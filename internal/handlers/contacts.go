@@ -35,16 +35,17 @@ type ContactResponse struct {
 
 // MessageResponse represents a message for the frontend
 type MessageResponse struct {
-	ID          uuid.UUID `json:"id"`
-	ContactID   uuid.UUID `json:"contact_id"`
-	Direction   string    `json:"direction"`
-	MessageType string    `json:"message_type"`
-	Content     any       `json:"content"`
-	Status      string    `json:"status"`
-	WAMID       string    `json:"wamid"`
-	Error       string    `json:"error_message"`
-	CreatedAt   time.Time `json:"created_at"`
-	UpdatedAt   time.Time `json:"updated_at"`
+	ID              uuid.UUID    `json:"id"`
+	ContactID       uuid.UUID    `json:"contact_id"`
+	Direction       string       `json:"direction"`
+	MessageType     string       `json:"message_type"`
+	Content         any          `json:"content"`
+	InteractiveData models.JSONB `json:"interactive_data,omitempty"`
+	Status          string       `json:"status"`
+	WAMID           string       `json:"wamid"`
+	Error           string       `json:"error_message"`
+	CreatedAt       time.Time    `json:"created_at"`
+	UpdatedAt       time.Time    `json:"updated_at"`
 }
 
 // ListContacts returns all contacts for the organization
@@ -257,16 +258,17 @@ func (a *App) GetMessages(r *fastglue.Request) error {
 		}
 
 		response[i] = MessageResponse{
-			ID:          m.ID,
-			ContactID:   m.ContactID,
-			Direction:   m.Direction,
-			MessageType: m.MessageType,
-			Content:     content,
-			Status:      m.Status,
-			WAMID:       m.WhatsAppMessageID,
-			Error:       m.ErrorMessage,
-			CreatedAt:   m.CreatedAt,
-			UpdatedAt:   m.UpdatedAt,
+			ID:              m.ID,
+			ContactID:       m.ContactID,
+			Direction:       m.Direction,
+			MessageType:     m.MessageType,
+			Content:         content,
+			InteractiveData: m.InteractiveData,
+			Status:          m.Status,
+			WAMID:           m.WhatsAppMessageID,
+			Error:           m.ErrorMessage,
+			CreatedAt:       m.CreatedAt,
+			UpdatedAt:       m.UpdatedAt,
 		}
 	}
 

@@ -23,6 +23,20 @@ export interface Message {
   direction: 'incoming' | 'outgoing'
   message_type: string
   content: any
+  interactive_data?: {
+    type?: string
+    body?: string
+    buttons?: Array<{
+      type?: string
+      reply?: { id: string; title: string }
+      id?: string
+      title?: string
+    }>
+    rows?: Array<{
+      id?: string
+      title?: string
+    }>
+  }
   status: string
   wamid?: string
   error_message?: string

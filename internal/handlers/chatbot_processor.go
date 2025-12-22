@@ -160,7 +160,19 @@ func (a *App) processIncomingMessageFull(phoneNumberID string, msg IncomingTextM
 		return
 	}
 
-	// Send greeting message for new sessions (first message or session timeout)
+	// Check if user is in an active flow
+	if session.CurrentFlowID != nil {
+		a.processFlowResponse(&account, session, contact, messageText, buttonID)
+		return
+	}
+
+	// Try to match flow trigger keywords first (before greeting to avoid duplicate messages)
+	if flow := a.matchFlowTrigger(account.OrganizationID, account.Name, messageText); flow != nil {
+		a.startFlow(&account, session, contact, flow)
+		return
+	}
+
+	// Send greeting message for new sessions (only if no flow was triggered)
 	if isNewSession && settings.DefaultResponse != "" {
 		a.Log.Info("New session - sending greeting message", "contact", contact.PhoneNumber)
 		if len(settings.GreetingButtons) > 0 {
@@ -179,19 +191,7 @@ func (a *App) processIncomingMessageFull(phoneNumberID string, msg IncomingTextM
 			a.sendAndSaveTextMessage(&account, contact, settings.DefaultResponse)
 		}
 		a.logSessionMessage(session.ID, "outgoing", settings.DefaultResponse, "greeting")
-		// Continue processing to also handle keyword/flow triggers
-	}
-
-	// Check if user is in an active flow
-	if session.CurrentFlowID != nil {
-		a.processFlowResponse(&account, session, contact, messageText, buttonID)
-		return
-	}
-
-	// Try to match flow trigger keywords first
-	if flow := a.matchFlowTrigger(account.OrganizationID, account.Name, messageText); flow != nil {
-		a.startFlow(&account, session, contact, flow)
-		return
+		return // After greeting, don't process further for new sessions
 	}
 
 	// Handle non-transfer keyword matches (transfer was already handled above)
@@ -430,7 +430,30 @@ func (a *App) sendAndSaveTextMessage(account *models.WhatsAppAccount, contact *m
 func (a *App) sendAndSaveInteractiveButtons(account *models.WhatsAppAccount, contact *models.Contact, bodyText string, buttons []map[string]interface{}) error {
 	err := a.sendInteractiveButtons(account, contact.PhoneNumber, bodyText, buttons)
 
-	// Create message record
+	// Create message record with interactive data
+	// Convert buttons to []interface{} for JSONB storage
+	buttonsInterface := make([]interface{}, len(buttons))
+	for i, b := range buttons {
+		buttonsInterface[i] = b
+	}
+
+	// Store differently based on button count (matching WhatsApp API format)
+	// 3 or fewer = button type, more than 3 = list type
+	var interactiveData models.JSONB
+	if len(buttons) <= 3 {
+		interactiveData = models.JSONB{
+			"type":    "button",
+			"body":    bodyText,
+			"buttons": buttonsInterface,
+		}
+	} else {
+		interactiveData = models.JSONB{
+			"type": "list",
+			"body": bodyText,
+			"rows": buttonsInterface,
+		}
+	}
+
 	msg := models.Message{
 		OrganizationID:  account.OrganizationID,
 		WhatsAppAccount: account.Name,
@@ -438,6 +461,7 @@ func (a *App) sendAndSaveInteractiveButtons(account *models.WhatsAppAccount, con
 		Direction:       "outgoing",
 		MessageType:     "interactive",
 		Content:         bodyText,
+		InteractiveData: interactiveData,
 		Status:          "sent",
 	}
 	if err != nil {
@@ -465,6 +489,7 @@ func (a *App) sendAndSaveInteractiveButtons(account *models.WhatsAppAccount, con
 				"direction":        msg.Direction,
 				"message_type":     msg.MessageType,
 				"content":          map[string]string{"body": msg.Content},
+				"interactive_data": msg.InteractiveData,
 				"status":           msg.Status,
 				"wamid":            msg.WhatsAppMessageID,
 				"created_at":       msg.CreatedAt,
@@ -946,7 +971,7 @@ func (a *App) sendStepMessage(account *models.WhatsAppAccount, session *models.C
 			message = apiResp.Message
 			// Check if API returned buttons
 			if len(apiResp.Buttons) > 0 {
-				a.sendInteractiveButtons(account, contact.PhoneNumber, message, apiResp.Buttons)
+				a.sendAndSaveInteractiveButtons(account, contact, message, apiResp.Buttons)
 			} else {
 				a.sendAndSaveTextMessage(account, contact, message)
 			}
@@ -964,7 +989,7 @@ func (a *App) sendStepMessage(account *models.WhatsAppAccount, session *models.C
 					buttons = append(buttons, btnMap)
 				}
 			}
-			a.sendInteractiveButtons(account, contact.PhoneNumber, message, buttons)
+			a.sendAndSaveInteractiveButtons(account, contact, message, buttons)
 		} else {
 			// No buttons configured, fall back to text
 			a.sendAndSaveTextMessage(account, contact, message)

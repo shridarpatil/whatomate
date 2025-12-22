@@ -325,9 +325,12 @@ function getMessageContent(message: Message): string {
     return message.content?.body || ''
   }
   if (message.message_type === 'interactive') {
-    // Interactive messages store body text in content (string) or content.body
+    // Interactive messages store body text in content (string) or content.body or interactive_data.body
     if (typeof message.content === 'string') {
       return message.content
+    }
+    if (message.interactive_data?.body) {
+      return message.interactive_data.body
     }
     return message.content?.body || '[Interactive Message]'
   }
@@ -341,6 +344,21 @@ function getMessageContent(message: Message): string {
     return '[Template Message]'
   }
   return '[Message]'
+}
+
+function getInteractiveButtons(message: Message): Array<{ id: string; title: string }> {
+  if (message.message_type !== 'interactive' || !message.interactive_data) {
+    return []
+  }
+  // Handle both "buttons" (<=3) and "rows" (>3 list format)
+  const items = message.interactive_data.buttons || message.interactive_data.rows
+  if (!items || !Array.isArray(items)) {
+    return []
+  }
+  return items.map((btn: any) => ({
+    id: btn.reply?.id || btn.id || '',
+    title: btn.reply?.title || btn.title || ''
+  }))
 }
 </script>
 
@@ -528,6 +546,19 @@ function getMessageContent(message: Message): string {
                 ]"
               >
                 <p class="whitespace-pre-wrap break-words">{{ getMessageContent(message) }}</p>
+                <!-- Interactive buttons -->
+                <div
+                  v-if="getInteractiveButtons(message).length > 0"
+                  class="mt-2 space-y-1"
+                >
+                  <div
+                    v-for="btn in getInteractiveButtons(message)"
+                    :key="btn.id"
+                    class="px-3 py-1.5 text-sm text-center border rounded-lg bg-background/50"
+                  >
+                    {{ btn.title }}
+                  </div>
+                </div>
                 <div
                   :class="[
                     'chat-bubble-time flex items-center gap-1',
