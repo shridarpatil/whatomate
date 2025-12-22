@@ -22,6 +22,7 @@ import {
   Send,
   TrendingUp,
   TrendingDown,
+  Minus,
   Clock,
   CheckCheck,
   CalendarIcon
@@ -387,13 +388,13 @@ onMounted(() => {
                 </div>
                 <div class="flex items-center text-xs text-muted-foreground mt-1">
                   <component
-                    :is="(stats[card.changeKey as keyof DashboardStats] as number) >= 0 ? TrendingUp : TrendingDown"
+                    :is="(stats[card.changeKey as keyof DashboardStats] as number) > 0 ? TrendingUp : (stats[card.changeKey as keyof DashboardStats] as number) < 0 ? TrendingDown : Minus"
                     :class="[
                       'h-3 w-3 mr-1',
-                      (stats[card.changeKey as keyof DashboardStats] as number) >= 0 ? 'text-green-500' : 'text-red-500'
+                      (stats[card.changeKey as keyof DashboardStats] as number) > 0 ? 'text-green-500' : (stats[card.changeKey as keyof DashboardStats] as number) < 0 ? 'text-red-500' : 'text-gray-400'
                     ]"
                   />
-                  <span :class="(stats[card.changeKey as keyof DashboardStats] as number) >= 0 ? 'text-green-500' : 'text-red-500'">
+                  <span :class="(stats[card.changeKey as keyof DashboardStats] as number) > 0 ? 'text-green-500' : (stats[card.changeKey as keyof DashboardStats] as number) < 0 ? 'text-red-500' : 'text-gray-400'">
                     {{ Math.abs(stats[card.changeKey as keyof DashboardStats] as number).toFixed(1) }}%
                   </span>
                   <span class="ml-1">{{ comparisonPeriodLabel }}</span>
