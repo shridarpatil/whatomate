@@ -101,7 +101,7 @@ interface Template {
 interface CSVRow {
   phone_number: string
   name: string
-  params: string[]
+  params: Record<string, string>  // keyed by param name (e.g., {"name": "John"} or {"1": "John"})
   isValid: boolean
   errors: string[]
 }
@@ -109,9 +109,11 @@ interface CSVRow {
 interface CSVValidation {
   isValid: boolean
   rows: CSVRow[]
-  templateParams: number
+  templateParamNames: string[]  // e.g., ["name", "order_id"] or ["1", "2"]
   csvColumns: string[]
+  columnMapping: { csvColumn: string; paramName: string }[]  // Shows how CSV columns map to params
   errors: string[]
+  warnings: string[]  // Non-blocking warnings (e.g., mixed param types)
 }
 
 interface Account {
@@ -229,6 +231,64 @@ const csvValidation = ref<CSVValidation | null>(null)
 const isValidatingCSV = ref(false)
 const selectedTemplate = ref<Template | null>(null)
 const addRecipientsTab = ref('manual')
+
+// Computed: template parameter format hints
+const templateParamNames = computed(() => {
+  if (!selectedTemplate.value) return []
+  return getTemplateParamNames(selectedTemplate.value)
+})
+
+const manualEntryFormat = computed(() => {
+  const params = templateParamNames.value
+  if (params.length === 0) {
+    return 'phone_number'
+  }
+  return `phone_number, ${params.join(', ')}`
+})
+
+const csvColumnsHint = computed(() => {
+  const params = templateParamNames.value
+  if (params.length === 0) {
+    return ['phone_number (or phone, mobile, number)']
+  }
+  return [
+    'phone_number (or phone, mobile, number)',
+    ...params.map(p => p)
+  ]
+})
+
+function formatParamName(param: string): string {
+  return `{{${param}}}`
+}
+
+// Dynamic placeholder for recipient input based on template parameters
+const recipientPlaceholder = computed(() => {
+  const params = templateParamNames.value
+  if (params.length === 0) {
+    return `+1234567890
++0987654321
++1122334455`
+  }
+  // Generate example values for each parameter
+  const exampleValues = params.map((p, i) => {
+    if (/^\d+$/.test(p)) {
+      return `value${i + 1}`
+    }
+    // Use parameter name as hint for example value
+    if (p.toLowerCase().includes('name')) return 'John Doe'
+    if (p.toLowerCase().includes('order')) return 'ORD-123'
+    if (p.toLowerCase().includes('date')) return '2024-01-15'
+    if (p.toLowerCase().includes('amount') || p.toLowerCase().includes('price')) return '99.99'
+    return `${p}_value`
+  })
+  const line1 = `+1234567890, ${exampleValues.join(', ')}`
+  const line2 = `+0987654321, ${exampleValues.map((v, i) => {
+    if (v === 'John Doe') return 'Jane Smith'
+    if (v === 'ORD-123') return 'ORD-456'
+    return v
+  }).join(', ')}`
+  return `${line1}\n${line2}`
+})
 
 // Form state
 const newCampaign = ref({
@@ -509,32 +569,25 @@ async function addRecipients() {
     return
   }
 
-  // Parse CSV/text input - supports formats:
-  // phone_number
-  // phone_number,name (name is used as {{1}} parameter)
-  // phone_number,name,param1,param2... (params override name as {{1}})
+  // Get template parameter names for mapping
+  const paramNames = templateParamNames.value
+
+  // Parse CSV/text input - format: phone_number, param1, param2, ...
+  // Parameters are mapped to template parameter names in order
   const recipientsList = lines.map(line => {
     const parts = line.split(',').map(p => p.trim())
     const recipient: { phone_number: string; recipient_name?: string; template_params?: Record<string, any> } = {
       phone_number: parts[0].replace(/[^\d+]/g, '') // Clean phone number
     }
-    if (parts[1]) {
-      recipient.recipient_name = parts[1]
-    }
-    // Collect non-empty parameters starting from index 2
+
+    // Map values to template parameter names
     const params: Record<string, any> = {}
-    let paramIndex = 1
-    for (let i = 2; i < parts.length; i++) {
+    for (let i = 1; i < parts.length && i <= paramNames.length; i++) {
       if (parts[i] && parts[i].length > 0) {
-        params[String(paramIndex)] = parts[i]
-        paramIndex++
+        params[paramNames[i - 1]] = parts[i]
       }
     }
-    // If no explicit params provided but name exists, use name as first parameter
-    // This handles templates like "Dear {{1}}, ..." where the name IS the parameter
-    if (Object.keys(params).length === 0 && recipient.recipient_name) {
-      params["1"] = recipient.recipient_name
-    }
+
     if (Object.keys(params).length > 0) {
       recipient.template_params = params
     }
@@ -570,11 +623,29 @@ function getRecipientStatusClass(status: string): string {
 }
 
 // CSV functions
-function extractTemplateParams(bodyContent: string): number {
-  // Extract {{1}}, {{2}}, etc. from template body
-  const matches = bodyContent.match(/\{\{(\d+)\}\}/g) || []
-  const paramNumbers = matches.map(m => parseInt(m.replace(/[{}]/g, '')))
-  return paramNumbers.length > 0 ? Math.max(...paramNumbers) : 0
+function getTemplateParamNames(template: Template): string[] {
+  // Extract parameter names from body_content on-the-fly
+  // Supports both positional ({{1}}, {{2}}) and named ({{name}}, {{order_id}}) parameters
+  if (!template.body_content) return []
+  const matches = template.body_content.match(/\{\{([^}]+)\}\}/g) || []
+  const seen = new Set<string>()
+  const names: string[] = []
+  for (const m of matches) {
+    const name = m.replace(/[{}]/g, '').trim()
+    if (name && !seen.has(name)) {
+      seen.add(name)
+      names.push(name)
+    }
+  }
+  return names
+}
+
+function hasMixedParamTypes(paramNames: string[]): boolean {
+  // Check if template has both positional (numeric) and named parameters
+  if (paramNames.length === 0) return false
+  const hasPositional = paramNames.some(n => /^\d+$/.test(n))
+  const hasNamed = paramNames.some(n => !/^\d+$/.test(n))
+  return hasPositional && hasNamed
 }
 
 async function openAddRecipientsDialog(campaign: Campaign) {
@@ -620,9 +691,11 @@ async function validateCSV() {
       csvValidation.value = {
         isValid: false,
         rows: [],
-        templateParams: 0,
+        templateParamNames: [],
         csvColumns: [],
-        errors: ['CSV file is empty']
+        columnMapping: [],
+        errors: ['CSV file is empty'],
+        warnings: []
       }
       return
     }
@@ -639,26 +712,67 @@ async function validateCSV() {
       h === 'name' || h === 'recipient_name' || h === 'recipientname' || h === 'customer_name'
     )
 
-    // Get template param count
-    const templateParamCount = selectedTemplate.value.body_content
-      ? extractTemplateParams(selectedTemplate.value.body_content)
-      : 0
+    // Get template parameter names (e.g., ["name", "order_id"] or ["1", "2"])
+    const templateParamNames = getTemplateParamNames(selectedTemplate.value)
 
     const globalErrors: string[] = []
+    const globalWarnings: string[] = []
 
     if (phoneIndex === -1) {
       globalErrors.push('Missing required column: phone_number (or phone, mobile, number)')
     }
 
-    // Identify param columns (columns after name, or all columns except phone if no name)
-    const paramColumns: number[] = []
-    for (let i = 0; i < headers.length; i++) {
-      if (i !== phoneIndex && i !== nameIndex) {
-        // Check if it's a param column (param1, param2, {{1}}, 1, etc.)
-        const header = headers[i]
-        if (header.match(/^(param\d*|\{\{\d+\}\}|\d+)$/) ||
-            (i > Math.max(phoneIndex, nameIndex) && phoneIndex !== -1)) {
-          paramColumns.push(i)
+    // Warn about mixed param types
+    if (hasMixedParamTypes(templateParamNames)) {
+      globalWarnings.push('Template has mixed parameter types (e.g., {{1}} and {{name}}). This may cause unexpected behavior. Use CSV columns that exactly match the parameter names.')
+    }
+
+    // Map CSV columns to template parameter names
+    // Strategy:
+    // 1. Try to match CSV headers to template param names directly
+    // 2. Fall back to positional mapping for remaining params
+    const paramColumnMapping: { csvIndex: number; paramName: string }[] = []
+    const usedCsvIndices = new Set<number>([phoneIndex, nameIndex].filter(i => i >= 0))
+    const mappedParamNames = new Set<string>()
+
+    // First pass: exact matches between CSV headers and template param names
+    for (const paramName of templateParamNames) {
+      const csvIndex = headers.findIndex((h, idx) =>
+        !usedCsvIndices.has(idx) && (h === paramName.toLowerCase() || h === `param${paramName}` || h === `{{${paramName}}}`)
+      )
+      if (csvIndex !== -1) {
+        paramColumnMapping.push({ csvIndex, paramName })
+        usedCsvIndices.add(csvIndex)
+        mappedParamNames.add(paramName)
+      }
+    }
+
+    // Second pass: positional mapping for unmapped params
+    const remainingParamNames = templateParamNames.filter(n => !mappedParamNames.has(n))
+    const remainingCsvIndices = headers
+      .map((_, idx) => idx)
+      .filter(idx => !usedCsvIndices.has(idx))
+      .sort((a, b) => a - b)
+
+    for (let i = 0; i < remainingParamNames.length && i < remainingCsvIndices.length; i++) {
+      paramColumnMapping.push({ csvIndex: remainingCsvIndices[i], paramName: remainingParamNames[i] })
+    }
+
+    // Validate CSV columns match template params
+    if (templateParamNames.length > 0) {
+      // Check for missing columns (params that couldn't be mapped)
+      const mappedCount = paramColumnMapping.length
+      if (mappedCount < templateParamNames.length) {
+        const unmappedParams = templateParamNames.slice(mappedCount)
+        globalErrors.push(`Missing columns for template parameters: ${unmappedParams.join(', ')}`)
+      }
+
+      // Warn if named params are being mapped positionally (not by column name)
+      const namedParams = templateParamNames.filter(n => !/^\d+$/.test(n))
+      if (namedParams.length > 0) {
+        const positionallyMapped = namedParams.filter(n => !mappedParamNames.has(n))
+        if (positionallyMapped.length > 0) {
+          globalWarnings.push(`Parameters mapped by position (not column name): ${positionallyMapped.join(', ')}. For best results, use column names that match the template parameters.`)
         }
       }
     }
@@ -675,7 +789,15 @@ async function validateCSV() {
       const phone = phoneIndex >= 0 ? values[phoneIndex]?.trim() || '' : ''
       const cleanPhone = phone.replace(/[^\d+]/g, '') // Normalize for duplicate check
       const name = nameIndex >= 0 ? values[nameIndex]?.trim() || '' : ''
-      const params: string[] = paramColumns.map(idx => values[idx]?.trim() || '')
+
+      // Build params object with proper keys
+      const params: Record<string, string> = {}
+      for (const mapping of paramColumnMapping) {
+        const value = values[mapping.csvIndex]?.trim() || ''
+        if (value) {
+          params[mapping.paramName] = value
+        }
+      }
 
       // Validate phone number
       if (!phone) {
@@ -692,8 +814,9 @@ async function validateCSV() {
       }
 
       // Validate params count if template requires params
-      if (templateParamCount > 0 && params.filter(p => p).length < templateParamCount) {
-        rowErrors.push(`Template requires ${templateParamCount} parameter(s), found ${params.filter(p => p).length}`)
+      const providedParamCount = Object.keys(params).length
+      if (templateParamNames.length > 0 && providedParamCount < templateParamNames.length) {
+        rowErrors.push(`Template requires ${templateParamNames.length} parameter(s), found ${providedParamCount}`)
       }
 
       rows.push({
@@ -707,21 +830,31 @@ async function validateCSV() {
 
     const validRows = rows.filter(r => r.isValid)
 
+    // Build column mapping for display
+    const columnMapping = paramColumnMapping.map(m => ({
+      csvColumn: headers[m.csvIndex],
+      paramName: m.paramName
+    }))
+
     csvValidation.value = {
       isValid: globalErrors.length === 0 && validRows.length > 0,
       rows,
-      templateParams: templateParamCount,
+      templateParamNames,
       csvColumns: headers,
-      errors: globalErrors
+      columnMapping,
+      errors: globalErrors,
+      warnings: globalWarnings
     }
   } catch (error) {
     console.error('Failed to parse CSV:', error)
     csvValidation.value = {
       isValid: false,
       rows: [],
-      templateParams: 0,
+      templateParamNames: [],
       csvColumns: [],
-      errors: ['Failed to parse CSV file']
+      columnMapping: [],
+      errors: ['Failed to parse CSV file'],
+      warnings: []
     }
   } finally {
     isValidatingCSV.value = false
@@ -771,19 +904,9 @@ async function addRecipientsFromCSV() {
     if (row.name) {
       recipient.recipient_name = row.name
     }
-    // Map params to template params
-    const params: Record<string, any> = {}
-    row.params.forEach((param, index) => {
-      if (param) {
-        params[String(index + 1)] = param
-      }
-    })
-    // If no explicit params but name exists, use name as first param
-    if (Object.keys(params).length === 0 && row.name) {
-      params["1"] = row.name
-    }
-    if (Object.keys(params).length > 0) {
-      recipient.template_params = params
+    // Use params directly - already keyed by param name (e.g., {"name": "John"} or {"1": "John"})
+    if (Object.keys(row.params).length > 0) {
+      recipient.template_params = row.params
     }
     return recipient
   })
@@ -1194,8 +1317,8 @@ async function addRecipientsFromCSV() {
           <DialogTitle>Add Recipients</DialogTitle>
           <DialogDescription>
             Add recipients to "{{ selectedCampaign?.name }}"
-            <span v-if="selectedTemplate?.body_content" class="block mt-1">
-              Template requires {{ extractTemplateParams(selectedTemplate.body_content) }} parameter(s)
+            <span v-if="templateParamNames.length > 0" class="block mt-1">
+              Template requires {{ templateParamNames.length }} parameter(s)
             </span>
           </DialogDescription>
         </DialogHeader>
@@ -1217,20 +1340,17 @@ async function addRecipientsFromCSV() {
             <div class="space-y-4">
               <div class="bg-muted p-3 rounded-lg text-sm">
                 <p class="font-medium mb-2">Format (one per line):</p>
-                <ul class="list-disc list-inside text-muted-foreground space-y-1">
-                  <li><code class="bg-background px-1 rounded">phone_number</code></li>
-                  <li><code class="bg-background px-1 rounded">phone_number, name</code></li>
-                  <li><code class="bg-background px-1 rounded">phone_number, name, param1, param2, ...</code></li>
-                </ul>
+                <code class="bg-background px-2 py-1 rounded block">{{ manualEntryFormat }}</code>
+                <p v-if="templateParamNames.length > 0" class="text-muted-foreground mt-2 text-xs">
+                  Template parameters: <span v-for="(param, idx) in templateParamNames" :key="param"><code class="bg-background px-1 rounded">{{ formatParamName(param) }}</code><span v-if="idx < templateParamNames.length - 1">, </span></span>
+                </p>
               </div>
               <div class="space-y-2">
                 <Label for="recipients">Recipients</Label>
                 <Textarea
                   id="recipients"
                   v-model="recipientsInput"
-                  placeholder="+1234567890, John Doe
-+0987654321, Jane Smith
-+1122334455"
+                  :placeholder="recipientPlaceholder"
                   rows="8"
                   class="font-mono text-sm"
                   :disabled="isAddingRecipients"
@@ -1254,12 +1374,13 @@ async function addRecipientsFromCSV() {
             <div class="space-y-4">
               <!-- CSV Format Info -->
               <div class="bg-muted p-3 rounded-lg text-sm">
-                <p class="font-medium mb-2">CSV Format Requirements:</p>
-                <ul class="list-disc list-inside text-muted-foreground space-y-1">
-                  <li>First row must be headers</li>
-                  <li>Required column: <code class="bg-background px-1 rounded">phone_number</code> (or phone, mobile, number)</li>
-                  <li>Optional: <code class="bg-background px-1 rounded">name</code>, <code class="bg-background px-1 rounded">param1</code>, <code class="bg-background px-1 rounded">param2</code>, ...</li>
-                </ul>
+                <p class="font-medium mb-2">Required CSV Columns:</p>
+                <div class="flex flex-wrap gap-2">
+                  <code v-for="col in csvColumnsHint" :key="col" class="bg-background px-2 py-1 rounded text-xs">{{ col }}</code>
+                </div>
+                <p v-if="templateParamNames.length > 0" class="text-muted-foreground mt-2 text-xs">
+                  Template parameters: <span v-for="(param, idx) in templateParamNames" :key="param"><code class="bg-background px-1 rounded">{{ formatParamName(param) }}</code><span v-if="idx < templateParamNames.length - 1">, </span></span>
+                </p>
               </div>
 
               <!-- File Upload -->
@@ -1302,6 +1423,33 @@ async function addRecipientsFromCSV() {
                   <ul class="list-disc list-inside text-sm text-destructive">
                     <li v-for="error in csvValidation.errors" :key="error">{{ error }}</li>
                   </ul>
+                </div>
+
+                <!-- Warnings -->
+                <div v-if="csvValidation.warnings && csvValidation.warnings.length > 0" class="bg-orange-500/10 border border-orange-500/20 rounded-lg p-3">
+                  <div class="flex items-center gap-2 text-orange-600 font-medium mb-2">
+                    <AlertTriangle class="h-4 w-4" />
+                    Warnings
+                  </div>
+                  <ul class="list-disc list-inside text-sm text-orange-600">
+                    <li v-for="warning in csvValidation.warnings" :key="warning">{{ warning }}</li>
+                  </ul>
+                </div>
+
+                <!-- Column Mapping Info -->
+                <div v-if="csvValidation.columnMapping && csvValidation.columnMapping.length > 0" class="bg-muted/50 border rounded-lg p-3">
+                  <div class="text-sm font-medium mb-2">Column Mapping</div>
+                  <div class="flex flex-wrap gap-2">
+                    <div
+                      v-for="mapping in csvValidation.columnMapping"
+                      :key="mapping.paramName"
+                      class="text-xs bg-background border rounded px-2 py-1"
+                    >
+                      <span class="text-muted-foreground">{{ mapping.csvColumn }}</span>
+                      <span class="mx-1">→</span>
+                      <span class="font-mono text-primary">{{ formatParamName(mapping.paramName) }}</span>
+                    </div>
+                  </div>
                 </div>
 
                 <!-- Summary -->
@@ -1358,7 +1506,7 @@ async function addRecipientsFromCSV() {
                           <td class="py-2 px-3 font-mono">{{ row.phone_number || '-' }}</td>
                           <td class="py-2 px-3">{{ row.name || '-' }}</td>
                           <td class="py-2 px-3 text-muted-foreground">
-                            {{ row.params.filter(p => p).join(', ') || '-' }}
+                            {{ Object.values(row.params).filter(p => p).join(', ') || '-' }}
                           </td>
                         </tr>
                       </tbody>

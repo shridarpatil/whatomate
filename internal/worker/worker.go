@@ -3,6 +3,7 @@ package worker
 import (
 	"context"
 	"fmt"
+	"regexp"
 	"strings"
 	"time"
 
@@ -15,6 +16,32 @@ import (
 	"github.com/zerodha/logf"
 	"gorm.io/gorm"
 )
+
+// parameterPattern matches template parameters like {{1}}, {{name}}, {{order_id}}
+var parameterPattern = regexp.MustCompile(`\{\{([^}]+)\}\}`)
+
+// extractParameterNames extracts parameter names from template content
+// Supports both positional ({{1}}, {{2}}) and named ({{name}}, {{order_id}}) parameters
+// Returns parameter names in order of first occurrence, without duplicates
+func extractParameterNames(content string) []string {
+	matches := parameterPattern.FindAllStringSubmatch(content, -1)
+	if len(matches) == 0 {
+		return nil
+	}
+
+	seen := make(map[string]bool)
+	var names []string
+	for _, match := range matches {
+		if len(match) > 1 {
+			name := strings.TrimSpace(match[1])
+			if name != "" && !seen[name] {
+				seen[name] = true
+				names = append(names, name)
+			}
+		}
+	}
+	return names
+}
 
 // Worker processes jobs from the queue
 type Worker struct {
@@ -51,76 +78,63 @@ func New(cfg *config.Config, db *gorm.DB, rdb *redis.Client, log logf.Logger) (*
 }
 
 // resolveTemplateParams resolves both positional and named parameters to ordered values
-// It uses the template's ParameterNames to map named params, with fallback to positional keys
+// Extracts parameter names from template body content on-the-fly
 func resolveTemplateParams(template *models.Template, params models.JSONB) []string {
 	if len(params) == 0 {
 		return nil
 	}
 
-	// If template has ParameterNames, use them to resolve in order
-	if len(template.ParameterNames) > 0 {
-		result := make([]string, len(template.ParameterNames))
-		for i, name := range template.ParameterNames {
-			// Try named key first
-			if val, ok := params[name]; ok {
-				result[i] = fmt.Sprintf("%v", val)
-				continue
-			}
-			// Fall back to positional key (1-indexed)
-			key := fmt.Sprintf("%d", i+1)
-			if val, ok := params[key]; ok {
-				result[i] = fmt.Sprintf("%v", val)
-				continue
-			}
-			// Default to empty string
-			result[i] = ""
-		}
-		return result
+	// Extract parameter names from template body content
+	paramNames := extractParameterNames(template.BodyContent)
+	if len(paramNames) == 0 {
+		return nil
 	}
 
-	// No ParameterNames - use legacy positional approach
-	var result []string
-	for i := 1; i <= 10; i++ {
-		key := fmt.Sprintf("%d", i)
-		if val, ok := params[key]; ok {
-			result = append(result, fmt.Sprintf("%v", val))
+	result := make([]string, len(paramNames))
+	for i, name := range paramNames {
+		// Try named key first
+		if val, ok := params[name]; ok {
+			result[i] = fmt.Sprintf("%v", val)
+			continue
 		}
+		// Fall back to positional key (1-indexed)
+		key := fmt.Sprintf("%d", i+1)
+		if val, ok := params[key]; ok {
+			result[i] = fmt.Sprintf("%v", val)
+			continue
+		}
+		// Default to empty string
+		result[i] = ""
 	}
 	return result
 }
 
 // replaceTemplateContent replaces both positional ({{1}}) and named ({{name}}) placeholders
+// Extracts parameter names from template body content on-the-fly
 func replaceTemplateContent(template *models.Template, content string, params models.JSONB) string {
 	if len(params) == 0 {
 		return content
 	}
 
-	// If template has ParameterNames, replace named placeholders
-	if len(template.ParameterNames) > 0 {
-		for i, name := range template.ParameterNames {
-			// Try named key first
-			var val string
-			if v, ok := params[name]; ok {
-				val = fmt.Sprintf("%v", v)
-			} else if v, ok := params[fmt.Sprintf("%d", i+1)]; ok {
-				// Fall back to positional key
-				val = fmt.Sprintf("%v", v)
-			}
-
-			// Replace both named and positional placeholders
-			content = strings.ReplaceAll(content, fmt.Sprintf("{{%s}}", name), val)
-			content = strings.ReplaceAll(content, fmt.Sprintf("{{%d}}", i+1), val)
-		}
+	// Extract parameter names from template body content
+	paramNames := extractParameterNames(template.BodyContent)
+	if len(paramNames) == 0 {
 		return content
 	}
 
-	// No ParameterNames - use legacy positional approach
-	for i := 1; i <= 10; i++ {
-		key := fmt.Sprintf("%d", i)
-		if val, ok := params[key]; ok {
-			placeholder := fmt.Sprintf("{{%d}}", i)
-			content = strings.ReplaceAll(content, placeholder, fmt.Sprintf("%v", val))
+	for i, name := range paramNames {
+		// Try named key first
+		var val string
+		if v, ok := params[name]; ok {
+			val = fmt.Sprintf("%v", v)
+		} else if v, ok := params[fmt.Sprintf("%d", i+1)]; ok {
+			// Fall back to positional key
+			val = fmt.Sprintf("%v", v)
 		}
+
+		// Replace both named and positional placeholders
+		content = strings.ReplaceAll(content, fmt.Sprintf("{{%s}}", name), val)
+		content = strings.ReplaceAll(content, fmt.Sprintf("{{%d}}", i+1), val)
 	}
 	return content
 }

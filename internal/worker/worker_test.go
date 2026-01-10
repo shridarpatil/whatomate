@@ -825,7 +825,7 @@ func TestWorker_HandleRecipientJob_TemplateParamSubstitution(t *testing.T) {
 
 func TestResolveTemplateParams_NamedParams(t *testing.T) {
 	template := &models.Template{
-		ParameterNames: []string{"name", "order_id"},
+		BodyContent: "Hello {{name}}, your order {{order_id}} is ready!",
 	}
 	params := models.JSONB{
 		"name":     "John",
@@ -839,7 +839,7 @@ func TestResolveTemplateParams_NamedParams(t *testing.T) {
 
 func TestResolveTemplateParams_PositionalParams(t *testing.T) {
 	template := &models.Template{
-		ParameterNames: []string{"1", "2"},
+		BodyContent: "Hello {{1}}, your order {{2}} is ready!",
 	}
 	params := models.JSONB{
 		"1": "John",
@@ -854,7 +854,7 @@ func TestResolveTemplateParams_PositionalParams(t *testing.T) {
 func TestResolveTemplateParams_FallbackToPositional(t *testing.T) {
 	// Named params in template, but user provides positional params
 	template := &models.Template{
-		ParameterNames: []string{"name", "order_id"},
+		BodyContent: "Hello {{name}}, your order {{order_id}} is ready!",
 	}
 	params := models.JSONB{
 		"1": "John",
@@ -869,7 +869,7 @@ func TestResolveTemplateParams_FallbackToPositional(t *testing.T) {
 func TestResolveTemplateParams_MixedParams(t *testing.T) {
 	// User provides some named, some positional
 	template := &models.Template{
-		ParameterNames: []string{"name", "order_id"},
+		BodyContent: "Hello {{name}}, your order {{order_id}} is ready!",
 	}
 	params := models.JSONB{
 		"name": "John",
@@ -881,9 +881,11 @@ func TestResolveTemplateParams_MixedParams(t *testing.T) {
 	assert.Equal(t, []string{"John", "ORD-123"}, result)
 }
 
-func TestResolveTemplateParams_LegacyNoParameterNames(t *testing.T) {
-	// Template without ParameterNames (legacy)
-	template := &models.Template{}
+func TestResolveTemplateParams_NoParams(t *testing.T) {
+	// Template without any parameters
+	template := &models.Template{
+		BodyContent: "Hello, your order is ready!",
+	}
 	params := models.JSONB{
 		"1": "John",
 		"2": "ORD-123",
@@ -891,12 +893,12 @@ func TestResolveTemplateParams_LegacyNoParameterNames(t *testing.T) {
 
 	result := resolveTemplateParams(template, params)
 
-	assert.Equal(t, []string{"John", "ORD-123"}, result)
+	assert.Nil(t, result)
 }
 
 func TestResolveTemplateParams_EmptyParams(t *testing.T) {
 	template := &models.Template{
-		ParameterNames: []string{"name"},
+		BodyContent: "Hello {{name}}!",
 	}
 	params := models.JSONB{}
 
@@ -907,7 +909,7 @@ func TestResolveTemplateParams_EmptyParams(t *testing.T) {
 
 func TestReplaceTemplateContent_NamedParams(t *testing.T) {
 	template := &models.Template{
-		ParameterNames: []string{"name", "order_id"},
+		BodyContent: "Hello {{name}}, your order {{order_id}} is ready!",
 	}
 	content := "Hello {{name}}, your order {{order_id}} is ready!"
 	params := models.JSONB{
@@ -922,7 +924,7 @@ func TestReplaceTemplateContent_NamedParams(t *testing.T) {
 
 func TestReplaceTemplateContent_PositionalParams(t *testing.T) {
 	template := &models.Template{
-		ParameterNames: []string{"1", "2"},
+		BodyContent: "Hello {{1}}, your order {{2}} is ready!",
 	}
 	content := "Hello {{1}}, your order {{2}} is ready!"
 	params := models.JSONB{
@@ -938,7 +940,7 @@ func TestReplaceTemplateContent_PositionalParams(t *testing.T) {
 func TestReplaceTemplateContent_NamedParamsWithPositionalInput(t *testing.T) {
 	// Template has named placeholders but user provides positional params
 	template := &models.Template{
-		ParameterNames: []string{"name", "order_id"},
+		BodyContent: "Hello {{name}}, your order {{order_id}} is ready!",
 	}
 	content := "Hello {{name}}, your order {{order_id}} is ready!"
 	params := models.JSONB{
@@ -951,10 +953,12 @@ func TestReplaceTemplateContent_NamedParamsWithPositionalInput(t *testing.T) {
 	assert.Equal(t, "Hello John, your order ORD-123 is ready!", result)
 }
 
-func TestReplaceTemplateContent_LegacyPositional(t *testing.T) {
-	// Template without ParameterNames (legacy)
-	template := &models.Template{}
-	content := "Hello {{1}}, your order {{2}} is ready!"
+func TestReplaceTemplateContent_NoParams(t *testing.T) {
+	// Template without any parameters
+	template := &models.Template{
+		BodyContent: "Hello, your order is ready!",
+	}
+	content := "Hello, your order is ready!"
 	params := models.JSONB{
 		"1": "John",
 		"2": "ORD-123",
@@ -962,5 +966,5 @@ func TestReplaceTemplateContent_LegacyPositional(t *testing.T) {
 
 	result := replaceTemplateContent(template, content, params)
 
-	assert.Equal(t, "Hello John, your order ORD-123 is ready!", result)
+	assert.Equal(t, "Hello, your order is ready!", result)
 }
