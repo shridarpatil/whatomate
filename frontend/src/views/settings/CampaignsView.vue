@@ -738,6 +738,15 @@ function isMediaPreviewLoading(campaignId: string): boolean {
   return mediaLoadingState.value[campaignId] === 'loading'
 }
 
+// Media preview dialog
+const showMediaPreviewDialog = ref(false)
+const previewingCampaign = ref<Campaign | null>(null)
+
+function openMediaPreview(campaign: Campaign) {
+  previewingCampaign.value = campaign
+  showMediaPreviewDialog.value = true
+}
+
 // Recipients functions
 const deletingRecipientId = ref<string | null>(null)
 
@@ -1367,47 +1376,48 @@ async function addRecipientsFromCSV() {
                 <span class="text-sm font-medium">Header Media ({{ getTemplateHeaderType(campaign.template_id) }})</span>
               </div>
 
-              <div v-if="campaign.header_media_id" class="space-y-2">
-                <!-- Loading State -->
-                <div v-if="isMediaPreviewLoading(campaign.id)" class="flex items-center justify-center p-4 bg-muted/50 rounded border">
-                  <Loader2 class="h-5 w-5 animate-spin text-muted-foreground" />
-                </div>
-                <!-- Image Preview -->
-                <div v-else-if="campaign.header_media_mime_type?.startsWith('image/') && isMediaPreviewAvailable(campaign.id)" class="relative">
+              <div v-if="campaign.header_media_id" class="flex items-center gap-3 p-2 bg-green-50 dark:bg-green-950/30 rounded border border-green-200 dark:border-green-800">
+                <!-- Thumbnail -->
+                <div class="relative flex-shrink-0">
+                  <!-- Loading -->
+                  <div v-if="isMediaPreviewLoading(campaign.id)" class="w-12 h-12 flex items-center justify-center bg-muted rounded">
+                    <Loader2 class="h-4 w-4 animate-spin text-muted-foreground" />
+                  </div>
+                  <!-- Image Thumbnail -->
                   <img
+                    v-else-if="campaign.header_media_mime_type?.startsWith('image/') && isMediaPreviewAvailable(campaign.id)"
                     :src="getMediaPreviewUrl(campaign.id)"
                     :alt="campaign.header_media_filename"
-                    class="w-full max-h-32 object-cover rounded border"
+                    class="w-12 h-12 object-cover rounded"
                   />
-                  <div class="absolute top-1 right-1 bg-green-500 rounded-full p-0.5">
-                    <CheckCircle class="h-3 w-3 text-white" />
+                  <!-- Video Thumbnail -->
+                  <div v-else-if="campaign.header_media_mime_type?.startsWith('video/')" class="w-12 h-12 flex items-center justify-center bg-muted rounded">
+                    <Video class="h-5 w-5 text-muted-foreground" />
+                  </div>
+                  <!-- Document Icon -->
+                  <div v-else class="w-12 h-12 flex items-center justify-center bg-muted rounded">
+                    <component :is="getMediaIcon(getTemplateHeaderType(campaign.template_id))" class="h-5 w-5 text-muted-foreground" />
                   </div>
                 </div>
-                <!-- Video Preview -->
-                <div v-else-if="campaign.header_media_mime_type?.startsWith('video/') && isMediaPreviewAvailable(campaign.id)" class="relative">
-                  <video
-                    :src="getMediaPreviewUrl(campaign.id)"
-                    class="w-full max-h-32 object-cover rounded border"
-                    muted
-                  />
-                  <div class="absolute top-1 right-1 bg-green-500 rounded-full p-0.5">
-                    <CheckCircle class="h-3 w-3 text-white" />
-                  </div>
+                <!-- File Info -->
+                <div class="flex-1 min-w-0">
+                  <p class="text-sm font-medium text-green-700 dark:text-green-400 truncate">
+                    {{ campaign.header_media_filename || 'Media file' }}
+                  </p>
+                  <p class="text-xs text-muted-foreground">
+                    {{ campaign.header_media_mime_type || 'Unknown type' }}
+                  </p>
                 </div>
-                <!-- Fallback: File info (for documents or when preview not available) -->
-                <div v-else class="flex items-center gap-2 p-2 bg-green-50 dark:bg-green-950/30 rounded border border-green-200 dark:border-green-800">
-                  <component :is="getMediaIcon(getTemplateHeaderType(campaign.template_id))" class="h-4 w-4 text-green-600" />
-                  <div class="flex-1 min-w-0">
-                    <p class="text-sm font-medium text-green-700 dark:text-green-400 truncate">
-                      {{ campaign.header_media_filename || 'Media file' }}
-                    </p>
-                    <p class="text-xs text-muted-foreground">
-                      {{ campaign.header_media_mime_type || 'Unknown type' }}
-                    </p>
-                  </div>
-                  <CheckCircle class="h-4 w-4 text-green-600 flex-shrink-0" />
-                </div>
-                <p class="text-xs text-muted-foreground truncate">{{ campaign.header_media_filename }}</p>
+                <!-- Preview Button -->
+                <Button
+                  v-if="isMediaPreviewAvailable(campaign.id) && (campaign.header_media_mime_type?.startsWith('image/') || campaign.header_media_mime_type?.startsWith('video/'))"
+                  variant="ghost"
+                  size="sm"
+                  @click="openMediaPreview(campaign)"
+                >
+                  <Eye class="h-4 w-4" />
+                </Button>
+                <CheckCircle class="h-4 w-4 text-green-600 flex-shrink-0" />
               </div>
 
               <div v-else-if="campaign.status === 'draft'" class="space-y-2">
@@ -1935,5 +1945,34 @@ async function addRecipientsFromCSV() {
         </AlertDialogFooter>
       </AlertDialogContent>
     </AlertDialog>
+
+    <!-- Media Preview Dialog -->
+    <Dialog v-model:open="showMediaPreviewDialog">
+      <DialogContent class="sm:max-w-[600px]">
+        <DialogHeader>
+          <DialogTitle>Media Preview</DialogTitle>
+          <DialogDescription>
+            {{ previewingCampaign?.header_media_filename }}
+          </DialogDescription>
+        </DialogHeader>
+        <div class="flex items-center justify-center py-4">
+          <img
+            v-if="previewingCampaign?.header_media_mime_type?.startsWith('image/') && previewingCampaign?.id"
+            :src="getMediaPreviewUrl(previewingCampaign.id)"
+            :alt="previewingCampaign?.header_media_filename"
+            class="max-w-full max-h-[60vh] object-contain rounded"
+          />
+          <video
+            v-else-if="previewingCampaign?.header_media_mime_type?.startsWith('video/') && previewingCampaign?.id"
+            :src="getMediaPreviewUrl(previewingCampaign.id)"
+            controls
+            class="max-w-full max-h-[60vh] rounded"
+          />
+        </div>
+        <DialogFooter>
+          <Button variant="outline" @click="showMediaPreviewDialog = false">Close</Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   </div>
 </template>
