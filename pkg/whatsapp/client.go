@@ -23,6 +23,7 @@ const (
 type Client struct {
 	HTTPClient *http.Client
 	Log        logf.Logger
+	baseURL    string // For testing with mock servers
 }
 
 // New creates a new WhatsApp client
@@ -31,7 +32,8 @@ func New(log logf.Logger) *Client {
 		HTTPClient: &http.Client{
 			Timeout: DefaultTimeout,
 		},
-		Log: log,
+		Log:     log,
+		baseURL: BaseURL,
 	}
 }
 
@@ -41,8 +43,28 @@ func NewWithTimeout(log logf.Logger, timeout time.Duration) *Client {
 		HTTPClient: &http.Client{
 			Timeout: timeout,
 		},
-		Log: log,
+		Log:     log,
+		baseURL: BaseURL,
 	}
+}
+
+// NewWithBaseURL creates a new WhatsApp client with a custom base URL (for testing)
+func NewWithBaseURL(log logf.Logger, baseURL string) *Client {
+	return &Client{
+		HTTPClient: &http.Client{
+			Timeout: DefaultTimeout,
+		},
+		Log:     log,
+		baseURL: baseURL,
+	}
+}
+
+// getBaseURL returns the base URL for API requests
+func (c *Client) getBaseURL() string {
+	if c.baseURL != "" {
+		return c.baseURL
+	}
+	return BaseURL
 }
 
 // doRequest performs an HTTP request to the Meta API
@@ -88,12 +110,12 @@ func (c *Client) doRequest(ctx context.Context, method, url string, body interfa
 
 // buildMessagesURL builds the messages endpoint URL
 func (c *Client) buildMessagesURL(account *Account) string {
-	return fmt.Sprintf("%s/%s/%s/messages", BaseURL, account.APIVersion, account.PhoneID)
+	return fmt.Sprintf("%s/%s/%s/messages", c.getBaseURL(), account.APIVersion, account.PhoneID)
 }
 
 // buildTemplatesURL builds the message_templates endpoint URL
 func (c *Client) buildTemplatesURL(account *Account) string {
-	return fmt.Sprintf("%s/%s/%s/message_templates", BaseURL, account.APIVersion, account.BusinessID)
+	return fmt.Sprintf("%s/%s/%s/message_templates", c.getBaseURL(), account.APIVersion, account.BusinessID)
 }
 
 // MediaURLResponse represents the response from Meta's media endpoint
@@ -107,7 +129,7 @@ type MediaURLResponse struct {
 
 // GetMediaURL retrieves the download URL for a media file from Meta's API
 func (c *Client) GetMediaURL(ctx context.Context, mediaID string, account *Account) (string, error) {
-	url := fmt.Sprintf("%s/%s/%s", BaseURL, account.APIVersion, mediaID)
+	url := fmt.Sprintf("%s/%s/%s", c.getBaseURL(), account.APIVersion, mediaID)
 
 	respBody, err := c.doRequest(ctx, http.MethodGet, url, nil, account.AccessToken)
 	if err != nil {
@@ -161,7 +183,7 @@ type UploadMediaResponse struct {
 
 // UploadMedia uploads media to WhatsApp's servers and returns the media ID
 func (c *Client) UploadMedia(ctx context.Context, account *Account, data []byte, mimeType, filename string) (string, error) {
-	url := fmt.Sprintf("%s/%s/%s/media", BaseURL, account.APIVersion, account.PhoneID)
+	url := fmt.Sprintf("%s/%s/%s/media", c.getBaseURL(), account.APIVersion, account.PhoneID)
 
 	// Create multipart form body
 	body := &bytes.Buffer{}
