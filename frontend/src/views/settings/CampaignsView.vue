@@ -696,6 +696,11 @@ function getAcceptedMediaTypes(headerType: string | null): string {
   }
 }
 
+function triggerMediaFileInput(campaignId: string) {
+  const input = window.document.querySelector(`input[data-campaign-id="${campaignId}"]`) as HTMLInputElement
+  input?.click()
+}
+
 // Recipients functions
 const deletingRecipientId = ref<string | null>(null)
 
@@ -1355,7 +1360,7 @@ async function addRecipientsFromCSV() {
                 <div v-else>
                   <input
                     type="file"
-                    :id="'media-upload-' + campaign.id"
+                    :data-campaign-id="campaign.id"
                     class="hidden"
                     :accept="getAcceptedMediaTypes(getTemplateHeaderType(campaign.template_id))"
                     @change="(e) => { selectedCampaign = campaign; handleMediaFileSelect(e) }"
@@ -1363,7 +1368,7 @@ async function addRecipientsFromCSV() {
                   <Button
                     variant="outline"
                     size="sm"
-                    @click="() => document.getElementById('media-upload-' + campaign.id)?.click()"
+                    @click="triggerMediaFileInput(campaign.id)"
                   >
                     <Upload class="h-4 w-4 mr-1" />
                     Select File
