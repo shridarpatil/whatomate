@@ -21,11 +21,19 @@ func testWorker(t *testing.T) *Worker {
 	db := testutil.SetupTestDB(t)
 	log := testutil.NopLogger()
 
-	return &Worker{
+	w := &Worker{
 		DB:       db,
 		Log:      log,
 		WhatsApp: whatsapp.New(log),
 	}
+
+	// Set up Publisher if Redis is available
+	if rdb := testutil.SetupTestRedis(t); rdb != nil {
+		w.Redis = rdb
+		w.Publisher = queue.NewPublisher(rdb, log)
+	}
+
+	return w
 }
 
 func createTestCampaignData(t *testing.T, w *Worker) (*models.Organization, *models.WhatsAppAccount, *models.Template, *models.BulkMessageCampaign, *models.BulkMessageRecipient) {
@@ -158,7 +166,8 @@ func TestWorker_HandleRecipientJob_AccountNotFound(t *testing.T) {
 	org, _, _, campaign, recipient := createTestCampaignData(t, w)
 
 	// Change campaign to use non-existent account
-	require.NoError(t, w.DB.Model(campaign).Update("whatsapp_account", "non-existent-account").Error)
+	campaign.WhatsAppAccount = "non-existent-account"
+	require.NoError(t, w.DB.Save(campaign).Error)
 
 	job := &queue.RecipientJob{
 		CampaignID:     campaign.ID,

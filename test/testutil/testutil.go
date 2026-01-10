@@ -3,12 +3,21 @@ package testutil
 
 import (
 	"context"
+	"os"
+	"sync"
 	"testing"
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/redis/go-redis/v9"
 	"github.com/stretchr/testify/require"
 	"github.com/zerodha/logf"
+)
+
+var (
+	testRedis        *redis.Client
+	testRedisOnce    sync.Once
+	testRedisInitErr error
 )
 
 // TestContext returns a context with a timeout suitable for tests.
@@ -102,4 +111,41 @@ func AssertEventually(t *testing.T, condition func() bool, timeout time.Duration
 		time.Sleep(10 * time.Millisecond)
 	}
 	t.Fatalf("condition not met within %v: %s", timeout, msg)
+}
+
+// SetupTestRedis creates a connection to a test Redis instance.
+// Requires TEST_REDIS_URL environment variable to be set.
+// If not set, returns nil (tests should handle this gracefully).
+func SetupTestRedis(t *testing.T) *redis.Client {
+	t.Helper()
+
+	redisURL := os.Getenv("TEST_REDIS_URL")
+	if redisURL == "" {
+		return nil
+	}
+
+	testRedisOnce.Do(func() {
+		opts, err := redis.ParseURL(redisURL)
+		if err != nil {
+			testRedisInitErr = err
+			return
+		}
+
+		testRedis = redis.NewClient(opts)
+
+		// Verify connection
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		if err := testRedis.Ping(ctx).Err(); err != nil {
+			testRedisInitErr = err
+			return
+		}
+	})
+
+	if testRedisInitErr != nil {
+		t.Logf("Warning: failed to connect to test Redis: %v", testRedisInitErr)
+		return nil
+	}
+
+	return testRedis
 }
