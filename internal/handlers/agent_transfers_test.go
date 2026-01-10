@@ -14,26 +14,10 @@ import (
 	"github.com/stretchr/testify/require"
 	"github.com/valyala/fasthttp"
 	"github.com/zerodha/fastglue"
-	"gorm.io/gorm"
 )
 
-// cleanupTestTables removes all data from tables in the correct order for FK constraints.
-func cleanupTestTables(db *gorm.DB) {
-	tables := []string{
-		"agent_transfers",
-		"team_members",
-		"teams",
-		"contacts",
-		"whatsapp_accounts",
-		"users",
-		"organizations",
-	}
-	for _, table := range tables {
-		db.Exec("DELETE FROM " + table)
-	}
-}
-
 // agentTransfersTestApp creates an App instance for agent transfers testing.
+// It uses a transaction that gets rolled back after the test for isolation.
 func agentTransfersTestApp(t *testing.T) *handlers.App {
 	t.Helper()
 
@@ -41,6 +25,11 @@ func agentTransfersTestApp(t *testing.T) *handlers.App {
 	log := testutil.NopLogger()
 	redis := testutil.SetupTestRedis(t)
 
+	// Start a transaction for test isolation
+	tx := db.Begin()
+	t.Cleanup(func() {
+		tx.Rollback()
+	})
 
 	cfg := &config.Config{
 		JWT: config.JWTConfig{
@@ -52,7 +41,7 @@ func agentTransfersTestApp(t *testing.T) *handlers.App {
 
 	return &handlers.App{
 		Config: cfg,
-		DB:     db,
+		DB:     tx, // Use transaction instead of raw db
 		Log:    log,
 		Redis:  redis,
 	}
