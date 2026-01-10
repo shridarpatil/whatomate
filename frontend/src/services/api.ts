@@ -188,9 +188,7 @@ export const campaignsService = {
   uploadMedia: (campaignId: string, file: File) => {
     const formData = new FormData()
     formData.append('file', file)
-    return api.post(`/campaigns/${campaignId}/media`, formData, {
-      headers: { 'Content-Type': 'multipart/form-data' }
-    })
+    return api.post(`/campaigns/${campaignId}/media`, formData)
   }
 }
 
