@@ -678,6 +678,55 @@ func (a *App) GetCampaignRecipients(r *fastglue.Request) error {
 	})
 }
 
+// DeleteCampaignRecipient deletes a single recipient from a campaign
+func (a *App) DeleteCampaignRecipient(r *fastglue.Request) error {
+	orgID, err := a.getOrgIDFromContext(r)
+	if err != nil {
+		return r.SendErrorEnvelope(fasthttp.StatusUnauthorized, "Unauthorized", nil, "")
+	}
+
+	campaignID := r.RequestCtx.UserValue("id").(string)
+	recipientID := r.RequestCtx.UserValue("recipientId").(string)
+
+	campaignUUID, err := uuid.Parse(campaignID)
+	if err != nil {
+		return r.SendErrorEnvelope(fasthttp.StatusBadRequest, "Invalid campaign ID", nil, "")
+	}
+
+	recipientUUID, err := uuid.Parse(recipientID)
+	if err != nil {
+		return r.SendErrorEnvelope(fasthttp.StatusBadRequest, "Invalid recipient ID", nil, "")
+	}
+
+	// Verify campaign belongs to org and is in draft status
+	var campaign models.BulkMessageCampaign
+	if err := a.DB.Where("id = ? AND organization_id = ?", campaignUUID, orgID).First(&campaign).Error; err != nil {
+		return r.SendErrorEnvelope(fasthttp.StatusNotFound, "Campaign not found", nil, "")
+	}
+
+	if campaign.Status != models.CampaignStatusDraft {
+		return r.SendErrorEnvelope(fasthttp.StatusBadRequest, "Can only delete recipients from draft campaigns", nil, "")
+	}
+
+	// Verify recipient belongs to campaign and delete
+	result := a.DB.Where("id = ? AND campaign_id = ?", recipientUUID, campaignUUID).Delete(&models.BulkMessageRecipient{})
+	if result.Error != nil {
+		a.Log.Error("Failed to delete recipient", "error", result.Error)
+		return r.SendErrorEnvelope(fasthttp.StatusInternalServerError, "Failed to delete recipient", nil, "")
+	}
+
+	if result.RowsAffected == 0 {
+		return r.SendErrorEnvelope(fasthttp.StatusNotFound, "Recipient not found", nil, "")
+	}
+
+	// Update campaign recipient count
+	a.DB.Model(&campaign).Update("recipient_count", gorm.Expr("recipient_count - 1"))
+
+	return r.SendEnvelope(map[string]interface{}{
+		"message": "Recipient deleted successfully",
+	})
+}
+
 // getUserIDFromContext extracts user ID from request context (set by auth middleware)
 func (a *App) getUserIDFromContext(r *fastglue.Request) (uuid.UUID, error) {
 	userIDVal := r.RequestCtx.UserValue("user_id")

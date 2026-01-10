@@ -590,6 +590,8 @@ function getProgressPercentage(campaign: Campaign): number {
 }
 
 // Recipients functions
+const deletingRecipientId = ref<string | null>(null)
+
 async function viewRecipients(campaign: Campaign) {
   selectedCampaign.value = campaign
   showRecipientsDialog.value = true
@@ -603,6 +605,23 @@ async function viewRecipients(campaign: Campaign) {
     recipients.value = []
   } finally {
     isLoadingRecipients.value = false
+  }
+}
+
+async function deleteRecipient(recipientId: string) {
+  if (!selectedCampaign.value) return
+
+  deletingRecipientId.value = recipientId
+  try {
+    await campaignsService.deleteRecipient(selectedCampaign.value.id, recipientId)
+    recipients.value = recipients.value.filter(r => r.id !== recipientId)
+    toast.success('Recipient deleted')
+    await fetchCampaigns() // Refresh to update recipient count
+  } catch (error: any) {
+    const message = error.response?.data?.message || 'Failed to delete recipient'
+    toast.error(message)
+  } finally {
+    deletingRecipientId.value = null
   }
 }
 
@@ -1322,6 +1341,7 @@ async function addRecipientsFromCSV() {
                   <th class="text-left py-2 px-2">Name</th>
                   <th class="text-left py-2 px-2">Status</th>
                   <th class="text-left py-2 px-2">Sent At</th>
+                  <th v-if="selectedCampaign?.status === 'draft'" class="text-center py-2 px-2 w-16"></th>
                 </tr>
               </thead>
               <tbody>
@@ -1340,6 +1360,18 @@ async function addRecipientsFromCSV() {
                   </td>
                   <td class="py-2 px-2 text-muted-foreground">
                     {{ recipient.sent_at ? formatDate(recipient.sent_at) : '-' }}
+                  </td>
+                  <td v-if="selectedCampaign?.status === 'draft'" class="py-2 px-2 text-center">
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      class="h-7 w-7"
+                      @click="deleteRecipient(recipient.id)"
+                      :disabled="deletingRecipientId === recipient.id"
+                    >
+                      <Loader2 v-if="deletingRecipientId === recipient.id" class="h-4 w-4 animate-spin" />
+                      <Trash2 v-else class="h-4 w-4 text-muted-foreground hover:text-destructive" />
+                    </Button>
                   </td>
                 </tr>
               </tbody>

@@ -181,7 +181,9 @@ export const campaignsService = {
   // Recipients
   getRecipients: (id: string) => api.get(`/campaigns/${id}/recipients`),
   addRecipients: (id: string, recipients: Array<{ phone_number: string; recipient_name?: string; template_params?: Record<string, any> }>) =>
-    api.post(`/campaigns/${id}/recipients/import`, { recipients })
+    api.post(`/campaigns/${id}/recipients/import`, { recipients }),
+  deleteRecipient: (campaignId: string, recipientId: string) =>
+    api.delete(`/campaigns/${campaignId}/recipients/${recipientId}`)
 }
 
 export const chatbotService = {
