@@ -19,18 +19,18 @@ type CampaignRequest struct {
 	Name            string     `json:"name" validate:"required"`
 	WhatsAppAccount string     `json:"whatsapp_account" validate:"required"`
 	TemplateID      string     `json:"template_id" validate:"required"`
-	HeaderMediaID  string     `json:"header_media_url"`
+	HeaderMediaID   string     `json:"header_media_id"`
 	ScheduledAt     *time.Time `json:"scheduled_at"`
 }
 
 // CampaignResponse represents campaign in API responses
 type CampaignResponse struct {
-	ID              uuid.UUID            `json:"id"`
-	Name            string               `json:"name"`
-	WhatsAppAccount string               `json:"whatsapp_account"`
-	TemplateID      uuid.UUID            `json:"template_id"`
-	TemplateName    string               `json:"template_name,omitempty"`
-	HeaderMediaID  string               `json:"header_media_url,omitempty"`
+	ID              uuid.UUID             `json:"id"`
+	Name            string                `json:"name"`
+	WhatsAppAccount string                `json:"whatsapp_account"`
+	TemplateID      uuid.UUID             `json:"template_id"`
+	TemplateName    string                `json:"template_name,omitempty"`
+	HeaderMediaID   string                `json:"header_media_id,omitempty"`
 	Status          models.CampaignStatus `json:"status"`
 	TotalRecipients int                  `json:"total_recipients"`
 	SentCount       int                  `json:"sent_count"`
