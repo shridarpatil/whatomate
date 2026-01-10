@@ -31,19 +31,33 @@ func testWorker(t *testing.T) *Worker {
 func createTestCampaignData(t *testing.T, w *Worker) (*models.Organization, *models.WhatsAppAccount, *models.Template, *models.BulkMessageCampaign, *models.BulkMessageRecipient) {
 	t.Helper()
 
+	uniqueID := uuid.New().String()[:8]
+
 	// Create organization
 	org := &models.Organization{
-		Name: "Test Org " + uuid.New().String()[:8],
-		Slug: "test-org-" + uuid.New().String()[:8],
+		Name: "Test Org " + uniqueID,
+		Slug: "test-org-" + uniqueID,
 	}
 	require.NoError(t, w.DB.Create(org).Error)
 
-	// Create WhatsApp account
+	// Create user for CreatedBy foreign key
+	user := &models.User{
+		OrganizationID: org.ID,
+		Email:          "test-" + uniqueID + "@example.com",
+		PasswordHash:   "hashed",
+		FullName:       "Test User",
+		Role:           "admin",
+		IsActive:       true,
+	}
+	require.NoError(t, w.DB.Create(user).Error)
+
+	// Create WhatsApp account with unique name
+	accountName := "test-account-" + uniqueID
 	account := &models.WhatsAppAccount{
 		OrganizationID: org.ID,
-		Name:           "test-account",
-		PhoneID:        "123456789",
-		BusinessID:     "987654321",
+		Name:           accountName,
+		PhoneID:        "phone-" + uniqueID,
+		BusinessID:     "business-" + uniqueID,
 		AccessToken:    "test-token",
 	}
 	require.NoError(t, w.DB.Create(account).Error)
@@ -51,8 +65,8 @@ func createTestCampaignData(t *testing.T, w *Worker) (*models.Organization, *mod
 	// Create template
 	template := &models.Template{
 		OrganizationID:  org.ID,
-		WhatsAppAccount: "test-account",
-		Name:            "test_template",
+		WhatsAppAccount: accountName,
+		Name:            "test_template_" + uniqueID,
 		Language:        "en",
 		Category:        "MARKETING",
 		Status:          "APPROVED",
@@ -60,14 +74,15 @@ func createTestCampaignData(t *testing.T, w *Worker) (*models.Organization, *mod
 	}
 	require.NoError(t, w.DB.Create(template).Error)
 
-	// Create campaign
+	// Create campaign with CreatedBy
 	campaign := &models.BulkMessageCampaign{
 		OrganizationID:  org.ID,
-		Name:            "Test Campaign",
-		WhatsAppAccount: "test-account",
+		Name:            "Test Campaign " + uniqueID,
+		WhatsAppAccount: accountName,
 		TemplateID:      template.ID,
 		Status:          "processing",
 		TotalRecipients: 1,
+		CreatedBy:       user.ID,
 	}
 	require.NoError(t, w.DB.Create(campaign).Error)
 
@@ -268,24 +283,67 @@ func TestWorker_getOrCreateContact_FindsWithPlusPrefix(t *testing.T) {
 	assert.Equal(t, existingContact.ID, contact.ID)
 }
 
-func TestWorker_updateRecipientStatus_Sent(t *testing.T) {
-	w := testWorker(t)
+// createMinimalCampaignData creates the minimum data needed for campaign tests
+// Returns org, user, template, and campaign
+func createMinimalCampaignData(t *testing.T, w *Worker, status string) (*models.Organization, *models.User, *models.Template, *models.BulkMessageCampaign) {
+	t.Helper()
+	uniqueID := uuid.New().String()[:8]
 
-	// Create organization and campaign
 	org := &models.Organization{
-		Name: "Test Org " + uuid.New().String()[:8],
-		Slug: "test-org-" + uuid.New().String()[:8],
+		Name: "Test Org " + uniqueID,
+		Slug: "test-org-" + uniqueID,
 	}
 	require.NoError(t, w.DB.Create(org).Error)
 
+	user := &models.User{
+		OrganizationID: org.ID,
+		Email:          "test-" + uniqueID + "@example.com",
+		PasswordHash:   "hashed",
+		FullName:       "Test User",
+		Role:           "admin",
+		IsActive:       true,
+	}
+	require.NoError(t, w.DB.Create(user).Error)
+
+	accountName := "test-account-" + uniqueID
+	account := &models.WhatsAppAccount{
+		OrganizationID: org.ID,
+		Name:           accountName,
+		PhoneID:        "phone-" + uniqueID,
+		BusinessID:     "business-" + uniqueID,
+		AccessToken:    "test-token",
+	}
+	require.NoError(t, w.DB.Create(account).Error)
+
+	template := &models.Template{
+		OrganizationID:  org.ID,
+		WhatsAppAccount: accountName,
+		Name:            "test_template_" + uniqueID,
+		Language:        "en",
+		Category:        "MARKETING",
+		Status:          "APPROVED",
+		BodyContent:     "Hello {{1}}!",
+	}
+	require.NoError(t, w.DB.Create(template).Error)
+
 	campaign := &models.BulkMessageCampaign{
 		OrganizationID:  org.ID,
-		Name:            "Test Campaign",
-		WhatsAppAccount: "test",
-		TemplateID:      uuid.New(),
-		Status:          "processing",
+		Name:            "Test Campaign " + uniqueID,
+		WhatsAppAccount: accountName,
+		TemplateID:      template.ID,
+		Status:          status,
+		CreatedBy:       user.ID,
 	}
 	require.NoError(t, w.DB.Create(campaign).Error)
+
+	return org, user, template, campaign
+}
+
+func TestWorker_updateRecipientStatus_Sent(t *testing.T) {
+	w := testWorker(t)
+
+	// Create campaign data with proper foreign keys
+	_, _, _, campaign := createMinimalCampaignData(t, w, "processing")
 
 	recipient := &models.BulkMessageRecipient{
 		CampaignID:  campaign.ID,
@@ -307,21 +365,8 @@ func TestWorker_updateRecipientStatus_Sent(t *testing.T) {
 func TestWorker_updateRecipientStatus_Failed(t *testing.T) {
 	w := testWorker(t)
 
-	// Create organization and campaign
-	org := &models.Organization{
-		Name: "Test Org " + uuid.New().String()[:8],
-		Slug: "test-org-" + uuid.New().String()[:8],
-	}
-	require.NoError(t, w.DB.Create(org).Error)
-
-	campaign := &models.BulkMessageCampaign{
-		OrganizationID:  org.ID,
-		Name:            "Test Campaign",
-		WhatsAppAccount: "test",
-		TemplateID:      uuid.New(),
-		Status:          "processing",
-	}
-	require.NoError(t, w.DB.Create(campaign).Error)
+	// Create campaign data with proper foreign keys
+	_, _, _, campaign := createMinimalCampaignData(t, w, "processing")
 
 	recipient := &models.BulkMessageRecipient{
 		CampaignID:  campaign.ID,
@@ -341,23 +386,8 @@ func TestWorker_updateRecipientStatus_Failed(t *testing.T) {
 func TestWorker_incrementCampaignCount(t *testing.T) {
 	w := testWorker(t)
 
-	// Create organization
-	org := &models.Organization{
-		Name: "Test Org " + uuid.New().String()[:8],
-		Slug: "test-org-" + uuid.New().String()[:8],
-	}
-	require.NoError(t, w.DB.Create(org).Error)
-
-	campaign := &models.BulkMessageCampaign{
-		OrganizationID:  org.ID,
-		Name:            "Test Campaign",
-		WhatsAppAccount: "test",
-		TemplateID:      uuid.New(),
-		Status:          "processing",
-		SentCount:       0,
-		FailedCount:     0,
-	}
-	require.NoError(t, w.DB.Create(campaign).Error)
+	// Create campaign data with proper foreign keys
+	_, _, _, campaign := createMinimalCampaignData(t, w, "processing")
 
 	// Increment sent count multiple times
 	w.incrementCampaignCount(campaign.ID, "sent_count")
@@ -373,23 +403,14 @@ func TestWorker_incrementCampaignCount(t *testing.T) {
 func TestWorker_checkCampaignCompletion_CompletesWhenAllProcessed(t *testing.T) {
 	w := testWorker(t)
 
-	// Create organization
-	org := &models.Organization{
-		Name: "Test Org " + uuid.New().String()[:8],
-		Slug: "test-org-" + uuid.New().String()[:8],
-	}
-	require.NoError(t, w.DB.Create(org).Error)
+	// Create campaign data with proper foreign keys
+	org, _, _, campaign := createMinimalCampaignData(t, w, "processing")
 
-	campaign := &models.BulkMessageCampaign{
-		OrganizationID:  org.ID,
-		Name:            "Test Campaign",
-		WhatsAppAccount: "test",
-		TemplateID:      uuid.New(),
-		Status:          "processing",
-		TotalRecipients: 2,
-		SentCount:       2,
-	}
-	require.NoError(t, w.DB.Create(campaign).Error)
+	// Update campaign counts for this test
+	require.NoError(t, w.DB.Model(campaign).Updates(map[string]interface{}{
+		"total_recipients": 2,
+		"sent_count":       2,
+	}).Error)
 
 	// Create recipients that are already processed (not pending)
 	recipient1 := &models.BulkMessageRecipient{
@@ -417,23 +438,14 @@ func TestWorker_checkCampaignCompletion_CompletesWhenAllProcessed(t *testing.T) 
 func TestWorker_checkCampaignCompletion_DoesNotCompleteWithPending(t *testing.T) {
 	w := testWorker(t)
 
-	// Create organization
-	org := &models.Organization{
-		Name: "Test Org " + uuid.New().String()[:8],
-		Slug: "test-org-" + uuid.New().String()[:8],
-	}
-	require.NoError(t, w.DB.Create(org).Error)
+	// Create campaign data with proper foreign keys
+	org, _, _, campaign := createMinimalCampaignData(t, w, "processing")
 
-	campaign := &models.BulkMessageCampaign{
-		OrganizationID:  org.ID,
-		Name:            "Test Campaign",
-		WhatsAppAccount: "test",
-		TemplateID:      uuid.New(),
-		Status:          "processing",
-		TotalRecipients: 2,
-		SentCount:       1,
-	}
-	require.NoError(t, w.DB.Create(campaign).Error)
+	// Update campaign counts for this test
+	require.NoError(t, w.DB.Model(campaign).Updates(map[string]interface{}{
+		"total_recipients": 2,
+		"sent_count":       1,
+	}).Error)
 
 	// Create one processed and one pending recipient
 	recipient1 := &models.BulkMessageRecipient{
@@ -461,21 +473,8 @@ func TestWorker_checkCampaignCompletion_DoesNotCompleteWithPending(t *testing.T)
 func TestWorker_checkCampaignCompletion_NotProcessingStatus(t *testing.T) {
 	w := testWorker(t)
 
-	// Create organization
-	org := &models.Organization{
-		Name: "Test Org " + uuid.New().String()[:8],
-		Slug: "test-org-" + uuid.New().String()[:8],
-	}
-	require.NoError(t, w.DB.Create(org).Error)
-
-	campaign := &models.BulkMessageCampaign{
-		OrganizationID:  org.ID,
-		Name:            "Test Campaign",
-		WhatsAppAccount: "test",
-		TemplateID:      uuid.New(),
-		Status:          "paused", // Not processing
-	}
-	require.NoError(t, w.DB.Create(campaign).Error)
+	// Create campaign data with proper foreign keys - status is "paused"
+	org, _, _, campaign := createMinimalCampaignData(t, w, "paused")
 
 	// Should not change status since it's not processing
 	w.checkCampaignCompletion(context.Background(), campaign.ID, org.ID)
