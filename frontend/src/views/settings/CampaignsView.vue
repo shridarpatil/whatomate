@@ -70,7 +70,8 @@ import {
   Image,
   FileText,
   Video,
-  X
+  X,
+  MessageSquare
 } from 'lucide-vue-next'
 import { formatDate } from '@/lib/utils'
 import type { DateRange } from 'reka-ui'
@@ -868,6 +869,19 @@ function getTemplateParamNames(template: Template): string[] {
     }
   }
   return names
+}
+
+function highlightTemplateParams(content: string): string {
+  // Escape HTML first to prevent XSS
+  const escaped = content
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+  // Highlight parameters with a styled span
+  return escaped.replace(
+    /\{\{([^}]+)\}\}/g,
+    '<span class="bg-primary/20 text-primary px-1 rounded font-medium">{{$1}}</span>'
+  )
 }
 
 function hasMixedParamTypes(paramNames: string[]): boolean {
@@ -1670,6 +1684,15 @@ async function addRecipientsFromCSV() {
             </span>
           </DialogDescription>
         </DialogHeader>
+
+        <!-- Template Preview -->
+        <div v-if="selectedTemplate?.body_content" class="mb-4 p-3 bg-muted/50 rounded-lg border">
+          <div class="flex items-center gap-2 mb-2">
+            <MessageSquare class="h-4 w-4 text-muted-foreground" />
+            <span class="text-sm font-medium">Template Preview</span>
+          </div>
+          <p class="text-sm whitespace-pre-wrap" v-html="highlightTemplateParams(selectedTemplate.body_content)"></p>
+        </div>
 
         <Tabs v-model="addRecipientsTab" class="w-full">
           <TabsList class="grid w-full grid-cols-2">
