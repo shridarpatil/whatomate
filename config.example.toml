@@ -38,6 +38,14 @@ secret = "your-super-secret-jwt-key-change-in-production"
 access_expiry_mins = 15
 refresh_expiry_days = 7
 
+[whatsapp]
+# Global webhook verify token (can be overridden per account)
+webhook_verify_token = "your-webhook-verify-token"
+# Meta Graph API version (v24.0 supports embedded signup with coexistence)
+api_version = "v24.0"
+# Meta Graph API base URL
+base_url = "https://graph.facebook.com"
+
 [storage]
 type = "local"  # local, s3
 local_path = "./uploads"

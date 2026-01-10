@@ -416,6 +416,12 @@ func setupRoutes(g *fastglue.Fastglue, app *handlers.App, lo logf.Logger, basePa
 		if len(path) >= 28 && path[:28] == "/api/custom-actions/redirect" {
 			return r
 		}
+		// Skip auth for public embedded signup endpoints
+		if len(path) >= 22 && path[:22] == "/api/embedded-signup/" {
+			// Allow /api/embedded-signup/{id}/config and /api/embedded-signup/{id}/submit
+			// These are public endpoints for the embedded widget
+			return r
+		}
 		// Apply auth for all other /api routes (supports both JWT and API key)
 		if len(path) > 4 && path[:4] == "/api" {
 			return middleware.AuthWithDB(app.Config.JWT.Secret, app.DB)(r)
@@ -480,6 +486,7 @@ func setupRoutes(g *fastglue.Fastglue, app *handlers.App, lo logf.Logger, basePa
 					"/api/campaigns",
 					"/api/chatbot",
 					"/api/analytics",
+					"/api/embedded-signups",
 				}
 				for _, prefix := range managerRoutes {
 					if len(path) >= len(prefix) && path[:len(prefix)] == prefix {
@@ -678,6 +685,18 @@ func setupRoutes(g *fastglue.Fastglue, app *handlers.App, lo logf.Logger, basePa
 	g.GET("/api/products/{id}", app.GetCatalogProduct)
 	g.PUT("/api/products/{id}", app.UpdateCatalogProduct)
 	g.DELETE("/api/products/{id}", app.DeleteCatalogProduct)
+
+	// Embedded Signup (Manager+ for management, Public for widget)
+	// Public endpoints - no auth required
+	g.GET("/api/embedded-signup/{id}/config", app.GetEmbeddedSignupConfig)
+	g.POST("/api/embedded-signup/{id}/submit", app.SubmitEmbeddedSignup)
+	// Management endpoints - require auth
+	g.GET("/api/embedded-signups", app.ListEmbeddedSignups)
+	g.POST("/api/embedded-signups", app.CreateEmbeddedSignup)
+	g.GET("/api/embedded-signups/{id}", app.GetEmbeddedSignup)
+	g.PUT("/api/embedded-signups/{id}", app.UpdateEmbeddedSignup)
+	g.DELETE("/api/embedded-signups/{id}", app.DeleteEmbeddedSignup)
+	g.GET("/api/embedded-signups/{id}/leads", app.ListEmbeddedSignupLeads)
 
 	// Serve embedded frontend (SPA)
 	if frontend.IsEmbedded() {

@@ -395,3 +395,89 @@ type WhatsAppFlow struct {
 func (WhatsAppFlow) TableName() string {
 	return "whatsapp_flows"
 }
+
+// EmbeddedSignup represents an embedded signup configuration with Meta coexistence support
+type EmbeddedSignup struct {
+	BaseModel
+	OrganizationID      uuid.UUID `gorm:"type:uuid;index;not null" json:"organization_id"`
+	Name                string    `gorm:"size:255;not null" json:"name"`
+	WhatsAppAccountID   uuid.UUID `gorm:"type:uuid;index;not null" json:"whatsapp_account_id"` // Default account for signups
+
+	// Meta Embedded Signup Configuration
+	MetaAppID           string `gorm:"size:100;not null" json:"meta_app_id"`
+	MetaConfigID        string `gorm:"size:255;not null" json:"meta_config_id"`
+	MetaAppSecret       string `gorm:"type:text;not null" json:"-"` // Encrypted, never exposed
+
+	// Coexistence Settings
+	EnableCoexistence   bool   `gorm:"default:true" json:"enable_coexistence"`
+	SyncChatHistory     bool   `gorm:"default:true" json:"sync_chat_history"` // Sync up to 6 months of chats
+	APIVersion          string `gorm:"size:20;default:'v24.0'" json:"api_version"` // Meta Graph API version
+
+	// Form Configuration
+	FormFields          JSONB       `gorm:"type:jsonb;default:'{}'" json:"form_fields"` // Custom fields configuration
+	RequiredFields      StringArray `gorm:"type:jsonb;default:'[\"phone\"]'" json:"required_fields"`
+
+	// Post-Signup Actions
+	WelcomeMessage      string  `gorm:"type:text" json:"welcome_message"`
+	WelcomeTemplateID   *uuid.UUID `gorm:"type:uuid" json:"welcome_template_id,omitempty"`
+	SuccessMessage      string  `gorm:"type:text" json:"success_message"`
+	RedirectURL         *string `gorm:"type:text" json:"redirect_url,omitempty"`
+	WebhookURL          *string `gorm:"type:text" json:"webhook_url,omitempty"` // Notify on signup
+
+	// Security & CORS
+	AllowedOrigins      StringArray `gorm:"type:jsonb;default:'[]'" json:"allowed_origins"` // Domain whitelist
+	RateLimitPerHour    int         `gorm:"default:100" json:"rate_limit_per_hour"`
+
+	// Settings
+	IsActive            bool   `gorm:"default:true" json:"is_active"`
+	AutoCreateContact   bool   `gorm:"default:true" json:"auto_create_contact"`
+	AssignToTeamID      *uuid.UUID `gorm:"type:uuid" json:"assign_to_team_id,omitempty"`
+
+	// Relations
+	Organization      *Organization     `gorm:"foreignKey:OrganizationID" json:"organization,omitempty"`
+	WhatsAppAccount   *WhatsAppAccount  `gorm:"foreignKey:WhatsAppAccountID" json:"whatsapp_account,omitempty"`
+	WelcomeTemplate   *Template         `gorm:"foreignKey:WelcomeTemplateID" json:"welcome_template,omitempty"`
+	AssignToTeam      *Team             `gorm:"foreignKey:AssignToTeamID" json:"assign_to_team,omitempty"`
+}
+
+func (EmbeddedSignup) TableName() string {
+	return "embedded_signups"
+}
+
+// EmbeddedSignupLead represents a captured lead from embedded signup
+type EmbeddedSignupLead struct {
+	BaseModel
+	OrganizationID      uuid.UUID                `gorm:"type:uuid;index;not null" json:"organization_id"`
+	SignupID            uuid.UUID                `gorm:"type:uuid;index;not null" json:"signup_id"`
+	PhoneNumber         string                   `gorm:"size:20;not null" json:"phone_number"`
+	ProfileName         string                   `gorm:"size:255" json:"profile_name"`
+	FormData            JSONB                    `gorm:"type:jsonb;default:'{}'" json:"form_data"`
+	ContactID           *uuid.UUID               `gorm:"type:uuid;index" json:"contact_id,omitempty"` // Link to contact
+
+	// Meta OAuth Data
+	MetaAccessToken     string                   `gorm:"type:text" json:"-"` // Encrypted
+	MetaBusinessID      string                   `gorm:"size:100" json:"meta_business_id"`
+	MetaPhoneID         string                   `gorm:"size:100" json:"meta_phone_id"`
+	MetaWABAID          string                   `gorm:"size:100" json:"meta_waba_id"` // WhatsApp Business Account ID
+
+	// Coexistence Info
+	CoexistenceEnabled  bool                     `gorm:"default:false" json:"coexistence_enabled"`
+	ChatHistorySynced   bool                     `gorm:"default:false" json:"chat_history_synced"`
+
+	// Status & Tracking
+	Status              EmbeddedSignupLeadStatus `gorm:"size:20;default:'pending'" json:"status"`
+	Source              EmbeddedSignupSource     `gorm:"size:20;default:'widget'" json:"source"`
+	IPAddress           string                   `gorm:"size:45" json:"ip_address"`
+	UserAgent           string                   `gorm:"type:text" json:"user_agent"`
+	Referrer            string                   `gorm:"type:text" json:"referrer"`
+	ErrorMessage        string                   `gorm:"type:text" json:"error_message,omitempty"`
+
+	// Relations
+	Organization *Organization  `gorm:"foreignKey:OrganizationID" json:"organization,omitempty"`
+	Signup       *EmbeddedSignup `gorm:"foreignKey:SignupID" json:"signup,omitempty"`
+	Contact      *Contact        `gorm:"foreignKey:ContactID" json:"contact,omitempty"`
+}
+
+func (EmbeddedSignupLead) TableName() string {
+	return "embedded_signup_leads"
+}

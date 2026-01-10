@@ -95,6 +95,10 @@ func GetMigrationModels() []MigrationModel {
 		// Catalogs
 		{"Catalog", &models.Catalog{}},
 		{"CatalogProduct", &models.CatalogProduct{}},
+
+		// Embedded Signup
+		{"EmbeddedSignup", &models.EmbeddedSignup{}},
+		{"EmbeddedSignupLead", &models.EmbeddedSignupLead{}},
 	}
 }
 
@@ -205,6 +209,12 @@ func getIndexes() []string {
 		`CREATE INDEX IF NOT EXISTS idx_availability_logs_user_time ON user_availability_logs(user_id, started_at DESC)`,
 		`CREATE INDEX IF NOT EXISTS idx_availability_logs_org_time ON user_availability_logs(organization_id, started_at DESC)`,
 		`CREATE UNIQUE INDEX IF NOT EXISTS idx_sso_providers_org_provider ON sso_providers(organization_id, provider)`,
+
+		// Embedded signup indexes
+		`CREATE INDEX IF NOT EXISTS idx_embedded_signups_org_active ON embedded_signups(organization_id, is_active)`,
+		`CREATE INDEX IF NOT EXISTS idx_embedded_signup_leads_signup ON embedded_signup_leads(signup_id, created_at DESC)`,
+		`CREATE INDEX IF NOT EXISTS idx_embedded_signup_leads_status ON embedded_signup_leads(organization_id, status, created_at DESC)`,
+		`CREATE INDEX IF NOT EXISTS idx_embedded_signup_leads_phone ON embedded_signup_leads(phone_number)`,
 	}
 }
 
@@ -268,6 +278,12 @@ func CreateIndexes(db *gorm.DB) error {
 
 		// SSO providers indexes
 		`CREATE UNIQUE INDEX IF NOT EXISTS idx_sso_providers_org_provider ON sso_providers(organization_id, provider)`,
+
+		// Embedded signup indexes
+		`CREATE INDEX IF NOT EXISTS idx_embedded_signups_org_active ON embedded_signups(organization_id, is_active)`,
+		`CREATE INDEX IF NOT EXISTS idx_embedded_signup_leads_signup ON embedded_signup_leads(signup_id, created_at DESC)`,
+		`CREATE INDEX IF NOT EXISTS idx_embedded_signup_leads_status ON embedded_signup_leads(organization_id, status, created_at DESC)`,
+		`CREATE INDEX IF NOT EXISTS idx_embedded_signup_leads_phone ON embedded_signup_leads(phone_number)`,
 	}
 
 	for _, idx := range indexes {

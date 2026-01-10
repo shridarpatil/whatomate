@@ -155,7 +155,7 @@ func setDefaults(cfg *Config) {
 		cfg.JWT.RefreshExpiryDays = 7
 	}
 	if cfg.WhatsApp.APIVersion == "" {
-		cfg.WhatsApp.APIVersion = "v18.0"
+		cfg.WhatsApp.APIVersion = "v24.0" // Latest version with coexistence support
 	}
 	if cfg.WhatsApp.BaseURL == "" {
 		cfg.WhatsApp.BaseURL = "https://graph.facebook.com"

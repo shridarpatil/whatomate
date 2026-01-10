@@ -214,3 +214,21 @@ const (
 	ActionTypeURL        ActionType = "url"
 	ActionTypeJavascript ActionType = "javascript"
 )
+
+// EmbeddedSignupLeadStatus represents the status of an embedded signup lead
+type EmbeddedSignupLeadStatus string
+
+const (
+	EmbeddedSignupLeadStatusPending   EmbeddedSignupLeadStatus = "pending"
+	EmbeddedSignupLeadStatusConfirmed EmbeddedSignupLeadStatus = "confirmed"
+	EmbeddedSignupLeadStatusFailed    EmbeddedSignupLeadStatus = "failed"
+)
+
+// EmbeddedSignupSource represents the source of embedded signup
+type EmbeddedSignupSource string
+
+const (
+	EmbeddedSignupSourceWidget    EmbeddedSignupSource = "widget"
+	EmbeddedSignupSourceEmbedded  EmbeddedSignupSource = "embedded"
+	EmbeddedSignupSourceAPI       EmbeddedSignupSource = "api"
+)
