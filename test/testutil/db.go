@@ -39,7 +39,7 @@ func SetupTestDB(t *testing.T) *gorm.DB {
 		cleanupTables(db)
 		sqlDB, err := db.DB()
 		if err == nil {
-			sqlDB.Close()
+			_ = sqlDB.Close()
 		}
 	})
 
@@ -72,7 +72,7 @@ func SetupTestDBWithCleanup(t *testing.T, cleanup bool) *gorm.DB {
 			cleanupTables(db)
 			sqlDB, err := db.DB()
 			if err == nil {
-				sqlDB.Close()
+				_ = sqlDB.Close()
 			}
 		})
 	}

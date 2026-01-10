@@ -558,11 +558,11 @@ func (a *App) SyncFlows(r *fastglue.Request) error {
 		} else if flowAssets != nil {
 			// Convert flow assets to JSONB
 			flowJSONBytes, _ := json.Marshal(flowAssets)
-			json.Unmarshal(flowJSONBytes, &flowJSON)
+			_ = json.Unmarshal(flowJSONBytes, &flowJSON)
 
 			// Extract screens
 			screensBytes, _ := json.Marshal(flowAssets.Screens)
-			json.Unmarshal(screensBytes, &screens)
+			_ = json.Unmarshal(screensBytes, &screens)
 
 			jsonVersion = flowAssets.Version
 		}

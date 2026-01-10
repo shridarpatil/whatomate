@@ -314,7 +314,9 @@ func (a *App) processIncomingMessageFull(phoneNumberID string, msg IncomingTextM
 			if !settings.AllowAutomatedOutsideHours {
 				a.Log.Info("Outside business hours, sending out of hours message")
 				if settings.OutOfHoursMessage != "" {
-					a.sendAndSaveTextMessage(account, contact, settings.OutOfHoursMessage)
+					if err := a.sendAndSaveTextMessage(account, contact, settings.OutOfHoursMessage); err != nil {
+						a.Log.Error("Failed to send out of hours message", "error", err, "contact", contact.PhoneNumber)
+					}
 				}
 				return
 			}
@@ -346,14 +348,18 @@ func (a *App) processIncomingMessageFull(phoneNumberID string, msg IncomingTextM
 			if !a.isWithinBusinessHours(settings.BusinessHours) {
 				a.Log.Info("Outside business hours, sending out of hours message instead of transfer")
 				if settings.OutOfHoursMessage != "" {
-					a.sendAndSaveTextMessage(account, contact, settings.OutOfHoursMessage)
+					if err := a.sendAndSaveTextMessage(account, contact, settings.OutOfHoursMessage); err != nil {
+						a.Log.Error("Failed to send out of hours message", "error", err, "contact", contact.PhoneNumber)
+					}
 				}
 				return
 			}
 		}
 		// Within business hours - send transfer message and create transfer
 		if keywordResponse.Body != "" {
-			a.sendAndSaveTextMessage(account, contact, keywordResponse.Body)
+			if err := a.sendAndSaveTextMessage(account, contact, keywordResponse.Body); err != nil {
+				a.Log.Error("Failed to send transfer message", "error", err, "contact", contact.PhoneNumber)
+			}
 		}
 		a.createTransferFromKeyword(account, contact)
 		return
@@ -382,12 +388,18 @@ func (a *App) processIncomingMessageFull(phoneNumberID string, msg IncomingTextM
 				}
 			}
 			if len(greetingButtons) > 0 {
-				a.sendAndSaveInteractiveButtons(account, contact, settings.DefaultResponse, greetingButtons)
+				if err := a.sendAndSaveInteractiveButtons(account, contact, settings.DefaultResponse, greetingButtons); err != nil {
+					a.Log.Error("Failed to send greeting buttons", "error", err, "contact", contact.PhoneNumber)
+				}
 			} else {
-				a.sendAndSaveTextMessage(account, contact, settings.DefaultResponse)
+				if err := a.sendAndSaveTextMessage(account, contact, settings.DefaultResponse); err != nil {
+					a.Log.Error("Failed to send greeting message", "error", err, "contact", contact.PhoneNumber)
+				}
 			}
 		} else {
-			a.sendAndSaveTextMessage(account, contact, settings.DefaultResponse)
+			if err := a.sendAndSaveTextMessage(account, contact, settings.DefaultResponse); err != nil {
+				a.Log.Error("Failed to send greeting message", "error", err, "contact", contact.PhoneNumber)
+			}
 		}
 		a.logSessionMessage(session.ID, "outgoing", settings.DefaultResponse, "greeting")
 		return // After greeting, don't process further for new sessions
@@ -399,9 +411,13 @@ func (a *App) processIncomingMessageFull(phoneNumberID string, msg IncomingTextM
 
 		// Handle regular text response
 		if len(keywordResponse.Buttons) > 0 {
-			a.sendAndSaveInteractiveButtons(account, contact, keywordResponse.Body, keywordResponse.Buttons)
+			if err := a.sendAndSaveInteractiveButtons(account, contact, keywordResponse.Body, keywordResponse.Buttons); err != nil {
+				a.Log.Error("Failed to send interactive buttons", "error", err, "contact", contact.PhoneNumber)
+			}
 		} else {
-			a.sendAndSaveTextMessage(account, contact, keywordResponse.Body)
+			if err := a.sendAndSaveTextMessage(account, contact, keywordResponse.Body); err != nil {
+				a.Log.Error("Failed to send text message", "error", err, "contact", contact.PhoneNumber)
+			}
 		}
 		// Log outgoing message
 		a.logSessionMessage(session.ID, "outgoing", keywordResponse.Body, "keyword_response")
@@ -417,7 +433,9 @@ func (a *App) processIncomingMessageFull(phoneNumberID string, msg IncomingTextM
 			// Fall through to default response
 		} else if aiResponse != "" {
 			a.Log.Info("AI response generated successfully", "response_length", len(aiResponse))
-			a.sendAndSaveTextMessage(account, contact, aiResponse)
+			if err := a.sendAndSaveTextMessage(account, contact, aiResponse); err != nil {
+				a.Log.Error("Failed to send AI response", "error", err, "contact", contact.PhoneNumber)
+			}
 			a.logSessionMessage(session.ID, "outgoing", aiResponse, "ai_response")
 			return
 		} else {
@@ -439,12 +457,18 @@ func (a *App) processIncomingMessageFull(phoneNumberID string, msg IncomingTextM
 				}
 			}
 			if len(fallbackButtons) > 0 {
-				a.sendAndSaveInteractiveButtons(account, contact, settings.FallbackMessage, fallbackButtons)
+				if err := a.sendAndSaveInteractiveButtons(account, contact, settings.FallbackMessage, fallbackButtons); err != nil {
+					a.Log.Error("Failed to send fallback buttons", "error", err, "contact", contact.PhoneNumber)
+				}
 			} else {
-				a.sendAndSaveTextMessage(account, contact, settings.FallbackMessage)
+				if err := a.sendAndSaveTextMessage(account, contact, settings.FallbackMessage); err != nil {
+					a.Log.Error("Failed to send fallback message", "error", err, "contact", contact.PhoneNumber)
+				}
 			}
 		} else {
-			a.sendAndSaveTextMessage(account, contact, settings.FallbackMessage)
+			if err := a.sendAndSaveTextMessage(account, contact, settings.FallbackMessage); err != nil {
+				a.Log.Error("Failed to send fallback message", "error", err, "contact", contact.PhoneNumber)
+			}
 		}
 		a.logSessionMessage(session.ID, "outgoing", settings.FallbackMessage, "fallback_response")
 	} else if !isNewSession {
@@ -929,7 +953,9 @@ func (a *App) startFlow(account *models.WhatsAppAccount, session *models.Chatbot
 
 	// Send initial message if configured
 	if flow.InitialMessage != "" {
-		a.sendAndSaveTextMessage(account, contact, flow.InitialMessage)
+		if err := a.sendAndSaveTextMessage(account, contact, flow.InitialMessage); err != nil {
+			a.Log.Error("Failed to send flow initial message", "error", err, "contact", contact.PhoneNumber)
+		}
 		a.logSessionMessage(session.ID, "outgoing", flow.InitialMessage, "flow_start")
 	}
 
@@ -961,7 +987,9 @@ func (a *App) processFlowResponse(account *models.WhatsAppAccount, session *mode
 	userInputLower := strings.ToLower(userInput)
 	for _, cancelKw := range flow.CancelKeywords {
 		if strings.Contains(userInputLower, strings.ToLower(cancelKw)) {
-			a.sendAndSaveTextMessage(account, contact, "Flow cancelled.")
+			if err := a.sendAndSaveTextMessage(account, contact, "Flow cancelled."); err != nil {
+				a.Log.Error("Failed to send flow cancel message", "error", err, "contact", contact.PhoneNumber)
+			}
 			a.logSessionMessage(session.ID, "outgoing", "Flow cancelled.", "flow_cancel")
 			a.exitFlow(session)
 			return
@@ -997,7 +1025,9 @@ func (a *App) processFlowResponse(account *models.WhatsAppAccount, session *mode
 				if errorMsg == "" {
 					errorMsg = "Invalid input. Please try again."
 				}
-				a.sendAndSaveTextMessage(account, contact, errorMsg)
+				if err := a.sendAndSaveTextMessage(account, contact, errorMsg); err != nil {
+					a.Log.Error("Failed to send validation error", "error", err, "contact", contact.PhoneNumber)
+				}
 				a.logSessionMessage(session.ID, "outgoing", errorMsg, currentStep.StepName+"_retry")
 				return
 			}
@@ -1056,7 +1086,9 @@ func (a *App) processFlowResponse(account *models.WhatsAppAccount, session *mode
 			if session.StepRetries >= maxRetries {
 				// Max retries exceeded - exit flow and close conversation
 				a.Log.Warn("Max button retries exceeded, closing conversation", "step", currentStep.StepName)
-				a.sendAndSaveTextMessage(account, contact, "Sorry, we couldn't continue. Please try again later.")
+				if err := a.sendAndSaveTextMessage(account, contact, "Sorry, we couldn't continue. Please try again later."); err != nil {
+					a.Log.Error("Failed to send max retries message", "error", err, "contact", contact.PhoneNumber)
+				}
 				a.exitFlow(session)
 				a.closeSession(session)
 				return
@@ -1150,7 +1182,9 @@ func (a *App) completeFlow(account *models.WhatsAppAccount, session *models.Chat
 	// Send completion message
 	if flow.CompletionMessage != "" {
 		message := a.replaceVariables(flow.CompletionMessage, session.SessionData)
-		a.sendAndSaveTextMessage(account, contact, message)
+		if err := a.sendAndSaveTextMessage(account, contact, message); err != nil {
+			a.Log.Error("Failed to send flow completion message", "error", err, "contact", contact.PhoneNumber)
+		}
 		a.logSessionMessage(session.ID, "outgoing", message, "flow_complete")
 	}
 
@@ -1247,7 +1281,7 @@ func (a *App) sendFlowCompletionWebhook(flow *models.ChatbotFlow, session *model
 		a.Log.Error("Webhook request failed", "error", err, "url", webhookURL)
 		return
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	body, _ := io.ReadAll(resp.Body)
 
@@ -1434,7 +1468,9 @@ func (a *App) sendStepMessage(account *models.WhatsAppAccount, session *models.C
 			} else {
 				message = "Sorry, there was an error processing your request."
 			}
-			a.sendAndSaveTextMessage(account, contact, message)
+			if err := a.sendAndSaveTextMessage(account, contact, message); err != nil {
+				a.Log.Error("Failed to send API error message", "error", err, "contact", contact.PhoneNumber)
+			}
 		} else {
 			message = apiResp.Message
 
@@ -1448,9 +1484,13 @@ func (a *App) sendStepMessage(account *models.WhatsAppAccount, session *models.C
 
 			// Check if API returned buttons
 			if len(apiResp.Buttons) > 0 {
-				a.sendAndSaveInteractiveButtons(account, contact, message, apiResp.Buttons)
+				if err := a.sendAndSaveInteractiveButtons(account, contact, message, apiResp.Buttons); err != nil {
+					a.Log.Error("Failed to send API response buttons", "error", err, "contact", contact.PhoneNumber)
+				}
 			} else {
-				a.sendAndSaveTextMessage(account, contact, message)
+				if err := a.sendAndSaveTextMessage(account, contact, message); err != nil {
+					a.Log.Error("Failed to send API response message", "error", err, "contact", contact.PhoneNumber)
+				}
 			}
 		}
 		a.logSessionMessage(session.ID, "outgoing", message, step.StepName)
@@ -1478,10 +1518,14 @@ func (a *App) sendStepMessage(account *models.WhatsAppAccount, session *models.C
 
 			// Send reply buttons first (with the main message)
 			if len(replyButtons) > 0 {
-				a.sendAndSaveInteractiveButtons(account, contact, message, replyButtons)
+				if err := a.sendAndSaveInteractiveButtons(account, contact, message, replyButtons); err != nil {
+					a.Log.Error("Failed to send reply buttons", "error", err, "contact", contact.PhoneNumber)
+				}
 			} else if len(urlButtons) == 0 {
 				// No buttons at all, fall back to text
-				a.sendAndSaveTextMessage(account, contact, message)
+				if err := a.sendAndSaveTextMessage(account, contact, message); err != nil {
+					a.Log.Error("Failed to send text message", "error", err, "contact", contact.PhoneNumber)
+				}
 			}
 
 			// Send URL buttons as separate CTA URL messages
@@ -1496,12 +1540,16 @@ func (a *App) sendStepMessage(account *models.WhatsAppAccount, session *models.C
 						bodyText = message
 						message = "" // Clear so we don't repeat it
 					}
-					a.sendAndSaveCTAURLButton(account, contact, bodyText, btnTitle, btnURL)
+					if err := a.sendAndSaveCTAURLButton(account, contact, bodyText, btnTitle, btnURL); err != nil {
+						a.Log.Error("Failed to send CTA URL button", "error", err, "contact", contact.PhoneNumber)
+					}
 				}
 			}
 		} else {
 			// No buttons configured, fall back to text
-			a.sendAndSaveTextMessage(account, contact, message)
+			if err := a.sendAndSaveTextMessage(account, contact, message); err != nil {
+				a.Log.Error("Failed to send step message", "error", err, "contact", contact.PhoneNumber)
+			}
 		}
 		a.logSessionMessage(session.ID, "outgoing", message, step.StepName)
 
@@ -1509,7 +1557,9 @@ func (a *App) sendStepMessage(account *models.WhatsAppAccount, session *models.C
 		// Transfer to team/agent queue
 		message = processTemplate(step.Message, session.SessionData)
 		if message != "" {
-			a.sendAndSaveTextMessage(account, contact, message)
+			if err := a.sendAndSaveTextMessage(account, contact, message); err != nil {
+				a.Log.Error("Failed to send transfer message", "error", err, "contact", contact.PhoneNumber)
+			}
 			a.logSessionMessage(session.ID, "outgoing", message, step.StepName)
 		}
 
@@ -1542,7 +1592,9 @@ func (a *App) sendStepMessage(account *models.WhatsAppAccount, session *models.C
 	default:
 		// Default: use the step message with template processing
 		message = processTemplate(step.Message, session.SessionData)
-		a.sendAndSaveTextMessage(account, contact, message)
+		if err := a.sendAndSaveTextMessage(account, contact, message); err != nil {
+			a.Log.Error("Failed to send step message", "error", err, "contact", contact.PhoneNumber)
+		}
 		a.logSessionMessage(session.ID, "outgoing", message, step.StepName)
 	}
 }
@@ -1610,7 +1662,7 @@ func (a *App) fetchApiResponse(apiConfig models.JSONB, sessionData models.JSONB,
 	if err != nil {
 		return nil, fmt.Errorf("API request failed: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	// Read response body (limit to 1MB to prevent memory issues)
 	limitReader := io.LimitReader(resp.Body, 1024*1024)
@@ -1826,7 +1878,7 @@ func (a *App) fetchAPIContext(apiConfig models.JSONB, session *models.ChatbotSes
 	if err != nil {
 		return "", fmt.Errorf("API request failed: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	// Read response body
 	respBody, err := io.ReadAll(resp.Body)
@@ -1925,7 +1977,7 @@ func (a *App) generateOpenAIResponse(settings *models.ChatbotSettings, session *
 	if err != nil {
 		return "", fmt.Errorf("request failed: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	body, _ := io.ReadAll(resp.Body)
 
@@ -1935,7 +1987,7 @@ func (a *App) generateOpenAIResponse(settings *models.ChatbotSettings, session *
 				Message string `json:"message"`
 			} `json:"error"`
 		}
-		json.Unmarshal(body, &errResp)
+		_ = json.Unmarshal(body, &errResp)
 		return "", fmt.Errorf("OpenAI API error: %s", errResp.Error.Message)
 	}
 
@@ -2029,7 +2081,7 @@ func (a *App) generateAnthropicResponse(settings *models.ChatbotSettings, sessio
 	if err != nil {
 		return "", fmt.Errorf("request failed: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	body, _ := io.ReadAll(resp.Body)
 
@@ -2039,8 +2091,8 @@ func (a *App) generateAnthropicResponse(settings *models.ChatbotSettings, sessio
 				Message string `json:"message"`
 			} `json:"error"`
 		}
-		json.Unmarshal(body, &errResp)
-		return "", fmt.Errorf("Anthropic API error: %s", errResp.Error.Message)
+		_ = json.Unmarshal(body, &errResp)
+		return "", fmt.Errorf("anthropic API error: %s", errResp.Error.Message)
 	}
 
 	var result struct {
@@ -2142,7 +2194,7 @@ func (a *App) generateGoogleResponse(settings *models.ChatbotSettings, session *
 	if err != nil {
 		return "", fmt.Errorf("request failed: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	body, _ := io.ReadAll(resp.Body)
 
@@ -2152,8 +2204,8 @@ func (a *App) generateGoogleResponse(settings *models.ChatbotSettings, session *
 				Message string `json:"message"`
 			} `json:"error"`
 		}
-		json.Unmarshal(body, &errResp)
-		return "", fmt.Errorf("Google AI API error: %s", errResp.Error.Message)
+		_ = json.Unmarshal(body, &errResp)
+		return "", fmt.Errorf("google AI API error: %s", errResp.Error.Message)
 	}
 
 	var result struct {

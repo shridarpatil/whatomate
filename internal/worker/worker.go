@@ -188,7 +188,7 @@ func (w *Worker) publishCampaignStats(ctx context.Context, campaignID, organizat
 		return
 	}
 
-	w.Publisher.PublishCampaignStats(ctx, &queue.CampaignStatsUpdate{
+	_ = w.Publisher.PublishCampaignStats(ctx, &queue.CampaignStatsUpdate{
 		CampaignID:     campaignID.String(),
 		OrganizationID: organizationID,
 		Status:         campaign.Status,
@@ -228,7 +228,7 @@ func (w *Worker) checkCampaignCompletion(ctx context.Context, campaignID, organi
 		w.Log.Info("Campaign completed", "campaign_id", campaignID, "sent", campaign.SentCount, "failed", campaign.FailedCount)
 
 		// Publish completion status
-		w.Publisher.PublishCampaignStats(ctx, &queue.CampaignStatsUpdate{
+		_ = w.Publisher.PublishCampaignStats(ctx, &queue.CampaignStatsUpdate{
 			CampaignID:     campaignID.String(),
 			OrganizationID: organizationID,
 			Status:         "completed",
@@ -256,7 +256,7 @@ func (w *Worker) sendTemplateMessage(ctx context.Context, account *models.WhatsA
 	var components []map[string]interface{}
 
 	// Add body parameters if template has variables
-	if recipient.TemplateParams != nil && len(recipient.TemplateParams) > 0 {
+	if len(recipient.TemplateParams) > 0 {
 		bodyParams := []map[string]interface{}{}
 		for i := 1; i <= 10; i++ {
 			key := fmt.Sprintf("%d", i)

@@ -94,7 +94,7 @@ func Load(configPath string) (*Config, error) {
 	// Load from environment variables (WHATOMATE_ prefix)
 	// e.g., WHATOMATE_DATABASE_HOST -> database.host
 	if err := k.Load(env.Provider("WHATOMATE_", ".", func(s string) string {
-		return strings.Replace(strings.ToLower(strings.TrimPrefix(s, "WHATOMATE_")), "_", ".", -1)
+		return strings.ReplaceAll(strings.ToLower(strings.TrimPrefix(s, "WHATOMATE_")), "_", ".")
 	}), nil); err != nil {
 		return nil, err
 	}

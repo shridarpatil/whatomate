@@ -68,7 +68,7 @@ func (c *Client) doRequest(ctx context.Context, method, url string, body interfa
 	if err != nil {
 		return nil, fmt.Errorf("request failed: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	respBody, err := io.ReadAll(resp.Body)
 	if err != nil {
@@ -140,7 +140,7 @@ func (c *Client) DownloadMedia(ctx context.Context, mediaURL string, accessToken
 	if err != nil {
 		return nil, fmt.Errorf("failed to download media: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode != http.StatusOK {
 		return nil, fmt.Errorf("media download failed with status %d", resp.StatusCode)
@@ -168,17 +168,17 @@ func (c *Client) UploadMedia(ctx context.Context, account *Account, data []byte,
 	boundary := "----WebKitFormBoundary7MA4YWxkTrZu0gW"
 
 	// Build multipart body manually
-	body.WriteString(fmt.Sprintf("--%s\r\n", boundary))
+	fmt.Fprintf(body, "--%s\r\n", boundary)
 	body.WriteString("Content-Disposition: form-data; name=\"messaging_product\"\r\n\r\n")
 	body.WriteString("whatsapp\r\n")
 
-	body.WriteString(fmt.Sprintf("--%s\r\n", boundary))
-	body.WriteString(fmt.Sprintf("Content-Disposition: form-data; name=\"file\"; filename=\"%s\"\r\n", filename))
-	body.WriteString(fmt.Sprintf("Content-Type: %s\r\n\r\n", mimeType))
+	fmt.Fprintf(body, "--%s\r\n", boundary)
+	fmt.Fprintf(body, "Content-Disposition: form-data; name=\"file\"; filename=\"%s\"\r\n", filename)
+	fmt.Fprintf(body, "Content-Type: %s\r\n\r\n", mimeType)
 	body.Write(data)
 	body.WriteString("\r\n")
 
-	body.WriteString(fmt.Sprintf("--%s--\r\n", boundary))
+	fmt.Fprintf(body, "--%s--\r\n", boundary)
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, url, body)
 	if err != nil {
@@ -192,7 +192,7 @@ func (c *Client) UploadMedia(ctx context.Context, account *Account, data []byte,
 	if err != nil {
 		return "", fmt.Errorf("failed to upload media: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	respBody, err := io.ReadAll(resp.Body)
 	if err != nil {

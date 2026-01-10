@@ -61,7 +61,7 @@ func TestClient_SendTextMessage(t *testing.T) {
 
 				// Return success
 				w.WriteHeader(http.StatusOK)
-				json.NewEncoder(w).Encode(map[string]interface{}{
+				_ = json.NewEncoder(w).Encode(map[string]interface{}{
 					"messages": []map[string]string{{"id": "wamid.test123"}},
 				})
 			},
@@ -74,7 +74,7 @@ func TestClient_SendTextMessage(t *testing.T) {
 			text:  "Hello",
 			serverResponse: func(t *testing.T, w http.ResponseWriter, r *http.Request) {
 				w.WriteHeader(http.StatusBadRequest)
-				json.NewEncoder(w).Encode(whatsapp.MetaAPIError{
+				_ = json.NewEncoder(w).Encode(whatsapp.MetaAPIError{
 					Error: struct {
 						Message      string `json:"message"`
 						Type         string `json:"type"`
@@ -100,7 +100,7 @@ func TestClient_SendTextMessage(t *testing.T) {
 			text:  "Hello",
 			serverResponse: func(t *testing.T, w http.ResponseWriter, r *http.Request) {
 				w.WriteHeader(http.StatusUnauthorized)
-				json.NewEncoder(w).Encode(whatsapp.MetaAPIError{
+				_ = json.NewEncoder(w).Encode(whatsapp.MetaAPIError{
 					Error: struct {
 						Message      string `json:"message"`
 						Type         string `json:"type"`
@@ -126,7 +126,7 @@ func TestClient_SendTextMessage(t *testing.T) {
 			text:  "Hello",
 			serverResponse: func(t *testing.T, w http.ResponseWriter, r *http.Request) {
 				w.WriteHeader(http.StatusOK)
-				json.NewEncoder(w).Encode(map[string]interface{}{
+				_ = json.NewEncoder(w).Encode(map[string]interface{}{
 					"messages": []map[string]string{}, // Empty
 				})
 			},
@@ -192,7 +192,7 @@ func TestClient_GetMediaURL(t *testing.T) {
 				assert.Contains(t, r.URL.Path, "media123")
 
 				w.WriteHeader(http.StatusOK)
-				json.NewEncoder(w).Encode(whatsapp.MediaURLResponse{
+				_ = json.NewEncoder(w).Encode(whatsapp.MediaURLResponse{
 					URL:      "https://cdn.whatsapp.net/media/test123",
 					MimeType: "image/jpeg",
 				})
@@ -205,7 +205,7 @@ func TestClient_GetMediaURL(t *testing.T) {
 			mediaID: "nonexistent",
 			serverResponse: func(t *testing.T, w http.ResponseWriter, r *http.Request) {
 				w.WriteHeader(http.StatusNotFound)
-				json.NewEncoder(w).Encode(whatsapp.MetaAPIError{
+				_ = json.NewEncoder(w).Encode(whatsapp.MetaAPIError{
 					Error: struct {
 						Message      string `json:"message"`
 						Type         string `json:"type"`
@@ -230,7 +230,7 @@ func TestClient_GetMediaURL(t *testing.T) {
 			mediaID: "media123",
 			serverResponse: func(t *testing.T, w http.ResponseWriter, r *http.Request) {
 				w.WriteHeader(http.StatusOK)
-				json.NewEncoder(w).Encode(whatsapp.MediaURLResponse{
+				_ = json.NewEncoder(w).Encode(whatsapp.MediaURLResponse{
 					URL: "", // Empty URL
 				})
 			},
@@ -289,7 +289,7 @@ func TestClient_DownloadMedia(t *testing.T) {
 				assert.Equal(t, "Bearer test-access-token", r.Header.Get("Authorization"))
 
 				w.WriteHeader(http.StatusOK)
-				w.Write([]byte("fake image data"))
+				_, _ = w.Write([]byte("fake image data"))
 			},
 			wantData: []byte("fake image data"),
 			wantErr:  false,
@@ -346,12 +346,12 @@ func TestClient_MarkMessageRead(t *testing.T) {
 				assert.Equal(t, http.MethodPost, r.Method)
 
 				var body map[string]interface{}
-				json.NewDecoder(r.Body).Decode(&body)
+				_ = json.NewDecoder(r.Body).Decode(&body)
 				assert.Equal(t, "read", body["status"])
 				assert.Equal(t, "wamid.test123", body["message_id"])
 
 				w.WriteHeader(http.StatusOK)
-				json.NewEncoder(w).Encode(map[string]bool{"success": true})
+				_ = json.NewEncoder(w).Encode(map[string]bool{"success": true})
 			},
 			wantErr: false,
 		},
@@ -400,7 +400,7 @@ func TestClient_SendImageMessage(t *testing.T) {
 
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		var body map[string]interface{}
-		json.NewDecoder(r.Body).Decode(&body)
+		_ = json.NewDecoder(r.Body).Decode(&body)
 
 		assert.Equal(t, "image", body["type"])
 		image := body["image"].(map[string]interface{})
@@ -408,7 +408,7 @@ func TestClient_SendImageMessage(t *testing.T) {
 		assert.Equal(t, "Test caption", image["caption"])
 
 		w.WriteHeader(http.StatusOK)
-		json.NewEncoder(w).Encode(map[string]interface{}{
+		_ = json.NewEncoder(w).Encode(map[string]interface{}{
 			"messages": []map[string]string{{"id": "wamid.img123"}},
 		})
 	}))
@@ -434,7 +434,7 @@ func TestClient_SendDocumentMessage(t *testing.T) {
 
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		var body map[string]interface{}
-		json.NewDecoder(r.Body).Decode(&body)
+		_ = json.NewDecoder(r.Body).Decode(&body)
 
 		assert.Equal(t, "document", body["type"])
 		doc := body["document"].(map[string]interface{})
@@ -443,7 +443,7 @@ func TestClient_SendDocumentMessage(t *testing.T) {
 		assert.Equal(t, "Monthly report", doc["caption"])
 
 		w.WriteHeader(http.StatusOK)
-		json.NewEncoder(w).Encode(map[string]interface{}{
+		_ = json.NewEncoder(w).Encode(map[string]interface{}{
 			"messages": []map[string]string{{"id": "wamid.doc123"}},
 		})
 	}))

@@ -670,7 +670,7 @@ func (a *App) sendWhatsAppMessage(account *models.WhatsAppAccount, contact *mode
 		})
 		return
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	body, _ := io.ReadAll(resp.Body)
 
@@ -681,7 +681,9 @@ func (a *App) sendWhatsAppMessage(account *models.WhatsAppAccount, contact *mode
 				Code    int    `json:"code"`
 			} `json:"error"`
 		}
-		json.Unmarshal(body, &errResp)
+		if err := json.Unmarshal(body, &errResp); err != nil {
+			a.Log.Warn("Failed to parse error response", "error", err)
+		}
 		a.Log.Error("WhatsApp API error",
 			"status", resp.StatusCode,
 			"code", errResp.Error.Code,
@@ -699,7 +701,9 @@ func (a *App) sendWhatsAppMessage(account *models.WhatsAppAccount, contact *mode
 			ID string `json:"id"`
 		} `json:"messages"`
 	}
-	json.Unmarshal(body, &result)
+	if err := json.Unmarshal(body, &result); err != nil {
+		a.Log.Warn("Failed to parse success response", "error", err)
+	}
 
 	if len(result.Messages) > 0 {
 		a.DB.Model(message).Updates(map[string]any{
@@ -780,7 +784,7 @@ func (a *App) SendMediaMessage(r *fastglue.Request) error {
 	if err != nil {
 		return r.SendErrorEnvelope(fasthttp.StatusBadRequest, "Failed to read file", nil, "")
 	}
-	defer file.Close()
+	defer func() { _ = file.Close() }()
 
 	// Read file data
 	fileData, err := io.ReadAll(file)
@@ -1133,7 +1137,7 @@ func (a *App) sendWhatsAppReaction(account *models.WhatsAppAccount, contact *mod
 		a.Log.Error("Failed to send reaction", "error", err)
 		return
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode != 200 {
 		body, _ := io.ReadAll(resp.Body)

@@ -175,7 +175,7 @@ func (a *App) sendWebhookRequest(webhook models.Webhook, jsonData []byte) error 
 	if err != nil {
 		return err
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	// Check for successful status code (2xx)
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {

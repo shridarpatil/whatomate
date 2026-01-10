@@ -94,20 +94,20 @@ func AuthWithDB(secret string, db *gorm.DB) fastglue.FastMiddleware {
 				return r
 			}
 			// API key was provided but invalid
-			r.SendErrorEnvelope(fasthttp.StatusUnauthorized, "Invalid API key", nil, "")
+			_ = r.SendErrorEnvelope(fasthttp.StatusUnauthorized, "Invalid API key", nil, "")
 			return nil
 		}
 
 		// Fall back to JWT authentication
 		if authHeader == "" {
-			r.SendErrorEnvelope(fasthttp.StatusUnauthorized, "Missing authorization header", nil, "")
+			_ = r.SendErrorEnvelope(fasthttp.StatusUnauthorized, "Missing authorization header", nil, "")
 			return nil
 		}
 
 		// Extract token from "Bearer <token>"
 		parts := strings.Split(authHeader, " ")
 		if len(parts) != 2 || parts[0] != "Bearer" {
-			r.SendErrorEnvelope(fasthttp.StatusUnauthorized, "Invalid authorization header format", nil, "")
+			_ = r.SendErrorEnvelope(fasthttp.StatusUnauthorized, "Invalid authorization header format", nil, "")
 			return nil
 		}
 
@@ -119,13 +119,13 @@ func AuthWithDB(secret string, db *gorm.DB) fastglue.FastMiddleware {
 		})
 
 		if err != nil || !token.Valid {
-			r.SendErrorEnvelope(fasthttp.StatusUnauthorized, "Invalid or expired token", nil, "")
+			_ = r.SendErrorEnvelope(fasthttp.StatusUnauthorized, "Invalid or expired token", nil, "")
 			return nil
 		}
 
 		claims, ok := token.Claims.(*JWTClaims)
 		if !ok {
-			r.SendErrorEnvelope(fasthttp.StatusUnauthorized, "Invalid token claims", nil, "")
+			_ = r.SendErrorEnvelope(fasthttp.StatusUnauthorized, "Invalid token claims", nil, "")
 			return nil
 		}
 
@@ -188,32 +188,32 @@ func OrganizationContext(db *gorm.DB) fastglue.FastMiddleware {
 	return func(r *fastglue.Request) *fastglue.Request {
 		userID, ok := r.RequestCtx.UserValue(ContextKeyUserID).(uuid.UUID)
 		if !ok {
-			r.SendErrorEnvelope(fasthttp.StatusUnauthorized, "User ID not found in context", nil, "")
+			_ = r.SendErrorEnvelope(fasthttp.StatusUnauthorized, "User ID not found in context", nil, "")
 			return nil
 		}
 
 		orgID, ok := r.RequestCtx.UserValue(ContextKeyOrganizationID).(uuid.UUID)
 		if !ok {
-			r.SendErrorEnvelope(fasthttp.StatusUnauthorized, "Organization ID not found in context", nil, "")
+			_ = r.SendErrorEnvelope(fasthttp.StatusUnauthorized, "Organization ID not found in context", nil, "")
 			return nil
 		}
 
 		// Load user
 		var user models.User
 		if err := db.Where("id = ?", userID).First(&user).Error; err != nil {
-			r.SendErrorEnvelope(fasthttp.StatusUnauthorized, "User not found", nil, "")
+			_ = r.SendErrorEnvelope(fasthttp.StatusUnauthorized, "User not found", nil, "")
 			return nil
 		}
 
 		if !user.IsActive {
-			r.SendErrorEnvelope(fasthttp.StatusUnauthorized, "Account is disabled", nil, "")
+			_ = r.SendErrorEnvelope(fasthttp.StatusUnauthorized, "Account is disabled", nil, "")
 			return nil
 		}
 
 		// Load organization
 		var org models.Organization
 		if err := db.Where("id = ?", orgID).First(&org).Error; err != nil {
-			r.SendErrorEnvelope(fasthttp.StatusUnauthorized, "Organization not found", nil, "")
+			_ = r.SendErrorEnvelope(fasthttp.StatusUnauthorized, "Organization not found", nil, "")
 			return nil
 		}
 
@@ -230,7 +230,7 @@ func RequireRole(roles ...string) fastglue.FastMiddleware {
 	return func(r *fastglue.Request) *fastglue.Request {
 		role, ok := r.RequestCtx.UserValue(ContextKeyRole).(string)
 		if !ok {
-			r.SendErrorEnvelope(fasthttp.StatusForbidden, "Role not found", nil, "")
+			_ = r.SendErrorEnvelope(fasthttp.StatusForbidden, "Role not found", nil, "")
 			return nil
 		}
 
@@ -240,7 +240,7 @@ func RequireRole(roles ...string) fastglue.FastMiddleware {
 			}
 		}
 
-		r.SendErrorEnvelope(fasthttp.StatusForbidden, "Insufficient permissions", nil, "")
+		_ = r.SendErrorEnvelope(fasthttp.StatusForbidden, "Insufficient permissions", nil, "")
 		return nil
 	}
 }

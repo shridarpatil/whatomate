@@ -93,7 +93,7 @@ func runServer(args []string) {
 	configPath := serverFlags.String("config", "config.toml", "Path to config file")
 	migrate := serverFlags.Bool("migrate", false, "Run database migrations")
 	numWorkers := serverFlags.Int("workers", 1, "Number of workers to run (0 to disable embedded workers)")
-	serverFlags.Parse(args)
+	_ = serverFlags.Parse(args)
 
 	// Initialize logger
 	lo := logf.New(logf.Opts{
@@ -253,7 +253,7 @@ func runServer(args []string) {
 		lo.Info("Stopping workers...", "count", len(workers))
 		workerCancel()
 		for _, w := range workers {
-			w.Close()
+			_ = w.Close()
 		}
 		lo.Info("Workers stopped")
 	}
@@ -274,7 +274,7 @@ func runWorker(args []string) {
 	workerFlags := flag.NewFlagSet("worker", flag.ExitOnError)
 	configPath := workerFlags.String("config", "config.toml", "Path to config file")
 	workerCount := workerFlags.Int("workers", 1, "Number of workers to run")
-	workerFlags.Parse(args)
+	_ = workerFlags.Parse(args)
 
 	// Initialize logger
 	lo := logf.New(logf.Opts{
@@ -490,11 +490,7 @@ func setupRoutes(g *fastglue.Fastglue, app *handlers.App, lo logf.Logger, basePa
 			}
 
 			// Agents can only create contacts, not modify/delete
-			if len(path) >= 13 && path[:13] == "/api/contacts" {
-				if method == "PUT" || method == "DELETE" {
-					// Allow only if it's their assigned contact (checked in handler)
-				}
-			}
+			// PUT and DELETE for contacts are allowed if it's their assigned contact (checked in handler)
 		}
 
 		return r

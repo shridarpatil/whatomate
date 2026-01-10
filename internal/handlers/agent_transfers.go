@@ -1198,7 +1198,7 @@ func (a *App) createTransferFromKeyword(account *models.WhatsAppAccount, contact
 		if !a.isWithinBusinessHours(settings.BusinessHours) {
 			a.Log.Info("Outside business hours, sending out of hours message instead of transfer", "contact_id", contact.ID)
 			if settings.OutOfHoursMessage != "" {
-				a.sendAndSaveTextMessage(account, contact, settings.OutOfHoursMessage)
+				_ = a.sendAndSaveTextMessage(account, contact, settings.OutOfHoursMessage)
 			}
 			return
 		}

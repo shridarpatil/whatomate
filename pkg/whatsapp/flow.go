@@ -125,7 +125,9 @@ func (c *Client) UpdateFlowJSON(ctx context.Context, account *Account, flowID st
 		return fmt.Errorf("failed to write asset_type field: %w", err)
 	}
 
-	writer.Close()
+	if err := writer.Close(); err != nil {
+		return fmt.Errorf("failed to close multipart writer: %w", err)
+	}
 
 	// Create request
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, url, &buf)
@@ -142,7 +144,7 @@ func (c *Client) UpdateFlowJSON(ctx context.Context, account *Account, flowID st
 	if err != nil {
 		return fmt.Errorf("request failed: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	respBody, err := io.ReadAll(resp.Body)
 	if err != nil {
@@ -309,7 +311,7 @@ func (c *Client) GetFlowAssets(ctx context.Context, account *Account, flowID str
 	if err != nil {
 		return nil, fmt.Errorf("failed to download flow JSON: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	flowJSONBody, err := io.ReadAll(resp.Body)
 	if err != nil {

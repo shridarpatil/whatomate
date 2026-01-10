@@ -129,7 +129,7 @@ func RunMigrationWithProgress(db *gorm.DB) error {
 
 		bar := repeatChar("█", filled) + "\033[90m" + repeatChar("░", empty) + "\033[0m"
 		fmt.Printf("\r  Running migrations  %s %3d%%", bar, int(percent*100))
-		os.Stdout.Sync()
+		_ = os.Stdout.Sync()
 	}
 
 	fmt.Println()

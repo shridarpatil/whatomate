@@ -1,6 +1,7 @@
 package handlers_test
 
 import (
+	"encoding/json"
 	"testing"
 	"time"
 
@@ -13,6 +14,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"github.com/valyala/fasthttp"
+	"github.com/zerodha/fastglue"
 	"golang.org/x/crypto/bcrypt"
 )
 
@@ -40,12 +42,17 @@ func testApp(t *testing.T) *handlers.App {
 	}
 }
 
+// uniqueEmail generates a unique email for test isolation.
+func uniqueEmail(prefix string) string {
+	return prefix + "-" + uuid.New().String()[:8] + "@example.com"
+}
+
 // createTestOrganization creates a test organization in the database.
 func createTestOrganization(t *testing.T, app *handlers.App) *models.Organization {
 	t.Helper()
 
 	org := &models.Organization{
-		Name: "Test Organization",
+		Name: "Test Organization " + uuid.New().String()[:8],
 		Slug: "test-org-" + uuid.New().String()[:8],
 	}
 	require.NoError(t, app.DB.Create(org).Error)
@@ -93,105 +100,106 @@ func generateTestRefreshToken(t *testing.T, user *models.User, secret string, ex
 	return tokenString
 }
 
-func TestApp_Login(t *testing.T) {
+// assertErrorResponse checks that the response contains an error message.
+func assertErrorResponse(t *testing.T, req *fastglue.Request, expectedStatus int, expectedMessage string) {
+	t.Helper()
+
+	assert.Equal(t, expectedStatus, testutil.GetResponseStatusCode(req))
+
+	body := testutil.GetResponseBody(req)
+	assert.Contains(t, string(body), expectedMessage)
+}
+
+func TestApp_Login_Success(t *testing.T) {
 	t.Parallel()
 
-	tests := []struct {
-		name               string
-		setupData          func(t *testing.T, app *handlers.App) (email, password string)
-		inputEmail         string
-		inputPassword      string
-		wantStatus         int
-		wantErrContains    string
-		wantSuccessful     bool
-	}{
-		{
-			name: "successful login",
-			setupData: func(t *testing.T, app *handlers.App) (string, string) {
-				org := createTestOrganization(t, app)
-				email := "valid@example.com"
-				password := "validpassword123"
-				createTestUser(t, app, org.ID, email, password, "admin", true)
-				return email, password
-			},
-			wantStatus:     fasthttp.StatusOK,
-			wantSuccessful: true,
-		},
-		{
-			name: "wrong password",
-			setupData: func(t *testing.T, app *handlers.App) (string, string) {
-				org := createTestOrganization(t, app)
-				email := "user@example.com"
-				createTestUser(t, app, org.ID, email, "correctpassword", "admin", true)
-				return email, "wrongpassword"
-			},
-			wantStatus:      fasthttp.StatusUnauthorized,
-			wantErrContains: "Invalid credentials",
-		},
-		{
-			name: "user not found",
-			setupData: func(t *testing.T, app *handlers.App) (string, string) {
-				return "nonexistent@example.com", "anypassword"
-			},
-			wantStatus:      fasthttp.StatusUnauthorized,
-			wantErrContains: "Invalid credentials",
-		},
-		{
-			name: "inactive user",
-			setupData: func(t *testing.T, app *handlers.App) (string, string) {
-				org := createTestOrganization(t, app)
-				email := "inactive@example.com"
-				password := "validpassword123"
-				createTestUser(t, app, org.ID, email, password, "admin", false)
-				return email, password
-			},
-			wantStatus:      fasthttp.StatusUnauthorized,
-			wantErrContains: "Account is disabled",
-		},
+	app := testApp(t)
+	org := createTestOrganization(t, app)
+	email := uniqueEmail("login-success")
+	password := "validpassword123"
+	createTestUser(t, app, org.ID, email, password, "admin", true)
+
+	req := testutil.NewJSONRequest(t, map[string]string{
+		"email":    email,
+		"password": password,
+	})
+
+	err := app.Login(req)
+	require.NoError(t, err)
+	assert.Equal(t, fasthttp.StatusOK, testutil.GetResponseStatusCode(req))
+
+	// Parse the response
+	var resp struct {
+		Status string `json:"status"`
+		Data   struct {
+			AccessToken  string `json:"access_token"`
+			RefreshToken string `json:"refresh_token"`
+			ExpiresIn    int    `json:"expires_in"`
+			User         struct {
+				Email string `json:"email"`
+				Role  string `json:"role"`
+			} `json:"user"`
+		} `json:"data"`
 	}
+	err = json.Unmarshal(testutil.GetResponseBody(req), &resp)
+	require.NoError(t, err)
 
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			t.Parallel()
+	assert.Equal(t, "success", resp.Status)
+	assert.NotEmpty(t, resp.Data.AccessToken)
+	assert.NotEmpty(t, resp.Data.RefreshToken)
+	assert.Equal(t, 15*60, resp.Data.ExpiresIn)
+	assert.Equal(t, email, resp.Data.User.Email)
+}
 
-			app := testApp(t)
+func TestApp_Login_WrongPassword(t *testing.T) {
+	t.Parallel()
 
-			email, password := tt.setupData(t, app)
-			if tt.inputEmail != "" {
-				email = tt.inputEmail
-			}
-			if tt.inputPassword != "" {
-				password = tt.inputPassword
-			}
+	app := testApp(t)
+	org := createTestOrganization(t, app)
+	email := uniqueEmail("wrong-pwd")
+	createTestUser(t, app, org.ID, email, "correctpassword", "admin", true)
 
-			req := testutil.NewJSONRequest(t, map[string]string{
-				"email":    email,
-				"password": password,
-			})
+	req := testutil.NewJSONRequest(t, map[string]string{
+		"email":    email,
+		"password": "wrongpassword",
+	})
 
-			err := app.Login(req)
-			require.NoError(t, err, "handler should not return error")
+	err := app.Login(req)
+	require.NoError(t, err)
+	assertErrorResponse(t, req, fasthttp.StatusUnauthorized, "Invalid credentials")
+}
 
-			assert.Equal(t, tt.wantStatus, testutil.GetResponseStatusCode(req))
+func TestApp_Login_UserNotFound(t *testing.T) {
+	t.Parallel()
 
-			if tt.wantSuccessful {
-				var envelope testutil.APIEnvelope
-				testutil.ParseJSONResponse(t, req, &envelope)
-				assert.Equal(t, "success", envelope.Status)
+	app := testApp(t)
 
-				var authResp handlers.AuthResponse
-				testutil.ParseEnvelopeResponse(t, req, &authResp)
-				assert.NotEmpty(t, authResp.AccessToken)
-				assert.NotEmpty(t, authResp.RefreshToken)
-				assert.Equal(t, 15*60, authResp.ExpiresIn) // 15 minutes in seconds
-				assert.Equal(t, email, authResp.User.Email)
-			}
+	req := testutil.NewJSONRequest(t, map[string]string{
+		"email":    uniqueEmail("nonexistent"),
+		"password": "anypassword",
+	})
 
-			if tt.wantErrContains != "" {
-				testutil.AssertErrorResponse(t, req, tt.wantStatus, tt.wantErrContains)
-			}
-		})
-	}
+	err := app.Login(req)
+	require.NoError(t, err)
+	assertErrorResponse(t, req, fasthttp.StatusUnauthorized, "Invalid credentials")
+}
+
+func TestApp_Login_InactiveUser(t *testing.T) {
+	t.Parallel()
+
+	app := testApp(t)
+	org := createTestOrganization(t, app)
+	email := uniqueEmail("inactive")
+	createTestUser(t, app, org.ID, email, "validpassword123", "admin", false)
+
+	req := testutil.NewJSONRequest(t, map[string]string{
+		"email":    email,
+		"password": "validpassword123",
+	})
+
+	err := app.Login(req)
+	require.NoError(t, err)
+	assertErrorResponse(t, req, fasthttp.StatusUnauthorized, "Account is disabled")
 }
 
 func TestApp_Login_InvalidRequestBody(t *testing.T) {
@@ -205,7 +213,6 @@ func TestApp_Login_InvalidRequestBody(t *testing.T) {
 
 	err := app.Login(req)
 	require.NoError(t, err)
-
 	assert.Equal(t, fasthttp.StatusBadRequest, testutil.GetResponseStatusCode(req))
 }
 
@@ -220,7 +227,7 @@ func TestApp_Login_DifferentRoles(t *testing.T) {
 
 			app := testApp(t)
 			org := createTestOrganization(t, app)
-			email := role + "@example.com"
+			email := uniqueEmail("role-" + role)
 			password := "testpassword123"
 			createTestUser(t, app, org.ID, email, password, role, true)
 
@@ -233,97 +240,79 @@ func TestApp_Login_DifferentRoles(t *testing.T) {
 			require.NoError(t, err)
 			assert.Equal(t, fasthttp.StatusOK, testutil.GetResponseStatusCode(req))
 
-			var authResp handlers.AuthResponse
-			testutil.ParseEnvelopeResponse(t, req, &authResp)
-			assert.Equal(t, role, authResp.User.Role)
+			var resp struct {
+				Data struct {
+					User struct {
+						Role string `json:"role"`
+					} `json:"user"`
+				} `json:"data"`
+			}
+			_ = json.Unmarshal(testutil.GetResponseBody(req), &resp)
+			assert.Equal(t, role, resp.Data.User.Role)
 		})
 	}
 }
 
-func TestApp_Register(t *testing.T) {
+func TestApp_Register_Success(t *testing.T) {
 	t.Parallel()
 
-	tests := []struct {
-		name            string
-		setupData       func(t *testing.T, app *handlers.App)
-		request         map[string]string
-		wantStatus      int
-		wantErrContains string
-		wantSuccessful  bool
-	}{
-		{
-			name:      "successful registration",
-			setupData: func(t *testing.T, app *handlers.App) {},
-			request: map[string]string{
-				"email":             "newuser@example.com",
-				"password":          "securepassword123",
-				"full_name":         "New User",
-				"organization_name": "New Organization",
-			},
-			wantStatus:     fasthttp.StatusOK,
-			wantSuccessful: true,
-		},
-		{
-			name: "email already registered",
-			setupData: func(t *testing.T, app *handlers.App) {
-				org := createTestOrganization(t, app)
-				createTestUser(t, app, org.ID, "existing@example.com", "password123", "admin", true)
-			},
-			request: map[string]string{
-				"email":             "existing@example.com",
-				"password":          "securepassword123",
-				"full_name":         "Another User",
-				"organization_name": "Another Org",
-			},
-			wantStatus:      fasthttp.StatusConflict,
-			wantErrContains: "Email already registered",
-		},
+	app := testApp(t)
+	email := uniqueEmail("register")
+
+	req := testutil.NewJSONRequest(t, map[string]string{
+		"email":             email,
+		"password":          "securepassword123",
+		"full_name":         "New User",
+		"organization_name": "New Organization " + uuid.New().String()[:8],
+	})
+
+	err := app.Register(req)
+	require.NoError(t, err)
+	assert.Equal(t, fasthttp.StatusOK, testutil.GetResponseStatusCode(req))
+
+	var resp struct {
+		Status string `json:"status"`
+		Data   struct {
+			AccessToken  string `json:"access_token"`
+			RefreshToken string `json:"refresh_token"`
+			User         struct {
+				Email    string `json:"email"`
+				FullName string `json:"full_name"`
+				Role     string `json:"role"`
+				IsActive bool   `json:"is_active"`
+			} `json:"user"`
+		} `json:"data"`
 	}
+	err = json.Unmarshal(testutil.GetResponseBody(req), &resp)
+	require.NoError(t, err)
 
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			t.Parallel()
+	assert.Equal(t, "success", resp.Status)
+	assert.NotEmpty(t, resp.Data.AccessToken)
+	assert.NotEmpty(t, resp.Data.RefreshToken)
+	assert.Equal(t, email, resp.Data.User.Email)
+	assert.Equal(t, "New User", resp.Data.User.FullName)
+	assert.Equal(t, "admin", resp.Data.User.Role)
+	assert.True(t, resp.Data.User.IsActive)
+}
 
-			app := testApp(t)
-			tt.setupData(t, app)
+func TestApp_Register_EmailAlreadyExists(t *testing.T) {
+	t.Parallel()
 
-			req := testutil.NewJSONRequest(t, tt.request)
+	app := testApp(t)
+	org := createTestOrganization(t, app)
+	email := uniqueEmail("existing")
+	createTestUser(t, app, org.ID, email, "password123", "admin", true)
 
-			err := app.Register(req)
-			require.NoError(t, err, "handler should not return error")
+	req := testutil.NewJSONRequest(t, map[string]string{
+		"email":             email,
+		"password":          "securepassword123",
+		"full_name":         "Another User",
+		"organization_name": "Another Org",
+	})
 
-			assert.Equal(t, tt.wantStatus, testutil.GetResponseStatusCode(req))
-
-			if tt.wantSuccessful {
-				var authResp handlers.AuthResponse
-				testutil.ParseEnvelopeResponse(t, req, &authResp)
-
-				assert.NotEmpty(t, authResp.AccessToken)
-				assert.NotEmpty(t, authResp.RefreshToken)
-				assert.Equal(t, tt.request["email"], authResp.User.Email)
-				assert.Equal(t, tt.request["full_name"], authResp.User.FullName)
-				assert.Equal(t, "admin", authResp.User.Role) // First user is always admin
-				assert.True(t, authResp.User.IsActive)
-
-				// Verify organization was created
-				var org models.Organization
-				err := app.DB.First(&org, authResp.User.OrganizationID).Error
-				require.NoError(t, err)
-				assert.Equal(t, tt.request["organization_name"], org.Name)
-
-				// Verify chatbot settings were created
-				var settings models.ChatbotSettings
-				err = app.DB.Where("organization_id = ?", org.ID).First(&settings).Error
-				require.NoError(t, err)
-				assert.False(t, settings.IsEnabled)
-				assert.Equal(t, 30, settings.SessionTimeoutMins)
-			}
-
-			if tt.wantErrContains != "" {
-				testutil.AssertErrorResponse(t, req, tt.wantStatus, tt.wantErrContains)
-			}
-		})
-	}
+	err := app.Register(req)
+	require.NoError(t, err)
+	assertErrorResponse(t, req, fasthttp.StatusConflict, "Email already registered")
 }
 
 func TestApp_Register_InvalidRequestBody(t *testing.T) {
@@ -337,117 +326,128 @@ func TestApp_Register_InvalidRequestBody(t *testing.T) {
 
 	err := app.Register(req)
 	require.NoError(t, err)
-
 	assert.Equal(t, fasthttp.StatusBadRequest, testutil.GetResponseStatusCode(req))
 }
 
-func TestApp_RefreshToken(t *testing.T) {
+func TestApp_RefreshToken_Success(t *testing.T) {
 	t.Parallel()
 
-	tests := []struct {
-		name            string
-		setupData       func(t *testing.T, app *handlers.App) string // returns refresh token
-		wantStatus      int
-		wantErrContains string
-		wantSuccessful  bool
-	}{
-		{
-			name: "successful refresh",
-			setupData: func(t *testing.T, app *handlers.App) string {
-				org := createTestOrganization(t, app)
-				user := createTestUser(t, app, org.ID, "refresh@example.com", "password123", "admin", true)
-				return generateTestRefreshToken(t, user, testJWTSecret, 7*24*time.Hour)
-			},
-			wantStatus:     fasthttp.StatusOK,
-			wantSuccessful: true,
-		},
-		{
-			name: "expired refresh token",
-			setupData: func(t *testing.T, app *handlers.App) string {
-				org := createTestOrganization(t, app)
-				user := createTestUser(t, app, org.ID, "expired@example.com", "password123", "admin", true)
-				return generateTestRefreshToken(t, user, testJWTSecret, -time.Hour) // Expired
-			},
-			wantStatus:      fasthttp.StatusUnauthorized,
-			wantErrContains: "Invalid refresh token",
-		},
-		{
-			name: "invalid token signature",
-			setupData: func(t *testing.T, app *handlers.App) string {
-				org := createTestOrganization(t, app)
-				user := createTestUser(t, app, org.ID, "invalid@example.com", "password123", "admin", true)
-				return generateTestRefreshToken(t, user, "wrong-secret-key-that-is-long", 7*24*time.Hour)
-			},
-			wantStatus:      fasthttp.StatusUnauthorized,
-			wantErrContains: "Invalid refresh token",
-		},
-		{
-			name: "user not found",
-			setupData: func(t *testing.T, app *handlers.App) string {
-				// Create a token for a non-existent user
-				fakeUser := &models.User{
-					BaseModel: models.BaseModel{
-						ID: uuid.New(),
-					},
-					OrganizationID: uuid.New(),
-					Email:          "fake@example.com",
-					Role:           "admin",
-				}
-				return generateTestRefreshToken(t, fakeUser, testJWTSecret, 7*24*time.Hour)
-			},
-			wantStatus:      fasthttp.StatusUnauthorized,
-			wantErrContains: "User not found",
-		},
-		{
-			name: "disabled user",
-			setupData: func(t *testing.T, app *handlers.App) string {
-				org := createTestOrganization(t, app)
-				user := createTestUser(t, app, org.ID, "disabled@example.com", "password123", "admin", false)
-				return generateTestRefreshToken(t, user, testJWTSecret, 7*24*time.Hour)
-			},
-			wantStatus:      fasthttp.StatusUnauthorized,
-			wantErrContains: "Account is disabled",
-		},
-		{
-			name: "malformed token",
-			setupData: func(t *testing.T, app *handlers.App) string {
-				return "not.a.valid.jwt.token"
-			},
-			wantStatus:      fasthttp.StatusUnauthorized,
-			wantErrContains: "Invalid refresh token",
-		},
+	app := testApp(t)
+	org := createTestOrganization(t, app)
+	user := createTestUser(t, app, org.ID, uniqueEmail("refresh"), "password123", "admin", true)
+	refreshToken := generateTestRefreshToken(t, user, testJWTSecret, 7*24*time.Hour)
+
+	req := testutil.NewJSONRequest(t, map[string]string{
+		"refresh_token": refreshToken,
+	})
+
+	err := app.RefreshToken(req)
+	require.NoError(t, err)
+	assert.Equal(t, fasthttp.StatusOK, testutil.GetResponseStatusCode(req))
+
+	var resp struct {
+		Status string `json:"status"`
+		Data   struct {
+			AccessToken  string `json:"access_token"`
+			RefreshToken string `json:"refresh_token"`
+			ExpiresIn    int    `json:"expires_in"`
+		} `json:"data"`
 	}
+	err = json.Unmarshal(testutil.GetResponseBody(req), &resp)
+	require.NoError(t, err)
 
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			t.Parallel()
+	assert.Equal(t, "success", resp.Status)
+	assert.NotEmpty(t, resp.Data.AccessToken)
+	assert.NotEmpty(t, resp.Data.RefreshToken)
+	assert.Equal(t, 15*60, resp.Data.ExpiresIn)
+}
 
-			app := testApp(t)
-			refreshToken := tt.setupData(t, app)
+func TestApp_RefreshToken_Expired(t *testing.T) {
+	t.Parallel()
 
-			req := testutil.NewJSONRequest(t, map[string]string{
-				"refresh_token": refreshToken,
-			})
+	app := testApp(t)
+	org := createTestOrganization(t, app)
+	user := createTestUser(t, app, org.ID, uniqueEmail("expired"), "password123", "admin", true)
+	expiredToken := generateTestRefreshToken(t, user, testJWTSecret, -time.Hour)
 
-			err := app.RefreshToken(req)
-			require.NoError(t, err, "handler should not return error")
+	req := testutil.NewJSONRequest(t, map[string]string{
+		"refresh_token": expiredToken,
+	})
 
-			assert.Equal(t, tt.wantStatus, testutil.GetResponseStatusCode(req))
+	err := app.RefreshToken(req)
+	require.NoError(t, err)
+	assertErrorResponse(t, req, fasthttp.StatusUnauthorized, "Invalid refresh token")
+}
 
-			if tt.wantSuccessful {
-				var authResp handlers.AuthResponse
-				testutil.ParseEnvelopeResponse(t, req, &authResp)
+func TestApp_RefreshToken_InvalidSignature(t *testing.T) {
+	t.Parallel()
 
-				assert.NotEmpty(t, authResp.AccessToken)
-				assert.NotEmpty(t, authResp.RefreshToken)
-				assert.Equal(t, 15*60, authResp.ExpiresIn)
-			}
+	app := testApp(t)
+	org := createTestOrganization(t, app)
+	user := createTestUser(t, app, org.ID, uniqueEmail("invalid-sig"), "password123", "admin", true)
+	wrongSecretToken := generateTestRefreshToken(t, user, "wrong-secret-key-that-is-long", 7*24*time.Hour)
 
-			if tt.wantErrContains != "" {
-				testutil.AssertErrorResponse(t, req, tt.wantStatus, tt.wantErrContains)
-			}
-		})
+	req := testutil.NewJSONRequest(t, map[string]string{
+		"refresh_token": wrongSecretToken,
+	})
+
+	err := app.RefreshToken(req)
+	require.NoError(t, err)
+	assertErrorResponse(t, req, fasthttp.StatusUnauthorized, "Invalid refresh token")
+}
+
+func TestApp_RefreshToken_UserNotFound(t *testing.T) {
+	t.Parallel()
+
+	app := testApp(t)
+	fakeUser := &models.User{
+		BaseModel: models.BaseModel{
+			ID: uuid.New(),
+		},
+		OrganizationID: uuid.New(),
+		Email:          "fake@example.com",
+		Role:           "admin",
 	}
+	token := generateTestRefreshToken(t, fakeUser, testJWTSecret, 7*24*time.Hour)
+
+	req := testutil.NewJSONRequest(t, map[string]string{
+		"refresh_token": token,
+	})
+
+	err := app.RefreshToken(req)
+	require.NoError(t, err)
+	assertErrorResponse(t, req, fasthttp.StatusUnauthorized, "User not found")
+}
+
+func TestApp_RefreshToken_DisabledUser(t *testing.T) {
+	t.Parallel()
+
+	app := testApp(t)
+	org := createTestOrganization(t, app)
+	user := createTestUser(t, app, org.ID, uniqueEmail("disabled"), "password123", "admin", false)
+	token := generateTestRefreshToken(t, user, testJWTSecret, 7*24*time.Hour)
+
+	req := testutil.NewJSONRequest(t, map[string]string{
+		"refresh_token": token,
+	})
+
+	err := app.RefreshToken(req)
+	require.NoError(t, err)
+	assertErrorResponse(t, req, fasthttp.StatusUnauthorized, "Account is disabled")
+}
+
+func TestApp_RefreshToken_MalformedToken(t *testing.T) {
+	t.Parallel()
+
+	app := testApp(t)
+
+	req := testutil.NewJSONRequest(t, map[string]string{
+		"refresh_token": "not.a.valid.jwt.token",
+	})
+
+	err := app.RefreshToken(req)
+	require.NoError(t, err)
+	assertErrorResponse(t, req, fasthttp.StatusUnauthorized, "Invalid refresh token")
 }
 
 func TestApp_RefreshToken_InvalidRequestBody(t *testing.T) {
@@ -461,7 +461,6 @@ func TestApp_RefreshToken_InvalidRequestBody(t *testing.T) {
 
 	err := app.RefreshToken(req)
 	require.NoError(t, err)
-
 	assert.Equal(t, fasthttp.StatusBadRequest, testutil.GetResponseStatusCode(req))
 }
 
@@ -470,11 +469,11 @@ func TestApp_GeneratedTokensAreValid(t *testing.T) {
 
 	app := testApp(t)
 	org := createTestOrganization(t, app)
-	user := createTestUser(t, app, org.ID, "tokentest@example.com", "password123", "admin", true)
+	email := uniqueEmail("tokentest")
+	user := createTestUser(t, app, org.ID, email, "password123", "admin", true)
 
-	// Login to get tokens
 	req := testutil.NewJSONRequest(t, map[string]string{
-		"email":    "tokentest@example.com",
+		"email":    email,
 		"password": "password123",
 	})
 
@@ -482,11 +481,17 @@ func TestApp_GeneratedTokensAreValid(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, fasthttp.StatusOK, testutil.GetResponseStatusCode(req))
 
-	var authResp handlers.AuthResponse
-	testutil.ParseEnvelopeResponse(t, req, &authResp)
+	var resp struct {
+		Data struct {
+			AccessToken  string `json:"access_token"`
+			RefreshToken string `json:"refresh_token"`
+		} `json:"data"`
+	}
+	err = json.Unmarshal(testutil.GetResponseBody(req), &resp)
+	require.NoError(t, err)
 
 	// Verify access token can be parsed
-	accessToken, err := jwt.ParseWithClaims(authResp.AccessToken, &handlers.JWTClaims{}, func(token *jwt.Token) (any, error) {
+	accessToken, err := jwt.ParseWithClaims(resp.Data.AccessToken, &handlers.JWTClaims{}, func(token *jwt.Token) (any, error) {
 		return []byte(testJWTSecret), nil
 	})
 	require.NoError(t, err)
@@ -501,7 +506,7 @@ func TestApp_GeneratedTokensAreValid(t *testing.T) {
 	assert.Equal(t, "whatomate", accessClaims.Issuer)
 
 	// Verify refresh token can be parsed
-	refreshToken, err := jwt.ParseWithClaims(authResp.RefreshToken, &handlers.JWTClaims{}, func(token *jwt.Token) (any, error) {
+	refreshToken, err := jwt.ParseWithClaims(resp.Data.RefreshToken, &handlers.JWTClaims{}, func(token *jwt.Token) (any, error) {
 		return []byte(testJWTSecret), nil
 	})
 	require.NoError(t, err)

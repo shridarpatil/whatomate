@@ -295,13 +295,13 @@ func (a *App) TestAccountConnection(r *fastglue.Request) error {
 			"error":   "Failed to connect to WhatsApp API: " + err.Error(),
 		})
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	body, _ := io.ReadAll(resp.Body)
 
 	if resp.StatusCode != 200 {
 		var errorResp map[string]interface{}
-		json.Unmarshal(body, &errorResp)
+		_ = json.Unmarshal(body, &errorResp)
 		return r.SendEnvelope(map[string]interface{}{
 			"success": false,
 			"error":   "API error",
@@ -310,7 +310,7 @@ func (a *App) TestAccountConnection(r *fastglue.Request) error {
 	}
 
 	var result map[string]interface{}
-	json.Unmarshal(body, &result)
+	_ = json.Unmarshal(body, &result)
 
 	return r.SendEnvelope(map[string]interface{}{
 		"success":              true,
@@ -344,7 +344,7 @@ func accountToResponse(acc models.WhatsAppAccount) AccountResponse {
 
 func generateVerifyToken() string {
 	bytes := make([]byte, 32)
-	rand.Read(bytes)
+	_, _ = rand.Read(bytes)
 	return hex.EncodeToString(bytes)
 }
 

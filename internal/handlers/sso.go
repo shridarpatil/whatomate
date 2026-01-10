@@ -504,7 +504,7 @@ func (a *App) buildOAuthConfig(provider string, ssoConfig *models.SSOProvider, r
 
 	// Build callback URL from request
 	scheme := "https"
-	if r.RequestCtx.IsTLS() == false && a.Config.App.Environment == "development" {
+	if !r.RequestCtx.IsTLS() && a.Config.App.Environment == "development" {
 		scheme = "http"
 	}
 	host := string(r.RequestCtx.Host())
@@ -554,7 +554,7 @@ func (a *App) fetchUserInfo(provider string, ssoConfig *models.SSOProvider, toke
 	if err != nil {
 		return nil, err
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode != http.StatusOK {
 		body, _ := io.ReadAll(resp.Body)
@@ -636,7 +636,7 @@ func (a *App) fetchGitHubEmail(token *oauth2.Token) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	var emails []struct {
 		Email    string `json:"email"`
@@ -677,7 +677,7 @@ func (a *App) redirectWithError(r *fastglue.Request, message string) {
 
 func generateRandomString(n int) string {
 	b := make([]byte, n)
-	rand.Read(b)
+	_, _ = rand.Read(b)
 	return base64.URLEncoding.EncodeToString(b)[:n]
 }
 

@@ -107,9 +107,9 @@ func TestClient_SendInteractiveButtons(t *testing.T) {
 
 			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 				serverCalled = true
-				json.NewDecoder(r.Body).Decode(&capturedBody)
+				_ = json.NewDecoder(r.Body).Decode(&capturedBody)
 				w.WriteHeader(http.StatusOK)
-				json.NewEncoder(w).Encode(map[string]interface{}{
+				_ = json.NewEncoder(w).Encode(map[string]interface{}{
 					"messages": []map[string]string{{"id": "wamid.test"}},
 				})
 			}))
@@ -155,9 +155,9 @@ func TestClient_SendInteractiveButtons_ButtonTruncation(t *testing.T) {
 	var capturedBody map[string]interface{}
 
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		json.NewDecoder(r.Body).Decode(&capturedBody)
+		_ = json.NewDecoder(r.Body).Decode(&capturedBody)
 		w.WriteHeader(http.StatusOK)
-		json.NewEncoder(w).Encode(map[string]interface{}{
+		_ = json.NewEncoder(w).Encode(map[string]interface{}{
 			"messages": []map[string]string{{"id": "wamid.test"}},
 		})
 	}))
@@ -240,9 +240,9 @@ func TestClient_SendTemplateMessage(t *testing.T) {
 			var capturedBody map[string]interface{}
 
 			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-				json.NewDecoder(r.Body).Decode(&capturedBody)
+				_ = json.NewDecoder(r.Body).Decode(&capturedBody)
 				w.WriteHeader(http.StatusOK)
-				json.NewEncoder(w).Encode(map[string]interface{}{
+				_ = json.NewEncoder(w).Encode(map[string]interface{}{
 					"messages": []map[string]string{{"id": "wamid.template123"}},
 				})
 			}))
@@ -350,9 +350,9 @@ func TestClient_SendCTAURLButton(t *testing.T) {
 			var capturedBody map[string]interface{}
 
 			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-				json.NewDecoder(r.Body).Decode(&capturedBody)
+				_ = json.NewDecoder(r.Body).Decode(&capturedBody)
 				w.WriteHeader(http.StatusOK)
-				json.NewEncoder(w).Encode(map[string]interface{}{
+				_ = json.NewEncoder(w).Encode(map[string]interface{}{
 					"messages": []map[string]string{{"id": "wamid.cta123"}},
 				})
 			}))
@@ -402,9 +402,9 @@ func TestClient_SendTemplateMessageWithComponents(t *testing.T) {
 	var capturedBody map[string]interface{}
 
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		json.NewDecoder(r.Body).Decode(&capturedBody)
+		_ = json.NewDecoder(r.Body).Decode(&capturedBody)
 		w.WriteHeader(http.StatusOK)
-		json.NewEncoder(w).Encode(map[string]interface{}{
+		_ = json.NewEncoder(w).Encode(map[string]interface{}{
 			"messages": []map[string]string{{"id": "wamid.comp123"}},
 		})
 	}))

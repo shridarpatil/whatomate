@@ -375,7 +375,7 @@ func (a *App) SyncTemplates(r *fastglue.Request) error {
 		var body struct {
 			WhatsAppAccount string `json:"whatsapp_account"`
 		}
-		r.Decode(&body, "json")
+		_ = r.Decode(&body, "json")
 		accountName = body.WhatsAppAccount
 	}
 

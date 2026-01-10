@@ -414,13 +414,13 @@ func (a *App) executeWebhookAction(action models.CustomAction, context map[strin
 	if err != nil {
 		return nil, err
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	respBody, _ := io.ReadAll(resp.Body)
 
 	// Parse response
 	var responseData map[string]interface{}
-	json.Unmarshal(respBody, &responseData)
+	_ = json.Unmarshal(respBody, &responseData) // Ignore parse errors for optional response data
 
 	success := resp.StatusCode >= 200 && resp.StatusCode < 300
 	message := "Webhook executed successfully"
@@ -456,7 +456,7 @@ func (a *App) executeURLAction(action models.CustomAction, context map[string]in
 
 	// Generate a random token
 	tokenBytes := make([]byte, 16)
-	rand.Read(tokenBytes)
+	_, _ = rand.Read(tokenBytes)
 	token := hex.EncodeToString(tokenBytes)
 
 	// Store the redirect token (expires in 30 seconds)

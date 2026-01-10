@@ -82,7 +82,7 @@ func Handler(basePath string) fasthttp.RequestHandler {
 			filePath := strings.TrimPrefix(path, "/")
 			file, err := distSubFS.Open(filePath)
 			if err == nil {
-				defer file.Close()
+				defer func() { _ = file.Close() }()
 
 				// Get file info for size
 				stat, err := file.Stat()
@@ -113,7 +113,7 @@ func Handler(basePath string) fasthttp.RequestHandler {
 				}
 
 				w.Header().Set("Content-Length", fmt.Sprintf("%d", len(content)))
-				w.Write(content)
+				_, _ = w.Write(content)
 				return
 			}
 		}
@@ -121,7 +121,7 @@ func Handler(basePath string) fasthttp.RequestHandler {
 		// For root or non-existent files (SPA routes), serve modified index.html
 		if path == "/" || (!strings.HasPrefix(path, "/api") && !strings.Contains(path, ".")) {
 			w.Header().Set("Content-Type", "text/html; charset=utf-8")
-			w.Write(cachedIndexHTML)
+			_, _ = w.Write(cachedIndexHTML)
 			return
 		}
 
@@ -147,6 +147,6 @@ func notEmbeddedHandler(message string) fasthttp.RequestHandler {
 	return func(ctx *fasthttp.RequestCtx) {
 		ctx.SetContentType("text/plain; charset=utf-8")
 		ctx.SetStatusCode(fasthttp.StatusNotFound)
-		ctx.WriteString(message)
+		_, _ = ctx.WriteString(message)
 	}
 }
