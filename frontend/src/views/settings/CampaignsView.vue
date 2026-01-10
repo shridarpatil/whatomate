@@ -1283,9 +1283,14 @@ async function addRecipientsFromCSV() {
                   <td class="py-2 px-2 font-mono">{{ recipient.phone_number }}</td>
                   <td class="py-2 px-2">{{ recipient.recipient_name || '-' }}</td>
                   <td class="py-2 px-2">
-                    <Badge variant="outline" :class="getRecipientStatusClass(recipient.status)">
-                      {{ recipient.status }}
-                    </Badge>
+                    <div class="flex flex-col gap-1">
+                      <Badge variant="outline" :class="getRecipientStatusClass(recipient.status)">
+                        {{ recipient.status }}
+                      </Badge>
+                      <span v-if="recipient.status === 'failed' && recipient.error_message" class="text-xs text-destructive max-w-[200px] truncate" :title="recipient.error_message">
+                        {{ recipient.error_message }}
+                      </span>
+                    </div>
                   </td>
                   <td class="py-2 px-2 text-muted-foreground">
                     {{ recipient.sent_at ? formatDate(recipient.sent_at) : '-' }}
