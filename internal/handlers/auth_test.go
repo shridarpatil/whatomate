@@ -240,7 +240,7 @@ func TestApp_Login_DifferentRoles(t *testing.T) {
 				} `json:"data"`
 			}
 			_ = json.Unmarshal(testutil.GetResponseBody(req), &resp)
-			assert.Equal(t, role, resp.Data.User.Role)
+			assert.Equal(t, string(role), resp.Data.User.Role)
 		})
 	}
 }
