@@ -233,12 +233,13 @@ func splitPath(path string) []string {
 	for i := 0; i < len(path); i++ {
 		ch := path[i]
 
-		if ch == '.' {
+		switch ch {
+		case '.':
 			if current.Len() > 0 {
 				parts = append(parts, current.String())
 				current.Reset()
 			}
-		} else if ch == '[' {
+		case '[':
 			// Include [index] with the current field name
 			if current.Len() > 0 {
 				current.WriteByte(ch)
@@ -250,7 +251,7 @@ func splitPath(path string) []string {
 					current.WriteByte(']')
 				}
 			}
-		} else {
+		default:
 			current.WriteByte(ch)
 		}
 	}

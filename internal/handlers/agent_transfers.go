@@ -205,7 +205,8 @@ func (a *App) ListAgentTransfers(r *fastglue.Request) error {
 	}
 
 	// Filter based on role
-	if role == "agent" {
+	switch role {
+	case "agent":
 		// Agents see their assigned transfers + unassigned in their team queues
 		if len(userTeamIDs) > 0 {
 			query = query.Where("agent_transfers.agent_id = ? OR (agent_transfers.agent_id IS NULL AND (agent_transfers.team_id IS NULL OR agent_transfers.team_id IN ?))", userID, userTeamIDs)
@@ -213,7 +214,7 @@ func (a *App) ListAgentTransfers(r *fastglue.Request) error {
 			// Agent not in any team - see own transfers + general queue only
 			query = query.Where("agent_transfers.agent_id = ? OR (agent_transfers.agent_id IS NULL AND agent_transfers.team_id IS NULL)", userID)
 		}
-	} else if role == "manager" {
+	case "manager":
 		// Managers see their team's transfers (assigned and unassigned)
 		if len(userTeamIDs) > 0 {
 			query = query.Where("agent_transfers.team_id IN ? OR (agent_transfers.team_id IS NULL AND agent_transfers.agent_id IS NULL)", userTeamIDs)
@@ -236,13 +237,14 @@ func (a *App) ListAgentTransfers(r *fastglue.Request) error {
 			countQuery = countQuery.Where("agent_transfers.team_id = ?", teamID)
 		}
 	}
-	if role == "agent" {
+	switch role {
+	case "agent":
 		if len(userTeamIDs) > 0 {
 			countQuery = countQuery.Where("agent_transfers.agent_id = ? OR (agent_transfers.agent_id IS NULL AND (agent_transfers.team_id IS NULL OR agent_transfers.team_id IN ?))", userID, userTeamIDs)
 		} else {
 			countQuery = countQuery.Where("agent_transfers.agent_id = ? OR (agent_transfers.agent_id IS NULL AND agent_transfers.team_id IS NULL)", userID)
 		}
-	} else if role == "manager" {
+	case "manager":
 		if len(userTeamIDs) > 0 {
 			countQuery = countQuery.Where("agent_transfers.team_id IN ? OR (agent_transfers.team_id IS NULL AND agent_transfers.agent_id IS NULL)", userTeamIDs)
 		} else {
