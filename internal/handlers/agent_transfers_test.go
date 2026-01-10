@@ -41,9 +41,6 @@ func agentTransfersTestApp(t *testing.T) *handlers.App {
 	log := testutil.NopLogger()
 	redis := testutil.SetupTestRedis(t)
 
-	// Clean up tables at the start of each test to ensure isolation
-	// Use CleanupTables (DELETE) instead of TruncateTables for more predictable behavior
-	cleanupTestTables(db)
 
 	cfg := &config.Config{
 		JWT: config.JWTConfig{
