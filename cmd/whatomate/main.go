@@ -577,6 +577,7 @@ func setupRoutes(g *fastglue.Fastglue, app *handlers.App, lo logf.Logger, basePa
 	g.POST("/api/campaigns/{id}/recipients/import", app.ImportRecipients)
 	g.GET("/api/campaigns/{id}/recipients", app.GetCampaignRecipients)
 	g.DELETE("/api/campaigns/{id}/recipients/{recipientId}", app.DeleteCampaignRecipient)
+	g.POST("/api/campaigns/{id}/media", app.UploadCampaignMedia)
 
 	// Chatbot Settings
 	g.GET("/api/chatbot/settings", app.GetChatbotSettings)

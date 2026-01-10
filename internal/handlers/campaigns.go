@@ -1,12 +1,14 @@
 package handlers
 
 import (
+	"io"
 	"time"
 
 	"github.com/google/uuid"
 	"github.com/shridarpatil/whatomate/internal/models"
 	"github.com/shridarpatil/whatomate/internal/queue"
 	"github.com/shridarpatil/whatomate/internal/websocket"
+	"github.com/shridarpatil/whatomate/pkg/whatsapp"
 	"github.com/valyala/fasthttp"
 	"github.com/zerodha/fastglue"
 	"gorm.io/gorm"
@@ -17,6 +19,7 @@ type CampaignRequest struct {
 	Name            string     `json:"name" validate:"required"`
 	WhatsAppAccount string     `json:"whatsapp_account" validate:"required"`
 	TemplateID      string     `json:"template_id" validate:"required"`
+	HeaderMediaID  string     `json:"header_media_url"`
 	ScheduledAt     *time.Time `json:"scheduled_at"`
 }
 
@@ -27,6 +30,7 @@ type CampaignResponse struct {
 	WhatsAppAccount string               `json:"whatsapp_account"`
 	TemplateID      uuid.UUID            `json:"template_id"`
 	TemplateName    string               `json:"template_name,omitempty"`
+	HeaderMediaID  string               `json:"header_media_url,omitempty"`
 	Status          models.CampaignStatus `json:"status"`
 	TotalRecipients int                  `json:"total_recipients"`
 	SentCount       int                  `json:"sent_count"`
@@ -97,6 +101,7 @@ func (a *App) ListCampaigns(r *fastglue.Request) error {
 			Name:            c.Name,
 			WhatsAppAccount: c.WhatsAppAccount,
 			TemplateID:      c.TemplateID,
+			HeaderMediaID:  c.HeaderMediaID,
 			Status:          c.Status,
 			TotalRecipients: c.TotalRecipients,
 			SentCount:       c.SentCount,
@@ -159,6 +164,7 @@ func (a *App) CreateCampaign(r *fastglue.Request) error {
 		WhatsAppAccount: req.WhatsAppAccount,
 		Name:            req.Name,
 		TemplateID:      templateID,
+		HeaderMediaID:  req.HeaderMediaID,
 		Status:          models.CampaignStatusDraft,
 		ScheduledAt:     req.ScheduledAt,
 		CreatedBy:       userID,
@@ -177,6 +183,7 @@ func (a *App) CreateCampaign(r *fastglue.Request) error {
 		WhatsAppAccount: campaign.WhatsAppAccount,
 		TemplateID:      campaign.TemplateID,
 		TemplateName:    template.Name,
+		HeaderMediaID:  campaign.HeaderMediaID,
 		Status:          campaign.Status,
 		TotalRecipients: campaign.TotalRecipients,
 		SentCount:       campaign.SentCount,
@@ -213,6 +220,7 @@ func (a *App) GetCampaign(r *fastglue.Request) error {
 		Name:            campaign.Name,
 		WhatsAppAccount: campaign.WhatsAppAccount,
 		TemplateID:      campaign.TemplateID,
+		HeaderMediaID:  campaign.HeaderMediaID,
 		Status:          campaign.Status,
 		TotalRecipients: campaign.TotalRecipients,
 		SentCount:       campaign.SentCount,
@@ -290,6 +298,7 @@ func (a *App) UpdateCampaign(r *fastglue.Request) error {
 		Name:            campaign.Name,
 		WhatsAppAccount: campaign.WhatsAppAccount,
 		TemplateID:      campaign.TemplateID,
+		HeaderMediaID:  campaign.HeaderMediaID,
 		Status:          campaign.Status,
 		TotalRecipients: campaign.TotalRecipients,
 		SentCount:       campaign.SentCount,
@@ -724,6 +733,102 @@ func (a *App) DeleteCampaignRecipient(r *fastglue.Request) error {
 
 	return r.SendEnvelope(map[string]interface{}{
 		"message": "Recipient deleted successfully",
+	})
+}
+
+// UploadCampaignMedia uploads media for a campaign's template header
+func (a *App) UploadCampaignMedia(r *fastglue.Request) error {
+	orgID, err := a.getOrgIDFromContext(r)
+	if err != nil {
+		return r.SendErrorEnvelope(fasthttp.StatusUnauthorized, "Unauthorized", nil, "")
+	}
+
+	campaignID := r.RequestCtx.UserValue("id").(string)
+	campaignUUID, err := uuid.Parse(campaignID)
+	if err != nil {
+		return r.SendErrorEnvelope(fasthttp.StatusBadRequest, "Invalid campaign ID", nil, "")
+	}
+
+	// Get campaign with template
+	var campaign models.BulkMessageCampaign
+	if err := a.DB.Where("id = ? AND organization_id = ?", campaignUUID, orgID).
+		Preload("Template").
+		First(&campaign).Error; err != nil {
+		return r.SendErrorEnvelope(fasthttp.StatusNotFound, "Campaign not found", nil, "")
+	}
+
+	// Only allow media upload for draft campaigns
+	if campaign.Status != models.CampaignStatusDraft {
+		return r.SendErrorEnvelope(fasthttp.StatusBadRequest, "Can only upload media for draft campaigns", nil, "")
+	}
+
+	// Verify template has media header
+	if campaign.Template == nil || campaign.Template.HeaderType == "" || campaign.Template.HeaderType == "TEXT" {
+		return r.SendErrorEnvelope(fasthttp.StatusBadRequest, "Template does not have a media header", nil, "")
+	}
+
+	// Get WhatsApp account
+	var account models.WhatsAppAccount
+	if err := a.DB.Where("name = ? AND organization_id = ?", campaign.WhatsAppAccount, orgID).First(&account).Error; err != nil {
+		return r.SendErrorEnvelope(fasthttp.StatusBadRequest, "WhatsApp account not found", nil, "")
+	}
+
+	// Parse multipart form
+	form, err := r.RequestCtx.MultipartForm()
+	if err != nil {
+		return r.SendErrorEnvelope(fasthttp.StatusBadRequest, "Invalid multipart form", nil, "")
+	}
+
+	files := form.File["file"]
+	if len(files) == 0 {
+		return r.SendErrorEnvelope(fasthttp.StatusBadRequest, "No file provided", nil, "")
+	}
+
+	fileHeader := files[0]
+	file, err := fileHeader.Open()
+	if err != nil {
+		return r.SendErrorEnvelope(fasthttp.StatusBadRequest, "Failed to open file", nil, "")
+	}
+	defer file.Close()
+
+	// Read file content
+	data, err := io.ReadAll(file)
+	if err != nil {
+		return r.SendErrorEnvelope(fasthttp.StatusInternalServerError, "Failed to read file", nil, "")
+	}
+
+	// Determine mime type from header content type or file extension
+	mimeType := fileHeader.Header.Get("Content-Type")
+	if mimeType == "" {
+		mimeType = "application/octet-stream"
+	}
+
+	// Upload to WhatsApp
+	waAccount := &whatsapp.Account{
+		PhoneID:     account.PhoneID,
+		BusinessID:  account.BusinessID,
+		APIVersion:  account.APIVersion,
+		AccessToken: account.AccessToken,
+	}
+
+	ctx := r.RequestCtx
+	mediaID, err := a.WhatsApp.UploadMedia(ctx, waAccount, data, mimeType, fileHeader.Filename)
+	if err != nil {
+		a.Log.Error("Failed to upload media to WhatsApp", "error", err)
+		return r.SendErrorEnvelope(fasthttp.StatusInternalServerError, "Failed to upload media to WhatsApp: "+err.Error(), nil, "")
+	}
+
+	// Update campaign with media ID
+	if err := a.DB.Model(&campaign).Update("header_media_id", mediaID).Error; err != nil {
+		a.Log.Error("Failed to update campaign with media ID", "error", err)
+		return r.SendErrorEnvelope(fasthttp.StatusInternalServerError, "Failed to save media ID", nil, "")
+	}
+
+	a.Log.Info("Campaign media uploaded", "campaign_id", campaignID, "media_id", mediaID)
+
+	return r.SendEnvelope(map[string]interface{}{
+		"media_id": mediaID,
+		"message":  "Media uploaded successfully",
 	})
 }
 

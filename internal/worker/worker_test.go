@@ -533,7 +533,7 @@ func TestWorker_sendTemplateMessage_BuildsComponents(t *testing.T) {
 		},
 	}
 
-	msgID, err := w.sendTemplateMessage(context.Background(), account, template, recipient)
+	msgID, err := w.sendTemplateMessage(context.Background(), account, template, recipient, "")
 	require.NoError(t, err)
 	assert.Equal(t, "wamid.test123", msgID)
 
@@ -589,7 +589,7 @@ func TestWorker_sendTemplateMessage_NoParams(t *testing.T) {
 		TemplateParams: nil, // No params
 	}
 
-	msgID, err := w.sendTemplateMessage(context.Background(), account, template, recipient)
+	msgID, err := w.sendTemplateMessage(context.Background(), account, template, recipient, "")
 	require.NoError(t, err)
 	assert.Equal(t, "wamid.test456", msgID)
 

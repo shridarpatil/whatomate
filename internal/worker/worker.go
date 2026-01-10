@@ -193,7 +193,7 @@ func (w *Worker) HandleRecipientJob(ctx context.Context, job *queue.RecipientJob
 	}
 
 	// Send template message
-	waMessageID, err := w.sendTemplateMessage(ctx, &account, campaign.Template, recipient)
+	waMessageID, err := w.sendTemplateMessage(ctx, &account, campaign.Template, recipient, campaign.HeaderMediaID)
 
 	// Create Message record
 	message := models.Message{
@@ -324,7 +324,7 @@ func (w *Worker) checkCampaignCompletion(ctx context.Context, campaignID, organi
 }
 
 // sendTemplateMessage sends a template message via WhatsApp Cloud API
-func (w *Worker) sendTemplateMessage(ctx context.Context, account *models.WhatsAppAccount, template *models.Template, recipient *models.BulkMessageRecipient) (string, error) {
+func (w *Worker) sendTemplateMessage(ctx context.Context, account *models.WhatsAppAccount, template *models.Template, recipient *models.BulkMessageRecipient, campaignHeaderMediaID string) (string, error) {
 	waAccount := &whatsapp.Account{
 		PhoneID:     account.PhoneID,
 		BusinessID:  account.BusinessID,
@@ -337,14 +337,18 @@ func (w *Worker) sendTemplateMessage(ctx context.Context, account *models.WhatsA
 
 	// Handle header component (for media templates)
 	if template.HeaderType != "" && template.HeaderType != "TEXT" {
-		// Check if recipient has a custom media URL, otherwise use template's header content
-		mediaURL := template.HeaderContent
-		if url, ok := recipient.TemplateParams["header_media_url"].(string); ok && url != "" {
-			mediaURL = url
-		}
-
-		if mediaURL != "" {
-			headerParam := buildMediaParameter(template.HeaderType, mediaURL)
+		// Use campaign's uploaded media ID if available
+		if campaignHeaderMediaID != "" {
+			headerParam := buildMediaParameterWithID(template.HeaderType, campaignHeaderMediaID)
+			if headerParam != nil {
+				components = append(components, map[string]interface{}{
+					"type":       "header",
+					"parameters": []map[string]interface{}{headerParam},
+				})
+			}
+		} else if template.HeaderContent != "" {
+			// Fall back to template's header content (URL)
+			headerParam := buildMediaParameterWithLink(template.HeaderType, template.HeaderContent)
 			if headerParam != nil {
 				components = append(components, map[string]interface{}{
 					"type":       "header",
@@ -373,8 +377,37 @@ func (w *Worker) sendTemplateMessage(ctx context.Context, account *models.WhatsA
 	return w.WhatsApp.SendTemplateMessageWithComponents(ctx, waAccount, recipient.PhoneNumber, template.Name, template.Language, components)
 }
 
-// buildMediaParameter creates a media parameter for header component
-func buildMediaParameter(headerType, mediaURL string) map[string]interface{} {
+// buildMediaParameterWithID creates a media parameter using Meta's media ID
+func buildMediaParameterWithID(headerType, mediaID string) map[string]interface{} {
+	switch headerType {
+	case "IMAGE":
+		return map[string]interface{}{
+			"type": "image",
+			"image": map[string]interface{}{
+				"id": mediaID,
+			},
+		}
+	case "VIDEO":
+		return map[string]interface{}{
+			"type": "video",
+			"video": map[string]interface{}{
+				"id": mediaID,
+			},
+		}
+	case "DOCUMENT":
+		return map[string]interface{}{
+			"type": "document",
+			"document": map[string]interface{}{
+				"id": mediaID,
+			},
+		}
+	default:
+		return nil
+	}
+}
+
+// buildMediaParameterWithLink creates a media parameter using external URL
+func buildMediaParameterWithLink(headerType, mediaURL string) map[string]interface{} {
 	switch headerType {
 	case "IMAGE":
 		return map[string]interface{}{
