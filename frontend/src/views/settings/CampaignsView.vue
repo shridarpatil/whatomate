@@ -83,6 +83,8 @@ interface Campaign {
   template_id?: string
   whatsapp_account?: string
   header_media_id?: string
+  header_media_filename?: string
+  header_media_mime_type?: string
   status: 'draft' | 'scheduled' | 'running' | 'paused' | 'completed' | 'failed' | 'queued' | 'processing' | 'cancelled'
   total_recipients: number
   sent_count: number
@@ -1330,10 +1332,20 @@ async function addRecipientsFromCSV() {
                 <span class="text-sm font-medium">Header Media ({{ getTemplateHeaderType(campaign.template_id) }})</span>
               </div>
 
-              <div v-if="campaign.header_media_id" class="flex items-center gap-2">
-                <CheckCircle class="h-4 w-4 text-green-600" />
-                <span class="text-sm text-green-600">Media uploaded</span>
-                <span class="text-xs text-muted-foreground">(ID: {{ campaign.header_media_id.substring(0, 12) }}...)</span>
+              <div v-if="campaign.header_media_id" class="space-y-2">
+                <div class="flex items-center gap-2 p-2 bg-green-50 dark:bg-green-950/30 rounded border border-green-200 dark:border-green-800">
+                  <component :is="getMediaIcon(getTemplateHeaderType(campaign.template_id))" class="h-4 w-4 text-green-600" />
+                  <div class="flex-1 min-w-0">
+                    <p class="text-sm font-medium text-green-700 dark:text-green-400 truncate">
+                      {{ campaign.header_media_filename || 'Media file' }}
+                    </p>
+                    <p class="text-xs text-muted-foreground">
+                      {{ campaign.header_media_mime_type || 'Unknown type' }}
+                    </p>
+                  </div>
+                  <CheckCircle class="h-4 w-4 text-green-600 flex-shrink-0" />
+                </div>
+                <p class="text-xs text-muted-foreground">ID: {{ campaign.header_media_id.substring(0, 20) }}...</p>
               </div>
 
               <div v-else-if="campaign.status === 'draft'" class="space-y-2">

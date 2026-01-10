@@ -25,13 +25,15 @@ type CampaignRequest struct {
 
 // CampaignResponse represents campaign in API responses
 type CampaignResponse struct {
-	ID              uuid.UUID             `json:"id"`
-	Name            string                `json:"name"`
-	WhatsAppAccount string                `json:"whatsapp_account"`
-	TemplateID      uuid.UUID             `json:"template_id"`
-	TemplateName    string                `json:"template_name,omitempty"`
-	HeaderMediaID   string                `json:"header_media_id,omitempty"`
-	Status          models.CampaignStatus `json:"status"`
+	ID                    uuid.UUID             `json:"id"`
+	Name                  string                `json:"name"`
+	WhatsAppAccount       string                `json:"whatsapp_account"`
+	TemplateID            uuid.UUID             `json:"template_id"`
+	TemplateName          string                `json:"template_name,omitempty"`
+	HeaderMediaID         string                `json:"header_media_id,omitempty"`
+	HeaderMediaFilename   string                `json:"header_media_filename,omitempty"`
+	HeaderMediaMimeType   string                `json:"header_media_mime_type,omitempty"`
+	Status                models.CampaignStatus `json:"status"`
 	TotalRecipients int                  `json:"total_recipients"`
 	SentCount       int                  `json:"sent_count"`
 	DeliveredCount  int                  `json:"delivered_count"`
@@ -97,22 +99,24 @@ func (a *App) ListCampaigns(r *fastglue.Request) error {
 	response := make([]CampaignResponse, len(campaigns))
 	for i, c := range campaigns {
 		response[i] = CampaignResponse{
-			ID:              c.ID,
-			Name:            c.Name,
-			WhatsAppAccount: c.WhatsAppAccount,
-			TemplateID:      c.TemplateID,
-			HeaderMediaID:  c.HeaderMediaID,
-			Status:          c.Status,
-			TotalRecipients: c.TotalRecipients,
-			SentCount:       c.SentCount,
-			DeliveredCount:  c.DeliveredCount,
-			ReadCount:       c.ReadCount,
-			FailedCount:     c.FailedCount,
-			ScheduledAt:     c.ScheduledAt,
-			StartedAt:       c.StartedAt,
-			CompletedAt:     c.CompletedAt,
-			CreatedAt:       c.CreatedAt,
-			UpdatedAt:       c.UpdatedAt,
+			ID:                  c.ID,
+			Name:                c.Name,
+			WhatsAppAccount:     c.WhatsAppAccount,
+			TemplateID:          c.TemplateID,
+			HeaderMediaID:       c.HeaderMediaID,
+			HeaderMediaFilename: c.HeaderMediaFilename,
+			HeaderMediaMimeType: c.HeaderMediaMimeType,
+			Status:              c.Status,
+			TotalRecipients:     c.TotalRecipients,
+			SentCount:           c.SentCount,
+			DeliveredCount:      c.DeliveredCount,
+			ReadCount:           c.ReadCount,
+			FailedCount:         c.FailedCount,
+			ScheduledAt:         c.ScheduledAt,
+			StartedAt:           c.StartedAt,
+			CompletedAt:         c.CompletedAt,
+			CreatedAt:           c.CreatedAt,
+			UpdatedAt:           c.UpdatedAt,
 		}
 		if c.Template != nil {
 			response[i].TemplateName = c.Template.Name
@@ -178,20 +182,22 @@ func (a *App) CreateCampaign(r *fastglue.Request) error {
 	a.Log.Info("Campaign created", "campaign_id", campaign.ID, "name", campaign.Name)
 
 	return r.SendEnvelope(CampaignResponse{
-		ID:              campaign.ID,
-		Name:            campaign.Name,
-		WhatsAppAccount: campaign.WhatsAppAccount,
-		TemplateID:      campaign.TemplateID,
-		TemplateName:    template.Name,
-		HeaderMediaID:  campaign.HeaderMediaID,
-		Status:          campaign.Status,
-		TotalRecipients: campaign.TotalRecipients,
-		SentCount:       campaign.SentCount,
-		DeliveredCount:  campaign.DeliveredCount,
-		FailedCount:     campaign.FailedCount,
-		ScheduledAt:     campaign.ScheduledAt,
-		CreatedAt:       campaign.CreatedAt,
-		UpdatedAt:       campaign.UpdatedAt,
+		ID:                  campaign.ID,
+		Name:                campaign.Name,
+		WhatsAppAccount:     campaign.WhatsAppAccount,
+		TemplateID:          campaign.TemplateID,
+		TemplateName:        template.Name,
+		HeaderMediaID:       campaign.HeaderMediaID,
+		HeaderMediaFilename: campaign.HeaderMediaFilename,
+		HeaderMediaMimeType: campaign.HeaderMediaMimeType,
+		Status:              campaign.Status,
+		TotalRecipients:     campaign.TotalRecipients,
+		SentCount:           campaign.SentCount,
+		DeliveredCount:      campaign.DeliveredCount,
+		FailedCount:         campaign.FailedCount,
+		ScheduledAt:         campaign.ScheduledAt,
+		CreatedAt:           campaign.CreatedAt,
+		UpdatedAt:           campaign.UpdatedAt,
 	})
 }
 
@@ -216,21 +222,23 @@ func (a *App) GetCampaign(r *fastglue.Request) error {
 	}
 
 	response := CampaignResponse{
-		ID:              campaign.ID,
-		Name:            campaign.Name,
-		WhatsAppAccount: campaign.WhatsAppAccount,
-		TemplateID:      campaign.TemplateID,
-		HeaderMediaID:  campaign.HeaderMediaID,
-		Status:          campaign.Status,
-		TotalRecipients: campaign.TotalRecipients,
-		SentCount:       campaign.SentCount,
-		DeliveredCount:  campaign.DeliveredCount,
-		FailedCount:     campaign.FailedCount,
-		ScheduledAt:     campaign.ScheduledAt,
-		StartedAt:       campaign.StartedAt,
-		CompletedAt:     campaign.CompletedAt,
-		CreatedAt:       campaign.CreatedAt,
-		UpdatedAt:       campaign.UpdatedAt,
+		ID:                  campaign.ID,
+		Name:                campaign.Name,
+		WhatsAppAccount:     campaign.WhatsAppAccount,
+		TemplateID:          campaign.TemplateID,
+		HeaderMediaID:       campaign.HeaderMediaID,
+		HeaderMediaFilename: campaign.HeaderMediaFilename,
+		HeaderMediaMimeType: campaign.HeaderMediaMimeType,
+		Status:              campaign.Status,
+		TotalRecipients:     campaign.TotalRecipients,
+		SentCount:           campaign.SentCount,
+		DeliveredCount:      campaign.DeliveredCount,
+		FailedCount:         campaign.FailedCount,
+		ScheduledAt:         campaign.ScheduledAt,
+		StartedAt:           campaign.StartedAt,
+		CompletedAt:         campaign.CompletedAt,
+		CreatedAt:           campaign.CreatedAt,
+		UpdatedAt:           campaign.UpdatedAt,
 	}
 	if campaign.Template != nil {
 		response.TemplateName = campaign.Template.Name
@@ -294,19 +302,21 @@ func (a *App) UpdateCampaign(r *fastglue.Request) error {
 	a.DB.Where("id = ?", id).Preload("Template").First(&campaign)
 
 	response := CampaignResponse{
-		ID:              campaign.ID,
-		Name:            campaign.Name,
-		WhatsAppAccount: campaign.WhatsAppAccount,
-		TemplateID:      campaign.TemplateID,
-		HeaderMediaID:  campaign.HeaderMediaID,
-		Status:          campaign.Status,
-		TotalRecipients: campaign.TotalRecipients,
-		SentCount:       campaign.SentCount,
-		DeliveredCount:  campaign.DeliveredCount,
-		FailedCount:     campaign.FailedCount,
-		ScheduledAt:     campaign.ScheduledAt,
-		CreatedAt:       campaign.CreatedAt,
-		UpdatedAt:       campaign.UpdatedAt,
+		ID:                  campaign.ID,
+		Name:                campaign.Name,
+		WhatsAppAccount:     campaign.WhatsAppAccount,
+		TemplateID:          campaign.TemplateID,
+		HeaderMediaID:       campaign.HeaderMediaID,
+		HeaderMediaFilename: campaign.HeaderMediaFilename,
+		HeaderMediaMimeType: campaign.HeaderMediaMimeType,
+		Status:              campaign.Status,
+		TotalRecipients:     campaign.TotalRecipients,
+		SentCount:           campaign.SentCount,
+		DeliveredCount:      campaign.DeliveredCount,
+		FailedCount:         campaign.FailedCount,
+		ScheduledAt:         campaign.ScheduledAt,
+		CreatedAt:           campaign.CreatedAt,
+		UpdatedAt:           campaign.UpdatedAt,
 	}
 	if campaign.Template != nil {
 		response.TemplateName = campaign.Template.Name
@@ -818,17 +828,24 @@ func (a *App) UploadCampaignMedia(r *fastglue.Request) error {
 		return r.SendErrorEnvelope(fasthttp.StatusInternalServerError, "Failed to upload media to WhatsApp: "+err.Error(), nil, "")
 	}
 
-	// Update campaign with media ID
-	if err := a.DB.Model(&campaign).Update("header_media_id", mediaID).Error; err != nil {
-		a.Log.Error("Failed to update campaign with media ID", "error", err)
-		return r.SendErrorEnvelope(fasthttp.StatusInternalServerError, "Failed to save media ID", nil, "")
+	// Update campaign with media ID, filename, and mime type
+	updates := map[string]interface{}{
+		"header_media_id":        mediaID,
+		"header_media_filename":  fileHeader.Filename,
+		"header_media_mime_type": mimeType,
+	}
+	if err := a.DB.Model(&campaign).Updates(updates).Error; err != nil {
+		a.Log.Error("Failed to update campaign with media info", "error", err)
+		return r.SendErrorEnvelope(fasthttp.StatusInternalServerError, "Failed to save media info", nil, "")
 	}
 
-	a.Log.Info("Campaign media uploaded", "campaign_id", campaignID, "media_id", mediaID)
+	a.Log.Info("Campaign media uploaded", "campaign_id", campaignID, "media_id", mediaID, "filename", fileHeader.Filename)
 
 	return r.SendEnvelope(map[string]interface{}{
-		"media_id": mediaID,
-		"message":  "Media uploaded successfully",
+		"media_id":  mediaID,
+		"filename":  fileHeader.Filename,
+		"mime_type": mimeType,
+		"message":   "Media uploaded successfully",
 	})
 }
 
