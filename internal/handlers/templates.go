@@ -3,6 +3,7 @@ package handlers
 import (
 	"context"
 	"fmt"
+	"regexp"
 	"strings"
 
 	"github.com/google/uuid"
@@ -11,6 +12,9 @@ import (
 	"github.com/valyala/fasthttp"
 	"github.com/zerodha/fastglue"
 )
+
+// parameterPattern matches template parameters like {{1}}, {{name}}, {{order_id}}
+var parameterPattern = regexp.MustCompile(`\{\{([^}]+)\}\}`)
 
 // TemplateRequest represents the request body for creating/updating a template
 type TemplateRequest struct {
@@ -43,6 +47,7 @@ type TemplateResponse struct {
 	FooterContent   string        `json:"footer_content"`
 	Buttons         []interface{} `json:"buttons"`
 	SampleValues    []interface{} `json:"sample_values"`
+	ParameterNames  []string      `json:"parameter_names"`
 	CreatedAt       string        `json:"created_at"`
 	UpdatedAt       string        `json:"updated_at"`
 }
@@ -124,6 +129,9 @@ func (a *App) CreateTemplate(r *fastglue.Request) error {
 		displayName = req.Name
 	}
 
+	// Extract parameter names from body content
+	paramNames := extractParameterNames(req.BodyContent)
+
 	template := models.Template{
 		OrganizationID:  orgID,
 		WhatsAppAccount: req.WhatsAppAccount,
@@ -138,6 +146,7 @@ func (a *App) CreateTemplate(r *fastglue.Request) error {
 		FooterContent:   req.FooterContent,
 		Buttons:         convertToJSONBArray(req.Buttons),
 		SampleValues:    convertToJSONBArray(req.SampleValues),
+		ParameterNames:  paramNames,
 	}
 
 	if err := a.DB.Create(&template).Error; err != nil {
@@ -219,6 +228,8 @@ func (a *App) UpdateTemplate(r *fastglue.Request) error {
 	template.HeaderContent = req.HeaderContent
 	if req.BodyContent != "" {
 		template.BodyContent = req.BodyContent
+		// Re-extract parameter names when body content changes
+		template.ParameterNames = extractParameterNames(req.BodyContent)
 	}
 	template.FooterContent = req.FooterContent
 	if req.Buttons != nil {
@@ -506,6 +517,7 @@ func templateToResponse(t models.Template) TemplateResponse {
 		FooterContent:   t.FooterContent,
 		Buttons:         convertFromJSONBArray(t.Buttons),
 		SampleValues:    convertFromJSONBArray(t.SampleValues),
+		ParameterNames:  t.ParameterNames,
 		CreatedAt:       t.CreatedAt.Format("2006-01-02T15:04:05Z"),
 		UpdatedAt:       t.UpdatedAt.Format("2006-01-02T15:04:05Z"),
 	}
@@ -538,4 +550,27 @@ func convertFromJSONBArray(arr models.JSONBArray) []interface{} {
 		return []interface{}{}
 	}
 	return []interface{}(arr)
+}
+
+// extractParameterNames extracts parameter names from template content
+// Supports both positional ({{1}}, {{2}}) and named ({{name}}, {{order_id}}) parameters
+// Returns parameter names in order of first occurrence, without duplicates
+func extractParameterNames(content string) []string {
+	matches := parameterPattern.FindAllStringSubmatch(content, -1)
+	if len(matches) == 0 {
+		return nil
+	}
+
+	seen := make(map[string]bool)
+	var names []string
+	for _, match := range matches {
+		if len(match) > 1 {
+			name := strings.TrimSpace(match[1])
+			if name != "" && !seen[name] {
+				seen[name] = true
+				names = append(names, name)
+			}
+		}
+	}
+	return names
 }

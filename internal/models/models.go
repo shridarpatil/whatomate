@@ -363,8 +363,9 @@ type Template struct {
 	HeaderContent   string     `gorm:"type:text" json:"header_content"`
 	BodyContent     string     `gorm:"type:text;not null" json:"body_content"`
 	FooterContent   string     `gorm:"type:text" json:"footer_content"`
-	Buttons         JSONBArray `gorm:"type:jsonb;default:'[]'" json:"buttons"`
-	SampleValues    JSONBArray `gorm:"type:jsonb;default:'[]'" json:"sample_values"`
+	Buttons         JSONBArray  `gorm:"type:jsonb;default:'[]'" json:"buttons"`
+	SampleValues    JSONBArray  `gorm:"type:jsonb;default:'[]'" json:"sample_values"`
+	ParameterNames  StringArray `gorm:"type:jsonb;default:'[]'" json:"parameter_names"` // Extracted parameter names in order: ["name", "order_id"] or ["1", "2"]
 
 	// Relations
 	Organization *Organization `gorm:"foreignKey:OrganizationID" json:"organization,omitempty"`

@@ -820,3 +820,147 @@ func TestWorker_HandleRecipientJob_TemplateParamSubstitution(t *testing.T) {
 	assert.NotContains(t, message.Content, "{{1}}")
 	assert.NotContains(t, message.Content, "{{2}}")
 }
+
+// Unit tests for parameter resolution functions (no database required)
+
+func TestResolveTemplateParams_NamedParams(t *testing.T) {
+	template := &models.Template{
+		ParameterNames: []string{"name", "order_id"},
+	}
+	params := models.JSONB{
+		"name":     "John",
+		"order_id": "ORD-123",
+	}
+
+	result := resolveTemplateParams(template, params)
+
+	assert.Equal(t, []string{"John", "ORD-123"}, result)
+}
+
+func TestResolveTemplateParams_PositionalParams(t *testing.T) {
+	template := &models.Template{
+		ParameterNames: []string{"1", "2"},
+	}
+	params := models.JSONB{
+		"1": "John",
+		"2": "ORD-123",
+	}
+
+	result := resolveTemplateParams(template, params)
+
+	assert.Equal(t, []string{"John", "ORD-123"}, result)
+}
+
+func TestResolveTemplateParams_FallbackToPositional(t *testing.T) {
+	// Named params in template, but user provides positional params
+	template := &models.Template{
+		ParameterNames: []string{"name", "order_id"},
+	}
+	params := models.JSONB{
+		"1": "John",
+		"2": "ORD-123",
+	}
+
+	result := resolveTemplateParams(template, params)
+
+	assert.Equal(t, []string{"John", "ORD-123"}, result)
+}
+
+func TestResolveTemplateParams_MixedParams(t *testing.T) {
+	// User provides some named, some positional
+	template := &models.Template{
+		ParameterNames: []string{"name", "order_id"},
+	}
+	params := models.JSONB{
+		"name": "John",
+		"2":    "ORD-123", // Positional fallback for second param
+	}
+
+	result := resolveTemplateParams(template, params)
+
+	assert.Equal(t, []string{"John", "ORD-123"}, result)
+}
+
+func TestResolveTemplateParams_LegacyNoParameterNames(t *testing.T) {
+	// Template without ParameterNames (legacy)
+	template := &models.Template{}
+	params := models.JSONB{
+		"1": "John",
+		"2": "ORD-123",
+	}
+
+	result := resolveTemplateParams(template, params)
+
+	assert.Equal(t, []string{"John", "ORD-123"}, result)
+}
+
+func TestResolveTemplateParams_EmptyParams(t *testing.T) {
+	template := &models.Template{
+		ParameterNames: []string{"name"},
+	}
+	params := models.JSONB{}
+
+	result := resolveTemplateParams(template, params)
+
+	assert.Nil(t, result)
+}
+
+func TestReplaceTemplateContent_NamedParams(t *testing.T) {
+	template := &models.Template{
+		ParameterNames: []string{"name", "order_id"},
+	}
+	content := "Hello {{name}}, your order {{order_id}} is ready!"
+	params := models.JSONB{
+		"name":     "John",
+		"order_id": "ORD-123",
+	}
+
+	result := replaceTemplateContent(template, content, params)
+
+	assert.Equal(t, "Hello John, your order ORD-123 is ready!", result)
+}
+
+func TestReplaceTemplateContent_PositionalParams(t *testing.T) {
+	template := &models.Template{
+		ParameterNames: []string{"1", "2"},
+	}
+	content := "Hello {{1}}, your order {{2}} is ready!"
+	params := models.JSONB{
+		"1": "John",
+		"2": "ORD-123",
+	}
+
+	result := replaceTemplateContent(template, content, params)
+
+	assert.Equal(t, "Hello John, your order ORD-123 is ready!", result)
+}
+
+func TestReplaceTemplateContent_NamedParamsWithPositionalInput(t *testing.T) {
+	// Template has named placeholders but user provides positional params
+	template := &models.Template{
+		ParameterNames: []string{"name", "order_id"},
+	}
+	content := "Hello {{name}}, your order {{order_id}} is ready!"
+	params := models.JSONB{
+		"1": "John",
+		"2": "ORD-123",
+	}
+
+	result := replaceTemplateContent(template, content, params)
+
+	assert.Equal(t, "Hello John, your order ORD-123 is ready!", result)
+}
+
+func TestReplaceTemplateContent_LegacyPositional(t *testing.T) {
+	// Template without ParameterNames (legacy)
+	template := &models.Template{}
+	content := "Hello {{1}}, your order {{2}} is ready!"
+	params := models.JSONB{
+		"1": "John",
+		"2": "ORD-123",
+	}
+
+	result := replaceTemplateContent(template, content, params)
+
+	assert.Equal(t, "Hello John, your order ORD-123 is ready!", result)
+}

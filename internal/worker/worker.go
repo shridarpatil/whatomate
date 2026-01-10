@@ -50,6 +50,81 @@ func New(cfg *config.Config, db *gorm.DB, rdb *redis.Client, log logf.Logger) (*
 	}, nil
 }
 
+// resolveTemplateParams resolves both positional and named parameters to ordered values
+// It uses the template's ParameterNames to map named params, with fallback to positional keys
+func resolveTemplateParams(template *models.Template, params models.JSONB) []string {
+	if len(params) == 0 {
+		return nil
+	}
+
+	// If template has ParameterNames, use them to resolve in order
+	if len(template.ParameterNames) > 0 {
+		result := make([]string, len(template.ParameterNames))
+		for i, name := range template.ParameterNames {
+			// Try named key first
+			if val, ok := params[name]; ok {
+				result[i] = fmt.Sprintf("%v", val)
+				continue
+			}
+			// Fall back to positional key (1-indexed)
+			key := fmt.Sprintf("%d", i+1)
+			if val, ok := params[key]; ok {
+				result[i] = fmt.Sprintf("%v", val)
+				continue
+			}
+			// Default to empty string
+			result[i] = ""
+		}
+		return result
+	}
+
+	// No ParameterNames - use legacy positional approach
+	var result []string
+	for i := 1; i <= 10; i++ {
+		key := fmt.Sprintf("%d", i)
+		if val, ok := params[key]; ok {
+			result = append(result, fmt.Sprintf("%v", val))
+		}
+	}
+	return result
+}
+
+// replaceTemplateContent replaces both positional ({{1}}) and named ({{name}}) placeholders
+func replaceTemplateContent(template *models.Template, content string, params models.JSONB) string {
+	if len(params) == 0 {
+		return content
+	}
+
+	// If template has ParameterNames, replace named placeholders
+	if len(template.ParameterNames) > 0 {
+		for i, name := range template.ParameterNames {
+			// Try named key first
+			var val string
+			if v, ok := params[name]; ok {
+				val = fmt.Sprintf("%v", v)
+			} else if v, ok := params[fmt.Sprintf("%d", i+1)]; ok {
+				// Fall back to positional key
+				val = fmt.Sprintf("%v", v)
+			}
+
+			// Replace both named and positional placeholders
+			content = strings.ReplaceAll(content, fmt.Sprintf("{{%s}}", name), val)
+			content = strings.ReplaceAll(content, fmt.Sprintf("{{%d}}", i+1), val)
+		}
+		return content
+	}
+
+	// No ParameterNames - use legacy positional approach
+	for i := 1; i <= 10; i++ {
+		key := fmt.Sprintf("%d", i)
+		if val, ok := params[key]; ok {
+			placeholder := fmt.Sprintf("{{%d}}", i)
+			content = strings.ReplaceAll(content, placeholder, fmt.Sprintf("%v", val))
+		}
+	}
+	return content
+}
+
 // Run starts the worker and processes jobs until context is cancelled
 func (w *Worker) Run(ctx context.Context) error {
 	w.Log.Info("Worker starting")
@@ -122,16 +197,7 @@ func (w *Worker) HandleRecipientJob(ctx context.Context, job *queue.RecipientJob
 	}
 	if campaign.Template != nil {
 		message.TemplateName = campaign.Template.Name
-		content := campaign.Template.BodyContent
-		if job.TemplateParams != nil {
-			for i := 1; i <= 10; i++ {
-				key := fmt.Sprintf("%d", i)
-				if val, ok := job.TemplateParams[key]; ok {
-					placeholder := fmt.Sprintf("{{%d}}", i)
-					content = strings.ReplaceAll(content, placeholder, fmt.Sprintf("%v", val))
-				}
-			}
-		}
+		content := replaceTemplateContent(campaign.Template, campaign.Template.BodyContent, job.TemplateParams)
 		message.Content = content
 	}
 
@@ -255,24 +321,20 @@ func (w *Worker) sendTemplateMessage(ctx context.Context, account *models.WhatsA
 	// Build template components with parameters
 	var components []map[string]interface{}
 
-	// Add body parameters if template has variables
-	if len(recipient.TemplateParams) > 0 {
-		bodyParams := []map[string]interface{}{}
-		for i := 1; i <= 10; i++ {
-			key := fmt.Sprintf("%d", i)
-			if val, ok := recipient.TemplateParams[key]; ok {
-				bodyParams = append(bodyParams, map[string]interface{}{
-					"type": "text",
-					"text": val,
-				})
+	// Resolve parameters (supports both named and positional)
+	resolvedParams := resolveTemplateParams(template, recipient.TemplateParams)
+	if len(resolvedParams) > 0 {
+		bodyParams := make([]map[string]interface{}, len(resolvedParams))
+		for i, val := range resolvedParams {
+			bodyParams[i] = map[string]interface{}{
+				"type": "text",
+				"text": val,
 			}
 		}
-		if len(bodyParams) > 0 {
-			components = append(components, map[string]interface{}{
-				"type":       "body",
-				"parameters": bodyParams,
-			})
-		}
+		components = append(components, map[string]interface{}{
+			"type":       "body",
+			"parameters": bodyParams,
+		})
 	}
 
 	return w.WhatsApp.SendTemplateMessageWithComponents(ctx, waAccount, recipient.PhoneNumber, template.Name, template.Language, components)
