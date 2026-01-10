@@ -290,6 +290,52 @@ const recipientPlaceholder = computed(() => {
   return `${line1}\n${line2}`
 })
 
+// Manual input validation
+interface ManualInputValidation {
+  isValid: boolean
+  totalLines: number
+  validLines: number
+  invalidLines: { lineNumber: number; reason: string }[]
+}
+
+const manualInputValidation = computed((): ManualInputValidation => {
+  const params = templateParamNames.value
+  const lines = recipientsInput.value.trim().split('\n').filter(line => line.trim())
+
+  if (lines.length === 0) {
+    return { isValid: false, totalLines: 0, validLines: 0, invalidLines: [] }
+  }
+
+  const invalidLines: { lineNumber: number; reason: string }[] = []
+
+  for (let i = 0; i < lines.length; i++) {
+    const parts = lines[i].split(',').map(p => p.trim())
+    const phone = parts[0]?.replace(/[^\d+]/g, '')
+
+    // Validate phone number
+    if (!phone || !phone.match(/^\+?\d{10,15}$/)) {
+      invalidLines.push({ lineNumber: i + 1, reason: 'Invalid phone number' })
+      continue
+    }
+
+    // Validate params count
+    const providedParams = parts.slice(1).filter(p => p.length > 0).length
+    if (params.length > 0 && providedParams < params.length) {
+      invalidLines.push({
+        lineNumber: i + 1,
+        reason: `Missing parameters: needs ${params.length}, has ${providedParams}`
+      })
+    }
+  }
+
+  return {
+    isValid: invalidLines.length === 0 && lines.length > 0,
+    totalLines: lines.length,
+    validLines: lines.length - invalidLines.length,
+    invalidLines
+  }
+})
+
 // Form state
 const newCampaign = ref({
   name: '',
@@ -1360,12 +1406,31 @@ async function addRecipientsFromCSV() {
                   class="font-mono text-sm"
                   :disabled="isAddingRecipients"
                 />
-                <p class="text-xs text-muted-foreground">
-                  {{ recipientsInput.split('\n').filter(l => l.trim()).length }} recipient(s) entered
-                </p>
+                <!-- Validation status -->
+                <div v-if="recipientsInput.trim()" class="space-y-2">
+                  <p v-if="manualInputValidation.isValid" class="text-xs text-green-600">
+                    {{ manualInputValidation.validLines }} recipient(s) valid
+                  </p>
+                  <div v-else-if="manualInputValidation.invalidLines.length > 0" class="text-xs">
+                    <p class="text-destructive font-medium mb-1">
+                      {{ manualInputValidation.invalidLines.length }} of {{ manualInputValidation.totalLines }} line(s) have errors:
+                    </p>
+                    <ul class="text-destructive space-y-0.5 max-h-20 overflow-y-auto">
+                      <li v-for="err in manualInputValidation.invalidLines.slice(0, 5)" :key="err.lineNumber">
+                        Line {{ err.lineNumber }}: {{ err.reason }}
+                      </li>
+                      <li v-if="manualInputValidation.invalidLines.length > 5" class="text-muted-foreground">
+                        ... and {{ manualInputValidation.invalidLines.length - 5 }} more errors
+                      </li>
+                    </ul>
+                  </div>
+                  <p v-else class="text-xs text-muted-foreground">
+                    {{ manualInputValidation.totalLines }} recipient(s) entered
+                  </p>
+                </div>
               </div>
               <div class="flex justify-end">
-                <Button @click="addRecipients" :disabled="isAddingRecipients || !recipientsInput.trim()">
+                <Button @click="addRecipients" :disabled="isAddingRecipients || !manualInputValidation.isValid">
                   <Loader2 v-if="isAddingRecipients" class="h-4 w-4 mr-2 animate-spin" />
                   <Upload v-else class="h-4 w-4 mr-2" />
                   Add Recipients
