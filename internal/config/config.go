@@ -63,6 +63,7 @@ type JWTConfig struct {
 type WhatsAppConfig struct {
 	WebhookVerifyToken string `koanf:"webhook_verify_token"`
 	APIVersion         string `koanf:"api_version"`
+	BaseURL            string `koanf:"base_url"` // Meta Graph API base URL
 }
 
 type AIConfig struct {
@@ -155,6 +156,9 @@ func setDefaults(cfg *Config) {
 	}
 	if cfg.WhatsApp.APIVersion == "" {
 		cfg.WhatsApp.APIVersion = "v18.0"
+	}
+	if cfg.WhatsApp.BaseURL == "" {
+		cfg.WhatsApp.BaseURL = "https://graph.facebook.com"
 	}
 	if cfg.Storage.Type == "" {
 		cfg.Storage.Type = "local"

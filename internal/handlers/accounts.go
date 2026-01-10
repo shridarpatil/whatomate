@@ -281,8 +281,8 @@ func (a *App) TestAccountConnection(r *fastglue.Request) error {
 	}
 
 	// Test the connection by fetching phone number details from Meta API
-	url := fmt.Sprintf("https://graph.facebook.com/%s/%s?fields=display_phone_number,verified_name,quality_rating,messaging_limit_tier",
-		account.APIVersion, account.PhoneID)
+	url := fmt.Sprintf("%s/%s/%s?fields=display_phone_number,verified_name,quality_rating,messaging_limit_tier",
+		a.Config.WhatsApp.BaseURL, account.APIVersion, account.PhoneID)
 
 	req, _ := http.NewRequest("GET", url, nil)
 	req.Header.Set("Authorization", "Bearer "+account.AccessToken)

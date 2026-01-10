@@ -11,17 +11,17 @@ import (
 
 // buildCatalogsURL builds the catalogs endpoint URL for a business
 func (c *Client) buildCatalogsURL(account *Account) string {
-	return fmt.Sprintf("%s/%s/%s/owned_product_catalogs", BaseURL, account.APIVersion, account.BusinessID)
+	return fmt.Sprintf("%s/%s/%s/owned_product_catalogs", c.getBaseURL(), account.APIVersion, account.BusinessID)
 }
 
 // buildCatalogProductsURL builds the products endpoint URL for a catalog
 func (c *Client) buildCatalogProductsURL(account *Account, catalogID string) string {
-	return fmt.Sprintf("%s/%s/%s/products", BaseURL, account.APIVersion, catalogID)
+	return fmt.Sprintf("%s/%s/%s/products", c.getBaseURL(), account.APIVersion, catalogID)
 }
 
 // buildProductURL builds the URL for a specific product
 func (c *Client) buildProductURL(account *Account, productID string) string {
-	return fmt.Sprintf("%s/%s/%s", BaseURL, account.APIVersion, productID)
+	return fmt.Sprintf("%s/%s/%s", c.getBaseURL(), account.APIVersion, productID)
 }
 
 // CreateCatalog creates a new product catalog
@@ -66,7 +66,7 @@ func (c *Client) ListCatalogs(ctx context.Context, account *Account) ([]CatalogI
 
 // DeleteCatalog deletes a catalog
 func (c *Client) DeleteCatalog(ctx context.Context, account *Account, catalogID string) error {
-	apiURL := fmt.Sprintf("%s/%s/%s", BaseURL, account.APIVersion, catalogID)
+	apiURL := fmt.Sprintf("%s/%s/%s", c.getBaseURL(), account.APIVersion, catalogID)
 
 	_, err := c.doRequest(ctx, http.MethodDelete, apiURL, nil, account.AccessToken)
 	return err

@@ -90,7 +90,7 @@ func (c *Client) CreateFlow(ctx context.Context, account *Account, name string, 
 // UpdateFlowJSON updates the flow's JSON definition
 // This uses multipart form upload as required by Meta's API
 func (c *Client) UpdateFlowJSON(ctx context.Context, account *Account, flowID string, flowJSON *FlowJSON) error {
-	url := fmt.Sprintf("%s/%s/%s/assets", BaseURL, account.APIVersion, flowID)
+	url := fmt.Sprintf("%s/%s/%s/assets", c.getBaseURL(), account.APIVersion, flowID)
 
 	// Convert flow JSON to bytes
 	jsonBytes, err := json.Marshal(flowJSON)
@@ -177,7 +177,7 @@ func (c *Client) UpdateFlowJSON(ctx context.Context, account *Account, flowID st
 
 // PublishFlow publishes a draft flow
 func (c *Client) PublishFlow(ctx context.Context, account *Account, flowID string) error {
-	url := fmt.Sprintf("%s/%s/%s/publish", BaseURL, account.APIVersion, flowID)
+	url := fmt.Sprintf("%s/%s/%s/publish", c.getBaseURL(), account.APIVersion, flowID)
 
 	c.Log.Info("Publishing flow", "flow_id", flowID)
 
@@ -202,7 +202,7 @@ func (c *Client) PublishFlow(ctx context.Context, account *Account, flowID strin
 
 // DeprecateFlow deprecates a published flow
 func (c *Client) DeprecateFlow(ctx context.Context, account *Account, flowID string) error {
-	url := fmt.Sprintf("%s/%s/%s/deprecate", BaseURL, account.APIVersion, flowID)
+	url := fmt.Sprintf("%s/%s/%s/deprecate", c.getBaseURL(), account.APIVersion, flowID)
 
 	c.Log.Info("Deprecating flow", "flow_id", flowID)
 
@@ -227,7 +227,7 @@ func (c *Client) DeprecateFlow(ctx context.Context, account *Account, flowID str
 
 // DeleteFlow deletes a flow from Meta
 func (c *Client) DeleteFlow(ctx context.Context, account *Account, flowID string) error {
-	url := fmt.Sprintf("%s/%s/%s", BaseURL, account.APIVersion, flowID)
+	url := fmt.Sprintf("%s/%s/%s", c.getBaseURL(), account.APIVersion, flowID)
 
 	c.Log.Info("Deleting flow from Meta", "flow_id", flowID)
 
@@ -243,7 +243,7 @@ func (c *Client) DeleteFlow(ctx context.Context, account *Account, flowID string
 
 // GetFlow fetches a single flow from Meta
 func (c *Client) GetFlow(ctx context.Context, account *Account, flowID string) (*FlowGetResponse, error) {
-	url := fmt.Sprintf("%s/%s/%s?fields=id,name,status,categories,preview.invalidate(false)", BaseURL, account.APIVersion, flowID)
+	url := fmt.Sprintf("%s/%s/%s?fields=id,name,status,categories,preview.invalidate(false)", c.getBaseURL(), account.APIVersion, flowID)
 
 	respBody, err := c.doRequest(ctx, http.MethodGet, url, nil, account.AccessToken)
 	if err != nil {
@@ -271,7 +271,7 @@ type FlowAssetsResponse struct {
 // GetFlowAssets fetches the flow JSON assets from Meta
 func (c *Client) GetFlowAssets(ctx context.Context, account *Account, flowID string) (*FlowJSON, error) {
 	// First get the assets list to find the download URL
-	assetsURL := fmt.Sprintf("%s/%s/%s/assets", BaseURL, account.APIVersion, flowID)
+	assetsURL := fmt.Sprintf("%s/%s/%s/assets", c.getBaseURL(), account.APIVersion, flowID)
 
 	c.Log.Info("Fetching flow assets", "flow_id", flowID, "url", assetsURL)
 
@@ -353,5 +353,5 @@ func (c *Client) ListFlows(ctx context.Context, account *Account) ([]FlowGetResp
 
 // buildFlowsURL builds the flows endpoint URL
 func (c *Client) buildFlowsURL(account *Account) string {
-	return fmt.Sprintf("%s/%s/%s/flows", BaseURL, account.APIVersion, account.BusinessID)
+	return fmt.Sprintf("%s/%s/%s/flows", c.getBaseURL(), account.APIVersion, account.BusinessID)
 }

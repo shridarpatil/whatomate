@@ -611,7 +611,7 @@ func (a *App) SendMessage(r *fastglue.Request) error {
 
 // sendWhatsAppMessage sends a message via the WhatsApp Cloud API
 func (a *App) sendWhatsAppMessage(account *models.WhatsAppAccount, contact *models.Contact, message *models.Message) {
-	url := fmt.Sprintf("https://graph.facebook.com/%s/%s/messages", account.APIVersion, account.PhoneID)
+	url := fmt.Sprintf("%s/%s/%s/messages", a.Config.WhatsApp.BaseURL, account.APIVersion, account.PhoneID)
 
 	payload := map[string]any{
 		"messaging_product": "whatsapp",
@@ -1103,7 +1103,7 @@ func (a *App) sendWhatsAppReaction(account *models.WhatsAppAccount, contact *mod
 		return
 	}
 
-	url := fmt.Sprintf("https://graph.facebook.com/%s/%s/messages", account.APIVersion, account.PhoneID)
+	url := fmt.Sprintf("%s/%s/%s/messages", a.Config.WhatsApp.BaseURL, account.APIVersion, account.PhoneID)
 
 	payload := map[string]any{
 		"messaging_product": "whatsapp",
