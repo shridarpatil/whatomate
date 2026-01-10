@@ -17,19 +17,12 @@ import (
 )
 
 // agentTransfersTestApp creates an App instance for agent transfers testing.
-// It uses a transaction that gets rolled back after the test for isolation.
 func agentTransfersTestApp(t *testing.T) *handlers.App {
 	t.Helper()
 
 	db := testutil.SetupTestDB(t)
 	log := testutil.NopLogger()
 	redis := testutil.SetupTestRedis(t)
-
-	// Start a transaction for test isolation
-	tx := db.Begin()
-	t.Cleanup(func() {
-		tx.Rollback()
-	})
 
 	cfg := &config.Config{
 		JWT: config.JWTConfig{
@@ -41,10 +34,56 @@ func agentTransfersTestApp(t *testing.T) *handlers.App {
 
 	return &handlers.App{
 		Config: cfg,
-		DB:     tx, // Use transaction instead of raw db
+		DB:     db,
 		Log:    log,
 		Redis:  redis,
 	}
+}
+
+// createTransferTestOrg creates a test organization with unique identifiers.
+func createTransferTestOrg(t *testing.T, app *handlers.App) *models.Organization {
+	t.Helper()
+	org := &models.Organization{
+		Name: "Transfer Test Org " + uuid.New().String(),
+		Slug: "transfer-test-" + uuid.New().String(),
+	}
+	err := app.DB.Create(org).Error
+	require.NoError(t, err, "failed to create test organization")
+	return org
+}
+
+// createTransferTestUser creates a test user with unique identifiers.
+func createTransferTestUser(t *testing.T, app *handlers.App, orgID uuid.UUID, role string) *models.User {
+	t.Helper()
+	user := &models.User{
+		OrganizationID: orgID,
+		Email:          "transfer-test-" + uuid.New().String() + "@example.com",
+		PasswordHash:   "hashed",
+		FullName:       "Transfer Test User",
+		Role:           role,
+		IsActive:       true,
+	}
+	err := app.DB.Create(user).Error
+	require.NoError(t, err, "failed to create test user")
+	return user
+}
+
+// createTransferTestAccount creates a test WhatsApp account with unique identifiers.
+func createTransferTestAccount(t *testing.T, app *handlers.App, orgID uuid.UUID) *models.WhatsAppAccount {
+	t.Helper()
+	account := &models.WhatsAppAccount{
+		OrganizationID:     orgID,
+		Name:               "transfer-test-" + uuid.New().String(),
+		PhoneID:            "phone-" + uuid.New().String(),
+		BusinessID:         "business-" + uuid.New().String(),
+		AccessToken:        "test-token",
+		WebhookVerifyToken: "webhook-token",
+		APIVersion:         "v18.0",
+		Status:             "active",
+	}
+	err := app.DB.Create(account).Error
+	require.NoError(t, err, "failed to create test WhatsApp account")
+	return account
 }
 
 // createTestContact creates a test contact in the database.
@@ -133,9 +172,9 @@ func setTransferAuthContext(req *fastglue.Request, orgID, userID uuid.UUID, role
 
 func TestApp_ListAgentTransfers_Success(t *testing.T) {
 	app := agentTransfersTestApp(t)
-	org := createTestOrganization(t, app)
-	user := createTestUser(t, app, org.ID, uniqueEmail("list-transfers"), "password", "admin", true)
-	account := createTestWhatsAppAccount(t, app, org.ID, "list-transfers-account")
+	org := createTransferTestOrg(t, app)
+	user := createTransferTestUser(t, app, org.ID, "admin")
+	account := createTransferTestAccount(t, app, org.ID)
 
 	contact := createTestContact(t, app, org.ID)
 	agent := createTestAgent(t, app, org.ID)
@@ -172,9 +211,9 @@ func TestApp_ListAgentTransfers_Success(t *testing.T) {
 
 func TestApp_ListAgentTransfers_FilterByStatus(t *testing.T) {
 	app := agentTransfersTestApp(t)
-	org := createTestOrganization(t, app)
-	user := createTestUser(t, app, org.ID, uniqueEmail("filter-status"), "password", "admin", true)
-	account := createTestWhatsAppAccount(t, app, org.ID, "filter-status-account")
+	org := createTransferTestOrg(t, app)
+	user := createTransferTestUser(t, app, org.ID, "admin")
+	account := createTransferTestAccount(t, app, org.ID)
 
 	contact := createTestContact(t, app, org.ID)
 	agent := createTestAgent(t, app, org.ID)
@@ -207,8 +246,8 @@ func TestApp_ListAgentTransfers_FilterByStatus(t *testing.T) {
 
 func TestApp_ListAgentTransfers_AgentRoleFiltering(t *testing.T) {
 	app := agentTransfersTestApp(t)
-	org := createTestOrganization(t, app)
-	account := createTestWhatsAppAccount(t, app, org.ID, "agent-filter-account")
+	org := createTransferTestOrg(t, app)
+	account := createTransferTestAccount(t, app, org.ID)
 
 	contact := createTestContact(t, app, org.ID)
 	agent := createTestAgent(t, app, org.ID)
@@ -244,9 +283,9 @@ func TestApp_ListAgentTransfers_AgentRoleFiltering(t *testing.T) {
 
 func TestApp_ListAgentTransfers_Pagination(t *testing.T) {
 	app := agentTransfersTestApp(t)
-	org := createTestOrganization(t, app)
-	user := createTestUser(t, app, org.ID, uniqueEmail("pagination"), "password", "admin", true)
-	account := createTestWhatsAppAccount(t, app, org.ID, "pagination-account")
+	org := createTransferTestOrg(t, app)
+	user := createTransferTestUser(t, app, org.ID, "admin")
+	account := createTransferTestAccount(t, app, org.ID)
 
 	contact := createTestContact(t, app, org.ID)
 
@@ -286,9 +325,9 @@ func TestApp_ListAgentTransfers_Pagination(t *testing.T) {
 
 func TestApp_CreateAgentTransfer_Success(t *testing.T) {
 	app := agentTransfersTestApp(t)
-	org := createTestOrganization(t, app)
-	user := createTestUser(t, app, org.ID, uniqueEmail("create-transfer"), "password", "admin", true)
-	account := createTestWhatsAppAccount(t, app, org.ID, "create-transfer-account")
+	org := createTransferTestOrg(t, app)
+	user := createTransferTestUser(t, app, org.ID, "admin")
+	account := createTransferTestAccount(t, app, org.ID)
 
 	contact := createTestContact(t, app, org.ID)
 
@@ -322,9 +361,9 @@ func TestApp_CreateAgentTransfer_Success(t *testing.T) {
 
 func TestApp_CreateAgentTransfer_WithAgent(t *testing.T) {
 	app := agentTransfersTestApp(t)
-	org := createTestOrganization(t, app)
-	user := createTestUser(t, app, org.ID, uniqueEmail("create-with-agent"), "password", "admin", true)
-	account := createTestWhatsAppAccount(t, app, org.ID, "create-with-agent-account")
+	org := createTransferTestOrg(t, app)
+	user := createTransferTestUser(t, app, org.ID, "admin")
+	account := createTransferTestAccount(t, app, org.ID)
 
 	contact := createTestContact(t, app, org.ID)
 	agent := createTestAgent(t, app, org.ID)
@@ -356,9 +395,9 @@ func TestApp_CreateAgentTransfer_WithAgent(t *testing.T) {
 
 func TestApp_CreateAgentTransfer_ContactNotFound(t *testing.T) {
 	app := agentTransfersTestApp(t)
-	org := createTestOrganization(t, app)
-	user := createTestUser(t, app, org.ID, uniqueEmail("contact-not-found"), "password", "admin", true)
-	account := createTestWhatsAppAccount(t, app, org.ID, "contact-not-found-account")
+	org := createTransferTestOrg(t, app)
+	user := createTransferTestUser(t, app, org.ID, "admin")
+	account := createTransferTestAccount(t, app, org.ID)
 
 	req := testutil.NewJSONRequest(t, map[string]any{
 		"contact_id":       uuid.New().String(), // Non-existent contact
@@ -377,9 +416,9 @@ func TestApp_CreateAgentTransfer_ContactNotFound(t *testing.T) {
 
 func TestApp_CreateAgentTransfer_DuplicateTransfer(t *testing.T) {
 	app := agentTransfersTestApp(t)
-	org := createTestOrganization(t, app)
-	user := createTestUser(t, app, org.ID, uniqueEmail("duplicate-transfer"), "password", "admin", true)
-	account := createTestWhatsAppAccount(t, app, org.ID, "duplicate-transfer-account")
+	org := createTransferTestOrg(t, app)
+	user := createTransferTestUser(t, app, org.ID, "admin")
+	account := createTransferTestAccount(t, app, org.ID)
 
 	contact := createTestContact(t, app, org.ID)
 
@@ -403,9 +442,9 @@ func TestApp_CreateAgentTransfer_DuplicateTransfer(t *testing.T) {
 
 func TestApp_CreateAgentTransfer_MissingContactID(t *testing.T) {
 	app := agentTransfersTestApp(t)
-	org := createTestOrganization(t, app)
-	user := createTestUser(t, app, org.ID, uniqueEmail("missing-contact-id"), "password", "admin", true)
-	account := createTestWhatsAppAccount(t, app, org.ID, "missing-contact-id-account")
+	org := createTransferTestOrg(t, app)
+	user := createTransferTestUser(t, app, org.ID, "admin")
+	account := createTransferTestAccount(t, app, org.ID)
 
 	req := testutil.NewJSONRequest(t, map[string]any{
 		"whatsapp_account": account.Name,
@@ -423,9 +462,9 @@ func TestApp_CreateAgentTransfer_MissingContactID(t *testing.T) {
 
 func TestApp_CreateAgentTransfer_AgentUnavailable(t *testing.T) {
 	app := agentTransfersTestApp(t)
-	org := createTestOrganization(t, app)
-	user := createTestUser(t, app, org.ID, uniqueEmail("agent-unavailable"), "password", "admin", true)
-	account := createTestWhatsAppAccount(t, app, org.ID, "agent-unavailable-account")
+	org := createTransferTestOrg(t, app)
+	user := createTransferTestUser(t, app, org.ID, "admin")
+	account := createTransferTestAccount(t, app, org.ID)
 
 	contact := createTestContact(t, app, org.ID)
 	agent := createTestAgent(t, app, org.ID)
@@ -453,9 +492,9 @@ func TestApp_CreateAgentTransfer_AgentUnavailable(t *testing.T) {
 
 func TestApp_ResumeFromTransfer_Success(t *testing.T) {
 	app := agentTransfersTestApp(t)
-	org := createTestOrganization(t, app)
-	user := createTestUser(t, app, org.ID, uniqueEmail("resume-success"), "password", "admin", true)
-	account := createTestWhatsAppAccount(t, app, org.ID, "resume-success-account")
+	org := createTransferTestOrg(t, app)
+	user := createTransferTestUser(t, app, org.ID, "admin")
+	account := createTransferTestAccount(t, app, org.ID)
 
 	contact := createTestContact(t, app, org.ID)
 	transfer := createTestTransfer(t, app, org.ID, contact.ID, account.Name, "active", nil)
@@ -489,8 +528,8 @@ func TestApp_ResumeFromTransfer_Success(t *testing.T) {
 
 func TestApp_ResumeFromTransfer_NotFound(t *testing.T) {
 	app := agentTransfersTestApp(t)
-	org := createTestOrganization(t, app)
-	user := createTestUser(t, app, org.ID, uniqueEmail("resume-not-found"), "password", "admin", true)
+	org := createTransferTestOrg(t, app)
+	user := createTransferTestUser(t, app, org.ID, "admin")
 
 	req := testutil.NewJSONRequest(t, nil)
 	setTransferAuthContext(req, org.ID, user.ID, "admin")
@@ -507,9 +546,9 @@ func TestApp_ResumeFromTransfer_NotFound(t *testing.T) {
 
 func TestApp_ResumeFromTransfer_NotActive(t *testing.T) {
 	app := agentTransfersTestApp(t)
-	org := createTestOrganization(t, app)
-	user := createTestUser(t, app, org.ID, uniqueEmail("resume-not-active"), "password", "admin", true)
-	account := createTestWhatsAppAccount(t, app, org.ID, "resume-not-active-account")
+	org := createTransferTestOrg(t, app)
+	user := createTransferTestUser(t, app, org.ID, "admin")
+	account := createTransferTestAccount(t, app, org.ID)
 
 	contact := createTestContact(t, app, org.ID)
 	transfer := createTestTransfer(t, app, org.ID, contact.ID, account.Name, "resumed", nil) // Already resumed
@@ -531,9 +570,9 @@ func TestApp_ResumeFromTransfer_NotActive(t *testing.T) {
 
 func TestApp_AssignAgentTransfer_Success(t *testing.T) {
 	app := agentTransfersTestApp(t)
-	org := createTestOrganization(t, app)
-	user := createTestUser(t, app, org.ID, uniqueEmail("assign-success"), "password", "admin", true)
-	account := createTestWhatsAppAccount(t, app, org.ID, "assign-success-account")
+	org := createTransferTestOrg(t, app)
+	user := createTransferTestUser(t, app, org.ID, "admin")
+	account := createTransferTestAccount(t, app, org.ID)
 
 	contact := createTestContact(t, app, org.ID)
 	agent := createTestAgent(t, app, org.ID)
@@ -570,8 +609,8 @@ func TestApp_AssignAgentTransfer_Success(t *testing.T) {
 
 func TestApp_AssignAgentTransfer_AgentSelfAssign(t *testing.T) {
 	app := agentTransfersTestApp(t)
-	org := createTestOrganization(t, app)
-	account := createTestWhatsAppAccount(t, app, org.ID, "self-assign-account")
+	org := createTransferTestOrg(t, app)
+	account := createTransferTestAccount(t, app, org.ID)
 
 	contact := createTestContact(t, app, org.ID)
 	agent := createTestAgent(t, app, org.ID)
@@ -594,8 +633,8 @@ func TestApp_AssignAgentTransfer_AgentSelfAssign(t *testing.T) {
 
 func TestApp_AssignAgentTransfer_AgentCannotAssignToOthers(t *testing.T) {
 	app := agentTransfersTestApp(t)
-	org := createTestOrganization(t, app)
-	account := createTestWhatsAppAccount(t, app, org.ID, "cannot-assign-others-account")
+	org := createTransferTestOrg(t, app)
+	account := createTransferTestAccount(t, app, org.ID)
 
 	contact := createTestContact(t, app, org.ID)
 	agent := createTestAgent(t, app, org.ID)
@@ -620,9 +659,9 @@ func TestApp_AssignAgentTransfer_AgentCannotAssignToOthers(t *testing.T) {
 
 func TestApp_AssignAgentTransfer_NotActive(t *testing.T) {
 	app := agentTransfersTestApp(t)
-	org := createTestOrganization(t, app)
-	user := createTestUser(t, app, org.ID, uniqueEmail("assign-not-active"), "password", "admin", true)
-	account := createTestWhatsAppAccount(t, app, org.ID, "assign-not-active-account")
+	org := createTransferTestOrg(t, app)
+	user := createTransferTestUser(t, app, org.ID, "admin")
+	account := createTransferTestAccount(t, app, org.ID)
 
 	contact := createTestContact(t, app, org.ID)
 	agent := createTestAgent(t, app, org.ID)
@@ -647,8 +686,8 @@ func TestApp_AssignAgentTransfer_NotActive(t *testing.T) {
 
 func TestApp_PickNextTransfer_Success(t *testing.T) {
 	app := agentTransfersTestApp(t)
-	org := createTestOrganization(t, app)
-	account := createTestWhatsAppAccount(t, app, org.ID, "pick-success-account")
+	org := createTransferTestOrg(t, app)
+	account := createTransferTestAccount(t, app, org.ID)
 
 	contact := createTestContact(t, app, org.ID)
 	agent := createTestAgent(t, app, org.ID)
@@ -686,7 +725,7 @@ func TestApp_PickNextTransfer_Success(t *testing.T) {
 
 func TestApp_PickNextTransfer_EmptyQueue(t *testing.T) {
 	app := agentTransfersTestApp(t)
-	org := createTestOrganization(t, app)
+	org := createTransferTestOrg(t, app)
 
 	agent := createTestAgent(t, app, org.ID)
 
@@ -714,8 +753,8 @@ func TestApp_PickNextTransfer_EmptyQueue(t *testing.T) {
 
 func TestApp_PickNextTransfer_FIFO(t *testing.T) {
 	app := agentTransfersTestApp(t)
-	org := createTestOrganization(t, app)
-	account := createTestWhatsAppAccount(t, app, org.ID, "pick-fifo-account")
+	org := createTransferTestOrg(t, app)
+	account := createTransferTestAccount(t, app, org.ID)
 
 	contact := createTestContact(t, app, org.ID)
 	agent := createTestAgent(t, app, org.ID)
@@ -764,8 +803,8 @@ func TestApp_PickNextTransfer_FIFO(t *testing.T) {
 
 func TestApp_PickNextTransfer_TeamFiltering(t *testing.T) {
 	app := agentTransfersTestApp(t)
-	org := createTestOrganization(t, app)
-	account := createTestWhatsAppAccount(t, app, org.ID, "pick-team-account")
+	org := createTransferTestOrg(t, app)
+	account := createTransferTestAccount(t, app, org.ID)
 
 	contact := createTestContact(t, app, org.ID)
 	agent := createTestAgent(t, app, org.ID)
@@ -817,14 +856,14 @@ func TestApp_AgentTransfers_CrossOrgIsolation(t *testing.T) {
 	app := agentTransfersTestApp(t)
 
 	// Create two organizations
-	org1 := createTestOrganization(t, app)
-	org2 := createTestOrganization(t, app)
+	org1 := createTransferTestOrg(t, app)
+	org2 := createTransferTestOrg(t, app)
 
-	user1 := createTestUser(t, app, org1.ID, uniqueEmail("cross-org-1"), "password", "admin", true)
-	user2 := createTestUser(t, app, org2.ID, uniqueEmail("cross-org-2"), "password", "admin", true)
+	user1 := createTransferTestUser(t, app, org1.ID, "admin")
+	user2 := createTransferTestUser(t, app, org2.ID, "admin")
 
-	account1 := createTestWhatsAppAccount(t, app, org1.ID, "cross-org-account-1")
-	account2 := createTestWhatsAppAccount(t, app, org2.ID, "cross-org-account-2")
+	account1 := createTransferTestAccount(t, app, org1.ID)
+	account2 := createTransferTestAccount(t, app, org2.ID)
 
 	contact1 := createTestContact(t, app, org1.ID)
 	contact2 := createTestContact(t, app, org2.ID)
@@ -883,8 +922,8 @@ func TestApp_AgentTransfers_CrossOrgIsolation(t *testing.T) {
 
 func TestApp_ReturnAgentTransfersToQueue(t *testing.T) {
 	app := agentTransfersTestApp(t)
-	org := createTestOrganization(t, app)
-	account := createTestWhatsAppAccount(t, app, org.ID, "return-to-queue-account")
+	org := createTransferTestOrg(t, app)
+	account := createTransferTestAccount(t, app, org.ID)
 
 	contact := createTestContact(t, app, org.ID)
 	agent := createTestAgent(t, app, org.ID)
