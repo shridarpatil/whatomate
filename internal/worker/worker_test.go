@@ -520,8 +520,9 @@ func TestWorker_sendTemplateMessage_BuildsComponents(t *testing.T) {
 	}
 
 	template := &models.Template{
-		Name:     "test_template",
-		Language: "en",
+		Name:        "test_template",
+		Language:    "en",
+		BodyContent: "Hello {{1}}, welcome to {{2}}!",
 	}
 
 	recipient := &models.BulkMessageRecipient{
