@@ -54,7 +54,9 @@ jobs:
         env:
           TEST_DATABASE_URL: postgres://postgres:postgres@localhost:5432/whatomate_test?sslmode=disable
           TEST_REDIS_URL: redis://localhost:6379
-        run: go test -v -race -coverprofile=coverage.out ./...
+        run: |
+          # Run tests with coverage, excluding test utility packages from coverage calculation
+          go test -v -race -coverprofile=coverage.out $(go list ./... | grep -v /test/)
 
       - name: Display coverage
         run: go tool cover -func=coverage.out | grep "total:"
