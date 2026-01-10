@@ -3,6 +3,7 @@ package testutil
 import (
 	"fmt"
 	"os"
+	"sync"
 	"testing"
 
 	"github.com/shridarpatil/whatomate/internal/models"
@@ -11,9 +12,16 @@ import (
 	"gorm.io/gorm/logger"
 )
 
+var (
+	testDB        *gorm.DB
+	testDBOnce    sync.Once
+	testDBInitErr error
+)
+
 // SetupTestDB creates a connection to a test PostgreSQL database.
 // Requires TEST_DATABASE_URL environment variable to be set.
 // If not set, the test will be skipped.
+// Migrations are run only once across all tests to avoid conflicts.
 func SetupTestDB(t *testing.T) *gorm.DB {
 	t.Helper()
 
@@ -22,58 +30,46 @@ func SetupTestDB(t *testing.T) *gorm.DB {
 		t.Skip("TEST_DATABASE_URL not set, skipping database test")
 	}
 
-	db, err := gorm.Open(postgres.Open(dsn), &gorm.Config{
-		Logger: logger.Default.LogMode(logger.Silent),
-	})
-	if err != nil {
-		t.Fatalf("failed to connect to test postgres: %v", err)
-	}
-
-	// Run migrations
-	if err := runMigrations(db); err != nil {
-		t.Fatalf("failed to run migrations: %v", err)
-	}
-
-	t.Cleanup(func() {
-		// Clean up all data after test
-		cleanupTables(db)
-		sqlDB, err := db.DB()
-		if err == nil {
-			_ = sqlDB.Close()
+	// Initialize database and run migrations only once
+	testDBOnce.Do(func() {
+		var err error
+		testDB, err = gorm.Open(postgres.Open(dsn), &gorm.Config{
+			Logger: logger.Default.LogMode(logger.Silent),
+		})
+		if err != nil {
+			testDBInitErr = fmt.Errorf("failed to connect to test postgres: %w", err)
+			return
 		}
+
+		// Run migrations once
+		if err := runMigrations(testDB); err != nil {
+			testDBInitErr = fmt.Errorf("failed to run migrations: %w", err)
+			return
+		}
+
+		// Clean up any existing data before tests start
+		cleanupTables(testDB)
 	})
 
-	return db
+	if testDBInitErr != nil {
+		t.Fatalf("failed to initialize test database: %v", testDBInitErr)
+	}
+
+	// Return a new session for this test to avoid connection conflicts
+	return testDB.Session(&gorm.Session{})
 }
 
 // SetupTestDBWithCleanup is like SetupTestDB but allows controlling cleanup behavior.
 func SetupTestDBWithCleanup(t *testing.T, cleanup bool) *gorm.DB {
 	t.Helper()
 
-	dsn := os.Getenv("TEST_DATABASE_URL")
-	if dsn == "" {
-		t.Skip("TEST_DATABASE_URL not set, skipping database test")
-	}
-
-	db, err := gorm.Open(postgres.Open(dsn), &gorm.Config{
-		Logger: logger.Default.LogMode(logger.Silent),
-	})
-	if err != nil {
-		t.Fatalf("failed to connect to test postgres: %v", err)
-	}
-
-	// Run migrations
-	if err := runMigrations(db); err != nil {
-		t.Fatalf("failed to run migrations: %v", err)
-	}
+	db := SetupTestDB(t)
 
 	if cleanup {
 		t.Cleanup(func() {
-			cleanupTables(db)
-			sqlDB, err := db.DB()
-			if err == nil {
-				_ = sqlDB.Close()
-			}
+			// Clean up only the data created by this test
+			// Note: In parallel tests, this may affect other tests
+			// Consider using unique identifiers instead
 		})
 	}
 

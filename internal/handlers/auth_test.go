@@ -111,8 +111,6 @@ func assertErrorResponse(t *testing.T, req *fastglue.Request, expectedStatus int
 }
 
 func TestApp_Login_Success(t *testing.T) {
-	t.Parallel()
-
 	app := testApp(t)
 	org := createTestOrganization(t, app)
 	email := uniqueEmail("login-success")
@@ -152,8 +150,6 @@ func TestApp_Login_Success(t *testing.T) {
 }
 
 func TestApp_Login_WrongPassword(t *testing.T) {
-	t.Parallel()
-
 	app := testApp(t)
 	org := createTestOrganization(t, app)
 	email := uniqueEmail("wrong-pwd")
@@ -170,8 +166,6 @@ func TestApp_Login_WrongPassword(t *testing.T) {
 }
 
 func TestApp_Login_UserNotFound(t *testing.T) {
-	t.Parallel()
-
 	app := testApp(t)
 
 	req := testutil.NewJSONRequest(t, map[string]string{
@@ -185,8 +179,6 @@ func TestApp_Login_UserNotFound(t *testing.T) {
 }
 
 func TestApp_Login_InactiveUser(t *testing.T) {
-	t.Parallel()
-
 	app := testApp(t)
 	org := createTestOrganization(t, app)
 	email := uniqueEmail("inactive")
@@ -203,8 +195,6 @@ func TestApp_Login_InactiveUser(t *testing.T) {
 }
 
 func TestApp_Login_InvalidRequestBody(t *testing.T) {
-	t.Parallel()
-
 	app := testApp(t)
 
 	req := testutil.NewRequest(t)
@@ -217,14 +207,10 @@ func TestApp_Login_InvalidRequestBody(t *testing.T) {
 }
 
 func TestApp_Login_DifferentRoles(t *testing.T) {
-	t.Parallel()
-
 	roles := []string{"admin", "manager", "agent"}
 
 	for _, role := range roles {
 		t.Run("role_"+role, func(t *testing.T) {
-			t.Parallel()
-
 			app := testApp(t)
 			org := createTestOrganization(t, app)
 			email := uniqueEmail("role-" + role)
@@ -254,8 +240,6 @@ func TestApp_Login_DifferentRoles(t *testing.T) {
 }
 
 func TestApp_Register_Success(t *testing.T) {
-	t.Parallel()
-
 	app := testApp(t)
 	email := uniqueEmail("register")
 
@@ -296,8 +280,6 @@ func TestApp_Register_Success(t *testing.T) {
 }
 
 func TestApp_Register_EmailAlreadyExists(t *testing.T) {
-	t.Parallel()
-
 	app := testApp(t)
 	org := createTestOrganization(t, app)
 	email := uniqueEmail("existing")
@@ -316,8 +298,6 @@ func TestApp_Register_EmailAlreadyExists(t *testing.T) {
 }
 
 func TestApp_Register_InvalidRequestBody(t *testing.T) {
-	t.Parallel()
-
 	app := testApp(t)
 
 	req := testutil.NewRequest(t)
@@ -330,8 +310,6 @@ func TestApp_Register_InvalidRequestBody(t *testing.T) {
 }
 
 func TestApp_RefreshToken_Success(t *testing.T) {
-	t.Parallel()
-
 	app := testApp(t)
 	org := createTestOrganization(t, app)
 	user := createTestUser(t, app, org.ID, uniqueEmail("refresh"), "password123", "admin", true)
@@ -363,8 +341,6 @@ func TestApp_RefreshToken_Success(t *testing.T) {
 }
 
 func TestApp_RefreshToken_Expired(t *testing.T) {
-	t.Parallel()
-
 	app := testApp(t)
 	org := createTestOrganization(t, app)
 	user := createTestUser(t, app, org.ID, uniqueEmail("expired"), "password123", "admin", true)
@@ -380,8 +356,6 @@ func TestApp_RefreshToken_Expired(t *testing.T) {
 }
 
 func TestApp_RefreshToken_InvalidSignature(t *testing.T) {
-	t.Parallel()
-
 	app := testApp(t)
 	org := createTestOrganization(t, app)
 	user := createTestUser(t, app, org.ID, uniqueEmail("invalid-sig"), "password123", "admin", true)
@@ -397,8 +371,6 @@ func TestApp_RefreshToken_InvalidSignature(t *testing.T) {
 }
 
 func TestApp_RefreshToken_UserNotFound(t *testing.T) {
-	t.Parallel()
-
 	app := testApp(t)
 	fakeUser := &models.User{
 		BaseModel: models.BaseModel{
@@ -420,8 +392,6 @@ func TestApp_RefreshToken_UserNotFound(t *testing.T) {
 }
 
 func TestApp_RefreshToken_DisabledUser(t *testing.T) {
-	t.Parallel()
-
 	app := testApp(t)
 	org := createTestOrganization(t, app)
 	user := createTestUser(t, app, org.ID, uniqueEmail("disabled"), "password123", "admin", false)
@@ -437,8 +407,6 @@ func TestApp_RefreshToken_DisabledUser(t *testing.T) {
 }
 
 func TestApp_RefreshToken_MalformedToken(t *testing.T) {
-	t.Parallel()
-
 	app := testApp(t)
 
 	req := testutil.NewJSONRequest(t, map[string]string{
@@ -451,8 +419,6 @@ func TestApp_RefreshToken_MalformedToken(t *testing.T) {
 }
 
 func TestApp_RefreshToken_InvalidRequestBody(t *testing.T) {
-	t.Parallel()
-
 	app := testApp(t)
 
 	req := testutil.NewRequest(t)
@@ -465,8 +431,6 @@ func TestApp_RefreshToken_InvalidRequestBody(t *testing.T) {
 }
 
 func TestApp_GeneratedTokensAreValid(t *testing.T) {
-	t.Parallel()
-
 	app := testApp(t)
 	org := createTestOrganization(t, app)
 	email := uniqueEmail("tokentest")
