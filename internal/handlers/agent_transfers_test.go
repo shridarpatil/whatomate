@@ -22,6 +22,7 @@ func agentTransfersTestApp(t *testing.T) *handlers.App {
 
 	db := testutil.SetupTestDB(t)
 	log := testutil.NopLogger()
+	redis := testutil.SetupTestRedis(t)
 
 	cfg := &config.Config{
 		JWT: config.JWTConfig{
@@ -35,6 +36,7 @@ func agentTransfersTestApp(t *testing.T) *handlers.App {
 		Config: cfg,
 		DB:     db,
 		Log:    log,
+		Redis:  redis,
 	}
 }
 
