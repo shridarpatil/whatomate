@@ -188,7 +188,11 @@ export const campaignsService = {
   uploadMedia: (campaignId: string, file: File) => {
     const formData = new FormData()
     formData.append('file', file)
-    return api.post(`/campaigns/${campaignId}/media`, formData)
+    return axios.post(`${api.defaults.baseURL}/campaigns/${campaignId}/media`, formData, {
+      headers: {
+        'Authorization': `Bearer ${localStorage.getItem('auth_token')}`
+      }
+    })
   }
 }
 
