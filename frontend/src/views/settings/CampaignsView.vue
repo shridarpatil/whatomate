@@ -615,8 +615,15 @@ async function deleteRecipient(recipientId: string) {
   try {
     await campaignsService.deleteRecipient(selectedCampaign.value.id, recipientId)
     recipients.value = recipients.value.filter(r => r.id !== recipientId)
+    // Update recipient count in selectedCampaign
+    selectedCampaign.value.total_recipients = recipients.value.length
     toast.success('Recipient deleted')
-    await fetchCampaigns() // Refresh to update recipient count
+    await fetchCampaigns() // Refresh campaigns list
+    // Update selectedCampaign with fresh data
+    const updated = campaigns.value.find(c => c.id === selectedCampaign.value?.id)
+    if (updated) {
+      selectedCampaign.value = updated
+    }
   } catch (error: any) {
     const message = error.response?.data?.message || 'Failed to delete recipient'
     toast.error(message)

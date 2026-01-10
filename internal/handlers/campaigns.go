@@ -720,7 +720,7 @@ func (a *App) DeleteCampaignRecipient(r *fastglue.Request) error {
 	}
 
 	// Update campaign recipient count
-	a.DB.Model(&campaign).Update("recipient_count", gorm.Expr("recipient_count - 1"))
+	a.DB.Model(&campaign).Update("total_recipients", gorm.Expr("total_recipients - 1"))
 
 	return r.SendEnvelope(map[string]interface{}{
 		"message": "Recipient deleted successfully",
