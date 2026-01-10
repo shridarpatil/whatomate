@@ -883,7 +883,7 @@ func TestApp_RetryFailed_Success(t *testing.T) {
 	err = json.Unmarshal(testutil.GetResponseBody(req), &resp)
 	require.NoError(t, err)
 	assert.Equal(t, 1, resp.Data.RetryCount)
-	assert.Equal(t, models.CampaignStatusProcessing, resp.Data.Status)
+	assert.Equal(t, string(models.CampaignStatusProcessing), resp.Data.Status)
 }
 
 func TestApp_RetryFailed_NoFailedRecipients(t *testing.T) {
