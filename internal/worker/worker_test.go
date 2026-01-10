@@ -657,7 +657,7 @@ func TestWorker_HandleRecipientJob_Success(t *testing.T) {
 	require.NoError(t, w.DB.Where("template_name = ?", template.Name).First(&message).Error)
 	assert.Equal(t, models.MessageStatusSent, message.Status)
 	assert.Equal(t, models.DirectionOutgoing, message.Direction)
-	assert.Equal(t, "template", message.MessageType)
+	assert.Equal(t, models.MessageTypeTemplate, message.MessageType)
 }
 
 func TestWorker_HandleRecipientJob_WhatsAppError(t *testing.T) {
