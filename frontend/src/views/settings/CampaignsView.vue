@@ -703,6 +703,29 @@ function triggerMediaFileInput(campaignId: string) {
   input?.click()
 }
 
+// Cache for media blob URLs
+const mediaBlobUrls = ref<Record<string, string>>({})
+
+async function loadMediaPreview(campaignId: string) {
+  if (mediaBlobUrls.value[campaignId]) return // Already loaded
+
+  try {
+    const response = await campaignsService.getMedia(campaignId)
+    const blob = new Blob([response.data], { type: response.headers['content-type'] })
+    mediaBlobUrls.value[campaignId] = URL.createObjectURL(blob)
+  } catch (error) {
+    console.error('Failed to load media preview:', error)
+  }
+}
+
+function getMediaPreviewUrl(campaignId: string): string {
+  // Trigger loading if not already loaded
+  if (!mediaBlobUrls.value[campaignId]) {
+    loadMediaPreview(campaignId)
+  }
+  return mediaBlobUrls.value[campaignId] || ''
+}
+
 // Recipients functions
 const deletingRecipientId = ref<string | null>(null)
 
@@ -1333,7 +1356,30 @@ async function addRecipientsFromCSV() {
               </div>
 
               <div v-if="campaign.header_media_id" class="space-y-2">
-                <div class="flex items-center gap-2 p-2 bg-green-50 dark:bg-green-950/30 rounded border border-green-200 dark:border-green-800">
+                <!-- Image Preview -->
+                <div v-if="campaign.header_media_mime_type?.startsWith('image/')" class="relative">
+                  <img
+                    :src="getMediaPreviewUrl(campaign.id)"
+                    :alt="campaign.header_media_filename"
+                    class="w-full max-h-32 object-cover rounded border"
+                  />
+                  <div class="absolute top-1 right-1 bg-green-500 rounded-full p-0.5">
+                    <CheckCircle class="h-3 w-3 text-white" />
+                  </div>
+                </div>
+                <!-- Video Preview -->
+                <div v-else-if="campaign.header_media_mime_type?.startsWith('video/')" class="relative">
+                  <video
+                    :src="getMediaPreviewUrl(campaign.id)"
+                    class="w-full max-h-32 object-cover rounded border"
+                    muted
+                  />
+                  <div class="absolute top-1 right-1 bg-green-500 rounded-full p-0.5">
+                    <CheckCircle class="h-3 w-3 text-white" />
+                  </div>
+                </div>
+                <!-- Document/Other Preview -->
+                <div v-else class="flex items-center gap-2 p-2 bg-green-50 dark:bg-green-950/30 rounded border border-green-200 dark:border-green-800">
                   <component :is="getMediaIcon(getTemplateHeaderType(campaign.template_id))" class="h-4 w-4 text-green-600" />
                   <div class="flex-1 min-w-0">
                     <p class="text-sm font-medium text-green-700 dark:text-green-400 truncate">
@@ -1345,7 +1391,7 @@ async function addRecipientsFromCSV() {
                   </div>
                   <CheckCircle class="h-4 w-4 text-green-600 flex-shrink-0" />
                 </div>
-                <p class="text-xs text-muted-foreground">ID: {{ campaign.header_media_id.substring(0, 20) }}...</p>
+                <p class="text-xs text-muted-foreground truncate">{{ campaign.header_media_filename }}</p>
               </div>
 
               <div v-else-if="campaign.status === 'draft'" class="space-y-2">

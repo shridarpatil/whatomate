@@ -193,7 +193,9 @@ export const campaignsService = {
         'Authorization': `Bearer ${localStorage.getItem('auth_token')}`
       }
     })
-  }
+  },
+  getMedia: (campaignId: string) =>
+    api.get(`/campaigns/${campaignId}/media`, { responseType: 'arraybuffer' })
 }
 
 export const chatbotService = {
