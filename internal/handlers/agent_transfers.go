@@ -475,7 +475,7 @@ func (a *App) CreateAgentTransfer(r *fastglue.Request) error {
 	} else if teamID != nil {
 		// Apply team's assignment strategy
 		agentID = a.assignToTeam(*teamID, orgID)
-	} else if settings.AssignToSameAgent && contact.AssignedUserID != nil {
+	} else if settings != nil && settings.AssignToSameAgent && contact.AssignedUserID != nil {
 		// Auto-assign to contact's existing assigned agent (if setting enabled and agent is available)
 		var assignedAgent models.User
 		if a.DB.Where("id = ?", contact.AssignedUserID).First(&assignedAgent).Error == nil && assignedAgent.IsAvailable {
