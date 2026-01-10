@@ -81,8 +81,7 @@ Examples:
 Deployment Scenarios:
   All-in-one:    whatomate server
   Separate:      whatomate server -workers 0  (on API server)
-                 whatomate worker -workers 4  (on worker server)
-`)
+                 whatomate worker -workers 4  (on worker server)`)
 }
 
 // ============================================================================
