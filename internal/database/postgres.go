@@ -316,7 +316,7 @@ func CreateDefaultAdmin(db *gorm.DB) error {
 		Email:          "admin@admin.com",
 		PasswordHash:   string(passwordHash),
 		FullName:       "Admin",
-		Role:           "admin",
+		Role:           models.RoleAdmin,
 		IsActive:       true,
 		IsAvailable:    true,
 		Settings:       models.JSONB{},

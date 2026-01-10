@@ -90,7 +90,7 @@ func NewUser(orgID uuid.UUID) *UserBuilder {
 			Email:          "test-" + id.String()[:8] + "@example.com",
 			PasswordHash:   defaultPasswordHash(),
 			FullName:       "Test User",
-			Role:           "agent",
+			Role:           models.RoleAgent,
 			Settings:       models.JSONB{},
 			IsActive:       true,
 			IsAvailable:    true,
@@ -125,19 +125,19 @@ func (b *UserBuilder) WithPassword(password string) *UserBuilder {
 
 // AsAdmin sets the user role to admin.
 func (b *UserBuilder) AsAdmin() *UserBuilder {
-	b.user.Role = "admin"
+	b.user.Role = models.RoleAdmin
 	return b
 }
 
 // AsManager sets the user role to manager.
 func (b *UserBuilder) AsManager() *UserBuilder {
-	b.user.Role = "manager"
+	b.user.Role = models.RoleManager
 	return b
 }
 
 // AsAgent sets the user role to agent.
 func (b *UserBuilder) AsAgent() *UserBuilder {
-	b.user.Role = "agent"
+	b.user.Role = models.RoleAgent
 	return b
 }
 
@@ -415,10 +415,10 @@ func NewMessage(orgID, contactID uuid.UUID, accountName string) *MessageBuilder 
 			WhatsAppAccount:   accountName,
 			ContactID:         contactID,
 			WhatsAppMessageID: "wamid." + id.String()[:16],
-			Direction:         "incoming",
-			MessageType:       "text",
+			Direction:         models.DirectionIncoming,
+			MessageType:       models.MessageTypeText,
 			Content:           "Test message content",
-			Status:            "delivered",
+			Status:            models.MessageStatusDelivered,
 			Metadata:          models.JSONB{},
 		},
 	}
@@ -438,13 +438,13 @@ func (b *MessageBuilder) WithContent(content string) *MessageBuilder {
 
 // Incoming sets the message as incoming.
 func (b *MessageBuilder) Incoming() *MessageBuilder {
-	b.message.Direction = "incoming"
+	b.message.Direction = models.DirectionIncoming
 	return b
 }
 
 // Outgoing sets the message as outgoing.
 func (b *MessageBuilder) Outgoing() *MessageBuilder {
-	b.message.Direction = "outgoing"
+	b.message.Direction = models.DirectionOutgoing
 	return b
 }
 
@@ -455,13 +455,13 @@ func (b *MessageBuilder) SentByUser(userID uuid.UUID) *MessageBuilder {
 }
 
 // WithType sets the message type (text, image, template, etc.).
-func (b *MessageBuilder) WithType(msgType string) *MessageBuilder {
+func (b *MessageBuilder) WithType(msgType models.MessageType) *MessageBuilder {
 	b.message.MessageType = msgType
 	return b
 }
 
 // WithStatus sets the message status.
-func (b *MessageBuilder) WithStatus(status string) *MessageBuilder {
+func (b *MessageBuilder) WithStatus(status models.MessageStatus) *MessageBuilder {
 	b.message.Status = status
 	return b
 }
@@ -476,7 +476,7 @@ func (b *MessageBuilder) WithMedia(url, mimeType, filename string) *MessageBuild
 
 // AsTemplate sets the message as a template message.
 func (b *MessageBuilder) AsTemplate(templateName string, params models.JSONB) *MessageBuilder {
-	b.message.MessageType = "template"
+	b.message.MessageType = models.MessageTypeTemplate
 	b.message.TemplateName = templateName
 	b.message.TemplateParams = params
 	return b
@@ -506,7 +506,7 @@ func NewCampaign(orgID, templateID, creatorID uuid.UUID, accountName string) *Ca
 			WhatsAppAccount: accountName,
 			Name:            "Test Campaign " + id.String()[:8],
 			TemplateID:      templateID,
-			Status:          "draft",
+			Status:          models.CampaignStatusDraft,
 			TotalRecipients: 0,
 			SentCount:       0,
 			DeliveredCount:  0,
@@ -530,7 +530,7 @@ func (b *CampaignBuilder) WithName(name string) *CampaignBuilder {
 }
 
 // WithStatus sets the campaign status.
-func (b *CampaignBuilder) WithStatus(status string) *CampaignBuilder {
+func (b *CampaignBuilder) WithStatus(status models.CampaignStatus) *CampaignBuilder {
 	b.campaign.Status = status
 	return b
 }
@@ -575,8 +575,8 @@ func NewAgentTransfer(orgID, contactID uuid.UUID, accountName, phone string) *Ag
 			ContactID:       contactID,
 			WhatsAppAccount: accountName,
 			PhoneNumber:     phone,
-			Status:          "active",
-			Source:          "manual",
+			Status:          models.TransferStatusActive,
+			Source:          models.TransferSourceManual,
 			TransferredAt:   time.Now(),
 		},
 	}
@@ -589,13 +589,13 @@ func (b *AgentTransferBuilder) WithID(id uuid.UUID) *AgentTransferBuilder {
 }
 
 // WithStatus sets the transfer status.
-func (b *AgentTransferBuilder) WithStatus(status string) *AgentTransferBuilder {
+func (b *AgentTransferBuilder) WithStatus(status models.TransferStatus) *AgentTransferBuilder {
 	b.transfer.Status = status
 	return b
 }
 
 // WithSource sets the transfer source.
-func (b *AgentTransferBuilder) WithSource(source string) *AgentTransferBuilder {
+func (b *AgentTransferBuilder) WithSource(source models.TransferSource) *AgentTransferBuilder {
 	b.transfer.Source = source
 	return b
 }
@@ -626,9 +626,9 @@ func (b *AgentTransferBuilder) TransferredAt(t time.Time) *AgentTransferBuilder 
 
 // WithSLADeadlines sets SLA deadline fields.
 func (b *AgentTransferBuilder) WithSLADeadlines(response, resolution, escalation *time.Time) *AgentTransferBuilder {
-	b.transfer.SLAResponseDeadline = response
-	b.transfer.SLAResolutionDeadline = resolution
-	b.transfer.SLAEscalationAt = escalation
+	b.transfer.SLA.ResponseDeadline = response
+	b.transfer.SLA.ResolutionDeadline = resolution
+	b.transfer.SLA.EscalationAt = escalation
 	return b
 }
 
@@ -654,7 +654,7 @@ func NewTeam(orgID uuid.UUID) *TeamBuilder {
 			},
 			OrganizationID:     orgID,
 			Name:               "Test Team " + id.String()[:8],
-			AssignmentStrategy: "round_robin",
+			AssignmentStrategy: models.AssignmentStrategyRoundRobin,
 			IsActive:           true,
 		},
 	}
@@ -679,7 +679,7 @@ func (b *TeamBuilder) WithDescription(desc string) *TeamBuilder {
 }
 
 // WithStrategy sets the assignment strategy.
-func (b *TeamBuilder) WithStrategy(strategy string) *TeamBuilder {
+func (b *TeamBuilder) WithStrategy(strategy models.AssignmentStrategy) *TeamBuilder {
 	b.team.AssignmentStrategy = strategy
 	return b
 }

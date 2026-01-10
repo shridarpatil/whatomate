@@ -22,12 +22,12 @@ type DashboardStats struct {
 
 // RecentMessageResponse represents a recent message in the dashboard
 type RecentMessageResponse struct {
-	ID          string `json:"id"`
-	ContactName string `json:"contact_name"`
-	Content     string `json:"content"`
-	Direction   string `json:"direction"`
-	CreatedAt   string `json:"created_at"`
-	Status      string `json:"status"`
+	ID          string               `json:"id"`
+	ContactName string               `json:"contact_name"`
+	Content     string               `json:"content"`
+	Direction   models.Direction     `json:"direction"`
+	CreatedAt   string               `json:"created_at"`
+	Status      models.MessageStatus `json:"status"`
 }
 
 // GetDashboardStats returns dashboard statistics for the organization
@@ -146,8 +146,8 @@ func (a *App) GetDashboardStats(r *fastglue.Request) error {
 		}
 
 		content := msg.Content
-		if content == "" && msg.MessageType != "text" {
-			content = "[" + msg.MessageType + "]"
+		if content == "" && msg.MessageType != models.MessageTypeText {
+			content = "[" + string(msg.MessageType) + "]"
 		}
 
 		recentMessages[i] = RecentMessageResponse{

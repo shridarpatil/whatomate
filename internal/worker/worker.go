@@ -73,7 +73,7 @@ func (w *Worker) HandleRecipientJob(ctx context.Context, job *queue.RecipientJob
 	}
 
 	// Skip if campaign is paused or cancelled
-	if campaign.Status == "paused" || campaign.Status == "cancelled" {
+	if campaign.Status == models.CampaignStatusPaused || campaign.Status == models.CampaignStatusCancelled {
 		w.Log.Info("Campaign not active, skipping recipient", "campaign_id", job.CampaignID, "status", campaign.Status, "recipient_id", job.RecipientID)
 		return nil // Not an error, just skip
 	}
@@ -82,7 +82,7 @@ func (w *Worker) HandleRecipientJob(ctx context.Context, job *queue.RecipientJob
 	var account models.WhatsAppAccount
 	if err := w.DB.Where("name = ? AND organization_id = ?", campaign.WhatsAppAccount, job.OrganizationID).First(&account).Error; err != nil {
 		w.Log.Error("Failed to load WhatsApp account", "error", err, "account_name", campaign.WhatsAppAccount)
-		w.updateRecipientStatus(job.RecipientID, "failed", "", "WhatsApp account not found")
+		w.updateRecipientStatus(job.RecipientID, models.MessageStatusFailed, "", "WhatsApp account not found")
 		w.incrementCampaignCount(job.CampaignID, "failed_count")
 		return nil // Don't retry, mark as failed
 	}
@@ -91,7 +91,7 @@ func (w *Worker) HandleRecipientJob(ctx context.Context, job *queue.RecipientJob
 	contact, err := w.getOrCreateContact(job.OrganizationID, job.PhoneNumber, job.RecipientName)
 	if err != nil || contact == nil {
 		w.Log.Error("Failed to get or create contact", "error", err, "phone", job.PhoneNumber)
-		w.updateRecipientStatus(job.RecipientID, "failed", "", "Failed to create contact")
+		w.updateRecipientStatus(job.RecipientID, models.MessageStatusFailed, "", "Failed to create contact")
 		w.incrementCampaignCount(job.CampaignID, "failed_count")
 		return nil // Don't retry
 	}
@@ -112,8 +112,8 @@ func (w *Worker) HandleRecipientJob(ctx context.Context, job *queue.RecipientJob
 		WhatsAppAccount:   campaign.WhatsAppAccount,
 		ContactID:         contact.ID,
 		WhatsAppMessageID: waMessageID,
-		Direction:         "outgoing",
-		MessageType:       "template",
+		Direction:         models.DirectionOutgoing,
+		MessageType:       models.MessageTypeTemplate,
 		TemplateParams:    job.TemplateParams,
 		Metadata: models.JSONB{
 			"campaign_id":    job.CampaignID.String(),
@@ -137,14 +137,14 @@ func (w *Worker) HandleRecipientJob(ctx context.Context, job *queue.RecipientJob
 
 	if err != nil {
 		w.Log.Error("Failed to send message", "error", err, "recipient", job.PhoneNumber)
-		message.Status = "failed"
+		message.Status = models.MessageStatusFailed
 		message.ErrorMessage = err.Error()
-		w.updateRecipientStatus(job.RecipientID, "failed", "", err.Error())
+		w.updateRecipientStatus(job.RecipientID, models.MessageStatusFailed, "", err.Error())
 		w.incrementCampaignCount(job.CampaignID, "failed_count")
 	} else {
 		w.Log.Info("Message sent", "recipient", job.PhoneNumber, "message_id", waMessageID)
-		message.Status = "sent"
-		w.updateRecipientStatus(job.RecipientID, "sent", waMessageID, "")
+		message.Status = models.MessageStatusSent
+		w.updateRecipientStatus(job.RecipientID, models.MessageStatusSent, waMessageID, "")
 		w.incrementCampaignCount(job.CampaignID, "sent_count")
 	}
 
@@ -160,12 +160,12 @@ func (w *Worker) HandleRecipientJob(ctx context.Context, job *queue.RecipientJob
 }
 
 // updateRecipientStatus updates the recipient's status in the database
-func (w *Worker) updateRecipientStatus(recipientID uuid.UUID, status, waMessageID, errorMsg string) {
+func (w *Worker) updateRecipientStatus(recipientID uuid.UUID, status models.MessageStatus, waMessageID, errorMsg string) {
 	updates := map[string]interface{}{
 		"status":               status,
 		"whats_app_message_id": waMessageID,
 	}
-	if status == "sent" {
+	if status == models.MessageStatusSent {
 		updates["sent_at"] = time.Now()
 	}
 	if errorMsg != "" {
@@ -204,7 +204,7 @@ func (w *Worker) checkCampaignCompletion(ctx context.Context, campaignID, organi
 	// Count pending recipients
 	var pendingCount int64
 	w.DB.Model(&models.BulkMessageRecipient{}).
-		Where("campaign_id = ? AND status = ?", campaignID, "pending").
+		Where("campaign_id = ? AND status = ?", campaignID, models.MessageStatusPending).
 		Count(&pendingCount)
 
 	// If no pending recipients, mark campaign as completed
@@ -215,13 +215,13 @@ func (w *Worker) checkCampaignCompletion(ctx context.Context, campaignID, organi
 		}
 
 		// Only complete if currently processing
-		if campaign.Status != "processing" {
+		if campaign.Status != models.CampaignStatusProcessing {
 			return
 		}
 
 		now := time.Now()
 		w.DB.Model(&campaign).Updates(map[string]interface{}{
-			"status":       "completed",
+			"status":       models.CampaignStatusCompleted,
 			"completed_at": now,
 		})
 
@@ -231,7 +231,7 @@ func (w *Worker) checkCampaignCompletion(ctx context.Context, campaignID, organi
 		_ = w.Publisher.PublishCampaignStats(ctx, &queue.CampaignStatsUpdate{
 			CampaignID:     campaignID.String(),
 			OrganizationID: organizationID,
-			Status:         "completed",
+			Status:         models.CampaignStatusCompleted,
 			SentCount:      campaign.SentCount,
 			DeliveredCount: campaign.DeliveredCount,
 			ReadCount:      campaign.ReadCount,

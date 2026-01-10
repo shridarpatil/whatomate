@@ -14,6 +14,7 @@ import (
 	"github.com/shridarpatil/whatomate/internal/frontend"
 	"github.com/shridarpatil/whatomate/internal/handlers"
 	"github.com/shridarpatil/whatomate/internal/middleware"
+	"github.com/shridarpatil/whatomate/internal/models"
 	"github.com/shridarpatil/whatomate/internal/queue"
 	"github.com/shridarpatil/whatomate/internal/websocket"
 	"github.com/shridarpatil/whatomate/internal/worker"
@@ -439,7 +440,7 @@ func setupRoutes(g *fastglue.Fastglue, app *handlers.App, lo logf.Logger, basePa
 		}
 
 		// Get role from context (set by auth middleware)
-		role, ok := r.RequestCtx.UserValue("role").(string)
+		role, ok := r.RequestCtx.UserValue("role").(models.Role)
 		if !ok {
 			return r // Auth middleware will handle unauthenticated requests
 		}
@@ -448,7 +449,7 @@ func setupRoutes(g *fastglue.Fastglue, app *handlers.App, lo logf.Logger, basePa
 		if (len(path) >= 10 && path[:10] == "/api/users") ||
 			(len(path) >= 13 && path[:13] == "/api/api-keys") ||
 			(len(path) >= 17 && path[:17] == "/api/settings/sso") {
-			if role != "admin" {
+			if role != models.RoleAdmin {
 				r.RequestCtx.SetStatusCode(403)
 				r.RequestCtx.SetBodyString(`{"status":"error","message":"Admin access required"}`)
 				return nil
@@ -456,7 +457,7 @@ func setupRoutes(g *fastglue.Fastglue, app *handlers.App, lo logf.Logger, basePa
 		}
 
 		// Manager+ routes: agents cannot access these
-		if role == "agent" {
+		if role == models.RoleAgent {
 			// Agent-accessible exceptions under restricted prefixes
 			agentAllowedPaths := []string{
 				"/api/chatbot/transfers",

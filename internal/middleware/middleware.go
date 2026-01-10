@@ -26,10 +26,10 @@ const (
 
 // JWTClaims represents JWT claims
 type JWTClaims struct {
-	UserID         uuid.UUID `json:"user_id"`
-	OrganizationID uuid.UUID `json:"organization_id"`
-	Email          string    `json:"email"`
-	Role           string    `json:"role"`
+	UserID         uuid.UUID   `json:"user_id"`
+	OrganizationID uuid.UUID   `json:"organization_id"`
+	Email          string      `json:"email"`
+	Role           models.Role `json:"role"`
 	jwt.RegisteredClaims
 }
 
@@ -228,14 +228,14 @@ func OrganizationContext(db *gorm.DB) fastglue.FastMiddleware {
 // RequireRole checks if user has required role
 func RequireRole(roles ...string) fastglue.FastMiddleware {
 	return func(r *fastglue.Request) *fastglue.Request {
-		role, ok := r.RequestCtx.UserValue(ContextKeyRole).(string)
+		role, ok := r.RequestCtx.UserValue(ContextKeyRole).(models.Role)
 		if !ok {
 			_ = r.SendErrorEnvelope(fasthttp.StatusForbidden, "Role not found", nil, "")
 			return nil
 		}
 
 		for _, allowedRole := range roles {
-			if role == allowedRole {
+			if string(role) == allowedRole {
 				return r
 			}
 		}

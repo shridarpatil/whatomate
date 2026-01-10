@@ -54,7 +54,7 @@ func createTestCampaignData(t *testing.T, w *Worker) (*models.Organization, *mod
 		Email:          "test-" + uniqueID + "@example.com",
 		PasswordHash:   "hashed",
 		FullName:       "Test User",
-		Role:           "admin",
+		Role:           models.RoleAdmin,
 		IsActive:       true,
 	}
 	require.NoError(t, w.DB.Create(user).Error)
@@ -88,7 +88,7 @@ func createTestCampaignData(t *testing.T, w *Worker) (*models.Organization, *mod
 		Name:            "Test Campaign " + uniqueID,
 		WhatsAppAccount: accountName,
 		TemplateID:      template.ID,
-		Status:          "processing",
+		Status:          models.CampaignStatusProcessing,
 		TotalRecipients: 1,
 		CreatedBy:       user.ID,
 	}
@@ -99,7 +99,7 @@ func createTestCampaignData(t *testing.T, w *Worker) (*models.Organization, *mod
 		CampaignID:    campaign.ID,
 		PhoneNumber:   "1112223333",
 		RecipientName: "Test User",
-		Status:        "pending",
+		Status:        models.MessageStatusPending,
 		TemplateParams: models.JSONB{
 			"1": "John",
 			"2": "ORD-123",
@@ -118,7 +118,7 @@ func TestWorker_HandleRecipientJob_CampaignPaused(t *testing.T) {
 	org, _, _, campaign, recipient := createTestCampaignData(t, w)
 
 	// Pause the campaign
-	require.NoError(t, w.DB.Model(campaign).Update("status", "paused").Error)
+	require.NoError(t, w.DB.Model(campaign).Update("status", models.CampaignStatusPaused).Error)
 
 	job := &queue.RecipientJob{
 		CampaignID:     campaign.ID,
@@ -134,7 +134,7 @@ func TestWorker_HandleRecipientJob_CampaignPaused(t *testing.T) {
 	// Recipient status should remain pending (job was skipped)
 	var updatedRecipient models.BulkMessageRecipient
 	require.NoError(t, w.DB.First(&updatedRecipient, recipient.ID).Error)
-	assert.Equal(t, "pending", updatedRecipient.Status)
+	assert.Equal(t, models.MessageStatusPending, updatedRecipient.Status)
 }
 
 func TestWorker_HandleRecipientJob_CampaignCancelled(t *testing.T) {
@@ -142,7 +142,7 @@ func TestWorker_HandleRecipientJob_CampaignCancelled(t *testing.T) {
 	org, _, _, campaign, recipient := createTestCampaignData(t, w)
 
 	// Cancel the campaign
-	require.NoError(t, w.DB.Model(campaign).Update("status", "cancelled").Error)
+	require.NoError(t, w.DB.Model(campaign).Update("status", models.CampaignStatusCancelled).Error)
 
 	job := &queue.RecipientJob{
 		CampaignID:     campaign.ID,
@@ -158,7 +158,7 @@ func TestWorker_HandleRecipientJob_CampaignCancelled(t *testing.T) {
 	// Recipient status should remain pending (job was skipped)
 	var updatedRecipient models.BulkMessageRecipient
 	require.NoError(t, w.DB.First(&updatedRecipient, recipient.ID).Error)
-	assert.Equal(t, "pending", updatedRecipient.Status)
+	assert.Equal(t, models.MessageStatusPending, updatedRecipient.Status)
 }
 
 func TestWorker_HandleRecipientJob_AccountNotFound(t *testing.T) {
@@ -183,7 +183,7 @@ func TestWorker_HandleRecipientJob_AccountNotFound(t *testing.T) {
 	// Verify recipient marked as failed
 	var updatedRecipient models.BulkMessageRecipient
 	require.NoError(t, w.DB.First(&updatedRecipient, recipient.ID).Error)
-	assert.Equal(t, "failed", updatedRecipient.Status)
+	assert.Equal(t, models.MessageStatusFailed, updatedRecipient.Status)
 	assert.Contains(t, updatedRecipient.ErrorMessage, "WhatsApp account not found")
 }
 
@@ -294,7 +294,7 @@ func TestWorker_getOrCreateContact_FindsWithPlusPrefix(t *testing.T) {
 
 // createMinimalCampaignData creates the minimum data needed for campaign tests
 // Returns org, user, template, and campaign
-func createMinimalCampaignData(t *testing.T, w *Worker, status string) (*models.Organization, *models.User, *models.Template, *models.BulkMessageCampaign) {
+func createMinimalCampaignData(t *testing.T, w *Worker, status models.CampaignStatus) (*models.Organization, *models.User, *models.Template, *models.BulkMessageCampaign) {
 	t.Helper()
 	uniqueID := uuid.New().String()[:8]
 
@@ -309,7 +309,7 @@ func createMinimalCampaignData(t *testing.T, w *Worker, status string) (*models.
 		Email:          "test-" + uniqueID + "@example.com",
 		PasswordHash:   "hashed",
 		FullName:       "Test User",
-		Role:           "admin",
+		Role:           models.RoleAdmin,
 		IsActive:       true,
 	}
 	require.NoError(t, w.DB.Create(user).Error)
@@ -329,8 +329,8 @@ func createMinimalCampaignData(t *testing.T, w *Worker, status string) (*models.
 		WhatsAppAccount: accountName,
 		Name:            "test_template_" + uniqueID,
 		Language:        "en",
-		Category:        "MARKETING",
-		Status:          "APPROVED",
+		Category:        string(models.TemplateCategoryMarketing),
+		Status:          string(models.TemplateStatusApproved),
 		BodyContent:     "Hello {{1}}!",
 	}
 	require.NoError(t, w.DB.Create(template).Error)
@@ -352,21 +352,21 @@ func TestWorker_updateRecipientStatus_Sent(t *testing.T) {
 	w := testWorker(t)
 
 	// Create campaign data with proper foreign keys
-	_, _, _, campaign := createMinimalCampaignData(t, w, "processing")
+	_, _, _, campaign := createMinimalCampaignData(t, w, models.CampaignStatusProcessing)
 
 	recipient := &models.BulkMessageRecipient{
 		CampaignID:  campaign.ID,
 		PhoneNumber: "1234567890",
-		Status:      "pending",
+		Status:      models.MessageStatusPending,
 	}
 	require.NoError(t, w.DB.Create(recipient).Error)
 
 	// Test updating to sent status
-	w.updateRecipientStatus(recipient.ID, "sent", "wamid.123", "")
+	w.updateRecipientStatus(recipient.ID, models.MessageStatusSent, "wamid.123", "")
 
 	var updated models.BulkMessageRecipient
 	require.NoError(t, w.DB.First(&updated, recipient.ID).Error)
-	assert.Equal(t, "sent", updated.Status)
+	assert.Equal(t, models.MessageStatusSent, updated.Status)
 	assert.Equal(t, "wamid.123", updated.WhatsAppMessageID)
 	assert.NotNil(t, updated.SentAt)
 }
@@ -375,20 +375,20 @@ func TestWorker_updateRecipientStatus_Failed(t *testing.T) {
 	w := testWorker(t)
 
 	// Create campaign data with proper foreign keys
-	_, _, _, campaign := createMinimalCampaignData(t, w, "processing")
+	_, _, _, campaign := createMinimalCampaignData(t, w, models.CampaignStatusProcessing)
 
 	recipient := &models.BulkMessageRecipient{
 		CampaignID:  campaign.ID,
 		PhoneNumber: "9876543210",
-		Status:      "pending",
+		Status:      models.MessageStatusPending,
 	}
 	require.NoError(t, w.DB.Create(recipient).Error)
 
-	w.updateRecipientStatus(recipient.ID, "failed", "", "API error")
+	w.updateRecipientStatus(recipient.ID, models.MessageStatusFailed, "", "API error")
 
 	var updated models.BulkMessageRecipient
 	require.NoError(t, w.DB.First(&updated, recipient.ID).Error)
-	assert.Equal(t, "failed", updated.Status)
+	assert.Equal(t, models.MessageStatusFailed, updated.Status)
 	assert.Equal(t, "API error", updated.ErrorMessage)
 }
 
@@ -396,7 +396,7 @@ func TestWorker_incrementCampaignCount(t *testing.T) {
 	w := testWorker(t)
 
 	// Create campaign data with proper foreign keys
-	_, _, _, campaign := createMinimalCampaignData(t, w, "processing")
+	_, _, _, campaign := createMinimalCampaignData(t, w, models.CampaignStatusProcessing)
 
 	// Increment sent count multiple times
 	w.incrementCampaignCount(campaign.ID, "sent_count")
@@ -413,7 +413,7 @@ func TestWorker_checkCampaignCompletion_CompletesWhenAllProcessed(t *testing.T) 
 	w := testWorker(t)
 
 	// Create campaign data with proper foreign keys
-	org, _, _, campaign := createMinimalCampaignData(t, w, "processing")
+	org, _, _, campaign := createMinimalCampaignData(t, w, models.CampaignStatusProcessing)
 
 	// Update campaign counts for this test
 	require.NoError(t, w.DB.Model(campaign).Updates(map[string]interface{}{
@@ -425,12 +425,12 @@ func TestWorker_checkCampaignCompletion_CompletesWhenAllProcessed(t *testing.T) 
 	recipient1 := &models.BulkMessageRecipient{
 		CampaignID:  campaign.ID,
 		PhoneNumber: "1111111111",
-		Status:      "sent",
+		Status:      models.MessageStatusSent,
 	}
 	recipient2 := &models.BulkMessageRecipient{
 		CampaignID:  campaign.ID,
 		PhoneNumber: "2222222222",
-		Status:      "sent",
+		Status:      models.MessageStatusSent,
 	}
 	require.NoError(t, w.DB.Create(recipient1).Error)
 	require.NoError(t, w.DB.Create(recipient2).Error)
@@ -440,7 +440,7 @@ func TestWorker_checkCampaignCompletion_CompletesWhenAllProcessed(t *testing.T) 
 
 	var updated models.BulkMessageCampaign
 	require.NoError(t, w.DB.First(&updated, campaign.ID).Error)
-	assert.Equal(t, "completed", updated.Status)
+	assert.Equal(t, models.CampaignStatusCompleted, updated.Status)
 	assert.NotNil(t, updated.CompletedAt)
 }
 
@@ -448,7 +448,7 @@ func TestWorker_checkCampaignCompletion_DoesNotCompleteWithPending(t *testing.T)
 	w := testWorker(t)
 
 	// Create campaign data with proper foreign keys
-	org, _, _, campaign := createMinimalCampaignData(t, w, "processing")
+	org, _, _, campaign := createMinimalCampaignData(t, w, models.CampaignStatusProcessing)
 
 	// Update campaign counts for this test
 	require.NoError(t, w.DB.Model(campaign).Updates(map[string]interface{}{
@@ -460,12 +460,12 @@ func TestWorker_checkCampaignCompletion_DoesNotCompleteWithPending(t *testing.T)
 	recipient1 := &models.BulkMessageRecipient{
 		CampaignID:  campaign.ID,
 		PhoneNumber: "1111111111",
-		Status:      "sent",
+		Status:      models.MessageStatusSent,
 	}
 	recipient2 := &models.BulkMessageRecipient{
 		CampaignID:  campaign.ID,
 		PhoneNumber: "2222222222",
-		Status:      "pending",
+		Status:      models.MessageStatusPending,
 	}
 	require.NoError(t, w.DB.Create(recipient1).Error)
 	require.NoError(t, w.DB.Create(recipient2).Error)
@@ -475,22 +475,22 @@ func TestWorker_checkCampaignCompletion_DoesNotCompleteWithPending(t *testing.T)
 
 	var updated models.BulkMessageCampaign
 	require.NoError(t, w.DB.First(&updated, campaign.ID).Error)
-	assert.Equal(t, "processing", updated.Status)
+	assert.Equal(t, models.CampaignStatusProcessing, updated.Status)
 	assert.Nil(t, updated.CompletedAt)
 }
 
 func TestWorker_checkCampaignCompletion_NotProcessingStatus(t *testing.T) {
 	w := testWorker(t)
 
-	// Create campaign data with proper foreign keys - status is "paused"
-	org, _, _, campaign := createMinimalCampaignData(t, w, "paused")
+	// Create campaign data with proper foreign keys - status is paused
+	org, _, _, campaign := createMinimalCampaignData(t, w, models.CampaignStatusPaused)
 
-	// Should not change status since it's not processing
+	// Should not change status since it's not models.CampaignStatusProcessing
 	w.checkCampaignCompletion(context.Background(), campaign.ID, org.ID)
 
 	var updated models.BulkMessageCampaign
 	require.NoError(t, w.DB.First(&updated, campaign.ID).Error)
-	assert.Equal(t, "paused", updated.Status)
+	assert.Equal(t, models.CampaignStatusPaused, updated.Status)
 }
 
 func TestWorker_sendTemplateMessage_BuildsComponents(t *testing.T) {
@@ -644,7 +644,7 @@ func TestWorker_HandleRecipientJob_Success(t *testing.T) {
 	// Verify recipient status updated
 	var updatedRecipient models.BulkMessageRecipient
 	require.NoError(t, w.DB.First(&updatedRecipient, recipient.ID).Error)
-	assert.Equal(t, "sent", updatedRecipient.Status)
+	assert.Equal(t, models.MessageStatusSent, updatedRecipient.Status)
 	assert.Equal(t, "wamid.success123", updatedRecipient.WhatsAppMessageID)
 
 	// Verify campaign count incremented
@@ -655,8 +655,8 @@ func TestWorker_HandleRecipientJob_Success(t *testing.T) {
 	// Verify message record created
 	var message models.Message
 	require.NoError(t, w.DB.Where("template_name = ?", template.Name).First(&message).Error)
-	assert.Equal(t, "sent", message.Status)
-	assert.Equal(t, "outgoing", message.Direction)
+	assert.Equal(t, models.MessageStatusSent, message.Status)
+	assert.Equal(t, models.DirectionOutgoing, message.Direction)
 	assert.Equal(t, "template", message.MessageType)
 }
 
@@ -695,7 +695,7 @@ func TestWorker_HandleRecipientJob_WhatsAppError(t *testing.T) {
 	// Verify recipient marked as failed
 	var updatedRecipient models.BulkMessageRecipient
 	require.NoError(t, w.DB.First(&updatedRecipient, recipient.ID).Error)
-	assert.Equal(t, "failed", updatedRecipient.Status)
+	assert.Equal(t, models.MessageStatusFailed, updatedRecipient.Status)
 	assert.NotEmpty(t, updatedRecipient.ErrorMessage)
 
 	// Verify campaign failed count incremented
@@ -775,7 +775,7 @@ func TestWorker_HandleRecipientJob_CampaignCompletion(t *testing.T) {
 	// Verify campaign is marked as completed (all recipients processed)
 	var updatedCampaign models.BulkMessageCampaign
 	require.NoError(t, w.DB.First(&updatedCampaign, campaign.ID).Error)
-	assert.Equal(t, "completed", updatedCampaign.Status)
+	assert.Equal(t, models.CampaignStatusCompleted, updatedCampaign.Status)
 	assert.NotNil(t, updatedCampaign.CompletedAt)
 }
 

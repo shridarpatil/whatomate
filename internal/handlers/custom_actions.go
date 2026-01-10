@@ -22,7 +22,7 @@ import (
 type CustomActionRequest struct {
 	Name         string                 `json:"name"`
 	Icon         string                 `json:"icon"`
-	ActionType   string                 `json:"action_type"` // webhook, url, javascript
+	ActionType   models.ActionType      `json:"action_type"` // webhook, url, javascript
 	Config       map[string]interface{} `json:"config"`
 	IsActive     bool                   `json:"is_active"`
 	DisplayOrder int                    `json:"display_order"`
@@ -33,7 +33,7 @@ type CustomActionResponse struct {
 	ID           uuid.UUID              `json:"id"`
 	Name         string                 `json:"name"`
 	Icon         string                 `json:"icon"`
-	ActionType   string                 `json:"action_type"`
+	ActionType   models.ActionType      `json:"action_type"`
 	Config       map[string]interface{} `json:"config"`
 	IsActive     bool                   `json:"is_active"`
 	DisplayOrder int                    `json:"display_order"`
@@ -135,7 +135,7 @@ func (a *App) CreateCustomAction(r *fastglue.Request) error {
 	if req.ActionType == "" {
 		return r.SendErrorEnvelope(fasthttp.StatusBadRequest, "Action type is required", nil, "")
 	}
-	if req.ActionType != "webhook" && req.ActionType != "url" && req.ActionType != "javascript" {
+	if req.ActionType != models.ActionTypeWebhook && req.ActionType != models.ActionTypeURL && req.ActionType != models.ActionTypeJavascript {
 		return r.SendErrorEnvelope(fasthttp.StatusBadRequest, "Invalid action type. Must be webhook, url, or javascript", nil, "")
 	}
 
@@ -194,7 +194,7 @@ func (a *App) UpdateCustomAction(r *fastglue.Request) error {
 		updates["icon"] = req.Icon
 	}
 	if req.ActionType != "" {
-		if req.ActionType != "webhook" && req.ActionType != "url" && req.ActionType != "javascript" {
+		if req.ActionType != models.ActionTypeWebhook && req.ActionType != models.ActionTypeURL && req.ActionType != models.ActionTypeJavascript {
 			return r.SendErrorEnvelope(fasthttp.StatusBadRequest, "Invalid action type", nil, "")
 		}
 		updates["action_type"] = req.ActionType
@@ -304,11 +304,11 @@ func (a *App) ExecuteCustomAction(r *fastglue.Request) error {
 	// Execute based on action type
 	var result *ActionResult
 	switch action.ActionType {
-	case "webhook":
+	case models.ActionTypeWebhook:
 		result, err = a.executeWebhookAction(action, context)
-	case "url":
+	case models.ActionTypeURL:
 		result, err = a.executeURLAction(action, context)
-	case "javascript":
+	case models.ActionTypeJavascript:
 		result, err = a.executeJavaScriptAction(action, context)
 	default:
 		return r.SendErrorEnvelope(fasthttp.StatusBadRequest, "Unknown action type", nil, "")
@@ -564,17 +564,17 @@ func replaceVariables(template string, context map[string]interface{}) string {
 }
 
 // validateActionConfig validates the config based on action type
-func validateActionConfig(actionType string, config map[string]interface{}) error {
+func validateActionConfig(actionType models.ActionType, config map[string]interface{}) error {
 	switch actionType {
-	case "webhook":
+	case models.ActionTypeWebhook:
 		if _, ok := config["url"]; !ok {
 			return &ValidationError{Field: "config.url", Message: "URL is required for webhook actions"}
 		}
-	case "url":
+	case models.ActionTypeURL:
 		if _, ok := config["url"]; !ok {
 			return &ValidationError{Field: "config.url", Message: "URL is required for URL actions"}
 		}
-	case "javascript":
+	case models.ActionTypeJavascript:
 		if _, ok := config["code"]; !ok {
 			return &ValidationError{Field: "config.code", Message: "Code is required for JavaScript actions"}
 		}

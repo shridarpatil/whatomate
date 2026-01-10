@@ -2,6 +2,7 @@ package testutil
 
 import (
 	"encoding/json"
+	"fmt"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -55,8 +56,8 @@ func SetHeader(req *fastglue.Request, key, value string) {
 }
 
 // SetQueryParam sets a query parameter on the request.
-func SetQueryParam(req *fastglue.Request, key, value string) {
-	req.RequestCtx.QueryArgs().Set(key, value)
+func SetQueryParam(req *fastglue.Request, key string, value any) {
+	req.RequestCtx.QueryArgs().Set(key, fmt.Sprintf("%v", value))
 }
 
 // SetPathParam sets a path parameter (user value) on the request.

@@ -22,22 +22,22 @@ type CampaignRequest struct {
 
 // CampaignResponse represents campaign in API responses
 type CampaignResponse struct {
-	ID              uuid.UUID  `json:"id"`
-	Name            string     `json:"name"`
-	WhatsAppAccount string     `json:"whatsapp_account"`
-	TemplateID      uuid.UUID  `json:"template_id"`
-	TemplateName    string     `json:"template_name,omitempty"`
-	Status          string     `json:"status"`
-	TotalRecipients int        `json:"total_recipients"`
-	SentCount       int        `json:"sent_count"`
-	DeliveredCount  int        `json:"delivered_count"`
-	ReadCount       int        `json:"read_count"`
-	FailedCount     int        `json:"failed_count"`
-	ScheduledAt     *time.Time `json:"scheduled_at,omitempty"`
-	StartedAt       *time.Time `json:"started_at,omitempty"`
-	CompletedAt     *time.Time `json:"completed_at,omitempty"`
-	CreatedAt       time.Time  `json:"created_at"`
-	UpdatedAt       time.Time  `json:"updated_at"`
+	ID              uuid.UUID            `json:"id"`
+	Name            string               `json:"name"`
+	WhatsAppAccount string               `json:"whatsapp_account"`
+	TemplateID      uuid.UUID            `json:"template_id"`
+	TemplateName    string               `json:"template_name,omitempty"`
+	Status          models.CampaignStatus `json:"status"`
+	TotalRecipients int                  `json:"total_recipients"`
+	SentCount       int                  `json:"sent_count"`
+	DeliveredCount  int                  `json:"delivered_count"`
+	ReadCount       int                  `json:"read_count"`
+	FailedCount     int                  `json:"failed_count"`
+	ScheduledAt     *time.Time           `json:"scheduled_at,omitempty"`
+	StartedAt       *time.Time           `json:"started_at,omitempty"`
+	CompletedAt     *time.Time           `json:"completed_at,omitempty"`
+	CreatedAt       time.Time            `json:"created_at"`
+	UpdatedAt       time.Time            `json:"updated_at"`
 }
 
 // RecipientRequest represents recipient import request
@@ -159,7 +159,7 @@ func (a *App) CreateCampaign(r *fastglue.Request) error {
 		WhatsAppAccount: req.WhatsAppAccount,
 		Name:            req.Name,
 		TemplateID:      templateID,
-		Status:          "draft",
+		Status:          models.CampaignStatusDraft,
 		ScheduledAt:     req.ScheduledAt,
 		CreatedBy:       userID,
 	}
@@ -250,7 +250,7 @@ func (a *App) UpdateCampaign(r *fastglue.Request) error {
 	}
 
 	// Only allow updates to draft campaigns
-	if campaign.Status != "draft" {
+	if campaign.Status != models.CampaignStatusDraft {
 		return r.SendErrorEnvelope(fasthttp.StatusBadRequest, "Can only update draft campaigns", nil, "")
 	}
 
@@ -325,7 +325,7 @@ func (a *App) DeleteCampaign(r *fastglue.Request) error {
 	}
 
 	// Don't allow deletion of running campaigns
-	if campaign.Status == "processing" || campaign.Status == "queued" {
+	if campaign.Status == models.CampaignStatusProcessing || campaign.Status == models.CampaignStatusQueued {
 		return r.SendErrorEnvelope(fasthttp.StatusBadRequest, "Cannot delete running campaign", nil, "")
 	}
 
@@ -367,13 +367,13 @@ func (a *App) StartCampaign(r *fastglue.Request) error {
 	}
 
 	// Check if campaign can be started
-	if campaign.Status != "draft" && campaign.Status != "scheduled" && campaign.Status != "paused" {
+	if campaign.Status != models.CampaignStatusDraft && campaign.Status != models.CampaignStatusScheduled && campaign.Status != models.CampaignStatusPaused {
 		return r.SendErrorEnvelope(fasthttp.StatusBadRequest, "Campaign cannot be started in current state", nil, "")
 	}
 
 	// Get all pending recipients
 	var recipients []models.BulkMessageRecipient
-	if err := a.DB.Where("campaign_id = ? AND status = ?", id, "pending").Find(&recipients).Error; err != nil {
+	if err := a.DB.Where("campaign_id = ? AND status = ?", id, models.MessageStatusPending).Find(&recipients).Error; err != nil {
 		a.Log.Error("Failed to load recipients", "error", err)
 		return r.SendErrorEnvelope(fasthttp.StatusInternalServerError, "Failed to load recipients", nil, "")
 	}
@@ -385,7 +385,7 @@ func (a *App) StartCampaign(r *fastglue.Request) error {
 	// Update status to processing
 	now := time.Now()
 	updates := map[string]interface{}{
-		"status":     "processing",
+		"status":     models.CampaignStatusProcessing,
 		"started_at": now,
 	}
 
@@ -412,7 +412,7 @@ func (a *App) StartCampaign(r *fastglue.Request) error {
 	if err := a.Queue.EnqueueRecipients(r.RequestCtx, jobs); err != nil {
 		a.Log.Error("Failed to enqueue recipients", "error", err)
 		// Revert status on failure
-		a.DB.Model(&campaign).Update("status", "draft")
+		a.DB.Model(&campaign).Update("status", models.CampaignStatusDraft)
 		return r.SendErrorEnvelope(fasthttp.StatusInternalServerError, "Failed to queue recipients", nil, "")
 	}
 
@@ -420,7 +420,7 @@ func (a *App) StartCampaign(r *fastglue.Request) error {
 
 	return r.SendEnvelope(map[string]interface{}{
 		"message": "Campaign started",
-		"status":  "processing",
+		"status":  models.CampaignStatusProcessing,
 	})
 }
 
@@ -442,11 +442,11 @@ func (a *App) PauseCampaign(r *fastglue.Request) error {
 		return r.SendErrorEnvelope(fasthttp.StatusNotFound, "Campaign not found", nil, "")
 	}
 
-	if campaign.Status != "processing" && campaign.Status != "queued" {
+	if campaign.Status != models.CampaignStatusProcessing && campaign.Status != models.CampaignStatusQueued {
 		return r.SendErrorEnvelope(fasthttp.StatusBadRequest, "Campaign is not running", nil, "")
 	}
 
-	if err := a.DB.Model(&campaign).Update("status", "paused").Error; err != nil {
+	if err := a.DB.Model(&campaign).Update("status", models.CampaignStatusPaused).Error; err != nil {
 		a.Log.Error("Failed to pause campaign", "error", err)
 		return r.SendErrorEnvelope(fasthttp.StatusInternalServerError, "Failed to pause campaign", nil, "")
 	}
@@ -455,7 +455,7 @@ func (a *App) PauseCampaign(r *fastglue.Request) error {
 
 	return r.SendEnvelope(map[string]interface{}{
 		"message": "Campaign paused",
-		"status":  "paused",
+		"status":  models.CampaignStatusPaused,
 	})
 }
 
@@ -477,11 +477,11 @@ func (a *App) CancelCampaign(r *fastglue.Request) error {
 		return r.SendErrorEnvelope(fasthttp.StatusNotFound, "Campaign not found", nil, "")
 	}
 
-	if campaign.Status == "completed" || campaign.Status == "cancelled" {
+	if campaign.Status == models.CampaignStatusCompleted || campaign.Status == models.CampaignStatusCancelled {
 		return r.SendErrorEnvelope(fasthttp.StatusBadRequest, "Campaign already finished", nil, "")
 	}
 
-	if err := a.DB.Model(&campaign).Update("status", "cancelled").Error; err != nil {
+	if err := a.DB.Model(&campaign).Update("status", models.CampaignStatusCancelled).Error; err != nil {
 		a.Log.Error("Failed to cancel campaign", "error", err)
 		return r.SendErrorEnvelope(fasthttp.StatusInternalServerError, "Failed to cancel campaign", nil, "")
 	}
@@ -490,7 +490,7 @@ func (a *App) CancelCampaign(r *fastglue.Request) error {
 
 	return r.SendEnvelope(map[string]interface{}{
 		"message": "Campaign cancelled",
-		"status":  "cancelled",
+		"status":  models.CampaignStatusCancelled,
 	})
 }
 
@@ -513,13 +513,13 @@ func (a *App) RetryFailed(r *fastglue.Request) error {
 	}
 
 	// Only allow retry on completed or paused campaigns
-	if campaign.Status != "completed" && campaign.Status != "paused" && campaign.Status != "failed" {
+	if campaign.Status != models.CampaignStatusCompleted && campaign.Status != models.CampaignStatusPaused && campaign.Status != models.CampaignStatusFailed {
 		return r.SendErrorEnvelope(fasthttp.StatusBadRequest, "Can only retry failed messages on completed, paused, or failed campaigns", nil, "")
 	}
 
 	// Get failed recipients
 	var failedRecipients []models.BulkMessageRecipient
-	if err := a.DB.Where("campaign_id = ? AND status = ?", id, "failed").Find(&failedRecipients).Error; err != nil {
+	if err := a.DB.Where("campaign_id = ? AND status = ?", id, models.MessageStatusFailed).Find(&failedRecipients).Error; err != nil {
 		a.Log.Error("Failed to load failed recipients", "error", err)
 		return r.SendErrorEnvelope(fasthttp.StatusInternalServerError, "Failed to load failed recipients", nil, "")
 	}
@@ -530,9 +530,9 @@ func (a *App) RetryFailed(r *fastglue.Request) error {
 
 	// Reset failed recipients to pending
 	if err := a.DB.Model(&models.BulkMessageRecipient{}).
-		Where("campaign_id = ? AND status = ?", id, "failed").
+		Where("campaign_id = ? AND status = ?", id, models.MessageStatusFailed).
 		Updates(map[string]interface{}{
-			"status":        "pending",
+			"status":        models.MessageStatusPending,
 			"error_message": "",
 		}).Error; err != nil {
 		a.Log.Error("Failed to reset failed recipients", "error", err)
@@ -541,9 +541,9 @@ func (a *App) RetryFailed(r *fastglue.Request) error {
 
 	// Reset failed messages in messages table to pending
 	if err := a.DB.Model(&models.Message{}).
-		Where("metadata->>'campaign_id' = ? AND status = ?", id.String(), "failed").
+		Where("metadata->>'campaign_id' = ? AND status = ?", id.String(), models.MessageStatusFailed).
 		Updates(map[string]interface{}{
-			"status":        "pending",
+			"status":        models.MessageStatusPending,
 			"error_message": "",
 		}).Error; err != nil {
 		a.Log.Error("Failed to reset failed messages", "error", err)
@@ -553,7 +553,7 @@ func (a *App) RetryFailed(r *fastglue.Request) error {
 	a.recalculateCampaignStats(id)
 
 	// Update campaign status to processing
-	if err := a.DB.Model(&campaign).Update("status", "processing").Error; err != nil {
+	if err := a.DB.Model(&campaign).Update("status", models.CampaignStatusProcessing).Error; err != nil {
 		a.Log.Error("Failed to update campaign status", "error", err)
 		return r.SendErrorEnvelope(fasthttp.StatusInternalServerError, "Failed to update campaign", nil, "")
 	}
@@ -583,7 +583,7 @@ func (a *App) RetryFailed(r *fastglue.Request) error {
 	return r.SendEnvelope(map[string]interface{}{
 		"message":     "Retrying failed messages",
 		"retry_count": len(failedRecipients),
-		"status":      "processing",
+		"status":      models.CampaignStatusProcessing,
 	})
 }
 
@@ -605,7 +605,7 @@ func (a *App) ImportRecipients(r *fastglue.Request) error {
 		return r.SendErrorEnvelope(fasthttp.StatusNotFound, "Campaign not found", nil, "")
 	}
 
-	if campaign.Status != "draft" {
+	if campaign.Status != models.CampaignStatusDraft {
 		return r.SendErrorEnvelope(fasthttp.StatusBadRequest, "Can only add recipients to draft campaigns", nil, "")
 	}
 
@@ -624,7 +624,7 @@ func (a *App) ImportRecipients(r *fastglue.Request) error {
 			PhoneNumber:    rec.PhoneNumber,
 			RecipientName:  rec.RecipientName,
 			TemplateParams: models.JSONB(rec.TemplateParams),
-			Status:         "pending",
+			Status:         models.MessageStatusPending,
 		}
 	}
 
@@ -701,12 +701,12 @@ func (a *App) incrementCampaignStat(campaignID string, status string) {
 	}
 
 	var column string
-	switch status {
-	case "delivered":
+	switch models.MessageStatus(status) {
+	case models.MessageStatusDelivered:
 		column = "delivered_count"
-	case "read":
+	case models.MessageStatusRead:
 		column = "read_count"
-	case "failed":
+	case models.MessageStatusFailed:
 		column = "failed_count"
 	default:
 		// sent is already counted during processCampaign

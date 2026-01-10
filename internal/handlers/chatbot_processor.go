@@ -121,7 +121,7 @@ func (a *App) processIncomingMessageFull(phoneNumberID string, msg IncomingTextM
 
 	// Dispatch webhook if new contact was created
 	if isNewContact {
-		a.DispatchWebhook(account.OrganizationID, EventContactCreated, ContactEventData{
+		a.DispatchWebhook(account.OrganizationID, models.WebhookEventContactCreated, ContactEventData{
 			ContactID:       contact.ID.String(),
 			ContactPhone:    contact.PhoneNumber,
 			ContactName:     contact.ProfileName,
@@ -302,19 +302,19 @@ func (a *App) processIncomingMessageFull(phoneNumberID string, msg IncomingTextM
 	if !settings.IsEnabled {
 		a.Log.Debug("Chatbot not enabled for this account, creating transfer for agent queue", "account", account.Name, "settings_id", settings.ID)
 		// Create transfer to agent queue when chatbot is disabled
-		a.createTransferToQueue(account, contact, "chatbot_disabled")
+		a.createTransferToQueue(account, contact, models.TransferSourceChatbotDisabled)
 		return
 	}
-	a.Log.Info("Chatbot settings loaded", "settings_id", settings.ID, "is_enabled", settings.IsEnabled, "ai_enabled", settings.AIEnabled, "ai_provider", settings.AIProvider, "default_response", settings.DefaultResponse)
+	a.Log.Info("Chatbot settings loaded", "settings_id", settings.ID, "is_enabled", settings.IsEnabled, "ai_enabled", settings.AI.Enabled, "ai_provider", settings.AI.Provider, "default_response", settings.DefaultResponse)
 
 	// Check business hours if enabled
-	if settings.BusinessHoursEnabled && len(settings.BusinessHours) > 0 {
-		if !a.isWithinBusinessHours(settings.BusinessHours) {
+	if settings.BusinessHours.Enabled && len(settings.BusinessHours.Hours) > 0 {
+		if !a.isWithinBusinessHours(settings.BusinessHours.Hours) {
 			// If automated responses are not allowed outside hours, send out-of-hours message and stop
-			if !settings.AllowAutomatedOutsideHours {
+			if !settings.BusinessHours.AllowAutomatedOutside {
 				a.Log.Info("Outside business hours, sending out of hours message")
-				if settings.OutOfHoursMessage != "" {
-					if err := a.sendAndSaveTextMessage(account, contact, settings.OutOfHoursMessage); err != nil {
+				if settings.BusinessHours.OutOfHoursMessage != "" {
+					if err := a.sendAndSaveTextMessage(account, contact, settings.BusinessHours.OutOfHoursMessage); err != nil {
 						a.Log.Error("Failed to send out of hours message", "error", err, "contact", contact.PhoneNumber)
 					}
 				}
@@ -337,18 +337,18 @@ func (a *App) processIncomingMessageFull(phoneNumberID string, msg IncomingTextM
 	session, isNewSession := a.getOrCreateSession(account.OrganizationID, contact.ID, account.Name, msg.From, settings.SessionTimeoutMins)
 
 	// Log incoming message to session
-	a.logSessionMessage(session.ID, "incoming", messageText, "keyword_check")
+	a.logSessionMessage(session.ID, models.DirectionIncoming, messageText, "keyword_check")
 
 	// Check for transfer keyword BEFORE sending greeting (transfer takes priority)
 	keywordResponse, keywordMatched := a.matchKeywordRules(account.OrganizationID, account.Name, messageText)
-	if keywordMatched && keywordResponse.ResponseType == "transfer" {
+	if keywordMatched && keywordResponse.ResponseType == models.ResponseTypeTransfer {
 		a.Log.Info("Transfer keyword matched", "response", keywordResponse.Body)
 		// Check business hours - if outside hours, send out of hours message instead
-		if settings.BusinessHoursEnabled && len(settings.BusinessHours) > 0 {
-			if !a.isWithinBusinessHours(settings.BusinessHours) {
+		if settings.BusinessHours.Enabled && len(settings.BusinessHours.Hours) > 0 {
+			if !a.isWithinBusinessHours(settings.BusinessHours.Hours) {
 				a.Log.Info("Outside business hours, sending out of hours message instead of transfer")
-				if settings.OutOfHoursMessage != "" {
-					if err := a.sendAndSaveTextMessage(account, contact, settings.OutOfHoursMessage); err != nil {
+				if settings.BusinessHours.OutOfHoursMessage != "" {
+					if err := a.sendAndSaveTextMessage(account, contact, settings.BusinessHours.OutOfHoursMessage); err != nil {
 						a.Log.Error("Failed to send out of hours message", "error", err, "contact", contact.PhoneNumber)
 					}
 				}
@@ -401,12 +401,12 @@ func (a *App) processIncomingMessageFull(phoneNumberID string, msg IncomingTextM
 				a.Log.Error("Failed to send greeting message", "error", err, "contact", contact.PhoneNumber)
 			}
 		}
-		a.logSessionMessage(session.ID, "outgoing", settings.DefaultResponse, "greeting")
+		a.logSessionMessage(session.ID, models.DirectionOutgoing, settings.DefaultResponse, "greeting")
 		return // After greeting, don't process further for new sessions
 	}
 
 	// Handle non-transfer keyword matches (transfer was already handled above)
-	if keywordMatched && keywordResponse.ResponseType != "transfer" {
+	if keywordMatched && keywordResponse.ResponseType != models.ResponseTypeTransfer {
 		a.Log.Info("Keyword rule matched", "response_type", keywordResponse.ResponseType, "response", keywordResponse.Body)
 
 		// Handle regular text response
@@ -420,29 +420,29 @@ func (a *App) processIncomingMessageFull(phoneNumberID string, msg IncomingTextM
 			}
 		}
 		// Log outgoing message
-		a.logSessionMessage(session.ID, "outgoing", keywordResponse.Body, "keyword_response")
+		a.logSessionMessage(session.ID, models.DirectionOutgoing, keywordResponse.Body, "keyword_response")
 		return
 	}
 
 	// If no keyword matched, try AI response if enabled
-	if settings.AIEnabled && settings.AIProvider != "" && settings.AIAPIKey != "" {
-		a.Log.Info("Attempting AI response", "provider", settings.AIProvider, "model", settings.AIModel)
+	if settings.AI.Enabled && settings.AI.Provider != "" && settings.AI.APIKey != "" {
+		a.Log.Info("Attempting AI response", "provider", settings.AI.Provider, "model", settings.AI.Model)
 		aiResponse, err := a.generateAIResponse(settings, session, messageText)
 		if err != nil {
-			a.Log.Error("AI response failed", "error", err, "provider", settings.AIProvider, "model", settings.AIModel)
+			a.Log.Error("AI response failed", "error", err, "provider", settings.AI.Provider, "model", settings.AI.Model)
 			// Fall through to default response
 		} else if aiResponse != "" {
 			a.Log.Info("AI response generated successfully", "response_length", len(aiResponse))
 			if err := a.sendAndSaveTextMessage(account, contact, aiResponse); err != nil {
 				a.Log.Error("Failed to send AI response", "error", err, "contact", contact.PhoneNumber)
 			}
-			a.logSessionMessage(session.ID, "outgoing", aiResponse, "ai_response")
+			a.logSessionMessage(session.ID, models.DirectionOutgoing, aiResponse, "ai_response")
 			return
 		} else {
 			a.Log.Warn("AI returned empty response")
 		}
 	} else {
-		a.Log.Info("AI not configured", "ai_enabled", settings.AIEnabled, "has_provider", settings.AIProvider != "", "has_api_key", settings.AIAPIKey != "")
+		a.Log.Info("AI not configured", "ai_enabled", settings.AI.Enabled, "has_provider", settings.AI.Provider != "", "has_api_key", settings.AI.APIKey != "")
 	}
 
 	// If no AI response or AI not enabled, send fallback message (for existing sessions)
@@ -470,7 +470,7 @@ func (a *App) processIncomingMessageFull(phoneNumberID string, msg IncomingTextM
 				a.Log.Error("Failed to send fallback message", "error", err, "contact", contact.PhoneNumber)
 			}
 		}
-		a.logSessionMessage(session.ID, "outgoing", settings.FallbackMessage, "fallback_response")
+		a.logSessionMessage(session.ID, models.DirectionOutgoing, settings.FallbackMessage, "fallback_response")
 	} else if !isNewSession {
 		a.Log.Info("No fallback message configured for existing session")
 	}
@@ -480,7 +480,7 @@ func (a *App) processIncomingMessageFull(phoneNumberID string, msg IncomingTextM
 type KeywordResponse struct {
 	Body         string
 	Buttons      []map[string]interface{}
-	ResponseType string // text, transfer
+	ResponseType models.ResponseType // text, transfer
 }
 
 // matchKeywordRules checks if the message matches any keyword rules
@@ -500,25 +500,25 @@ func (a *App) matchKeywordRules(orgID uuid.UUID, accountName, messageText string
 			matched := false
 
 			switch rule.MatchType {
-			case "exact":
+			case models.MatchTypeExact:
 				if rule.CaseSensitive {
 					matched = messageText == keyword
 				} else {
 					matched = messageLower == keywordLower
 				}
-			case "contains":
+			case models.MatchTypeContains:
 				if rule.CaseSensitive {
 					matched = strings.Contains(messageText, keyword)
 				} else {
 					matched = strings.Contains(messageLower, keywordLower)
 				}
-			case "starts_with":
+			case models.MatchTypeStartsWith:
 				if rule.CaseSensitive {
 					matched = strings.HasPrefix(messageText, keyword)
 				} else {
 					matched = strings.HasPrefix(messageLower, keywordLower)
 				}
-			case "regex":
+			case models.MatchTypeRegex:
 				re, err := regexp.Compile(keyword)
 				if err == nil {
 					matched = re.MatchString(messageText)
@@ -534,7 +534,7 @@ func (a *App) matchKeywordRules(orgID uuid.UUID, accountName, messageText string
 				}
 
 				// For transfer type, use body as the transfer message
-				if rule.ResponseType == "transfer" {
+				if rule.ResponseType == models.ResponseTypeTransfer {
 					if body, ok := rule.ResponseContent["body"].(string); ok {
 						response.Body = body
 					}
@@ -595,13 +595,13 @@ func (a *App) sendAndSaveTextMessage(account *models.WhatsAppAccount, contact *m
 		OrganizationID:  account.OrganizationID,
 		WhatsAppAccount: account.Name,
 		ContactID:       contact.ID,
-		Direction:       "outgoing",
-		MessageType:     "text",
+		Direction:       models.DirectionOutgoing,
+		MessageType:     models.MessageTypeText,
 		Content:         message,
-		Status:          "sent",
+		Status:          models.MessageStatusSent,
 	}
 	if err != nil {
-		msg.Status = "failed"
+		msg.Status = models.MessageStatusFailed
 		msg.ErrorMessage = err.Error()
 	} else if wamid != "" {
 		msg.WhatsAppMessageID = wamid
@@ -675,14 +675,14 @@ func (a *App) sendAndSaveInteractiveButtons(account *models.WhatsAppAccount, con
 		OrganizationID:  account.OrganizationID,
 		WhatsAppAccount: account.Name,
 		ContactID:       contact.ID,
-		Direction:       "outgoing",
-		MessageType:     "interactive",
+		Direction:       models.DirectionOutgoing,
+		MessageType:     models.MessageTypeInteractive,
 		Content:         bodyText,
 		InteractiveData: interactiveData,
-		Status:          "sent",
+		Status:          models.MessageStatusSent,
 	}
 	if err != nil {
-		msg.Status = "failed"
+		msg.Status = models.MessageStatusFailed
 		msg.ErrorMessage = err.Error()
 	} else if wamid != "" {
 		msg.WhatsAppMessageID = wamid
@@ -786,14 +786,14 @@ func (a *App) sendAndSaveCTAURLButton(account *models.WhatsAppAccount, contact *
 		OrganizationID:  account.OrganizationID,
 		WhatsAppAccount: account.Name,
 		ContactID:       contact.ID,
-		Direction:       "outgoing",
-		MessageType:     "interactive",
+		Direction:       models.DirectionOutgoing,
+		MessageType:     models.MessageTypeInteractive,
 		Content:         bodyText,
 		InteractiveData: interactiveData,
-		Status:          "sent",
+		Status:          models.MessageStatusSent,
 	}
 	if err != nil {
-		msg.Status = "failed"
+		msg.Status = models.MessageStatusFailed
 		msg.ErrorMessage = err.Error()
 	} else if wamid != "" {
 		msg.WhatsAppMessageID = wamid
@@ -874,7 +874,7 @@ func (a *App) getOrCreateSession(orgID, contactID uuid.UUID, accountName, phoneN
 	var session models.ChatbotSession
 	timeout := now.Add(-time.Duration(timeoutMins) * time.Minute)
 	result := a.DB.Where("organization_id = ? AND contact_id = ? AND whats_app_account = ? AND status = ? AND last_activity_at > ?",
-		orgID, contactID, accountName, "active", timeout).First(&session)
+		orgID, contactID, accountName, models.SessionStatusActive, timeout).First(&session)
 
 	if result.Error == nil {
 		// Update last activity
@@ -889,7 +889,7 @@ func (a *App) getOrCreateSession(orgID, contactID uuid.UUID, accountName, phoneN
 		ContactID:       contactID,
 		WhatsAppAccount: accountName,
 		PhoneNumber:     phoneNumber,
-		Status:          "active",
+		Status:          models.SessionStatusActive,
 		SessionData:     models.JSONB{},
 		StartedAt:       now,
 		LastActivityAt:  now,
@@ -901,7 +901,7 @@ func (a *App) getOrCreateSession(orgID, contactID uuid.UUID, accountName, phoneN
 }
 
 // logSessionMessage logs a message to the chatbot session
-func (a *App) logSessionMessage(sessionID uuid.UUID, direction, message, stepName string) {
+func (a *App) logSessionMessage(sessionID uuid.UUID, direction models.Direction, message, stepName string) {
 	msg := models.ChatbotSessionMessage{
 		BaseModel: models.BaseModel{ID: uuid.New()},
 		SessionID: sessionID,
@@ -956,7 +956,7 @@ func (a *App) startFlow(account *models.WhatsAppAccount, session *models.Chatbot
 		if err := a.sendAndSaveTextMessage(account, contact, flow.InitialMessage); err != nil {
 			a.Log.Error("Failed to send flow initial message", "error", err, "contact", contact.PhoneNumber)
 		}
-		a.logSessionMessage(session.ID, "outgoing", flow.InitialMessage, "flow_start")
+		a.logSessionMessage(session.ID, models.DirectionOutgoing, flow.InitialMessage, "flow_start")
 	}
 
 	// Send first step message (with skip check)
@@ -990,7 +990,7 @@ func (a *App) processFlowResponse(account *models.WhatsAppAccount, session *mode
 			if err := a.sendAndSaveTextMessage(account, contact, "Flow cancelled."); err != nil {
 				a.Log.Error("Failed to send flow cancel message", "error", err, "contact", contact.PhoneNumber)
 			}
-			a.logSessionMessage(session.ID, "outgoing", "Flow cancelled.", "flow_cancel")
+			a.logSessionMessage(session.ID, models.DirectionOutgoing, "Flow cancelled.", "flow_cancel")
 			a.exitFlow(session)
 			return
 		}
@@ -1028,7 +1028,7 @@ func (a *App) processFlowResponse(account *models.WhatsAppAccount, session *mode
 				if err := a.sendAndSaveTextMessage(account, contact, errorMsg); err != nil {
 					a.Log.Error("Failed to send validation error", "error", err, "contact", contact.PhoneNumber)
 				}
-				a.logSessionMessage(session.ID, "outgoing", errorMsg, currentStep.StepName+"_retry")
+				a.logSessionMessage(session.ID, models.DirectionOutgoing, errorMsg, currentStep.StepName+"_retry")
 				return
 			}
 			// Max retries exceeded, continue anyway or exit
@@ -1039,7 +1039,7 @@ func (a *App) processFlowResponse(account *models.WhatsAppAccount, session *mode
 	// Auto-validate button responses when step expects button/select input
 	// Only validate if InputType is button/select, or if buttons are configured and user clicked a button
 	shouldValidateButtons := len(currentStep.Buttons) > 0 &&
-		(currentStep.InputType == "button" || currentStep.InputType == "select" || buttonID != "")
+		(currentStep.InputType == models.InputTypeButton || currentStep.InputType == models.InputTypeSelect || buttonID != "")
 
 	if shouldValidateButtons {
 		isValidButton := false
@@ -1185,7 +1185,7 @@ func (a *App) completeFlow(account *models.WhatsAppAccount, session *models.Chat
 		if err := a.sendAndSaveTextMessage(account, contact, message); err != nil {
 			a.Log.Error("Failed to send flow completion message", "error", err, "contact", contact.PhoneNumber)
 		}
-		a.logSessionMessage(session.ID, "outgoing", message, "flow_complete")
+		a.logSessionMessage(session.ID, models.DirectionOutgoing, message, "flow_complete")
 	}
 
 	// Execute on-complete action
@@ -1198,7 +1198,7 @@ func (a *App) completeFlow(account *models.WhatsAppAccount, session *models.Chat
 	a.DB.Model(session).Updates(map[string]interface{}{
 		"current_flow_id": nil,
 		"current_step":    "",
-		"status":          "completed",
+		"status":          models.SessionStatusCompleted,
 		"completed_at":    now,
 	})
 
@@ -1313,7 +1313,7 @@ func (a *App) exitFlow(session *models.ChatbotSession) {
 // closeSession ends the chatbot session and clears contact tracking
 func (a *App) closeSession(session *models.ChatbotSession) {
 	a.DB.Model(session).Updates(map[string]interface{}{
-		"status":       "completed",
+		"status":       models.SessionStatusCompleted,
 		"completed_at": time.Now(),
 	})
 
@@ -1405,7 +1405,7 @@ func (a *App) sendStepWithSkipCheck(account *models.WhatsAppAccount, session *mo
 	a.sendStepMessage(account, session, contact, step)
 
 	// If input type is "none", automatically advance to next step without waiting for user input
-	if step.InputType == "none" {
+	if step.InputType == models.InputTypeNone {
 
 		// Find next step
 		nextStepName := step.NextStep
@@ -1454,7 +1454,7 @@ func (a *App) sendStepMessage(account *models.WhatsAppAccount, session *models.C
 	var message string
 
 	switch step.MessageType {
-	case "api_fetch":
+	case models.FlowStepTypeAPIFetch:
 		// Fetch response from external API (may include message + buttons)
 		// Pass the step message as template - it will be processed with API response data
 		apiResp, err := a.fetchApiResponse(step.ApiConfig, session.SessionData, step.Message)
@@ -1493,9 +1493,9 @@ func (a *App) sendStepMessage(account *models.WhatsAppAccount, session *models.C
 				}
 			}
 		}
-		a.logSessionMessage(session.ID, "outgoing", message, step.StepName)
+		a.logSessionMessage(session.ID, models.DirectionOutgoing, message, step.StepName)
 
-	case "buttons":
+	case models.FlowStepTypeButtons:
 		// Send interactive buttons message
 		message = processTemplate(step.Message, session.SessionData)
 		if len(step.Buttons) > 0 {
@@ -1551,16 +1551,16 @@ func (a *App) sendStepMessage(account *models.WhatsAppAccount, session *models.C
 				a.Log.Error("Failed to send step message", "error", err, "contact", contact.PhoneNumber)
 			}
 		}
-		a.logSessionMessage(session.ID, "outgoing", message, step.StepName)
+		a.logSessionMessage(session.ID, models.DirectionOutgoing, message, step.StepName)
 
-	case "transfer":
+	case models.FlowStepTypeTransfer:
 		// Transfer to team/agent queue
 		message = processTemplate(step.Message, session.SessionData)
 		if message != "" {
 			if err := a.sendAndSaveTextMessage(account, contact, message); err != nil {
 				a.Log.Error("Failed to send transfer message", "error", err, "contact", contact.PhoneNumber)
 			}
-			a.logSessionMessage(session.ID, "outgoing", message, step.StepName)
+			a.logSessionMessage(session.ID, models.DirectionOutgoing, message, step.StepName)
 		}
 
 		// Get transfer configuration
@@ -1579,10 +1579,10 @@ func (a *App) sendStepMessage(account *models.WhatsAppAccount, session *models.C
 
 		// Create the transfer
 		if teamID != nil {
-			a.createTransferToTeam(account, contact, *teamID, notes, "flow")
+			a.createTransferToTeam(account, contact, *teamID, notes, models.TransferSourceFlow)
 		} else {
 			// General queue transfer
-			a.createTransferToQueue(account, contact, "flow")
+			a.createTransferToQueue(account, contact, models.TransferSourceFlow)
 		}
 
 		// End the flow session (transfer takes over)
@@ -1595,7 +1595,7 @@ func (a *App) sendStepMessage(account *models.WhatsAppAccount, session *models.C
 		if err := a.sendAndSaveTextMessage(account, contact, message); err != nil {
 			a.Log.Error("Failed to send step message", "error", err, "contact", contact.PhoneNumber)
 		}
-		a.logSessionMessage(session.ID, "outgoing", message, step.StepName)
+		a.logSessionMessage(session.ID, models.DirectionOutgoing, message, step.StepName)
 	}
 }
 
@@ -1749,15 +1749,15 @@ func (a *App) generateAIResponse(settings *models.ChatbotSettings, session *mode
 	// Build context from AIContext entries
 	contextData := a.buildAIContext(settings.OrganizationID, session, userMessage)
 
-	switch settings.AIProvider {
-	case "openai":
+	switch settings.AI.Provider {
+	case models.AIProviderOpenAI:
 		return a.generateOpenAIResponse(settings, session, userMessage, contextData)
-	case "anthropic":
+	case models.AIProviderAnthropic:
 		return a.generateAnthropicResponse(settings, session, userMessage, contextData)
-	case "google":
+	case models.AIProviderGoogle:
 		return a.generateGoogleResponse(settings, session, userMessage, contextData)
 	default:
-		return "", fmt.Errorf("unsupported AI provider: %s", settings.AIProvider)
+		return "", fmt.Errorf("unsupported AI provider: %s", settings.AI.Provider)
 	}
 }
 
@@ -1781,10 +1781,10 @@ func (a *App) buildAIContext(orgID uuid.UUID, session *models.ChatbotSession, us
 		var content string
 
 		switch ctx.ContextType {
-		case "static":
+		case models.ContextTypeStatic:
 			content = ctx.StaticContent
 
-		case "api":
+		case models.ContextTypeAPI:
 			// Start with static content/prompt if provided
 			content = ctx.StaticContent
 
@@ -1911,7 +1911,7 @@ func (a *App) generateOpenAIResponse(settings *models.ChatbotSettings, session *
 	messages := []map[string]string{}
 
 	// Build system prompt with context
-	systemPrompt := settings.AISystemPrompt
+	systemPrompt := settings.AI.SystemPrompt
 	if contextData != "" {
 		if systemPrompt != "" {
 			systemPrompt = systemPrompt + "\n\n" + contextData
@@ -1929,11 +1929,11 @@ func (a *App) generateOpenAIResponse(settings *models.ChatbotSettings, session *
 	}
 
 	// Add conversation history if enabled
-	if settings.AIIncludeHistory && session != nil {
-		history := a.getSessionHistory(session.ID, settings.AIHistoryLimit)
+	if settings.AI.IncludeHistory && session != nil {
+		history := a.getSessionHistory(session.ID, settings.AI.HistoryLimit)
 		for _, msg := range history {
 			role := "user"
-			if msg.Direction == "outgoing" {
+			if msg.Direction == models.DirectionOutgoing {
 				role = "assistant"
 			}
 			messages = append(messages, map[string]string{
@@ -1950,13 +1950,13 @@ func (a *App) generateOpenAIResponse(settings *models.ChatbotSettings, session *
 	})
 
 	payload := map[string]interface{}{
-		"model":      settings.AIModel,
+		"model":      settings.AI.Model,
 		"messages":   messages,
-		"max_tokens": settings.AIMaxTokens,
+		"max_tokens": settings.AI.MaxTokens,
 	}
 
-	if settings.AITemperature > 0 {
-		payload["temperature"] = settings.AITemperature
+	if settings.AI.Temperature > 0 {
+		payload["temperature"] = settings.AI.Temperature
 	}
 
 	jsonPayload, err := json.Marshal(payload)
@@ -1970,7 +1970,7 @@ func (a *App) generateOpenAIResponse(settings *models.ChatbotSettings, session *
 	}
 
 	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("Authorization", "Bearer "+settings.AIAPIKey)
+	req.Header.Set("Authorization", "Bearer "+settings.AI.APIKey)
 
 	client := &http.Client{Timeout: 60 * time.Second}
 	resp, err := client.Do(req)
@@ -2017,11 +2017,11 @@ func (a *App) generateAnthropicResponse(settings *models.ChatbotSettings, sessio
 	messages := []map[string]string{}
 
 	// Add conversation history if enabled
-	if settings.AIIncludeHistory && session != nil {
-		history := a.getSessionHistory(session.ID, settings.AIHistoryLimit)
+	if settings.AI.IncludeHistory && session != nil {
+		history := a.getSessionHistory(session.ID, settings.AI.HistoryLimit)
 		for _, msg := range history {
 			role := "user"
-			if msg.Direction == "outgoing" {
+			if msg.Direction == models.DirectionOutgoing {
 				role = "assistant"
 			}
 			messages = append(messages, map[string]string{
@@ -2038,13 +2038,13 @@ func (a *App) generateAnthropicResponse(settings *models.ChatbotSettings, sessio
 	})
 
 	payload := map[string]interface{}{
-		"model":      settings.AIModel,
+		"model":      settings.AI.Model,
 		"messages":   messages,
-		"max_tokens": settings.AIMaxTokens,
+		"max_tokens": settings.AI.MaxTokens,
 	}
 
 	// Build system prompt with context
-	systemPrompt := settings.AISystemPrompt
+	systemPrompt := settings.AI.SystemPrompt
 	if contextData != "" {
 		if systemPrompt != "" {
 			systemPrompt = systemPrompt + "\n\n" + contextData
@@ -2058,8 +2058,8 @@ func (a *App) generateAnthropicResponse(settings *models.ChatbotSettings, sessio
 		payload["system"] = systemPrompt
 	}
 
-	if settings.AITemperature > 0 {
-		payload["temperature"] = settings.AITemperature
+	if settings.AI.Temperature > 0 {
+		payload["temperature"] = settings.AI.Temperature
 	}
 
 	jsonPayload, err := json.Marshal(payload)
@@ -2073,7 +2073,7 @@ func (a *App) generateAnthropicResponse(settings *models.ChatbotSettings, sessio
 	}
 
 	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("x-api-key", settings.AIAPIKey)
+	req.Header.Set("x-api-key", settings.AI.APIKey)
 	req.Header.Set("anthropic-version", "2023-06-01")
 
 	client := &http.Client{Timeout: 60 * time.Second}
@@ -2117,17 +2117,17 @@ func (a *App) generateAnthropicResponse(settings *models.ChatbotSettings, sessio
 // generateGoogleResponse generates a response using Google Gemini API
 func (a *App) generateGoogleResponse(settings *models.ChatbotSettings, session *models.ChatbotSession, userMessage string, contextData string) (string, error) {
 	url := fmt.Sprintf("https://generativelanguage.googleapis.com/v1beta/models/%s:generateContent?key=%s",
-		settings.AIModel, settings.AIAPIKey)
+		settings.AI.Model, settings.AI.APIKey)
 
 	// Build contents array
 	contents := []map[string]interface{}{}
 
 	// Add conversation history if enabled
-	if settings.AIIncludeHistory && session != nil {
-		history := a.getSessionHistory(session.ID, settings.AIHistoryLimit)
+	if settings.AI.IncludeHistory && session != nil {
+		history := a.getSessionHistory(session.ID, settings.AI.HistoryLimit)
 		for _, msg := range history {
 			role := "user"
-			if msg.Direction == "outgoing" {
+			if msg.Direction == models.DirectionOutgoing {
 				role = "model"
 			}
 			contents = append(contents, map[string]interface{}{
@@ -2150,12 +2150,12 @@ func (a *App) generateGoogleResponse(settings *models.ChatbotSettings, session *
 	payload := map[string]interface{}{
 		"contents": contents,
 		"generationConfig": map[string]interface{}{
-			"maxOutputTokens": settings.AIMaxTokens,
+			"maxOutputTokens": settings.AI.MaxTokens,
 		},
 	}
 
 	// Build system prompt with context
-	systemPrompt := settings.AISystemPrompt
+	systemPrompt := settings.AI.SystemPrompt
 	if contextData != "" {
 		if systemPrompt != "" {
 			systemPrompt = systemPrompt + "\n\n" + contextData
@@ -2173,8 +2173,8 @@ func (a *App) generateGoogleResponse(settings *models.ChatbotSettings, session *
 		}
 	}
 
-	if settings.AITemperature > 0 {
-		payload["generationConfig"].(map[string]interface{})["temperature"] = settings.AITemperature
+	if settings.AI.Temperature > 0 {
+		payload["generationConfig"].(map[string]interface{})["temperature"] = settings.AI.Temperature
 	}
 
 	jsonPayload, err := json.Marshal(payload)
@@ -2380,10 +2380,10 @@ func (a *App) saveIncomingMessage(account *models.WhatsAppAccount, contact *mode
 		WhatsAppAccount:   account.Name,
 		ContactID:         contact.ID,
 		WhatsAppMessageID: whatsappMsgID,
-		Direction:         "incoming",
-		MessageType:       msgType,
+		Direction:         models.DirectionIncoming,
+		MessageType:       models.MessageType(msgType),
 		Content:           content,
-		Status:            "received",
+		Status:            models.MessageStatusReceived,
 	}
 
 	// Handle reply context - look up the original message by WhatsApp message ID
@@ -2471,15 +2471,15 @@ func (a *App) saveIncomingMessage(account *models.WhatsAppAccount, contact *mode
 	}
 
 	// Dispatch webhook for incoming message
-	a.DispatchWebhook(account.OrganizationID, EventMessageIncoming, MessageEventData{
+	a.DispatchWebhook(account.OrganizationID, models.WebhookEventMessageIncoming, MessageEventData{
 		MessageID:       message.ID.String(),
 		ContactID:       contact.ID.String(),
 		ContactPhone:    contact.PhoneNumber,
 		ContactName:     contact.ProfileName,
-		MessageType:     msgType,
+		MessageType:     models.MessageType(msgType),
 		Content:         content,
 		WhatsAppAccount: account.Name,
-		Direction:       "incoming",
+		Direction:       models.DirectionIncoming,
 	})
 }
 

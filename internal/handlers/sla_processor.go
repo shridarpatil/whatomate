@@ -73,22 +73,22 @@ func (p *SLAProcessor) processOrganizationSLA(settings models.ChatbotSettings, n
 	orgID := settings.OrganizationID
 
 	// 1. Auto-close expired transfers
-	if settings.SLAAutoCloseHours > 0 {
+	if settings.SLA.AutoCloseHours > 0 {
 		p.autoCloseExpiredTransfers(orgID, settings, now)
 	}
 
 	// 2. Escalate transfers past escalation deadline
-	if settings.SLAEscalationMinutes > 0 {
+	if settings.SLA.EscalationMinutes > 0 {
 		p.escalateTransfers(orgID, settings, now)
 	}
 
 	// 3. Mark SLA breached for transfers past response deadline
-	if settings.SLAResponseMinutes > 0 {
+	if settings.SLA.ResponseMinutes > 0 {
 		p.markSLABreached(orgID, settings, now)
 	}
 
 	// 4. Handle client inactivity (reminders and auto-close)
-	if settings.ClientReminderEnabled {
+	if settings.ClientInactivity.ReminderEnabled {
 		p.processClientInactivity(orgID, settings, now)
 	}
 }
@@ -98,7 +98,7 @@ func (p *SLAProcessor) autoCloseExpiredTransfers(orgID uuid.UUID, settings model
 	var transfers []models.AgentTransfer
 	if err := p.app.DB.Where(
 		"organization_id = ? AND status = ? AND expires_at IS NOT NULL AND expires_at < ?",
-		orgID, "active", now,
+		orgID, models.TransferStatusActive, now,
 	).Find(&transfers).Error; err != nil {
 		p.app.Log.Error("Failed to find expired transfers", "error", err, "org_id", orgID)
 		return
@@ -106,13 +106,13 @@ func (p *SLAProcessor) autoCloseExpiredTransfers(orgID uuid.UUID, settings model
 
 	for _, transfer := range transfers {
 		// Send auto-close message to customer if configured
-		if settings.SLAAutoCloseMessage != "" {
-			p.sendSLAAutoCloseToCustomer(transfer, settings.SLAAutoCloseMessage)
+		if settings.SLA.AutoCloseMessage != "" {
+			p.sendSLAAutoCloseToCustomer(transfer, settings.SLA.AutoCloseMessage)
 		}
 
 		// Update transfer status
 		if err := p.app.DB.Model(&transfer).Updates(map[string]interface{}{
-			"status":     "expired",
+			"status":     models.TransferStatusExpired,
 			"resumed_at": now,
 			"notes":      transfer.Notes + "\n[Auto-closed: No agent response within SLA]",
 		}).Error; err != nil {
@@ -123,11 +123,11 @@ func (p *SLAProcessor) autoCloseExpiredTransfers(orgID uuid.UUID, settings model
 		p.app.Log.Info("Transfer auto-closed due to expiry",
 			"transfer_id", transfer.ID,
 			"contact_id", transfer.ContactID,
-			"expires_at", transfer.ExpiresAt,
+			"expires_at", transfer.SLA.ExpiresAt,
 		)
 
 		// Broadcast update
-		p.broadcastTransferUpdate(transfer, "expired")
+		p.broadcastTransferUpdate(transfer, string(models.TransferStatusExpired))
 	}
 
 	if len(transfers) > 0 {
@@ -140,14 +140,14 @@ func (p *SLAProcessor) escalateTransfers(orgID uuid.UUID, settings models.Chatbo
 	var transfers []models.AgentTransfer
 	if err := p.app.DB.Where(
 		"organization_id = ? AND status = ? AND sla_escalation_at IS NOT NULL AND sla_escalation_at < ? AND escalation_level < 2",
-		orgID, "active", now,
+		orgID, models.TransferStatusActive, now,
 	).Find(&transfers).Error; err != nil {
 		p.app.Log.Error("Failed to find transfers for escalation", "error", err, "org_id", orgID)
 		return
 	}
 
 	for _, transfer := range transfers {
-		newLevel := transfer.EscalationLevel + 1
+		newLevel := transfer.SLA.EscalationLevel + 1
 
 		// Update transfer
 		updates := map[string]interface{}{
@@ -156,7 +156,7 @@ func (p *SLAProcessor) escalateTransfers(orgID uuid.UUID, settings models.Chatbo
 		}
 
 		// If not yet breached and past response deadline, mark as breached
-		if !transfer.SLABreached && transfer.SLAResponseDeadline != nil && now.After(*transfer.SLAResponseDeadline) {
+		if !transfer.SLA.Breached && transfer.SLA.ResponseDeadline != nil && now.After(*transfer.SLA.ResponseDeadline) {
 			updates["sla_breached"] = true
 			updates["sla_breached_at"] = now
 		}
@@ -170,7 +170,7 @@ func (p *SLAProcessor) escalateTransfers(orgID uuid.UUID, settings models.Chatbo
 			"transfer_id", transfer.ID,
 			"contact_id", transfer.ContactID,
 			"new_level", newLevel,
-			"escalation_at", transfer.SLAEscalationAt,
+			"escalation_at", transfer.SLA.EscalationAt,
 		)
 
 		// Send notification to escalation contacts
@@ -180,8 +180,8 @@ func (p *SLAProcessor) escalateTransfers(orgID uuid.UUID, settings models.Chatbo
 		p.broadcastTransferUpdate(transfer, "escalated")
 
 		// Send warning message to customer if configured
-		if newLevel == 1 && settings.SLAWarningMessage != "" {
-			p.sendSLAWarningToCustomer(transfer, settings.SLAWarningMessage)
+		if newLevel == 1 && settings.SLA.WarningMessage != "" {
+			p.sendSLAWarningToCustomer(transfer, settings.SLA.WarningMessage)
 		}
 	}
 
@@ -194,7 +194,7 @@ func (p *SLAProcessor) escalateTransfers(orgID uuid.UUID, settings models.Chatbo
 func (p *SLAProcessor) markSLABreached(orgID uuid.UUID, settings models.ChatbotSettings, now time.Time) {
 	result := p.app.DB.Model(&models.AgentTransfer{}).Where(
 		"organization_id = ? AND status = ? AND sla_breached = ? AND sla_response_deadline IS NOT NULL AND sla_response_deadline < ? AND agent_id IS NULL",
-		orgID, "active", false, now,
+		orgID, models.TransferStatusActive, false, now,
 	).Updates(map[string]interface{}{
 		"sla_breached":    true,
 		"sla_breached_at": now,
@@ -212,7 +212,7 @@ func (p *SLAProcessor) markSLABreached(orgID uuid.UUID, settings models.ChatbotS
 
 // notifyEscalation sends notifications to escalation contacts via WebSocket broadcast
 func (p *SLAProcessor) notifyEscalation(transfer models.AgentTransfer, settings models.ChatbotSettings, level int) {
-	if len(settings.SLAEscalationNotifyIDs) == 0 {
+	if len(settings.SLA.EscalationNotifyIDs) == 0 {
 		return
 	}
 
@@ -242,14 +242,14 @@ func (p *SLAProcessor) notifyEscalation(transfer models.AgentTransfer, settings 
 			"level_name":            levelName,
 			"waiting_since":         transfer.TransferredAt.Format(time.RFC3339),
 			"team_id":               transfer.TeamID,
-			"escalation_notify_ids": settings.SLAEscalationNotifyIDs,
+			"escalation_notify_ids": settings.SLA.EscalationNotifyIDs,
 		},
 	})
 
 	p.app.Log.Info("Escalation notification sent",
 		"transfer_id", transfer.ID,
 		"level", level,
-		"notify_count", len(settings.SLAEscalationNotifyIDs),
+		"notify_count", len(settings.SLA.EscalationNotifyIDs),
 	)
 }
 
@@ -325,72 +325,72 @@ func (p *SLAProcessor) broadcastTransferUpdate(transfer models.AgentTransfer, ev
 			"contact_name":     contact.ProfileName,
 			"phone_number":     contact.PhoneNumber,
 			"status":           transfer.Status,
-			"escalation_level": transfer.EscalationLevel,
-			"sla_breached":     transfer.SLABreached,
+			"escalation_level": transfer.SLA.EscalationLevel,
+			"sla_breached":     transfer.SLA.Breached,
 		},
 	})
 }
 
 // SetSLADeadlines sets SLA deadlines on a new transfer based on settings
 func (a *App) SetSLADeadlines(transfer *models.AgentTransfer, settings *models.ChatbotSettings) {
-	if !settings.SLAEnabled {
+	if !settings.SLA.Enabled {
 		return
 	}
 
 	now := time.Now()
 
 	// Response deadline (time to pick up)
-	if settings.SLAResponseMinutes > 0 {
-		deadline := now.Add(time.Duration(settings.SLAResponseMinutes) * time.Minute)
-		transfer.SLAResponseDeadline = &deadline
+	if settings.SLA.ResponseMinutes > 0 {
+		deadline := now.Add(time.Duration(settings.SLA.ResponseMinutes) * time.Minute)
+		transfer.SLA.ResponseDeadline = &deadline
 	}
 
 	// Resolution deadline
-	if settings.SLAResolutionMinutes > 0 {
-		deadline := now.Add(time.Duration(settings.SLAResolutionMinutes) * time.Minute)
-		transfer.SLAResolutionDeadline = &deadline
+	if settings.SLA.ResolutionMinutes > 0 {
+		deadline := now.Add(time.Duration(settings.SLA.ResolutionMinutes) * time.Minute)
+		transfer.SLA.ResolutionDeadline = &deadline
 	}
 
 	// Escalation deadline
-	if settings.SLAEscalationMinutes > 0 {
-		deadline := now.Add(time.Duration(settings.SLAEscalationMinutes) * time.Minute)
-		transfer.SLAEscalationAt = &deadline
+	if settings.SLA.EscalationMinutes > 0 {
+		deadline := now.Add(time.Duration(settings.SLA.EscalationMinutes) * time.Minute)
+		transfer.SLA.EscalationAt = &deadline
 	}
 
 	// Expiry deadline (auto-close)
-	if settings.SLAAutoCloseHours > 0 {
-		deadline := now.Add(time.Duration(settings.SLAAutoCloseHours) * time.Hour)
-		transfer.ExpiresAt = &deadline
+	if settings.SLA.AutoCloseHours > 0 {
+		deadline := now.Add(time.Duration(settings.SLA.AutoCloseHours) * time.Hour)
+		transfer.SLA.ExpiresAt = &deadline
 	}
 
 	a.Log.Debug("SLA deadlines set",
 		"transfer_id", transfer.ID,
-		"response_deadline", transfer.SLAResponseDeadline,
-		"escalation_at", transfer.SLAEscalationAt,
-		"expires_at", transfer.ExpiresAt,
+		"response_deadline", transfer.SLA.ResponseDeadline,
+		"escalation_at", transfer.SLA.EscalationAt,
+		"expires_at", transfer.SLA.ExpiresAt,
 	)
 }
 
 // UpdateSLAOnPickup updates SLA tracking when a transfer is picked up
 func (a *App) UpdateSLAOnPickup(transfer *models.AgentTransfer) {
 	now := time.Now()
-	transfer.PickedUpAt = &now
+	transfer.SLA.PickedUpAt = &now
 
 	// Check if SLA was breached (picked up after response deadline)
-	if transfer.SLAResponseDeadline != nil && now.After(*transfer.SLAResponseDeadline) {
-		transfer.SLABreached = true
-		transfer.SLABreachedAt = &now
+	if transfer.SLA.ResponseDeadline != nil && now.After(*transfer.SLA.ResponseDeadline) {
+		transfer.SLA.Breached = true
+		transfer.SLA.BreachedAt = &now
 	}
 }
 
 // UpdateSLAOnFirstResponse updates SLA tracking when agent sends first response
 func (a *App) UpdateSLAOnFirstResponse(transfer *models.AgentTransfer) {
-	if transfer.FirstResponseAt != nil {
+	if transfer.SLA.FirstResponseAt != nil {
 		return // Already responded
 	}
 
 	now := time.Now()
-	transfer.FirstResponseAt = &now
+	transfer.SLA.FirstResponseAt = &now
 }
 
 // processClientInactivity handles client inactivity reminders and auto-close for chatbot conversations only
@@ -422,8 +422,8 @@ func (p *SLAProcessor) processClientInactivity(orgID uuid.UUID, settings models.
 		timeSinceChatbotMsg := now.Sub(*contact.ChatbotLastMessageAt)
 
 		// Check if we should auto-close (takes precedence over reminder)
-		if settings.ClientAutoCloseMinutes > 0 {
-			autoCloseThreshold := time.Duration(settings.ClientAutoCloseMinutes) * time.Minute
+		if settings.ClientInactivity.AutoCloseMinutes > 0 {
+			autoCloseThreshold := time.Duration(settings.ClientInactivity.AutoCloseMinutes) * time.Minute
 			if timeSinceChatbotMsg >= autoCloseThreshold {
 				p.autoCloseChatbotSession(contact, settings, now)
 				continue
@@ -431,8 +431,8 @@ func (p *SLAProcessor) processClientInactivity(orgID uuid.UUID, settings models.
 		}
 
 		// Check if we should send reminder
-		if settings.ClientReminderMinutes > 0 && !contact.ChatbotReminderSent {
-			reminderThreshold := time.Duration(settings.ClientReminderMinutes) * time.Minute
+		if settings.ClientInactivity.ReminderMinutes > 0 && !contact.ChatbotReminderSent {
+			reminderThreshold := time.Duration(settings.ClientInactivity.ReminderMinutes) * time.Minute
 			if timeSinceChatbotMsg >= reminderThreshold {
 				p.sendChatbotReminder(contact, settings, now)
 			}
@@ -442,7 +442,7 @@ func (p *SLAProcessor) processClientInactivity(orgID uuid.UUID, settings models.
 
 // sendChatbotReminder sends a reminder message to an inactive client during chatbot conversation
 func (p *SLAProcessor) sendChatbotReminder(contact models.Contact, settings models.ChatbotSettings, now time.Time) {
-	if settings.ClientReminderMessage == "" {
+	if settings.ClientInactivity.ReminderMessage == "" {
 		return
 	}
 
@@ -464,20 +464,20 @@ func (p *SLAProcessor) sendChatbotReminder(contact models.Contact, settings mode
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 
-	wamid, err := p.app.WhatsApp.SendTextMessage(ctx, waAccount, contact.PhoneNumber, settings.ClientReminderMessage)
+	wamid, err := p.app.WhatsApp.SendTextMessage(ctx, waAccount, contact.PhoneNumber, settings.ClientInactivity.ReminderMessage)
 
 	// Save message to database
 	msg := models.Message{
 		OrganizationID:  account.OrganizationID,
 		WhatsAppAccount: account.Name,
 		ContactID:       contact.ID,
-		Direction:       "outgoing",
-		MessageType:     "text",
-		Content:         settings.ClientReminderMessage,
-		Status:          "sent",
+		Direction:       models.DirectionOutgoing,
+		MessageType:     models.MessageTypeText,
+		Content:         settings.ClientInactivity.ReminderMessage,
+		Status:          models.MessageStatusSent,
 	}
 	if err != nil {
-		msg.Status = "failed"
+		msg.Status = models.MessageStatusFailed
 		msg.ErrorMessage = err.Error()
 		p.app.Log.Error("Failed to send chatbot reminder message", "error", err, "phone", contact.PhoneNumber)
 	} else if wamid != "" {
@@ -537,7 +537,7 @@ func (p *SLAProcessor) autoCloseChatbotSession(contact models.Contact, settings 
 	}
 
 	// Send auto-close message if configured
-	if settings.ClientAutoCloseMessage != "" {
+	if settings.ClientInactivity.AutoCloseMessage != "" {
 		var account models.WhatsAppAccount
 		if err := p.app.DB.Where("name = ?", contact.WhatsAppAccount).First(&account).Error; err == nil {
 			waAccount := &whatsapp.Account{
@@ -548,7 +548,7 @@ func (p *SLAProcessor) autoCloseChatbotSession(contact models.Contact, settings 
 			}
 
 			ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
-			wamid, err := p.app.WhatsApp.SendTextMessage(ctx, waAccount, contact.PhoneNumber, settings.ClientAutoCloseMessage)
+			wamid, err := p.app.WhatsApp.SendTextMessage(ctx, waAccount, contact.PhoneNumber, settings.ClientInactivity.AutoCloseMessage)
 			cancel()
 
 			// Save message to database
@@ -556,13 +556,13 @@ func (p *SLAProcessor) autoCloseChatbotSession(contact models.Contact, settings 
 				OrganizationID:  account.OrganizationID,
 				WhatsAppAccount: account.Name,
 				ContactID:       contact.ID,
-				Direction:       "outgoing",
-				MessageType:     "text",
-				Content:         settings.ClientAutoCloseMessage,
-				Status:          "sent",
+				Direction:       models.DirectionOutgoing,
+				MessageType:     models.MessageTypeText,
+				Content:         settings.ClientInactivity.AutoCloseMessage,
+				Status:          models.MessageStatusSent,
 			}
 			if err != nil {
-				msg.Status = "failed"
+				msg.Status = models.MessageStatusFailed
 				msg.ErrorMessage = err.Error()
 				p.app.Log.Error("Failed to send chatbot auto-close message", "error", err, "phone", contact.PhoneNumber)
 			} else if wamid != "" {

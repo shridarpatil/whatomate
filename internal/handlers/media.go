@@ -139,7 +139,7 @@ func (a *App) ServeMedia(r *fastglue.Request) error {
 		return r.SendErrorEnvelope(fasthttp.StatusUnauthorized, "Unauthorized", nil, "")
 	}
 	userID, _ := r.RequestCtx.UserValue("user_id").(uuid.UUID)
-	userRole, _ := r.RequestCtx.UserValue("role").(string)
+	userRole, _ := r.RequestCtx.UserValue("role").(models.Role)
 
 	// Get the message ID from URL parameter
 	messageIDStr := r.RequestCtx.UserValue("message_id").(string)
@@ -155,7 +155,7 @@ func (a *App) ServeMedia(r *fastglue.Request) error {
 	}
 
 	// For agents, verify they have access to this contact
-	if userRole == "agent" {
+	if userRole == models.RoleAgent {
 		var contact models.Contact
 		if err := a.DB.Where("id = ? AND assigned_user_id = ?", message.ContactID, userID).First(&contact).Error; err != nil {
 			return r.SendErrorEnvelope(fasthttp.StatusForbidden, "Access denied", nil, "")

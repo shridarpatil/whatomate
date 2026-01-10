@@ -36,8 +36,8 @@ func (a *App) AssignContact(r *fastglue.Request) error {
 	}
 
 	// Only admin and manager can assign contacts
-	role, _ := r.RequestCtx.UserValue("role").(string)
-	if role == "agent" {
+	role, _ := r.RequestCtx.UserValue("role").(models.Role)
+	if role == models.RoleAgent {
 		return r.SendErrorEnvelope(fasthttp.StatusForbidden, "Only admin and manager can assign contacts", nil, "")
 	}
 

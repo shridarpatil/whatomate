@@ -60,7 +60,7 @@ func (a *App) GetAgentAnalytics(r *fastglue.Request) error {
 	}
 
 	userID, _ := r.RequestCtx.UserValue("user_id").(uuid.UUID)
-	role, _ := r.RequestCtx.UserValue("role").(string)
+	role, _ := r.RequestCtx.UserValue("role").(models.Role)
 
 	// Parse date range
 	fromStr := string(r.RequestCtx.QueryArgs().Peek("from"))
@@ -99,7 +99,7 @@ func (a *App) GetAgentAnalytics(r *fastglue.Request) error {
 
 	// Check if filtering by specific agent (admin/manager only)
 	var filterAgentID *uuid.UUID
-	if role != "agent" && agentIDStr != "" {
+	if role != models.RoleAgent && agentIDStr != "" {
 		parsedID, err := uuid.Parse(agentIDStr)
 		if err == nil {
 			filterAgentID = &parsedID
@@ -113,7 +113,7 @@ func (a *App) GetAgentAnalytics(r *fastglue.Request) error {
 		response.TrendData = a.calculateTrendData(orgID, periodStart, periodEnd, groupBy, filterAgentID)
 		// Calculate summary for this specific agent
 		a.calculateAgentSummaryStats(orgID, *filterAgentID, periodStart, periodEnd, &response.Summary)
-	} else if role == "agent" {
+	} else if role == models.RoleAgent {
 		// Agents only see their own stats
 		myStats := a.calculateAgentStats(orgID, userID, periodStart, periodEnd)
 		response.MyStats = &myStats
@@ -139,8 +139,8 @@ func (a *App) GetAgentDetails(r *fastglue.Request) error {
 		return r.SendErrorEnvelope(fasthttp.StatusUnauthorized, "Unauthorized", nil, "")
 	}
 
-	role, _ := r.RequestCtx.UserValue("role").(string)
-	if role == "agent" {
+	role, _ := r.RequestCtx.UserValue("role").(models.Role)
+	if role == models.RoleAgent {
 		return r.SendErrorEnvelope(fasthttp.StatusForbidden, "Access denied", nil, "")
 	}
 
@@ -192,8 +192,8 @@ func (a *App) GetAgentComparison(r *fastglue.Request) error {
 		return r.SendErrorEnvelope(fasthttp.StatusUnauthorized, "Unauthorized", nil, "")
 	}
 
-	role, _ := r.RequestCtx.UserValue("role").(string)
-	if role == "agent" {
+	role, _ := r.RequestCtx.UserValue("role").(models.Role)
+	if role == models.RoleAgent {
 		return r.SendErrorEnvelope(fasthttp.StatusForbidden, "Access denied", nil, "")
 	}
 
@@ -226,12 +226,12 @@ func (a *App) calculateSummaryStats(orgID uuid.UUID, start, end time.Time, summa
 	// Total transfers handled (resumed)
 	a.DB.Model(&models.AgentTransfer{}).
 		Where("organization_id = ? AND status = ? AND transferred_at >= ? AND transferred_at <= ?",
-			orgID, "resumed", start, end).
+			orgID, models.TransferStatusResumed, start, end).
 		Count(&summary.TotalTransfersHandled)
 
 	// Active transfers
 	a.DB.Model(&models.AgentTransfer{}).
-		Where("organization_id = ? AND status = ?", orgID, "active").
+		Where("organization_id = ? AND status = ?", orgID, models.TransferStatusActive).
 		Count(&summary.ActiveTransfers)
 
 	// Average queue time (time from transfer to assignment for assigned transfers)
@@ -251,7 +251,7 @@ func (a *App) calculateSummaryStats(orgID uuid.UUID, start, end time.Time, summa
 	a.DB.Model(&models.AgentTransfer{}).
 		Select("AVG(EXTRACT(EPOCH FROM (resumed_at - transferred_at))/60) as avg").
 		Where("organization_id = ? AND status = ? AND resumed_at IS NOT NULL AND transferred_at >= ? AND transferred_at <= ?",
-			orgID, "resumed", start, end).
+			orgID, models.TransferStatusResumed, start, end).
 		Scan(&resolutionTimeResult)
 	summary.AvgResolutionMins = resolutionTimeResult.Avg
 
@@ -276,12 +276,12 @@ func (a *App) calculateAgentSummaryStats(orgID, agentID uuid.UUID, start, end ti
 	// Total transfers handled by this agent (resumed)
 	a.DB.Model(&models.AgentTransfer{}).
 		Where("organization_id = ? AND agent_id = ? AND status = ? AND transferred_at >= ? AND transferred_at <= ?",
-			orgID, agentID, "resumed", start, end).
+			orgID, agentID, models.TransferStatusResumed, start, end).
 		Count(&summary.TotalTransfersHandled)
 
 	// Active transfers for this agent
 	a.DB.Model(&models.AgentTransfer{}).
-		Where("organization_id = ? AND agent_id = ? AND status = ?", orgID, agentID, "active").
+		Where("organization_id = ? AND agent_id = ? AND status = ?", orgID, agentID, models.TransferStatusActive).
 		Count(&summary.ActiveTransfers)
 
 	// Average resolution time for this agent
@@ -292,7 +292,7 @@ func (a *App) calculateAgentSummaryStats(orgID, agentID uuid.UUID, start, end ti
 	a.DB.Model(&models.AgentTransfer{}).
 		Select("AVG(EXTRACT(EPOCH FROM (resumed_at - transferred_at))/60) as avg").
 		Where("organization_id = ? AND agent_id = ? AND status = ? AND resumed_at IS NOT NULL AND transferred_at >= ? AND transferred_at <= ?",
-			orgID, agentID, "resumed", start, end).
+			orgID, agentID, models.TransferStatusResumed, start, end).
 		Scan(&resolutionTimeResult)
 	summary.AvgResolutionMins = resolutionTimeResult.Avg
 
@@ -331,18 +331,18 @@ func (a *App) calculateAgentStats(orgID, agentID uuid.UUID, start, end time.Time
 	// Transfers handled (resumed)
 	a.DB.Model(&models.AgentTransfer{}).
 		Where("organization_id = ? AND agent_id = ? AND status = ? AND transferred_at >= ? AND transferred_at <= ?",
-			orgID, agentID, "resumed", start, end).
+			orgID, agentID, models.TransferStatusResumed, start, end).
 		Count(&stats.TransfersHandled)
 
 	// Active transfers
 	a.DB.Model(&models.AgentTransfer{}).
-		Where("organization_id = ? AND agent_id = ? AND status = ?", orgID, agentID, "active").
+		Where("organization_id = ? AND agent_id = ? AND status = ?", orgID, agentID, models.TransferStatusActive).
 		Count(&stats.ActiveTransfers)
 
 	// Messages sent - count outgoing messages to contacts during agent's active transfers
 	// This captures all messages sent while the agent was handling the conversation
 	a.DB.Model(&models.Message{}).
-		Where("organization_id = ? AND direction = ? AND created_at >= ? AND created_at <= ?", orgID, "outgoing", start, end).
+		Where("organization_id = ? AND direction = ? AND created_at >= ? AND created_at <= ?", orgID, models.DirectionOutgoing, start, end).
 		Where("contact_id IN (SELECT contact_id FROM agent_transfers WHERE agent_id = ? AND organization_id = ?)", agentID, orgID).
 		Count(&stats.MessagesSent)
 
@@ -354,7 +354,7 @@ func (a *App) calculateAgentStats(orgID, agentID uuid.UUID, start, end time.Time
 	a.DB.Model(&models.AgentTransfer{}).
 		Select("AVG(EXTRACT(EPOCH FROM (resumed_at - transferred_at))/60) as avg").
 		Where("organization_id = ? AND agent_id = ? AND status = ? AND resumed_at IS NOT NULL AND transferred_at >= ? AND transferred_at <= ?",
-			orgID, agentID, "resumed", start, end).
+			orgID, agentID, models.TransferStatusResumed, start, end).
 		Scan(&resolutionTimeResult)
 	stats.AvgResolutionMins = resolutionTimeResult.Avg
 
@@ -377,7 +377,7 @@ func (a *App) calculateAgentStats(orgID, agentID uuid.UUID, start, end time.Time
 func (a *App) calculateAllAgentStats(orgID uuid.UUID, start, end time.Time) []AgentPerformanceStats {
 	// Get all agents in the organization
 	var agents []models.User
-	a.DB.Where("organization_id = ? AND role = ?", orgID, "agent").Find(&agents)
+	a.DB.Where("organization_id = ? AND role = ?", orgID, models.RoleAgent).Find(&agents)
 
 	stats := make([]AgentPerformanceStats, 0, len(agents))
 	for _, agent := range agents {
@@ -446,7 +446,7 @@ func (a *App) calculateTrendData(orgID uuid.UUID, start, end time.Time, groupBy 
 	query := a.DB.Model(&models.AgentTransfer{}).
 		Select("DATE_TRUNC('" + dateTrunc + "', transferred_at) as date, COUNT(*) as count").
 		Where("organization_id = ? AND status = ? AND transferred_at >= ? AND transferred_at <= ?",
-			orgID, "resumed", start, end)
+			orgID, models.TransferStatusResumed, start, end)
 
 	if agentID != nil {
 		query = query.Where("agent_id = ?", *agentID)

@@ -60,7 +60,7 @@ func createTestOrganization(t *testing.T, app *handlers.App) *models.Organizatio
 }
 
 // createTestUser creates a test user in the database with a hashed password.
-func createTestUser(t *testing.T, app *handlers.App, orgID uuid.UUID, email, password, role string, isActive bool) *models.User {
+func createTestUser(t *testing.T, app *handlers.App, orgID uuid.UUID, email, password string, role models.Role, isActive bool) *models.User {
 	t.Helper()
 
 	hashedPassword, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
@@ -121,7 +121,7 @@ func TestApp_Login_Success(t *testing.T) {
 	org := createTestOrganization(t, app)
 	email := uniqueEmail("login-success")
 	password := "validpassword123"
-	createTestUser(t, app, org.ID, email, password, "admin", true)
+	createTestUser(t, app, org.ID, email, password, models.RoleAdmin, true)
 
 	req := testutil.NewJSONRequest(t, map[string]string{
 		"email":    email,
@@ -159,7 +159,7 @@ func TestApp_Login_WrongPassword(t *testing.T) {
 	app := testApp(t)
 	org := createTestOrganization(t, app)
 	email := uniqueEmail("wrong-pwd")
-	createTestUser(t, app, org.ID, email, "correctpassword", "admin", true)
+	createTestUser(t, app, org.ID, email, "correctpassword", models.RoleAdmin, true)
 
 	req := testutil.NewJSONRequest(t, map[string]string{
 		"email":    email,
@@ -188,7 +188,7 @@ func TestApp_Login_InactiveUser(t *testing.T) {
 	app := testApp(t)
 	org := createTestOrganization(t, app)
 	email := uniqueEmail("inactive")
-	createTestUser(t, app, org.ID, email, "validpassword123", "admin", false)
+	createTestUser(t, app, org.ID, email, "validpassword123", models.RoleAdmin, false)
 
 	req := testutil.NewJSONRequest(t, map[string]string{
 		"email":    email,
@@ -213,13 +213,13 @@ func TestApp_Login_InvalidRequestBody(t *testing.T) {
 }
 
 func TestApp_Login_DifferentRoles(t *testing.T) {
-	roles := []string{"admin", "manager", "agent"}
+	roles := []models.Role{models.RoleAdmin, models.RoleManager, models.RoleAgent}
 
 	for _, role := range roles {
-		t.Run("role_"+role, func(t *testing.T) {
+		t.Run("role_"+string(role), func(t *testing.T) {
 			app := testApp(t)
 			org := createTestOrganization(t, app)
-			email := uniqueEmail("role-" + role)
+			email := uniqueEmail("role-" + string(role))
 			password := "testpassword123"
 			createTestUser(t, app, org.ID, email, password, role, true)
 
@@ -289,7 +289,7 @@ func TestApp_Register_EmailAlreadyExists(t *testing.T) {
 	app := testApp(t)
 	org := createTestOrganization(t, app)
 	email := uniqueEmail("existing")
-	createTestUser(t, app, org.ID, email, "password123", "admin", true)
+	createTestUser(t, app, org.ID, email, "password123", models.RoleAdmin, true)
 
 	req := testutil.NewJSONRequest(t, map[string]string{
 		"email":             email,
@@ -318,7 +318,7 @@ func TestApp_Register_InvalidRequestBody(t *testing.T) {
 func TestApp_RefreshToken_Success(t *testing.T) {
 	app := testApp(t)
 	org := createTestOrganization(t, app)
-	user := createTestUser(t, app, org.ID, uniqueEmail("refresh"), "password123", "admin", true)
+	user := createTestUser(t, app, org.ID, uniqueEmail("refresh"), "password123", models.RoleAdmin, true)
 	refreshToken := generateTestRefreshToken(t, user, testJWTSecret, 7*24*time.Hour)
 
 	req := testutil.NewJSONRequest(t, map[string]string{
@@ -349,7 +349,7 @@ func TestApp_RefreshToken_Success(t *testing.T) {
 func TestApp_RefreshToken_Expired(t *testing.T) {
 	app := testApp(t)
 	org := createTestOrganization(t, app)
-	user := createTestUser(t, app, org.ID, uniqueEmail("expired"), "password123", "admin", true)
+	user := createTestUser(t, app, org.ID, uniqueEmail("expired"), "password123", models.RoleAdmin, true)
 	expiredToken := generateTestRefreshToken(t, user, testJWTSecret, -time.Hour)
 
 	req := testutil.NewJSONRequest(t, map[string]string{
@@ -364,7 +364,7 @@ func TestApp_RefreshToken_Expired(t *testing.T) {
 func TestApp_RefreshToken_InvalidSignature(t *testing.T) {
 	app := testApp(t)
 	org := createTestOrganization(t, app)
-	user := createTestUser(t, app, org.ID, uniqueEmail("invalid-sig"), "password123", "admin", true)
+	user := createTestUser(t, app, org.ID, uniqueEmail("invalid-sig"), "password123", models.RoleAdmin, true)
 	wrongSecretToken := generateTestRefreshToken(t, user, "wrong-secret-key-that-is-long", 7*24*time.Hour)
 
 	req := testutil.NewJSONRequest(t, map[string]string{
@@ -384,7 +384,7 @@ func TestApp_RefreshToken_UserNotFound(t *testing.T) {
 		},
 		OrganizationID: uuid.New(),
 		Email:          "fake@example.com",
-		Role:           "admin",
+		Role:           models.RoleAdmin,
 	}
 	token := generateTestRefreshToken(t, fakeUser, testJWTSecret, 7*24*time.Hour)
 
@@ -400,7 +400,7 @@ func TestApp_RefreshToken_UserNotFound(t *testing.T) {
 func TestApp_RefreshToken_DisabledUser(t *testing.T) {
 	app := testApp(t)
 	org := createTestOrganization(t, app)
-	user := createTestUser(t, app, org.ID, uniqueEmail("disabled"), "password123", "admin", false)
+	user := createTestUser(t, app, org.ID, uniqueEmail("disabled"), "password123", models.RoleAdmin, false)
 	token := generateTestRefreshToken(t, user, testJWTSecret, 7*24*time.Hour)
 
 	req := testutil.NewJSONRequest(t, map[string]string{
@@ -440,7 +440,7 @@ func TestApp_GeneratedTokensAreValid(t *testing.T) {
 	app := testApp(t)
 	org := createTestOrganization(t, app)
 	email := uniqueEmail("tokentest")
-	user := createTestUser(t, app, org.ID, email, "password123", "admin", true)
+	user := createTestUser(t, app, org.ID, email, "password123", models.RoleAdmin, true)
 
 	req := testutil.NewJSONRequest(t, map[string]string{
 		"email":    email,

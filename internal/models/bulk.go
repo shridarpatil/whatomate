@@ -13,7 +13,7 @@ type BulkMessageCampaign struct {
 	WhatsAppAccount string     `gorm:"size:100;index;not null" json:"whatsapp_account"` // References WhatsAppAccount.Name
 	Name            string     `gorm:"size:255;not null" json:"name"`
 	TemplateID      uuid.UUID  `gorm:"type:uuid;not null" json:"template_id"`
-	Status          string     `gorm:"size:20;default:'draft'" json:"status"` // draft, queued, processing, completed, failed
+	Status          CampaignStatus `gorm:"size:20;default:'draft'" json:"status"` // draft, queued, processing, completed, failed
 	TotalRecipients int        `gorm:"default:0" json:"total_recipients"`
 	SentCount       int        `gorm:"default:0" json:"sent_count"`
 	DeliveredCount  int        `gorm:"default:0" json:"delivered_count"`
@@ -42,7 +42,7 @@ type BulkMessageRecipient struct {
 	PhoneNumber        string     `gorm:"size:20;not null" json:"phone_number"`
 	RecipientName      string     `gorm:"size:255" json:"recipient_name"`
 	TemplateParams     JSONB      `gorm:"type:jsonb;default:'{}'" json:"template_params"`
-	Status             string     `gorm:"size:20;default:'pending'" json:"status"` // pending, sent, delivered, read, failed
+	Status             MessageStatus `gorm:"size:20;default:'pending'" json:"status"` // pending, sent, delivered, read, failed
 	WhatsAppMessageID  string     `gorm:"column:whats_app_message_id;size:100;index" json:"whatsapp_message_id,omitempty"`
 	MessageID          *uuid.UUID `gorm:"type:uuid" json:"message_id,omitempty"`
 	ErrorMessage       string     `gorm:"type:text" json:"error_message"`

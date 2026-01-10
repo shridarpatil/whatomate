@@ -6,6 +6,7 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/redis/go-redis/v9"
+	"github.com/shridarpatil/whatomate/internal/models"
 	"github.com/zerodha/logf"
 )
 
@@ -16,13 +17,13 @@ const (
 
 // CampaignStatsUpdate represents a campaign stats update message
 type CampaignStatsUpdate struct {
-	CampaignID     string    `json:"campaign_id"`
-	OrganizationID uuid.UUID `json:"organization_id"`
-	Status         string    `json:"status"`
-	SentCount      int       `json:"sent_count"`
-	DeliveredCount int       `json:"delivered_count"`
-	ReadCount      int       `json:"read_count"`
-	FailedCount    int       `json:"failed_count"`
+	CampaignID     string               `json:"campaign_id"`
+	OrganizationID uuid.UUID            `json:"organization_id"`
+	Status         models.CampaignStatus `json:"status"`
+	SentCount      int                  `json:"sent_count"`
+	DeliveredCount int                  `json:"delivered_count"`
+	ReadCount      int                  `json:"read_count"`
+	FailedCount    int                  `json:"failed_count"`
 }
 
 // Publisher publishes messages to Redis pub/sub channels

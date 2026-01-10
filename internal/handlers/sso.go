@@ -67,12 +67,12 @@ type SSOProviderPublic struct {
 
 // SSOProviderRequest represents SSO provider config from admin
 type SSOProviderRequest struct {
-	ClientID        string `json:"client_id" validate:"required"`
-	ClientSecret    string `json:"client_secret"`
-	IsEnabled       bool   `json:"is_enabled"`
-	AllowAutoCreate bool   `json:"allow_auto_create"`
-	DefaultRole     string `json:"default_role"`
-	AllowedDomains  string `json:"allowed_domains"`
+	ClientID        string      `json:"client_id" validate:"required"`
+	ClientSecret    string      `json:"client_secret"`
+	IsEnabled       bool        `json:"is_enabled"`
+	AllowAutoCreate bool        `json:"allow_auto_create"`
+	DefaultRole     models.Role `json:"default_role"`
+	AllowedDomains  string      `json:"allowed_domains"`
 	// Custom provider fields
 	AuthURL     string `json:"auth_url"`
 	TokenURL    string `json:"token_url"`
@@ -81,16 +81,16 @@ type SSOProviderRequest struct {
 
 // SSOProviderResponse represents SSO provider config response (masked secret)
 type SSOProviderResponse struct {
-	Provider        string `json:"provider"`
-	ClientID        string `json:"client_id"`
-	HasSecret       bool   `json:"has_secret"`
-	IsEnabled       bool   `json:"is_enabled"`
-	AllowAutoCreate bool   `json:"allow_auto_create"`
-	DefaultRole     string `json:"default_role"`
-	AllowedDomains  string `json:"allowed_domains"`
-	AuthURL         string `json:"auth_url,omitempty"`
-	TokenURL        string `json:"token_url,omitempty"`
-	UserInfoURL     string `json:"user_info_url,omitempty"`
+	Provider        string      `json:"provider"`
+	ClientID        string      `json:"client_id"`
+	HasSecret       bool        `json:"has_secret"`
+	IsEnabled       bool        `json:"is_enabled"`
+	AllowAutoCreate bool        `json:"allow_auto_create"`
+	DefaultRole     models.Role `json:"default_role"`
+	AllowedDomains  string      `json:"allowed_domains"`
+	AuthURL         string      `json:"auth_url,omitempty"`
+	TokenURL        string      `json:"token_url,omitempty"`
+	UserInfoURL     string      `json:"user_info_url,omitempty"`
 }
 
 // providerDisplayNames maps provider keys to display names
@@ -283,7 +283,7 @@ func (a *App) CallbackSSO(r *fastglue.Request) error {
 		// Auto-create user in the SSO config's organization
 		role := ssoConfig.DefaultRole
 		if role == "" {
-			role = "agent"
+			role = models.RoleAgent
 		}
 
 		user = models.User{
@@ -436,7 +436,7 @@ func (a *App) UpdateSSOProvider(r *fastglue.Request) error {
 	ssoConfig.AllowAutoCreate = req.AllowAutoCreate
 	ssoConfig.DefaultRole = req.DefaultRole
 	if ssoConfig.DefaultRole == "" {
-		ssoConfig.DefaultRole = "agent"
+		ssoConfig.DefaultRole = models.RoleAgent
 	}
 	ssoConfig.AllowedDomains = req.AllowedDomains
 	ssoConfig.AuthURL = req.AuthURL

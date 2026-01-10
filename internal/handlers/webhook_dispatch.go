@@ -13,15 +13,6 @@ import (
 	"github.com/shridarpatil/whatomate/internal/models"
 )
 
-// WebhookEvent types
-const (
-	EventMessageIncoming  = "message.incoming"
-	EventMessageSent      = "message.sent"
-	EventContactCreated   = "contact.created"
-	EventTransferCreated  = "transfer.created"
-	EventTransferAssigned = "transfer.assigned"
-	EventTransferResumed  = "transfer.resumed"
-)
 
 // OutboundWebhookPayload represents the structure sent to external webhook endpoints
 type OutboundWebhookPayload struct {
@@ -32,15 +23,15 @@ type OutboundWebhookPayload struct {
 
 // MessageEventData represents data for message events
 type MessageEventData struct {
-	MessageID       string `json:"message_id"`
-	ContactID       string `json:"contact_id"`
-	ContactPhone    string `json:"contact_phone"`
-	ContactName     string `json:"contact_name"`
-	MessageType     string `json:"message_type"`
-	Content         string `json:"content"`
-	WhatsAppAccount string `json:"whatsapp_account"`
-	Direction       string `json:"direction,omitempty"`
-	SentByUserID    string `json:"sent_by_user_id,omitempty"`
+	MessageID       string             `json:"message_id"`
+	ContactID       string             `json:"contact_id"`
+	ContactPhone    string             `json:"contact_phone"`
+	ContactName     string             `json:"contact_name"`
+	MessageType     models.MessageType `json:"message_type"`
+	Content         string             `json:"content"`
+	WhatsAppAccount string             `json:"whatsapp_account"`
+	Direction       models.Direction   `json:"direction,omitempty"`
+	SentByUserID    string             `json:"sent_by_user_id,omitempty"`
 }
 
 // ContactEventData represents data for contact events
@@ -53,20 +44,20 @@ type ContactEventData struct {
 
 // TransferEventData represents data for transfer events
 type TransferEventData struct {
-	TransferID      string  `json:"transfer_id"`
-	ContactID       string  `json:"contact_id"`
-	ContactPhone    string  `json:"contact_phone"`
-	ContactName     string  `json:"contact_name"`
-	Source          string  `json:"source"`
-	Reason          string  `json:"reason,omitempty"`
-	AgentID         *string `json:"agent_id,omitempty"`
-	AgentName       *string `json:"agent_name,omitempty"`
-	WhatsAppAccount string  `json:"whatsapp_account"`
+	TransferID      string                `json:"transfer_id"`
+	ContactID       string                `json:"contact_id"`
+	ContactPhone    string                `json:"contact_phone"`
+	ContactName     string                `json:"contact_name"`
+	Source          models.TransferSource `json:"source"`
+	Reason          string                `json:"reason,omitempty"`
+	AgentID         *string               `json:"agent_id,omitempty"`
+	AgentName       *string               `json:"agent_name,omitempty"`
+	WhatsAppAccount string                `json:"whatsapp_account"`
 }
 
 // DispatchWebhook sends an event to all matching webhooks for the organization
-func (a *App) DispatchWebhook(orgID uuid.UUID, eventType string, data interface{}) {
-	go a.dispatchWebhookAsync(orgID, eventType, data)
+func (a *App) DispatchWebhook(orgID uuid.UUID, eventType models.WebhookEvent, data interface{}) {
+	go a.dispatchWebhookAsync(orgID, string(eventType), data)
 }
 
 func (a *App) dispatchWebhookAsync(orgID uuid.UUID, eventType string, data interface{}) {

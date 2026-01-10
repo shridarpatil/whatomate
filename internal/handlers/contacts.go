@@ -41,32 +41,32 @@ type ContactResponse struct {
 
 // MessageResponse represents a message for the frontend
 type MessageResponse struct {
-	ID               uuid.UUID      `json:"id"`
-	ContactID        uuid.UUID      `json:"contact_id"`
-	Direction        string         `json:"direction"`
-	MessageType      string         `json:"message_type"`
-	Content          any            `json:"content"`
-	MediaURL         string         `json:"media_url,omitempty"`
-	MediaMimeType    string         `json:"media_mime_type,omitempty"`
-	MediaFilename    string         `json:"media_filename,omitempty"`
-	InteractiveData  models.JSONB   `json:"interactive_data,omitempty"`
-	Status           string         `json:"status"`
-	WAMID            string         `json:"wamid"`
-	Error            string         `json:"error_message"`
-	IsReply          bool           `json:"is_reply"`
-	ReplyToMessageID *string        `json:"reply_to_message_id,omitempty"`
-	ReplyToMessage   *ReplyPreview  `json:"reply_to_message,omitempty"`
-	Reactions        []ReactionInfo `json:"reactions,omitempty"`
-	CreatedAt        time.Time      `json:"created_at"`
-	UpdatedAt        time.Time      `json:"updated_at"`
+	ID               uuid.UUID            `json:"id"`
+	ContactID        uuid.UUID            `json:"contact_id"`
+	Direction        models.Direction     `json:"direction"`
+	MessageType      models.MessageType   `json:"message_type"`
+	Content          any                  `json:"content"`
+	MediaURL         string               `json:"media_url,omitempty"`
+	MediaMimeType    string               `json:"media_mime_type,omitempty"`
+	MediaFilename    string               `json:"media_filename,omitempty"`
+	InteractiveData  models.JSONB         `json:"interactive_data,omitempty"`
+	Status           models.MessageStatus `json:"status"`
+	WAMID            string               `json:"wamid"`
+	Error            string               `json:"error_message"`
+	IsReply          bool                 `json:"is_reply"`
+	ReplyToMessageID *string              `json:"reply_to_message_id,omitempty"`
+	ReplyToMessage   *ReplyPreview        `json:"reply_to_message,omitempty"`
+	Reactions        []ReactionInfo       `json:"reactions,omitempty"`
+	CreatedAt        time.Time            `json:"created_at"`
+	UpdatedAt        time.Time            `json:"updated_at"`
 }
 
 // ReplyPreview contains a preview of the replied-to message
 type ReplyPreview struct {
-	ID          string `json:"id"`
-	Content     any    `json:"content"`
-	MessageType string `json:"message_type"`
-	Direction   string `json:"direction"`
+	ID          string             `json:"id"`
+	Content     any                `json:"content"`
+	MessageType models.MessageType `json:"message_type"`
+	Direction   models.Direction   `json:"direction"`
 }
 
 // ReactionInfo represents a reaction on a message
@@ -81,7 +81,7 @@ type ReactionInfo struct {
 func (a *App) ListContacts(r *fastglue.Request) error {
 	orgID := r.RequestCtx.UserValue("organization_id").(uuid.UUID)
 	userID, _ := r.RequestCtx.UserValue("user_id").(uuid.UUID)
-	userRole, _ := r.RequestCtx.UserValue("role").(string)
+	userRole, _ := r.RequestCtx.UserValue("role").(models.Role)
 
 	// Pagination
 	page, _ := strconv.Atoi(string(r.RequestCtx.QueryArgs().Peek("page")))
@@ -100,7 +100,7 @@ func (a *App) ListContacts(r *fastglue.Request) error {
 	query := a.DB.Where("organization_id = ?", orgID)
 
 	// Agents can only see contacts assigned to them
-	if userRole == "agent" {
+	if userRole == models.RoleAgent {
 		query = query.Where("assigned_user_id = ?", userID)
 	}
 
@@ -129,7 +129,7 @@ func (a *App) ListContacts(r *fastglue.Request) error {
 		// Count unread messages
 		var unreadCount int64
 		a.DB.Model(&models.Message{}).
-			Where("contact_id = ? AND direction = ? AND status != ?", c.ID, "incoming", "read").
+			Where("contact_id = ? AND direction = ? AND status != ?", c.ID, models.DirectionIncoming, models.MessageStatusRead).
 			Count(&unreadCount)
 
 		tags := []string{}
@@ -178,7 +178,7 @@ func (a *App) ListContacts(r *fastglue.Request) error {
 func (a *App) GetContact(r *fastglue.Request) error {
 	orgID := r.RequestCtx.UserValue("organization_id").(uuid.UUID)
 	userID, _ := r.RequestCtx.UserValue("user_id").(uuid.UUID)
-	userRole, _ := r.RequestCtx.UserValue("role").(string)
+	userRole, _ := r.RequestCtx.UserValue("role").(models.Role)
 	contactIDStr := r.RequestCtx.UserValue("id").(string)
 
 	contactID, err := uuid.Parse(contactIDStr)
@@ -190,7 +190,7 @@ func (a *App) GetContact(r *fastglue.Request) error {
 	query := a.DB.Where("id = ? AND organization_id = ?", contactID, orgID)
 
 	// Agents can only access their assigned contacts
-	if userRole == "agent" {
+	if userRole == models.RoleAgent {
 		query = query.Where("assigned_user_id = ?", userID)
 	}
 
@@ -201,7 +201,7 @@ func (a *App) GetContact(r *fastglue.Request) error {
 	// Count unread messages
 	var unreadCount int64
 	a.DB.Model(&models.Message{}).
-		Where("contact_id = ? AND direction = ? AND status != ?", contact.ID, "incoming", "read").
+		Where("contact_id = ? AND direction = ? AND status != ?", contact.ID, models.DirectionIncoming, models.MessageStatusRead).
 		Count(&unreadCount)
 
 	tags := []string{}
@@ -246,7 +246,7 @@ func (a *App) GetContact(r *fastglue.Request) error {
 func (a *App) GetMessages(r *fastglue.Request) error {
 	orgID := r.RequestCtx.UserValue("organization_id").(uuid.UUID)
 	userID, _ := r.RequestCtx.UserValue("user_id").(uuid.UUID)
-	userRole, _ := r.RequestCtx.UserValue("role").(string)
+	userRole, _ := r.RequestCtx.UserValue("role").(models.Role)
 	contactIDStr := r.RequestCtx.UserValue("id").(string)
 
 	contactID, err := uuid.Parse(contactIDStr)
@@ -257,7 +257,7 @@ func (a *App) GetMessages(r *fastglue.Request) error {
 	// Verify contact belongs to org (and to agent if role is agent)
 	var contact models.Contact
 	query := a.DB.Where("id = ? AND organization_id = ?", contactID, orgID)
-	if userRole == "agent" {
+	if userRole == models.RoleAgent {
 		query = query.Where("assigned_user_id = ?", userID)
 	}
 	if err := query.First(&contact).Error; err != nil {
@@ -276,10 +276,10 @@ func (a *App) GetMessages(r *fastglue.Request) error {
 	msgQuery := a.DB.Where("contact_id = ?", contactID)
 
 	// Check if agent should only see current conversation
-	if userRole == "agent" {
+	if userRole == models.RoleAgent {
 		settings, err := a.getChatbotSettingsCached(orgID, "")
 		if err == nil {
-			if settings.AgentCurrentConversationOnly {
+			if settings.AgentAssignment.CurrentConversationOnly {
 				// Find the most recent session for this contact
 				var session models.ChatbotSession
 				if err := a.DB.Where("contact_id = ? AND organization_id = ?", contactID, orgID).
@@ -362,7 +362,7 @@ func (a *App) buildMessagesResponse(messages []models.Message) []MessageResponse
 	response := make([]MessageResponse, len(messages))
 	for i, m := range messages {
 		var content any
-		if m.MessageType == "text" {
+		if m.MessageType == models.MessageTypeText {
 			content = map[string]string{"body": m.Content}
 		} else {
 			content = map[string]string{"body": m.Content}
@@ -426,12 +426,12 @@ func (a *App) buildMessagesResponse(messages []models.Message) []MessageResponse
 // markMessagesAsRead marks messages as read and sends read receipts
 func (a *App) markMessagesAsRead(orgID uuid.UUID, contactID uuid.UUID, contact *models.Contact) {
 	var unreadMessages []models.Message
-	a.DB.Where("contact_id = ? AND direction = ? AND status != ?", contactID, "incoming", "read").
+	a.DB.Where("contact_id = ? AND direction = ? AND status != ?", contactID, models.DirectionIncoming, models.MessageStatusRead).
 		Find(&unreadMessages)
 
 	a.DB.Model(&models.Message{}).
-		Where("contact_id = ? AND direction = ?", contactID, "incoming").
-		Update("status", "read")
+		Where("contact_id = ? AND direction = ?", contactID, models.DirectionIncoming).
+		Update("status", models.MessageStatusRead)
 
 	a.DB.Model(contact).Update("is_read", true)
 
@@ -460,7 +460,7 @@ func (a *App) markMessagesAsRead(orgID uuid.UUID, contactID uuid.UUID, contact *
 
 // SendMessageRequest represents a send message request
 type SendMessageRequest struct {
-	Type    string `json:"type"`
+	Type    models.MessageType `json:"type"`
 	Content struct {
 		Body string `json:"body"`
 	} `json:"content"`
@@ -472,7 +472,7 @@ type SendMessageRequest struct {
 func (a *App) SendMessage(r *fastglue.Request) error {
 	orgID := r.RequestCtx.UserValue("organization_id").(uuid.UUID)
 	userID, _ := r.RequestCtx.UserValue("user_id").(uuid.UUID)
-	userRole, _ := r.RequestCtx.UserValue("role").(string)
+	userRole, _ := r.RequestCtx.UserValue("role").(models.Role)
 	contactIDStr := r.RequestCtx.UserValue("id").(string)
 
 	contactID, err := uuid.Parse(contactIDStr)
@@ -489,7 +489,7 @@ func (a *App) SendMessage(r *fastglue.Request) error {
 	// Get contact (agents can only message their assigned contacts)
 	var contact models.Contact
 	query := a.DB.Where("id = ? AND organization_id = ?", contactID, orgID)
-	if userRole == "agent" {
+	if userRole == models.RoleAgent {
 		query = query.Where("assigned_user_id = ?", userID)
 	}
 	if err := query.First(&contact).Error; err != nil {
@@ -518,10 +518,10 @@ func (a *App) SendMessage(r *fastglue.Request) error {
 		OrganizationID:  orgID,
 		WhatsAppAccount: account.Name,
 		ContactID:       contactID,
-		Direction:       "outgoing",
+		Direction:       models.DirectionOutgoing,
 		MessageType:     req.Type,
 		Content:         req.Content.Body,
-		Status:          "pending",
+		Status:          models.MessageStatusPending,
 		SentByUserID:    &userID,
 	}
 
@@ -620,7 +620,7 @@ func (a *App) sendWhatsAppMessage(account *models.WhatsAppAccount, contact *mode
 		"type":              message.MessageType,
 	}
 
-	if message.MessageType == "text" {
+	if message.MessageType == models.MessageTypeText {
 		payload["text"] = map[string]any{
 			"preview_url": false,
 			"body":        message.Content,
@@ -641,7 +641,7 @@ func (a *App) sendWhatsAppMessage(account *models.WhatsAppAccount, contact *mode
 	if err != nil {
 		a.Log.Error("Failed to marshal message payload", "error", err)
 		a.DB.Model(message).Updates(map[string]any{
-			"status":        "failed",
+			"status":        models.MessageStatusFailed,
 			"error_message": "Failed to create request",
 		})
 		return
@@ -651,7 +651,7 @@ func (a *App) sendWhatsAppMessage(account *models.WhatsAppAccount, contact *mode
 	if err != nil {
 		a.Log.Error("Failed to create request", "error", err)
 		a.DB.Model(message).Updates(map[string]any{
-			"status":        "failed",
+			"status":        models.MessageStatusFailed,
 			"error_message": "Failed to create request",
 		})
 		return
@@ -665,7 +665,7 @@ func (a *App) sendWhatsAppMessage(account *models.WhatsAppAccount, contact *mode
 	if err != nil {
 		a.Log.Error("Failed to send message", "error", err)
 		a.DB.Model(message).Updates(map[string]any{
-			"status":        "failed",
+			"status":        models.MessageStatusFailed,
 			"error_message": err.Error(),
 		})
 		return
@@ -690,7 +690,7 @@ func (a *App) sendWhatsAppMessage(account *models.WhatsAppAccount, contact *mode
 			"message", errResp.Error.Message,
 		)
 		a.DB.Model(message).Updates(map[string]any{
-			"status":        "failed",
+			"status":        models.MessageStatusFailed,
 			"error_message": errResp.Error.Message,
 		})
 		return
@@ -707,7 +707,7 @@ func (a *App) sendWhatsAppMessage(account *models.WhatsAppAccount, contact *mode
 
 	if len(result.Messages) > 0 {
 		a.DB.Model(message).Updates(map[string]any{
-			"status":               "sent",
+			"status":               models.MessageStatusSent,
 			"whats_app_message_id": result.Messages[0].ID,
 		})
 		a.Log.Info("Message sent successfully", "message_id", result.Messages[0].ID, "to", contact.PhoneNumber)
@@ -717,7 +717,7 @@ func (a *App) sendWhatsAppMessage(account *models.WhatsAppAccount, contact *mode
 		if message.SentByUserID != nil {
 			sentByUserID = message.SentByUserID.String()
 		}
-		a.DispatchWebhook(account.OrganizationID, EventMessageSent, MessageEventData{
+		a.DispatchWebhook(account.OrganizationID, models.WebhookEventMessageSent, MessageEventData{
 			MessageID:       message.ID.String(),
 			ContactID:       contact.ID.String(),
 			ContactPhone:    contact.PhoneNumber,
@@ -725,7 +725,7 @@ func (a *App) sendWhatsAppMessage(account *models.WhatsAppAccount, contact *mode
 			MessageType:     message.MessageType,
 			Content:         message.Content,
 			WhatsAppAccount: account.Name,
-			Direction:       "outgoing",
+			Direction:       models.DirectionOutgoing,
 			SentByUserID:    sentByUserID,
 		})
 	}
@@ -742,7 +742,7 @@ func truncateString(s string, maxLen int) string {
 func (a *App) SendMediaMessage(r *fastglue.Request) error {
 	orgID := r.RequestCtx.UserValue("organization_id").(uuid.UUID)
 	userID, _ := r.RequestCtx.UserValue("user_id").(uuid.UUID)
-	userRole, _ := r.RequestCtx.UserValue("role").(string)
+	userRole, _ := r.RequestCtx.UserValue("role").(models.Role)
 
 	// Parse multipart form
 	form, err := r.RequestCtx.MultipartForm()
@@ -801,7 +801,7 @@ func (a *App) SendMediaMessage(r *fastglue.Request) error {
 	// Get contact (agents can only message their assigned contacts)
 	var contact models.Contact
 	query := a.DB.Where("id = ? AND organization_id = ?", contactID, orgID)
-	if userRole == "agent" {
+	if userRole == models.RoleAgent {
 		query = query.Where("assigned_user_id = ?", userID)
 	}
 	if err := query.First(&contact).Error; err != nil {
@@ -844,13 +844,13 @@ func (a *App) SendMediaMessage(r *fastglue.Request) error {
 		OrganizationID:  orgID,
 		WhatsAppAccount: account.Name,
 		ContactID:       contactID,
-		Direction:       "outgoing",
-		MessageType:     mediaType,
+		Direction:       models.DirectionOutgoing,
+		MessageType:     models.MessageType(mediaType),
 		Content:         caption,
 		MediaURL:        localPath,
 		MediaMimeType:   mimeType,
 		MediaFilename:   fileHeader.Filename,
-		Status:          "pending",
+		Status:          models.MessageStatusPending,
 		SentByUserID:    &userID,
 	}
 
@@ -969,7 +969,7 @@ type SendReactionRequest struct {
 func (a *App) SendReaction(r *fastglue.Request) error {
 	orgID := r.RequestCtx.UserValue("organization_id").(uuid.UUID)
 	userID, _ := r.RequestCtx.UserValue("user_id").(uuid.UUID)
-	userRole, _ := r.RequestCtx.UserValue("role").(string)
+	userRole, _ := r.RequestCtx.UserValue("role").(models.Role)
 	contactIDStr := r.RequestCtx.UserValue("id").(string)
 	messageIDStr := r.RequestCtx.UserValue("message_id").(string)
 
@@ -992,7 +992,7 @@ func (a *App) SendReaction(r *fastglue.Request) error {
 	// Get contact (agents can only react to messages in their assigned contacts)
 	var contact models.Contact
 	query := a.DB.Where("id = ? AND organization_id = ?", contactID, orgID)
-	if userRole == "agent" {
+	if userRole == models.RoleAgent {
 		query = query.Where("assigned_user_id = ?", userID)
 	}
 	if err := query.First(&contact).Error; err != nil {
@@ -1157,7 +1157,7 @@ func (a *App) uploadAndSendMediaMessage(waAccount *whatsapp.Account, account *mo
 	if err != nil {
 		a.Log.Error("Failed to upload media to WhatsApp", "error", err)
 		a.DB.Model(message).Updates(map[string]any{
-			"status":        "failed",
+			"status":        models.MessageStatusFailed,
 			"error_message": "Failed to upload media: " + err.Error(),
 		})
 		return
@@ -1166,13 +1166,13 @@ func (a *App) uploadAndSendMediaMessage(waAccount *whatsapp.Account, account *mo
 	// Send the media message
 	var wamID string
 	switch message.MessageType {
-	case "image":
+	case models.MessageTypeImage:
 		wamID, err = a.WhatsApp.SendImageMessage(ctx, waAccount, contact.PhoneNumber, mediaID, caption)
-	case "document":
+	case models.MessageTypeDocument:
 		wamID, err = a.WhatsApp.SendDocumentMessage(ctx, waAccount, contact.PhoneNumber, mediaID, filename, caption)
-	case "video":
+	case models.MessageTypeVideo:
 		wamID, err = a.WhatsApp.SendVideoMessage(ctx, waAccount, contact.PhoneNumber, mediaID, caption)
-	case "audio":
+	case models.MessageTypeAudio:
 		wamID, err = a.WhatsApp.SendAudioMessage(ctx, waAccount, contact.PhoneNumber, mediaID)
 	default:
 		err = fmt.Errorf("unsupported media type: %s", message.MessageType)
@@ -1181,7 +1181,7 @@ func (a *App) uploadAndSendMediaMessage(waAccount *whatsapp.Account, account *mo
 	if err != nil {
 		a.Log.Error("Failed to send media message", "error", err)
 		a.DB.Model(message).Updates(map[string]any{
-			"status":        "failed",
+			"status":        models.MessageStatusFailed,
 			"error_message": err.Error(),
 		})
 		return
@@ -1189,7 +1189,7 @@ func (a *App) uploadAndSendMediaMessage(waAccount *whatsapp.Account, account *mo
 
 	// Update message with WhatsApp message ID
 	a.DB.Model(message).Updates(map[string]any{
-		"status":               "sent",
+		"status":               models.MessageStatusSent,
 		"whats_app_message_id": wamID,
 	})
 
@@ -1200,7 +1200,7 @@ func (a *App) uploadAndSendMediaMessage(waAccount *whatsapp.Account, account *mo
 	if message.SentByUserID != nil {
 		sentByUserID = message.SentByUserID.String()
 	}
-	a.DispatchWebhook(account.OrganizationID, EventMessageSent, MessageEventData{
+	a.DispatchWebhook(account.OrganizationID, models.WebhookEventMessageSent, MessageEventData{
 		MessageID:       message.ID.String(),
 		ContactID:       contact.ID.String(),
 		ContactPhone:    contact.PhoneNumber,
@@ -1208,7 +1208,7 @@ func (a *App) uploadAndSendMediaMessage(waAccount *whatsapp.Account, account *mo
 		MessageType:     message.MessageType,
 		Content:         caption,
 		WhatsAppAccount: account.Name,
-		Direction:       "outgoing",
+		Direction:       models.DirectionOutgoing,
 		SentByUserID:    sentByUserID,
 	})
 }

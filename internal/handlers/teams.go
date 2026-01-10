@@ -11,40 +11,40 @@ import (
 
 // TeamRequest represents create/update team request
 type TeamRequest struct {
-	Name               string `json:"name" validate:"required"`
-	Description        string `json:"description"`
-	AssignmentStrategy string `json:"assignment_strategy"` // round_robin, load_balanced, manual
-	IsActive           bool   `json:"is_active"`
+	Name               string                   `json:"name" validate:"required"`
+	Description        string                   `json:"description"`
+	AssignmentStrategy models.AssignmentStrategy `json:"assignment_strategy"` // round_robin, load_balanced, manual
+	IsActive           bool                     `json:"is_active"`
 }
 
 // TeamMemberRequest represents add member request
 type TeamMemberRequest struct {
-	UserID string `json:"user_id" validate:"required"`
-	Role   string `json:"role"` // manager, agent
+	UserID string      `json:"user_id" validate:"required"`
+	Role   models.Role `json:"role"` // manager, agent
 }
 
 // TeamResponse represents team in API response
 type TeamResponse struct {
-	ID                 uuid.UUID            `json:"id"`
-	Name               string               `json:"name"`
-	Description        string               `json:"description"`
-	AssignmentStrategy string               `json:"assignment_strategy"`
-	IsActive           bool                 `json:"is_active"`
-	MemberCount        int                  `json:"member_count"`
-	Members            []TeamMemberResponse `json:"members,omitempty"`
-	CreatedAt          time.Time            `json:"created_at"`
-	UpdatedAt          time.Time            `json:"updated_at"`
+	ID                 uuid.UUID                 `json:"id"`
+	Name               string                    `json:"name"`
+	Description        string                    `json:"description"`
+	AssignmentStrategy models.AssignmentStrategy `json:"assignment_strategy"`
+	IsActive           bool                      `json:"is_active"`
+	MemberCount        int                       `json:"member_count"`
+	Members            []TeamMemberResponse      `json:"members,omitempty"`
+	CreatedAt          time.Time                 `json:"created_at"`
+	UpdatedAt          time.Time                 `json:"updated_at"`
 }
 
 // TeamMemberResponse represents team member in API response
 type TeamMemberResponse struct {
-	ID             uuid.UUID  `json:"id"`
-	UserID         uuid.UUID  `json:"user_id"`
-	FullName       string     `json:"full_name"`
-	Email          string     `json:"email"`
-	Role           string     `json:"role"` // manager, agent
-	IsAvailable    bool       `json:"is_available"`
-	LastAssignedAt *time.Time `json:"last_assigned_at,omitempty"`
+	ID             uuid.UUID   `json:"id"`
+	UserID         uuid.UUID   `json:"user_id"`
+	FullName       string      `json:"full_name"`
+	Email          string      `json:"email"`
+	Role           models.Role `json:"role"` // manager, agent
+	IsAvailable    bool        `json:"is_available"`
+	LastAssignedAt *time.Time  `json:"last_assigned_at,omitempty"`
 }
 
 // ListTeams returns teams based on user access
@@ -52,11 +52,11 @@ type TeamMemberResponse struct {
 func (a *App) ListTeams(r *fastglue.Request) error {
 	orgID := r.RequestCtx.UserValue("organization_id").(uuid.UUID)
 	userID := r.RequestCtx.UserValue("user_id").(uuid.UUID)
-	userRole := r.RequestCtx.UserValue("role").(string)
+	userRole := r.RequestCtx.UserValue("role").(models.Role)
 
 	var teams []models.Team
 
-	if userRole == "admin" {
+	if userRole == models.RoleAdmin {
 		// Admin sees all teams
 		if err := a.DB.Where("organization_id = ?", orgID).
 			Preload("Members").Preload("Members.User").
@@ -86,7 +86,7 @@ func (a *App) ListTeams(r *fastglue.Request) error {
 func (a *App) GetTeam(r *fastglue.Request) error {
 	orgID := r.RequestCtx.UserValue("organization_id").(uuid.UUID)
 	userID := r.RequestCtx.UserValue("user_id").(uuid.UUID)
-	userRole := r.RequestCtx.UserValue("role").(string)
+	userRole := r.RequestCtx.UserValue("role").(models.Role)
 	teamIDStr := r.RequestCtx.UserValue("id").(string)
 
 	teamID, err := uuid.Parse(teamIDStr)
@@ -102,7 +102,7 @@ func (a *App) GetTeam(r *fastglue.Request) error {
 	}
 
 	// Check access for non-admin users
-	if userRole != "admin" {
+	if userRole != models.RoleAdmin {
 		hasAccess := false
 		for _, m := range team.Members {
 			if m.UserID == userID {
@@ -121,9 +121,9 @@ func (a *App) GetTeam(r *fastglue.Request) error {
 // CreateTeam creates a new team (admin only)
 func (a *App) CreateTeam(r *fastglue.Request) error {
 	orgID := r.RequestCtx.UserValue("organization_id").(uuid.UUID)
-	userRole := r.RequestCtx.UserValue("role").(string)
+	userRole := r.RequestCtx.UserValue("role").(models.Role)
 
-	if userRole != "admin" {
+	if userRole != models.RoleAdmin {
 		return r.SendErrorEnvelope(fasthttp.StatusForbidden, "Only admins can create teams", nil, "")
 	}
 
@@ -139,9 +139,9 @@ func (a *App) CreateTeam(r *fastglue.Request) error {
 	// Validate assignment strategy
 	strategy := req.AssignmentStrategy
 	if strategy == "" {
-		strategy = "round_robin"
+		strategy = models.AssignmentStrategyRoundRobin
 	}
-	if strategy != "round_robin" && strategy != "load_balanced" && strategy != "manual" {
+	if strategy != models.AssignmentStrategyRoundRobin && strategy != models.AssignmentStrategyLoadBalanced && strategy != models.AssignmentStrategyManual {
 		return r.SendErrorEnvelope(fasthttp.StatusBadRequest, "Invalid assignment strategy", nil, "")
 	}
 
@@ -165,7 +165,7 @@ func (a *App) CreateTeam(r *fastglue.Request) error {
 func (a *App) UpdateTeam(r *fastglue.Request) error {
 	orgID := r.RequestCtx.UserValue("organization_id").(uuid.UUID)
 	userID := r.RequestCtx.UserValue("user_id").(uuid.UUID)
-	userRole := r.RequestCtx.UserValue("role").(string)
+	userRole := r.RequestCtx.UserValue("role").(models.Role)
 	teamIDStr := r.RequestCtx.UserValue("id").(string)
 
 	teamID, err := uuid.Parse(teamIDStr)
@@ -180,10 +180,10 @@ func (a *App) UpdateTeam(r *fastglue.Request) error {
 	}
 
 	// Check access
-	if userRole != "admin" {
+	if userRole != models.RoleAdmin {
 		isManager := false
 		for _, m := range team.Members {
-			if m.UserID == userID && m.Role == "manager" {
+			if m.UserID == userID && m.Role == models.RoleManager {
 				isManager = true
 				break
 			}
@@ -206,7 +206,7 @@ func (a *App) UpdateTeam(r *fastglue.Request) error {
 	team.IsActive = req.IsActive
 
 	if req.AssignmentStrategy != "" {
-		if req.AssignmentStrategy != "round_robin" && req.AssignmentStrategy != "load_balanced" && req.AssignmentStrategy != "manual" {
+		if req.AssignmentStrategy != models.AssignmentStrategyRoundRobin && req.AssignmentStrategy != models.AssignmentStrategyLoadBalanced && req.AssignmentStrategy != models.AssignmentStrategyManual {
 			return r.SendErrorEnvelope(fasthttp.StatusBadRequest, "Invalid assignment strategy", nil, "")
 		}
 		team.AssignmentStrategy = req.AssignmentStrategy
@@ -223,10 +223,10 @@ func (a *App) UpdateTeam(r *fastglue.Request) error {
 // DeleteTeam deletes a team (admin only)
 func (a *App) DeleteTeam(r *fastglue.Request) error {
 	orgID := r.RequestCtx.UserValue("organization_id").(uuid.UUID)
-	userRole := r.RequestCtx.UserValue("role").(string)
+	userRole := r.RequestCtx.UserValue("role").(models.Role)
 	teamIDStr := r.RequestCtx.UserValue("id").(string)
 
-	if userRole != "admin" {
+	if userRole != models.RoleAdmin {
 		return r.SendErrorEnvelope(fasthttp.StatusForbidden, "Only admins can delete teams", nil, "")
 	}
 
@@ -259,7 +259,7 @@ func (a *App) DeleteTeam(r *fastglue.Request) error {
 func (a *App) ListTeamMembers(r *fastglue.Request) error {
 	orgID := r.RequestCtx.UserValue("organization_id").(uuid.UUID)
 	userID := r.RequestCtx.UserValue("user_id").(uuid.UUID)
-	userRole := r.RequestCtx.UserValue("role").(string)
+	userRole := r.RequestCtx.UserValue("role").(models.Role)
 	teamIDStr := r.RequestCtx.UserValue("id").(string)
 
 	teamID, err := uuid.Parse(teamIDStr)
@@ -276,7 +276,7 @@ func (a *App) ListTeamMembers(r *fastglue.Request) error {
 	}
 
 	// Check access for non-admin users
-	if userRole != "admin" {
+	if userRole != models.RoleAdmin {
 		hasAccess := false
 		for _, m := range team.Members {
 			if m.UserID == userID {
@@ -309,7 +309,7 @@ func (a *App) ListTeamMembers(r *fastglue.Request) error {
 func (a *App) AddTeamMember(r *fastglue.Request) error {
 	orgID := r.RequestCtx.UserValue("organization_id").(uuid.UUID)
 	userID := r.RequestCtx.UserValue("user_id").(uuid.UUID)
-	userRole := r.RequestCtx.UserValue("role").(string)
+	userRole := r.RequestCtx.UserValue("role").(models.Role)
 	teamIDStr := r.RequestCtx.UserValue("id").(string)
 
 	teamID, err := uuid.Parse(teamIDStr)
@@ -325,10 +325,10 @@ func (a *App) AddTeamMember(r *fastglue.Request) error {
 	}
 
 	// Check access
-	if userRole != "admin" {
+	if userRole != models.RoleAdmin {
 		isManager := false
 		for _, m := range team.Members {
-			if m.UserID == userID && m.Role == "manager" {
+			if m.UserID == userID && m.Role == models.RoleManager {
 				isManager = true
 				break
 			}
@@ -363,14 +363,14 @@ func (a *App) AddTeamMember(r *fastglue.Request) error {
 	// Validate role
 	role := req.Role
 	if role == "" {
-		role = "agent"
+		role = models.RoleAgent
 	}
-	if role != "manager" && role != "agent" {
+	if role != models.RoleManager && role != models.RoleAgent {
 		return r.SendErrorEnvelope(fasthttp.StatusBadRequest, "Invalid role. Must be 'manager' or 'agent'", nil, "")
 	}
 
 	// Non-admin managers can only add agents, not other managers
-	if userRole != "admin" && role == "manager" {
+	if userRole != models.RoleAdmin && role == models.RoleManager {
 		return r.SendErrorEnvelope(fasthttp.StatusForbidden, "Only admins can add managers to teams", nil, "")
 	}
 
@@ -399,7 +399,7 @@ func (a *App) AddTeamMember(r *fastglue.Request) error {
 func (a *App) RemoveTeamMember(r *fastglue.Request) error {
 	orgID := r.RequestCtx.UserValue("organization_id").(uuid.UUID)
 	userID := r.RequestCtx.UserValue("user_id").(uuid.UUID)
-	userRole := r.RequestCtx.UserValue("role").(string)
+	userRole := r.RequestCtx.UserValue("role").(models.Role)
 	teamIDStr := r.RequestCtx.UserValue("id").(string)
 	memberUserIDStr := r.RequestCtx.UserValue("user_id_param").(string)
 
@@ -421,10 +421,10 @@ func (a *App) RemoveTeamMember(r *fastglue.Request) error {
 	}
 
 	// Check access
-	if userRole != "admin" {
+	if userRole != models.RoleAdmin {
 		isManager := false
 		for _, m := range team.Members {
-			if m.UserID == userID && m.Role == "manager" {
+			if m.UserID == userID && m.Role == models.RoleManager {
 				isManager = true
 				break
 			}
@@ -435,7 +435,7 @@ func (a *App) RemoveTeamMember(r *fastglue.Request) error {
 
 		// Non-admin managers cannot remove other managers
 		for _, m := range team.Members {
-			if m.UserID == memberUserID && m.Role == "manager" {
+			if m.UserID == memberUserID && m.Role == models.RoleManager {
 				return r.SendErrorEnvelope(fasthttp.StatusForbidden, "Only admins can remove managers from teams", nil, "")
 			}
 		}

@@ -296,15 +296,15 @@ func (a *App) updateMessageStatus(whatsappMsgID, statusValue string, errors []We
 
 	updates := map[string]interface{}{}
 
-	switch statusValue {
-	case "sent":
-		updates["status"] = "sent"
-	case "delivered":
-		updates["status"] = "delivered"
-	case "read":
-		updates["status"] = "read"
-	case "failed":
-		updates["status"] = "failed"
+	switch models.MessageStatus(statusValue) {
+	case models.MessageStatusSent:
+		updates["status"] = models.MessageStatusSent
+	case models.MessageStatusDelivered:
+		updates["status"] = models.MessageStatusDelivered
+	case models.MessageStatusRead:
+		updates["status"] = models.MessageStatusRead
+	case models.MessageStatusFailed:
+		updates["status"] = models.MessageStatusFailed
 		if len(errors) > 0 {
 			updates["error_message"] = errors[0].Message
 		}

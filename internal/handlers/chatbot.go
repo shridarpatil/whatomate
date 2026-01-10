@@ -27,7 +27,7 @@ type ChatbotSettingsResponse struct {
 	AssignToSameAgent            bool                     `json:"assign_to_same_agent"`
 	AgentCurrentConversationOnly bool                     `json:"agent_current_conversation_only"`
 	AIEnabled                    bool                     `json:"ai_enabled"`
-	AIProvider            string                   `json:"ai_provider"`
+	AIProvider            models.AIProvider        `json:"ai_provider"`
 	AIModel               string                   `json:"ai_model"`
 	AIMaxTokens           int                      `json:"ai_max_tokens"`
 	AISystemPrompt        string                   `json:"ai_system_prompt"`
@@ -62,15 +62,15 @@ type ChatbotStatsResponse struct {
 
 // KeywordRuleResponse represents a keyword rule for API response
 type KeywordRuleResponse struct {
-	ID              string          `json:"id"`
-	Name            string          `json:"name"`
-	Keywords        []string        `json:"keywords"`
-	MatchType       string          `json:"match_type"`
-	ResponseType    string          `json:"response_type"`
-	ResponseContent json.RawMessage `json:"response_content"`
-	Priority        int             `json:"priority"`
-	Enabled         bool            `json:"enabled"`
-	CreatedAt       string          `json:"created_at"`
+	ID              string             `json:"id"`
+	Name            string             `json:"name"`
+	Keywords        []string           `json:"keywords"`
+	MatchType       models.MatchType   `json:"match_type"`
+	ResponseType    models.ResponseType `json:"response_type"`
+	ResponseContent json.RawMessage    `json:"response_content"`
+	Priority        int                `json:"priority"`
+	Enabled         bool               `json:"enabled"`
+	CreatedAt       string             `json:"created_at"`
 }
 
 // ChatbotFlowResponse represents a chatbot flow for API response
@@ -86,14 +86,14 @@ type ChatbotFlowResponse struct {
 
 // AIContextResponse represents an AI context for API response
 type AIContextResponse struct {
-	ID              string   `json:"id"`
-	Name            string   `json:"name"`
-	ContextType     string   `json:"context_type"`
-	TriggerKeywords []string `json:"trigger_keywords"`
-	StaticContent   string   `json:"static_content"`
-	Enabled         bool     `json:"enabled"`
-	Priority        int      `json:"priority"`
-	CreatedAt       string   `json:"created_at"`
+	ID              string            `json:"id"`
+	Name            string            `json:"name"`
+	ContextType     models.ContextType `json:"context_type"`
+	TriggerKeywords []string          `json:"trigger_keywords"`
+	StaticContent   string            `json:"static_content"`
+	Enabled         bool              `json:"enabled"`
+	Priority        int               `json:"priority"`
+	CreatedAt       string            `json:"created_at"`
 }
 
 // GetChatbotSettings returns chatbot settings and stats
@@ -112,7 +112,7 @@ func (a *App) GetChatbotSettings(r *fastglue.Request) error {
 			IsEnabled:          false,
 			DefaultResponse:    "Hello! How can I help you today?",
 			SessionTimeoutMins: 30,
-			AIEnabled:          false,
+			AI:                 models.AIConfig{Enabled: false},
 		}
 	}
 
@@ -140,8 +140,8 @@ func (a *App) GetChatbotSettings(r *fastglue.Request) error {
 
 	// Convert business hours array
 	businessHours := make([]map[string]interface{}, 0)
-	if settings.BusinessHours != nil {
-		for _, bh := range settings.BusinessHours {
+	if settings.BusinessHours.Hours != nil {
+		for _, bh := range settings.BusinessHours.Hours {
 			if bhMap, ok := bh.(map[string]interface{}); ok {
 				businessHours = append(businessHours, bhMap)
 			}
@@ -155,33 +155,36 @@ func (a *App) GetChatbotSettings(r *fastglue.Request) error {
 		FallbackMessage:       settings.FallbackMessage,
 		FallbackButtons:       fallbackButtons,
 		SessionTimeoutMinutes: settings.SessionTimeoutMins,
-		BusinessHoursEnabled:       settings.BusinessHoursEnabled,
+		// Business Hours
+		BusinessHoursEnabled:       settings.BusinessHours.Enabled,
 		BusinessHours:              businessHours,
-		OutOfHoursMessage:          settings.OutOfHoursMessage,
-		AllowAutomatedOutsideHours: settings.AllowAutomatedOutsideHours,
-		AllowAgentQueuePickup:        settings.AllowAgentQueuePickup,
-		AssignToSameAgent:            settings.AssignToSameAgent,
-		AgentCurrentConversationOnly: settings.AgentCurrentConversationOnly,
-		AIEnabled:                    settings.AIEnabled,
-		AIProvider:            settings.AIProvider,
-		AIModel:               settings.AIModel,
-		AIMaxTokens:           settings.AIMaxTokens,
-		AISystemPrompt:        settings.AISystemPrompt,
+		OutOfHoursMessage:          settings.BusinessHours.OutOfHoursMessage,
+		AllowAutomatedOutsideHours: settings.BusinessHours.AllowAutomatedOutside,
+		// Agent Assignment
+		AllowAgentQueuePickup:        settings.AgentAssignment.AllowQueuePickup,
+		AssignToSameAgent:            settings.AgentAssignment.AssignToSameAgent,
+		AgentCurrentConversationOnly: settings.AgentAssignment.CurrentConversationOnly,
+		// AI
+		AIEnabled:      settings.AI.Enabled,
+		AIProvider:     settings.AI.Provider,
+		AIModel:        settings.AI.Model,
+		AIMaxTokens:    settings.AI.MaxTokens,
+		AISystemPrompt: settings.AI.SystemPrompt,
 		// SLA Settings
-		SLAEnabled:             settings.SLAEnabled,
-		SLAResponseMinutes:     settings.SLAResponseMinutes,
-		SLAResolutionMinutes:   settings.SLAResolutionMinutes,
-		SLAEscalationMinutes:   settings.SLAEscalationMinutes,
-		SLAAutoCloseHours:      settings.SLAAutoCloseHours,
-		SLAAutoCloseMessage:    settings.SLAAutoCloseMessage,
-		SLAWarningMessage:      settings.SLAWarningMessage,
-		SLAEscalationNotifyIDs: settings.SLAEscalationNotifyIDs,
+		SLAEnabled:             settings.SLA.Enabled,
+		SLAResponseMinutes:     settings.SLA.ResponseMinutes,
+		SLAResolutionMinutes:   settings.SLA.ResolutionMinutes,
+		SLAEscalationMinutes:   settings.SLA.EscalationMinutes,
+		SLAAutoCloseHours:      settings.SLA.AutoCloseHours,
+		SLAAutoCloseMessage:    settings.SLA.AutoCloseMessage,
+		SLAWarningMessage:      settings.SLA.WarningMessage,
+		SLAEscalationNotifyIDs: settings.SLA.EscalationNotifyIDs,
 		// Client Inactivity Settings
-		ClientReminderEnabled:  settings.ClientReminderEnabled,
-		ClientReminderMinutes:  settings.ClientReminderMinutes,
-		ClientReminderMessage:  settings.ClientReminderMessage,
-		ClientAutoCloseMinutes: settings.ClientAutoCloseMinutes,
-		ClientAutoCloseMessage: settings.ClientAutoCloseMessage,
+		ClientReminderEnabled:  settings.ClientInactivity.ReminderEnabled,
+		ClientReminderMinutes:  settings.ClientInactivity.ReminderMinutes,
+		ClientReminderMessage:  settings.ClientInactivity.ReminderMessage,
+		ClientAutoCloseMinutes: settings.ClientInactivity.AutoCloseMinutes,
+		ClientAutoCloseMessage: settings.ClientInactivity.AutoCloseMessage,
 	}
 
 	return r.SendEnvelope(map[string]interface{}{
@@ -212,7 +215,7 @@ func (a *App) UpdateChatbotSettings(r *fastglue.Request) error {
 		AssignToSameAgent            *bool                      `json:"assign_to_same_agent"`
 		AgentCurrentConversationOnly *bool                      `json:"agent_current_conversation_only"`
 		AIEnabled                    *bool                      `json:"ai_enabled"`
-		AIProvider                 *string                    `json:"ai_provider"`
+		AIProvider                 *models.AIProvider         `json:"ai_provider"`
 		AIAPIKey                   *string                    `json:"ai_api_key"`
 		AIModel                    *string                    `json:"ai_model"`
 		AIMaxTokens                *int                       `json:"ai_max_tokens"`
@@ -276,91 +279,96 @@ func (a *App) UpdateChatbotSettings(r *fastglue.Request) error {
 	if req.SessionTimeoutMinutes != nil {
 		settings.SessionTimeoutMins = *req.SessionTimeoutMinutes
 	}
+	// Business Hours
 	if req.BusinessHoursEnabled != nil {
-		settings.BusinessHoursEnabled = *req.BusinessHoursEnabled
+		settings.BusinessHours.Enabled = *req.BusinessHoursEnabled
 	}
 	if req.BusinessHours != nil {
 		hours := make([]interface{}, len(*req.BusinessHours))
 		for i, bh := range *req.BusinessHours {
 			hours[i] = bh
 		}
-		settings.BusinessHours = hours
+		settings.BusinessHours.Hours = hours
 	}
 	if req.OutOfHoursMessage != nil {
-		settings.OutOfHoursMessage = *req.OutOfHoursMessage
+		settings.BusinessHours.OutOfHoursMessage = *req.OutOfHoursMessage
 	}
 	if req.AllowAutomatedOutsideHours != nil {
-		settings.AllowAutomatedOutsideHours = *req.AllowAutomatedOutsideHours
+		settings.BusinessHours.AllowAutomatedOutside = *req.AllowAutomatedOutsideHours
 	}
+
+	// Agent Assignment
 	if req.AllowAgentQueuePickup != nil {
-		settings.AllowAgentQueuePickup = *req.AllowAgentQueuePickup
+		settings.AgentAssignment.AllowQueuePickup = *req.AllowAgentQueuePickup
 	}
 	if req.AssignToSameAgent != nil {
-		settings.AssignToSameAgent = *req.AssignToSameAgent
+		settings.AgentAssignment.AssignToSameAgent = *req.AssignToSameAgent
 	}
 	if req.AgentCurrentConversationOnly != nil {
-		settings.AgentCurrentConversationOnly = *req.AgentCurrentConversationOnly
+		settings.AgentAssignment.CurrentConversationOnly = *req.AgentCurrentConversationOnly
 	}
+
+	// AI Settings
 	if req.AIEnabled != nil {
-		settings.AIEnabled = *req.AIEnabled
+		settings.AI.Enabled = *req.AIEnabled
 	}
 	if req.AIProvider != nil {
-		settings.AIProvider = *req.AIProvider
+		settings.AI.Provider = *req.AIProvider
 	}
 	if req.AIAPIKey != nil && *req.AIAPIKey != "" {
-		settings.AIAPIKey = *req.AIAPIKey
+		settings.AI.APIKey = *req.AIAPIKey
 	}
 	if req.AIModel != nil {
-		settings.AIModel = *req.AIModel
+		settings.AI.Model = *req.AIModel
 	}
 	if req.AIMaxTokens != nil {
-		settings.AIMaxTokens = *req.AIMaxTokens
+		settings.AI.MaxTokens = *req.AIMaxTokens
 	}
 	if req.AISystemPrompt != nil {
-		settings.AISystemPrompt = *req.AISystemPrompt
+		settings.AI.SystemPrompt = *req.AISystemPrompt
 	}
 
 	// SLA Settings
 	if req.SLAEnabled != nil {
-		settings.SLAEnabled = *req.SLAEnabled
+		settings.SLA.Enabled = *req.SLAEnabled
 	}
 	if req.SLAResponseMinutes != nil {
-		settings.SLAResponseMinutes = *req.SLAResponseMinutes
+		settings.SLA.ResponseMinutes = *req.SLAResponseMinutes
 	}
 	if req.SLAResolutionMinutes != nil {
-		settings.SLAResolutionMinutes = *req.SLAResolutionMinutes
+		settings.SLA.ResolutionMinutes = *req.SLAResolutionMinutes
 	}
 	if req.SLAEscalationMinutes != nil {
-		settings.SLAEscalationMinutes = *req.SLAEscalationMinutes
+		settings.SLA.EscalationMinutes = *req.SLAEscalationMinutes
 	}
 	if req.SLAAutoCloseHours != nil {
-		settings.SLAAutoCloseHours = *req.SLAAutoCloseHours
+		settings.SLA.AutoCloseHours = *req.SLAAutoCloseHours
 	}
 	if req.SLAAutoCloseMessage != nil {
-		settings.SLAAutoCloseMessage = *req.SLAAutoCloseMessage
+		settings.SLA.AutoCloseMessage = *req.SLAAutoCloseMessage
 	}
 	if req.SLAWarningMessage != nil {
-		settings.SLAWarningMessage = *req.SLAWarningMessage
+		settings.SLA.WarningMessage = *req.SLAWarningMessage
 	}
 	if req.SLAEscalationNotifyIDs != nil {
-		settings.SLAEscalationNotifyIDs = *req.SLAEscalationNotifyIDs
+		settings.SLA.EscalationNotifyIDs = *req.SLAEscalationNotifyIDs
 	}
 
 	// Client Inactivity Settings
 	if req.ClientReminderEnabled != nil {
-		settings.ClientReminderEnabled = *req.ClientReminderEnabled
+		settings.ClientInactivity.ReminderEnabled = *req.ClientReminderEnabled
 	}
 	if req.ClientReminderMinutes != nil {
-		settings.ClientReminderMinutes = *req.ClientReminderMinutes
+		settings.ClientInactivity.ReminderMinutes = *req.ClientReminderMinutes
 	}
 	if req.ClientReminderMessage != nil {
-		settings.ClientReminderMessage = *req.ClientReminderMessage
+		settings.ClientInactivity.ReminderMessage = *req.ClientReminderMessage
 	}
 	if req.ClientAutoCloseMinutes != nil {
-		settings.ClientAutoCloseMinutes = *req.ClientAutoCloseMinutes
+		settings.ClientInactivity.AutoCloseMinutes = *req.ClientAutoCloseMinutes
 	}
 	if req.ClientAutoCloseMessage != nil {
-		settings.ClientAutoCloseMessage = *req.ClientAutoCloseMessage
+		settings.ClientInactivity.AutoCloseMessage = *req.ClientAutoCloseMessage
 	}
 
 	if err := a.DB.Save(&settings).Error; err != nil {
@@ -421,8 +429,8 @@ func (a *App) CreateKeywordRule(r *fastglue.Request) error {
 	var req struct {
 		Name            string                 `json:"name"`
 		Keywords        []string               `json:"keywords"`
-		MatchType       string                 `json:"match_type"`
-		ResponseType    string                 `json:"response_type"`
+		MatchType       models.MatchType       `json:"match_type"`
+		ResponseType    models.ResponseType    `json:"response_type"`
 		ResponseContent map[string]interface{} `json:"response_content"`
 		Priority        int                    `json:"priority"`
 		Enabled         bool                   `json:"enabled"`
@@ -438,10 +446,10 @@ func (a *App) CreateKeywordRule(r *fastglue.Request) error {
 
 	// Set defaults
 	if req.MatchType == "" {
-		req.MatchType = "contains"
+		req.MatchType = models.MatchTypeContains
 	}
 	if req.ResponseType == "" {
-		req.ResponseType = "text"
+		req.ResponseType = models.ResponseTypeText
 	}
 	if req.Name == "" {
 		req.Name = req.Keywords[0]
@@ -525,13 +533,13 @@ func (a *App) UpdateKeywordRule(r *fastglue.Request) error {
 	}
 
 	var req struct {
-		Name            *string                `json:"name"`
-		Keywords        []string               `json:"keywords"`
-		MatchType       *string                `json:"match_type"`
-		ResponseType    *string                `json:"response_type"`
-		ResponseContent map[string]interface{} `json:"response_content"`
-		Priority        *int                   `json:"priority"`
-		Enabled         *bool                  `json:"enabled"`
+		Name            *string                 `json:"name"`
+		Keywords        []string                `json:"keywords"`
+		MatchType       *models.MatchType       `json:"match_type"`
+		ResponseType    *models.ResponseType    `json:"response_type"`
+		ResponseContent map[string]interface{}  `json:"response_content"`
+		Priority        *int                    `json:"priority"`
+		Enabled         *bool                   `json:"enabled"`
 	}
 
 	if err := json.Unmarshal(r.RequestCtx.PostBody(), &req); err != nil {
@@ -640,8 +648,8 @@ type FlowStepRequest struct {
 	StepName        string                   `json:"step_name"`
 	StepOrder       int                      `json:"step_order"`
 	Message         string                   `json:"message"`
-	MessageType     string                   `json:"message_type"`
-	InputType       string                   `json:"input_type"`
+	MessageType     models.FlowStepType      `json:"message_type"`
+	InputType       models.InputType         `json:"input_type"`
 	InputConfig     map[string]interface{}   `json:"input_config"`
 	ApiConfig       map[string]interface{}   `json:"api_config"`
 	Buttons         []map[string]interface{} `json:"buttons"`
@@ -735,7 +743,7 @@ func (a *App) CreateChatbotFlow(r *fastglue.Request) error {
 			MaxRetries:      stepReq.MaxRetries,
 		}
 		if step.MessageType == "" {
-			step.MessageType = "text"
+			step.MessageType = models.FlowStepTypeText
 		}
 		if step.MaxRetries == 0 {
 			step.MaxRetries = 3
@@ -886,7 +894,7 @@ func (a *App) UpdateChatbotFlow(r *fastglue.Request) error {
 				MaxRetries:      stepReq.MaxRetries,
 			}
 			if step.MessageType == "" {
-				step.MessageType = "text"
+				step.MessageType = models.FlowStepTypeText
 			}
 			if step.MaxRetries == 0 {
 				step.MaxRetries = 3
@@ -992,12 +1000,12 @@ func (a *App) CreateAIContext(r *fastglue.Request) error {
 	}
 
 	var req struct {
-		Name            string   `json:"name"`
-		ContextType     string   `json:"context_type"`
-		TriggerKeywords []string `json:"trigger_keywords"`
-		StaticContent   string   `json:"static_content"`
-		Priority        int      `json:"priority"`
-		Enabled         bool     `json:"enabled"`
+		Name            string            `json:"name"`
+		ContextType     models.ContextType `json:"context_type"`
+		TriggerKeywords []string          `json:"trigger_keywords"`
+		StaticContent   string            `json:"static_content"`
+		Priority        int               `json:"priority"`
+		Enabled         bool              `json:"enabled"`
 	}
 
 	if err := json.Unmarshal(r.RequestCtx.PostBody(), &req); err != nil {
@@ -1008,7 +1016,7 @@ func (a *App) CreateAIContext(r *fastglue.Request) error {
 		return r.SendErrorEnvelope(fasthttp.StatusBadRequest, "Name is required", nil, "")
 	}
 	if req.ContextType == "" {
-		req.ContextType = "static"
+		req.ContextType = models.ContextTypeStatic
 	}
 
 	ctx := models.AIContext{
@@ -1075,12 +1083,12 @@ func (a *App) UpdateAIContext(r *fastglue.Request) error {
 	}
 
 	var req struct {
-		Name            *string  `json:"name"`
-		ContextType     *string  `json:"context_type"`
-		TriggerKeywords []string `json:"trigger_keywords"`
-		StaticContent   *string  `json:"static_content"`
-		Priority        *int     `json:"priority"`
-		Enabled         *bool    `json:"enabled"`
+		Name            *string             `json:"name"`
+		ContextType     *models.ContextType `json:"context_type"`
+		TriggerKeywords []string            `json:"trigger_keywords"`
+		StaticContent   *string             `json:"static_content"`
+		Priority        *int                `json:"priority"`
+		Enabled         *bool               `json:"enabled"`
 	}
 
 	if err := json.Unmarshal(r.RequestCtx.PostBody(), &req); err != nil {
@@ -1209,7 +1217,7 @@ func (a *App) getChatbotStats(orgID uuid.UUID) ChatbotStatsResponse {
 
 	// Active sessions
 	a.DB.Model(&models.ChatbotSession{}).
-		Where("organization_id = ? AND status = ?", orgID, "active").
+		Where("organization_id = ? AND status = ?", orgID, models.SessionStatusActive).
 		Count(&stats.ActiveSessions)
 
 	// Messages handled (from chatbot_session_messages)

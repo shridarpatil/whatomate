@@ -56,8 +56,8 @@ func (a *App) ListAPIKeys(r *fastglue.Request) error {
 	}
 
 	// Check if user is admin
-	role, _ := r.RequestCtx.UserValue("role").(string)
-	if role != "admin" {
+	role, _ := r.RequestCtx.UserValue("role").(models.Role)
+	if role != models.RoleAdmin {
 		return r.SendErrorEnvelope(fasthttp.StatusForbidden, "Admin access required", nil, "")
 	}
 
@@ -94,8 +94,8 @@ func (a *App) CreateAPIKey(r *fastglue.Request) error {
 	userID, _ := r.RequestCtx.UserValue("user_id").(uuid.UUID)
 
 	// Check if user is admin
-	role, _ := r.RequestCtx.UserValue("role").(string)
-	if role != "admin" {
+	role, _ := r.RequestCtx.UserValue("role").(models.Role)
+	if role != models.RoleAdmin {
 		return r.SendErrorEnvelope(fasthttp.StatusForbidden, "Admin access required", nil, "")
 	}
 
@@ -170,8 +170,8 @@ func (a *App) DeleteAPIKey(r *fastglue.Request) error {
 	}
 
 	// Check if user is admin
-	role, _ := r.RequestCtx.UserValue("role").(string)
-	if role != "admin" {
+	role, _ := r.RequestCtx.UserValue("role").(models.Role)
+	if role != models.RoleAdmin {
 		return r.SendErrorEnvelope(fasthttp.StatusForbidden, "Admin access required", nil, "")
 	}
 

@@ -12,25 +12,25 @@ import (
 
 // UserRequest represents the request body for creating/updating a user
 type UserRequest struct {
-	Email    string `json:"email"`
-	Password string `json:"password"`
-	FullName string `json:"full_name"`
-	Role     string `json:"role"`
-	IsActive *bool  `json:"is_active"`
+	Email    string      `json:"email"`
+	Password string      `json:"password"`
+	FullName string      `json:"full_name"`
+	Role     models.Role `json:"role"`
+	IsActive *bool       `json:"is_active"`
 }
 
 // UserResponse represents the response for a user (without sensitive data)
 type UserResponse struct {
-	ID             uuid.UUID     `json:"id"`
-	Email          string        `json:"email"`
-	FullName       string        `json:"full_name"`
-	Role           string        `json:"role"`
-	IsActive       bool          `json:"is_active"`
-	IsAvailable    bool          `json:"is_available"`
-	OrganizationID uuid.UUID     `json:"organization_id"`
-	Settings       models.JSONB  `json:"settings,omitempty"`
-	CreatedAt      string        `json:"created_at"`
-	UpdatedAt      string        `json:"updated_at"`
+	ID             uuid.UUID    `json:"id"`
+	Email          string       `json:"email"`
+	FullName       string       `json:"full_name"`
+	Role           models.Role  `json:"role"`
+	IsActive       bool         `json:"is_active"`
+	IsAvailable    bool         `json:"is_available"`
+	OrganizationID uuid.UUID    `json:"organization_id"`
+	Settings       models.JSONB `json:"settings,omitempty"`
+	CreatedAt      string       `json:"created_at"`
+	UpdatedAt      string       `json:"updated_at"`
 }
 
 // UserSettingsRequest represents notification/settings preferences
@@ -54,8 +54,8 @@ func (a *App) ListUsers(r *fastglue.Request) error {
 	}
 
 	// Check if user is admin or manager
-	role, _ := r.RequestCtx.UserValue("role").(string)
-	if role != "admin" && role != "manager" {
+	role, _ := r.RequestCtx.UserValue("role").(models.Role)
+	if role != models.RoleAdmin && role != models.RoleManager {
 		return r.SendErrorEnvelope(fasthttp.StatusForbidden, "Admin or manager access required", nil, "")
 	}
 
@@ -105,8 +105,8 @@ func (a *App) CreateUser(r *fastglue.Request) error {
 	}
 
 	// Check if user is admin
-	role, _ := r.RequestCtx.UserValue("role").(string)
-	if role != "admin" {
+	role, _ := r.RequestCtx.UserValue("role").(models.Role)
+	if role != models.RoleAdmin {
 		return r.SendErrorEnvelope(fasthttp.StatusForbidden, "Admin access required", nil, "")
 	}
 
@@ -121,10 +121,10 @@ func (a *App) CreateUser(r *fastglue.Request) error {
 	}
 
 	// Validate role
-	if req.Role == "" {
-		req.Role = "agent" // Default role
+	if req.Role == models.Role("") {
+		req.Role = models.RoleAgent // Default role
 	}
-	if req.Role != "admin" && req.Role != "manager" && req.Role != "agent" {
+	if req.Role != models.RoleAdmin && req.Role != models.RoleManager && req.Role != models.RoleAgent {
 		return r.SendErrorEnvelope(fasthttp.StatusBadRequest, "Invalid role. Must be admin, manager, or agent", nil, "")
 	}
 
@@ -166,7 +166,7 @@ func (a *App) UpdateUser(r *fastglue.Request) error {
 	}
 
 	currentUserID, _ := r.RequestCtx.UserValue("user_id").(uuid.UUID)
-	currentRole, _ := r.RequestCtx.UserValue("role").(string)
+	currentRole, _ := r.RequestCtx.UserValue("role").(models.Role)
 
 	idStr, ok := r.RequestCtx.UserValue("id").(string)
 	if !ok || idStr == "" {
@@ -188,19 +188,19 @@ func (a *App) UpdateUser(r *fastglue.Request) error {
 	}
 
 	// Only admin can update other users or change roles
-	if currentRole != "admin" && currentUserID != id {
+	if currentRole != models.RoleAdmin && currentUserID != id {
 		return r.SendErrorEnvelope(fasthttp.StatusForbidden, "Admin access required", nil, "")
 	}
 
 	// Prevent admin from demoting themselves
 	if currentUserID == id && req.Role != "" && req.Role != user.Role {
-		if user.Role == "admin" && req.Role != "admin" {
+		if user.Role == models.RoleAdmin && req.Role != models.RoleAdmin {
 			return r.SendErrorEnvelope(fasthttp.StatusBadRequest, "Cannot demote yourself", nil, "")
 		}
 	}
 
 	// Only admin can change roles
-	if req.Role != "" && req.Role != user.Role && currentRole != "admin" {
+	if req.Role != "" && req.Role != user.Role && currentRole != models.RoleAdmin {
 		return r.SendErrorEnvelope(fasthttp.StatusForbidden, "Admin access required to change roles", nil, "")
 	}
 
@@ -225,7 +225,7 @@ func (a *App) UpdateUser(r *fastglue.Request) error {
 		user.PasswordHash = string(hashedPassword)
 	}
 	if req.Role != "" {
-		if req.Role != "admin" && req.Role != "manager" && req.Role != "agent" {
+		if req.Role != models.RoleAdmin && req.Role != models.RoleManager && req.Role != models.RoleAgent {
 			return r.SendErrorEnvelope(fasthttp.StatusBadRequest, "Invalid role. Must be admin, manager, or agent", nil, "")
 		}
 		user.Role = req.Role
@@ -254,8 +254,8 @@ func (a *App) DeleteUser(r *fastglue.Request) error {
 	}
 
 	// Check if user is admin
-	currentRole, _ := r.RequestCtx.UserValue("role").(string)
-	if currentRole != "admin" {
+	currentRole, _ := r.RequestCtx.UserValue("role").(models.Role)
+	if currentRole != models.RoleAdmin {
 		return r.SendErrorEnvelope(fasthttp.StatusForbidden, "Admin access required", nil, "")
 	}
 
@@ -278,9 +278,9 @@ func (a *App) DeleteUser(r *fastglue.Request) error {
 		return r.SendErrorEnvelope(fasthttp.StatusNotFound, "User not found", nil, "")
 	}
 
-	if user.Role == "admin" {
+	if user.Role == models.RoleAdmin {
 		var adminCount int64
-		a.DB.Model(&models.User{}).Where("organization_id = ? AND role = ?", orgID, "admin").Count(&adminCount)
+		a.DB.Model(&models.User{}).Where("organization_id = ? AND role = ?", orgID, models.RoleAdmin).Count(&adminCount)
 		if adminCount <= 1 {
 			return r.SendErrorEnvelope(fasthttp.StatusBadRequest, "Cannot delete the last admin", nil, "")
 		}

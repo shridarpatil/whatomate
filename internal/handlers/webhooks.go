@@ -35,12 +35,12 @@ type WebhookResponse struct {
 
 // AvailableWebhookEvents returns the list of available webhook event types
 var AvailableWebhookEvents = []map[string]string{
-	{"value": EventMessageIncoming, "label": "Message Incoming", "description": "When a new message is received from a contact"},
-	{"value": EventMessageSent, "label": "Message Sent", "description": "When an agent sends a message"},
-	{"value": EventContactCreated, "label": "Contact Created", "description": "When a new contact is created"},
-	{"value": EventTransferCreated, "label": "Transfer Created", "description": "When a transfer to human agent is requested"},
-	{"value": EventTransferAssigned, "label": "Transfer Assigned", "description": "When a transfer is assigned to an agent"},
-	{"value": EventTransferResumed, "label": "Transfer Resumed", "description": "When chatbot is resumed (transfer closed)"},
+	{"value": string(models.WebhookEventMessageIncoming), "label": "Message Incoming", "description": "When a new message is received from a contact"},
+	{"value": string(models.WebhookEventMessageSent), "label": "Message Sent", "description": "When an agent sends a message"},
+	{"value": string(models.WebhookEventContactCreated), "label": "Contact Created", "description": "When a new contact is created"},
+	{"value": string(models.WebhookEventTransferCreated), "label": "Transfer Created", "description": "When a transfer to human agent is requested"},
+	{"value": string(models.WebhookEventTransferAssigned), "label": "Transfer Assigned", "description": "When a transfer is assigned to an agent"},
+	{"value": string(models.WebhookEventTransferResumed), "label": "Transfer Resumed", "description": "When chatbot is resumed (transfer closed)"},
 }
 
 // ListWebhooks returns all webhooks for the organization

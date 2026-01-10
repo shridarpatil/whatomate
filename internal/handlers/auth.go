@@ -40,10 +40,10 @@ type RefreshRequest struct {
 
 // JWTClaims represents JWT claims
 type JWTClaims struct {
-	UserID         uuid.UUID `json:"user_id"`
-	OrganizationID uuid.UUID `json:"organization_id"`
-	Email          string    `json:"email"`
-	Role           string    `json:"role"`
+	UserID         uuid.UUID   `json:"user_id"`
+	OrganizationID uuid.UUID   `json:"organization_id"`
+	Email          string      `json:"email"`
+	Role           models.Role `json:"role"`
 	jwt.RegisteredClaims
 }
 
@@ -138,7 +138,7 @@ func (a *App) Register(r *fastglue.Request) error {
 		Email:          req.Email,
 		PasswordHash:   string(hashedPassword),
 		FullName:       req.FullName,
-		Role:           "admin", // First user of new org is admin
+		Role:           models.RoleAdmin, // First user of new org is admin
 		IsActive:       true,
 	}
 
