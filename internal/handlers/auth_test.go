@@ -72,10 +72,15 @@ func createTestUser(t *testing.T, app *handlers.App, orgID uuid.UUID, email, pas
 		PasswordHash:   string(hashedPassword),
 		FullName:       "Test User",
 		Role:           role,
-		IsActive:       isActive,
+		IsActive:       true, // Create with default, then update if needed
 	}
-	// Use Select to explicitly save IsActive even when false (GORM skips zero values by default)
-	require.NoError(t, app.DB.Select("OrganizationID", "Email", "PasswordHash", "FullName", "Role", "IsActive").Create(user).Error)
+	require.NoError(t, app.DB.Create(user).Error)
+
+	// Explicitly update IsActive if false (GORM ignores false due to default:true tag)
+	if !isActive {
+		require.NoError(t, app.DB.Model(user).Update("is_active", false).Error)
+		user.IsActive = false
+	}
 	return user
 }
 
