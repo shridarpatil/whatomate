@@ -66,7 +66,11 @@ import {
   AlertTriangle,
   Check,
   RefreshCw,
-  CalendarIcon
+  CalendarIcon,
+  Image,
+  FileText,
+  Video,
+  X
 } from 'lucide-vue-next'
 import { formatDate } from '@/lib/utils'
 import type { DateRange } from 'reka-ui'
@@ -78,6 +82,7 @@ interface Campaign {
   template_name: string
   template_id?: string
   whatsapp_account?: string
+  header_media_id?: string
   status: 'draft' | 'scheduled' | 'running' | 'paused' | 'completed' | 'failed' | 'queued' | 'processing' | 'cancelled'
   total_recipients: number
   sent_count: number
@@ -96,6 +101,8 @@ interface Template {
   display_name?: string
   status: string
   body_content?: string
+  header_type?: string  // TEXT, IMAGE, DOCUMENT, VIDEO
+  header_content?: string
 }
 
 interface CSVRow {
@@ -232,6 +239,11 @@ const isValidatingCSV = ref(false)
 const selectedTemplate = ref<Template | null>(null)
 const addRecipientsTab = ref('manual')
 
+// Media upload state
+const mediaFile = ref<File | null>(null)
+const isUploadingMedia = ref(false)
+const mediaPreviewUrl = ref<string | null>(null)
+
 // Computed: template parameter format hints
 const templateParamNames = computed(() => {
   if (!selectedTemplate.value) return []
@@ -289,6 +301,76 @@ const recipientPlaceholder = computed(() => {
   }).join(', ')}`
   return `${line1}\n${line2}`
 })
+
+// Check if selected campaign's template has media header
+const campaignTemplateHasMedia = computed(() => {
+  if (!selectedCampaign.value?.template_id) return false
+  const template = templates.value.find(t => t.id === selectedCampaign.value?.template_id)
+  return template?.header_type && template.header_type !== 'TEXT'
+})
+
+const campaignTemplateMediaType = computed(() => {
+  if (!selectedCampaign.value?.template_id) return null
+  const template = templates.value.find(t => t.id === selectedCampaign.value?.template_id)
+  return template?.header_type || null
+})
+
+// Get accepted file types based on template header type
+const acceptedMediaTypes = computed(() => {
+  const type = campaignTemplateMediaType.value
+  switch (type) {
+    case 'IMAGE': return 'image/jpeg,image/png'
+    case 'VIDEO': return 'video/mp4,video/3gpp'
+    case 'DOCUMENT': return 'application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+    default: return '*/*'
+  }
+})
+
+function handleMediaFileSelect(event: Event) {
+  const input = event.target as HTMLInputElement
+  if (input.files && input.files[0]) {
+    mediaFile.value = input.files[0]
+    // Create preview URL for images
+    if (mediaFile.value.type.startsWith('image/')) {
+      mediaPreviewUrl.value = URL.createObjectURL(mediaFile.value)
+    } else {
+      mediaPreviewUrl.value = null
+    }
+  }
+}
+
+function clearMediaFile() {
+  mediaFile.value = null
+  if (mediaPreviewUrl.value) {
+    URL.revokeObjectURL(mediaPreviewUrl.value)
+    mediaPreviewUrl.value = null
+  }
+}
+
+async function uploadCampaignMedia() {
+  if (!selectedCampaign.value || !mediaFile.value) return
+
+  isUploadingMedia.value = true
+  try {
+    const response = await campaignsService.uploadMedia(selectedCampaign.value.id, mediaFile.value)
+    const result = response.data.data
+    toast.success('Media uploaded successfully')
+    // Update campaign with media ID
+    selectedCampaign.value.header_media_id = result.media_id
+    await fetchCampaigns()
+    // Update selectedCampaign with fresh data
+    const updated = campaigns.value.find(c => c.id === selectedCampaign.value?.id)
+    if (updated) {
+      selectedCampaign.value = updated
+    }
+    clearMediaFile()
+  } catch (error: any) {
+    const message = error.response?.data?.message || 'Failed to upload media'
+    toast.error(message)
+  } finally {
+    isUploadingMedia.value = false
+  }
+}
 
 // Manual input validation
 interface ManualInputValidation {
@@ -587,6 +669,31 @@ function getStatusClass(status: string): string {
 function getProgressPercentage(campaign: Campaign): number {
   if (campaign.total_recipients === 0) return 0
   return Math.round((campaign.sent_count / campaign.total_recipients) * 100)
+}
+
+// Helper functions for media upload
+function getTemplateHeaderType(templateId: string | undefined): string | null {
+  if (!templateId) return null
+  const template = templates.value.find(t => t.id === templateId)
+  return template?.header_type || null
+}
+
+function getMediaIcon(headerType: string | null) {
+  switch (headerType) {
+    case 'IMAGE': return Image
+    case 'VIDEO': return Video
+    case 'DOCUMENT': return FileText
+    default: return FileText
+  }
+}
+
+function getAcceptedMediaTypes(headerType: string | null): string {
+  switch (headerType) {
+    case 'IMAGE': return 'image/jpeg,image/png'
+    case 'VIDEO': return 'video/mp4,video/3gpp'
+    case 'DOCUMENT': return 'application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+    default: return '*/*'
+  }
 }
 
 // Recipients functions
@@ -1206,6 +1313,68 @@ async function addRecipientsFromCSV() {
               <span v-else>
                 Created: {{ formatDate(campaign.created_at) }}
               </span>
+            </div>
+
+            <!-- Media Upload Section (for templates with media header) -->
+            <div
+              v-if="getTemplateHeaderType(campaign.template_id) && getTemplateHeaderType(campaign.template_id) !== 'TEXT'"
+              class="mb-4 p-3 rounded-lg border bg-muted/30"
+            >
+              <div class="flex items-center gap-2 mb-2">
+                <component :is="getMediaIcon(getTemplateHeaderType(campaign.template_id))" class="h-4 w-4 text-muted-foreground" />
+                <span class="text-sm font-medium">Header Media ({{ getTemplateHeaderType(campaign.template_id) }})</span>
+              </div>
+
+              <div v-if="campaign.header_media_id" class="flex items-center gap-2">
+                <CheckCircle class="h-4 w-4 text-green-600" />
+                <span class="text-sm text-green-600">Media uploaded</span>
+                <span class="text-xs text-muted-foreground">(ID: {{ campaign.header_media_id.substring(0, 12) }}...)</span>
+              </div>
+
+              <div v-else-if="campaign.status === 'draft'" class="space-y-2">
+                <p class="text-xs text-muted-foreground">Upload media for template header</p>
+                <div v-if="selectedCampaign?.id === campaign.id && mediaFile">
+                  <div class="flex items-center gap-2 p-2 bg-background rounded border">
+                    <component :is="getMediaIcon(getTemplateHeaderType(campaign.template_id))" class="h-4 w-4" />
+                    <span class="text-sm flex-1 truncate">{{ mediaFile.name }}</span>
+                    <Button variant="ghost" size="icon" class="h-6 w-6" @click="clearMediaFile">
+                      <X class="h-3 w-3" />
+                    </Button>
+                  </div>
+                  <Button
+                    size="sm"
+                    class="mt-2"
+                    @click="uploadCampaignMedia"
+                    :disabled="isUploadingMedia"
+                  >
+                    <Loader2 v-if="isUploadingMedia" class="h-4 w-4 mr-1 animate-spin" />
+                    <Upload v-else class="h-4 w-4 mr-1" />
+                    Upload
+                  </Button>
+                </div>
+                <div v-else>
+                  <input
+                    type="file"
+                    :id="'media-upload-' + campaign.id"
+                    class="hidden"
+                    :accept="getAcceptedMediaTypes(getTemplateHeaderType(campaign.template_id))"
+                    @change="(e) => { selectedCampaign = campaign; handleMediaFileSelect(e) }"
+                  />
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    @click="() => document.getElementById('media-upload-' + campaign.id)?.click()"
+                  >
+                    <Upload class="h-4 w-4 mr-1" />
+                    Select File
+                  </Button>
+                </div>
+              </div>
+
+              <div v-else class="flex items-center gap-2">
+                <AlertCircle class="h-4 w-4 text-amber-500" />
+                <span class="text-sm text-amber-600">No media uploaded</span>
+              </div>
             </div>
 
             <!-- Actions -->

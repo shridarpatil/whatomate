@@ -183,7 +183,15 @@ export const campaignsService = {
   addRecipients: (id: string, recipients: Array<{ phone_number: string; recipient_name?: string; template_params?: Record<string, any> }>) =>
     api.post(`/campaigns/${id}/recipients/import`, { recipients }),
   deleteRecipient: (campaignId: string, recipientId: string) =>
-    api.delete(`/campaigns/${campaignId}/recipients/${recipientId}`)
+    api.delete(`/campaigns/${campaignId}/recipients/${recipientId}`),
+  // Media
+  uploadMedia: (campaignId: string, file: File) => {
+    const formData = new FormData()
+    formData.append('file', file)
+    return api.post(`/campaigns/${campaignId}/media`, formData, {
+      headers: { 'Content-Type': 'multipart/form-data' }
+    })
+  }
 }
 
 export const chatbotService = {
