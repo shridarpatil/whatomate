@@ -335,7 +335,26 @@ func (w *Worker) sendTemplateMessage(ctx context.Context, account *models.WhatsA
 	// Build template components with parameters
 	var components []map[string]interface{}
 
-	// Resolve parameters (supports both named and positional)
+	// Handle header component (for media templates)
+	if template.HeaderType != "" && template.HeaderType != "TEXT" {
+		// Check if recipient has a custom media URL, otherwise use template's header content
+		mediaURL := template.HeaderContent
+		if url, ok := recipient.TemplateParams["header_media_url"].(string); ok && url != "" {
+			mediaURL = url
+		}
+
+		if mediaURL != "" {
+			headerParam := buildMediaParameter(template.HeaderType, mediaURL)
+			if headerParam != nil {
+				components = append(components, map[string]interface{}{
+					"type":       "header",
+					"parameters": []map[string]interface{}{headerParam},
+				})
+			}
+		}
+	}
+
+	// Resolve body parameters (supports both named and positional)
 	resolvedParams := resolveTemplateParams(template, recipient.TemplateParams)
 	if len(resolvedParams) > 0 {
 		bodyParams := make([]map[string]interface{}, len(resolvedParams))
@@ -352,6 +371,35 @@ func (w *Worker) sendTemplateMessage(ctx context.Context, account *models.WhatsA
 	}
 
 	return w.WhatsApp.SendTemplateMessageWithComponents(ctx, waAccount, recipient.PhoneNumber, template.Name, template.Language, components)
+}
+
+// buildMediaParameter creates a media parameter for header component
+func buildMediaParameter(headerType, mediaURL string) map[string]interface{} {
+	switch headerType {
+	case "IMAGE":
+		return map[string]interface{}{
+			"type": "image",
+			"image": map[string]interface{}{
+				"link": mediaURL,
+			},
+		}
+	case "VIDEO":
+		return map[string]interface{}{
+			"type": "video",
+			"video": map[string]interface{}{
+				"link": mediaURL,
+			},
+		}
+	case "DOCUMENT":
+		return map[string]interface{}{
+			"type": "document",
+			"document": map[string]interface{}{
+				"link": mediaURL,
+			},
+		}
+	default:
+		return nil
+	}
 }
 
 // Close cleans up worker resources
