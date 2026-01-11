@@ -44,8 +44,9 @@ func agentTransfersTestApp(t *testing.T) *handlers.App {
 func createTransferTestOrg(t *testing.T, app *handlers.App) *models.Organization {
 	t.Helper()
 	org := &models.Organization{
-		Name: "Transfer Test Org " + uuid.New().String(),
-		Slug: "transfer-test-" + uuid.New().String(),
+		BaseModel: models.BaseModel{ID: uuid.New()},
+		Name:      "Transfer Test Org " + uuid.New().String(),
+		Slug:      "transfer-test-" + uuid.New().String(),
 	}
 	err := app.DB.Create(org).Error
 	require.NoError(t, err, "failed to create test organization")
@@ -56,6 +57,7 @@ func createTransferTestOrg(t *testing.T, app *handlers.App) *models.Organization
 func createTransferTestUser(t *testing.T, app *handlers.App, orgID uuid.UUID, role models.Role) *models.User {
 	t.Helper()
 	user := &models.User{
+		BaseModel:      models.BaseModel{ID: uuid.New()},
 		OrganizationID: orgID,
 		Email:          "transfer-test-" + uuid.New().String() + "@example.com",
 		PasswordHash:   "hashed",
@@ -72,6 +74,7 @@ func createTransferTestUser(t *testing.T, app *handlers.App, orgID uuid.UUID, ro
 func createTransferTestAccount(t *testing.T, app *handlers.App, orgID uuid.UUID) *models.WhatsAppAccount {
 	t.Helper()
 	account := &models.WhatsAppAccount{
+		BaseModel:          models.BaseModel{ID: uuid.New()},
 		OrganizationID:     orgID,
 		Name:               "transfer-test-" + uuid.New().String(),
 		PhoneID:            "phone-" + uuid.New().String(),
@@ -92,6 +95,7 @@ func createTestContact(t *testing.T, app *handlers.App, orgID uuid.UUID) *models
 
 	uniqueID := uuid.New().String()[:8]
 	contact := &models.Contact{
+		BaseModel:      models.BaseModel{ID: uuid.New()},
 		OrganizationID: orgID,
 		PhoneNumber:    "1234567890" + uniqueID[:4],
 		ProfileName:    "Test Contact " + uniqueID,
@@ -106,6 +110,7 @@ func createTestAgent(t *testing.T, app *handlers.App, orgID uuid.UUID) *models.U
 
 	uniqueID := uuid.New().String()[:8]
 	agent := &models.User{
+		BaseModel:      models.BaseModel{ID: uuid.New()},
 		OrganizationID: orgID,
 		Email:          "agent-" + uniqueID + "@example.com",
 		PasswordHash:   "hashed",
@@ -123,6 +128,7 @@ func createTestTransfer(t *testing.T, app *handlers.App, orgID, contactID uuid.U
 	t.Helper()
 
 	transfer := &models.AgentTransfer{
+		BaseModel:       models.BaseModel{ID: uuid.New()},
 		OrganizationID:  orgID,
 		ContactID:       contactID,
 		WhatsAppAccount: accountName,
@@ -142,6 +148,7 @@ func createTestTeam(t *testing.T, app *handlers.App, orgID uuid.UUID, memberIDs 
 
 	uniqueID := uuid.New().String()[:8]
 	team := &models.Team{
+		BaseModel:          models.BaseModel{ID: uuid.New()},
 		OrganizationID:     orgID,
 		Name:               "Test Team " + uniqueID,
 		IsActive:           true,
@@ -151,9 +158,10 @@ func createTestTeam(t *testing.T, app *handlers.App, orgID uuid.UUID, memberIDs 
 
 	for _, memberID := range memberIDs {
 		member := &models.TeamMember{
-			TeamID: team.ID,
-			UserID: memberID,
-			Role:   models.RoleAgent,
+			BaseModel: models.BaseModel{ID: uuid.New()},
+			TeamID:    team.ID,
+			UserID:    memberID,
+			Role:      models.RoleAgent,
 		}
 		require.NoError(t, app.DB.Create(member).Error)
 	}

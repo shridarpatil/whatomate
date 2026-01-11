@@ -52,8 +52,9 @@ func createTestOrganization(t *testing.T, app *handlers.App) *models.Organizatio
 	t.Helper()
 
 	org := &models.Organization{
-		Name: "Test Organization " + uuid.New().String()[:8],
-		Slug: "test-org-" + uuid.New().String()[:8],
+		BaseModel: models.BaseModel{ID: uuid.New()},
+		Name:      "Test Organization " + uuid.New().String()[:8],
+		Slug:      "test-org-" + uuid.New().String()[:8],
 	}
 	require.NoError(t, app.DB.Create(org).Error)
 	return org
@@ -67,6 +68,7 @@ func createTestUser(t *testing.T, app *handlers.App, orgID uuid.UUID, email, pas
 	require.NoError(t, err)
 
 	user := &models.User{
+		BaseModel:      models.BaseModel{ID: uuid.New()},
 		OrganizationID: orgID,
 		Email:          email,
 		PasswordHash:   string(hashedPassword),
