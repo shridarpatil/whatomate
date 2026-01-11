@@ -198,7 +198,9 @@ func (a *App) ListAgentTransfers(r *fastglue.Request) error {
 	var userTeamIDs []uuid.UUID
 	if role == models.RoleAgent || role == models.RoleManager {
 		var memberships []models.TeamMember
-		a.DB.Where("user_id = ?", userID).Find(&memberships)
+		if err := a.DB.Where("user_id = ?", userID).Find(&memberships).Error; err != nil {
+			a.Log.Error("Failed to fetch team memberships", "error", err, "user_id", userID)
+		}
 		for _, m := range memberships {
 			userTeamIDs = append(userTeamIDs, m.TeamID)
 		}
@@ -861,7 +863,9 @@ func (a *App) PickNextTransfer(r *fastglue.Request) error {
 	// Get user's team memberships
 	var userTeamIDs []uuid.UUID
 	var memberships []models.TeamMember
-	a.DB.Where("user_id = ?", userID).Find(&memberships)
+	if err := a.DB.Where("user_id = ?", userID).Find(&memberships).Error; err != nil {
+		a.Log.Error("Failed to fetch team memberships for pick", "error", err, "user_id", userID)
+	}
 	for _, m := range memberships {
 		userTeamIDs = append(userTeamIDs, m.TeamID)
 	}

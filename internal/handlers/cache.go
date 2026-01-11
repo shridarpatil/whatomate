@@ -131,17 +131,21 @@ func (a *App) getKeywordRulesCached(orgID uuid.UUID, whatsAppAccount string) ([]
 
 	// Get account-specific rules
 	var accountRules []models.KeywordRule
-	a.DB.Where("organization_id = ? AND whats_app_account = ? AND is_enabled = true",
+	if err := a.DB.Where("organization_id = ? AND whats_app_account = ? AND is_enabled = true",
 		orgID, whatsAppAccount).
 		Order("priority DESC").
-		Find(&accountRules)
+		Find(&accountRules).Error; err != nil {
+		a.Log.Error("Failed to fetch account keyword rules", "error", err, "org_id", orgID)
+	}
 
 	// Get global rules (whats_app_account = '')
 	var globalRules []models.KeywordRule
-	a.DB.Where("organization_id = ? AND whats_app_account = '' AND is_enabled = true",
+	if err := a.DB.Where("organization_id = ? AND whats_app_account = '' AND is_enabled = true",
 		orgID).
 		Order("priority DESC").
-		Find(&globalRules)
+		Find(&globalRules).Error; err != nil {
+		a.Log.Error("Failed to fetch global keyword rules", "error", err, "org_id", orgID)
+	}
 
 	// Merge: account-specific first, then global
 	rules = append(accountRules, globalRules...)
@@ -316,17 +320,21 @@ func (a *App) getAIContextsCached(orgID uuid.UUID, whatsAppAccount string) ([]mo
 
 	// Get account-specific contexts
 	var accountContexts []models.AIContext
-	a.DB.Where("organization_id = ? AND whats_app_account = ? AND is_enabled = true",
+	if err := a.DB.Where("organization_id = ? AND whats_app_account = ? AND is_enabled = true",
 		orgID, whatsAppAccount).
 		Order("priority DESC").
-		Find(&accountContexts)
+		Find(&accountContexts).Error; err != nil {
+		a.Log.Error("Failed to fetch account AI contexts", "error", err, "org_id", orgID)
+	}
 
 	// Get global contexts (whats_app_account = '')
 	var globalContexts []models.AIContext
-	a.DB.Where("organization_id = ? AND whats_app_account = '' AND is_enabled = true",
+	if err := a.DB.Where("organization_id = ? AND whats_app_account = '' AND is_enabled = true",
 		orgID).
 		Order("priority DESC").
-		Find(&globalContexts)
+		Find(&globalContexts).Error; err != nil {
+		a.Log.Error("Failed to fetch global AI contexts", "error", err, "org_id", orgID)
+	}
 
 	// Merge: account-specific first, then global
 	contexts = append(accountContexts, globalContexts...)

@@ -1048,14 +1048,17 @@ func (a *App) recalculateCampaignStats(campaignID uuid.UUID) {
 		Failed    int64
 	}
 
-	a.DB.Model(&models.Message{}).
+	if err := a.DB.Model(&models.Message{}).
 		Where("metadata->>'campaign_id' = ?", campaignID.String()).
 		Select(`
 			COUNT(CASE WHEN status IN ('sent','delivered','read') THEN 1 END) as sent,
 			COUNT(CASE WHEN status IN ('delivered','read') THEN 1 END) as delivered,
 			COUNT(CASE WHEN status = 'read' THEN 1 END) as read,
 			COUNT(CASE WHEN status = 'failed' THEN 1 END) as failed
-		`).Scan(&stats)
+		`).Scan(&stats).Error; err != nil {
+		a.Log.Error("Failed to scan campaign message stats", "error", err, "campaign_id", campaignID)
+		return
+	}
 
 	if err := a.DB.Model(&models.BulkMessageCampaign{}).Where("id = ?", campaignID).
 		Updates(map[string]interface{}{
