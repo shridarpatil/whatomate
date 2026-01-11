@@ -387,12 +387,6 @@ const filteredTemplates = computed(() => {
   )
 })
 
-// Extract variables from template body
-function extractVariables(text: string): string[] {
-  const matches = text.match(/\{\{(\d+)\}\}/g) || []
-  return [...new Set(matches)]
-}
-
 // Extract all parameter names (both positional {{1}} and named {{name}})
 function extractParamNames(content: string): string[] {
   const matches = content.match(/\{\{([^}]+)\}\}/g) || []
@@ -829,11 +823,11 @@ function formatPreview(text: string, samples: any[]): string {
             <Label>Body Content <span class="text-destructive">*</span></Label>
             <Textarea
               v-model="formData.body_content"
-              placeholder="Hi {{name}}, your order #{{order_id}} has been confirmed..."
+              placeholder="Hi {{1}}, your order #{{2}} has been confirmed... (or use named: {{name}}, {{order_id}})"
               rows="4"
             />
             <p class="text-xs text-muted-foreground">
-              Use <span v-pre>{{name}}</span>, <span v-pre>{{order_id}}</span>, etc. for dynamic variables
+              Use <span v-pre>{{name}}</span>, <span v-pre>{{order_id}}</span> for named variables or <span v-pre>{{1}}</span>, <span v-pre>{{2}}</span> for positional variables
             </p>
           </div>
 
