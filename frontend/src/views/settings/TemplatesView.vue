@@ -40,7 +40,7 @@ import {
   TooltipContent,
   TooltipTrigger,
 } from '@/components/ui/tooltip'
-import { api } from '@/services/api'
+import { api, templatesService } from '@/services/api'
 import { toast } from 'vue-sonner'
 import {
   Plus,
@@ -58,7 +58,8 @@ import {
   X,
   Check,
   AlertCircle,
-  Send
+  Send,
+  Upload
 } from 'lucide-vue-next'
 
 interface WhatsAppAccount {
@@ -103,6 +104,12 @@ const deleteDialogOpen = ref(false)
 const templateToDelete = ref<Template | null>(null)
 const publishDialogOpen = ref(false)
 const templateToPublish = ref<Template | null>(null)
+
+// Header media upload state
+const headerMediaFile = ref<File | null>(null)
+const headerMediaUploading = ref(false)
+const headerMediaHandle = ref('')
+const headerMediaFilename = ref('')
 
 const formData = ref({
   whatsapp_account: '',
@@ -219,6 +226,10 @@ function openCreateDialog() {
     buttons: [],
     sample_values: []
   }
+  // Reset header media state
+  headerMediaFile.value = null
+  headerMediaHandle.value = ''
+  headerMediaFilename.value = ''
   isDialogOpen.value = true
 }
 
@@ -237,6 +248,10 @@ function openEditDialog(template: Template) {
     buttons: template.buttons || [],
     sample_values: template.sample_values || []
   }
+  // Reset header media state (will show existing handle if present)
+  headerMediaFile.value = null
+  headerMediaHandle.value = template.header_content || ''
+  headerMediaFilename.value = ''
   isDialogOpen.value = true
 }
 
@@ -424,6 +439,59 @@ function addButton() {
 
 function removeButton(index: number) {
   formData.value.buttons.splice(index, 1)
+}
+
+// Handle header media file selection
+function onHeaderMediaFileChange(event: Event) {
+  const input = event.target as HTMLInputElement
+  if (input.files && input.files.length > 0) {
+    headerMediaFile.value = input.files[0]
+    headerMediaFilename.value = input.files[0].name
+    // Clear previous handle when new file is selected
+    headerMediaHandle.value = ''
+    formData.value.header_content = ''
+  }
+}
+
+// Upload header media file to Meta
+async function uploadHeaderMedia() {
+  if (!headerMediaFile.value) {
+    toast.error('Please select a file first')
+    return
+  }
+
+  if (!formData.value.whatsapp_account) {
+    toast.error('Please select a WhatsApp account first')
+    return
+  }
+
+  headerMediaUploading.value = true
+  try {
+    const response = await templatesService.uploadMedia(formData.value.whatsapp_account, headerMediaFile.value)
+    const data = response.data.data
+    headerMediaHandle.value = data.handle
+    formData.value.header_content = data.handle
+    toast.success(`Media uploaded: ${data.filename}`)
+  } catch (error: any) {
+    const message = error.response?.data?.message || 'Failed to upload media'
+    toast.error(message)
+  } finally {
+    headerMediaUploading.value = false
+  }
+}
+
+// Get accepted file types for header type
+function getAcceptedFileTypes(): string {
+  switch (formData.value.header_type) {
+    case 'IMAGE':
+      return 'image/jpeg,image/png'
+    case 'VIDEO':
+      return 'video/mp4'
+    case 'DOCUMENT':
+      return 'application/pdf'
+    default:
+      return '*/*'
+  }
 }
 
 function getSampleValue(component: string, paramName: string): string {
@@ -704,16 +772,68 @@ function formatPreview(text: string, samples: any[]): string {
             <Input v-model="formData.header_content" placeholder="Enter header text..." />
           </div>
 
+          <!-- Header Media Upload for IMAGE/VIDEO/DOCUMENT -->
+          <div v-else-if="['IMAGE', 'VIDEO', 'DOCUMENT'].includes(formData.header_type)" class="space-y-3">
+            <Label>Header Sample {{ formData.header_type.toLowerCase() }}</Label>
+            <p class="text-xs text-muted-foreground">
+              Upload a sample {{ formData.header_type.toLowerCase() }} for Meta to review. This helps with template approval.
+            </p>
+
+            <div class="flex items-center gap-2">
+              <div class="flex-1">
+                <input
+                  type="file"
+                  :accept="getAcceptedFileTypes()"
+                  @change="onHeaderMediaFileChange"
+                  class="w-full text-sm file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:text-sm file:font-medium file:bg-primary file:text-primary-foreground hover:file:bg-primary/90 cursor-pointer"
+                />
+              </div>
+              <Button
+                type="button"
+                size="sm"
+                @click="uploadHeaderMedia"
+                :disabled="!headerMediaFile || headerMediaUploading || !formData.whatsapp_account"
+              >
+                <Loader2 v-if="headerMediaUploading" class="h-4 w-4 mr-1 animate-spin" />
+                <Upload v-else class="h-4 w-4 mr-1" />
+                Upload
+              </Button>
+            </div>
+
+            <!-- Show upload status -->
+            <div v-if="headerMediaFilename && !headerMediaHandle" class="text-sm text-muted-foreground">
+              Selected: {{ headerMediaFilename }} (click Upload to get handle)
+            </div>
+
+            <!-- Show uploaded handle -->
+            <div v-if="headerMediaHandle" class="bg-green-50 dark:bg-green-950 border border-green-200 dark:border-green-800 rounded-lg p-3">
+              <div class="flex items-center gap-2">
+                <Check class="h-4 w-4 text-green-600" />
+                <span class="text-sm text-green-800 dark:text-green-200">Media uploaded successfully</span>
+              </div>
+              <p class="text-xs text-muted-foreground mt-1 font-mono truncate">
+                Handle: {{ headerMediaHandle.substring(0, 40) }}...
+              </p>
+            </div>
+
+            <!-- Accepted formats hint -->
+            <p class="text-xs text-muted-foreground">
+              <span v-if="formData.header_type === 'IMAGE'">Accepted: JPEG, PNG (max 5MB)</span>
+              <span v-else-if="formData.header_type === 'VIDEO'">Accepted: MP4 (max 16MB)</span>
+              <span v-else-if="formData.header_type === 'DOCUMENT'">Accepted: PDF (max 100MB)</span>
+            </p>
+          </div>
+
           <!-- Body -->
           <div class="space-y-2">
             <Label>Body Content <span class="text-destructive">*</span></Label>
             <Textarea
               v-model="formData.body_content"
-              placeholder="Hi {{1}}, your order #{{2}} has been confirmed..."
+              placeholder="Hi {{name}}, your order #{{order_id}} has been confirmed..."
               rows="4"
             />
             <p class="text-xs text-muted-foreground">
-              Use {"{{1}}"}, {"{{2}}"}, etc. for dynamic variables
+              Use <span v-pre>{{name}}</span>, <span v-pre>{{order_id}}</span>, etc. for dynamic variables
             </p>
           </div>
 
@@ -768,8 +888,8 @@ function formatPreview(text: string, samples: any[]): string {
               <!-- URL specific fields -->
               <div v-if="button.type === 'URL'" class="space-y-1">
                 <Label class="text-xs">URL</Label>
-                <Input v-model="button.url" placeholder="https://example.com/{{1}}" class="h-9" />
-                <p class="text-xs text-muted-foreground">Use {"{{1}}"} for dynamic URL suffix</p>
+                <Input v-model="button.url" placeholder="https://example.com/{{path}}" class="h-9" />
+                <p class="text-xs text-muted-foreground">Use <span v-pre>{{path}}</span> for dynamic URL suffix</p>
               </div>
 
               <!-- Phone number specific fields -->

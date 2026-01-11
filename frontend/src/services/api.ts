@@ -152,7 +152,17 @@ export const templatesService = {
   create: (data: any) => api.post('/templates', data),
   update: (id: string, data: any) => api.put(`/templates/${id}`, data),
   delete: (id: string) => api.delete(`/templates/${id}`),
-  sync: () => api.post('/templates/sync')
+  sync: () => api.post('/templates/sync'),
+  uploadMedia: (accountName: string, file: File) => {
+    const formData = new FormData()
+    formData.append('file', file)
+    formData.append('account', accountName)
+    return axios.post(`${api.defaults.baseURL}/templates/upload-media`, formData, {
+      headers: {
+        'Authorization': `Bearer ${localStorage.getItem('auth_token')}`
+      }
+    })
+  }
 }
 
 export const flowsService = {

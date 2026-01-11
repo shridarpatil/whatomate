@@ -6,6 +6,7 @@ import "time"
 type Account struct {
 	PhoneID     string
 	BusinessID  string
+	AppID       string
 	APIVersion  string
 	AccessToken string
 }

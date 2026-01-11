@@ -32,6 +32,49 @@ func (c *Client) SubmitTemplate(ctx context.Context, account *Account, template 
 	// Check if using named parameters
 	isNamedParams := template.ParameterFormat == "named" || hasNamedParams(template.BodyContent)
 
+	// Header component (must come before BODY)
+	if template.HeaderType != "" && template.HeaderType != "NONE" {
+		header := map[string]interface{}{
+			"type":   "HEADER",
+			"format": template.HeaderType,
+		}
+		addHeader := true
+		switch template.HeaderType {
+		case "TEXT":
+			header["text"] = template.HeaderContent
+			if strings.Contains(template.HeaderContent, "{{") {
+				if isNamedParams {
+					namedExamples := extractNamedExamplesForComponent(template.SampleValues, "header")
+					if len(namedExamples) > 0 {
+						header["example"] = map[string]interface{}{
+							"header_text_named_params": namedExamples,
+						}
+					}
+				} else {
+					headerExamples := extractExamplesForComponent(template.SampleValues, "header")
+					if len(headerExamples) > 0 {
+						header["example"] = map[string]interface{}{
+							"header_text": headerExamples,
+						}
+					}
+				}
+			}
+		case "IMAGE", "VIDEO", "DOCUMENT":
+			// Media headers require a handle - skip if not provided
+			if template.HeaderContent != "" {
+				header["example"] = map[string]interface{}{
+					"header_handle": []string{template.HeaderContent},
+				}
+			} else {
+				// Don't add media header without a handle
+				addHeader = false
+			}
+		}
+		if addHeader {
+			components = append(components, header)
+		}
+	}
+
 	// Body component (required)
 	body := map[string]interface{}{
 		"type": "BODY",
@@ -66,42 +109,6 @@ func (c *Client) SubmitTemplate(ctx context.Context, account *Account, template 
 		}
 	}
 	components = append(components, body)
-
-	// Header component
-	if template.HeaderType != "" && template.HeaderType != "NONE" {
-		header := map[string]interface{}{
-			"type":   "HEADER",
-			"format": template.HeaderType,
-		}
-		switch template.HeaderType {
-		case "TEXT":
-			header["text"] = template.HeaderContent
-			if strings.Contains(template.HeaderContent, "{{") {
-				if isNamedParams {
-					namedExamples := extractNamedExamplesForComponent(template.SampleValues, "header")
-					if len(namedExamples) > 0 {
-						header["example"] = map[string]interface{}{
-							"header_text_named_params": namedExamples,
-						}
-					}
-				} else {
-					headerExamples := extractExamplesForComponent(template.SampleValues, "header")
-					if len(headerExamples) > 0 {
-						header["example"] = map[string]interface{}{
-							"header_text": headerExamples,
-						}
-					}
-				}
-			}
-		case "IMAGE", "VIDEO", "DOCUMENT":
-			if template.HeaderContent != "" {
-				header["example"] = map[string]interface{}{
-					"header_handle": []string{template.HeaderContent},
-				}
-			}
-		}
-		components = append(components, header)
-	}
 
 	// Footer component
 	if template.FooterContent != "" {
@@ -188,7 +195,9 @@ func (c *Client) SubmitTemplate(ctx context.Context, account *Account, template 
 		payload["parameter_format"] = "NAMED"
 	}
 
-	c.Log.Info("Submitting template to Meta", "url", url, "name", template.Name)
+	// Log payload for debugging
+	payloadJSON, _ := json.MarshalIndent(payload, "", "  ")
+	c.Log.Info("Submitting template to Meta", "url", url, "name", template.Name, "payload", string(payloadJSON))
 
 	respBody, err := c.doRequest(ctx, http.MethodPost, url, payload, account.AccessToken)
 	if err != nil {
