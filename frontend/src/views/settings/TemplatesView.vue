@@ -378,19 +378,30 @@ function extractVariables(text: string): string[] {
   return [...new Set(matches)]
 }
 
-// Get variable numbers from body content
+// Extract all parameter names (both positional {{1}} and named {{name}})
+function extractParamNames(content: string): string[] {
+  const matches = content.match(/\{\{([^}]+)\}\}/g) || []
+  const seen = new Set<string>()
+  const names: string[] = []
+  for (const m of matches) {
+    const name = m.replace(/[{}]/g, '').trim()
+    if (name && !seen.has(name)) {
+      seen.add(name)
+      names.push(name)
+    }
+  }
+  return names
+}
+
+// Get variable names from body content (supports both {{1}} and {{name}})
 const bodyVariables = computed(() => {
-  const matches = formData.value.body_content.match(/\{\{(\d+)\}\}/g) || []
-  const unique = [...new Set(matches)]
-  return unique.map(v => parseInt(v.replace(/\{\{|\}\}/g, ''))).sort((a, b) => a - b)
+  return extractParamNames(formData.value.body_content)
 })
 
-// Get variable numbers from header content
+// Get variable names from header content
 const headerVariables = computed(() => {
   if (formData.value.header_type !== 'TEXT') return []
-  const matches = formData.value.header_content.match(/\{\{(\d+)\}\}/g) || []
-  const unique = [...new Set(matches)]
-  return unique.map(v => parseInt(v.replace(/\{\{|\}\}/g, ''))).sort((a, b) => a - b)
+  return extractParamNames(formData.value.header_content)
 })
 
 // Button types for template
@@ -415,39 +426,43 @@ function removeButton(index: number) {
   formData.value.buttons.splice(index, 1)
 }
 
-function getSampleValue(component: string, index: number): string {
+function getSampleValue(component: string, paramName: string): string {
   const sample = formData.value.sample_values.find(
-    (s: any) => s.component === component && s.index === index
+    (s: any) => s.component === component && s.param_name === paramName
   )
   return sample?.value || ''
 }
 
-function setSampleValue(component: string, index: number, value: string) {
+function setSampleValue(component: string, paramName: string, value: string) {
   const existingIndex = formData.value.sample_values.findIndex(
-    (s: any) => s.component === component && s.index === index
+    (s: any) => s.component === component && s.param_name === paramName
   )
   if (existingIndex >= 0) {
     formData.value.sample_values[existingIndex].value = value
   } else {
-    formData.value.sample_values.push({ component, index, value })
+    formData.value.sample_values.push({ component, param_name: paramName, value })
   }
 }
 
-function formatVariableLabel(varNum: number): string {
-  return `{{${varNum}}}`
+function formatVariableLabel(paramName: string): string {
+  return `{{${paramName}}}`
 }
 
 // Format template preview with sample values (sanitized to prevent XSS)
 function formatPreview(text: string, samples: any[]): string {
   // Sanitize the base text first
   let result = DOMPurify.sanitize(text, { ALLOWED_TAGS: [] })
-  samples.forEach((sample, index) => {
-    // Sanitize each sample value to prevent XSS
-    const sanitizedSample = DOMPurify.sanitize(String(sample), { ALLOWED_TAGS: [] })
-    result = result.replace(`{{${index + 1}}}`, `<span class="bg-green-100 dark:bg-green-900 px-1 rounded">${sanitizedSample}</span>`)
+
+  // Handle named parameters with param_name field
+  samples.forEach((sample) => {
+    if (sample && sample.param_name && sample.value) {
+      const sanitizedSample = DOMPurify.sanitize(String(sample.value), { ALLOWED_TAGS: [] })
+      result = result.replace(`{{${sample.param_name}}}`, `<span class="bg-green-100 dark:bg-green-900 px-1 rounded">${sanitizedSample}</span>`)
+    }
   })
-  // Replace remaining variables
-  result = result.replace(/\{\{(\d+)\}\}/g, '<span class="bg-yellow-100 dark:bg-yellow-900 px-1 rounded">{{$1}}</span>')
+
+  // Replace remaining variables (both named and positional)
+  result = result.replace(/\{\{([^}]+)\}\}/g, '<span class="bg-yellow-100 dark:bg-yellow-900 px-1 rounded">{{$1}}</span>')
   return result
 }
 </script>
@@ -779,13 +794,13 @@ function formatPreview(text: string, samples: any[]): string {
             <!-- Header Variables -->
             <div v-if="headerVariables.length > 0" class="space-y-2">
               <p class="text-sm font-medium text-muted-foreground">Header Variables</p>
-              <div v-for="varNum in headerVariables" :key="'header-' + varNum" class="flex items-center gap-2">
-                <span class="text-sm font-mono bg-muted px-2 py-1 rounded min-w-[60px] text-center">{{ formatVariableLabel(varNum) }}</span>
+              <div v-for="paramName in headerVariables" :key="'header-' + paramName" class="flex items-center gap-2">
+                <span class="text-sm font-mono bg-muted px-2 py-1 rounded min-w-[80px] text-center">{{ formatVariableLabel(paramName) }}</span>
                 <input
                   type="text"
-                  :value="getSampleValue('header', varNum)"
-                  @input="setSampleValue('header', varNum, ($event.target as HTMLInputElement).value)"
-                  placeholder="Example value..."
+                  :value="getSampleValue('header', paramName)"
+                  @input="setSampleValue('header', paramName, ($event.target as HTMLInputElement).value)"
+                  :placeholder="'Example for ' + paramName + '...'"
                   class="flex-1 h-9 rounded-md border border-input bg-background px-3 text-sm"
                 />
               </div>
@@ -794,13 +809,13 @@ function formatPreview(text: string, samples: any[]): string {
             <!-- Body Variables -->
             <div v-if="bodyVariables.length > 0" class="space-y-2">
               <p class="text-sm font-medium text-muted-foreground">Body Variables</p>
-              <div v-for="varNum in bodyVariables" :key="'body-' + varNum" class="flex items-center gap-2">
-                <span class="text-sm font-mono bg-muted px-2 py-1 rounded min-w-[60px] text-center">{{ formatVariableLabel(varNum) }}</span>
+              <div v-for="paramName in bodyVariables" :key="'body-' + paramName" class="flex items-center gap-2">
+                <span class="text-sm font-mono bg-muted px-2 py-1 rounded min-w-[80px] text-center">{{ formatVariableLabel(paramName) }}</span>
                 <input
                   type="text"
-                  :value="getSampleValue('body', varNum)"
-                  @input="setSampleValue('body', varNum, ($event.target as HTMLInputElement).value)"
-                  placeholder="Example value..."
+                  :value="getSampleValue('body', paramName)"
+                  @input="setSampleValue('body', paramName, ($event.target as HTMLInputElement).value)"
+                  :placeholder="'Example for ' + paramName + '...'"
                   class="flex-1 h-9 rounded-md border border-input bg-background px-3 text-sm"
                 />
               </div>

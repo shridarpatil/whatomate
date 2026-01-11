@@ -10,15 +10,16 @@ import (
 
 // TemplateSubmission represents a template to be submitted to Meta
 type TemplateSubmission struct {
-	Name          string
-	Language      string
-	Category      string
-	HeaderType    string
-	HeaderContent string
-	BodyContent   string
-	FooterContent string
-	Buttons       []interface{}
-	SampleValues  []interface{}
+	Name            string
+	Language        string
+	Category        string
+	ParameterFormat string // "positional" or "named" - default is positional
+	HeaderType      string
+	HeaderContent   string
+	BodyContent     string
+	FooterContent   string
+	Buttons         []interface{}
+	SampleValues    []interface{} // For named: [{param_name: "name", value: "John"}, ...]
 }
 
 // SubmitTemplate submits a template to Meta's API
@@ -28,6 +29,9 @@ func (c *Client) SubmitTemplate(ctx context.Context, account *Account, template 
 	// Build components array
 	components := []map[string]interface{}{}
 
+	// Check if using named parameters
+	isNamedParams := template.ParameterFormat == "named" || hasNamedParams(template.BodyContent)
+
 	// Body component (required)
 	body := map[string]interface{}{
 		"type": "BODY",
@@ -35,15 +39,29 @@ func (c *Client) SubmitTemplate(ctx context.Context, account *Account, template 
 	}
 	// Add examples if there are variables in body
 	if strings.Contains(template.BodyContent, "{{") {
-		bodyExamples := extractExamplesForComponent(template.SampleValues, "body")
-		if len(bodyExamples) > 0 {
-			body["example"] = map[string]interface{}{
-				"body_text": [][]string{bodyExamples},
+		if isNamedParams {
+			namedExamples := extractNamedExamplesForComponent(template.SampleValues, "body")
+			if len(namedExamples) > 0 {
+				body["example"] = map[string]interface{}{
+					"body_text_named_params": namedExamples,
+				}
+			} else {
+				varCount := strings.Count(template.BodyContent, "{{")
+				if varCount > 0 {
+					return "", fmt.Errorf("sample values are required for template variables. Found %d variable(s) in body but no sample values provided", varCount)
+				}
 			}
 		} else {
-			varCount := strings.Count(template.BodyContent, "{{")
-			if varCount > 0 {
-				return "", fmt.Errorf("sample values are required for template variables. Found %d variable(s) in body but no sample values provided", varCount)
+			bodyExamples := extractExamplesForComponent(template.SampleValues, "body")
+			if len(bodyExamples) > 0 {
+				body["example"] = map[string]interface{}{
+					"body_text": [][]string{bodyExamples},
+				}
+			} else {
+				varCount := strings.Count(template.BodyContent, "{{")
+				if varCount > 0 {
+					return "", fmt.Errorf("sample values are required for template variables. Found %d variable(s) in body but no sample values provided", varCount)
+				}
 			}
 		}
 	}
@@ -59,10 +77,19 @@ func (c *Client) SubmitTemplate(ctx context.Context, account *Account, template 
 		case "TEXT":
 			header["text"] = template.HeaderContent
 			if strings.Contains(template.HeaderContent, "{{") {
-				headerExamples := extractExamplesForComponent(template.SampleValues, "header")
-				if len(headerExamples) > 0 {
-					header["example"] = map[string]interface{}{
-						"header_text": headerExamples,
+				if isNamedParams {
+					namedExamples := extractNamedExamplesForComponent(template.SampleValues, "header")
+					if len(namedExamples) > 0 {
+						header["example"] = map[string]interface{}{
+							"header_text_named_params": namedExamples,
+						}
+					}
+				} else {
+					headerExamples := extractExamplesForComponent(template.SampleValues, "header")
+					if len(headerExamples) > 0 {
+						header["example"] = map[string]interface{}{
+							"header_text": headerExamples,
+						}
 					}
 				}
 			}
@@ -154,6 +181,11 @@ func (c *Client) SubmitTemplate(ctx context.Context, account *Account, template 
 		"language":   template.Language,
 		"category":   template.Category,
 		"components": components,
+	}
+
+	// Add parameter_format for named parameters
+	if isNamedParams {
+		payload["parameter_format"] = "NAMED"
 	}
 
 	c.Log.Info("Submitting template to Meta", "url", url, "name", template.Name)
@@ -266,4 +298,54 @@ func extractExamplesForComponent(sampleValues []interface{}, componentType strin
 		}
 	}
 	return examples
+}
+
+// hasNamedParams checks if the body content uses named parameters (non-numeric)
+func hasNamedParams(content string) bool {
+	// Extract all parameter names
+	matches := strings.Split(content, "{{")
+	for _, m := range matches[1:] { // Skip first part before any {{
+		if idx := strings.Index(m, "}}"); idx > 0 {
+			paramName := strings.TrimSpace(m[:idx])
+			// If param name is not purely numeric, it's a named param
+			if paramName != "" {
+				isNumeric := true
+				for _, c := range paramName {
+					if c < '0' || c > '9' {
+						isNumeric = false
+						break
+					}
+				}
+				if !isNumeric {
+					return true
+				}
+			}
+		}
+	}
+	return false
+}
+
+// extractNamedExamplesForComponent extracts named example values for Meta API format
+// Returns: [{"param_name": "name", "example": "John"}, ...]
+func extractNamedExamplesForComponent(sampleValues []interface{}, componentType string) []map[string]string {
+	results := []map[string]string{}
+
+	for _, sv := range sampleValues {
+		if svMap, ok := sv.(map[string]interface{}); ok {
+			comp, _ := svMap["component"].(string)
+			// Match component type or accept if not specified (for body)
+			if comp == componentType || (comp == "" && componentType == "body") {
+				paramName, _ := svMap["param_name"].(string)
+				value, _ := svMap["value"].(string)
+				if paramName != "" && value != "" {
+					results = append(results, map[string]string{
+						"param_name": paramName,
+						"example":    value,
+					})
+				}
+			}
+		}
+	}
+
+	return results
 }
