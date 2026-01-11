@@ -78,11 +78,6 @@ func (a *App) AssignContact(r *fastglue.Request) error {
 	})
 }
 
-// Message handlers
-func (a *App) SendTemplateMessage(r *fastglue.Request) error {
-	return r.SendErrorEnvelope(fasthttp.StatusNotImplemented, "Not implemented yet", nil, "")
-}
-
 // SendMediaMessage is implemented in contacts.go
 
 func (a *App) MarkMessageRead(r *fastglue.Request) error {
