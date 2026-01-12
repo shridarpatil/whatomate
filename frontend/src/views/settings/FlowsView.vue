@@ -182,13 +182,14 @@ async function createFlow() {
       json_version: formData.value.json_version
     }
 
-    // Build flow_json from the builder
+    // Build flow_json from the builder (sanitize for Meta API)
     if (flowBuilderData.value.screens.length > 0) {
+      const sanitizedScreens = sanitizeScreensForMeta(flowBuilderData.value.screens)
       payload.flow_json = {
         version: formData.value.json_version,
-        screens: flowBuilderData.value.screens
+        screens: sanitizedScreens
       }
-      payload.screens = flowBuilderData.value.screens
+      payload.screens = sanitizedScreens
     }
 
     await flowsService.create(payload)
@@ -237,13 +238,14 @@ async function updateFlow() {
       json_version: editFormData.value.json_version
     }
 
-    // Build flow_json from the builder
+    // Build flow_json from the builder (sanitize for Meta API)
     if (editFlowBuilderData.value.screens.length > 0) {
+      const sanitizedScreens = sanitizeScreensForMeta(editFlowBuilderData.value.screens)
       payload.flow_json = {
         version: editFormData.value.json_version,
-        screens: editFlowBuilderData.value.screens
+        screens: sanitizedScreens
       }
-      payload.screens = editFlowBuilderData.value.screens
+      payload.screens = sanitizedScreens
     }
 
     await flowsService.update(flowToEdit.value.id, payload)
@@ -344,6 +346,41 @@ function formatDate(dateStr: string): string {
     month: 'short',
     day: 'numeric'
   })
+}
+
+// Components that should NOT have an 'id' property when sent to Meta API
+const componentsWithoutId = [
+  'TextHeading',
+  'TextSubheading',
+  'TextBody',
+  'TextInput',
+  'TextArea',
+  'Dropdown',
+  'RadioButtonsGroup',
+  'CheckboxGroup',
+  'DatePicker',
+  'Image',
+  'Footer'
+]
+
+// Sanitize flow screens for Meta API by removing 'id' from components that don't support it
+function sanitizeScreensForMeta(screens: any[]): any[] {
+  return screens.map(screen => ({
+    id: screen.id,
+    title: screen.title,
+    data: screen.data || {},
+    layout: {
+      type: screen.layout?.type || 'SingleColumnLayout',
+      children: (screen.layout?.children || []).map((comp: any) => {
+        // Create a copy without the 'id' if component type doesn't support it
+        const { id, ...rest } = comp
+        if (componentsWithoutId.includes(comp.type)) {
+          return rest
+        }
+        return comp
+      })
+    }
+  }))
 }
 </script>
 
