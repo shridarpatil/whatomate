@@ -20,7 +20,7 @@ echo [INFO] Starting backend server on port 8080...
 echo [INFO] Press Ctrl+C to stop
 echo.
 
-go run cmd/whatomate/main.go -config config.toml
+go run cmd/whatomate/main.go server -config config.toml
 
 if %ERRORLEVEL% NEQ 0 (
     echo.

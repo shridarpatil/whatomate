@@ -20,7 +20,7 @@ pkill whatomate
 # Run migrations
 make run-migrate
 # OR
-go run cmd/whatomate/main.go -config config.toml -migrate
+go run cmd/whatomate/main.go server -config config.toml -migrate
 ```
 
 This will create:
@@ -34,7 +34,7 @@ This will create:
 # If running directly
 make run
 # OR
-go run cmd/whatomate/main.go -config config.toml
+go run cmd/whatomate/main.go server -config config.toml
 
 # If using Docker
 cd docker

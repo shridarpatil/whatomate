@@ -36,7 +36,7 @@ REM If config.toml doesn't exist, copy from example
 copy config.example.toml config.toml
 
 REM Run migrations
-go run cmd/whatomate/main.go -config config.toml -migrate
+go run cmd/whatomate/main.go server -config config.toml -migrate
 ```
 
 You should see:
@@ -55,7 +55,7 @@ Open a **new Command Prompt** window:
 cd C:\path\to\whatomate
 
 REM Start the backend
-go run cmd/whatomate/main.go -config config.toml
+go run cmd/whatomate/main.go server -config config.toml
 ```
 
 Wait for:
@@ -118,7 +118,7 @@ If you prefer PowerShell:
 **Terminal 1 - Backend:**
 ```powershell
 cd C:\path\to\whatomate
-go run cmd/whatomate/main.go -config config.toml
+go run cmd/whatomate/main.go server -config config.toml
 ```
 
 **Terminal 2 - Frontend:**
@@ -145,10 +145,10 @@ timeout /t 10
 
 REM Run migrations
 cd ..
-go run cmd/whatomate/main.go -config config.toml -migrate
+go run cmd/whatomate/main.go server -config config.toml -migrate
 
 REM Start backend
-go run cmd/whatomate/main.go -config config.toml
+go run cmd/whatomate/main.go server -config config.toml
 ```
 
 In another terminal:
@@ -247,7 +247,7 @@ You should see:
 
 If not, run migrations again:
 ```cmd
-go run cmd/whatomate/main.go -config config.toml -migrate
+go run cmd/whatomate/main.go server -config config.toml -migrate
 ```
 
 ---
@@ -281,13 +281,13 @@ whatomate.exe -config config.toml
 **Terminal 1 - Database Migration (one time):**
 ```cmd
 cd C:\path\to\whatomate
-go run cmd/whatomate/main.go -config config.toml -migrate
+go run cmd/whatomate/main.go server -config config.toml -migrate
 ```
 
 **Terminal 2 - Backend:**
 ```cmd
 cd C:\path\to\whatomate
-go run cmd/whatomate/main.go -config config.toml
+go run cmd/whatomate/main.go server -config config.toml
 ```
 
 **Terminal 3 - Frontend:**

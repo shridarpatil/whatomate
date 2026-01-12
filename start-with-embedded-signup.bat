@@ -15,7 +15,7 @@ if not exist "config.toml" (
 
 REM Run migrations
 echo [Step 1] Running database migrations...
-go run cmd/whatomate/main.go -config config.toml -migrate
+go run cmd/whatomate/main.go server -config config.toml -migrate
 
 if %ERRORLEVEL% EQU 0 (
     echo [OK] Migrations completed successfully

@@ -51,7 +51,7 @@ echo Running database migrations to create tables...
 echo This creates the embedded_signups and embedded_signup_leads tables.
 echo.
 
-go run cmd/whatomate/main.go -config config.toml -migrate
+go run cmd/whatomate/main.go server -config config.toml -migrate
 
 if %ERRORLEVEL% EQU 0 (
     echo.
