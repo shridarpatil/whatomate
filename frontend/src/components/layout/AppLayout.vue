@@ -48,7 +48,8 @@ import {
   Webhook,
   BarChart3,
   ShieldCheck,
-  Zap
+  Zap,
+  Link2
 } from 'lucide-vue-next'
 import { useColorMode } from '@/composables/useColorMode'
 import { toast } from 'vue-sonner'
@@ -254,6 +255,7 @@ const allNavItems = [
       { name: 'General', path: '/settings', icon: Settings },
       { name: 'Chatbot', path: '/settings/chatbot', icon: Bot },
       { name: 'Accounts', path: '/settings/accounts', icon: Users },
+      { name: 'Embedded Signup', path: '/settings/embedded-signup', icon: Link2 },
       { name: 'Canned Responses', path: '/settings/canned-responses', icon: MessageSquareText },
       { name: 'Teams', path: '/settings/teams', icon: Users },
       { name: 'Users', path: '/settings/users', icon: Users, roles: ['admin'] },

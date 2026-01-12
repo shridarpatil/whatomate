@@ -193,6 +193,12 @@ const router = createRouter({
           name: 'custom-actions',
           component: () => import('@/views/settings/CustomActionsView.vue'),
           meta: { roles: ['admin'] }
+        },
+        {
+          path: 'settings/embedded-signup',
+          name: 'embedded-signup',
+          component: () => import('@/views/settings/EmbeddedSignupView.vue'),
+          meta: { roles: ['admin', 'manager'] }
         }
       ]
     },
