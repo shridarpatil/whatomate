@@ -1,0 +1,87 @@
+version: '3.8'
+
+services:
+  # PostgreSQL database
+  db:
+    image: postgres:17-alpine
+    container_name: whatomate_db
+    restart: unless-stopped
+    networks:
+      - whatomate
+    ports:
+      - "5432:5432"
+    environment:
+      POSTGRES_USER: whatomate
+      POSTGRES_PASSWORD: whatomate
+      POSTGRES_DB: whatomate
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U whatomate -d whatomate"]
+      interval: 10s
+      timeout: 5s
+      retries: 6
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+
+  # Redis
+  redis:
+    image: redis:7-alpine
+    container_name: whatomate_redis
+    restart: unless-stopped
+    networks:
+      - whatomate
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    volumes:
+      - redis-data:/data
+
+  # Whatomate Backend (built from source)
+  backend:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile
+    container_name: whatomate_backend
+    restart: unless-stopped
+    ports:
+      - "8080:8080"
+    networks:
+      - whatomate
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    volumes:
+      - ./uploads:/app/uploads:rw
+      - ./config.docker.toml:/app/config.toml:ro
+    environment:
+      - TZ=UTC
+    command: ["./whatomate", "server", "-config", "config.toml", "-migrate"]
+
+  # Whatomate Frontend (built from source)
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: whatomate_frontend
+    restart: unless-stopped
+    ports:
+      - "5173:80"
+    networks:
+      - whatomate
+    depends_on:
+      - backend
+    environment:
+      - VITE_API_BASE_URL=http://localhost:8080
+
+networks:
+  whatomate:
+    driver: bridge
+
+volumes:
+  postgres-data:
+  redis-data:

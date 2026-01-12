@@ -35,6 +35,9 @@ Modern, open-source WhatsApp Business Platform. Single binary app.
 - **Analytics Dashboard**
   Track messages, engagement, and campaign performance.
 
+- **Embedded Signup** ✨ NEW
+  Allow users to sign up for WhatsApp Business API directly through OAuth flow with Meta coexistence support. Automatically stores all credentials securely in the database.
+
 <details>
 <summary>View more screenshots</summary>
 
@@ -47,7 +50,26 @@ Modern, open-source WhatsApp Business Platform. Single binary app.
 
 ## Installation
 
-### Docker
+### Docker (Recommended for Windows)
+
+**For Windows users:** We provide a complete Docker setup with one-click start:
+
+```cmd
+# Just run this batch file!
+START_DOCKER_WINDOWS.bat
+```
+
+This will:
+- ✅ Build Whatomate from source (includes latest Embedded Signup feature)
+- ✅ Start PostgreSQL, Redis, Backend, and Frontend
+- ✅ Run database migrations automatically
+- ✅ Open Whatomate in your browser
+
+**See [DOCKER_WINDOWS_SETUP.md](DOCKER_WINDOWS_SETUP.md) for complete guide**
+
+__________________
+
+**For Linux/Mac or production deployment:**
 
 The latest image is available on Docker Hub at [`shridh0r/whatomate:latest`](https://hub.docker.com/r/shridh0r/whatomate)
 
