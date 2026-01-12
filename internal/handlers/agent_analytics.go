@@ -377,7 +377,10 @@ func (a *App) calculateAgentStats(orgID, agentID uuid.UUID, start, end time.Time
 func (a *App) calculateAllAgentStats(orgID uuid.UUID, start, end time.Time) []AgentPerformanceStats {
 	// Get all agents in the organization
 	var agents []models.User
-	a.DB.Where("organization_id = ? AND role = ?", orgID, models.RoleAgent).Find(&agents)
+	if err := a.DB.Where("organization_id = ? AND role = ?", orgID, models.RoleAgent).Find(&agents).Error; err != nil {
+		a.Log.Error("Failed to fetch agents for analytics", "error", err, "org_id", orgID)
+		return []AgentPerformanceStats{}
+	}
 
 	stats := make([]AgentPerformanceStats, 0, len(agents))
 	for _, agent := range agents {
@@ -392,9 +395,12 @@ func (a *App) calculateAllAgentStats(orgID uuid.UUID, start, end time.Time) []Ag
 func (a *App) calculateBreakTime(agentID uuid.UUID, start, end time.Time) (totalMins float64, count int64) {
 	// Get all "away" periods that overlap with the time range
 	var logs []models.UserAvailabilityLog
-	a.DB.Where("user_id = ? AND is_available = false AND started_at <= ? AND (ended_at >= ? OR ended_at IS NULL)",
+	if err := a.DB.Where("user_id = ? AND is_available = false AND started_at <= ? AND (ended_at >= ? OR ended_at IS NULL)",
 		agentID, end, start).
-		Find(&logs)
+		Find(&logs).Error; err != nil {
+		a.Log.Error("Failed to fetch availability logs for break time calculation", "error", err, "agent_id", agentID)
+		return 0, 0
+	}
 
 	for _, log := range logs {
 		// Calculate the overlap with our time range

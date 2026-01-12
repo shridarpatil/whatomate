@@ -100,7 +100,14 @@ func (c *Client) doRequest(ctx context.Context, method, url string, body interfa
 	if resp.StatusCode != http.StatusOK {
 		var apiErr MetaAPIError
 		if err := json.Unmarshal(respBody, &apiErr); err == nil && apiErr.Error.Message != "" {
-			return nil, fmt.Errorf("API error %d: %s", apiErr.Error.Code, apiErr.Error.Message)
+			errMsg := fmt.Sprintf("API error %d: %s", apiErr.Error.Code, apiErr.Error.Message)
+			if apiErr.Error.ErrorData.Details != "" {
+				errMsg += " - Details: " + apiErr.Error.ErrorData.Details
+			}
+			if apiErr.Error.ErrorUserMsg != "" {
+				errMsg += " - " + apiErr.Error.ErrorUserMsg
+			}
+			return nil, fmt.Errorf("%s", errMsg)
 		}
 		return nil, fmt.Errorf("API returned status %d: %s", resp.StatusCode, string(respBody))
 	}
@@ -396,4 +403,89 @@ func (c *Client) MarkMessageRead(ctx context.Context, account *Account, messageI
 
 	c.Log.Debug("Read receipt sent", "message_id", messageID)
 	return nil
+}
+
+// ResumableUploadResponse represents response from creating upload session
+type ResumableUploadResponse struct {
+	ID string `json:"id"` // Upload session ID
+}
+
+// ResumableUploadFinishResponse represents response from completing upload
+type ResumableUploadFinishResponse struct {
+	Handle string `json:"h"` // File handle for use in templates
+}
+
+// ResumableUpload performs a resumable upload to get a file handle for template media samples.
+// This is required for IMAGE, VIDEO, DOCUMENT header types in templates.
+// Returns a handle (like "4::aW1hZ2...") that can be used in template creation.
+func (c *Client) ResumableUpload(ctx context.Context, account *Account, data []byte, mimeType, filename string) (string, error) {
+	if account.AppID == "" {
+		return "", fmt.Errorf("app_id is required for resumable upload")
+	}
+
+	// Step 1: Create upload session
+	sessionURL := fmt.Sprintf("%s/%s/%s/uploads", c.getBaseURL(), account.APIVersion, account.AppID)
+
+	sessionPayload := map[string]interface{}{
+		"file_length": len(data),
+		"file_type":   mimeType,
+		"file_name":   filename,
+	}
+
+	c.Log.Info("Creating upload session", "url", sessionURL, "file_size", len(data), "mime_type", mimeType)
+
+	sessionResp, err := c.doRequest(ctx, http.MethodPost, sessionURL, sessionPayload, account.AccessToken)
+	if err != nil {
+		return "", fmt.Errorf("failed to create upload session: %w", err)
+	}
+
+	var uploadSession ResumableUploadResponse
+	if err := json.Unmarshal(sessionResp, &uploadSession); err != nil {
+		return "", fmt.Errorf("failed to parse upload session response: %w", err)
+	}
+
+	if uploadSession.ID == "" {
+		return "", fmt.Errorf("no session ID in upload response")
+	}
+
+	c.Log.Info("Upload session created", "session_id", uploadSession.ID)
+
+	// Step 2: Upload file data to session
+	uploadURL := fmt.Sprintf("%s/%s/%s", c.getBaseURL(), account.APIVersion, uploadSession.ID)
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, uploadURL, bytes.NewReader(data))
+	if err != nil {
+		return "", fmt.Errorf("failed to create upload request: %w", err)
+	}
+
+	req.Header.Set("Authorization", "OAuth "+account.AccessToken)
+	req.Header.Set("file_offset", "0")
+	req.Header.Set("Content-Type", "application/octet-stream")
+
+	resp, err := c.HTTPClient.Do(req)
+	if err != nil {
+		return "", fmt.Errorf("failed to upload file data: %w", err)
+	}
+	defer func() { _ = resp.Body.Close() }()
+
+	respBody, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return "", fmt.Errorf("failed to read upload response: %w", err)
+	}
+
+	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusCreated {
+		return "", fmt.Errorf("upload failed with status %d: %s", resp.StatusCode, string(respBody))
+	}
+
+	var finishResp ResumableUploadFinishResponse
+	if err := json.Unmarshal(respBody, &finishResp); err != nil {
+		return "", fmt.Errorf("failed to parse upload finish response: %w", err)
+	}
+
+	if finishResp.Handle == "" {
+		return "", fmt.Errorf("no handle in upload response")
+	}
+
+	c.Log.Info("Resumable upload completed", "handle", finishResp.Handle[:20]+"...")
+	return finishResp.Handle, nil
 }

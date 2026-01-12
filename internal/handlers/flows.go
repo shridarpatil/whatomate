@@ -3,6 +3,7 @@ package handlers
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 
 	"github.com/google/uuid"
 	"github.com/shridarpatil/whatomate/internal/models"
@@ -313,9 +314,17 @@ func (a *App) SaveFlowToMeta(r *fastglue.Request) error {
 
 	// Step 2: Upload flow JSON if we have screens
 	if len(flow.Screens) > 0 {
+		// Validate flow structure before sending to Meta
+		if err := validateFlowStructure([]interface{}(flow.Screens)); err != nil {
+			return r.SendErrorEnvelope(fasthttp.StatusBadRequest, err.Error(), nil, "")
+		}
+
+		// Sanitize screens before sending to Meta
+		sanitizedScreens := sanitizeScreensForMeta([]interface{}(flow.Screens))
+
 		flowJSON := &whatsapp.FlowJSON{
 			Version: flow.JSONVersion,
-			Screens: flow.Screens,
+			Screens: sanitizedScreens,
 		}
 
 		if err := waClient.UpdateFlowJSON(ctx, waAccount, metaFlowID, flowJSON); err != nil {
@@ -617,6 +626,226 @@ func (a *App) SyncFlows(r *fastglue.Request) error {
 		"created": created,
 		"updated": updated,
 	})
+}
+
+// validateFlowStructure validates the flow structure before sending to Meta
+// - Ensures at least one screen has a Footer with "complete" action
+// - If multiple screens, only the last screen should have "complete" action
+func validateFlowStructure(screens []interface{}) error {
+	if len(screens) == 0 {
+		return fmt.Errorf("Flow must have at least one screen")
+	}
+
+	// Find which screens have complete action
+	screensWithComplete := []int{}
+	for i, screen := range screens {
+		screenMap, ok := screen.(map[string]interface{})
+		if !ok {
+			continue
+		}
+
+		layout, ok := screenMap["layout"].(map[string]interface{})
+		if !ok {
+			continue
+		}
+
+		children, ok := layout["children"].([]interface{})
+		if !ok {
+			continue
+		}
+
+		if hasCompleteAction(children) {
+			screensWithComplete = append(screensWithComplete, i)
+		}
+	}
+
+	// Check if any screen has a complete action
+	if len(screensWithComplete) == 0 {
+		return fmt.Errorf("Flow must have a Footer button with 'Complete Flow' action. Add a Footer component to your last screen and set its action to 'Complete Flow'")
+	}
+
+	// If multiple screens, complete action should only be on the last screen
+	if len(screens) > 1 {
+		lastScreenIndex := len(screens) - 1
+		for _, idx := range screensWithComplete {
+			if idx != lastScreenIndex {
+				return fmt.Errorf("'Complete Flow' action should only be on the last screen. Screen %d has a complete action but it's not the last screen. Use 'Navigate to Screen' action for intermediate screens", idx+1)
+			}
+		}
+	}
+
+	return nil
+}
+
+// componentsWithoutID lists component types that should NOT have an 'id' property when sent to Meta API
+var componentsWithoutID = map[string]bool{
+	"TextHeading":       true,
+	"TextSubheading":    true,
+	"TextBody":          true,
+	"TextInput":         true,
+	"TextArea":          true,
+	"Dropdown":          true,
+	"RadioButtonsGroup": true,
+	"CheckboxGroup":     true,
+	"DatePicker":        true,
+	"Image":             true,
+	"Footer":            true,
+}
+
+// sanitizeScreensForMeta sanitizes flow screens before sending to Meta API
+// - Fixes screen IDs to only use alphabets and underscores
+// - Removes 'id' property from components that don't support it
+// - Marks screens with 'complete' action as terminal screens
+func sanitizeScreensForMeta(screens []interface{}) []interface{} {
+	result := make([]interface{}, len(screens))
+
+	for i, screen := range screens {
+		screenMap, ok := screen.(map[string]interface{})
+		if !ok {
+			result[i] = screen
+			continue
+		}
+
+		// Create a new screen map
+		newScreen := make(map[string]interface{})
+		for k, v := range screenMap {
+			newScreen[k] = v
+		}
+
+		// Fix screen ID if it contains numbers
+		if id, ok := newScreen["id"].(string); ok {
+			newScreen["id"] = sanitizeID(id)
+		}
+
+		// Sanitize layout children and check for terminal action
+		isTerminal := false
+		if layout, ok := newScreen["layout"].(map[string]interface{}); ok {
+			newLayout := make(map[string]interface{})
+			for k, v := range layout {
+				newLayout[k] = v
+			}
+
+			if children, ok := layout["children"].([]interface{}); ok {
+				sanitizedChildren := sanitizeComponents(children)
+				newLayout["children"] = sanitizedChildren
+
+				// Check if any child has on-click-action with name "complete"
+				isTerminal = hasCompleteAction(sanitizedChildren)
+			}
+
+			newScreen["layout"] = newLayout
+		}
+
+		// Mark screen as terminal if it has a complete action
+		if isTerminal {
+			newScreen["terminal"] = true
+		}
+
+		result[i] = newScreen
+	}
+
+	return result
+}
+
+// hasCompleteAction checks if any component has an on-click-action with name "complete"
+func hasCompleteAction(children []interface{}) bool {
+	for _, child := range children {
+		compMap, ok := child.(map[string]interface{})
+		if !ok {
+			continue
+		}
+
+		if action, ok := compMap["on-click-action"].(map[string]interface{}); ok {
+			if name, ok := action["name"].(string); ok && name == "complete" {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+// sanitizeID converts an ID to use only alphabets and underscores
+// e.g., "SCREEN_1" -> "SCREEN_A", "id_1234_abc" -> "id_abcd_abc"
+func sanitizeID(id string) string {
+	// Check if ID already only contains valid characters
+	valid := true
+	for _, c := range id {
+		if !((c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || c == '_') {
+			valid = false
+			break
+		}
+	}
+	if valid {
+		return id
+	}
+
+	// Replace numbers with letters
+	result := make([]byte, 0, len(id))
+	for _, c := range id {
+		if c >= '0' && c <= '9' {
+			// Convert 0-9 to A-J
+			result = append(result, byte('A'+c-'0'))
+		} else if (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || c == '_' {
+			result = append(result, byte(c))
+		}
+		// Skip other characters
+	}
+
+	return string(result)
+}
+
+// sanitizeComponents removes 'id' from components that don't support it
+func sanitizeComponents(children []interface{}) []interface{} {
+	result := make([]interface{}, len(children))
+
+	for i, child := range children {
+		compMap, ok := child.(map[string]interface{})
+		if !ok {
+			result[i] = child
+			continue
+		}
+
+		// Create a new component map
+		newComp := make(map[string]interface{})
+		for k, v := range compMap {
+			newComp[k] = v
+		}
+
+		// Check if this component type should not have an id
+		compType, _ := newComp["type"].(string)
+		if componentsWithoutID[compType] {
+			delete(newComp, "id")
+		}
+
+		// Sanitize name field if it contains numbers
+		if name, ok := newComp["name"].(string); ok {
+			newComp["name"] = sanitizeID(name)
+		}
+
+		// Sanitize data-source option IDs
+		if dataSource, ok := newComp["data-source"].([]interface{}); ok {
+			newDataSource := make([]interface{}, len(dataSource))
+			for j, opt := range dataSource {
+				if optMap, ok := opt.(map[string]interface{}); ok {
+					newOpt := make(map[string]interface{})
+					for k, v := range optMap {
+						newOpt[k] = v
+					}
+					if optID, ok := newOpt["id"].(string); ok {
+						newOpt["id"] = sanitizeID(optID)
+					}
+					newDataSource[j] = newOpt
+				} else {
+					newDataSource[j] = opt
+				}
+			}
+			newComp["data-source"] = newDataSource
+		}
+
+		result[i] = newComp
+	}
+
+	return result
 }
 
 // flowToResponse converts a flow model to response

@@ -73,6 +73,7 @@ func createTestTemplate(t *testing.T, app *handlers.App, orgID uuid.UUID, accoun
 	t.Helper()
 
 	template := &models.Template{
+		BaseModel:       models.BaseModel{ID: uuid.New()},
 		OrganizationID:  orgID,
 		WhatsAppAccount: accountName,
 		Name:            "test-template-" + uuid.New().String()[:8],
@@ -91,6 +92,7 @@ func createTestWhatsAppAccount(t *testing.T, app *handlers.App, orgID uuid.UUID,
 	t.Helper()
 
 	account := &models.WhatsAppAccount{
+		BaseModel:          models.BaseModel{ID: uuid.New()},
 		OrganizationID:     orgID,
 		Name:               name,
 		PhoneID:            "phone-" + uuid.New().String()[:8],
@@ -109,6 +111,7 @@ func createTestCampaign(t *testing.T, app *handlers.App, orgID, templateID, user
 	t.Helper()
 
 	campaign := &models.BulkMessageCampaign{
+		BaseModel:       models.BaseModel{ID: uuid.New()},
 		OrganizationID:  orgID,
 		Name:            "Test Campaign " + uuid.New().String()[:8],
 		WhatsAppAccount: whatsappAccount,
@@ -125,6 +128,7 @@ func createTestRecipient(t *testing.T, app *handlers.App, campaignID uuid.UUID, 
 	t.Helper()
 
 	recipient := &models.BulkMessageRecipient{
+		BaseModel:     models.BaseModel{ID: uuid.New()},
 		CampaignID:    campaignID,
 		PhoneNumber:   phone,
 		RecipientName: "Test Recipient",

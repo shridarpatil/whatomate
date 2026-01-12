@@ -112,7 +112,7 @@ func runMigrations(db *gorm.DB) error {
 }
 
 // cleanupTables removes all data from tables (for PostgreSQL cleanup).
-// Tables are ordered to respect foreign key constraints.
+// Uses TRUNCATE CASCADE to handle foreign key constraints properly.
 func cleanupTables(db *gorm.DB) {
 	tables := []string{
 		// Bulk message tables
@@ -147,7 +147,7 @@ func cleanupTables(db *gorm.DB) {
 	}
 
 	for _, table := range tables {
-		db.Exec(fmt.Sprintf("DELETE FROM %s", table))
+		db.Exec(fmt.Sprintf("TRUNCATE TABLE %s CASCADE", table))
 	}
 }
 

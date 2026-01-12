@@ -13,7 +13,11 @@ type BulkMessageCampaign struct {
 	WhatsAppAccount string     `gorm:"size:100;index;not null" json:"whatsapp_account"` // References WhatsAppAccount.Name
 	Name            string     `gorm:"size:255;not null" json:"name"`
 	TemplateID      uuid.UUID  `gorm:"type:uuid;not null" json:"template_id"`
-	Status          CampaignStatus `gorm:"size:20;default:'draft'" json:"status"` // draft, queued, processing, completed, failed
+	HeaderMediaID        string         `gorm:"type:text" json:"header_media_id"`         // Meta media ID (from uploaded media)
+	HeaderMediaFilename  string         `gorm:"type:text" json:"header_media_filename"`   // Original filename
+	HeaderMediaMimeType  string         `gorm:"type:text" json:"header_media_mime_type"`  // MIME type (image/jpeg, video/mp4, etc.)
+	HeaderMediaLocalPath string         `gorm:"type:text" json:"header_media_local_path"` // Local file path for preview
+	Status              CampaignStatus `gorm:"size:20;default:'draft'" json:"status"`   // draft, queued, processing, completed, failed
 	TotalRecipients int        `gorm:"default:0" json:"total_recipients"`
 	SentCount       int        `gorm:"default:0" json:"sent_count"`
 	DeliveredCount  int        `gorm:"default:0" json:"delivered_count"`

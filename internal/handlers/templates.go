@@ -3,6 +3,7 @@ package handlers
 import (
 	"context"
 	"fmt"
+	"regexp"
 	"strings"
 
 	"github.com/google/uuid"
@@ -11,6 +12,9 @@ import (
 	"github.com/valyala/fasthttp"
 	"github.com/zerodha/fastglue"
 )
+
+// parameterPattern matches template parameters like {{1}}, {{name}}, {{order_id}}
+var parameterPattern = regexp.MustCompile(`\{\{([^}]+)\}\}`)
 
 // TemplateRequest represents the request body for creating/updating a template
 type TemplateRequest struct {
@@ -538,4 +542,117 @@ func convertFromJSONBArray(arr models.JSONBArray) []interface{} {
 		return []interface{}{}
 	}
 	return []interface{}(arr)
+}
+
+// extractParameterNames extracts parameter names from template content
+// Supports both positional ({{1}}, {{2}}) and named ({{name}}, {{order_id}}) parameters
+// Returns parameter names in order of first occurrence, without duplicates
+func extractParameterNames(content string) []string {
+	matches := parameterPattern.FindAllStringSubmatch(content, -1)
+	if len(matches) == 0 {
+		return nil
+	}
+
+	seen := make(map[string]bool)
+	var names []string
+	for _, match := range matches {
+		if len(match) > 1 {
+			name := strings.TrimSpace(match[1])
+			if name != "" && !seen[name] {
+				seen[name] = true
+				names = append(names, name)
+			}
+		}
+	}
+	return names
+}
+
+// UploadTemplateMedia uploads a media file for use as template header sample
+// Returns a file handle that can be used in template creation
+func (a *App) UploadTemplateMedia(r *fastglue.Request) error {
+	orgID, err := getOrganizationID(r)
+	if err != nil {
+		return r.SendErrorEnvelope(fasthttp.StatusUnauthorized, "Unauthorized", nil, "")
+	}
+
+	// Get account name from form or query
+	accountName := string(r.RequestCtx.FormValue("account"))
+	if accountName == "" {
+		accountName = string(r.RequestCtx.QueryArgs().Peek("account"))
+	}
+	if accountName == "" {
+		return r.SendErrorEnvelope(fasthttp.StatusBadRequest, "account is required", nil, "")
+	}
+
+	// Verify account belongs to organization
+	var account models.WhatsAppAccount
+	if err := a.DB.Where("name = ? AND organization_id = ?", accountName, orgID).First(&account).Error; err != nil {
+		return r.SendErrorEnvelope(fasthttp.StatusBadRequest, "WhatsApp account not found", nil, "")
+	}
+
+	// Check if account has app_id configured
+	if account.AppID == "" {
+		return r.SendErrorEnvelope(fasthttp.StatusBadRequest, "WhatsApp account does not have app_id configured. Please update the account settings.", nil, "")
+	}
+
+	// Get the uploaded file
+	fileHeader, err := r.RequestCtx.FormFile("file")
+	if err != nil {
+		return r.SendErrorEnvelope(fasthttp.StatusBadRequest, "No file provided", nil, "")
+	}
+
+	file, err := fileHeader.Open()
+	if err != nil {
+		return r.SendErrorEnvelope(fasthttp.StatusInternalServerError, "Failed to open uploaded file", nil, "")
+	}
+	defer file.Close()
+
+	// Read file data
+	fileData := make([]byte, fileHeader.Size)
+	if _, err := file.Read(fileData); err != nil {
+		return r.SendErrorEnvelope(fasthttp.StatusInternalServerError, "Failed to read file data", nil, "")
+	}
+
+	// Determine mime type from Content-Type header or filename
+	mimeType := fileHeader.Header.Get("Content-Type")
+	if mimeType == "" || mimeType == "application/octet-stream" {
+		// Try to infer from filename
+		filename := fileHeader.Filename
+		switch {
+		case strings.HasSuffix(strings.ToLower(filename), ".jpg") || strings.HasSuffix(strings.ToLower(filename), ".jpeg"):
+			mimeType = "image/jpeg"
+		case strings.HasSuffix(strings.ToLower(filename), ".png"):
+			mimeType = "image/png"
+		case strings.HasSuffix(strings.ToLower(filename), ".mp4"):
+			mimeType = "video/mp4"
+		case strings.HasSuffix(strings.ToLower(filename), ".pdf"):
+			mimeType = "application/pdf"
+		default:
+			mimeType = "application/octet-stream"
+		}
+	}
+
+	// Create whatsapp account with AppID
+	waAccount := &whatsapp.Account{
+		PhoneID:     account.PhoneID,
+		BusinessID:  account.BusinessID,
+		AppID:       account.AppID,
+		APIVersion:  account.APIVersion,
+		AccessToken: account.AccessToken,
+	}
+
+	// Perform resumable upload to get handle
+	ctx := context.Background()
+	handle, err := a.WhatsApp.ResumableUpload(ctx, waAccount, fileData, mimeType, fileHeader.Filename)
+	if err != nil {
+		a.Log.Error("Failed to upload template media", "error", err)
+		return r.SendErrorEnvelope(fasthttp.StatusBadGateway, "Failed to upload media to Meta: "+err.Error(), nil, "")
+	}
+
+	return r.SendEnvelope(map[string]interface{}{
+		"handle":    handle,
+		"filename":  fileHeader.Filename,
+		"mime_type": mimeType,
+		"size":      fileHeader.Size,
+	})
 }

@@ -152,7 +152,17 @@ export const templatesService = {
   create: (data: any) => api.post('/templates', data),
   update: (id: string, data: any) => api.put(`/templates/${id}`, data),
   delete: (id: string) => api.delete(`/templates/${id}`),
-  sync: () => api.post('/templates/sync')
+  sync: () => api.post('/templates/sync'),
+  uploadMedia: (accountName: string, file: File) => {
+    const formData = new FormData()
+    formData.append('file', file)
+    formData.append('account', accountName)
+    return axios.post(`${api.defaults.baseURL}/templates/upload-media`, formData, {
+      headers: {
+        'Authorization': `Bearer ${localStorage.getItem('auth_token')}`
+      }
+    })
+  }
 }
 
 export const flowsService = {
@@ -181,7 +191,21 @@ export const campaignsService = {
   // Recipients
   getRecipients: (id: string) => api.get(`/campaigns/${id}/recipients`),
   addRecipients: (id: string, recipients: Array<{ phone_number: string; recipient_name?: string; template_params?: Record<string, any> }>) =>
-    api.post(`/campaigns/${id}/recipients/import`, { recipients })
+    api.post(`/campaigns/${id}/recipients/import`, { recipients }),
+  deleteRecipient: (campaignId: string, recipientId: string) =>
+    api.delete(`/campaigns/${campaignId}/recipients/${recipientId}`),
+  // Media
+  uploadMedia: (campaignId: string, file: File) => {
+    const formData = new FormData()
+    formData.append('file', file)
+    return axios.post(`${api.defaults.baseURL}/campaigns/${campaignId}/media`, formData, {
+      headers: {
+        'Authorization': `Bearer ${localStorage.getItem('auth_token')}`
+      }
+    })
+  },
+  getMedia: (campaignId: string) =>
+    api.get(`/campaigns/${campaignId}/media`, { responseType: 'arraybuffer' })
 }
 
 export const chatbotService = {

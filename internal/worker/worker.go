@@ -3,6 +3,7 @@ package worker
 import (
 	"context"
 	"fmt"
+	"regexp"
 	"strings"
 	"time"
 
@@ -15,6 +16,32 @@ import (
 	"github.com/zerodha/logf"
 	"gorm.io/gorm"
 )
+
+// parameterPattern matches template parameters like {{1}}, {{name}}, {{order_id}}
+var parameterPattern = regexp.MustCompile(`\{\{([^}]+)\}\}`)
+
+// extractParameterNames extracts parameter names from template content
+// Supports both positional ({{1}}, {{2}}) and named ({{name}}, {{order_id}}) parameters
+// Returns parameter names in order of first occurrence, without duplicates
+func extractParameterNames(content string) []string {
+	matches := parameterPattern.FindAllStringSubmatch(content, -1)
+	if len(matches) == 0 {
+		return nil
+	}
+
+	seen := make(map[string]bool)
+	var names []string
+	for _, match := range matches {
+		if len(match) > 1 {
+			name := strings.TrimSpace(match[1])
+			if name != "" && !seen[name] {
+				seen[name] = true
+				names = append(names, name)
+			}
+		}
+	}
+	return names
+}
 
 // Worker processes jobs from the queue
 type Worker struct {
@@ -48,6 +75,68 @@ func New(cfg *config.Config, db *gorm.DB, rdb *redis.Client, log logf.Logger) (*
 		Consumer:  consumer,
 		Publisher: publisher,
 	}, nil
+}
+
+// resolveTemplateParams resolves both positional and named parameters to ordered values
+// Extracts parameter names from template body content on-the-fly
+func resolveTemplateParams(template *models.Template, params models.JSONB) []string {
+	if len(params) == 0 {
+		return nil
+	}
+
+	// Extract parameter names from template body content
+	paramNames := extractParameterNames(template.BodyContent)
+	if len(paramNames) == 0 {
+		return nil
+	}
+
+	result := make([]string, len(paramNames))
+	for i, name := range paramNames {
+		// Try named key first
+		if val, ok := params[name]; ok {
+			result[i] = fmt.Sprintf("%v", val)
+			continue
+		}
+		// Fall back to positional key (1-indexed)
+		key := fmt.Sprintf("%d", i+1)
+		if val, ok := params[key]; ok {
+			result[i] = fmt.Sprintf("%v", val)
+			continue
+		}
+		// Default to empty string
+		result[i] = ""
+	}
+	return result
+}
+
+// replaceTemplateContent replaces both positional ({{1}}) and named ({{name}}) placeholders
+// Extracts parameter names from template body content on-the-fly
+func replaceTemplateContent(template *models.Template, content string, params models.JSONB) string {
+	if len(params) == 0 {
+		return content
+	}
+
+	// Extract parameter names from template body content
+	paramNames := extractParameterNames(template.BodyContent)
+	if len(paramNames) == 0 {
+		return content
+	}
+
+	for i, name := range paramNames {
+		// Try named key first
+		var val string
+		if v, ok := params[name]; ok {
+			val = fmt.Sprintf("%v", v)
+		} else if v, ok := params[fmt.Sprintf("%d", i+1)]; ok {
+			// Fall back to positional key
+			val = fmt.Sprintf("%v", v)
+		}
+
+		// Replace both named and positional placeholders
+		content = strings.ReplaceAll(content, fmt.Sprintf("{{%s}}", name), val)
+		content = strings.ReplaceAll(content, fmt.Sprintf("{{%d}}", i+1), val)
+	}
+	return content
 }
 
 // Run starts the worker and processes jobs until context is cancelled
@@ -104,7 +193,7 @@ func (w *Worker) HandleRecipientJob(ctx context.Context, job *queue.RecipientJob
 	}
 
 	// Send template message
-	waMessageID, err := w.sendTemplateMessage(ctx, &account, campaign.Template, recipient)
+	waMessageID, err := w.sendTemplateMessage(ctx, &account, campaign.Template, recipient, campaign.HeaderMediaID)
 
 	// Create Message record
 	message := models.Message{
@@ -122,16 +211,7 @@ func (w *Worker) HandleRecipientJob(ctx context.Context, job *queue.RecipientJob
 	}
 	if campaign.Template != nil {
 		message.TemplateName = campaign.Template.Name
-		content := campaign.Template.BodyContent
-		if job.TemplateParams != nil {
-			for i := 1; i <= 10; i++ {
-				key := fmt.Sprintf("%d", i)
-				if val, ok := job.TemplateParams[key]; ok {
-					placeholder := fmt.Sprintf("{{%d}}", i)
-					content = strings.ReplaceAll(content, placeholder, fmt.Sprintf("%v", val))
-				}
-			}
-		}
+		content := replaceTemplateContent(campaign.Template, campaign.Template.BodyContent, job.TemplateParams)
 		message.Content = content
 	}
 
@@ -244,7 +324,7 @@ func (w *Worker) checkCampaignCompletion(ctx context.Context, campaignID, organi
 }
 
 // sendTemplateMessage sends a template message via WhatsApp Cloud API
-func (w *Worker) sendTemplateMessage(ctx context.Context, account *models.WhatsAppAccount, template *models.Template, recipient *models.BulkMessageRecipient) (string, error) {
+func (w *Worker) sendTemplateMessage(ctx context.Context, account *models.WhatsAppAccount, template *models.Template, recipient *models.BulkMessageRecipient, campaignHeaderMediaID string) (string, error) {
 	waAccount := &whatsapp.Account{
 		PhoneID:     account.PhoneID,
 		BusinessID:  account.BusinessID,
@@ -255,27 +335,104 @@ func (w *Worker) sendTemplateMessage(ctx context.Context, account *models.WhatsA
 	// Build template components with parameters
 	var components []map[string]interface{}
 
-	// Add body parameters if template has variables
-	if len(recipient.TemplateParams) > 0 {
-		bodyParams := []map[string]interface{}{}
-		for i := 1; i <= 10; i++ {
-			key := fmt.Sprintf("%d", i)
-			if val, ok := recipient.TemplateParams[key]; ok {
-				bodyParams = append(bodyParams, map[string]interface{}{
-					"type": "text",
-					"text": val,
+	// Handle header component (for media templates)
+	if template.HeaderType != "" && template.HeaderType != "TEXT" {
+		// Use campaign's uploaded media ID if available
+		if campaignHeaderMediaID != "" {
+			headerParam := buildMediaParameterWithID(template.HeaderType, campaignHeaderMediaID)
+			if headerParam != nil {
+				components = append(components, map[string]interface{}{
+					"type":       "header",
+					"parameters": []map[string]interface{}{headerParam},
+				})
+			}
+		} else if template.HeaderContent != "" {
+			// Fall back to template's header content (URL)
+			headerParam := buildMediaParameterWithLink(template.HeaderType, template.HeaderContent)
+			if headerParam != nil {
+				components = append(components, map[string]interface{}{
+					"type":       "header",
+					"parameters": []map[string]interface{}{headerParam},
 				})
 			}
 		}
-		if len(bodyParams) > 0 {
-			components = append(components, map[string]interface{}{
-				"type":       "body",
-				"parameters": bodyParams,
-			})
+	}
+
+	// Resolve body parameters (supports both named and positional)
+	resolvedParams := resolveTemplateParams(template, recipient.TemplateParams)
+	if len(resolvedParams) > 0 {
+		bodyParams := make([]map[string]interface{}, len(resolvedParams))
+		for i, val := range resolvedParams {
+			bodyParams[i] = map[string]interface{}{
+				"type": "text",
+				"text": val,
+			}
 		}
+		components = append(components, map[string]interface{}{
+			"type":       "body",
+			"parameters": bodyParams,
+		})
 	}
 
 	return w.WhatsApp.SendTemplateMessageWithComponents(ctx, waAccount, recipient.PhoneNumber, template.Name, template.Language, components)
+}
+
+// buildMediaParameterWithID creates a media parameter using Meta's media ID
+func buildMediaParameterWithID(headerType, mediaID string) map[string]interface{} {
+	switch headerType {
+	case "IMAGE":
+		return map[string]interface{}{
+			"type": "image",
+			"image": map[string]interface{}{
+				"id": mediaID,
+			},
+		}
+	case "VIDEO":
+		return map[string]interface{}{
+			"type": "video",
+			"video": map[string]interface{}{
+				"id": mediaID,
+			},
+		}
+	case "DOCUMENT":
+		return map[string]interface{}{
+			"type": "document",
+			"document": map[string]interface{}{
+				"id": mediaID,
+			},
+		}
+	default:
+		return nil
+	}
+}
+
+// buildMediaParameterWithLink creates a media parameter using external URL
+func buildMediaParameterWithLink(headerType, mediaURL string) map[string]interface{} {
+	switch headerType {
+	case "IMAGE":
+		return map[string]interface{}{
+			"type": "image",
+			"image": map[string]interface{}{
+				"link": mediaURL,
+			},
+		}
+	case "VIDEO":
+		return map[string]interface{}{
+			"type": "video",
+			"video": map[string]interface{}{
+				"link": mediaURL,
+			},
+		}
+	case "DOCUMENT":
+		return map[string]interface{}{
+			"type": "document",
+			"document": map[string]interface{}{
+				"link": mediaURL,
+			},
+		}
+	default:
+		return nil
+	}
 }
 
 // Close cleans up worker resources

@@ -558,6 +558,7 @@ func setupRoutes(g *fastglue.Fastglue, app *handlers.App, lo logf.Logger, basePa
 	g.DELETE("/api/templates/{id}", app.DeleteTemplate)
 	g.POST("/api/templates/sync", app.SyncTemplates)
 	g.POST("/api/templates/{id}/publish", app.SubmitTemplate)
+	g.POST("/api/templates/upload-media", app.UploadTemplateMedia)
 
 	// WhatsApp Flows
 	g.GET("/api/flows", app.ListFlows)
@@ -583,6 +584,9 @@ func setupRoutes(g *fastglue.Fastglue, app *handlers.App, lo logf.Logger, basePa
 	g.GET("/api/campaigns/{id}/progress", app.GetCampaign)
 	g.POST("/api/campaigns/{id}/recipients/import", app.ImportRecipients)
 	g.GET("/api/campaigns/{id}/recipients", app.GetCampaignRecipients)
+	g.DELETE("/api/campaigns/{id}/recipients/{recipientId}", app.DeleteCampaignRecipient)
+	g.POST("/api/campaigns/{id}/media", app.UploadCampaignMedia)
+	g.GET("/api/campaigns/{id}/media", app.ServeCampaignMedia)
 
 	// Chatbot Settings
 	g.GET("/api/chatbot/settings", app.GetChatbotSettings)
@@ -658,10 +662,10 @@ func setupRoutes(g *fastglue.Fastglue, app *handlers.App, lo logf.Logger, basePa
 	// Webhooks
 	g.GET("/api/webhooks", app.ListWebhooks)
 	g.POST("/api/webhooks", app.CreateWebhook)
-	g.GET("/api/webhooks/:id", app.GetWebhook)
-	g.PUT("/api/webhooks/:id", app.UpdateWebhook)
-	g.DELETE("/api/webhooks/:id", app.DeleteWebhook)
-	g.POST("/api/webhooks/:id/test", app.TestWebhook)
+	g.GET("/api/webhooks/{id}", app.GetWebhook)
+	g.PUT("/api/webhooks/{id}", app.UpdateWebhook)
+	g.DELETE("/api/webhooks/{id}", app.DeleteWebhook)
+	g.POST("/api/webhooks/{id}/test", app.TestWebhook)
 
 	// Custom Actions
 	g.GET("/api/custom-actions", app.ListCustomActions)

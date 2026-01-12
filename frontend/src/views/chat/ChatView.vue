@@ -74,7 +74,8 @@ import {
   Link,
   Mail,
   Globe,
-  Code
+  Code,
+  RotateCw
 } from 'lucide-vue-next'
 import { formatTime, getInitials, truncate } from '@/lib/utils'
 import { useColorMode } from '@/composables/useColorMode'
@@ -480,6 +481,39 @@ async function sendMessage() {
     toast.error('Failed to send message')
   } finally {
     isSending.value = false
+  }
+}
+
+const retryingMessageId = ref<string | null>(null)
+
+async function retryMessage(message: Message) {
+  if (!contactsStore.currentContact || retryingMessageId.value) return
+
+  retryingMessageId.value = message.id
+  try {
+    // Get the message content based on type
+    const content = message.content || {}
+
+    await contactsStore.sendMessage(
+      contactsStore.currentContact.id,
+      message.message_type,
+      content
+    )
+
+    // Remove the failed message from the list after successful retry
+    const messages = contactsStore.messages.get(contactsStore.currentContact.id)
+    if (messages) {
+      const index = messages.findIndex(m => m.id === message.id)
+      if (index !== -1) {
+        messages.splice(index, 1)
+      }
+    }
+
+    toast.success('Message sent successfully')
+  } catch (error) {
+    toast.error('Failed to retry message')
+  } finally {
+    retryingMessageId.value = null
   }
 }
 
@@ -1504,6 +1538,25 @@ async function sendMediaMessage() {
                     {{ reaction.emoji }}
                   </span>
                 </div>
+                <!-- Failed message retry indicator (not for template messages) -->
+                <button
+                  v-if="message.status === 'failed' && message.direction === 'outgoing' && message.message_type !== 'template'"
+                  class="flex items-center gap-1 mt-1 text-xs text-destructive hover:underline cursor-pointer"
+                  :disabled="retryingMessageId === message.id"
+                  @click="retryMessage(message)"
+                >
+                  <Loader2 v-if="retryingMessageId === message.id" class="h-3 w-3 animate-spin" />
+                  <RotateCw v-else class="h-3 w-3" />
+                  <span>{{ retryingMessageId === message.id ? 'Retrying...' : 'Failed - Tap to retry' }}</span>
+                </button>
+                <!-- Failed template message indicator (no retry) -->
+                <span
+                  v-if="message.status === 'failed' && message.direction === 'outgoing' && message.message_type === 'template'"
+                  class="flex items-center gap-1 mt-1 text-xs text-destructive"
+                >
+                  <AlertCircle class="h-3 w-3" />
+                  <span>Failed to send</span>
+                </span>
               </div>
               <!-- Action buttons for incoming messages -->
               <div v-if="message.direction === 'incoming'" class="flex flex-col gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity self-center ml-1">
@@ -1563,6 +1616,18 @@ async function sendMediaMessage() {
                   @click="replyToMessage(message)"
                 >
                   <Reply class="h-3 w-3" />
+                </Button>
+                <Button
+                  v-if="message.status === 'failed' && message.message_type !== 'template'"
+                  variant="ghost"
+                  size="icon"
+                  class="h-6 w-6 text-destructive hover:text-destructive"
+                  :disabled="retryingMessageId === message.id"
+                  @click="retryMessage(message)"
+                  title="Retry sending"
+                >
+                  <Loader2 v-if="retryingMessageId === message.id" class="h-3 w-3 animate-spin" />
+                  <RotateCw v-else class="h-3 w-3" />
                 </Button>
               </div>
             </div>

@@ -40,7 +40,7 @@ import {
   TooltipContent,
   TooltipTrigger,
 } from '@/components/ui/tooltip'
-import { api } from '@/services/api'
+import { api, templatesService } from '@/services/api'
 import { toast } from 'vue-sonner'
 import {
   Plus,
@@ -58,7 +58,8 @@ import {
   X,
   Check,
   AlertCircle,
-  Send
+  Send,
+  Upload
 } from 'lucide-vue-next'
 
 interface WhatsAppAccount {
@@ -103,6 +104,12 @@ const deleteDialogOpen = ref(false)
 const templateToDelete = ref<Template | null>(null)
 const publishDialogOpen = ref(false)
 const templateToPublish = ref<Template | null>(null)
+
+// Header media upload state
+const headerMediaFile = ref<File | null>(null)
+const headerMediaUploading = ref(false)
+const headerMediaHandle = ref('')
+const headerMediaFilename = ref('')
 
 const formData = ref({
   whatsapp_account: '',
@@ -219,6 +226,10 @@ function openCreateDialog() {
     buttons: [],
     sample_values: []
   }
+  // Reset header media state
+  headerMediaFile.value = null
+  headerMediaHandle.value = ''
+  headerMediaFilename.value = ''
   isDialogOpen.value = true
 }
 
@@ -237,6 +248,10 @@ function openEditDialog(template: Template) {
     buttons: template.buttons || [],
     sample_values: template.sample_values || []
   }
+  // Reset header media state (will show existing handle if present)
+  headerMediaFile.value = null
+  headerMediaHandle.value = template.header_content || ''
+  headerMediaFilename.value = ''
   isDialogOpen.value = true
 }
 
@@ -372,25 +387,30 @@ const filteredTemplates = computed(() => {
   )
 })
 
-// Extract variables from template body
-function extractVariables(text: string): string[] {
-  const matches = text.match(/\{\{(\d+)\}\}/g) || []
-  return [...new Set(matches)]
+// Extract all parameter names (both positional {{1}} and named {{name}})
+function extractParamNames(content: string): string[] {
+  const matches = content.match(/\{\{([^}]+)\}\}/g) || []
+  const seen = new Set<string>()
+  const names: string[] = []
+  for (const m of matches) {
+    const name = m.replace(/[{}]/g, '').trim()
+    if (name && !seen.has(name)) {
+      seen.add(name)
+      names.push(name)
+    }
+  }
+  return names
 }
 
-// Get variable numbers from body content
+// Get variable names from body content (supports both {{1}} and {{name}})
 const bodyVariables = computed(() => {
-  const matches = formData.value.body_content.match(/\{\{(\d+)\}\}/g) || []
-  const unique = [...new Set(matches)]
-  return unique.map(v => parseInt(v.replace(/\{\{|\}\}/g, ''))).sort((a, b) => a - b)
+  return extractParamNames(formData.value.body_content)
 })
 
-// Get variable numbers from header content
+// Get variable names from header content
 const headerVariables = computed(() => {
   if (formData.value.header_type !== 'TEXT') return []
-  const matches = formData.value.header_content.match(/\{\{(\d+)\}\}/g) || []
-  const unique = [...new Set(matches)]
-  return unique.map(v => parseInt(v.replace(/\{\{|\}\}/g, ''))).sort((a, b) => a - b)
+  return extractParamNames(formData.value.header_content)
 })
 
 // Button types for template
@@ -415,39 +435,96 @@ function removeButton(index: number) {
   formData.value.buttons.splice(index, 1)
 }
 
-function getSampleValue(component: string, index: number): string {
+// Handle header media file selection
+function onHeaderMediaFileChange(event: Event) {
+  const input = event.target as HTMLInputElement
+  if (input.files && input.files.length > 0) {
+    headerMediaFile.value = input.files[0]
+    headerMediaFilename.value = input.files[0].name
+    // Clear previous handle when new file is selected
+    headerMediaHandle.value = ''
+    formData.value.header_content = ''
+  }
+}
+
+// Upload header media file to Meta
+async function uploadHeaderMedia() {
+  if (!headerMediaFile.value) {
+    toast.error('Please select a file first')
+    return
+  }
+
+  if (!formData.value.whatsapp_account) {
+    toast.error('Please select a WhatsApp account first')
+    return
+  }
+
+  headerMediaUploading.value = true
+  try {
+    const response = await templatesService.uploadMedia(formData.value.whatsapp_account, headerMediaFile.value)
+    const data = response.data.data
+    headerMediaHandle.value = data.handle
+    formData.value.header_content = data.handle
+    toast.success(`Media uploaded: ${data.filename}`)
+  } catch (error: any) {
+    const message = error.response?.data?.message || 'Failed to upload media'
+    toast.error(message)
+  } finally {
+    headerMediaUploading.value = false
+  }
+}
+
+// Get accepted file types for header type
+function getAcceptedFileTypes(): string {
+  switch (formData.value.header_type) {
+    case 'IMAGE':
+      return 'image/jpeg,image/png'
+    case 'VIDEO':
+      return 'video/mp4'
+    case 'DOCUMENT':
+      return 'application/pdf'
+    default:
+      return '*/*'
+  }
+}
+
+function getSampleValue(component: string, paramName: string): string {
   const sample = formData.value.sample_values.find(
-    (s: any) => s.component === component && s.index === index
+    (s: any) => s.component === component && s.param_name === paramName
   )
   return sample?.value || ''
 }
 
-function setSampleValue(component: string, index: number, value: string) {
+function setSampleValue(component: string, paramName: string, value: string) {
   const existingIndex = formData.value.sample_values.findIndex(
-    (s: any) => s.component === component && s.index === index
+    (s: any) => s.component === component && s.param_name === paramName
   )
   if (existingIndex >= 0) {
     formData.value.sample_values[existingIndex].value = value
   } else {
-    formData.value.sample_values.push({ component, index, value })
+    formData.value.sample_values.push({ component, param_name: paramName, value })
   }
 }
 
-function formatVariableLabel(varNum: number): string {
-  return `{{${varNum}}}`
+function formatVariableLabel(paramName: string): string {
+  return `{{${paramName}}}`
 }
 
 // Format template preview with sample values (sanitized to prevent XSS)
 function formatPreview(text: string, samples: any[]): string {
   // Sanitize the base text first
   let result = DOMPurify.sanitize(text, { ALLOWED_TAGS: [] })
-  samples.forEach((sample, index) => {
-    // Sanitize each sample value to prevent XSS
-    const sanitizedSample = DOMPurify.sanitize(String(sample), { ALLOWED_TAGS: [] })
-    result = result.replace(`{{${index + 1}}}`, `<span class="bg-green-100 dark:bg-green-900 px-1 rounded">${sanitizedSample}</span>`)
+
+  // Handle named parameters with param_name field
+  samples.forEach((sample) => {
+    if (sample && sample.param_name && sample.value) {
+      const sanitizedSample = DOMPurify.sanitize(String(sample.value), { ALLOWED_TAGS: [] })
+      result = result.replace(`{{${sample.param_name}}}`, `<span class="bg-green-100 dark:bg-green-900 px-1 rounded">${sanitizedSample}</span>`)
+    }
   })
-  // Replace remaining variables
-  result = result.replace(/\{\{(\d+)\}\}/g, '<span class="bg-yellow-100 dark:bg-yellow-900 px-1 rounded">{{$1}}</span>')
+
+  // Replace remaining variables (both named and positional)
+  result = result.replace(/\{\{([^}]+)\}\}/g, '<span class="bg-yellow-100 dark:bg-yellow-900 px-1 rounded">{{$1}}</span>')
   return result
 }
 </script>
@@ -689,16 +766,68 @@ function formatPreview(text: string, samples: any[]): string {
             <Input v-model="formData.header_content" placeholder="Enter header text..." />
           </div>
 
+          <!-- Header Media Upload for IMAGE/VIDEO/DOCUMENT -->
+          <div v-else-if="['IMAGE', 'VIDEO', 'DOCUMENT'].includes(formData.header_type)" class="space-y-3">
+            <Label>Header Sample {{ formData.header_type.toLowerCase() }}</Label>
+            <p class="text-xs text-muted-foreground">
+              Upload a sample {{ formData.header_type.toLowerCase() }} for Meta to review. This helps with template approval.
+            </p>
+
+            <div class="flex items-center gap-2">
+              <div class="flex-1">
+                <input
+                  type="file"
+                  :accept="getAcceptedFileTypes()"
+                  @change="onHeaderMediaFileChange"
+                  class="w-full text-sm file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:text-sm file:font-medium file:bg-primary file:text-primary-foreground hover:file:bg-primary/90 cursor-pointer"
+                />
+              </div>
+              <Button
+                type="button"
+                size="sm"
+                @click="uploadHeaderMedia"
+                :disabled="!headerMediaFile || headerMediaUploading || !formData.whatsapp_account"
+              >
+                <Loader2 v-if="headerMediaUploading" class="h-4 w-4 mr-1 animate-spin" />
+                <Upload v-else class="h-4 w-4 mr-1" />
+                Upload
+              </Button>
+            </div>
+
+            <!-- Show upload status -->
+            <div v-if="headerMediaFilename && !headerMediaHandle" class="text-sm text-muted-foreground">
+              Selected: {{ headerMediaFilename }} (click Upload to get handle)
+            </div>
+
+            <!-- Show uploaded handle -->
+            <div v-if="headerMediaHandle" class="bg-green-50 dark:bg-green-950 border border-green-200 dark:border-green-800 rounded-lg p-3">
+              <div class="flex items-center gap-2">
+                <Check class="h-4 w-4 text-green-600" />
+                <span class="text-sm text-green-800 dark:text-green-200">Media uploaded successfully</span>
+              </div>
+              <p class="text-xs text-muted-foreground mt-1 font-mono truncate">
+                Handle: {{ headerMediaHandle.substring(0, 40) }}...
+              </p>
+            </div>
+
+            <!-- Accepted formats hint -->
+            <p class="text-xs text-muted-foreground">
+              <span v-if="formData.header_type === 'IMAGE'">Accepted: JPEG, PNG (max 5MB)</span>
+              <span v-else-if="formData.header_type === 'VIDEO'">Accepted: MP4 (max 16MB)</span>
+              <span v-else-if="formData.header_type === 'DOCUMENT'">Accepted: PDF (max 100MB)</span>
+            </p>
+          </div>
+
           <!-- Body -->
           <div class="space-y-2">
             <Label>Body Content <span class="text-destructive">*</span></Label>
             <Textarea
               v-model="formData.body_content"
-              placeholder="Hi {{1}}, your order #{{2}} has been confirmed..."
+              placeholder="Hi {{1}}, your order #{{2}} has been confirmed... (or use named: {{name}}, {{order_id}})"
               rows="4"
             />
             <p class="text-xs text-muted-foreground">
-              Use {"{{1}}"}, {"{{2}}"}, etc. for dynamic variables
+              Use <span v-pre>{{name}}</span>, <span v-pre>{{order_id}}</span> for named variables or <span v-pre>{{1}}</span>, <span v-pre>{{2}}</span> for positional variables
             </p>
           </div>
 
@@ -753,8 +882,8 @@ function formatPreview(text: string, samples: any[]): string {
               <!-- URL specific fields -->
               <div v-if="button.type === 'URL'" class="space-y-1">
                 <Label class="text-xs">URL</Label>
-                <Input v-model="button.url" placeholder="https://example.com/{{1}}" class="h-9" />
-                <p class="text-xs text-muted-foreground">Use {"{{1}}"} for dynamic URL suffix</p>
+                <Input v-model="button.url" placeholder="https://example.com/{{path}}" class="h-9" />
+                <p class="text-xs text-muted-foreground">Use <span v-pre>{{path}}</span> for dynamic URL suffix</p>
               </div>
 
               <!-- Phone number specific fields -->
@@ -779,13 +908,13 @@ function formatPreview(text: string, samples: any[]): string {
             <!-- Header Variables -->
             <div v-if="headerVariables.length > 0" class="space-y-2">
               <p class="text-sm font-medium text-muted-foreground">Header Variables</p>
-              <div v-for="varNum in headerVariables" :key="'header-' + varNum" class="flex items-center gap-2">
-                <span class="text-sm font-mono bg-muted px-2 py-1 rounded min-w-[60px] text-center">{{ formatVariableLabel(varNum) }}</span>
+              <div v-for="paramName in headerVariables" :key="'header-' + paramName" class="flex items-center gap-2">
+                <span class="text-sm font-mono bg-muted px-2 py-1 rounded min-w-[80px] text-center">{{ formatVariableLabel(paramName) }}</span>
                 <input
                   type="text"
-                  :value="getSampleValue('header', varNum)"
-                  @input="setSampleValue('header', varNum, ($event.target as HTMLInputElement).value)"
-                  placeholder="Example value..."
+                  :value="getSampleValue('header', paramName)"
+                  @input="setSampleValue('header', paramName, ($event.target as HTMLInputElement).value)"
+                  :placeholder="'Example for ' + paramName + '...'"
                   class="flex-1 h-9 rounded-md border border-input bg-background px-3 text-sm"
                 />
               </div>
@@ -794,13 +923,13 @@ function formatPreview(text: string, samples: any[]): string {
             <!-- Body Variables -->
             <div v-if="bodyVariables.length > 0" class="space-y-2">
               <p class="text-sm font-medium text-muted-foreground">Body Variables</p>
-              <div v-for="varNum in bodyVariables" :key="'body-' + varNum" class="flex items-center gap-2">
-                <span class="text-sm font-mono bg-muted px-2 py-1 rounded min-w-[60px] text-center">{{ formatVariableLabel(varNum) }}</span>
+              <div v-for="paramName in bodyVariables" :key="'body-' + paramName" class="flex items-center gap-2">
+                <span class="text-sm font-mono bg-muted px-2 py-1 rounded min-w-[80px] text-center">{{ formatVariableLabel(paramName) }}</span>
                 <input
                   type="text"
-                  :value="getSampleValue('body', varNum)"
-                  @input="setSampleValue('body', varNum, ($event.target as HTMLInputElement).value)"
-                  placeholder="Example value..."
+                  :value="getSampleValue('body', paramName)"
+                  @input="setSampleValue('body', paramName, ($event.target as HTMLInputElement).value)"
+                  :placeholder="'Example for ' + paramName + '...'"
                   class="flex-1 h-9 rounded-md border border-input bg-background px-3 text-sm"
                 />
               </div>

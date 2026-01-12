@@ -24,8 +24,8 @@ type FlowCreateResponse struct {
 
 // FlowUpdateResponse represents the response from updating flow assets
 type FlowUpdateResponse struct {
-	Success          bool     `json:"success"`
-	ValidationErrors []string `json:"validation_errors,omitempty"`
+	Success          bool        `json:"success"`
+	ValidationErrors interface{} `json:"validation_errors,omitempty"`
 }
 
 // FlowPublishResponse represents the response from publishing a flow
@@ -165,7 +165,7 @@ func (c *Client) UpdateFlowJSON(ctx context.Context, account *Account, flowID st
 	}
 
 	if !result.Success {
-		if len(result.ValidationErrors) > 0 {
+		if result.ValidationErrors != nil {
 			return fmt.Errorf("flow validation errors: %v", result.ValidationErrors)
 		}
 		return fmt.Errorf("failed to update flow JSON")

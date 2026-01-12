@@ -346,13 +346,13 @@ func (a *App) processTemplateStatusUpdate(wabaID, event, templateName, templateL
 		return
 	}
 
-	// Map Meta's event names to lowercase status values
+	// Keep status uppercase to match existing template status format
 	// Events: APPROVED, REJECTED, PENDING, DISABLED, PENDING_DELETION, DELETED, REINSTATED, FLAGGED
-	status := strings.ToLower(event)
+	status := strings.ToUpper(event)
 
-	// Find WhatsApp accounts that use this WABA ID
+	// Find WhatsApp accounts that use this WABA ID (business_id field)
 	var accounts []models.WhatsAppAccount
-	if err := a.DB.Where("whatsapp_business_account_id = ?", wabaID).Find(&accounts).Error; err != nil {
+	if err := a.DB.Where("business_id = ?", wabaID).Find(&accounts).Error; err != nil {
 		a.Log.Error("Failed to find WhatsApp accounts for WABA", "error", err, "waba_id", wabaID)
 		return
 	}

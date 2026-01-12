@@ -103,14 +103,31 @@ const selectedComponent = computed(() => {
   return selectedScreen.value.layout.children[selectedComponentIndex.value]
 })
 
+// Generate a unique ID using only alphabets and underscores (Meta requirement)
 function generateId() {
-  return `id_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
+  const chars = 'abcdefghijklmnopqrstuvwxyz'
+  let result = 'id_'
+  for (let i = 0; i < 12; i++) {
+    result += chars.charAt(Math.floor(Math.random() * chars.length))
+  }
+  return result
+}
+
+// Convert number to letter sequence (1=A, 2=B, ..., 27=AA, etc.)
+function numberToLetters(num: number): string {
+  let result = ''
+  while (num > 0) {
+    num--
+    result = String.fromCharCode(65 + (num % 26)) + result
+    num = Math.floor(num / 26)
+  }
+  return result
 }
 
 function addScreen() {
   const screenNum = screens.value.length + 1
   screens.value.push({
-    id: `SCREEN_${screenNum}`,
+    id: `SCREEN_${numberToLetters(screenNum)}`,
     title: `Screen ${screenNum}`,
     data: {},
     layout: {
@@ -151,45 +168,45 @@ function addComponent(type: string) {
       component.text = 'Enter text here'
       break
     case 'TextInput':
-      component.name = `input_${Date.now()}`
+      component.name = generateId()
       component.label = 'Label'
       component.required = false
       component['input-type'] = 'text'
       break
     case 'TextArea':
-      component.name = `textarea_${Date.now()}`
+      component.name = generateId()
       component.label = 'Label'
       component.required = false
       break
     case 'Dropdown':
-      component.name = `dropdown_${Date.now()}`
+      component.name = generateId()
       component.label = 'Select an option'
       component.required = false
       component['data-source'] = [
-        { id: 'option_1', title: 'Option 1' },
-        { id: 'option_2', title: 'Option 2' }
+        { id: 'option_a', title: 'Option 1' },
+        { id: 'option_b', title: 'Option 2' }
       ]
       break
     case 'RadioButtonsGroup':
-      component.name = `radio_${Date.now()}`
+      component.name = generateId()
       component.label = 'Choose one'
       component.required = false
       component['data-source'] = [
-        { id: 'option_1', title: 'Option 1' },
-        { id: 'option_2', title: 'Option 2' }
+        { id: 'option_a', title: 'Option 1' },
+        { id: 'option_b', title: 'Option 2' }
       ]
       break
     case 'CheckboxGroup':
-      component.name = `checkbox_${Date.now()}`
+      component.name = generateId()
       component.label = 'Select options'
       component.required = false
       component['data-source'] = [
-        { id: 'option_1', title: 'Option 1' },
-        { id: 'option_2', title: 'Option 2' }
+        { id: 'option_a', title: 'Option 1' },
+        { id: 'option_b', title: 'Option 2' }
       ]
       break
     case 'DatePicker':
-      component.name = `date_${Date.now()}`
+      component.name = generateId()
       component.label = 'Select date'
       component.required = false
       break
@@ -242,7 +259,7 @@ function updateComponentProperty(key: string, value: any) {
 function addOption() {
   if (!selectedComponent.value || !selectedComponent.value['data-source']) return
   selectedComponent.value['data-source'].push({
-    id: `option_${Date.now()}`,
+    id: generateId(),
     title: 'New Option'
   })
 }
@@ -265,6 +282,48 @@ function getComponentLabel(comp: FlowComponent): string {
 function getComponentIcon(type: string) {
   return componentTypes.find(t => t.type === type)?.icon || Type
 }
+
+// Components that should NOT have an 'id' property when sent to Meta API
+const componentsWithoutId = [
+  'TextHeading',
+  'TextSubheading',
+  'TextBody',
+  'TextInput',
+  'TextArea',
+  'Dropdown',
+  'RadioButtonsGroup',
+  'CheckboxGroup',
+  'DatePicker',
+  'Image',
+  'Footer'
+]
+
+// Sanitize flow JSON for Meta API by removing 'id' from components that don't support it
+function sanitizeFlowForMeta(flowData: { screens: FlowScreen[] }): { screens: any[] } {
+  return {
+    screens: flowData.screens.map(screen => ({
+      id: screen.id,
+      title: screen.title,
+      data: screen.data,
+      layout: {
+        type: screen.layout.type,
+        children: screen.layout.children.map(comp => {
+          // Create a copy without the 'id' if component type doesn't support it
+          const { id, ...rest } = comp
+          if (componentsWithoutId.includes(comp.type)) {
+            return rest
+          }
+          return comp
+        })
+      }
+    }))
+  }
+}
+
+// Expose sanitize function for parent components
+defineExpose({
+  sanitizeFlowForMeta
+})
 </script>
 
 <template>

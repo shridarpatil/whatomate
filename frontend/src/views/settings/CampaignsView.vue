@@ -66,7 +66,12 @@ import {
   AlertTriangle,
   Check,
   RefreshCw,
-  CalendarIcon
+  CalendarIcon,
+  Image,
+  FileText,
+  Video,
+  X,
+  MessageSquare
 } from 'lucide-vue-next'
 import { formatDate } from '@/lib/utils'
 import type { DateRange } from 'reka-ui'
@@ -78,6 +83,9 @@ interface Campaign {
   template_name: string
   template_id?: string
   whatsapp_account?: string
+  header_media_id?: string
+  header_media_filename?: string
+  header_media_mime_type?: string
   status: 'draft' | 'scheduled' | 'running' | 'paused' | 'completed' | 'failed' | 'queued' | 'processing' | 'cancelled'
   total_recipients: number
   sent_count: number
@@ -96,12 +104,14 @@ interface Template {
   display_name?: string
   status: string
   body_content?: string
+  header_type?: string  // TEXT, IMAGE, DOCUMENT, VIDEO
+  header_content?: string
 }
 
 interface CSVRow {
   phone_number: string
   name: string
-  params: string[]
+  params: Record<string, string>  // keyed by param name (e.g., {"name": "John"} or {"1": "John"})
   isValid: boolean
   errors: string[]
 }
@@ -109,9 +119,11 @@ interface CSVRow {
 interface CSVValidation {
   isValid: boolean
   rows: CSVRow[]
-  templateParams: number
+  templateParamNames: string[]  // e.g., ["name", "order_id"] or ["1", "2"]
   csvColumns: string[]
+  columnMapping: { csvColumn: string; paramName: string }[]  // Shows how CSV columns map to params
   errors: string[]
+  warnings: string[]  // Non-blocking warnings (e.g., mixed param types)
 }
 
 interface Account {
@@ -229,6 +241,185 @@ const csvValidation = ref<CSVValidation | null>(null)
 const isValidatingCSV = ref(false)
 const selectedTemplate = ref<Template | null>(null)
 const addRecipientsTab = ref('manual')
+
+// Media upload state
+const mediaFile = ref<File | null>(null)
+const isUploadingMedia = ref(false)
+const mediaPreviewUrl = ref<string | null>(null)
+
+// Computed: template parameter format hints
+const templateParamNames = computed(() => {
+  if (!selectedTemplate.value) return []
+  return getTemplateParamNames(selectedTemplate.value)
+})
+
+const manualEntryFormat = computed(() => {
+  const params = templateParamNames.value
+  if (params.length === 0) {
+    return 'phone_number'
+  }
+  return `phone_number, ${params.join(', ')}`
+})
+
+const csvColumnsHint = computed(() => {
+  const params = templateParamNames.value
+  if (params.length === 0) {
+    return ['phone_number (or phone, mobile, number)']
+  }
+  return [
+    'phone_number (or phone, mobile, number)',
+    ...params.map(p => p)
+  ]
+})
+
+function formatParamName(param: string): string {
+  return `{{${param}}}`
+}
+
+// Dynamic placeholder for recipient input based on template parameters
+const recipientPlaceholder = computed(() => {
+  const params = templateParamNames.value
+  if (params.length === 0) {
+    return `+1234567890
++0987654321
++1122334455`
+  }
+  // Generate example values for each parameter
+  const exampleValues = params.map((p, i) => {
+    if (/^\d+$/.test(p)) {
+      return `value${i + 1}`
+    }
+    // Use parameter name as hint for example value
+    if (p.toLowerCase().includes('name')) return 'John Doe'
+    if (p.toLowerCase().includes('order')) return 'ORD-123'
+    if (p.toLowerCase().includes('date')) return '2024-01-15'
+    if (p.toLowerCase().includes('amount') || p.toLowerCase().includes('price')) return '99.99'
+    return `${p}_value`
+  })
+  const line1 = `+1234567890, ${exampleValues.join(', ')}`
+  const line2 = `+0987654321, ${exampleValues.map((v, i) => {
+    if (v === 'John Doe') return 'Jane Smith'
+    if (v === 'ORD-123') return 'ORD-456'
+    return v
+  }).join(', ')}`
+  return `${line1}\n${line2}`
+})
+
+// Check if selected campaign's template has media header
+const campaignTemplateHasMedia = computed(() => {
+  if (!selectedCampaign.value?.template_id) return false
+  const template = templates.value.find(t => t.id === selectedCampaign.value?.template_id)
+  return template?.header_type && template.header_type !== 'TEXT'
+})
+
+const campaignTemplateMediaType = computed(() => {
+  if (!selectedCampaign.value?.template_id) return null
+  const template = templates.value.find(t => t.id === selectedCampaign.value?.template_id)
+  return template?.header_type || null
+})
+
+// Get accepted file types based on template header type
+const acceptedMediaTypes = computed(() => {
+  const type = campaignTemplateMediaType.value
+  switch (type) {
+    case 'IMAGE': return 'image/jpeg,image/png'
+    case 'VIDEO': return 'video/mp4,video/3gpp'
+    case 'DOCUMENT': return 'application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+    default: return '*/*'
+  }
+})
+
+function handleMediaFileSelect(event: Event) {
+  const input = event.target as HTMLInputElement
+  if (input.files && input.files[0]) {
+    mediaFile.value = input.files[0]
+    // Create preview URL for images
+    if (mediaFile.value.type.startsWith('image/')) {
+      mediaPreviewUrl.value = URL.createObjectURL(mediaFile.value)
+    } else {
+      mediaPreviewUrl.value = null
+    }
+  }
+}
+
+function clearMediaFile() {
+  mediaFile.value = null
+  if (mediaPreviewUrl.value) {
+    URL.revokeObjectURL(mediaPreviewUrl.value)
+    mediaPreviewUrl.value = null
+  }
+}
+
+async function uploadCampaignMedia() {
+  if (!selectedCampaign.value || !mediaFile.value) return
+
+  isUploadingMedia.value = true
+  try {
+    const response = await campaignsService.uploadMedia(selectedCampaign.value.id, mediaFile.value)
+    const result = response.data.data
+    toast.success('Media uploaded successfully')
+    // Update campaign with media ID
+    selectedCampaign.value.header_media_id = result.media_id
+    await fetchCampaigns()
+    // Update selectedCampaign with fresh data
+    const updated = campaigns.value.find(c => c.id === selectedCampaign.value?.id)
+    if (updated) {
+      selectedCampaign.value = updated
+    }
+    clearMediaFile()
+  } catch (error: any) {
+    const message = error.response?.data?.message || 'Failed to upload media'
+    toast.error(message)
+  } finally {
+    isUploadingMedia.value = false
+  }
+}
+
+// Manual input validation
+interface ManualInputValidation {
+  isValid: boolean
+  totalLines: number
+  validLines: number
+  invalidLines: { lineNumber: number; reason: string }[]
+}
+
+const manualInputValidation = computed((): ManualInputValidation => {
+  const params = templateParamNames.value
+  const lines = recipientsInput.value.trim().split('\n').filter(line => line.trim())
+
+  if (lines.length === 0) {
+    return { isValid: false, totalLines: 0, validLines: 0, invalidLines: [] }
+  }
+
+  const invalidLines: { lineNumber: number; reason: string }[] = []
+
+  for (let i = 0; i < lines.length; i++) {
+    const parts = lines[i].split(',').map(p => p.trim())
+    const phone = parts[0]?.replace(/[^\d+]/g, '')
+
+    // Validate phone number
+    if (!phone || !phone.match(/^\+?\d{10,15}$/)) {
+      invalidLines.push({ lineNumber: i + 1, reason: 'Invalid phone number' })
+      continue
+    }
+
+    // Validate params count
+    const providedParams = parts.slice(1).filter(p => p.length > 0).length
+    if (params.length > 0 && providedParams < params.length) {
+      invalidLines.push({
+        lineNumber: i + 1,
+        reason: `Missing parameters: needs ${params.length}, has ${providedParams}`
+      })
+    }
+  }
+
+  return {
+    isValid: invalidLines.length === 0 && lines.length > 0,
+    totalLines: lines.length,
+    validLines: lines.length - invalidLines.length,
+    invalidLines
+  }
+})
 
 // Form state
 const newCampaign = ref({
@@ -483,7 +674,83 @@ function getProgressPercentage(campaign: Campaign): number {
   return Math.round((campaign.sent_count / campaign.total_recipients) * 100)
 }
 
+// Helper functions for media upload
+function getTemplateHeaderType(templateId: string | undefined): string | null {
+  if (!templateId) return null
+  const template = templates.value.find(t => t.id === templateId)
+  return template?.header_type || null
+}
+
+function getMediaIcon(headerType: string | null) {
+  switch (headerType) {
+    case 'IMAGE': return Image
+    case 'VIDEO': return Video
+    case 'DOCUMENT': return FileText
+    default: return FileText
+  }
+}
+
+function getAcceptedMediaTypes(headerType: string | null): string {
+  switch (headerType) {
+    case 'IMAGE': return 'image/jpeg,image/png'
+    case 'VIDEO': return 'video/mp4,video/3gpp'
+    case 'DOCUMENT': return 'application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+    default: return '*/*'
+  }
+}
+
+function triggerMediaFileInput(campaignId: string) {
+  const input = window.document.querySelector(`input[data-campaign-id="${campaignId}"]`) as HTMLInputElement
+  input?.click()
+}
+
+// Cache for media blob URLs and loading states
+const mediaBlobUrls = ref<Record<string, string>>({})
+const mediaLoadingState = ref<Record<string, 'loading' | 'loaded' | 'error'>>({})
+
+async function loadMediaPreview(campaignId: string) {
+  if (mediaLoadingState.value[campaignId]) return // Already loading or loaded
+
+  mediaLoadingState.value[campaignId] = 'loading'
+  try {
+    const response = await campaignsService.getMedia(campaignId)
+    const blob = new Blob([response.data], { type: response.headers['content-type'] })
+    mediaBlobUrls.value[campaignId] = URL.createObjectURL(blob)
+    mediaLoadingState.value[campaignId] = 'loaded'
+  } catch (error) {
+    console.error('Failed to load media preview:', error)
+    mediaLoadingState.value[campaignId] = 'error'
+  }
+}
+
+function getMediaPreviewUrl(campaignId: string): string {
+  return mediaBlobUrls.value[campaignId] || ''
+}
+
+function isMediaPreviewAvailable(campaignId: string): boolean {
+  // Trigger loading if not started
+  if (!mediaLoadingState.value[campaignId]) {
+    loadMediaPreview(campaignId)
+  }
+  return mediaLoadingState.value[campaignId] === 'loaded'
+}
+
+function isMediaPreviewLoading(campaignId: string): boolean {
+  return mediaLoadingState.value[campaignId] === 'loading'
+}
+
+// Media preview dialog
+const showMediaPreviewDialog = ref(false)
+const previewingCampaign = ref<Campaign | null>(null)
+
+function openMediaPreview(campaign: Campaign) {
+  previewingCampaign.value = campaign
+  showMediaPreviewDialog.value = true
+}
+
 // Recipients functions
+const deletingRecipientId = ref<string | null>(null)
+
 async function viewRecipients(campaign: Campaign) {
   selectedCampaign.value = campaign
   showRecipientsDialog.value = true
@@ -500,6 +767,30 @@ async function viewRecipients(campaign: Campaign) {
   }
 }
 
+async function deleteRecipient(recipientId: string) {
+  if (!selectedCampaign.value) return
+
+  deletingRecipientId.value = recipientId
+  try {
+    await campaignsService.deleteRecipient(selectedCampaign.value.id, recipientId)
+    recipients.value = recipients.value.filter(r => r.id !== recipientId)
+    // Update recipient count in selectedCampaign
+    selectedCampaign.value.total_recipients = recipients.value.length
+    toast.success('Recipient deleted')
+    await fetchCampaigns() // Refresh campaigns list
+    // Update selectedCampaign with fresh data
+    const updated = campaigns.value.find(c => c.id === selectedCampaign.value?.id)
+    if (updated) {
+      selectedCampaign.value = updated
+    }
+  } catch (error: any) {
+    const message = error.response?.data?.message || 'Failed to delete recipient'
+    toast.error(message)
+  } finally {
+    deletingRecipientId.value = null
+  }
+}
+
 async function addRecipients() {
   if (!selectedCampaign.value) return
 
@@ -509,32 +800,25 @@ async function addRecipients() {
     return
   }
 
-  // Parse CSV/text input - supports formats:
-  // phone_number
-  // phone_number,name (name is used as {{1}} parameter)
-  // phone_number,name,param1,param2... (params override name as {{1}})
+  // Get template parameter names for mapping
+  const paramNames = templateParamNames.value
+
+  // Parse CSV/text input - format: phone_number, param1, param2, ...
+  // Parameters are mapped to template parameter names in order
   const recipientsList = lines.map(line => {
     const parts = line.split(',').map(p => p.trim())
     const recipient: { phone_number: string; recipient_name?: string; template_params?: Record<string, any> } = {
       phone_number: parts[0].replace(/[^\d+]/g, '') // Clean phone number
     }
-    if (parts[1]) {
-      recipient.recipient_name = parts[1]
-    }
-    // Collect non-empty parameters starting from index 2
+
+    // Map values to template parameter names
     const params: Record<string, any> = {}
-    let paramIndex = 1
-    for (let i = 2; i < parts.length; i++) {
+    for (let i = 1; i < parts.length && i <= paramNames.length; i++) {
       if (parts[i] && parts[i].length > 0) {
-        params[String(paramIndex)] = parts[i]
-        paramIndex++
+        params[paramNames[i - 1]] = parts[i]
       }
     }
-    // If no explicit params provided but name exists, use name as first parameter
-    // This handles templates like "Dear {{1}}, ..." where the name IS the parameter
-    if (Object.keys(params).length === 0 && recipient.recipient_name) {
-      params["1"] = recipient.recipient_name
-    }
+
     if (Object.keys(params).length > 0) {
       recipient.template_params = params
     }
@@ -570,11 +854,42 @@ function getRecipientStatusClass(status: string): string {
 }
 
 // CSV functions
-function extractTemplateParams(bodyContent: string): number {
-  // Extract {{1}}, {{2}}, etc. from template body
-  const matches = bodyContent.match(/\{\{(\d+)\}\}/g) || []
-  const paramNumbers = matches.map(m => parseInt(m.replace(/[{}]/g, '')))
-  return paramNumbers.length > 0 ? Math.max(...paramNumbers) : 0
+function getTemplateParamNames(template: Template): string[] {
+  // Extract parameter names from body_content on-the-fly
+  // Supports both positional ({{1}}, {{2}}) and named ({{name}}, {{order_id}}) parameters
+  if (!template.body_content) return []
+  const matches = template.body_content.match(/\{\{([^}]+)\}\}/g) || []
+  const seen = new Set<string>()
+  const names: string[] = []
+  for (const m of matches) {
+    const name = m.replace(/[{}]/g, '').trim()
+    if (name && !seen.has(name)) {
+      seen.add(name)
+      names.push(name)
+    }
+  }
+  return names
+}
+
+function highlightTemplateParams(content: string): string {
+  // Escape HTML first to prevent XSS
+  const escaped = content
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+  // Highlight parameters with a styled span
+  return escaped.replace(
+    /\{\{([^}]+)\}\}/g,
+    '<span class="bg-primary/20 text-primary px-1 rounded font-medium">{{$1}}</span>'
+  )
+}
+
+function hasMixedParamTypes(paramNames: string[]): boolean {
+  // Check if template has both positional (numeric) and named parameters
+  if (paramNames.length === 0) return false
+  const hasPositional = paramNames.some(n => /^\d+$/.test(n))
+  const hasNamed = paramNames.some(n => !/^\d+$/.test(n))
+  return hasPositional && hasNamed
 }
 
 async function openAddRecipientsDialog(campaign: Campaign) {
@@ -620,9 +935,11 @@ async function validateCSV() {
       csvValidation.value = {
         isValid: false,
         rows: [],
-        templateParams: 0,
+        templateParamNames: [],
         csvColumns: [],
-        errors: ['CSV file is empty']
+        columnMapping: [],
+        errors: ['CSV file is empty'],
+        warnings: []
       }
       return
     }
@@ -639,26 +956,67 @@ async function validateCSV() {
       h === 'name' || h === 'recipient_name' || h === 'recipientname' || h === 'customer_name'
     )
 
-    // Get template param count
-    const templateParamCount = selectedTemplate.value.body_content
-      ? extractTemplateParams(selectedTemplate.value.body_content)
-      : 0
+    // Get template parameter names (e.g., ["name", "order_id"] or ["1", "2"])
+    const templateParamNames = getTemplateParamNames(selectedTemplate.value)
 
     const globalErrors: string[] = []
+    const globalWarnings: string[] = []
 
     if (phoneIndex === -1) {
       globalErrors.push('Missing required column: phone_number (or phone, mobile, number)')
     }
 
-    // Identify param columns (columns after name, or all columns except phone if no name)
-    const paramColumns: number[] = []
-    for (let i = 0; i < headers.length; i++) {
-      if (i !== phoneIndex && i !== nameIndex) {
-        // Check if it's a param column (param1, param2, {{1}}, 1, etc.)
-        const header = headers[i]
-        if (header.match(/^(param\d*|\{\{\d+\}\}|\d+)$/) ||
-            (i > Math.max(phoneIndex, nameIndex) && phoneIndex !== -1)) {
-          paramColumns.push(i)
+    // Warn about mixed param types
+    if (hasMixedParamTypes(templateParamNames)) {
+      globalWarnings.push('Template has mixed parameter types (e.g., {{1}} and {{name}}). This may cause unexpected behavior. Use CSV columns that exactly match the parameter names.')
+    }
+
+    // Map CSV columns to template parameter names
+    // Strategy:
+    // 1. Try to match CSV headers to template param names directly
+    // 2. Fall back to positional mapping for remaining params
+    const paramColumnMapping: { csvIndex: number; paramName: string }[] = []
+    const usedCsvIndices = new Set<number>([phoneIndex, nameIndex].filter(i => i >= 0))
+    const mappedParamNames = new Set<string>()
+
+    // First pass: exact matches between CSV headers and template param names
+    for (const paramName of templateParamNames) {
+      const csvIndex = headers.findIndex((h, idx) =>
+        !usedCsvIndices.has(idx) && (h === paramName.toLowerCase() || h === `param${paramName}` || h === `{{${paramName}}}`)
+      )
+      if (csvIndex !== -1) {
+        paramColumnMapping.push({ csvIndex, paramName })
+        usedCsvIndices.add(csvIndex)
+        mappedParamNames.add(paramName)
+      }
+    }
+
+    // Second pass: positional mapping for unmapped params
+    const remainingParamNames = templateParamNames.filter(n => !mappedParamNames.has(n))
+    const remainingCsvIndices = headers
+      .map((_, idx) => idx)
+      .filter(idx => !usedCsvIndices.has(idx))
+      .sort((a, b) => a - b)
+
+    for (let i = 0; i < remainingParamNames.length && i < remainingCsvIndices.length; i++) {
+      paramColumnMapping.push({ csvIndex: remainingCsvIndices[i], paramName: remainingParamNames[i] })
+    }
+
+    // Validate CSV columns match template params
+    if (templateParamNames.length > 0) {
+      // Check for missing columns (params that couldn't be mapped)
+      const mappedCount = paramColumnMapping.length
+      if (mappedCount < templateParamNames.length) {
+        const unmappedParams = templateParamNames.slice(mappedCount)
+        globalErrors.push(`Missing columns for template parameters: ${unmappedParams.join(', ')}`)
+      }
+
+      // Warn if named params are being mapped positionally (not by column name)
+      const namedParams = templateParamNames.filter(n => !/^\d+$/.test(n))
+      if (namedParams.length > 0) {
+        const positionallyMapped = namedParams.filter(n => !mappedParamNames.has(n))
+        if (positionallyMapped.length > 0) {
+          globalWarnings.push(`Parameters mapped by position (not column name): ${positionallyMapped.join(', ')}. For best results, use column names that match the template parameters.`)
         }
       }
     }
@@ -675,7 +1033,15 @@ async function validateCSV() {
       const phone = phoneIndex >= 0 ? values[phoneIndex]?.trim() || '' : ''
       const cleanPhone = phone.replace(/[^\d+]/g, '') // Normalize for duplicate check
       const name = nameIndex >= 0 ? values[nameIndex]?.trim() || '' : ''
-      const params: string[] = paramColumns.map(idx => values[idx]?.trim() || '')
+
+      // Build params object with proper keys
+      const params: Record<string, string> = {}
+      for (const mapping of paramColumnMapping) {
+        const value = values[mapping.csvIndex]?.trim() || ''
+        if (value) {
+          params[mapping.paramName] = value
+        }
+      }
 
       // Validate phone number
       if (!phone) {
@@ -692,8 +1058,9 @@ async function validateCSV() {
       }
 
       // Validate params count if template requires params
-      if (templateParamCount > 0 && params.filter(p => p).length < templateParamCount) {
-        rowErrors.push(`Template requires ${templateParamCount} parameter(s), found ${params.filter(p => p).length}`)
+      const providedParamCount = Object.keys(params).length
+      if (templateParamNames.length > 0 && providedParamCount < templateParamNames.length) {
+        rowErrors.push(`Template requires ${templateParamNames.length} parameter(s), found ${providedParamCount}`)
       }
 
       rows.push({
@@ -707,21 +1074,31 @@ async function validateCSV() {
 
     const validRows = rows.filter(r => r.isValid)
 
+    // Build column mapping for display
+    const columnMapping = paramColumnMapping.map(m => ({
+      csvColumn: headers[m.csvIndex],
+      paramName: m.paramName
+    }))
+
     csvValidation.value = {
       isValid: globalErrors.length === 0 && validRows.length > 0,
       rows,
-      templateParams: templateParamCount,
+      templateParamNames,
       csvColumns: headers,
-      errors: globalErrors
+      columnMapping,
+      errors: globalErrors,
+      warnings: globalWarnings
     }
   } catch (error) {
     console.error('Failed to parse CSV:', error)
     csvValidation.value = {
       isValid: false,
       rows: [],
-      templateParams: 0,
+      templateParamNames: [],
       csvColumns: [],
-      errors: ['Failed to parse CSV file']
+      columnMapping: [],
+      errors: ['Failed to parse CSV file'],
+      warnings: []
     }
   } finally {
     isValidatingCSV.value = false
@@ -771,19 +1148,9 @@ async function addRecipientsFromCSV() {
     if (row.name) {
       recipient.recipient_name = row.name
     }
-    // Map params to template params
-    const params: Record<string, any> = {}
-    row.params.forEach((param, index) => {
-      if (param) {
-        params[String(index + 1)] = param
-      }
-    })
-    // If no explicit params but name exists, use name as first param
-    if (Object.keys(params).length === 0 && row.name) {
-      params["1"] = row.name
-    }
-    if (Object.keys(params).length > 0) {
-      recipient.template_params = params
+    // Use params directly - already keyed by param name (e.g., {"name": "John"} or {"1": "John"})
+    if (Object.keys(row.params).length > 0) {
+      recipient.template_params = row.params
     }
     return recipient
   })
@@ -1013,6 +1380,106 @@ async function addRecipientsFromCSV() {
               </span>
             </div>
 
+            <!-- Media Upload Section (for templates with media header) -->
+            <div
+              v-if="getTemplateHeaderType(campaign.template_id) && getTemplateHeaderType(campaign.template_id) !== 'TEXT'"
+              class="mb-4 p-3 rounded-lg border bg-muted/30"
+            >
+              <div class="flex items-center gap-2 mb-2">
+                <component :is="getMediaIcon(getTemplateHeaderType(campaign.template_id))" class="h-4 w-4 text-muted-foreground" />
+                <span class="text-sm font-medium">Header Media ({{ getTemplateHeaderType(campaign.template_id) }})</span>
+              </div>
+
+              <div v-if="campaign.header_media_id" class="flex items-center gap-3 p-2 bg-green-50 dark:bg-green-950/30 rounded border border-green-200 dark:border-green-800">
+                <!-- Thumbnail -->
+                <div class="relative flex-shrink-0">
+                  <!-- Loading -->
+                  <div v-if="isMediaPreviewLoading(campaign.id)" class="w-12 h-12 flex items-center justify-center bg-muted rounded">
+                    <Loader2 class="h-4 w-4 animate-spin text-muted-foreground" />
+                  </div>
+                  <!-- Image Thumbnail -->
+                  <img
+                    v-else-if="campaign.header_media_mime_type?.startsWith('image/') && isMediaPreviewAvailable(campaign.id)"
+                    :src="getMediaPreviewUrl(campaign.id)"
+                    :alt="campaign.header_media_filename"
+                    class="w-12 h-12 object-cover rounded"
+                  />
+                  <!-- Video Thumbnail -->
+                  <div v-else-if="campaign.header_media_mime_type?.startsWith('video/')" class="w-12 h-12 flex items-center justify-center bg-muted rounded">
+                    <Video class="h-5 w-5 text-muted-foreground" />
+                  </div>
+                  <!-- Document Icon -->
+                  <div v-else class="w-12 h-12 flex items-center justify-center bg-muted rounded">
+                    <component :is="getMediaIcon(getTemplateHeaderType(campaign.template_id))" class="h-5 w-5 text-muted-foreground" />
+                  </div>
+                </div>
+                <!-- File Info -->
+                <div class="flex-1 min-w-0">
+                  <p class="text-sm font-medium text-green-700 dark:text-green-400 truncate">
+                    {{ campaign.header_media_filename || 'Media file' }}
+                  </p>
+                  <p class="text-xs text-muted-foreground">
+                    {{ campaign.header_media_mime_type || 'Unknown type' }}
+                  </p>
+                </div>
+                <!-- Preview Button -->
+                <Button
+                  v-if="isMediaPreviewAvailable(campaign.id) && (campaign.header_media_mime_type?.startsWith('image/') || campaign.header_media_mime_type?.startsWith('video/'))"
+                  variant="ghost"
+                  size="sm"
+                  @click="openMediaPreview(campaign)"
+                >
+                  <Eye class="h-4 w-4" />
+                </Button>
+                <CheckCircle class="h-4 w-4 text-green-600 flex-shrink-0" />
+              </div>
+
+              <div v-else-if="campaign.status === 'draft'" class="space-y-2">
+                <p class="text-xs text-muted-foreground">Upload media for template header</p>
+                <div v-if="selectedCampaign?.id === campaign.id && mediaFile">
+                  <div class="flex items-center gap-2 p-2 bg-background rounded border">
+                    <component :is="getMediaIcon(getTemplateHeaderType(campaign.template_id))" class="h-4 w-4" />
+                    <span class="text-sm flex-1 truncate">{{ mediaFile.name }}</span>
+                    <Button variant="ghost" size="icon" class="h-6 w-6" @click="clearMediaFile">
+                      <X class="h-3 w-3" />
+                    </Button>
+                  </div>
+                  <Button
+                    size="sm"
+                    class="mt-2"
+                    @click="uploadCampaignMedia"
+                    :disabled="isUploadingMedia"
+                  >
+                    <Loader2 v-if="isUploadingMedia" class="h-4 w-4 mr-1 animate-spin" />
+                    <Upload v-else class="h-4 w-4 mr-1" />
+                    Upload
+                  </Button>
+                </div>
+                <div v-else>
+                  <input
+                    type="file"
+                    :data-campaign-id="campaign.id"
+                    class="hidden"
+                    :accept="getAcceptedMediaTypes(getTemplateHeaderType(campaign.template_id))"
+                    @change="(e) => { selectedCampaign = campaign; handleMediaFileSelect(e) }"
+                  />
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    @click="triggerMediaFileInput(campaign.id)"
+                  >
+                    <Upload class="h-4 w-4 mr-1" />
+                    Select File
+                  </Button>
+                </div>
+              </div>
+
+              <div v-else class="flex items-center gap-2">
+                <AlertCircle class="h-4 w-4 text-amber-500" />
+                <span class="text-sm text-amber-600">No media uploaded</span>
+              </div>
+            </div>
+
             <!-- Actions -->
             <div class="flex items-center justify-between border-t pt-4">
               <div class="flex gap-2">
@@ -1153,6 +1620,7 @@ async function addRecipientsFromCSV() {
                   <th class="text-left py-2 px-2">Name</th>
                   <th class="text-left py-2 px-2">Status</th>
                   <th class="text-left py-2 px-2">Sent At</th>
+                  <th v-if="selectedCampaign?.status === 'draft'" class="text-center py-2 px-2 w-16"></th>
                 </tr>
               </thead>
               <tbody>
@@ -1160,12 +1628,29 @@ async function addRecipientsFromCSV() {
                   <td class="py-2 px-2 font-mono">{{ recipient.phone_number }}</td>
                   <td class="py-2 px-2">{{ recipient.recipient_name || '-' }}</td>
                   <td class="py-2 px-2">
-                    <Badge variant="outline" :class="getRecipientStatusClass(recipient.status)">
-                      {{ recipient.status }}
-                    </Badge>
+                    <div class="flex flex-col gap-1">
+                      <Badge variant="outline" :class="getRecipientStatusClass(recipient.status)">
+                        {{ recipient.status }}
+                      </Badge>
+                      <span v-if="recipient.status === 'failed' && recipient.error_message" class="text-xs text-destructive max-w-[200px] truncate" :title="recipient.error_message">
+                        {{ recipient.error_message }}
+                      </span>
+                    </div>
                   </td>
                   <td class="py-2 px-2 text-muted-foreground">
                     {{ recipient.sent_at ? formatDate(recipient.sent_at) : '-' }}
+                  </td>
+                  <td v-if="selectedCampaign?.status === 'draft'" class="py-2 px-2 text-center">
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      class="h-7 w-7"
+                      @click="deleteRecipient(recipient.id)"
+                      :disabled="deletingRecipientId === recipient.id"
+                    >
+                      <Loader2 v-if="deletingRecipientId === recipient.id" class="h-4 w-4 animate-spin" />
+                      <Trash2 v-else class="h-4 w-4 text-muted-foreground hover:text-destructive" />
+                    </Button>
                   </td>
                 </tr>
               </tbody>
@@ -1194,11 +1679,20 @@ async function addRecipientsFromCSV() {
           <DialogTitle>Add Recipients</DialogTitle>
           <DialogDescription>
             Add recipients to "{{ selectedCampaign?.name }}"
-            <span v-if="selectedTemplate?.body_content" class="block mt-1">
-              Template requires {{ extractTemplateParams(selectedTemplate.body_content) }} parameter(s)
+            <span v-if="templateParamNames.length > 0" class="block mt-1">
+              Template requires {{ templateParamNames.length }} parameter(s)
             </span>
           </DialogDescription>
         </DialogHeader>
+
+        <!-- Template Preview -->
+        <div v-if="selectedTemplate?.body_content" class="mb-4 p-3 bg-muted/50 rounded-lg border">
+          <div class="flex items-center gap-2 mb-2">
+            <MessageSquare class="h-4 w-4 text-muted-foreground" />
+            <span class="text-sm font-medium">Template Preview</span>
+          </div>
+          <p class="text-sm whitespace-pre-wrap" v-html="highlightTemplateParams(selectedTemplate.body_content)"></p>
+        </div>
 
         <Tabs v-model="addRecipientsTab" class="w-full">
           <TabsList class="grid w-full grid-cols-2">
@@ -1217,30 +1711,46 @@ async function addRecipientsFromCSV() {
             <div class="space-y-4">
               <div class="bg-muted p-3 rounded-lg text-sm">
                 <p class="font-medium mb-2">Format (one per line):</p>
-                <ul class="list-disc list-inside text-muted-foreground space-y-1">
-                  <li><code class="bg-background px-1 rounded">phone_number</code></li>
-                  <li><code class="bg-background px-1 rounded">phone_number, name</code></li>
-                  <li><code class="bg-background px-1 rounded">phone_number, name, param1, param2, ...</code></li>
-                </ul>
+                <code class="bg-background px-2 py-1 rounded block">{{ manualEntryFormat }}</code>
+                <p v-if="templateParamNames.length > 0" class="text-muted-foreground mt-2 text-xs">
+                  Template parameters: <span v-for="(param, idx) in templateParamNames" :key="param"><code class="bg-background px-1 rounded">{{ formatParamName(param) }}</code><span v-if="idx < templateParamNames.length - 1">, </span></span>
+                </p>
               </div>
               <div class="space-y-2">
                 <Label for="recipients">Recipients</Label>
                 <Textarea
                   id="recipients"
                   v-model="recipientsInput"
-                  placeholder="+1234567890, John Doe
-+0987654321, Jane Smith
-+1122334455"
+                  :placeholder="recipientPlaceholder"
                   rows="8"
                   class="font-mono text-sm"
                   :disabled="isAddingRecipients"
                 />
-                <p class="text-xs text-muted-foreground">
-                  {{ recipientsInput.split('\n').filter(l => l.trim()).length }} recipient(s) entered
-                </p>
+                <!-- Validation status -->
+                <div v-if="recipientsInput.trim()" class="space-y-2">
+                  <p v-if="manualInputValidation.isValid" class="text-xs text-green-600">
+                    {{ manualInputValidation.validLines }} recipient(s) valid
+                  </p>
+                  <div v-else-if="manualInputValidation.invalidLines.length > 0" class="text-xs">
+                    <p class="text-destructive font-medium mb-1">
+                      {{ manualInputValidation.invalidLines.length }} of {{ manualInputValidation.totalLines }} line(s) have errors:
+                    </p>
+                    <ul class="text-destructive space-y-0.5 max-h-20 overflow-y-auto">
+                      <li v-for="err in manualInputValidation.invalidLines.slice(0, 5)" :key="err.lineNumber">
+                        Line {{ err.lineNumber }}: {{ err.reason }}
+                      </li>
+                      <li v-if="manualInputValidation.invalidLines.length > 5" class="text-muted-foreground">
+                        ... and {{ manualInputValidation.invalidLines.length - 5 }} more errors
+                      </li>
+                    </ul>
+                  </div>
+                  <p v-else class="text-xs text-muted-foreground">
+                    {{ manualInputValidation.totalLines }} recipient(s) entered
+                  </p>
+                </div>
               </div>
               <div class="flex justify-end">
-                <Button @click="addRecipients" :disabled="isAddingRecipients || !recipientsInput.trim()">
+                <Button @click="addRecipients" :disabled="isAddingRecipients || !manualInputValidation.isValid">
                   <Loader2 v-if="isAddingRecipients" class="h-4 w-4 mr-2 animate-spin" />
                   <Upload v-else class="h-4 w-4 mr-2" />
                   Add Recipients
@@ -1254,12 +1764,13 @@ async function addRecipientsFromCSV() {
             <div class="space-y-4">
               <!-- CSV Format Info -->
               <div class="bg-muted p-3 rounded-lg text-sm">
-                <p class="font-medium mb-2">CSV Format Requirements:</p>
-                <ul class="list-disc list-inside text-muted-foreground space-y-1">
-                  <li>First row must be headers</li>
-                  <li>Required column: <code class="bg-background px-1 rounded">phone_number</code> (or phone, mobile, number)</li>
-                  <li>Optional: <code class="bg-background px-1 rounded">name</code>, <code class="bg-background px-1 rounded">param1</code>, <code class="bg-background px-1 rounded">param2</code>, ...</li>
-                </ul>
+                <p class="font-medium mb-2">Required CSV Columns:</p>
+                <div class="flex flex-wrap gap-2">
+                  <code v-for="col in csvColumnsHint" :key="col" class="bg-background px-2 py-1 rounded text-xs">{{ col }}</code>
+                </div>
+                <p v-if="templateParamNames.length > 0" class="text-muted-foreground mt-2 text-xs">
+                  Template parameters: <span v-for="(param, idx) in templateParamNames" :key="param"><code class="bg-background px-1 rounded">{{ formatParamName(param) }}</code><span v-if="idx < templateParamNames.length - 1">, </span></span>
+                </p>
               </div>
 
               <!-- File Upload -->
@@ -1302,6 +1813,33 @@ async function addRecipientsFromCSV() {
                   <ul class="list-disc list-inside text-sm text-destructive">
                     <li v-for="error in csvValidation.errors" :key="error">{{ error }}</li>
                   </ul>
+                </div>
+
+                <!-- Warnings -->
+                <div v-if="csvValidation.warnings && csvValidation.warnings.length > 0" class="bg-orange-500/10 border border-orange-500/20 rounded-lg p-3">
+                  <div class="flex items-center gap-2 text-orange-600 font-medium mb-2">
+                    <AlertTriangle class="h-4 w-4" />
+                    Warnings
+                  </div>
+                  <ul class="list-disc list-inside text-sm text-orange-600">
+                    <li v-for="warning in csvValidation.warnings" :key="warning">{{ warning }}</li>
+                  </ul>
+                </div>
+
+                <!-- Column Mapping Info -->
+                <div v-if="csvValidation.columnMapping && csvValidation.columnMapping.length > 0" class="bg-muted/50 border rounded-lg p-3">
+                  <div class="text-sm font-medium mb-2">Column Mapping</div>
+                  <div class="flex flex-wrap gap-2">
+                    <div
+                      v-for="mapping in csvValidation.columnMapping"
+                      :key="mapping.paramName"
+                      class="text-xs bg-background border rounded px-2 py-1"
+                    >
+                      <span class="text-muted-foreground">{{ mapping.csvColumn }}</span>
+                      <span class="mx-1">→</span>
+                      <span class="font-mono text-primary">{{ formatParamName(mapping.paramName) }}</span>
+                    </div>
+                  </div>
                 </div>
 
                 <!-- Summary -->
@@ -1358,7 +1896,7 @@ async function addRecipientsFromCSV() {
                           <td class="py-2 px-3 font-mono">{{ row.phone_number || '-' }}</td>
                           <td class="py-2 px-3">{{ row.name || '-' }}</td>
                           <td class="py-2 px-3 text-muted-foreground">
-                            {{ row.params.filter(p => p).join(', ') || '-' }}
+                            {{ Object.values(row.params).filter(p => p).join(', ') || '-' }}
                           </td>
                         </tr>
                       </tbody>
@@ -1430,5 +1968,34 @@ async function addRecipientsFromCSV() {
         </AlertDialogFooter>
       </AlertDialogContent>
     </AlertDialog>
+
+    <!-- Media Preview Dialog -->
+    <Dialog v-model:open="showMediaPreviewDialog">
+      <DialogContent class="sm:max-w-[600px]">
+        <DialogHeader>
+          <DialogTitle>Media Preview</DialogTitle>
+          <DialogDescription>
+            {{ previewingCampaign?.header_media_filename }}
+          </DialogDescription>
+        </DialogHeader>
+        <div class="flex items-center justify-center py-4">
+          <img
+            v-if="previewingCampaign?.header_media_mime_type?.startsWith('image/') && previewingCampaign?.id"
+            :src="getMediaPreviewUrl(previewingCampaign.id)"
+            :alt="previewingCampaign?.header_media_filename"
+            class="max-w-full max-h-[60vh] object-contain rounded"
+          />
+          <video
+            v-else-if="previewingCampaign?.header_media_mime_type?.startsWith('video/') && previewingCampaign?.id"
+            :src="getMediaPreviewUrl(previewingCampaign.id)"
+            controls
+            class="max-w-full max-h-[60vh] rounded"
+          />
+        </div>
+        <DialogFooter>
+          <Button variant="outline" @click="showMediaPreviewDialog = false">Close</Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   </div>
 </template>
