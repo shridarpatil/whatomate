@@ -15,7 +15,7 @@ services:
         condition: service_healthy
     volumes:
       - ./uploads:/app/uploads:rw
-      - ./config.toml:/app/config.toml:ro
+      - ../config.toml:/app/config.toml:ro
     command: ["server", "-migrate", "-config", "/app/config.toml"]
 
   # PostgreSQL database
@@ -32,7 +32,11 @@ services:
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-whatomate}
       POSTGRES_DB: ${POSTGRES_DB:-whatomate}
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-whatomate} -d ${POSTGRES_DB:-whatomate}"]
+      test:
+        [
+          "CMD-SHELL",
+          "pg_isready -U ${POSTGRES_USER:-whatomate} -d ${POSTGRES_DB:-whatomate}",
+        ]
       interval: 10s
       timeout: 5s
       retries: 6
