@@ -566,169 +566,22 @@ func (a *App) matchKeywordRules(orgID uuid.UUID, accountName, messageText string
 	return nil, false
 }
 
-// sendTextMessage sends a text message via WhatsApp Cloud API
-// Returns the WhatsApp message ID and any error
-func (a *App) sendTextMessage(account *models.WhatsAppAccount, to, message string) (string, error) {
-	waAccount := &whatsapp.Account{
-		PhoneID:     account.PhoneID,
-		BusinessID:  account.BusinessID,
-		APIVersion:  account.APIVersion,
-		AccessToken: account.AccessToken,
-	}
-	ctx := context.Background()
-	return a.WhatsApp.SendTextMessage(ctx, waAccount, to, message)
-}
-
 // sendAndSaveTextMessage sends a text message and saves it to the database
+// Uses the unified SendOutgoingMessage for consistent behavior
 func (a *App) sendAndSaveTextMessage(account *models.WhatsAppAccount, contact *models.Contact, message string) error {
-	waAccount := &whatsapp.Account{
-		PhoneID:     account.PhoneID,
-		BusinessID:  account.BusinessID,
-		APIVersion:  account.APIVersion,
-		AccessToken: account.AccessToken,
-	}
 	ctx := context.Background()
-	wamid, err := a.WhatsApp.SendTextMessage(ctx, waAccount, contact.PhoneNumber, message)
-
-	// Create message record
-	msg := models.Message{
-		OrganizationID:  account.OrganizationID,
-		WhatsAppAccount: account.Name,
-		ContactID:       contact.ID,
-		Direction:       models.DirectionOutgoing,
-		MessageType:     models.MessageTypeText,
-		Content:         message,
-		Status:          models.MessageStatusSent,
-	}
-	if err != nil {
-		msg.Status = models.MessageStatusFailed
-		msg.ErrorMessage = err.Error()
-	} else if wamid != "" {
-		msg.WhatsAppMessageID = wamid
-	}
-
-	if dbErr := a.DB.Create(&msg).Error; dbErr != nil {
-		a.Log.Error("Failed to save chatbot message", "error", dbErr)
-	}
-
-	// Track chatbot message for client inactivity SLA
-	if err == nil {
-		a.UpdateContactChatbotMessage(contact.ID)
-	}
-
-	// Broadcast via WebSocket
-	if a.WSHub != nil {
-		var assignedUserIDStr string
-		if contact.AssignedUserID != nil {
-			assignedUserIDStr = contact.AssignedUserID.String()
-		}
-		a.WSHub.BroadcastToOrg(account.OrganizationID, websocket.WSMessage{
-			Type: websocket.TypeNewMessage,
-			Payload: map[string]any{
-				"id":               msg.ID,
-				"contact_id":       contact.ID.String(),
-				"assigned_user_id": assignedUserIDStr,
-				"profile_name":     contact.ProfileName,
-				"direction":        msg.Direction,
-				"message_type":     msg.MessageType,
-				"content":          map[string]string{"body": msg.Content},
-				"status":           msg.Status,
-				"wamid":            msg.WhatsAppMessageID,
-				"created_at":       msg.CreatedAt,
-				"updated_at":       msg.UpdatedAt,
-			},
-		})
-	}
-
+	_, err := a.SendOutgoingMessage(ctx, OutgoingMessageRequest{
+		Account: account,
+		Contact: contact,
+		Type:    models.MessageTypeText,
+		Content: message,
+	}, ChatbotSendOptions())
 	return err
 }
 
 // sendAndSaveInteractiveButtons sends an interactive button message and saves it to the database
+// Uses the unified SendOutgoingMessage for consistent behavior
 func (a *App) sendAndSaveInteractiveButtons(account *models.WhatsAppAccount, contact *models.Contact, bodyText string, buttons []map[string]interface{}) error {
-	wamid, err := a.sendInteractiveButtons(account, contact.PhoneNumber, bodyText, buttons)
-
-	// Create message record with interactive data
-	// Convert buttons to []interface{} for JSONB storage
-	buttonsInterface := make([]interface{}, len(buttons))
-	for i, b := range buttons {
-		buttonsInterface[i] = b
-	}
-
-	// Store differently based on button count (matching WhatsApp API format)
-	// 3 or fewer = button type, more than 3 = list type
-	var interactiveData models.JSONB
-	if len(buttons) <= 3 {
-		interactiveData = models.JSONB{
-			"type":    "button",
-			"body":    bodyText,
-			"buttons": buttonsInterface,
-		}
-	} else {
-		interactiveData = models.JSONB{
-			"type": "list",
-			"body": bodyText,
-			"rows": buttonsInterface,
-		}
-	}
-
-	msg := models.Message{
-		OrganizationID:  account.OrganizationID,
-		WhatsAppAccount: account.Name,
-		ContactID:       contact.ID,
-		Direction:       models.DirectionOutgoing,
-		MessageType:     models.MessageTypeInteractive,
-		Content:         bodyText,
-		InteractiveData: interactiveData,
-		Status:          models.MessageStatusSent,
-	}
-	if err != nil {
-		msg.Status = models.MessageStatusFailed
-		msg.ErrorMessage = err.Error()
-	} else if wamid != "" {
-		msg.WhatsAppMessageID = wamid
-	}
-
-	if dbErr := a.DB.Create(&msg).Error; dbErr != nil {
-		a.Log.Error("Failed to save chatbot interactive message", "error", dbErr)
-	}
-
-	// Track chatbot message for client inactivity SLA
-	if err == nil {
-		a.UpdateContactChatbotMessage(contact.ID)
-	}
-
-	// Broadcast via WebSocket
-	if a.WSHub != nil {
-		var assignedUserIDStr string
-		if contact.AssignedUserID != nil {
-			assignedUserIDStr = contact.AssignedUserID.String()
-		}
-		a.WSHub.BroadcastToOrg(account.OrganizationID, websocket.WSMessage{
-			Type: websocket.TypeNewMessage,
-			Payload: map[string]any{
-				"id":               msg.ID,
-				"contact_id":       contact.ID.String(),
-				"assigned_user_id": assignedUserIDStr,
-				"profile_name":     contact.ProfileName,
-				"direction":        msg.Direction,
-				"message_type":     msg.MessageType,
-				"content":          map[string]string{"body": msg.Content},
-				"interactive_data": msg.InteractiveData,
-				"status":           msg.Status,
-				"wamid":            msg.WhatsAppMessageID,
-				"created_at":       msg.CreatedAt,
-				"updated_at":       msg.UpdatedAt,
-			},
-		})
-	}
-
-	return err
-}
-
-// sendInteractiveButtons sends an interactive button or list message via WhatsApp Cloud API
-// If 3 or fewer buttons, sends as button message; if more than 3, sends as list message (max 10)
-// Returns the WhatsApp message ID and any error
-func (a *App) sendInteractiveButtons(account *models.WhatsAppAccount, to, bodyText string, buttons []map[string]interface{}) (string, error) {
 	// Convert buttons to whatsapp.Button format
 	waButtons := make([]whatsapp.Button, 0, len(buttons))
 	for i, btn := range buttons {
@@ -749,90 +602,42 @@ func (a *App) sendInteractiveButtons(account *models.WhatsAppAccount, to, bodyTe
 		})
 	}
 
+	// Fall back to text if no buttons
 	if len(waButtons) == 0 {
-		return a.sendTextMessage(account, to, bodyText)
+		return a.sendAndSaveTextMessage(account, contact, bodyText)
 	}
 
-	waAccount := &whatsapp.Account{
-		PhoneID:     account.PhoneID,
-		BusinessID:  account.BusinessID,
-		APIVersion:  account.APIVersion,
-		AccessToken: account.AccessToken,
+	// Determine interactive type based on button count
+	interactiveType := "button"
+	if len(waButtons) > 3 {
+		interactiveType = "list"
 	}
+
 	ctx := context.Background()
-	return a.WhatsApp.SendInteractiveButtons(ctx, waAccount, to, bodyText, waButtons)
+	_, err := a.SendOutgoingMessage(ctx, OutgoingMessageRequest{
+		Account:         account,
+		Contact:         contact,
+		Type:            models.MessageTypeInteractive,
+		InteractiveType: interactiveType,
+		BodyText:        bodyText,
+		Buttons:         waButtons,
+	}, ChatbotSendOptions())
+	return err
 }
 
 // sendAndSaveCTAURLButton sends a CTA URL button message and saves it to the database
+// Uses the unified SendOutgoingMessage for consistent behavior
 func (a *App) sendAndSaveCTAURLButton(account *models.WhatsAppAccount, contact *models.Contact, bodyText, buttonText, url string) error {
-	waAccount := &whatsapp.Account{
-		PhoneID:     account.PhoneID,
-		BusinessID:  account.BusinessID,
-		APIVersion:  account.APIVersion,
-		AccessToken: account.AccessToken,
-	}
 	ctx := context.Background()
-	wamid, err := a.WhatsApp.SendCTAURLButton(ctx, waAccount, contact.PhoneNumber, bodyText, buttonText, url)
-
-	// Create message record with interactive data
-	interactiveData := models.JSONB{
-		"type":        "cta_url",
-		"body":        bodyText,
-		"button_text": buttonText,
-		"url":         url,
-	}
-
-	msg := models.Message{
-		OrganizationID:  account.OrganizationID,
-		WhatsAppAccount: account.Name,
-		ContactID:       contact.ID,
-		Direction:       models.DirectionOutgoing,
-		MessageType:     models.MessageTypeInteractive,
-		Content:         bodyText,
-		InteractiveData: interactiveData,
-		Status:          models.MessageStatusSent,
-	}
-	if err != nil {
-		msg.Status = models.MessageStatusFailed
-		msg.ErrorMessage = err.Error()
-	} else if wamid != "" {
-		msg.WhatsAppMessageID = wamid
-	}
-
-	if dbErr := a.DB.Create(&msg).Error; dbErr != nil {
-		a.Log.Error("Failed to save chatbot CTA URL message", "error", dbErr)
-	}
-
-	// Track chatbot message for client inactivity SLA
-	if err == nil {
-		a.UpdateContactChatbotMessage(contact.ID)
-	}
-
-	// Broadcast via WebSocket
-	if a.WSHub != nil {
-		var assignedUserIDStr string
-		if contact.AssignedUserID != nil {
-			assignedUserIDStr = contact.AssignedUserID.String()
-		}
-		a.WSHub.BroadcastToOrg(account.OrganizationID, websocket.WSMessage{
-			Type: websocket.TypeNewMessage,
-			Payload: map[string]any{
-				"id":               msg.ID,
-				"contact_id":       contact.ID.String(),
-				"assigned_user_id": assignedUserIDStr,
-				"profile_name":     contact.ProfileName,
-				"direction":        msg.Direction,
-				"message_type":     msg.MessageType,
-				"content":          map[string]string{"body": msg.Content},
-				"interactive_data": msg.InteractiveData,
-				"status":           msg.Status,
-				"wamid":            msg.WhatsAppMessageID,
-				"created_at":       msg.CreatedAt,
-				"updated_at":       msg.UpdatedAt,
-			},
-		})
-	}
-
+	_, err := a.SendOutgoingMessage(ctx, OutgoingMessageRequest{
+		Account:         account,
+		Contact:         contact,
+		Type:            models.MessageTypeInteractive,
+		InteractiveType: "cta_url",
+		BodyText:        bodyText,
+		ButtonText:      buttonText,
+		URL:             url,
+	}, ChatbotSendOptions())
 	return err
 }
 
@@ -2539,7 +2344,7 @@ func (a *App) isWithinBusinessHours(businessHours models.JSONBArray) bool {
 	return false
 }
 
-// shouldSkipStep evaluates a text expression like "(status == 'vip' OR amount > 100) AND name != ''"
+// shouldSkipStep evaluates a text expression like "(status == 'vip' OR amount > 100) AND name != ”"
 func (a *App) shouldSkipStep(step *models.ChatbotFlowStep, sessionData map[string]interface{}) bool {
 	if step.SkipCondition == "" {
 		a.Log.Debug("No skip condition for step", "step", step.StepName)
@@ -2630,7 +2435,7 @@ func splitByLogicOperator(expr, op string) []string {
 	return parts
 }
 
-// evaluateSingleCondition handles: phone != '' or age > 18 or status == 'confirmed'
+// evaluateSingleCondition handles: phone != ” or age > 18 or status == 'confirmed'
 func evaluateSingleCondition(expr string, data map[string]interface{}) bool {
 	expr = strings.TrimSpace(expr)
 

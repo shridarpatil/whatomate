@@ -508,32 +508,9 @@ func (a *App) SendMessage(r *fastglue.Request) error {
 	}
 
 	// Get WhatsApp account
-	var account models.WhatsAppAccount
-	if contact.WhatsAppAccount != "" {
-		if err := a.DB.Where("name = ? AND organization_id = ?", contact.WhatsAppAccount, orgID).First(&account).Error; err != nil {
-			return r.SendErrorEnvelope(fasthttp.StatusBadRequest, "WhatsApp account not found", nil, "")
-		}
-	} else {
-		// Get default outgoing account
-		if err := a.DB.Where("organization_id = ? AND is_default_outgoing = ?", orgID, true).First(&account).Error; err != nil {
-			// Fall back to any account
-			if err := a.DB.Where("organization_id = ?", orgID).First(&account).Error; err != nil {
-				return r.SendErrorEnvelope(fasthttp.StatusBadRequest, "No WhatsApp account configured", nil, "")
-			}
-		}
-	}
-
-	// Create message record
-	message := models.Message{
-		BaseModel:       models.BaseModel{ID: uuid.New()},
-		OrganizationID:  orgID,
-		WhatsAppAccount: account.Name,
-		ContactID:       contactID,
-		Direction:       models.DirectionOutgoing,
-		MessageType:     req.Type,
-		Content:         req.Content.Body,
-		Status:          models.MessageStatusPending,
-		SentByUserID:    &userID,
+	account, err := a.resolveWhatsAppAccount(orgID, contact.WhatsAppAccount)
+	if err != nil {
+		return r.SendErrorEnvelope(fasthttp.StatusBadRequest, err.Error(), nil, "")
 	}
 
 	// Handle reply context
@@ -543,28 +520,30 @@ func (a *App) SendMessage(r *fastglue.Request) error {
 		if err == nil {
 			var replyTo models.Message
 			if err := a.DB.Where("id = ? AND contact_id = ?", replyToID, contactID).First(&replyTo).Error; err == nil {
-				message.IsReply = true
-				message.ReplyToMessageID = &replyToID
 				replyToMessage = &replyTo
 			}
 		}
 	}
 
-	if err := a.DB.Create(&message).Error; err != nil {
-		a.Log.Error("Failed to create message", "error", err)
-		return r.SendErrorEnvelope(fasthttp.StatusInternalServerError, "Failed to create message", nil, "")
+	// Build request and send using unified sender
+	msgReq := OutgoingMessageRequest{
+		Account:        account,
+		Contact:        &contact,
+		Type:           req.Type,
+		Content:        req.Content.Body,
+		ReplyToMessage: replyToMessage,
 	}
 
-	// Send via WhatsApp API
-	go a.sendWhatsAppMessage(&account, &contact, &message)
+	opts := DefaultSendOptions()
+	opts.SentByUserID = &userID
 
-	// Update contact's last message
-	now := time.Now()
-	a.DB.Model(&contact).Updates(map[string]any{
-		"last_message_at":      now,
-		"last_message_preview": truncateString(req.Content.Body, 100),
-	})
+	ctx := context.Background()
+	message, err := a.SendOutgoingMessage(ctx, msgReq, opts)
+	if err != nil {
+		return r.SendErrorEnvelope(fasthttp.StatusInternalServerError, "Failed to send message", nil, "")
+	}
 
+	// Build response
 	response := MessageResponse{
 		ID:          message.ID,
 		ContactID:   message.ContactID,
@@ -589,157 +568,28 @@ func (a *App) SendMessage(r *fastglue.Request) error {
 		}
 	}
 
-	// Broadcast new outgoing message via WebSocket
-	if a.WSHub != nil {
-		wsPayload := map[string]any{
-			"id":           message.ID,
-			"contact_id":   message.ContactID,
-			"direction":    message.Direction,
-			"message_type": message.MessageType,
-			"content":      map[string]string{"body": message.Content},
-			"status":       message.Status,
-			"created_at":   message.CreatedAt,
-			"updated_at":   message.UpdatedAt,
-			"is_reply":     message.IsReply,
-		}
-		if message.IsReply && message.ReplyToMessageID != nil && replyToMessage != nil {
-			wsPayload["reply_to_message_id"] = message.ReplyToMessageID.String()
-			wsPayload["reply_to_message"] = map[string]any{
-				"id":           replyToMessage.ID.String(),
-				"content":      map[string]string{"body": replyToMessage.Content},
-				"message_type": replyToMessage.MessageType,
-				"direction":    replyToMessage.Direction,
-			}
-		}
-		a.WSHub.BroadcastToOrg(orgID, websocket.WSMessage{
-			Type:    websocket.TypeNewMessage,
-			Payload: wsPayload,
-		})
-	}
-
 	return r.SendEnvelope(response)
 }
 
-// sendWhatsAppMessage sends a message via the WhatsApp Cloud API
-func (a *App) sendWhatsAppMessage(account *models.WhatsAppAccount, contact *models.Contact, message *models.Message) {
-	url := fmt.Sprintf("%s/%s/%s/messages", a.Config.WhatsApp.BaseURL, account.APIVersion, account.PhoneID)
+// resolveWhatsAppAccount gets the WhatsApp account for sending messages
+func (a *App) resolveWhatsAppAccount(orgID uuid.UUID, accountName string) (*models.WhatsAppAccount, error) {
+	var account models.WhatsAppAccount
 
-	payload := map[string]any{
-		"messaging_product": "whatsapp",
-		"recipient_type":    "individual",
-		"to":                contact.PhoneNumber,
-		"type":              message.MessageType,
+	if accountName != "" {
+		if err := a.DB.Where("name = ? AND organization_id = ?", accountName, orgID).First(&account).Error; err != nil {
+			return nil, fmt.Errorf("WhatsApp account not found")
+		}
+		return &account, nil
 	}
 
-	if message.MessageType == models.MessageTypeText {
-		payload["text"] = map[string]any{
-			"preview_url": false,
-			"body":        message.Content,
+	// Get default outgoing account
+	if err := a.DB.Where("organization_id = ? AND is_default_outgoing = ?", orgID, true).First(&account).Error; err != nil {
+		// Fall back to any account
+		if err := a.DB.Where("organization_id = ?", orgID).First(&account).Error; err != nil {
+			return nil, fmt.Errorf("no WhatsApp account configured")
 		}
 	}
-
-	// Add reply context if this is a reply
-	if message.IsReply && message.ReplyToMessageID != nil {
-		var replyToMsg models.Message
-		if err := a.DB.First(&replyToMsg, message.ReplyToMessageID).Error; err == nil && replyToMsg.WhatsAppMessageID != "" {
-			payload["context"] = map[string]any{
-				"message_id": replyToMsg.WhatsAppMessageID,
-			}
-		}
-	}
-
-	jsonPayload, err := json.Marshal(payload)
-	if err != nil {
-		a.Log.Error("Failed to marshal message payload", "error", err)
-		a.DB.Model(message).Updates(map[string]any{
-			"status":        models.MessageStatusFailed,
-			"error_message": "Failed to create request",
-		})
-		return
-	}
-
-	req, err := http.NewRequest("POST", url, bytes.NewBuffer(jsonPayload))
-	if err != nil {
-		a.Log.Error("Failed to create request", "error", err)
-		a.DB.Model(message).Updates(map[string]any{
-			"status":        models.MessageStatusFailed,
-			"error_message": "Failed to create request",
-		})
-		return
-	}
-
-	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("Authorization", "Bearer "+account.AccessToken)
-
-	client := &http.Client{Timeout: 30 * time.Second}
-	resp, err := client.Do(req)
-	if err != nil {
-		a.Log.Error("Failed to send message", "error", err)
-		a.DB.Model(message).Updates(map[string]any{
-			"status":        models.MessageStatusFailed,
-			"error_message": err.Error(),
-		})
-		return
-	}
-	defer func() { _ = resp.Body.Close() }()
-
-	body, _ := io.ReadAll(resp.Body)
-
-	if resp.StatusCode != 200 {
-		var errResp struct {
-			Error struct {
-				Message string `json:"message"`
-				Code    int    `json:"code"`
-			} `json:"error"`
-		}
-		if err := json.Unmarshal(body, &errResp); err != nil {
-			a.Log.Warn("Failed to parse error response", "error", err)
-		}
-		a.Log.Error("WhatsApp API error",
-			"status", resp.StatusCode,
-			"code", errResp.Error.Code,
-			"message", errResp.Error.Message,
-		)
-		a.DB.Model(message).Updates(map[string]any{
-			"status":        models.MessageStatusFailed,
-			"error_message": errResp.Error.Message,
-		})
-		return
-	}
-
-	var result struct {
-		Messages []struct {
-			ID string `json:"id"`
-		} `json:"messages"`
-	}
-	if err := json.Unmarshal(body, &result); err != nil {
-		a.Log.Warn("Failed to parse success response", "error", err)
-	}
-
-	if len(result.Messages) > 0 {
-		a.DB.Model(message).Updates(map[string]any{
-			"status":               models.MessageStatusSent,
-			"whats_app_message_id": result.Messages[0].ID,
-		})
-		a.Log.Info("Message sent successfully", "message_id", result.Messages[0].ID, "to", contact.PhoneNumber)
-
-		// Dispatch webhook for message sent
-		var sentByUserID string
-		if message.SentByUserID != nil {
-			sentByUserID = message.SentByUserID.String()
-		}
-		a.DispatchWebhook(account.OrganizationID, models.WebhookEventMessageSent, MessageEventData{
-			MessageID:       message.ID.String(),
-			ContactID:       contact.ID.String(),
-			ContactPhone:    contact.PhoneNumber,
-			ContactName:     contact.ProfileName,
-			MessageType:     message.MessageType,
-			Content:         message.Content,
-			WhatsAppAccount: account.Name,
-			Direction:       models.DirectionOutgoing,
-			SentByUserID:    sentByUserID,
-		})
-	}
+	return &account, nil
 }
 
 func truncateString(s string, maxLen int) string {
@@ -834,58 +684,33 @@ func (a *App) SendMediaMessage(r *fastglue.Request) error {
 		}
 	}
 
-	// Save file locally
-	waAccount := &whatsapp.Account{
-		PhoneID:     account.PhoneID,
-		BusinessID:  account.BusinessID,
-		APIVersion:  account.APIVersion,
-		AccessToken: account.AccessToken,
-	}
-
-	// Save locally first
+	// Save file locally first
 	localPath, err := a.saveMediaLocally(fileData, mimeType, fileHeader.Filename)
 	if err != nil {
 		a.Log.Error("Failed to save media locally", "error", err)
 		return r.SendErrorEnvelope(fasthttp.StatusInternalServerError, "Failed to save media", nil, "")
 	}
 
-	// Create message record first
-	message := models.Message{
-		BaseModel:       models.BaseModel{ID: uuid.New()},
-		OrganizationID:  orgID,
-		WhatsAppAccount: account.Name,
-		ContactID:       contactID,
-		Direction:       models.DirectionOutgoing,
-		MessageType:     models.MessageType(mediaType),
-		Content:         caption,
-		MediaURL:        localPath,
-		MediaMimeType:   mimeType,
-		MediaFilename:   fileHeader.Filename,
-		Status:          models.MessageStatusPending,
-		SentByUserID:    &userID,
+	// Build and send via unified message sender
+	msgReq := OutgoingMessageRequest{
+		Account:       &account,
+		Contact:       &contact,
+		Type:          models.MessageType(mediaType),
+		MediaData:     fileData,
+		MediaURL:      localPath,
+		MediaMimeType: mimeType,
+		MediaFilename: fileHeader.Filename,
+		Caption:       caption,
 	}
 
-	if err := a.DB.Create(&message).Error; err != nil {
-		a.Log.Error("Failed to create message", "error", err)
-		return r.SendErrorEnvelope(fasthttp.StatusInternalServerError, "Failed to create message", nil, "")
-	}
+	opts := DefaultSendOptions()
+	opts.SentByUserID = &userID
 
-	// Upload to WhatsApp and send asynchronously
-	go a.uploadAndSendMediaMessage(waAccount, &account, &contact, &message, fileData, mimeType, fileHeader.Filename, caption)
-
-	// Update contact's last message
-	now := time.Now()
-	preview := "[" + mediaType + "]"
-	if caption != "" {
-		preview = caption
-		if len(preview) > 100 {
-			preview = preview[:97] + "..."
-		}
+	ctx := context.Background()
+	message, err := a.SendOutgoingMessage(ctx, msgReq, opts)
+	if err != nil {
+		return r.SendErrorEnvelope(fasthttp.StatusInternalServerError, "Failed to send message", nil, "")
 	}
-	a.DB.Model(&contact).Updates(map[string]any{
-		"last_message_at":      now,
-		"last_message_preview": preview,
-	})
 
 	response := MessageResponse{
 		ID:            message.ID,
@@ -899,26 +724,6 @@ func (a *App) SendMediaMessage(r *fastglue.Request) error {
 		Status:        message.Status,
 		CreatedAt:     message.CreatedAt,
 		UpdatedAt:     message.UpdatedAt,
-	}
-
-	// Broadcast new outgoing message via WebSocket
-	if a.WSHub != nil {
-		a.WSHub.BroadcastToOrg(orgID, websocket.WSMessage{
-			Type: websocket.TypeNewMessage,
-			Payload: map[string]any{
-				"id":              message.ID.String(),
-				"contact_id":     message.ContactID.String(),
-				"direction":      message.Direction,
-				"message_type":   message.MessageType,
-				"content":        map[string]string{"body": message.Content},
-				"media_url":      message.MediaURL,
-				"media_mime_type": message.MediaMimeType,
-				"media_filename": message.MediaFilename,
-				"status":         message.Status,
-				"created_at":     message.CreatedAt,
-				"updated_at":     message.UpdatedAt,
-			},
-		})
 	}
 
 	return r.SendEnvelope(response)
@@ -1157,71 +962,6 @@ func (a *App) sendWhatsAppReaction(account *models.WhatsAppAccount, contact *mod
 	}
 
 	a.Log.Info("Reaction sent successfully", "message_id", message.WhatsAppMessageID, "emoji", emoji)
-}
-
-// uploadAndSendMediaMessage uploads media to WhatsApp and sends the message
-func (a *App) uploadAndSendMediaMessage(waAccount *whatsapp.Account, account *models.WhatsAppAccount, contact *models.Contact, message *models.Message, data []byte, mimeType, filename, caption string) {
-	ctx := context.Background()
-
-	// Upload media to WhatsApp
-	mediaID, err := a.WhatsApp.UploadMedia(ctx, waAccount, data, mimeType, filename)
-	if err != nil {
-		a.Log.Error("Failed to upload media to WhatsApp", "error", err)
-		a.DB.Model(message).Updates(map[string]any{
-			"status":        models.MessageStatusFailed,
-			"error_message": "Failed to upload media: " + err.Error(),
-		})
-		return
-	}
-
-	// Send the media message
-	var wamID string
-	switch message.MessageType {
-	case models.MessageTypeImage:
-		wamID, err = a.WhatsApp.SendImageMessage(ctx, waAccount, contact.PhoneNumber, mediaID, caption)
-	case models.MessageTypeDocument:
-		wamID, err = a.WhatsApp.SendDocumentMessage(ctx, waAccount, contact.PhoneNumber, mediaID, filename, caption)
-	case models.MessageTypeVideo:
-		wamID, err = a.WhatsApp.SendVideoMessage(ctx, waAccount, contact.PhoneNumber, mediaID, caption)
-	case models.MessageTypeAudio:
-		wamID, err = a.WhatsApp.SendAudioMessage(ctx, waAccount, contact.PhoneNumber, mediaID)
-	default:
-		err = fmt.Errorf("unsupported media type: %s", message.MessageType)
-	}
-
-	if err != nil {
-		a.Log.Error("Failed to send media message", "error", err)
-		a.DB.Model(message).Updates(map[string]any{
-			"status":        models.MessageStatusFailed,
-			"error_message": err.Error(),
-		})
-		return
-	}
-
-	// Update message with WhatsApp message ID
-	a.DB.Model(message).Updates(map[string]any{
-		"status":               models.MessageStatusSent,
-		"whats_app_message_id": wamID,
-	})
-
-	a.Log.Info("Media message sent", "message_id", message.ID, "wamid", wamID, "type", message.MessageType)
-
-	// Dispatch webhook for message sent
-	var sentByUserID string
-	if message.SentByUserID != nil {
-		sentByUserID = message.SentByUserID.String()
-	}
-	a.DispatchWebhook(account.OrganizationID, models.WebhookEventMessageSent, MessageEventData{
-		MessageID:       message.ID.String(),
-		ContactID:       contact.ID.String(),
-		ContactPhone:    contact.PhoneNumber,
-		ContactName:     contact.ProfileName,
-		MessageType:     message.MessageType,
-		Content:         caption,
-		WhatsAppAccount: account.Name,
-		Direction:       models.DirectionOutgoing,
-		SentByUserID:    sentByUserID,
-	})
 }
 
 // AssignContactRequest represents the request to assign a contact to a user
