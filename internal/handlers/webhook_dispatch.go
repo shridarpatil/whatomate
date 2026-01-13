@@ -2,11 +2,13 @@ package handlers
 
 import (
 	"bytes"
+	"context"
 	"crypto/hmac"
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
 	"net/http"
+	"sync"
 	"time"
 
 	"github.com/google/uuid"
@@ -55,12 +57,22 @@ type TransferEventData struct {
 	WhatsAppAccount string                `json:"whatsapp_account"`
 }
 
+// maxConcurrentWebhooks limits the number of concurrent webhook deliveries per dispatch
+const maxConcurrentWebhooks = 10
+
 // DispatchWebhook sends an event to all matching webhooks for the organization
 func (a *App) DispatchWebhook(orgID uuid.UUID, eventType models.WebhookEvent, data interface{}) {
-	go a.dispatchWebhookAsync(orgID, string(eventType), data)
+	a.wg.Add(1)
+	go func() {
+		defer a.wg.Done()
+		// Use detached context with timeout for webhook delivery
+		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
+		defer cancel()
+		a.dispatchWebhookAsync(ctx, orgID, string(eventType), data)
+	}()
 }
 
-func (a *App) dispatchWebhookAsync(orgID uuid.UUID, eventType string, data interface{}) {
+func (a *App) dispatchWebhookAsync(ctx context.Context, orgID uuid.UUID, eventType string, data interface{}) {
 	// Find all active webhooks for this org that subscribe to this event (use cache)
 	webhooks, err := a.getWebhooksCached(orgID)
 	if err != nil {
@@ -68,15 +80,33 @@ func (a *App) dispatchWebhookAsync(orgID uuid.UUID, eventType string, data inter
 		return
 	}
 
+	// Use semaphore to limit concurrent webhook calls
+	sem := make(chan struct{}, maxConcurrentWebhooks)
+	var wg sync.WaitGroup
+
 	for _, webhook := range webhooks {
 		// Check if webhook subscribes to this event
 		if !containsEvent(webhook.Events, eventType) {
 			continue
 		}
 
-		// Send webhook asynchronously
-		go a.sendWebhook(webhook, eventType, data)
+		// Check if context was cancelled
+		if ctx.Err() != nil {
+			a.Log.Warn("webhook dispatch cancelled", "reason", ctx.Err())
+			break
+		}
+
+		wg.Add(1)
+		sem <- struct{}{} // Acquire semaphore slot
+
+		go func(wh models.Webhook) {
+			defer wg.Done()
+			defer func() { <-sem }() // Release semaphore slot
+			a.sendWebhook(ctx, wh, eventType, data)
+		}(webhook)
 	}
+
+	wg.Wait()
 }
 
 func containsEvent(events models.StringArray, event string) bool {
@@ -88,7 +118,7 @@ func containsEvent(events models.StringArray, event string) bool {
 	return false
 }
 
-func (a *App) sendWebhook(webhook models.Webhook, eventType string, data interface{}) {
+func (a *App) sendWebhook(ctx context.Context, webhook models.Webhook, eventType string, data interface{}) {
 	payload := OutboundWebhookPayload{
 		Event:     eventType,
 		Timestamp: time.Now().UTC(),
@@ -104,12 +134,23 @@ func (a *App) sendWebhook(webhook models.Webhook, eventType string, data interfa
 	// Retry logic with exponential backoff
 	maxRetries := 3
 	for attempt := 0; attempt < maxRetries; attempt++ {
-		if attempt > 0 {
-			// Exponential backoff: 1s, 2s, 4s
-			time.Sleep(time.Duration(1<<attempt) * time.Second)
+		// Check if context was cancelled before retry
+		if ctx.Err() != nil {
+			a.Log.Warn("webhook delivery cancelled", "reason", ctx.Err(), "webhook_id", webhook.ID)
+			return
 		}
 
-		if err := a.sendWebhookRequest(webhook, jsonData); err != nil {
+		if attempt > 0 {
+			// Exponential backoff: 1s, 2s, 4s
+			select {
+			case <-ctx.Done():
+				a.Log.Warn("webhook delivery cancelled during backoff", "reason", ctx.Err(), "webhook_id", webhook.ID)
+				return
+			case <-time.After(time.Duration(1<<attempt) * time.Second):
+			}
+		}
+
+		if err := a.sendWebhookRequest(ctx, webhook, jsonData); err != nil {
 			a.Log.Warn("webhook delivery failed",
 				"error", err,
 				"webhook_id", webhook.ID,
@@ -135,8 +176,8 @@ func (a *App) sendWebhook(webhook models.Webhook, eventType string, data interfa
 	)
 }
 
-func (a *App) sendWebhookRequest(webhook models.Webhook, jsonData []byte) error {
-	req, err := http.NewRequest("POST", webhook.URL, bytes.NewBuffer(jsonData))
+func (a *App) sendWebhookRequest(ctx context.Context, webhook models.Webhook, jsonData []byte) error {
+	req, err := http.NewRequestWithContext(ctx, "POST", webhook.URL, bytes.NewBuffer(jsonData))
 	if err != nil {
 		return err
 	}
@@ -160,7 +201,7 @@ func (a *App) sendWebhookRequest(webhook models.Webhook, jsonData []byte) error 
 		req.Header.Set("X-Webhook-Signature", signature)
 	}
 
-	// Send request with timeout
+	// Send request (context handles timeout)
 	client := &http.Client{Timeout: 10 * time.Second}
 	resp, err := client.Do(req)
 	if err != nil {

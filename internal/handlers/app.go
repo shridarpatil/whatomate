@@ -3,6 +3,7 @@ package handlers
 import (
 	"context"
 	"errors"
+	"sync"
 
 	"github.com/google/uuid"
 	"github.com/redis/go-redis/v9"
@@ -25,6 +26,14 @@ type App struct {
 	WSHub             *websocket.Hub
 	Queue             queue.Queue
 	CampaignSubCancel context.CancelFunc
+	// wg tracks background goroutines for graceful shutdown
+	wg sync.WaitGroup
+}
+
+// WaitForBackgroundTasks blocks until all background goroutines complete.
+// Call this during graceful shutdown to ensure all async work finishes.
+func (a *App) WaitForBackgroundTasks() {
+	a.wg.Wait()
 }
 
 // getOrgIDFromContext extracts organization ID from request context (set by auth middleware)

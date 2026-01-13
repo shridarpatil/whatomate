@@ -439,15 +439,26 @@ func (a *App) markMessagesAsRead(orgID uuid.UUID, contactID uuid.UUID, contact *
 		var account models.WhatsAppAccount
 		if err := a.DB.Where("organization_id = ? AND name = ?", orgID, contact.WhatsAppAccount).First(&account).Error; err == nil {
 			if account.AutoReadReceipt {
+				a.wg.Add(1)
 				go func() {
+					defer a.wg.Done()
+					// Use timeout context for external API calls
+					ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+					defer cancel()
+
 					waAccount := &whatsapp.Account{
 						PhoneID:     account.PhoneID,
 						AccessToken: account.AccessToken,
 						APIVersion:  a.Config.WhatsApp.APIVersion,
 					}
 					for _, msg := range unreadMessages {
+						// Check if context was cancelled
+						if ctx.Err() != nil {
+							a.Log.Warn("Read receipt sending cancelled", "reason", ctx.Err())
+							return
+						}
 						if msg.WhatsAppMessageID != "" {
-							if err := a.WhatsApp.MarkMessageRead(context.Background(), waAccount, msg.WhatsAppMessageID); err != nil {
+							if err := a.WhatsApp.MarkMessageRead(ctx, waAccount, msg.WhatsAppMessageID); err != nil {
 								a.Log.Error("Failed to send read receipt", "error", err, "message_id", msg.WhatsAppMessageID)
 							}
 						}

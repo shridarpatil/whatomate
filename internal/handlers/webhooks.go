@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"context"
 	"encoding/json"
 	"time"
 
@@ -255,7 +256,11 @@ func (a *App) TestWebhook(r *fastglue.Request) error {
 		return r.SendErrorEnvelope(fasthttp.StatusInternalServerError, "Failed to create test payload", nil, "")
 	}
 
-	if err := a.sendWebhookRequest(webhook, jsonData); err != nil {
+	// Use timeout context for test webhook request
+	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+	defer cancel()
+
+	if err := a.sendWebhookRequest(ctx, webhook, jsonData); err != nil {
 		return r.SendErrorEnvelope(fasthttp.StatusBadGateway, "Webhook test failed: "+err.Error(), nil, "")
 	}
 

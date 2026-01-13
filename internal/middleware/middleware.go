@@ -1,6 +1,7 @@
 package middleware
 
 import (
+	"context"
 	"strings"
 	"time"
 
@@ -165,8 +166,10 @@ func validateAPIKey(r *fastglue.Request, key string, db *gorm.DB) bool {
 
 			// Update last used timestamp (async to not block request)
 			go func(id uuid.UUID) {
+				ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+				defer cancel()
 				now := time.Now()
-				db.Model(&models.APIKey{}).Where("id = ?", id).Update("last_used_at", now)
+				db.WithContext(ctx).Model(&models.APIKey{}).Where("id = ?", id).Update("last_used_at", now)
 			}(apiKey.ID)
 
 			// Set context values from the user who created the key
