@@ -1,0 +1,486 @@
+package handlers_test
+
+import (
+	"net/http"
+	"net/http/httptest"
+	"sync/atomic"
+	"testing"
+	"time"
+
+	"github.com/google/uuid"
+	"github.com/shridarpatil/whatomate/internal/config"
+	"github.com/shridarpatil/whatomate/internal/handlers"
+	"github.com/shridarpatil/whatomate/internal/models"
+	"github.com/shridarpatil/whatomate/test/testutil"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+)
+
+func TestApp_WaitForBackgroundTasks(t *testing.T) {
+	t.Parallel()
+
+	t.Run("returns immediately when no background tasks", func(t *testing.T) {
+		t.Parallel()
+
+		app := &handlers.App{
+			Log: testutil.NopLogger(),
+		}
+
+		done := make(chan struct{})
+		go func() {
+			app.WaitForBackgroundTasks()
+			close(done)
+		}()
+
+		select {
+		case <-done:
+			// Expected - should return immediately when no background tasks
+		case <-time.After(time.Second):
+			t.Fatal("WaitForBackgroundTasks should return immediately when no tasks are running")
+		}
+	})
+}
+
+func TestApp_DispatchWebhook_CompletesSuccessfully(t *testing.T) {
+	t.Parallel()
+
+	db := testutil.SetupTestDB(t)
+	log := testutil.NopLogger()
+
+	// Create test organization
+	org := &models.Organization{
+		BaseModel: models.BaseModel{ID: uuid.New()},
+		Name:      "test-org-webhook",
+		Slug:      "test-org-webhook-" + uuid.New().String()[:8],
+	}
+	require.NoError(t, db.Create(org).Error)
+
+	// Create a test server that responds successfully
+	var requestCount atomic.Int32
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		requestCount.Add(1)
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer server.Close()
+
+	// Create webhook
+	webhook := &models.Webhook{
+		BaseModel:      models.BaseModel{ID: uuid.New()},
+		OrganizationID: org.ID,
+		Name:           "test-webhook",
+		URL:            server.URL,
+		Events:         models.StringArray{"message.incoming"},
+		IsActive:       true,
+	}
+	require.NoError(t, db.Create(webhook).Error)
+
+	app := &handlers.App{
+		Config: &config.Config{},
+		DB:     db,
+		Log:    log,
+	}
+
+	// Dispatch webhook
+	app.DispatchWebhook(org.ID, models.WebhookEventMessageIncoming, map[string]string{"test": "data"})
+
+	// Wait for background tasks
+	app.WaitForBackgroundTasks()
+
+	// Verify webhook was called
+	assert.Equal(t, int32(1), requestCount.Load(), "webhook should have been called once")
+}
+
+func TestApp_DispatchWebhook_ConcurrencyLimit(t *testing.T) {
+	t.Parallel()
+
+	db := testutil.SetupTestDB(t)
+	log := testutil.NopLogger()
+
+	// Create test organization
+	org := &models.Organization{
+		BaseModel: models.BaseModel{ID: uuid.New()},
+		Name:      "test-org-concurrency",
+		Slug:      "test-org-concurrency-" + uuid.New().String()[:8],
+	}
+	require.NoError(t, db.Create(org).Error)
+
+	// Track concurrent requests
+	var currentConcurrent atomic.Int32
+	var maxConcurrent atomic.Int32
+	var totalRequests atomic.Int32
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		current := currentConcurrent.Add(1)
+		totalRequests.Add(1)
+
+		// Track max concurrent
+		for {
+			max := maxConcurrent.Load()
+			if current <= max || maxConcurrent.CompareAndSwap(max, current) {
+				break
+			}
+		}
+
+		time.Sleep(50 * time.Millisecond)
+		currentConcurrent.Add(-1)
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer server.Close()
+
+	// Create 15 webhooks (more than the max concurrent limit of 10)
+	for i := 0; i < 15; i++ {
+		webhook := &models.Webhook{
+			BaseModel:      models.BaseModel{ID: uuid.New()},
+			OrganizationID: org.ID,
+			Name:           "test-webhook-" + uuid.New().String()[:8],
+			URL:            server.URL,
+			Events:         models.StringArray{"message.incoming"},
+			IsActive:       true,
+		}
+		require.NoError(t, db.Create(webhook).Error)
+	}
+
+	app := &handlers.App{
+		Config: &config.Config{},
+		DB:     db,
+		Log:    log,
+	}
+
+	// Dispatch webhook (should trigger all 15 webhooks)
+	app.DispatchWebhook(org.ID, models.WebhookEventMessageIncoming, map[string]string{"test": "data"})
+
+	// Wait for all background tasks
+	app.WaitForBackgroundTasks()
+
+	// Verify concurrency was limited to 10
+	assert.LessOrEqual(t, maxConcurrent.Load(), int32(10), "max concurrent webhooks should be limited to 10")
+	assert.Equal(t, int32(15), totalRequests.Load(), "all 15 webhooks should have been called")
+}
+
+func TestApp_DispatchWebhook_NoWebhooks(t *testing.T) {
+	t.Parallel()
+
+	db := testutil.SetupTestDB(t)
+	log := testutil.NopLogger()
+
+	// Create test organization with no webhooks
+	org := &models.Organization{
+		BaseModel: models.BaseModel{ID: uuid.New()},
+		Name:      "test-org-no-webhooks",
+		Slug:      "test-org-no-webhooks-" + uuid.New().String()[:8],
+	}
+	require.NoError(t, db.Create(org).Error)
+
+	app := &handlers.App{
+		Config: &config.Config{},
+		DB:     db,
+		Log:    log,
+	}
+
+	// Should not panic when no webhooks exist
+	app.DispatchWebhook(org.ID, models.WebhookEventMessageIncoming, map[string]string{"test": "data"})
+
+	// Wait should complete quickly
+	done := make(chan struct{})
+	go func() {
+		app.WaitForBackgroundTasks()
+		close(done)
+	}()
+
+	select {
+	case <-done:
+		// Expected
+	case <-time.After(2 * time.Second):
+		t.Fatal("WaitForBackgroundTasks should complete quickly when no webhooks to dispatch")
+	}
+}
+
+func TestApp_DispatchWebhook_InactiveWebhook(t *testing.T) {
+	t.Parallel()
+
+	db := testutil.SetupTestDB(t)
+	log := testutil.NopLogger()
+
+	// Create test organization
+	org := &models.Organization{
+		BaseModel: models.BaseModel{ID: uuid.New()},
+		Name:      "test-org-inactive",
+		Slug:      "test-org-inactive-" + uuid.New().String()[:8],
+	}
+	require.NoError(t, db.Create(org).Error)
+
+	var requestCount atomic.Int32
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		requestCount.Add(1)
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer server.Close()
+
+	// Create inactive webhook
+	webhook := &models.Webhook{
+		BaseModel:      models.BaseModel{ID: uuid.New()},
+		OrganizationID: org.ID,
+		Name:           "test-inactive-webhook",
+		URL:            server.URL,
+		Events:         models.StringArray{"message.incoming"},
+		IsActive:       false, // Inactive!
+	}
+	require.NoError(t, db.Create(webhook).Error)
+
+	app := &handlers.App{
+		Config: &config.Config{},
+		DB:     db,
+		Log:    log,
+	}
+
+	app.DispatchWebhook(org.ID, models.WebhookEventMessageIncoming, map[string]string{"test": "data"})
+	app.WaitForBackgroundTasks()
+
+	// Inactive webhook should not be called
+	assert.Equal(t, int32(0), requestCount.Load(), "inactive webhook should not be called")
+}
+
+func TestApp_DispatchWebhook_EventFiltering(t *testing.T) {
+	t.Parallel()
+
+	db := testutil.SetupTestDB(t)
+	log := testutil.NopLogger()
+
+	// Create test organization
+	org := &models.Organization{
+		BaseModel: models.BaseModel{ID: uuid.New()},
+		Name:      "test-org-filtering",
+		Slug:      "test-org-filtering-" + uuid.New().String()[:8],
+	}
+	require.NoError(t, db.Create(org).Error)
+
+	var requestCount atomic.Int32
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		requestCount.Add(1)
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer server.Close()
+
+	// Create webhook that only listens to message.outgoing
+	webhook := &models.Webhook{
+		BaseModel:      models.BaseModel{ID: uuid.New()},
+		OrganizationID: org.ID,
+		Name:           "test-filtering-webhook",
+		URL:            server.URL,
+		Events:         models.StringArray{"message.outgoing"}, // Not message.incoming
+		IsActive:       true,
+	}
+	require.NoError(t, db.Create(webhook).Error)
+
+	app := &handlers.App{
+		Config: &config.Config{},
+		DB:     db,
+		Log:    log,
+	}
+
+	// Dispatch message.incoming event
+	app.DispatchWebhook(org.ID, models.WebhookEventMessageIncoming, map[string]string{"test": "data"})
+	app.WaitForBackgroundTasks()
+
+	// Webhook should not be called because it doesn't subscribe to message.incoming
+	assert.Equal(t, int32(0), requestCount.Load(), "webhook should not be called for non-subscribed events")
+}
+
+func TestApp_DispatchWebhook_RetryOnFailure(t *testing.T) {
+	t.Parallel()
+
+	db := testutil.SetupTestDB(t)
+	log := testutil.NopLogger()
+
+	// Create test organization
+	org := &models.Organization{
+		BaseModel: models.BaseModel{ID: uuid.New()},
+		Name:      "test-org-retry",
+		Slug:      "test-org-retry-" + uuid.New().String()[:8],
+	}
+	require.NoError(t, db.Create(org).Error)
+
+	var requestCount atomic.Int32
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		count := requestCount.Add(1)
+		if count < 3 {
+			// Fail first 2 requests
+			w.WriteHeader(http.StatusInternalServerError)
+			return
+		}
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer server.Close()
+
+	webhook := &models.Webhook{
+		BaseModel:      models.BaseModel{ID: uuid.New()},
+		OrganizationID: org.ID,
+		Name:           "test-retry-webhook",
+		URL:            server.URL,
+		Events:         models.StringArray{"message.incoming"},
+		IsActive:       true,
+	}
+	require.NoError(t, db.Create(webhook).Error)
+
+	app := &handlers.App{
+		Config: &config.Config{},
+		DB:     db,
+		Log:    log,
+	}
+
+	app.DispatchWebhook(org.ID, models.WebhookEventMessageIncoming, map[string]string{"test": "data"})
+	app.WaitForBackgroundTasks()
+
+	// Should have retried (3 attempts total)
+	assert.Equal(t, int32(3), requestCount.Load(), "should retry on failure")
+}
+
+func TestApp_DispatchWebhook_HTTPTimeout(t *testing.T) {
+	t.Parallel()
+
+	db := testutil.SetupTestDB(t)
+	log := testutil.NopLogger()
+
+	// Create test organization
+	org := &models.Organization{
+		BaseModel: models.BaseModel{ID: uuid.New()},
+		Name:      "test-org-timeout",
+		Slug:      "test-org-timeout-" + uuid.New().String()[:8],
+	}
+	require.NoError(t, db.Create(org).Error)
+
+	var requestStarted atomic.Bool
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		requestStarted.Store(true)
+		// Delay longer than HTTP client timeout (10s)
+		select {
+		case <-r.Context().Done():
+			// Request was cancelled
+			return
+		case <-time.After(15 * time.Second):
+			w.WriteHeader(http.StatusOK)
+		}
+	}))
+	defer server.Close()
+
+	webhook := &models.Webhook{
+		BaseModel:      models.BaseModel{ID: uuid.New()},
+		OrganizationID: org.ID,
+		Name:           "test-timeout-webhook",
+		URL:            server.URL,
+		Events:         models.StringArray{"message.incoming"},
+		IsActive:       true,
+	}
+	require.NoError(t, db.Create(webhook).Error)
+
+	app := &handlers.App{
+		Config: &config.Config{},
+		DB:     db,
+		Log:    log,
+	}
+
+	app.DispatchWebhook(org.ID, models.WebhookEventMessageIncoming, map[string]string{"test": "data"})
+
+	// Wait with timeout (the HTTP client has 10s timeout, with 3 retries = ~30s max)
+	done := make(chan struct{})
+	go func() {
+		app.WaitForBackgroundTasks()
+		close(done)
+	}()
+
+	select {
+	case <-done:
+		// Expected - should complete due to HTTP timeout after retries
+	case <-time.After(2 * time.Minute):
+		t.Fatal("dispatch should timeout and complete within reasonable time")
+	}
+
+	assert.True(t, requestStarted.Load(), "request should have started")
+}
+
+func TestApp_DispatchWebhook_MultipleEvents(t *testing.T) {
+	t.Parallel()
+
+	db := testutil.SetupTestDB(t)
+	log := testutil.NopLogger()
+
+	// Create test organization
+	org := &models.Organization{
+		BaseModel: models.BaseModel{ID: uuid.New()},
+		Name:      "test-org-multi-events",
+		Slug:      "test-org-multi-events-" + uuid.New().String()[:8],
+	}
+	require.NoError(t, db.Create(org).Error)
+
+	var incomingCount atomic.Int32
+	var outgoingCount atomic.Int32
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer server.Close()
+
+	// Create webhook that listens to multiple events
+	webhook := &models.Webhook{
+		BaseModel:      models.BaseModel{ID: uuid.New()},
+		OrganizationID: org.ID,
+		Name:           "test-multi-webhook",
+		URL:            server.URL,
+		Events:         models.StringArray{"message.incoming", "message.outgoing"},
+		IsActive:       true,
+	}
+	require.NoError(t, db.Create(webhook).Error)
+
+	app := &handlers.App{
+		Config: &config.Config{},
+		DB:     db,
+		Log:    log,
+	}
+
+	// Create a separate counter server for each event type
+	incomingServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		incomingCount.Add(1)
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer incomingServer.Close()
+
+	outgoingServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		outgoingCount.Add(1)
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer outgoingServer.Close()
+
+	// Update webhook URL for tracking (create two webhooks)
+	webhook1 := &models.Webhook{
+		BaseModel:      models.BaseModel{ID: uuid.New()},
+		OrganizationID: org.ID,
+		Name:           "test-incoming-webhook",
+		URL:            incomingServer.URL,
+		Events:         models.StringArray{"message.incoming"},
+		IsActive:       true,
+	}
+	require.NoError(t, db.Create(webhook1).Error)
+
+	webhook2 := &models.Webhook{
+		BaseModel:      models.BaseModel{ID: uuid.New()},
+		OrganizationID: org.ID,
+		Name:           "test-outgoing-webhook",
+		URL:            outgoingServer.URL,
+		Events:         models.StringArray{"message.outgoing"},
+		IsActive:       true,
+	}
+	require.NoError(t, db.Create(webhook2).Error)
+
+	// Dispatch incoming event
+	app.DispatchWebhook(org.ID, models.WebhookEventMessageIncoming, map[string]string{"test": "incoming"})
+	app.WaitForBackgroundTasks()
+
+	// Dispatch outgoing event
+	app.DispatchWebhook(org.ID, models.WebhookEventMessageOutgoing, map[string]string{"test": "outgoing"})
+	app.WaitForBackgroundTasks()
+
+	// Verify each webhook was called for its event
+	assert.Equal(t, int32(1), incomingCount.Load(), "incoming webhook should be called once")
+	assert.Equal(t, int32(1), outgoingCount.Load(), "outgoing webhook should be called once")
+}
