@@ -234,9 +234,13 @@ func TestApp_DispatchWebhook_InactiveWebhook(t *testing.T) {
 	}
 	require.NoError(t, db.Create(org).Error)
 
-	// Clear cache and cleanup after test
+	// Ensure clean state: delete any webhooks and clear cache
+	db.Where("organization_id = ?", org.ID).Delete(&models.Webhook{})
 	clearWebhookCache(t, redisClient, org.ID)
-	t.Cleanup(func() { clearWebhookCache(t, redisClient, org.ID) })
+	t.Cleanup(func() {
+		db.Where("organization_id = ?", org.ID).Delete(&models.Webhook{})
+		clearWebhookCache(t, redisClient, org.ID)
+	})
 
 	var requestCount atomic.Int32
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -255,6 +259,11 @@ func TestApp_DispatchWebhook_InactiveWebhook(t *testing.T) {
 		IsActive:       false, // Inactive!
 	}
 	require.NoError(t, db.Create(webhook).Error)
+
+	// Verify the webhook is actually inactive in DB
+	var savedWebhook models.Webhook
+	require.NoError(t, db.Where("id = ?", webhook.ID).First(&savedWebhook).Error)
+	require.False(t, savedWebhook.IsActive, "webhook should be saved as inactive")
 
 	app.DispatchWebhook(org.ID, models.WebhookEventMessageIncoming, map[string]string{"test": "data"})
 	app.WaitForBackgroundTasks()
