@@ -157,12 +157,7 @@ func (a *App) processIncomingMessageFull(phoneNumberID string, msg IncomingTextM
 			MediaMimeType: msg.Image.MimeType,
 		}
 		// Download and save media locally
-		waAccount := &whatsapp.Account{
-			PhoneID:     account.PhoneID,
-			BusinessID:  account.BusinessID,
-			APIVersion:  account.APIVersion,
-			AccessToken: account.AccessToken,
-		}
+		waAccount := a.toWhatsAppAccount(account)
 		if localPath, err := a.DownloadAndSaveMedia(context.Background(), msg.Image.ID, msg.Image.MimeType, waAccount); err != nil {
 			a.Log.Error("Failed to download image", "error", err, "media_id", msg.Image.ID)
 		} else {
@@ -176,12 +171,7 @@ func (a *App) processIncomingMessageFull(phoneNumberID string, msg IncomingTextM
 			MediaFilename: msg.Document.Filename,
 		}
 		// Download and save media locally
-		waAccount := &whatsapp.Account{
-			PhoneID:     account.PhoneID,
-			BusinessID:  account.BusinessID,
-			APIVersion:  account.APIVersion,
-			AccessToken: account.AccessToken,
-		}
+		waAccount := a.toWhatsAppAccount(account)
 		if localPath, err := a.DownloadAndSaveMedia(context.Background(), msg.Document.ID, msg.Document.MimeType, waAccount); err != nil {
 			a.Log.Error("Failed to download document", "error", err, "media_id", msg.Document.ID)
 		} else {
@@ -194,12 +184,7 @@ func (a *App) processIncomingMessageFull(phoneNumberID string, msg IncomingTextM
 			MediaMimeType: msg.Video.MimeType,
 		}
 		// Download and save media locally
-		waAccount := &whatsapp.Account{
-			PhoneID:     account.PhoneID,
-			BusinessID:  account.BusinessID,
-			APIVersion:  account.APIVersion,
-			AccessToken: account.AccessToken,
-		}
+		waAccount := a.toWhatsAppAccount(account)
 		if localPath, err := a.DownloadAndSaveMedia(context.Background(), msg.Video.ID, msg.Video.MimeType, waAccount); err != nil {
 			a.Log.Error("Failed to download video", "error", err, "media_id", msg.Video.ID)
 		} else {
@@ -211,12 +196,7 @@ func (a *App) processIncomingMessageFull(phoneNumberID string, msg IncomingTextM
 			MediaMimeType: msg.Audio.MimeType,
 		}
 		// Download and save media locally
-		waAccount := &whatsapp.Account{
-			PhoneID:     account.PhoneID,
-			BusinessID:  account.BusinessID,
-			APIVersion:  account.APIVersion,
-			AccessToken: account.AccessToken,
-		}
+		waAccount := a.toWhatsAppAccount(account)
 		if localPath, err := a.DownloadAndSaveMedia(context.Background(), msg.Audio.ID, msg.Audio.MimeType, waAccount); err != nil {
 			a.Log.Error("Failed to download audio", "error", err, "media_id", msg.Audio.ID)
 		} else {
@@ -228,12 +208,7 @@ func (a *App) processIncomingMessageFull(phoneNumberID string, msg IncomingTextM
 			MediaMimeType: msg.Sticker.MimeType,
 		}
 		// Download and save media locally
-		waAccount := &whatsapp.Account{
-			PhoneID:     account.PhoneID,
-			BusinessID:  account.BusinessID,
-			APIVersion:  account.APIVersion,
-			AccessToken: account.AccessToken,
-		}
+		waAccount := a.toWhatsAppAccount(account)
 		if localPath, err := a.DownloadAndSaveMedia(context.Background(), msg.Sticker.ID, msg.Sticker.MimeType, waAccount); err != nil {
 			a.Log.Error("Failed to download sticker", "error", err, "media_id", msg.Sticker.ID)
 		} else {

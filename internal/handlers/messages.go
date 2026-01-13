@@ -103,6 +103,16 @@ func APISendOptions() MessageSendOptions {
 	}
 }
 
+// SLASendOptions returns options suitable for SLA system notifications
+func SLASendOptions() MessageSendOptions {
+	return MessageSendOptions{
+		BroadcastWebSocket: true,
+		DispatchWebhook:    false,
+		TrackSLA:           false,
+		Async:              false, // Sync to ensure message is sent before continuing
+	}
+}
+
 // SendOutgoingMessage is the unified method for sending all types of WhatsApp messages.
 // It handles: text, media (image/video/audio/document), interactive (buttons/list/cta_url), and template messages.
 func (a *App) SendOutgoingMessage(ctx context.Context, req OutgoingMessageRequest, opts MessageSendOptions) (*models.Message, error) {

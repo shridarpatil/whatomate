@@ -343,12 +343,7 @@ func (a *App) SubmitTemplate(r *fastglue.Request) error {
 
 // submitTemplateToMeta submits a template to Meta's API
 func (a *App) submitTemplateToMeta(account *models.WhatsAppAccount, template *models.Template) (string, error) {
-	waAccount := &whatsapp.Account{
-		PhoneID:     account.PhoneID,
-		BusinessID:  account.BusinessID,
-		APIVersion:  account.APIVersion,
-		AccessToken: account.AccessToken,
-	}
+	waAccount := a.toWhatsAppAccount(account)
 
 	submission := &whatsapp.TemplateSubmission{
 		Name:          template.Name,
@@ -467,24 +462,14 @@ func (a *App) SyncTemplates(r *fastglue.Request) error {
 }
 
 func (a *App) fetchTemplatesFromMeta(account *models.WhatsAppAccount) ([]whatsapp.MetaTemplate, error) {
-	waAccount := &whatsapp.Account{
-		PhoneID:     account.PhoneID,
-		BusinessID:  account.BusinessID,
-		APIVersion:  account.APIVersion,
-		AccessToken: account.AccessToken,
-	}
+	waAccount := a.toWhatsAppAccount(account)
 
 	ctx := context.Background()
 	return a.WhatsApp.FetchTemplates(ctx, waAccount)
 }
 
 func (a *App) deleteTemplateFromMeta(account *models.WhatsAppAccount, templateName string) {
-	waAccount := &whatsapp.Account{
-		PhoneID:     account.PhoneID,
-		BusinessID:  account.BusinessID,
-		APIVersion:  account.APIVersion,
-		AccessToken: account.AccessToken,
-	}
+	waAccount := a.toWhatsAppAccount(account)
 
 	ctx := context.Background()
 	if err := a.WhatsApp.DeleteTemplate(ctx, waAccount, templateName); err != nil {
@@ -633,13 +618,7 @@ func (a *App) UploadTemplateMedia(r *fastglue.Request) error {
 	}
 
 	// Create whatsapp account with AppID
-	waAccount := &whatsapp.Account{
-		PhoneID:     account.PhoneID,
-		BusinessID:  account.BusinessID,
-		AppID:       account.AppID,
-		APIVersion:  account.APIVersion,
-		AccessToken: account.AccessToken,
-	}
+	waAccount := a.toWhatsAppAccount(&account)
 
 	// Perform resumable upload to get handle
 	ctx := context.Background()

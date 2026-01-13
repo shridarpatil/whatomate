@@ -277,12 +277,7 @@ func (a *App) SaveFlowToMeta(r *fastglue.Request) error {
 
 	// Create WhatsApp API client
 	waClient := whatsapp.New(a.Log)
-	waAccount := &whatsapp.Account{
-		PhoneID:     account.PhoneID,
-		BusinessID:  account.BusinessID,
-		APIVersion:  account.APIVersion,
-		AccessToken: account.AccessToken,
-	}
+	waAccount := a.toWhatsAppAccount(&account)
 
 	a.Log.Info("SaveFlowToMeta: Account details",
 		"account_name", account.Name,
@@ -392,12 +387,7 @@ func (a *App) PublishFlow(r *fastglue.Request) error {
 
 	// Create WhatsApp API client
 	waClient := whatsapp.New(a.Log)
-	waAccount := &whatsapp.Account{
-		PhoneID:     account.PhoneID,
-		BusinessID:  account.BusinessID,
-		APIVersion:  account.APIVersion,
-		AccessToken: account.AccessToken,
-	}
+	waAccount := a.toWhatsAppAccount(&account)
 
 	ctx := context.Background()
 
@@ -466,12 +456,7 @@ func (a *App) DeprecateFlow(r *fastglue.Request) error {
 		}
 
 		waClient := whatsapp.New(a.Log)
-		waAccount := &whatsapp.Account{
-			PhoneID:     account.PhoneID,
-			BusinessID:  account.BusinessID,
-			APIVersion:  account.APIVersion,
-			AccessToken: account.AccessToken,
-		}
+		waAccount := a.toWhatsAppAccount(&account)
 
 		ctx := context.Background()
 		if err := waClient.DeprecateFlow(ctx, waAccount, flow.MetaFlowID); err != nil {
@@ -525,12 +510,7 @@ func (a *App) SyncFlows(r *fastglue.Request) error {
 
 	// Create WhatsApp API client
 	waClient := whatsapp.New(a.Log)
-	waAccount := &whatsapp.Account{
-		PhoneID:     account.PhoneID,
-		BusinessID:  account.BusinessID,
-		APIVersion:  account.APIVersion,
-		AccessToken: account.AccessToken,
-	}
+	waAccount := a.toWhatsAppAccount(&account)
 
 	ctx := context.Background()
 

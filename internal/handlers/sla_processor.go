@@ -7,7 +7,6 @@ import (
 	"github.com/google/uuid"
 	"github.com/shridarpatil/whatomate/internal/models"
 	"github.com/shridarpatil/whatomate/internal/websocket"
-	"github.com/shridarpatil/whatomate/pkg/whatsapp"
 )
 
 // SLAProcessor handles periodic SLA checks and escalations
@@ -262,18 +261,24 @@ func (p *SLAProcessor) sendSLAWarningToCustomer(transfer models.AgentTransfer, m
 		return
 	}
 
-	waAccount := &whatsapp.Account{
-		PhoneID:     account.PhoneID,
-		BusinessID:  account.BusinessID,
-		APIVersion:  account.APIVersion,
-		AccessToken: account.AccessToken,
+	// Get contact
+	var contact models.Contact
+	if err := p.app.DB.Where("id = ?", transfer.ContactID).First(&contact).Error; err != nil {
+		p.app.Log.Error("Failed to load contact for SLA warning", "error", err)
+		return
 	}
 
-	// Send message
+	// Send using unified message sender
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 
-	_, err := p.app.WhatsApp.SendTextMessage(ctx, waAccount, transfer.PhoneNumber, message)
+	_, err := p.app.SendOutgoingMessage(ctx, OutgoingMessageRequest{
+		Account: &account,
+		Contact: &contact,
+		Type:    models.MessageTypeText,
+		Content: message,
+	}, SLASendOptions())
+
 	if err != nil {
 		p.app.Log.Error("Failed to send SLA warning message", "error", err, "phone", transfer.PhoneNumber)
 		return
@@ -291,18 +296,24 @@ func (p *SLAProcessor) sendSLAAutoCloseToCustomer(transfer models.AgentTransfer,
 		return
 	}
 
-	waAccount := &whatsapp.Account{
-		PhoneID:     account.PhoneID,
-		BusinessID:  account.BusinessID,
-		APIVersion:  account.APIVersion,
-		AccessToken: account.AccessToken,
+	// Get contact
+	var contact models.Contact
+	if err := p.app.DB.Where("id = ?", transfer.ContactID).First(&contact).Error; err != nil {
+		p.app.Log.Error("Failed to load contact for SLA auto-close message", "error", err)
+		return
 	}
 
-	// Send message
+	// Send using unified message sender
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 
-	_, err := p.app.WhatsApp.SendTextMessage(ctx, waAccount, transfer.PhoneNumber, message)
+	_, err := p.app.SendOutgoingMessage(ctx, OutgoingMessageRequest{
+		Account: &account,
+		Contact: &contact,
+		Type:    models.MessageTypeText,
+		Content: message,
+	}, SLASendOptions())
+
 	if err != nil {
 		p.app.Log.Error("Failed to send SLA auto-close message", "error", err, "phone", transfer.PhoneNumber)
 		return
@@ -425,7 +436,7 @@ func (p *SLAProcessor) processClientInactivity(orgID uuid.UUID, settings models.
 		if settings.ClientInactivity.AutoCloseMinutes > 0 {
 			autoCloseThreshold := time.Duration(settings.ClientInactivity.AutoCloseMinutes) * time.Minute
 			if timeSinceChatbotMsg >= autoCloseThreshold {
-				p.autoCloseChatbotSession(contact, settings, now)
+				p.autoCloseChatbotSession(contact, settings)
 				continue
 			}
 		}
@@ -434,14 +445,14 @@ func (p *SLAProcessor) processClientInactivity(orgID uuid.UUID, settings models.
 		if settings.ClientInactivity.ReminderMinutes > 0 && !contact.ChatbotReminderSent {
 			reminderThreshold := time.Duration(settings.ClientInactivity.ReminderMinutes) * time.Minute
 			if timeSinceChatbotMsg >= reminderThreshold {
-				p.sendChatbotReminder(contact, settings, now)
+				p.sendChatbotReminder(contact, settings)
 			}
 		}
 	}
 }
 
 // sendChatbotReminder sends a reminder message to an inactive client during chatbot conversation
-func (p *SLAProcessor) sendChatbotReminder(contact models.Contact, settings models.ChatbotSettings, now time.Time) {
+func (p *SLAProcessor) sendChatbotReminder(contact models.Contact, settings models.ChatbotSettings) {
 	if settings.ClientInactivity.ReminderMessage == "" {
 		return
 	}
@@ -453,66 +464,19 @@ func (p *SLAProcessor) sendChatbotReminder(contact models.Contact, settings mode
 		return
 	}
 
-	waAccount := &whatsapp.Account{
-		PhoneID:     account.PhoneID,
-		BusinessID:  account.BusinessID,
-		APIVersion:  account.APIVersion,
-		AccessToken: account.AccessToken,
-	}
-
-	// Send reminder message
+	// Send using unified message sender
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 
-	wamid, err := p.app.WhatsApp.SendTextMessage(ctx, waAccount, contact.PhoneNumber, settings.ClientInactivity.ReminderMessage)
+	_, err := p.app.SendOutgoingMessage(ctx, OutgoingMessageRequest{
+		Account: &account,
+		Contact: &contact,
+		Type:    models.MessageTypeText,
+		Content: settings.ClientInactivity.ReminderMessage,
+	}, SLASendOptions())
 
-	// Save message to database
-	msg := models.Message{
-		OrganizationID:  account.OrganizationID,
-		WhatsAppAccount: account.Name,
-		ContactID:       contact.ID,
-		Direction:       models.DirectionOutgoing,
-		MessageType:     models.MessageTypeText,
-		Content:         settings.ClientInactivity.ReminderMessage,
-		Status:          models.MessageStatusSent,
-	}
 	if err != nil {
-		msg.Status = models.MessageStatusFailed
-		msg.ErrorMessage = err.Error()
 		p.app.Log.Error("Failed to send chatbot reminder message", "error", err, "phone", contact.PhoneNumber)
-	} else if wamid != "" {
-		msg.WhatsAppMessageID = wamid
-	}
-
-	if dbErr := p.app.DB.Create(&msg).Error; dbErr != nil {
-		p.app.Log.Error("Failed to save chatbot reminder message", "error", dbErr)
-	}
-
-	// Broadcast via WebSocket
-	if p.app.WSHub != nil {
-		var assignedUserIDStr string
-		if contact.AssignedUserID != nil {
-			assignedUserIDStr = contact.AssignedUserID.String()
-		}
-		p.app.WSHub.BroadcastToOrg(account.OrganizationID, websocket.WSMessage{
-			Type: websocket.TypeNewMessage,
-			Payload: map[string]any{
-				"id":               msg.ID,
-				"contact_id":       contact.ID.String(),
-				"assigned_user_id": assignedUserIDStr,
-				"profile_name":     contact.ProfileName,
-				"direction":        msg.Direction,
-				"message_type":     msg.MessageType,
-				"content":          map[string]string{"body": msg.Content},
-				"status":           msg.Status,
-				"wamid":            msg.WhatsAppMessageID,
-				"created_at":       msg.CreatedAt,
-				"updated_at":       msg.UpdatedAt,
-			},
-		})
-	}
-
-	if err != nil {
 		return
 	}
 
@@ -529,7 +493,7 @@ func (p *SLAProcessor) sendChatbotReminder(contact models.Contact, settings mode
 }
 
 // autoCloseChatbotSession closes a chatbot session due to client inactivity
-func (p *SLAProcessor) autoCloseChatbotSession(contact models.Contact, settings models.ChatbotSettings, now time.Time) {
+func (p *SLAProcessor) autoCloseChatbotSession(contact models.Contact, settings models.ChatbotSettings) {
 	// Save the timestamp before clearing for logging
 	var inactiveSince time.Time
 	if contact.ChatbotLastMessageAt != nil {
@@ -540,67 +504,24 @@ func (p *SLAProcessor) autoCloseChatbotSession(contact models.Contact, settings 
 	if settings.ClientInactivity.AutoCloseMessage != "" {
 		var account models.WhatsAppAccount
 		if err := p.app.DB.Where("name = ?", contact.WhatsAppAccount).First(&account).Error; err == nil {
-			waAccount := &whatsapp.Account{
-				PhoneID:     account.PhoneID,
-				BusinessID:  account.BusinessID,
-				APIVersion:  account.APIVersion,
-				AccessToken: account.AccessToken,
-			}
-
 			ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
-			wamid, err := p.app.WhatsApp.SendTextMessage(ctx, waAccount, contact.PhoneNumber, settings.ClientInactivity.AutoCloseMessage)
-			cancel()
+			defer cancel()
 
-			// Save message to database
-			msg := models.Message{
-				OrganizationID:  account.OrganizationID,
-				WhatsAppAccount: account.Name,
-				ContactID:       contact.ID,
-				Direction:       models.DirectionOutgoing,
-				MessageType:     models.MessageTypeText,
-				Content:         settings.ClientInactivity.AutoCloseMessage,
-				Status:          models.MessageStatusSent,
-			}
+			_, err := p.app.SendOutgoingMessage(ctx, OutgoingMessageRequest{
+				Account: &account,
+				Contact: &contact,
+				Type:    models.MessageTypeText,
+				Content: settings.ClientInactivity.AutoCloseMessage,
+			}, SLASendOptions())
+
 			if err != nil {
-				msg.Status = models.MessageStatusFailed
-				msg.ErrorMessage = err.Error()
 				p.app.Log.Error("Failed to send chatbot auto-close message", "error", err, "phone", contact.PhoneNumber)
-			} else if wamid != "" {
-				msg.WhatsAppMessageID = wamid
-			}
-
-			if dbErr := p.app.DB.Create(&msg).Error; dbErr != nil {
-				p.app.Log.Error("Failed to save chatbot auto-close message", "error", dbErr)
-			}
-
-			// Broadcast via WebSocket
-			if p.app.WSHub != nil {
-				var assignedUserIDStr string
-				if contact.AssignedUserID != nil {
-					assignedUserIDStr = contact.AssignedUserID.String()
-				}
-				p.app.WSHub.BroadcastToOrg(account.OrganizationID, websocket.WSMessage{
-					Type: websocket.TypeNewMessage,
-					Payload: map[string]any{
-						"id":               msg.ID,
-						"contact_id":       contact.ID.String(),
-						"assigned_user_id": assignedUserIDStr,
-						"profile_name":     contact.ProfileName,
-						"direction":        msg.Direction,
-						"message_type":     msg.MessageType,
-						"content":          map[string]string{"body": msg.Content},
-						"status":           msg.Status,
-						"wamid":            msg.WhatsAppMessageID,
-						"created_at":       msg.CreatedAt,
-						"updated_at":       msg.UpdatedAt,
-					},
-				})
 			}
 		}
 	}
 
 	// Clear chatbot tracking fields to close the session
-	if err := p.app.DB.Model(&contact).Updates(map[string]interface{}{
+	if err := p.app.DB.Model(&contact).Updates(map[string]any{
 		"chatbot_last_message_at": nil,
 		"chatbot_reminder_sent":   false,
 	}).Error; err != nil {

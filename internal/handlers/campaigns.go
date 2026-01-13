@@ -12,7 +12,6 @@ import (
 	"github.com/shridarpatil/whatomate/internal/models"
 	"github.com/shridarpatil/whatomate/internal/queue"
 	"github.com/shridarpatil/whatomate/internal/websocket"
-	"github.com/shridarpatil/whatomate/pkg/whatsapp"
 	"github.com/valyala/fasthttp"
 	"github.com/zerodha/fastglue"
 	"gorm.io/gorm"
@@ -818,12 +817,7 @@ func (a *App) UploadCampaignMedia(r *fastglue.Request) error {
 	}
 
 	// Upload to WhatsApp
-	waAccount := &whatsapp.Account{
-		PhoneID:     account.PhoneID,
-		BusinessID:  account.BusinessID,
-		APIVersion:  account.APIVersion,
-		AccessToken: account.AccessToken,
-	}
+	waAccount := a.toWhatsAppAccount(&account)
 
 	ctx := r.RequestCtx
 	mediaID, err := a.WhatsApp.UploadMedia(ctx, waAccount, data, mimeType, fileHeader.Filename)
