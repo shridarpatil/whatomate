@@ -8,13 +8,37 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/redis/go-redis/v9"
 	"github.com/shridarpatil/whatomate/internal/config"
 	"github.com/shridarpatil/whatomate/internal/handlers"
 	"github.com/shridarpatil/whatomate/internal/models"
 	"github.com/shridarpatil/whatomate/test/testutil"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"gorm.io/gorm"
 )
+
+// setupWebhookTestApp creates an App with DB and Redis for webhook tests.
+// Skips test if TEST_DATABASE_URL or TEST_REDIS_URL is not set.
+func setupWebhookTestApp(t *testing.T) (*handlers.App, *gorm.DB, *redis.Client) {
+	t.Helper()
+
+	db := testutil.SetupTestDB(t)
+	redisClient := testutil.SetupTestRedis(t)
+	if redisClient == nil {
+		t.Skip("TEST_REDIS_URL not set, skipping Redis test")
+	}
+	log := testutil.NopLogger()
+
+	app := &handlers.App{
+		Config: &config.Config{},
+		DB:     db,
+		Redis:  redisClient,
+		Log:    log,
+	}
+
+	return app, db, redisClient
+}
 
 func TestApp_WaitForBackgroundTasks(t *testing.T) {
 	t.Parallel()
@@ -44,8 +68,7 @@ func TestApp_WaitForBackgroundTasks(t *testing.T) {
 func TestApp_DispatchWebhook_CompletesSuccessfully(t *testing.T) {
 	t.Parallel()
 
-	db := testutil.SetupTestDB(t)
-	log := testutil.NopLogger()
+	app, db, _ := setupWebhookTestApp(t)
 
 	// Create test organization
 	org := &models.Organization{
@@ -74,12 +97,6 @@ func TestApp_DispatchWebhook_CompletesSuccessfully(t *testing.T) {
 	}
 	require.NoError(t, db.Create(webhook).Error)
 
-	app := &handlers.App{
-		Config: &config.Config{},
-		DB:     db,
-		Log:    log,
-	}
-
 	// Dispatch webhook
 	app.DispatchWebhook(org.ID, models.WebhookEventMessageIncoming, map[string]string{"test": "data"})
 
@@ -93,8 +110,7 @@ func TestApp_DispatchWebhook_CompletesSuccessfully(t *testing.T) {
 func TestApp_DispatchWebhook_ConcurrencyLimit(t *testing.T) {
 	t.Parallel()
 
-	db := testutil.SetupTestDB(t)
-	log := testutil.NopLogger()
+	app, db, _ := setupWebhookTestApp(t)
 
 	// Create test organization
 	org := &models.Organization{
@@ -140,12 +156,6 @@ func TestApp_DispatchWebhook_ConcurrencyLimit(t *testing.T) {
 		require.NoError(t, db.Create(webhook).Error)
 	}
 
-	app := &handlers.App{
-		Config: &config.Config{},
-		DB:     db,
-		Log:    log,
-	}
-
 	// Dispatch webhook (should trigger all 15 webhooks)
 	app.DispatchWebhook(org.ID, models.WebhookEventMessageIncoming, map[string]string{"test": "data"})
 
@@ -160,8 +170,7 @@ func TestApp_DispatchWebhook_ConcurrencyLimit(t *testing.T) {
 func TestApp_DispatchWebhook_NoWebhooks(t *testing.T) {
 	t.Parallel()
 
-	db := testutil.SetupTestDB(t)
-	log := testutil.NopLogger()
+	app, db, _ := setupWebhookTestApp(t)
 
 	// Create test organization with no webhooks
 	org := &models.Organization{
@@ -170,12 +179,6 @@ func TestApp_DispatchWebhook_NoWebhooks(t *testing.T) {
 		Slug:      "test-org-no-webhooks-" + uuid.New().String()[:8],
 	}
 	require.NoError(t, db.Create(org).Error)
-
-	app := &handlers.App{
-		Config: &config.Config{},
-		DB:     db,
-		Log:    log,
-	}
 
 	// Should not panic when no webhooks exist
 	app.DispatchWebhook(org.ID, models.WebhookEventMessageIncoming, map[string]string{"test": "data"})
@@ -198,8 +201,7 @@ func TestApp_DispatchWebhook_NoWebhooks(t *testing.T) {
 func TestApp_DispatchWebhook_InactiveWebhook(t *testing.T) {
 	t.Parallel()
 
-	db := testutil.SetupTestDB(t)
-	log := testutil.NopLogger()
+	app, db, _ := setupWebhookTestApp(t)
 
 	// Create test organization
 	org := &models.Organization{
@@ -227,12 +229,6 @@ func TestApp_DispatchWebhook_InactiveWebhook(t *testing.T) {
 	}
 	require.NoError(t, db.Create(webhook).Error)
 
-	app := &handlers.App{
-		Config: &config.Config{},
-		DB:     db,
-		Log:    log,
-	}
-
 	app.DispatchWebhook(org.ID, models.WebhookEventMessageIncoming, map[string]string{"test": "data"})
 	app.WaitForBackgroundTasks()
 
@@ -243,8 +239,7 @@ func TestApp_DispatchWebhook_InactiveWebhook(t *testing.T) {
 func TestApp_DispatchWebhook_EventFiltering(t *testing.T) {
 	t.Parallel()
 
-	db := testutil.SetupTestDB(t)
-	log := testutil.NopLogger()
+	app, db, _ := setupWebhookTestApp(t)
 
 	// Create test organization
 	org := &models.Organization{
@@ -272,12 +267,6 @@ func TestApp_DispatchWebhook_EventFiltering(t *testing.T) {
 	}
 	require.NoError(t, db.Create(webhook).Error)
 
-	app := &handlers.App{
-		Config: &config.Config{},
-		DB:     db,
-		Log:    log,
-	}
-
 	// Dispatch message.incoming event
 	app.DispatchWebhook(org.ID, models.WebhookEventMessageIncoming, map[string]string{"test": "data"})
 	app.WaitForBackgroundTasks()
@@ -289,8 +278,7 @@ func TestApp_DispatchWebhook_EventFiltering(t *testing.T) {
 func TestApp_DispatchWebhook_RetryOnFailure(t *testing.T) {
 	t.Parallel()
 
-	db := testutil.SetupTestDB(t)
-	log := testutil.NopLogger()
+	app, db, _ := setupWebhookTestApp(t)
 
 	// Create test organization
 	org := &models.Organization{
@@ -322,12 +310,6 @@ func TestApp_DispatchWebhook_RetryOnFailure(t *testing.T) {
 	}
 	require.NoError(t, db.Create(webhook).Error)
 
-	app := &handlers.App{
-		Config: &config.Config{},
-		DB:     db,
-		Log:    log,
-	}
-
 	app.DispatchWebhook(org.ID, models.WebhookEventMessageIncoming, map[string]string{"test": "data"})
 	app.WaitForBackgroundTasks()
 
@@ -338,8 +320,7 @@ func TestApp_DispatchWebhook_RetryOnFailure(t *testing.T) {
 func TestApp_DispatchWebhook_HTTPTimeout(t *testing.T) {
 	t.Parallel()
 
-	db := testutil.SetupTestDB(t)
-	log := testutil.NopLogger()
+	app, db, _ := setupWebhookTestApp(t)
 
 	// Create test organization
 	org := &models.Organization{
@@ -374,12 +355,6 @@ func TestApp_DispatchWebhook_HTTPTimeout(t *testing.T) {
 	}
 	require.NoError(t, db.Create(webhook).Error)
 
-	app := &handlers.App{
-		Config: &config.Config{},
-		DB:     db,
-		Log:    log,
-	}
-
 	app.DispatchWebhook(org.ID, models.WebhookEventMessageIncoming, map[string]string{"test": "data"})
 
 	// Wait with timeout (the HTTP client has 10s timeout, with 3 retries = ~30s max)
@@ -402,8 +377,7 @@ func TestApp_DispatchWebhook_HTTPTimeout(t *testing.T) {
 func TestApp_DispatchWebhook_MultipleEvents(t *testing.T) {
 	t.Parallel()
 
-	db := testutil.SetupTestDB(t)
-	log := testutil.NopLogger()
+	app, db, _ := setupWebhookTestApp(t)
 
 	// Create test organization
 	org := &models.Organization{
@@ -415,28 +389,6 @@ func TestApp_DispatchWebhook_MultipleEvents(t *testing.T) {
 
 	var incomingCount atomic.Int32
 	var outgoingCount atomic.Int32
-
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(http.StatusOK)
-	}))
-	defer server.Close()
-
-	// Create webhook that listens to multiple events
-	webhook := &models.Webhook{
-		BaseModel:      models.BaseModel{ID: uuid.New()},
-		OrganizationID: org.ID,
-		Name:           "test-multi-webhook",
-		URL:            server.URL,
-		Events:         models.StringArray{"message.incoming", "message.outgoing"},
-		IsActive:       true,
-	}
-	require.NoError(t, db.Create(webhook).Error)
-
-	app := &handlers.App{
-		Config: &config.Config{},
-		DB:     db,
-		Log:    log,
-	}
 
 	// Create a separate counter server for each event type
 	incomingServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -451,7 +403,7 @@ func TestApp_DispatchWebhook_MultipleEvents(t *testing.T) {
 	}))
 	defer outgoingServer.Close()
 
-	// Update webhook URL for tracking (create two webhooks)
+	// Create webhooks for different events
 	webhook1 := &models.Webhook{
 		BaseModel:      models.BaseModel{ID: uuid.New()},
 		OrganizationID: org.ID,
