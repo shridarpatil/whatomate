@@ -249,21 +249,26 @@ func TestApp_DispatchWebhook_InactiveWebhook(t *testing.T) {
 	}))
 	defer server.Close()
 
-	// Create inactive webhook
+	// Create webhook (GORM default:true sets IsActive=true)
 	webhook := &models.Webhook{
 		BaseModel:      models.BaseModel{ID: uuid.New()},
 		OrganizationID: org.ID,
 		Name:           "test-inactive-webhook",
 		URL:            server.URL,
 		Events:         models.StringArray{"message.incoming"},
-		IsActive:       false, // Inactive!
 	}
 	require.NoError(t, db.Create(webhook).Error)
+
+	// Explicitly set inactive (GORM default:true prevents setting false during create)
+	require.NoError(t, db.Model(webhook).Update("is_active", false).Error)
 
 	// Verify the webhook is actually inactive in DB
 	var savedWebhook models.Webhook
 	require.NoError(t, db.Where("id = ?", webhook.ID).First(&savedWebhook).Error)
 	require.False(t, savedWebhook.IsActive, "webhook should be saved as inactive")
+
+	// Clear cache after updating webhook to inactive
+	clearWebhookCache(t, redisClient, org.ID)
 
 	app.DispatchWebhook(org.ID, models.WebhookEventMessageIncoming, map[string]string{"test": "data"})
 	app.WaitForBackgroundTasks()
