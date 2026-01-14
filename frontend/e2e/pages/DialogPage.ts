@@ -16,8 +16,8 @@ export class DialogPage extends BasePage {
 
   get submitButton(): Locator {
     // Look for the primary action button - usually at the bottom of dialog
-    // Prefer button with type="submit" or the last button with Create/Save text
-    return this.dialog.getByRole('button', { name: /^(Save|Create|Submit|Update)$/i }).last()
+    // Match buttons that START with Save/Create/Submit/Update (e.g., "Create Team", "Update User")
+    return this.dialog.getByRole('button', { name: /^(Save|Create|Submit|Update)/i }).last()
   }
 
   async isOpen(): Promise<boolean> {

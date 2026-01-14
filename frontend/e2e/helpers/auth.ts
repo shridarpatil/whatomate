@@ -47,8 +47,8 @@ export async function loginAsAgent(page: Page) {
 }
 
 export async function logout(page: Page) {
-  // Click user menu in sidebar - it's the button with user's name/email
-  const userMenuButton = page.locator('nav').getByRole('button').filter({ hasText: /@/ }).first()
+  // Click user menu in sidebar - it's in the aside element (not nav), button contains user's email
+  const userMenuButton = page.locator('aside').getByRole('button').filter({ hasText: /@/ }).first()
   await userMenuButton.click()
   // Click logout in popover
   await page.getByRole('button', { name: /Log out/i }).click()
