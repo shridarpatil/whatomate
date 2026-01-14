@@ -14,11 +14,12 @@ test.describe('Dashboard', () => {
   })
 
   test('should display stat cards', async ({ page }) => {
-    // Wait for stat cards to load (not skeleton)
-    await expect(page.locator('text=Total Messages')).toBeVisible({ timeout: 15000 })
-    await expect(page.locator('text=Contacts')).toBeVisible()
-    await expect(page.locator('text=Chatbot Sessions')).toBeVisible()
-    await expect(page.locator('text=Campaigns Sent')).toBeVisible()
+    // Wait for stat cards to load (not skeleton) - use headings for specific matching
+    const main = page.locator('main')
+    await expect(main.getByRole('heading', { name: 'Total Messages' })).toBeVisible({ timeout: 15000 })
+    await expect(main.getByRole('heading', { name: 'Contacts' })).toBeVisible()
+    await expect(main.getByRole('heading', { name: 'Chatbot Sessions' })).toBeVisible()
+    await expect(main.getByRole('heading', { name: 'Campaigns Sent' })).toBeVisible()
   })
 
   test('should display time range filter', async ({ page }) => {
@@ -47,33 +48,35 @@ test.describe('Dashboard', () => {
   })
 
   test('should display quick actions section', async ({ page }) => {
-    await expect(page.locator('text=Quick Actions')).toBeVisible()
-    await expect(page.locator('text=Common tasks and shortcuts')).toBeVisible()
+    const main = page.locator('main')
+    await expect(main.locator('text=Quick Actions')).toBeVisible()
+    await expect(main.locator('text=Common tasks and shortcuts')).toBeVisible()
 
-    // Check for quick action links using href attribute
-    await expect(page.locator('a[href="/chat"]')).toBeVisible()
-    await expect(page.locator('a[href="/campaigns"]')).toBeVisible()
-    await expect(page.locator('a[href="/templates"]')).toBeVisible()
-    await expect(page.locator('a[href="/chatbot"]')).toBeVisible()
+    // Check for quick action links - scope to main to avoid sidebar duplicates
+    await expect(main.locator('a[href="/chat"]')).toBeVisible()
+    await expect(main.locator('a[href="/campaigns"]')).toBeVisible()
+    await expect(main.locator('a[href="/templates"]')).toBeVisible()
+    await expect(main.locator('a[href="/chatbot"]')).toBeVisible()
   })
 
   test('should navigate to chat from quick actions', async ({ page }) => {
-    await page.getByRole('link', { name: 'Start Chat' }).click()
+    // Use main to scope to quick actions, not sidebar
+    await page.locator('main a[href="/chat"]').click()
     await expect(page).toHaveURL(/\/chat/)
   })
 
   test('should navigate to campaigns from quick actions', async ({ page }) => {
-    await page.getByRole('link', { name: 'New Campaign' }).click()
+    await page.locator('main a[href="/campaigns"]').click()
     await expect(page).toHaveURL(/\/campaigns/)
   })
 
   test('should navigate to templates from quick actions', async ({ page }) => {
-    await page.locator('a[href="/templates"]').click()
+    await page.locator('main a[href="/templates"]').click()
     await expect(page).toHaveURL(/\/templates/)
   })
 
   test('should navigate to chatbot from quick actions', async ({ page }) => {
-    await page.locator('a[href="/chatbot"]').click()
+    await page.locator('main a[href="/chatbot"]').click()
     await expect(page).toHaveURL(/\/chatbot/)
   })
 

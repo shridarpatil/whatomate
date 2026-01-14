@@ -65,17 +65,19 @@ test.describe('Custom Actions Management', () => {
     await page.getByRole('button', { name: /Add Action/i }).click()
     await dialogPage.waitForOpen()
 
+    const dialog = page.locator('[role="dialog"][data-state="open"]')
+
     // Fill name
-    await page.locator('[role="dialog"] input#name').fill(actionName)
+    await dialog.locator('input#name').fill(actionName)
 
-    // Select URL type
-    await page.locator('[role="dialog"] input#type-url').check()
+    // Select URL type - RadioGroupItem renders as role="radio" button
+    await dialog.getByRole('radio', { name: /Open URL/i }).click()
 
-    // Fill URL
-    await page.locator('[role="dialog"] input#url').fill('https://crm.example.com/contact')
+    // Wait for URL input to appear and fill it
+    await dialog.locator('input#url').fill('https://crm.example.com/contact')
 
     // Click Create button
-    await page.locator('[role="dialog"]').getByRole('button', { name: /^Create$/i }).click()
+    await dialog.getByRole('button', { name: /^Create$/i }).click()
 
     const toast = page.locator('[data-sonner-toast]')
     await expect(toast).toBeVisible({ timeout: 5000 })
@@ -91,17 +93,19 @@ test.describe('Custom Actions Management', () => {
     await page.getByRole('button', { name: /Add Action/i }).click()
     await dialogPage.waitForOpen()
 
+    const dialog = page.locator('[role="dialog"][data-state="open"]')
+
     // Fill name
-    await page.locator('[role="dialog"] input#name').fill(actionName)
+    await dialog.locator('input#name').fill(actionName)
 
-    // Select JavaScript type
-    await page.locator('[role="dialog"] input#type-javascript').check()
+    // Select JavaScript type - RadioGroupItem renders as role="radio" button
+    await dialog.getByRole('radio', { name: /JavaScript/i }).click()
 
-    // Fill code
-    await page.locator('[role="dialog"] textarea#code').fill('return { clipboard: contact.phone_number }')
+    // Wait for code textarea to appear and fill it
+    await dialog.locator('textarea#code').fill('return { clipboard: contact.phone_number }')
 
     // Click Create button
-    await page.locator('[role="dialog"]').getByRole('button', { name: /^Create$/i }).click()
+    await dialog.getByRole('button', { name: /^Create$/i }).click()
 
     const toast = page.locator('[data-sonner-toast]')
     await expect(toast).toBeVisible({ timeout: 5000 })
@@ -117,31 +121,35 @@ test.describe('Custom Actions Management', () => {
 
     await page.getByRole('button', { name: /Add Action/i }).click()
     await dialogPage.waitForOpen()
-    await page.locator('[role="dialog"] input#name').fill(actionName)
-    await page.locator('[role="dialog"] input#type-url').check()
-    await page.locator('[role="dialog"] input#url').fill('https://example.com')
-    await page.locator('[role="dialog"]').getByRole('button', { name: /^Create$/i }).click()
 
-    // Wait for toast
-    const createToast = page.locator('[data-sonner-toast]')
+    const createDialog = page.locator('[role="dialog"][data-state="open"]')
+    await createDialog.locator('input#name').fill(actionName)
+    await createDialog.getByRole('radio', { name: /Open URL/i }).click()
+    await createDialog.locator('input#url').fill('https://example.com')
+    await createDialog.getByRole('button', { name: /^Create$/i }).click()
+
+    // Wait for create toast and dismiss it
+    const createToast = page.locator('[data-sonner-toast]').filter({ hasText: 'created' })
     await expect(createToast).toBeVisible({ timeout: 5000 })
+    await createToast.click() // Dismiss toast
 
     // Wait for action to appear
     await expect(page.locator('table')).toContainText(actionName)
 
-    // Find the row with our action and click edit
+    // Find the row with our action and click edit (first button in Actions cell)
     const row = page.locator('tr').filter({ hasText: actionName })
-    await row.locator('button').filter({ has: page.locator('svg.lucide-pencil') }).click()
+    await row.locator('td').last().locator('button').first().click()
 
     await dialogPage.waitForOpen()
 
     // Update URL
-    await page.locator('[role="dialog"] input#url').fill('https://updated.example.com')
-    await page.locator('[role="dialog"]').getByRole('button', { name: /^Update$/i }).click()
+    const editDialog = page.locator('[role="dialog"][data-state="open"]')
+    await editDialog.locator('input#url').fill('https://updated.example.com')
+    await editDialog.getByRole('button', { name: /^Update$/i }).click()
 
-    const toast = page.locator('[data-sonner-toast]')
-    await expect(toast).toBeVisible({ timeout: 5000 })
-    await expect(toast).toContainText('updated')
+    // Wait for update toast
+    const updateToast = page.locator('[data-sonner-toast]').filter({ hasText: 'updated' })
+    await expect(updateToast).toBeVisible({ timeout: 5000 })
   })
 
   test('should delete custom action', async ({ page }) => {
@@ -150,29 +158,32 @@ test.describe('Custom Actions Management', () => {
 
     await page.getByRole('button', { name: /Add Action/i }).click()
     await dialogPage.waitForOpen()
-    await page.locator('[role="dialog"] input#name').fill(actionName)
-    await page.locator('[role="dialog"] input#type-url').check()
-    await page.locator('[role="dialog"] input#url').fill('https://todelete.com')
-    await page.locator('[role="dialog"]').getByRole('button', { name: /^Create$/i }).click()
 
-    // Wait for toast
-    const createToast = page.locator('[data-sonner-toast]')
+    const createDialog = page.locator('[role="dialog"][data-state="open"]')
+    await createDialog.locator('input#name').fill(actionName)
+    await createDialog.getByRole('radio', { name: /Open URL/i }).click()
+    await createDialog.locator('input#url').fill('https://todelete.com')
+    await createDialog.getByRole('button', { name: /^Create$/i }).click()
+
+    // Wait for create toast and dismiss it
+    const createToast = page.locator('[data-sonner-toast]').filter({ hasText: 'created' })
     await expect(createToast).toBeVisible({ timeout: 5000 })
+    await createToast.click() // Dismiss toast
 
     // Wait for action to appear
     await expect(page.locator('table')).toContainText(actionName)
 
-    // Find the row with our action and click delete
+    // Find the row with our action and click delete (second button in Actions cell)
     const row = page.locator('tr').filter({ hasText: actionName })
-    await row.locator('button').filter({ has: page.locator('svg.lucide-trash-2') }).click()
+    await row.locator('td').last().locator('button').nth(1).click()
 
     // Confirm deletion
     await expect(page.locator('[role="alertdialog"]')).toBeVisible()
     await page.getByRole('button', { name: 'Delete' }).click()
 
-    const toast = page.locator('[data-sonner-toast]')
-    await expect(toast).toBeVisible({ timeout: 5000 })
-    await expect(toast).toContainText('deleted')
+    // Wait for delete toast
+    const deleteToast = page.locator('[data-sonner-toast]').filter({ hasText: 'deleted' })
+    await expect(deleteToast).toBeVisible({ timeout: 5000 })
   })
 
   test('should toggle custom action status', async ({ page }) => {
@@ -181,10 +192,12 @@ test.describe('Custom Actions Management', () => {
 
     await page.getByRole('button', { name: /Add Action/i }).click()
     await dialogPage.waitForOpen()
-    await page.locator('[role="dialog"] input#name').fill(actionName)
-    await page.locator('[role="dialog"] input#type-url').check()
-    await page.locator('[role="dialog"] input#url').fill('https://toggle.com')
-    await page.locator('[role="dialog"]').getByRole('button', { name: /^Create$/i }).click()
+
+    const createDialog = page.locator('[role="dialog"][data-state="open"]')
+    await createDialog.locator('input#name').fill(actionName)
+    await createDialog.getByRole('radio', { name: /Open URL/i }).click()
+    await createDialog.locator('input#url').fill('https://toggle.com')
+    await createDialog.getByRole('button', { name: /^Create$/i }).click()
 
     // Wait for toast
     const createToast = page.locator('[data-sonner-toast]')

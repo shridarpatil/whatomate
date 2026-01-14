@@ -75,16 +75,18 @@ test.describe('Canned Responses Management', () => {
     await page.locator('[role="dialog"] textarea').fill('Original content')
     await page.locator('[role="dialog"]').getByRole('button', { name: /^Create$/i }).click()
 
-    // Wait for toast and dialog close
-    const createToast = page.locator('[data-sonner-toast]')
+    // Wait for create toast and dismiss it
+    const createToast = page.locator('[data-sonner-toast]').filter({ hasText: 'created' })
     await expect(createToast).toBeVisible({ timeout: 5000 })
+    await createToast.click() // Dismiss toast
 
-    // Wait for response to appear
-    await expect(page.locator('body')).toContainText(responseName)
+    // Wait for response to appear - find heading with exact name
+    const heading = page.getByRole('heading', { name: responseName })
+    await expect(heading).toBeVisible({ timeout: 10000 })
 
-    // Find the card with our response and click edit
-    const card = page.locator('[class*="Card"]').filter({ hasText: responseName }).first()
-    await card.locator('button').filter({ has: page.locator('svg.lucide-pencil') }).click()
+    // Find the card container and click edit button (2nd button in the card footer)
+    const cardContainer = heading.locator('xpath=ancestor::div[contains(@class, "rounded")]').first()
+    await cardContainer.locator('button').nth(1).click()  // edit is 2nd button (copy, edit, delete)
 
     await dialogPage.waitForOpen()
 
@@ -92,9 +94,9 @@ test.describe('Canned Responses Management', () => {
     await page.locator('[role="dialog"] textarea').fill('Updated content')
     await page.locator('[role="dialog"]').getByRole('button', { name: /^Update$/i }).click()
 
-    const toast = page.locator('[data-sonner-toast]')
-    await expect(toast).toBeVisible({ timeout: 5000 })
-    await expect(toast).toContainText('updated')
+    // Wait for update toast
+    const updateToast = page.locator('[data-sonner-toast]').filter({ hasText: 'updated' })
+    await expect(updateToast).toBeVisible({ timeout: 5000 })
   })
 
   test('should delete canned response', async ({ page }) => {
@@ -107,22 +109,25 @@ test.describe('Canned Responses Management', () => {
     await page.locator('[role="dialog"] textarea').fill('To be deleted')
     await page.locator('[role="dialog"]').getByRole('button', { name: /^Create$/i }).click()
 
-    // Wait for response to appear
-    const createToast = page.locator('[data-sonner-toast]')
+    // Wait for create toast and dismiss it
+    const createToast = page.locator('[data-sonner-toast]').filter({ hasText: 'created' })
     await expect(createToast).toBeVisible({ timeout: 5000 })
-    await expect(page.locator('body')).toContainText(responseName)
+    await createToast.click() // Dismiss toast
 
-    // Find the card with our response and click delete
-    const card = page.locator('[class*="Card"]').filter({ hasText: responseName }).first()
-    await card.locator('button').filter({ has: page.locator('svg.lucide-trash-2') }).click()
+    const heading = page.getByRole('heading', { name: responseName })
+    await expect(heading).toBeVisible({ timeout: 10000 })
+
+    // Find the card container and click delete button (3rd button in the card footer)
+    const cardContainer = heading.locator('xpath=ancestor::div[contains(@class, "rounded")]').first()
+    await cardContainer.locator('button').nth(2).click()  // delete is 3rd button (copy, edit, delete)
 
     // Confirm deletion
     await expect(page.locator('[role="alertdialog"]')).toBeVisible()
     await page.getByRole('button', { name: 'Delete' }).click()
 
-    const toast = page.locator('[data-sonner-toast]')
-    await expect(toast).toBeVisible({ timeout: 5000 })
-    await expect(toast).toContainText('deleted')
+    // Wait for delete toast
+    const deleteToast = page.locator('[data-sonner-toast]').filter({ hasText: 'deleted' })
+    await expect(deleteToast).toBeVisible({ timeout: 5000 })
   })
 
   test('should filter by category', async ({ page }) => {

@@ -46,11 +46,11 @@ test.describe('API Keys Management', () => {
 
     await page.locator('input#name').fill(keyName)
     // Button text is "Create Key"
-    await page.locator('[role="dialog"]').getByRole('button', { name: /Create Key/i }).click()
+    await page.locator('[role="dialog"][data-state="open"]').getByRole('button', { name: /Create Key/i }).click()
 
-    // Should show the key display dialog
-    await expect(page.locator('[role="dialog"]')).toContainText('API Key Created')
-    await expect(page.locator('[role="dialog"]')).toContainText('whm_')
+    // Should show the key display dialog - use data-state="open" to get the visible one
+    await expect(page.locator('[role="dialog"][data-state="open"]')).toContainText('API Key Created')
+    await expect(page.locator('[role="dialog"][data-state="open"]')).toContainText('whm_')
 
     // Close the dialog
     await page.getByRole('button', { name: 'Done' }).click()
@@ -73,10 +73,10 @@ test.describe('API Keys Management', () => {
     await page.locator('input#expiry').fill(dateStr)
 
     // Button text is "Create Key"
-    await page.locator('[role="dialog"]').getByRole('button', { name: /Create Key/i }).click()
+    await page.locator('[role="dialog"][data-state="open"]').getByRole('button', { name: /Create Key/i }).click()
 
-    // Should show the key display dialog
-    await expect(page.locator('[role="dialog"]')).toContainText('API Key Created')
+    // Should show the key display dialog - use data-state="open" to get the visible one
+    await expect(page.locator('[role="dialog"][data-state="open"]')).toContainText('API Key Created')
     await page.getByRole('button', { name: 'Done' }).click()
 
     // Key should appear in table with expiration
@@ -90,27 +90,26 @@ test.describe('API Keys Management', () => {
     await page.getByRole('button', { name: /Create API Key/i }).click()
     await dialogPage.waitForOpen()
     await page.locator('input#name').fill(keyName)
-    await page.locator('[role="dialog"]').getByRole('button', { name: /Create Key/i }).click()
+    await page.locator('[role="dialog"][data-state="open"]').getByRole('button', { name: /Create Key/i }).click()
 
-    // Wait for key created dialog
-    await expect(page.locator('[role="dialog"]')).toContainText('API Key Created')
+    // Wait for key created dialog - use data-state="open"
+    await expect(page.locator('[role="dialog"][data-state="open"]')).toContainText('API Key Created')
     await page.getByRole('button', { name: 'Done' }).click()
 
     // Wait for table to update
     await expect(page.locator('table')).toContainText(keyName)
 
-    // Find the row with our key and click delete
+    // Find the row with our key and click delete (last button in the row's Actions cell)
     const row = page.locator('tr').filter({ hasText: keyName })
-    await row.locator('button').filter({ has: page.locator('svg.lucide-trash-2') }).click()
+    await row.locator('td').last().locator('button').click()
 
     // Confirm deletion
     await expect(page.locator('[role="alertdialog"]')).toBeVisible()
     await page.getByRole('button', { name: 'Delete' }).click()
 
-    // Key should be removed
-    const toast = page.locator('[data-sonner-toast]')
-    await expect(toast).toBeVisible({ timeout: 5000 })
-    await expect(toast).toContainText('deleted')
+    // Key should be removed - filter for delete toast
+    const deleteToast = page.locator('[data-sonner-toast]').filter({ hasText: 'deleted' })
+    await expect(deleteToast).toBeVisible({ timeout: 5000 })
   })
 
   test('should cancel API key creation', async ({ page }) => {
