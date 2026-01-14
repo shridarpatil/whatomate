@@ -102,7 +102,7 @@ jobs:
           ./whatomate server -migrate &
           sleep 10
           # Verify server is running
-          curl -f http://localhost:8080/api/health || exit 1
+          curl -f http://localhost:8080/health || exit 1
         env:
           WHATOMATE_CONFIG: config.toml
 
