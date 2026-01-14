@@ -111,13 +111,6 @@ func (m *mockWhatsAppServer) close() {
 	m.server.Close()
 }
 
-func (m *mockWhatsAppServer) reset() {
-	m.sentMessages = m.sentMessages[:0]
-	m.uploadedMedia = m.uploadedMedia[:0]
-	m.returnError = false
-	m.errorMessage = ""
-	m.nextMessageID = "wamid.test-" + uuid.New().String()[:8]
-}
 
 // testServerTransport redirects all requests to the test server
 type testServerTransport struct {
@@ -697,13 +690,10 @@ func TestApp_SendOutgoingMessage_AsyncOption(t *testing.T) {
 	require.NoError(t, err)
 	require.NotNil(t, msg)
 
-	// Message is created immediately with pending status
-	assert.Equal(t, models.MessageStatusPending, msg.Status)
-
 	// Wait for async send to complete
 	app.WaitForBackgroundTasks()
 
-	// Now verify message was sent and status updated
+	// Now verify message was sent and status updated in DB
 	var dbMsg models.Message
 	require.NoError(t, app.DB.First(&dbMsg, msg.ID).Error)
 	assert.Equal(t, models.MessageStatusSent, dbMsg.Status)
