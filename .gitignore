@@ -36,6 +36,11 @@ frontend/dist/
 frontend/.env.local
 frontend/.env.*.local
 
+# Playwright
+frontend/playwright-report/
+frontend/test-results/
+frontend/playwright/.cache/
+
 # Embedded frontend build (generated during build)
 internal/frontend/dist/*
 !internal/frontend/dist/.gitkeep

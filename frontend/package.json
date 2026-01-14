@@ -9,7 +9,11 @@
     "typecheck": "vue-tsc --noEmit",
     "preview": "vite preview",
     "lint": "eslint . --ext .vue,.js,.jsx,.cjs,.mjs,.ts,.tsx,.cts,.mts --fix --ignore-path .gitignore",
-    "format": "prettier --write src/"
+    "format": "prettier --write src/",
+    "test:e2e": "BASE_URL=http://localhost:8080 playwright test",
+    "test:e2e:ui": "BASE_URL=http://localhost:8080 playwright test --ui",
+    "test:e2e:debug": "BASE_URL=http://localhost:8080 playwright test --debug",
+    "test:e2e:report": "playwright show-report"
   },
   "dependencies": {
     "@radix-icons/vue": "^1.0.0",
@@ -38,6 +42,7 @@
     "zod": "^3.25.76"
   },
   "devDependencies": {
+    "@playwright/test": "^1.57.0",
     "@rushstack/eslint-patch": "^1.6.0",
     "@tsconfig/node20": "^20.1.0",
     "@types/dompurify": "^3.0.5",
