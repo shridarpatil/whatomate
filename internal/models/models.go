@@ -387,6 +387,7 @@ type WhatsAppFlow struct {
 	FlowJSON        JSONB      `gorm:"type:jsonb" json:"flow_json"`
 	Screens         JSONBArray `gorm:"type:jsonb;default:'[]'" json:"screens"`
 	PreviewURL      string     `gorm:"type:text" json:"preview_url"`
+	HasLocalChanges bool       `gorm:"default:true" json:"has_local_changes"` // True when local changes need to be synced to Meta
 
 	// Relations
 	Organization *Organization `gorm:"foreignKey:OrganizationID" json:"organization,omitempty"`

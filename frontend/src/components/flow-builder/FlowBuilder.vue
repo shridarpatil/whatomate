@@ -113,6 +113,28 @@ function generateId() {
   return result
 }
 
+// Generate a user-friendly field name based on component type
+function generateFieldName(type: string): string {
+  // Count existing fields of this type across all screens
+  let count = 1
+  const prefix = type === 'TextInput' ? 'text_input' :
+                 type === 'TextArea' ? 'text_area' :
+                 type === 'Dropdown' ? 'dropdown' :
+                 type === 'RadioButtonsGroup' ? 'radio' :
+                 type === 'CheckboxGroup' ? 'checkbox' :
+                 type === 'DatePicker' ? 'date' : 'field'
+
+  for (const screen of screens.value) {
+    for (const comp of screen.layout.children) {
+      if (comp.name?.startsWith(prefix)) {
+        count++
+      }
+    }
+  }
+
+  return `${prefix}_${count}`
+}
+
 // Convert number to letter sequence (1=A, 2=B, ..., 27=AA, etc.)
 function numberToLetters(num: number): string {
   let result = ''
@@ -168,18 +190,18 @@ function addComponent(type: string) {
       component.text = 'Enter text here'
       break
     case 'TextInput':
-      component.name = generateId()
+      component.name = generateFieldName(type)
       component.label = 'Label'
       component.required = false
       component['input-type'] = 'text'
       break
     case 'TextArea':
-      component.name = generateId()
+      component.name = generateFieldName(type)
       component.label = 'Label'
       component.required = false
       break
     case 'Dropdown':
-      component.name = generateId()
+      component.name = generateFieldName(type)
       component.label = 'Select an option'
       component.required = false
       component['data-source'] = [
@@ -188,7 +210,7 @@ function addComponent(type: string) {
       ]
       break
     case 'RadioButtonsGroup':
-      component.name = generateId()
+      component.name = generateFieldName(type)
       component.label = 'Choose one'
       component.required = false
       component['data-source'] = [
@@ -197,7 +219,7 @@ function addComponent(type: string) {
       ]
       break
     case 'CheckboxGroup':
-      component.name = generateId()
+      component.name = generateFieldName(type)
       component.label = 'Select options'
       component.required = false
       component['data-source'] = [
@@ -206,7 +228,7 @@ function addComponent(type: string) {
       ]
       break
     case 'DatePicker':
-      component.name = generateId()
+      component.name = generateFieldName(type)
       component.label = 'Select date'
       component.required = false
       break
@@ -630,12 +652,16 @@ defineExpose({
 
           <!-- Name property -->
           <div v-if="'name' in selectedComponent" class="space-y-2">
-            <Label class="text-xs">Field Name</Label>
+            <Label class="text-xs">Field Name (Key)</Label>
             <Input
               :model-value="selectedComponent.name"
               @update:model-value="updateComponentProperty('name', $event)"
               class="font-mono text-sm"
+              placeholder="e.g. email, phone, message"
             />
+            <p class="text-xs text-muted-foreground">
+              This key is used in the response data. Use lowercase with underscores (e.g. customer_name).
+            </p>
           </div>
 
           <!-- Required property -->

@@ -37,6 +37,11 @@ type IncomingTextMessage struct {
 			Title       string `json:"title"`
 			Description string `json:"description"`
 		} `json:"list_reply,omitempty"`
+		NFMReply *struct {
+			ResponseJSON string `json:"response_json"`
+			Body         string `json:"body"`
+			Name         string `json:"name"`
+		} `json:"nfm_reply,omitempty"`
 	} `json:"interactive,omitempty"`
 	Image *struct {
 		ID       string `json:"id"`
@@ -135,6 +140,9 @@ func (a *App) processIncomingMessageFull(phoneNumberID string, msg IncomingTextM
 	buttonID := "" // Track button/list ID for conditional routing
 	var mediaInfo *MediaInfo
 
+	// Track flow response data for WhatsApp Flow forms
+	var flowResponseData map[string]interface{}
+
 	if msg.Type == "text" && msg.Text != nil {
 		messageText = msg.Text.Body
 	} else if msg.Type == "interactive" && msg.Interactive != nil {
@@ -149,6 +157,21 @@ func (a *App) processIncomingMessageFull(phoneNumberID string, msg IncomingTextM
 			messageText = msg.Interactive.ListReply.Title
 			buttonID = msg.Interactive.ListReply.ID
 			messageType = "button_reply"
+		}
+		// Handle WhatsApp Flow reply (nfm_reply)
+		if msg.Interactive.NFMReply != nil {
+			messageText = msg.Interactive.NFMReply.Body
+			messageType = "nfm_reply"
+			// Parse the response JSON to extract form data
+			if msg.Interactive.NFMReply.ResponseJSON != "" {
+				var responseData map[string]interface{}
+				if err := json.Unmarshal([]byte(msg.Interactive.NFMReply.ResponseJSON), &responseData); err != nil {
+					a.Log.Error("Failed to parse flow response JSON", "error", err, "response_json", msg.Interactive.NFMReply.ResponseJSON)
+				} else {
+					flowResponseData = responseData
+					a.Log.Info("Parsed WhatsApp Flow response", "data", flowResponseData)
+				}
+			}
 		}
 	} else if msg.Type == "image" && msg.Image != nil {
 		// Handle image message
@@ -342,7 +365,7 @@ func (a *App) processIncomingMessageFull(phoneNumberID string, msg IncomingTextM
 
 	// Check if user is in an active flow
 	if session.CurrentFlowID != nil {
-		a.processFlowResponse(account, session, contact, messageText, buttonID)
+		a.processFlowResponse(account, session, contact, messageText, buttonID, flowResponseData)
 		return
 	}
 
@@ -616,6 +639,24 @@ func (a *App) sendAndSaveCTAURLButton(account *models.WhatsAppAccount, contact *
 	return err
 }
 
+// sendAndSaveFlowMessage sends a WhatsApp Flow message and saves it to the database
+// Uses the unified SendOutgoingMessage for consistent behavior
+func (a *App) sendAndSaveFlowMessage(account *models.WhatsAppAccount, contact *models.Contact, flowID, headerText, bodyText, ctaText, flowToken, firstScreen string) error {
+	ctx := context.Background()
+	_, err := a.SendOutgoingMessage(ctx, OutgoingMessageRequest{
+		Account:         account,
+		Contact:         contact,
+		Type:            models.MessageTypeFlow,
+		FlowID:          flowID,
+		FlowHeader:      headerText,
+		BodyText:        bodyText,
+		FlowCTA:         ctaText,
+		FlowToken:       flowToken,
+		FlowFirstScreen: firstScreen,
+	}, ChatbotSendOptions())
+	return err
+}
+
 // getOrCreateContact finds or creates a contact for the phone number
 // Returns the contact and a boolean indicating if the contact was newly created
 func (a *App) getOrCreateContact(orgID uuid.UUID, phoneNumber, profileName string) (*models.Contact, bool) {
@@ -757,7 +798,7 @@ func (a *App) startFlow(account *models.WhatsAppAccount, session *models.Chatbot
 }
 
 // processFlowResponse handles user response within a flow
-func (a *App) processFlowResponse(account *models.WhatsAppAccount, session *models.ChatbotSession, contact *models.Contact, userInput string, buttonID string) {
+func (a *App) processFlowResponse(account *models.WhatsAppAccount, session *models.ChatbotSession, contact *models.Contact, userInput string, buttonID string, flowResponseData map[string]interface{}) {
 	// Load the current flow from cache
 	flow, err := a.getChatbotFlowByIDCached(account.OrganizationID, *session.CurrentFlowID)
 	if err != nil {
@@ -898,6 +939,24 @@ func (a *App) processFlowResponse(account *models.WhatsAppAccount, session *mode
 		}
 		a.DB.Model(session).Update("session_data", sessionData)
 		session.SessionData = sessionData
+	}
+
+	// Store WhatsApp Flow response data (from nfm_reply)
+	if len(flowResponseData) > 0 {
+		sessionData := session.SessionData
+		if sessionData == nil {
+			sessionData = models.JSONB{}
+		}
+		// Store each field from the flow response in the session
+		for key, value := range flowResponseData {
+			sessionData[key] = value
+			a.Log.Debug("Stored flow response field", "key", key, "value", value)
+		}
+		// Also store the raw flow response for reference
+		sessionData["_flow_response"] = flowResponseData
+		a.DB.Model(session).Update("session_data", sessionData)
+		session.SessionData = sessionData
+		a.Log.Info("Stored WhatsApp Flow response in session", "fields", len(flowResponseData))
 	}
 
 	// Determine next step
@@ -1240,6 +1299,8 @@ func (a *App) sendStepWithSkipCheck(account *models.WhatsAppAccount, session *mo
 func (a *App) sendStepMessage(account *models.WhatsAppAccount, session *models.ChatbotSession, contact *models.Contact, step *models.ChatbotFlowStep) {
 	var message string
 
+	a.Log.Debug("sendStepMessage called", "step", step.StepName, "message_type", step.MessageType, "input_config", step.InputConfig)
+
 	switch step.MessageType {
 	case models.FlowStepTypeAPIFetch:
 		// Fetch response from external API (may include message + buttons)
@@ -1376,8 +1437,74 @@ func (a *App) sendStepMessage(account *models.WhatsAppAccount, session *models.C
 		a.exitFlow(session)
 		return
 
+	case models.FlowStepTypeWhatsAppFlow:
+		// Send a WhatsApp Flow (interactive form)
+		a.Log.Debug("Processing WhatsApp Flow step", "step", step.StepName, "input_config", step.InputConfig)
+		message = processTemplate(step.Message, session.SessionData)
+
+		// Extract flow configuration from input_config
+		var flowID, headerText, ctaText string
+		if step.InputConfig != nil {
+			if fid, ok := step.InputConfig["whatsapp_flow_id"].(string); ok {
+				flowID = fid
+				a.Log.Debug("Found WhatsApp Flow ID", "flow_id", flowID)
+			}
+			if header, ok := step.InputConfig["flow_header"].(string); ok {
+				headerText = processTemplate(header, session.SessionData)
+			}
+			if cta, ok := step.InputConfig["flow_cta"].(string); ok {
+				ctaText = cta
+			}
+		}
+
+		if flowID == "" {
+			a.Log.Error("WhatsApp Flow step missing flow ID", "step", step.StepName)
+			// Fall back to text message
+			if err := a.sendAndSaveTextMessage(account, contact, message); err != nil {
+				a.Log.Error("Failed to send fallback message", "error", err, "contact", contact.PhoneNumber)
+			}
+		} else {
+			// Look up the WhatsApp Flow to get the first screen name
+			var waFlow models.WhatsAppFlow
+			firstScreen := ""
+			if err := a.DB.Where("meta_flow_id = ?", flowID).First(&waFlow).Error; err != nil {
+				a.Log.Debug("Could not find WhatsApp Flow in database, using default screen", "meta_flow_id", flowID)
+			} else {
+				// Extract first screen name from screens array
+				if len(waFlow.Screens) > 0 {
+					if screenMap, ok := waFlow.Screens[0].(map[string]interface{}); ok {
+						if screenID, ok := screenMap["id"].(string); ok {
+							firstScreen = screenID
+							a.Log.Debug("Found first screen from flow", "first_screen", firstScreen)
+						}
+					}
+				}
+				// If screens array is empty, try to get from flow_json
+				if firstScreen == "" && waFlow.FlowJSON != nil {
+					if screens, ok := waFlow.FlowJSON["screens"].([]interface{}); ok && len(screens) > 0 {
+						if screenMap, ok := screens[0].(map[string]interface{}); ok {
+							if screenID, ok := screenMap["id"].(string); ok {
+								firstScreen = screenID
+								a.Log.Debug("Found first screen from flow_json", "first_screen", firstScreen)
+							}
+						}
+					}
+				}
+			}
+
+			// Generate a unique flow token for tracking
+			flowToken := fmt.Sprintf("chatbot_%s_%s_%d", session.ID.String(), step.StepName, time.Now().UnixNano())
+			a.Log.Debug("Sending WhatsApp Flow message", "flow_id", flowID, "first_screen", firstScreen, "cta", ctaText)
+
+			if err := a.sendAndSaveFlowMessage(account, contact, flowID, headerText, message, ctaText, flowToken, firstScreen); err != nil {
+				a.Log.Error("Failed to send WhatsApp Flow message", "error", err, "contact", contact.PhoneNumber, "flow_id", flowID)
+			}
+		}
+		a.logSessionMessage(session.ID, models.DirectionOutgoing, message, step.StepName)
+
 	default:
 		// Default: use the step message with template processing
+		a.Log.Debug("Unhandled message type, falling back to text", "message_type", step.MessageType, "step", step.StepName)
 		message = processTemplate(step.Message, session.SessionData)
 		if err := a.sendAndSaveTextMessage(account, contact, message); err != nil {
 			a.Log.Error("Failed to send step message", "error", err, "contact", contact.PhoneNumber)

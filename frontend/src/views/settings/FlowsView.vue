@@ -35,7 +35,7 @@ import {
 import FlowBuilder from '@/components/flow-builder/FlowBuilder.vue'
 import { flowsService, accountsService } from '@/services/api'
 import { toast } from 'vue-sonner'
-import { Plus, Pencil, Trash2, Workflow, Play, ExternalLink, Loader2, Archive, RefreshCw, Upload } from 'lucide-vue-next'
+import { Plus, Pencil, Trash2, Workflow, Play, ExternalLink, Loader2, Archive, RefreshCw, Upload, Copy } from 'lucide-vue-next'
 
 interface WhatsAppFlow {
   id: string
@@ -48,6 +48,7 @@ interface WhatsAppFlow {
   flow_json: Record<string, any>
   screens: any[]
   preview_url?: string
+  has_local_changes: boolean
   created_at: string
   updated_at: string
 }
@@ -82,6 +83,7 @@ const isUpdating = ref(false)
 const isSyncing = ref(false)
 const savingToMetaFlowId = ref<string | null>(null)
 const publishingFlowId = ref<string | null>(null)
+const duplicatingFlowId = ref<string | null>(null)
 const deleteDialogOpen = ref(false)
 const flowToDelete = ref<WhatsAppFlow | null>(null)
 const flowToEdit = ref<WhatsAppFlow | null>(null)
@@ -309,6 +311,20 @@ async function confirmDeleteFlow() {
   }
 }
 
+async function duplicateFlow(flow: WhatsAppFlow) {
+  duplicatingFlowId.value = flow.id
+  try {
+    await flowsService.duplicate(flow.id)
+    toast.success('Flow duplicated successfully')
+    await fetchFlows()
+  } catch (error: any) {
+    const message = error.response?.data?.message || 'Failed to duplicate flow'
+    toast.error(message)
+  } finally {
+    duplicatingFlowId.value = null
+  }
+}
+
 async function syncFlows() {
   if (!selectedAccount.value || selectedAccount.value === 'all') {
     toast.error('Please select a specific WhatsApp account to sync')
@@ -486,16 +502,26 @@ function sanitizeScreensForMeta(screens: any[]): any[] {
                 variant="ghost"
                 size="icon"
                 @click="openEditDialog(flow)"
-                :disabled="!isFlowDraft(flow)"
-                :title="!isFlowDraft(flow) ? 'Only DRAFT flows can be edited' : 'Edit flow'"
+                title="Edit flow"
               >
                 <Pencil class="h-4 w-4" />
               </Button>
               <Button
                 variant="ghost"
                 size="icon"
+                @click="duplicateFlow(flow)"
+                :disabled="duplicatingFlowId === flow.id"
+                title="Duplicate flow"
+              >
+                <Loader2 v-if="duplicatingFlowId === flow.id" class="h-4 w-4 animate-spin" />
+                <Copy v-else class="h-4 w-4" />
+              </Button>
+              <Button
+                variant="ghost"
+                size="icon"
                 @click="openDeleteDialog(flow)"
                 :disabled="flow.status?.toUpperCase() === 'PUBLISHED'"
+                title="Delete flow"
               >
                 <Trash2 class="h-4 w-4 text-destructive" />
               </Button>
@@ -513,7 +539,7 @@ function sanitizeScreensForMeta(screens: any[]): any[] {
                 Preview
               </Button>
               <Button
-                v-if="isFlowDraft(flow)"
+                v-if="flow.status?.toUpperCase() !== 'DEPRECATED' && (flow.has_local_changes || !flow.meta_flow_id)"
                 variant="outline"
                 size="sm"
                 @click="saveFlowToMeta(flow)"

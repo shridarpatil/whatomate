@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"time"
 )
 
 // SendTextMessage sends a text message to a phone number
@@ -268,6 +269,91 @@ func (c *Client) SendTemplateMessage(ctx context.Context, account *Account, phon
 
 	messageID := resp.Messages[0].ID
 	c.Log.Info("Template message sent", "message_id", messageID, "phone", phoneNumber, "template", templateName)
+	return messageID, nil
+}
+
+// SendFlowMessage sends an interactive WhatsApp Flow message
+// flowID is the Meta Flow ID, headerText is optional header, bodyText is the message body,
+// ctaText is the button text, flowToken is a unique token for tracking the flow response,
+// and firstScreen is the name of the first screen to navigate to
+func (c *Client) SendFlowMessage(ctx context.Context, account *Account, phoneNumber, flowID, headerText, bodyText, ctaText, flowToken, firstScreen string) (string, error) {
+	if flowID == "" {
+		return "", fmt.Errorf("flow ID is required")
+	}
+	if bodyText == "" {
+		return "", fmt.Errorf("body text is required")
+	}
+	if ctaText == "" {
+		ctaText = "Open" // Default CTA text
+	}
+	if flowToken == "" {
+		flowToken = fmt.Sprintf("flow_%d", time.Now().UnixNano())
+	}
+	if firstScreen == "" {
+		firstScreen = "FIRST_SCREEN" // Default fallback
+	}
+
+	// Truncate CTA text to 20 chars (WhatsApp limit)
+	if len(ctaText) > 20 {
+		ctaText = ctaText[:20]
+	}
+
+	interactive := map[string]interface{}{
+		"type": "flow",
+		"body": map[string]interface{}{
+			"text": bodyText,
+		},
+		"action": map[string]interface{}{
+			"name": "flow",
+			"parameters": map[string]interface{}{
+				"flow_message_version": "3",
+				"flow_token":           flowToken,
+				"flow_id":              flowID,
+				"flow_cta":             ctaText,
+				"flow_action":          "navigate",
+				"flow_action_payload": map[string]interface{}{
+					"screen": firstScreen,
+				},
+			},
+		},
+	}
+
+	// Add header if provided
+	if headerText != "" {
+		interactive["header"] = map[string]interface{}{
+			"type": "text",
+			"text": headerText,
+		}
+	}
+
+	payload := map[string]interface{}{
+		"messaging_product": "whatsapp",
+		"recipient_type":    "individual",
+		"to":                phoneNumber,
+		"type":              "interactive",
+		"interactive":       interactive,
+	}
+
+	url := c.buildMessagesURL(account)
+	c.Log.Debug("Sending flow message", "phone", phoneNumber, "flow_id", flowID)
+
+	respBody, err := c.doRequest(ctx, "POST", url, payload, account.AccessToken)
+	if err != nil {
+		c.Log.Error("Failed to send flow message", "error", err, "phone", phoneNumber, "flow_id", flowID)
+		return "", fmt.Errorf("failed to send flow message: %w", err)
+	}
+
+	var resp MetaAPIResponse
+	if err := json.Unmarshal(respBody, &resp); err != nil {
+		return "", fmt.Errorf("failed to parse response: %w", err)
+	}
+
+	if len(resp.Messages) == 0 {
+		return "", fmt.Errorf("no message ID in response")
+	}
+
+	messageID := resp.Messages[0].ID
+	c.Log.Info("Flow message sent", "message_id", messageID, "phone", phoneNumber, "flow_id", flowID)
 	return messageID, nil
 }
 
