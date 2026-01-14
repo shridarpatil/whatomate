@@ -206,12 +206,16 @@ function removeHeader(key: string) {
   delete formData.value.headers[key]
 }
 
-function toggleEvent(eventValue: string) {
-  const index = formData.value.events.indexOf(eventValue)
-  if (index > -1) {
-    formData.value.events.splice(index, 1)
+function toggleEvent(eventValue: string, checked: boolean | 'indeterminate') {
+  if (checked === true) {
+    if (!formData.value.events.includes(eventValue)) {
+      formData.value.events.push(eventValue)
+    }
   } else {
-    formData.value.events.push(eventValue)
+    const index = formData.value.events.indexOf(eventValue)
+    if (index > -1) {
+      formData.value.events.splice(index, 1)
+    }
   }
 }
 
@@ -388,7 +392,7 @@ onMounted(() => {
                 <Checkbox
                   :id="event.value"
                   :checked="formData.events.includes(event.value)"
-                  @update:checked="toggleEvent(event.value)"
+                  @update:checked="(checked) => toggleEvent(event.value, checked)"
                 />
                 <div class="grid gap-0.5">
                   <Label :for="event.value" class="cursor-pointer">{{ event.label }}</Label>
