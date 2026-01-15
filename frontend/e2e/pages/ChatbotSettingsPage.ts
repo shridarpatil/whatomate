@@ -15,7 +15,7 @@ export class ChatbotSettingsPage extends BasePage {
 
   constructor(page: Page) {
     super(page)
-    this.heading = page.getByRole('heading', { name: 'Chatbot Settings' })
+    this.heading = page.locator('h1').filter({ hasText: 'Chatbot Settings' })
     this.messagesTab = page.getByRole('tab', { name: /Messages/i })
     this.agentsTab = page.getByRole('tab', { name: /Agents/i })
     this.hoursTab = page.getByRole('tab', { name: /Hours/i })

@@ -17,7 +17,7 @@ export class AgentTransfersPage extends BasePage {
 
   constructor(page: Page) {
     super(page)
-    this.heading = page.getByRole('heading', { name: 'Transfers' })
+    this.heading = page.locator('h1').filter({ hasText: 'Transfers' })
     this.pickNextButton = page.getByRole('button', { name: /Pick Next/i })
     this.myTransfersTab = page.getByRole('tab', { name: /My Transfers/i })
     this.queueTab = page.getByRole('tab', { name: /Queue/i })

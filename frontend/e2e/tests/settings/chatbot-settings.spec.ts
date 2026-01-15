@@ -251,8 +251,8 @@ test.describe('AI Tab', () => {
     if (state === 'unchecked') {
       await toggle.click()
     }
-    await expect(page.getByText('AI Provider')).toBeVisible()
-    await expect(page.getByText('Model')).toBeVisible()
+    await expect(page.locator('label').filter({ hasText: /^AI Provider$/ })).toBeVisible()
+    await expect(page.locator('label').filter({ hasText: /^Model$/ })).toBeVisible()
   })
 
   test('should have API key field', async ({ page }) => {
@@ -261,7 +261,7 @@ test.describe('AI Tab', () => {
     if (state === 'unchecked') {
       await toggle.click()
     }
-    await expect(page.getByText('API Key')).toBeVisible()
+    await expect(page.locator('label').filter({ hasText: /^API Key$/ })).toBeVisible()
   })
 
   test('should have system prompt field', async ({ page }) => {

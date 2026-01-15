@@ -19,7 +19,7 @@ export class GeneralSettingsPage extends BasePage {
 
   constructor(page: Page) {
     super(page)
-    this.heading = page.getByRole('heading', { name: 'Settings' })
+    this.heading = page.locator('h1').filter({ hasText: 'Settings' })
     this.generalTab = page.getByRole('tab', { name: /General/i })
     this.notificationsTab = page.getByRole('tab', { name: /Notifications/i })
     this.orgNameInput = page.locator('input#org_name')

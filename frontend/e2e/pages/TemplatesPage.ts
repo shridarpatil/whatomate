@@ -16,7 +16,7 @@ export class TemplatesPage extends BasePage {
 
   constructor(page: Page) {
     super(page)
-    this.heading = page.getByRole('heading', { name: 'Message Templates' })
+    this.heading = page.locator('h1').filter({ hasText: 'Message Templates' })
     this.createButton = page.getByRole('button', { name: /Create Template/i })
     this.syncButton = page.getByRole('button', { name: /Sync from Meta/i })
     this.searchInput = page.locator('input[placeholder*="Search templates"]')
@@ -27,7 +27,7 @@ export class TemplatesPage extends BasePage {
   }
 
   async goto() {
-    await this.page.goto('/settings/templates')
+    await this.page.goto('/templates')
     await this.page.waitForLoadState('networkidle')
   }
 

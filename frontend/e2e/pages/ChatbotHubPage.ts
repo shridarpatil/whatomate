@@ -15,7 +15,7 @@ export class ChatbotHubPage extends BasePage {
 
   constructor(page: Page) {
     super(page)
-    this.heading = page.getByRole('heading', { name: 'Chatbot' })
+    this.heading = page.locator('h1').filter({ hasText: 'Chatbot' })
     this.enableSwitch = page.locator('button[role="switch"]')
     this.keywordsCard = page.locator('a[href="/chatbot/keywords"]')
     this.flowsCard = page.locator('a[href="/chatbot/flows"]')
