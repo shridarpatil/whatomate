@@ -13,7 +13,7 @@ export class AccountsPage extends BasePage {
   constructor(page: Page) {
     super(page)
     this.heading = page.locator('h1').filter({ hasText: 'WhatsApp Accounts' })
-    this.addButton = page.getByRole('button', { name: /Add Account/i })
+    this.addButton = page.getByRole('button', { name: /Add Account/i }).first()
     this.dialog = page.locator('[role="dialog"][data-state="open"]')
     this.alertDialog = page.locator('[role="alertdialog"]')
   }
@@ -32,13 +32,13 @@ export class AccountsPage extends BasePage {
   async fillAccountForm(options: {
     name: string
     phoneId: string
-    businessAccountId: string
+    businessId: string
     accessToken: string
     verifyToken?: string
   }) {
     await this.dialog.locator('input#name').fill(options.name)
     await this.dialog.locator('input#phone_id').fill(options.phoneId)
-    await this.dialog.locator('input#business_account_id').fill(options.businessAccountId)
+    await this.dialog.locator('input#business_id').fill(options.businessId)
     await this.dialog.locator('input#access_token').fill(options.accessToken)
 
     if (options.verifyToken) {

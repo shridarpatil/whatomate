@@ -169,10 +169,10 @@ test.describe('Template CRUD Operations', () => {
   })
 
   test('should show delete confirmation dialog', async ({ page }) => {
-    // If templates exist, test delete
-    const firstCard = page.locator('.rounded-lg.border').first()
-    if (await firstCard.isVisible()) {
-      await firstCard.getByRole('button').filter({ has: page.locator('svg.lucide-trash-2') }).click()
+    // Find template cards that have delete buttons (exclude info cards)
+    const deleteButton = page.locator('.rounded-lg.border').locator('button').filter({ has: page.locator('svg.lucide-trash-2') }).first()
+    if (await deleteButton.isVisible({ timeout: 2000 }).catch(() => false)) {
+      await deleteButton.click()
       await expect(templatesPage.alertDialog).toBeVisible()
       await expect(templatesPage.alertDialog).toContainText('cannot be undone')
       await templatesPage.cancelAlertDialog()
@@ -180,9 +180,10 @@ test.describe('Template CRUD Operations', () => {
   })
 
   test('should show preview dialog', async ({ page }) => {
-    const firstCard = page.locator('.rounded-lg.border').first()
-    if (await firstCard.isVisible()) {
-      await firstCard.getByRole('button').filter({ has: page.locator('svg.lucide-eye') }).click()
+    // Find template cards that have preview buttons
+    const previewButton = page.locator('.rounded-lg.border').locator('button').filter({ has: page.locator('svg.lucide-eye') }).first()
+    if (await previewButton.isVisible({ timeout: 2000 }).catch(() => false)) {
+      await previewButton.click()
       await expect(templatesPage.previewDialog).toBeVisible()
       await expect(templatesPage.previewDialog).toContainText('Template Preview')
       await templatesPage.closePreview()

@@ -32,7 +32,7 @@ test.describe('WhatsApp Accounts', () => {
     await accountsPage.openCreateDialog()
     await expect(accountsPage.dialog.locator('input#name')).toBeVisible()
     await expect(accountsPage.dialog.locator('input#phone_id')).toBeVisible()
-    await expect(accountsPage.dialog.locator('input#business_account_id')).toBeVisible()
+    await expect(accountsPage.dialog.locator('input#business_id')).toBeVisible()
     await expect(accountsPage.dialog.locator('input#access_token')).toBeVisible()
   })
 })
@@ -49,7 +49,7 @@ test.describe('Account Form Validation', () => {
 
   test('should show validation error for empty name', async () => {
     await accountsPage.dialog.locator('input#phone_id').fill('123456')
-    await accountsPage.dialog.locator('input#business_account_id').fill('789012')
+    await accountsPage.dialog.locator('input#business_id').fill('789012')
     await accountsPage.dialog.locator('input#access_token').fill('token123')
     await accountsPage.submitDialog()
     await accountsPage.expectToast(/name|required/i)
@@ -57,7 +57,7 @@ test.describe('Account Form Validation', () => {
 
   test('should show validation error for empty phone ID', async () => {
     await accountsPage.dialog.locator('input#name').fill('Test Account')
-    await accountsPage.dialog.locator('input#business_account_id').fill('789012')
+    await accountsPage.dialog.locator('input#business_id').fill('789012')
     await accountsPage.dialog.locator('input#access_token').fill('token123')
     await accountsPage.submitDialog()
     await accountsPage.expectToast(/phone|required/i)
@@ -66,7 +66,7 @@ test.describe('Account Form Validation', () => {
   test('should show validation error for empty access token', async () => {
     await accountsPage.dialog.locator('input#name').fill('Test Account')
     await accountsPage.dialog.locator('input#phone_id').fill('123456')
-    await accountsPage.dialog.locator('input#business_account_id').fill('789012')
+    await accountsPage.dialog.locator('input#business_id').fill('789012')
     await accountsPage.submitDialog()
     await accountsPage.expectToast(/token|required/i)
   })
@@ -88,7 +88,7 @@ test.describe('Account CRUD Operations', () => {
     await accountsPage.fillAccountForm({
       name: accountName,
       phoneId: '123456789',
-      businessAccountId: '987654321',
+      businessId: '987654321',
       accessToken: 'test_access_token_123'
     })
     await accountsPage.submitDialog()

@@ -16,11 +16,12 @@ export class ChatbotHubPage extends BasePage {
   constructor(page: Page) {
     super(page)
     this.heading = page.locator('h1').filter({ hasText: 'Chatbot' })
-    this.enableSwitch = page.locator('button[role="switch"]')
-    this.keywordsCard = page.locator('a[href="/chatbot/keywords"]')
-    this.flowsCard = page.locator('a[href="/chatbot/flows"]')
-    this.aiContextsCard = page.locator('a[href="/chatbot/ai"]')
-    this.transfersCard = page.locator('a[href="/chatbot/transfers"]')
+    this.enableSwitch = page.locator('button[role="switch"]').first()
+    // Target cards specifically - they contain CardHeader with CardTitle
+    this.keywordsCard = page.locator('a[href="/chatbot/keywords"]').filter({ has: page.locator('.rounded-lg') })
+    this.flowsCard = page.locator('a[href="/chatbot/flows"]').filter({ has: page.locator('.rounded-lg') })
+    this.aiContextsCard = page.locator('a[href="/chatbot/ai"]').filter({ has: page.locator('.rounded-lg') })
+    this.transfersCard = page.locator('a[href="/chatbot/transfers"]').filter({ has: page.locator('.rounded-lg') })
     this.statsCards = page.locator('.grid .rounded-lg.border')
   }
 
