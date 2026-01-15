@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { DropdownMenuRoot } from 'radix-vue'
+import { DropdownMenuRoot } from 'reka-ui'
 
 const props = defineProps<{
   open?: boolean

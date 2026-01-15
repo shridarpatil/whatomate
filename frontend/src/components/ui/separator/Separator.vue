@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { Separator as SeparatorPrimitive } from 'radix-vue'
+import { Separator as SeparatorPrimitive } from 'reka-ui'
 import { cn } from '@/lib/utils'
 
 const props = defineProps<{

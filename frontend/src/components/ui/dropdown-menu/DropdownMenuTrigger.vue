@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { DropdownMenuTrigger as DropdownMenuTriggerPrimitive } from 'radix-vue'
+import { DropdownMenuTrigger as DropdownMenuTriggerPrimitive } from 'reka-ui'
 
 defineProps<{
   asChild?: boolean

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { DropdownMenuPortal, DropdownMenuContent as DropdownMenuContentPrimitive } from 'radix-vue'
+import { DropdownMenuPortal, DropdownMenuContent as DropdownMenuContentPrimitive } from 'reka-ui'
 import { cn } from '@/lib/utils'
 
 const props = defineProps<{

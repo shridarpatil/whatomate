@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { DropdownMenuItem as DropdownMenuItemPrimitive } from 'radix-vue'
+import { DropdownMenuItem as DropdownMenuItemPrimitive } from 'reka-ui'
 import { cn } from '@/lib/utils'
 
 const props = defineProps<{

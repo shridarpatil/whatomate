@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { AvatarFallback as AvatarFallbackPrimitive } from 'radix-vue'
+import { AvatarFallback as AvatarFallbackPrimitive } from 'reka-ui'
 import { cn } from '@/lib/utils'
 
 const props = defineProps<{
