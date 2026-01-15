@@ -101,6 +101,11 @@ jobs:
       - name: Build frontend
         run: cd frontend && npm run build
 
+      - name: Copy frontend to embed directory
+        run: |
+          rm -rf internal/frontend/dist/*
+          cp -r frontend/dist/* internal/frontend/dist/
+
       - name: Build backend
         run: go build -o whatomate ./cmd/whatomate
 
