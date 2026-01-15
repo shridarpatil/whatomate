@@ -21,7 +21,7 @@ jobs:
         ports:
           - 5432:5432
         options: >-
-          --health-cmd pg_isready
+          --health-cmd "pg_isready -U test"
           --health-interval 10s
           --health-timeout 5s
           --health-retries 5
@@ -94,6 +94,13 @@ jobs:
           local_path = "./uploads"
           EOF
 
+      # Build frontend FIRST so it can be embedded in the backend
+      - name: Install frontend dependencies
+        run: cd frontend && npm ci
+
+      - name: Build frontend
+        run: cd frontend && npm run build
+
       - name: Build backend
         run: go build -o whatomate ./cmd/whatomate
 
@@ -105,12 +112,6 @@ jobs:
           curl -f http://localhost:8080/health || exit 1
         env:
           WHATOMATE_CONFIG: config.toml
-
-      - name: Install frontend dependencies
-        run: cd frontend && npm ci
-
-      - name: Build frontend
-        run: cd frontend && npm run build
 
       - name: Install Playwright browsers
         run: cd frontend && npx playwright install chromium --with-deps
