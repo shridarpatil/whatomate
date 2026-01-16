@@ -251,8 +251,8 @@ test.describe('Template Buttons', () => {
     const buttonSection = templatesPage.dialog.locator('.border.rounded-lg.p-3')
     await expect(buttonSection).toBeVisible()
 
-    // Remove button
-    await buttonSection.locator('button').filter({ has: templatesPage.page.locator('svg.lucide-x') }).click()
+    // Remove button - target the X button with lucide-x class
+    await buttonSection.locator('button').filter({ has: templatesPage.page.locator('.lucide-x') }).click()
     await expect(buttonSection).not.toBeVisible()
   })
 })
@@ -279,7 +279,8 @@ test.describe('Template Variables', () => {
 
   test('should show sample inputs for positional variables', async () => {
     await templatesPage.dialog.locator('textarea').first().fill('Hello {{1}}, your code is {{2}}')
-    await expect(templatesPage.dialog.getByText('{{1}}')).toBeVisible()
-    await expect(templatesPage.dialog.getByText('{{2}}')).toBeVisible()
+    // Target labels specifically to avoid matching the textarea content
+    await expect(templatesPage.dialog.locator('label').filter({ hasText: '{{1}}' })).toBeVisible()
+    await expect(templatesPage.dialog.locator('label').filter({ hasText: '{{2}}' })).toBeVisible()
   })
 })

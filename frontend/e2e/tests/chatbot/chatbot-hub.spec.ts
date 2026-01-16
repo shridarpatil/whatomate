@@ -120,27 +120,29 @@ test.describe('Chatbot Hub Card Content', () => {
     await chatbotHubPage.goto()
   })
 
-  test('should show keywords card with title', async ({ page }) => {
-    await expect(chatbotHubPage.keywordsCard.getByText('Keyword Rules')).toBeVisible()
+  test('should show keywords card with title', async () => {
+    // Title is in h3 element
+    await expect(chatbotHubPage.keywordsCard.locator('h3')).toContainText('Keyword Rules')
   })
 
-  test('should show flows card with title', async ({ page }) => {
-    await expect(chatbotHubPage.flowsCard.getByText('Conversation Flows')).toBeVisible()
+  test('should show flows card with title', async () => {
+    await expect(chatbotHubPage.flowsCard.locator('h3')).toContainText('Conversation Flows')
   })
 
-  test('should show AI contexts card with title', async ({ page }) => {
-    await expect(chatbotHubPage.aiContextsCard.getByText('AI Contexts')).toBeVisible()
+  test('should show AI contexts card with title', async () => {
+    await expect(chatbotHubPage.aiContextsCard.locator('h3')).toContainText('AI Contexts')
   })
 
-  test('should show keywords card description', async ({ page }) => {
-    await expect(chatbotHubPage.keywordsCard.getByText(/keyword/i)).toBeVisible()
+  test('should show keywords card description', async () => {
+    // Description is in p element
+    await expect(chatbotHubPage.keywordsCard.locator('p')).toContainText('automated responses')
   })
 
-  test('should show flows card description', async ({ page }) => {
-    await expect(chatbotHubPage.flowsCard.getByText(/flow/i).first()).toBeVisible()
+  test('should show flows card description', async () => {
+    await expect(chatbotHubPage.flowsCard.locator('p')).toContainText('multi-step conversation')
   })
 
-  test('should show AI contexts card description', async ({ page }) => {
-    await expect(chatbotHubPage.aiContextsCard.getByText(/AI/i).first()).toBeVisible()
+  test('should show AI contexts card description', async () => {
+    await expect(chatbotHubPage.aiContextsCard.locator('p')).toContainText('AI-powered responses')
   })
 })

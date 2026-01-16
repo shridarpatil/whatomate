@@ -52,7 +52,7 @@ test.describe('Account Form Validation', () => {
     await accountsPage.dialog.locator('input#business_id').fill('789012')
     await accountsPage.dialog.locator('input#access_token').fill('token123')
     await accountsPage.submitDialog()
-    await accountsPage.expectToast(/name|required/i)
+    await accountsPage.expectToast(/required/i)
   })
 
   test('should show validation error for empty phone ID', async () => {
@@ -60,7 +60,7 @@ test.describe('Account Form Validation', () => {
     await accountsPage.dialog.locator('input#business_id').fill('789012')
     await accountsPage.dialog.locator('input#access_token').fill('token123')
     await accountsPage.submitDialog()
-    await accountsPage.expectToast(/phone|required/i)
+    await accountsPage.expectToast(/required/i)
   })
 
   test('should show validation error for empty access token', async () => {
@@ -97,22 +97,20 @@ test.describe('Account CRUD Operations', () => {
   })
 
   test('should show delete confirmation dialog', async ({ page }) => {
-    const firstCard = page.locator('.rounded-lg.border').first()
-    if (await firstCard.isVisible()) {
-      const cardText = await firstCard.textContent()
-      if (cardText) {
-        await firstCard.getByRole('button').filter({ has: page.locator('svg.lucide-trash-2') }).click()
-        await expect(accountsPage.alertDialog).toBeVisible()
-        await expect(accountsPage.alertDialog).toContainText('cannot be undone')
-        await accountsPage.cancelDelete()
-      }
+    // Account cards have h3 with account name, skip the webhook info card
+    const accountCard = page.locator('.rounded-lg.border').filter({ has: page.locator('h3') }).first()
+    if (await accountCard.isVisible()) {
+      await accountCard.getByRole('button', { name: '' }).filter({ has: page.locator('.lucide-trash-2') }).click()
+      await expect(accountsPage.alertDialog).toBeVisible()
+      await expect(accountsPage.alertDialog).toContainText('cannot be undone')
+      await accountsPage.cancelDelete()
     }
   })
 
   test('should cancel account deletion', async ({ page }) => {
-    const firstCard = page.locator('.rounded-lg.border').first()
-    if (await firstCard.isVisible()) {
-      await firstCard.getByRole('button').filter({ has: page.locator('svg.lucide-trash-2') }).click()
+    const accountCard = page.locator('.rounded-lg.border').filter({ has: page.locator('h3') }).first()
+    if (await accountCard.isVisible()) {
+      await accountCard.getByRole('button', { name: '' }).filter({ has: page.locator('.lucide-trash-2') }).click()
       await accountsPage.cancelDelete()
       await accountsPage.expectDialogHidden()
     }
@@ -129,25 +127,26 @@ test.describe('Account Card Actions', () => {
   })
 
   test('should have edit button on account card', async ({ page }) => {
-    const firstCard = page.locator('.rounded-lg.border').first()
-    if (await firstCard.isVisible()) {
-      const editBtn = firstCard.getByRole('button').filter({ has: page.locator('svg.lucide-pencil') })
+    // Account cards have h3 with account name
+    const accountCard = page.locator('.rounded-lg.border').filter({ has: page.locator('h3') }).first()
+    if (await accountCard.isVisible()) {
+      const editBtn = accountCard.getByRole('button', { name: '' }).filter({ has: page.locator('.lucide-pencil') })
       await expect(editBtn).toBeVisible()
     }
   })
 
   test('should have delete button on account card', async ({ page }) => {
-    const firstCard = page.locator('.rounded-lg.border').first()
-    if (await firstCard.isVisible()) {
-      const deleteBtn = firstCard.getByRole('button').filter({ has: page.locator('svg.lucide-trash-2') })
+    const accountCard = page.locator('.rounded-lg.border').filter({ has: page.locator('h3') }).first()
+    if (await accountCard.isVisible()) {
+      const deleteBtn = accountCard.getByRole('button', { name: '' }).filter({ has: page.locator('.lucide-trash-2') })
       await expect(deleteBtn).toBeVisible()
     }
   })
 
   test('should open edit dialog when clicking edit', async ({ page }) => {
-    const firstCard = page.locator('.rounded-lg.border').first()
-    if (await firstCard.isVisible()) {
-      await firstCard.getByRole('button').filter({ has: page.locator('svg.lucide-pencil') }).click()
+    const accountCard = page.locator('.rounded-lg.border').filter({ has: page.locator('h3') }).first()
+    if (await accountCard.isVisible()) {
+      await accountCard.getByRole('button', { name: '' }).filter({ has: page.locator('.lucide-pencil') }).click()
       await accountsPage.expectDialogVisible()
       await expect(accountsPage.dialog).toContainText('Edit')
     }
@@ -164,19 +163,16 @@ test.describe('Account Webhook Info', () => {
   })
 
   test('should display webhook URL section', async ({ page }) => {
-    const firstCard = page.locator('.rounded-lg.border').first()
-    if (await firstCard.isVisible()) {
-      await expect(firstCard.getByText(/Webhook/i)).toBeVisible()
-    }
+    // Webhook card has h4 with "Webhook Configuration"
+    const webhookCard = page.locator('.rounded-lg.border').filter({ has: page.locator('h4') }).first()
+    await expect(webhookCard.getByText('Webhook Configuration')).toBeVisible()
   })
 
   test('should have copy button for webhook URL', async ({ page }) => {
-    const firstCard = page.locator('.rounded-lg.border').first()
-    if (await firstCard.isVisible()) {
-      const copyBtn = firstCard.locator('button').filter({ has: page.locator('svg.lucide-copy') })
-      if (await copyBtn.first().isVisible()) {
-        await expect(copyBtn.first()).toBeVisible()
-      }
+    const webhookCard = page.locator('.rounded-lg.border').filter({ has: page.locator('h4') }).first()
+    if (await webhookCard.isVisible()) {
+      const copyBtn = webhookCard.locator('button').filter({ has: page.locator('.lucide-copy') })
+      await expect(copyBtn).toBeVisible()
     }
   })
 })
@@ -191,12 +187,11 @@ test.describe('Account Test Connection', () => {
   })
 
   test('should have test connection button', async ({ page }) => {
-    const firstCard = page.locator('.rounded-lg.border').first()
-    if (await firstCard.isVisible()) {
-      const testBtn = firstCard.getByRole('button', { name: /Test/i })
-      if (await testBtn.isVisible()) {
-        await expect(testBtn).toBeVisible()
-      }
+    // Account cards have h3 with account name
+    const accountCard = page.locator('.rounded-lg.border').filter({ has: page.locator('h3') }).first()
+    if (await accountCard.isVisible()) {
+      const testBtn = accountCard.getByRole('button', { name: /Test/i })
+      await expect(testBtn).toBeVisible()
     }
   })
 })

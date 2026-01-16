@@ -47,7 +47,8 @@ export class AccountsPage extends BasePage {
   }
 
   async submitDialog(buttonText = 'Create') {
-    await this.dialog.getByRole('button', { name: new RegExp(`^${buttonText}$`, 'i') }).click()
+    // Button text is "Create Account" or "Update Account"
+    await this.dialog.getByRole('button', { name: new RegExp(`${buttonText}`, 'i') }).click()
   }
 
   async cancelDialog() {

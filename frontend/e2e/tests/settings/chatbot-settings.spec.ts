@@ -205,8 +205,9 @@ test.describe('SLA Tab', () => {
     if (state === 'unchecked') {
       await toggle.click()
     }
-    await expect(page.getByText('Response Time')).toBeVisible()
-    await expect(page.getByText('Escalation Time')).toBeVisible()
+    // Target labels specifically to avoid matching description text
+    await expect(page.locator('label').filter({ hasText: /Response Time/i })).toBeVisible()
+    await expect(page.locator('label').filter({ hasText: /Escalation Time/i })).toBeVisible()
   })
 
   test('should have client inactivity reminders toggle', async ({ page }) => {

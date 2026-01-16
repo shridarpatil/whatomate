@@ -19,10 +19,10 @@ export class ChatbotHubPage extends BasePage {
     // The toggle is a Button with Enable/Disable text, not a switch
     this.toggleButton = page.getByRole('button', { name: /Enable|Disable/i })
     this.statusBadge = page.locator('.border').filter({ hasText: /Active|Inactive/ }).first()
-    // Target cards by their links
-    this.keywordsCard = page.locator('a[href="/chatbot/keywords"]')
-    this.flowsCard = page.locator('a[href="/chatbot/flows"]')
-    this.aiContextsCard = page.locator('a[href="/chatbot/ai"]')
+    // Target cards specifically by their full card title (not sidebar links)
+    this.keywordsCard = page.getByRole('link', { name: /Keyword Rules.*rules/i })
+    this.flowsCard = page.getByRole('link', { name: /Conversation Flows.*flows/i })
+    this.aiContextsCard = page.getByRole('link', { name: /AI Contexts.*contexts/i })
     this.statsCards = page.locator('.grid .rounded-lg.border')
   }
 
