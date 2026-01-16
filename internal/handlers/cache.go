@@ -31,6 +31,12 @@ const (
 	aiContextsCachePrefix      = "chatbot:ai_contexts:"
 )
 
+// chatbotSettingsCache is used for caching since AI.APIKey has json:"-" tag
+type chatbotSettingsCache struct {
+	models.ChatbotSettings
+	AIAPIKey string `json:"ai_api_key_cache"`
+}
+
 // getChatbotSettingsCached retrieves chatbot settings from cache or database
 func (a *App) getChatbotSettingsCached(orgID uuid.UUID, whatsAppAccount string) (*models.ChatbotSettings, error) {
 	ctx := context.Background()
@@ -39,9 +45,11 @@ func (a *App) getChatbotSettingsCached(orgID uuid.UUID, whatsAppAccount string) 
 	// Try cache first
 	cached, err := a.Redis.Get(ctx, cacheKey).Result()
 	if err == nil && cached != "" {
-		var settings models.ChatbotSettings
-		if err := json.Unmarshal([]byte(cached), &settings); err == nil {
-			return &settings, nil
+		var cacheData chatbotSettingsCache
+		if err := json.Unmarshal([]byte(cached), &cacheData); err == nil {
+			// Restore the API key from the cache wrapper
+			cacheData.ChatbotSettings.AI.APIKey = cacheData.AIAPIKey
+			return &cacheData.ChatbotSettings, nil
 		}
 	}
 
@@ -56,8 +64,12 @@ func (a *App) getChatbotSettingsCached(orgID uuid.UUID, whatsAppAccount string) 
 		return nil, result.Error
 	}
 
-	// Cache the result
-	if data, err := json.Marshal(settings); err == nil {
+	// Cache the result (include AI APIKey explicitly since it has json:"-" tag)
+	cacheData := chatbotSettingsCache{
+		ChatbotSettings: settings,
+		AIAPIKey:        settings.AI.APIKey,
+	}
+	if data, err := json.Marshal(cacheData); err == nil {
 		a.Redis.Set(ctx, cacheKey, data, settingsCacheTTL)
 	}
 
