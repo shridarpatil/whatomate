@@ -47,7 +47,7 @@ export class TemplatesPage extends BasePage {
   }
 
   // Form field selectors using placeholders/labels for stability
-  private get accountSelect() {
+  private get dialogAccountSelect() {
     return this.dialog.locator('label').filter({ hasText: 'WhatsApp Account' }).locator('..').locator('select')
   }
 
@@ -96,7 +96,7 @@ export class TemplatesPage extends BasePage {
     footerContent?: string
   }) {
     if (options.account) {
-      await this.accountSelect.selectOption(options.account)
+      await this.dialogAccountSelect.selectOption(options.account)
     }
 
     await this.templateNameInput.fill(options.name)
@@ -144,7 +144,8 @@ export class TemplatesPage extends BasePage {
 
   async removeButton(index: number) {
     const buttons = this.dialog.locator('.border.rounded-lg.p-3')
-    await buttons.nth(index).locator('button').filter({ has: this.page.locator('.lucide-x') }).click()
+    // X button is in the flex justify-between header row
+    await buttons.nth(index).locator('.flex.items-center.justify-between button').click()
   }
 
   async submitDialog(buttonText = 'Create Template') {

@@ -254,8 +254,9 @@ test.describe('Template Buttons', () => {
     const buttonSection = templatesPage.dialog.locator('.border.rounded-lg.p-3')
     await expect(buttonSection).toBeVisible()
 
-    // Remove button - target the X button with lucide-x class
-    await buttonSection.locator('button').filter({ has: templatesPage.page.locator('.lucide-x') }).click()
+    // Remove button - the X button is in the header row next to "Button 1" text
+    // It's the button with destructive icon in the flex justify-between container
+    await buttonSection.locator('.flex.items-center.justify-between button').click()
     await expect(buttonSection).not.toBeVisible()
   })
 })
@@ -282,8 +283,8 @@ test.describe('Template Variables', () => {
 
   test('should show sample inputs for positional variables', async () => {
     await templatesPage.dialog.locator('textarea').first().fill('Hello {{1}}, your code is {{2}}')
-    // Target labels specifically to avoid matching the textarea content
-    await expect(templatesPage.dialog.locator('label').filter({ hasText: '{{1}}' })).toBeVisible()
-    await expect(templatesPage.dialog.locator('label').filter({ hasText: '{{2}}' })).toBeVisible()
+    // Variable labels are rendered as spans with font-mono class
+    await expect(templatesPage.dialog.locator('span.font-mono').filter({ hasText: '{{1}}' })).toBeVisible()
+    await expect(templatesPage.dialog.locator('span.font-mono').filter({ hasText: '{{2}}' })).toBeVisible()
   })
 })
