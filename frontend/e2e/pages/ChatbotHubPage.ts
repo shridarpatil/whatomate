@@ -6,22 +6,23 @@ import { BasePage } from './BasePage'
  */
 export class ChatbotHubPage extends BasePage {
   readonly heading: Locator
-  readonly enableSwitch: Locator
+  readonly toggleButton: Locator
+  readonly statusBadge: Locator
   readonly keywordsCard: Locator
   readonly flowsCard: Locator
   readonly aiContextsCard: Locator
-  readonly transfersCard: Locator
   readonly statsCards: Locator
 
   constructor(page: Page) {
     super(page)
     this.heading = page.locator('h1').filter({ hasText: 'Chatbot' })
-    this.enableSwitch = page.locator('button[role="switch"]').first()
-    // Target cards specifically - they contain CardHeader with CardTitle
-    this.keywordsCard = page.locator('a[href="/chatbot/keywords"]').filter({ has: page.locator('.rounded-lg') })
-    this.flowsCard = page.locator('a[href="/chatbot/flows"]').filter({ has: page.locator('.rounded-lg') })
-    this.aiContextsCard = page.locator('a[href="/chatbot/ai"]').filter({ has: page.locator('.rounded-lg') })
-    this.transfersCard = page.locator('a[href="/chatbot/transfers"]').filter({ has: page.locator('.rounded-lg') })
+    // The toggle is a Button with Enable/Disable text, not a switch
+    this.toggleButton = page.getByRole('button', { name: /Enable|Disable/i })
+    this.statusBadge = page.locator('.border').filter({ hasText: /Active|Inactive/ }).first()
+    // Target cards by their links
+    this.keywordsCard = page.locator('a[href="/chatbot/keywords"]')
+    this.flowsCard = page.locator('a[href="/chatbot/flows"]')
+    this.aiContextsCard = page.locator('a[href="/chatbot/ai"]')
     this.statsCards = page.locator('.grid .rounded-lg.border')
   }
 
@@ -31,7 +32,7 @@ export class ChatbotHubPage extends BasePage {
   }
 
   async toggleChatbot() {
-    await this.enableSwitch.click()
+    await this.toggleButton.click()
   }
 
   async navigateToKeywords() {
@@ -49,11 +50,6 @@ export class ChatbotHubPage extends BasePage {
     await this.page.waitForLoadState('networkidle')
   }
 
-  async navigateToTransfers() {
-    await this.transfersCard.click()
-    await this.page.waitForLoadState('networkidle')
-  }
-
   // Toast helpers
   async expectToast(text: string | RegExp) {
     const toast = this.page.locator('[data-sonner-toast]').filter({ hasText: text })
@@ -67,11 +63,13 @@ export class ChatbotHubPage extends BasePage {
   }
 
   async expectChatbotEnabled() {
-    await expect(this.enableSwitch).toHaveAttribute('data-state', 'checked')
+    await expect(this.statusBadge).toContainText('Active')
+    await expect(this.toggleButton).toContainText('Disable')
   }
 
   async expectChatbotDisabled() {
-    await expect(this.enableSwitch).toHaveAttribute('data-state', 'unchecked')
+    await expect(this.statusBadge).toContainText('Inactive')
+    await expect(this.toggleButton).toContainText('Enable')
   }
 
   async expectNavigationCardsVisible() {

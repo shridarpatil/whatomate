@@ -250,17 +250,17 @@ test.describe('Tab Navigation', () => {
 
   test('should switch to Queue tab', async () => {
     await transfersPage.switchToQueue()
-    await expect(transfersPage.page.getByText(/Unassigned|queue/i)).toBeVisible()
+    await expect(transfersPage.page.getByRole('heading', { name: /Transfer Queue/i })).toBeVisible()
   })
 
   test('should switch to All Active tab', async () => {
     await transfersPage.switchToAllActive()
-    await expect(transfersPage.page.getByText(/All currently active|All Active/i)).toBeVisible()
+    await expect(transfersPage.page.getByRole('heading', { name: /All Active Transfers/i })).toBeVisible()
   })
 
   test('should switch to History tab', async () => {
     await transfersPage.switchToHistory()
-    await expect(transfersPage.page.getByText(/Resumed|History/i)).toBeVisible()
+    await expect(transfersPage.page.getByText('Transfer History', { exact: true })).toBeVisible()
   })
 
   test('should switch back to My Transfers tab', async () => {

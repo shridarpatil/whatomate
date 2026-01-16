@@ -126,7 +126,7 @@ test.describe('Profile Page Labels', () => {
   })
 
   test('should show New Password label', async () => {
-    await expect(profilePage.changePasswordCard.getByText('New Password')).toBeVisible()
+    await expect(profilePage.changePasswordCard.getByText('New Password', { exact: true })).toBeVisible()
   })
 
   test('should show Confirm New Password label', async () => {

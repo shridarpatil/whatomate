@@ -15,8 +15,12 @@ test.describe('Chatbot Hub Page', () => {
     await chatbotHubPage.expectPageVisible()
   })
 
-  test('should have chatbot enable/disable switch', async () => {
-    await expect(chatbotHubPage.enableSwitch).toBeVisible()
+  test('should have chatbot toggle button', async () => {
+    await expect(chatbotHubPage.toggleButton).toBeVisible()
+  })
+
+  test('should have status badge', async () => {
+    await expect(chatbotHubPage.statusBadge).toBeVisible()
   })
 
   test('should have keywords navigation card', async () => {
@@ -42,10 +46,10 @@ test.describe('Chatbot Toggle', () => {
   })
 
   test('should toggle chatbot on/off', async () => {
-    const initialState = await chatbotHubPage.enableSwitch.getAttribute('data-state')
+    const initialText = await chatbotHubPage.toggleButton.textContent()
     await chatbotHubPage.toggleChatbot()
-    const newState = await chatbotHubPage.enableSwitch.getAttribute('data-state')
-    expect(newState).not.toBe(initialState)
+    // Wait for the button text to change
+    await expect(chatbotHubPage.toggleButton).not.toHaveText(initialText!)
   })
 
   test('should show toast on toggle', async () => {
@@ -77,11 +81,6 @@ test.describe('Navigation Cards', () => {
     await chatbotHubPage.navigateToAIContexts()
     await expect(page).toHaveURL(/\/chatbot\/ai/)
   })
-
-  test('should navigate to transfers page', async ({ page }) => {
-    await chatbotHubPage.navigateToTransfers()
-    await expect(page).toHaveURL(/\/chatbot\/transfers/)
-  })
 })
 
 test.describe('Stats Cards', () => {
@@ -99,16 +98,16 @@ test.describe('Stats Cards', () => {
     await expect(cards.first()).toBeVisible()
   })
 
-  test('should show keyword rules count', async ({ page }) => {
-    await expect(page.getByText(/Keyword Rules|Keywords/i)).toBeVisible()
+  test('should show total sessions stat', async ({ page }) => {
+    await expect(page.getByText('Total Sessions')).toBeVisible()
   })
 
-  test('should show flows count', async ({ page }) => {
-    await expect(page.getByText(/Flows/i)).toBeVisible()
+  test('should show active sessions stat', async ({ page }) => {
+    await expect(page.getByText('Active Sessions')).toBeVisible()
   })
 
-  test('should show AI contexts count', async ({ page }) => {
-    await expect(page.getByText(/AI Context/i)).toBeVisible()
+  test('should show messages handled stat', async ({ page }) => {
+    await expect(page.getByText('Messages Handled')).toBeVisible()
   })
 })
 
@@ -121,15 +120,27 @@ test.describe('Chatbot Hub Card Content', () => {
     await chatbotHubPage.goto()
   })
 
+  test('should show keywords card with title', async ({ page }) => {
+    await expect(chatbotHubPage.keywordsCard.getByText('Keyword Rules')).toBeVisible()
+  })
+
+  test('should show flows card with title', async ({ page }) => {
+    await expect(chatbotHubPage.flowsCard.getByText('Conversation Flows')).toBeVisible()
+  })
+
+  test('should show AI contexts card with title', async ({ page }) => {
+    await expect(chatbotHubPage.aiContextsCard.getByText('AI Contexts')).toBeVisible()
+  })
+
   test('should show keywords card description', async ({ page }) => {
-    await expect(chatbotHubPage.keywordsCard.getByText(/keyword|trigger/i)).toBeVisible()
+    await expect(chatbotHubPage.keywordsCard.getByText(/keyword/i)).toBeVisible()
   })
 
   test('should show flows card description', async ({ page }) => {
-    await expect(chatbotHubPage.flowsCard.getByText(/flow|conversation/i)).toBeVisible()
+    await expect(chatbotHubPage.flowsCard.getByText(/flow/i).first()).toBeVisible()
   })
 
   test('should show AI contexts card description', async ({ page }) => {
-    await expect(chatbotHubPage.aiContextsCard.getByText(/AI|context/i)).toBeVisible()
+    await expect(chatbotHubPage.aiContextsCard.getByText(/AI/i).first()).toBeVisible()
   })
 })
