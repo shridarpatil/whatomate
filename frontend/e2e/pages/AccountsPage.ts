@@ -64,14 +64,17 @@ export class AccountsPage extends BasePage {
   async editAccount(name: string) {
     const card = this.getAccountCard(name)
     await expect(card).toBeVisible({ timeout: 10000 })
-    await card.locator('button').filter({ has: this.page.locator('.lucide-pencil') }).click()
+    // Edit button is the first icon-only button (svg.h-4 without span text)
+    const iconButtons = card.locator('button:has(svg.h-4)').filter({ hasNot: this.page.locator('span') })
+    await iconButtons.first().click()
     await this.dialog.waitFor({ state: 'visible' })
   }
 
   async deleteAccount(name: string) {
     const card = this.getAccountCard(name)
     await expect(card).toBeVisible({ timeout: 10000 })
-    await card.locator('button').filter({ has: this.page.locator('.lucide-trash-2') }).click()
+    // Delete button has svg with text-destructive class
+    await card.locator('button').filter({ has: this.page.locator('svg.text-destructive') }).click()
     await this.alertDialog.waitFor({ state: 'visible' })
   }
 

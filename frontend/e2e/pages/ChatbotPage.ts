@@ -147,9 +147,16 @@ export class KeywordsPage extends BasePage {
     const toast = text
       ? this.page.locator('[data-sonner-toast]').filter({ hasText: text })
       : this.page.locator('[data-sonner-toast]').first()
-    if (await toast.isVisible()) {
-      await toast.click()
+    // Wait for toast to disappear (either by clicking or auto-dismiss)
+    try {
+      if (await toast.isVisible({ timeout: 1000 }).catch(() => false)) {
+        await toast.click({ timeout: 1000 }).catch(() => {})
+      }
+    } catch {
+      // Toast already dismissed, ignore
     }
+    // Wait for toast to be fully hidden
+    await toast.waitFor({ state: 'hidden', timeout: 5000 }).catch(() => {})
   }
 
   // Assertions
@@ -357,9 +364,16 @@ export class AIContextsPage extends BasePage {
     const toast = text
       ? this.page.locator('[data-sonner-toast]').filter({ hasText: text })
       : this.page.locator('[data-sonner-toast]').first()
-    if (await toast.isVisible()) {
-      await toast.click()
+    // Wait for toast to disappear (either by clicking or auto-dismiss)
+    try {
+      if (await toast.isVisible({ timeout: 1000 }).catch(() => false)) {
+        await toast.click({ timeout: 1000 }).catch(() => {})
+      }
+    } catch {
+      // Toast already dismissed, ignore
     }
+    // Wait for toast to be fully hidden
+    await toast.waitFor({ state: 'hidden', timeout: 5000 }).catch(() => {})
   }
 
   // Assertions

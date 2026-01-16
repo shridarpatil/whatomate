@@ -134,15 +134,17 @@ test.describe('Chatbot Hub Card Content', () => {
   })
 
   test('should show keywords card description', async () => {
-    // Description is in p element
-    await expect(chatbotHubPage.keywordsCard.locator('p')).toContainText('automated responses')
+    // Description is the second p element (first is count)
+    await expect(chatbotHubPage.keywordsCard.locator('p').last()).toContainText('automated responses')
   })
 
   test('should show flows card description', async () => {
-    await expect(chatbotHubPage.flowsCard.locator('p')).toContainText('multi-step conversation')
+    // Description is the second p element (first is count)
+    await expect(chatbotHubPage.flowsCard.locator('p').last()).toContainText('multi-step conversation')
   })
 
   test('should show AI contexts card description', async () => {
-    await expect(chatbotHubPage.aiContextsCard.locator('p')).toContainText('AI-powered responses')
+    // Description is the second p element (first is count)
+    await expect(chatbotHubPage.aiContextsCard.locator('p').last()).toContainText('AI-powered responses')
   })
 })

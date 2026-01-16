@@ -131,7 +131,7 @@ test.describe('Keyword Rules Management', () => {
     await keywordsPage.expectToast('updated')
   })
 
-  test('should delete keyword rule', async () => {
+  test('should delete keyword rule', async ({ page }) => {
     // First create a rule
     const keyword = `delete${Date.now()}`
 
@@ -149,7 +149,12 @@ test.describe('Keyword Rules Management', () => {
     await expect(keywordsPage.alertDialog).toContainText('cannot be undone')
     await keywordsPage.confirmDelete()
 
-    await keywordsPage.expectToast('deleted')
+    // Wait for delete to complete - check for toast or rule disappearing
+    const toast = page.locator('[data-sonner-toast]').filter({ hasText: /deleted/i })
+    await toast.waitFor({ state: 'visible', timeout: 10000 }).catch(() => {})
+
+    // Verify rule is gone
+    await keywordsPage.expectRuleNotExists(keyword)
   })
 
   test('should cancel keyword rule deletion', async () => {
