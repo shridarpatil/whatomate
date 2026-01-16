@@ -46,6 +46,43 @@ export class TemplatesPage extends BasePage {
     await this.page.waitForTimeout(300)
   }
 
+  // Form field selectors using placeholders/labels for stability
+  private get accountSelect() {
+    return this.dialog.locator('label').filter({ hasText: 'WhatsApp Account' }).locator('..').locator('select')
+  }
+
+  private get templateNameInput() {
+    return this.dialog.locator('input[placeholder="order_confirmation"]')
+  }
+
+  private get displayNameInput() {
+    return this.dialog.locator('input[placeholder="Order Confirmation"]')
+  }
+
+  private get languageSelect() {
+    return this.dialog.locator('label').filter({ hasText: /^Language/ }).locator('..').locator('select')
+  }
+
+  private get categorySelect() {
+    return this.dialog.locator('label').filter({ hasText: /^Category/ }).locator('..').locator('select')
+  }
+
+  private get headerTypeSelect() {
+    return this.dialog.locator('label').filter({ hasText: 'Header Type' }).locator('..').locator('select')
+  }
+
+  private get headerTextInput() {
+    return this.dialog.locator('input[placeholder="Enter header text..."]')
+  }
+
+  private get bodyTextarea() {
+    return this.dialog.locator('textarea[placeholder*="Hi {{1}}"]')
+  }
+
+  private get footerInput() {
+    return this.dialog.locator('input[placeholder="Thank you for your business!"]')
+  }
+
   // Form helpers
   async fillTemplateForm(options: {
     account?: string
@@ -59,35 +96,35 @@ export class TemplatesPage extends BasePage {
     footerContent?: string
   }) {
     if (options.account) {
-      await this.dialog.locator('select').first().selectOption(options.account)
+      await this.accountSelect.selectOption(options.account)
     }
 
-    await this.dialog.locator('input').first().fill(options.name)
+    await this.templateNameInput.fill(options.name)
 
     if (options.displayName) {
-      await this.dialog.locator('input').nth(1).fill(options.displayName)
+      await this.displayNameInput.fill(options.displayName)
     }
 
     if (options.language) {
-      await this.dialog.locator('select').nth(1).selectOption(options.language)
+      await this.languageSelect.selectOption(options.language)
     }
 
     if (options.category) {
-      await this.dialog.locator('select').nth(2).selectOption(options.category)
+      await this.categorySelect.selectOption(options.category)
     }
 
     if (options.headerType) {
-      await this.dialog.locator('select').nth(3).selectOption(options.headerType)
+      await this.headerTypeSelect.selectOption(options.headerType)
     }
 
     if (options.headerContent && options.headerType === 'TEXT') {
-      await this.dialog.locator('input[placeholder*="header"]').fill(options.headerContent)
+      await this.headerTextInput.fill(options.headerContent)
     }
 
-    await this.dialog.locator('textarea').first().fill(options.bodyContent)
+    await this.bodyTextarea.fill(options.bodyContent)
 
     if (options.footerContent) {
-      await this.dialog.locator('input[placeholder*="Thank you"]').fill(options.footerContent)
+      await this.footerInput.fill(options.footerContent)
     }
   }
 
@@ -107,7 +144,7 @@ export class TemplatesPage extends BasePage {
 
   async removeButton(index: number) {
     const buttons = this.dialog.locator('.border.rounded-lg.p-3')
-    await buttons.nth(index).getByRole('button').filter({ has: this.page.locator('svg') }).click()
+    await buttons.nth(index).locator('button').filter({ has: this.page.locator('.lucide-x') }).click()
   }
 
   async submitDialog(buttonText = 'Create Template') {
@@ -126,25 +163,25 @@ export class TemplatesPage extends BasePage {
 
   async previewTemplate(name: string) {
     const card = this.getTemplateCard(name)
-    await card.getByRole('button').filter({ has: this.page.locator('svg.lucide-eye') }).click()
+    await card.locator('button').filter({ has: this.page.locator('.lucide-eye') }).click()
     await this.previewDialog.waitFor({ state: 'visible' })
   }
 
   async editTemplate(name: string) {
     const card = this.getTemplateCard(name)
-    await card.getByRole('button').filter({ has: this.page.locator('svg.lucide-pencil') }).click()
+    await card.locator('button').filter({ has: this.page.locator('.lucide-pencil') }).click()
     await this.dialog.waitFor({ state: 'visible' })
   }
 
   async deleteTemplate(name: string) {
     const card = this.getTemplateCard(name)
-    await card.getByRole('button').filter({ has: this.page.locator('svg.lucide-trash-2') }).click()
+    await card.locator('button').filter({ has: this.page.locator('.lucide-trash-2') }).click()
     await this.alertDialog.waitFor({ state: 'visible' })
   }
 
   async publishTemplate(name: string) {
     const card = this.getTemplateCard(name)
-    await card.getByRole('button').filter({ has: this.page.locator('svg.lucide-send') }).click()
+    await card.locator('button').filter({ has: this.page.locator('.lucide-send') }).click()
     await this.alertDialog.waitFor({ state: 'visible' })
   }
 

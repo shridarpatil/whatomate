@@ -11,10 +11,6 @@ export class GeneralSettingsPage extends BasePage {
   readonly orgNameInput: Locator
   readonly timezoneSelect: Locator
   readonly dateFormatSelect: Locator
-  readonly maskPhoneSwitch: Locator
-  readonly emailNotificationsSwitch: Locator
-  readonly newMessageAlertsSwitch: Locator
-  readonly campaignUpdatesSwitch: Locator
   readonly saveButton: Locator
 
   constructor(page: Page) {
@@ -23,13 +19,34 @@ export class GeneralSettingsPage extends BasePage {
     this.generalTab = page.getByRole('tab', { name: /General/i })
     this.notificationsTab = page.getByRole('tab', { name: /Notifications/i })
     this.orgNameInput = page.locator('input#org_name')
-    this.timezoneSelect = page.locator('button[role="combobox"]').first()
-    this.dateFormatSelect = page.locator('button[role="combobox"]').nth(1)
-    this.maskPhoneSwitch = page.locator('button[role="switch"]').first()
-    this.emailNotificationsSwitch = page.locator('button[role="switch"]').first()
-    this.newMessageAlertsSwitch = page.locator('button[role="switch"]').nth(1)
-    this.campaignUpdatesSwitch = page.locator('button[role="switch"]').nth(2)
+    // Use label-based selectors for comboboxes
+    this.timezoneSelect = page.locator('label').filter({ hasText: 'Default Timezone' }).locator('..').locator('button[role="combobox"]')
+    this.dateFormatSelect = page.locator('label').filter({ hasText: 'Date Format' }).locator('..').locator('button[role="combobox"]')
     this.saveButton = page.getByRole('button', { name: /Save Changes/i })
+  }
+
+  // Helper to get switch by its label text
+  private getSwitchByLabel(labelText: string): Locator {
+    return this.page.locator('.flex.items-center.justify-between')
+      .filter({ hasText: labelText })
+      .locator('button[role="switch"]')
+  }
+
+  // Switch locators using label-based approach
+  get maskPhoneSwitch(): Locator {
+    return this.getSwitchByLabel('Mask Phone Numbers')
+  }
+
+  get emailNotificationsSwitch(): Locator {
+    return this.getSwitchByLabel('Email Notifications')
+  }
+
+  get newMessageAlertsSwitch(): Locator {
+    return this.getSwitchByLabel('New Message Alerts')
+  }
+
+  get campaignUpdatesSwitch(): Locator {
+    return this.getSwitchByLabel('Campaign Updates')
   }
 
   async goto() {

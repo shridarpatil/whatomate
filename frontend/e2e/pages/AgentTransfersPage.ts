@@ -67,17 +67,17 @@ export class AgentTransfersPage extends BasePage {
 
   async viewChat(contactName: string) {
     const row = this.getTransferRow(contactName)
-    await row.getByRole('button').filter({ has: this.page.locator('svg.lucide-message-square') }).click()
+    await row.locator('button').filter({ has: this.page.locator('.lucide-message-square') }).click()
   }
 
   async resumeTransfer(contactName: string) {
     const row = this.getTransferRow(contactName)
-    await row.getByRole('button').filter({ has: this.page.locator('svg.lucide-play') }).click()
+    await row.locator('button').filter({ has: this.page.locator('.lucide-play') }).click()
   }
 
   async openAssignDialog(contactName: string) {
     const row = this.getTransferRow(contactName)
-    await row.getByRole('button').filter({ has: this.page.locator('svg.lucide-user-plus') }).click()
+    await row.locator('button').filter({ has: this.page.locator('.lucide-user-plus') }).click()
     await this.assignDialog.waitFor({ state: 'visible' })
   }
 

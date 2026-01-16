@@ -36,22 +36,22 @@ export class CampaignsPage extends BasePage {
 
   getEditButton(card?: Locator): Locator {
     const container = card || this.page
-    return container.locator('button').filter({ has: this.page.locator('svg.lucide-pencil') }).first()
+    return container.locator('button').filter({ has: this.page.locator('.lucide-pencil') }).first()
   }
 
   getDeleteButton(card?: Locator): Locator {
     const container = card || this.page
-    return container.locator('button').filter({ has: this.page.locator('svg.lucide-trash-2') }).first()
+    return container.locator('button').filter({ has: this.page.locator('.lucide-trash-2') }).first()
   }
 
   getViewRecipientsButton(card?: Locator): Locator {
     const container = card || this.page
-    return container.locator('button').filter({ has: this.page.locator('svg.lucide-eye') }).first()
+    return container.locator('button').filter({ has: this.page.locator('.lucide-eye') }).first()
   }
 
   getAddRecipientsButton(card?: Locator): Locator {
     const container = card || this.page
-    return container.locator('button').filter({ has: this.page.locator('svg.lucide-user-plus') }).first()
+    return container.locator('button').filter({ has: this.page.locator('.lucide-user-plus') }).first()
   }
 
   getStartButton(card?: Locator): Locator {

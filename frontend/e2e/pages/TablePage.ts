@@ -69,7 +69,7 @@ export class TablePage extends BasePage {
     // For Edit - look for Pencil icon button
     // For Delete - look for Trash icon button
     if (action.toLowerCase() === 'edit') {
-      const editButton = row.locator('button').filter({ has: this.page.locator('svg.lucide-pencil, svg[class*="pencil"]') })
+      const editButton = row.locator('button').filter({ has: this.page.locator('.lucide-pencil, [class*="pencil"]') })
       if (await editButton.count() > 0) {
         await editButton.click()
         return
@@ -81,13 +81,13 @@ export class TablePage extends BasePage {
     }
 
     if (action.toLowerCase() === 'delete') {
-      const deleteButton = row.locator('button').filter({ has: this.page.locator('svg.lucide-trash, svg[class*="trash"]') })
+      const deleteButton = row.locator('button').filter({ has: this.page.locator('.lucide-trash, [class*="trash"]') })
       if (await deleteButton.count() > 0) {
         await deleteButton.click()
         return
       }
       // Fallback: look for button with destructive styling
-      const destructiveButton = row.locator('button:has(svg[class*="destructive"]), button svg.text-destructive').locator('..')
+      const destructiveButton = row.locator('button:has([class*="destructive"]), button .text-destructive').locator('..')
       if (await destructiveButton.count() > 0) {
         await destructiveButton.click()
         return

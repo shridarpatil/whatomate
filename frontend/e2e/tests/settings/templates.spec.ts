@@ -39,21 +39,24 @@ test.describe('Message Templates', () => {
 
   test('should show required fields in create dialog', async () => {
     await templatesPage.openCreateDialog()
-    await expect(templatesPage.dialog.locator('select').first()).toBeVisible() // Account
-    await expect(templatesPage.dialog.locator('input').first()).toBeVisible() // Name
-    await expect(templatesPage.dialog.locator('textarea').first()).toBeVisible() // Body
+    // Account select near label
+    await expect(templatesPage.dialog.locator('label').filter({ hasText: 'WhatsApp Account' }).locator('..').locator('select')).toBeVisible()
+    // Template Name input by placeholder
+    await expect(templatesPage.dialog.locator('input[placeholder="order_confirmation"]')).toBeVisible()
+    // Body textarea by placeholder
+    await expect(templatesPage.dialog.locator('textarea[placeholder*="Hi {{1}}"]')).toBeVisible()
   })
 
   test('should show validation error for empty name', async () => {
     await templatesPage.openCreateDialog()
-    await templatesPage.dialog.locator('textarea').first().fill('Body content')
+    await templatesPage.dialog.locator('textarea[placeholder*="Hi {{1}}"]').fill('Body content')
     await templatesPage.submitDialog()
     await templatesPage.expectToast('required')
   })
 
   test('should show validation error for empty body', async () => {
     await templatesPage.openCreateDialog()
-    await templatesPage.dialog.locator('input').first().fill('test_template')
+    await templatesPage.dialog.locator('input[placeholder="order_confirmation"]').fill('test_template')
     await templatesPage.submitDialog()
     await templatesPage.expectToast('required')
   })
@@ -70,27 +73,27 @@ test.describe('Template Form Fields', () => {
   })
 
   test('should have language selector', async () => {
-    const langSelect = templatesPage.dialog.locator('select').nth(1)
+    const langSelect = templatesPage.dialog.locator('label').filter({ hasText: /^Language/ }).locator('..').locator('select')
     await expect(langSelect).toBeVisible()
   })
 
   test('should have category selector', async () => {
-    const categorySelect = templatesPage.dialog.locator('select').nth(2)
+    const categorySelect = templatesPage.dialog.locator('label').filter({ hasText: /^Category/ }).locator('..').locator('select')
     await expect(categorySelect).toBeVisible()
   })
 
   test('should have header type selector', async () => {
-    const headerTypeSelect = templatesPage.dialog.locator('select').nth(3)
+    const headerTypeSelect = templatesPage.dialog.locator('label').filter({ hasText: 'Header Type' }).locator('..').locator('select')
     await expect(headerTypeSelect).toBeVisible()
   })
 
   test('should show header text input for TEXT type', async () => {
-    await templatesPage.dialog.locator('select').nth(3).selectOption('TEXT')
-    await expect(templatesPage.dialog.locator('input[placeholder*="header"]')).toBeVisible()
+    await templatesPage.dialog.locator('label').filter({ hasText: 'Header Type' }).locator('..').locator('select').selectOption('TEXT')
+    await expect(templatesPage.dialog.locator('input[placeholder="Enter header text..."]')).toBeVisible()
   })
 
   test('should show media upload for IMAGE type', async () => {
-    await templatesPage.dialog.locator('select').nth(3).selectOption('IMAGE')
+    await templatesPage.dialog.locator('label').filter({ hasText: 'Header Type' }).locator('..').locator('select').selectOption('IMAGE')
     await expect(templatesPage.dialog.locator('input[type="file"]')).toBeVisible()
   })
 
@@ -153,14 +156,14 @@ test.describe('Template CRUD Operations', () => {
     await templatesPage.openCreateDialog()
 
     // Select first account if available
-    const accountSelect = templatesPage.dialog.locator('select').first()
+    const accountSelect = templatesPage.dialog.locator('label').filter({ hasText: 'WhatsApp Account' }).locator('..').locator('select')
     const options = await accountSelect.locator('option').count()
     if (options > 1) {
       await accountSelect.selectOption({ index: 1 })
     }
 
-    await templatesPage.dialog.locator('input').first().fill(templateName)
-    await templatesPage.dialog.locator('textarea').first().fill('Hello {{1}}, your order is confirmed!')
+    await templatesPage.dialog.locator('input[placeholder="order_confirmation"]').fill(templateName)
+    await templatesPage.dialog.locator('textarea[placeholder*="Hi {{1}}"]').fill('Hello {{1}}, your order is confirmed!')
     await templatesPage.submitDialog()
 
     // May fail if no account - that's expected
@@ -170,7 +173,7 @@ test.describe('Template CRUD Operations', () => {
 
   test('should show delete confirmation dialog', async ({ page }) => {
     // Find template cards that have delete buttons (exclude info cards)
-    const deleteButton = page.locator('.rounded-lg.border').locator('button').filter({ has: page.locator('svg.lucide-trash-2') }).first()
+    const deleteButton = page.locator('.rounded-lg.border').locator('button').filter({ has: page.locator('.lucide-trash-2') }).first()
     if (await deleteButton.isVisible({ timeout: 2000 }).catch(() => false)) {
       await deleteButton.click()
       await expect(templatesPage.alertDialog).toBeVisible()
@@ -181,7 +184,7 @@ test.describe('Template CRUD Operations', () => {
 
   test('should show preview dialog', async ({ page }) => {
     // Find template cards that have preview buttons
-    const previewButton = page.locator('.rounded-lg.border').locator('button').filter({ has: page.locator('svg.lucide-eye') }).first()
+    const previewButton = page.locator('.rounded-lg.border').locator('button').filter({ has: page.locator('.lucide-eye') }).first()
     if (await previewButton.isVisible({ timeout: 2000 }).catch(() => false)) {
       await previewButton.click()
       await expect(templatesPage.previewDialog).toBeVisible()

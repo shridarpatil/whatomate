@@ -22,10 +22,10 @@ export class ChatPage extends BasePage {
     this.contactList = page.locator('.contacts-list, [data-testid="contacts"]').first()
     this.searchInput = page.locator('input[placeholder*="Search"]').first()
     this.messageInput = page.locator('textarea[placeholder*="message"], input[placeholder*="message"]')
-    this.sendButton = page.getByRole('button').filter({ has: page.locator('svg.lucide-send') })
-    this.attachButton = page.getByRole('button').filter({ has: page.locator('svg.lucide-paperclip') })
-    this.emojiButton = page.getByRole('button').filter({ has: page.locator('svg.lucide-smile') })
-    this.cannedResponsesButton = page.getByRole('button').filter({ has: page.locator('svg.lucide-message-square-text') })
+    this.sendButton = page.getByRole('button').filter({ has: page.locator('.lucide-send') })
+    this.attachButton = page.getByRole('button').filter({ has: page.locator('.lucide-paperclip') })
+    this.emojiButton = page.getByRole('button').filter({ has: page.locator('.lucide-smile') })
+    this.cannedResponsesButton = page.getByRole('button').filter({ has: page.locator('.lucide-message-square-text') })
     this.contactInfoPanel = page.locator('.contact-info, [data-testid="contact-info"]')
     this.messageList = page.locator('.messages-container, [data-testid="messages"]')
     this.assignDialog = page.locator('[role="dialog"][data-state="open"]')
@@ -106,11 +106,11 @@ export class ChatPage extends BasePage {
 
   // Contact actions
   async openContactInfo() {
-    await this.page.getByRole('button').filter({ has: this.page.locator('svg.lucide-info') }).click()
+    await this.page.getByRole('button').filter({ has: this.page.locator('.lucide-info') }).click()
   }
 
   async assignContact() {
-    await this.page.getByRole('button').filter({ has: this.page.locator('svg.lucide-user-plus') }).click()
+    await this.page.getByRole('button').filter({ has: this.page.locator('.lucide-user-plus') }).click()
     await this.assignDialog.waitFor({ state: 'visible' })
   }
 
@@ -141,7 +141,7 @@ export class ChatPage extends BasePage {
   async reactToMessage(messageText: string, reaction: string) {
     const message = this.getMessageBubble(messageText)
     await message.hover()
-    await message.locator('button').filter({ has: this.page.locator('svg.lucide-smile') }).click()
+    await message.locator('button').filter({ has: this.page.locator('.lucide-smile') }).click()
     await this.page.locator(`button:has-text("${reaction}")`).click()
   }
 
@@ -149,13 +149,13 @@ export class ChatPage extends BasePage {
   async replyToMessage(messageText: string, replyText: string) {
     const message = this.getMessageBubble(messageText)
     await message.hover()
-    await message.locator('button').filter({ has: this.page.locator('svg.lucide-reply') }).click()
+    await message.locator('button').filter({ has: this.page.locator('.lucide-reply') }).click()
     await this.sendMessage(replyText)
   }
 
   // Custom actions
   async executeCustomAction(actionName: string) {
-    await this.page.getByRole('button').filter({ has: this.page.locator('svg.lucide-zap') }).click()
+    await this.page.getByRole('button').filter({ has: this.page.locator('.lucide-zap') }).click()
     await this.page.locator('[role="menuitem"], .action-item').filter({ hasText: actionName }).click()
   }
 

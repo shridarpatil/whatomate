@@ -64,14 +64,14 @@ export class AccountsPage extends BasePage {
   async editAccount(name: string) {
     const card = this.getAccountCard(name)
     await expect(card).toBeVisible({ timeout: 10000 })
-    await card.getByRole('button').filter({ has: this.page.locator('svg.lucide-pencil') }).click()
+    await card.locator('button').filter({ has: this.page.locator('.lucide-pencil') }).click()
     await this.dialog.waitFor({ state: 'visible' })
   }
 
   async deleteAccount(name: string) {
     const card = this.getAccountCard(name)
     await expect(card).toBeVisible({ timeout: 10000 })
-    await card.getByRole('button').filter({ has: this.page.locator('svg.lucide-trash-2') }).click()
+    await card.locator('button').filter({ has: this.page.locator('.lucide-trash-2') }).click()
     await this.alertDialog.waitFor({ state: 'visible' })
   }
 

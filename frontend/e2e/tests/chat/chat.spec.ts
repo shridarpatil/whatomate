@@ -107,7 +107,7 @@ test.describe('Message Area', () => {
     if (count > 0) {
       await contacts.first().click()
       await page.waitForLoadState('networkidle')
-      const sendBtn = page.locator('button').filter({ has: page.locator('svg.lucide-send') })
+      const sendBtn = page.locator('button').filter({ has: page.locator('.lucide-send') })
       if (await sendBtn.isVisible()) {
         await expect(sendBtn).toBeVisible()
       }
@@ -130,7 +130,7 @@ test.describe('Chat Actions', () => {
     if (count > 0) {
       await contacts.first().click()
       await page.waitForLoadState('networkidle')
-      const attachBtn = page.locator('button').filter({ has: page.locator('svg.lucide-paperclip') })
+      const attachBtn = page.locator('button').filter({ has: page.locator('.lucide-paperclip') })
       if (await attachBtn.isVisible()) {
         await expect(attachBtn).toBeVisible()
       }
@@ -143,7 +143,7 @@ test.describe('Chat Actions', () => {
     if (count > 0) {
       await contacts.first().click()
       await page.waitForLoadState('networkidle')
-      const emojiBtn = page.locator('button').filter({ has: page.locator('svg.lucide-smile') })
+      const emojiBtn = page.locator('button').filter({ has: page.locator('.lucide-smile') })
       if (await emojiBtn.isVisible()) {
         await expect(emojiBtn).toBeVisible()
       }
@@ -205,7 +205,7 @@ test.describe('Contact Info Panel', () => {
     if (count > 0) {
       await contacts.first().click()
       await page.waitForLoadState('networkidle')
-      const infoBtn = page.locator('button').filter({ has: page.locator('svg.lucide-info, svg.lucide-user') })
+      const infoBtn = page.locator('button').filter({ has: page.locator('.lucide-info, .lucide-user') })
       if (await infoBtn.first().isVisible()) {
         await expect(infoBtn.first()).toBeVisible()
       }
@@ -302,7 +302,7 @@ test.describe('Canned Responses', () => {
     if (count > 0) {
       await contacts.first().click()
       await page.waitForLoadState('networkidle')
-      const cannedBtn = page.locator('button').filter({ has: page.locator('svg.lucide-message-square-text, svg.lucide-book-text') })
+      const cannedBtn = page.locator('button').filter({ has: page.locator('.lucide-message-square-text, .lucide-book-text') })
       if (await cannedBtn.first().isVisible()) {
         await expect(cannedBtn.first()).toBeVisible()
       }
@@ -325,7 +325,7 @@ test.describe('Custom Actions', () => {
     if (count > 0) {
       await contacts.first().click()
       await page.waitForLoadState('networkidle')
-      const actionsBtn = page.locator('button').filter({ has: page.locator('svg.lucide-zap, svg.lucide-bolt') })
+      const actionsBtn = page.locator('button').filter({ has: page.locator('.lucide-zap, .lucide-bolt') })
       if (await actionsBtn.first().isVisible()) {
         await expect(actionsBtn.first()).toBeVisible()
       }

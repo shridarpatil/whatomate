@@ -16,8 +16,9 @@ export class FlowsPage extends BasePage {
     this.createButton = page.getByRole('button', { name: /Create Flow/i }).first()
     this.syncButton = page.getByRole('button', { name: /Sync from Meta/i }).first()
     this.accountFilter = page.locator('button[role="combobox"]').first()
-    this.createDialog = page.locator('[role="dialog"][data-state="open"]')
-    this.editDialog = page.locator('[role="dialog"][data-state="open"]')
+    // Distinguish dialogs by their title content
+    this.createDialog = page.locator('[role="dialog"][data-state="open"]').filter({ hasText: 'Create WhatsApp Flow' })
+    this.editDialog = page.locator('[role="dialog"][data-state="open"]').filter({ hasText: 'Edit WhatsApp Flow' })
     this.alertDialog = page.locator('[role="alertdialog"]')
   }
 
@@ -38,17 +39,18 @@ export class FlowsPage extends BasePage {
 
   getEditButton(card?: Locator): Locator {
     const container = card || this.page
-    return container.locator('button').filter({ has: this.page.locator('svg.lucide-pencil') }).first()
+    // Use lucide class without svg prefix for broader compatibility
+    return container.locator('button').filter({ has: this.page.locator('.lucide-pencil') }).first()
   }
 
   getDeleteButton(card?: Locator): Locator {
     const container = card || this.page
-    return container.locator('button').filter({ has: this.page.locator('svg.lucide-trash-2') }).first()
+    return container.locator('button').filter({ has: this.page.locator('.lucide-trash-2') }).first()
   }
 
   getDuplicateButton(card?: Locator): Locator {
     const container = card || this.page
-    return container.locator('button').filter({ has: this.page.locator('svg.lucide-copy') }).first()
+    return container.locator('button').filter({ has: this.page.locator('.lucide-copy') }).first()
   }
 
   getPreviewButton(card?: Locator): Locator {
@@ -196,7 +198,7 @@ export class ChatbotFlowsPage extends BasePage {
     super(page)
     this.heading = page.getByRole('heading', { name: /Conversation Flows/i }).first()
     this.createButton = page.getByRole('button', { name: /Create Flow/i }).first()
-    this.backButton = page.locator('button').filter({ has: page.locator('svg.lucide-arrow-left') }).first()
+    this.backButton = page.locator('button').filter({ has: page.locator('.lucide-arrow-left') }).first()
     this.alertDialog = page.locator('[role="alertdialog"]')
   }
 
@@ -222,12 +224,12 @@ export class ChatbotFlowsPage extends BasePage {
 
   getEditButton(card?: Locator): Locator {
     const container = card || this.page
-    return container.locator('button').filter({ has: this.page.locator('svg.lucide-pencil') }).first()
+    return container.locator('button').filter({ has: this.page.locator('.lucide-pencil') }).first()
   }
 
   getDeleteButton(card?: Locator): Locator {
     const container = card || this.page
-    return container.locator('button').filter({ has: this.page.locator('svg.lucide-trash-2') }).first()
+    return container.locator('button').filter({ has: this.page.locator('.lucide-trash-2') }).first()
   }
 
   getToggleButton(card?: Locator): Locator {

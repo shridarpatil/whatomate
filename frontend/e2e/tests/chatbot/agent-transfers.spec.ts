@@ -177,7 +177,7 @@ test.describe('Transfer Actions', () => {
     const tableRows = await page.locator('tbody tr').count()
     if (tableRows > 0) {
       const firstRow = page.locator('tbody tr').first()
-      const assignBtn = firstRow.getByRole('button').filter({ has: page.locator('svg.lucide-user-plus') })
+      const assignBtn = firstRow.getByRole('button').filter({ has: page.locator('.lucide-user-plus') })
       if (await assignBtn.isVisible()) {
         await assignBtn.click()
         await expect(transfersPage.assignDialog).toBeVisible()
@@ -201,7 +201,7 @@ test.describe('Assign Dialog', () => {
     const tableRows = await page.locator('tbody tr').count()
     if (tableRows > 0) {
       const firstRow = page.locator('tbody tr').first()
-      const assignBtn = firstRow.getByRole('button').filter({ has: page.locator('svg.lucide-user-plus') })
+      const assignBtn = firstRow.getByRole('button').filter({ has: page.locator('.lucide-user-plus') })
       if (await assignBtn.isVisible()) {
         await assignBtn.click()
         await expect(transfersPage.assignDialog.getByText('Team Queue')).toBeVisible()
@@ -215,7 +215,7 @@ test.describe('Assign Dialog', () => {
     const tableRows = await page.locator('tbody tr').count()
     if (tableRows > 0) {
       const firstRow = page.locator('tbody tr').first()
-      const assignBtn = firstRow.getByRole('button').filter({ has: page.locator('svg.lucide-user-plus') })
+      const assignBtn = firstRow.getByRole('button').filter({ has: page.locator('.lucide-user-plus') })
       if (await assignBtn.isVisible()) {
         await assignBtn.click()
         await expect(transfersPage.assignDialog.getByText('Assign to Agent')).toBeVisible()
@@ -229,7 +229,7 @@ test.describe('Assign Dialog', () => {
     const tableRows = await page.locator('tbody tr').count()
     if (tableRows > 0) {
       const firstRow = page.locator('tbody tr').first()
-      const assignBtn = firstRow.getByRole('button').filter({ has: page.locator('svg.lucide-user-plus') })
+      const assignBtn = firstRow.getByRole('button').filter({ has: page.locator('.lucide-user-plus') })
       if (await assignBtn.isVisible()) {
         await assignBtn.click()
         await transfersPage.cancelAssignment()
