@@ -802,7 +802,7 @@ func (a *App) UploadCampaignMedia(r *fastglue.Request) error {
 	if err != nil {
 		return r.SendErrorEnvelope(fasthttp.StatusBadRequest, "Failed to open file", nil, "")
 	}
-	defer file.Close()
+	defer func() { _ = file.Close() }()
 
 	// Read file content
 	data, err := io.ReadAll(file)

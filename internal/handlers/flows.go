@@ -659,7 +659,7 @@ func (a *App) SyncFlows(r *fastglue.Request) error {
 // - If multiple screens, only the last screen should have "complete" action
 func validateFlowStructure(screens []interface{}) error {
 	if len(screens) == 0 {
-		return fmt.Errorf("Flow must have at least one screen")
+		return fmt.Errorf("flow must have at least one screen")
 	}
 
 	// Find which screens have complete action
@@ -687,7 +687,7 @@ func validateFlowStructure(screens []interface{}) error {
 
 	// Check if any screen has a complete action
 	if len(screensWithComplete) == 0 {
-		return fmt.Errorf("Flow must have a Footer button with 'Complete Flow' action. Add a Footer component to your last screen and set its action to 'Complete Flow'")
+		return fmt.Errorf("flow must have a Footer button with 'Complete Flow' action: add a Footer component to your last screen and set its action to 'Complete Flow'")
 	}
 
 	// If multiple screens, complete action should only be on the last screen
@@ -911,7 +911,7 @@ func sanitizeID(id string) string {
 	// Check if ID already only contains valid characters
 	valid := true
 	for _, c := range id {
-		if !((c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || c == '_') {
+		if !((c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || c == '_') { //nolint:staticcheck // More readable than De Morgan's law
 			valid = false
 			break
 		}
@@ -1012,7 +1012,8 @@ func sanitizeComponentsWithPayload(children []interface{}, allFieldNames []strin
 				newAction[k] = v
 			}
 
-			if actionName == "complete" {
+			switch actionName {
+			case "complete":
 				// Complete action: include all form fields from all screens
 				// - Fields from previous screens: use ${data.fieldName} (passed via data model)
 				// - Fields on current screen: use ${form.fieldName} (form input)
@@ -1027,7 +1028,7 @@ func sanitizeComponentsWithPayload(children []interface{}, allFieldNames []strin
 					}
 				}
 				newAction["payload"] = payload
-			} else if actionName == "navigate" {
+			case "navigate":
 				// Navigate action: pass current screen's form fields to next screen
 				// Use ${form.fieldName} for current screen's fields
 				if len(thisScreenFields) > 0 {

@@ -52,7 +52,7 @@ func (a *App) getChatbotSettingsCached(orgID uuid.UUID, whatsAppAccount string) 
 		var cacheData chatbotSettingsCache
 		if err := json.Unmarshal([]byte(cached), &cacheData); err == nil {
 			// Restore the API key from the cache wrapper
-			cacheData.ChatbotSettings.AI.APIKey = cacheData.AIAPIKey
+			cacheData.AI.APIKey = cacheData.AIAPIKey
 			return &cacheData.ChatbotSettings, nil
 		}
 	}
@@ -503,8 +503,8 @@ func (a *App) ScopeToOrg(query *gorm.DB, userID, orgID uuid.UUID) *gorm.DB {
 	return query.Where("organization_id = ?", orgID)
 }
 
-// getRolePermissionsCached retrieves role permissions from cache or database
-func (a *App) getRolePermissionsCached(roleID uuid.UUID) ([]string, error) {
+// GetRolePermissionsCached retrieves role permissions from cache or database
+func (a *App) GetRolePermissionsCached(roleID uuid.UUID) ([]string, error) {
 	ctx := context.Background()
 	cacheKey := fmt.Sprintf("%s%s", rolePermissionsCachePrefix, roleID.String())
 

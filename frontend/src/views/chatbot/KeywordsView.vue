@@ -222,7 +222,7 @@ async function toggleRule(rule: KeywordRule) {
 }
 
 const filteredRules = ref<KeywordRule[]>([])
-$: filteredRules.value = searchQuery.value
+filteredRules.value = searchQuery.value
   ? rules.value.filter(r =>
       r.keywords.some(k => k.toLowerCase().includes(searchQuery.value.toLowerCase()))
     )
