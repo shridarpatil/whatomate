@@ -38,6 +38,7 @@ func (a *App) WaitForBackgroundTasks() {
 
 // getOrgIDFromContext extracts organization ID from request context (set by auth middleware)
 // Super admins can override the org by passing X-Organization-ID header
+// Returns uuid.Nil for super admins viewing "all organizations" (no header set)
 func (a *App) getOrgIDFromContext(r *fastglue.Request) (uuid.UUID, error) {
 	// Get user's default organization ID from JWT
 	orgIDVal := r.RequestCtx.UserValue("organization_id")
@@ -54,16 +55,53 @@ func (a *App) getOrgIDFromContext(r *fastglue.Request) (uuid.UUID, error) {
 	if a.IsSuperAdmin(userID) {
 		// Check for X-Organization-ID header
 		overrideOrgID := string(r.RequestCtx.Request.Header.Peek("X-Organization-ID"))
+		if overrideOrgID == "" {
+			// No header = super admin viewing all organizations
+			return uuid.Nil, nil
+		}
+		// Header present = super admin selected a specific org
+		parsedOrgID, err := uuid.Parse(overrideOrgID)
+		if err == nil {
+			// Verify the organization exists
+			var count int64
+			if err := a.DB.Table("organizations").Where("id = ?", parsedOrgID).Count(&count).Error; err == nil && count > 0 {
+				return parsedOrgID, nil
+			}
+		}
+		// Invalid org ID in header, fall back to user's org
+	}
+
+	return orgID, nil
+}
+
+// getOrgIDForCreate returns organization ID for creating new records
+// Unlike getOrgIDFromContext, this always returns a valid org ID (falls back to user's default)
+// Use this when creating records that require an organization_id
+func (a *App) getOrgIDForCreate(r *fastglue.Request) (uuid.UUID, error) {
+	// Get user's default organization ID from JWT
+	orgIDVal := r.RequestCtx.UserValue("organization_id")
+	if orgIDVal == nil {
+		return uuid.Nil, errors.New("organization_id not found in context")
+	}
+	orgID, ok := orgIDVal.(uuid.UUID)
+	if !ok {
+		return uuid.Nil, errors.New("organization_id is not a valid UUID")
+	}
+
+	// Check if super admin has selected a specific organization
+	userID, _ := r.RequestCtx.UserValue("user_id").(uuid.UUID)
+	if a.IsSuperAdmin(userID) {
+		overrideOrgID := string(r.RequestCtx.Request.Header.Peek("X-Organization-ID"))
 		if overrideOrgID != "" {
 			parsedOrgID, err := uuid.Parse(overrideOrgID)
 			if err == nil {
-				// Verify the organization exists
 				var count int64
 				if err := a.DB.Table("organizations").Where("id = ?", parsedOrgID).Count(&count).Error; err == nil && count > 0 {
 					return parsedOrgID, nil
 				}
 			}
 		}
+		// No specific org selected - use user's default org for creates
 	}
 
 	return orgID, nil
