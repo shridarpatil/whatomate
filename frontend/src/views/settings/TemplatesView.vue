@@ -273,7 +273,6 @@ async function saveTemplate() {
 
   isSubmitting.value = true
   try {
-    console.log('Saving template with data:', JSON.stringify(formData.value, null, 2))
     if (editingTemplate.value) {
       await api.put(`/templates/${editingTemplate.value.id}`, formData.value)
       toast.success('Template updated successfully')

@@ -437,6 +437,7 @@ function formatDate(dateString: string): string {
               </div>
               <PermissionMatrix
                 v-else
+                :key="editingRole?.id || 'new'"
                 :permission-groups="rolesStore.permissionGroups"
                 v-model:selected-permissions="formData.permissions"
                 :disabled="editingRole?.is_system"

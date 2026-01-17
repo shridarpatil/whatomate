@@ -84,18 +84,59 @@ function getSelectedCountForGroup(group: PermissionGroup): number {
   return group.permissions.filter(p => props.selectedPermissions.includes(p.key)).length
 }
 
-// Default open all groups
-const defaultOpenGroups = computed(() => props.permissionGroups.map(g => g.resource))
-
-// Use a reactive value for the accordion
+// Use a reactive value for the accordion - only expand groups with selections
 const openGroups = ref<string[]>([])
 
-// When permissionGroups change, open all groups
+// Compute groups that have selected permissions
+const groupsWithSelections = computed(() => {
+  return props.permissionGroups
+    .filter(g => g.permissions.some(p => props.selectedPermissions.includes(p.key)))
+    .map(g => g.resource)
+})
+
+// Sort groups: selected groups first, then alphabetically
+const sortedPermissionGroups = computed(() => {
+  return [...props.permissionGroups].sort((a, b) => {
+    const aHasSelection = a.permissions.some(p => props.selectedPermissions.includes(p.key))
+    const bHasSelection = b.permissions.some(p => props.selectedPermissions.includes(p.key))
+
+    // Groups with selections come first
+    if (aHasSelection && !bHasSelection) return -1
+    if (!aHasSelection && bHasSelection) return 1
+
+    // Within same category, sort alphabetically
+    return a.label.localeCompare(b.label)
+  })
+})
+
+// Set initial state when component mounts or permission groups load
 watch(() => props.permissionGroups, (groups) => {
-  if (groups.length > 0) {
-    openGroups.value = groups.map(g => g.resource)
+  if (groups.length > 0 && openGroups.value.length === 0) {
+    // On initial load, only expand groups with selections
+    openGroups.value = [...groupsWithSelections.value]
   }
 }, { immediate: true })
+
+// Auto-expand groups when permissions are selected
+watch(() => props.selectedPermissions, (newPerms, oldPerms) => {
+  if (!oldPerms) return
+
+  // Find newly selected permissions
+  const oldSet = new Set(oldPerms)
+  const newlySelected = newPerms.filter(p => !oldSet.has(p))
+
+  if (newlySelected.length > 0) {
+    // Find which groups contain the newly selected permissions and expand them
+    const groupsToExpand = props.permissionGroups
+      .filter(g => g.permissions.some(p => newlySelected.includes(p.key)))
+      .map(g => g.resource)
+
+    // Add to openGroups if not already open
+    const currentOpen = new Set(openGroups.value)
+    groupsToExpand.forEach(g => currentOpen.add(g))
+    openGroups.value = [...currentOpen]
+  }
+})
 </script>
 
 <template>
@@ -108,7 +149,7 @@ watch(() => props.permissionGroups, (groups) => {
     <!-- Permission groups -->
     <Accordion v-else type="multiple" v-model="openGroups" class="w-full">
       <AccordionItem
-        v-for="group in permissionGroups"
+        v-for="group in sortedPermissionGroups"
         :key="group.resource"
         :value="group.resource"
         class="border rounded-lg px-4"

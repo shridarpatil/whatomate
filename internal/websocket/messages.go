@@ -24,11 +24,15 @@ const (
 
 	// Campaign types
 	TypeCampaignStatsUpdate = "campaign_stats_update"
+
+	// Permission types
+	TypePermissionsUpdated = "permissions_updated"
 )
 
 // BroadcastMessage represents a message to be broadcast to clients
 type BroadcastMessage struct {
 	OrgID     uuid.UUID
+	UserID    uuid.UUID // Optional: only send to specific user
 	ContactID uuid.UUID // Optional: only send to users viewing this contact
 	Message   WSMessage
 }

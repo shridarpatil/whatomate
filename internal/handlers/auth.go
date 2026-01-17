@@ -53,6 +53,26 @@ func (a *App) Login(r *fastglue.Request) error {
 		return r.SendErrorEnvelope(fasthttp.StatusUnauthorized, "Invalid credentials", nil, "")
 	}
 
+	// Load permissions from cache
+	if user.Role != nil && user.RoleID != nil {
+		cachedPerms, err := a.GetRolePermissionsCached(*user.RoleID)
+		if err == nil {
+			permissions := make([]models.Permission, 0, len(cachedPerms))
+			for _, p := range cachedPerms {
+				for i := len(p) - 1; i >= 0; i-- {
+					if p[i] == ':' {
+						permissions = append(permissions, models.Permission{
+							Resource: p[:i],
+							Action:   p[i+1:],
+						})
+						break
+					}
+				}
+			}
+			user.Role.Permissions = permissions
+		}
+	}
+
 	// Check if user is active
 	if !user.IsActive {
 		return r.SendErrorEnvelope(fasthttp.StatusUnauthorized, "Account is disabled", nil, "")

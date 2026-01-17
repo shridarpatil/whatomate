@@ -191,100 +191,127 @@ onUnmounted(() => {
   }
 })
 
-// Define all navigation items with role requirements
+// Define all navigation items with permission requirements
+// Each item can have a 'permission' (resource name) that is checked for 'read' access
 const allNavItems = [
   {
     name: 'Dashboard',
     path: '/',
     icon: LayoutDashboard,
-    roles: ['admin', 'manager']
+    permission: 'analytics' // Dashboard requires analytics read permission
   },
   {
     name: 'Chat',
     path: '/chat',
     icon: MessageSquare,
-    roles: ['admin', 'manager', 'agent']
+    permission: 'chat'
   },
   {
     name: 'Chatbot',
     path: '/chatbot',
     icon: Bot,
-    roles: ['admin', 'manager'],
+    permission: 'settings.chatbot',
+    // Show parent if user has any child permission
+    childPermissions: ['settings.chatbot', 'chatbot.keywords', 'flows.chatbot', 'chatbot.ai'],
     children: [
-      { name: 'Overview', path: '/chatbot', icon: Bot },
-      { name: 'Keywords', path: '/chatbot/keywords', icon: Key },
-      { name: 'Flows', path: '/chatbot/flows', icon: Workflow },
-      { name: 'AI Contexts', path: '/chatbot/ai', icon: Sparkles }
+      { name: 'Overview', path: '/chatbot', icon: Bot, permission: 'settings.chatbot' },
+      { name: 'Keywords', path: '/chatbot/keywords', icon: Key, permission: 'chatbot.keywords' },
+      { name: 'Flows', path: '/chatbot/flows', icon: Workflow, permission: 'flows.chatbot' },
+      { name: 'AI Contexts', path: '/chatbot/ai', icon: Sparkles, permission: 'chatbot.ai' }
     ]
   },
   {
     name: 'Transfers',
     path: '/chatbot/transfers',
     icon: UserX,
-    roles: ['admin', 'manager', 'agent']
+    permission: 'transfers'
   },
   {
     name: 'Agent Analytics',
     path: '/analytics/agents',
     icon: BarChart3,
-    roles: ['admin', 'manager', 'agent']
+    permission: 'analytics.agents'
   },
   {
     name: 'Templates',
     path: '/templates',
     icon: FileText,
-    roles: ['admin', 'manager']
+    permission: 'templates'
   },
   {
     name: 'Flows',
     path: '/flows',
     icon: Workflow,
-    roles: ['admin', 'manager']
+    permission: 'flows.whatsapp'
   },
   {
     name: 'Campaigns',
     path: '/campaigns',
     icon: Megaphone,
-    roles: ['admin', 'manager']
+    permission: 'campaigns'
   },
   {
     name: 'Settings',
     path: '/settings',
     icon: Settings,
-    roles: ['admin', 'manager'],
+    permission: 'settings.general',
+    // Show parent if user has any child permission
+    childPermissions: ['settings.general', 'settings.chatbot', 'accounts', 'canned_responses', 'teams', 'users', 'roles', 'api_keys', 'webhooks', 'custom_actions', 'settings.sso'],
     children: [
-      { name: 'General', path: '/settings', icon: Settings },
-      { name: 'Chatbot', path: '/settings/chatbot', icon: Bot },
-      { name: 'Accounts', path: '/settings/accounts', icon: Users },
-      { name: 'Canned Responses', path: '/settings/canned-responses', icon: MessageSquareText },
-      { name: 'Teams', path: '/settings/teams', icon: Users },
-      { name: 'Users', path: '/settings/users', icon: Users, roles: ['admin'] },
-      { name: 'Roles', path: '/settings/roles', icon: Shield, roles: ['admin'] },
-      { name: 'API Keys', path: '/settings/api-keys', icon: Key, roles: ['admin'] },
-      { name: 'Webhooks', path: '/settings/webhooks', icon: Webhook, roles: ['admin'] },
-      { name: 'Custom Actions', path: '/settings/custom-actions', icon: Zap, roles: ['admin'] },
-      { name: 'SSO', path: '/settings/sso', icon: ShieldCheck, roles: ['admin'] }
+      { name: 'General', path: '/settings', icon: Settings, permission: 'settings.general' },
+      { name: 'Chatbot', path: '/settings/chatbot', icon: Bot, permission: 'settings.chatbot' },
+      { name: 'Accounts', path: '/settings/accounts', icon: Users, permission: 'accounts' },
+      { name: 'Canned Responses', path: '/settings/canned-responses', icon: MessageSquareText, permission: 'canned_responses' },
+      { name: 'Teams', path: '/settings/teams', icon: Users, permission: 'teams' },
+      { name: 'Users', path: '/settings/users', icon: Users, permission: 'users' },
+      { name: 'Roles', path: '/settings/roles', icon: Shield, permission: 'roles' },
+      { name: 'API Keys', path: '/settings/api-keys', icon: Key, permission: 'api_keys' },
+      { name: 'Webhooks', path: '/settings/webhooks', icon: Webhook, permission: 'webhooks' },
+      { name: 'Custom Actions', path: '/settings/custom-actions', icon: Zap, permission: 'custom_actions' },
+      { name: 'SSO', path: '/settings/sso', icon: ShieldCheck, permission: 'settings.sso' }
     ]
   }
 ]
 
-// Filter navigation based on user role
+// Filter navigation based on user permissions
 const navigation = computed(() => {
-  const userRole = authStore.userRole || 'agent'
-
   return allNavItems
-    .filter(item => item.roles.includes(userRole))
-    .map(item => ({
-      ...item,
-      active: item.path === '/'
-        ? route.name === 'dashboard'
-        : item.path === '/chat'
-          ? route.name === 'chat' || route.name === 'chat-conversation'
-          : route.path.startsWith(item.path),
-      children: item.children?.filter(
-        child => !child.roles || child.roles.includes(userRole)
+    .filter(item => {
+      // If item has childPermissions, show if user has ANY of them
+      if (item.childPermissions) {
+        return item.childPermissions.some(p => authStore.hasPermission(p, 'read'))
+      }
+      // Otherwise check the item's own permission
+      return !item.permission || authStore.hasPermission(item.permission, 'read')
+    })
+    .map(item => {
+      // Filter children first
+      const filteredChildren = item.children?.filter(
+        child => !child.permission || authStore.hasPermission(child.permission, 'read')
       )
-    }))
+
+      // If user doesn't have permission for parent but has childPermissions,
+      // use the first accessible child's path as the parent link
+      let effectivePath = item.path
+      if (item.childPermissions && !authStore.hasPermission(item.permission, 'read') && filteredChildren?.length) {
+        effectivePath = filteredChildren[0].path
+      }
+
+      // For active state, use original path so children show when on any child route
+      const originalPath = item.path
+      const isActive = originalPath === '/'
+        ? route.name === 'dashboard'
+        : originalPath === '/chat'
+          ? route.name === 'chat' || route.name === 'chat-conversation'
+          : route.path.startsWith(originalPath)
+
+      return {
+        ...item,
+        path: effectivePath,
+        active: isActive,
+        children: filteredChildren
+      }
+    })
 })
 
 const toggleSidebar = () => {

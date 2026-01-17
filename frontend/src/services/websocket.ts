@@ -57,6 +57,9 @@ const WS_TYPE_TRANSFER_ESCALATION = 'transfer_escalation'
 // Campaign types
 const WS_TYPE_CAMPAIGN_STATS_UPDATE = 'campaign_stats_update'
 
+// Permission types
+const WS_TYPE_PERMISSIONS_UPDATED = 'permissions_updated'
+
 interface WSMessage {
   type: string
   payload: any
@@ -74,7 +77,6 @@ class WebSocketService {
 
   connect(token: string) {
     if (this.ws?.readyState === WebSocket.OPEN) {
-      console.log('WebSocket already connected')
       return
     }
 
@@ -83,13 +85,10 @@ class WebSocketService {
     const basePath = ((window as any).__BASE_PATH__ ?? '').replace(/\/$/, '')
     const url = `${protocol}//${host}${basePath}/ws?token=${token}`
 
-    console.log('Connecting to WebSocket...')
-
     try {
       this.ws = new WebSocket(url)
 
       this.ws.onopen = () => {
-        console.log('WebSocket connected')
         const isReconnection = this.hasConnectedBefore
         this.isConnected = true
         this.hasConnectedBefore = true
@@ -98,7 +97,6 @@ class WebSocketService {
 
         // Force refresh data after reconnection to sync any missed updates
         if (isReconnection) {
-          console.log('WebSocket reconnected - refreshing data')
           this.refreshStaleData()
         }
       }
@@ -107,18 +105,16 @@ class WebSocketService {
         this.handleMessage(event.data)
       }
 
-      this.ws.onclose = (event) => {
-        console.log('WebSocket closed:', event.code, event.reason)
+      this.ws.onclose = () => {
         this.isConnected = false
         this.stopPing()
         this.handleReconnect(token)
       }
 
-      this.ws.onerror = (error) => {
-        console.error('WebSocket error:', error)
+      this.ws.onerror = () => {
+        // Error handled by onclose
       }
-    } catch (error) {
-      console.error('Failed to create WebSocket:', error)
+    } catch {
       this.handleReconnect(token)
     }
   }
@@ -136,8 +132,6 @@ class WebSocketService {
   private handleMessage(data: string) {
     try {
       const message: WSMessage = JSON.parse(data)
-      console.log('WebSocket message received:', message.type)
-
       const store = useContactsStore()
 
       switch (message.type) {
@@ -168,11 +162,15 @@ class WebSocketService {
         case WS_TYPE_CAMPAIGN_STATS_UPDATE:
           this.handleCampaignStatsUpdate(message.payload)
           break
+        case WS_TYPE_PERMISSIONS_UPDATED:
+          this.handlePermissionsUpdated()
+          break
         default:
-          console.log('Unknown message type:', message.type)
+          // Unknown message type, ignore
+          break
       }
-    } catch (error) {
-      console.error('Failed to parse WebSocket message:', error)
+    } catch {
+      // Failed to parse message, ignore
     }
   }
 
@@ -180,14 +178,6 @@ class WebSocketService {
     // Check if this message is for the current contact
     const currentContact = store.currentContact
     const isViewingThisContact = currentContact && payload.contact_id === currentContact.id
-
-    console.log('WebSocket: handleNewMessage', {
-      payload_contact_id: payload.contact_id,
-      current_contact_id: currentContact?.id,
-      isViewingThisContact,
-      direction: payload.direction,
-      assigned_user_id: payload.assigned_user_id
-    })
 
     if (isViewingThisContact) {
       // Add message to the store
@@ -228,13 +218,6 @@ class WebSocketService {
 
       // Check if new message alerts are enabled (default to true if not set)
       const alertsEnabled = settings.new_message_alerts !== false
-
-      console.log('WebSocket: notification check', {
-        currentUserId,
-        assigned_user_id: payload.assigned_user_id,
-        isAssignedToUser,
-        alertsEnabled
-      })
 
       if (isAssignedToUser && alertsEnabled) {
         const senderName = payload.profile_name || 'Unknown'
@@ -387,6 +370,25 @@ class WebSocketService {
     this.campaignStatsCallbacks.forEach(callback => callback(payload))
   }
 
+  private async handlePermissionsUpdated() {
+    const authStore = useAuthStore()
+
+    // Refresh user data from server
+    const success = await authStore.refreshUserData()
+
+    if (success) {
+      toast.info('Permissions Updated', {
+        description: 'Your permissions have been updated. The page will refresh.',
+        duration: 3000
+      })
+
+      // Reload the page after a short delay to apply new permissions
+      setTimeout(() => {
+        window.location.reload()
+      }, 1500)
+    }
+  }
+
   onCampaignStatsUpdate(callback: (payload: any) => void) {
     this.campaignStatsCallbacks.push(callback)
     // Return unsubscribe function
@@ -400,13 +402,11 @@ class WebSocketService {
 
   private handleReconnect(token: string) {
     if (this.reconnectAttempts >= this.maxReconnectAttempts) {
-      console.log('Max reconnect attempts reached')
       return
     }
 
     this.reconnectAttempts++
     const delay = this.reconnectDelay * Math.pow(2, this.reconnectAttempts - 1)
-    console.log(`Reconnecting in ${delay}ms (attempt ${this.reconnectAttempts})`)
 
     setTimeout(() => {
       this.connect(token)

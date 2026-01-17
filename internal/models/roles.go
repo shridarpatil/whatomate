@@ -24,7 +24,7 @@ type CustomRole struct {
 	Description    string       `gorm:"size:500" json:"description"`
 	IsSystem       bool         `gorm:"default:false" json:"is_system"` // true for default admin/manager/agent
 	IsDefault      bool         `gorm:"default:false" json:"is_default"` // default role for new users in org
-	Permissions    []Permission `gorm:"many2many:role_permissions;" json:"permissions,omitempty"`
+	Permissions    []Permission `gorm:"many2many:role_permissions;" json:"permissions"`
 
 	// Relations
 	Organization *Organization `gorm:"foreignKey:OrganizationID" json:"organization,omitempty"`

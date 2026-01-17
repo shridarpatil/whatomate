@@ -612,6 +612,11 @@ func (a *App) DeleteKeywordRule(r *fastglue.Request) error {
 
 // ListChatbotFlows lists all chatbot flows
 func (a *App) ListChatbotFlows(r *fastglue.Request) error {
+	userID, _ := r.RequestCtx.UserValue("user_id").(uuid.UUID)
+	if !a.HasPermission(userID, models.ResourceFlowsChatbot, models.ActionRead) {
+		return r.SendErrorEnvelope(fasthttp.StatusForbidden, "Permission denied", nil, "")
+	}
+
 	orgID, err := a.getOrgIDFromContext(r)
 	if err != nil {
 		return r.SendErrorEnvelope(fasthttp.StatusUnauthorized, "Unauthorized", nil, "")
@@ -666,6 +671,11 @@ type FlowStepRequest struct {
 
 // CreateChatbotFlow creates a new chatbot flow
 func (a *App) CreateChatbotFlow(r *fastglue.Request) error {
+	userID, _ := r.RequestCtx.UserValue("user_id").(uuid.UUID)
+	if !a.HasPermission(userID, models.ResourceFlowsChatbot, models.ActionWrite) {
+		return r.SendErrorEnvelope(fasthttp.StatusForbidden, "Permission denied", nil, "")
+	}
+
 	orgID, err := a.getOrgIDFromContext(r)
 	if err != nil {
 		return r.SendErrorEnvelope(fasthttp.StatusUnauthorized, "Unauthorized", nil, "")
@@ -769,6 +779,11 @@ func (a *App) CreateChatbotFlow(r *fastglue.Request) error {
 
 // GetChatbotFlow gets a single chatbot flow with steps
 func (a *App) GetChatbotFlow(r *fastglue.Request) error {
+	userID, _ := r.RequestCtx.UserValue("user_id").(uuid.UUID)
+	if !a.HasPermission(userID, models.ResourceFlowsChatbot, models.ActionRead) {
+		return r.SendErrorEnvelope(fasthttp.StatusForbidden, "Permission denied", nil, "")
+	}
+
 	orgID, err := a.getOrgIDFromContext(r)
 	if err != nil {
 		return r.SendErrorEnvelope(fasthttp.StatusUnauthorized, "Unauthorized", nil, "")
@@ -794,6 +809,11 @@ func (a *App) GetChatbotFlow(r *fastglue.Request) error {
 
 // UpdateChatbotFlow updates a chatbot flow
 func (a *App) UpdateChatbotFlow(r *fastglue.Request) error {
+	userID, _ := r.RequestCtx.UserValue("user_id").(uuid.UUID)
+	if !a.HasPermission(userID, models.ResourceFlowsChatbot, models.ActionWrite) {
+		return r.SendErrorEnvelope(fasthttp.StatusForbidden, "Permission denied", nil, "")
+	}
+
 	orgID, err := a.getOrgIDFromContext(r)
 	if err != nil {
 		return r.SendErrorEnvelope(fasthttp.StatusUnauthorized, "Unauthorized", nil, "")
@@ -924,6 +944,11 @@ func (a *App) UpdateChatbotFlow(r *fastglue.Request) error {
 
 // DeleteChatbotFlow deletes a chatbot flow
 func (a *App) DeleteChatbotFlow(r *fastglue.Request) error {
+	userID, _ := r.RequestCtx.UserValue("user_id").(uuid.UUID)
+	if !a.HasPermission(userID, models.ResourceFlowsChatbot, models.ActionDelete) {
+		return r.SendErrorEnvelope(fasthttp.StatusForbidden, "Permission denied", nil, "")
+	}
+
 	orgID, err := a.getOrgIDFromContext(r)
 	if err != nil {
 		return r.SendErrorEnvelope(fasthttp.StatusUnauthorized, "Unauthorized", nil, "")

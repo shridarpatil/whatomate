@@ -126,26 +126,14 @@ watch(activeTab, async (newTab) => {
 })
 
 onMounted(async () => {
-  console.log('AgentTransfersView mounted, user role:', userRole.value, 'isAdminOrManager:', isAdminOrManager.value)
   await Promise.all([fetchTransfers(), fetchTeams()])
   // Always try to fetch agents for admin/manager - the API will reject if unauthorized
   if (isAdminOrManager.value) {
     await fetchAgents()
-  } else {
-    console.log('Not admin or manager, skipping fetchAgents')
   }
   // No polling - WebSocket handles real-time updates
   // Reconnection refresh handles sync after disconnect
 })
-
-// Watch for changes in the store's transfers array
-watch(
-  () => transfersStore.transfers,
-  (newTransfers) => {
-    console.log('Transfers updated:', newTransfers.length, 'Queue:', queueTransfers.value.length)
-  },
-  { deep: true }
-)
 
 async function fetchTransfers() {
   isLoading.value = true
@@ -159,18 +147,13 @@ async function fetchTransfers() {
 async function fetchAgents() {
   try {
     const response = await usersService.list()
-    console.log('Users API response:', response.data)
     const data = response.data.data || response.data
-    console.log('Parsed data:', data)
     const usersList = data.users || data || []
-    console.log('Users list:', usersList)
     agents.value = usersList.filter((u: any) => u.is_active !== false).map((u: any) => ({
       id: u.id,
       full_name: u.full_name
     }))
-    console.log('Agents after mapping:', agents.value)
-  } catch (error: any) {
-    console.error('Failed to fetch agents:', error)
+  } catch {
     toast.error('Failed to load agents list')
   }
 }
@@ -180,8 +163,7 @@ async function fetchTeams() {
     const response = await teamsService.list()
     const data = response.data.data || response.data
     teams.value = (data.teams || []).filter((t: Team) => t.is_active)
-  } catch (error) {
-    console.error('Failed to load teams:', error)
+  } catch {
     teams.value = []
   }
 }

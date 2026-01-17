@@ -58,7 +58,7 @@ func (a *App) ListRoles(r *fastglue.Request) error {
 	response := make([]RoleResponse, len(roles))
 	for i, role := range roles {
 		var userCount int64
-		a.DB.Model(&models.User{}).Where("custom_role_id = ?", role.ID).Count(&userCount)
+		a.DB.Model(&models.User{}).Where("role_id = ?", role.ID).Count(&userCount)
 		response[i] = roleToResponse(role, userCount)
 	}
 
@@ -88,7 +88,7 @@ func (a *App) GetRole(r *fastglue.Request) error {
 	}
 
 	var userCount int64
-	a.DB.Model(&models.User{}).Where("custom_role_id = ?", role.ID).Count(&userCount)
+	a.DB.Model(&models.User{}).Where("role_id = ?", role.ID).Count(&userCount)
 
 	return r.SendEnvelope(roleToResponse(role, userCount))
 }
@@ -185,7 +185,7 @@ func (a *App) UpdateRole(r *fastglue.Request) error {
 		}
 
 		var userCount int64
-		a.DB.Model(&models.User{}).Where("custom_role_id = ?", role.ID).Count(&userCount)
+		a.DB.Model(&models.User{}).Where("role_id = ?", role.ID).Count(&userCount)
 		return r.SendEnvelope(roleToResponse(role, userCount))
 	}
 
@@ -237,7 +237,7 @@ func (a *App) UpdateRole(r *fastglue.Request) error {
 	a.InvalidateRolePermissionsCache(role.ID)
 
 	var userCount int64
-	a.DB.Model(&models.User{}).Where("custom_role_id = ?", role.ID).Count(&userCount)
+	a.DB.Model(&models.User{}).Where("role_id = ?", role.ID).Count(&userCount)
 	return r.SendEnvelope(roleToResponse(role, userCount))
 }
 

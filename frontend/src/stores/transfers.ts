@@ -218,9 +218,6 @@ export const useTransfersStore = defineStore('transfers', () => {
           generalQueueCount.value++
         }
       }
-      console.log('Transfer added to store:', transfer.id, 'Total:', transfers.value.length, 'Queue count:', queueCount.value)
-    } else {
-      console.log('Transfer already exists:', transfer.id)
     }
   }
 

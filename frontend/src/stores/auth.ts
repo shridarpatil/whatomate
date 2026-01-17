@@ -8,11 +8,19 @@ export interface UserSettings {
   campaign_updates?: boolean
 }
 
+export interface Permission {
+  id: string
+  resource: string
+  action: string
+  description?: string
+}
+
 export interface UserRole {
   id: string
   name: string
   description?: string
   is_system: boolean
+  permissions?: Permission[]
 }
 
 export interface User {
@@ -77,6 +85,8 @@ export const useAuthStore = defineStore('auth', () => {
         token.value = storedToken
         refreshToken.value = storedRefreshToken
         user.value = JSON.parse(storedUser)
+        // Fetch fresh user data in background to get updated permissions
+        refreshUserData()
         return true
       } catch {
         clearAuth()
@@ -84,6 +94,22 @@ export const useAuthStore = defineStore('auth', () => {
       }
     }
     return false
+  }
+
+  // Fetch fresh user data from API (including updated permissions)
+  async function refreshUserData(): Promise<boolean> {
+    if (!token.value) return false
+
+    try {
+      const response = await api.get('/me')
+      const freshUser = response.data.data
+      user.value = freshUser
+      localStorage.setItem('user', JSON.stringify(freshUser))
+      return true
+    } catch {
+      // If unauthorized, clear auth
+      return false
+    }
   }
 
   async function login(email: string, password: string): Promise<void> {
@@ -153,6 +179,36 @@ export const useAuthStore = defineStore('auth', () => {
     }
   }
 
+  // Check if user has a specific permission
+  function hasPermission(resource: string, action: string = 'read'): boolean {
+    // Super admins have all permissions
+    if (user.value?.is_super_admin) {
+      return true
+    }
+
+    const permissions = user.value?.role?.permissions
+    if (!permissions || permissions.length === 0) {
+      return false
+    }
+
+    return permissions.some(p => p.resource === resource && p.action === action)
+  }
+
+  // Check if user has any permission for a resource
+  function hasAnyPermission(resource: string): boolean {
+    // Super admins have all permissions
+    if (user.value?.is_super_admin) {
+      return true
+    }
+
+    const permissions = user.value?.role?.permissions
+    if (!permissions || permissions.length === 0) {
+      return false
+    }
+
+    return permissions.some(p => p.resource === resource)
+  }
+
   return {
     user,
     token,
@@ -167,10 +223,13 @@ export const useAuthStore = defineStore('auth', () => {
     clearAuth,
     restoreSession,
     restoreBreakTime,
+    refreshUserData,
     login,
     register,
     logout,
     refreshAccessToken,
-    setAvailability
+    setAvailability,
+    hasPermission,
+    hasAnyPermission
   }
 })

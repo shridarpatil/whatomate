@@ -1,11 +1,11 @@
 import { createRouter, createWebHistory } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
 
-// Role-based route meta type
+// Permission-based route meta type
 declare module 'vue-router' {
   interface RouteMeta {
     requiresAuth?: boolean
-    roles?: ('admin' | 'manager' | 'agent')[]
+    permission?: string // Resource permission required (e.g., 'analytics', 'chat')
   }
 }
 
@@ -43,20 +43,20 @@ const router = createRouter({
           path: '',
           name: 'dashboard',
           component: () => import('@/views/dashboard/DashboardView.vue'),
-          meta: { roles: ['admin', 'manager'] }
+          meta: { permission: 'analytics' }
         },
         {
           path: 'chat',
           name: 'chat',
-          component: () => import('@/views/chat/ChatView.vue')
-          // All roles can access chat
+          component: () => import('@/views/chat/ChatView.vue'),
+          meta: { permission: 'chat' }
         },
         {
           path: 'chat/:contactId',
           name: 'chat-conversation',
           component: () => import('@/views/chat/ChatView.vue'),
-          props: true
-          // All roles can access chat
+          props: true,
+          meta: { permission: 'chat' }
         },
         {
           path: 'profile',
@@ -68,25 +68,25 @@ const router = createRouter({
           path: 'templates',
           name: 'templates',
           component: () => import('@/views/settings/TemplatesView.vue'),
-          meta: { roles: ['admin', 'manager'] }
+          meta: { permission: 'templates' }
         },
         {
           path: 'flows',
           name: 'flows',
           component: () => import('@/views/settings/FlowsView.vue'),
-          meta: { roles: ['admin', 'manager'] }
+          meta: { permission: 'flows.whatsapp' }
         },
         {
           path: 'campaigns',
           name: 'campaigns',
           component: () => import('@/views/settings/CampaignsView.vue'),
-          meta: { roles: ['admin', 'manager'] }
+          meta: { permission: 'campaigns' }
         },
         {
           path: 'chatbot',
           name: 'chatbot',
           component: () => import('@/views/chatbot/ChatbotView.vue'),
-          meta: { roles: ['admin', 'manager'] }
+          meta: { permission: 'settings.chatbot' }
         },
         {
           path: 'chatbot/settings',
@@ -96,109 +96,109 @@ const router = createRouter({
           path: 'chatbot/keywords',
           name: 'chatbot-keywords',
           component: () => import('@/views/chatbot/KeywordsView.vue'),
-          meta: { roles: ['admin', 'manager'] }
+          meta: { permission: 'chatbot.keywords' }
         },
         {
           path: 'chatbot/flows',
           name: 'chatbot-flows',
           component: () => import('@/views/chatbot/ChatbotFlowsView.vue'),
-          meta: { roles: ['admin', 'manager'] }
+          meta: { permission: 'flows.chatbot' }
         },
         {
           path: 'chatbot/flows/new',
           name: 'chatbot-flow-new',
           component: () => import('@/views/chatbot/ChatbotFlowBuilderView.vue'),
-          meta: { roles: ['admin', 'manager'] }
+          meta: { permission: 'flows.chatbot' }
         },
         {
           path: 'chatbot/flows/:id/edit',
           name: 'chatbot-flow-edit',
           component: () => import('@/views/chatbot/ChatbotFlowBuilderView.vue'),
-          meta: { roles: ['admin', 'manager'] }
+          meta: { permission: 'flows.chatbot' }
         },
         {
           path: 'chatbot/ai',
           name: 'chatbot-ai',
           component: () => import('@/views/chatbot/AIContextsView.vue'),
-          meta: { roles: ['admin', 'manager'] }
+          meta: { permission: 'chatbot.ai' }
         },
         {
           path: 'chatbot/transfers',
           name: 'chatbot-transfers',
-          component: () => import('@/views/chatbot/AgentTransfersView.vue')
-          // All roles can access transfers
+          component: () => import('@/views/chatbot/AgentTransfersView.vue'),
+          meta: { permission: 'transfers' }
         },
         {
           path: 'analytics/agents',
           name: 'agent-analytics',
-          component: () => import('@/views/analytics/AgentAnalyticsView.vue')
-          // All roles can access (agents see only their own stats)
+          component: () => import('@/views/analytics/AgentAnalyticsView.vue'),
+          meta: { permission: 'analytics.agents' }
         },
         {
           path: 'settings',
           name: 'settings',
           component: () => import('@/views/settings/SettingsView.vue'),
-          meta: { roles: ['admin', 'manager'] }
+          meta: { permission: 'settings.general' }
         },
         {
           path: 'settings/chatbot',
           name: 'chatbot-settings',
           component: () => import('@/views/settings/ChatbotSettingsView.vue'),
-          meta: { roles: ['admin', 'manager'] }
+          meta: { permission: 'settings.chatbot' }
         },
         {
           path: 'settings/accounts',
           name: 'accounts',
           component: () => import('@/views/settings/AccountsView.vue'),
-          meta: { roles: ['admin', 'manager'] }
+          meta: { permission: 'accounts' }
         },
         {
           path: 'settings/canned-responses',
           name: 'canned-responses',
           component: () => import('@/views/settings/CannedResponsesView.vue'),
-          meta: { roles: ['admin', 'manager'] }
+          meta: { permission: 'canned_responses' }
         },
         {
           path: 'settings/users',
           name: 'users',
           component: () => import('@/views/settings/UsersView.vue'),
-          meta: { roles: ['admin'] }
+          meta: { permission: 'users' }
         },
         {
           path: 'settings/roles',
           name: 'roles',
           component: () => import('@/views/settings/RolesView.vue'),
-          meta: { roles: ['admin'] }
+          meta: { permission: 'roles' }
         },
         {
           path: 'settings/teams',
           name: 'teams',
           component: () => import('@/views/settings/TeamsView.vue'),
-          meta: { roles: ['admin', 'manager'] }
+          meta: { permission: 'teams' }
         },
         {
           path: 'settings/api-keys',
           name: 'api-keys',
           component: () => import('@/views/settings/APIKeysView.vue'),
-          meta: { roles: ['admin'] }
+          meta: { permission: 'api_keys' }
         },
         {
           path: 'settings/webhooks',
           name: 'webhooks',
           component: () => import('@/views/settings/WebhooksView.vue'),
-          meta: { roles: ['admin'] }
+          meta: { permission: 'webhooks' }
         },
         {
           path: 'settings/sso',
           name: 'sso-settings',
           component: () => import('@/views/settings/SSOSettingsView.vue'),
-          meta: { roles: ['admin'] }
+          meta: { permission: 'settings.sso' }
         },
         {
           path: 'settings/custom-actions',
           name: 'custom-actions',
           component: () => import('@/views/settings/CustomActionsView.vue'),
-          meta: { roles: ['admin'] }
+          meta: { permission: 'custom_actions' }
         }
       ]
     },
@@ -209,6 +209,57 @@ const router = createRouter({
     }
   ]
 })
+
+// Navigation items with permissions in priority order (matches AppLayout.vue)
+// Used to find the first accessible route for a user
+const navigationOrder = [
+  { path: '/', permission: 'analytics' },
+  { path: '/chat', permission: 'chat' },
+  { path: '/chatbot', permission: 'settings.chatbot', childPaths: [
+    { path: '/chatbot', permission: 'settings.chatbot' },
+    { path: '/chatbot/keywords', permission: 'chatbot.keywords' },
+    { path: '/chatbot/flows', permission: 'flows.chatbot' },
+    { path: '/chatbot/ai', permission: 'chatbot.ai' }
+  ]},
+  { path: '/chatbot/transfers', permission: 'transfers' },
+  { path: '/analytics/agents', permission: 'analytics.agents' },
+  { path: '/templates', permission: 'templates' },
+  { path: '/flows', permission: 'flows.whatsapp' },
+  { path: '/campaigns', permission: 'campaigns' },
+  { path: '/settings', permission: 'settings.general', childPaths: [
+    { path: '/settings', permission: 'settings.general' },
+    { path: '/settings/chatbot', permission: 'settings.chatbot' },
+    { path: '/settings/accounts', permission: 'accounts' },
+    { path: '/settings/canned-responses', permission: 'canned_responses' },
+    { path: '/settings/teams', permission: 'teams' },
+    { path: '/settings/users', permission: 'users' },
+    { path: '/settings/roles', permission: 'roles' },
+    { path: '/settings/api-keys', permission: 'api_keys' },
+    { path: '/settings/webhooks', permission: 'webhooks' },
+    { path: '/settings/custom-actions', permission: 'custom_actions' },
+    { path: '/settings/sso', permission: 'settings.sso' }
+  ]}
+]
+
+// Find the first accessible route for the user
+function getFirstAccessibleRoute(authStore: ReturnType<typeof useAuthStore>): string {
+  for (const item of navigationOrder) {
+    // Check if user has permission for this item
+    if (authStore.hasPermission(item.permission, 'read')) {
+      return item.path
+    }
+    // Check child paths if available
+    if (item.childPaths) {
+      for (const child of item.childPaths) {
+        if (authStore.hasPermission(child.permission, 'read')) {
+          return child.path
+        }
+      }
+    }
+  }
+  // Fallback to profile (always accessible)
+  return '/profile'
+}
 
 // Navigation guard
 router.beforeEach(async (to, from, next) => {
@@ -224,28 +275,18 @@ router.beforeEach(async (to, from, next) => {
       }
     }
 
-    // Check role-based access
-    const requiredRoles = to.meta.roles
-    if (requiredRoles && requiredRoles.length > 0) {
-      const userRole = authStore.userRole as 'admin' | 'manager' | 'agent'
-      if (!requiredRoles.includes(userRole)) {
-        // Redirect based on role
-        if (userRole === 'agent') {
-          return next({ name: 'agent-analytics' })
-        } else {
-          return next({ name: 'dashboard' })
-        }
+    // Check permission-based access
+    const requiredPermission = to.meta.permission
+    if (requiredPermission) {
+      if (!authStore.hasPermission(requiredPermission, 'read')) {
+        // Redirect to first accessible page
+        return next({ path: getFirstAccessibleRoute(authStore) })
       }
     }
   } else {
     // Redirect to appropriate page if already logged in
     if (authStore.isAuthenticated && (to.name === 'login' || to.name === 'register')) {
-      const userRole = authStore.userRole
-      if (userRole === 'agent') {
-        return next({ name: 'agent-analytics' })
-      } else {
-        return next({ name: 'dashboard' })
-      }
+      return next({ path: getFirstAccessibleRoute(authStore) })
     }
   }
 

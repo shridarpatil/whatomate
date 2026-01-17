@@ -8,6 +8,7 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/shridarpatil/whatomate/internal/models"
+	"github.com/shridarpatil/whatomate/internal/websocket"
 	"gorm.io/gorm"
 )
 
@@ -546,6 +547,9 @@ func (a *App) InvalidateUserPermissionsCache(userID uuid.UUID) {
 	ctx := context.Background()
 	cacheKey := fmt.Sprintf("%s%s", userPermissionsCachePrefix, userID.String())
 	a.Redis.Del(ctx, cacheKey)
+
+	// Notify user via WebSocket to refresh their permissions
+	a.notifyUserPermissionsChanged(userID)
 }
 
 // InvalidateRolePermissionsCache invalidates the permissions cache for a role and all users with that role
@@ -558,7 +562,7 @@ func (a *App) InvalidateRolePermissionsCache(roleID uuid.UUID) {
 
 	// Find all users with this role and invalidate their cache
 	var users []models.User
-	if err := a.DB.Select("id").Where("role_id = ?", roleID).Find(&users).Error; err != nil {
+	if err := a.DB.Select("id, organization_id").Where("role_id = ?", roleID).Find(&users).Error; err != nil {
 		a.Log.Error("Failed to find users for role permission cache invalidation", "error", err, "role_id", roleID)
 		return
 	}
@@ -566,6 +570,9 @@ func (a *App) InvalidateRolePermissionsCache(roleID uuid.UUID) {
 	for _, user := range users {
 		userCacheKey := fmt.Sprintf("%s%s", userPermissionsCachePrefix, user.ID.String())
 		a.Redis.Del(ctx, userCacheKey)
+
+		// Notify user via WebSocket to refresh their permissions
+		a.notifyUserPermissionsChanged(user.ID)
 	}
 }
 
@@ -581,4 +588,23 @@ func (a *App) InvalidateOrgPermissionsCache(orgID uuid.UUID) {
 	for _, role := range roles {
 		a.InvalidateRolePermissionsCache(role.ID)
 	}
+}
+
+// notifyUserPermissionsChanged sends a WebSocket message to a user to refresh their permissions
+func (a *App) notifyUserPermissionsChanged(userID uuid.UUID) {
+	if a.WSHub == nil {
+		return
+	}
+
+	// Get user's organization ID for the broadcast
+	var user models.User
+	if err := a.DB.Select("organization_id").Where("id = ?", userID).First(&user).Error; err != nil {
+		a.Log.Error("Failed to find user for permissions notification", "error", err, "user_id", userID)
+		return
+	}
+
+	a.WSHub.BroadcastToUser(user.OrganizationID, userID, websocket.WSMessage{
+		Type:    websocket.TypePermissionsUpdated,
+		Payload: map[string]string{"message": "Your permissions have been updated"},
+	})
 }

@@ -129,6 +129,24 @@ func (h *Hub) broadcastMessage(msg BroadcastMessage) {
 		return
 	}
 
+	// If UserID is specified, only send to that user's clients
+	if msg.UserID != uuid.Nil {
+		userClients, ok := orgClients[msg.UserID]
+		if !ok {
+			return
+		}
+		for client := range userClients {
+			select {
+			case client.send <- data:
+			default:
+				h.log.Warn("Client send buffer full, skipping",
+					"user_id", client.userID,
+					"org_id", client.organizationID)
+			}
+		}
+		return
+	}
+
 	// Iterate through all users in the organization
 	for _, userClients := range orgClients {
 		// Iterate through all clients (tabs) for each user
@@ -174,6 +192,22 @@ func (h *Hub) BroadcastToContact(orgID, contactID uuid.UUID, msg WSMessage) {
 		ContactID: contactID,
 		Message:   msg,
 	})
+}
+
+// BroadcastToUser sends a message to a specific user
+func (h *Hub) BroadcastToUser(orgID, userID uuid.UUID, msg WSMessage) {
+	h.Broadcast(BroadcastMessage{
+		OrgID:   orgID,
+		UserID:  userID,
+		Message: msg,
+	})
+}
+
+// BroadcastToUsers sends a message to multiple users
+func (h *Hub) BroadcastToUsers(orgID uuid.UUID, userIDs []uuid.UUID, msg WSMessage) {
+	for _, userID := range userIDs {
+		h.BroadcastToUser(orgID, userID, msg)
+	}
 }
 
 // countClients returns the total number of connected clients

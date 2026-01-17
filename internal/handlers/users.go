@@ -36,12 +36,21 @@ type UserResponse struct {
 	UpdatedAt      string       `json:"updated_at"`
 }
 
+// PermissionInfo represents permission info in role response
+type PermissionInfo struct {
+	ID          uuid.UUID `json:"id"`
+	Resource    string    `json:"resource"`
+	Action      string    `json:"action"`
+	Description string    `json:"description,omitempty"`
+}
+
 // RoleInfo represents role info in user response
 type RoleInfo struct {
-	ID          uuid.UUID `json:"id"`
-	Name        string    `json:"name"`
-	Description string    `json:"description"`
-	IsSystem    bool      `json:"is_system"`
+	ID          uuid.UUID        `json:"id"`
+	Name        string           `json:"name"`
+	Description string           `json:"description"`
+	IsSystem    bool             `json:"is_system"`
+	Permissions []PermissionInfo `json:"permissions"`
 }
 
 // UserSettingsRequest represents notification/settings preferences
@@ -222,6 +231,7 @@ func (a *App) UpdateUser(r *fastglue.Request) error {
 
 	var req UserRequest
 	if err := r.Decode(&req, "json"); err != nil {
+		a.Log.Error("UpdateUser: Failed to decode request", "error", err, "body", string(r.RequestCtx.PostBody()))
 		return r.SendErrorEnvelope(fasthttp.StatusBadRequest, "Invalid request body", nil, "")
 	}
 
@@ -266,6 +276,7 @@ func (a *App) UpdateUser(r *fastglue.Request) error {
 			roleChanged = true
 		}
 		user.RoleID = req.RoleID
+		user.Role = nil // Clear the preloaded role to prevent GORM from using the old association
 	}
 
 	if req.IsActive != nil {
@@ -371,7 +382,36 @@ func (a *App) GetCurrentUser(r *fastglue.Request) error {
 		return r.SendErrorEnvelope(fasthttp.StatusNotFound, "User not found", nil, "")
 	}
 
+	// Load permissions from cache
+	if user.Role != nil && user.RoleID != nil {
+		cachedPerms, err := a.GetRolePermissionsCached(*user.RoleID)
+		if err == nil {
+			// Convert cached permission strings back to Permission objects
+			permissions := make([]models.Permission, 0, len(cachedPerms))
+			for _, p := range cachedPerms {
+				parts := splitPermission(p)
+				if len(parts) == 2 {
+					permissions = append(permissions, models.Permission{
+						Resource: parts[0],
+						Action:   parts[1],
+					})
+				}
+			}
+			user.Role.Permissions = permissions
+		}
+	}
+
 	return r.SendEnvelope(userToResponse(user))
+}
+
+// splitPermission splits a "resource:action" string
+func splitPermission(p string) []string {
+	for i := len(p) - 1; i >= 0; i-- {
+		if p[i] == ':' {
+			return []string{p[:i], p[i+1:]}
+		}
+	}
+	return nil
 }
 
 // UpdateCurrentUserSettings updates the current user's notification/preferences settings
@@ -478,12 +518,25 @@ func userToResponse(user models.User) UserResponse {
 
 	// Include role info if loaded
 	if user.Role != nil {
-		resp.Role = &RoleInfo{
+		roleInfo := &RoleInfo{
 			ID:          user.Role.ID,
 			Name:        user.Role.Name,
 			Description: user.Role.Description,
 			IsSystem:    user.Role.IsSystem,
+			Permissions: []PermissionInfo{},
 		}
+
+		// Include permissions if loaded
+		for _, p := range user.Role.Permissions {
+			roleInfo.Permissions = append(roleInfo.Permissions, PermissionInfo{
+				ID:          p.ID,
+				Resource:    p.Resource,
+				Action:      p.Action,
+				Description: p.Description,
+			})
+		}
+
+		resp.Role = roleInfo
 	}
 
 	return resp
