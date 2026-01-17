@@ -81,6 +81,8 @@ func runMigrations(db *gorm.DB) error {
 	return db.AutoMigrate(
 		// Core models
 		&models.Organization{},
+		&models.Permission{},
+		&models.CustomRole{},
 		&models.User{},
 		&models.Team{},
 		&models.TeamMember{},
@@ -134,6 +136,10 @@ func cleanupTables(db *gorm.DB) {
 		"templates",
 		"whatsapp_flows",
 		"whatsapp_accounts",
+		// Roles and permissions
+		"role_permissions",
+		"custom_roles",
+		"permissions",
 		// Core tables
 		"team_members",
 		"teams",
@@ -170,6 +176,9 @@ func TruncateTables(db *gorm.DB) {
 		"templates",
 		"whatsapp_flows",
 		"whatsapp_accounts",
+		"role_permissions",
+		"custom_roles",
+		"permissions",
 		"team_members",
 		"teams",
 		"api_keys",

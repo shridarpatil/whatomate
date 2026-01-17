@@ -10,10 +10,10 @@
     "preview": "vite preview",
     "lint": "eslint . --ext .vue,.js,.jsx,.cjs,.mjs,.ts,.tsx,.cts,.mts --fix --ignore-path .gitignore",
     "format": "prettier --write src/",
-    "test:e2e": "BASE_URL=http://localhost:8080 playwright test",
-    "test:e2e:ui": "BASE_URL=http://localhost:8080 playwright test --ui",
-    "test:e2e:debug": "BASE_URL=http://localhost:8080 playwright test --debug",
-    "test:e2e:report": "playwright show-report"
+    "test": "BASE_URL=http://localhost:8080 playwright test",
+    "test:ui": "BASE_URL=http://localhost:8080 playwright test --ui",
+    "test:debug": "BASE_URL=http://localhost:8080 playwright test --debug",
+    "test:report": "playwright show-report"
   },
   "dependencies": {
     "@radix-icons/vue": "^1.0.0",
@@ -49,15 +49,18 @@
     "@vitejs/plugin-vue": "^5.0.0",
     "@vue/eslint-config-prettier": "^9.0.0",
     "@vue/eslint-config-typescript": "^12.0.0",
+    "@vue/test-utils": "^2.4.6",
     "@vue/tsconfig": "^0.5.0",
     "autoprefixer": "^10.4.16",
     "eslint": "^8.56.0",
     "eslint-plugin-vue": "^9.19.0",
+    "happy-dom": "^20.3.1",
     "postcss": "^8.4.32",
     "prettier": "^3.1.0",
     "tailwindcss": "^3.4.0",
     "typescript": "~5.3.0",
     "vite": "^5.0.0",
+    "vitest": "^4.0.17",
     "vue-tsc": "^1.8.0"
   }
 }
