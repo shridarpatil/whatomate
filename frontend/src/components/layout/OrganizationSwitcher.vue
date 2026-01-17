@@ -109,6 +109,9 @@ const refreshOrgs = async () => {
       <div v-else-if="organizationsStore.loading" class="text-[12px] text-muted-foreground px-1">
         Loading...
       </div>
+      <div v-else-if="organizationsStore.error" class="text-[12px] text-destructive px-1">
+        {{ organizationsStore.error }}
+      </div>
       <div v-else class="text-[12px] text-muted-foreground px-1">
         No organizations found
       </div>

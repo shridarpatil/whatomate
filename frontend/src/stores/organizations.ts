@@ -28,13 +28,12 @@ export const useOrganizationsStore = defineStore('organizations', () => {
     error.value = null
     try {
       const response = await organizationsService.list()
-      organizations.value = response.data.data.organizations || []
+      console.log('Organizations API response:', response.data)
+      organizations.value = response.data.data?.organizations || []
     } catch (err: any) {
+      console.error('Organizations API error:', err.response?.status, err.response?.data)
       error.value = err.response?.data?.message || 'Failed to fetch organizations'
-      // Not a super admin - this is expected
-      if (err.response?.status === 403) {
-        organizations.value = []
-      }
+      organizations.value = []
     } finally {
       loading.value = false
     }
