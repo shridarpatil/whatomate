@@ -63,7 +63,7 @@ const refreshOrgs = async () => {
 </script>
 
 <template>
-  <div v-if="isSuperAdmin() && organizationsStore.organizations.length > 0" class="px-2 py-2 border-b">
+  <div v-if="isSuperAdmin()" class="px-2 py-2 border-b">
     <div v-if="!collapsed" class="space-y-1">
       <div class="flex items-center justify-between">
         <span class="text-[11px] font-medium text-muted-foreground uppercase tracking-wide px-1">
@@ -80,6 +80,7 @@ const refreshOrgs = async () => {
         </Button>
       </div>
       <Select
+        v-if="organizationsStore.organizations.length > 0"
         :model-value="organizationsStore.selectedOrgId || 'all'"
         @update:model-value="handleOrgChange"
       >
@@ -105,6 +106,12 @@ const refreshOrgs = async () => {
           </SelectItem>
         </SelectContent>
       </Select>
+      <div v-else-if="organizationsStore.loading" class="text-[12px] text-muted-foreground px-1">
+        Loading...
+      </div>
+      <div v-else class="text-[12px] text-muted-foreground px-1">
+        No organizations found
+      </div>
     </div>
 
     <!-- Collapsed view - just show icon with selected org initial -->
