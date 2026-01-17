@@ -2,13 +2,6 @@ import { request } from '@playwright/test'
 
 const BASE_URL = process.env.BASE_URL || 'http://localhost:8080'
 
-interface RegisterUser {
-  email: string
-  password: string
-  full_name: string
-  organization_name: string
-}
-
 interface CreateUser {
   email: string
   password: string
@@ -23,58 +16,40 @@ async function globalSetup() {
     baseURL: BASE_URL,
   })
 
-  // Step 1: Register the admin user (creates organization + admin role)
-  const adminUser: RegisterUser = {
-    email: 'admin@test.com',
-    password: 'password',
-    full_name: 'Test Admin',
-    organization_name: 'Test Organization',
+  // Step 1: Login as the default superadmin (created by migrations)
+  // This user has IsSuperAdmin=true and can create users in any org
+  const defaultAdmin = {
+    email: 'admin@admin.com',
+    password: 'admin',
   }
 
   let accessToken: string | null = null
 
   try {
-    // Try to register admin
-    const registerResponse = await context.post('/api/auth/register', {
-      data: adminUser,
+    const loginResponse = await context.post('/api/auth/login', {
+      data: defaultAdmin,
     })
 
-    if (registerResponse.ok()) {
-      const data = await registerResponse.json()
+    if (loginResponse.ok()) {
+      const data = await loginResponse.json()
       accessToken = data.data?.access_token
-      console.log(`  ✅ Created admin user: ${adminUser.email}`)
+      console.log(`  ✅ Logged in as superadmin: ${defaultAdmin.email}`)
     } else {
-      const body = await registerResponse.text()
-      if (body.includes('already') || registerResponse.status() === 409) {
-        console.log(`  ⏭️  Admin already exists, logging in...`)
-        // Login to get token
-        const loginResponse = await context.post('/api/auth/login', {
-          data: { email: adminUser.email, password: adminUser.password },
-        })
-        if (loginResponse.ok()) {
-          const data = await loginResponse.json()
-          accessToken = data.data?.access_token
-          console.log(`  ✅ Logged in as admin: ${adminUser.email}`)
-        } else {
-          console.log(`  ❌ Failed to login as admin: ${await loginResponse.text()}`)
-        }
-      } else {
-        console.log(`  ⚠️  Could not create admin: ${registerResponse.status()} - ${body}`)
-      }
+      console.log(`  ❌ Failed to login as superadmin: ${await loginResponse.text()}`)
+      console.log(`  ℹ️  Make sure migrations have run (./whatomate server -migrate)`)
     }
   } catch (error) {
-    console.log(`  ❌ Error creating admin:`, error)
+    console.log(`  ❌ Error logging in as superadmin:`, error)
   }
 
   if (!accessToken) {
-    console.log('  ❌ No access token, cannot create other users')
+    console.log('  ❌ No access token, cannot create test users')
     await context.dispose()
     return
   }
 
-  // Step 2: Get the roles to find manager and agent role IDs
-  let managerRoleId: string | null = null
-  let agentRoleId: string | null = null
+  // Step 2: Get the roles to find admin, manager and agent role IDs
+  const roleIds: Record<string, string> = {}
 
   try {
     const rolesResponse = await context.get('/api/roles', {
@@ -85,10 +60,9 @@ async function globalSetup() {
       const data = await rolesResponse.json()
       const roles = data.data?.roles || []
       for (const role of roles) {
-        if (role.name === 'manager') managerRoleId = role.id
-        if (role.name === 'agent') agentRoleId = role.id
+        roleIds[role.name] = role.id
       }
-      console.log(`  ✅ Found roles - manager: ${managerRoleId ? 'yes' : 'no'}, agent: ${agentRoleId ? 'yes' : 'no'}`)
+      console.log(`  ✅ Found roles: ${Object.keys(roleIds).join(', ')}`)
     } else {
       console.log(`  ⚠️  Could not fetch roles: ${rolesResponse.status()}`)
     }
@@ -96,37 +70,37 @@ async function globalSetup() {
     console.log(`  ⚠️  Error fetching roles:`, error)
   }
 
-  // Step 3: Create manager and agent users in the same organization
+  // Step 3: Create test users in the default organization
   const usersToCreate: CreateUser[] = [
+    { email: 'admin@test.com', password: 'password', full_name: 'Test Admin', role_name: 'admin' },
     { email: 'manager@test.com', password: 'password', full_name: 'Test Manager', role_name: 'manager' },
     { email: 'agent@test.com', password: 'password', full_name: 'Test Agent', role_name: 'agent' },
   ]
 
+  // Get existing users to check for duplicates
+  let existingEmails: Set<string> = new Set()
+  try {
+    const listResponse = await context.get('/api/users', {
+      headers: { Authorization: `Bearer ${accessToken}` },
+    })
+    if (listResponse.ok()) {
+      const data = await listResponse.json()
+      const users = data.data?.users || []
+      existingEmails = new Set(users.map((u: { email: string }) => u.email))
+    }
+  } catch (error) {
+    console.log(`  ⚠️  Error fetching existing users:`, error)
+  }
+
   for (const user of usersToCreate) {
+    if (existingEmails.has(user.email)) {
+      console.log(`  ⏭️  User already exists: ${user.email}`)
+      continue
+    }
+
     try {
-      // First check if user already exists
-      const listResponse = await context.get('/api/users', {
-        headers: { Authorization: `Bearer ${accessToken}` },
-      })
+      const roleId = roleIds[user.role_name] || null
 
-      let userExists = false
-      if (listResponse.ok()) {
-        const data = await listResponse.json()
-        const users = data.data?.users || []
-        userExists = users.some((u: { email: string }) => u.email === user.email)
-      }
-
-      if (userExists) {
-        console.log(`  ⏭️  User already exists: ${user.email}`)
-        continue
-      }
-
-      // Get role ID
-      let roleId: string | null = null
-      if (user.role_name === 'manager') roleId = managerRoleId
-      if (user.role_name === 'agent') roleId = agentRoleId
-
-      // Create user via users API
       const createResponse = await context.post('/api/users', {
         headers: { Authorization: `Bearer ${accessToken}` },
         data: {
