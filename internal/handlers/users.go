@@ -68,7 +68,7 @@ func (a *App) ListUsers(r *fastglue.Request) error {
 	}
 
 	var users []models.User
-	if err := a.DB.Where("organization_id = ?", orgID).
+	if err := a.ScopeToOrg(a.DB, userID, orgID).
 		Preload("Role").
 		Order("created_at DESC").
 		Find(&users).Error; err != nil {

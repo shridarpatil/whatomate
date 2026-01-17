@@ -21,6 +21,7 @@ const (
 	ContextKeyOrganizationID = "organization_id"
 	ContextKeyEmail          = "email"
 	ContextKeyRoleID         = "role_id"
+	ContextKeyIsSuperAdmin   = "is_super_admin"
 	ContextKeyUser           = "user"
 	ContextKeyOrganization   = "organization"
 )
@@ -31,6 +32,7 @@ type JWTClaims struct {
 	OrganizationID uuid.UUID  `json:"organization_id"`
 	Email          string     `json:"email"`
 	RoleID         *uuid.UUID `json:"role_id,omitempty"`
+	IsSuperAdmin   bool       `json:"is_super_admin"`
 	jwt.RegisteredClaims
 }
 
@@ -137,6 +139,7 @@ func AuthWithDB(secret string, db *gorm.DB) fastglue.FastMiddleware {
 		if claims.RoleID != nil {
 			r.RequestCtx.SetUserValue(ContextKeyRoleID, *claims.RoleID)
 		}
+		r.RequestCtx.SetUserValue(ContextKeyIsSuperAdmin, claims.IsSuperAdmin)
 
 		return r
 	}
@@ -182,6 +185,7 @@ func validateAPIKey(r *fastglue.Request, key string, db *gorm.DB) bool {
 				if apiKey.User.RoleID != nil {
 					r.RequestCtx.SetUserValue(ContextKeyRoleID, *apiKey.User.RoleID)
 				}
+				r.RequestCtx.SetUserValue(ContextKeyIsSuperAdmin, apiKey.User.IsSuperAdmin)
 				return true
 			}
 		}
@@ -296,4 +300,10 @@ func GetUser(r *fastglue.Request) (*models.User, bool) {
 func GetOrganization(r *fastglue.Request) (*models.Organization, bool) {
 	org, ok := r.RequestCtx.UserValue(ContextKeyOrganization).(*models.Organization)
 	return org, ok
+}
+
+// IsSuperAdmin checks if the current user is a super admin
+func IsSuperAdmin(r *fastglue.Request) bool {
+	isSuperAdmin, ok := r.RequestCtx.UserValue(ContextKeyIsSuperAdmin).(bool)
+	return ok && isSuperAdmin
 }

@@ -56,15 +56,15 @@ func (a *App) ListTeams(r *fastglue.Request) error {
 
 	// Users with teams:read permission can see all teams, others see only their teams
 	if a.HasPermission(userID, models.ResourceTeams, models.ActionRead) {
-		if err := a.DB.Where("organization_id = ?", orgID).
+		if err := a.ScopeToOrg(a.DB, userID, orgID).
 			Preload("Members").Preload("Members.User").
 			Order("name ASC").Find(&teams).Error; err != nil {
 			return r.SendErrorEnvelope(fasthttp.StatusInternalServerError, "Failed to list teams", nil, "")
 		}
 	} else {
 		// Users only see teams they belong to
-		if err := a.DB.Joins("JOIN team_members ON team_members.team_id = teams.id").
-			Where("teams.organization_id = ? AND team_members.user_id = ?", orgID, userID).
+		query := a.ScopeToOrg(a.DB.Joins("JOIN team_members ON team_members.team_id = teams.id"), userID, orgID)
+		if err := query.Where("team_members.user_id = ?", userID).
 			Preload("Members").Preload("Members.User").
 			Order("teams.name ASC").Find(&teams).Error; err != nil {
 			return r.SendErrorEnvelope(fasthttp.StatusInternalServerError, "Failed to list teams", nil, "")

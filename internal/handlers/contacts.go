@@ -96,7 +96,7 @@ func (a *App) ListContacts(r *fastglue.Request) error {
 	offset := (page - 1) * limit
 
 	var contacts []models.Contact
-	query := a.DB.Where("organization_id = ?", orgID)
+	query := a.ScopeToOrg(a.DB, userID, orgID)
 
 	// Users without contacts:read permission can only see contacts assigned to them
 	if !a.HasPermission(userID, models.ResourceContacts, models.ActionRead) {

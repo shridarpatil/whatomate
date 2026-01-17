@@ -336,7 +336,7 @@ func CreateDefaultAdmin(db *gorm.DB) error {
 		return fmt.Errorf("failed to find admin role: %w", err)
 	}
 
-	// Create default admin user
+	// Create default admin user (super admin for cross-organization access)
 	admin := models.User{
 		BaseModel:      models.BaseModel{ID: uuid.New()},
 		OrganizationID: org.ID,
@@ -346,6 +346,7 @@ func CreateDefaultAdmin(db *gorm.DB) error {
 		RoleID:         &adminRole.ID,
 		IsActive:       true,
 		IsAvailable:    true,
+		IsSuperAdmin:   true,
 		Settings:       models.JSONB{},
 	}
 	if err := db.Create(&admin).Error; err != nil {

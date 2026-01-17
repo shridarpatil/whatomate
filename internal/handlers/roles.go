@@ -43,9 +43,10 @@ func (a *App) ListRoles(r *fastglue.Request) error {
 	if err != nil {
 		return r.SendErrorEnvelope(fasthttp.StatusUnauthorized, "Unauthorized", nil, "")
 	}
+	userID, _ := r.RequestCtx.UserValue("user_id").(uuid.UUID)
 
 	var roles []models.CustomRole
-	if err := a.DB.Where("organization_id = ?", orgID).
+	if err := a.ScopeToOrg(a.DB, userID, orgID).
 		Preload("Permissions").
 		Order("is_system DESC, name ASC").
 		Find(&roles).Error; err != nil {

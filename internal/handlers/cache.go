@@ -372,10 +372,11 @@ func (a *App) InvalidateAIContextsCache(orgID uuid.UUID) {
 
 // UserPermissions represents cached user permissions
 type UserPermissions struct {
-	RoleID      uuid.UUID `json:"role_id"`
-	RoleName    string    `json:"role_name"`
-	IsSystem    bool      `json:"is_system"`
-	Permissions []string  `json:"permissions"` // Format: "resource:action"
+	RoleID       uuid.UUID `json:"role_id"`
+	RoleName     string    `json:"role_name"`
+	IsSystem     bool      `json:"is_system"`
+	IsSuperAdmin bool      `json:"is_super_admin"`
+	Permissions  []string  `json:"permissions"` // Format: "resource:action"
 }
 
 // getUserPermissionsCached retrieves user permissions from cache or database
@@ -404,10 +405,11 @@ func (a *App) getUserPermissionsCached(userID uuid.UUID) (*UserPermissions, erro
 
 	// Build permissions list
 	perms := UserPermissions{
-		RoleID:      user.Role.ID,
-		RoleName:    user.Role.Name,
-		IsSystem:    user.Role.IsSystem,
-		Permissions: make([]string, 0, len(user.Role.Permissions)),
+		RoleID:       user.Role.ID,
+		RoleName:     user.Role.Name,
+		IsSystem:     user.Role.IsSystem,
+		IsSuperAdmin: user.IsSuperAdmin,
+		Permissions:  make([]string, 0, len(user.Role.Permissions)),
 	}
 
 	for _, p := range user.Role.Permissions {
@@ -423,11 +425,17 @@ func (a *App) getUserPermissionsCached(userID uuid.UUID) (*UserPermissions, erro
 }
 
 // HasPermission checks if a user has a specific permission
+// Super admins have all permissions automatically
 func (a *App) HasPermission(userID uuid.UUID, resource, action string) bool {
 	perms, err := a.getUserPermissionsCached(userID)
 	if err != nil {
 		a.Log.Error("Failed to get user permissions", "error", err, "user_id", userID)
 		return false
+	}
+
+	// Super admins have all permissions
+	if perms.IsSuperAdmin {
+		return true
 	}
 
 	permKey := resource + ":" + action
@@ -441,11 +449,17 @@ func (a *App) HasPermission(userID uuid.UUID, resource, action string) bool {
 }
 
 // HasAnyPermission checks if a user has any of the specified permissions
+// Super admins have all permissions automatically
 func (a *App) HasAnyPermission(userID uuid.UUID, permissions ...string) bool {
 	perms, err := a.getUserPermissionsCached(userID)
 	if err != nil {
 		a.Log.Error("Failed to get user permissions", "error", err, "user_id", userID)
 		return false
+	}
+
+	// Super admins have all permissions
+	if perms.IsSuperAdmin {
+		return true
 	}
 
 	permSet := make(map[string]bool)
@@ -460,6 +474,33 @@ func (a *App) HasAnyPermission(userID uuid.UUID, permissions ...string) bool {
 	}
 
 	return false
+}
+
+// IsSuperAdmin checks if a user is a super admin
+func (a *App) IsSuperAdmin(userID uuid.UUID) bool {
+	perms, err := a.getUserPermissionsCached(userID)
+	if err != nil {
+		return false
+	}
+	return perms.IsSuperAdmin
+}
+
+// ScopedQuery returns a gorm query scoped to the organization
+// Super admins bypass organization scoping and can access all organizations
+func (a *App) ScopedQuery(userID, orgID uuid.UUID) *gorm.DB {
+	if a.IsSuperAdmin(userID) {
+		return a.DB
+	}
+	return a.DB.Where("organization_id = ?", orgID)
+}
+
+// ScopeToOrg adds organization scoping to an existing query
+// Super admins bypass organization scoping
+func (a *App) ScopeToOrg(query *gorm.DB, userID, orgID uuid.UUID) *gorm.DB {
+	if a.IsSuperAdmin(userID) {
+		return query
+	}
+	return query.Where("organization_id = ?", orgID)
 }
 
 // getRolePermissionsCached retrieves role permissions from cache or database

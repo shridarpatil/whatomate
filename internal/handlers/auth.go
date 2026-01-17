@@ -239,6 +239,7 @@ func (a *App) generateAccessToken(user *models.User) (string, error) {
 		OrganizationID: user.OrganizationID,
 		Email:          user.Email,
 		RoleID:         user.RoleID,
+		IsSuperAdmin:   user.IsSuperAdmin,
 		RegisteredClaims: jwt.RegisteredClaims{
 			ExpiresAt: jwt.NewNumericDate(time.Now().Add(time.Duration(a.Config.JWT.AccessExpiryMins) * time.Minute)),
 			IssuedAt:  jwt.NewNumericDate(time.Now()),
@@ -256,6 +257,7 @@ func (a *App) generateRefreshToken(user *models.User) (string, error) {
 		OrganizationID: user.OrganizationID,
 		Email:          user.Email,
 		RoleID:         user.RoleID,
+		IsSuperAdmin:   user.IsSuperAdmin,
 		RegisteredClaims: jwt.RegisteredClaims{
 			ExpiresAt: jwt.NewNumericDate(time.Now().Add(time.Duration(a.Config.JWT.RefreshExpiryDays) * 24 * time.Hour)),
 			IssuedAt:  jwt.NewNumericDate(time.Now()),

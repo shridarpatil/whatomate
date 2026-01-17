@@ -111,6 +111,7 @@ type User struct {
 	Settings       JSONB      `gorm:"type:jsonb;default:'{}'" json:"settings"`
 	IsActive       bool       `gorm:"default:true" json:"is_active"`
 	IsAvailable    bool       `gorm:"default:true" json:"is_available"` // Agent availability status (away/available)
+	IsSuperAdmin   bool       `gorm:"default:false" json:"is_super_admin"`  // Super admin can access all organizations
 
 	// SSO fields
 	SSOProvider   string `gorm:"size:50" json:"sso_provider,omitempty"`     // google, microsoft, github, facebook, custom
