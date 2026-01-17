@@ -30,7 +30,7 @@ onMounted(async () => {
 
     // If no org selected, default to user's own org
     if (!organizationsStore.selectedOrgId && authStore.user?.organization_id) {
-      // Don't auto-select, let them see "All Organizations" view
+      organizationsStore.selectOrganization(authStore.user.organization_id)
     }
   }
 })
@@ -46,11 +46,7 @@ watch(() => authStore.user?.is_super_admin, async (isSuperAdmin) => {
 })
 
 const handleOrgChange = (value: string) => {
-  if (value === 'all') {
-    organizationsStore.clearSelection()
-  } else {
-    organizationsStore.selectOrganization(value)
-  }
+  organizationsStore.selectOrganization(value)
   // Reload the page to refresh data with new org context
   window.location.reload()
 }
@@ -81,19 +77,13 @@ const refreshOrgs = async () => {
       </div>
       <Select
         v-if="organizationsStore.organizations.length > 0"
-        :model-value="organizationsStore.selectedOrgId || 'all'"
+        :model-value="organizationsStore.selectedOrgId || ''"
         @update:model-value="handleOrgChange"
       >
         <SelectTrigger class="h-8 text-[13px]">
           <SelectValue placeholder="Select organization" />
         </SelectTrigger>
         <SelectContent>
-          <SelectItem value="all">
-            <div class="flex items-center gap-2">
-              <Building2 class="h-3.5 w-3.5 text-muted-foreground" />
-              <span>All Organizations</span>
-            </div>
-          </SelectItem>
           <SelectItem
             v-for="org in organizationsStore.organizations"
             :key="org.id"
