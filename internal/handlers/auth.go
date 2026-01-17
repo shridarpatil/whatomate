@@ -47,9 +47,9 @@ func (a *App) Login(r *fastglue.Request) error {
 		return r.SendErrorEnvelope(fasthttp.StatusBadRequest, "Invalid request body", nil, "")
 	}
 
-	// Find user by email
+	// Find user by email with role preloaded
 	var user models.User
-	if err := a.DB.Where("email = ?", req.Email).First(&user).Error; err != nil {
+	if err := a.DB.Preload("Role").Where("email = ?", req.Email).First(&user).Error; err != nil {
 		return r.SendErrorEnvelope(fasthttp.StatusUnauthorized, "Invalid credentials", nil, "")
 	}
 
@@ -177,6 +177,9 @@ func (a *App) Register(r *fastglue.Request) error {
 	}
 
 	a.Log.Info("Registration completed", "user_id", user.ID, "org_id", org.ID)
+
+	// Populate the role for the response
+	user.Role = &adminRole
 
 	// Generate tokens
 	accessToken, _ := a.generateAccessToken(&user)

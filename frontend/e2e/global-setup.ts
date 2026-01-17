@@ -6,12 +6,13 @@ interface TestUser {
   email: string
   password: string
   full_name: string
+  organization_name: string
 }
 
 const TEST_USERS: TestUser[] = [
-  { email: 'admin@test.com', password: 'password', full_name: 'Test Admin' },
-  { email: 'manager@test.com', password: 'password', full_name: 'Test Manager' },
-  { email: 'agent@test.com', password: 'password', full_name: 'Test Agent' },
+  { email: 'admin@test.com', password: 'password', full_name: 'Test Admin', organization_name: 'Test Organization' },
+  { email: 'manager@test.com', password: 'password', full_name: 'Test Manager', organization_name: 'Manager Org' },
+  { email: 'agent@test.com', password: 'password', full_name: 'Test Agent', organization_name: 'Agent Org' },
 ]
 
 async function globalSetup() {
@@ -29,6 +30,7 @@ async function globalSetup() {
           email: user.email,
           password: user.password,
           full_name: user.full_name,
+          organization_name: user.organization_name,
         },
       })
 

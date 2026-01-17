@@ -292,7 +292,7 @@ class WebSocketService {
     transfersStore.fetchTransfers()
 
     // Show toast notification for admin/manager or assigned agent
-    const userRole = authStore.user?.role
+    const userRole = authStore.user?.role?.name
     const currentUserId = authStore.user?.id
     const isAssignedToMe = payload.agent_id === currentUserId
 
@@ -360,7 +360,7 @@ class WebSocketService {
     const shouldNotify = notifyIds.includes(currentUserId || '')
 
     // Also notify admins/managers
-    const userRole = authStore.user?.role
+    const userRole = authStore.user?.role?.name
     const isAdminOrManager = userRole === 'admin' || userRole === 'manager'
 
     if (shouldNotify || isAdminOrManager) {

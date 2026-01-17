@@ -148,7 +148,7 @@ const canAssignContacts = computed(() => {
       const storedUser = localStorage.getItem('user')
       if (storedUser) {
         const user = JSON.parse(storedUser)
-        role = user.role
+        role = user.role?.name || user.role // Support both old and new format
       }
     } catch {
       // ignore
@@ -1803,7 +1803,7 @@ async function sendMediaMessage() {
                   class="ml-auto h-4 w-4 text-primary"
                 />
                 <Badge v-else variant="outline" class="ml-auto text-xs">
-                  {{ user.role }}
+                  {{ user.role?.name }}
                 </Badge>
               </Button>
               <p v-if="filteredAssignableUsers.length === 0" class="text-sm text-muted-foreground text-center py-4">

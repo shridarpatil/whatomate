@@ -30,8 +30,8 @@ export async function login(page: Page, user: TestUser) {
   await page.locator('input[name="email"], input[type="email"]').fill(user.email)
   await page.locator('input[name="password"], input[type="password"]').fill(user.password)
   await page.locator('button[type="submit"]').click()
-  // Wait for redirect to dashboard or home
-  await page.waitForURL(/\/(dashboard|chat|home)?$/)
+  // Wait for redirect away from login page (could be dashboard, chat, analytics, etc.)
+  await page.waitForURL((url) => !url.pathname.includes('/login'), { timeout: 10000 })
 }
 
 export async function loginAsAdmin(page: Page) {

@@ -265,9 +265,10 @@ func TestApp_Register_Success(t *testing.T) {
 			AccessToken  string `json:"access_token"`
 			RefreshToken string `json:"refresh_token"`
 			User         struct {
+				ID       string `json:"id"`
 				Email    string `json:"email"`
 				FullName string `json:"full_name"`
-				Role     string `json:"role"`
+				RoleID   string `json:"role_id"`
 				IsActive bool   `json:"is_active"`
 			} `json:"user"`
 		} `json:"data"`
@@ -280,8 +281,17 @@ func TestApp_Register_Success(t *testing.T) {
 	assert.NotEmpty(t, resp.Data.RefreshToken)
 	assert.Equal(t, email, resp.Data.User.Email)
 	assert.Equal(t, "New User", resp.Data.User.FullName)
-	assert.Equal(t, "admin", resp.Data.User.Role)
+	assert.NotEmpty(t, resp.Data.User.RoleID, "User should have a role assigned")
 	assert.True(t, resp.Data.User.IsActive)
+
+	// Verify the user has admin role in the database
+	userID, err := uuid.Parse(resp.Data.User.ID)
+	require.NoError(t, err)
+	var user models.User
+	require.NoError(t, app.DB.Preload("Role").Where("id = ?", userID).First(&user).Error)
+	assert.NotNil(t, user.Role)
+	assert.Equal(t, "admin", user.Role.Name)
+	assert.True(t, user.Role.IsSystem)
 }
 
 func TestApp_Register_EmailAlreadyExists(t *testing.T) {

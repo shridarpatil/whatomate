@@ -14,7 +14,89 @@ import (
 	"github.com/stretchr/testify/require"
 	"github.com/valyala/fasthttp"
 	"github.com/zerodha/fastglue"
+	"gorm.io/gorm"
 )
+
+// getOrCreateTransferTestPermissions gets existing permissions or creates them for testing.
+func getOrCreateTransferTestPermissions(t *testing.T, db *gorm.DB) []models.Permission {
+	t.Helper()
+
+	var existingPerms []models.Permission
+	if err := db.Order("resource, action").Find(&existingPerms).Error; err == nil && len(existingPerms) > 0 {
+		return existingPerms
+	}
+
+	// Create all default permissions if none exist
+	perms := models.DefaultPermissions()
+	for i := range perms {
+		perms[i].ID = uuid.New()
+	}
+	require.NoError(t, db.Create(&perms).Error)
+	return perms
+}
+
+// createTransferTestRole creates a role with specified permissions for testing.
+func createTransferTestRole(t *testing.T, db *gorm.DB, orgID uuid.UUID, name string, permissionKeys []string) *models.CustomRole {
+	t.Helper()
+
+	// Get all permissions
+	perms := getOrCreateTransferTestPermissions(t, db)
+
+	// Filter to only the ones we need
+	permMap := make(map[string]models.Permission)
+	for _, p := range perms {
+		key := p.Resource + ":" + p.Action
+		permMap[key] = p
+	}
+
+	var rolePerms []models.Permission
+	for _, key := range permissionKeys {
+		if p, ok := permMap[key]; ok {
+			rolePerms = append(rolePerms, p)
+		}
+	}
+
+	role := &models.CustomRole{
+		BaseModel:      models.BaseModel{ID: uuid.New()},
+		OrganizationID: orgID,
+		Name:           name + "_" + uuid.New().String()[:8],
+		Description:    "Test role for " + name,
+		IsSystem:       false,
+		IsDefault:      false,
+		Permissions:    rolePerms,
+	}
+	require.NoError(t, db.Create(role).Error)
+	return role
+}
+
+// createTransferAdminRole creates an admin role with all permissions for testing.
+func createTransferAdminRole(t *testing.T, db *gorm.DB, orgID uuid.UUID) *models.CustomRole {
+	t.Helper()
+
+	allPerms := models.DefaultPermissions()
+	var permKeys []string
+	for _, p := range allPerms {
+		permKeys = append(permKeys, p.Resource+":"+p.Action)
+	}
+	return createTransferTestRole(t, db, orgID, "admin", permKeys)
+}
+
+// createTransferAgentRole creates an agent role with limited permissions for testing.
+// This creates a role that doesn't have transfers:write, so agents can only see
+// their own transfers + general queue and use self-assign behavior.
+func createTransferAgentRole(t *testing.T, db *gorm.DB, orgID uuid.UUID) *models.CustomRole {
+	t.Helper()
+
+	// Agent permissions WITHOUT transfers:write for proper queue isolation
+	agentPerms := []string{
+		"chat:read", "chat:write",
+		"contacts:read",
+		"analytics.agents:read",
+		"transfers:read", "transfers:pickup", // No transfers:write
+		"canned_responses:read",
+	}
+	return createTransferTestRole(t, db, orgID, "agent", agentPerms)
+}
 
 // agentTransfersTestApp creates an App instance for agent transfers testing.
 func agentTransfersTestApp(t *testing.T) *handlers.App {
@@ -53,16 +135,26 @@ func createTransferTestOrg(t *testing.T, app *handlers.App) *models.Organization
 	return org
 }
 
-// createTransferTestUser creates a test user with unique identifiers.
+// createTransferTestUser creates a test user with admin role.
 func createTransferTestUser(t *testing.T, app *handlers.App, orgID uuid.UUID, roleID *uuid.UUID) *models.User {
 	t.Helper()
+
+	// If no role provided, create an admin role for backward compatibility
+	var actualRoleID *uuid.UUID
+	if roleID != nil {
+		actualRoleID = roleID
+	} else {
+		role := createTransferAdminRole(t, app.DB, orgID)
+		actualRoleID = &role.ID
+	}
+
 	user := &models.User{
 		BaseModel:      models.BaseModel{ID: uuid.New()},
 		OrganizationID: orgID,
 		Email:          "transfer-test-" + uuid.New().String() + "@example.com",
 		PasswordHash:   "hashed",
 		FullName:       "Transfer Test User",
-		RoleID:         roleID,
+		RoleID:         actualRoleID,
 		IsActive:       true,
 	}
 	err := app.DB.Create(user).Error
@@ -104,9 +196,12 @@ func createTestContact(t *testing.T, app *handlers.App, orgID uuid.UUID) *models
 	return contact
 }
 
-// createTestAgent creates a test agent user in the database.
+// createTestAgent creates a test agent user with agent role in the database.
 func createTestAgent(t *testing.T, app *handlers.App, orgID uuid.UUID) *models.User {
 	t.Helper()
+
+	// Create agent role with agent-level permissions
+	role := createTransferAgentRole(t, app.DB, orgID)
 
 	uniqueID := uuid.New().String()[:8]
 	agent := &models.User{
@@ -115,6 +210,7 @@ func createTestAgent(t *testing.T, app *handlers.App, orgID uuid.UUID) *models.U
 		Email:          "agent-" + uniqueID + "@example.com",
 		PasswordHash:   "hashed",
 		FullName:       "Test Agent " + uniqueID,
+		RoleID:         &role.ID,
 		IsActive:       true,
 		IsAvailable:    true,
 	}
@@ -660,7 +756,7 @@ func TestApp_AssignAgentTransfer_AgentCannotAssignToOthers(t *testing.T) {
 
 	var result map[string]any
 	require.NoError(t, json.Unmarshal(testutil.GetResponseBody(req), &result))
-	assert.Equal(t, "Agents cannot assign transfers to others", result["message"])
+	assert.Equal(t, "You don't have permission to assign transfers to others", result["message"])
 }
 
 func TestApp_AssignAgentTransfer_NotActive(t *testing.T) {

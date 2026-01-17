@@ -91,7 +91,7 @@ async function changePassword() {
               </div>
               <div>
                 <Label class="text-muted-foreground">Role</Label>
-                <p class="font-medium capitalize">{{ authStore.user?.role }}</p>
+                <p class="font-medium capitalize">{{ authStore.user?.role?.name }}</p>
               </div>
             </div>
           </CardContent>

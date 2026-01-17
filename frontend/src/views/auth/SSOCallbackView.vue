@@ -51,7 +51,7 @@ onMounted(async () => {
 
     // Redirect based on role
     setTimeout(() => {
-      if (user.role === 'agent') {
+      if (user.role?.name === 'agent') {
         router.push('/analytics/agents')
       } else {
         router.push('/')

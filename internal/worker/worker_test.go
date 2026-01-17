@@ -36,6 +36,44 @@ func testWorker(t *testing.T) *Worker {
 	return w
 }
 
+// getOrCreateTestPermissions gets existing permissions or creates them for testing.
+func getOrCreateTestPermissions(t *testing.T, w *Worker) []models.Permission {
+	t.Helper()
+
+	var existingPerms []models.Permission
+	if err := w.DB.Order("resource, action").Find(&existingPerms).Error; err == nil && len(existingPerms) > 0 {
+		return existingPerms
+	}
+
+	// Create all default permissions if none exist
+	perms := models.DefaultPermissions()
+	for i := range perms {
+		perms[i].ID = uuid.New()
+	}
+	require.NoError(t, w.DB.Create(&perms).Error)
+	return perms
+}
+
+// createTestRole creates an admin role with all permissions for testing.
+func createTestRole(t *testing.T, w *Worker, orgID uuid.UUID) *models.CustomRole {
+	t.Helper()
+
+	// Get or create permissions
+	perms := getOrCreateTestPermissions(t, w)
+
+	role := &models.CustomRole{
+		BaseModel:      models.BaseModel{ID: uuid.New()},
+		OrganizationID: orgID,
+		Name:           "admin_" + uuid.New().String()[:8],
+		Description:    "Test admin role",
+		IsSystem:       false,
+		IsDefault:      false,
+		Permissions:    perms,
+	}
+	require.NoError(t, w.DB.Create(role).Error)
+	return role
+}
+
 func createTestCampaignData(t *testing.T, w *Worker) (*models.Organization, *models.WhatsAppAccount, *models.Template, *models.BulkMessageCampaign, *models.BulkMessageRecipient) {
 	t.Helper()
 
@@ -48,12 +86,16 @@ func createTestCampaignData(t *testing.T, w *Worker) (*models.Organization, *mod
 	}
 	require.NoError(t, w.DB.Create(org).Error)
 
+	// Create role for user
+	role := createTestRole(t, w, org.ID)
+
 	// Create user for CreatedBy foreign key
 	user := &models.User{
 		OrganizationID: org.ID,
 		Email:          "test-" + uniqueID + "@example.com",
 		PasswordHash:   "hashed",
 		FullName:       "Test User",
+		RoleID:         &role.ID,
 		IsActive:       true,
 	}
 	require.NoError(t, w.DB.Create(user).Error)
@@ -303,11 +345,15 @@ func createMinimalCampaignData(t *testing.T, w *Worker, status models.CampaignSt
 	}
 	require.NoError(t, w.DB.Create(org).Error)
 
+	// Create role for user
+	role := createTestRole(t, w, org.ID)
+
 	user := &models.User{
 		OrganizationID: org.ID,
 		Email:          "test-" + uniqueID + "@example.com",
 		PasswordHash:   "hashed",
 		FullName:       "Test User",
+		RoleID:         &role.ID,
 		IsActive:       true,
 	}
 	require.NoError(t, w.DB.Create(user).Error)

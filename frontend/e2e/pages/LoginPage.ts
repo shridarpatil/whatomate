@@ -25,11 +25,13 @@ export class LoginPage extends BasePage {
     await this.emailInput.fill(email)
     await this.passwordInput.fill(password)
     await this.submitButton.click()
+    // Wait for network to settle after login
+    await this.page.waitForLoadState('networkidle', { timeout: 10000 }).catch(() => {})
   }
 
   async expectLoginSuccess() {
     // Should redirect away from login page
-    await expect(this.page).not.toHaveURL(/\/login/)
+    await expect(this.page).not.toHaveURL(/\/login/, { timeout: 10000 })
   }
 
   async expectLoginError(message?: string) {

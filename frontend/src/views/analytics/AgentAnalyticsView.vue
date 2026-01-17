@@ -117,7 +117,7 @@ interface AgentAnalyticsResponse {
 }
 
 const authStore = useAuthStore()
-const isAdminOrManager = computed(() => ['admin', 'manager'].includes(authStore.user?.role || ''))
+const isAdminOrManager = computed(() => ['admin', 'manager'].includes(authStore.user?.role?.name || ''))
 
 const analytics = ref<AgentAnalyticsResponse | null>(null)
 const isLoading = ref(true)

@@ -8,11 +8,19 @@ export interface UserSettings {
   campaign_updates?: boolean
 }
 
+export interface UserRole {
+  id: string
+  name: string
+  description?: string
+  is_system: boolean
+}
+
 export interface User {
   id: string
   email: string
   full_name: string
-  role: string
+  role_id?: string
+  role?: UserRole
   organization_id: string
   organization_name?: string
   settings?: UserSettings
@@ -32,7 +40,7 @@ export const useAuthStore = defineStore('auth', () => {
   const breakStartedAt = ref<string | null>(null)
 
   const isAuthenticated = computed(() => !!token.value && !!user.value)
-  const userRole = computed(() => user.value?.role || 'agent')
+  const userRole = computed(() => user.value?.role?.name || 'agent')
   const organizationId = computed(() => user.value?.organization_id || '')
   const userSettings = computed(() => user.value?.settings || {})
   const isAvailable = computed(() => user.value?.is_available ?? true)

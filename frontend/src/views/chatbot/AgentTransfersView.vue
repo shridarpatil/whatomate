@@ -70,7 +70,7 @@ const agents = ref<{ id: string; full_name: string }[]>([])
 const teams = ref<Team[]>([])
 const selectedTeamFilter = ref<string>('all')
 
-const userRole = computed(() => authStore.user?.role)
+const userRole = computed(() => authStore.user?.role?.name)
 const isAdminOrManager = computed(() => userRole.value === 'admin' || userRole.value === 'manager')
 const currentUserId = computed(() => authStore.user?.id)
 
