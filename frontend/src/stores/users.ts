@@ -27,6 +27,7 @@ export interface CreateUserData {
   password: string
   full_name: string
   role_id?: string
+  is_super_admin?: boolean
 }
 
 export interface UpdateUserData {
@@ -35,6 +36,7 @@ export interface UpdateUserData {
   full_name?: string
   role_id?: string
   is_active?: boolean
+  is_super_admin?: boolean
 }
 
 export const useUsersStore = defineStore('users', () => {

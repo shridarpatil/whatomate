@@ -596,6 +596,10 @@ func setupRoutes(g *fastglue.Fastglue, app *handlers.App, lo logf.Logger, basePa
 	g.GET("/api/org/settings", app.GetOrganizationSettings)
 	g.PUT("/api/org/settings", app.UpdateOrganizationSettings)
 
+	// Organizations (super admin only)
+	g.GET("/api/organizations", app.ListOrganizations)
+	g.GET("/api/organizations/current", app.GetCurrentOrganization)
+
 	// SSO Settings (admin only - enforced by middleware)
 	g.GET("/api/settings/sso", app.GetSSOSettings)
 	g.PUT("/api/settings/sso/{provider}", app.UpdateSSOProvider)

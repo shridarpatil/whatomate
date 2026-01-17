@@ -25,6 +25,7 @@ export interface User {
   organization_name?: string
   settings?: UserSettings
   is_available?: boolean
+  is_super_admin?: boolean
 }
 
 export interface AuthState {

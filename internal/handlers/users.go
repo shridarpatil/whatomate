@@ -12,11 +12,12 @@ import (
 
 // UserRequest represents the request body for creating/updating a user
 type UserRequest struct {
-	Email    string     `json:"email"`
-	Password string     `json:"password"`
-	FullName string     `json:"full_name"`
-	RoleID   *uuid.UUID `json:"role_id"`
-	IsActive *bool      `json:"is_active"`
+	Email        string     `json:"email"`
+	Password     string     `json:"password"`
+	FullName     string     `json:"full_name"`
+	RoleID       *uuid.UUID `json:"role_id"`
+	IsActive     *bool      `json:"is_active"`
+	IsSuperAdmin *bool      `json:"is_super_admin"`
 }
 
 // UserResponse represents the response for a user (without sensitive data)
@@ -28,6 +29,7 @@ type UserResponse struct {
 	Role           *RoleInfo    `json:"role,omitempty"`
 	IsActive       bool         `json:"is_active"`
 	IsAvailable    bool         `json:"is_available"`
+	IsSuperAdmin   bool         `json:"is_super_admin"`
 	OrganizationID uuid.UUID    `json:"organization_id"`
 	Settings       models.JSONB `json:"settings,omitempty"`
 	CreatedAt      string       `json:"created_at"`
@@ -171,6 +173,14 @@ func (a *App) CreateUser(r *fastglue.Request) error {
 		IsActive:       true,
 	}
 
+	// Only superadmins can create other superadmins
+	if req.IsSuperAdmin != nil && *req.IsSuperAdmin {
+		if !a.IsSuperAdmin(userID) {
+			return r.SendErrorEnvelope(fasthttp.StatusForbidden, "Only super admins can create super admins", nil, "")
+		}
+		user.IsSuperAdmin = true
+	}
+
 	if err := a.DB.Create(&user).Error; err != nil {
 		a.Log.Error("Failed to create user", "error", err)
 		return r.SendErrorEnvelope(fasthttp.StatusInternalServerError, "Failed to create user", nil, "")
@@ -264,6 +274,18 @@ func (a *App) UpdateUser(r *fastglue.Request) error {
 			return r.SendErrorEnvelope(fasthttp.StatusBadRequest, "Cannot deactivate yourself", nil, "")
 		}
 		user.IsActive = *req.IsActive
+	}
+
+	// Handle super admin update - only superadmins can change this
+	if req.IsSuperAdmin != nil {
+		if !a.IsSuperAdmin(currentUserID) {
+			return r.SendErrorEnvelope(fasthttp.StatusForbidden, "Only super admins can modify super admin status", nil, "")
+		}
+		// Prevent removing own super admin status
+		if currentUserID == id && !*req.IsSuperAdmin && user.IsSuperAdmin {
+			return r.SendErrorEnvelope(fasthttp.StatusBadRequest, "Cannot remove your own super admin status", nil, "")
+		}
+		user.IsSuperAdmin = *req.IsSuperAdmin
 	}
 
 	if err := a.DB.Save(&user).Error; err != nil {
@@ -447,6 +469,7 @@ func userToResponse(user models.User) UserResponse {
 		RoleID:         user.RoleID,
 		IsActive:       user.IsActive,
 		IsAvailable:    user.IsAvailable,
+		IsSuperAdmin:   user.IsSuperAdmin,
 		OrganizationID: user.OrganizationID,
 		Settings:       user.Settings,
 		CreatedAt:      user.CreatedAt.Format("2006-01-02T15:04:05Z"),

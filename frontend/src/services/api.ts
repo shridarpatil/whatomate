@@ -317,6 +317,19 @@ export const organizationService = {
   }) => api.put('/org/settings', data)
 }
 
+// Organizations (super admin only)
+export interface Organization {
+  id: string
+  name: string
+  slug?: string
+  created_at: string
+}
+
+export const organizationsService = {
+  list: () => api.get<{ organizations: Organization[] }>('/organizations'),
+  getCurrent: () => api.get<Organization>('/organizations/current')
+}
+
 export interface Webhook {
   id: string
   name: string

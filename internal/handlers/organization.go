@@ -3,6 +3,7 @@ package handlers
 import (
 	"encoding/json"
 
+	"github.com/google/uuid"
 	"github.com/shridarpatil/whatomate/internal/models"
 	"github.com/valyala/fasthttp"
 	"github.com/zerodha/fastglue"
@@ -151,4 +152,65 @@ func (a *App) ShouldMaskPhoneNumbers(orgID interface{}) bool {
 		}
 	}
 	return false
+}
+
+// OrganizationResponse represents an organization in API responses
+type OrganizationResponse struct {
+	ID        uuid.UUID `json:"id"`
+	Name      string    `json:"name"`
+	Slug      string    `json:"slug,omitempty"`
+	CreatedAt string    `json:"created_at"`
+}
+
+// ListOrganizations returns all organizations (super admin only)
+func (a *App) ListOrganizations(r *fastglue.Request) error {
+	userID, ok := r.RequestCtx.UserValue("user_id").(uuid.UUID)
+	if !ok {
+		return r.SendErrorEnvelope(fasthttp.StatusUnauthorized, "Unauthorized", nil, "")
+	}
+
+	// Only super admins can list all organizations
+	if !a.IsSuperAdmin(userID) {
+		return r.SendErrorEnvelope(fasthttp.StatusForbidden, "Only super admins can access all organizations", nil, "")
+	}
+
+	var orgs []models.Organization
+	if err := a.DB.Order("name ASC").Find(&orgs).Error; err != nil {
+		a.Log.Error("Failed to list organizations", "error", err)
+		return r.SendErrorEnvelope(fasthttp.StatusInternalServerError, "Failed to list organizations", nil, "")
+	}
+
+	response := make([]OrganizationResponse, len(orgs))
+	for i, org := range orgs {
+		response[i] = OrganizationResponse{
+			ID:        org.ID,
+			Name:      org.Name,
+			Slug:      org.Slug,
+			CreatedAt: org.CreatedAt.Format("2006-01-02T15:04:05Z"),
+		}
+	}
+
+	return r.SendEnvelope(map[string]any{
+		"organizations": response,
+	})
+}
+
+// GetCurrentOrganization returns the current user's organization details
+func (a *App) GetCurrentOrganization(r *fastglue.Request) error {
+	orgID, err := a.getOrgIDFromContext(r)
+	if err != nil {
+		return r.SendErrorEnvelope(fasthttp.StatusUnauthorized, "Unauthorized", nil, "")
+	}
+
+	var org models.Organization
+	if err := a.DB.Where("id = ?", orgID).First(&org).Error; err != nil {
+		return r.SendErrorEnvelope(fasthttp.StatusNotFound, "Organization not found", nil, "")
+	}
+
+	return r.SendEnvelope(OrganizationResponse{
+		ID:        org.ID,
+		Name:      org.Name,
+		Slug:      org.Slug,
+		CreatedAt: org.CreatedAt.Format("2006-01-02T15:04:05Z"),
+	})
 }

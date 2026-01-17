@@ -95,7 +95,8 @@ const formData = ref({
   password: '',
   full_name: '',
   role_id: '',
-  is_active: true
+  is_active: true,
+  is_super_admin: false
 })
 
 // Get the default role ID (agent role)
@@ -105,6 +106,7 @@ const getDefaultRoleId = () => {
 }
 
 const currentUserId = computed(() => authStore.user?.id)
+const isSuperAdmin = computed(() => authStore.user?.is_super_admin || false)
 
 // Filtered and paginated users
 const filteredUsers = computed(() => {
@@ -163,7 +165,8 @@ function openCreateDialog() {
     password: '',
     full_name: '',
     role_id: getDefaultRoleId(),
-    is_active: true
+    is_active: true,
+    is_super_admin: false
   }
   isDialogOpen.value = true
 }
@@ -175,7 +178,8 @@ function openEditDialog(user: User) {
     password: '',
     full_name: user.full_name,
     role_id: user.role_id || '',
-    is_active: user.is_active
+    is_active: user.is_active,
+    is_super_admin: user.is_super_admin || false
   }
   isDialogOpen.value = true
 }
@@ -208,15 +212,24 @@ async function saveUser() {
       if (formData.value.password) {
         updateData.password = formData.value.password
       }
+      // Only include is_super_admin if current user is a super admin
+      if (isSuperAdmin.value) {
+        updateData.is_super_admin = formData.value.is_super_admin
+      }
       await usersStore.updateUser(editingUser.value.id, updateData)
       toast.success('User updated successfully')
     } else {
-      await usersStore.createUser({
+      const createData: any = {
         email: formData.value.email,
         password: formData.value.password,
         full_name: formData.value.full_name,
         role_id: formData.value.role_id
-      })
+      }
+      // Only include is_super_admin if current user is a super admin
+      if (isSuperAdmin.value && formData.value.is_super_admin) {
+        createData.is_super_admin = true
+      }
+      await usersStore.createUser(createData)
       toast.success('User created successfully')
     }
     isDialogOpen.value = false
@@ -597,6 +610,24 @@ function goToPage(page: number) {
               :checked="formData.is_active"
               @update:checked="formData.is_active = $event"
               :disabled="editingUser?.id === currentUserId"
+            />
+          </div>
+
+          <!-- Super Admin toggle - only visible to super admins -->
+          <div v-if="isSuperAdmin" class="flex items-center justify-between border-t pt-4">
+            <div>
+              <Label for="is_super_admin" class="font-normal cursor-pointer">
+                Super Admin
+              </Label>
+              <p class="text-xs text-muted-foreground">
+                Super admins can access all organizations and manage other super admins
+              </p>
+            </div>
+            <Switch
+              id="is_super_admin"
+              :checked="formData.is_super_admin"
+              @update:checked="formData.is_super_admin = $event"
+              :disabled="editingUser?.id === currentUserId && editingUser?.is_super_admin"
             />
           </div>
         </div>
