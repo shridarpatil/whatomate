@@ -14,7 +14,6 @@ import (
 	"github.com/shridarpatil/whatomate/internal/frontend"
 	"github.com/shridarpatil/whatomate/internal/handlers"
 	"github.com/shridarpatil/whatomate/internal/middleware"
-	"github.com/shridarpatil/whatomate/internal/models"
 	"github.com/shridarpatil/whatomate/internal/queue"
 	"github.com/shridarpatil/whatomate/internal/websocket"
 	"github.com/shridarpatil/whatomate/internal/worker"
@@ -432,68 +431,8 @@ func setupRoutes(g *fastglue.Fastglue, app *handlers.App, lo logf.Logger, basePa
 			return r
 		}
 
-		path := string(r.RequestCtx.Path())
-
-		// Only apply to authenticated API routes
-		if len(path) < 4 || path[:4] != "/api" {
-			return r
-		}
-
-		// Get role from context (set by auth middleware)
-		role, ok := r.RequestCtx.UserValue("role").(models.Role)
-		if !ok {
-			return r // Auth middleware will handle unauthenticated requests
-		}
-
-		// Admin-only routes: user management, API keys, and SSO settings
-		if (len(path) >= 10 && path[:10] == "/api/users") ||
-			(len(path) >= 13 && path[:13] == "/api/api-keys") ||
-			(len(path) >= 17 && path[:17] == "/api/settings/sso") {
-			if role != models.RoleAdmin {
-				r.RequestCtx.SetStatusCode(403)
-				r.RequestCtx.SetBodyString(`{"status":"error","message":"Admin access required"}`)
-				return nil
-			}
-		}
-
-		// Manager+ routes: agents cannot access these
-		if role == models.RoleAgent {
-			// Agent-accessible exceptions under restricted prefixes
-			agentAllowedPaths := []string{
-				"/api/chatbot/transfers",
-				"/api/analytics/agents",
-			}
-
-			isAllowed := false
-			for _, allowed := range agentAllowedPaths {
-				if len(path) >= len(allowed) && path[:len(allowed)] == allowed {
-					isAllowed = true
-					break
-				}
-			}
-
-			if !isAllowed {
-				managerRoutes := []string{
-					"/api/accounts",
-					"/api/templates",
-					"/api/flows",
-					"/api/campaigns",
-					"/api/chatbot",
-					"/api/analytics",
-				}
-				for _, prefix := range managerRoutes {
-					if len(path) >= len(prefix) && path[:len(prefix)] == prefix {
-						r.RequestCtx.SetStatusCode(403)
-						r.RequestCtx.SetBodyString(`{"status":"error","message":"Access denied"}`)
-						return nil
-					}
-				}
-			}
-
-			// Agents can only create contacts, not modify/delete
-			// PUT and DELETE for contacts are allowed if it's their assigned contact (checked in handler)
-		}
-
+		// Route-level permission checks are now handled at the handler level
+		// using the granular permission system (HasPermission checks)
 		return r
 	})
 
@@ -509,6 +448,14 @@ func setupRoutes(g *fastglue.Fastglue, app *handlers.App, lo logf.Logger, basePa
 	g.GET("/api/users/{id}", app.GetUser)
 	g.PUT("/api/users/{id}", app.UpdateUser)
 	g.DELETE("/api/users/{id}", app.DeleteUser)
+
+	// Roles & Permissions (admin only - enforced by middleware)
+	g.GET("/api/roles", app.ListRoles)
+	g.POST("/api/roles", app.CreateRole)
+	g.GET("/api/roles/{id}", app.GetRole)
+	g.PUT("/api/roles/{id}", app.UpdateRole)
+	g.DELETE("/api/roles/{id}", app.DeleteRole)
+	g.GET("/api/permissions", app.ListPermissions)
 
 	// API Keys (admin only - enforced by middleware)
 	g.GET("/api/api-keys", app.ListAPIKeys)

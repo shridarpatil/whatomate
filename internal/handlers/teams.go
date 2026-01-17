@@ -19,8 +19,8 @@ type TeamRequest struct {
 
 // TeamMemberRequest represents add member request
 type TeamMemberRequest struct {
-	UserID string      `json:"user_id" validate:"required"`
-	Role   models.Role `json:"role"` // manager, agent
+	UserID string          `json:"user_id" validate:"required"`
+	Role   models.TeamRole `json:"role"` // manager, agent
 }
 
 // TeamResponse represents team in API response
@@ -38,33 +38,31 @@ type TeamResponse struct {
 
 // TeamMemberResponse represents team member in API response
 type TeamMemberResponse struct {
-	ID             uuid.UUID   `json:"id"`
-	UserID         uuid.UUID   `json:"user_id"`
-	FullName       string      `json:"full_name"`
-	Email          string      `json:"email"`
-	Role           models.Role `json:"role"` // manager, agent
-	IsAvailable    bool        `json:"is_available"`
-	LastAssignedAt *time.Time  `json:"last_assigned_at,omitempty"`
+	ID             uuid.UUID       `json:"id"`
+	UserID         uuid.UUID       `json:"user_id"`
+	FullName       string          `json:"full_name"`
+	Email          string          `json:"email"`
+	Role           models.TeamRole `json:"role"` // manager, agent
+	IsAvailable    bool            `json:"is_available"`
+	LastAssignedAt *time.Time      `json:"last_assigned_at,omitempty"`
 }
 
 // ListTeams returns teams based on user access
-// Admin: all teams, Manager: their teams, Agent: their teams
 func (a *App) ListTeams(r *fastglue.Request) error {
 	orgID := r.RequestCtx.UserValue("organization_id").(uuid.UUID)
 	userID := r.RequestCtx.UserValue("user_id").(uuid.UUID)
-	userRole := r.RequestCtx.UserValue("role").(models.Role)
 
 	var teams []models.Team
 
-	if userRole == models.RoleAdmin {
-		// Admin sees all teams
+	// Users with teams:read permission can see all teams, others see only their teams
+	if a.HasPermission(userID, models.ResourceTeams, models.ActionRead) {
 		if err := a.DB.Where("organization_id = ?", orgID).
 			Preload("Members").Preload("Members.User").
 			Order("name ASC").Find(&teams).Error; err != nil {
 			return r.SendErrorEnvelope(fasthttp.StatusInternalServerError, "Failed to list teams", nil, "")
 		}
 	} else {
-		// Managers and agents only see teams they belong to
+		// Users only see teams they belong to
 		if err := a.DB.Joins("JOIN team_members ON team_members.team_id = teams.id").
 			Where("teams.organization_id = ? AND team_members.user_id = ?", orgID, userID).
 			Preload("Members").Preload("Members.User").
@@ -86,7 +84,6 @@ func (a *App) ListTeams(r *fastglue.Request) error {
 func (a *App) GetTeam(r *fastglue.Request) error {
 	orgID := r.RequestCtx.UserValue("organization_id").(uuid.UUID)
 	userID := r.RequestCtx.UserValue("user_id").(uuid.UUID)
-	userRole := r.RequestCtx.UserValue("role").(models.Role)
 	teamIDStr := r.RequestCtx.UserValue("id").(string)
 
 	teamID, err := uuid.Parse(teamIDStr)
@@ -101,8 +98,8 @@ func (a *App) GetTeam(r *fastglue.Request) error {
 		return r.SendErrorEnvelope(fasthttp.StatusNotFound, "Team not found", nil, "")
 	}
 
-	// Check access for non-admin users
-	if userRole != models.RoleAdmin {
+	// Check access: users with teams:read permission can see all teams, otherwise must be a member
+	if !a.HasPermission(userID, models.ResourceTeams, models.ActionRead) {
 		hasAccess := false
 		for _, m := range team.Members {
 			if m.UserID == userID {
@@ -118,13 +115,13 @@ func (a *App) GetTeam(r *fastglue.Request) error {
 	return r.SendEnvelope(map[string]interface{}{"team": buildTeamResponse(&team, true)})
 }
 
-// CreateTeam creates a new team (admin only)
+// CreateTeam creates a new team
 func (a *App) CreateTeam(r *fastglue.Request) error {
 	orgID := r.RequestCtx.UserValue("organization_id").(uuid.UUID)
-	userRole := r.RequestCtx.UserValue("role").(models.Role)
+	userID := r.RequestCtx.UserValue("user_id").(uuid.UUID)
 
-	if userRole != models.RoleAdmin {
-		return r.SendErrorEnvelope(fasthttp.StatusForbidden, "Only admins can create teams", nil, "")
+	if !a.HasPermission(userID, models.ResourceTeams, models.ActionWrite) {
+		return r.SendErrorEnvelope(fasthttp.StatusForbidden, "Insufficient permissions", nil, "")
 	}
 
 	var req TeamRequest
@@ -161,11 +158,10 @@ func (a *App) CreateTeam(r *fastglue.Request) error {
 	return r.SendEnvelope(map[string]interface{}{"team": buildTeamResponse(&team, false)})
 }
 
-// UpdateTeam updates a team (admin or team manager)
+// UpdateTeam updates a team
 func (a *App) UpdateTeam(r *fastglue.Request) error {
 	orgID := r.RequestCtx.UserValue("organization_id").(uuid.UUID)
 	userID := r.RequestCtx.UserValue("user_id").(uuid.UUID)
-	userRole := r.RequestCtx.UserValue("role").(models.Role)
 	teamIDStr := r.RequestCtx.UserValue("id").(string)
 
 	teamID, err := uuid.Parse(teamIDStr)
@@ -179,17 +175,17 @@ func (a *App) UpdateTeam(r *fastglue.Request) error {
 		return r.SendErrorEnvelope(fasthttp.StatusNotFound, "Team not found", nil, "")
 	}
 
-	// Check access
-	if userRole != models.RoleAdmin {
+	// Check access: users with teams:write permission OR team managers can update
+	if !a.HasPermission(userID, models.ResourceTeams, models.ActionWrite) {
 		isManager := false
 		for _, m := range team.Members {
-			if m.UserID == userID && m.Role == models.RoleManager {
+			if m.UserID == userID && m.Role == models.TeamRoleManager {
 				isManager = true
 				break
 			}
 		}
 		if !isManager {
-			return r.SendErrorEnvelope(fasthttp.StatusForbidden, "Only admins or team managers can update team", nil, "")
+			return r.SendErrorEnvelope(fasthttp.StatusForbidden, "Insufficient permissions", nil, "")
 		}
 	}
 
@@ -220,14 +216,14 @@ func (a *App) UpdateTeam(r *fastglue.Request) error {
 	return r.SendEnvelope(map[string]interface{}{"team": buildTeamResponse(&team, false)})
 }
 
-// DeleteTeam deletes a team (admin only)
+// DeleteTeam deletes a team
 func (a *App) DeleteTeam(r *fastglue.Request) error {
 	orgID := r.RequestCtx.UserValue("organization_id").(uuid.UUID)
-	userRole := r.RequestCtx.UserValue("role").(models.Role)
+	userID := r.RequestCtx.UserValue("user_id").(uuid.UUID)
 	teamIDStr := r.RequestCtx.UserValue("id").(string)
 
-	if userRole != models.RoleAdmin {
-		return r.SendErrorEnvelope(fasthttp.StatusForbidden, "Only admins can delete teams", nil, "")
+	if !a.HasPermission(userID, models.ResourceTeams, models.ActionDelete) {
+		return r.SendErrorEnvelope(fasthttp.StatusForbidden, "Insufficient permissions", nil, "")
 	}
 
 	teamID, err := uuid.Parse(teamIDStr)
@@ -259,7 +255,6 @@ func (a *App) DeleteTeam(r *fastglue.Request) error {
 func (a *App) ListTeamMembers(r *fastglue.Request) error {
 	orgID := r.RequestCtx.UserValue("organization_id").(uuid.UUID)
 	userID := r.RequestCtx.UserValue("user_id").(uuid.UUID)
-	userRole := r.RequestCtx.UserValue("role").(models.Role)
 	teamIDStr := r.RequestCtx.UserValue("id").(string)
 
 	teamID, err := uuid.Parse(teamIDStr)
@@ -275,8 +270,8 @@ func (a *App) ListTeamMembers(r *fastglue.Request) error {
 		return r.SendErrorEnvelope(fasthttp.StatusNotFound, "Team not found", nil, "")
 	}
 
-	// Check access for non-admin users
-	if userRole != models.RoleAdmin {
+	// Check access: users with teams:read permission can see all, otherwise must be a member
+	if !a.HasPermission(userID, models.ResourceTeams, models.ActionRead) {
 		hasAccess := false
 		for _, m := range team.Members {
 			if m.UserID == userID {
@@ -305,11 +300,10 @@ func (a *App) ListTeamMembers(r *fastglue.Request) error {
 	return r.SendEnvelope(map[string]interface{}{"members": members})
 }
 
-// AddTeamMember adds a member to a team (admin or team manager)
+// AddTeamMember adds a member to a team
 func (a *App) AddTeamMember(r *fastglue.Request) error {
 	orgID := r.RequestCtx.UserValue("organization_id").(uuid.UUID)
 	userID := r.RequestCtx.UserValue("user_id").(uuid.UUID)
-	userRole := r.RequestCtx.UserValue("role").(models.Role)
 	teamIDStr := r.RequestCtx.UserValue("id").(string)
 
 	teamID, err := uuid.Parse(teamIDStr)
@@ -324,17 +318,19 @@ func (a *App) AddTeamMember(r *fastglue.Request) error {
 		return r.SendErrorEnvelope(fasthttp.StatusNotFound, "Team not found", nil, "")
 	}
 
-	// Check access
-	if userRole != models.RoleAdmin {
+	hasWritePermission := a.HasPermission(userID, models.ResourceTeams, models.ActionWrite)
+
+	// Check access: users with teams:write permission OR team managers can add members
+	if !hasWritePermission {
 		isManager := false
 		for _, m := range team.Members {
-			if m.UserID == userID && m.Role == models.RoleManager {
+			if m.UserID == userID && m.Role == models.TeamRoleManager {
 				isManager = true
 				break
 			}
 		}
 		if !isManager {
-			return r.SendErrorEnvelope(fasthttp.StatusForbidden, "Only admins or team managers can add members", nil, "")
+			return r.SendErrorEnvelope(fasthttp.StatusForbidden, "Insufficient permissions", nil, "")
 		}
 	}
 
@@ -363,15 +359,15 @@ func (a *App) AddTeamMember(r *fastglue.Request) error {
 	// Validate role
 	role := req.Role
 	if role == "" {
-		role = models.RoleAgent
+		role = models.TeamRoleAgent
 	}
-	if role != models.RoleManager && role != models.RoleAgent {
+	if role != models.TeamRoleManager && role != models.TeamRoleAgent {
 		return r.SendErrorEnvelope(fasthttp.StatusBadRequest, "Invalid role. Must be 'manager' or 'agent'", nil, "")
 	}
 
-	// Non-admin managers can only add agents, not other managers
-	if userRole != models.RoleAdmin && role == models.RoleManager {
-		return r.SendErrorEnvelope(fasthttp.StatusForbidden, "Only admins can add managers to teams", nil, "")
+	// Only users with teams:write permission can add managers
+	if !hasWritePermission && role == models.TeamRoleManager {
+		return r.SendErrorEnvelope(fasthttp.StatusForbidden, "Insufficient permissions to add managers", nil, "")
 	}
 
 	member := models.TeamMember{
@@ -395,11 +391,10 @@ func (a *App) AddTeamMember(r *fastglue.Request) error {
 	}})
 }
 
-// RemoveTeamMember removes a member from a team (admin or team manager)
+// RemoveTeamMember removes a member from a team
 func (a *App) RemoveTeamMember(r *fastglue.Request) error {
 	orgID := r.RequestCtx.UserValue("organization_id").(uuid.UUID)
 	userID := r.RequestCtx.UserValue("user_id").(uuid.UUID)
-	userRole := r.RequestCtx.UserValue("role").(models.Role)
 	teamIDStr := r.RequestCtx.UserValue("id").(string)
 	memberUserIDStr := r.RequestCtx.UserValue("user_id_param").(string)
 
@@ -420,23 +415,25 @@ func (a *App) RemoveTeamMember(r *fastglue.Request) error {
 		return r.SendErrorEnvelope(fasthttp.StatusNotFound, "Team not found", nil, "")
 	}
 
-	// Check access
-	if userRole != models.RoleAdmin {
+	hasWritePermission := a.HasPermission(userID, models.ResourceTeams, models.ActionWrite)
+
+	// Check access: users with teams:write permission OR team managers can remove members
+	if !hasWritePermission {
 		isManager := false
 		for _, m := range team.Members {
-			if m.UserID == userID && m.Role == models.RoleManager {
+			if m.UserID == userID && m.Role == models.TeamRoleManager {
 				isManager = true
 				break
 			}
 		}
 		if !isManager {
-			return r.SendErrorEnvelope(fasthttp.StatusForbidden, "Only admins or team managers can remove members", nil, "")
+			return r.SendErrorEnvelope(fasthttp.StatusForbidden, "Insufficient permissions", nil, "")
 		}
 
-		// Non-admin managers cannot remove other managers
+		// Team managers cannot remove other managers
 		for _, m := range team.Members {
-			if m.UserID == memberUserID && m.Role == models.RoleManager {
-				return r.SendErrorEnvelope(fasthttp.StatusForbidden, "Only admins can remove managers from teams", nil, "")
+			if m.UserID == memberUserID && m.Role == models.TeamRoleManager {
+				return r.SendErrorEnvelope(fasthttp.StatusForbidden, "Insufficient permissions to remove managers", nil, "")
 			}
 		}
 	}

@@ -20,17 +20,17 @@ const (
 	ContextKeyUserID         = "user_id"
 	ContextKeyOrganizationID = "organization_id"
 	ContextKeyEmail          = "email"
-	ContextKeyRole           = "role"
+	ContextKeyRoleID         = "role_id"
 	ContextKeyUser           = "user"
 	ContextKeyOrganization   = "organization"
 )
 
 // JWTClaims represents JWT claims
 type JWTClaims struct {
-	UserID         uuid.UUID   `json:"user_id"`
-	OrganizationID uuid.UUID   `json:"organization_id"`
-	Email          string      `json:"email"`
-	Role           models.Role `json:"role"`
+	UserID         uuid.UUID  `json:"user_id"`
+	OrganizationID uuid.UUID  `json:"organization_id"`
+	Email          string     `json:"email"`
+	RoleID         *uuid.UUID `json:"role_id,omitempty"`
 	jwt.RegisteredClaims
 }
 
@@ -134,7 +134,9 @@ func AuthWithDB(secret string, db *gorm.DB) fastglue.FastMiddleware {
 		r.RequestCtx.SetUserValue(ContextKeyUserID, claims.UserID)
 		r.RequestCtx.SetUserValue(ContextKeyOrganizationID, claims.OrganizationID)
 		r.RequestCtx.SetUserValue(ContextKeyEmail, claims.Email)
-		r.RequestCtx.SetUserValue(ContextKeyRole, claims.Role)
+		if claims.RoleID != nil {
+			r.RequestCtx.SetUserValue(ContextKeyRoleID, *claims.RoleID)
+		}
 
 		return r
 	}
@@ -177,7 +179,9 @@ func validateAPIKey(r *fastglue.Request, key string, db *gorm.DB) bool {
 				r.RequestCtx.SetUserValue(ContextKeyUserID, apiKey.UserID)
 				r.RequestCtx.SetUserValue(ContextKeyOrganizationID, apiKey.OrganizationID)
 				r.RequestCtx.SetUserValue(ContextKeyEmail, apiKey.User.Email)
-				r.RequestCtx.SetUserValue(ContextKeyRole, apiKey.User.Role)
+				if apiKey.User.RoleID != nil {
+					r.RequestCtx.SetUserValue(ContextKeyRoleID, *apiKey.User.RoleID)
+				}
 				return true
 			}
 		}
@@ -228,17 +232,39 @@ func OrganizationContext(db *gorm.DB) fastglue.FastMiddleware {
 	}
 }
 
-// RequireRole checks if user has required role
-func RequireRole(roles ...string) fastglue.FastMiddleware {
+// PermissionChecker is a function that checks if a user has a permission
+type PermissionChecker func(userID uuid.UUID, resource, action string) bool
+
+// RequirePermission checks if user has the required permission using the provided checker
+func RequirePermission(checker PermissionChecker, resource, action string) fastglue.FastMiddleware {
 	return func(r *fastglue.Request) *fastglue.Request {
-		role, ok := r.RequestCtx.UserValue(ContextKeyRole).(models.Role)
+		userID, ok := r.RequestCtx.UserValue(ContextKeyUserID).(uuid.UUID)
 		if !ok {
-			_ = r.SendErrorEnvelope(fasthttp.StatusForbidden, "Role not found", nil, "")
+			_ = r.SendErrorEnvelope(fasthttp.StatusUnauthorized, "User not authenticated", nil, "")
 			return nil
 		}
 
-		for _, allowedRole := range roles {
-			if string(role) == allowedRole {
+		if !checker(userID, resource, action) {
+			_ = r.SendErrorEnvelope(fasthttp.StatusForbidden, "Insufficient permissions", nil, "")
+			return nil
+		}
+
+		return r
+	}
+}
+
+// RequireAnyPermission checks if user has any of the required permissions
+func RequireAnyPermission(checker PermissionChecker, permissions ...string) fastglue.FastMiddleware {
+	return func(r *fastglue.Request) *fastglue.Request {
+		userID, ok := r.RequestCtx.UserValue(ContextKeyUserID).(uuid.UUID)
+		if !ok {
+			_ = r.SendErrorEnvelope(fasthttp.StatusUnauthorized, "User not authenticated", nil, "")
+			return nil
+		}
+
+		for _, perm := range permissions {
+			parts := strings.Split(perm, ":")
+			if len(parts) == 2 && checker(userID, parts[0], parts[1]) {
 				return r
 			}
 		}

@@ -748,7 +748,6 @@ func TestApp_SendOutgoingMessage_WithSentByUser(t *testing.T) {
 		OrganizationID: org.ID,
 		Email:          "agent-" + uuid.New().String()[:8] + "@test.com",
 		FullName:       "Test Agent",
-		Role:           models.RoleAgent,
 		IsActive:       true,
 	}
 	require.NoError(t, app.DB.Create(user).Error)

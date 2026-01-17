@@ -1,12 +1,11 @@
 package models
 
-// Role represents user roles in the system
-type Role string
+// TeamRole represents a user's role within a specific team (not organizational role)
+type TeamRole string
 
 const (
-	RoleAdmin   Role = "admin"
-	RoleManager Role = "manager"
-	RoleAgent   Role = "agent"
+	TeamRoleManager TeamRole = "manager"
+	TeamRoleAgent   TeamRole = "agent"
 )
 
 // Direction represents message direction

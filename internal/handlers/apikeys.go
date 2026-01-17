@@ -48,17 +48,16 @@ func generateAPIKey() (string, error) {
 	return "whm_" + hex.EncodeToString(bytes), nil
 }
 
-// ListAPIKeys returns all API keys for the organization (admin only)
+// ListAPIKeys returns all API keys for the organization
 func (a *App) ListAPIKeys(r *fastglue.Request) error {
 	orgID, err := getOrganizationID(r)
 	if err != nil {
 		return r.SendErrorEnvelope(fasthttp.StatusUnauthorized, "Unauthorized", nil, "")
 	}
 
-	// Check if user is admin
-	role, _ := r.RequestCtx.UserValue("role").(models.Role)
-	if role != models.RoleAdmin {
-		return r.SendErrorEnvelope(fasthttp.StatusForbidden, "Admin access required", nil, "")
+	userID, _ := r.RequestCtx.UserValue("user_id").(uuid.UUID)
+	if !a.HasPermission(userID, models.ResourceAPIKeys, models.ActionRead) {
+		return r.SendErrorEnvelope(fasthttp.StatusForbidden, "Insufficient permissions", nil, "")
 	}
 
 	var apiKeys []models.APIKey
@@ -84,7 +83,7 @@ func (a *App) ListAPIKeys(r *fastglue.Request) error {
 	return r.SendEnvelope(response)
 }
 
-// CreateAPIKey creates a new API key (admin only)
+// CreateAPIKey creates a new API key
 func (a *App) CreateAPIKey(r *fastglue.Request) error {
 	orgID, err := getOrganizationID(r)
 	if err != nil {
@@ -92,11 +91,8 @@ func (a *App) CreateAPIKey(r *fastglue.Request) error {
 	}
 
 	userID, _ := r.RequestCtx.UserValue("user_id").(uuid.UUID)
-
-	// Check if user is admin
-	role, _ := r.RequestCtx.UserValue("role").(models.Role)
-	if role != models.RoleAdmin {
-		return r.SendErrorEnvelope(fasthttp.StatusForbidden, "Admin access required", nil, "")
+	if !a.HasPermission(userID, models.ResourceAPIKeys, models.ActionWrite) {
+		return r.SendErrorEnvelope(fasthttp.StatusForbidden, "Insufficient permissions", nil, "")
 	}
 
 	var req APIKeyRequest
@@ -162,17 +158,16 @@ func (a *App) CreateAPIKey(r *fastglue.Request) error {
 	})
 }
 
-// DeleteAPIKey revokes an API key (admin only)
+// DeleteAPIKey revokes an API key
 func (a *App) DeleteAPIKey(r *fastglue.Request) error {
 	orgID, err := getOrganizationID(r)
 	if err != nil {
 		return r.SendErrorEnvelope(fasthttp.StatusUnauthorized, "Unauthorized", nil, "")
 	}
 
-	// Check if user is admin
-	role, _ := r.RequestCtx.UserValue("role").(models.Role)
-	if role != models.RoleAdmin {
-		return r.SendErrorEnvelope(fasthttp.StatusForbidden, "Admin access required", nil, "")
+	userID, _ := r.RequestCtx.UserValue("user_id").(uuid.UUID)
+	if !a.HasPermission(userID, models.ResourceAPIKeys, models.ActionDelete) {
+		return r.SendErrorEnvelope(fasthttp.StatusForbidden, "Insufficient permissions", nil, "")
 	}
 
 	idStr := r.RequestCtx.UserValue("id").(string)

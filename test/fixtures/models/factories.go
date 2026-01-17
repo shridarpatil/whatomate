@@ -90,7 +90,6 @@ func NewUser(orgID uuid.UUID) *UserBuilder {
 			Email:          "test-" + id.String()[:8] + "@example.com",
 			PasswordHash:   defaultPasswordHash(),
 			FullName:       "Test User",
-			Role:           models.RoleAgent,
 			Settings:       models.JSONB{},
 			IsActive:       true,
 			IsAvailable:    true,
@@ -123,21 +122,9 @@ func (b *UserBuilder) WithPassword(password string) *UserBuilder {
 	return b
 }
 
-// AsAdmin sets the user role to admin.
-func (b *UserBuilder) AsAdmin() *UserBuilder {
-	b.user.Role = models.RoleAdmin
-	return b
-}
-
-// AsManager sets the user role to manager.
-func (b *UserBuilder) AsManager() *UserBuilder {
-	b.user.Role = models.RoleManager
-	return b
-}
-
-// AsAgent sets the user role to agent.
-func (b *UserBuilder) AsAgent() *UserBuilder {
-	b.user.Role = models.RoleAgent
+// WithRoleID sets the user's role ID.
+func (b *UserBuilder) WithRoleID(roleID uuid.UUID) *UserBuilder {
+	b.user.RoleID = &roleID
 	return b
 }
 

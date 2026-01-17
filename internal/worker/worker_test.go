@@ -54,7 +54,6 @@ func createTestCampaignData(t *testing.T, w *Worker) (*models.Organization, *mod
 		Email:          "test-" + uniqueID + "@example.com",
 		PasswordHash:   "hashed",
 		FullName:       "Test User",
-		Role:           models.RoleAdmin,
 		IsActive:       true,
 	}
 	require.NoError(t, w.DB.Create(user).Error)
@@ -309,7 +308,6 @@ func createMinimalCampaignData(t *testing.T, w *Worker, status models.CampaignSt
 		Email:          "test-" + uniqueID + "@example.com",
 		PasswordHash:   "hashed",
 		FullName:       "Test User",
-		Role:           models.RoleAdmin,
 		IsActive:       true,
 	}
 	require.NoError(t, w.DB.Create(user).Error)

@@ -7,7 +7,6 @@ import (
 	"github.com/golang-jwt/jwt/v5"
 	"github.com/google/uuid"
 	"github.com/shridarpatil/whatomate/internal/middleware"
-	"github.com/shridarpatil/whatomate/internal/models"
 	"github.com/shridarpatil/whatomate/test/testutil"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -24,14 +23,14 @@ func newTestRequest() *fastglue.Request {
 }
 
 // generateTestToken creates a valid JWT token for testing.
-func generateTestToken(t *testing.T, userID, orgID uuid.UUID, email string, role models.Role, expiry time.Duration) string {
+func generateTestToken(t *testing.T, userID, orgID uuid.UUID, email string, roleID *uuid.UUID, expiry time.Duration) string {
 	t.Helper()
 
 	claims := middleware.JWTClaims{
 		UserID:         userID,
 		OrganizationID: orgID,
 		Email:          email,
-		Role:           role,
+		RoleID:         roleID,
 		RegisteredClaims: jwt.RegisteredClaims{
 			ExpiresAt: jwt.NewNumericDate(time.Now().Add(expiry)),
 			IssuedAt:  jwt.NewNumericDate(time.Now()),
@@ -120,9 +119,9 @@ func TestAuth_ValidJWT(t *testing.T) {
 	userID := uuid.New()
 	orgID := uuid.New()
 	email := "test@example.com"
-	role := models.RoleAdmin
+	roleID := uuid.New()
 
-	token := generateTestToken(t, userID, orgID, email, role, time.Hour)
+	token := generateTestToken(t, userID, orgID, email, &roleID, time.Hour)
 
 	req := newTestRequest()
 	req.RequestCtx.Request.Header.Set("Authorization", "Bearer "+token)
@@ -145,9 +144,9 @@ func TestAuth_ValidJWT(t *testing.T) {
 	require.True(t, ok, "email should be string")
 	assert.Equal(t, email, gotEmail)
 
-	gotRole, ok := result.RequestCtx.UserValue(middleware.ContextKeyRole).(models.Role)
-	require.True(t, ok, "role should be models.Role")
-	assert.Equal(t, role, gotRole)
+	gotRoleID, ok := result.RequestCtx.UserValue(middleware.ContextKeyRoleID).(uuid.UUID)
+	require.True(t, ok, "role_id should be uuid.UUID")
+	assert.Equal(t, roleID, gotRoleID)
 }
 
 func TestAuth_ExpiredJWT(t *testing.T) {
@@ -155,9 +154,10 @@ func TestAuth_ExpiredJWT(t *testing.T) {
 
 	userID := uuid.New()
 	orgID := uuid.New()
+	roleID := uuid.New()
 
 	// Create an expired token
-	token := generateTestToken(t, userID, orgID, "test@example.com", models.RoleAdmin, -time.Hour)
+	token := generateTestToken(t, userID, orgID, "test@example.com", &roleID, -time.Hour)
 
 	req := newTestRequest()
 	req.RequestCtx.Request.Header.Set("Authorization", "Bearer "+token)
@@ -216,18 +216,22 @@ func TestAuth_InvalidJWT(t *testing.T) {
 	}
 }
 
-func TestAuth_DifferentRoles(t *testing.T) {
+func TestAuth_DifferentRoleIDs(t *testing.T) {
 	t.Parallel()
 
-	roles := []models.Role{models.RoleAdmin, models.RoleManager, models.RoleAgent}
+	roleIDs := []*uuid.UUID{
+		func() *uuid.UUID { id := uuid.New(); return &id }(),
+		func() *uuid.UUID { id := uuid.New(); return &id }(),
+		func() *uuid.UUID { id := uuid.New(); return &id }(),
+	}
 
-	for _, role := range roles {
-		t.Run("role_"+string(role), func(t *testing.T) {
+	for i, roleID := range roleIDs {
+		t.Run("role_"+roleID.String()[:8], func(t *testing.T) {
 			t.Parallel()
 
 			userID := uuid.New()
 			orgID := uuid.New()
-			token := generateTestToken(t, userID, orgID, "test@example.com", role, time.Hour)
+			token := generateTestToken(t, userID, orgID, "test@example.com", roleIDs[i], time.Hour)
 
 			req := newTestRequest()
 			req.RequestCtx.Request.Header.Set("Authorization", "Bearer "+token)
@@ -237,50 +241,49 @@ func TestAuth_DifferentRoles(t *testing.T) {
 
 			require.NotNil(t, result)
 
-			gotRole := result.RequestCtx.UserValue(middleware.ContextKeyRole).(models.Role)
-			assert.Equal(t, role, gotRole)
+			gotRoleID := result.RequestCtx.UserValue(middleware.ContextKeyRoleID).(uuid.UUID)
+			assert.Equal(t, *roleIDs[i], gotRoleID)
 		})
 	}
 }
 
-func TestRequireRole(t *testing.T) {
+func TestAuth_NilRoleID(t *testing.T) {
+	t.Parallel()
+
+	userID := uuid.New()
+	orgID := uuid.New()
+	token := generateTestToken(t, userID, orgID, "test@example.com", nil, time.Hour)
+
+	req := newTestRequest()
+	req.RequestCtx.Request.Header.Set("Authorization", "Bearer "+token)
+
+	authMiddleware := middleware.Auth(testJWTSecret)
+	result := authMiddleware(req)
+
+	require.NotNil(t, result, "should return request for valid token with nil roleID")
+
+	// Verify roleID is not set in context when nil
+	gotRoleID := result.RequestCtx.UserValue(middleware.ContextKeyRoleID)
+	assert.Nil(t, gotRoleID, "role_id should not be set when nil in claims")
+}
+
+func TestRequirePermission(t *testing.T) {
 	t.Parallel()
 
 	tests := []struct {
-		name         string
-		userRole     models.Role
-		allowedRoles []string
-		wantAllowed  bool
+		name        string
+		hasPermission bool
+		wantAllowed bool
 	}{
 		{
-			name:         "admin allowed for admin-only",
-			userRole:     models.RoleAdmin,
-			allowedRoles: []string{"admin"},
-			wantAllowed:  true,
+			name:        "user with permission allowed",
+			hasPermission: true,
+			wantAllowed: true,
 		},
 		{
-			name:         "agent denied for admin-only",
-			userRole:     models.RoleAgent,
-			allowedRoles: []string{"admin"},
-			wantAllowed:  false,
-		},
-		{
-			name:         "manager allowed for admin or manager",
-			userRole:     models.RoleManager,
-			allowedRoles: []string{"admin", "manager"},
-			wantAllowed:  true,
-		},
-		{
-			name:         "agent allowed for multi-role",
-			userRole:     models.RoleAgent,
-			allowedRoles: []string{"admin", "manager", "agent"},
-			wantAllowed:  true,
-		},
-		{
-			name:         "unknown role denied",
-			userRole:     models.Role("unknown"),
-			allowedRoles: []string{"admin", "manager", "agent"},
-			wantAllowed:  false,
+			name:        "user without permission denied",
+			hasPermission: false,
+			wantAllowed: false,
 		},
 	}
 
@@ -288,11 +291,17 @@ func TestRequireRole(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
+			userID := uuid.New()
 			req := newTestRequest()
-			req.RequestCtx.SetUserValue(middleware.ContextKeyRole, tt.userRole)
+			req.RequestCtx.SetUserValue(middleware.ContextKeyUserID, userID)
 
-			roleMiddleware := middleware.RequireRole(tt.allowedRoles...)
-			result := roleMiddleware(req)
+			// Create a mock permission checker
+			checker := func(uid uuid.UUID, resource, action string) bool {
+				return tt.hasPermission
+			}
+
+			permMiddleware := middleware.RequirePermission(checker, "contacts", "read")
+			result := permMiddleware(req)
 
 			if tt.wantAllowed {
 				assert.NotNil(t, result, "should allow access")
@@ -304,17 +313,77 @@ func TestRequireRole(t *testing.T) {
 	}
 }
 
-func TestRequireRole_NoRoleInContext(t *testing.T) {
+func TestRequirePermission_NoUserInContext(t *testing.T) {
 	t.Parallel()
 
 	req := newTestRequest()
-	// Don't set any role in context
+	// Don't set any user in context
 
-	roleMiddleware := middleware.RequireRole("admin")
-	result := roleMiddleware(req)
+	checker := func(uid uuid.UUID, resource, action string) bool {
+		return true
+	}
 
-	assert.Nil(t, result, "should deny when role not in context")
-	assert.Equal(t, fasthttp.StatusForbidden, req.RequestCtx.Response.StatusCode())
+	permMiddleware := middleware.RequirePermission(checker, "contacts", "read")
+	result := permMiddleware(req)
+
+	assert.Nil(t, result, "should deny when user not in context")
+	assert.Equal(t, fasthttp.StatusUnauthorized, req.RequestCtx.Response.StatusCode())
+}
+
+func TestRequireAnyPermission(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name           string
+		allowedPerms   map[string]bool
+		checkPerms     []string
+		wantAllowed    bool
+	}{
+		{
+			name:         "user with first permission allowed",
+			allowedPerms: map[string]bool{"contacts:read": true},
+			checkPerms:   []string{"contacts:read", "contacts:write"},
+			wantAllowed:  true,
+		},
+		{
+			name:         "user with second permission allowed",
+			allowedPerms: map[string]bool{"contacts:write": true},
+			checkPerms:   []string{"contacts:read", "contacts:write"},
+			wantAllowed:  true,
+		},
+		{
+			name:         "user without any permission denied",
+			allowedPerms: map[string]bool{},
+			checkPerms:   []string{"contacts:read", "contacts:write"},
+			wantAllowed:  false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			userID := uuid.New()
+			req := newTestRequest()
+			req.RequestCtx.SetUserValue(middleware.ContextKeyUserID, userID)
+
+			// Create a mock permission checker
+			checker := func(uid uuid.UUID, resource, action string) bool {
+				perm := resource + ":" + action
+				return tt.allowedPerms[perm]
+			}
+
+			permMiddleware := middleware.RequireAnyPermission(checker, tt.checkPerms...)
+			result := permMiddleware(req)
+
+			if tt.wantAllowed {
+				assert.NotNil(t, result, "should allow access")
+			} else {
+				assert.Nil(t, result, "should deny access")
+				assert.Equal(t, fasthttp.StatusForbidden, req.RequestCtx.Response.StatusCode())
+			}
+		})
+	}
 }
 
 func TestGetUserID(t *testing.T) {
@@ -404,12 +473,13 @@ func TestJWTClaims(t *testing.T) {
 
 	userID := uuid.New()
 	orgID := uuid.New()
+	roleID := uuid.New()
 
 	claims := middleware.JWTClaims{
 		UserID:         userID,
 		OrganizationID: orgID,
 		Email:          "test@example.com",
-		Role:           models.RoleAdmin,
+		RoleID:         &roleID,
 		RegisteredClaims: jwt.RegisteredClaims{
 			ExpiresAt: jwt.NewNumericDate(time.Now().Add(time.Hour)),
 			IssuedAt:  jwt.NewNumericDate(time.Now()),
@@ -435,7 +505,8 @@ func TestJWTClaims(t *testing.T) {
 	assert.Equal(t, userID, parsedClaims.UserID)
 	assert.Equal(t, orgID, parsedClaims.OrganizationID)
 	assert.Equal(t, "test@example.com", parsedClaims.Email)
-	assert.Equal(t, models.RoleAdmin, parsedClaims.Role)
+	require.NotNil(t, parsedClaims.RoleID)
+	assert.Equal(t, roleID, *parsedClaims.RoleID)
 }
 
 func TestAuth_MultipleMiddlewareChain(t *testing.T) {
@@ -444,7 +515,8 @@ func TestAuth_MultipleMiddlewareChain(t *testing.T) {
 	// Test that Auth works correctly when chained with other middleware
 	userID := uuid.New()
 	orgID := uuid.New()
-	token := generateTestToken(t, userID, orgID, "test@example.com", models.RoleAdmin, time.Hour)
+	roleID := uuid.New()
+	token := generateTestToken(t, userID, orgID, "test@example.com", &roleID, time.Hour)
 
 	req := newTestRequest()
 	req.RequestCtx.Request.Header.Set("Authorization", "Bearer "+token)
@@ -460,15 +532,18 @@ func TestAuth_MultipleMiddlewareChain(t *testing.T) {
 	req = authMiddleware(req)
 	require.NotNil(t, req)
 
-	// Then RequireRole
-	roleMiddleware := middleware.RequireRole("admin")
-	req = roleMiddleware(req)
+	// Then RequirePermission (replaces RequireRole)
+	checker := func(uid uuid.UUID, resource, action string) bool {
+		return uid == userID // Allow the authenticated user
+	}
+	permMiddleware := middleware.RequirePermission(checker, "contacts", "read")
+	req = permMiddleware(req)
 	require.NotNil(t, req)
 
 	// Verify all context values are still present
 	assert.Equal(t, userID, req.RequestCtx.UserValue(middleware.ContextKeyUserID))
 	assert.Equal(t, orgID, req.RequestCtx.UserValue(middleware.ContextKeyOrganizationID))
-	assert.Equal(t, models.RoleAdmin, req.RequestCtx.UserValue(middleware.ContextKeyRole))
+	assert.Equal(t, roleID, req.RequestCtx.UserValue(middleware.ContextKeyRoleID))
 
 	// Verify CORS headers are still present
 	assert.Equal(t, "https://example.com", string(req.RequestCtx.Response.Header.Peek("Access-Control-Allow-Origin")))
@@ -478,11 +553,12 @@ func TestAuth_MultipleMiddlewareChain(t *testing.T) {
 func generateTokenWithSecret(t *testing.T, secret string) string {
 	t.Helper()
 
+	roleID := uuid.New()
 	claims := middleware.JWTClaims{
 		UserID:         uuid.New(),
 		OrganizationID: uuid.New(),
 		Email:          "test@example.com",
-		Role:           models.RoleAdmin,
+		RoleID:         &roleID,
 		RegisteredClaims: jwt.RegisteredClaims{
 			ExpiresAt: jwt.NewNumericDate(time.Now().Add(time.Hour)),
 			IssuedAt:  jwt.NewNumericDate(time.Now()),

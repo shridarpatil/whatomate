@@ -20,6 +20,8 @@ const (
 	webhooksCacheTTL        = 6 * time.Hour
 	slaSettingsCacheTTL     = 6 * time.Hour
 	aiContextsCacheTTL      = 6 * time.Hour
+	userPermissionsCacheTTL = 6 * time.Hour
+	rolePermissionsCacheTTL = 6 * time.Hour
 
 	// Cache key prefixes
 	settingsCachePrefix        = "chatbot:settings:"
@@ -29,6 +31,8 @@ const (
 	webhooksCachePrefix        = "webhooks:"
 	slaSettingsCacheKey        = "chatbot:sla_enabled_settings"
 	aiContextsCachePrefix      = "chatbot:ai_contexts:"
+	userPermissionsCachePrefix = "permissions:user:"
+	rolePermissionsCachePrefix = "permissions:role:"
 )
 
 // chatbotSettingsCache is used for caching since AI.APIKey has json:"-" tag
@@ -364,4 +368,172 @@ func (a *App) InvalidateAIContextsCache(orgID uuid.UUID) {
 	ctx := context.Background()
 	pattern := fmt.Sprintf("%s%s:*", aiContextsCachePrefix, orgID.String())
 	a.deleteKeysByPattern(ctx, pattern)
+}
+
+// UserPermissions represents cached user permissions
+type UserPermissions struct {
+	RoleID      uuid.UUID `json:"role_id"`
+	RoleName    string    `json:"role_name"`
+	IsSystem    bool      `json:"is_system"`
+	Permissions []string  `json:"permissions"` // Format: "resource:action"
+}
+
+// getUserPermissionsCached retrieves user permissions from cache or database
+func (a *App) getUserPermissionsCached(userID uuid.UUID) (*UserPermissions, error) {
+	ctx := context.Background()
+	cacheKey := fmt.Sprintf("%s%s", userPermissionsCachePrefix, userID.String())
+
+	// Try cache first
+	cached, err := a.Redis.Get(ctx, cacheKey).Result()
+	if err == nil && cached != "" {
+		var perms UserPermissions
+		if err := json.Unmarshal([]byte(cached), &perms); err == nil {
+			return &perms, nil
+		}
+	}
+
+	// Cache miss - fetch from database
+	var user models.User
+	if err := a.DB.Preload("Role.Permissions").Where("id = ?", userID).First(&user).Error; err != nil {
+		return nil, err
+	}
+
+	if user.Role == nil {
+		return nil, gorm.ErrRecordNotFound
+	}
+
+	// Build permissions list
+	perms := UserPermissions{
+		RoleID:      user.Role.ID,
+		RoleName:    user.Role.Name,
+		IsSystem:    user.Role.IsSystem,
+		Permissions: make([]string, 0, len(user.Role.Permissions)),
+	}
+
+	for _, p := range user.Role.Permissions {
+		perms.Permissions = append(perms.Permissions, p.Resource+":"+p.Action)
+	}
+
+	// Cache the result
+	if data, err := json.Marshal(perms); err == nil {
+		a.Redis.Set(ctx, cacheKey, data, userPermissionsCacheTTL)
+	}
+
+	return &perms, nil
+}
+
+// HasPermission checks if a user has a specific permission
+func (a *App) HasPermission(userID uuid.UUID, resource, action string) bool {
+	perms, err := a.getUserPermissionsCached(userID)
+	if err != nil {
+		a.Log.Error("Failed to get user permissions", "error", err, "user_id", userID)
+		return false
+	}
+
+	permKey := resource + ":" + action
+	for _, p := range perms.Permissions {
+		if p == permKey {
+			return true
+		}
+	}
+
+	return false
+}
+
+// HasAnyPermission checks if a user has any of the specified permissions
+func (a *App) HasAnyPermission(userID uuid.UUID, permissions ...string) bool {
+	perms, err := a.getUserPermissionsCached(userID)
+	if err != nil {
+		a.Log.Error("Failed to get user permissions", "error", err, "user_id", userID)
+		return false
+	}
+
+	permSet := make(map[string]bool)
+	for _, p := range perms.Permissions {
+		permSet[p] = true
+	}
+
+	for _, p := range permissions {
+		if permSet[p] {
+			return true
+		}
+	}
+
+	return false
+}
+
+// getRolePermissionsCached retrieves role permissions from cache or database
+func (a *App) getRolePermissionsCached(roleID uuid.UUID) ([]string, error) {
+	ctx := context.Background()
+	cacheKey := fmt.Sprintf("%s%s", rolePermissionsCachePrefix, roleID.String())
+
+	// Try cache first
+	cached, err := a.Redis.Get(ctx, cacheKey).Result()
+	if err == nil && cached != "" {
+		var perms []string
+		if err := json.Unmarshal([]byte(cached), &perms); err == nil {
+			return perms, nil
+		}
+	}
+
+	// Cache miss - fetch from database
+	var role models.CustomRole
+	if err := a.DB.Preload("Permissions").Where("id = ?", roleID).First(&role).Error; err != nil {
+		return nil, err
+	}
+
+	// Build permissions list
+	perms := make([]string, 0, len(role.Permissions))
+	for _, p := range role.Permissions {
+		perms = append(perms, p.Resource+":"+p.Action)
+	}
+
+	// Cache the result
+	if data, err := json.Marshal(perms); err == nil {
+		a.Redis.Set(ctx, cacheKey, data, rolePermissionsCacheTTL)
+	}
+
+	return perms, nil
+}
+
+// InvalidateUserPermissionsCache invalidates the permissions cache for a user
+func (a *App) InvalidateUserPermissionsCache(userID uuid.UUID) {
+	ctx := context.Background()
+	cacheKey := fmt.Sprintf("%s%s", userPermissionsCachePrefix, userID.String())
+	a.Redis.Del(ctx, cacheKey)
+}
+
+// InvalidateRolePermissionsCache invalidates the permissions cache for a role and all users with that role
+func (a *App) InvalidateRolePermissionsCache(roleID uuid.UUID) {
+	ctx := context.Background()
+
+	// Delete role cache
+	roleCacheKey := fmt.Sprintf("%s%s", rolePermissionsCachePrefix, roleID.String())
+	a.Redis.Del(ctx, roleCacheKey)
+
+	// Find all users with this role and invalidate their cache
+	var users []models.User
+	if err := a.DB.Select("id").Where("role_id = ?", roleID).Find(&users).Error; err != nil {
+		a.Log.Error("Failed to find users for role permission cache invalidation", "error", err, "role_id", roleID)
+		return
+	}
+
+	for _, user := range users {
+		userCacheKey := fmt.Sprintf("%s%s", userPermissionsCachePrefix, user.ID.String())
+		a.Redis.Del(ctx, userCacheKey)
+	}
+}
+
+// InvalidateOrgPermissionsCache invalidates all permission caches for an organization
+func (a *App) InvalidateOrgPermissionsCache(orgID uuid.UUID) {
+	// Find all roles in this org
+	var roles []models.CustomRole
+	if err := a.DB.Select("id").Where("organization_id = ?", orgID).Find(&roles).Error; err != nil {
+		a.Log.Error("Failed to find roles for org permission cache invalidation", "error", err, "org_id", orgID)
+		return
+	}
+
+	for _, role := range roles {
+		a.InvalidateRolePermissionsCache(role.ID)
+	}
 }

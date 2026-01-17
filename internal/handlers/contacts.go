@@ -77,11 +77,10 @@ type ReactionInfo struct {
 }
 
 // ListContacts returns all contacts for the organization
-// Agents only see contacts assigned to them
+// Users without contacts:read permission only see contacts assigned to them
 func (a *App) ListContacts(r *fastglue.Request) error {
 	orgID := r.RequestCtx.UserValue("organization_id").(uuid.UUID)
 	userID, _ := r.RequestCtx.UserValue("user_id").(uuid.UUID)
-	userRole, _ := r.RequestCtx.UserValue("role").(models.Role)
 
 	// Pagination
 	page, _ := strconv.Atoi(string(r.RequestCtx.QueryArgs().Peek("page")))
@@ -99,8 +98,8 @@ func (a *App) ListContacts(r *fastglue.Request) error {
 	var contacts []models.Contact
 	query := a.DB.Where("organization_id = ?", orgID)
 
-	// Agents can only see contacts assigned to them
-	if userRole == models.RoleAgent {
+	// Users without contacts:read permission can only see contacts assigned to them
+	if !a.HasPermission(userID, models.ResourceContacts, models.ActionRead) {
 		query = query.Where("assigned_user_id = ?", userID)
 	}
 
@@ -174,11 +173,10 @@ func (a *App) ListContacts(r *fastglue.Request) error {
 }
 
 // GetContact returns a single contact
-// Agents can only access contacts assigned to them
+// Users without contacts:read permission can only access contacts assigned to them
 func (a *App) GetContact(r *fastglue.Request) error {
 	orgID := r.RequestCtx.UserValue("organization_id").(uuid.UUID)
 	userID, _ := r.RequestCtx.UserValue("user_id").(uuid.UUID)
-	userRole, _ := r.RequestCtx.UserValue("role").(models.Role)
 	contactIDStr := r.RequestCtx.UserValue("id").(string)
 
 	contactID, err := uuid.Parse(contactIDStr)
@@ -189,8 +187,8 @@ func (a *App) GetContact(r *fastglue.Request) error {
 	var contact models.Contact
 	query := a.DB.Where("id = ? AND organization_id = ?", contactID, orgID)
 
-	// Agents can only access their assigned contacts
-	if userRole == models.RoleAgent {
+	// Users without contacts:read permission can only access their assigned contacts
+	if !a.HasPermission(userID, models.ResourceContacts, models.ActionRead) {
 		query = query.Where("assigned_user_id = ?", userID)
 	}
 
@@ -246,7 +244,6 @@ func (a *App) GetContact(r *fastglue.Request) error {
 func (a *App) GetMessages(r *fastglue.Request) error {
 	orgID := r.RequestCtx.UserValue("organization_id").(uuid.UUID)
 	userID, _ := r.RequestCtx.UserValue("user_id").(uuid.UUID)
-	userRole, _ := r.RequestCtx.UserValue("role").(models.Role)
 	contactIDStr := r.RequestCtx.UserValue("id").(string)
 
 	contactID, err := uuid.Parse(contactIDStr)
@@ -254,10 +251,12 @@ func (a *App) GetMessages(r *fastglue.Request) error {
 		return r.SendErrorEnvelope(fasthttp.StatusBadRequest, "Invalid contact ID", nil, "")
 	}
 
-	// Verify contact belongs to org (and to agent if role is agent)
+	hasContactsReadPermission := a.HasPermission(userID, models.ResourceContacts, models.ActionRead)
+
+	// Verify contact belongs to org (and to user if no contacts:read permission)
 	var contact models.Contact
 	query := a.DB.Where("id = ? AND organization_id = ?", contactID, orgID)
-	if userRole == models.RoleAgent {
+	if !hasContactsReadPermission {
 		query = query.Where("assigned_user_id = ?", userID)
 	}
 	if err := query.First(&contact).Error; err != nil {
@@ -275,8 +274,8 @@ func (a *App) GetMessages(r *fastglue.Request) error {
 	// Build base query
 	msgQuery := a.DB.Where("contact_id = ?", contactID)
 
-	// Check if agent should only see current conversation
-	if userRole == models.RoleAgent {
+	// Check if user without contacts:read should only see current conversation
+	if !hasContactsReadPermission {
 		settings, err := a.getChatbotSettingsCached(orgID, "")
 		if err == nil {
 			if settings.AgentAssignment.CurrentConversationOnly {
@@ -483,7 +482,6 @@ type SendMessageRequest struct {
 func (a *App) SendMessage(r *fastglue.Request) error {
 	orgID := r.RequestCtx.UserValue("organization_id").(uuid.UUID)
 	userID, _ := r.RequestCtx.UserValue("user_id").(uuid.UUID)
-	userRole, _ := r.RequestCtx.UserValue("role").(models.Role)
 	contactIDStr := r.RequestCtx.UserValue("id").(string)
 
 	contactID, err := uuid.Parse(contactIDStr)
@@ -497,10 +495,10 @@ func (a *App) SendMessage(r *fastglue.Request) error {
 		return r.SendErrorEnvelope(fasthttp.StatusBadRequest, "Invalid request body", nil, "")
 	}
 
-	// Get contact (agents can only message their assigned contacts)
+	// Get contact (users without full read permission can only message their assigned contacts)
 	var contact models.Contact
 	query := a.DB.Where("id = ? AND organization_id = ?", contactID, orgID)
-	if userRole == models.RoleAgent {
+	if !a.HasPermission(userID, models.ResourceContacts, models.ActionRead) {
 		query = query.Where("assigned_user_id = ?", userID)
 	}
 	if err := query.First(&contact).Error; err != nil {
@@ -603,7 +601,6 @@ func truncateString(s string, maxLen int) string {
 func (a *App) SendMediaMessage(r *fastglue.Request) error {
 	orgID := r.RequestCtx.UserValue("organization_id").(uuid.UUID)
 	userID, _ := r.RequestCtx.UserValue("user_id").(uuid.UUID)
-	userRole, _ := r.RequestCtx.UserValue("role").(models.Role)
 
 	// Parse multipart form
 	form, err := r.RequestCtx.MultipartForm()
@@ -659,10 +656,10 @@ func (a *App) SendMediaMessage(r *fastglue.Request) error {
 		mimeType = "application/octet-stream"
 	}
 
-	// Get contact (agents can only message their assigned contacts)
+	// Get contact (users without full read permission can only message their assigned contacts)
 	var contact models.Contact
 	query := a.DB.Where("id = ? AND organization_id = ?", contactID, orgID)
-	if userRole == models.RoleAgent {
+	if !a.HasPermission(userID, models.ResourceContacts, models.ActionRead) {
 		query = query.Where("assigned_user_id = ?", userID)
 	}
 	if err := query.First(&contact).Error; err != nil {
@@ -785,7 +782,6 @@ type SendReactionRequest struct {
 func (a *App) SendReaction(r *fastglue.Request) error {
 	orgID := r.RequestCtx.UserValue("organization_id").(uuid.UUID)
 	userID, _ := r.RequestCtx.UserValue("user_id").(uuid.UUID)
-	userRole, _ := r.RequestCtx.UserValue("role").(models.Role)
 	contactIDStr := r.RequestCtx.UserValue("id").(string)
 	messageIDStr := r.RequestCtx.UserValue("message_id").(string)
 
@@ -805,10 +801,10 @@ func (a *App) SendReaction(r *fastglue.Request) error {
 		return r.SendErrorEnvelope(fasthttp.StatusBadRequest, "Invalid request body", nil, "")
 	}
 
-	// Get contact (agents can only react to messages in their assigned contacts)
+	// Get contact (users without full read permission can only react to messages in their assigned contacts)
 	var contact models.Contact
 	query := a.DB.Where("id = ? AND organization_id = ?", contactID, orgID)
-	if userRole == models.RoleAgent {
+	if !a.HasPermission(userID, models.ResourceContacts, models.ActionRead) {
 		query = query.Where("assigned_user_id = ?", userID)
 	}
 	if err := query.First(&contact).Error; err != nil {
@@ -970,17 +966,18 @@ type AssignContactRequest struct {
 }
 
 // AssignContact assigns a contact to a user (agent)
-// Only admin and manager can assign contacts
+// Only users with write permission can assign contacts
 func (a *App) AssignContact(r *fastglue.Request) error {
 	orgID, err := getOrganizationID(r)
 	if err != nil {
 		return r.SendErrorEnvelope(fasthttp.StatusUnauthorized, "Unauthorized", nil, "")
 	}
 
-	// Only admin and manager can assign contacts
-	role, _ := r.RequestCtx.UserValue("role").(models.Role)
-	if role == models.RoleAgent {
-		return r.SendErrorEnvelope(fasthttp.StatusForbidden, "Only admin and manager can assign contacts", nil, "")
+	userID, _ := r.RequestCtx.UserValue("user_id").(uuid.UUID)
+
+	// Only users with write permission can assign contacts
+	if !a.HasPermission(userID, models.ResourceContacts, models.ActionWrite) {
+		return r.SendErrorEnvelope(fasthttp.StatusForbidden, "You do not have permission to assign contacts", nil, "")
 	}
 
 	contactIDStr := r.RequestCtx.UserValue("id").(string)
@@ -1034,7 +1031,6 @@ type ContactSessionDataResponse struct {
 func (a *App) GetContactSessionData(r *fastglue.Request) error {
 	orgID := r.RequestCtx.UserValue("organization_id").(uuid.UUID)
 	userID, _ := r.RequestCtx.UserValue("user_id").(uuid.UUID)
-	userRole, _ := r.RequestCtx.UserValue("role").(models.Role)
 	contactIDStr := r.RequestCtx.UserValue("id").(string)
 
 	contactID, err := uuid.Parse(contactIDStr)
@@ -1042,10 +1038,10 @@ func (a *App) GetContactSessionData(r *fastglue.Request) error {
 		return r.SendErrorEnvelope(fasthttp.StatusBadRequest, "Invalid contact ID", nil, "")
 	}
 
-	// Verify contact belongs to org (and to agent if role is agent)
+	// Verify contact belongs to org (users without full read permission can only access assigned contacts)
 	var contact models.Contact
 	query := a.DB.Where("id = ? AND organization_id = ?", contactID, orgID)
-	if userRole == models.RoleAgent {
+	if !a.HasPermission(userID, models.ResourceContacts, models.ActionRead) {
 		query = query.Where("assigned_user_id = ?", userID)
 	}
 	if err := query.First(&contact).Error; err != nil {

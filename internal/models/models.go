@@ -103,21 +103,22 @@ func (Organization) TableName() string {
 // User represents a user in the system
 type User struct {
 	BaseModel
-	OrganizationID uuid.UUID `gorm:"type:uuid;index" json:"organization_id"`
-	Email          string    `gorm:"size:255;uniqueIndex;not null" json:"email"`
-	PasswordHash   string    `gorm:"size:255" json:"-"`
-	FullName       string    `gorm:"size:255" json:"full_name"`
-	Role           Role      `gorm:"size:50;default:'agent'" json:"role"`
-	Settings       JSONB     `gorm:"type:jsonb;default:'{}'" json:"settings"`
-	IsActive       bool      `gorm:"default:true" json:"is_active"`
-	IsAvailable    bool      `gorm:"default:true" json:"is_available"` // Agent availability status (away/available)
+	OrganizationID uuid.UUID  `gorm:"type:uuid;index" json:"organization_id"`
+	Email          string     `gorm:"size:255;uniqueIndex;not null" json:"email"`
+	PasswordHash   string     `gorm:"size:255" json:"-"`
+	FullName       string     `gorm:"size:255" json:"full_name"`
+	RoleID         *uuid.UUID `gorm:"type:uuid;index" json:"role_id,omitempty"`
+	Settings       JSONB      `gorm:"type:jsonb;default:'{}'" json:"settings"`
+	IsActive       bool       `gorm:"default:true" json:"is_active"`
+	IsAvailable    bool       `gorm:"default:true" json:"is_available"` // Agent availability status (away/available)
 
 	// SSO fields
-	SSOProvider   string `gorm:"size:50" json:"sso_provider,omitempty"`    // google, microsoft, github, facebook, custom
+	SSOProvider   string `gorm:"size:50" json:"sso_provider,omitempty"`     // google, microsoft, github, facebook, custom
 	SSOProviderID string `gorm:"size:255" json:"sso_provider_id,omitempty"` // External user ID from provider
 
 	// Relations
 	Organization *Organization `gorm:"foreignKey:OrganizationID" json:"organization,omitempty"`
+	Role         *CustomRole   `gorm:"foreignKey:RoleID" json:"role,omitempty"`
 }
 
 func (User) TableName() string {
@@ -164,7 +165,7 @@ type TeamMember struct {
 	BaseModel
 	TeamID         uuid.UUID  `gorm:"type:uuid;index;not null" json:"team_id"`
 	UserID         uuid.UUID  `gorm:"type:uuid;index;not null" json:"user_id"`
-	Role           Role       `gorm:"size:50;default:'agent'" json:"role"` // manager, agent
+	Role           TeamRole   `gorm:"size:50;default:'agent'" json:"role"` // manager, agent
 	LastAssignedAt *time.Time `json:"last_assigned_at,omitempty"`          // For round-robin tracking
 
 	// Relations
@@ -204,9 +205,9 @@ type SSOProvider struct {
 	Provider        string    `gorm:"size:50;not null" json:"provider"` // google, microsoft, github, facebook, custom
 	ClientID        string    `gorm:"size:500;not null" json:"client_id"`
 	ClientSecret    string    `gorm:"size:500;not null" json:"-"` // Never exposed in JSON
-	IsEnabled       bool      `gorm:"default:false" json:"is_enabled"`
-	AllowAutoCreate bool      `gorm:"default:false" json:"allow_auto_create"` // Auto-create new users on SSO login
-	DefaultRole     Role      `gorm:"size:50;default:'agent'" json:"default_role"` // Role for auto-created users
+	IsEnabled       bool   `gorm:"default:false" json:"is_enabled"`
+	AllowAutoCreate bool   `gorm:"default:false" json:"allow_auto_create"`         // Auto-create new users on SSO login
+	DefaultRoleName string `gorm:"size:50;default:'agent'" json:"default_role"`    // Role name for auto-created users (references CustomRole.Name)
 	AllowedDomains  string    `gorm:"type:text" json:"allowed_domains,omitempty"` // Comma-separated email domains
 
 	// Custom OIDC provider fields (only used when Provider = "custom")

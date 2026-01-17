@@ -149,7 +149,7 @@ func setAuthContext(req *fastglue.Request, orgID, userID uuid.UUID) {
 func TestApp_ListCampaigns_Success(t *testing.T) {
 	app, _ := campaignTestApp(t)
 	org := createTestOrganization(t, app)
-	user := createTestUser(t, app, org.ID, uniqueEmail("list-campaigns"), "password", models.RoleAdmin, true)
+	user := createTestUser(t, app, org.ID, uniqueEmail("list-campaigns"), "password", nil, true)
 	account := createTestWhatsAppAccount(t, app, org.ID, "test-account")
 	template := createTestTemplate(t, app, org.ID, account.Name)
 
@@ -179,7 +179,7 @@ func TestApp_ListCampaigns_Success(t *testing.T) {
 func TestApp_ListCampaigns_FilterByStatus(t *testing.T) {
 	app, _ := campaignTestApp(t)
 	org := createTestOrganization(t, app)
-	user := createTestUser(t, app, org.ID, uniqueEmail("list-filter"), "password", models.RoleAdmin, true)
+	user := createTestUser(t, app, org.ID, uniqueEmail("list-filter"), "password", nil, true)
 	account := createTestWhatsAppAccount(t, app, org.ID, "test-account-filter")
 	template := createTestTemplate(t, app, org.ID, account.Name)
 
@@ -222,7 +222,7 @@ func TestApp_ListCampaigns_Unauthorized(t *testing.T) {
 func TestApp_CreateCampaign_Success(t *testing.T) {
 	app, _ := campaignTestApp(t)
 	org := createTestOrganization(t, app)
-	user := createTestUser(t, app, org.ID, uniqueEmail("create-campaign"), "password", models.RoleAdmin, true)
+	user := createTestUser(t, app, org.ID, uniqueEmail("create-campaign"), "password", nil, true)
 	account := createTestWhatsAppAccount(t, app, org.ID, "create-account")
 	template := createTestTemplate(t, app, org.ID, account.Name)
 
@@ -250,7 +250,7 @@ func TestApp_CreateCampaign_Success(t *testing.T) {
 func TestApp_CreateCampaign_WithScheduledAt(t *testing.T) {
 	app, _ := campaignTestApp(t)
 	org := createTestOrganization(t, app)
-	user := createTestUser(t, app, org.ID, uniqueEmail("create-scheduled"), "password", models.RoleAdmin, true)
+	user := createTestUser(t, app, org.ID, uniqueEmail("create-scheduled"), "password", nil, true)
 	account := createTestWhatsAppAccount(t, app, org.ID, "scheduled-account")
 	template := createTestTemplate(t, app, org.ID, account.Name)
 
@@ -279,7 +279,7 @@ func TestApp_CreateCampaign_WithScheduledAt(t *testing.T) {
 func TestApp_CreateCampaign_InvalidTemplateID(t *testing.T) {
 	app, _ := campaignTestApp(t)
 	org := createTestOrganization(t, app)
-	user := createTestUser(t, app, org.ID, uniqueEmail("invalid-template"), "password", models.RoleAdmin, true)
+	user := createTestUser(t, app, org.ID, uniqueEmail("invalid-template"), "password", nil, true)
 	account := createTestWhatsAppAccount(t, app, org.ID, "invalid-template-account")
 
 	req := testutil.NewJSONRequest(t, map[string]interface{}{
@@ -297,7 +297,7 @@ func TestApp_CreateCampaign_InvalidTemplateID(t *testing.T) {
 func TestApp_CreateCampaign_TemplateNotFound(t *testing.T) {
 	app, _ := campaignTestApp(t)
 	org := createTestOrganization(t, app)
-	user := createTestUser(t, app, org.ID, uniqueEmail("template-not-found"), "password", models.RoleAdmin, true)
+	user := createTestUser(t, app, org.ID, uniqueEmail("template-not-found"), "password", nil, true)
 	account := createTestWhatsAppAccount(t, app, org.ID, "no-template-account")
 
 	req := testutil.NewJSONRequest(t, map[string]interface{}{
@@ -315,7 +315,7 @@ func TestApp_CreateCampaign_TemplateNotFound(t *testing.T) {
 func TestApp_CreateCampaign_AccountNotFound(t *testing.T) {
 	app, _ := campaignTestApp(t)
 	org := createTestOrganization(t, app)
-	user := createTestUser(t, app, org.ID, uniqueEmail("account-not-found"), "password", models.RoleAdmin, true)
+	user := createTestUser(t, app, org.ID, uniqueEmail("account-not-found"), "password", nil, true)
 	account := createTestWhatsAppAccount(t, app, org.ID, "temp-account-for-template")
 	template := createTestTemplate(t, app, org.ID, account.Name)
 
@@ -334,7 +334,7 @@ func TestApp_CreateCampaign_AccountNotFound(t *testing.T) {
 func TestApp_CreateCampaign_InvalidRequestBody(t *testing.T) {
 	app, _ := campaignTestApp(t)
 	org := createTestOrganization(t, app)
-	user := createTestUser(t, app, org.ID, uniqueEmail("invalid-body"), "password", models.RoleAdmin, true)
+	user := createTestUser(t, app, org.ID, uniqueEmail("invalid-body"), "password", nil, true)
 
 	req := testutil.NewRequest(t)
 	req.RequestCtx.Request.SetBody([]byte("invalid json"))
@@ -351,7 +351,7 @@ func TestApp_CreateCampaign_InvalidRequestBody(t *testing.T) {
 func TestApp_GetCampaign_Success(t *testing.T) {
 	app, _ := campaignTestApp(t)
 	org := createTestOrganization(t, app)
-	user := createTestUser(t, app, org.ID, uniqueEmail("get-campaign"), "password", models.RoleAdmin, true)
+	user := createTestUser(t, app, org.ID, uniqueEmail("get-campaign"), "password", nil, true)
 	account := createTestWhatsAppAccount(t, app, org.ID, "get-account")
 	template := createTestTemplate(t, app, org.ID, account.Name)
 	campaign := createTestCampaign(t, app, org.ID, template.ID, user.ID, account.Name, models.CampaignStatusDraft)
@@ -376,7 +376,7 @@ func TestApp_GetCampaign_Success(t *testing.T) {
 func TestApp_GetCampaign_NotFound(t *testing.T) {
 	app, _ := campaignTestApp(t)
 	org := createTestOrganization(t, app)
-	user := createTestUser(t, app, org.ID, uniqueEmail("get-not-found"), "password", models.RoleAdmin, true)
+	user := createTestUser(t, app, org.ID, uniqueEmail("get-not-found"), "password", nil, true)
 
 	req := testutil.NewGETRequest(t)
 	setAuthContext(req, org.ID, user.ID)
@@ -390,7 +390,7 @@ func TestApp_GetCampaign_NotFound(t *testing.T) {
 func TestApp_GetCampaign_InvalidID(t *testing.T) {
 	app, _ := campaignTestApp(t)
 	org := createTestOrganization(t, app)
-	user := createTestUser(t, app, org.ID, uniqueEmail("get-invalid-id"), "password", models.RoleAdmin, true)
+	user := createTestUser(t, app, org.ID, uniqueEmail("get-invalid-id"), "password", nil, true)
 
 	req := testutil.NewGETRequest(t)
 	setAuthContext(req, org.ID, user.ID)
@@ -406,7 +406,7 @@ func TestApp_GetCampaign_InvalidID(t *testing.T) {
 func TestApp_UpdateCampaign_Success(t *testing.T) {
 	app, _ := campaignTestApp(t)
 	org := createTestOrganization(t, app)
-	user := createTestUser(t, app, org.ID, uniqueEmail("update-campaign"), "password", models.RoleAdmin, true)
+	user := createTestUser(t, app, org.ID, uniqueEmail("update-campaign"), "password", nil, true)
 	account := createTestWhatsAppAccount(t, app, org.ID, "update-account")
 	template := createTestTemplate(t, app, org.ID, account.Name)
 	campaign := createTestCampaign(t, app, org.ID, template.ID, user.ID, account.Name, models.CampaignStatusDraft)
@@ -434,7 +434,7 @@ func TestApp_UpdateCampaign_Success(t *testing.T) {
 func TestApp_UpdateCampaign_NotDraft(t *testing.T) {
 	app, _ := campaignTestApp(t)
 	org := createTestOrganization(t, app)
-	user := createTestUser(t, app, org.ID, uniqueEmail("update-not-draft"), "password", models.RoleAdmin, true)
+	user := createTestUser(t, app, org.ID, uniqueEmail("update-not-draft"), "password", nil, true)
 	account := createTestWhatsAppAccount(t, app, org.ID, "update-not-draft-account")
 	template := createTestTemplate(t, app, org.ID, account.Name)
 	campaign := createTestCampaign(t, app, org.ID, template.ID, user.ID, account.Name, models.CampaignStatusProcessing)
@@ -453,7 +453,7 @@ func TestApp_UpdateCampaign_NotDraft(t *testing.T) {
 func TestApp_UpdateCampaign_NotFound(t *testing.T) {
 	app, _ := campaignTestApp(t)
 	org := createTestOrganization(t, app)
-	user := createTestUser(t, app, org.ID, uniqueEmail("update-not-found"), "password", models.RoleAdmin, true)
+	user := createTestUser(t, app, org.ID, uniqueEmail("update-not-found"), "password", nil, true)
 
 	req := testutil.NewJSONRequest(t, map[string]interface{}{
 		"name": "Updated Name",
@@ -471,7 +471,7 @@ func TestApp_UpdateCampaign_NotFound(t *testing.T) {
 func TestApp_DeleteCampaign_Success(t *testing.T) {
 	app, _ := campaignTestApp(t)
 	org := createTestOrganization(t, app)
-	user := createTestUser(t, app, org.ID, uniqueEmail("delete-campaign"), "password", models.RoleAdmin, true)
+	user := createTestUser(t, app, org.ID, uniqueEmail("delete-campaign"), "password", nil, true)
 	account := createTestWhatsAppAccount(t, app, org.ID, "delete-account")
 	template := createTestTemplate(t, app, org.ID, account.Name)
 	campaign := createTestCampaign(t, app, org.ID, template.ID, user.ID, account.Name, models.CampaignStatusDraft)
@@ -493,7 +493,7 @@ func TestApp_DeleteCampaign_Success(t *testing.T) {
 func TestApp_DeleteCampaign_WithRecipients(t *testing.T) {
 	app, _ := campaignTestApp(t)
 	org := createTestOrganization(t, app)
-	user := createTestUser(t, app, org.ID, uniqueEmail("delete-with-recipients"), "password", models.RoleAdmin, true)
+	user := createTestUser(t, app, org.ID, uniqueEmail("delete-with-recipients"), "password", nil, true)
 	account := createTestWhatsAppAccount(t, app, org.ID, "delete-recipients-account")
 	template := createTestTemplate(t, app, org.ID, account.Name)
 	campaign := createTestCampaign(t, app, org.ID, template.ID, user.ID, account.Name, models.CampaignStatusDraft)
@@ -517,7 +517,7 @@ func TestApp_DeleteCampaign_WithRecipients(t *testing.T) {
 func TestApp_DeleteCampaign_RunningCampaign(t *testing.T) {
 	app, _ := campaignTestApp(t)
 	org := createTestOrganization(t, app)
-	user := createTestUser(t, app, org.ID, uniqueEmail("delete-running"), "password", models.RoleAdmin, true)
+	user := createTestUser(t, app, org.ID, uniqueEmail("delete-running"), "password", nil, true)
 	account := createTestWhatsAppAccount(t, app, org.ID, "delete-running-account")
 	template := createTestTemplate(t, app, org.ID, account.Name)
 	campaign := createTestCampaign(t, app, org.ID, template.ID, user.ID, account.Name, models.CampaignStatusProcessing)
@@ -534,7 +534,7 @@ func TestApp_DeleteCampaign_RunningCampaign(t *testing.T) {
 func TestApp_DeleteCampaign_NotFound(t *testing.T) {
 	app, _ := campaignTestApp(t)
 	org := createTestOrganization(t, app)
-	user := createTestUser(t, app, org.ID, uniqueEmail("delete-not-found"), "password", models.RoleAdmin, true)
+	user := createTestUser(t, app, org.ID, uniqueEmail("delete-not-found"), "password", nil, true)
 
 	req := testutil.NewGETRequest(t)
 	setAuthContext(req, org.ID, user.ID)
@@ -550,7 +550,7 @@ func TestApp_DeleteCampaign_NotFound(t *testing.T) {
 func TestApp_StartCampaign_Success(t *testing.T) {
 	app, mockQueue := campaignTestApp(t)
 	org := createTestOrganization(t, app)
-	user := createTestUser(t, app, org.ID, uniqueEmail("start-campaign"), "password", models.RoleAdmin, true)
+	user := createTestUser(t, app, org.ID, uniqueEmail("start-campaign"), "password", nil, true)
 	account := createTestWhatsAppAccount(t, app, org.ID, "start-account")
 	template := createTestTemplate(t, app, org.ID, account.Name)
 	campaign := createTestCampaign(t, app, org.ID, template.ID, user.ID, account.Name, models.CampaignStatusDraft)
@@ -578,7 +578,7 @@ func TestApp_StartCampaign_Success(t *testing.T) {
 func TestApp_StartCampaign_NoPendingRecipients(t *testing.T) {
 	app, _ := campaignTestApp(t)
 	org := createTestOrganization(t, app)
-	user := createTestUser(t, app, org.ID, uniqueEmail("start-no-recipients"), "password", models.RoleAdmin, true)
+	user := createTestUser(t, app, org.ID, uniqueEmail("start-no-recipients"), "password", nil, true)
 	account := createTestWhatsAppAccount(t, app, org.ID, "start-no-recipients-account")
 	template := createTestTemplate(t, app, org.ID, account.Name)
 	campaign := createTestCampaign(t, app, org.ID, template.ID, user.ID, account.Name, models.CampaignStatusDraft)
@@ -600,7 +600,7 @@ func TestApp_StartCampaign_InvalidStatus(t *testing.T) {
 		t.Run("status_"+string(status), func(t *testing.T) {
 			app, _ := campaignTestApp(t)
 			org := createTestOrganization(t, app)
-			user := createTestUser(t, app, org.ID, uniqueEmail("start-invalid-"+string(status)), "password", models.RoleAdmin, true)
+			user := createTestUser(t, app, org.ID, uniqueEmail("start-invalid-"+string(status)), "password", nil, true)
 			account := createTestWhatsAppAccount(t, app, org.ID, "start-invalid-"+string(status))
 			template := createTestTemplate(t, app, org.ID, account.Name)
 			campaign := createTestCampaign(t, app, org.ID, template.ID, user.ID, account.Name, status)
@@ -620,7 +620,7 @@ func TestApp_StartCampaign_InvalidStatus(t *testing.T) {
 func TestApp_StartCampaign_CanResumePaused(t *testing.T) {
 	app, mockQueue := campaignTestApp(t)
 	org := createTestOrganization(t, app)
-	user := createTestUser(t, app, org.ID, uniqueEmail("resume-paused"), "password", models.RoleAdmin, true)
+	user := createTestUser(t, app, org.ID, uniqueEmail("resume-paused"), "password", nil, true)
 	account := createTestWhatsAppAccount(t, app, org.ID, "resume-paused-account")
 	template := createTestTemplate(t, app, org.ID, account.Name)
 	campaign := createTestCampaign(t, app, org.ID, template.ID, user.ID, account.Name, models.CampaignStatusPaused)
@@ -641,7 +641,7 @@ func TestApp_StartCampaign_CanResumePaused(t *testing.T) {
 func TestApp_PauseCampaign_Success(t *testing.T) {
 	app, _ := campaignTestApp(t)
 	org := createTestOrganization(t, app)
-	user := createTestUser(t, app, org.ID, uniqueEmail("pause-campaign"), "password", models.RoleAdmin, true)
+	user := createTestUser(t, app, org.ID, uniqueEmail("pause-campaign"), "password", nil, true)
 	account := createTestWhatsAppAccount(t, app, org.ID, "pause-account")
 	template := createTestTemplate(t, app, org.ID, account.Name)
 	campaign := createTestCampaign(t, app, org.ID, template.ID, user.ID, account.Name, models.CampaignStatusProcessing)
@@ -662,7 +662,7 @@ func TestApp_PauseCampaign_Success(t *testing.T) {
 func TestApp_PauseCampaign_NotRunning(t *testing.T) {
 	app, _ := campaignTestApp(t)
 	org := createTestOrganization(t, app)
-	user := createTestUser(t, app, org.ID, uniqueEmail("pause-not-running"), "password", models.RoleAdmin, true)
+	user := createTestUser(t, app, org.ID, uniqueEmail("pause-not-running"), "password", nil, true)
 	account := createTestWhatsAppAccount(t, app, org.ID, "pause-not-running-account")
 	template := createTestTemplate(t, app, org.ID, account.Name)
 	campaign := createTestCampaign(t, app, org.ID, template.ID, user.ID, account.Name, models.CampaignStatusDraft)
@@ -681,7 +681,7 @@ func TestApp_PauseCampaign_NotRunning(t *testing.T) {
 func TestApp_CancelCampaign_Success(t *testing.T) {
 	app, _ := campaignTestApp(t)
 	org := createTestOrganization(t, app)
-	user := createTestUser(t, app, org.ID, uniqueEmail("cancel-campaign"), "password", models.RoleAdmin, true)
+	user := createTestUser(t, app, org.ID, uniqueEmail("cancel-campaign"), "password", nil, true)
 	account := createTestWhatsAppAccount(t, app, org.ID, "cancel-account")
 	template := createTestTemplate(t, app, org.ID, account.Name)
 	campaign := createTestCampaign(t, app, org.ID, template.ID, user.ID, account.Name, models.CampaignStatusProcessing)
@@ -706,7 +706,7 @@ func TestApp_CancelCampaign_AlreadyFinished(t *testing.T) {
 		t.Run("status_"+string(status), func(t *testing.T) {
 			app, _ := campaignTestApp(t)
 			org := createTestOrganization(t, app)
-			user := createTestUser(t, app, org.ID, uniqueEmail("cancel-finished-"+string(status)), "password", models.RoleAdmin, true)
+			user := createTestUser(t, app, org.ID, uniqueEmail("cancel-finished-"+string(status)), "password", nil, true)
 			account := createTestWhatsAppAccount(t, app, org.ID, "cancel-finished-"+string(status))
 			template := createTestTemplate(t, app, org.ID, account.Name)
 			campaign := createTestCampaign(t, app, org.ID, template.ID, user.ID, account.Name, status)
@@ -727,7 +727,7 @@ func TestApp_CancelCampaign_AlreadyFinished(t *testing.T) {
 func TestApp_ImportRecipients_Success(t *testing.T) {
 	app, _ := campaignTestApp(t)
 	org := createTestOrganization(t, app)
-	user := createTestUser(t, app, org.ID, uniqueEmail("import-recipients"), "password", models.RoleAdmin, true)
+	user := createTestUser(t, app, org.ID, uniqueEmail("import-recipients"), "password", nil, true)
 	account := createTestWhatsAppAccount(t, app, org.ID, "import-account")
 	template := createTestTemplate(t, app, org.ID, account.Name)
 	campaign := createTestCampaign(t, app, org.ID, template.ID, user.ID, account.Name, models.CampaignStatusDraft)
@@ -761,7 +761,7 @@ func TestApp_ImportRecipients_Success(t *testing.T) {
 func TestApp_ImportRecipients_WithTemplateParams(t *testing.T) {
 	app, _ := campaignTestApp(t)
 	org := createTestOrganization(t, app)
-	user := createTestUser(t, app, org.ID, uniqueEmail("import-with-params"), "password", models.RoleAdmin, true)
+	user := createTestUser(t, app, org.ID, uniqueEmail("import-with-params"), "password", nil, true)
 	account := createTestWhatsAppAccount(t, app, org.ID, "import-params-account")
 	template := createTestTemplate(t, app, org.ID, account.Name)
 	campaign := createTestCampaign(t, app, org.ID, template.ID, user.ID, account.Name, models.CampaignStatusDraft)
@@ -791,7 +791,7 @@ func TestApp_ImportRecipients_WithTemplateParams(t *testing.T) {
 func TestApp_ImportRecipients_NotDraft(t *testing.T) {
 	app, _ := campaignTestApp(t)
 	org := createTestOrganization(t, app)
-	user := createTestUser(t, app, org.ID, uniqueEmail("import-not-draft"), "password", models.RoleAdmin, true)
+	user := createTestUser(t, app, org.ID, uniqueEmail("import-not-draft"), "password", nil, true)
 	account := createTestWhatsAppAccount(t, app, org.ID, "import-not-draft-account")
 	template := createTestTemplate(t, app, org.ID, account.Name)
 	campaign := createTestCampaign(t, app, org.ID, template.ID, user.ID, account.Name, models.CampaignStatusProcessing)
@@ -814,7 +814,7 @@ func TestApp_ImportRecipients_NotDraft(t *testing.T) {
 func TestApp_GetCampaignRecipients_Success(t *testing.T) {
 	app, _ := campaignTestApp(t)
 	org := createTestOrganization(t, app)
-	user := createTestUser(t, app, org.ID, uniqueEmail("get-recipients"), "password", models.RoleAdmin, true)
+	user := createTestUser(t, app, org.ID, uniqueEmail("get-recipients"), "password", nil, true)
 	account := createTestWhatsAppAccount(t, app, org.ID, "get-recipients-account")
 	template := createTestTemplate(t, app, org.ID, account.Name)
 	campaign := createTestCampaign(t, app, org.ID, template.ID, user.ID, account.Name, models.CampaignStatusDraft)
@@ -843,7 +843,7 @@ func TestApp_GetCampaignRecipients_Success(t *testing.T) {
 func TestApp_GetCampaignRecipients_CampaignNotFound(t *testing.T) {
 	app, _ := campaignTestApp(t)
 	org := createTestOrganization(t, app)
-	user := createTestUser(t, app, org.ID, uniqueEmail("get-recipients-not-found"), "password", models.RoleAdmin, true)
+	user := createTestUser(t, app, org.ID, uniqueEmail("get-recipients-not-found"), "password", nil, true)
 
 	req := testutil.NewGETRequest(t)
 	setAuthContext(req, org.ID, user.ID)
@@ -859,7 +859,7 @@ func TestApp_GetCampaignRecipients_CampaignNotFound(t *testing.T) {
 func TestApp_RetryFailed_Success(t *testing.T) {
 	app, mockQueue := campaignTestApp(t)
 	org := createTestOrganization(t, app)
-	user := createTestUser(t, app, org.ID, uniqueEmail("retry-failed"), "password", models.RoleAdmin, true)
+	user := createTestUser(t, app, org.ID, uniqueEmail("retry-failed"), "password", nil, true)
 	account := createTestWhatsAppAccount(t, app, org.ID, "retry-account")
 	template := createTestTemplate(t, app, org.ID, account.Name)
 	campaign := createTestCampaign(t, app, org.ID, template.ID, user.ID, account.Name, models.CampaignStatusCompleted)
@@ -893,7 +893,7 @@ func TestApp_RetryFailed_Success(t *testing.T) {
 func TestApp_RetryFailed_NoFailedRecipients(t *testing.T) {
 	app, _ := campaignTestApp(t)
 	org := createTestOrganization(t, app)
-	user := createTestUser(t, app, org.ID, uniqueEmail("retry-no-failed"), "password", models.RoleAdmin, true)
+	user := createTestUser(t, app, org.ID, uniqueEmail("retry-no-failed"), "password", nil, true)
 	account := createTestWhatsAppAccount(t, app, org.ID, "retry-no-failed-account")
 	template := createTestTemplate(t, app, org.ID, account.Name)
 	campaign := createTestCampaign(t, app, org.ID, template.ID, user.ID, account.Name, models.CampaignStatusCompleted)
@@ -911,7 +911,7 @@ func TestApp_RetryFailed_NoFailedRecipients(t *testing.T) {
 func TestApp_RetryFailed_InvalidStatus(t *testing.T) {
 	app, _ := campaignTestApp(t)
 	org := createTestOrganization(t, app)
-	user := createTestUser(t, app, org.ID, uniqueEmail("retry-invalid-status"), "password", models.RoleAdmin, true)
+	user := createTestUser(t, app, org.ID, uniqueEmail("retry-invalid-status"), "password", nil, true)
 	account := createTestWhatsAppAccount(t, app, org.ID, "retry-invalid-account")
 	template := createTestTemplate(t, app, org.ID, account.Name)
 	campaign := createTestCampaign(t, app, org.ID, template.ID, user.ID, account.Name, models.CampaignStatusDraft)
@@ -935,8 +935,8 @@ func TestApp_Campaign_CrossOrgIsolation(t *testing.T) {
 	org1 := createTestOrganization(t, app)
 	org2 := createTestOrganization(t, app)
 
-	user1 := createTestUser(t, app, org1.ID, uniqueEmail("cross-org-1"), "password", models.RoleAdmin, true)
-	user2 := createTestUser(t, app, org2.ID, uniqueEmail("cross-org-2"), "password", models.RoleAdmin, true)
+	user1 := createTestUser(t, app, org1.ID, uniqueEmail("cross-org-1"), "password", nil, true)
+	user2 := createTestUser(t, app, org2.ID, uniqueEmail("cross-org-2"), "password", nil, true)
 
 	account1 := createTestWhatsAppAccount(t, app, org1.ID, "cross-org-account-1")
 	template1 := createTestTemplate(t, app, org1.ID, account1.Name)

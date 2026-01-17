@@ -67,12 +67,12 @@ type SSOProviderPublic struct {
 
 // SSOProviderRequest represents SSO provider config from admin
 type SSOProviderRequest struct {
-	ClientID        string      `json:"client_id" validate:"required"`
-	ClientSecret    string      `json:"client_secret"`
-	IsEnabled       bool        `json:"is_enabled"`
-	AllowAutoCreate bool        `json:"allow_auto_create"`
-	DefaultRole     models.Role `json:"default_role"`
-	AllowedDomains  string      `json:"allowed_domains"`
+	ClientID        string `json:"client_id" validate:"required"`
+	ClientSecret    string `json:"client_secret"`
+	IsEnabled       bool   `json:"is_enabled"`
+	AllowAutoCreate bool   `json:"allow_auto_create"`
+	DefaultRole     string `json:"default_role"`
+	AllowedDomains  string `json:"allowed_domains"`
 	// Custom provider fields
 	AuthURL     string `json:"auth_url"`
 	TokenURL    string `json:"token_url"`
@@ -81,16 +81,16 @@ type SSOProviderRequest struct {
 
 // SSOProviderResponse represents SSO provider config response (masked secret)
 type SSOProviderResponse struct {
-	Provider        string      `json:"provider"`
-	ClientID        string      `json:"client_id"`
-	HasSecret       bool        `json:"has_secret"`
-	IsEnabled       bool        `json:"is_enabled"`
-	AllowAutoCreate bool        `json:"allow_auto_create"`
-	DefaultRole     models.Role `json:"default_role"`
-	AllowedDomains  string      `json:"allowed_domains"`
-	AuthURL         string      `json:"auth_url,omitempty"`
-	TokenURL        string      `json:"token_url,omitempty"`
-	UserInfoURL     string      `json:"user_info_url,omitempty"`
+	Provider        string `json:"provider"`
+	ClientID        string `json:"client_id"`
+	HasSecret       bool   `json:"has_secret"`
+	IsEnabled       bool   `json:"is_enabled"`
+	AllowAutoCreate bool   `json:"allow_auto_create"`
+	DefaultRole     string `json:"default_role"`
+	AllowedDomains  string `json:"allowed_domains"`
+	AuthURL         string `json:"auth_url,omitempty"`
+	TokenURL        string `json:"token_url,omitempty"`
+	UserInfoURL     string `json:"user_info_url,omitempty"`
 }
 
 // providerDisplayNames maps provider keys to display names
@@ -281,16 +281,24 @@ func (a *App) CallbackSSO(r *fastglue.Request) error {
 		}
 
 		// Auto-create user in the SSO config's organization
-		role := ssoConfig.DefaultRole
-		if role == "" {
-			role = models.RoleAgent
+		roleName := ssoConfig.DefaultRoleName
+		if roleName == "" {
+			roleName = "agent"
+		}
+
+		// Look up the CustomRole by name for this organization
+		var customRole models.CustomRole
+		if err := a.DB.Where("organization_id = ? AND name = ?", orgID, roleName).First(&customRole).Error; err != nil {
+			a.Log.Error("Failed to find role for SSO user", "error", err, "role_name", roleName)
+			a.redirectWithError(r, "Failed to create user account: role not found")
+			return nil
 		}
 
 		user = models.User{
 			OrganizationID: orgID,
 			Email:          userInfo.Email,
 			FullName:       userInfo.Name,
-			Role:           role,
+			RoleID:         &customRole.ID,
 			IsActive:       true,
 			IsAvailable:    true,
 			SSOProvider:    provider,
@@ -370,7 +378,7 @@ func (a *App) GetSSOSettings(r *fastglue.Request) error {
 			HasSecret:       p.ClientSecret != "",
 			IsEnabled:       p.IsEnabled,
 			AllowAutoCreate: p.AllowAutoCreate,
-			DefaultRole:     p.DefaultRole,
+			DefaultRole:     p.DefaultRoleName,
 			AllowedDomains:  p.AllowedDomains,
 			AuthURL:         p.AuthURL,
 			TokenURL:        p.TokenURL,
@@ -434,9 +442,9 @@ func (a *App) UpdateSSOProvider(r *fastglue.Request) error {
 	}
 	ssoConfig.IsEnabled = req.IsEnabled
 	ssoConfig.AllowAutoCreate = req.AllowAutoCreate
-	ssoConfig.DefaultRole = req.DefaultRole
-	if ssoConfig.DefaultRole == "" {
-		ssoConfig.DefaultRole = models.RoleAgent
+	ssoConfig.DefaultRoleName = req.DefaultRole
+	if ssoConfig.DefaultRoleName == "" {
+		ssoConfig.DefaultRoleName = "agent"
 	}
 	ssoConfig.AllowedDomains = req.AllowedDomains
 	ssoConfig.AuthURL = req.AuthURL
@@ -454,7 +462,7 @@ func (a *App) UpdateSSOProvider(r *fastglue.Request) error {
 		HasSecret:       ssoConfig.ClientSecret != "",
 		IsEnabled:       ssoConfig.IsEnabled,
 		AllowAutoCreate: ssoConfig.AllowAutoCreate,
-		DefaultRole:     ssoConfig.DefaultRole,
+		DefaultRole:     ssoConfig.DefaultRoleName,
 		AllowedDomains:  ssoConfig.AllowedDomains,
 		AuthURL:         ssoConfig.AuthURL,
 		TokenURL:        ssoConfig.TokenURL,
