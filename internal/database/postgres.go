@@ -163,6 +163,12 @@ func RunMigrationWithProgress(db *gorm.DB) error {
 		return err
 	}
 
+	// Fix existing organizations - link permissions to system roles if missing
+	if err := SeedSystemRolesForAllOrgs(silentDB); err != nil {
+		fmt.Printf("\n  \033[31m✗ Failed to fix existing role permissions\033[0m\n\n")
+		return err
+	}
+
 	// Create default admin (only runs if no users exist)
 	printProgress(currentStep, totalSteps)
 	if err := CreateDefaultAdmin(silentDB); err != nil {
@@ -379,6 +385,88 @@ func SeedPermissionsAndRoles(db *gorm.DB) error {
 		}
 		if err := db.Create(&permissions).Error; err != nil {
 			return fmt.Errorf("failed to seed permissions: %w", err)
+		}
+	}
+
+	return nil
+}
+
+// SeedSystemRolesForAllOrgs creates system roles for all existing organizations
+// This is idempotent - it skips organizations that already have system roles
+func SeedSystemRolesForAllOrgs(db *gorm.DB) error {
+	var orgs []models.Organization
+	if err := db.Find(&orgs).Error; err != nil {
+		return fmt.Errorf("failed to fetch organizations: %w", err)
+	}
+
+	for _, org := range orgs {
+		if err := SeedSystemRolesForOrg(db, org.ID); err != nil {
+			return fmt.Errorf("failed to seed roles for org %s: %w", org.ID, err)
+		}
+	}
+
+	// Fix any system roles that don't have permissions linked
+	if err := FixSystemRolePermissions(db); err != nil {
+		return fmt.Errorf("failed to fix role permissions: %w", err)
+	}
+
+	return nil
+}
+
+// FixSystemRolePermissions links permissions to existing system roles that have no permissions
+func FixSystemRolePermissions(db *gorm.DB) error {
+	// Get all permissions from database
+	var permissions []models.Permission
+	if err := db.Find(&permissions).Error; err != nil {
+		return fmt.Errorf("failed to fetch permissions: %w", err)
+	}
+
+	if len(permissions) == 0 {
+		return nil // No permissions to link
+	}
+
+	// Create permission map for lookup
+	permMap := make(map[string]models.Permission)
+	for _, p := range permissions {
+		permMap[p.Resource+":"+p.Action] = p
+	}
+
+	// Get system role permission mappings
+	rolePermissions := models.SystemRolePermissions()
+
+	// Find system roles without permissions
+	var systemRoles []models.CustomRole
+	if err := db.Where("is_system = ?", true).Find(&systemRoles).Error; err != nil {
+		return fmt.Errorf("failed to fetch system roles: %w", err)
+	}
+
+	for _, role := range systemRoles {
+		// Check if role has permissions
+		var permCount int64
+		db.Table("role_permissions").Where("custom_role_id = ?", role.ID).Count(&permCount)
+
+		if permCount > 0 {
+			continue // Already has permissions
+		}
+
+		// Get the permission keys for this role
+		permKeys, ok := rolePermissions[role.Name]
+		if !ok {
+			continue // Unknown role name
+		}
+
+		// Link permissions to role
+		var permsToAdd []models.Permission
+		for _, key := range permKeys {
+			if perm, ok := permMap[key]; ok {
+				permsToAdd = append(permsToAdd, perm)
+			}
+		}
+
+		if len(permsToAdd) > 0 {
+			if err := db.Model(&role).Association("Permissions").Replace(permsToAdd); err != nil {
+				return fmt.Errorf("failed to link permissions to role %s: %w", role.Name, err)
+			}
 		}
 	}
 
