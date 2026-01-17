@@ -30,10 +30,17 @@ func createTestRole(t *testing.T, app *handlers.App, orgID uuid.UUID, name strin
 	return role
 }
 
-// seedTestPermissions creates a set of test permissions
-func seedTestPermissions(t *testing.T, app *handlers.App) []models.Permission {
+// getOrCreateTestPermissions gets existing permissions or creates them if needed
+func getOrCreateTestPermissions(t *testing.T, app *handlers.App) []models.Permission {
 	t.Helper()
 
+	// First try to get existing permissions
+	var existingPerms []models.Permission
+	if err := app.DB.Order("resource, action").Find(&existingPerms).Error; err == nil && len(existingPerms) > 0 {
+		return existingPerms
+	}
+
+	// If no permissions exist, create test ones
 	permissions := []models.Permission{
 		{BaseModel: models.BaseModel{ID: uuid.New()}, Resource: "users", Action: "read", Description: "View users"},
 		{BaseModel: models.BaseModel{ID: uuid.New()}, Resource: "users", Action: "write", Description: "Create/edit users"},
@@ -54,7 +61,7 @@ func seedTestPermissions(t *testing.T, app *handlers.App) []models.Permission {
 func TestApp_ListRoles_Success(t *testing.T) {
 	app := testApp(t)
 	org := createTestOrganization(t, app)
-	permissions := seedTestPermissions(t, app)
+	permissions := getOrCreateTestPermissions(t, app)
 
 	// Create some roles
 	adminRole := createTestRole(t, app, org.ID, "Admin", true, false, permissions)
@@ -93,7 +100,7 @@ func TestApp_ListRoles_Success(t *testing.T) {
 func TestApp_GetRole_Success(t *testing.T) {
 	app := testApp(t)
 	org := createTestOrganization(t, app)
-	permissions := seedTestPermissions(t, app)
+	permissions := getOrCreateTestPermissions(t, app)
 
 	role := createTestRole(t, app, org.ID, "Test Role", false, false, permissions[:2])
 	user := createTestUser(t, app, org.ID, uniqueEmail("get-role"), "password123", &role.ID, true)
@@ -138,7 +145,7 @@ func TestApp_GetRole_NotFound(t *testing.T) {
 func TestApp_CreateRole_Success(t *testing.T) {
 	app := testApp(t)
 	org := createTestOrganization(t, app)
-	permissions := seedTestPermissions(t, app)
+	permissions := getOrCreateTestPermissions(t, app)
 	user := createTestUser(t, app, org.ID, uniqueEmail("create-role"), "password123", nil, true)
 
 	reqBody := handlers.RoleRequest{
@@ -181,7 +188,7 @@ func TestApp_CreateRole_Success(t *testing.T) {
 func TestApp_CreateRole_DuplicateName(t *testing.T) {
 	app := testApp(t)
 	org := createTestOrganization(t, app)
-	_ = seedTestPermissions(t, app)
+	_ = getOrCreateTestPermissions(t, app)
 
 	createTestRole(t, app, org.ID, "Existing Role", false, false, nil)
 	user := createTestUser(t, app, org.ID, uniqueEmail("create-dup-role"), "password123", nil, true)
@@ -224,7 +231,7 @@ func TestApp_CreateRole_MissingName(t *testing.T) {
 func TestApp_CreateRole_WithDefaultFlag(t *testing.T) {
 	app := testApp(t)
 	org := createTestOrganization(t, app)
-	_ = seedTestPermissions(t, app)
+	_ = getOrCreateTestPermissions(t, app)
 
 	// Create an existing default role
 	existingDefault := createTestRole(t, app, org.ID, "Old Default", false, true, nil)
@@ -254,7 +261,7 @@ func TestApp_CreateRole_WithDefaultFlag(t *testing.T) {
 func TestApp_UpdateRole_Success(t *testing.T) {
 	app := testApp(t)
 	org := createTestOrganization(t, app)
-	permissions := seedTestPermissions(t, app)
+	permissions := getOrCreateTestPermissions(t, app)
 
 	role := createTestRole(t, app, org.ID, "Editable Role", false, false, permissions[:1])
 	user := createTestUser(t, app, org.ID, uniqueEmail("update-role"), "password123", nil, true)
@@ -289,7 +296,7 @@ func TestApp_UpdateRole_Success(t *testing.T) {
 func TestApp_UpdateRole_SystemRoleOnlyDescription(t *testing.T) {
 	app := testApp(t)
 	org := createTestOrganization(t, app)
-	permissions := seedTestPermissions(t, app)
+	permissions := getOrCreateTestPermissions(t, app)
 
 	// Create a system role
 	systemRole := createTestRole(t, app, org.ID, "System Admin", true, false, permissions)
@@ -411,7 +418,7 @@ func TestApp_DeleteRole_WithAssignedUsers(t *testing.T) {
 func TestApp_ListPermissions_Success(t *testing.T) {
 	app := testApp(t)
 	org := createTestOrganization(t, app)
-	permissions := seedTestPermissions(t, app)
+	permissions := getOrCreateTestPermissions(t, app)
 	user := createTestUser(t, app, org.ID, uniqueEmail("list-perms"), "password123", nil, true)
 
 	req := testutil.NewGETRequest(t)

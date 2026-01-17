@@ -21,11 +21,12 @@ import (
 
 const testJWTSecret = "test-secret-key-must-be-at-least-32-chars"
 
-// testApp creates an App instance for testing with a test database.
+// testApp creates an App instance for testing with a test database and Redis.
 func testApp(t *testing.T) *handlers.App {
 	t.Helper()
 
 	db := testutil.SetupTestDB(t)
+	redis := testutil.SetupTestRedis(t)
 	log := testutil.NopLogger()
 
 	cfg := &config.Config{
@@ -39,6 +40,7 @@ func testApp(t *testing.T) *handlers.App {
 	return &handlers.App{
 		Config: cfg,
 		DB:     db,
+		Redis:  redis,
 		Log:    log,
 	}
 }
@@ -220,8 +222,17 @@ func TestApp_Login_UserWithRole(t *testing.T) {
 	org := createTestOrganization(t, app)
 	email := uniqueEmail("role-test")
 	password := "testpassword123"
-	roleID := uuid.New()
-	createTestUser(t, app, org.ID, email, password, &roleID, true)
+
+	// Create an actual role first
+	role := &models.CustomRole{
+		BaseModel:      models.BaseModel{ID: uuid.New()},
+		OrganizationID: org.ID,
+		Name:           "Test Role " + uuid.New().String()[:8],
+		IsSystem:       false,
+	}
+	require.NoError(t, app.DB.Create(role).Error)
+
+	createTestUser(t, app, org.ID, email, password, &role.ID, true)
 
 	req := testutil.NewJSONRequest(t, map[string]string{
 		"email":    email,

@@ -266,7 +266,7 @@ func (a *App) DeleteRole(r *fastglue.Request) error {
 
 	// Check if any users have this role
 	var userCount int64
-	a.DB.Model(&models.User{}).Where("custom_role_id = ?", id).Count(&userCount)
+	a.DB.Model(&models.User{}).Where("role_id = ?", id).Count(&userCount)
 	if userCount > 0 {
 		return r.SendErrorEnvelope(fasthttp.StatusBadRequest, "Cannot delete role with assigned users", nil, "")
 	}
