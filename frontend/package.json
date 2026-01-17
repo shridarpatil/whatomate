@@ -11,6 +11,7 @@
     "lint": "eslint . --ext .vue,.js,.jsx,.cjs,.mjs,.ts,.tsx,.cts,.mts --fix --ignore-path .gitignore",
     "format": "prettier --write src/",
     "test": "BASE_URL=http://localhost:8080 playwright test",
+    "test:e2e": "playwright test",
     "test:ui": "BASE_URL=http://localhost:8080 playwright test --ui",
     "test:debug": "BASE_URL=http://localhost:8080 playwright test --debug",
     "test:report": "playwright show-report"
