@@ -24,10 +24,11 @@ test.describe('Users Management', () => {
   })
 
   test('should search users', async ({ page }) => {
-    await tablePage.search('admin')
+    // Search by specific email to avoid multiple matches
+    await tablePage.search('admin@test.com')
     // Should filter results
     await page.waitForTimeout(500)
-    await tablePage.expectRowExists('admin')
+    await tablePage.expectRowExists('admin@test.com')
   })
 
   test('should open create user dialog', async ({ page }) => {
