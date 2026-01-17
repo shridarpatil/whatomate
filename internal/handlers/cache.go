@@ -384,12 +384,14 @@ func (a *App) getUserPermissionsCached(userID uuid.UUID) (*UserPermissions, erro
 	ctx := context.Background()
 	cacheKey := fmt.Sprintf("%s%s", userPermissionsCachePrefix, userID.String())
 
-	// Try cache first
-	cached, err := a.Redis.Get(ctx, cacheKey).Result()
-	if err == nil && cached != "" {
-		var perms UserPermissions
-		if err := json.Unmarshal([]byte(cached), &perms); err == nil {
-			return &perms, nil
+	// Try cache first (if Redis is available)
+	if a.Redis != nil {
+		cached, err := a.Redis.Get(ctx, cacheKey).Result()
+		if err == nil && cached != "" {
+			var perms UserPermissions
+			if err := json.Unmarshal([]byte(cached), &perms); err == nil {
+				return &perms, nil
+			}
 		}
 	}
 
@@ -416,9 +418,11 @@ func (a *App) getUserPermissionsCached(userID uuid.UUID) (*UserPermissions, erro
 		perms.Permissions = append(perms.Permissions, p.Resource+":"+p.Action)
 	}
 
-	// Cache the result
-	if data, err := json.Marshal(perms); err == nil {
-		a.Redis.Set(ctx, cacheKey, data, userPermissionsCacheTTL)
+	// Cache the result (if Redis is available)
+	if a.Redis != nil {
+		if data, err := json.Marshal(perms); err == nil {
+			a.Redis.Set(ctx, cacheKey, data, userPermissionsCacheTTL)
+		}
 	}
 
 	return &perms, nil
