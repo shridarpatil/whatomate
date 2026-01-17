@@ -87,9 +87,9 @@ export const authService = {
 export const usersService = {
   list: () => api.get('/users'),
   get: (id: string) => api.get(`/users/${id}`),
-  create: (data: { email: string; password: string; full_name: string; role?: string }) =>
+  create: (data: { email: string; password: string; full_name: string; role_id?: string }) =>
     api.post('/users', data),
-  update: (id: string, data: { email?: string; password?: string; full_name?: string; role?: string; is_active?: boolean }) =>
+  update: (id: string, data: { email?: string; password?: string; full_name?: string; role_id?: string; is_active?: boolean }) =>
     api.put(`/users/${id}`, data),
   delete: (id: string) => api.delete(`/users/${id}`),
   me: () => api.get('/me'),
@@ -458,6 +458,41 @@ export const customActionsService = {
   delete: (id: string) => api.delete(`/custom-actions/${id}`),
   execute: (id: string, contactId: string) =>
     api.post<ActionResult>(`/custom-actions/${id}/execute`, { contact_id: contactId })
+}
+
+// Roles and Permissions
+export interface Permission {
+  id: string
+  resource: string
+  action: string
+  description: string
+  key: string // "resource:action"
+}
+
+export interface Role {
+  id: string
+  name: string
+  description: string
+  is_system: boolean
+  is_default: boolean
+  permissions: string[] // ["resource:action", ...]
+  user_count: number
+  created_at: string
+  updated_at: string
+}
+
+export const rolesService = {
+  list: () => api.get<{ roles: Role[] }>('/roles'),
+  get: (id: string) => api.get<Role>(`/roles/${id}`),
+  create: (data: { name: string; description?: string; is_default?: boolean; permissions: string[] }) =>
+    api.post<Role>('/roles', data),
+  update: (id: string, data: { name?: string; description?: string; is_default?: boolean; permissions?: string[] }) =>
+    api.put<Role>(`/roles/${id}`, data),
+  delete: (id: string) => api.delete(`/roles/${id}`)
+}
+
+export const permissionsService = {
+  list: () => api.get<{ permissions: Permission[] }>('/permissions')
 }
 
 export default api

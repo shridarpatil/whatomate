@@ -54,6 +54,7 @@ import {
 } from '@/components/ui/breadcrumb'
 import { useUsersStore, type User } from '@/stores/users'
 import { useAuthStore } from '@/stores/auth'
+import { useRolesStore } from '@/stores/roles'
 import { toast } from 'vue-sonner'
 import {
   Plus,
@@ -75,6 +76,7 @@ import {
 
 const usersStore = useUsersStore()
 const authStore = useAuthStore()
+const rolesStore = useRolesStore()
 
 const isLoading = ref(true)
 const isDialogOpen = ref(false)
@@ -92,9 +94,15 @@ const formData = ref({
   email: '',
   password: '',
   full_name: '',
-  role: 'agent' as 'admin' | 'manager' | 'agent',
+  role_id: '',
   is_active: true
 })
+
+// Get the default role ID (agent role)
+const getDefaultRoleId = () => {
+  const agentRole = rolesStore.roles.find(r => r.name === 'agent' && r.is_system)
+  return agentRole?.id || ''
+}
 
 const currentUserId = computed(() => authStore.user?.id)
 
@@ -107,7 +115,7 @@ const filteredUsers = computed(() => {
   return usersStore.users.filter(user =>
     user.full_name.toLowerCase().includes(query) ||
     user.email.toLowerCase().includes(query) ||
-    user.role.toLowerCase().includes(query)
+    (user.role?.name || '').toLowerCase().includes(query)
   )
 })
 
@@ -131,15 +139,18 @@ watch(searchQuery, () => {
 })
 
 onMounted(async () => {
-  await fetchUsers()
+  await fetchData()
 })
 
-async function fetchUsers() {
+async function fetchData() {
   isLoading.value = true
   try {
-    await usersStore.fetchUsers()
+    await Promise.all([
+      usersStore.fetchUsers(),
+      rolesStore.fetchRoles()
+    ])
   } catch (error: any) {
-    toast.error('Failed to load users')
+    toast.error('Failed to load data')
   } finally {
     isLoading.value = false
   }
@@ -151,7 +162,7 @@ function openCreateDialog() {
     email: '',
     password: '',
     full_name: '',
-    role: 'agent',
+    role_id: getDefaultRoleId(),
     is_active: true
   }
   isDialogOpen.value = true
@@ -163,7 +174,7 @@ function openEditDialog(user: User) {
     email: user.email,
     password: '',
     full_name: user.full_name,
-    role: user.role,
+    role_id: user.role_id || '',
     is_active: user.is_active
   }
   isDialogOpen.value = true
@@ -180,13 +191,18 @@ async function saveUser() {
     return
   }
 
+  if (!formData.value.role_id) {
+    toast.error('Please select a role')
+    return
+  }
+
   isSubmitting.value = true
   try {
     if (editingUser.value) {
       const updateData: any = {
         email: formData.value.email,
         full_name: formData.value.full_name,
-        role: formData.value.role,
+        role_id: formData.value.role_id,
         is_active: formData.value.is_active
       }
       if (formData.value.password) {
@@ -199,7 +215,7 @@ async function saveUser() {
         email: formData.value.email,
         password: formData.value.password,
         full_name: formData.value.full_name,
-        role: formData.value.role
+        role_id: formData.value.role_id
       })
       toast.success('User created successfully')
     }
@@ -231,8 +247,8 @@ async function confirmDelete() {
   }
 }
 
-function getRoleBadgeVariant(role: string): 'default' | 'secondary' | 'outline' {
-  switch (role) {
+function getRoleBadgeVariant(roleName: string): 'default' | 'secondary' | 'outline' {
+  switch (roleName.toLowerCase()) {
     case 'admin':
       return 'default'
     case 'manager':
@@ -242,8 +258,8 @@ function getRoleBadgeVariant(role: string): 'default' | 'secondary' | 'outline' 
   }
 }
 
-function getRoleIcon(role: string) {
-  switch (role) {
+function getRoleIcon(roleName: string) {
+  switch (roleName.toLowerCase()) {
     case 'admin':
       return ShieldCheck
     case 'manager':
@@ -251,6 +267,10 @@ function getRoleIcon(role: string) {
     default:
       return UserCog
   }
+}
+
+function getRoleName(user: User): string {
+  return user.role?.name || 'No role'
 }
 
 function formatDate(dateString: string) {
@@ -305,30 +325,24 @@ function goToPage(page: number) {
       <div class="max-w-6xl mx-auto space-y-4">
          <!-- Role Info -->
         <Card>
-          <CardContent class="p-6">
-            <h3 class="font-semibold mb-4">Role Permissions</h3>
-            <div class="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
+          <CardContent class="p-4">
+            <div class="flex items-start justify-between">
               <div class="flex items-start gap-3">
-                <ShieldCheck class="h-5 w-5 text-primary mt-0.5" />
+                <div class="p-2 rounded-lg bg-primary/10">
+                  <Shield class="h-5 w-5 text-primary" />
+                </div>
                 <div>
-                  <span class="font-medium">Admin</span>
-                  <p class="text-muted-foreground">Full access including user management</p>
+                  <h3 class="font-medium">Role-Based Access Control</h3>
+                  <p class="text-sm text-muted-foreground mt-1">
+                    Assign roles to control what users can access. Each role has specific permissions.
+                  </p>
                 </div>
               </div>
-              <div class="flex items-start gap-3">
-                <Shield class="h-5 w-5 text-muted-foreground mt-0.5" />
-                <div>
-                  <span class="font-medium">Manager</span>
-                  <p class="text-muted-foreground">All features except user management</p>
-                </div>
-              </div>
-              <div class="flex items-start gap-3">
-                <UserCog class="h-5 w-5 text-muted-foreground mt-0.5" />
-                <div>
-                  <span class="font-medium">Agent</span>
-                  <p class="text-muted-foreground">Chat with assigned contacts only</p>
-                </div>
-              </div>
+              <RouterLink to="/settings/roles">
+                <Button variant="outline" size="sm">
+                  Manage Roles
+                </Button>
+              </RouterLink>
             </div>
           </CardContent>
         </Card>
@@ -376,20 +390,21 @@ function goToPage(page: number) {
                   <TableCell>
                     <div class="flex items-center gap-3">
                       <div class="h-9 w-9 rounded-full bg-primary/10 flex items-center justify-center flex-shrink-0">
-                        <component :is="getRoleIcon(user.role)" class="h-4 w-4 text-primary" />
+                        <component :is="getRoleIcon(getRoleName(user))" class="h-4 w-4 text-primary" />
                       </div>
                       <div class="min-w-0">
                         <div class="flex items-center gap-2">
                           <p class="font-medium truncate">{{ user.full_name }}</p>
                           <Badge v-if="user.id === currentUserId" variant="outline" class="text-xs">You</Badge>
+                          <Badge v-if="user.is_super_admin" variant="default" class="text-xs">Super Admin</Badge>
                         </div>
                         <p class="text-sm text-muted-foreground truncate">{{ user.email }}</p>
                       </div>
                     </div>
                   </TableCell>
                   <TableCell>
-                    <Badge :variant="getRoleBadgeVariant(user.role)" class="capitalize">
-                      {{ user.role }}
+                    <Badge :variant="getRoleBadgeVariant(getRoleName(user))" class="capitalize">
+                      {{ getRoleName(user) }}
                     </Badge>
                   </TableCell>
                   <TableCell>
@@ -548,17 +563,29 @@ function goToPage(page: number) {
           </div>
 
           <div class="space-y-2">
-            <Label for="role">Role</Label>
-            <Select v-model="formData.role">
+            <Label for="role">Role <span class="text-destructive">*</span></Label>
+            <Select v-model="formData.role_id">
               <SelectTrigger>
                 <SelectValue placeholder="Select role" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="admin">Admin</SelectItem>
-                <SelectItem value="manager">Manager</SelectItem>
-                <SelectItem value="agent">Agent</SelectItem>
+                <SelectItem
+                  v-for="role in rolesStore.roles"
+                  :key="role.id"
+                  :value="role.id"
+                >
+                  <div class="flex items-center gap-2">
+                    <span class="capitalize">{{ role.name }}</span>
+                    <Badge v-if="role.is_system" variant="secondary" class="text-xs">System</Badge>
+                  </div>
+                </SelectItem>
               </SelectContent>
             </Select>
+            <p class="text-xs text-muted-foreground">
+              <RouterLink to="/settings/roles" class="text-primary hover:underline">
+                Manage roles and permissions
+              </RouterLink>
+            </p>
           </div>
 
           <div v-if="editingUser" class="flex items-center justify-between">

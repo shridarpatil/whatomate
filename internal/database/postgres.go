@@ -156,7 +156,14 @@ func RunMigrationWithProgress(db *gorm.DB) error {
 		currentStep++
 	}
 
-	// Create default admin
+	// Seed permissions (always run, will skip if already seeded)
+	printProgress(currentStep, totalSteps)
+	if err := SeedPermissionsAndRoles(silentDB); err != nil {
+		fmt.Printf("\n  \033[31m✗ Failed to seed permissions\033[0m\n\n")
+		return err
+	}
+
+	// Create default admin (only runs if no users exist)
 	printProgress(currentStep, totalSteps)
 	if err := CreateDefaultAdmin(silentDB); err != nil {
 		fmt.Printf("\n  \033[31m✗ Setup failed\033[0m\n\n")
