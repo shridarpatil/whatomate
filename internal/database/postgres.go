@@ -410,6 +410,16 @@ func SeedSystemRolesForAllOrgs(db *gorm.DB) error {
 		return fmt.Errorf("failed to fix role permissions: %w", err)
 	}
 
+	// Migrate existing users from old role column to new role_id
+	if err := MigrateExistingUserRoles(db); err != nil {
+		return fmt.Errorf("failed to migrate user roles: %w", err)
+	}
+
+	// Make admin@admin.com a super admin if exists
+	if err := db.Exec("UPDATE users SET is_super_admin = true WHERE email = 'admin@admin.com'").Error; err != nil {
+		return fmt.Errorf("failed to set super admin: %w", err)
+	}
+
 	return nil
 }
 
@@ -467,6 +477,82 @@ func FixSystemRolePermissions(db *gorm.DB) error {
 			if err := db.Model(&role).Association("Permissions").Replace(permsToAdd); err != nil {
 				return fmt.Errorf("failed to link permissions to role %s: %w", role.Name, err)
 			}
+		}
+	}
+
+	return nil
+}
+
+// MigrateExistingUserRoles migrates users from the old role column to the new role_id
+// This is safe to run on fresh installs - it will simply do nothing if the column doesn't exist
+func MigrateExistingUserRoles(db *gorm.DB) error {
+	// Check if the old 'role' column exists in the users table
+	var columnExists bool
+	err := db.Raw(`
+		SELECT EXISTS (
+			SELECT 1 FROM information_schema.columns
+			WHERE table_name = 'users' AND column_name = 'role'
+		)
+	`).Scan(&columnExists).Error
+	if err != nil {
+		return fmt.Errorf("failed to check for role column: %w", err)
+	}
+
+	if !columnExists {
+		return nil // Fresh install, no old role column
+	}
+
+	// Get users who have old role but no role_id assigned
+	type UserWithLegacyRole struct {
+		ID             uuid.UUID
+		OrganizationID uuid.UUID
+		LegacyRole     string
+	}
+
+	var usersToMigrate []UserWithLegacyRole
+	err = db.Raw(`
+		SELECT id, organization_id, role as legacy_role
+		FROM users
+		WHERE role_id IS NULL AND role IS NOT NULL AND role != ''
+	`).Scan(&usersToMigrate).Error
+	if err != nil {
+		return fmt.Errorf("failed to fetch users with legacy roles: %w", err)
+	}
+
+	if len(usersToMigrate) == 0 {
+		return nil // No users to migrate
+	}
+
+	// Get all system roles grouped by organization
+	var systemRoles []models.CustomRole
+	if err := db.Where("is_system = ?", true).Find(&systemRoles).Error; err != nil {
+		return fmt.Errorf("failed to fetch system roles: %w", err)
+	}
+
+	// Create lookup: orgID -> roleName -> roleID
+	roleMap := make(map[uuid.UUID]map[string]uuid.UUID)
+	for _, role := range systemRoles {
+		if roleMap[role.OrganizationID] == nil {
+			roleMap[role.OrganizationID] = make(map[string]uuid.UUID)
+		}
+		roleMap[role.OrganizationID][role.Name] = role.ID
+	}
+
+	// Migrate each user
+	for _, user := range usersToMigrate {
+		orgRoles, ok := roleMap[user.OrganizationID]
+		if !ok {
+			continue // Organization doesn't have system roles yet
+		}
+
+		roleID, ok := orgRoles[user.LegacyRole]
+		if !ok {
+			continue // Role not found (shouldn't happen for admin/manager/agent)
+		}
+
+		// Update user's role_id
+		if err := db.Exec("UPDATE users SET role_id = ? WHERE id = ?", roleID, user.ID).Error; err != nil {
+			return fmt.Errorf("failed to update user %s role: %w", user.ID, err)
 		}
 	}
 
