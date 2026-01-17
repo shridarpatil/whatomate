@@ -12,12 +12,17 @@ export const api: AxiosInstance = axios.create({
   }
 })
 
-// Request interceptor to add auth token
+// Request interceptor to add auth token and organization header
 api.interceptors.request.use(
   (config: InternalAxiosRequestConfig) => {
     const token = localStorage.getItem('auth_token')
     if (token) {
       config.headers.Authorization = `Bearer ${token}`
+    }
+    // Add organization override header for super admins
+    const selectedOrgId = localStorage.getItem('selected_organization_id')
+    if (selectedOrgId) {
+      config.headers['X-Organization-ID'] = selectedOrgId
     }
     return config
   },

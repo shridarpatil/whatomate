@@ -55,6 +55,7 @@ import { useColorMode } from '@/composables/useColorMode'
 import { toast } from 'vue-sonner'
 import { getInitials } from '@/lib/utils'
 import { wsService } from '@/services/websocket'
+import OrganizationSwitcher from './OrganizationSwitcher.vue'
 
 const route = useRoute()
 const router = useRouter()
@@ -328,6 +329,9 @@ const handleLogout = async () => {
           <ChevronRight v-else class="h-3.5 w-3.5" />
         </Button>
       </div>
+
+      <!-- Organization Switcher (Super Admin only) -->
+      <OrganizationSwitcher :collapsed="isCollapsed" />
 
       <!-- Navigation -->
       <ScrollArea class="flex-1 py-2">

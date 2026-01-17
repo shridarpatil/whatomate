@@ -37,16 +37,35 @@ func (a *App) WaitForBackgroundTasks() {
 }
 
 // getOrgIDFromContext extracts organization ID from request context (set by auth middleware)
+// Super admins can override the org by passing X-Organization-ID header
 func (a *App) getOrgIDFromContext(r *fastglue.Request) (uuid.UUID, error) {
+	// Get user's default organization ID from JWT
 	orgIDVal := r.RequestCtx.UserValue("organization_id")
 	if orgIDVal == nil {
 		return uuid.Nil, errors.New("organization_id not found in context")
 	}
-	// The middleware stores uuid.UUID directly, not as string
 	orgID, ok := orgIDVal.(uuid.UUID)
 	if !ok {
 		return uuid.Nil, errors.New("organization_id is not a valid UUID")
 	}
+
+	// Check if super admin is trying to switch organizations
+	userID, _ := r.RequestCtx.UserValue("user_id").(uuid.UUID)
+	if a.IsSuperAdmin(userID) {
+		// Check for X-Organization-ID header
+		overrideOrgID := string(r.RequestCtx.Request.Header.Peek("X-Organization-ID"))
+		if overrideOrgID != "" {
+			parsedOrgID, err := uuid.Parse(overrideOrgID)
+			if err == nil {
+				// Verify the organization exists
+				var count int64
+				if err := a.DB.Table("organizations").Where("id = ?", parsedOrgID).Count(&count).Error; err == nil && count > 0 {
+					return parsedOrgID, nil
+				}
+			}
+		}
+	}
+
 	return orgID, nil
 }
 
