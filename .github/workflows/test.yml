@@ -56,7 +56,8 @@ jobs:
           TEST_REDIS_URL: redis://localhost:6379
         run: |
           # Run tests with coverage, excluding test utility packages from coverage calculation
-          go test -v -race -coverprofile=coverage.out $(go list ./... | grep -v /test/)
+          # -p 1 runs packages sequentially to avoid database conflicts (all packages share the test DB)
+          go test -v -race -p 1 -coverprofile=coverage.out $(go list ./... | grep -v /test/)
 
       - name: Display coverage
         run: go tool cover -func=coverage.out | grep "total:"
