@@ -363,12 +363,15 @@ func getOrganizationID(r *fastglue.Request) (uuid.UUID, error) {
 		return uuid.Nil, fmt.Errorf("organization_id not found in context")
 	}
 
-	// Check for X-Organization-ID header override (for super admins switching orgs)
-	overrideOrgID := string(r.RequestCtx.Request.Header.Peek("X-Organization-ID"))
-	if overrideOrgID != "" {
-		parsedOrgID, err := uuid.Parse(overrideOrgID)
-		if err == nil {
-			return parsedOrgID, nil
+	// Only super admins can use X-Organization-ID header to switch orgs
+	isSuperAdmin, _ := r.RequestCtx.UserValue("is_super_admin").(bool)
+	if isSuperAdmin {
+		overrideOrgID := string(r.RequestCtx.Request.Header.Peek("X-Organization-ID"))
+		if overrideOrgID != "" {
+			parsedOrgID, err := uuid.Parse(overrideOrgID)
+			if err == nil {
+				return parsedOrgID, nil
+			}
 		}
 	}
 
