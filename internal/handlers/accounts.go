@@ -349,13 +349,28 @@ func generateVerifyToken() string {
 }
 
 func getOrganizationID(r *fastglue.Request) (uuid.UUID, error) {
-	// Try to get as uuid.UUID first (set by auth middleware)
+	// Get default organization ID from JWT (set by auth middleware)
+	var defaultOrgID uuid.UUID
 	if orgID, ok := r.RequestCtx.UserValue("organization_id").(uuid.UUID); ok {
-		return orgID, nil
+		defaultOrgID = orgID
+	} else if orgIDStr, ok := r.RequestCtx.UserValue("organization_id").(string); ok {
+		parsed, err := uuid.Parse(orgIDStr)
+		if err != nil {
+			return uuid.Nil, fmt.Errorf("organization_id not found in context")
+		}
+		defaultOrgID = parsed
+	} else {
+		return uuid.Nil, fmt.Errorf("organization_id not found in context")
 	}
-	// Fallback to string parsing
-	if orgIDStr, ok := r.RequestCtx.UserValue("organization_id").(string); ok {
-		return uuid.Parse(orgIDStr)
+
+	// Check for X-Organization-ID header override (for super admins switching orgs)
+	overrideOrgID := string(r.RequestCtx.Request.Header.Peek("X-Organization-ID"))
+	if overrideOrgID != "" {
+		parsedOrgID, err := uuid.Parse(overrideOrgID)
+		if err == nil {
+			return parsedOrgID, nil
+		}
 	}
-	return uuid.Nil, fmt.Errorf("organization_id not found in context")
+
+	return defaultOrgID, nil
 }
