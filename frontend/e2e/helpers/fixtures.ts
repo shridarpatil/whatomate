@@ -81,3 +81,31 @@ export function createWebhookFixture(overrides = {}) {
     ...overrides,
   }
 }
+
+export function createRoleFixture(overrides = {}) {
+  return {
+    name: generateUniqueName('Role'),
+    description: 'Test role for E2E testing',
+    permission_ids: [] as string[],
+    ...overrides,
+  }
+}
+
+export const RoleFixtures = {
+  chatOnly: {
+    name: generateUniqueName('Chat Only Role'),
+    description: 'Role with only chat permissions',
+    permissionFilters: [
+      { resource: 'chat', action: 'read' },
+      { resource: 'contacts', action: 'read' },
+    ],
+  },
+  readOnly: {
+    name: generateUniqueName('Read Only Role'),
+    description: 'Role with read-only permissions',
+    permissionFilters: [
+      { resource: 'contacts', action: 'read' },
+      { resource: 'templates', action: 'read' },
+    ],
+  },
+}
