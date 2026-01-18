@@ -190,71 +190,122 @@ test.describe('Organization Switching (Super Admin)', () => {
 })
 
 test.describe('Organization Data Isolation', () => {
+  const timestamp = Date.now()
+  const org1Email = `org1-admin-${timestamp}@test.com`
+  const org2Email = `org2-admin-${timestamp}@test.com`
+  const org1Name = `E2E Org 1 ${timestamp}`
+  const org2Name = `E2E Org 2 ${timestamp}`
+
   test('users from one org are not visible in another org', async ({ request }) => {
     const api = new ApiHelper(request)
 
-    // Login as super admin
+    // Create two separate organizations via registration
+    let org1Id: string
+    let org2Id: string
+
+    try {
+      // Register first organization
+      const reg1 = await api.register({
+        email: org1Email,
+        password: 'password123',
+        full_name: 'Org 1 Admin',
+        organization_name: org1Name
+      })
+      org1Id = reg1.organization.id
+
+      // Register second organization (creates new ApiHelper to get fresh token)
+      const api2 = new ApiHelper(request)
+      const reg2 = await api2.register({
+        email: org2Email,
+        password: 'password123',
+        full_name: 'Org 2 Admin',
+        organization_name: org2Name
+      })
+      org2Id = reg2.organization.id
+    } catch (error) {
+      test.skip(true, `Failed to create test organizations: ${error}`)
+      return
+    }
+
+    // Now login as super admin to test cross-org access
+    const superAdminApi = new ApiHelper(request)
     let token: string | null = null
     try {
-      token = await api.login(ADMIN_EMAIL, ADMIN_PASSWORD)
+      token = await superAdminApi.login(ADMIN_EMAIL, ADMIN_PASSWORD)
     } catch {
       try {
-        token = await api.login(FALLBACK_ADMIN_EMAIL, FALLBACK_ADMIN_PASSWORD)
+        token = await superAdminApi.login(FALLBACK_ADMIN_EMAIL, FALLBACK_ADMIN_PASSWORD)
       } catch {
-        test.skip(true, 'No admin credentials available')
+        test.skip(true, 'No super admin credentials available')
         return
       }
     }
 
-    // Get organizations list
-    const orgsResponse = await request.get('/api/organizations', {
-      headers: { Authorization: `Bearer ${token}` }
-    })
+    // Get users for first org using X-Organization-ID header
+    const org1Users = await superAdminApi.getUsersWithOrgHeader(org1Id)
 
-    if (!orgsResponse.ok()) {
-      test.skip(true, 'Cannot fetch organizations')
+    // Get users for second org using X-Organization-ID header
+    const org2Users = await superAdminApi.getUsersWithOrgHeader(org2Id)
+
+    // Verify isolation: org1 admin should only be in org1, org2 admin only in org2
+    const org1Emails = org1Users.map((u: any) => u.email)
+    const org2Emails = org2Users.map((u: any) => u.email)
+
+    // Org1 should contain org1Email but NOT org2Email
+    expect(org1Emails).toContain(org1Email)
+    expect(org1Emails).not.toContain(org2Email)
+
+    // Org2 should contain org2Email but NOT org1Email
+    expect(org2Emails).toContain(org2Email)
+    expect(org2Emails).not.toContain(org1Email)
+  })
+
+  test('regular user cannot access other organization data via API', async ({ request }) => {
+    const api = new ApiHelper(request)
+
+    // Create a new organization (this user becomes admin of that org)
+    const uniqueEmail = `isolated-admin-${Date.now()}@test.com`
+    const uniqueOrgName = `Isolated Org ${Date.now()}`
+
+    let myOrgId: string
+    try {
+      const reg = await api.register({
+        email: uniqueEmail,
+        password: 'password123',
+        full_name: 'Isolated Admin',
+        organization_name: uniqueOrgName
+      })
+      myOrgId = reg.organization.id
+    } catch (error) {
+      test.skip(true, `Failed to create test organization: ${error}`)
       return
     }
 
-    const orgsData = await orgsResponse.json()
-    const organizations = orgsData.data?.organizations || []
-
-    if (organizations.length < 2) {
-      // Need at least 2 orgs to test isolation
-      test.skip(true, 'Need at least 2 organizations')
-      return
-    }
-
-    // Get users for first org
-    const users1Response = await request.get('/api/users', {
+    // This user (org admin, not super admin) should not be able to use X-Organization-ID header
+    // Try to access their own organization's endpoint (which should work)
+    const ownOrgResponse = await request.get('/api/organizations/current', {
       headers: {
-        Authorization: `Bearer ${token}`,
-        'X-Organization-ID': organizations[0].id
+        Authorization: `Bearer ${api.getToken()}`
       }
     })
-    const users1Data = await users1Response.json()
-    const org1Users = users1Data.data?.users || []
+    expect(ownOrgResponse.ok()).toBeTruthy()
+    const ownOrgData = await ownOrgResponse.json()
+    expect(ownOrgData.data?.id || ownOrgData.data?.ID).toBe(myOrgId)
 
-    // Get users for second org
-    const users2Response = await request.get('/api/users', {
+    // Now try to access with a different org ID header - should be ignored
+    const otherOrgId = '00000000-0000-0000-0000-000000000001'
+    const responseWithHeader = await request.get('/api/organizations/current', {
       headers: {
-        Authorization: `Bearer ${token}`,
-        'X-Organization-ID': organizations[1].id
+        Authorization: `Bearer ${api.getToken()}`,
+        'X-Organization-ID': otherOrgId
       }
     })
-    const users2Data = await users2Response.json()
-    const org2Users = users2Data.data?.users || []
 
-    // Users should be different (or at least not all the same)
-    const org1Emails = new Set(org1Users.map((u: any) => u.email))
-    const org2Emails = new Set(org2Users.map((u: any) => u.email))
-
-    // Check that not all users are shared between orgs
-    // (Super admin might appear in both, but org-specific users shouldn't)
-    if (org1Users.length > 1 && org2Users.length > 1) {
-      const commonUsers = org1Users.filter((u: any) => org2Emails.has(u.email))
-      // Not all users should be common (unless both orgs have same users which is unlikely)
-      expect(commonUsers.length).toBeLessThan(Math.max(org1Users.length, org2Users.length))
-    }
+    // Should still return their own org, not the fake one (header ignored for non-super-admin)
+    expect(responseWithHeader.ok()).toBeTruthy()
+    const dataWithHeader = await responseWithHeader.json()
+    const returnedOrgId = dataWithHeader.data?.id || dataWithHeader.data?.ID
+    expect(returnedOrgId).toBe(myOrgId)
+    expect(returnedOrgId).not.toBe(otherOrgId)
   })
 })

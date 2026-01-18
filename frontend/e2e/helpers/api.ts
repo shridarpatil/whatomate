@@ -19,6 +19,13 @@ export interface User {
   email: string
   full_name: string
   role_id?: string
+  organization_id?: string
+}
+
+export interface Organization {
+  id: string
+  name: string
+  slug?: string
 }
 
 export class ApiHelper {
@@ -49,6 +56,57 @@ export class ApiHelper {
 
   async loginAsAdmin(): Promise<string> {
     return this.login('admin@test.com', 'password')
+  }
+
+  // Register creates a new organization and user
+  async register(data: {
+    email: string
+    password: string
+    full_name: string
+    organization_name: string
+  }): Promise<{ user: User; organization: Organization; access_token: string }> {
+    const response = await this.request.post(`${BASE_URL}/api/auth/register`, {
+      data
+    })
+    if (!response.ok()) {
+      throw new Error(`Registration failed: ${await response.text()}`)
+    }
+    const result = await response.json()
+    this.accessToken = result.data.access_token
+    return {
+      user: result.data.user,
+      organization: { id: result.data.user.organization_id, name: data.organization_name },
+      access_token: result.data.access_token
+    }
+  }
+
+  async getOrganizations(): Promise<Organization[]> {
+    const response = await this.request.get(`${BASE_URL}/api/organizations`, {
+      headers: this.headers
+    })
+    if (!response.ok()) {
+      throw new Error(`Failed to get organizations: ${await response.text()}`)
+    }
+    const data = await response.json()
+    return data.data?.organizations || []
+  }
+
+  async getUsersWithOrgHeader(orgId: string): Promise<User[]> {
+    const response = await this.request.get(`${BASE_URL}/api/users`, {
+      headers: {
+        ...this.headers,
+        'X-Organization-ID': orgId
+      }
+    })
+    if (!response.ok()) {
+      throw new Error(`Failed to get users: ${await response.text()}`)
+    }
+    const data = await response.json()
+    return data.data?.users || []
+  }
+
+  getToken(): string | null {
+    return this.accessToken
   }
 
   async getPermissions(): Promise<Permission[]> {
