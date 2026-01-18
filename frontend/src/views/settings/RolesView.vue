@@ -54,10 +54,12 @@ import {
   Star
 } from 'lucide-vue-next'
 import { useRolesStore, type CreateRoleData, type UpdateRoleData } from '@/stores/roles'
+import { useOrganizationsStore } from '@/stores/organizations'
 import type { Role } from '@/services/api'
 import PermissionMatrix from '@/components/roles/PermissionMatrix.vue'
 
 const rolesStore = useRolesStore()
+const organizationsStore = useOrganizationsStore()
 
 // State
 const isLoading = ref(true)
@@ -98,6 +100,11 @@ watch(isDialogOpen, (open) => {
     editingRole.value = null
     resetForm()
   }
+})
+
+// Refetch data when organization changes
+watch(() => organizationsStore.selectedOrgId, () => {
+  fetchData()
 })
 
 // Lifecycle

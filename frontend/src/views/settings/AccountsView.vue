@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
+import { ref, onMounted, watch } from 'vue'
 import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -41,6 +41,7 @@ import {
   BreadcrumbSeparator,
 } from '@/components/ui/breadcrumb'
 import { api } from '@/services/api'
+import { useOrganizationsStore } from '@/stores/organizations'
 import { toast } from 'vue-sonner'
 import {
   Plus,
@@ -87,6 +88,8 @@ interface TestResult {
   messaging_limit_tier?: string
 }
 
+const organizationsStore = useOrganizationsStore()
+
 const accounts = ref<WhatsAppAccount[]>([])
 const isLoading = ref(true)
 const isDialogOpen = ref(false)
@@ -108,6 +111,11 @@ const formData = ref({
   is_default_incoming: false,
   is_default_outgoing: false,
   auto_read_receipt: false
+})
+
+// Refetch data when organization changes
+watch(() => organizationsStore.selectedOrgId, () => {
+  fetchAccounts()
 })
 
 onMounted(async () => {

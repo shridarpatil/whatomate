@@ -56,6 +56,7 @@ import {
 import { useTeamsStore } from '@/stores/teams'
 import { useUsersStore, type User } from '@/stores/users'
 import { useAuthStore } from '@/stores/auth'
+import { useOrganizationsStore } from '@/stores/organizations'
 import { type Team, type TeamMember } from '@/services/api'
 import { toast } from 'vue-sonner'
 import {
@@ -76,6 +77,7 @@ import {
 const teamsStore = useTeamsStore()
 const usersStore = useUsersStore()
 const authStore = useAuthStore()
+const organizationsStore = useOrganizationsStore()
 
 const isLoading = ref(true)
 const isDialogOpen = ref(false)
@@ -116,6 +118,12 @@ const filteredTeams = computed(() => {
 const availableUsers = computed(() => {
   const memberUserIds = new Set(teamMembers.value.map(m => m.user_id))
   return usersStore.users.filter(u => !memberUserIds.has(u.id) && u.is_active)
+})
+
+// Refetch data when organization changes
+watch(() => organizationsStore.selectedOrgId, () => {
+  fetchTeams()
+  usersStore.fetchUsers()
 })
 
 onMounted(async () => {

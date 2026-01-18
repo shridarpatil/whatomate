@@ -55,6 +55,7 @@ import {
 import { useUsersStore, type User } from '@/stores/users'
 import { useAuthStore } from '@/stores/auth'
 import { useRolesStore } from '@/stores/roles'
+import { useOrganizationsStore } from '@/stores/organizations'
 import { toast } from 'vue-sonner'
 import {
   Plus,
@@ -77,6 +78,7 @@ import {
 const usersStore = useUsersStore()
 const authStore = useAuthStore()
 const rolesStore = useRolesStore()
+const organizationsStore = useOrganizationsStore()
 
 const isLoading = ref(true)
 const isDialogOpen = ref(false)
@@ -138,6 +140,11 @@ const paginationInfo = computed(() => {
 // Reset to page 1 when search changes
 watch(searchQuery, () => {
   currentPage.value = 1
+})
+
+// Refetch data when organization changes
+watch(() => organizationsStore.selectedOrgId, () => {
+  fetchData()
 })
 
 onMounted(async () => {

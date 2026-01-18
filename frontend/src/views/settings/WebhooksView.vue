@@ -1,6 +1,7 @@
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
+import { ref, onMounted, watch } from 'vue'
 import { webhooksService, type Webhook, type WebhookEvent } from '@/services/api'
+import { useOrganizationsStore } from '@/stores/organizations'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -43,6 +44,8 @@ import {
 } from '@/components/ui/alert-dialog'
 import { toast } from 'vue-sonner'
 import { Plus, Trash2, Pencil, Webhook as WebhookIcon, Play, Loader2 } from 'lucide-vue-next'
+
+const organizationsStore = useOrganizationsStore()
 
 const webhooks = ref<Webhook[]>([])
 const availableEvents = ref<WebhookEvent[]>([])
@@ -231,6 +234,11 @@ function formatDate(dateStr: string) {
     day: 'numeric'
   })
 }
+
+// Refetch data when organization changes
+watch(() => organizationsStore.selectedOrgId, () => {
+  fetchWebhooks()
+})
 
 onMounted(() => {
   fetchWebhooks()
