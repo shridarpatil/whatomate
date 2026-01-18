@@ -38,7 +38,7 @@ func (a *App) WaitForBackgroundTasks() {
 
 // getOrgIDFromContext extracts organization ID from request context (set by auth middleware)
 // Super admins can override the org by passing X-Organization-ID header
-// Returns uuid.Nil for super admins viewing "all organizations" (no header set)
+// Super admins MUST select an organization - no "all organizations" view
 func (a *App) getOrgIDFromContext(r *fastglue.Request) (uuid.UUID, error) {
 	// Get user's default organization ID from JWT
 	orgIDVal := r.RequestCtx.UserValue("organization_id")
@@ -55,20 +55,18 @@ func (a *App) getOrgIDFromContext(r *fastglue.Request) (uuid.UUID, error) {
 	if a.IsSuperAdmin(userID) {
 		// Check for X-Organization-ID header
 		overrideOrgID := string(r.RequestCtx.Request.Header.Peek("X-Organization-ID"))
-		if overrideOrgID == "" {
-			// No header = super admin viewing all organizations
-			return uuid.Nil, nil
-		}
-		// Header present = super admin selected a specific org
-		parsedOrgID, err := uuid.Parse(overrideOrgID)
-		if err == nil {
-			// Verify the organization exists
-			var count int64
-			if err := a.DB.Table("organizations").Where("id = ?", parsedOrgID).Count(&count).Error; err == nil && count > 0 {
-				return parsedOrgID, nil
+		if overrideOrgID != "" {
+			// Header present = super admin selected a specific org
+			parsedOrgID, err := uuid.Parse(overrideOrgID)
+			if err == nil {
+				// Verify the organization exists
+				var count int64
+				if err := a.DB.Table("organizations").Where("id = ?", parsedOrgID).Count(&count).Error; err == nil && count > 0 {
+					return parsedOrgID, nil
+				}
 			}
 		}
-		// Invalid org ID in header, fall back to user's org
+		// No header or invalid org ID - fall back to user's org
 	}
 
 	return orgID, nil

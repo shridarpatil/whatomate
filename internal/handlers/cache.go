@@ -491,20 +491,14 @@ func (a *App) IsSuperAdmin(userID uuid.UUID) bool {
 }
 
 // ScopedQuery returns a gorm query scoped to the organization
-// If orgID is uuid.Nil (super admin viewing all), no filter is applied
+// Always filters by organization - uuid.Nil is not allowed
 func (a *App) ScopedQuery(userID, orgID uuid.UUID) *gorm.DB {
-	if orgID == uuid.Nil {
-		return a.DB
-	}
 	return a.DB.Where("organization_id = ?", orgID)
 }
 
 // ScopeToOrg adds organization scoping to an existing query
-// If orgID is uuid.Nil (super admin viewing all), no filter is applied
+// Always filters by organization - uuid.Nil is not allowed
 func (a *App) ScopeToOrg(query *gorm.DB, userID, orgID uuid.UUID) *gorm.DB {
-	if orgID == uuid.Nil {
-		return query
-	}
 	return query.Where("organization_id = ?", orgID)
 }
 
