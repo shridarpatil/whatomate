@@ -1,0 +1,341 @@
+---
+title: Roles
+description: Role and permission management API
+---
+
+import { Aside } from '@astrojs/starlight/components';
+
+<Aside type="caution">
+  Role management endpoints require the `roles:read`, `roles:create`, `roles:update`, or `roles:delete` permissions respectively.
+</Aside>
+
+## Overview
+
+Manage roles and permissions within your organization. Roles are collections of permissions that can be assigned to users.
+
+## List Permissions
+
+Get all available permissions in the system.
+
+```bash
+GET /api/permissions
+```
+
+### Response
+
+```json
+{
+  "status": "success",
+  "data": {
+    "permissions": [
+      {
+        "id": "uuid",
+        "resource": "users",
+        "action": "read",
+        "description": "View users"
+      },
+      {
+        "id": "uuid",
+        "resource": "users",
+        "action": "create",
+        "description": "Create users"
+      }
+    ]
+  }
+}
+```
+
+## List Roles
+
+Get all roles in your organization.
+
+```bash
+GET /api/roles
+```
+
+<Aside type="note">
+  Requires `roles:read` permission.
+</Aside>
+
+### Query Parameters
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `search` | string | Filter by role name |
+
+### Response
+
+```json
+{
+  "status": "success",
+  "data": {
+    "roles": [
+      {
+        "id": "uuid",
+        "name": "admin",
+        "description": "Full access to all features",
+        "is_system": true,
+        "is_default": false,
+        "permission_count": 45,
+        "created_at": "2024-01-01T00:00:00Z",
+        "updated_at": "2024-01-01T00:00:00Z"
+      },
+      {
+        "id": "uuid",
+        "name": "Custom Role",
+        "description": "Custom role with specific permissions",
+        "is_system": false,
+        "is_default": false,
+        "permission_count": 12,
+        "created_at": "2024-01-01T00:00:00Z",
+        "updated_at": "2024-01-01T00:00:00Z"
+      }
+    ]
+  }
+}
+```
+
+## Get Role
+
+Get a single role with its permissions.
+
+```bash
+GET /api/roles/{id}
+```
+
+### Response
+
+```json
+{
+  "status": "success",
+  "data": {
+    "id": "uuid",
+    "name": "Custom Role",
+    "description": "Custom role with specific permissions",
+    "is_system": false,
+    "is_default": false,
+    "permissions": [
+      {
+        "id": "uuid",
+        "resource": "contacts",
+        "action": "read",
+        "description": "View contacts"
+      },
+      {
+        "id": "uuid",
+        "resource": "contacts",
+        "action": "create",
+        "description": "Create contacts"
+      }
+    ],
+    "created_at": "2024-01-01T00:00:00Z",
+    "updated_at": "2024-01-01T00:00:00Z"
+  }
+}
+```
+
+## Create Role
+
+Create a new custom role.
+
+```bash
+POST /api/roles
+```
+
+<Aside type="note">
+  Requires `roles:create` permission.
+</Aside>
+
+### Request Body
+
+```json
+{
+  "name": "Support Agent",
+  "description": "Can view and respond to chats",
+  "permissions": ["contacts:read", "messages:read", "messages:create"]
+}
+```
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `name` | string | Yes | Unique role name |
+| `description` | string | No | Role description |
+| `permissions` | array | Yes | Array of permission keys (e.g., `resource:action`) |
+| `is_default` | boolean | No | Set as default role for new users |
+
+### Response
+
+```json
+{
+  "status": "success",
+  "data": {
+    "id": "uuid",
+    "name": "Support Agent",
+    "description": "Can view and respond to chats",
+    "is_system": false,
+    "is_default": false,
+    "permissions": [
+      {
+        "id": "uuid",
+        "resource": "contacts",
+        "action": "read",
+        "description": "View contacts"
+      }
+    ],
+    "created_at": "2024-01-01T00:00:00Z"
+  }
+}
+```
+
+## Update Role
+
+Update an existing custom role.
+
+```bash
+PUT /api/roles/{id}
+```
+
+<Aside type="note">
+  Requires `roles:update` permission.
+</Aside>
+
+<Aside type="caution">
+  System roles (admin, manager, agent) cannot be modified.
+</Aside>
+
+### Request Body
+
+```json
+{
+  "name": "Senior Support Agent",
+  "description": "Can view, respond to chats, and access analytics",
+  "permissions": ["contacts:read", "messages:read", "messages:create", "analytics:read"]
+}
+```
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `name` | string | Role name |
+| `description` | string | Role description |
+| `permissions` | array | Array of permission keys |
+| `is_default` | boolean | Set as default role for new users |
+
+### Response
+
+```json
+{
+  "status": "success",
+  "data": {
+    "id": "uuid",
+    "name": "Senior Support Agent",
+    "description": "Can view, respond to chats, and access analytics",
+    "is_system": false,
+    "is_default": false,
+    "permissions": [...],
+    "updated_at": "2024-01-01T00:00:00Z"
+  }
+}
+```
+
+## Delete Role
+
+Delete a custom role.
+
+```bash
+DELETE /api/roles/{id}
+```
+
+<Aside type="note">
+  Requires `roles:delete` permission.
+</Aside>
+
+<Aside type="caution">
+  - System roles cannot be deleted
+  - Roles with assigned users cannot be deleted (reassign users first)
+</Aside>
+
+### Response
+
+```json
+{
+  "status": "success",
+  "data": {
+    "message": "Role deleted successfully"
+  }
+}
+```
+
+## Permission Keys
+
+Permissions use the format `resource:action`. Here are all available permissions:
+
+### User Management
+- `users:read` - View users
+- `users:create` - Create users
+- `users:update` - Update users
+- `users:delete` - Delete users
+
+### Role Management
+- `roles:read` - View roles
+- `roles:create` - Create roles
+- `roles:update` - Update roles
+- `roles:delete` - Delete roles
+
+### Team Management
+- `teams:read` - View teams
+- `teams:create` - Create teams
+- `teams:update` - Update teams
+- `teams:delete` - Delete teams
+
+### Contacts
+- `contacts:read` - View contacts
+- `contacts:create` - Create contacts
+- `contacts:update` - Update contacts
+- `contacts:delete` - Delete contacts
+
+### Messages
+- `messages:read` - View messages
+- `messages:create` - Send messages
+
+### Templates
+- `templates:read` - View templates
+- `templates:create` - Create templates
+- `templates:update` - Update templates
+- `templates:delete` - Delete templates
+
+### Campaigns
+- `campaigns:read` - View campaigns
+- `campaigns:create` - Create campaigns
+- `campaigns:update` - Update campaigns
+- `campaigns:delete` - Delete campaigns
+
+### Chatbot
+- `chatbot:read` - View chatbot settings
+- `chatbot:update` - Update chatbot settings
+- `flows:read` - View flows
+- `flows:create` - Create flows
+- `flows:update` - Update flows
+- `flows:delete` - Delete flows
+
+### Settings
+- `settings:read` - View organization settings
+- `settings:update` - Update organization settings
+- `accounts:read` - View WhatsApp accounts
+- `accounts:create` - Create WhatsApp accounts
+- `accounts:update` - Update WhatsApp accounts
+- `accounts:delete` - Delete WhatsApp accounts
+- `webhooks:read` - View webhooks
+- `webhooks:create` - Create webhooks
+- `webhooks:update` - Update webhooks
+- `webhooks:delete` - Delete webhooks
+- `api_keys:read` - View API keys
+- `api_keys:create` - Create API keys
+- `api_keys:delete` - Delete API keys
+
+### Analytics
+- `analytics:read` - View analytics
+
+## See Also
+
+- [Roles & Permissions](/features/roles-permissions) - Learn about the permission system
+- [Users API](/api-reference/users) - User management

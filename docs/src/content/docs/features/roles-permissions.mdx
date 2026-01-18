@@ -1,0 +1,177 @@
+---
+title: Roles & Permissions
+description: Granular access control with customizable roles and permissions
+---
+
+import { Aside, Tabs, TabItem } from '@astrojs/starlight/components';
+
+Whatomate provides a flexible role-based access control (RBAC) system that allows you to define custom roles with granular permissions.
+
+## Overview
+
+The permission system is built around:
+
+- **Permissions**: Fine-grained access controls for specific actions on resources (e.g., `users:create`, `contacts:read`)
+- **Roles**: Collections of permissions that can be assigned to users
+- **System Roles**: Pre-defined roles (Admin, Manager, Agent) that cannot be deleted
+
+## System Roles
+
+Three system roles are created automatically for each organization:
+
+| Role | Description |
+|------|-------------|
+| **Admin** | Full access to all features including user and role management |
+| **Manager** | Full access except user/role management and organization settings |
+| **Agent** | Limited access - can only view/respond to assigned chats |
+
+<Aside type="note">
+  System roles cannot be deleted, but their permissions can be viewed (read-only).
+</Aside>
+
+## Custom Roles
+
+Create custom roles to match your organization's needs. For example:
+
+- **Support Lead**: Can manage contacts and view analytics, but not manage users
+- **Campaign Manager**: Can create/manage campaigns and templates only
+- **Read-Only Auditor**: Can view all data but not make changes
+
+### Creating a Custom Role
+
+1. Go to **Settings → Roles**
+2. Click **Add Role**
+3. Enter a name and description
+4. Select permissions from the permission matrix
+5. Click **Create**
+
+## Permissions
+
+Permissions follow the format `resource:action`. Available actions are:
+
+| Action | Description |
+|--------|-------------|
+| `read` | View the resource |
+| `create` | Create new items |
+| `update` | Modify existing items |
+| `delete` | Remove items |
+
+### Available Resources
+
+| Resource | Description |
+|----------|-------------|
+| `users` | User management |
+| `roles` | Role management |
+| `teams` | Team management |
+| `contacts` | Contact management |
+| `messages` | Message sending/viewing |
+| `templates` | Message template management |
+| `campaigns` | Campaign management |
+| `flows` | Chatbot flow management |
+| `chatbot` | Chatbot settings |
+| `webhooks` | Webhook configuration |
+| `api_keys` | API key management |
+| `accounts` | WhatsApp account settings |
+| `settings` | Organization settings |
+| `analytics` | Analytics and reporting |
+
+### Permission Matrix
+
+When creating or editing a role, you'll see a permission matrix organized by resource:
+
+```
+Users
+  ☑ Read users
+  ☑ Create users
+  ☐ Update users
+  ☐ Delete users
+
+Contacts
+  ☑ Read contacts
+  ☑ Create contacts
+  ☑ Update contacts
+  ☐ Delete contacts
+```
+
+## Assigning Roles to Users
+
+1. Go to **Settings → Users**
+2. Click on a user or create a new one
+3. Select a role from the dropdown
+4. Save changes
+
+<Aside type="tip">
+  Changes to permissions take effect immediately. Users will see updated menu items and access controls without needing to log out.
+</Aside>
+
+## Super Admin
+
+Super admins have special privileges:
+
+- Access to all organizations (for multi-tenant setups)
+- Can switch between organizations using the organization switcher
+- Organization switching uses the `X-Organization-ID` header for API requests
+
+<Aside type="caution">
+  The `X-Organization-ID` header is only respected for super admin users. Regular users cannot use this header to access other organizations.
+</Aside>
+
+### Organization Switching
+
+Super admins see an organization switcher in the sidebar. When switching organizations:
+
+1. All data views refresh to show the selected organization's data
+2. API requests include the `X-Organization-ID` header
+3. The selected organization persists across page navigation
+
+## UI Behavior
+
+The frontend dynamically adapts based on user permissions:
+
+### Sidebar Menu
+
+Menu items are shown/hidden based on permissions:
+
+- **Chat** - Requires `messages:read`
+- **Contacts** - Requires `contacts:read`
+- **Campaigns** - Requires `campaigns:read`
+- **Templates** - Requires `templates:read`
+- **Chatbot** - Requires `chatbot:read`
+- **Analytics** - Requires `analytics:read`
+- **Settings** - Requires any settings-related permission
+
+### Page Access
+
+If a user tries to access a page they don't have permission for, they are redirected to the first accessible page.
+
+### Action Buttons
+
+Create, edit, and delete buttons are shown only if the user has the corresponding permission. For example, the "Add User" button only appears if the user has `users:create` permission.
+
+## API Authorization
+
+All API endpoints check permissions before processing requests:
+
+```bash
+# Returns 403 if user lacks users:read permission
+GET /api/users
+
+# Returns 403 if user lacks campaigns:create permission
+POST /api/campaigns
+```
+
+### Response for Unauthorized Access
+
+```json
+{
+  "status": "error",
+  "message": "Permission denied: users:create"
+}
+```
+
+## Best Practices
+
+1. **Principle of Least Privilege**: Assign only the permissions users need
+2. **Use Custom Roles**: Create roles that match job functions rather than assigning system roles
+3. **Regular Audits**: Periodically review role assignments and permissions
+4. **Document Roles**: Use meaningful names and descriptions for custom roles

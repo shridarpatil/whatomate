@@ -1,29 +1,48 @@
 ---
 title: Users
-description: User management API (Admin only)
+description: User management API
 ---
 
 import { Aside } from '@astrojs/starlight/components';
 
 <Aside type="caution">
-  All user management endpoints require **Admin** role. Other roles will receive a 403 Forbidden response.
+  User management endpoints require the `users:read`, `users:create`, `users:update`, or `users:delete` permissions respectively.
 </Aside>
 
 ## Overview
 
-Manage users within your organization. Users can have different roles that control their access to features.
-
-## Roles
-
-| Role | Description |
-|------|-------------|
-| `admin` | Full access including user management |
-| `manager` | Full access except user management |
-| `agent` | Can only chat with assigned contacts |
+Manage users within your organization. Users are assigned roles that control their access to features through granular permissions.
 
 ## Profile & Password Change
 
 All users (regardless of role) can access their profile to view account information and change their password. The Profile page is accessible from the user menu in the top navigation.
+
+### Get Current User
+
+```bash
+GET /api/me
+```
+
+#### Response
+
+```json
+{
+  "status": "success",
+  "data": {
+    "id": "uuid",
+    "email": "user@example.com",
+    "full_name": "John Doe",
+    "role": {
+      "id": "uuid",
+      "name": "admin",
+      "description": "Full access to all features"
+    },
+    "permissions": ["users:read", "users:create", "contacts:read", "..."],
+    "is_super_admin": false,
+    "created_at": "2024-01-01T00:00:00Z"
+  }
+}
+```
 
 ### Change Password
 
@@ -64,22 +83,40 @@ Retrieve all users in your organization.
 GET /api/users
 ```
 
+<Aside type="note">
+  Requires `users:read` permission.
+</Aside>
+
+### Query Parameters
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `search` | string | Filter by name or email |
+
 ### Response
 
 ```json
 {
   "status": "success",
-  "data": [
-    {
-      "id": "uuid",
-      "email": "user@example.com",
-      "full_name": "John Doe",
-      "role": "agent",
-      "is_active": true,
-      "created_at": "2024-01-01T00:00:00Z",
-      "updated_at": "2024-01-01T00:00:00Z"
-    }
-  ]
+  "data": {
+    "users": [
+      {
+        "id": "uuid",
+        "email": "user@example.com",
+        "full_name": "John Doe",
+        "role_id": "uuid",
+        "role": {
+          "id": "uuid",
+          "name": "agent",
+          "is_system": true
+        },
+        "is_active": true,
+        "is_available": true,
+        "created_at": "2024-01-01T00:00:00Z",
+        "updated_at": "2024-01-01T00:00:00Z"
+      }
+    ]
+  }
 }
 ```
 
@@ -100,8 +137,14 @@ GET /api/users/{id}
     "id": "uuid",
     "email": "user@example.com",
     "full_name": "John Doe",
-    "role": "agent",
+    "role_id": "uuid",
+    "role": {
+      "id": "uuid",
+      "name": "agent",
+      "is_system": true
+    },
     "is_active": true,
+    "is_available": true,
     "created_at": "2024-01-01T00:00:00Z",
     "updated_at": "2024-01-01T00:00:00Z"
   }
@@ -116,6 +159,10 @@ Create a new user in your organization.
 POST /api/users
 ```
 
+<Aside type="note">
+  Requires `users:create` permission.
+</Aside>
+
 ### Request Body
 
 ```json
@@ -123,7 +170,7 @@ POST /api/users
   "email": "newuser@example.com",
   "password": "securepassword",
   "full_name": "Jane Smith",
-  "role": "agent"
+  "role_id": "uuid"
 }
 ```
 
@@ -132,7 +179,7 @@ POST /api/users
 | `email` | string | Yes | Unique email address |
 | `password` | string | Yes | Minimum 8 characters |
 | `full_name` | string | Yes | Display name |
-| `role` | string | No | One of: `admin`, `manager`, `agent`. Defaults to `agent` |
+| `role_id` | string | No | UUID of the role to assign. If not provided, uses the organization's default role |
 
 ### Response
 
@@ -143,7 +190,12 @@ POST /api/users
     "id": "uuid",
     "email": "newuser@example.com",
     "full_name": "Jane Smith",
-    "role": "agent",
+    "role_id": "uuid",
+    "role": {
+      "id": "uuid",
+      "name": "agent",
+      "is_system": true
+    },
     "is_active": true,
     "created_at": "2024-01-01T00:00:00Z"
   }
@@ -158,12 +210,16 @@ Update user details or role.
 PUT /api/users/{id}
 ```
 
+<Aside type="note">
+  Requires `users:update` permission.
+</Aside>
+
 ### Request Body
 
 ```json
 {
   "full_name": "Jane Doe",
-  "role": "manager",
+  "role_id": "uuid",
   "is_active": true
 }
 ```
@@ -173,10 +229,10 @@ PUT /api/users/{id}
 | `email` | string | New email address |
 | `password` | string | New password (min 8 chars) |
 | `full_name` | string | Display name |
-| `role` | string | One of: `admin`, `manager`, `agent` |
+| `role_id` | string | UUID of the role to assign |
 | `is_active` | boolean | Enable/disable user |
 
-<Aside type="note">
+<Aside type="caution">
   You cannot demote yourself or change your own role.
 </Aside>
 
@@ -187,6 +243,10 @@ Remove a user from the organization.
 ```bash
 DELETE /api/users/{id}
 ```
+
+<Aside type="note">
+  Requires `users:delete` permission.
+</Aside>
 
 <Aside type="caution">
   - You cannot delete yourself
@@ -205,16 +265,25 @@ DELETE /api/users/{id}
 }
 ```
 
-## Role Permissions
+## User Availability
 
-| Feature | Admin | Manager | Agent |
-|---------|-------|---------|-------|
-| User Management | Full | None | None |
-| Account Settings | Full | Full | None |
-| Contacts | Full | Full | Assigned only |
-| Messages | Full | Full | Assigned only |
-| Templates | Full | Full | None |
-| Flows | Full | Full | None |
-| Campaigns | Full | Full | None |
-| Chatbot Settings | Full | Full | None |
-| Analytics | Full | Full | None |
+Users can set their availability status for chat routing.
+
+### Update Availability
+
+```bash
+PUT /api/users/{id}/availability
+```
+
+#### Request Body
+
+```json
+{
+  "is_available": true
+}
+```
+
+## See Also
+
+- [Roles & Permissions](/features/roles-permissions) - Learn about the permission system
+- [Roles API](/api-reference/roles) - Manage roles programmatically

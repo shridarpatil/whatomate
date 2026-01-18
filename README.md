@@ -11,8 +11,8 @@ Modern, open-source WhatsApp Business Platform. Single binary app.
 - **Multi-tenant Architecture**
   Support multiple organizations with isolated data and configurations.
 
-- **Role-Based Access Control**
-  Three roles (Admin, Manager, Agent) with granular permissions.
+- **Granular Roles & Permissions**
+  Customizable roles with fine-grained permissions. Create custom roles, assign specific permissions per resource (users, contacts, templates, etc.), and control access at the action level (read, create, update, delete). Super admins can manage multiple organizations.
 
 - **WhatsApp Cloud API Integration**
   Connect with Meta's WhatsApp Business API for messaging.
@@ -94,7 +94,7 @@ make build-prod
 ./whatomate server -migrate
 ```
 
-See [configuration docs](docs/src/content/docs/getting-started/configuration.mdx) for detailed setup options.
+See [configuration docs](https://shridarpatil.github.io/whatomate/getting-started/configuration/) for detailed setup options.
 
 ## CLI Usage
 

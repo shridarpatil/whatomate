@@ -24,6 +24,7 @@ export default defineConfig({
           label: 'Features',
           items: [
             { label: 'Dashboard', slug: 'features/dashboard' },
+            { label: 'Roles & Permissions', slug: 'features/roles-permissions' },
             { label: 'Chatbot Automation', slug: 'features/chatbot' },
             { label: 'Canned Responses', slug: 'features/canned-responses' },
             { label: 'Templates', slug: 'features/templates' },
@@ -38,6 +39,7 @@ export default defineConfig({
             { label: 'Authentication', slug: 'api-reference/authentication' },
             { label: 'API Keys', slug: 'api-reference/api-keys' },
             { label: 'Users', slug: 'api-reference/users' },
+            { label: 'Roles', slug: 'api-reference/roles' },
             { label: 'Accounts', slug: 'api-reference/accounts' },
             { label: 'Contacts', slug: 'api-reference/contacts' },
             { label: 'Messages', slug: 'api-reference/messages' },
