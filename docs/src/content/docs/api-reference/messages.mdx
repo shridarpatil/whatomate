@@ -94,37 +94,61 @@ POST /api/messages/template
 
 ### Request Body
 
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `contact_id` | string | One of contact_id or phone_number | UUID of existing contact |
+| `phone_number` | string | One of contact_id or phone_number | Phone number (creates contact if not exists) |
+| `template_name` | string | One of template_name or template_id | Name of the template |
+| `template_id` | string | One of template_name or template_id | UUID of the template |
+| `template_params` | object | No | Named or positional parameters |
+| `account_name` | string | No | Specific WhatsApp account to use |
+
+### Examples
+
+**Using phone number (creates contact if needed):**
+
+```bash
+curl -X POST "http://your-server:8080/api/messages/template" \
+  -H "X-API-Key: whm_your_api_key" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "phone_number": "919876543210",
+    "template_name": "hello_world"
+  }'
+```
+
+```json
+{
+  "phone_number": "919876543210",
+  "template_name": "hello_world"
+}
+```
+
+**With named parameters:**
+
+If your template has placeholders like `Hello {{name}}, your order {{order_id}} is ready`:
+
 ```json
 {
   "contact_id": "uuid",
   "template_name": "order_confirmation",
-  "language": "en",
-  "components": [
-    {
-      "type": "header",
-      "parameters": [
-        {
-          "type": "image",
-          "image": {
-            "link": "https://example.com/image.jpg"
-          }
-        }
-      ]
-    },
-    {
-      "type": "body",
-      "parameters": [
-        {
-          "type": "text",
-          "text": "John"
-        },
-        {
-          "type": "text",
-          "text": "12345"
-        }
-      ]
-    }
-  ]
+  "template_params": {
+    "name": "John",
+    "order_id": "12345"
+  }
+}
+```
+
+**With positional parameters:**
+
+```json
+{
+  "phone_number": "919876543210",
+  "template_name": "order_confirmation",
+  "template_params": {
+    "1": "John",
+    "2": "12345"
+  }
 }
 ```
 
@@ -134,12 +158,22 @@ POST /api/messages/template
 {
   "status": "success",
   "data": {
-    "id": "uuid",
-    "wa_message_id": "wamid.xxx",
-    "status": "sent"
+    "message_id": "uuid",
+    "phone_number": "919876543210",
+    "status": "pending",
+    "template_name": "order_confirmation"
   }
 }
 ```
+
+<Aside type="tip">
+  When using `phone_number`, a new contact is automatically created if one doesn't exist for that number.
+</Aside>
+
+<Aside type="caution">
+  If required template parameters are missing, you'll receive an error:
+  `"Missing template parameters: name, order_id. Expected parameters: [name, order_id]"`
+</Aside>
 
 ## Send Media Message
 
@@ -181,6 +215,97 @@ POST /api/messages/media
   }
 }
 ```
+
+## Send Interactive Message
+
+Send interactive messages with buttons or CTA URLs.
+
+```bash
+POST /api/contacts/{id}/messages
+```
+
+### Button Message
+
+Send a message with up to 3 quick reply buttons:
+
+```bash
+curl -X POST "http://your-server:8080/api/contacts/{contact_id}/messages" \
+  -H "X-API-Key: whm_your_api_key" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "type": "interactive",
+    "interactive": {
+      "type": "button",
+      "body": "How would you like to proceed?",
+      "buttons": [
+        { "id": "yes", "title": "Yes" },
+        { "id": "no", "title": "No" }
+      ]
+    }
+  }'
+```
+
+```json
+{
+  "type": "interactive",
+  "interactive": {
+    "type": "button",
+    "body": "How would you like to proceed?",
+    "buttons": [
+      { "id": "yes", "title": "Yes" },
+      { "id": "no", "title": "No" }
+    ]
+  }
+}
+```
+
+### CTA URL Button
+
+Send a message with a call-to-action URL button:
+
+```bash
+curl -X POST "http://your-server:8080/api/contacts/{contact_id}/messages" \
+  -H "X-API-Key: whm_your_api_key" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "type": "interactive",
+    "interactive": {
+      "type": "cta_url",
+      "body": "Click below to view your order details",
+      "button_text": "View Order",
+      "url": "https://example.com/orders/12345"
+    }
+  }'
+```
+
+```json
+{
+  "type": "interactive",
+  "interactive": {
+    "type": "cta_url",
+    "body": "Click below to view your order details",
+    "button_text": "View Order",
+    "url": "https://example.com/orders/12345"
+  }
+}
+```
+
+### Response
+
+```json
+{
+  "status": "success",
+  "data": {
+    "id": "uuid",
+    "wa_message_id": "wamid.xxx",
+    "status": "sent"
+  }
+}
+```
+
+<Aside type="note">
+  Button titles have a maximum length of 20 characters. Button IDs are returned when the user clicks a button.
+</Aside>
 
 ## Mark Message as Read
 
