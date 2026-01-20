@@ -944,3 +944,138 @@ func TestApp_SendOutgoingMessage_DocumentPreview(t *testing.T) {
 	require.NoError(t, app.DB.First(&updatedContact, contact.ID).Error)
 	assert.Equal(t, "[Document: report.pdf]", updatedContact.LastMessagePreview)
 }
+
+// --- Template Parameter Tests ---
+
+func TestExtractParamNamesFromContent_Positional(t *testing.T) {
+	content := "Hello {{1}}! Your order {{2}} is ready for pickup at {{3}}."
+	names := handlers.ExtractParamNamesFromContent(content)
+
+	require.Len(t, names, 3)
+	assert.Equal(t, "1", names[0])
+	assert.Equal(t, "2", names[1])
+	assert.Equal(t, "3", names[2])
+}
+
+func TestExtractParamNamesFromContent_Named(t *testing.T) {
+	content := "Hi {{customer_name}}, your order {{order_id}} will arrive on {{delivery_date}}."
+	names := handlers.ExtractParamNamesFromContent(content)
+
+	require.Len(t, names, 3)
+	assert.Equal(t, "customer_name", names[0])
+	assert.Equal(t, "order_id", names[1])
+	assert.Equal(t, "delivery_date", names[2])
+}
+
+func TestExtractParamNamesFromContent_Mixed(t *testing.T) {
+	content := "Hello {{name}}, your code is {{1}}."
+	names := handlers.ExtractParamNamesFromContent(content)
+
+	require.Len(t, names, 2)
+	assert.Equal(t, "name", names[0])
+	assert.Equal(t, "1", names[1])
+}
+
+func TestExtractParamNamesFromContent_NoParams(t *testing.T) {
+	content := "This is a static message with no parameters."
+	names := handlers.ExtractParamNamesFromContent(content)
+
+	assert.Nil(t, names)
+}
+
+func TestExtractParamNamesFromContent_DuplicateParams(t *testing.T) {
+	content := "Hello {{name}}, {{name}} is a great name!"
+	names := handlers.ExtractParamNamesFromContent(content)
+
+	// Should deduplicate
+	require.Len(t, names, 1)
+	assert.Equal(t, "name", names[0])
+}
+
+func TestResolveParams_NamedMatch(t *testing.T) {
+	paramNames := []string{"customer_name", "order_id"}
+	params := map[string]string{
+		"customer_name": "John",
+		"order_id":      "ORD-123",
+	}
+
+	result := handlers.ResolveParams(paramNames, params)
+
+	require.Len(t, result, 2)
+	assert.Equal(t, "John", result[0])
+	assert.Equal(t, "ORD-123", result[1])
+}
+
+func TestResolveParams_PositionalMatch(t *testing.T) {
+	paramNames := []string{"1", "2"}
+	params := map[string]string{
+		"1": "First",
+		"2": "Second",
+	}
+
+	result := handlers.ResolveParams(paramNames, params)
+
+	require.Len(t, result, 2)
+	assert.Equal(t, "First", result[0])
+	assert.Equal(t, "Second", result[1])
+}
+
+func TestResolveParams_FallbackToPositional(t *testing.T) {
+	// Template has named params, but user sends positional
+	paramNames := []string{"name", "code"}
+	params := map[string]string{
+		"1": "John",
+		"2": "ABC123",
+	}
+
+	result := handlers.ResolveParams(paramNames, params)
+
+	require.Len(t, result, 2)
+	assert.Equal(t, "John", result[0])
+	assert.Equal(t, "ABC123", result[1])
+}
+
+func TestResolveParams_MissingParams(t *testing.T) {
+	paramNames := []string{"name", "order_id", "date"}
+	params := map[string]string{
+		"name": "John",
+		// order_id and date are missing
+	}
+
+	result := handlers.ResolveParams(paramNames, params)
+
+	require.Len(t, result, 3)
+	assert.Equal(t, "John", result[0])
+	assert.Equal(t, "", result[1]) // Missing - defaults to empty
+	assert.Equal(t, "", result[2]) // Missing - defaults to empty
+}
+
+func TestResolveParams_EmptyInputs(t *testing.T) {
+	// Empty param names
+	result1 := handlers.ResolveParams([]string{}, map[string]string{"a": "b"})
+	assert.Nil(t, result1)
+
+	// Empty params map
+	result2 := handlers.ResolveParams([]string{"a"}, map[string]string{})
+	assert.Nil(t, result2)
+
+	// Both empty
+	result3 := handlers.ResolveParams([]string{}, map[string]string{})
+	assert.Nil(t, result3)
+}
+
+func TestResolveParams_WrongParamNames(t *testing.T) {
+	// User sends different param names than template expects
+	paramNames := []string{"1", "2"} // Template expects positional
+	params := map[string]string{
+		"lastrec":  "Nifty",     // Wrong name
+		"misstime": "banknifty", // Wrong name
+	}
+
+	result := handlers.ResolveParams(paramNames, params)
+
+	require.Len(t, result, 2)
+	// Both should be empty since names don't match
+	assert.Equal(t, "", result[0])
+	assert.Equal(t, "", result[1])
+}
