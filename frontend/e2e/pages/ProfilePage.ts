@@ -16,8 +16,8 @@ export class ProfilePage extends BasePage {
   constructor(page: Page) {
     super(page)
     this.heading = page.locator('h1').filter({ hasText: 'Profile' })
-    this.accountInfoCard = page.locator('.rounded-lg.border').filter({ hasText: 'Account Information' })
-    this.changePasswordCard = page.locator('.rounded-lg.border').filter({ hasText: 'Change Password' })
+    this.accountInfoCard = page.locator('.rounded-xl.border').filter({ hasText: 'Account Information' })
+    this.changePasswordCard = page.locator('.rounded-xl.border').filter({ hasText: 'Change Password' })
     this.currentPasswordInput = page.locator('input#current_password')
     this.newPasswordInput = page.locator('input#new_password')
     this.confirmPasswordInput = page.locator('input#confirm_password')

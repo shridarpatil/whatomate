@@ -14,12 +14,11 @@ test.describe('Dashboard', () => {
   })
 
   test('should display stat cards', async ({ page }) => {
-    // Wait for stat cards to load (not skeleton) - use headings for specific matching
-    const main = page.locator('main')
-    await expect(main.getByRole('heading', { name: 'Total Messages' })).toBeVisible({ timeout: 15000 })
-    await expect(main.getByRole('heading', { name: 'Contacts' })).toBeVisible()
-    await expect(main.getByRole('heading', { name: 'Chatbot Sessions' })).toBeVisible()
-    await expect(main.getByRole('heading', { name: 'Campaigns Sent' })).toBeVisible()
+    // Wait for stat cards to load (not skeleton) - use exact text matching to avoid duplicates
+    await expect(page.getByText('Total Messages', { exact: true })).toBeVisible({ timeout: 15000 })
+    await expect(page.getByText('Contacts', { exact: true })).toBeVisible()
+    await expect(page.getByText('Chatbot Sessions', { exact: true })).toBeVisible()
+    await expect(page.getByText('Campaigns Sent', { exact: true })).toBeVisible()
   })
 
   test('should display time range filter', async ({ page }) => {

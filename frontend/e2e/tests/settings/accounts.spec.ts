@@ -100,7 +100,7 @@ test.describe('Account CRUD Operations', () => {
 
   test('should show delete confirmation dialog', async ({ page }) => {
     // Account cards have h3 with account name, skip the webhook info card
-    const accountCard = page.locator('.rounded-lg.border').filter({ has: page.locator('h3') }).first()
+    const accountCard = page.locator('.rounded-xl.border').filter({ has: page.locator('h3') }).first()
     if (await accountCard.isVisible()) {
       // Delete button is the icon button with destructive icon (has text-destructive class on svg)
       await accountCard.locator('button').filter({ has: page.locator('svg.text-destructive') }).click()
@@ -111,7 +111,7 @@ test.describe('Account CRUD Operations', () => {
   })
 
   test('should cancel account deletion', async ({ page }) => {
-    const accountCard = page.locator('.rounded-lg.border').filter({ has: page.locator('h3') }).first()
+    const accountCard = page.locator('.rounded-xl.border').filter({ has: page.locator('h3') }).first()
     if (await accountCard.isVisible()) {
       await accountCard.locator('button').filter({ has: page.locator('svg.text-destructive') }).click()
       await accountsPage.cancelDelete()
@@ -131,7 +131,7 @@ test.describe('Account Card Actions', () => {
 
   test('should have edit button on account card', async ({ page }) => {
     // Account cards have h3 with account name
-    const accountCard = page.locator('.rounded-lg.border').filter({ has: page.locator('h3') }).first()
+    const accountCard = page.locator('.rounded-xl.border').filter({ has: page.locator('h3') }).first()
     if (await accountCard.isVisible()) {
       // Edit button is an icon-only button (has svg but no text-destructive class)
       // It's the icon button that's NOT the delete button
@@ -142,7 +142,7 @@ test.describe('Account Card Actions', () => {
   })
 
   test('should have delete button on account card', async ({ page }) => {
-    const accountCard = page.locator('.rounded-lg.border').filter({ has: page.locator('h3') }).first()
+    const accountCard = page.locator('.rounded-xl.border').filter({ has: page.locator('h3') }).first()
     if (await accountCard.isVisible()) {
       // Delete button has svg with text-destructive class
       const deleteBtn = accountCard.locator('button').filter({ has: page.locator('svg.text-destructive') })
@@ -151,7 +151,7 @@ test.describe('Account Card Actions', () => {
   })
 
   test('should open edit dialog when clicking edit', async ({ page }) => {
-    const accountCard = page.locator('.rounded-lg.border').filter({ has: page.locator('h3') }).first()
+    const accountCard = page.locator('.rounded-xl.border').filter({ has: page.locator('h3') }).first()
     if (await accountCard.isVisible()) {
       // Edit button is the first icon-only button (without text-destructive)
       const iconButtons = accountCard.locator('button:has(svg.h-4)').filter({ hasNot: page.locator('span') })
@@ -173,12 +173,12 @@ test.describe('Account Webhook Info', () => {
 
   test('should display webhook URL section', async ({ page }) => {
     // Webhook card has h4 with "Webhook Configuration"
-    const webhookCard = page.locator('.rounded-lg.border').filter({ has: page.locator('h4') }).first()
+    const webhookCard = page.locator('.rounded-xl.border').filter({ has: page.locator('h4') }).first()
     await expect(webhookCard.getByText('Webhook Configuration')).toBeVisible()
   })
 
   test('should have copy button for webhook URL', async ({ page }) => {
-    const webhookCard = page.locator('.rounded-lg.border').filter({ has: page.locator('h4') }).first()
+    const webhookCard = page.locator('.rounded-xl.border').filter({ has: page.locator('h4') }).first()
     if (await webhookCard.isVisible()) {
       // Copy button is next to the code element containing the webhook URL
       const copyBtn = webhookCard.locator('code').first().locator('..').locator('button')
@@ -198,7 +198,7 @@ test.describe('Account Test Connection', () => {
 
   test('should have test connection button', async ({ page }) => {
     // Account cards have h3 with account name
-    const accountCard = page.locator('.rounded-lg.border').filter({ has: page.locator('h3') }).first()
+    const accountCard = page.locator('.rounded-xl.border').filter({ has: page.locator('h3') }).first()
     if (await accountCard.isVisible()) {
       const testBtn = accountCard.getByRole('button', { name: /Test/i })
       await expect(testBtn).toBeVisible()

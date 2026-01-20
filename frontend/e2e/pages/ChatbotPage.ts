@@ -91,7 +91,7 @@ export class KeywordsPage extends BasePage {
 
   // Card helpers
   getRuleCard(keyword: string): Locator {
-    return this.page.locator('.rounded-lg.border').filter({ hasText: keyword })
+    return this.page.locator('.rounded-xl.border').filter({ hasText: keyword })
   }
 
   getEditButton(card?: Locator): Locator {
@@ -313,7 +313,7 @@ export class AIContextsPage extends BasePage {
 
   // Card helpers
   getContextCard(name: string): Locator {
-    return this.page.locator('.rounded-lg.border').filter({ hasText: name })
+    return this.page.locator('.rounded-xl.border').filter({ hasText: name })
   }
 
   getEditButton(card?: Locator): Locator {
