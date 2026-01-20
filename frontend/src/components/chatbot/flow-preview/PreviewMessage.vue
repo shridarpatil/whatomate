@@ -45,9 +45,9 @@ const isDebug = computed(() => props.message.type === 'debug')
   <!-- User Message -->
   <div v-else-if="isUser" class="flex justify-end">
     <div class="max-w-[85%]">
-      <div class="bg-[#d9fdd3] dark:bg-[#005c4b] rounded-lg rounded-tr-none shadow-sm p-3">
-        <p class="text-sm text-gray-800 dark:text-gray-200">{{ message.content }}</p>
-        <p class="text-[10px] text-gray-500 dark:text-gray-400 text-right mt-1 flex items-center justify-end gap-1">
+      <div class="bg-[#005c4b] light:bg-[#d9fdd3] rounded-lg rounded-tr-none shadow-sm p-3">
+        <p class="text-sm text-gray-200 light:text-gray-800">{{ message.content }}</p>
+        <p class="text-[10px] text-gray-400 light:text-gray-500 text-right mt-1 flex items-center justify-end gap-1">
           {{ formattedTime }}
           <svg class="h-4 w-4 text-[#53bdeb]" viewBox="0 0 24 24" fill="currentColor">
             <path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41L9 16.17z"/>

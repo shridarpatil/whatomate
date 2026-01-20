@@ -344,31 +344,32 @@ async function confirmPublishTemplate() {
   }
 }
 
+// Dark-first: default is dark mode, light: prefix for light mode
 function getStatusBadgeClass(status: string) {
   switch (status) {
     case 'APPROVED':
-      return 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-300'
+      return 'bg-green-900 text-green-300 light:bg-green-100 light:text-green-800'
     case 'PENDING':
-      return 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-300'
+      return 'bg-yellow-900 text-yellow-300 light:bg-yellow-100 light:text-yellow-800'
     case 'REJECTED':
-      return 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-300'
+      return 'bg-red-900 text-red-300 light:bg-red-100 light:text-red-800'
     case 'DRAFT':
-      return 'bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-300'
+      return 'bg-gray-800 text-gray-300 light:bg-gray-100 light:text-gray-800'
     default:
-      return 'bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-300'
+      return 'bg-gray-800 text-gray-300 light:bg-gray-100 light:text-gray-800'
   }
 }
 
 function getCategoryBadgeClass(category: string) {
   switch (category) {
     case 'UTILITY':
-      return 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-300'
+      return 'bg-blue-900 text-blue-300 light:bg-blue-100 light:text-blue-800'
     case 'MARKETING':
-      return 'bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-300'
+      return 'bg-purple-900 text-purple-300 light:bg-purple-100 light:text-purple-800'
     case 'AUTHENTICATION':
-      return 'bg-orange-100 text-orange-800 dark:bg-orange-900 dark:text-orange-300'
+      return 'bg-orange-900 text-orange-300 light:bg-orange-100 light:text-orange-800'
     default:
-      return 'bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-300'
+      return 'bg-gray-800 text-gray-300 light:bg-gray-100 light:text-gray-800'
   }
 }
 
@@ -527,25 +528,27 @@ function formatPreview(text: string, samples: any[]): string {
   samples.forEach((sample) => {
     if (sample && sample.param_name && sample.value) {
       const sanitizedSample = DOMPurify.sanitize(String(sample.value), { ALLOWED_TAGS: [] })
-      result = result.replace(`{{${sample.param_name}}}`, `<span class="bg-green-100 dark:bg-green-900 px-1 rounded">${sanitizedSample}</span>`)
+      result = result.replace(`{{${sample.param_name}}}`, `<span class="bg-green-900 light:bg-green-100 px-1 rounded">${sanitizedSample}</span>`)
     }
   })
 
   // Replace remaining variables (both named and positional)
-  result = result.replace(/\{\{([^}]+)\}\}/g, '<span class="bg-yellow-100 dark:bg-yellow-900 px-1 rounded">{{$1}}</span>')
+  result = result.replace(/\{\{([^}]+)\}\}/g, '<span class="bg-yellow-900 light:bg-yellow-100 px-1 rounded">{{$1}}</span>')
   return result
 }
 </script>
 
 <template>
-  <div class="flex flex-col h-full">
+  <div class="flex flex-col h-full bg-[#0a0a0b] light:bg-gray-50">
     <!-- Header -->
-    <header class="border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
+    <header class="border-b border-white/[0.08] light:border-gray-200 bg-[#0a0a0b]/95 light:bg-white/95 backdrop-blur">
       <div class="flex h-16 items-center px-6">
-        <FileText class="h-5 w-5 mr-3" />
+        <div class="h-8 w-8 rounded-lg bg-gradient-to-br from-blue-500 to-cyan-600 flex items-center justify-center mr-3 shadow-lg shadow-blue-500/20">
+          <FileText class="h-4 w-4 text-white" />
+        </div>
         <div class="flex-1">
-          <h1 class="text-xl font-semibold">Message Templates</h1>
-          <p class="text-sm text-muted-foreground">Create and manage WhatsApp message templates</p>
+          <h1 class="text-xl font-semibold text-white light:text-gray-900">Message Templates</h1>
+          <p class="text-sm text-white/50 light:text-gray-500">Create and manage WhatsApp message templates</p>
         </div>
         <div class="flex items-center gap-2">
           <Button variant="outline" size="sm" @click="syncTemplates" :disabled="isSyncing || !selectedAccount || selectedAccount === 'all'">
@@ -808,10 +811,10 @@ function formatPreview(text: string, samples: any[]): string {
             </div>
 
             <!-- Show uploaded handle -->
-            <div v-if="headerMediaHandle" class="bg-green-50 dark:bg-green-950 border border-green-200 dark:border-green-800 rounded-lg p-3">
+            <div v-if="headerMediaHandle" class="bg-green-950 light:bg-green-50 border border-green-800 light:border-green-200 rounded-lg p-3">
               <div class="flex items-center gap-2">
                 <Check class="h-4 w-4 text-green-600" />
-                <span class="text-sm text-green-800 dark:text-green-200">Media uploaded successfully</span>
+                <span class="text-sm text-green-200 light:text-green-800">Media uploaded successfully</span>
               </div>
               <p class="text-xs text-muted-foreground mt-1 font-mono truncate">
                 Handle: {{ headerMediaHandle.substring(0, 40) }}...
@@ -945,10 +948,10 @@ function formatPreview(text: string, samples: any[]): string {
           </div>
 
           <!-- Info Box -->
-          <div class="bg-blue-50 dark:bg-blue-950 border border-blue-200 dark:border-blue-800 rounded-lg p-4">
+          <div class="bg-blue-950 light:bg-blue-50 border border-blue-800 light:border-blue-200 rounded-lg p-4">
             <div class="flex gap-3">
-              <AlertCircle class="h-5 w-5 text-blue-600 dark:text-blue-400 flex-shrink-0" />
-              <div class="text-sm text-blue-800 dark:text-blue-200">
+              <AlertCircle class="h-5 w-5 text-blue-400 light:text-blue-600 flex-shrink-0" />
+              <div class="text-sm text-blue-200 light:text-blue-800">
                 <p class="font-medium">Template Submission</p>
                 <p class="mt-1">
                   This creates a local draft. After saving, click the <Send class="h-3 w-3 inline" /> publish button
@@ -981,14 +984,14 @@ function formatPreview(text: string, samples: any[]): string {
 
         <div v-if="previewTemplate" class="py-4">
           <!-- WhatsApp-style preview -->
-          <div class="bg-[#e5ddd5] dark:bg-gray-800 rounded-lg p-4">
-            <div class="bg-white dark:bg-gray-700 rounded-lg shadow max-w-[280px] overflow-hidden">
+          <div class="bg-gray-800 light:bg-[#e5ddd5] rounded-lg p-4">
+            <div class="bg-gray-700 light:bg-white rounded-lg shadow max-w-[280px] overflow-hidden">
               <!-- Header -->
               <div v-if="previewTemplate.header_type && previewTemplate.header_type !== 'NONE'" class="p-3 border-b">
                 <div v-if="previewTemplate.header_type === 'TEXT'" class="font-semibold">
                   {{ previewTemplate.header_content }}
                 </div>
-                <div v-else class="h-32 bg-gray-200 dark:bg-gray-600 rounded flex items-center justify-center">
+                <div v-else class="h-32 bg-gray-600 light:bg-gray-200 rounded flex items-center justify-center">
                   <component :is="getHeaderIcon(previewTemplate.header_type)" class="h-8 w-8 text-gray-400" />
                 </div>
               </div>
@@ -1006,7 +1009,7 @@ function formatPreview(text: string, samples: any[]): string {
               <!-- Buttons -->
               <div v-if="previewTemplate.buttons && previewTemplate.buttons.length > 0" class="border-t">
                 <div v-for="(btn, idx) in previewTemplate.buttons" :key="idx" class="border-b last:border-b-0">
-                  <button class="w-full py-2 text-sm text-blue-500 hover:bg-gray-50 dark:hover:bg-gray-600">
+                  <button class="w-full py-2 text-sm text-blue-500 hover:bg-gray-600 light:hover:bg-gray-50">
                     {{ btn.text || btn.title || 'Button' }}
                   </button>
                 </div>

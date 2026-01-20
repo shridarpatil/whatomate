@@ -326,109 +326,122 @@ onMounted(() => {
 </script>
 
 <template>
-  <div class="p-4">
-    <Card>
-      <CardHeader class="flex flex-row items-center justify-between">
-        <div>
-          <CardTitle class="flex items-center gap-2">
-            <Zap class="h-5 w-5" />
-            Custom Actions
-          </CardTitle>
-          <CardDescription>
-            Configure custom action buttons that appear in the chat header for quick integrations
-          </CardDescription>
+  <div class="flex flex-col h-full bg-[#0a0a0b] light:bg-gray-50">
+    <!-- Header -->
+    <header class="border-b border-white/[0.08] light:border-gray-200 bg-[#0a0a0b]/95 light:bg-white/95 backdrop-blur">
+      <div class="flex h-16 items-center px-6">
+        <div class="h-8 w-8 rounded-lg bg-gradient-to-br from-yellow-500 to-orange-600 flex items-center justify-center mr-3 shadow-lg shadow-yellow-500/20">
+          <Zap class="h-4 w-4 text-white" />
         </div>
-        <Button @click="openCreateDialog">
+        <div class="flex-1">
+          <h1 class="text-xl font-semibold text-white light:text-gray-900">Custom Actions</h1>
+          <p class="text-sm text-white/50 light:text-gray-500">Configure custom action buttons for chat integrations</p>
+        </div>
+        <Button variant="outline" size="sm" @click="openCreateDialog">
           <Plus class="h-4 w-4 mr-2" />
           Add Action
         </Button>
-      </CardHeader>
-      <CardContent>
-        <ScrollArea class="h-[500px]">
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead class="w-[40px]"></TableHead>
-                <TableHead>Name</TableHead>
-                <TableHead>Type</TableHead>
-                <TableHead>Target</TableHead>
-                <TableHead>Status</TableHead>
-                <TableHead>Created</TableHead>
-                <TableHead class="text-right">Actions</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              <TableRow v-if="isLoading">
-                <TableCell colspan="7" class="text-center py-8 text-muted-foreground">
-                  Loading...
-                </TableCell>
-              </TableRow>
-              <TableRow v-else-if="actions.length === 0">
-                <TableCell colspan="7" class="text-center py-8 text-muted-foreground">
-                  No custom actions configured. Add one to create quick action buttons in chat.
-                </TableCell>
-              </TableRow>
-              <TableRow v-for="action in actions" :key="action.id">
-                <TableCell>
-                  <component
-                    :is="getIconComponent(action.icon)"
-                    class="h-5 w-5 text-muted-foreground"
-                  />
-                </TableCell>
-                <TableCell class="font-medium">{{ action.name }}</TableCell>
-                <TableCell>
-                  <Badge :variant="getActionTypeBadge(action.action_type).variant">
-                    {{ getActionTypeBadge(action.action_type).label }}
-                  </Badge>
-                </TableCell>
-                <TableCell class="max-w-[200px] truncate text-muted-foreground">
-                  <template v-if="action.action_type === 'webhook' || action.action_type === 'url'">
-                    {{ action.config.url }}
-                  </template>
-                  <template v-else>
-                    Custom Script
-                  </template>
-                </TableCell>
-                <TableCell>
-                  <div class="flex items-center gap-2">
-                    <Switch
-                      :checked="action.is_active"
-                      @update:checked="toggleAction(action)"
-                    />
-                    <span class="text-sm text-muted-foreground">
-                      {{ action.is_active ? 'Active' : 'Inactive' }}
-                    </span>
-                  </div>
-                </TableCell>
-                <TableCell class="text-muted-foreground">
-                  {{ formatDate(action.created_at) }}
-                </TableCell>
-                <TableCell class="text-right">
-                  <div class="flex items-center justify-end gap-1">
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      class="h-8 w-8"
-                      @click="openEditDialog(action)"
-                    >
-                      <Pencil class="h-4 w-4" />
-                    </Button>
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      class="h-8 w-8 text-destructive"
-                      @click="actionToDelete = action; isDeleteDialogOpen = true"
-                    >
-                      <Trash2 class="h-4 w-4" />
-                    </Button>
-                  </div>
-                </TableCell>
-              </TableRow>
-            </TableBody>
-          </Table>
-        </ScrollArea>
-      </CardContent>
-    </Card>
+      </div>
+    </header>
+
+    <ScrollArea class="flex-1">
+      <div class="p-6">
+        <div class="max-w-6xl mx-auto space-y-4">
+          <Card>
+            <CardHeader>
+              <CardTitle>Your Custom Actions</CardTitle>
+              <CardDescription>
+                Custom actions appear as buttons in the chat header for quick integrations.
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead class="w-[40px]"></TableHead>
+                    <TableHead>Name</TableHead>
+                    <TableHead>Type</TableHead>
+                    <TableHead>Target</TableHead>
+                    <TableHead>Status</TableHead>
+                    <TableHead>Created</TableHead>
+                    <TableHead class="text-right">Actions</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  <TableRow v-if="isLoading">
+                    <TableCell colspan="7" class="text-center py-8 text-muted-foreground">
+                      Loading...
+                    </TableCell>
+                  </TableRow>
+                  <TableRow v-else-if="actions.length === 0">
+                    <TableCell colspan="7" class="text-center py-8 text-muted-foreground">
+                      <Zap class="h-8 w-8 mx-auto mb-2 opacity-50" />
+                      <p>No custom actions configured</p>
+                    </TableCell>
+                  </TableRow>
+                  <TableRow v-for="action in actions" :key="action.id">
+                    <TableCell>
+                      <component
+                        :is="getIconComponent(action.icon)"
+                        class="h-5 w-5 text-muted-foreground"
+                      />
+                    </TableCell>
+                    <TableCell class="font-medium">{{ action.name }}</TableCell>
+                    <TableCell>
+                      <Badge :variant="getActionTypeBadge(action.action_type).variant">
+                        {{ getActionTypeBadge(action.action_type).label }}
+                      </Badge>
+                    </TableCell>
+                    <TableCell class="max-w-[200px] truncate text-muted-foreground">
+                      <template v-if="action.action_type === 'webhook' || action.action_type === 'url'">
+                        {{ action.config.url }}
+                      </template>
+                      <template v-else>
+                        Custom Script
+                      </template>
+                    </TableCell>
+                    <TableCell>
+                      <div class="flex items-center gap-2">
+                        <Switch
+                          :checked="action.is_active"
+                          @update:checked="toggleAction(action)"
+                        />
+                        <span class="text-sm text-muted-foreground">
+                          {{ action.is_active ? 'Active' : 'Inactive' }}
+                        </span>
+                      </div>
+                    </TableCell>
+                    <TableCell class="text-muted-foreground">
+                      {{ formatDate(action.created_at) }}
+                    </TableCell>
+                    <TableCell class="text-right">
+                      <div class="flex items-center justify-end gap-1">
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          class="h-8 w-8"
+                          @click="openEditDialog(action)"
+                        >
+                          <Pencil class="h-4 w-4" />
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          class="h-8 w-8 text-destructive"
+                          @click="actionToDelete = action; isDeleteDialogOpen = true"
+                        >
+                          <Trash2 class="h-4 w-4" />
+                        </Button>
+                      </div>
+                    </TableCell>
+                  </TableRow>
+                </TableBody>
+              </Table>
+            </CardContent>
+          </Card>
+        </div>
+      </div>
+    </ScrollArea>
 
     <!-- Create/Edit Dialog -->
     <Dialog v-model:open="isDialogOpen">

@@ -1223,14 +1223,16 @@ async function addRecipientsFromCSV() {
 </script>
 
 <template>
-  <div class="flex flex-col h-full">
+  <div class="flex flex-col h-full bg-[#0a0a0b] light:bg-gray-50">
     <!-- Header -->
-    <header class="border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
+    <header class="border-b border-white/[0.08] light:border-gray-200 bg-[#0a0a0b]/95 light:bg-white/95 backdrop-blur">
       <div class="flex h-16 items-center px-6">
-        <Megaphone class="h-5 w-5 mr-3" />
+        <div class="h-8 w-8 rounded-lg bg-gradient-to-br from-rose-500 to-pink-600 flex items-center justify-center mr-3 shadow-lg shadow-rose-500/20">
+          <Megaphone class="h-4 w-4 text-white" />
+        </div>
         <div class="flex-1">
-          <h1 class="text-xl font-semibold">Campaigns</h1>
-          <p class="text-sm text-muted-foreground">Manage bulk messaging campaigns</p>
+          <h1 class="text-xl font-semibold text-white light:text-gray-900">Campaigns</h1>
+          <p class="text-sm text-white/50 light:text-gray-500">Manage bulk messaging campaigns</p>
         </div>
 
         <!-- Filters -->
@@ -1352,7 +1354,8 @@ async function addRecipientsFromCSV() {
 
     <!-- Campaigns List -->
     <ScrollArea class="flex-1">
-      <div class="p-6 space-y-4">
+      <div class="p-6">
+        <div class="max-w-6xl mx-auto space-y-4">
         <!-- Loading State -->
         <div v-if="isLoading" class="flex items-center justify-center py-12">
           <Loader2 class="h-8 w-8 animate-spin text-muted-foreground" />
@@ -1363,8 +1366,8 @@ async function addRecipientsFromCSV() {
           <CardContent class="p-6">
             <div class="flex items-start justify-between mb-4">
               <div class="flex items-center gap-4">
-                <div class="h-12 w-12 rounded-lg bg-orange-100 dark:bg-orange-900 flex items-center justify-center">
-                  <Megaphone class="h-6 w-6 text-orange-600 dark:text-orange-400" />
+                <div class="h-12 w-12 rounded-lg bg-orange-900 light:bg-orange-100 flex items-center justify-center">
+                  <Megaphone class="h-6 w-6 text-orange-400 light:text-orange-600" />
                 </div>
                 <div>
                   <h3 class="font-semibold text-lg">{{ campaign.name }}</h3>
@@ -1438,7 +1441,7 @@ async function addRecipientsFromCSV() {
                 <span class="text-sm font-medium">Header Media ({{ getTemplateHeaderType(campaign.template_id) }})</span>
               </div>
 
-              <div v-if="campaign.header_media_id" class="flex items-center gap-3 p-2 bg-green-50 dark:bg-green-950/30 rounded border border-green-200 dark:border-green-800">
+              <div v-if="campaign.header_media_id" class="flex items-center gap-3 p-2 bg-green-950/30 light:bg-green-50 rounded border border-green-800 light:border-green-200">
                 <!-- Thumbnail -->
                 <div class="relative flex-shrink-0">
                   <!-- Loading -->
@@ -1463,7 +1466,7 @@ async function addRecipientsFromCSV() {
                 </div>
                 <!-- File Info -->
                 <div class="flex-1 min-w-0">
-                  <p class="text-sm font-medium text-green-700 dark:text-green-400 truncate">
+                  <p class="text-sm font-medium text-green-400 light:text-green-700 truncate">
                     {{ campaign.header_media_filename || 'Media file' }}
                   </p>
                   <p class="text-xs text-muted-foreground">
@@ -1630,6 +1633,7 @@ async function addRecipientsFromCSV() {
             </Button>
           </CardContent>
         </Card>
+        </div>
       </div>
     </ScrollArea>
 

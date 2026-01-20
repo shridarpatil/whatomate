@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { ref, onMounted, computed, watch } from 'vue'
-import { Card, CardContent } from '@/components/ui/card'
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import { ScrollArea } from '@/components/ui/scroll-area'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -303,18 +304,20 @@ function formatDate(dateString: string) {
 </script>
 
 <template>
-  <div class="flex flex-col h-full">
+  <div class="flex flex-col h-full bg-[#0a0a0b] light:bg-gray-50">
     <!-- Header -->
-    <header class="border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
+    <header class="border-b border-white/[0.08] light:border-gray-200 bg-[#0a0a0b]/95 light:bg-white/95 backdrop-blur">
       <div class="flex h-16 items-center px-6">
         <RouterLink to="/settings">
           <Button variant="ghost" size="icon" class="mr-3">
             <ArrowLeft class="h-5 w-5" />
           </Button>
         </RouterLink>
-        <Users class="h-5 w-5 mr-3" />
+        <div class="h-8 w-8 rounded-lg bg-gradient-to-br from-cyan-500 to-blue-600 flex items-center justify-center mr-3 shadow-lg shadow-cyan-500/20">
+          <Users class="h-4 w-4 text-white" />
+        </div>
         <div class="flex-1">
-          <h1 class="text-xl font-semibold">Teams</h1>
+          <h1 class="text-xl font-semibold text-white light:text-gray-900">Teams</h1>
           <Breadcrumb>
             <BreadcrumbList>
               <BreadcrumbItem>
@@ -334,58 +337,34 @@ function formatDate(dateString: string) {
       </div>
     </header>
 
-    <!-- Content -->
-    <div class="flex-1 p-6 overflow-auto">
-      <div class="max-w-6xl mx-auto space-y-4">
-        <!-- Info Card -->
-        <Card>
-          <CardContent class="p-6">
-            <h3 class="font-semibold mb-4">Assignment Strategies</h3>
-            <div class="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
-              <div class="flex items-start gap-3">
-                <RotateCcw class="h-5 w-5 text-primary mt-0.5" />
-                <div>
-                  <span class="font-medium">Round Robin</span>
-                  <p class="text-muted-foreground">Assigns to agents in rotation</p>
-                </div>
-              </div>
-              <div class="flex items-start gap-3">
-                <Scale class="h-5 w-5 text-muted-foreground mt-0.5" />
-                <div>
-                  <span class="font-medium">Load Balanced</span>
-                  <p class="text-muted-foreground">Assigns to agent with fewest active chats</p>
-                </div>
-              </div>
-              <div class="flex items-start gap-3">
-                <Hand class="h-5 w-5 text-muted-foreground mt-0.5" />
-                <div>
-                  <span class="font-medium">Manual Queue</span>
-                  <p class="text-muted-foreground">Agents pick from team queue</p>
-                </div>
-              </div>
+    <ScrollArea class="flex-1">
+      <div class="p-6">
+        <div class="max-w-6xl mx-auto space-y-4">
+          <!-- Search -->
+          <div class="flex items-center gap-4">
+            <div class="relative flex-1 max-w-sm">
+              <Search class="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+              <Input
+                v-model="searchQuery"
+                placeholder="Search teams..."
+                class="pl-9"
+              />
             </div>
-          </CardContent>
-        </Card>
-
-        <!-- Search -->
-        <div class="flex items-center gap-4">
-          <div class="relative flex-1 max-w-sm">
-            <Search class="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-            <Input
-              v-model="searchQuery"
-              placeholder="Search teams..."
-              class="pl-9"
-            />
+            <div class="text-sm text-muted-foreground">
+              {{ filteredTeams.length }} team{{ filteredTeams.length !== 1 ? 's' : '' }}
+            </div>
           </div>
-          <div class="text-sm text-muted-foreground">
-            {{ filteredTeams.length }} team{{ filteredTeams.length !== 1 ? 's' : '' }}
-          </div>
-        </div>
 
-        <!-- Teams Table -->
-        <Card>
-          <CardContent class="p-0">
-            <Table>
+          <!-- Teams Table -->
+          <Card>
+            <CardHeader>
+              <CardTitle>Your Teams</CardTitle>
+              <CardDescription>
+                Organize agents into teams with assignment strategies: Round Robin, Load Balanced, or Manual Queue.
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <Table>
               <TableHeader>
                 <TableRow>
                   <TableHead class="w-[250px]">Team</TableHead>
@@ -482,11 +461,12 @@ function formatDate(dateString: string) {
                   </TableCell>
                 </TableRow>
               </TableBody>
-            </Table>
-          </CardContent>
-        </Card>
+              </Table>
+            </CardContent>
+          </Card>
+        </div>
       </div>
-    </div>
+    </ScrollArea>
 
     <!-- Add/Edit Team Dialog -->
     <Dialog v-model:open="isDialogOpen">

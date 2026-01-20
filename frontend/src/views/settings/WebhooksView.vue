@@ -246,121 +246,134 @@ onMounted(() => {
 </script>
 
 <template>
-  <div class="p-4">
-    <Card>
-      <CardHeader class="flex flex-row items-center justify-between">
-        <div>
-          <CardTitle class="flex items-center gap-2">
-            <WebhookIcon class="h-5 w-5" />
-            Webhooks
-          </CardTitle>
-          <CardDescription>
-            Configure webhooks to send events to external systems like helpdesks
-          </CardDescription>
+  <div class="flex flex-col h-full bg-[#0a0a0b] light:bg-gray-50">
+    <!-- Header -->
+    <header class="border-b border-white/[0.08] light:border-gray-200 bg-[#0a0a0b]/95 light:bg-white/95 backdrop-blur">
+      <div class="flex h-16 items-center px-6">
+        <div class="h-8 w-8 rounded-lg bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center mr-3 shadow-lg shadow-indigo-500/20">
+          <WebhookIcon class="h-4 w-4 text-white" />
         </div>
-        <Button @click="openCreateDialog">
+        <div class="flex-1">
+          <h1 class="text-xl font-semibold text-white light:text-gray-900">Webhooks</h1>
+          <p class="text-sm text-white/50 light:text-gray-500">Configure webhooks to send events to external systems</p>
+        </div>
+        <Button variant="outline" size="sm" @click="openCreateDialog">
           <Plus class="h-4 w-4 mr-2" />
           Add Webhook
         </Button>
-      </CardHeader>
-      <CardContent>
-        <ScrollArea class="h-[500px]">
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Name</TableHead>
-                <TableHead>URL</TableHead>
-                <TableHead>Events</TableHead>
-                <TableHead>Status</TableHead>
-                <TableHead>Created</TableHead>
-                <TableHead class="text-right">Actions</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              <TableRow v-if="isLoading">
-                <TableCell colspan="6" class="text-center py-8 text-muted-foreground">
-                  Loading...
-                </TableCell>
-              </TableRow>
-              <TableRow v-else-if="webhooks.length === 0">
-                <TableCell colspan="6" class="text-center py-8 text-muted-foreground">
-                  No webhooks configured. Add one to start receiving events.
-                </TableCell>
-              </TableRow>
-              <TableRow v-for="webhook in webhooks" :key="webhook.id">
-                <TableCell class="font-medium">{{ webhook.name }}</TableCell>
-                <TableCell class="max-w-[200px] truncate text-muted-foreground">
-                  {{ webhook.url }}
-                </TableCell>
-                <TableCell>
-                  <div class="flex flex-wrap gap-1">
-                    <Badge
-                      v-for="event in webhook.events.slice(0, 2)"
-                      :key="event"
-                      variant="secondary"
-                      class="text-xs"
-                    >
-                      {{ getEventLabel(event) }}
-                    </Badge>
-                    <Badge
-                      v-if="webhook.events.length > 2"
-                      variant="outline"
-                      class="text-xs"
-                    >
-                      +{{ webhook.events.length - 2 }}
-                    </Badge>
-                  </div>
-                </TableCell>
-                <TableCell>
-                  <div class="flex items-center gap-2">
-                    <Switch
-                      :checked="webhook.is_active"
-                      @update:checked="toggleWebhook(webhook)"
-                    />
-                    <span class="text-sm text-muted-foreground">
-                      {{ webhook.is_active ? 'Active' : 'Inactive' }}
-                    </span>
-                  </div>
-                </TableCell>
-                <TableCell class="text-muted-foreground">
-                  {{ formatDate(webhook.created_at) }}
-                </TableCell>
-                <TableCell class="text-right">
-                  <div class="flex items-center justify-end gap-1">
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      class="h-8 w-8"
-                      :disabled="isTesting === webhook.id"
-                      @click="testWebhook(webhook)"
-                    >
-                      <Loader2 v-if="isTesting === webhook.id" class="h-4 w-4 animate-spin" />
-                      <Play v-else class="h-4 w-4" />
-                    </Button>
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      class="h-8 w-8"
-                      @click="openEditDialog(webhook)"
-                    >
-                      <Pencil class="h-4 w-4" />
-                    </Button>
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      class="h-8 w-8 text-destructive"
-                      @click="webhookToDelete = webhook; isDeleteDialogOpen = true"
-                    >
-                      <Trash2 class="h-4 w-4" />
-                    </Button>
-                  </div>
-                </TableCell>
-              </TableRow>
-            </TableBody>
-          </Table>
-        </ScrollArea>
-      </CardContent>
-    </Card>
+      </div>
+    </header>
+
+    <ScrollArea class="flex-1">
+      <div class="p-6">
+        <div class="max-w-6xl mx-auto space-y-4">
+          <Card>
+            <CardHeader>
+              <CardTitle>Your Webhooks</CardTitle>
+              <CardDescription>
+                Webhooks allow you to send real-time events to external systems like helpdesks.
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Name</TableHead>
+                    <TableHead>URL</TableHead>
+                    <TableHead>Events</TableHead>
+                    <TableHead>Status</TableHead>
+                    <TableHead>Created</TableHead>
+                    <TableHead class="text-right">Actions</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  <TableRow v-if="isLoading">
+                    <TableCell colspan="6" class="text-center py-8 text-muted-foreground">
+                      Loading...
+                    </TableCell>
+                  </TableRow>
+                  <TableRow v-else-if="webhooks.length === 0">
+                    <TableCell colspan="6" class="text-center py-8 text-muted-foreground">
+                      <WebhookIcon class="h-8 w-8 mx-auto mb-2 opacity-50" />
+                      <p>No webhooks configured</p>
+                    </TableCell>
+                  </TableRow>
+                  <TableRow v-for="webhook in webhooks" :key="webhook.id">
+                    <TableCell class="font-medium">{{ webhook.name }}</TableCell>
+                    <TableCell class="max-w-[200px] truncate text-muted-foreground">
+                      {{ webhook.url }}
+                    </TableCell>
+                    <TableCell>
+                      <div class="flex flex-wrap gap-1">
+                        <Badge
+                          v-for="event in webhook.events.slice(0, 2)"
+                          :key="event"
+                          variant="secondary"
+                          class="text-xs"
+                        >
+                          {{ getEventLabel(event) }}
+                        </Badge>
+                        <Badge
+                          v-if="webhook.events.length > 2"
+                          variant="outline"
+                          class="text-xs"
+                        >
+                          +{{ webhook.events.length - 2 }}
+                        </Badge>
+                      </div>
+                    </TableCell>
+                    <TableCell>
+                      <div class="flex items-center gap-2">
+                        <Switch
+                          :checked="webhook.is_active"
+                          @update:checked="toggleWebhook(webhook)"
+                        />
+                        <span class="text-sm text-muted-foreground">
+                          {{ webhook.is_active ? 'Active' : 'Inactive' }}
+                        </span>
+                      </div>
+                    </TableCell>
+                    <TableCell class="text-muted-foreground">
+                      {{ formatDate(webhook.created_at) }}
+                    </TableCell>
+                    <TableCell class="text-right">
+                      <div class="flex items-center justify-end gap-1">
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          class="h-8 w-8"
+                          :disabled="isTesting === webhook.id"
+                          @click="testWebhook(webhook)"
+                        >
+                          <Loader2 v-if="isTesting === webhook.id" class="h-4 w-4 animate-spin" />
+                          <Play v-else class="h-4 w-4" />
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          class="h-8 w-8"
+                          @click="openEditDialog(webhook)"
+                        >
+                          <Pencil class="h-4 w-4" />
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          class="h-8 w-8 text-destructive"
+                          @click="webhookToDelete = webhook; isDeleteDialogOpen = true"
+                        >
+                          <Trash2 class="h-4 w-4" />
+                        </Button>
+                      </div>
+                    </TableCell>
+                  </TableRow>
+                </TableBody>
+              </Table>
+            </CardContent>
+          </Card>
+        </div>
+      </div>
+    </ScrollArea>
 
     <!-- Create/Edit Dialog -->
     <Dialog v-model:open="isDialogOpen">

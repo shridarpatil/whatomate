@@ -230,18 +230,20 @@ filteredRules.value = searchQuery.value
 </script>
 
 <template>
-  <div class="flex flex-col h-full">
+  <div class="flex flex-col h-full bg-[#0a0a0b] light:bg-gray-50">
     <!-- Header -->
-    <header class="border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
+    <header class="border-b border-white/[0.08] light:border-gray-200 bg-[#0a0a0b]/95 light:bg-white/95 backdrop-blur">
       <div class="flex h-16 items-center px-6">
         <RouterLink to="/chatbot">
           <Button variant="ghost" size="icon" class="mr-3">
             <ArrowLeft class="h-5 w-5" />
           </Button>
         </RouterLink>
-        <Key class="h-5 w-5 mr-3" />
+        <div class="h-8 w-8 rounded-lg bg-gradient-to-br from-blue-500 to-cyan-600 flex items-center justify-center mr-3 shadow-lg shadow-blue-500/20">
+          <Key class="h-4 w-4 text-white" />
+        </div>
         <div class="flex-1">
-          <h1 class="text-xl font-semibold">Keyword Rules</h1>
+          <h1 class="text-xl font-semibold text-white light:text-gray-900">Keyword Rules</h1>
           <Breadcrumb>
             <BreadcrumbList>
               <BreadcrumbItem>
@@ -393,9 +395,9 @@ filteredRules.value = searchQuery.value
     </header>
 
     <!-- Search -->
-    <div class="p-4 border-b">
+    <div class="p-4 border-b border-white/[0.08] light:border-gray-200">
       <div class="relative max-w-md">
-        <Search class="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+        <Search class="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-white/40 light:text-gray-400" />
         <Input v-model="searchQuery" placeholder="Search keywords..." class="pl-9" />
       </div>
     </div>
@@ -405,84 +407,83 @@ filteredRules.value = searchQuery.value
       <div class="p-6 space-y-4">
         <!-- Loading Skeleton -->
         <template v-if="isLoading">
-          <Card v-for="i in 3" :key="i">
-            <CardContent class="p-4">
-              <div class="flex items-start justify-between">
-                <div class="flex-1">
-                  <div class="flex items-center gap-2 mb-2">
-                    <Skeleton class="h-4 w-4" />
-                    <Skeleton class="h-5 w-16" />
-                    <Skeleton class="h-5 w-16" />
-                    <Skeleton class="h-5 w-14" />
-                  </div>
-                  <Skeleton class="h-4 w-48 mb-2" />
-                  <Skeleton class="h-12 w-full" />
-                </div>
-                <div class="flex items-center gap-2 ml-4">
-                  <Skeleton class="h-8 w-8 rounded" />
-                  <Skeleton class="h-8 w-8 rounded" />
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-        </template>
-
-        <template v-else>
-        <Card v-for="rule in rules" :key="rule.id">
-          <CardContent class="p-4">
+          <div v-for="i in 3" :key="i" class="rounded-xl border border-white/[0.08] bg-white/[0.02] p-4 light:bg-white light:border-gray-200">
             <div class="flex items-start justify-between">
               <div class="flex-1">
                 <div class="flex items-center gap-2 mb-2">
-                  <Key class="h-4 w-4 text-muted-foreground" />
-                  <div class="flex flex-wrap gap-1">
-                    <Badge v-for="keyword in rule.keywords" :key="keyword" variant="secondary">
-                      {{ keyword }}
-                    </Badge>
-                  </div>
-                  <Badge v-if="rule.response_type === 'transfer'" variant="outline" class="border-destructive text-destructive">
-                    Transfer
-                  </Badge>
-                  <Badge
-                    variant="outline"
-                    :class="rule.enabled ? 'border-green-600 text-green-600' : ''"
-                  >
-                    {{ rule.enabled ? 'Active' : 'Inactive' }}
-                  </Badge>
+                  <Skeleton class="h-4 w-4 bg-white/[0.08] light:bg-gray-200" />
+                  <Skeleton class="h-5 w-16 bg-white/[0.08] light:bg-gray-200" />
+                  <Skeleton class="h-5 w-16 bg-white/[0.08] light:bg-gray-200" />
+                  <Skeleton class="h-5 w-14 bg-white/[0.08] light:bg-gray-200" />
                 </div>
-                <p class="text-sm text-muted-foreground mb-2">
-                  Match: {{ rule.match_type }} | Priority: {{ rule.priority }}
-                </p>
-                <p class="text-sm bg-muted p-2 rounded">
-                  {{ rule.response_type === 'transfer'
-                    ? (rule.response_content?.body || 'Transfers to agent')
-                    : (rule.response_content?.body || 'No response configured') }}
-                </p>
+                <Skeleton class="h-4 w-48 mb-2 bg-white/[0.08] light:bg-gray-200" />
+                <Skeleton class="h-12 w-full bg-white/[0.08] light:bg-gray-200" />
               </div>
               <div class="flex items-center gap-2 ml-4">
-                <Tooltip>
-                  <TooltipTrigger as-child>
-                    <Button variant="ghost" size="icon" @click="openEditDialog(rule)">
-                      <Pencil class="h-4 w-4" />
-                    </Button>
-                  </TooltipTrigger>
-                  <TooltipContent>Edit rule</TooltipContent>
-                </Tooltip>
-                <Tooltip>
-                  <TooltipTrigger as-child>
-                    <Button variant="ghost" size="icon" @click="openDeleteDialog(rule)">
-                      <Trash2 class="h-4 w-4 text-destructive" />
-                    </Button>
-                  </TooltipTrigger>
-                  <TooltipContent>Delete rule</TooltipContent>
-                </Tooltip>
+                <Skeleton class="h-8 w-8 rounded bg-white/[0.08] light:bg-gray-200" />
+                <Skeleton class="h-8 w-8 rounded bg-white/[0.08] light:bg-gray-200" />
               </div>
             </div>
-          </CardContent>
-        </Card>
+          </div>
+        </template>
 
-        <div v-if="rules.length === 0" class="text-center py-12 text-muted-foreground">
-          <Key class="h-12 w-12 mx-auto mb-4 opacity-50" />
-          <p class="text-lg font-medium">No keyword rules yet</p>
+        <template v-else>
+        <div v-for="rule in rules" :key="rule.id" class="rounded-xl border border-white/[0.08] bg-white/[0.02] p-4 light:bg-white light:border-gray-200">
+          <div class="flex items-start justify-between">
+            <div class="flex-1">
+              <div class="flex items-center gap-2 mb-2">
+                <div class="h-8 w-8 rounded-lg bg-blue-500/20 flex items-center justify-center">
+                  <Key class="h-4 w-4 text-blue-400" />
+                </div>
+                <div class="flex flex-wrap gap-1">
+                  <Badge v-for="keyword in rule.keywords" :key="keyword" variant="secondary">
+                    {{ keyword }}
+                  </Badge>
+                </div>
+                <Badge v-if="rule.response_type === 'transfer'" class="bg-red-500/20 text-red-400 border-transparent light:bg-red-100 light:text-red-700">
+                  Transfer
+                </Badge>
+                <Badge
+                  :class="rule.enabled ? 'bg-emerald-500/20 text-emerald-400 border-transparent light:bg-emerald-100 light:text-emerald-700' : 'bg-white/[0.08] text-white/50 border-transparent light:bg-gray-100 light:text-gray-500'"
+                >
+                  {{ rule.enabled ? 'Active' : 'Inactive' }}
+                </Badge>
+              </div>
+              <p class="text-sm text-white/50 light:text-gray-500 mb-2">
+                Match: {{ rule.match_type }} | Priority: {{ rule.priority }}
+              </p>
+              <p class="text-sm bg-white/[0.04] light:bg-gray-100 p-2 rounded text-white/70 light:text-gray-600">
+                {{ rule.response_type === 'transfer'
+                  ? (rule.response_content?.body || 'Transfers to agent')
+                  : (rule.response_content?.body || 'No response configured') }}
+              </p>
+            </div>
+            <div class="flex items-center gap-2 ml-4">
+              <Tooltip>
+                <TooltipTrigger as-child>
+                  <Button variant="ghost" size="icon" @click="openEditDialog(rule)">
+                    <Pencil class="h-4 w-4" />
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent>Edit rule</TooltipContent>
+              </Tooltip>
+              <Tooltip>
+                <TooltipTrigger as-child>
+                  <Button variant="ghost" size="icon" @click="openDeleteDialog(rule)">
+                    <Trash2 class="h-4 w-4 text-destructive" />
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent>Delete rule</TooltipContent>
+              </Tooltip>
+            </div>
+          </div>
+        </div>
+
+        <div v-if="rules.length === 0" class="text-center py-12 text-white/50 light:text-gray-500">
+          <div class="h-16 w-16 rounded-xl bg-blue-500/20 flex items-center justify-center mx-auto mb-4">
+            <Key class="h-8 w-8 text-blue-400" />
+          </div>
+          <p class="text-lg font-medium text-white light:text-gray-900">No keyword rules yet</p>
           <p class="text-sm">Create your first keyword rule to get started.</p>
         </div>
         </template>

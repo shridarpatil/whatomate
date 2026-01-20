@@ -228,18 +228,20 @@ async function confirmDeleteContext() {
 </script>
 
 <template>
-  <div class="flex flex-col h-full">
+  <div class="flex flex-col h-full bg-[#0a0a0b] light:bg-gray-50">
     <!-- Header -->
-    <header class="border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
+    <header class="border-b border-white/[0.08] light:border-gray-200 bg-[#0a0a0b]/95 light:bg-white/95 backdrop-blur">
       <div class="flex h-16 items-center px-6">
         <RouterLink to="/chatbot">
           <Button variant="ghost" size="icon" class="mr-3">
             <ArrowLeft class="h-5 w-5" />
           </Button>
         </RouterLink>
-        <Sparkles class="h-5 w-5 mr-3" />
+        <div class="h-8 w-8 rounded-lg bg-gradient-to-br from-orange-500 to-amber-600 flex items-center justify-center mr-3 shadow-lg shadow-orange-500/20">
+          <Sparkles class="h-4 w-4 text-white" />
+        </div>
         <div class="flex-1">
-          <h1 class="text-xl font-semibold">AI Contexts</h1>
+          <h1 class="text-xl font-semibold text-white light:text-gray-900">AI Contexts</h1>
           <Breadcrumb>
             <BreadcrumbList>
               <BreadcrumbItem>
@@ -410,61 +412,60 @@ async function confirmDeleteContext() {
       <div class="p-6 grid gap-4 md:grid-cols-2">
         <!-- Loading Skeleton -->
         <template v-if="isLoading">
-          <Card v-for="i in 4" :key="i">
-            <CardHeader>
+          <div v-for="i in 4" :key="i" class="rounded-xl border border-white/[0.08] bg-white/[0.02] light:bg-white light:border-gray-200">
+            <div class="p-6">
               <div class="flex items-start justify-between">
                 <div class="flex items-center gap-3">
-                  <Skeleton class="h-10 w-10 rounded-lg" />
+                  <Skeleton class="h-10 w-10 rounded-lg bg-white/[0.08] light:bg-gray-200" />
                   <div>
-                    <Skeleton class="h-5 w-32 mb-1" />
-                    <Skeleton class="h-4 w-24" />
+                    <Skeleton class="h-5 w-32 mb-1 bg-white/[0.08] light:bg-gray-200" />
+                    <Skeleton class="h-4 w-24 bg-white/[0.08] light:bg-gray-200" />
                   </div>
                 </div>
-                <Skeleton class="h-5 w-16" />
+                <Skeleton class="h-5 w-16 bg-white/[0.08] light:bg-gray-200" />
               </div>
-            </CardHeader>
-            <CardContent>
+            </div>
+            <div class="px-6 pb-6">
               <div class="flex flex-wrap gap-1 mb-3">
-                <Skeleton class="h-5 w-12" />
-                <Skeleton class="h-5 w-16" />
+                <Skeleton class="h-5 w-12 bg-white/[0.08] light:bg-gray-200" />
+                <Skeleton class="h-5 w-16 bg-white/[0.08] light:bg-gray-200" />
               </div>
-              <Skeleton class="h-5 w-24 mb-3" />
+              <Skeleton class="h-5 w-24 mb-3 bg-white/[0.08] light:bg-gray-200" />
               <div class="flex gap-2">
-                <Skeleton class="h-8 w-8 rounded" />
-                <Skeleton class="h-8 w-8 rounded" />
+                <Skeleton class="h-8 w-8 rounded bg-white/[0.08] light:bg-gray-200" />
+                <Skeleton class="h-8 w-8 rounded bg-white/[0.08] light:bg-gray-200" />
               </div>
-            </CardContent>
-          </Card>
+            </div>
+          </div>
         </template>
 
         <template v-else>
-        <Card v-for="context in contexts" :key="context.id">
-          <CardHeader>
+        <div v-for="context in contexts" :key="context.id" class="rounded-xl border border-white/[0.08] bg-white/[0.02] light:bg-white light:border-gray-200">
+          <div class="p-6">
             <div class="flex items-start justify-between">
               <div class="flex items-center gap-3">
                 <div
-                  class="h-10 w-10 rounded-lg flex items-center justify-center"
-                  :class="context.context_type === 'api' ? 'bg-blue-100 dark:bg-blue-900' : 'bg-orange-100 dark:bg-orange-900'"
+                  class="h-10 w-10 rounded-lg flex items-center justify-center shadow-lg"
+                  :class="context.context_type === 'api' ? 'bg-gradient-to-br from-blue-500 to-cyan-600 shadow-blue-500/20' : 'bg-gradient-to-br from-orange-500 to-amber-600 shadow-orange-500/20'"
                 >
-                  <Globe v-if="context.context_type === 'api'" class="h-5 w-5 text-blue-600 dark:text-blue-400" />
-                  <FileText v-else class="h-5 w-5 text-orange-600 dark:text-orange-400" />
+                  <Globe v-if="context.context_type === 'api'" class="h-5 w-5 text-white" />
+                  <FileText v-else class="h-5 w-5 text-white" />
                 </div>
                 <div>
-                  <CardTitle class="text-base">{{ context.name }}</CardTitle>
-                  <CardDescription>{{ context.context_type === 'api' ? 'API Fetch' : 'Static Content' }}</CardDescription>
+                  <h3 class="text-base font-semibold text-white light:text-gray-900">{{ context.name }}</h3>
+                  <p class="text-sm text-white/50 light:text-gray-500">{{ context.context_type === 'api' ? 'API Fetch' : 'Static Content' }}</p>
                 </div>
               </div>
               <Badge
-                variant="outline"
-                :class="context.enabled ? 'border-green-600 text-green-600' : ''"
+                :class="context.enabled ? 'bg-emerald-500/20 text-emerald-400 border-transparent light:bg-emerald-100 light:text-emerald-700' : 'bg-white/[0.08] text-white/50 border-transparent light:bg-gray-100 light:text-gray-500'"
               >
                 {{ context.enabled ? 'Active' : 'Inactive' }}
               </Badge>
             </div>
-          </CardHeader>
-          <CardContent>
+          </div>
+          <div class="px-6 pb-6">
             <div class="flex flex-wrap gap-1 mb-3" v-if="context.trigger_keywords?.length">
-              <Badge v-for="kw in context.trigger_keywords" :key="kw" variant="outline" class="text-xs">
+              <Badge v-for="kw in context.trigger_keywords" :key="kw" variant="outline" class="text-xs border-white/20 text-white/70 light:border-gray-200 light:text-gray-600">
                 {{ kw }}
               </Badge>
             </div>
@@ -491,20 +492,22 @@ async function confirmDeleteContext() {
                 </Tooltip>
               </div>
             </div>
-          </CardContent>
-        </Card>
+          </div>
+        </div>
 
-        <Card v-if="contexts.length === 0" class="col-span-full">
-          <CardContent class="py-12 text-center text-muted-foreground">
-            <Sparkles class="h-12 w-12 mx-auto mb-4 opacity-50" />
-            <p class="text-lg font-medium">No AI contexts yet</p>
+        <div v-if="contexts.length === 0" class="col-span-full rounded-xl border border-white/[0.08] bg-white/[0.02] light:bg-white light:border-gray-200">
+          <div class="py-12 text-center text-white/50 light:text-gray-500">
+            <div class="h-16 w-16 rounded-xl bg-gradient-to-br from-orange-500 to-amber-600 flex items-center justify-center mx-auto mb-4 shadow-lg shadow-orange-500/20">
+              <Sparkles class="h-8 w-8 text-white" />
+            </div>
+            <p class="text-lg font-medium text-white light:text-gray-900">No AI contexts yet</p>
             <p class="text-sm mb-4">Create knowledge contexts that the AI can use to answer questions.</p>
             <Button variant="outline" size="sm" @click="openCreateDialog">
               <Plus class="h-4 w-4 mr-2" />
               Create Context
             </Button>
-          </CardContent>
-        </Card>
+          </div>
+        </div>
         </template>
       </div>
     </ScrollArea>

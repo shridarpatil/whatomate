@@ -401,14 +401,16 @@ function sanitizeScreensForMeta(screens: any[]): any[] {
 </script>
 
 <template>
-  <div class="flex flex-col h-full">
+  <div class="flex flex-col h-full bg-[#0a0a0b] light:bg-gray-50">
     <!-- Header -->
-    <header class="border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
+    <header class="border-b border-white/[0.08] light:border-gray-200 bg-[#0a0a0b]/95 light:bg-white/95 backdrop-blur">
       <div class="flex h-16 items-center px-6">
-        <Workflow class="h-5 w-5 mr-3" />
+        <div class="h-8 w-8 rounded-lg bg-gradient-to-br from-violet-500 to-purple-600 flex items-center justify-center mr-3 shadow-lg shadow-violet-500/20">
+          <Workflow class="h-4 w-4 text-white" />
+        </div>
         <div class="flex-1">
-          <h1 class="text-xl font-semibold">WhatsApp Flows</h1>
-          <p class="text-sm text-muted-foreground">Create interactive flows for your customers</p>
+          <h1 class="text-xl font-semibold text-white light:text-gray-900">WhatsApp Flows</h1>
+          <p class="text-sm text-white/50 light:text-gray-500">Create interactive flows for your customers</p>
         </div>
         <div class="flex gap-2">
           <Button
@@ -473,8 +475,8 @@ function sanitizeScreensForMeta(screens: any[]): any[] {
           <CardHeader>
             <div class="flex items-start justify-between">
               <div class="flex items-center gap-3">
-                <div class="h-10 w-10 rounded-lg bg-indigo-100 dark:bg-indigo-900 flex items-center justify-center">
-                  <Workflow class="h-5 w-5 text-indigo-600 dark:text-indigo-400" />
+                <div class="h-10 w-10 rounded-lg bg-indigo-900 light:bg-indigo-100 flex items-center justify-center">
+                  <Workflow class="h-5 w-5 text-indigo-400 light:text-indigo-600" />
                 </div>
                 <div>
                   <CardTitle class="text-base">{{ flow.name }}</CardTitle>

@@ -235,27 +235,30 @@ onMounted(() => {
 </script>
 
 <template>
-  <div class="flex flex-col h-full">
+  <div class="flex flex-col h-full bg-[#0a0a0b] light:bg-gray-50">
     <!-- Header -->
-    <header class="border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
+    <header class="border-b border-white/[0.08] light:border-gray-200 bg-[#0a0a0b]/95 light:bg-white/95 backdrop-blur">
       <div class="flex h-16 items-center px-6">
-        <ShieldCheck class="h-5 w-5 mr-3" />
+        <div class="h-8 w-8 rounded-lg bg-gradient-to-br from-emerald-500 to-teal-600 flex items-center justify-center mr-3 shadow-lg shadow-emerald-500/20">
+          <ShieldCheck class="h-4 w-4 text-white" />
+        </div>
         <div class="flex-1">
-          <h1 class="text-xl font-semibold">Single Sign-On (SSO)</h1>
-          <p class="text-sm text-muted-foreground">Configure SSO providers for your organization</p>
+          <h1 class="text-xl font-semibold text-white light:text-gray-900">Single Sign-On (SSO)</h1>
+          <p class="text-sm text-white/50 light:text-gray-500">Configure SSO providers for your organization</p>
         </div>
       </div>
     </header>
 
     <ScrollArea class="flex-1">
-      <div class="p-6 space-y-6">
+      <div class="p-6">
+        <div class="max-w-6xl mx-auto space-y-6">
         <!-- Info Card -->
-        <Card class="bg-blue-50 dark:bg-blue-950/30 border-blue-200 dark:border-blue-800">
+        <Card class="bg-blue-950/30 light:bg-blue-50 border-blue-800 light:border-blue-200">
           <CardContent class="flex items-start gap-3 pt-6">
-            <Info class="h-5 w-5 text-blue-600 dark:text-blue-400 shrink-0 mt-0.5" />
-            <div class="text-sm text-blue-800 dark:text-blue-200">
+            <Info class="h-5 w-5 text-blue-400 light:text-blue-600 shrink-0 mt-0.5" />
+            <div class="text-sm text-blue-200 light:text-blue-800">
               <p class="font-medium mb-1">SSO Configuration</p>
-              <p class="text-blue-700 dark:text-blue-300">
+              <p class="text-blue-300 light:text-blue-700">
                 Configure OAuth providers to allow users to sign in with their existing accounts.
                 Enabled providers will appear as login options on the sign-in page.
               </p>
@@ -329,6 +332,7 @@ onMounted(() => {
               </div>
             </CardContent>
           </Card>
+        </div>
         </div>
       </div>
     </ScrollArea>

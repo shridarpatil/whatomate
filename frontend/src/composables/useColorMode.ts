@@ -2,8 +2,8 @@ import { ref, watch, onMounted } from 'vue'
 
 export type ColorMode = 'light' | 'dark' | 'system'
 
-const colorMode = ref<ColorMode>('system')
-const isDark = ref(false)
+const colorMode = ref<ColorMode>('dark')
+const isDark = ref(true)
 
 function getSystemTheme(): boolean {
   return window.matchMedia('(prefers-color-scheme: dark)').matches
@@ -16,10 +16,13 @@ function updateTheme() {
     isDark.value = colorMode.value === 'dark'
   }
 
+  // Dark-first: we use .light class for light mode, .dark class for dark mode
   if (isDark.value) {
+    document.documentElement.classList.remove('light')
     document.documentElement.classList.add('dark')
   } else {
     document.documentElement.classList.remove('dark')
+    document.documentElement.classList.add('light')
   }
 }
 

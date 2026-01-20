@@ -179,14 +179,16 @@ function getCategoryLabel(category: string): string {
 </script>
 
 <template>
-  <div class="flex flex-col h-full">
+  <div class="flex flex-col h-full bg-[#0a0a0b] light:bg-gray-50">
     <!-- Header -->
-    <header class="border-b bg-background/95 backdrop-blur">
+    <header class="border-b border-white/[0.08] light:border-gray-200 bg-[#0a0a0b]/95 light:bg-white/95 backdrop-blur">
       <div class="flex h-16 items-center px-6">
-        <MessageSquareText class="h-5 w-5 mr-3" />
+        <div class="h-8 w-8 rounded-lg bg-gradient-to-br from-teal-500 to-emerald-600 flex items-center justify-center mr-3 shadow-lg shadow-teal-500/20">
+          <MessageSquareText class="h-4 w-4 text-white" />
+        </div>
         <div class="flex-1">
-          <h1 class="text-xl font-semibold">Canned Responses</h1>
-          <p class="text-sm text-muted-foreground">Pre-defined responses for quick messaging</p>
+          <h1 class="text-xl font-semibold text-white light:text-gray-900">Canned Responses</h1>
+          <p class="text-sm text-white/50 light:text-gray-500">Pre-defined responses for quick messaging</p>
         </div>
         <Button variant="outline" size="sm" @click="openCreateDialog">
           <Plus class="h-4 w-4 mr-2" />

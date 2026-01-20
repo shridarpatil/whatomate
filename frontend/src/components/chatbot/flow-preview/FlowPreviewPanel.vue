@@ -190,8 +190,8 @@ const localListPickerOpen = computed({
                   <!-- User Response Placeholder -->
                   <div v-if="selectedStep.message_type !== 'transfer'" class="flex justify-end">
                     <div class="max-w-[85%]">
-                      <div class="bg-[#d9fdd3] dark:bg-[#005c4b] rounded-lg rounded-tr-none shadow-sm p-3">
-                        <p class="text-sm text-gray-800 dark:text-gray-200 italic">
+                      <div class="bg-[#005c4b] light:bg-[#d9fdd3] rounded-lg rounded-tr-none shadow-sm p-3">
+                        <p class="text-sm text-gray-200 light:text-gray-800 italic">
                           <template v-if="selectedStep.input_type === 'none'">
                             (No response needed)
                           </template>

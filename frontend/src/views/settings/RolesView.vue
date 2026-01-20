@@ -1,7 +1,8 @@
 <script setup lang="ts">
 import { ref, onMounted, computed, watch } from 'vue'
 import { RouterLink } from 'vue-router'
-import { Card, CardContent } from '@/components/ui/card'
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import { ScrollArea } from '@/components/ui/scroll-area'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -213,19 +214,21 @@ function formatDate(dateString: string): string {
 
 <template>
   <TooltipProvider>
-    <div class="flex flex-col h-full">
+    <div class="flex flex-col h-full bg-[#0a0a0b] light:bg-gray-50">
       <!-- Header -->
-      <header class="border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
+      <header class="border-b border-white/[0.08] light:border-gray-200 bg-[#0a0a0b]/95 light:bg-white/95 backdrop-blur">
         <div class="flex h-16 items-center px-6">
           <RouterLink to="/settings">
             <Button variant="ghost" size="icon" class="mr-2">
               <ArrowLeft class="h-5 w-5" />
             </Button>
           </RouterLink>
-          <Shield class="h-5 w-5 mr-3 text-muted-foreground" />
+          <div class="h-8 w-8 rounded-lg bg-gradient-to-br from-purple-500 to-indigo-600 flex items-center justify-center mr-3 shadow-lg shadow-purple-500/20">
+            <Shield class="h-4 w-4 text-white" />
+          </div>
           <div class="flex-1">
-            <h1 class="text-xl font-semibold">Roles & Permissions</h1>
-            <p class="text-sm text-muted-foreground">Manage roles and their permissions</p>
+            <h1 class="text-xl font-semibold text-white light:text-gray-900">Roles & Permissions</h1>
+            <p class="text-sm text-white/50 light:text-gray-500">Manage roles and their permissions</p>
           </div>
           <Button @click="openCreateDialog">
             <Plus class="h-4 w-4 mr-2" />
@@ -234,46 +237,34 @@ function formatDate(dateString: string): string {
         </div>
       </header>
 
-      <!-- Content -->
-      <div class="flex-1 p-6 overflow-auto">
-        <div class="max-w-6xl mx-auto space-y-4">
-          <!-- Info Card -->
-          <Card>
-            <CardContent class="p-4">
-              <div class="flex items-start gap-3">
-                <div class="p-2 rounded-lg bg-primary/10">
-                  <Shield class="h-5 w-5 text-primary" />
-                </div>
-                <div class="flex-1">
-                  <h3 class="font-medium">Role-Based Access Control</h3>
-                  <p class="text-sm text-muted-foreground mt-1">
-                    Create custom roles with specific permissions to control what users can access and do.
-                    System roles (admin, manager, agent) cannot be deleted but their permissions can be viewed.
-                  </p>
-                </div>
+      <ScrollArea class="flex-1">
+        <div class="p-6">
+          <div class="max-w-6xl mx-auto space-y-4">
+            <!-- Search -->
+            <div class="flex items-center gap-4">
+              <div class="relative flex-1 max-w-sm">
+                <Search class="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                <Input
+                  v-model="searchQuery"
+                  placeholder="Search roles..."
+                  class="pl-9"
+                />
               </div>
-            </CardContent>
-          </Card>
-
-          <!-- Search -->
-          <div class="flex items-center gap-4">
-            <div class="relative flex-1 max-w-sm">
-              <Search class="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-              <Input
-                v-model="searchQuery"
-                placeholder="Search roles..."
-                class="pl-9"
-              />
+              <div class="text-sm text-muted-foreground">
+                {{ filteredRoles.length }} role{{ filteredRoles.length !== 1 ? 's' : '' }}
+              </div>
             </div>
-            <div class="text-sm text-muted-foreground">
-              {{ filteredRoles.length }} role{{ filteredRoles.length !== 1 ? 's' : '' }}
-            </div>
-          </div>
 
-          <!-- Roles Table -->
-          <Card>
-            <CardContent class="p-0">
-              <Table>
+            <!-- Roles Table -->
+            <Card>
+              <CardHeader>
+                <CardTitle>Your Roles</CardTitle>
+                <CardDescription>
+                  Create custom roles with specific permissions to control what users can access.
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <Table>
                 <TableHeader>
                   <TableRow>
                     <TableHead>Role</TableHead>
@@ -362,10 +353,11 @@ function formatDate(dateString: string): string {
                   </TableRow>
                 </TableBody>
               </Table>
-            </CardContent>
-          </Card>
+              </CardContent>
+            </Card>
+          </div>
         </div>
-      </div>
+      </ScrollArea>
 
       <!-- Create/Edit Dialog -->
       <Dialog v-model:open="isDialogOpen">

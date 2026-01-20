@@ -97,6 +97,29 @@ function toggleSection(sectionId: string) {
   collapsedSections.value[sectionId] = !collapsedSections.value[sectionId]
 }
 
+// Avatar gradient colors for unique per-contact styling
+const avatarGradients = [
+  'from-violet-500 to-purple-600',
+  'from-blue-500 to-cyan-600',
+  'from-rose-500 to-pink-600',
+  'from-amber-500 to-orange-600',
+  'from-emerald-500 to-teal-600',
+  'from-indigo-500 to-blue-600',
+  'from-fuchsia-500 to-purple-600',
+  'from-cyan-500 to-blue-600',
+  'from-orange-500 to-red-600',
+  'from-teal-500 to-emerald-600',
+]
+
+function getAvatarGradient(name: string): string {
+  if (!name) return avatarGradients[0]
+  let hash = 0
+  for (let i = 0; i < name.length; i++) {
+    hash = name.charCodeAt(i) + ((hash << 5) - hash)
+  }
+  return avatarGradients[Math.abs(hash) % avatarGradients.length]
+}
+
 function isSectionCollapsed(sectionId: string): boolean {
   return collapsedSections.value[sectionId] ?? false
 }
@@ -162,7 +185,7 @@ const contactTags = computed(() => {
         <div class="flex flex-col items-center text-center pb-4 border-b">
           <Avatar class="h-16 w-16 mb-3">
             <AvatarImage :src="contact.avatar_url" />
-            <AvatarFallback class="text-lg">
+            <AvatarFallback :class="['text-lg bg-gradient-to-br text-white', getAvatarGradient(contact.name || contact.phone_number)]">
               {{ getInitials(contact.name || contact.phone_number) }}
             </AvatarFallback>
           </Avatar>

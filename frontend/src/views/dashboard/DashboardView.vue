@@ -314,40 +314,42 @@ onMounted(() => {
 </script>
 
 <template>
-  <div class="flex flex-col h-full">
+  <div class="flex flex-col h-full bg-[#0a0a0b] light:bg-gray-50">
     <!-- Header -->
-    <header class="border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
+    <header class="border-b border-white/[0.08] light:border-gray-200 bg-[#0a0a0b]/95 light:bg-white/95 backdrop-blur">
       <div class="flex h-16 items-center px-6">
-        <LayoutDashboard class="h-5 w-5 mr-3" />
+        <div class="h-8 w-8 rounded-lg bg-gradient-to-br from-emerald-500 to-green-600 flex items-center justify-center mr-3 shadow-lg shadow-emerald-500/20">
+          <LayoutDashboard class="h-4 w-4 text-white" />
+        </div>
         <div class="flex-1">
-          <h1 class="text-xl font-semibold">Dashboard</h1>
-          <p class="text-sm text-muted-foreground">Overview of your messaging platform</p>
+          <h1 class="text-xl font-semibold text-white light:text-gray-900">Dashboard</h1>
+          <p class="text-sm text-white/50 light:text-gray-500">Overview of your messaging platform</p>
         </div>
 
         <!-- Time Range Filter -->
         <div class="flex items-center gap-2">
           <Select v-model="selectedRange">
-            <SelectTrigger class="w-[180px]">
+            <SelectTrigger class="w-[180px] bg-white/[0.04] border-white/[0.1] text-white/70 hover:bg-white/[0.08] light:bg-white light:border-gray-200 light:text-gray-700">
               <SelectValue placeholder="Select range" />
             </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="today">Today</SelectItem>
-              <SelectItem value="7days">Last 7 days</SelectItem>
-              <SelectItem value="30days">Last 30 days</SelectItem>
-              <SelectItem value="this_month">This month</SelectItem>
-              <SelectItem value="custom">Custom range</SelectItem>
+            <SelectContent class="bg-[#141414] border-white/[0.08] light:bg-white light:border-gray-200">
+              <SelectItem value="today" class="text-white/70 focus:bg-white/[0.08] focus:text-white light:text-gray-700 light:focus:bg-gray-100">Today</SelectItem>
+              <SelectItem value="7days" class="text-white/70 focus:bg-white/[0.08] focus:text-white light:text-gray-700 light:focus:bg-gray-100">Last 7 days</SelectItem>
+              <SelectItem value="30days" class="text-white/70 focus:bg-white/[0.08] focus:text-white light:text-gray-700 light:focus:bg-gray-100">Last 30 days</SelectItem>
+              <SelectItem value="this_month" class="text-white/70 focus:bg-white/[0.08] focus:text-white light:text-gray-700 light:focus:bg-gray-100">This month</SelectItem>
+              <SelectItem value="custom" class="text-white/70 focus:bg-white/[0.08] focus:text-white light:text-gray-700 light:focus:bg-gray-100">Custom range</SelectItem>
             </SelectContent>
           </Select>
 
           <!-- Custom Range Popover -->
           <Popover v-if="selectedRange === 'custom'" v-model:open="isDatePickerOpen">
             <PopoverTrigger as-child>
-              <Button variant="outline" class="w-auto">
+              <Button variant="outline" class="w-auto bg-white/[0.04] border-white/[0.1] text-white/70 hover:bg-white/[0.08] hover:text-white light:bg-white light:border-gray-200 light:text-gray-700 light:hover:bg-gray-50">
                 <CalendarIcon class="h-4 w-4 mr-2" />
                 {{ formatDateRange || 'Select dates' }}
               </Button>
             </PopoverTrigger>
-            <PopoverContent class="w-auto p-4" align="end">
+            <PopoverContent class="w-auto p-4 bg-[#141414] border-white/[0.08] light:bg-white light:border-gray-200" align="end">
               <div class="space-y-4">
                 <RangeCalendar v-model="customDateRange" :number-of-months="2" />
                 <Button class="w-full" @click="applyCustomRange" :disabled="!customDateRange.start || !customDateRange.end">
@@ -367,140 +369,161 @@ onMounted(() => {
         <div class="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
           <!-- Skeleton Loading State -->
           <template v-if="isLoading">
-            <Card v-for="i in 4" :key="i">
-              <CardHeader class="flex flex-row items-center justify-between space-y-0 pb-2">
-                <Skeleton class="h-4 w-24" />
-                <Skeleton class="h-5 w-5 rounded" />
-              </CardHeader>
-              <CardContent>
-                <Skeleton class="h-8 w-20 mb-2" />
-                <Skeleton class="h-3 w-32" />
-              </CardContent>
-            </Card>
+            <div v-for="i in 4" :key="i" class="rounded-xl border border-white/[0.08] bg-white/[0.02] p-6 light:bg-white light:border-gray-200">
+              <div class="flex flex-row items-center justify-between space-y-0 pb-2">
+                <Skeleton class="h-4 w-24 bg-white/[0.08] light:bg-gray-200" />
+                <Skeleton class="h-10 w-10 rounded-lg bg-white/[0.08] light:bg-gray-200" />
+              </div>
+              <div class="pt-2">
+                <Skeleton class="h-8 w-20 mb-2 bg-white/[0.08] light:bg-gray-200" />
+                <Skeleton class="h-3 w-32 bg-white/[0.08] light:bg-gray-200" />
+              </div>
+            </div>
           </template>
           <!-- Actual Stats -->
           <template v-else>
-            <Card v-for="card in statCards" :key="card.key">
-              <CardHeader class="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle class="text-sm font-medium">
+            <div v-for="card in statCards" :key="card.key" class="card-depth rounded-xl border border-white/[0.08] bg-white/[0.04] p-6 light:bg-white light:border-gray-200">
+              <div class="flex flex-row items-center justify-between space-y-0 pb-2">
+                <span class="text-sm font-medium text-white/50 light:text-gray-500">
                   {{ card.title }}
-                </CardTitle>
-                <component :is="card.icon" :class="['h-5 w-5', card.color]" />
-              </CardHeader>
-              <CardContent>
-                <div class="text-2xl font-bold">
+                </span>
+                <div :class="[
+                  'h-10 w-10 rounded-lg flex items-center justify-center',
+                  card.key === 'total_messages' ? 'bg-blue-500/20' : '',
+                  card.key === 'total_contacts' ? 'bg-emerald-500/20' : '',
+                  card.key === 'chatbot_sessions' ? 'bg-purple-500/20' : '',
+                  card.key === 'campaigns_sent' ? 'bg-orange-500/20' : ''
+                ]">
+                  <component :is="card.icon" :class="[
+                    'h-5 w-5',
+                    card.key === 'total_messages' ? 'text-blue-400' : '',
+                    card.key === 'total_contacts' ? 'text-emerald-400' : '',
+                    card.key === 'chatbot_sessions' ? 'text-purple-400' : '',
+                    card.key === 'campaigns_sent' ? 'text-orange-400' : ''
+                  ]" />
+                </div>
+              </div>
+              <div class="pt-2">
+                <div class="text-3xl font-bold text-white light:text-gray-900">
                   {{ formatNumber(stats[card.key as keyof DashboardStats] as number) }}
                 </div>
-                <div class="flex items-center text-xs text-muted-foreground mt-1">
+                <div class="flex items-center text-xs text-white/40 light:text-gray-500 mt-1">
                   <component
                     :is="(stats[card.changeKey as keyof DashboardStats] as number) > 0 ? TrendingUp : (stats[card.changeKey as keyof DashboardStats] as number) < 0 ? TrendingDown : Minus"
                     :class="[
                       'h-3 w-3 mr-1',
-                      (stats[card.changeKey as keyof DashboardStats] as number) > 0 ? 'text-green-500' : (stats[card.changeKey as keyof DashboardStats] as number) < 0 ? 'text-red-500' : 'text-gray-400'
+                      (stats[card.changeKey as keyof DashboardStats] as number) > 0 ? 'text-emerald-400' : (stats[card.changeKey as keyof DashboardStats] as number) < 0 ? 'text-red-400' : 'text-white/30'
                     ]"
                   />
-                  <span :class="(stats[card.changeKey as keyof DashboardStats] as number) > 0 ? 'text-green-500' : (stats[card.changeKey as keyof DashboardStats] as number) < 0 ? 'text-red-500' : 'text-gray-400'">
+                  <span :class="(stats[card.changeKey as keyof DashboardStats] as number) > 0 ? 'text-emerald-400' : (stats[card.changeKey as keyof DashboardStats] as number) < 0 ? 'text-red-400' : 'text-white/30 light:text-gray-400'">
                     {{ Math.abs(stats[card.changeKey as keyof DashboardStats] as number).toFixed(1) }}%
                   </span>
                   <span class="ml-1">{{ comparisonPeriodLabel }}</span>
                 </div>
-              </CardContent>
-            </Card>
+              </div>
+            </div>
           </template>
         </div>
 
         <!-- Recent Activity -->
         <div class="grid gap-4 md:grid-cols-2">
           <!-- Recent Messages -->
-          <Card>
-            <CardHeader>
-              <CardTitle>Recent Messages</CardTitle>
-              <CardDescription>Latest conversations from your contacts</CardDescription>
-            </CardHeader>
-            <CardContent>
+          <div class="rounded-xl border border-white/[0.08] bg-white/[0.02] light:bg-white light:border-gray-200">
+            <div class="p-6 pb-3">
+              <h3 class="text-lg font-semibold text-white light:text-gray-900">Recent Messages</h3>
+              <p class="text-sm text-white/40 light:text-gray-500">Latest conversations from your contacts</p>
+            </div>
+            <div class="p-6 pt-3">
               <div class="space-y-4">
                 <div
                   v-for="message in recentMessages"
                   :key="message.id"
-                  class="flex items-start gap-3"
+                  class="flex items-start gap-3 p-3 rounded-lg hover:bg-white/[0.04] light:hover:bg-gray-50 transition-colors"
                 >
                   <div
                     :class="[
-                      'h-10 w-10 rounded-full flex items-center justify-center text-sm font-medium',
-                      message.direction === 'incoming' ? 'bg-primary/10 text-primary' : 'bg-muted text-muted-foreground'
+                      'h-10 w-10 rounded-lg flex items-center justify-center text-sm font-medium',
+                      message.direction === 'incoming' ? 'bg-gradient-to-br from-emerald-500 to-green-600 text-white' : 'bg-gradient-to-br from-blue-500 to-cyan-600 text-white'
                     ]"
                   >
                     {{ message.contact_name.split(' ').map(n => n[0]).join('').slice(0, 2) }}
                   </div>
                   <div class="flex-1 min-w-0">
                     <div class="flex items-center justify-between">
-                      <p class="text-sm font-medium truncate">{{ message.contact_name }}</p>
-                      <span class="text-xs text-muted-foreground flex items-center gap-1">
+                      <p class="text-sm font-medium truncate text-white light:text-gray-900">{{ message.contact_name }}</p>
+                      <span class="text-xs text-white/40 light:text-gray-500 flex items-center gap-1">
                         <Clock class="h-3 w-3" />
                         {{ formatTime(message.created_at) }}
                       </span>
                     </div>
-                    <p class="text-sm text-muted-foreground truncate">{{ message.content }}</p>
+                    <p class="text-sm text-white/50 light:text-gray-600 truncate">{{ message.content }}</p>
                     <div class="flex items-center gap-2 mt-1">
-                      <Badge
-                        variant="outline"
+                      <span
                         :class="[
-                          'text-xs',
-                          message.direction === 'incoming' ? 'border-green-600 text-green-600' : 'border-blue-600 text-blue-600'
+                          'text-[10px] px-1.5 py-0.5 rounded-full font-medium',
+                          message.direction === 'incoming' ? 'bg-emerald-500/20 text-emerald-400 light:bg-emerald-100 light:text-emerald-700' : 'bg-blue-500/20 text-blue-400 light:bg-blue-100 light:text-blue-700'
                         ]"
                       >
                         {{ message.direction }}
-                      </Badge>
-                      <span v-if="message.status === 'delivered'" class="text-xs text-muted-foreground flex items-center">
-                        <CheckCheck class="h-3 w-3 mr-1" />
+                      </span>
+                      <span v-if="message.status === 'delivered'" class="text-xs text-white/40 light:text-gray-500 flex items-center">
+                        <CheckCheck class="h-3 w-3 mr-1 text-blue-400" />
                         Delivered
                       </span>
                     </div>
                   </div>
                 </div>
               </div>
-            </CardContent>
-          </Card>
+            </div>
+          </div>
 
           <!-- Quick Actions -->
-          <Card>
-            <CardHeader>
-              <CardTitle>Quick Actions</CardTitle>
-              <CardDescription>Common tasks and shortcuts</CardDescription>
-            </CardHeader>
-            <CardContent>
+          <div class="rounded-xl border border-white/[0.08] bg-white/[0.02] light:bg-white light:border-gray-200">
+            <div class="p-6 pb-3">
+              <h3 class="text-lg font-semibold text-white light:text-gray-900">Quick Actions</h3>
+              <p class="text-sm text-white/40 light:text-gray-500">Common tasks and shortcuts</p>
+            </div>
+            <div class="p-6 pt-3">
               <div class="grid grid-cols-2 gap-3">
                 <RouterLink
                   to="/chat"
-                  class="flex flex-col items-center justify-center p-4 rounded-lg border hover:bg-accent transition-colors text-foreground"
+                  class="card-interactive flex flex-col items-center justify-center p-4 rounded-xl border border-white/[0.08] bg-white/[0.02] light:bg-gray-50 light:border-gray-200"
                 >
-                  <MessageSquare class="h-8 w-8 text-primary mb-2" />
-                  <span class="text-sm font-medium">Start Chat</span>
+                  <div class="h-12 w-12 rounded-lg bg-gradient-to-br from-emerald-500 to-green-600 flex items-center justify-center mb-2 shadow-lg shadow-emerald-500/20">
+                    <MessageSquare class="h-6 w-6 text-white" />
+                  </div>
+                  <span class="text-sm font-medium text-white light:text-gray-900">Start Chat</span>
                 </RouterLink>
                 <RouterLink
                   to="/campaigns"
-                  class="flex flex-col items-center justify-center p-4 rounded-lg border hover:bg-accent transition-colors text-foreground"
+                  class="card-interactive flex flex-col items-center justify-center p-4 rounded-xl border border-white/[0.08] bg-white/[0.02] light:bg-gray-50 light:border-gray-200"
                 >
-                  <Send class="h-8 w-8 text-orange-500 mb-2" />
-                  <span class="text-sm font-medium">New Campaign</span>
+                  <div class="h-12 w-12 rounded-lg bg-gradient-to-br from-orange-500 to-amber-600 flex items-center justify-center mb-2 shadow-lg shadow-orange-500/20">
+                    <Send class="h-6 w-6 text-white" />
+                  </div>
+                  <span class="text-sm font-medium text-white light:text-gray-900">New Campaign</span>
                 </RouterLink>
                 <RouterLink
                   to="/templates"
-                  class="flex flex-col items-center justify-center p-4 rounded-lg border hover:bg-accent transition-colors text-foreground"
+                  class="card-interactive flex flex-col items-center justify-center p-4 rounded-xl border border-white/[0.08] bg-white/[0.02] light:bg-gray-50 light:border-gray-200"
                 >
-                  <span class="h-8 w-8 text-blue-500 mb-2 text-2xl">T</span>
-                  <span class="text-sm font-medium">Templates</span>
+                  <div class="h-12 w-12 rounded-lg bg-gradient-to-br from-blue-500 to-cyan-600 flex items-center justify-center mb-2 shadow-lg shadow-blue-500/20">
+                    <span class="text-white text-xl font-bold">T</span>
+                  </div>
+                  <span class="text-sm font-medium text-white light:text-gray-900">Templates</span>
                 </RouterLink>
                 <RouterLink
                   to="/chatbot"
-                  class="flex flex-col items-center justify-center p-4 rounded-lg border hover:bg-accent transition-colors text-foreground"
+                  class="card-interactive flex flex-col items-center justify-center p-4 rounded-xl border border-white/[0.08] bg-white/[0.02] light:bg-gray-50 light:border-gray-200"
                 >
-                  <Bot class="h-8 w-8 text-purple-500 mb-2" />
-                  <span class="text-sm font-medium">Chatbot</span>
+                  <div class="h-12 w-12 rounded-lg bg-gradient-to-br from-purple-500 to-pink-600 flex items-center justify-center mb-2 shadow-lg shadow-purple-500/20">
+                    <Bot class="h-6 w-6 text-white" />
+                  </div>
+                  <span class="text-sm font-medium text-white light:text-gray-900">Chatbot</span>
                 </RouterLink>
               </div>
-            </CardContent>
-          </Card>
+            </div>
+          </div>
         </div>
       </div>
     </ScrollArea>

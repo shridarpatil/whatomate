@@ -106,18 +106,20 @@ async function confirmDeleteFlow() {
 </script>
 
 <template>
-  <div class="flex flex-col h-full">
+  <div class="flex flex-col h-full bg-[#0a0a0b] light:bg-gray-50">
     <!-- Header -->
-    <header class="border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
+    <header class="border-b border-white/[0.08] light:border-gray-200 bg-[#0a0a0b]/95 light:bg-white/95 backdrop-blur">
       <div class="flex h-16 items-center px-6">
         <RouterLink to="/chatbot">
           <Button variant="ghost" size="icon" class="mr-3">
             <ArrowLeft class="h-5 w-5" />
           </Button>
         </RouterLink>
-        <Workflow class="h-5 w-5 mr-3" />
+        <div class="h-8 w-8 rounded-lg bg-gradient-to-br from-purple-500 to-pink-600 flex items-center justify-center mr-3 shadow-lg shadow-purple-500/20">
+          <Workflow class="h-4 w-4 text-white" />
+        </div>
         <div class="flex-1">
-          <h1 class="text-xl font-semibold">Conversation Flows</h1>
+          <h1 class="text-xl font-semibold text-white light:text-gray-900">Conversation Flows</h1>
           <Breadcrumb>
             <BreadcrumbList>
               <BreadcrumbItem>
@@ -142,66 +144,65 @@ async function confirmDeleteFlow() {
       <div class="p-6 grid gap-4 md:grid-cols-2 lg:grid-cols-3">
         <!-- Loading Skeleton -->
         <template v-if="isLoading">
-          <Card v-for="i in 6" :key="i" class="flex flex-col">
-            <CardHeader>
+          <div v-for="i in 6" :key="i" class="flex flex-col rounded-xl border border-white/[0.08] bg-white/[0.02] light:bg-white light:border-gray-200">
+            <div class="p-6">
               <div class="flex items-start justify-between">
                 <div class="flex items-center gap-3">
-                  <Skeleton class="h-10 w-10 rounded-lg" />
+                  <Skeleton class="h-10 w-10 rounded-lg bg-white/[0.08] light:bg-gray-200" />
                   <div>
-                    <Skeleton class="h-5 w-32 mb-2" />
-                    <Skeleton class="h-5 w-16" />
+                    <Skeleton class="h-5 w-32 mb-2 bg-white/[0.08] light:bg-gray-200" />
+                    <Skeleton class="h-5 w-16 bg-white/[0.08] light:bg-gray-200" />
                   </div>
                 </div>
               </div>
-            </CardHeader>
-            <CardContent class="flex-1">
-              <Skeleton class="h-4 w-full mb-3" />
-              <div class="flex gap-1 mb-3">
-                <Skeleton class="h-5 w-14" />
-                <Skeleton class="h-5 w-16" />
-              </div>
-              <Skeleton class="h-4 w-20" />
-            </CardContent>
-            <div class="p-4 pt-0 flex items-center justify-between border-t mt-auto">
-              <div class="flex gap-2">
-                <Skeleton class="h-8 w-8 rounded" />
-                <Skeleton class="h-8 w-8 rounded" />
-              </div>
-              <Skeleton class="h-8 w-20" />
             </div>
-          </Card>
+            <div class="px-6 pb-6 flex-1">
+              <Skeleton class="h-4 w-full mb-3 bg-white/[0.08] light:bg-gray-200" />
+              <div class="flex gap-1 mb-3">
+                <Skeleton class="h-5 w-14 bg-white/[0.08] light:bg-gray-200" />
+                <Skeleton class="h-5 w-16 bg-white/[0.08] light:bg-gray-200" />
+              </div>
+              <Skeleton class="h-4 w-20 bg-white/[0.08] light:bg-gray-200" />
+            </div>
+            <div class="p-4 flex items-center justify-between border-t border-white/[0.08] light:border-gray-200 mt-auto">
+              <div class="flex gap-2">
+                <Skeleton class="h-8 w-8 rounded bg-white/[0.08] light:bg-gray-200" />
+                <Skeleton class="h-8 w-8 rounded bg-white/[0.08] light:bg-gray-200" />
+              </div>
+              <Skeleton class="h-8 w-20 bg-white/[0.08] light:bg-gray-200" />
+            </div>
+          </div>
         </template>
 
         <template v-else>
-          <Card v-for="flow in flows" :key="flow.id" class="flex flex-col">
-            <CardHeader>
+          <div v-for="flow in flows" :key="flow.id" class="flex flex-col rounded-xl border border-white/[0.08] bg-white/[0.02] light:bg-white light:border-gray-200">
+            <div class="p-6">
               <div class="flex items-start justify-between">
                 <div class="flex items-center gap-3">
-                  <div class="h-10 w-10 rounded-lg bg-purple-100 dark:bg-purple-900 flex items-center justify-center">
-                    <Workflow class="h-5 w-5 text-purple-600 dark:text-purple-400" />
+                  <div class="h-10 w-10 rounded-lg bg-gradient-to-br from-purple-500 to-pink-600 flex items-center justify-center shadow-lg shadow-purple-500/20">
+                    <Workflow class="h-5 w-5 text-white" />
                   </div>
                   <div>
-                    <CardTitle class="text-base">{{ flow.name }}</CardTitle>
+                    <h3 class="text-base font-semibold text-white light:text-gray-900">{{ flow.name }}</h3>
                     <Badge
-                      variant="outline"
-                      :class="flow.enabled ? 'border-green-600 text-green-600 mt-1' : 'mt-1'"
+                      :class="flow.enabled ? 'bg-emerald-500/20 text-emerald-400 border-transparent mt-1 light:bg-emerald-100 light:text-emerald-700' : 'bg-white/[0.08] text-white/50 border-transparent mt-1 light:bg-gray-100 light:text-gray-500'"
                     >
                       {{ flow.enabled ? 'Active' : 'Inactive' }}
                     </Badge>
                   </div>
                 </div>
               </div>
-            </CardHeader>
-            <CardContent class="flex-1">
-              <p class="text-sm text-muted-foreground mb-3">{{ flow.description || 'No description' }}</p>
+            </div>
+            <div class="px-6 pb-6 flex-1">
+              <p class="text-sm text-white/50 light:text-gray-500 mb-3">{{ flow.description || 'No description' }}</p>
               <div class="flex flex-wrap gap-1 mb-3" v-if="flow.trigger_keywords?.length">
-                <Badge v-for="keyword in flow.trigger_keywords" :key="keyword" variant="outline">
+                <Badge v-for="keyword in flow.trigger_keywords" :key="keyword" variant="outline" class="border-white/20 text-white/70 light:border-gray-200 light:text-gray-600">
                   {{ keyword }}
                 </Badge>
               </div>
-              <p class="text-xs text-muted-foreground">{{ flow.steps_count }} steps</p>
-            </CardContent>
-            <div class="p-4 pt-0 flex items-center justify-between border-t mt-auto">
+              <p class="text-xs text-white/40 light:text-gray-400">{{ flow.steps_count }} steps</p>
+            </div>
+            <div class="p-4 flex items-center justify-between border-t border-white/[0.08] light:border-gray-200 mt-auto">
               <div class="flex gap-2">
                 <Tooltip>
                   <TooltipTrigger as-child>
@@ -229,19 +230,21 @@ async function confirmDeleteFlow() {
                 {{ flow.enabled ? 'Disable' : 'Enable' }}
               </Button>
             </div>
-          </Card>
+          </div>
 
-          <Card v-if="flows.length === 0" class="col-span-full">
-            <CardContent class="py-12 text-center text-muted-foreground">
-              <Workflow class="h-12 w-12 mx-auto mb-4 opacity-50" />
-              <p class="text-lg font-medium">No conversation flows yet</p>
+          <div v-if="flows.length === 0" class="col-span-full rounded-xl border border-white/[0.08] bg-white/[0.02] light:bg-white light:border-gray-200">
+            <div class="py-12 text-center text-white/50 light:text-gray-500">
+              <div class="h-16 w-16 rounded-xl bg-gradient-to-br from-purple-500 to-pink-600 flex items-center justify-center mx-auto mb-4 shadow-lg shadow-purple-500/20">
+                <Workflow class="h-8 w-8 text-white" />
+              </div>
+              <p class="text-lg font-medium text-white light:text-gray-900">No conversation flows yet</p>
               <p class="text-sm mb-4">Create your first flow to automate conversations.</p>
               <Button variant="outline" size="sm" @click="createFlow">
                 <Plus class="h-4 w-4 mr-2" />
                 Create Flow
               </Button>
-            </CardContent>
-          </Card>
+            </div>
+          </div>
         </template>
       </div>
     </ScrollArea>

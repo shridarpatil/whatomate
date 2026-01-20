@@ -3,49 +3,99 @@
 @tailwind utilities;
 
 @layer base {
+  /* Dark-first: Linear/Vercel inspired dark mode */
   :root {
-    --background: 0 0% 100%;
-    --foreground: 217 19% 27%;
-    --card: 0 0% 100%;
-    --card-foreground: 217 19% 27%;
-    --popover: 0 0% 100%;
-    --popover-foreground: 217 19% 27%;
-    --primary: 142 70% 49%;
+    /* True black background like Linear/Vercel */
+    --background: 0 0% 2.5%;
+    --foreground: 0 0% 98%;
+
+    /* Glass morphism cards - slightly transparent */
+    --card: 0 0% 5%;
+    --card-foreground: 0 0% 98%;
+    --popover: 0 0% 7%;
+    --popover-foreground: 0 0% 98%;
+
+    /* Emerald green primary (WhatsApp style) */
+    --primary: 160 84% 39%;
     --primary-foreground: 0 0% 100%;
-    --secondary: 210 40% 96.1%;
-    --secondary-foreground: 217 19% 27%;
-    --muted: 210 40% 96.1%;
-    --muted-foreground: 215.4 16.3% 46.9%;
-    --accent: 210 40% 96.1%;
-    --accent-foreground: 217 19% 27%;
-    --destructive: 0 84.2% 60.2%;
-    --destructive-foreground: 210 40% 98%;
-    --border: 214.3 31.8% 91.4%;
-    --input: 214.3 31.8% 91.4%;
-    --ring: 142 70% 49%;
-    --radius: 0.5rem;
+
+    /* Subtle secondary/muted for glass effect */
+    --secondary: 0 0% 8%;
+    --secondary-foreground: 0 0% 90%;
+    --muted: 0 0% 10%;
+    --muted-foreground: 0 0% 55%;
+    --accent: 0 0% 10%;
+    --accent-foreground: 0 0% 98%;
+
+    --destructive: 0 72% 51%;
+    --destructive-foreground: 0 0% 100%;
+
+    /* Subtle borders - key for Linear look */
+    --border: 0 0% 12%;
+    --input: 0 0% 12%;
+    --ring: 160 84% 39%;
+    --radius: 0.75rem;
+
+    /* Glass effect utilities */
+    --glass-bg: rgba(255, 255, 255, 0.03);
+    --glass-bg-hover: rgba(255, 255, 255, 0.06);
+    --glass-border: rgba(255, 255, 255, 0.06);
   }
 
-  .dark {
-    --background: 0 0% 4%;
-    --foreground: 0 0% 95%;
-    --card: 0 0% 6%;
-    --card-foreground: 0 0% 95%;
-    --popover: 0 0% 6%;
-    --popover-foreground: 0 0% 95%;
-    --primary: 142 70% 49%;
+  /* Light mode - clean white like Vercel */
+  .light {
+    --background: 0 0% 98%;
+    --foreground: 0 0% 9%;
+    --card: 0 0% 100%;
+    --card-foreground: 0 0% 9%;
+    --popover: 0 0% 100%;
+    --popover-foreground: 0 0% 9%;
+    --primary: 160 84% 39%;
     --primary-foreground: 0 0% 100%;
-    --secondary: 0 0% 12%;
-    --secondary-foreground: 0 0% 95%;
-    --muted: 0 0% 12%;
-    --muted-foreground: 0 0% 65%;
-    --accent: 0 0% 12%;
-    --accent-foreground: 0 0% 95%;
-    --destructive: 0 62.8% 30.6%;
-    --destructive-foreground: 0 0% 95%;
-    --border: 0 0% 16%;
-    --input: 0 0% 16%;
-    --ring: 142 70% 49%;
+    --secondary: 0 0% 96%;
+    --secondary-foreground: 0 0% 9%;
+    --muted: 0 0% 96%;
+    --muted-foreground: 0 0% 45%;
+    --accent: 0 0% 96%;
+    --accent-foreground: 0 0% 9%;
+    --destructive: 0 84% 60%;
+    --destructive-foreground: 0 0% 100%;
+    --border: 0 0% 90%;
+    --input: 0 0% 90%;
+    --ring: 160 84% 39%;
+
+    /* Glass effect utilities for light mode */
+    --glass-bg: rgba(0, 0, 0, 0.02);
+    --glass-bg-hover: rgba(0, 0, 0, 0.04);
+    --glass-border: rgba(0, 0, 0, 0.06);
+  }
+
+  /* Legacy dark class support */
+  .dark {
+    --background: 0 0% 2.5%;
+    --foreground: 0 0% 98%;
+    --card: 0 0% 5%;
+    --card-foreground: 0 0% 98%;
+    --popover: 0 0% 7%;
+    --popover-foreground: 0 0% 98%;
+    --primary: 160 84% 39%;
+    --primary-foreground: 0 0% 100%;
+    --secondary: 0 0% 8%;
+    --secondary-foreground: 0 0% 90%;
+    --muted: 0 0% 10%;
+    --muted-foreground: 0 0% 55%;
+    --accent: 0 0% 10%;
+    --accent-foreground: 0 0% 98%;
+    --destructive: 0 72% 51%;
+    --destructive-foreground: 0 0% 100%;
+    --border: 0 0% 12%;
+    --input: 0 0% 12%;
+    --ring: 160 84% 39%;
+
+    /* Glass effect utilities */
+    --glass-bg: rgba(255, 255, 255, 0.03);
+    --glass-bg-hover: rgba(255, 255, 255, 0.06);
+    --glass-border: rgba(255, 255, 255, 0.06);
   }
 }
 
@@ -62,6 +112,11 @@
     @apply bg-background text-foreground font-sans;
     line-height: 1.5;
     font-weight: 400;
+    /* Subtle gradient for depth like Linear/Vercel */
+    background-image: radial-gradient(ellipse 80% 50% at 50% -20%, rgba(16, 185, 129, 0.08), transparent);
+  }
+  .light body {
+    background-image: radial-gradient(ellipse 80% 50% at 50% -20%, rgba(16, 185, 129, 0.05), transparent);
   }
   h1, h2, h3, h4, h5, h6 {
     @apply font-medium;
@@ -117,83 +172,156 @@
   background: hsl(var(--muted-foreground) / 0.5);
 }
 
-/* Chat background - plain */
+/* Glass effect utility classes */
+.glass {
+  background: var(--glass-bg);
+  border-color: var(--glass-border);
+}
+
+.glass-hover:hover {
+  background: var(--glass-bg-hover);
+}
+
+/* Static card with depth - use for non-clickable stat cards */
+.card-depth {
+  @apply transition-all duration-300 relative overflow-hidden;
+  box-shadow:
+    0 4px 6px -1px rgba(0, 0, 0, 0.3),
+    0 2px 4px -2px rgba(0, 0, 0, 0.2),
+    inset 0 1px 0 0 rgba(255, 255, 255, 0.05);
+}
+
+/* Bottom line animation */
+.card-depth::after {
+  content: '';
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  width: 100%;
+  height: 2px;
+  background: linear-gradient(90deg, #22c55e, #10b981, #059669);
+  transform: scaleX(0);
+  transform-origin: left;
+  transition: transform 0.3s ease;
+}
+
+.card-depth:hover::after {
+  transform: scaleX(1);
+}
+
+.card-depth:hover {
+  @apply bg-white/[0.06] border-white/[0.12];
+  box-shadow:
+    0 10px 15px -3px rgba(0, 0, 0, 0.4),
+    0 4px 6px -4px rgba(0, 0, 0, 0.3),
+    inset 0 1px 0 0 rgba(255, 255, 255, 0.08);
+}
+
+.light .card-depth {
+  box-shadow:
+    0 4px 6px -1px rgba(0, 0, 0, 0.08),
+    0 2px 4px -2px rgba(0, 0, 0, 0.05);
+}
+
+.light .card-depth:hover {
+  @apply bg-gray-50 border-gray-300;
+  box-shadow:
+    0 10px 15px -3px rgba(0, 0, 0, 0.1),
+    0 4px 6px -4px rgba(0, 0, 0, 0.08);
+}
+
+/* Interactive card hover effect - use for clickable cards */
+.card-interactive {
+  @apply transition-all duration-300 cursor-pointer;
+}
+
+.card-interactive:hover {
+  @apply border-white/20 bg-white/[0.06] shadow-2xl;
+  box-shadow:
+    0 25px 50px -12px rgba(0, 0, 0, 0.5),
+    0 0 0 1px rgba(255, 255, 255, 0.1),
+    0 0 30px -5px rgba(16, 185, 129, 0.15);
+  transform: translateY(-2px);
+}
+
+.light .card-interactive:hover {
+  @apply border-gray-300 bg-gray-50 shadow-xl;
+  box-shadow:
+    0 25px 50px -12px rgba(0, 0, 0, 0.1),
+    0 0 0 1px rgba(0, 0, 0, 0.05),
+    0 0 30px -5px rgba(16, 185, 129, 0.1);
+}
+
+/* List item hover - for contact lists, menu items, etc */
+.list-item-hover {
+  @apply transition-all duration-200;
+}
+
+.list-item-hover:hover {
+  @apply bg-white/[0.08];
+}
+
+.light .list-item-hover:hover {
+  @apply bg-gray-100;
+}
+
+/* Chat background - dark-first */
 .chat-background {
-  background-color: #efeae2;
+  background-color: #0f0f10;
 }
 
-.dark .chat-background {
-  background-color: #0b141a;
+.light .chat-background {
+  background-color: #f5f5f5;
 }
 
-/* WhatsApp chat bubble styles - exact match */
+/* Modern chat bubble styles */
 .chat-bubble {
-  @apply relative px-2 py-1.5 text-sm;
+  @apply relative px-4 py-2.5 text-sm;
   max-width: 65%;
-  border-radius: 7.5px;
-  box-shadow: 0 1px 0.5px rgba(11, 20, 26, 0.13);
+  border-radius: 1rem;
 }
 
-/* Incoming bubble - white with left tail */
+/* Incoming bubble - glass effect */
 .chat-bubble-incoming {
+  background-color: rgba(255, 255, 255, 0.08);
+  color: #e9edef;
+  border-bottom-left-radius: 0.375rem;
+}
+
+/* Outgoing bubble - WhatsApp dark mode teal green */
+.chat-bubble-outgoing {
+  background-color: #38674a;
+  color: #e9edef;
+  border-bottom-right-radius: 0.375rem;
+}
+
+/* Light mode bubbles */
+.light .chat-bubble-incoming {
   background-color: #ffffff;
   color: #111b21;
-  border-top-left-radius: 0;
-  margin-left: 8px;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.08);
 }
 
-.chat-bubble-incoming::before {
-  content: '';
-  position: absolute;
-  top: 0;
-  left: -8px;
-  width: 8px;
-  height: 13px;
-  background: #ffffff;
-  clip-path: polygon(100% 0, 100% 100%, 0 0);
-}
-
-/* Outgoing bubble - light green with right tail */
-.chat-bubble-outgoing {
+.light .chat-bubble-outgoing {
   background-color: #d9fdd3;
   color: #111b21;
-  border-top-right-radius: 0;
-  margin-right: 8px;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.08);
 }
 
-.chat-bubble-outgoing::before {
-  content: '';
-  position: absolute;
-  top: 0;
-  right: -8px;
-  width: 8px;
-  height: 13px;
-  background: #d9fdd3;
-  clip-path: polygon(0 0, 100% 0, 0 100%);
-}
-
-/* Dark mode bubbles */
+/* Legacy dark class support */
 .dark .chat-bubble-incoming {
-  background-color: #202c33;
+  background-color: rgba(255, 255, 255, 0.08);
   color: #e9edef;
-}
-
-.dark .chat-bubble-incoming::before {
-  background: #202c33;
 }
 
 .dark .chat-bubble-outgoing {
-  background-color: #005c4b;
+  background-color: #38674a;
   color: #e9edef;
-}
-
-.dark .chat-bubble-outgoing::before {
-  background: #005c4b;
 }
 
 /* Time and status */
 .chat-bubble-time {
-  @apply text-[11px] mt-1 flex items-center gap-1 float-right;
+  @apply text-[10px] mt-1 flex items-center gap-1.5 float-right;
   margin-left: 8px;
   margin-bottom: -4px;
   position: relative;
@@ -201,83 +329,176 @@
 }
 
 .chat-bubble-time span {
+  color: rgba(255, 255, 255, 0.4);
+}
+
+.chat-bubble-incoming .chat-bubble-time span {
+  color: rgba(255, 255, 255, 0.4);
+}
+
+.chat-bubble-outgoing .chat-bubble-time span {
+  color: rgba(255, 255, 255, 0.6);
+}
+
+.light .chat-bubble-time span {
   color: rgba(17, 27, 33, 0.45);
 }
 
-.dark .chat-bubble-time span {
-  color: rgba(233, 237, 239, 0.6);
+.light .chat-bubble-outgoing .chat-bubble-time span {
+  color: rgba(17, 27, 33, 0.6);
 }
 
 /* Status icons */
 .chat-bubble-outgoing .chat-bubble-time .status-icon {
-  color: rgba(17, 27, 33, 0.75);
+  color: rgba(255, 255, 255, 0.6);
+  width: 16px;
+  height: 16px;
 }
 
+/* Read status - bright cyan blue like WhatsApp */
 .chat-bubble-outgoing .chat-bubble-time .status-icon.text-blue-400 {
-  color: #007BFC !important;
+  color: #53bdeb !important;
 }
 
-.dark .chat-bubble-outgoing .chat-bubble-time .status-icon {
-  color: rgba(233, 237, 239, 0.85);
+.light .chat-bubble-outgoing .chat-bubble-time .status-icon {
+  color: rgba(17, 27, 33, 0.4);
 }
 
-.dark .chat-bubble-outgoing .chat-bubble-time .status-icon.text-blue-400 {
-  color: #007BFC !important;
+.light .chat-bubble-outgoing .chat-bubble-time .status-icon.text-blue-400 {
+  color: #53bdeb !important;
 }
 
 /* Reply preview inside chat bubble */
 .reply-preview {
-  @apply border-l-2 border-primary rounded;
-  background: rgba(17, 27, 33, 0.06);
-  margin-bottom: 4px;
+  @apply border-l-2 rounded-lg;
+  background: rgba(255, 255, 255, 0.06);
+  border-left-color: #4ade80;
+  margin-bottom: 8px;
+  padding: 8px 10px;
 }
 
-.dark .reply-preview {
-  background: rgba(233, 237, 239, 0.1);
+.reply-preview p {
+  color: rgba(255, 255, 255, 0.7);
+}
+
+.reply-preview .font-medium {
+  color: #4ade80;
+}
+
+.light .reply-preview {
+  background: rgba(0, 0, 0, 0.04);
+  border-left-color: #16a34a;
+}
+
+.light .reply-preview p {
+  color: rgba(17, 27, 33, 0.7);
+}
+
+.light .reply-preview .font-medium {
+  color: #16a34a;
 }
 
 .chat-bubble-outgoing .reply-preview {
-  background: rgba(17, 27, 33, 0.08);
-  border-left-color: #06cf9c;
+  background: rgba(0, 0, 0, 0.2);
+  border-left-color: rgba(255, 255, 255, 0.5);
 }
 
-.dark .chat-bubble-outgoing .reply-preview {
-  background: rgba(233, 237, 239, 0.12);
+.chat-bubble-outgoing .reply-preview p {
+  color: rgba(255, 255, 255, 0.7);
 }
 
-/* Button reply - WhatsApp style (shows selected button) */
+.chat-bubble-outgoing .reply-preview .font-medium {
+  color: rgba(255, 255, 255, 0.9);
+}
+
+.light .chat-bubble-outgoing .reply-preview {
+  background: rgba(0, 0, 0, 0.08);
+  border-left-color: #166534;
+}
+
+.light .chat-bubble-outgoing .reply-preview p {
+  color: rgba(17, 27, 33, 0.7);
+}
+
+.light .chat-bubble-outgoing .reply-preview .font-medium {
+  color: #166534;
+}
+
+/* Button reply style - shows when user clicks a button */
 .button-reply-bubble {
   display: flex;
   align-items: center;
+  flex-wrap: wrap;
   gap: 8px;
-  padding: 6px 12px;
-  background: rgba(0, 165, 244, 0.1);
-  border-left: 3px solid #00a5f4;
-  border-radius: 4px;
-  color: #00a5f4;
+  color: #4ade80;
   font-weight: 500;
 }
 
-.dark .button-reply-bubble {
-  background: rgba(0, 165, 244, 0.15);
+.button-reply-bubble .chat-bubble-time {
+  color: rgba(255, 255, 255, 0.4);
 }
 
-/* WhatsApp-style interactive buttons */
+.chat-bubble-outgoing .button-reply-bubble {
+  color: rgba(255, 255, 255, 0.95);
+}
+
+.light .button-reply-bubble {
+  color: #16a34a;
+}
+
+.light .button-reply-bubble .chat-bubble-time {
+  color: rgba(17, 27, 33, 0.45);
+}
+
+.light .chat-bubble-outgoing .button-reply-bubble {
+  color: #166534;
+}
+
+/* Interactive buttons */
 .interactive-buttons {
-  border-radius: 0 0 7.5px 7.5px;
+  border-radius: 0 0 1rem 1rem;
   overflow: hidden;
+  border-color: rgba(255, 255, 255, 0.15);
 }
 
-.dark .interactive-buttons {
-  border-color: rgba(255, 255, 255, 0.1);
+.interactive-buttons > div {
+  border-color: rgba(255, 255, 255, 0.15);
+  color: #4ade80; /* emerald-400 for dark mode incoming */
 }
 
-.dark .interactive-buttons > div {
-  border-color: rgba(255, 255, 255, 0.1);
+.interactive-buttons > div:hover {
+  background: rgba(255, 255, 255, 0.08);
 }
 
-.dark .interactive-buttons > div:hover {
-  background: rgba(255, 255, 255, 0.05);
+/* Interactive buttons inside outgoing (green) bubbles */
+.chat-bubble-outgoing .interactive-buttons {
+  border-color: rgba(255, 255, 255, 0.2);
+}
+
+.chat-bubble-outgoing .interactive-buttons > div {
+  border-color: rgba(255, 255, 255, 0.2);
+  color: rgba(255, 255, 255, 0.95);
+}
+
+.chat-bubble-outgoing .interactive-buttons > div:hover {
+  background: rgba(255, 255, 255, 0.1);
+}
+
+.light .interactive-buttons {
+  border-color: rgba(0, 0, 0, 0.1);
+}
+
+.light .interactive-buttons > div {
+  border-color: rgba(0, 0, 0, 0.1);
+  color: #16a34a; /* emerald-600 for light mode */
+}
+
+.light .interactive-buttons > div:hover {
+  background: rgba(0, 0, 0, 0.05);
+}
+
+.light .chat-bubble-outgoing .interactive-buttons > div {
+  color: #166534; /* darker green for light mode outgoing */
 }
 
 /* Message highlight animation for scroll-to */
@@ -301,8 +522,8 @@
   margin-top: 4px;
 }
 
-/* Emoji picker dark theme override to match app dark theme */
-.dark .v3-emoji-picker.v3-color-theme-dark {
+/* Emoji picker theme override to match app theme */
+.v3-emoji-picker.v3-color-theme-dark {
   --v3-picker-bg: hsl(0 0% 6%);
   --v3-picker-fg: hsl(0 0% 95%);
   --v3-picker-border: hsl(0 0% 16%);
@@ -310,4 +531,14 @@
   --v3-picker-input-border: hsl(0 0% 20%);
   --v3-picker-input-focus-border: hsl(142 70% 49%);
   --v3-picker-emoji-hover: hsl(0 0% 12%);
+}
+
+.light .v3-emoji-picker {
+  --v3-picker-bg: hsl(0 0% 100%);
+  --v3-picker-fg: hsl(217 19% 27%);
+  --v3-picker-border: hsl(214.3 31.8% 91.4%);
+  --v3-picker-input-bg: hsl(0 0% 100%);
+  --v3-picker-input-border: hsl(214.3 31.8% 91.4%);
+  --v3-picker-input-focus-border: hsl(142 70% 49%);
+  --v3-picker-emoji-hover: hsl(210 40% 96.1%);
 }

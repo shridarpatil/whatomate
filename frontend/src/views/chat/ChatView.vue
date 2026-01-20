@@ -82,6 +82,29 @@ import CannedResponsePicker from '@/components/chat/CannedResponsePicker.vue'
 import ContactInfoPanel from '@/components/chat/ContactInfoPanel.vue'
 import { Info } from 'lucide-vue-next'
 
+// Avatar gradient colors - consistent per contact based on name hash
+const avatarGradients = [
+  'from-violet-500 to-purple-600',
+  'from-blue-500 to-cyan-600',
+  'from-rose-500 to-pink-600',
+  'from-amber-500 to-orange-600',
+  'from-emerald-500 to-teal-600',
+  'from-indigo-500 to-blue-600',
+  'from-fuchsia-500 to-purple-600',
+  'from-cyan-500 to-blue-600',
+  'from-orange-500 to-red-600',
+  'from-teal-500 to-emerald-600',
+]
+
+function getAvatarGradient(name: string): string {
+  if (!name) return avatarGradients[0]
+  let hash = 0
+  for (let i = 0; i < name.length; i++) {
+    hash = name.charCodeAt(i) + ((hash << 5) - hash)
+  }
+  return avatarGradients[Math.abs(hash) % avatarGradients.length]
+}
+
 const route = useRoute()
 const router = useRouter()
 const contactsStore = useContactsStore()
@@ -93,7 +116,7 @@ const { isDark } = useColorMode()
 const messageInput = ref('')
 const messagesEndRef = ref<HTMLElement | null>(null)
 const messagesScrollAreaRef = ref<InstanceType<typeof ScrollArea> | null>(null)
-const messageInputRef = ref<InstanceType<typeof Textarea> | null>(null)
+const messageInputRef = ref<HTMLTextAreaElement | null>(null)
 const isSending = ref(false)
 const isAssignDialogOpen = ref(false)
 const isTransferring = ref(false)
@@ -532,14 +555,14 @@ async function retryMessage(message: Message) {
 }
 
 function autoResizeTextarea() {
-  const textarea = messageInputRef.value?.$el as HTMLTextAreaElement | undefined
+  const textarea = messageInputRef.value
   if (!textarea) return
   textarea.style.height = 'auto'
   textarea.style.height = Math.min(textarea.scrollHeight, 120) + 'px'
 }
 
 function resetTextareaHeight() {
-  const textarea = messageInputRef.value?.$el as HTMLTextAreaElement | undefined
+  const textarea = messageInputRef.value
   if (!textarea) return
   textarea.style.height = 'auto'
 }
@@ -632,7 +655,7 @@ function toggleReactionPicker(messageId: string) {
 function replyToMessage(message: Message) {
   contactsStore.setReplyingTo(message)
   nextTick(() => {
-    messageInputRef.value?.$el?.focus()
+    messageInputRef.value?.focus()
   })
 }
 
@@ -1111,17 +1134,17 @@ async function sendMediaMessage() {
 </script>
 
 <template>
-  <div class="flex h-full">
+  <div class="flex h-full bg-[#0a0a0b] light:bg-gray-50">
     <!-- Contacts List -->
-    <div class="w-80 border-r flex flex-col bg-card">
+    <div class="w-80 border-r border-white/[0.08] light:border-gray-200 flex flex-col bg-[#0a0a0b] light:bg-white">
       <!-- Search Header -->
-      <div class="p-2 border-b">
+      <div class="p-2 border-b border-white/[0.08] light:border-gray-200">
         <div class="relative">
-          <Search class="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
+          <Search class="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-white/40 light:text-gray-400" />
           <Input
             v-model="contactsStore.searchQuery"
             placeholder="Search contacts..."
-            class="pl-8 h-8 text-sm"
+            class="pl-8 h-8 text-sm bg-white/[0.04] border-white/[0.1] text-white placeholder:text-white/40 light:bg-gray-50 light:border-gray-200 light:text-gray-900 light:placeholder:text-gray-400"
           />
         </div>
       </div>
@@ -1133,31 +1156,31 @@ async function sendMediaMessage() {
             v-for="contact in contactsStore.sortedContacts"
             :key="contact.id"
             :class="[
-              'flex items-center gap-2 px-3 py-2 cursor-pointer hover:bg-accent transition-colors',
-              contactsStore.currentContact?.id === contact.id && 'bg-accent'
+              'flex items-center gap-2 px-3 py-2 cursor-pointer hover:bg-white/[0.04] light:hover:bg-gray-50 transition-colors',
+              contactsStore.currentContact?.id === contact.id && 'bg-white/[0.08] light:bg-gray-100'
             ]"
             @click="handleContactClick(contact)"
           >
-            <Avatar class="h-9 w-9">
+            <Avatar class="h-9 w-9 ring-2 ring-white/[0.1] light:ring-gray-200">
               <AvatarImage :src="contact.avatar_url" />
-              <AvatarFallback class="text-xs">
+              <AvatarFallback :class="['text-xs bg-gradient-to-br text-white', getAvatarGradient(contact.name || contact.phone_number)]">
                 {{ getInitials(contact.name || contact.phone_number) }}
               </AvatarFallback>
             </Avatar>
             <div class="flex-1 min-w-0">
               <div class="flex items-center justify-between">
-                <p class="text-sm font-medium truncate">
+                <p class="text-sm font-medium truncate text-white light:text-gray-900">
                   {{ contact.name || contact.phone_number }}
                 </p>
-                <span class="text-[11px] text-muted-foreground">
+                <span class="text-[11px] text-white/40 light:text-gray-500">
                   {{ formatContactTime(contact.last_message_at) }}
                 </span>
               </div>
               <div class="flex items-center justify-between">
-                <p class="text-xs text-muted-foreground truncate">
+                <p class="text-xs text-white/50 light:text-gray-500 truncate">
                   {{ contact.phone_number }}
                 </p>
-                <Badge v-if="contact.unread_count > 0" class="ml-2 h-5 text-[10px]">
+                <Badge v-if="contact.unread_count > 0" class="ml-2 h-5 text-[10px] bg-emerald-500/20 text-emerald-400 light:bg-emerald-100 light:text-emerald-700">
                   {{ contact.unread_count }}
                 </Badge>
               </div>
@@ -1170,14 +1193,15 @@ async function sendMediaMessage() {
               v-if="!contactsStore.isLoadingMoreContacts"
               variant="ghost"
               size="sm"
+              class="text-white/50 hover:text-white hover:bg-white/[0.04] light:text-gray-500 light:hover:text-gray-900 light:hover:bg-gray-100"
               @click="contactsStore.loadMoreContacts()"
             >
               Load more ({{ contactsStore.sortedContacts.length }} of {{ contactsStore.contactsTotal }})
             </Button>
-            <Loader2 v-else class="h-5 w-5 mx-auto animate-spin text-muted-foreground" />
+            <Loader2 v-else class="h-5 w-5 mx-auto animate-spin text-white/40 light:text-gray-400" />
           </div>
 
-          <div v-if="contactsStore.sortedContacts.length === 0" class="p-3 text-center text-muted-foreground">
+          <div v-if="contactsStore.sortedContacts.length === 0" class="p-3 text-center text-white/40 light:text-gray-500">
             <User class="h-6 w-6 mx-auto mb-1.5 opacity-50" />
             <p class="text-sm">No contacts found</p>
           </div>
@@ -1186,42 +1210,42 @@ async function sendMediaMessage() {
     </div>
 
     <!-- Chat Area -->
-    <div class="flex-1 flex flex-col">
+    <div class="flex-1 flex flex-col bg-[#0f0f10] light:bg-gray-50">
       <!-- No Contact Selected -->
       <div
         v-if="!contactsStore.currentContact"
-        class="flex-1 flex items-center justify-center text-muted-foreground"
+        class="flex-1 flex items-center justify-center text-white/40 light:text-gray-500"
       >
         <div class="text-center">
-          <div class="h-16 w-16 rounded-full bg-muted flex items-center justify-center mx-auto mb-4">
-            <Send class="h-8 w-8" />
+          <div class="h-16 w-16 rounded-2xl bg-gradient-to-br from-emerald-500 to-green-600 flex items-center justify-center mx-auto mb-4 shadow-lg shadow-emerald-500/20">
+            <Send class="h-8 w-8 text-white" />
           </div>
-          <h3 class="font-medium text-lg mb-1">Select a conversation</h3>
-          <p class="text-sm">Choose a contact to start chatting</p>
+          <h3 class="font-medium text-lg mb-1 text-white light:text-gray-900">Select a conversation</h3>
+          <p class="text-sm text-white/50 light:text-gray-500">Choose a contact to start chatting</p>
         </div>
       </div>
 
       <!-- Chat Interface -->
       <template v-else>
         <!-- Chat Header -->
-        <div class="h-12 px-3 border-b flex items-center justify-between bg-card">
+        <div class="h-14 px-4 border-b border-white/[0.08] light:border-gray-200 flex items-center justify-between bg-[#0f0f10] light:bg-white">
           <div class="flex items-center gap-2">
-            <Avatar class="h-8 w-8">
+            <Avatar class="h-8 w-8 ring-2 ring-white/[0.1] light:ring-gray-200">
               <AvatarImage :src="contactsStore.currentContact.avatar_url" />
-              <AvatarFallback class="text-xs">
+              <AvatarFallback :class="['text-xs bg-gradient-to-br text-white', getAvatarGradient(contactsStore.currentContact.name || contactsStore.currentContact.phone_number)]">
                 {{ getInitials(contactsStore.currentContact.name || contactsStore.currentContact.phone_number) }}
               </AvatarFallback>
             </Avatar>
             <div>
               <div class="flex items-center gap-1.5">
-                <p class="text-sm font-medium">
+                <p class="text-sm font-medium text-white light:text-gray-900">
                   {{ contactsStore.currentContact.name || contactsStore.currentContact.phone_number }}
                 </p>
-                <Badge v-if="activeTransferId" variant="outline" class="text-[10px] h-5 border-orange-500 text-orange-500">
+                <Badge v-if="activeTransferId" class="text-[10px] h-5 bg-orange-500/20 text-orange-400 light:bg-orange-100 light:text-orange-700">
                   Paused
                 </Badge>
               </div>
-              <p class="text-[11px] text-muted-foreground">
+              <p class="text-[11px] text-white/50 light:text-gray-500">
                 {{ contactsStore.currentContact.phone_number }}
               </p>
             </div>
@@ -1229,7 +1253,7 @@ async function sendMediaMessage() {
           <div class="flex items-center gap-1">
             <Tooltip v-if="canAssignContacts">
               <TooltipTrigger as-child>
-                <Button variant="ghost" size="icon" class="h-8 w-8" @click="isAssignDialogOpen = true">
+                <Button variant="ghost" size="icon" class="h-8 w-8 text-white/50 hover:text-white hover:bg-white/[0.08] light:text-gray-500 light:hover:text-gray-900 light:hover:bg-gray-100" @click="isAssignDialogOpen = true">
                   <UserPlus class="h-4 w-4" />
                 </Button>
               </TooltipTrigger>
@@ -1237,7 +1261,7 @@ async function sendMediaMessage() {
             </Tooltip>
             <Tooltip v-if="activeTransferId">
               <TooltipTrigger as-child>
-                <Button variant="ghost" size="icon" class="h-8 w-8" :disabled="isResuming" @click="resumeChatbot">
+                <Button variant="ghost" size="icon" class="h-8 w-8 text-white/50 hover:text-white hover:bg-white/[0.08] light:text-gray-500 light:hover:text-gray-900 light:hover:bg-gray-100" :disabled="isResuming" @click="resumeChatbot">
                   <Play class="h-4 w-4" />
                 </Button>
               </TooltipTrigger>
@@ -1249,7 +1273,7 @@ async function sendMediaMessage() {
                 <Button
                   variant="ghost"
                   size="icon"
-                  class="h-8 w-8"
+                  class="h-8 w-8 text-white/50 hover:text-white hover:bg-white/[0.08] light:text-gray-500 light:hover:text-gray-900 light:hover:bg-gray-100"
                   :disabled="executingActionId === action.id"
                   @click="executeCustomAction(action)"
                 >
@@ -1264,8 +1288,8 @@ async function sendMediaMessage() {
                 <Button
                   variant="ghost"
                   size="icon"
-                  class="h-8 w-8"
-                  :class="isInfoPanelOpen && 'bg-accent'"
+                  class="h-8 w-8 text-white/50 hover:text-white hover:bg-white/[0.08] light:text-gray-500 light:hover:text-gray-900 light:hover:bg-gray-100"
+                  :class="isInfoPanelOpen && 'bg-white/[0.08] text-white light:bg-gray-100 light:text-gray-900'"
                   @click="isInfoPanelOpen = !isInfoPanelOpen"
                 >
                   <Info class="h-4 w-4" />
@@ -1275,7 +1299,7 @@ async function sendMediaMessage() {
             </Tooltip>
             <DropdownMenu>
               <DropdownMenuTrigger as-child>
-                <Button variant="ghost" size="icon" class="h-8 w-8">
+                <Button variant="ghost" size="icon" class="h-8 w-8 text-white/50 hover:text-white hover:bg-white/[0.08] light:text-gray-500 light:hover:text-gray-900 light:hover:bg-gray-100">
                   <MoreVertical class="h-4 w-4" />
                 </Button>
               </DropdownMenuTrigger>
@@ -1309,7 +1333,7 @@ async function sendMediaMessage() {
           <Transition name="sticky-date">
             <div
               v-if="showStickyDate"
-              class="absolute top-2 left-1/2 -translate-x-1/2 z-10 px-3 py-1 bg-muted/95 backdrop-blur-sm rounded-full text-xs text-muted-foreground font-medium shadow-sm"
+              class="absolute top-2 left-1/2 -translate-x-1/2 z-10 px-3 py-1 bg-white/[0.08] light:bg-gray-200 backdrop-blur-sm rounded-full text-[11px] text-white/50 light:text-gray-600 font-medium shadow-sm"
             >
               {{ stickyDate }}
             </div>
@@ -1319,7 +1343,7 @@ async function sendMediaMessage() {
             <div class="space-y-2">
               <!-- Loading indicator for older messages -->
               <div v-if="contactsStore.isLoadingOlderMessages" class="flex justify-center py-2">
-                <div class="flex items-center gap-2 text-muted-foreground text-sm">
+                <div class="flex items-center gap-2 text-white/40 light:text-gray-500 text-sm">
                   <div class="h-4 w-4 animate-spin rounded-full border-2 border-current border-t-transparent" />
                   <span>Loading older messages...</span>
                 </div>
@@ -1334,10 +1358,10 @@ async function sendMediaMessage() {
                   class="flex items-center justify-center my-4"
                   :data-date-separator="getDateLabel(message.created_at)"
                 >
-                  <div class="px-3 py-1 bg-muted rounded-full text-xs text-muted-foreground font-medium">
-                  {{ getDateLabel(message.created_at) }}
+                  <div class="px-3 py-1 bg-white/[0.06] light:bg-gray-200 rounded-full text-[11px] text-white/40 light:text-gray-600 font-medium">
+                    {{ getDateLabel(message.created_at) }}
+                  </div>
                 </div>
-              </div>
 
               <!-- Message bubble -->
               <div
@@ -1356,13 +1380,13 @@ async function sendMediaMessage() {
                 <!-- Reply preview (if this message is replying to another) -->
                 <div
                   v-if="message.is_reply && message.reply_to_message"
-                  class="reply-preview mb-2 p-2 rounded-lg cursor-pointer text-xs"
+                  class="reply-preview cursor-pointer text-xs"
                   @click="scrollToMessage(message.reply_to_message_id)"
                 >
-                  <p class="font-medium opacity-70">
+                  <p class="font-medium">
                     {{ message.reply_to_message.direction === 'incoming' ? (contactsStore.currentContact?.profile_name || contactsStore.currentContact?.name || 'Customer') : 'You' }}
                   </p>
-                  <p class="opacity-60 truncate">
+                  <p class="truncate">
                     {{ getReplyPreviewContent(message) }}
                   </p>
                 </div>
@@ -1458,7 +1482,7 @@ async function sendMediaMessage() {
                     rel="noopener noreferrer"
                     class="flex items-center gap-3 px-3 py-3 bg-background/50 rounded-lg hover:bg-background/80 transition-colors"
                   >
-                    <div class="h-10 w-10 rounded-full bg-red-100 dark:bg-red-900/30 flex items-center justify-center shrink-0">
+                    <div class="h-10 w-10 rounded-full bg-red-900/30 light:bg-red-100 flex items-center justify-center shrink-0">
                       <MapPin class="h-5 w-5 text-red-500" />
                     </div>
                     <div class="flex-1 min-w-0">
@@ -1508,20 +1532,20 @@ async function sendMediaMessage() {
                   <span class="chat-bubble-time"><span>{{ formatMessageTime(message.created_at) }}</span></span>
                 </div>
                 <!-- Text content (for text messages or captions) -->
-                <span v-else-if="getMessageContent(message)" class="whitespace-pre-wrap break-words">{{ getMessageContent(message) }}<span class="chat-bubble-time"><span>{{ formatMessageTime(message.created_at) }}</span><component v-if="message.direction === 'outgoing'" :is="getMessageStatusIcon(message.status)" :class="['h-5 w-5 status-icon', getMessageStatusClass(message.status)]" /></span></span>
+                <span v-else-if="getMessageContent(message)" class="whitespace-pre-wrap break-words">{{ getMessageContent(message) }}<span class="chat-bubble-time"><span>{{ formatMessageTime(message.created_at) }}</span><component v-if="message.direction === 'outgoing'" :is="getMessageStatusIcon(message.status)" :class="['h-4 w-4 status-icon', getMessageStatusClass(message.status)]" /></span></span>
                 <!-- Fallback for media without URL -->
-                <span v-else-if="isMediaMessage(message) && !message.media_url" class="text-muted-foreground italic">[{{ message.message_type.charAt(0).toUpperCase() + message.message_type.slice(1) }}]<span class="chat-bubble-time"><span>{{ formatMessageTime(message.created_at) }}</span><component v-if="message.direction === 'outgoing'" :is="getMessageStatusIcon(message.status)" :class="['h-5 w-5 status-icon', getMessageStatusClass(message.status)]" /></span></span>
+                <span v-else-if="isMediaMessage(message) && !message.media_url" class="text-muted-foreground italic">[{{ message.message_type.charAt(0).toUpperCase() + message.message_type.slice(1) }}]<span class="chat-bubble-time"><span>{{ formatMessageTime(message.created_at) }}</span><component v-if="message.direction === 'outgoing'" :is="getMessageStatusIcon(message.status)" :class="['h-4 w-4 status-icon', getMessageStatusClass(message.status)]" /></span></span>
                 <!-- Interactive buttons - WhatsApp style -->
                 <div
                   v-if="getInteractiveButtons(message).length > 0"
-                  class="interactive-buttons mt-2 -mx-2 -mb-1.5 border-t border-black/10"
+                  class="interactive-buttons mt-2 -mx-2 -mb-1.5 border-t"
                 >
                   <div
                     v-for="(btn, index) in getInteractiveButtons(message)"
                     :key="btn.id"
                     :class="[
-                      'py-2 text-sm text-center text-[#00a5f4] font-medium cursor-pointer hover:bg-black/5',
-                      index > 0 && 'border-t border-black/10'
+                      'py-2 text-sm text-center font-medium cursor-pointer',
+                      index > 0 && 'border-t'
                     ]"
                   >
                     {{ btn.title }}
@@ -1533,7 +1557,7 @@ async function sendMediaMessage() {
                   <component
                     v-if="message.direction === 'outgoing'"
                     :is="getMessageStatusIcon(message.status)"
-                    :class="['h-5 w-5 status-icon', getMessageStatusClass(message.status)]"
+                    :class="['h-4 w-4 status-icon', getMessageStatusClass(message.status)]"
                   />
                 </span>
                 <!-- Reactions display -->
@@ -1652,99 +1676,87 @@ async function sendMediaMessage() {
         <!-- Reply indicator -->
         <div
           v-if="contactsStore.replyingTo"
-          class="px-3 py-2 border-t bg-muted/50 flex items-center justify-between"
+          class="px-4 py-2 border-t border-white/[0.08] light:border-gray-200 bg-white/[0.04] light:bg-gray-50 flex items-center justify-between"
         >
           <div class="flex-1 min-w-0">
-            <p class="text-xs font-medium text-muted-foreground">
+            <p class="text-xs font-medium text-white/50 light:text-gray-500">
               Replying to {{ contactsStore.replyingTo.direction === 'incoming' ? (contactsStore.currentContact?.profile_name || contactsStore.currentContact?.name || 'Customer') : 'Yourself' }}
             </p>
-            <p class="text-sm truncate">
+            <p class="text-sm truncate text-white/70 light:text-gray-700">
               {{ getMessageContent(contactsStore.replyingTo) || '[Media]' }}
             </p>
           </div>
-          <Button variant="ghost" size="icon" class="h-6 w-6 shrink-0" @click="contactsStore.clearReplyingTo">
-            <X class="h-4 w-4" />
-          </Button>
+          <button class="w-6 h-6 rounded hover:bg-white/[0.08] light:hover:bg-gray-200 flex items-center justify-center shrink-0 transition-colors" @click="contactsStore.clearReplyingTo">
+            <X class="h-4 w-4 text-white/50 light:text-gray-500" />
+          </button>
         </div>
 
         <!-- Message Input -->
-        <div class="px-3 py-2 border-t bg-card">
-          <form @submit.prevent="sendMessage" class="flex items-end gap-1.5">
-            <div class="flex">
-              <Tooltip>
-                <TooltipTrigger as-child>
-                  <span>
-                    <Popover v-model:open="emojiPickerOpen">
-                      <PopoverTrigger as-child>
-                        <Button type="button" variant="ghost" size="icon" class="h-8 w-8">
-                          <Smile class="h-4 w-4" />
-                        </Button>
-                      </PopoverTrigger>
-                      <PopoverContent side="top" align="start" class="w-auto p-0">
-                        <EmojiPicker
-                          :native="true"
-                          :disable-skin-tones="true"
-                          :theme="isDark ? 'dark' : 'light'"
-                          @select="insertEmoji($event.i)"
-                        />
-                      </PopoverContent>
-                    </Popover>
-                  </span>
-                </TooltipTrigger>
-                <TooltipContent>Emoji</TooltipContent>
-              </Tooltip>
-              <Tooltip>
-                <TooltipTrigger as-child>
-                  <span>
-                    <CannedResponsePicker
-                      :contact="contactsStore.currentContact"
-                      :external-open="cannedPickerOpen"
-                      :external-search="cannedSearchQuery"
-                      @select="insertCannedResponse"
-                      @close="closeCannedPicker"
-                    />
-                  </span>
-                </TooltipTrigger>
-                <TooltipContent>Canned Responses</TooltipContent>
-              </Tooltip>
-              <Tooltip>
-                <TooltipTrigger as-child>
-                  <Button type="button" variant="ghost" size="icon" class="h-8 w-8" @click="openFilePicker">
-                    <Paperclip class="h-4 w-4" />
-                  </Button>
-                </TooltipTrigger>
-                <TooltipContent>Attach file</TooltipContent>
-              </Tooltip>
-              <input
-                ref="fileInputRef"
-                type="file"
-                accept="image/*,video/*,audio/*,.pdf,.doc,.docx"
-                class="hidden"
-                @change="handleFileSelect"
-              />
-            </div>
-            <Textarea
+        <div class="p-4 border-t border-white/[0.08] light:border-gray-200 bg-[#0f0f10] light:bg-white">
+          <form @submit.prevent="sendMessage" class="flex items-center gap-2 p-2 rounded-xl bg-white/[0.06] light:bg-gray-100 border border-white/[0.08] light:border-gray-200">
+            <Tooltip>
+              <TooltipTrigger as-child>
+                <span>
+                  <Popover v-model:open="emojiPickerOpen">
+                    <PopoverTrigger as-child>
+                      <button type="button" class="w-9 h-9 rounded-lg hover:bg-white/[0.08] light:hover:bg-gray-200 flex items-center justify-center transition-colors">
+                        <Smile class="w-[18px] h-[18px] text-white/40 light:text-gray-500" />
+                      </button>
+                    </PopoverTrigger>
+                    <PopoverContent side="top" align="start" class="w-auto p-0">
+                      <EmojiPicker
+                        :native="true"
+                        :disable-skin-tones="true"
+                        :theme="isDark ? 'dark' : 'light'"
+                        @select="insertEmoji($event.i)"
+                      />
+                    </PopoverContent>
+                  </Popover>
+                </span>
+              </TooltipTrigger>
+              <TooltipContent>Emoji</TooltipContent>
+            </Tooltip>
+            <Tooltip>
+              <TooltipTrigger as-child>
+                <span>
+                  <CannedResponsePicker
+                    :contact="contactsStore.currentContact"
+                    :external-open="cannedPickerOpen"
+                    :external-search="cannedSearchQuery"
+                    @select="insertCannedResponse"
+                    @close="closeCannedPicker"
+                  />
+                </span>
+              </TooltipTrigger>
+              <TooltipContent>Canned Responses</TooltipContent>
+            </Tooltip>
+            <Tooltip>
+              <TooltipTrigger as-child>
+                <button type="button" class="w-9 h-9 rounded-lg hover:bg-white/[0.08] light:hover:bg-gray-200 flex items-center justify-center transition-colors" @click="openFilePicker">
+                  <Paperclip class="w-[18px] h-[18px] text-white/40 light:text-gray-500" />
+                </button>
+              </TooltipTrigger>
+              <TooltipContent>Attach file</TooltipContent>
+            </Tooltip>
+            <input
+              ref="fileInputRef"
+              type="file"
+              accept="image/*,video/*,audio/*,.pdf,.doc,.docx"
+              class="hidden"
+              @change="handleFileSelect"
+            />
+            <textarea
               ref="messageInputRef"
               v-model="messageInput"
               placeholder="Type a message..."
-              class="flex-1 min-h-[36px] max-h-[120px] resize-none text-sm overflow-y-auto"
-              :rows="1"
+              rows="1"
+              class="flex-1 bg-transparent text-[14px] text-white light:text-gray-900 placeholder:text-white/30 light:placeholder:text-gray-400 focus:outline-none resize-none min-h-[36px] max-h-[120px] py-2 overflow-y-auto"
               @keydown.enter.exact.prevent="sendMessage"
               @input="autoResizeTextarea"
             />
-            <Tooltip>
-              <TooltipTrigger as-child>
-                <Button
-                  type="submit"
-                  size="icon"
-                  class="h-8 w-8"
-                  :disabled="!messageInput.trim() || isSending"
-                >
-                  <Send class="h-4 w-4" />
-                </Button>
-              </TooltipTrigger>
-              <TooltipContent>Send message</TooltipContent>
-            </Tooltip>
+            <button type="submit" class="w-9 h-9 rounded-lg bg-emerald-600 hover:bg-emerald-500 light:bg-emerald-500 light:hover:bg-emerald-600 flex items-center justify-center transition-colors disabled:opacity-50" :disabled="!messageInput.trim() || isSending">
+              <Send class="w-4 h-4 text-white" />
+            </button>
           </form>
         </div>
       </template>
