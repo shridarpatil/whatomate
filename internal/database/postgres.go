@@ -195,6 +195,12 @@ func repeatChar(char string, n int) string {
 // getIndexes returns all index creation SQL statements
 func getIndexes() []string {
 	return []string{
+		// Expand phone_number columns to support group JIDs (e.g., 120363422675615917@g.us)
+		`ALTER TABLE contacts ALTER COLUMN phone_number TYPE varchar(50)`,
+		`ALTER TABLE chatbot_sessions ALTER COLUMN phone_number TYPE varchar(50)`,
+		`ALTER TABLE agent_transfers ALTER COLUMN phone_number TYPE varchar(50)`,
+		`ALTER TABLE bulk_message_recipients ALTER COLUMN phone_number TYPE varchar(50)`,
+		// Indexes
 		`CREATE INDEX IF NOT EXISTS idx_messages_contact_created ON messages(contact_id, created_at DESC)`,
 		`CREATE INDEX IF NOT EXISTS idx_messages_conversation ON messages(conversation_id)`,
 		`CREATE UNIQUE INDEX IF NOT EXISTS idx_contacts_org_phone ON contacts(organization_id, phone_number)`,

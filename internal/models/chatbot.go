@@ -206,7 +206,7 @@ type ChatbotSession struct {
 	OrganizationID  uuid.UUID  `gorm:"type:uuid;index;not null" json:"organization_id"`
 	ContactID       uuid.UUID  `gorm:"type:uuid;index;not null" json:"contact_id"`
 	WhatsAppAccount string     `gorm:"size:100;index;not null" json:"whatsapp_account"` // References WhatsAppAccount.Name
-	PhoneNumber     string     `gorm:"size:20;not null" json:"phone_number"`
+	PhoneNumber     string     `gorm:"size:50;not null" json:"phone_number"`
 	Status          SessionStatus `gorm:"size:20;default:'active'" json:"status"` // active, completed, cancelled, timeout
 	CurrentFlowID   *uuid.UUID `gorm:"type:uuid" json:"current_flow_id,omitempty"`
 	CurrentStep     string     `gorm:"size:100" json:"current_step"`
@@ -284,7 +284,7 @@ type AgentTransfer struct {
 	OrganizationID      uuid.UUID  `gorm:"type:uuid;index;not null" json:"organization_id"`
 	ContactID           uuid.UUID  `gorm:"type:uuid;index;not null" json:"contact_id"`
 	WhatsAppAccount     string     `gorm:"size:100;index;not null" json:"whatsapp_account"` // References WhatsAppAccount.Name
-	PhoneNumber         string     `gorm:"size:20;not null" json:"phone_number"`
+	PhoneNumber         string     `gorm:"size:50;not null" json:"phone_number"`
 	Status              TransferStatus `gorm:"size:20;default:'active'" json:"status"` // active, resumed
 	Source              TransferSource `gorm:"size:20;default:'manual'" json:"source"` // manual, flow, keyword, chatbot_disabled
 	AgentID             *uuid.UUID `gorm:"type:uuid" json:"agent_id,omitempty"`

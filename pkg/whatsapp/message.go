@@ -9,17 +9,24 @@ import (
 	"time"
 )
 
-// SendTextMessage sends a text message to a phone number
-func (c *Client) SendTextMessage(ctx context.Context, account *Account, phoneNumber, text string) (string, error) {
-	payload := map[string]interface{}{
+// SendTextMessage sends a text message to a phone number with optional reply context
+func (c *Client) SendTextMessage(ctx context.Context, account *Account, phoneNumber, text string, replyToMsgID ...string) (string, error) {
+	payload := map[string]any{
 		"messaging_product": "whatsapp",
 		"recipient_type":    "individual",
 		"to":                phoneNumber,
 		"type":              "text",
-		"text": map[string]interface{}{
+		"text": map[string]any{
 			"preview_url": false,
 			"body":        text,
 		},
+	}
+
+	// Add reply context if provided
+	if len(replyToMsgID) > 0 && replyToMsgID[0] != "" {
+		payload["context"] = map[string]any{
+			"message_id": replyToMsgID[0],
+		}
 	}
 
 	url := c.buildMessagesURL(account)

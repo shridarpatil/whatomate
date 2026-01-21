@@ -290,7 +290,7 @@ func (WhatsAppAccount) TableName() string {
 type Contact struct {
 	BaseModel
 	OrganizationID     uuid.UUID  `gorm:"type:uuid;index;not null" json:"organization_id"`
-	PhoneNumber        string     `gorm:"size:20;not null" json:"phone_number"`
+	PhoneNumber        string     `gorm:"size:50;not null" json:"phone_number"`
 	ProfileName        string     `gorm:"size:255" json:"profile_name"`
 	WhatsAppAccount    string     `gorm:"size:100;index" json:"whatsapp_account"` // References WhatsAppAccount.Name
 	AssignedUserID     *uuid.UUID `gorm:"type:uuid;index" json:"assigned_user_id,omitempty"`

@@ -150,7 +150,7 @@ func runServer(args []string) {
 	g := fastglue.NewGlue()
 
 	// Initialize WhatsApp client
-	waClient := whatsapp.New(lo)
+	waClient := whatsapp.NewWithBaseURL(lo, cfg.WhatsApp.BaseURL)
 
 	// Initialize WebSocket hub
 	wsHub := websocket.NewHub(lo)

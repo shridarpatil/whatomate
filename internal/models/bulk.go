@@ -43,7 +43,7 @@ func (BulkMessageCampaign) TableName() string {
 type BulkMessageRecipient struct {
 	BaseModel
 	CampaignID         uuid.UUID  `gorm:"type:uuid;index;not null" json:"campaign_id"`
-	PhoneNumber        string     `gorm:"size:20;not null" json:"phone_number"`
+	PhoneNumber        string     `gorm:"size:50;not null" json:"phone_number"`
 	RecipientName      string     `gorm:"size:255" json:"recipient_name"`
 	TemplateParams     JSONB      `gorm:"type:jsonb;default:'{}'" json:"template_params"`
 	Status             MessageStatus `gorm:"size:20;default:'pending'" json:"status"` // pending, sent, delivered, read, failed

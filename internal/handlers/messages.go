@@ -136,9 +136,15 @@ func (a *App) SendOutgoingMessage(ctx context.Context, req OutgoingMessageReques
 	sendFn := func(sendCtx context.Context) (string, error) {
 		waAccount := a.toWhatsAppAccount(req.Account)
 
+		// Get reply-to message ID if this is a reply
+		var replyToMsgID string
+		if req.ReplyToMessage != nil && req.ReplyToMessage.WhatsAppMessageID != "" {
+			replyToMsgID = req.ReplyToMessage.WhatsAppMessageID
+		}
+
 		switch req.Type {
 		case models.MessageTypeText:
-			return a.WhatsApp.SendTextMessage(sendCtx, waAccount, req.Contact.PhoneNumber, req.Content)
+			return a.WhatsApp.SendTextMessage(sendCtx, waAccount, req.Contact.PhoneNumber, req.Content, replyToMsgID)
 
 		case models.MessageTypeImage, models.MessageTypeVideo, models.MessageTypeAudio, models.MessageTypeDocument:
 			// Upload media if MediaData is provided and MediaID is not set
@@ -396,6 +402,17 @@ func (a *App) broadcastNewMessage(orgID uuid.UUID, msg *models.Message, contact 
 	if msg.IsReply && msg.ReplyToMessageID != nil {
 		payload["is_reply"] = true
 		payload["reply_to_message_id"] = msg.ReplyToMessageID.String()
+
+		// Include reply preview for UI
+		var replyToMsg models.Message
+		if err := a.DB.First(&replyToMsg, msg.ReplyToMessageID).Error; err == nil {
+			payload["reply_to_message"] = map[string]any{
+				"id":           replyToMsg.ID.String(),
+				"content":      replyToMsg.Content,
+				"message_type": replyToMsg.MessageType,
+				"direction":    replyToMsg.Direction,
+			}
+		}
 	}
 
 	a.WSHub.BroadcastToOrg(orgID, websocket.WSMessage{

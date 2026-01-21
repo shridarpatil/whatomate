@@ -284,6 +284,24 @@ func (a *App) processStatusUpdate(phoneNumberID string, status WebhookStatus) {
 	a.updateMessageStatus(messageID, statusValue, status.Errors)
 }
 
+// statusPriority returns the priority of a status (higher = more progressed)
+func statusPriority(status models.MessageStatus) int {
+	switch status {
+	case models.MessageStatusPending:
+		return 0
+	case models.MessageStatusSent:
+		return 1
+	case models.MessageStatusDelivered:
+		return 2
+	case models.MessageStatusRead:
+		return 3
+	case models.MessageStatusFailed:
+		return 4 // Failed can override any status
+	default:
+		return -1
+	}
+}
+
 // updateMessageStatus updates the status of a regular message in the messages table
 func (a *App) updateMessageStatus(whatsappMsgID, statusValue string, errors []WebhookStatusError) {
 	// Find the message by WhatsApp message ID
@@ -294,9 +312,22 @@ func (a *App) updateMessageStatus(whatsappMsgID, statusValue string, errors []We
 		return
 	}
 
+	newStatus := models.MessageStatus(statusValue)
+	currentPriority := statusPriority(message.Status)
+	newPriority := statusPriority(newStatus)
+
+	// Only update if new status is a progression (higher priority) or if it's failed
+	if newPriority <= currentPriority && newStatus != models.MessageStatusFailed {
+		a.Log.Debug("Ignoring status update - not a progression",
+			"message_id", message.ID,
+			"current_status", message.Status,
+			"new_status", statusValue)
+		return
+	}
+
 	updates := map[string]interface{}{}
 
-	switch models.MessageStatus(statusValue) {
+	switch newStatus {
 	case models.MessageStatusSent:
 		updates["status"] = models.MessageStatusSent
 	case models.MessageStatusDelivered:
