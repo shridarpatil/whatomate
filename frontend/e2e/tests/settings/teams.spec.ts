@@ -170,7 +170,7 @@ test.describe('Team Members', () => {
     // Verify members dialog opens
     const membersDialog = page.getByRole('dialog')
     await expect(membersDialog).toBeVisible()
-    await expect(membersDialog.getByText(/Team Members/i)).toBeVisible()
+    await expect(membersDialog.getByRole('heading', { name: /Team Members/i })).toBeVisible()
   })
 
   test('should add member to team and display name correctly', async ({ page }) => {
@@ -222,7 +222,7 @@ test.describe('Team Members', () => {
     }
 
     // Close dialog
-    await membersDialog.getByRole('button', { name: /Close/i }).click()
+    await membersDialog.getByRole('button', { name: 'Close' }).first().click()
   })
 
   test('should remove member from team', async ({ page }) => {
@@ -264,7 +264,7 @@ test.describe('Team Members', () => {
         await page.waitForTimeout(500)
 
         // Verify member count decreased or "No members yet" message appears
-        const updatedHeading = membersDialog.getByText(/Current Members \(\d+\)|No members yet/)
+        const updatedHeading = membersDialog.getByRole('heading', { name: /Current Members/ })
         await expect(updatedHeading).toBeVisible()
 
         const updatedText = await updatedHeading.textContent()
@@ -276,7 +276,7 @@ test.describe('Team Members', () => {
     }
 
     // Close dialog
-    await membersDialog.getByRole('button', { name: /Close/i }).click()
+    await membersDialog.getByRole('button', { name: 'Close' }).first().click()
   })
 
   test('should display member role badge', async ({ page }) => {
@@ -309,6 +309,6 @@ test.describe('Team Members', () => {
       await expect(roleBadge).toBeVisible()
     }
 
-    await membersDialog.getByRole('button', { name: /Close/i }).click()
+    await membersDialog.getByRole('button', { name: 'Close' }).first().click()
   })
 })
