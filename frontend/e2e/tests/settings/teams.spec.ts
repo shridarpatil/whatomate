@@ -137,16 +137,21 @@ test.describe('Teams Management', () => {
 })
 
 test.describe('Team Members', () => {
-  test('should view team members', async ({ page }) => {
+  let tablePage: TablePage
+  let dialogPage: DialogPage
+
+  test.beforeEach(async ({ page }) => {
     await loginAsAdmin(page)
     await page.goto('/settings/teams')
     await page.waitForLoadState('networkidle')
 
-    const tablePage = new TablePage(page)
+    tablePage = new TablePage(page)
+    dialogPage = new DialogPage(page)
+  })
 
+  test('should open members dialog', async ({ page }) => {
     // Create a team first
     const team = createTeamFixture()
-    const dialogPage = new DialogPage(page)
 
     await tablePage.clickAddButton()
     await dialogPage.waitForOpen()
@@ -154,16 +159,156 @@ test.describe('Team Members', () => {
     await dialogPage.submit()
     await dialogPage.waitForClose()
 
-    // Click on team to view members (or click view members action)
+    // Find the team and click manage members button
     await tablePage.search(team.name)
     const row = await tablePage.getRow(team.name)
 
-    // Try to find and click members button/link
-    const membersButton = row.locator('button, a').filter({ hasText: /Members|View|Manage/i })
-    if (await membersButton.count() > 0) {
-      await membersButton.click()
-      // Should navigate to team members or open members dialog
-      await page.waitForLoadState('networkidle')
+    // Click the UserPlus button to manage members
+    const manageMembersButton = row.getByRole('button').filter({ has: page.locator('svg') }).first()
+    await manageMembersButton.click()
+
+    // Verify members dialog opens
+    const membersDialog = page.getByRole('dialog')
+    await expect(membersDialog).toBeVisible()
+    await expect(membersDialog.getByText(/Team Members/i)).toBeVisible()
+  })
+
+  test('should add member to team and display name correctly', async ({ page }) => {
+    // Create a team
+    const team = createTeamFixture()
+
+    await tablePage.clickAddButton()
+    await dialogPage.waitForOpen()
+    await dialogPage.fillField('Name', team.name)
+    await dialogPage.submit()
+    await dialogPage.waitForClose()
+
+    // Open members dialog
+    await tablePage.search(team.name)
+    const row = await tablePage.getRow(team.name)
+
+    // Click manage members button (UserPlus icon in actions)
+    const actionButtons = row.locator('button')
+    const manageMembersButton = actionButtons.nth(0) // First action button is manage members
+    await manageMembersButton.click()
+
+    // Wait for members dialog
+    const membersDialog = page.getByRole('dialog')
+    await expect(membersDialog).toBeVisible()
+
+    // Find available users section and add one as agent
+    const addAsAgentButton = membersDialog.getByRole('button', { name: /Add as Agent/i }).first()
+
+    if (await addAsAgentButton.isVisible()) {
+      await addAsAgentButton.click()
+
+      // Wait for the member to be added
+      await page.waitForTimeout(500)
+
+      // Verify member appears in Current Members section with actual name (not "?")
+      const currentMembersSection = membersDialog.locator('text=Current Members').locator('..')
+      const memberItems = currentMembersSection.locator('.flex.items-center.justify-between')
+
+      // Check that at least one member exists
+      const memberCount = await memberItems.count()
+      expect(memberCount).toBeGreaterThan(0)
+
+      // Verify the member name is displayed (not showing "?")
+      const firstMemberName = memberItems.first().locator('p.font-medium')
+      const nameText = await firstMemberName.textContent()
+      expect(nameText).toBeTruthy()
+      expect(nameText).not.toBe('?')
+      expect(nameText?.trim()).not.toBe('')
     }
+
+    // Close dialog
+    await membersDialog.getByRole('button', { name: /Close/i }).click()
+  })
+
+  test('should remove member from team', async ({ page }) => {
+    // Create a team
+    const team = createTeamFixture()
+
+    await tablePage.clickAddButton()
+    await dialogPage.waitForOpen()
+    await dialogPage.fillField('Name', team.name)
+    await dialogPage.submit()
+    await dialogPage.waitForClose()
+
+    // Open members dialog
+    await tablePage.search(team.name)
+    const row = await tablePage.getRow(team.name)
+    const actionButtons = row.locator('button')
+    await actionButtons.nth(0).click()
+
+    const membersDialog = page.getByRole('dialog')
+    await expect(membersDialog).toBeVisible()
+
+    // Add a member first
+    const addAsAgentButton = membersDialog.getByRole('button', { name: /Add as Agent/i }).first()
+
+    if (await addAsAgentButton.isVisible()) {
+      await addAsAgentButton.click()
+      await page.waitForTimeout(500)
+
+      // Get initial member count
+      const currentMembersHeading = membersDialog.getByText(/Current Members \(\d+\)/)
+      const initialText = await currentMembersHeading.textContent()
+      const initialCount = parseInt(initialText?.match(/\((\d+)\)/)?.[1] || '0')
+
+      // Find and click remove button (UserMinus icon)
+      const removeMemberButton = membersDialog.locator('button').filter({ has: page.locator('svg.text-destructive') }).first()
+
+      if (await removeMemberButton.isVisible()) {
+        await removeMemberButton.click()
+        await page.waitForTimeout(500)
+
+        // Verify member count decreased or "No members yet" message appears
+        const updatedHeading = membersDialog.getByText(/Current Members \(\d+\)|No members yet/)
+        await expect(updatedHeading).toBeVisible()
+
+        const updatedText = await updatedHeading.textContent()
+        if (updatedText?.includes('Current Members')) {
+          const updatedCount = parseInt(updatedText?.match(/\((\d+)\)/)?.[1] || '0')
+          expect(updatedCount).toBeLessThan(initialCount)
+        }
+      }
+    }
+
+    // Close dialog
+    await membersDialog.getByRole('button', { name: /Close/i }).click()
+  })
+
+  test('should display member role badge', async ({ page }) => {
+    // Create a team
+    const team = createTeamFixture()
+
+    await tablePage.clickAddButton()
+    await dialogPage.waitForOpen()
+    await dialogPage.fillField('Name', team.name)
+    await dialogPage.submit()
+    await dialogPage.waitForClose()
+
+    // Open members dialog
+    await tablePage.search(team.name)
+    const row = await tablePage.getRow(team.name)
+    await row.locator('button').nth(0).click()
+
+    const membersDialog = page.getByRole('dialog')
+    await expect(membersDialog).toBeVisible()
+
+    // Add a member as agent
+    const addAsAgentButton = membersDialog.getByRole('button', { name: /Add as Agent/i }).first()
+
+    if (await addAsAgentButton.isVisible()) {
+      await addAsAgentButton.click()
+      await page.waitForTimeout(500)
+
+      // Verify role badge is displayed
+      const roleBadge = membersDialog.locator('.text-xs').filter({ hasText: /agent|manager/i }).first()
+      await expect(roleBadge).toBeVisible()
+    }
+
+    await membersDialog.getByRole('button', { name: /Close/i }).click()
   })
 })
