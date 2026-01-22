@@ -37,6 +37,9 @@ func setupWebhookTestApp(t *testing.T) (*handlers.App, *gorm.DB, *redis.Client) 
 		DB:     db,
 		Redis:  redisClient,
 		Log:    log,
+		HTTPClient: &http.Client{
+			Timeout: 30 * time.Second,
+		},
 	}
 
 	return app, db, redisClient
