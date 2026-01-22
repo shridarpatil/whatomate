@@ -366,11 +366,16 @@ export interface Team {
 
 export interface TeamMember {
   id: string
-  team_id: string
+  team_id?: string
   user_id: string
   role: 'manager' | 'agent'
   last_assigned_at: string | null
-  user: {
+  // Flat structure from API
+  full_name: string
+  email: string
+  is_available: boolean
+  // Optional nested user for local additions
+  user?: {
     id: string
     full_name: string
     email: string

@@ -570,7 +570,7 @@ func setupRoutes(g *fastglue.Fastglue, app *handlers.App, lo logf.Logger, basePa
 	g.DELETE("/api/teams/{id}", app.DeleteTeam)
 	g.GET("/api/teams/{id}/members", app.ListTeamMembers)
 	g.POST("/api/teams/{id}/members", app.AddTeamMember)
-	g.DELETE("/api/teams/{id}/members/{user_id}", app.RemoveTeamMember)
+	g.DELETE("/api/teams/{id}/members/{member_user_id}", app.RemoveTeamMember)
 
 	// Canned Responses
 	g.GET("/api/canned-responses", app.ListCannedResponses)

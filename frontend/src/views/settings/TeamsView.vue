@@ -577,11 +577,11 @@ function formatDate(dateString: string) {
               >
                 <div class="flex items-center gap-3">
                   <div class="h-8 w-8 rounded-full bg-muted flex items-center justify-center">
-                    {{ member.user?.full_name?.charAt(0) || '?' }}
+                    {{ (member.full_name || member.user?.full_name)?.charAt(0) || '?' }}
                   </div>
                   <div>
-                    <p class="text-sm font-medium">{{ member.user?.full_name }}</p>
-                    <p class="text-xs text-muted-foreground">{{ member.user?.email }}</p>
+                    <p class="text-sm font-medium">{{ member.full_name || member.user?.full_name }}</p>
+                    <p class="text-xs text-muted-foreground">{{ member.email || member.user?.email }}</p>
                   </div>
                 </div>
                 <div class="flex items-center gap-2">

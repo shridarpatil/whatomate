@@ -113,10 +113,9 @@ const localListPickerOpen = computed({
               <Button
                 v-for="(icon, type) in messageTypeIcons"
                 :key="type"
-                variant="outline"
+                :variant="selectedStep?.message_type === type ? 'active' : 'outline'"
                 size="sm"
                 class="h-8 text-xs"
-                :class="{ 'bg-primary text-primary-foreground': selectedStep?.message_type === type }"
                 @click="handleSelectMessageType(type)"
               >
                 <component :is="icon" class="h-3.5 w-3.5 mr-1.5" />

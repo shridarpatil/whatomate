@@ -396,7 +396,7 @@ func (a *App) RemoveTeamMember(r *fastglue.Request) error {
 	orgID := r.RequestCtx.UserValue("organization_id").(uuid.UUID)
 	userID := r.RequestCtx.UserValue("user_id").(uuid.UUID)
 	teamIDStr := r.RequestCtx.UserValue("id").(string)
-	memberUserIDStr := r.RequestCtx.UserValue("user_id_param").(string)
+	memberUserIDStr := r.RequestCtx.UserValue("member_user_id").(string)
 
 	teamID, err := uuid.Parse(teamIDStr)
 	if err != nil {

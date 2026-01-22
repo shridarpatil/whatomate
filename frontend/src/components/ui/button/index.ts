@@ -15,6 +15,9 @@ export const buttonVariants = cva(
         // Glass outline for dark mode
         outline:
           "border border-white/10 bg-white/[0.02] text-foreground hover:bg-white/[0.06] hover:border-white/20 light:border-gray-200 light:bg-white light:hover:bg-gray-50",
+        // Active/selected state - works in both dark and light modes
+        active:
+          "border border-primary/50 bg-primary text-primary-foreground light:bg-primary light:text-primary-foreground light:border-primary/50",
         secondary:
           "bg-white/[0.06] text-foreground hover:bg-white/[0.10] light:bg-gray-100 light:hover:bg-gray-200",
         // Subtle ghost with hover
