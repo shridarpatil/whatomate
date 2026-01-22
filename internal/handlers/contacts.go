@@ -981,8 +981,7 @@ func (a *App) sendWhatsAppReaction(account *models.WhatsAppAccount, contact *mod
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("Authorization", "Bearer "+account.AccessToken)
 
-	client := &http.Client{Timeout: 30 * time.Second}
-	resp, err := client.Do(req)
+	resp, err := a.HTTPClient.Do(req)
 	if err != nil {
 		a.Log.Error("Failed to send reaction", "error", err)
 		return

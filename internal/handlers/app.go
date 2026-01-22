@@ -3,6 +3,7 @@ package handlers
 import (
 	"context"
 	"errors"
+	"net/http"
 	"sync"
 
 	"github.com/google/uuid"
@@ -26,6 +27,8 @@ type App struct {
 	WSHub             *websocket.Hub
 	Queue             queue.Queue
 	CampaignSubCancel context.CancelFunc
+	// HTTPClient is a shared HTTP client with connection pooling for external API calls
+	HTTPClient *http.Client
 	// wg tracks background goroutines for graceful shutdown
 	wg sync.WaitGroup
 }

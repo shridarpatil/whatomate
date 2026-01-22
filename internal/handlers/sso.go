@@ -547,8 +547,7 @@ func (a *App) fetchUserInfo(provider string, ssoConfig *models.SSOProvider, toke
 		userInfoURL = oauthProviders[provider].UserInfoURL
 	}
 
-	client := &http.Client{Timeout: 10 * time.Second}
-	req, err := http.NewRequest("GET", userInfoURL, nil)
+	req, err := http.NewRequest(http.MethodGet, userInfoURL, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -558,7 +557,7 @@ func (a *App) fetchUserInfo(provider string, ssoConfig *models.SSOProvider, toke
 		req.Header.Set("Accept", "application/vnd.github+json")
 	}
 
-	resp, err := client.Do(req)
+	resp, err := a.HTTPClient.Do(req)
 	if err != nil {
 		return nil, err
 	}
@@ -631,7 +630,6 @@ func (a *App) fetchUserInfo(provider string, ssoConfig *models.SSOProvider, toke
 }
 
 func (a *App) fetchGitHubEmail(token *oauth2.Token) (string, error) {
-	client := &http.Client{Timeout: 10 * time.Second}
 	req, err := http.NewRequest("GET", "https://api.github.com/user/emails", nil)
 	if err != nil {
 		return "", err
@@ -640,7 +638,7 @@ func (a *App) fetchGitHubEmail(token *oauth2.Token) (string, error) {
 	req.Header.Set("Authorization", "Bearer "+token.AccessToken)
 	req.Header.Set("Accept", "application/vnd.github+json")
 
-	resp, err := client.Do(req)
+	resp, err := a.HTTPClient.Do(req)
 	if err != nil {
 		return "", err
 	}

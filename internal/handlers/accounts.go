@@ -284,11 +284,10 @@ func (a *App) TestAccountConnection(r *fastglue.Request) error {
 	url := fmt.Sprintf("%s/%s/%s?fields=display_phone_number,verified_name,quality_rating,messaging_limit_tier",
 		a.Config.WhatsApp.BaseURL, account.APIVersion, account.PhoneID)
 
-	req, _ := http.NewRequest("GET", url, nil)
+	req, _ := http.NewRequest(http.MethodGet, url, nil)
 	req.Header.Set("Authorization", "Bearer "+account.AccessToken)
 
-	client := &http.Client{}
-	resp, err := client.Do(req)
+	resp, err := a.HTTPClient.Do(req)
 	if err != nil {
 		return r.SendEnvelope(map[string]interface{}{
 			"success": false,

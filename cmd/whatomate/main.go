@@ -4,6 +4,7 @@ import (
 	"context"
 	"flag"
 	"fmt"
+	"net/http"
 	"os"
 	"os/signal"
 	"syscall"
@@ -158,14 +159,25 @@ func runServer(args []string) {
 	lo.Info("WebSocket hub started")
 
 	// Initialize app with dependencies
+	// Shared HTTP client with connection pooling for external API calls
+	httpClient := &http.Client{
+		Timeout: 30 * time.Second,
+		Transport: &http.Transport{
+			MaxIdleConns:        100,
+			MaxIdleConnsPerHost: 10,
+			IdleConnTimeout:     90 * time.Second,
+		},
+	}
+
 	app := &handlers.App{
-		Config:   cfg,
-		DB:       db,
-		Redis:    rdb,
-		Log:      lo,
-		WhatsApp: waClient,
-		WSHub:    wsHub,
-		Queue:    jobQueue,
+		Config:     cfg,
+		DB:         db,
+		Redis:      rdb,
+		Log:        lo,
+		WhatsApp:   waClient,
+		WSHub:      wsHub,
+		Queue:      jobQueue,
+		HTTPClient: httpClient,
 	}
 
 	// Start campaign stats subscriber for real-time WebSocket updates from worker

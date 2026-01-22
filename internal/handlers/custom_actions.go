@@ -399,7 +399,6 @@ func (a *App) executeWebhookAction(action models.CustomAction, context map[strin
 		method = "POST"
 	}
 
-	client := &http.Client{Timeout: 10 * time.Second}
 	req, err := http.NewRequest(method, url, bytes.NewBufferString(body))
 	if err != nil {
 		return nil, err
@@ -410,7 +409,7 @@ func (a *App) executeWebhookAction(action models.CustomAction, context map[strin
 		req.Header.Set(k, v)
 	}
 
-	resp, err := client.Do(req)
+	resp, err := a.HTTPClient.Do(req)
 	if err != nil {
 		return nil, err
 	}

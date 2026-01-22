@@ -201,9 +201,8 @@ func (a *App) sendWebhookRequest(ctx context.Context, webhook models.Webhook, js
 		req.Header.Set("X-Webhook-Signature", signature)
 	}
 
-	// Send request (context handles timeout)
-	client := &http.Client{Timeout: 10 * time.Second}
-	resp, err := client.Do(req)
+	// Send request
+	resp, err := a.HTTPClient.Do(req)
 	if err != nil {
 		return err
 	}
