@@ -35,6 +35,7 @@ import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import { Switch } from '@/components/ui/switch'
 import { analyticsService, dashboardWidgetsService, type DashboardWidget, type WidgetData } from '@/services/api'
+import { useAuthStore } from '@/stores/auth'
 import {
   MessageSquare,
   Users,
@@ -58,6 +59,12 @@ import { CalendarDate } from '@internationalized/date'
 import { useToast } from '@/components/ui/toast'
 
 const { toast } = useToast()
+const authStore = useAuthStore()
+
+// Permission checks
+const canCreateWidget = computed(() => authStore.hasPermission('analytics', 'write'))
+const canEditWidget = computed(() => authStore.hasPermission('analytics', 'write'))
+const canDeleteWidget = computed(() => authStore.hasPermission('analytics', 'delete'))
 
 interface RecentMessage {
   id: string
@@ -544,7 +551,7 @@ onMounted(() => {
 
         <!-- Time Range Filter -->
         <div class="flex items-center gap-2">
-          <Button variant="outline" size="sm" @click="openAddWidgetDialog" class="bg-white/[0.04] border-white/[0.1] text-white/70 hover:bg-white/[0.08] hover:text-white light:bg-white light:border-gray-200 light:text-gray-700">
+          <Button v-if="canCreateWidget" variant="outline" size="sm" @click="openAddWidgetDialog" class="bg-white/[0.04] border-white/[0.1] text-white/70 hover:bg-white/[0.08] hover:text-white light:bg-white light:border-gray-200 light:text-gray-700">
             <Plus class="h-4 w-4 mr-2" />
             Add Widget
           </Button>
@@ -616,8 +623,9 @@ onMounted(() => {
                 </div>
                 <div class="flex items-center gap-2">
                   <!-- Actions - hidden by default, shown on card hover -->
-                  <div class="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                  <div v-if="canEditWidget || canDeleteWidget" class="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
                     <Button
+                      v-if="canEditWidget"
                       variant="ghost"
                       size="icon"
                       class="h-6 w-6 text-white/20 hover:text-white hover:bg-white/[0.1] light:text-gray-300 light:hover:text-gray-700 light:hover:bg-gray-100"
@@ -627,6 +635,7 @@ onMounted(() => {
                       <Pencil class="h-3 w-3" />
                     </Button>
                     <Button
+                      v-if="canDeleteWidget"
                       variant="ghost"
                       size="icon"
                       class="h-6 w-6 text-white/20 hover:text-red-400 hover:bg-red-500/10 light:text-gray-300 light:hover:text-red-600 light:hover:bg-red-50"
