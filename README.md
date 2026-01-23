@@ -6,6 +6,8 @@ Modern, open-source WhatsApp Business Platform. Single binary app.
 
 ![Dashboard](docs/public/images/01-dashboard.png)
 
+[![Deploy on Railway](https://railway.com/button.svg)](https://railway.com/deploy/whatomate?referralCode=emPbG7&utm_medium=integration&utm_source=template&utm_campaign=generic)
+
 ## Features
 
 - **Multi-tenant Architecture**
