@@ -712,7 +712,8 @@ func (a *App) queryMessages(orgID uuid.UUID, metric, field string, filters []Fil
 }
 
 func (a *App) queryContacts(orgID uuid.UUID, _ string, filters []FilterInput, start, end time.Time) float64 {
-	query := a.DB.Model(&models.Contact{}).Where("organization_id = ? AND created_at >= ? AND created_at <= ?", orgID, start, end)
+	// Filter by last_message_at to get "active" contacts with recent activity
+	query := a.DB.Model(&models.Contact{}).Where("organization_id = ? AND last_message_at >= ? AND last_message_at <= ?", orgID, start, end)
 
 	for _, f := range filters {
 		query = applyFilter(query, f)
@@ -784,7 +785,7 @@ func (a *App) getChartData(orgID uuid.UUID, widget models.DashboardWidget, filte
 		dateField = "created_at"
 	case "contacts":
 		tableName = "contacts"
-		dateField = "created_at"
+		dateField = "last_message_at"
 	case "campaigns":
 		tableName = "bulk_message_campaigns"
 		dateField = "created_at"
