@@ -604,6 +604,17 @@ func setupRoutes(g *fastglue.Fastglue, app *handlers.App, lo logf.Logger, basePa
 	g.GET("/api/analytics/agents/{id}", app.GetAgentDetails)
 	g.GET("/api/analytics/agents/comparison", app.GetAgentComparison)
 
+	// Dashboard Widgets (customizable analytics)
+	g.GET("/api/dashboard/widgets", app.ListDashboardWidgets)
+	g.POST("/api/dashboard/widgets", app.CreateDashboardWidget)
+	g.GET("/api/dashboard/widgets/data-sources", app.GetWidgetDataSources)
+	g.GET("/api/dashboard/widgets/data", app.GetAllWidgetsData)
+	g.GET("/api/dashboard/widgets/{id}", app.GetDashboardWidget)
+	g.PUT("/api/dashboard/widgets/{id}", app.UpdateDashboardWidget)
+	g.DELETE("/api/dashboard/widgets/{id}", app.DeleteDashboardWidget)
+	g.GET("/api/dashboard/widgets/{id}/data", app.GetWidgetData)
+	g.POST("/api/dashboard/widgets/reorder", app.ReorderDashboardWidgets)
+
 	// Organization Settings
 	g.GET("/api/org/settings", app.GetOrganizationSettings)
 	g.PUT("/api/org/settings", app.UpdateOrganizationSettings)

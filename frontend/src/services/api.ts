@@ -312,6 +312,90 @@ export const agentAnalyticsService = {
     api.get('/analytics/agents/comparison', { params })
 }
 
+// Dashboard Widgets (customizable analytics)
+export interface DashboardWidget {
+  id: string
+  name: string
+  description: string
+  data_source: string
+  metric: string
+  field: string
+  filters: Array<{ field: string; operator: string; value: string }>
+  display_type: string
+  chart_type: string
+  show_change: boolean
+  color: string
+  size: string
+  display_order: number
+  is_shared: boolean
+  is_default: boolean
+  is_owner: boolean
+  created_by: string
+  created_at: string
+  updated_at: string
+}
+
+export interface WidgetData {
+  widget_id: string
+  value: number
+  change: number
+  prev_value: number
+  chart_data: Array<{ label: string; value: number }>
+  data_points: Array<{ label: string; value: number; color?: string }>
+}
+
+export interface DataSourceInfo {
+  name: string
+  label: string
+  fields: string[]
+}
+
+export const dashboardWidgetsService = {
+  list: () => api.get<{ widgets: DashboardWidget[] }>('/dashboard/widgets'),
+  get: (id: string) => api.get<DashboardWidget>(`/dashboard/widgets/${id}`),
+  create: (data: {
+    name: string
+    description?: string
+    data_source: string
+    metric: string
+    field?: string
+    filters?: Array<{ field: string; operator: string; value: string }>
+    display_type?: string
+    chart_type?: string
+    show_change?: boolean
+    color?: string
+    size?: string
+    is_shared?: boolean
+  }) => api.post<DashboardWidget>('/dashboard/widgets', data),
+  update: (id: string, data: Partial<{
+    name: string
+    description: string
+    data_source: string
+    metric: string
+    field: string
+    filters: Array<{ field: string; operator: string; value: string }>
+    display_type: string
+    chart_type: string
+    show_change: boolean
+    color: string
+    size: string
+    is_shared: boolean
+  }>) => api.put<DashboardWidget>(`/dashboard/widgets/${id}`, data),
+  delete: (id: string) => api.delete(`/dashboard/widgets/${id}`),
+  getData: (id: string, params?: { from?: string; to?: string }) =>
+    api.get<WidgetData>(`/dashboard/widgets/${id}/data`, { params }),
+  getAllData: (params?: { from?: string; to?: string }) =>
+    api.get<{ data: Record<string, WidgetData> }>('/dashboard/widgets/data', { params }),
+  getDataSources: () => api.get<{
+    data_sources: DataSourceInfo[]
+    metrics: string[]
+    display_types: string[]
+    operators: Array<{ value: string; label: string }>
+  }>('/dashboard/widgets/data-sources'),
+  reorder: (widgetIds: string[]) =>
+    api.post('/dashboard/widgets/reorder', { widget_ids: widgetIds })
+}
+
 export const organizationService = {
   getSettings: () => api.get('/org/settings'),
   updateSettings: (data: {
