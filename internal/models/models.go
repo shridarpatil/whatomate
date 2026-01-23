@@ -404,7 +404,7 @@ func (WhatsAppFlow) TableName() string {
 type DashboardWidget struct {
 	BaseModel
 	OrganizationID uuid.UUID  `gorm:"type:uuid;index;not null" json:"organization_id"`
-	UserID         uuid.UUID  `gorm:"type:uuid;index;not null" json:"user_id"` // Creator of the widget
+	UserID         *uuid.UUID `gorm:"type:uuid;index" json:"user_id"` // Creator of the widget (nil for system defaults)
 	Name           string     `gorm:"size:255;not null" json:"name"`
 	Description    string     `gorm:"type:text" json:"description"`
 	DataSource     string     `gorm:"size:50;not null" json:"data_source"` // messages, contacts, campaigns, transfers, sessions

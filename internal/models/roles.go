@@ -159,6 +159,8 @@ func DefaultPermissions() []Permission {
 
 		// Analytics
 		{Resource: ResourceAnalytics, Action: ActionRead, Description: "View analytics dashboard"},
+		{Resource: ResourceAnalytics, Action: ActionWrite, Description: "Create and edit dashboard widgets"},
+		{Resource: ResourceAnalytics, Action: ActionDelete, Description: "Delete dashboard widgets"},
 		{Resource: ResourceAnalyticsAgents, Action: ActionRead, Description: "View agent analytics"},
 
 		// Transfers

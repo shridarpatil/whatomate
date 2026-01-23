@@ -105,6 +105,11 @@ func (a *App) ListDashboardWidgets(r *fastglue.Request) error {
 
 	userID, _ := r.RequestCtx.UserValue("user_id").(uuid.UUID)
 
+	// Check analytics read permission
+	if !a.HasPermission(userID, models.ResourceAnalytics, models.ActionRead) {
+		return r.SendErrorEnvelope(fasthttp.StatusForbidden, "You don't have permission to view analytics", nil, "")
+	}
+
 	// Get user's own widgets + shared widgets from org
 	var widgets []models.DashboardWidget
 	if err := a.DB.Where(
@@ -135,6 +140,11 @@ func (a *App) GetDashboardWidget(r *fastglue.Request) error {
 
 	userID, _ := r.RequestCtx.UserValue("user_id").(uuid.UUID)
 
+	// Check analytics read permission
+	if !a.HasPermission(userID, models.ResourceAnalytics, models.ActionRead) {
+		return r.SendErrorEnvelope(fasthttp.StatusForbidden, "You don't have permission to view analytics", nil, "")
+	}
+
 	idStr := r.RequestCtx.UserValue("id").(string)
 	id, err := uuid.Parse(idStr)
 	if err != nil {
@@ -160,6 +170,11 @@ func (a *App) CreateDashboardWidget(r *fastglue.Request) error {
 	}
 
 	userID, _ := r.RequestCtx.UserValue("user_id").(uuid.UUID)
+
+	// Check analytics write permission
+	if !a.HasPermission(userID, models.ResourceAnalytics, models.ActionWrite) {
+		return r.SendErrorEnvelope(fasthttp.StatusForbidden, "You don't have permission to create widgets", nil, "")
+	}
 
 	var req WidgetRequest
 	if err := r.Decode(&req, "json"); err != nil {
@@ -230,7 +245,7 @@ func (a *App) CreateDashboardWidget(r *fastglue.Request) error {
 
 	widget := models.DashboardWidget{
 		OrganizationID: orgID,
-		UserID:         userID,
+		UserID:         &userID,
 		Name:           req.Name,
 		Description:    req.Description,
 		DataSource:     req.DataSource,
@@ -263,21 +278,26 @@ func (a *App) UpdateDashboardWidget(r *fastglue.Request) error {
 
 	userID, _ := r.RequestCtx.UserValue("user_id").(uuid.UUID)
 
+	// Check analytics write permission
+	if !a.HasPermission(userID, models.ResourceAnalytics, models.ActionWrite) {
+		return r.SendErrorEnvelope(fasthttp.StatusForbidden, "You don't have permission to edit widgets", nil, "")
+	}
+
 	idStr := r.RequestCtx.UserValue("id").(string)
 	id, err := uuid.Parse(idStr)
 	if err != nil {
 		return r.SendErrorEnvelope(fasthttp.StatusBadRequest, "Invalid widget ID", nil, "")
 	}
 
-	// Only the owner can update a widget
+	// Find the widget - must belong to same organization
 	var widget models.DashboardWidget
-	if err := a.DB.Where("id = ? AND organization_id = ? AND user_id = ?", id, orgID, userID).First(&widget).Error; err != nil {
-		return r.SendErrorEnvelope(fasthttp.StatusNotFound, "Widget not found or you don't have permission to edit it", nil, "")
+	if err := a.DB.Where("id = ? AND organization_id = ?", id, orgID).First(&widget).Error; err != nil {
+		return r.SendErrorEnvelope(fasthttp.StatusNotFound, "Widget not found", nil, "")
 	}
 
-	// Prevent editing default widgets
-	if widget.IsDefault {
-		return r.SendErrorEnvelope(fasthttp.StatusForbidden, "Cannot edit default widgets", nil, "")
+	// Only the owner can edit the widget
+	if widget.UserID == nil || *widget.UserID != userID {
+		return r.SendErrorEnvelope(fasthttp.StatusForbidden, "Only the widget owner can edit this widget", nil, "")
 	}
 
 	var req WidgetRequest
@@ -357,21 +377,26 @@ func (a *App) DeleteDashboardWidget(r *fastglue.Request) error {
 
 	userID, _ := r.RequestCtx.UserValue("user_id").(uuid.UUID)
 
+	// Check analytics delete permission
+	if !a.HasPermission(userID, models.ResourceAnalytics, models.ActionDelete) {
+		return r.SendErrorEnvelope(fasthttp.StatusForbidden, "You don't have permission to delete widgets", nil, "")
+	}
+
 	idStr := r.RequestCtx.UserValue("id").(string)
 	id, err := uuid.Parse(idStr)
 	if err != nil {
 		return r.SendErrorEnvelope(fasthttp.StatusBadRequest, "Invalid widget ID", nil, "")
 	}
 
-	// Only the owner can delete a widget
+	// Find the widget - must belong to same organization
 	var widget models.DashboardWidget
-	if err := a.DB.Where("id = ? AND organization_id = ? AND user_id = ?", id, orgID, userID).First(&widget).Error; err != nil {
-		return r.SendErrorEnvelope(fasthttp.StatusNotFound, "Widget not found or you don't have permission to delete it", nil, "")
+	if err := a.DB.Where("id = ? AND organization_id = ?", id, orgID).First(&widget).Error; err != nil {
+		return r.SendErrorEnvelope(fasthttp.StatusNotFound, "Widget not found", nil, "")
 	}
 
-	// Prevent deleting default widgets
-	if widget.IsDefault {
-		return r.SendErrorEnvelope(fasthttp.StatusForbidden, "Cannot delete default widgets", nil, "")
+	// Only the owner can delete the widget
+	if widget.UserID == nil || *widget.UserID != userID {
+		return r.SendErrorEnvelope(fasthttp.StatusForbidden, "Only the widget owner can delete this widget", nil, "")
 	}
 
 	if err := a.DB.Delete(&widget).Error; err != nil {
@@ -466,7 +491,7 @@ func widgetToResponse(w models.DashboardWidget, currentUserID uuid.UUID) WidgetR
 		DisplayOrder: w.DisplayOrder,
 		IsShared:     w.IsShared,
 		IsDefault:    w.IsDefault,
-		IsOwner:      w.UserID == currentUserID,
+		IsOwner:      w.UserID != nil && *w.UserID == currentUserID,
 		CreatedAt:    w.CreatedAt.Format("2006-01-02T15:04:05Z"),
 		UpdatedAt:    w.UpdatedAt.Format("2006-01-02T15:04:05Z"),
 	}

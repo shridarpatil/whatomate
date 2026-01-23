@@ -56,11 +56,23 @@ import {
 } from 'lucide-vue-next'
 import { useRolesStore, type CreateRoleData, type UpdateRoleData } from '@/stores/roles'
 import { useOrganizationsStore } from '@/stores/organizations'
+import { useAuthStore } from '@/stores/auth'
 import type { Role } from '@/services/api'
 import PermissionMatrix from '@/components/roles/PermissionMatrix.vue'
 
 const rolesStore = useRolesStore()
 const organizationsStore = useOrganizationsStore()
+const authStore = useAuthStore()
+
+// Check if current user is super admin
+const isSuperAdmin = computed(() => authStore.user?.is_super_admin ?? false)
+
+// Check if we can edit the current role's permissions
+const canEditPermissions = computed(() => {
+  if (!editingRole.value) return true // New role
+  if (!editingRole.value.is_system) return true // Custom role
+  return isSuperAdmin.value // System role - only super admin
+})
 
 // State
 const isLoading = ref(true)
@@ -330,7 +342,7 @@ function formatDate(dateString: string): string {
                             </Button>
                           </TooltipTrigger>
                           <TooltipContent>
-                            {{ role.is_system ? 'View permissions' : 'Edit role' }}
+                            {{ role.is_system ? (isSuperAdmin ? 'Edit permissions' : 'View permissions') : 'Edit role' }}
                           </TooltipContent>
                         </Tooltip>
                         <Tooltip v-if="!role.is_system">
@@ -364,11 +376,13 @@ function formatDate(dateString: string): string {
         <DialogContent class="max-w-2xl max-h-[90vh] overflow-hidden flex flex-col">
           <DialogHeader>
             <DialogTitle>
-              {{ editingRole ? (editingRole.is_system ? 'View Role' : 'Edit Role') : 'Create Role' }}
+              {{ editingRole ? (editingRole.is_system && !isSuperAdmin ? 'View Role' : 'Edit Role') : 'Create Role' }}
             </DialogTitle>
             <DialogDescription>
               {{ editingRole?.is_system
-                ? 'System roles cannot be modified, but you can view their permissions.'
+                ? (isSuperAdmin
+                  ? 'As a super admin, you can modify permissions for this system role.'
+                  : 'System roles cannot be modified, but you can view their permissions.')
                 : editingRole
                   ? 'Update the role name, description, and permissions.'
                   : 'Create a new role with custom permissions.'
@@ -398,7 +412,7 @@ function formatDate(dateString: string): string {
                 v-model="formData.description"
                 placeholder="Describe what this role is for..."
                 rows="2"
-                :disabled="editingRole?.is_system"
+                :disabled="editingRole?.is_system && !isSuperAdmin"
               />
             </div>
 
@@ -439,17 +453,17 @@ function formatDate(dateString: string): string {
                 :key="editingRole?.id || 'new'"
                 :permission-groups="rolesStore.permissionGroups"
                 v-model:selected-permissions="formData.permissions"
-                :disabled="editingRole?.is_system"
+                :disabled="!canEditPermissions"
               />
             </div>
           </div>
 
           <DialogFooter class="pt-4 border-t">
             <Button variant="outline" size="sm" @click="isDialogOpen = false">
-              {{ editingRole?.is_system ? 'Close' : 'Cancel' }}
+              {{ editingRole?.is_system && !isSuperAdmin ? 'Close' : 'Cancel' }}
             </Button>
             <Button
-              v-if="!editingRole?.is_system"
+              v-if="!editingRole?.is_system || isSuperAdmin"
               size="sm"
               @click="saveRole"
               :disabled="isSubmitting"

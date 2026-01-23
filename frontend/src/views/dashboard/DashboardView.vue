@@ -20,6 +20,16 @@ import {
   DialogHeader,
   DialogTitle
 } from '@/components/ui/dialog'
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle
+} from '@/components/ui/alert-dialog'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
@@ -58,42 +68,22 @@ interface RecentMessage {
   status: string
 }
 
-// Default stats from dashboard API (always shown)
-interface DashboardStats {
-  total_messages: number
-  active_contacts: number
-  chatbot_sessions: number
-  total_campaigns: number
-  total_messages_change: number
-  active_contacts_change: number
-  chatbot_sessions_change: number
-  total_campaigns_change: number
-}
-
-const defaultStats = ref<DashboardStats>({
-  total_messages: 0,
-  active_contacts: 0,
-  chatbot_sessions: 0,
-  total_campaigns: 0,
-  total_messages_change: 0,
-  active_contacts_change: 0,
-  chatbot_sessions_change: 0,
-  total_campaigns_change: 0
-})
-
-// Custom widgets state
+// Widgets state
 const widgets = ref<DashboardWidget[]>([])
 const widgetData = ref<Record<string, WidgetData>>({})
 const recentMessages = ref<RecentMessage[]>([])
 const isLoading = ref(true)
 const isWidgetDataLoading = ref(false)
-const isDefaultStatsLoading = ref(false)
 
 // Widget builder state
 const isWidgetDialogOpen = ref(false)
 const isEditMode = ref(false)
 const editingWidgetId = ref<string | null>(null)
 const isSavingWidget = ref(false)
+
+// Delete dialog state
+const deleteDialogOpen = ref(false)
+const widgetToDelete = ref<DashboardWidget | null>(null)
 
 const dataSources = ref<Array<{ name: string; label: string; fields: string[] }>>([])
 const metrics = ref<string[]>([])
@@ -305,7 +295,9 @@ const availableFields = computed(() => {
 const fetchWidgets = async () => {
   try {
     const response = await dashboardWidgetsService.list()
-    widgets.value = response.data.widgets || []
+    console.log('Widgets response:', response.data)
+    widgets.value = response.data.data?.widgets || []
+    console.log('Loaded widgets:', widgets.value)
   } catch (error) {
     console.error('Failed to load widgets:', error)
     widgets.value = []
@@ -319,7 +311,9 @@ const fetchWidgetData = async () => {
   try {
     const { from, to } = getDateRange.value
     const response = await dashboardWidgetsService.getAllData({ from, to })
-    widgetData.value = response.data.data || {}
+    console.log('Widget data response:', response.data)
+    widgetData.value = response.data.data?.data || {}
+    console.log('Loaded widget data:', widgetData.value)
   } catch (error) {
     console.error('Failed to load widget data:', error)
     widgetData.value = {}
@@ -328,39 +322,29 @@ const fetchWidgetData = async () => {
   }
 }
 
-const fetchDefaultStats = async () => {
-  isDefaultStatsLoading.value = true
+const fetchRecentMessages = async () => {
   try {
     const { from, to } = getDateRange.value
     const response = await analyticsService.dashboard({ from, to })
     const data = response.data.data || response.data
-    defaultStats.value = {
-      total_messages: data.total_messages || 0,
-      active_contacts: data.active_contacts || 0,
-      chatbot_sessions: data.chatbot_sessions || 0,
-      total_campaigns: data.total_campaigns || 0,
-      total_messages_change: data.total_messages_change || 0,
-      active_contacts_change: data.active_contacts_change || 0,
-      chatbot_sessions_change: data.chatbot_sessions_change || 0,
-      total_campaigns_change: data.total_campaigns_change || 0
-    }
     recentMessages.value = data.recent_messages || []
   } catch (error) {
-    console.error('Failed to load dashboard stats:', error)
+    console.error('Failed to load recent messages:', error)
     recentMessages.value = []
-  } finally {
-    isDefaultStatsLoading.value = false
   }
 }
 
 const fetchDataSources = async () => {
   try {
     const response = await dashboardWidgetsService.getDataSources()
+    console.log('Data sources response:', response.data)
     const data = response.data.data || response.data
     dataSources.value = data.data_sources || []
     metrics.value = data.metrics || []
     displayTypes.value = data.display_types || []
     operators.value = data.operators || []
+    console.log('Available data sources:', dataSources.value)
+    console.log('Available operators:', operators.value)
   } catch (error) {
     console.error('Failed to load data sources:', error)
   }
@@ -371,7 +355,7 @@ const fetchDashboardData = async () => {
   try {
     await Promise.all([
       fetchWidgets(),
-      fetchDefaultStats(),
+      fetchRecentMessages(),
       fetchDataSources()
     ])
     await fetchWidgetData()
@@ -385,12 +369,15 @@ const applyCustomRange = () => {
     isDatePickerOpen.value = false
     savePreferences()
     fetchWidgetData()
-    fetchDefaultStats()
+    fetchRecentMessages()
   }
 }
 
 // Widget CRUD
 const openAddWidgetDialog = () => {
+  console.log('Opening add widget dialog')
+  console.log('Available dataSources:', dataSources.value)
+  console.log('Available operators:', operators.value)
   isEditMode.value = false
   editingWidgetId.value = null
   widgetForm.value = {
@@ -431,7 +418,10 @@ const openEditWidgetDialog = (widget: DashboardWidget) => {
 }
 
 const addFilter = () => {
+  console.log('addFilter called, data_source:', widgetForm.value.data_source)
+  console.log('Current filters:', widgetForm.value.filters)
   widgetForm.value.filters.push({ field: '', operator: 'equals', value: '' })
+  console.log('After push, filters:', widgetForm.value.filters)
 }
 
 const removeFilter = (index: number) => {
@@ -448,19 +438,43 @@ const saveWidget = async () => {
     return
   }
 
+  // Clean up empty filters
+  const cleanFilters = widgetForm.value.filters.filter(f => f.field && f.operator && f.value)
+
+  const payload = {
+    name: widgetForm.value.name,
+    description: widgetForm.value.description,
+    data_source: widgetForm.value.data_source,
+    metric: widgetForm.value.metric,
+    field: widgetForm.value.field,
+    filters: cleanFilters,
+    display_type: widgetForm.value.display_type,
+    chart_type: widgetForm.value.chart_type,
+    show_change: widgetForm.value.show_change,
+    color: widgetForm.value.color,
+    size: widgetForm.value.size,
+    is_shared: widgetForm.value.is_shared
+  }
+
+  console.log('Saving widget with payload:', payload)
+
   isSavingWidget.value = true
   try {
     if (isEditMode.value && editingWidgetId.value) {
-      await dashboardWidgetsService.update(editingWidgetId.value, widgetForm.value)
+      const response = await dashboardWidgetsService.update(editingWidgetId.value, payload)
+      console.log('Update response:', response)
       toast({ title: 'Widget updated successfully' })
     } else {
-      await dashboardWidgetsService.create(widgetForm.value)
+      const response = await dashboardWidgetsService.create(payload)
+      console.log('Create response:', response)
       toast({ title: 'Widget created successfully' })
     }
     isWidgetDialogOpen.value = false
     await fetchWidgets()
     await fetchWidgetData()
   } catch (error: any) {
+    console.error('Save widget error:', error)
+    console.error('Error response:', error.response?.data)
     toast({
       title: 'Error',
       description: error.response?.data?.message || 'Failed to save widget',
@@ -471,12 +485,19 @@ const saveWidget = async () => {
   }
 }
 
-const deleteWidget = async (widgetId: string) => {
-  if (!confirm('Are you sure you want to delete this widget?')) return
+const openDeleteDialog = (widget: DashboardWidget) => {
+  widgetToDelete.value = widget
+  deleteDialogOpen.value = true
+}
+
+const confirmDeleteWidget = async () => {
+  if (!widgetToDelete.value) return
 
   try {
-    await dashboardWidgetsService.delete(widgetId)
+    await dashboardWidgetsService.delete(widgetToDelete.value.id)
     toast({ title: 'Widget deleted successfully' })
+    deleteDialogOpen.value = false
+    widgetToDelete.value = null
     await fetchWidgets()
     await fetchWidgetData()
   } catch (error: any) {
@@ -493,8 +514,14 @@ watch(selectedRange, (newValue) => {
   savePreferences()
   if (newValue !== 'custom') {
     fetchWidgetData()
-    fetchDefaultStats()
+    fetchRecentMessages()
   }
+})
+
+// Debug: Watch for data source changes
+watch(() => widgetForm.value.data_source, (newValue) => {
+  console.log('Data source changed to:', newValue)
+  console.log('Available fields for this source:', availableFields.value)
 })
 
 onMounted(() => {
@@ -558,9 +585,9 @@ onMounted(() => {
     <!-- Content -->
     <ScrollArea class="flex-1">
       <div class="p-6 space-y-6">
-        <!-- Default Stats (always shown) -->
+        <!-- Widgets Grid -->
         <div class="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-          <!-- Loading State for Default Stats -->
+          <!-- Loading State -->
           <template v-if="isLoading">
             <div v-for="i in 4" :key="i" class="rounded-xl border border-white/[0.08] bg-white/[0.02] p-6 light:bg-white light:border-gray-200">
               <div class="flex flex-row items-center justify-between space-y-0 pb-2">
@@ -574,161 +601,45 @@ onMounted(() => {
             </div>
           </template>
 
-          <!-- Default Stat Cards -->
+          <!-- Widget Cards -->
           <template v-else>
-            <!-- Total Messages -->
-            <div class="card-depth rounded-xl border border-white/[0.08] bg-white/[0.04] p-6 light:bg-white light:border-gray-200">
-              <div class="flex flex-row items-center justify-between space-y-0 pb-2">
-                <span class="text-sm font-medium text-white/50 light:text-gray-500">Total Messages</span>
-                <div class="h-10 w-10 rounded-lg bg-blue-500/20 flex items-center justify-center">
-                  <MessageSquare class="h-5 w-5 text-blue-400" />
-                </div>
-              </div>
-              <div class="pt-2">
-                <div class="text-3xl font-bold text-white light:text-gray-900">
-                  <template v-if="isDefaultStatsLoading">
-                    <Skeleton class="h-8 w-20 bg-white/[0.08] light:bg-gray-200" />
-                  </template>
-                  <template v-else>{{ formatNumber(defaultStats.total_messages) }}</template>
-                </div>
-                <div class="flex items-center text-xs text-white/40 light:text-gray-500 mt-1">
-                  <component
-                    :is="defaultStats.total_messages_change > 0 ? TrendingUp : defaultStats.total_messages_change < 0 ? TrendingDown : Minus"
-                    :class="['h-3 w-3 mr-1', defaultStats.total_messages_change > 0 ? 'text-emerald-400' : defaultStats.total_messages_change < 0 ? 'text-red-400' : 'text-white/30']"
-                  />
-                  <span :class="defaultStats.total_messages_change > 0 ? 'text-emerald-400' : defaultStats.total_messages_change < 0 ? 'text-red-400' : 'text-white/30 light:text-gray-400'">
-                    {{ Math.abs(defaultStats.total_messages_change).toFixed(1) }}%
-                  </span>
-                  <span class="ml-1">{{ comparisonPeriodLabel }}</span>
-                </div>
-              </div>
-            </div>
-
-            <!-- Active Contacts -->
-            <div class="card-depth rounded-xl border border-white/[0.08] bg-white/[0.04] p-6 light:bg-white light:border-gray-200">
-              <div class="flex flex-row items-center justify-between space-y-0 pb-2">
-                <span class="text-sm font-medium text-white/50 light:text-gray-500">Active Contacts</span>
-                <div class="h-10 w-10 rounded-lg bg-emerald-500/20 flex items-center justify-center">
-                  <Users class="h-5 w-5 text-emerald-400" />
-                </div>
-              </div>
-              <div class="pt-2">
-                <div class="text-3xl font-bold text-white light:text-gray-900">
-                  <template v-if="isDefaultStatsLoading">
-                    <Skeleton class="h-8 w-20 bg-white/[0.08] light:bg-gray-200" />
-                  </template>
-                  <template v-else>{{ formatNumber(defaultStats.active_contacts) }}</template>
-                </div>
-                <div class="flex items-center text-xs text-white/40 light:text-gray-500 mt-1">
-                  <component
-                    :is="defaultStats.active_contacts_change > 0 ? TrendingUp : defaultStats.active_contacts_change < 0 ? TrendingDown : Minus"
-                    :class="['h-3 w-3 mr-1', defaultStats.active_contacts_change > 0 ? 'text-emerald-400' : defaultStats.active_contacts_change < 0 ? 'text-red-400' : 'text-white/30']"
-                  />
-                  <span :class="defaultStats.active_contacts_change > 0 ? 'text-emerald-400' : defaultStats.active_contacts_change < 0 ? 'text-red-400' : 'text-white/30 light:text-gray-400'">
-                    {{ Math.abs(defaultStats.active_contacts_change).toFixed(1) }}%
-                  </span>
-                  <span class="ml-1">{{ comparisonPeriodLabel }}</span>
-                </div>
-              </div>
-            </div>
-
-            <!-- Chatbot Sessions -->
-            <div class="card-depth rounded-xl border border-white/[0.08] bg-white/[0.04] p-6 light:bg-white light:border-gray-200">
-              <div class="flex flex-row items-center justify-between space-y-0 pb-2">
-                <span class="text-sm font-medium text-white/50 light:text-gray-500">Chatbot Sessions</span>
-                <div class="h-10 w-10 rounded-lg bg-purple-500/20 flex items-center justify-center">
-                  <Bot class="h-5 w-5 text-purple-400" />
-                </div>
-              </div>
-              <div class="pt-2">
-                <div class="text-3xl font-bold text-white light:text-gray-900">
-                  <template v-if="isDefaultStatsLoading">
-                    <Skeleton class="h-8 w-20 bg-white/[0.08] light:bg-gray-200" />
-                  </template>
-                  <template v-else>{{ formatNumber(defaultStats.chatbot_sessions) }}</template>
-                </div>
-                <div class="flex items-center text-xs text-white/40 light:text-gray-500 mt-1">
-                  <component
-                    :is="defaultStats.chatbot_sessions_change > 0 ? TrendingUp : defaultStats.chatbot_sessions_change < 0 ? TrendingDown : Minus"
-                    :class="['h-3 w-3 mr-1', defaultStats.chatbot_sessions_change > 0 ? 'text-emerald-400' : defaultStats.chatbot_sessions_change < 0 ? 'text-red-400' : 'text-white/30']"
-                  />
-                  <span :class="defaultStats.chatbot_sessions_change > 0 ? 'text-emerald-400' : defaultStats.chatbot_sessions_change < 0 ? 'text-red-400' : 'text-white/30 light:text-gray-400'">
-                    {{ Math.abs(defaultStats.chatbot_sessions_change).toFixed(1) }}%
-                  </span>
-                  <span class="ml-1">{{ comparisonPeriodLabel }}</span>
-                </div>
-              </div>
-            </div>
-
-            <!-- Total Campaigns -->
-            <div class="card-depth rounded-xl border border-white/[0.08] bg-white/[0.04] p-6 light:bg-white light:border-gray-200">
-              <div class="flex flex-row items-center justify-between space-y-0 pb-2">
-                <span class="text-sm font-medium text-white/50 light:text-gray-500">Total Campaigns</span>
-                <div class="h-10 w-10 rounded-lg bg-orange-500/20 flex items-center justify-center">
-                  <Send class="h-5 w-5 text-orange-400" />
-                </div>
-              </div>
-              <div class="pt-2">
-                <div class="text-3xl font-bold text-white light:text-gray-900">
-                  <template v-if="isDefaultStatsLoading">
-                    <Skeleton class="h-8 w-20 bg-white/[0.08] light:bg-gray-200" />
-                  </template>
-                  <template v-else>{{ formatNumber(defaultStats.total_campaigns) }}</template>
-                </div>
-                <div class="flex items-center text-xs text-white/40 light:text-gray-500 mt-1">
-                  <component
-                    :is="defaultStats.total_campaigns_change > 0 ? TrendingUp : defaultStats.total_campaigns_change < 0 ? TrendingDown : Minus"
-                    :class="['h-3 w-3 mr-1', defaultStats.total_campaigns_change > 0 ? 'text-emerald-400' : defaultStats.total_campaigns_change < 0 ? 'text-red-400' : 'text-white/30']"
-                  />
-                  <span :class="defaultStats.total_campaigns_change > 0 ? 'text-emerald-400' : defaultStats.total_campaigns_change < 0 ? 'text-red-400' : 'text-white/30 light:text-gray-400'">
-                    {{ Math.abs(defaultStats.total_campaigns_change).toFixed(1) }}%
-                  </span>
-                  <span class="ml-1">{{ comparisonPeriodLabel }}</span>
-                </div>
-              </div>
-            </div>
-          </template>
-        </div>
-
-        <!-- Custom Widgets Section -->
-        <div v-if="widgets.length > 0" class="space-y-4">
-          <div class="flex items-center justify-between">
-            <h2 class="text-lg font-semibold text-white light:text-gray-900">Custom Widgets</h2>
-          </div>
-          <div class="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
             <div
               v-for="widget in widgets"
               :key="widget.id"
-              class="group relative card-depth rounded-xl border border-white/[0.08] bg-white/[0.04] p-6 light:bg-white light:border-gray-200"
+              class="group relative card-depth rounded-xl border border-white/[0.08] bg-white/[0.04] p-6 light:bg-white light:border-gray-200 hover:bg-white/[0.06] light:hover:bg-gray-50 transition-colors"
             >
-              <!-- Actions -->
-              <div class="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity flex gap-1">
-                <Button
-                  v-if="widget.is_owner"
-                  variant="ghost"
-                  size="icon"
-                  class="h-7 w-7 text-white/50 hover:text-white hover:bg-white/[0.1]"
-                  @click.stop="openEditWidgetDialog(widget)"
-                >
-                  <Pencil class="h-3 w-3" />
-                </Button>
-                <Button
-                  v-if="widget.is_owner"
-                  variant="ghost"
-                  size="icon"
-                  class="h-7 w-7 text-white/50 hover:text-red-400 hover:bg-red-500/10"
-                  @click.stop="deleteWidget(widget.id)"
-                >
-                  <Trash2 class="h-3 w-3" />
-                </Button>
-              </div>
-
-              <div class="flex flex-row items-center justify-between space-y-0 pb-2">
-                <span class="text-sm font-medium text-white/50 light:text-gray-500">
-                  {{ widget.name }}
-                </span>
-                <div :class="['h-10 w-10 rounded-lg flex items-center justify-center', getWidgetColor(widget.color).bg]">
-                  <component :is="getWidgetIcon(widget.data_source)" :class="['h-5 w-5', getWidgetColor(widget.color).text]" />
+              <div class="flex flex-row items-start justify-between space-y-0 pb-2">
+                <div class="flex-1">
+                  <span class="text-sm font-medium text-white/50 light:text-gray-500">
+                    {{ widget.name }}
+                  </span>
+                </div>
+                <div class="flex items-center gap-2">
+                  <!-- Actions - hidden by default, shown on card hover -->
+                  <div class="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      class="h-6 w-6 text-white/20 hover:text-white hover:bg-white/[0.1] light:text-gray-300 light:hover:text-gray-700 light:hover:bg-gray-100"
+                      @click.stop="openEditWidgetDialog(widget)"
+                      title="Edit widget"
+                    >
+                      <Pencil class="h-3 w-3" />
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      class="h-6 w-6 text-white/20 hover:text-red-400 hover:bg-red-500/10 light:text-gray-300 light:hover:text-red-600 light:hover:bg-red-50"
+                      @click.stop="openDeleteDialog(widget)"
+                      title="Delete widget"
+                    >
+                      <Trash2 class="h-3 w-3" />
+                    </Button>
+                  </div>
+                  <!-- Icon -->
+                  <div :class="['h-10 w-10 rounded-lg flex items-center justify-center', getWidgetColor(widget.color).bg]">
+                    <component :is="getWidgetIcon(widget.data_source)" :class="['h-5 w-5', getWidgetColor(widget.color).text]" />
+                  </div>
                 </div>
               </div>
 
@@ -756,7 +667,7 @@ onMounted(() => {
                 </div>
               </div>
             </div>
-          </div>
+          </template>
         </div>
 
         <!-- Recent Activity -->
@@ -900,7 +811,7 @@ onMounted(() => {
           <!-- Data Source -->
           <div class="space-y-2">
             <Label class="text-white/70 light:text-gray-700">Data Source *</Label>
-            <Select v-model="widgetForm.data_source">
+            <Select :model-value="widgetForm.data_source" @update:model-value="(val) => { console.log('Data source selected:', val); widgetForm.data_source = val }">
               <SelectTrigger class="bg-white/[0.04] border-white/[0.1] text-white light:bg-white light:border-gray-300 light:text-gray-900">
                 <SelectValue placeholder="Select data source" />
               </SelectTrigger>
@@ -920,7 +831,7 @@ onMounted(() => {
           <!-- Metric -->
           <div class="space-y-2">
             <Label class="text-white/70 light:text-gray-700">Metric</Label>
-            <Select v-model="widgetForm.metric">
+            <Select :model-value="widgetForm.metric" @update:model-value="(val) => widgetForm.metric = val">
               <SelectTrigger class="bg-white/[0.04] border-white/[0.1] text-white light:bg-white light:border-gray-300 light:text-gray-900">
                 <SelectValue placeholder="Select metric" />
               </SelectTrigger>
@@ -935,49 +846,56 @@ onMounted(() => {
           <!-- Filters -->
           <div class="space-y-2">
             <div class="flex items-center justify-between">
-              <Label class="text-white/70 light:text-gray-700">Filters</Label>
-              <Button variant="ghost" size="sm" @click="addFilter" class="text-white/50 hover:text-white">
+              <Label class="text-white/70 light:text-gray-700">Filters ({{ widgetForm.filters.length }})</Label>
+              <Button type="button" variant="outline" size="sm" @click.stop.prevent="addFilter" class="border-white/20 text-white hover:bg-white/10 light:border-gray-300 light:text-gray-700">
                 <Plus class="h-4 w-4 mr-1" />
                 Add Filter
               </Button>
             </div>
+            <p v-if="!widgetForm.data_source && widgetForm.filters.length === 0" class="text-xs text-white/40 light:text-gray-500">
+              Select a data source first to add filters
+            </p>
             <div v-for="(filter, index) in widgetForm.filters" :key="index" class="flex items-center gap-2">
-              <Select v-model="filter.field" class="flex-1">
-                <SelectTrigger class="bg-white/[0.04] border-white/[0.1] text-white text-sm light:bg-white light:border-gray-300 light:text-gray-900">
-                  <SelectValue placeholder="Field" />
-                </SelectTrigger>
-                <SelectContent class="bg-[#1a1a1a] border-white/[0.08] light:bg-white light:border-gray-200">
-                  <SelectItem
-                    v-for="field in availableFields"
-                    :key="field"
-                    :value="field"
-                    class="text-white/70 focus:bg-white/[0.08] focus:text-white light:text-gray-700 light:focus:bg-gray-100"
-                  >
-                    {{ field }}
-                  </SelectItem>
-                </SelectContent>
-              </Select>
-              <Select v-model="filter.operator" class="w-32">
-                <SelectTrigger class="bg-white/[0.04] border-white/[0.1] text-white text-sm light:bg-white light:border-gray-300 light:text-gray-900">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent class="bg-[#1a1a1a] border-white/[0.08] light:bg-white light:border-gray-200">
-                  <SelectItem
-                    v-for="op in operators"
-                    :key="op.value"
-                    :value="op.value"
-                    class="text-white/70 focus:bg-white/[0.08] focus:text-white light:text-gray-700 light:focus:bg-gray-100"
-                  >
-                    {{ op.label }}
-                  </SelectItem>
-                </SelectContent>
-              </Select>
+              <div class="flex-1">
+                <Select :model-value="filter.field" @update:model-value="(val) => filter.field = val">
+                  <SelectTrigger class="w-full bg-white/[0.04] border-white/[0.1] text-white text-sm light:bg-white light:border-gray-300 light:text-gray-900">
+                    <SelectValue placeholder="Field" />
+                  </SelectTrigger>
+                  <SelectContent class="bg-[#1a1a1a] border-white/[0.08] light:bg-white light:border-gray-200">
+                    <SelectItem
+                      v-for="field in availableFields"
+                      :key="field"
+                      :value="field"
+                      class="text-white/70 focus:bg-white/[0.08] focus:text-white light:text-gray-700 light:focus:bg-gray-100"
+                    >
+                      {{ field }}
+                    </SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div class="w-36">
+                <Select :model-value="filter.operator" @update:model-value="(val) => filter.operator = val">
+                  <SelectTrigger class="w-full bg-white/[0.04] border-white/[0.1] text-white text-sm light:bg-white light:border-gray-300 light:text-gray-900">
+                    <SelectValue placeholder="Operator" />
+                  </SelectTrigger>
+                  <SelectContent class="bg-[#1a1a1a] border-white/[0.08] light:bg-white light:border-gray-200">
+                    <SelectItem
+                      v-for="op in operators"
+                      :key="op.value"
+                      :value="op.value"
+                      class="text-white/70 focus:bg-white/[0.08] focus:text-white light:text-gray-700 light:focus:bg-gray-100"
+                    >
+                      {{ op.label }}
+                    </SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
               <Input
                 v-model="filter.value"
                 placeholder="Value"
                 class="flex-1 bg-white/[0.04] border-white/[0.1] text-white text-sm placeholder:text-white/30 light:bg-white light:border-gray-300 light:text-gray-900"
               />
-              <Button variant="ghost" size="icon" @click="removeFilter(index)" class="text-white/50 hover:text-red-400">
+              <Button variant="ghost" size="icon" @click="removeFilter(index)" class="text-white/50 hover:text-red-400 shrink-0">
                 <X class="h-4 w-4" />
               </Button>
             </div>
@@ -1025,5 +943,25 @@ onMounted(() => {
         </DialogFooter>
       </DialogContent>
     </Dialog>
+
+    <!-- Delete Confirmation Dialog -->
+    <AlertDialog v-model:open="deleteDialogOpen">
+      <AlertDialogContent class="bg-[#141414] border-white/[0.08] light:bg-white light:border-gray-200">
+        <AlertDialogHeader>
+          <AlertDialogTitle class="text-white light:text-gray-900">Delete Widget</AlertDialogTitle>
+          <AlertDialogDescription class="text-white/60 light:text-gray-500">
+            Are you sure you want to delete "{{ widgetToDelete?.name }}"? This action cannot be undone.
+          </AlertDialogDescription>
+        </AlertDialogHeader>
+        <AlertDialogFooter>
+          <AlertDialogCancel class="bg-transparent border-white/[0.1] text-white/70 hover:bg-white/[0.08] light:border-gray-300 light:text-gray-700 light:hover:bg-gray-100">
+            Cancel
+          </AlertDialogCancel>
+          <AlertDialogAction @click="confirmDeleteWidget" class="bg-red-600 text-white hover:bg-red-700">
+            Delete
+          </AlertDialogAction>
+        </AlertDialogFooter>
+      </AlertDialogContent>
+    </AlertDialog>
   </div>
 </template>

@@ -180,6 +180,13 @@ func RunMigrationWithProgress(db *gorm.DB) error {
 	}
 	currentStep++
 
+	// Seed default dashboard widgets for all organizations
+	printProgress(currentStep, totalSteps)
+	if err := SeedDefaultDashboardWidgets(silentDB); err != nil {
+		fmt.Printf("\n  \033[31m✗ Failed to seed dashboard widgets\033[0m\n\n")
+		return err
+	}
+
 	printProgress(currentStep, totalSteps)
 	fmt.Printf("\n  \033[32m✓ Migration completed\033[0m\n\n")
 
@@ -315,25 +322,25 @@ func CreateIndexes(db *gorm.DB) error {
 // CreateDefaultAdmin creates a default admin user if no users exist
 // This should only be called once during initial setup
 func CreateDefaultAdmin(db *gorm.DB) error {
-	// Check if any users exist
-	var count int64
-	if err := db.Model(&models.User{}).Count(&count).Error; err != nil {
-		return fmt.Errorf("failed to count users: %w", err)
-	}
-
-	// If users already exist, skip creating default admin
-	if count > 0 {
+	// Check if admin@admin.com already exists
+	var existingAdmin models.User
+	if err := db.Where("email = ?", "admin@admin.com").First(&existingAdmin).Error; err == nil {
+		// Admin already exists, skip
 		return nil
 	}
 
-	// Create default organization
-	org := models.Organization{
-		BaseModel: models.BaseModel{ID: uuid.New()},
-		Name:      "Default Organization",
-		Settings:  models.JSONB{},
-	}
-	if err := db.Create(&org).Error; err != nil {
-		return fmt.Errorf("failed to create default organization: %w", err)
+	// Find any existing organization, or create "Default Organization" if none exist
+	var org models.Organization
+	if err := db.First(&org).Error; err != nil {
+		// No organizations exist, create default one
+		org = models.Organization{
+			BaseModel: models.BaseModel{ID: uuid.New()},
+			Name:      "Default Organization",
+			Settings:  models.JSONB{},
+		}
+		if err := db.Create(&org).Error; err != nil {
+			return fmt.Errorf("failed to create default organization: %w", err)
+		}
 	}
 
 	// Hash the default password
@@ -347,7 +354,7 @@ func CreateDefaultAdmin(db *gorm.DB) error {
 		return fmt.Errorf("failed to seed permissions: %w", err)
 	}
 
-	// Seed system roles for this organization
+	// Seed system roles for this organization if not exist
 	if err := SeedSystemRolesForOrg(db, org.ID); err != nil {
 		return fmt.Errorf("failed to seed system roles: %w", err)
 	}
@@ -380,20 +387,18 @@ func CreateDefaultAdmin(db *gorm.DB) error {
 
 // SeedPermissionsAndRoles seeds the default permissions and system roles
 func SeedPermissionsAndRoles(db *gorm.DB) error {
-	// Check if permissions already seeded
-	var permCount int64
-	if err := db.Model(&models.Permission{}).Count(&permCount).Error; err != nil {
-		return fmt.Errorf("failed to count permissions: %w", err)
-	}
+	// Get all default permissions
+	defaultPerms := models.DefaultPermissions()
 
-	// Seed permissions if not exist
-	if permCount == 0 {
-		permissions := models.DefaultPermissions()
-		for i := range permissions {
-			permissions[i].ID = uuid.New()
-		}
-		if err := db.Create(&permissions).Error; err != nil {
-			return fmt.Errorf("failed to seed permissions: %w", err)
+	// Add any missing permissions
+	for _, perm := range defaultPerms {
+		var existing models.Permission
+		if err := db.Where("resource = ? AND action = ?", perm.Resource, perm.Action).First(&existing).Error; err != nil {
+			// Permission doesn't exist, create it
+			perm.ID = uuid.New()
+			if err := db.Create(&perm).Error; err != nil {
+				return fmt.Errorf("failed to create permission %s:%s: %w", perm.Resource, perm.Action, err)
+			}
 		}
 	}
 
@@ -465,7 +470,7 @@ func FixSystemRolePermissions(db *gorm.DB) error {
 		db.Table("role_permissions").Where("custom_role_id = ?", role.ID).Count(&permCount)
 
 		if permCount > 0 {
-			continue // Already has permissions
+			continue // Already has permissions, don't overwrite customizations
 		}
 
 		// Get the permission keys for this role
@@ -626,6 +631,72 @@ func SeedSystemRolesForOrg(db *gorm.DB, orgID uuid.UUID) error {
 
 		if err := db.Create(&role).Error; err != nil {
 			return fmt.Errorf("failed to create %s role: %w", sr.Name, err)
+		}
+	}
+
+	return nil
+}
+
+// SeedDefaultDashboardWidgets creates default dashboard widgets for all organizations
+func SeedDefaultDashboardWidgets(db *gorm.DB) error {
+	// Find the super admin user (admin@admin.com)
+	var superAdmin models.User
+	if err := db.Where("email = ?", "admin@admin.com").First(&superAdmin).Error; err != nil {
+		// No super admin exists yet, skip widget creation
+		return nil
+	}
+
+	// Get all organizations
+	var orgs []models.Organization
+	if err := db.Find(&orgs).Error; err != nil {
+		return fmt.Errorf("failed to fetch organizations: %w", err)
+	}
+
+	// Default widget definitions
+	defaultWidgetsData := []struct {
+		Name         string
+		Description  string
+		DataSource   string
+		Color        string
+		DisplayOrder int
+	}{
+		{"Total Messages", "Total number of messages sent and received", "messages", "blue", 1},
+		{"Active Contacts", "Number of contacts with recent activity", "contacts", "green", 2},
+		{"Chatbot Sessions", "Active chatbot conversation sessions", "sessions", "purple", 3},
+		{"Total Campaigns", "Number of bulk message campaigns", "campaigns", "orange", 4},
+	}
+
+	for _, org := range orgs {
+		// Check if org already has widgets
+		var widgetCount int64
+		if err := db.Model(&models.DashboardWidget{}).Where("organization_id = ?", org.ID).Count(&widgetCount).Error; err != nil {
+			continue
+		}
+
+		// Skip if widgets already exist
+		if widgetCount > 0 {
+			continue
+		}
+
+		// Create default widgets owned by super admin
+		for _, wd := range defaultWidgetsData {
+			widget := models.DashboardWidget{
+				BaseModel:      models.BaseModel{ID: uuid.New()},
+				OrganizationID: org.ID,
+				UserID:         &superAdmin.ID,
+				Name:           wd.Name,
+				Description:    wd.Description,
+				DataSource:     wd.DataSource,
+				Metric:         "count",
+				DisplayType:    "number",
+				ShowChange:     true,
+				Color:          wd.Color,
+				Size:           "small",
+				DisplayOrder:   wd.DisplayOrder,
+				IsShared:       true,
+				IsDefault:      true,
+			}
+			db.Create(&widget)
 		}
 	}
 

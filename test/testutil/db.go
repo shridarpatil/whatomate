@@ -110,6 +110,8 @@ func runMigrations(db *gorm.DB) error {
 		&models.BulkMessageCampaign{},
 		&models.BulkMessageRecipient{},
 		&models.NotificationRule{},
+		// Dashboard
+		&models.DashboardWidget{},
 	)
 }
 
@@ -117,6 +119,8 @@ func runMigrations(db *gorm.DB) error {
 // Uses TRUNCATE CASCADE to handle foreign key constraints properly.
 func cleanupTables(db *gorm.DB) {
 	tables := []string{
+		// Dashboard tables
+		"dashboard_widgets",
 		// Bulk message tables
 		"bulk_message_recipients",
 		"bulk_message_campaigns",
@@ -160,6 +164,7 @@ func cleanupTables(db *gorm.DB) {
 // TruncateTables truncates all tables (PostgreSQL only, faster than DELETE).
 func TruncateTables(db *gorm.DB) {
 	tables := []string{
+		"dashboard_widgets",
 		"bulk_message_recipients",
 		"bulk_message_campaigns",
 		"notification_rules",

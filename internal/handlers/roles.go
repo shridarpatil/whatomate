@@ -175,13 +175,36 @@ func (a *App) UpdateRole(r *fastglue.Request) error {
 	}
 
 	if role.IsSystem {
-		// Only allow description updates for system roles
+		// Check if user is super admin
+		isSuperAdmin, _ := r.RequestCtx.UserValue("is_super_admin").(bool)
+
+		// Only allow description updates for non-super admins
 		if req.Description != "" {
 			role.Description = req.Description
 		}
+
+		// Super admins can update permissions for system roles
+		if isSuperAdmin && len(req.Permissions) > 0 {
+			permissions, err := a.getPermissionsByKeys(req.Permissions)
+			if err != nil {
+				a.Log.Error("Failed to fetch permissions", "error", err)
+				return r.SendErrorEnvelope(fasthttp.StatusInternalServerError, "Failed to update role", nil, "")
+			}
+			if err := a.DB.Model(&role).Association("Permissions").Replace(permissions); err != nil {
+				a.Log.Error("Failed to update role permissions", "error", err)
+				return r.SendErrorEnvelope(fasthttp.StatusInternalServerError, "Failed to update role", nil, "")
+			}
+			role.Permissions = permissions
+		}
+
 		if err := a.DB.Save(&role).Error; err != nil {
 			a.Log.Error("Failed to update role", "error", err)
 			return r.SendErrorEnvelope(fasthttp.StatusInternalServerError, "Failed to update role", nil, "")
+		}
+
+		// Invalidate permissions cache for all users with this role
+		if isSuperAdmin && len(req.Permissions) > 0 {
+			a.InvalidateRolePermissionsCache(role.ID)
 		}
 
 		var userCount int64
