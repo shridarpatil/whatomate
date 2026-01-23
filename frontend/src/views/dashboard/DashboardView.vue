@@ -58,12 +58,36 @@ interface RecentMessage {
   status: string
 }
 
-// Widgets state
+// Default stats from dashboard API (always shown)
+interface DashboardStats {
+  total_messages: number
+  active_contacts: number
+  chatbot_sessions: number
+  total_campaigns: number
+  total_messages_change: number
+  active_contacts_change: number
+  chatbot_sessions_change: number
+  total_campaigns_change: number
+}
+
+const defaultStats = ref<DashboardStats>({
+  total_messages: 0,
+  active_contacts: 0,
+  chatbot_sessions: 0,
+  total_campaigns: 0,
+  total_messages_change: 0,
+  active_contacts_change: 0,
+  chatbot_sessions_change: 0,
+  total_campaigns_change: 0
+})
+
+// Custom widgets state
 const widgets = ref<DashboardWidget[]>([])
 const widgetData = ref<Record<string, WidgetData>>({})
 const recentMessages = ref<RecentMessage[]>([])
 const isLoading = ref(true)
 const isWidgetDataLoading = ref(false)
+const isDefaultStatsLoading = ref(false)
 
 // Widget builder state
 const isWidgetDialogOpen = ref(false)
@@ -304,25 +328,39 @@ const fetchWidgetData = async () => {
   }
 }
 
-const fetchRecentMessages = async () => {
+const fetchDefaultStats = async () => {
+  isDefaultStatsLoading.value = true
   try {
     const { from, to } = getDateRange.value
     const response = await analyticsService.dashboard({ from, to })
     const data = response.data.data || response.data
+    defaultStats.value = {
+      total_messages: data.total_messages || 0,
+      active_contacts: data.active_contacts || 0,
+      chatbot_sessions: data.chatbot_sessions || 0,
+      total_campaigns: data.total_campaigns || 0,
+      total_messages_change: data.total_messages_change || 0,
+      active_contacts_change: data.active_contacts_change || 0,
+      chatbot_sessions_change: data.chatbot_sessions_change || 0,
+      total_campaigns_change: data.total_campaigns_change || 0
+    }
     recentMessages.value = data.recent_messages || []
   } catch (error) {
-    console.error('Failed to load recent messages:', error)
+    console.error('Failed to load dashboard stats:', error)
     recentMessages.value = []
+  } finally {
+    isDefaultStatsLoading.value = false
   }
 }
 
 const fetchDataSources = async () => {
   try {
     const response = await dashboardWidgetsService.getDataSources()
-    dataSources.value = response.data.data_sources || []
-    metrics.value = response.data.metrics || []
-    displayTypes.value = response.data.display_types || []
-    operators.value = response.data.operators || []
+    const data = response.data.data || response.data
+    dataSources.value = data.data_sources || []
+    metrics.value = data.metrics || []
+    displayTypes.value = data.display_types || []
+    operators.value = data.operators || []
   } catch (error) {
     console.error('Failed to load data sources:', error)
   }
@@ -333,7 +371,7 @@ const fetchDashboardData = async () => {
   try {
     await Promise.all([
       fetchWidgets(),
-      fetchRecentMessages(),
+      fetchDefaultStats(),
       fetchDataSources()
     ])
     await fetchWidgetData()
@@ -347,7 +385,7 @@ const applyCustomRange = () => {
     isDatePickerOpen.value = false
     savePreferences()
     fetchWidgetData()
-    fetchRecentMessages()
+    fetchDefaultStats()
   }
 }
 
@@ -455,7 +493,7 @@ watch(selectedRange, (newValue) => {
   savePreferences()
   if (newValue !== 'custom') {
     fetchWidgetData()
-    fetchRecentMessages()
+    fetchDefaultStats()
   }
 })
 
@@ -520,9 +558,9 @@ onMounted(() => {
     <!-- Content -->
     <ScrollArea class="flex-1">
       <div class="p-6 space-y-6">
-        <!-- Custom Widgets -->
+        <!-- Default Stats (always shown) -->
         <div class="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-          <!-- Loading State -->
+          <!-- Loading State for Default Stats -->
           <template v-if="isLoading">
             <div v-for="i in 4" :key="i" class="rounded-xl border border-white/[0.08] bg-white/[0.02] p-6 light:bg-white light:border-gray-200">
               <div class="flex flex-row items-center justify-between space-y-0 pb-2">
@@ -536,21 +574,128 @@ onMounted(() => {
             </div>
           </template>
 
-          <!-- Empty State -->
-          <template v-else-if="widgets.length === 0">
-            <div class="col-span-full rounded-xl border border-dashed border-white/[0.15] bg-white/[0.02] p-12 light:bg-white light:border-gray-300 text-center">
-              <BarChart3 class="h-12 w-12 mx-auto text-white/30 light:text-gray-400 mb-4" />
-              <h3 class="text-lg font-medium text-white light:text-gray-900 mb-2">No widgets yet</h3>
-              <p class="text-sm text-white/50 light:text-gray-500 mb-4">Create custom analytics widgets to track what matters to you</p>
-              <Button @click="openAddWidgetDialog">
-                <Plus class="h-4 w-4 mr-2" />
-                Add Your First Widget
-              </Button>
+          <!-- Default Stat Cards -->
+          <template v-else>
+            <!-- Total Messages -->
+            <div class="card-depth rounded-xl border border-white/[0.08] bg-white/[0.04] p-6 light:bg-white light:border-gray-200">
+              <div class="flex flex-row items-center justify-between space-y-0 pb-2">
+                <span class="text-sm font-medium text-white/50 light:text-gray-500">Total Messages</span>
+                <div class="h-10 w-10 rounded-lg bg-blue-500/20 flex items-center justify-center">
+                  <MessageSquare class="h-5 w-5 text-blue-400" />
+                </div>
+              </div>
+              <div class="pt-2">
+                <div class="text-3xl font-bold text-white light:text-gray-900">
+                  <template v-if="isDefaultStatsLoading">
+                    <Skeleton class="h-8 w-20 bg-white/[0.08] light:bg-gray-200" />
+                  </template>
+                  <template v-else>{{ formatNumber(defaultStats.total_messages) }}</template>
+                </div>
+                <div class="flex items-center text-xs text-white/40 light:text-gray-500 mt-1">
+                  <component
+                    :is="defaultStats.total_messages_change > 0 ? TrendingUp : defaultStats.total_messages_change < 0 ? TrendingDown : Minus"
+                    :class="['h-3 w-3 mr-1', defaultStats.total_messages_change > 0 ? 'text-emerald-400' : defaultStats.total_messages_change < 0 ? 'text-red-400' : 'text-white/30']"
+                  />
+                  <span :class="defaultStats.total_messages_change > 0 ? 'text-emerald-400' : defaultStats.total_messages_change < 0 ? 'text-red-400' : 'text-white/30 light:text-gray-400'">
+                    {{ Math.abs(defaultStats.total_messages_change).toFixed(1) }}%
+                  </span>
+                  <span class="ml-1">{{ comparisonPeriodLabel }}</span>
+                </div>
+              </div>
+            </div>
+
+            <!-- Active Contacts -->
+            <div class="card-depth rounded-xl border border-white/[0.08] bg-white/[0.04] p-6 light:bg-white light:border-gray-200">
+              <div class="flex flex-row items-center justify-between space-y-0 pb-2">
+                <span class="text-sm font-medium text-white/50 light:text-gray-500">Active Contacts</span>
+                <div class="h-10 w-10 rounded-lg bg-emerald-500/20 flex items-center justify-center">
+                  <Users class="h-5 w-5 text-emerald-400" />
+                </div>
+              </div>
+              <div class="pt-2">
+                <div class="text-3xl font-bold text-white light:text-gray-900">
+                  <template v-if="isDefaultStatsLoading">
+                    <Skeleton class="h-8 w-20 bg-white/[0.08] light:bg-gray-200" />
+                  </template>
+                  <template v-else>{{ formatNumber(defaultStats.active_contacts) }}</template>
+                </div>
+                <div class="flex items-center text-xs text-white/40 light:text-gray-500 mt-1">
+                  <component
+                    :is="defaultStats.active_contacts_change > 0 ? TrendingUp : defaultStats.active_contacts_change < 0 ? TrendingDown : Minus"
+                    :class="['h-3 w-3 mr-1', defaultStats.active_contacts_change > 0 ? 'text-emerald-400' : defaultStats.active_contacts_change < 0 ? 'text-red-400' : 'text-white/30']"
+                  />
+                  <span :class="defaultStats.active_contacts_change > 0 ? 'text-emerald-400' : defaultStats.active_contacts_change < 0 ? 'text-red-400' : 'text-white/30 light:text-gray-400'">
+                    {{ Math.abs(defaultStats.active_contacts_change).toFixed(1) }}%
+                  </span>
+                  <span class="ml-1">{{ comparisonPeriodLabel }}</span>
+                </div>
+              </div>
+            </div>
+
+            <!-- Chatbot Sessions -->
+            <div class="card-depth rounded-xl border border-white/[0.08] bg-white/[0.04] p-6 light:bg-white light:border-gray-200">
+              <div class="flex flex-row items-center justify-between space-y-0 pb-2">
+                <span class="text-sm font-medium text-white/50 light:text-gray-500">Chatbot Sessions</span>
+                <div class="h-10 w-10 rounded-lg bg-purple-500/20 flex items-center justify-center">
+                  <Bot class="h-5 w-5 text-purple-400" />
+                </div>
+              </div>
+              <div class="pt-2">
+                <div class="text-3xl font-bold text-white light:text-gray-900">
+                  <template v-if="isDefaultStatsLoading">
+                    <Skeleton class="h-8 w-20 bg-white/[0.08] light:bg-gray-200" />
+                  </template>
+                  <template v-else>{{ formatNumber(defaultStats.chatbot_sessions) }}</template>
+                </div>
+                <div class="flex items-center text-xs text-white/40 light:text-gray-500 mt-1">
+                  <component
+                    :is="defaultStats.chatbot_sessions_change > 0 ? TrendingUp : defaultStats.chatbot_sessions_change < 0 ? TrendingDown : Minus"
+                    :class="['h-3 w-3 mr-1', defaultStats.chatbot_sessions_change > 0 ? 'text-emerald-400' : defaultStats.chatbot_sessions_change < 0 ? 'text-red-400' : 'text-white/30']"
+                  />
+                  <span :class="defaultStats.chatbot_sessions_change > 0 ? 'text-emerald-400' : defaultStats.chatbot_sessions_change < 0 ? 'text-red-400' : 'text-white/30 light:text-gray-400'">
+                    {{ Math.abs(defaultStats.chatbot_sessions_change).toFixed(1) }}%
+                  </span>
+                  <span class="ml-1">{{ comparisonPeriodLabel }}</span>
+                </div>
+              </div>
+            </div>
+
+            <!-- Total Campaigns -->
+            <div class="card-depth rounded-xl border border-white/[0.08] bg-white/[0.04] p-6 light:bg-white light:border-gray-200">
+              <div class="flex flex-row items-center justify-between space-y-0 pb-2">
+                <span class="text-sm font-medium text-white/50 light:text-gray-500">Total Campaigns</span>
+                <div class="h-10 w-10 rounded-lg bg-orange-500/20 flex items-center justify-center">
+                  <Send class="h-5 w-5 text-orange-400" />
+                </div>
+              </div>
+              <div class="pt-2">
+                <div class="text-3xl font-bold text-white light:text-gray-900">
+                  <template v-if="isDefaultStatsLoading">
+                    <Skeleton class="h-8 w-20 bg-white/[0.08] light:bg-gray-200" />
+                  </template>
+                  <template v-else>{{ formatNumber(defaultStats.total_campaigns) }}</template>
+                </div>
+                <div class="flex items-center text-xs text-white/40 light:text-gray-500 mt-1">
+                  <component
+                    :is="defaultStats.total_campaigns_change > 0 ? TrendingUp : defaultStats.total_campaigns_change < 0 ? TrendingDown : Minus"
+                    :class="['h-3 w-3 mr-1', defaultStats.total_campaigns_change > 0 ? 'text-emerald-400' : defaultStats.total_campaigns_change < 0 ? 'text-red-400' : 'text-white/30']"
+                  />
+                  <span :class="defaultStats.total_campaigns_change > 0 ? 'text-emerald-400' : defaultStats.total_campaigns_change < 0 ? 'text-red-400' : 'text-white/30 light:text-gray-400'">
+                    {{ Math.abs(defaultStats.total_campaigns_change).toFixed(1) }}%
+                  </span>
+                  <span class="ml-1">{{ comparisonPeriodLabel }}</span>
+                </div>
+              </div>
             </div>
           </template>
+        </div>
 
-          <!-- Widget Cards -->
-          <template v-else>
+        <!-- Custom Widgets Section -->
+        <div v-if="widgets.length > 0" class="space-y-4">
+          <div class="flex items-center justify-between">
+            <h2 class="text-lg font-semibold text-white light:text-gray-900">Custom Widgets</h2>
+          </div>
+          <div class="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
             <div
               v-for="widget in widgets"
               :key="widget.id"
@@ -611,7 +756,7 @@ onMounted(() => {
                 </div>
               </div>
             </div>
-          </template>
+          </div>
         </div>
 
         <!-- Recent Activity -->
