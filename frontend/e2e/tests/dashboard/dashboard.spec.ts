@@ -10,15 +10,15 @@ test.describe('Dashboard', () => {
 
   test('should display dashboard page', async ({ page }) => {
     await expect(page.locator('h1')).toContainText('Dashboard')
-    await expect(page.locator('text=Overview of your messaging platform')).toBeVisible()
+    await expect(page.getByText('Customizable analytics overview')).toBeVisible()
   })
 
   test('should display stat cards', async ({ page }) => {
-    // Wait for stat cards to load (not skeleton) - use exact text matching to avoid duplicates
+    // Wait for widget cards to load (not skeleton) - use exact text matching to avoid duplicates
     await expect(page.getByText('Total Messages', { exact: true })).toBeVisible({ timeout: 15000 })
-    await expect(page.getByText('Contacts', { exact: true })).toBeVisible()
+    await expect(page.getByText('Active Contacts', { exact: true })).toBeVisible()
     await expect(page.getByText('Chatbot Sessions', { exact: true })).toBeVisible()
-    await expect(page.getByText('Campaigns Sent', { exact: true })).toBeVisible()
+    await expect(page.getByText('Total Campaigns', { exact: true })).toBeVisible()
   })
 
   test('should display time range filter', async ({ page }) => {
@@ -42,8 +42,8 @@ test.describe('Dashboard', () => {
   })
 
   test('should display recent messages section', async ({ page }) => {
-    await expect(page.locator('text=Recent Messages')).toBeVisible()
-    await expect(page.locator('text=Latest conversations from your contacts')).toBeVisible()
+    await expect(page.getByRole('heading', { name: 'Recent Messages' })).toBeVisible()
+    await expect(page.getByText('Latest conversations from your contacts')).toBeVisible()
   })
 
   test('should display quick actions section', async ({ page }) => {
