@@ -21,6 +21,7 @@ type AccountRequest struct {
 	PhoneID            string `json:"phone_id" validate:"required"`
 	BusinessID         string `json:"business_id" validate:"required"`
 	AccessToken        string `json:"access_token" validate:"required"`
+	AppSecret          string `json:"app_secret"` // Meta App Secret for webhook signature verification
 	WebhookVerifyToken string `json:"webhook_verify_token"`
 	APIVersion         string `json:"api_version"`
 	IsDefaultIncoming  bool   `json:"is_default_incoming"`
@@ -42,6 +43,7 @@ type AccountResponse struct {
 	AutoReadReceipt    bool      `json:"auto_read_receipt"`
 	Status             string    `json:"status"`
 	HasAccessToken     bool      `json:"has_access_token"`
+	HasAppSecret       bool      `json:"has_app_secret"`
 	PhoneNumber        string    `json:"phone_number,omitempty"`
 	DisplayName        string    `json:"display_name,omitempty"`
 	CreatedAt          string    `json:"created_at"`
@@ -108,6 +110,7 @@ func (a *App) CreateAccount(r *fastglue.Request) error {
 		PhoneID:            req.PhoneID,
 		BusinessID:         req.BusinessID,
 		AccessToken:        req.AccessToken, // TODO: encrypt before storing
+		AppSecret:          req.AppSecret,   // Meta App Secret for webhook signature verification
 		WebhookVerifyToken: webhookVerifyToken,
 		APIVersion:         apiVersion,
 		IsDefaultIncoming:  req.IsDefaultIncoming,
@@ -198,6 +201,9 @@ func (a *App) UpdateAccount(r *fastglue.Request) error {
 	}
 	if req.AccessToken != "" {
 		account.AccessToken = req.AccessToken // TODO: encrypt
+	}
+	if req.AppSecret != "" {
+		account.AppSecret = req.AppSecret
 	}
 	if req.WebhookVerifyToken != "" {
 		account.WebhookVerifyToken = req.WebhookVerifyToken
@@ -336,6 +342,7 @@ func accountToResponse(acc models.WhatsAppAccount) AccountResponse {
 		AutoReadReceipt:    acc.AutoReadReceipt,
 		Status:             acc.Status,
 		HasAccessToken:     acc.AccessToken != "",
+		HasAppSecret:       acc.AppSecret != "",
 		CreatedAt:          acc.CreatedAt.Format("2006-01-02T15:04:05Z"),
 		UpdatedAt:          acc.UpdatedAt.Format("2006-01-02T15:04:05Z"),
 	}

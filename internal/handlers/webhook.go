@@ -1,6 +1,10 @@
 package handlers
 
 import (
+	"bytes"
+	"crypto/hmac"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"strings"
 
@@ -183,11 +187,17 @@ type WebhookPayload struct {
 
 // WebhookHandler processes incoming webhook events from Meta
 func (a *App) WebhookHandler(r *fastglue.Request) error {
+	body := r.RequestCtx.PostBody()
+	signature := r.RequestCtx.Request.Header.Peek("X-Hub-Signature-256")
+
 	var payload WebhookPayload
-	if err := json.Unmarshal(r.RequestCtx.PostBody(), &payload); err != nil {
+	if err := json.Unmarshal(body, &payload); err != nil {
 		a.Log.Error("Failed to parse webhook payload", "error", err)
 		return r.SendErrorEnvelope(fasthttp.StatusBadRequest, "Invalid payload", nil, "")
 	}
+
+	// Track if signature has been verified (only need to verify once per request)
+	signatureVerified := false
 
 	// Process each entry
 	for _, entry := range payload.Entry {
@@ -209,6 +219,19 @@ func (a *App) WebhookHandler(r *fastglue.Request) error {
 			}
 
 			phoneNumberID := change.Value.Metadata.PhoneNumberID
+
+			// Verify webhook signature on first message processing (uses cached account)
+			if !signatureVerified && len(signature) > 0 && phoneNumberID != "" {
+				account, err := a.getWhatsAppAccountCached(phoneNumberID)
+				if err == nil && account.AppSecret != "" {
+					if !verifyWebhookSignature(body, signature, []byte(account.AppSecret)) {
+						a.Log.Warn("Invalid webhook signature", "phone_id", phoneNumberID)
+						return r.SendErrorEnvelope(fasthttp.StatusForbidden, "Invalid signature", nil, "")
+					}
+					a.Log.Debug("Webhook signature verified successfully")
+				}
+				signatureVerified = true
+			}
 
 			// Process messages
 			for _, msg := range change.Value.Messages {
@@ -420,4 +443,25 @@ func (a *App) processTemplateStatusUpdate(wabaID, event, templateName, templateL
 			)
 		}
 	}
+}
+
+// verifyWebhookSignature verifies the X-Hub-Signature-256 header from Meta.
+// The signature is HMAC-SHA256 of the request body using the App Secret.
+func verifyWebhookSignature(body, signature, appSecret []byte) bool {
+	// Signature format: "sha256=<hex_signature>"
+	prefix := []byte("sha256=")
+	if !bytes.HasPrefix(signature, prefix) {
+		return false
+	}
+
+	expectedSig := bytes.TrimPrefix(signature, prefix)
+
+	// Compute HMAC-SHA256
+	mac := hmac.New(sha256.New, appSecret)
+	mac.Write(body)
+	computedSig := make([]byte, hex.EncodedLen(mac.Size()))
+	hex.Encode(computedSig, mac.Sum(nil))
+
+	// Constant-time comparison to prevent timing attacks
+	return hmac.Equal(expectedSig, computedSig)
 }

@@ -73,6 +73,7 @@ interface WhatsAppAccount {
   auto_read_receipt: boolean
   status: string
   has_access_token: boolean
+  has_app_secret: boolean
   phone_number?: string
   display_name?: string
   created_at: string
@@ -106,6 +107,7 @@ const formData = ref({
   phone_id: '',
   business_id: '',
   access_token: '',
+  app_secret: '',
   webhook_verify_token: '',
   api_version: 'v21.0',
   is_default_incoming: false,
@@ -144,6 +146,7 @@ function openCreateDialog() {
     phone_id: '',
     business_id: '',
     access_token: '',
+    app_secret: '',
     webhook_verify_token: '',
     api_version: 'v21.0',
     is_default_incoming: false,
@@ -161,6 +164,7 @@ function openEditDialog(account: WhatsAppAccount) {
     phone_id: account.phone_id,
     business_id: account.business_id,
     access_token: '', // Don't show existing token
+    app_secret: '', // Don't show existing secret
     webhook_verify_token: account.webhook_verify_token,
     api_version: account.api_version,
     is_default_incoming: account.is_default_incoming,
@@ -184,9 +188,12 @@ async function saveAccount() {
   isSubmitting.value = true
   try {
     const payload = { ...formData.value }
-    // Don't send empty access token when editing
+    // Don't send empty access token or app secret when editing
     if (editingAccount.value && !payload.access_token) {
       delete (payload as any).access_token
+    }
+    if (editingAccount.value && !payload.app_secret) {
+      delete (payload as any).app_secret
     }
 
     if (editingAccount.value) {
@@ -418,6 +425,15 @@ const webhookUrl = window.location.origin + basePath + '/api/webhook'
                         {{ account.has_access_token ? 'Configured' : 'Missing' }}
                       </Badge>
                     </div>
+                    <div class="flex items-center gap-2">
+                      <span class="text-white/50 light:text-gray-500">App Secret:</span>
+                      <Badge
+                        variant="outline"
+                        :class="account.has_app_secret ? 'border-green-600 text-green-600' : 'border-yellow-600 text-yellow-600'"
+                      >
+                        {{ account.has_app_secret ? 'Configured' : 'Not Set' }}
+                      </Badge>
+                    </div>
                   </div>
 
                   <!-- Defaults -->
@@ -595,6 +611,22 @@ const webhookUrl = window.location.origin + basePath + '/api/webhook'
             />
             <p class="text-xs text-muted-foreground">
               Generate in Business Settings &gt; System Users &gt; Generate Token
+            </p>
+          </div>
+
+          <div class="space-y-2">
+            <Label for="app_secret">
+              App Secret
+              <span v-if="editingAccount" class="text-muted-foreground">(leave blank to keep existing)</span>
+            </Label>
+            <Input
+              id="app_secret"
+              v-model="formData.app_secret"
+              type="password"
+              placeholder="Meta App Secret for webhook verification"
+            />
+            <p class="text-xs text-muted-foreground">
+              Found in Meta Developer Console &gt; App Settings &gt; Basic &gt; App Secret. Used to verify webhook signatures.
             </p>
           </div>
 

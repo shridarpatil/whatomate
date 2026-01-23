@@ -204,10 +204,11 @@ func (a *App) deleteKeysByPattern(ctx context.Context, pattern string) {
 	}
 }
 
-// whatsAppAccountCache is used for caching since AccessToken has json:"-" tag
+// whatsAppAccountCache is used for caching since AccessToken and AppSecret have json:"-" tag
 type whatsAppAccountCache struct {
 	models.WhatsAppAccount
 	AccessToken string `json:"access_token"`
+	AppSecret   string `json:"app_secret"`
 }
 
 // getWhatsAppAccountCached retrieves WhatsApp account by phone_id from cache or database
@@ -221,6 +222,7 @@ func (a *App) getWhatsAppAccountCached(phoneID string) (*models.WhatsAppAccount,
 		var cacheData whatsAppAccountCache
 		if err := json.Unmarshal([]byte(cached), &cacheData); err == nil {
 			cacheData.WhatsAppAccount.AccessToken = cacheData.AccessToken
+			cacheData.WhatsAppAccount.AppSecret = cacheData.AppSecret
 			return &cacheData.WhatsAppAccount, nil
 		}
 	}
@@ -231,10 +233,11 @@ func (a *App) getWhatsAppAccountCached(phoneID string) (*models.WhatsAppAccount,
 		return nil, err
 	}
 
-	// Cache the result (include AccessToken explicitly)
+	// Cache the result (include AccessToken and AppSecret explicitly since they have json:"-")
 	cacheData := whatsAppAccountCache{
 		WhatsAppAccount: account,
 		AccessToken:     account.AccessToken,
+		AppSecret:       account.AppSecret,
 	}
 	if data, err := json.Marshal(cacheData); err == nil {
 		a.Redis.Set(ctx, cacheKey, data, whatsappAccountCacheTTL)
