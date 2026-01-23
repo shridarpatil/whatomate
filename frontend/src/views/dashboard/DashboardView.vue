@@ -302,9 +302,7 @@ const availableFields = computed(() => {
 const fetchWidgets = async () => {
   try {
     const response = await dashboardWidgetsService.list()
-    console.log('Widgets response:', response.data)
     widgets.value = response.data.data?.widgets || []
-    console.log('Loaded widgets:', widgets.value)
   } catch (error) {
     console.error('Failed to load widgets:', error)
     widgets.value = []
@@ -318,9 +316,7 @@ const fetchWidgetData = async () => {
   try {
     const { from, to } = getDateRange.value
     const response = await dashboardWidgetsService.getAllData({ from, to })
-    console.log('Widget data response:', response.data)
     widgetData.value = response.data.data?.data || {}
-    console.log('Loaded widget data:', widgetData.value)
   } catch (error) {
     console.error('Failed to load widget data:', error)
     widgetData.value = {}
@@ -344,14 +340,11 @@ const fetchRecentMessages = async () => {
 const fetchDataSources = async () => {
   try {
     const response = await dashboardWidgetsService.getDataSources()
-    console.log('Data sources response:', response.data)
     const data = response.data.data || response.data
     dataSources.value = data.data_sources || []
     metrics.value = data.metrics || []
     displayTypes.value = data.display_types || []
     operators.value = data.operators || []
-    console.log('Available data sources:', dataSources.value)
-    console.log('Available operators:', operators.value)
   } catch (error) {
     console.error('Failed to load data sources:', error)
   }
@@ -382,9 +375,6 @@ const applyCustomRange = () => {
 
 // Widget CRUD
 const openAddWidgetDialog = () => {
-  console.log('Opening add widget dialog')
-  console.log('Available dataSources:', dataSources.value)
-  console.log('Available operators:', operators.value)
   isEditMode.value = false
   editingWidgetId.value = null
   widgetForm.value = {
@@ -425,10 +415,7 @@ const openEditWidgetDialog = (widget: DashboardWidget) => {
 }
 
 const addFilter = () => {
-  console.log('addFilter called, data_source:', widgetForm.value.data_source)
-  console.log('Current filters:', widgetForm.value.filters)
   widgetForm.value.filters.push({ field: '', operator: 'equals', value: '' })
-  console.log('After push, filters:', widgetForm.value.filters)
 }
 
 const removeFilter = (index: number) => {
@@ -463,25 +450,19 @@ const saveWidget = async () => {
     is_shared: widgetForm.value.is_shared
   }
 
-  console.log('Saving widget with payload:', payload)
-
   isSavingWidget.value = true
   try {
     if (isEditMode.value && editingWidgetId.value) {
-      const response = await dashboardWidgetsService.update(editingWidgetId.value, payload)
-      console.log('Update response:', response)
+      await dashboardWidgetsService.update(editingWidgetId.value, payload)
       toast({ title: 'Widget updated successfully' })
     } else {
-      const response = await dashboardWidgetsService.create(payload)
-      console.log('Create response:', response)
+      await dashboardWidgetsService.create(payload)
       toast({ title: 'Widget created successfully' })
     }
     isWidgetDialogOpen.value = false
     await fetchWidgets()
     await fetchWidgetData()
   } catch (error: any) {
-    console.error('Save widget error:', error)
-    console.error('Error response:', error.response?.data)
     toast({
       title: 'Error',
       description: error.response?.data?.message || 'Failed to save widget',
@@ -523,12 +504,6 @@ watch(selectedRange, (newValue) => {
     fetchWidgetData()
     fetchRecentMessages()
   }
-})
-
-// Debug: Watch for data source changes
-watch(() => widgetForm.value.data_source, (newValue) => {
-  console.log('Data source changed to:', newValue)
-  console.log('Available fields for this source:', availableFields.value)
 })
 
 onMounted(() => {
@@ -820,7 +795,7 @@ onMounted(() => {
           <!-- Data Source -->
           <div class="space-y-2">
             <Label class="text-white/70 light:text-gray-700">Data Source *</Label>
-            <Select :model-value="widgetForm.data_source" @update:model-value="(val) => { console.log('Data source selected:', val); widgetForm.data_source = val }">
+            <Select :model-value="widgetForm.data_source" @update:model-value="(val) => widgetForm.data_source = val">
               <SelectTrigger class="bg-white/[0.04] border-white/[0.1] text-white light:bg-white light:border-gray-300 light:text-gray-900">
                 <SelectValue placeholder="Select data source" />
               </SelectTrigger>
