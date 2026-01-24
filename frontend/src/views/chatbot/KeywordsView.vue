@@ -487,12 +487,18 @@ const filteredRules = computed(() => {
           <p class="text-lg font-medium text-white light:text-gray-900">No matching rules</p>
           <p class="text-sm">No keyword rules match "{{ searchQuery }}"</p>
         </div>
-        <div v-else-if="rules.length === 0" class="text-center py-12 text-white/50 light:text-gray-500">
-          <div class="h-16 w-16 rounded-xl bg-blue-500/20 flex items-center justify-center mx-auto mb-4">
-            <Key class="h-8 w-8 text-blue-400" />
+        <div v-else-if="rules.length === 0" class="rounded-xl border border-white/[0.08] bg-white/[0.02] light:bg-white light:border-gray-200">
+          <div class="py-12 text-center text-white/50 light:text-gray-500">
+            <div class="h-16 w-16 rounded-xl bg-gradient-to-br from-blue-500 to-cyan-600 flex items-center justify-center mx-auto mb-4 shadow-lg shadow-blue-500/20">
+              <Key class="h-8 w-8 text-white" />
+            </div>
+            <p class="text-lg font-medium text-white light:text-gray-900">No keyword rules yet</p>
+            <p class="text-sm mb-4">Create your first keyword rule to get started.</p>
+            <Button variant="outline" size="sm" @click="openCreateDialog">
+              <Plus class="h-4 w-4 mr-2" />
+              Create Rule
+            </Button>
           </div>
-          <p class="text-lg font-medium text-white light:text-gray-900">No keyword rules yet</p>
-          <p class="text-sm">Create your first keyword rule to get started.</p>
         </div>
         </template>
       </div>
