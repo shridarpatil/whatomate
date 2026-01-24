@@ -1,7 +1,6 @@
 <script setup lang="ts">
 import { ref, onMounted, computed, watch } from 'vue'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
-import { Badge } from '@/components/ui/badge'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Button } from '@/components/ui/button'
@@ -14,14 +13,6 @@ import {
   SelectTrigger,
   SelectValue
 } from '@/components/ui/select'
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow
-} from '@/components/ui/table'
 import { agentAnalyticsService, usersService } from '@/services/api'
 import { useAuthStore } from '@/stores/auth'
 import {
@@ -33,13 +24,9 @@ import {
   CommandList
 } from '@/components/ui/command'
 import {
-  Users,
   Clock,
   CheckCircle,
   MessageSquare,
-  TrendingUp,
-  TrendingDown,
-  Minus,
   CalendarIcon,
   BarChart3,
   Activity,
@@ -437,13 +424,14 @@ const comparisonChartOptions = {
   }
 }
 
-// Stats to display based on role
-const displayStats = computed(() => {
+// Stats to display based on role (reserved for future use)
+const _displayStats = computed(() => {
   if (isAdminOrManager.value) {
     return analytics.value?.summary
   }
   return analytics.value?.my_stats
 })
+void _displayStats // Suppress unused warning
 </script>
 
 <template>

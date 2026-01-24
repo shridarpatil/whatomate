@@ -9,7 +9,7 @@ import {
   CollapsibleContent,
   CollapsibleTrigger,
 } from '@/components/ui/collapsible'
-import { X, ChevronDown, ChevronRight, Phone, User } from 'lucide-vue-next'
+import { X, ChevronDown, Phone, User } from 'lucide-vue-next'
 import { getInitials } from '@/lib/utils'
 import type { Contact } from '@/stores/contacts'
 
@@ -185,7 +185,7 @@ const contactTags = computed(() => {
         <div class="flex flex-col items-center text-center pb-4 border-b">
           <Avatar class="h-16 w-16 mb-3">
             <AvatarImage :src="contact.avatar_url" />
-            <AvatarFallback :class="['text-lg bg-gradient-to-br text-white', getAvatarGradient(contact.name || contact.phone_number)]">
+            <AvatarFallback :class="'text-lg bg-gradient-to-br text-white ' + getAvatarGradient(contact.name || contact.phone_number)">
               {{ getInitials(contact.name || contact.phone_number) }}
             </AvatarFallback>
           </Avatar>

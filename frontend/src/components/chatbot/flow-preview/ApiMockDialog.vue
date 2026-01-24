@@ -200,8 +200,7 @@ function handleSubmit() {
           </div>
           <Textarea
             v-model="responseBody"
-            class="font-mono text-sm min-h-[150px]"
-            :class="{ 'border-red-500': parseError }"
+            :class="'font-mono text-sm min-h-[150px]' + (parseError ? ' border-red-500' : '')"
             placeholder='{"key": "value"}'
           />
         </div>

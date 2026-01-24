@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { ref, computed, onMounted, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { Card, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -162,7 +162,7 @@ const maxPanelWidth = 500
 const minStepsPanelWidth = 200
 const maxStepsPanelWidth = 400
 
-function startResizeRight(e: MouseEvent) {
+function startResizeRight(_e: MouseEvent) {
   isResizingRight.value = true
   document.addEventListener('mousemove', handleResizeRight)
   document.addEventListener('mouseup', stopResizeRight)
@@ -184,7 +184,7 @@ function stopResizeRight() {
   document.body.style.userSelect = ''
 }
 
-function startResizeLeft(e: MouseEvent) {
+function startResizeLeft(_e: MouseEvent) {
   isResizingLeft.value = true
   document.addEventListener('mousemove', handleResizeLeft)
   document.addEventListener('mouseup', stopResizeLeft)
@@ -400,7 +400,7 @@ async function fetchWhatsAppFlows() {
 async function fetchTeams() {
   try {
     const response = await teamsService.list()
-    const data = response.data.data || response.data
+    const data = (response.data as any).data || response.data
     teams.value = (data.teams || []).filter((t: Team) => t.is_active)
   } catch (error) {
     console.error('Failed to load teams:', error)
@@ -1110,7 +1110,7 @@ function confirmCancel() {
                           <Plus class="h-3 w-3" />
                         </Button>
                       </div>
-                      <div v-for="(value, key) in formData.completion_config.headers" :key="key" class="flex gap-1">
+                      <div v-for="(_value, key) in formData.completion_config.headers" :key="key" class="flex gap-1">
                         <Input
                           :model-value="key"
                           placeholder="Key"
@@ -1440,7 +1440,7 @@ function confirmCancel() {
                           <Plus class="h-3 w-3" />
                         </Button>
                       </div>
-                      <div v-for="(value, key) in selectedStep.api_config.headers" :key="key" class="flex gap-1">
+                      <div v-for="(_value, key) in selectedStep.api_config.headers" :key="key" class="flex gap-1">
                         <Input
                           :model-value="key"
                           placeholder="Key"
@@ -1472,7 +1472,7 @@ function confirmCancel() {
                           <Plus class="h-3 w-3" />
                         </Button>
                       </div>
-                      <div v-for="(value, key) in selectedStep.api_config.response_mapping" :key="key" class="flex gap-1 items-center">
+                      <div v-for="(_value, key) in selectedStep.api_config.response_mapping" :key="key" class="flex gap-1 items-center">
                         <Input
                           :model-value="key"
                           placeholder="Variable"

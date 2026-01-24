@@ -70,7 +70,7 @@ export const useRolesStore = defineStore('roles', () => {
     error.value = null
     try {
       const response = await rolesService.list()
-      roles.value = response.data.data.roles || []
+      roles.value = (response.data as any).data?.roles || response.data?.roles || []
     } catch (err: any) {
       error.value = err.response?.data?.message || 'Failed to fetch roles'
       throw err
@@ -82,7 +82,7 @@ export const useRolesStore = defineStore('roles', () => {
   async function fetchPermissions(): Promise<void> {
     try {
       const response = await permissionsService.list()
-      permissions.value = response.data.data.permissions || []
+      permissions.value = (response.data as any).data?.permissions || response.data?.permissions || []
     } catch (err: any) {
       error.value = err.response?.data?.message || 'Failed to fetch permissions'
       throw err
@@ -94,7 +94,7 @@ export const useRolesStore = defineStore('roles', () => {
     error.value = null
     try {
       const response = await rolesService.create(data)
-      const newRole = response.data.data
+      const newRole = (response.data as any).data || response.data
       roles.value.unshift(newRole)
       return newRole
     } catch (err: any) {
@@ -110,7 +110,7 @@ export const useRolesStore = defineStore('roles', () => {
     error.value = null
     try {
       const response = await rolesService.update(id, data)
-      const updatedRole = response.data.data
+      const updatedRole = (response.data as any).data || response.data
       const index = roles.value.findIndex(r => r.id === id)
       if (index !== -1) {
         roles.value[index] = updatedRole

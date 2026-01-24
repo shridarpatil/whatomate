@@ -262,7 +262,7 @@ function getFirstAccessibleRoute(authStore: ReturnType<typeof useAuthStore>): st
 }
 
 // Navigation guard
-router.beforeEach(async (to, from, next) => {
+router.beforeEach(async (to, _from, next) => {
   const authStore = useAuthStore()
 
   // Check if route requires auth

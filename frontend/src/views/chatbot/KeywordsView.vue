@@ -1,6 +1,5 @@
 <script setup lang="ts">
 import { ref, onMounted, computed } from 'vue'
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -79,8 +78,8 @@ const ruleToDelete = ref<KeywordRule | null>(null)
 
 const formData = ref({
   keywords: '',
-  match_type: 'contains' as const,
-  response_type: 'text' as const,
+  match_type: 'contains' as 'exact' | 'contains' | 'regex',
+  response_type: 'text' as 'template' | 'text' | 'flow' | 'transfer',
   response_content: '',
   buttons: [] as ButtonItem[],
   priority: 0,
@@ -211,7 +210,7 @@ async function confirmDeleteRule() {
   }
 }
 
-async function toggleRule(rule: KeywordRule) {
+async function _toggleRule(rule: KeywordRule) {
   try {
     await chatbotService.updateKeyword(rule.id, { enabled: !rule.enabled })
     rule.enabled = !rule.enabled
@@ -220,6 +219,7 @@ async function toggleRule(rule: KeywordRule) {
     toast.error('Failed to toggle rule')
   }
 }
+void _toggleRule // Reserved for future use
 
 const filteredRules = computed(() => {
   if (!searchQuery.value) return rules.value

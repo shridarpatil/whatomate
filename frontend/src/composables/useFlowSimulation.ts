@@ -1,11 +1,9 @@
-import { ref, reactive, computed, type Ref } from 'vue'
+import { reactive, computed, type Ref } from 'vue'
 import type {
   FlowStep,
   FlowData,
   SimulationState,
   SimulationMessage,
-  SimulationStatus,
-  ExecutionLogEntry,
   ExecutionLogType,
   ButtonConfig,
   UserInput

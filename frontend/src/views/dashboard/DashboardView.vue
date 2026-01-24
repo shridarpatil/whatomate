@@ -302,7 +302,7 @@ const availableFields = computed(() => {
 const fetchWidgets = async () => {
   try {
     const response = await dashboardWidgetsService.list()
-    widgets.value = response.data.data?.widgets || []
+    widgets.value = (response.data as any).data?.widgets || []
   } catch (error) {
     console.error('Failed to load widgets:', error)
     widgets.value = []
@@ -316,7 +316,7 @@ const fetchWidgetData = async () => {
   try {
     const { from, to } = getDateRange.value
     const response = await dashboardWidgetsService.getAllData({ from, to })
-    widgetData.value = response.data.data?.data || {}
+    widgetData.value = (response.data as any).data?.data || {}
   } catch (error) {
     console.error('Failed to load widget data:', error)
     widgetData.value = {}
@@ -340,7 +340,7 @@ const fetchRecentMessages = async () => {
 const fetchDataSources = async () => {
   try {
     const response = await dashboardWidgetsService.getDataSources()
-    const data = response.data.data || response.data
+    const data = (response.data as any).data || response.data
     dataSources.value = data.data_sources || []
     metrics.value = data.metrics || []
     displayTypes.value = data.display_types || []

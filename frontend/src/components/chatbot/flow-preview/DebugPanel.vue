@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed } from 'vue'
-import type { SimulationState, FlowStep, ExecutionLogEntry } from '@/types/flow-preview'
+import type { SimulationState, FlowStep } from '@/types/flow-preview'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { Button } from '@/components/ui/button'
 import {

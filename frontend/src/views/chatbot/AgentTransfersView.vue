@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
+import { ref, computed, onMounted, watch } from 'vue'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -35,7 +35,7 @@ import {
   TooltipTrigger,
 } from '@/components/ui/tooltip'
 import { chatbotService, usersService, teamsService, type Team } from '@/services/api'
-import { useTransfersStore, type AgentTransfer, getSLAStatus, type SLAStatus } from '@/stores/transfers'
+import { useTransfersStore, type AgentTransfer, getSLAStatus } from '@/stores/transfers'
 import { useAuthStore } from '@/stores/auth'
 import { toast } from 'vue-sonner'
 import { useRouter } from 'vue-router'
@@ -161,7 +161,7 @@ async function fetchAgents() {
 async function fetchTeams() {
   try {
     const response = await teamsService.list()
-    const data = response.data.data || response.data
+    const data = (response.data as any).data || response.data
     teams.value = (data.teams || []).filter((t: Team) => t.is_active)
   } catch {
     teams.value = []

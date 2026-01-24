@@ -194,12 +194,9 @@ const handleLogout = () => {
           <div class="flex items-center gap-2">
             <span class="text-[13px] text-white/70 light:text-gray-700">Status</span>
             <Badge
-              :class="[
-                'text-[10px] px-1.5 py-0',
-                authStore.isAvailable
+              :class="'text-[10px] px-1.5 py-0 ' + (authStore.isAvailable
                   ? 'bg-emerald-500/20 text-emerald-400 light:bg-emerald-100 light:text-emerald-700'
-                  : 'bg-white/[0.08] text-white/50 light:bg-gray-100 light:text-gray-500'
-              ]"
+                  : 'bg-white/[0.08] text-white/50 light:bg-gray-100 light:text-gray-500')"
             >
               {{ authStore.isAvailable ? 'Available' : 'Away' }}
             </Badge>

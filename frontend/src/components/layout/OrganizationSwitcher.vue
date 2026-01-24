@@ -45,7 +45,8 @@ watch(() => authStore.user?.is_super_admin, async (isSuperAdmin) => {
   }
 })
 
-const handleOrgChange = (value: string) => {
+const handleOrgChange = (value: string | number | boolean | Record<string, string> | null) => {
+  if (!value || typeof value !== 'string') return
   organizationsStore.selectOrganization(value)
   // Reload the page to refresh data with new org context
   window.location.reload()

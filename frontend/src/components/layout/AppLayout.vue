@@ -45,7 +45,7 @@ const navigation = computed(() => {
       )
 
       let effectivePath = item.path
-      if (item.childPermissions && !authStore.hasPermission(item.permission, 'read') && filteredChildren?.length) {
+      if (item.childPermissions && item.permission && !authStore.hasPermission(item.permission, 'read') && filteredChildren?.length) {
         effectivePath = filteredChildren[0].path
       }
 

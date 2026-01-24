@@ -28,7 +28,7 @@ export const useOrganizationsStore = defineStore('organizations', () => {
     error.value = null
     try {
       const response = await organizationsService.list()
-      organizations.value = response.data.data?.organizations || []
+      organizations.value = (response.data as any).data?.organizations || response.data?.organizations || []
     } catch (err: any) {
       error.value = err.response?.data?.message || 'Failed to fetch organizations'
       organizations.value = []

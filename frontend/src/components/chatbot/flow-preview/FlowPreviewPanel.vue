@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { ref, computed, watch } from 'vue'
-import type { FlowStep, FlowData, ButtonConfig } from '@/types/flow-preview'
+import type { FlowStep, FlowData } from '@/types/flow-preview'
 import { Button } from '@/components/ui/button'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import InteractivePreview from './InteractivePreview.vue'
@@ -10,7 +10,6 @@ import {
   Globe,
   MessageCircle,
   Users,
-  Eye,
   Edit3,
   ExternalLink,
   Play
@@ -46,10 +45,6 @@ const messageTypeIcons: Record<string, any> = {
   api_fetch: Globe,
   whatsapp_flow: MessageCircle,
   transfer: Users
-}
-
-function getMessageTypeIcon(type: string) {
-  return messageTypeIcons[type] || MessageSquare
 }
 
 function handleSelectMessageType(type: string) {
@@ -225,7 +220,7 @@ const localListPickerOpen = computed({
                   <div v-if="selectedStep.message_type === 'transfer'" class="flex justify-center">
                     <div class="bg-amber-100 dark:bg-amber-900/30 text-xs text-amber-700 dark:text-amber-400 px-3 py-1.5 rounded-lg flex items-center gap-1.5">
                       <Users class="h-3 w-3" />
-                      <span>Conversation transferred to {{ selectedStep.transfer_config?.team_id === '_general' ? 'General Queue' : teams.find(t => t.id === selectedStep.transfer_config?.team_id)?.name || 'Team' }}</span>
+                      <span>Conversation transferred to {{ selectedStep?.transfer_config?.team_id === '_general' ? 'General Queue' : teams.find(t => t.id === selectedStep?.transfer_config?.team_id)?.name || 'Team' }}</span>
                     </div>
                   </div>
 

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, onMounted, computed } from 'vue'
+import { ref, onMounted } from 'vue'
 import { customActionsService, type CustomAction } from '@/services/api'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -59,7 +59,6 @@ import {
   Globe,
   Webhook,
   Code,
-  GripVertical,
   Ticket,
   User,
   BarChart,

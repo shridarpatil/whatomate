@@ -11,8 +11,9 @@ const props = defineProps<{
 
 <template>
   <AvatarImagePrimitive
+    v-if="src"
     :src="src"
-    :alt="alt"
+    :alt="alt || ''"
     :class="cn('aspect-square h-full w-full', props.class)"
   />
 </template>

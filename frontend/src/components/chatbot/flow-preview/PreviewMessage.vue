@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import type { SimulationMessage } from '@/types/flow-preview'
-import { AlertCircle, Bug, Info } from 'lucide-vue-next'
+import { Bug, Info } from 'lucide-vue-next'
 
 const props = defineProps<{
   message: SimulationMessage

@@ -14,7 +14,6 @@ import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import { Badge } from '@/components/ui/badge'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { Separator } from '@/components/ui/separator'
-import { Skeleton } from '@/components/ui/skeleton'
 import {
   Tooltip,
   TooltipContent,
@@ -47,7 +46,6 @@ import {
   Search,
   Send,
   Paperclip,
-  Image,
   FileText,
   Smile,
   MoreVertical,
@@ -76,7 +74,7 @@ import {
   Code,
   RotateCw
 } from 'lucide-vue-next'
-import { formatTime, getInitials, truncate } from '@/lib/utils'
+import { getInitials } from '@/lib/utils'
 import { useColorMode } from '@/composables/useColorMode'
 import CannedResponsePicker from '@/components/chat/CannedResponsePicker.vue'
 import ContactInfoPanel from '@/components/chat/ContactInfoPanel.vue'
@@ -207,7 +205,7 @@ function getActionIcon(iconName: string) {
 async function fetchCustomActions() {
   try {
     const response = await customActionsService.list()
-    const data = response.data.data || response.data
+    const data = (response.data as any).data || response.data
     customActions.value = (data.custom_actions || []).filter((a: CustomAction) => a.is_active)
   } catch (error) {
     // Silently fail - custom actions are optional
@@ -221,7 +219,7 @@ async function executeCustomAction(action: CustomAction) {
   executingActionId.value = action.id
   try {
     const response = await customActionsService.execute(action.id, contactsStore.currentContact.id)
-    let result: ActionResult = response.data.data || response.data
+    let result: ActionResult = (response.data as any).data || response.data
 
     // Handle JavaScript action - execute code in frontend
     if (result.data?.code && result.data?.context) {
@@ -554,9 +552,9 @@ async function retryMessage(message: Message) {
     )
 
     // Remove the failed message from the list after successful retry
-    const messages = contactsStore.messages.get(contactsStore.currentContact.id)
+    const messages = contactsStore.messages.get(contactsStore.currentContact.id) as Message[] | undefined
     if (messages) {
-      const index = messages.findIndex(m => m.id === message.id)
+      const index = messages.findIndex((m: Message) => m.id === message.id)
       if (index !== -1) {
         messages.splice(index, 1)
       }
@@ -595,7 +593,7 @@ function getReplyPreviewContent(message: Message): string {
     return body.length > 50 ? body.substring(0, 50) + '...' : body
   }
   if (reply.message_type === 'interactive') {
-    const body = typeof reply.content === 'string' ? reply.content : (reply.interactive_data?.body || reply.content?.body || '')
+    const body = typeof reply.content === 'string' ? reply.content : ((reply as any).interactive_data?.body || reply.content?.body || '')
     return body.length > 50 ? body.substring(0, 50) + '...' : body
   }
   if (reply.message_type === 'template') {
@@ -660,13 +658,14 @@ async function sendReaction(messageId: string, emoji: string) {
   reactionPickerMessageId.value = null
 }
 
-function toggleReactionPicker(messageId: string) {
+function _toggleReactionPicker(messageId: string) {
   if (reactionPickerMessageId.value === messageId) {
     reactionPickerMessageId.value = null
   } else {
     reactionPickerMessageId.value = messageId
   }
 }
+void _toggleReactionPicker // Suppress unused warning
 
 function replyToMessage(message: Message) {
   contactsStore.setReplyingTo(message)
@@ -714,7 +713,7 @@ async function transferToAgent() {
   try {
     await chatbotService.createTransfer({
       contact_id: contactsStore.currentContact.id,
-      whatsapp_account: contactsStore.currentContact.whatsapp_account,
+      whatsapp_account: (contactsStore.currentContact as any).whatsapp_account,
       source: 'manual'
     })
     toast.success('Contact transferred to agent queue', {
@@ -969,8 +968,8 @@ function getCTAUrlData(message: Message): CTAUrlData | null {
   return {
     type: 'cta_url',
     body: message.interactive_data.body || '',
-    button_text: message.interactive_data.button_text || 'Open',
-    url: message.interactive_data.url || ''
+    button_text: (message.interactive_data as any).button_text || 'Open',
+    url: (message.interactive_data as any).url || ''
   }
 }
 
@@ -1201,7 +1200,7 @@ async function sendMediaMessage() {
           >
             <Avatar class="h-9 w-9 ring-2 ring-white/[0.1] light:ring-gray-200">
               <AvatarImage :src="contact.avatar_url" />
-              <AvatarFallback :class="['text-xs bg-gradient-to-br text-white', getAvatarGradient(contact.name || contact.phone_number)]">
+              <AvatarFallback :class="'text-xs bg-gradient-to-br text-white ' + getAvatarGradient(contact.name || contact.phone_number)">
                 {{ getInitials(contact.name || contact.phone_number) }}
               </AvatarFallback>
             </Avatar>
