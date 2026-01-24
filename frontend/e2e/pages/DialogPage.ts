@@ -1,6 +1,11 @@
 import { Page, Locator, expect } from '@playwright/test'
 import { BasePage } from './BasePage'
 
+// Escape special characters in CSS selectors (backslashes must be escaped first)
+function escapeCssSelector(id: string): string {
+  return id.replace(/\\/g, '\\\\').replace(/\./g, '\\.')
+}
+
 export class DialogPage extends BasePage {
   readonly dialog: Locator
   readonly cancelButton: Locator
@@ -100,7 +105,7 @@ export class DialogPage extends BasePage {
     if (labelFor) {
       // Checkbox has id matching label's for attribute
       // Need to escape dots in ID for CSS selector
-      const escapedId = labelFor.replace(/\./g, '\\.')
+      const escapedId = escapeCssSelector(labelFor)
       checkbox = this.dialog.locator(`#${escapedId}`)
     } else {
       // Checkbox is sibling of label in same container
@@ -120,7 +125,7 @@ export class DialogPage extends BasePage {
 
     let checkbox: Locator
     if (labelFor) {
-      const escapedId = labelFor.replace(/\./g, '\\.')
+      const escapedId = escapeCssSelector(labelFor)
       checkbox = this.dialog.locator(`#${escapedId}`)
     } else {
       checkbox = labelLocator.locator('..').locator('button[role="checkbox"], input[type="checkbox"]')
