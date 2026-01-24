@@ -137,11 +137,6 @@ async function fetchProviders() {
   }
 }
 
-function getProviderConfig(provider: SSOProvider): SSOProvider & ProviderConfig {
-  const config = providerConfigs[provider.provider] || providerConfigs.custom
-  return { ...provider, ...config }
-}
-
 function openEditDialog(providerKey: string) {
   editingProvider.value = providerKey
   const existing = providers.value.find(p => p.provider === providerKey)
@@ -271,8 +266,7 @@ onMounted(() => {
           <Card
             v-for="(config, key) in providerConfigs"
             :key="key"
-            class="relative overflow-hidden transition-all hover:shadow-md"
-            :class="{ 'ring-2 ring-primary': getConfiguredProvider(key)?.is_enabled }"
+            :class="'relative overflow-hidden transition-all hover:shadow-md' + (getConfiguredProvider(key)?.is_enabled ? ' ring-2 ring-primary' : '')"
           >
             <CardHeader class="pb-3">
               <div class="flex items-start justify-between">

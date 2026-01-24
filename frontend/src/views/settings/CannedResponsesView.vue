@@ -333,7 +333,7 @@ function getCategoryLabel(category: string): string {
             <Textarea
               v-model="formData.content"
               placeholder="Hello {{contact_name}}! Thank you for reaching out. How can I help you today?"
-              rows="5"
+              :rows="5"
             />
             <p class="text-xs text-muted-foreground">
               Placeholders: <code class="bg-muted px-1 rounded" v-pre>{{contact_name}}</code> for name, <code class="bg-muted px-1 rounded" v-pre>{{phone_number}}</code> for phone

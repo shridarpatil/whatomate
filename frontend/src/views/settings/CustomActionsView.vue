@@ -125,7 +125,7 @@ async function fetchActions() {
   isLoading.value = true
   try {
     const response = await customActionsService.list()
-    const data = response.data.data || response.data
+    const data = (response.data as any).data || response.data
     actions.value = data.custom_actions || []
   } catch (error: any) {
     toast.error(error.response?.data?.message || 'Failed to load custom actions')

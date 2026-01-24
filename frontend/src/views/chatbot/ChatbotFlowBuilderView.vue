@@ -108,6 +108,8 @@ interface PanelFieldConfig {
   key: string
   label: string
   order: number
+  display_type?: string
+  color?: string
 }
 
 interface PanelSection {
@@ -539,8 +541,8 @@ function setMessageType(type: string) {
   }
 }
 
-function setInputType(type: string) {
-  if (!selectedStep.value) return
+function setInputType(type: string | number | bigint | Record<string, any> | null) {
+  if (!selectedStep.value || typeof type !== 'string') return
 
   selectedStep.value.input_type = type
 
@@ -611,8 +613,8 @@ function getButtonNextStep(buttonId: string): string {
   return target || '__default__'
 }
 
-function setButtonNextStep(buttonId: string, targetStep: string) {
-  if (!selectedStep.value) return
+function setButtonNextStep(buttonId: string, targetStep: string | number | bigint | Record<string, any> | null) {
+  if (!selectedStep.value || typeof targetStep !== 'string') return
   if (!selectedStep.value.conditional_next) {
     selectedStep.value.conditional_next = {}
   }
@@ -699,7 +701,8 @@ function removePanelSection(index: number) {
   formData.value.panel_config.sections.forEach((s, i) => s.order = i + 1)
 }
 
-function addFieldToSection(sectionIndex: number, variableKey: string) {
+function addFieldToSection(sectionIndex: number, variableKey: string | number | bigint | Record<string, any> | null) {
+  if (typeof variableKey !== 'string') return
   const variable = availableVariables.value.find(v => v.key === variableKey)
   if (!variable) return
 
@@ -709,10 +712,8 @@ function addFieldToSection(sectionIndex: number, variableKey: string) {
   section.fields.push({
     key: variableKey,
     label: variableKey.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase()),
-    order: section.fields.length + 1,
-    display_type: 'text',
-    color: 'default'
-  })
+    order: section.fields.length + 1
+  } as any)
 }
 
 function removeFieldFromSection(sectionIndex: number, fieldIndex: number) {
@@ -978,9 +979,9 @@ function confirmCancel() {
         <!-- Step Preview (when editing a step) -->
         <template v-else>
           <FlowPreviewPanel
-            :steps="formData.steps"
-            :flow-data="formData"
-            :selected-step="selectedStep"
+            :steps="formData.steps as any"
+            :flow-data="formData as any"
+            :selected-step="selectedStep as any"
             :selected-step-index="selectedStepIndex"
             :list-picker-open="listPickerOpen"
             :teams="teams"

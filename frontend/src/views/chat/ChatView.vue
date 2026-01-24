@@ -552,7 +552,7 @@ async function retryMessage(message: Message) {
     )
 
     // Remove the failed message from the list after successful retry
-    const messages = contactsStore.messages.get(contactsStore.currentContact.id) as Message[] | undefined
+    const messages = (contactsStore.messages as any).get?.(contactsStore.currentContact.id) as Message[] | undefined
     if (messages) {
       const index = messages.findIndex((m: Message) => m.id === message.id)
       if (index !== -1) {
@@ -1269,7 +1269,7 @@ async function sendMediaMessage() {
           <div class="flex items-center gap-2">
             <Avatar class="h-8 w-8 ring-2 ring-white/[0.1] light:ring-gray-200">
               <AvatarImage :src="contactsStore.currentContact.avatar_url" />
-              <AvatarFallback :class="['text-xs bg-gradient-to-br text-white', getAvatarGradient(contactsStore.currentContact.name || contactsStore.currentContact.phone_number)]">
+              <AvatarFallback :class="'text-xs bg-gradient-to-br text-white ' + getAvatarGradient(contactsStore.currentContact.name || contactsStore.currentContact.phone_number)">
                 {{ getInitials(contactsStore.currentContact.name || contactsStore.currentContact.phone_number) }}
               </AvatarFallback>
             </Avatar>

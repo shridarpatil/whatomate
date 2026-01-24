@@ -126,7 +126,8 @@ async function fetchAccounts() {
   }
 }
 
-function onAccountChange(value: string) {
+function onAccountChange(value: string | number | bigint | Record<string, any> | null) {
+  if (typeof value !== 'string') return
   localStorage.setItem('flows_selected_account', value)
   fetchFlows()
 }
@@ -134,9 +135,6 @@ function onAccountChange(value: string) {
 async function fetchFlows() {
   isLoading.value = true
   try {
-    const params = selectedAccount.value && selectedAccount.value !== 'all'
-      ? `?account=${selectedAccount.value}`
-      : ''
     const response = await flowsService.list()
     flows.value = response.data.data?.flows || []
 

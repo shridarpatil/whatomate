@@ -77,7 +77,7 @@ async function fetchWebhooks() {
   isLoading.value = true
   try {
     const response = await webhooksService.list()
-    const data = response.data.data || response.data
+    const data = (response.data as any).data || response.data
     webhooks.value = data.webhooks || []
     availableEvents.value = data.available_events || []
   } catch (error: any) {

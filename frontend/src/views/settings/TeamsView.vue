@@ -494,7 +494,7 @@ function formatDate(dateString: string) {
               id="description"
               v-model="formData.description"
               placeholder="What does this team handle?"
-              rows="2"
+              :rows="2"
             />
           </div>
 

@@ -155,7 +155,7 @@ const loadSavedPreferences = () => {
 
 const savedPrefs = loadSavedPreferences()
 const selectedRange = ref<TimeRangePreset>(savedPrefs.range as TimeRangePreset)
-const customDateRange = ref<DateRange>(savedPrefs.customRange)
+const customDateRange = ref<any>(savedPrefs.customRange)
 const isDatePickerOpen = ref(false)
 
 const savePreferences = () => {

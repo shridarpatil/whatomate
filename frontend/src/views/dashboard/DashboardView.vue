@@ -152,7 +152,7 @@ const loadSavedPreferences = () => {
 
 const savedPrefs = loadSavedPreferences()
 const selectedRange = ref<TimeRangePreset>(savedPrefs.range as TimeRangePreset)
-const customDateRange = ref<DateRange>(savedPrefs.customRange)
+const customDateRange = ref<any>(savedPrefs.customRange)
 const isDatePickerOpen = ref(false)
 
 const savePreferences = () => {
@@ -795,7 +795,7 @@ onMounted(() => {
           <!-- Data Source -->
           <div class="space-y-2">
             <Label class="text-white/70 light:text-gray-700">Data Source *</Label>
-            <Select :model-value="widgetForm.data_source" @update:model-value="(val) => widgetForm.data_source = val">
+            <Select :model-value="widgetForm.data_source" @update:model-value="(val) => widgetForm.data_source = String(val)">
               <SelectTrigger class="bg-white/[0.04] border-white/[0.1] text-white light:bg-white light:border-gray-300 light:text-gray-900">
                 <SelectValue placeholder="Select data source" />
               </SelectTrigger>
@@ -815,7 +815,7 @@ onMounted(() => {
           <!-- Metric -->
           <div class="space-y-2">
             <Label class="text-white/70 light:text-gray-700">Metric</Label>
-            <Select :model-value="widgetForm.metric" @update:model-value="(val) => widgetForm.metric = val">
+            <Select :model-value="widgetForm.metric" @update:model-value="(val) => widgetForm.metric = String(val)">
               <SelectTrigger class="bg-white/[0.04] border-white/[0.1] text-white light:bg-white light:border-gray-300 light:text-gray-900">
                 <SelectValue placeholder="Select metric" />
               </SelectTrigger>
@@ -841,7 +841,7 @@ onMounted(() => {
             </p>
             <div v-for="(filter, index) in widgetForm.filters" :key="index" class="flex items-center gap-2">
               <div class="flex-1">
-                <Select :model-value="filter.field" @update:model-value="(val) => filter.field = val">
+                <Select :model-value="filter.field" @update:model-value="(val) => filter.field = String(val)">
                   <SelectTrigger class="w-full bg-white/[0.04] border-white/[0.1] text-white text-sm light:bg-white light:border-gray-300 light:text-gray-900">
                     <SelectValue placeholder="Field" />
                   </SelectTrigger>
@@ -858,7 +858,7 @@ onMounted(() => {
                 </Select>
               </div>
               <div class="w-36">
-                <Select :model-value="filter.operator" @update:model-value="(val) => filter.operator = val">
+                <Select :model-value="filter.operator" @update:model-value="(val) => filter.operator = String(val)">
                   <SelectTrigger class="w-full bg-white/[0.04] border-white/[0.1] text-white text-sm light:bg-white light:border-gray-300 light:text-gray-900">
                     <SelectValue placeholder="Operator" />
                   </SelectTrigger>

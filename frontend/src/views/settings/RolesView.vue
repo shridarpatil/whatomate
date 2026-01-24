@@ -411,7 +411,7 @@ function formatDate(dateString: string): string {
                 id="description"
                 v-model="formData.description"
                 placeholder="Describe what this role is for..."
-                rows="2"
+                :rows="2"
                 :disabled="editingRole?.is_system && !isSuperAdmin"
               />
             </div>
