@@ -108,6 +108,8 @@ See [configuration docs](https://shridarpatil.github.io/whatomate/getting-starte
 ## Developers
 
 The backend is written in Go ([Fastglue](https://github.com/zerodha/fastglue)) and the frontend is Vue.js 3 with shadcn-vue.
+- If you are interested in contributing, please read [CONTRIBUTING.md](./CONTRIBUTING.md) first.
+
 
 ```bash
 # Development setup
