@@ -413,6 +413,7 @@ type DashboardWidget struct {
 	Filters        JSONBArray `gorm:"type:jsonb;default:'[]'" json:"filters"`
 	DisplayType    string     `gorm:"size:20;default:'number'" json:"display_type"` // number, percentage, chart
 	ChartType      string     `gorm:"size:20" json:"chart_type"`                    // line, bar, pie (when display_type is chart)
+	GroupByField   string     `gorm:"size:100" json:"group_by_field"`               // Field to group by (e.g., status, direction)
 	ShowChange     bool       `gorm:"default:true" json:"show_change"`              // Show % change vs previous period
 	Color          string     `gorm:"size:20" json:"color"`                         // Widget color theme
 	Size           string     `gorm:"size:10;default:'small'" json:"size"`          // small, medium, large

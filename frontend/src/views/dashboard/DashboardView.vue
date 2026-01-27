@@ -54,6 +54,34 @@ import {
   BarChart3,
   X
 } from 'lucide-vue-next'
+import {
+  Chart as ChartJS,
+  CategoryScale,
+  LinearScale,
+  PointElement,
+  LineElement,
+  BarElement,
+  ArcElement,
+  Title,
+  Tooltip,
+  Legend,
+  Filler
+} from 'chart.js'
+import { Line, Bar, Pie } from 'vue-chartjs'
+
+// Register Chart.js components
+ChartJS.register(
+  CategoryScale,
+  LinearScale,
+  PointElement,
+  LineElement,
+  BarElement,
+  ArcElement,
+  Title,
+  Tooltip,
+  Legend,
+  Filler
+)
 import type { DateRange } from 'reka-ui'
 import { CalendarDate } from '@internationalized/date'
 import { useToast } from '@/components/ui/toast'
@@ -106,6 +134,7 @@ const widgetForm = ref({
   filters: [] as Array<{ field: string; operator: string; value: string }>,
   display_type: 'number',
   chart_type: '',
+  group_by_field: '',
   show_change: true,
   color: 'blue',
   size: 'small',
@@ -121,6 +150,118 @@ const colorOptions = [
   { value: 'red', label: 'Red', bg: 'bg-red-500/20', text: 'text-red-400' },
   { value: 'cyan', label: 'Cyan', bg: 'bg-cyan-500/20', text: 'text-cyan-400' }
 ]
+
+// Chart type options
+const chartTypeOptions = [
+  { value: 'line', label: 'Line' },
+  { value: 'bar', label: 'Bar' },
+  { value: 'pie', label: 'Pie' }
+]
+
+// Chart color palette for pie charts
+const chartColors = [
+  'rgba(59, 130, 246, 0.8)',
+  'rgba(16, 185, 129, 0.8)',
+  'rgba(245, 158, 11, 0.8)',
+  'rgba(139, 92, 246, 0.8)',
+  'rgba(239, 68, 68, 0.8)',
+  'rgba(6, 182, 212, 0.8)',
+  'rgba(236, 72, 153, 0.8)',
+  'rgba(234, 179, 8, 0.8)'
+]
+
+const getChartComponentData = (widget: DashboardWidget) => {
+  const data = widgetData.value[widget.id]
+  if (!data) return { labels: [], datasets: [] }
+
+  const chartData = data.chart_data || []
+  const dataPoints = data.data_points || []
+  const groupedSeries = data.grouped_series
+
+  // Grouped line chart: multiple datasets from grouped_series
+  if (widget.chart_type === 'line' && groupedSeries && groupedSeries.datasets.length > 0) {
+    return {
+      labels: groupedSeries.labels,
+      datasets: groupedSeries.datasets.map((ds, i) => ({
+        label: ds.label,
+        data: ds.data,
+        borderColor: chartColors[i % chartColors.length],
+        backgroundColor: chartColors[i % chartColors.length].replace('0.8)', '0.1)'),
+        fill: false,
+        tension: 0.3
+      }))
+    }
+  }
+
+  // Bar/Pie with group_by uses data_points (group → count)
+  if (widget.chart_type === 'pie') {
+    const source = dataPoints.length > 0 ? dataPoints : chartData
+    return {
+      labels: source.map((d: { label: string }) => d.label),
+      datasets: [{
+        data: source.map((d: { value: number }) => d.value),
+        backgroundColor: chartColors.slice(0, source.length),
+        borderWidth: 0
+      }]
+    }
+  }
+
+  if (widget.chart_type === 'bar' && dataPoints.length > 0) {
+    return {
+      labels: dataPoints.map((d: { label: string }) => d.label),
+      datasets: [{
+        label: widget.name,
+        data: dataPoints.map((d: { value: number }) => d.value),
+        backgroundColor: dataPoints.map((_: any, i: number) => chartColors[i % chartColors.length]),
+        borderWidth: 0
+      }]
+    }
+  }
+
+  // Default: line and bar charts use time-series chart_data
+  const colorMap: Record<string, string> = {
+    blue: 'rgb(59, 130, 246)',
+    green: 'rgb(16, 185, 129)',
+    purple: 'rgb(139, 92, 246)',
+    orange: 'rgb(245, 158, 11)',
+    red: 'rgb(239, 68, 68)',
+    cyan: 'rgb(6, 182, 212)'
+  }
+  const borderColor = colorMap[widget.color] || colorMap.blue
+
+  return {
+    labels: chartData.map((d: { label: string }) => d.label),
+    datasets: [{
+      label: widget.name,
+      data: chartData.map((d: { value: number }) => d.value),
+      borderColor,
+      backgroundColor: widget.chart_type === 'bar'
+        ? borderColor.replace('rgb', 'rgba').replace(')', ', 0.8)')
+        : borderColor.replace('rgb', 'rgba').replace(')', ', 0.1)'),
+      fill: widget.chart_type === 'line',
+      tension: 0.3
+    }]
+  }
+}
+
+const lineBarChartOptions = {
+  responsive: true,
+  maintainAspectRatio: false,
+  plugins: {
+    legend: { display: true, position: 'top' as const }
+  },
+  scales: {
+    y: { beginAtZero: true }
+  }
+}
+
+const pieChartOptions = {
+  responsive: true,
+  maintainAspectRatio: false,
+  plugins: {
+    legend: { position: 'bottom' as const }
+  }
+}
 
 // Time range filter
 type TimeRangePreset = 'today' | '7days' | '30days' | 'this_month' | 'custom'
@@ -292,6 +433,9 @@ const getWidgetIcon = (dataSource: string) => {
   }
 }
 
+const numberWidgets = computed(() => widgets.value.filter(w => w.display_type !== 'chart'))
+const chartWidgets = computed(() => widgets.value.filter(w => w.display_type === 'chart'))
+
 const availableFields = computed(() => {
   if (!widgetForm.value.data_source) return []
   const source = dataSources.value.find(s => s.name === widgetForm.value.data_source)
@@ -386,6 +530,7 @@ const openAddWidgetDialog = () => {
     filters: [],
     display_type: 'number',
     chart_type: '',
+    group_by_field: '',
     show_change: true,
     color: 'blue',
     size: 'small',
@@ -406,6 +551,7 @@ const openEditWidgetDialog = (widget: DashboardWidget) => {
     filters: [...widget.filters],
     display_type: widget.display_type,
     chart_type: widget.chart_type,
+    group_by_field: widget.group_by_field || '',
     show_change: widget.show_change,
     color: widget.color || 'blue',
     size: widget.size,
@@ -444,6 +590,7 @@ const saveWidget = async () => {
     filters: cleanFilters,
     display_type: widgetForm.value.display_type,
     chart_type: widgetForm.value.chart_type,
+    group_by_field: widgetForm.value.group_by_field,
     show_change: widgetForm.value.show_change,
     color: widgetForm.value.color,
     size: widgetForm.value.size,
@@ -503,6 +650,17 @@ watch(selectedRange, (newValue) => {
   if (newValue !== 'custom') {
     fetchWidgetData()
     fetchRecentMessages()
+  }
+})
+
+// Set default chart_type when display_type changes to chart
+watch(() => widgetForm.value.display_type, (newVal) => {
+  if (newVal === 'chart' && !widgetForm.value.chart_type) {
+    widgetForm.value.chart_type = 'line'
+  }
+  if (newVal !== 'chart') {
+    widgetForm.value.chart_type = ''
+    widgetForm.value.group_by_field = ''
   }
 })
 
@@ -567,7 +725,7 @@ onMounted(() => {
     <!-- Content -->
     <ScrollArea class="flex-1">
       <div class="p-6 space-y-6">
-        <!-- Widgets Grid -->
+        <!-- Number Widgets Grid -->
         <div class="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
           <!-- Loading State -->
           <template v-if="isLoading">
@@ -583,10 +741,10 @@ onMounted(() => {
             </div>
           </template>
 
-          <!-- Widget Cards -->
+          <!-- Number Widget Cards -->
           <template v-else>
             <div
-              v-for="widget in widgets"
+              v-for="widget in numberWidgets"
               :key="widget.id"
               class="group relative card-depth rounded-xl border border-white/[0.08] bg-white/[0.04] p-6 light:bg-white light:border-gray-200 hover:bg-white/[0.06] light:hover:bg-gray-50 transition-colors"
             >
@@ -652,6 +810,64 @@ onMounted(() => {
               </div>
             </div>
           </template>
+        </div>
+
+        <!-- Chart Widgets Grid -->
+        <div v-if="!isLoading && chartWidgets.length > 0" class="grid gap-4 md:grid-cols-2">
+          <div
+            v-for="widget in chartWidgets"
+            :key="widget.id"
+            class="group relative card-depth rounded-xl border border-white/[0.08] bg-white/[0.04] p-6 light:bg-white light:border-gray-200 hover:bg-white/[0.06] light:hover:bg-gray-50 transition-colors"
+          >
+            <div class="flex flex-row items-center justify-between pb-2">
+              <div>
+                <span class="text-sm font-medium text-white/50 light:text-gray-500">{{ widget.name }}</span>
+                <p v-if="widget.description" class="text-xs text-white/30 light:text-gray-400 mt-0.5">{{ widget.description }}</p>
+              </div>
+              <div class="flex items-center gap-2">
+                <div v-if="canEditWidget || canDeleteWidget" class="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                  <Button
+                    v-if="canEditWidget"
+                    variant="ghost"
+                    size="icon"
+                    class="h-6 w-6 text-white/20 hover:text-white hover:bg-white/[0.1] light:text-gray-300 light:hover:text-gray-700 light:hover:bg-gray-100"
+                    @click.stop="openEditWidgetDialog(widget)"
+                    title="Edit widget"
+                  >
+                    <Pencil class="h-3 w-3" />
+                  </Button>
+                  <Button
+                    v-if="canDeleteWidget"
+                    variant="ghost"
+                    size="icon"
+                    class="h-6 w-6 text-white/20 hover:text-red-400 hover:bg-red-500/10 light:text-gray-300 light:hover:text-red-600 light:hover:bg-red-50"
+                    @click.stop="openDeleteDialog(widget)"
+                    title="Delete widget"
+                  >
+                    <Trash2 class="h-3 w-3" />
+                  </Button>
+                </div>
+                <div :class="['h-10 w-10 rounded-lg flex items-center justify-center', getWidgetColor(widget.color).bg]">
+                  <component :is="getWidgetIcon(widget.data_source)" :class="['h-5 w-5', getWidgetColor(widget.color).text]" />
+                </div>
+              </div>
+            </div>
+            <div class="h-64 pt-2">
+              <template v-if="isWidgetDataLoading">
+                <Skeleton class="h-full w-full bg-white/[0.08] light:bg-gray-200" />
+              </template>
+              <template v-else-if="(widgetData[widget.id]?.chart_data?.length || 0) > 0 || (widgetData[widget.id]?.data_points?.length || 0) > 0 || (widgetData[widget.id]?.grouped_series?.datasets?.length || 0) > 0">
+                <Line v-if="widget.chart_type === 'line'" :data="getChartComponentData(widget)" :options="lineBarChartOptions" />
+                <Bar v-else-if="widget.chart_type === 'bar'" :data="getChartComponentData(widget)" :options="lineBarChartOptions" />
+                <Pie v-else-if="widget.chart_type === 'pie'" :data="getChartComponentData(widget)" :options="pieChartOptions" />
+              </template>
+              <template v-else>
+                <div class="h-full flex items-center justify-center text-white/40 light:text-gray-400">
+                  No data available
+                </div>
+              </template>
+            </div>
+          </div>
         </div>
 
         <!-- Recent Activity -->
@@ -827,6 +1043,66 @@ onMounted(() => {
             </Select>
           </div>
 
+          <!-- Display Type -->
+          <div class="space-y-2">
+            <Label class="text-white/70 light:text-gray-700">Display Type</Label>
+            <Select :model-value="widgetForm.display_type" @update:model-value="(val) => widgetForm.display_type = String(val)">
+              <SelectTrigger class="bg-white/[0.04] border-white/[0.1] text-white light:bg-white light:border-gray-300 light:text-gray-900">
+                <SelectValue placeholder="Select display type" />
+              </SelectTrigger>
+              <SelectContent class="bg-[#1a1a1a] border-white/[0.08] light:bg-white light:border-gray-200">
+                <SelectItem value="number" class="text-white/70 focus:bg-white/[0.08] focus:text-white light:text-gray-700 light:focus:bg-gray-100">Number</SelectItem>
+                <SelectItem value="chart" class="text-white/70 focus:bg-white/[0.08] focus:text-white light:text-gray-700 light:focus:bg-gray-100">Chart</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+
+          <!-- Chart Type (visible when display type is chart) -->
+          <div v-if="widgetForm.display_type === 'chart'" class="space-y-2">
+            <Label class="text-white/70 light:text-gray-700">Chart Type</Label>
+            <Select :model-value="widgetForm.chart_type" @update:model-value="(val) => widgetForm.chart_type = String(val)">
+              <SelectTrigger class="bg-white/[0.04] border-white/[0.1] text-white light:bg-white light:border-gray-300 light:text-gray-900">
+                <SelectValue placeholder="Select chart type" />
+              </SelectTrigger>
+              <SelectContent class="bg-[#1a1a1a] border-white/[0.08] light:bg-white light:border-gray-200">
+                <SelectItem
+                  v-for="ct in chartTypeOptions"
+                  :key="ct.value"
+                  :value="ct.value"
+                  class="text-white/70 focus:bg-white/[0.08] focus:text-white light:text-gray-700 light:focus:bg-gray-100"
+                >
+                  {{ ct.label }}
+                </SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+
+          <!-- Group By (visible when display type is chart and data source is selected) -->
+          <div v-if="widgetForm.display_type === 'chart' && widgetForm.data_source" class="space-y-2">
+            <Label class="text-white/70 light:text-gray-700">Group By</Label>
+            <Select :model-value="widgetForm.group_by_field || 'none'" @update:model-value="(val) => widgetForm.group_by_field = val === 'none' ? '' : String(val)">
+              <SelectTrigger class="bg-white/[0.04] border-white/[0.1] text-white light:bg-white light:border-gray-300 light:text-gray-900">
+                <SelectValue placeholder="None (time series)" />
+              </SelectTrigger>
+              <SelectContent class="bg-[#1a1a1a] border-white/[0.08] light:bg-white light:border-gray-200">
+                <SelectItem
+                  value="none"
+                  class="text-white/70 focus:bg-white/[0.08] focus:text-white light:text-gray-700 light:focus:bg-gray-100"
+                >
+                  None (time series)
+                </SelectItem>
+                <SelectItem
+                  v-for="field in availableFields"
+                  :key="field"
+                  :value="field"
+                  class="text-white/70 focus:bg-white/[0.08] focus:text-white light:text-gray-700 light:focus:bg-gray-100"
+                >
+                  {{ field }}
+                </SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+
           <!-- Filters -->
           <div class="space-y-2">
             <div class="flex items-center justify-between">
@@ -888,25 +1164,29 @@ onMounted(() => {
           <!-- Color -->
           <div class="space-y-2">
             <Label class="text-white/70 light:text-gray-700">Color</Label>
-            <div class="flex gap-2">
-              <button
-                v-for="color in colorOptions"
-                :key="color.value"
-                :class="[
-                  'w-8 h-8 rounded-lg flex items-center justify-center transition-all',
-                  color.bg,
-                  widgetForm.color === color.value ? 'ring-2 ring-white/50' : ''
-                ]"
-                @click="widgetForm.color = color.value"
-              >
-                <div :class="['w-4 h-4 rounded-full', color.text.replace('text-', 'bg-')]"></div>
-              </button>
-            </div>
+            <Select :model-value="widgetForm.color" @update:model-value="(val) => widgetForm.color = String(val)">
+              <SelectTrigger class="bg-white/[0.04] border-white/[0.1] text-white light:bg-white light:border-gray-300 light:text-gray-900">
+                <SelectValue placeholder="Select color" />
+              </SelectTrigger>
+              <SelectContent class="bg-[#1a1a1a] border-white/[0.08] light:bg-white light:border-gray-200">
+                <SelectItem
+                  v-for="color in colorOptions"
+                  :key="color.value"
+                  :value="color.value"
+                  class="text-white/70 focus:bg-white/[0.08] focus:text-white light:text-gray-700 light:focus:bg-gray-100"
+                >
+                  <span class="flex items-center gap-2">
+                    <span :class="['inline-block w-3 h-3 rounded-full', color.bg]"></span>
+                    {{ color.label }}
+                  </span>
+                </SelectItem>
+              </SelectContent>
+            </Select>
           </div>
 
           <!-- Options -->
           <div class="flex items-center justify-between">
-            <div class="flex items-center gap-2">
+            <div v-if="widgetForm.display_type !== 'chart'" class="flex items-center gap-2">
               <Switch v-model:checked="widgetForm.show_change" />
               <Label class="text-white/70 light:text-gray-700">Show % change</Label>
             </div>

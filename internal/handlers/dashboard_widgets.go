@@ -20,9 +20,10 @@ type WidgetRequest struct {
 	Metric      string        `json:"metric"`       // count, sum, avg
 	Field       string        `json:"field"`        // Field for sum/avg
 	Filters     []FilterInput `json:"filters"`      // Filter conditions
-	DisplayType string        `json:"display_type"` // number, percentage, chart
-	ChartType   string        `json:"chart_type"`   // line, bar, pie
-	ShowChange  *bool         `json:"show_change"`
+	DisplayType  string        `json:"display_type"`   // number, percentage, chart
+	ChartType    string        `json:"chart_type"`     // line, bar, pie
+	GroupByField string        `json:"group_by_field"` // Field to group by
+	ShowChange   *bool         `json:"show_change"`
 	Color       string        `json:"color"`
 	Size        string        `json:"size"` // small, medium, large
 	IsShared    *bool         `json:"is_shared"`
@@ -46,6 +47,7 @@ type WidgetResponse struct {
 	Filters      []FilterInput `json:"filters"`
 	DisplayType  string        `json:"display_type"`
 	ChartType    string        `json:"chart_type"`
+	GroupByField string        `json:"group_by_field"`
 	ShowChange   bool          `json:"show_change"`
 	Color        string        `json:"color"`
 	Size         string        `json:"size"`
@@ -60,12 +62,25 @@ type WidgetResponse struct {
 
 // WidgetDataResponse represents the computed data for a widget
 type WidgetDataResponse struct {
-	WidgetID   uuid.UUID      `json:"widget_id"`
-	Value      float64        `json:"value"`
-	Change     float64        `json:"change"`      // Percentage change from previous period
-	ChartData  []ChartPoint   `json:"chart_data"`  // For chart display type
-	PrevValue  float64        `json:"prev_value"`  // Previous period value
-	DataPoints []DataPoint    `json:"data_points"` // Breakdown data
+	WidgetID      uuid.UUID          `json:"widget_id"`
+	Value         float64            `json:"value"`
+	Change        float64            `json:"change"`          // Percentage change from previous period
+	ChartData     []ChartPoint       `json:"chart_data"`      // For chart display type
+	PrevValue     float64            `json:"prev_value"`      // Previous period value
+	DataPoints    []DataPoint        `json:"data_points"`     // Breakdown data
+	GroupedSeries *GroupedSeriesData `json:"grouped_series"`  // For grouped time-series (line charts with group_by)
+}
+
+// GroupedSeriesData represents multiple datasets for grouped time-series charts
+type GroupedSeriesData struct {
+	Labels   []string              `json:"labels"`
+	Datasets []GroupedSeriesDataset `json:"datasets"`
+}
+
+// GroupedSeriesDataset represents a single series in a grouped chart
+type GroupedSeriesDataset struct {
+	Label string    `json:"label"`
+	Data  []float64 `json:"data"`
 }
 
 // ChartPoint represents a data point for charts
@@ -85,7 +100,7 @@ type DataPoint struct {
 var widgetDataSources = map[string][]string{
 	"messages":  {"status", "direction", "message_type", "whatsapp_account"},
 	"contacts":  {"whatsapp_account", "is_read"},
-	"campaigns": {"status"},
+	"campaigns": {"status", "message_status"},
 	"transfers": {"status", "source"},
 	"sessions":  {"status"},
 }
@@ -243,6 +258,14 @@ func (a *App) CreateDashboardWidget(r *fastglue.Request) error {
 		size = "small"
 	}
 
+	// Validate group_by_field if provided
+	if req.GroupByField != "" {
+		fields := widgetDataSources[req.DataSource]
+		if !contains(fields, req.GroupByField) {
+			return r.SendErrorEnvelope(fasthttp.StatusBadRequest, "Invalid group by field for this data source", nil, "")
+		}
+	}
+
 	widget := models.DashboardWidget{
 		OrganizationID: orgID,
 		UserID:         &userID,
@@ -254,6 +277,7 @@ func (a *App) CreateDashboardWidget(r *fastglue.Request) error {
 		Filters:        filters,
 		DisplayType:    displayType,
 		ChartType:      req.ChartType,
+		GroupByField:   req.GroupByField,
 		ShowChange:     showChange,
 		Color:          req.Color,
 		Size:           size,
@@ -347,6 +371,18 @@ func (a *App) UpdateDashboardWidget(r *fastglue.Request) error {
 	if req.ChartType != "" {
 		widget.ChartType = req.ChartType
 	}
+	// Always update group_by_field (empty string clears it)
+	if req.GroupByField != "" {
+		ds := widget.DataSource
+		if req.DataSource != "" {
+			ds = req.DataSource
+		}
+		fields := widgetDataSources[ds]
+		if !contains(fields, req.GroupByField) {
+			return r.SendErrorEnvelope(fasthttp.StatusBadRequest, "Invalid group by field for this data source", nil, "")
+		}
+	}
+	widget.GroupByField = req.GroupByField
 	if req.ShowChange != nil {
 		widget.ShowChange = *req.ShowChange
 	}
@@ -485,6 +521,7 @@ func widgetToResponse(w models.DashboardWidget, currentUserID uuid.UUID) WidgetR
 		Filters:      filters,
 		DisplayType:  w.DisplayType,
 		ChartType:    w.ChartType,
+		GroupByField: w.GroupByField,
 		ShowChange:   w.ShowChange,
 		Color:        w.Color,
 		Size:         w.Size,
@@ -675,7 +712,18 @@ func (a *App) executeWidgetQuery(orgID uuid.UUID, widget models.DashboardWidget,
 
 	// Get chart data if display type is chart
 	if widget.DisplayType == "chart" {
-		response.ChartData = a.getChartData(orgID, widget, filters, periodStart, periodEnd)
+		if widget.GroupByField != "" {
+			if widget.ChartType == "line" {
+				// Line chart with group by → grouped time-series
+				groupedSeries := a.getGroupedTimeSeriesData(orgID, widget, filters, periodStart, periodEnd)
+				response.GroupedSeries = &groupedSeries
+			} else {
+				// Bar/Pie chart with group by → data points (group → count)
+				response.DataPoints = a.getGroupedData(orgID, widget, filters, periodStart, periodEnd)
+			}
+		} else {
+			response.ChartData = a.getChartData(orgID, widget, filters, periodStart, periodEnd)
+		}
 	}
 
 	return response, nil
@@ -776,26 +824,8 @@ func (a *App) querySessions(orgID uuid.UUID, _ string, filters []FilterInput, st
 func (a *App) getChartData(orgID uuid.UUID, widget models.DashboardWidget, filters []FilterInput, start, end time.Time) []ChartPoint {
 	chartData := make([]ChartPoint, 0)
 
-	// Get the table name based on data source
-	var tableName string
-	var dateField string
-	switch widget.DataSource {
-	case "messages":
-		tableName = "messages"
-		dateField = "created_at"
-	case "contacts":
-		tableName = "contacts"
-		dateField = "last_message_at"
-	case "campaigns":
-		tableName = "bulk_message_campaigns"
-		dateField = "created_at"
-	case "transfers":
-		tableName = "agent_transfers"
-		dateField = "transferred_at"
-	case "sessions":
-		tableName = "chatbot_sessions"
-		dateField = "created_at"
-	default:
+	tableName, dateField, ok := resolveDataSourceTable(widget.DataSource)
+	if !ok {
 		return chartData
 	}
 
@@ -806,13 +836,8 @@ func (a *App) getChartData(orgID uuid.UUID, widget models.DashboardWidget, filte
 		WHERE organization_id = ? AND %s >= ? AND %s <= ?
 	`, dateField, tableName, dateField, dateField)
 
-	// Add filter conditions
 	args := []interface{}{orgID, start, end}
-	for _, f := range filters {
-		condition, value := buildFilterSQL(f)
-		query += " AND " + condition
-		args = append(args, value)
-	}
+	query, args = appendFilterSQL(query, args, filters)
 
 	query += fmt.Sprintf(" GROUP BY DATE_TRUNC('day', %s) ORDER BY date ASC", dateField)
 
@@ -832,6 +857,262 @@ func (a *App) getChartData(orgID uuid.UUID, widget models.DashboardWidget, filte
 	}
 
 	return chartData
+}
+
+// resolveDataSourceTable returns the table name and date field for a data source
+func resolveDataSourceTable(dataSource string) (tableName, dateField string, ok bool) {
+	switch dataSource {
+	case "messages":
+		return "messages", "created_at", true
+	case "contacts":
+		return "contacts", "last_message_at", true
+	case "campaigns":
+		return "bulk_message_campaigns", "created_at", true
+	case "transfers":
+		return "agent_transfers", "transferred_at", true
+	case "sessions":
+		return "chatbot_sessions", "created_at", true
+	default:
+		return "", "", false
+	}
+}
+
+// appendFilterSQL appends filter conditions to a raw SQL query string and args slice
+func appendFilterSQL(query string, args []interface{}, filters []FilterInput) (string, []interface{}) {
+	for _, f := range filters {
+		condition, value := buildFilterSQL(f)
+		query += " AND " + condition
+		args = append(args, value)
+	}
+	return query, args
+}
+
+// getGroupedData returns aggregated counts grouped by a field (for bar/pie charts)
+func (a *App) getGroupedData(orgID uuid.UUID, widget models.DashboardWidget, filters []FilterInput, start, end time.Time) []DataPoint {
+	dataPoints := make([]DataPoint, 0)
+
+	// Special case: campaigns grouped by message_status uses pre-aggregated counters
+	if widget.DataSource == "campaigns" && widget.GroupByField == "message_status" {
+		return a.getCampaignMessageStatusData(orgID, filters, start, end)
+	}
+
+	tableName, dateField, ok := resolveDataSourceTable(widget.DataSource)
+	if !ok {
+		return dataPoints
+	}
+
+	query := fmt.Sprintf(`
+		SELECT %s as label, COUNT(*) as value
+		FROM %s
+		WHERE organization_id = ? AND %s >= ? AND %s <= ?
+	`, widget.GroupByField, tableName, dateField, dateField)
+
+	args := []interface{}{orgID, start, end}
+	query, args = appendFilterSQL(query, args, filters)
+
+	query += fmt.Sprintf(" GROUP BY %s ORDER BY value DESC", widget.GroupByField)
+
+	type GroupedCount struct {
+		Label string
+		Value int64
+	}
+
+	var results []GroupedCount
+	a.DB.Raw(query, args...).Scan(&results)
+
+	for _, r := range results {
+		label := r.Label
+		if label == "" {
+			label = "(empty)"
+		}
+		dataPoints = append(dataPoints, DataPoint{
+			Label: label,
+			Value: float64(r.Value),
+		})
+	}
+
+	return dataPoints
+}
+
+// getCampaignMessageStatusData returns sent/delivered/read/failed totals from campaign counters
+func (a *App) getCampaignMessageStatusData(orgID uuid.UUID, filters []FilterInput, start, end time.Time) []DataPoint {
+	query := `
+		SELECT
+			COALESCE(SUM(sent_count), 0) as sent,
+			COALESCE(SUM(delivered_count), 0) as delivered,
+			COALESCE(SUM(read_count), 0) as read_count,
+			COALESCE(SUM(failed_count), 0) as failed
+		FROM bulk_message_campaigns
+		WHERE organization_id = ? AND created_at >= ? AND created_at <= ?
+	`
+
+	args := []interface{}{orgID, start, end}
+	query, args = appendFilterSQL(query, args, filters)
+
+	type CampaignCounts struct {
+		Sent      int64
+		Delivered int64
+		ReadCount int64 `gorm:"column:read_count"`
+		Failed    int64
+	}
+
+	var counts CampaignCounts
+	a.DB.Raw(query, args...).Scan(&counts)
+
+	return []DataPoint{
+		{Label: "sent", Value: float64(counts.Sent)},
+		{Label: "delivered", Value: float64(counts.Delivered)},
+		{Label: "read", Value: float64(counts.ReadCount)},
+		{Label: "failed", Value: float64(counts.Failed)},
+	}
+}
+
+// getGroupedTimeSeriesData returns time-series data grouped by a field (for line charts with group_by)
+func (a *App) getGroupedTimeSeriesData(orgID uuid.UUID, widget models.DashboardWidget, filters []FilterInput, start, end time.Time) GroupedSeriesData {
+	result := GroupedSeriesData{
+		Labels:   make([]string, 0),
+		Datasets: make([]GroupedSeriesDataset, 0),
+	}
+
+	// Special case: campaigns grouped by message_status over time
+	if widget.DataSource == "campaigns" && widget.GroupByField == "message_status" {
+		return a.getCampaignMessageStatusTimeSeries(orgID, filters, start, end)
+	}
+
+	tableName, dateField, ok := resolveDataSourceTable(widget.DataSource)
+	if !ok {
+		return result
+	}
+
+	query := fmt.Sprintf(`
+		SELECT DATE_TRUNC('day', %s) as date, %s as group_value, COUNT(*) as count
+		FROM %s
+		WHERE organization_id = ? AND %s >= ? AND %s <= ?
+	`, dateField, widget.GroupByField, tableName, dateField, dateField)
+
+	args := []interface{}{orgID, start, end}
+	query, args = appendFilterSQL(query, args, filters)
+
+	query += fmt.Sprintf(" GROUP BY DATE_TRUNC('day', %s), %s ORDER BY date ASC", dateField, widget.GroupByField)
+
+	type GroupedRow struct {
+		Date       time.Time
+		GroupValue string
+		Count      int64
+	}
+
+	var rows []GroupedRow
+	a.DB.Raw(query, args...).Scan(&rows)
+
+	// Collect unique dates and groups
+	dateSet := make(map[string]bool)
+	groupSet := make(map[string]bool)
+	dateOrder := make([]string, 0)
+	groupOrder := make([]string, 0)
+
+	for _, row := range rows {
+		dateLabel := row.Date.Format("Jan 02")
+		if !dateSet[dateLabel] {
+			dateSet[dateLabel] = true
+			dateOrder = append(dateOrder, dateLabel)
+		}
+		gv := row.GroupValue
+		if gv == "" {
+			gv = "(empty)"
+		}
+		if !groupSet[gv] {
+			groupSet[gv] = true
+			groupOrder = append(groupOrder, gv)
+		}
+	}
+
+	result.Labels = dateOrder
+
+	// Build a lookup: group → date → count
+	lookup := make(map[string]map[string]float64)
+	for _, row := range rows {
+		gv := row.GroupValue
+		if gv == "" {
+			gv = "(empty)"
+		}
+		dateLabel := row.Date.Format("Jan 02")
+		if lookup[gv] == nil {
+			lookup[gv] = make(map[string]float64)
+		}
+		lookup[gv][dateLabel] = float64(row.Count)
+	}
+
+	// Build datasets
+	for _, group := range groupOrder {
+		data := make([]float64, len(dateOrder))
+		for i, dateLabel := range dateOrder {
+			data[i] = lookup[group][dateLabel]
+		}
+		result.Datasets = append(result.Datasets, GroupedSeriesDataset{
+			Label: group,
+			Data:  data,
+		})
+	}
+
+	return result
+}
+
+// getCampaignMessageStatusTimeSeries returns daily sent/delivered/read/failed from campaign counters over time
+func (a *App) getCampaignMessageStatusTimeSeries(orgID uuid.UUID, filters []FilterInput, start, end time.Time) GroupedSeriesData {
+	result := GroupedSeriesData{
+		Labels:   make([]string, 0),
+		Datasets: make([]GroupedSeriesDataset, 0),
+	}
+
+	query := `
+		SELECT DATE_TRUNC('day', created_at) as date,
+			COALESCE(SUM(sent_count), 0) as sent,
+			COALESCE(SUM(delivered_count), 0) as delivered,
+			COALESCE(SUM(read_count), 0) as read_count,
+			COALESCE(SUM(failed_count), 0) as failed
+		FROM bulk_message_campaigns
+		WHERE organization_id = ? AND created_at >= ? AND created_at <= ?
+	`
+
+	args := []interface{}{orgID, start, end}
+	query, args = appendFilterSQL(query, args, filters)
+
+	query += " GROUP BY DATE_TRUNC('day', created_at) ORDER BY date ASC"
+
+	type DailyCampaignCounts struct {
+		Date      time.Time
+		Sent      int64
+		Delivered int64
+		ReadCount int64 `gorm:"column:read_count"`
+		Failed    int64
+	}
+
+	var rows []DailyCampaignCounts
+	a.DB.Raw(query, args...).Scan(&rows)
+
+	labels := make([]string, len(rows))
+	sentData := make([]float64, len(rows))
+	deliveredData := make([]float64, len(rows))
+	readData := make([]float64, len(rows))
+	failedData := make([]float64, len(rows))
+
+	for i, row := range rows {
+		labels[i] = row.Date.Format("Jan 02")
+		sentData[i] = float64(row.Sent)
+		deliveredData[i] = float64(row.Delivered)
+		readData[i] = float64(row.ReadCount)
+		failedData[i] = float64(row.Failed)
+	}
+
+	result.Labels = labels
+	result.Datasets = []GroupedSeriesDataset{
+		{Label: "sent", Data: sentData},
+		{Label: "delivered", Data: deliveredData},
+		{Label: "read", Data: readData},
+		{Label: "failed", Data: failedData},
+	}
+
+	return result
 }
 
 func applyFilter(query *gorm.DB, filter FilterInput) *gorm.DB {

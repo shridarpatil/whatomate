@@ -323,6 +323,7 @@ export interface DashboardWidget {
   filters: Array<{ field: string; operator: string; value: string }>
   display_type: string
   chart_type: string
+  group_by_field: string
   show_change: boolean
   color: string
   size: string
@@ -342,6 +343,10 @@ export interface WidgetData {
   prev_value: number
   chart_data: Array<{ label: string; value: number }>
   data_points: Array<{ label: string; value: number; color?: string }>
+  grouped_series?: {
+    labels: string[]
+    datasets: Array<{ label: string; data: number[] }>
+  }
 }
 
 export interface DataSourceInfo {
@@ -362,6 +367,7 @@ export const dashboardWidgetsService = {
     filters?: Array<{ field: string; operator: string; value: string }>
     display_type?: string
     chart_type?: string
+    group_by_field?: string
     show_change?: boolean
     color?: string
     size?: string
@@ -376,6 +382,7 @@ export const dashboardWidgetsService = {
     filters: Array<{ field: string; operator: string; value: string }>
     display_type: string
     chart_type: string
+    group_by_field: string
     show_change: boolean
     color: string
     size: string
