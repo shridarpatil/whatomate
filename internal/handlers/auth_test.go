@@ -7,126 +7,20 @@ import (
 
 	"github.com/golang-jwt/jwt/v5"
 	"github.com/google/uuid"
-	"github.com/shridarpatil/whatomate/internal/config"
-	"github.com/shridarpatil/whatomate/internal/handlers"
 	"github.com/shridarpatil/whatomate/internal/middleware"
 	"github.com/shridarpatil/whatomate/internal/models"
 	"github.com/shridarpatil/whatomate/test/testutil"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"github.com/valyala/fasthttp"
-	"github.com/zerodha/fastglue"
-	"golang.org/x/crypto/bcrypt"
 )
 
-const testJWTSecret = "test-secret-key-must-be-at-least-32-chars"
-
-// testApp creates an App instance for testing with a test database and Redis.
-func testApp(t *testing.T) *handlers.App {
-	t.Helper()
-
-	db := testutil.SetupTestDB(t)
-	redis := testutil.SetupTestRedis(t)
-	log := testutil.NopLogger()
-
-	cfg := &config.Config{
-		JWT: config.JWTConfig{
-			Secret:            testJWTSecret,
-			AccessExpiryMins:  15,
-			RefreshExpiryDays: 7,
-		},
-	}
-
-	return &handlers.App{
-		Config: cfg,
-		DB:     db,
-		Redis:  redis,
-		Log:    log,
-	}
-}
-
-// uniqueEmail generates a unique email for test isolation.
-func uniqueEmail(prefix string) string {
-	return prefix + "-" + uuid.New().String()[:8] + "@example.com"
-}
-
-// createTestOrganization creates a test organization in the database.
-func createTestOrganization(t *testing.T, app *handlers.App) *models.Organization {
-	t.Helper()
-
-	org := &models.Organization{
-		BaseModel: models.BaseModel{ID: uuid.New()},
-		Name:      "Test Organization " + uuid.New().String()[:8],
-		Slug:      "test-org-" + uuid.New().String()[:8],
-	}
-	require.NoError(t, app.DB.Create(org).Error)
-	return org
-}
-
-// createTestUser creates a test user in the database with a hashed password.
-func createTestUser(t *testing.T, app *handlers.App, orgID uuid.UUID, email, password string, roleID *uuid.UUID, isActive bool) *models.User {
-	t.Helper()
-
-	hashedPassword, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
-	require.NoError(t, err)
-
-	user := &models.User{
-		BaseModel:      models.BaseModel{ID: uuid.New()},
-		OrganizationID: orgID,
-		Email:          email,
-		PasswordHash:   string(hashedPassword),
-		FullName:       "Test User",
-		RoleID:         roleID,
-		IsActive:       true, // Create with default, then update if needed
-	}
-	require.NoError(t, app.DB.Create(user).Error)
-
-	// Explicitly update IsActive if false (GORM ignores false due to default:true tag)
-	if !isActive {
-		require.NoError(t, app.DB.Model(user).Update("is_active", false).Error)
-		user.IsActive = false
-	}
-	return user
-}
-
-// generateTestRefreshToken creates a valid refresh token for testing.
-func generateTestRefreshToken(t *testing.T, user *models.User, secret string, expiry time.Duration) string {
-	t.Helper()
-
-	claims := middleware.JWTClaims{
-		UserID:         user.ID,
-		OrganizationID: user.OrganizationID,
-		Email:          user.Email,
-		RoleID:         user.RoleID,
-		RegisteredClaims: jwt.RegisteredClaims{
-			ExpiresAt: jwt.NewNumericDate(time.Now().Add(expiry)),
-			IssuedAt:  jwt.NewNumericDate(time.Now()),
-			Issuer:    "whatomate",
-		},
-	}
-
-	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
-	tokenString, err := token.SignedString([]byte(secret))
-	require.NoError(t, err)
-	return tokenString
-}
-
-// assertErrorResponse checks that the response contains an error message.
-func assertErrorResponse(t *testing.T, req *fastglue.Request, expectedStatus int, expectedMessage string) {
-	t.Helper()
-
-	assert.Equal(t, expectedStatus, testutil.GetResponseStatusCode(req))
-
-	body := testutil.GetResponseBody(req)
-	assert.Contains(t, string(body), expectedMessage)
-}
-
 func TestApp_Login_Success(t *testing.T) {
-	app := testApp(t)
-	org := createTestOrganization(t, app)
-	email := uniqueEmail("login-success")
+	app := newTestApp(t)
+	org := testutil.CreateTestOrganization(t, app.DB)
+	email := testutil.UniqueEmail("login-success")
 	password := "validpassword123"
-	createTestUser(t, app, org.ID, email, password, nil, true)
+	testutil.CreateTestUser(t, app.DB, org.ID, testutil.WithEmail(email), testutil.WithPassword(password))
 
 	req := testutil.NewJSONRequest(t, map[string]string{
 		"email":    email,
@@ -161,10 +55,10 @@ func TestApp_Login_Success(t *testing.T) {
 }
 
 func TestApp_Login_WrongPassword(t *testing.T) {
-	app := testApp(t)
-	org := createTestOrganization(t, app)
-	email := uniqueEmail("wrong-pwd")
-	createTestUser(t, app, org.ID, email, "correctpassword", nil, true)
+	app := newTestApp(t)
+	org := testutil.CreateTestOrganization(t, app.DB)
+	email := testutil.UniqueEmail("wrong-pwd")
+	testutil.CreateTestUser(t, app.DB, org.ID, testutil.WithEmail(email), testutil.WithPassword("correctpassword"))
 
 	req := testutil.NewJSONRequest(t, map[string]string{
 		"email":    email,
@@ -173,27 +67,27 @@ func TestApp_Login_WrongPassword(t *testing.T) {
 
 	err := app.Login(req)
 	require.NoError(t, err)
-	assertErrorResponse(t, req, fasthttp.StatusUnauthorized, "Invalid credentials")
+	testutil.AssertErrorResponse(t, req, fasthttp.StatusUnauthorized, "Invalid credentials")
 }
 
 func TestApp_Login_UserNotFound(t *testing.T) {
-	app := testApp(t)
+	app := newTestApp(t)
 
 	req := testutil.NewJSONRequest(t, map[string]string{
-		"email":    uniqueEmail("nonexistent"),
+		"email":    testutil.UniqueEmail("nonexistent"),
 		"password": "anypassword",
 	})
 
 	err := app.Login(req)
 	require.NoError(t, err)
-	assertErrorResponse(t, req, fasthttp.StatusUnauthorized, "Invalid credentials")
+	testutil.AssertErrorResponse(t, req, fasthttp.StatusUnauthorized, "Invalid credentials")
 }
 
 func TestApp_Login_InactiveUser(t *testing.T) {
-	app := testApp(t)
-	org := createTestOrganization(t, app)
-	email := uniqueEmail("inactive")
-	createTestUser(t, app, org.ID, email, "validpassword123", nil, false)
+	app := newTestApp(t)
+	org := testutil.CreateTestOrganization(t, app.DB)
+	email := testutil.UniqueEmail("inactive")
+	testutil.CreateTestUser(t, app.DB, org.ID, testutil.WithEmail(email), testutil.WithPassword("validpassword123"), testutil.WithInactive())
 
 	req := testutil.NewJSONRequest(t, map[string]string{
 		"email":    email,
@@ -202,11 +96,11 @@ func TestApp_Login_InactiveUser(t *testing.T) {
 
 	err := app.Login(req)
 	require.NoError(t, err)
-	assertErrorResponse(t, req, fasthttp.StatusUnauthorized, "Account is disabled")
+	testutil.AssertErrorResponse(t, req, fasthttp.StatusUnauthorized, "Account is disabled")
 }
 
 func TestApp_Login_InvalidRequestBody(t *testing.T) {
-	app := testApp(t)
+	app := newTestApp(t)
 
 	req := testutil.NewRequest(t)
 	req.RequestCtx.Request.SetBody([]byte("invalid json"))
@@ -218,9 +112,9 @@ func TestApp_Login_InvalidRequestBody(t *testing.T) {
 }
 
 func TestApp_Login_UserWithRole(t *testing.T) {
-	app := testApp(t)
-	org := createTestOrganization(t, app)
-	email := uniqueEmail("role-test")
+	app := newTestApp(t)
+	org := testutil.CreateTestOrganization(t, app.DB)
+	email := testutil.UniqueEmail("role-test")
 	password := "testpassword123"
 
 	// Create an actual role first
@@ -232,7 +126,7 @@ func TestApp_Login_UserWithRole(t *testing.T) {
 	}
 	require.NoError(t, app.DB.Create(role).Error)
 
-	createTestUser(t, app, org.ID, email, password, &role.ID, true)
+	testutil.CreateTestUser(t, app.DB, org.ID, testutil.WithEmail(email), testutil.WithPassword(password), testutil.WithRoleID(&role.ID))
 
 	req := testutil.NewJSONRequest(t, map[string]string{
 		"email":    email,
@@ -245,8 +139,8 @@ func TestApp_Login_UserWithRole(t *testing.T) {
 }
 
 func TestApp_Register_Success(t *testing.T) {
-	app := testApp(t)
-	email := uniqueEmail("register")
+	app := newTestApp(t)
+	email := testutil.UniqueEmail("register")
 
 	req := testutil.NewJSONRequest(t, map[string]string{
 		"email":             email,
@@ -295,10 +189,10 @@ func TestApp_Register_Success(t *testing.T) {
 }
 
 func TestApp_Register_EmailAlreadyExists(t *testing.T) {
-	app := testApp(t)
-	org := createTestOrganization(t, app)
-	email := uniqueEmail("existing")
-	createTestUser(t, app, org.ID, email, "password123", nil, true)
+	app := newTestApp(t)
+	org := testutil.CreateTestOrganization(t, app.DB)
+	email := testutil.UniqueEmail("existing")
+	testutil.CreateTestUser(t, app.DB, org.ID, testutil.WithEmail(email), testutil.WithPassword("password123"))
 
 	req := testutil.NewJSONRequest(t, map[string]string{
 		"email":             email,
@@ -309,11 +203,11 @@ func TestApp_Register_EmailAlreadyExists(t *testing.T) {
 
 	err := app.Register(req)
 	require.NoError(t, err)
-	assertErrorResponse(t, req, fasthttp.StatusConflict, "Email already registered")
+	testutil.AssertErrorResponse(t, req, fasthttp.StatusConflict, "Email already registered")
 }
 
 func TestApp_Register_InvalidRequestBody(t *testing.T) {
-	app := testApp(t)
+	app := newTestApp(t)
 
 	req := testutil.NewRequest(t)
 	req.RequestCtx.Request.SetBody([]byte("invalid json"))
@@ -325,10 +219,10 @@ func TestApp_Register_InvalidRequestBody(t *testing.T) {
 }
 
 func TestApp_RefreshToken_Success(t *testing.T) {
-	app := testApp(t)
-	org := createTestOrganization(t, app)
-	user := createTestUser(t, app, org.ID, uniqueEmail("refresh"), "password123", nil, true)
-	refreshToken := generateTestRefreshToken(t, user, testJWTSecret, 7*24*time.Hour)
+	app := newTestApp(t)
+	org := testutil.CreateTestOrganization(t, app.DB)
+	user := testutil.CreateTestUser(t, app.DB, org.ID, testutil.WithEmail(testutil.UniqueEmail("refresh")), testutil.WithPassword("password123"))
+	refreshToken := testutil.GenerateTestRefreshToken(t, user, testutil.TestJWTSecret, 7*24*time.Hour)
 
 	req := testutil.NewJSONRequest(t, map[string]string{
 		"refresh_token": refreshToken,
@@ -356,10 +250,10 @@ func TestApp_RefreshToken_Success(t *testing.T) {
 }
 
 func TestApp_RefreshToken_Expired(t *testing.T) {
-	app := testApp(t)
-	org := createTestOrganization(t, app)
-	user := createTestUser(t, app, org.ID, uniqueEmail("expired"), "password123", nil, true)
-	expiredToken := generateTestRefreshToken(t, user, testJWTSecret, -time.Hour)
+	app := newTestApp(t)
+	org := testutil.CreateTestOrganization(t, app.DB)
+	user := testutil.CreateTestUser(t, app.DB, org.ID, testutil.WithEmail(testutil.UniqueEmail("expired")), testutil.WithPassword("password123"))
+	expiredToken := testutil.GenerateTestRefreshToken(t, user, testutil.TestJWTSecret, -time.Hour)
 
 	req := testutil.NewJSONRequest(t, map[string]string{
 		"refresh_token": expiredToken,
@@ -367,14 +261,14 @@ func TestApp_RefreshToken_Expired(t *testing.T) {
 
 	err := app.RefreshToken(req)
 	require.NoError(t, err)
-	assertErrorResponse(t, req, fasthttp.StatusUnauthorized, "Invalid refresh token")
+	testutil.AssertErrorResponse(t, req, fasthttp.StatusUnauthorized, "Invalid refresh token")
 }
 
 func TestApp_RefreshToken_InvalidSignature(t *testing.T) {
-	app := testApp(t)
-	org := createTestOrganization(t, app)
-	user := createTestUser(t, app, org.ID, uniqueEmail("invalid-sig"), "password123", nil, true)
-	wrongSecretToken := generateTestRefreshToken(t, user, "wrong-secret-key-that-is-long", 7*24*time.Hour)
+	app := newTestApp(t)
+	org := testutil.CreateTestOrganization(t, app.DB)
+	user := testutil.CreateTestUser(t, app.DB, org.ID, testutil.WithEmail(testutil.UniqueEmail("invalid-sig")), testutil.WithPassword("password123"))
+	wrongSecretToken := testutil.GenerateTestRefreshToken(t, user, "wrong-secret-key-that-is-long", 7*24*time.Hour)
 
 	req := testutil.NewJSONRequest(t, map[string]string{
 		"refresh_token": wrongSecretToken,
@@ -382,11 +276,11 @@ func TestApp_RefreshToken_InvalidSignature(t *testing.T) {
 
 	err := app.RefreshToken(req)
 	require.NoError(t, err)
-	assertErrorResponse(t, req, fasthttp.StatusUnauthorized, "Invalid refresh token")
+	testutil.AssertErrorResponse(t, req, fasthttp.StatusUnauthorized, "Invalid refresh token")
 }
 
 func TestApp_RefreshToken_UserNotFound(t *testing.T) {
-	app := testApp(t)
+	app := newTestApp(t)
 	fakeUser := &models.User{
 		BaseModel: models.BaseModel{
 			ID: uuid.New(),
@@ -394,7 +288,7 @@ func TestApp_RefreshToken_UserNotFound(t *testing.T) {
 		OrganizationID: uuid.New(),
 		Email:          "fake@example.com",
 	}
-	token := generateTestRefreshToken(t, fakeUser, testJWTSecret, 7*24*time.Hour)
+	token := testutil.GenerateTestRefreshToken(t, fakeUser, testutil.TestJWTSecret, 7*24*time.Hour)
 
 	req := testutil.NewJSONRequest(t, map[string]string{
 		"refresh_token": token,
@@ -402,14 +296,14 @@ func TestApp_RefreshToken_UserNotFound(t *testing.T) {
 
 	err := app.RefreshToken(req)
 	require.NoError(t, err)
-	assertErrorResponse(t, req, fasthttp.StatusUnauthorized, "User not found")
+	testutil.AssertErrorResponse(t, req, fasthttp.StatusUnauthorized, "User not found")
 }
 
 func TestApp_RefreshToken_DisabledUser(t *testing.T) {
-	app := testApp(t)
-	org := createTestOrganization(t, app)
-	user := createTestUser(t, app, org.ID, uniqueEmail("disabled"), "password123", nil, false)
-	token := generateTestRefreshToken(t, user, testJWTSecret, 7*24*time.Hour)
+	app := newTestApp(t)
+	org := testutil.CreateTestOrganization(t, app.DB)
+	user := testutil.CreateTestUser(t, app.DB, org.ID, testutil.WithEmail(testutil.UniqueEmail("disabled")), testutil.WithPassword("password123"), testutil.WithInactive())
+	token := testutil.GenerateTestRefreshToken(t, user, testutil.TestJWTSecret, 7*24*time.Hour)
 
 	req := testutil.NewJSONRequest(t, map[string]string{
 		"refresh_token": token,
@@ -417,11 +311,11 @@ func TestApp_RefreshToken_DisabledUser(t *testing.T) {
 
 	err := app.RefreshToken(req)
 	require.NoError(t, err)
-	assertErrorResponse(t, req, fasthttp.StatusUnauthorized, "Account is disabled")
+	testutil.AssertErrorResponse(t, req, fasthttp.StatusUnauthorized, "Account is disabled")
 }
 
 func TestApp_RefreshToken_MalformedToken(t *testing.T) {
-	app := testApp(t)
+	app := newTestApp(t)
 
 	req := testutil.NewJSONRequest(t, map[string]string{
 		"refresh_token": "not.a.valid.jwt.token",
@@ -429,11 +323,11 @@ func TestApp_RefreshToken_MalformedToken(t *testing.T) {
 
 	err := app.RefreshToken(req)
 	require.NoError(t, err)
-	assertErrorResponse(t, req, fasthttp.StatusUnauthorized, "Invalid refresh token")
+	testutil.AssertErrorResponse(t, req, fasthttp.StatusUnauthorized, "Invalid refresh token")
 }
 
 func TestApp_RefreshToken_InvalidRequestBody(t *testing.T) {
-	app := testApp(t)
+	app := newTestApp(t)
 
 	req := testutil.NewRequest(t)
 	req.RequestCtx.Request.SetBody([]byte("invalid json"))
@@ -445,10 +339,10 @@ func TestApp_RefreshToken_InvalidRequestBody(t *testing.T) {
 }
 
 func TestApp_GeneratedTokensAreValid(t *testing.T) {
-	app := testApp(t)
-	org := createTestOrganization(t, app)
-	email := uniqueEmail("tokentest")
-	user := createTestUser(t, app, org.ID, email, "password123", nil, true)
+	app := newTestApp(t)
+	org := testutil.CreateTestOrganization(t, app.DB)
+	email := testutil.UniqueEmail("tokentest")
+	user := testutil.CreateTestUser(t, app.DB, org.ID, testutil.WithEmail(email), testutil.WithPassword("password123"))
 
 	req := testutil.NewJSONRequest(t, map[string]string{
 		"email":    email,
@@ -470,7 +364,7 @@ func TestApp_GeneratedTokensAreValid(t *testing.T) {
 
 	// Verify access token can be parsed
 	accessToken, err := jwt.ParseWithClaims(resp.Data.AccessToken, &middleware.JWTClaims{}, func(token *jwt.Token) (any, error) {
-		return []byte(testJWTSecret), nil
+		return []byte(testutil.TestJWTSecret), nil
 	})
 	require.NoError(t, err)
 	require.True(t, accessToken.Valid)
@@ -485,7 +379,7 @@ func TestApp_GeneratedTokensAreValid(t *testing.T) {
 
 	// Verify refresh token can be parsed
 	refreshToken, err := jwt.ParseWithClaims(resp.Data.RefreshToken, &middleware.JWTClaims{}, func(token *jwt.Token) (any, error) {
-		return []byte(testJWTSecret), nil
+		return []byte(testutil.TestJWTSecret), nil
 	})
 	require.NoError(t, err)
 	require.True(t, refreshToken.Valid)

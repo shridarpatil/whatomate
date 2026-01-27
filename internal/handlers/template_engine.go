@@ -19,7 +19,7 @@ var (
 	variablePattern = regexp.MustCompile(`\{\{([a-zA-Z_][a-zA-Z0-9_]*(?:\.[a-zA-Z_][a-zA-Z0-9_]*|\[\d+\])*)\}\}`)
 
 	// Condition parsing: variable, variable == 'value', variable > 100, etc.
-	conditionPattern = regexp.MustCompile(`^(\w+(?:\.\w+)*)\s*(==|!=|>|<|>=|<=)?\s*(.*)$`)
+	conditionPattern = regexp.MustCompile(`^(\w+(?:\.\w+)*)\s*(==|!=|>=|<=|>|<)?\s*(.*)$`)
 )
 
 const maxLoopIterations = 50

@@ -8,7 +8,6 @@ import (
 	"time"
 
 	"github.com/google/uuid"
-	"github.com/shridarpatil/whatomate/internal/config"
 	"github.com/shridarpatil/whatomate/internal/handlers"
 	"github.com/shridarpatil/whatomate/internal/models"
 	"github.com/shridarpatil/whatomate/internal/templateutil"
@@ -125,48 +124,17 @@ func (t *testServerTransport) RoundTrip(req *http.Request) (*http.Response, erro
 	return http.DefaultTransport.RoundTrip(testReq)
 }
 
-// messageTestApp creates an App instance for message testing with a mock WhatsApp server.
-func messageTestApp(t *testing.T, mockServer *mockWhatsAppServer) *handlers.App {
+// newMsgTestApp creates an App instance for message testing with a mock WhatsApp server.
+func newMsgTestApp(t *testing.T, mockServer *mockWhatsAppServer) *handlers.App {
 	t.Helper()
 
-	db := testutil.SetupTestDB(t)
-	redis := testutil.SetupTestRedis(t)
 	log := testutil.NopLogger()
-
-	// Create WhatsApp client pointing to mock server
 	waClient := whatsapp.NewWithTimeout(log, 5*time.Second)
 	waClient.HTTPClient = &http.Client{
 		Transport: &testServerTransport{serverURL: mockServer.server.URL},
 	}
 
-	cfg := &config.Config{
-		JWT: config.JWTConfig{
-			Secret:            "test-secret-key-for-jwt-signing",
-			AccessExpiryMins:  15,
-			RefreshExpiryDays: 7,
-		},
-	}
-
-	return &handlers.App{
-		Config:   cfg,
-		DB:       db,
-		Redis:    redis,
-		Log:      log,
-		WhatsApp: waClient,
-	}
-}
-
-// createTestOrg creates a test organization in the database.
-func createTestOrg(t *testing.T, app *handlers.App) *models.Organization {
-	t.Helper()
-
-	org := &models.Organization{
-		BaseModel: models.BaseModel{ID: uuid.New()},
-		Name:      "Test Org " + uuid.New().String()[:8],
-		Slug:      "test-org-" + uuid.New().String()[:8],
-	}
-	require.NoError(t, app.DB.Create(org).Error)
-	return org
+	return newTestApp(t, withWhatsApp(waClient))
 }
 
 // createTestAccount creates a test WhatsApp account in the database.
@@ -188,20 +156,6 @@ func createTestAccount(t *testing.T, app *handlers.App, orgID uuid.UUID) *models
 	return account
 }
 
-// createMsgTestContact creates a test contact in the database for message tests.
-func createMsgTestContact(t *testing.T, app *handlers.App, orgID uuid.UUID, accountName string) *models.Contact {
-	t.Helper()
-
-	contact := &models.Contact{
-		BaseModel:       models.BaseModel{ID: uuid.New()},
-		OrganizationID:  orgID,
-		WhatsAppAccount: accountName,
-		PhoneNumber:     "+1234567890",
-		ProfileName:     "Test Contact",
-	}
-	require.NoError(t, app.DB.Create(contact).Error)
-	return contact
-}
 
 // --- SendOutgoingMessage Tests ---
 
@@ -209,10 +163,10 @@ func TestApp_SendOutgoingMessage_TextMessage_Success(t *testing.T) {
 	mockServer := newMockWhatsAppServer()
 	defer mockServer.close()
 
-	app := messageTestApp(t, mockServer)
-	org := createTestOrg(t, app)
+	app := newMsgTestApp(t, mockServer)
+	org := testutil.CreateTestOrganization(t, app.DB)
 	account := createTestAccount(t, app, org.ID)
-	contact := createMsgTestContact(t, app, org.ID, account.Name)
+	contact := testutil.CreateTestContactWith(t, app.DB, org.ID, testutil.WithContactAccount(account.Name))
 
 	ctx := testutil.TestContext(t)
 
@@ -242,7 +196,7 @@ func TestApp_SendOutgoingMessage_TextMessage_Success(t *testing.T) {
 	require.Len(t, mockServer.sentMessages, 1)
 	sentMsg := mockServer.sentMessages[0]
 	assert.Equal(t, "text", sentMsg["type"])
-	assert.Equal(t, "+1234567890", sentMsg["to"])
+	assert.Equal(t, contact.PhoneNumber, sentMsg["to"])
 
 	textContent := sentMsg["text"].(map[string]interface{})
 	assert.Equal(t, "Hello, World!", textContent["body"])
@@ -261,10 +215,10 @@ func TestApp_SendOutgoingMessage_TextMessage_APIError(t *testing.T) {
 	mockServer.returnError = true
 	mockServer.errorMessage = "Phone number is invalid"
 
-	app := messageTestApp(t, mockServer)
-	org := createTestOrg(t, app)
+	app := newMsgTestApp(t, mockServer)
+	org := testutil.CreateTestOrganization(t, app.DB)
 	account := createTestAccount(t, app, org.ID)
-	contact := createMsgTestContact(t, app, org.ID, account.Name)
+	contact := testutil.CreateTestContactWith(t, app.DB, org.ID, testutil.WithContactAccount(account.Name))
 
 	ctx := testutil.TestContext(t)
 
@@ -294,10 +248,10 @@ func TestApp_SendOutgoingMessage_ImageMessage_WithMediaID(t *testing.T) {
 	mockServer := newMockWhatsAppServer()
 	defer mockServer.close()
 
-	app := messageTestApp(t, mockServer)
-	org := createTestOrg(t, app)
+	app := newMsgTestApp(t, mockServer)
+	org := testutil.CreateTestOrganization(t, app.DB)
 	account := createTestAccount(t, app, org.ID)
-	contact := createMsgTestContact(t, app, org.ID, account.Name)
+	contact := testutil.CreateTestContactWith(t, app.DB, org.ID, testutil.WithContactAccount(account.Name))
 
 	ctx := testutil.TestContext(t)
 
@@ -334,10 +288,10 @@ func TestApp_SendOutgoingMessage_ImageMessage_WithMediaData(t *testing.T) {
 	mockServer := newMockWhatsAppServer()
 	defer mockServer.close()
 
-	app := messageTestApp(t, mockServer)
-	org := createTestOrg(t, app)
+	app := newMsgTestApp(t, mockServer)
+	org := testutil.CreateTestOrganization(t, app.DB)
 	account := createTestAccount(t, app, org.ID)
-	contact := createMsgTestContact(t, app, org.ID, account.Name)
+	contact := testutil.CreateTestContactWith(t, app.DB, org.ID, testutil.WithContactAccount(account.Name))
 
 	ctx := testutil.TestContext(t)
 
@@ -374,10 +328,10 @@ func TestApp_SendOutgoingMessage_DocumentMessage(t *testing.T) {
 	mockServer := newMockWhatsAppServer()
 	defer mockServer.close()
 
-	app := messageTestApp(t, mockServer)
-	org := createTestOrg(t, app)
+	app := newMsgTestApp(t, mockServer)
+	org := testutil.CreateTestOrganization(t, app.DB)
 	account := createTestAccount(t, app, org.ID)
-	contact := createMsgTestContact(t, app, org.ID, account.Name)
+	contact := testutil.CreateTestContactWith(t, app.DB, org.ID, testutil.WithContactAccount(account.Name))
 
 	ctx := testutil.TestContext(t)
 
@@ -413,10 +367,10 @@ func TestApp_SendOutgoingMessage_VideoMessage(t *testing.T) {
 	mockServer := newMockWhatsAppServer()
 	defer mockServer.close()
 
-	app := messageTestApp(t, mockServer)
-	org := createTestOrg(t, app)
+	app := newMsgTestApp(t, mockServer)
+	org := testutil.CreateTestOrganization(t, app.DB)
 	account := createTestAccount(t, app, org.ID)
-	contact := createMsgTestContact(t, app, org.ID, account.Name)
+	contact := testutil.CreateTestContactWith(t, app.DB, org.ID, testutil.WithContactAccount(account.Name))
 
 	ctx := testutil.TestContext(t)
 
@@ -449,10 +403,10 @@ func TestApp_SendOutgoingMessage_AudioMessage(t *testing.T) {
 	mockServer := newMockWhatsAppServer()
 	defer mockServer.close()
 
-	app := messageTestApp(t, mockServer)
-	org := createTestOrg(t, app)
+	app := newMsgTestApp(t, mockServer)
+	org := testutil.CreateTestOrganization(t, app.DB)
 	account := createTestAccount(t, app, org.ID)
-	contact := createMsgTestContact(t, app, org.ID, account.Name)
+	contact := testutil.CreateTestContactWith(t, app.DB, org.ID, testutil.WithContactAccount(account.Name))
 
 	ctx := testutil.TestContext(t)
 
@@ -483,10 +437,10 @@ func TestApp_SendOutgoingMessage_InteractiveButtons(t *testing.T) {
 	mockServer := newMockWhatsAppServer()
 	defer mockServer.close()
 
-	app := messageTestApp(t, mockServer)
-	org := createTestOrg(t, app)
+	app := newMsgTestApp(t, mockServer)
+	org := testutil.CreateTestOrganization(t, app.DB)
 	account := createTestAccount(t, app, org.ID)
-	contact := createMsgTestContact(t, app, org.ID, account.Name)
+	contact := testutil.CreateTestContactWith(t, app.DB, org.ID, testutil.WithContactAccount(account.Name))
 
 	ctx := testutil.TestContext(t)
 
@@ -533,10 +487,10 @@ func TestApp_SendOutgoingMessage_InteractiveCTAURL(t *testing.T) {
 	mockServer := newMockWhatsAppServer()
 	defer mockServer.close()
 
-	app := messageTestApp(t, mockServer)
-	org := createTestOrg(t, app)
+	app := newMsgTestApp(t, mockServer)
+	org := testutil.CreateTestOrganization(t, app.DB)
 	account := createTestAccount(t, app, org.ID)
-	contact := createMsgTestContact(t, app, org.ID, account.Name)
+	contact := testutil.CreateTestContactWith(t, app.DB, org.ID, testutil.WithContactAccount(account.Name))
 
 	ctx := testutil.TestContext(t)
 
@@ -575,10 +529,10 @@ func TestApp_SendOutgoingMessage_TemplateMessage(t *testing.T) {
 	mockServer := newMockWhatsAppServer()
 	defer mockServer.close()
 
-	app := messageTestApp(t, mockServer)
-	org := createTestOrg(t, app)
+	app := newMsgTestApp(t, mockServer)
+	org := testutil.CreateTestOrganization(t, app.DB)
 	account := createTestAccount(t, app, org.ID)
-	contact := createMsgTestContact(t, app, org.ID, account.Name)
+	contact := testutil.CreateTestContactWith(t, app.DB, org.ID, testutil.WithContactAccount(account.Name))
 
 	// Create a test template
 	template := &models.Template{
@@ -634,10 +588,10 @@ func TestApp_SendOutgoingMessage_TemplateMessage_MissingTemplate(t *testing.T) {
 	mockServer := newMockWhatsAppServer()
 	defer mockServer.close()
 
-	app := messageTestApp(t, mockServer)
-	org := createTestOrg(t, app)
+	app := newMsgTestApp(t, mockServer)
+	org := testutil.CreateTestOrganization(t, app.DB)
 	account := createTestAccount(t, app, org.ID)
-	contact := createMsgTestContact(t, app, org.ID, account.Name)
+	contact := testutil.CreateTestContactWith(t, app.DB, org.ID, testutil.WithContactAccount(account.Name))
 
 	ctx := testutil.TestContext(t)
 
@@ -668,10 +622,10 @@ func TestApp_SendOutgoingMessage_AsyncOption(t *testing.T) {
 	mockServer := newMockWhatsAppServer()
 	defer mockServer.close()
 
-	app := messageTestApp(t, mockServer)
-	org := createTestOrg(t, app)
+	app := newMsgTestApp(t, mockServer)
+	org := testutil.CreateTestOrganization(t, app.DB)
 	account := createTestAccount(t, app, org.ID)
-	contact := createMsgTestContact(t, app, org.ID, account.Name)
+	contact := testutil.CreateTestContactWith(t, app.DB, org.ID, testutil.WithContactAccount(account.Name))
 
 	ctx := testutil.TestContext(t)
 
@@ -705,10 +659,10 @@ func TestApp_SendOutgoingMessage_SyncOption(t *testing.T) {
 	mockServer := newMockWhatsAppServer()
 	defer mockServer.close()
 
-	app := messageTestApp(t, mockServer)
-	org := createTestOrg(t, app)
+	app := newMsgTestApp(t, mockServer)
+	org := testutil.CreateTestOrganization(t, app.DB)
 	account := createTestAccount(t, app, org.ID)
-	contact := createMsgTestContact(t, app, org.ID, account.Name)
+	contact := testutil.CreateTestContactWith(t, app.DB, org.ID, testutil.WithContactAccount(account.Name))
 
 	ctx := testutil.TestContext(t)
 
@@ -738,10 +692,10 @@ func TestApp_SendOutgoingMessage_WithSentByUser(t *testing.T) {
 	mockServer := newMockWhatsAppServer()
 	defer mockServer.close()
 
-	app := messageTestApp(t, mockServer)
-	org := createTestOrg(t, app)
+	app := newMsgTestApp(t, mockServer)
+	org := testutil.CreateTestOrganization(t, app.DB)
 	account := createTestAccount(t, app, org.ID)
-	contact := createMsgTestContact(t, app, org.ID, account.Name)
+	contact := testutil.CreateTestContactWith(t, app.DB, org.ID, testutil.WithContactAccount(account.Name))
 
 	// Create a test user (required due to foreign key constraint)
 	user := &models.User{
@@ -785,10 +739,10 @@ func TestApp_SendOutgoingMessage_UnsupportedType(t *testing.T) {
 	mockServer := newMockWhatsAppServer()
 	defer mockServer.close()
 
-	app := messageTestApp(t, mockServer)
-	org := createTestOrg(t, app)
+	app := newMsgTestApp(t, mockServer)
+	org := testutil.CreateTestOrganization(t, app.DB)
 	account := createTestAccount(t, app, org.ID)
-	contact := createMsgTestContact(t, app, org.ID, account.Name)
+	contact := testutil.CreateTestContactWith(t, app.DB, org.ID, testutil.WithContactAccount(account.Name))
 
 	ctx := testutil.TestContext(t)
 
@@ -861,10 +815,10 @@ func TestApp_SendOutgoingMessage_ContactLastMessageUpdated(t *testing.T) {
 	mockServer := newMockWhatsAppServer()
 	defer mockServer.close()
 
-	app := messageTestApp(t, mockServer)
-	org := createTestOrg(t, app)
+	app := newMsgTestApp(t, mockServer)
+	org := testutil.CreateTestOrganization(t, app.DB)
 	account := createTestAccount(t, app, org.ID)
-	contact := createMsgTestContact(t, app, org.ID, account.Name)
+	contact := testutil.CreateTestContactWith(t, app.DB, org.ID, testutil.WithContactAccount(account.Name))
 
 	ctx := testutil.TestContext(t)
 
@@ -891,10 +845,10 @@ func TestApp_SendOutgoingMessage_MediaPreview(t *testing.T) {
 	mockServer := newMockWhatsAppServer()
 	defer mockServer.close()
 
-	app := messageTestApp(t, mockServer)
-	org := createTestOrg(t, app)
+	app := newMsgTestApp(t, mockServer)
+	org := testutil.CreateTestOrganization(t, app.DB)
 	account := createTestAccount(t, app, org.ID)
-	contact := createMsgTestContact(t, app, org.ID, account.Name)
+	contact := testutil.CreateTestContactWith(t, app.DB, org.ID, testutil.WithContactAccount(account.Name))
 
 	ctx := testutil.TestContext(t)
 
@@ -921,10 +875,10 @@ func TestApp_SendOutgoingMessage_DocumentPreview(t *testing.T) {
 	mockServer := newMockWhatsAppServer()
 	defer mockServer.close()
 
-	app := messageTestApp(t, mockServer)
-	org := createTestOrg(t, app)
+	app := newMsgTestApp(t, mockServer)
+	org := testutil.CreateTestOrganization(t, app.DB)
 	account := createTestAccount(t, app, org.ID)
-	contact := createMsgTestContact(t, app, org.ID, account.Name)
+	contact := testutil.CreateTestContactWith(t, app.DB, org.ID, testutil.WithContactAccount(account.Name))
 
 	ctx := testutil.TestContext(t)
 

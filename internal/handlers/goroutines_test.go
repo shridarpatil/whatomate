@@ -11,39 +11,12 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/redis/go-redis/v9"
-	"github.com/shridarpatil/whatomate/internal/config"
 	"github.com/shridarpatil/whatomate/internal/handlers"
 	"github.com/shridarpatil/whatomate/internal/models"
 	"github.com/shridarpatil/whatomate/test/testutil"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"gorm.io/gorm"
 )
-
-// setupWebhookTestApp creates an App with DB and Redis for webhook tests.
-// Skips test if TEST_DATABASE_URL or TEST_REDIS_URL is not set.
-func setupWebhookTestApp(t *testing.T) (*handlers.App, *gorm.DB, *redis.Client) {
-	t.Helper()
-
-	db := testutil.SetupTestDB(t)
-	redisClient := testutil.SetupTestRedis(t)
-	if redisClient == nil {
-		t.Skip("TEST_REDIS_URL not set, skipping Redis test")
-	}
-	log := testutil.NopLogger()
-
-	app := &handlers.App{
-		Config: &config.Config{},
-		DB:     db,
-		Redis:  redisClient,
-		Log:    log,
-		HTTPClient: &http.Client{
-			Timeout: 30 * time.Second,
-		},
-	}
-
-	return app, db, redisClient
-}
 
 // clearWebhookCache clears the webhook cache for a specific organization.
 // This ensures test isolation when using shared Redis.
@@ -82,7 +55,7 @@ func TestApp_WaitForBackgroundTasks(t *testing.T) {
 func TestApp_DispatchWebhook_CompletesSuccessfully(t *testing.T) {
 	t.Parallel()
 
-	app, db, redisClient := setupWebhookTestApp(t)
+	app := newTestAppWithRedis(t)
 
 	// Create test organization
 	org := &models.Organization{
@@ -90,11 +63,11 @@ func TestApp_DispatchWebhook_CompletesSuccessfully(t *testing.T) {
 		Name:      "test-org-webhook",
 		Slug:      "test-org-webhook-" + uuid.New().String()[:8],
 	}
-	require.NoError(t, db.Create(org).Error)
+	require.NoError(t, app.DB.Create(org).Error)
 
 	// Clear cache and cleanup after test
-	clearWebhookCache(t, redisClient, org.ID)
-	t.Cleanup(func() { clearWebhookCache(t, redisClient, org.ID) })
+	clearWebhookCache(t, app.Redis, org.ID)
+	t.Cleanup(func() { clearWebhookCache(t, app.Redis, org.ID) })
 
 	// Create a test server that responds successfully
 	var requestCount atomic.Int32
@@ -113,7 +86,7 @@ func TestApp_DispatchWebhook_CompletesSuccessfully(t *testing.T) {
 		Events:         models.StringArray{"message.incoming"},
 		IsActive:       true,
 	}
-	require.NoError(t, db.Create(webhook).Error)
+	require.NoError(t, app.DB.Create(webhook).Error)
 
 	// Dispatch webhook
 	app.DispatchWebhook(org.ID, models.WebhookEventMessageIncoming, map[string]string{"test": "data"})
@@ -128,7 +101,7 @@ func TestApp_DispatchWebhook_CompletesSuccessfully(t *testing.T) {
 func TestApp_DispatchWebhook_ConcurrencyLimit(t *testing.T) {
 	t.Parallel()
 
-	app, db, redisClient := setupWebhookTestApp(t)
+	app := newTestAppWithRedis(t)
 
 	// Create test organization
 	org := &models.Organization{
@@ -136,11 +109,11 @@ func TestApp_DispatchWebhook_ConcurrencyLimit(t *testing.T) {
 		Name:      "test-org-concurrency",
 		Slug:      "test-org-concurrency-" + uuid.New().String()[:8],
 	}
-	require.NoError(t, db.Create(org).Error)
+	require.NoError(t, app.DB.Create(org).Error)
 
 	// Clear cache and cleanup after test
-	clearWebhookCache(t, redisClient, org.ID)
-	t.Cleanup(func() { clearWebhookCache(t, redisClient, org.ID) })
+	clearWebhookCache(t, app.Redis, org.ID)
+	t.Cleanup(func() { clearWebhookCache(t, app.Redis, org.ID) })
 
 	// Track concurrent requests
 	var currentConcurrent atomic.Int32
@@ -175,7 +148,7 @@ func TestApp_DispatchWebhook_ConcurrencyLimit(t *testing.T) {
 			Events:         models.StringArray{"message.incoming"},
 			IsActive:       true,
 		}
-		require.NoError(t, db.Create(webhook).Error)
+		require.NoError(t, app.DB.Create(webhook).Error)
 	}
 
 	// Dispatch webhook (should trigger all 15 webhooks)
@@ -192,7 +165,7 @@ func TestApp_DispatchWebhook_ConcurrencyLimit(t *testing.T) {
 func TestApp_DispatchWebhook_NoWebhooks(t *testing.T) {
 	t.Parallel()
 
-	app, db, redisClient := setupWebhookTestApp(t)
+	app := newTestAppWithRedis(t)
 
 	// Create test organization with no webhooks
 	org := &models.Organization{
@@ -200,11 +173,11 @@ func TestApp_DispatchWebhook_NoWebhooks(t *testing.T) {
 		Name:      "test-org-no-webhooks",
 		Slug:      "test-org-no-webhooks-" + uuid.New().String()[:8],
 	}
-	require.NoError(t, db.Create(org).Error)
+	require.NoError(t, app.DB.Create(org).Error)
 
 	// Clear cache and cleanup after test
-	clearWebhookCache(t, redisClient, org.ID)
-	t.Cleanup(func() { clearWebhookCache(t, redisClient, org.ID) })
+	clearWebhookCache(t, app.Redis, org.ID)
+	t.Cleanup(func() { clearWebhookCache(t, app.Redis, org.ID) })
 
 	// Should not panic when no webhooks exist
 	app.DispatchWebhook(org.ID, models.WebhookEventMessageIncoming, map[string]string{"test": "data"})
@@ -227,7 +200,7 @@ func TestApp_DispatchWebhook_NoWebhooks(t *testing.T) {
 func TestApp_DispatchWebhook_InactiveWebhook(t *testing.T) {
 	t.Parallel()
 
-	app, db, redisClient := setupWebhookTestApp(t)
+	app := newTestAppWithRedis(t)
 
 	// Create test organization
 	org := &models.Organization{
@@ -235,14 +208,14 @@ func TestApp_DispatchWebhook_InactiveWebhook(t *testing.T) {
 		Name:      "test-org-inactive",
 		Slug:      "test-org-inactive-" + uuid.New().String()[:8],
 	}
-	require.NoError(t, db.Create(org).Error)
+	require.NoError(t, app.DB.Create(org).Error)
 
 	// Ensure clean state: delete any webhooks and clear cache
-	db.Where("organization_id = ?", org.ID).Delete(&models.Webhook{})
-	clearWebhookCache(t, redisClient, org.ID)
+	app.DB.Where("organization_id = ?", org.ID).Delete(&models.Webhook{})
+	clearWebhookCache(t, app.Redis, org.ID)
 	t.Cleanup(func() {
-		db.Where("organization_id = ?", org.ID).Delete(&models.Webhook{})
-		clearWebhookCache(t, redisClient, org.ID)
+		app.DB.Where("organization_id = ?", org.ID).Delete(&models.Webhook{})
+		clearWebhookCache(t, app.Redis, org.ID)
 	})
 
 	var requestCount atomic.Int32
@@ -260,18 +233,18 @@ func TestApp_DispatchWebhook_InactiveWebhook(t *testing.T) {
 		URL:            server.URL,
 		Events:         models.StringArray{"message.incoming"},
 	}
-	require.NoError(t, db.Create(webhook).Error)
+	require.NoError(t, app.DB.Create(webhook).Error)
 
 	// Explicitly set inactive (GORM default:true prevents setting false during create)
-	require.NoError(t, db.Model(webhook).Update("is_active", false).Error)
+	require.NoError(t, app.DB.Model(webhook).Update("is_active", false).Error)
 
 	// Verify the webhook is actually inactive in DB
 	var savedWebhook models.Webhook
-	require.NoError(t, db.Where("id = ?", webhook.ID).First(&savedWebhook).Error)
+	require.NoError(t, app.DB.Where("id = ?", webhook.ID).First(&savedWebhook).Error)
 	require.False(t, savedWebhook.IsActive, "webhook should be saved as inactive")
 
 	// Clear cache after updating webhook to inactive
-	clearWebhookCache(t, redisClient, org.ID)
+	clearWebhookCache(t, app.Redis, org.ID)
 
 	app.DispatchWebhook(org.ID, models.WebhookEventMessageIncoming, map[string]string{"test": "data"})
 	app.WaitForBackgroundTasks()
@@ -283,7 +256,7 @@ func TestApp_DispatchWebhook_InactiveWebhook(t *testing.T) {
 func TestApp_DispatchWebhook_EventFiltering(t *testing.T) {
 	t.Parallel()
 
-	app, db, redisClient := setupWebhookTestApp(t)
+	app := newTestAppWithRedis(t)
 
 	// Create test organization
 	org := &models.Organization{
@@ -291,11 +264,11 @@ func TestApp_DispatchWebhook_EventFiltering(t *testing.T) {
 		Name:      "test-org-filtering",
 		Slug:      "test-org-filtering-" + uuid.New().String()[:8],
 	}
-	require.NoError(t, db.Create(org).Error)
+	require.NoError(t, app.DB.Create(org).Error)
 
 	// Clear cache and cleanup after test
-	clearWebhookCache(t, redisClient, org.ID)
-	t.Cleanup(func() { clearWebhookCache(t, redisClient, org.ID) })
+	clearWebhookCache(t, app.Redis, org.ID)
+	t.Cleanup(func() { clearWebhookCache(t, app.Redis, org.ID) })
 
 	var requestCount atomic.Int32
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -313,7 +286,7 @@ func TestApp_DispatchWebhook_EventFiltering(t *testing.T) {
 		Events:         models.StringArray{"message.outgoing"}, // Not message.incoming
 		IsActive:       true,
 	}
-	require.NoError(t, db.Create(webhook).Error)
+	require.NoError(t, app.DB.Create(webhook).Error)
 
 	// Dispatch message.incoming event
 	app.DispatchWebhook(org.ID, models.WebhookEventMessageIncoming, map[string]string{"test": "data"})
@@ -326,7 +299,7 @@ func TestApp_DispatchWebhook_EventFiltering(t *testing.T) {
 func TestApp_DispatchWebhook_RetryOnFailure(t *testing.T) {
 	t.Parallel()
 
-	app, db, redisClient := setupWebhookTestApp(t)
+	app := newTestAppWithRedis(t)
 
 	// Create test organization
 	org := &models.Organization{
@@ -334,11 +307,11 @@ func TestApp_DispatchWebhook_RetryOnFailure(t *testing.T) {
 		Name:      "test-org-retry",
 		Slug:      "test-org-retry-" + uuid.New().String()[:8],
 	}
-	require.NoError(t, db.Create(org).Error)
+	require.NoError(t, app.DB.Create(org).Error)
 
 	// Clear cache and cleanup after test
-	clearWebhookCache(t, redisClient, org.ID)
-	t.Cleanup(func() { clearWebhookCache(t, redisClient, org.ID) })
+	clearWebhookCache(t, app.Redis, org.ID)
+	t.Cleanup(func() { clearWebhookCache(t, app.Redis, org.ID) })
 
 	var requestCount atomic.Int32
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -360,7 +333,7 @@ func TestApp_DispatchWebhook_RetryOnFailure(t *testing.T) {
 		Events:         models.StringArray{"message.incoming"},
 		IsActive:       true,
 	}
-	require.NoError(t, db.Create(webhook).Error)
+	require.NoError(t, app.DB.Create(webhook).Error)
 
 	app.DispatchWebhook(org.ID, models.WebhookEventMessageIncoming, map[string]string{"test": "data"})
 	app.WaitForBackgroundTasks()
@@ -372,7 +345,7 @@ func TestApp_DispatchWebhook_RetryOnFailure(t *testing.T) {
 func TestApp_DispatchWebhook_HTTPTimeout(t *testing.T) {
 	t.Parallel()
 
-	app, db, redisClient := setupWebhookTestApp(t)
+	app := newTestAppWithRedis(t)
 
 	// Create test organization
 	org := &models.Organization{
@@ -380,11 +353,11 @@ func TestApp_DispatchWebhook_HTTPTimeout(t *testing.T) {
 		Name:      "test-org-timeout",
 		Slug:      "test-org-timeout-" + uuid.New().String()[:8],
 	}
-	require.NoError(t, db.Create(org).Error)
+	require.NoError(t, app.DB.Create(org).Error)
 
 	// Clear cache and cleanup after test
-	clearWebhookCache(t, redisClient, org.ID)
-	t.Cleanup(func() { clearWebhookCache(t, redisClient, org.ID) })
+	clearWebhookCache(t, app.Redis, org.ID)
+	t.Cleanup(func() { clearWebhookCache(t, app.Redis, org.ID) })
 
 	var requestStarted atomic.Bool
 
@@ -409,7 +382,7 @@ func TestApp_DispatchWebhook_HTTPTimeout(t *testing.T) {
 		Events:         models.StringArray{"message.incoming"},
 		IsActive:       true,
 	}
-	require.NoError(t, db.Create(webhook).Error)
+	require.NoError(t, app.DB.Create(webhook).Error)
 
 	app.DispatchWebhook(org.ID, models.WebhookEventMessageIncoming, map[string]string{"test": "data"})
 
@@ -433,7 +406,7 @@ func TestApp_DispatchWebhook_HTTPTimeout(t *testing.T) {
 func TestApp_DispatchWebhook_MultipleEvents(t *testing.T) {
 	t.Parallel()
 
-	app, db, redisClient := setupWebhookTestApp(t)
+	app := newTestAppWithRedis(t)
 
 	// Create test organization
 	org := &models.Organization{
@@ -441,11 +414,11 @@ func TestApp_DispatchWebhook_MultipleEvents(t *testing.T) {
 		Name:      "test-org-multi-events",
 		Slug:      "test-org-multi-events-" + uuid.New().String()[:8],
 	}
-	require.NoError(t, db.Create(org).Error)
+	require.NoError(t, app.DB.Create(org).Error)
 
 	// Clear cache and cleanup after test
-	clearWebhookCache(t, redisClient, org.ID)
-	t.Cleanup(func() { clearWebhookCache(t, redisClient, org.ID) })
+	clearWebhookCache(t, app.Redis, org.ID)
+	t.Cleanup(func() { clearWebhookCache(t, app.Redis, org.ID) })
 
 	var incomingCount atomic.Int32
 	var outgoingCount atomic.Int32
@@ -472,7 +445,7 @@ func TestApp_DispatchWebhook_MultipleEvents(t *testing.T) {
 		Events:         models.StringArray{"message.incoming"},
 		IsActive:       true,
 	}
-	require.NoError(t, db.Create(webhook1).Error)
+	require.NoError(t, app.DB.Create(webhook1).Error)
 
 	webhook2 := &models.Webhook{
 		BaseModel:      models.BaseModel{ID: uuid.New()},
@@ -482,7 +455,7 @@ func TestApp_DispatchWebhook_MultipleEvents(t *testing.T) {
 		Events:         models.StringArray{"message.outgoing"},
 		IsActive:       true,
 	}
-	require.NoError(t, db.Create(webhook2).Error)
+	require.NoError(t, app.DB.Create(webhook2).Error)
 
 	// Dispatch incoming event
 	app.DispatchWebhook(org.ID, models.WebhookEventMessageIncoming, map[string]string{"test": "incoming"})

@@ -5,7 +5,6 @@ import (
 	"testing"
 
 	"github.com/google/uuid"
-	"github.com/shridarpatil/whatomate/internal/config"
 	"github.com/shridarpatil/whatomate/internal/handlers"
 	"github.com/shridarpatil/whatomate/internal/models"
 	"github.com/shridarpatil/whatomate/test/testutil"
@@ -14,73 +13,20 @@ import (
 	"github.com/valyala/fasthttp"
 )
 
-// widgetTestApp creates an App instance for widget testing.
-func widgetTestApp(t *testing.T) *handlers.App {
+// getAnalyticsPermissions returns analytics permissions from the full permission set.
+func getAnalyticsPermissions(t *testing.T, app *handlers.App) []models.Permission {
 	t.Helper()
 
-	db := testutil.SetupTestDB(t)
-	log := testutil.NopLogger()
+	allPerms := testutil.GetOrCreateTestPermissions(t, app.DB)
 
-	cfg := &config.Config{
-		JWT: config.JWTConfig{
-			Secret:            testJWTSecret,
-			AccessExpiryMins:  15,
-			RefreshExpiryDays: 7,
-		},
-	}
-
-	return &handlers.App{
-		Config: cfg,
-		DB:     db,
-		Log:    log,
-	}
-}
-
-// getOrCreateAnalyticsPermissions gets existing analytics permissions or creates them.
-func getOrCreateAnalyticsPermissions(t *testing.T, app *handlers.App) []models.Permission {
-	t.Helper()
-
-	// First try to get existing analytics permissions
-	var existingPerms []models.Permission
-	if err := app.DB.Where("resource = ?", "analytics").Order("action").Find(&existingPerms).Error; err == nil && len(existingPerms) >= 3 {
-		return existingPerms
-	}
-
-	// Create analytics permissions if they don't exist
-	permissions := []models.Permission{
-		{BaseModel: models.BaseModel{ID: uuid.New()}, Resource: "analytics", Action: "read", Description: "View analytics dashboard"},
-		{BaseModel: models.BaseModel{ID: uuid.New()}, Resource: "analytics", Action: "write", Description: "Create and edit dashboard widgets"},
-		{BaseModel: models.BaseModel{ID: uuid.New()}, Resource: "analytics", Action: "delete", Description: "Delete dashboard widgets"},
-	}
-
-	for i := range permissions {
-		// Check if permission already exists
-		var existing models.Permission
-		if err := app.DB.Where("resource = ? AND action = ?", permissions[i].Resource, permissions[i].Action).First(&existing).Error; err == nil {
-			permissions[i] = existing
-		} else {
-			require.NoError(t, app.DB.Create(&permissions[i]).Error)
+	var analyticsPerms []models.Permission
+	for _, p := range allPerms {
+		if p.Resource == "analytics" {
+			analyticsPerms = append(analyticsPerms, p)
 		}
 	}
-
-	return permissions
-}
-
-// createAnalyticsRole creates a role with analytics permissions.
-func createAnalyticsRole(t *testing.T, app *handlers.App, orgID uuid.UUID, name string, permissions []models.Permission) *models.CustomRole {
-	t.Helper()
-
-	role := &models.CustomRole{
-		BaseModel:      models.BaseModel{ID: uuid.New()},
-		OrganizationID: orgID,
-		Name:           name,
-		Description:    "Role with analytics permissions",
-		IsSystem:       false,
-		IsDefault:      false,
-		Permissions:    permissions,
-	}
-	require.NoError(t, app.DB.Create(role).Error)
-	return role
+	require.NotEmpty(t, analyticsPerms, "expected analytics permissions in default set")
+	return analyticsPerms
 }
 
 // createTestWidget creates a test dashboard widget in the database.
@@ -110,18 +56,18 @@ func createTestWidget(t *testing.T, app *handlers.App, orgID uuid.UUID, userID *
 // --- ListDashboardWidgets Tests ---
 
 func TestApp_ListDashboardWidgets_Success(t *testing.T) {
-	app := widgetTestApp(t)
-	org := createTestOrganization(t, app)
-	perms := getOrCreateAnalyticsPermissions(t, app)
-	role := createAnalyticsRole(t, app, org.ID, "Analytics User", perms)
-	user := createTestUser(t, app, org.ID, uniqueEmail("list-widgets"), "password", &role.ID, true)
+	app := newTestApp(t)
+	org := testutil.CreateTestOrganization(t, app.DB)
+	perms := getAnalyticsPermissions(t, app)
+	role := testutil.CreateTestRoleExact(t, app.DB, org.ID, "Analytics User", false, false, perms)
+	user := testutil.CreateTestUser(t, app.DB, org.ID, testutil.WithEmail(testutil.UniqueEmail("list-widgets")), testutil.WithPassword("password"), testutil.WithRoleID(&role.ID))
 
 	// Create multiple widgets
 	createTestWidget(t, app, org.ID, &user.ID, "Widget 1", true, false)
 	createTestWidget(t, app, org.ID, &user.ID, "Widget 2", true, false)
 
 	req := testutil.NewGETRequest(t)
-	setAuthContext(req, org.ID, user.ID)
+	testutil.SetAuthContext(req, org.ID, user.ID)
 
 	err := app.ListDashboardWidgets(req)
 	require.NoError(t, err)
@@ -138,13 +84,13 @@ func TestApp_ListDashboardWidgets_Success(t *testing.T) {
 }
 
 func TestApp_ListDashboardWidgets_NoPermission(t *testing.T) {
-	app := widgetTestApp(t)
-	org := createTestOrganization(t, app)
+	app := newTestApp(t)
+	org := testutil.CreateTestOrganization(t, app.DB)
 	// User without analytics permission
-	user := createTestUser(t, app, org.ID, uniqueEmail("list-no-perm"), "password", nil, true)
+	user := testutil.CreateTestUser(t, app.DB, org.ID, testutil.WithEmail(testutil.UniqueEmail("list-no-perm")), testutil.WithPassword("password"))
 
 	req := testutil.NewGETRequest(t)
-	setAuthContext(req, org.ID, user.ID)
+	testutil.SetAuthContext(req, org.ID, user.ID)
 
 	err := app.ListDashboardWidgets(req)
 	require.NoError(t, err)
@@ -152,18 +98,18 @@ func TestApp_ListDashboardWidgets_NoPermission(t *testing.T) {
 }
 
 func TestApp_ListDashboardWidgets_FiltersByOrganization(t *testing.T) {
-	app := widgetTestApp(t)
+	app := newTestApp(t)
 
 	// Create two organizations
-	org1 := createTestOrganization(t, app)
-	org2 := createTestOrganization(t, app)
+	org1 := testutil.CreateTestOrganization(t, app.DB)
+	org2 := testutil.CreateTestOrganization(t, app.DB)
 
-	perms := getOrCreateAnalyticsPermissions(t, app)
-	role1 := createAnalyticsRole(t, app, org1.ID, "Analytics User 1", perms)
-	role2 := createAnalyticsRole(t, app, org2.ID, "Analytics User 2", perms)
+	perms := getAnalyticsPermissions(t, app)
+	role1 := testutil.CreateTestRoleExact(t, app.DB, org1.ID, "Analytics User 1", false, false, perms)
+	role2 := testutil.CreateTestRoleExact(t, app.DB, org2.ID, "Analytics User 2", false, false, perms)
 
-	user1 := createTestUser(t, app, org1.ID, uniqueEmail("list-org1"), "password", &role1.ID, true)
-	user2 := createTestUser(t, app, org2.ID, uniqueEmail("list-org2"), "password", &role2.ID, true)
+	user1 := testutil.CreateTestUser(t, app.DB, org1.ID, testutil.WithEmail(testutil.UniqueEmail("list-org1")), testutil.WithPassword("password"), testutil.WithRoleID(&role1.ID))
+	user2 := testutil.CreateTestUser(t, app.DB, org2.ID, testutil.WithEmail(testutil.UniqueEmail("list-org2")), testutil.WithPassword("password"), testutil.WithRoleID(&role2.ID))
 
 	// Create widgets for each org
 	createTestWidget(t, app, org1.ID, &user1.ID, "Org1 Widget", true, false)
@@ -171,7 +117,7 @@ func TestApp_ListDashboardWidgets_FiltersByOrganization(t *testing.T) {
 
 	// User from org1 should only see org1's widgets
 	req := testutil.NewGETRequest(t)
-	setAuthContext(req, org1.ID, user1.ID)
+	testutil.SetAuthContext(req, org1.ID, user1.ID)
 
 	err := app.ListDashboardWidgets(req)
 	require.NoError(t, err)
@@ -189,7 +135,7 @@ func TestApp_ListDashboardWidgets_FiltersByOrganization(t *testing.T) {
 }
 
 func TestApp_ListDashboardWidgets_Unauthorized(t *testing.T) {
-	app := widgetTestApp(t)
+	app := newTestApp(t)
 
 	req := testutil.NewGETRequest(t)
 	// No auth context set
@@ -202,15 +148,15 @@ func TestApp_ListDashboardWidgets_Unauthorized(t *testing.T) {
 // --- GetDashboardWidget Tests ---
 
 func TestApp_GetDashboardWidget_Success(t *testing.T) {
-	app := widgetTestApp(t)
-	org := createTestOrganization(t, app)
-	perms := getOrCreateAnalyticsPermissions(t, app)
-	role := createAnalyticsRole(t, app, org.ID, "Analytics User", perms)
-	user := createTestUser(t, app, org.ID, uniqueEmail("get-widget"), "password", &role.ID, true)
+	app := newTestApp(t)
+	org := testutil.CreateTestOrganization(t, app.DB)
+	perms := getAnalyticsPermissions(t, app)
+	role := testutil.CreateTestRoleExact(t, app.DB, org.ID, "Analytics User", false, false, perms)
+	user := testutil.CreateTestUser(t, app.DB, org.ID, testutil.WithEmail(testutil.UniqueEmail("get-widget")), testutil.WithPassword("password"), testutil.WithRoleID(&role.ID))
 	widget := createTestWidget(t, app, org.ID, &user.ID, "Test Widget", true, false)
 
 	req := testutil.NewGETRequest(t)
-	setAuthContext(req, org.ID, user.ID)
+	testutil.SetAuthContext(req, org.ID, user.ID)
 	testutil.SetPathParam(req, "id", widget.ID.String())
 
 	err := app.GetDashboardWidget(req)
@@ -227,18 +173,18 @@ func TestApp_GetDashboardWidget_Success(t *testing.T) {
 }
 
 func TestApp_GetDashboardWidget_NoPermission(t *testing.T) {
-	app := widgetTestApp(t)
-	org := createTestOrganization(t, app)
-	perms := getOrCreateAnalyticsPermissions(t, app)
-	role := createAnalyticsRole(t, app, org.ID, "Analytics User", perms)
-	owner := createTestUser(t, app, org.ID, uniqueEmail("owner-get"), "password", &role.ID, true)
+	app := newTestApp(t)
+	org := testutil.CreateTestOrganization(t, app.DB)
+	perms := getAnalyticsPermissions(t, app)
+	role := testutil.CreateTestRoleExact(t, app.DB, org.ID, "Analytics User", false, false, perms)
+	owner := testutil.CreateTestUser(t, app.DB, org.ID, testutil.WithEmail(testutil.UniqueEmail("owner-get")), testutil.WithPassword("password"), testutil.WithRoleID(&role.ID))
 	// User without analytics permission
-	otherUser := createTestUser(t, app, org.ID, uniqueEmail("no-perm-get"), "password", nil, true)
+	otherUser := testutil.CreateTestUser(t, app.DB, org.ID, testutil.WithEmail(testutil.UniqueEmail("no-perm-get")), testutil.WithPassword("password"))
 
 	widget := createTestWidget(t, app, org.ID, &owner.ID, "Test Widget", true, false)
 
 	req := testutil.NewGETRequest(t)
-	setAuthContext(req, org.ID, otherUser.ID)
+	testutil.SetAuthContext(req, org.ID, otherUser.ID)
 	testutil.SetPathParam(req, "id", widget.ID.String())
 
 	err := app.GetDashboardWidget(req)
@@ -247,14 +193,14 @@ func TestApp_GetDashboardWidget_NoPermission(t *testing.T) {
 }
 
 func TestApp_GetDashboardWidget_NotFound(t *testing.T) {
-	app := widgetTestApp(t)
-	org := createTestOrganization(t, app)
-	perms := getOrCreateAnalyticsPermissions(t, app)
-	role := createAnalyticsRole(t, app, org.ID, "Analytics User", perms)
-	user := createTestUser(t, app, org.ID, uniqueEmail("get-not-found"), "password", &role.ID, true)
+	app := newTestApp(t)
+	org := testutil.CreateTestOrganization(t, app.DB)
+	perms := getAnalyticsPermissions(t, app)
+	role := testutil.CreateTestRoleExact(t, app.DB, org.ID, "Analytics User", false, false, perms)
+	user := testutil.CreateTestUser(t, app.DB, org.ID, testutil.WithEmail(testutil.UniqueEmail("get-not-found")), testutil.WithPassword("password"), testutil.WithRoleID(&role.ID))
 
 	req := testutil.NewGETRequest(t)
-	setAuthContext(req, org.ID, user.ID)
+	testutil.SetAuthContext(req, org.ID, user.ID)
 	testutil.SetPathParam(req, "id", uuid.New().String())
 
 	err := app.GetDashboardWidget(req)
@@ -263,14 +209,14 @@ func TestApp_GetDashboardWidget_NotFound(t *testing.T) {
 }
 
 func TestApp_GetDashboardWidget_InvalidID(t *testing.T) {
-	app := widgetTestApp(t)
-	org := createTestOrganization(t, app)
-	perms := getOrCreateAnalyticsPermissions(t, app)
-	role := createAnalyticsRole(t, app, org.ID, "Analytics User", perms)
-	user := createTestUser(t, app, org.ID, uniqueEmail("get-invalid-id"), "password", &role.ID, true)
+	app := newTestApp(t)
+	org := testutil.CreateTestOrganization(t, app.DB)
+	perms := getAnalyticsPermissions(t, app)
+	role := testutil.CreateTestRoleExact(t, app.DB, org.ID, "Analytics User", false, false, perms)
+	user := testutil.CreateTestUser(t, app.DB, org.ID, testutil.WithEmail(testutil.UniqueEmail("get-invalid-id")), testutil.WithPassword("password"), testutil.WithRoleID(&role.ID))
 
 	req := testutil.NewGETRequest(t)
-	setAuthContext(req, org.ID, user.ID)
+	testutil.SetAuthContext(req, org.ID, user.ID)
 	testutil.SetPathParam(req, "id", "not-a-uuid")
 
 	err := app.GetDashboardWidget(req)
@@ -281,11 +227,11 @@ func TestApp_GetDashboardWidget_InvalidID(t *testing.T) {
 // --- CreateDashboardWidget Tests ---
 
 func TestApp_CreateDashboardWidget_Success(t *testing.T) {
-	app := widgetTestApp(t)
-	org := createTestOrganization(t, app)
-	perms := getOrCreateAnalyticsPermissions(t, app)
-	role := createAnalyticsRole(t, app, org.ID, "Analytics User", perms)
-	user := createTestUser(t, app, org.ID, uniqueEmail("create-widget"), "password", &role.ID, true)
+	app := newTestApp(t)
+	org := testutil.CreateTestOrganization(t, app.DB)
+	perms := getAnalyticsPermissions(t, app)
+	role := testutil.CreateTestRoleExact(t, app.DB, org.ID, "Analytics User", false, false, perms)
+	user := testutil.CreateTestUser(t, app.DB, org.ID, testutil.WithEmail(testutil.UniqueEmail("create-widget")), testutil.WithPassword("password"), testutil.WithRoleID(&role.ID))
 
 	req := testutil.NewJSONRequest(t, map[string]any{
 		"name":        "New Widget",
@@ -294,7 +240,7 @@ func TestApp_CreateDashboardWidget_Success(t *testing.T) {
 		"metric":      "count",
 		"color":       "green",
 	})
-	setAuthContext(req, org.ID, user.ID)
+	testutil.SetAuthContext(req, org.ID, user.ID)
 
 	err := app.CreateDashboardWidget(req)
 	require.NoError(t, err)
@@ -311,19 +257,19 @@ func TestApp_CreateDashboardWidget_Success(t *testing.T) {
 }
 
 func TestApp_CreateDashboardWidget_NoPermission(t *testing.T) {
-	app := widgetTestApp(t)
-	org := createTestOrganization(t, app)
+	app := newTestApp(t)
+	org := testutil.CreateTestOrganization(t, app.DB)
 	// User without analytics write permission (only read)
-	readOnlyPerms := getOrCreateAnalyticsPermissions(t, app)
-	readOnlyRole := createAnalyticsRole(t, app, org.ID, "Read Only", readOnlyPerms[:1]) // Only read permission
-	user := createTestUser(t, app, org.ID, uniqueEmail("create-no-perm"), "password", &readOnlyRole.ID, true)
+	readOnlyPerms := getAnalyticsPermissions(t, app)
+	readOnlyRole := testutil.CreateTestRoleExact(t, app.DB, org.ID, "Read Only", false, false, readOnlyPerms[:1]) // Only read permission
+	user := testutil.CreateTestUser(t, app.DB, org.ID, testutil.WithEmail(testutil.UniqueEmail("create-no-perm")), testutil.WithPassword("password"), testutil.WithRoleID(&readOnlyRole.ID))
 
 	req := testutil.NewJSONRequest(t, map[string]any{
 		"name":        "New Widget",
 		"data_source": "messages",
 		"metric":      "count",
 	})
-	setAuthContext(req, org.ID, user.ID)
+	testutil.SetAuthContext(req, org.ID, user.ID)
 
 	err := app.CreateDashboardWidget(req)
 	require.NoError(t, err)
@@ -331,11 +277,11 @@ func TestApp_CreateDashboardWidget_NoPermission(t *testing.T) {
 }
 
 func TestApp_CreateDashboardWidget_WithFilters(t *testing.T) {
-	app := widgetTestApp(t)
-	org := createTestOrganization(t, app)
-	perms := getOrCreateAnalyticsPermissions(t, app)
-	role := createAnalyticsRole(t, app, org.ID, "Analytics User", perms)
-	user := createTestUser(t, app, org.ID, uniqueEmail("create-with-filters"), "password", &role.ID, true)
+	app := newTestApp(t)
+	org := testutil.CreateTestOrganization(t, app.DB)
+	perms := getAnalyticsPermissions(t, app)
+	role := testutil.CreateTestRoleExact(t, app.DB, org.ID, "Analytics User", false, false, perms)
+	user := testutil.CreateTestUser(t, app.DB, org.ID, testutil.WithEmail(testutil.UniqueEmail("create-with-filters")), testutil.WithPassword("password"), testutil.WithRoleID(&role.ID))
 
 	req := testutil.NewJSONRequest(t, map[string]any{
 		"name":        "Filtered Widget",
@@ -349,7 +295,7 @@ func TestApp_CreateDashboardWidget_WithFilters(t *testing.T) {
 			},
 		},
 	})
-	setAuthContext(req, org.ID, user.ID)
+	testutil.SetAuthContext(req, org.ID, user.ID)
 
 	err := app.CreateDashboardWidget(req)
 	require.NoError(t, err)
@@ -364,18 +310,18 @@ func TestApp_CreateDashboardWidget_WithFilters(t *testing.T) {
 }
 
 func TestApp_CreateDashboardWidget_InvalidDataSource(t *testing.T) {
-	app := widgetTestApp(t)
-	org := createTestOrganization(t, app)
-	perms := getOrCreateAnalyticsPermissions(t, app)
-	role := createAnalyticsRole(t, app, org.ID, "Analytics User", perms)
-	user := createTestUser(t, app, org.ID, uniqueEmail("create-invalid-source"), "password", &role.ID, true)
+	app := newTestApp(t)
+	org := testutil.CreateTestOrganization(t, app.DB)
+	perms := getAnalyticsPermissions(t, app)
+	role := testutil.CreateTestRoleExact(t, app.DB, org.ID, "Analytics User", false, false, perms)
+	user := testutil.CreateTestUser(t, app.DB, org.ID, testutil.WithEmail(testutil.UniqueEmail("create-invalid-source")), testutil.WithPassword("password"), testutil.WithRoleID(&role.ID))
 
 	req := testutil.NewJSONRequest(t, map[string]any{
 		"name":        "Invalid Widget",
 		"data_source": "invalid_source",
 		"metric":      "count",
 	})
-	setAuthContext(req, org.ID, user.ID)
+	testutil.SetAuthContext(req, org.ID, user.ID)
 
 	err := app.CreateDashboardWidget(req)
 	require.NoError(t, err)
@@ -383,17 +329,17 @@ func TestApp_CreateDashboardWidget_InvalidDataSource(t *testing.T) {
 }
 
 func TestApp_CreateDashboardWidget_MissingName(t *testing.T) {
-	app := widgetTestApp(t)
-	org := createTestOrganization(t, app)
-	perms := getOrCreateAnalyticsPermissions(t, app)
-	role := createAnalyticsRole(t, app, org.ID, "Analytics User", perms)
-	user := createTestUser(t, app, org.ID, uniqueEmail("create-missing-name"), "password", &role.ID, true)
+	app := newTestApp(t)
+	org := testutil.CreateTestOrganization(t, app.DB)
+	perms := getAnalyticsPermissions(t, app)
+	role := testutil.CreateTestRoleExact(t, app.DB, org.ID, "Analytics User", false, false, perms)
+	user := testutil.CreateTestUser(t, app.DB, org.ID, testutil.WithEmail(testutil.UniqueEmail("create-missing-name")), testutil.WithPassword("password"), testutil.WithRoleID(&role.ID))
 
 	req := testutil.NewJSONRequest(t, map[string]any{
 		"data_source": "messages",
 		"metric":      "count",
 	})
-	setAuthContext(req, org.ID, user.ID)
+	testutil.SetAuthContext(req, org.ID, user.ID)
 
 	err := app.CreateDashboardWidget(req)
 	require.NoError(t, err)
@@ -401,7 +347,7 @@ func TestApp_CreateDashboardWidget_MissingName(t *testing.T) {
 }
 
 func TestApp_CreateDashboardWidget_Unauthorized(t *testing.T) {
-	app := widgetTestApp(t)
+	app := newTestApp(t)
 
 	req := testutil.NewJSONRequest(t, map[string]any{
 		"name":        "Widget",
@@ -418,11 +364,11 @@ func TestApp_CreateDashboardWidget_Unauthorized(t *testing.T) {
 // --- UpdateDashboardWidget Tests ---
 
 func TestApp_UpdateDashboardWidget_Success(t *testing.T) {
-	app := widgetTestApp(t)
-	org := createTestOrganization(t, app)
-	perms := getOrCreateAnalyticsPermissions(t, app)
-	role := createAnalyticsRole(t, app, org.ID, "Analytics User", perms)
-	user := createTestUser(t, app, org.ID, uniqueEmail("update-widget"), "password", &role.ID, true)
+	app := newTestApp(t)
+	org := testutil.CreateTestOrganization(t, app.DB)
+	perms := getAnalyticsPermissions(t, app)
+	role := testutil.CreateTestRoleExact(t, app.DB, org.ID, "Analytics User", false, false, perms)
+	user := testutil.CreateTestUser(t, app.DB, org.ID, testutil.WithEmail(testutil.UniqueEmail("update-widget")), testutil.WithPassword("password"), testutil.WithRoleID(&role.ID))
 	widget := createTestWidget(t, app, org.ID, &user.ID, "Original Name", true, false)
 
 	req := testutil.NewJSONRequest(t, map[string]any{
@@ -430,7 +376,7 @@ func TestApp_UpdateDashboardWidget_Success(t *testing.T) {
 		"description": "Updated description",
 		"color":       "red",
 	})
-	setAuthContext(req, org.ID, user.ID)
+	testutil.SetAuthContext(req, org.ID, user.ID)
 	testutil.SetPathParam(req, "id", widget.ID.String())
 
 	err := app.UpdateDashboardWidget(req)
@@ -447,21 +393,21 @@ func TestApp_UpdateDashboardWidget_Success(t *testing.T) {
 }
 
 func TestApp_UpdateDashboardWidget_NoPermission(t *testing.T) {
-	app := widgetTestApp(t)
-	org := createTestOrganization(t, app)
-	perms := getOrCreateAnalyticsPermissions(t, app)
-	role := createAnalyticsRole(t, app, org.ID, "Analytics User", perms)
-	owner := createTestUser(t, app, org.ID, uniqueEmail("owner-update"), "password", &role.ID, true)
+	app := newTestApp(t)
+	org := testutil.CreateTestOrganization(t, app.DB)
+	perms := getAnalyticsPermissions(t, app)
+	role := testutil.CreateTestRoleExact(t, app.DB, org.ID, "Analytics User", false, false, perms)
+	owner := testutil.CreateTestUser(t, app.DB, org.ID, testutil.WithEmail(testutil.UniqueEmail("owner-update")), testutil.WithPassword("password"), testutil.WithRoleID(&role.ID))
 	// User without analytics write permission
-	readOnlyRole := createAnalyticsRole(t, app, org.ID, "Read Only", perms[:1])
-	otherUser := createTestUser(t, app, org.ID, uniqueEmail("no-perm-update"), "password", &readOnlyRole.ID, true)
+	readOnlyRole := testutil.CreateTestRoleExact(t, app.DB, org.ID, "Read Only", false, false, perms[:1])
+	otherUser := testutil.CreateTestUser(t, app.DB, org.ID, testutil.WithEmail(testutil.UniqueEmail("no-perm-update")), testutil.WithPassword("password"), testutil.WithRoleID(&readOnlyRole.ID))
 
 	widget := createTestWidget(t, app, org.ID, &owner.ID, "Test Widget", true, false)
 
 	req := testutil.NewJSONRequest(t, map[string]any{
 		"name": "Updated Name",
 	})
-	setAuthContext(req, org.ID, otherUser.ID)
+	testutil.SetAuthContext(req, org.ID, otherUser.ID)
 	testutil.SetPathParam(req, "id", widget.ID.String())
 
 	err := app.UpdateDashboardWidget(req)
@@ -470,12 +416,12 @@ func TestApp_UpdateDashboardWidget_NoPermission(t *testing.T) {
 }
 
 func TestApp_UpdateDashboardWidget_OnlyOwnerCanEdit(t *testing.T) {
-	app := widgetTestApp(t)
-	org := createTestOrganization(t, app)
-	perms := getOrCreateAnalyticsPermissions(t, app)
-	role := createAnalyticsRole(t, app, org.ID, "Analytics User", perms)
-	owner := createTestUser(t, app, org.ID, uniqueEmail("owner-only"), "password", &role.ID, true)
-	otherUser := createTestUser(t, app, org.ID, uniqueEmail("other-user"), "password", &role.ID, true)
+	app := newTestApp(t)
+	org := testutil.CreateTestOrganization(t, app.DB)
+	perms := getAnalyticsPermissions(t, app)
+	role := testutil.CreateTestRoleExact(t, app.DB, org.ID, "Analytics User", false, false, perms)
+	owner := testutil.CreateTestUser(t, app.DB, org.ID, testutil.WithEmail(testutil.UniqueEmail("owner-only")), testutil.WithPassword("password"), testutil.WithRoleID(&role.ID))
+	otherUser := testutil.CreateTestUser(t, app.DB, org.ID, testutil.WithEmail(testutil.UniqueEmail("other-user")), testutil.WithPassword("password"), testutil.WithRoleID(&role.ID))
 
 	// Create widget owned by 'owner'
 	widget := createTestWidget(t, app, org.ID, &owner.ID, "Owner Widget", true, false)
@@ -484,7 +430,7 @@ func TestApp_UpdateDashboardWidget_OnlyOwnerCanEdit(t *testing.T) {
 	req := testutil.NewJSONRequest(t, map[string]any{
 		"name": "Attempted Update",
 	})
-	setAuthContext(req, org.ID, otherUser.ID)
+	testutil.SetAuthContext(req, org.ID, otherUser.ID)
 	testutil.SetPathParam(req, "id", widget.ID.String())
 
 	err := app.UpdateDashboardWidget(req)
@@ -493,16 +439,16 @@ func TestApp_UpdateDashboardWidget_OnlyOwnerCanEdit(t *testing.T) {
 }
 
 func TestApp_UpdateDashboardWidget_NotFound(t *testing.T) {
-	app := widgetTestApp(t)
-	org := createTestOrganization(t, app)
-	perms := getOrCreateAnalyticsPermissions(t, app)
-	role := createAnalyticsRole(t, app, org.ID, "Analytics User", perms)
-	user := createTestUser(t, app, org.ID, uniqueEmail("update-not-found"), "password", &role.ID, true)
+	app := newTestApp(t)
+	org := testutil.CreateTestOrganization(t, app.DB)
+	perms := getAnalyticsPermissions(t, app)
+	role := testutil.CreateTestRoleExact(t, app.DB, org.ID, "Analytics User", false, false, perms)
+	user := testutil.CreateTestUser(t, app.DB, org.ID, testutil.WithEmail(testutil.UniqueEmail("update-not-found")), testutil.WithPassword("password"), testutil.WithRoleID(&role.ID))
 
 	req := testutil.NewJSONRequest(t, map[string]any{
 		"name": "Updated",
 	})
-	setAuthContext(req, org.ID, user.ID)
+	testutil.SetAuthContext(req, org.ID, user.ID)
 	testutil.SetPathParam(req, "id", uuid.New().String())
 
 	err := app.UpdateDashboardWidget(req)
@@ -513,15 +459,15 @@ func TestApp_UpdateDashboardWidget_NotFound(t *testing.T) {
 // --- DeleteDashboardWidget Tests ---
 
 func TestApp_DeleteDashboardWidget_Success(t *testing.T) {
-	app := widgetTestApp(t)
-	org := createTestOrganization(t, app)
-	perms := getOrCreateAnalyticsPermissions(t, app)
-	role := createAnalyticsRole(t, app, org.ID, "Analytics User", perms)
-	user := createTestUser(t, app, org.ID, uniqueEmail("delete-widget"), "password", &role.ID, true)
+	app := newTestApp(t)
+	org := testutil.CreateTestOrganization(t, app.DB)
+	perms := getAnalyticsPermissions(t, app)
+	role := testutil.CreateTestRoleExact(t, app.DB, org.ID, "Analytics User", false, false, perms)
+	user := testutil.CreateTestUser(t, app.DB, org.ID, testutil.WithEmail(testutil.UniqueEmail("delete-widget")), testutil.WithPassword("password"), testutil.WithRoleID(&role.ID))
 	widget := createTestWidget(t, app, org.ID, &user.ID, "To Delete", true, false)
 
 	req := testutil.NewGETRequest(t)
-	setAuthContext(req, org.ID, user.ID)
+	testutil.SetAuthContext(req, org.ID, user.ID)
 	testutil.SetPathParam(req, "id", widget.ID.String())
 
 	err := app.DeleteDashboardWidget(req)
@@ -535,19 +481,19 @@ func TestApp_DeleteDashboardWidget_Success(t *testing.T) {
 }
 
 func TestApp_DeleteDashboardWidget_NoPermission(t *testing.T) {
-	app := widgetTestApp(t)
-	org := createTestOrganization(t, app)
-	perms := getOrCreateAnalyticsPermissions(t, app)
-	role := createAnalyticsRole(t, app, org.ID, "Analytics User", perms)
-	owner := createTestUser(t, app, org.ID, uniqueEmail("owner-del"), "password", &role.ID, true)
+	app := newTestApp(t)
+	org := testutil.CreateTestOrganization(t, app.DB)
+	perms := getAnalyticsPermissions(t, app)
+	role := testutil.CreateTestRoleExact(t, app.DB, org.ID, "Analytics User", false, false, perms)
+	owner := testutil.CreateTestUser(t, app.DB, org.ID, testutil.WithEmail(testutil.UniqueEmail("owner-del")), testutil.WithPassword("password"), testutil.WithRoleID(&role.ID))
 	// User without analytics delete permission (only read and write)
-	limitedRole := createAnalyticsRole(t, app, org.ID, "Limited", perms[:2])
-	otherUser := createTestUser(t, app, org.ID, uniqueEmail("no-del-perm"), "password", &limitedRole.ID, true)
+	limitedRole := testutil.CreateTestRoleExact(t, app.DB, org.ID, "Limited", false, false, perms[:2])
+	otherUser := testutil.CreateTestUser(t, app.DB, org.ID, testutil.WithEmail(testutil.UniqueEmail("no-del-perm")), testutil.WithPassword("password"), testutil.WithRoleID(&limitedRole.ID))
 
 	widget := createTestWidget(t, app, org.ID, &owner.ID, "Test Widget", true, false)
 
 	req := testutil.NewGETRequest(t)
-	setAuthContext(req, org.ID, otherUser.ID)
+	testutil.SetAuthContext(req, org.ID, otherUser.ID)
 	testutil.SetPathParam(req, "id", widget.ID.String())
 
 	err := app.DeleteDashboardWidget(req)
@@ -556,19 +502,19 @@ func TestApp_DeleteDashboardWidget_NoPermission(t *testing.T) {
 }
 
 func TestApp_DeleteDashboardWidget_OnlyOwnerCanDelete(t *testing.T) {
-	app := widgetTestApp(t)
-	org := createTestOrganization(t, app)
-	perms := getOrCreateAnalyticsPermissions(t, app)
-	role := createAnalyticsRole(t, app, org.ID, "Analytics User", perms)
-	owner := createTestUser(t, app, org.ID, uniqueEmail("owner-del-only"), "password", &role.ID, true)
-	otherUser := createTestUser(t, app, org.ID, uniqueEmail("other-del-only"), "password", &role.ID, true)
+	app := newTestApp(t)
+	org := testutil.CreateTestOrganization(t, app.DB)
+	perms := getAnalyticsPermissions(t, app)
+	role := testutil.CreateTestRoleExact(t, app.DB, org.ID, "Analytics User", false, false, perms)
+	owner := testutil.CreateTestUser(t, app.DB, org.ID, testutil.WithEmail(testutil.UniqueEmail("owner-del-only")), testutil.WithPassword("password"), testutil.WithRoleID(&role.ID))
+	otherUser := testutil.CreateTestUser(t, app.DB, org.ID, testutil.WithEmail(testutil.UniqueEmail("other-del-only")), testutil.WithPassword("password"), testutil.WithRoleID(&role.ID))
 
 	// Create widget owned by 'owner'
 	widget := createTestWidget(t, app, org.ID, &owner.ID, "Owner Widget", true, false)
 
 	// Other user (with delete permission) should NOT be able to delete someone else's widget
 	req := testutil.NewGETRequest(t)
-	setAuthContext(req, org.ID, otherUser.ID)
+	testutil.SetAuthContext(req, org.ID, otherUser.ID)
 	testutil.SetPathParam(req, "id", widget.ID.String())
 
 	err := app.DeleteDashboardWidget(req)
@@ -582,14 +528,14 @@ func TestApp_DeleteDashboardWidget_OnlyOwnerCanDelete(t *testing.T) {
 }
 
 func TestApp_DeleteDashboardWidget_NotFound(t *testing.T) {
-	app := widgetTestApp(t)
-	org := createTestOrganization(t, app)
-	perms := getOrCreateAnalyticsPermissions(t, app)
-	role := createAnalyticsRole(t, app, org.ID, "Analytics User", perms)
-	user := createTestUser(t, app, org.ID, uniqueEmail("delete-not-found"), "password", &role.ID, true)
+	app := newTestApp(t)
+	org := testutil.CreateTestOrganization(t, app.DB)
+	perms := getAnalyticsPermissions(t, app)
+	role := testutil.CreateTestRoleExact(t, app.DB, org.ID, "Analytics User", false, false, perms)
+	user := testutil.CreateTestUser(t, app.DB, org.ID, testutil.WithEmail(testutil.UniqueEmail("delete-not-found")), testutil.WithPassword("password"), testutil.WithRoleID(&role.ID))
 
 	req := testutil.NewGETRequest(t)
-	setAuthContext(req, org.ID, user.ID)
+	testutil.SetAuthContext(req, org.ID, user.ID)
 	testutil.SetPathParam(req, "id", uuid.New().String())
 
 	err := app.DeleteDashboardWidget(req)
@@ -600,11 +546,11 @@ func TestApp_DeleteDashboardWidget_NotFound(t *testing.T) {
 // --- ReorderDashboardWidgets Tests ---
 
 func TestApp_ReorderDashboardWidgets_Success(t *testing.T) {
-	app := widgetTestApp(t)
-	org := createTestOrganization(t, app)
-	perms := getOrCreateAnalyticsPermissions(t, app)
-	role := createAnalyticsRole(t, app, org.ID, "Analytics User", perms)
-	user := createTestUser(t, app, org.ID, uniqueEmail("reorder-widgets"), "password", &role.ID, true)
+	app := newTestApp(t)
+	org := testutil.CreateTestOrganization(t, app.DB)
+	perms := getAnalyticsPermissions(t, app)
+	role := testutil.CreateTestRoleExact(t, app.DB, org.ID, "Analytics User", false, false, perms)
+	user := testutil.CreateTestUser(t, app.DB, org.ID, testutil.WithEmail(testutil.UniqueEmail("reorder-widgets")), testutil.WithPassword("password"), testutil.WithRoleID(&role.ID))
 
 	widget1 := createTestWidget(t, app, org.ID, &user.ID, "Widget 1", true, false)
 	widget2 := createTestWidget(t, app, org.ID, &user.ID, "Widget 2", true, false)
@@ -614,7 +560,7 @@ func TestApp_ReorderDashboardWidgets_Success(t *testing.T) {
 	req := testutil.NewJSONRequest(t, map[string]any{
 		"widget_ids": []string{widget3.ID.String(), widget1.ID.String(), widget2.ID.String()},
 	})
-	setAuthContext(req, org.ID, user.ID)
+	testutil.SetAuthContext(req, org.ID, user.ID)
 
 	err := app.ReorderDashboardWidgets(req)
 	require.NoError(t, err)
@@ -629,7 +575,7 @@ func TestApp_ReorderDashboardWidgets_Success(t *testing.T) {
 }
 
 func TestApp_ReorderDashboardWidgets_Unauthorized(t *testing.T) {
-	app := widgetTestApp(t)
+	app := newTestApp(t)
 
 	req := testutil.NewJSONRequest(t, map[string]any{
 		"widget_ids": []string{uuid.New().String()},
@@ -644,24 +590,24 @@ func TestApp_ReorderDashboardWidgets_Unauthorized(t *testing.T) {
 // --- Cross-Organization Isolation Tests ---
 
 func TestApp_DashboardWidget_CrossOrgIsolation(t *testing.T) {
-	app := widgetTestApp(t)
+	app := newTestApp(t)
 
-	org1 := createTestOrganization(t, app)
-	org2 := createTestOrganization(t, app)
+	org1 := testutil.CreateTestOrganization(t, app.DB)
+	org2 := testutil.CreateTestOrganization(t, app.DB)
 
-	perms := getOrCreateAnalyticsPermissions(t, app)
-	role1 := createAnalyticsRole(t, app, org1.ID, "Analytics User 1", perms)
-	role2 := createAnalyticsRole(t, app, org2.ID, "Analytics User 2", perms)
+	perms := getAnalyticsPermissions(t, app)
+	role1 := testutil.CreateTestRoleExact(t, app.DB, org1.ID, "Analytics User 1", false, false, perms)
+	role2 := testutil.CreateTestRoleExact(t, app.DB, org2.ID, "Analytics User 2", false, false, perms)
 
-	user1 := createTestUser(t, app, org1.ID, uniqueEmail("cross-widget-1"), "password", &role1.ID, true)
-	user2 := createTestUser(t, app, org2.ID, uniqueEmail("cross-widget-2"), "password", &role2.ID, true)
+	user1 := testutil.CreateTestUser(t, app.DB, org1.ID, testutil.WithEmail(testutil.UniqueEmail("cross-widget-1")), testutil.WithPassword("password"), testutil.WithRoleID(&role1.ID))
+	user2 := testutil.CreateTestUser(t, app.DB, org2.ID, testutil.WithEmail(testutil.UniqueEmail("cross-widget-2")), testutil.WithPassword("password"), testutil.WithRoleID(&role2.ID))
 
 	// Create widget in org1
 	widget1 := createTestWidget(t, app, org1.ID, &user1.ID, "Org1 Widget", true, false)
 
 	// User from org2 tries to access org1's widget
 	req := testutil.NewGETRequest(t)
-	setAuthContext(req, org2.ID, user2.ID)
+	testutil.SetAuthContext(req, org2.ID, user2.ID)
 	testutil.SetPathParam(req, "id", widget1.ID.String())
 
 	err := app.GetDashboardWidget(req)
@@ -670,24 +616,24 @@ func TestApp_DashboardWidget_CrossOrgIsolation(t *testing.T) {
 }
 
 func TestApp_DashboardWidget_CrossOrg_CannotDelete(t *testing.T) {
-	app := widgetTestApp(t)
+	app := newTestApp(t)
 
-	org1 := createTestOrganization(t, app)
-	org2 := createTestOrganization(t, app)
+	org1 := testutil.CreateTestOrganization(t, app.DB)
+	org2 := testutil.CreateTestOrganization(t, app.DB)
 
-	perms := getOrCreateAnalyticsPermissions(t, app)
-	role1 := createAnalyticsRole(t, app, org1.ID, "Analytics User 1", perms)
-	role2 := createAnalyticsRole(t, app, org2.ID, "Analytics User 2", perms)
+	perms := getAnalyticsPermissions(t, app)
+	role1 := testutil.CreateTestRoleExact(t, app.DB, org1.ID, "Analytics User 1", false, false, perms)
+	role2 := testutil.CreateTestRoleExact(t, app.DB, org2.ID, "Analytics User 2", false, false, perms)
 
-	user1 := createTestUser(t, app, org1.ID, uniqueEmail("cross-del-1"), "password", &role1.ID, true)
-	user2 := createTestUser(t, app, org2.ID, uniqueEmail("cross-del-2"), "password", &role2.ID, true)
+	user1 := testutil.CreateTestUser(t, app.DB, org1.ID, testutil.WithEmail(testutil.UniqueEmail("cross-del-1")), testutil.WithPassword("password"), testutil.WithRoleID(&role1.ID))
+	user2 := testutil.CreateTestUser(t, app.DB, org2.ID, testutil.WithEmail(testutil.UniqueEmail("cross-del-2")), testutil.WithPassword("password"), testutil.WithRoleID(&role2.ID))
 
 	// Create widget in org1
 	widget1 := createTestWidget(t, app, org1.ID, &user1.ID, "Org1 Widget", true, false)
 
 	// User from org2 tries to delete org1's widget
 	req := testutil.NewGETRequest(t)
-	setAuthContext(req, org2.ID, user2.ID)
+	testutil.SetAuthContext(req, org2.ID, user2.ID)
 	testutil.SetPathParam(req, "id", widget1.ID.String())
 
 	err := app.DeleteDashboardWidget(req)
