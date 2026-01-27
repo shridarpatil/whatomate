@@ -38,6 +38,7 @@ import {
   Dialog,
   DialogContent,
   DialogDescription,
+  DialogFooter,
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog'
@@ -117,6 +118,7 @@ const messagesScrollAreaRef = ref<InstanceType<typeof ScrollArea> | null>(null)
 const messageInputRef = ref<HTMLTextAreaElement | null>(null)
 const isSending = ref(false)
 const isAssignDialogOpen = ref(false)
+const isConfirmSendDialogOpen = ref(false)
 const isTransferring = ref(false)
 const isResuming = ref(false)
 const isInfoPanelOpen = ref(false)
@@ -512,9 +514,23 @@ function handleContactClick(contact: Contact) {
   router.push(`/chat/${contact.id}`)
 }
 
-async function sendMessage() {
+function showConfirmSendDialog() {
+  if (!messageInput.value.trim() || !contactsStore.currentContact) return
+  isConfirmSendDialogOpen.value = true
+}
+
+function cancelSendMessage() {
+  isConfirmSendDialogOpen.value = false
+  // Focus back on the textarea for editing
+  nextTick(() => {
+    messageInputRef.value?.focus()
+  })
+}
+
+async function confirmAndSendMessage() {
   if (!messageInput.value.trim() || !contactsStore.currentContact) return
 
+  isConfirmSendDialogOpen.value = false
   isSending.value = true
   try {
     await contactsStore.sendMessage(
@@ -533,6 +549,10 @@ async function sendMessage() {
   } finally {
     isSending.value = false
   }
+}
+
+async function sendMessage() {
+  showConfirmSendDialog()
 }
 
 const retryingMessageId = ref<string | null>(null)
@@ -1799,8 +1819,8 @@ async function sendMediaMessage() {
               ref="messageInputRef"
               v-model="messageInput"
               placeholder="Type a message..."
-              rows="1"
-              class="flex-1 bg-transparent text-[14px] text-white light:text-gray-900 placeholder:text-white/30 light:placeholder:text-gray-400 focus:outline-none resize-none min-h-[36px] max-h-[120px] py-2 overflow-y-auto"
+              rows="3"
+              class="flex-1 bg-transparent text-[14px] text-white light:text-gray-900 placeholder:text-white/30 light:placeholder:text-gray-400 focus:outline-none resize-none min-h-[72px] max-h-[120px] py-2 overflow-y-auto"
               @keydown.enter.exact.prevent="sendMessage"
               @input="autoResizeTextarea"
             />
@@ -1952,6 +1972,33 @@ async function sendMediaMessage() {
             </Button>
           </div>
         </div>
+      </DialogContent>
+    </Dialog>
+
+    <!-- Confirm Send Message Dialog -->
+    <Dialog v-model:open="isConfirmSendDialogOpen">
+      <DialogContent class="max-w-md">
+        <DialogHeader>
+          <DialogTitle>Review Message</DialogTitle>
+          <DialogDescription>
+            Please review your message before sending.
+          </DialogDescription>
+        </DialogHeader>
+        <div class="py-4">
+          <div class="p-3 rounded-lg bg-muted/50 border border-border">
+            <p class="text-sm whitespace-pre-wrap break-words">{{ messageInput }}</p>
+          </div>
+        </div>
+        <DialogFooter class="gap-2 sm:gap-0">
+          <Button variant="outline" @click="cancelSendMessage">
+            Edit
+          </Button>
+          <Button @click="confirmAndSendMessage" :disabled="isSending">
+            <Send v-if="!isSending" class="mr-2 h-4 w-4" />
+            <span v-if="isSending">Sending...</span>
+            <span v-else>Send</span>
+          </Button>
+        </DialogFooter>
       </DialogContent>
     </Dialog>
   </div>
