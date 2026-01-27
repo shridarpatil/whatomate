@@ -7,6 +7,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"strings"
+	"time"
 
 	"github.com/shridarpatil/whatomate/internal/models"
 	"github.com/shridarpatil/whatomate/internal/websocket"
@@ -374,10 +375,24 @@ func (a *App) updateMessageStatus(whatsappMsgID, statusValue string, errors []We
 
 	a.Log.Info("Updated message status", "message_id", message.ID, "status", statusValue)
 
-	// Update campaign stats if this is a campaign message
+	// Update campaign stats and recipient status if this is a campaign message
 	if message.Metadata != nil {
 		if campaignID, ok := message.Metadata["campaign_id"].(string); ok && campaignID != "" {
 			a.incrementCampaignStat(campaignID, statusValue)
+
+			// Update the BulkMessageRecipient status and timestamps
+			recipientUpdates := map[string]interface{}{
+				"status": newStatus,
+			}
+			switch newStatus {
+			case models.MessageStatusDelivered:
+				recipientUpdates["delivered_at"] = time.Now()
+			case models.MessageStatusRead:
+				recipientUpdates["read_at"] = time.Now()
+			}
+			a.DB.Model(&models.BulkMessageRecipient{}).
+				Where("whats_app_message_id = ?", whatsappMsgID).
+				Updates(recipientUpdates)
 		}
 	}
 
