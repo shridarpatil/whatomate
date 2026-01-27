@@ -106,7 +106,8 @@ const aiSettings = ref({
   ai_api_key: '',
   ai_model: '',
   ai_max_tokens: 500,
-  ai_system_prompt: ''
+  ai_system_prompt: '',
+  ai_server_url: ''
 })
 
 const isAIEnabled = ref(false)
@@ -114,8 +115,11 @@ const isAIEnabled = ref(false)
 const aiProviders = [
   { value: 'openai', label: 'OpenAI', models: ['gpt-4o', 'gpt-4o-mini', 'gpt-4-turbo', 'gpt-3.5-turbo'] },
   { value: 'anthropic', label: 'Anthropic', models: ['claude-3-5-sonnet-latest', 'claude-3-5-haiku-latest', 'claude-3-opus-latest'] },
-  { value: 'google', label: 'Google AI', models: ['gemini-2.0-flash', 'gemini-2.0-flash-lite', 'gemini-1.5-flash', 'gemini-1.5-flash-8b'] }
+  { value: 'google', label: 'Google AI', models: ['gemini-2.0-flash', 'gemini-2.0-flash-lite', 'gemini-1.5-flash', 'gemini-1.5-flash-8b'] },
+  { value: 'rasa', label: 'Rasa', models: [] }
 ]
+
+const isSelfHostedProvider = computed(() => aiSettings.value.ai_provider === 'rasa')
 
 const availableModels = computed(() => {
   const provider = aiProviders.find(p => p.value === aiSettings.value.ai_provider)
@@ -217,7 +221,8 @@ onMounted(async () => {
         ai_api_key: '',
         ai_model: chatbotData.settings.ai_model || '',
         ai_max_tokens: chatbotData.settings.ai_max_tokens || 500,
-        ai_system_prompt: chatbotData.settings.ai_system_prompt || ''
+        ai_system_prompt: chatbotData.settings.ai_system_prompt || '',
+        ai_server_url: chatbotData.settings.ai_server_url || ''
       }
 
       const slaEnabledValue = chatbotData.settings.sla_enabled === true
@@ -317,7 +322,8 @@ async function saveAISettings() {
       ai_provider: aiSettings.value.ai_provider,
       ai_model: aiSettings.value.ai_model,
       ai_max_tokens: aiSettings.value.ai_max_tokens,
-      ai_system_prompt: aiSettings.value.ai_system_prompt
+      ai_system_prompt: aiSettings.value.ai_system_prompt,
+      ai_server_url: aiSettings.value.ai_server_url
     }
     if (aiSettings.value.ai_api_key) {
       payload.ai_api_key = aiSettings.value.ai_api_key
@@ -891,7 +897,7 @@ function removeEscalationUser(userId: string) {
                         </SelectContent>
                       </Select>
                     </div>
-                    <div class="space-y-2">
+                    <div v-if="!isSelfHostedProvider" class="space-y-2">
                       <Label>Model</Label>
                       <Select v-model="aiSettings.ai_model" :disabled="!aiSettings.ai_provider">
                         <SelectTrigger>
@@ -906,7 +912,29 @@ function removeEscalationUser(userId: string) {
                     </div>
                   </div>
 
-                  <div class="space-y-2">
+                  <!-- Self-hosted provider settings (Rasa, etc.) -->
+                  <div v-if="isSelfHostedProvider" class="space-y-2">
+                    <Label>Server URL</Label>
+                    <Input
+                      v-model="aiSettings.ai_server_url"
+                      type="url"
+                      placeholder="http://localhost:5005/webhooks/rest/webhook"
+                    />
+                    <p class="text-xs text-muted-foreground">Full webhook URL for your self-hosted model (e.g., http://localhost:5005/webhooks/rest/webhook for Rasa)</p>
+                  </div>
+
+                  <div v-if="isSelfHostedProvider" class="space-y-2">
+                    <Label>API Token (optional)</Label>
+                    <Input
+                      v-model="aiSettings.ai_api_key"
+                      type="password"
+                      placeholder="Enter token if your server requires authentication"
+                    />
+                    <p class="text-xs text-muted-foreground">Only required if your server has authentication enabled</p>
+                  </div>
+
+                  <!-- Cloud provider settings -->
+                  <div v-if="!isSelfHostedProvider" class="space-y-2">
                     <Label>API Key</Label>
                     <Input
                       v-model="aiSettings.ai_api_key"
@@ -916,12 +944,12 @@ function removeEscalationUser(userId: string) {
                     <p class="text-xs text-muted-foreground">Your API key is encrypted and stored securely</p>
                   </div>
 
-                  <div class="space-y-2">
+                  <div v-if="!isSelfHostedProvider" class="space-y-2">
                     <Label>Max Tokens</Label>
                     <Input v-model.number="aiSettings.ai_max_tokens" type="number" min="100" max="4000" class="w-32" />
                   </div>
 
-                  <div class="space-y-2">
+                  <div v-if="!isSelfHostedProvider" class="space-y-2">
                     <Label>System Prompt (optional)</Label>
                     <Textarea
                       v-model="aiSettings.ai_system_prompt"

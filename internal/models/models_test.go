@@ -318,3 +318,11 @@ func TestJSONBArray_Scan(t *testing.T) {
 		})
 	}
 }
+
+func TestAIProviderConstants(t *testing.T) {
+	// Verify all AI provider constants have expected values
+	assert.Equal(t, models.AIProvider("openai"), models.AIProviderOpenAI)
+	assert.Equal(t, models.AIProvider("anthropic"), models.AIProviderAnthropic)
+	assert.Equal(t, models.AIProvider("google"), models.AIProviderGoogle)
+	assert.Equal(t, models.AIProvider("rasa"), models.AIProviderRasa)
+}

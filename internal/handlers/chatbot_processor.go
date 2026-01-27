@@ -1641,6 +1641,9 @@ func (a *App) generateAIResponse(settings *models.ChatbotSettings, session *mode
 		return a.generateAnthropicResponse(settings, session, userMessage, contextData)
 	case models.AIProviderGoogle:
 		return a.generateGoogleResponse(settings, session, userMessage, contextData)
+	case models.AIProviderRasa:
+		// Rasa doesn't use the contextData from AI contexts - it has its own context management
+		return a.generateRasaResponse(settings, session, userMessage)
 	default:
 		return "", fmt.Errorf("unsupported AI provider: %s", settings.AI.Provider)
 	}
@@ -2107,6 +2110,89 @@ func (a *App) generateGoogleResponse(settings *models.ChatbotSettings, session *
 	}
 
 	return "", fmt.Errorf("no response from Google AI")
+}
+
+// generateRasaResponse generates a response using Rasa server
+func (a *App) generateRasaResponse(settings *models.ChatbotSettings, session *models.ChatbotSession, userMessage string) (string, error) {
+	if settings.AI.ServerURL == "" {
+		return "", fmt.Errorf("server URL is not configured")
+	}
+
+	// Use phone number as sender ID for conversation tracking
+	senderID := "unknown"
+	if session != nil {
+		senderID = session.PhoneNumber
+	}
+
+	// Build request payload
+	payload := map[string]string{
+		"sender":  senderID,
+		"message": userMessage,
+	}
+
+	jsonPayload, err := json.Marshal(payload)
+	if err != nil {
+		return "", fmt.Errorf("failed to marshal payload: %w", err)
+	}
+
+	req, err := http.NewRequest("POST", settings.AI.ServerURL, bytes.NewBuffer(jsonPayload))
+	if err != nil {
+		return "", fmt.Errorf("failed to create request: %w", err)
+	}
+
+	req.Header.Set("Content-Type", "application/json")
+
+	// Add API key as Bearer token if configured (some Rasa setups require auth)
+	if settings.AI.APIKey != "" {
+		req.Header.Set("Authorization", "Bearer "+settings.AI.APIKey)
+	}
+
+	client := &http.Client{Timeout: 30 * time.Second}
+	resp, err := client.Do(req)
+	if err != nil {
+		return "", fmt.Errorf("request failed: %w", err)
+	}
+	defer func() { _ = resp.Body.Close() }()
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return "", fmt.Errorf("failed to read response: %w", err)
+	}
+
+	if resp.StatusCode != 200 {
+		return "", fmt.Errorf("Rasa API error (status %d): %s", resp.StatusCode, string(body))
+	}
+
+	// Rasa returns an array of responses: [{"recipient_id": "...", "text": "..."}, ...]
+	var rasaResponses []struct {
+		RecipientID string                 `json:"recipient_id"`
+		Text        string                 `json:"text"`
+		Image       string                 `json:"image,omitempty"`
+		Buttons     []map[string]string    `json:"buttons,omitempty"`
+		Custom      map[string]interface{} `json:"custom,omitempty"`
+	}
+
+	if err := json.Unmarshal(body, &rasaResponses); err != nil {
+		return "", fmt.Errorf("failed to parse Rasa response: %w", err)
+	}
+
+	if len(rasaResponses) == 0 {
+		return "", fmt.Errorf("no response from Rasa")
+	}
+
+	// Combine all text responses (Rasa can return multiple messages)
+	var responses []string
+	for _, r := range rasaResponses {
+		if r.Text != "" {
+			responses = append(responses, r.Text)
+		}
+	}
+
+	if len(responses) == 0 {
+		return "", fmt.Errorf("no text response from Rasa")
+	}
+
+	return strings.Join(responses, "\n\n"), nil
 }
 
 // getSessionHistory retrieves recent messages from the session

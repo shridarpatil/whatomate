@@ -44,15 +44,17 @@ type ClientInactivityConfig struct {
 
 // AIConfig holds AI provider settings
 type AIConfig struct {
-	Enabled        bool    `gorm:"column:ai_enabled;default:false" json:"ai_enabled"`
-	Provider       AIProvider `gorm:"column:ai_provider;size:20" json:"ai_provider"`                     // openai, anthropic, google
-	APIKey         string  `gorm:"column:ai_api_key;type:text" json:"-"`                                 // encrypted
-	Model          string  `gorm:"column:ai_model;size:100" json:"ai_model"`
-	MaxTokens      int     `gorm:"column:ai_max_tokens;default:500" json:"ai_max_tokens"`
-	Temperature    float64 `gorm:"column:ai_temperature;type:decimal(3,2);default:0.7" json:"ai_temperature"`
-	SystemPrompt   string  `gorm:"column:ai_system_prompt;type:text" json:"ai_system_prompt"`
-	IncludeHistory bool    `gorm:"column:ai_include_history;default:true" json:"ai_include_history"`
-	HistoryLimit   int     `gorm:"column:ai_history_limit;default:4" json:"ai_history_limit"`
+	Enabled        bool       `gorm:"column:ai_enabled;default:false" json:"ai_enabled"`
+	Provider       AIProvider `gorm:"column:ai_provider;size:20" json:"ai_provider"`        // openai, anthropic, google, rasa
+	APIKey         string     `gorm:"column:ai_api_key;type:text" json:"-"`                 // encrypted (not used for Rasa)
+	Model          string     `gorm:"column:ai_model;size:100" json:"ai_model"`
+	MaxTokens      int        `gorm:"column:ai_max_tokens;default:500" json:"ai_max_tokens"`
+	Temperature    float64    `gorm:"column:ai_temperature;type:decimal(3,2);default:0.7" json:"ai_temperature"`
+	SystemPrompt   string     `gorm:"column:ai_system_prompt;type:text" json:"ai_system_prompt"`
+	IncludeHistory bool       `gorm:"column:ai_include_history;default:true" json:"ai_include_history"`
+	HistoryLimit   int        `gorm:"column:ai_history_limit;default:4" json:"ai_history_limit"`
+	// Self-hosted model settings
+	ServerURL string `gorm:"column:ai_server_url;size:500" json:"ai_server_url"` // Server URL for self-hosted models (e.g., Rasa, Ollama)
 }
 
 // PanelFieldConfig defines a field to display in the contact info panel
