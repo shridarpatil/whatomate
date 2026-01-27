@@ -305,10 +305,20 @@ type Contact struct {
 	ChatbotLastMessageAt *time.Time `json:"chatbot_last_message_at,omitempty"` // When chatbot last sent a message
 	ChatbotReminderSent  bool       `gorm:"default:false" json:"chatbot_reminder_sent"`
 
+	// Contact blocking (for abusive contacts)
+	IsBlocked       bool       `gorm:"default:false" json:"is_blocked"`
+	BlockedReason   string     `gorm:"size:500" json:"blocked_reason,omitempty"`
+	BlockedAt       *time.Time `json:"blocked_at,omitempty"`
+	BlockedByUserID *uuid.UUID `gorm:"type:uuid" json:"blocked_by_user_id,omitempty"`
+
+	// Contact notes (for agent context)
+	Notes JSONB `gorm:"type:jsonb;default:'[]'" json:"notes"` // Array of {content, created_at, created_by_user_id, created_by_name}
+
 	// Relations
-	Organization *Organization `gorm:"foreignKey:OrganizationID" json:"organization,omitempty"`
-	AssignedUser *User         `gorm:"foreignKey:AssignedUserID" json:"assigned_user,omitempty"`
-	Messages     []Message     `gorm:"foreignKey:ContactID" json:"messages,omitempty"`
+	Organization  *Organization `gorm:"foreignKey:OrganizationID" json:"organization,omitempty"`
+	AssignedUser  *User         `gorm:"foreignKey:AssignedUserID" json:"assigned_user,omitempty"`
+	BlockedByUser *User         `gorm:"foreignKey:BlockedByUserID" json:"blocked_by_user,omitempty"`
+	Messages      []Message     `gorm:"foreignKey:ContactID" json:"messages,omitempty"`
 }
 
 func (Contact) TableName() string {

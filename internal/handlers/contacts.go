@@ -35,8 +35,25 @@ type ContactResponse struct {
 	LastMessagePreview string     `json:"last_message_preview"`
 	UnreadCount        int        `json:"unread_count"`
 	AssignedUserID     *uuid.UUID `json:"assigned_user_id,omitempty"`
-	CreatedAt          time.Time  `json:"created_at"`
-	UpdatedAt          time.Time  `json:"updated_at"`
+	// Blocking info
+	IsBlocked       bool       `json:"is_blocked"`
+	BlockedReason   string     `json:"blocked_reason,omitempty"`
+	BlockedAt       *time.Time `json:"blocked_at,omitempty"`
+	BlockedByUserID *uuid.UUID `json:"blocked_by_user_id,omitempty"`
+	// Notes
+	Notes []ContactNote `json:"notes,omitempty"`
+
+	CreatedAt time.Time `json:"created_at"`
+	UpdatedAt time.Time `json:"updated_at"`
+}
+
+// ContactNote represents a note added by an agent
+type ContactNote struct {
+	ID              string    `json:"id"`
+	Content         string    `json:"content"`
+	CreatedAt       time.Time `json:"created_at"`
+	CreatedByUserID string    `json:"created_by_user_id"`
+	CreatedByName   string    `json:"created_by_name"`
 }
 
 // MessageResponse represents a message for the frontend
@@ -138,18 +155,51 @@ func (a *App) ListContacts(r *fastglue.Request) error {
 			profileName = MaskIfPhoneNumber(profileName)
 		}
 
+		// Parse notes from JSONB
+		var notes []ContactNote
+		if c.Notes != nil {
+			if notesArray, ok := c.Notes.([]interface{}); ok {
+				for _, n := range notesArray {
+					if noteMap, ok := n.(map[string]interface{}); ok {
+						note := ContactNote{
+							ID:              getString(noteMap, "id"),
+							Content:         getString(noteMap, "content"),
+							CreatedByUserID: getString(noteMap, "created_by_user_id"),
+							CreatedByName:   getString(noteMap, "created_by_name"),
+						}
+						if createdAt, ok := noteMap["created_at"].(string); ok {
+							if t, err := time.Parse(time.RFC3339, createdAt); err == nil {
+								note.CreatedAt = t
+							}
+						}
+						notes = append(notes, note)
+					}
+				}
+			}
+		}
+
+		status := "active"
+		if c.IsBlocked {
+			status = "blocked"
+		}
+
 		response[i] = ContactResponse{
 			ID:                 c.ID,
 			PhoneNumber:        phoneNumber,
 			Name:               profileName,
 			ProfileName:        profileName,
-			Status:             "active",
+			Status:             status,
 			Tags:               tags,
 			CustomFields:       c.Metadata,
 			LastMessageAt:      c.LastMessageAt,
 			LastMessagePreview: c.LastMessagePreview,
 			UnreadCount:        int(unreadCount),
 			AssignedUserID:     c.AssignedUserID,
+			IsBlocked:          c.IsBlocked,
+			BlockedReason:      c.BlockedReason,
+			BlockedAt:          c.BlockedAt,
+			BlockedByUserID:    c.BlockedByUserID,
+			Notes:              notes,
 			CreatedAt:          c.CreatedAt,
 			UpdatedAt:          c.UpdatedAt,
 		}
@@ -208,18 +258,51 @@ func (a *App) GetContact(r *fastglue.Request) error {
 		profileName = MaskIfPhoneNumber(profileName)
 	}
 
+	// Parse notes from JSONB
+	var notes []ContactNote
+	if contact.Notes != nil {
+		if notesArray, ok := contact.Notes.([]interface{}); ok {
+			for _, n := range notesArray {
+				if noteMap, ok := n.(map[string]interface{}); ok {
+					note := ContactNote{
+						ID:              getString(noteMap, "id"),
+						Content:         getString(noteMap, "content"),
+						CreatedByUserID: getString(noteMap, "created_by_user_id"),
+						CreatedByName:   getString(noteMap, "created_by_name"),
+					}
+					if createdAt, ok := noteMap["created_at"].(string); ok {
+						if t, err := time.Parse(time.RFC3339, createdAt); err == nil {
+							note.CreatedAt = t
+						}
+					}
+					notes = append(notes, note)
+				}
+			}
+		}
+	}
+
+	status := "active"
+	if contact.IsBlocked {
+		status = "blocked"
+	}
+
 	response := ContactResponse{
 		ID:                 contact.ID,
 		PhoneNumber:        phoneNumber,
 		Name:               profileName,
 		ProfileName:        profileName,
-		Status:             "active",
+		Status:             status,
 		Tags:               tags,
 		CustomFields:       contact.Metadata,
 		LastMessageAt:      contact.LastMessageAt,
 		LastMessagePreview: contact.LastMessagePreview,
 		UnreadCount:        int(unreadCount),
 		AssignedUserID:     contact.AssignedUserID,
+		IsBlocked:          contact.IsBlocked,
+		BlockedReason:      contact.BlockedReason,
+		BlockedAt:          contact.BlockedAt,
+		BlockedByUserID:    contact.BlockedByUserID,
+		Notes:              notes,
 		CreatedAt:          contact.CreatedAt,
 		UpdatedAt:          contact.UpdatedAt,
 	}
@@ -1135,4 +1218,219 @@ func (a *App) GetContactSessionData(r *fastglue.Request) error {
 	}
 
 	return r.SendEnvelope(response)
+}
+
+// getString safely extracts a string from a map
+func getString(m map[string]interface{}, key string) string {
+	if v, ok := m[key].(string); ok {
+		return v
+	}
+	return ""
+}
+
+// BlockContactRequest represents the request to block/unblock a contact
+type BlockContactRequest struct {
+	IsBlocked bool   `json:"is_blocked"`
+	Reason    string `json:"reason,omitempty"`
+}
+
+// BlockContact blocks or unblocks a contact
+// Only users with write permission can block contacts
+func (a *App) BlockContact(r *fastglue.Request) error {
+	orgID, err := a.getOrgID(r)
+	if err != nil {
+		return r.SendErrorEnvelope(fasthttp.StatusUnauthorized, "Unauthorized", nil, "")
+	}
+
+	userID, _ := r.RequestCtx.UserValue("user_id").(uuid.UUID)
+
+	// Only users with write permission can block contacts
+	if !a.HasPermission(userID, models.ResourceContacts, models.ActionWrite) {
+		return r.SendErrorEnvelope(fasthttp.StatusForbidden, "You do not have permission to block contacts", nil, "")
+	}
+
+	contactID, err := parsePathUUID(r, "id", "contact")
+	if err != nil {
+		return nil
+	}
+
+	var req BlockContactRequest
+	if err := r.Decode(&req, "json"); err != nil {
+		return r.SendErrorEnvelope(fasthttp.StatusBadRequest, "Invalid request body", nil, "")
+	}
+
+	// Get contact
+	contact, err := findByIDAndOrg[models.Contact](a.DB, r, contactID, orgID, "Contact")
+	if err != nil {
+		return nil
+	}
+
+	// Update contact blocking status
+	now := time.Now()
+	updates := map[string]interface{}{
+		"is_blocked": req.IsBlocked,
+	}
+
+	if req.IsBlocked {
+		updates["blocked_reason"] = req.Reason
+		updates["blocked_at"] = now
+		updates["blocked_by_user_id"] = userID
+	} else {
+		updates["blocked_reason"] = ""
+		updates["blocked_at"] = nil
+		updates["blocked_by_user_id"] = nil
+	}
+
+	if err := a.DB.Model(contact).Updates(updates).Error; err != nil {
+		a.Log.Error("Failed to update contact blocking status", "error", err)
+		return r.SendErrorEnvelope(fasthttp.StatusInternalServerError, "Failed to update contact", nil, "")
+	}
+
+	action := "unblocked"
+	if req.IsBlocked {
+		action = "blocked"
+	}
+
+	return r.SendEnvelope(map[string]any{
+		"message":    fmt.Sprintf("Contact %s successfully", action),
+		"is_blocked": req.IsBlocked,
+	})
+}
+
+// AddContactNoteRequest represents the request to add a note to a contact
+type AddContactNoteRequest struct {
+	Content string `json:"content"`
+}
+
+// AddContactNote adds a note to a contact
+func (a *App) AddContactNote(r *fastglue.Request) error {
+	orgID, err := a.getOrgID(r)
+	if err != nil {
+		return r.SendErrorEnvelope(fasthttp.StatusUnauthorized, "Unauthorized", nil, "")
+	}
+
+	userID, _ := r.RequestCtx.UserValue("user_id").(uuid.UUID)
+	contactID, err := parsePathUUID(r, "id", "contact")
+	if err != nil {
+		return nil
+	}
+
+	var req AddContactNoteRequest
+	if err := r.Decode(&req, "json"); err != nil {
+		return r.SendErrorEnvelope(fasthttp.StatusBadRequest, "Invalid request body", nil, "")
+	}
+
+	if strings.TrimSpace(req.Content) == "" {
+		return r.SendErrorEnvelope(fasthttp.StatusBadRequest, "Note content is required", nil, "")
+	}
+
+	// Get contact (users without full read permission can only access assigned contacts)
+	var contact models.Contact
+	query := a.DB.Where("id = ? AND organization_id = ?", contactID, orgID)
+	if !a.HasPermission(userID, models.ResourceContacts, models.ActionRead) {
+		query = query.Where("assigned_user_id = ?", userID)
+	}
+	if err := query.First(&contact).Error; err != nil {
+		return r.SendErrorEnvelope(fasthttp.StatusNotFound, "Contact not found", nil, "")
+	}
+
+	// Get user name for the note
+	var user models.User
+	userName := "Unknown"
+	if err := a.DB.Where("id = ?", userID).First(&user).Error; err == nil {
+		userName = user.FullName
+	}
+
+	// Parse existing notes
+	var notes []map[string]interface{}
+	if contact.Notes != nil {
+		if notesArray, ok := contact.Notes.([]interface{}); ok {
+			for _, n := range notesArray {
+				if noteMap, ok := n.(map[string]interface{}); ok {
+					notes = append(notes, noteMap)
+				}
+			}
+		}
+	}
+
+	// Add new note
+	newNote := map[string]interface{}{
+		"id":                 uuid.New().String(),
+		"content":            strings.TrimSpace(req.Content),
+		"created_at":         time.Now().Format(time.RFC3339),
+		"created_by_user_id": userID.String(),
+		"created_by_name":    userName,
+	}
+	notes = append(notes, newNote)
+
+	// Update contact notes
+	if err := a.DB.Model(&contact).Update("notes", notes).Error; err != nil {
+		a.Log.Error("Failed to add contact note", "error", err)
+		return r.SendErrorEnvelope(fasthttp.StatusInternalServerError, "Failed to add note", nil, "")
+	}
+
+	return r.SendEnvelope(map[string]any{
+		"message": "Note added successfully",
+		"note":    newNote,
+	})
+}
+
+// DeleteContactNote deletes a note from a contact
+func (a *App) DeleteContactNote(r *fastglue.Request) error {
+	orgID, err := a.getOrgID(r)
+	if err != nil {
+		return r.SendErrorEnvelope(fasthttp.StatusUnauthorized, "Unauthorized", nil, "")
+	}
+
+	userID, _ := r.RequestCtx.UserValue("user_id").(uuid.UUID)
+	contactID, err := parsePathUUID(r, "id", "contact")
+	if err != nil {
+		return nil
+	}
+
+	noteID := r.RequestCtx.UserValue("note_id").(string)
+	if noteID == "" {
+		return r.SendErrorEnvelope(fasthttp.StatusBadRequest, "Note ID is required", nil, "")
+	}
+
+	// Get contact (users without full read permission can only access assigned contacts)
+	var contact models.Contact
+	query := a.DB.Where("id = ? AND organization_id = ?", contactID, orgID)
+	if !a.HasPermission(userID, models.ResourceContacts, models.ActionRead) {
+		query = query.Where("assigned_user_id = ?", userID)
+	}
+	if err := query.First(&contact).Error; err != nil {
+		return r.SendErrorEnvelope(fasthttp.StatusNotFound, "Contact not found", nil, "")
+	}
+
+	// Parse existing notes and filter out the one to delete
+	var notes []map[string]interface{}
+	found := false
+	if contact.Notes != nil {
+		if notesArray, ok := contact.Notes.([]interface{}); ok {
+			for _, n := range notesArray {
+				if noteMap, ok := n.(map[string]interface{}); ok {
+					if getString(noteMap, "id") == noteID {
+						found = true
+						continue // Skip this note (delete it)
+					}
+					notes = append(notes, noteMap)
+				}
+			}
+		}
+	}
+
+	if !found {
+		return r.SendErrorEnvelope(fasthttp.StatusNotFound, "Note not found", nil, "")
+	}
+
+	// Update contact notes
+	if err := a.DB.Model(&contact).Update("notes", notes).Error; err != nil {
+		a.Log.Error("Failed to delete contact note", "error", err)
+		return r.SendErrorEnvelope(fasthttp.StatusInternalServerError, "Failed to delete note", nil, "")
+	}
+
+	return r.SendEnvelope(map[string]any{
+		"message": "Note deleted successfully",
+	})
 }

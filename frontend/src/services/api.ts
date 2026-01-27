@@ -131,6 +131,14 @@ export const contactsService = {
   assign: (id: string, userId: string | null) =>
     api.put(`/contacts/${id}/assign`, { user_id: userId }),
   getSessionData: (id: string) => api.get(`/contacts/${id}/session-data`),
+  // Block/unblock contact (for abusive contacts)
+  block: (id: string, isBlocked: boolean, reason?: string) =>
+    api.put(`/contacts/${id}/block`, { is_blocked: isBlocked, reason }),
+  // Contact notes
+  addNote: (id: string, content: string) =>
+    api.post(`/contacts/${id}/notes`, { content }),
+  deleteNote: (id: string, noteId: string) =>
+    api.delete(`/contacts/${id}/notes/${noteId}`),
   import: (file: File) => {
     const formData = new FormData()
     formData.append('file', file)

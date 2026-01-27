@@ -514,6 +514,11 @@ function handleContactClick(contact: Contact) {
   router.push(`/chat/${contact.id}`)
 }
 
+function handleContactUpdated(updatedContact: Contact) {
+  // Update the contact in the store
+  contactsStore.updateContact(updatedContact)
+}
+
 function showConfirmSendDialog() {
   if (!messageInput.value.trim() || !contactsStore.currentContact) return
   isConfirmSendDialogOpen.value = true
@@ -1838,6 +1843,7 @@ async function sendMediaMessage() {
       :contact="contactsStore.currentContact"
       :session-data="contactSessionData"
       @close="isInfoPanelOpen = false"
+      @contact-updated="handleContactUpdated"
     />
 
     <!-- Assign Contact Dialog -->

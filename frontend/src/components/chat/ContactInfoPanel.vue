@@ -4,14 +4,26 @@ import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { ScrollArea } from '@/components/ui/scroll-area'
+import { Textarea } from '@/components/ui/textarea'
+import { Input } from '@/components/ui/input'
 import {
   Collapsible,
   CollapsibleContent,
   CollapsibleTrigger,
 } from '@/components/ui/collapsible'
-import { X, ChevronDown, Phone, User } from 'lucide-vue-next'
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog'
+import { X, ChevronDown, Phone, User, ShieldAlert, ShieldCheck, Plus, Trash2, MessageSquare, Loader2 } from 'lucide-vue-next'
 import { getInitials } from '@/lib/utils'
-import type { Contact } from '@/stores/contacts'
+import { contactsService } from '@/services/api'
+import { toast } from 'vue-sonner'
+import type { Contact, ContactNote } from '@/stores/contacts'
 
 interface PanelFieldConfig {
   key: string
@@ -50,6 +62,7 @@ const props = defineProps<{
 
 const emit = defineEmits<{
   close: []
+  contactUpdated: [contact: Contact]
 }>()
 
 const collapsedSections = ref<Record<string, boolean>>({})
@@ -59,6 +72,16 @@ const MIN_WIDTH = 280
 const MAX_WIDTH = 480
 const panelWidth = ref(MAX_WIDTH) // Default to max width
 const isResizing = ref(false)
+
+// Blocking state
+const isBlockDialogOpen = ref(false)
+const blockReason = ref('')
+const isBlockingContact = ref(false)
+
+// Notes state
+const newNoteContent = ref('')
+const isAddingNote = ref(false)
+const isDeletingNoteId = ref<string | null>(null)
 
 function startResize(e: MouseEvent) {
   isResizing.value = true
@@ -157,6 +180,108 @@ const contactTags = computed(() => {
   if (!props.contact.tags || !Array.isArray(props.contact.tags)) return []
   return props.contact.tags
 })
+
+// Get notes from contact
+const contactNotes = computed(() => {
+  if (!props.contact.notes || !Array.isArray(props.contact.notes)) return []
+  // Sort by created_at descending (newest first)
+  return [...props.contact.notes].sort((a, b) =>
+    new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+  )
+})
+
+// Format date for notes
+function formatNoteDate(dateStr: string): string {
+  const date = new Date(dateStr)
+  const now = new Date()
+  const diffMs = now.getTime() - date.getTime()
+  const diffMins = Math.floor(diffMs / 60000)
+  const diffHours = Math.floor(diffMs / 3600000)
+  const diffDays = Math.floor(diffMs / 86400000)
+
+  if (diffMins < 1) return 'Just now'
+  if (diffMins < 60) return `${diffMins}m ago`
+  if (diffHours < 24) return `${diffHours}h ago`
+  if (diffDays < 7) return `${diffDays}d ago`
+  return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
+}
+
+// Block/unblock contact
+async function toggleBlockContact() {
+  if (props.contact.is_blocked) {
+    // Unblock directly
+    await handleBlockContact(false, '')
+  } else {
+    // Show dialog to get reason
+    blockReason.value = ''
+    isBlockDialogOpen.value = true
+  }
+}
+
+async function handleBlockContact(isBlocked: boolean, reason: string) {
+  isBlockingContact.value = true
+  try {
+    await contactsService.block(props.contact.id, isBlocked, reason)
+    toast.success(isBlocked ? 'Contact blocked' : 'Contact unblocked')
+    // Emit event to refresh contact
+    emit('contactUpdated', {
+      ...props.contact,
+      is_blocked: isBlocked,
+      blocked_reason: reason,
+      blocked_at: isBlocked ? new Date().toISOString() : undefined
+    })
+    isBlockDialogOpen.value = false
+  } catch (error: any) {
+    const message = error.response?.data?.message || 'Failed to update contact'
+    toast.error(message)
+  } finally {
+    isBlockingContact.value = false
+  }
+}
+
+// Add note
+async function addNote() {
+  if (!newNoteContent.value.trim()) return
+
+  isAddingNote.value = true
+  try {
+    const response = await contactsService.addNote(props.contact.id, newNoteContent.value.trim())
+    const newNote = response.data?.data?.note || response.data?.note
+    toast.success('Note added')
+    // Emit event to refresh contact
+    const updatedNotes = [...(props.contact.notes || []), newNote]
+    emit('contactUpdated', {
+      ...props.contact,
+      notes: updatedNotes
+    })
+    newNoteContent.value = ''
+  } catch (error: any) {
+    const message = error.response?.data?.message || 'Failed to add note'
+    toast.error(message)
+  } finally {
+    isAddingNote.value = false
+  }
+}
+
+// Delete note
+async function deleteNote(noteId: string) {
+  isDeletingNoteId.value = noteId
+  try {
+    await contactsService.deleteNote(props.contact.id, noteId)
+    toast.success('Note deleted')
+    // Emit event to refresh contact
+    const updatedNotes = (props.contact.notes || []).filter(n => n.id !== noteId)
+    emit('contactUpdated', {
+      ...props.contact,
+      notes: updatedNotes
+    })
+  } catch (error: any) {
+    const message = error.response?.data?.message || 'Failed to delete note'
+    toast.error(message)
+  } finally {
+    isDeletingNoteId.value = null
+  }
+}
 </script>
 
 <template>
@@ -196,12 +321,106 @@ const contactTags = computed(() => {
             <Phone class="h-3 w-3" />
             <span>{{ contact.phone_number }}</span>
           </div>
+          <!-- Blocked Badge -->
+          <Badge v-if="contact.is_blocked" variant="destructive" class="mt-2">
+            <ShieldAlert class="h-3 w-3 mr-1" />
+            Blocked
+          </Badge>
+        </div>
+
+        <!-- Block/Unblock Section -->
+        <div class="pt-2 border-b pb-4">
+          <h5 class="py-2 text-sm font-medium">Contact Status</h5>
+          <div class="space-y-2">
+            <Button
+              v-if="contact.is_blocked"
+              variant="outline"
+              size="sm"
+              class="w-full justify-start text-green-600 hover:text-green-700 hover:bg-green-50 dark:text-green-400 dark:hover:bg-green-900/20"
+              :disabled="isBlockingContact"
+              @click="toggleBlockContact"
+            >
+              <ShieldCheck class="h-4 w-4 mr-2" />
+              Unblock Contact
+            </Button>
+            <Button
+              v-else
+              variant="outline"
+              size="sm"
+              class="w-full justify-start text-red-600 hover:text-red-700 hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-900/20"
+              :disabled="isBlockingContact"
+              @click="toggleBlockContact"
+            >
+              <ShieldAlert class="h-4 w-4 mr-2" />
+              Block Contact (Abusive)
+            </Button>
+            <p v-if="contact.is_blocked && contact.blocked_reason" class="text-xs text-muted-foreground px-2">
+              Reason: {{ contact.blocked_reason }}
+            </p>
+          </div>
+        </div>
+
+        <!-- Notes Section -->
+        <div class="pt-2 border-b pb-4">
+          <h5 class="py-2 text-sm font-medium flex items-center gap-2">
+            <MessageSquare class="h-4 w-4" />
+            Notes
+          </h5>
+
+          <!-- Add Note Form -->
+          <div class="space-y-2 mb-3">
+            <Textarea
+              v-model="newNoteContent"
+              placeholder="Add a note about this contact..."
+              class="min-h-[60px] text-sm resize-none"
+              :rows="2"
+            />
+            <Button
+              size="sm"
+              class="w-full"
+              :disabled="!newNoteContent.trim() || isAddingNote"
+              @click="addNote"
+            >
+              <Loader2 v-if="isAddingNote" class="h-4 w-4 mr-2 animate-spin" />
+              <Plus v-else class="h-4 w-4 mr-2" />
+              Add Note
+            </Button>
+          </div>
+
+          <!-- Existing Notes -->
+          <div v-if="contactNotes.length > 0" class="space-y-2">
+            <div
+              v-for="note in contactNotes"
+              :key="note.id"
+              class="bg-muted/50 rounded-md p-3 group relative"
+            >
+              <p class="text-sm whitespace-pre-wrap break-words pr-6">{{ note.content }}</p>
+              <div class="flex items-center justify-between mt-2 text-xs text-muted-foreground">
+                <span>{{ note.created_by_name }}</span>
+                <span>{{ formatNoteDate(note.created_at) }}</span>
+              </div>
+              <!-- Delete button -->
+              <Button
+                variant="ghost"
+                size="icon"
+                class="absolute top-2 right-2 h-6 w-6 opacity-0 group-hover:opacity-100 transition-opacity text-muted-foreground hover:text-destructive"
+                :disabled="isDeletingNoteId === note.id"
+                @click="deleteNote(note.id)"
+              >
+                <Loader2 v-if="isDeletingNoteId === note.id" class="h-3 w-3 animate-spin" />
+                <Trash2 v-else class="h-3 w-3" />
+              </Button>
+            </div>
+          </div>
+          <p v-else class="text-xs text-muted-foreground text-center py-2">
+            No notes yet
+          </p>
         </div>
 
         <!-- No Session Data or no panel config -->
         <div v-if="!props.sessionData || sortedSections.length === 0" class="text-center py-6 text-muted-foreground">
           <User class="h-8 w-8 mx-auto mb-2 opacity-50" />
-          <p class="text-sm">No data configured</p>
+          <p class="text-sm">No session data configured</p>
           <p class="text-xs mt-1">Configure panel display in the chatbot flow settings.</p>
         </div>
 
@@ -312,5 +531,35 @@ const contactTags = computed(() => {
         </div>
       </div>
     </ScrollArea>
+
+    <!-- Block Contact Dialog -->
+    <Dialog v-model:open="isBlockDialogOpen">
+      <DialogContent class="max-w-sm">
+        <DialogHeader>
+          <DialogTitle>Block Contact</DialogTitle>
+          <DialogDescription>
+            This will block all incoming messages from this contact until they are unblocked by an admin.
+          </DialogDescription>
+        </DialogHeader>
+        <div class="py-4">
+          <label class="text-sm font-medium mb-2 block">Reason for blocking</label>
+          <Input
+            v-model="blockReason"
+            placeholder="e.g., Abusive language, spam, harassment..."
+          />
+        </div>
+        <DialogFooter>
+          <Button variant="outline" @click="isBlockDialogOpen = false">Cancel</Button>
+          <Button
+            variant="destructive"
+            :disabled="isBlockingContact"
+            @click="handleBlockContact(true, blockReason)"
+          >
+            <Loader2 v-if="isBlockingContact" class="h-4 w-4 mr-2 animate-spin" />
+            Block Contact
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   </div>
 </template>

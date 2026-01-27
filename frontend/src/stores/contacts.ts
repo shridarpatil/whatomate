@@ -2,6 +2,14 @@ import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
 import { contactsService, messagesService } from '@/services/api'
 
+export interface ContactNote {
+  id: string
+  content: string
+  created_at: string
+  created_by_user_id: string
+  created_by_name: string
+}
+
 export interface Contact {
   id: string
   phone_number: string
@@ -14,6 +22,13 @@ export interface Contact {
   last_message_at?: string
   unread_count: number
   assigned_user_id?: string
+  // Blocking info
+  is_blocked: boolean
+  blocked_reason?: string
+  blocked_at?: string
+  blocked_by_user_id?: string
+  // Notes
+  notes?: ContactNote[]
   created_at: string
   updated_at: string
 }
@@ -285,6 +300,18 @@ export const useContactsStore = defineStore('contacts', () => {
     }
   }
 
+  function updateContact(updatedContact: Contact) {
+    // Update in contacts list
+    const index = contacts.value.findIndex(c => c.id === updatedContact.id)
+    if (index !== -1) {
+      contacts.value[index] = updatedContact
+    }
+    // Update currentContact if it's the same
+    if (currentContact.value?.id === updatedContact.id) {
+      currentContact.value = updatedContact
+    }
+  }
+
   return {
     contacts,
     currentContact,
@@ -315,6 +342,7 @@ export const useContactsStore = defineStore('contacts', () => {
     clearMessages,
     setReplyingTo,
     clearReplyingTo,
-    updateMessageReactions
+    updateMessageReactions,
+    updateContact
   }
 })
