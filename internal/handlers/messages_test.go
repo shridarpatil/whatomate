@@ -11,6 +11,7 @@ import (
 	"github.com/shridarpatil/whatomate/internal/config"
 	"github.com/shridarpatil/whatomate/internal/handlers"
 	"github.com/shridarpatil/whatomate/internal/models"
+	"github.com/shridarpatil/whatomate/internal/templateutil"
 	"github.com/shridarpatil/whatomate/pkg/whatsapp"
 	"github.com/shridarpatil/whatomate/test/testutil"
 	"github.com/stretchr/testify/assert"
@@ -949,7 +950,7 @@ func TestApp_SendOutgoingMessage_DocumentPreview(t *testing.T) {
 
 func TestExtractParamNamesFromContent_Positional(t *testing.T) {
 	content := "Hello {{1}}! Your order {{2}} is ready for pickup at {{3}}."
-	names := handlers.ExtractParamNamesFromContent(content)
+	names := templateutil.ExtParamNames(content)
 
 	require.Len(t, names, 3)
 	assert.Equal(t, "1", names[0])
@@ -959,7 +960,7 @@ func TestExtractParamNamesFromContent_Positional(t *testing.T) {
 
 func TestExtractParamNamesFromContent_Named(t *testing.T) {
 	content := "Hi {{customer_name}}, your order {{order_id}} will arrive on {{delivery_date}}."
-	names := handlers.ExtractParamNamesFromContent(content)
+	names := templateutil.ExtParamNames(content)
 
 	require.Len(t, names, 3)
 	assert.Equal(t, "customer_name", names[0])
@@ -969,7 +970,7 @@ func TestExtractParamNamesFromContent_Named(t *testing.T) {
 
 func TestExtractParamNamesFromContent_Mixed(t *testing.T) {
 	content := "Hello {{name}}, your code is {{1}}."
-	names := handlers.ExtractParamNamesFromContent(content)
+	names := templateutil.ExtParamNames(content)
 
 	require.Len(t, names, 2)
 	assert.Equal(t, "name", names[0])
@@ -978,14 +979,14 @@ func TestExtractParamNamesFromContent_Mixed(t *testing.T) {
 
 func TestExtractParamNamesFromContent_NoParams(t *testing.T) {
 	content := "This is a static message with no parameters."
-	names := handlers.ExtractParamNamesFromContent(content)
+	names := templateutil.ExtParamNames(content)
 
 	assert.Nil(t, names)
 }
 
 func TestExtractParamNamesFromContent_DuplicateParams(t *testing.T) {
 	content := "Hello {{name}}, {{name}} is a great name!"
-	names := handlers.ExtractParamNamesFromContent(content)
+	names := templateutil.ExtParamNames(content)
 
 	// Should deduplicate
 	require.Len(t, names, 1)
@@ -999,7 +1000,7 @@ func TestResolveParams_NamedMatch(t *testing.T) {
 		"order_id":      "ORD-123",
 	}
 
-	result := handlers.ResolveParams(paramNames, params)
+	result := templateutil.ResolveParamsFromMap(paramNames, params)
 
 	require.Len(t, result, 2)
 	assert.Equal(t, "John", result[0])
@@ -1013,7 +1014,7 @@ func TestResolveParams_PositionalMatch(t *testing.T) {
 		"2": "Second",
 	}
 
-	result := handlers.ResolveParams(paramNames, params)
+	result := templateutil.ResolveParamsFromMap(paramNames, params)
 
 	require.Len(t, result, 2)
 	assert.Equal(t, "First", result[0])
@@ -1028,7 +1029,7 @@ func TestResolveParams_FallbackToPositional(t *testing.T) {
 		"2": "ABC123",
 	}
 
-	result := handlers.ResolveParams(paramNames, params)
+	result := templateutil.ResolveParamsFromMap(paramNames, params)
 
 	require.Len(t, result, 2)
 	assert.Equal(t, "John", result[0])
@@ -1042,7 +1043,7 @@ func TestResolveParams_MissingParams(t *testing.T) {
 		// order_id and date are missing
 	}
 
-	result := handlers.ResolveParams(paramNames, params)
+	result := templateutil.ResolveParamsFromMap(paramNames, params)
 
 	require.Len(t, result, 3)
 	assert.Equal(t, "John", result[0])
@@ -1052,15 +1053,15 @@ func TestResolveParams_MissingParams(t *testing.T) {
 
 func TestResolveParams_EmptyInputs(t *testing.T) {
 	// Empty param names
-	result1 := handlers.ResolveParams([]string{}, map[string]string{"a": "b"})
+	result1 := templateutil.ResolveParamsFromMap([]string{}, map[string]string{"a": "b"})
 	assert.Nil(t, result1)
 
 	// Empty params map
-	result2 := handlers.ResolveParams([]string{"a"}, map[string]string{})
+	result2 := templateutil.ResolveParamsFromMap([]string{"a"}, map[string]string{})
 	assert.Nil(t, result2)
 
 	// Both empty
-	result3 := handlers.ResolveParams([]string{}, map[string]string{})
+	result3 := templateutil.ResolveParamsFromMap([]string{}, map[string]string{})
 	assert.Nil(t, result3)
 }
 
@@ -1072,7 +1073,7 @@ func TestResolveParams_WrongParamNames(t *testing.T) {
 		"misstime": "banknifty", // Wrong name
 	}
 
-	result := handlers.ResolveParams(paramNames, params)
+	result := templateutil.ResolveParamsFromMap(paramNames, params)
 
 	require.Len(t, result, 2)
 	// Both should be empty since names don't match

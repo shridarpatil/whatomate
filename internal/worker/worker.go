@@ -3,45 +3,19 @@ package worker
 import (
 	"context"
 	"fmt"
-	"regexp"
-	"strings"
 	"time"
 
 	"github.com/google/uuid"
 	"github.com/redis/go-redis/v9"
 	"github.com/shridarpatil/whatomate/internal/config"
+	"github.com/shridarpatil/whatomate/internal/contactutil"
 	"github.com/shridarpatil/whatomate/internal/models"
 	"github.com/shridarpatil/whatomate/internal/queue"
+	"github.com/shridarpatil/whatomate/internal/templateutil"
 	"github.com/shridarpatil/whatomate/pkg/whatsapp"
 	"github.com/zerodha/logf"
 	"gorm.io/gorm"
 )
-
-// parameterPattern matches template parameters like {{1}}, {{name}}, {{order_id}}
-var parameterPattern = regexp.MustCompile(`\{\{([^}]+)\}\}`)
-
-// extractParameterNames extracts parameter names from template content
-// Supports both positional ({{1}}, {{2}}) and named ({{name}}, {{order_id}}) parameters
-// Returns parameter names in order of first occurrence, without duplicates
-func extractParameterNames(content string) []string {
-	matches := parameterPattern.FindAllStringSubmatch(content, -1)
-	if len(matches) == 0 {
-		return nil
-	}
-
-	seen := make(map[string]bool)
-	var names []string
-	for _, match := range matches {
-		if len(match) > 1 {
-			name := strings.TrimSpace(match[1])
-			if name != "" && !seen[name] {
-				seen[name] = true
-				names = append(names, name)
-			}
-		}
-	}
-	return names
-}
 
 // Worker processes jobs from the queue
 type Worker struct {
@@ -77,67 +51,6 @@ func New(cfg *config.Config, db *gorm.DB, rdb *redis.Client, log logf.Logger) (*
 	}, nil
 }
 
-// resolveTemplateParams resolves both positional and named parameters to ordered values
-// Extracts parameter names from template body content on-the-fly
-func resolveTemplateParams(template *models.Template, params models.JSONB) []string {
-	if len(params) == 0 {
-		return nil
-	}
-
-	// Extract parameter names from template body content
-	paramNames := extractParameterNames(template.BodyContent)
-	if len(paramNames) == 0 {
-		return nil
-	}
-
-	result := make([]string, len(paramNames))
-	for i, name := range paramNames {
-		// Try named key first
-		if val, ok := params[name]; ok {
-			result[i] = fmt.Sprintf("%v", val)
-			continue
-		}
-		// Fall back to positional key (1-indexed)
-		key := fmt.Sprintf("%d", i+1)
-		if val, ok := params[key]; ok {
-			result[i] = fmt.Sprintf("%v", val)
-			continue
-		}
-		// Default to empty string
-		result[i] = ""
-	}
-	return result
-}
-
-// replaceTemplateContent replaces both positional ({{1}}) and named ({{name}}) placeholders
-// Extracts parameter names from template body content on-the-fly
-func replaceTemplateContent(template *models.Template, content string, params models.JSONB) string {
-	if len(params) == 0 {
-		return content
-	}
-
-	// Extract parameter names from template body content
-	paramNames := extractParameterNames(template.BodyContent)
-	if len(paramNames) == 0 {
-		return content
-	}
-
-	for i, name := range paramNames {
-		// Try named key first
-		var val string
-		if v, ok := params[name]; ok {
-			val = fmt.Sprintf("%v", v)
-		} else if v, ok := params[fmt.Sprintf("%d", i+1)]; ok {
-			// Fall back to positional key
-			val = fmt.Sprintf("%v", v)
-		}
-
-		// Replace both named and positional placeholders
-		content = strings.ReplaceAll(content, fmt.Sprintf("{{%s}}", name), val)
-		content = strings.ReplaceAll(content, fmt.Sprintf("{{%d}}", i+1), val)
-	}
-	return content
-}
 
 // Run starts the worker and processes jobs until context is cancelled
 func (w *Worker) Run(ctx context.Context) error {
@@ -177,7 +90,7 @@ func (w *Worker) HandleRecipientJob(ctx context.Context, job *queue.RecipientJob
 	}
 
 	// Get or create contact for this recipient
-	contact, err := w.getOrCreateContact(job.OrganizationID, job.PhoneNumber, job.RecipientName)
+	contact, _, err := contactutil.GetOrCreateContact(w.DB, job.OrganizationID, job.PhoneNumber, job.RecipientName)
 	if err != nil || contact == nil {
 		w.Log.Error("Failed to get or create contact", "error", err, "phone", job.PhoneNumber)
 		w.updateRecipientStatus(job.RecipientID, models.MessageStatusFailed, "", "Failed to create contact")
@@ -211,7 +124,7 @@ func (w *Worker) HandleRecipientJob(ctx context.Context, job *queue.RecipientJob
 	}
 	if campaign.Template != nil {
 		message.TemplateName = campaign.Template.Name
-		content := replaceTemplateContent(campaign.Template, campaign.Template.BodyContent, job.TemplateParams)
+		content := templateutil.ReplaceWithJSONBParams(campaign.Template.BodyContent, campaign.Template.BodyContent, job.TemplateParams)
 		message.Content = content
 	}
 
@@ -339,7 +252,7 @@ func (w *Worker) sendTemplateMessage(ctx context.Context, account *models.WhatsA
 	if template.HeaderType != "" && template.HeaderType != "TEXT" {
 		// Use campaign's uploaded media ID if available
 		if campaignHeaderMediaID != "" {
-			headerParam := buildMediaParameterWithID(template.HeaderType, campaignHeaderMediaID)
+			headerParam := buildMediaParameter(template.HeaderType, "id", campaignHeaderMediaID)
 			if headerParam != nil {
 				components = append(components, map[string]interface{}{
 					"type":       "header",
@@ -348,7 +261,7 @@ func (w *Worker) sendTemplateMessage(ctx context.Context, account *models.WhatsA
 			}
 		} else if template.HeaderContent != "" {
 			// Fall back to template's header content (URL)
-			headerParam := buildMediaParameterWithLink(template.HeaderType, template.HeaderContent)
+			headerParam := buildMediaParameter(template.HeaderType, "link", template.HeaderContent)
 			if headerParam != nil {
 				components = append(components, map[string]interface{}{
 					"type":       "header",
@@ -359,7 +272,7 @@ func (w *Worker) sendTemplateMessage(ctx context.Context, account *models.WhatsA
 	}
 
 	// Resolve body parameters (supports both named and positional)
-	resolvedParams := resolveTemplateParams(template, recipient.TemplateParams)
+	resolvedParams := templateutil.ResolveParams(template.BodyContent, recipient.TemplateParams)
 	if len(resolvedParams) > 0 {
 		bodyParams := make([]map[string]interface{}, len(resolvedParams))
 		for i, val := range resolvedParams {
@@ -377,61 +290,25 @@ func (w *Worker) sendTemplateMessage(ctx context.Context, account *models.WhatsA
 	return w.WhatsApp.SendTemplateMessageWithComponents(ctx, waAccount, recipient.PhoneNumber, template.Name, template.Language, components)
 }
 
-// buildMediaParameterWithID creates a media parameter using Meta's media ID
-func buildMediaParameterWithID(headerType, mediaID string) map[string]interface{} {
+// buildMediaParameter creates a media parameter for WhatsApp template headers.
+// keyName is "id" for Meta media IDs or "link" for external URLs.
+func buildMediaParameter(headerType, keyName, value string) map[string]interface{} {
+	var mediaType string
 	switch headerType {
 	case "IMAGE":
-		return map[string]interface{}{
-			"type": "image",
-			"image": map[string]interface{}{
-				"id": mediaID,
-			},
-		}
+		mediaType = "image"
 	case "VIDEO":
-		return map[string]interface{}{
-			"type": "video",
-			"video": map[string]interface{}{
-				"id": mediaID,
-			},
-		}
+		mediaType = "video"
 	case "DOCUMENT":
-		return map[string]interface{}{
-			"type": "document",
-			"document": map[string]interface{}{
-				"id": mediaID,
-			},
-		}
+		mediaType = "document"
 	default:
 		return nil
 	}
-}
-
-// buildMediaParameterWithLink creates a media parameter using external URL
-func buildMediaParameterWithLink(headerType, mediaURL string) map[string]interface{} {
-	switch headerType {
-	case "IMAGE":
-		return map[string]interface{}{
-			"type": "image",
-			"image": map[string]interface{}{
-				"link": mediaURL,
-			},
-		}
-	case "VIDEO":
-		return map[string]interface{}{
-			"type": "video",
-			"video": map[string]interface{}{
-				"link": mediaURL,
-			},
-		}
-	case "DOCUMENT":
-		return map[string]interface{}{
-			"type": "document",
-			"document": map[string]interface{}{
-				"link": mediaURL,
-			},
-		}
-	default:
-		return nil
+	return map[string]interface{}{
+		"type": mediaType,
+		mediaType: map[string]interface{}{
+			keyName: value,
+		},
 	}
 }
 
@@ -443,37 +320,3 @@ func (w *Worker) Close() error {
 	return nil
 }
 
-// getOrCreateContact finds or creates a contact for a phone number
-func (w *Worker) getOrCreateContact(orgID uuid.UUID, phoneNumber, name string) (*models.Contact, error) {
-	// Normalize phone number (remove + prefix if present)
-	normalizedPhone := phoneNumber
-	if len(normalizedPhone) > 0 && normalizedPhone[0] == '+' {
-		normalizedPhone = normalizedPhone[1:]
-	}
-
-	// Try to find existing contact
-	var contact models.Contact
-	err := w.DB.Where("organization_id = ? AND phone_number = ?", orgID, normalizedPhone).First(&contact).Error
-	if err == nil {
-		return &contact, nil
-	}
-
-	// Also try with + prefix
-	err = w.DB.Where("organization_id = ? AND phone_number = ?", orgID, "+"+normalizedPhone).First(&contact).Error
-	if err == nil {
-		return &contact, nil
-	}
-
-	// Create new contact
-	contact = models.Contact{
-		OrganizationID: orgID,
-		PhoneNumber:    normalizedPhone,
-		ProfileName:    name,
-	}
-	if err := w.DB.Create(&contact).Error; err != nil {
-		return nil, fmt.Errorf("failed to create contact: %w", err)
-	}
-
-	w.Log.Info("Created new contact for campaign recipient", "phone", normalizedPhone, "name", name)
-	return &contact, nil
-}

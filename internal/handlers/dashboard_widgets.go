@@ -113,7 +113,7 @@ var widgetDisplayTypes = []string{"number", "percentage", "chart"}
 
 // ListDashboardWidgets returns all widgets for the user (their own + shared)
 func (a *App) ListDashboardWidgets(r *fastglue.Request) error {
-	orgID, err := getOrganizationID(r)
+	orgID, err := a.getOrgID(r)
 	if err != nil {
 		return r.SendErrorEnvelope(fasthttp.StatusUnauthorized, "Unauthorized", nil, "")
 	}
@@ -148,7 +148,7 @@ func (a *App) ListDashboardWidgets(r *fastglue.Request) error {
 
 // GetDashboardWidget returns a single widget
 func (a *App) GetDashboardWidget(r *fastglue.Request) error {
-	orgID, err := getOrganizationID(r)
+	orgID, err := a.getOrgID(r)
 	if err != nil {
 		return r.SendErrorEnvelope(fasthttp.StatusUnauthorized, "Unauthorized", nil, "")
 	}
@@ -160,10 +160,9 @@ func (a *App) GetDashboardWidget(r *fastglue.Request) error {
 		return r.SendErrorEnvelope(fasthttp.StatusForbidden, "You don't have permission to view analytics", nil, "")
 	}
 
-	idStr := r.RequestCtx.UserValue("id").(string)
-	id, err := uuid.Parse(idStr)
+	id, err := parsePathUUID(r, "id", "widget")
 	if err != nil {
-		return r.SendErrorEnvelope(fasthttp.StatusBadRequest, "Invalid widget ID", nil, "")
+		return nil
 	}
 
 	var widget models.DashboardWidget
@@ -179,7 +178,7 @@ func (a *App) GetDashboardWidget(r *fastglue.Request) error {
 
 // CreateDashboardWidget creates a new widget
 func (a *App) CreateDashboardWidget(r *fastglue.Request) error {
-	orgID, err := getOrganizationID(r)
+	orgID, err := a.getOrgID(r)
 	if err != nil {
 		return r.SendErrorEnvelope(fasthttp.StatusUnauthorized, "Unauthorized", nil, "")
 	}
@@ -295,7 +294,7 @@ func (a *App) CreateDashboardWidget(r *fastglue.Request) error {
 
 // UpdateDashboardWidget updates a widget
 func (a *App) UpdateDashboardWidget(r *fastglue.Request) error {
-	orgID, err := getOrganizationID(r)
+	orgID, err := a.getOrgID(r)
 	if err != nil {
 		return r.SendErrorEnvelope(fasthttp.StatusUnauthorized, "Unauthorized", nil, "")
 	}
@@ -307,16 +306,15 @@ func (a *App) UpdateDashboardWidget(r *fastglue.Request) error {
 		return r.SendErrorEnvelope(fasthttp.StatusForbidden, "You don't have permission to edit widgets", nil, "")
 	}
 
-	idStr := r.RequestCtx.UserValue("id").(string)
-	id, err := uuid.Parse(idStr)
+	id, err := parsePathUUID(r, "id", "widget")
 	if err != nil {
-		return r.SendErrorEnvelope(fasthttp.StatusBadRequest, "Invalid widget ID", nil, "")
+		return nil
 	}
 
 	// Find the widget - must belong to same organization
-	var widget models.DashboardWidget
-	if err := a.DB.Where("id = ? AND organization_id = ?", id, orgID).First(&widget).Error; err != nil {
-		return r.SendErrorEnvelope(fasthttp.StatusNotFound, "Widget not found", nil, "")
+	widget, err := findByIDAndOrg[models.DashboardWidget](a.DB, r, id, orgID, "Widget")
+	if err != nil {
+		return nil
 	}
 
 	// Only the owner can edit the widget
@@ -396,17 +394,17 @@ func (a *App) UpdateDashboardWidget(r *fastglue.Request) error {
 		widget.IsShared = *req.IsShared
 	}
 
-	if err := a.DB.Save(&widget).Error; err != nil {
+	if err := a.DB.Save(widget).Error; err != nil {
 		a.Log.Error("Failed to update dashboard widget", "error", err)
 		return r.SendErrorEnvelope(fasthttp.StatusInternalServerError, "Failed to update widget", nil, "")
 	}
 
-	return r.SendEnvelope(widgetToResponse(widget, userID))
+	return r.SendEnvelope(widgetToResponse(*widget, userID))
 }
 
 // DeleteDashboardWidget deletes a widget
 func (a *App) DeleteDashboardWidget(r *fastglue.Request) error {
-	orgID, err := getOrganizationID(r)
+	orgID, err := a.getOrgID(r)
 	if err != nil {
 		return r.SendErrorEnvelope(fasthttp.StatusUnauthorized, "Unauthorized", nil, "")
 	}
@@ -418,16 +416,15 @@ func (a *App) DeleteDashboardWidget(r *fastglue.Request) error {
 		return r.SendErrorEnvelope(fasthttp.StatusForbidden, "You don't have permission to delete widgets", nil, "")
 	}
 
-	idStr := r.RequestCtx.UserValue("id").(string)
-	id, err := uuid.Parse(idStr)
+	id, err := parsePathUUID(r, "id", "widget")
 	if err != nil {
-		return r.SendErrorEnvelope(fasthttp.StatusBadRequest, "Invalid widget ID", nil, "")
+		return nil
 	}
 
 	// Find the widget - must belong to same organization
-	var widget models.DashboardWidget
-	if err := a.DB.Where("id = ? AND organization_id = ?", id, orgID).First(&widget).Error; err != nil {
-		return r.SendErrorEnvelope(fasthttp.StatusNotFound, "Widget not found", nil, "")
+	widget, err := findByIDAndOrg[models.DashboardWidget](a.DB, r, id, orgID, "Widget")
+	if err != nil {
+		return nil
 	}
 
 	// Only the owner can delete the widget
@@ -435,7 +432,7 @@ func (a *App) DeleteDashboardWidget(r *fastglue.Request) error {
 		return r.SendErrorEnvelope(fasthttp.StatusForbidden, "Only the widget owner can delete this widget", nil, "")
 	}
 
-	if err := a.DB.Delete(&widget).Error; err != nil {
+	if err := a.DB.Delete(widget).Error; err != nil {
 		a.Log.Error("Failed to delete dashboard widget", "error", err)
 		return r.SendErrorEnvelope(fasthttp.StatusInternalServerError, "Failed to delete widget", nil, "")
 	}
@@ -445,7 +442,7 @@ func (a *App) DeleteDashboardWidget(r *fastglue.Request) error {
 
 // ReorderDashboardWidgets updates the display order of widgets
 func (a *App) ReorderDashboardWidgets(r *fastglue.Request) error {
-	orgID, err := getOrganizationID(r)
+	orgID, err := a.getOrgID(r)
 	if err != nil {
 		return r.SendErrorEnvelope(fasthttp.StatusUnauthorized, "Unauthorized", nil, "")
 	}
@@ -562,17 +559,16 @@ func formatLabel(s string) string {
 
 // GetWidgetData executes the widget query and returns the data
 func (a *App) GetWidgetData(r *fastglue.Request) error {
-	orgID, err := getOrganizationID(r)
+	orgID, err := a.getOrgID(r)
 	if err != nil {
 		return r.SendErrorEnvelope(fasthttp.StatusUnauthorized, "Unauthorized", nil, "")
 	}
 
 	userID, _ := r.RequestCtx.UserValue("user_id").(uuid.UUID)
 
-	idStr := r.RequestCtx.UserValue("id").(string)
-	id, err := uuid.Parse(idStr)
+	id, err := parsePathUUID(r, "id", "widget")
 	if err != nil {
-		return r.SendErrorEnvelope(fasthttp.StatusBadRequest, "Invalid widget ID", nil, "")
+		return nil
 	}
 
 	// Parse date range from query params
@@ -601,7 +597,7 @@ func (a *App) GetWidgetData(r *fastglue.Request) error {
 
 // GetAllWidgetsData returns data for all user's widgets in a single request
 func (a *App) GetAllWidgetsData(r *fastglue.Request) error {
-	orgID, err := getOrganizationID(r)
+	orgID, err := a.getOrgID(r)
 	if err != nil {
 		return r.SendErrorEnvelope(fasthttp.StatusUnauthorized, "Unauthorized", nil, "")
 	}
@@ -655,7 +651,7 @@ func (a *App) executeWidgetQuery(orgID uuid.UUID, widget models.DashboardWidget,
 		if err != nil {
 			periodEnd = now
 		}
-		periodEnd = periodEnd.Add(24*time.Hour - time.Nanosecond)
+		periodEnd = endOfDay(periodEnd)
 	} else {
 		// Default to current month
 		periodStart = time.Date(now.Year(), now.Month(), 1, 0, 0, 0, 0, time.UTC)

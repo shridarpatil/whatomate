@@ -10,6 +10,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/shridarpatil/whatomate/internal/models"
 	"github.com/shridarpatil/whatomate/internal/queue"
+	"github.com/shridarpatil/whatomate/internal/templateutil"
 	"github.com/shridarpatil/whatomate/pkg/whatsapp"
 	"github.com/shridarpatil/whatomate/test/testutil"
 	"github.com/stretchr/testify/assert"
@@ -242,95 +243,6 @@ func TestWorker_HandleRecipientJob_CampaignNotFound(t *testing.T) {
 	err := w.HandleRecipientJob(context.Background(), job)
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "failed to load campaign")
-}
-
-func TestWorker_getOrCreateContact_CreatesNewContact(t *testing.T) {
-	w := testWorker(t)
-
-	// Create organization
-	org := &models.Organization{
-		Name: "Test Org " + uuid.New().String()[:8],
-		Slug: "test-org-" + uuid.New().String()[:8],
-	}
-	require.NoError(t, w.DB.Create(org).Error)
-
-	contact, err := w.getOrCreateContact(org.ID, "1234567890", "Test User")
-	require.NoError(t, err)
-	require.NotNil(t, contact)
-
-	assert.Equal(t, "1234567890", contact.PhoneNumber)
-	assert.Equal(t, "Test User", contact.ProfileName)
-	assert.Equal(t, org.ID, contact.OrganizationID)
-}
-
-func TestWorker_getOrCreateContact_NormalizesPhoneNumber(t *testing.T) {
-	w := testWorker(t)
-
-	// Create organization
-	org := &models.Organization{
-		Name: "Test Org " + uuid.New().String()[:8],
-		Slug: "test-org-" + uuid.New().String()[:8],
-	}
-	require.NoError(t, w.DB.Create(org).Error)
-
-	// Test with + prefix - should strip it
-	contact1, err := w.getOrCreateContact(org.ID, "+1234567890", "Test User")
-	require.NoError(t, err)
-	assert.Equal(t, "1234567890", contact1.PhoneNumber)
-
-	// Test finding existing contact with normalized number
-	contact2, err := w.getOrCreateContact(org.ID, "+1234567890", "Different Name")
-	require.NoError(t, err)
-	assert.Equal(t, contact1.ID, contact2.ID) // Should return same contact
-}
-
-func TestWorker_getOrCreateContact_FindsExistingContact(t *testing.T) {
-	w := testWorker(t)
-
-	// Create organization
-	org := &models.Organization{
-		Name: "Test Org " + uuid.New().String()[:8],
-		Slug: "test-org-" + uuid.New().String()[:8],
-	}
-	require.NoError(t, w.DB.Create(org).Error)
-
-	// Pre-create a contact
-	existingContact := &models.Contact{
-		OrganizationID: org.ID,
-		PhoneNumber:    "5556667777",
-		ProfileName:    "Existing Contact",
-	}
-	require.NoError(t, w.DB.Create(existingContact).Error)
-
-	// Should find existing contact
-	contact, err := w.getOrCreateContact(org.ID, "5556667777", "Different Name")
-	require.NoError(t, err)
-	assert.Equal(t, existingContact.ID, contact.ID)
-	assert.Equal(t, "Existing Contact", contact.ProfileName) // Name shouldn't change
-}
-
-func TestWorker_getOrCreateContact_FindsWithPlusPrefix(t *testing.T) {
-	w := testWorker(t)
-
-	// Create organization
-	org := &models.Organization{
-		Name: "Test Org " + uuid.New().String()[:8],
-		Slug: "test-org-" + uuid.New().String()[:8],
-	}
-	require.NoError(t, w.DB.Create(org).Error)
-
-	// Create contact with + prefix
-	existingContact := &models.Contact{
-		OrganizationID: org.ID,
-		PhoneNumber:    "+9876543210",
-		ProfileName:    "Plus Prefix Contact",
-	}
-	require.NoError(t, w.DB.Create(existingContact).Error)
-
-	// Search without + prefix should find it
-	contact, err := w.getOrCreateContact(org.ID, "9876543210", "Test")
-	require.NoError(t, err)
-	assert.Equal(t, existingContact.ID, contact.ID)
 }
 
 // createMinimalCampaignData creates the minimum data needed for campaign tests
@@ -869,147 +781,127 @@ func TestWorker_HandleRecipientJob_TemplateParamSubstitution(t *testing.T) {
 // Unit tests for parameter resolution functions (no database required)
 
 func TestResolveTemplateParams_NamedParams(t *testing.T) {
-	template := &models.Template{
-		BodyContent: "Hello {{name}}, your order {{order_id}} is ready!",
-	}
+	bodyContent := "Hello {{name}}, your order {{order_id}} is ready!"
 	params := models.JSONB{
 		"name":     "John",
 		"order_id": "ORD-123",
 	}
 
-	result := resolveTemplateParams(template, params)
+	result := templateutil.ResolveParams(bodyContent, params)
 
 	assert.Equal(t, []string{"John", "ORD-123"}, result)
 }
 
 func TestResolveTemplateParams_PositionalParams(t *testing.T) {
-	template := &models.Template{
-		BodyContent: "Hello {{1}}, your order {{2}} is ready!",
-	}
+	bodyContent := "Hello {{1}}, your order {{2}} is ready!"
 	params := models.JSONB{
 		"1": "John",
 		"2": "ORD-123",
 	}
 
-	result := resolveTemplateParams(template, params)
+	result := templateutil.ResolveParams(bodyContent, params)
 
 	assert.Equal(t, []string{"John", "ORD-123"}, result)
 }
 
 func TestResolveTemplateParams_FallbackToPositional(t *testing.T) {
 	// Named params in template, but user provides positional params
-	template := &models.Template{
-		BodyContent: "Hello {{name}}, your order {{order_id}} is ready!",
-	}
+	bodyContent := "Hello {{name}}, your order {{order_id}} is ready!"
 	params := models.JSONB{
 		"1": "John",
 		"2": "ORD-123",
 	}
 
-	result := resolveTemplateParams(template, params)
+	result := templateutil.ResolveParams(bodyContent, params)
 
 	assert.Equal(t, []string{"John", "ORD-123"}, result)
 }
 
 func TestResolveTemplateParams_MixedParams(t *testing.T) {
 	// User provides some named, some positional
-	template := &models.Template{
-		BodyContent: "Hello {{name}}, your order {{order_id}} is ready!",
-	}
+	bodyContent := "Hello {{name}}, your order {{order_id}} is ready!"
 	params := models.JSONB{
 		"name": "John",
 		"2":    "ORD-123", // Positional fallback for second param
 	}
 
-	result := resolveTemplateParams(template, params)
+	result := templateutil.ResolveParams(bodyContent, params)
 
 	assert.Equal(t, []string{"John", "ORD-123"}, result)
 }
 
 func TestResolveTemplateParams_NoParams(t *testing.T) {
 	// Template without any parameters
-	template := &models.Template{
-		BodyContent: "Hello, your order is ready!",
-	}
+	bodyContent := "Hello, your order is ready!"
 	params := models.JSONB{
 		"1": "John",
 		"2": "ORD-123",
 	}
 
-	result := resolveTemplateParams(template, params)
+	result := templateutil.ResolveParams(bodyContent, params)
 
 	assert.Nil(t, result)
 }
 
 func TestResolveTemplateParams_EmptyParams(t *testing.T) {
-	template := &models.Template{
-		BodyContent: "Hello {{name}}!",
-	}
+	bodyContent := "Hello {{name}}!"
 	params := models.JSONB{}
 
-	result := resolveTemplateParams(template, params)
+	result := templateutil.ResolveParams(bodyContent, params)
 
 	assert.Nil(t, result)
 }
 
 func TestReplaceTemplateContent_NamedParams(t *testing.T) {
-	template := &models.Template{
-		BodyContent: "Hello {{name}}, your order {{order_id}} is ready!",
-	}
+	bodyContent := "Hello {{name}}, your order {{order_id}} is ready!"
 	content := "Hello {{name}}, your order {{order_id}} is ready!"
 	params := models.JSONB{
 		"name":     "John",
 		"order_id": "ORD-123",
 	}
 
-	result := replaceTemplateContent(template, content, params)
+	result := templateutil.ReplaceWithJSONBParams(bodyContent, content, params)
 
 	assert.Equal(t, "Hello John, your order ORD-123 is ready!", result)
 }
 
 func TestReplaceTemplateContent_PositionalParams(t *testing.T) {
-	template := &models.Template{
-		BodyContent: "Hello {{1}}, your order {{2}} is ready!",
-	}
+	bodyContent := "Hello {{1}}, your order {{2}} is ready!"
 	content := "Hello {{1}}, your order {{2}} is ready!"
 	params := models.JSONB{
 		"1": "John",
 		"2": "ORD-123",
 	}
 
-	result := replaceTemplateContent(template, content, params)
+	result := templateutil.ReplaceWithJSONBParams(bodyContent, content, params)
 
 	assert.Equal(t, "Hello John, your order ORD-123 is ready!", result)
 }
 
 func TestReplaceTemplateContent_NamedParamsWithPositionalInput(t *testing.T) {
 	// Template has named placeholders but user provides positional params
-	template := &models.Template{
-		BodyContent: "Hello {{name}}, your order {{order_id}} is ready!",
-	}
+	bodyContent := "Hello {{name}}, your order {{order_id}} is ready!"
 	content := "Hello {{name}}, your order {{order_id}} is ready!"
 	params := models.JSONB{
 		"1": "John",
 		"2": "ORD-123",
 	}
 
-	result := replaceTemplateContent(template, content, params)
+	result := templateutil.ReplaceWithJSONBParams(bodyContent, content, params)
 
 	assert.Equal(t, "Hello John, your order ORD-123 is ready!", result)
 }
 
 func TestReplaceTemplateContent_NoParams(t *testing.T) {
 	// Template without any parameters
-	template := &models.Template{
-		BodyContent: "Hello, your order is ready!",
-	}
+	bodyContent := "Hello, your order is ready!"
 	content := "Hello, your order is ready!"
 	params := models.JSONB{
 		"1": "John",
 		"2": "ORD-123",
 	}
 
-	result := replaceTemplateContent(template, content, params)
+	result := templateutil.ReplaceWithJSONBParams(bodyContent, content, params)
 
 	assert.Equal(t, "Hello, your order is ready!", result)
 }

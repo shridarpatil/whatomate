@@ -345,9 +345,9 @@ func (a *App) AddTeamMember(r *fastglue.Request) error {
 	}
 
 	// Verify user exists in org
-	var user models.User
-	if err := a.DB.Where("id = ? AND organization_id = ?", memberUserID, orgID).First(&user).Error; err != nil {
-		return r.SendErrorEnvelope(fasthttp.StatusNotFound, "User not found", nil, "")
+	user, err := findByIDAndOrg[models.User](a.DB, r, memberUserID, orgID, "User")
+	if err != nil {
+		return nil
 	}
 
 	// Check if already a member

@@ -83,17 +83,8 @@ func (a *App) ListContacts(r *fastglue.Request) error {
 	userID, _ := r.RequestCtx.UserValue("user_id").(uuid.UUID)
 
 	// Pagination
-	page, _ := strconv.Atoi(string(r.RequestCtx.QueryArgs().Peek("page")))
-	limit, _ := strconv.Atoi(string(r.RequestCtx.QueryArgs().Peek("limit")))
+	pg := parsePagination(r)
 	search := string(r.RequestCtx.QueryArgs().Peek("search"))
-
-	if page < 1 {
-		page = 1
-	}
-	if limit < 1 || limit > 100 {
-		limit = 50
-	}
-	offset := (page - 1) * limit
 
 	var contacts []models.Contact
 	query := a.ScopeToOrg(a.DB, userID, orgID)
@@ -114,7 +105,7 @@ func (a *App) ListContacts(r *fastglue.Request) error {
 	var total int64
 	query.Model(&models.Contact{}).Count(&total)
 
-	if err := query.Offset(offset).Limit(limit).Find(&contacts).Error; err != nil {
+	if err := query.Offset(pg.Offset).Limit(pg.Limit).Find(&contacts).Error; err != nil {
 		a.Log.Error("Failed to list contacts", "error", err)
 		return r.SendErrorEnvelope(fasthttp.StatusInternalServerError, "Failed to list contacts", nil, "")
 	}
@@ -167,8 +158,8 @@ func (a *App) ListContacts(r *fastglue.Request) error {
 	return r.SendEnvelope(map[string]any{
 		"contacts": response,
 		"total":    total,
-		"page":     page,
-		"limit":    limit,
+		"page":     pg.Page,
+		"limit":    pg.Limit,
 	})
 }
 
@@ -177,11 +168,9 @@ func (a *App) ListContacts(r *fastglue.Request) error {
 func (a *App) GetContact(r *fastglue.Request) error {
 	orgID := r.RequestCtx.UserValue("organization_id").(uuid.UUID)
 	userID, _ := r.RequestCtx.UserValue("user_id").(uuid.UUID)
-	contactIDStr := r.RequestCtx.UserValue("id").(string)
-
-	contactID, err := uuid.Parse(contactIDStr)
+	contactID, err := parsePathUUID(r, "id", "contact")
 	if err != nil {
-		return r.SendErrorEnvelope(fasthttp.StatusBadRequest, "Invalid contact ID", nil, "")
+		return nil
 	}
 
 	var contact models.Contact
@@ -244,11 +233,9 @@ func (a *App) GetContact(r *fastglue.Request) error {
 func (a *App) GetMessages(r *fastglue.Request) error {
 	orgID := r.RequestCtx.UserValue("organization_id").(uuid.UUID)
 	userID, _ := r.RequestCtx.UserValue("user_id").(uuid.UUID)
-	contactIDStr := r.RequestCtx.UserValue("id").(string)
-
-	contactID, err := uuid.Parse(contactIDStr)
+	contactID, err := parsePathUUID(r, "id", "contact")
 	if err != nil {
-		return r.SendErrorEnvelope(fasthttp.StatusBadRequest, "Invalid contact ID", nil, "")
+		return nil
 	}
 
 	hasContactsReadPermission := a.HasPermission(userID, models.ResourceContacts, models.ActionRead)
@@ -500,11 +487,9 @@ type ButtonContent struct {
 func (a *App) SendMessage(r *fastglue.Request) error {
 	orgID := r.RequestCtx.UserValue("organization_id").(uuid.UUID)
 	userID, _ := r.RequestCtx.UserValue("user_id").(uuid.UUID)
-	contactIDStr := r.RequestCtx.UserValue("id").(string)
-
-	contactID, err := uuid.Parse(contactIDStr)
+	contactID, err := parsePathUUID(r, "id", "contact")
 	if err != nil {
-		return r.SendErrorEnvelope(fasthttp.StatusBadRequest, "Invalid contact ID", nil, "")
+		return nil
 	}
 
 	// Parse request body
@@ -820,13 +805,12 @@ type SendReactionRequest struct {
 func (a *App) SendReaction(r *fastglue.Request) error {
 	orgID := r.RequestCtx.UserValue("organization_id").(uuid.UUID)
 	userID, _ := r.RequestCtx.UserValue("user_id").(uuid.UUID)
-	contactIDStr := r.RequestCtx.UserValue("id").(string)
-	messageIDStr := r.RequestCtx.UserValue("message_id").(string)
-
-	contactID, err := uuid.Parse(contactIDStr)
+	contactID, err := parsePathUUID(r, "id", "contact")
 	if err != nil {
-		return r.SendErrorEnvelope(fasthttp.StatusBadRequest, "Invalid contact ID", nil, "")
+		return nil
 	}
+
+	messageIDStr := r.RequestCtx.UserValue("message_id").(string)
 
 	messageID, err := uuid.Parse(messageIDStr)
 	if err != nil {
@@ -1005,7 +989,7 @@ type AssignContactRequest struct {
 // AssignContact assigns a contact to a user (agent)
 // Only users with write permission can assign contacts
 func (a *App) AssignContact(r *fastglue.Request) error {
-	orgID, err := getOrganizationID(r)
+	orgID, err := a.getOrgID(r)
 	if err != nil {
 		return r.SendErrorEnvelope(fasthttp.StatusUnauthorized, "Unauthorized", nil, "")
 	}
@@ -1017,10 +1001,9 @@ func (a *App) AssignContact(r *fastglue.Request) error {
 		return r.SendErrorEnvelope(fasthttp.StatusForbidden, "You do not have permission to assign contacts", nil, "")
 	}
 
-	contactIDStr := r.RequestCtx.UserValue("id").(string)
-	contactID, err := uuid.Parse(contactIDStr)
+	contactID, err := parsePathUUID(r, "id", "contact")
 	if err != nil {
-		return r.SendErrorEnvelope(fasthttp.StatusBadRequest, "Invalid contact ID", nil, "")
+		return nil
 	}
 
 	var req AssignContactRequest
@@ -1029,9 +1012,9 @@ func (a *App) AssignContact(r *fastglue.Request) error {
 	}
 
 	// Get contact
-	var contact models.Contact
-	if err := a.DB.Where("id = ? AND organization_id = ?", contactID, orgID).First(&contact).Error; err != nil {
-		return r.SendErrorEnvelope(fasthttp.StatusNotFound, "Contact not found", nil, "")
+	contact, err := findByIDAndOrg[models.Contact](a.DB, r, contactID, orgID, "Contact")
+	if err != nil {
+		return nil
 	}
 
 	// If assigning to a user, verify they exist in the same org
@@ -1043,7 +1026,7 @@ func (a *App) AssignContact(r *fastglue.Request) error {
 	}
 
 	// Update contact assignment
-	if err := a.DB.Model(&contact).Update("assigned_user_id", req.UserID).Error; err != nil {
+	if err := a.DB.Model(contact).Update("assigned_user_id", req.UserID).Error; err != nil {
 		a.Log.Error("Failed to assign contact", "error", err)
 		return r.SendErrorEnvelope(fasthttp.StatusInternalServerError, "Failed to assign contact", nil, "")
 	}
@@ -1068,11 +1051,9 @@ type ContactSessionDataResponse struct {
 func (a *App) GetContactSessionData(r *fastglue.Request) error {
 	orgID := r.RequestCtx.UserValue("organization_id").(uuid.UUID)
 	userID, _ := r.RequestCtx.UserValue("user_id").(uuid.UUID)
-	contactIDStr := r.RequestCtx.UserValue("id").(string)
-
-	contactID, err := uuid.Parse(contactIDStr)
+	contactID, err := parsePathUUID(r, "id", "contact")
 	if err != nil {
-		return r.SendErrorEnvelope(fasthttp.StatusBadRequest, "Invalid contact ID", nil, "")
+		return nil
 	}
 
 	// Verify contact belongs to org (users without full read permission can only access assigned contacts)

@@ -309,7 +309,7 @@ func TestApp_CreateCampaign_TemplateNotFound(t *testing.T) {
 
 	err := app.CreateCampaign(req)
 	require.NoError(t, err)
-	assert.Equal(t, fasthttp.StatusBadRequest, testutil.GetResponseStatusCode(req))
+	assert.Equal(t, fasthttp.StatusNotFound, testutil.GetResponseStatusCode(req))
 }
 
 func TestApp_CreateCampaign_AccountNotFound(t *testing.T) {

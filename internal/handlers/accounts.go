@@ -52,7 +52,7 @@ type AccountResponse struct {
 
 // ListAccounts returns all WhatsApp accounts for the organization
 func (a *App) ListAccounts(r *fastglue.Request) error {
-	orgID, err := getOrganizationID(r)
+	orgID, err := a.getOrgID(r)
 	if err != nil {
 		return r.SendErrorEnvelope(fasthttp.StatusUnauthorized, "Unauthorized", nil, "")
 	}
@@ -76,7 +76,7 @@ func (a *App) ListAccounts(r *fastglue.Request) error {
 
 // CreateAccount creates a new WhatsApp account
 func (a *App) CreateAccount(r *fastglue.Request) error {
-	orgID, err := getOrganizationID(r)
+	orgID, err := a.getOrgID(r)
 	if err != nil {
 		return r.SendErrorEnvelope(fasthttp.StatusUnauthorized, "Unauthorized", nil, "")
 	}
@@ -141,44 +141,39 @@ func (a *App) CreateAccount(r *fastglue.Request) error {
 
 // GetAccount returns a single WhatsApp account
 func (a *App) GetAccount(r *fastglue.Request) error {
-	orgID, err := getOrganizationID(r)
+	orgID, err := a.getOrgID(r)
 	if err != nil {
 		return r.SendErrorEnvelope(fasthttp.StatusUnauthorized, "Unauthorized", nil, "")
 	}
 
-	idStr := r.RequestCtx.UserValue("id").(string)
-	id, err := uuid.Parse(idStr)
+	id, err := parsePathUUID(r, "id", "account")
 	if err != nil {
-		return r.SendErrorEnvelope(fasthttp.StatusBadRequest, "Invalid account ID", nil, "")
+		return nil
 	}
 
-	var account models.WhatsAppAccount
-	if err := a.DB.Where("id = ? AND organization_id = ?", id, orgID).First(&account).Error; err != nil {
-		return r.SendErrorEnvelope(fasthttp.StatusNotFound, "Account not found", nil, "")
+	account, err := findByIDAndOrg[models.WhatsAppAccount](a.DB, r, id, orgID, "Account")
+	if err != nil {
+		return nil
 	}
 
-	return r.SendEnvelope(accountToResponse(account))
+	return r.SendEnvelope(accountToResponse(*account))
 }
 
 // UpdateAccount updates a WhatsApp account
 func (a *App) UpdateAccount(r *fastglue.Request) error {
-	orgID, err := getOrganizationID(r)
+	orgID, err := a.getOrgID(r)
 	if err != nil {
 		return r.SendErrorEnvelope(fasthttp.StatusUnauthorized, "Unauthorized", nil, "")
 	}
 
-	idStr, ok := r.RequestCtx.UserValue("id").(string)
-	if !ok || idStr == "" {
-		return r.SendErrorEnvelope(fasthttp.StatusBadRequest, "Missing account ID", nil, "")
-	}
-	id, err := uuid.Parse(idStr)
+	id, err := parsePathUUID(r, "id", "account")
 	if err != nil {
-		return r.SendErrorEnvelope(fasthttp.StatusBadRequest, "Invalid account ID", nil, "")
+		return nil
 	}
 
-	var account models.WhatsAppAccount
-	if err := a.DB.Where("id = ? AND organization_id = ?", id, orgID).First(&account).Error; err != nil {
-		return r.SendErrorEnvelope(fasthttp.StatusNotFound, "Account not found", nil, "")
+	account, err := findByIDAndOrg[models.WhatsAppAccount](a.DB, r, id, orgID, "Account")
+	if err != nil {
+		return nil
 	}
 
 	var req AccountRequest
@@ -227,7 +222,7 @@ func (a *App) UpdateAccount(r *fastglue.Request) error {
 	account.IsDefaultIncoming = req.IsDefaultIncoming
 	account.IsDefaultOutgoing = req.IsDefaultOutgoing
 
-	if err := a.DB.Save(&account).Error; err != nil {
+	if err := a.DB.Save(account).Error; err != nil {
 		a.Log.Error("Failed to update account", "error", err)
 		return r.SendErrorEnvelope(fasthttp.StatusInternalServerError, "Failed to update account", nil, "")
 	}
@@ -235,29 +230,28 @@ func (a *App) UpdateAccount(r *fastglue.Request) error {
 	// Invalidate cache
 	a.InvalidateWhatsAppAccountCache(account.PhoneID)
 
-	return r.SendEnvelope(accountToResponse(account))
+	return r.SendEnvelope(accountToResponse(*account))
 }
 
 // DeleteAccount deletes a WhatsApp account
 func (a *App) DeleteAccount(r *fastglue.Request) error {
-	orgID, err := getOrganizationID(r)
+	orgID, err := a.getOrgID(r)
 	if err != nil {
 		return r.SendErrorEnvelope(fasthttp.StatusUnauthorized, "Unauthorized", nil, "")
 	}
 
-	idStr := r.RequestCtx.UserValue("id").(string)
-	id, err := uuid.Parse(idStr)
+	id, err := parsePathUUID(r, "id", "account")
 	if err != nil {
-		return r.SendErrorEnvelope(fasthttp.StatusBadRequest, "Invalid account ID", nil, "")
+		return nil
 	}
 
 	// Get account first for cache invalidation
-	var account models.WhatsAppAccount
-	if err := a.DB.Where("id = ? AND organization_id = ?", id, orgID).First(&account).Error; err != nil {
-		return r.SendErrorEnvelope(fasthttp.StatusNotFound, "Account not found", nil, "")
+	account, err := findByIDAndOrg[models.WhatsAppAccount](a.DB, r, id, orgID, "Account")
+	if err != nil {
+		return nil
 	}
 
-	if err := a.DB.Delete(&account).Error; err != nil {
+	if err := a.DB.Delete(account).Error; err != nil {
 		a.Log.Error("Failed to delete account", "error", err)
 		return r.SendErrorEnvelope(fasthttp.StatusInternalServerError, "Failed to delete account", nil, "")
 	}
@@ -270,20 +264,19 @@ func (a *App) DeleteAccount(r *fastglue.Request) error {
 
 // TestAccountConnection tests the WhatsApp API connection
 func (a *App) TestAccountConnection(r *fastglue.Request) error {
-	orgID, err := getOrganizationID(r)
+	orgID, err := a.getOrgID(r)
 	if err != nil {
 		return r.SendErrorEnvelope(fasthttp.StatusUnauthorized, "Unauthorized", nil, "")
 	}
 
-	idStr := r.RequestCtx.UserValue("id").(string)
-	id, err := uuid.Parse(idStr)
+	id, err := parsePathUUID(r, "id", "account")
 	if err != nil {
-		return r.SendErrorEnvelope(fasthttp.StatusBadRequest, "Invalid account ID", nil, "")
+		return nil
 	}
 
-	var account models.WhatsAppAccount
-	if err := a.DB.Where("id = ? AND organization_id = ?", id, orgID).First(&account).Error; err != nil {
-		return r.SendErrorEnvelope(fasthttp.StatusNotFound, "Account not found", nil, "")
+	account, err := findByIDAndOrg[models.WhatsAppAccount](a.DB, r, id, orgID, "Account")
+	if err != nil {
+		return nil
 	}
 
 	// Test the connection by fetching phone number details from Meta API
@@ -354,32 +347,3 @@ func generateVerifyToken() string {
 	return hex.EncodeToString(bytes)
 }
 
-func getOrganizationID(r *fastglue.Request) (uuid.UUID, error) {
-	// Get default organization ID from JWT (set by auth middleware)
-	var defaultOrgID uuid.UUID
-	if orgID, ok := r.RequestCtx.UserValue("organization_id").(uuid.UUID); ok {
-		defaultOrgID = orgID
-	} else if orgIDStr, ok := r.RequestCtx.UserValue("organization_id").(string); ok {
-		parsed, err := uuid.Parse(orgIDStr)
-		if err != nil {
-			return uuid.Nil, fmt.Errorf("organization_id not found in context")
-		}
-		defaultOrgID = parsed
-	} else {
-		return uuid.Nil, fmt.Errorf("organization_id not found in context")
-	}
-
-	// Only super admins can use X-Organization-ID header to switch orgs
-	isSuperAdmin, _ := r.RequestCtx.UserValue("is_super_admin").(bool)
-	if isSuperAdmin {
-		overrideOrgID := string(r.RequestCtx.Request.Header.Peek("X-Organization-ID"))
-		if overrideOrgID != "" {
-			parsedOrgID, err := uuid.Parse(overrideOrgID)
-			if err == nil {
-				return parsedOrgID, nil
-			}
-		}
-	}
-
-	return defaultOrgID, nil
-}

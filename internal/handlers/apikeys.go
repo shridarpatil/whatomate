@@ -50,7 +50,7 @@ func generateAPIKey() (string, error) {
 
 // ListAPIKeys returns all API keys for the organization
 func (a *App) ListAPIKeys(r *fastglue.Request) error {
-	orgID, err := getOrganizationID(r)
+	orgID, err := a.getOrgID(r)
 	if err != nil {
 		return r.SendErrorEnvelope(fasthttp.StatusUnauthorized, "Unauthorized", nil, "")
 	}
@@ -85,7 +85,7 @@ func (a *App) ListAPIKeys(r *fastglue.Request) error {
 
 // CreateAPIKey creates a new API key
 func (a *App) CreateAPIKey(r *fastglue.Request) error {
-	orgID, err := getOrganizationID(r)
+	orgID, err := a.getOrgID(r)
 	if err != nil {
 		return r.SendErrorEnvelope(fasthttp.StatusUnauthorized, "Unauthorized", nil, "")
 	}
@@ -160,7 +160,7 @@ func (a *App) CreateAPIKey(r *fastglue.Request) error {
 
 // DeleteAPIKey revokes an API key
 func (a *App) DeleteAPIKey(r *fastglue.Request) error {
-	orgID, err := getOrganizationID(r)
+	orgID, err := a.getOrgID(r)
 	if err != nil {
 		return r.SendErrorEnvelope(fasthttp.StatusUnauthorized, "Unauthorized", nil, "")
 	}

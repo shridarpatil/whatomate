@@ -39,17 +39,26 @@ func (a *App) WaitForBackgroundTasks() {
 	a.wg.Wait()
 }
 
-// getOrgIDFromContext extracts organization ID from request context (set by auth middleware)
+// getOrgID extracts organization ID from request context (set by auth middleware)
 // Super admins can override the org by passing X-Organization-ID header
 // Super admins MUST select an organization - no "all organizations" view
-func (a *App) getOrgIDFromContext(r *fastglue.Request) (uuid.UUID, error) {
+func (a *App) getOrgID(r *fastglue.Request) (uuid.UUID, error) {
 	// Get user's default organization ID from JWT
+	var defaultOrgID uuid.UUID
 	orgIDVal := r.RequestCtx.UserValue("organization_id")
 	if orgIDVal == nil {
 		return uuid.Nil, errors.New("organization_id not found in context")
 	}
-	orgID, ok := orgIDVal.(uuid.UUID)
-	if !ok {
+	switch v := orgIDVal.(type) {
+	case uuid.UUID:
+		defaultOrgID = v
+	case string:
+		parsed, err := uuid.Parse(v)
+		if err != nil {
+			return uuid.Nil, errors.New("organization_id is not a valid UUID")
+		}
+		defaultOrgID = parsed
+	default:
 		return uuid.Nil, errors.New("organization_id is not a valid UUID")
 	}
 
@@ -72,7 +81,7 @@ func (a *App) getOrgIDFromContext(r *fastglue.Request) (uuid.UUID, error) {
 		// No header or invalid org ID - fall back to user's org
 	}
 
-	return orgID, nil
+	return defaultOrgID, nil
 }
 
 // HealthCheck returns server health status

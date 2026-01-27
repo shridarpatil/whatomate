@@ -68,7 +68,7 @@ type ChangePasswordRequest struct {
 
 // ListUsers returns all users for the organization
 func (a *App) ListUsers(r *fastglue.Request) error {
-	orgID, err := getOrganizationID(r)
+	orgID, err := a.getOrgID(r)
 	if err != nil {
 		return r.SendErrorEnvelope(fasthttp.StatusUnauthorized, "Unauthorized", nil, "")
 	}
@@ -100,7 +100,7 @@ func (a *App) ListUsers(r *fastglue.Request) error {
 
 // GetUser returns a single user
 func (a *App) GetUser(r *fastglue.Request) error {
-	orgID, err := getOrganizationID(r)
+	orgID, err := a.getOrgID(r)
 	if err != nil {
 		return r.SendErrorEnvelope(fasthttp.StatusUnauthorized, "Unauthorized", nil, "")
 	}
@@ -123,7 +123,7 @@ func (a *App) GetUser(r *fastglue.Request) error {
 
 // CreateUser creates a new user (admin only)
 func (a *App) CreateUser(r *fastglue.Request) error {
-	orgID, err := getOrganizationID(r)
+	orgID, err := a.getOrgID(r)
 	if err != nil {
 		return r.SendErrorEnvelope(fasthttp.StatusUnauthorized, "Unauthorized", nil, "")
 	}
@@ -203,7 +203,7 @@ func (a *App) CreateUser(r *fastglue.Request) error {
 
 // UpdateUser updates a user
 func (a *App) UpdateUser(r *fastglue.Request) error {
-	orgID, err := getOrganizationID(r)
+	orgID, err := a.getOrgID(r)
 	if err != nil {
 		return r.SendErrorEnvelope(fasthttp.StatusUnauthorized, "Unauthorized", nil, "")
 	}
@@ -317,7 +317,7 @@ func (a *App) UpdateUser(r *fastglue.Request) error {
 
 // DeleteUser deletes a user
 func (a *App) DeleteUser(r *fastglue.Request) error {
-	orgID, err := getOrganizationID(r)
+	orgID, err := a.getOrgID(r)
 	if err != nil {
 		return r.SendErrorEnvelope(fasthttp.StatusUnauthorized, "Unauthorized", nil, "")
 	}

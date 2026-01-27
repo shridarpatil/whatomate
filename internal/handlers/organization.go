@@ -18,7 +18,7 @@ type OrganizationSettings struct {
 
 // GetOrganizationSettings returns the organization settings
 func (a *App) GetOrganizationSettings(r *fastglue.Request) error {
-	orgID, err := a.getOrgIDFromContext(r)
+	orgID, err := a.getOrgID(r)
 	if err != nil {
 		return r.SendErrorEnvelope(fasthttp.StatusUnauthorized, "Unauthorized", nil, "")
 	}
@@ -55,7 +55,7 @@ func (a *App) GetOrganizationSettings(r *fastglue.Request) error {
 
 // UpdateOrganizationSettings updates the organization settings
 func (a *App) UpdateOrganizationSettings(r *fastglue.Request) error {
-	orgID, err := a.getOrgIDFromContext(r)
+	orgID, err := a.getOrgID(r)
 	if err != nil {
 		return r.SendErrorEnvelope(fasthttp.StatusUnauthorized, "Unauthorized", nil, "")
 	}
@@ -197,7 +197,7 @@ func (a *App) ListOrganizations(r *fastglue.Request) error {
 
 // GetCurrentOrganization returns the current user's organization details
 func (a *App) GetCurrentOrganization(r *fastglue.Request) error {
-	orgID, err := a.getOrgIDFromContext(r)
+	orgID, err := a.getOrgID(r)
 	if err != nil {
 		return r.SendErrorEnvelope(fasthttp.StatusUnauthorized, "Unauthorized", nil, "")
 	}

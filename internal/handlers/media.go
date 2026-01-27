@@ -148,9 +148,9 @@ func (a *App) ServeMedia(r *fastglue.Request) error {
 	}
 
 	// Find the message and verify access
-	var message models.Message
-	if err := a.DB.Where("id = ? AND organization_id = ?", messageID, orgID).First(&message).Error; err != nil {
-		return r.SendErrorEnvelope(fasthttp.StatusNotFound, "Message not found", nil, "")
+	message, err := findByIDAndOrg[models.Message](a.DB, r, messageID, orgID, "Message")
+	if err != nil {
+		return nil
 	}
 
 	// Users without contacts:read permission can only access media from their assigned contacts

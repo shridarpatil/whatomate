@@ -3,7 +3,6 @@ package handlers
 import (
 	"context"
 	"fmt"
-	"regexp"
 	"strings"
 
 	"github.com/google/uuid"
@@ -12,9 +11,6 @@ import (
 	"github.com/valyala/fasthttp"
 	"github.com/zerodha/fastglue"
 )
-
-// parameterPattern matches template parameters like {{1}}, {{name}}, {{order_id}}
-var parameterPattern = regexp.MustCompile(`\{\{([^}]+)\}\}`)
 
 // TemplateRequest represents the request body for creating/updating a template
 type TemplateRequest struct {
@@ -53,7 +49,7 @@ type TemplateResponse struct {
 
 // ListTemplates returns all templates for the organization
 func (a *App) ListTemplates(r *fastglue.Request) error {
-	orgID, err := getOrganizationID(r)
+	orgID, err := a.getOrgID(r)
 	if err != nil {
 		return r.SendErrorEnvelope(fasthttp.StatusUnauthorized, "Unauthorized", nil, "")
 	}
@@ -93,7 +89,7 @@ func (a *App) ListTemplates(r *fastglue.Request) error {
 
 // CreateTemplate creates a new message template
 func (a *App) CreateTemplate(r *fastglue.Request) error {
-	orgID, err := getOrganizationID(r)
+	orgID, err := a.getOrgID(r)
 	if err != nil {
 		return r.SendErrorEnvelope(fasthttp.StatusUnauthorized, "Unauthorized", nil, "")
 	}
@@ -154,7 +150,7 @@ func (a *App) CreateTemplate(r *fastglue.Request) error {
 
 // GetTemplate returns a single template
 func (a *App) GetTemplate(r *fastglue.Request) error {
-	orgID, err := getOrganizationID(r)
+	orgID, err := a.getOrgID(r)
 	if err != nil {
 		return r.SendErrorEnvelope(fasthttp.StatusUnauthorized, "Unauthorized", nil, "")
 	}
@@ -168,17 +164,17 @@ func (a *App) GetTemplate(r *fastglue.Request) error {
 		return r.SendErrorEnvelope(fasthttp.StatusBadRequest, "Invalid template ID", nil, "")
 	}
 
-	var template models.Template
-	if err := a.DB.Where("id = ? AND organization_id = ?", id, orgID).First(&template).Error; err != nil {
-		return r.SendErrorEnvelope(fasthttp.StatusNotFound, "Template not found", nil, "")
+	template, err := findByIDAndOrg[models.Template](a.DB, r, id, orgID, "Template")
+	if err != nil {
+		return nil
 	}
 
-	return r.SendEnvelope(templateToResponse(template))
+	return r.SendEnvelope(templateToResponse(*template))
 }
 
 // UpdateTemplate updates a message template
 func (a *App) UpdateTemplate(r *fastglue.Request) error {
-	orgID, err := getOrganizationID(r)
+	orgID, err := a.getOrgID(r)
 	if err != nil {
 		return r.SendErrorEnvelope(fasthttp.StatusUnauthorized, "Unauthorized", nil, "")
 	}
@@ -192,9 +188,9 @@ func (a *App) UpdateTemplate(r *fastglue.Request) error {
 		return r.SendErrorEnvelope(fasthttp.StatusBadRequest, "Invalid template ID", nil, "")
 	}
 
-	var template models.Template
-	if err := a.DB.Where("id = ? AND organization_id = ?", id, orgID).First(&template).Error; err != nil {
-		return r.SendErrorEnvelope(fasthttp.StatusNotFound, "Template not found", nil, "")
+	template, err := findByIDAndOrg[models.Template](a.DB, r, id, orgID, "Template")
+	if err != nil {
+		return nil
 	}
 
 	// Cannot edit approved templates (Meta doesn't allow)
@@ -232,17 +228,17 @@ func (a *App) UpdateTemplate(r *fastglue.Request) error {
 		template.SampleValues = convertToJSONBArray(req.SampleValues)
 	}
 
-	if err := a.DB.Save(&template).Error; err != nil {
+	if err := a.DB.Save(template).Error; err != nil {
 		a.Log.Error("Failed to update template", "error", err)
 		return r.SendErrorEnvelope(fasthttp.StatusInternalServerError, "Failed to update template", nil, "")
 	}
 
-	return r.SendEnvelope(templateToResponse(template))
+	return r.SendEnvelope(templateToResponse(*template))
 }
 
 // DeleteTemplate deletes a message template
 func (a *App) DeleteTemplate(r *fastglue.Request) error {
-	orgID, err := getOrganizationID(r)
+	orgID, err := a.getOrgID(r)
 	if err != nil {
 		return r.SendErrorEnvelope(fasthttp.StatusUnauthorized, "Unauthorized", nil, "")
 	}
@@ -256,9 +252,9 @@ func (a *App) DeleteTemplate(r *fastglue.Request) error {
 		return r.SendErrorEnvelope(fasthttp.StatusBadRequest, "Invalid template ID", nil, "")
 	}
 
-	var template models.Template
-	if err := a.DB.Where("id = ? AND organization_id = ?", id, orgID).First(&template).Error; err != nil {
-		return r.SendErrorEnvelope(fasthttp.StatusNotFound, "Template not found", nil, "")
+	template, err := findByIDAndOrg[models.Template](a.DB, r, id, orgID, "Template")
+	if err != nil {
+		return nil
 	}
 
 	// If template exists on Meta, delete it there too
@@ -270,7 +266,7 @@ func (a *App) DeleteTemplate(r *fastglue.Request) error {
 		}
 	}
 
-	if err := a.DB.Delete(&template).Error; err != nil {
+	if err := a.DB.Delete(template).Error; err != nil {
 		a.Log.Error("Failed to delete template", "error", err)
 		return r.SendErrorEnvelope(fasthttp.StatusInternalServerError, "Failed to delete template", nil, "")
 	}
@@ -280,7 +276,7 @@ func (a *App) DeleteTemplate(r *fastglue.Request) error {
 
 // SubmitTemplate submits a template to Meta for approval
 func (a *App) SubmitTemplate(r *fastglue.Request) error {
-	orgID, err := getOrganizationID(r)
+	orgID, err := a.getOrgID(r)
 	if err != nil {
 		return r.SendErrorEnvelope(fasthttp.StatusUnauthorized, "Unauthorized", nil, "")
 	}
@@ -294,9 +290,9 @@ func (a *App) SubmitTemplate(r *fastglue.Request) error {
 		return r.SendErrorEnvelope(fasthttp.StatusBadRequest, "Invalid template ID", nil, "")
 	}
 
-	var template models.Template
-	if err := a.DB.Where("id = ? AND organization_id = ?", id, orgID).First(&template).Error; err != nil {
-		return r.SendErrorEnvelope(fasthttp.StatusNotFound, "Template not found", nil, "")
+	template, err := findByIDAndOrg[models.Template](a.DB, r, id, orgID, "Template")
+	if err != nil {
+		return nil
 	}
 
 	// Check if already submitted and not rejected
@@ -319,7 +315,7 @@ func (a *App) SubmitTemplate(r *fastglue.Request) error {
 	}
 
 	// Submit template to Meta
-	metaTemplateID, submitErr := a.submitTemplateToMeta(&account, &template)
+	metaTemplateID, submitErr := a.submitTemplateToMeta(&account, template)
 	if submitErr != nil {
 		a.Log.Error("Failed to submit template to Meta", "error", submitErr)
 		return r.SendErrorEnvelope(fasthttp.StatusBadGateway, "Failed to submit template to Meta: "+submitErr.Error(), nil, "")
@@ -328,7 +324,7 @@ func (a *App) SubmitTemplate(r *fastglue.Request) error {
 
 	// Update template status
 	template.Status = "PENDING"
-	if err := a.DB.Save(&template).Error; err != nil {
+	if err := a.DB.Save(template).Error; err != nil {
 		a.Log.Error("Failed to update template after submission", "error", err)
 		return r.SendErrorEnvelope(fasthttp.StatusInternalServerError, "Template submitted but failed to update local record", nil, "")
 	}
@@ -337,7 +333,7 @@ func (a *App) SubmitTemplate(r *fastglue.Request) error {
 		"message":          "Template submitted to Meta for approval",
 		"meta_template_id": metaTemplateID,
 		"status":           "PENDING",
-		"template":         templateToResponse(template),
+		"template":         templateToResponse(*template),
 	})
 }
 
@@ -363,7 +359,7 @@ func (a *App) submitTemplateToMeta(account *models.WhatsAppAccount, template *mo
 
 // SyncTemplates syncs templates from Meta API
 func (a *App) SyncTemplates(r *fastglue.Request) error {
-	orgID, err := getOrganizationID(r)
+	orgID, err := a.getOrgID(r)
 	if err != nil {
 		return r.SendErrorEnvelope(fasthttp.StatusUnauthorized, "Unauthorized", nil, "")
 	}
@@ -529,33 +525,11 @@ func convertFromJSONBArray(arr models.JSONBArray) []interface{} {
 	return []interface{}(arr)
 }
 
-// extractParameterNames extracts parameter names from template content
-// Supports both positional ({{1}}, {{2}}) and named ({{name}}, {{order_id}}) parameters
-// Returns parameter names in order of first occurrence, without duplicates
-func extractParameterNames(content string) []string {
-	matches := parameterPattern.FindAllStringSubmatch(content, -1)
-	if len(matches) == 0 {
-		return nil
-	}
-
-	seen := make(map[string]bool)
-	var names []string
-	for _, match := range matches {
-		if len(match) > 1 {
-			name := strings.TrimSpace(match[1])
-			if name != "" && !seen[name] {
-				seen[name] = true
-				names = append(names, name)
-			}
-		}
-	}
-	return names
-}
 
 // UploadTemplateMedia uploads a media file for use as template header sample
 // Returns a file handle that can be used in template creation
 func (a *App) UploadTemplateMedia(r *fastglue.Request) error {
-	orgID, err := getOrganizationID(r)
+	orgID, err := a.getOrgID(r)
 	if err != nil {
 		return r.SendErrorEnvelope(fasthttp.StatusUnauthorized, "Unauthorized", nil, "")
 	}

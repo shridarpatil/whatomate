@@ -75,7 +75,7 @@ type redirectToken struct {
 
 // ListCustomActions returns all custom actions for the organization
 func (a *App) ListCustomActions(r *fastglue.Request) error {
-	orgID, err := getOrganizationID(r)
+	orgID, err := a.getOrgID(r)
 	if err != nil {
 		return r.SendErrorEnvelope(fasthttp.StatusUnauthorized, "Unauthorized", nil, "")
 	}
@@ -98,27 +98,27 @@ func (a *App) ListCustomActions(r *fastglue.Request) error {
 
 // GetCustomAction returns a single custom action by ID
 func (a *App) GetCustomAction(r *fastglue.Request) error {
-	orgID, err := getOrganizationID(r)
+	orgID, err := a.getOrgID(r)
 	if err != nil {
 		return r.SendErrorEnvelope(fasthttp.StatusUnauthorized, "Unauthorized", nil, "")
 	}
 
-	actionID, err := uuid.Parse(r.RequestCtx.UserValue("id").(string))
+	actionID, err := parsePathUUID(r, "id", "action")
 	if err != nil {
-		return r.SendErrorEnvelope(fasthttp.StatusBadRequest, "Invalid action ID", nil, "")
+		return nil
 	}
 
-	var action models.CustomAction
-	if err := a.DB.Where("id = ? AND organization_id = ?", actionID, orgID).First(&action).Error; err != nil {
-		return r.SendErrorEnvelope(fasthttp.StatusNotFound, "Custom action not found", nil, "")
+	action, err := findByIDAndOrg[models.CustomAction](a.DB, r, actionID, orgID, "Custom action")
+	if err != nil {
+		return nil
 	}
 
-	return r.SendEnvelope(customActionToResponse(action))
+	return r.SendEnvelope(customActionToResponse(*action))
 }
 
 // CreateCustomAction creates a new custom action
 func (a *App) CreateCustomAction(r *fastglue.Request) error {
-	orgID, err := getOrganizationID(r)
+	orgID, err := a.getOrgID(r)
 	if err != nil {
 		return r.SendErrorEnvelope(fasthttp.StatusUnauthorized, "Unauthorized", nil, "")
 	}
@@ -165,19 +165,19 @@ func (a *App) CreateCustomAction(r *fastglue.Request) error {
 
 // UpdateCustomAction updates an existing custom action
 func (a *App) UpdateCustomAction(r *fastglue.Request) error {
-	orgID, err := getOrganizationID(r)
+	orgID, err := a.getOrgID(r)
 	if err != nil {
 		return r.SendErrorEnvelope(fasthttp.StatusUnauthorized, "Unauthorized", nil, "")
 	}
 
-	actionID, err := uuid.Parse(r.RequestCtx.UserValue("id").(string))
+	actionID, err := parsePathUUID(r, "id", "action")
 	if err != nil {
-		return r.SendErrorEnvelope(fasthttp.StatusBadRequest, "Invalid action ID", nil, "")
+		return nil
 	}
 
-	var action models.CustomAction
-	if err := a.DB.Where("id = ? AND organization_id = ?", actionID, orgID).First(&action).Error; err != nil {
-		return r.SendErrorEnvelope(fasthttp.StatusNotFound, "Custom action not found", nil, "")
+	action, err := findByIDAndOrg[models.CustomAction](a.DB, r, actionID, orgID, "Custom action")
+	if err != nil {
+		return nil
 	}
 
 	var req CustomActionRequest
@@ -213,28 +213,28 @@ func (a *App) UpdateCustomAction(r *fastglue.Request) error {
 	updates["is_active"] = req.IsActive
 	updates["display_order"] = req.DisplayOrder
 
-	if err := a.DB.Model(&action).Updates(updates).Error; err != nil {
+	if err := a.DB.Model(action).Updates(updates).Error; err != nil {
 		a.Log.Error("Failed to update custom action", "error", err)
 		return r.SendErrorEnvelope(fasthttp.StatusInternalServerError, "Failed to update custom action", nil, "")
 	}
 
 	// Reload to get updated values
-	a.DB.First(&action, actionID)
+	a.DB.First(action, actionID)
 
 	a.Log.Info("Custom action updated", "action_id", action.ID)
-	return r.SendEnvelope(customActionToResponse(action))
+	return r.SendEnvelope(customActionToResponse(*action))
 }
 
 // DeleteCustomAction deletes a custom action
 func (a *App) DeleteCustomAction(r *fastglue.Request) error {
-	orgID, err := getOrganizationID(r)
+	orgID, err := a.getOrgID(r)
 	if err != nil {
 		return r.SendErrorEnvelope(fasthttp.StatusUnauthorized, "Unauthorized", nil, "")
 	}
 
-	actionID, err := uuid.Parse(r.RequestCtx.UserValue("id").(string))
+	actionID, err := parsePathUUID(r, "id", "action")
 	if err != nil {
-		return r.SendErrorEnvelope(fasthttp.StatusBadRequest, "Invalid action ID", nil, "")
+		return nil
 	}
 
 	result := a.DB.Where("id = ? AND organization_id = ?", actionID, orgID).Delete(&models.CustomAction{})
@@ -252,16 +252,16 @@ func (a *App) DeleteCustomAction(r *fastglue.Request) error {
 
 // ExecuteCustomAction executes a custom action with the given context
 func (a *App) ExecuteCustomAction(r *fastglue.Request) error {
-	orgID, err := getOrganizationID(r)
+	orgID, err := a.getOrgID(r)
 	if err != nil {
 		return r.SendErrorEnvelope(fasthttp.StatusUnauthorized, "Unauthorized", nil, "")
 	}
 
 	userID := r.RequestCtx.UserValue("user_id").(uuid.UUID)
 
-	actionID, err := uuid.Parse(r.RequestCtx.UserValue("id").(string))
+	actionID, err := parsePathUUID(r, "id", "action")
 	if err != nil {
-		return r.SendErrorEnvelope(fasthttp.StatusBadRequest, "Invalid action ID", nil, "")
+		return nil
 	}
 
 	var req ExecuteActionRequest
@@ -270,9 +270,9 @@ func (a *App) ExecuteCustomAction(r *fastglue.Request) error {
 	}
 
 	// Get the action
-	var action models.CustomAction
-	if err := a.DB.Where("id = ? AND organization_id = ?", actionID, orgID).First(&action).Error; err != nil {
-		return r.SendErrorEnvelope(fasthttp.StatusNotFound, "Custom action not found", nil, "")
+	action, err := findByIDAndOrg[models.CustomAction](a.DB, r, actionID, orgID, "Custom action")
+	if err != nil {
+		return nil
 	}
 
 	if !action.IsActive {
@@ -285,9 +285,9 @@ func (a *App) ExecuteCustomAction(r *fastglue.Request) error {
 		return r.SendErrorEnvelope(fasthttp.StatusBadRequest, "Invalid contact ID", nil, "")
 	}
 
-	var contact models.Contact
-	if err := a.DB.Where("id = ? AND organization_id = ?", contactID, orgID).First(&contact).Error; err != nil {
-		return r.SendErrorEnvelope(fasthttp.StatusNotFound, "Contact not found", nil, "")
+	contact, err := findByIDAndOrg[models.Contact](a.DB, r, contactID, orgID, "Contact")
+	if err != nil {
+		return nil
 	}
 
 	// Get user details
@@ -299,17 +299,17 @@ func (a *App) ExecuteCustomAction(r *fastglue.Request) error {
 	a.DB.First(&org, orgID)
 
 	// Build context for variable replacement
-	context := buildActionContext(contact, user, org)
+	context := buildActionContext(*contact, user, org)
 
 	// Execute based on action type
 	var result *ActionResult
 	switch action.ActionType {
 	case models.ActionTypeWebhook:
-		result, err = a.executeWebhookAction(action, context)
+		result, err = a.executeWebhookAction(*action, context)
 	case models.ActionTypeURL:
-		result, err = a.executeURLAction(action, context)
+		result, err = a.executeURLAction(*action, context)
 	case models.ActionTypeJavascript:
-		result, err = a.executeJavaScriptAction(action, context)
+		result, err = a.executeJavaScriptAction(*action, context)
 	default:
 		return r.SendErrorEnvelope(fasthttp.StatusBadRequest, "Unknown action type", nil, "")
 	}

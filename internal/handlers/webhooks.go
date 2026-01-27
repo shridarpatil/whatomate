@@ -46,7 +46,7 @@ var AvailableWebhookEvents = []map[string]string{
 
 // ListWebhooks returns all webhooks for the organization
 func (a *App) ListWebhooks(r *fastglue.Request) error {
-	orgID, err := getOrganizationID(r)
+	orgID, err := a.getOrgID(r)
 	if err != nil {
 		return r.SendErrorEnvelope(fasthttp.StatusUnauthorized, "Unauthorized", nil, "")
 	}
@@ -70,27 +70,27 @@ func (a *App) ListWebhooks(r *fastglue.Request) error {
 
 // GetWebhook returns a single webhook by ID
 func (a *App) GetWebhook(r *fastglue.Request) error {
-	orgID, err := getOrganizationID(r)
+	orgID, err := a.getOrgID(r)
 	if err != nil {
 		return r.SendErrorEnvelope(fasthttp.StatusUnauthorized, "Unauthorized", nil, "")
 	}
 
-	webhookID, err := uuid.Parse(r.RequestCtx.UserValue("id").(string))
+	webhookID, err := parsePathUUID(r, "id", "webhook")
 	if err != nil {
-		return r.SendErrorEnvelope(fasthttp.StatusBadRequest, "Invalid webhook ID", nil, "")
+		return nil
 	}
 
-	var webhook models.Webhook
-	if err := a.DB.Where("id = ? AND organization_id = ?", webhookID, orgID).First(&webhook).Error; err != nil {
-		return r.SendErrorEnvelope(fasthttp.StatusNotFound, "Webhook not found", nil, "")
+	webhook, err := findByIDAndOrg[models.Webhook](a.DB, r, webhookID, orgID, "Webhook")
+	if err != nil {
+		return nil
 	}
 
-	return r.SendEnvelope(webhookToResponse(webhook))
+	return r.SendEnvelope(webhookToResponse(*webhook))
 }
 
 // CreateWebhook creates a new webhook
 func (a *App) CreateWebhook(r *fastglue.Request) error {
-	orgID, err := getOrganizationID(r)
+	orgID, err := a.getOrgID(r)
 	if err != nil {
 		return r.SendErrorEnvelope(fasthttp.StatusUnauthorized, "Unauthorized", nil, "")
 	}
@@ -137,19 +137,19 @@ func (a *App) CreateWebhook(r *fastglue.Request) error {
 
 // UpdateWebhook updates an existing webhook
 func (a *App) UpdateWebhook(r *fastglue.Request) error {
-	orgID, err := getOrganizationID(r)
+	orgID, err := a.getOrgID(r)
 	if err != nil {
 		return r.SendErrorEnvelope(fasthttp.StatusUnauthorized, "Unauthorized", nil, "")
 	}
 
-	webhookID, err := uuid.Parse(r.RequestCtx.UserValue("id").(string))
+	webhookID, err := parsePathUUID(r, "id", "webhook")
 	if err != nil {
-		return r.SendErrorEnvelope(fasthttp.StatusBadRequest, "Invalid webhook ID", nil, "")
+		return nil
 	}
 
-	var webhook models.Webhook
-	if err := a.DB.Where("id = ? AND organization_id = ?", webhookID, orgID).First(&webhook).Error; err != nil {
-		return r.SendErrorEnvelope(fasthttp.StatusNotFound, "Webhook not found", nil, "")
+	webhook, err := findByIDAndOrg[models.Webhook](a.DB, r, webhookID, orgID, "Webhook")
+	if err != nil {
+		return nil
 	}
 
 	var req WebhookRequest
@@ -183,7 +183,7 @@ func (a *App) UpdateWebhook(r *fastglue.Request) error {
 
 	webhook.IsActive = req.IsActive
 
-	if err := a.DB.Save(&webhook).Error; err != nil {
+	if err := a.DB.Save(webhook).Error; err != nil {
 		a.Log.Error("Failed to update webhook", "error", err)
 		return r.SendErrorEnvelope(fasthttp.StatusInternalServerError, "Failed to update webhook", nil, "")
 	}
@@ -191,19 +191,19 @@ func (a *App) UpdateWebhook(r *fastglue.Request) error {
 	// Invalidate cache
 	a.InvalidateWebhooksCache(orgID)
 
-	return r.SendEnvelope(webhookToResponse(webhook))
+	return r.SendEnvelope(webhookToResponse(*webhook))
 }
 
 // DeleteWebhook deletes a webhook
 func (a *App) DeleteWebhook(r *fastglue.Request) error {
-	orgID, err := getOrganizationID(r)
+	orgID, err := a.getOrgID(r)
 	if err != nil {
 		return r.SendErrorEnvelope(fasthttp.StatusUnauthorized, "Unauthorized", nil, "")
 	}
 
-	webhookID, err := uuid.Parse(r.RequestCtx.UserValue("id").(string))
+	webhookID, err := parsePathUUID(r, "id", "webhook")
 	if err != nil {
-		return r.SendErrorEnvelope(fasthttp.StatusBadRequest, "Invalid webhook ID", nil, "")
+		return nil
 	}
 
 	result := a.DB.Where("id = ? AND organization_id = ?", webhookID, orgID).Delete(&models.Webhook{})
@@ -223,19 +223,19 @@ func (a *App) DeleteWebhook(r *fastglue.Request) error {
 
 // TestWebhook sends a test event to a webhook
 func (a *App) TestWebhook(r *fastglue.Request) error {
-	orgID, err := getOrganizationID(r)
+	orgID, err := a.getOrgID(r)
 	if err != nil {
 		return r.SendErrorEnvelope(fasthttp.StatusUnauthorized, "Unauthorized", nil, "")
 	}
 
-	webhookID, err := uuid.Parse(r.RequestCtx.UserValue("id").(string))
+	webhookID, err := parsePathUUID(r, "id", "webhook")
 	if err != nil {
-		return r.SendErrorEnvelope(fasthttp.StatusBadRequest, "Invalid webhook ID", nil, "")
+		return nil
 	}
 
-	var webhook models.Webhook
-	if err := a.DB.Where("id = ? AND organization_id = ?", webhookID, orgID).First(&webhook).Error; err != nil {
-		return r.SendErrorEnvelope(fasthttp.StatusNotFound, "Webhook not found", nil, "")
+	webhook, err := findByIDAndOrg[models.Webhook](a.DB, r, webhookID, orgID, "Webhook")
+	if err != nil {
+		return nil
 	}
 
 	// Send a test event synchronously
@@ -260,7 +260,7 @@ func (a *App) TestWebhook(r *fastglue.Request) error {
 	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
 	defer cancel()
 
-	if err := a.sendWebhookRequest(ctx, webhook, jsonData); err != nil {
+	if err := a.sendWebhookRequest(ctx, *webhook, jsonData); err != nil {
 		return r.SendErrorEnvelope(fasthttp.StatusBadGateway, "Webhook test failed: "+err.Error(), nil, "")
 	}
 

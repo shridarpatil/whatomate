@@ -32,7 +32,7 @@ type CannedResponseResponse struct {
 
 // ListCannedResponses returns all canned responses for the organization
 func (a *App) ListCannedResponses(r *fastglue.Request) error {
-	orgID, err := getOrganizationID(r)
+	orgID, err := a.getOrgID(r)
 	if err != nil {
 		return r.SendErrorEnvelope(fasthttp.StatusUnauthorized, "Unauthorized", nil, "")
 	}
@@ -77,7 +77,7 @@ func (a *App) ListCannedResponses(r *fastglue.Request) error {
 
 // CreateCannedResponse creates a new canned response
 func (a *App) CreateCannedResponse(r *fastglue.Request) error {
-	orgID, err := getOrganizationID(r)
+	orgID, err := a.getOrgID(r)
 	if err != nil {
 		return r.SendErrorEnvelope(fasthttp.StatusUnauthorized, "Unauthorized", nil, "")
 	}
@@ -123,15 +123,14 @@ func (a *App) CreateCannedResponse(r *fastglue.Request) error {
 
 // GetCannedResponse returns a single canned response
 func (a *App) GetCannedResponse(r *fastglue.Request) error {
-	orgID, err := getOrganizationID(r)
+	orgID, err := a.getOrgID(r)
 	if err != nil {
 		return r.SendErrorEnvelope(fasthttp.StatusUnauthorized, "Unauthorized", nil, "")
 	}
 
-	idStr, _ := r.RequestCtx.UserValue("id").(string)
-	id, err := uuid.Parse(idStr)
+	id, err := parsePathUUID(r, "id", "canned response")
 	if err != nil {
-		return r.SendErrorEnvelope(fasthttp.StatusBadRequest, "Invalid ID", nil, "")
+		return nil
 	}
 
 	var cannedResponse models.CannedResponse
@@ -146,15 +145,14 @@ func (a *App) GetCannedResponse(r *fastglue.Request) error {
 
 // UpdateCannedResponse updates an existing canned response
 func (a *App) UpdateCannedResponse(r *fastglue.Request) error {
-	orgID, err := getOrganizationID(r)
+	orgID, err := a.getOrgID(r)
 	if err != nil {
 		return r.SendErrorEnvelope(fasthttp.StatusUnauthorized, "Unauthorized", nil, "")
 	}
 
-	idStr, _ := r.RequestCtx.UserValue("id").(string)
-	id, err := uuid.Parse(idStr)
+	id, err := parsePathUUID(r, "id", "canned response")
 	if err != nil {
-		return r.SendErrorEnvelope(fasthttp.StatusBadRequest, "Invalid ID", nil, "")
+		return nil
 	}
 
 	var cannedResponse models.CannedResponse
@@ -191,15 +189,14 @@ func (a *App) UpdateCannedResponse(r *fastglue.Request) error {
 
 // DeleteCannedResponse deletes a canned response
 func (a *App) DeleteCannedResponse(r *fastglue.Request) error {
-	orgID, err := getOrganizationID(r)
+	orgID, err := a.getOrgID(r)
 	if err != nil {
 		return r.SendErrorEnvelope(fasthttp.StatusUnauthorized, "Unauthorized", nil, "")
 	}
 
-	idStr, _ := r.RequestCtx.UserValue("id").(string)
-	id, err := uuid.Parse(idStr)
+	id, err := parsePathUUID(r, "id", "canned response")
 	if err != nil {
-		return r.SendErrorEnvelope(fasthttp.StatusBadRequest, "Invalid ID", nil, "")
+		return nil
 	}
 
 	var cannedResponse models.CannedResponse
@@ -220,15 +217,14 @@ func (a *App) DeleteCannedResponse(r *fastglue.Request) error {
 
 // IncrementCannedResponseUsage increments the usage counter
 func (a *App) IncrementCannedResponseUsage(r *fastglue.Request) error {
-	orgID, err := getOrganizationID(r)
+	orgID, err := a.getOrgID(r)
 	if err != nil {
 		return r.SendErrorEnvelope(fasthttp.StatusUnauthorized, "Unauthorized", nil, "")
 	}
 
-	idStr, _ := r.RequestCtx.UserValue("id").(string)
-	id, err := uuid.Parse(idStr)
+	id, err := parsePathUUID(r, "id", "canned response")
 	if err != nil {
-		return r.SendErrorEnvelope(fasthttp.StatusBadRequest, "Invalid ID", nil, "")
+		return nil
 	}
 
 	if err := a.DB.Model(&models.CannedResponse{}).

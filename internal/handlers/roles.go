@@ -39,7 +39,7 @@ type PermissionResponse struct {
 
 // ListRoles returns all roles for the organization
 func (a *App) ListRoles(r *fastglue.Request) error {
-	orgID, err := getOrganizationID(r)
+	orgID, err := a.getOrgID(r)
 	if err != nil {
 		return r.SendErrorEnvelope(fasthttp.StatusUnauthorized, "Unauthorized", nil, "")
 	}
@@ -69,15 +69,14 @@ func (a *App) ListRoles(r *fastglue.Request) error {
 
 // GetRole returns a single role
 func (a *App) GetRole(r *fastglue.Request) error {
-	orgID, err := getOrganizationID(r)
+	orgID, err := a.getOrgID(r)
 	if err != nil {
 		return r.SendErrorEnvelope(fasthttp.StatusUnauthorized, "Unauthorized", nil, "")
 	}
 
-	idStr := r.RequestCtx.UserValue("id").(string)
-	id, err := uuid.Parse(idStr)
+	id, err := parsePathUUID(r, "id", "role")
 	if err != nil {
-		return r.SendErrorEnvelope(fasthttp.StatusBadRequest, "Invalid role ID", nil, "")
+		return nil
 	}
 
 	var role models.CustomRole
@@ -95,7 +94,7 @@ func (a *App) GetRole(r *fastglue.Request) error {
 
 // CreateRole creates a new custom role
 func (a *App) CreateRole(r *fastglue.Request) error {
-	orgID, err := getOrganizationID(r)
+	orgID, err := a.getOrgID(r)
 	if err != nil {
 		return r.SendErrorEnvelope(fasthttp.StatusUnauthorized, "Unauthorized", nil, "")
 	}
@@ -150,15 +149,14 @@ func (a *App) CreateRole(r *fastglue.Request) error {
 
 // UpdateRole updates a custom role
 func (a *App) UpdateRole(r *fastglue.Request) error {
-	orgID, err := getOrganizationID(r)
+	orgID, err := a.getOrgID(r)
 	if err != nil {
 		return r.SendErrorEnvelope(fasthttp.StatusUnauthorized, "Unauthorized", nil, "")
 	}
 
-	idStr := r.RequestCtx.UserValue("id").(string)
-	id, err := uuid.Parse(idStr)
+	id, err := parsePathUUID(r, "id", "role")
 	if err != nil {
-		return r.SendErrorEnvelope(fasthttp.StatusBadRequest, "Invalid role ID", nil, "")
+		return nil
 	}
 
 	var role models.CustomRole
@@ -266,20 +264,19 @@ func (a *App) UpdateRole(r *fastglue.Request) error {
 
 // DeleteRole deletes a custom role
 func (a *App) DeleteRole(r *fastglue.Request) error {
-	orgID, err := getOrganizationID(r)
+	orgID, err := a.getOrgID(r)
 	if err != nil {
 		return r.SendErrorEnvelope(fasthttp.StatusUnauthorized, "Unauthorized", nil, "")
 	}
 
-	idStr := r.RequestCtx.UserValue("id").(string)
-	id, err := uuid.Parse(idStr)
+	id, err := parsePathUUID(r, "id", "role")
 	if err != nil {
-		return r.SendErrorEnvelope(fasthttp.StatusBadRequest, "Invalid role ID", nil, "")
+		return nil
 	}
 
-	var role models.CustomRole
-	if err := a.DB.Where("id = ? AND organization_id = ?", id, orgID).First(&role).Error; err != nil {
-		return r.SendErrorEnvelope(fasthttp.StatusNotFound, "Role not found", nil, "")
+	role, err := findByIDAndOrg[models.CustomRole](a.DB, r, id, orgID, "Role")
+	if err != nil {
+		return nil
 	}
 
 	// Cannot delete system roles
@@ -295,7 +292,7 @@ func (a *App) DeleteRole(r *fastglue.Request) error {
 	}
 
 	// Delete the role (permissions associations will be cleared automatically)
-	if err := a.DB.Delete(&role).Error; err != nil {
+	if err := a.DB.Delete(role).Error; err != nil {
 		a.Log.Error("Failed to delete role", "error", err)
 		return r.SendErrorEnvelope(fasthttp.StatusInternalServerError, "Failed to delete role", nil, "")
 	}

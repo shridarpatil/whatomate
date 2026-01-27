@@ -353,7 +353,7 @@ func (a *App) CallbackSSO(r *fastglue.Request) error {
 
 // GetSSOSettings returns all SSO provider configs for the organization (admin only)
 func (a *App) GetSSOSettings(r *fastglue.Request) error {
-	orgID, err := a.getOrgIDFromContext(r)
+	orgID, err := a.getOrgID(r)
 	if err != nil {
 		return r.SendErrorEnvelope(fasthttp.StatusUnauthorized, "Unauthorized", nil, "")
 	}
@@ -386,7 +386,7 @@ func (a *App) GetSSOSettings(r *fastglue.Request) error {
 
 // UpdateSSOProvider creates or updates an SSO provider config (admin only)
 func (a *App) UpdateSSOProvider(r *fastglue.Request) error {
-	orgID, err := a.getOrgIDFromContext(r)
+	orgID, err := a.getOrgID(r)
 	if err != nil {
 		return r.SendErrorEnvelope(fasthttp.StatusUnauthorized, "Unauthorized", nil, "")
 	}
@@ -467,7 +467,7 @@ func (a *App) UpdateSSOProvider(r *fastglue.Request) error {
 
 // DeleteSSOProvider removes an SSO provider config (admin only)
 func (a *App) DeleteSSOProvider(r *fastglue.Request) error {
-	orgID, err := a.getOrgIDFromContext(r)
+	orgID, err := a.getOrgID(r)
 	if err != nil {
 		return r.SendErrorEnvelope(fasthttp.StatusUnauthorized, "Unauthorized", nil, "")
 	}

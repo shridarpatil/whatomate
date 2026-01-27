@@ -32,7 +32,7 @@ type RecentMessageResponse struct {
 
 // GetDashboardStats returns dashboard statistics for the organization
 func (a *App) GetDashboardStats(r *fastglue.Request) error {
-	orgID, err := a.getOrgIDFromContext(r)
+	orgID, err := a.getOrgID(r)
 	if err != nil {
 		return r.SendErrorEnvelope(fasthttp.StatusUnauthorized, "Unauthorized", nil, "")
 	}
@@ -55,7 +55,7 @@ func (a *App) GetDashboardStats(r *fastglue.Request) error {
 			return r.SendErrorEnvelope(fasthttp.StatusBadRequest, "Invalid 'to' date format. Use YYYY-MM-DD", nil, "")
 		}
 		// End of day for the to date
-		periodEnd = periodEnd.Add(24*time.Hour - time.Nanosecond)
+		periodEnd = endOfDay(periodEnd)
 	} else {
 		// Default to current month
 		periodStart = time.Date(now.Year(), now.Month(), 1, 0, 0, 0, 0, time.UTC)

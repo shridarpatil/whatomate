@@ -54,7 +54,7 @@ type AgentAnalyticsResponse struct {
 // GetAgentAnalytics returns agent analytics for the organization
 // Agents see only their own stats; Admin/Manager see all agents
 func (a *App) GetAgentAnalytics(r *fastglue.Request) error {
-	orgID, err := a.getOrgIDFromContext(r)
+	orgID, err := a.getOrgID(r)
 	if err != nil {
 		return r.SendErrorEnvelope(fasthttp.StatusUnauthorized, "Unauthorized", nil, "")
 	}
@@ -82,7 +82,7 @@ func (a *App) GetAgentAnalytics(r *fastglue.Request) error {
 		if err != nil {
 			return r.SendErrorEnvelope(fasthttp.StatusBadRequest, "Invalid 'to' date format. Use YYYY-MM-DD", nil, "")
 		}
-		periodEnd = periodEnd.Add(24*time.Hour - time.Nanosecond)
+		periodEnd = endOfDay(periodEnd)
 	} else {
 		// Default to current month
 		periodStart = time.Date(now.Year(), now.Month(), 1, 0, 0, 0, 0, time.UTC)
@@ -133,7 +133,7 @@ func (a *App) GetAgentAnalytics(r *fastglue.Request) error {
 
 // GetAgentDetails returns detailed analytics for a specific agent
 func (a *App) GetAgentDetails(r *fastglue.Request) error {
-	orgID, err := a.getOrgIDFromContext(r)
+	orgID, err := a.getOrgID(r)
 	if err != nil {
 		return r.SendErrorEnvelope(fasthttp.StatusUnauthorized, "Unauthorized", nil, "")
 	}
@@ -163,16 +163,16 @@ func (a *App) GetAgentDetails(r *fastglue.Request) error {
 	if fromStr != "" && toStr != "" {
 		periodStart, _ = time.Parse("2006-01-02", fromStr)
 		periodEnd, _ = time.Parse("2006-01-02", toStr)
-		periodEnd = periodEnd.Add(24*time.Hour - time.Nanosecond)
+		periodEnd = endOfDay(periodEnd)
 	} else {
 		periodStart = time.Date(now.Year(), now.Month(), 1, 0, 0, 0, 0, time.UTC)
 		periodEnd = now
 	}
 
 	// Verify agent exists
-	var agent models.User
-	if err := a.DB.Where("id = ? AND organization_id = ?", agentID, orgID).First(&agent).Error; err != nil {
-		return r.SendErrorEnvelope(fasthttp.StatusNotFound, "Agent not found", nil, "")
+	_, err = findByIDAndOrg[models.User](a.DB, r, agentID, orgID, "Agent")
+	if err != nil {
+		return nil
 	}
 
 	stats := a.calculateAgentStats(orgID, agentID, periodStart, periodEnd)
@@ -186,7 +186,7 @@ func (a *App) GetAgentDetails(r *fastglue.Request) error {
 
 // GetAgentComparison returns comparison data for multiple agents
 func (a *App) GetAgentComparison(r *fastglue.Request) error {
-	orgID, err := a.getOrgIDFromContext(r)
+	orgID, err := a.getOrgID(r)
 	if err != nil {
 		return r.SendErrorEnvelope(fasthttp.StatusUnauthorized, "Unauthorized", nil, "")
 	}
@@ -206,7 +206,7 @@ func (a *App) GetAgentComparison(r *fastglue.Request) error {
 	if fromStr != "" && toStr != "" {
 		periodStart, _ = time.Parse("2006-01-02", fromStr)
 		periodEnd, _ = time.Parse("2006-01-02", toStr)
-		periodEnd = periodEnd.Add(24*time.Hour - time.Nanosecond)
+		periodEnd = endOfDay(periodEnd)
 	} else {
 		periodStart = time.Date(now.Year(), now.Month(), 1, 0, 0, 0, 0, time.UTC)
 		periodEnd = now
