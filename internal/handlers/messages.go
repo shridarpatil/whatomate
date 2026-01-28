@@ -329,8 +329,10 @@ func (a *App) buildInteractiveData(req OutgoingMessageRequest) models.JSONB {
 
 // finalizeMessageSend updates message status and triggers post-send actions
 func (a *App) finalizeMessageSend(msg *models.Message, req OutgoingMessageRequest, opts MessageSendOptions, wamid string, err error) {
+	// Use Where instead of Model(msg) to avoid mutating the shared msg struct,
+	// which may be read concurrently by the caller when sending is async.
 	if err != nil {
-		a.DB.Model(msg).Updates(map[string]any{
+		a.DB.Model(&models.Message{}).Where("id = ?", msg.ID).Updates(map[string]any{
 			"status":        models.MessageStatusFailed,
 			"error_message": err.Error(),
 		})
@@ -338,7 +340,7 @@ func (a *App) finalizeMessageSend(msg *models.Message, req OutgoingMessageReques
 		return
 	}
 
-	a.DB.Model(msg).Updates(map[string]any{
+	a.DB.Model(&models.Message{}).Where("id = ?", msg.ID).Updates(map[string]any{
 		"status":               models.MessageStatusSent,
 		"whats_app_message_id": wamid,
 	})
