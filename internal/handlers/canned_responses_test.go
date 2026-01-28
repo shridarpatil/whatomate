@@ -11,6 +11,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"github.com/valyala/fasthttp"
+	"github.com/zerodha/fastglue"
 )
 
 // createTestCannedResponse creates a canned response directly in the database for testing.
@@ -652,6 +653,631 @@ func TestApp_DeleteCannedResponse(t *testing.T) {
 		require.NoError(t, err)
 		assert.Equal(t, fasthttp.StatusUnauthorized, testutil.GetResponseStatusCode(req))
 	})
+}
+
+// --- CreateCannedResponse Additional Tests ---
+
+func TestApp_CreateCannedResponse_DuplicateShortcut(t *testing.T) {
+	t.Parallel()
+
+	app := newTestApp(t)
+	org := testutil.CreateTestOrganization(t, app.DB)
+	user := testutil.CreateTestUser(t, app.DB, org.ID)
+
+	createTestCannedResponse(t, app, org.ID, user.ID, "First", "/dup-shortcut", "First content", "general")
+
+	// Creating a second canned response with the same shortcut but different name should succeed,
+	// since the handler only checks for duplicate names, not shortcuts.
+	req := testutil.NewJSONRequest(t, map[string]any{
+		"name":     "Second",
+		"shortcut": "/dup-shortcut",
+		"content":  "Second content",
+	})
+	testutil.SetAuthContext(req, org.ID, user.ID)
+
+	err := app.CreateCannedResponse(req)
+	require.NoError(t, err)
+	assert.Equal(t, fasthttp.StatusOK, testutil.GetResponseStatusCode(req))
+
+	var resp struct {
+		Data handlers.CannedResponseResponse `json:"data"`
+	}
+	err = json.Unmarshal(testutil.GetResponseBody(req), &resp)
+	require.NoError(t, err)
+	assert.Equal(t, "Second", resp.Data.Name)
+	assert.Equal(t, "/dup-shortcut", resp.Data.Shortcut)
+}
+
+func TestApp_CreateCannedResponse_SameNameDifferentOrgs(t *testing.T) {
+	t.Parallel()
+
+	app := newTestApp(t)
+	org1 := testutil.CreateTestOrganization(t, app.DB)
+	org2 := testutil.CreateTestOrganization(t, app.DB)
+	user1 := testutil.CreateTestUser(t, app.DB, org1.ID)
+	user2 := testutil.CreateTestUser(t, app.DB, org2.ID)
+
+	// Create a canned response in org1
+	createTestCannedResponse(t, app, org1.ID, user1.ID, "Shared Name", "/sn1", "Org1 content", "general")
+
+	// Creating the same name in org2 should succeed (name uniqueness is per-org)
+	req := testutil.NewJSONRequest(t, map[string]any{
+		"name":    "Shared Name",
+		"content": "Org2 content",
+	})
+	testutil.SetAuthContext(req, org2.ID, user2.ID)
+
+	err := app.CreateCannedResponse(req)
+	require.NoError(t, err)
+	assert.Equal(t, fasthttp.StatusOK, testutil.GetResponseStatusCode(req))
+
+	var resp struct {
+		Data handlers.CannedResponseResponse `json:"data"`
+	}
+	err = json.Unmarshal(testutil.GetResponseBody(req), &resp)
+	require.NoError(t, err)
+	assert.Equal(t, "Shared Name", resp.Data.Name)
+}
+
+func TestApp_CreateCannedResponse_InvalidJSON(t *testing.T) {
+	t.Parallel()
+
+	app := newTestApp(t)
+	org := testutil.CreateTestOrganization(t, app.DB)
+	user := testutil.CreateTestUser(t, app.DB, org.ID)
+
+	// Send raw invalid JSON body
+	ctx := &fasthttp.RequestCtx{}
+	ctx.Request.Header.SetContentType("application/json")
+	ctx.Request.Header.SetMethod("POST")
+	ctx.Request.SetBody([]byte(`{invalid json`))
+	req := &fastglue.Request{RequestCtx: ctx}
+	testutil.SetAuthContext(req, org.ID, user.ID)
+
+	err := app.CreateCannedResponse(req)
+	require.NoError(t, err)
+	assert.Equal(t, fasthttp.StatusBadRequest, testutil.GetResponseStatusCode(req))
+}
+
+func TestApp_CreateCannedResponse_WithAllOptionalFields(t *testing.T) {
+	t.Parallel()
+
+	app := newTestApp(t)
+	org := testutil.CreateTestOrganization(t, app.DB)
+	user := testutil.CreateTestUser(t, app.DB, org.ID)
+
+	req := testutil.NewJSONRequest(t, map[string]any{
+		"name":     "Full Response",
+		"shortcut": "/full",
+		"content":  "Full content with all fields",
+		"category": "premium",
+	})
+	testutil.SetAuthContext(req, org.ID, user.ID)
+
+	err := app.CreateCannedResponse(req)
+	require.NoError(t, err)
+	assert.Equal(t, fasthttp.StatusOK, testutil.GetResponseStatusCode(req))
+
+	var resp struct {
+		Data handlers.CannedResponseResponse `json:"data"`
+	}
+	err = json.Unmarshal(testutil.GetResponseBody(req), &resp)
+	require.NoError(t, err)
+	assert.Equal(t, "Full Response", resp.Data.Name)
+	assert.Equal(t, "/full", resp.Data.Shortcut)
+	assert.Equal(t, "Full content with all fields", resp.Data.Content)
+	assert.Equal(t, "premium", resp.Data.Category)
+	assert.True(t, resp.Data.IsActive)
+	assert.Equal(t, 0, resp.Data.UsageCount)
+	assert.NotEmpty(t, resp.Data.CreatedAt)
+	assert.NotEmpty(t, resp.Data.UpdatedAt)
+}
+
+func TestApp_CreateCannedResponse_WithoutShortcutOrCategory(t *testing.T) {
+	t.Parallel()
+
+	app := newTestApp(t)
+	org := testutil.CreateTestOrganization(t, app.DB)
+	user := testutil.CreateTestUser(t, app.DB, org.ID)
+
+	// Shortcut and category are optional
+	req := testutil.NewJSONRequest(t, map[string]any{
+		"name":    "Minimal Response",
+		"content": "Just name and content",
+	})
+	testutil.SetAuthContext(req, org.ID, user.ID)
+
+	err := app.CreateCannedResponse(req)
+	require.NoError(t, err)
+	assert.Equal(t, fasthttp.StatusOK, testutil.GetResponseStatusCode(req))
+
+	var resp struct {
+		Data handlers.CannedResponseResponse `json:"data"`
+	}
+	err = json.Unmarshal(testutil.GetResponseBody(req), &resp)
+	require.NoError(t, err)
+	assert.Equal(t, "Minimal Response", resp.Data.Name)
+	assert.Equal(t, "", resp.Data.Shortcut)
+	assert.Equal(t, "", resp.Data.Category)
+	assert.Equal(t, "Just name and content", resp.Data.Content)
+}
+
+// --- ListCannedResponses Additional Tests ---
+
+func TestApp_ListCannedResponses_SearchByShortcut(t *testing.T) {
+	t.Parallel()
+
+	app := newTestApp(t)
+	org := testutil.CreateTestOrganization(t, app.DB)
+	user := testutil.CreateTestUser(t, app.DB, org.ID)
+
+	createTestCannedResponse(t, app, org.ID, user.ID, "Alpha", "/alpha-cmd", "Alpha content", "general")
+	createTestCannedResponse(t, app, org.ID, user.ID, "Beta", "/beta-cmd", "Beta content", "general")
+
+	req := testutil.NewGETRequest(t)
+	testutil.SetAuthContext(req, org.ID, user.ID)
+	testutil.SetQueryParam(req, "search", "/alpha")
+
+	err := app.ListCannedResponses(req)
+	require.NoError(t, err)
+	assert.Equal(t, fasthttp.StatusOK, testutil.GetResponseStatusCode(req))
+
+	var resp struct {
+		Data struct {
+			CannedResponses []handlers.CannedResponseResponse `json:"canned_responses"`
+		} `json:"data"`
+	}
+	err = json.Unmarshal(testutil.GetResponseBody(req), &resp)
+	require.NoError(t, err)
+	assert.Len(t, resp.Data.CannedResponses, 1)
+	assert.Equal(t, "Alpha", resp.Data.CannedResponses[0].Name)
+}
+
+func TestApp_ListCannedResponses_OrderedByUsageCount(t *testing.T) {
+	t.Parallel()
+
+	app := newTestApp(t)
+	org := testutil.CreateTestOrganization(t, app.DB)
+	user := testutil.CreateTestUser(t, app.DB, org.ID)
+
+	crLow := createTestCannedResponse(t, app, org.ID, user.ID, "Low Usage", "/low", "Low usage content", "general")
+	crHigh := createTestCannedResponse(t, app, org.ID, user.ID, "High Usage", "/high", "High usage content", "general")
+
+	// Set usage counts: high=10, low=1
+	require.NoError(t, app.DB.Model(crHigh).Update("usage_count", 10).Error)
+	require.NoError(t, app.DB.Model(crLow).Update("usage_count", 1).Error)
+
+	req := testutil.NewGETRequest(t)
+	testutil.SetAuthContext(req, org.ID, user.ID)
+
+	err := app.ListCannedResponses(req)
+	require.NoError(t, err)
+	assert.Equal(t, fasthttp.StatusOK, testutil.GetResponseStatusCode(req))
+
+	var resp struct {
+		Data struct {
+			CannedResponses []handlers.CannedResponseResponse `json:"canned_responses"`
+		} `json:"data"`
+	}
+	err = json.Unmarshal(testutil.GetResponseBody(req), &resp)
+	require.NoError(t, err)
+	require.Len(t, resp.Data.CannedResponses, 2)
+	// Higher usage count should come first
+	assert.Equal(t, "High Usage", resp.Data.CannedResponses[0].Name)
+	assert.Equal(t, "Low Usage", resp.Data.CannedResponses[1].Name)
+}
+
+func TestApp_ListCannedResponses_SearchByContent(t *testing.T) {
+	t.Parallel()
+
+	app := newTestApp(t)
+	org := testutil.CreateTestOrganization(t, app.DB)
+	user := testutil.CreateTestUser(t, app.DB, org.ID)
+
+	createTestCannedResponse(t, app, org.ID, user.ID, "Promo", "/promo", "Special discount offer!", "sales")
+	createTestCannedResponse(t, app, org.ID, user.ID, "Normal", "/normal", "Regular response", "general")
+
+	req := testutil.NewGETRequest(t)
+	testutil.SetAuthContext(req, org.ID, user.ID)
+	testutil.SetQueryParam(req, "search", "discount")
+
+	err := app.ListCannedResponses(req)
+	require.NoError(t, err)
+	assert.Equal(t, fasthttp.StatusOK, testutil.GetResponseStatusCode(req))
+
+	var resp struct {
+		Data struct {
+			CannedResponses []handlers.CannedResponseResponse `json:"canned_responses"`
+		} `json:"data"`
+	}
+	err = json.Unmarshal(testutil.GetResponseBody(req), &resp)
+	require.NoError(t, err)
+	assert.Len(t, resp.Data.CannedResponses, 1)
+	assert.Equal(t, "Promo", resp.Data.CannedResponses[0].Name)
+}
+
+func TestApp_ListCannedResponses_CombinedCategoryAndSearch(t *testing.T) {
+	t.Parallel()
+
+	app := newTestApp(t)
+	org := testutil.CreateTestOrganization(t, app.DB)
+	user := testutil.CreateTestUser(t, app.DB, org.ID)
+
+	createTestCannedResponse(t, app, org.ID, user.ID, "Sales Hello", "/sh", "Hello from sales", "sales")
+	createTestCannedResponse(t, app, org.ID, user.ID, "Support Hello", "/sph", "Hello from support", "support")
+	createTestCannedResponse(t, app, org.ID, user.ID, "Sales Bye", "/sb", "Bye from sales", "sales")
+
+	req := testutil.NewGETRequest(t)
+	testutil.SetAuthContext(req, org.ID, user.ID)
+	testutil.SetQueryParam(req, "category", "sales")
+	testutil.SetQueryParam(req, "search", "Hello")
+
+	err := app.ListCannedResponses(req)
+	require.NoError(t, err)
+	assert.Equal(t, fasthttp.StatusOK, testutil.GetResponseStatusCode(req))
+
+	var resp struct {
+		Data struct {
+			CannedResponses []handlers.CannedResponseResponse `json:"canned_responses"`
+		} `json:"data"`
+	}
+	err = json.Unmarshal(testutil.GetResponseBody(req), &resp)
+	require.NoError(t, err)
+	assert.Len(t, resp.Data.CannedResponses, 1)
+	assert.Equal(t, "Sales Hello", resp.Data.CannedResponses[0].Name)
+}
+
+// --- UpdateCannedResponse Additional Tests ---
+
+func TestApp_UpdateCannedResponse_DeactivateResponse(t *testing.T) {
+	t.Parallel()
+
+	app := newTestApp(t)
+	org := testutil.CreateTestOrganization(t, app.DB)
+	user := testutil.CreateTestUser(t, app.DB, org.ID)
+
+	cr := createTestCannedResponse(t, app, org.ID, user.ID, "To Deactivate", "/deact", "Will be deactivated", "general")
+	assert.True(t, cr.IsActive)
+
+	req := testutil.NewJSONRequest(t, map[string]any{
+		"name":      "To Deactivate",
+		"content":   "Will be deactivated",
+		"is_active": false,
+	})
+	testutil.SetAuthContext(req, org.ID, user.ID)
+	testutil.SetPathParam(req, "id", cr.ID.String())
+
+	err := app.UpdateCannedResponse(req)
+	require.NoError(t, err)
+	assert.Equal(t, fasthttp.StatusOK, testutil.GetResponseStatusCode(req))
+
+	var resp struct {
+		Data handlers.CannedResponseResponse `json:"data"`
+	}
+	err = json.Unmarshal(testutil.GetResponseBody(req), &resp)
+	require.NoError(t, err)
+	assert.False(t, resp.Data.IsActive)
+
+	// Verify in DB
+	var updated models.CannedResponse
+	require.NoError(t, app.DB.First(&updated, "id = ?", cr.ID).Error)
+	assert.False(t, updated.IsActive)
+}
+
+func TestApp_UpdateCannedResponse_ClearShortcutAndCategory(t *testing.T) {
+	t.Parallel()
+
+	app := newTestApp(t)
+	org := testutil.CreateTestOrganization(t, app.DB)
+	user := testutil.CreateTestUser(t, app.DB, org.ID)
+
+	cr := createTestCannedResponse(t, app, org.ID, user.ID, "With Shortcut", "/shortcut", "Has shortcut", "support")
+
+	// Update with empty shortcut and category to clear them
+	req := testutil.NewJSONRequest(t, map[string]any{
+		"name":      "With Shortcut",
+		"content":   "Has shortcut",
+		"shortcut":  "",
+		"category":  "",
+		"is_active": true,
+	})
+	testutil.SetAuthContext(req, org.ID, user.ID)
+	testutil.SetPathParam(req, "id", cr.ID.String())
+
+	err := app.UpdateCannedResponse(req)
+	require.NoError(t, err)
+	assert.Equal(t, fasthttp.StatusOK, testutil.GetResponseStatusCode(req))
+
+	var resp struct {
+		Data handlers.CannedResponseResponse `json:"data"`
+	}
+	err = json.Unmarshal(testutil.GetResponseBody(req), &resp)
+	require.NoError(t, err)
+	assert.Equal(t, "", resp.Data.Shortcut)
+	assert.Equal(t, "", resp.Data.Category)
+}
+
+func TestApp_UpdateCannedResponse_PreservesUsageCount(t *testing.T) {
+	t.Parallel()
+
+	app := newTestApp(t)
+	org := testutil.CreateTestOrganization(t, app.DB)
+	user := testutil.CreateTestUser(t, app.DB, org.ID)
+
+	cr := createTestCannedResponse(t, app, org.ID, user.ID, "Count Preserver", "/countpres", "Usage should stay", "general")
+	// Set a usage count
+	require.NoError(t, app.DB.Model(cr).Update("usage_count", 42).Error)
+
+	req := testutil.NewJSONRequest(t, map[string]any{
+		"name":      "Count Preserver Updated",
+		"content":   "Updated but usage stays",
+		"is_active": true,
+	})
+	testutil.SetAuthContext(req, org.ID, user.ID)
+	testutil.SetPathParam(req, "id", cr.ID.String())
+
+	err := app.UpdateCannedResponse(req)
+	require.NoError(t, err)
+	assert.Equal(t, fasthttp.StatusOK, testutil.GetResponseStatusCode(req))
+
+	var resp struct {
+		Data handlers.CannedResponseResponse `json:"data"`
+	}
+	err = json.Unmarshal(testutil.GetResponseBody(req), &resp)
+	require.NoError(t, err)
+	assert.Equal(t, "Count Preserver Updated", resp.Data.Name)
+	assert.Equal(t, 42, resp.Data.UsageCount)
+}
+
+// --- DeleteCannedResponse Additional Tests ---
+
+func TestApp_DeleteCannedResponse_DoubleDelete(t *testing.T) {
+	t.Parallel()
+
+	app := newTestApp(t)
+	org := testutil.CreateTestOrganization(t, app.DB)
+	user := testutil.CreateTestUser(t, app.DB, org.ID)
+
+	cr := createTestCannedResponse(t, app, org.ID, user.ID, "Delete Twice", "/del2x", "Double delete test", "general")
+
+	// First delete should succeed
+	req1 := testutil.NewGETRequest(t)
+	testutil.SetAuthContext(req1, org.ID, user.ID)
+	testutil.SetPathParam(req1, "id", cr.ID.String())
+
+	err := app.DeleteCannedResponse(req1)
+	require.NoError(t, err)
+	assert.Equal(t, fasthttp.StatusOK, testutil.GetResponseStatusCode(req1))
+
+	// Second delete should return not found
+	req2 := testutil.NewGETRequest(t)
+	testutil.SetAuthContext(req2, org.ID, user.ID)
+	testutil.SetPathParam(req2, "id", cr.ID.String())
+
+	err = app.DeleteCannedResponse(req2)
+	require.NoError(t, err)
+	assert.Equal(t, fasthttp.StatusNotFound, testutil.GetResponseStatusCode(req2))
+}
+
+func TestApp_DeleteCannedResponse_VerifyNotListedAfterDelete(t *testing.T) {
+	t.Parallel()
+
+	app := newTestApp(t)
+	org := testutil.CreateTestOrganization(t, app.DB)
+	user := testutil.CreateTestUser(t, app.DB, org.ID)
+
+	cr := createTestCannedResponse(t, app, org.ID, user.ID, "Will Vanish", "/vanish", "Gone after delete", "general")
+	createTestCannedResponse(t, app, org.ID, user.ID, "Will Stay", "/stay", "Remains after delete", "general")
+
+	// Delete the first one
+	delReq := testutil.NewGETRequest(t)
+	testutil.SetAuthContext(delReq, org.ID, user.ID)
+	testutil.SetPathParam(delReq, "id", cr.ID.String())
+
+	err := app.DeleteCannedResponse(delReq)
+	require.NoError(t, err)
+	assert.Equal(t, fasthttp.StatusOK, testutil.GetResponseStatusCode(delReq))
+
+	// List should only return the remaining one
+	listReq := testutil.NewGETRequest(t)
+	testutil.SetAuthContext(listReq, org.ID, user.ID)
+
+	err = app.ListCannedResponses(listReq)
+	require.NoError(t, err)
+	assert.Equal(t, fasthttp.StatusOK, testutil.GetResponseStatusCode(listReq))
+
+	var resp struct {
+		Data struct {
+			CannedResponses []handlers.CannedResponseResponse `json:"canned_responses"`
+		} `json:"data"`
+	}
+	err = json.Unmarshal(testutil.GetResponseBody(listReq), &resp)
+	require.NoError(t, err)
+	assert.Len(t, resp.Data.CannedResponses, 1)
+	assert.Equal(t, "Will Stay", resp.Data.CannedResponses[0].Name)
+}
+
+// --- IncrementCannedResponseUsage Additional Tests ---
+
+func TestApp_IncrementCannedResponseUsage_CrossOrgIsolation(t *testing.T) {
+	t.Parallel()
+
+	app := newTestApp(t)
+	org1 := testutil.CreateTestOrganization(t, app.DB)
+	org2 := testutil.CreateTestOrganization(t, app.DB)
+	user1 := testutil.CreateTestUser(t, app.DB, org1.ID)
+	user2 := testutil.CreateTestUser(t, app.DB, org2.ID)
+
+	cr := createTestCannedResponse(t, app, org1.ID, user1.ID, "Org1 Usage", "/org1usage", "Org1 only", "general")
+
+	// User from org2 tries to increment org1's canned response usage
+	req := testutil.NewJSONRequest(t, nil)
+	testutil.SetAuthContext(req, org2.ID, user2.ID)
+	testutil.SetPathParam(req, "id", cr.ID.String())
+
+	err := app.IncrementCannedResponseUsage(req)
+	require.NoError(t, err)
+	// The handler uses UpdateColumn which succeeds even if no rows matched,
+	// but the WHERE clause filters by org, so no row gets updated.
+	assert.Equal(t, fasthttp.StatusOK, testutil.GetResponseStatusCode(req))
+
+	// Verify usage count was NOT incremented for org1's response
+	var updated models.CannedResponse
+	require.NoError(t, app.DB.First(&updated, "id = ?", cr.ID).Error)
+	assert.Equal(t, 0, updated.UsageCount)
+}
+
+func TestApp_IncrementCannedResponseUsage_ReflectedInGet(t *testing.T) {
+	t.Parallel()
+
+	app := newTestApp(t)
+	org := testutil.CreateTestOrganization(t, app.DB)
+	user := testutil.CreateTestUser(t, app.DB, org.ID)
+
+	cr := createTestCannedResponse(t, app, org.ID, user.ID, "Get After Increment", "/getinc", "Check via get", "general")
+
+	// Increment usage
+	incReq := testutil.NewJSONRequest(t, nil)
+	testutil.SetAuthContext(incReq, org.ID, user.ID)
+	testutil.SetPathParam(incReq, "id", cr.ID.String())
+
+	err := app.IncrementCannedResponseUsage(incReq)
+	require.NoError(t, err)
+	assert.Equal(t, fasthttp.StatusOK, testutil.GetResponseStatusCode(incReq))
+
+	// Get the canned response and verify usage_count is reflected
+	getReq := testutil.NewGETRequest(t)
+	testutil.SetAuthContext(getReq, org.ID, user.ID)
+	testutil.SetPathParam(getReq, "id", cr.ID.String())
+
+	err = app.GetCannedResponse(getReq)
+	require.NoError(t, err)
+	assert.Equal(t, fasthttp.StatusOK, testutil.GetResponseStatusCode(getReq))
+
+	var resp struct {
+		Data handlers.CannedResponseResponse `json:"data"`
+	}
+	err = json.Unmarshal(testutil.GetResponseBody(getReq), &resp)
+	require.NoError(t, err)
+	assert.Equal(t, 1, resp.Data.UsageCount)
+}
+
+// --- CRUD Lifecycle Test ---
+
+func TestApp_CannedResponse_FullLifecycle(t *testing.T) {
+	t.Parallel()
+
+	app := newTestApp(t)
+	org := testutil.CreateTestOrganization(t, app.DB)
+	user := testutil.CreateTestUser(t, app.DB, org.ID)
+
+	// 1. Create
+	createReq := testutil.NewJSONRequest(t, map[string]any{
+		"name":     "Lifecycle Response",
+		"shortcut": "/lifecycle",
+		"content":  "Original lifecycle content",
+		"category": "lifecycle",
+	})
+	testutil.SetAuthContext(createReq, org.ID, user.ID)
+
+	err := app.CreateCannedResponse(createReq)
+	require.NoError(t, err)
+	assert.Equal(t, fasthttp.StatusOK, testutil.GetResponseStatusCode(createReq))
+
+	var createResp struct {
+		Data handlers.CannedResponseResponse `json:"data"`
+	}
+	err = json.Unmarshal(testutil.GetResponseBody(createReq), &createResp)
+	require.NoError(t, err)
+	crID := createResp.Data.ID
+	assert.NotEqual(t, uuid.Nil, crID)
+
+	// 2. Get
+	getReq := testutil.NewGETRequest(t)
+	testutil.SetAuthContext(getReq, org.ID, user.ID)
+	testutil.SetPathParam(getReq, "id", crID.String())
+
+	err = app.GetCannedResponse(getReq)
+	require.NoError(t, err)
+	assert.Equal(t, fasthttp.StatusOK, testutil.GetResponseStatusCode(getReq))
+
+	var getResp struct {
+		Data handlers.CannedResponseResponse `json:"data"`
+	}
+	err = json.Unmarshal(testutil.GetResponseBody(getReq), &getResp)
+	require.NoError(t, err)
+	assert.Equal(t, "Lifecycle Response", getResp.Data.Name)
+	assert.Equal(t, "Original lifecycle content", getResp.Data.Content)
+
+	// 3. Update
+	updateReq := testutil.NewJSONRequest(t, map[string]any{
+		"name":      "Lifecycle Response Updated",
+		"shortcut":  "/lifecycle-v2",
+		"content":   "Updated lifecycle content",
+		"category":  "lifecycle-v2",
+		"is_active": true,
+	})
+	testutil.SetAuthContext(updateReq, org.ID, user.ID)
+	testutil.SetPathParam(updateReq, "id", crID.String())
+
+	err = app.UpdateCannedResponse(updateReq)
+	require.NoError(t, err)
+	assert.Equal(t, fasthttp.StatusOK, testutil.GetResponseStatusCode(updateReq))
+
+	var updateResp struct {
+		Data handlers.CannedResponseResponse `json:"data"`
+	}
+	err = json.Unmarshal(testutil.GetResponseBody(updateReq), &updateResp)
+	require.NoError(t, err)
+	assert.Equal(t, "Lifecycle Response Updated", updateResp.Data.Name)
+	assert.Equal(t, "Updated lifecycle content", updateResp.Data.Content)
+	assert.Equal(t, "/lifecycle-v2", updateResp.Data.Shortcut)
+
+	// 4. Increment usage
+	incReq := testutil.NewJSONRequest(t, nil)
+	testutil.SetAuthContext(incReq, org.ID, user.ID)
+	testutil.SetPathParam(incReq, "id", crID.String())
+
+	err = app.IncrementCannedResponseUsage(incReq)
+	require.NoError(t, err)
+	assert.Equal(t, fasthttp.StatusOK, testutil.GetResponseStatusCode(incReq))
+
+	// 5. Verify in list
+	listReq := testutil.NewGETRequest(t)
+	testutil.SetAuthContext(listReq, org.ID, user.ID)
+
+	err = app.ListCannedResponses(listReq)
+	require.NoError(t, err)
+	assert.Equal(t, fasthttp.StatusOK, testutil.GetResponseStatusCode(listReq))
+
+	var listResp struct {
+		Data struct {
+			CannedResponses []handlers.CannedResponseResponse `json:"canned_responses"`
+		} `json:"data"`
+	}
+	err = json.Unmarshal(testutil.GetResponseBody(listReq), &listResp)
+	require.NoError(t, err)
+	require.Len(t, listResp.Data.CannedResponses, 1)
+	assert.Equal(t, "Lifecycle Response Updated", listResp.Data.CannedResponses[0].Name)
+	assert.Equal(t, 1, listResp.Data.CannedResponses[0].UsageCount)
+
+	// 6. Delete
+	delReq := testutil.NewGETRequest(t)
+	testutil.SetAuthContext(delReq, org.ID, user.ID)
+	testutil.SetPathParam(delReq, "id", crID.String())
+
+	err = app.DeleteCannedResponse(delReq)
+	require.NoError(t, err)
+	assert.Equal(t, fasthttp.StatusOK, testutil.GetResponseStatusCode(delReq))
+
+	// 7. Verify gone
+	getReq2 := testutil.NewGETRequest(t)
+	testutil.SetAuthContext(getReq2, org.ID, user.ID)
+	testutil.SetPathParam(getReq2, "id", crID.String())
+
+	err = app.GetCannedResponse(getReq2)
+	require.NoError(t, err)
+	assert.Equal(t, fasthttp.StatusNotFound, testutil.GetResponseStatusCode(getReq2))
 }
 
 // --- IncrementCannedResponseUsage Tests ---
