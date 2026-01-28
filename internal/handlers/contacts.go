@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"mime/multipart"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -83,8 +84,17 @@ func (a *App) ListContacts(r *fastglue.Request) error {
 	userID, _ := r.RequestCtx.UserValue("user_id").(uuid.UUID)
 
 	// Pagination
-	pg := parsePagination(r)
+	page, _ := strconv.Atoi(string(r.RequestCtx.QueryArgs().Peek("page")))
+	limit, _ := strconv.Atoi(string(r.RequestCtx.QueryArgs().Peek("limit")))
 	search := string(r.RequestCtx.QueryArgs().Peek("search"))
+
+	if page < 1 {
+		page = 1
+	}
+	if limit < 1 || limit > 100 {
+		limit = 50
+	}
+	offset := (page - 1) * limit
 
 	var contacts []models.Contact
 	query := a.ScopeToOrg(a.DB, userID, orgID)
@@ -105,7 +115,7 @@ func (a *App) ListContacts(r *fastglue.Request) error {
 	var total int64
 	query.Model(&models.Contact{}).Count(&total)
 
-	if err := query.Offset(pg.Offset).Limit(pg.Limit).Find(&contacts).Error; err != nil {
+	if err := query.Offset(offset).Limit(limit).Find(&contacts).Error; err != nil {
 		a.Log.Error("Failed to list contacts", "error", err)
 		return r.SendErrorEnvelope(fasthttp.StatusInternalServerError, "Failed to list contacts", nil, "")
 	}
@@ -158,8 +168,8 @@ func (a *App) ListContacts(r *fastglue.Request) error {
 	return r.SendEnvelope(map[string]any{
 		"contacts": response,
 		"total":    total,
-		"page":     pg.Page,
-		"limit":    pg.Limit,
+		"page":     page,
+		"limit":    limit,
 	})
 }
 
@@ -168,9 +178,11 @@ func (a *App) ListContacts(r *fastglue.Request) error {
 func (a *App) GetContact(r *fastglue.Request) error {
 	orgID := r.RequestCtx.UserValue("organization_id").(uuid.UUID)
 	userID, _ := r.RequestCtx.UserValue("user_id").(uuid.UUID)
-	contactID, err := parsePathUUID(r, "id", "contact")
+	contactIDStr := r.RequestCtx.UserValue("id").(string)
+
+	contactID, err := uuid.Parse(contactIDStr)
 	if err != nil {
-		return nil
+		return r.SendErrorEnvelope(fasthttp.StatusBadRequest, "Invalid contact ID", nil, "")
 	}
 
 	var contact models.Contact
@@ -233,9 +245,11 @@ func (a *App) GetContact(r *fastglue.Request) error {
 func (a *App) GetMessages(r *fastglue.Request) error {
 	orgID := r.RequestCtx.UserValue("organization_id").(uuid.UUID)
 	userID, _ := r.RequestCtx.UserValue("user_id").(uuid.UUID)
-	contactID, err := parsePathUUID(r, "id", "contact")
+	contactIDStr := r.RequestCtx.UserValue("id").(string)
+
+	contactID, err := uuid.Parse(contactIDStr)
 	if err != nil {
-		return nil
+		return r.SendErrorEnvelope(fasthttp.StatusBadRequest, "Invalid contact ID", nil, "")
 	}
 
 	hasContactsReadPermission := a.HasPermission(userID, models.ResourceContacts, models.ActionRead)
@@ -469,11 +483,11 @@ type SendMessageRequest struct {
 
 // InteractiveContent holds interactive message data
 type InteractiveContent struct {
-	Type       string           `json:"type"`                  // "button", "list", "cta_url"
-	Body       string           `json:"body"`                  // Body text
-	Buttons    []ButtonContent  `json:"buttons,omitempty"`     // For button type
-	ButtonText string           `json:"button_text,omitempty"` // For cta_url type
-	URL        string           `json:"url,omitempty"`         // For cta_url type
+	Type       string          `json:"type"`                  // "button", "list", "cta_url"
+	Body       string          `json:"body"`                  // Body text
+	Buttons    []ButtonContent `json:"buttons,omitempty"`     // For button type
+	ButtonText string          `json:"button_text,omitempty"` // For cta_url type
+	URL        string          `json:"url,omitempty"`         // For cta_url type
 }
 
 // ButtonContent represents a button in interactive messages
@@ -487,9 +501,11 @@ type ButtonContent struct {
 func (a *App) SendMessage(r *fastglue.Request) error {
 	orgID := r.RequestCtx.UserValue("organization_id").(uuid.UUID)
 	userID, _ := r.RequestCtx.UserValue("user_id").(uuid.UUID)
-	contactID, err := parsePathUUID(r, "id", "contact")
+	contactIDStr := r.RequestCtx.UserValue("id").(string)
+
+	contactID, err := uuid.Parse(contactIDStr)
 	if err != nil {
-		return nil
+		return r.SendErrorEnvelope(fasthttp.StatusBadRequest, "Invalid contact ID", nil, "")
 	}
 
 	// Parse request body
@@ -631,15 +647,19 @@ func (a *App) SendMediaMessage(r *fastglue.Request) error {
 		return r.SendErrorEnvelope(fasthttp.StatusBadRequest, "Invalid multipart form", nil, "")
 	}
 
-	// Get contact ID from form
-	contactIDValues := form.Value["contact_id"]
-	if len(contactIDValues) == 0 {
-		return r.SendErrorEnvelope(fasthttp.StatusBadRequest, "contact_id is required", nil, "")
+	// Get contact_id or phone_number (at least one required)
+	contactIDStr := getFormValue(form, "contact_id")
+	phoneNumber := getFormValue(form, "phone_number")
+
+	if contactIDStr == "" && phoneNumber == "" {
+		return r.SendErrorEnvelope(fasthttp.StatusBadRequest, "contact_id or phone_number is required", nil, "")
 	}
-	contactID, err := uuid.Parse(contactIDValues[0])
-	if err != nil {
-		return r.SendErrorEnvelope(fasthttp.StatusBadRequest, "Invalid contact ID", nil, "")
-	}
+
+	// Get optional parameters
+	accountName := getFormValue(form, "account_name")
+	replyToMsgIDStr := getFormValue(form, "reply_to_message_id")
+	mediaID := getFormValue(form, "media_id")
+	customFilename := getFormValue(form, "filename")
 
 	// Get media type (image, document, video, audio)
 	mediaType := "image"
@@ -653,45 +673,44 @@ func (a *App) SendMediaMessage(r *fastglue.Request) error {
 		caption = captionValues[0]
 	}
 
-	// Get uploaded file
-	files := form.File["file"]
-	if len(files) == 0 {
-		return r.SendErrorEnvelope(fasthttp.StatusBadRequest, "file is required", nil, "")
-	}
-	fileHeader := files[0]
-
-	// Open the file
-	file, err := fileHeader.Open()
-	if err != nil {
-		return r.SendErrorEnvelope(fasthttp.StatusBadRequest, "Failed to read file", nil, "")
-	}
-	defer func() { _ = file.Close() }()
-
-	// Read file data
-	fileData, err := io.ReadAll(file)
-	if err != nil {
-		return r.SendErrorEnvelope(fasthttp.StatusInternalServerError, "Failed to read file data", nil, "")
+	// Validate: Audio messages don't support captions
+	if mediaType == "audio" && caption != "" {
+		return r.SendErrorEnvelope(fasthttp.StatusBadRequest, "captions are not supported for audio messages", nil, "")
 	}
 
-	// Get MIME type
-	mimeType := fileHeader.Header.Get("Content-Type")
-	if mimeType == "" {
-		mimeType = "application/octet-stream"
-	}
-
-	// Get contact (users without full read permission can only message their assigned contacts)
+	// Get or create contact
 	var contact models.Contact
-	query := a.DB.Where("id = ? AND organization_id = ?", contactID, orgID)
-	if !a.HasPermission(userID, models.ResourceContacts, models.ActionRead) {
-		query = query.Where("assigned_user_id = ?", userID)
-	}
-	if err := query.First(&contact).Error; err != nil {
-		return r.SendErrorEnvelope(fasthttp.StatusNotFound, "Contact not found", nil, "")
+	if contactIDStr != "" {
+		// Use existing contact by ID
+		contactID, err := uuid.Parse(contactIDStr)
+		if err != nil {
+			return r.SendErrorEnvelope(fasthttp.StatusBadRequest, "Invalid contact ID", nil, "")
+		}
+
+		query := a.DB.Where("id = ? AND organization_id = ?", contactID, orgID)
+		if !a.HasPermission(userID, models.ResourceContacts, models.ActionRead) {
+			query = query.Where("assigned_user_id = ?", userID)
+		}
+		if err := query.First(&contact).Error; err != nil {
+			return r.SendErrorEnvelope(fasthttp.StatusNotFound, "Contact not found", nil, "")
+		}
+	} else {
+		// Find or create contact by phone number
+		contact, err = a.findOrCreateContact(phoneNumber, orgID, accountName)
+		if err != nil {
+			return r.SendErrorEnvelope(fasthttp.StatusInternalServerError, "Failed to get contact", nil, "")
+		}
 	}
 
-	// Get WhatsApp account
+	// Get WhatsApp account (priority: account_name > contact's account > default)
 	var account models.WhatsAppAccount
-	if contact.WhatsAppAccount != "" {
+	if accountName != "" {
+		// Use specified account
+		if err := a.DB.Where("name = ? AND organization_id = ?", accountName, orgID).First(&account).Error; err != nil {
+			return r.SendErrorEnvelope(fasthttp.StatusBadRequest, fmt.Sprintf("WhatsApp account not found: %s", accountName), nil, "")
+		}
+	} else if contact.WhatsAppAccount != "" {
+		// Use contact's assigned account
 		if err := a.DB.Where("name = ? AND organization_id = ?", contact.WhatsAppAccount, orgID).First(&account).Error; err != nil {
 			return r.SendErrorEnvelope(fasthttp.StatusBadRequest, "WhatsApp account not found", nil, "")
 		}
@@ -704,23 +723,91 @@ func (a *App) SendMediaMessage(r *fastglue.Request) error {
 		}
 	}
 
-	// Save file locally first
-	localPath, err := a.saveMediaLocally(fileData, mimeType, fileHeader.Filename)
-	if err != nil {
-		a.Log.Error("Failed to save media locally", "error", err)
-		return r.SendErrorEnvelope(fasthttp.StatusInternalServerError, "Failed to save media", nil, "")
+	// Get reply-to message if specified
+	var replyToMessage *models.Message
+	if replyToMsgIDStr != "" {
+		replyToMsgID, err := uuid.Parse(replyToMsgIDStr)
+		if err == nil {
+			var msg models.Message
+			if err := a.DB.Where("id = ? AND organization_id = ?", replyToMsgID, orgID).First(&msg).Error; err == nil {
+				replyToMessage = &msg
+			} else {
+				return r.SendErrorEnvelope(fasthttp.StatusNotFound, "Reply-to message not found", nil, "")
+			}
+		}
+	}
+
+	// Handle media: either media_id or file upload
+	var fileData []byte
+	var mimeType string
+	var filename string
+	var localPath string
+
+	if mediaID != "" {
+		// Use existing WhatsApp media ID (no upload needed)
+		filename = customFilename
+		if filename == "" {
+			filename = "media_file"
+		}
+	} else {
+		// Upload new file
+		files := form.File["file"]
+		if len(files) == 0 {
+			return r.SendErrorEnvelope(fasthttp.StatusBadRequest, "file or media_id is required", nil, "")
+		}
+		fileHeader := files[0]
+
+		// Validate file size
+		if err := validateFileSize(fileHeader.Size, mediaType); err != nil {
+			return r.SendErrorEnvelope(fasthttp.StatusBadRequest, err.Error(), nil, "")
+		}
+
+		// Open the file
+		file, err := fileHeader.Open()
+		if err != nil {
+			return r.SendErrorEnvelope(fasthttp.StatusBadRequest, "Failed to read file", nil, "")
+		}
+		defer func() { _ = file.Close() }()
+
+		// Read file data
+		fileData, err = io.ReadAll(file)
+		if err != nil {
+			return r.SendErrorEnvelope(fasthttp.StatusInternalServerError, "Failed to read file data", nil, "")
+		}
+
+		// Get MIME type
+		mimeType = fileHeader.Header.Get("Content-Type")
+		if mimeType == "" {
+			mimeType = "application/octet-stream"
+		}
+
+		// Determine filename (custom for documents, or original)
+		if customFilename != "" && mediaType == "document" {
+			filename = customFilename
+		} else {
+			filename = fileHeader.Filename
+		}
+
+		// Save file locally
+		localPath, err = a.saveMediaLocally(fileData, mimeType, filename)
+		if err != nil {
+			a.Log.Error("Failed to save media locally", "error", err)
+			return r.SendErrorEnvelope(fasthttp.StatusInternalServerError, "Failed to save media", nil, "")
+		}
 	}
 
 	// Build and send via unified message sender
 	msgReq := OutgoingMessageRequest{
-		Account:       &account,
-		Contact:       &contact,
-		Type:          models.MessageType(mediaType),
-		MediaData:     fileData,
-		MediaURL:      localPath,
-		MediaMimeType: mimeType,
-		MediaFilename: fileHeader.Filename,
-		Caption:       caption,
+		Account:        &account,
+		Contact:        &contact,
+		Type:           models.MessageType(mediaType),
+		MediaID:        mediaID,
+		MediaData:      fileData,
+		MediaURL:       localPath,
+		MediaMimeType:  mimeType,
+		MediaFilename:  filename,
+		Caption:        caption,
+		ReplyToMessage: replyToMessage,
 	}
 
 	opts := DefaultSendOptions()
@@ -796,6 +883,64 @@ func (a *App) saveMediaLocally(data []byte, mimeType, filename string) (string, 
 	return relativePath, nil
 }
 
+// getFormValue safely gets a form value
+func getFormValue(form *multipart.Form, key string) string {
+	if values := form.Value[key]; len(values) > 0 {
+		return values[0]
+	}
+	return ""
+}
+
+// validateFileSize validates file size against media type limits
+func validateFileSize(size int64, mediaType string) error {
+	limits := map[string]int64{
+		"image":    5 * 1024 * 1024,   // 5 MB
+		"video":    16 * 1024 * 1024,  // 16 MB
+		"audio":    16 * 1024 * 1024,  // 16 MB
+		"document": 100 * 1024 * 1024, // 100 MB
+	}
+
+	limit, ok := limits[mediaType]
+	if !ok {
+		return fmt.Errorf("unsupported media type: %s", mediaType)
+	}
+
+	if size > limit {
+		sizeMB := float64(size) / (1024 * 1024)
+		limitMB := float64(limit) / (1024 * 1024)
+		return fmt.Errorf("file size %.2f MB exceeds limit %.0f MB for %s", sizeMB, limitMB, mediaType)
+	}
+
+	return nil
+}
+
+// findOrCreateContact finds an existing contact by phone number or creates a new one
+func (a *App) findOrCreateContact(phoneNumber string, orgID uuid.UUID, accountName string) (models.Contact, error) {
+	var contact models.Contact
+
+	// Try to find existing contact
+	err := a.DB.Where("phone_number = ? AND organization_id = ?", phoneNumber, orgID).First(&contact).Error
+	if err == nil {
+		// Contact exists
+		return contact, nil
+	}
+
+	// Contact doesn't exist, create new one
+	contact = models.Contact{
+		OrganizationID:  orgID,
+		PhoneNumber:     phoneNumber,
+		ProfileName:     phoneNumber, // Use phone as name initially
+		WhatsAppAccount: accountName,
+	}
+
+	if err := a.DB.Create(&contact).Error; err != nil {
+		return contact, fmt.Errorf("failed to create contact: %w", err)
+	}
+
+	a.Log.Info("Created new contact", "phone", phoneNumber, "contact_id", contact.ID)
+	return contact, nil
+}
+
 // SendReactionRequest represents a request to send a reaction
 type SendReactionRequest struct {
 	Emoji string `json:"emoji"` // Empty string to remove reaction
@@ -805,12 +950,13 @@ type SendReactionRequest struct {
 func (a *App) SendReaction(r *fastglue.Request) error {
 	orgID := r.RequestCtx.UserValue("organization_id").(uuid.UUID)
 	userID, _ := r.RequestCtx.UserValue("user_id").(uuid.UUID)
-	contactID, err := parsePathUUID(r, "id", "contact")
-	if err != nil {
-		return nil
-	}
-
+	contactIDStr := r.RequestCtx.UserValue("id").(string)
 	messageIDStr := r.RequestCtx.UserValue("message_id").(string)
+
+	contactID, err := uuid.Parse(contactIDStr)
+	if err != nil {
+		return r.SendErrorEnvelope(fasthttp.StatusBadRequest, "Invalid contact ID", nil, "")
+	}
 
 	messageID, err := uuid.Parse(messageIDStr)
 	if err != nil {
@@ -989,7 +1135,7 @@ type AssignContactRequest struct {
 // AssignContact assigns a contact to a user (agent)
 // Only users with write permission can assign contacts
 func (a *App) AssignContact(r *fastglue.Request) error {
-	orgID, err := a.getOrgID(r)
+	orgID, err := getOrganizationID(r)
 	if err != nil {
 		return r.SendErrorEnvelope(fasthttp.StatusUnauthorized, "Unauthorized", nil, "")
 	}
@@ -1001,9 +1147,10 @@ func (a *App) AssignContact(r *fastglue.Request) error {
 		return r.SendErrorEnvelope(fasthttp.StatusForbidden, "You do not have permission to assign contacts", nil, "")
 	}
 
-	contactID, err := parsePathUUID(r, "id", "contact")
+	contactIDStr := r.RequestCtx.UserValue("id").(string)
+	contactID, err := uuid.Parse(contactIDStr)
 	if err != nil {
-		return nil
+		return r.SendErrorEnvelope(fasthttp.StatusBadRequest, "Invalid contact ID", nil, "")
 	}
 
 	var req AssignContactRequest
@@ -1012,9 +1159,9 @@ func (a *App) AssignContact(r *fastglue.Request) error {
 	}
 
 	// Get contact
-	contact, err := findByIDAndOrg[models.Contact](a.DB, r, contactID, orgID, "Contact")
-	if err != nil {
-		return nil
+	var contact models.Contact
+	if err := a.DB.Where("id = ? AND organization_id = ?", contactID, orgID).First(&contact).Error; err != nil {
+		return r.SendErrorEnvelope(fasthttp.StatusNotFound, "Contact not found", nil, "")
 	}
 
 	// If assigning to a user, verify they exist in the same org
@@ -1026,7 +1173,7 @@ func (a *App) AssignContact(r *fastglue.Request) error {
 	}
 
 	// Update contact assignment
-	if err := a.DB.Model(contact).Update("assigned_user_id", req.UserID).Error; err != nil {
+	if err := a.DB.Model(&contact).Update("assigned_user_id", req.UserID).Error; err != nil {
 		a.Log.Error("Failed to assign contact", "error", err)
 		return r.SendErrorEnvelope(fasthttp.StatusInternalServerError, "Failed to assign contact", nil, "")
 	}
@@ -1051,9 +1198,11 @@ type ContactSessionDataResponse struct {
 func (a *App) GetContactSessionData(r *fastglue.Request) error {
 	orgID := r.RequestCtx.UserValue("organization_id").(uuid.UUID)
 	userID, _ := r.RequestCtx.UserValue("user_id").(uuid.UUID)
-	contactID, err := parsePathUUID(r, "id", "contact")
+	contactIDStr := r.RequestCtx.UserValue("id").(string)
+
+	contactID, err := uuid.Parse(contactIDStr)
 	if err != nil {
-		return nil
+		return r.SendErrorEnvelope(fasthttp.StatusBadRequest, "Invalid contact ID", nil, "")
 	}
 
 	// Verify contact belongs to org (users without full read permission can only access assigned contacts)
