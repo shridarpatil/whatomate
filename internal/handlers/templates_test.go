@@ -886,6 +886,12 @@ func TestApp_SubmitTemplate_Success(t *testing.T) {
 
 	tmpl := createTestTemplateInDB(t, app, org.ID, account.Name, "submit_me", "DRAFT")
 
+	// Add sample values so the WhatsApp API submission includes required examples
+	tmpl.SampleValues = models.JSONBArray{
+		map[string]interface{}{"component": "body", "index": 1, "value": "John"},
+	}
+	require.NoError(t, app.DB.Save(tmpl).Error)
+
 	req := testutil.NewJSONRequest(t, nil)
 	testutil.SetAuthContext(req, org.ID, user.ID)
 	testutil.SetPathParam(req, "id", tmpl.ID.String())

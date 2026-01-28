@@ -243,9 +243,11 @@ func (a *App) UpdateChatbotSettings(r *fastglue.Request) error {
 
 	// Get or create settings
 	var settings models.ChatbotSettings
+	isNew := false
 	result := a.DB.Where("organization_id = ? AND whats_app_account = ?", orgID, "").First(&settings)
 	if result.Error != nil {
 		// Create new settings
+		isNew = true
 		settings = models.ChatbotSettings{
 			BaseModel:      models.BaseModel{ID: uuid.New()},
 			OrganizationID: orgID,
@@ -373,6 +375,28 @@ func (a *App) UpdateChatbotSettings(r *fastglue.Request) error {
 
 	if err := a.DB.Save(&settings).Error; err != nil {
 		return r.SendErrorEnvelope(fasthttp.StatusInternalServerError, "Failed to save settings", nil, "")
+	}
+
+	// GORM skips false (zero-value) bool fields on INSERT when the column has
+	// a database default of true, so the DB default wins. After creating the
+	// row we explicitly set any default:true bool columns that were requested
+	// as false.
+	if isNew {
+		zeroOverrides := map[string]interface{}{}
+		if req.AllowAutomatedOutsideHours != nil && !*req.AllowAutomatedOutsideHours {
+			zeroOverrides["allow_automated_outside_hours"] = false
+		}
+		if req.AllowAgentQueuePickup != nil && !*req.AllowAgentQueuePickup {
+			zeroOverrides["allow_agent_queue_pickup"] = false
+		}
+		if req.AssignToSameAgent != nil && !*req.AssignToSameAgent {
+			zeroOverrides["assign_to_same_agent"] = false
+		}
+		if len(zeroOverrides) > 0 {
+			if err := a.DB.Model(&settings).Updates(zeroOverrides).Error; err != nil {
+				return r.SendErrorEnvelope(fasthttp.StatusInternalServerError, "Failed to save settings", nil, "")
+			}
+		}
 	}
 
 	// Invalidate caches

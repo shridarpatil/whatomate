@@ -89,7 +89,6 @@ func TestNewRedisQueue(t *testing.T) {
 // --- EnqueueRecipient tests ---
 
 func TestEnqueueRecipient_Single(t *testing.T) {
-	t.Parallel()
 	client := skipIfNoRedis(t)
 	cleanStream(t, client)
 	log := testutil.NopLogger()
@@ -117,7 +116,6 @@ func TestEnqueueRecipient_Single(t *testing.T) {
 }
 
 func TestEnqueueRecipient_SetsEnqueuedAt(t *testing.T) {
-	t.Parallel()
 	client := skipIfNoRedis(t)
 	cleanStream(t, client)
 	log := testutil.NopLogger()
@@ -136,7 +134,6 @@ func TestEnqueueRecipient_SetsEnqueuedAt(t *testing.T) {
 }
 
 func TestEnqueueRecipient_PreservesExistingEnqueuedAt(t *testing.T) {
-	t.Parallel()
 	client := skipIfNoRedis(t)
 	cleanStream(t, client)
 	log := testutil.NopLogger()
@@ -167,7 +164,6 @@ func TestEnqueueRecipient_PreservesExistingEnqueuedAt(t *testing.T) {
 // --- EnqueueRecipients (batch) tests ---
 
 func TestEnqueueRecipients_Batch(t *testing.T) {
-	t.Parallel()
 	client := skipIfNoRedis(t)
 	cleanStream(t, client)
 	log := testutil.NopLogger()
@@ -195,7 +191,6 @@ func TestEnqueueRecipients_Batch(t *testing.T) {
 }
 
 func TestEnqueueRecipients_Empty(t *testing.T) {
-	t.Parallel()
 	client := skipIfNoRedis(t)
 	cleanStream(t, client)
 	log := testutil.NopLogger()
@@ -213,7 +208,6 @@ func TestEnqueueRecipients_Empty(t *testing.T) {
 }
 
 func TestEnqueueRecipients_SetsEnqueuedAt(t *testing.T) {
-	t.Parallel()
 	client := skipIfNoRedis(t)
 	cleanStream(t, client)
 	log := testutil.NopLogger()
@@ -238,7 +232,6 @@ func TestEnqueueRecipients_SetsEnqueuedAt(t *testing.T) {
 // --- Consumer tests ---
 
 func TestNewRedisConsumer(t *testing.T) {
-	t.Parallel()
 	client := skipIfNoRedis(t)
 	cleanStream(t, client)
 	log := testutil.NopLogger()
@@ -252,7 +245,6 @@ func TestNewRedisConsumer(t *testing.T) {
 }
 
 func TestConsume_ProcessesJob(t *testing.T) {
-	t.Parallel()
 	client := skipIfNoRedis(t)
 	cleanStream(t, client)
 	log := testutil.NopLogger()
@@ -296,7 +288,6 @@ func TestConsume_ProcessesJob(t *testing.T) {
 }
 
 func TestConsume_EmptyQueue(t *testing.T) {
-	t.Parallel()
 	client := skipIfNoRedis(t)
 	cleanStream(t, client)
 	log := testutil.NopLogger()
@@ -321,7 +312,6 @@ func TestConsume_EmptyQueue(t *testing.T) {
 }
 
 func TestConsume_MultipleJobs(t *testing.T) {
-	t.Parallel()
 	client := skipIfNoRedis(t)
 	cleanStream(t, client)
 	log := testutil.NopLogger()

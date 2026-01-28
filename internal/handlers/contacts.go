@@ -318,14 +318,18 @@ func (a *App) GetMessages(r *fastglue.Request) error {
 
 	// For chat, we want the most recent messages
 	// Calculate offset from the end for pagination
+	// Preserve the original limit for the response; adjust a query-specific limit
+	// when the remaining messages are fewer than the requested page size.
+	responseLimit := limit
+	queryLimit := limit
 	offset := int(total) - (page * limit)
 	if offset < 0 {
-		limit = limit + offset // Adjust limit if we're on the last page
+		queryLimit = limit + offset // Adjust limit if we're on the last page
 		offset = 0
 	}
 
 	var messages []models.Message
-	if err := msgQuery.Preload("ReplyToMessage").Order("created_at ASC").Offset(offset).Limit(limit).Find(&messages).Error; err != nil {
+	if err := msgQuery.Preload("ReplyToMessage").Order("created_at ASC").Offset(offset).Limit(queryLimit).Find(&messages).Error; err != nil {
 		a.Log.Error("Failed to list messages", "error", err)
 		return r.SendErrorEnvelope(fasthttp.StatusInternalServerError, "Failed to list messages", nil, "")
 	}
@@ -338,7 +342,7 @@ func (a *App) GetMessages(r *fastglue.Request) error {
 		"messages": response,
 		"total":    total,
 		"page":     page,
-		"limit":    limit,
+		"limit":    responseLimit,
 		"has_more": offset > 0,
 	})
 }

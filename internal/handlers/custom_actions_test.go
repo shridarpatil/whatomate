@@ -32,6 +32,13 @@ func createTestCustomAction(t *testing.T, app *handlers.App, orgID uuid.UUID, na
 		DisplayOrder:   displayOrder,
 	}
 	require.NoError(t, app.DB.Create(action).Error)
+
+	// GORM skips zero-value bools on INSERT, so the DB default (true) takes effect.
+	// Explicitly UPDATE the column when the caller wants isActive=false.
+	if !isActive {
+		require.NoError(t, app.DB.Model(action).Update("is_active", false).Error)
+		action.IsActive = false
+	}
 	return action
 }
 
