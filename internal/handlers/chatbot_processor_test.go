@@ -1,24 +1,41 @@
 package handlers
 
 import (
+	"encoding/json"
+	"net/http"
+	"net/http/httptest"
 	"testing"
 	"time"
 
 	"github.com/google/uuid"
 	"github.com/shridarpatil/whatomate/internal/models"
+	"github.com/shridarpatil/whatomate/pkg/whatsapp"
 	"github.com/shridarpatil/whatomate/test/testutil"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
 // newProcessorTestApp creates a minimal App suitable for chatbot processor tests.
-// It connects to the test database and Redis, and uses a no-op logger.
+// It connects to the test database and Redis, provides a mock WhatsApp client,
+// and uses a no-op logger.
 func newProcessorTestApp(t *testing.T) *App {
 	t.Helper()
 	db := testutil.SetupTestDB(t)
+	log := testutil.NopLogger()
+
+	// Mock WhatsApp API server that accepts all requests.
+	waServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		_ = json.NewEncoder(w).Encode(map[string]interface{}{
+			"messages": []map[string]string{{"id": "wamid.mock_" + uuid.New().String()[:8]}},
+		})
+	}))
+	t.Cleanup(waServer.Close)
+
 	app := &App{
-		DB:  db,
-		Log: testutil.NopLogger(),
+		DB:       db,
+		Log:      log,
+		WhatsApp: whatsapp.NewWithBaseURL(log, waServer.URL),
 	}
 	if rdb := testutil.SetupTestRedis(t); rdb != nil {
 		app.Redis = rdb
@@ -260,9 +277,11 @@ func TestMatchKeywordRules_DisabledRuleIgnored(t *testing.T) {
 		ResponseType:    models.ResponseTypeText,
 		ResponseContent: models.JSONB{"body": "Should not match"},
 		Priority:        10,
-		IsEnabled:       false,
+		IsEnabled:       true, // Create as enabled first
 	}
 	require.NoError(t, app.DB.Create(rule).Error)
+	// Explicitly disable: GORM skips zero-value bools with default:true on INSERT.
+	require.NoError(t, app.DB.Model(rule).Update("is_enabled", false).Error)
 
 	_, matched := app.matchKeywordRules(org.ID, account.Name, "disabled")
 	assert.False(t, matched)

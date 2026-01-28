@@ -2726,9 +2726,11 @@ func TestApp_GetKeywordRule_ResponseFields(t *testing.T) {
 			ResponseType:    models.ResponseTypeTemplate,
 			ResponseContent: models.JSONB{"template_name": "welcome_tpl", "lang": "en"},
 			Priority:        42,
-			IsEnabled:       false,
+			IsEnabled:       true, // Create as enabled first
 		}
 		require.NoError(t, app.DB.Create(rule).Error)
+		// Explicitly disable: GORM skips zero-value bools with default:true on INSERT.
+		require.NoError(t, app.DB.Model(rule).Update("is_enabled", false).Error)
 
 		req := testutil.NewGETRequest(t)
 		testutil.SetAuthContext(req, org.ID, user.ID)
