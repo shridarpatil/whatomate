@@ -9,22 +9,10 @@ import { ScrollArea } from '@/components/ui/scroll-area'
 import { Separator } from '@/components/ui/separator'
 import { Switch } from '@/components/ui/switch'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
-import {
-  Command,
-  CommandEmpty,
-  CommandGroup,
-  CommandInput,
-  CommandItem,
-  CommandList
-} from '@/components/ui/command'
+import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '@/components/ui/command'
+import { PageHeader } from '@/components/shared'
 import { toast } from 'vue-sonner'
 import { Bot, Loader2, Brain, Plus, X, Clock, AlertTriangle, UserPlus, MessageSquare, Users } from 'lucide-vue-next'
 import { usersService, chatbotService } from '@/services/api'
@@ -375,20 +363,7 @@ function removeEscalationUser(userId: string) {
 
 <template>
   <div class="flex flex-col h-full bg-[#0a0a0b] light:bg-gray-50">
-    <!-- Header -->
-    <header class="border-b border-white/[0.08] light:border-gray-200 bg-[#0a0a0b]/95 light:bg-white/95 backdrop-blur">
-      <div class="flex h-16 items-center px-6">
-        <div class="h-8 w-8 rounded-lg bg-gradient-to-br from-purple-500 to-pink-600 flex items-center justify-center mr-3 shadow-lg shadow-purple-500/20">
-          <Bot class="h-4 w-4 text-white" />
-        </div>
-        <div class="flex-1">
-          <h1 class="text-xl font-semibold text-white light:text-gray-900">Chatbot Settings</h1>
-          <p class="text-sm text-white/50 light:text-gray-500">Configure chatbot behavior, agents, and automation</p>
-        </div>
-      </div>
-    </header>
-
-    <!-- Content -->
+    <PageHeader title="Chatbot Settings" subtitle="Configure chatbot behavior, agents, and automation" :icon="Bot" icon-gradient="bg-gradient-to-br from-purple-500 to-pink-600 shadow-purple-500/20" />
     <ScrollArea class="flex-1">
       <div class="p-6 space-y-4 max-w-4xl mx-auto">
         <Tabs default-value="messages" class="w-full">

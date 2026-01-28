@@ -7,13 +7,8 @@ import { ScrollArea } from '@/components/ui/scroll-area'
 import { Separator } from '@/components/ui/separator'
 import { Switch } from '@/components/ui/switch'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { PageHeader } from '@/components/shared'
 import { toast } from 'vue-sonner'
 import { Settings, Bell, Loader2 } from 'lucide-vue-next'
 import { usersService, organizationService } from '@/services/api'
@@ -106,20 +101,7 @@ async function saveNotificationSettings() {
 
 <template>
   <div class="flex flex-col h-full bg-[#0a0a0b] light:bg-gray-50">
-    <!-- Header -->
-    <header class="border-b border-white/[0.08] light:border-gray-200 bg-[#0a0a0b]/95 light:bg-white/95 backdrop-blur">
-      <div class="flex h-16 items-center px-6">
-        <div class="h-8 w-8 rounded-lg bg-gradient-to-br from-gray-500 to-gray-600 flex items-center justify-center mr-3 shadow-lg shadow-gray-500/20">
-          <Settings class="h-4 w-4 text-white" />
-        </div>
-        <div class="flex-1">
-          <h1 class="text-xl font-semibold text-white light:text-gray-900">Settings</h1>
-          <p class="text-sm text-white/50 light:text-gray-500">Manage your organization settings</p>
-        </div>
-      </div>
-    </header>
-
-    <!-- Content -->
+    <PageHeader title="Settings" subtitle="Manage your organization settings" :icon="Settings" icon-gradient="bg-gradient-to-br from-gray-500 to-gray-600 shadow-gray-500/20" />
     <ScrollArea class="flex-1">
       <div class="p-6 space-y-4 max-w-4xl mx-auto">
         <Tabs default-value="general" class="w-full">

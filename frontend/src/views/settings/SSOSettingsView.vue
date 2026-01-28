@@ -7,30 +7,13 @@ import { Label } from '@/components/ui/label'
 import { Badge } from '@/components/ui/badge'
 import { Switch } from '@/components/ui/switch'
 import { ScrollArea } from '@/components/ui/scroll-area'
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle
-} from '@/components/ui/card'
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle
-} from '@/components/ui/dialog'
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue
-} from '@/components/ui/select'
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { PageHeader } from '@/components/shared'
 import { toast } from 'vue-sonner'
-import { ShieldCheck, Settings2, ExternalLink, Info, Copy, Check } from 'lucide-vue-next'
+import { ShieldCheck, Settings2, ExternalLink, Info, Copy, Check, Loader2 } from 'lucide-vue-next'
+import { getErrorMessage } from '@/lib/api-utils'
 
 interface SSOProvider {
   provider: string
@@ -130,8 +113,8 @@ async function fetchProviders() {
   try {
     const response = await api.get('/settings/sso')
     providers.value = response.data.data || []
-  } catch (error: any) {
-    toast.error(error.response?.data?.message || 'Failed to load SSO settings')
+  } catch (error) {
+    toast.error(getErrorMessage(error, 'Failed to load SSO settings'))
   } finally {
     isLoading.value = false
   }
@@ -203,8 +186,8 @@ async function saveProvider() {
     await fetchProviders()
     isEditDialogOpen.value = false
     toast.success('SSO provider saved successfully')
-  } catch (error: any) {
-    toast.error(error.response?.data?.message || 'Failed to save SSO provider')
+  } catch (error) {
+    toast.error(getErrorMessage(error, 'Failed to save SSO provider'))
   } finally {
     isSaving.value = false
   }
@@ -215,8 +198,8 @@ async function deleteProvider(providerKey: string) {
     await api.delete(`/settings/sso/${providerKey}`)
     await fetchProviders()
     toast.success('SSO provider removed')
-  } catch (error: any) {
-    toast.error(error.response?.data?.message || 'Failed to remove SSO provider')
+  } catch (error) {
+    toast.error(getErrorMessage(error, 'Failed to remove SSO provider'))
   }
 }
 
@@ -231,18 +214,7 @@ onMounted(() => {
 
 <template>
   <div class="flex flex-col h-full bg-[#0a0a0b] light:bg-gray-50">
-    <!-- Header -->
-    <header class="border-b border-white/[0.08] light:border-gray-200 bg-[#0a0a0b]/95 light:bg-white/95 backdrop-blur">
-      <div class="flex h-16 items-center px-6">
-        <div class="h-8 w-8 rounded-lg bg-gradient-to-br from-emerald-500 to-teal-600 flex items-center justify-center mr-3 shadow-lg shadow-emerald-500/20">
-          <ShieldCheck class="h-4 w-4 text-white" />
-        </div>
-        <div class="flex-1">
-          <h1 class="text-xl font-semibold text-white light:text-gray-900">Single Sign-On (SSO)</h1>
-          <p class="text-sm text-white/50 light:text-gray-500">Configure SSO providers for your organization</p>
-        </div>
-      </div>
-    </header>
+    <PageHeader title="Single Sign-On (SSO)" subtitle="Configure SSO providers for your organization" :icon="ShieldCheck" icon-gradient="bg-gradient-to-br from-emerald-500 to-teal-600 shadow-emerald-500/20" />
 
     <ScrollArea class="flex-1">
       <div class="p-6">
@@ -488,7 +460,7 @@ onMounted(() => {
             Cancel
           </Button>
           <Button size="sm" @click="saveProvider" :disabled="isSaving">
-            {{ isSaving ? 'Saving...' : 'Save' }}
+            <Loader2 v-if="isSaving" class="h-4 w-4 mr-2 animate-spin" />Save
           </Button>
         </DialogFooter>
       </DialogContent>
