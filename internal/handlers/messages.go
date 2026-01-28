@@ -3,12 +3,12 @@ package handlers
 import (
 	"context"
 	"fmt"
+	"regexp"
 	"strings"
 	"time"
 
 	"github.com/google/uuid"
 	"github.com/shridarpatil/whatomate/internal/models"
-	"github.com/shridarpatil/whatomate/internal/templateutil"
 	"github.com/shridarpatil/whatomate/internal/websocket"
 	"github.com/shridarpatil/whatomate/pkg/whatsapp"
 	"github.com/valyala/fasthttp"
@@ -144,7 +144,10 @@ func (a *App) SendOutgoingMessage(ctx context.Context, req OutgoingMessageReques
 
 		switch req.Type {
 		case models.MessageTypeText:
-			return a.WhatsApp.SendTextMessage(sendCtx, waAccount, req.Contact.PhoneNumber, req.Content, replyToMsgID)
+			if replyToMsgID != "" {
+				return a.WhatsApp.SendTextMessage(sendCtx, waAccount, req.Contact.PhoneNumber, req.Content, replyToMsgID)
+			}
+			return a.WhatsApp.SendTextMessage(sendCtx, waAccount, req.Contact.PhoneNumber, req.Content)
 
 		case models.MessageTypeImage, models.MessageTypeVideo, models.MessageTypeAudio, models.MessageTypeDocument:
 			// Upload media if MediaData is provided and MediaID is not set
@@ -271,7 +274,7 @@ func (a *App) createOutgoingMessage(req OutgoingMessageRequest, opts MessageSend
 	case models.MessageTypeTemplate:
 		if req.Template != nil {
 			// Store actual rendered content instead of just template name
-			content := templateutil.ReplaceWithStringParams(req.Template.BodyContent, req.BodyParams)
+			content := replaceTemplateParams(req.Template.BodyContent, req.BodyParams)
 			if content == "" {
 				content = fmt.Sprintf("[Template: %s]", req.Template.DisplayName)
 			}
@@ -489,17 +492,34 @@ func (a *App) getMessagePreview(req OutgoingMessageRequest) string {
 
 // SendTemplateMessageRequest represents the request to send a template message
 type SendTemplateMessageRequest struct {
-	ContactID      string            `json:"contact_id"`
-	PhoneNumber    string            `json:"phone_number"`    // Alternative to contact_id - send to phone directly
-	TemplateName   string            `json:"template_name"`   // Template name
-	TemplateID     string            `json:"template_id"`     // Alternative: template UUID
-	TemplateParams map[string]string `json:"template_params"` // Named or positional params
-	AccountName    string            `json:"account_name"`    // Optional: specific WhatsApp account
+	ContactID      string                    `json:"contact_id"`
+	PhoneNumber    string                    `json:"phone_number"`            // Alternative to contact_id - send to phone directly
+	TemplateName   string                    `json:"template_name"`           // Template name
+	TemplateID     string                    `json:"template_id"`             // Alternative: template UUID
+	TemplateParams map[string]string         `json:"template_params"`         // Named or positional params
+	Header         *TemplateHeaderRequest    `json:"header,omitempty"`        // Header parameters
+	ButtonParams   []TemplateButtonParameter `json:"button_params,omitempty"` // Button parameters
+	AccountName    string                    `json:"account_name"`            // Optional: specific WhatsApp account
+}
+
+// TemplateHeaderRequest represents header parameters for template message
+type TemplateHeaderRequest struct {
+	Type     string `json:"type"`               // text, image, video, document
+	Value    string `json:"value,omitempty"`    // For type: text
+	Link     string `json:"link,omitempty"`     // For type: image|video|document
+	Filename string `json:"filename,omitempty"` // For type: document
+}
+
+// TemplateButtonParameter represents button parameters for template message
+// Button index is determined by array position (first item = button 0, second = button 1, etc.)
+type TemplateButtonParameter struct {
+	Type  string `json:"type"`  // url or copy_code
+	Value string `json:"value"` // Dynamic URL suffix or coupon code
 }
 
 // SendTemplateMessage sends a template message to a contact or phone number
 func (a *App) SendTemplateMessage(r *fastglue.Request) error {
-	orgID, err := a.getOrgID(r)
+	orgID, err := getOrganizationID(r)
 	if err != nil {
 		return r.SendErrorEnvelope(fasthttp.StatusUnauthorized, "Unauthorized", nil, "")
 	}
@@ -527,11 +547,9 @@ func (a *App) SendTemplateMessage(r *fastglue.Request) error {
 		if err != nil {
 			return r.SendErrorEnvelope(fasthttp.StatusBadRequest, "Invalid template_id", nil, "")
 		}
-		t, err := findByIDAndOrg[models.Template](a.DB, r, templateID, orgID, "Template")
-		if err != nil {
-			return nil
+		if err := a.DB.Where("id = ? AND organization_id = ?", templateID, orgID).First(&template).Error; err != nil {
+			return r.SendErrorEnvelope(fasthttp.StatusNotFound, "Template not found", nil, "")
 		}
-		template = *t
 	} else {
 		if err := a.DB.Where("name = ? AND organization_id = ?", req.TemplateName, orgID).First(&template).Error; err != nil {
 			return r.SendErrorEnvelope(fasthttp.StatusNotFound, "Template not found", nil, "")
@@ -552,11 +570,11 @@ func (a *App) SendTemplateMessage(r *fastglue.Request) error {
 		if err != nil {
 			return r.SendErrorEnvelope(fasthttp.StatusBadRequest, "Invalid contact_id", nil, "")
 		}
-		c, err := findByIDAndOrg[models.Contact](a.DB, r, cID, orgID, "Contact")
-		if err != nil {
-			return nil
+		var c models.Contact
+		if err := a.DB.Where("id = ? AND organization_id = ?", cID, orgID).First(&c).Error; err != nil {
+			return r.SendErrorEnvelope(fasthttp.StatusNotFound, "Contact not found", nil, "")
 		}
-		contact = c
+		contact = &c
 		phoneNumber = c.PhoneNumber
 	} else {
 		// Find or create contact from phone number
@@ -602,9 +620,23 @@ func (a *App) SendTemplateMessage(r *fastglue.Request) error {
 		}
 	}
 
+	// Validate header if provided
+	if req.Header != nil {
+		if err := validateTemplateHeader(req.Header, &template); err != nil {
+			return r.SendErrorEnvelope(fasthttp.StatusBadRequest, err.Error(), nil, "")
+		}
+	}
+
+	// Validate button parameters if provided
+	if len(req.ButtonParams) > 0 {
+		if err := validateTemplateButtons(req.ButtonParams, &template); err != nil {
+			return r.SendErrorEnvelope(fasthttp.StatusBadRequest, err.Error(), nil, "")
+		}
+	}
+
 	// Extract parameter names and resolve values
-	paramNames := templateutil.ExtParamNames(template.BodyContent)
-	bodyParams := templateutil.ResolveParamsFromMap(paramNames, req.TemplateParams)
+	paramNames := ExtractParamNamesFromContent(template.BodyContent)
+	bodyParams := ResolveParams(paramNames, req.TemplateParams)
 
 	// Validate that all required parameters are provided
 	if len(paramNames) > 0 {
@@ -621,29 +653,344 @@ func (a *App) SendTemplateMessage(r *fastglue.Request) error {
 		}
 	}
 
-	// Send using unified message sender
-	msgReq := OutgoingMessageRequest{
-		Account:    &account,
-		Contact:    contact,
-		Type:       models.MessageTypeTemplate,
-		Template:   &template,
-		BodyParams: req.TemplateParams,
-	}
+	// Build components for template message
+	components := buildTemplateComponents(req.Header, req.TemplateParams, req.ButtonParams, &template)
 
-	opts := DefaultSendOptions()
-	opts.SentByUserID = &userID
-
+	// Send using WhatsApp client directly with components
+	waAccount := a.toWhatsAppAccount(&account)
 	ctx := context.Background()
-	message, err := a.SendOutgoingMessage(ctx, msgReq, opts)
+
+	msgID, err := a.WhatsApp.SendTemplateMessageWithComponents(
+		ctx,
+		waAccount,
+		phoneNumber,
+		template.Name,
+		template.Language,
+		components,
+	)
+
 	if err != nil {
+		a.Log.Error("Failed to send template message", "error", err)
 		return r.SendErrorEnvelope(fasthttp.StatusInternalServerError, "Failed to send template message", nil, "")
 	}
 
+	// Create message record
+	message := &models.Message{
+		BaseModel:         models.BaseModel{ID: uuid.New()},
+		OrganizationID:    orgID,
+		WhatsAppAccount:   account.Name,
+		ContactID:         contact.ID,
+		Direction:         models.DirectionOutgoing,
+		MessageType:       models.MessageTypeTemplate,
+		Status:            models.MessageStatusSent,
+		WhatsAppMessageID: msgID,
+		TemplateName:      template.Name,
+		Content:           replaceTemplateParams(template.BodyContent, req.TemplateParams),
+		SentByUserID:      &userID,
+	}
+
+	if err := a.DB.Create(message).Error; err != nil {
+		a.Log.Error("Failed to create message record", "error", err)
+	}
+
+	// Broadcast via WebSocket
+	if a.WSHub != nil {
+		a.WSHub.BroadcastToOrg(orgID, websocket.WSMessage{
+			Type: websocket.TypeNewMessage,
+			Payload: map[string]interface{}{
+				"message": message,
+				"contact": contact,
+			},
+		})
+	}
+
+	// Update contact last message
+	now := time.Now()
+	preview := fmt.Sprintf("[Template: %s]", template.DisplayName)
+	if template.DisplayName == "" {
+		preview = fmt.Sprintf("[Template: %s]", template.Name)
+	}
+	a.DB.Model(contact).Updates(map[string]interface{}{
+		"last_message_at":      &now,
+		"last_message_preview": preview,
+	})
+
 	return r.SendEnvelope(map[string]any{
 		"message_id":    message.ID,
-		"status":        "pending",
+		"status":        "sent",
 		"template_name": template.Name,
 		"phone_number":  phoneNumber,
 	})
 }
 
+// ExtractParamNamesFromContent extracts parameter names from template content
+// Supports both positional ({{1}}, {{2}}) and named ({{name}}, {{order_id}}) parameters
+var templateParamPattern = regexp.MustCompile(`\{\{([^}]+)\}\}`)
+
+func ExtractParamNamesFromContent(content string) []string {
+	matches := templateParamPattern.FindAllStringSubmatch(content, -1)
+	if len(matches) == 0 {
+		return nil
+	}
+
+	seen := make(map[string]bool)
+	var names []string
+	for _, match := range matches {
+		if len(match) > 1 {
+			name := strings.TrimSpace(match[1])
+			if name != "" && !seen[name] {
+				seen[name] = true
+				names = append(names, name)
+			}
+		}
+	}
+	return names
+}
+
+// validateTemplateHeader validates header parameters against template definition
+func validateTemplateHeader(header *TemplateHeaderRequest, template *models.Template) error {
+	if header == nil {
+		return nil
+	}
+
+	// Normalize header type
+	headerType := strings.ToUpper(header.Type)
+
+	// Check if template has a header
+	if template.HeaderType == "" {
+		return fmt.Errorf("template does not have a header, but header was provided")
+	}
+
+	// Validate header type matches template
+	if headerType != template.HeaderType {
+		return fmt.Errorf("header type mismatch: template expects '%s', got '%s'",
+			template.HeaderType, headerType)
+	}
+
+	// Validate required fields based on type
+	switch headerType {
+	case "TEXT":
+		if header.Value == "" {
+			return fmt.Errorf("header value is required for text headers")
+		}
+	case "IMAGE", "VIDEO", "DOCUMENT":
+		if header.Link == "" {
+			return fmt.Errorf("header link is required for %s headers", strings.ToLower(headerType))
+		}
+		// For document, filename is optional but recommended
+	default:
+		return fmt.Errorf("invalid header type: %s", header.Type)
+	}
+
+	return nil
+}
+
+// validateTemplateButtons validates button parameters against template definition
+func validateTemplateButtons(buttonParams []TemplateButtonParameter, template *models.Template) error {
+	if len(buttonParams) == 0 {
+		return nil
+	}
+
+	// Check if template has buttons
+	if len(template.Buttons) == 0 {
+		return fmt.Errorf("template does not have buttons, but button parameters were provided")
+	}
+
+	// Validate each button parameter (index is array position)
+	for i, btnParam := range buttonParams {
+		// Check button index is valid (based on array position)
+		if i >= len(template.Buttons) {
+			return fmt.Errorf("too many button parameters: provided %d, template has %d buttons", len(buttonParams), len(template.Buttons))
+		}
+
+		// Get the button definition from template using array index
+		btnDef, ok := template.Buttons[i].(map[string]interface{})
+		if !ok {
+			return fmt.Errorf("invalid button definition at index %d", i)
+		}
+
+		btnType, _ := btnDef["type"].(string)
+		btnType = strings.ToUpper(btnType)
+
+		// Validate parameter type matches button type
+		paramType := strings.ToLower(btnParam.Type)
+		switch paramType {
+		case "url":
+			if btnType != "URL" {
+				return fmt.Errorf("button at position %d is not a URL button (type: %s)", i, btnType)
+			}
+			// Check if URL has dynamic parameter
+			btnURL, _ := btnDef["url"].(string)
+			if !strings.Contains(btnURL, "{{") {
+				return fmt.Errorf("button at position %d does not have a dynamic URL parameter", i)
+			}
+		case "copy_code":
+			if btnType != "COPY_CODE" {
+				return fmt.Errorf("button at position %d is not a COPY_CODE button (type: %s)", i, btnType)
+			}
+		default:
+			return fmt.Errorf("invalid button parameter type: %s (must be 'url' or 'copy_code')", btnParam.Type)
+		}
+
+		// Validate value is provided
+		if btnParam.Value == "" {
+			return fmt.Errorf("button parameter value is required for button at position %d", i)
+		}
+	}
+
+	return nil
+}
+
+// buildTemplateComponents builds WhatsApp API components array
+func buildTemplateComponents(header *TemplateHeaderRequest, bodyParams map[string]string, buttonParams []TemplateButtonParameter, template *models.Template) []map[string]interface{} {
+	components := []map[string]interface{}{}
+
+	// Add header component if provided
+	if header != nil {
+		headerComp := map[string]interface{}{
+			"type": "header",
+		}
+
+		headerType := strings.ToUpper(header.Type)
+		switch headerType {
+		case "TEXT":
+			headerComp["parameters"] = []map[string]interface{}{
+				{
+					"type": "text",
+					"text": header.Value,
+				},
+			}
+		case "IMAGE":
+			headerComp["parameters"] = []map[string]interface{}{
+				{
+					"type": "image",
+					"image": map[string]string{
+						"link": header.Link,
+					},
+				},
+			}
+		case "VIDEO":
+			headerComp["parameters"] = []map[string]interface{}{
+				{
+					"type": "video",
+					"video": map[string]string{
+						"link": header.Link,
+					},
+				},
+			}
+		case "DOCUMENT":
+			docParam := map[string]interface{}{
+				"type": "document",
+				"document": map[string]interface{}{
+					"link": header.Link,
+				},
+			}
+			if header.Filename != "" {
+				docParam["document"].(map[string]interface{})["filename"] = header.Filename
+			}
+			headerComp["parameters"] = []map[string]interface{}{docParam}
+		}
+
+		components = append(components, headerComp)
+	}
+
+	// Add body component if parameters exist
+	if len(bodyParams) > 0 {
+		paramNames := ExtractParamNamesFromContent(template.BodyContent)
+		resolvedParams := ResolveParams(paramNames, bodyParams)
+
+		bodyParamsArray := []map[string]interface{}{}
+		for _, value := range resolvedParams {
+			bodyParamsArray = append(bodyParamsArray, map[string]interface{}{
+				"type": "text",
+				"text": value,
+			})
+		}
+
+		components = append(components, map[string]interface{}{
+			"type":       "body",
+			"parameters": bodyParamsArray,
+		})
+	}
+
+	// Add button components if parameters provided
+	if len(buttonParams) > 0 {
+		for i, btnParam := range buttonParams {
+			btnComp := map[string]interface{}{
+				"type":     "button",
+				"sub_type": btnParam.Type,
+				"index":    fmt.Sprintf("%d", i), // Use array position as index
+			}
+
+			switch strings.ToLower(btnParam.Type) {
+			case "url":
+				btnComp["parameters"] = []map[string]interface{}{
+					{
+						"type": "text",
+						"text": btnParam.Value, // Dynamic URL suffix
+					},
+				}
+			case "copy_code":
+				btnComp["parameters"] = []map[string]interface{}{
+					{
+						"type":        "coupon_code",
+						"coupon_code": btnParam.Value,
+					},
+				}
+			}
+
+			components = append(components, btnComp)
+		}
+	}
+
+	return components
+}
+
+// replaceTemplateParams replaces {{1}}, {{2}}, {{name}}, etc. placeholders with actual values
+func replaceTemplateParams(content string, params map[string]string) string {
+	if content == "" || len(params) == 0 {
+		return content
+	}
+
+	result := content
+	// Extract param names from content to replace placeholders
+	paramNames := ExtractParamNamesFromContent(content)
+	for i, name := range paramNames {
+		// Try to get value by name first (works for both named and positional)
+		if val, ok := params[name]; ok {
+			result = strings.ReplaceAll(result, fmt.Sprintf("{{%s}}", name), val)
+			continue
+		}
+		// Fall back to positional key (1-indexed)
+		key := fmt.Sprintf("%d", i+1)
+		if val, ok := params[key]; ok {
+			result = strings.ReplaceAll(result, fmt.Sprintf("{{%s}}", name), val)
+		}
+	}
+	return result
+}
+
+// ResolveParams resolves both positional and named parameters to ordered values
+func ResolveParams(paramNames []string, params map[string]string) []string {
+	if len(paramNames) == 0 || len(params) == 0 {
+		return nil
+	}
+
+	result := make([]string, len(paramNames))
+	for i, name := range paramNames {
+		// Try named key first
+		if val, ok := params[name]; ok {
+			result[i] = val
+			continue
+		}
+		// Fall back to positional key (1-indexed)
+		key := fmt.Sprintf("%d", i+1)
+		if val, ok := params[key]; ok {
+			result[i] = val
+			continue
+		}
+		// Default to empty string
+		result[i] = ""
+	}
+	return result
+}
