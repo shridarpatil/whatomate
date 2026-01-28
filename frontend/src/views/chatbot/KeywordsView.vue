@@ -39,17 +39,11 @@ import {
   TooltipContent,
   TooltipTrigger,
 } from '@/components/ui/tooltip'
-import {
-  Breadcrumb,
-  BreadcrumbItem,
-  BreadcrumbLink,
-  BreadcrumbList,
-  BreadcrumbPage,
-  BreadcrumbSeparator,
-} from '@/components/ui/breadcrumb'
 import { chatbotService } from '@/services/api'
 import { toast } from 'vue-sonner'
-import { Plus, Pencil, Trash2, Key, Search, ArrowLeft } from 'lucide-vue-next'
+import { PageHeader, SearchInput } from '@/components/shared'
+import { getErrorMessage } from '@/lib/api-utils'
+import { Plus, Pencil, Trash2, Key, Search } from 'lucide-vue-next'
 
 interface ButtonItem {
   id: string
@@ -184,8 +178,8 @@ async function saveRule() {
 
     isDialogOpen.value = false
     await fetchRules()
-  } catch (error) {
-    toast.error('Failed to save keyword rule')
+  } catch (error: any) {
+    toast.error(getErrorMessage(error, 'Failed to save keyword rule'))
   } finally {
     isSubmitting.value = false
   }
@@ -205,8 +199,8 @@ async function confirmDeleteRule() {
     deleteDialogOpen.value = false
     ruleToDelete.value = null
     await fetchRules()
-  } catch (error) {
-    toast.error('Failed to delete keyword rule')
+  } catch (error: any) {
+    toast.error(getErrorMessage(error, 'Failed to delete keyword rule'))
   }
 }
 
@@ -215,8 +209,8 @@ async function _toggleRule(rule: KeywordRule) {
     await chatbotService.updateKeyword(rule.id, { enabled: !rule.enabled })
     rule.enabled = !rule.enabled
     toast.success(rule.enabled ? 'Rule enabled' : 'Rule disabled')
-  } catch (error) {
-    toast.error('Failed to toggle rule')
+  } catch (error: any) {
+    toast.error(getErrorMessage(error, 'Failed to toggle rule'))
   }
 }
 void _toggleRule // Reserved for future use
@@ -232,31 +226,14 @@ const filteredRules = computed(() => {
 
 <template>
   <div class="flex flex-col h-full bg-[#0a0a0b] light:bg-gray-50">
-    <!-- Header -->
-    <header class="border-b border-white/[0.08] light:border-gray-200 bg-[#0a0a0b]/95 light:bg-white/95 backdrop-blur">
-      <div class="flex h-16 items-center px-6">
-        <RouterLink to="/chatbot">
-          <Button variant="ghost" size="icon" class="mr-3">
-            <ArrowLeft class="h-5 w-5" />
-          </Button>
-        </RouterLink>
-        <div class="h-8 w-8 rounded-lg bg-gradient-to-br from-blue-500 to-cyan-600 flex items-center justify-center mr-3 shadow-lg shadow-blue-500/20">
-          <Key class="h-4 w-4 text-white" />
-        </div>
-        <div class="flex-1">
-          <h1 class="text-xl font-semibold text-white light:text-gray-900">Keyword Rules</h1>
-          <Breadcrumb>
-            <BreadcrumbList>
-              <BreadcrumbItem>
-                <BreadcrumbLink href="/chatbot">Chatbot</BreadcrumbLink>
-              </BreadcrumbItem>
-              <BreadcrumbSeparator />
-              <BreadcrumbItem>
-                <BreadcrumbPage>Keywords</BreadcrumbPage>
-              </BreadcrumbItem>
-            </BreadcrumbList>
-          </Breadcrumb>
-        </div>
+    <PageHeader
+      title="Keyword Rules"
+      :icon="Key"
+      icon-gradient="bg-gradient-to-br from-blue-500 to-cyan-600 shadow-blue-500/20"
+      back-link="/chatbot"
+      :breadcrumbs="[{ label: 'Chatbot', href: '/chatbot' }, { label: 'Keywords' }]"
+    >
+      <template #actions>
         <Dialog v-model:open="isDialogOpen">
           <DialogTrigger as-child>
             <Button variant="outline" size="sm" @click="openCreateDialog">
@@ -392,15 +369,12 @@ const filteredRules = computed(() => {
             </DialogFooter>
           </DialogContent>
         </Dialog>
-      </div>
-    </header>
+      </template>
+    </PageHeader>
 
     <!-- Search -->
     <div class="p-4 border-b border-white/[0.08] light:border-gray-200">
-      <div class="relative max-w-md">
-        <Search class="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-white/40 light:text-gray-400" />
-        <Input v-model="searchQuery" placeholder="Search keywords..." class="pl-9" />
-      </div>
+      <SearchInput v-model="searchQuery" placeholder="Search keywords..." class="max-w-md" />
     </div>
 
     <!-- Rules List -->

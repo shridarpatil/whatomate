@@ -20,17 +20,11 @@ import {
   TooltipContent,
   TooltipTrigger,
 } from '@/components/ui/tooltip'
-import {
-  Breadcrumb,
-  BreadcrumbItem,
-  BreadcrumbLink,
-  BreadcrumbList,
-  BreadcrumbPage,
-  BreadcrumbSeparator,
-} from '@/components/ui/breadcrumb'
 import { chatbotService } from '@/services/api'
 import { toast } from 'vue-sonner'
-import { Plus, Pencil, Trash2, Workflow, ArrowLeft, Play, Pause } from 'lucide-vue-next'
+import { PageHeader } from '@/components/shared'
+import { getErrorMessage } from '@/lib/api-utils'
+import { Plus, Pencil, Trash2, Workflow, Play, Pause } from 'lucide-vue-next'
 
 interface ChatbotFlow {
   id: string
@@ -79,8 +73,8 @@ async function toggleFlow(flow: ChatbotFlow) {
     await chatbotService.updateFlow(flow.id, { enabled: !flow.enabled })
     flow.enabled = !flow.enabled
     toast.success(flow.enabled ? 'Flow enabled' : 'Flow disabled')
-  } catch (error) {
-    toast.error('Failed to toggle flow')
+  } catch (error: any) {
+    toast.error(getErrorMessage(error, 'Failed to toggle flow'))
   }
 }
 
@@ -98,45 +92,28 @@ async function confirmDeleteFlow() {
     deleteDialogOpen.value = false
     flowToDelete.value = null
     await fetchFlows()
-  } catch (error) {
-    toast.error('Failed to delete flow')
+  } catch (error: any) {
+    toast.error(getErrorMessage(error, 'Failed to delete flow'))
   }
 }
 </script>
 
 <template>
   <div class="flex flex-col h-full bg-[#0a0a0b] light:bg-gray-50">
-    <!-- Header -->
-    <header class="border-b border-white/[0.08] light:border-gray-200 bg-[#0a0a0b]/95 light:bg-white/95 backdrop-blur">
-      <div class="flex h-16 items-center px-6">
-        <RouterLink to="/chatbot">
-          <Button variant="ghost" size="icon" class="mr-3">
-            <ArrowLeft class="h-5 w-5" />
-          </Button>
-        </RouterLink>
-        <div class="h-8 w-8 rounded-lg bg-gradient-to-br from-purple-500 to-pink-600 flex items-center justify-center mr-3 shadow-lg shadow-purple-500/20">
-          <Workflow class="h-4 w-4 text-white" />
-        </div>
-        <div class="flex-1">
-          <h1 class="text-xl font-semibold text-white light:text-gray-900">Conversation Flows</h1>
-          <Breadcrumb>
-            <BreadcrumbList>
-              <BreadcrumbItem>
-                <BreadcrumbLink href="/chatbot">Chatbot</BreadcrumbLink>
-              </BreadcrumbItem>
-              <BreadcrumbSeparator />
-              <BreadcrumbItem>
-                <BreadcrumbPage>Flows</BreadcrumbPage>
-              </BreadcrumbItem>
-            </BreadcrumbList>
-          </Breadcrumb>
-        </div>
+    <PageHeader
+      title="Conversation Flows"
+      :icon="Workflow"
+      icon-gradient="bg-gradient-to-br from-purple-500 to-pink-600 shadow-purple-500/20"
+      back-link="/chatbot"
+      :breadcrumbs="[{ label: 'Chatbot', href: '/chatbot' }, { label: 'Flows' }]"
+    >
+      <template #actions>
         <Button variant="outline" size="sm" @click="createFlow">
           <Plus class="h-4 w-4 mr-2" />
           Create Flow
         </Button>
-      </div>
-    </header>
+      </template>
+    </PageHeader>
 
     <!-- Flows List -->
     <ScrollArea class="flex-1">

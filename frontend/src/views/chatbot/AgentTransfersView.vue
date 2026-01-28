@@ -6,52 +6,18 @@ import { Badge } from '@/components/ui/badge'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from '@/components/ui/table'
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from '@/components/ui/dialog'
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select'
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipTrigger,
-} from '@/components/ui/tooltip'
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
+import { PageHeader } from '@/components/shared'
 import { chatbotService, usersService, teamsService, type Team } from '@/services/api'
 import { useTransfersStore, type AgentTransfer, getSLAStatus } from '@/stores/transfers'
 import { useAuthStore } from '@/stores/auth'
 import { toast } from 'vue-sonner'
 import { useRouter } from 'vue-router'
-import {
-  UserX,
-  Play,
-  MessageSquare,
-  User,
-  Clock,
-  Loader2,
-  Users,
-  UserPlus,
-  AlertTriangle,
-  CheckCircle2,
-  XCircle
-} from 'lucide-vue-next'
+import { UserX, Play, MessageSquare, User, Clock, Loader2, Users, UserPlus, AlertTriangle, CheckCircle2, XCircle } from 'lucide-vue-next'
+import { getErrorMessage } from '@/lib/api-utils'
 
 const router = useRouter()
 const transfersStore = useTransfersStore()
@@ -191,8 +157,8 @@ async function pickNextTransfer() {
     } else {
       toast.info('No transfers in queue')
     }
-  } catch (error: any) {
-    toast.error(error.response?.data?.message || 'Failed to pick transfer')
+  } catch (error) {
+    toast.error(getErrorMessage(error, 'Failed to pick transfer'))
   } finally {
     isPicking.value = false
   }
@@ -206,8 +172,8 @@ async function resumeTransfer(transfer: AgentTransfer) {
       description: 'Chatbot is now active for this contact'
     })
     await fetchTransfers()
-  } catch (error: any) {
-    toast.error(error.response?.data?.message || 'Failed to resume transfer')
+  } catch (error) {
+    toast.error(getErrorMessage(error, 'Failed to resume transfer'))
   } finally {
     isResuming.value = false
   }
@@ -248,8 +214,8 @@ async function assignTransfer() {
     toast.success('Transfer updated')
     assignDialogOpen.value = false
     await fetchTransfers()
-  } catch (error: any) {
-    toast.error(error.response?.data?.message || 'Failed to assign transfer')
+  } catch (error) {
+    toast.error(getErrorMessage(error, 'Failed to assign transfer'))
   } finally {
     isAssigning.value = false
   }
@@ -308,19 +274,9 @@ function formatTimeRemaining(deadline: string | undefined): string {
 
 <template>
   <div class="flex flex-col h-full bg-[#0a0a0b] light:bg-gray-50">
-    <!-- Header -->
-    <header class="border-b border-white/[0.08] light:border-gray-200 bg-[#0a0a0b]/95 light:bg-white/95 backdrop-blur">
-      <div class="flex h-16 items-center px-6">
-        <div class="h-8 w-8 rounded-lg bg-gradient-to-br from-red-500 to-orange-600 flex items-center justify-center mr-3 shadow-lg shadow-red-500/20">
-          <UserX class="h-4 w-4 text-white" />
-        </div>
-        <div class="flex-1">
-          <h1 class="text-xl font-semibold text-white light:text-gray-900">Transfers</h1>
-          <p class="text-sm text-white/50 light:text-gray-500">Manage agent transfers and queue</p>
-        </div>
-
-        <!-- Queue pickup for agents -->
-        <div v-if="!isAdminOrManager" class="flex items-center gap-4">
+    <PageHeader title="Transfers" subtitle="Manage agent transfers and queue" :icon="UserX" icon-gradient="bg-gradient-to-br from-red-500 to-orange-600 shadow-red-500/20">
+      <template v-if="!isAdminOrManager" #actions>
+        <div class="flex items-center gap-4">
           <div class="text-sm text-white/50 light:text-gray-500">
             <Users class="h-4 w-4 inline mr-1" />
             {{ transfersStore.queueCount }} waiting in queue
@@ -331,8 +287,8 @@ function formatTimeRemaining(deadline: string | undefined): string {
             Pick Next
           </Button>
         </div>
-      </div>
-    </header>
+      </template>
+    </PageHeader>
 
     <!-- Content -->
     <ScrollArea class="flex-1">

@@ -32,17 +32,11 @@ import {
   TooltipContent,
   TooltipTrigger,
 } from '@/components/ui/tooltip'
-import {
-  Breadcrumb,
-  BreadcrumbItem,
-  BreadcrumbLink,
-  BreadcrumbList,
-  BreadcrumbPage,
-  BreadcrumbSeparator,
-} from '@/components/ui/breadcrumb'
 import { api } from '@/services/api'
 import { useOrganizationsStore } from '@/stores/organizations'
 import { toast } from 'vue-sonner'
+import { PageHeader } from '@/components/shared'
+import { getErrorMessage } from '@/lib/api-utils'
 import {
   Plus,
   Pencil,
@@ -50,7 +44,6 @@ import {
   Phone,
   Check,
   X,
-  ArrowLeft,
   RefreshCw,
   Loader2,
   Copy,
@@ -207,8 +200,7 @@ async function saveAccount() {
     isDialogOpen.value = false
     await fetchAccounts()
   } catch (error: any) {
-    const message = error.response?.data?.message || 'Failed to save account'
-    toast.error(message)
+    toast.error(getErrorMessage(error, 'Failed to save account'))
   } finally {
     isSubmitting.value = false
   }
@@ -229,8 +221,7 @@ async function confirmDelete() {
     accountToDelete.value = null
     await fetchAccounts()
   } catch (error: any) {
-    const message = error.response?.data?.message || 'Failed to delete account'
-    toast.error(message)
+    toast.error(getErrorMessage(error, 'Failed to delete account'))
   }
 }
 
@@ -246,7 +237,7 @@ async function testConnection(account: WhatsAppAccount) {
       toast.error('Connection failed: ' + (response.data.data.error || 'Unknown error'))
     }
   } catch (error: any) {
-    const message = error.response?.data?.message || 'Connection test failed'
+    const message = getErrorMessage(error, 'Connection test failed')
     testResults.value[account.id] = { success: false, error: message }
     toast.error(message)
   } finally {
@@ -279,37 +270,20 @@ const webhookUrl = window.location.origin + basePath + '/api/webhook'
 
 <template>
   <div class="flex flex-col h-full bg-[#0a0a0b] light:bg-gray-50">
-    <!-- Header -->
-    <header class="border-b border-white/[0.08] light:border-gray-200 bg-[#0a0a0b]/95 light:bg-white/95 backdrop-blur">
-      <div class="flex h-16 items-center px-6">
-        <RouterLink to="/settings">
-          <Button variant="ghost" size="icon" class="mr-3">
-            <ArrowLeft class="h-5 w-5" />
-          </Button>
-        </RouterLink>
-        <div class="h-8 w-8 rounded-lg bg-gradient-to-br from-emerald-500 to-green-600 flex items-center justify-center mr-3 shadow-lg shadow-emerald-500/20">
-          <Phone class="h-4 w-4 text-white" />
-        </div>
-        <div class="flex-1">
-          <h1 class="text-xl font-semibold text-white light:text-gray-900">WhatsApp Accounts</h1>
-          <Breadcrumb>
-            <BreadcrumbList>
-              <BreadcrumbItem>
-                <BreadcrumbLink href="/settings">Settings</BreadcrumbLink>
-              </BreadcrumbItem>
-              <BreadcrumbSeparator />
-              <BreadcrumbItem>
-                <BreadcrumbPage>Accounts</BreadcrumbPage>
-              </BreadcrumbItem>
-            </BreadcrumbList>
-          </Breadcrumb>
-        </div>
+    <PageHeader
+      title="WhatsApp Accounts"
+      :icon="Phone"
+      icon-gradient="bg-gradient-to-br from-emerald-500 to-green-600 shadow-emerald-500/20"
+      back-link="/settings"
+      :breadcrumbs="[{ label: 'Settings', href: '/settings' }, { label: 'Accounts' }]"
+    >
+      <template #actions>
         <Button variant="outline" size="sm" @click="openCreateDialog">
           <Plus class="h-4 w-4 mr-2" />
           Add Account
         </Button>
-      </div>
-    </header>
+      </template>
+    </PageHeader>
 
     <!-- Loading State -->
     <ScrollArea v-if="isLoading" class="flex-1">

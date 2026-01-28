@@ -44,6 +44,8 @@ import { campaignsService, templatesService, accountsService } from '@/services/
 import { wsService } from '@/services/websocket'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { toast } from 'vue-sonner'
+import { PageHeader } from '@/components/shared'
+import { getErrorMessage } from '@/lib/api-utils'
 import {
   Plus,
   Pencil,
@@ -341,8 +343,7 @@ async function uploadCampaignMedia() {
     }
     clearMediaFile()
   } catch (error: any) {
-    const message = error.response?.data?.message || 'Failed to upload media'
-    toast.error(message)
+    toast.error(getErrorMessage(error, 'Failed to upload media'))
   } finally {
     isUploadingMedia.value = false
   }
@@ -517,8 +518,7 @@ async function createCampaign() {
     resetForm()
     await fetchCampaigns()
   } catch (error: any) {
-    const message = error.response?.data?.message || 'Failed to create campaign'
-    toast.error(message)
+    toast.error(getErrorMessage(error, 'Failed to create campaign'))
   } finally {
     isCreating.value = false
   }
@@ -569,8 +569,7 @@ async function saveCampaign() {
       resetForm()
       await fetchCampaigns()
     } catch (error: any) {
-      const message = error.response?.data?.message || 'Failed to update campaign'
-      toast.error(message)
+      toast.error(getErrorMessage(error, 'Failed to update campaign'))
     } finally {
       isCreating.value = false
     }
@@ -586,8 +585,7 @@ async function startCampaign(campaign: Campaign) {
     toast.success('Campaign started')
     await fetchCampaigns()
   } catch (error: any) {
-    const message = error.response?.data?.message || 'Failed to start campaign'
-    toast.error(message)
+    toast.error(getErrorMessage(error, 'Failed to start campaign'))
   }
 }
 
@@ -597,8 +595,7 @@ async function pauseCampaign(campaign: Campaign) {
     toast.success('Campaign paused')
     await fetchCampaigns()
   } catch (error: any) {
-    const message = error.response?.data?.message || 'Failed to pause campaign'
-    toast.error(message)
+    toast.error(getErrorMessage(error, 'Failed to pause campaign'))
   }
 }
 
@@ -617,8 +614,7 @@ async function confirmCancelCampaign() {
     campaignToCancel.value = null
     await fetchCampaigns()
   } catch (error: any) {
-    const message = error.response?.data?.message || 'Failed to cancel campaign'
-    toast.error(message)
+    toast.error(getErrorMessage(error, 'Failed to cancel campaign'))
   }
 }
 
@@ -629,8 +625,7 @@ async function retryFailed(campaign: Campaign) {
     toast.success(`Retrying ${result?.retry_count || 0} failed message(s)`)
     await fetchCampaigns()
   } catch (error: any) {
-    const message = error.response?.data?.message || 'Failed to retry failed messages'
-    toast.error(message)
+    toast.error(getErrorMessage(error, 'Failed to retry failed messages'))
   }
 }
 
@@ -649,8 +644,7 @@ async function confirmDeleteCampaign() {
     campaignToDelete.value = null
     await fetchCampaigns()
   } catch (error: any) {
-    const message = error.response?.data?.message || 'Failed to delete campaign'
-    toast.error(message)
+    toast.error(getErrorMessage(error, 'Failed to delete campaign'))
   }
 }
 
@@ -805,8 +799,7 @@ async function deleteRecipient(recipientId: string) {
       selectedCampaign.value = updated
     }
   } catch (error: any) {
-    const message = error.response?.data?.message || 'Failed to delete recipient'
-    toast.error(message)
+    toast.error(getErrorMessage(error, 'Failed to delete recipient'))
   } finally {
     deletingRecipientId.value = null
   }
@@ -855,8 +848,7 @@ async function addRecipients() {
     recipientsInput.value = ''
     await fetchCampaigns()
   } catch (error: any) {
-    const message = error.response?.data?.message || 'Failed to add recipients'
-    toast.error(message)
+    toast.error(getErrorMessage(error, 'Failed to add recipients'))
   } finally {
     isAddingRecipients.value = false
   }
@@ -1186,8 +1178,7 @@ async function addRecipientsFromCSV() {
     csvValidation.value = null
     await fetchCampaigns()
   } catch (error: any) {
-    const message = error.response?.data?.message || 'Failed to add recipients'
-    toast.error(message)
+    toast.error(getErrorMessage(error, 'Failed to add recipients'))
   } finally {
     isAddingRecipients.value = false
   }
@@ -1196,17 +1187,13 @@ async function addRecipientsFromCSV() {
 
 <template>
   <div class="flex flex-col h-full bg-[#0a0a0b] light:bg-gray-50">
-    <!-- Header -->
-    <header class="border-b border-white/[0.08] light:border-gray-200 bg-[#0a0a0b]/95 light:bg-white/95 backdrop-blur">
-      <div class="flex h-16 items-center px-6">
-        <div class="h-8 w-8 rounded-lg bg-gradient-to-br from-rose-500 to-pink-600 flex items-center justify-center mr-3 shadow-lg shadow-rose-500/20">
-          <Megaphone class="h-4 w-4 text-white" />
-        </div>
-        <div class="flex-1">
-          <h1 class="text-xl font-semibold text-white light:text-gray-900">Campaigns</h1>
-          <p class="text-sm text-white/50 light:text-gray-500">Manage bulk messaging campaigns</p>
-        </div>
-
+    <PageHeader
+      title="Campaigns"
+      description="Manage bulk messaging campaigns"
+      :icon="Megaphone"
+      icon-gradient="bg-gradient-to-br from-rose-500 to-pink-600 shadow-rose-500/20"
+    >
+      <template #actions>
         <!-- Filters -->
         <div class="flex items-center gap-2 mr-4">
           <!-- Status Filter -->
@@ -1321,8 +1308,8 @@ async function addRecipientsFromCSV() {
             </DialogFooter>
           </DialogContent>
         </Dialog>
-      </div>
-    </header>
+      </template>
+    </PageHeader>
 
     <!-- Campaigns List -->
     <ScrollArea class="flex-1">

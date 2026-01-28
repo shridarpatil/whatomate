@@ -39,17 +39,11 @@ import {
   TooltipContent,
   TooltipTrigger,
 } from '@/components/ui/tooltip'
-import {
-  Breadcrumb,
-  BreadcrumbItem,
-  BreadcrumbLink,
-  BreadcrumbList,
-  BreadcrumbPage,
-  BreadcrumbSeparator,
-} from '@/components/ui/breadcrumb'
 import { chatbotService } from '@/services/api'
 import { toast } from 'vue-sonner'
-import { Plus, Pencil, Trash2, Sparkles, ArrowLeft, FileText, Globe } from 'lucide-vue-next'
+import { PageHeader } from '@/components/shared'
+import { getErrorMessage } from '@/lib/api-utils'
+import { Plus, Pencil, Trash2, Sparkles, FileText, Globe } from 'lucide-vue-next'
 
 interface ApiConfig {
   url: string
@@ -199,8 +193,8 @@ async function saveContext() {
 
     isDialogOpen.value = false
     await fetchContexts()
-  } catch (error) {
-    toast.error('Failed to save AI context')
+  } catch (error: any) {
+    toast.error(getErrorMessage(error, 'Failed to save AI context'))
   } finally {
     isSubmitting.value = false
   }
@@ -220,39 +214,22 @@ async function confirmDeleteContext() {
     deleteDialogOpen.value = false
     contextToDelete.value = null
     await fetchContexts()
-  } catch (error) {
-    toast.error('Failed to delete AI context')
+  } catch (error: any) {
+    toast.error(getErrorMessage(error, 'Failed to delete AI context'))
   }
 }
 </script>
 
 <template>
   <div class="flex flex-col h-full bg-[#0a0a0b] light:bg-gray-50">
-    <!-- Header -->
-    <header class="border-b border-white/[0.08] light:border-gray-200 bg-[#0a0a0b]/95 light:bg-white/95 backdrop-blur">
-      <div class="flex h-16 items-center px-6">
-        <RouterLink to="/chatbot">
-          <Button variant="ghost" size="icon" class="mr-3">
-            <ArrowLeft class="h-5 w-5" />
-          </Button>
-        </RouterLink>
-        <div class="h-8 w-8 rounded-lg bg-gradient-to-br from-orange-500 to-amber-600 flex items-center justify-center mr-3 shadow-lg shadow-orange-500/20">
-          <Sparkles class="h-4 w-4 text-white" />
-        </div>
-        <div class="flex-1">
-          <h1 class="text-xl font-semibold text-white light:text-gray-900">AI Contexts</h1>
-          <Breadcrumb>
-            <BreadcrumbList>
-              <BreadcrumbItem>
-                <BreadcrumbLink href="/chatbot">Chatbot</BreadcrumbLink>
-              </BreadcrumbItem>
-              <BreadcrumbSeparator />
-              <BreadcrumbItem>
-                <BreadcrumbPage>AI Contexts</BreadcrumbPage>
-              </BreadcrumbItem>
-            </BreadcrumbList>
-          </Breadcrumb>
-        </div>
+    <PageHeader
+      title="AI Contexts"
+      :icon="Sparkles"
+      icon-gradient="bg-gradient-to-br from-orange-500 to-amber-600 shadow-orange-500/20"
+      back-link="/chatbot"
+      :breadcrumbs="[{ label: 'Chatbot', href: '/chatbot' }, { label: 'AI Contexts' }]"
+    >
+      <template #actions>
         <Dialog v-model:open="isDialogOpen">
           <DialogTrigger as-child>
             <Button variant="outline" size="sm" @click="openCreateDialog">
@@ -403,8 +380,8 @@ async function confirmDeleteContext() {
             </DialogFooter>
           </DialogContent>
         </Dialog>
-      </div>
-    </header>
+      </template>
+    </PageHeader>
 
     <!-- Contexts List -->
     <ScrollArea class="flex-1">
