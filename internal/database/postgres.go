@@ -99,7 +99,7 @@ func GetMigrationModels() []MigrationModel {
 		{"CatalogProduct", &models.CatalogProduct{}},
 
 		// Dashboard
-		{"DashboardWidget", &models.DashboardWidget{}},
+		{"Widget", &models.Widget{}},
 	}
 }
 
@@ -180,10 +180,10 @@ func RunMigrationWithProgress(db *gorm.DB, adminCfg *config.DefaultAdminConfig) 
 	}
 	currentStep++
 
-	// Seed default dashboard widgets for all organizations
+	// Seed default widgets for all organizations
 	printProgress(currentStep, totalSteps)
-	if err := SeedDefaultDashboardWidgets(silentDB); err != nil {
-		fmt.Printf("\n  \033[31m✗ Failed to seed dashboard widgets\033[0m\n\n")
+	if err := SeedDefaultWidgets(silentDB); err != nil {
+		fmt.Printf("\n  \033[31m✗ Failed to seed widgets\033[0m\n\n")
 		return err
 	}
 
@@ -575,8 +575,8 @@ func SeedSystemRolesForOrg(db *gorm.DB, orgID uuid.UUID) error {
 	return nil
 }
 
-// SeedDefaultDashboardWidgets creates default dashboard widgets for all organizations
-func SeedDefaultDashboardWidgets(db *gorm.DB) error {
+// SeedDefaultWidgets creates default dashboard widgets for all organizations
+func SeedDefaultWidgets(db *gorm.DB) error {
 	// Find the super admin user (admin@admin.com)
 	var superAdmin models.User
 	if err := db.Where("email = ?", "admin@admin.com").First(&superAdmin).Error; err != nil {
@@ -595,30 +595,38 @@ func SeedDefaultDashboardWidgets(db *gorm.DB) error {
 		Name         string
 		Description  string
 		DataSource   string
+		DisplayType  string
 		Color        string
+		Config       models.JSONB
 		DisplayOrder int
+		GridX        int
+		GridY        int
+		GridW        int
+		GridH        int
 	}{
-		{"Total Messages", "Total number of messages sent and received", "messages", "blue", 1},
-		{"Active Contacts", "Number of contacts with recent activity", "contacts", "green", 2},
-		{"Chatbot Sessions", "Active chatbot conversation sessions", "sessions", "purple", 3},
-		{"Total Campaigns", "Number of bulk message campaigns", "campaigns", "orange", 4},
+		{"Total Messages", "Total number of messages sent and received", "messages", "number", "blue", nil, 1, 0, 0, 3, 3},
+		{"Active Contacts", "Number of contacts with recent activity", "contacts", "number", "green", nil, 2, 3, 0, 3, 3},
+		{"Chatbot Sessions", "Active chatbot conversation sessions", "sessions", "number", "purple", nil, 3, 6, 0, 3, 3},
+		{"Total Campaigns", "Number of bulk message campaigns", "campaigns", "number", "orange", nil, 4, 9, 0, 3, 3},
+		{"Recent Messages", "Latest conversations from your contacts", "messages", "table", "", nil, 5, 0, 3, 6, 8},
+		{"Quick Actions", "Common tasks and shortcuts", "shortcuts", "shortcuts", "", models.JSONB{"shortcuts": []interface{}{"chat", "campaigns", "templates", "chatbot"}}, 6, 6, 3, 6, 8},
 	}
 
 	for _, org := range orgs {
-		// Check if org already has widgets
-		var widgetCount int64
-		if err := db.Model(&models.DashboardWidget{}).Where("organization_id = ?", org.ID).Count(&widgetCount).Error; err != nil {
-			continue
-		}
-
-		// Skip if widgets already exist
-		if widgetCount > 0 {
-			continue
-		}
-
 		// Create default widgets owned by super admin
 		for _, wd := range defaultWidgetsData {
-			widget := models.DashboardWidget{
+			// Skip if a widget with this name already exists for the org
+			var exists int64
+			db.Model(&models.Widget{}).Where("organization_id = ? AND name = ?", org.ID, wd.Name).Count(&exists)
+			if exists > 0 {
+				continue
+			}
+
+			displayType := wd.DisplayType
+			if displayType == "" {
+				displayType = "number"
+			}
+			widget := models.Widget{
 				BaseModel:      models.BaseModel{ID: uuid.New()},
 				OrganizationID: org.ID,
 				UserID:         &superAdmin.ID,
@@ -626,11 +634,16 @@ func SeedDefaultDashboardWidgets(db *gorm.DB) error {
 				Description:    wd.Description,
 				DataSource:     wd.DataSource,
 				Metric:         "count",
-				DisplayType:    "number",
-				ShowChange:     true,
+				DisplayType:    displayType,
+				ShowChange:     displayType == "number",
 				Color:          wd.Color,
 				Size:           "small",
+				Config:         wd.Config,
 				DisplayOrder:   wd.DisplayOrder,
+				GridX:          wd.GridX,
+				GridY:          wd.GridY,
+				GridW:          wd.GridW,
+				GridH:          wd.GridH,
 				IsShared:       true,
 				IsDefault:      true,
 			}

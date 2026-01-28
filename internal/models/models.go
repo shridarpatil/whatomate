@@ -400,8 +400,8 @@ func (WhatsAppFlow) TableName() string {
 	return "whatsapp_flows"
 }
 
-// DashboardWidget represents a customizable analytics widget on the dashboard
-type DashboardWidget struct {
+// Widget represents a customizable analytics widget on the dashboard
+type Widget struct {
 	BaseModel
 	OrganizationID uuid.UUID  `gorm:"type:uuid;index;not null" json:"organization_id"`
 	UserID         *uuid.UUID `gorm:"type:uuid;index" json:"user_id"` // Creator of the widget (nil for system defaults)
@@ -418,6 +418,11 @@ type DashboardWidget struct {
 	Color          string     `gorm:"size:20" json:"color"`                         // Widget color theme
 	Size           string     `gorm:"size:10;default:'small'" json:"size"`          // small, medium, large
 	DisplayOrder   int        `gorm:"default:0" json:"display_order"`
+	GridX          int        `gorm:"default:0" json:"grid_x"`
+	GridY          int        `gorm:"default:0" json:"grid_y"`
+	GridW          int        `gorm:"default:0" json:"grid_w"`
+	GridH          int        `gorm:"default:0" json:"grid_h"`
+	Config         JSONB      `gorm:"type:jsonb;default:'{}'" json:"config"`
 	IsShared       bool       `gorm:"default:false" json:"is_shared"` // Visible to entire org or just creator
 	IsDefault      bool       `gorm:"default:false" json:"is_default"` // System default widget
 
@@ -426,8 +431,8 @@ type DashboardWidget struct {
 	User         *User         `gorm:"foreignKey:UserID" json:"user,omitempty"`
 }
 
-func (DashboardWidget) TableName() string {
-	return "dashboard_widgets"
+func (Widget) TableName() string {
+	return "widgets"
 }
 
 // WidgetFilter represents a filter condition for a dashboard widget

@@ -41,15 +41,16 @@ test.describe('Dashboard', () => {
     await expect(page.locator('button[role="combobox"]').first()).toContainText('Last 7 days')
   })
 
-  test('should display recent messages section', async ({ page }) => {
-    await expect(page.getByRole('heading', { name: 'Recent Messages' })).toBeVisible()
+  test('should display recent messages widget', async ({ page }) => {
+    // Widget names are displayed in spans, not headings
+    await expect(page.getByText('Recent Messages', { exact: true })).toBeVisible({ timeout: 15000 })
     await expect(page.getByText('Latest conversations from your contacts')).toBeVisible()
   })
 
-  test('should display quick actions section', async ({ page }) => {
+  test('should display quick actions widget', async ({ page }) => {
     const main = page.locator('main')
-    await expect(main.locator('text=Quick Actions')).toBeVisible()
-    await expect(main.locator('text=Common tasks and shortcuts')).toBeVisible()
+    await expect(main.getByText('Quick Actions', { exact: true })).toBeVisible({ timeout: 15000 })
+    await expect(main.getByText('Common tasks and shortcuts')).toBeVisible()
 
     // Check for quick action links - scope to main to avoid sidebar duplicates
     await expect(main.locator('a[href="/chat"]')).toBeVisible()

@@ -116,7 +116,7 @@ func runMigrations(db *gorm.DB) error {
 		// Canned responses
 		&models.CannedResponse{},
 		// Dashboard
-		&models.DashboardWidget{},
+		&models.Widget{},
 	)
 }
 
@@ -125,7 +125,7 @@ func runMigrations(db *gorm.DB) error {
 func cleanupTables(db *gorm.DB) {
 	tables := []string{
 		// Dashboard tables
-		"dashboard_widgets",
+		"widgets",
 		// Catalog tables
 		"catalog_products",
 		"catalogs",
@@ -174,7 +174,7 @@ func cleanupTables(db *gorm.DB) {
 // TruncateTables truncates all tables (PostgreSQL only, faster than DELETE).
 func TruncateTables(db *gorm.DB) {
 	tables := []string{
-		"dashboard_widgets",
+		"widgets",
 		"catalog_products",
 		"catalogs",
 		"canned_responses",

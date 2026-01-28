@@ -26,6 +26,7 @@
     "class-variance-authority": "^0.7.0",
     "clsx": "^2.1.0",
     "dompurify": "^3.3.1",
+    "grid-layout-plus": "^1.1.1",
     "lucide-vue-next": "^0.303.0",
     "pinia": "^2.1.7",
     "reka-ui": "^2.7.0",
