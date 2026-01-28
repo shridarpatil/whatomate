@@ -1,7 +1,6 @@
 import { defineStore } from 'pinia'
+import { ref } from 'vue'
 import { teamsService, type Team, type TeamMember } from '@/services/api'
-import { createCrudStore } from './createCrudStore'
-import { getErrorMessage } from '@/lib/api-utils'
 
 export interface CreateTeamData {
   name: string
@@ -16,42 +15,80 @@ export interface UpdateTeamData {
   is_active?: boolean
 }
 
-// Create the base CRUD store
-const useBaseCrudStore = createCrudStore<Team, CreateTeamData, UpdateTeamData>(
-  'teams-crud',
-  {
-    list: () => teamsService.list(),
-    create: (data) => teamsService.create(data),
-    update: (id, data) => teamsService.update(id, data),
-    delete: (id) => teamsService.delete(id),
-  },
-  {
-    unwrapList: (response: any) => (response.data as any).data?.teams || response.data?.teams || [],
-    unwrapSingle: (response: any) => (response.data as any).data?.team || response.data?.team,
-    entityName: 'Team',
-  }
-)
-
-// Extend with team-specific methods
 export const useTeamsStore = defineStore('teams', () => {
-  const baseCrud = useBaseCrudStore()
+  const teams = ref<Team[]>([])
+  const loading = ref(false)
+  const error = ref<string | null>(null)
 
-  // Re-export base CRUD functionality
-  const teams = baseCrud.items
-  const loading = baseCrud.loading
-  const error = baseCrud.error
-  const fetchTeams = baseCrud.fetchItems
-  const createTeam = baseCrud.createItem
-  const updateTeam = baseCrud.updateItem
-  const deleteTeam = baseCrud.deleteItem
+  async function fetchTeams(): Promise<void> {
+    loading.value = true
+    error.value = null
+    try {
+      const response = await teamsService.list()
+      teams.value = (response.data as any).data?.teams || response.data?.teams || []
+    } catch (err: any) {
+      error.value = err.response?.data?.message || 'Failed to fetch teams'
+      throw err
+    } finally {
+      loading.value = false
+    }
+  }
 
-  // Team member management methods
+  async function createTeam(data: CreateTeamData): Promise<Team> {
+    loading.value = true
+    error.value = null
+    try {
+      const response = await teamsService.create(data)
+      const newTeam = (response.data as any).data?.team || response.data?.team
+      teams.value.unshift(newTeam)
+      return newTeam
+    } catch (err: any) {
+      error.value = err.response?.data?.message || 'Failed to create team'
+      throw err
+    } finally {
+      loading.value = false
+    }
+  }
+
+  async function updateTeam(id: string, data: UpdateTeamData): Promise<Team> {
+    loading.value = true
+    error.value = null
+    try {
+      const response = await teamsService.update(id, data)
+      const updatedTeam = (response.data as any).data?.team || response.data?.team
+      const index = teams.value.findIndex(t => t.id === id)
+      if (index !== -1) {
+        teams.value[index] = updatedTeam
+      }
+      return updatedTeam
+    } catch (err: any) {
+      error.value = err.response?.data?.message || 'Failed to update team'
+      throw err
+    } finally {
+      loading.value = false
+    }
+  }
+
+  async function deleteTeam(id: string): Promise<void> {
+    loading.value = true
+    error.value = null
+    try {
+      await teamsService.delete(id)
+      teams.value = teams.value.filter(t => t.id !== id)
+    } catch (err: any) {
+      error.value = err.response?.data?.message || 'Failed to delete team'
+      throw err
+    } finally {
+      loading.value = false
+    }
+  }
+
   async function fetchTeamMembers(teamId: string): Promise<TeamMember[]> {
     try {
       const response = await teamsService.listMembers(teamId)
       return (response.data as any).data?.members || response.data?.members || []
     } catch (err: any) {
-      error.value = getErrorMessage(err, 'Failed to fetch team members')
+      error.value = err.response?.data?.message || 'Failed to fetch team members'
       throw err
     }
   }
@@ -66,7 +103,7 @@ export const useTeamsStore = defineStore('teams', () => {
       }
       return (response.data as any).data?.member || response.data?.member
     } catch (err: any) {
-      error.value = getErrorMessage(err, 'Failed to add team member')
+      error.value = err.response?.data?.message || 'Failed to add team member'
       throw err
     }
   }
@@ -80,7 +117,7 @@ export const useTeamsStore = defineStore('teams', () => {
         team.member_count = team.member_count - 1
       }
     } catch (err: any) {
-      error.value = getErrorMessage(err, 'Failed to remove team member')
+      error.value = err.response?.data?.message || 'Failed to remove team member'
       throw err
     }
   }

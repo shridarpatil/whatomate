@@ -1,6 +1,6 @@
 import { defineStore } from 'pinia'
+import { ref } from 'vue'
 import { usersService } from '@/services/api'
-import { createCrudStore } from './createCrudStore'
 
 export interface UserRole {
   id: string
@@ -39,36 +39,74 @@ export interface UpdateUserData {
   is_super_admin?: boolean
 }
 
-// Create the base CRUD store
-const useBaseCrudStore = createCrudStore<User, CreateUserData, UpdateUserData>(
-  'users-crud',
-  {
-    list: () => usersService.list(),
-    create: (data) => usersService.create(data),
-    update: (id, data) => usersService.update(id, data),
-    delete: (id) => usersService.delete(id),
-  },
-  {
-    unwrapList: (response: any) => response.data.data.users || [],
-    unwrapSingle: (response: any) => response.data.data,
-    entityName: 'User',
-  }
-)
-
-// Extend with user-specific methods
 export const useUsersStore = defineStore('users', () => {
-  const baseCrud = useBaseCrudStore()
+  const users = ref<User[]>([])
+  const loading = ref(false)
+  const error = ref<string | null>(null)
 
-  // Re-export base CRUD functionality
-  const users = baseCrud.items
-  const loading = baseCrud.loading
-  const error = baseCrud.error
-  const fetchUsers = baseCrud.fetchItems
-  const createUser = baseCrud.createItem
-  const updateUser = baseCrud.updateItem
-  const deleteUser = baseCrud.deleteItem
+  async function fetchUsers(): Promise<void> {
+    loading.value = true
+    error.value = null
+    try {
+      const response = await usersService.list()
+      users.value = response.data.data.users || []
+    } catch (err: any) {
+      error.value = err.response?.data?.message || 'Failed to fetch users'
+      throw err
+    } finally {
+      loading.value = false
+    }
+  }
 
-  // User-specific helper methods
+  async function createUser(data: CreateUserData): Promise<User> {
+    loading.value = true
+    error.value = null
+    try {
+      const response = await usersService.create(data)
+      const newUser = response.data.data
+      users.value.unshift(newUser)
+      return newUser
+    } catch (err: any) {
+      error.value = err.response?.data?.message || 'Failed to create user'
+      throw err
+    } finally {
+      loading.value = false
+    }
+  }
+
+  async function updateUser(id: string, data: UpdateUserData): Promise<User> {
+    loading.value = true
+    error.value = null
+    try {
+      const response = await usersService.update(id, data)
+      const updatedUser = response.data.data
+      const index = users.value.findIndex(u => u.id === id)
+      if (index !== -1) {
+        users.value[index] = updatedUser
+      }
+      return updatedUser
+    } catch (err: any) {
+      error.value = err.response?.data?.message || 'Failed to update user'
+      throw err
+    } finally {
+      loading.value = false
+    }
+  }
+
+  async function deleteUser(id: string): Promise<void> {
+    loading.value = true
+    error.value = null
+    try {
+      await usersService.delete(id)
+      users.value = users.value.filter(u => u.id !== id)
+    } catch (err: any) {
+      error.value = err.response?.data?.message || 'Failed to delete user'
+      throw err
+    } finally {
+      loading.value = false
+    }
+  }
+
   function getUserById(id: string): User | undefined {
     return users.value.find(u => u.id === id)
   }
