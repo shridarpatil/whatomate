@@ -676,6 +676,8 @@ func TestStartFlow_WithSteps(t *testing.T) {
 			},
 		},
 	}
+	// Flow must exist in DB for the session FK constraint on CurrentFlowID.
+	require.NoError(t, app.DB.Create(flow).Error)
 
 	// startFlow sets current_flow_id and current_step on the session
 	app.startFlow(account, session, contact, flow)
@@ -697,7 +699,16 @@ func TestCompleteFlow_UpdatesSession(t *testing.T) {
 	org, account := createProcessorTestOrg(t, app)
 	contact := testutil.CreateTestContact(t, app.DB, org.ID)
 
-	flowID := uuid.New()
+	flow := &models.ChatbotFlow{
+		BaseModel:         models.BaseModel{ID: uuid.New()},
+		OrganizationID:    org.ID,
+		WhatsAppAccount:   account.Name,
+		Name:              "Test Flow",
+		CompletionMessage: "Thank you {{name}}!",
+		IsEnabled:         true,
+	}
+	require.NoError(t, app.DB.Create(flow).Error)
+
 	session := &models.ChatbotSession{
 		BaseModel:       models.BaseModel{ID: uuid.New()},
 		OrganizationID:  org.ID,
@@ -705,22 +716,13 @@ func TestCompleteFlow_UpdatesSession(t *testing.T) {
 		WhatsAppAccount: account.Name,
 		PhoneNumber:     contact.PhoneNumber,
 		Status:          models.SessionStatusActive,
-		CurrentFlowID:   &flowID,
+		CurrentFlowID:   &flow.ID,
 		CurrentStep:     "step1",
 		SessionData:     models.JSONB{"name": "John"},
 		StartedAt:       time.Now(),
 		LastActivityAt:  time.Now(),
 	}
 	require.NoError(t, app.DB.Create(session).Error)
-
-	flow := &models.ChatbotFlow{
-		BaseModel:         models.BaseModel{ID: flowID},
-		OrganizationID:    org.ID,
-		WhatsAppAccount:   account.Name,
-		Name:              "Test Flow",
-		CompletionMessage: "Thank you {{name}}!",
-		IsEnabled:         true,
-	}
 
 	app.completeFlow(account, session, contact, flow)
 
@@ -741,7 +743,15 @@ func TestExitFlow_UpdatesSession(t *testing.T) {
 	org, account := createProcessorTestOrg(t, app)
 	contact := testutil.CreateTestContact(t, app.DB, org.ID)
 
-	flowID := uuid.New()
+	flow := &models.ChatbotFlow{
+		BaseModel:       models.BaseModel{ID: uuid.New()},
+		OrganizationID:  org.ID,
+		WhatsAppAccount: account.Name,
+		Name:            "Exit Test Flow",
+		IsEnabled:       true,
+	}
+	require.NoError(t, app.DB.Create(flow).Error)
+
 	session := &models.ChatbotSession{
 		BaseModel:       models.BaseModel{ID: uuid.New()},
 		OrganizationID:  org.ID,
@@ -749,7 +759,7 @@ func TestExitFlow_UpdatesSession(t *testing.T) {
 		WhatsAppAccount: account.Name,
 		PhoneNumber:     contact.PhoneNumber,
 		Status:          models.SessionStatusActive,
-		CurrentFlowID:   &flowID,
+		CurrentFlowID:   &flow.ID,
 		CurrentStep:     "step2",
 		StepRetries:     2,
 		SessionData:     models.JSONB{},
