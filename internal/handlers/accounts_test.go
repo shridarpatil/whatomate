@@ -386,7 +386,7 @@ func TestApp_GetAccount_CrossOrgIsolation(t *testing.T) {
 func TestApp_UpdateAccount_Success(t *testing.T) {
 	t.Parallel()
 
-	app := newTestAppWithRedis(t)
+	app := newTestApp(t)
 	org := testutil.CreateTestOrganization(t, app.DB)
 	user := testutil.CreateTestUser(t, app.DB, org.ID)
 	account := testutil.CreateTestWhatsAppAccount(t, app.DB, org.ID)
@@ -430,7 +430,7 @@ func TestApp_UpdateAccount_Success(t *testing.T) {
 func TestApp_UpdateAccount_PartialUpdate(t *testing.T) {
 	t.Parallel()
 
-	app := newTestAppWithRedis(t)
+	app := newTestApp(t)
 	org := testutil.CreateTestOrganization(t, app.DB)
 	user := testutil.CreateTestUser(t, app.DB, org.ID)
 	account := testutil.CreateTestWhatsAppAccount(t, app.DB, org.ID)
@@ -461,7 +461,7 @@ func TestApp_UpdateAccount_PartialUpdate(t *testing.T) {
 func TestApp_UpdateAccount_NotFound(t *testing.T) {
 	t.Parallel()
 
-	app := newTestAppWithRedis(t)
+	app := newTestApp(t)
 	org := testutil.CreateTestOrganization(t, app.DB)
 	user := testutil.CreateTestUser(t, app.DB, org.ID)
 
@@ -479,7 +479,7 @@ func TestApp_UpdateAccount_NotFound(t *testing.T) {
 func TestApp_UpdateAccount_InvalidID(t *testing.T) {
 	t.Parallel()
 
-	app := newTestAppWithRedis(t)
+	app := newTestApp(t)
 	org := testutil.CreateTestOrganization(t, app.DB)
 	user := testutil.CreateTestUser(t, app.DB, org.ID)
 
@@ -499,7 +499,7 @@ func TestApp_UpdateAccount_InvalidID(t *testing.T) {
 func TestApp_DeleteAccount_Success(t *testing.T) {
 	t.Parallel()
 
-	app := newTestAppWithRedis(t)
+	app := newTestApp(t)
 	org := testutil.CreateTestOrganization(t, app.DB)
 	user := testutil.CreateTestUser(t, app.DB, org.ID)
 	account := testutil.CreateTestWhatsAppAccount(t, app.DB, org.ID)
@@ -530,7 +530,7 @@ func TestApp_DeleteAccount_Success(t *testing.T) {
 func TestApp_DeleteAccount_NotFound(t *testing.T) {
 	t.Parallel()
 
-	app := newTestAppWithRedis(t)
+	app := newTestApp(t)
 	org := testutil.CreateTestOrganization(t, app.DB)
 	user := testutil.CreateTestUser(t, app.DB, org.ID)
 
@@ -546,7 +546,7 @@ func TestApp_DeleteAccount_NotFound(t *testing.T) {
 func TestApp_DeleteAccount_InvalidID(t *testing.T) {
 	t.Parallel()
 
-	app := newTestAppWithRedis(t)
+	app := newTestApp(t)
 	org := testutil.CreateTestOrganization(t, app.DB)
 	user := testutil.CreateTestUser(t, app.DB, org.ID)
 
@@ -562,7 +562,7 @@ func TestApp_DeleteAccount_InvalidID(t *testing.T) {
 func TestApp_DeleteAccount_CrossOrgIsolation(t *testing.T) {
 	t.Parallel()
 
-	app := newTestAppWithRedis(t)
+	app := newTestApp(t)
 
 	org1 := testutil.CreateTestOrganization(t, app.DB)
 	org2 := testutil.CreateTestOrganization(t, app.DB)

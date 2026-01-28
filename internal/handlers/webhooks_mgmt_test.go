@@ -241,7 +241,7 @@ func TestApp_GetWebhook_CrossOrgIsolation(t *testing.T) {
 func TestApp_CreateWebhook_Success(t *testing.T) {
 	t.Parallel()
 
-	app := newTestAppWithRedis(t)
+	app := newTestApp(t)
 	org := testutil.CreateTestOrganization(t, app.DB)
 	user := testutil.CreateTestUser(t, app.DB, org.ID)
 
@@ -283,7 +283,7 @@ func TestApp_CreateWebhook_Success(t *testing.T) {
 func TestApp_CreateWebhook_MissingName(t *testing.T) {
 	t.Parallel()
 
-	app := newTestAppWithRedis(t)
+	app := newTestApp(t)
 	org := testutil.CreateTestOrganization(t, app.DB)
 	user := testutil.CreateTestUser(t, app.DB, org.ID)
 
@@ -301,7 +301,7 @@ func TestApp_CreateWebhook_MissingName(t *testing.T) {
 func TestApp_CreateWebhook_MissingURL(t *testing.T) {
 	t.Parallel()
 
-	app := newTestAppWithRedis(t)
+	app := newTestApp(t)
 	org := testutil.CreateTestOrganization(t, app.DB)
 	user := testutil.CreateTestUser(t, app.DB, org.ID)
 
@@ -319,7 +319,7 @@ func TestApp_CreateWebhook_MissingURL(t *testing.T) {
 func TestApp_CreateWebhook_MissingEvents(t *testing.T) {
 	t.Parallel()
 
-	app := newTestAppWithRedis(t)
+	app := newTestApp(t)
 	org := testutil.CreateTestOrganization(t, app.DB)
 	user := testutil.CreateTestUser(t, app.DB, org.ID)
 
@@ -337,7 +337,7 @@ func TestApp_CreateWebhook_MissingEvents(t *testing.T) {
 func TestApp_CreateWebhook_EmptyEvents(t *testing.T) {
 	t.Parallel()
 
-	app := newTestAppWithRedis(t)
+	app := newTestApp(t)
 	org := testutil.CreateTestOrganization(t, app.DB)
 	user := testutil.CreateTestUser(t, app.DB, org.ID)
 
@@ -375,7 +375,7 @@ func TestApp_CreateWebhook_Unauthorized(t *testing.T) {
 func TestApp_UpdateWebhook_Success(t *testing.T) {
 	t.Parallel()
 
-	app := newTestAppWithRedis(t)
+	app := newTestApp(t)
 	org := testutil.CreateTestOrganization(t, app.DB)
 	user := testutil.CreateTestUser(t, app.DB, org.ID)
 	wh := createTestWebhook(t, app, org.ID, "Old Name", "https://old.example.com", []string{"message.incoming"})
@@ -416,7 +416,7 @@ func TestApp_UpdateWebhook_Success(t *testing.T) {
 func TestApp_UpdateWebhook_PartialUpdate(t *testing.T) {
 	t.Parallel()
 
-	app := newTestAppWithRedis(t)
+	app := newTestApp(t)
 	org := testutil.CreateTestOrganization(t, app.DB)
 	user := testutil.CreateTestUser(t, app.DB, org.ID)
 	wh := createTestWebhook(t, app, org.ID, "Original", "https://original.example.com", []string{"message.incoming"})
@@ -447,7 +447,7 @@ func TestApp_UpdateWebhook_PartialUpdate(t *testing.T) {
 func TestApp_UpdateWebhook_NotFound(t *testing.T) {
 	t.Parallel()
 
-	app := newTestAppWithRedis(t)
+	app := newTestApp(t)
 	org := testutil.CreateTestOrganization(t, app.DB)
 	user := testutil.CreateTestUser(t, app.DB, org.ID)
 
@@ -466,7 +466,7 @@ func TestApp_UpdateWebhook_NotFound(t *testing.T) {
 func TestApp_UpdateWebhook_InvalidID(t *testing.T) {
 	t.Parallel()
 
-	app := newTestAppWithRedis(t)
+	app := newTestApp(t)
 	org := testutil.CreateTestOrganization(t, app.DB)
 	user := testutil.CreateTestUser(t, app.DB, org.ID)
 
@@ -487,7 +487,7 @@ func TestApp_UpdateWebhook_InvalidID(t *testing.T) {
 func TestApp_DeleteWebhook_Success(t *testing.T) {
 	t.Parallel()
 
-	app := newTestAppWithRedis(t)
+	app := newTestApp(t)
 	org := testutil.CreateTestOrganization(t, app.DB)
 	user := testutil.CreateTestUser(t, app.DB, org.ID)
 	wh := createTestWebhook(t, app, org.ID, "To Delete", "https://example.com/delete", []string{"message.incoming"})
@@ -518,7 +518,7 @@ func TestApp_DeleteWebhook_Success(t *testing.T) {
 func TestApp_DeleteWebhook_NotFound(t *testing.T) {
 	t.Parallel()
 
-	app := newTestAppWithRedis(t)
+	app := newTestApp(t)
 	org := testutil.CreateTestOrganization(t, app.DB)
 	user := testutil.CreateTestUser(t, app.DB, org.ID)
 
@@ -534,7 +534,7 @@ func TestApp_DeleteWebhook_NotFound(t *testing.T) {
 func TestApp_DeleteWebhook_InvalidID(t *testing.T) {
 	t.Parallel()
 
-	app := newTestAppWithRedis(t)
+	app := newTestApp(t)
 	org := testutil.CreateTestOrganization(t, app.DB)
 	user := testutil.CreateTestUser(t, app.DB, org.ID)
 
@@ -550,7 +550,7 @@ func TestApp_DeleteWebhook_InvalidID(t *testing.T) {
 func TestApp_DeleteWebhook_CrossOrgIsolation(t *testing.T) {
 	t.Parallel()
 
-	app := newTestAppWithRedis(t)
+	app := newTestApp(t)
 	org1 := testutil.CreateTestOrganization(t, app.DB)
 	org2 := testutil.CreateTestOrganization(t, app.DB)
 	user2 := testutil.CreateTestUser(t, app.DB, org2.ID)
@@ -589,7 +589,7 @@ func TestApp_TestWebhook_Success(t *testing.T) {
 	}))
 	defer server.Close()
 
-	app := newTestAppWithRedis(t, withHTTPClient(&http.Client{Timeout: 5 * time.Second}))
+	app := newTestApp(t, withHTTPClient(&http.Client{Timeout: 5 * time.Second}))
 	org := testutil.CreateTestOrganization(t, app.DB)
 	user := testutil.CreateTestUser(t, app.DB, org.ID)
 	wh := createTestWebhook(t, app, org.ID, "Test Hook", server.URL, []string{"message.incoming"})
@@ -638,7 +638,7 @@ func TestApp_TestWebhook_ServerError(t *testing.T) {
 	}))
 	defer server.Close()
 
-	app := newTestAppWithRedis(t, withHTTPClient(&http.Client{Timeout: 5 * time.Second}))
+	app := newTestApp(t, withHTTPClient(&http.Client{Timeout: 5 * time.Second}))
 	org := testutil.CreateTestOrganization(t, app.DB)
 	user := testutil.CreateTestUser(t, app.DB, org.ID)
 	wh := createTestWebhook(t, app, org.ID, "Failing Hook", server.URL, []string{"message.incoming"})
@@ -655,7 +655,7 @@ func TestApp_TestWebhook_ServerError(t *testing.T) {
 func TestApp_TestWebhook_NotFound(t *testing.T) {
 	t.Parallel()
 
-	app := newTestAppWithRedis(t, withHTTPClient(&http.Client{Timeout: 5 * time.Second}))
+	app := newTestApp(t, withHTTPClient(&http.Client{Timeout: 5 * time.Second}))
 	org := testutil.CreateTestOrganization(t, app.DB)
 	user := testutil.CreateTestUser(t, app.DB, org.ID)
 

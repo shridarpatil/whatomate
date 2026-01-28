@@ -44,12 +44,18 @@ func withHTTPClient(client *http.Client) appOption {
 	}
 }
 
-// newTestApp creates an App instance for testing with a test database and default config.
+// newTestApp creates an App instance for testing with a test database, Redis, and default config.
+// Skips the test if TEST_REDIS_URL is not set.
 func newTestApp(t *testing.T, opts ...appOption) *handlers.App {
 	t.Helper()
 
 	db := testutil.SetupTestDB(t)
 	log := testutil.NopLogger()
+
+	redisClient := testutil.SetupTestRedis(t)
+	if redisClient == nil {
+		t.Skip("TEST_REDIS_URL not set, skipping test")
+	}
 
 	cfg := &config.Config{
 		JWT: config.JWTConfig{
@@ -63,33 +69,14 @@ func newTestApp(t *testing.T, opts ...appOption) *handlers.App {
 		Config: cfg,
 		DB:     db,
 		Log:    log,
+		Redis:  redisClient,
+		HTTPClient: &http.Client{
+			Timeout: 30 * time.Second,
+		},
 	}
 
 	for _, opt := range opts {
 		opt(app)
-	}
-
-	return app
-}
-
-// newTestAppWithRedis creates an App with DB and Redis.
-// Skips the test if TEST_REDIS_URL is not set.
-func newTestAppWithRedis(t *testing.T, opts ...appOption) *handlers.App {
-	t.Helper()
-
-	redisClient := testutil.SetupTestRedis(t)
-	if redisClient == nil {
-		t.Skip("TEST_REDIS_URL not set, skipping Redis test")
-	}
-
-	allOpts := append([]appOption{withRedis(redisClient)}, opts...)
-	app := newTestApp(t, allOpts...)
-
-	// Add HTTP client with timeout if not already set
-	if app.HTTPClient == nil {
-		app.HTTPClient = &http.Client{
-			Timeout: 30 * time.Second,
-		}
 	}
 
 	return app

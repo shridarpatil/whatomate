@@ -55,7 +55,7 @@ func TestApp_WaitForBackgroundTasks(t *testing.T) {
 func TestApp_DispatchWebhook_CompletesSuccessfully(t *testing.T) {
 	t.Parallel()
 
-	app := newTestAppWithRedis(t)
+	app := newTestApp(t)
 
 	// Create test organization
 	org := &models.Organization{
@@ -101,7 +101,7 @@ func TestApp_DispatchWebhook_CompletesSuccessfully(t *testing.T) {
 func TestApp_DispatchWebhook_ConcurrencyLimit(t *testing.T) {
 	t.Parallel()
 
-	app := newTestAppWithRedis(t)
+	app := newTestApp(t)
 
 	// Create test organization
 	org := &models.Organization{
@@ -165,7 +165,7 @@ func TestApp_DispatchWebhook_ConcurrencyLimit(t *testing.T) {
 func TestApp_DispatchWebhook_NoWebhooks(t *testing.T) {
 	t.Parallel()
 
-	app := newTestAppWithRedis(t)
+	app := newTestApp(t)
 
 	// Create test organization with no webhooks
 	org := &models.Organization{
@@ -200,7 +200,7 @@ func TestApp_DispatchWebhook_NoWebhooks(t *testing.T) {
 func TestApp_DispatchWebhook_InactiveWebhook(t *testing.T) {
 	t.Parallel()
 
-	app := newTestAppWithRedis(t)
+	app := newTestApp(t)
 
 	// Create test organization
 	org := &models.Organization{
@@ -256,7 +256,7 @@ func TestApp_DispatchWebhook_InactiveWebhook(t *testing.T) {
 func TestApp_DispatchWebhook_EventFiltering(t *testing.T) {
 	t.Parallel()
 
-	app := newTestAppWithRedis(t)
+	app := newTestApp(t)
 
 	// Create test organization
 	org := &models.Organization{
@@ -299,7 +299,7 @@ func TestApp_DispatchWebhook_EventFiltering(t *testing.T) {
 func TestApp_DispatchWebhook_RetryOnFailure(t *testing.T) {
 	t.Parallel()
 
-	app := newTestAppWithRedis(t)
+	app := newTestApp(t)
 
 	// Create test organization
 	org := &models.Organization{
@@ -345,7 +345,7 @@ func TestApp_DispatchWebhook_RetryOnFailure(t *testing.T) {
 func TestApp_DispatchWebhook_HTTPTimeout(t *testing.T) {
 	t.Parallel()
 
-	app := newTestAppWithRedis(t)
+	app := newTestApp(t)
 
 	// Create test organization
 	org := &models.Organization{
@@ -406,7 +406,7 @@ func TestApp_DispatchWebhook_HTTPTimeout(t *testing.T) {
 func TestApp_DispatchWebhook_MultipleEvents(t *testing.T) {
 	t.Parallel()
 
-	app := newTestAppWithRedis(t)
+	app := newTestApp(t)
 
 	// Create test organization
 	org := &models.Organization{
