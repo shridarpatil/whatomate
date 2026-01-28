@@ -9,7 +9,6 @@ import (
 	"github.com/shridarpatil/whatomate/internal/config"
 	"github.com/shridarpatil/whatomate/internal/handlers"
 	"github.com/shridarpatil/whatomate/internal/queue"
-	"github.com/shridarpatil/whatomate/internal/websocket"
 	"github.com/shridarpatil/whatomate/pkg/whatsapp"
 	"github.com/shridarpatil/whatomate/test/testutil"
 )
@@ -35,13 +34,6 @@ func withRedis(rdb *redis.Client) appOption {
 func withWhatsApp(wa *whatsapp.Client) appOption {
 	return func(a *handlers.App) {
 		a.WhatsApp = wa
-	}
-}
-
-// withWSHub sets the WebSocket hub on the test App.
-func withWSHub(hub *websocket.Hub) appOption {
-	return func(a *handlers.App) {
-		a.WSHub = hub
 	}
 }
 

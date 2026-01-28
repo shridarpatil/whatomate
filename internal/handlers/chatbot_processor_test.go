@@ -12,14 +12,18 @@ import (
 )
 
 // newProcessorTestApp creates a minimal App suitable for chatbot processor tests.
-// It connects to the test database and uses a no-op logger.
+// It connects to the test database and Redis, and uses a no-op logger.
 func newProcessorTestApp(t *testing.T) *App {
 	t.Helper()
 	db := testutil.SetupTestDB(t)
-	return &App{
+	app := &App{
 		DB:  db,
 		Log: testutil.NopLogger(),
 	}
+	if rdb := testutil.SetupTestRedis(t); rdb != nil {
+		app.Redis = rdb
+	}
+	return app
 }
 
 // createProcessorTestOrg creates an organization and WhatsApp account for processor tests.
@@ -917,24 +921,25 @@ func TestLogSessionMessage(t *testing.T) {
 
 func TestMatchFlowTrigger_Match(t *testing.T) {
 	app := newProcessorTestApp(t)
-	org, _ := createProcessorTestOrg(t, app)
+	org, account := createProcessorTestOrg(t, app)
 
-	// matchFlowTrigger uses getChatbotFlowsCached which requires Redis.
-	// Without Redis, this will fall through to DB query.
 	flow := &models.ChatbotFlow{
 		BaseModel:       models.BaseModel{ID: uuid.New()},
 		OrganizationID:  org.ID,
+		WhatsAppAccount: account.Name,
 		Name:            "Order Flow",
 		TriggerKeywords: models.StringArray{"order", "buy"},
 		IsEnabled:       true,
 	}
 	require.NoError(t, app.DB.Create(flow).Error)
 
-	// Without Redis, getChatbotFlowsCached will return an error and matchFlowTrigger returns nil.
-	// This tests the graceful error handling path.
-	result := app.matchFlowTrigger(org.ID, "", "I want to order")
-	// Without Redis, this returns nil (cache miss + no Redis = error)
-	assert.Nil(t, result)
+	result := app.matchFlowTrigger(org.ID, account.Name, "I want to order")
+	require.NotNil(t, result)
+	assert.Equal(t, flow.ID, result.ID)
+
+	// No match
+	noMatch := app.matchFlowTrigger(org.ID, account.Name, "hello there")
+	assert.Nil(t, noMatch)
 }
 
 // =============================================================================

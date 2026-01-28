@@ -404,8 +404,12 @@ func TestSubscribeCampaignStats_ReceivesUpdate(t *testing.T) {
 	sub := queue.NewSubscriber(client, log)
 	defer sub.Close()
 
+	// Use a unique campaign ID to filter out messages from parallel tests
+	// sharing the same pub/sub channel.
+	targetCampaignID := uuid.New().String()
+
 	var mu sync.Mutex
-	var received []*queue.CampaignStatsUpdate
+	var matched *queue.CampaignStatsUpdate
 
 	subCtx, cancel := context.WithCancel(ctx)
 	defer cancel()
@@ -413,7 +417,9 @@ func TestSubscribeCampaignStats_ReceivesUpdate(t *testing.T) {
 	err := sub.SubscribeCampaignStats(subCtx, func(update *queue.CampaignStatsUpdate) {
 		mu.Lock()
 		defer mu.Unlock()
-		received = append(received, update)
+		if update.CampaignID == targetCampaignID {
+			matched = update
+		}
 	})
 	require.NoError(t, err)
 
@@ -421,7 +427,7 @@ func TestSubscribeCampaignStats_ReceivesUpdate(t *testing.T) {
 	time.Sleep(100 * time.Millisecond)
 
 	update := &queue.CampaignStatsUpdate{
-		CampaignID:     uuid.New().String(),
+		CampaignID:     targetCampaignID,
 		OrganizationID: uuid.New(),
 		Status:         models.CampaignStatusCompleted,
 		SentCount:      50,
@@ -436,19 +442,19 @@ func TestSubscribeCampaignStats_ReceivesUpdate(t *testing.T) {
 	testutil.AssertEventually(t, func() bool {
 		mu.Lock()
 		defer mu.Unlock()
-		return len(received) >= 1
+		return matched != nil
 	}, 5*time.Second, "subscriber should have received the stats update")
 
 	mu.Lock()
 	defer mu.Unlock()
-	require.Len(t, received, 1)
-	assert.Equal(t, update.CampaignID, received[0].CampaignID)
-	assert.Equal(t, update.OrganizationID, received[0].OrganizationID)
-	assert.Equal(t, update.Status, received[0].Status)
-	assert.Equal(t, update.SentCount, received[0].SentCount)
-	assert.Equal(t, update.DeliveredCount, received[0].DeliveredCount)
-	assert.Equal(t, update.ReadCount, received[0].ReadCount)
-	assert.Equal(t, update.FailedCount, received[0].FailedCount)
+	require.NotNil(t, matched)
+	assert.Equal(t, update.CampaignID, matched.CampaignID)
+	assert.Equal(t, update.OrganizationID, matched.OrganizationID)
+	assert.Equal(t, update.Status, matched.Status)
+	assert.Equal(t, update.SentCount, matched.SentCount)
+	assert.Equal(t, update.DeliveredCount, matched.DeliveredCount)
+	assert.Equal(t, update.ReadCount, matched.ReadCount)
+	assert.Equal(t, update.FailedCount, matched.FailedCount)
 }
 
 func TestSubscriber_Close(t *testing.T) {
