@@ -5,14 +5,14 @@ import { TooltipProvider } from '@/components/ui/tooltip'
 import { useColorMode } from '@/composables/useColorMode'
 
 // Initialize color mode early
-useColorMode()
+const { colorMode } = useColorMode()
 </script>
 
 <template>
   <TooltipProvider>
     <div class="min-h-screen bg-background font-sans antialiased">
       <RouterView />
-      <Toaster position="top-right" richColors />
+      <Toaster position="top-right" richColors :theme="colorMode" />
     </div>
   </TooltipProvider>
 </template>
