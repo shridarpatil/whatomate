@@ -15,6 +15,7 @@ import {
 } from '@/components/ui/select'
 import { agentAnalyticsService, usersService } from '@/services/api'
 import { useAuthStore } from '@/stores/auth'
+import { PageHeader } from '@/components/shared'
 import {
   Command,
   CommandEmpty,
@@ -436,17 +437,13 @@ void _displayStats.value // Suppress unused warning
 
 <template>
   <div class="flex flex-col h-full">
-    <!-- Header -->
-    <header class="border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
-      <div class="flex h-16 items-center px-6">
-        <BarChart3 class="h-5 w-5 mr-3" />
-        <div class="flex-1">
-          <h1 class="text-xl font-semibold">Agent Analytics</h1>
-          <p class="text-sm text-muted-foreground">
-            {{ isAdminOrManager ? 'Performance metrics for all agents' : 'Your performance metrics' }}
-          </p>
-        </div>
-
+    <PageHeader
+      title="Agent Analytics"
+      :description="isAdminOrManager ? 'Performance metrics for all agents' : 'Your performance metrics'"
+      :icon="BarChart3"
+      icon-gradient="bg-gradient-to-br from-blue-500 to-indigo-600 shadow-blue-500/20"
+    >
+      <template #actions>
         <!-- Agent Filter (Admin/Manager only) -->
         <div v-if="isAdminOrManager" class="flex items-center gap-2 mr-4">
           <Popover v-model:open="agentComboboxOpen">
@@ -517,8 +514,8 @@ void _displayStats.value // Suppress unused warning
             </PopoverContent>
           </Popover>
         </div>
-      </div>
-    </header>
+      </template>
+    </PageHeader>
 
     <!-- Content -->
     <ScrollArea class="flex-1">

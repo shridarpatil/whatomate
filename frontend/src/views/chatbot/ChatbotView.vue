@@ -6,6 +6,8 @@ import { ScrollArea } from '@/components/ui/scroll-area'
 import { Skeleton } from '@/components/ui/skeleton'
 import { chatbotService } from '@/services/api'
 import { toast } from 'vue-sonner'
+import { PageHeader } from '@/components/shared'
+import { getErrorMessage } from '@/lib/api-utils'
 import {
   Bot,
   Key,
@@ -84,8 +86,8 @@ async function toggleChatbot() {
     await chatbotService.updateSettings({ enabled: newState })
     settings.value.enabled = newState
     toast.success(newState ? 'Chatbot enabled' : 'Chatbot disabled')
-  } catch (error) {
-    toast.error('Failed to toggle chatbot')
+  } catch (error: any) {
+    toast.error(getErrorMessage(error, 'Failed to toggle chatbot'))
   } finally {
     isToggling.value = false
   }
@@ -101,16 +103,13 @@ const statCards = [
 
 <template>
   <div class="flex flex-col h-full bg-[#0a0a0b] light:bg-gray-50">
-    <!-- Header -->
-    <header class="border-b border-white/[0.08] light:border-gray-200 bg-[#0a0a0b]/95 light:bg-white/95 backdrop-blur">
-      <div class="flex h-16 items-center px-6">
-        <div class="h-8 w-8 rounded-lg bg-gradient-to-br from-purple-500 to-pink-600 flex items-center justify-center mr-3 shadow-lg shadow-purple-500/20">
-          <Bot class="h-4 w-4 text-white" />
-        </div>
-        <div class="flex-1">
-          <h1 class="text-xl font-semibold text-white light:text-gray-900">Chatbot</h1>
-          <p class="text-sm text-white/50 light:text-gray-500">Manage automated responses and AI conversations</p>
-        </div>
+    <PageHeader
+      title="Chatbot"
+      description="Manage automated responses and AI conversations"
+      :icon="Bot"
+      icon-gradient="bg-gradient-to-br from-purple-500 to-pink-600 shadow-purple-500/20"
+    >
+      <template #actions>
         <div class="flex items-center gap-3">
           <Badge
             :class="settings.enabled ? 'bg-emerald-500/20 text-emerald-400 light:bg-emerald-100 light:text-emerald-700' : 'bg-white/[0.08] text-white/50 light:bg-gray-100 light:text-gray-500'"
@@ -128,8 +127,8 @@ const statCards = [
             {{ settings.enabled ? 'Disable' : 'Enable' }}
           </Button>
         </div>
-      </div>
-    </header>
+      </template>
+    </PageHeader>
 
     <!-- Content -->
     <ScrollArea class="flex-1">

@@ -9,6 +9,8 @@ import { toast } from 'vue-sonner'
 import { User, Eye, EyeOff, Loader2 } from 'lucide-vue-next'
 import { usersService } from '@/services/api'
 import { useAuthStore } from '@/stores/auth'
+import { PageHeader } from '@/components/shared'
+import { getErrorMessage } from '@/lib/api-utils'
 
 const authStore = useAuthStore()
 const isChangingPassword = ref(false)
@@ -49,8 +51,7 @@ async function changePassword() {
       confirm_password: ''
     }
   } catch (error: any) {
-    const message = error.response?.data?.message || 'Failed to change password'
-    toast.error(message)
+    toast.error(getErrorMessage(error, 'Failed to change password'))
   } finally {
     isChangingPassword.value = false
   }
@@ -59,16 +60,12 @@ async function changePassword() {
 
 <template>
   <div class="flex flex-col h-full">
-    <!-- Header -->
-    <header class="border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
-      <div class="flex h-16 items-center px-6">
-        <User class="h-5 w-5 mr-3" />
-        <div class="flex-1">
-          <h1 class="text-xl font-semibold">Profile</h1>
-          <p class="text-sm text-muted-foreground">Manage your account settings</p>
-        </div>
-      </div>
-    </header>
+    <PageHeader
+      title="Profile"
+      description="Manage your account settings"
+      :icon="User"
+      icon-gradient="bg-gradient-to-br from-gray-500 to-gray-600 shadow-gray-500/20"
+    />
 
     <!-- Content -->
     <ScrollArea class="flex-1">
