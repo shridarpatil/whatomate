@@ -431,7 +431,7 @@ const _displayStats = computed(() => {
   }
   return analytics.value?.my_stats
 })
-void _displayStats // Suppress unused warning
+void _displayStats.value // Suppress unused warning
 </script>
 
 <template>
