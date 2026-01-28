@@ -5,7 +5,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/redis/go-redis/v9"
 	"github.com/shridarpatil/whatomate/internal/config"
 	"github.com/shridarpatil/whatomate/internal/handlers"
 	"github.com/shridarpatil/whatomate/internal/queue"
@@ -20,13 +19,6 @@ type appOption func(*handlers.App)
 func withQueue(q queue.Queue) appOption {
 	return func(a *handlers.App) {
 		a.Queue = q
-	}
-}
-
-// withRedis sets the Redis client on the test App.
-func withRedis(rdb *redis.Client) appOption {
-	return func(a *handlers.App) {
-		a.Redis = rdb
 	}
 }
 
