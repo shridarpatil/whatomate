@@ -595,7 +595,7 @@ function formatPreview(text: string, samples: any[]): string {
                   <Send v-else class="h-4 w-4" />
                 </Button>
               </TooltipTrigger>
-              <TooltipContent>Publish to Meta</TooltipContent>
+              <TooltipContent>{{ template.meta_template_id ? 'Republish to Meta' : 'Publish to Meta' }}</TooltipContent>
             </Tooltip>
             <Tooltip>
               <TooltipTrigger as-child>
@@ -645,7 +645,7 @@ function formatPreview(text: string, samples: any[]): string {
             <Label>WhatsApp Account <span class="text-destructive">*</span></Label>
             <select
               v-model="formData.whatsapp_account"
-              class="w-full h-10 rounded-md border bg-background px-3"
+              class="w-full h-10 rounded-md border bg-background px-3 disabled:cursor-not-allowed disabled:opacity-50"
               :disabled="!!editingTemplate"
             >
               <option value="">Select account...</option>
@@ -681,7 +681,11 @@ function formatPreview(text: string, samples: any[]): string {
             <!-- Language -->
             <div class="space-y-2">
               <Label>Language <span class="text-destructive">*</span></Label>
-              <select v-model="formData.language" class="w-full h-10 rounded-md border bg-background px-3">
+              <select
+                v-model="formData.language"
+                class="w-full h-10 rounded-md border bg-background px-3 disabled:cursor-not-allowed disabled:opacity-50"
+                :disabled="!!editingTemplate"
+              >
                 <option v-for="lang in languages" :key="lang.code" :value="lang.code">
                   {{ lang.name }}
                 </option>
@@ -691,7 +695,11 @@ function formatPreview(text: string, samples: any[]): string {
             <!-- Category -->
             <div class="space-y-2">
               <Label>Category <span class="text-destructive">*</span></Label>
-              <select v-model="formData.category" class="w-full h-10 rounded-md border bg-background px-3">
+              <select
+                v-model="formData.category"
+                class="w-full h-10 rounded-md border bg-background px-3 disabled:cursor-not-allowed disabled:opacity-50"
+                :disabled="!!editingTemplate"
+              >
                 <option v-for="cat in categories" :key="cat.value" :value="cat.value">
                   {{ cat.label }} - {{ cat.description }}
                 </option>
@@ -989,7 +997,7 @@ function formatPreview(text: string, samples: any[]): string {
           >
             <Loader2 v-if="publishingTemplateId === previewTemplate?.id" class="h-4 w-4 mr-2 animate-spin" />
             <Send v-else class="h-4 w-4 mr-2" />
-            {{ previewTemplate?.status === 'REJECTED' ? 'Resubmit to Meta' : 'Publish to Meta' }}
+            {{ previewTemplate?.meta_template_id ? 'Republish to Meta' : 'Publish to Meta' }}
           </Button>
         </DialogFooter>
       </DialogContent>
@@ -1015,14 +1023,19 @@ function formatPreview(text: string, samples: any[]): string {
     <AlertDialog v-model:open="publishDialogOpen">
       <AlertDialogContent>
         <AlertDialogHeader>
-          <AlertDialogTitle>Publish Template</AlertDialogTitle>
+          <AlertDialogTitle>{{ templateToPublish?.meta_template_id ? 'Republish' : 'Publish' }} Template</AlertDialogTitle>
           <AlertDialogDescription>
-            Publish "{{ templateToPublish?.display_name || templateToPublish?.name }}" to Meta for approval? Once submitted, you won't be able to edit it until it's approved or rejected.
+            <template v-if="templateToPublish?.meta_template_id">
+              Republish "{{ templateToPublish?.display_name || templateToPublish?.name }}" to Meta? The updated template will go through approval again before becoming active.
+            </template>
+            <template v-else>
+              Publish "{{ templateToPublish?.display_name || templateToPublish?.name }}" to Meta for approval? Once submitted, you won't be able to edit it until it's approved or rejected.
+            </template>
           </AlertDialogDescription>
         </AlertDialogHeader>
         <AlertDialogFooter>
           <AlertDialogCancel>Cancel</AlertDialogCancel>
-          <AlertDialogAction @click="confirmPublishTemplate">Publish</AlertDialogAction>
+          <AlertDialogAction @click="confirmPublishTemplate">{{ templateToPublish?.meta_template_id ? 'Republish' : 'Publish' }}</AlertDialogAction>
         </AlertDialogFooter>
       </AlertDialogContent>
     </AlertDialog>

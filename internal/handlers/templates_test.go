@@ -664,29 +664,6 @@ func TestApp_UpdateTemplate_Success(t *testing.T) {
 	assert.Equal(t, "es", resp.Data.Language)
 }
 
-func TestApp_UpdateTemplate_CannotEditApproved(t *testing.T) {
-	t.Parallel()
-
-	app := newTestApp(t)
-	org := testutil.CreateTestOrganization(t, app.DB)
-	user := testutil.CreateTestUser(t, app.DB, org.ID)
-	account := testutil.CreateTestWhatsAppAccount(t, app.DB, org.ID)
-
-	tmpl := createTestTemplateInDB(t, app, org.ID, account.Name, "approved_tmpl", "APPROVED")
-
-	body := map[string]interface{}{
-		"body_content": "Trying to update approved",
-	}
-
-	req := testutil.NewJSONRequest(t, body)
-	testutil.SetAuthContext(req, org.ID, user.ID)
-	testutil.SetPathParam(req, "id", tmpl.ID.String())
-
-	err := app.UpdateTemplate(req)
-	require.NoError(t, err)
-	testutil.AssertErrorResponse(t, req, fasthttp.StatusBadRequest, "Cannot edit approved templates")
-}
-
 func TestApp_UpdateTemplate_NotFound(t *testing.T) {
 	t.Parallel()
 

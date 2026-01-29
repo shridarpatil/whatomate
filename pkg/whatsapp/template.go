@@ -10,6 +10,7 @@ import (
 
 // TemplateSubmission represents a template to be submitted to Meta
 type TemplateSubmission struct {
+	MetaTemplateID  string        // If set, update existing template instead of creating new
 	Name            string
 	Language        string
 	Category        string
@@ -22,9 +23,16 @@ type TemplateSubmission struct {
 	SampleValues    []interface{} // For named: [{param_name: "name", value: "John"}, ...]
 }
 
-// SubmitTemplate submits a template to Meta's API
+// SubmitTemplate submits a template to Meta's API (creates new or updates existing)
 func (c *Client) SubmitTemplate(ctx context.Context, account *Account, template *TemplateSubmission) (string, error) {
-	url := c.buildTemplatesURL(account)
+	// If MetaTemplateID is set, this is an update to existing template
+	isUpdate := template.MetaTemplateID != ""
+	var url string
+	if isUpdate {
+		url = fmt.Sprintf("%s/%s", c.baseURL, template.MetaTemplateID)
+	} else {
+		url = c.buildTemplatesURL(account)
+	}
 
 	// Build components array
 	components := []map[string]interface{}{}
@@ -183,26 +191,44 @@ func (c *Client) SubmitTemplate(ctx context.Context, account *Account, template 
 	}
 
 	// Build request payload
-	payload := map[string]interface{}{
-		"name":       template.Name,
-		"language":   template.Language,
-		"category":   template.Category,
-		"components": components,
-	}
-
-	// Add parameter_format for named parameters
-	if isNamedParams {
-		payload["parameter_format"] = "NAMED"
+	var payload map[string]interface{}
+	if isUpdate {
+		// Update only sends components (name, language, category are immutable)
+		payload = map[string]interface{}{
+			"components": components,
+		}
+	} else {
+		// Create sends full template
+		payload = map[string]interface{}{
+			"name":       template.Name,
+			"language":   template.Language,
+			"category":   template.Category,
+			"components": components,
+		}
+		// Add parameter_format for named parameters (only for create)
+		if isNamedParams {
+			payload["parameter_format"] = "NAMED"
+		}
 	}
 
 	// Log payload for debugging
+	action := "Submitting"
+	if isUpdate {
+		action = "Updating"
+	}
 	payloadJSON, _ := json.MarshalIndent(payload, "", "  ")
-	c.Log.Info("Submitting template to Meta", "url", url, "name", template.Name, "payload", string(payloadJSON))
+	c.Log.Info(action+" template to Meta", "url", url, "name", template.Name, "payload", string(payloadJSON))
 
 	respBody, err := c.doRequest(ctx, http.MethodPost, url, payload, account.AccessToken)
 	if err != nil {
-		c.Log.Error("Failed to submit template", "error", err, "name", template.Name)
+		c.Log.Error("Failed to "+action+" template", "error", err, "name", template.Name)
 		return "", err
+	}
+
+	// For updates, return existing ID; for creates, parse response for new ID
+	if isUpdate {
+		c.Log.Info("Template updated", "template_id", template.MetaTemplateID, "name", template.Name)
+		return template.MetaTemplateID, nil
 	}
 
 	var result TemplateResponse

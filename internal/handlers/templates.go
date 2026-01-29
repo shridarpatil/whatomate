@@ -193,9 +193,9 @@ func (a *App) UpdateTemplate(r *fastglue.Request) error {
 		return nil
 	}
 
-	// Cannot edit approved templates (Meta doesn't allow)
-	if template.Status == "APPROVED" {
-		return r.SendErrorEnvelope(fasthttp.StatusBadRequest, "Cannot edit approved templates", nil, "")
+	// When editing approved or rejected templates, set to DRAFT to indicate local changes pending submission
+	if template.Status == "APPROVED" || template.Status == "REJECTED" {
+		template.Status = "DRAFT"
 	}
 
 	var req TemplateRequest
@@ -295,9 +295,9 @@ func (a *App) SubmitTemplate(r *fastglue.Request) error {
 		return nil
 	}
 
-	// Check if already submitted and not rejected
-	if template.MetaTemplateID != "" && template.Status != "REJECTED" {
-		return r.SendErrorEnvelope(fasthttp.StatusBadRequest, "Template already submitted to Meta", nil, "")
+	// Only block if status is PENDING (awaiting approval - can't modify)
+	if template.MetaTemplateID != "" && template.Status == "PENDING" {
+		return r.SendErrorEnvelope(fasthttp.StatusBadRequest, "Template is pending approval and cannot be modified", nil, "")
 	}
 
 	// Get the WhatsApp account
@@ -306,13 +306,8 @@ func (a *App) SubmitTemplate(r *fastglue.Request) error {
 		return r.SendErrorEnvelope(fasthttp.StatusBadRequest, "WhatsApp account not found", nil, "")
 	}
 
-	// For rejected templates, delete the old one first then create new
-	if template.Status == "REJECTED" && template.MetaTemplateID != "" {
-		a.Log.Info("Deleting rejected template before resubmission", "template", template.Name)
-		a.deleteTemplateFromMeta(&account, template.Name)
-		// Clear the old meta template ID
-		template.MetaTemplateID = ""
-	}
+	// Check if this is an update to an existing template on Meta
+	isUpdate := template.MetaTemplateID != ""
 
 	// Submit template to Meta
 	metaTemplateID, submitErr := a.submitTemplateToMeta(&account, template)
@@ -323,34 +318,41 @@ func (a *App) SubmitTemplate(r *fastglue.Request) error {
 	template.MetaTemplateID = metaTemplateID
 
 	// Update template status
+	// Both new submissions and updates go to PENDING for approval
+	message := "Template submitted to Meta for approval"
+	if isUpdate {
+		message = "Template updated and pending re-approval"
+	}
 	template.Status = "PENDING"
+
 	if err := a.DB.Save(template).Error; err != nil {
 		a.Log.Error("Failed to update template after submission", "error", err)
 		return r.SendErrorEnvelope(fasthttp.StatusInternalServerError, "Template submitted but failed to update local record", nil, "")
 	}
 
 	return r.SendEnvelope(map[string]interface{}{
-		"message":          "Template submitted to Meta for approval",
+		"message":          message,
 		"meta_template_id": metaTemplateID,
-		"status":           "PENDING",
+		"status":           template.Status,
 		"template":         templateToResponse(*template),
 	})
 }
 
-// submitTemplateToMeta submits a template to Meta's API
+// submitTemplateToMeta submits a template to Meta's API (creates new or updates existing)
 func (a *App) submitTemplateToMeta(account *models.WhatsAppAccount, template *models.Template) (string, error) {
 	waAccount := a.toWhatsAppAccount(account)
 
 	submission := &whatsapp.TemplateSubmission{
-		Name:          template.Name,
-		Language:      template.Language,
-		Category:      template.Category,
-		HeaderType:    template.HeaderType,
-		HeaderContent: template.HeaderContent,
-		BodyContent:   template.BodyContent,
-		FooterContent: template.FooterContent,
-		Buttons:       template.Buttons,
-		SampleValues:  template.SampleValues,
+		MetaTemplateID: template.MetaTemplateID, // If set, will update instead of create
+		Name:           template.Name,
+		Language:       template.Language,
+		Category:       template.Category,
+		HeaderType:     template.HeaderType,
+		HeaderContent:  template.HeaderContent,
+		BodyContent:    template.BodyContent,
+		FooterContent:  template.FooterContent,
+		Buttons:        template.Buttons,
+		SampleValues:   template.SampleValues,
 	}
 
 	ctx := context.Background()
@@ -524,7 +526,6 @@ func convertFromJSONBArray(arr models.JSONBArray) []interface{} {
 	}
 	return []interface{}(arr)
 }
-
 
 // UploadTemplateMedia uploads a media file for use as template header sample
 // Returns a file handle that can be used in template creation
