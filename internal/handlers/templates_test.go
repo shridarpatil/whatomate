@@ -983,7 +983,7 @@ func TestApp_SubmitTemplate_AlreadySubmitted(t *testing.T) {
 
 	err := app.SubmitTemplate(req)
 	require.NoError(t, err)
-	testutil.AssertErrorResponse(t, req, fasthttp.StatusBadRequest, "already submitted")
+	testutil.AssertErrorResponse(t, req, fasthttp.StatusBadRequest, "pending approval")
 }
 
 func TestApp_SubmitTemplate_NotFound(t *testing.T) {
