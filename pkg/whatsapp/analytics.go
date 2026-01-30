@@ -401,8 +401,18 @@ func (c *Client) buildAnalyticsURL(account *Account, analyticsType AnalyticsType
 		filters = append(filters, fmt.Sprintf("country_codes(%s)", string(countriesJSON)))
 	}
 
-	// Note: dimensions parameter was removed as Meta may have changed the API
-	// If breakdown data is needed, it may need to be fetched differently
+	// Add phone_numbers and dimensions for conversation_analytics (per Meta docs)
+	if analyticsType == AnalyticsTypeConversation {
+		// phone_numbers is required even if empty
+		if len(req.PhoneNumbers) > 0 {
+			phonesJSON, _ := json.Marshal(req.PhoneNumbers)
+			filters = append(filters, fmt.Sprintf("phone_numbers(%s)", string(phonesJSON)))
+		} else {
+			filters = append(filters, "phone_numbers([])")
+		}
+		// dimensions for breakdown data
+		filters = append(filters, "dimensions([\"CONVERSATION_CATEGORY\",\"CONVERSATION_TYPE\",\"COUNTRY\",\"PHONE\"])")
+	}
 
 	field := fmt.Sprintf("%s.%s", analyticsType, strings.Join(filters, "."))
 
