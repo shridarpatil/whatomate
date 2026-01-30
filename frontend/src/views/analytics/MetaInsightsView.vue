@@ -385,26 +385,19 @@ function aggregateMessagingData(points: MetaMessagingDataPoint[]) {
 }
 
 function aggregateConversationData(points: MetaConversationDataPoint[]) {
-  const byCategory = new Map<string, { count: number; cost: number }>()
+  const byCategory = new Map<string, number>()
   const byDirection = new Map<string, number>()
   const byType = new Map<string, number>()
   // Track free vs paid breakdown
   const freeMessages = { total: 0, customerService: 0, entryPoint: 0 }
   const paidMessages = { total: 0, byCategory: new Map<string, number>() }
-  const costByCategory = new Map<string, number>()
   let totalConversations = 0
-  let totalCost = 0
 
   for (const point of points) {
     totalConversations += point.conversation
-    totalCost += point.cost
 
     const category = point.conversation_category || 'OTHER'
-    const existing = byCategory.get(category) || { count: 0, cost: 0 }
-    byCategory.set(category, {
-      count: existing.count + point.conversation,
-      cost: existing.cost + point.cost
-    })
+    byCategory.set(category, (byCategory.get(category) || 0) + point.conversation)
 
     const direction = point.conversation_direction || 'UNKNOWN'
     byDirection.set(direction, (byDirection.get(direction) || 0) + point.conversation)
@@ -425,13 +418,10 @@ function aggregateConversationData(points: MetaConversationDataPoint[]) {
       const paidCat = paidMessages.byCategory.get(category) || 0
       paidMessages.byCategory.set(category, paidCat + point.conversation)
     }
-
-    // Track cost by category
-    costByCategory.set(category, (costByCategory.get(category) || 0) + point.cost)
   }
 
   return {
-    totals: { conversations: totalConversations, cost: totalCost },
+    totals: { conversations: totalConversations },
     byCategory: Object.fromEntries(byCategory),
     byDirection: Object.fromEntries(byDirection),
     byType: Object.fromEntries(byType),
@@ -439,8 +429,7 @@ function aggregateConversationData(points: MetaConversationDataPoint[]) {
     paidMessages: {
       total: paidMessages.total,
       byCategory: Object.fromEntries(paidMessages.byCategory)
-    },
-    costByCategory: Object.fromEntries(costByCategory)
+    }
   }
 }
 
@@ -577,7 +566,7 @@ const conversationCategoryChartData = computed(() => {
   return {
     labels: categories.map(([cat]) => formatCategory(cat)),
     datasets: [{
-      data: categories.map(([, val]) => val.count),
+      data: categories.map(([, val]) => val),
       backgroundColor: [
         'rgba(59, 130, 246, 0.8)',
         'rgba(16, 185, 129, 0.8)',
@@ -890,7 +879,7 @@ const doughnutOptions = {
             </template>
             <template v-else-if="aggregatedData && activeTab === 'conversation_analytics'">
               <!-- Summary Stats -->
-              <div class="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+              <div class="grid gap-4 md:grid-cols-3">
                 <div class="card-depth rounded-xl border border-white/[0.08] bg-white/[0.04] p-6 light:bg-white light:border-gray-200">
                   <div class="flex flex-row items-center justify-between space-y-0 pb-2">
                     <span class="text-sm font-medium text-white/50 light:text-gray-500">Total Messages</span>
@@ -932,20 +921,6 @@ const doughnutOptions = {
                     </div>
                   </div>
                 </div>
-
-                <div class="card-depth rounded-xl border border-white/[0.08] bg-white/[0.04] p-6 light:bg-white light:border-gray-200">
-                  <div class="flex flex-row items-center justify-between space-y-0 pb-2">
-                    <span class="text-sm font-medium text-white/50 light:text-gray-500">Total Cost</span>
-                    <div class="h-10 w-10 rounded-lg bg-emerald-500/20 flex items-center justify-center">
-                      <DollarSign class="h-5 w-5 text-emerald-400" />
-                    </div>
-                  </div>
-                  <div class="pt-2">
-                    <div class="text-3xl font-bold text-white light:text-gray-900">
-                      {{ formatCurrency((aggregatedData as ReturnType<typeof aggregateConversationData>).totals.cost) }}
-                    </div>
-                  </div>
-                </div>
               </div>
 
               <!-- Detailed Breakdown -->
@@ -958,9 +933,9 @@ const doughnutOptions = {
                   </CardHeader>
                   <CardContent>
                     <div class="space-y-3">
-                      <div v-for="(data, category) in (aggregatedData as ReturnType<typeof aggregateConversationData>).byCategory" :key="category" class="flex items-center justify-between py-2 border-b border-white/[0.08] light:border-gray-100 last:border-0">
+                      <div v-for="(count, category) in (aggregatedData as ReturnType<typeof aggregateConversationData>).byCategory" :key="category" class="flex items-center justify-between py-2 border-b border-white/[0.08] light:border-gray-100 last:border-0">
                         <span class="text-sm text-white/70 light:text-gray-600">{{ formatCategory(category as string) }}</span>
-                        <span class="font-semibold text-white light:text-gray-900">{{ data.count.toLocaleString() }}</span>
+                        <span class="font-semibold text-white light:text-gray-900">{{ (count as number).toLocaleString() }}</span>
                       </div>
                     </div>
                   </CardContent>
@@ -1008,26 +983,6 @@ const doughnutOptions = {
                       <div v-else class="flex items-center justify-between py-2 bg-amber-500/10 rounded px-2 -mx-2">
                         <span class="text-sm font-medium text-amber-400 light:text-amber-600">Total Paid</span>
                         <span class="font-bold text-amber-400 light:text-amber-600">{{ (aggregatedData as ReturnType<typeof aggregateConversationData>).paidMessages.total.toLocaleString() }}</span>
-                      </div>
-                    </div>
-                  </CardContent>
-                </Card>
-
-                <!-- Cost by Category -->
-                <Card>
-                  <CardHeader>
-                    <CardTitle>Cost by Category</CardTitle>
-                    <CardDescription>Approximate charges breakdown</CardDescription>
-                  </CardHeader>
-                  <CardContent>
-                    <div class="space-y-3">
-                      <div v-for="(cost, category) in (aggregatedData as ReturnType<typeof aggregateConversationData>).costByCategory" :key="category" class="flex items-center justify-between py-2 border-b border-white/[0.08] light:border-gray-100 last:border-0">
-                        <span class="text-sm text-white/70 light:text-gray-600">{{ formatCategory(category as string) }}</span>
-                        <span class="font-semibold text-white light:text-gray-900">{{ formatCurrency(cost as number) }}</span>
-                      </div>
-                      <div class="flex items-center justify-between py-2 bg-emerald-500/10 rounded px-2 -mx-2">
-                        <span class="text-sm font-medium text-emerald-400 light:text-emerald-600">Total Cost</span>
-                        <span class="font-bold text-emerald-400 light:text-emerald-600">{{ formatCurrency((aggregatedData as ReturnType<typeof aggregateConversationData>).totals.cost) }}</span>
                       </div>
                     </div>
                   </CardContent>
