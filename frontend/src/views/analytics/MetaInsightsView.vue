@@ -1,6 +1,9 @@
 <script setup lang="ts">
 import { ref, onMounted, computed, watch } from 'vue'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import { Input } from '@/components/ui/input'
+import DataTable from '@/components/shared/DataTable.vue'
+import type { Column } from '@/components/shared/DataTable.vue'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Button } from '@/components/ui/button'
@@ -50,7 +53,8 @@ import {
   Send,
   CheckCircle,
   Eye,
-  MousePointerClick
+  MousePointerClick,
+  Search
 } from 'lucide-vue-next'
 import type { DateRange } from 'reka-ui'
 import { CalendarDate } from '@internationalized/date'
@@ -505,6 +509,51 @@ const templateNamesMap = computed(() => {
 function getTemplateName(templateId: string): string {
   return templateNamesMap.value[templateId] || templateId
 }
+
+// Template table search and sorting
+const templateSearchQuery = ref('')
+const templateSortKey = ref('sent')
+const templateSortDirection = ref<'asc' | 'desc'>('desc')
+
+// Template table columns definition
+const templateColumns: Column<any>[] = [
+  { key: 'name', label: 'Template', sortable: true },
+  { key: 'sent', label: 'Sent', align: 'right', sortable: true },
+  { key: 'delivered', label: 'Delivered', align: 'right', sortable: true },
+  { key: 'read', label: 'Read', align: 'right', sortable: true },
+  { key: 'replied', label: 'Replied', align: 'right', sortable: true },
+  { key: 'clicked', label: 'Clicked', align: 'right', sortable: true },
+  { key: 'deliveryRate', label: 'Delivery %', align: 'right', sortable: true },
+  { key: 'readRate', label: 'Read %', align: 'right', sortable: true },
+  { key: 'cost', label: 'Cost', align: 'right', sortable: true },
+]
+
+const filteredTemplateData = computed(() => {
+  if (!aggregatedData.value || activeTab.value !== 'template_analytics') {
+    return []
+  }
+
+  const data = aggregatedData.value as ReturnType<typeof aggregateTemplateData>
+  let entries = Object.entries(data.byTemplate).map(([templateId, stats]) => ({
+    id: templateId,
+    templateId,
+    name: getTemplateName(templateId),
+    ...stats,
+    deliveryRate: stats.sent > 0 ? (stats.delivered / stats.sent * 100) : 0,
+    readRate: stats.delivered > 0 ? (stats.read / stats.delivered * 100) : 0
+  }))
+
+  // Filter by search query
+  if (templateSearchQuery.value) {
+    const query = templateSearchQuery.value.toLowerCase()
+    entries = entries.filter(e =>
+      e.name.toLowerCase().includes(query) ||
+      e.templateId.toLowerCase().includes(query)
+    )
+  }
+
+  return entries
+})
 
 function aggregateCallData(points: MetaCallDataPoint[]) {
   const byType = new Map<string, number>()
@@ -1100,56 +1149,59 @@ const doughnutOptions = {
               <!-- Template Performance Table -->
               <Card>
                 <CardHeader>
-                  <CardTitle>Template Performance</CardTitle>
-                  <CardDescription>Performance metrics by template</CardDescription>
-                </CardHeader>
-                <CardContent>
-                  <div class="overflow-x-auto">
-                    <table class="w-full text-sm">
-                      <thead>
-                        <tr class="border-b border-white/[0.08] light:border-gray-200">
-                          <th class="py-3 px-4 text-left font-medium text-white/70 light:text-gray-600">Template</th>
-                          <th class="py-3 px-4 text-right font-medium text-white/70 light:text-gray-600">Sent</th>
-                          <th class="py-3 px-4 text-right font-medium text-white/70 light:text-gray-600">Delivered</th>
-                          <th class="py-3 px-4 text-right font-medium text-white/70 light:text-gray-600">Read</th>
-                          <th class="py-3 px-4 text-right font-medium text-white/70 light:text-gray-600">Replied</th>
-                          <th class="py-3 px-4 text-right font-medium text-white/70 light:text-gray-600">Clicked</th>
-                          <th class="py-3 px-4 text-right font-medium text-white/70 light:text-gray-600">Delivery %</th>
-                          <th class="py-3 px-4 text-right font-medium text-white/70 light:text-gray-600">Read %</th>
-                          <th class="py-3 px-4 text-right font-medium text-white/70 light:text-gray-600">Cost</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        <tr
-                          v-for="[templateId, stats] in Object.entries((aggregatedData as ReturnType<typeof aggregateTemplateData>).byTemplate)"
-                          :key="templateId"
-                          class="border-b border-white/[0.04] light:border-gray-100"
-                        >
-                          <td class="py-3 px-4 text-white light:text-gray-900">
-                            <div class="font-medium">{{ getTemplateName(templateId) }}</div>
-                            <div v-if="getTemplateName(templateId) !== templateId" class="text-xs text-white/50 light:text-gray-500 font-mono">{{ templateId }}</div>
-                          </td>
-                          <td class="py-3 px-4 text-right text-white/70 light:text-gray-600">{{ stats.sent.toLocaleString() }}</td>
-                          <td class="py-3 px-4 text-right text-white/70 light:text-gray-600">{{ stats.delivered.toLocaleString() }}</td>
-                          <td class="py-3 px-4 text-right text-white/70 light:text-gray-600">{{ stats.read.toLocaleString() }}</td>
-                          <td class="py-3 px-4 text-right text-white/70 light:text-gray-600">{{ stats.replied.toLocaleString() }}</td>
-                          <td class="py-3 px-4 text-right text-white/70 light:text-gray-600">{{ stats.clicked.toLocaleString() }}</td>
-                          <td class="py-3 px-4 text-right text-white/70 light:text-gray-600">
-                            {{ stats.sent > 0 ? (stats.delivered / stats.sent * 100).toFixed(1) : 0 }}%
-                          </td>
-                          <td class="py-3 px-4 text-right text-white/70 light:text-gray-600">
-                            {{ stats.delivered > 0 ? (stats.read / stats.delivered * 100).toFixed(1) : 0 }}%
-                          </td>
-                          <td class="py-3 px-4 text-right text-white/70 light:text-gray-600">
-                            {{ stats.cost > 0 ? formatCurrency(stats.cost) : '-' }}
-                          </td>
-                        </tr>
-                      </tbody>
-                    </table>
-                    <div v-if="Object.keys((aggregatedData as ReturnType<typeof aggregateTemplateData>).byTemplate).length === 0" class="py-8 text-center text-muted-foreground">
-                      No template data available for the selected period
+                  <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+                    <div>
+                      <CardTitle>Template Performance</CardTitle>
+                      <CardDescription>Performance metrics by template</CardDescription>
+                    </div>
+                    <div class="relative w-full sm:w-64">
+                      <Search class="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-white/40 light:text-gray-400" />
+                      <Input
+                        v-model="templateSearchQuery"
+                        placeholder="Search templates..."
+                        class="pl-9"
+                      />
                     </div>
                   </div>
+                </CardHeader>
+                <CardContent>
+                  <DataTable
+                    :items="filteredTemplateData"
+                    :columns="templateColumns"
+                    v-model:sort-key="templateSortKey"
+                    v-model:sort-direction="templateSortDirection"
+                    :empty-title="templateSearchQuery ? 'No templates matching search' : 'No template data available'"
+                    :empty-description="templateSearchQuery ? '' : 'No data for the selected period'"
+                  >
+                    <template #cell-name="{ item }">
+                      <div class="font-medium">{{ item.name }}</div>
+                      <div v-if="item.name !== item.templateId" class="text-xs text-muted-foreground font-mono">{{ item.templateId }}</div>
+                    </template>
+                    <template #cell-sent="{ item }">
+                      {{ item.sent.toLocaleString() }}
+                    </template>
+                    <template #cell-delivered="{ item }">
+                      {{ item.delivered.toLocaleString() }}
+                    </template>
+                    <template #cell-read="{ item }">
+                      {{ item.read.toLocaleString() }}
+                    </template>
+                    <template #cell-replied="{ item }">
+                      {{ item.replied.toLocaleString() }}
+                    </template>
+                    <template #cell-clicked="{ item }">
+                      {{ item.clicked.toLocaleString() }}
+                    </template>
+                    <template #cell-deliveryRate="{ item }">
+                      {{ item.deliveryRate.toFixed(1) }}%
+                    </template>
+                    <template #cell-readRate="{ item }">
+                      {{ item.readRate.toFixed(1) }}%
+                    </template>
+                    <template #cell-cost="{ item }">
+                      {{ item.cost > 0 ? formatCurrency(item.cost) : '-' }}
+                    </template>
+                  </DataTable>
                 </CardContent>
               </Card>
             </template>

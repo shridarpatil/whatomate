@@ -1,4 +1,5 @@
-<script setup lang="ts" generic="T extends { id: string }">
+<script setup lang="ts" generic="T extends Record<string, any>">
+import { computed } from 'vue'
 import {
   Table,
   TableBody,
@@ -7,7 +8,7 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table'
-import { Loader2 } from 'lucide-vue-next'
+import { Loader2, ArrowUpDown, ArrowUp, ArrowDown } from 'lucide-vue-next'
 import type { Component } from 'vue'
 
 export interface Column<T> {
@@ -15,15 +16,30 @@ export interface Column<T> {
   label: string
   width?: string
   align?: 'left' | 'center' | 'right'
+  sortable?: boolean
+  sortKey?: string // Custom sort key if different from display key
 }
 
-defineProps<{
+const props = withDefaults(defineProps<{
   items: T[]
   columns: Column<T>[]
   isLoading?: boolean
   emptyIcon?: Component
   emptyTitle?: string
   emptyDescription?: string
+  // Sorting
+  sortKey?: string
+  sortDirection?: 'asc' | 'desc'
+  // Row key - defaults to 'id' but can be customized
+  rowKey?: string
+}>(), {
+  rowKey: 'id'
+})
+
+const emit = defineEmits<{
+  'update:sortKey': [key: string]
+  'update:sortDirection': [direction: 'asc' | 'desc']
+  'sort': [key: string, direction: 'asc' | 'desc']
 }>()
 
 defineSlots<{
@@ -31,6 +47,54 @@ defineSlots<{
   empty: () => any
   'empty-action': () => any
 }>()
+
+const hasSortableColumns = computed(() => props.columns.some(col => col.sortable))
+
+function handleSort(column: Column<T>) {
+  if (!column.sortable) return
+
+  const sortKey = column.sortKey || column.key
+  let newDirection: 'asc' | 'desc' = 'desc'
+
+  if (props.sortKey === sortKey) {
+    newDirection = props.sortDirection === 'asc' ? 'desc' : 'asc'
+  }
+
+  emit('update:sortKey', sortKey)
+  emit('update:sortDirection', newDirection)
+  emit('sort', sortKey, newDirection)
+}
+
+const sortedItems = computed(() => {
+  if (!props.sortKey || !hasSortableColumns.value) {
+    return props.items
+  }
+
+  return [...props.items].sort((a, b) => {
+    const aVal = a[props.sortKey!]
+    const bVal = b[props.sortKey!]
+
+    // Handle null/undefined
+    if (aVal == null && bVal == null) return 0
+    if (aVal == null) return props.sortDirection === 'asc' ? -1 : 1
+    if (bVal == null) return props.sortDirection === 'asc' ? 1 : -1
+
+    // String comparison
+    if (typeof aVal === 'string' && typeof bVal === 'string') {
+      const comparison = aVal.localeCompare(bVal, undefined, { sensitivity: 'base' })
+      return props.sortDirection === 'asc' ? comparison : -comparison
+    }
+
+    // Numeric comparison
+    if (aVal < bVal) return props.sortDirection === 'asc' ? -1 : 1
+    if (aVal > bVal) return props.sortDirection === 'asc' ? 1 : -1
+    return 0
+  })
+})
+
+function getRowKey(item: T, index: number): string {
+  return item[props.rowKey] ?? `row-${index}`
+}
 </script>
 
 <template>
@@ -44,9 +108,30 @@ defineSlots<{
             col.width,
             col.align === 'right' && 'text-right',
             col.align === 'center' && 'text-center',
+            col.sortable && 'cursor-pointer select-none hover:text-foreground transition-colors',
           ]"
+          @click="handleSort(col)"
         >
-          {{ col.label }}
+          <div
+            :class="[
+              'flex items-center gap-1',
+              col.align === 'right' && 'justify-end',
+              col.align === 'center' && 'justify-center',
+            ]"
+          >
+            {{ col.label }}
+            <template v-if="col.sortable">
+              <ArrowUp
+                v-if="sortKey === (col.sortKey || col.key) && sortDirection === 'asc'"
+                class="h-3 w-3"
+              />
+              <ArrowDown
+                v-else-if="sortKey === (col.sortKey || col.key) && sortDirection === 'desc'"
+                class="h-3 w-3"
+              />
+              <ArrowUpDown v-else class="h-3 w-3 opacity-30" />
+            </template>
+          </div>
         </TableHead>
       </TableRow>
     </TableHeader>
@@ -59,7 +144,7 @@ defineSlots<{
       </TableRow>
 
       <!-- Empty State -->
-      <TableRow v-else-if="items.length === 0">
+      <TableRow v-else-if="sortedItems.length === 0">
         <TableCell :colspan="columns.length" class="h-24 text-center text-muted-foreground">
           <slot name="empty">
             <component v-if="emptyIcon" :is="emptyIcon" class="h-8 w-8 mx-auto mb-2 opacity-50" />
@@ -73,7 +158,7 @@ defineSlots<{
       </TableRow>
 
       <!-- Data Rows -->
-      <TableRow v-else v-for="(item, index) in items" :key="item.id">
+      <TableRow v-else v-for="(item, index) in sortedItems" :key="getRowKey(item, index)">
         <TableCell
           v-for="col in columns"
           :key="col.key"
