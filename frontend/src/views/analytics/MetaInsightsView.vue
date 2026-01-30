@@ -744,24 +744,24 @@ const doughnutOptions = {
         <!-- Analytics Type Tabs -->
         <Tabs v-model="activeTab" class="w-full">
           <TabsList class="grid w-full grid-cols-5 lg:w-auto lg:inline-flex">
-            <TabsTrigger value="analytics" class="gap-2">
-              <MessageSquare class="h-4 w-4" />
+            <TabsTrigger value="analytics">
+              <MessageSquare class="h-4 w-4 lg:mr-2" />
               <span class="hidden lg:inline">Messaging</span>
             </TabsTrigger>
-            <TabsTrigger value="conversation_analytics" class="gap-2">
-              <MessagesSquare class="h-4 w-4" />
+            <TabsTrigger value="conversation_analytics">
+              <MessagesSquare class="h-4 w-4 lg:mr-2" />
               <span class="hidden lg:inline">Conversations</span>
             </TabsTrigger>
-            <TabsTrigger value="pricing_analytics" class="gap-2">
-              <DollarSign class="h-4 w-4" />
+            <TabsTrigger value="pricing_analytics">
+              <DollarSign class="h-4 w-4 lg:mr-2" />
               <span class="hidden lg:inline">Pricing</span>
             </TabsTrigger>
-            <TabsTrigger value="template_analytics" class="gap-2">
-              <FileText class="h-4 w-4" />
+            <TabsTrigger value="template_analytics">
+              <FileText class="h-4 w-4 lg:mr-2" />
               <span class="hidden lg:inline">Templates</span>
             </TabsTrigger>
-            <TabsTrigger value="call_analytics" class="gap-2">
-              <Phone class="h-4 w-4" />
+            <TabsTrigger value="call_analytics">
+              <Phone class="h-4 w-4 lg:mr-2" />
               <span class="hidden lg:inline">Calls</span>
             </TabsTrigger>
           </TabsList>
