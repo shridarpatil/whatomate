@@ -439,7 +439,7 @@ func NormalizeGranularity(granularity string, analyticsType AnalyticsType) strin
 	// Some endpoints use DAILY/MONTHLY format
 	useDailyFormat := false
 	switch analyticsType {
-	case AnalyticsTypeConversation, AnalyticsTypePricing:
+	case AnalyticsTypeConversation, AnalyticsTypePricing, AnalyticsTypeCall:
 		useDailyFormat = true
 	}
 
