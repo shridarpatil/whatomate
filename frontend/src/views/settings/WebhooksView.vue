@@ -37,13 +37,17 @@ const isDeleteDialogOpen = ref(false)
 const webhookToDelete = ref<Webhook | null>(null)
 
 const columns: Column<Webhook>[] = [
-  { key: 'name', label: 'Name' },
-  { key: 'url', label: 'URL' },
+  { key: 'name', label: 'Name', sortable: true },
+  { key: 'url', label: 'URL', sortable: true },
   { key: 'events', label: 'Events' },
-  { key: 'status', label: 'Status' },
-  { key: 'created', label: 'Created' },
+  { key: 'status', label: 'Status', sortable: true, sortKey: 'is_active' },
+  { key: 'created', label: 'Created', sortable: true, sortKey: 'created_at' },
   { key: 'actions', label: 'Actions', align: 'right' },
 ]
+
+// Sorting state
+const sortKey = ref('name')
+const sortDirection = ref<'asc' | 'desc'>('asc')
 
 async function fetchWebhooks() {
   isLoading.value = true
@@ -150,7 +154,7 @@ onMounted(() => fetchWebhooks())
               <CardDescription>Webhooks allow you to send real-time events to external systems like helpdesks.</CardDescription>
             </CardHeader>
             <CardContent>
-              <DataTable :items="webhooks" :columns="columns" :is-loading="isLoading" :empty-icon="WebhookIcon" empty-title="No webhooks configured">
+              <DataTable :items="webhooks" :columns="columns" :is-loading="isLoading" :empty-icon="WebhookIcon" empty-title="No webhooks configured" v-model:sort-key="sortKey" v-model:sort-direction="sortDirection">
                 <template #cell-name="{ item: webhook }"><span class="font-medium">{{ webhook.name }}</span></template>
                 <template #cell-url="{ item: webhook }"><span class="max-w-[200px] truncate text-muted-foreground block">{{ webhook.url }}</span></template>
                 <template #cell-events="{ item: webhook }">

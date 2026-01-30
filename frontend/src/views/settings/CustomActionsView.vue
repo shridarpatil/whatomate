@@ -45,13 +45,17 @@ const iconOptions = [
 
 const columns: Column<CustomAction>[] = [
   { key: 'icon', label: '', width: 'w-[40px]' },
-  { key: 'name', label: 'Name' },
-  { key: 'type', label: 'Type' },
+  { key: 'name', label: 'Name', sortable: true },
+  { key: 'type', label: 'Type', sortable: true, sortKey: 'action_type' },
   { key: 'target', label: 'Target' },
-  { key: 'status', label: 'Status' },
-  { key: 'created', label: 'Created' },
+  { key: 'status', label: 'Status', sortable: true, sortKey: 'is_active' },
+  { key: 'created', label: 'Created', sortable: true, sortKey: 'created_at' },
   { key: 'actions', label: 'Actions', align: 'right' },
 ]
+
+// Sorting state
+const sortKey = ref('name')
+const sortDirection = ref<'asc' | 'desc'>('asc')
 
 const getIconComponent = (iconName: string) => iconOptions.find(i => i.value === iconName)?.icon || Zap
 
@@ -141,7 +145,7 @@ onMounted(() => fetchActions())
               <CardDescription>Custom actions appear as buttons in the chat header for quick integrations.</CardDescription>
             </CardHeader>
             <CardContent>
-              <DataTable :items="actions" :columns="columns" :is-loading="isLoading" :empty-icon="Zap" empty-title="No custom actions configured">
+              <DataTable :items="actions" :columns="columns" :is-loading="isLoading" :empty-icon="Zap" empty-title="No custom actions configured" v-model:sort-key="sortKey" v-model:sort-direction="sortDirection">
                 <template #cell-icon="{ item: action }"><component :is="getIconComponent(action.icon)" class="h-5 w-5 text-muted-foreground" /></template>
                 <template #cell-name="{ item: action }"><span class="font-medium">{{ action.name }}</span></template>
                 <template #cell-type="{ item: action }"><Badge :variant="getActionTypeBadge(action.action_type).variant">{{ getActionTypeBadge(action.action_type).label }}</Badge></template>

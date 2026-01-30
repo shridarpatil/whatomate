@@ -51,13 +51,17 @@ const canEditPermissions = computed(() => {
 })
 
 const columns: Column<Role>[] = [
-  { key: 'role', label: 'Role' },
-  { key: 'description', label: 'Description' },
+  { key: 'role', label: 'Role', sortable: true, sortKey: 'name' },
+  { key: 'description', label: 'Description', sortable: true },
   { key: 'permissions', label: 'Permissions', align: 'center' },
-  { key: 'users', label: 'Users', align: 'center' },
-  { key: 'created', label: 'Created' },
+  { key: 'users', label: 'Users', align: 'center', sortable: true, sortKey: 'user_count' },
+  { key: 'created', label: 'Created', sortable: true, sortKey: 'created_at' },
   { key: 'actions', label: 'Actions', align: 'right' },
 ]
+
+// Sorting state
+const sortKey = ref('name')
+const sortDirection = ref<'asc' | 'desc'>('asc')
 
 function openEditDialog(role: Role) {
   baseOpenEditDialog(role, (r) => ({ name: r.name, description: r.description || '', is_default: r.is_default, permissions: [...r.permissions] }))
@@ -120,7 +124,7 @@ async function confirmDelete() {
               <CardDescription>Create custom roles with specific permissions to control what users can access.</CardDescription>
             </CardHeader>
             <CardContent>
-              <DataTable :items="filteredRoles" :columns="columns" :is-loading="isLoading" :empty-icon="Shield" :empty-title="searchQuery ? 'No roles found matching your search' : 'No roles created yet'">
+              <DataTable :items="filteredRoles" :columns="columns" :is-loading="isLoading" :empty-icon="Shield" :empty-title="searchQuery ? 'No roles found matching your search' : 'No roles created yet'" v-model:sort-key="sortKey" v-model:sort-direction="sortDirection">
                 <template #cell-role="{ item: role }">
                   <div class="flex items-center gap-2">
                     <span class="font-medium">{{ role.name }}</span>

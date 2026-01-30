@@ -51,13 +51,17 @@ const isKeyDisplayOpen = ref(false)
 const newlyCreatedKey = ref<NewAPIKeyResponse | null>(null)
 
 const columns: Column<APIKey>[] = [
-  { key: 'name', label: 'Name' },
+  { key: 'name', label: 'Name', sortable: true },
   { key: 'key', label: 'Key' },
-  { key: 'last_used', label: 'Last Used' },
-  { key: 'expires', label: 'Expires' },
-  { key: 'status', label: 'Status' },
+  { key: 'last_used', label: 'Last Used', sortable: true, sortKey: 'last_used_at' },
+  { key: 'expires', label: 'Expires', sortable: true, sortKey: 'expires_at' },
+  { key: 'status', label: 'Status', sortable: true, sortKey: 'is_active' },
   { key: 'actions', label: 'Actions', align: 'right' },
 ]
+
+// Sorting state
+const sortKey = ref('name')
+const sortDirection = ref<'asc' | 'desc'>('asc')
 
 const { fetchItems } = useCrudOperations({
   fetchFn: async () => { const response = await apiKeysService.list(); return unwrapListResponse<APIKey>(response, 'api_keys') || response.data.data || [] },
@@ -112,7 +116,7 @@ onMounted(() => fetchItems())
               <CardDescription>API keys allow external applications to access your account. Keep them secure.</CardDescription>
             </CardHeader>
             <CardContent>
-              <DataTable :items="apiKeys" :columns="columns" :is-loading="isLoading" :empty-icon="Key" empty-title="No API keys yet">
+              <DataTable :items="apiKeys" :columns="columns" :is-loading="isLoading" :empty-icon="Key" empty-title="No API keys yet" v-model:sort-key="sortKey" v-model:sort-direction="sortDirection">
                 <template #cell-name="{ item: key }"><span class="font-medium">{{ key.name }}</span></template>
                 <template #cell-key="{ item: key }"><code class="bg-muted px-2 py-1 rounded text-sm">whm_{{ key.key_prefix }}...</code></template>
                 <template #cell-last_used="{ item: key }">{{ formatDateTime(key.last_used_at) }}</template>

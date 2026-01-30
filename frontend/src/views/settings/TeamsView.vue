@@ -61,13 +61,17 @@ const availableUsers = computed(() => {
 })
 
 const columns: Column<Team>[] = [
-  { key: 'team', label: 'Team', width: 'w-[250px]' },
-  { key: 'strategy', label: 'Strategy' },
-  { key: 'members', label: 'Members' },
-  { key: 'status', label: 'Status' },
-  { key: 'created', label: 'Created' },
+  { key: 'team', label: 'Team', width: 'w-[250px]', sortable: true, sortKey: 'name' },
+  { key: 'strategy', label: 'Strategy', sortable: true, sortKey: 'assignment_strategy' },
+  { key: 'members', label: 'Members', sortable: true, sortKey: 'member_count' },
+  { key: 'status', label: 'Status', sortable: true, sortKey: 'is_active' },
+  { key: 'created', label: 'Created', sortable: true, sortKey: 'created_at' },
   { key: 'actions', label: 'Actions', align: 'right' },
 ]
+
+// Sorting state
+const sortKey = ref('name')
+const sortDirection = ref<'asc' | 'desc'>('asc')
 
 function openEditDialog(team: Team) {
   baseOpenEditDialog(team, (t) => ({ name: t.name, description: t.description || '', assignment_strategy: t.assignment_strategy, is_active: t.is_active }))
@@ -158,7 +162,7 @@ function getStrategyIcon(strategy: string) { return { round_robin: RotateCcw, lo
               <CardDescription>Organize agents into teams with assignment strategies: Round Robin, Load Balanced, or Manual Queue.</CardDescription>
             </CardHeader>
             <CardContent>
-              <DataTable :items="filteredTeams" :columns="columns" :is-loading="isLoading" :empty-icon="Users" :empty-title="searchQuery ? 'No teams found matching your search' : 'No teams created yet'">
+              <DataTable :items="filteredTeams" :columns="columns" :is-loading="isLoading" :empty-icon="Users" :empty-title="searchQuery ? 'No teams found matching your search' : 'No teams created yet'" v-model:sort-key="sortKey" v-model:sort-direction="sortDirection">
                 <template #empty-action>
                   <Button v-if="isAdmin && !searchQuery" variant="outline" size="sm" @click="openCreateDialog"><Plus class="h-4 w-4 mr-2" />Create First Team</Button>
                 </template>
