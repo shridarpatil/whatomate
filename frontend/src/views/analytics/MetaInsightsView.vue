@@ -22,7 +22,6 @@ import {
   type MetaAnalyticsAccount,
   type MetaAnalyticsResponse,
   type MetaMessagingDataPoint,
-  type MetaConversationDataPoint,
   type MetaPricingDataPoint,
   type MetaTemplateDataPoint,
   type MetaCallDataPoint
@@ -309,17 +308,6 @@ const aggregatedData = computed(() => {
     return aggregateMessagingData(allPoints)
   }
 
-  // For conversation analytics
-  if (activeTab.value === 'conversation_analytics') {
-    const allPoints: MetaConversationDataPoint[] = []
-    for (const account of analyticsData.value) {
-      if (account.data?.conversation_analytics?.data_points) {
-        allPoints.push(...account.data.conversation_analytics.data_points)
-      }
-    }
-    return aggregateConversationData(allPoints)
-  }
-
   // For pricing analytics
   if (activeTab.value === 'pricing_analytics') {
     const allPoints: MetaPricingDataPoint[] = []
@@ -381,55 +369,6 @@ function aggregateMessagingData(points: MetaMessagingDataPoint[]) {
       time,
       ...data
     }))
-  }
-}
-
-function aggregateConversationData(points: MetaConversationDataPoint[]) {
-  const byCategory = new Map<string, number>()
-  const byDirection = new Map<string, number>()
-  const byType = new Map<string, number>()
-  // Track free vs paid breakdown
-  const freeMessages = { total: 0, customerService: 0, entryPoint: 0 }
-  const paidMessages = { total: 0, byCategory: new Map<string, number>() }
-  let totalConversations = 0
-
-  for (const point of points) {
-    totalConversations += point.conversation
-
-    const category = point.conversation_category || 'OTHER'
-    byCategory.set(category, (byCategory.get(category) || 0) + point.conversation)
-
-    const direction = point.conversation_direction || 'UNKNOWN'
-    byDirection.set(direction, (byDirection.get(direction) || 0) + point.conversation)
-
-    const type = point.conversation_type || 'UNKNOWN'
-    byType.set(type, (byType.get(type) || 0) + point.conversation)
-
-    // Track free vs paid
-    if (type === 'FREE_TIER') {
-      freeMessages.total += point.conversation
-      freeMessages.customerService += point.conversation
-    } else if (type === 'FREE_ENTRY_POINT') {
-      freeMessages.total += point.conversation
-      freeMessages.entryPoint += point.conversation
-    } else {
-      // REGULAR = paid
-      paidMessages.total += point.conversation
-      const paidCat = paidMessages.byCategory.get(category) || 0
-      paidMessages.byCategory.set(category, paidCat + point.conversation)
-    }
-  }
-
-  return {
-    totals: { conversations: totalConversations },
-    byCategory: Object.fromEntries(byCategory),
-    byDirection: Object.fromEntries(byDirection),
-    byType: Object.fromEntries(byType),
-    freeMessages,
-    paidMessages: {
-      total: paidMessages.total,
-      byCategory: Object.fromEntries(paidMessages.byCategory)
-    }
   }
 }
 
@@ -602,53 +541,26 @@ const messagingChartData = computed(() => {
   }
 })
 
-const conversationCategoryChartData = computed(() => {
-  if (!aggregatedData.value || activeTab.value !== 'conversation_analytics') {
-    return { labels: [], datasets: [] }
-  }
-
-  const data = aggregatedData.value as ReturnType<typeof aggregateConversationData>
-  const categories = Object.entries(data.byCategory)
-
-  return {
-    labels: categories.map(([cat]) => formatCategory(cat)),
-    datasets: [{
-      data: categories.map(([, val]) => val),
-      backgroundColor: [
-        'rgba(59, 130, 246, 0.8)',
-        'rgba(16, 185, 129, 0.8)',
-        'rgba(245, 158, 11, 0.8)',
-        'rgba(139, 92, 246, 0.8)',
-        'rgba(236, 72, 153, 0.8)'
-      ],
-      borderWidth: 0
-    }]
-  }
-})
-
 const pricingChartData = computed(() => {
   if (!aggregatedData.value || activeTab.value !== 'pricing_analytics') {
     return { labels: [], datasets: [] }
   }
 
   const data = aggregatedData.value as ReturnType<typeof aggregatePricingData>
+  const categories = Object.entries(data.byCategory)
 
   return {
-    labels: data.timeSeries.map(d => formatTimestamp(d.start)),
+    labels: categories.map(([cat]) => formatCategory(cat)),
     datasets: [
       {
         label: 'Messages',
-        data: data.timeSeries.map(d => d.volume),
-        borderColor: 'rgba(59, 130, 246, 1)',
-        backgroundColor: 'rgba(59, 130, 246, 0.2)',
-        yAxisID: 'y'
+        data: categories.map(([, val]) => val.volume),
+        backgroundColor: 'rgba(59, 130, 246, 0.8)'
       },
       {
         label: 'Cost',
-        data: data.timeSeries.map(d => d.cost),
-        borderColor: 'rgba(16, 185, 129, 1)',
-        backgroundColor: 'rgba(16, 185, 129, 0.2)',
-        yAxisID: 'y1'
+        data: categories.map(([, val]) => val.cost),
+        backgroundColor: 'rgba(16, 185, 129, 0.8)'
       }
     ]
   }
@@ -708,44 +620,6 @@ const doughnutOptions = {
   }
 }
 
-const pricingChartOptions = {
-  responsive: true,
-  maintainAspectRatio: false,
-  interaction: {
-    mode: 'index' as const,
-    intersect: false
-  },
-  plugins: {
-    legend: {
-      position: 'bottom' as const
-    }
-  },
-  scales: {
-    y: {
-      type: 'linear' as const,
-      display: true,
-      position: 'left' as const,
-      title: {
-        display: true,
-        text: 'Messages'
-      },
-      beginAtZero: true
-    },
-    y1: {
-      type: 'linear' as const,
-      display: true,
-      position: 'right' as const,
-      title: {
-        display: true,
-        text: 'Cost'
-      },
-      beginAtZero: true,
-      grid: {
-        drawOnChartArea: false
-      }
-    }
-  }
-}
 </script>
 
 <template>
@@ -855,14 +729,10 @@ const pricingChartOptions = {
       <div class="p-6 space-y-6">
         <!-- Analytics Type Tabs -->
         <Tabs v-model="activeTab" class="w-full">
-          <TabsList class="grid w-full grid-cols-5 lg:w-auto lg:inline-flex">
+          <TabsList class="grid w-full grid-cols-4 lg:w-auto lg:inline-flex">
             <TabsTrigger value="analytics">
               <MessageSquare class="h-4 w-4 lg:mr-2" />
               <span class="hidden lg:inline">Messaging</span>
-            </TabsTrigger>
-            <TabsTrigger value="conversation_analytics">
-              <MessagesSquare class="h-4 w-4 lg:mr-2" />
-              <span class="hidden lg:inline">Conversations</span>
             </TabsTrigger>
             <TabsTrigger value="pricing_analytics">
               <DollarSign class="h-4 w-4 lg:mr-2" />
@@ -958,150 +828,6 @@ const pricingChartOptions = {
               </div>
             </template>
           </TabsContent>
-
-          <!-- Conversation Analytics -->
-          <TabsContent value="conversation_analytics" class="space-y-6">
-            <template v-if="isLoading">
-              <div class="grid gap-4 md:grid-cols-2">
-                <Skeleton class="h-64 bg-white/[0.08] light:bg-gray-200" />
-                <Skeleton class="h-64 bg-white/[0.08] light:bg-gray-200" />
-              </div>
-            </template>
-            <template v-else-if="aggregatedData && activeTab === 'conversation_analytics'">
-              <!-- Summary Stats -->
-              <div class="grid gap-4 md:grid-cols-3">
-                <div class="card-depth rounded-xl border border-white/[0.08] bg-white/[0.04] p-6 light:bg-white light:border-gray-200">
-                  <div class="flex flex-row items-center justify-between space-y-0 pb-2">
-                    <span class="text-sm font-medium text-white/50 light:text-gray-500">Total Messages</span>
-                    <div class="h-10 w-10 rounded-lg bg-blue-500/20 flex items-center justify-center">
-                      <MessagesSquare class="h-5 w-5 text-blue-400" />
-                    </div>
-                  </div>
-                  <div class="pt-2">
-                    <div class="text-3xl font-bold text-white light:text-gray-900">
-                      {{ (aggregatedData as ReturnType<typeof aggregateConversationData>).totals.conversations.toLocaleString() }}
-                    </div>
-                  </div>
-                </div>
-
-                <div class="card-depth rounded-xl border border-white/[0.08] bg-white/[0.04] p-6 light:bg-white light:border-gray-200">
-                  <div class="flex flex-row items-center justify-between space-y-0 pb-2">
-                    <span class="text-sm font-medium text-white/50 light:text-gray-500">Free Messages</span>
-                    <div class="h-10 w-10 rounded-lg bg-green-500/20 flex items-center justify-center">
-                      <Check class="h-5 w-5 text-green-400" />
-                    </div>
-                  </div>
-                  <div class="pt-2">
-                    <div class="text-3xl font-bold text-white light:text-gray-900">
-                      {{ (aggregatedData as ReturnType<typeof aggregateConversationData>).freeMessages.total.toLocaleString() }}
-                    </div>
-                  </div>
-                </div>
-
-                <div class="card-depth rounded-xl border border-white/[0.08] bg-white/[0.04] p-6 light:bg-white light:border-gray-200">
-                  <div class="flex flex-row items-center justify-between space-y-0 pb-2">
-                    <span class="text-sm font-medium text-white/50 light:text-gray-500">Paid Messages</span>
-                    <div class="h-10 w-10 rounded-lg bg-amber-500/20 flex items-center justify-center">
-                      <CreditCard class="h-5 w-5 text-amber-400" />
-                    </div>
-                  </div>
-                  <div class="pt-2">
-                    <div class="text-3xl font-bold text-white light:text-gray-900">
-                      {{ (aggregatedData as ReturnType<typeof aggregateConversationData>).paidMessages.total.toLocaleString() }}
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              <!-- Detailed Breakdown -->
-              <div class="grid gap-6 lg:grid-cols-2">
-                <!-- Messages by Category -->
-                <Card>
-                  <CardHeader>
-                    <CardTitle>Messages by Category</CardTitle>
-                    <CardDescription>Breakdown by conversation category</CardDescription>
-                  </CardHeader>
-                  <CardContent>
-                    <div class="space-y-3">
-                      <div v-for="(count, category) in (aggregatedData as ReturnType<typeof aggregateConversationData>).byCategory" :key="category" class="flex items-center justify-between py-2 border-b border-white/[0.08] light:border-gray-100 last:border-0">
-                        <span class="text-sm text-white/70 light:text-gray-600">{{ formatCategory(category as string) }}</span>
-                        <span class="font-semibold text-white light:text-gray-900">{{ (count as number).toLocaleString() }}</span>
-                      </div>
-                    </div>
-                  </CardContent>
-                </Card>
-
-                <!-- Free Messages Breakdown -->
-                <Card>
-                  <CardHeader>
-                    <CardTitle>Free Messages</CardTitle>
-                    <CardDescription>Free tier message breakdown</CardDescription>
-                  </CardHeader>
-                  <CardContent>
-                    <div class="space-y-3">
-                      <div class="flex items-center justify-between py-2 border-b border-white/[0.08] light:border-gray-100">
-                        <span class="text-sm text-white/70 light:text-gray-600">Free Customer Service</span>
-                        <span class="font-semibold text-white light:text-gray-900">{{ (aggregatedData as ReturnType<typeof aggregateConversationData>).freeMessages.customerService.toLocaleString() }}</span>
-                      </div>
-                      <div class="flex items-center justify-between py-2 border-b border-white/[0.08] light:border-gray-100">
-                        <span class="text-sm text-white/70 light:text-gray-600">Free Entry Point</span>
-                        <span class="font-semibold text-white light:text-gray-900">{{ (aggregatedData as ReturnType<typeof aggregateConversationData>).freeMessages.entryPoint.toLocaleString() }}</span>
-                      </div>
-                      <div class="flex items-center justify-between py-2 bg-green-500/10 rounded px-2 -mx-2">
-                        <span class="text-sm font-medium text-green-400 light:text-green-600">Total Free</span>
-                        <span class="font-bold text-green-400 light:text-green-600">{{ (aggregatedData as ReturnType<typeof aggregateConversationData>).freeMessages.total.toLocaleString() }}</span>
-                      </div>
-                    </div>
-                  </CardContent>
-                </Card>
-
-                <!-- Paid Messages by Category -->
-                <Card>
-                  <CardHeader>
-                    <CardTitle>Paid Messages</CardTitle>
-                    <CardDescription>Paid message breakdown by category</CardDescription>
-                  </CardHeader>
-                  <CardContent>
-                    <div class="space-y-3">
-                      <div v-for="(count, category) in (aggregatedData as ReturnType<typeof aggregateConversationData>).paidMessages.byCategory" :key="category" class="flex items-center justify-between py-2 border-b border-white/[0.08] light:border-gray-100 last:border-0">
-                        <span class="text-sm text-white/70 light:text-gray-600">{{ formatCategory(category as string) }}</span>
-                        <span class="font-semibold text-white light:text-gray-900">{{ (count as number).toLocaleString() }}</span>
-                      </div>
-                      <div v-if="Object.keys((aggregatedData as ReturnType<typeof aggregateConversationData>).paidMessages.byCategory).length === 0" class="text-center text-white/40 light:text-gray-400 py-4">
-                        No paid messages
-                      </div>
-                      <div v-else class="flex items-center justify-between py-2 bg-amber-500/10 rounded px-2 -mx-2">
-                        <span class="text-sm font-medium text-amber-400 light:text-amber-600">Total Paid</span>
-                        <span class="font-bold text-amber-400 light:text-amber-600">{{ (aggregatedData as ReturnType<typeof aggregateConversationData>).paidMessages.total.toLocaleString() }}</span>
-                      </div>
-                    </div>
-                  </CardContent>
-                </Card>
-              </div>
-
-              <!-- Chart -->
-              <Card>
-                <CardHeader>
-                  <CardTitle>Conversations by Category</CardTitle>
-                  <CardDescription>Visual distribution of conversation types</CardDescription>
-                </CardHeader>
-                <CardContent>
-                  <div class="h-80">
-                    <Doughnut v-if="conversationCategoryChartData.labels.length > 0" :data="conversationCategoryChartData" :options="doughnutOptions" />
-                    <div v-else class="h-full flex items-center justify-center text-muted-foreground">
-                      No data available for the selected period
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
-            </template>
-            <template v-else>
-              <div class="text-center py-12 text-muted-foreground">
-                No conversation analytics data available
-              </div>
-            </template>
-          </TabsContent>
-
           <!-- Pricing Analytics -->
           <TabsContent value="pricing_analytics" class="space-y-6">
             <template v-if="isLoading">
@@ -1142,18 +868,107 @@ const pricingChartOptions = {
               <!-- Chart -->
               <Card>
                 <CardHeader>
-                  <CardTitle>Messages & Cost Over Time</CardTitle>
-                  <CardDescription>Daily message volume and associated costs</CardDescription>
+                  <CardTitle>Messages & Cost by Category</CardTitle>
+                  <CardDescription>Breakdown by pricing category</CardDescription>
                 </CardHeader>
                 <CardContent>
                   <div class="h-80">
-                    <Line v-if="pricingChartData.labels.length > 0" :data="pricingChartData" :options="pricingChartOptions" />
+                    <Bar v-if="pricingChartData.labels.length > 0" :data="pricingChartData" :options="chartOptions" />
                     <div v-else class="h-full flex items-center justify-center text-muted-foreground">
                       No data available for the selected period
                     </div>
                   </div>
                 </CardContent>
               </Card>
+
+              <!-- Detailed Breakdown -->
+              <div class="grid gap-6 lg:grid-cols-2">
+                <!-- Free Messages Breakdown -->
+                <Card>
+                  <CardHeader>
+                    <CardTitle>Free Messages</CardTitle>
+                    <CardDescription>Free tier message breakdown</CardDescription>
+                  </CardHeader>
+                  <CardContent>
+                    <div class="space-y-3">
+                      <div class="flex items-center justify-between py-2 border-b border-white/[0.08] light:border-gray-100">
+                        <span class="text-sm text-white/70 light:text-gray-600">Free Customer Service</span>
+                        <span class="font-semibold text-white light:text-gray-900">{{ (aggregatedData as ReturnType<typeof aggregatePricingData>).freeMessages.customerService.toLocaleString() }}</span>
+                      </div>
+                      <div class="flex items-center justify-between py-2 border-b border-white/[0.08] light:border-gray-100">
+                        <span class="text-sm text-white/70 light:text-gray-600">Free Entry Point</span>
+                        <span class="font-semibold text-white light:text-gray-900">{{ (aggregatedData as ReturnType<typeof aggregatePricingData>).freeMessages.entryPoint.toLocaleString() }}</span>
+                      </div>
+                      <div class="flex items-center justify-between py-2 bg-green-500/10 rounded px-2 -mx-2">
+                        <span class="text-sm font-medium text-green-400 light:text-green-600">Total Free</span>
+                        <span class="font-bold text-green-400 light:text-green-600">{{ (aggregatedData as ReturnType<typeof aggregatePricingData>).freeMessages.total.toLocaleString() }}</span>
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+
+                <!-- Paid Messages by Category -->
+                <Card>
+                  <CardHeader>
+                    <CardTitle>Paid Messages</CardTitle>
+                    <CardDescription>Paid message breakdown by category</CardDescription>
+                  </CardHeader>
+                  <CardContent>
+                    <div class="space-y-3">
+                      <div v-for="(count, category) in (aggregatedData as ReturnType<typeof aggregatePricingData>).paidMessages.byCategory" :key="category" class="flex items-center justify-between py-2 border-b border-white/[0.08] light:border-gray-100 last:border-0">
+                        <span class="text-sm text-white/70 light:text-gray-600">{{ formatCategory(category as string) }}</span>
+                        <span class="font-semibold text-white light:text-gray-900">{{ (count as number).toLocaleString() }}</span>
+                      </div>
+                      <div v-if="Object.keys((aggregatedData as ReturnType<typeof aggregatePricingData>).paidMessages.byCategory).length === 0" class="text-center text-white/40 light:text-gray-400 py-4">
+                        No paid messages
+                      </div>
+                      <div v-else class="flex items-center justify-between py-2 bg-amber-500/10 rounded px-2 -mx-2">
+                        <span class="text-sm font-medium text-amber-400 light:text-amber-600">Total Paid</span>
+                        <span class="font-bold text-amber-400 light:text-amber-600">{{ (aggregatedData as ReturnType<typeof aggregatePricingData>).paidMessages.total.toLocaleString() }}</span>
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+
+                <!-- Cost by Category -->
+                <Card>
+                  <CardHeader>
+                    <CardTitle>Cost by Category</CardTitle>
+                    <CardDescription>Approximate charges breakdown</CardDescription>
+                  </CardHeader>
+                  <CardContent>
+                    <div class="space-y-3">
+                      <div v-for="(cost, category) in (aggregatedData as ReturnType<typeof aggregatePricingData>).costByCategory" :key="category" class="flex items-center justify-between py-2 border-b border-white/[0.08] light:border-gray-100 last:border-0">
+                        <span class="text-sm text-white/70 light:text-gray-600">{{ formatCategory(category as string) }}</span>
+                        <span class="font-semibold text-white light:text-gray-900">{{ formatCurrency(cost as number) }}</span>
+                      </div>
+                      <div class="flex items-center justify-between py-2 bg-emerald-500/10 rounded px-2 -mx-2">
+                        <span class="text-sm font-medium text-emerald-400 light:text-emerald-600">Total Cost</span>
+                        <span class="font-bold text-emerald-400 light:text-emerald-600">{{ formatCurrency((aggregatedData as ReturnType<typeof aggregatePricingData>).totals.cost) }}</span>
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+
+                <!-- By Country -->
+                <Card>
+                  <CardHeader>
+                    <CardTitle>By Country</CardTitle>
+                    <CardDescription>Message and cost breakdown by country</CardDescription>
+                  </CardHeader>
+                  <CardContent>
+                    <div class="space-y-3">
+                      <div v-for="(data, country) in (aggregatedData as ReturnType<typeof aggregatePricingData>).byCountry" :key="country" class="flex items-center justify-between py-2 border-b border-white/[0.08] light:border-gray-100 last:border-0">
+                        <span class="text-sm text-white/70 light:text-gray-600">{{ country }}</span>
+                        <div class="text-right">
+                          <span class="font-semibold text-white light:text-gray-900">{{ (data as {volume: number, cost: number}).volume.toLocaleString() }} msgs</span>
+                          <span class="text-white/50 light:text-gray-500 ml-2">{{ formatCurrency((data as {volume: number, cost: number}).cost) }}</span>
+                        </div>
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+              </div>
             </template>
             <template v-else>
               <div class="text-center py-12 text-muted-foreground">
