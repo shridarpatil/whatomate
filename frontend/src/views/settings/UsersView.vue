@@ -182,7 +182,24 @@ function getRoleName(user: User) { return user.role?.name || 'No role' }
         <div class="space-y-2"><Label for="password">Password <span v-if="!editingUser" class="text-destructive">*</span><span v-else class="text-muted-foreground">(leave blank to keep existing)</span></Label><Input id="password" v-model="formData.password" type="password" placeholder="Enter password" /></div>
         <div class="space-y-2">
           <Label for="role">Role <span class="text-destructive">*</span></Label>
-          <Select v-model="formData.role_id"><SelectTrigger><SelectValue placeholder="Select role" /></SelectTrigger><SelectContent><SelectItem v-for="role in rolesStore.roles" :key="role.id" :value="role.id"><div class="flex items-center gap-2"><span class="capitalize">{{ role.name }}</span><Badge v-if="role.is_system" variant="secondary" class="text-xs">System</Badge></div></SelectItem></SelectContent></Select>
+          <Select v-model="formData.role_id">
+            <SelectTrigger>
+              <SelectValue placeholder="Select role">
+                <template v-if="formData.role_id">
+                  <span class="capitalize">{{ rolesStore.roles.find(r => r.id === formData.role_id)?.name }}</span>
+                  <Badge v-if="rolesStore.roles.find(r => r.id === formData.role_id)?.is_system" variant="secondary" class="text-xs ml-2">System</Badge>
+                </template>
+              </SelectValue>
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem v-for="role in rolesStore.roles" :key="role.id" :value="role.id">
+                <div class="flex items-center gap-2">
+                  <span class="capitalize">{{ role.name }}</span>
+                  <Badge v-if="role.is_system" variant="secondary" class="text-xs">System</Badge>
+                </div>
+              </SelectItem>
+            </SelectContent>
+          </Select>
         </div>
         <div v-if="editingUser" class="flex items-center justify-between"><Label for="is_active" class="font-normal cursor-pointer">Account Active</Label><Switch id="is_active" :checked="formData.is_active" @update:checked="formData.is_active = $event" :disabled="editingUser?.id === currentUserId" /></div>
         <div v-if="isSuperAdmin" class="flex items-center justify-between border-t pt-4"><div><Label for="is_super_admin" class="font-normal cursor-pointer">Super Admin</Label><p class="text-xs text-muted-foreground">Super admins can access all organizations</p></div><Switch id="is_super_admin" :checked="formData.is_super_admin" @update:checked="formData.is_super_admin = $event" :disabled="editingUser?.id === currentUserId && editingUser?.is_super_admin" /></div>
