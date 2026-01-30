@@ -143,3 +143,61 @@ test.describe('Users - Role-based Access', () => {
     // This test should be updated based on actual RBAC implementation
   })
 })
+
+test.describe('Users - Table Sorting', () => {
+  let tablePage: TablePage
+
+  test.beforeEach(async ({ page }) => {
+    await loginAsAdmin(page)
+    await page.goto('/settings/users')
+    await page.waitForLoadState('networkidle')
+    tablePage = new TablePage(page)
+  })
+
+  test('should sort by user name ascending', async () => {
+    await tablePage.clickColumnHeader('User')
+    await tablePage.expectSortDirection('User', 'asc')
+  })
+
+  test('should toggle sort direction on column click', async () => {
+    // First click - ascending (default)
+    await tablePage.clickColumnHeader('User')
+    await tablePage.expectSortDirection('User', 'asc')
+
+    // Second click - descending
+    await tablePage.clickColumnHeader('User')
+    await tablePage.expectSortDirection('User', 'desc')
+  })
+
+  test('should sort by created date', async () => {
+    await tablePage.clickColumnHeader('Created')
+    const direction = await tablePage.getSortDirection('Created')
+    expect(direction).not.toBeNull()
+  })
+
+  test('should sort by status', async () => {
+    await tablePage.clickColumnHeader('Status')
+    const direction = await tablePage.getSortDirection('Status')
+    expect(direction).not.toBeNull()
+  })
+
+  test('should sort by role', async () => {
+    await tablePage.clickColumnHeader('Role')
+    const direction = await tablePage.getSortDirection('Role')
+    expect(direction).not.toBeNull()
+  })
+
+  test('should change sort column when clicking different header', async () => {
+    // Sort by User first
+    await tablePage.clickColumnHeader('User')
+    await tablePage.expectSortDirection('User', 'asc')
+
+    // Then sort by Created
+    await tablePage.clickColumnHeader('Created')
+    await tablePage.expectSortDirection('Created', 'desc')
+
+    // User column should no longer show sort indicator
+    const userSort = await tablePage.getSortDirection('User')
+    expect(userSort).toBeNull()
+  })
+})

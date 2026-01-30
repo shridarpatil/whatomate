@@ -136,6 +136,51 @@ test.describe('Teams Management', () => {
   })
 })
 
+test.describe('Teams - Table Sorting', () => {
+  let tablePage: TablePage
+
+  test.beforeEach(async ({ page }) => {
+    await loginAsAdmin(page)
+    await page.goto('/settings/teams')
+    await page.waitForLoadState('networkidle')
+    tablePage = new TablePage(page)
+  })
+
+  test('should sort by team name', async () => {
+    await tablePage.clickColumnHeader('Team')
+    const direction = await tablePage.getSortDirection('Team')
+    expect(direction).not.toBeNull()
+  })
+
+  test('should sort by strategy', async () => {
+    await tablePage.clickColumnHeader('Strategy')
+    const direction = await tablePage.getSortDirection('Strategy')
+    expect(direction).not.toBeNull()
+  })
+
+  test('should sort by status', async () => {
+    await tablePage.clickColumnHeader('Status')
+    const direction = await tablePage.getSortDirection('Status')
+    expect(direction).not.toBeNull()
+  })
+
+  test('should sort by created date', async () => {
+    await tablePage.clickColumnHeader('Created')
+    const direction = await tablePage.getSortDirection('Created')
+    expect(direction).not.toBeNull()
+  })
+
+  test('should toggle sort direction', async () => {
+    await tablePage.clickColumnHeader('Team')
+    const firstDirection = await tablePage.getSortDirection('Team')
+
+    await tablePage.clickColumnHeader('Team')
+    const secondDirection = await tablePage.getSortDirection('Team')
+
+    expect(firstDirection).not.toEqual(secondDirection)
+  })
+})
+
 test.describe('Team Members', () => {
   let tablePage: TablePage
   let dialogPage: DialogPage

@@ -126,4 +126,49 @@ export class TablePage extends BasePage {
     const rowCount = await this.getRowCount()
     expect(hasEmptyMessage || rowCount === 0).toBeTruthy()
   }
+
+  // Sorting helpers
+  getColumnHeader(columnName: string): Locator {
+    return this.page.locator('thead th').filter({ hasText: columnName })
+  }
+
+  async clickColumnHeader(columnName: string) {
+    await this.getColumnHeader(columnName).click()
+    await this.page.waitForTimeout(300)
+  }
+
+  async getSortDirection(columnName: string): Promise<'asc' | 'desc' | null> {
+    const header = this.getColumnHeader(columnName)
+    const arrowUp = header.locator('.lucide-arrow-up')
+    const arrowDown = header.locator('.lucide-arrow-down')
+
+    if (await arrowUp.count() > 0) return 'asc'
+    if (await arrowDown.count() > 0) return 'desc'
+    return null
+  }
+
+  async expectSortDirection(columnName: string, direction: 'asc' | 'desc') {
+    const actual = await this.getSortDirection(columnName)
+    expect(actual).toBe(direction)
+  }
+
+  async getColumnValues(columnIndex: number): Promise<string[]> {
+    const cells = this.page.locator(`tbody tr td:nth-child(${columnIndex + 1})`)
+    const count = await cells.count()
+    const values: string[] = []
+    for (let i = 0; i < count; i++) {
+      const text = await cells.nth(i).textContent()
+      values.push(text?.trim() || '')
+    }
+    return values
+  }
+
+  async expectColumnSorted(columnIndex: number, direction: 'asc' | 'desc') {
+    const values = await this.getColumnValues(columnIndex)
+    const sorted = [...values].sort((a, b) => {
+      const comparison = a.localeCompare(b, undefined, { sensitivity: 'base' })
+      return direction === 'asc' ? comparison : -comparison
+    })
+    expect(values).toEqual(sorted)
+  }
 }

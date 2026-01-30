@@ -93,3 +93,47 @@ test.describe('API Keys Management', () => {
     await apiKeysPage.expectDialogHidden()
   })
 })
+
+test.describe('API Keys - Table Sorting', () => {
+  let apiKeysPage: ApiKeysPage
+
+  test.beforeEach(async ({ page }) => {
+    await loginAsAdmin(page)
+    apiKeysPage = new ApiKeysPage(page)
+    await apiKeysPage.goto()
+  })
+
+  test('should sort by name', async () => {
+    await apiKeysPage.clickColumnHeader('Name')
+    const direction = await apiKeysPage.getSortDirection('Name')
+    expect(direction).not.toBeNull()
+  })
+
+  test('should sort by last used', async () => {
+    await apiKeysPage.clickColumnHeader('Last Used')
+    const direction = await apiKeysPage.getSortDirection('Last Used')
+    expect(direction).not.toBeNull()
+  })
+
+  test('should sort by expires', async () => {
+    await apiKeysPage.clickColumnHeader('Expires')
+    const direction = await apiKeysPage.getSortDirection('Expires')
+    expect(direction).not.toBeNull()
+  })
+
+  test('should sort by status', async () => {
+    await apiKeysPage.clickColumnHeader('Status')
+    const direction = await apiKeysPage.getSortDirection('Status')
+    expect(direction).not.toBeNull()
+  })
+
+  test('should toggle sort direction', async () => {
+    await apiKeysPage.clickColumnHeader('Name')
+    const firstDirection = await apiKeysPage.getSortDirection('Name')
+
+    await apiKeysPage.clickColumnHeader('Name')
+    const secondDirection = await apiKeysPage.getSortDirection('Name')
+
+    expect(firstDirection).not.toEqual(secondDirection)
+  })
+})

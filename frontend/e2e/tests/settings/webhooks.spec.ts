@@ -187,3 +187,50 @@ test.describe('Webhook Testing', () => {
     }
   })
 })
+
+test.describe('Webhooks - Table Sorting', () => {
+  let tablePage: TablePage
+
+  test.beforeEach(async ({ page }) => {
+    await loginAsAdmin(page)
+    await page.goto('/settings/webhooks')
+    await page.waitForLoadState('networkidle')
+    tablePage = new TablePage(page)
+  })
+
+  test('should sort by name', async () => {
+    await tablePage.clickColumnHeader('Name')
+    const direction = await tablePage.getSortDirection('Name')
+    expect(direction).not.toBeNull()
+  })
+
+  test('should sort by URL', async () => {
+    await tablePage.clickColumnHeader('URL')
+    const direction = await tablePage.getSortDirection('URL')
+    expect(direction).not.toBeNull()
+  })
+
+  test('should sort by status', async () => {
+    await tablePage.clickColumnHeader('Status')
+    const direction = await tablePage.getSortDirection('Status')
+    expect(direction).not.toBeNull()
+  })
+
+  test('should sort by created date', async () => {
+    await tablePage.clickColumnHeader('Created')
+    const direction = await tablePage.getSortDirection('Created')
+    expect(direction).not.toBeNull()
+  })
+
+  test('should toggle sort direction', async () => {
+    // First click
+    await tablePage.clickColumnHeader('Name')
+    const firstDirection = await tablePage.getSortDirection('Name')
+
+    // Second click - should toggle
+    await tablePage.clickColumnHeader('Name')
+    const secondDirection = await tablePage.getSortDirection('Name')
+
+    expect(firstDirection).not.toEqual(secondDirection)
+  })
+})

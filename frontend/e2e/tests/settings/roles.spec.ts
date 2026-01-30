@@ -236,6 +236,51 @@ test.describe('Roles Management', () => {
   })
 })
 
+test.describe('Roles - Table Sorting', () => {
+  let tablePage: TablePage
+
+  test.beforeEach(async ({ page }) => {
+    await loginAsAdmin(page)
+    await page.goto('/settings/roles')
+    await page.waitForLoadState('networkidle')
+    tablePage = new TablePage(page)
+  })
+
+  test('should sort by role name', async () => {
+    await tablePage.clickColumnHeader('Role')
+    const direction = await tablePage.getSortDirection('Role')
+    expect(direction).not.toBeNull()
+  })
+
+  test('should sort by description', async () => {
+    await tablePage.clickColumnHeader('Description')
+    const direction = await tablePage.getSortDirection('Description')
+    expect(direction).not.toBeNull()
+  })
+
+  test('should sort by user count', async () => {
+    await tablePage.clickColumnHeader('Users')
+    const direction = await tablePage.getSortDirection('Users')
+    expect(direction).not.toBeNull()
+  })
+
+  test('should sort by created date', async () => {
+    await tablePage.clickColumnHeader('Created')
+    const direction = await tablePage.getSortDirection('Created')
+    expect(direction).not.toBeNull()
+  })
+
+  test('should toggle sort direction', async () => {
+    await tablePage.clickColumnHeader('Role')
+    const firstDirection = await tablePage.getSortDirection('Role')
+
+    await tablePage.clickColumnHeader('Role')
+    const secondDirection = await tablePage.getSortDirection('Role')
+
+    expect(firstDirection).not.toEqual(secondDirection)
+  })
+})
+
 test.describe('Roles - Permissions Selection', () => {
   test('should display permission groups in accordion', async ({ page }) => {
     await loginAsAdmin(page)
