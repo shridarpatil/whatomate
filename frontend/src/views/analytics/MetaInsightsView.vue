@@ -434,34 +434,65 @@ function aggregateConversationData(points: MetaConversationDataPoint[]) {
 }
 
 function aggregatePricingData(points: MetaPricingDataPoint[]) {
-  // Meta's July 2025 pricing model returns volume + cost per time period
-  // without category breakdown
-  const byTime = new Map<number, { volume: number; cost: number }>()
+  // Aggregate by category, type, and country
+  const byCategory = new Map<string, { volume: number; cost: number }>()
+  const byType = new Map<string, { volume: number; cost: number }>()
+  const byCountry = new Map<string, { volume: number; cost: number }>()
+
+  // Track free vs paid
+  const freeMessages = { total: 0, customerService: 0, entryPoint: 0 }
+  const paidMessages = { total: 0, byCategory: new Map<string, number>() }
+  const costByCategory = new Map<string, number>()
+
   let totalVolume = 0
   let totalCost = 0
 
   for (const point of points) {
-    totalVolume += point.volume || 0
-    totalCost += point.cost || 0
+    const volume = point.volume || 0
+    const cost = point.cost || 0
+    totalVolume += volume
+    totalCost += cost
 
-    // Group by start timestamp for time series
-    const existing = byTime.get(point.start) || { volume: 0, cost: 0 }
-    byTime.set(point.start, {
-      volume: existing.volume + (point.volume || 0),
-      cost: existing.cost + (point.cost || 0)
-    })
+    // By pricing category (MARKETING, UTILITY, AUTHENTICATION, SERVICE)
+    const category = point.pricing_category || 'OTHER'
+    const catData = byCategory.get(category) || { volume: 0, cost: 0 }
+    byCategory.set(category, { volume: catData.volume + volume, cost: catData.cost + cost })
+    costByCategory.set(category, (costByCategory.get(category) || 0) + cost)
+
+    // By pricing type (FREE_CUSTOMER_SERVICE, FREE_ENTRY_POINT, REGULAR)
+    const pricingType = point.pricing_type || 'OTHER'
+    const typeData = byType.get(pricingType) || { volume: 0, cost: 0 }
+    byType.set(pricingType, { volume: typeData.volume + volume, cost: typeData.cost + cost })
+
+    // Free vs Paid breakdown
+    if (pricingType === 'FREE_CUSTOMER_SERVICE') {
+      freeMessages.total += volume
+      freeMessages.customerService += volume
+    } else if (pricingType === 'FREE_ENTRY_POINT') {
+      freeMessages.total += volume
+      freeMessages.entryPoint += volume
+    } else {
+      paidMessages.total += volume
+      paidMessages.byCategory.set(category, (paidMessages.byCategory.get(category) || 0) + volume)
+    }
+
+    // By country
+    const country = point.country || 'UNKNOWN'
+    const countryData = byCountry.get(country) || { volume: 0, cost: 0 }
+    byCountry.set(country, { volume: countryData.volume + volume, cost: countryData.cost + cost })
   }
-
-  // Sort by time
-  const sortedEntries = Array.from(byTime.entries()).sort((a, b) => a[0] - b[0])
 
   return {
     totals: { volume: totalVolume, cost: totalCost },
-    timeSeries: sortedEntries.map(([start, data]) => ({
-      start,
-      volume: data.volume,
-      cost: data.cost
-    }))
+    byCategory: Object.fromEntries(byCategory),
+    byType: Object.fromEntries(byType),
+    byCountry: Object.fromEntries(byCountry),
+    freeMessages,
+    paidMessages: {
+      total: paidMessages.total,
+      byCategory: Object.fromEntries(paidMessages.byCategory)
+    },
+    costByCategory: Object.fromEntries(costByCategory)
   }
 }
 

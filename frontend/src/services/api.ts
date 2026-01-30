@@ -348,10 +348,12 @@ export interface MetaConversationDataPoint {
 export interface MetaPricingDataPoint {
   start: number
   end: number
-  volume: number  // Message count (Meta's new pricing model)
+  volume: number
   cost: number
-  conversation_category?: string  // May not be present in new model
-  country_code?: string
+  country?: string              // Country code (IN, US, etc.)
+  pricing_type?: string         // FREE_CUSTOMER_SERVICE, FREE_ENTRY_POINT, REGULAR
+  pricing_category?: string     // MARKETING, UTILITY, AUTHENTICATION, SERVICE, etc.
+  tier?: string                 // Pricing tier
 }
 
 export interface MetaTemplateCostItem {

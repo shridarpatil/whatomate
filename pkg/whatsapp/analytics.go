@@ -89,15 +89,16 @@ type ConversationAnalytics struct {
 }
 
 // PricingAnalyticsDataPoint represents a single data point for pricing analytics
-// Note: Meta's July 2025 pricing model change means we get volume+cost per time period
-// instead of breakdown by conversation_category
+// With dimensions, this includes detailed breakdown by category, type, and country
 type PricingAnalyticsDataPoint struct {
-	Start                int64   `json:"start"`
-	End                  int64   `json:"end"`
-	Volume               int64   `json:"volume"`                                  // Message count (new pricing model)
-	Cost                 float64 `json:"cost"`                                    // Cost in account currency
-	ConversationCategory string  `json:"conversation_category,omitempty"`         // May not be present in new model
-	CountryCode          string  `json:"country_code,omitempty"`
+	Start           int64   `json:"start"`
+	End             int64   `json:"end"`
+	Volume          int64   `json:"volume"`                      // Message count
+	Cost            float64 `json:"cost"`                        // Cost in account currency
+	Country         string  `json:"country,omitempty"`           // Country code (IN, US, etc.)
+	PricingType     string  `json:"pricing_type,omitempty"`      // FREE_CUSTOMER_SERVICE, FREE_ENTRY_POINT, REGULAR
+	PricingCategory string  `json:"pricing_category,omitempty"`  // MARKETING, UTILITY, AUTHENTICATION, SERVICE, etc.
+	Tier            string  `json:"tier,omitempty"`              // Pricing tier
 }
 
 // PricingAnalyticsEntry represents a single phone number's pricing data
@@ -399,6 +400,11 @@ func (c *Client) buildAnalyticsURL(account *Account, analyticsType AnalyticsType
 	if len(req.CountryCodes) > 0 && analyticsType == AnalyticsTypePricing {
 		countriesJSON, _ := json.Marshal(req.CountryCodes)
 		filters = append(filters, fmt.Sprintf("country_codes(%s)", string(countriesJSON)))
+	}
+
+	// Add dimensions for pricing_analytics to get detailed breakdown
+	if analyticsType == AnalyticsTypePricing {
+		filters = append(filters, "dimensions(PRICING_CATEGORY,PRICING_TYPE,COUNTRY)")
 	}
 
 	// Add phone_numbers and dimensions for conversation_analytics (per Meta docs)
