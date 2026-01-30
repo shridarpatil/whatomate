@@ -71,7 +71,7 @@ export const navigationItems: NavItem[] = [
     name: 'Meta Insights',
     path: '/analytics/meta-insights',
     icon: LineChart,
-    permission: 'analytics.meta'
+    permission: 'analytics'
   },
   {
     name: 'Templates',
