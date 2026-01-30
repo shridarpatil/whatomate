@@ -154,19 +154,20 @@ test.describe('Users - Table Sorting', () => {
     tablePage = new TablePage(page)
   })
 
-  test('should sort by user name ascending', async () => {
-    await tablePage.clickColumnHeader('User')
+  test('should have default sort by user name ascending', async () => {
+    // UsersView defaults to sorting by full_name ascending
     await tablePage.expectSortDirection('User', 'asc')
   })
 
   test('should toggle sort direction on column click', async () => {
-    // First click - ascending (default)
-    await tablePage.clickColumnHeader('User')
-    await tablePage.expectSortDirection('User', 'asc')
-
-    // Second click - descending
+    // User column is already sorted ascending by default
+    // First click toggles to descending
     await tablePage.clickColumnHeader('User')
     await tablePage.expectSortDirection('User', 'desc')
+
+    // Second click toggles back to ascending
+    await tablePage.clickColumnHeader('User')
+    await tablePage.expectSortDirection('User', 'asc')
   })
 
   test('should sort by created date', async () => {
@@ -188,11 +189,10 @@ test.describe('Users - Table Sorting', () => {
   })
 
   test('should change sort column when clicking different header', async () => {
-    // Sort by User first
-    await tablePage.clickColumnHeader('User')
+    // User is already sorted ascending by default
     await tablePage.expectSortDirection('User', 'asc')
 
-    // Then sort by Created
+    // Click Created - switches to that column with desc direction
     await tablePage.clickColumnHeader('Created')
     await tablePage.expectSortDirection('Created', 'desc')
 
