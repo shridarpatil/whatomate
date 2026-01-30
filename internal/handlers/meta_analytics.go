@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"strconv"
 	"time"
 
 	"github.com/google/uuid"
@@ -442,17 +441,4 @@ func (a *App) getMetaAnalyticsCacheTTL(granularity string) time.Duration {
 	default:
 		return metaAnalyticsCacheDayTTL
 	}
-}
-
-// Helper function to parse int64 from query args
-func parseIntParam(r *fastglue.Request, key string, defaultVal int64) int64 {
-	strVal := string(r.RequestCtx.QueryArgs().Peek(key))
-	if strVal == "" {
-		return defaultVal
-	}
-	val, err := strconv.ParseInt(strVal, 10, 64)
-	if err != nil {
-		return defaultVal
-	}
-	return val
 }
