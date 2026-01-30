@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { onMounted, computed, watch } from 'vue'
+import { ref, onMounted, computed, watch } from 'vue'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { Button } from '@/components/ui/button'
@@ -50,12 +50,16 @@ const { currentPage, paginatedItems: paginatedUsers, totalPages, pageSize, needs
 watch(searchQuery, () => { currentPage.value = 1 })
 
 const columns: Column<User>[] = [
-  { key: 'user', label: 'User', width: 'w-[300px]' },
-  { key: 'role', label: 'Role' },
-  { key: 'status', label: 'Status' },
-  { key: 'created', label: 'Created' },
+  { key: 'user', label: 'User', width: 'w-[300px]', sortable: true, sortKey: 'full_name' },
+  { key: 'role', label: 'Role', sortable: true, sortKey: 'role.name' },
+  { key: 'status', label: 'Status', sortable: true, sortKey: 'is_active' },
+  { key: 'created', label: 'Created', sortable: true, sortKey: 'created_at' },
   { key: 'actions', label: 'Actions', align: 'right' },
 ]
+
+// Sorting state
+const sortKey = ref('full_name')
+const sortDirection = ref<'asc' | 'desc'>('asc')
 
 const currentUserId = computed(() => authStore.user?.id)
 const isSuperAdmin = computed(() => authStore.user?.is_super_admin || false)
@@ -135,7 +139,7 @@ function getRoleName(user: User) { return user.role?.name || 'No role' }
               <CardDescription>Manage team members and their roles. <RouterLink to="/settings/roles" class="text-primary hover:underline">Manage roles</RouterLink></CardDescription>
             </CardHeader>
             <CardContent>
-              <DataTable :items="paginatedUsers" :columns="columns" :is-loading="isLoading" :empty-icon="UserIcon" :empty-title="searchQuery ? 'No users found matching your search' : 'No users found'">
+              <DataTable :items="paginatedUsers" :columns="columns" :is-loading="isLoading" :empty-icon="UserIcon" :empty-title="searchQuery ? 'No users found matching your search' : 'No users found'" v-model:sort-key="sortKey" v-model:sort-direction="sortDirection">
                 <template #cell-user="{ item: user }">
                   <div class="flex items-center gap-3">
                     <div class="h-9 w-9 rounded-full bg-primary/10 flex items-center justify-center flex-shrink-0">

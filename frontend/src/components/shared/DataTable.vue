@@ -65,19 +65,30 @@ function handleSort(column: Column<T>) {
   emit('sort', sortKey, newDirection)
 }
 
+// Helper to get nested property value (e.g., 'role.name' -> item.role.name)
+function getNestedValue(obj: Record<string, any>, path: string): any {
+  return path.split('.').reduce((acc, key) => acc?.[key], obj)
+}
+
 const sortedItems = computed(() => {
   if (!props.sortKey || !hasSortableColumns.value) {
     return props.items
   }
 
   return [...props.items].sort((a, b) => {
-    const aVal = a[props.sortKey!]
-    const bVal = b[props.sortKey!]
+    const aVal = getNestedValue(a, props.sortKey!)
+    const bVal = getNestedValue(b, props.sortKey!)
 
     // Handle null/undefined
     if (aVal == null && bVal == null) return 0
     if (aVal == null) return props.sortDirection === 'asc' ? -1 : 1
     if (bVal == null) return props.sortDirection === 'asc' ? 1 : -1
+
+    // Boolean comparison
+    if (typeof aVal === 'boolean' && typeof bVal === 'boolean') {
+      if (aVal === bVal) return 0
+      return props.sortDirection === 'asc' ? (aVal ? 1 : -1) : (aVal ? -1 : 1)
+    }
 
     // String comparison
     if (typeof aVal === 'string' && typeof bVal === 'string') {
