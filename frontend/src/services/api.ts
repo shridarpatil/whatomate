@@ -312,6 +312,119 @@ export const agentAnalyticsService = {
     api.get('/analytics/agents/comparison', { params })
 }
 
+// Meta WhatsApp Analytics Types
+export type MetaAnalyticsType =
+  | 'analytics'
+  | 'conversation_analytics'
+  | 'pricing_analytics'
+  | 'template_analytics'
+  | 'call_analytics'
+
+export type MetaGranularity = 'HALF_HOUR' | 'DAY' | 'MONTH'
+
+export interface MetaAnalyticsAccount {
+  id: string
+  name: string
+  phone_id: string
+}
+
+export interface MetaMessagingDataPoint {
+  start: number
+  end: number
+  sent: number
+  delivered: number
+}
+
+export interface MetaConversationDataPoint {
+  start: number
+  end: number
+  conversation: number
+  conversation_type: string
+  conversation_direction: string
+  conversation_category: string
+  cost: number
+}
+
+export interface MetaPricingDataPoint {
+  start: number
+  end: number
+  cost: number
+  conversation_category: string
+  country_code?: string
+}
+
+export interface MetaTemplateCostItem {
+  type: string
+  amount?: number
+}
+
+export interface MetaTemplateDataPoint {
+  start: number
+  end: number
+  template_id: string
+  sent: number
+  delivered: number
+  read: number
+  replied?: number
+  clicked?: number
+  cost?: MetaTemplateCostItem[]
+}
+
+export interface MetaCallDataPoint {
+  start: number
+  end: number
+  total_calls: number
+  call_duration: number
+  call_type: string
+  call_direction: string
+}
+
+export interface MetaAnalyticsData {
+  id: string
+  analytics?: {
+    granularity: string
+    data_points: MetaMessagingDataPoint[]
+  }
+  conversation_analytics?: {
+    granularity: string
+    data_points: MetaConversationDataPoint[]
+  }
+  pricing_analytics?: {
+    granularity: string
+    data_points: MetaPricingDataPoint[]
+  }
+  template_analytics?: {
+    granularity: string
+    data_points: MetaTemplateDataPoint[]
+  }
+  call_analytics?: {
+    granularity: string
+    data_points: MetaCallDataPoint[]
+  }
+}
+
+export interface MetaAnalyticsResponse {
+  account_id: string
+  account_name: string
+  data: MetaAnalyticsData | null
+  template_names?: Record<string, string> // meta_template_id -> template name
+}
+
+export const metaAnalyticsService = {
+  get: (params: {
+    account_id?: string
+    analytics_type: MetaAnalyticsType
+    start: string
+    end: string
+    granularity?: MetaGranularity
+    template_ids?: string
+  }) => api.get<{ accounts: MetaAnalyticsResponse[]; cached: boolean }>('/analytics/meta', { params }),
+
+  getAccounts: () => api.get<{ accounts: MetaAnalyticsAccount[] }>('/analytics/meta/accounts'),
+
+  refresh: () => api.post('/analytics/meta/refresh')
+}
+
 // Dashboard Widgets (customizable analytics)
 export interface DashboardWidget {
   id: string

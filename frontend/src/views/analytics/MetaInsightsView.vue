@@ -1,0 +1,1203 @@
+<script setup lang="ts">
+import { ref, onMounted, computed, watch } from 'vue'
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import { ScrollArea } from '@/components/ui/scroll-area'
+import { Skeleton } from '@/components/ui/skeleton'
+import { Button } from '@/components/ui/button'
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
+import { RangeCalendar } from '@/components/ui/range-calendar'
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
+import { Badge } from '@/components/ui/badge'
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue
+} from '@/components/ui/select'
+import {
+  metaAnalyticsService,
+  type MetaAnalyticsType,
+  type MetaGranularity,
+  type MetaAnalyticsAccount,
+  type MetaAnalyticsResponse,
+  type MetaMessagingDataPoint,
+  type MetaConversationDataPoint,
+  type MetaPricingDataPoint,
+  type MetaTemplateDataPoint,
+  type MetaCallDataPoint
+} from '@/services/api'
+import { PageHeader } from '@/components/shared'
+import {
+  Command,
+  CommandEmpty,
+  CommandGroup,
+  CommandInput,
+  CommandItem,
+  CommandList
+} from '@/components/ui/command'
+import {
+  BarChart3,
+  CalendarIcon,
+  ChevronsUpDown,
+  Check,
+  MessageSquare,
+  MessagesSquare,
+  DollarSign,
+  FileText,
+  Phone,
+  RefreshCw,
+  TrendingUp,
+  Send,
+  CheckCircle,
+  Eye
+} from 'lucide-vue-next'
+import type { DateRange } from 'reka-ui'
+import { CalendarDate } from '@internationalized/date'
+import { Line, Bar, Doughnut } from '@/lib/charts'
+import { useToast } from '@/components/ui/toast'
+
+const { toast } = useToast()
+
+// State
+const isLoading = ref(true)
+const isRefreshing = ref(false)
+const accounts = ref<MetaAnalyticsAccount[]>([])
+const selectedAccountId = ref<string>('all')
+const accountComboboxOpen = ref(false)
+const activeTab = ref<MetaAnalyticsType>('analytics')
+const analyticsData = ref<MetaAnalyticsResponse[]>([])
+const isCached = ref(false)
+
+// Granularity
+const selectedGranularity = ref<MetaGranularity>('DAY')
+
+// Time range filter
+type TimeRangePreset = 'today' | '7days' | '30days' | 'this_month' | 'custom'
+
+const loadSavedPreferences = () => {
+  const savedRange = localStorage.getItem('meta_insights_time_range') as TimeRangePreset | null
+  const savedCustomRange = localStorage.getItem('meta_insights_custom_range')
+  const savedGranularity = localStorage.getItem('meta_insights_granularity') as MetaGranularity | null
+
+  let customRange: DateRange = { start: undefined, end: undefined }
+  if (savedCustomRange) {
+    try {
+      const parsed = JSON.parse(savedCustomRange)
+      if (parsed.start && parsed.end) {
+        customRange = {
+          start: new CalendarDate(parsed.start.year, parsed.start.month, parsed.start.day),
+          end: new CalendarDate(parsed.end.year, parsed.end.month, parsed.end.day)
+        }
+      }
+    } catch {
+      // Ignore parse errors
+    }
+  }
+
+  return {
+    range: savedRange || '30days',
+    customRange,
+    granularity: savedGranularity || 'DAY'
+  }
+}
+
+const savedPrefs = loadSavedPreferences()
+const selectedRange = ref<TimeRangePreset>(savedPrefs.range as TimeRangePreset)
+const customDateRange = ref<any>(savedPrefs.customRange)
+const isDatePickerOpen = ref(false)
+
+if (savedPrefs.granularity) {
+  selectedGranularity.value = savedPrefs.granularity as MetaGranularity
+}
+
+const savePreferences = () => {
+  localStorage.setItem('meta_insights_time_range', selectedRange.value)
+  localStorage.setItem('meta_insights_granularity', selectedGranularity.value)
+  if (selectedRange.value === 'custom' && customDateRange.value.start && customDateRange.value.end) {
+    localStorage.setItem('meta_insights_custom_range', JSON.stringify({
+      start: {
+        year: customDateRange.value.start.year,
+        month: customDateRange.value.start.month,
+        day: customDateRange.value.start.day
+      },
+      end: {
+        year: customDateRange.value.end.year,
+        month: customDateRange.value.end.month,
+        day: customDateRange.value.end.day
+      }
+    }))
+  }
+}
+
+const selectedAccountName = computed(() => {
+  if (selectedAccountId.value === 'all') return 'All Accounts'
+  const account = accounts.value.find(a => a.id === selectedAccountId.value)
+  return account?.name || 'Select account'
+})
+
+const formatDateLocal = (date: Date): string => {
+  const year = date.getFullYear()
+  const month = String(date.getMonth() + 1).padStart(2, '0')
+  const day = String(date.getDate()).padStart(2, '0')
+  return `${year}-${month}-${day}`
+}
+
+const getDateRange = computed(() => {
+  const now = new Date()
+  let from: Date
+  let to: Date = now
+
+  switch (selectedRange.value) {
+    case 'today':
+      from = new Date(now.getFullYear(), now.getMonth(), now.getDate())
+      to = new Date(now.getFullYear(), now.getMonth(), now.getDate())
+      break
+    case '7days':
+      from = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 7)
+      to = new Date(now.getFullYear(), now.getMonth(), now.getDate())
+      break
+    case '30days':
+      from = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 30)
+      to = new Date(now.getFullYear(), now.getMonth(), now.getDate())
+      break
+    case 'this_month':
+      from = new Date(now.getFullYear(), now.getMonth(), 1)
+      to = new Date(now.getFullYear(), now.getMonth(), now.getDate())
+      break
+    case 'custom':
+      if (customDateRange.value.start && customDateRange.value.end) {
+        from = new Date(customDateRange.value.start.year, customDateRange.value.start.month - 1, customDateRange.value.start.day)
+        to = new Date(customDateRange.value.end.year, customDateRange.value.end.month - 1, customDateRange.value.end.day)
+      } else {
+        from = new Date(now.getFullYear(), now.getMonth(), 1)
+        to = new Date(now.getFullYear(), now.getMonth(), now.getDate())
+      }
+      break
+    default:
+      from = new Date(now.getFullYear(), now.getMonth(), 1)
+      to = new Date(now.getFullYear(), now.getMonth(), now.getDate())
+  }
+
+  return {
+    from: formatDateLocal(from),
+    to: formatDateLocal(to)
+  }
+})
+
+const formatDateRange = computed(() => {
+  if (selectedRange.value === 'custom' && customDateRange.value.start && customDateRange.value.end) {
+    const start = customDateRange.value.start
+    const end = customDateRange.value.end
+    const startStr = `${start.month}/${start.day}/${start.year}`
+    const endStr = `${end.month}/${end.day}/${end.year}`
+    return `${startStr} - ${endStr}`
+  }
+  return ''
+})
+
+const fetchAccounts = async () => {
+  try {
+    const response = await metaAnalyticsService.getAccounts()
+    const data = (response.data as any).data || response.data
+    accounts.value = data.accounts || []
+  } catch (error) {
+    console.error('Failed to load accounts:', error)
+  }
+}
+
+const fetchAnalytics = async () => {
+  isLoading.value = true
+  try {
+    const { from, to } = getDateRange.value
+    const params: {
+      analytics_type: MetaAnalyticsType
+      start: string
+      end: string
+      granularity: MetaGranularity
+      account_id?: string
+    } = {
+      analytics_type: activeTab.value,
+      start: from,
+      end: to,
+      granularity: selectedGranularity.value
+    }
+
+    if (selectedAccountId.value !== 'all') {
+      params.account_id = selectedAccountId.value
+    }
+
+    const response = await metaAnalyticsService.get(params)
+    const data = (response.data as any).data || response.data
+    analyticsData.value = data.accounts || []
+    isCached.value = data.cached || false
+  } catch (error) {
+    console.error('Failed to load analytics:', error)
+    analyticsData.value = []
+  } finally {
+    isLoading.value = false
+  }
+}
+
+const refreshCache = async () => {
+  isRefreshing.value = true
+  try {
+    await metaAnalyticsService.refresh()
+    toast({
+      title: 'Cache Cleared',
+      description: 'Analytics cache has been refreshed. Fetching fresh data...'
+    })
+    await fetchAnalytics()
+  } catch (error) {
+    console.error('Failed to refresh cache:', error)
+    toast({
+      title: 'Error',
+      description: 'Failed to refresh cache',
+      variant: 'destructive'
+    })
+  } finally {
+    isRefreshing.value = false
+  }
+}
+
+const applyCustomRange = () => {
+  if (customDateRange.value.start && customDateRange.value.end) {
+    isDatePickerOpen.value = false
+    savePreferences()
+    fetchAnalytics()
+  }
+}
+
+watch(selectedRange, (newValue) => {
+  savePreferences()
+  if (newValue !== 'custom') {
+    fetchAnalytics()
+  }
+})
+
+watch(selectedGranularity, () => {
+  savePreferences()
+  fetchAnalytics()
+})
+
+watch(selectedAccountId, () => {
+  fetchAnalytics()
+})
+
+watch(activeTab, () => {
+  fetchAnalytics()
+})
+
+onMounted(() => {
+  fetchAccounts()
+  fetchAnalytics()
+})
+
+// Aggregate data across accounts
+const aggregatedData = computed(() => {
+  if (!analyticsData.value.length) return null
+
+  // For messaging analytics
+  if (activeTab.value === 'analytics') {
+    const allPoints: MetaMessagingDataPoint[] = []
+    for (const account of analyticsData.value) {
+      if (account.data?.analytics?.data_points) {
+        allPoints.push(...account.data.analytics.data_points)
+      }
+    }
+    return aggregateMessagingData(allPoints)
+  }
+
+  // For conversation analytics
+  if (activeTab.value === 'conversation_analytics') {
+    const allPoints: MetaConversationDataPoint[] = []
+    for (const account of analyticsData.value) {
+      if (account.data?.conversation_analytics?.data_points) {
+        allPoints.push(...account.data.conversation_analytics.data_points)
+      }
+    }
+    return aggregateConversationData(allPoints)
+  }
+
+  // For pricing analytics
+  if (activeTab.value === 'pricing_analytics') {
+    const allPoints: MetaPricingDataPoint[] = []
+    for (const account of analyticsData.value) {
+      if (account.data?.pricing_analytics?.data_points) {
+        allPoints.push(...account.data.pricing_analytics.data_points)
+      }
+    }
+    return aggregatePricingData(allPoints)
+  }
+
+  // For template analytics
+  if (activeTab.value === 'template_analytics') {
+    const allPoints: MetaTemplateDataPoint[] = []
+    for (const account of analyticsData.value) {
+      if (account.data?.template_analytics?.data_points) {
+        allPoints.push(...account.data.template_analytics.data_points)
+      }
+    }
+    return aggregateTemplateData(allPoints)
+  }
+
+  // For call analytics
+  if (activeTab.value === 'call_analytics') {
+    const allPoints: MetaCallDataPoint[] = []
+    for (const account of analyticsData.value) {
+      if (account.data?.call_analytics?.data_points) {
+        allPoints.push(...account.data.call_analytics.data_points)
+      }
+    }
+    return aggregateCallData(allPoints)
+  }
+
+  return null
+})
+
+// Aggregation functions
+function aggregateMessagingData(points: MetaMessagingDataPoint[]) {
+  const byTime = new Map<number, { sent: number; delivered: number }>()
+  let totalSent = 0
+  let totalDelivered = 0
+
+  for (const point of points) {
+    totalSent += point.sent
+    totalDelivered += point.delivered
+
+    const existing = byTime.get(point.start) || { sent: 0, delivered: 0 }
+    byTime.set(point.start, {
+      sent: existing.sent + point.sent,
+      delivered: existing.delivered + point.delivered
+    })
+  }
+
+  const sortedTimes = Array.from(byTime.entries()).sort((a, b) => a[0] - b[0])
+
+  return {
+    totals: { sent: totalSent, delivered: totalDelivered },
+    timeSeries: sortedTimes.map(([time, data]) => ({
+      time,
+      ...data
+    }))
+  }
+}
+
+function aggregateConversationData(points: MetaConversationDataPoint[]) {
+  const byCategory = new Map<string, { count: number; cost: number }>()
+  const byDirection = new Map<string, number>()
+  let totalConversations = 0
+  let totalCost = 0
+
+  for (const point of points) {
+    totalConversations += point.conversation
+    totalCost += point.cost
+
+    const category = point.conversation_category || 'OTHER'
+    const existing = byCategory.get(category) || { count: 0, cost: 0 }
+    byCategory.set(category, {
+      count: existing.count + point.conversation,
+      cost: existing.cost + point.cost
+    })
+
+    const direction = point.conversation_direction || 'UNKNOWN'
+    byDirection.set(direction, (byDirection.get(direction) || 0) + point.conversation)
+  }
+
+  return {
+    totals: { conversations: totalConversations, cost: totalCost },
+    byCategory: Object.fromEntries(byCategory),
+    byDirection: Object.fromEntries(byDirection)
+  }
+}
+
+function aggregatePricingData(points: MetaPricingDataPoint[]) {
+  const byCategory = new Map<string, number>()
+  let totalCost = 0
+
+  for (const point of points) {
+    totalCost += point.cost
+    const category = point.conversation_category || 'OTHER'
+    byCategory.set(category, (byCategory.get(category) || 0) + point.cost)
+  }
+
+  return {
+    totals: { cost: totalCost },
+    byCategory: Object.fromEntries(byCategory)
+  }
+}
+
+function aggregateTemplateData(points: MetaTemplateDataPoint[]) {
+  const byTemplate = new Map<string, { sent: number; delivered: number; read: number; replied: number; clicked: number; cost: number }>()
+  let totalSent = 0
+  let totalDelivered = 0
+  let totalRead = 0
+  let totalReplied = 0
+  let totalCost = 0
+
+  for (const point of points) {
+    totalSent += point.sent
+    totalDelivered += point.delivered
+    totalRead += point.read
+    totalReplied += point.replied || 0
+
+    // Extract amount_spent from cost array
+    const amountSpent = point.cost?.find(c => c.type === 'amount_spent')?.amount || 0
+    totalCost += amountSpent
+
+    const templateId = point.template_id
+    const existing = byTemplate.get(templateId) || { sent: 0, delivered: 0, read: 0, replied: 0, clicked: 0, cost: 0 }
+    byTemplate.set(templateId, {
+      sent: existing.sent + point.sent,
+      delivered: existing.delivered + point.delivered,
+      read: existing.read + point.read,
+      replied: existing.replied + (point.replied || 0),
+      clicked: existing.clicked + (point.clicked || 0),
+      cost: existing.cost + amountSpent
+    })
+  }
+
+  return {
+    totals: { sent: totalSent, delivered: totalDelivered, read: totalRead, replied: totalReplied, cost: totalCost },
+    byTemplate: Object.fromEntries(byTemplate)
+  }
+}
+
+// Computed property for template name lookup
+const templateNamesMap = computed(() => {
+  const names: Record<string, string> = {}
+  for (const account of analyticsData.value) {
+    if (account.template_names) {
+      Object.assign(names, account.template_names)
+    }
+  }
+  return names
+})
+
+function getTemplateName(templateId: string): string {
+  return templateNamesMap.value[templateId] || templateId
+}
+
+function aggregateCallData(points: MetaCallDataPoint[]) {
+  const byType = new Map<string, number>()
+  const byDirection = new Map<string, number>()
+  let totalCalls = 0
+  let totalDuration = 0
+
+  for (const point of points) {
+    totalCalls += point.total_calls
+    totalDuration += point.call_duration
+
+    const callType = point.call_type || 'UNKNOWN'
+    byType.set(callType, (byType.get(callType) || 0) + point.total_calls)
+
+    const direction = point.call_direction || 'UNKNOWN'
+    byDirection.set(direction, (byDirection.get(direction) || 0) + point.total_calls)
+  }
+
+  return {
+    totals: { calls: totalCalls, duration: totalDuration },
+    byType: Object.fromEntries(byType),
+    byDirection: Object.fromEntries(byDirection)
+  }
+}
+
+// Chart data
+const messagingChartData = computed(() => {
+  if (!aggregatedData.value || activeTab.value !== 'analytics') {
+    return { labels: [], datasets: [] }
+  }
+
+  const data = aggregatedData.value as ReturnType<typeof aggregateMessagingData>
+
+  return {
+    labels: data.timeSeries.map(t => formatTimestamp(t.time)),
+    datasets: [
+      {
+        label: 'Sent',
+        data: data.timeSeries.map(t => t.sent),
+        borderColor: 'rgb(59, 130, 246)',
+        backgroundColor: 'rgba(59, 130, 246, 0.1)',
+        fill: true,
+        tension: 0.3
+      },
+      {
+        label: 'Delivered',
+        data: data.timeSeries.map(t => t.delivered),
+        borderColor: 'rgb(16, 185, 129)',
+        backgroundColor: 'rgba(16, 185, 129, 0.1)',
+        fill: true,
+        tension: 0.3
+      }
+    ]
+  }
+})
+
+const conversationCategoryChartData = computed(() => {
+  if (!aggregatedData.value || activeTab.value !== 'conversation_analytics') {
+    return { labels: [], datasets: [] }
+  }
+
+  const data = aggregatedData.value as ReturnType<typeof aggregateConversationData>
+  const categories = Object.entries(data.byCategory)
+
+  return {
+    labels: categories.map(([cat]) => formatCategory(cat)),
+    datasets: [{
+      data: categories.map(([, val]) => val.count),
+      backgroundColor: [
+        'rgba(59, 130, 246, 0.8)',
+        'rgba(16, 185, 129, 0.8)',
+        'rgba(245, 158, 11, 0.8)',
+        'rgba(139, 92, 246, 0.8)',
+        'rgba(236, 72, 153, 0.8)'
+      ],
+      borderWidth: 0
+    }]
+  }
+})
+
+const pricingChartData = computed(() => {
+  if (!aggregatedData.value || activeTab.value !== 'pricing_analytics') {
+    return { labels: [], datasets: [] }
+  }
+
+  const data = aggregatedData.value as ReturnType<typeof aggregatePricingData>
+  const categories = Object.entries(data.byCategory)
+
+  return {
+    labels: categories.map(([cat]) => formatCategory(cat)),
+    datasets: [{
+      label: 'Cost',
+      data: categories.map(([, val]) => val),
+      backgroundColor: [
+        'rgba(59, 130, 246, 0.8)',
+        'rgba(16, 185, 129, 0.8)',
+        'rgba(245, 158, 11, 0.8)',
+        'rgba(139, 92, 246, 0.8)',
+        'rgba(236, 72, 153, 0.8)'
+      ]
+    }]
+  }
+})
+
+// Helper functions
+function formatTimestamp(ts: number): string {
+  const date = new Date(ts * 1000)
+  if (selectedGranularity.value === 'HALF_HOUR') {
+    return date.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })
+  } else if (selectedGranularity.value === 'MONTH') {
+    return date.toLocaleDateString('en-US', { month: 'short', year: 'numeric' })
+  }
+  return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
+}
+
+function formatCategory(category: string): string {
+  return category.charAt(0) + category.slice(1).toLowerCase().replace(/_/g, ' ')
+}
+
+function formatCurrency(value: number): string {
+  return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(value)
+}
+
+function formatDuration(seconds: number): string {
+  if (seconds < 60) return `${seconds}s`
+  const mins = Math.floor(seconds / 60)
+  const secs = seconds % 60
+  if (mins < 60) return secs > 0 ? `${mins}m ${secs}s` : `${mins}m`
+  const hours = Math.floor(mins / 60)
+  const remainingMins = mins % 60
+  return remainingMins > 0 ? `${hours}h ${remainingMins}m` : `${hours}h`
+}
+
+const chartOptions = {
+  responsive: true,
+  maintainAspectRatio: false,
+  plugins: {
+    legend: {
+      position: 'bottom' as const
+    }
+  },
+  scales: {
+    y: {
+      beginAtZero: true
+    }
+  }
+}
+
+const doughnutOptions = {
+  responsive: true,
+  maintainAspectRatio: false,
+  plugins: {
+    legend: {
+      position: 'bottom' as const
+    }
+  }
+}
+</script>
+
+<template>
+  <div class="flex flex-col h-full">
+    <PageHeader
+      title="Meta Insights"
+      description="WhatsApp Business Analytics from Meta"
+      :icon="BarChart3"
+      icon-gradient="bg-gradient-to-br from-green-500 to-emerald-600 shadow-green-500/20"
+    >
+      <template #actions>
+        <!-- Account Filter -->
+        <div class="flex items-center gap-2">
+          <Popover v-model:open="accountComboboxOpen">
+            <PopoverTrigger as-child>
+              <Button variant="outline" role="combobox" :aria-expanded="accountComboboxOpen" class="w-[180px] justify-between">
+                <span class="truncate">{{ selectedAccountName }}</span>
+                <ChevronsUpDown class="ml-2 h-4 w-4 shrink-0 opacity-50" />
+              </Button>
+            </PopoverTrigger>
+            <PopoverContent class="w-[180px] p-0">
+              <Command>
+                <CommandInput placeholder="Search account..." />
+                <CommandList>
+                  <CommandEmpty>No account found.</CommandEmpty>
+                  <CommandGroup>
+                    <CommandItem
+                      value="all"
+                      @select="() => { selectedAccountId = 'all'; accountComboboxOpen = false }"
+                    >
+                      <Check :class="['mr-2 h-4 w-4', selectedAccountId === 'all' ? 'opacity-100' : 'opacity-0']" />
+                      All Accounts
+                    </CommandItem>
+                    <CommandItem
+                      v-for="account in accounts"
+                      :key="account.id"
+                      :value="account.name"
+                      @select="() => { selectedAccountId = account.id; accountComboboxOpen = false }"
+                    >
+                      <Check :class="['mr-2 h-4 w-4', selectedAccountId === account.id ? 'opacity-100' : 'opacity-0']" />
+                      {{ account.name }}
+                    </CommandItem>
+                  </CommandGroup>
+                </CommandList>
+              </Command>
+            </PopoverContent>
+          </Popover>
+        </div>
+
+        <!-- Granularity Filter -->
+        <Select v-model="selectedGranularity">
+          <SelectTrigger class="w-[130px]">
+            <SelectValue placeholder="Granularity" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="HALF_HOUR">Half Hour</SelectItem>
+            <SelectItem value="DAY">Daily</SelectItem>
+            <SelectItem value="MONTH">Monthly</SelectItem>
+          </SelectContent>
+        </Select>
+
+        <!-- Time Range Filter -->
+        <Select v-model="selectedRange">
+          <SelectTrigger class="w-[150px]">
+            <SelectValue placeholder="Select range" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="today">Today</SelectItem>
+            <SelectItem value="7days">Last 7 days</SelectItem>
+            <SelectItem value="30days">Last 30 days</SelectItem>
+            <SelectItem value="this_month">This month</SelectItem>
+            <SelectItem value="custom">Custom range</SelectItem>
+          </SelectContent>
+        </Select>
+
+        <Popover v-if="selectedRange === 'custom'" v-model:open="isDatePickerOpen">
+          <PopoverTrigger as-child>
+            <Button variant="outline" class="w-auto">
+              <CalendarIcon class="h-4 w-4 mr-2" />
+              {{ formatDateRange || 'Select dates' }}
+            </Button>
+          </PopoverTrigger>
+          <PopoverContent class="w-auto p-4" align="end">
+            <div class="space-y-4">
+              <RangeCalendar v-model="customDateRange" :number-of-months="2" />
+              <Button class="w-full" @click="applyCustomRange" :disabled="!customDateRange.start || !customDateRange.end">
+                Apply Range
+              </Button>
+            </div>
+          </PopoverContent>
+        </Popover>
+
+        <!-- Refresh Button -->
+        <Button variant="outline" size="icon" @click="refreshCache" :disabled="isRefreshing">
+          <RefreshCw :class="['h-4 w-4', isRefreshing && 'animate-spin']" />
+        </Button>
+
+        <!-- Cache indicator -->
+        <Badge v-if="isCached" variant="secondary" class="ml-2">
+          Cached
+        </Badge>
+      </template>
+    </PageHeader>
+
+    <!-- Content -->
+    <ScrollArea class="flex-1">
+      <div class="p-6 space-y-6">
+        <!-- Analytics Type Tabs -->
+        <Tabs v-model="activeTab" class="w-full">
+          <TabsList class="grid w-full grid-cols-5 lg:w-auto lg:inline-flex">
+            <TabsTrigger value="analytics" class="gap-2">
+              <MessageSquare class="h-4 w-4" />
+              <span class="hidden lg:inline">Messaging</span>
+            </TabsTrigger>
+            <TabsTrigger value="conversation_analytics" class="gap-2">
+              <MessagesSquare class="h-4 w-4" />
+              <span class="hidden lg:inline">Conversations</span>
+            </TabsTrigger>
+            <TabsTrigger value="pricing_analytics" class="gap-2">
+              <DollarSign class="h-4 w-4" />
+              <span class="hidden lg:inline">Pricing</span>
+            </TabsTrigger>
+            <TabsTrigger value="template_analytics" class="gap-2">
+              <FileText class="h-4 w-4" />
+              <span class="hidden lg:inline">Templates</span>
+            </TabsTrigger>
+            <TabsTrigger value="call_analytics" class="gap-2">
+              <Phone class="h-4 w-4" />
+              <span class="hidden lg:inline">Calls</span>
+            </TabsTrigger>
+          </TabsList>
+
+          <!-- Messaging Analytics -->
+          <TabsContent value="analytics" class="space-y-6">
+            <template v-if="isLoading">
+              <div class="grid gap-4 md:grid-cols-3">
+                <div v-for="i in 3" :key="i" class="rounded-xl border border-white/[0.08] bg-white/[0.02] p-6 light:bg-white light:border-gray-200">
+                  <Skeleton class="h-4 w-24 mb-2 bg-white/[0.08] light:bg-gray-200" />
+                  <Skeleton class="h-8 w-16 bg-white/[0.08] light:bg-gray-200" />
+                </div>
+              </div>
+            </template>
+            <template v-else-if="aggregatedData && activeTab === 'analytics'">
+              <!-- Stats Cards -->
+              <div class="grid gap-4 md:grid-cols-3">
+                <div class="card-depth rounded-xl border border-white/[0.08] bg-white/[0.04] p-6 light:bg-white light:border-gray-200">
+                  <div class="flex flex-row items-center justify-between space-y-0 pb-2">
+                    <span class="text-sm font-medium text-white/50 light:text-gray-500">Messages Sent</span>
+                    <div class="h-10 w-10 rounded-lg bg-blue-500/20 flex items-center justify-center">
+                      <Send class="h-5 w-5 text-blue-400" />
+                    </div>
+                  </div>
+                  <div class="pt-2">
+                    <div class="text-3xl font-bold text-white light:text-gray-900">
+                      {{ (aggregatedData as ReturnType<typeof aggregateMessagingData>).totals.sent.toLocaleString() }}
+                    </div>
+                  </div>
+                </div>
+
+                <div class="card-depth rounded-xl border border-white/[0.08] bg-white/[0.04] p-6 light:bg-white light:border-gray-200">
+                  <div class="flex flex-row items-center justify-between space-y-0 pb-2">
+                    <span class="text-sm font-medium text-white/50 light:text-gray-500">Messages Delivered</span>
+                    <div class="h-10 w-10 rounded-lg bg-emerald-500/20 flex items-center justify-center">
+                      <CheckCircle class="h-5 w-5 text-emerald-400" />
+                    </div>
+                  </div>
+                  <div class="pt-2">
+                    <div class="text-3xl font-bold text-white light:text-gray-900">
+                      {{ (aggregatedData as ReturnType<typeof aggregateMessagingData>).totals.delivered.toLocaleString() }}
+                    </div>
+                  </div>
+                </div>
+
+                <div class="card-depth rounded-xl border border-white/[0.08] bg-white/[0.04] p-6 light:bg-white light:border-gray-200">
+                  <div class="flex flex-row items-center justify-between space-y-0 pb-2">
+                    <span class="text-sm font-medium text-white/50 light:text-gray-500">Delivery Rate</span>
+                    <div class="h-10 w-10 rounded-lg bg-purple-500/20 flex items-center justify-center">
+                      <TrendingUp class="h-5 w-5 text-purple-400" />
+                    </div>
+                  </div>
+                  <div class="pt-2">
+                    <div class="text-3xl font-bold text-white light:text-gray-900">
+                      {{ ((aggregatedData as ReturnType<typeof aggregateMessagingData>).totals.sent > 0
+                        ? ((aggregatedData as ReturnType<typeof aggregateMessagingData>).totals.delivered / (aggregatedData as ReturnType<typeof aggregateMessagingData>).totals.sent * 100).toFixed(1)
+                        : 0) }}%
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Chart -->
+              <Card>
+                <CardHeader>
+                  <CardTitle>Message Delivery Over Time</CardTitle>
+                  <CardDescription>Sent vs Delivered messages</CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <div class="h-80">
+                    <Line v-if="messagingChartData.labels.length > 0" :data="messagingChartData" :options="chartOptions" />
+                    <div v-else class="h-full flex items-center justify-center text-muted-foreground">
+                      No data available for the selected period
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+            </template>
+            <template v-else>
+              <div class="text-center py-12 text-muted-foreground">
+                No messaging analytics data available
+              </div>
+            </template>
+          </TabsContent>
+
+          <!-- Conversation Analytics -->
+          <TabsContent value="conversation_analytics" class="space-y-6">
+            <template v-if="isLoading">
+              <div class="grid gap-4 md:grid-cols-2">
+                <Skeleton class="h-64 bg-white/[0.08] light:bg-gray-200" />
+                <Skeleton class="h-64 bg-white/[0.08] light:bg-gray-200" />
+              </div>
+            </template>
+            <template v-else-if="aggregatedData && activeTab === 'conversation_analytics'">
+              <!-- Stats Cards -->
+              <div class="grid gap-4 md:grid-cols-2">
+                <div class="card-depth rounded-xl border border-white/[0.08] bg-white/[0.04] p-6 light:bg-white light:border-gray-200">
+                  <div class="flex flex-row items-center justify-between space-y-0 pb-2">
+                    <span class="text-sm font-medium text-white/50 light:text-gray-500">Total Conversations</span>
+                    <div class="h-10 w-10 rounded-lg bg-blue-500/20 flex items-center justify-center">
+                      <MessagesSquare class="h-5 w-5 text-blue-400" />
+                    </div>
+                  </div>
+                  <div class="pt-2">
+                    <div class="text-3xl font-bold text-white light:text-gray-900">
+                      {{ (aggregatedData as ReturnType<typeof aggregateConversationData>).totals.conversations.toLocaleString() }}
+                    </div>
+                  </div>
+                </div>
+
+                <div class="card-depth rounded-xl border border-white/[0.08] bg-white/[0.04] p-6 light:bg-white light:border-gray-200">
+                  <div class="flex flex-row items-center justify-between space-y-0 pb-2">
+                    <span class="text-sm font-medium text-white/50 light:text-gray-500">Total Cost</span>
+                    <div class="h-10 w-10 rounded-lg bg-emerald-500/20 flex items-center justify-center">
+                      <DollarSign class="h-5 w-5 text-emerald-400" />
+                    </div>
+                  </div>
+                  <div class="pt-2">
+                    <div class="text-3xl font-bold text-white light:text-gray-900">
+                      {{ formatCurrency((aggregatedData as ReturnType<typeof aggregateConversationData>).totals.cost) }}
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Chart -->
+              <Card>
+                <CardHeader>
+                  <CardTitle>Conversations by Category</CardTitle>
+                  <CardDescription>Distribution of conversation types</CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <div class="h-80">
+                    <Doughnut v-if="conversationCategoryChartData.labels.length > 0" :data="conversationCategoryChartData" :options="doughnutOptions" />
+                    <div v-else class="h-full flex items-center justify-center text-muted-foreground">
+                      No data available for the selected period
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+            </template>
+            <template v-else>
+              <div class="text-center py-12 text-muted-foreground">
+                No conversation analytics data available
+              </div>
+            </template>
+          </TabsContent>
+
+          <!-- Pricing Analytics -->
+          <TabsContent value="pricing_analytics" class="space-y-6">
+            <template v-if="isLoading">
+              <Skeleton class="h-64 bg-white/[0.08] light:bg-gray-200" />
+            </template>
+            <template v-else-if="aggregatedData && activeTab === 'pricing_analytics'">
+              <!-- Stats Card -->
+              <div class="grid gap-4 md:grid-cols-1 lg:grid-cols-3">
+                <div class="card-depth rounded-xl border border-white/[0.08] bg-white/[0.04] p-6 light:bg-white light:border-gray-200">
+                  <div class="flex flex-row items-center justify-between space-y-0 pb-2">
+                    <span class="text-sm font-medium text-white/50 light:text-gray-500">Total Cost</span>
+                    <div class="h-10 w-10 rounded-lg bg-emerald-500/20 flex items-center justify-center">
+                      <DollarSign class="h-5 w-5 text-emerald-400" />
+                    </div>
+                  </div>
+                  <div class="pt-2">
+                    <div class="text-3xl font-bold text-white light:text-gray-900">
+                      {{ formatCurrency((aggregatedData as ReturnType<typeof aggregatePricingData>).totals.cost) }}
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Chart -->
+              <Card>
+                <CardHeader>
+                  <CardTitle>Cost by Category</CardTitle>
+                  <CardDescription>Breakdown of costs by conversation type</CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <div class="h-80">
+                    <Bar v-if="pricingChartData.labels.length > 0" :data="pricingChartData" :options="chartOptions" />
+                    <div v-else class="h-full flex items-center justify-center text-muted-foreground">
+                      No data available for the selected period
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+            </template>
+            <template v-else>
+              <div class="text-center py-12 text-muted-foreground">
+                No pricing analytics data available
+              </div>
+            </template>
+          </TabsContent>
+
+          <!-- Template Analytics -->
+          <TabsContent value="template_analytics" class="space-y-6">
+            <template v-if="isLoading">
+              <div class="grid gap-4 md:grid-cols-3">
+                <div v-for="i in 3" :key="i" class="rounded-xl border border-white/[0.08] bg-white/[0.02] p-6 light:bg-white light:border-gray-200">
+                  <Skeleton class="h-4 w-24 mb-2 bg-white/[0.08] light:bg-gray-200" />
+                  <Skeleton class="h-8 w-16 bg-white/[0.08] light:bg-gray-200" />
+                </div>
+              </div>
+            </template>
+            <template v-else-if="aggregatedData && activeTab === 'template_analytics'">
+              <!-- Stats Cards -->
+              <div class="grid gap-4 md:grid-cols-5">
+                <div class="card-depth rounded-xl border border-white/[0.08] bg-white/[0.04] p-6 light:bg-white light:border-gray-200">
+                  <div class="flex flex-row items-center justify-between space-y-0 pb-2">
+                    <span class="text-sm font-medium text-white/50 light:text-gray-500">Sent</span>
+                    <div class="h-10 w-10 rounded-lg bg-blue-500/20 flex items-center justify-center">
+                      <Send class="h-5 w-5 text-blue-400" />
+                    </div>
+                  </div>
+                  <div class="pt-2">
+                    <div class="text-3xl font-bold text-white light:text-gray-900">
+                      {{ (aggregatedData as ReturnType<typeof aggregateTemplateData>).totals.sent.toLocaleString() }}
+                    </div>
+                  </div>
+                </div>
+
+                <div class="card-depth rounded-xl border border-white/[0.08] bg-white/[0.04] p-6 light:bg-white light:border-gray-200">
+                  <div class="flex flex-row items-center justify-between space-y-0 pb-2">
+                    <span class="text-sm font-medium text-white/50 light:text-gray-500">Delivered</span>
+                    <div class="h-10 w-10 rounded-lg bg-emerald-500/20 flex items-center justify-center">
+                      <CheckCircle class="h-5 w-5 text-emerald-400" />
+                    </div>
+                  </div>
+                  <div class="pt-2">
+                    <div class="text-3xl font-bold text-white light:text-gray-900">
+                      {{ (aggregatedData as ReturnType<typeof aggregateTemplateData>).totals.delivered.toLocaleString() }}
+                    </div>
+                  </div>
+                </div>
+
+                <div class="card-depth rounded-xl border border-white/[0.08] bg-white/[0.04] p-6 light:bg-white light:border-gray-200">
+                  <div class="flex flex-row items-center justify-between space-y-0 pb-2">
+                    <span class="text-sm font-medium text-white/50 light:text-gray-500">Read</span>
+                    <div class="h-10 w-10 rounded-lg bg-purple-500/20 flex items-center justify-center">
+                      <Eye class="h-5 w-5 text-purple-400" />
+                    </div>
+                  </div>
+                  <div class="pt-2">
+                    <div class="text-3xl font-bold text-white light:text-gray-900">
+                      {{ (aggregatedData as ReturnType<typeof aggregateTemplateData>).totals.read.toLocaleString() }}
+                    </div>
+                  </div>
+                </div>
+
+                <div class="card-depth rounded-xl border border-white/[0.08] bg-white/[0.04] p-6 light:bg-white light:border-gray-200">
+                  <div class="flex flex-row items-center justify-between space-y-0 pb-2">
+                    <span class="text-sm font-medium text-white/50 light:text-gray-500">Replied</span>
+                    <div class="h-10 w-10 rounded-lg bg-amber-500/20 flex items-center justify-center">
+                      <MessagesSquare class="h-5 w-5 text-amber-400" />
+                    </div>
+                  </div>
+                  <div class="pt-2">
+                    <div class="text-3xl font-bold text-white light:text-gray-900">
+                      {{ (aggregatedData as ReturnType<typeof aggregateTemplateData>).totals.replied.toLocaleString() }}
+                    </div>
+                  </div>
+                </div>
+
+                <div class="card-depth rounded-xl border border-white/[0.08] bg-white/[0.04] p-6 light:bg-white light:border-gray-200">
+                  <div class="flex flex-row items-center justify-between space-y-0 pb-2">
+                    <span class="text-sm font-medium text-white/50 light:text-gray-500">Total Cost</span>
+                    <div class="h-10 w-10 rounded-lg bg-rose-500/20 flex items-center justify-center">
+                      <DollarSign class="h-5 w-5 text-rose-400" />
+                    </div>
+                  </div>
+                  <div class="pt-2">
+                    <div class="text-3xl font-bold text-white light:text-gray-900">
+                      {{ (aggregatedData as ReturnType<typeof aggregateTemplateData>).totals.cost > 0
+                        ? formatCurrency((aggregatedData as ReturnType<typeof aggregateTemplateData>).totals.cost)
+                        : '-' }}
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Template Performance Table -->
+              <Card>
+                <CardHeader>
+                  <CardTitle>Template Performance</CardTitle>
+                  <CardDescription>Performance metrics by template</CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <div class="overflow-x-auto">
+                    <table class="w-full text-sm">
+                      <thead>
+                        <tr class="border-b border-white/[0.08] light:border-gray-200">
+                          <th class="py-3 px-4 text-left font-medium text-white/70 light:text-gray-600">Template</th>
+                          <th class="py-3 px-4 text-right font-medium text-white/70 light:text-gray-600">Sent</th>
+                          <th class="py-3 px-4 text-right font-medium text-white/70 light:text-gray-600">Delivered</th>
+                          <th class="py-3 px-4 text-right font-medium text-white/70 light:text-gray-600">Read</th>
+                          <th class="py-3 px-4 text-right font-medium text-white/70 light:text-gray-600">Replied</th>
+                          <th class="py-3 px-4 text-right font-medium text-white/70 light:text-gray-600">Delivery %</th>
+                          <th class="py-3 px-4 text-right font-medium text-white/70 light:text-gray-600">Read %</th>
+                          <th class="py-3 px-4 text-right font-medium text-white/70 light:text-gray-600">Cost</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        <tr
+                          v-for="[templateId, stats] in Object.entries((aggregatedData as ReturnType<typeof aggregateTemplateData>).byTemplate)"
+                          :key="templateId"
+                          class="border-b border-white/[0.04] light:border-gray-100"
+                        >
+                          <td class="py-3 px-4 text-white light:text-gray-900">
+                            <div class="font-medium">{{ getTemplateName(templateId) }}</div>
+                            <div v-if="getTemplateName(templateId) !== templateId" class="text-xs text-white/50 light:text-gray-500 font-mono">{{ templateId }}</div>
+                          </td>
+                          <td class="py-3 px-4 text-right text-white/70 light:text-gray-600">{{ stats.sent.toLocaleString() }}</td>
+                          <td class="py-3 px-4 text-right text-white/70 light:text-gray-600">{{ stats.delivered.toLocaleString() }}</td>
+                          <td class="py-3 px-4 text-right text-white/70 light:text-gray-600">{{ stats.read.toLocaleString() }}</td>
+                          <td class="py-3 px-4 text-right text-white/70 light:text-gray-600">{{ stats.replied.toLocaleString() }}</td>
+                          <td class="py-3 px-4 text-right text-white/70 light:text-gray-600">
+                            {{ stats.sent > 0 ? (stats.delivered / stats.sent * 100).toFixed(1) : 0 }}%
+                          </td>
+                          <td class="py-3 px-4 text-right text-white/70 light:text-gray-600">
+                            {{ stats.delivered > 0 ? (stats.read / stats.delivered * 100).toFixed(1) : 0 }}%
+                          </td>
+                          <td class="py-3 px-4 text-right text-white/70 light:text-gray-600">
+                            {{ stats.cost > 0 ? formatCurrency(stats.cost) : '-' }}
+                          </td>
+                        </tr>
+                      </tbody>
+                    </table>
+                    <div v-if="Object.keys((aggregatedData as ReturnType<typeof aggregateTemplateData>).byTemplate).length === 0" class="py-8 text-center text-muted-foreground">
+                      No template data available for the selected period
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+            </template>
+            <template v-else>
+              <div class="text-center py-12 text-muted-foreground">
+                No template analytics data available
+              </div>
+            </template>
+          </TabsContent>
+
+          <!-- Call Analytics -->
+          <TabsContent value="call_analytics" class="space-y-6">
+            <template v-if="isLoading">
+              <div class="grid gap-4 md:grid-cols-2">
+                <div v-for="i in 2" :key="i" class="rounded-xl border border-white/[0.08] bg-white/[0.02] p-6 light:bg-white light:border-gray-200">
+                  <Skeleton class="h-4 w-24 mb-2 bg-white/[0.08] light:bg-gray-200" />
+                  <Skeleton class="h-8 w-16 bg-white/[0.08] light:bg-gray-200" />
+                </div>
+              </div>
+            </template>
+            <template v-else-if="aggregatedData && activeTab === 'call_analytics'">
+              <!-- Stats Cards -->
+              <div class="grid gap-4 md:grid-cols-2">
+                <div class="card-depth rounded-xl border border-white/[0.08] bg-white/[0.04] p-6 light:bg-white light:border-gray-200">
+                  <div class="flex flex-row items-center justify-between space-y-0 pb-2">
+                    <span class="text-sm font-medium text-white/50 light:text-gray-500">Total Calls</span>
+                    <div class="h-10 w-10 rounded-lg bg-blue-500/20 flex items-center justify-center">
+                      <Phone class="h-5 w-5 text-blue-400" />
+                    </div>
+                  </div>
+                  <div class="pt-2">
+                    <div class="text-3xl font-bold text-white light:text-gray-900">
+                      {{ (aggregatedData as ReturnType<typeof aggregateCallData>).totals.calls.toLocaleString() }}
+                    </div>
+                  </div>
+                </div>
+
+                <div class="card-depth rounded-xl border border-white/[0.08] bg-white/[0.04] p-6 light:bg-white light:border-gray-200">
+                  <div class="flex flex-row items-center justify-between space-y-0 pb-2">
+                    <span class="text-sm font-medium text-white/50 light:text-gray-500">Total Duration</span>
+                    <div class="h-10 w-10 rounded-lg bg-emerald-500/20 flex items-center justify-center">
+                      <TrendingUp class="h-5 w-5 text-emerald-400" />
+                    </div>
+                  </div>
+                  <div class="pt-2">
+                    <div class="text-3xl font-bold text-white light:text-gray-900">
+                      {{ formatDuration((aggregatedData as ReturnType<typeof aggregateCallData>).totals.duration) }}
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Call Breakdown -->
+              <div class="grid gap-4 md:grid-cols-2">
+                <Card>
+                  <CardHeader>
+                    <CardTitle>Calls by Type</CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <div class="space-y-3">
+                      <div
+                        v-for="[type, count] in Object.entries((aggregatedData as ReturnType<typeof aggregateCallData>).byType)"
+                        :key="type"
+                        class="flex items-center justify-between"
+                      >
+                        <span class="text-white/70 light:text-gray-600">{{ formatCategory(type) }}</span>
+                        <span class="font-medium text-white light:text-gray-900">{{ count.toLocaleString() }}</span>
+                      </div>
+                      <div v-if="Object.keys((aggregatedData as ReturnType<typeof aggregateCallData>).byType).length === 0" class="text-muted-foreground text-center py-4">
+                        No call data available
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+
+                <Card>
+                  <CardHeader>
+                    <CardTitle>Calls by Direction</CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <div class="space-y-3">
+                      <div
+                        v-for="[direction, count] in Object.entries((aggregatedData as ReturnType<typeof aggregateCallData>).byDirection)"
+                        :key="direction"
+                        class="flex items-center justify-between"
+                      >
+                        <span class="text-white/70 light:text-gray-600">{{ formatCategory(direction) }}</span>
+                        <span class="font-medium text-white light:text-gray-900">{{ count.toLocaleString() }}</span>
+                      </div>
+                      <div v-if="Object.keys((aggregatedData as ReturnType<typeof aggregateCallData>).byDirection).length === 0" class="text-muted-foreground text-center py-4">
+                        No call data available
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+              </div>
+            </template>
+            <template v-else>
+              <div class="text-center py-12 text-muted-foreground">
+                No call analytics data available
+              </div>
+            </template>
+          </TabsContent>
+        </Tabs>
+      </div>
+    </ScrollArea>
+  </div>
+</template>

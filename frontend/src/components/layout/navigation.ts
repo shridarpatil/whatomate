@@ -15,7 +15,8 @@ import {
   BarChart3,
   ShieldCheck,
   Zap,
-  Shield
+  Shield,
+  LineChart
 } from 'lucide-vue-next'
 import type { Component } from 'vue'
 
@@ -65,6 +66,12 @@ export const navigationItems: NavItem[] = [
     path: '/analytics/agents',
     icon: BarChart3,
     permission: 'analytics.agents'
+  },
+  {
+    name: 'Meta Insights',
+    path: '/analytics/meta-insights',
+    icon: LineChart,
+    permission: 'analytics.meta'
   },
   {
     name: 'Templates',
