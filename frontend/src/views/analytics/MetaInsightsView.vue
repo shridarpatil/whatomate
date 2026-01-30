@@ -434,18 +434,34 @@ function aggregateConversationData(points: MetaConversationDataPoint[]) {
 }
 
 function aggregatePricingData(points: MetaPricingDataPoint[]) {
-  const byCategory = new Map<string, number>()
+  // Meta's July 2025 pricing model returns volume + cost per time period
+  // without category breakdown
+  const byTime = new Map<number, { volume: number; cost: number }>()
+  let totalVolume = 0
   let totalCost = 0
 
   for (const point of points) {
-    totalCost += point.cost
-    const category = point.conversation_category || 'OTHER'
-    byCategory.set(category, (byCategory.get(category) || 0) + point.cost)
+    totalVolume += point.volume || 0
+    totalCost += point.cost || 0
+
+    // Group by start timestamp for time series
+    const existing = byTime.get(point.start) || { volume: 0, cost: 0 }
+    byTime.set(point.start, {
+      volume: existing.volume + (point.volume || 0),
+      cost: existing.cost + (point.cost || 0)
+    })
   }
 
+  // Sort by time
+  const sortedEntries = Array.from(byTime.entries()).sort((a, b) => a[0] - b[0])
+
   return {
-    totals: { cost: totalCost },
-    byCategory: Object.fromEntries(byCategory)
+    totals: { volume: totalVolume, cost: totalCost },
+    timeSeries: sortedEntries.map(([start, data]) => ({
+      start,
+      volume: data.volume,
+      cost: data.cost
+    }))
   }
 }
 
@@ -585,21 +601,25 @@ const pricingChartData = computed(() => {
   }
 
   const data = aggregatedData.value as ReturnType<typeof aggregatePricingData>
-  const categories = Object.entries(data.byCategory)
 
   return {
-    labels: categories.map(([cat]) => formatCategory(cat)),
-    datasets: [{
-      label: 'Cost',
-      data: categories.map(([, val]) => val),
-      backgroundColor: [
-        'rgba(59, 130, 246, 0.8)',
-        'rgba(16, 185, 129, 0.8)',
-        'rgba(245, 158, 11, 0.8)',
-        'rgba(139, 92, 246, 0.8)',
-        'rgba(236, 72, 153, 0.8)'
-      ]
-    }]
+    labels: data.timeSeries.map(d => formatTimestamp(d.start)),
+    datasets: [
+      {
+        label: 'Messages',
+        data: data.timeSeries.map(d => d.volume),
+        borderColor: 'rgba(59, 130, 246, 1)',
+        backgroundColor: 'rgba(59, 130, 246, 0.2)',
+        yAxisID: 'y'
+      },
+      {
+        label: 'Cost',
+        data: data.timeSeries.map(d => d.cost),
+        borderColor: 'rgba(16, 185, 129, 1)',
+        backgroundColor: 'rgba(16, 185, 129, 0.2)',
+        yAxisID: 'y1'
+      }
+    ]
   }
 })
 
@@ -653,6 +673,45 @@ const doughnutOptions = {
   plugins: {
     legend: {
       position: 'bottom' as const
+    }
+  }
+}
+
+const pricingChartOptions = {
+  responsive: true,
+  maintainAspectRatio: false,
+  interaction: {
+    mode: 'index' as const,
+    intersect: false
+  },
+  plugins: {
+    legend: {
+      position: 'bottom' as const
+    }
+  },
+  scales: {
+    y: {
+      type: 'linear' as const,
+      display: true,
+      position: 'left' as const,
+      title: {
+        display: true,
+        text: 'Messages'
+      },
+      beginAtZero: true
+    },
+    y1: {
+      type: 'linear' as const,
+      display: true,
+      position: 'right' as const,
+      title: {
+        display: true,
+        text: 'Cost'
+      },
+      beginAtZero: true,
+      grid: {
+        drawOnChartArea: false
+      }
     }
   }
 }
@@ -1018,8 +1077,22 @@ const doughnutOptions = {
               <Skeleton class="h-64 bg-white/[0.08] light:bg-gray-200" />
             </template>
             <template v-else-if="aggregatedData && activeTab === 'pricing_analytics'">
-              <!-- Stats Card -->
-              <div class="grid gap-4 md:grid-cols-1 lg:grid-cols-3">
+              <!-- Stats Cards -->
+              <div class="grid gap-4 md:grid-cols-2">
+                <div class="card-depth rounded-xl border border-white/[0.08] bg-white/[0.04] p-6 light:bg-white light:border-gray-200">
+                  <div class="flex flex-row items-center justify-between space-y-0 pb-2">
+                    <span class="text-sm font-medium text-white/50 light:text-gray-500">Total Messages</span>
+                    <div class="h-10 w-10 rounded-lg bg-blue-500/20 flex items-center justify-center">
+                      <MessagesSquare class="h-5 w-5 text-blue-400" />
+                    </div>
+                  </div>
+                  <div class="pt-2">
+                    <div class="text-3xl font-bold text-white light:text-gray-900">
+                      {{ (aggregatedData as ReturnType<typeof aggregatePricingData>).totals.volume.toLocaleString() }}
+                    </div>
+                  </div>
+                </div>
+
                 <div class="card-depth rounded-xl border border-white/[0.08] bg-white/[0.04] p-6 light:bg-white light:border-gray-200">
                   <div class="flex flex-row items-center justify-between space-y-0 pb-2">
                     <span class="text-sm font-medium text-white/50 light:text-gray-500">Total Cost</span>
@@ -1038,12 +1111,12 @@ const doughnutOptions = {
               <!-- Chart -->
               <Card>
                 <CardHeader>
-                  <CardTitle>Cost by Category</CardTitle>
-                  <CardDescription>Breakdown of costs by conversation type</CardDescription>
+                  <CardTitle>Messages & Cost Over Time</CardTitle>
+                  <CardDescription>Daily message volume and associated costs</CardDescription>
                 </CardHeader>
                 <CardContent>
                   <div class="h-80">
-                    <Bar v-if="pricingChartData.labels.length > 0" :data="pricingChartData" :options="chartOptions" />
+                    <Line v-if="pricingChartData.labels.length > 0" :data="pricingChartData" :options="pricingChartOptions" />
                     <div v-else class="h-full flex items-center justify-center text-muted-foreground">
                       No data available for the selected period
                     </div>

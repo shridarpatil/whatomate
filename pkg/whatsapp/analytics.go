@@ -89,11 +89,14 @@ type ConversationAnalytics struct {
 }
 
 // PricingAnalyticsDataPoint represents a single data point for pricing analytics
+// Note: Meta's July 2025 pricing model change means we get volume+cost per time period
+// instead of breakdown by conversation_category
 type PricingAnalyticsDataPoint struct {
 	Start                int64   `json:"start"`
 	End                  int64   `json:"end"`
-	Cost                 float64 `json:"cost"`
-	ConversationCategory string  `json:"conversation_category"` // "MARKETING", "UTILITY", "AUTHENTICATION", "SERVICE"
+	Volume               int64   `json:"volume"`                                  // Message count (new pricing model)
+	Cost                 float64 `json:"cost"`                                    // Cost in account currency
+	ConversationCategory string  `json:"conversation_category,omitempty"`         // May not be present in new model
 	CountryCode          string  `json:"country_code,omitempty"`
 }
 
