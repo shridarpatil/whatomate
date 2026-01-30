@@ -91,22 +91,29 @@ type PricingAnalytics struct {
 
 // TemplateCostItem represents a cost item in template analytics
 type TemplateCostItem struct {
-	Type   string  `json:"type"`
-	Amount float64 `json:"amount,omitempty"`
+	Type  string  `json:"type"`            // amount_spent, cost_per_delivered, cost_per_url_button_click
+	Value float64 `json:"value,omitempty"` // The cost value
+}
+
+// TemplateClickItem represents a click item in template analytics
+type TemplateClickItem struct {
+	Type          string `json:"type"`           // quick_reply_button, unique_url_button
+	ButtonContent string `json:"button_content"` // The button text
+	Count         int64  `json:"count"`          // Number of clicks
 }
 
 // TemplateAnalyticsDataPoint represents a single data point for template analytics
 // This matches Meta's actual response where template_id is in each data point
 type TemplateAnalyticsDataPoint struct {
-	TemplateID string             `json:"template_id"`
-	Start      int64              `json:"start"`
-	End        int64              `json:"end"`
-	Sent       int64              `json:"sent"`
-	Delivered  int64              `json:"delivered"`
-	Read       int64              `json:"read"`
-	Replied    int64              `json:"replied,omitempty"`
-	Clicked    int64              `json:"clicked,omitempty"`
-	Cost       []TemplateCostItem `json:"cost,omitempty"`
+	TemplateID string              `json:"template_id"`
+	Start      int64               `json:"start"`
+	End        int64               `json:"end"`
+	Sent       int64               `json:"sent"`
+	Delivered  int64               `json:"delivered"`
+	Read       int64               `json:"read"`
+	Replied    int64               `json:"replied,omitempty"`
+	Clicked    []TemplateClickItem `json:"clicked,omitempty"` // Array of button click details
+	Cost       []TemplateCostItem  `json:"cost,omitempty"`
 }
 
 // TemplateAnalyticsDataEntry represents one entry in the data array
@@ -206,6 +213,11 @@ func (c *Client) GetAnalytics(ctx context.Context, account *Account, analyticsTy
 	// Log raw response for debugging
 	c.Log.Debug("Meta analytics raw response", "type", analyticsType, "response", string(respBody))
 
+	// Template analytics uses a different endpoint that returns data directly (not nested under template_analytics)
+	if analyticsType == AnalyticsTypeTemplate {
+		return c.parseTemplateAnalyticsResponse(ctx, account, respBody)
+	}
+
 	// Parse raw response first
 	var rawResp metaAnalyticsRawResponse
 	if err := json.Unmarshal(respBody, &rawResp); err != nil {
@@ -214,20 +226,6 @@ func (c *Client) GetAnalytics(ctx context.Context, account *Account, analyticsTy
 
 	response := &MetaAnalyticsResponse{
 		ID: rawResp.ID,
-	}
-
-	// Handle template analytics with pagination
-	if analyticsType == AnalyticsTypeTemplate && len(rawResp.TemplateAnalytics) > 0 {
-		allDataPoints, err := c.fetchAllTemplateAnalyticsPages(ctx, account, rawResp.TemplateAnalytics)
-		if err != nil {
-			return nil, err
-		}
-		analytics := TemplateAnalytics{
-			Granularity: "DAILY", // Template analytics only supports DAILY
-			DataPoints:  allDataPoints,
-		}
-		response.TemplateAnalytics = &analytics
-		return response, nil
 	}
 
 	// Parse the specific analytics type
@@ -272,26 +270,6 @@ func (c *Client) GetAnalytics(ctx context.Context, account *Account, analyticsTy
 			}
 			response.PricingAnalytics = &analytics
 		}
-	case AnalyticsTypeTemplate:
-		if len(rawResp.TemplateAnalytics) > 0 {
-			var rawAnalytics TemplateAnalyticsRaw
-			if err := json.Unmarshal(rawResp.TemplateAnalytics, &rawAnalytics); err != nil {
-				return nil, fmt.Errorf("failed to parse template analytics: %w", err)
-			}
-			// Flatten the nested structure - template_id is in each data_point
-			analytics := TemplateAnalytics{
-				DataPoints: make([]TemplateAnalyticsDataPoint, 0),
-			}
-			// Get granularity from first entry if available
-			if len(rawAnalytics.Data) > 0 {
-				analytics.Granularity = rawAnalytics.Data[0].Granularity
-			}
-			// Flatten all data points from all entries
-			for _, entry := range rawAnalytics.Data {
-				analytics.DataPoints = append(analytics.DataPoints, entry.DataPoints...)
-			}
-			response.TemplateAnalytics = &analytics
-		}
 	case AnalyticsTypeCall:
 		if len(rawResp.CallAnalytics) > 0 {
 			var rawAnalytics CallAnalyticsRaw
@@ -319,8 +297,14 @@ func (c *Client) GetAnalytics(ctx context.Context, account *Account, analyticsTy
 
 // buildAnalyticsURL builds the analytics endpoint URL with filters
 func (c *Client) buildAnalyticsURL(account *Account, analyticsType AnalyticsType, req *AnalyticsRequest) string {
-	// Build the field with filters
-	// Format: field.start(ts).end(ts).granularity(GRAN)[.phone_numbers(["+1234"])][.template_ids(["123"])]
+	// Template analytics uses a different endpoint format
+	// https://graph.facebook.com/{version}/{waba_id}/template_analytics?start=...&end=...&granularity=...&metric_types=...&template_ids=[...]
+	if analyticsType == AnalyticsTypeTemplate {
+		return c.buildTemplateAnalyticsURL(account, req)
+	}
+
+	// Other analytics use the fields syntax
+	// Format: field.start(ts).end(ts).granularity(GRAN)[.phone_numbers(["+1234"])]
 	var filters []string
 
 	filters = append(filters, fmt.Sprintf("start(%d)", req.Start))
@@ -338,11 +322,6 @@ func (c *Client) buildAnalyticsURL(account *Account, analyticsType AnalyticsType
 		filters = append(filters, fmt.Sprintf("phone_numbers(%s)", string(phonesJSON)))
 	}
 
-	if len(req.TemplateIDs) > 0 && analyticsType == AnalyticsTypeTemplate {
-		templatesJSON, _ := json.Marshal(req.TemplateIDs)
-		filters = append(filters, fmt.Sprintf("template_ids(%s)", string(templatesJSON)))
-	}
-
 	if len(req.CountryCodes) > 0 && analyticsType == AnalyticsTypePricing {
 		countriesJSON, _ := json.Marshal(req.CountryCodes)
 		filters = append(filters, fmt.Sprintf("country_codes(%s)", string(countriesJSON)))
@@ -356,6 +335,32 @@ func (c *Client) buildAnalyticsURL(account *Account, analyticsType AnalyticsType
 	field := fmt.Sprintf("%s.%s", analyticsType, strings.Join(filters, "."))
 
 	return fmt.Sprintf("%s/%s/%s?fields=%s", c.getBaseURL(), account.APIVersion, account.BusinessID, field)
+}
+
+// buildTemplateAnalyticsURL builds the template analytics endpoint URL
+// Uses dedicated endpoint: /{waba_id}/template_analytics?start=...&end=...&granularity=...&metric_types=...&template_ids=[...]
+func (c *Client) buildTemplateAnalyticsURL(account *Account, req *AnalyticsRequest) string {
+	baseURL := fmt.Sprintf("%s/%s/%s/template_analytics", c.getBaseURL(), account.APIVersion, account.BusinessID)
+
+	// Build query parameters
+	params := []string{
+		fmt.Sprintf("start=%d", req.Start),
+		fmt.Sprintf("end=%d", req.End),
+		"granularity=daily", // Template analytics only supports daily
+		"metric_types=cost,clicked,delivered,read,sent",
+	}
+
+	// Add template IDs if provided - format as numeric array [123,456] not ["123","456"]
+	// If no template IDs are provided, Meta will return all templates with activity
+	if len(req.TemplateIDs) > 0 {
+		templateIDsStr := "[" + strings.Join(req.TemplateIDs, ",") + "]"
+		params = append(params, fmt.Sprintf("template_ids=%s", templateIDsStr))
+		c.Log.Debug("Template analytics request", "template_ids", templateIDsStr, "count", len(req.TemplateIDs))
+	} else {
+		c.Log.Debug("Template analytics request without template_ids filter - will return all templates with activity")
+	}
+
+	return fmt.Sprintf("%s?%s", baseURL, strings.Join(params, "&"))
 }
 
 // ValidateGranularity validates the granularity value (accepts both formats)
@@ -415,17 +420,16 @@ func ValidateAnalyticsType(analyticsType string) bool {
 	}
 }
 
-// fetchAllTemplateAnalyticsPages fetches all pages of template analytics using pagination
-func (c *Client) fetchAllTemplateAnalyticsPages(ctx context.Context, account *Account, firstPageData json.RawMessage) ([]TemplateAnalyticsDataPoint, error) {
-	var allDataPoints []TemplateAnalyticsDataPoint
-
-	// Parse first page
+// parseTemplateAnalyticsResponse parses the response from the direct template_analytics endpoint
+// This endpoint returns {"data": [...], "paging": {...}} at root level (not nested under template_analytics)
+func (c *Client) parseTemplateAnalyticsResponse(ctx context.Context, account *Account, respBody []byte) (*MetaAnalyticsResponse, error) {
 	var firstPage templateAnalyticsWithPaging
-	if err := json.Unmarshal(firstPageData, &firstPage); err != nil {
-		return nil, fmt.Errorf("failed to parse template analytics: %w", err)
+	if err := json.Unmarshal(respBody, &firstPage); err != nil {
+		return nil, fmt.Errorf("failed to parse template analytics response: %w", err)
 	}
 
 	// Collect data points from first page
+	allDataPoints := make([]TemplateAnalyticsDataPoint, 0)
 	for _, entry := range firstPage.Data {
 		allDataPoints = append(allDataPoints, entry.DataPoints...)
 	}
@@ -433,25 +437,23 @@ func (c *Client) fetchAllTemplateAnalyticsPages(ctx context.Context, account *Ac
 	// Follow pagination
 	nextURL := firstPage.Paging.Next
 	pageCount := 1
-	maxPages := 50 // Safety limit to prevent infinite loops
+	maxPages := 50 // Safety limit
 
 	for nextURL != "" && pageCount < maxPages {
 		c.Log.Debug("Fetching next page of template analytics", "page", pageCount+1, "url", nextURL)
 
-		respBody, err := c.doRequest(ctx, http.MethodGet, nextURL, nil, account.AccessToken)
+		pageRespBody, err := c.doRequest(ctx, http.MethodGet, nextURL, nil, account.AccessToken)
 		if err != nil {
 			c.Log.Error("Failed to fetch template analytics page", "error", err, "page", pageCount+1)
-			break // Return what we have so far
+			break
 		}
 
-		// The paginated response has a different structure - data is at root level
 		var pageResp templateAnalyticsWithPaging
-		if err := json.Unmarshal(respBody, &pageResp); err != nil {
+		if err := json.Unmarshal(pageRespBody, &pageResp); err != nil {
 			c.Log.Error("Failed to parse template analytics page", "error", err, "page", pageCount+1)
 			break
 		}
 
-		// Collect data points from this page
 		for _, entry := range pageResp.Data {
 			allDataPoints = append(allDataPoints, entry.DataPoints...)
 		}
@@ -461,5 +463,15 @@ func (c *Client) fetchAllTemplateAnalyticsPages(ctx context.Context, account *Ac
 	}
 
 	c.Log.Debug("Template analytics pagination complete", "total_pages", pageCount, "total_data_points", len(allDataPoints))
-	return allDataPoints, nil
+
+	response := &MetaAnalyticsResponse{
+		ID: account.BusinessID,
+		TemplateAnalytics: &TemplateAnalytics{
+			Granularity: "DAILY",
+			DataPoints:  allDataPoints,
+		},
+	}
+
+	return response, nil
 }
+

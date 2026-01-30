@@ -357,8 +357,14 @@ export interface MetaPricingDataPoint {
 }
 
 export interface MetaTemplateCostItem {
-  type: string
-  amount?: number
+  type: string    // amount_spent, cost_per_delivered, cost_per_url_button_click
+  value?: number  // The cost value
+}
+
+export interface MetaTemplateClickItem {
+  type: string           // quick_reply_button, unique_url_button
+  button_content: string // The button text
+  count: number          // Number of clicks
 }
 
 export interface MetaTemplateDataPoint {
@@ -369,7 +375,7 @@ export interface MetaTemplateDataPoint {
   delivered: number
   read: number
   replied?: number
-  clicked?: number
+  clicked?: MetaTemplateClickItem[]  // Array of button click details
   cost?: MetaTemplateCostItem[]
 }
 

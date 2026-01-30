@@ -50,7 +50,7 @@ import {
   Send,
   CheckCircle,
   Eye,
-  CreditCard
+  MousePointerClick
 } from 'lucide-vue-next'
 import type { DateRange } from 'reka-ui'
 import { CalendarDate } from '@internationalized/date'
@@ -79,6 +79,8 @@ const loadSavedPreferences = () => {
   const savedRange = localStorage.getItem('meta_insights_time_range') as TimeRangePreset | null
   const savedCustomRange = localStorage.getItem('meta_insights_custom_range')
   const savedGranularity = localStorage.getItem('meta_insights_granularity') as MetaGranularity | null
+  const savedAccountId = localStorage.getItem('meta_insights_account_id')
+  const savedActiveTab = localStorage.getItem('meta_insights_active_tab') as MetaAnalyticsType | null
 
   let customRange: DateRange = { start: undefined, end: undefined }
   if (savedCustomRange) {
@@ -98,7 +100,9 @@ const loadSavedPreferences = () => {
   return {
     range: savedRange || '30days',
     customRange,
-    granularity: savedGranularity || 'DAY'
+    granularity: savedGranularity || 'DAY',
+    accountId: savedAccountId || 'all',
+    activeTab: savedActiveTab || 'analytics'
   }
 }
 
@@ -107,13 +111,22 @@ const selectedRange = ref<TimeRangePreset>(savedPrefs.range as TimeRangePreset)
 const customDateRange = ref<any>(savedPrefs.customRange)
 const isDatePickerOpen = ref(false)
 
+// Apply saved preferences
 if (savedPrefs.granularity) {
   selectedGranularity.value = savedPrefs.granularity as MetaGranularity
+}
+if (savedPrefs.accountId) {
+  selectedAccountId.value = savedPrefs.accountId
+}
+if (savedPrefs.activeTab) {
+  activeTab.value = savedPrefs.activeTab as MetaAnalyticsType
 }
 
 const savePreferences = () => {
   localStorage.setItem('meta_insights_time_range', selectedRange.value)
   localStorage.setItem('meta_insights_granularity', selectedGranularity.value)
+  localStorage.setItem('meta_insights_account_id', selectedAccountId.value)
+  localStorage.setItem('meta_insights_active_tab', activeTab.value)
   if (selectedRange.value === 'custom' && customDateRange.value.start && customDateRange.value.end) {
     localStorage.setItem('meta_insights_custom_range', JSON.stringify({
       start: {
@@ -281,10 +294,12 @@ watch(selectedGranularity, () => {
 })
 
 watch(selectedAccountId, () => {
+  savePreferences()
   fetchAnalytics()
 })
 
 watch(activeTab, () => {
+  savePreferences()
   fetchAnalytics()
 })
 
@@ -441,6 +456,7 @@ function aggregateTemplateData(points: MetaTemplateDataPoint[]) {
   let totalDelivered = 0
   let totalRead = 0
   let totalReplied = 0
+  let totalClicked = 0
   let totalCost = 0
 
   for (const point of points) {
@@ -449,8 +465,12 @@ function aggregateTemplateData(points: MetaTemplateDataPoint[]) {
     totalRead += point.read
     totalReplied += point.replied || 0
 
-    // Extract amount_spent from cost array
-    const amountSpent = point.cost?.find(c => c.type === 'amount_spent')?.amount || 0
+    // Sum all clicked counts from the clicked array
+    const clickedCount = point.clicked?.reduce((sum, c) => sum + c.count, 0) || 0
+    totalClicked += clickedCount
+
+    // Extract amount_spent from cost array (using 'value' field per Meta API)
+    const amountSpent = point.cost?.find(c => c.type === 'amount_spent')?.value || 0
     totalCost += amountSpent
 
     const templateId = point.template_id
@@ -460,13 +480,13 @@ function aggregateTemplateData(points: MetaTemplateDataPoint[]) {
       delivered: existing.delivered + point.delivered,
       read: existing.read + point.read,
       replied: existing.replied + (point.replied || 0),
-      clicked: existing.clicked + (point.clicked || 0),
+      clicked: existing.clicked + clickedCount,
       cost: existing.cost + amountSpent
     })
   }
 
   return {
-    totals: { sent: totalSent, delivered: totalDelivered, read: totalRead, replied: totalReplied, cost: totalCost },
+    totals: { sent: totalSent, delivered: totalDelivered, read: totalRead, replied: totalReplied, clicked: totalClicked, cost: totalCost },
     byTemplate: Object.fromEntries(byTemplate)
   }
 }
@@ -989,7 +1009,7 @@ const doughnutOptions = {
             </template>
             <template v-else-if="aggregatedData && activeTab === 'template_analytics'">
               <!-- Stats Cards -->
-              <div class="grid gap-4 md:grid-cols-5">
+              <div class="grid gap-4 md:grid-cols-6">
                 <div class="card-depth rounded-xl border border-white/[0.08] bg-white/[0.04] p-6 light:bg-white light:border-gray-200">
                   <div class="flex flex-row items-center justify-between space-y-0 pb-2">
                     <span class="text-sm font-medium text-white/50 light:text-gray-500">Sent</span>
@@ -1048,6 +1068,20 @@ const doughnutOptions = {
 
                 <div class="card-depth rounded-xl border border-white/[0.08] bg-white/[0.04] p-6 light:bg-white light:border-gray-200">
                   <div class="flex flex-row items-center justify-between space-y-0 pb-2">
+                    <span class="text-sm font-medium text-white/50 light:text-gray-500">Clicked</span>
+                    <div class="h-10 w-10 rounded-lg bg-cyan-500/20 flex items-center justify-center">
+                      <MousePointerClick class="h-5 w-5 text-cyan-400" />
+                    </div>
+                  </div>
+                  <div class="pt-2">
+                    <div class="text-3xl font-bold text-white light:text-gray-900">
+                      {{ (aggregatedData as ReturnType<typeof aggregateTemplateData>).totals.clicked.toLocaleString() }}
+                    </div>
+                  </div>
+                </div>
+
+                <div class="card-depth rounded-xl border border-white/[0.08] bg-white/[0.04] p-6 light:bg-white light:border-gray-200">
+                  <div class="flex flex-row items-center justify-between space-y-0 pb-2">
                     <span class="text-sm font-medium text-white/50 light:text-gray-500">Total Cost</span>
                     <div class="h-10 w-10 rounded-lg bg-rose-500/20 flex items-center justify-center">
                       <DollarSign class="h-5 w-5 text-rose-400" />
@@ -1079,6 +1113,7 @@ const doughnutOptions = {
                           <th class="py-3 px-4 text-right font-medium text-white/70 light:text-gray-600">Delivered</th>
                           <th class="py-3 px-4 text-right font-medium text-white/70 light:text-gray-600">Read</th>
                           <th class="py-3 px-4 text-right font-medium text-white/70 light:text-gray-600">Replied</th>
+                          <th class="py-3 px-4 text-right font-medium text-white/70 light:text-gray-600">Clicked</th>
                           <th class="py-3 px-4 text-right font-medium text-white/70 light:text-gray-600">Delivery %</th>
                           <th class="py-3 px-4 text-right font-medium text-white/70 light:text-gray-600">Read %</th>
                           <th class="py-3 px-4 text-right font-medium text-white/70 light:text-gray-600">Cost</th>
@@ -1098,6 +1133,7 @@ const doughnutOptions = {
                           <td class="py-3 px-4 text-right text-white/70 light:text-gray-600">{{ stats.delivered.toLocaleString() }}</td>
                           <td class="py-3 px-4 text-right text-white/70 light:text-gray-600">{{ stats.read.toLocaleString() }}</td>
                           <td class="py-3 px-4 text-right text-white/70 light:text-gray-600">{{ stats.replied.toLocaleString() }}</td>
+                          <td class="py-3 px-4 text-right text-white/70 light:text-gray-600">{{ stats.clicked.toLocaleString() }}</td>
                           <td class="py-3 px-4 text-right text-white/70 light:text-gray-600">
                             {{ stats.sent > 0 ? (stats.delivered / stats.sent * 100).toFixed(1) : 0 }}%
                           </td>
