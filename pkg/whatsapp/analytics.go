@@ -398,10 +398,8 @@ func (c *Client) buildAnalyticsURL(account *Account, analyticsType AnalyticsType
 		filters = append(filters, fmt.Sprintf("country_codes(%s)", string(countriesJSON)))
 	}
 
-	// Add dimensions for conversation analytics to get the breakdown data
-	if analyticsType == AnalyticsTypeConversation {
-		filters = append(filters, "dimensions([\"CONVERSATION_CATEGORY\",\"CONVERSATION_DIRECTION\",\"CONVERSATION_TYPE\"])")
-	}
+	// Note: dimensions parameter was removed as Meta may have changed the API
+	// If breakdown data is needed, it may need to be fetched differently
 
 	field := fmt.Sprintf("%s.%s", analyticsType, strings.Join(filters, "."))
 
