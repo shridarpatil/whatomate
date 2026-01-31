@@ -173,13 +173,7 @@ func (a *App) GetMetaAnalytics(r *fastglue.Request) error {
 
 	var results []MetaAnalyticsResponse
 	for _, account := range accounts {
-		waAccount := &whatsapp.Account{
-			PhoneID:     account.PhoneID,
-			BusinessID:  account.BusinessID,
-			AppID:       account.AppID,
-			APIVersion:  account.APIVersion,
-			AccessToken: account.AccessToken,
-		}
+		waAccount := a.toWhatsAppAccount(&account)
 
 		req := &whatsapp.AnalyticsRequest{
 			Start:       startUnix,

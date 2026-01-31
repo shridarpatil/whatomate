@@ -30,13 +30,7 @@ func (a *App) GetBusinessProfile(r *fastglue.Request) error {
 	ctx := r.RequestCtx
 
 	// Call the WhatsApp client
-	profile, err := a.WhatsApp.GetBusinessProfile(ctx, &whatsapp.Account{
-		PhoneID:     account.PhoneID,
-		BusinessID:  account.BusinessID,
-		AppID:       account.AppID,
-		APIVersion:  account.APIVersion,
-		AccessToken: account.AccessToken,
-	})
+	profile, err := a.WhatsApp.GetBusinessProfile(ctx, a.toWhatsAppAccount(&account))
 	if err != nil {
 		a.Log.Error("Failed to get business profile", "error", err)
 		return r.SendErrorEnvelope(fasthttp.StatusInternalServerError, "Failed to get business profile: "+err.Error(), nil, "")
@@ -69,13 +63,7 @@ func (a *App) UpdateBusinessProfile(r *fastglue.Request) error {
 	}
 
 	ctx := r.RequestCtx
-	waAccount := &whatsapp.Account{
-		PhoneID:     account.PhoneID,
-		BusinessID:  account.BusinessID,
-		AppID:       account.AppID,
-		APIVersion:  account.APIVersion,
-		AccessToken: account.AccessToken,
-	}
+	waAccount := a.toWhatsAppAccount(&account)
 
 	if err := a.WhatsApp.UpdateBusinessProfile(ctx, waAccount, input); err != nil {
 		a.Log.Error("Failed to update business profile", "error", err)
@@ -131,13 +119,7 @@ func (a *App) UpdateProfilePicture(r *fastglue.Request) error {
 	}
 
 	ctx := r.RequestCtx
-	waAccount := &whatsapp.Account{
-		PhoneID:     account.PhoneID,
-		BusinessID:  account.BusinessID,
-		AppID:       account.AppID,
-		APIVersion:  account.APIVersion,
-		AccessToken: account.AccessToken,
-	}
+	waAccount := a.toWhatsAppAccount(&account)
 
 	// Upload to Meta to get handle
 	handle, err := a.WhatsApp.UploadProfilePicture(ctx, waAccount, fileContent, fileHeader.Header.Get("Content-Type"))

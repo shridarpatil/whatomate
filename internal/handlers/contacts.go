@@ -436,11 +436,7 @@ func (a *App) markMessagesAsRead(orgID uuid.UUID, contactID uuid.UUID, contact *
 					ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 					defer cancel()
 
-					waAccount := &whatsapp.Account{
-						PhoneID:     account.PhoneID,
-						AccessToken: account.AccessToken,
-						APIVersion:  a.Config.WhatsApp.APIVersion,
-					}
+					waAccount := a.toWhatsAppAccount(&account)
 					for _, msg := range unreadMessages {
 						// Check if context was cancelled
 						if ctx.Err() != nil {
