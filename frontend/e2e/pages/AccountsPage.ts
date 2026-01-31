@@ -95,6 +95,11 @@ export class AccountsPage extends BasePage {
     await card.getByRole('button', { name: /Test/i }).click()
   }
 
+  async subscribeApp(name: string) {
+    const card = this.getAccountCard(name)
+    await card.getByRole('button', { name: /Subscribe/i }).click()
+  }
+
   async copyWebhookUrl(name: string) {
     const card = this.getAccountCard(name)
     await card.locator('button[title*="Copy"]').first().click()

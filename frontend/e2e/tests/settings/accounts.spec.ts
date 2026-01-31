@@ -329,3 +329,133 @@ test.describe('Account Test Connection Details', () => {
     await expect(testBtn.locator('.animate-spin')).not.toBeVisible()
   })
 })
+
+test.describe('Account Subscribe App', () => {
+  let accountsPage: AccountsPage
+
+  test.beforeEach(async ({ page }) => {
+    await loginAsAdmin(page)
+    accountsPage = new AccountsPage(page)
+
+    // Mock the GET /accounts to ensure we have a test subject
+    await page.route('**/api/accounts', async route => {
+      if (route.request().method() === 'GET') {
+        await route.fulfill({
+          status: 200,
+          contentType: 'application/json',
+          body: JSON.stringify({
+            data: {
+              accounts: [{
+                id: 'test-acc-id',
+                name: 'Test Account',
+                phone_id: '123456',
+                business_id: '789012',
+                status: 'active'
+              }]
+            }
+          })
+        })
+      } else {
+        await route.continue()
+      }
+    })
+
+    await accountsPage.goto()
+  })
+
+  test('should have subscribe button on account card', async ({ page }) => {
+    const accountCard = page.locator('.rounded-xl.border').filter({ hasText: 'Test Account' })
+    const subscribeBtn = accountCard.getByRole('button', { name: /Subscribe/i })
+    await expect(subscribeBtn).toBeVisible()
+  })
+
+  test('should display success message when subscription succeeds', async ({ page }) => {
+    await page.route('**/api/accounts/*/subscribe', async route => {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          data: {
+            success: true,
+            message: 'App subscribed to webhooks successfully. You should now receive incoming messages.'
+          }
+        })
+      })
+    })
+
+    const accountCard = page.locator('.rounded-xl.border').filter({ hasText: 'Test Account' })
+    await accountCard.getByRole('button', { name: /Subscribe/i }).click()
+
+    await expect(page.locator('[data-sonner-toast]').filter({ hasText: /subscribed.*successfully/i })).toBeVisible()
+  })
+
+  test('should display error message when subscription fails', async ({ page }) => {
+    await page.route('**/api/accounts/*/subscribe', async route => {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          data: {
+            success: false,
+            error: 'Invalid access token or insufficient permissions'
+          }
+        })
+      })
+    })
+
+    const accountCard = page.locator('.rounded-xl.border').filter({ hasText: 'Test Account' })
+    await accountCard.getByRole('button', { name: /Subscribe/i }).click()
+
+    await expect(page.locator('[data-sonner-toast]').filter({ hasText: /failed/i })).toBeVisible()
+  })
+
+  test('should show loading state while subscribing', async ({ page }) => {
+    let fulfillCallback: () => void;
+    const responsePromise = new Promise<void>((resolve) => {
+      fulfillCallback = resolve;
+    });
+
+    await page.route('**/api/accounts/*/subscribe', async route => {
+      await responsePromise;
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({ data: { success: true } })
+      })
+    });
+
+    const accountCard = page.locator('.rounded-xl.border').filter({ hasText: 'Test Account' })
+    const subscribeBtn = accountCard.getByRole('button', { name: /Subscribe/i })
+
+    // Start the action
+    await subscribeBtn.click()
+
+    // Verify loading state
+    await expect(subscribeBtn).toBeDisabled()
+    await expect(subscribeBtn.locator('.animate-spin')).toBeVisible()
+
+    // Finish the request
+    fulfillCallback!()
+
+    // Verify loading state ends
+    await expect(subscribeBtn).not.toBeDisabled()
+    await expect(subscribeBtn.locator('.animate-spin')).not.toBeVisible()
+  })
+
+  test('should handle API error gracefully', async ({ page }) => {
+    await page.route('**/api/accounts/*/subscribe', async route => {
+      await route.fulfill({
+        status: 500,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          error: 'Internal server error'
+        })
+      })
+    })
+
+    const accountCard = page.locator('.rounded-xl.border').filter({ hasText: 'Test Account' })
+    await accountCard.getByRole('button', { name: /Subscribe/i }).click()
+
+    await expect(page.locator('[data-sonner-toast]').filter({ hasText: /failed|error/i })).toBeVisible()
+  })
+})
