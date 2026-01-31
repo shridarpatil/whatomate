@@ -622,3 +622,32 @@ func (c *Client) UpdateBusinessProfile(ctx context.Context, account *Account, in
 
 	return nil
 }
+
+// SubscribeAppResponse represents the response from subscribing an app to webhooks
+type SubscribeAppResponse struct {
+	Success bool `json:"success"`
+}
+
+// SubscribeApp subscribes the app to webhooks for the WhatsApp Business Account.
+// This is required after phone number registration to receive incoming messages.
+// Calls POST /{api_version}/{waba_id}/subscribed_apps
+func (c *Client) SubscribeApp(ctx context.Context, account *Account) error {
+	url := fmt.Sprintf("%s/%s/%s/subscribed_apps", c.getBaseURL(), account.APIVersion, account.BusinessID)
+
+	respBody, err := c.doRequest(ctx, http.MethodPost, url, nil, account.AccessToken)
+	if err != nil {
+		return fmt.Errorf("failed to subscribe app to webhooks: %w", err)
+	}
+
+	var resp SubscribeAppResponse
+	if err := json.Unmarshal(respBody, &resp); err != nil {
+		return fmt.Errorf("failed to parse subscribe response: %w", err)
+	}
+
+	if !resp.Success {
+		return fmt.Errorf("subscription was not successful")
+	}
+
+	c.Log.Info("App subscribed to webhooks", "business_id", account.BusinessID)
+	return nil
+}

@@ -385,3 +385,38 @@ func (a *App) validateAccountCredentials(phoneID, businessID, accessToken, apiVe
 	a.Log.Info("Account credentials validated successfully", "phone_id", phoneID, "business_id", businessID)
 	return nil
 }
+
+// SubscribeApp subscribes the app to webhooks for the WhatsApp Business Account.
+// This is required after phone number registration to receive incoming messages from Meta.
+func (a *App) SubscribeApp(r *fastglue.Request) error {
+	orgID, err := a.getOrgID(r)
+	if err != nil {
+		return r.SendErrorEnvelope(fasthttp.StatusUnauthorized, "Unauthorized", nil, "")
+	}
+
+	id, err := parsePathUUID(r, "id", "account")
+	if err != nil {
+		return nil
+	}
+
+	account, err := findByIDAndOrg[models.WhatsAppAccount](a.DB, r, id, orgID, "Account")
+	if err != nil {
+		return nil
+	}
+
+	// Subscribe the app to webhooks
+	ctx := context.Background()
+	if err := a.WhatsApp.SubscribeApp(ctx, a.toWhatsAppAccount(account)); err != nil {
+		a.Log.Error("Failed to subscribe app to webhooks", "error", err, "account", account.Name)
+		return r.SendEnvelope(map[string]interface{}{
+			"success": false,
+			"error":   err.Error(),
+		})
+	}
+
+	a.Log.Info("App subscribed to webhooks successfully", "account", account.Name, "business_id", account.BusinessID)
+	return r.SendEnvelope(map[string]interface{}{
+		"success": true,
+		"message": "App subscribed to webhooks successfully. You should now receive incoming messages.",
+	})
+}

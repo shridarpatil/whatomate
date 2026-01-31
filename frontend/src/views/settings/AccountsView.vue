@@ -34,7 +34,8 @@ import {
   CheckCircle2,
   Settings2,
   TestTube2,
-  Store
+  Store,
+  Bell
 } from 'lucide-vue-next'
 
 interface WhatsAppAccount {
@@ -81,6 +82,7 @@ const isSubmitting = ref(false)
 const editingAccount = ref<WhatsAppAccount | null>(null)
 const testingAccountId = ref<string | null>(null)
 const testResults = ref<Record<string, TestResult>>({})
+const subscribingAccountId = ref<string | null>(null)
 const deleteDialogOpen = ref(false)
 const accountToDelete = ref<WhatsAppAccount | null>(null)
 
@@ -241,6 +243,22 @@ async function testConnection(account: WhatsAppAccount) {
     toast.error(message)
   } finally {
     testingAccountId.value = null
+  }
+}
+
+async function subscribeApp(account: WhatsAppAccount) {
+  subscribingAccountId.value = account.id
+  try {
+    const response = await api.post(`/accounts/${account.id}/subscribe`)
+    if (response.data.data.success) {
+      toast.success('Subscribed to webhooks successfully! You should now receive incoming messages.')
+    } else {
+      toast.error('Subscription failed: ' + (response.data.data.error || 'Unknown error'))
+    }
+  } catch (error: any) {
+    toast.error(getErrorMessage(error, 'Failed to subscribe to webhooks'))
+  } finally {
+    subscribingAccountId.value = null
   }
 }
 
@@ -460,6 +478,21 @@ const webhookUrl = window.location.origin + basePath + '/api/webhook'
                   <RefreshCw v-else class="h-4 w-4" />
                   <span class="ml-1">Test</span>
                 </Button>
+                <Tooltip>
+                  <TooltipTrigger as-child>
+                    <Button
+                        variant="ghost"
+                        size="sm"
+                        @click="subscribeApp(account)"
+                        :disabled="subscribingAccountId === account.id"
+                    >
+                      <Loader2 v-if="subscribingAccountId === account.id" class="h-4 w-4 animate-spin" />
+                      <Bell v-else class="h-4 w-4" />
+                      <span class="ml-1">Subscribe</span>
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent>Subscribe app to receive webhooks from Meta</TooltipContent>
+                </Tooltip>
                 <Tooltip>
                   <TooltipTrigger as-child>
                     <Button variant="ghost" size="icon" @click="openEditDialog(account)">
