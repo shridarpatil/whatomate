@@ -130,6 +130,8 @@ export const contactsService = {
   delete: (id: string) => api.delete(`/contacts/${id}`),
   assign: (id: string, userId: string | null) =>
     api.put(`/contacts/${id}/assign`, { user_id: userId }),
+  updateTags: (id: string, tags: string[]) =>
+    api.put(`/contacts/${id}/tags`, { tags }),
   getSessionData: (id: string) => api.get(`/contacts/${id}/session-data`),
   import: (file: File) => {
     const formData = new FormData()
@@ -752,6 +754,23 @@ export const rolesService = {
 
 export const permissionsService = {
   list: () => api.get<{ permissions: Permission[] }>('/permissions')
+}
+
+// Tags
+export interface Tag {
+  name: string
+  color: string
+  created_at: string
+  updated_at: string
+}
+
+export const tagsService = {
+  list: () => api.get<{ tags: Tag[] }>('/tags'),
+  create: (data: { name: string; color?: string }) =>
+    api.post<Tag>('/tags', data),
+  update: (name: string, data: { name?: string; color?: string }) =>
+    api.put<Tag>(`/tags/${encodeURIComponent(name)}`, data),
+  delete: (name: string) => api.delete(`/tags/${encodeURIComponent(name)}`)
 }
 
 export default api

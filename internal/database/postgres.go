@@ -68,6 +68,7 @@ func GetMigrationModels() []MigrationModel {
 		{"CustomAction", &models.CustomAction{}},
 		{"WhatsAppAccount", &models.WhatsAppAccount{}},
 		{"Contact", &models.Contact{}},
+		{"Tag", &models.Tag{}},
 		{"Message", &models.Message{}},
 		{"Template", &models.Template{}},
 		{"WhatsAppFlow", &models.WhatsAppFlow{}},

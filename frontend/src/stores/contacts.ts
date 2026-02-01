@@ -285,6 +285,18 @@ export const useContactsStore = defineStore('contacts', () => {
     }
   }
 
+  function updateContactTags(contactId: string, tags: string[]) {
+    // Update in contacts list
+    const contact = contacts.value.find(c => c.id === contactId)
+    if (contact) {
+      contact.tags = tags
+    }
+    // Update current contact if it matches
+    if (currentContact.value?.id === contactId) {
+      currentContact.value = { ...currentContact.value, tags }
+    }
+  }
+
   return {
     contacts,
     currentContact,
@@ -315,6 +327,7 @@ export const useContactsStore = defineStore('contacts', () => {
     clearMessages,
     setReplyingTo,
     clearReplyingTo,
-    updateMessageReactions
+    updateMessageReactions,
+    updateContactTags
   }
 })

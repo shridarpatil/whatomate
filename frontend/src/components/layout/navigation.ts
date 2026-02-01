@@ -16,7 +16,8 @@ import {
   ShieldCheck,
   Zap,
   Shield,
-  LineChart
+  LineChart,
+  Tags
 } from 'lucide-vue-next'
 import type { Component } from 'vue'
 
@@ -96,12 +97,13 @@ export const navigationItems: NavItem[] = [
     path: '/settings',
     icon: Settings,
     permission: 'settings.general',
-    childPermissions: ['settings.general', 'settings.chatbot', 'accounts', 'canned_responses', 'teams', 'users', 'roles', 'api_keys', 'webhooks', 'custom_actions', 'settings.sso'],
+    childPermissions: ['settings.general', 'settings.chatbot', 'accounts', 'canned_responses', 'tags', 'teams', 'users', 'roles', 'api_keys', 'webhooks', 'custom_actions', 'settings.sso'],
     children: [
       { name: 'General', path: '/settings', icon: Settings, permission: 'settings.general' },
       { name: 'Chatbot', path: '/settings/chatbot', icon: Bot, permission: 'settings.chatbot' },
       { name: 'Accounts', path: '/settings/accounts', icon: Users, permission: 'accounts' },
       { name: 'Canned Responses', path: '/settings/canned-responses', icon: MessageSquareText, permission: 'canned_responses' },
+      { name: 'Tags', path: '/settings/tags', icon: Tags, permission: 'tags' },
       { name: 'Teams', path: '/settings/teams', icon: Users, permission: 'teams' },
       { name: 'Users', path: '/settings/users', icon: Users, permission: 'users' },
       { name: 'Roles', path: '/settings/roles', icon: Shield, permission: 'roles' },

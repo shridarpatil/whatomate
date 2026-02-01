@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, watch, computed } from 'vue'
+import { ref, watch, computed, onMounted } from 'vue'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -9,8 +9,27 @@ import {
   CollapsibleContent,
   CollapsibleTrigger,
 } from '@/components/ui/collapsible'
-import { X, ChevronDown, Phone, User } from 'lucide-vue-next'
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger
+} from '@/components/ui/popover'
+import {
+  Command,
+  CommandEmpty,
+  CommandGroup,
+  CommandInput,
+  CommandItem,
+  CommandList
+} from '@/components/ui/command'
+import { X, ChevronDown, Phone, User, Plus, Check, Tags, Loader2 } from 'lucide-vue-next'
+import { TagBadge } from '@/components/ui/tag-badge'
 import { getInitials } from '@/lib/utils'
+import { getTagColorClass } from '@/lib/constants'
+import { useTagsStore } from '@/stores/tags'
+import { useAuthStore } from '@/stores/auth'
+import { contactsService, type Tag } from '@/services/api'
+import { toast } from 'vue-sonner'
 import type { Contact } from '@/stores/contacts'
 
 interface PanelFieldConfig {
@@ -50,15 +69,35 @@ const props = defineProps<{
 
 const emit = defineEmits<{
   close: []
+  tagsUpdated: [tags: string[]]
 }>()
 
+const tagsStore = useTagsStore()
+const authStore = useAuthStore()
+
 const collapsedSections = ref<Record<string, boolean>>({})
+const tagSelectorOpen = ref(false)
+const isUpdatingTags = ref(false)
 
 // Resizable panel state
 const MIN_WIDTH = 280
 const MAX_WIDTH = 480
 const panelWidth = ref(MAX_WIDTH) // Default to max width
 const isResizing = ref(false)
+
+// Check if user can edit tags
+const canEditTags = computed(() => authStore.hasPermission('contacts', 'write'))
+
+// Fetch tags on mount
+onMounted(async () => {
+  if (tagsStore.tags.length === 0) {
+    try {
+      await tagsStore.fetchTags()
+    } catch (e) {
+      // Silently fail - tags just won't be available
+    }
+  }
+})
 
 function startResize(e: MouseEvent) {
   isResizing.value = true
@@ -155,8 +194,57 @@ const sortedSections = computed(() => {
 // Get tags from contact
 const contactTags = computed(() => {
   if (!props.contact.tags || !Array.isArray(props.contact.tags)) return []
-  return props.contact.tags
+  return props.contact.tags as string[]
 })
+
+// Get tag details for display
+function getTagDetails(tagName: string): Tag | undefined {
+  return tagsStore.getTagByName(tagName)
+}
+
+// Check if a tag is selected
+function isTagSelected(tagName: string): boolean {
+  return contactTags.value.includes(tagName)
+}
+
+// Toggle tag on contact
+async function toggleTag(tagName: string) {
+  if (isUpdatingTags.value) return
+
+  const currentTags = [...contactTags.value]
+  let newTags: string[]
+
+  if (currentTags.includes(tagName)) {
+    newTags = currentTags.filter(t => t !== tagName)
+  } else {
+    newTags = [...currentTags, tagName]
+  }
+
+  await updateContactTags(newTags)
+}
+
+// Remove tag from contact
+async function removeTag(tagName: string) {
+  if (isUpdatingTags.value) return
+
+  const newTags = contactTags.value.filter(t => t !== tagName)
+  await updateContactTags(newTags)
+}
+
+// Update contact tags via API
+async function updateContactTags(tags: string[]) {
+  isUpdatingTags.value = true
+  try {
+    await contactsService.updateTags(props.contact.id, tags)
+    emit('tagsUpdated', tags)
+    toast.success('Tags updated')
+  } catch (e: any) {
+    toast.error(e.response?.data?.message || 'Failed to update tags')
+  } finally {
+    isUpdatingTags.value = false
+  }
+}
+
 </script>
 
 <template>
@@ -195,6 +283,73 @@ const contactTags = computed(() => {
           <div class="flex items-center gap-1 text-sm text-muted-foreground mt-1">
             <Phone class="h-3 w-3" />
             <span>{{ contact.phone_number }}</span>
+          </div>
+        </div>
+
+        <!-- Tags Section (always shown) -->
+        <div class="border-b pb-4">
+          <div class="flex items-center justify-between py-2">
+            <h5 class="text-sm font-medium flex items-center gap-2">
+              <Tags class="h-4 w-4 text-muted-foreground" />
+              Tags
+            </h5>
+            <Popover v-if="canEditTags" v-model:open="tagSelectorOpen">
+              <PopoverTrigger as-child>
+                <Button variant="ghost" size="sm" class="h-7 px-2">
+                  <Plus class="h-3.5 w-3.5" />
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent class="w-[200px] p-0" align="end">
+                <Command>
+                  <CommandInput placeholder="Search tags..." />
+                  <CommandList>
+                    <CommandEmpty>
+                      <div class="py-4 text-center text-sm text-muted-foreground">
+                        No tags found
+                      </div>
+                    </CommandEmpty>
+                    <CommandGroup>
+                      <CommandItem
+                        v-for="tag in tagsStore.tags"
+                        :key="tag.name"
+                        :value="tag.name"
+                        class="flex items-center gap-2"
+                        @select="toggleTag(tag.name)"
+                      >
+                        <div class="flex items-center gap-2 flex-1">
+                          <span :class="['w-2 h-2 rounded-full', getTagColorClass(tag.color).split(' ')[0]]"></span>
+                          <span>{{ tag.name }}</span>
+                        </div>
+                        <Check v-if="isTagSelected(tag.name)" class="h-4 w-4 text-primary" />
+                      </CommandItem>
+                    </CommandGroup>
+                  </CommandList>
+                </Command>
+              </PopoverContent>
+            </Popover>
+          </div>
+
+          <div class="flex flex-wrap gap-2 mt-2">
+            <template v-if="contactTags.length > 0">
+              <TagBadge
+                v-for="tagName in contactTags"
+                :key="tagName"
+                :color="getTagDetails(tagName)?.color"
+              >
+                {{ tagName }}
+                <button
+                  v-if="canEditTags"
+                  type="button"
+                  class="ml-1 rounded-full hover:bg-black/10 dark:hover:bg-white/10 p-0.5 transition-colors"
+                  :disabled="isUpdatingTags"
+                  @click.stop="removeTag(tagName)"
+                >
+                  <X class="h-3 w-3" />
+                </button>
+              </TagBadge>
+            </template>
+            <span v-else class="text-sm text-muted-foreground">No tags</span>
+            <Loader2 v-if="isUpdatingTags" class="h-4 w-4 animate-spin text-muted-foreground" />
           </div>
         </div>
 
@@ -300,16 +455,6 @@ const contactTags = computed(() => {
             </div>
           </div>
         </template>
-
-        <!-- Tags Section (always shown if tags exist) -->
-        <div v-if="contactTags.length > 0" class="pt-4 border-t">
-          <h5 class="py-2 text-sm font-medium">Tags</h5>
-          <div class="flex flex-wrap gap-2">
-            <Badge v-for="tag in contactTags" :key="tag" variant="secondary">
-              {{ tag }}
-            </Badge>
-          </div>
-        </div>
       </div>
     </ScrollArea>
   </div>

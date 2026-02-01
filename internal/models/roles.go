@@ -62,6 +62,7 @@ const (
 	ResourceChat            = "chat"
 	ResourceChatAssign      = "chat.assign"
 	ResourceContacts        = "contacts"
+	ResourceTags            = "tags"
 	ResourceAnalytics       = "analytics"
 	ResourceAnalyticsAgents = "analytics.agents"
 	ResourceTransfers       = "transfers"
@@ -157,6 +158,11 @@ func DefaultPermissions() []Permission {
 		{Resource: ResourceContacts, Action: ActionImport, Description: "Import contacts"},
 		{Resource: ResourceContacts, Action: ActionExport, Description: "Export contacts"},
 
+		// Tags
+		{Resource: ResourceTags, Action: ActionRead, Description: "View tags"},
+		{Resource: ResourceTags, Action: ActionWrite, Description: "Create and edit tags"},
+		{Resource: ResourceTags, Action: ActionDelete, Description: "Delete tags"},
+
 		// Analytics
 		{Resource: ResourceAnalytics, Action: ActionRead, Description: "View analytics dashboard"},
 		{Resource: ResourceAnalytics, Action: ActionWrite, Description: "Create and edit dashboard widgets"},
@@ -220,6 +226,8 @@ func SystemRolePermissions() map[string][]string {
 		"chat:read", "chat:write", "chat.assign:write",
 		// Contacts
 		"contacts:read", "contacts:write", "contacts:delete", "contacts:import", "contacts:export",
+		// Tags
+		"tags:read", "tags:write", "tags:delete",
 		// Analytics
 		"analytics:read", "analytics.agents:read",
 		// Transfers
@@ -237,6 +245,8 @@ func SystemRolePermissions() map[string][]string {
 		"chat:read", "chat:write",
 		// Contacts (read only)
 		"contacts:read",
+		// Tags (read only - agents can see tags on contacts)
+		"tags:read",
 		// Analytics (own)
 		"analytics.agents:read",
 		// Transfers

@@ -1148,3 +1148,69 @@ func (a *App) GetContactSessionData(r *fastglue.Request) error {
 
 	return r.SendEnvelope(response)
 }
+
+// UpdateContactTagsRequest represents the request body for updating contact tags
+type UpdateContactTagsRequest struct {
+	Tags []string `json:"tags"`
+}
+
+// UpdateContactTags updates the tags on a contact
+func (a *App) UpdateContactTags(r *fastglue.Request) error {
+	orgID, userID, err := a.getOrgAndUserID(r)
+	if err != nil {
+		return r.SendErrorEnvelope(fasthttp.StatusUnauthorized, "Unauthorized", nil, "")
+	}
+
+	// Check permission - need contacts:write to update tags on contacts
+	if !a.HasPermission(userID, models.ResourceContacts, models.ActionWrite) {
+		return r.SendErrorEnvelope(fasthttp.StatusForbidden, "You do not have permission to update contact tags", nil, "")
+	}
+
+	contactID, err := parsePathUUID(r, "id", "contact")
+	if err != nil {
+		return nil
+	}
+
+	var req UpdateContactTagsRequest
+	if err := a.decodeRequest(r, &req); err != nil {
+		return nil
+	}
+
+	// Get contact
+	contact, err := findByIDAndOrg[models.Contact](a.DB, r, contactID, orgID, "Contact")
+	if err != nil {
+		return nil
+	}
+
+	// Convert tags to JSONBArray
+	tagsArray := make(models.JSONBArray, len(req.Tags))
+	for i, tag := range req.Tags {
+		tagsArray[i] = tag
+	}
+
+	// Update contact tags
+	if err := a.DB.Model(contact).Update("tags", tagsArray).Error; err != nil {
+		a.Log.Error("Failed to update contact tags", "error", err)
+		return r.SendErrorEnvelope(fasthttp.StatusInternalServerError, "Failed to update contact tags", nil, "")
+	}
+
+	// Reload contact to get updated tags
+	if err := a.DB.First(contact, contactID).Error; err != nil {
+		a.Log.Error("Failed to reload contact", "error", err)
+	}
+
+	// Build response with tag details
+	tags := []string{}
+	if contact.Tags != nil {
+		for _, t := range contact.Tags {
+			if s, ok := t.(string); ok {
+				tags = append(tags, s)
+			}
+		}
+	}
+
+	return r.SendEnvelope(map[string]any{
+		"message": "Contact tags updated",
+		"tags":    tags,
+	})
+}

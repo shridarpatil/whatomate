@@ -1824,6 +1824,7 @@ async function sendMediaMessage() {
       :contact="contactsStore.currentContact"
       :session-data="contactSessionData"
       @close="isInfoPanelOpen = false"
+      @tags-updated="(tags) => contactsStore.updateContactTags(contactsStore.currentContact!.id, tags)"
     />
 
     <!-- Assign Contact Dialog -->

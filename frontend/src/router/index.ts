@@ -165,6 +165,12 @@ const router = createRouter({
           meta: { permission: 'canned_responses' }
         },
         {
+          path: 'settings/tags',
+          name: 'tags',
+          component: () => import('@/views/settings/TagsView.vue'),
+          meta: { permission: 'tags' }
+        },
+        {
           path: 'settings/users',
           name: 'users',
           component: () => import('@/views/settings/UsersView.vue'),
@@ -238,6 +244,7 @@ const navigationOrder = [
     { path: '/settings/chatbot', permission: 'settings.chatbot' },
     { path: '/settings/accounts', permission: 'accounts' },
     { path: '/settings/canned-responses', permission: 'canned_responses' },
+    { path: '/settings/tags', permission: 'tags' },
     { path: '/settings/teams', permission: 'teams' },
     { path: '/settings/users', permission: 'users' },
     { path: '/settings/roles', permission: 'roles' },
