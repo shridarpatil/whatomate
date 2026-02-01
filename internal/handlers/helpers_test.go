@@ -324,3 +324,79 @@ func TestMaskIfPhoneNumber(t *testing.T) {
 		})
 	}
 }
+
+// --- parseDateRange ---
+
+func TestParseDateRange_Valid(t *testing.T) {
+	t.Parallel()
+
+	start, end, errMsg := parseDateRange("2024-01-15", "2024-01-20")
+
+	assert.Empty(t, errMsg)
+	assert.Equal(t, 2024, start.Year())
+	assert.Equal(t, time.January, start.Month())
+	assert.Equal(t, 15, start.Day())
+	assert.Equal(t, 0, start.Hour())
+
+	// End should be end of day
+	assert.Equal(t, 2024, end.Year())
+	assert.Equal(t, time.January, end.Month())
+	assert.Equal(t, 20, end.Day())
+	assert.Equal(t, 23, end.Hour())
+	assert.Equal(t, 59, end.Minute())
+	assert.Equal(t, 59, end.Second())
+}
+
+func TestParseDateRange_InvalidStartDate(t *testing.T) {
+	t.Parallel()
+
+	_, _, errMsg := parseDateRange("invalid", "2024-01-20")
+
+	assert.Contains(t, errMsg, "Invalid start date")
+}
+
+func TestParseDateRange_InvalidEndDate(t *testing.T) {
+	t.Parallel()
+
+	_, _, errMsg := parseDateRange("2024-01-15", "invalid")
+
+	assert.Contains(t, errMsg, "Invalid end date")
+}
+
+func TestParseDateRange_WrongFormat(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name     string
+		startStr string
+		endStr   string
+		wantErr  string
+	}{
+		{"start DD/MM/YYYY", "15/01/2024", "2024-01-20", "Invalid start date"},
+		{"end DD/MM/YYYY", "2024-01-15", "20/01/2024", "Invalid end date"},
+		{"start MM-DD-YYYY", "01-15-2024", "2024-01-20", "Invalid start date"},
+		{"end MM-DD-YYYY", "2024-01-15", "01-20-2024", "Invalid end date"},
+		{"start empty", "", "2024-01-20", "Invalid start date"},
+		{"end empty", "2024-01-15", "", "Invalid end date"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			_, _, errMsg := parseDateRange(tt.startStr, tt.endStr)
+			assert.Contains(t, errMsg, tt.wantErr)
+		})
+	}
+}
+
+func TestParseDateRange_SameDay(t *testing.T) {
+	t.Parallel()
+
+	start, end, errMsg := parseDateRange("2024-06-15", "2024-06-15")
+
+	assert.Empty(t, errMsg)
+	assert.Equal(t, start.Day(), end.Day())
+	// Start at beginning of day, end at end of day
+	assert.Equal(t, 0, start.Hour())
+	assert.Equal(t, 23, end.Hour())
+}
