@@ -382,13 +382,13 @@ export class TagsPage extends TableSettingsPage {
     await this.dialog.locator('input').first().fill(name)
     if (color) {
       await this.dialog.locator('button[role="combobox"]').click()
-      await this.page.locator('[role="option"]').filter({ hasText: new RegExp(`^${color}$`, 'i') }).click()
+      await this.page.locator('[role="option"]').filter({ hasText: color }).click()
     }
   }
 
   async selectColor(color: string) {
     await this.dialog.locator('button[role="combobox"]').click()
-    await this.page.locator('[role="option"]').filter({ hasText: new RegExp(`^${color}$`, 'i') }).click()
+    await this.page.locator('[role="option"]').filter({ hasText: color }).click()
   }
 
   async expectTagBadgeVisible(name: string) {
