@@ -12,6 +12,7 @@ import (
 	"github.com/shridarpatil/whatomate/internal/queue"
 	"github.com/shridarpatil/whatomate/internal/websocket"
 	"github.com/shridarpatil/whatomate/pkg/whatsapp"
+	"github.com/valyala/fasthttp"
 	"github.com/zerodha/fastglue"
 	"github.com/zerodha/logf"
 	"gorm.io/gorm"
@@ -161,4 +162,51 @@ func (a *App) StopCampaignStatsSubscriber() {
 	if a.CampaignSubCancel != nil {
 		a.CampaignSubCancel()
 	}
+}
+
+// getOrgAndUserID extracts both organization ID and user ID from the request context.
+// Returns an error if either is missing or invalid.
+func (a *App) getOrgAndUserID(r *fastglue.Request) (orgID, userID uuid.UUID, err error) {
+	orgID, err = a.getOrgID(r)
+	if err != nil {
+		return uuid.Nil, uuid.Nil, err
+	}
+
+	userIDVal := r.RequestCtx.UserValue("user_id")
+	if userIDVal == nil {
+		return uuid.Nil, uuid.Nil, errors.New("user_id not found in context")
+	}
+	switch v := userIDVal.(type) {
+	case uuid.UUID:
+		userID = v
+	case string:
+		userID, err = uuid.Parse(v)
+		if err != nil {
+			return uuid.Nil, uuid.Nil, errors.New("user_id is not a valid UUID")
+		}
+	default:
+		return uuid.Nil, uuid.Nil, errors.New("user_id is not a valid UUID")
+	}
+
+	return orgID, userID, nil
+}
+
+// requirePermission checks if the user has the required permission.
+// Returns nil if permitted, otherwise sends a 403 error envelope and returns errEnvelopeSent.
+func (a *App) requirePermission(r *fastglue.Request, userID uuid.UUID, resource, action string) error {
+	if !a.HasPermission(userID, resource, action) {
+		_ = r.SendErrorEnvelope(fasthttp.StatusForbidden, "Insufficient permissions", nil, "")
+		return errEnvelopeSent
+	}
+	return nil
+}
+
+// decodeRequest decodes a JSON request body into the provided struct.
+// Returns nil on success, otherwise sends a 400 error envelope and returns errEnvelopeSent.
+func (a *App) decodeRequest(r *fastglue.Request, v interface{}) error {
+	if err := r.Decode(v, "json"); err != nil {
+		_ = r.SendErrorEnvelope(fasthttp.StatusBadRequest, "Invalid request body", nil, "")
+		return errEnvelopeSent
+	}
+	return nil
 }

@@ -160,20 +160,18 @@ func (a *App) CreateAPIKey(r *fastglue.Request) error {
 
 // DeleteAPIKey revokes an API key
 func (a *App) DeleteAPIKey(r *fastglue.Request) error {
-	orgID, err := a.getOrgID(r)
+	orgID, userID, err := a.getOrgAndUserID(r)
 	if err != nil {
 		return r.SendErrorEnvelope(fasthttp.StatusUnauthorized, "Unauthorized", nil, "")
 	}
 
-	userID, _ := r.RequestCtx.UserValue("user_id").(uuid.UUID)
-	if !a.HasPermission(userID, models.ResourceAPIKeys, models.ActionDelete) {
-		return r.SendErrorEnvelope(fasthttp.StatusForbidden, "Insufficient permissions", nil, "")
+	if err := a.requirePermission(r, userID, models.ResourceAPIKeys, models.ActionDelete); err != nil {
+		return nil
 	}
 
-	idStr := r.RequestCtx.UserValue("id").(string)
-	id, err := uuid.Parse(idStr)
+	id, err := parsePathUUID(r, "id", "API key")
 	if err != nil {
-		return r.SendErrorEnvelope(fasthttp.StatusBadRequest, "Invalid API key ID", nil, "")
+		return nil
 	}
 
 	result := a.DB.Where("id = ? AND organization_id = ?", id, orgID).Delete(&models.APIKey{})

@@ -1,7 +1,6 @@
 package handlers
 
 import (
-	"github.com/google/uuid"
 	"github.com/shridarpatil/whatomate/internal/models"
 	"github.com/shridarpatil/whatomate/pkg/whatsapp"
 	"github.com/valyala/fasthttp"
@@ -15,22 +14,21 @@ func (a *App) GetBusinessProfile(r *fastglue.Request) error {
 		return r.SendErrorEnvelope(fasthttp.StatusUnauthorized, "Unauthorized", nil, "")
 	}
 
-	idStr := r.RequestCtx.UserValue("id").(string)
-	id, err := uuid.Parse(idStr)
+	id, err := parsePathUUID(r, "id", "account")
 	if err != nil {
-		return r.SendErrorEnvelope(fasthttp.StatusBadRequest, "Invalid account ID", nil, "")
+		return nil
 	}
 
-	var account models.WhatsAppAccount
-	if err := a.DB.Where("id = ? AND organization_id = ?", id, orgID).First(&account).Error; err != nil {
-		return r.SendErrorEnvelope(fasthttp.StatusNotFound, "Account not found", nil, "")
+	account, err := findByIDAndOrg[models.WhatsAppAccount](a.DB, r, id, orgID, "Account")
+	if err != nil {
+		return nil
 	}
 
 	// Create a context for the request
 	ctx := r.RequestCtx
 
 	// Call the WhatsApp client
-	profile, err := a.WhatsApp.GetBusinessProfile(ctx, a.toWhatsAppAccount(&account))
+	profile, err := a.WhatsApp.GetBusinessProfile(ctx, a.toWhatsAppAccount(account))
 	if err != nil {
 		a.Log.Error("Failed to get business profile", "error", err)
 		return r.SendErrorEnvelope(fasthttp.StatusInternalServerError, "Failed to get business profile: "+err.Error(), nil, "")
@@ -46,24 +44,23 @@ func (a *App) UpdateBusinessProfile(r *fastglue.Request) error {
 		return r.SendErrorEnvelope(fasthttp.StatusUnauthorized, "Unauthorized", nil, "")
 	}
 
-	idStr := r.RequestCtx.UserValue("id").(string)
-	id, err := uuid.Parse(idStr)
+	id, err := parsePathUUID(r, "id", "account")
 	if err != nil {
-		return r.SendErrorEnvelope(fasthttp.StatusBadRequest, "Invalid account ID", nil, "")
+		return nil
 	}
 
-	var account models.WhatsAppAccount
-	if err := a.DB.Where("id = ? AND organization_id = ?", id, orgID).First(&account).Error; err != nil {
-		return r.SendErrorEnvelope(fasthttp.StatusNotFound, "Account not found", nil, "")
+	account, err := findByIDAndOrg[models.WhatsAppAccount](a.DB, r, id, orgID, "Account")
+	if err != nil {
+		return nil
 	}
 
 	var input whatsapp.BusinessProfileInput
-	if err := r.Decode(&input, "json"); err != nil {
-		return r.SendErrorEnvelope(fasthttp.StatusBadRequest, "Invalid request body", nil, "")
+	if err := a.decodeRequest(r, &input); err != nil {
+		return nil
 	}
 
 	ctx := r.RequestCtx
-	waAccount := a.toWhatsAppAccount(&account)
+	waAccount := a.toWhatsAppAccount(account)
 
 	if err := a.WhatsApp.UpdateBusinessProfile(ctx, waAccount, input); err != nil {
 		a.Log.Error("Failed to update business profile", "error", err)
@@ -87,15 +84,14 @@ func (a *App) UpdateProfilePicture(r *fastglue.Request) error {
 		return r.SendErrorEnvelope(fasthttp.StatusUnauthorized, "Unauthorized", nil, "")
 	}
 
-	idStr := r.RequestCtx.UserValue("id").(string)
-	id, err := uuid.Parse(idStr)
+	id, err := parsePathUUID(r, "id", "account")
 	if err != nil {
-		return r.SendErrorEnvelope(fasthttp.StatusBadRequest, "Invalid account ID", nil, "")
+		return nil
 	}
 
-	var account models.WhatsAppAccount
-	if err := a.DB.Where("id = ? AND organization_id = ?", id, orgID).First(&account).Error; err != nil {
-		return r.SendErrorEnvelope(fasthttp.StatusNotFound, "Account not found", nil, "")
+	account, err := findByIDAndOrg[models.WhatsAppAccount](a.DB, r, id, orgID, "Account")
+	if err != nil {
+		return nil
 	}
 
 	// 1. Get the file from request
@@ -119,7 +115,7 @@ func (a *App) UpdateProfilePicture(r *fastglue.Request) error {
 	}
 
 	ctx := r.RequestCtx
-	waAccount := a.toWhatsAppAccount(&account)
+	waAccount := a.toWhatsAppAccount(account)
 
 	// Upload to Meta to get handle
 	handle, err := a.WhatsApp.UploadProfilePicture(ctx, waAccount, fileContent, fileHeader.Header.Get("Content-Type"))

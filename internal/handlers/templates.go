@@ -155,13 +155,9 @@ func (a *App) GetTemplate(r *fastglue.Request) error {
 		return r.SendErrorEnvelope(fasthttp.StatusUnauthorized, "Unauthorized", nil, "")
 	}
 
-	idStr, ok := r.RequestCtx.UserValue("id").(string)
-	if !ok || idStr == "" {
-		return r.SendErrorEnvelope(fasthttp.StatusBadRequest, "Missing template ID", nil, "")
-	}
-	id, err := uuid.Parse(idStr)
+	id, err := parsePathUUID(r, "id", "template")
 	if err != nil {
-		return r.SendErrorEnvelope(fasthttp.StatusBadRequest, "Invalid template ID", nil, "")
+		return nil
 	}
 
 	template, err := findByIDAndOrg[models.Template](a.DB, r, id, orgID, "Template")
@@ -179,13 +175,9 @@ func (a *App) UpdateTemplate(r *fastglue.Request) error {
 		return r.SendErrorEnvelope(fasthttp.StatusUnauthorized, "Unauthorized", nil, "")
 	}
 
-	idStr, ok := r.RequestCtx.UserValue("id").(string)
-	if !ok || idStr == "" {
-		return r.SendErrorEnvelope(fasthttp.StatusBadRequest, "Missing template ID", nil, "")
-	}
-	id, err := uuid.Parse(idStr)
+	id, err := parsePathUUID(r, "id", "template")
 	if err != nil {
-		return r.SendErrorEnvelope(fasthttp.StatusBadRequest, "Invalid template ID", nil, "")
+		return nil
 	}
 
 	template, err := findByIDAndOrg[models.Template](a.DB, r, id, orgID, "Template")
@@ -243,13 +235,9 @@ func (a *App) DeleteTemplate(r *fastglue.Request) error {
 		return r.SendErrorEnvelope(fasthttp.StatusUnauthorized, "Unauthorized", nil, "")
 	}
 
-	idStr, ok := r.RequestCtx.UserValue("id").(string)
-	if !ok || idStr == "" {
-		return r.SendErrorEnvelope(fasthttp.StatusBadRequest, "Missing template ID", nil, "")
-	}
-	id, err := uuid.Parse(idStr)
+	id, err := parsePathUUID(r, "id", "template")
 	if err != nil {
-		return r.SendErrorEnvelope(fasthttp.StatusBadRequest, "Invalid template ID", nil, "")
+		return nil
 	}
 
 	template, err := findByIDAndOrg[models.Template](a.DB, r, id, orgID, "Template")
@@ -281,13 +269,9 @@ func (a *App) SubmitTemplate(r *fastglue.Request) error {
 		return r.SendErrorEnvelope(fasthttp.StatusUnauthorized, "Unauthorized", nil, "")
 	}
 
-	idStr, ok := r.RequestCtx.UserValue("id").(string)
-	if !ok || idStr == "" {
-		return r.SendErrorEnvelope(fasthttp.StatusBadRequest, "Missing template ID", nil, "")
-	}
-	id, err := uuid.Parse(idStr)
+	id, err := parsePathUUID(r, "id", "template")
 	if err != nil {
-		return r.SendErrorEnvelope(fasthttp.StatusBadRequest, "Invalid template ID", nil, "")
+		return nil
 	}
 
 	template, err := findByIDAndOrg[models.Template](a.DB, r, id, orgID, "Template")

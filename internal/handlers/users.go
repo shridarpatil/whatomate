@@ -105,10 +105,9 @@ func (a *App) GetUser(r *fastglue.Request) error {
 		return r.SendErrorEnvelope(fasthttp.StatusUnauthorized, "Unauthorized", nil, "")
 	}
 
-	idStr := r.RequestCtx.UserValue("id").(string)
-	id, err := uuid.Parse(idStr)
+	id, err := parsePathUUID(r, "id", "user")
 	if err != nil {
-		return r.SendErrorEnvelope(fasthttp.StatusBadRequest, "Invalid user ID", nil, "")
+		return nil
 	}
 
 	var user models.User
@@ -123,19 +122,18 @@ func (a *App) GetUser(r *fastglue.Request) error {
 
 // CreateUser creates a new user (admin only)
 func (a *App) CreateUser(r *fastglue.Request) error {
-	orgID, err := a.getOrgID(r)
+	orgID, userID, err := a.getOrgAndUserID(r)
 	if err != nil {
 		return r.SendErrorEnvelope(fasthttp.StatusUnauthorized, "Unauthorized", nil, "")
 	}
 
-	userID, _ := r.RequestCtx.UserValue("user_id").(uuid.UUID)
-	if !a.HasPermission(userID, models.ResourceUsers, models.ActionWrite) {
-		return r.SendErrorEnvelope(fasthttp.StatusForbidden, "Insufficient permissions", nil, "")
+	if err := a.requirePermission(r, userID, models.ResourceUsers, models.ActionWrite); err != nil {
+		return nil
 	}
 
 	var req UserRequest
-	if err := r.Decode(&req, "json"); err != nil {
-		return r.SendErrorEnvelope(fasthttp.StatusBadRequest, "Invalid request body", nil, "")
+	if err := a.decodeRequest(r, &req); err != nil {
+		return nil
 	}
 
 	// Validate required fields
@@ -210,13 +208,9 @@ func (a *App) UpdateUser(r *fastglue.Request) error {
 
 	currentUserID, _ := r.RequestCtx.UserValue("user_id").(uuid.UUID)
 
-	idStr, ok := r.RequestCtx.UserValue("id").(string)
-	if !ok || idStr == "" {
-		return r.SendErrorEnvelope(fasthttp.StatusBadRequest, "Missing user ID", nil, "")
-	}
-	id, err := uuid.Parse(idStr)
+	id, err := parsePathUUID(r, "id", "user")
 	if err != nil {
-		return r.SendErrorEnvelope(fasthttp.StatusBadRequest, "Invalid user ID", nil, "")
+		return nil
 	}
 
 	// Users can update themselves, others need users:write permission
@@ -327,10 +321,9 @@ func (a *App) DeleteUser(r *fastglue.Request) error {
 		return r.SendErrorEnvelope(fasthttp.StatusForbidden, "Insufficient permissions", nil, "")
 	}
 
-	idStr := r.RequestCtx.UserValue("id").(string)
-	id, err := uuid.Parse(idStr)
+	id, err := parsePathUUID(r, "id", "user")
 	if err != nil {
-		return r.SendErrorEnvelope(fasthttp.StatusBadRequest, "Invalid user ID", nil, "")
+		return nil
 	}
 
 	// Prevent user from deleting themselves

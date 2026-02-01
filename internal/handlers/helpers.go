@@ -88,3 +88,20 @@ func findByIDAndOrg[T any](db *gorm.DB, r *fastglue.Request, id, orgID uuid.UUID
 	}
 	return &model, nil
 }
+
+// parseDateRange parses start and end date strings in YYYY-MM-DD format.
+// Applies end-of-day to the end date. Returns an error message suitable for
+// display if parsing fails.
+func parseDateRange(startStr, endStr string) (start, end time.Time, errMsg string) {
+	var err error
+	start, err = time.Parse("2006-01-02", startStr)
+	if err != nil {
+		return time.Time{}, time.Time{}, "Invalid start date format. Use YYYY-MM-DD"
+	}
+	end, err = time.Parse("2006-01-02", endStr)
+	if err != nil {
+		return time.Time{}, time.Time{}, "Invalid end date format. Use YYYY-MM-DD"
+	}
+	end = endOfDay(end)
+	return start, end, ""
+}
