@@ -35,7 +35,8 @@ func TestApp_ListTags(t *testing.T) {
 	t.Run("success with results", func(t *testing.T) {
 		app := newTestApp(t)
 		org := testutil.CreateTestOrganization(t, app.DB)
-		user := testutil.CreateTestUser(t, app.DB, org.ID)
+		role := testutil.CreateAdminRole(t, app.DB, org.ID)
+		user := testutil.CreateTestUser(t, app.DB, org.ID, testutil.WithRoleID(&role.ID))
 
 		createTestTag(t, app, org.ID, "VIP", "blue")
 		createTestTag(t, app, org.ID, "Premium", "purple")
@@ -60,7 +61,8 @@ func TestApp_ListTags(t *testing.T) {
 	t.Run("empty list", func(t *testing.T) {
 		app := newTestApp(t)
 		org := testutil.CreateTestOrganization(t, app.DB)
-		user := testutil.CreateTestUser(t, app.DB, org.ID)
+		role := testutil.CreateAdminRole(t, app.DB, org.ID)
+		user := testutil.CreateTestUser(t, app.DB, org.ID, testutil.WithRoleID(&role.ID))
 
 		req := testutil.NewGETRequest(t)
 		testutil.SetAuthContext(req, org.ID, user.ID)
@@ -82,7 +84,8 @@ func TestApp_ListTags(t *testing.T) {
 	t.Run("sorted alphabetically", func(t *testing.T) {
 		app := newTestApp(t)
 		org := testutil.CreateTestOrganization(t, app.DB)
-		user := testutil.CreateTestUser(t, app.DB, org.ID)
+		role := testutil.CreateAdminRole(t, app.DB, org.ID)
+		user := testutil.CreateTestUser(t, app.DB, org.ID, testutil.WithRoleID(&role.ID))
 
 		createTestTag(t, app, org.ID, "Zebra", "gray")
 		createTestTag(t, app, org.ID, "Alpha", "blue")
@@ -112,8 +115,10 @@ func TestApp_ListTags(t *testing.T) {
 		app := newTestApp(t)
 		org1 := testutil.CreateTestOrganization(t, app.DB)
 		org2 := testutil.CreateTestOrganization(t, app.DB)
-		user1 := testutil.CreateTestUser(t, app.DB, org1.ID)
-		user2 := testutil.CreateTestUser(t, app.DB, org2.ID)
+		role1 := testutil.CreateAdminRole(t, app.DB, org1.ID)
+		role2 := testutil.CreateAdminRole(t, app.DB, org2.ID)
+		user1 := testutil.CreateTestUser(t, app.DB, org1.ID, testutil.WithRoleID(&role1.ID))
+		user2 := testutil.CreateTestUser(t, app.DB, org2.ID, testutil.WithRoleID(&role2.ID))
 
 		createTestTag(t, app, org1.ID, "Org1Tag", "blue")
 		createTestTag(t, app, org2.ID, "Org2Tag", "red")
@@ -157,7 +162,8 @@ func TestApp_CreateTag(t *testing.T) {
 	t.Run("success", func(t *testing.T) {
 		app := newTestApp(t)
 		org := testutil.CreateTestOrganization(t, app.DB)
-		user := testutil.CreateTestUser(t, app.DB, org.ID)
+		role := testutil.CreateAdminRole(t, app.DB, org.ID)
+		user := testutil.CreateTestUser(t, app.DB, org.ID, testutil.WithRoleID(&role.ID))
 
 		req := testutil.NewJSONRequest(t, map[string]any{
 			"name":  "New Lead",
@@ -182,7 +188,8 @@ func TestApp_CreateTag(t *testing.T) {
 	t.Run("success with default color", func(t *testing.T) {
 		app := newTestApp(t)
 		org := testutil.CreateTestOrganization(t, app.DB)
-		user := testutil.CreateTestUser(t, app.DB, org.ID)
+		role := testutil.CreateAdminRole(t, app.DB, org.ID)
+		user := testutil.CreateTestUser(t, app.DB, org.ID, testutil.WithRoleID(&role.ID))
 
 		req := testutil.NewJSONRequest(t, map[string]any{
 			"name": "No Color Tag",
@@ -205,7 +212,8 @@ func TestApp_CreateTag(t *testing.T) {
 	t.Run("validation error missing name", func(t *testing.T) {
 		app := newTestApp(t)
 		org := testutil.CreateTestOrganization(t, app.DB)
-		user := testutil.CreateTestUser(t, app.DB, org.ID)
+		role := testutil.CreateAdminRole(t, app.DB, org.ID)
+		user := testutil.CreateTestUser(t, app.DB, org.ID, testutil.WithRoleID(&role.ID))
 
 		req := testutil.NewJSONRequest(t, map[string]any{
 			"color": "blue",
@@ -220,7 +228,8 @@ func TestApp_CreateTag(t *testing.T) {
 	t.Run("validation error name too long", func(t *testing.T) {
 		app := newTestApp(t)
 		org := testutil.CreateTestOrganization(t, app.DB)
-		user := testutil.CreateTestUser(t, app.DB, org.ID)
+		role := testutil.CreateAdminRole(t, app.DB, org.ID)
+		user := testutil.CreateTestUser(t, app.DB, org.ID, testutil.WithRoleID(&role.ID))
 
 		longName := ""
 		for range 51 {
@@ -240,7 +249,8 @@ func TestApp_CreateTag(t *testing.T) {
 	t.Run("validation error invalid color", func(t *testing.T) {
 		app := newTestApp(t)
 		org := testutil.CreateTestOrganization(t, app.DB)
-		user := testutil.CreateTestUser(t, app.DB, org.ID)
+		role := testutil.CreateAdminRole(t, app.DB, org.ID)
+		user := testutil.CreateTestUser(t, app.DB, org.ID, testutil.WithRoleID(&role.ID))
 
 		req := testutil.NewJSONRequest(t, map[string]any{
 			"name":  "Invalid Color Tag",
@@ -256,7 +266,8 @@ func TestApp_CreateTag(t *testing.T) {
 	t.Run("duplicate name conflict", func(t *testing.T) {
 		app := newTestApp(t)
 		org := testutil.CreateTestOrganization(t, app.DB)
-		user := testutil.CreateTestUser(t, app.DB, org.ID)
+		role := testutil.CreateAdminRole(t, app.DB, org.ID)
+		user := testutil.CreateTestUser(t, app.DB, org.ID, testutil.WithRoleID(&role.ID))
 
 		createTestTag(t, app, org.ID, "Duplicate", "blue")
 
@@ -275,8 +286,10 @@ func TestApp_CreateTag(t *testing.T) {
 		app := newTestApp(t)
 		org1 := testutil.CreateTestOrganization(t, app.DB)
 		org2 := testutil.CreateTestOrganization(t, app.DB)
-		user1 := testutil.CreateTestUser(t, app.DB, org1.ID)
-		user2 := testutil.CreateTestUser(t, app.DB, org2.ID)
+		role1 := testutil.CreateAdminRole(t, app.DB, org1.ID)
+		role2 := testutil.CreateAdminRole(t, app.DB, org2.ID)
+		user1 := testutil.CreateTestUser(t, app.DB, org1.ID, testutil.WithRoleID(&role1.ID))
+		user2 := testutil.CreateTestUser(t, app.DB, org2.ID, testutil.WithRoleID(&role2.ID))
 
 		createTestTag(t, app, org1.ID, "SharedName", "blue")
 
@@ -315,7 +328,8 @@ func TestApp_UpdateTag(t *testing.T) {
 	t.Run("success update color only", func(t *testing.T) {
 		app := newTestApp(t)
 		org := testutil.CreateTestOrganization(t, app.DB)
-		user := testutil.CreateTestUser(t, app.DB, org.ID)
+		role := testutil.CreateAdminRole(t, app.DB, org.ID)
+		user := testutil.CreateTestUser(t, app.DB, org.ID, testutil.WithRoleID(&role.ID))
 
 		createTestTag(t, app, org.ID, "ColorChange", "blue")
 
@@ -342,7 +356,8 @@ func TestApp_UpdateTag(t *testing.T) {
 	t.Run("success rename tag", func(t *testing.T) {
 		app := newTestApp(t)
 		org := testutil.CreateTestOrganization(t, app.DB)
-		user := testutil.CreateTestUser(t, app.DB, org.ID)
+		role := testutil.CreateAdminRole(t, app.DB, org.ID)
+		user := testutil.CreateTestUser(t, app.DB, org.ID, testutil.WithRoleID(&role.ID))
 
 		createTestTag(t, app, org.ID, "OldName", "blue")
 
@@ -373,7 +388,8 @@ func TestApp_UpdateTag(t *testing.T) {
 	t.Run("rename preserves color if not specified", func(t *testing.T) {
 		app := newTestApp(t)
 		org := testutil.CreateTestOrganization(t, app.DB)
-		user := testutil.CreateTestUser(t, app.DB, org.ID)
+		role := testutil.CreateAdminRole(t, app.DB, org.ID)
+		user := testutil.CreateTestUser(t, app.DB, org.ID, testutil.WithRoleID(&role.ID))
 
 		createTestTag(t, app, org.ID, "KeepColor", "purple")
 
@@ -399,7 +415,8 @@ func TestApp_UpdateTag(t *testing.T) {
 	t.Run("not found", func(t *testing.T) {
 		app := newTestApp(t)
 		org := testutil.CreateTestOrganization(t, app.DB)
-		user := testutil.CreateTestUser(t, app.DB, org.ID)
+		role := testutil.CreateAdminRole(t, app.DB, org.ID)
+		user := testutil.CreateTestUser(t, app.DB, org.ID, testutil.WithRoleID(&role.ID))
 
 		req := testutil.NewJSONRequest(t, map[string]any{
 			"name":  "UpdatedName",
@@ -416,7 +433,8 @@ func TestApp_UpdateTag(t *testing.T) {
 	t.Run("rename to existing name conflict", func(t *testing.T) {
 		app := newTestApp(t)
 		org := testutil.CreateTestOrganization(t, app.DB)
-		user := testutil.CreateTestUser(t, app.DB, org.ID)
+		role := testutil.CreateAdminRole(t, app.DB, org.ID)
+		user := testutil.CreateTestUser(t, app.DB, org.ID, testutil.WithRoleID(&role.ID))
 
 		createTestTag(t, app, org.ID, "ExistingTag", "blue")
 		createTestTag(t, app, org.ID, "TagToRename", "green")
@@ -435,7 +453,8 @@ func TestApp_UpdateTag(t *testing.T) {
 	t.Run("invalid color", func(t *testing.T) {
 		app := newTestApp(t)
 		org := testutil.CreateTestOrganization(t, app.DB)
-		user := testutil.CreateTestUser(t, app.DB, org.ID)
+		role := testutil.CreateAdminRole(t, app.DB, org.ID)
+		user := testutil.CreateTestUser(t, app.DB, org.ID, testutil.WithRoleID(&role.ID))
 
 		createTestTag(t, app, org.ID, "InvalidColorUpdate", "blue")
 
@@ -455,8 +474,10 @@ func TestApp_UpdateTag(t *testing.T) {
 		app := newTestApp(t)
 		org1 := testutil.CreateTestOrganization(t, app.DB)
 		org2 := testutil.CreateTestOrganization(t, app.DB)
-		user1 := testutil.CreateTestUser(t, app.DB, org1.ID)
-		user2 := testutil.CreateTestUser(t, app.DB, org2.ID)
+		role1 := testutil.CreateAdminRole(t, app.DB, org1.ID)
+		role2 := testutil.CreateAdminRole(t, app.DB, org2.ID)
+		user1 := testutil.CreateTestUser(t, app.DB, org1.ID, testutil.WithRoleID(&role1.ID))
+		user2 := testutil.CreateTestUser(t, app.DB, org2.ID, testutil.WithRoleID(&role2.ID))
 
 		createTestTag(t, app, org1.ID, "Org1OnlyTag", "blue")
 
@@ -482,7 +503,8 @@ func TestApp_UpdateTag(t *testing.T) {
 	t.Run("url encoded name", func(t *testing.T) {
 		app := newTestApp(t)
 		org := testutil.CreateTestOrganization(t, app.DB)
-		user := testutil.CreateTestUser(t, app.DB, org.ID)
+		role := testutil.CreateAdminRole(t, app.DB, org.ID)
+		user := testutil.CreateTestUser(t, app.DB, org.ID, testutil.WithRoleID(&role.ID))
 
 		createTestTag(t, app, org.ID, "Tag With Spaces", "blue")
 
@@ -528,7 +550,8 @@ func TestApp_DeleteTag(t *testing.T) {
 	t.Run("success", func(t *testing.T) {
 		app := newTestApp(t)
 		org := testutil.CreateTestOrganization(t, app.DB)
-		user := testutil.CreateTestUser(t, app.DB, org.ID)
+		role := testutil.CreateAdminRole(t, app.DB, org.ID)
+		user := testutil.CreateTestUser(t, app.DB, org.ID, testutil.WithRoleID(&role.ID))
 
 		createTestTag(t, app, org.ID, "DeleteMe", "red")
 
@@ -558,7 +581,8 @@ func TestApp_DeleteTag(t *testing.T) {
 	t.Run("not found", func(t *testing.T) {
 		app := newTestApp(t)
 		org := testutil.CreateTestOrganization(t, app.DB)
-		user := testutil.CreateTestUser(t, app.DB, org.ID)
+		role := testutil.CreateAdminRole(t, app.DB, org.ID)
+		user := testutil.CreateTestUser(t, app.DB, org.ID, testutil.WithRoleID(&role.ID))
 
 		req := testutil.NewGETRequest(t)
 		testutil.SetAuthContext(req, org.ID, user.ID)
@@ -573,8 +597,10 @@ func TestApp_DeleteTag(t *testing.T) {
 		app := newTestApp(t)
 		org1 := testutil.CreateTestOrganization(t, app.DB)
 		org2 := testutil.CreateTestOrganization(t, app.DB)
-		user1 := testutil.CreateTestUser(t, app.DB, org1.ID)
-		user2 := testutil.CreateTestUser(t, app.DB, org2.ID)
+		role1 := testutil.CreateAdminRole(t, app.DB, org1.ID)
+		role2 := testutil.CreateAdminRole(t, app.DB, org2.ID)
+		user1 := testutil.CreateTestUser(t, app.DB, org1.ID, testutil.WithRoleID(&role1.ID))
+		user2 := testutil.CreateTestUser(t, app.DB, org2.ID, testutil.WithRoleID(&role2.ID))
 
 		createTestTag(t, app, org1.ID, "ProtectedTag", "blue")
 
@@ -597,7 +623,8 @@ func TestApp_DeleteTag(t *testing.T) {
 	t.Run("double delete", func(t *testing.T) {
 		app := newTestApp(t)
 		org := testutil.CreateTestOrganization(t, app.DB)
-		user := testutil.CreateTestUser(t, app.DB, org.ID)
+		role := testutil.CreateAdminRole(t, app.DB, org.ID)
+		user := testutil.CreateTestUser(t, app.DB, org.ID, testutil.WithRoleID(&role.ID))
 
 		createTestTag(t, app, org.ID, "DeleteTwice", "gray")
 
@@ -623,7 +650,8 @@ func TestApp_DeleteTag(t *testing.T) {
 	t.Run("url encoded name", func(t *testing.T) {
 		app := newTestApp(t)
 		org := testutil.CreateTestOrganization(t, app.DB)
-		user := testutil.CreateTestUser(t, app.DB, org.ID)
+		role := testutil.CreateAdminRole(t, app.DB, org.ID)
+		user := testutil.CreateTestUser(t, app.DB, org.ID, testutil.WithRoleID(&role.ID))
 
 		createTestTag(t, app, org.ID, "Delete With Spaces", "yellow")
 
@@ -655,7 +683,8 @@ func TestApp_Tag_FullLifecycle(t *testing.T) {
 
 	app := newTestApp(t)
 	org := testutil.CreateTestOrganization(t, app.DB)
-	user := testutil.CreateTestUser(t, app.DB, org.ID)
+	role := testutil.CreateAdminRole(t, app.DB, org.ID)
+	user := testutil.CreateTestUser(t, app.DB, org.ID, testutil.WithRoleID(&role.ID))
 
 	// 1. Create
 	createReq := testutil.NewJSONRequest(t, map[string]any{
@@ -771,7 +800,8 @@ func TestApp_CreateTag_AllValidColors(t *testing.T) {
 
 			app := newTestApp(t)
 			org := testutil.CreateTestOrganization(t, app.DB)
-			user := testutil.CreateTestUser(t, app.DB, org.ID)
+			role := testutil.CreateAdminRole(t, app.DB, org.ID)
+			user := testutil.CreateTestUser(t, app.DB, org.ID, testutil.WithRoleID(&role.ID))
 
 			req := testutil.NewJSONRequest(t, map[string]any{
 				"name":  "Tag " + color,
