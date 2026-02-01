@@ -126,12 +126,7 @@ func (a *App) ListCampaigns(r *fastglue.Request) error {
 
 // CreateCampaign implements campaign creation
 func (a *App) CreateCampaign(r *fastglue.Request) error {
-	orgID, err := a.getOrgID(r)
-	if err != nil {
-		return r.SendErrorEnvelope(fasthttp.StatusUnauthorized, "Unauthorized", nil, "")
-	}
-
-	userID, err := a.getUserIDFromContext(r)
+	orgID, userID, err := a.getOrgAndUserID(r)
 	if err != nil {
 		return r.SendErrorEnvelope(fasthttp.StatusUnauthorized, "Unauthorized", nil, "")
 	}
@@ -949,20 +944,6 @@ func getMimeTypeFromExtension(ext string) string {
 	default:
 		return "application/octet-stream"
 	}
-}
-
-// getUserIDFromContext extracts user ID from request context (set by auth middleware)
-func (a *App) getUserIDFromContext(r *fastglue.Request) (uuid.UUID, error) {
-	userIDVal := r.RequestCtx.UserValue("user_id")
-	if userIDVal == nil {
-		return uuid.Nil, fasthttp.ErrNoMultipartForm
-	}
-	// The middleware stores uuid.UUID directly, not as string
-	userID, ok := userIDVal.(uuid.UUID)
-	if !ok {
-		return uuid.Nil, fasthttp.ErrNoMultipartForm
-	}
-	return userID, nil
 }
 
 // incrementCampaignStat increments the appropriate campaign counter based on status
