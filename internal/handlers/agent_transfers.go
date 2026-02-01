@@ -99,12 +99,10 @@ type AgentTransferResponse struct {
 // ListAgentTransfers lists agent transfers for the organization
 // Agents see only their assigned transfers + their team queues; Admin see all; Managers see their teams
 func (a *App) ListAgentTransfers(r *fastglue.Request) error {
-	orgID, err := a.getOrgID(r)
+	orgID, userID, err := a.getOrgAndUserID(r)
 	if err != nil {
 		return r.SendErrorEnvelope(fasthttp.StatusUnauthorized, "Unauthorized", nil, "")
 	}
-
-	userID, _ := r.RequestCtx.UserValue("user_id").(uuid.UUID)
 
 	// Check permissions - users with write permission have full access (like admin)
 	hasFullAccess := a.HasPermission(userID, models.ResourceTransfers, models.ActionWrite)
@@ -388,12 +386,10 @@ func (a *App) ListAgentTransfers(r *fastglue.Request) error {
 
 // CreateAgentTransfer creates a new agent transfer
 func (a *App) CreateAgentTransfer(r *fastglue.Request) error {
-	orgID, err := a.getOrgID(r)
+	orgID, userID, err := a.getOrgAndUserID(r)
 	if err != nil {
 		return r.SendErrorEnvelope(fasthttp.StatusUnauthorized, "Unauthorized", nil, "")
 	}
-
-	userID, _ := r.RequestCtx.UserValue("user_id").(uuid.UUID)
 
 	var req CreateAgentTransferRequest
 	if err := json.Unmarshal(r.RequestCtx.PostBody(), &req); err != nil {
@@ -828,12 +824,10 @@ func (a *App) AssignAgentTransfer(r *fastglue.Request) error {
 
 // PickNextTransfer allows an agent to pick the next unassigned transfer from the queue
 func (a *App) PickNextTransfer(r *fastglue.Request) error {
-	orgID, err := a.getOrgID(r)
+	orgID, userID, err := a.getOrgAndUserID(r)
 	if err != nil {
 		return r.SendErrorEnvelope(fasthttp.StatusUnauthorized, "Unauthorized", nil, "")
 	}
-
-	userID, _ := r.RequestCtx.UserValue("user_id").(uuid.UUID)
 
 	// Check permissions - users with write permission have full access
 	hasFullAccess := a.HasPermission(userID, models.ResourceTransfers, models.ActionWrite)
