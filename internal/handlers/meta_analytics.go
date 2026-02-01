@@ -42,13 +42,12 @@ type MetaAnalyticsResponse struct {
 
 // GetMetaAnalytics fetches Meta WhatsApp analytics with Redis caching
 func (a *App) GetMetaAnalytics(r *fastglue.Request) error {
-	orgID, err := a.getOrgID(r)
+	orgID, userID, err := a.getOrgAndUserID(r)
 	if err != nil {
 		return r.SendErrorEnvelope(fasthttp.StatusUnauthorized, "Unauthorized", nil, "")
 	}
 
 	// Check permission
-	userID, _ := r.RequestCtx.UserValue("user_id").(uuid.UUID)
 	if !a.HasPermission(userID, "analytics", "read") {
 		return r.SendErrorEnvelope(fasthttp.StatusForbidden, "Permission denied", nil, "")
 	}
@@ -344,13 +343,12 @@ func (a *App) GetMetaAnalytics(r *fastglue.Request) error {
 
 // ListMetaAccountsForAnalytics lists WhatsApp accounts available for analytics
 func (a *App) ListMetaAccountsForAnalytics(r *fastglue.Request) error {
-	orgID, err := a.getOrgID(r)
+	orgID, userID, err := a.getOrgAndUserID(r)
 	if err != nil {
 		return r.SendErrorEnvelope(fasthttp.StatusUnauthorized, "Unauthorized", nil, "")
 	}
 
 	// Check permission
-	userID, _ := r.RequestCtx.UserValue("user_id").(uuid.UUID)
 	if !a.HasPermission(userID, "analytics", "read") {
 		return r.SendErrorEnvelope(fasthttp.StatusForbidden, "Permission denied", nil, "")
 	}
@@ -382,13 +380,12 @@ func (a *App) ListMetaAccountsForAnalytics(r *fastglue.Request) error {
 
 // RefreshMetaAnalyticsCache invalidates the cache for Meta analytics
 func (a *App) RefreshMetaAnalyticsCache(r *fastglue.Request) error {
-	orgID, err := a.getOrgID(r)
+	orgID, userID, err := a.getOrgAndUserID(r)
 	if err != nil {
 		return r.SendErrorEnvelope(fasthttp.StatusUnauthorized, "Unauthorized", nil, "")
 	}
 
 	// Check permission
-	userID, _ := r.RequestCtx.UserValue("user_id").(uuid.UUID)
 	if !a.HasPermission(userID, "analytics", "write") {
 		return r.SendErrorEnvelope(fasthttp.StatusForbidden, "Permission denied", nil, "")
 	}

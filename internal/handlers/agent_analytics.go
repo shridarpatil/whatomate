@@ -54,12 +54,10 @@ type AgentAnalyticsResponse struct {
 // GetAgentAnalytics returns agent analytics for the organization
 // Agents see only their own stats; Admin/Manager see all agents
 func (a *App) GetAgentAnalytics(r *fastglue.Request) error {
-	orgID, err := a.getOrgID(r)
+	orgID, userID, err := a.getOrgAndUserID(r)
 	if err != nil {
 		return r.SendErrorEnvelope(fasthttp.StatusUnauthorized, "Unauthorized", nil, "")
 	}
-
-	userID, _ := r.RequestCtx.UserValue("user_id").(uuid.UUID)
 
 	// Parse date range
 	fromStr := string(r.RequestCtx.QueryArgs().Peek("from"))
@@ -133,12 +131,11 @@ func (a *App) GetAgentAnalytics(r *fastglue.Request) error {
 
 // GetAgentDetails returns detailed analytics for a specific agent
 func (a *App) GetAgentDetails(r *fastglue.Request) error {
-	orgID, err := a.getOrgID(r)
+	orgID, userID, err := a.getOrgAndUserID(r)
 	if err != nil {
 		return r.SendErrorEnvelope(fasthttp.StatusUnauthorized, "Unauthorized", nil, "")
 	}
 
-	userID, _ := r.RequestCtx.UserValue("user_id").(uuid.UUID)
 	if err := a.requirePermission(r, userID, models.ResourceAnalytics, models.ActionRead); err != nil {
 		return nil
 	}
@@ -185,12 +182,11 @@ func (a *App) GetAgentDetails(r *fastglue.Request) error {
 
 // GetAgentComparison returns comparison data for multiple agents
 func (a *App) GetAgentComparison(r *fastglue.Request) error {
-	orgID, err := a.getOrgID(r)
+	orgID, userID, err := a.getOrgAndUserID(r)
 	if err != nil {
 		return r.SendErrorEnvelope(fasthttp.StatusUnauthorized, "Unauthorized", nil, "")
 	}
 
-	userID, _ := r.RequestCtx.UserValue("user_id").(uuid.UUID)
 	if !a.HasPermission(userID, models.ResourceAnalytics, models.ActionRead) {
 		return r.SendErrorEnvelope(fasthttp.StatusForbidden, "Access denied", nil, "")
 	}
