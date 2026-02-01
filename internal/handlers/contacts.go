@@ -1001,12 +1001,10 @@ type AssignContactRequest struct {
 // AssignContact assigns a contact to a user (agent)
 // Only users with write permission can assign contacts
 func (a *App) AssignContact(r *fastglue.Request) error {
-	orgID, err := a.getOrgID(r)
+	orgID, userID, err := a.getOrgAndUserID(r)
 	if err != nil {
 		return r.SendErrorEnvelope(fasthttp.StatusUnauthorized, "Unauthorized", nil, "")
 	}
-
-	userID, _ := r.RequestCtx.UserValue("user_id").(uuid.UUID)
 
 	// Only users with write permission can assign contacts
 	if !a.HasPermission(userID, models.ResourceContacts, models.ActionWrite) {
