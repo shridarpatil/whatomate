@@ -94,6 +94,7 @@ func runMigrations(db *gorm.DB) error {
 		// WhatsApp models
 		&models.WhatsAppAccount{},
 		&models.Contact{},
+		&models.Tag{},
 		&models.Message{},
 		&models.Template{},
 		&models.WhatsAppFlow{},
@@ -146,6 +147,7 @@ func cleanupTables(db *gorm.DB) {
 		"agent_transfers",
 		// WhatsApp tables
 		"messages",
+		"tags",
 		"contacts",
 		"templates",
 		"whatsapp_flows",
@@ -190,6 +192,7 @@ func TruncateTables(db *gorm.DB) {
 		"ai_contexts",
 		"agent_transfers",
 		"messages",
+		"tags",
 		"contacts",
 		"templates",
 		"whatsapp_flows",
