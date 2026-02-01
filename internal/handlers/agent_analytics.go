@@ -72,15 +72,11 @@ func (a *App) GetAgentAnalytics(r *fastglue.Request) error {
 	var periodStart, periodEnd time.Time
 
 	if fromStr != "" && toStr != "" {
-		periodStart, err = time.Parse("2006-01-02", fromStr)
-		if err != nil {
-			return r.SendErrorEnvelope(fasthttp.StatusBadRequest, "Invalid 'from' date format. Use YYYY-MM-DD", nil, "")
+		var errMsg string
+		periodStart, periodEnd, errMsg = parseDateRange(fromStr, toStr)
+		if errMsg != "" {
+			return r.SendErrorEnvelope(fasthttp.StatusBadRequest, errMsg, nil, "")
 		}
-		periodEnd, err = time.Parse("2006-01-02", toStr)
-		if err != nil {
-			return r.SendErrorEnvelope(fasthttp.StatusBadRequest, "Invalid 'to' date format. Use YYYY-MM-DD", nil, "")
-		}
-		periodEnd = endOfDay(periodEnd)
 	} else {
 		// Default to current month
 		periodStart = time.Date(now.Year(), now.Month(), 1, 0, 0, 0, 0, time.UTC)
@@ -157,9 +153,13 @@ func (a *App) GetAgentDetails(r *fastglue.Request) error {
 	var periodStart, periodEnd time.Time
 
 	if fromStr != "" && toStr != "" {
-		periodStart, _ = time.Parse("2006-01-02", fromStr)
-		periodEnd, _ = time.Parse("2006-01-02", toStr)
-		periodEnd = endOfDay(periodEnd)
+		var errMsg string
+		periodStart, periodEnd, errMsg = parseDateRange(fromStr, toStr)
+		if errMsg != "" {
+			// Fall back to current month on parse error
+			periodStart = time.Date(now.Year(), now.Month(), 1, 0, 0, 0, 0, time.UTC)
+			periodEnd = now
+		}
 	} else {
 		periodStart = time.Date(now.Year(), now.Month(), 1, 0, 0, 0, 0, time.UTC)
 		periodEnd = now
@@ -199,9 +199,13 @@ func (a *App) GetAgentComparison(r *fastglue.Request) error {
 	var periodStart, periodEnd time.Time
 
 	if fromStr != "" && toStr != "" {
-		periodStart, _ = time.Parse("2006-01-02", fromStr)
-		periodEnd, _ = time.Parse("2006-01-02", toStr)
-		periodEnd = endOfDay(periodEnd)
+		var errMsg string
+		periodStart, periodEnd, errMsg = parseDateRange(fromStr, toStr)
+		if errMsg != "" {
+			// Fall back to current month on parse error
+			periodStart = time.Date(now.Year(), now.Month(), 1, 0, 0, 0, 0, time.UTC)
+			periodEnd = now
+		}
 	} else {
 		periodStart = time.Date(now.Year(), now.Month(), 1, 0, 0, 0, 0, time.UTC)
 		periodEnd = now

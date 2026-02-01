@@ -746,18 +746,15 @@ func (a *App) executeWidgetQuery(orgID uuid.UUID, widget models.Widget, fromStr,
 	now := time.Now()
 
 	var periodStart, periodEnd time.Time
-	var err error
 
 	if fromStr != "" && toStr != "" {
-		periodStart, err = time.Parse("2006-01-02", fromStr)
-		if err != nil {
+		var errMsg string
+		periodStart, periodEnd, errMsg = parseDateRange(fromStr, toStr)
+		if errMsg != "" {
+			// Fall back to current month on parse error
 			periodStart = time.Date(now.Year(), now.Month(), 1, 0, 0, 0, 0, time.UTC)
-		}
-		periodEnd, err = time.Parse("2006-01-02", toStr)
-		if err != nil {
 			periodEnd = now
 		}
-		periodEnd = endOfDay(periodEnd)
 	} else {
 		// Default to current month
 		periodStart = time.Date(now.Year(), now.Month(), 1, 0, 0, 0, 0, time.UTC)

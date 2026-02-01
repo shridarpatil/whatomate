@@ -45,17 +45,11 @@ func (a *App) GetDashboardStats(r *fastglue.Request) error {
 
 	var periodStart, periodEnd time.Time
 	if fromStr != "" && toStr != "" {
-		// Parse custom date range
-		periodStart, err = time.Parse("2006-01-02", fromStr)
-		if err != nil {
-			return r.SendErrorEnvelope(fasthttp.StatusBadRequest, "Invalid 'from' date format. Use YYYY-MM-DD", nil, "")
+		var errMsg string
+		periodStart, periodEnd, errMsg = parseDateRange(fromStr, toStr)
+		if errMsg != "" {
+			return r.SendErrorEnvelope(fasthttp.StatusBadRequest, errMsg, nil, "")
 		}
-		periodEnd, err = time.Parse("2006-01-02", toStr)
-		if err != nil {
-			return r.SendErrorEnvelope(fasthttp.StatusBadRequest, "Invalid 'to' date format. Use YYYY-MM-DD", nil, "")
-		}
-		// End of day for the to date
-		periodEnd = endOfDay(periodEnd)
 	} else {
 		// Default to current month
 		periodStart = time.Date(now.Year(), now.Month(), 1, 0, 0, 0, 0, time.UTC)

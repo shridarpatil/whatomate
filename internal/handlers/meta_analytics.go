@@ -71,13 +71,9 @@ func (a *App) GetMetaAnalytics(r *fastglue.Request) error {
 	}
 
 	// Parse dates
-	startDate, err := time.Parse("2006-01-02", startStr)
-	if err != nil {
-		return r.SendErrorEnvelope(fasthttp.StatusBadRequest, "Invalid start date format. Use YYYY-MM-DD", nil, "")
-	}
-	endDate, err := time.Parse("2006-01-02", endStr)
-	if err != nil {
-		return r.SendErrorEnvelope(fasthttp.StatusBadRequest, "Invalid end date format. Use YYYY-MM-DD", nil, "")
+	startDate, endDate, errMsg := parseDateRange(startStr, endStr)
+	if errMsg != "" {
+		return r.SendErrorEnvelope(fasthttp.StatusBadRequest, errMsg, nil, "")
 	}
 
 	// Validate date range
