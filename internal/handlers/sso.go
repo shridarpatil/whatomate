@@ -407,8 +407,8 @@ func (a *App) UpdateSSOProvider(r *fastglue.Request) error {
 	}
 
 	var req SSOProviderRequest
-	if err := r.Decode(&req, "json"); err != nil {
-		return r.SendErrorEnvelope(fasthttp.StatusBadRequest, "Invalid request body", nil, "")
+	if err := a.decodeRequest(r, &req); err != nil {
+		return nil
 	}
 
 	// Validate custom provider fields

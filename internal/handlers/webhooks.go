@@ -96,8 +96,8 @@ func (a *App) CreateWebhook(r *fastglue.Request) error {
 	}
 
 	var req WebhookRequest
-	if err := r.Decode(&req, "json"); err != nil {
-		return r.SendErrorEnvelope(fasthttp.StatusBadRequest, "Invalid request body", nil, "")
+	if err := a.decodeRequest(r, &req); err != nil {
+		return nil
 	}
 
 	if req.Name == "" || req.URL == "" {
@@ -153,8 +153,8 @@ func (a *App) UpdateWebhook(r *fastglue.Request) error {
 	}
 
 	var req WebhookRequest
-	if err := r.Decode(&req, "json"); err != nil {
-		return r.SendErrorEnvelope(fasthttp.StatusBadRequest, "Invalid request body", nil, "")
+	if err := a.decodeRequest(r, &req); err != nil {
+		return nil
 	}
 
 	if req.Name != "" {

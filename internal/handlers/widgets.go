@@ -204,12 +204,10 @@ func (a *App) GetWidget(r *fastglue.Request) error {
 
 // CreateWidget creates a new widget
 func (a *App) CreateWidget(r *fastglue.Request) error {
-	orgID, err := a.getOrgID(r)
+	orgID, userID, err := a.getOrgAndUserID(r)
 	if err != nil {
 		return r.SendErrorEnvelope(fasthttp.StatusUnauthorized, "Unauthorized", nil, "")
 	}
-
-	userID, _ := r.RequestCtx.UserValue("user_id").(uuid.UUID)
 
 	// Check analytics write permission
 	if !a.HasPermission(userID, models.ResourceAnalytics, models.ActionWrite) {
@@ -217,8 +215,8 @@ func (a *App) CreateWidget(r *fastglue.Request) error {
 	}
 
 	var req WidgetRequest
-	if err := r.Decode(&req, "json"); err != nil {
-		return r.SendErrorEnvelope(fasthttp.StatusBadRequest, "Invalid request body", nil, "")
+	if err := a.decodeRequest(r, &req); err != nil {
+		return nil
 	}
 
 	// Validate required fields
@@ -364,12 +362,10 @@ func (a *App) CreateWidget(r *fastglue.Request) error {
 
 // UpdateWidget updates a widget
 func (a *App) UpdateWidget(r *fastglue.Request) error {
-	orgID, err := a.getOrgID(r)
+	orgID, userID, err := a.getOrgAndUserID(r)
 	if err != nil {
 		return r.SendErrorEnvelope(fasthttp.StatusUnauthorized, "Unauthorized", nil, "")
 	}
-
-	userID, _ := r.RequestCtx.UserValue("user_id").(uuid.UUID)
 
 	// Check analytics write permission
 	if !a.HasPermission(userID, models.ResourceAnalytics, models.ActionWrite) {
@@ -393,8 +389,8 @@ func (a *App) UpdateWidget(r *fastglue.Request) error {
 	}
 
 	var req WidgetRequest
-	if err := r.Decode(&req, "json"); err != nil {
-		return r.SendErrorEnvelope(fasthttp.StatusBadRequest, "Invalid request body", nil, "")
+	if err := a.decodeRequest(r, &req); err != nil {
+		return nil
 	}
 
 	// Update fields
@@ -543,8 +539,8 @@ func (a *App) SaveWidgetLayout(r *fastglue.Request) error {
 			GridH int       `json:"grid_h"`
 		} `json:"layout"`
 	}
-	if err := r.Decode(&req, "json"); err != nil {
-		return r.SendErrorEnvelope(fasthttp.StatusBadRequest, "Invalid request body", nil, "")
+	if err := a.decodeRequest(r, &req); err != nil {
+		return nil
 	}
 
 	if len(req.Layout) == 0 {

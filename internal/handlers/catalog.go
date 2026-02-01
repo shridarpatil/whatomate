@@ -102,8 +102,8 @@ func (a *App) CreateCatalog(r *fastglue.Request) error {
 	}
 
 	var req CatalogRequest
-	if err := r.Decode(&req, "json"); err != nil {
-		return r.SendErrorEnvelope(fasthttp.StatusBadRequest, "Invalid request body", nil, "")
+	if err := a.decodeRequest(r, &req); err != nil {
+		return nil
 	}
 
 	if req.Name == "" || req.WhatsAppAccount == "" {
@@ -222,8 +222,8 @@ func (a *App) SyncCatalogs(r *fastglue.Request) error {
 	}
 
 	var req SyncCatalogsRequest
-	if err := r.Decode(&req, "json"); err != nil {
-		return r.SendErrorEnvelope(fasthttp.StatusBadRequest, "Invalid request body", nil, "")
+	if err := a.decodeRequest(r, &req); err != nil {
+		return nil
 	}
 
 	if req.WhatsAppAccount == "" {
@@ -328,8 +328,8 @@ func (a *App) CreateCatalogProduct(r *fastglue.Request) error {
 	}
 
 	var req CatalogProductRequest
-	if err := r.Decode(&req, "json"); err != nil {
-		return r.SendErrorEnvelope(fasthttp.StatusBadRequest, "Invalid request body", nil, "")
+	if err := a.decodeRequest(r, &req); err != nil {
+		return nil
 	}
 
 	if req.Name == "" || req.Price <= 0 {
@@ -434,8 +434,8 @@ func (a *App) UpdateCatalogProduct(r *fastglue.Request) error {
 	}
 
 	var req CatalogProductRequest
-	if err := r.Decode(&req, "json"); err != nil {
-		return r.SendErrorEnvelope(fasthttp.StatusBadRequest, "Invalid request body", nil, "")
+	if err := a.decodeRequest(r, &req); err != nil {
+		return nil
 	}
 
 	// Get catalog to get WhatsApp account

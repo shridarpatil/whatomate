@@ -79,8 +79,10 @@ type ReactionInfo struct {
 // ListContacts returns all contacts for the organization
 // Users without contacts:read permission only see contacts assigned to them
 func (a *App) ListContacts(r *fastglue.Request) error {
-	orgID := r.RequestCtx.UserValue("organization_id").(uuid.UUID)
-	userID, _ := r.RequestCtx.UserValue("user_id").(uuid.UUID)
+	orgID, userID, err := a.getOrgAndUserID(r)
+	if err != nil {
+		return r.SendErrorEnvelope(fasthttp.StatusUnauthorized, "Unauthorized", nil, "")
+	}
 
 	// Pagination
 	pg := parsePagination(r)
@@ -166,8 +168,10 @@ func (a *App) ListContacts(r *fastglue.Request) error {
 // GetContact returns a single contact
 // Users without contacts:read permission can only access contacts assigned to them
 func (a *App) GetContact(r *fastglue.Request) error {
-	orgID := r.RequestCtx.UserValue("organization_id").(uuid.UUID)
-	userID, _ := r.RequestCtx.UserValue("user_id").(uuid.UUID)
+	orgID, userID, err := a.getOrgAndUserID(r)
+	if err != nil {
+		return r.SendErrorEnvelope(fasthttp.StatusUnauthorized, "Unauthorized", nil, "")
+	}
 	contactID, err := parsePathUUID(r, "id", "contact")
 	if err != nil {
 		return nil
@@ -231,8 +235,10 @@ func (a *App) GetContact(r *fastglue.Request) error {
 // Agents can only access messages for their assigned contacts
 // Supports cursor-based pagination with before_id for loading older messages
 func (a *App) GetMessages(r *fastglue.Request) error {
-	orgID := r.RequestCtx.UserValue("organization_id").(uuid.UUID)
-	userID, _ := r.RequestCtx.UserValue("user_id").(uuid.UUID)
+	orgID, userID, err := a.getOrgAndUserID(r)
+	if err != nil {
+		return r.SendErrorEnvelope(fasthttp.StatusUnauthorized, "Unauthorized", nil, "")
+	}
 	contactID, err := parsePathUUID(r, "id", "contact")
 	if err != nil {
 		return nil
@@ -485,8 +491,10 @@ type ButtonContent struct {
 // SendMessage sends a message to a contact
 // Agents can only send messages to their assigned contacts
 func (a *App) SendMessage(r *fastglue.Request) error {
-	orgID := r.RequestCtx.UserValue("organization_id").(uuid.UUID)
-	userID, _ := r.RequestCtx.UserValue("user_id").(uuid.UUID)
+	orgID, userID, err := a.getOrgAndUserID(r)
+	if err != nil {
+		return r.SendErrorEnvelope(fasthttp.StatusUnauthorized, "Unauthorized", nil, "")
+	}
 	contactID, err := parsePathUUID(r, "id", "contact")
 	if err != nil {
 		return nil
@@ -622,8 +630,10 @@ func truncateString(s string, maxLen int) string {
 
 // SendMediaMessage sends a media message (image, document, video, audio) to a contact
 func (a *App) SendMediaMessage(r *fastglue.Request) error {
-	orgID := r.RequestCtx.UserValue("organization_id").(uuid.UUID)
-	userID, _ := r.RequestCtx.UserValue("user_id").(uuid.UUID)
+	orgID, userID, err := a.getOrgAndUserID(r)
+	if err != nil {
+		return r.SendErrorEnvelope(fasthttp.StatusUnauthorized, "Unauthorized", nil, "")
+	}
 
 	// Parse multipart form
 	form, err := r.RequestCtx.MultipartForm()
@@ -803,8 +813,10 @@ type SendReactionRequest struct {
 
 // SendReaction sends a reaction to a message
 func (a *App) SendReaction(r *fastglue.Request) error {
-	orgID := r.RequestCtx.UserValue("organization_id").(uuid.UUID)
-	userID, _ := r.RequestCtx.UserValue("user_id").(uuid.UUID)
+	orgID, userID, err := a.getOrgAndUserID(r)
+	if err != nil {
+		return r.SendErrorEnvelope(fasthttp.StatusUnauthorized, "Unauthorized", nil, "")
+	}
 	contactID, err := parsePathUUID(r, "id", "contact")
 	if err != nil {
 		return nil
@@ -1007,8 +1019,8 @@ func (a *App) AssignContact(r *fastglue.Request) error {
 	}
 
 	var req AssignContactRequest
-	if err := r.Decode(&req, "json"); err != nil {
-		return r.SendErrorEnvelope(fasthttp.StatusBadRequest, "Invalid request body", nil, "")
+	if err := a.decodeRequest(r, &req); err != nil {
+		return nil
 	}
 
 	// Get contact
@@ -1049,8 +1061,10 @@ type ContactSessionDataResponse struct {
 // GetContactSessionData returns session data and panel configuration for a contact
 // Used by the contact info panel in the chat view
 func (a *App) GetContactSessionData(r *fastglue.Request) error {
-	orgID := r.RequestCtx.UserValue("organization_id").(uuid.UUID)
-	userID, _ := r.RequestCtx.UserValue("user_id").(uuid.UUID)
+	orgID, userID, err := a.getOrgAndUserID(r)
+	if err != nil {
+		return r.SendErrorEnvelope(fasthttp.StatusUnauthorized, "Unauthorized", nil, "")
+	}
 	contactID, err := parsePathUUID(r, "id", "contact")
 	if err != nil {
 		return nil

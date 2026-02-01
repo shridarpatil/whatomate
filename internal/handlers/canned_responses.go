@@ -77,16 +77,14 @@ func (a *App) ListCannedResponses(r *fastglue.Request) error {
 
 // CreateCannedResponse creates a new canned response
 func (a *App) CreateCannedResponse(r *fastglue.Request) error {
-	orgID, err := a.getOrgID(r)
+	orgID, userID, err := a.getOrgAndUserID(r)
 	if err != nil {
 		return r.SendErrorEnvelope(fasthttp.StatusUnauthorized, "Unauthorized", nil, "")
 	}
 
-	userID, _ := r.RequestCtx.UserValue("user_id").(uuid.UUID)
-
 	var req CannedResponseRequest
-	if err := r.Decode(&req, "json"); err != nil {
-		return r.SendErrorEnvelope(fasthttp.StatusBadRequest, "Invalid request body", nil, "")
+	if err := a.decodeRequest(r, &req); err != nil {
+		return nil
 	}
 
 	if req.Name == "" || req.Content == "" {
@@ -163,8 +161,8 @@ func (a *App) UpdateCannedResponse(r *fastglue.Request) error {
 	}
 
 	var req CannedResponseRequest
-	if err := r.Decode(&req, "json"); err != nil {
-		return r.SendErrorEnvelope(fasthttp.StatusBadRequest, "Invalid request body", nil, "")
+	if err := a.decodeRequest(r, &req); err != nil {
+		return nil
 	}
 
 	// Update fields

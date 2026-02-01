@@ -95,8 +95,8 @@ func (a *App) CreateTemplate(r *fastglue.Request) error {
 	}
 
 	var req TemplateRequest
-	if err := r.Decode(&req, "json"); err != nil {
-		return r.SendErrorEnvelope(fasthttp.StatusBadRequest, "Invalid request body", nil, "")
+	if err := a.decodeRequest(r, &req); err != nil {
+		return nil
 	}
 
 	// Validate required fields
@@ -191,8 +191,8 @@ func (a *App) UpdateTemplate(r *fastglue.Request) error {
 	}
 
 	var req TemplateRequest
-	if err := r.Decode(&req, "json"); err != nil {
-		return r.SendErrorEnvelope(fasthttp.StatusBadRequest, "Invalid request body", nil, "")
+	if err := a.decodeRequest(r, &req); err != nil {
+		return nil
 	}
 
 	// Update fields

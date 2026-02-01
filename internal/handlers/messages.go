@@ -501,15 +501,14 @@ type SendTemplateMessageRequest struct {
 
 // SendTemplateMessage sends a template message to a contact or phone number
 func (a *App) SendTemplateMessage(r *fastglue.Request) error {
-	orgID, err := a.getOrgID(r)
+	orgID, userID, err := a.getOrgAndUserID(r)
 	if err != nil {
 		return r.SendErrorEnvelope(fasthttp.StatusUnauthorized, "Unauthorized", nil, "")
 	}
-	userID, _ := r.RequestCtx.UserValue("user_id").(uuid.UUID)
 
 	var req SendTemplateMessageRequest
-	if err := r.Decode(&req, "json"); err != nil {
-		return r.SendErrorEnvelope(fasthttp.StatusBadRequest, "Invalid request body", nil, "")
+	if err := a.decodeRequest(r, &req); err != nil {
+		return nil
 	}
 
 	// Must have either contact_id or phone_number

@@ -124,8 +124,8 @@ func (a *App) CreateCustomAction(r *fastglue.Request) error {
 	}
 
 	var req CustomActionRequest
-	if err := r.Decode(&req, "json"); err != nil {
-		return r.SendErrorEnvelope(fasthttp.StatusBadRequest, "Invalid request body", nil, "")
+	if err := a.decodeRequest(r, &req); err != nil {
+		return nil
 	}
 
 	// Validate required fields
@@ -181,8 +181,8 @@ func (a *App) UpdateCustomAction(r *fastglue.Request) error {
 	}
 
 	var req CustomActionRequest
-	if err := r.Decode(&req, "json"); err != nil {
-		return r.SendErrorEnvelope(fasthttp.StatusBadRequest, "Invalid request body", nil, "")
+	if err := a.decodeRequest(r, &req); err != nil {
+		return nil
 	}
 
 	// Build updates
@@ -265,8 +265,8 @@ func (a *App) ExecuteCustomAction(r *fastglue.Request) error {
 	}
 
 	var req ExecuteActionRequest
-	if err := r.Decode(&req, "json"); err != nil {
-		return r.SendErrorEnvelope(fasthttp.StatusBadRequest, "Invalid request body", nil, "")
+	if err := a.decodeRequest(r, &req); err != nil {
+		return nil
 	}
 
 	// Get the action

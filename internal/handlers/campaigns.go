@@ -137,8 +137,8 @@ func (a *App) CreateCampaign(r *fastglue.Request) error {
 	}
 
 	var req CampaignRequest
-	if err := r.Decode(&req, "json"); err != nil {
-		return r.SendErrorEnvelope(fasthttp.StatusBadRequest, "Invalid request body", nil, "")
+	if err := a.decodeRequest(r, &req); err != nil {
+		return nil
 	}
 
 	// Validate template exists
@@ -264,8 +264,8 @@ func (a *App) UpdateCampaign(r *fastglue.Request) error {
 	}
 
 	var req CampaignRequest
-	if err := r.Decode(&req, "json"); err != nil {
-		return r.SendErrorEnvelope(fasthttp.StatusBadRequest, "Invalid request body", nil, "")
+	if err := a.decodeRequest(r, &req); err != nil {
+		return nil
 	}
 
 	// Update fields
@@ -618,8 +618,8 @@ func (a *App) ImportRecipients(r *fastglue.Request) error {
 	var req struct {
 		Recipients []RecipientRequest `json:"recipients" validate:"required"`
 	}
-	if err := r.Decode(&req, "json"); err != nil {
-		return r.SendErrorEnvelope(fasthttp.StatusBadRequest, "Invalid request body", nil, "")
+	if err := a.decodeRequest(r, &req); err != nil {
+		return nil
 	}
 
 	// Create recipients
@@ -868,8 +868,8 @@ func (a *App) saveCampaignMedia(campaignID string, data []byte, mimeType string)
 // ServeCampaignMedia serves campaign media files for preview
 func (a *App) ServeCampaignMedia(r *fastglue.Request) error {
 	// Get auth context
-	orgID, ok := r.RequestCtx.UserValue("organization_id").(uuid.UUID)
-	if !ok {
+	orgID, err := a.getOrgID(r)
+	if err != nil {
 		return r.SendErrorEnvelope(fasthttp.StatusUnauthorized, "Unauthorized", nil, "")
 	}
 

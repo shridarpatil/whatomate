@@ -83,8 +83,8 @@ func (a *App) CreateFlow(r *fastglue.Request) error {
 	}
 
 	var req FlowRequest
-	if err := r.Decode(&req, "json"); err != nil {
-		return r.SendErrorEnvelope(fasthttp.StatusBadRequest, "Invalid request body", nil, "")
+	if err := a.decodeRequest(r, &req); err != nil {
+		return nil
 	}
 
 	// Validate required fields
@@ -170,8 +170,8 @@ func (a *App) UpdateFlow(r *fastglue.Request) error {
 	}
 
 	var req FlowRequest
-	if err := r.Decode(&req, "json"); err != nil {
-		return r.SendErrorEnvelope(fasthttp.StatusBadRequest, "Invalid request body", nil, "")
+	if err := a.decodeRequest(r, &req); err != nil {
+		return nil
 	}
 
 	// Update fields
@@ -533,8 +533,8 @@ func (a *App) SyncFlows(r *fastglue.Request) error {
 	var req struct {
 		WhatsAppAccount string `json:"whatsapp_account"`
 	}
-	if err := r.Decode(&req, "json"); err != nil {
-		return r.SendErrorEnvelope(fasthttp.StatusBadRequest, "Invalid request body", nil, "")
+	if err := a.decodeRequest(r, &req); err != nil {
+		return nil
 	}
 
 	if req.WhatsAppAccount == "" {

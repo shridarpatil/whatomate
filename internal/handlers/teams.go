@@ -49,8 +49,10 @@ type TeamMemberResponse struct {
 
 // ListTeams returns teams based on user access
 func (a *App) ListTeams(r *fastglue.Request) error {
-	orgID := r.RequestCtx.UserValue("organization_id").(uuid.UUID)
-	userID := r.RequestCtx.UserValue("user_id").(uuid.UUID)
+	orgID, userID, err := a.getOrgAndUserID(r)
+	if err != nil {
+		return r.SendErrorEnvelope(fasthttp.StatusUnauthorized, "Unauthorized", nil, "")
+	}
 
 	var teams []models.Team
 
@@ -118,16 +120,18 @@ func (a *App) GetTeam(r *fastglue.Request) error {
 
 // CreateTeam creates a new team
 func (a *App) CreateTeam(r *fastglue.Request) error {
-	orgID := r.RequestCtx.UserValue("organization_id").(uuid.UUID)
-	userID := r.RequestCtx.UserValue("user_id").(uuid.UUID)
+	orgID, userID, err := a.getOrgAndUserID(r)
+	if err != nil {
+		return r.SendErrorEnvelope(fasthttp.StatusUnauthorized, "Unauthorized", nil, "")
+	}
 
-	if !a.HasPermission(userID, models.ResourceTeams, models.ActionWrite) {
-		return r.SendErrorEnvelope(fasthttp.StatusForbidden, "Insufficient permissions", nil, "")
+	if err := a.requirePermission(r, userID, models.ResourceTeams, models.ActionWrite); err != nil {
+		return nil
 	}
 
 	var req TeamRequest
-	if err := r.Decode(&req, "json"); err != nil {
-		return r.SendErrorEnvelope(fasthttp.StatusBadRequest, "Invalid request body", nil, "")
+	if err := a.decodeRequest(r, &req); err != nil {
+		return nil
 	}
 
 	if req.Name == "" {
@@ -340,8 +344,8 @@ func (a *App) AddTeamMember(r *fastglue.Request) error {
 	}
 
 	var req TeamMemberRequest
-	if err := r.Decode(&req, "json"); err != nil {
-		return r.SendErrorEnvelope(fasthttp.StatusBadRequest, "Invalid request body", nil, "")
+	if err := a.decodeRequest(r, &req); err != nil {
+		return nil
 	}
 
 	memberUserID, err := uuid.Parse(req.UserID)

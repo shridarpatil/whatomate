@@ -50,14 +50,13 @@ func generateAPIKey() (string, error) {
 
 // ListAPIKeys returns all API keys for the organization
 func (a *App) ListAPIKeys(r *fastglue.Request) error {
-	orgID, err := a.getOrgID(r)
+	orgID, userID, err := a.getOrgAndUserID(r)
 	if err != nil {
 		return r.SendErrorEnvelope(fasthttp.StatusUnauthorized, "Unauthorized", nil, "")
 	}
 
-	userID, _ := r.RequestCtx.UserValue("user_id").(uuid.UUID)
-	if !a.HasPermission(userID, models.ResourceAPIKeys, models.ActionRead) {
-		return r.SendErrorEnvelope(fasthttp.StatusForbidden, "Insufficient permissions", nil, "")
+	if err := a.requirePermission(r, userID, models.ResourceAPIKeys, models.ActionRead); err != nil {
+		return nil
 	}
 
 	var apiKeys []models.APIKey
@@ -85,19 +84,18 @@ func (a *App) ListAPIKeys(r *fastglue.Request) error {
 
 // CreateAPIKey creates a new API key
 func (a *App) CreateAPIKey(r *fastglue.Request) error {
-	orgID, err := a.getOrgID(r)
+	orgID, userID, err := a.getOrgAndUserID(r)
 	if err != nil {
 		return r.SendErrorEnvelope(fasthttp.StatusUnauthorized, "Unauthorized", nil, "")
 	}
 
-	userID, _ := r.RequestCtx.UserValue("user_id").(uuid.UUID)
-	if !a.HasPermission(userID, models.ResourceAPIKeys, models.ActionWrite) {
-		return r.SendErrorEnvelope(fasthttp.StatusForbidden, "Insufficient permissions", nil, "")
+	if err := a.requirePermission(r, userID, models.ResourceAPIKeys, models.ActionWrite); err != nil {
+		return nil
 	}
 
 	var req APIKeyRequest
-	if err := r.Decode(&req, "json"); err != nil {
-		return r.SendErrorEnvelope(fasthttp.StatusBadRequest, "Invalid request body", nil, "")
+	if err := a.decodeRequest(r, &req); err != nil {
+		return nil
 	}
 
 	// Validate required fields

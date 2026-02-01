@@ -68,14 +68,13 @@ type ChangePasswordRequest struct {
 
 // ListUsers returns all users for the organization
 func (a *App) ListUsers(r *fastglue.Request) error {
-	orgID, err := a.getOrgID(r)
+	orgID, userID, err := a.getOrgAndUserID(r)
 	if err != nil {
 		return r.SendErrorEnvelope(fasthttp.StatusUnauthorized, "Unauthorized", nil, "")
 	}
 
-	userID, _ := r.RequestCtx.UserValue("user_id").(uuid.UUID)
-	if !a.HasPermission(userID, models.ResourceUsers, models.ActionRead) {
-		return r.SendErrorEnvelope(fasthttp.StatusForbidden, "Insufficient permissions", nil, "")
+	if err := a.requirePermission(r, userID, models.ResourceUsers, models.ActionRead); err != nil {
+		return nil
 	}
 
 	var users []models.User
@@ -420,8 +419,8 @@ func (a *App) UpdateCurrentUserSettings(r *fastglue.Request) error {
 	}
 
 	var req UserSettingsRequest
-	if err := r.Decode(&req, "json"); err != nil {
-		return r.SendErrorEnvelope(fasthttp.StatusBadRequest, "Invalid request body", nil, "")
+	if err := a.decodeRequest(r, &req); err != nil {
+		return nil
 	}
 
 	// Initialize settings if nil
@@ -458,8 +457,8 @@ func (a *App) ChangePassword(r *fastglue.Request) error {
 	}
 
 	var req ChangePasswordRequest
-	if err := r.Decode(&req, "json"); err != nil {
-		return r.SendErrorEnvelope(fasthttp.StatusBadRequest, "Invalid request body", nil, "")
+	if err := a.decodeRequest(r, &req); err != nil {
+		return nil
 	}
 
 	// Validate required fields
@@ -542,13 +541,8 @@ type AvailabilityRequest struct {
 
 // UpdateAvailability updates the current user's availability status (away/available)
 func (a *App) UpdateAvailability(r *fastglue.Request) error {
-	userID, ok := r.RequestCtx.UserValue("user_id").(uuid.UUID)
-	if !ok {
-		return r.SendErrorEnvelope(fasthttp.StatusUnauthorized, "Unauthorized", nil, "")
-	}
-
-	orgID, ok := r.RequestCtx.UserValue("organization_id").(uuid.UUID)
-	if !ok {
+	orgID, userID, err := a.getOrgAndUserID(r)
+	if err != nil {
 		return r.SendErrorEnvelope(fasthttp.StatusUnauthorized, "Unauthorized", nil, "")
 	}
 
@@ -558,8 +552,8 @@ func (a *App) UpdateAvailability(r *fastglue.Request) error {
 	}
 
 	var req AvailabilityRequest
-	if err := r.Decode(&req, "json"); err != nil {
-		return r.SendErrorEnvelope(fasthttp.StatusBadRequest, "Invalid request body", nil, "")
+	if err := a.decodeRequest(r, &req); err != nil {
+		return nil
 	}
 
 	// Only log if status is actually changing

@@ -43,8 +43,8 @@ type RefreshRequest struct {
 // Login authenticates a user and returns tokens
 func (a *App) Login(r *fastglue.Request) error {
 	var req LoginRequest
-	if err := r.Decode(&req, "json"); err != nil {
-		return r.SendErrorEnvelope(fasthttp.StatusBadRequest, "Invalid request body", nil, "")
+	if err := a.decodeRequest(r, &req); err != nil {
+		return nil
 	}
 
 	// Find user by email with role preloaded
@@ -107,8 +107,8 @@ func (a *App) Login(r *fastglue.Request) error {
 // Register creates a new user and organization
 func (a *App) Register(r *fastglue.Request) error {
 	var req RegisterRequest
-	if err := r.Decode(&req, "json"); err != nil {
-		return r.SendErrorEnvelope(fasthttp.StatusBadRequest, "Invalid request body", nil, "")
+	if err := a.decodeRequest(r, &req); err != nil {
+		return nil
 	}
 
 	// Check if email already exists
@@ -216,8 +216,8 @@ func (a *App) Register(r *fastglue.Request) error {
 // RefreshToken refreshes access token using refresh token
 func (a *App) RefreshToken(r *fastglue.Request) error {
 	var req RefreshRequest
-	if err := r.Decode(&req, "json"); err != nil {
-		return r.SendErrorEnvelope(fasthttp.StatusBadRequest, "Invalid request body", nil, "")
+	if err := a.decodeRequest(r, &req); err != nil {
+		return nil
 	}
 
 	// Parse and validate refresh token

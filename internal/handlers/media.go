@@ -134,11 +134,10 @@ func (a *App) DownloadAndSaveMedia(ctx context.Context, mediaID string, mimeType
 // Only authorized users who have access to the message can view the media
 func (a *App) ServeMedia(r *fastglue.Request) error {
 	// Get auth context
-	orgID, ok := r.RequestCtx.UserValue("organization_id").(uuid.UUID)
-	if !ok {
+	orgID, userID, err := a.getOrgAndUserID(r)
+	if err != nil {
 		return r.SendErrorEnvelope(fasthttp.StatusUnauthorized, "Unauthorized", nil, "")
 	}
-	userID, _ := r.RequestCtx.UserValue("user_id").(uuid.UUID)
 
 	// Get the message ID from URL parameter
 	messageIDStr := r.RequestCtx.UserValue("message_id").(string)
