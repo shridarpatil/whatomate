@@ -361,3 +361,37 @@ export class ApiKeysPage extends TableSettingsPage {
     await this.page.getByRole('button', { name: 'Done' }).click()
   }
 }
+
+/**
+ * Tags Page
+ */
+export class TagsPage extends TableSettingsPage {
+  readonly colorSelect: Locator
+
+  constructor(page: Page) {
+    super(page, { headingText: 'Tags', addButtonText: 'Add Tag' })
+    this.colorSelect = page.locator('button[role="combobox"]')
+  }
+
+  async goto() {
+    await this.page.goto('/settings/tags')
+    await this.page.waitForLoadState('networkidle')
+  }
+
+  async fillTagForm(name: string, color?: string) {
+    await this.dialog.locator('input').first().fill(name)
+    if (color) {
+      await this.dialog.locator('button[role="combobox"]').click()
+      await this.page.locator('[role="option"]').filter({ hasText: new RegExp(`^${color}$`, 'i') }).click()
+    }
+  }
+
+  async selectColor(color: string) {
+    await this.dialog.locator('button[role="combobox"]').click()
+    await this.page.locator('[role="option"]').filter({ hasText: new RegExp(`^${color}$`, 'i') }).click()
+  }
+
+  async expectTagBadgeVisible(name: string) {
+    await expect(this.page.locator('span').filter({ hasText: name })).toBeVisible()
+  }
+}
