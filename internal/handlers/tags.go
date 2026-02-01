@@ -33,8 +33,8 @@ func (a *App) ListTags(r *fastglue.Request) error {
 		return nil
 	}
 
-	var tags []models.Tag
-	if err := a.DB.Where("organization_id = ?", orgID).Order("name ASC").Find(&tags).Error; err != nil {
+	tags, err := a.getTagsCached(orgID)
+	if err != nil {
 		a.Log.Error("Failed to list tags", "error", err)
 		return r.SendErrorEnvelope(fasthttp.StatusInternalServerError, "Failed to list tags", nil, "")
 	}
@@ -93,6 +93,9 @@ func (a *App) CreateTag(r *fastglue.Request) error {
 		a.Log.Error("Failed to create tag", "error", err)
 		return r.SendErrorEnvelope(fasthttp.StatusInternalServerError, "Failed to create tag", nil, "")
 	}
+
+	// Invalidate cache
+	a.InvalidateTagsCache(orgID)
 
 	return r.SendEnvelope(tagToResponse(tag))
 }
@@ -182,6 +185,9 @@ func (a *App) UpdateTag(r *fastglue.Request) error {
 			return r.SendErrorEnvelope(fasthttp.StatusInternalServerError, "Failed to update tag", nil, "")
 		}
 
+		// Invalidate cache
+		a.InvalidateTagsCache(orgID)
+
 		return r.SendEnvelope(tagToResponse(newTag))
 	}
 
@@ -194,6 +200,9 @@ func (a *App) UpdateTag(r *fastglue.Request) error {
 			return r.SendErrorEnvelope(fasthttp.StatusInternalServerError, "Failed to update tag", nil, "")
 		}
 		tag.Color = req.Color
+
+		// Invalidate cache
+		a.InvalidateTagsCache(orgID)
 	}
 
 	// Reload tag to get updated timestamp
@@ -246,6 +255,9 @@ func (a *App) DeleteTag(r *fastglue.Request) error {
 		a.Log.Error("Failed to delete tag", "error", err)
 		return r.SendErrorEnvelope(fasthttp.StatusInternalServerError, "Failed to delete tag", nil, "")
 	}
+
+	// Invalidate cache
+	a.InvalidateTagsCache(orgID)
 
 	return r.SendEnvelope(map[string]string{"message": "Tag deleted"})
 }

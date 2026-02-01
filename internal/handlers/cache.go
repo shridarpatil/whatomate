@@ -23,6 +23,7 @@ const (
 	aiContextsCacheTTL      = 6 * time.Hour
 	userPermissionsCacheTTL = 6 * time.Hour
 	rolePermissionsCacheTTL = 6 * time.Hour
+	tagsCacheTTL            = 6 * time.Hour
 
 	// Cache key prefixes
 	settingsCachePrefix        = "chatbot:settings:"
@@ -34,6 +35,7 @@ const (
 	aiContextsCachePrefix      = "chatbot:ai_contexts:"
 	userPermissionsCachePrefix = "permissions:user:"
 	rolePermissionsCachePrefix = "permissions:role:"
+	tagsCachePrefix            = "tags:"
 )
 
 // chatbotSettingsCache is used for caching since AI.APIKey has json:"-" tag
@@ -604,4 +606,39 @@ func (a *App) notifyUserPermissionsChanged(userID uuid.UUID) {
 		Type:    websocket.TypePermissionsUpdated,
 		Payload: map[string]string{"message": "Your permissions have been updated"},
 	})
+}
+
+// getTagsCached retrieves tags for an organization from cache or database
+func (a *App) getTagsCached(orgID uuid.UUID) ([]models.Tag, error) {
+	ctx := context.Background()
+	cacheKey := fmt.Sprintf("%s%s", tagsCachePrefix, orgID.String())
+
+	// Try cache first
+	cached, err := a.Redis.Get(ctx, cacheKey).Result()
+	if err == nil && cached != "" {
+		var tags []models.Tag
+		if err := json.Unmarshal([]byte(cached), &tags); err == nil {
+			return tags, nil
+		}
+	}
+
+	// Cache miss - fetch from database
+	var tags []models.Tag
+	if err := a.DB.Where("organization_id = ?", orgID).Order("name ASC").Find(&tags).Error; err != nil {
+		return nil, err
+	}
+
+	// Cache the result
+	if data, err := json.Marshal(tags); err == nil {
+		a.Redis.Set(ctx, cacheKey, data, tagsCacheTTL)
+	}
+
+	return tags, nil
+}
+
+// InvalidateTagsCache invalidates the tags cache for an organization
+func (a *App) InvalidateTagsCache(orgID uuid.UUID) {
+	ctx := context.Background()
+	cacheKey := fmt.Sprintf("%s%s", tagsCachePrefix, orgID.String())
+	a.Redis.Del(ctx, cacheKey)
 }
