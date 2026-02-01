@@ -139,14 +139,13 @@ func (a *App) GetAgentDetails(r *fastglue.Request) error {
 	}
 
 	userID, _ := r.RequestCtx.UserValue("user_id").(uuid.UUID)
-	if !a.HasPermission(userID, models.ResourceAnalytics, models.ActionRead) {
-		return r.SendErrorEnvelope(fasthttp.StatusForbidden, "Access denied", nil, "")
+	if err := a.requirePermission(r, userID, models.ResourceAnalytics, models.ActionRead); err != nil {
+		return nil
 	}
 
-	agentIDStr := r.RequestCtx.UserValue("id").(string)
-	agentID, err := uuid.Parse(agentIDStr)
+	agentID, err := parsePathUUID(r, "id", "agent")
 	if err != nil {
-		return r.SendErrorEnvelope(fasthttp.StatusBadRequest, "Invalid agent ID", nil, "")
+		return nil
 	}
 
 	// Parse date range

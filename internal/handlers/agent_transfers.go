@@ -622,17 +622,14 @@ func (a *App) CreateAgentTransfer(r *fastglue.Request) error {
 
 // ResumeFromTransfer resumes chatbot processing for a transferred contact
 func (a *App) ResumeFromTransfer(r *fastglue.Request) error {
-	orgID, err := a.getOrgID(r)
+	orgID, userID, err := a.getOrgAndUserID(r)
 	if err != nil {
 		return r.SendErrorEnvelope(fasthttp.StatusUnauthorized, "Unauthorized", nil, "")
 	}
 
-	userID, _ := r.RequestCtx.UserValue("user_id").(uuid.UUID)
-
-	transferIDStr := r.RequestCtx.UserValue("id").(string)
-	transferID, err := uuid.Parse(transferIDStr)
+	transferID, err := parsePathUUID(r, "id", "transfer")
 	if err != nil {
-		return r.SendErrorEnvelope(fasthttp.StatusBadRequest, "Invalid transfer ID", nil, "")
+		return nil
 	}
 
 	transfer, err := findByIDAndOrg[models.AgentTransfer](a.DB, r, transferID, orgID, "Transfer")
@@ -691,25 +688,22 @@ func (a *App) ResumeFromTransfer(r *fastglue.Request) error {
 
 // AssignAgentTransfer assigns a transfer to a specific agent
 func (a *App) AssignAgentTransfer(r *fastglue.Request) error {
-	orgID, err := a.getOrgID(r)
+	orgID, userID, err := a.getOrgAndUserID(r)
 	if err != nil {
 		return r.SendErrorEnvelope(fasthttp.StatusUnauthorized, "Unauthorized", nil, "")
 	}
 
-	userID, _ := r.RequestCtx.UserValue("user_id").(uuid.UUID)
-
 	// Check permissions - users with write permission can assign transfers to others
 	hasWriteAccess := a.HasPermission(userID, models.ResourceTransfers, models.ActionWrite)
 
-	transferIDStr := r.RequestCtx.UserValue("id").(string)
-	transferID, err := uuid.Parse(transferIDStr)
+	transferID, err := parsePathUUID(r, "id", "transfer")
 	if err != nil {
-		return r.SendErrorEnvelope(fasthttp.StatusBadRequest, "Invalid transfer ID", nil, "")
+		return nil
 	}
 
 	var req AssignTransferRequest
-	if err := json.Unmarshal(r.RequestCtx.PostBody(), &req); err != nil {
-		return r.SendErrorEnvelope(fasthttp.StatusBadRequest, "Invalid request body", nil, "")
+	if err := a.decodeRequest(r, &req); err != nil {
+		return nil
 	}
 
 	var transfer models.AgentTransfer
