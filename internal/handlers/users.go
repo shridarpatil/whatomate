@@ -77,10 +77,22 @@ func (a *App) ListUsers(r *fastglue.Request) error {
 		return nil
 	}
 
+	pg := parsePagination(r)
+	search := string(r.RequestCtx.QueryArgs().Peek("search"))
+
+	baseQuery := a.ScopeToOrg(a.DB, userID, orgID)
+	if search != "" {
+		baseQuery = baseQuery.Where("full_name ILIKE ? OR email ILIKE ?", "%"+search+"%", "%"+search+"%")
+	}
+
+	// Get total count
+	var total int64
+	baseQuery.Model(&models.User{}).Count(&total)
+
 	var users []models.User
-	if err := a.ScopeToOrg(a.DB, userID, orgID).
+	if err := pg.Apply(baseQuery.
 		Preload("Role").
-		Order("created_at DESC").
+		Order("created_at DESC")).
 		Find(&users).Error; err != nil {
 		a.Log.Error("Failed to list users", "error", err)
 		return r.SendErrorEnvelope(fasthttp.StatusInternalServerError, "Failed to list users", nil, "")
@@ -94,6 +106,9 @@ func (a *App) ListUsers(r *fastglue.Request) error {
 
 	return r.SendEnvelope(map[string]interface{}{
 		"users": response,
+		"total": total,
+		"page":  pg.Page,
+		"limit": pg.Limit,
 	})
 }
 

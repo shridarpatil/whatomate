@@ -88,7 +88,7 @@ const formData = ref({
 // Pagination state
 const currentPage = ref(1)
 const totalItems = ref(0)
-const pageSize = 10
+const pageSize = 20
 
 const columns: Column<Template>[] = [
   { key: 'name', label: 'Name', sortable: true },

@@ -19,9 +19,9 @@ import PermissionMatrix from '@/components/roles/PermissionMatrix.vue'
 import { toast } from 'vue-sonner'
 import { Plus, Pencil, Trash2, Loader2, Shield, Users, Lock, Star } from 'lucide-vue-next'
 import { useCrudState } from '@/composables/useCrudState'
-import { useSearch } from '@/composables/useSearch'
 import { getErrorMessage } from '@/lib/api-utils'
 import { formatDate } from '@/lib/utils'
+import { useDebounceFn } from '@vueuse/core'
 
 const rolesStore = useRolesStore()
 const organizationsStore = useOrganizationsStore()
@@ -41,7 +41,26 @@ const {
   formData, openCreateDialog, openEditDialog: baseOpenEditDialog, openDeleteDialog, closeDialog, closeDeleteDialog,
 } = useCrudState<Role, RoleFormData>(defaultFormData)
 
-const { searchQuery, filteredItems: filteredRoles } = useSearch(computed(() => rolesStore.roles), ['name', 'description'] as (keyof Role)[])
+const roles = ref<Role[]>([])
+const searchQuery = ref('')
+
+// Pagination state
+const currentPage = ref(1)
+const totalItems = ref(0)
+const pageSize = 20
+
+// Debounced search
+const debouncedSearch = useDebounceFn(() => {
+  currentPage.value = 1
+  fetchRoles()
+}, 300)
+
+watch(searchQuery, () => debouncedSearch())
+
+function handlePageChange(page: number) {
+  currentPage.value = page
+  fetchRoles()
+}
 
 const isSuperAdmin = computed(() => authStore.user?.is_super_admin ?? false)
 const canEditPermissions = computed(() => {
@@ -67,13 +86,20 @@ function openEditDialog(role: Role) {
   baseOpenEditDialog(role, (r) => ({ name: r.name, description: r.description || '', is_default: r.is_default, permissions: [...r.permissions] }))
 }
 
-watch(() => organizationsStore.selectedOrgId, () => fetchData())
-onMounted(() => fetchData())
+watch(() => organizationsStore.selectedOrgId, () => { fetchRoles(); rolesStore.fetchPermissions() })
+onMounted(() => { fetchRoles(); rolesStore.fetchPermissions() })
 
-async function fetchData() {
+async function fetchRoles() {
   isLoading.value = true
-  try { await Promise.all([rolesStore.fetchRoles(), rolesStore.fetchPermissions()]) }
-  catch { toast.error('Failed to load roles') }
+  try {
+    const response = await rolesStore.fetchRoles({
+      search: searchQuery.value || undefined,
+      page: currentPage.value,
+      limit: pageSize
+    })
+    roles.value = response.roles
+    totalItems.value = response.total
+  } catch { toast.error('Failed to load roles') }
   finally { isLoading.value = false }
 }
 
@@ -91,13 +117,14 @@ async function saveRole() {
       toast.success('Role created successfully')
     }
     closeDialog()
+    await fetchRoles()
   } catch (e) { toast.error(getErrorMessage(e, 'Failed to save role')) }
   finally { isSubmitting.value = false }
 }
 
 async function confirmDelete() {
   if (!roleToDelete.value) return
-  try { await rolesStore.deleteRole(roleToDelete.value.id); toast.success('Role deleted'); closeDeleteDialog() }
+  try { await rolesStore.deleteRole(roleToDelete.value.id); toast.success('Role deleted'); closeDeleteDialog(); await fetchRoles() }
   catch (e) { toast.error(getErrorMessage(e, 'Failed to delete role')) }
 }
 </script>
@@ -124,7 +151,7 @@ async function confirmDelete() {
               </div>
             </CardHeader>
             <CardContent>
-              <DataTable :items="filteredRoles" :columns="columns" :is-loading="isLoading" :empty-icon="Shield" :empty-title="searchQuery ? 'No matching roles' : 'No roles created yet'" :empty-description="searchQuery ? 'No roles match your search.' : 'Create your first role to get started.'" v-model:sort-key="sortKey" v-model:sort-direction="sortDirection">
+              <DataTable :items="roles" :columns="columns" :is-loading="isLoading" :empty-icon="Shield" :empty-title="searchQuery ? 'No matching roles' : 'No roles created yet'" :empty-description="searchQuery ? 'No roles match your search.' : 'Create your first role to get started.'" v-model:sort-key="sortKey" v-model:sort-direction="sortDirection" server-pagination :current-page="currentPage" :total-items="totalItems" :page-size="pageSize" item-name="roles" @page-change="handlePageChange">
                 <template #cell-role="{ item: role }">
                   <div class="flex items-center gap-2">
                     <span class="font-medium">{{ role.name }}</span>

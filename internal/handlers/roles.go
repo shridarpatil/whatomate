@@ -44,10 +44,22 @@ func (a *App) ListRoles(r *fastglue.Request) error {
 		return r.SendErrorEnvelope(fasthttp.StatusUnauthorized, "Unauthorized", nil, "")
 	}
 
+	pg := parsePagination(r)
+	search := string(r.RequestCtx.QueryArgs().Peek("search"))
+
+	baseQuery := a.ScopeToOrg(a.DB, userID, orgID)
+	if search != "" {
+		baseQuery = baseQuery.Where("name ILIKE ?", "%"+search+"%")
+	}
+
+	// Get total count
+	var total int64
+	baseQuery.Model(&models.CustomRole{}).Count(&total)
+
 	var roles []models.CustomRole
-	if err := a.ScopeToOrg(a.DB, userID, orgID).
+	if err := pg.Apply(baseQuery.
 		Preload("Permissions").
-		Order("is_system DESC, name ASC").
+		Order("is_system DESC, name ASC")).
 		Find(&roles).Error; err != nil {
 		a.Log.Error("Failed to list roles", "error", err)
 		return r.SendErrorEnvelope(fasthttp.StatusInternalServerError, "Failed to list roles", nil, "")
@@ -63,6 +75,9 @@ func (a *App) ListRoles(r *fastglue.Request) error {
 
 	return r.SendEnvelope(map[string]interface{}{
 		"roles": response,
+		"total": total,
+		"page":  pg.Page,
+		"limit": pg.Limit,
 	})
 }
 

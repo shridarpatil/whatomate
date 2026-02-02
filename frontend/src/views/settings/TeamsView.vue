@@ -20,10 +20,10 @@ import { type Team, type TeamMember } from '@/services/api'
 import { toast } from 'vue-sonner'
 import { Plus, Pencil, Trash2, Loader2, Users, UserPlus, UserMinus, RotateCcw, Scale, Hand } from 'lucide-vue-next'
 import { useCrudState } from '@/composables/useCrudState'
-import { useSearch } from '@/composables/useSearch'
 import { getErrorMessage } from '@/lib/api-utils'
 import { formatDate } from '@/lib/utils'
 import { ASSIGNMENT_STRATEGIES, getLabelFromValue } from '@/lib/constants'
+import { useDebounceFn } from '@vueuse/core'
 
 const teamsStore = useTeamsStore()
 const usersStore = useUsersStore()
@@ -44,7 +44,26 @@ const {
   formData, openCreateDialog, openEditDialog: baseOpenEditDialog, openDeleteDialog, closeDialog, closeDeleteDialog,
 } = useCrudState<Team, TeamFormData>(defaultFormData)
 
-const { searchQuery, filteredItems: filteredTeams } = useSearch(computed(() => teamsStore.teams), ['name', 'description'] as (keyof Team)[])
+const teams = ref<Team[]>([])
+const searchQuery = ref('')
+
+// Pagination state
+const currentPage = ref(1)
+const totalItems = ref(0)
+const pageSize = 20
+
+// Debounced search
+const debouncedSearch = useDebounceFn(() => {
+  currentPage.value = 1
+  fetchTeams()
+}, 300)
+
+watch(searchQuery, () => debouncedSearch())
+
+function handlePageChange(page: number) {
+  currentPage.value = page
+  fetchTeams()
+}
 
 // Members dialog state
 const isMembersDialogOpen = ref(false)
@@ -78,12 +97,19 @@ function openEditDialog(team: Team) {
 }
 
 watch(() => organizationsStore.selectedOrgId, () => { fetchTeams(); usersStore.fetchUsers() })
-onMounted(() => Promise.all([fetchTeams(), usersStore.fetchUsers()]))
+onMounted(() => { fetchTeams(); usersStore.fetchUsers() })
 
 async function fetchTeams() {
   isLoading.value = true
-  try { await teamsStore.fetchTeams() }
-  catch { toast.error('Failed to load teams') }
+  try {
+    const response = await teamsStore.fetchTeams({
+      search: searchQuery.value || undefined,
+      page: currentPage.value,
+      limit: pageSize
+    })
+    teams.value = response.teams
+    totalItems.value = response.total
+  } catch { toast.error('Failed to load teams') }
   finally { isLoading.value = false }
 }
 
@@ -99,13 +125,14 @@ async function saveTeam() {
       toast.success('Team created successfully')
     }
     closeDialog()
+    await fetchTeams()
   } catch (e) { toast.error(getErrorMessage(e, 'Failed to save team')) }
   finally { isSubmitting.value = false }
 }
 
 async function confirmDelete() {
   if (!teamToDelete.value) return
-  try { await teamsStore.deleteTeam(teamToDelete.value.id); toast.success('Team deleted'); closeDeleteDialog() }
+  try { await teamsStore.deleteTeam(teamToDelete.value.id); toast.success('Team deleted'); closeDeleteDialog(); await fetchTeams() }
   catch (e) { toast.error(getErrorMessage(e, 'Failed to delete team')) }
 }
 
@@ -162,7 +189,7 @@ function getStrategyIcon(strategy: string) { return { round_robin: RotateCcw, lo
               </div>
             </CardHeader>
             <CardContent>
-              <DataTable :items="filteredTeams" :columns="columns" :is-loading="isLoading" :empty-icon="Users" :empty-title="searchQuery ? 'No matching teams' : 'No teams created yet'" :empty-description="searchQuery ? 'No teams match your search.' : 'Create your first team to organize agents.'" v-model:sort-key="sortKey" v-model:sort-direction="sortDirection">
+              <DataTable :items="teams" :columns="columns" :is-loading="isLoading" :empty-icon="Users" :empty-title="searchQuery ? 'No matching teams' : 'No teams created yet'" :empty-description="searchQuery ? 'No teams match your search.' : 'Create your first team to organize agents.'" v-model:sort-key="sortKey" v-model:sort-direction="sortDirection" server-pagination :current-page="currentPage" :total-items="totalItems" :page-size="pageSize" item-name="teams" @page-change="handlePageChange">
                 <template #empty-action>
                   <Button v-if="isAdmin" variant="outline" size="sm" @click="openCreateDialog"><Plus class="h-4 w-4 mr-2" />Add Team</Button>
                 </template>

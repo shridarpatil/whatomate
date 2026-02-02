@@ -39,17 +39,37 @@ export interface UpdateUserData {
   is_super_admin?: boolean
 }
 
+export interface FetchUsersParams {
+  search?: string
+  page?: number
+  limit?: number
+}
+
+export interface FetchUsersResponse {
+  users: User[]
+  total: number
+  page: number
+  limit: number
+}
+
 export const useUsersStore = defineStore('users', () => {
   const users = ref<User[]>([])
   const loading = ref(false)
   const error = ref<string | null>(null)
 
-  async function fetchUsers(): Promise<void> {
+  async function fetchUsers(params?: FetchUsersParams): Promise<FetchUsersResponse> {
     loading.value = true
     error.value = null
     try {
-      const response = await usersService.list()
-      users.value = response.data.data.users || []
+      const response = await usersService.list(params)
+      const data = response.data.data || response.data
+      users.value = data.users || []
+      return {
+        users: data.users || [],
+        total: data.total ?? users.value.length,
+        page: data.page ?? 1,
+        limit: data.limit ?? 50
+      }
     } catch (err: any) {
       error.value = err.response?.data?.message || 'Failed to fetch users'
       throw err

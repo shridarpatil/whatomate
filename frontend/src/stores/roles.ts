@@ -17,6 +17,19 @@ export interface UpdateRoleData {
   permissions?: string[]
 }
 
+export interface FetchRolesParams {
+  search?: string
+  page?: number
+  limit?: number
+}
+
+export interface FetchRolesResponse {
+  roles: Role[]
+  total: number
+  page: number
+  limit: number
+}
+
 // Group permissions by resource for the UI
 export interface PermissionGroup {
   resource: string
@@ -50,12 +63,19 @@ export const useRolesStore = defineStore('roles', () => {
       .sort((a, b) => a.label.localeCompare(b.label))
   })
 
-  async function fetchRoles(): Promise<void> {
+  async function fetchRoles(params?: FetchRolesParams): Promise<FetchRolesResponse> {
     loading.value = true
     error.value = null
     try {
-      const response = await rolesService.list()
-      roles.value = (response.data as any).data?.roles || response.data?.roles || []
+      const response = await rolesService.list(params)
+      const data = (response.data as any).data || response.data
+      roles.value = data.roles || []
+      return {
+        roles: data.roles || [],
+        total: data.total ?? roles.value.length,
+        page: data.page ?? 1,
+        limit: data.limit ?? 50
+      }
     } catch (err: any) {
       error.value = err.response?.data?.message || 'Failed to fetch roles'
       throw err

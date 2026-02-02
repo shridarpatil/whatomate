@@ -90,7 +90,8 @@ export const authService = {
 }
 
 export const usersService = {
-  list: () => api.get('/users'),
+  list: (params?: { search?: string; page?: number; limit?: number }) =>
+    api.get('/users', { params }),
   get: (id: string) => api.get(`/users/${id}`),
   create: (data: { email: string; password: string; full_name: string; role_id?: string }) =>
     api.post('/users', data),
@@ -189,7 +190,8 @@ export const flowsService = {
 }
 
 export const campaignsService = {
-  list: (params?: { status?: string; from?: string; to?: string }) => api.get('/campaigns', { params }),
+  list: (params?: { status?: string; from?: string; to?: string; search?: string; page?: number; limit?: number }) =>
+    api.get('/campaigns', { params }),
   get: (id: string) => api.get(`/campaigns/${id}`),
   create: (data: any) => api.post('/campaigns', data),
   update: (id: string, data: any) => api.put(`/campaigns/${id}`, data),
@@ -627,7 +629,8 @@ export interface TeamMember {
 }
 
 export const teamsService = {
-  list: () => api.get<{ teams: Team[] }>('/teams'),
+  list: (params?: { search?: string; page?: number; limit?: number }) =>
+    api.get<{ teams: Team[] }>('/teams', { params }),
   get: (id: string) => api.get<{ team: Team }>(`/teams/${id}`),
   create: (data: {
     name: string
@@ -750,7 +753,8 @@ export interface Role {
 }
 
 export const rolesService = {
-  list: () => api.get<{ roles: Role[] }>('/roles'),
+  list: (params?: { search?: string; page?: number; limit?: number }) =>
+    api.get<{ roles: Role[] }>('/roles', { params }),
   get: (id: string) => api.get<Role>(`/roles/${id}`),
   create: (data: { name: string; description?: string; is_default?: boolean; permissions: string[] }) =>
     api.post<Role>('/roles', data),

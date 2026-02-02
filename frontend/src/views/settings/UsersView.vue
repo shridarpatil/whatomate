@@ -9,7 +9,7 @@ import { Badge } from '@/components/ui/badge'
 import { Switch } from '@/components/ui/switch'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
-import { PageHeader, SearchInput, DataTable, PaginationControls, CrudFormDialog, DeleteConfirmDialog, type Column } from '@/components/shared'
+import { PageHeader, SearchInput, DataTable, CrudFormDialog, DeleteConfirmDialog, type Column } from '@/components/shared'
 import { useUsersStore, type User } from '@/stores/users'
 import { useAuthStore } from '@/stores/auth'
 import { useRolesStore } from '@/stores/roles'
@@ -17,11 +17,10 @@ import { useOrganizationsStore } from '@/stores/organizations'
 import { toast } from 'vue-sonner'
 import { Plus, Pencil, Trash2, User as UserIcon, Shield, ShieldCheck, UserCog, Users } from 'lucide-vue-next'
 import { useCrudState } from '@/composables/useCrudState'
-import { useDeepSearch } from '@/composables/useSearch'
-import { usePagination } from '@/composables/usePagination'
 import { getErrorMessage } from '@/lib/api-utils'
 import { formatDate } from '@/lib/utils'
 import { ROLE_BADGE_VARIANTS } from '@/lib/constants'
+import { useDebounceFn } from '@vueuse/core'
 
 const usersStore = useUsersStore()
 const authStore = useAuthStore()
@@ -44,10 +43,26 @@ const {
   formData, openCreateDialog: baseOpenCreateDialog, openEditDialog: baseOpenEditDialog, openDeleteDialog, closeDialog, closeDeleteDialog,
 } = useCrudState<User, UserFormData>(defaultFormData)
 
-const { searchQuery, filteredItems: filteredUsers } = useDeepSearch(computed(() => usersStore.users), ['full_name', 'email', 'role.name'])
-const { currentPage, paginatedItems: paginatedUsers, totalPages, pageSize, needsPagination } = usePagination(filteredUsers, { pageSize: 20 })
+const users = ref<User[]>([])
+const searchQuery = ref('')
 
-watch(searchQuery, () => { currentPage.value = 1 })
+// Pagination state
+const currentPage = ref(1)
+const totalItems = ref(0)
+const pageSize = 20
+
+// Debounced search
+const debouncedSearch = useDebounceFn(() => {
+  currentPage.value = 1
+  fetchUsers()
+}, 300)
+
+watch(searchQuery, () => debouncedSearch())
+
+function handlePageChange(page: number) {
+  currentPage.value = page
+  fetchUsers()
+}
 
 const columns: Column<User>[] = [
   { key: 'user', label: 'User', width: 'w-[300px]', sortable: true, sortKey: 'full_name' },
@@ -71,13 +86,20 @@ function openEditDialog(user: User) {
   baseOpenEditDialog(user, (u) => ({ email: u.email, password: '', full_name: u.full_name, role_id: u.role_id || '', is_active: u.is_active, is_super_admin: u.is_super_admin || false }))
 }
 
-watch(() => organizationsStore.selectedOrgId, () => fetchData())
-onMounted(() => fetchData())
+watch(() => organizationsStore.selectedOrgId, () => { fetchUsers(); rolesStore.fetchRoles() })
+onMounted(() => { fetchUsers(); rolesStore.fetchRoles() })
 
-async function fetchData() {
+async function fetchUsers() {
   isLoading.value = true
-  try { await Promise.all([usersStore.fetchUsers(), rolesStore.fetchRoles()]) }
-  catch { toast.error('Failed to load data') }
+  try {
+    const response = await usersStore.fetchUsers({
+      search: searchQuery.value || undefined,
+      page: currentPage.value,
+      limit: pageSize
+    })
+    users.value = response.users
+    totalItems.value = response.total
+  } catch { toast.error('Failed to load users') }
   finally { isLoading.value = false }
 }
 
@@ -102,13 +124,14 @@ async function saveUser() {
       toast.success('User created')
     }
     closeDialog()
+    await fetchUsers()
   } catch (e) { toast.error(getErrorMessage(e, 'Failed to save user')) }
   finally { isSubmitting.value = false }
 }
 
 async function confirmDelete() {
   if (!userToDelete.value) return
-  try { await usersStore.deleteUser(userToDelete.value.id); toast.success('User deleted'); closeDeleteDialog() }
+  try { await usersStore.deleteUser(userToDelete.value.id); toast.success('User deleted'); closeDeleteDialog(); await fetchUsers() }
   catch (e) { toast.error(getErrorMessage(e, 'Failed to delete user')) }
 }
 
@@ -139,7 +162,7 @@ function getRoleName(user: User) { return user.role?.name || 'No role' }
               </div>
             </CardHeader>
             <CardContent>
-              <DataTable :items="paginatedUsers" :columns="columns" :is-loading="isLoading" :empty-icon="UserIcon" :empty-title="searchQuery ? 'No matching users' : 'No users found'" :empty-description="searchQuery ? 'No users match your search.' : 'Add your first user to get started.'" v-model:sort-key="sortKey" v-model:sort-direction="sortDirection">
+              <DataTable :items="users" :columns="columns" :is-loading="isLoading" :empty-icon="UserIcon" :empty-title="searchQuery ? 'No matching users' : 'No users found'" :empty-description="searchQuery ? 'No users match your search.' : 'Add your first user to get started.'" v-model:sort-key="sortKey" v-model:sort-direction="sortDirection" server-pagination :current-page="currentPage" :total-items="totalItems" :page-size="pageSize" item-name="users" @page-change="handlePageChange">
                 <template #cell-user="{ item: user }">
                   <div class="flex items-center gap-3">
                     <div class="h-9 w-9 rounded-full bg-primary/10 flex items-center justify-center flex-shrink-0">
@@ -176,8 +199,6 @@ function getRoleName(user: User) { return user.role?.name || 'No role' }
               </DataTable>
             </CardContent>
           </Card>
-
-          <PaginationControls v-if="needsPagination" v-model:current-page="currentPage" :total-pages="totalPages" :total-items="filteredUsers.length" :page-size="pageSize" item-name="users" />
         </div>
       </div>
     </ScrollArea>

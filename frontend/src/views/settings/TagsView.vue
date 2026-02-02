@@ -36,7 +36,7 @@ const searchQuery = ref('')
 // Pagination state
 const currentPage = ref(1)
 const totalItems = ref(0)
-const pageSize = 10
+const pageSize = 20
 
 // Sorting state
 const sortKey = ref('name')

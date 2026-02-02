@@ -74,6 +74,7 @@ import {
   MessageSquare
 } from 'lucide-vue-next'
 import { formatDate } from '@/lib/utils'
+import { useDebounceFn } from '@vueuse/core'
 
 interface Campaign {
   id: string
@@ -160,14 +161,15 @@ const sortKey = ref('created_at')
 const sortDirection = ref<'asc' | 'desc'>('desc')
 const searchQuery = ref('')
 
-const filteredCampaigns = computed(() => {
-  if (!searchQuery.value) return campaigns.value
-  const query = searchQuery.value.toLowerCase()
-  return campaigns.value.filter(c =>
-    c.name.toLowerCase().includes(query) ||
-    c.template_name?.toLowerCase().includes(query)
-  )
-})
+// Pagination state
+const currentPage = ref(1)
+const totalItems = ref(0)
+const pageSize = 20
+
+function handlePageChange(page: number) {
+  currentPage.value = page
+  fetchCampaigns()
+}
 
 // Filter state
 const filterStatus = ref<string>('all')
@@ -464,16 +466,27 @@ async function fetchCampaigns() {
   isLoading.value = true
   try {
     const { from, to } = getDateRange.value
-    const params: Record<string, string> = { from, to }
+    const params: Record<string, string | number> = {
+      from,
+      to,
+      page: currentPage.value,
+      limit: pageSize
+    }
     if (filterStatus.value && filterStatus.value !== 'all') {
       params.status = filterStatus.value
     }
+    if (searchQuery.value) {
+      params.search = searchQuery.value
+    }
     const response = await campaignsService.list(params)
-    // API returns: { status: "success", data: { campaigns: [...] } }
-    campaigns.value = response.data.data?.campaigns || []
+    // API returns: { status: "success", data: { campaigns: [...], total: N } }
+    const data = response.data.data || response.data
+    campaigns.value = data.campaigns || []
+    totalItems.value = data.total ?? campaigns.value.length
   } catch (error) {
     console.error('Failed to fetch campaigns:', error)
     campaigns.value = []
+    totalItems.value = 0
   } finally {
     isLoading.value = false
   }
@@ -486,8 +499,17 @@ function applyCustomRange() {
   }
 }
 
+// Debounced search
+const debouncedSearch = useDebounceFn(() => {
+  currentPage.value = 1
+  fetchCampaigns()
+}, 300)
+
+watch(searchQuery, () => debouncedSearch())
+
 // Watch for filter changes
 watch([filterStatus, selectedRange], () => {
+  currentPage.value = 1
   if (selectedRange.value !== 'custom') {
     fetchCampaigns()
   }
@@ -1341,7 +1363,7 @@ async function addRecipientsFromCSV() {
             </CardHeader>
             <CardContent>
               <DataTable
-                :items="filteredCampaigns"
+                :items="campaigns"
                 :columns="columns"
                 :is-loading="isLoading"
                 :empty-icon="Megaphone"
@@ -1349,6 +1371,12 @@ async function addRecipientsFromCSV() {
                 :empty-description="searchQuery ? 'Try a different search term.' : 'Create your first bulk messaging campaign.'"
                 v-model:sort-key="sortKey"
                 v-model:sort-direction="sortDirection"
+                server-pagination
+                :current-page="currentPage"
+                :total-items="totalItems"
+                :page-size="pageSize"
+                item-name="campaigns"
+                @page-change="handlePageChange"
               >
                 <template #cell-name="{ item: campaign }">
                   <div>

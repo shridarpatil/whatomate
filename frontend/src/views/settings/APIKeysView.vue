@@ -53,7 +53,7 @@ const newlyCreatedKey = ref<NewAPIKeyResponse | null>(null)
 // Pagination state
 const currentPage = ref(1)
 const totalItems = ref(0)
-const pageSize = 10
+const pageSize = 20
 
 const columns: Column<APIKey>[] = [
   { key: 'name', label: 'Name', sortable: true },

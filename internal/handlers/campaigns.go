@@ -63,29 +63,41 @@ func (a *App) ListCampaigns(r *fastglue.Request) error {
 		return r.SendErrorEnvelope(fasthttp.StatusUnauthorized, "Unauthorized", nil, "")
 	}
 
+	pg := parsePagination(r)
+
 	// Get query params
 	status := string(r.RequestCtx.QueryArgs().Peek("status"))
 	whatsappAccount := string(r.RequestCtx.QueryArgs().Peek("whatsapp_account"))
+	search := string(r.RequestCtx.QueryArgs().Peek("search"))
 
-	var campaigns []models.BulkMessageCampaign
-	query := a.DB.Where("organization_id = ?", orgID).
-		Preload("Template").
-		Order("created_at DESC")
+	baseQuery := a.DB.Where("organization_id = ?", orgID)
+
+	if search != "" {
+		baseQuery = baseQuery.Where("name ILIKE ?", "%"+search+"%")
+	}
 
 	if status != "" {
-		query = query.Where("status = ?", status)
+		baseQuery = baseQuery.Where("status = ?", status)
 	}
 	if whatsappAccount != "" {
-		query = query.Where("whats_app_account = ?", whatsappAccount)
+		baseQuery = baseQuery.Where("whats_app_account = ?", whatsappAccount)
 	}
 	if from, ok := parseDateParam(r, "from"); ok {
-		query = query.Where("created_at >= ?", from)
+		baseQuery = baseQuery.Where("created_at >= ?", from)
 	}
 	if to, ok := parseDateParam(r, "to"); ok {
-		query = query.Where("created_at <= ?", endOfDay(to))
+		baseQuery = baseQuery.Where("created_at <= ?", endOfDay(to))
 	}
 
-	if err := query.Find(&campaigns).Error; err != nil {
+	// Get total count
+	var total int64
+	baseQuery.Model(&models.BulkMessageCampaign{}).Count(&total)
+
+	var campaigns []models.BulkMessageCampaign
+	if err := pg.Apply(baseQuery.
+		Preload("Template").
+		Order("created_at DESC")).
+		Find(&campaigns).Error; err != nil {
 		a.Log.Error("Failed to list campaigns", "error", err)
 		return r.SendErrorEnvelope(fasthttp.StatusInternalServerError, "Failed to list campaigns", nil, "")
 	}
@@ -120,7 +132,9 @@ func (a *App) ListCampaigns(r *fastglue.Request) error {
 
 	return r.SendEnvelope(map[string]interface{}{
 		"campaigns": response,
-		"total":     len(response),
+		"total":     total,
+		"page":      pg.Page,
+		"limit":     pg.Limit,
 	})
 }
 

@@ -54,21 +54,34 @@ func (a *App) ListTeams(r *fastglue.Request) error {
 		return r.SendErrorEnvelope(fasthttp.StatusUnauthorized, "Unauthorized", nil, "")
 	}
 
+	pg := parsePagination(r)
+	search := string(r.RequestCtx.QueryArgs().Peek("search"))
 	var teams []models.Team
+	var total int64
 
 	// Users with teams:read permission can see all teams, others see only their teams
 	if a.HasPermission(userID, models.ResourceTeams, models.ActionRead) {
-		if err := a.ScopeToOrg(a.DB, userID, orgID).
+		baseQuery := a.ScopeToOrg(a.DB, userID, orgID)
+		if search != "" {
+			baseQuery = baseQuery.Where("name ILIKE ?", "%"+search+"%")
+		}
+		baseQuery.Model(&models.Team{}).Count(&total)
+		if err := pg.Apply(baseQuery.
 			Preload("Members").Preload("Members.User").
-			Order("name ASC").Find(&teams).Error; err != nil {
+			Order("name ASC")).Find(&teams).Error; err != nil {
 			return r.SendErrorEnvelope(fasthttp.StatusInternalServerError, "Failed to list teams", nil, "")
 		}
 	} else {
 		// Users only see teams they belong to
-		query := a.ScopeToOrg(a.DB.Joins("JOIN team_members ON team_members.team_id = teams.id"), userID, orgID)
-		if err := query.Where("team_members.user_id = ?", userID).
+		baseQuery := a.ScopeToOrg(a.DB.Joins("JOIN team_members ON team_members.team_id = teams.id"), userID, orgID).
+			Where("team_members.user_id = ?", userID)
+		if search != "" {
+			baseQuery = baseQuery.Where("teams.name ILIKE ?", "%"+search+"%")
+		}
+		baseQuery.Model(&models.Team{}).Count(&total)
+		if err := pg.Apply(baseQuery.
 			Preload("Members").Preload("Members.User").
-			Order("teams.name ASC").Find(&teams).Error; err != nil {
+			Order("teams.name ASC")).Find(&teams).Error; err != nil {
 			return r.SendErrorEnvelope(fasthttp.StatusInternalServerError, "Failed to list teams", nil, "")
 		}
 	}
@@ -79,7 +92,12 @@ func (a *App) ListTeams(r *fastglue.Request) error {
 		response[i] = buildTeamResponse(&t, false)
 	}
 
-	return r.SendEnvelope(map[string]interface{}{"teams": response})
+	return r.SendEnvelope(map[string]interface{}{
+		"teams": response,
+		"total": total,
+		"page":  pg.Page,
+		"limit": pg.Limit,
+	})
 }
 
 // GetTeam returns a single team with members

@@ -15,17 +15,37 @@ export interface UpdateTeamData {
   is_active?: boolean
 }
 
+export interface FetchTeamsParams {
+  search?: string
+  page?: number
+  limit?: number
+}
+
+export interface FetchTeamsResponse {
+  teams: Team[]
+  total: number
+  page: number
+  limit: number
+}
+
 export const useTeamsStore = defineStore('teams', () => {
   const teams = ref<Team[]>([])
   const loading = ref(false)
   const error = ref<string | null>(null)
 
-  async function fetchTeams(): Promise<void> {
+  async function fetchTeams(params?: FetchTeamsParams): Promise<FetchTeamsResponse> {
     loading.value = true
     error.value = null
     try {
-      const response = await teamsService.list()
-      teams.value = (response.data as any).data?.teams || response.data?.teams || []
+      const response = await teamsService.list(params)
+      const data = (response.data as any).data || response.data
+      teams.value = data.teams || []
+      return {
+        teams: data.teams || [],
+        total: data.total ?? teams.value.length,
+        page: data.page ?? 1,
+        limit: data.limit ?? 50
+      }
     } catch (err: any) {
       error.value = err.response?.data?.message || 'Failed to fetch teams'
       throw err
