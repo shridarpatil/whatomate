@@ -54,6 +54,8 @@ func (a *App) ListTemplates(r *fastglue.Request) error {
 		return r.SendErrorEnvelope(fasthttp.StatusUnauthorized, "Unauthorized", nil, "")
 	}
 
+	pg := parsePagination(r)
+
 	// Optional filters
 	accountName := string(r.RequestCtx.QueryArgs().Peek("account")) // Filter by account name
 	status := string(r.RequestCtx.QueryArgs().Peek("status"))
@@ -71,8 +73,12 @@ func (a *App) ListTemplates(r *fastglue.Request) error {
 		query = query.Where("category = ?", category)
 	}
 
+	var total int64
+	query.Model(&models.Template{}).Count(&total)
+
 	var templates []models.Template
-	if err := query.Order("created_at DESC").Find(&templates).Error; err != nil {
+	if err := pg.Apply(query.Order("created_at DESC")).
+		Find(&templates).Error; err != nil {
 		a.Log.Error("Failed to list templates", "error", err)
 		return r.SendErrorEnvelope(fasthttp.StatusInternalServerError, "Failed to list templates", nil, "")
 	}
@@ -82,8 +88,11 @@ func (a *App) ListTemplates(r *fastglue.Request) error {
 		response[i] = templateToResponse(t)
 	}
 
-	return r.SendEnvelope(map[string]interface{}{
+	return r.SendEnvelope(map[string]any{
 		"templates": response,
+		"total":     total,
+		"page":      pg.Page,
+		"limit":     pg.Limit,
 	})
 }
 

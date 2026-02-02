@@ -37,6 +37,8 @@ func (a *App) ListCannedResponses(r *fastglue.Request) error {
 		return r.SendErrorEnvelope(fasthttp.StatusUnauthorized, "Unauthorized", nil, "")
 	}
 
+	pg := parsePagination(r)
+
 	// Optional filters
 	category := string(r.RequestCtx.QueryArgs().Peek("category"))
 	search := string(r.RequestCtx.QueryArgs().Peek("search"))
@@ -58,8 +60,12 @@ func (a *App) ListCannedResponses(r *fastglue.Request) error {
 			searchPattern, searchPattern, searchPattern)
 	}
 
+	var total int64
+	query.Model(&models.CannedResponse{}).Count(&total)
+
 	var responses []models.CannedResponse
-	if err := query.Order("usage_count DESC, name ASC").Find(&responses).Error; err != nil {
+	if err := pg.Apply(query.Order("usage_count DESC, name ASC")).
+		Find(&responses).Error; err != nil {
 		a.Log.Error("Failed to list canned responses", "error", err)
 		return r.SendErrorEnvelope(fasthttp.StatusInternalServerError,
 			"Failed to list canned responses", nil, "")
@@ -70,8 +76,11 @@ func (a *App) ListCannedResponses(r *fastglue.Request) error {
 		result[i] = cannedResponseToResponse(cr)
 	}
 
-	return r.SendEnvelope(map[string]interface{}{
+	return r.SendEnvelope(map[string]any{
 		"canned_responses": result,
+		"total":            total,
+		"page":             pg.Page,
+		"limit":            pg.Limit,
 	})
 }
 

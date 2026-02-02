@@ -33,19 +33,36 @@ func (a *App) ListTags(r *fastglue.Request) error {
 		return nil
 	}
 
+	pg := parsePagination(r)
+
 	tags, err := a.getTagsCached(orgID)
 	if err != nil {
 		a.Log.Error("Failed to list tags", "error", err)
 		return r.SendErrorEnvelope(fasthttp.StatusInternalServerError, "Failed to list tags", nil, "")
 	}
 
-	result := make([]TagResponse, len(tags))
-	for i, tag := range tags {
-		result[i] = tagToResponse(tag)
+	total := len(tags)
+
+	// Apply pagination
+	start := pg.Offset
+	end := pg.Offset + pg.Limit
+	if start > total {
+		start = total
+	}
+	if end > total {
+		end = total
+	}
+
+	result := make([]TagResponse, 0, end-start)
+	for i := start; i < end; i++ {
+		result = append(result, tagToResponse(tags[i]))
 	}
 
 	return r.SendEnvelope(map[string]any{
-		"tags": result,
+		"tags":  result,
+		"total": total,
+		"page":  pg.Page,
+		"limit": pg.Limit,
 	})
 }
 

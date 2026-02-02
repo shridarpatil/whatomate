@@ -34,6 +34,11 @@ type Pagination struct {
 	Offset int
 }
 
+// Apply adds Offset and Limit to a GORM query.
+func (pg Pagination) Apply(query *gorm.DB) *gorm.DB {
+	return query.Offset(pg.Offset).Limit(pg.Limit)
+}
+
 // parsePagination extracts page-based pagination from query params with
 // default limit=50 and max limit=100.
 func parsePagination(r *fastglue.Request) Pagination {
@@ -57,6 +62,7 @@ func parsePaginationWithDefaults(r *fastglue.Request, defaultLimit, maxLimit int
 		Offset: (page - 1) * limit,
 	}
 }
+
 
 // parseDateParam parses a YYYY-MM-DD date from the named query parameter.
 // Returns the parsed time and true on success, or zero time and false if the

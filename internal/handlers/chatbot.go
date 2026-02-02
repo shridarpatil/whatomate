@@ -415,9 +415,14 @@ func (a *App) ListKeywordRules(r *fastglue.Request) error {
 		return r.SendErrorEnvelope(fasthttp.StatusUnauthorized, "Unauthorized", nil, "")
 	}
 
+	pg := parsePagination(r)
+
+	var total int64
+	a.DB.Model(&models.KeywordRule{}).Where("organization_id = ?", orgID).Count(&total)
+
 	var rules []models.KeywordRule
-	if err := a.DB.Where("organization_id = ?", orgID).
-		Order("priority DESC, created_at DESC").
+	if err := pg.Apply(a.DB.Where("organization_id = ?", orgID).
+		Order("priority DESC, created_at DESC")).
 		Find(&rules).Error; err != nil {
 		return r.SendErrorEnvelope(fasthttp.StatusInternalServerError, "Failed to fetch keyword rules", nil, "")
 	}
@@ -438,8 +443,11 @@ func (a *App) ListKeywordRules(r *fastglue.Request) error {
 		}
 	}
 
-	return r.SendEnvelope(map[string]interface{}{
+	return r.SendEnvelope(map[string]any{
 		"rules": response,
+		"total": total,
+		"page":  pg.Page,
+		"limit": pg.Limit,
 	})
 }
 
@@ -642,10 +650,15 @@ func (a *App) ListChatbotFlows(r *fastglue.Request) error {
 		return r.SendErrorEnvelope(fasthttp.StatusForbidden, "Permission denied", nil, "")
 	}
 
+	pg := parsePagination(r)
+
+	var total int64
+	a.DB.Model(&models.ChatbotFlow{}).Where("organization_id = ?", orgID).Count(&total)
+
 	var flows []models.ChatbotFlow
-	if err := a.DB.Where("organization_id = ?", orgID).
+	if err := pg.Apply(a.DB.Where("organization_id = ?", orgID).
 		Preload("Steps").
-		Order("created_at DESC").
+		Order("created_at DESC")).
 		Find(&flows).Error; err != nil {
 		return r.SendErrorEnvelope(fasthttp.StatusInternalServerError, "Failed to fetch flows", nil, "")
 	}
@@ -663,8 +676,11 @@ func (a *App) ListChatbotFlows(r *fastglue.Request) error {
 		}
 	}
 
-	return r.SendEnvelope(map[string]interface{}{
+	return r.SendEnvelope(map[string]any{
 		"flows": response,
+		"total": total,
+		"page":  pg.Page,
+		"limit": pg.Limit,
 	})
 }
 
@@ -1010,9 +1026,14 @@ func (a *App) ListAIContexts(r *fastglue.Request) error {
 		return r.SendErrorEnvelope(fasthttp.StatusUnauthorized, "Unauthorized", nil, "")
 	}
 
+	pg := parsePagination(r)
+
+	var total int64
+	a.DB.Model(&models.AIContext{}).Where("organization_id = ?", orgID).Count(&total)
+
 	var contexts []models.AIContext
-	if err := a.DB.Where("organization_id = ?", orgID).
-		Order("priority DESC, created_at DESC").
+	if err := pg.Apply(a.DB.Where("organization_id = ?", orgID).
+		Order("priority DESC, created_at DESC")).
 		Find(&contexts).Error; err != nil {
 		return r.SendErrorEnvelope(fasthttp.StatusInternalServerError, "Failed to fetch AI contexts", nil, "")
 	}
@@ -1031,8 +1052,11 @@ func (a *App) ListAIContexts(r *fastglue.Request) error {
 		}
 	}
 
-	return r.SendEnvelope(map[string]interface{}{
+	return r.SendEnvelope(map[string]any{
 		"contexts": response,
+		"total":    total,
+		"page":     pg.Page,
+		"limit":    pg.Limit,
 	})
 }
 

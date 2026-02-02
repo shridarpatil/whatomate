@@ -80,8 +80,15 @@ func (a *App) ListCustomActions(r *fastglue.Request) error {
 		return r.SendErrorEnvelope(fasthttp.StatusUnauthorized, "Unauthorized", nil, "")
 	}
 
+	pg := parsePagination(r)
+
+	var total int64
+	a.DB.Model(&models.CustomAction{}).Where("organization_id = ?", orgID).Count(&total)
+
 	var actions []models.CustomAction
-	if err := a.DB.Where("organization_id = ?", orgID).Order("display_order ASC, created_at DESC").Find(&actions).Error; err != nil {
+	if err := pg.Apply(a.DB.Where("organization_id = ?", orgID).
+		Order("display_order ASC, created_at DESC")).
+		Find(&actions).Error; err != nil {
 		a.Log.Error("Failed to list custom actions", "error", err)
 		return r.SendErrorEnvelope(fasthttp.StatusInternalServerError, "Failed to list custom actions", nil, "")
 	}
@@ -91,8 +98,11 @@ func (a *App) ListCustomActions(r *fastglue.Request) error {
 		result[i] = customActionToResponse(action)
 	}
 
-	return r.SendEnvelope(map[string]interface{}{
+	return r.SendEnvelope(map[string]any{
 		"custom_actions": result,
+		"total":          total,
+		"page":           pg.Page,
+		"limit":          pg.Limit,
 	})
 }
 

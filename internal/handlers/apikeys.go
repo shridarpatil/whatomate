@@ -59,13 +59,19 @@ func (a *App) ListAPIKeys(r *fastglue.Request) error {
 		return nil
 	}
 
+	pg := parsePagination(r)
+
+	var total int64
+	a.DB.Model(&models.APIKey{}).Where("organization_id = ?", orgID).Count(&total)
+
 	var apiKeys []models.APIKey
-	if err := a.DB.Where("organization_id = ?", orgID).Order("created_at DESC").Find(&apiKeys).Error; err != nil {
+	if err := pg.Apply(a.DB.Where("organization_id = ?", orgID).
+		Order("created_at DESC")).
+		Find(&apiKeys).Error; err != nil {
 		a.Log.Error("Failed to list API keys", "error", err)
 		return r.SendErrorEnvelope(fasthttp.StatusInternalServerError, "Failed to list API keys", nil, "")
 	}
 
-	// Convert to response format
 	response := make([]APIKeyResponse, len(apiKeys))
 	for i, key := range apiKeys {
 		response[i] = APIKeyResponse{
@@ -79,7 +85,12 @@ func (a *App) ListAPIKeys(r *fastglue.Request) error {
 		}
 	}
 
-	return r.SendEnvelope(response)
+	return r.SendEnvelope(map[string]any{
+		"api_keys": response,
+		"total":    total,
+		"page":     pg.Page,
+		"limit":    pg.Limit,
+	})
 }
 
 // CreateAPIKey creates a new API key

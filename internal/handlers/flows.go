@@ -46,6 +46,8 @@ func (a *App) ListFlows(r *fastglue.Request) error {
 		return r.SendErrorEnvelope(fasthttp.StatusUnauthorized, "Unauthorized", nil, "")
 	}
 
+	pg := parsePagination(r)
+
 	// Optional filters
 	accountName := string(r.RequestCtx.QueryArgs().Peek("account"))
 	status := string(r.RequestCtx.QueryArgs().Peek("status"))
@@ -59,8 +61,12 @@ func (a *App) ListFlows(r *fastglue.Request) error {
 		query = query.Where("status = ?", status)
 	}
 
+	var total int64
+	query.Model(&models.WhatsAppFlow{}).Count(&total)
+
 	var flows []models.WhatsAppFlow
-	if err := query.Order("created_at DESC").Find(&flows).Error; err != nil {
+	if err := pg.Apply(query.Order("created_at DESC")).
+		Find(&flows).Error; err != nil {
 		a.Log.Error("Failed to list flows", "error", err)
 		return r.SendErrorEnvelope(fasthttp.StatusInternalServerError, "Failed to list flows", nil, "")
 	}
@@ -70,8 +76,11 @@ func (a *App) ListFlows(r *fastglue.Request) error {
 		response[i] = flowToResponse(f)
 	}
 
-	return r.SendEnvelope(map[string]interface{}{
+	return r.SendEnvelope(map[string]any{
 		"flows": response,
+		"total": total,
+		"page":  pg.Page,
+		"limit": pg.Limit,
 	})
 }
 
