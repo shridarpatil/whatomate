@@ -134,23 +134,9 @@ const totalPages = computed(() => {
 
 const needsPagination = computed(() => props.serverPagination && totalPages.value > 1)
 
-// Display items with client-side slicing fallback
-// If server pagination is enabled but server returns all items (more than pageSize),
-// we do client-side slicing as a fallback until backend supports pagination
+// Display items - relies on server to handle pagination when serverPagination is enabled
 const displayItems = computed(() => {
-  if (!props.serverPagination) {
-    return sortedItems.value
-  }
-
-  // If server returned exactly pageSize or fewer items, assume server did the pagination
-  if (sortedItems.value.length <= props.pageSize) {
-    return sortedItems.value
-  }
-
-  // Fallback: server returned all items, do client-side slicing
-  const start = (props.currentPage - 1) * props.pageSize
-  const end = start + props.pageSize
-  return sortedItems.value.slice(start, end)
+  return sortedItems.value
 })
 
 function handlePageChange(page: number) {
