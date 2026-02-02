@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
+import { useI18n } from 'vue-i18n'
 import { useAuthStore } from '@/stores/auth'
 import { api } from '@/services/api'
 import { Button } from '@/components/ui/button'
@@ -9,6 +10,8 @@ import { Label } from '@/components/ui/label'
 import { Separator } from '@/components/ui/separator'
 import { toast } from 'vue-sonner'
 import { MessageSquare, Loader2 } from 'lucide-vue-next'
+
+const { t } = useI18n()
 
 interface SSOProvider {
   provider: string
@@ -62,7 +65,7 @@ onMounted(async () => {
 
 const handleLogin = async () => {
   if (!email.value || !password.value) {
-    toast.error('Please enter email and password')
+    toast.error(t('auth.enterEmailPassword'))
     return
   }
 
@@ -70,12 +73,12 @@ const handleLogin = async () => {
 
   try {
     await authStore.login(email.value, password.value)
-    toast.success('Login successful')
+    toast.success(t('auth.loginSuccess'))
 
     const redirect = route.query.redirect as string
     router.push(redirect || '/')
   } catch (error: any) {
-    const message = error.response?.data?.message || 'Invalid credentials'
+    const message = error.response?.data?.message || t('auth.invalidCredentials')
     toast.error(message)
   } finally {
     isLoading.value = false
@@ -97,39 +100,39 @@ const initiateSSO = (provider: string) => {
             <MessageSquare class="h-7 w-7 text-white" />
           </div>
         </div>
-        <h2 class="text-2xl font-bold text-white light:text-gray-900">Welcome to Whatomate</h2>
+        <h2 class="text-2xl font-bold text-white light:text-gray-900">{{ $t('auth.welcomeTitle') }}</h2>
         <p class="text-white/50 light:text-gray-500">
-          Enter your credentials to access your account
+          {{ $t('auth.welcomeSubtitle') }}
         </p>
       </div>
 
       <form @submit.prevent="handleLogin">
         <div class="px-8 pb-4 space-y-4">
           <div class="space-y-2">
-            <Label for="email" class="text-white/70 light:text-gray-700">Email</Label>
+            <Label for="email" class="text-white/70 light:text-gray-700">{{ $t('common.email') }}</Label>
             <Input
               id="email"
               v-model="email"
               type="email"
-              placeholder="name@example.com"
+              :placeholder="$t('auth.emailPlaceholder')"
               :disabled="isLoading"
               autocomplete="email"
             />
           </div>
           <div class="space-y-2">
-            <Label for="password" class="text-white/70 light:text-gray-700">Password</Label>
+            <Label for="password" class="text-white/70 light:text-gray-700">{{ $t('auth.password') }}</Label>
             <Input
               id="password"
               v-model="password"
               type="password"
-              placeholder="Enter your password"
+              :placeholder="$t('auth.passwordPlaceholder')"
               :disabled="isLoading"
               autocomplete="current-password"
             />
           </div>
           <Button type="submit" class="w-full bg-gradient-to-r from-emerald-500 to-green-600 hover:from-emerald-600 hover:to-green-700 text-white shadow-lg shadow-emerald-500/20" :disabled="isLoading">
             <Loader2 v-if="isLoading" class="mr-2 h-4 w-4 animate-spin" />
-            Sign in
+            {{ $t('auth.signIn') }}
           </Button>
         </div>
       </form>
@@ -139,7 +142,7 @@ const initiateSSO = (provider: string) => {
         <div class="relative my-2">
           <Separator class="bg-white/[0.08] light:bg-gray-200" />
           <span class="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 bg-[#0a0a0b] light:bg-white px-2 text-xs text-white/40 light:text-gray-500">
-            or continue with
+            {{ $t('auth.orContinueWith') }}
           </span>
         </div>
 
@@ -160,9 +163,9 @@ const initiateSSO = (provider: string) => {
 
       <div class="px-8 pb-8">
         <p class="text-sm text-center text-white/40 light:text-gray-500">
-          Don't have an account?
+          {{ $t('auth.noAccount') }}
           <RouterLink to="/register" class="text-emerald-400 light:text-emerald-600 hover:underline">
-            Sign up
+            {{ $t('auth.signUp') }}
           </RouterLink>
         </p>
       </div>
