@@ -44,7 +44,7 @@ export type SupportedLocale = string
 const messages: Record<string, MessageSchema> = {}
 for (const path in localeModules) {
   const code = path.replace('./locales/', '').replace('.json', '')
-  messages[code] = (localeModules[path] as any).default
+  messages[code] = localeModules[path].default
 }
 
 // Get saved locale or detect from browser
