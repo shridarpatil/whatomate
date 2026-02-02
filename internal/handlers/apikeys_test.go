@@ -70,15 +70,21 @@ func TestApp_ListAPIKeys(t *testing.T) {
 		assert.Equal(t, fasthttp.StatusOK, testutil.GetResponseStatusCode(req))
 
 		var resp struct {
-			Data []handlers.APIKeyResponse `json:"data"`
+			Data struct {
+				APIKeys []handlers.APIKeyResponse `json:"api_keys"`
+				Total   int                       `json:"total"`
+				Page    int                       `json:"page"`
+				Limit   int                       `json:"limit"`
+			} `json:"data"`
 		}
 		err = json.Unmarshal(testutil.GetResponseBody(req), &resp)
 		require.NoError(t, err)
-		assert.Len(t, resp.Data, 2)
+		assert.Len(t, resp.Data.APIKeys, 2)
+		assert.Equal(t, 2, resp.Data.Total)
 
 		// Verify ordering is by created_at DESC (most recent first)
-		assert.Equal(t, "Key Two", resp.Data[0].Name)
-		assert.Equal(t, "Key One", resp.Data[1].Name)
+		assert.Equal(t, "Key Two", resp.Data.APIKeys[0].Name)
+		assert.Equal(t, "Key One", resp.Data.APIKeys[1].Name)
 	})
 
 	t.Run("empty list", func(t *testing.T) {
@@ -96,11 +102,17 @@ func TestApp_ListAPIKeys(t *testing.T) {
 		assert.Equal(t, fasthttp.StatusOK, testutil.GetResponseStatusCode(req))
 
 		var resp struct {
-			Data []handlers.APIKeyResponse `json:"data"`
+			Data struct {
+				APIKeys []handlers.APIKeyResponse `json:"api_keys"`
+				Total   int                       `json:"total"`
+				Page    int                       `json:"page"`
+				Limit   int                       `json:"limit"`
+			} `json:"data"`
 		}
 		err = json.Unmarshal(testutil.GetResponseBody(req), &resp)
 		require.NoError(t, err)
-		assert.Empty(t, resp.Data)
+		assert.Empty(t, resp.Data.APIKeys)
+		assert.Equal(t, 0, resp.Data.Total)
 	})
 }
 
@@ -267,12 +279,17 @@ func TestApp_ListAPIKeys_CrossOrgIsolation(t *testing.T) {
 	assert.Equal(t, fasthttp.StatusOK, testutil.GetResponseStatusCode(req))
 
 	var resp struct {
-		Data []handlers.APIKeyResponse `json:"data"`
+		Data struct {
+			APIKeys []handlers.APIKeyResponse `json:"api_keys"`
+			Total   int                       `json:"total"`
+			Page    int                       `json:"page"`
+			Limit   int                       `json:"limit"`
+		} `json:"data"`
 	}
 	err = json.Unmarshal(testutil.GetResponseBody(req), &resp)
 	require.NoError(t, err)
-	assert.Len(t, resp.Data, 1)
-	assert.Equal(t, "Org2 Key C", resp.Data[0].Name)
+	assert.Len(t, resp.Data.APIKeys, 1)
+	assert.Equal(t, "Org2 Key C", resp.Data.APIKeys[0].Name)
 }
 
 func TestApp_ListAPIKeys_ResponseFields(t *testing.T) {
@@ -294,13 +311,18 @@ func TestApp_ListAPIKeys_ResponseFields(t *testing.T) {
 	assert.Equal(t, fasthttp.StatusOK, testutil.GetResponseStatusCode(req))
 
 	var resp struct {
-		Data []handlers.APIKeyResponse `json:"data"`
+		Data struct {
+			APIKeys []handlers.APIKeyResponse `json:"api_keys"`
+			Total   int                       `json:"total"`
+			Page    int                       `json:"page"`
+			Limit   int                       `json:"limit"`
+		} `json:"data"`
 	}
 	err = json.Unmarshal(testutil.GetResponseBody(req), &resp)
 	require.NoError(t, err)
-	require.Len(t, resp.Data, 1)
+	require.Len(t, resp.Data.APIKeys, 1)
 
-	item := resp.Data[0]
+	item := resp.Data.APIKeys[0]
 	assert.Equal(t, apiKey.ID, item.ID)
 	assert.Equal(t, "Field Check Key", item.Name)
 	assert.Equal(t, "abcd1234", item.KeyPrefix)
@@ -335,12 +357,17 @@ func TestApp_ListAPIKeys_ExcludesDeletedKeys(t *testing.T) {
 	assert.Equal(t, fasthttp.StatusOK, testutil.GetResponseStatusCode(req))
 
 	var resp struct {
-		Data []handlers.APIKeyResponse `json:"data"`
+		Data struct {
+			APIKeys []handlers.APIKeyResponse `json:"api_keys"`
+			Total   int                       `json:"total"`
+			Page    int                       `json:"page"`
+			Limit   int                       `json:"limit"`
+		} `json:"data"`
 	}
 	err = json.Unmarshal(testutil.GetResponseBody(req), &resp)
 	require.NoError(t, err)
-	assert.Len(t, resp.Data, 1)
-	assert.Equal(t, keyToKeep.ID, resp.Data[0].ID)
+	assert.Len(t, resp.Data.APIKeys, 1)
+	assert.Equal(t, keyToKeep.ID, resp.Data.APIKeys[0].ID)
 }
 
 // --- CreateAPIKey Additional Tests ---
