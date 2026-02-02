@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
 import { RouterLink, RouterView, useRoute, useRouter } from 'vue-router'
+import { useI18n } from 'vue-i18n'
 import { useAuthStore } from '@/stores/auth'
 import { Button } from '@/components/ui/button'
 import { ScrollArea } from '@/components/ui/scroll-area'
@@ -15,6 +16,8 @@ import { wsService } from '@/services/websocket'
 import OrganizationSwitcher from './OrganizationSwitcher.vue'
 import UserMenu from './UserMenu.vue'
 import { navigationItems } from './navigation'
+
+useI18n() // Enable $t() in template
 
 const route = useRoute()
 const router = useRouter()
@@ -78,7 +81,7 @@ const handleLogout = async () => {
 <template>
   <div class="flex h-screen bg-[#0a0a0b] light:bg-gray-50">
     <!-- Skip link for accessibility -->
-    <a href="#main-content" class="skip-link">Skip to main content</a>
+    <a href="#main-content" class="skip-link">{{ $t('nav.skipToMain') }}</a>
 
     <!-- Mobile header -->
     <header class="fixed top-0 left-0 right-0 z-50 flex h-12 items-center justify-between border-b border-white/[0.08] light:border-gray-200 bg-[#0a0a0b]/95 light:bg-white/95 backdrop-blur-sm px-3 md:hidden">
@@ -137,7 +140,7 @@ const handleLogout = async () => {
           variant="ghost"
           size="icon"
           class="h-7 w-7 text-white/50 hover:text-white hover:bg-white/[0.08] light:text-gray-400 light:hover:text-gray-900 light:hover:bg-gray-100"
-          :aria-label="isCollapsed ? 'Expand sidebar' : 'Collapse sidebar'"
+          :aria-label="isCollapsed ? $t('nav.expandSidebar') : $t('nav.collapseSidebar')"
           :aria-expanded="!isCollapsed"
           @click="toggleSidebar"
         >
@@ -169,7 +172,7 @@ const handleLogout = async () => {
               @click="isMobileMenuOpen = false"
             >
               <component :is="item.icon" class="h-4 w-4 shrink-0" aria-hidden="true" />
-              <span :class="isCollapsed && 'md:sr-only'">{{ item.name }}</span>
+              <span :class="isCollapsed && 'md:sr-only'">{{ $t(item.name) }}</span>
             </RouterLink>
 
             <!-- Submenu items -->
@@ -189,7 +192,7 @@ const handleLogout = async () => {
                 @click="isMobileMenuOpen = false"
               >
                 <component :is="child.icon" class="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
-                <span>{{ child.name }}</span>
+                <span>{{ $t(child.name) }}</span>
               </RouterLink>
             </template>
           </template>

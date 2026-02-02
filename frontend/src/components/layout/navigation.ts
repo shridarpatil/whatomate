@@ -32,85 +32,85 @@ export interface NavItem {
 
 export const navigationItems: NavItem[] = [
   {
-    name: 'Dashboard',
+    name: 'nav.dashboard',
     path: '/',
     icon: LayoutDashboard,
     permission: 'analytics'
   },
   {
-    name: 'Chat',
+    name: 'nav.chat',
     path: '/chat',
     icon: MessageSquare,
     permission: 'chat'
   },
   {
-    name: 'Chatbot',
+    name: 'nav.chatbot',
     path: '/chatbot',
     icon: Bot,
     permission: 'settings.chatbot',
     childPermissions: ['settings.chatbot', 'chatbot.keywords', 'flows.chatbot', 'chatbot.ai'],
     children: [
-      { name: 'Overview', path: '/chatbot', icon: Bot, permission: 'settings.chatbot' },
-      { name: 'Keywords', path: '/chatbot/keywords', icon: Key, permission: 'chatbot.keywords' },
-      { name: 'Flows', path: '/chatbot/flows', icon: Workflow, permission: 'flows.chatbot' },
-      { name: 'AI Contexts', path: '/chatbot/ai', icon: Sparkles, permission: 'chatbot.ai' }
+      { name: 'nav.overview', path: '/chatbot', icon: Bot, permission: 'settings.chatbot' },
+      { name: 'nav.keywords', path: '/chatbot/keywords', icon: Key, permission: 'chatbot.keywords' },
+      { name: 'nav.flows', path: '/chatbot/flows', icon: Workflow, permission: 'flows.chatbot' },
+      { name: 'nav.aiContexts', path: '/chatbot/ai', icon: Sparkles, permission: 'chatbot.ai' }
     ]
   },
   {
-    name: 'Transfers',
+    name: 'nav.transfers',
     path: '/chatbot/transfers',
     icon: UserX,
     permission: 'transfers'
   },
   {
-    name: 'Agent Analytics',
+    name: 'nav.agentAnalytics',
     path: '/analytics/agents',
     icon: BarChart3,
     permission: 'analytics.agents'
   },
   {
-    name: 'Meta Insights',
+    name: 'nav.metaInsights',
     path: '/analytics/meta-insights',
     icon: LineChart,
     permission: 'analytics'
   },
   {
-    name: 'Templates',
+    name: 'nav.templates',
     path: '/templates',
     icon: FileText,
     permission: 'templates'
   },
   {
-    name: 'Flows',
+    name: 'nav.flows',
     path: '/flows',
     icon: Workflow,
     permission: 'flows.whatsapp'
   },
   {
-    name: 'Campaigns',
+    name: 'nav.campaigns',
     path: '/campaigns',
     icon: Megaphone,
     permission: 'campaigns'
   },
   {
-    name: 'Settings',
+    name: 'nav.settings',
     path: '/settings',
     icon: Settings,
     permission: 'settings.general',
     childPermissions: ['settings.general', 'settings.chatbot', 'accounts', 'canned_responses', 'tags', 'teams', 'users', 'roles', 'api_keys', 'webhooks', 'custom_actions', 'settings.sso'],
     children: [
-      { name: 'General', path: '/settings', icon: Settings, permission: 'settings.general' },
-      { name: 'Chatbot', path: '/settings/chatbot', icon: Bot, permission: 'settings.chatbot' },
-      { name: 'Accounts', path: '/settings/accounts', icon: Users, permission: 'accounts' },
-      { name: 'Canned Responses', path: '/settings/canned-responses', icon: MessageSquareText, permission: 'canned_responses' },
-      { name: 'Tags', path: '/settings/tags', icon: Tags, permission: 'tags' },
-      { name: 'Teams', path: '/settings/teams', icon: Users, permission: 'teams' },
-      { name: 'Users', path: '/settings/users', icon: Users, permission: 'users' },
-      { name: 'Roles', path: '/settings/roles', icon: Shield, permission: 'roles' },
-      { name: 'API Keys', path: '/settings/api-keys', icon: Key, permission: 'api_keys' },
-      { name: 'Webhooks', path: '/settings/webhooks', icon: Webhook, permission: 'webhooks' },
-      { name: 'Custom Actions', path: '/settings/custom-actions', icon: Zap, permission: 'custom_actions' },
-      { name: 'SSO', path: '/settings/sso', icon: ShieldCheck, permission: 'settings.sso' }
+      { name: 'nav.general', path: '/settings', icon: Settings, permission: 'settings.general' },
+      { name: 'nav.chatbot', path: '/settings/chatbot', icon: Bot, permission: 'settings.chatbot' },
+      { name: 'nav.accounts', path: '/settings/accounts', icon: Users, permission: 'accounts' },
+      { name: 'nav.cannedResponses', path: '/settings/canned-responses', icon: MessageSquareText, permission: 'canned_responses' },
+      { name: 'nav.tags', path: '/settings/tags', icon: Tags, permission: 'tags' },
+      { name: 'nav.teams', path: '/settings/teams', icon: Users, permission: 'teams' },
+      { name: 'nav.users', path: '/settings/users', icon: Users, permission: 'users' },
+      { name: 'nav.roles', path: '/settings/roles', icon: Shield, permission: 'roles' },
+      { name: 'nav.apiKeys', path: '/settings/api-keys', icon: Key, permission: 'api_keys' },
+      { name: 'nav.webhooks', path: '/settings/webhooks', icon: Webhook, permission: 'webhooks' },
+      { name: 'nav.customActions', path: '/settings/custom-actions', icon: Zap, permission: 'custom_actions' },
+      { name: 'nav.sso', path: '/settings/sso', icon: ShieldCheck, permission: 'settings.sso' }
     ]
   }
 ]

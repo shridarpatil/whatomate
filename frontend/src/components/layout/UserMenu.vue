@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { ref, watch, onMounted, onUnmounted } from 'vue'
 import { RouterLink } from 'vue-router'
+import { useI18n } from 'vue-i18n'
 import { useAuthStore } from '@/stores/auth'
 import { useContactsStore } from '@/stores/contacts'
 import { usersService, chatbotService } from '@/services/api'
@@ -26,6 +27,8 @@ import { LogOut, User } from 'lucide-vue-next'
 import { toast } from 'vue-sonner'
 import { getInitials } from '@/lib/utils'
 import ThemeSwitcher from './ThemeSwitcher.vue'
+
+const { t } = useI18n()
 
 defineProps<{
   collapsed?: boolean
@@ -81,15 +84,15 @@ const setAvailability = async (checked: boolean) => {
     authStore.setAvailability(checked, data.break_started_at)
 
     if (checked) {
-      toast.success('Available', {
-        description: 'You are now available to receive transfers'
+      toast.success(t('userMenu.available'), {
+        description: t('userMenu.availableDesc')
       })
     } else {
       const transfersReturned = data.transfers_to_queue || 0
-      toast.success('Away', {
+      toast.success(t('userMenu.away'), {
         description: transfersReturned > 0
-          ? `${transfersReturned} transfer(s) returned to queue`
-          : 'You will not receive new transfer assignments'
+          ? t('userMenu.transfersReturned', { count: transfersReturned })
+          : t('userMenu.awayDesc')
       })
 
       if (transfersReturned > 0) {
@@ -97,8 +100,8 @@ const setAvailability = async (checked: boolean) => {
       }
     }
   } catch (error) {
-    toast.error('Error', {
-      description: 'Failed to update availability'
+    toast.error(t('common.error'), {
+      description: t('userMenu.failedUpdateAvailability')
     })
   } finally {
     isUpdatingAvailability.value = false
@@ -187,18 +190,18 @@ const handleLogout = () => {
         </Button>
       </PopoverTrigger>
       <PopoverContent side="top" align="start" class="w-52 p-1.5 bg-[#141414] light:bg-white border-white/[0.08] light:border-gray-200">
-        <div class="text-xs font-medium px-2 py-1 text-white/40 light:text-gray-500">My Account</div>
+        <div class="text-xs font-medium px-2 py-1 text-white/40 light:text-gray-500">{{ $t('userMenu.myAccount') }}</div>
         <Separator class="my-1 bg-white/[0.08] light:bg-gray-200" />
         <!-- Availability Toggle -->
         <div class="flex items-center justify-between px-2 py-1.5">
           <div class="flex items-center gap-2">
-            <span class="text-[13px] text-white/70 light:text-gray-700">Status</span>
+            <span class="text-[13px] text-white/70 light:text-gray-700">{{ $t('userMenu.status') }}</span>
             <Badge
               :class="'text-[10px] px-1.5 py-0 ' + (authStore.isAvailable
                   ? 'bg-emerald-500/20 text-emerald-400 light:bg-emerald-100 light:text-emerald-700'
                   : 'bg-white/[0.08] text-white/50 light:bg-gray-100 light:text-gray-500')"
             >
-              {{ authStore.isAvailable ? 'Available' : 'Away' }}
+              {{ authStore.isAvailable ? $t('userMenu.available') : $t('userMenu.away') }}
             </Badge>
             <span v-if="!authStore.isAvailable && breakDuration" class="text-[10px] text-white/40 light:text-gray-400">
               {{ breakDuration }}
@@ -219,11 +222,11 @@ const handleLogout = () => {
             @click="isUserMenuOpen = false"
           >
             <User class="mr-2 h-3.5 w-3.5" aria-hidden="true" />
-            <span>Profile</span>
+            <span>{{ $t('userMenu.profile') }}</span>
           </Button>
         </RouterLink>
         <Separator class="my-1 bg-white/[0.08] light:bg-gray-200" />
-        <div class="text-xs font-medium px-2 py-1 text-white/40 light:text-gray-500">Theme</div>
+        <div class="text-xs font-medium px-2 py-1 text-white/40 light:text-gray-500">{{ $t('userMenu.theme') }}</div>
         <ThemeSwitcher />
         <Separator class="my-1 bg-white/[0.08] light:bg-gray-200" />
         <Button
@@ -232,7 +235,7 @@ const handleLogout = () => {
           @click="handleLogout"
         >
           <LogOut class="mr-2 h-3.5 w-3.5" aria-hidden="true" />
-          <span>Log out</span>
+          <span>{{ $t('userMenu.logOut') }}</span>
         </Button>
       </PopoverContent>
     </Popover>
@@ -242,15 +245,14 @@ const handleLogout = () => {
   <AlertDialog :open="showAwayWarning">
     <AlertDialogContent>
       <AlertDialogHeader>
-        <AlertDialogTitle>Active Transfers Will Be Returned to Queue</AlertDialogTitle>
+        <AlertDialogTitle>{{ $t('userMenu.awayWarningTitle') }}</AlertDialogTitle>
         <AlertDialogDescription>
-          You have {{ awayWarningTransferCount }} active transfer(s) assigned to you.
-          Setting your status to "Away" will return them to the queue for other agents to pick up.
+          {{ $t('userMenu.awayWarningDesc', { count: awayWarningTransferCount }) }}
         </AlertDialogDescription>
       </AlertDialogHeader>
       <AlertDialogFooter>
-        <Button variant="outline" @click="showAwayWarning = false">Cancel</Button>
-        <Button @click="confirmGoAway" :disabled="isUpdatingAvailability">Go Away</Button>
+        <Button variant="outline" @click="showAwayWarning = false">{{ $t('common.cancel') }}</Button>
+        <Button @click="confirmGoAway" :disabled="isUpdatingAvailability">{{ $t('userMenu.goAway') }}</Button>
       </AlertDialogFooter>
     </AlertDialogContent>
   </AlertDialog>
