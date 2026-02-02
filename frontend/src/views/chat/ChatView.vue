@@ -86,6 +86,7 @@ import {
 } from 'lucide-vue-next'
 import { getInitials } from '@/lib/utils'
 import { useColorMode } from '@/composables/useColorMode'
+import { useInfiniteScroll } from '@/composables/useInfiniteScroll'
 import CannedResponsePicker from '@/components/chat/CannedResponsePicker.vue'
 import ContactInfoPanel from '@/components/chat/ContactInfoPanel.vue'
 import { Info } from 'lucide-vue-next'
@@ -124,7 +125,6 @@ const { isDark } = useColorMode()
 
 const messageInput = ref('')
 const messagesEndRef = ref<HTMLElement | null>(null)
-const messagesScrollAreaRef = ref<InstanceType<typeof ScrollArea> | null>(null)
 const messageInputRef = ref<HTMLTextAreaElement | null>(null)
 const isSending = ref(false)
 const isAssignDialogOpen = ref(false)
@@ -163,6 +163,35 @@ const executingActionId = ref<string | null>(null)
 
 // Tags filter state
 const isTagFilterOpen = ref(false)
+
+// Infinite scroll for contacts (load more at bottom)
+const contactsScroll = useInfiniteScroll({
+  direction: 'bottom',
+  onLoadMore: () => contactsStore.loadMoreContacts(),
+  hasMore: computed(() => contactsStore.hasMoreContacts),
+  isLoading: computed(() => contactsStore.isLoadingMoreContacts)
+})
+
+// Infinite scroll for messages (load older at top)
+const messagesScroll = useInfiniteScroll({
+  direction: 'top',
+  onLoadMore: async () => {
+    if (!contactsStore.currentContact) return
+    await messagesScroll.preserveScrollPosition(async () => {
+      await contactsStore.fetchOlderMessages(contactsStore.currentContact!.id)
+      await nextTick()
+      // Load media for any new messages
+      try {
+        loadMediaForMessages()
+      } catch (e) {
+        console.error('Error loading media:', e)
+      }
+    })
+  },
+  hasMore: computed(() => contactsStore.hasMoreMessages),
+  isLoading: computed(() => contactsStore.isLoadingOlderMessages),
+  onScroll: (event) => updateStickyDate(event.target as HTMLElement)
+})
 
 const contactId = computed(() => route.params.contactId as string | undefined)
 
@@ -337,6 +366,10 @@ onMounted(async () => {
 
   await contactsStore.fetchContacts()
 
+  // Setup infinite scroll for contacts list
+  await nextTick()
+  contactsScroll.setup()
+
   // Fetch transfers to track active transfers
   transfersStore.fetchTransfers({ status: 'active' })
 
@@ -371,75 +404,9 @@ onUnmounted(() => {
     URL.revokeObjectURL(url)
   })
   mediaBlobUrls.value = {}
-  // Remove scroll listener
-  removeScrollListener()
   // Clear sticky date timeout
   if (stickyDateTimeout) clearTimeout(stickyDateTimeout)
 })
-
-// Infinite scroll for loading older messages
-let scrollViewport: HTMLElement | null = null
-
-function setupScrollListener() {
-  // Get the viewport element from ScrollArea
-  const scrollArea = messagesScrollAreaRef.value?.$el
-  if (scrollArea) {
-    // Find the scrollable viewport - it's the element with overflow:scroll/auto
-    // Try data attributes first, then find by computed style
-    scrollViewport = scrollArea.querySelector('[data-reka-scroll-area-viewport]') ||
-                     scrollArea.querySelector('[data-radix-scroll-area-viewport]')
-
-    if (!scrollViewport) {
-      // Fallback: find child element that has overflow scroll/auto
-      const children = scrollArea.querySelectorAll('*')
-      for (const child of children) {
-        const style = window.getComputedStyle(child)
-        if (style.overflowY === 'scroll' || style.overflowY === 'auto') {
-          scrollViewport = child as HTMLElement
-          break
-        }
-      }
-    }
-
-    if (scrollViewport) {
-      scrollViewport.addEventListener('scroll', handleScroll)
-    }
-  }
-}
-
-function removeScrollListener() {
-  if (scrollViewport) {
-    scrollViewport.removeEventListener('scroll', handleScroll)
-    scrollViewport = null
-  }
-}
-
-async function handleScroll(event: Event) {
-  const target = event.target as HTMLElement
-
-  // Update sticky date header
-  updateStickyDate(target)
-
-  // Trigger load when scrolled near top (within 100px)
-  if (target.scrollTop < 100 && contactsStore.hasMoreMessages && !contactsStore.isLoadingOlderMessages) {
-    const currentScrollHeight = target.scrollHeight
-    const currentScrollTop = target.scrollTop
-
-    await contactsStore.fetchOlderMessages(contactsStore.currentContact!.id)
-
-    // Preserve scroll position after prepending messages
-    await nextTick()
-    const newScrollHeight = target.scrollHeight
-    target.scrollTop = newScrollHeight - currentScrollHeight + currentScrollTop
-
-    // Load media for any new messages
-    try {
-      loadMediaForMessages()
-    } catch (e) {
-      console.error('Error loading media:', e)
-    }
-  }
-}
 
 function updateStickyDate(scrollContainer: HTMLElement) {
   // Find all date separator elements
@@ -490,7 +457,7 @@ async function selectContact(id: string) {
   const contact = contactsStore.contacts.find(c => c.id === id)
   if (contact) {
     // Remove old scroll listener before switching contacts
-    removeScrollListener()
+    messagesScroll.cleanup()
 
     contactsStore.setCurrentContact(contact)
     await contactsStore.fetchMessages(id)
@@ -508,7 +475,7 @@ async function selectContact(id: string) {
     setTimeout(() => {
       scrollToBottom(true)
       // Setup scroll listener for infinite scroll after initial scroll
-      setupScrollListener()
+      messagesScroll.setup()
     }, 50)
 
     // Fetch session data and auto-open panel if configured
@@ -1289,7 +1256,7 @@ async function sendMediaMessage() {
       </div>
 
       <!-- Contacts -->
-      <ScrollArea class="flex-1">
+      <ScrollArea :ref="(el: any) => contactsScroll.scrollAreaRef.value = el" class="flex-1">
         <div class="py-1">
           <div
             v-for="contact in contactsStore.sortedContacts"
@@ -1326,18 +1293,9 @@ async function sendMediaMessage() {
             </div>
           </div>
 
-          <!-- Load more indicator -->
-          <div v-if="contactsStore.hasMoreContacts" class="p-3 text-center">
-            <Button
-              v-if="!contactsStore.isLoadingMoreContacts"
-              variant="ghost"
-              size="sm"
-              class="text-white/50 hover:text-white hover:bg-white/[0.04] light:text-gray-500 light:hover:text-gray-900 light:hover:bg-gray-100"
-              @click="contactsStore.loadMoreContacts()"
-            >
-              Load more ({{ contactsStore.sortedContacts.length }} of {{ contactsStore.contactsTotal }})
-            </Button>
-            <Loader2 v-else class="h-5 w-5 mx-auto animate-spin text-white/40 light:text-gray-400" />
+          <!-- Loading indicator for infinite scroll -->
+          <div v-if="contactsStore.isLoadingMoreContacts" class="p-3 text-center">
+            <Loader2 class="h-5 w-5 mx-auto animate-spin text-white/40 light:text-gray-400" />
           </div>
 
           <div v-if="contactsStore.sortedContacts.length === 0" class="p-3 text-center text-white/40 light:text-gray-500">
@@ -1478,7 +1436,7 @@ async function sendMediaMessage() {
             </div>
           </Transition>
 
-          <ScrollArea ref="messagesScrollAreaRef" class="h-full p-3 chat-background">
+          <ScrollArea :ref="(el: any) => messagesScroll.scrollAreaRef.value = el" class="h-full p-3 chat-background">
             <div class="space-y-2">
               <!-- Loading indicator for older messages -->
               <div v-if="contactsStore.isLoadingOlderMessages" class="flex justify-center py-2">

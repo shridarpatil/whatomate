@@ -79,7 +79,7 @@ export const useContactsStore = defineStore('contacts', () => {
 
   // Contacts pagination
   const contactsPage = ref(1)
-  const contactsLimit = ref(50)
+  const contactsLimit = ref(25)
   const contactsTotal = ref(0)
   const isLoadingMoreContacts = ref(false)
   const hasMoreContacts = computed(() => contacts.value.length < contactsTotal.value)
@@ -122,6 +122,10 @@ export const useContactsStore = defineStore('contacts', () => {
     } finally {
       isLoading.value = false
     }
+  }
+
+  function setContactsLimit(limit: number) {
+    contactsLimit.value = limit
   }
 
   async function loadMoreContacts() {
@@ -316,9 +320,11 @@ export const useContactsStore = defineStore('contacts', () => {
     filteredContacts,
     sortedContacts,
     // Contacts pagination
+    contactsLimit,
     contactsTotal,
     hasMoreContacts,
     isLoadingMoreContacts,
+    setContactsLimit,
     fetchContacts,
     loadMoreContacts,
     // Other
