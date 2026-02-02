@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -13,6 +14,8 @@ import { toast } from 'vue-sonner'
 import { Settings, Bell, Loader2, Globe } from 'lucide-vue-next'
 import { usersService, organizationService } from '@/services/api'
 import { SUPPORTED_LOCALES, setLocale, getLocale } from '@/i18n'
+
+const { t } = useI18n()
 
 const isSubmitting = ref(false)
 const isLoading = ref(true)
@@ -85,9 +88,9 @@ async function saveGeneralSettings() {
       date_format: generalSettings.value.date_format,
       mask_phone_numbers: generalSettings.value.mask_phone_numbers
     })
-    toast.success('General settings saved')
+    toast.success(t('settings.generalSaved'))
   } catch (error) {
-    toast.error('Failed to save settings')
+    toast.error(t('settings.saveFailed'))
   } finally {
     isSubmitting.value = false
   }
@@ -101,9 +104,9 @@ async function saveNotificationSettings() {
       new_message_alerts: notificationSettings.value.new_message_alerts,
       campaign_updates: notificationSettings.value.campaign_updates
     })
-    toast.success('Notification settings saved')
+    toast.success(t('settings.notificationsSaved'))
   } catch (error) {
-    toast.error('Failed to save notification settings')
+    toast.error(t('settings.notificationsSaveFailed'))
   } finally {
     isSubmitting.value = false
   }
@@ -112,18 +115,18 @@ async function saveNotificationSettings() {
 
 <template>
   <div class="flex flex-col h-full bg-[#0a0a0b] light:bg-gray-50">
-    <PageHeader title="Settings" subtitle="Manage your organization settings" :icon="Settings" icon-gradient="bg-gradient-to-br from-gray-500 to-gray-600 shadow-gray-500/20" />
+    <PageHeader :title="$t('settings.title')" :subtitle="$t('settings.subtitle')" :icon="Settings" icon-gradient="bg-gradient-to-br from-gray-500 to-gray-600 shadow-gray-500/20" />
     <ScrollArea class="flex-1">
       <div class="p-6 space-y-4 max-w-4xl mx-auto">
         <Tabs default-value="general" class="w-full">
           <TabsList class="grid w-full grid-cols-2 mb-6 bg-white/[0.04] border border-white/[0.08] light:bg-gray-100 light:border-gray-200">
             <TabsTrigger value="general" class="data-[state=active]:bg-white/[0.08] data-[state=active]:text-white text-white/50 light:data-[state=active]:bg-white light:data-[state=active]:text-gray-900 light:text-gray-500">
               <Settings class="h-4 w-4 mr-2" />
-              General
+              {{ $t('settings.general') }}
             </TabsTrigger>
             <TabsTrigger value="notifications" class="data-[state=active]:bg-white/[0.08] data-[state=active]:text-white text-white/50 light:data-[state=active]:bg-white light:data-[state=active]:text-gray-900 light:text-gray-500">
               <Bell class="h-4 w-4 mr-2" />
-              Notifications
+              {{ $t('settings.notifications') }}
             </TabsTrigger>
           </TabsList>
 
@@ -131,24 +134,24 @@ async function saveNotificationSettings() {
           <TabsContent value="general">
             <div class="rounded-xl border border-white/[0.08] bg-white/[0.02] light:bg-white light:border-gray-200">
               <div class="p-6 pb-3">
-                <h3 class="text-lg font-semibold text-white light:text-gray-900">General Settings</h3>
-                <p class="text-sm text-white/40 light:text-gray-500">Basic organization and display settings</p>
+                <h3 class="text-lg font-semibold text-white light:text-gray-900">{{ $t('settings.generalSettings') }}</h3>
+                <p class="text-sm text-white/40 light:text-gray-500">{{ $t('settings.generalSettingsDesc') }}</p>
               </div>
               <div class="p-6 pt-3 space-y-4">
                 <div class="space-y-2">
-                  <Label for="org_name" class="text-white/70 light:text-gray-700">Organization Name</Label>
+                  <Label for="org_name" class="text-white/70 light:text-gray-700">{{ $t('settings.organizationName') }}</Label>
                   <Input
                     id="org_name"
                     v-model="generalSettings.organization_name"
-                    placeholder="Your Organization"
+                    :placeholder="$t('settings.organizationPlaceholder')"
                   />
                 </div>
                 <div class="grid grid-cols-2 gap-4">
                   <div class="space-y-2">
-                    <Label for="timezone" class="text-white/70 light:text-gray-700">Default Timezone</Label>
+                    <Label for="timezone" class="text-white/70 light:text-gray-700">{{ $t('settings.defaultTimezone') }}</Label>
                     <Select v-model="generalSettings.default_timezone">
                       <SelectTrigger class="bg-white/[0.04] border-white/[0.1] text-white/70 light:bg-white light:border-gray-200 light:text-gray-700">
-                        <SelectValue placeholder="Select timezone" />
+                        <SelectValue :placeholder="$t('settings.selectTimezone')" />
                       </SelectTrigger>
                       <SelectContent class="bg-[#141414] border-white/[0.08] light:bg-white light:border-gray-200">
                         <SelectItem value="UTC" class="text-white/70 focus:bg-white/[0.08] focus:text-white light:text-gray-700 light:focus:bg-gray-100">UTC</SelectItem>
@@ -160,10 +163,10 @@ async function saveNotificationSettings() {
                     </Select>
                   </div>
                   <div class="space-y-2">
-                    <Label for="date_format" class="text-white/70 light:text-gray-700">Date Format</Label>
+                    <Label for="date_format" class="text-white/70 light:text-gray-700">{{ $t('settings.dateFormat') }}</Label>
                     <Select v-model="generalSettings.date_format">
                       <SelectTrigger class="bg-white/[0.04] border-white/[0.1] text-white/70 light:bg-white light:border-gray-200 light:text-gray-700">
-                        <SelectValue placeholder="Select format" />
+                        <SelectValue :placeholder="$t('settings.selectFormat')" />
                       </SelectTrigger>
                       <SelectContent class="bg-[#141414] border-white/[0.08] light:bg-white light:border-gray-200">
                         <SelectItem value="YYYY-MM-DD" class="text-white/70 focus:bg-white/[0.08] focus:text-white light:text-gray-700 light:focus:bg-gray-100">YYYY-MM-DD</SelectItem>
@@ -176,11 +179,11 @@ async function saveNotificationSettings() {
                 <div class="space-y-2">
                   <Label class="text-white/70 light:text-gray-700">
                     <Globe class="h-4 w-4 inline mr-1" />
-                    Language
+                    {{ $t('settings.language') }}
                   </Label>
                   <Select :model-value="selectedLocale" @update:model-value="changeLocale">
                     <SelectTrigger class="w-full max-w-xs bg-white/[0.04] border-white/[0.1] text-white/70 light:bg-white light:border-gray-200 light:text-gray-700">
-                      <SelectValue placeholder="Select language" />
+                      <SelectValue :placeholder="$t('settings.selectLanguage')" />
                     </SelectTrigger>
                     <SelectContent class="bg-[#141414] border-white/[0.08] light:bg-white light:border-gray-200">
                       <SelectItem
@@ -193,13 +196,13 @@ async function saveNotificationSettings() {
                       </SelectItem>
                     </SelectContent>
                   </Select>
-                  <p class="text-xs text-white/40 light:text-gray-500">Choose your preferred display language</p>
+                  <p class="text-xs text-white/40 light:text-gray-500">{{ $t('settings.languageDesc') }}</p>
                 </div>
                 <Separator class="bg-white/[0.08] light:bg-gray-200" />
                 <div class="flex items-center justify-between">
                   <div>
-                    <p class="font-medium text-white light:text-gray-900">Mask Phone Numbers</p>
-                    <p class="text-sm text-white/40 light:text-gray-500">Hide phone numbers showing only last 4 digits</p>
+                    <p class="font-medium text-white light:text-gray-900">{{ $t('settings.maskPhoneNumbers') }}</p>
+                    <p class="text-sm text-white/40 light:text-gray-500">{{ $t('settings.maskPhoneNumbersDesc') }}</p>
                   </div>
                   <Switch
                     :checked="generalSettings.mask_phone_numbers"
@@ -209,7 +212,7 @@ async function saveNotificationSettings() {
                 <div class="flex justify-end">
                   <Button variant="outline" size="sm" class="bg-white/[0.04] border-white/[0.1] text-white/70 hover:bg-white/[0.08] hover:text-white light:bg-white light:border-gray-200 light:text-gray-700 light:hover:bg-gray-50" @click="saveGeneralSettings" :disabled="isSubmitting">
                     <Loader2 v-if="isSubmitting" class="mr-2 h-4 w-4 animate-spin" />
-                    Save Changes
+                    {{ $t('settings.save') }}
                   </Button>
                 </div>
               </div>
@@ -220,14 +223,14 @@ async function saveNotificationSettings() {
           <TabsContent value="notifications">
             <div class="rounded-xl border border-white/[0.08] bg-white/[0.02] light:bg-white light:border-gray-200">
               <div class="p-6 pb-3">
-                <h3 class="text-lg font-semibold text-white light:text-gray-900">Notifications</h3>
-                <p class="text-sm text-white/40 light:text-gray-500">Manage how you receive notifications</p>
+                <h3 class="text-lg font-semibold text-white light:text-gray-900">{{ $t('settings.notifications') }}</h3>
+                <p class="text-sm text-white/40 light:text-gray-500">{{ $t('settings.notificationsDesc') }}</p>
               </div>
               <div class="p-6 pt-3 space-y-4">
                 <div class="flex items-center justify-between">
                   <div>
-                    <p class="font-medium text-white light:text-gray-900">Email Notifications</p>
-                    <p class="text-sm text-white/40 light:text-gray-500">Receive important updates via email</p>
+                    <p class="font-medium text-white light:text-gray-900">{{ $t('settings.emailNotifications') }}</p>
+                    <p class="text-sm text-white/40 light:text-gray-500">{{ $t('settings.emailNotificationsDesc') }}</p>
                   </div>
                   <Switch
                     :checked="notificationSettings.email_notifications"
@@ -237,8 +240,8 @@ async function saveNotificationSettings() {
                 <Separator class="bg-white/[0.08] light:bg-gray-200" />
                 <div class="flex items-center justify-between">
                   <div>
-                    <p class="font-medium text-white light:text-gray-900">New Message Alerts</p>
-                    <p class="text-sm text-white/40 light:text-gray-500">Get notified when new messages arrive</p>
+                    <p class="font-medium text-white light:text-gray-900">{{ $t('settings.newMessageAlerts') }}</p>
+                    <p class="text-sm text-white/40 light:text-gray-500">{{ $t('settings.newMessageAlertsDesc') }}</p>
                   </div>
                   <Switch
                     :checked="notificationSettings.new_message_alerts"
@@ -248,8 +251,8 @@ async function saveNotificationSettings() {
                 <Separator class="bg-white/[0.08] light:bg-gray-200" />
                 <div class="flex items-center justify-between">
                   <div>
-                    <p class="font-medium text-white light:text-gray-900">Campaign Updates</p>
-                    <p class="text-sm text-white/40 light:text-gray-500">Receive campaign status notifications</p>
+                    <p class="font-medium text-white light:text-gray-900">{{ $t('settings.campaignUpdates') }}</p>
+                    <p class="text-sm text-white/40 light:text-gray-500">{{ $t('settings.campaignUpdatesDesc') }}</p>
                   </div>
                   <Switch
                     :checked="notificationSettings.campaign_updates"
@@ -259,7 +262,7 @@ async function saveNotificationSettings() {
                 <div class="flex justify-end pt-4">
                   <Button variant="outline" size="sm" class="bg-white/[0.04] border-white/[0.1] text-white/70 hover:bg-white/[0.08] hover:text-white light:bg-white light:border-gray-200 light:text-gray-700 light:hover:bg-gray-50" @click="saveNotificationSettings" :disabled="isSubmitting">
                     <Loader2 v-if="isSubmitting" class="mr-2 h-4 w-4 animate-spin" />
-                    Save Changes
+                    {{ $t('settings.save') }}
                   </Button>
                 </div>
               </div>
