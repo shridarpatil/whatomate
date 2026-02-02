@@ -1,0 +1,19 @@
+# Crowdin Configuration
+# Documentation: https://developer.crowdin.com/configuration-file/
+
+project_id_env: CROWDIN_PROJECT_ID
+api_token_env: CROWDIN_PERSONAL_TOKEN
+
+# Preserve hierarchy of files and folders
+preserve_hierarchy: true
+
+files:
+  # Source English file
+  - source: /src/i18n/locales/en.json
+    translation: /src/i18n/locales/%two_letters_code%.json
+    # Skip English as it's the source
+    languages_mapping:
+      two_letters_code:
+        en: en
+    # Update strings instead of replacing
+    update_option: update_as_unapproved
