@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
+import { ref, onMounted, watch } from 'vue'
 import { customActionsService, type CustomAction } from '@/services/api'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -12,11 +12,12 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group'
-import { PageHeader, DataTable, DeleteConfirmDialog, type Column } from '@/components/shared'
+import { PageHeader, DataTable, SearchInput, DeleteConfirmDialog, type Column } from '@/components/shared'
 import { toast } from 'vue-sonner'
 import { Plus, Trash2, Pencil, Zap, Loader2, Globe, Webhook, Code, Ticket, User, BarChart, Link, Phone, Mail, FileText, ExternalLink } from 'lucide-vue-next'
 import { getErrorMessage } from '@/lib/api-utils'
 import { formatDate } from '@/lib/utils'
+import { useDebounceFn } from '@vueuse/core'
 
 const actions = ref<CustomAction[]>([])
 const isLoading = ref(false)
@@ -43,6 +44,11 @@ const iconOptions = [
   { value: 'zap', label: 'Zap', icon: Zap }, { value: 'globe', label: 'Globe', icon: Globe }, { value: 'code', label: 'Code', icon: Code }
 ]
 
+// Pagination state
+const currentPage = ref(1)
+const totalItems = ref(0)
+const pageSize = 10
+
 const columns: Column<CustomAction>[] = [
   { key: 'icon', label: '', width: 'w-[40px]' },
   { key: 'name', label: 'Name', sortable: true },
@@ -57,15 +63,36 @@ const columns: Column<CustomAction>[] = [
 const sortKey = ref('name')
 const sortDirection = ref<'asc' | 'desc'>('asc')
 
+const searchQuery = ref('')
+
 const getIconComponent = (iconName: string) => iconOptions.find(i => i.value === iconName)?.icon || Zap
 
 async function fetchActions() {
   isLoading.value = true
   try {
-    const response = await customActionsService.list()
-    actions.value = (response.data as any).data?.custom_actions || []
+    const response = await customActionsService.list({
+      search: searchQuery.value || undefined,
+      page: currentPage.value,
+      limit: pageSize
+    })
+    const data = (response.data as any).data || response.data
+    actions.value = data.custom_actions || []
+    totalItems.value = data.total ?? actions.value.length
   } catch (e) { toast.error(getErrorMessage(e, 'Failed to load custom actions')) }
   finally { isLoading.value = false }
+}
+
+// Debounced search
+const debouncedSearch = useDebounceFn(() => {
+  currentPage.value = 1
+  fetchActions()
+}, 300)
+
+watch(searchQuery, () => debouncedSearch())
+
+function handlePageChange(page: number) {
+  currentPage.value = page
+  fetchActions()
 }
 
 function openCreateDialog() {
@@ -138,14 +165,19 @@ onMounted(() => fetchActions())
 
     <ScrollArea class="flex-1">
       <div class="p-6">
-        <div class="max-w-6xl mx-auto space-y-4">
+        <div class="max-w-6xl mx-auto">
           <Card>
             <CardHeader>
-              <CardTitle>Your Custom Actions</CardTitle>
-              <CardDescription>Custom actions appear as buttons in the chat header for quick integrations.</CardDescription>
+              <div class="flex items-center justify-between flex-wrap gap-4">
+                <div>
+                  <CardTitle>Your Custom Actions</CardTitle>
+                  <CardDescription>Custom actions appear as buttons in the chat header for quick integrations.</CardDescription>
+                </div>
+                <SearchInput v-model="searchQuery" placeholder="Search actions..." class="w-64" />
+              </div>
             </CardHeader>
             <CardContent>
-              <DataTable :items="actions" :columns="columns" :is-loading="isLoading" :empty-icon="Zap" empty-title="No custom actions configured" v-model:sort-key="sortKey" v-model:sort-direction="sortDirection">
+              <DataTable :items="actions" :columns="columns" :is-loading="isLoading" :empty-icon="Zap" :empty-title="searchQuery ? 'No matching actions' : 'No custom actions configured'" :empty-description="searchQuery ? 'No actions match your search.' : 'Create your first custom action to get started.'" v-model:sort-key="sortKey" v-model:sort-direction="sortDirection" server-pagination :current-page="currentPage" :total-items="totalItems" :page-size="pageSize" item-name="actions" @page-change="handlePageChange">
                 <template #cell-icon="{ item: action }"><component :is="getIconComponent(action.icon)" class="h-5 w-5 text-muted-foreground" /></template>
                 <template #cell-name="{ item: action }"><span class="font-medium">{{ action.name }}</span></template>
                 <template #cell-type="{ item: action }"><Badge :variant="getActionTypeBadge(action.action_type).variant">{{ getActionTypeBadge(action.action_type).label }}</Badge></template>
@@ -159,6 +191,9 @@ onMounted(() => fetchActions())
                     <Button variant="ghost" size="icon" class="h-8 w-8" @click="openEditDialog(action)"><Pencil class="h-4 w-4" /></Button>
                     <Button variant="ghost" size="icon" class="h-8 w-8 text-destructive" @click="actionToDelete = action; isDeleteDialogOpen = true"><Trash2 class="h-4 w-4" /></Button>
                   </div>
+                </template>
+                <template #empty-action>
+                  <Button variant="outline" size="sm" @click="openCreateDialog"><Plus class="h-4 w-4 mr-2" />Add Action</Button>
                 </template>
               </DataTable>
             </CardContent>

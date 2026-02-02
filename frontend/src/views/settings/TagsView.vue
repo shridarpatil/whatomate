@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, onMounted, computed } from 'vue'
+import { ref, onMounted, watch } from 'vue'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { Button } from '@/components/ui/button'
@@ -11,9 +11,10 @@ import { PageHeader, SearchInput, DataTable, CrudFormDialog, DeleteConfirmDialog
 import { tagsService, type Tag } from '@/services/api'
 import { toast } from 'vue-sonner'
 import { Plus, Tags, Pencil, Trash2 } from 'lucide-vue-next'
-import { unwrapListResponse, getErrorMessage } from '@/lib/api-utils'
+import { getErrorMessage } from '@/lib/api-utils'
 import { TAG_COLORS } from '@/lib/constants'
 import { formatDate } from '@/lib/utils'
+import { useDebounceFn } from '@vueuse/core'
 
 interface TagFormData {
   name: string
@@ -31,6 +32,11 @@ const deleteDialogOpen = ref(false)
 const tagToDelete = ref<Tag | null>(null)
 const formData = ref<TagFormData>({ ...defaultFormData })
 const searchQuery = ref('')
+
+// Pagination state
+const currentPage = ref(1)
+const totalItems = ref(0)
+const pageSize = 10
 
 // Sorting state
 const sortKey = ref('name')
@@ -71,22 +77,41 @@ function closeDeleteDialog() {
   tagToDelete.value = null
 }
 
-const filteredTags = computed(() => {
-  if (!searchQuery.value) return tags.value
-  const query = searchQuery.value.toLowerCase()
-  return tags.value.filter(t => t.name.toLowerCase().includes(query))
-})
-
 async function fetchTags() {
   isLoading.value = true
   try {
-    const response = await tagsService.list()
-    tags.value = unwrapListResponse<Tag>(response, 'tags')
+    const response = await tagsService.list({
+      search: searchQuery.value || undefined,
+      page: currentPage.value,
+      limit: pageSize
+    })
+    const data = response.data as any
+    // Handle both wrapped and unwrapped responses
+    const responseData = data.data || data
+    tags.value = responseData.tags || []
+    // Use total from response if available, otherwise use items length
+    totalItems.value = responseData.total ?? tags.value.length
   } catch (error) {
     toast.error(getErrorMessage(error, 'Failed to load tags'))
   } finally {
     isLoading.value = false
   }
+}
+
+// Debounced search to avoid too many API calls
+const debouncedSearch = useDebounceFn(() => {
+  currentPage.value = 1
+  fetchTags()
+}, 300)
+
+// Watch search query changes
+watch(searchQuery, () => {
+  debouncedSearch()
+})
+
+function handlePageChange(page: number) {
+  currentPage.value = page
+  fetchTags()
 }
 
 onMounted(() => fetchTags())
@@ -99,21 +124,15 @@ async function saveTag() {
   isSubmitting.value = true
   try {
     if (editingTag.value) {
-      const response = await tagsService.update(editingTag.value.name, formData.value)
-      const updatedTag = (response.data as any).data || response.data
-      const oldName = editingTag.value.name
-      tags.value = tags.value.map(t => t.name === oldName ? updatedTag : t)
-      if (formData.value.name !== oldName) {
-        tags.value = [...tags.value].sort((a, b) => a.name.localeCompare(b.name))
-      }
+      await tagsService.update(editingTag.value.name, formData.value)
       toast.success('Tag updated successfully')
     } else {
-      const response = await tagsService.create(formData.value)
-      const newTag = (response.data as any).data || response.data
-      tags.value = [...tags.value, newTag].sort((a, b) => a.name.localeCompare(b.name))
+      await tagsService.create(formData.value)
       toast.success('Tag created successfully')
     }
     closeDialog()
+    // Refresh from server to keep pagination in sync
+    await fetchTags()
   } catch (error) {
     toast.error(getErrorMessage(error, 'Failed to save tag'))
   } finally {
@@ -125,9 +144,10 @@ async function confirmDelete() {
   if (!tagToDelete.value) return
   try {
     await tagsService.delete(tagToDelete.value.name)
-    tags.value = tags.value.filter(t => t.name !== tagToDelete.value!.name)
     toast.success('Tag deleted')
     closeDeleteDialog()
+    // Refresh from server to keep pagination in sync
+    await fetchTags()
   } catch (error) {
     toast.error(getErrorMessage(error, 'Failed to delete tag'))
   }
@@ -149,27 +169,33 @@ function getColorLabel(color: string): string {
 
     <ScrollArea class="flex-1">
       <div class="p-6">
-        <div class="max-w-4xl mx-auto space-y-4">
-          <div class="flex items-center gap-4">
-            <SearchInput v-model="searchQuery" placeholder="Search tags..." class="flex-1 max-w-sm" />
-            <div class="text-sm text-muted-foreground">{{ filteredTags.length }} tag{{ filteredTags.length !== 1 ? 's' : '' }}</div>
-          </div>
-
+        <div class="max-w-6xl mx-auto">
           <Card>
             <CardHeader>
-              <CardTitle>Organization Tags</CardTitle>
-              <CardDescription>Create and manage tags to organize your contacts.</CardDescription>
+              <div class="flex items-center justify-between flex-wrap gap-4">
+                <div>
+                  <CardTitle>Organization Tags</CardTitle>
+                  <CardDescription>Create and manage tags to organize your contacts.</CardDescription>
+                </div>
+                <SearchInput v-model="searchQuery" placeholder="Search tags..." class="w-64" />
+              </div>
             </CardHeader>
             <CardContent>
               <DataTable
-                :items="filteredTags"
+                :items="tags"
                 :columns="columns"
                 :is-loading="isLoading"
                 :empty-icon="Tags"
-                :empty-title="searchQuery ? 'No tags found matching your search' : 'No tags created yet'"
-                empty-description="Create your first tag to start organizing contacts."
+                :empty-title="searchQuery ? 'No matching tags' : 'No tags created yet'"
+                :empty-description="searchQuery ? 'No tags match your search.' : 'Create your first tag to start organizing contacts.'"
                 v-model:sort-key="sortKey"
                 v-model:sort-direction="sortDirection"
+                server-pagination
+                :current-page="currentPage"
+                :total-items="totalItems"
+                :page-size="pageSize"
+                item-name="tags"
+                @page-change="handlePageChange"
               >
                 <template #cell-name="{ item: tag }">
                   <TagBadge :color="tag.color">{{ tag.name }}</TagBadge>
@@ -189,6 +215,12 @@ function getColorLabel(color: string): string {
                       <Trash2 class="h-4 w-4 text-destructive" />
                     </Button>
                   </div>
+                </template>
+                <template #empty-action>
+                  <Button variant="outline" size="sm" @click="openCreateDialog">
+                    <Plus class="h-4 w-4 mr-2" />
+                    Add Tag
+                  </Button>
                 </template>
               </DataTable>
             </CardContent>

@@ -150,21 +150,21 @@ function getStrategyIcon(strategy: string) { return { round_robin: RotateCcw, lo
 
     <ScrollArea class="flex-1">
       <div class="p-6">
-        <div class="max-w-6xl mx-auto space-y-4">
-          <div class="flex items-center gap-4">
-            <SearchInput v-model="searchQuery" placeholder="Search teams..." class="flex-1 max-w-sm" />
-            <div class="text-sm text-muted-foreground">{{ filteredTeams.length }} team{{ filteredTeams.length !== 1 ? 's' : '' }}</div>
-          </div>
-
+        <div class="max-w-6xl mx-auto">
           <Card>
             <CardHeader>
-              <CardTitle>Your Teams</CardTitle>
-              <CardDescription>Organize agents into teams with assignment strategies: Round Robin, Load Balanced, or Manual Queue.</CardDescription>
+              <div class="flex items-center justify-between flex-wrap gap-4">
+                <div>
+                  <CardTitle>Your Teams</CardTitle>
+                  <CardDescription>Organize agents into teams with assignment strategies: Round Robin, Load Balanced, or Manual Queue.</CardDescription>
+                </div>
+                <SearchInput v-model="searchQuery" placeholder="Search teams..." class="w-64" />
+              </div>
             </CardHeader>
             <CardContent>
-              <DataTable :items="filteredTeams" :columns="columns" :is-loading="isLoading" :empty-icon="Users" :empty-title="searchQuery ? 'No teams found matching your search' : 'No teams created yet'" v-model:sort-key="sortKey" v-model:sort-direction="sortDirection">
+              <DataTable :items="filteredTeams" :columns="columns" :is-loading="isLoading" :empty-icon="Users" :empty-title="searchQuery ? 'No matching teams' : 'No teams created yet'" :empty-description="searchQuery ? 'No teams match your search.' : 'Create your first team to organize agents.'" v-model:sort-key="sortKey" v-model:sort-direction="sortDirection">
                 <template #empty-action>
-                  <Button v-if="isAdmin && !searchQuery" variant="outline" size="sm" @click="openCreateDialog"><Plus class="h-4 w-4 mr-2" />Create First Team</Button>
+                  <Button v-if="isAdmin" variant="outline" size="sm" @click="openCreateDialog"><Plus class="h-4 w-4 mr-2" />Add Team</Button>
                 </template>
                 <template #cell-team="{ item: team }">
                   <div class="flex items-center gap-3">

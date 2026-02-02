@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
+import { ref, onMounted, watch } from 'vue'
 import { apiKeysService } from '@/services/api'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -8,13 +8,13 @@ import { Badge } from '@/components/ui/badge'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
-import { PageHeader, DataTable, CrudFormDialog, DeleteConfirmDialog, type Column } from '@/components/shared'
+import { PageHeader, DataTable, SearchInput, CrudFormDialog, DeleteConfirmDialog, type Column } from '@/components/shared'
 import { toast } from 'vue-sonner'
 import { Plus, Trash2, Copy, Key, AlertTriangle } from 'lucide-vue-next'
 import { useCrudState } from '@/composables/useCrudState'
-import { useCrudOperations } from '@/composables/useCrudOperations'
-import { getErrorMessage, unwrapListResponse } from '@/lib/api-utils'
+import { getErrorMessage } from '@/lib/api-utils'
 import { formatDate } from '@/lib/utils'
+import { useDebounceFn } from '@vueuse/core'
 
 interface APIKey {
   id: string
@@ -50,6 +50,11 @@ const {
 const isKeyDisplayOpen = ref(false)
 const newlyCreatedKey = ref<NewAPIKeyResponse | null>(null)
 
+// Pagination state
+const currentPage = ref(1)
+const totalItems = ref(0)
+const pageSize = 10
+
 const columns: Column<APIKey>[] = [
   { key: 'name', label: 'Name', sortable: true },
   { key: 'key', label: 'Key' },
@@ -63,11 +68,38 @@ const columns: Column<APIKey>[] = [
 const sortKey = ref('name')
 const sortDirection = ref<'asc' | 'desc'>('asc')
 
-const { fetchItems } = useCrudOperations({
-  fetchFn: async () => { const response = await apiKeysService.list(); return unwrapListResponse<APIKey>(response, 'api_keys') || response.data.data || [] },
-  deleteFn: async (id) => { await apiKeysService.delete(id) },
-  itemsRef: apiKeys, loadingRef: isLoading, entityName: 'API key'
-})
+const searchQuery = ref('')
+
+async function fetchItems() {
+  isLoading.value = true
+  try {
+    const response = await apiKeysService.list({
+      search: searchQuery.value || undefined,
+      page: currentPage.value,
+      limit: pageSize
+    })
+    const data = (response.data as any).data || response.data
+    apiKeys.value = data.api_keys || []
+    totalItems.value = data.total ?? apiKeys.value.length
+  } catch (error) {
+    toast.error(getErrorMessage(error, 'Failed to load API keys'))
+  } finally {
+    isLoading.value = false
+  }
+}
+
+// Debounced search
+const debouncedSearch = useDebounceFn(() => {
+  currentPage.value = 1
+  fetchItems()
+}, 300)
+
+watch(searchQuery, () => debouncedSearch())
+
+function handlePageChange(page: number) {
+  currentPage.value = page
+  fetchItems()
+}
 
 async function createAPIKey() {
   if (!formData.value.name.trim()) { toast.error('Name is required'); return }
@@ -109,14 +141,19 @@ onMounted(() => fetchItems())
 
     <ScrollArea class="flex-1">
       <div class="p-6">
-        <div class="max-w-6xl mx-auto space-y-4">
+        <div class="max-w-6xl mx-auto">
           <Card>
             <CardHeader>
-              <CardTitle>Your API Keys</CardTitle>
-              <CardDescription>API keys allow external applications to access your account. Keep them secure.</CardDescription>
+              <div class="flex items-center justify-between flex-wrap gap-4">
+                <div>
+                  <CardTitle>Your API Keys</CardTitle>
+                  <CardDescription>API keys allow external applications to access your account. Keep them secure.</CardDescription>
+                </div>
+                <SearchInput v-model="searchQuery" placeholder="Search API keys..." class="w-64" />
+              </div>
             </CardHeader>
             <CardContent>
-              <DataTable :items="apiKeys" :columns="columns" :is-loading="isLoading" :empty-icon="Key" empty-title="No API keys yet" v-model:sort-key="sortKey" v-model:sort-direction="sortDirection">
+              <DataTable :items="apiKeys" :columns="columns" :is-loading="isLoading" :empty-icon="Key" :empty-title="searchQuery ? 'No matching API keys' : 'No API keys yet'" :empty-description="searchQuery ? 'No API keys match your search.' : 'Create your first API key to get started.'" v-model:sort-key="sortKey" v-model:sort-direction="sortDirection" server-pagination :current-page="currentPage" :total-items="totalItems" :page-size="pageSize" item-name="API keys" @page-change="handlePageChange">
                 <template #cell-name="{ item: key }"><span class="font-medium">{{ key.name }}</span></template>
                 <template #cell-key="{ item: key }"><code class="bg-muted px-2 py-1 rounded text-sm">whm_{{ key.key_prefix }}...</code></template>
                 <template #cell-last_used="{ item: key }">{{ formatDateTime(key.last_used_at) }}</template>
@@ -128,6 +165,9 @@ onMounted(() => fetchItems())
                 </template>
                 <template #cell-actions="{ item: key }">
                   <Button variant="ghost" size="icon" @click="openDeleteDialog(key)"><Trash2 class="h-4 w-4 text-destructive" /></Button>
+                </template>
+                <template #empty-action>
+                  <Button variant="outline" size="sm" @click="openCreateDialogBase"><Plus class="h-4 w-4 mr-2" />Create API Key</Button>
                 </template>
               </DataTable>
             </CardContent>

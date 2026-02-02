@@ -127,19 +127,19 @@ function getRoleName(user: User) { return user.role?.name || 'No role' }
 
     <ScrollArea class="flex-1">
       <div class="p-6">
-        <div class="max-w-6xl mx-auto space-y-4">
-          <div class="flex items-center gap-4">
-            <SearchInput v-model="searchQuery" placeholder="Search by name, email, or role..." class="flex-1 max-w-sm" />
-            <div class="text-sm text-muted-foreground">{{ filteredUsers.length }} user{{ filteredUsers.length !== 1 ? 's' : '' }}</div>
-          </div>
-
+        <div class="max-w-6xl mx-auto">
           <Card>
             <CardHeader>
-              <CardTitle>Your Users</CardTitle>
-              <CardDescription>Manage team members and their roles. <RouterLink to="/settings/roles" class="text-primary hover:underline">Manage roles</RouterLink></CardDescription>
+              <div class="flex items-center justify-between flex-wrap gap-4">
+                <div>
+                  <CardTitle>Your Users</CardTitle>
+                  <CardDescription>Manage team members and their roles. <RouterLink to="/settings/roles" class="text-primary hover:underline">Manage roles</RouterLink></CardDescription>
+                </div>
+                <SearchInput v-model="searchQuery" placeholder="Search users..." class="w-64" />
+              </div>
             </CardHeader>
             <CardContent>
-              <DataTable :items="paginatedUsers" :columns="columns" :is-loading="isLoading" :empty-icon="UserIcon" :empty-title="searchQuery ? 'No users found matching your search' : 'No users found'" v-model:sort-key="sortKey" v-model:sort-direction="sortDirection">
+              <DataTable :items="paginatedUsers" :columns="columns" :is-loading="isLoading" :empty-icon="UserIcon" :empty-title="searchQuery ? 'No matching users' : 'No users found'" :empty-description="searchQuery ? 'No users match your search.' : 'Add your first user to get started.'" v-model:sort-key="sortKey" v-model:sort-direction="sortDirection">
                 <template #cell-user="{ item: user }">
                   <div class="flex items-center gap-3">
                     <div class="h-9 w-9 rounded-full bg-primary/10 flex items-center justify-center flex-shrink-0">
@@ -169,6 +169,9 @@ function getRoleName(user: User) { return user.role?.name || 'No role' }
                     <Tooltip><TooltipTrigger as-child><Button variant="ghost" size="icon" class="h-8 w-8" @click="openEditDialog(user)"><Pencil class="h-4 w-4" /></Button></TooltipTrigger><TooltipContent>Edit user</TooltipContent></Tooltip>
                     <Tooltip><TooltipTrigger as-child><Button variant="ghost" size="icon" class="h-8 w-8" @click="openDeleteDialog(user)" :disabled="user.id === currentUserId"><Trash2 class="h-4 w-4 text-destructive" /></Button></TooltipTrigger><TooltipContent>{{ user.id === currentUserId ? "Can't delete yourself" : 'Delete user' }}</TooltipContent></Tooltip>
                   </div>
+                </template>
+                <template #empty-action>
+                  <Button variant="outline" size="sm" @click="openCreateDialog"><Plus class="h-4 w-4 mr-2" />Add User</Button>
                 </template>
               </DataTable>
             </CardContent>

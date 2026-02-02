@@ -65,33 +65,22 @@ export class TablePage extends BasePage {
       return
     }
 
-    // Strategy 3: Icon button with tooltip (hover to show tooltip, then find by tooltip content)
-    // For Edit - look for Pencil icon button
-    // For Delete - look for Trash icon button
+    // Strategy 3: Position-based selectors in last column (actions column)
+    const actionButtons = row.locator('td:last-child button')
+    const buttonCount = await actionButtons.count()
+
     if (action.toLowerCase() === 'edit') {
-      const editButton = row.locator('button').filter({ has: this.page.locator('.lucide-pencil, [class*="pencil"]') })
-      if (await editButton.count() > 0) {
-        await editButton.click()
-        return
-      }
-      // Fallback: first small icon button that's not delete
-      const iconButtons = row.locator('button[class*="icon"], button:has(svg)').first()
-      await iconButtons.click()
+      // Edit is typically second-to-last button (before delete), or first if only 2 buttons
+      // Common patterns: [edit, delete] or [extra, edit, delete] or [extra1, extra2, edit, delete]
+      const editIndex = buttonCount <= 2 ? 0 : buttonCount - 2
+      await actionButtons.nth(editIndex).click()
       return
     }
 
     if (action.toLowerCase() === 'delete') {
-      const deleteButton = row.locator('button').filter({ has: this.page.locator('.lucide-trash, [class*="trash"]') })
-      if (await deleteButton.count() > 0) {
-        await deleteButton.click()
-        return
-      }
-      // Fallback: look for button with destructive styling
-      const destructiveButton = row.locator('button:has([class*="destructive"]), button .text-destructive').locator('..')
-      if (await destructiveButton.count() > 0) {
-        await destructiveButton.click()
-        return
-      }
+      // Delete is typically the last button in actions column
+      await actionButtons.last().click()
+      return
     }
 
     throw new Error(`Could not find action button: ${action}`)

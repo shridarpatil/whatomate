@@ -112,19 +112,19 @@ async function confirmDelete() {
 
     <ScrollArea class="flex-1">
       <div class="p-6">
-        <div class="max-w-6xl mx-auto space-y-4">
-          <div class="flex items-center gap-4">
-            <SearchInput v-model="searchQuery" placeholder="Search roles..." class="flex-1 max-w-sm" />
-            <div class="text-sm text-muted-foreground">{{ filteredRoles.length }} role{{ filteredRoles.length !== 1 ? 's' : '' }}</div>
-          </div>
-
+        <div class="max-w-6xl mx-auto">
           <Card>
             <CardHeader>
-              <CardTitle>Your Roles</CardTitle>
-              <CardDescription>Create custom roles with specific permissions to control what users can access.</CardDescription>
+              <div class="flex items-center justify-between flex-wrap gap-4">
+                <div>
+                  <CardTitle>Your Roles</CardTitle>
+                  <CardDescription>Create custom roles with specific permissions to control what users can access.</CardDescription>
+                </div>
+                <SearchInput v-model="searchQuery" placeholder="Search roles..." class="w-64" />
+              </div>
             </CardHeader>
             <CardContent>
-              <DataTable :items="filteredRoles" :columns="columns" :is-loading="isLoading" :empty-icon="Shield" :empty-title="searchQuery ? 'No roles found matching your search' : 'No roles created yet'" v-model:sort-key="sortKey" v-model:sort-direction="sortDirection">
+              <DataTable :items="filteredRoles" :columns="columns" :is-loading="isLoading" :empty-icon="Shield" :empty-title="searchQuery ? 'No matching roles' : 'No roles created yet'" :empty-description="searchQuery ? 'No roles match your search.' : 'Create your first role to get started.'" v-model:sort-key="sortKey" v-model:sort-direction="sortDirection">
                 <template #cell-role="{ item: role }">
                   <div class="flex items-center gap-2">
                     <span class="font-medium">{{ role.name }}</span>
@@ -149,6 +149,9 @@ async function confirmDelete() {
                     <Tooltip><TooltipTrigger as-child><Button variant="ghost" size="icon" class="h-8 w-8" @click="openEditDialog(role)"><Pencil class="h-4 w-4" /></Button></TooltipTrigger><TooltipContent>{{ role.is_system ? (isSuperAdmin ? 'Edit permissions' : 'View permissions') : 'Edit role' }}</TooltipContent></Tooltip>
                     <Tooltip v-if="!role.is_system"><TooltipTrigger as-child><Button variant="ghost" size="icon" class="h-8 w-8" :disabled="role.user_count > 0" @click="openDeleteDialog(role)"><Trash2 class="h-4 w-4 text-destructive" /></Button></TooltipTrigger><TooltipContent>{{ role.user_count > 0 ? 'Cannot delete: users assigned' : 'Delete role' }}</TooltipContent></Tooltip>
                   </div>
+                </template>
+                <template #empty-action>
+                  <Button variant="outline" size="sm" @click="openCreateDialog"><Plus class="h-4 w-4 mr-2" />Add Role</Button>
                 </template>
               </DataTable>
             </CardContent>

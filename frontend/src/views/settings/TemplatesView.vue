@@ -1,23 +1,24 @@
 <script setup lang="ts">
-import { ref, onMounted, computed, watch } from 'vue'
+import { ref, onMounted, watch } from 'vue'
 import DOMPurify from 'dompurify'
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import { Badge } from '@/components/ui/badge'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { Textarea } from '@/components/ui/textarea'
 import { Separator } from '@/components/ui/separator'
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
-import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
-import { PageHeader, SearchInput } from '@/components/shared'
+import { PageHeader, SearchInput, DataTable, DeleteConfirmDialog, type Column } from '@/components/shared'
 import { api, templatesService } from '@/services/api'
 import { useOrganizationsStore } from '@/stores/organizations'
 import { toast } from 'vue-sonner'
 import { Plus, RefreshCw, FileText, Eye, Pencil, Trash2, Loader2, MessageSquare, Image, FileIcon, Video, X, Check, AlertCircle, Send, Upload } from 'lucide-vue-next'
 import { getErrorMessage } from '@/lib/api-utils'
+import { useDebounceFn } from '@vueuse/core'
 
 interface WhatsAppAccount {
   id: string
@@ -84,6 +85,23 @@ const formData = ref({
   sample_values: [] as any[]
 })
 
+// Pagination state
+const currentPage = ref(1)
+const totalItems = ref(0)
+const pageSize = 10
+
+const columns: Column<Template>[] = [
+  { key: 'name', label: 'Name', sortable: true },
+  { key: 'category', label: 'Category', sortable: true },
+  { key: 'status', label: 'Status', sortable: true },
+  { key: 'language', label: 'Language', sortable: true },
+  { key: 'header_type', label: 'Header' },
+  { key: 'actions', label: 'Actions', align: 'right' },
+]
+
+const sortKey = ref('name')
+const sortDirection = ref<'asc' | 'desc'>('asc')
+
 const languages = [
   { code: 'en', name: 'English' },
   { code: 'en_US', name: 'English (US)' },
@@ -138,15 +156,22 @@ async function fetchAccounts() {
 function onAccountChange(value: string | number | bigint | Record<string, any> | null) {
   if (typeof value !== 'string') return
   localStorage.setItem('templates_selected_account', value)
+  currentPage.value = 1
   fetchTemplates()
 }
 
 async function fetchTemplates() {
   isLoading.value = true
   try {
-    const params = selectedAccount.value && selectedAccount.value !== 'all' ? `?account=${selectedAccount.value}` : ''
-    const response = await api.get(`/templates${params}`)
-    templates.value = response.data.data?.templates || []
+    const response = await templatesService.list({
+      account: selectedAccount.value !== 'all' ? selectedAccount.value : undefined,
+      search: searchQuery.value || undefined,
+      page: currentPage.value,
+      limit: pageSize
+    })
+    const data = (response.data as any).data || response.data
+    templates.value = data.templates || []
+    totalItems.value = data.total ?? templates.value.length
   } catch (error: any) {
     console.error('Failed to fetch templates:', error)
     toast.error('Failed to load templates')
@@ -154,6 +179,19 @@ async function fetchTemplates() {
   } finally {
     isLoading.value = false
   }
+}
+
+// Debounced search
+const debouncedSearch = useDebounceFn(() => {
+  currentPage.value = 1
+  fetchTemplates()
+}, 300)
+
+watch(searchQuery, () => debouncedSearch())
+
+function handlePageChange(page: number) {
+  currentPage.value = page
+  fetchTemplates()
 }
 
 async function syncTemplates() {
@@ -339,15 +377,6 @@ function getHeaderIcon(type: string) {
   }
 }
 
-const filteredTemplates = computed(() => {
-  if (!searchQuery.value) return templates.value
-  const query = searchQuery.value.toLowerCase()
-  return templates.value.filter(t =>
-    t.name.toLowerCase().includes(query) ||
-    t.display_name?.toLowerCase().includes(query) ||
-    t.body_content.toLowerCase().includes(query)
-  )
-})
 
 // Extract all parameter names (both positional {{1}} and named {{name}})
 function extractParamNames(content: string): string[] {
@@ -506,126 +535,123 @@ function formatPreview(text: string, samples: any[]): string {
       </template>
     </PageHeader>
 
-    <!-- Filters -->
-    <div class="p-4 border-b flex items-center gap-4 flex-wrap">
-      <div class="flex items-center gap-2">
-        <Label class="text-sm text-muted-foreground">Account:</Label>
-        <Select v-model="selectedAccount" @update:model-value="onAccountChange">
-          <SelectTrigger class="w-[180px]">
-            <SelectValue placeholder="All Accounts" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">All Accounts</SelectItem>
-            <SelectItem v-for="account in accounts" :key="account.id" :value="account.name">
-              {{ account.name }}
-            </SelectItem>
-          </SelectContent>
-        </Select>
-      </div>
-      <SearchInput v-model="searchQuery" placeholder="Search templates..." class="flex-1 max-w-md" />
-    </div>
-
-    <!-- Loading State -->
-    <div v-if="isLoading" class="flex-1 flex items-center justify-center">
-      <Loader2 class="h-8 w-8 animate-spin text-muted-foreground" />
-    </div>
-
-    <!-- Templates Grid -->
-    <ScrollArea v-else class="flex-1">
-      <div class="p-6 grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-        <Card v-for="template in filteredTemplates" :key="template.id" class="flex flex-col">
-          <CardHeader class="pb-3">
-            <div class="flex items-start justify-between">
-              <div class="flex-1 min-w-0">
-                <CardTitle class="text-base truncate">{{ template.display_name || template.name }}</CardTitle>
-                <p class="text-xs font-mono text-muted-foreground truncate mt-1">{{ template.name }}</p>
-                <div class="flex items-center gap-2 mt-2 flex-wrap">
-                  <span :class="['px-2 py-0.5 rounded text-xs font-medium', getCategoryBadgeClass(template.category)]">
-                    {{ template.category }}
-                  </span>
-                  <span :class="['px-2 py-0.5 rounded text-xs font-medium', getStatusBadgeClass(template.status)]">
-                    {{ template.status }}
-                  </span>
-                  <span class="text-xs text-muted-foreground">{{ template.language }}</span>
+    <ScrollArea class="flex-1">
+      <div class="p-6">
+        <div class="max-w-6xl mx-auto">
+          <Card>
+            <CardHeader>
+              <div class="flex items-center justify-between flex-wrap gap-4">
+                <div>
+                  <CardTitle>Your Templates</CardTitle>
+                  <CardDescription>WhatsApp message templates for your accounts.</CardDescription>
+                </div>
+                <div class="flex items-center gap-4 flex-wrap">
+                  <div class="flex items-center gap-2">
+                    <Label class="text-sm text-muted-foreground">Account:</Label>
+                    <Select v-model="selectedAccount" @update:model-value="onAccountChange">
+                      <SelectTrigger class="w-[180px]">
+                        <SelectValue placeholder="All Accounts" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="all">All Accounts</SelectItem>
+                        <SelectItem v-for="account in accounts" :key="account.id" :value="account.name">
+                          {{ account.name }}
+                        </SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <SearchInput v-model="searchQuery" placeholder="Search templates..." class="w-64" />
                 </div>
               </div>
-              <component :is="getHeaderIcon(template.header_type)" class="h-5 w-5 text-muted-foreground flex-shrink-0" />
-            </div>
-          </CardHeader>
-          <CardContent class="flex-1">
-            <p class="text-sm text-muted-foreground line-clamp-3">
-              {{ template.body_content }}
-            </p>
-            <div v-if="template.footer_content" class="mt-2 text-xs text-muted-foreground italic">
-              {{ template.footer_content }}
-            </div>
-          </CardContent>
-          <div class="px-6 pb-4 flex items-center gap-1 border-t pt-3">
-            <Tooltip>
-              <TooltipTrigger as-child>
-                <Button variant="ghost" size="sm" @click="openPreview(template)">
-                  <Eye class="h-4 w-4" />
-                </Button>
-              </TooltipTrigger>
-              <TooltipContent>Preview</TooltipContent>
-            </Tooltip>
-            <Tooltip>
-              <TooltipTrigger as-child>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  @click="openEditDialog(template)"
-                  :disabled="template.status === 'PENDING'"
-                >
-                  <Pencil class="h-4 w-4" />
-                </Button>
-              </TooltipTrigger>
-              <TooltipContent>Edit</TooltipContent>
-            </Tooltip>
-            <Tooltip v-if="template.status === 'DRAFT' || template.status === 'REJECTED'">
-              <TooltipTrigger as-child>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  @click="openPublishDialog(template)"
-                  :disabled="publishingTemplateId === template.id"
-                  class="text-blue-600 hover:text-blue-700"
-                >
-                  <Loader2 v-if="publishingTemplateId === template.id" class="h-4 w-4 animate-spin" />
-                  <Send v-else class="h-4 w-4" />
-                </Button>
-              </TooltipTrigger>
-              <TooltipContent>{{ template.meta_template_id ? 'Republish to Meta' : 'Publish to Meta' }}</TooltipContent>
-            </Tooltip>
-            <Tooltip>
-              <TooltipTrigger as-child>
-                <Button variant="ghost" size="sm" @click="openDeleteDialog(template)">
-                  <Trash2 class="h-4 w-4 text-destructive" />
-                </Button>
-              </TooltipTrigger>
-              <TooltipContent>Delete</TooltipContent>
-            </Tooltip>
-          </div>
-        </Card>
-
-        <!-- Empty State -->
-        <Card v-if="filteredTemplates.length === 0" class="col-span-full">
-          <CardContent class="py-12 text-center text-muted-foreground">
-            <FileText class="h-12 w-12 mx-auto mb-4 opacity-50" />
-            <p class="text-lg font-medium">No templates found</p>
-            <p class="text-sm mb-4">Create a new template or sync from Meta.</p>
-            <div class="flex items-center justify-center gap-2">
-              <Button variant="outline" size="sm" @click="syncTemplates" :disabled="!selectedAccount || selectedAccount === 'all'">
-                <RefreshCw class="h-4 w-4 mr-2" />
-                Sync from Meta
-              </Button>
-              <Button variant="outline" size="sm" @click="openCreateDialog">
-                <Plus class="h-4 w-4 mr-2" />
-                Create Template
-              </Button>
-            </div>
-          </CardContent>
-        </Card>
+            </CardHeader>
+            <CardContent>
+              <DataTable
+                :items="templates"
+                :columns="columns"
+                :is-loading="isLoading"
+                :empty-icon="FileText"
+                empty-title="No templates found"
+                empty-description="Create a new template or sync from Meta."
+                server-pagination
+                :current-page="currentPage"
+                :total-items="totalItems"
+                :page-size="pageSize"
+                item-name="templates"
+                @page-change="handlePageChange"
+                v-model:sort-key="sortKey"
+                v-model:sort-direction="sortDirection"
+              >
+                <template #cell-name="{ item: template }">
+                  <div>
+                    <span class="font-medium">{{ template.display_name || template.name }}</span>
+                    <p class="text-xs font-mono text-muted-foreground">{{ template.name }}</p>
+                  </div>
+                </template>
+                <template #cell-category="{ item: template }">
+                  <Badge :class="getCategoryBadgeClass(template.category)" class="text-xs">
+                    {{ template.category }}
+                  </Badge>
+                </template>
+                <template #cell-status="{ item: template }">
+                  <Badge :class="getStatusBadgeClass(template.status)" class="text-xs">
+                    {{ template.status }}
+                  </Badge>
+                </template>
+                <template #cell-language="{ item: template }">
+                  <span class="text-muted-foreground">{{ template.language }}</span>
+                </template>
+                <template #cell-header_type="{ item: template }">
+                  <div class="flex items-center gap-1">
+                    <component :is="getHeaderIcon(template.header_type)" class="h-4 w-4 text-muted-foreground" />
+                    <span class="text-muted-foreground text-sm">{{ template.header_type || 'NONE' }}</span>
+                  </div>
+                </template>
+                <template #cell-actions="{ item: template }">
+                  <div class="flex items-center justify-end gap-1">
+                    <Button variant="ghost" size="icon" class="h-8 w-8" @click="openPreview(template)">
+                      <Eye class="h-4 w-4" />
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      class="h-8 w-8"
+                      @click="openEditDialog(template)"
+                      :disabled="template.status === 'PENDING'"
+                    >
+                      <Pencil class="h-4 w-4" />
+                    </Button>
+                    <Button
+                      v-if="template.status === 'DRAFT' || template.status === 'REJECTED'"
+                      variant="ghost"
+                      size="icon"
+                      class="h-8 w-8 text-blue-600 hover:text-blue-700"
+                      @click="openPublishDialog(template)"
+                      :disabled="publishingTemplateId === template.id"
+                    >
+                      <Loader2 v-if="publishingTemplateId === template.id" class="h-4 w-4 animate-spin" />
+                      <Send v-else class="h-4 w-4" />
+                    </Button>
+                    <Button variant="ghost" size="icon" class="h-8 w-8 text-destructive" @click="openDeleteDialog(template)">
+                      <Trash2 class="h-4 w-4" />
+                    </Button>
+                  </div>
+                </template>
+                <template #empty-action>
+                  <div class="flex items-center justify-center gap-2">
+                    <Button variant="outline" size="sm" @click="syncTemplates" :disabled="!selectedAccount || selectedAccount === 'all'">
+                      <RefreshCw class="h-4 w-4 mr-2" />
+                      Sync from Meta
+                    </Button>
+                    <Button variant="outline" size="sm" @click="openCreateDialog">
+                      <Plus class="h-4 w-4 mr-2" />
+                      Create Template
+                    </Button>
+                  </div>
+                </template>
+              </DataTable>
+            </CardContent>
+          </Card>
+        </div>
       </div>
     </ScrollArea>
 
@@ -1003,21 +1029,12 @@ function formatPreview(text: string, samples: any[]): string {
       </DialogContent>
     </Dialog>
 
-    <!-- Delete Confirmation Dialog -->
-    <AlertDialog v-model:open="deleteDialogOpen">
-      <AlertDialogContent>
-        <AlertDialogHeader>
-          <AlertDialogTitle>Delete Template</AlertDialogTitle>
-          <AlertDialogDescription>
-            Are you sure you want to delete "{{ templateToDelete?.display_name || templateToDelete?.name }}"? This action cannot be undone.
-          </AlertDialogDescription>
-        </AlertDialogHeader>
-        <AlertDialogFooter>
-          <AlertDialogCancel>Cancel</AlertDialogCancel>
-          <AlertDialogAction @click="confirmDeleteTemplate">Delete</AlertDialogAction>
-        </AlertDialogFooter>
-      </AlertDialogContent>
-    </AlertDialog>
+    <DeleteConfirmDialog
+      v-model:open="deleteDialogOpen"
+      title="Delete Template"
+      :item-name="templateToDelete?.display_name || templateToDelete?.name"
+      @confirm="confirmDeleteTemplate"
+    />
 
     <!-- Publish Confirmation Dialog -->
     <AlertDialog v-model:open="publishDialogOpen">

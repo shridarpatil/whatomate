@@ -52,8 +52,8 @@ test.describe('Canned Responses Management', () => {
     await cannedResponsesPage.expectToast('created')
     await cannedResponsesPage.dismissToast('created')
 
-    // Wait for response to appear
-    await expect(page.getByRole('heading', { name: responseName })).toBeVisible({ timeout: 10000 })
+    // Wait for response to appear in table
+    await cannedResponsesPage.expectResponseExists(responseName)
 
     // Edit the response
     await cannedResponsesPage.editResponse(responseName)
@@ -75,8 +75,8 @@ test.describe('Canned Responses Management', () => {
     await cannedResponsesPage.expectToast('created')
     await cannedResponsesPage.dismissToast('created')
 
-    // Wait for response to appear
-    await expect(page.getByRole('heading', { name: responseName })).toBeVisible({ timeout: 10000 })
+    // Wait for response to appear in table
+    await cannedResponsesPage.expectResponseExists(responseName)
 
     // Delete the response
     await cannedResponsesPage.deleteResponse(responseName)

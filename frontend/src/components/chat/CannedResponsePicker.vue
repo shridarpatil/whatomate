@@ -57,7 +57,8 @@ async function fetchResponses() {
   isLoading.value = true
   try {
     const response = await cannedResponsesService.list({ active_only: 'true' })
-    responses.value = response.data.data?.canned_responses || []
+    const data = (response.data as any).data || response.data
+    responses.value = data.canned_responses || []
   } catch (error) {
     console.error('Failed to fetch canned responses:', error)
   } finally {

@@ -11,11 +11,12 @@ import { Checkbox } from '@/components/ui/checkbox'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
-import { PageHeader, DataTable, DeleteConfirmDialog, type Column } from '@/components/shared'
+import { PageHeader, DataTable, SearchInput, DeleteConfirmDialog, type Column } from '@/components/shared'
 import { toast } from 'vue-sonner'
 import { Plus, Trash2, Pencil, Webhook as WebhookIcon, Play, Loader2 } from 'lucide-vue-next'
 import { getErrorMessage } from '@/lib/api-utils'
 import { formatDate } from '@/lib/utils'
+import { useDebounceFn } from '@vueuse/core'
 
 const organizationsStore = useOrganizationsStore()
 
@@ -36,6 +37,11 @@ const newHeaderValue = ref('')
 const isDeleteDialogOpen = ref(false)
 const webhookToDelete = ref<Webhook | null>(null)
 
+// Pagination state
+const currentPage = ref(1)
+const totalItems = ref(0)
+const pageSize = 10
+
 const columns: Column<Webhook>[] = [
   { key: 'name', label: 'Name', sortable: true },
   { key: 'url', label: 'URL', sortable: true },
@@ -49,15 +55,35 @@ const columns: Column<Webhook>[] = [
 const sortKey = ref('name')
 const sortDirection = ref<'asc' | 'desc'>('asc')
 
+const searchQuery = ref('')
+
 async function fetchWebhooks() {
   isLoading.value = true
   try {
-    const response = await webhooksService.list()
+    const response = await webhooksService.list({
+      search: searchQuery.value || undefined,
+      page: currentPage.value,
+      limit: pageSize
+    })
     const data = (response.data as any).data || response.data
     webhooks.value = data.webhooks || []
     availableEvents.value = data.available_events || []
+    totalItems.value = data.total ?? webhooks.value.length
   } catch (e) { toast.error(getErrorMessage(e, 'Failed to load webhooks')) }
   finally { isLoading.value = false }
+}
+
+// Debounced search
+const debouncedSearch = useDebounceFn(() => {
+  currentPage.value = 1
+  fetchWebhooks()
+}, 300)
+
+watch(searchQuery, () => debouncedSearch())
+
+function handlePageChange(page: number) {
+  currentPage.value = page
+  fetchWebhooks()
 }
 
 function openCreateDialog() {
@@ -147,14 +173,19 @@ onMounted(() => fetchWebhooks())
 
     <ScrollArea class="flex-1">
       <div class="p-6">
-        <div class="max-w-6xl mx-auto space-y-4">
+        <div class="max-w-6xl mx-auto">
           <Card>
             <CardHeader>
-              <CardTitle>Your Webhooks</CardTitle>
-              <CardDescription>Webhooks allow you to send real-time events to external systems like helpdesks.</CardDescription>
+              <div class="flex items-center justify-between flex-wrap gap-4">
+                <div>
+                  <CardTitle>Your Webhooks</CardTitle>
+                  <CardDescription>Webhooks allow you to send real-time events to external systems like helpdesks.</CardDescription>
+                </div>
+                <SearchInput v-model="searchQuery" placeholder="Search webhooks..." class="w-64" />
+              </div>
             </CardHeader>
             <CardContent>
-              <DataTable :items="webhooks" :columns="columns" :is-loading="isLoading" :empty-icon="WebhookIcon" empty-title="No webhooks configured" v-model:sort-key="sortKey" v-model:sort-direction="sortDirection">
+              <DataTable :items="webhooks" :columns="columns" :is-loading="isLoading" :empty-icon="WebhookIcon" :empty-title="searchQuery ? 'No matching webhooks' : 'No webhooks configured'" :empty-description="searchQuery ? 'No webhooks match your search.' : 'Create your first webhook to get started.'" v-model:sort-key="sortKey" v-model:sort-direction="sortDirection" server-pagination :current-page="currentPage" :total-items="totalItems" :page-size="pageSize" item-name="webhooks" @page-change="handlePageChange">
                 <template #cell-name="{ item: webhook }"><span class="font-medium">{{ webhook.name }}</span></template>
                 <template #cell-url="{ item: webhook }"><span class="max-w-[200px] truncate text-muted-foreground block">{{ webhook.url }}</span></template>
                 <template #cell-events="{ item: webhook }">
@@ -176,6 +207,9 @@ onMounted(() => fetchWebhooks())
                     <Button variant="ghost" size="icon" class="h-8 w-8" @click="openEditDialog(webhook)"><Pencil class="h-4 w-4" /></Button>
                     <Button variant="ghost" size="icon" class="h-8 w-8 text-destructive" @click="webhookToDelete = webhook; isDeleteDialogOpen = true"><Trash2 class="h-4 w-4" /></Button>
                   </div>
+                </template>
+                <template #empty-action>
+                  <Button variant="outline" size="sm" @click="openCreateDialog"><Plus class="h-4 w-4 mr-2" />Add Webhook</Button>
                 </template>
               </DataTable>
             </CardContent>

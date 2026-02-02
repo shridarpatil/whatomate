@@ -1,6 +1,6 @@
 <script setup lang="ts">
-import { onMounted, computed } from 'vue'
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { ref, onMounted, watch } from 'vue'
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -9,14 +9,13 @@ import { ScrollArea } from '@/components/ui/scroll-area'
 import { Textarea } from '@/components/ui/textarea'
 import { Switch } from '@/components/ui/switch'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
-import { PageHeader, SearchInput, CrudFormDialog, DeleteConfirmDialog } from '@/components/shared'
+import { PageHeader, SearchInput, CrudFormDialog, DeleteConfirmDialog, DataTable, type Column } from '@/components/shared'
 import { cannedResponsesService, type CannedResponse } from '@/services/api'
 import { toast } from 'vue-sonner'
-import { Plus, MessageSquareText, Pencil, Trash2, Loader2, Copy } from 'lucide-vue-next'
-import { useCrudState } from '@/composables/useCrudState'
-import { useCrudOperations } from '@/composables/useCrudOperations'
-import { unwrapListResponse } from '@/lib/api-utils'
+import { Plus, MessageSquareText, Pencil, Trash2, Copy } from 'lucide-vue-next'
+import { getErrorMessage } from '@/lib/api-utils'
 import { CANNED_RESPONSE_CATEGORIES, getLabelFromValue } from '@/lib/constants'
+import { useDebounceFn } from '@vueuse/core'
 
 interface CannedResponseFormData {
   name: string
@@ -28,33 +27,97 @@ interface CannedResponseFormData {
 
 const defaultFormData: CannedResponseFormData = { name: '', shortcut: '', content: '', category: '', is_active: true }
 
-const {
-  items: cannedResponses, isLoading, isSubmitting, isDialogOpen, editingItem: editingResponse, deleteDialogOpen, itemToDelete: responseToDelete,
-  formData, searchQuery, openCreateDialog, openEditDialog: baseOpenEditDialog, openDeleteDialog, closeDialog, closeDeleteDialog,
-} = useCrudState<CannedResponse, CannedResponseFormData>(defaultFormData)
+const cannedResponses = ref<CannedResponse[]>([])
+const isLoading = ref(false)
+const isSubmitting = ref(false)
+const isDialogOpen = ref(false)
+const editingResponse = ref<CannedResponse | null>(null)
+const deleteDialogOpen = ref(false)
+const responseToDelete = ref<CannedResponse | null>(null)
+const formData = ref<CannedResponseFormData>({ ...defaultFormData })
+const searchQuery = ref('')
+const selectedCategory = ref('all')
 
-const selectedCategory = computed({
-  get: () => searchQuery.value.startsWith('category:') ? searchQuery.value.replace('category:', '') : 'all',
-  set: (val: string) => { searchQuery.value = val === 'all' ? '' : `category:${val}` }
-})
+// Pagination state
+const currentPage = ref(1)
+const totalItems = ref(0)
+const pageSize = 10
 
-const { fetchItems, createItem, updateItem, deleteItem } = useCrudOperations({
-  fetchFn: async () => { const response = await cannedResponsesService.list(); return unwrapListResponse<CannedResponse>(response, 'canned_responses') },
-  createFn: async (data) => { const response = await cannedResponsesService.create(data); return response.data.data || response.data },
-  updateFn: async (id, data) => { const response = await cannedResponsesService.update(id, data); return response.data.data || response.data },
-  deleteFn: async (id) => { await cannedResponsesService.delete(id) },
-  itemsRef: cannedResponses, loadingRef: isLoading, entityName: 'Canned response'
-})
+const columns: Column<CannedResponse>[] = [
+  { key: 'name', label: 'Name', sortable: true },
+  { key: 'category', label: 'Category', sortable: true },
+  { key: 'content', label: 'Content' },
+  { key: 'usage_count', label: 'Used', sortable: true },
+  { key: 'status', label: 'Status', sortable: true, sortKey: 'is_active' },
+  { key: 'actions', label: 'Actions', align: 'right' },
+]
 
-function openEditDialog(response: CannedResponse) {
-  baseOpenEditDialog(response, (r) => ({ name: r.name, shortcut: r.shortcut || '', content: r.content, category: r.category || '', is_active: r.is_active }))
+const sortKey = ref('name')
+const sortDirection = ref<'asc' | 'desc'>('asc')
+
+async function fetchItems() {
+  isLoading.value = true
+  try {
+    const response = await cannedResponsesService.list({
+      search: searchQuery.value || undefined,
+      category: selectedCategory.value !== 'all' ? selectedCategory.value : undefined,
+      page: currentPage.value,
+      limit: pageSize
+    })
+    const data = (response.data as any).data || response.data
+    cannedResponses.value = data.canned_responses || []
+    totalItems.value = data.total ?? cannedResponses.value.length
+  } catch (error) {
+    toast.error(getErrorMessage(error, 'Failed to load canned responses'))
+  } finally {
+    isLoading.value = false
+  }
 }
 
-const filteredResponses = computed(() => {
-  let items = cannedResponses.value
-  if (selectedCategory.value !== 'all') items = items.filter(r => r.category === selectedCategory.value)
-  return items
+// Debounced search
+const debouncedSearch = useDebounceFn(() => {
+  currentPage.value = 1
+  fetchItems()
+}, 300)
+
+watch(searchQuery, () => debouncedSearch())
+watch(selectedCategory, () => {
+  currentPage.value = 1
+  fetchItems()
 })
+
+function handlePageChange(page: number) {
+  currentPage.value = page
+  fetchItems()
+}
+
+function openCreateDialog() {
+  editingResponse.value = null
+  formData.value = { ...defaultFormData }
+  isDialogOpen.value = true
+}
+
+function openEditDialog(response: CannedResponse) {
+  editingResponse.value = response
+  formData.value = { name: response.name, shortcut: response.shortcut || '', content: response.content, category: response.category || '', is_active: response.is_active }
+  isDialogOpen.value = true
+}
+
+function openDeleteDialog(response: CannedResponse) {
+  responseToDelete.value = response
+  deleteDialogOpen.value = true
+}
+
+function closeDialog() {
+  isDialogOpen.value = false
+  editingResponse.value = null
+  formData.value = { ...defaultFormData }
+}
+
+function closeDeleteDialog() {
+  deleteDialogOpen.value = false
+  responseToDelete.value = null
+}
 
 onMounted(() => fetchItems())
 
@@ -62,17 +125,32 @@ async function saveResponse() {
   if (!formData.value.name.trim() || !formData.value.content.trim()) { toast.error('Name and content are required'); return }
   isSubmitting.value = true
   try {
-    if (editingResponse.value) await updateItem(editingResponse.value.id, formData.value)
-    else await createItem(formData.value)
+    if (editingResponse.value) {
+      await cannedResponsesService.update(editingResponse.value.id, formData.value)
+      toast.success('Canned response updated')
+    } else {
+      await cannedResponsesService.create(formData.value)
+      toast.success('Canned response created')
+    }
     closeDialog()
-  } catch { /* Error handled by useCrudOperations */ }
-  finally { isSubmitting.value = false }
+    await fetchItems()
+  } catch (error) {
+    toast.error(getErrorMessage(error, 'Failed to save canned response'))
+  } finally {
+    isSubmitting.value = false
+  }
 }
 
 async function confirmDelete() {
   if (!responseToDelete.value) return
-  try { await deleteItem(responseToDelete.value.id); closeDeleteDialog() }
-  catch { /* Error handled by useCrudOperations */ }
+  try {
+    await cannedResponsesService.delete(responseToDelete.value.id)
+    toast.success('Canned response deleted')
+    closeDeleteDialog()
+    await fetchItems()
+  } catch (error) {
+    toast.error(getErrorMessage(error, 'Failed to delete canned response'))
+  }
 }
 
 function copyToClipboard(content: string) { navigator.clipboard.writeText(content); toast.success('Copied to clipboard') }
@@ -87,50 +165,86 @@ function getCategoryLabel(category: string): string { return getLabelFromValue(C
       </template>
     </PageHeader>
 
-    <div class="p-4 border-b flex items-center gap-4 flex-wrap">
-      <div class="flex items-center gap-2">
-        <Label class="text-sm text-muted-foreground">Category:</Label>
-        <Select v-model="selectedCategory"><SelectTrigger class="w-[150px]"><SelectValue placeholder="All" /></SelectTrigger><SelectContent><SelectItem value="all">All Categories</SelectItem><SelectItem v-for="cat in CANNED_RESPONSE_CATEGORIES" :key="cat.value" :value="cat.value">{{ cat.label }}</SelectItem></SelectContent></Select>
-      </div>
-      <SearchInput v-model="searchQuery" placeholder="Search responses..." class="flex-1 max-w-md" />
-    </div>
-
-    <div v-if="isLoading" class="flex-1 flex items-center justify-center"><Loader2 class="h-8 w-8 animate-spin text-muted-foreground" /></div>
-
-    <ScrollArea v-else class="flex-1">
-      <div class="p-6 grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-        <Card v-for="response in filteredResponses" :key="response.id" class="flex flex-col">
-          <CardHeader class="pb-3">
-            <div class="flex items-start justify-between">
-              <div class="flex-1 min-w-0">
-                <CardTitle class="text-base truncate">{{ response.name }}</CardTitle>
-                <div class="flex items-center gap-2 mt-2">
-                  <Badge variant="outline" class="text-xs">{{ getCategoryLabel(response.category) }}</Badge>
-                  <span v-if="response.shortcut" class="text-xs font-mono text-muted-foreground">/{{ response.shortcut }}</span>
+    <ScrollArea class="flex-1">
+      <div class="p-6">
+        <div class="max-w-6xl mx-auto">
+          <Card>
+            <CardHeader>
+              <div class="flex items-center justify-between flex-wrap gap-4">
+                <div>
+                  <CardTitle>Your Canned Responses</CardTitle>
+                  <CardDescription>Quick responses for common questions.</CardDescription>
+                </div>
+                <div class="flex items-center gap-2">
+                  <Select v-model="selectedCategory">
+                    <SelectTrigger class="w-[150px]"><SelectValue placeholder="All" /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">All Categories</SelectItem>
+                      <SelectItem v-for="cat in CANNED_RESPONSE_CATEGORIES" :key="cat.value" :value="cat.value">{{ cat.label }}</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  <SearchInput v-model="searchQuery" placeholder="Search responses..." class="w-64" />
                 </div>
               </div>
-              <Badge v-if="!response.is_active" variant="secondary" class="ml-2">Inactive</Badge>
-            </div>
-          </CardHeader>
-          <CardContent class="flex-1">
-            <p class="text-sm text-muted-foreground line-clamp-3 whitespace-pre-wrap">{{ response.content }}</p>
-            <p class="text-xs text-muted-foreground mt-2">Used {{ response.usage_count }} times</p>
-          </CardContent>
-          <div class="px-6 pb-4 flex items-center gap-1 border-t pt-3">
-            <Button variant="ghost" size="sm" @click="copyToClipboard(response.content)"><Copy class="h-4 w-4" /></Button>
-            <Button variant="ghost" size="sm" @click="openEditDialog(response)"><Pencil class="h-4 w-4" /></Button>
-            <Button variant="ghost" size="sm" @click="openDeleteDialog(response)"><Trash2 class="h-4 w-4 text-destructive" /></Button>
-          </div>
-        </Card>
-
-        <Card v-if="filteredResponses.length === 0" class="col-span-full">
-          <CardContent class="py-12 text-center text-muted-foreground">
-            <MessageSquareText class="h-12 w-12 mx-auto mb-4 opacity-50" />
-            <p class="text-lg font-medium">No canned responses found</p>
-            <p class="text-sm mb-4">Create your first canned response to get started.</p>
-            <Button variant="outline" size="sm" @click="openCreateDialog"><Plus class="h-4 w-4 mr-2" />Add Response</Button>
-          </CardContent>
-        </Card>
+            </CardHeader>
+            <CardContent>
+              <DataTable
+                :items="cannedResponses"
+                :columns="columns"
+                :is-loading="isLoading"
+                :empty-icon="MessageSquareText"
+                empty-title="No canned responses found"
+                empty-description="Create your first canned response to get started."
+                v-model:sort-key="sortKey"
+                v-model:sort-direction="sortDirection"
+                server-pagination
+                :current-page="currentPage"
+                :total-items="totalItems"
+                :page-size="pageSize"
+                item-name="responses"
+                @page-change="handlePageChange"
+              >
+                <template #cell-name="{ item: response }">
+                  <div>
+                    <span class="font-medium">{{ response.name }}</span>
+                    <p v-if="response.shortcut" class="text-xs font-mono text-muted-foreground">/{{ response.shortcut }}</p>
+                  </div>
+                </template>
+                <template #cell-category="{ item: response }">
+                  <Badge variant="outline" class="text-xs">{{ getCategoryLabel(response.category) }}</Badge>
+                </template>
+                <template #cell-content="{ item: response }">
+                  <p class="text-sm text-muted-foreground max-w-[300px] truncate">{{ response.content }}</p>
+                </template>
+                <template #cell-usage_count="{ item: response }">
+                  <span class="text-muted-foreground">{{ response.usage_count }}</span>
+                </template>
+                <template #cell-status="{ item: response }">
+                  <Badge v-if="response.is_active" class="bg-emerald-500/20 text-emerald-400 border-transparent text-xs">Active</Badge>
+                  <Badge v-else variant="secondary" class="text-xs">Inactive</Badge>
+                </template>
+                <template #cell-actions="{ item: response }">
+                  <div class="flex items-center justify-end gap-1">
+                    <Button variant="ghost" size="icon" class="h-8 w-8" @click="copyToClipboard(response.content)" title="Copy">
+                      <Copy class="h-4 w-4" />
+                    </Button>
+                    <Button variant="ghost" size="icon" class="h-8 w-8" @click="openEditDialog(response)" title="Edit">
+                      <Pencil class="h-4 w-4" />
+                    </Button>
+                    <Button variant="ghost" size="icon" class="h-8 w-8 text-destructive" @click="openDeleteDialog(response)" title="Delete">
+                      <Trash2 class="h-4 w-4" />
+                    </Button>
+                  </div>
+                </template>
+                <template #empty-action>
+                  <Button variant="outline" size="sm" @click="openCreateDialog">
+                    <Plus class="h-4 w-4 mr-2" />Add Response
+                  </Button>
+                </template>
+              </DataTable>
+            </CardContent>
+          </Card>
+        </div>
       </div>
     </ScrollArea>
 

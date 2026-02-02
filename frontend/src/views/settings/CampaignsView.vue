@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { ref, onMounted, onUnmounted, computed, watch } from 'vue'
-import { Card, CardContent } from '@/components/ui/card'
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { ScrollArea } from '@/components/ui/scroll-area'
@@ -44,7 +44,7 @@ import { campaignsService, templatesService, accountsService } from '@/services/
 import { wsService } from '@/services/websocket'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { toast } from 'vue-sonner'
-import { PageHeader } from '@/components/shared'
+import { PageHeader, DataTable, DeleteConfirmDialog, SearchInput, type Column } from '@/components/shared'
 import { getErrorMessage } from '@/lib/api-utils'
 import {
   Plus,
@@ -147,6 +147,27 @@ const isLoading = ref(true)
 const isCreating = ref(false)
 const showCreateDialog = ref(false)
 const editingCampaignId = ref<string | null>(null) // null = create mode, string = edit mode
+
+const columns: Column<Campaign>[] = [
+  { key: 'name', label: 'Campaign', sortable: true },
+  { key: 'status', label: 'Status', sortable: true },
+  { key: 'stats', label: 'Progress' },
+  { key: 'created_at', label: 'Created', sortable: true },
+  { key: 'actions', label: 'Actions', align: 'right' },
+]
+
+const sortKey = ref('created_at')
+const sortDirection = ref<'asc' | 'desc'>('desc')
+const searchQuery = ref('')
+
+const filteredCampaigns = computed(() => {
+  if (!searchQuery.value) return campaigns.value
+  const query = searchQuery.value.toLowerCase()
+  return campaigns.value.filter(c =>
+    c.name.toLowerCase().includes(query) ||
+    c.template_name?.toLowerCase().includes(query)
+  )
+})
 
 // Filter state
 const filterStatus = ref<string>('all')
@@ -1189,64 +1210,19 @@ async function addRecipientsFromCSV() {
   <div class="flex flex-col h-full bg-[#0a0a0b] light:bg-gray-50">
     <PageHeader
       title="Campaigns"
-      description="Manage bulk messaging campaigns"
+      subtitle="Manage bulk messaging campaigns"
       :icon="Megaphone"
       icon-gradient="bg-gradient-to-br from-rose-500 to-pink-600 shadow-rose-500/20"
     >
       <template #actions>
-        <!-- Filters -->
-        <div class="flex items-center gap-2 mr-4">
-          <!-- Status Filter -->
-          <Select v-model="filterStatus">
-            <SelectTrigger class="w-[140px]">
-              <SelectValue placeholder="All Statuses" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem v-for="opt in statusOptions" :key="opt.value" :value="opt.value">
-                {{ opt.label }}
-              </SelectItem>
-            </SelectContent>
-          </Select>
-
-          <!-- Time Range Filter -->
-          <Select v-model="selectedRange">
-            <SelectTrigger class="w-[150px]">
-              <SelectValue placeholder="Select range" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="today">Today</SelectItem>
-              <SelectItem value="7days">Last 7 days</SelectItem>
-              <SelectItem value="30days">Last 30 days</SelectItem>
-              <SelectItem value="this_month">This month</SelectItem>
-              <SelectItem value="custom">Custom range</SelectItem>
-            </SelectContent>
-          </Select>
-
-          <!-- Custom Range Popover -->
-          <Popover v-if="selectedRange === 'custom'" v-model:open="isDatePickerOpen">
-            <PopoverTrigger as-child>
-              <Button variant="outline" class="w-auto">
-                <CalendarIcon class="h-4 w-4 mr-2" />
-                {{ formatDateRangeDisplay || 'Select dates' }}
-              </Button>
-            </PopoverTrigger>
-            <PopoverContent class="w-auto p-4" align="end">
-              <div class="space-y-4">
-                <RangeCalendar v-model="customDateRange" :number-of-months="2" />
-                <Button class="w-full" @click="applyCustomRange" :disabled="!customDateRange.start || !customDateRange.end">
-                  Apply Range
-                </Button>
-              </div>
-            </PopoverContent>
-          </Popover>
-        </div>
-
         <Button variant="outline" size="sm" @click="openCreateDialog">
           <Plus class="h-4 w-4 mr-2" />
           Create Campaign
         </Button>
+      </template>
+    </PageHeader>
 
-        <Dialog v-model:open="showCreateDialog">
+    <Dialog v-model:open="showCreateDialog">
           <DialogContent class="sm:max-w-[500px]">
             <DialogHeader>
               <DialogTitle>{{ editingCampaignId ? 'Edit Campaign' : 'Create New Campaign' }}</DialogTitle>
@@ -1308,290 +1284,183 @@ async function addRecipientsFromCSV() {
             </DialogFooter>
           </DialogContent>
         </Dialog>
-      </template>
-    </PageHeader>
 
     <!-- Campaigns List -->
     <ScrollArea class="flex-1">
       <div class="p-6">
-        <div class="max-w-6xl mx-auto space-y-4">
-        <!-- Loading State -->
-        <div v-if="isLoading" class="flex items-center justify-center py-12">
-          <Loader2 class="h-8 w-8 animate-spin text-muted-foreground" />
-        </div>
-
-        <!-- Campaign Cards -->
-        <Card v-for="campaign in campaigns" :key="campaign.id">
-          <CardContent class="p-6">
-            <div class="flex items-start justify-between mb-4">
-              <div class="flex items-center gap-4">
-                <div class="h-12 w-12 rounded-lg bg-orange-900 light:bg-orange-100 flex items-center justify-center">
-                  <Megaphone class="h-6 w-6 text-orange-400 light:text-orange-600" />
-                </div>
+        <div class="max-w-6xl mx-auto">
+          <Card>
+            <CardHeader>
+              <div class="flex items-center justify-between flex-wrap gap-4">
                 <div>
-                  <h3 class="font-semibold text-lg">{{ campaign.name }}</h3>
-                  <p class="text-sm text-muted-foreground">
-                    Template: {{ campaign.template_name || 'N/A' }}
-                  </p>
+                  <CardTitle>Your Campaigns</CardTitle>
+                  <CardDescription>Bulk messaging campaigns for your customers.</CardDescription>
+                </div>
+                <div class="flex items-center gap-2 flex-wrap">
+                  <Select v-model="filterStatus">
+                    <SelectTrigger class="w-[140px]">
+                      <SelectValue placeholder="All Statuses" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem v-for="opt in statusOptions" :key="opt.value" :value="opt.value">
+                        {{ opt.label }}
+                      </SelectItem>
+                    </SelectContent>
+                  </Select>
+                  <Select v-model="selectedRange">
+                    <SelectTrigger class="w-[140px]">
+                      <SelectValue placeholder="Select range" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="today">Today</SelectItem>
+                      <SelectItem value="7days">Last 7 days</SelectItem>
+                      <SelectItem value="30days">Last 30 days</SelectItem>
+                      <SelectItem value="this_month">This month</SelectItem>
+                      <SelectItem value="custom">Custom range</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  <SearchInput v-model="searchQuery" placeholder="Search campaigns..." class="w-48" />
+                  <Popover v-if="selectedRange === 'custom'" v-model:open="isDatePickerOpen">
+                    <PopoverTrigger as-child>
+                      <Button variant="outline" size="sm">
+                        <CalendarIcon class="h-4 w-4 mr-1" />
+                        {{ formatDateRangeDisplay || 'Select' }}
+                      </Button>
+                    </PopoverTrigger>
+                    <PopoverContent class="w-auto p-4" align="end">
+                      <div class="space-y-4">
+                        <RangeCalendar v-model="customDateRange" :number-of-months="2" />
+                        <Button class="w-full" size="sm" @click="applyCustomRange" :disabled="!customDateRange.start || !customDateRange.end">
+                          Apply Range
+                        </Button>
+                      </div>
+                    </PopoverContent>
+                  </Popover>
                 </div>
               </div>
-              <Badge variant="outline" :class="getStatusClass(campaign.status)">
-                <component :is="getStatusIcon(campaign.status)" class="h-3 w-3 mr-1" />
-                {{ campaign.status }}
-              </Badge>
-            </div>
-
-            <!-- Progress Bar -->
-            <div v-if="campaign.status === 'running' || campaign.status === 'processing'" class="mb-4">
-              <div class="flex items-center justify-between text-sm mb-1">
-                <span>Progress</span>
-                <span>{{ getProgressPercentage(campaign) }}%</span>
-              </div>
-              <Progress :model-value="getProgressPercentage(campaign)" class="h-2" />
-            </div>
-
-            <!-- Stats -->
-            <div class="grid grid-cols-5 gap-4 mb-4">
-              <div class="text-center">
-                <p class="text-2xl font-bold">{{ campaign.total_recipients.toLocaleString() }}</p>
-                <p class="text-xs text-muted-foreground">Recipients</p>
-              </div>
-              <div class="text-center">
-                <p class="text-2xl font-bold">{{ campaign.sent_count.toLocaleString() }}</p>
-                <p class="text-xs text-muted-foreground">Sent</p>
-              </div>
-              <div class="text-center">
-                <p class="text-2xl font-bold text-green-600">{{ campaign.delivered_count.toLocaleString() }}</p>
-                <p class="text-xs text-muted-foreground">Delivered</p>
-              </div>
-              <div class="text-center">
-                <p class="text-2xl font-bold text-blue-600">{{ campaign.read_count.toLocaleString() }}</p>
-                <p class="text-xs text-muted-foreground">Read</p>
-              </div>
-              <div class="text-center">
-                <p class="text-2xl font-bold text-destructive">{{ campaign.failed_count.toLocaleString() }}</p>
-                <p class="text-xs text-muted-foreground">Failed</p>
-              </div>
-            </div>
-
-            <!-- Timing Info -->
-            <div class="text-xs text-muted-foreground mb-4">
-              <span v-if="campaign.scheduled_at">
-                Scheduled: {{ formatDate(campaign.scheduled_at) }}
-              </span>
-              <span v-else-if="campaign.started_at">
-                Started: {{ formatDate(campaign.started_at) }}
-              </span>
-              <span v-else-if="campaign.completed_at">
-                Completed: {{ formatDate(campaign.completed_at) }}
-              </span>
-              <span v-else>
-                Created: {{ formatDate(campaign.created_at) }}
-              </span>
-            </div>
-
-            <!-- Media Upload Section (for templates with media header) -->
-            <div
-              v-if="getTemplateHeaderType(campaign.template_id) && getTemplateHeaderType(campaign.template_id) !== 'TEXT'"
-              class="mb-4 p-3 rounded-lg border bg-muted/30"
-            >
-              <div class="flex items-center gap-2 mb-2">
-                <component :is="getMediaIcon(getTemplateHeaderType(campaign.template_id))" class="h-4 w-4 text-muted-foreground" />
-                <span class="text-sm font-medium">Header Media ({{ getTemplateHeaderType(campaign.template_id) }})</span>
-              </div>
-
-              <div v-if="campaign.header_media_id" class="flex items-center gap-3 p-2 bg-green-950/30 light:bg-green-50 rounded border border-green-800 light:border-green-200">
-                <!-- Thumbnail -->
-                <div class="relative flex-shrink-0">
-                  <!-- Loading -->
-                  <div v-if="isMediaPreviewLoading(campaign.id)" class="w-12 h-12 flex items-center justify-center bg-muted rounded">
-                    <Loader2 class="h-4 w-4 animate-spin text-muted-foreground" />
+            </CardHeader>
+            <CardContent>
+              <DataTable
+                :items="filteredCampaigns"
+                :columns="columns"
+                :is-loading="isLoading"
+                :empty-icon="Megaphone"
+                :empty-title="searchQuery ? 'No matching campaigns' : 'No campaigns yet'"
+                :empty-description="searchQuery ? 'Try a different search term.' : 'Create your first bulk messaging campaign.'"
+                v-model:sort-key="sortKey"
+                v-model:sort-direction="sortDirection"
+              >
+                <template #cell-name="{ item: campaign }">
+                  <div>
+                    <span class="font-medium">{{ campaign.name }}</span>
+                    <p class="text-xs text-muted-foreground">{{ campaign.template_name || 'No template' }}</p>
                   </div>
-                  <!-- Image Thumbnail -->
-                  <img
-                    v-else-if="campaign.header_media_mime_type?.startsWith('image/') && isMediaPreviewAvailable(campaign.id)"
-                    :src="getMediaPreviewUrl(campaign.id)"
-                    :alt="campaign.header_media_filename"
-                    class="w-12 h-12 object-cover rounded"
-                  />
-                  <!-- Video Thumbnail -->
-                  <div v-else-if="campaign.header_media_mime_type?.startsWith('video/')" class="w-12 h-12 flex items-center justify-center bg-muted rounded">
-                    <Video class="h-5 w-5 text-muted-foreground" />
+                </template>
+                <template #cell-status="{ item: campaign }">
+                  <Badge variant="outline" :class="[getStatusClass(campaign.status), 'text-xs']">
+                    <component :is="getStatusIcon(campaign.status)" class="h-3 w-3 mr-1" />
+                    {{ campaign.status }}
+                  </Badge>
+                </template>
+                <template #cell-stats="{ item: campaign }">
+                  <div class="space-y-1">
+                    <div v-if="campaign.status === 'running' || campaign.status === 'processing'" class="w-32">
+                      <Progress :model-value="getProgressPercentage(campaign)" class="h-1.5" />
+                      <span class="text-xs text-muted-foreground">{{ getProgressPercentage(campaign) }}%</span>
+                    </div>
+                    <div class="flex items-center gap-3 text-xs">
+                      <span title="Recipients"><Users class="h-3 w-3 inline mr-0.5" />{{ campaign.total_recipients }}</span>
+                      <span class="text-green-600" title="Delivered">{{ campaign.delivered_count }}</span>
+                      <span class="text-blue-600" title="Read">{{ campaign.read_count }}</span>
+                      <span v-if="campaign.failed_count > 0" class="text-destructive" title="Failed">{{ campaign.failed_count }}</span>
+                    </div>
                   </div>
-                  <!-- Document Icon -->
-                  <div v-else class="w-12 h-12 flex items-center justify-center bg-muted rounded">
-                    <component :is="getMediaIcon(getTemplateHeaderType(campaign.template_id))" class="h-5 w-5 text-muted-foreground" />
-                  </div>
-                </div>
-                <!-- File Info -->
-                <div class="flex-1 min-w-0">
-                  <p class="text-sm font-medium text-green-400 light:text-green-700 truncate">
-                    {{ campaign.header_media_filename || 'Media file' }}
-                  </p>
-                  <p class="text-xs text-muted-foreground">
-                    {{ campaign.header_media_mime_type || 'Unknown type' }}
-                  </p>
-                </div>
-                <!-- Preview Button -->
-                <Button
-                  v-if="isMediaPreviewAvailable(campaign.id) && (campaign.header_media_mime_type?.startsWith('image/') || campaign.header_media_mime_type?.startsWith('video/'))"
-                  variant="ghost"
-                  size="sm"
-                  @click="openMediaPreview(campaign)"
-                >
-                  <Eye class="h-4 w-4" />
-                </Button>
-                <CheckCircle class="h-4 w-4 text-green-600 flex-shrink-0" />
-              </div>
-
-              <div v-else-if="campaign.status === 'draft'" class="space-y-2">
-                <p class="text-xs text-muted-foreground">Upload media for template header</p>
-                <div v-if="selectedCampaign?.id === campaign.id && mediaFile">
-                  <div class="flex items-center gap-2 p-2 bg-background rounded border">
-                    <component :is="getMediaIcon(getTemplateHeaderType(campaign.template_id))" class="h-4 w-4" />
-                    <span class="text-sm flex-1 truncate">{{ mediaFile.name }}</span>
-                    <Button variant="ghost" size="icon" class="h-6 w-6" @click="clearMediaFile">
-                      <X class="h-3 w-3" />
-                    </Button>
-                  </div>
-                  <Button
-                    size="sm"
-                    class="mt-2"
-                    @click="uploadCampaignMedia"
-                    :disabled="isUploadingMedia"
-                  >
-                    <Loader2 v-if="isUploadingMedia" class="h-4 w-4 mr-1 animate-spin" />
-                    <Upload v-else class="h-4 w-4 mr-1" />
-                    Upload
-                  </Button>
-                </div>
-                <div v-else>
-                  <input
-                    type="file"
-                    :data-campaign-id="campaign.id"
-                    class="hidden"
-                    :accept="getAcceptedMediaTypes(getTemplateHeaderType(campaign.template_id))"
-                    @change="(e) => { selectedCampaign = campaign; handleMediaFileSelect(e) }"
-                  />
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    @click="triggerMediaFileInput(campaign.id)"
-                  >
-                    <Upload class="h-4 w-4 mr-1" />
-                    Select File
-                  </Button>
-                </div>
-              </div>
-
-              <div v-else class="flex items-center gap-2">
-                <AlertCircle class="h-4 w-4 text-amber-500" />
-                <span class="text-sm text-amber-600">No media uploaded</span>
-              </div>
-            </div>
-
-            <!-- Actions -->
-            <div class="flex items-center justify-between border-t pt-4">
-              <div class="flex gap-2">
-                <Tooltip>
-                  <TooltipTrigger as-child>
-                    <Button variant="ghost" size="icon" @click="viewRecipients(campaign)">
+                </template>
+                <template #cell-created_at="{ item: campaign }">
+                  <span class="text-muted-foreground text-sm">{{ formatDate(campaign.created_at) }}</span>
+                </template>
+                <template #cell-actions="{ item: campaign }">
+                  <div class="flex items-center justify-end gap-1">
+                    <Button variant="ghost" size="icon" class="h-8 w-8" @click="viewRecipients(campaign)" title="View Recipients">
                       <Eye class="h-4 w-4" />
                     </Button>
-                  </TooltipTrigger>
-                  <TooltipContent>View Recipients</TooltipContent>
-                </Tooltip>
-                <Tooltip v-if="campaign.status === 'draft'">
-                  <TooltipTrigger as-child>
-                    <Button variant="ghost" size="icon" @click="openAddRecipientsDialog(campaign as any)">
+                    <Button v-if="campaign.status === 'draft'" variant="ghost" size="icon" class="h-8 w-8" @click="openAddRecipientsDialog(campaign as any)" title="Add Recipients">
                       <UserPlus class="h-4 w-4" />
                     </Button>
-                  </TooltipTrigger>
-                  <TooltipContent>Add Recipients</TooltipContent>
-                </Tooltip>
-                <Tooltip v-if="campaign.status === 'draft'">
-                  <TooltipTrigger as-child>
-                    <Button variant="ghost" size="icon" @click="openEditDialog(campaign)">
+                    <Button v-if="campaign.status === 'draft'" variant="ghost" size="icon" class="h-8 w-8" @click="openEditDialog(campaign)" title="Edit">
                       <Pencil class="h-4 w-4" />
                     </Button>
-                  </TooltipTrigger>
-                  <TooltipContent>Edit Campaign</TooltipContent>
-                </Tooltip>
-                <Tooltip>
-                  <TooltipTrigger as-child>
+                    <Button
+                      v-if="campaign.status === 'draft' || campaign.status === 'scheduled'"
+                      variant="ghost"
+                      size="icon"
+                      class="h-8 w-8 text-green-600"
+                      @click="startCampaign(campaign)"
+                      title="Start"
+                    >
+                      <Play class="h-4 w-4" />
+                    </Button>
+                    <Button
+                      v-if="campaign.status === 'running' || campaign.status === 'processing'"
+                      variant="ghost"
+                      size="icon"
+                      class="h-8 w-8"
+                      @click="pauseCampaign(campaign)"
+                      title="Pause"
+                    >
+                      <Pause class="h-4 w-4" />
+                    </Button>
+                    <Button
+                      v-if="campaign.status === 'paused'"
+                      variant="ghost"
+                      size="icon"
+                      class="h-8 w-8 text-green-600"
+                      @click="startCampaign(campaign)"
+                      title="Resume"
+                    >
+                      <Play class="h-4 w-4" />
+                    </Button>
+                    <Button
+                      v-if="campaign.failed_count > 0 && (campaign.status === 'completed' || campaign.status === 'paused' || campaign.status === 'failed')"
+                      variant="ghost"
+                      size="icon"
+                      class="h-8 w-8"
+                      @click="retryFailed(campaign)"
+                      title="Retry Failed"
+                    >
+                      <RefreshCw class="h-4 w-4" />
+                    </Button>
+                    <Button
+                      v-if="campaign.status === 'running' || campaign.status === 'paused' || campaign.status === 'processing' || campaign.status === 'queued'"
+                      variant="ghost"
+                      size="icon"
+                      class="h-8 w-8 text-destructive"
+                      @click="openCancelDialog(campaign)"
+                      title="Cancel"
+                    >
+                      <XCircle class="h-4 w-4" />
+                    </Button>
                     <Button
                       variant="ghost"
                       size="icon"
+                      class="h-8 w-8 text-destructive"
                       @click="openDeleteDialog(campaign)"
                       :disabled="campaign.status === 'running' || campaign.status === 'processing'"
+                      title="Delete"
                     >
-                      <Trash2 class="h-4 w-4 text-destructive" />
+                      <Trash2 class="h-4 w-4" />
                     </Button>
-                  </TooltipTrigger>
-                  <TooltipContent>Delete Campaign</TooltipContent>
-                </Tooltip>
-              </div>
-              <div class="flex gap-2">
-                <Button
-                  v-if="campaign.status === 'draft' || campaign.status === 'scheduled'"
-                  size="sm"
-                  @click="startCampaign(campaign)"
-                >
-                  <Play class="h-4 w-4 mr-1" />
-                  Start
-                </Button>
-                <Button
-                  v-if="campaign.status === 'running' || campaign.status === 'processing'"
-                  variant="outline"
-                  size="sm"
-                  @click="pauseCampaign(campaign)"
-                >
-                  <Pause class="h-4 w-4 mr-1" />
-                  Pause
-                </Button>
-                <Button
-                  v-if="campaign.status === 'paused'"
-                  size="sm"
-                  @click="startCampaign(campaign)"
-                >
-                  <Play class="h-4 w-4 mr-1" />
-                  Resume
-                </Button>
-                <Button
-                  v-if="campaign.failed_count > 0 && (campaign.status === 'completed' || campaign.status === 'paused' || campaign.status === 'failed')"
-                  variant="outline"
-                  size="sm"
-                  @click="retryFailed(campaign)"
-                >
-                  <RefreshCw class="h-4 w-4 mr-1" />
-                  Retry Failed
-                </Button>
-                <Button
-                  v-if="campaign.status === 'running' || campaign.status === 'paused' || campaign.status === 'processing' || campaign.status === 'queued'"
-                  variant="destructive"
-                  size="sm"
-                  @click="openCancelDialog(campaign)"
-                >
-                  <XCircle class="h-4 w-4 mr-1" />
-                  Cancel
-                </Button>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-
-        <!-- Empty State -->
-        <Card v-if="campaigns.length === 0 && !isLoading">
-          <CardContent class="py-12 text-center text-muted-foreground">
-            <Megaphone class="h-12 w-12 mx-auto mb-4 opacity-50" />
-            <p class="text-lg font-medium">No campaigns yet</p>
-            <p class="text-sm mb-4">Create your first bulk messaging campaign.</p>
-            <Button variant="outline" size="sm" @click="showCreateDialog = true">
-              <Plus class="h-4 w-4 mr-2" />
-              Create Campaign
-            </Button>
-          </CardContent>
-        </Card>
+                  </div>
+                </template>
+                <template #empty-action>
+                  <Button v-if="!searchQuery" variant="outline" size="sm" @click="showCreateDialog = true">
+                    <Plus class="h-4 w-4 mr-2" />
+                    Create Campaign
+                  </Button>
+                </template>
+              </DataTable>
+            </CardContent>
+          </Card>
         </div>
       </div>
     </ScrollArea>
@@ -1948,21 +1817,12 @@ async function addRecipientsFromCSV() {
       </DialogContent>
     </Dialog>
 
-    <!-- Delete Confirmation Dialog -->
-    <AlertDialog v-model:open="deleteDialogOpen">
-      <AlertDialogContent>
-        <AlertDialogHeader>
-          <AlertDialogTitle>Delete Campaign</AlertDialogTitle>
-          <AlertDialogDescription>
-            Are you sure you want to delete "{{ campaignToDelete?.name }}"? This action cannot be undone.
-          </AlertDialogDescription>
-        </AlertDialogHeader>
-        <AlertDialogFooter>
-          <AlertDialogCancel>Cancel</AlertDialogCancel>
-          <AlertDialogAction @click="confirmDeleteCampaign">Delete</AlertDialogAction>
-        </AlertDialogFooter>
-      </AlertDialogContent>
-    </AlertDialog>
+    <DeleteConfirmDialog
+      v-model:open="deleteDialogOpen"
+      title="Delete Campaign"
+      :item-name="campaignToDelete?.name"
+      @confirm="confirmDeleteCampaign"
+    />
 
     <!-- Cancel Confirmation Dialog -->
     <AlertDialog v-model:open="cancelDialogOpen">

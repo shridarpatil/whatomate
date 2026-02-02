@@ -164,7 +164,7 @@ test.describe('AI Contexts Management', () => {
     await aiContextsPage.expectDialogHidden()
   })
 
-  test('should show context type badge in card', async () => {
+  test('should show context type badge in table row', async () => {
     const contextName = `Type Badge ${Date.now()}`
 
     await aiContextsPage.openCreateDialog()
@@ -175,11 +175,11 @@ test.describe('AI Contexts Management', () => {
     await aiContextsPage.submitDialog()
     await aiContextsPage.expectToast('created')
 
-    const card = aiContextsPage.getContextCard(contextName)
-    await expect(card).toContainText('Static Content')
+    const row = aiContextsPage.getContextRow(contextName)
+    await expect(row).toContainText('Static')
   })
 
-  test('should show priority badge in card', async () => {
+  test('should show priority in table row', async () => {
     const contextName = `Priority Badge ${Date.now()}`
 
     await aiContextsPage.openCreateDialog()
@@ -191,11 +191,11 @@ test.describe('AI Contexts Management', () => {
     await aiContextsPage.submitDialog()
     await aiContextsPage.expectToast('created')
 
-    const card = aiContextsPage.getContextCard(contextName)
-    await expect(card).toContainText('50')
+    const row = aiContextsPage.getContextRow(contextName)
+    await expect(row).toContainText('50')
   })
 
-  test('should show trigger keywords in card', async () => {
+  test('should show trigger keywords in table row', async () => {
     const contextName = `Keywords Badge ${Date.now()}`
     const keywords = 'faq, help'
 
@@ -208,12 +208,12 @@ test.describe('AI Contexts Management', () => {
     await aiContextsPage.submitDialog()
     await aiContextsPage.expectToast('created')
 
-    const card = aiContextsPage.getContextCard(contextName)
-    await expect(card).toContainText('faq')
-    await expect(card).toContainText('help')
+    const row = aiContextsPage.getContextRow(contextName)
+    await expect(row).toContainText('faq')
+    await expect(row).toContainText('help')
   })
 
-  test('should show active/inactive status badge', async () => {
+  test('should show active/inactive status in table row', async () => {
     const contextName = `Status Badge ${Date.now()}`
 
     await aiContextsPage.openCreateDialog()
@@ -224,8 +224,8 @@ test.describe('AI Contexts Management', () => {
     await aiContextsPage.submitDialog()
     await aiContextsPage.expectToast('created')
 
-    const card = aiContextsPage.getContextCard(contextName)
-    await expect(card).toContainText('Active')
+    const row = aiContextsPage.getContextRow(contextName)
+    await expect(row).toContainText('Active')
   })
 })
 
@@ -346,8 +346,8 @@ test.describe('AI Contexts - API Configuration', () => {
     await aiContextsPage.submitDialog()
     await aiContextsPage.expectToast('created')
 
-    const card = aiContextsPage.getContextCard(contextName)
-    await expect(card).toContainText('API Fetch')
+    const row = aiContextsPage.getContextRow(contextName)
+    await expect(row).toContainText('API Fetch')
   })
 })
 
@@ -377,8 +377,8 @@ test.describe('AI Contexts - Priority', () => {
     await aiContextsPage.submitDialog()
 
     await aiContextsPage.expectToast('created')
-    const card = aiContextsPage.getContextCard(contextName)
-    await expect(card).toContainText('100')
+    const row = aiContextsPage.getContextRow(contextName)
+    await expect(row).toContainText('100')
   })
 })
 
