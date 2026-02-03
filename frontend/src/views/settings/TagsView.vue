@@ -1,5 +1,6 @@
 <script setup lang="ts">
-import { ref, onMounted, watch } from 'vue'
+import { ref, onMounted, watch, computed } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { Button } from '@/components/ui/button'
@@ -15,6 +16,8 @@ import { getErrorMessage } from '@/lib/api-utils'
 import { TAG_COLORS } from '@/lib/constants'
 import { formatDate } from '@/lib/utils'
 import { useDebounceFn } from '@vueuse/core'
+
+const { t } = useI18n()
 
 interface TagFormData {
   name: string
@@ -42,12 +45,12 @@ const pageSize = 20
 const sortKey = ref('name')
 const sortDirection = ref<'asc' | 'desc'>('asc')
 
-const columns: Column<Tag>[] = [
-  { key: 'name', label: 'Tag', sortable: true },
-  { key: 'color', label: 'Color', sortable: true },
-  { key: 'created_at', label: 'Created', sortable: true },
-  { key: 'actions', label: 'Actions', align: 'right' },
-]
+const columns = computed<Column<Tag>[]>(() => [
+  { key: 'name', label: t('tags.tag'), sortable: true },
+  { key: 'color', label: t('tags.color'), sortable: true },
+  { key: 'created_at', label: t('tags.created'), sortable: true },
+  { key: 'actions', label: t('common.actions'), align: 'right' },
+])
 
 function openCreateDialog() {
   editingTag.value = null
@@ -92,7 +95,7 @@ async function fetchTags() {
     // Use total from response if available, otherwise use items length
     totalItems.value = responseData.total ?? tags.value.length
   } catch (error) {
-    toast.error(getErrorMessage(error, 'Failed to load tags'))
+    toast.error(getErrorMessage(error, t('tags.loadTagsFailed')))
   } finally {
     isLoading.value = false
   }
@@ -118,23 +121,23 @@ onMounted(() => fetchTags())
 
 async function saveTag() {
   if (!formData.value.name.trim()) {
-    toast.error('Name is required')
+    toast.error(t('tags.nameRequired'))
     return
   }
   isSubmitting.value = true
   try {
     if (editingTag.value) {
       await tagsService.update(editingTag.value.name, formData.value)
-      toast.success('Tag updated successfully')
+      toast.success(t('tags.tagUpdated'))
     } else {
       await tagsService.create(formData.value)
-      toast.success('Tag created successfully')
+      toast.success(t('tags.tagCreated'))
     }
     closeDialog()
     // Refresh from server to keep pagination in sync
     await fetchTags()
   } catch (error) {
-    toast.error(getErrorMessage(error, 'Failed to save tag'))
+    toast.error(getErrorMessage(error, t('tags.saveTagFailed')))
   } finally {
     isSubmitting.value = false
   }
@@ -144,12 +147,12 @@ async function confirmDelete() {
   if (!tagToDelete.value) return
   try {
     await tagsService.delete(tagToDelete.value.name)
-    toast.success('Tag deleted')
+    toast.success(t('tags.tagDeleted'))
     closeDeleteDialog()
     // Refresh from server to keep pagination in sync
     await fetchTags()
   } catch (error) {
-    toast.error(getErrorMessage(error, 'Failed to delete tag'))
+    toast.error(getErrorMessage(error, t('tags.deleteTagFailed')))
   }
 }
 
@@ -161,9 +164,9 @@ function getColorLabel(color: string): string {
 
 <template>
   <div class="flex flex-col h-full bg-[#0a0a0b] light:bg-gray-50">
-    <PageHeader title="Tags" subtitle="Manage organization tags for contacts" :icon="Tags" icon-gradient="bg-gradient-to-br from-indigo-500 to-purple-600 shadow-indigo-500/20" back-link="/settings">
+    <PageHeader :title="$t('tags.title')" :subtitle="$t('tags.subtitle')" :icon="Tags" icon-gradient="bg-gradient-to-br from-indigo-500 to-purple-600 shadow-indigo-500/20" back-link="/settings">
       <template #actions>
-        <Button variant="outline" size="sm" @click="openCreateDialog"><Plus class="h-4 w-4 mr-2" />Add Tag</Button>
+        <Button variant="outline" size="sm" @click="openCreateDialog"><Plus class="h-4 w-4 mr-2" />{{ $t('tags.addTag') }}</Button>
       </template>
     </PageHeader>
 
@@ -174,10 +177,10 @@ function getColorLabel(color: string): string {
             <CardHeader>
               <div class="flex items-center justify-between flex-wrap gap-4">
                 <div>
-                  <CardTitle>Organization Tags</CardTitle>
-                  <CardDescription>Create and manage tags to organize your contacts.</CardDescription>
+                  <CardTitle>{{ $t('tags.organizationTags') }}</CardTitle>
+                  <CardDescription>{{ $t('tags.organizationTagsDesc') }}</CardDescription>
                 </div>
-                <SearchInput v-model="searchQuery" placeholder="Search tags..." class="w-64" />
+                <SearchInput v-model="searchQuery" :placeholder="$t('tags.searchTags') + '...'" class="w-64" />
               </div>
             </CardHeader>
             <CardContent>
@@ -186,8 +189,8 @@ function getColorLabel(color: string): string {
                 :columns="columns"
                 :is-loading="isLoading"
                 :empty-icon="Tags"
-                :empty-title="searchQuery ? 'No matching tags' : 'No tags created yet'"
-                :empty-description="searchQuery ? 'No tags match your search.' : 'Create your first tag to start organizing contacts.'"
+                :empty-title="searchQuery ? $t('tags.noMatchingTags') : $t('tags.noTagsYet')"
+                :empty-description="searchQuery ? $t('tags.noMatchingTagsDesc') : $t('tags.noTagsYetDesc')"
                 v-model:sort-key="sortKey"
                 v-model:sort-direction="sortDirection"
                 server-pagination
@@ -219,7 +222,7 @@ function getColorLabel(color: string): string {
                 <template #empty-action>
                   <Button variant="outline" size="sm" @click="openCreateDialog">
                     <Plus class="h-4 w-4 mr-2" />
-                    Add Tag
+                    {{ $t('tags.addTag') }}
                   </Button>
                 </template>
               </DataTable>
@@ -233,24 +236,24 @@ function getColorLabel(color: string): string {
       v-model:open="isDialogOpen"
       :is-editing="!!editingTag"
       :is-submitting="isSubmitting"
-      edit-title="Edit Tag"
-      create-title="Create Tag"
-      edit-description="Update the tag details."
-      create-description="Add a new tag for contacts."
+      :edit-title="$t('tags.editTagTitle')"
+      :create-title="$t('tags.createTagTitle')"
+      :edit-description="$t('tags.editTagDesc')"
+      :create-description="$t('tags.createTagDesc')"
       max-width="max-w-md"
       @submit="saveTag"
     >
       <div class="space-y-4">
         <div class="space-y-2">
-          <Label>Name <span class="text-destructive">*</span></Label>
-          <Input v-model="formData.name" placeholder="VIP Customer" maxlength="50" />
-          <p class="text-xs text-muted-foreground">Maximum 50 characters</p>
+          <Label>{{ $t('tags.name') }} <span class="text-destructive">*</span></Label>
+          <Input v-model="formData.name" :placeholder="$t('tags.namePlaceholder')" maxlength="50" />
+          <p class="text-xs text-muted-foreground">{{ $t('tags.maxCharacters') }}</p>
         </div>
         <div class="space-y-2">
-          <Label>Color</Label>
+          <Label>{{ $t('tags.color') }}</Label>
           <Select v-model="formData.color" :default-value="formData.color">
             <SelectTrigger>
-              <SelectValue placeholder="Select color" />
+              <SelectValue :placeholder="$t('tags.selectColor')" />
             </SelectTrigger>
             <SelectContent>
               <SelectItem v-for="color in TAG_COLORS" :key="color.value" :value="color.value" :text-value="color.label">
@@ -263,16 +266,16 @@ function getColorLabel(color: string): string {
           </Select>
         </div>
         <div class="pt-2">
-          <Label class="text-sm text-muted-foreground">Preview</Label>
+          <Label class="text-sm text-muted-foreground">{{ $t('tags.preview') }}</Label>
           <div class="mt-2">
-            <TagBadge :color="formData.color">{{ formData.name || 'Tag Preview' }}</TagBadge>
+            <TagBadge :color="formData.color">{{ formData.name || $t('tags.tagPreview') }}</TagBadge>
           </div>
         </div>
       </div>
     </CrudFormDialog>
 
-    <DeleteConfirmDialog v-model:open="deleteDialogOpen" title="Delete Tag" :item-name="tagToDelete?.name" @confirm="confirmDelete">
-      <p class="text-sm text-muted-foreground">This will remove the tag from all contacts that have it.</p>
+    <DeleteConfirmDialog v-model:open="deleteDialogOpen" :title="$t('tags.deleteTag')" :item-name="tagToDelete?.name" @confirm="confirmDelete">
+      <p class="text-sm text-muted-foreground">{{ $t('tags.deleteWarning') }}</p>
     </DeleteConfirmDialog>
   </div>
 </template>

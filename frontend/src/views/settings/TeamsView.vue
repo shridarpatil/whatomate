@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { ref, onMounted, computed, watch } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { Button } from '@/components/ui/button'
@@ -24,6 +25,8 @@ import { getErrorMessage } from '@/lib/api-utils'
 import { formatDate } from '@/lib/utils'
 import { ASSIGNMENT_STRATEGIES, getLabelFromValue } from '@/lib/constants'
 import { useDebounceFn } from '@vueuse/core'
+
+const { t } = useI18n()
 
 const teamsStore = useTeamsStore()
 const usersStore = useUsersStore()
@@ -72,21 +75,21 @@ const teamMembers = ref<TeamMember[]>([])
 const loadingMembers = ref(false)
 
 const isAdmin = computed(() => authStore.userRole === 'admin')
-const breadcrumbs = [{ label: 'Settings', href: '/settings' }, { label: 'Teams' }]
+const breadcrumbs = computed(() => [{ label: t('nav.settings'), href: '/settings' }, { label: t('nav.teams') }])
 
 const availableUsers = computed(() => {
   const memberUserIds = new Set(teamMembers.value.map(m => m.user_id))
   return usersStore.users.filter(u => !memberUserIds.has(u.id) && u.is_active)
 })
 
-const columns: Column<Team>[] = [
-  { key: 'team', label: 'Team', width: 'w-[250px]', sortable: true, sortKey: 'name' },
-  { key: 'strategy', label: 'Strategy', sortable: true, sortKey: 'assignment_strategy' },
-  { key: 'members', label: 'Members', sortable: true, sortKey: 'member_count' },
-  { key: 'status', label: 'Status', sortable: true, sortKey: 'is_active' },
-  { key: 'created', label: 'Created', sortable: true, sortKey: 'created_at' },
-  { key: 'actions', label: 'Actions', align: 'right' },
-]
+const columns = computed<Column<Team>[]>(() => [
+  { key: 'team', label: t('teams.team'), width: 'w-[250px]', sortable: true, sortKey: 'name' },
+  { key: 'strategy', label: t('teams.strategy'), sortable: true, sortKey: 'assignment_strategy' },
+  { key: 'members', label: t('teams.members'), sortable: true, sortKey: 'member_count' },
+  { key: 'status', label: t('teams.status'), sortable: true, sortKey: 'is_active' },
+  { key: 'created', label: t('teams.created'), sortable: true, sortKey: 'created_at' },
+  { key: 'actions', label: t('common.actions'), align: 'right' },
+])
 
 // Sorting state
 const sortKey = ref('name')
@@ -109,31 +112,31 @@ async function fetchTeams() {
     })
     teams.value = response.teams
     totalItems.value = response.total
-  } catch { toast.error('Failed to load teams') }
+  } catch { toast.error(t('teams.loadTeamsFailed')) }
   finally { isLoading.value = false }
 }
 
 async function saveTeam() {
-  if (!formData.value.name.trim()) { toast.error('Please enter a team name'); return }
+  if (!formData.value.name.trim()) { toast.error(t('teams.enterTeamName')); return }
   isSubmitting.value = true
   try {
     if (editingTeam.value) {
       await teamsStore.updateTeam(editingTeam.value.id, { name: formData.value.name, description: formData.value.description, assignment_strategy: formData.value.assignment_strategy, is_active: formData.value.is_active })
-      toast.success('Team updated successfully')
+      toast.success(t('teams.teamUpdated'))
     } else {
       await teamsStore.createTeam({ name: formData.value.name, description: formData.value.description, assignment_strategy: formData.value.assignment_strategy })
-      toast.success('Team created successfully')
+      toast.success(t('teams.teamCreated'))
     }
     closeDialog()
     await fetchTeams()
-  } catch (e) { toast.error(getErrorMessage(e, 'Failed to save team')) }
+  } catch (e) { toast.error(getErrorMessage(e, t('teams.saveTeamFailed'))) }
   finally { isSubmitting.value = false }
 }
 
 async function confirmDelete() {
   if (!teamToDelete.value) return
-  try { await teamsStore.deleteTeam(teamToDelete.value.id); toast.success('Team deleted'); closeDeleteDialog(); await fetchTeams() }
-  catch (e) { toast.error(getErrorMessage(e, 'Failed to delete team')) }
+  try { await teamsStore.deleteTeam(teamToDelete.value.id); toast.success(t('teams.teamDeleted')); closeDeleteDialog(); await fetchTeams() }
+  catch (e) { toast.error(getErrorMessage(e, t('teams.deleteTeamFailed'))) }
 }
 
 async function openMembersDialog(team: Team) {
@@ -141,7 +144,7 @@ async function openMembersDialog(team: Team) {
   loadingMembers.value = true
   isMembersDialogOpen.value = true
   try { teamMembers.value = await teamsStore.fetchTeamMembers(team.id) }
-  catch { toast.error('Failed to load team members') }
+  catch { toast.error(t('teams.loadMembersFailed')) }
   finally { loadingMembers.value = false }
 }
 
@@ -150,8 +153,8 @@ async function addMember(user: User, role: 'manager' | 'agent' = 'agent') {
   try {
     const member = await teamsStore.addTeamMember(selectedTeam.value.id, user.id, role)
     teamMembers.value.push({ ...member, user: { id: user.id, full_name: user.full_name, email: user.email, is_available: true } })
-    toast.success(`${user.full_name} added to team`)
-  } catch (e) { toast.error(getErrorMessage(e, 'Failed to add member')) }
+    toast.success(t('teams.memberAdded', { name: user.full_name }))
+  } catch (e) { toast.error(getErrorMessage(e, t('teams.addMemberFailed'))) }
 }
 
 async function removeMember(member: TeamMember) {
@@ -159,8 +162,8 @@ async function removeMember(member: TeamMember) {
   try {
     await teamsStore.removeTeamMember(selectedTeam.value.id, member.user_id)
     teamMembers.value = teamMembers.value.filter(m => m.user_id !== member.user_id)
-    toast.success('Member removed from team')
-  } catch (e) { toast.error(getErrorMessage(e, 'Failed to remove member')) }
+    toast.success(t('teams.memberRemoved'))
+  } catch (e) { toast.error(getErrorMessage(e, t('teams.removeMemberFailed'))) }
 }
 
 function getStrategyLabel(strategy: string): string { return getLabelFromValue(ASSIGNMENT_STRATEGIES, strategy) }
@@ -169,9 +172,9 @@ function getStrategyIcon(strategy: string) { return { round_robin: RotateCcw, lo
 
 <template>
   <div class="flex flex-col h-full bg-[#0a0a0b] light:bg-gray-50">
-    <PageHeader title="Teams" :icon="Users" icon-gradient="bg-gradient-to-br from-cyan-500 to-blue-600 shadow-cyan-500/20" back-link="/settings" :breadcrumbs="breadcrumbs">
+    <PageHeader :title="$t('teams.title')" :icon="Users" icon-gradient="bg-gradient-to-br from-cyan-500 to-blue-600 shadow-cyan-500/20" back-link="/settings" :breadcrumbs="breadcrumbs">
       <template #actions>
-        <Button v-if="isAdmin" variant="outline" size="sm" @click="openCreateDialog"><Plus class="h-4 w-4 mr-2" />Add Team</Button>
+        <Button v-if="isAdmin" variant="outline" size="sm" @click="openCreateDialog"><Plus class="h-4 w-4 mr-2" />{{ $t('teams.addTeam') }}</Button>
       </template>
     </PageHeader>
 
@@ -182,16 +185,16 @@ function getStrategyIcon(strategy: string) { return { round_robin: RotateCcw, lo
             <CardHeader>
               <div class="flex items-center justify-between flex-wrap gap-4">
                 <div>
-                  <CardTitle>Your Teams</CardTitle>
-                  <CardDescription>Organize agents into teams with assignment strategies: Round Robin, Load Balanced, or Manual Queue.</CardDescription>
+                  <CardTitle>{{ $t('teams.yourTeams') }}</CardTitle>
+                  <CardDescription>{{ $t('teams.yourTeamsDesc') }}</CardDescription>
                 </div>
-                <SearchInput v-model="searchQuery" placeholder="Search teams..." class="w-64" />
+                <SearchInput v-model="searchQuery" :placeholder="$t('teams.searchTeams') + '...'" class="w-64" />
               </div>
             </CardHeader>
             <CardContent>
-              <DataTable :items="teams" :columns="columns" :is-loading="isLoading" :empty-icon="Users" :empty-title="searchQuery ? 'No matching teams' : 'No teams created yet'" :empty-description="searchQuery ? 'No teams match your search.' : 'Create your first team to organize agents.'" v-model:sort-key="sortKey" v-model:sort-direction="sortDirection" server-pagination :current-page="currentPage" :total-items="totalItems" :page-size="pageSize" item-name="teams" @page-change="handlePageChange">
+              <DataTable :items="teams" :columns="columns" :is-loading="isLoading" :empty-icon="Users" :empty-title="searchQuery ? $t('teams.noMatchingTeams') : $t('teams.noTeamsYet')" :empty-description="searchQuery ? $t('teams.noMatchingTeamsDesc') : $t('teams.noTeamsYetDesc')" v-model:sort-key="sortKey" v-model:sort-direction="sortDirection" server-pagination :current-page="currentPage" :total-items="totalItems" :page-size="pageSize" item-name="teams" @page-change="handlePageChange">
                 <template #empty-action>
-                  <Button v-if="isAdmin" variant="outline" size="sm" @click="openCreateDialog"><Plus class="h-4 w-4 mr-2" />Add Team</Button>
+                  <Button v-if="isAdmin" variant="outline" size="sm" @click="openCreateDialog"><Plus class="h-4 w-4 mr-2" />{{ $t('teams.addTeam') }}</Button>
                 </template>
                 <template #cell-team="{ item: team }">
                   <div class="flex items-center gap-3">
@@ -212,16 +215,16 @@ function getStrategyIcon(strategy: string) { return { round_robin: RotateCcw, lo
                   <Button variant="ghost" size="sm" class="h-8 px-2" @click="openMembersDialog(team)"><Users class="h-4 w-4 mr-1" />{{ team.member_count || 0 }}</Button>
                 </template>
                 <template #cell-status="{ item: team }">
-                  <Badge variant="outline" :class="team.is_active ? 'border-green-600 text-green-600' : ''">{{ team.is_active ? 'Active' : 'Inactive' }}</Badge>
+                  <Badge variant="outline" :class="team.is_active ? 'border-green-600 text-green-600' : ''">{{ team.is_active ? $t('common.active') : $t('common.inactive') }}</Badge>
                 </template>
                 <template #cell-created="{ item: team }">
                   <span class="text-muted-foreground">{{ formatDate(team.created_at) }}</span>
                 </template>
                 <template #cell-actions="{ item: team }">
                   <div class="flex items-center justify-end gap-1">
-                    <Tooltip><TooltipTrigger as-child><Button variant="ghost" size="icon" class="h-8 w-8" @click="openMembersDialog(team)"><UserPlus class="h-4 w-4" /></Button></TooltipTrigger><TooltipContent>Manage members</TooltipContent></Tooltip>
-                    <Tooltip><TooltipTrigger as-child><Button variant="ghost" size="icon" class="h-8 w-8" @click="openEditDialog(team)"><Pencil class="h-4 w-4" /></Button></TooltipTrigger><TooltipContent>Edit team</TooltipContent></Tooltip>
-                    <Tooltip v-if="isAdmin"><TooltipTrigger as-child><Button variant="ghost" size="icon" class="h-8 w-8" @click="openDeleteDialog(team)"><Trash2 class="h-4 w-4 text-destructive" /></Button></TooltipTrigger><TooltipContent>Delete team</TooltipContent></Tooltip>
+                    <Tooltip><TooltipTrigger as-child><Button variant="ghost" size="icon" class="h-8 w-8" @click="openMembersDialog(team)"><UserPlus class="h-4 w-4" /></Button></TooltipTrigger><TooltipContent>{{ $t('teams.manageMembers') }}</TooltipContent></Tooltip>
+                    <Tooltip><TooltipTrigger as-child><Button variant="ghost" size="icon" class="h-8 w-8" @click="openEditDialog(team)"><Pencil class="h-4 w-4" /></Button></TooltipTrigger><TooltipContent>{{ $t('teams.editTeamTooltip') }}</TooltipContent></Tooltip>
+                    <Tooltip v-if="isAdmin"><TooltipTrigger as-child><Button variant="ghost" size="icon" class="h-8 w-8" @click="openDeleteDialog(team)"><Trash2 class="h-4 w-4 text-destructive" /></Button></TooltipTrigger><TooltipContent>{{ $t('teams.deleteTeamTooltip') }}</TooltipContent></Tooltip>
                   </div>
                 </template>
               </DataTable>
@@ -231,15 +234,15 @@ function getStrategyIcon(strategy: string) { return { round_robin: RotateCcw, lo
       </div>
     </ScrollArea>
 
-    <CrudFormDialog v-model:open="isDialogOpen" :is-editing="!!editingTeam" :is-submitting="isSubmitting" edit-title="Edit Team" create-title="Create Team" edit-description="Update team settings." create-description="Create a new team to organize agents." edit-submit-label="Update Team" create-submit-label="Create Team" @submit="saveTeam">
+    <CrudFormDialog v-model:open="isDialogOpen" :is-editing="!!editingTeam" :is-submitting="isSubmitting" :edit-title="$t('teams.editTeamTitle')" :create-title="$t('teams.createTeamTitle')" :edit-description="$t('teams.editTeamDesc')" :create-description="$t('teams.createTeamDesc')" :edit-submit-label="$t('teams.updateTeam')" :create-submit-label="$t('teams.createTeam')" @submit="saveTeam">
       <div class="space-y-4">
-        <div class="space-y-2"><Label for="name">Team Name <span class="text-destructive">*</span></Label><Input id="name" v-model="formData.name" placeholder="e.g., Sales Team" /></div>
-        <div class="space-y-2"><Label for="description">Description</Label><Textarea id="description" v-model="formData.description" placeholder="What does this team handle?" :rows="2" /></div>
+        <div class="space-y-2"><Label for="name">{{ $t('teams.teamName') }} <span class="text-destructive">*</span></Label><Input id="name" v-model="formData.name" :placeholder="$t('teams.teamNamePlaceholder')" /></div>
+        <div class="space-y-2"><Label for="description">{{ $t('teams.description') }}</Label><Textarea id="description" v-model="formData.description" :placeholder="$t('teams.descriptionPlaceholder')" :rows="2" /></div>
         <div class="space-y-2">
-          <Label for="strategy">Assignment Strategy</Label>
-          <Select v-model="formData.assignment_strategy"><SelectTrigger><SelectValue placeholder="Select strategy" /></SelectTrigger><SelectContent><SelectItem value="round_robin"><div class="flex items-center gap-2"><RotateCcw class="h-4 w-4" />Round Robin</div></SelectItem><SelectItem value="load_balanced"><div class="flex items-center gap-2"><Scale class="h-4 w-4" />Load Balanced</div></SelectItem><SelectItem value="manual"><div class="flex items-center gap-2"><Hand class="h-4 w-4" />Manual Queue</div></SelectItem></SelectContent></Select>
+          <Label for="strategy">{{ $t('teams.assignmentStrategy') }}</Label>
+          <Select v-model="formData.assignment_strategy"><SelectTrigger><SelectValue :placeholder="$t('teams.selectStrategy')" /></SelectTrigger><SelectContent><SelectItem value="round_robin"><div class="flex items-center gap-2"><RotateCcw class="h-4 w-4" />{{ $t('teams.roundRobin') }}</div></SelectItem><SelectItem value="load_balanced"><div class="flex items-center gap-2"><Scale class="h-4 w-4" />{{ $t('teams.loadBalanced') }}</div></SelectItem><SelectItem value="manual"><div class="flex items-center gap-2"><Hand class="h-4 w-4" />{{ $t('teams.manualQueue') }}</div></SelectItem></SelectContent></Select>
         </div>
-        <div v-if="editingTeam" class="flex items-center justify-between"><Label for="is_active" class="font-normal cursor-pointer">Team Active</Label><Switch id="is_active" :checked="formData.is_active" @update:checked="formData.is_active = $event" /></div>
+        <div v-if="editingTeam" class="flex items-center justify-between"><Label for="is_active" class="font-normal cursor-pointer">{{ $t('teams.teamActive') }}</Label><Switch id="is_active" :checked="formData.is_active" @update:checked="formData.is_active = $event" /></div>
       </div>
     </CrudFormDialog>
 
@@ -247,14 +250,14 @@ function getStrategyIcon(strategy: string) { return { round_robin: RotateCcw, lo
     <Dialog v-model:open="isMembersDialogOpen">
       <DialogContent class="max-w-lg">
         <DialogHeader>
-          <DialogTitle>Team Members - {{ selectedTeam?.name }}</DialogTitle>
-          <DialogDescription>Add or remove team members.</DialogDescription>
+          <DialogTitle>{{ $t('teams.teamMembers') }} - {{ selectedTeam?.name }}</DialogTitle>
+          <DialogDescription>{{ $t('teams.addOrRemoveMembers') }}</DialogDescription>
         </DialogHeader>
         <div class="py-4 space-y-4">
           <div>
-            <h4 class="font-medium mb-2">Current Members ({{ teamMembers.length }})</h4>
+            <h4 class="font-medium mb-2">{{ $t('teams.currentMembers') }} ({{ teamMembers.length }})</h4>
             <div v-if="loadingMembers" class="flex items-center justify-center py-4"><Loader2 class="h-6 w-6 animate-spin" /></div>
-            <div v-else-if="teamMembers.length === 0" class="text-sm text-muted-foreground py-4 text-center">No members yet. Add users below.</div>
+            <div v-else-if="teamMembers.length === 0" class="text-sm text-muted-foreground py-4 text-center">{{ $t('teams.noMembersYet') }}</div>
             <div v-else class="space-y-2 max-h-48 overflow-y-auto">
               <div v-for="member in teamMembers" :key="member.id" class="flex items-center justify-between p-2 rounded-md border">
                 <div class="flex items-center gap-3">
@@ -269,7 +272,7 @@ function getStrategyIcon(strategy: string) { return { round_robin: RotateCcw, lo
             </div>
           </div>
           <div v-if="availableUsers.length > 0">
-            <h4 class="font-medium mb-2">Add Members</h4>
+            <h4 class="font-medium mb-2">{{ $t('teams.addMembers') }}</h4>
             <div class="space-y-2 max-h-48 overflow-y-auto">
               <div v-for="user in availableUsers" :key="user.id" class="flex items-center justify-between p-2 rounded-md border">
                 <div class="flex items-center gap-3">
@@ -277,18 +280,18 @@ function getStrategyIcon(strategy: string) { return { round_robin: RotateCcw, lo
                   <div><p class="text-sm font-medium">{{ user.full_name }}</p><p class="text-xs text-muted-foreground">{{ user.email }}</p></div>
                 </div>
                 <div class="flex items-center gap-1">
-                  <Button variant="outline" size="sm" class="h-7 text-xs" @click="addMember(user, 'agent')">Add as Agent</Button>
-                  <Button v-if="isAdmin" variant="outline" size="sm" class="h-7 text-xs" @click="addMember(user, 'manager')">Add as Manager</Button>
+                  <Button variant="outline" size="sm" class="h-7 text-xs" @click="addMember(user, 'agent')">{{ $t('teams.addAsAgent') }}</Button>
+                  <Button v-if="isAdmin" variant="outline" size="sm" class="h-7 text-xs" @click="addMember(user, 'manager')">{{ $t('teams.addAsManager') }}</Button>
                 </div>
               </div>
             </div>
           </div>
-          <div v-else-if="!loadingMembers" class="text-sm text-muted-foreground text-center py-2">All active users are already members of this team.</div>
+          <div v-else-if="!loadingMembers" class="text-sm text-muted-foreground text-center py-2">{{ $t('teams.allUsersInTeam') }}</div>
         </div>
-        <DialogFooter><Button variant="outline" size="sm" @click="isMembersDialogOpen = false">Close</Button></DialogFooter>
+        <DialogFooter><Button variant="outline" size="sm" @click="isMembersDialogOpen = false">{{ $t('common.close') }}</Button></DialogFooter>
       </DialogContent>
     </Dialog>
 
-    <DeleteConfirmDialog v-model:open="deleteDialogOpen" title="Delete Team" :item-name="teamToDelete?.name" description="Active transfers will remain but will no longer be associated with this team." @confirm="confirmDelete" />
+    <DeleteConfirmDialog v-model:open="deleteDialogOpen" :title="$t('teams.deleteTeam')" :item-name="teamToDelete?.name" :description="$t('teams.deleteTeamWarning')" @confirm="confirmDelete" />
   </div>
 </template>

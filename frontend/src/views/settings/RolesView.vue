@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { ref, onMounted, computed, watch } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { Button } from '@/components/ui/button'
@@ -22,6 +23,8 @@ import { useCrudState } from '@/composables/useCrudState'
 import { getErrorMessage } from '@/lib/api-utils'
 import { formatDate } from '@/lib/utils'
 import { useDebounceFn } from '@vueuse/core'
+
+const { t } = useI18n()
 
 const rolesStore = useRolesStore()
 const organizationsStore = useOrganizationsStore()
@@ -69,14 +72,14 @@ const canEditPermissions = computed(() => {
   return isSuperAdmin.value
 })
 
-const columns: Column<Role>[] = [
-  { key: 'role', label: 'Role', sortable: true, sortKey: 'name' },
-  { key: 'description', label: 'Description', sortable: true },
-  { key: 'permissions', label: 'Permissions', align: 'center' },
-  { key: 'users', label: 'Users', align: 'center', sortable: true, sortKey: 'user_count' },
-  { key: 'created', label: 'Created', sortable: true, sortKey: 'created_at' },
-  { key: 'actions', label: 'Actions', align: 'right' },
-]
+const columns = computed<Column<Role>[]>(() => [
+  { key: 'role', label: t('roles.role'), sortable: true, sortKey: 'name' },
+  { key: 'description', label: t('roles.description'), sortable: true },
+  { key: 'permissions', label: t('roles.permissions'), align: 'center' },
+  { key: 'users', label: t('roles.users'), align: 'center', sortable: true, sortKey: 'user_count' },
+  { key: 'created', label: t('roles.created'), sortable: true, sortKey: 'created_at' },
+  { key: 'actions', label: t('common.actions'), align: 'right' },
+])
 
 // Sorting state
 const sortKey = ref('name')
@@ -99,41 +102,41 @@ async function fetchRoles() {
     })
     roles.value = response.roles
     totalItems.value = response.total
-  } catch { toast.error('Failed to load roles') }
+  } catch { toast.error(t('roles.loadRolesFailed')) }
   finally { isLoading.value = false }
 }
 
 async function saveRole() {
-  if (!formData.value.name.trim()) { toast.error('Role name is required'); return }
+  if (!formData.value.name.trim()) { toast.error(t('roles.roleNameRequired')); return }
   isSubmitting.value = true
   try {
     if (editingRole.value) {
       const updateData: UpdateRoleData = { name: formData.value.name, description: formData.value.description, is_default: formData.value.is_default, permissions: formData.value.permissions }
       await rolesStore.updateRole(editingRole.value.id, updateData)
-      toast.success('Role updated successfully')
+      toast.success(t('roles.roleUpdated'))
     } else {
       const createData: CreateRoleData = { name: formData.value.name, description: formData.value.description, is_default: formData.value.is_default, permissions: formData.value.permissions }
       await rolesStore.createRole(createData)
-      toast.success('Role created successfully')
+      toast.success(t('roles.roleCreated'))
     }
     closeDialog()
     await fetchRoles()
-  } catch (e) { toast.error(getErrorMessage(e, 'Failed to save role')) }
+  } catch (e) { toast.error(getErrorMessage(e, t('roles.saveRoleFailed'))) }
   finally { isSubmitting.value = false }
 }
 
 async function confirmDelete() {
   if (!roleToDelete.value) return
-  try { await rolesStore.deleteRole(roleToDelete.value.id); toast.success('Role deleted'); closeDeleteDialog(); await fetchRoles() }
-  catch (e) { toast.error(getErrorMessage(e, 'Failed to delete role')) }
+  try { await rolesStore.deleteRole(roleToDelete.value.id); toast.success(t('roles.roleDeleted')); closeDeleteDialog(); await fetchRoles() }
+  catch (e) { toast.error(getErrorMessage(e, t('roles.deleteRoleFailed'))) }
 }
 </script>
 
 <template>
   <div class="flex flex-col h-full bg-[#0a0a0b] light:bg-gray-50">
-    <PageHeader title="Roles & Permissions" subtitle="Manage roles and their permissions" :icon="Shield" icon-gradient="bg-gradient-to-br from-purple-500 to-indigo-600 shadow-purple-500/20" back-link="/settings">
+    <PageHeader :title="$t('roles.title')" :subtitle="$t('roles.subtitle')" :icon="Shield" icon-gradient="bg-gradient-to-br from-purple-500 to-indigo-600 shadow-purple-500/20" back-link="/settings">
       <template #actions>
-        <Button variant="outline" size="sm" @click="openCreateDialog"><Plus class="h-4 w-4 mr-2" />Add Role</Button>
+        <Button variant="outline" size="sm" @click="openCreateDialog"><Plus class="h-4 w-4 mr-2" />{{ $t('roles.addRole') }}</Button>
       </template>
     </PageHeader>
 
@@ -144,19 +147,19 @@ async function confirmDelete() {
             <CardHeader>
               <div class="flex items-center justify-between flex-wrap gap-4">
                 <div>
-                  <CardTitle>Your Roles</CardTitle>
-                  <CardDescription>Create custom roles with specific permissions to control what users can access.</CardDescription>
+                  <CardTitle>{{ $t('roles.yourRoles') }}</CardTitle>
+                  <CardDescription>{{ $t('roles.yourRolesDesc') }}</CardDescription>
                 </div>
-                <SearchInput v-model="searchQuery" placeholder="Search roles..." class="w-64" />
+                <SearchInput v-model="searchQuery" :placeholder="$t('roles.searchRoles') + '...'" class="w-64" />
               </div>
             </CardHeader>
             <CardContent>
-              <DataTable :items="roles" :columns="columns" :is-loading="isLoading" :empty-icon="Shield" :empty-title="searchQuery ? 'No matching roles' : 'No roles created yet'" :empty-description="searchQuery ? 'No roles match your search.' : 'Create your first role to get started.'" v-model:sort-key="sortKey" v-model:sort-direction="sortDirection" server-pagination :current-page="currentPage" :total-items="totalItems" :page-size="pageSize" item-name="roles" @page-change="handlePageChange">
+              <DataTable :items="roles" :columns="columns" :is-loading="isLoading" :empty-icon="Shield" :empty-title="searchQuery ? $t('roles.noMatchingRoles') : $t('roles.noRolesYet')" :empty-description="searchQuery ? $t('roles.noMatchingRolesDesc') : $t('roles.noRolesYetDesc')" v-model:sort-key="sortKey" v-model:sort-direction="sortDirection" server-pagination :current-page="currentPage" :total-items="totalItems" :page-size="pageSize" item-name="roles" @page-change="handlePageChange">
                 <template #cell-role="{ item: role }">
                   <div class="flex items-center gap-2">
                     <span class="font-medium">{{ role.name }}</span>
-                    <Badge v-if="role.is_system" variant="secondary"><Lock class="h-3 w-3 mr-1" />System</Badge>
-                    <Badge v-if="role.is_default" variant="outline"><Star class="h-3 w-3 mr-1" />Default</Badge>
+                    <Badge v-if="role.is_system" variant="secondary"><Lock class="h-3 w-3 mr-1" />{{ $t('roles.system') }}</Badge>
+                    <Badge v-if="role.is_default" variant="outline"><Star class="h-3 w-3 mr-1" />{{ $t('roles.default') }}</Badge>
                   </div>
                 </template>
                 <template #cell-description="{ item: role }">
@@ -173,12 +176,12 @@ async function confirmDelete() {
                 </template>
                 <template #cell-actions="{ item: role }">
                   <div class="flex items-center justify-end gap-1">
-                    <Tooltip><TooltipTrigger as-child><Button variant="ghost" size="icon" class="h-8 w-8" @click="openEditDialog(role)"><Pencil class="h-4 w-4" /></Button></TooltipTrigger><TooltipContent>{{ role.is_system ? (isSuperAdmin ? 'Edit permissions' : 'View permissions') : 'Edit role' }}</TooltipContent></Tooltip>
-                    <Tooltip v-if="!role.is_system"><TooltipTrigger as-child><Button variant="ghost" size="icon" class="h-8 w-8" :disabled="role.user_count > 0" @click="openDeleteDialog(role)"><Trash2 class="h-4 w-4 text-destructive" /></Button></TooltipTrigger><TooltipContent>{{ role.user_count > 0 ? 'Cannot delete: users assigned' : 'Delete role' }}</TooltipContent></Tooltip>
+                    <Tooltip><TooltipTrigger as-child><Button variant="ghost" size="icon" class="h-8 w-8" @click="openEditDialog(role)"><Pencil class="h-4 w-4" /></Button></TooltipTrigger><TooltipContent>{{ role.is_system ? (isSuperAdmin ? $t('roles.editPermissions') : $t('roles.viewPermissions')) : $t('roles.editRole') }}</TooltipContent></Tooltip>
+                    <Tooltip v-if="!role.is_system"><TooltipTrigger as-child><Button variant="ghost" size="icon" class="h-8 w-8" :disabled="role.user_count > 0" @click="openDeleteDialog(role)"><Trash2 class="h-4 w-4 text-destructive" /></Button></TooltipTrigger><TooltipContent>{{ role.user_count > 0 ? $t('roles.cannotDeleteUsers') : $t('roles.deleteRole') }}</TooltipContent></Tooltip>
                   </div>
                 </template>
                 <template #empty-action>
-                  <Button variant="outline" size="sm" @click="openCreateDialog"><Plus class="h-4 w-4 mr-2" />Add Role</Button>
+                  <Button variant="outline" size="sm" @click="openCreateDialog"><Plus class="h-4 w-4 mr-2" />{{ $t('roles.addRole') }}</Button>
                 </template>
               </DataTable>
             </CardContent>
@@ -191,30 +194,30 @@ async function confirmDelete() {
     <Dialog v-model:open="isDialogOpen">
       <DialogContent class="max-w-2xl max-h-[90vh] overflow-hidden flex flex-col">
         <DialogHeader>
-          <DialogTitle>{{ editingRole ? (editingRole.is_system && !isSuperAdmin ? 'View Role' : 'Edit Role') : 'Create Role' }}</DialogTitle>
-          <DialogDescription>{{ editingRole?.is_system ? (isSuperAdmin ? 'As a super admin, you can modify permissions for this system role.' : 'System roles cannot be modified, but you can view their permissions.') : editingRole ? 'Update the role name, description, and permissions.' : 'Create a new role with custom permissions.' }}</DialogDescription>
+          <DialogTitle>{{ editingRole ? (editingRole.is_system && !isSuperAdmin ? $t('roles.viewRole') : $t('roles.editRole')) : $t('roles.createRole') }}</DialogTitle>
+          <DialogDescription>{{ editingRole?.is_system ? (isSuperAdmin ? $t('roles.superAdminCanEdit') : $t('roles.systemRoleViewOnly')) : editingRole ? $t('roles.updateRoleDesc') : $t('roles.createRoleDesc') }}</DialogDescription>
         </DialogHeader>
         <div class="flex-1 overflow-y-auto space-y-4 py-4 pr-2">
-          <div class="space-y-2"><Label for="name">Name <span class="text-destructive">*</span></Label><Input id="name" v-model="formData.name" placeholder="e.g., Support Lead" :disabled="editingRole?.is_system" /></div>
-          <div class="space-y-2"><Label for="description">Description</Label><Textarea id="description" v-model="formData.description" placeholder="Describe what this role is for..." :rows="2" :disabled="editingRole?.is_system && !isSuperAdmin" /></div>
+          <div class="space-y-2"><Label for="name">{{ $t('roles.name') }} <span class="text-destructive">*</span></Label><Input id="name" v-model="formData.name" :placeholder="$t('roles.namePlaceholder')" :disabled="editingRole?.is_system" /></div>
+          <div class="space-y-2"><Label for="description">{{ $t('roles.description') }}</Label><Textarea id="description" v-model="formData.description" :placeholder="$t('roles.descriptionPlaceholder')" :rows="2" :disabled="editingRole?.is_system && !isSuperAdmin" /></div>
           <div v-if="!editingRole?.is_system" class="flex items-center justify-between">
-            <div class="space-y-0.5"><Label for="is_default" class="font-normal cursor-pointer">Default role for new users</Label><p class="text-xs text-muted-foreground">New users will be assigned this role automatically</p></div>
+            <div class="space-y-0.5"><Label for="is_default" class="font-normal cursor-pointer">{{ $t('roles.defaultRole') }}</Label><p class="text-xs text-muted-foreground">{{ $t('roles.defaultRoleDesc') }}</p></div>
             <Switch id="is_default" :checked="formData.is_default" @update:checked="formData.is_default = $event" />
           </div>
           <div class="space-y-2">
-            <div class="flex items-center justify-between"><Label>Permissions</Label><span class="text-xs text-muted-foreground">{{ formData.permissions.length }} selected</span></div>
-            <p class="text-sm text-muted-foreground mb-3">Select the permissions this role should have access to.</p>
-            <div v-if="rolesStore.permissions.length === 0" class="text-center py-8 text-muted-foreground border rounded-lg"><Loader2 class="h-6 w-6 animate-spin mx-auto mb-2" /><p>Loading permissions...</p></div>
+            <div class="flex items-center justify-between"><Label>{{ $t('roles.permissions') }}</Label><span class="text-xs text-muted-foreground">{{ formData.permissions.length }} {{ $t('common.selected') || 'selected' }}</span></div>
+            <p class="text-sm text-muted-foreground mb-3">{{ $t('roles.selectPermissions') }}</p>
+            <div v-if="rolesStore.permissions.length === 0" class="text-center py-8 text-muted-foreground border rounded-lg"><Loader2 class="h-6 w-6 animate-spin mx-auto mb-2" /><p>{{ $t('roles.loadingPermissions') }}...</p></div>
             <PermissionMatrix v-else :key="editingRole?.id || 'new'" :permission-groups="rolesStore.permissionGroups" v-model:selected-permissions="formData.permissions" :disabled="!canEditPermissions" />
           </div>
         </div>
         <DialogFooter class="pt-4 border-t">
-          <Button variant="outline" size="sm" @click="isDialogOpen = false">{{ editingRole?.is_system && !isSuperAdmin ? 'Close' : 'Cancel' }}</Button>
-          <Button v-if="!editingRole?.is_system || isSuperAdmin" size="sm" @click="saveRole" :disabled="isSubmitting"><Loader2 v-if="isSubmitting" class="h-4 w-4 mr-2 animate-spin" />{{ editingRole ? 'Update Role' : 'Create Role' }}</Button>
+          <Button variant="outline" size="sm" @click="isDialogOpen = false">{{ editingRole?.is_system && !isSuperAdmin ? $t('common.close') : $t('common.cancel') }}</Button>
+          <Button v-if="!editingRole?.is_system || isSuperAdmin" size="sm" @click="saveRole" :disabled="isSubmitting"><Loader2 v-if="isSubmitting" class="h-4 w-4 mr-2 animate-spin" />{{ editingRole ? $t('roles.updateRole') : $t('roles.createRole') }}</Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>
 
-    <DeleteConfirmDialog v-model:open="deleteDialogOpen" title="Delete Role" :item-name="roleToDelete?.name" @confirm="confirmDelete" />
+    <DeleteConfirmDialog v-model:open="deleteDialogOpen" :title="$t('roles.deleteRole')" :item-name="roleToDelete?.name" @confirm="confirmDelete" />
   </div>
 </template>
