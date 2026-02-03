@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { ref, watch, computed } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { api } from '@/services/api'
 import { toast } from 'vue-sonner'
 import { CrudFormDialog } from '@/components/shared'
@@ -26,6 +27,8 @@ interface Props {
 
 const props = defineProps<Props>()
 const emit = defineEmits(['update:open'])
+
+const { t } = useI18n()
 
 const dialogOpen = computed({
   get: () => props.open,
@@ -120,7 +123,7 @@ async function fetchProfile() {
 
   } catch (error: any) {
     console.error('Failed to fetch business profile:', error)
-    toast.error('Failed to load business profile')
+    toast.error(t('businessProfile.loadFailed'))
   } finally {
     isLoading.value = false
   }
@@ -145,11 +148,11 @@ async function saveProfile() {
     }
 
     await api.put(`/accounts/${props.accountId}/business_profile`, payload)
-    toast.success('Business profile updated successfully')
+    toast.success(t('businessProfile.updateSuccess'))
     emit('update:open', false)
   } catch (error: any) {
     console.error('Failed to update profile:', error)
-    const message = error.response?.data?.message || 'Failed to update profile'
+    const message = error.response?.data?.message || t('businessProfile.updateFailed')
     toast.error(message)
   } finally {
     isSubmitting.value = false
@@ -170,13 +173,13 @@ async function handleFileChange(event: Event) {
   const file = input.files[0]
   // Validate basic type
   if (!file.type.startsWith('image/')) {
-    toast.error('Please select an image file (JPEG, PNG)')
+    toast.error(t('businessProfile.selectImage'))
     return
   }
 
   // Validate size (Meta limit is usually 5MB for profile generic, strict on square)
   if (file.size > 5 * 1024 * 1024) {
-    toast.error('Image must be less than 5MB')
+    toast.error(t('businessProfile.imageTooLarge'))
     return
   }
 
@@ -190,12 +193,12 @@ async function handleFileChange(event: Event) {
         'Content-Type': 'multipart/form-data'
       }
     })
-    toast.success('Profile picture updated successfully')
+    toast.success(t('businessProfile.photoUpdated'))
     // Refresh
     await fetchProfile()
   } catch (error: any) {
     console.error('Failed to upload photo:', error)
-    toast.error(error.response?.data?.message || 'Failed to update profile picture')
+    toast.error(error.response?.data?.message || t('businessProfile.photoUploadFailed'))
   } finally {
     isUploading.value = false
     // Reset input
@@ -209,9 +212,9 @@ async function handleFileChange(event: Event) {
     v-model:open="dialogOpen"
     :is-editing="true"
     :is-submitting="isSubmitting || isLoading"
-    :title="`Business Profile: ${accountName}`"
-    description="Update your WhatsApp Business profile details. These are visible to your customers."
-    submit-label="Save Changes"
+    :title="`${$t('businessProfile.title')}: ${accountName}`"
+    :description="$t('businessProfile.description')"
+    :submit-label="$t('businessProfile.saveChanges')"
     max-width="max-w-2xl"
     @submit="saveProfile"
   >
@@ -222,10 +225,9 @@ async function handleFileChange(event: Event) {
     <div v-else class="space-y-6">
       <Alert variant="warning">
         <AlertTriangle class="h-4 w-4" />
-        <AlertTitle>Profile Updates</AlertTitle>
+        <AlertTitle>{{ $t('businessProfile.profileUpdates') }}</AlertTitle>
         <AlertDescription>
-          Changes to your address, description, email, and websites usually update immediately.
-          <br/>Note: Updating the Business Display Name (not available here) triggers a Meta review process.
+          {{ $t('businessProfile.profileUpdatesDesc') }}
         </AlertDescription>
       </Alert>
 
@@ -258,34 +260,33 @@ async function handleFileChange(event: Event) {
             />
           </div>
           <div class="flex-1">
-            <Label>Profile Picture</Label>
+            <Label>{{ $t('businessProfile.profilePicture') }}</Label>
             <p class="text-xs text-muted-foreground mt-1">
-              Click to upload a new picture.
-              <br/>Recommended: Square JPG or PNG, max 5MB.
+              {{ $t('businessProfile.profilePictureHint') }}
             </p>
           </div>
         </div>
 
         <!-- About -->
         <div class="md:col-span-2 space-y-2">
-          <Label for="about">About (Status)</Label>
-          <Input id="about" v-model="profile.about" placeholder="e.g., Available, Busy, At work" maxlength="139" />
+          <Label for="about">{{ $t('businessProfile.about') }}</Label>
+          <Input id="about" v-model="profile.about" :placeholder="$t('businessProfile.aboutPlaceholder')" maxlength="139" />
           <p class="text-xs text-muted-foreground text-right">{{ profile.about.length }}/139</p>
         </div>
 
         <!-- Description -->
         <div class="md:col-span-2 space-y-2">
-          <Label for="description">Business Description</Label>
-          <Textarea id="description" v-model="profile.description" placeholder="Describe your business..." rows="3" maxlength="512" />
+          <Label for="description">{{ $t('businessProfile.businessDescription') }}</Label>
+          <Textarea id="description" v-model="profile.description" :placeholder="$t('businessProfile.descriptionPlaceholder')" rows="3" maxlength="512" />
           <p class="text-xs text-muted-foreground text-right">{{ profile.description.length }}/512</p>
         </div>
 
         <!-- Vertical (Category) -->
         <div class="space-y-2">
-          <Label for="vertical">Industry (Vertical)</Label>
+          <Label for="vertical">{{ $t('businessProfile.industry') }}</Label>
           <Select v-model="profile.vertical">
             <SelectTrigger>
-              <SelectValue placeholder="Select a category">
+              <SelectValue :placeholder="$t('businessProfile.selectCategory')">
                 <template v-if="profile.vertical">{{ selectedVerticalLabel }}</template>
               </SelectValue>
             </SelectTrigger>
@@ -299,28 +300,28 @@ async function handleFileChange(event: Event) {
 
         <!-- Email -->
         <div class="space-y-2">
-          <Label for="email">Contact Email</Label>
+          <Label for="email">{{ $t('businessProfile.contactEmail') }}</Label>
           <div class="relative">
             <Mail class="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
-            <Input id="email" v-model="profile.email" type="email" class="pl-9" placeholder="contact@example.com" maxlength="128" />
+            <Input id="email" v-model="profile.email" type="email" class="pl-9" :placeholder="$t('businessProfile.emailPlaceholder')" maxlength="128" />
           </div>
         </div>
 
         <!-- Address -->
         <div class="md:col-span-2 space-y-2">
-          <Label for="address">Business Address</Label>
+          <Label for="address">{{ $t('businessProfile.businessAddress') }}</Label>
           <div class="relative">
             <MapPin class="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
-            <Input id="address" v-model="profile.address" class="pl-9" placeholder="Street, City, State, Zip" maxlength="256" />
+            <Input id="address" v-model="profile.address" class="pl-9" :placeholder="$t('businessProfile.addressPlaceholder')" maxlength="256" />
           </div>
         </div>
 
         <!-- Websites -->
         <div class="md:col-span-2 space-y-3">
-          <Label>Websites (Max 2)</Label>
+          <Label>{{ $t('businessProfile.websites') }}</Label>
           <div v-for="(_, index) in profile.websites" :key="index" class="relative">
             <Globe class="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
-            <Input v-model="profile.websites[index]" class="pl-9" placeholder="https://www.example.com" maxlength="256" />
+            <Input v-model="profile.websites[index]" class="pl-9" :placeholder="$t('businessProfile.websitePlaceholder')" maxlength="256" />
           </div>
         </div>
       </div>

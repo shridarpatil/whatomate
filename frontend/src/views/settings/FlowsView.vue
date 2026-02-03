@@ -1,5 +1,6 @@
 <script setup lang="ts">
-import { ref, onMounted, watch } from 'vue'
+import { ref, onMounted, watch, computed } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -16,6 +17,8 @@ import { Plus, Pencil, Trash2, Workflow, Play, ExternalLink, Loader2, Archive, R
 import { getErrorMessage } from '@/lib/api-utils'
 import { formatDate } from '@/lib/utils'
 import { useDebounceFn } from '@vueuse/core'
+
+const { t } = useI18n()
 
 interface WhatsAppFlow {
   id: string; whatsapp_account: string; meta_flow_id: string; name: string; status: 'DRAFT' | 'PUBLISHED' | 'DEPRECATED'
@@ -58,13 +61,13 @@ const currentPage = ref(1)
 const totalItems = ref(0)
 const pageSize = 20
 
-const columns: Column<WhatsAppFlow>[] = [
-  { key: 'name', label: 'Name', sortable: true },
-  { key: 'status', label: 'Status', sortable: true },
-  { key: 'category', label: 'Category', sortable: true },
-  { key: 'created_at', label: 'Created', sortable: true },
-  { key: 'actions', label: 'Actions', align: 'right' },
-]
+const columns = computed<Column<WhatsAppFlow>[]>(() => [
+  { key: 'name', label: t('flows.name'), sortable: true },
+  { key: 'status', label: t('flows.status'), sortable: true },
+  { key: 'category', label: t('flows.category'), sortable: true },
+  { key: 'created_at', label: t('flows.created'), sortable: true },
+  { key: 'actions', label: t('common.actions'), align: 'right' },
+])
 
 const sortKey = ref('name')
 const sortDirection = ref<'asc' | 'desc'>('asc')
@@ -123,8 +126,8 @@ function openCreateDialog() {
 }
 
 async function createFlow() {
-  if (!formData.value.name) { toast.error('Please enter a flow name'); return }
-  if (!formData.value.whatsapp_account) { toast.error('Please select a WhatsApp account'); return }
+  if (!formData.value.name) { toast.error(t('flows.enterFlowName')); return }
+  if (!formData.value.whatsapp_account) { toast.error(t('flows.selectAccountRequired')); return }
   isCreating.value = true
   try {
     const payload: any = { whatsapp_account: formData.value.whatsapp_account, name: formData.value.name, category: formData.value.category || undefined, json_version: formData.value.json_version }
@@ -132,8 +135,8 @@ async function createFlow() {
       const sanitizedScreens = sanitizeScreensForMeta(flowBuilderData.value.screens)
       payload.flow_json = { version: formData.value.json_version, screens: sanitizedScreens }; payload.screens = sanitizedScreens
     }
-    await flowsService.create(payload); toast.success('Flow created successfully'); showCreateDialog.value = false; await fetchFlows()
-  } catch (e) { toast.error(getErrorMessage(e, 'Failed to create flow')) }
+    await flowsService.create(payload); toast.success(t('flows.flowCreated')); showCreateDialog.value = false; await fetchFlows()
+  } catch (e) { toast.error(getErrorMessage(e, t('flows.createFailed'))) }
   finally { isCreating.value = false }
 }
 
@@ -145,7 +148,7 @@ function openEditDialog(flow: WhatsAppFlow) {
 
 async function updateFlow() {
   if (!flowToEdit.value) return
-  if (!editFormData.value.name) { toast.error('Please enter a flow name'); return }
+  if (!editFormData.value.name) { toast.error(t('flows.enterFlowName')); return }
   isUpdating.value = true
   try {
     const payload: any = { name: editFormData.value.name, category: editFormData.value.category || undefined, json_version: editFormData.value.json_version }
@@ -153,43 +156,43 @@ async function updateFlow() {
       const sanitizedScreens = sanitizeScreensForMeta(editFlowBuilderData.value.screens)
       payload.flow_json = { version: editFormData.value.json_version, screens: sanitizedScreens }; payload.screens = sanitizedScreens
     }
-    await flowsService.update(flowToEdit.value.id, payload); toast.success('Flow updated successfully'); showEditDialog.value = false; flowToEdit.value = null; await fetchFlows()
-  } catch (e) { toast.error(getErrorMessage(e, 'Failed to update flow')) }
+    await flowsService.update(flowToEdit.value.id, payload); toast.success(t('flows.flowUpdated')); showEditDialog.value = false; flowToEdit.value = null; await fetchFlows()
+  } catch (e) { toast.error(getErrorMessage(e, t('flows.updateFailed'))) }
   finally { isUpdating.value = false }
 }
 
 async function saveFlowToMeta(flow: WhatsAppFlow) {
   savingToMetaFlowId.value = flow.id
-  try { await flowsService.saveToMeta(flow.id); toast.success('Flow saved to Meta successfully'); await fetchFlows() }
-  catch (e) { toast.error(getErrorMessage(e, 'Failed to save flow to Meta')) }
+  try { await flowsService.saveToMeta(flow.id); toast.success(t('flows.flowSavedToMeta')); await fetchFlows() }
+  catch (e) { toast.error(getErrorMessage(e, t('flows.saveToMetaFailed'))) }
   finally { savingToMetaFlowId.value = null }
 }
 
 async function publishFlow(flow: WhatsAppFlow) {
   publishingFlowId.value = flow.id
-  try { await flowsService.publish(flow.id); toast.success('Flow published successfully'); await fetchFlows() }
-  catch (e) { toast.error(getErrorMessage(e, 'Failed to publish flow')) }
+  try { await flowsService.publish(flow.id); toast.success(t('flows.flowPublished')); await fetchFlows() }
+  catch (e) { toast.error(getErrorMessage(e, t('flows.publishFailed'))) }
   finally { publishingFlowId.value = null }
 }
 
 async function confirmDeleteFlow() {
   if (!flowToDelete.value) return
-  try { await flowsService.delete(flowToDelete.value.id); toast.success('Flow deleted'); deleteDialogOpen.value = false; flowToDelete.value = null; await fetchFlows() }
-  catch (e) { toast.error(getErrorMessage(e, 'Failed to delete flow')) }
+  try { await flowsService.delete(flowToDelete.value.id); toast.success(t('flows.flowDeleted')); deleteDialogOpen.value = false; flowToDelete.value = null; await fetchFlows() }
+  catch (e) { toast.error(getErrorMessage(e, t('flows.deleteFailed'))) }
 }
 
 async function duplicateFlow(flow: WhatsAppFlow) {
   duplicatingFlowId.value = flow.id
-  try { await flowsService.duplicate(flow.id); toast.success('Flow duplicated successfully'); await fetchFlows() }
-  catch (e) { toast.error(getErrorMessage(e, 'Failed to duplicate flow')) }
+  try { await flowsService.duplicate(flow.id); toast.success(t('flows.flowDuplicated')); await fetchFlows() }
+  catch (e) { toast.error(getErrorMessage(e, t('flows.duplicateFailed'))) }
   finally { duplicatingFlowId.value = null }
 }
 
 async function syncFlows() {
-  if (!selectedAccount.value || selectedAccount.value === 'all') { toast.error('Please select a specific WhatsApp account to sync'); return }
+  if (!selectedAccount.value || selectedAccount.value === 'all') { toast.error(t('flows.selectAccountToSync')); return }
   isSyncing.value = true
-  try { const response = await flowsService.sync(selectedAccount.value); const data = response.data.data; toast.success(`Synced ${data.synced} flows (${data.created} new, ${data.updated} updated)`); await fetchFlows() }
-  catch (e) { toast.error(getErrorMessage(e, 'Failed to sync flows')) }
+  try { const response = await flowsService.sync(selectedAccount.value); const data = response.data.data; toast.success(t('flows.syncSuccess', { synced: data.synced, created: data.created, updated: data.updated })); await fetchFlows() }
+  catch (e) { toast.error(getErrorMessage(e, t('flows.syncFailed'))) }
   finally { isSyncing.value = false }
 }
 
@@ -207,10 +210,10 @@ function sanitizeScreensForMeta(screens: any[]): any[] {
 
 <template>
   <div class="flex flex-col h-full bg-[#0a0a0b] light:bg-gray-50">
-    <PageHeader title="WhatsApp Flows" subtitle="Create interactive flows for your customers" :icon="Workflow" icon-gradient="bg-gradient-to-br from-violet-500 to-purple-600 shadow-violet-500/20">
+    <PageHeader :title="$t('flows.title')" :subtitle="$t('flows.subtitle')" :icon="Workflow" icon-gradient="bg-gradient-to-br from-violet-500 to-purple-600 shadow-violet-500/20">
       <template #actions>
-        <Button variant="outline" size="sm" @click="syncFlows" :disabled="isSyncing || !selectedAccount || selectedAccount === 'all'"><RefreshCw :class="['h-4 w-4 mr-2', isSyncing && 'animate-spin']" />Sync from Meta</Button>
-        <Button variant="outline" size="sm" @click="openCreateDialog"><Plus class="h-4 w-4 mr-2" />Create Flow</Button>
+        <Button variant="outline" size="sm" @click="syncFlows" :disabled="isSyncing || !selectedAccount || selectedAccount === 'all'"><RefreshCw :class="['h-4 w-4 mr-2', isSyncing && 'animate-spin']" />{{ $t('flows.syncFromMeta') }}</Button>
+        <Button variant="outline" size="sm" @click="openCreateDialog"><Plus class="h-4 w-4 mr-2" />{{ $t('flows.createFlow') }}</Button>
       </template>
     </PageHeader>
 
@@ -221,16 +224,16 @@ function sanitizeScreensForMeta(screens: any[]): any[] {
             <CardHeader>
               <div class="flex items-center justify-between flex-wrap gap-4">
                 <div>
-                  <CardTitle>Your Flows</CardTitle>
-                  <CardDescription>Interactive WhatsApp flows for your customers.</CardDescription>
+                  <CardTitle>{{ $t('flows.yourFlows') }}</CardTitle>
+                  <CardDescription>{{ $t('flows.yourFlowsDesc') }}</CardDescription>
                 </div>
                 <div class="flex items-center gap-2">
-                  <Label class="text-sm text-muted-foreground">Account:</Label>
+                  <Label class="text-sm text-muted-foreground">{{ $t('flows.account') }}:</Label>
                   <Select v-model="selectedAccount" @update:model-value="onAccountChange">
-                    <SelectTrigger class="w-[180px]"><SelectValue placeholder="All Accounts" /></SelectTrigger>
-                    <SelectContent><SelectItem value="all">All Accounts</SelectItem><SelectItem v-for="account in accounts" :key="account.id" :value="account.name">{{ account.name }}</SelectItem></SelectContent>
+                    <SelectTrigger class="w-[180px]"><SelectValue :placeholder="$t('flows.allAccounts')" /></SelectTrigger>
+                    <SelectContent><SelectItem value="all">{{ $t('flows.allAccounts') }}</SelectItem><SelectItem v-for="account in accounts" :key="account.id" :value="account.name">{{ account.name }}</SelectItem></SelectContent>
                   </Select>
-                  <SearchInput v-model="searchQuery" placeholder="Search flows..." class="w-64" />
+                  <SearchInput v-model="searchQuery" :placeholder="$t('flows.searchFlows') + '...'" class="w-64" />
                 </div>
               </div>
             </CardHeader>
@@ -240,8 +243,8 @@ function sanitizeScreensForMeta(screens: any[]): any[] {
                 :columns="columns"
                 :is-loading="isLoading"
                 :empty-icon="Workflow"
-                :empty-title="searchQuery ? 'No matching flows' : 'No WhatsApp Flows yet'"
-                :empty-description="searchQuery ? 'No flows match your search.' : 'Create interactive flows to engage your customers.'"
+                :empty-title="searchQuery ? $t('flows.noMatchingFlows') : $t('flows.noFlowsYet')"
+                :empty-description="searchQuery ? $t('flows.noMatchingFlowsDesc') : $t('flows.noFlowsYetDesc')"
                 server-pagination
                 :current-page="currentPage"
                 :total-items="totalItems"
@@ -259,7 +262,7 @@ function sanitizeScreensForMeta(screens: any[]): any[] {
                 </template>
                 <template #cell-status="{ item: flow }">
                   <Badge v-if="flow.status?.toUpperCase() === 'DEPRECATED'" variant="destructive" class="text-xs">
-                    <Archive class="h-3 w-3 mr-1" />Deprecated
+                    <Archive class="h-3 w-3 mr-1" />{{ $t('flows.deprecated') }}
                   </Badge>
                   <Badge v-else variant="outline" :class="[getStatusClass(flow.status), 'text-xs']">{{ flow.status }}</Badge>
                 </template>
@@ -272,13 +275,13 @@ function sanitizeScreensForMeta(screens: any[]): any[] {
                 </template>
                 <template #cell-actions="{ item: flow }">
                   <div class="flex items-center justify-end gap-1">
-                    <Button variant="ghost" size="icon" class="h-8 w-8" @click="openEditDialog(flow)" title="Edit flow">
+                    <Button variant="ghost" size="icon" class="h-8 w-8" @click="openEditDialog(flow)" :title="$t('flows.editTooltip')">
                       <Pencil class="h-4 w-4" />
                     </Button>
-                    <Button variant="ghost" size="icon" class="h-8 w-8" @click="duplicateFlow(flow)" :disabled="duplicatingFlowId === flow.id" title="Duplicate flow">
+                    <Button variant="ghost" size="icon" class="h-8 w-8" @click="duplicateFlow(flow)" :disabled="duplicatingFlowId === flow.id" :title="$t('flows.duplicateTooltip')">
                       <Loader2 v-if="duplicatingFlowId === flow.id" class="h-4 w-4 animate-spin" /><Copy v-else class="h-4 w-4" />
                     </Button>
-                    <Button v-if="flow.preview_url" variant="ghost" size="icon" class="h-8 w-8" as="a" :href="flow.preview_url" target="_blank" title="Preview">
+                    <Button v-if="flow.preview_url" variant="ghost" size="icon" class="h-8 w-8" as="a" :href="flow.preview_url" target="_blank" :title="$t('flows.previewTooltip')">
                       <ExternalLink class="h-4 w-4" />
                     </Button>
                     <Button
@@ -288,7 +291,7 @@ function sanitizeScreensForMeta(screens: any[]): any[] {
                       class="h-8 w-8"
                       @click="saveFlowToMeta(flow)"
                       :disabled="savingToMetaFlowId === flow.id || publishingFlowId === flow.id"
-                      :title="flow.meta_flow_id ? 'Update on Meta' : 'Save to Meta'"
+                      :title="flow.meta_flow_id ? $t('flows.updateOnMeta') : $t('flows.saveToMeta')"
                     >
                       <Loader2 v-if="savingToMetaFlowId === flow.id" class="h-4 w-4 animate-spin" /><Upload v-else class="h-4 w-4" />
                     </Button>
@@ -299,7 +302,7 @@ function sanitizeScreensForMeta(screens: any[]): any[] {
                       class="h-8 w-8 text-green-600"
                       @click="publishFlow(flow)"
                       :disabled="savingToMetaFlowId === flow.id || publishingFlowId === flow.id"
-                      title="Publish"
+                      :title="$t('flows.publishTooltip')"
                     >
                       <Loader2 v-if="publishingFlowId === flow.id" class="h-4 w-4 animate-spin" /><Play v-else class="h-4 w-4" />
                     </Button>
@@ -309,7 +312,7 @@ function sanitizeScreensForMeta(screens: any[]): any[] {
                       class="h-8 w-8 text-destructive"
                       @click="flowToDelete = flow; deleteDialogOpen = true"
                       :disabled="flow.status?.toUpperCase() === 'PUBLISHED'"
-                      title="Delete flow"
+                      :title="$t('flows.deleteTooltip')"
                     >
                       <Trash2 class="h-4 w-4" />
                     </Button>
@@ -317,7 +320,7 @@ function sanitizeScreensForMeta(screens: any[]): any[] {
                 </template>
                 <template #empty-action>
                   <Button v-if="!searchQuery" variant="outline" size="sm" @click="openCreateDialog">
-                    <Plus class="h-4 w-4 mr-2" />Create Flow
+                    <Plus class="h-4 w-4 mr-2" />{{ $t('flows.createFlow') }}
                   </Button>
                 </template>
               </DataTable>
@@ -330,41 +333,41 @@ function sanitizeScreensForMeta(screens: any[]): any[] {
     <!-- Create Flow Dialog -->
     <Dialog v-model:open="showCreateDialog">
       <DialogContent class="max-w-6xl h-[85vh] flex flex-col">
-        <DialogHeader><DialogTitle>Create WhatsApp Flow</DialogTitle><DialogDescription>Design an interactive flow for WhatsApp using the visual builder.</DialogDescription></DialogHeader>
+        <DialogHeader><DialogTitle>{{ $t('flows.createWhatsAppFlow') }}</DialogTitle><DialogDescription>{{ $t('flows.createFlowDesc') }}</DialogDescription></DialogHeader>
         <div class="flex gap-4 py-2 border-b">
           <div class="flex items-center gap-2">
-            <Label class="text-sm whitespace-nowrap">Account:</Label>
-            <Select v-model="formData.whatsapp_account" :disabled="isCreating"><SelectTrigger class="w-[180px]"><SelectValue placeholder="Select an account" /></SelectTrigger><SelectContent><SelectItem v-for="account in accounts" :key="account.id" :value="account.name">{{ account.name }}</SelectItem></SelectContent></Select>
+            <Label class="text-sm whitespace-nowrap">{{ $t('flows.account') }}:</Label>
+            <Select v-model="formData.whatsapp_account" :disabled="isCreating"><SelectTrigger class="w-[180px]"><SelectValue :placeholder="$t('flows.selectAccount')" /></SelectTrigger><SelectContent><SelectItem v-for="account in accounts" :key="account.id" :value="account.name">{{ account.name }}</SelectItem></SelectContent></Select>
           </div>
-          <div class="flex items-center gap-2"><Label class="text-sm whitespace-nowrap">Name:</Label><Input v-model="formData.name" placeholder="Flow name" class="w-48" :disabled="isCreating" /></div>
+          <div class="flex items-center gap-2"><Label class="text-sm whitespace-nowrap">{{ $t('flows.name') }}:</Label><Input v-model="formData.name" :placeholder="$t('flows.flowName')" class="w-48" :disabled="isCreating" /></div>
           <div class="flex items-center gap-2">
-            <Label class="text-sm whitespace-nowrap">Category:</Label>
-            <Select v-model="formData.category" :disabled="isCreating"><SelectTrigger class="w-[180px]"><SelectValue placeholder="Select category" /></SelectTrigger><SelectContent><SelectItem v-for="cat in flowCategories" :key="cat.value" :value="cat.value">{{ cat.label }}</SelectItem></SelectContent></Select>
+            <Label class="text-sm whitespace-nowrap">{{ $t('flows.category') }}:</Label>
+            <Select v-model="formData.category" :disabled="isCreating"><SelectTrigger class="w-[180px]"><SelectValue :placeholder="$t('flows.selectCategory')" /></SelectTrigger><SelectContent><SelectItem v-for="cat in flowCategories" :key="cat.value" :value="cat.value">{{ cat.label }}</SelectItem></SelectContent></Select>
           </div>
         </div>
         <div class="flex-1 overflow-hidden py-4"><FlowBuilder v-model="flowBuilderData" /></div>
-        <DialogFooter><Button variant="outline" size="sm" @click="showCreateDialog = false" :disabled="isCreating">Cancel</Button><Button size="sm" @click="createFlow" :disabled="isCreating"><Loader2 v-if="isCreating" class="h-4 w-4 mr-2 animate-spin" />Create Flow</Button></DialogFooter>
+        <DialogFooter><Button variant="outline" size="sm" @click="showCreateDialog = false" :disabled="isCreating">{{ $t('common.cancel') }}</Button><Button size="sm" @click="createFlow" :disabled="isCreating"><Loader2 v-if="isCreating" class="h-4 w-4 mr-2 animate-spin" />{{ $t('flows.createFlow') }}</Button></DialogFooter>
       </DialogContent>
     </Dialog>
 
     <!-- Edit Flow Dialog -->
     <Dialog v-model:open="showEditDialog">
       <DialogContent class="max-w-6xl h-[85vh] flex flex-col">
-        <DialogHeader><DialogTitle>Edit WhatsApp Flow</DialogTitle><DialogDescription>Modify your flow and save changes locally, then push to Meta.</DialogDescription></DialogHeader>
+        <DialogHeader><DialogTitle>{{ $t('flows.editWhatsAppFlow') }}</DialogTitle><DialogDescription>{{ $t('flows.editFlowDesc') }}</DialogDescription></DialogHeader>
         <div class="flex gap-4 py-2 border-b">
-          <div class="flex items-center gap-2"><Label class="text-sm whitespace-nowrap">Account:</Label><span class="text-sm text-muted-foreground">{{ flowToEdit?.whatsapp_account }}</span></div>
-          <div class="flex items-center gap-2"><Label class="text-sm whitespace-nowrap">Name:</Label><Input v-model="editFormData.name" placeholder="Flow name" class="w-48" :disabled="isUpdating" /></div>
+          <div class="flex items-center gap-2"><Label class="text-sm whitespace-nowrap">{{ $t('flows.account') }}:</Label><span class="text-sm text-muted-foreground">{{ flowToEdit?.whatsapp_account }}</span></div>
+          <div class="flex items-center gap-2"><Label class="text-sm whitespace-nowrap">{{ $t('flows.name') }}:</Label><Input v-model="editFormData.name" :placeholder="$t('flows.flowName')" class="w-48" :disabled="isUpdating" /></div>
           <div class="flex items-center gap-2">
-            <Label class="text-sm whitespace-nowrap">Category:</Label>
-            <Select v-model="editFormData.category" :disabled="isUpdating"><SelectTrigger class="w-[180px]"><SelectValue placeholder="Select category" /></SelectTrigger><SelectContent><SelectItem v-for="cat in flowCategories" :key="cat.value" :value="cat.value">{{ cat.label }}</SelectItem></SelectContent></Select>
+            <Label class="text-sm whitespace-nowrap">{{ $t('flows.category') }}:</Label>
+            <Select v-model="editFormData.category" :disabled="isUpdating"><SelectTrigger class="w-[180px]"><SelectValue :placeholder="$t('flows.selectCategory')" /></SelectTrigger><SelectContent><SelectItem v-for="cat in flowCategories" :key="cat.value" :value="cat.value">{{ cat.label }}</SelectItem></SelectContent></Select>
           </div>
           <div v-if="flowToEdit?.meta_flow_id" class="flex items-center gap-2 ml-auto"><Badge variant="outline">Meta ID: {{ flowToEdit.meta_flow_id }}</Badge></div>
         </div>
         <div class="flex-1 overflow-hidden py-4"><FlowBuilder v-model="editFlowBuilderData" /></div>
-        <DialogFooter><Button variant="outline" size="sm" @click="showEditDialog = false" :disabled="isUpdating">Cancel</Button><Button size="sm" @click="updateFlow" :disabled="isUpdating"><Loader2 v-if="isUpdating" class="h-4 w-4 mr-2 animate-spin" />Save Changes</Button></DialogFooter>
+        <DialogFooter><Button variant="outline" size="sm" @click="showEditDialog = false" :disabled="isUpdating">{{ $t('common.cancel') }}</Button><Button size="sm" @click="updateFlow" :disabled="isUpdating"><Loader2 v-if="isUpdating" class="h-4 w-4 mr-2 animate-spin" />{{ $t('flows.saveChanges') }}</Button></DialogFooter>
       </DialogContent>
     </Dialog>
 
-    <DeleteConfirmDialog v-model:open="deleteDialogOpen" title="Delete Flow" :item-name="flowToDelete?.name" @confirm="confirmDeleteFlow" />
+    <DeleteConfirmDialog v-model:open="deleteDialogOpen" :title="$t('flows.deleteFlow')" :item-name="flowToDelete?.name" @confirm="confirmDeleteFlow" />
   </div>
 </template>
