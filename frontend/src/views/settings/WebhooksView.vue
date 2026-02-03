@@ -1,5 +1,6 @@
 <script setup lang="ts">
-import { ref, onMounted, watch } from 'vue'
+import { ref, onMounted, watch, computed } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { webhooksService, type Webhook, type WebhookEvent } from '@/services/api'
 import { useOrganizationsStore } from '@/stores/organizations'
 import { Button } from '@/components/ui/button'
@@ -17,6 +18,8 @@ import { Plus, Trash2, Pencil, Webhook as WebhookIcon, Play, Loader2 } from 'luc
 import { getErrorMessage } from '@/lib/api-utils'
 import { formatDate } from '@/lib/utils'
 import { useDebounceFn } from '@vueuse/core'
+
+const { t } = useI18n()
 
 const organizationsStore = useOrganizationsStore()
 
@@ -42,14 +45,14 @@ const currentPage = ref(1)
 const totalItems = ref(0)
 const pageSize = 20
 
-const columns: Column<Webhook>[] = [
-  { key: 'name', label: 'Name', sortable: true },
-  { key: 'url', label: 'URL', sortable: true },
-  { key: 'events', label: 'Events' },
-  { key: 'status', label: 'Status', sortable: true, sortKey: 'is_active' },
-  { key: 'created', label: 'Created', sortable: true, sortKey: 'created_at' },
-  { key: 'actions', label: 'Actions', align: 'right' },
-]
+const columns = computed<Column<Webhook>[]>(() => [
+  { key: 'name', label: t('webhooks.name'), sortable: true },
+  { key: 'url', label: t('webhooks.url'), sortable: true },
+  { key: 'events', label: t('webhooks.events') },
+  { key: 'status', label: t('webhooks.status'), sortable: true, sortKey: 'is_active' },
+  { key: 'created', label: t('webhooks.created'), sortable: true, sortKey: 'created_at' },
+  { key: 'actions', label: t('common.actions'), align: 'right' },
+])
 
 // Sorting state
 const sortKey = ref('name')
@@ -69,7 +72,7 @@ async function fetchWebhooks() {
     webhooks.value = data.webhooks || []
     availableEvents.value = data.available_events || []
     totalItems.value = data.total ?? webhooks.value.length
-  } catch (e) { toast.error(getErrorMessage(e, 'Failed to load webhooks')) }
+  } catch (e) { toast.error(getErrorMessage(e, t('webhooks.loadFailed'))) }
   finally { isLoading.value = false }
 }
 
@@ -101,23 +104,23 @@ function openEditDialog(webhook: Webhook) {
 }
 
 async function saveWebhook() {
-  if (!formData.value.name.trim()) { toast.error('Name is required'); return }
-  if (!formData.value.url.trim()) { toast.error('URL is required'); return }
-  if (formData.value.events.length === 0) { toast.error('At least one event must be selected'); return }
+  if (!formData.value.name.trim()) { toast.error(t('webhooks.nameRequired')); return }
+  if (!formData.value.url.trim()) { toast.error(t('webhooks.urlRequired')); return }
+  if (formData.value.events.length === 0) { toast.error(t('webhooks.eventRequired')); return }
 
   isSaving.value = true
   try {
     const payload = { name: formData.value.name.trim(), url: formData.value.url.trim(), events: formData.value.events, headers: formData.value.headers, secret: formData.value.secret || undefined }
     if (isEditing.value && editingWebhookId.value) {
       await webhooksService.update(editingWebhookId.value, { ...payload, is_active: true })
-      toast.success('Webhook updated successfully')
+      toast.success(t('webhooks.webhookUpdated'))
     } else {
       await webhooksService.create(payload)
-      toast.success('Webhook created successfully')
+      toast.success(t('webhooks.webhookCreated'))
     }
     isDialogOpen.value = false
     await fetchWebhooks()
-  } catch (e) { toast.error(getErrorMessage(e, 'Failed to save webhook')) }
+  } catch (e) { toast.error(getErrorMessage(e, t('webhooks.saveFailed'))) }
   finally { isSaving.value = false }
 }
 
@@ -125,21 +128,21 @@ async function toggleWebhook(webhook: Webhook) {
   try {
     await webhooksService.update(webhook.id, { is_active: !webhook.is_active })
     await fetchWebhooks()
-    toast.success(webhook.is_active ? 'Webhook disabled' : 'Webhook enabled')
-  } catch (e) { toast.error(getErrorMessage(e, 'Failed to update webhook')) }
+    toast.success(webhook.is_active ? t('webhooks.webhookDisabled') : t('webhooks.webhookEnabled'))
+  } catch (e) { toast.error(getErrorMessage(e, t('webhooks.updateFailed'))) }
 }
 
 async function testWebhook(webhook: Webhook) {
   isTesting.value = webhook.id
-  try { await webhooksService.test(webhook.id); toast.success('Test webhook sent successfully') }
-  catch (e) { toast.error(getErrorMessage(e, 'Webhook test failed')) }
+  try { await webhooksService.test(webhook.id); toast.success(t('webhooks.testSent')) }
+  catch (e) { toast.error(getErrorMessage(e, t('webhooks.testFailed'))) }
   finally { isTesting.value = null }
 }
 
 async function deleteWebhook() {
   if (!webhookToDelete.value) return
-  try { await webhooksService.delete(webhookToDelete.value.id); await fetchWebhooks(); toast.success('Webhook deleted'); isDeleteDialogOpen.value = false; webhookToDelete.value = null }
-  catch (e) { toast.error(getErrorMessage(e, 'Failed to delete webhook')) }
+  try { await webhooksService.delete(webhookToDelete.value.id); await fetchWebhooks(); toast.success(t('webhooks.webhookDeleted')); isDeleteDialogOpen.value = false; webhookToDelete.value = null }
+  catch (e) { toast.error(getErrorMessage(e, t('webhooks.deleteFailed'))) }
 }
 
 function addHeader() {
@@ -165,9 +168,9 @@ onMounted(() => fetchWebhooks())
 
 <template>
   <div class="flex flex-col h-full bg-[#0a0a0b] light:bg-gray-50">
-    <PageHeader title="Webhooks" subtitle="Configure webhooks to send events to external systems" :icon="WebhookIcon" icon-gradient="bg-gradient-to-br from-indigo-500 to-purple-600 shadow-indigo-500/20">
+    <PageHeader :title="$t('webhooks.title')" :subtitle="$t('webhooks.subtitle')" :icon="WebhookIcon" icon-gradient="bg-gradient-to-br from-indigo-500 to-purple-600 shadow-indigo-500/20">
       <template #actions>
-        <Button variant="outline" size="sm" @click="openCreateDialog"><Plus class="h-4 w-4 mr-2" />Add Webhook</Button>
+        <Button variant="outline" size="sm" @click="openCreateDialog"><Plus class="h-4 w-4 mr-2" />{{ $t('webhooks.addWebhook') }}</Button>
       </template>
     </PageHeader>
 
@@ -178,14 +181,14 @@ onMounted(() => fetchWebhooks())
             <CardHeader>
               <div class="flex items-center justify-between flex-wrap gap-4">
                 <div>
-                  <CardTitle>Your Webhooks</CardTitle>
-                  <CardDescription>Webhooks allow you to send real-time events to external systems like helpdesks.</CardDescription>
+                  <CardTitle>{{ $t('webhooks.yourWebhooks') }}</CardTitle>
+                  <CardDescription>{{ $t('webhooks.yourWebhooksDesc') }}</CardDescription>
                 </div>
-                <SearchInput v-model="searchQuery" placeholder="Search webhooks..." class="w-64" />
+                <SearchInput v-model="searchQuery" :placeholder="$t('webhooks.searchWebhooks') + '...'" class="w-64" />
               </div>
             </CardHeader>
             <CardContent>
-              <DataTable :items="webhooks" :columns="columns" :is-loading="isLoading" :empty-icon="WebhookIcon" :empty-title="searchQuery ? 'No matching webhooks' : 'No webhooks configured'" :empty-description="searchQuery ? 'No webhooks match your search.' : 'Create your first webhook to get started.'" v-model:sort-key="sortKey" v-model:sort-direction="sortDirection" server-pagination :current-page="currentPage" :total-items="totalItems" :page-size="pageSize" item-name="webhooks" @page-change="handlePageChange">
+              <DataTable :items="webhooks" :columns="columns" :is-loading="isLoading" :empty-icon="WebhookIcon" :empty-title="searchQuery ? $t('webhooks.noMatchingWebhooks') : $t('webhooks.noWebhooksYet')" :empty-description="searchQuery ? $t('webhooks.noMatchingWebhooksDesc') : $t('webhooks.noWebhooksYetDesc')" v-model:sort-key="sortKey" v-model:sort-direction="sortDirection" server-pagination :current-page="currentPage" :total-items="totalItems" :page-size="pageSize" item-name="webhooks" @page-change="handlePageChange">
                 <template #cell-name="{ item: webhook }"><span class="font-medium">{{ webhook.name }}</span></template>
                 <template #cell-url="{ item: webhook }"><span class="max-w-[200px] truncate text-muted-foreground block">{{ webhook.url }}</span></template>
                 <template #cell-events="{ item: webhook }">
@@ -197,7 +200,7 @@ onMounted(() => fetchWebhooks())
                 <template #cell-status="{ item: webhook }">
                   <div class="flex items-center gap-2">
                     <Switch :checked="webhook.is_active" @update:checked="toggleWebhook(webhook)" />
-                    <span class="text-sm text-muted-foreground">{{ webhook.is_active ? 'Active' : 'Inactive' }}</span>
+                    <span class="text-sm text-muted-foreground">{{ webhook.is_active ? $t('common.active') : $t('common.inactive') }}</span>
                   </div>
                 </template>
                 <template #cell-created="{ item: webhook }"><span class="text-muted-foreground">{{ formatDate(webhook.created_at) }}</span></template>
@@ -209,7 +212,7 @@ onMounted(() => fetchWebhooks())
                   </div>
                 </template>
                 <template #empty-action>
-                  <Button variant="outline" size="sm" @click="openCreateDialog"><Plus class="h-4 w-4 mr-2" />Add Webhook</Button>
+                  <Button variant="outline" size="sm" @click="openCreateDialog"><Plus class="h-4 w-4 mr-2" />{{ $t('webhooks.addWebhook') }}</Button>
                 </template>
               </DataTable>
             </CardContent>
@@ -222,14 +225,14 @@ onMounted(() => fetchWebhooks())
     <Dialog v-model:open="isDialogOpen">
       <DialogContent class="max-w-lg">
         <DialogHeader>
-          <DialogTitle>{{ isEditing ? 'Edit Webhook' : 'Add Webhook' }}</DialogTitle>
-          <DialogDescription>Configure a webhook to receive events from Whatomate</DialogDescription>
+          <DialogTitle>{{ isEditing ? $t('webhooks.editWebhook') : $t('webhooks.addWebhook') }}</DialogTitle>
+          <DialogDescription>{{ $t('webhooks.configureWebhook') }}</DialogDescription>
         </DialogHeader>
         <div class="space-y-4 py-4">
-          <div class="space-y-2"><Label for="name">Name</Label><Input id="name" v-model="formData.name" placeholder="My Helpdesk Integration" /></div>
-          <div class="space-y-2"><Label for="url">Webhook URL</Label><Input id="url" v-model="formData.url" type="url" placeholder="https://example.com/webhook" /></div>
+          <div class="space-y-2"><Label for="name">{{ $t('webhooks.name') }}</Label><Input id="name" v-model="formData.name" :placeholder="$t('webhooks.namePlaceholder')" /></div>
+          <div class="space-y-2"><Label for="url">{{ $t('webhooks.webhookUrl') }}</Label><Input id="url" v-model="formData.url" type="url" :placeholder="$t('webhooks.webhookUrlPlaceholder')" /></div>
           <div class="space-y-2">
-            <Label>Events</Label>
+            <Label>{{ $t('webhooks.events') }}</Label>
             <div class="grid grid-cols-1 gap-2 border rounded-lg p-3">
               <div v-for="event in availableEvents" :key="event.value" class="flex items-start gap-2">
                 <Checkbox :id="event.value" :checked="formData.events.includes(event.value)" @update:checked="(checked) => toggleEvent(event.value, checked)" />
@@ -238,12 +241,12 @@ onMounted(() => fetchWebhooks())
             </div>
           </div>
           <div class="space-y-2">
-            <Label for="secret">Secret (optional)</Label>
-            <Input id="secret" v-model="formData.secret" type="password" placeholder="Used for HMAC signature verification" />
-            <p class="text-xs text-muted-foreground">If set, requests will include X-Webhook-Signature header</p>
+            <Label for="secret">{{ $t('webhooks.secret') }}</Label>
+            <Input id="secret" v-model="formData.secret" type="password" :placeholder="$t('webhooks.secretPlaceholder')" />
+            <p class="text-xs text-muted-foreground">{{ $t('webhooks.secretHint') }}</p>
           </div>
           <div class="space-y-2">
-            <Label>Custom Headers (optional)</Label>
+            <Label>{{ $t('webhooks.customHeaders') }}</Label>
             <div class="space-y-2">
               <div v-for="(value, key) in formData.headers" :key="key" class="flex items-center gap-2">
                 <Badge variant="secondary" class="flex-shrink-0">{{ key }}</Badge>
@@ -251,20 +254,20 @@ onMounted(() => fetchWebhooks())
                 <Button variant="ghost" size="icon" class="h-6 w-6 flex-shrink-0" @click="removeHeader(key as string)"><Trash2 class="h-3 w-3" /></Button>
               </div>
               <div class="flex gap-2">
-                <Input v-model="newHeaderKey" placeholder="Header name" class="flex-1" />
-                <Input v-model="newHeaderValue" placeholder="Value" class="flex-1" />
-                <Button variant="outline" size="sm" @click="addHeader">Add</Button>
+                <Input v-model="newHeaderKey" :placeholder="$t('webhooks.headerName')" class="flex-1" />
+                <Input v-model="newHeaderValue" :placeholder="$t('webhooks.headerValue')" class="flex-1" />
+                <Button variant="outline" size="sm" @click="addHeader">{{ $t('common.add') }}</Button>
               </div>
             </div>
           </div>
         </div>
         <DialogFooter>
-          <Button variant="outline" @click="isDialogOpen = false">Cancel</Button>
-          <Button @click="saveWebhook" :disabled="isSaving"><Loader2 v-if="isSaving" class="h-4 w-4 mr-2 animate-spin" />{{ isEditing ? 'Update' : 'Create' }}</Button>
+          <Button variant="outline" @click="isDialogOpen = false">{{ $t('common.cancel') }}</Button>
+          <Button @click="saveWebhook" :disabled="isSaving"><Loader2 v-if="isSaving" class="h-4 w-4 mr-2 animate-spin" />{{ isEditing ? $t('common.update') : $t('common.create') }}</Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>
 
-    <DeleteConfirmDialog v-model:open="isDeleteDialogOpen" title="Delete Webhook" :item-name="webhookToDelete?.name" @confirm="deleteWebhook" />
+    <DeleteConfirmDialog v-model:open="isDeleteDialogOpen" :title="$t('webhooks.deleteWebhook')" :item-name="webhookToDelete?.name" @confirm="deleteWebhook" />
   </div>
 </template>

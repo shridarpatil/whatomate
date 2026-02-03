@@ -1,5 +1,6 @@
 <script setup lang="ts">
-import { ref, onMounted, watch } from 'vue'
+import { ref, onMounted, watch, computed } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { customActionsService, type CustomAction } from '@/services/api'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -18,6 +19,8 @@ import { Plus, Trash2, Pencil, Zap, Loader2, Globe, Webhook, Code, Ticket, User,
 import { getErrorMessage } from '@/lib/api-utils'
 import { formatDate } from '@/lib/utils'
 import { useDebounceFn } from '@vueuse/core'
+
+const { t } = useI18n()
 
 const actions = ref<CustomAction[]>([])
 const isLoading = ref(false)
@@ -49,15 +52,15 @@ const currentPage = ref(1)
 const totalItems = ref(0)
 const pageSize = 20
 
-const columns: Column<CustomAction>[] = [
+const columns = computed<Column<CustomAction>[]>(() => [
   { key: 'icon', label: '', width: 'w-[40px]' },
-  { key: 'name', label: 'Name', sortable: true },
-  { key: 'type', label: 'Type', sortable: true, sortKey: 'action_type' },
-  { key: 'target', label: 'Target' },
-  { key: 'status', label: 'Status', sortable: true, sortKey: 'is_active' },
-  { key: 'created', label: 'Created', sortable: true, sortKey: 'created_at' },
-  { key: 'actions', label: 'Actions', align: 'right' },
-]
+  { key: 'name', label: t('customActions.name'), sortable: true },
+  { key: 'type', label: t('customActions.type'), sortable: true, sortKey: 'action_type' },
+  { key: 'target', label: t('customActions.target') },
+  { key: 'status', label: t('customActions.status'), sortable: true, sortKey: 'is_active' },
+  { key: 'created', label: t('customActions.created'), sortable: true, sortKey: 'created_at' },
+  { key: 'actions', label: t('common.actions'), align: 'right' },
+])
 
 // Sorting state
 const sortKey = ref('name')
@@ -78,7 +81,7 @@ async function fetchActions() {
     const data = (response.data as any).data || response.data
     actions.value = data.custom_actions || []
     totalItems.value = data.total ?? actions.value.length
-  } catch (e) { toast.error(getErrorMessage(e, 'Failed to load custom actions')) }
+  } catch (e) { toast.error(getErrorMessage(e, t('customActions.loadFailed'))) }
   finally { isLoading.value = false }
 }
 
@@ -113,9 +116,9 @@ function openEditDialog(action: CustomAction) {
 }
 
 async function saveAction() {
-  if (!formData.value.name.trim()) { toast.error('Name is required'); return }
-  if ((formData.value.action_type === 'webhook' || formData.value.action_type === 'url') && !formData.value.config.url.trim()) { toast.error('URL is required'); return }
-  if (formData.value.action_type === 'javascript' && !formData.value.config.code.trim()) { toast.error('JavaScript code is required'); return }
+  if (!formData.value.name.trim()) { toast.error(t('customActions.nameRequired')); return }
+  if ((formData.value.action_type === 'webhook' || formData.value.action_type === 'url') && !formData.value.config.url.trim()) { toast.error(t('customActions.urlRequired')); return }
+  if (formData.value.action_type === 'javascript' && !formData.value.config.code.trim()) { toast.error(t('customActions.jsCodeRequired')); return }
 
   let config: Record<string, any> = {}
   switch (formData.value.action_type) {
@@ -127,23 +130,23 @@ async function saveAction() {
   isSaving.value = true
   try {
     const payload = { name: formData.value.name.trim(), icon: formData.value.icon, action_type: formData.value.action_type, config, is_active: formData.value.is_active, display_order: formData.value.display_order }
-    if (isEditing.value && editingActionId.value) { await customActionsService.update(editingActionId.value, payload); toast.success('Custom action updated') }
-    else { await customActionsService.create(payload); toast.success('Custom action created') }
+    if (isEditing.value && editingActionId.value) { await customActionsService.update(editingActionId.value, payload); toast.success(t('customActions.actionUpdated')) }
+    else { await customActionsService.create(payload); toast.success(t('customActions.actionCreated')) }
     isDialogOpen.value = false
     await fetchActions()
-  } catch (e) { toast.error(getErrorMessage(e, 'Failed to save custom action')) }
+  } catch (e) { toast.error(getErrorMessage(e, t('customActions.saveFailed'))) }
   finally { isSaving.value = false }
 }
 
 async function toggleAction(action: CustomAction) {
-  try { await customActionsService.update(action.id, { is_active: !action.is_active }); await fetchActions(); toast.success(action.is_active ? 'Action disabled' : 'Action enabled') }
-  catch (e) { toast.error(getErrorMessage(e, 'Failed to update action')) }
+  try { await customActionsService.update(action.id, { is_active: !action.is_active }); await fetchActions(); toast.success(action.is_active ? t('customActions.actionDisabled') : t('customActions.actionEnabled')) }
+  catch (e) { toast.error(getErrorMessage(e, t('customActions.updateFailed'))) }
 }
 
 async function deleteAction() {
   if (!actionToDelete.value) return
-  try { await customActionsService.delete(actionToDelete.value.id); await fetchActions(); toast.success('Custom action deleted'); isDeleteDialogOpen.value = false; actionToDelete.value = null }
-  catch (e) { toast.error(getErrorMessage(e, 'Failed to delete action')) }
+  try { await customActionsService.delete(actionToDelete.value.id); await fetchActions(); toast.success(t('customActions.actionDeleted')); isDeleteDialogOpen.value = false; actionToDelete.value = null }
+  catch (e) { toast.error(getErrorMessage(e, t('customActions.deleteFailed'))) }
 }
 
 function addHeader() { if (newHeaderKey.value.trim() && newHeaderValue.value.trim()) { formData.value.config.headers[newHeaderKey.value.trim()] = newHeaderValue.value.trim(); newHeaderKey.value = ''; newHeaderValue.value = '' } }
@@ -157,9 +160,9 @@ onMounted(() => fetchActions())
 
 <template>
   <div class="flex flex-col h-full bg-[#0a0a0b] light:bg-gray-50">
-    <PageHeader title="Custom Actions" subtitle="Configure custom action buttons for chat integrations" :icon="Zap" icon-gradient="bg-gradient-to-br from-yellow-500 to-orange-600 shadow-yellow-500/20">
+    <PageHeader :title="$t('customActions.title')" :subtitle="$t('customActions.subtitle')" :icon="Zap" icon-gradient="bg-gradient-to-br from-yellow-500 to-orange-600 shadow-yellow-500/20">
       <template #actions>
-        <Button variant="outline" size="sm" @click="openCreateDialog"><Plus class="h-4 w-4 mr-2" />Add Action</Button>
+        <Button variant="outline" size="sm" @click="openCreateDialog"><Plus class="h-4 w-4 mr-2" />{{ $t('customActions.addAction') }}</Button>
       </template>
     </PageHeader>
 
@@ -170,20 +173,20 @@ onMounted(() => fetchActions())
             <CardHeader>
               <div class="flex items-center justify-between flex-wrap gap-4">
                 <div>
-                  <CardTitle>Your Custom Actions</CardTitle>
-                  <CardDescription>Custom actions appear as buttons in the chat header for quick integrations.</CardDescription>
+                  <CardTitle>{{ $t('customActions.yourActions') }}</CardTitle>
+                  <CardDescription>{{ $t('customActions.yourActionsDesc') }}</CardDescription>
                 </div>
-                <SearchInput v-model="searchQuery" placeholder="Search actions..." class="w-64" />
+                <SearchInput v-model="searchQuery" :placeholder="$t('customActions.searchActions') + '...'" class="w-64" />
               </div>
             </CardHeader>
             <CardContent>
-              <DataTable :items="actions" :columns="columns" :is-loading="isLoading" :empty-icon="Zap" :empty-title="searchQuery ? 'No matching actions' : 'No custom actions configured'" :empty-description="searchQuery ? 'No actions match your search.' : 'Create your first custom action to get started.'" v-model:sort-key="sortKey" v-model:sort-direction="sortDirection" server-pagination :current-page="currentPage" :total-items="totalItems" :page-size="pageSize" item-name="actions" @page-change="handlePageChange">
+              <DataTable :items="actions" :columns="columns" :is-loading="isLoading" :empty-icon="Zap" :empty-title="searchQuery ? $t('customActions.noMatchingActions') : $t('customActions.noActionsYet')" :empty-description="searchQuery ? $t('customActions.noMatchingActionsDesc') : $t('customActions.noActionsYetDesc')" v-model:sort-key="sortKey" v-model:sort-direction="sortDirection" server-pagination :current-page="currentPage" :total-items="totalItems" :page-size="pageSize" item-name="actions" @page-change="handlePageChange">
                 <template #cell-icon="{ item: action }"><component :is="getIconComponent(action.icon)" class="h-5 w-5 text-muted-foreground" /></template>
                 <template #cell-name="{ item: action }"><span class="font-medium">{{ action.name }}</span></template>
                 <template #cell-type="{ item: action }"><Badge :variant="getActionTypeBadge(action.action_type).variant">{{ getActionTypeBadge(action.action_type).label }}</Badge></template>
-                <template #cell-target="{ item: action }"><span class="max-w-[200px] truncate text-muted-foreground block">{{ action.action_type === 'javascript' ? 'Custom Script' : action.config.url }}</span></template>
+                <template #cell-target="{ item: action }"><span class="max-w-[200px] truncate text-muted-foreground block">{{ action.action_type === 'javascript' ? $t('customActions.customScript') : action.config.url }}</span></template>
                 <template #cell-status="{ item: action }">
-                  <div class="flex items-center gap-2"><Switch :checked="action.is_active" @update:checked="toggleAction(action)" /><span class="text-sm text-muted-foreground">{{ action.is_active ? 'Active' : 'Inactive' }}</span></div>
+                  <div class="flex items-center gap-2"><Switch :checked="action.is_active" @update:checked="toggleAction(action)" /><span class="text-sm text-muted-foreground">{{ action.is_active ? $t('common.active') : $t('common.inactive') }}</span></div>
                 </template>
                 <template #cell-created="{ item: action }"><span class="text-muted-foreground">{{ formatDate(action.created_at) }}</span></template>
                 <template #cell-actions="{ item: action }">
@@ -193,7 +196,7 @@ onMounted(() => fetchActions())
                   </div>
                 </template>
                 <template #empty-action>
-                  <Button variant="outline" size="sm" @click="openCreateDialog"><Plus class="h-4 w-4 mr-2" />Add Action</Button>
+                  <Button variant="outline" size="sm" @click="openCreateDialog"><Plus class="h-4 w-4 mr-2" />{{ $t('customActions.addAction') }}</Button>
                 </template>
               </DataTable>
             </CardContent>
@@ -206,48 +209,48 @@ onMounted(() => fetchActions())
     <Dialog v-model:open="isDialogOpen">
       <DialogContent class="max-w-lg max-h-[90vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle>{{ isEditing ? 'Edit Custom Action' : 'Add Custom Action' }}</DialogTitle>
-          <DialogDescription>Configure an action button that appears in the chat header</DialogDescription>
+          <DialogTitle>{{ isEditing ? $t('customActions.editTitle') : $t('customActions.createTitle') }}</DialogTitle>
+          <DialogDescription>{{ $t('customActions.dialogDesc') }}</DialogDescription>
         </DialogHeader>
         <div class="space-y-4 py-4">
-          <div class="space-y-2"><Label for="name">Name</Label><Input id="name" v-model="formData.name" placeholder="Create Support Ticket" /></div>
+          <div class="space-y-2"><Label for="name">{{ $t('customActions.name') }}</Label><Input id="name" v-model="formData.name" :placeholder="$t('customActions.namePlaceholder')" /></div>
           <div class="space-y-2">
-            <Label>Icon</Label>
+            <Label>{{ $t('customActions.icon') }}</Label>
             <div class="flex flex-wrap gap-2">
               <Button v-for="iconOpt in iconOptions" :key="iconOpt.value" variant="outline" size="icon" class="h-10 w-10" :class="{ 'ring-2 ring-primary': formData.icon === iconOpt.value }" @click="formData.icon = iconOpt.value"><component :is="iconOpt.icon" class="h-5 w-5" /></Button>
             </div>
           </div>
           <div class="space-y-2">
-            <Label>Action Type</Label>
+            <Label>{{ $t('customActions.actionType') }}</Label>
             <RadioGroup v-model="formData.action_type" class="flex flex-col gap-2">
-              <div class="flex items-center space-x-2"><RadioGroupItem value="webhook" id="type-webhook" /><Label for="type-webhook" class="flex items-center gap-2 cursor-pointer font-normal"><Webhook class="h-4 w-4" />Webhook (Call external API)</Label></div>
-              <div class="flex items-center space-x-2"><RadioGroupItem value="url" id="type-url" /><Label for="type-url" class="flex items-center gap-2 cursor-pointer font-normal"><Globe class="h-4 w-4" />Open URL (Open in browser)</Label></div>
-              <div class="flex items-center space-x-2"><RadioGroupItem value="javascript" id="type-javascript" /><Label for="type-javascript" class="flex items-center gap-2 cursor-pointer font-normal"><Code class="h-4 w-4" />JavaScript (Run custom code)</Label></div>
+              <div class="flex items-center space-x-2"><RadioGroupItem value="webhook" id="type-webhook" /><Label for="type-webhook" class="flex items-center gap-2 cursor-pointer font-normal"><Webhook class="h-4 w-4" />{{ $t('customActions.webhookType') }}</Label></div>
+              <div class="flex items-center space-x-2"><RadioGroupItem value="url" id="type-url" /><Label for="type-url" class="flex items-center gap-2 cursor-pointer font-normal"><Globe class="h-4 w-4" />{{ $t('customActions.urlType') }}</Label></div>
+              <div class="flex items-center space-x-2"><RadioGroupItem value="javascript" id="type-javascript" /><Label for="type-javascript" class="flex items-center gap-2 cursor-pointer font-normal"><Code class="h-4 w-4" />{{ $t('customActions.javascriptType') }}</Label></div>
             </RadioGroup>
           </div>
 
           <!-- Webhook Configuration -->
           <template v-if="formData.action_type === 'webhook'">
             <div class="border-t pt-4 space-y-4">
-              <div class="space-y-2"><Label for="url">Webhook URL</Label><Input id="url" v-model="formData.config.url" type="url" placeholder="https://api.helpdesk.com/tickets" /></div>
+              <div class="space-y-2"><Label for="url">{{ $t('customActions.webhookUrl') }}</Label><Input id="url" v-model="formData.config.url" type="url" :placeholder="$t('customActions.webhookUrlPlaceholder')" /></div>
               <div class="space-y-2">
-                <Label for="method">HTTP Method</Label>
+                <Label for="method">{{ $t('customActions.httpMethod') }}</Label>
                 <Select v-model="formData.config.method"><SelectTrigger><SelectValue /></SelectTrigger><SelectContent><SelectItem value="POST">POST</SelectItem><SelectItem value="GET">GET</SelectItem><SelectItem value="PUT">PUT</SelectItem><SelectItem value="PATCH">PATCH</SelectItem></SelectContent></Select>
               </div>
               <div class="space-y-2">
-                <Label>Headers (optional)</Label>
+                <Label>{{ $t('customActions.headers') }}</Label>
                 <div class="space-y-2">
                   <div v-for="(value, key) in formData.config.headers" :key="key" class="flex items-center gap-2">
                     <Badge variant="secondary" class="flex-shrink-0">{{ key }}</Badge><span class="text-sm truncate flex-1">{{ value }}</span>
                     <Button variant="ghost" size="icon" class="h-6 w-6 flex-shrink-0" @click="removeHeader(key as string)"><Trash2 class="h-3 w-3" /></Button>
                   </div>
-                  <div class="flex gap-2"><Input v-model="newHeaderKey" placeholder="Header name" class="flex-1" /><Input v-model="newHeaderValue" placeholder="Value" class="flex-1" /><Button variant="outline" size="sm" @click="addHeader">Add</Button></div>
+                  <div class="flex gap-2"><Input v-model="newHeaderKey" :placeholder="$t('webhooks.headerName')" class="flex-1" /><Input v-model="newHeaderValue" :placeholder="$t('webhooks.headerValue')" class="flex-1" /><Button variant="outline" size="sm" @click="addHeader">{{ $t('common.add') }}</Button></div>
                 </div>
               </div>
               <div class="space-y-2">
-                <div class="flex items-center justify-between"><Label for="body">Request Body (JSON)</Label><Button variant="link" size="sm" class="h-auto p-0 text-xs" @click="formData.config.body = defaultBodyTemplate">Insert template</Button></div>
+                <div class="flex items-center justify-between"><Label for="body">{{ $t('customActions.requestBody') }}</Label><Button variant="link" size="sm" class="h-auto p-0 text-xs" @click="formData.config.body = defaultBodyTemplate">{{ $t('customActions.insertTemplate') }}</Button></div>
                 <Textarea id="body" v-model="formData.config.body" placeholder='{"subject": "{{contact.name}}"}' class="font-mono text-sm min-h-[120px]" />
-                <p class="text-xs text-muted-foreground">Variables: <code class="bg-muted px-1 rounded" v-pre>{{contact.name}}</code>, <code class="bg-muted px-1 rounded" v-pre>{{contact.phone_number}}</code>, <code class="bg-muted px-1 rounded" v-pre>{{user.name}}</code>, <code class="bg-muted px-1 rounded" v-pre>{{user.email}}</code></p>
+                <p class="text-xs text-muted-foreground">{{ $t('customActions.bodyVariables') }}</p>
               </div>
             </div>
           </template>
@@ -255,8 +258,8 @@ onMounted(() => fetchActions())
           <!-- URL Configuration -->
           <template v-if="formData.action_type === 'url'">
             <div class="border-t pt-4 space-y-4">
-              <div class="space-y-2"><Label for="url">URL</Label><Input id="url" v-model="formData.config.url" type="url" placeholder="https://crm.example.com/contact?phone={{contact.phone_number}}" /><p class="text-xs text-muted-foreground">Use <code class="bg-muted px-1 rounded" v-pre>{{contact.phone_number}}</code> in URL</p></div>
-              <div class="flex items-center space-x-2"><Switch id="new-tab" :checked="formData.config.open_in_new_tab" @update:checked="formData.config.open_in_new_tab = $event" /><Label for="new-tab" class="cursor-pointer">Open in new tab</Label></div>
+              <div class="space-y-2"><Label for="url">{{ $t('customActions.urlLabel') }}</Label><Input id="url" v-model="formData.config.url" type="url" :placeholder="$t('customActions.urlPlaceholder')" /><p class="text-xs text-muted-foreground">{{ $t('customActions.urlHint') }}</p></div>
+              <div class="flex items-center space-x-2"><Switch id="new-tab" :checked="formData.config.open_in_new_tab" @update:checked="formData.config.open_in_new_tab = $event" /><Label for="new-tab" class="cursor-pointer">{{ $t('customActions.openInNewTab') }}</Label></div>
             </div>
           </template>
 
@@ -264,20 +267,20 @@ onMounted(() => fetchActions())
           <template v-if="formData.action_type === 'javascript'">
             <div class="border-t pt-4 space-y-4">
               <div class="space-y-2">
-                <Label for="code">JavaScript Code</Label>
-                <Textarea id="code" v-model="formData.config.code" placeholder="// Available: contact, user, organization&#10;return { clipboard: contact.phone_number }" class="font-mono text-sm min-h-[200px]" />
-                <p class="text-xs text-muted-foreground">Return: <code class="bg-muted px-1 rounded">toast</code>, <code class="bg-muted px-1 rounded">clipboard</code>, or <code class="bg-muted px-1 rounded">url</code></p>
+                <Label for="code">{{ $t('customActions.jsCode') }}</Label>
+                <Textarea id="code" v-model="formData.config.code" :placeholder="$t('customActions.jsCodePlaceholder')" class="font-mono text-sm min-h-[200px]" />
+                <p class="text-xs text-muted-foreground">{{ $t('customActions.jsReturnHint') }}</p>
               </div>
             </div>
           </template>
         </div>
         <DialogFooter>
-          <Button variant="outline" @click="isDialogOpen = false">Cancel</Button>
-          <Button @click="saveAction" :disabled="isSaving"><Loader2 v-if="isSaving" class="h-4 w-4 mr-2 animate-spin" />{{ isEditing ? 'Update' : 'Create' }}</Button>
+          <Button variant="outline" @click="isDialogOpen = false">{{ $t('common.cancel') }}</Button>
+          <Button @click="saveAction" :disabled="isSaving"><Loader2 v-if="isSaving" class="h-4 w-4 mr-2 animate-spin" />{{ isEditing ? $t('common.update') : $t('common.create') }}</Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>
 
-    <DeleteConfirmDialog v-model:open="isDeleteDialogOpen" title="Delete Custom Action" :item-name="actionToDelete?.name" @confirm="deleteAction" />
+    <DeleteConfirmDialog v-model:open="isDeleteDialogOpen" :title="$t('customActions.deleteTitle')" :item-name="actionToDelete?.name" @confirm="deleteAction" />
   </div>
 </template>

@@ -1,5 +1,6 @@
 <script setup lang="ts">
-import { ref, onMounted, watch } from 'vue'
+import { ref, onMounted, watch, computed } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -16,6 +17,8 @@ import { Plus, MessageSquareText, Pencil, Trash2, Copy } from 'lucide-vue-next'
 import { getErrorMessage } from '@/lib/api-utils'
 import { CANNED_RESPONSE_CATEGORIES, getLabelFromValue } from '@/lib/constants'
 import { useDebounceFn } from '@vueuse/core'
+
+const { t } = useI18n()
 
 interface CannedResponseFormData {
   name: string
@@ -43,14 +46,14 @@ const currentPage = ref(1)
 const totalItems = ref(0)
 const pageSize = 20
 
-const columns: Column<CannedResponse>[] = [
-  { key: 'name', label: 'Name', sortable: true },
-  { key: 'category', label: 'Category', sortable: true },
-  { key: 'content', label: 'Content' },
-  { key: 'usage_count', label: 'Used', sortable: true },
-  { key: 'status', label: 'Status', sortable: true, sortKey: 'is_active' },
-  { key: 'actions', label: 'Actions', align: 'right' },
-]
+const columns = computed<Column<CannedResponse>[]>(() => [
+  { key: 'name', label: t('cannedResponses.name'), sortable: true },
+  { key: 'category', label: t('cannedResponses.category'), sortable: true },
+  { key: 'content', label: t('cannedResponses.content') },
+  { key: 'usage_count', label: t('cannedResponses.used'), sortable: true },
+  { key: 'status', label: t('cannedResponses.status'), sortable: true, sortKey: 'is_active' },
+  { key: 'actions', label: t('common.actions'), align: 'right' },
+])
 
 const sortKey = ref('name')
 const sortDirection = ref<'asc' | 'desc'>('asc')
@@ -68,7 +71,7 @@ async function fetchItems() {
     cannedResponses.value = data.canned_responses || []
     totalItems.value = data.total ?? cannedResponses.value.length
   } catch (error) {
-    toast.error(getErrorMessage(error, 'Failed to load canned responses'))
+    toast.error(getErrorMessage(error, t('cannedResponses.loadFailed')))
   } finally {
     isLoading.value = false
   }
@@ -122,20 +125,20 @@ function closeDeleteDialog() {
 onMounted(() => fetchItems())
 
 async function saveResponse() {
-  if (!formData.value.name.trim() || !formData.value.content.trim()) { toast.error('Name and content are required'); return }
+  if (!formData.value.name.trim() || !formData.value.content.trim()) { toast.error(t('cannedResponses.nameContentRequired')); return }
   isSubmitting.value = true
   try {
     if (editingResponse.value) {
       await cannedResponsesService.update(editingResponse.value.id, formData.value)
-      toast.success('Canned response updated')
+      toast.success(t('cannedResponses.responseUpdated'))
     } else {
       await cannedResponsesService.create(formData.value)
-      toast.success('Canned response created')
+      toast.success(t('cannedResponses.responseCreated'))
     }
     closeDialog()
     await fetchItems()
   } catch (error) {
-    toast.error(getErrorMessage(error, 'Failed to save canned response'))
+    toast.error(getErrorMessage(error, t('cannedResponses.saveFailed')))
   } finally {
     isSubmitting.value = false
   }
@@ -145,23 +148,23 @@ async function confirmDelete() {
   if (!responseToDelete.value) return
   try {
     await cannedResponsesService.delete(responseToDelete.value.id)
-    toast.success('Canned response deleted')
+    toast.success(t('cannedResponses.responseDeleted'))
     closeDeleteDialog()
     await fetchItems()
   } catch (error) {
-    toast.error(getErrorMessage(error, 'Failed to delete canned response'))
+    toast.error(getErrorMessage(error, t('cannedResponses.deleteFailed')))
   }
 }
 
-function copyToClipboard(content: string) { navigator.clipboard.writeText(content); toast.success('Copied to clipboard') }
-function getCategoryLabel(category: string): string { return getLabelFromValue(CANNED_RESPONSE_CATEGORIES, category) || 'Uncategorized' }
+function copyToClipboard(content: string) { navigator.clipboard.writeText(content); toast.success(t('cannedResponses.copiedToClipboard')) }
+function getCategoryLabel(category: string): string { return getLabelFromValue(CANNED_RESPONSE_CATEGORIES, category) || t('cannedResponses.uncategorized') }
 </script>
 
 <template>
   <div class="flex flex-col h-full bg-[#0a0a0b] light:bg-gray-50">
-    <PageHeader title="Canned Responses" subtitle="Pre-defined responses for quick messaging" :icon="MessageSquareText" icon-gradient="bg-gradient-to-br from-teal-500 to-emerald-600 shadow-teal-500/20">
+    <PageHeader :title="$t('cannedResponses.title')" :subtitle="$t('cannedResponses.subtitle')" :icon="MessageSquareText" icon-gradient="bg-gradient-to-br from-teal-500 to-emerald-600 shadow-teal-500/20">
       <template #actions>
-        <Button variant="outline" size="sm" @click="openCreateDialog"><Plus class="h-4 w-4 mr-2" />Add Response</Button>
+        <Button variant="outline" size="sm" @click="openCreateDialog"><Plus class="h-4 w-4 mr-2" />{{ $t('cannedResponses.addResponse') }}</Button>
       </template>
     </PageHeader>
 
@@ -172,18 +175,18 @@ function getCategoryLabel(category: string): string { return getLabelFromValue(C
             <CardHeader>
               <div class="flex items-center justify-between flex-wrap gap-4">
                 <div>
-                  <CardTitle>Your Canned Responses</CardTitle>
-                  <CardDescription>Quick responses for common questions.</CardDescription>
+                  <CardTitle>{{ $t('cannedResponses.yourResponses') }}</CardTitle>
+                  <CardDescription>{{ $t('cannedResponses.yourResponsesDesc') }}</CardDescription>
                 </div>
                 <div class="flex items-center gap-2">
                   <Select v-model="selectedCategory">
-                    <SelectTrigger class="w-[150px]"><SelectValue placeholder="All" /></SelectTrigger>
+                    <SelectTrigger class="w-[150px]"><SelectValue :placeholder="$t('common.all')" /></SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="all">All Categories</SelectItem>
+                      <SelectItem value="all">{{ $t('cannedResponses.allCategories') }}</SelectItem>
                       <SelectItem v-for="cat in CANNED_RESPONSE_CATEGORIES" :key="cat.value" :value="cat.value">{{ cat.label }}</SelectItem>
                     </SelectContent>
                   </Select>
-                  <SearchInput v-model="searchQuery" placeholder="Search responses..." class="w-64" />
+                  <SearchInput v-model="searchQuery" :placeholder="$t('cannedResponses.searchResponses') + '...'" class="w-64" />
                 </div>
               </div>
             </CardHeader>
@@ -193,8 +196,8 @@ function getCategoryLabel(category: string): string { return getLabelFromValue(C
                 :columns="columns"
                 :is-loading="isLoading"
                 :empty-icon="MessageSquareText"
-                empty-title="No canned responses found"
-                empty-description="Create your first canned response to get started."
+                :empty-title="$t('cannedResponses.noResponsesFound')"
+                :empty-description="$t('cannedResponses.noResponsesFoundDesc')"
                 v-model:sort-key="sortKey"
                 v-model:sort-direction="sortDirection"
                 server-pagination
@@ -220,8 +223,8 @@ function getCategoryLabel(category: string): string { return getLabelFromValue(C
                   <span class="text-muted-foreground">{{ response.usage_count }}</span>
                 </template>
                 <template #cell-status="{ item: response }">
-                  <Badge v-if="response.is_active" class="bg-emerald-500/20 text-emerald-400 border-transparent text-xs">Active</Badge>
-                  <Badge v-else variant="secondary" class="text-xs">Inactive</Badge>
+                  <Badge v-if="response.is_active" class="bg-emerald-500/20 text-emerald-400 border-transparent text-xs">{{ $t('common.active') }}</Badge>
+                  <Badge v-else variant="secondary" class="text-xs">{{ $t('common.inactive') }}</Badge>
                 </template>
                 <template #cell-actions="{ item: response }">
                   <div class="flex items-center justify-end gap-1">
@@ -238,7 +241,7 @@ function getCategoryLabel(category: string): string { return getLabelFromValue(C
                 </template>
                 <template #empty-action>
                   <Button variant="outline" size="sm" @click="openCreateDialog">
-                    <Plus class="h-4 w-4 mr-2" />Add Response
+                    <Plus class="h-4 w-4 mr-2" />{{ $t('cannedResponses.addResponse') }}
                   </Button>
                 </template>
               </DataTable>
@@ -248,29 +251,29 @@ function getCategoryLabel(category: string): string { return getLabelFromValue(C
       </div>
     </ScrollArea>
 
-    <CrudFormDialog v-model:open="isDialogOpen" :is-editing="!!editingResponse" :is-submitting="isSubmitting" edit-title="Edit Canned Response" create-title="Create Canned Response" edit-description="Update the response details." create-description="Add a new quick response." max-width="max-w-lg" @submit="saveResponse">
+    <CrudFormDialog v-model:open="isDialogOpen" :is-editing="!!editingResponse" :is-submitting="isSubmitting" :edit-title="$t('cannedResponses.editTitle')" :create-title="$t('cannedResponses.createTitle')" :edit-description="$t('cannedResponses.editDesc')" :create-description="$t('cannedResponses.createDesc')" max-width="max-w-lg" @submit="saveResponse">
       <div class="space-y-4">
-        <div class="space-y-2"><Label>Name <span class="text-destructive">*</span></Label><Input v-model="formData.name" placeholder="Welcome Message" /></div>
+        <div class="space-y-2"><Label>{{ $t('cannedResponses.name') }} <span class="text-destructive">*</span></Label><Input v-model="formData.name" placeholder="Welcome Message" /></div>
         <div class="grid grid-cols-2 gap-4">
           <div class="space-y-2">
-            <Label>Shortcut</Label>
+            <Label>{{ $t('cannedResponses.shortcut') }}</Label>
             <div class="relative"><span class="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground">/</span><Input v-model="formData.shortcut" placeholder="welcome" class="pl-7" /></div>
-            <p class="text-xs text-muted-foreground">Type /welcome to quickly find</p>
+            <p class="text-xs text-muted-foreground">{{ $t('cannedResponses.shortcutHint') }}</p>
           </div>
           <div class="space-y-2">
-            <Label>Category</Label>
-            <Select v-model="formData.category"><SelectTrigger><SelectValue placeholder="Select category" /></SelectTrigger><SelectContent><SelectItem v-for="cat in CANNED_RESPONSE_CATEGORIES" :key="cat.value" :value="cat.value">{{ cat.label }}</SelectItem></SelectContent></Select>
+            <Label>{{ $t('cannedResponses.category') }}</Label>
+            <Select v-model="formData.category"><SelectTrigger><SelectValue :placeholder="$t('cannedResponses.category')" /></SelectTrigger><SelectContent><SelectItem v-for="cat in CANNED_RESPONSE_CATEGORIES" :key="cat.value" :value="cat.value">{{ cat.label }}</SelectItem></SelectContent></Select>
           </div>
         </div>
         <div class="space-y-2">
-          <Label>Content <span class="text-destructive">*</span></Label>
-          <Textarea v-model="formData.content" placeholder="Hello {{contact_name}}! Thank you for reaching out. How can I help you today?" :rows="5" />
-          <p class="text-xs text-muted-foreground">Placeholders: <code class="bg-muted px-1 rounded" v-pre>{{contact_name}}</code> for name, <code class="bg-muted px-1 rounded" v-pre>{{phone_number}}</code> for phone</p>
+          <Label>{{ $t('cannedResponses.content') }} <span class="text-destructive">*</span></Label>
+          <Textarea v-model="formData.content" :placeholder="$t('cannedResponses.contentPlaceholder')" :rows="5" />
+          <p class="text-xs text-muted-foreground">{{ $t('cannedResponses.placeholderHint') }}</p>
         </div>
-        <div v-if="editingResponse" class="flex items-center justify-between"><Label>Active</Label><Switch v-model:checked="formData.is_active" /></div>
+        <div v-if="editingResponse" class="flex items-center justify-between"><Label>{{ $t('common.active') }}</Label><Switch v-model:checked="formData.is_active" /></div>
       </div>
     </CrudFormDialog>
 
-    <DeleteConfirmDialog v-model:open="deleteDialogOpen" title="Delete Canned Response" :item-name="responseToDelete?.name" @confirm="confirmDelete" />
+    <DeleteConfirmDialog v-model:open="deleteDialogOpen" :title="$t('cannedResponses.deleteTitle')" :item-name="responseToDelete?.name" @confirm="confirmDelete" />
   </div>
 </template>
