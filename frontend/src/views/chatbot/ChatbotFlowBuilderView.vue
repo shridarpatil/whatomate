@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { ref, computed, onMounted, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
+import { useI18n } from 'vue-i18n'
 import { Card, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -135,6 +136,7 @@ interface WhatsAppFlow {
 
 const route = useRoute()
 const router = useRouter()
+const { t } = useI18n()
 
 const isLoading = ref(true)
 const isSaving = ref(false)
@@ -329,22 +331,22 @@ const unassignedVariables = computed(() => {
 })
 
 const messageTypes = [
-  { value: 'text', label: 'Text', icon: MessageSquare, description: 'Send a text message' },
-  { value: 'buttons', label: 'Buttons', icon: MousePointerClick, description: 'Text with button options' },
-  { value: 'api_fetch', label: 'API', icon: Globe, description: 'Fetch data from API' },
-  { value: 'whatsapp_flow', label: 'WA Flow', icon: MessageCircle, description: 'WhatsApp Flow form' },
-  { value: 'transfer', label: 'Transfer', icon: Users, description: 'Transfer to agent' }
+  { value: 'text', label: 'Text', icon: MessageSquare },
+  { value: 'buttons', label: 'Buttons', icon: MousePointerClick },
+  { value: 'api_fetch', label: 'API', icon: Globe },
+  { value: 'whatsapp_flow', label: 'WA Flow', icon: MessageCircle },
+  { value: 'transfer', label: 'Transfer', icon: Users }
 ]
 
-const inputTypes = [
-  { value: 'none', label: 'No input required' },
-  { value: 'text', label: 'Text' },
-  { value: 'number', label: 'Number' },
-  { value: 'email', label: 'Email' },
-  { value: 'phone', label: 'Phone number' },
-  { value: 'date', label: 'Date' },
-  { value: 'select', label: 'Selection (buttons)' }
-]
+const inputTypes = computed(() => [
+  { value: 'none', label: t('flowBuilder.noInputRequired') },
+  { value: 'text', label: t('flowBuilder.textInput') },
+  { value: 'number', label: t('flowBuilder.numberInput') },
+  { value: 'email', label: t('flowBuilder.emailInput') },
+  { value: 'phone', label: t('flowBuilder.phoneInput') },
+  { value: 'date', label: t('flowBuilder.dateInput') },
+  { value: 'select', label: t('flowBuilder.selectionInput') }
+])
 
 const httpMethods = ['GET', 'POST', 'PUT', 'PATCH']
 
@@ -465,7 +467,7 @@ async function loadFlow(id: string) {
 
     // Flow Settings will be selected by default in onMounted
   } catch (error) {
-    toast.error('Failed to load flow')
+    toast.error(t('flowBuilder.loadFailed'))
     router.push('/chatbot/flows')
   } finally {
     isLoading.value = false
@@ -559,7 +561,7 @@ function setInputType(type: string | number | bigint | Record<string, any> | nul
 function addButton(type: 'reply' | 'url' = 'reply') {
   if (!selectedStep.value) return
   if (selectedStep.value.buttons.length >= 10) {
-    toast.error('WhatsApp allows maximum 10 options')
+    toast.error(t('flowBuilder.maxOptionsError'))
     return
   }
   const newButton: ButtonConfig = {
@@ -727,11 +729,11 @@ function removeFieldFromSection(sectionIndex: number, fieldIndex: number) {
 
 async function saveFlow() {
   if (!formData.value.name.trim()) {
-    toast.error('Please enter a flow name')
+    toast.error(t('flowBuilder.enterFlowName'))
     return
   }
   if (formData.value.steps.length === 0) {
-    toast.error('Please add at least one step')
+    toast.error(t('flowBuilder.addAtLeastOneStep'))
     return
   }
 
@@ -742,14 +744,14 @@ async function saveFlow() {
       for (const btn of step.buttons) {
         // Check title
         if (!btn.title?.trim()) {
-          toast.error(`Step "${step.step_name || `Step ${i + 1}`}" has a button without a title. Button titles are required for WhatsApp.`)
+          toast.error(t('flowBuilder.buttonTitleRequired', { step: step.step_name || `Step ${i + 1}` }))
           selectStep(i)
           return
         }
         // Check URL for URL buttons
         if (btn.type === 'url') {
           if (!btn.url?.trim()) {
-            toast.error(`Step "${step.step_name || `Step ${i + 1}`}" has a URL button "${btn.title}" without a URL.`)
+            toast.error(t('flowBuilder.urlButtonWithoutUrl', { step: step.step_name || `Step ${i + 1}`, title: btn.title }))
             selectStep(i)
             return
           }
@@ -757,7 +759,7 @@ async function saveFlow() {
           try {
             new URL(btn.url)
           } catch {
-            toast.error(`Step "${step.step_name || `Step ${i + 1}`}" has an invalid URL for button "${btn.title}".`)
+            toast.error(t('flowBuilder.invalidUrl', { step: step.step_name || `Step ${i + 1}`, title: btn.title }))
             selectStep(i)
             return
           }
@@ -788,18 +790,18 @@ async function saveFlow() {
     if (isNewFlow.value) {
       const response = await chatbotService.createFlow(data)
       const newFlow = response.data.data || response.data
-      toast.success('Flow created')
+      toast.success(t('flowBuilder.flowCreated'))
       // Update URL to edit mode so subsequent saves work correctly
       router.replace(`/chatbot/flows/${newFlow.id}/edit`)
     } else {
       await chatbotService.updateFlow(flowId.value!, data)
-      toast.success('Flow saved')
+      toast.success(t('flowBuilder.flowSaved'))
     }
 
     hasUnsavedChanges.value = false
     // Stay on page - don't navigate away
   } catch (error) {
-    toast.error('Failed to save flow')
+    toast.error(t('flowBuilder.saveFailed'))
   } finally {
     isSaving.value = false
   }
@@ -830,18 +832,18 @@ function confirmCancel() {
 
         <div class="flex-1 flex items-center gap-6">
           <div class="flex items-center gap-2">
-            <Label class="text-sm text-muted-foreground whitespace-nowrap">Name</Label>
+            <Label class="text-sm text-muted-foreground whitespace-nowrap">{{ $t('flowBuilder.name') }}</Label>
             <Input
               v-model="formData.name"
-              placeholder="Enter flow name"
+              :placeholder="$t('flowBuilder.namePlaceholder')"
               class="w-48 font-medium"
             />
           </div>
           <div class="flex items-center gap-2">
-            <Label class="text-sm text-muted-foreground whitespace-nowrap">Description</Label>
+            <Label class="text-sm text-muted-foreground whitespace-nowrap">{{ $t('flowBuilder.description') }}</Label>
             <Input
               v-model="formData.description"
-              placeholder="Optional"
+              :placeholder="$t('flowBuilder.optional')"
               class="w-64"
             />
           </div>
@@ -853,13 +855,13 @@ function confirmCancel() {
               :checked="formData.enabled"
               @update:checked="formData.enabled = $event"
             />
-            <span class="text-sm">{{ formData.enabled ? 'Enabled' : 'Disabled' }}</span>
+            <span class="text-sm">{{ formData.enabled ? $t('flowBuilder.enabled') : $t('flowBuilder.disabled') }}</span>
           </div>
 
-          <Button variant="outline" @click="handleCancel">Cancel</Button>
+          <Button variant="outline" @click="handleCancel">{{ $t('flowBuilder.cancel') }}</Button>
           <Button @click="saveFlow" :disabled="isSaving">
             <Save class="h-4 w-4 mr-2" />
-            {{ isSaving ? 'Saving...' : 'Save Flow' }}
+            {{ isSaving ? $t('flowBuilder.saving') + '...' : $t('flowBuilder.saveFlow') }}
           </Button>
         </div>
       </div>
@@ -867,7 +869,7 @@ function confirmCancel() {
 
     <!-- Loading state -->
     <div v-if="isLoading" class="flex-1 flex items-center justify-center">
-      <div class="text-muted-foreground">Loading...</div>
+      <div class="text-muted-foreground">{{ $t('flowBuilder.loading') }}...</div>
     </div>
 
     <!-- Main 3-panel layout -->
@@ -879,10 +881,10 @@ function confirmCancel() {
       >
         <CardHeader class="py-3 px-4 border-b">
           <div class="flex items-center justify-between">
-            <CardTitle class="text-sm font-medium">Steps</CardTitle>
+            <CardTitle class="text-sm font-medium">{{ $t('flowBuilder.steps') }}</CardTitle>
             <Button variant="outline" size="sm" @click="addStep">
               <Plus class="h-4 w-4 mr-1" />
-              Add
+              {{ $t('flowBuilder.add') }}
             </Button>
           </div>
         </CardHeader>
@@ -898,8 +900,8 @@ function confirmCancel() {
             >
               <Settings class="h-4 w-4 text-muted-foreground flex-shrink-0" />
               <div class="flex-1 min-w-0">
-                <span class="text-sm font-medium">Flow Settings</span>
-                <p class="text-xs text-muted-foreground">Messages & Webhook</p>
+                <span class="text-sm font-medium">{{ $t('flowBuilder.flowSettings') }}</span>
+                <p class="text-xs text-muted-foreground">{{ $t('flowBuilder.messagesWebhook') }}</p>
               </div>
             </div>
 
@@ -944,7 +946,7 @@ function confirmCancel() {
             </draggable>
 
             <div v-if="formData.steps.length === 0" class="text-center py-8 text-muted-foreground text-sm">
-              No steps yet.<br />Click "Add" to create one.
+              {{ $t('flowBuilder.noStepsYet') }}<br />{{ $t('flowBuilder.clickAddToCreate') }}
             </div>
           </div>
         </ScrollArea>
@@ -1008,7 +1010,7 @@ function confirmCancel() {
       >
         <CardHeader class="py-3 px-4 border-b">
           <CardTitle class="text-sm font-medium">
-            {{ showFlowSettings ? 'Flow Settings' : 'Step Properties' }}
+            {{ showFlowSettings ? $t('flowBuilder.flowSettings') : $t('flowBuilder.stepProperties') }}
           </CardTitle>
         </CardHeader>
 
@@ -1017,41 +1019,41 @@ function confirmCancel() {
           <div class="p-4 space-y-4">
             <!-- Trigger Keywords -->
             <div class="space-y-1.5">
-              <Label class="text-xs">Trigger Keywords</Label>
+              <Label class="text-xs">{{ $t('flowBuilder.triggerKeywords') }}</Label>
               <Input
                 v-model="formData.trigger_keywords"
-                placeholder="help, support, order"
+                :placeholder="$t('flowBuilder.triggerKeywordsPlaceholder')"
                 class="h-8 text-xs"
               />
-              <p class="text-[10px] text-muted-foreground">Comma-separated keywords to start this flow</p>
+              <p class="text-[10px] text-muted-foreground">{{ $t('flowBuilder.triggerKeywordsHint') }}</p>
             </div>
 
             <Separator />
 
             <!-- Initial Message -->
             <div class="space-y-1.5">
-              <Label class="text-xs">Initial Message</Label>
+              <Label class="text-xs">{{ $t('flowBuilder.initialMessage') }}</Label>
               <Textarea
                 v-model="formData.initial_message"
-                placeholder="Hi! Let me help you with that."
+                :placeholder="$t('flowBuilder.initialMessagePlaceholder')"
                 :rows="3"
                 class="text-xs"
               />
-              <p class="text-[10px] text-muted-foreground">Sent when flow starts</p>
+              <p class="text-[10px] text-muted-foreground">{{ $t('flowBuilder.initialMessageHint') }}</p>
             </div>
 
             <Separator />
 
             <!-- Completion Message -->
             <div class="space-y-1.5">
-              <Label class="text-xs">Completion Message</Label>
+              <Label class="text-xs">{{ $t('flowBuilder.completionMessage') }}</Label>
               <Textarea
                 v-model="formData.completion_message"
-                placeholder="Thank you! We have all the information we need."
+                :placeholder="$t('flowBuilder.completionMessagePlaceholder')"
                 :rows="3"
                 class="text-xs"
               />
-              <p class="text-[10px] text-muted-foreground">Sent when flow completes</p>
+              <p class="text-[10px] text-muted-foreground">{{ $t('flowBuilder.completionMessageHint') }}</p>
             </div>
 
             <Separator />
@@ -1059,19 +1061,19 @@ function confirmCancel() {
             <!-- On Complete Action -->
             <Collapsible v-model:open="webhookHeadersOpen">
               <CollapsibleTrigger class="flex items-center justify-between w-full py-1 text-sm font-medium">
-                On Completion
+                {{ $t('flowBuilder.onCompletion') }}
                 <component :is="webhookHeadersOpen ? ChevronDown : ChevronRight" class="h-4 w-4" />
               </CollapsibleTrigger>
               <CollapsibleContent class="pt-3 space-y-3">
                 <div class="space-y-1.5">
-                  <Label class="text-xs">Action</Label>
+                  <Label class="text-xs">{{ $t('flowBuilder.action') }}</Label>
                   <Select v-model="formData.on_complete_action">
                     <SelectTrigger class="h-8 text-xs">
-                      <SelectValue placeholder="Select action" />
+                      <SelectValue :placeholder="$t('flowBuilder.selectAction')" />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="none">No action</SelectItem>
-                      <SelectItem value="webhook">Send to API/Webhook</SelectItem>
+                      <SelectItem value="none">{{ $t('flowBuilder.noAction') }}</SelectItem>
+                      <SelectItem value="webhook">{{ $t('flowBuilder.sendToWebhook') }}</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
@@ -1081,7 +1083,7 @@ function confirmCancel() {
                   <div class="space-y-3 p-3 border rounded-lg bg-muted/30">
                     <div class="flex gap-2">
                       <div class="w-16">
-                        <Label class="text-[10px]">Method</Label>
+                        <Label class="text-[10px]">{{ $t('flowBuilder.method') }}</Label>
                         <Select v-model="formData.completion_config.method">
                           <SelectTrigger class="h-7 text-xs">
                             <SelectValue />
@@ -1094,10 +1096,10 @@ function confirmCancel() {
                         </Select>
                       </div>
                       <div class="flex-1">
-                        <Label class="text-[10px]">URL</Label>
+                        <Label class="text-[10px]">{{ $t('flowBuilder.url') }}</Label>
                         <Input
                           v-model="formData.completion_config.url"
-                          placeholder="https://..."
+                          :placeholder="$t('flowBuilder.urlPlaceholder')"
                           class="h-7 text-xs"
                         />
                       </div>
@@ -1106,7 +1108,7 @@ function confirmCancel() {
                     <!-- Headers -->
                     <div class="space-y-2">
                       <div class="flex items-center justify-between">
-                        <Label class="text-[10px]">Headers</Label>
+                        <Label class="text-[10px]">{{ $t('flowBuilder.headers') }}</Label>
                         <Button variant="ghost" size="sm" class="h-5 text-[10px] px-1" @click="addCompletionHeader">
                           <Plus class="h-3 w-3" />
                         </Button>
@@ -1130,7 +1132,7 @@ function confirmCancel() {
                     </div>
 
                     <div class="space-y-1">
-                      <Label class="text-[10px]">Body (optional)</Label>
+                      <Label class="text-[10px]">{{ $t('flowBuilder.bodyOptional') }}</Label>
                       <Textarea
                         v-model="formData.completion_config.body"
                         placeholder='{"name": "{{name}}"}'
@@ -1148,17 +1150,17 @@ function confirmCancel() {
             <!-- Panel Display Settings -->
             <Collapsible v-model:open="panelConfigOpen">
               <CollapsibleTrigger class="flex items-center justify-between w-full py-1 text-sm font-medium">
-                Panel Display Settings
+                {{ $t('flowBuilder.panelDisplaySettings') }}
                 <component :is="panelConfigOpen ? ChevronDown : ChevronRight" class="h-4 w-4" />
               </CollapsibleTrigger>
               <CollapsibleContent class="pt-3 space-y-3">
                 <p class="text-[10px] text-muted-foreground">
-                  Configure which fields to show in the contact info panel when viewing chat.
+                  {{ $t('flowBuilder.panelConfigHint') }}
                 </p>
 
                 <!-- Available Variables -->
                 <div v-if="availableVariables.length > 0" class="space-y-2">
-                  <Label class="text-xs">Available Variables</Label>
+                  <Label class="text-xs">{{ $t('flowBuilder.availableVariables') }}</Label>
                   <div class="flex flex-wrap gap-1">
                     <Badge
                       v-for="variable in unassignedVariables"
@@ -1170,27 +1172,27 @@ function confirmCancel() {
                       {{ variable.key }}
                     </Badge>
                     <span v-if="unassignedVariables.length === 0" class="text-[10px] text-muted-foreground">
-                      All variables assigned
+                      {{ $t('flowBuilder.allVariablesAssigned') }}
                     </span>
                   </div>
                 </div>
 
                 <div v-else class="text-[10px] text-muted-foreground p-2 border rounded bg-muted/30">
-                  No variables available. Add "Store Response As" to steps or configure Response Mapping in API steps.
+                  {{ $t('flowBuilder.noVariablesAvailable') }}
                 </div>
 
                 <!-- Sections -->
                 <div class="space-y-2">
                   <div class="flex items-center justify-between">
-                    <Label class="text-xs">Sections</Label>
+                    <Label class="text-xs">{{ $t('flowBuilder.sections') }}</Label>
                     <Button variant="outline" size="sm" class="h-6 text-xs" @click="addPanelSection">
                       <Plus class="h-3 w-3 mr-1" />
-                      Add Section
+                      {{ $t('flowBuilder.addSection') }}
                     </Button>
                   </div>
 
                   <div v-if="formData.panel_config.sections.length === 0" class="text-[10px] text-muted-foreground p-2 border rounded bg-muted/30 text-center">
-                    No sections configured. Click "Add Section" to start.
+                    {{ $t('flowBuilder.noSectionsConfigured') }}
                   </div>
 
                   <div v-for="(section, sectionIdx) in formData.panel_config.sections" :key="section.id" class="border rounded-md p-2 space-y-2 bg-muted/20">
@@ -1207,7 +1209,7 @@ function confirmCancel() {
 
                     <div class="flex items-center gap-3 text-[10px]">
                       <div class="flex items-center gap-1">
-                        <span class="text-muted-foreground">Columns:</span>
+                        <span class="text-muted-foreground">{{ $t('flowBuilder.columns') }}:</span>
                         <Select v-model="section.columns">
                           <SelectTrigger class="h-6 w-14 text-[10px]">
                             <SelectValue />
@@ -1224,7 +1226,7 @@ function confirmCancel() {
                           @update:checked="section.collapsible = $event"
                           class="scale-75"
                         />
-                        <span class="text-muted-foreground">Collapsible</span>
+                        <span class="text-muted-foreground">{{ $t('flowBuilder.collapsible') }}</span>
                       </div>
                       <div v-if="section.collapsible" class="flex items-center gap-1">
                         <Switch
@@ -1232,14 +1234,14 @@ function confirmCancel() {
                           @update:checked="section.default_collapsed = $event"
                           class="scale-75"
                         />
-                        <span class="text-muted-foreground">Collapsed</span>
+                        <span class="text-muted-foreground">{{ $t('flowBuilder.collapsed') }}</span>
                       </div>
                     </div>
 
                     <!-- Fields in section -->
                     <div class="space-y-1">
                       <div class="flex items-center justify-between">
-                        <span class="text-[10px] text-muted-foreground">Fields:</span>
+                        <span class="text-[10px] text-muted-foreground">{{ $t('flowBuilder.fields') }}:</span>
                         <Select @update:model-value="addFieldToSection(sectionIdx, $event)">
                           <SelectTrigger class="h-6 w-24 text-[10px]">
                             <SelectValue placeholder="+ Add" />
@@ -1253,14 +1255,14 @@ function confirmCancel() {
                               {{ variable.key }}
                             </SelectItem>
                             <div v-if="unassignedVariables.length === 0" class="p-2 text-[10px] text-muted-foreground">
-                              No variables available
+                              {{ $t('flowBuilder.noVariablesAvailable') }}
                             </div>
                           </SelectContent>
                         </Select>
                       </div>
 
                       <div v-if="section.fields.length === 0" class="text-[10px] text-muted-foreground text-center py-1">
-                        No fields added
+                        {{ $t('flowBuilder.noFieldsAdded') }}
                       </div>
 
                       <div v-for="(field, fieldIdx) in section.fields" :key="field.key" class="bg-background rounded p-2 space-y-2">
@@ -1268,7 +1270,7 @@ function confirmCancel() {
                           <Badge variant="secondary" class="text-[10px] font-mono">{{ field.key }}</Badge>
                           <Input
                             v-model="field.label"
-                            placeholder="Display Label"
+                            :placeholder="$t('flowBuilder.displayLabel')"
                             class="h-6 text-[10px] flex-1"
                           />
                           <Button variant="ghost" size="icon" class="h-6 w-6" @click="removeFieldFromSection(sectionIdx, fieldIdx)">
@@ -1278,24 +1280,24 @@ function confirmCancel() {
                         <div class="flex items-center gap-2">
                           <Select v-model="field.display_type">
                             <SelectTrigger class="h-6 text-[10px] w-20">
-                              <SelectValue placeholder="Type" />
+                              <SelectValue :placeholder="$t('flowBuilder.displayType')" />
                             </SelectTrigger>
                             <SelectContent>
-                              <SelectItem value="text">Text</SelectItem>
-                              <SelectItem value="badge">Badge</SelectItem>
-                              <SelectItem value="tag">Tag</SelectItem>
+                              <SelectItem value="text">{{ $t('flowBuilder.textType') }}</SelectItem>
+                              <SelectItem value="badge">{{ $t('flowBuilder.badgeType') }}</SelectItem>
+                              <SelectItem value="tag">{{ $t('flowBuilder.tagType') }}</SelectItem>
                             </SelectContent>
                           </Select>
                           <Select v-model="field.color" :disabled="field.display_type === 'text'">
                             <SelectTrigger class="h-6 text-[10px] flex-1">
-                              <SelectValue placeholder="Color" />
+                              <SelectValue :placeholder="$t('flowBuilder.colorLabel')" />
                             </SelectTrigger>
                             <SelectContent>
-                              <SelectItem value="default">Default</SelectItem>
-                              <SelectItem value="success">Success (Green)</SelectItem>
-                              <SelectItem value="warning">Warning (Yellow)</SelectItem>
-                              <SelectItem value="error">Error (Red)</SelectItem>
-                              <SelectItem value="info">Info (Blue)</SelectItem>
+                              <SelectItem value="default">{{ $t('flowBuilder.defaultColor') }}</SelectItem>
+                              <SelectItem value="success">{{ $t('flowBuilder.successColor') }}</SelectItem>
+                              <SelectItem value="warning">{{ $t('flowBuilder.warningColor') }}</SelectItem>
+                              <SelectItem value="error">{{ $t('flowBuilder.errorColor') }}</SelectItem>
+                              <SelectItem value="info">{{ $t('flowBuilder.infoColor') }}</SelectItem>
                             </SelectContent>
                           </Select>
                         </div>
@@ -1314,13 +1316,13 @@ function confirmCancel() {
             <!-- Basic Properties -->
             <div class="space-y-3">
               <div class="space-y-1.5">
-                <Label class="text-xs">Step Name</Label>
-                <Input v-model="selectedStep.step_name" placeholder="step_1" class="h-8" />
+                <Label class="text-xs">{{ $t('flowBuilder.stepName') }}</Label>
+                <Input v-model="selectedStep.step_name" :placeholder="$t('flowBuilder.stepNamePlaceholder')" class="h-8" />
               </div>
               <div class="space-y-1.5">
-                <Label class="text-xs">Store Response As</Label>
-                <Input v-model="selectedStep.store_as" placeholder="variable_name" class="h-8" />
-                <p class="text-xs text-muted-foreground">Variable name to store user's response</p>
+                <Label class="text-xs">{{ $t('flowBuilder.storeResponseAs') }}</Label>
+                <Input v-model="selectedStep.store_as" :placeholder="$t('flowBuilder.variableNamePlaceholder')" class="h-8" />
+                <p class="text-xs text-muted-foreground">{{ $t('flowBuilder.storeResponseHint') }}</p>
               </div>
             </div>
 
@@ -1329,22 +1331,22 @@ function confirmCancel() {
             <!-- Message Configuration -->
             <Collapsible v-model:open="messagesOpen">
               <CollapsibleTrigger class="flex items-center justify-between w-full py-1 text-sm font-medium">
-                Message
+                {{ $t('flowBuilder.message') }}
                 <component :is="messagesOpen ? ChevronDown : ChevronRight" class="h-4 w-4" />
               </CollapsibleTrigger>
               <CollapsibleContent class="pt-3 space-y-3">
                 <!-- Text / Buttons Message -->
                 <template v-if="selectedStep.message_type === 'text' || selectedStep.message_type === 'buttons'">
                   <div class="space-y-1.5">
-                    <Label class="text-xs">Message Text</Label>
+                    <Label class="text-xs">{{ $t('flowBuilder.messageText') }}</Label>
                     <Textarea
                       v-model="selectedStep.message"
-                      placeholder="Enter your message..."
+                      :placeholder="$t('flowBuilder.messagePlaceholder')"
                       :rows="3"
                       class="text-sm"
                     />
                     <p class="text-xs text-muted-foreground">
-                      Use <code v-pre class="bg-muted px-0.5 rounded">{{variable}}</code> for dynamic values
+                      {{ $t('flowBuilder.dynamicValuesHint') }}
                     </p>
                   </div>
                 </template>
@@ -1353,15 +1355,15 @@ function confirmCancel() {
                 <template v-if="selectedStep.message_type === 'buttons'">
                   <div class="space-y-3">
                     <div class="flex items-center justify-between">
-                      <Label class="text-xs">Button Options ({{ selectedStep.buttons.length }}/10)</Label>
+                      <Label class="text-xs">{{ $t('flowBuilder.buttonOptions') }} ({{ selectedStep.buttons.length }}/10)</Label>
                       <div class="flex gap-1">
                         <Button variant="outline" size="sm" class="h-6 text-xs" @click="addButton('reply')" :disabled="selectedStep.buttons.length >= 10">
                           <Reply class="h-3 w-3 mr-1" />
-                          Reply
+                          {{ $t('flowBuilder.replyButton') }}
                         </Button>
                         <Button variant="outline" size="sm" class="h-6 text-xs" @click="addButton('url')" :disabled="selectedStep.buttons.length >= 10">
                           <ExternalLink class="h-3 w-3 mr-1" />
-                          URL
+                          {{ $t('flowBuilder.urlButton') }}
                         </Button>
                       </div>
                     </div>
@@ -1370,9 +1372,9 @@ function confirmCancel() {
                         <div class="flex items-center gap-2">
                           <Badge variant="outline" class="text-[10px] px-1.5">
                             <component :is="btn.type === 'url' ? ExternalLink : Reply" class="h-2.5 w-2.5 mr-1" />
-                            {{ btn.type === 'url' ? 'URL' : 'Reply' }}
+                            {{ btn.type === 'url' ? 'URL' : $t('flowBuilder.replyButton') }}
                           </Badge>
-                          <Input :model-value="btn.title" @update:model-value="updateButtonTitle(idx, $event)" placeholder="Button Title" class="h-7 flex-1 text-xs" />
+                          <Input :model-value="btn.title" @update:model-value="updateButtonTitle(idx, $event)" :placeholder="$t('flowBuilder.buttonTitle')" class="h-7 flex-1 text-xs" />
                           <Button variant="ghost" size="icon" class="h-7 w-7" @click="removeButton(idx)">
                             <Trash2 class="h-3 w-3 text-destructive" />
                           </Button>
@@ -1381,18 +1383,18 @@ function confirmCancel() {
                           <Input v-model="btn.url" placeholder="https://example.com" class="h-7 text-xs flex-1" />
                         </div>
                         <div v-else class="space-y-2">
-                          <Input v-model="btn.id" :placeholder="`Button ID (default: btn_${idx + 1})`" class="h-7 text-xs" />
+                          <Input v-model="btn.id" :placeholder="$t('flowBuilder.buttonIdPlaceholder')" class="h-7 text-xs" />
                           <div class="flex items-center gap-2">
-                            <Label class="text-xs text-muted-foreground whitespace-nowrap">Go to:</Label>
+                            <Label class="text-xs text-muted-foreground whitespace-nowrap">{{ $t('flowBuilder.goTo') }}:</Label>
                             <Select
                               :model-value="getButtonNextStep(getButtonId(btn, idx))"
                               @update:model-value="setButtonNextStep(getButtonId(btn, idx), $event)"
                             >
                               <SelectTrigger class="h-7 text-xs flex-1">
-                                <SelectValue placeholder="Next step (sequential)" />
+                                <SelectValue :placeholder="$t('flowBuilder.nextStepSequential')" />
                               </SelectTrigger>
                               <SelectContent>
-                                <SelectItem value="__default__">Next step (sequential)</SelectItem>
+                                <SelectItem value="__default__">{{ $t('flowBuilder.nextStepSequential') }}</SelectItem>
                                 <SelectItem
                                   v-for="step in stepsWithNames"
                                   :key="`goto-${step.step_name}`"
@@ -1407,7 +1409,7 @@ function confirmCancel() {
                       </div>
                     </div>
                     <p class="text-[10px] text-muted-foreground">
-                      Reply buttons send user's choice back. URL buttons open a link. Use "Go to" to branch to different steps.
+                      {{ $t('flowBuilder.buttonsHint') }}
                     </p>
                   </div>
                 </template>
@@ -1417,7 +1419,7 @@ function confirmCancel() {
                   <div class="space-y-3">
                     <div class="flex gap-2">
                       <div class="w-20">
-                        <Label class="text-xs">Method</Label>
+                        <Label class="text-xs">{{ $t('flowBuilder.method') }}</Label>
                         <Select v-model="selectedStep.api_config.method">
                           <SelectTrigger class="h-8 text-xs">
                             <SelectValue />
@@ -1428,15 +1430,15 @@ function confirmCancel() {
                         </Select>
                       </div>
                       <div class="flex-1">
-                        <Label class="text-xs">URL</Label>
-                        <Input v-model="selectedStep.api_config.url" placeholder="https://..." class="h-8 text-xs" />
+                        <Label class="text-xs">{{ $t('flowBuilder.url') }}</Label>
+                        <Input v-model="selectedStep.api_config.url" :placeholder="$t('flowBuilder.urlPlaceholder')" class="h-8 text-xs" />
                       </div>
                     </div>
 
                     <!-- Headers -->
                     <div class="space-y-2">
                       <div class="flex items-center justify-between">
-                        <Label class="text-xs">Headers</Label>
+                        <Label class="text-xs">{{ $t('flowBuilder.headers') }}</Label>
                         <Button variant="ghost" size="sm" class="h-6 text-xs" @click="addHeader">
                           <Plus class="h-3 w-3" />
                         </Button>
@@ -1461,14 +1463,14 @@ function confirmCancel() {
 
                     <!-- Body -->
                     <div v-if="selectedStep.api_config.method !== 'GET'" class="space-y-1.5">
-                      <Label class="text-xs">Request Body (JSON)</Label>
+                      <Label class="text-xs">{{ $t('flowBuilder.requestBody') }}</Label>
                       <Textarea v-model="selectedStep.api_config.body" :rows="2" class="text-xs font-mono" />
                     </div>
 
                     <!-- Response Mapping -->
                     <div class="space-y-2">
                       <div class="flex items-center justify-between">
-                        <Label class="text-xs">Response Mapping</Label>
+                        <Label class="text-xs">{{ $t('flowBuilder.responseMapping') }}</Label>
                         <Button variant="ghost" size="sm" class="h-6 text-xs" @click="addResponseMapping">
                           <Plus class="h-3 w-3" />
                         </Button>
@@ -1476,7 +1478,7 @@ function confirmCancel() {
                       <div v-for="(_value, key) in selectedStep.api_config.response_mapping" :key="key" class="flex gap-1 items-center">
                         <Input
                           :model-value="key"
-                          placeholder="Variable"
+                          :placeholder="$t('flowBuilder.variable')"
                           class="h-7 text-xs flex-1"
                           @update:model-value="updateResponseMappingKey(key as string, $event)"
                         />
@@ -1494,10 +1496,10 @@ function confirmCancel() {
 
                     <!-- Message Template -->
                     <div class="space-y-1.5">
-                      <Label class="text-xs">Message Template</Label>
+                      <Label class="text-xs">{{ $t('flowBuilder.messageTemplate') }}</Label>
                       <Textarea
                         v-model="selectedStep.message"
-                        placeholder="Hi {{name}}..."
+                        :placeholder="$t('flowBuilder.messageTemplatePlaceholder')"
                         :rows="4"
                         class="text-xs"
                       />
@@ -1505,7 +1507,7 @@ function confirmCancel() {
 
                     <!-- Fallback -->
                     <div class="space-y-1.5">
-                      <Label class="text-xs">Fallback Message</Label>
+                      <Label class="text-xs">{{ $t('flowBuilder.fallbackMessage') }}</Label>
                       <Input v-model="selectedStep.api_config.fallback_message" class="h-8 text-xs" />
                     </div>
                   </div>
@@ -1515,10 +1517,10 @@ function confirmCancel() {
                 <template v-if="selectedStep.message_type === 'whatsapp_flow'">
                   <div class="space-y-3">
                     <div class="space-y-1.5">
-                      <Label class="text-xs">WhatsApp Flow</Label>
+                      <Label class="text-xs">{{ $t('flowBuilder.whatsappFlow') }}</Label>
                       <Select v-model="selectedStep.input_config.whatsapp_flow_id">
                         <SelectTrigger class="h-8 text-xs">
-                          <SelectValue :placeholder="whatsappFlows.length === 0 ? 'No flows available' : 'Select flow'" />
+                          <SelectValue :placeholder="whatsappFlows.length === 0 ? $t('flowBuilder.noFlowsAvailable') : $t('flowBuilder.selectFlow')" />
                         </SelectTrigger>
                         <SelectContent>
                           <SelectItem v-for="wf in whatsappFlows" :key="wf.id" :value="wf.meta_flow_id">
@@ -1528,16 +1530,16 @@ function confirmCancel() {
                       </Select>
                     </div>
                     <div class="space-y-1.5">
-                      <Label class="text-xs">Header Text</Label>
+                      <Label class="text-xs">{{ $t('flowBuilder.headerText') }}</Label>
                       <Input v-model="selectedStep.input_config.flow_header" class="h-8 text-xs" />
                     </div>
                     <div class="space-y-1.5">
-                      <Label class="text-xs">Body Text</Label>
+                      <Label class="text-xs">{{ $t('flowBuilder.bodyText') }}</Label>
                       <Textarea v-model="selectedStep.message" :rows="2" class="text-xs" />
                     </div>
                     <div class="space-y-1.5">
-                      <Label class="text-xs">Button Text</Label>
-                      <Input v-model="selectedStep.input_config.flow_cta" placeholder="Open Form" maxlength="20" class="h-8 text-xs" />
+                      <Label class="text-xs">{{ $t('flowBuilder.buttonText') }}</Label>
+                      <Input v-model="selectedStep.input_config.flow_cta" :placeholder="$t('flowBuilder.buttonTextPlaceholder')" maxlength="20" class="h-8 text-xs" />
                     </div>
                   </div>
                 </template>
@@ -1546,17 +1548,17 @@ function confirmCancel() {
                 <template v-if="selectedStep.message_type === 'transfer'">
                   <div class="space-y-3">
                     <div class="space-y-1.5">
-                      <Label class="text-xs">Transfer Message</Label>
+                      <Label class="text-xs">{{ $t('flowBuilder.transferMessage') }}</Label>
                       <Textarea v-model="selectedStep.message" :rows="2" class="text-xs" />
                     </div>
                     <div class="space-y-1.5">
-                      <Label class="text-xs">Assign to Team</Label>
+                      <Label class="text-xs">{{ $t('flowBuilder.assignToTeam') }}</Label>
                       <Select v-model="selectedStep.transfer_config.team_id">
                         <SelectTrigger class="h-8 text-xs">
                           <SelectValue />
                         </SelectTrigger>
                         <SelectContent>
-                          <SelectItem value="_general">General Queue</SelectItem>
+                          <SelectItem value="_general">{{ $t('agentTransfers.generalQueue') }}</SelectItem>
                           <SelectItem v-for="team in teams" :key="team.id" :value="team.id">
                             {{ team.name }}
                           </SelectItem>
@@ -1564,7 +1566,7 @@ function confirmCancel() {
                       </Select>
                     </div>
                     <div class="space-y-1.5">
-                      <Label class="text-xs">Transfer Notes</Label>
+                      <Label class="text-xs">{{ $t('flowBuilder.transferNotes') }}</Label>
                       <Input v-model="selectedStep.transfer_config.notes" class="h-8 text-xs" />
                     </div>
                   </div>
@@ -1577,12 +1579,12 @@ function confirmCancel() {
             <!-- Input Configuration (not for transfer) -->
             <Collapsible v-if="selectedStep.message_type !== 'transfer'" v-model:open="inputOpen">
               <CollapsibleTrigger class="flex items-center justify-between w-full py-1 text-sm font-medium">
-                Input
+                {{ $t('flowBuilder.input') }}
                 <component :is="inputOpen ? ChevronDown : ChevronRight" class="h-4 w-4" />
               </CollapsibleTrigger>
               <CollapsibleContent class="pt-3 space-y-3">
                 <div class="space-y-1.5">
-                  <Label class="text-xs">Expected Input Type</Label>
+                  <Label class="text-xs">{{ $t('flowBuilder.expectedInputType') }}</Label>
                   <Select
                     :model-value="selectedStep.input_type"
                     @update:model-value="setInputType($event)"
@@ -1599,7 +1601,7 @@ function confirmCancel() {
                 </div>
 
                 <div v-if="selectedStep.input_type === 'select'" class="space-y-1.5">
-                  <Label class="text-xs">Options (one per line)</Label>
+                  <Label class="text-xs">{{ $t('flowBuilder.optionsPerLine') }}</Label>
                   <Textarea
                     :model-value="(selectedStep.input_config.options || []).join('\n')"
                     @update:model-value="selectedStep.input_config = { ...selectedStep.input_config, options: ($event as string).split('\n').filter(Boolean) }"
@@ -1615,16 +1617,16 @@ function confirmCancel() {
             <!-- Validation (not for transfer) -->
             <Collapsible v-if="selectedStep.message_type !== 'transfer'" v-model:open="validationOpen">
               <CollapsibleTrigger class="flex items-center justify-between w-full py-1 text-sm font-medium">
-                Validation
+                {{ $t('flowBuilder.validation') }}
                 <component :is="validationOpen ? ChevronDown : ChevronRight" class="h-4 w-4" />
               </CollapsibleTrigger>
               <CollapsibleContent class="pt-3 space-y-3">
                 <div class="space-y-1.5">
-                  <Label class="text-xs">Validation Regex</Label>
-                  <Input v-model="selectedStep.validation_regex" placeholder="^[A-Za-z ]+$" class="h-8 text-xs font-mono" />
+                  <Label class="text-xs">{{ $t('flowBuilder.validationRegex') }}</Label>
+                  <Input v-model="selectedStep.validation_regex" :placeholder="$t('flowBuilder.validationRegexPlaceholder')" class="h-8 text-xs font-mono" />
                 </div>
                 <div class="space-y-1.5">
-                  <Label class="text-xs">Error Message</Label>
+                  <Label class="text-xs">{{ $t('flowBuilder.errorMessage') }}</Label>
                   <Input v-model="selectedStep.validation_error" class="h-8 text-xs" />
                 </div>
                 <div class="flex items-center gap-2">
@@ -1632,7 +1634,7 @@ function confirmCancel() {
                     :checked="selectedStep.retry_on_invalid"
                     @update:checked="selectedStep.retry_on_invalid = $event"
                   />
-                  <Label class="text-xs">Retry on invalid</Label>
+                  <Label class="text-xs">{{ $t('flowBuilder.retryOnInvalid') }}</Label>
                   <Input
                     v-if="selectedStep.retry_on_invalid"
                     v-model.number="selectedStep.max_retries"
@@ -1650,21 +1652,21 @@ function confirmCancel() {
             <!-- Advanced (not for transfer) -->
             <Collapsible v-if="selectedStep.message_type !== 'transfer'" v-model:open="advancedOpen">
               <CollapsibleTrigger class="flex items-center justify-between w-full py-1 text-sm font-medium">
-                Advanced
+                {{ $t('flowBuilder.advanced') }}
                 <component :is="advancedOpen ? ChevronDown : ChevronRight" class="h-4 w-4" />
               </CollapsibleTrigger>
               <CollapsibleContent class="pt-3 space-y-3">
                 <div class="space-y-1.5">
-                  <Label class="text-xs">Skip Condition</Label>
-                  <Input v-model="selectedStep.skip_condition" placeholder="phone != ''" class="h-8 text-xs font-mono" />
-                  <p class="text-xs text-muted-foreground">Skip this step if condition is true</p>
+                  <Label class="text-xs">{{ $t('flowBuilder.skipCondition') }}</Label>
+                  <Input v-model="selectedStep.skip_condition" :placeholder="$t('flowBuilder.skipConditionPlaceholder')" class="h-8 text-xs font-mono" />
+                  <p class="text-xs text-muted-foreground">{{ $t('flowBuilder.skipConditionHint') }}</p>
                 </div>
               </CollapsibleContent>
             </Collapsible>
           </div>
         </ScrollArea>
         <div v-else class="flex-1 flex items-center justify-center text-muted-foreground text-sm p-4">
-          Select a step to edit its properties
+          {{ $t('flowBuilder.selectStepToEdit') }}
         </div>
       </Card>
     </div>
@@ -1673,14 +1675,14 @@ function confirmCancel() {
     <AlertDialog v-model:open="deleteStepDialogOpen">
       <AlertDialogContent>
         <AlertDialogHeader>
-          <AlertDialogTitle>Delete Step</AlertDialogTitle>
+          <AlertDialogTitle>{{ $t('flowBuilder.deleteStep') }}</AlertDialogTitle>
           <AlertDialogDescription>
-            Are you sure you want to delete this step? This action cannot be undone.
+            {{ $t('flowBuilder.deleteStepConfirm') }}
           </AlertDialogDescription>
         </AlertDialogHeader>
         <AlertDialogFooter>
-          <AlertDialogCancel>Cancel</AlertDialogCancel>
-          <AlertDialogAction @click="deleteStep">Delete</AlertDialogAction>
+          <AlertDialogCancel>{{ $t('common.cancel') }}</AlertDialogCancel>
+          <AlertDialogAction @click="deleteStep">{{ $t('common.delete') }}</AlertDialogAction>
         </AlertDialogFooter>
       </AlertDialogContent>
     </AlertDialog>
@@ -1689,14 +1691,14 @@ function confirmCancel() {
     <AlertDialog v-model:open="cancelDialogOpen">
       <AlertDialogContent>
         <AlertDialogHeader>
-          <AlertDialogTitle>Unsaved Changes</AlertDialogTitle>
+          <AlertDialogTitle>{{ $t('flowBuilder.unsavedChanges') }}</AlertDialogTitle>
           <AlertDialogDescription>
-            You have unsaved changes. Are you sure you want to leave? Your changes will be lost.
+            {{ $t('flowBuilder.unsavedChangesConfirm') }}
           </AlertDialogDescription>
         </AlertDialogHeader>
         <AlertDialogFooter>
-          <AlertDialogCancel>Stay</AlertDialogCancel>
-          <AlertDialogAction @click="confirmCancel">Leave</AlertDialogAction>
+          <AlertDialogCancel>{{ $t('flowBuilder.stay') }}</AlertDialogCancel>
+          <AlertDialogAction @click="confirmCancel">{{ $t('flowBuilder.leave') }}</AlertDialogAction>
         </AlertDialogFooter>
       </AlertDialogContent>
     </AlertDialog>

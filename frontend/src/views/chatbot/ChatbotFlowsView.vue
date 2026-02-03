@@ -1,6 +1,7 @@
 <script setup lang="ts">
-import { ref, onMounted, watch } from 'vue'
+import { ref, onMounted, watch, computed } from 'vue'
 import { useRouter } from 'vue-router'
+import { useI18n } from 'vue-i18n'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { ScrollArea } from '@/components/ui/scroll-area'
@@ -12,6 +13,8 @@ import { PageHeader, DataTable, DeleteConfirmDialog, SearchInput, type Column } 
 import { getErrorMessage } from '@/lib/api-utils'
 import { Plus, Pencil, Trash2, Workflow } from 'lucide-vue-next'
 import { useDebounceFn } from '@vueuse/core'
+
+const { t } = useI18n()
 
 interface ChatbotFlow {
   id: string
@@ -35,14 +38,14 @@ const currentPage = ref(1)
 const totalItems = ref(0)
 const pageSize = 20
 
-const columns: Column<ChatbotFlow>[] = [
-  { key: 'name', label: 'Name', sortable: true },
-  { key: 'description', label: 'Description' },
-  { key: 'trigger_keywords', label: 'Keywords' },
-  { key: 'steps_count', label: 'Steps', sortable: true },
-  { key: 'status', label: 'Status', sortable: true, sortKey: 'enabled' },
-  { key: 'actions', label: 'Actions', align: 'right' },
-]
+const columns = computed<Column<ChatbotFlow>[]>(() => [
+  { key: 'name', label: t('chatbotFlows.name'), sortable: true },
+  { key: 'description', label: t('chatbotFlows.description') },
+  { key: 'trigger_keywords', label: t('chatbotFlows.keywords') },
+  { key: 'steps_count', label: t('chatbotFlows.steps'), sortable: true },
+  { key: 'status', label: t('chatbotFlows.status'), sortable: true, sortKey: 'enabled' },
+  { key: 'actions', label: t('chatbotFlows.actions'), align: 'right' },
+])
 
 const sortKey = ref('name')
 const sortDirection = ref<'asc' | 'desc'>('asc')
@@ -95,9 +98,9 @@ async function toggleFlow(flow: ChatbotFlow) {
   try {
     await chatbotService.updateFlow(flow.id, { enabled: !flow.enabled })
     flow.enabled = !flow.enabled
-    toast.success(flow.enabled ? 'Flow enabled' : 'Flow disabled')
+    toast.success(flow.enabled ? t('chatbotFlows.flowEnabled') : t('chatbotFlows.flowDisabled'))
   } catch (error: any) {
-    toast.error(getErrorMessage(error, 'Failed to toggle flow'))
+    toast.error(getErrorMessage(error, t('chatbotFlows.toggleFailed')))
   }
 }
 
@@ -111,12 +114,12 @@ async function confirmDeleteFlow() {
 
   try {
     await chatbotService.deleteFlow(flowToDelete.value.id)
-    toast.success('Flow deleted')
+    toast.success(t('chatbotFlows.flowDeleted'))
     deleteDialogOpen.value = false
     flowToDelete.value = null
     await fetchFlows()
   } catch (error: any) {
-    toast.error(getErrorMessage(error, 'Failed to delete flow'))
+    toast.error(getErrorMessage(error, t('chatbotFlows.deleteFailed')))
   }
 }
 </script>
@@ -124,16 +127,16 @@ async function confirmDeleteFlow() {
 <template>
   <div class="flex flex-col h-full bg-[#0a0a0b] light:bg-gray-50">
     <PageHeader
-      title="Conversation Flows"
+      :title="$t('chatbotFlows.title')"
       :icon="Workflow"
       icon-gradient="bg-gradient-to-br from-purple-500 to-pink-600 shadow-purple-500/20"
       back-link="/chatbot"
-      :breadcrumbs="[{ label: 'Chatbot', href: '/chatbot' }, { label: 'Flows' }]"
+      :breadcrumbs="[{ label: $t('chatbotFlows.backToChatbot'), href: '/chatbot' }, { label: $t('nav.flows') }]"
     >
       <template #actions>
         <Button variant="outline" size="sm" @click="createFlow">
           <Plus class="h-4 w-4 mr-2" />
-          Create Flow
+          {{ $t('chatbotFlows.createFlow') }}
         </Button>
       </template>
     </PageHeader>
@@ -145,10 +148,10 @@ async function confirmDeleteFlow() {
             <CardHeader>
               <div class="flex items-center justify-between flex-wrap gap-4">
                 <div>
-                  <CardTitle>Your Flows</CardTitle>
-                  <CardDescription>Automate conversations with custom flows triggered by keywords.</CardDescription>
+                  <CardTitle>{{ $t('chatbotFlows.yourFlows') }}</CardTitle>
+                  <CardDescription>{{ $t('chatbotFlows.yourFlowsDesc') }}</CardDescription>
                 </div>
-                <SearchInput v-model="searchQuery" placeholder="Search flows..." class="w-64" />
+                <SearchInput v-model="searchQuery" :placeholder="$t('chatbotFlows.searchFlows') + '...'" class="w-64" />
               </div>
             </CardHeader>
             <CardContent>
@@ -157,8 +160,8 @@ async function confirmDeleteFlow() {
                 :columns="columns"
                 :is-loading="isLoading"
                 :empty-icon="Workflow"
-                :empty-title="searchQuery ? 'No matching flows' : 'No conversation flows yet'"
-                :empty-description="searchQuery ? 'No flows match your search.' : 'Create your first flow to automate conversations.'"
+                :empty-title="searchQuery ? $t('chatbotFlows.noMatchingFlows') : $t('chatbotFlows.noFlowsYet')"
+                :empty-description="searchQuery ? $t('chatbotFlows.noMatchingFlowsDesc') : $t('chatbotFlows.noFlowsYetDesc')"
                 server-pagination
                 :current-page="currentPage"
                 :total-items="totalItems"
@@ -172,7 +175,7 @@ async function confirmDeleteFlow() {
                   <span class="font-medium">{{ flow.name }}</span>
                 </template>
                 <template #cell-description="{ item: flow }">
-                  <span class="text-muted-foreground max-w-[200px] truncate block">{{ flow.description || 'No description' }}</span>
+                  <span class="text-muted-foreground max-w-[200px] truncate block">{{ flow.description || $t('chatbotFlows.noDescription') }}</span>
                 </template>
                 <template #cell-trigger_keywords="{ item: flow }">
                   <div class="flex flex-wrap gap-1">
@@ -191,7 +194,7 @@ async function confirmDeleteFlow() {
                 <template #cell-status="{ item: flow }">
                   <div class="flex items-center gap-2">
                     <Switch :checked="flow.enabled" @update:checked="toggleFlow(flow)" />
-                    <span class="text-sm text-muted-foreground">{{ flow.enabled ? 'Active' : 'Inactive' }}</span>
+                    <span class="text-sm text-muted-foreground">{{ flow.enabled ? $t('chatbotFlows.active') : $t('chatbotFlows.inactive') }}</span>
                   </div>
                 </template>
                 <template #cell-actions="{ item: flow }">
@@ -207,7 +210,7 @@ async function confirmDeleteFlow() {
                 <template #empty-action>
                   <Button v-if="!searchQuery" variant="outline" size="sm" @click="createFlow">
                     <Plus class="h-4 w-4 mr-2" />
-                    Create Flow
+                    {{ $t('chatbotFlows.createFlow') }}
                   </Button>
                 </template>
               </DataTable>
@@ -219,7 +222,7 @@ async function confirmDeleteFlow() {
 
     <DeleteConfirmDialog
       v-model:open="deleteDialogOpen"
-      title="Delete Flow"
+      :title="$t('chatbotFlows.deleteFlow')"
       :item-name="flowToDelete?.name"
       @confirm="confirmDeleteFlow"
     />

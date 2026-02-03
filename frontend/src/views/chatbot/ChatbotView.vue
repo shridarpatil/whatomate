@@ -1,5 +1,6 @@
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
+import { ref, onMounted, computed } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { ScrollArea } from '@/components/ui/scroll-area'
@@ -20,6 +21,8 @@ import {
   MessageSquare,
   Clock
 } from 'lucide-vue-next'
+
+const { t } = useI18n()
 
 interface ChatbotSettings {
   enabled: boolean
@@ -85,27 +88,27 @@ async function toggleChatbot() {
     const newState = !settings.value.enabled
     await chatbotService.updateSettings({ enabled: newState })
     settings.value.enabled = newState
-    toast.success(newState ? 'Chatbot enabled' : 'Chatbot disabled')
+    toast.success(newState ? t('chatbot.chatbotEnabled') : t('chatbot.chatbotDisabled'))
   } catch (error: any) {
-    toast.error(getErrorMessage(error, 'Failed to toggle chatbot'))
+    toast.error(getErrorMessage(error, t('chatbot.toggleFailed')))
   } finally {
     isToggling.value = false
   }
 }
 
-const statCards = [
-  { title: 'Total Sessions', key: 'total_sessions', icon: Users, color: 'text-blue-500' },
-  { title: 'Active Sessions', key: 'active_sessions', icon: MessageSquare, color: 'text-green-500' },
-  { title: 'Messages Handled', key: 'messages_handled', icon: TrendingUp, color: 'text-purple-500' },
-  { title: 'AI Responses', key: 'ai_responses', icon: Sparkles, color: 'text-orange-500' }
-]
+const statCards = computed(() => [
+  { title: t('chatbot.totalSessions'), key: 'total_sessions', icon: Users, color: 'text-blue-500' },
+  { title: t('chatbot.activeSessions'), key: 'active_sessions', icon: MessageSquare, color: 'text-green-500' },
+  { title: t('chatbot.messagesHandled'), key: 'messages_handled', icon: TrendingUp, color: 'text-purple-500' },
+  { title: t('chatbot.aiResponses'), key: 'ai_responses', icon: Sparkles, color: 'text-orange-500' }
+])
 </script>
 
 <template>
   <div class="flex flex-col h-full bg-[#0a0a0b] light:bg-gray-50">
     <PageHeader
-      title="Chatbot"
-      description="Manage automated responses and AI conversations"
+      :title="$t('chatbot.title')"
+      :description="$t('chatbot.subtitle')"
       :icon="Bot"
       icon-gradient="bg-gradient-to-br from-purple-500 to-pink-600 shadow-purple-500/20"
     >
@@ -114,7 +117,7 @@ const statCards = [
           <Badge
             :class="settings.enabled ? 'bg-emerald-500/20 text-emerald-400 light:bg-emerald-100 light:text-emerald-700' : 'bg-white/[0.08] text-white/50 light:bg-gray-100 light:text-gray-500'"
           >
-            {{ settings.enabled ? 'Active' : 'Inactive' }}
+            {{ settings.enabled ? $t('chatbot.active') : $t('chatbot.inactive') }}
           </Badge>
           <Button
             variant="outline"
@@ -124,7 +127,7 @@ const statCards = [
             :class="settings.enabled ? 'border-red-500/50 text-red-400 hover:bg-red-500/10' : 'border-emerald-500/50 text-emerald-400 hover:bg-emerald-500/10'"
           >
             <Power class="h-4 w-4 mr-2" />
-            {{ settings.enabled ? 'Disable' : 'Enable' }}
+            {{ settings.enabled ? $t('chatbot.disable') : $t('chatbot.enable') }}
           </Button>
         </div>
       </template>
@@ -186,14 +189,14 @@ const statCards = [
                   <Key class="h-5 w-5 text-white" />
                 </div>
                 <div>
-                  <h3 class="text-lg font-semibold text-white light:text-gray-900">Keyword Rules</h3>
-                  <p class="text-sm text-white/40 light:text-gray-500">{{ stats.keywords_count }} rules configured</p>
+                  <h3 class="text-lg font-semibold text-white light:text-gray-900">{{ $t('chatbot.keywordRules') }}</h3>
+                  <p class="text-sm text-white/40 light:text-gray-500">{{ $t('chatbot.rulesConfigured', { count: stats.keywords_count }) }}</p>
                 </div>
               </div>
             </div>
             <div class="px-6 pb-6">
               <p class="text-sm text-white/50 light:text-gray-600">
-                Create automated responses triggered by specific keywords or phrases.
+                {{ $t('chatbot.keywordRulesDesc') }}
               </p>
             </div>
           </RouterLink>
@@ -205,14 +208,14 @@ const statCards = [
                   <Workflow class="h-5 w-5 text-white" />
                 </div>
                 <div>
-                  <h3 class="text-lg font-semibold text-white light:text-gray-900">Conversation Flows</h3>
-                  <p class="text-sm text-white/40 light:text-gray-500">{{ stats.flows_count }} flows created</p>
+                  <h3 class="text-lg font-semibold text-white light:text-gray-900">{{ $t('chatbot.conversationFlows') }}</h3>
+                  <p class="text-sm text-white/40 light:text-gray-500">{{ $t('chatbot.flowsCreated', { count: stats.flows_count }) }}</p>
                 </div>
               </div>
             </div>
             <div class="px-6 pb-6">
               <p class="text-sm text-white/50 light:text-gray-600">
-                Design multi-step conversation flows with branching logic.
+                {{ $t('chatbot.flowsDesc') }}
               </p>
             </div>
           </RouterLink>
@@ -224,14 +227,14 @@ const statCards = [
                   <Sparkles class="h-5 w-5 text-white" />
                 </div>
                 <div>
-                  <h3 class="text-lg font-semibold text-white light:text-gray-900">AI Contexts</h3>
-                  <p class="text-sm text-white/40 light:text-gray-500">{{ stats.ai_contexts_count }} contexts active</p>
+                  <h3 class="text-lg font-semibold text-white light:text-gray-900">{{ $t('chatbot.aiContexts') }}</h3>
+                  <p class="text-sm text-white/40 light:text-gray-500">{{ $t('chatbot.contextsActive', { count: stats.ai_contexts_count }) }}</p>
                 </div>
               </div>
             </div>
             <div class="px-6 pb-6">
               <p class="text-sm text-white/50 light:text-gray-600">
-                Configure AI-powered responses with custom knowledge bases.
+                {{ $t('chatbot.aiContextsDesc') }}
               </p>
             </div>
           </RouterLink>
@@ -242,13 +245,13 @@ const statCards = [
           <div class="p-6">
             <div class="flex items-center justify-between">
               <div>
-                <h3 class="text-lg font-semibold text-white light:text-gray-900">Current Configuration</h3>
-                <p class="text-sm text-white/40 light:text-gray-500">Overview of your chatbot settings</p>
+                <h3 class="text-lg font-semibold text-white light:text-gray-900">{{ $t('chatbot.currentConfiguration') }}</h3>
+                <p class="text-sm text-white/40 light:text-gray-500">{{ $t('chatbot.configOverview') }}</p>
               </div>
               <RouterLink to="/settings/chatbot">
                 <Button variant="outline" size="sm">
                   <Settings class="h-4 w-4 mr-2" />
-                  Edit Settings
+                  {{ $t('chatbot.editSettings') }}
                 </Button>
               </RouterLink>
             </div>
@@ -256,31 +259,31 @@ const statCards = [
           <div class="px-6 pb-6">
             <div class="grid gap-4 md:grid-cols-2">
               <div class="space-y-2">
-                <h4 class="font-medium text-sm text-white/70 light:text-gray-700">Greeting Message</h4>
+                <h4 class="font-medium text-sm text-white/70 light:text-gray-700">{{ $t('chatbot.greetingMessage') }}</h4>
                 <p class="text-sm text-white/50 light:text-gray-600 bg-white/[0.04] light:bg-gray-100 p-3 rounded-lg">
-                  {{ settings.greeting_message || 'Not configured' }}
+                  {{ settings.greeting_message || $t('chatbot.notConfigured') }}
                 </p>
               </div>
               <div class="space-y-2">
-                <h4 class="font-medium text-sm text-white/70 light:text-gray-700">Fallback Message</h4>
+                <h4 class="font-medium text-sm text-white/70 light:text-gray-700">{{ $t('chatbot.fallbackMessage') }}</h4>
                 <p class="text-sm text-white/50 light:text-gray-600 bg-white/[0.04] light:bg-gray-100 p-3 rounded-lg">
-                  {{ settings.fallback_message || 'Not configured' }}
+                  {{ settings.fallback_message || $t('chatbot.notConfigured') }}
                 </p>
               </div>
               <div class="space-y-2">
-                <h4 class="font-medium text-sm text-white/70 light:text-gray-700">Session Timeout</h4>
+                <h4 class="font-medium text-sm text-white/70 light:text-gray-700">{{ $t('chatbot.sessionTimeout') }}</h4>
                 <div class="flex items-center gap-2 text-sm text-white/50 light:text-gray-600">
                   <Clock class="h-4 w-4" />
-                  {{ settings.session_timeout_minutes }} minutes
+                  {{ $t('chatbot.minutes', { count: settings.session_timeout_minutes }) }}
                 </div>
               </div>
               <div class="space-y-2">
-                <h4 class="font-medium text-sm text-white/70 light:text-gray-700">AI Provider</h4>
+                <h4 class="font-medium text-sm text-white/70 light:text-gray-700">{{ $t('chatbot.aiProvider') }}</h4>
                 <div class="flex items-center gap-2">
                   <Badge v-if="settings.ai_enabled" class="bg-emerald-500/20 text-emerald-400 light:bg-emerald-100 light:text-emerald-700">
-                    {{ settings.ai_provider || 'Not configured' }}
+                    {{ settings.ai_provider || $t('chatbot.notConfigured') }}
                   </Badge>
-                  <Badge v-else class="bg-white/[0.08] text-white/50 light:bg-gray-100 light:text-gray-500">Disabled</Badge>
+                  <Badge v-else class="bg-white/[0.08] text-white/50 light:bg-gray-100 light:text-gray-500">{{ $t('chatbot.disabled') }}</Badge>
                 </div>
               </div>
             </div>
