@@ -5,7 +5,8 @@ export type MessageSchema = typeof en
 
 // Auto-discover available locales from the locales folder
 // Vite imports all JSON files at build time
-const localeModules = import.meta.glob('./locales/*.json', { eager: true }) as Record<string, { default: MessageSchema }>
+// Using import: 'default' to get JSON content directly (required for Vite 5+)
+const localeModules = import.meta.glob('./locales/*.json', { eager: true, import: 'default' }) as Record<string, MessageSchema>
 
 // Build supported locales list from available files
 const localeNames: Record<string, { name: string; nativeName: string }> = {
@@ -44,7 +45,7 @@ export type SupportedLocale = string
 const messages: Record<string, MessageSchema> = {}
 for (const path in localeModules) {
   const code = path.replace('./locales/', '').replace('.json', '')
-  messages[code] = localeModules[path].default
+  messages[code] = localeModules[path]
 }
 
 // Get saved locale or detect from browser
