@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { ref, onMounted, onUnmounted, computed, watch } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -76,6 +77,8 @@ import {
 import { formatDate } from '@/lib/utils'
 import { useDebounceFn } from '@vueuse/core'
 
+const { t } = useI18n()
+
 interface Campaign {
   id: string
   name: string
@@ -149,13 +152,13 @@ const isCreating = ref(false)
 const showCreateDialog = ref(false)
 const editingCampaignId = ref<string | null>(null) // null = create mode, string = edit mode
 
-const columns: Column<Campaign>[] = [
-  { key: 'name', label: 'Campaign', sortable: true },
-  { key: 'status', label: 'Status', sortable: true },
-  { key: 'stats', label: 'Progress' },
-  { key: 'created_at', label: 'Created', sortable: true },
-  { key: 'actions', label: 'Actions', align: 'right' },
-]
+const columns = computed<Column<Campaign>[]>(() => [
+  { key: 'name', label: t('campaigns.campaign'), sortable: true },
+  { key: 'status', label: t('campaigns.status'), sortable: true },
+  { key: 'stats', label: t('campaigns.progress') },
+  { key: 'created_at', label: t('campaigns.created'), sortable: true },
+  { key: 'actions', label: t('common.actions'), align: 'right' },
+])
 
 const sortKey = ref('created_at')
 const sortDirection = ref<'asc' | 'desc'>('desc')
@@ -178,16 +181,16 @@ const selectedRange = ref<TimeRangePreset>('this_month')
 const customDateRange = ref<any>({ start: undefined, end: undefined })
 const isDatePickerOpen = ref(false)
 
-const statusOptions = [
-  { value: 'all', label: 'All Statuses' },
-  { value: 'draft', label: 'Draft' },
-  { value: 'queued', label: 'Queued' },
-  { value: 'processing', label: 'Processing' },
-  { value: 'completed', label: 'Completed' },
-  { value: 'failed', label: 'Failed' },
-  { value: 'cancelled', label: 'Cancelled' },
-  { value: 'paused', label: 'Paused' },
-]
+const statusOptions = computed(() => [
+  { value: 'all', label: t('campaigns.allStatuses') },
+  { value: 'draft', label: t('campaigns.draft') },
+  { value: 'queued', label: t('campaigns.queued') },
+  { value: 'processing', label: t('campaigns.processing') },
+  { value: 'completed', label: t('campaigns.completed') },
+  { value: 'failed', label: t('campaigns.failed') },
+  { value: 'cancelled', label: t('campaigns.cancelled') },
+  { value: 'paused', label: t('campaigns.paused') },
+])
 
 // Format date as YYYY-MM-DD in local timezone
 const formatDateLocal = (date: Date): string => {
@@ -355,7 +358,7 @@ async function uploadCampaignMedia() {
   try {
     const response = await campaignsService.uploadMedia(selectedCampaign.value.id, mediaFile.value)
     const result = response.data.data
-    toast.success('Media uploaded successfully')
+    toast.success(t('campaigns.mediaUploaded'))
     // Update campaign with media ID
     selectedCampaign.value.header_media_id = result.media_id
     await fetchCampaigns()
@@ -366,7 +369,7 @@ async function uploadCampaignMedia() {
     }
     clearMediaFile()
   } catch (error: any) {
-    toast.error(getErrorMessage(error, 'Failed to upload media'))
+    toast.error(getErrorMessage(error, t('campaigns.mediaUploadFailed')))
   } finally {
     isUploadingMedia.value = false
   }
@@ -396,7 +399,7 @@ const manualInputValidation = computed((): ManualInputValidation => {
 
     // Validate phone number
     if (!phone || !phone.match(/^\+?\d{10,15}$/)) {
-      invalidLines.push({ lineNumber: i + 1, reason: 'Invalid phone number' })
+      invalidLines.push({ lineNumber: i + 1, reason: t('campaigns.invalidPhoneNumber') })
       continue
     }
 
@@ -405,7 +408,7 @@ const manualInputValidation = computed((): ManualInputValidation => {
     if (params.length > 0 && providedParams < params.length) {
       invalidLines.push({
         lineNumber: i + 1,
-        reason: `Missing parameters: needs ${params.length}, has ${providedParams}`
+        reason: t('campaigns.missingParameters', { needed: params.length, has: providedParams })
       })
     }
   }
@@ -537,15 +540,15 @@ async function fetchAccounts() {
 
 async function createCampaign() {
   if (!newCampaign.value.name) {
-    toast.error('Please enter a campaign name')
+    toast.error(t('campaigns.enterCampaignName'))
     return
   }
   if (!newCampaign.value.whatsapp_account) {
-    toast.error('Please select a WhatsApp account')
+    toast.error(t('campaigns.selectWhatsappAccount'))
     return
   }
   if (!newCampaign.value.template_id) {
-    toast.error('Please select a template')
+    toast.error(t('campaigns.selectTemplateRequired'))
     return
   }
 
@@ -556,12 +559,12 @@ async function createCampaign() {
       whatsapp_account: newCampaign.value.whatsapp_account,
       template_id: newCampaign.value.template_id
     })
-    toast.success('Campaign created successfully')
+    toast.success(t('campaigns.campaignCreated'))
     showCreateDialog.value = false
     resetForm()
     await fetchCampaigns()
   } catch (error: any) {
-    toast.error(getErrorMessage(error, 'Failed to create campaign'))
+    toast.error(getErrorMessage(error, t('campaigns.createFailed')))
   } finally {
     isCreating.value = false
   }
@@ -593,7 +596,7 @@ function openCreateDialog() {
 
 async function saveCampaign() {
   if (!newCampaign.value.name) {
-    toast.error('Please enter a campaign name')
+    toast.error(t('campaigns.enterCampaignName'))
     return
   }
 
@@ -606,13 +609,13 @@ async function saveCampaign() {
         whatsapp_account: newCampaign.value.whatsapp_account,
         template_id: newCampaign.value.template_id
       })
-      toast.success('Campaign updated successfully')
+      toast.success(t('campaigns.campaignUpdated'))
       showCreateDialog.value = false
       editingCampaignId.value = null
       resetForm()
       await fetchCampaigns()
     } catch (error: any) {
-      toast.error(getErrorMessage(error, 'Failed to update campaign'))
+      toast.error(getErrorMessage(error, t('campaigns.updateFailed')))
     } finally {
       isCreating.value = false
     }
@@ -625,20 +628,20 @@ async function saveCampaign() {
 async function startCampaign(campaign: Campaign) {
   try {
     await campaignsService.start(campaign.id)
-    toast.success('Campaign started')
+    toast.success(t('campaigns.campaignStarted'))
     await fetchCampaigns()
   } catch (error: any) {
-    toast.error(getErrorMessage(error, 'Failed to start campaign'))
+    toast.error(getErrorMessage(error, t('campaigns.startFailed')))
   }
 }
 
 async function pauseCampaign(campaign: Campaign) {
   try {
     await campaignsService.pause(campaign.id)
-    toast.success('Campaign paused')
+    toast.success(t('campaigns.campaignPaused'))
     await fetchCampaigns()
   } catch (error: any) {
-    toast.error(getErrorMessage(error, 'Failed to pause campaign'))
+    toast.error(getErrorMessage(error, t('campaigns.pauseFailed')))
   }
 }
 
@@ -652,12 +655,12 @@ async function confirmCancelCampaign() {
 
   try {
     await campaignsService.cancel(campaignToCancel.value.id)
-    toast.success('Campaign cancelled')
+    toast.success(t('campaigns.campaignCancelled'))
     cancelDialogOpen.value = false
     campaignToCancel.value = null
     await fetchCampaigns()
   } catch (error: any) {
-    toast.error(getErrorMessage(error, 'Failed to cancel campaign'))
+    toast.error(getErrorMessage(error, t('campaigns.cancelFailed')))
   }
 }
 
@@ -665,10 +668,10 @@ async function retryFailed(campaign: Campaign) {
   try {
     const response = await campaignsService.retryFailed(campaign.id)
     const result = response.data.data
-    toast.success(`Retrying ${result?.retry_count || 0} failed message(s)`)
+    toast.success(t('campaigns.retryingFailed', { count: result?.retry_count || 0 }))
     await fetchCampaigns()
   } catch (error: any) {
-    toast.error(getErrorMessage(error, 'Failed to retry failed messages'))
+    toast.error(getErrorMessage(error, t('campaigns.retryFailedError')))
   }
 }
 
@@ -682,12 +685,12 @@ async function confirmDeleteCampaign() {
 
   try {
     await campaignsService.delete(campaignToDelete.value.id)
-    toast.success('Campaign deleted')
+    toast.success(t('campaigns.campaignDeleted'))
     deleteDialogOpen.value = false
     campaignToDelete.value = null
     await fetchCampaigns()
   } catch (error: any) {
-    toast.error(getErrorMessage(error, 'Failed to delete campaign'))
+    toast.error(getErrorMessage(error, t('campaigns.deleteFailed')))
   }
 }
 
@@ -818,7 +821,7 @@ async function viewRecipients(campaign: Campaign) {
     recipients.value = response.data.data?.recipients || []
   } catch (error) {
     console.error('Failed to fetch recipients:', error)
-    toast.error('Failed to load recipients')
+    toast.error(t('campaigns.loadRecipientsFailed'))
     recipients.value = []
   } finally {
     isLoadingRecipients.value = false
@@ -834,7 +837,7 @@ async function deleteRecipient(recipientId: string) {
     recipients.value = recipients.value.filter(r => r.id !== recipientId)
     // Update recipient count in selectedCampaign
     selectedCampaign.value.total_recipients = recipients.value.length
-    toast.success('Recipient deleted')
+    toast.success(t('campaigns.recipientDeleted'))
     await fetchCampaigns() // Refresh campaigns list
     // Update selectedCampaign with fresh data
     const updated = campaigns.value.find(c => c.id === selectedCampaign.value?.id)
@@ -842,7 +845,7 @@ async function deleteRecipient(recipientId: string) {
       selectedCampaign.value = updated
     }
   } catch (error: any) {
-    toast.error(getErrorMessage(error, 'Failed to delete recipient'))
+    toast.error(getErrorMessage(error, t('campaigns.deleteRecipientFailed')))
   } finally {
     deletingRecipientId.value = null
   }
@@ -853,7 +856,7 @@ async function addRecipients() {
 
   const lines = recipientsInput.value.trim().split('\n').filter(line => line.trim())
   if (lines.length === 0) {
-    toast.error('Please enter at least one phone number')
+    toast.error(t('campaigns.enterPhoneNumber'))
     return
   }
 
@@ -886,12 +889,12 @@ async function addRecipients() {
   try {
     const response = await campaignsService.addRecipients(selectedCampaign.value.id, recipientsList)
     const result = response.data.data
-    toast.success(`Added ${result?.added_count || recipientsList.length} recipients`)
+    toast.success(t('campaigns.addedRecipients', { count: result?.added_count || recipientsList.length }))
     showAddRecipientsDialog.value = false
     recipientsInput.value = ''
     await fetchCampaigns()
   } catch (error: any) {
-    toast.error(getErrorMessage(error, 'Failed to add recipients'))
+    toast.error(getErrorMessage(error, t('campaigns.addRecipientsFailed')))
   } finally {
     isAddingRecipients.value = false
   }
@@ -994,7 +997,7 @@ async function validateCSV() {
         templateParamNames: [],
         csvColumns: [],
         columnMapping: [],
-        errors: ['CSV file is empty'],
+        errors: [t('campaigns.csvEmpty')],
         warnings: []
       }
       return
@@ -1019,12 +1022,12 @@ async function validateCSV() {
     const globalWarnings: string[] = []
 
     if (phoneIndex === -1) {
-      globalErrors.push('Missing required column: phone_number (or phone, mobile, number)')
+      globalErrors.push(t('campaigns.missingPhoneColumn'))
     }
 
     // Warn about mixed param types
     if (hasMixedParamTypes(templateParamNames)) {
-      globalWarnings.push('Template has mixed parameter types (e.g., {{1}} and {{name}}). This may cause unexpected behavior. Use CSV columns that exactly match the parameter names.')
+      globalWarnings.push(t('campaigns.mixedParamTypes'))
     }
 
     // Map CSV columns to template parameter names
@@ -1064,7 +1067,7 @@ async function validateCSV() {
       const mappedCount = paramColumnMapping.length
       if (mappedCount < templateParamNames.length) {
         const unmappedParams = templateParamNames.slice(mappedCount)
-        globalErrors.push(`Missing columns for template parameters: ${unmappedParams.join(', ')}`)
+        globalErrors.push(t('campaigns.missingParamColumns', { params: unmappedParams.join(', ') }))
       }
 
       // Warn if named params are being mapped positionally (not by column name)
@@ -1072,7 +1075,7 @@ async function validateCSV() {
       if (namedParams.length > 0) {
         const positionallyMapped = namedParams.filter(n => !mappedParamNames.has(n))
         if (positionallyMapped.length > 0) {
-          globalWarnings.push(`Parameters mapped by position (not column name): ${positionallyMapped.join(', ')}. For best results, use column names that match the template parameters.`)
+          globalWarnings.push(t('campaigns.paramsMappedPositionally', { params: positionallyMapped.join(', ') }))
         }
       }
     }
@@ -1101,13 +1104,13 @@ async function validateCSV() {
 
       // Validate phone number
       if (!phone) {
-        rowErrors.push('Missing phone number')
+        rowErrors.push(t('campaigns.missingPhoneNumber'))
       } else if (!phone.match(/^\+?\d{10,15}$/)) {
-        rowErrors.push('Invalid phone number format')
+        rowErrors.push(t('campaigns.invalidPhoneFormat'))
       } else {
         // Check for duplicates
         if (seenPhones.has(cleanPhone)) {
-          rowErrors.push(`Duplicate phone number (first seen in row ${seenPhones.get(cleanPhone)! + 1})`)
+          rowErrors.push(t('campaigns.duplicatePhone', { row: seenPhones.get(cleanPhone)! + 1 }))
         } else {
           seenPhones.set(cleanPhone, rows.length)
         }
@@ -1116,7 +1119,7 @@ async function validateCSV() {
       // Validate params count if template requires params
       const providedParamCount = Object.keys(params).length
       if (templateParamNames.length > 0 && providedParamCount < templateParamNames.length) {
-        rowErrors.push(`Template requires ${templateParamNames.length} parameter(s), found ${providedParamCount}`)
+        rowErrors.push(t('campaigns.templateRequiresParamsError', { required: templateParamNames.length, found: providedParamCount }))
       }
 
       rows.push({
@@ -1153,7 +1156,7 @@ async function validateCSV() {
       templateParamNames: [],
       csvColumns: [],
       columnMapping: [],
-      errors: ['Failed to parse CSV file'],
+      errors: [t('campaigns.parseCsvFailed')],
       warnings: []
     }
   } finally {
@@ -1193,7 +1196,7 @@ async function addRecipientsFromCSV() {
 
   const validRows = csvValidation.value.rows.filter(r => r.isValid)
   if (validRows.length === 0) {
-    toast.error('No valid rows to import')
+    toast.error(t('campaigns.noValidRowsToImport'))
     return
   }
 
@@ -1215,13 +1218,13 @@ async function addRecipientsFromCSV() {
   try {
     const response = await campaignsService.addRecipients(selectedCampaign.value.id, recipientsList)
     const result = response.data.data
-    toast.success(`Added ${result?.added_count || recipientsList.length} recipients from CSV`)
+    toast.success(t('campaigns.addedFromCsv', { count: result?.added_count || recipientsList.length }))
     showAddRecipientsDialog.value = false
     csvFile.value = null
     csvValidation.value = null
     await fetchCampaigns()
   } catch (error: any) {
-    toast.error(getErrorMessage(error, 'Failed to add recipients'))
+    toast.error(getErrorMessage(error, t('campaigns.addRecipientsFailed')))
   } finally {
     isAddingRecipients.value = false
   }
@@ -1231,15 +1234,15 @@ async function addRecipientsFromCSV() {
 <template>
   <div class="flex flex-col h-full bg-[#0a0a0b] light:bg-gray-50">
     <PageHeader
-      title="Campaigns"
-      subtitle="Manage bulk messaging campaigns"
+      :title="$t('campaigns.title')"
+      :subtitle="$t('campaigns.subtitle')"
       :icon="Megaphone"
       icon-gradient="bg-gradient-to-br from-rose-500 to-pink-600 shadow-rose-500/20"
     >
       <template #actions>
         <Button variant="outline" size="sm" @click="openCreateDialog">
           <Plus class="h-4 w-4 mr-2" />
-          Create Campaign
+          {{ $t('campaigns.createCampaign') }}
         </Button>
       </template>
     </PageHeader>
@@ -1247,26 +1250,26 @@ async function addRecipientsFromCSV() {
     <Dialog v-model:open="showCreateDialog">
           <DialogContent class="sm:max-w-[500px]">
             <DialogHeader>
-              <DialogTitle>{{ editingCampaignId ? 'Edit Campaign' : 'Create New Campaign' }}</DialogTitle>
+              <DialogTitle>{{ editingCampaignId ? $t('campaigns.editCampaign') : $t('campaigns.createNewCampaign') }}</DialogTitle>
               <DialogDescription>
-                {{ editingCampaignId ? 'Update campaign details.' : 'Create a new bulk messaging campaign. You can add recipients after creation.' }}
+                {{ editingCampaignId ? $t('campaigns.editDescription') : $t('campaigns.createDescription') }}
               </DialogDescription>
             </DialogHeader>
             <div class="grid gap-4 py-4">
               <div class="grid gap-2">
-                <Label for="name">Campaign Name</Label>
+                <Label for="name">{{ $t('campaigns.campaignName') }}</Label>
                 <Input
                   id="name"
                   v-model="newCampaign.name"
-                  placeholder="e.g., Holiday Promotion"
+                  :placeholder="$t('campaigns.campaignNamePlaceholder')"
                   :disabled="isCreating"
                 />
               </div>
               <div class="grid gap-2">
-                <Label for="account">WhatsApp Account</Label>
+                <Label for="account">{{ $t('campaigns.whatsappAccount') }}</Label>
                 <Select v-model="newCampaign.whatsapp_account" :disabled="isCreating">
                   <SelectTrigger>
-                    <SelectValue placeholder="Select an account" />
+                    <SelectValue :placeholder="$t('campaigns.selectAccount')" />
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem v-for="account in accounts" :key="account.id" :value="account.name">
@@ -1275,14 +1278,14 @@ async function addRecipientsFromCSV() {
                   </SelectContent>
                 </Select>
                 <p v-if="accounts.length === 0" class="text-xs text-muted-foreground">
-                  No accounts found. Please add a WhatsApp account first.
+                  {{ $t('campaigns.noAccountsFound') }}
                 </p>
               </div>
               <div class="grid gap-2">
-                <Label for="template">Message Template</Label>
+                <Label for="template">{{ $t('campaigns.messageTemplate') }}</Label>
                 <Select v-model="newCampaign.template_id" :disabled="isCreating">
                   <SelectTrigger>
-                    <SelectValue placeholder="Select a template" />
+                    <SelectValue :placeholder="$t('campaigns.selectTemplate')" />
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem v-for="template in templates" :key="template.id" :value="template.id">
@@ -1291,17 +1294,17 @@ async function addRecipientsFromCSV() {
                   </SelectContent>
                 </Select>
                 <p v-if="templates.length === 0" class="text-xs text-muted-foreground">
-                  No templates found. Please create a template first.
+                  {{ $t('campaigns.noTemplatesFound') }}
                 </p>
               </div>
             </div>
             <DialogFooter>
               <Button variant="outline" size="sm" @click="showCreateDialog = false; editingCampaignId = null" :disabled="isCreating">
-                Cancel
+                {{ $t('common.cancel') }}
               </Button>
               <Button size="sm" @click="saveCampaign" :disabled="isCreating">
                 <Loader2 v-if="isCreating" class="h-4 w-4 mr-2 animate-spin" />
-                {{ editingCampaignId ? 'Save Changes' : 'Create Campaign' }}
+                {{ editingCampaignId ? $t('campaigns.saveChanges') : $t('campaigns.createCampaign') }}
               </Button>
             </DialogFooter>
           </DialogContent>
@@ -1315,13 +1318,13 @@ async function addRecipientsFromCSV() {
             <CardHeader>
               <div class="flex items-center justify-between flex-wrap gap-4">
                 <div>
-                  <CardTitle>Your Campaigns</CardTitle>
-                  <CardDescription>Bulk messaging campaigns for your customers.</CardDescription>
+                  <CardTitle>{{ $t('campaigns.yourCampaigns') }}</CardTitle>
+                  <CardDescription>{{ $t('campaigns.yourCampaignsDesc') }}</CardDescription>
                 </div>
                 <div class="flex items-center gap-2 flex-wrap">
                   <Select v-model="filterStatus">
                     <SelectTrigger class="w-[140px]">
-                      <SelectValue placeholder="All Statuses" />
+                      <SelectValue :placeholder="$t('campaigns.allStatuses')" />
                     </SelectTrigger>
                     <SelectContent>
                       <SelectItem v-for="opt in statusOptions" :key="opt.value" :value="opt.value">
@@ -1331,29 +1334,29 @@ async function addRecipientsFromCSV() {
                   </Select>
                   <Select v-model="selectedRange">
                     <SelectTrigger class="w-[140px]">
-                      <SelectValue placeholder="Select range" />
+                      <SelectValue :placeholder="$t('campaigns.selectRange')" />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="today">Today</SelectItem>
-                      <SelectItem value="7days">Last 7 days</SelectItem>
-                      <SelectItem value="30days">Last 30 days</SelectItem>
-                      <SelectItem value="this_month">This month</SelectItem>
-                      <SelectItem value="custom">Custom range</SelectItem>
+                      <SelectItem value="today">{{ $t('campaigns.today') }}</SelectItem>
+                      <SelectItem value="7days">{{ $t('campaigns.last7Days') }}</SelectItem>
+                      <SelectItem value="30days">{{ $t('campaigns.last30Days') }}</SelectItem>
+                      <SelectItem value="this_month">{{ $t('campaigns.thisMonth') }}</SelectItem>
+                      <SelectItem value="custom">{{ $t('campaigns.customRange') }}</SelectItem>
                     </SelectContent>
                   </Select>
-                  <SearchInput v-model="searchQuery" placeholder="Search campaigns..." class="w-48" />
+                  <SearchInput v-model="searchQuery" :placeholder="$t('campaigns.searchCampaigns') + '...'" class="w-48" />
                   <Popover v-if="selectedRange === 'custom'" v-model:open="isDatePickerOpen">
                     <PopoverTrigger as-child>
                       <Button variant="outline" size="sm">
                         <CalendarIcon class="h-4 w-4 mr-1" />
-                        {{ formatDateRangeDisplay || 'Select' }}
+                        {{ formatDateRangeDisplay || $t('common.select') }}
                       </Button>
                     </PopoverTrigger>
                     <PopoverContent class="w-auto p-4" align="end">
                       <div class="space-y-4">
                         <RangeCalendar v-model="customDateRange" :number-of-months="2" />
                         <Button class="w-full" size="sm" @click="applyCustomRange" :disabled="!customDateRange.start || !customDateRange.end">
-                          Apply Range
+                          {{ $t('campaigns.applyRange') }}
                         </Button>
                       </div>
                     </PopoverContent>
@@ -1367,8 +1370,8 @@ async function addRecipientsFromCSV() {
                 :columns="columns"
                 :is-loading="isLoading"
                 :empty-icon="Megaphone"
-                :empty-title="searchQuery ? 'No matching campaigns' : 'No campaigns yet'"
-                :empty-description="searchQuery ? 'Try a different search term.' : 'Create your first bulk messaging campaign.'"
+                :empty-title="searchQuery ? $t('campaigns.noMatchingCampaigns') : $t('campaigns.noCampaignsYet')"
+                :empty-description="searchQuery ? $t('campaigns.noMatchingCampaignsDesc') : $t('campaigns.noCampaignsYetDesc')"
                 v-model:sort-key="sortKey"
                 v-model:sort-direction="sortDirection"
                 server-pagination
@@ -1381,7 +1384,7 @@ async function addRecipientsFromCSV() {
                 <template #cell-name="{ item: campaign }">
                   <div>
                     <span class="font-medium">{{ campaign.name }}</span>
-                    <p class="text-xs text-muted-foreground">{{ campaign.template_name || 'No template' }}</p>
+                    <p class="text-xs text-muted-foreground">{{ campaign.template_name || $t('campaigns.noTemplate') }}</p>
                   </div>
                 </template>
                 <template #cell-status="{ item: campaign }">
@@ -1483,7 +1486,7 @@ async function addRecipientsFromCSV() {
                 <template #empty-action>
                   <Button v-if="!searchQuery" variant="outline" size="sm" @click="showCreateDialog = true">
                     <Plus class="h-4 w-4 mr-2" />
-                    Create Campaign
+                    {{ $t('campaigns.createCampaign') }}
                   </Button>
                 </template>
               </DataTable>
@@ -1497,9 +1500,9 @@ async function addRecipientsFromCSV() {
     <Dialog v-model:open="showRecipientsDialog">
       <DialogContent class="sm:max-w-[700px] max-h-[80vh]">
         <DialogHeader>
-          <DialogTitle>Campaign Recipients</DialogTitle>
+          <DialogTitle>{{ $t('campaigns.campaignRecipients') }}</DialogTitle>
           <DialogDescription>
-            {{ selectedCampaign?.name }} - {{ recipients.length }} recipient(s)
+            {{ selectedCampaign?.name }} - {{ $t('campaigns.recipientCount', { count: recipients.length }) }}
           </DialogDescription>
         </DialogHeader>
         <div class="py-4">
@@ -1508,7 +1511,7 @@ async function addRecipientsFromCSV() {
           </div>
           <div v-else-if="recipients.length === 0" class="text-center py-8 text-muted-foreground">
             <Users class="h-12 w-12 mx-auto mb-2 opacity-50" />
-            <p>No recipients added yet</p>
+            <p>{{ $t('campaigns.noRecipientsYet') }}</p>
             <Button
               v-if="selectedCampaign?.status === 'draft'"
               variant="outline"
@@ -1517,17 +1520,17 @@ async function addRecipientsFromCSV() {
               @click="showRecipientsDialog = false; openAddRecipientsDialog(selectedCampaign as any)"
             >
               <UserPlus class="h-4 w-4 mr-2" />
-              Add Recipients
+              {{ $t('campaigns.addRecipients') }}
             </Button>
           </div>
           <ScrollArea v-else class="h-[400px]">
             <table class="w-full text-sm">
               <thead class="sticky top-0 bg-background border-b">
                 <tr>
-                  <th class="text-left py-2 px-2">Phone Number</th>
-                  <th class="text-left py-2 px-2">Name</th>
-                  <th class="text-left py-2 px-2">Status</th>
-                  <th class="text-left py-2 px-2">Sent At</th>
+                  <th class="text-left py-2 px-2">{{ $t('campaigns.phoneNumber') }}</th>
+                  <th class="text-left py-2 px-2">{{ $t('campaigns.name') }}</th>
+                  <th class="text-left py-2 px-2">{{ $t('campaigns.status') }}</th>
+                  <th class="text-left py-2 px-2">{{ $t('campaigns.sentAt') }}</th>
                   <th v-if="selectedCampaign?.status === 'draft'" class="text-center py-2 px-2 w-16"></th>
                 </tr>
               </thead>
@@ -1573,9 +1576,9 @@ async function addRecipientsFromCSV() {
             @click="showRecipientsDialog = false; openAddRecipientsDialog(selectedCampaign as any)"
           >
             <UserPlus class="h-4 w-4 mr-2" />
-            Add More
+            {{ $t('campaigns.addMore') }}
           </Button>
-          <Button variant="outline" size="sm" @click="showRecipientsDialog = false">Close</Button>
+          <Button variant="outline" size="sm" @click="showRecipientsDialog = false">{{ $t('common.close') }}</Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>
@@ -1584,11 +1587,11 @@ async function addRecipientsFromCSV() {
     <Dialog v-model:open="showAddRecipientsDialog">
       <DialogContent class="sm:max-w-[700px] max-h-[85vh]">
         <DialogHeader>
-          <DialogTitle>Add Recipients</DialogTitle>
+          <DialogTitle>{{ $t('campaigns.addRecipients') }}</DialogTitle>
           <DialogDescription>
-            Add recipients to "{{ selectedCampaign?.name }}"
+            {{ $t('campaigns.addRecipientsTo', { name: selectedCampaign?.name }) }}
             <span v-if="templateParamNames.length > 0" class="block mt-1">
-              Template requires {{ templateParamNames.length }} parameter(s)
+              {{ $t('campaigns.templateRequiresParams', { count: templateParamNames.length }) }}
             </span>
           </DialogDescription>
         </DialogHeader>
@@ -1597,7 +1600,7 @@ async function addRecipientsFromCSV() {
         <div v-if="selectedTemplate?.body_content" class="mb-4 p-3 bg-muted/50 rounded-lg border">
           <div class="flex items-center gap-2 mb-2">
             <MessageSquare class="h-4 w-4 text-muted-foreground" />
-            <span class="text-sm font-medium">Template Preview</span>
+            <span class="text-sm font-medium">{{ $t('campaigns.templatePreview') }}</span>
           </div>
           <p class="text-sm whitespace-pre-wrap" v-html="highlightTemplateParams(selectedTemplate.body_content)"></p>
         </div>
@@ -1606,11 +1609,11 @@ async function addRecipientsFromCSV() {
           <TabsList class="grid w-full grid-cols-2">
             <TabsTrigger value="manual">
               <UserPlus class="h-4 w-4 mr-2" />
-              Manual Entry
+              {{ $t('campaigns.manualEntry') }}
             </TabsTrigger>
             <TabsTrigger value="csv">
               <FileSpreadsheet class="h-4 w-4 mr-2" />
-              Upload CSV
+              {{ $t('campaigns.uploadCsv') }}
             </TabsTrigger>
           </TabsList>
 
@@ -1618,14 +1621,14 @@ async function addRecipientsFromCSV() {
           <TabsContent value="manual" class="mt-4">
             <div class="space-y-4">
               <div class="bg-muted p-3 rounded-lg text-sm">
-                <p class="font-medium mb-2">Format (one per line):</p>
+                <p class="font-medium mb-2">{{ $t('campaigns.formatOneLine') }}</p>
                 <code class="bg-background px-2 py-1 rounded block">{{ manualEntryFormat }}</code>
                 <p v-if="templateParamNames.length > 0" class="text-muted-foreground mt-2 text-xs">
-                  Template parameters: <span v-for="(param, idx) in templateParamNames" :key="param"><code class="bg-background px-1 rounded">{{ formatParamName(param) }}</code><span v-if="idx < templateParamNames.length - 1">, </span></span>
+                  {{ $t('campaigns.templateParameters') }} <span v-for="(param, idx) in templateParamNames" :key="param"><code class="bg-background px-1 rounded">{{ formatParamName(param) }}</code><span v-if="idx < templateParamNames.length - 1">, </span></span>
                 </p>
               </div>
               <div class="space-y-2">
-                <Label for="recipients">Recipients</Label>
+                <Label for="recipients">{{ $t('campaigns.recipientsLabel') }}</Label>
                 <Textarea
                   id="recipients"
                   v-model="recipientsInput"
@@ -1637,23 +1640,23 @@ async function addRecipientsFromCSV() {
                 <!-- Validation status -->
                 <div v-if="recipientsInput.trim()" class="space-y-2">
                   <p v-if="manualInputValidation.isValid" class="text-xs text-green-600">
-                    {{ manualInputValidation.validLines }} recipient(s) valid
+                    {{ $t('campaigns.recipientsValid', { count: manualInputValidation.validLines }) }}
                   </p>
                   <div v-else-if="manualInputValidation.invalidLines.length > 0" class="text-xs">
                     <p class="text-destructive font-medium mb-1">
-                      {{ manualInputValidation.invalidLines.length }} of {{ manualInputValidation.totalLines }} line(s) have errors:
+                      {{ $t('campaigns.linesHaveErrors', { invalid: manualInputValidation.invalidLines.length, total: manualInputValidation.totalLines }) }}
                     </p>
                     <ul class="text-destructive space-y-0.5 max-h-20 overflow-y-auto">
                       <li v-for="err in manualInputValidation.invalidLines.slice(0, 5)" :key="err.lineNumber">
-                        Line {{ err.lineNumber }}: {{ err.reason }}
+                        {{ $t('campaigns.lineError', { line: err.lineNumber, reason: err.reason }) }}
                       </li>
                       <li v-if="manualInputValidation.invalidLines.length > 5" class="text-muted-foreground">
-                        ... and {{ manualInputValidation.invalidLines.length - 5 }} more errors
+                        {{ $t('campaigns.andMoreErrors', { count: manualInputValidation.invalidLines.length - 5 }) }}
                       </li>
                     </ul>
                   </div>
                   <p v-else class="text-xs text-muted-foreground">
-                    {{ manualInputValidation.totalLines }} recipient(s) entered
+                    {{ $t('campaigns.recipientsEntered', { count: manualInputValidation.totalLines }) }}
                   </p>
                 </div>
               </div>
@@ -1661,7 +1664,7 @@ async function addRecipientsFromCSV() {
                 <Button @click="addRecipients" :disabled="isAddingRecipients || !manualInputValidation.isValid">
                   <Loader2 v-if="isAddingRecipients" class="h-4 w-4 mr-2 animate-spin" />
                   <Upload v-else class="h-4 w-4 mr-2" />
-                  Add Recipients
+                  {{ $t('campaigns.addRecipients') }}
                 </Button>
               </div>
             </div>
@@ -1672,18 +1675,18 @@ async function addRecipientsFromCSV() {
             <div class="space-y-4">
               <!-- CSV Format Info -->
               <div class="bg-muted p-3 rounded-lg text-sm">
-                <p class="font-medium mb-2">Required CSV Columns:</p>
+                <p class="font-medium mb-2">{{ $t('campaigns.requiredCsvColumns') }}</p>
                 <div class="flex flex-wrap gap-2">
                   <code v-for="col in csvColumnsHint" :key="col" class="bg-background px-2 py-1 rounded text-xs">{{ col }}</code>
                 </div>
                 <p v-if="templateParamNames.length > 0" class="text-muted-foreground mt-2 text-xs">
-                  Template parameters: <span v-for="(param, idx) in templateParamNames" :key="param"><code class="bg-background px-1 rounded">{{ formatParamName(param) }}</code><span v-if="idx < templateParamNames.length - 1">, </span></span>
+                  {{ $t('campaigns.templateParameters') }} <span v-for="(param, idx) in templateParamNames" :key="param"><code class="bg-background px-1 rounded">{{ formatParamName(param) }}</code><span v-if="idx < templateParamNames.length - 1">, </span></span>
                 </p>
               </div>
 
               <!-- File Upload -->
               <div class="space-y-2">
-                <Label for="csv-file">Select CSV File</Label>
+                <Label for="csv-file">{{ $t('campaigns.selectCsvFile') }}</Label>
                 <div class="flex items-center gap-2">
                   <Input
                     id="csv-file"
@@ -1708,7 +1711,7 @@ async function addRecipientsFromCSV() {
               <!-- Validation Results -->
               <div v-if="isValidatingCSV" class="flex items-center justify-center py-8">
                 <Loader2 class="h-6 w-6 animate-spin text-muted-foreground" />
-                <span class="ml-2 text-muted-foreground">Validating CSV...</span>
+                <span class="ml-2 text-muted-foreground">{{ $t('campaigns.validatingCsv') }}</span>
               </div>
 
               <div v-else-if="csvValidation" class="space-y-4">
@@ -1716,7 +1719,7 @@ async function addRecipientsFromCSV() {
                 <div v-if="csvValidation.errors.length > 0" class="bg-destructive/10 border border-destructive/20 rounded-lg p-3">
                   <div class="flex items-center gap-2 text-destructive font-medium mb-2">
                     <AlertTriangle class="h-4 w-4" />
-                    Validation Errors
+                    {{ $t('campaigns.validationErrors') }}
                   </div>
                   <ul class="list-disc list-inside text-sm text-destructive">
                     <li v-for="error in csvValidation.errors" :key="error">{{ error }}</li>
@@ -1727,7 +1730,7 @@ async function addRecipientsFromCSV() {
                 <div v-if="csvValidation.warnings && csvValidation.warnings.length > 0" class="bg-orange-500/10 border border-orange-500/20 rounded-lg p-3">
                   <div class="flex items-center gap-2 text-orange-600 font-medium mb-2">
                     <AlertTriangle class="h-4 w-4" />
-                    Warnings
+                    {{ $t('campaigns.warnings') }}
                   </div>
                   <ul class="list-disc list-inside text-sm text-orange-600">
                     <li v-for="warning in csvValidation.warnings" :key="warning">{{ warning }}</li>
@@ -1736,7 +1739,7 @@ async function addRecipientsFromCSV() {
 
                 <!-- Column Mapping Info -->
                 <div v-if="csvValidation.columnMapping && csvValidation.columnMapping.length > 0" class="bg-muted/50 border rounded-lg p-3">
-                  <div class="text-sm font-medium mb-2">Column Mapping</div>
+                  <div class="text-sm font-medium mb-2">{{ $t('campaigns.columnMapping') }}</div>
                   <div class="flex flex-wrap gap-2">
                     <div
                       v-for="mapping in csvValidation.columnMapping"
@@ -1754,18 +1757,18 @@ async function addRecipientsFromCSV() {
                 <div class="flex flex-wrap items-center gap-4 text-sm">
                   <div class="flex items-center gap-1">
                     <Check class="h-4 w-4 text-green-600" />
-                    <span>{{ csvValidation.rows.filter(r => r.isValid).length }} valid</span>
+                    <span>{{ csvValidation.rows.filter(r => r.isValid).length }} {{ $t('campaigns.valid') }}</span>
                   </div>
                   <div v-if="csvValidation.rows.filter(r => !r.isValid).length > 0" class="flex items-center gap-1">
                     <AlertTriangle class="h-4 w-4 text-destructive" />
-                    <span>{{ csvValidation.rows.filter(r => !r.isValid).length }} invalid</span>
+                    <span>{{ csvValidation.rows.filter(r => !r.isValid).length }} {{ $t('campaigns.invalid') }}</span>
                   </div>
                   <div v-if="csvValidation.rows.filter(r => r.errors.some(e => e.includes('Duplicate'))).length > 0" class="flex items-center gap-1 text-orange-600">
                     <Users class="h-4 w-4" />
-                    <span>{{ csvValidation.rows.filter(r => r.errors.some(e => e.includes('Duplicate'))).length }} duplicates</span>
+                    <span>{{ csvValidation.rows.filter(r => r.errors.some(e => e.includes('Duplicate'))).length }} {{ $t('campaigns.duplicates') }}</span>
                   </div>
                   <div class="text-muted-foreground">
-                    Columns: {{ csvValidation.csvColumns.join(', ') }}
+                    {{ $t('campaigns.columns') }} {{ csvValidation.csvColumns.join(', ') }}
                   </div>
                 </div>
 
@@ -1776,9 +1779,9 @@ async function addRecipientsFromCSV() {
                       <thead class="sticky top-0 bg-muted border-b">
                         <tr>
                           <th class="text-left py-2 px-3 w-8"></th>
-                          <th class="text-left py-2 px-3">Phone</th>
-                          <th class="text-left py-2 px-3">Name</th>
-                          <th class="text-left py-2 px-3">Parameters</th>
+                          <th class="text-left py-2 px-3">{{ $t('campaigns.phone') }}</th>
+                          <th class="text-left py-2 px-3">{{ $t('campaigns.name') }}</th>
+                          <th class="text-left py-2 px-3">{{ $t('campaigns.parameters') }}</th>
                         </tr>
                       </thead>
                       <tbody>
@@ -1811,7 +1814,7 @@ async function addRecipientsFromCSV() {
                     </table>
                   </ScrollArea>
                   <div v-if="csvValidation.rows.length > 50" class="text-xs text-muted-foreground text-center py-2 border-t">
-                    Showing first 50 of {{ csvValidation.rows.length }} rows
+                    {{ $t('campaigns.showingFirst', { count: 50, total: csvValidation.rows.length }) }}
                   </div>
                 </div>
 
@@ -1823,7 +1826,7 @@ async function addRecipientsFromCSV() {
                   >
                     <Loader2 v-if="isAddingRecipients" class="h-4 w-4 mr-2 animate-spin" />
                     <Upload v-else class="h-4 w-4 mr-2" />
-                    Import {{ csvValidation.rows.filter(r => r.isValid).length }} Recipients
+                    {{ $t('campaigns.importRecipients', { count: csvValidation.rows.filter(r => r.isValid).length }) }}
                   </Button>
                 </div>
               </div>
@@ -1831,7 +1834,7 @@ async function addRecipientsFromCSV() {
               <!-- Empty state -->
               <div v-else class="text-center py-8 text-muted-foreground">
                 <FileSpreadsheet class="h-12 w-12 mx-auto mb-2 opacity-50" />
-                <p>Select a CSV file to preview and validate</p>
+                <p>{{ $t('campaigns.selectCsvToPreview') }}</p>
               </div>
             </div>
           </TabsContent>
@@ -1839,7 +1842,7 @@ async function addRecipientsFromCSV() {
 
         <DialogFooter class="border-t pt-4 mt-4">
           <Button variant="outline" size="sm" @click="showAddRecipientsDialog = false" :disabled="isAddingRecipients">
-            Cancel
+            {{ $t('common.cancel') }}
           </Button>
         </DialogFooter>
       </DialogContent>
@@ -1847,7 +1850,7 @@ async function addRecipientsFromCSV() {
 
     <DeleteConfirmDialog
       v-model:open="deleteDialogOpen"
-      title="Delete Campaign"
+      :title="$t('campaigns.deleteCampaign')"
       :item-name="campaignToDelete?.name"
       @confirm="confirmDeleteCampaign"
     />
@@ -1856,14 +1859,14 @@ async function addRecipientsFromCSV() {
     <AlertDialog v-model:open="cancelDialogOpen">
       <AlertDialogContent>
         <AlertDialogHeader>
-          <AlertDialogTitle>Cancel Campaign</AlertDialogTitle>
+          <AlertDialogTitle>{{ $t('campaigns.cancelConfirmTitle') }}</AlertDialogTitle>
           <AlertDialogDescription>
-            Are you sure you want to cancel "{{ campaignToCancel?.name }}"? This will stop all pending messages.
+            {{ $t('campaigns.cancelConfirmDesc', { name: campaignToCancel?.name }) }}
           </AlertDialogDescription>
         </AlertDialogHeader>
         <AlertDialogFooter>
-          <AlertDialogCancel>Keep Running</AlertDialogCancel>
-          <AlertDialogAction @click="confirmCancelCampaign">Cancel Campaign</AlertDialogAction>
+          <AlertDialogCancel>{{ $t('campaigns.keepRunning') }}</AlertDialogCancel>
+          <AlertDialogAction @click="confirmCancelCampaign">{{ $t('campaigns.cancelCampaign') }}</AlertDialogAction>
         </AlertDialogFooter>
       </AlertDialogContent>
     </AlertDialog>
@@ -1872,7 +1875,7 @@ async function addRecipientsFromCSV() {
     <Dialog v-model:open="showMediaPreviewDialog">
       <DialogContent class="sm:max-w-[600px]">
         <DialogHeader>
-          <DialogTitle>Media Preview</DialogTitle>
+          <DialogTitle>{{ $t('campaigns.mediaPreview') }}</DialogTitle>
           <DialogDescription>
             {{ previewingCampaign?.header_media_filename }}
           </DialogDescription>
@@ -1892,7 +1895,7 @@ async function addRecipientsFromCSV() {
           />
         </div>
         <DialogFooter>
-          <Button variant="outline" @click="showMediaPreviewDialog = false">Close</Button>
+          <Button variant="outline" @click="showMediaPreviewDialog = false">{{ $t('common.close') }}</Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>
