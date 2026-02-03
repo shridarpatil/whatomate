@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { ref, onMounted, computed } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { api } from '@/services/api'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -14,6 +15,8 @@ import { PageHeader } from '@/components/shared'
 import { toast } from 'vue-sonner'
 import { ShieldCheck, Settings2, ExternalLink, Info, Copy, Check, Loader2 } from 'lucide-vue-next'
 import { getErrorMessage } from '@/lib/api-utils'
+
+const { t } = useI18n()
 
 interface SSOProvider {
   provider: string
@@ -102,7 +105,7 @@ const copiedRedirectUrl = ref(false)
 function copyRedirectUrl() {
   navigator.clipboard.writeText(redirectUrl.value)
   copiedRedirectUrl.value = true
-  toast.success('Redirect URL copied to clipboard')
+  toast.success(t('sso.redirectUrlCopied'))
   setTimeout(() => {
     copiedRedirectUrl.value = false
   }, 2000)
@@ -114,7 +117,7 @@ async function fetchProviders() {
     const response = await api.get('/settings/sso')
     providers.value = response.data.data || []
   } catch (error) {
-    toast.error(getErrorMessage(error, 'Failed to load SSO settings'))
+    toast.error(getErrorMessage(error, t('sso.loadFailed')))
   } finally {
     isLoading.value = false
   }
@@ -141,21 +144,21 @@ function openEditDialog(providerKey: string) {
 
 async function saveProvider() {
   if (!editForm.value.client_id.trim()) {
-    toast.error('Client ID is required')
+    toast.error(t('sso.clientIdRequired'))
     return
   }
 
   // For new providers, require client secret
   const existing = providers.value.find(p => p.provider === editingProvider.value)
   if (!existing && !editForm.value.client_secret.trim()) {
-    toast.error('Client Secret is required for new providers')
+    toast.error(t('sso.clientSecretRequired'))
     return
   }
 
   // For custom providers, validate URLs
   if (editingProvider.value === 'custom') {
     if (!editForm.value.auth_url || !editForm.value.token_url || !editForm.value.user_info_url) {
-      toast.error('Auth URL, Token URL, and User Info URL are required for custom providers')
+      toast.error(t('sso.customUrlsRequired'))
       return
     }
   }
@@ -185,9 +188,9 @@ async function saveProvider() {
     await api.put(`/settings/sso/${editingProvider.value}`, payload)
     await fetchProviders()
     isEditDialogOpen.value = false
-    toast.success('SSO provider saved successfully')
+    toast.success(t('sso.providerSaved'))
   } catch (error) {
-    toast.error(getErrorMessage(error, 'Failed to save SSO provider'))
+    toast.error(getErrorMessage(error, t('sso.saveFailed')))
   } finally {
     isSaving.value = false
   }
@@ -197,9 +200,9 @@ async function deleteProvider(providerKey: string) {
   try {
     await api.delete(`/settings/sso/${providerKey}`)
     await fetchProviders()
-    toast.success('SSO provider removed')
+    toast.success(t('sso.providerRemoved'))
   } catch (error) {
-    toast.error(getErrorMessage(error, 'Failed to remove SSO provider'))
+    toast.error(getErrorMessage(error, t('sso.removeFailed')))
   }
 }
 
@@ -214,7 +217,7 @@ onMounted(() => {
 
 <template>
   <div class="flex flex-col h-full bg-[#0a0a0b] light:bg-gray-50">
-    <PageHeader title="Single Sign-On (SSO)" subtitle="Configure SSO providers for your organization" :icon="ShieldCheck" icon-gradient="bg-gradient-to-br from-emerald-500 to-teal-600 shadow-emerald-500/20" />
+    <PageHeader :title="$t('sso.title')" :subtitle="$t('sso.subtitle')" :icon="ShieldCheck" icon-gradient="bg-gradient-to-br from-emerald-500 to-teal-600 shadow-emerald-500/20" />
 
     <ScrollArea class="flex-1">
       <div class="p-6">
@@ -224,10 +227,9 @@ onMounted(() => {
           <CardContent class="flex items-start gap-3 pt-6">
             <Info class="h-5 w-5 text-blue-400 light:text-blue-600 shrink-0 mt-0.5" />
             <div class="text-sm text-blue-200 light:text-blue-800">
-              <p class="font-medium mb-1">SSO Configuration</p>
+              <p class="font-medium mb-1">{{ $t('sso.configuration') }}</p>
               <p class="text-blue-300 light:text-blue-700">
-                Configure OAuth providers to allow users to sign in with their existing accounts.
-                Enabled providers will appear as login options on the sign-in page.
+                {{ $t('sso.configurationDesc') }}
               </p>
             </div>
           </CardContent>
@@ -259,18 +261,18 @@ onMounted(() => {
                   v-if="getConfiguredProvider(key)"
                   :variant="getConfiguredProvider(key)?.is_enabled ? 'default' : 'secondary'"
                 >
-                  {{ getConfiguredProvider(key)?.is_enabled ? 'Enabled' : 'Disabled' }}
+                  {{ getConfiguredProvider(key)?.is_enabled ? $t('sso.enabled') : $t('sso.disabled') }}
                 </Badge>
               </div>
             </CardHeader>
             <CardContent class="space-y-3">
               <div v-if="getConfiguredProvider(key)" class="text-xs text-muted-foreground space-y-1">
                 <p>
-                  <span class="font-medium">Auto-create users:</span>
-                  {{ getConfiguredProvider(key)?.allow_auto_create ? 'Yes' : 'No' }}
+                  <span class="font-medium">{{ $t('sso.autoCreateUsers') }}:</span>
+                  {{ getConfiguredProvider(key)?.allow_auto_create ? $t('sso.yes') : $t('sso.no') }}
                 </p>
                 <p v-if="getConfiguredProvider(key)?.allowed_domains">
-                  <span class="font-medium">Allowed domains:</span>
+                  <span class="font-medium">{{ $t('sso.allowedDomains') }}:</span>
                   {{ getConfiguredProvider(key)?.allowed_domains }}
                 </p>
               </div>
@@ -282,7 +284,7 @@ onMounted(() => {
                   @click="openEditDialog(key)"
                 >
                   <Settings2 class="h-4 w-4 mr-2" />
-                  {{ getConfiguredProvider(key) ? 'Configure' : 'Set Up' }}
+                  {{ getConfiguredProvider(key) ? $t('sso.configure') : $t('sso.setUp') }}
                 </Button>
                 <Button
                   v-if="config.docUrl"
@@ -311,19 +313,19 @@ onMounted(() => {
             <svg v-if="currentProviderConfig" class="h-5 w-5" viewBox="0 0 24 24" fill="currentColor">
               <path :d="currentProviderConfig.icon" />
             </svg>
-            Configure {{ currentProviderConfig?.name }}
+            {{ $t('sso.configure') }} {{ currentProviderConfig?.name }}
           </DialogTitle>
           <DialogDescription>
-            Enter your OAuth credentials from {{ currentProviderConfig?.name }}.
+            {{ $t('sso.enterCredentials', { provider: currentProviderConfig?.name }) }}
           </DialogDescription>
         </DialogHeader>
 
         <div class="space-y-4 py-4 max-h-[60vh] overflow-y-auto">
           <!-- Redirect URL -->
           <div class="space-y-2">
-            <Label>Redirect URL</Label>
+            <Label>{{ $t('sso.redirectUrl') }}</Label>
             <p class="text-xs text-muted-foreground mb-1">
-              Add this URL to your {{ currentProviderConfig?.name }} OAuth app settings
+              {{ $t('sso.redirectUrlHint', { provider: currentProviderConfig?.name }) }}
             </p>
             <div class="flex gap-2">
               <Input
@@ -345,54 +347,54 @@ onMounted(() => {
 
           <!-- Client ID -->
           <div class="space-y-2">
-            <Label for="client_id">Client ID</Label>
+            <Label for="client_id">{{ $t('sso.clientId') }}</Label>
             <Input
               id="client_id"
               v-model="editForm.client_id"
-              placeholder="Enter client ID"
+              :placeholder="$t('sso.clientIdPlaceholder')"
             />
           </div>
 
           <!-- Client Secret -->
           <div class="space-y-2">
             <Label for="client_secret">
-              Client Secret
+              {{ $t('sso.clientSecret') }}
               <span v-if="getConfiguredProvider(editingProvider)?.has_secret" class="text-xs text-muted-foreground ml-1">
-                (leave blank to keep existing)
+                {{ $t('sso.clientSecretKeepExisting') }}
               </span>
             </Label>
             <Input
               id="client_secret"
               v-model="editForm.client_secret"
               type="password"
-              placeholder="Enter client secret"
+              :placeholder="$t('sso.clientSecretPlaceholder')"
             />
           </div>
 
           <!-- Custom Provider URLs -->
           <template v-if="editingProvider === 'custom'">
             <div class="space-y-2">
-              <Label for="auth_url">Authorization URL</Label>
+              <Label for="auth_url">{{ $t('sso.authUrl') }}</Label>
               <Input
                 id="auth_url"
                 v-model="editForm.auth_url"
-                placeholder="https://provider.com/oauth/authorize"
+                :placeholder="$t('sso.authUrlPlaceholder')"
               />
             </div>
             <div class="space-y-2">
-              <Label for="token_url">Token URL</Label>
+              <Label for="token_url">{{ $t('sso.tokenUrl') }}</Label>
               <Input
                 id="token_url"
                 v-model="editForm.token_url"
-                placeholder="https://provider.com/oauth/token"
+                :placeholder="$t('sso.tokenUrlPlaceholder')"
               />
             </div>
             <div class="space-y-2">
-              <Label for="user_info_url">User Info URL</Label>
+              <Label for="user_info_url">{{ $t('sso.userInfoUrl') }}</Label>
               <Input
                 id="user_info_url"
                 v-model="editForm.user_info_url"
-                placeholder="https://provider.com/userinfo"
+                :placeholder="$t('sso.userInfoUrlPlaceholder')"
               />
             </div>
           </template>
@@ -401,8 +403,8 @@ onMounted(() => {
             <!-- Enable Toggle -->
             <div class="flex items-center justify-between">
               <div>
-                <Label>Enable Provider</Label>
-                <p class="text-xs text-muted-foreground">Allow users to sign in with this provider</p>
+                <Label>{{ $t('sso.enableProvider') }}</Label>
+                <p class="text-xs text-muted-foreground">{{ $t('sso.enableProviderDesc') }}</p>
               </div>
               <Switch v-model:checked="editForm.is_enabled" />
             </div>
@@ -410,37 +412,37 @@ onMounted(() => {
             <!-- Auto-create Toggle -->
             <div class="flex items-center justify-between">
               <div>
-                <Label>Auto-create Users</Label>
-                <p class="text-xs text-muted-foreground">Automatically create accounts for new SSO users</p>
+                <Label>{{ $t('sso.autoCreateUsersLabel') }}</Label>
+                <p class="text-xs text-muted-foreground">{{ $t('sso.autoCreateUsersDesc') }}</p>
               </div>
               <Switch v-model:checked="editForm.allow_auto_create" />
             </div>
 
             <!-- Default Role -->
             <div v-if="editForm.allow_auto_create" class="space-y-2">
-              <Label>Default Role for New Users</Label>
+              <Label>{{ $t('sso.defaultRole') }}</Label>
               <Select v-model="editForm.default_role">
                 <SelectTrigger>
-                  <SelectValue placeholder="Select role" />
+                  <SelectValue :placeholder="$t('sso.selectRole')" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="agent">Agent</SelectItem>
-                  <SelectItem value="manager">Manager</SelectItem>
-                  <SelectItem value="admin">Admin</SelectItem>
+                  <SelectItem value="agent">{{ $t('sso.agent') }}</SelectItem>
+                  <SelectItem value="manager">{{ $t('sso.manager') }}</SelectItem>
+                  <SelectItem value="admin">{{ $t('sso.admin') }}</SelectItem>
                 </SelectContent>
               </Select>
             </div>
 
             <!-- Allowed Domains -->
             <div class="space-y-2">
-              <Label for="allowed_domains">Allowed Email Domains (optional)</Label>
+              <Label for="allowed_domains">{{ $t('sso.allowedEmailDomains') }}</Label>
               <Input
                 id="allowed_domains"
                 v-model="editForm.allowed_domains"
-                placeholder="example.com, company.org"
+                :placeholder="$t('sso.allowedDomainsPlaceholder')"
               />
               <p class="text-xs text-muted-foreground">
-                Comma-separated list. Leave empty to allow all domains.
+                {{ $t('sso.allowedDomainsHint') }}
               </p>
             </div>
           </div>
@@ -453,14 +455,14 @@ onMounted(() => {
             size="sm"
             @click="deleteProvider(editingProvider); isEditDialogOpen = false"
           >
-            Remove
+            {{ $t('sso.remove') }}
           </Button>
           <div class="flex-1" />
           <Button variant="outline" size="sm" @click="isEditDialogOpen = false">
-            Cancel
+            {{ $t('common.cancel') }}
           </Button>
           <Button size="sm" @click="saveProvider" :disabled="isSaving">
-            <Loader2 v-if="isSaving" class="h-4 w-4 mr-2 animate-spin" />Save
+            <Loader2 v-if="isSaving" class="h-4 w-4 mr-2 animate-spin" />{{ $t('common.save') }}
           </Button>
         </DialogFooter>
       </DialogContent>
