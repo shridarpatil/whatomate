@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { ref, watch, onMounted, onUnmounted, nextTick, computed, defineAsyncComponent } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
+import { useI18n } from 'vue-i18n'
 import { useContactsStore, type Contact, type Message } from '@/stores/contacts'
 import { useAuthStore } from '@/stores/auth'
 import { useUsersStore } from '@/stores/users'
@@ -114,6 +115,7 @@ function getAvatarGradient(name: string): string {
   return avatarGradients[Math.abs(hash) % avatarGradients.length]
 }
 
+const { t } = useI18n()
 const route = useRoute()
 const router = useRouter()
 const contactsStore = useContactsStore()
@@ -299,7 +301,7 @@ async function executeCustomAction(action: CustomAction) {
         }
       } catch (jsError: any) {
         console.error('JavaScript action error:', jsError)
-        toast.error('JavaScript error: ' + jsError.message)
+        toast.error(t('chat.jsError') + ': ' + jsError.message)
         return
       }
     }
@@ -318,7 +320,7 @@ async function executeCustomAction(action: CustomAction) {
     if (result.clipboard) {
       // Copy to clipboard
       await navigator.clipboard.writeText(result.clipboard)
-      toast.success('Copied to clipboard')
+      toast.success(t('chat.copiedToClipboard'))
     }
 
     if (result.toast) {
@@ -332,9 +334,9 @@ async function executeCustomAction(action: CustomAction) {
       }
     } else if (result.success && !result.redirect_url && !result.clipboard) {
       // Default success message
-      toast.success(result.message || 'Action executed successfully')
+      toast.success(result.message || t('chat.actionExecuted'))
     } else if (!result.success) {
-      toast.error(result.message || 'Action failed')
+      toast.error(result.message || t('chat.actionFailed'))
     }
   } catch (error: any) {
     const message = error.response?.data?.message || 'Failed to execute action'
@@ -531,7 +533,7 @@ async function sendMessage() {
     await nextTick()
     scrollToBottom()
   } catch (error) {
-    toast.error('Failed to send message')
+    toast.error(t('chat.sendMessageFailed'))
   } finally {
     isSending.value = false
   }
@@ -562,9 +564,9 @@ async function retryMessage(message: Message) {
       }
     }
 
-    toast.success('Message sent successfully')
+    toast.success(t('chat.messageSent'))
   } catch (error) {
-    toast.error('Failed to retry message')
+    toast.error(t('chat.sendMessageFailed'))
   } finally {
     retryingMessageId.value = null
   }
@@ -655,7 +657,7 @@ async function sendReaction(messageId: string, emoji: string) {
     const data = response.data.data || response.data
     contactsStore.updateMessageReactions(messageId, data.reactions)
   } catch (error) {
-    toast.error('Failed to send reaction')
+    toast.error(t('chat.reactionFailed'))
   }
   reactionPickerMessageId.value = null
 }
@@ -694,7 +696,7 @@ async function assignContactToUser(userId: string | null) {
 
   try {
     await contactsService.assign(contactsStore.currentContact.id, userId)
-    toast.success(userId ? 'Contact assigned successfully' : 'Contact unassigned')
+    toast.success(userId ? t('chat.contactAssigned') : t('chat.contactUnassigned'))
     // Update current contact with new assignment
     contactsStore.currentContact = {
       ...contactsStore.currentContact,
@@ -703,7 +705,7 @@ async function assignContactToUser(userId: string | null) {
     // Refresh contacts list
     await contactsStore.fetchContacts()
   } catch (error: any) {
-    const message = error.response?.data?.message || 'Failed to assign contact'
+    const message = error.response?.data?.message || t('chat.assignFailed')
     toast.error(message)
   }
 }
@@ -718,13 +720,13 @@ async function transferToAgent() {
       whatsapp_account: (contactsStore.currentContact as any).whatsapp_account,
       source: 'manual'
     })
-    toast.success('Contact transferred to agent queue', {
-      description: 'Chatbot is now paused for this contact'
+    toast.success(t('chat.transferSuccess'), {
+      description: t('chat.transferSuccessDesc')
     })
     // Refresh transfers store (WebSocket will also update, but this ensures immediate sync)
     await transfersStore.fetchTransfers({ status: 'active' })
   } catch (error: any) {
-    const message = error.response?.data?.message || 'Failed to transfer contact'
+    const message = error.response?.data?.message || t('chat.transferFailed')
     toast.error(message)
   } finally {
     isTransferring.value = false
@@ -738,8 +740,8 @@ async function resumeChatbot() {
   isResuming.value = true
   try {
     await chatbotService.resumeTransfer(activeTransferId.value)
-    toast.success('Chatbot resumed', {
-      description: 'The contact will now receive automated responses'
+    toast.success(t('chat.resumeSuccess'), {
+      description: t('chat.resumeSuccessDesc')
     })
     // Refresh transfers store to update UI
     await transfersStore.fetchTransfers({ status: 'active' })
@@ -757,7 +759,7 @@ async function resumeChatbot() {
       }
     }
   } catch (error: any) {
-    const message = error.response?.data?.message || 'Failed to resume chatbot'
+    const message = error.response?.data?.message || t('chat.resumeFailed')
     toast.error(message)
   } finally {
     isResuming.value = false
@@ -1066,8 +1068,8 @@ function handleFileSelect(event: Event) {
   const allowedTypes = ['image/', 'video/', 'audio/', 'application/pdf', 'application/msword', 'application/vnd.openxmlformats-officedocument']
   const isAllowed = allowedTypes.some(type => file.type.startsWith(type))
   if (!isAllowed) {
-    toast.error('Unsupported file type', {
-      description: 'Please select an image, video, audio, or document file'
+    toast.error(t('chat.unsupportedFileType'), {
+      description: t('chat.unsupportedFileTypeDesc')
     })
     return
   }
@@ -1075,8 +1077,8 @@ function handleFileSelect(event: Event) {
   // Validate file size (16MB limit for WhatsApp)
   const maxSize = 16 * 1024 * 1024
   if (file.size > maxSize) {
-    toast.error('File too large', {
-      description: 'Maximum file size is 16MB'
+    toast.error(t('chat.fileTooLarge'), {
+      description: t('chat.fileTooLargeDesc')
     })
     return
   }
@@ -1129,7 +1131,7 @@ async function sendMediaMessage() {
 
     const token = authStore.token
     if (!token) {
-      toast.error('Authentication required')
+      toast.error(t('errors.unauthorized'))
       return
     }
 
@@ -1160,11 +1162,11 @@ async function sendMediaMessage() {
       }
     }
 
-    toast.success('Media sent successfully')
+    toast.success(t('chat.mediaSent'))
     closeMediaDialog()
   } catch (error: any) {
-    toast.error('Failed to send media', {
-      description: error.message || 'Please try again'
+    toast.error(t('chat.mediaFailed'), {
+      description: error.message || t('chat.mediaFailedDesc')
     })
   } finally {
     isUploadingMedia.value = false
@@ -1183,7 +1185,7 @@ async function sendMediaMessage() {
             <Search class="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-white/40 light:text-gray-400" />
             <Input
               v-model="contactsStore.searchQuery"
-              placeholder="Search contacts..."
+              :placeholder="$t('chat.searchContacts') + '...'"
               class="pl-8 h-8 text-sm bg-white/[0.04] border-white/[0.1] text-white placeholder:text-white/40 light:bg-gray-50 light:border-gray-200 light:text-gray-900 light:placeholder:text-gray-400"
             />
           </div>
@@ -1205,7 +1207,7 @@ async function sendMediaMessage() {
             <PopoverContent align="end" class="w-56 p-2">
               <div class="space-y-2">
                 <div class="flex items-center justify-between px-1">
-                  <span class="text-sm font-medium">Filter by tags</span>
+                  <span class="text-sm font-medium">{{ $t('chat.filterByTags') }}</span>
                   <Button
                     v-if="contactsStore.selectedTags.length > 0"
                     variant="ghost"
@@ -1218,7 +1220,7 @@ async function sendMediaMessage() {
                 </div>
                 <Separator />
                 <div v-if="tagsStore.tags.length === 0" class="py-2 text-center text-sm text-muted-foreground">
-                  No tags available
+                  {{ $t('chat.noTagsAvailable') }}
                 </div>
                 <div v-else class="space-y-1 max-h-48 overflow-y-auto">
                   <button
@@ -1300,7 +1302,7 @@ async function sendMediaMessage() {
 
           <div v-if="contactsStore.sortedContacts.length === 0" class="p-3 text-center text-white/40 light:text-gray-500">
             <User class="h-6 w-6 mx-auto mb-1.5 opacity-50" />
-            <p class="text-sm">No contacts found</p>
+            <p class="text-sm">{{ $t('chat.noContacts') }}</p>
           </div>
         </div>
       </ScrollArea>
@@ -1317,8 +1319,8 @@ async function sendMediaMessage() {
           <div class="h-16 w-16 rounded-2xl bg-gradient-to-br from-emerald-500 to-green-600 flex items-center justify-center mx-auto mb-4 shadow-lg shadow-emerald-500/20">
             <Send class="h-8 w-8 text-white" />
           </div>
-          <h3 class="font-medium text-lg mb-1 text-white light:text-gray-900">Select a conversation</h3>
-          <p class="text-sm text-white/50 light:text-gray-500">Choose a contact to start chatting</p>
+          <h3 class="font-medium text-lg mb-1 text-white light:text-gray-900">{{ $t('chat.selectConversation') }}</h3>
+          <p class="text-sm text-white/50 light:text-gray-500">{{ $t('chat.chooseContact') }}</p>
         </div>
       </div>
 
@@ -1354,7 +1356,7 @@ async function sendMediaMessage() {
                   <UserPlus class="h-4 w-4" />
                 </Button>
               </TooltipTrigger>
-              <TooltipContent>Assign to agent</TooltipContent>
+              <TooltipContent>{{ $t('chat.assignToAgent') }}</TooltipContent>
             </Tooltip>
             <Tooltip v-if="activeTransferId">
               <TooltipTrigger as-child>
@@ -1362,7 +1364,7 @@ async function sendMediaMessage() {
                   <Play class="h-4 w-4" />
                 </Button>
               </TooltipTrigger>
-              <TooltipContent>Resume Chatbot</TooltipContent>
+              <TooltipContent>{{ $t('chat.resumeChatbot') }}</TooltipContent>
             </Tooltip>
             <!-- Custom Action Buttons -->
             <Tooltip v-for="action in customActions" :key="action.id">
@@ -1392,7 +1394,7 @@ async function sendMediaMessage() {
                   <Info class="h-4 w-4" />
                 </Button>
               </TooltipTrigger>
-              <TooltipContent>Contact Info</TooltipContent>
+              <TooltipContent>{{ $t('chat.contactInfo') }}</TooltipContent>
             </Tooltip>
             <DropdownMenu>
               <DropdownMenuTrigger as-child>
@@ -1401,23 +1403,23 @@ async function sendMediaMessage() {
                 </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end">
-                <DropdownMenuLabel>Contact Options</DropdownMenuLabel>
+                <DropdownMenuLabel>{{ $t('chat.contactOptions') }}</DropdownMenuLabel>
                 <DropdownMenuSeparator />
                 <DropdownMenuItem v-if="canAssignContacts" @click="isAssignDialogOpen = true">
                   <UserPlus class="mr-2 h-4 w-4" />
-                  <span>Assign to agent</span>
+                  <span>{{ $t('chat.assignToAgent') }}</span>
                 </DropdownMenuItem>
                 <DropdownMenuItem v-if="!activeTransferId" @click="transferToAgent" :disabled="isTransferring">
                   <UserX class="mr-2 h-4 w-4" />
-                  <span>Transfer to Agent</span>
+                  <span>{{ $t('chat.transferToAgent') }}</span>
                 </DropdownMenuItem>
                 <DropdownMenuItem v-if="activeTransferId" @click="resumeChatbot" :disabled="isResuming">
                   <Play class="mr-2 h-4 w-4" />
-                  <span>Resume Chatbot</span>
+                  <span>{{ $t('chat.resumeChatbot') }}</span>
                 </DropdownMenuItem>
                 <DropdownMenuItem @click="isInfoPanelOpen = !isInfoPanelOpen">
                   <Info class="mr-2 h-4 w-4" />
-                  <span>{{ isInfoPanelOpen ? 'Hide contact details' : 'View contact details' }}</span>
+                  <span>{{ isInfoPanelOpen ? $t('chat.hideContactDetails') : $t('chat.viewContactDetails') }}</span>
                 </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
@@ -1442,7 +1444,7 @@ async function sendMediaMessage() {
               <div v-if="contactsStore.isLoadingOlderMessages" class="flex justify-center py-2">
                 <div class="flex items-center gap-2 text-white/40 light:text-gray-500 text-sm">
                   <div class="h-4 w-4 animate-spin rounded-full border-2 border-current border-t-transparent" />
-                  <span>Loading older messages...</span>
+                  <span>{{ $t('chat.loadingOlderMessages') }}...</span>
                 </div>
               </div>
               <template
@@ -1490,7 +1492,7 @@ async function sendMediaMessage() {
                 <!-- Image message -->
                 <div v-if="message.message_type === 'image' && message.media_url" class="mb-2">
                   <div v-if="isMediaLoading(message)" class="w-[200px] h-[150px] bg-muted rounded-lg animate-pulse flex items-center justify-center">
-                    <span class="text-muted-foreground text-sm">Loading...</span>
+                    <span class="text-muted-foreground text-sm">{{ $t('common.loading') }}...</span>
                   </div>
                   <img
                     v-else-if="getMediaBlobUrl(message)"
@@ -1507,7 +1509,7 @@ async function sendMediaMessage() {
                 <!-- Sticker message -->
                 <div v-else-if="message.message_type === 'sticker' && message.media_url" class="mb-2">
                   <div v-if="isMediaLoading(message)" class="w-[128px] h-[128px] bg-muted rounded-lg animate-pulse flex items-center justify-center">
-                    <span class="text-muted-foreground text-sm">Loading...</span>
+                    <span class="text-muted-foreground text-sm">{{ $t('common.loading') }}...</span>
                   </div>
                   <img
                     v-else-if="getMediaBlobUrl(message)"
@@ -1524,7 +1526,7 @@ async function sendMediaMessage() {
                 <!-- Video message -->
                 <div v-else-if="message.message_type === 'video' && message.media_url" class="mb-2">
                   <div v-if="isMediaLoading(message)" class="w-[200px] h-[150px] bg-muted rounded-lg animate-pulse flex items-center justify-center">
-                    <span class="text-muted-foreground text-sm">Loading...</span>
+                    <span class="text-muted-foreground text-sm">{{ $t('common.loading') }}...</span>
                   </div>
                   <video
                     v-else-if="getMediaBlobUrl(message)"
@@ -1564,7 +1566,7 @@ async function sendMediaMessage() {
                   </a>
                   <div v-else-if="isMediaLoading(message)" class="flex items-center gap-2 px-3 py-2 bg-background/50 rounded-lg">
                     <FileText class="h-5 w-5 text-muted-foreground" />
-                    <span class="text-sm text-muted-foreground">Loading...</span>
+                    <span class="text-sm text-muted-foreground">{{ $t('common.loading') }}...</span>
                   </div>
                   <div v-else class="flex items-center gap-2 px-3 py-2 bg-background/50 rounded-lg">
                     <FileText class="h-5 w-5 text-muted-foreground" />
@@ -1824,7 +1826,7 @@ async function sendMediaMessage() {
                   </Popover>
                 </span>
               </TooltipTrigger>
-              <TooltipContent>Emoji</TooltipContent>
+              <TooltipContent>{{ $t('chat.emoji') }}</TooltipContent>
             </Tooltip>
             <Tooltip>
               <TooltipTrigger as-child>
@@ -1838,7 +1840,7 @@ async function sendMediaMessage() {
                   />
                 </span>
               </TooltipTrigger>
-              <TooltipContent>Canned Responses</TooltipContent>
+              <TooltipContent>{{ $t('chat.cannedResponses') }}</TooltipContent>
             </Tooltip>
             <Tooltip>
               <TooltipTrigger as-child>
@@ -1846,7 +1848,7 @@ async function sendMediaMessage() {
                   <Paperclip class="w-[18px] h-[18px] text-white/40 light:text-gray-500" />
                 </button>
               </TooltipTrigger>
-              <TooltipContent>Attach file</TooltipContent>
+              <TooltipContent>{{ $t('chat.attachFile') }}</TooltipContent>
             </Tooltip>
             <input
               ref="fileInputRef"
@@ -1858,7 +1860,7 @@ async function sendMediaMessage() {
             <textarea
               ref="messageInputRef"
               v-model="messageInput"
-              placeholder="Type a message..."
+              :placeholder="$t('chat.typeMessage') + '...'"
               rows="1"
               class="flex-1 bg-transparent text-[14px] text-white light:text-gray-900 placeholder:text-white/30 light:placeholder:text-gray-400 focus:outline-none resize-none min-h-[36px] max-h-[120px] py-2 overflow-y-auto"
               @keydown.enter.exact.prevent="sendMessage"
@@ -1885,9 +1887,9 @@ async function sendMediaMessage() {
     <Dialog v-model:open="isAssignDialogOpen" @update:open="(open) => !open && (assignSearchQuery = '')">
       <DialogContent class="max-w-sm">
         <DialogHeader>
-          <DialogTitle>Assign Contact</DialogTitle>
+          <DialogTitle>{{ $t('chat.assignContact') }}</DialogTitle>
           <DialogDescription>
-            Select a team member to assign this contact to.
+            {{ $t('chat.assignContactDesc') }}
           </DialogDescription>
         </DialogHeader>
         <div class="py-4 space-y-3">
@@ -1896,7 +1898,7 @@ async function sendMediaMessage() {
             <Search class="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
             <Input
               v-model="assignSearchQuery"
-              placeholder="Search users..."
+              :placeholder="$t('chat.searchUsers') + '...'"
               class="pl-9 h-9"
             />
           </div>
@@ -1907,7 +1909,7 @@ async function sendMediaMessage() {
             @click="assignContactToUser(null); isAssignDialogOpen = false"
           >
             <UserMinus class="mr-2 h-4 w-4" />
-            Unassign
+            {{ $t('chat.unassignContact') }}
           </Button>
           <Separator />
           <ScrollArea class="max-h-[280px]">
@@ -1930,7 +1932,7 @@ async function sendMediaMessage() {
                 </Badge>
               </Button>
               <p v-if="filteredAssignableUsers.length === 0" class="text-sm text-muted-foreground text-center py-4">
-                No users found
+                {{ $t('chat.noUsersFound') }}
               </p>
             </div>
           </ScrollArea>
@@ -1942,7 +1944,7 @@ async function sendMediaMessage() {
     <Dialog v-model:open="isMediaDialogOpen">
       <DialogContent class="max-w-md">
         <DialogHeader>
-          <DialogTitle>Send Media</DialogTitle>
+          <DialogTitle>{{ $t('chat.sendMedia') }}</DialogTitle>
           <DialogDescription>
             {{ selectedFile?.name }}
           </DialogDescription>
@@ -1972,7 +1974,7 @@ async function sendMediaMessage() {
               </div>
               <div>
                 <p class="font-medium text-sm">{{ selectedFile.name }}</p>
-                <p class="text-xs text-muted-foreground">Audio file</p>
+                <p class="text-xs text-muted-foreground">{{ $t('chat.audioFile') }}</p>
               </div>
             </div>
           </div>
@@ -1995,7 +1997,7 @@ async function sendMediaMessage() {
           <div v-if="selectedFile && !selectedFile.type.startsWith('audio/')">
             <Textarea
               v-model="mediaCaption"
-              placeholder="Add a caption..."
+              :placeholder="$t('chat.mediaCaption') + '...'"
               class="min-h-[60px] max-h-[100px] resize-none"
               :rows="2"
             />
@@ -2004,12 +2006,12 @@ async function sendMediaMessage() {
           <!-- Actions -->
           <div class="flex justify-end gap-2">
             <Button variant="outline" @click="closeMediaDialog" :disabled="isUploadingMedia">
-              Cancel
+              {{ $t('common.cancel') }}
             </Button>
             <Button @click="sendMediaMessage" :disabled="isUploadingMedia">
               <Send v-if="!isUploadingMedia" class="mr-2 h-4 w-4" />
-              <span v-if="isUploadingMedia">Sending...</span>
-              <span v-else>Send</span>
+              <span v-if="isUploadingMedia">{{ $t('chat.sending') }}...</span>
+              <span v-else>{{ $t('chat.send') }}</span>
             </Button>
           </div>
         </div>

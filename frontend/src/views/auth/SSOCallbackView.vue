@@ -1,12 +1,14 @@
 <script setup lang="ts">
 import { onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
+import { useI18n } from 'vue-i18n'
 import { useAuthStore } from '@/stores/auth'
 import { api } from '@/services/api'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Loader2, AlertCircle, CheckCircle } from 'lucide-vue-next'
 import { toast } from 'vue-sonner'
 
+const { t } = useI18n()
 const router = useRouter()
 const authStore = useAuthStore()
 
@@ -23,7 +25,7 @@ onMounted(async () => {
 
   if (!accessToken || !refreshToken) {
     status.value = 'error'
-    errorMessage.value = 'Invalid SSO callback. Missing tokens.'
+    errorMessage.value = t('auth.ssoMissingTokens')
     return
   }
 
@@ -44,7 +46,7 @@ onMounted(async () => {
     })
 
     status.value = 'success'
-    toast.success('SSO login successful')
+    toast.success(t('auth.ssoLoginSuccess'))
 
     // Clear hash from URL
     window.history.replaceState(null, '', window.location.pathname)
@@ -59,7 +61,7 @@ onMounted(async () => {
     }, 1000)
   } catch (error: any) {
     status.value = 'error'
-    errorMessage.value = error.response?.data?.message || 'Failed to complete SSO login'
+    errorMessage.value = error.response?.data?.message || t('auth.ssoLoginFailed')
     // Clear any stored tokens
     localStorage.removeItem('auth_token')
     localStorage.removeItem('refresh_token')
@@ -83,19 +85,19 @@ onMounted(async () => {
           </div>
         </div>
         <CardTitle class="text-xl">
-          <template v-if="status === 'loading'">Completing SSO Login...</template>
-          <template v-else-if="status === 'success'">Login Successful!</template>
-          <template v-else>SSO Login Failed</template>
+          <template v-if="status === 'loading'">{{ $t('auth.ssoLoading') }}</template>
+          <template v-else-if="status === 'success'">{{ $t('auth.ssoSuccess') }}</template>
+          <template v-else>{{ $t('auth.ssoFailed') }}</template>
         </CardTitle>
         <CardDescription>
-          <template v-if="status === 'loading'">Please wait while we complete your authentication.</template>
-          <template v-else-if="status === 'success'">Redirecting you to the dashboard...</template>
+          <template v-if="status === 'loading'">{{ $t('auth.ssoLoadingDesc') }}</template>
+          <template v-else-if="status === 'success'">{{ $t('auth.ssoSuccessDesc') }}</template>
           <template v-else>{{ errorMessage }}</template>
         </CardDescription>
       </CardHeader>
       <CardContent v-if="status === 'error'" class="text-center">
         <RouterLink to="/login" class="text-primary hover:underline">
-          Return to login
+          {{ $t('auth.returnToLogin') }}
         </RouterLink>
       </CardContent>
     </Card>

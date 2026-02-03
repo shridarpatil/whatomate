@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { ref, onMounted, watch } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -37,6 +38,8 @@ import {
   Store,
   Bell
 } from 'lucide-vue-next'
+
+const { t } = useI18n()
 
 interface WhatsAppAccount {
   id: string
@@ -125,7 +128,7 @@ async function fetchAccounts() {
     accounts.value = response.data.data?.accounts || []
   } catch (error: any) {
     console.error('Failed to fetch accounts:', error)
-    toast.error('Failed to load accounts')
+    toast.error(t('accounts.loadAccountsFailed'))
     accounts.value = []
   } finally {
     isLoading.value = false
@@ -170,12 +173,12 @@ function openEditDialog(account: WhatsAppAccount) {
 
 async function saveAccount() {
   if (!formData.value.name.trim() || !formData.value.phone_id.trim() || !formData.value.business_id.trim()) {
-    toast.error('Please fill in all required fields')
+    toast.error(t('accounts.fillRequired'))
     return
   }
 
   if (!editingAccount.value && !formData.value.access_token.trim()) {
-    toast.error('Access token is required for new accounts')
+    toast.error(t('accounts.accessTokenRequired'))
     return
   }
 
@@ -192,16 +195,16 @@ async function saveAccount() {
 
     if (editingAccount.value) {
       await api.put(`/accounts/${editingAccount.value.id}`, payload)
-      toast.success('Account updated successfully')
+      toast.success(t('accounts.accountUpdated'))
     } else {
       await api.post('/accounts', payload)
-      toast.success('Account created successfully')
+      toast.success(t('accounts.accountCreated'))
     }
 
     isDialogOpen.value = false
     await fetchAccounts()
   } catch (error: any) {
-    toast.error(getErrorMessage(error, 'Failed to save account'))
+    toast.error(getErrorMessage(error, t('accounts.saveAccountFailed')))
   } finally {
     isSubmitting.value = false
   }
@@ -217,12 +220,12 @@ async function confirmDelete() {
 
   try {
     await api.delete(`/accounts/${accountToDelete.value.id}`)
-    toast.success('Account deleted')
+    toast.success(t('accounts.accountDeleted'))
     deleteDialogOpen.value = false
     accountToDelete.value = null
     await fetchAccounts()
   } catch (error: any) {
-    toast.error(getErrorMessage(error, 'Failed to delete account'))
+    toast.error(getErrorMessage(error, t('accounts.deleteAccountFailed')))
   }
 }
 
@@ -233,12 +236,12 @@ async function testConnection(account: WhatsAppAccount) {
     testResults.value[account.id] = response.data.data
 
     if (response.data.data.success) {
-      toast.success('Connection successful!')
+      toast.success(t('accounts.connectionSuccess'))
     } else {
-      toast.error('Connection failed: ' + (response.data.data.error || 'Unknown error'))
+      toast.error(t('accounts.connectionFailed') + ': ' + (response.data.data.error || 'Unknown error'))
     }
   } catch (error: any) {
-    const message = getErrorMessage(error, 'Connection test failed')
+    const message = getErrorMessage(error, t('accounts.connectionTestFailed'))
     testResults.value[account.id] = { success: false, error: message }
     toast.error(message)
   } finally {
@@ -251,12 +254,12 @@ async function subscribeApp(account: WhatsAppAccount) {
   try {
     const response = await api.post(`/accounts/${account.id}/subscribe`)
     if (response.data.data.success) {
-      toast.success('Subscribed to webhooks successfully! You should now receive incoming messages.')
+      toast.success(t('accounts.subscribeSuccess'))
     } else {
-      toast.error('Subscription failed: ' + (response.data.data.error || 'Unknown error'))
+      toast.error(t('accounts.subscribeFailed') + ': ' + (response.data.data.error || 'Unknown error'))
     }
   } catch (error: any) {
-    toast.error(getErrorMessage(error, 'Failed to subscribe to webhooks'))
+    toast.error(getErrorMessage(error, t('accounts.subscribeError')))
   } finally {
     subscribingAccountId.value = null
   }
@@ -288,16 +291,16 @@ const webhookUrl = window.location.origin + basePath + '/api/webhook'
 <template>
   <div class="flex flex-col h-full bg-[#0a0a0b] light:bg-gray-50">
     <PageHeader
-      title="WhatsApp Accounts"
+      :title="$t('accounts.title')"
       :icon="Phone"
       icon-gradient="bg-gradient-to-br from-emerald-500 to-green-600 shadow-emerald-500/20"
       back-link="/settings"
-      :breadcrumbs="[{ label: 'Settings', href: '/settings' }, { label: 'Accounts' }]"
+      :breadcrumbs="[{ label: $t('settings.title'), href: '/settings' }, { label: $t('settings.accounts') }]"
     >
       <template #actions>
         <Button variant="outline" size="sm" @click="openCreateDialog">
           <Plus class="h-4 w-4 mr-2" />
-          Add Account
+          {{ $t('accounts.addAccount') }}
         </Button>
       </template>
     </PageHeader>
@@ -338,9 +341,9 @@ const webhookUrl = window.location.origin + basePath + '/api/webhook'
             <div class="flex items-start gap-3">
               <AlertCircle class="h-5 w-5 text-blue-400 light:text-blue-600 mt-0.5" />
               <div class="flex-1">
-                <h4 class="font-medium text-blue-100 light:text-blue-900">Webhook Configuration</h4>
+                <h4 class="font-medium text-blue-100 light:text-blue-900">{{ $t('accounts.webhookConfig') }}</h4>
                 <p class="text-sm text-blue-300 light:text-blue-700 mt-1">
-                  Configure this URL in your Meta Developer Console as the webhook callback URL:
+                  {{ $t('accounts.webhookConfigDesc') }}
                 </p>
                 <div class="flex items-center gap-2 mt-2">
                   <code class="px-2 py-1 bg-blue-900 light:bg-blue-100 rounded text-sm font-mono">
@@ -372,7 +375,7 @@ const webhookUrl = window.location.origin + basePath + '/api/webhook'
                     <!-- Test Number Badge -->
                     <Badge v-if="testResults[account.id]?.is_test_number" variant="outline" class="border-amber-600 text-amber-600 light:border-amber-500 light:text-amber-700">
                       <TestTube2 class="h-3 w-3 mr-1" />
-                      Test Number
+                      {{ $t('accounts.testNumber') }}
                     </Badge>
                   </div>
 
@@ -380,7 +383,7 @@ const webhookUrl = window.location.origin + basePath + '/api/webhook'
                   <div v-if="testResults[account.id]" class="mt-2 space-y-2">
                     <div v-if="testResults[account.id].success" class="flex items-center gap-2 text-green-400 light:text-green-600">
                       <CheckCircle2 class="h-4 w-4" />
-                      <span class="text-sm font-medium">Connected</span>
+                      <span class="text-sm font-medium">{{ $t('accounts.connected') }}</span>
                       <span v-if="testResults[account.id].display_phone_number" class="text-sm text-muted-foreground">
                         - {{ testResults[account.id].display_phone_number }}
                       </span>
@@ -418,21 +421,21 @@ const webhookUrl = window.location.origin + basePath + '/api/webhook'
                       <span class="text-white/70 light:text-gray-600">{{ account.api_version }}</span>
                     </div>
                     <div class="flex items-center gap-2">
-                      <span class="text-white/50 light:text-gray-500">Access Token:</span>
+                      <span class="text-white/50 light:text-gray-500">{{ $t('accounts.accessToken') }}:</span>
                       <Badge
                           variant="outline"
                           :class="account.has_access_token ? 'border-green-600 text-green-600' : 'border-destructive text-destructive'"
                       >
-                        {{ account.has_access_token ? 'Configured' : 'Missing' }}
+                        {{ account.has_access_token ? $t('accounts.configured') : $t('accounts.missing') }}
                       </Badge>
                     </div>
                     <div class="flex items-center gap-2">
-                      <span class="text-white/50 light:text-gray-500">App Secret:</span>
+                      <span class="text-white/50 light:text-gray-500">{{ $t('accounts.appSecret') }}:</span>
                       <Badge
                           variant="outline"
                           :class="account.has_app_secret ? 'border-green-600 text-green-600' : 'border-yellow-600 text-yellow-600'"
                       >
-                        {{ account.has_app_secret ? 'Configured' : 'Not Set' }}
+                        {{ account.has_app_secret ? $t('accounts.configured') : $t('accounts.notSet') }}
                       </Badge>
                     </div>
                   </div>
@@ -441,21 +444,21 @@ const webhookUrl = window.location.origin + basePath + '/api/webhook'
                   <div class="mt-3 flex items-center gap-3 flex-wrap">
                     <Badge v-if="account.is_default_incoming" variant="outline">
                       <Check class="h-3 w-3 mr-1" />
-                      Default Incoming
+                      {{ $t('accounts.defaultIncoming') }}
                     </Badge>
                     <Badge v-if="account.is_default_outgoing" variant="outline">
                       <Check class="h-3 w-3 mr-1" />
-                      Default Outgoing
+                      {{ $t('accounts.defaultOutgoing') }}
                     </Badge>
                     <Badge v-if="account.auto_read_receipt" variant="outline">
                       <Check class="h-3 w-3 mr-1" />
-                      Auto Read Receipt
+                      {{ $t('accounts.autoReadReceipt') }}
                     </Badge>
                   </div>
 
                   <!-- Webhook Verify Token -->
                   <div class="mt-3 flex items-center gap-2 text-sm">
-                    <span class="text-white/50 light:text-gray-500">Verify Token:</span>
+                    <span class="text-white/50 light:text-gray-500">{{ $t('accounts.verifyToken') }}:</span>
                     <code class="text-xs bg-white/[0.08] light:bg-gray-100 px-2 py-0.5 rounded font-mono truncate max-w-[200px] text-white/70 light:text-gray-600">
                       {{ account.webhook_verify_token }}
                     </code>
@@ -476,7 +479,7 @@ const webhookUrl = window.location.origin + basePath + '/api/webhook'
                 >
                   <Loader2 v-if="testingAccountId === account.id" class="h-4 w-4 animate-spin" />
                   <RefreshCw v-else class="h-4 w-4" />
-                  <span class="ml-1">Test</span>
+                  <span class="ml-1">{{ $t('accounts.test') }}</span>
                 </Button>
                 <Tooltip>
                   <TooltipTrigger as-child>
@@ -488,10 +491,10 @@ const webhookUrl = window.location.origin + basePath + '/api/webhook'
                     >
                       <Loader2 v-if="subscribingAccountId === account.id" class="h-4 w-4 animate-spin" />
                       <Bell v-else class="h-4 w-4" />
-                      <span class="ml-1">Subscribe</span>
+                      <span class="ml-1">{{ $t('accounts.subscribe') }}</span>
                     </Button>
                   </TooltipTrigger>
-                  <TooltipContent>Subscribe app to receive webhooks from Meta</TooltipContent>
+                  <TooltipContent>{{ $t('accounts.subscribeTooltip') }}</TooltipContent>
                 </Tooltip>
                 <Tooltip>
                   <TooltipTrigger as-child>
@@ -499,7 +502,7 @@ const webhookUrl = window.location.origin + basePath + '/api/webhook'
                       <Pencil class="h-4 w-4" />
                     </Button>
                   </TooltipTrigger>
-                  <TooltipContent>Edit account</TooltipContent>
+                  <TooltipContent>{{ $t('common.edit') }}</TooltipContent>
                 </Tooltip>
                 <Tooltip>
                   <TooltipTrigger as-child>
@@ -507,7 +510,7 @@ const webhookUrl = window.location.origin + basePath + '/api/webhook'
                       <Store class="h-4 w-4 text-emerald-500" />
                     </Button>
                   </TooltipTrigger>
-                  <TooltipContent>Business Profile</TooltipContent>
+                  <TooltipContent>{{ $t('accounts.businessProfile') }}</TooltipContent>
                 </Tooltip>
                 <Tooltip>
                   <TooltipTrigger as-child>
@@ -515,7 +518,7 @@ const webhookUrl = window.location.origin + basePath + '/api/webhook'
                       <Trash2 class="h-4 w-4 text-destructive" />
                     </Button>
                   </TooltipTrigger>
-                  <TooltipContent>Delete account</TooltipContent>
+                  <TooltipContent>{{ $t('common.delete') }}</TooltipContent>
                 </Tooltip>
               </div>
             </div>
@@ -528,11 +531,11 @@ const webhookUrl = window.location.origin + basePath + '/api/webhook'
             <div class="h-16 w-16 rounded-xl bg-gradient-to-br from-emerald-500 to-green-600 flex items-center justify-center mx-auto mb-4 shadow-lg shadow-emerald-500/20">
               <Phone class="h-8 w-8 text-white" />
             </div>
-            <p class="text-lg font-medium text-white light:text-gray-900">No WhatsApp accounts connected</p>
-            <p class="text-sm mb-4">Connect your WhatsApp Business account to start sending and receiving messages.</p>
+            <p class="text-lg font-medium text-white light:text-gray-900">{{ $t('accounts.noAccounts') }}</p>
+            <p class="text-sm mb-4">{{ $t('accounts.noAccountsDesc') }}</p>
             <Button variant="outline" size="sm" @click="openCreateDialog">
               <Plus class="h-4 w-4 mr-2" />
-              Add Account
+              {{ $t('accounts.addAccount') }}
             </Button>
           </div>
         </div>
@@ -542,23 +545,23 @@ const webhookUrl = window.location.origin + basePath + '/api/webhook'
           <CardContent class="p-6">
             <h3 class="font-semibold flex items-center gap-2 mb-4">
               <Settings2 class="h-5 w-5" />
-              Setup Guide
+              {{ $t('accounts.setupGuide') }}
             </h3>
             <ol class="list-decimal list-inside space-y-3 text-sm text-muted-foreground">
               <li>
-                Go to <a href="https://developers.facebook.com" target="_blank" class="text-primary hover:underline inline-flex items-center gap-1">
-                Meta Developer Console <ExternalLink class="h-3 w-3" />
-              </a> and create or select your app
+                {{ $t('accounts.setupStep1') }} <a href="https://developers.facebook.com" target="_blank" class="text-primary hover:underline inline-flex items-center gap-1">
+                {{ $t('accounts.metaDevConsole') }} <ExternalLink class="h-3 w-3" />
+              </a> {{ $t('accounts.setupStep1End') }}
               </li>
-              <li>Add WhatsApp product to your app and complete the setup</li>
-              <li>In WhatsApp &gt; API Setup, copy your <strong>Phone Number ID</strong> and <strong>WhatsApp Business Account ID</strong></li>
+              <li>{{ $t('accounts.setupStep2') }}</li>
+              <li>{{ $t('accounts.setupStep3') }} <strong>{{ $t('accounts.setupStep3Bold1') }}</strong> {{ $t('accounts.setupStep3And') }} <strong>{{ $t('accounts.setupStep3Bold2') }}</strong></li>
               <li>
-                Create a permanent access token in <a href="https://business.facebook.com/settings/system-users" target="_blank" class="text-primary hover:underline inline-flex items-center gap-1">
-                Business Settings &gt; System Users <ExternalLink class="h-3 w-3" />
+                {{ $t('accounts.setupStep4') }} <a href="https://business.facebook.com/settings/system-users" target="_blank" class="text-primary hover:underline inline-flex items-center gap-1">
+                {{ $t('accounts.businessSettings') }} <ExternalLink class="h-3 w-3" />
               </a>
               </li>
-              <li>Configure the webhook URL and verify token in your Meta app settings</li>
-              <li>Subscribe to messages webhook field</li>
+              <li>{{ $t('accounts.setupStep5') }}</li>
+              <li>{{ $t('accounts.setupStep6') }}</li>
             </ol>
           </CardContent>
         </Card>
@@ -571,96 +574,96 @@ const webhookUrl = window.location.origin + basePath + '/api/webhook'
       v-model:open="isDialogOpen"
       :is-editing="!!editingAccount"
       :is-submitting="isSubmitting"
-      edit-title="Edit WhatsApp Account"
-      create-title="Add WhatsApp Account"
-      description="Connect your WhatsApp Business account using the Meta Cloud API."
-      edit-submit-label="Update Account"
-      create-submit-label="Create Account"
+      :edit-title="$t('accounts.editAccount')"
+      :create-title="$t('accounts.createAccount')"
+      :description="$t('accounts.connectDescription')"
+      :edit-submit-label="$t('accounts.updateAccount')"
+      :create-submit-label="$t('accounts.createAccountBtn')"
       max-width="max-w-lg"
       @submit="saveAccount"
     >
       <div class="space-y-4">
         <div class="space-y-2">
-          <Label for="name">Account Name <span class="text-destructive">*</span></Label>
+          <Label for="name">{{ $t('accounts.accountName') }} <span class="text-destructive">*</span></Label>
           <Input
               id="name"
               v-model="formData.name"
-              placeholder="e.g., Main Business Line"
+              :placeholder="$t('accounts.accountNamePlaceholder')"
           />
         </div>
 
         <Separator />
 
         <div class="space-y-2">
-          <Label for="app_id">Meta App ID</Label>
+          <Label for="app_id">{{ $t('accounts.metaAppId') }}</Label>
           <Input
               id="app_id"
               v-model="formData.app_id"
-              placeholder="e.g., 123456789012345"
+              :placeholder="$t('accounts.metaAppIdPlaceholder')"
           />
           <p class="text-xs text-muted-foreground">
-            Found in Meta Developer Console &gt; App Dashboard
+            {{ $t('accounts.metaAppIdHint') }}
           </p>
         </div>
 
         <div class="space-y-2">
-          <Label for="phone_id">Phone Number ID <span class="text-destructive">*</span></Label>
+          <Label for="phone_id">{{ $t('accounts.phoneNumberId') }} <span class="text-destructive">*</span></Label>
           <Input
               id="phone_id"
               v-model="formData.phone_id"
-              placeholder="e.g., 123456789012345"
+              :placeholder="$t('accounts.phoneNumberIdPlaceholder')"
           />
           <p class="text-xs text-muted-foreground">
-            Found in Meta Developer Console &gt; WhatsApp &gt; API Setup
+            {{ $t('accounts.phoneNumberIdHint') }}
           </p>
         </div>
 
         <div class="space-y-2">
-          <Label for="business_id">WhatsApp Business Account ID <span class="text-destructive">*</span></Label>
+          <Label for="business_id">{{ $t('accounts.businessAccountId') }} <span class="text-destructive">*</span></Label>
           <Input
               id="business_id"
               v-model="formData.business_id"
-              placeholder="e.g., 987654321098765"
+              :placeholder="$t('accounts.businessAccountIdPlaceholder')"
           />
         </div>
 
         <div class="space-y-2">
           <Label for="access_token">
-            Access Token
+            {{ $t('accounts.accessToken') }}
             <span v-if="!editingAccount" class="text-destructive">*</span>
-            <span v-else class="text-muted-foreground">(leave blank to keep existing)</span>
+            <span v-else class="text-muted-foreground">{{ $t('accounts.accessTokenKeepExisting') }}</span>
           </Label>
           <Input
               id="access_token"
               v-model="formData.access_token"
               type="password"
-              placeholder="Permanent access token from System User"
+              :placeholder="$t('accounts.accessTokenPlaceholder')"
           />
           <p class="text-xs text-muted-foreground">
-            Generate in Business Settings &gt; System Users &gt; Generate Token
+            {{ $t('accounts.accessTokenHint') }}
           </p>
         </div>
 
         <div class="space-y-2">
           <Label for="app_secret">
-            App Secret
-            <span v-if="editingAccount" class="text-muted-foreground">(leave blank to keep existing)</span>
+            {{ $t('accounts.appSecret') }}
+            <span v-if="editingAccount" class="text-muted-foreground">{{ $t('accounts.accessTokenKeepExisting') }}</span>
           </Label>
           <Input
               id="app_secret"
               v-model="formData.app_secret"
               type="password"
-              placeholder="Meta App Secret for webhook verification"
+              :placeholder="$t('accounts.appSecretPlaceholder')"
           />
           <p class="text-xs text-muted-foreground">
-            Found in Meta Developer Console &gt; App Settings &gt; Basic &gt; App Secret. Used to verify webhook signatures.
+            {{ $t('accounts.appSecretHint') }}
           </p>
         </div>
 
         <Separator />
 
         <div class="space-y-2">
-          <Label for="api_version">API Version</Label>
+          <Label for="api_version">{{ $t('accounts.apiVersion') }}</Label>
           <Input
               id="api_version"
               v-model="formData.api_version"
@@ -669,24 +672,24 @@ const webhookUrl = window.location.origin + basePath + '/api/webhook'
         </div>
 
         <div class="space-y-2">
-          <Label for="webhook_verify_token">Webhook Verify Token</Label>
+          <Label for="webhook_verify_token">{{ $t('accounts.webhookVerifyToken') }}</Label>
           <Input
               id="webhook_verify_token"
               v-model="formData.webhook_verify_token"
-              placeholder="Auto-generated if empty"
+              :placeholder="$t('accounts.webhookVerifyTokenPlaceholder')"
           />
           <p class="text-xs text-muted-foreground">
-            Used to verify webhook requests from Meta
+            {{ $t('accounts.webhookVerifyTokenHint') }}
           </p>
         </div>
 
         <Separator />
 
         <div class="space-y-4">
-          <Label>Options</Label>
+          <Label>{{ $t('accounts.options') }}</Label>
           <div class="flex items-center justify-between">
             <Label for="is_default_incoming" class="font-normal cursor-pointer">
-              Default for incoming messages
+              {{ $t('accounts.defaultIncoming') }}
             </Label>
             <Switch
                 id="is_default_incoming"
@@ -696,7 +699,7 @@ const webhookUrl = window.location.origin + basePath + '/api/webhook'
           </div>
           <div class="flex items-center justify-between">
             <Label for="is_default_outgoing" class="font-normal cursor-pointer">
-              Default for outgoing messages
+              {{ $t('accounts.defaultOutgoing') }}
             </Label>
             <Switch
                 id="is_default_outgoing"
@@ -706,7 +709,7 @@ const webhookUrl = window.location.origin + basePath + '/api/webhook'
           </div>
           <div class="flex items-center justify-between">
             <Label for="auto_read_receipt" class="font-normal cursor-pointer">
-              Automatically send read receipts
+              {{ $t('accounts.autoReadReceipt') }}
             </Label>
             <Switch
                 id="auto_read_receipt"
@@ -721,7 +724,7 @@ const webhookUrl = window.location.origin + basePath + '/api/webhook'
     <!-- Delete Confirmation Dialog -->
     <DeleteConfirmDialog
       v-model:open="deleteDialogOpen"
-      title="Delete Account"
+      :title="$t('accounts.deleteAccount')"
       :item-name="accountToDelete?.name"
       @confirm="confirmDelete"
     />
