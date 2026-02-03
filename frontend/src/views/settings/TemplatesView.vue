@@ -750,7 +750,7 @@ function formatPreview(text: string, samples: any[]): string {
 
           <div v-if="formData.header_type === 'TEXT'" class="space-y-2">
             <Label>{{ $t('templates.headerText') }}</Label>
-            <Input v-model="formData.header_content" :placeholder="$t('templates.headerText') + '...'" />
+            <Input v-model="formData.header_content" :placeholder="$t('templates.headerTextPlaceholder') + '...'" />
           </div>
 
           <!-- Header Media Upload for IMAGE/VIDEO/DOCUMENT -->
@@ -862,7 +862,7 @@ function formatPreview(text: string, samples: any[]): string {
                 </div>
                 <div class="space-y-1">
                   <Label class="text-xs">{{ $t('templates.buttonText') }}</Label>
-                  <Input v-model="button.text" :placeholder="$t('templates.buttonText')" class="h-9" />
+                  <Input v-model="button.text" :placeholder="$t('templates.buttonTextPlaceholder')" class="h-9" />
                 </div>
               </div>
 
