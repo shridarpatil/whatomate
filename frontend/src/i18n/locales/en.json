@@ -85,7 +85,7 @@
     "sessionExpired": "Your session has expired. Please login again.",
     "welcomeTitle": "Welcome to Whatomate",
     "welcomeSubtitle": "Enter your credentials to access your account",
-    "emailPlaceholder": "name@example.com",
+    "emailPlaceholder": "name{'@'}example.com",
     "enterEmailPassword": "Please enter email and password",
     "orContinueWith": "or continue with",
     "noAccount": "Don't have an account?"
