@@ -330,13 +330,13 @@ const unassignedVariables = computed(() => {
   return availableVariables.value.filter(v => !assignedVariables.value.has(v.key))
 })
 
-const messageTypes = [
-  { value: 'text', label: 'Text', icon: MessageSquare },
-  { value: 'buttons', label: 'Buttons', icon: MousePointerClick },
-  { value: 'api_fetch', label: 'API', icon: Globe },
-  { value: 'whatsapp_flow', label: 'WA Flow', icon: MessageCircle },
-  { value: 'transfer', label: 'Transfer', icon: Users }
-]
+const messageTypes = computed(() => [
+  { value: 'text', label: t('flowBuilder.messageTypeText'), icon: MessageSquare },
+  { value: 'buttons', label: t('flowBuilder.messageTypeButtons'), icon: MousePointerClick },
+  { value: 'api_fetch', label: t('flowBuilder.messageTypeApi'), icon: Globe },
+  { value: 'whatsapp_flow', label: t('flowBuilder.messageTypeWhatsappFlow'), icon: MessageCircle },
+  { value: 'transfer', label: t('flowBuilder.messageTypeTransfer'), icon: Users }
+])
 
 const inputTypes = computed(() => [
   { value: 'none', label: t('flowBuilder.noInputRequired') },
@@ -351,13 +351,13 @@ const inputTypes = computed(() => [
 const httpMethods = ['GET', 'POST', 'PUT', 'PATCH']
 
 function getStepIcon(messageType: string) {
-  const type = messageTypes.find(t => t.value === messageType)
+  const type = messageTypes.value.find(t => t.value === messageType)
   return type?.icon || MessageSquare
 }
 
 function getStepLabel(messageType: string) {
-  const type = messageTypes.find(t => t.value === messageType)
-  return type?.label || 'Text'
+  const type = messageTypes.value.find(t => t.value === messageType)
+  return type?.label || t('flowBuilder.messageTypeText')
 }
 
 // Watch for changes to mark unsaved
@@ -688,7 +688,7 @@ function addPanelSection() {
   const newId = `section_${Date.now()}`
   formData.value.panel_config.sections.push({
     id: newId,
-    label: 'New Section',
+    label: t('flowBuilder.newSection'),
     columns: 1,
     collapsible: true,
     default_collapsed: false,
@@ -1116,13 +1116,13 @@ function confirmCancel() {
                       <div v-for="(_value, key) in formData.completion_config.headers" :key="key" class="flex gap-1">
                         <Input
                           :model-value="key"
-                          placeholder="Key"
+                          :placeholder="$t('flowBuilder.keyPlaceholder')"
                           class="h-6 text-[10px] flex-1"
                           @update:model-value="updateCompletionHeaderKey(key as string, $event)"
                         />
                         <Input
                           v-model="formData.completion_config.headers[key as string]"
-                          placeholder="Value"
+                          :placeholder="$t('flowBuilder.valuePlaceholder')"
                           class="h-6 text-[10px] flex-1"
                         />
                         <Button variant="ghost" size="icon" class="h-6 w-6" @click="removeCompletionHeader(key as string)">
@@ -1135,7 +1135,7 @@ function confirmCancel() {
                       <Label class="text-[10px]">{{ $t('flowBuilder.bodyOptional') }}</Label>
                       <Textarea
                         v-model="formData.completion_config.body"
-                        placeholder='{"name": "{{name}}"}'
+                        :placeholder="$t('flowBuilder.jsonBodyExample')"
                         :rows="2"
                         class="text-[10px] font-mono"
                       />
@@ -1199,7 +1199,7 @@ function confirmCancel() {
                     <div class="flex items-center gap-2">
                       <Input
                         v-model="section.label"
-                        placeholder="Section Label"
+                        :placeholder="$t('flowBuilder.sectionLabelPlaceholder')"
                         class="h-7 text-xs flex-1"
                       />
                       <Button variant="ghost" size="icon" class="h-7 w-7" @click="removePanelSection(sectionIdx)">
@@ -1244,7 +1244,7 @@ function confirmCancel() {
                         <span class="text-[10px] text-muted-foreground">{{ $t('flowBuilder.fields') }}:</span>
                         <Select @update:model-value="addFieldToSection(sectionIdx, $event)">
                           <SelectTrigger class="h-6 w-24 text-[10px]">
-                            <SelectValue placeholder="+ Add" />
+                            <SelectValue :placeholder="$t('flowBuilder.addFieldPlaceholder')" />
                           </SelectTrigger>
                           <SelectContent>
                             <SelectItem
@@ -1380,7 +1380,7 @@ function confirmCancel() {
                           </Button>
                         </div>
                         <div v-if="btn.type === 'url'" class="flex gap-2">
-                          <Input v-model="btn.url" placeholder="https://example.com" class="h-7 text-xs flex-1" />
+                          <Input v-model="btn.url" :placeholder="$t('flowBuilder.exampleUrlPlaceholder')" class="h-7 text-xs flex-1" />
                         </div>
                         <div v-else class="space-y-2">
                           <Input v-model="btn.id" :placeholder="$t('flowBuilder.buttonIdPlaceholder')" class="h-7 text-xs" />
@@ -1446,13 +1446,13 @@ function confirmCancel() {
                       <div v-for="(_value, key) in selectedStep.api_config.headers" :key="key" class="flex gap-1">
                         <Input
                           :model-value="key"
-                          placeholder="Key"
+                          :placeholder="$t('flowBuilder.keyPlaceholder')"
                           class="h-7 text-xs flex-1"
                           @update:model-value="updateHeaderKey(key as string, $event)"
                         />
                         <Input
                           v-model="selectedStep.api_config.headers[key as string]"
-                          placeholder="Value"
+                          :placeholder="$t('flowBuilder.valuePlaceholder')"
                           class="h-7 text-xs flex-1"
                         />
                         <Button variant="ghost" size="icon" class="h-7 w-7" @click="removeHeader(key as string)">
@@ -1485,7 +1485,7 @@ function confirmCancel() {
                         <span class="text-xs text-muted-foreground">=</span>
                         <Input
                           v-model="selectedStep.api_config.response_mapping[key as string]"
-                          placeholder="data.path"
+                          :placeholder="$t('flowBuilder.dataPathPlaceholder')"
                           class="h-7 text-xs flex-1"
                         />
                         <Button variant="ghost" size="icon" class="h-7 w-7" @click="removeResponseMapping(key as string)">

@@ -125,7 +125,8 @@ export class KeywordsPage extends BasePage {
 
   async search(term: string) {
     await this.searchInput.fill(term)
-    await this.page.waitForTimeout(300)
+    // Wait for debounce (300ms) + API response + render
+    await this.page.waitForTimeout(500)
   }
 
   // Alert dialog actions
@@ -352,7 +353,8 @@ export class AIContextsPage extends BasePage {
 
   async search(term: string) {
     await this.searchInput.fill(term)
-    await this.page.waitForTimeout(300)
+    // Wait for debounce (300ms) + API response + render
+    await this.page.waitForTimeout(500)
   }
 
   // Alert dialog actions
@@ -403,10 +405,14 @@ export class AIContextsPage extends BasePage {
   }
 
   async expectContextExists(name: string) {
+    // Search for the context to handle pagination
+    await this.search(name)
     await expect(this.getContextRow(name)).toBeVisible()
   }
 
   async expectContextNotExists(name: string) {
+    // Search for the context to verify it doesn't exist
+    await this.search(name)
     await expect(this.getContextRow(name)).not.toBeVisible()
   }
 

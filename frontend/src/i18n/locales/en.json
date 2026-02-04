@@ -1801,6 +1801,23 @@
     "flowSaved": "Flow saved",
     "saveFailed": "Failed to save flow",
     "loadFailed": "Failed to load flow",
-    "maxOptionsError": "WhatsApp allows maximum 10 options"
+    "maxOptionsError": "WhatsApp allows maximum 10 options",
+    "messageTypeText": "Text",
+    "messageTypeButtons": "Buttons",
+    "messageTypeApi": "API",
+    "messageTypeWhatsappFlow": "WA Flow",
+    "messageTypeTransfer": "Transfer",
+    "defaultValidationError": "Invalid input. Please try again.",
+    "defaultInitialMessage": "Hi! Let me help you with that.",
+    "defaultCompletionMessage": "Thank you! We have all the information we need.",
+    "defaultStepMessage": "What is your name?",
+    "newSection": "New Section",
+    "keyPlaceholder": "Key",
+    "valuePlaceholder": "Value",
+    "jsonBodyExample": "{\"name\": \"{{name}}\"}",
+    "sectionLabelPlaceholder": "Section Label",
+    "addFieldPlaceholder": "+ Add",
+    "exampleUrlPlaceholder": "https://example.com",
+    "dataPathPlaceholder": "data.path"
   }
 }
