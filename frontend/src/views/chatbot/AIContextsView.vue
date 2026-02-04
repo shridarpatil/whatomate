@@ -420,9 +420,7 @@ async function toggleContext(context: AIContext) {
 
           <div v-if="formData.context_type === 'api'" class="space-y-4 border-t pt-4">
             <p class="text-sm font-medium">{{ $t('aiContexts.apiConfiguration') }}</p>
-            <p class="text-xs text-muted-foreground">
-              {{ $t('aiContexts.apiConfigHint') }}
-            </p>
+            <p class="text-xs text-muted-foreground">{{ $t('aiContexts.apiConfigHint') }}</p>
 
             <div class="grid grid-cols-4 gap-4">
               <div class="col-span-1 space-y-2">
@@ -458,6 +456,9 @@ async function toggleContext(context: AIContext) {
                 :placeholder="$t('aiContexts.headersPlaceholder')"
                 :rows="2"
               />
+              <p class="text-xs text-muted-foreground">
+                {{ $t('aiContexts.headersHint') }}
+              </p>
             </div>
 
             <div class="space-y-2">
@@ -467,9 +468,7 @@ async function toggleContext(context: AIContext) {
                 v-model="formData.api_response_path"
                 :placeholder="$t('aiContexts.responsePathPlaceholder')"
               />
-              <p class="text-xs text-muted-foreground">
-                {{ $t('aiContexts.responsePathHint') }}
-              </p>
+              <p class="text-xs text-muted-foreground">{{ $t('aiContexts.responsePathHint') }}</p>
             </div>
           </div>
 

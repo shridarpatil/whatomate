@@ -79,7 +79,14 @@ export class KeywordsPage extends BasePage {
     const labelLocator = this.dialog.locator('label').filter({ hasText: label })
     const trigger = labelLocator.locator('..').locator('button[role="combobox"]')
     await trigger.click()
-    await this.page.locator('[role="option"]').filter({ hasText: value }).click()
+    // Wait for dropdown to appear
+    await this.page.locator('[role="listbox"]').waitFor({ state: 'visible', timeout: 5000 })
+    const option = this.page.locator('[role="option"]').filter({ hasText: value })
+    await option.click()
+    // Wait for dropdown to close and dialog to still be open
+    await this.page.locator('[role="listbox"]').waitFor({ state: 'hidden', timeout: 5000 })
+    // Verify dialog is still open
+    await this.dialog.waitFor({ state: 'visible', timeout: 5000 })
   }
 
   async submitDialog(buttonText = 'Create') {
@@ -218,8 +225,12 @@ export class AIContextsPage extends BasePage {
   }
 
   async openCreateDialog() {
+    // Wait for page to be ready and button to be actionable
+    await this.page.waitForLoadState('domcontentloaded')
+    await this.addButton.waitFor({ state: 'visible', timeout: 10000 })
+    await expect(this.addButton).toBeEnabled()
     await this.addButton.click()
-    await this.dialog.waitFor({ state: 'visible' })
+    await this.dialog.waitFor({ state: 'visible', timeout: 10000 })
   }
 
   // Form helpers
@@ -266,6 +277,8 @@ export class AIContextsPage extends BasePage {
 
     // Select API type
     await this.selectOption('Type', 'API Fetch')
+    // Wait for API fields to render after type selection (longer timeout for production)
+    await this.dialog.locator('input#api_url').waitFor({ state: 'visible', timeout: 10000 })
 
     if (options.triggerKeywords) {
       await this.dialog.locator('input#trigger_keywords').fill(options.triggerKeywords)
@@ -307,7 +320,14 @@ export class AIContextsPage extends BasePage {
     const labelLocator = this.dialog.locator('label').filter({ hasText: label })
     const trigger = labelLocator.locator('..').locator('button[role="combobox"]')
     await trigger.click()
-    await this.page.locator('[role="option"]').filter({ hasText: value }).click()
+    // Wait for dropdown to appear
+    await this.page.locator('[role="listbox"]').waitFor({ state: 'visible', timeout: 5000 })
+    const option = this.page.locator('[role="option"]').filter({ hasText: value })
+    await option.click()
+    // Wait for dropdown to close and dialog to still be open
+    await this.page.locator('[role="listbox"]').waitFor({ state: 'hidden', timeout: 5000 })
+    // Verify dialog is still open
+    await this.dialog.waitFor({ state: 'visible', timeout: 5000 })
   }
 
   async submitDialog(buttonText = 'Create') {
