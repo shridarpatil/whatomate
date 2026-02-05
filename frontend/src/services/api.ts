@@ -134,11 +134,63 @@ export const contactsService = {
     api.put(`/contacts/${id}/assign`, { user_id: userId }),
   updateTags: (id: string, tags: string[]) =>
     api.put(`/contacts/${id}/tags`, { tags }),
-  getSessionData: (id: string) => api.get(`/contacts/${id}/session-data`),
-  import: (file: File) => {
+  getSessionData: (id: string) => api.get(`/contacts/${id}/session-data`)
+}
+
+// Generic Import/Export Service
+export interface ExportColumn {
+  key: string
+  label: string
+}
+
+export interface ExportConfig {
+  table: string
+  columns: ExportColumn[]
+  default_columns: string[]
+}
+
+export interface ImportConfig {
+  table: string
+  required_columns: ExportColumn[]
+  optional_columns: ExportColumn[]
+  unique_column: string
+}
+
+export interface ImportResult {
+  created: number
+  updated: number
+  skipped: number
+  errors: number
+  messages: string[]
+}
+
+export const dataService = {
+  // Get export configuration for a table
+  getExportConfig: (table: string) => api.get<ExportConfig>(`/export/${table}/config`),
+
+  // Get import configuration for a table
+  getImportConfig: (table: string) => api.get<ImportConfig>(`/import/${table}/config`),
+
+  // Export data - returns CSV blob
+  exportData: async (table: string, columns?: string[], filters?: Record<string, string>) => {
+    const response = await api.post('/export', { table, columns, filters }, {
+      responseType: 'blob'
+    })
+    return response
+  },
+
+  // Import data from CSV file
+  importData: (table: string, file: File, updateOnDuplicate?: boolean, columnMapping?: Record<string, string>) => {
     const formData = new FormData()
     formData.append('file', file)
-    return api.post('/contacts/import', formData, {
+    formData.append('table', table)
+    if (updateOnDuplicate) {
+      formData.append('update_on_duplicate', 'true')
+    }
+    if (columnMapping) {
+      formData.append('column_mapping', JSON.stringify(columnMapping))
+    }
+    return api.post<ImportResult>('/import', formData, {
       headers: { 'Content-Type': 'multipart/form-data' }
     })
   }

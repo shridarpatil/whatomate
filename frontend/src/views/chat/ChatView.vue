@@ -90,6 +90,7 @@ import { useColorMode } from '@/composables/useColorMode'
 import { useInfiniteScroll } from '@/composables/useInfiniteScroll'
 import CannedResponsePicker from '@/components/chat/CannedResponsePicker.vue'
 import ContactInfoPanel from '@/components/chat/ContactInfoPanel.vue'
+import { CreateContactDialog } from '@/components/shared'
 import { Info } from 'lucide-vue-next'
 
 // Avatar gradient colors - consistent per contact based on name hash
@@ -124,6 +125,8 @@ const usersStore = useUsersStore()
 const transfersStore = useTransfersStore()
 const tagsStore = useTagsStore()
 const { isDark } = useColorMode()
+
+const canWriteContacts = authStore.hasPermission('contacts', 'write')
 
 const messageInput = ref('')
 const messagesEndRef = ref<HTMLElement | null>(null)
@@ -165,6 +168,21 @@ const executingActionId = ref<string | null>(null)
 
 // Tags filter state
 const isTagFilterOpen = ref(false)
+
+// Add contact dialog state
+const isAddContactOpen = ref(false)
+
+function openAddContactDialog() {
+  isAddContactOpen.value = true
+}
+
+async function onContactCreated(contact: any) {
+  // Refresh contacts and select the new one
+  await contactsStore.fetchContacts()
+  if (contact?.id) {
+    router.push({ name: 'chat-conversation', params: { contactId: contact.id } })
+  }
+}
 
 // Infinite scroll for contacts (load more at bottom)
 const contactsScroll = useInfiniteScroll({
@@ -1189,6 +1207,20 @@ async function sendMediaMessage() {
               class="pl-8 h-8 text-sm bg-white/[0.04] border-white/[0.1] text-white placeholder:text-white/40 light:bg-gray-50 light:border-gray-200 light:text-gray-900 light:placeholder:text-gray-400"
             />
           </div>
+          <!-- Add Contact -->
+          <Tooltip v-if="canWriteContacts">
+            <TooltipTrigger as-child>
+              <Button
+                variant="ghost"
+                size="icon"
+                class="h-8 w-8 shrink-0 text-white/40 hover:text-white hover:bg-white/[0.08] light:text-gray-500 light:hover:text-gray-900 light:hover:bg-gray-100"
+                @click="openAddContactDialog"
+              >
+                <UserPlus class="h-4 w-4" />
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent>{{ $t('chat.addContact') }}</TooltipContent>
+          </Tooltip>
           <!-- Tag Filter -->
           <Popover v-model:open="isTagFilterOpen">
             <PopoverTrigger as-child>
@@ -2017,6 +2049,9 @@ async function sendMediaMessage() {
         </div>
       </DialogContent>
     </Dialog>
+
+    <!-- Add Contact Dialog -->
+    <CreateContactDialog v-model:open="isAddContactOpen" @created="onContactCreated" />
   </div>
 </template>
 

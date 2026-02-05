@@ -12,6 +12,7 @@ import (
 //   - Tries both normalized and +prefix forms
 //   - Updates profile name if changed
 //   - Handles race conditions on create by re-fetching
+//   - Restores soft-deleted contacts if found
 //
 // Returns the contact, whether it was newly created, and any error.
 func GetOrCreateContact(db *gorm.DB, orgID uuid.UUID, phoneNumber, profileName string) (*models.Contact, bool, error) {
@@ -21,9 +22,14 @@ func GetOrCreateContact(db *gorm.DB, orgID uuid.UUID, phoneNumber, profileName s
 		normalizedPhone = normalizedPhone[1:]
 	}
 
-	// Try to find existing contact with normalized phone
+	// Try to find existing contact with normalized phone (including soft-deleted)
 	var contact models.Contact
-	if err := db.Where("organization_id = ? AND phone_number = ?", orgID, normalizedPhone).First(&contact).Error; err == nil {
+	if err := db.Unscoped().Where("organization_id = ? AND phone_number = ?", orgID, normalizedPhone).First(&contact).Error; err == nil {
+		// Restore if soft-deleted
+		if contact.DeletedAt.Valid {
+			db.Unscoped().Model(&contact).Update("deleted_at", nil)
+			contact.DeletedAt.Valid = false
+		}
 		// Update profile name if changed
 		if profileName != "" && contact.ProfileName != profileName {
 			db.Model(&contact).Update("profile_name", profileName)
@@ -32,7 +38,12 @@ func GetOrCreateContact(db *gorm.DB, orgID uuid.UUID, phoneNumber, profileName s
 	}
 
 	// Also try with + prefix (contacts may have been stored with it)
-	if err := db.Where("organization_id = ? AND phone_number = ?", orgID, "+"+normalizedPhone).First(&contact).Error; err == nil {
+	if err := db.Unscoped().Where("organization_id = ? AND phone_number = ?", orgID, "+"+normalizedPhone).First(&contact).Error; err == nil {
+		// Restore if soft-deleted
+		if contact.DeletedAt.Valid {
+			db.Unscoped().Model(&contact).Update("deleted_at", nil)
+			contact.DeletedAt.Valid = false
+		}
 		if profileName != "" && contact.ProfileName != profileName {
 			db.Model(&contact).Update("profile_name", profileName)
 		}
@@ -48,7 +59,12 @@ func GetOrCreateContact(db *gorm.DB, orgID uuid.UUID, phoneNumber, profileName s
 	}
 	if err := db.Create(&contact).Error; err != nil {
 		// Race condition: another goroutine may have created the contact
-		if err2 := db.Where("organization_id = ? AND phone_number = ?", orgID, normalizedPhone).First(&contact).Error; err2 == nil {
+		if err2 := db.Unscoped().Where("organization_id = ? AND phone_number = ?", orgID, normalizedPhone).First(&contact).Error; err2 == nil {
+			// Restore if soft-deleted
+			if contact.DeletedAt.Valid {
+				db.Unscoped().Model(&contact).Update("deleted_at", nil)
+				contact.DeletedAt.Valid = false
+			}
 			return &contact, false, nil
 		}
 		return nil, false, err
