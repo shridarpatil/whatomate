@@ -1742,7 +1742,7 @@
     "active": "Active",
     "inactive": "Inactive",
     "editFlow": "Edit flow",
-    "deleteFlow": "Delete Flow",
+    "deleteFlow": "Delete Flow"
   },
   "chatbot": {
     "title": "Chatbot",
@@ -1773,7 +1773,7 @@
     "sessionTimeout": "Session Timeout",
     "minutes": "{count} minutes",
     "aiProvider": "AI Provider",
-    "disabled": "Disabled",
+    "disabled": "Disabled"
   },
   "agentAnalytics": {
     "title": "Agent Analytics",
