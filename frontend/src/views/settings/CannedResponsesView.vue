@@ -71,7 +71,7 @@ async function fetchItems() {
     cannedResponses.value = data.canned_responses || []
     totalItems.value = data.total ?? cannedResponses.value.length
   } catch (error) {
-    toast.error(getErrorMessage(error, t('cannedResponses.loadFailed')))
+    toast.error(getErrorMessage(error, t('common.failedLoad', { resource: 'canned responses' })))
   } finally {
     isLoading.value = false
   }
@@ -130,15 +130,15 @@ async function saveResponse() {
   try {
     if (editingResponse.value) {
       await cannedResponsesService.update(editingResponse.value.id, formData.value)
-      toast.success(t('cannedResponses.responseUpdated'))
+      toast.success(t('common.updatedSuccess', { resource: 'Canned response' }))
     } else {
       await cannedResponsesService.create(formData.value)
-      toast.success(t('cannedResponses.responseCreated'))
+      toast.success(t('common.createdSuccess', { resource: 'Canned response' }))
     }
     closeDialog()
     await fetchItems()
   } catch (error) {
-    toast.error(getErrorMessage(error, t('cannedResponses.saveFailed')))
+    toast.error(getErrorMessage(error, t('common.failedSave', { resource: 'canned response' })))
   } finally {
     isSubmitting.value = false
   }
@@ -148,15 +148,15 @@ async function confirmDelete() {
   if (!responseToDelete.value) return
   try {
     await cannedResponsesService.delete(responseToDelete.value.id)
-    toast.success(t('cannedResponses.responseDeleted'))
+    toast.success(t('common.deletedSuccess', { resource: 'Canned response' }))
     closeDeleteDialog()
     await fetchItems()
   } catch (error) {
-    toast.error(getErrorMessage(error, t('cannedResponses.deleteFailed')))
+    toast.error(getErrorMessage(error, t('common.failedDelete', { resource: 'canned response' })))
   }
 }
 
-function copyToClipboard(content: string) { navigator.clipboard.writeText(content); toast.success(t('cannedResponses.copiedToClipboard')) }
+function copyToClipboard(content: string) { navigator.clipboard.writeText(content); toast.success(t('common.copiedToClipboard')) }
 function getCategoryLabel(category: string): string { return getLabelFromValue(CANNED_RESPONSE_CATEGORIES, category) || t('cannedResponses.uncategorized') }
 </script>
 

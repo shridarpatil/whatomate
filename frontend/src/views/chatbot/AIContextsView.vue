@@ -212,16 +212,16 @@ async function saveContext() {
 
     if (editingContext.value) {
       await chatbotService.updateAIContext(editingContext.value.id, data)
-      toast.success(t('aiContexts.contextUpdated'))
+      toast.success(t('common.updatedSuccess', { resource: 'AI context' }))
     } else {
       await chatbotService.createAIContext(data)
-      toast.success(t('aiContexts.contextCreated'))
+      toast.success(t('common.createdSuccess', { resource: 'AI context' }))
     }
 
     isDialogOpen.value = false
     await fetchContexts()
   } catch (error: any) {
-    toast.error(getErrorMessage(error, t('aiContexts.saveFailed')))
+    toast.error(getErrorMessage(error, t('common.failedSave', { resource: 'AI context' })))
   } finally {
     isSubmitting.value = false
   }
@@ -237,12 +237,12 @@ async function confirmDeleteContext() {
 
   try {
     await chatbotService.deleteAIContext(contextToDelete.value.id)
-    toast.success(t('aiContexts.contextDeleted'))
+    toast.success(t('common.deletedSuccess', { resource: 'AI context' }))
     deleteDialogOpen.value = false
     contextToDelete.value = null
     await fetchContexts()
   } catch (error: any) {
-    toast.error(getErrorMessage(error, t('aiContexts.deleteFailed')))
+    toast.error(getErrorMessage(error, t('common.failedDelete', { resource: 'AI context' })))
   }
 }
 
@@ -250,9 +250,9 @@ async function toggleContext(context: AIContext) {
   try {
     await chatbotService.updateAIContext(context.id, { enabled: !context.enabled })
     context.enabled = !context.enabled
-    toast.success(context.enabled ? t('aiContexts.contextEnabled') : t('aiContexts.contextDisabled'))
+    toast.success(context.enabled ? t('common.enabledSuccess', { resource: 'AI context' }) : t('common.disabledSuccess', { resource: 'AI context' }))
   } catch (error: any) {
-    toast.error(getErrorMessage(error, t('aiContexts.toggleFailed')))
+    toast.error(getErrorMessage(error, t('common.failedToggle', { resource: 'AI context' })))
   }
 }
 </script>

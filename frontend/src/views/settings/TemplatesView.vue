@@ -177,7 +177,7 @@ async function fetchTemplates() {
     totalItems.value = data.total ?? templates.value.length
   } catch (error: any) {
     console.error('Failed to fetch templates:', error)
-    toast.error(t('templates.loadFailed'))
+    toast.error(t('common.failedLoad', { resource: 'templates' }))
     templates.value = []
   } finally {
     isLoading.value = false
@@ -281,15 +281,15 @@ async function saveTemplate() {
   try {
     if (editingTemplate.value) {
       await api.put(`/templates/${editingTemplate.value.id}`, formData.value)
-      toast.success(t('templates.templateUpdated'))
+      toast.success(t('common.updatedSuccess', { resource: 'Template' }))
     } else {
       await api.post('/templates', formData.value)
-      toast.success(t('templates.templateCreated'))
+      toast.success(t('common.createdSuccess', { resource: 'Template' }))
     }
     isDialogOpen.value = false
     await fetchTemplates()
   } catch (error) {
-    toast.error(getErrorMessage(error, t('templates.saveFailed')))
+    toast.error(getErrorMessage(error, t('common.failedSave', { resource: 'template' })))
   } finally {
     isSubmitting.value = false
   }
@@ -305,12 +305,12 @@ async function confirmDeleteTemplate() {
 
   try {
     await api.delete(`/templates/${templateToDelete.value.id}`)
-    toast.success(t('templates.templateDeleted'))
+    toast.success(t('common.deletedSuccess', { resource: 'Template' }))
     deleteDialogOpen.value = false
     templateToDelete.value = null
     await fetchTemplates()
   } catch (error) {
-    toast.error(getErrorMessage(error, t('templates.deleteFailed')))
+    toast.error(getErrorMessage(error, t('common.failedDelete', { resource: 'template' })))
   }
 }
 

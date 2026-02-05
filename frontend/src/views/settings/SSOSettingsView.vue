@@ -105,7 +105,7 @@ const copiedRedirectUrl = ref(false)
 function copyRedirectUrl() {
   navigator.clipboard.writeText(redirectUrl.value)
   copiedRedirectUrl.value = true
-  toast.success(t('sso.redirectUrlCopied'))
+  toast.success(t('common.copiedToClipboard'))
   setTimeout(() => {
     copiedRedirectUrl.value = false
   }, 2000)
@@ -117,7 +117,7 @@ async function fetchProviders() {
     const response = await api.get('/settings/sso')
     providers.value = response.data.data || []
   } catch (error) {
-    toast.error(getErrorMessage(error, t('sso.loadFailed')))
+    toast.error(getErrorMessage(error, t('common.failedLoad', { resource: 'SSO providers' })))
   } finally {
     isLoading.value = false
   }
@@ -188,9 +188,9 @@ async function saveProvider() {
     await api.put(`/settings/sso/${editingProvider.value}`, payload)
     await fetchProviders()
     isEditDialogOpen.value = false
-    toast.success(t('sso.providerSaved'))
+    toast.success(t('common.savedSuccess', { resource: 'SSO provider' }))
   } catch (error) {
-    toast.error(getErrorMessage(error, t('sso.saveFailed')))
+    toast.error(getErrorMessage(error, t('common.failedSave', { resource: 'SSO provider' })))
   } finally {
     isSaving.value = false
   }
@@ -200,9 +200,9 @@ async function deleteProvider(providerKey: string) {
   try {
     await api.delete(`/settings/sso/${providerKey}`)
     await fetchProviders()
-    toast.success(t('sso.providerRemoved'))
+    toast.success(t('common.deletedSuccess', { resource: 'SSO provider' }))
   } catch (error) {
-    toast.error(getErrorMessage(error, t('sso.removeFailed')))
+    toast.error(getErrorMessage(error, t('common.failedDelete', { resource: 'SSO provider' })))
   }
 }
 
