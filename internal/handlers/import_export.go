@@ -200,15 +200,17 @@ func (a *App) ExportData(r *fastglue.Request) error {
 		columns = config.DefaultColumns
 	}
 
-	// Validate columns
+	// Validate columns against allowed set
 	allowedSet := make(map[string]bool)
 	for _, col := range config.AllowedColumns {
 		allowedSet[col] = true
 	}
+	requestedCols := make(map[string]bool, len(columns))
 	for _, col := range columns {
 		if !allowedSet[col] {
 			return r.SendErrorEnvelope(fasthttp.StatusBadRequest, fmt.Sprintf("Column '%s' is not allowed for export", col), nil, "")
 		}
+		requestedCols[col] = true
 	}
 
 	// Build query
@@ -241,8 +243,16 @@ func (a *App) ExportData(r *fastglue.Request) error {
 		}
 	}
 
-	// Select only needed columns plus organization_id for scoping
-	selectCols := append([]string{"id"}, columns...)
+	// Select only needed columns plus id for scoping.
+	// Build the list from server-controlled AllowedColumns to prevent SQL injection.
+	// This ensures only server-defined strings are passed to GORM, not user input.
+	safeColumns := make([]string, 0, len(columns))
+	for _, col := range config.AllowedColumns {
+		if requestedCols[col] {
+			safeColumns = append(safeColumns, col)
+		}
+	}
+	selectCols := append([]string{"id"}, safeColumns...)
 	query = query.Select(selectCols)
 
 	// Execute query
@@ -260,16 +270,16 @@ func (a *App) ExportData(r *fastglue.Request) error {
 	var buf strings.Builder
 	writer := csv.NewWriter(&buf)
 
-	// Write header
-	header := make([]string, len(columns))
-	for i, col := range columns {
+	// Write header using safe (server-controlled) column names
+	header := make([]string, len(safeColumns))
+	for i, col := range safeColumns {
 		if label, ok := config.ColumnLabels[col]; ok {
 			header[i] = label
 		} else {
 			header[i] = col
 		}
 	}
-	writer.Write(header)
+	_ = writer.Write(header)
 
 	// Write rows
 	for rows.Next() {
@@ -285,8 +295,8 @@ func (a *App) ExportData(r *fastglue.Request) error {
 		}
 
 		// Convert to CSV row (skip id column which is at index 0)
-		csvRow := make([]string, len(columns))
-		for i, col := range columns {
+		csvRow := make([]string, len(safeColumns))
+		for i, col := range safeColumns {
 			val := values[i+1] // +1 to skip id
 
 			// Apply transform if available
@@ -296,7 +306,7 @@ func (a *App) ExportData(r *fastglue.Request) error {
 				csvRow[i] = formatExportValue(val, colTypes[i+1])
 			}
 		}
-		writer.Write(csvRow)
+		_ = writer.Write(csvRow)
 	}
 
 	writer.Flush()
@@ -357,7 +367,7 @@ func (a *App) ImportData(r *fastglue.Request) error {
 	// Get column mapping (optional)
 	columnMapping := make(map[string]string)
 	if mappingValues := form.Value["column_mapping"]; len(mappingValues) > 0 {
-		json.Unmarshal([]byte(mappingValues[0]), &columnMapping)
+		_ = json.Unmarshal([]byte(mappingValues[0]), &columnMapping)
 	}
 
 	// Get CSV file
@@ -676,10 +686,26 @@ func (a *App) GetImportConfig(r *fastglue.Request) error {
 }
 
 // Helper function to convert snake_case to PascalCase
+// Handles common acronyms like ID, URL, API, etc.
 func snakeToPascal(s string) string {
+	// Common acronyms that should be all uppercase
+	acronyms := map[string]string{
+		"id":   "ID",
+		"url":  "URL",
+		"api":  "API",
+		"uuid": "UUID",
+		"ip":   "IP",
+		"http": "HTTP",
+		"sql":  "SQL",
+		"json": "JSON",
+	}
+
 	parts := strings.Split(s, "_")
 	for i, part := range parts {
-		if len(part) > 0 {
+		lower := strings.ToLower(part)
+		if acronym, ok := acronyms[lower]; ok {
+			parts[i] = acronym
+		} else if len(part) > 0 {
 			parts[i] = strings.ToUpper(part[:1]) + part[1:]
 		}
 	}
