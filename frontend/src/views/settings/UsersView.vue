@@ -102,7 +102,7 @@ async function fetchUsers() {
     })
     users.value = response.users
     totalItems.value = response.total
-  } catch { toast.error(t('users.loadUsersFailed')) }
+  } catch { toast.error(t('common.failedLoad', { resource: 'users' })) }
   finally { isLoading.value = false }
 }
 
@@ -119,23 +119,23 @@ async function saveUser() {
       if (formData.value.password) data.password = formData.value.password
       if (isSuperAdmin.value) data.is_super_admin = formData.value.is_super_admin
       await usersStore.updateUser(editingUser.value.id, data)
-      toast.success(t('users.userUpdated'))
+      toast.success(t('common.updatedSuccess', { resource: 'User' }))
     } else {
       data.password = formData.value.password
       if (isSuperAdmin.value && formData.value.is_super_admin) data.is_super_admin = true
       await usersStore.createUser(data)
-      toast.success(t('users.userCreated'))
+      toast.success(t('common.createdSuccess', { resource: 'User' }))
     }
     closeDialog()
     await fetchUsers()
-  } catch (e) { toast.error(getErrorMessage(e, t('users.saveUserFailed'))) }
+  } catch (e) { toast.error(getErrorMessage(e, t('common.failedSave', { resource: 'user' }))) }
   finally { isSubmitting.value = false }
 }
 
 async function confirmDelete() {
   if (!userToDelete.value) return
-  try { await usersStore.deleteUser(userToDelete.value.id); toast.success(t('users.userDeleted')); closeDeleteDialog(); await fetchUsers() }
-  catch (e) { toast.error(getErrorMessage(e, t('users.deleteUserFailed'))) }
+  try { await usersStore.deleteUser(userToDelete.value.id); toast.success(t('common.deletedSuccess', { resource: 'User' })); closeDeleteDialog(); await fetchUsers() }
+  catch (e) { toast.error(getErrorMessage(e, t('common.failedDelete', { resource: 'user' }))) }
 }
 
 function getRoleBadgeVariant(name: string): 'default' | 'secondary' | 'outline' { return ROLE_BADGE_VARIANTS[name.toLowerCase()] || 'outline' }

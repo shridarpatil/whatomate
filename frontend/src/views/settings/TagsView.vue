@@ -95,7 +95,7 @@ async function fetchTags() {
     // Use total from response if available, otherwise use items length
     totalItems.value = responseData.total ?? tags.value.length
   } catch (error) {
-    toast.error(getErrorMessage(error, t('tags.loadTagsFailed')))
+    toast.error(getErrorMessage(error, t('common.failedLoad', { resource: 'tags' })))
   } finally {
     isLoading.value = false
   }
@@ -128,16 +128,16 @@ async function saveTag() {
   try {
     if (editingTag.value) {
       await tagsService.update(editingTag.value.name, formData.value)
-      toast.success(t('tags.tagUpdated'))
+      toast.success(t('common.updatedSuccess', { resource: 'Tag' }))
     } else {
       await tagsService.create(formData.value)
-      toast.success(t('tags.tagCreated'))
+      toast.success(t('common.createdSuccess', { resource: 'Tag' }))
     }
     closeDialog()
     // Refresh from server to keep pagination in sync
     await fetchTags()
   } catch (error) {
-    toast.error(getErrorMessage(error, t('tags.saveTagFailed')))
+    toast.error(getErrorMessage(error, t('common.failedSave', { resource: 'tag' })))
   } finally {
     isSubmitting.value = false
   }
@@ -147,12 +147,12 @@ async function confirmDelete() {
   if (!tagToDelete.value) return
   try {
     await tagsService.delete(tagToDelete.value.name)
-    toast.success(t('tags.tagDeleted'))
+    toast.success(t('common.deletedSuccess', { resource: 'Tag' }))
     closeDeleteDialog()
     // Refresh from server to keep pagination in sync
     await fetchTags()
   } catch (error) {
-    toast.error(getErrorMessage(error, t('tags.deleteTagFailed')))
+    toast.error(getErrorMessage(error, t('common.failedDelete', { resource: 'tag' })))
   }
 }
 

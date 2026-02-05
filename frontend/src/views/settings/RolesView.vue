@@ -102,7 +102,7 @@ async function fetchRoles() {
     })
     roles.value = response.roles
     totalItems.value = response.total
-  } catch { toast.error(t('roles.loadRolesFailed')) }
+  } catch { toast.error(t('common.failedLoad', { resource: 'roles' })) }
   finally { isLoading.value = false }
 }
 
@@ -113,22 +113,22 @@ async function saveRole() {
     if (editingRole.value) {
       const updateData: UpdateRoleData = { name: formData.value.name, description: formData.value.description, is_default: formData.value.is_default, permissions: formData.value.permissions }
       await rolesStore.updateRole(editingRole.value.id, updateData)
-      toast.success(t('roles.roleUpdated'))
+      toast.success(t('common.updatedSuccess', { resource: 'Role' }))
     } else {
       const createData: CreateRoleData = { name: formData.value.name, description: formData.value.description, is_default: formData.value.is_default, permissions: formData.value.permissions }
       await rolesStore.createRole(createData)
-      toast.success(t('roles.roleCreated'))
+      toast.success(t('common.createdSuccess', { resource: 'Role' }))
     }
     closeDialog()
     await fetchRoles()
-  } catch (e) { toast.error(getErrorMessage(e, t('roles.saveRoleFailed'))) }
+  } catch (e) { toast.error(getErrorMessage(e, t('common.failedSave', { resource: 'role' }))) }
   finally { isSubmitting.value = false }
 }
 
 async function confirmDelete() {
   if (!roleToDelete.value) return
-  try { await rolesStore.deleteRole(roleToDelete.value.id); toast.success(t('roles.roleDeleted')); closeDeleteDialog(); await fetchRoles() }
-  catch (e) { toast.error(getErrorMessage(e, t('roles.deleteRoleFailed'))) }
+  try { await rolesStore.deleteRole(roleToDelete.value.id); toast.success(t('common.deletedSuccess', { resource: 'Role' })); closeDeleteDialog(); await fetchRoles() }
+  catch (e) { toast.error(getErrorMessage(e, t('common.failedDelete', { resource: 'role' }))) }
 }
 </script>
 

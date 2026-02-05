@@ -85,7 +85,7 @@ async function fetchItems() {
     apiKeys.value = data.api_keys || []
     totalItems.value = data.total ?? apiKeys.value.length
   } catch (error) {
-    toast.error(getErrorMessage(error, t('apiKeys.loadFailed')))
+    toast.error(getErrorMessage(error, t('common.failedLoad', { resource: 'API keys' })))
   } finally {
     isLoading.value = false
   }
@@ -116,18 +116,18 @@ async function createAPIKey() {
     isKeyDisplayOpen.value = true
     formData.value = { ...defaultFormData }
     await fetchItems()
-    toast.success(t('apiKeys.apiKeyCreatedSuccess'))
-  } catch (error) { toast.error(getErrorMessage(error, t('apiKeys.createFailed'))) }
+    toast.success(t('common.createdSuccess', { resource: 'API key' }))
+  } catch (error) { toast.error(getErrorMessage(error, t('common.failedCreate', { resource: 'API key' }))) }
   finally { isSubmitting.value = false }
 }
 
 async function deleteAPIKey() {
   if (!keyToDelete.value) return
-  try { await apiKeysService.delete(keyToDelete.value.id); await fetchItems(); toast.success(t('apiKeys.apiKeyDeleted')); closeDeleteDialog() }
-  catch (error) { toast.error(getErrorMessage(error, t('apiKeys.deleteFailed'))) }
+  try { await apiKeysService.delete(keyToDelete.value.id); await fetchItems(); toast.success(t('common.deletedSuccess', { resource: 'API key' })); closeDeleteDialog() }
+  catch (error) { toast.error(getErrorMessage(error, t('common.failedDelete', { resource: 'API key' }))) }
 }
 
-function copyToClipboard(text: string) { navigator.clipboard.writeText(text); toast.success(t('apiKeys.copiedToClipboard')) }
+function copyToClipboard(text: string) { navigator.clipboard.writeText(text); toast.success(t('common.copiedToClipboard')) }
 function formatDateTime(dateStr: string | null) { return dateStr ? formatDate(dateStr, { year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : t('apiKeys.never') }
 function isExpired(expiresAt: string | null) { return expiresAt ? new Date(expiresAt) < new Date() : false }
 

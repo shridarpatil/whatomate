@@ -112,7 +112,7 @@ async function fetchTeams() {
     })
     teams.value = response.teams
     totalItems.value = response.total
-  } catch { toast.error(t('teams.loadTeamsFailed')) }
+  } catch { toast.error(t('common.failedLoad', { resource: 'teams' })) }
   finally { isLoading.value = false }
 }
 
@@ -122,21 +122,21 @@ async function saveTeam() {
   try {
     if (editingTeam.value) {
       await teamsStore.updateTeam(editingTeam.value.id, { name: formData.value.name, description: formData.value.description, assignment_strategy: formData.value.assignment_strategy, is_active: formData.value.is_active })
-      toast.success(t('teams.teamUpdated'))
+      toast.success(t('common.updatedSuccess', { resource: 'Team' }))
     } else {
       await teamsStore.createTeam({ name: formData.value.name, description: formData.value.description, assignment_strategy: formData.value.assignment_strategy })
-      toast.success(t('teams.teamCreated'))
+      toast.success(t('common.createdSuccess', { resource: 'Team' }))
     }
     closeDialog()
     await fetchTeams()
-  } catch (e) { toast.error(getErrorMessage(e, t('teams.saveTeamFailed'))) }
+  } catch (e) { toast.error(getErrorMessage(e, t('common.failedSave', { resource: 'team' }))) }
   finally { isSubmitting.value = false }
 }
 
 async function confirmDelete() {
   if (!teamToDelete.value) return
-  try { await teamsStore.deleteTeam(teamToDelete.value.id); toast.success(t('teams.teamDeleted')); closeDeleteDialog(); await fetchTeams() }
-  catch (e) { toast.error(getErrorMessage(e, t('teams.deleteTeamFailed'))) }
+  try { await teamsStore.deleteTeam(teamToDelete.value.id); toast.success(t('common.deletedSuccess', { resource: 'Team' })); closeDeleteDialog(); await fetchTeams() }
+  catch (e) { toast.error(getErrorMessage(e, t('common.failedDelete', { resource: 'team' }))) }
 }
 
 async function openMembersDialog(team: Team) {
@@ -144,7 +144,7 @@ async function openMembersDialog(team: Team) {
   loadingMembers.value = true
   isMembersDialogOpen.value = true
   try { teamMembers.value = await teamsStore.fetchTeamMembers(team.id) }
-  catch { toast.error(t('teams.loadMembersFailed')) }
+  catch { toast.error(t('common.failedLoad', { resource: 'team members' })) }
   finally { loadingMembers.value = false }
 }
 
@@ -154,7 +154,7 @@ async function addMember(user: User, role: 'manager' | 'agent' = 'agent') {
     const member = await teamsStore.addTeamMember(selectedTeam.value.id, user.id, role)
     teamMembers.value.push({ ...member, user: { id: user.id, full_name: user.full_name, email: user.email, is_available: true } })
     toast.success(t('teams.memberAdded', { name: user.full_name }))
-  } catch (e) { toast.error(getErrorMessage(e, t('teams.addMemberFailed'))) }
+  } catch (e) { toast.error(getErrorMessage(e, t('common.failedSave', { resource: 'member' }))) }
 }
 
 async function removeMember(member: TeamMember) {
@@ -163,7 +163,7 @@ async function removeMember(member: TeamMember) {
     await teamsStore.removeTeamMember(selectedTeam.value.id, member.user_id)
     teamMembers.value = teamMembers.value.filter(m => m.user_id !== member.user_id)
     toast.success(t('teams.memberRemoved'))
-  } catch (e) { toast.error(getErrorMessage(e, t('teams.removeMemberFailed'))) }
+  } catch (e) { toast.error(getErrorMessage(e, t('common.failedDelete', { resource: 'member' }))) }
 }
 
 function getStrategyLabel(strategy: string): string { return getLabelFromValue(ASSIGNMENT_STRATEGIES, strategy) }
