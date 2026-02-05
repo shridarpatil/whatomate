@@ -98,9 +98,9 @@ async function toggleFlow(flow: ChatbotFlow) {
   try {
     await chatbotService.updateFlow(flow.id, { enabled: !flow.enabled })
     flow.enabled = !flow.enabled
-    toast.success(flow.enabled ? t('chatbotFlows.flowEnabled') : t('chatbotFlows.flowDisabled'))
+    toast.success(flow.enabled ? t('common.enabledSuccess', { resource: 'Flow' }) : t('common.disabledSuccess', { resource: 'Flow' }))
   } catch (error: any) {
-    toast.error(getErrorMessage(error, t('chatbotFlows.toggleFailed')))
+    toast.error(getErrorMessage(error, t('common.failedToggle', { resource: 'flow' })))
   }
 }
 
@@ -114,12 +114,12 @@ async function confirmDeleteFlow() {
 
   try {
     await chatbotService.deleteFlow(flowToDelete.value.id)
-    toast.success(t('chatbotFlows.flowDeleted'))
+    toast.success(t('common.deletedSuccess', { resource: 'Flow' }))
     deleteDialogOpen.value = false
     flowToDelete.value = null
     await fetchFlows()
   } catch (error: any) {
-    toast.error(getErrorMessage(error, t('chatbotFlows.deleteFailed')))
+    toast.error(getErrorMessage(error, t('common.failedDelete', { resource: 'flow' })))
   }
 }
 </script>

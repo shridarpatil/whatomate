@@ -320,7 +320,7 @@ async function executeCustomAction(action: CustomAction) {
     if (result.clipboard) {
       // Copy to clipboard
       await navigator.clipboard.writeText(result.clipboard)
-      toast.success(t('chat.copiedToClipboard'))
+      toast.success(t('common.copiedToClipboard'))
     }
 
     if (result.toast) {

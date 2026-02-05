@@ -269,7 +269,7 @@ async function saveMessagesSettings() {
     })
     toast.success(t('chatbotSettings.messagesSaved'))
   } catch (error) {
-    toast.error(t('chatbotSettings.saveFailed'))
+    toast.error(t('common.failedSave', { resource: 'chatbot settings' }))
   } finally {
     isSubmitting.value = false
   }
@@ -285,7 +285,7 @@ async function saveAgentSettings() {
     })
     toast.success(t('chatbotSettings.agentSettingsSaved'))
   } catch (error) {
-    toast.error(t('chatbotSettings.saveFailed'))
+    toast.error(t('common.failedSave', { resource: 'chatbot settings' }))
   } finally {
     isSubmitting.value = false
   }
@@ -302,7 +302,7 @@ async function saveBusinessHoursSettings() {
     })
     toast.success(t('chatbotSettings.businessHoursSaved'))
   } catch (error) {
-    toast.error(t('chatbotSettings.saveFailed'))
+    toast.error(t('common.failedSave', { resource: 'chatbot settings' }))
   } finally {
     isSubmitting.value = false
   }

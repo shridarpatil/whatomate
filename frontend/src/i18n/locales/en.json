@@ -76,6 +76,8 @@
     "failedLoad": "Failed to load {resource}",
     "failedSave": "Failed to save {resource}",
     "failedToggle": "Failed to toggle {resource}",
+    "failedUpload": "Failed to upload {resource}",
+    "uploadedSuccess": "{resource} uploaded successfully",
     "notFound": "No {resource} found",
     "noMatching": "No matching {resource}",
     "noneYet": "No {resource} yet",

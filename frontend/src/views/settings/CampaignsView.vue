@@ -358,7 +358,7 @@ async function uploadCampaignMedia() {
   try {
     const response = await campaignsService.uploadMedia(selectedCampaign.value.id, mediaFile.value)
     const result = response.data.data
-    toast.success(t('campaigns.mediaUploaded'))
+    toast.success(t('common.uploadedSuccess', { resource: 'Media' }))
     // Update campaign with media ID
     selectedCampaign.value.header_media_id = result.media_id
     await fetchCampaigns()
@@ -369,7 +369,7 @@ async function uploadCampaignMedia() {
     }
     clearMediaFile()
   } catch (error: any) {
-    toast.error(getErrorMessage(error, t('campaigns.mediaUploadFailed')))
+    toast.error(getErrorMessage(error, t('common.failedUpload', { resource: 'media' })))
   } finally {
     isUploadingMedia.value = false
   }
@@ -559,12 +559,12 @@ async function createCampaign() {
       whatsapp_account: newCampaign.value.whatsapp_account,
       template_id: newCampaign.value.template_id
     })
-    toast.success(t('campaigns.campaignCreated'))
+    toast.success(t('common.createdSuccess', { resource: 'Campaign' }))
     showCreateDialog.value = false
     resetForm()
     await fetchCampaigns()
   } catch (error: any) {
-    toast.error(getErrorMessage(error, t('campaigns.createFailed')))
+    toast.error(getErrorMessage(error, t('common.failedCreate', { resource: 'campaign' })))
   } finally {
     isCreating.value = false
   }
@@ -609,13 +609,13 @@ async function saveCampaign() {
         whatsapp_account: newCampaign.value.whatsapp_account,
         template_id: newCampaign.value.template_id
       })
-      toast.success(t('campaigns.campaignUpdated'))
+      toast.success(t('common.updatedSuccess', { resource: 'Campaign' }))
       showCreateDialog.value = false
       editingCampaignId.value = null
       resetForm()
       await fetchCampaigns()
     } catch (error: any) {
-      toast.error(getErrorMessage(error, t('campaigns.updateFailed')))
+      toast.error(getErrorMessage(error, t('common.failedUpdate', { resource: 'campaign' })))
     } finally {
       isCreating.value = false
     }
@@ -685,12 +685,12 @@ async function confirmDeleteCampaign() {
 
   try {
     await campaignsService.delete(campaignToDelete.value.id)
-    toast.success(t('campaigns.campaignDeleted'))
+    toast.success(t('common.deletedSuccess', { resource: 'Campaign' }))
     deleteDialogOpen.value = false
     campaignToDelete.value = null
     await fetchCampaigns()
   } catch (error: any) {
-    toast.error(getErrorMessage(error, t('campaigns.deleteFailed')))
+    toast.error(getErrorMessage(error, t('common.failedDelete', { resource: 'campaign' })))
   }
 }
 
@@ -821,7 +821,7 @@ async function viewRecipients(campaign: Campaign) {
     recipients.value = response.data.data?.recipients || []
   } catch (error) {
     console.error('Failed to fetch recipients:', error)
-    toast.error(t('campaigns.loadRecipientsFailed'))
+    toast.error(t('common.failedLoad', { resource: 'recipients' }))
     recipients.value = []
   } finally {
     isLoadingRecipients.value = false
@@ -837,7 +837,7 @@ async function deleteRecipient(recipientId: string) {
     recipients.value = recipients.value.filter(r => r.id !== recipientId)
     // Update recipient count in selectedCampaign
     selectedCampaign.value.total_recipients = recipients.value.length
-    toast.success(t('campaigns.recipientDeleted'))
+    toast.success(t('common.deletedSuccess', { resource: 'Recipient' }))
     await fetchCampaigns() // Refresh campaigns list
     // Update selectedCampaign with fresh data
     const updated = campaigns.value.find(c => c.id === selectedCampaign.value?.id)
@@ -845,7 +845,7 @@ async function deleteRecipient(recipientId: string) {
       selectedCampaign.value = updated
     }
   } catch (error: any) {
-    toast.error(getErrorMessage(error, t('campaigns.deleteRecipientFailed')))
+    toast.error(getErrorMessage(error, t('common.failedDelete', { resource: 'recipient' })))
   } finally {
     deletingRecipientId.value = null
   }

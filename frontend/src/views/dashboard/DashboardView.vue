@@ -720,10 +720,10 @@ const saveWidget = async () => {
   try {
     if (isEditMode.value && editingWidgetId.value) {
       await widgetsService.update(editingWidgetId.value, payload)
-      toast({ title: t('dashboard.widgetUpdated') })
+      toast({ title: t('common.updatedSuccess', { resource: 'Widget' }) })
     } else {
       await widgetsService.create(payload)
-      toast({ title: t('dashboard.widgetCreated') })
+      toast({ title: t('common.createdSuccess', { resource: 'Widget' }) })
     }
     isWidgetDialogOpen.value = false
     await fetchWidgets()
@@ -731,7 +731,7 @@ const saveWidget = async () => {
   } catch (error: any) {
     toast({
       title: t('common.error'),
-      description: error.response?.data?.message || t('dashboard.saveWidgetFailed'),
+      description: error.response?.data?.message || t('common.failedSave', { resource: 'widget' }),
       variant: 'destructive'
     })
   } finally {
@@ -749,7 +749,7 @@ const confirmDeleteWidget = async () => {
 
   try {
     await widgetsService.delete(widgetToDelete.value.id)
-    toast({ title: t('dashboard.widgetDeleted') })
+    toast({ title: t('common.deletedSuccess', { resource: 'Widget' }) })
     deleteDialogOpen.value = false
     widgetToDelete.value = null
     await fetchWidgets()
@@ -757,7 +757,7 @@ const confirmDeleteWidget = async () => {
   } catch (error: any) {
     toast({
       title: t('common.error'),
-      description: error.response?.data?.message || t('dashboard.deleteWidgetFailed'),
+      description: error.response?.data?.message || t('common.failedDelete', { resource: 'widget' }),
       variant: 'destructive'
     })
   }

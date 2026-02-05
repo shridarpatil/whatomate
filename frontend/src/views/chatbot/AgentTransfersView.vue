@@ -214,7 +214,7 @@ async function assignTransfer() {
       agentId,
       teamId
     )
-    toast.success(t('agentTransfers.transferUpdated'))
+    toast.success(t('common.updatedSuccess', { resource: 'Transfer' }))
     assignDialogOpen.value = false
     await fetchTransfers()
   } catch (error) {
