@@ -467,7 +467,7 @@ async function loadFlow(id: string) {
 
     // Flow Settings will be selected by default in onMounted
   } catch (error) {
-    toast.error(t('common.failedLoad', { resource: 'flow' }))
+    toast.error(t('common.failedLoad', { resource: t('resources.flow') }))
     router.push('/chatbot/flows')
   } finally {
     isLoading.value = false
@@ -790,18 +790,18 @@ async function saveFlow() {
     if (isNewFlow.value) {
       const response = await chatbotService.createFlow(data)
       const newFlow = response.data.data || response.data
-      toast.success(t('common.createdSuccess', { resource: 'Flow' }))
+      toast.success(t('common.createdSuccess', { resource: t('resources.Flow') }))
       // Update URL to edit mode so subsequent saves work correctly
       router.replace(`/chatbot/flows/${newFlow.id}/edit`)
     } else {
       await chatbotService.updateFlow(flowId.value!, data)
-      toast.success(t('common.savedSuccess', { resource: 'Flow' }))
+      toast.success(t('common.savedSuccess', { resource: t('resources.Flow') }))
     }
 
     hasUnsavedChanges.value = false
     // Stay on page - don't navigate away
   } catch (error) {
-    toast.error(t('common.failedSave', { resource: 'flow' }))
+    toast.error(t('common.failedSave', { resource: t('resources.flow') }))
   } finally {
     isSaving.value = false
   }

@@ -102,7 +102,7 @@ async function fetchUsers() {
     })
     users.value = response.users
     totalItems.value = response.total
-  } catch { toast.error(t('common.failedLoad', { resource: 'users' })) }
+  } catch { toast.error(t('common.failedLoad', { resource: t('resources.users') })) }
   finally { isLoading.value = false }
 }
 
@@ -119,23 +119,23 @@ async function saveUser() {
       if (formData.value.password) data.password = formData.value.password
       if (isSuperAdmin.value) data.is_super_admin = formData.value.is_super_admin
       await usersStore.updateUser(editingUser.value.id, data)
-      toast.success(t('common.updatedSuccess', { resource: 'User' }))
+      toast.success(t('common.updatedSuccess', { resource: t('resources.User') }))
     } else {
       data.password = formData.value.password
       if (isSuperAdmin.value && formData.value.is_super_admin) data.is_super_admin = true
       await usersStore.createUser(data)
-      toast.success(t('common.createdSuccess', { resource: 'User' }))
+      toast.success(t('common.createdSuccess', { resource: t('resources.User') }))
     }
     closeDialog()
     await fetchUsers()
-  } catch (e) { toast.error(getErrorMessage(e, t('common.failedSave', { resource: 'user' }))) }
+  } catch (e) { toast.error(getErrorMessage(e, t('common.failedSave', { resource: t('resources.user') }))) }
   finally { isSubmitting.value = false }
 }
 
 async function confirmDelete() {
   if (!userToDelete.value) return
-  try { await usersStore.deleteUser(userToDelete.value.id); toast.success(t('common.deletedSuccess', { resource: 'User' })); closeDeleteDialog(); await fetchUsers() }
-  catch (e) { toast.error(getErrorMessage(e, t('common.failedDelete', { resource: 'user' }))) }
+  try { await usersStore.deleteUser(userToDelete.value.id); toast.success(t('common.deletedSuccess', { resource: t('resources.User') })); closeDeleteDialog(); await fetchUsers() }
+  catch (e) { toast.error(getErrorMessage(e, t('common.failedDelete', { resource: t('resources.user') }))) }
 }
 
 function getRoleBadgeVariant(name: string): 'default' | 'secondary' | 'outline' { return ROLE_BADGE_VARIANTS[name.toLowerCase()] || 'outline' }

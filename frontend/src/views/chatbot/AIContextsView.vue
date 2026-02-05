@@ -212,16 +212,16 @@ async function saveContext() {
 
     if (editingContext.value) {
       await chatbotService.updateAIContext(editingContext.value.id, data)
-      toast.success(t('common.updatedSuccess', { resource: 'AI context' }))
+      toast.success(t('common.updatedSuccess', { resource: t('resources.AIContext') }))
     } else {
       await chatbotService.createAIContext(data)
-      toast.success(t('common.createdSuccess', { resource: 'AI context' }))
+      toast.success(t('common.createdSuccess', { resource: t('resources.AIContext') }))
     }
 
     isDialogOpen.value = false
     await fetchContexts()
   } catch (error: any) {
-    toast.error(getErrorMessage(error, t('common.failedSave', { resource: 'AI context' })))
+    toast.error(getErrorMessage(error, t('common.failedSave', { resource: t('resources.AIContext') })))
   } finally {
     isSubmitting.value = false
   }
@@ -237,12 +237,12 @@ async function confirmDeleteContext() {
 
   try {
     await chatbotService.deleteAIContext(contextToDelete.value.id)
-    toast.success(t('common.deletedSuccess', { resource: 'AI context' }))
+    toast.success(t('common.deletedSuccess', { resource: t('resources.AIContext') }))
     deleteDialogOpen.value = false
     contextToDelete.value = null
     await fetchContexts()
   } catch (error: any) {
-    toast.error(getErrorMessage(error, t('common.failedDelete', { resource: 'AI context' })))
+    toast.error(getErrorMessage(error, t('common.failedDelete', { resource: t('resources.AIContext') })))
   }
 }
 
@@ -250,9 +250,9 @@ async function toggleContext(context: AIContext) {
   try {
     await chatbotService.updateAIContext(context.id, { enabled: !context.enabled })
     context.enabled = !context.enabled
-    toast.success(context.enabled ? t('common.enabledSuccess', { resource: 'AI context' }) : t('common.disabledSuccess', { resource: 'AI context' }))
+    toast.success(context.enabled ? t('common.enabledSuccess', { resource: t('resources.AIContext') }) : t('common.disabledSuccess', { resource: t('resources.AIContext') }))
   } catch (error: any) {
-    toast.error(getErrorMessage(error, t('common.failedToggle', { resource: 'AI context' })))
+    toast.error(getErrorMessage(error, t('common.failedToggle', { resource: t('resources.AIContext') })))
   }
 }
 </script>

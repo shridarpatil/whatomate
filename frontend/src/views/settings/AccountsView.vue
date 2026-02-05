@@ -128,7 +128,7 @@ async function fetchAccounts() {
     accounts.value = response.data.data?.accounts || []
   } catch (error: any) {
     console.error('Failed to fetch accounts:', error)
-    toast.error(t('common.failedLoad', { resource: 'accounts' }))
+    toast.error(t('common.failedLoad', { resource: t('resources.accounts') }))
     accounts.value = []
   } finally {
     isLoading.value = false
@@ -195,16 +195,16 @@ async function saveAccount() {
 
     if (editingAccount.value) {
       await api.put(`/accounts/${editingAccount.value.id}`, payload)
-      toast.success(t('common.updatedSuccess', { resource: 'Account' }))
+      toast.success(t('common.updatedSuccess', { resource: t('resources.Account') }))
     } else {
       await api.post('/accounts', payload)
-      toast.success(t('common.createdSuccess', { resource: 'Account' }))
+      toast.success(t('common.createdSuccess', { resource: t('resources.Account') }))
     }
 
     isDialogOpen.value = false
     await fetchAccounts()
   } catch (error: any) {
-    toast.error(getErrorMessage(error, t('common.failedSave', { resource: 'account' })))
+    toast.error(getErrorMessage(error, t('common.failedSave', { resource: t('resources.account') })))
   } finally {
     isSubmitting.value = false
   }
@@ -220,12 +220,12 @@ async function confirmDelete() {
 
   try {
     await api.delete(`/accounts/${accountToDelete.value.id}`)
-    toast.success(t('common.deletedSuccess', { resource: 'Account' }))
+    toast.success(t('common.deletedSuccess', { resource: t('resources.Account') }))
     deleteDialogOpen.value = false
     accountToDelete.value = null
     await fetchAccounts()
   } catch (error: any) {
-    toast.error(getErrorMessage(error, t('common.failedDelete', { resource: 'account' })))
+    toast.error(getErrorMessage(error, t('common.failedDelete', { resource: t('resources.account') })))
   }
 }
 

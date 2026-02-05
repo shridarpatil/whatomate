@@ -196,16 +196,16 @@ async function saveRule() {
 
     if (editingRule.value) {
       await chatbotService.updateKeyword(editingRule.value.id, data)
-      toast.success(t('common.updatedSuccess', { resource: 'Keyword rule' }))
+      toast.success(t('common.updatedSuccess', { resource: t('resources.KeywordRule') }))
     } else {
       await chatbotService.createKeyword(data)
-      toast.success(t('common.createdSuccess', { resource: 'Keyword rule' }))
+      toast.success(t('common.createdSuccess', { resource: t('resources.KeywordRule') }))
     }
 
     isDialogOpen.value = false
     await fetchRules()
   } catch (error: any) {
-    toast.error(getErrorMessage(error, t('common.failedSave', { resource: 'keyword rule' })))
+    toast.error(getErrorMessage(error, t('common.failedSave', { resource: t('resources.keywordRule') })))
   } finally {
     isSubmitting.value = false
   }
@@ -221,12 +221,12 @@ async function confirmDeleteRule() {
 
   try {
     await chatbotService.deleteKeyword(ruleToDelete.value.id)
-    toast.success(t('common.deletedSuccess', { resource: 'Keyword rule' }))
+    toast.success(t('common.deletedSuccess', { resource: t('resources.KeywordRule') }))
     deleteDialogOpen.value = false
     ruleToDelete.value = null
     await fetchRules()
   } catch (error: any) {
-    toast.error(getErrorMessage(error, t('common.failedDelete', { resource: 'keyword rule' })))
+    toast.error(getErrorMessage(error, t('common.failedDelete', { resource: t('resources.keywordRule') })))
   }
 }
 
@@ -234,9 +234,9 @@ async function toggleRule(rule: KeywordRule) {
   try {
     await chatbotService.updateKeyword(rule.id, { enabled: !rule.enabled })
     rule.enabled = !rule.enabled
-    toast.success(rule.enabled ? t('common.enabledSuccess', { resource: 'Keyword rule' }) : t('common.disabledSuccess', { resource: 'Keyword rule' }))
+    toast.success(rule.enabled ? t('common.enabledSuccess', { resource: t('resources.KeywordRule') }) : t('common.disabledSuccess', { resource: t('resources.KeywordRule') }))
   } catch (error: any) {
-    toast.error(getErrorMessage(error, t('common.failedToggle', { resource: 'keyword rule' })))
+    toast.error(getErrorMessage(error, t('common.failedToggle', { resource: t('resources.keywordRule') })))
   }
 }
 

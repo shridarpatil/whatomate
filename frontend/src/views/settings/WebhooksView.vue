@@ -72,7 +72,7 @@ async function fetchWebhooks() {
     webhooks.value = data.webhooks || []
     availableEvents.value = data.available_events || []
     totalItems.value = data.total ?? webhooks.value.length
-  } catch (e) { toast.error(getErrorMessage(e, t('common.failedLoad', { resource: 'webhooks' }))) }
+  } catch (e) { toast.error(getErrorMessage(e, t('common.failedLoad', { resource: t('resources.webhooks') }))) }
   finally { isLoading.value = false }
 }
 
@@ -113,14 +113,14 @@ async function saveWebhook() {
     const payload = { name: formData.value.name.trim(), url: formData.value.url.trim(), events: formData.value.events, headers: formData.value.headers, secret: formData.value.secret || undefined }
     if (isEditing.value && editingWebhookId.value) {
       await webhooksService.update(editingWebhookId.value, { ...payload, is_active: true })
-      toast.success(t('common.updatedSuccess', { resource: 'Webhook' }))
+      toast.success(t('common.updatedSuccess', { resource: t('resources.Webhook') }))
     } else {
       await webhooksService.create(payload)
-      toast.success(t('common.createdSuccess', { resource: 'Webhook' }))
+      toast.success(t('common.createdSuccess', { resource: t('resources.Webhook') }))
     }
     isDialogOpen.value = false
     await fetchWebhooks()
-  } catch (e) { toast.error(getErrorMessage(e, t('common.failedSave', { resource: 'webhook' }))) }
+  } catch (e) { toast.error(getErrorMessage(e, t('common.failedSave', { resource: t('resources.webhook') }))) }
   finally { isSaving.value = false }
 }
 
@@ -128,8 +128,8 @@ async function toggleWebhook(webhook: Webhook) {
   try {
     await webhooksService.update(webhook.id, { is_active: !webhook.is_active })
     await fetchWebhooks()
-    toast.success(webhook.is_active ? t('common.disabledSuccess', { resource: 'Webhook' }) : t('common.enabledSuccess', { resource: 'Webhook' }))
-  } catch (e) { toast.error(getErrorMessage(e, t('common.failedToggle', { resource: 'webhook' }))) }
+    toast.success(webhook.is_active ? t('common.disabledSuccess', { resource: t('resources.Webhook') }) : t('common.enabledSuccess', { resource: t('resources.Webhook') }))
+  } catch (e) { toast.error(getErrorMessage(e, t('common.failedToggle', { resource: t('resources.webhook') }))) }
 }
 
 async function testWebhook(webhook: Webhook) {
@@ -141,8 +141,8 @@ async function testWebhook(webhook: Webhook) {
 
 async function deleteWebhook() {
   if (!webhookToDelete.value) return
-  try { await webhooksService.delete(webhookToDelete.value.id); await fetchWebhooks(); toast.success(t('common.deletedSuccess', { resource: 'Webhook' })); isDeleteDialogOpen.value = false; webhookToDelete.value = null }
-  catch (e) { toast.error(getErrorMessage(e, t('common.failedDelete', { resource: 'webhook' }))) }
+  try { await webhooksService.delete(webhookToDelete.value.id); await fetchWebhooks(); toast.success(t('common.deletedSuccess', { resource: t('resources.Webhook') })); isDeleteDialogOpen.value = false; webhookToDelete.value = null }
+  catch (e) { toast.error(getErrorMessage(e, t('common.failedDelete', { resource: t('resources.webhook') }))) }
 }
 
 function addHeader() {

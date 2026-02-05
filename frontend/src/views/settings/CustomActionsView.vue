@@ -81,7 +81,7 @@ async function fetchActions() {
     const data = (response.data as any).data || response.data
     actions.value = data.custom_actions || []
     totalItems.value = data.total ?? actions.value.length
-  } catch (e) { toast.error(getErrorMessage(e, t('common.failedLoad', { resource: 'custom actions' }))) }
+  } catch (e) { toast.error(getErrorMessage(e, t('common.failedLoad', { resource: t('resources.customActions') }))) }
   finally { isLoading.value = false }
 }
 
@@ -130,23 +130,23 @@ async function saveAction() {
   isSaving.value = true
   try {
     const payload = { name: formData.value.name.trim(), icon: formData.value.icon, action_type: formData.value.action_type, config, is_active: formData.value.is_active, display_order: formData.value.display_order }
-    if (isEditing.value && editingActionId.value) { await customActionsService.update(editingActionId.value, payload); toast.success(t('common.updatedSuccess', { resource: 'Custom action' })) }
-    else { await customActionsService.create(payload); toast.success(t('common.createdSuccess', { resource: 'Custom action' })) }
+    if (isEditing.value && editingActionId.value) { await customActionsService.update(editingActionId.value, payload); toast.success(t('common.updatedSuccess', { resource: t('resources.CustomAction') })) }
+    else { await customActionsService.create(payload); toast.success(t('common.createdSuccess', { resource: t('resources.CustomAction') })) }
     isDialogOpen.value = false
     await fetchActions()
-  } catch (e) { toast.error(getErrorMessage(e, t('common.failedSave', { resource: 'custom action' }))) }
+  } catch (e) { toast.error(getErrorMessage(e, t('common.failedSave', { resource: t('resources.customAction') }))) }
   finally { isSaving.value = false }
 }
 
 async function toggleAction(action: CustomAction) {
-  try { await customActionsService.update(action.id, { is_active: !action.is_active }); await fetchActions(); toast.success(action.is_active ? t('common.disabledSuccess', { resource: 'Custom action' }) : t('common.enabledSuccess', { resource: 'Custom action' })) }
-  catch (e) { toast.error(getErrorMessage(e, t('common.failedUpdate', { resource: 'custom action' }))) }
+  try { await customActionsService.update(action.id, { is_active: !action.is_active }); await fetchActions(); toast.success(action.is_active ? t('common.disabledSuccess', { resource: t('resources.CustomAction') }) : t('common.enabledSuccess', { resource: t('resources.CustomAction') })) }
+  catch (e) { toast.error(getErrorMessage(e, t('common.failedUpdate', { resource: t('resources.customAction') }))) }
 }
 
 async function deleteAction() {
   if (!actionToDelete.value) return
-  try { await customActionsService.delete(actionToDelete.value.id); await fetchActions(); toast.success(t('common.deletedSuccess', { resource: 'Custom action' })); isDeleteDialogOpen.value = false; actionToDelete.value = null }
-  catch (e) { toast.error(getErrorMessage(e, t('common.failedDelete', { resource: 'custom action' }))) }
+  try { await customActionsService.delete(actionToDelete.value.id); await fetchActions(); toast.success(t('common.deletedSuccess', { resource: t('resources.CustomAction') })); isDeleteDialogOpen.value = false; actionToDelete.value = null }
+  catch (e) { toast.error(getErrorMessage(e, t('common.failedDelete', { resource: t('resources.customAction') }))) }
 }
 
 function addHeader() { if (newHeaderKey.value.trim() && newHeaderValue.value.trim()) { formData.value.config.headers[newHeaderKey.value.trim()] = newHeaderValue.value.trim(); newHeaderKey.value = ''; newHeaderValue.value = '' } }

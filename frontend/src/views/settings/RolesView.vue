@@ -102,7 +102,7 @@ async function fetchRoles() {
     })
     roles.value = response.roles
     totalItems.value = response.total
-  } catch { toast.error(t('common.failedLoad', { resource: 'roles' })) }
+  } catch { toast.error(t('common.failedLoad', { resource: t('resources.roles') })) }
   finally { isLoading.value = false }
 }
 
@@ -113,22 +113,22 @@ async function saveRole() {
     if (editingRole.value) {
       const updateData: UpdateRoleData = { name: formData.value.name, description: formData.value.description, is_default: formData.value.is_default, permissions: formData.value.permissions }
       await rolesStore.updateRole(editingRole.value.id, updateData)
-      toast.success(t('common.updatedSuccess', { resource: 'Role' }))
+      toast.success(t('common.updatedSuccess', { resource: t('resources.Role') }))
     } else {
       const createData: CreateRoleData = { name: formData.value.name, description: formData.value.description, is_default: formData.value.is_default, permissions: formData.value.permissions }
       await rolesStore.createRole(createData)
-      toast.success(t('common.createdSuccess', { resource: 'Role' }))
+      toast.success(t('common.createdSuccess', { resource: t('resources.Role') }))
     }
     closeDialog()
     await fetchRoles()
-  } catch (e) { toast.error(getErrorMessage(e, t('common.failedSave', { resource: 'role' }))) }
+  } catch (e) { toast.error(getErrorMessage(e, t('common.failedSave', { resource: t('resources.role') }))) }
   finally { isSubmitting.value = false }
 }
 
 async function confirmDelete() {
   if (!roleToDelete.value) return
-  try { await rolesStore.deleteRole(roleToDelete.value.id); toast.success(t('common.deletedSuccess', { resource: 'Role' })); closeDeleteDialog(); await fetchRoles() }
-  catch (e) { toast.error(getErrorMessage(e, t('common.failedDelete', { resource: 'role' }))) }
+  try { await rolesStore.deleteRole(roleToDelete.value.id); toast.success(t('common.deletedSuccess', { resource: t('resources.Role') })); closeDeleteDialog(); await fetchRoles() }
+  catch (e) { toast.error(getErrorMessage(e, t('common.failedDelete', { resource: t('resources.role') }))) }
 }
 </script>
 

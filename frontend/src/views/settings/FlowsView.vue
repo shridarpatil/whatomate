@@ -135,8 +135,8 @@ async function createFlow() {
       const sanitizedScreens = sanitizeScreensForMeta(flowBuilderData.value.screens)
       payload.flow_json = { version: formData.value.json_version, screens: sanitizedScreens }; payload.screens = sanitizedScreens
     }
-    await flowsService.create(payload); toast.success(t('common.createdSuccess', { resource: 'Flow' })); showCreateDialog.value = false; await fetchFlows()
-  } catch (e) { toast.error(getErrorMessage(e, t('common.failedCreate', { resource: 'flow' }))) }
+    await flowsService.create(payload); toast.success(t('common.createdSuccess', { resource: t('resources.Flow') })); showCreateDialog.value = false; await fetchFlows()
+  } catch (e) { toast.error(getErrorMessage(e, t('common.failedCreate', { resource: t('resources.flow') }))) }
   finally { isCreating.value = false }
 }
 
@@ -156,8 +156,8 @@ async function updateFlow() {
       const sanitizedScreens = sanitizeScreensForMeta(editFlowBuilderData.value.screens)
       payload.flow_json = { version: editFormData.value.json_version, screens: sanitizedScreens }; payload.screens = sanitizedScreens
     }
-    await flowsService.update(flowToEdit.value.id, payload); toast.success(t('common.updatedSuccess', { resource: 'Flow' })); showEditDialog.value = false; flowToEdit.value = null; await fetchFlows()
-  } catch (e) { toast.error(getErrorMessage(e, t('common.failedUpdate', { resource: 'flow' }))) }
+    await flowsService.update(flowToEdit.value.id, payload); toast.success(t('common.updatedSuccess', { resource: t('resources.Flow') })); showEditDialog.value = false; flowToEdit.value = null; await fetchFlows()
+  } catch (e) { toast.error(getErrorMessage(e, t('common.failedUpdate', { resource: t('resources.flow') }))) }
   finally { isUpdating.value = false }
 }
 
@@ -177,8 +177,8 @@ async function publishFlow(flow: WhatsAppFlow) {
 
 async function confirmDeleteFlow() {
   if (!flowToDelete.value) return
-  try { await flowsService.delete(flowToDelete.value.id); toast.success(t('common.deletedSuccess', { resource: 'Flow' })); deleteDialogOpen.value = false; flowToDelete.value = null; await fetchFlows() }
-  catch (e) { toast.error(getErrorMessage(e, t('common.failedDelete', { resource: 'flow' }))) }
+  try { await flowsService.delete(flowToDelete.value.id); toast.success(t('common.deletedSuccess', { resource: t('resources.Flow') })); deleteDialogOpen.value = false; flowToDelete.value = null; await fetchFlows() }
+  catch (e) { toast.error(getErrorMessage(e, t('common.failedDelete', { resource: t('resources.flow') }))) }
 }
 
 async function duplicateFlow(flow: WhatsAppFlow) {

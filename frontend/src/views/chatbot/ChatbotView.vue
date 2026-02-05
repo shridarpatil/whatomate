@@ -88,9 +88,9 @@ async function toggleChatbot() {
     const newState = !settings.value.enabled
     await chatbotService.updateSettings({ enabled: newState })
     settings.value.enabled = newState
-    toast.success(newState ? t('common.enabledSuccess', { resource: 'Chatbot' }) : t('common.disabledSuccess', { resource: 'Chatbot' }))
+    toast.success(newState ? t('common.enabledSuccess', { resource: t('resources.Chatbot') }) : t('common.disabledSuccess', { resource: t('resources.Chatbot') }))
   } catch (error: any) {
-    toast.error(getErrorMessage(error, t('common.failedToggle', { resource: 'chatbot' })))
+    toast.error(getErrorMessage(error, t('common.failedToggle', { resource: t('resources.chatbot') })))
   } finally {
     isToggling.value = false
   }

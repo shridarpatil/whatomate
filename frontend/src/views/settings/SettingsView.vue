@@ -90,7 +90,7 @@ async function saveGeneralSettings() {
     })
     toast.success(t('settings.generalSaved'))
   } catch (error) {
-    toast.error(t('common.failedSave', { resource: 'settings' }))
+    toast.error(t('common.failedSave', { resource: t('resources.settings') }))
   } finally {
     isSubmitting.value = false
   }
@@ -106,7 +106,7 @@ async function saveNotificationSettings() {
     })
     toast.success(t('settings.notificationsSaved'))
   } catch (error) {
-    toast.error(t('common.failedSave', { resource: 'notification settings' }))
+    toast.error(t('common.failedSave', { resource: t('resources.notificationSettings') }))
   } finally {
     isSubmitting.value = false
   }
