@@ -466,10 +466,7 @@
     "superAdminDesc": "Super admins can access all organizations",
     "fillEmailName": "Please fill in email and name",
     "passwordRequired": "Password is required for new users",
-    "selectRoleRequired": "Please select a role",
-    "userUpdated": "User updated",
-    "userCreated": "User created",
-    "userDeleted": "User deleted"
+    "selectRoleRequired": "Please select a role"
   },
   "roles": {
     "title": "Roles & Permissions",
@@ -509,10 +506,7 @@
     "superAdminCanEdit": "As a super admin, you can modify permissions for this system role.",
     "updateRoleDesc": "Update the role name, description, and permissions.",
     "createRoleDesc": "Create a new role with custom permissions.",
-    "roleNameRequired": "Role name is required",
-    "roleUpdated": "Role updated successfully",
-    "roleCreated": "Role created successfully",
-    "roleDeleted": "Role deleted"
+    "roleNameRequired": "Role name is required"
   },
   "teams": {
     "title": "Teams",
@@ -561,9 +555,6 @@
     "allUsersInTeam": "All active users are already members of this team.",
     "deleteTeamWarning": "Active transfers will remain but will no longer be associated with this team.",
     "enterTeamName": "Please enter a team name",
-    "teamUpdated": "Team updated successfully",
-    "teamCreated": "Team created successfully",
-    "teamDeleted": "Team deleted",
     "memberAdded": "{name} added to team",
     "memberRemoved": "Member removed from team"
   },
@@ -596,10 +587,7 @@
     "createTagTitle": "Create Tag",
     "createTagDesc": "Add a new tag for contacts.",
     "deleteWarning": "This will remove the tag from all contacts that have it.",
-    "nameRequired": "Name is required",
-    "tagUpdated": "Tag updated successfully",
-    "tagCreated": "Tag created successfully",
-    "tagDeleted": "Tag deleted"
+    "nameRequired": "Name is required"
   },
   "analytics": {
     "title": "Analytics",
@@ -725,9 +713,6 @@
     "republishToMeta": "Republish to Meta",
     "publishSuccess": "Template submitted to Meta for approval",
     "publishFailed": "Failed to publish template",
-    "templateUpdated": "Template updated successfully",
-    "templateCreated": "Template created successfully",
-    "templateDeleted": "Template deleted",
     "nameBodyRequired": "Template name and body content are required",
     "selectAccountRequired": "Please select a WhatsApp account",
     "selectAccountFirst": "Please select a WhatsApp account first",
@@ -1183,15 +1168,9 @@
     "enterFlowName": "Please enter a flow name",
     "selectAccountRequired": "Please select a WhatsApp account",
     "selectAccountToSync": "Please select a specific WhatsApp account to sync",
-    "flowCreated": "Flow created successfully",
-    "flowUpdated": "Flow updated successfully",
-    "flowDeleted": "Flow deleted",
     "flowDuplicated": "Flow duplicated successfully",
     "flowPublished": "Flow published successfully",
     "flowSavedToMeta": "Flow saved to Meta successfully",
-    "createFailed": "Failed to create flow",
-    "updateFailed": "Failed to update flow",
-    "deleteFailed": "Failed to delete flow",
     "duplicateFailed": "Failed to duplicate flow",
     "publishFailed": "Failed to publish flow",
     "saveToMetaFailed": "Failed to save flow to Meta",
@@ -1588,15 +1567,7 @@
     "deleteContext": "Delete AI Context",
     "enterName": "Please enter a name",
     "enterApiUrl": "Please enter an API URL",
-    "invalidHeaders": "Invalid JSON format for headers",
-    "contextUpdated": "AI context updated",
-    "contextCreated": "AI context created",
-    "contextDeleted": "AI context deleted",
-    "saveFailed": "Failed to save AI context",
-    "deleteFailed": "Failed to delete AI context",
-    "contextEnabled": "Context enabled",
-    "contextDisabled": "Context disabled",
-    "toggleFailed": "Failed to toggle context"
+    "invalidHeaders": "Invalid JSON format for headers"
   },
   "keywords": {
     "title": "Keyword Rules",
@@ -1650,15 +1621,7 @@
     "deleteRuleDesc": "Are you sure you want to delete this keyword rule? This action cannot be undone.",
     "enterKeyword": "Please enter at least one keyword",
     "enterResponse": "Please enter a response message",
-    "maxButtonsError": "Maximum 10 buttons allowed",
-    "ruleUpdated": "Keyword rule updated",
-    "ruleCreated": "Keyword rule created",
-    "ruleDeleted": "Keyword rule deleted",
-    "saveFailed": "Failed to save keyword rule",
-    "deleteFailed": "Failed to delete keyword rule",
-    "ruleEnabled": "Rule enabled",
-    "ruleDisabled": "Rule disabled",
-    "toggleFailed": "Failed to toggle rule"
+    "maxButtonsError": "Maximum 10 buttons allowed"
   },
   "chatbotFlows": {
     "title": "Conversation Flows",
