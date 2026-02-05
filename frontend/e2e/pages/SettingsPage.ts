@@ -453,3 +453,135 @@ export class TagsPage extends TableSettingsPage {
     await expect(this.page.locator('span').filter({ hasText: name })).toBeVisible()
   }
 }
+
+/**
+ * Contacts Page
+ */
+export class ContactsPage extends TableSettingsPage {
+  readonly importExportButton: Locator
+  readonly importExportDialog: Locator
+
+  constructor(page: Page) {
+    super(page, { headingText: 'Contacts', addButtonText: 'Add Contact' })
+    this.importExportButton = page.getByRole('button', { name: /Import.*Export/i })
+    this.importExportDialog = page.locator('[role="dialog"][data-state="open"]')
+  }
+
+  async goto() {
+    await this.page.goto('/settings/contacts')
+    await this.page.waitForLoadState('networkidle')
+  }
+
+  // Contact form helpers
+  async fillContactForm(phoneNumber: string, name?: string, account?: string) {
+    await this.dialog.locator('input').first().fill(phoneNumber)
+    if (name) {
+      await this.dialog.locator('input').nth(1).fill(name)
+    }
+    if (account) {
+      await this.dialog.locator('button[role="combobox"]').first().click()
+      await this.page.locator('[role="option"]').filter({ hasText: account }).click()
+    }
+  }
+
+  async fillEditForm(name?: string) {
+    if (name) {
+      // In edit mode, phone is disabled, name is second input
+      await this.dialog.locator('input').nth(1).fill(name)
+    }
+  }
+
+  // Tag selection in form
+  async selectTags(tags: string[]) {
+    // Open tag selector popover
+    const tagButton = this.dialog.locator('button[role="combobox"]').last()
+    await tagButton.click()
+
+    for (const tag of tags) {
+      await this.page.locator('[role="option"]').filter({ hasText: tag }).click()
+    }
+
+    // Close by clicking outside
+    await this.dialog.locator('h2').click()
+  }
+
+  // Table helpers - buttons in order: chat, edit, delete
+  getContactRow(identifier: string): Locator {
+    return this.page.locator('tbody tr').filter({ hasText: identifier })
+  }
+
+  async openChat(identifier: string) {
+    const row = this.getContactRow(identifier)
+    await expect(row).toBeVisible({ timeout: 10000 })
+    // Chat is first button in actions column
+    await row.locator('td:last-child button').first().click()
+  }
+
+  async editContact(identifier: string) {
+    const row = this.getContactRow(identifier)
+    await expect(row).toBeVisible({ timeout: 10000 })
+    // Edit is second button in actions column
+    await row.locator('td:last-child button').nth(1).click()
+    await this.dialog.waitFor({ state: 'visible' })
+  }
+
+  async deleteContact(identifier: string) {
+    const row = this.getContactRow(identifier)
+    await expect(row).toBeVisible({ timeout: 10000 })
+    // Delete is third button in actions column
+    await row.locator('td:last-child button').nth(2).click()
+    await this.alertDialog.waitFor({ state: 'visible' })
+  }
+
+  async expectContactExists(identifier: string) {
+    await expect(this.getContactRow(identifier)).toBeVisible()
+  }
+
+  async expectContactNotExists(identifier: string) {
+    await expect(this.getContactRow(identifier)).not.toBeVisible()
+  }
+
+  // Import/Export helpers
+  async openImportExportDialog() {
+    await this.importExportButton.click()
+    await this.importExportDialog.waitFor({ state: 'visible' })
+  }
+
+  async switchToImportTab() {
+    await this.importExportDialog.getByRole('tab', { name: /Import/i }).click()
+  }
+
+  async switchToExportTab() {
+    await this.importExportDialog.getByRole('tab', { name: /Export/i }).click()
+  }
+
+  async selectExportColumn(columnName: string) {
+    await this.importExportDialog.locator('label').filter({ hasText: columnName }).click()
+  }
+
+  async clickExportButton() {
+    await this.importExportDialog.getByRole('button', { name: /Export CSV/i }).click()
+  }
+
+  async uploadImportFile(filePath: string) {
+    await this.importExportDialog.locator('input[type="file"]').setInputFiles(filePath)
+  }
+
+  async toggleUpdateOnDuplicate() {
+    await this.importExportDialog.locator('button[role="checkbox"]').click()
+  }
+
+  async clickImportButton() {
+    await this.importExportDialog.getByRole('button', { name: /Import CSV/i }).click()
+  }
+
+  async expectImportResult(created: number, updated: number) {
+    await expect(this.importExportDialog).toContainText(`Created: ${created}`)
+    await expect(this.importExportDialog).toContainText(`Updated: ${updated}`)
+  }
+
+  async closeImportExportDialog() {
+    await this.importExportDialog.getByRole('button', { name: /Cancel/i }).click()
+    await this.importExportDialog.waitFor({ state: 'hidden' })
+  }
+}
