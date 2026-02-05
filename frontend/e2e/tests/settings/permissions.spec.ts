@@ -35,10 +35,9 @@ test.describe('Custom Role with Limited Permissions', () => {
     api = new ApiHelper(request)
     await api.loginAsAdmin()
 
-    // Create role with only chat and contacts read permissions
+    // Create role with only chat read permission (very limited)
     const permissions = await api.findPermissionKeys([
       { resource: 'chat', action: 'read' },
-      { resource: 'contacts', action: 'read' },
     ])
 
     const role = await api.createRole({
