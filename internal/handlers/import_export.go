@@ -531,12 +531,33 @@ func (a *App) ImportData(r *fastglue.Request) error {
 		// Create new record using model type
 		recordMap["id"] = uuid.New()
 
-		// Create instance of the model type and populate it
+		// Create instance of the model type and populate it via reflection
 		modelType := reflect.TypeOf(config.Model).Elem()
-		newRecord := reflect.New(modelType).Interface()
+		newRecordVal := reflect.New(modelType).Elem()
 
-		// Use GORM to create - this handles PostgreSQL properly
-		if err := a.DB.Model(newRecord).Create(recordMap).Error; err != nil {
+		// Populate struct fields from recordMap
+		for key, val := range recordMap {
+			// Convert snake_case to PascalCase for struct field names
+			fieldName := snakeToPascal(key)
+			field := newRecordVal.FieldByName(fieldName)
+			if !field.IsValid() || !field.CanSet() {
+				continue
+			}
+
+			// Set the value based on type
+			if val != nil {
+				valReflect := reflect.ValueOf(val)
+				if valReflect.Type().AssignableTo(field.Type()) {
+					field.Set(valReflect)
+				} else if valReflect.Type().ConvertibleTo(field.Type()) {
+					field.Set(valReflect.Convert(field.Type()))
+				}
+			}
+		}
+
+		// Use GORM to create the populated struct - this handles PostgreSQL properly
+		newRecord := newRecordVal.Addr().Interface()
+		if err := a.DB.Create(newRecord).Error; err != nil {
 			errors++
 			errorMessages = append(errorMessages, fmt.Sprintf("Row %d: failed to create - %s", rowNum, err.Error()))
 			continue
@@ -652,6 +673,17 @@ func (a *App) GetImportConfig(r *fastglue.Request) error {
 		"optional_columns": optionalCols,
 		"unique_column":    config.UniqueColumn,
 	})
+}
+
+// Helper function to convert snake_case to PascalCase
+func snakeToPascal(s string) string {
+	parts := strings.Split(s, "_")
+	for i, part := range parts {
+		if len(part) > 0 {
+			parts[i] = strings.ToUpper(part[:1]) + part[1:]
+		}
+	}
+	return strings.Join(parts, "")
 }
 
 // Helper function to format values for CSV export

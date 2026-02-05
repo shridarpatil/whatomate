@@ -110,8 +110,9 @@ function onContactCreated() {
 }
 
 function onImported(_result: ImportResult) {
+  // Refresh the contacts list but keep dialog open to show import results
   fetchContacts()
-  isImportExportOpen.value = false
+  // Dialog stays open so user can see import results
 }
 
 function openDeleteDialog(contact: Contact) {

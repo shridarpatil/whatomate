@@ -573,11 +573,13 @@ export class ContactsPage extends TableSettingsPage {
 
   async clickImportButton() {
     await this.importExportDialog.getByRole('button', { name: /Import CSV/i }).click()
+    // Wait for import to complete - look for "Import Complete" text
+    await this.importExportDialog.locator('text=Import Complete').waitFor({ state: 'visible', timeout: 30000 })
   }
 
   async expectImportResult(created: number, updated: number) {
-    await expect(this.importExportDialog).toContainText(`Created: ${created}`)
-    await expect(this.importExportDialog).toContainText(`Updated: ${updated}`)
+    await expect(this.importExportDialog).toContainText(`Created: ${created}`, { timeout: 10000 })
+    await expect(this.importExportDialog).toContainText(`Updated: ${updated}`, { timeout: 10000 })
   }
 
   async closeImportExportDialog() {
