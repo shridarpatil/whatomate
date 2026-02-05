@@ -469,10 +469,7 @@
     "selectRoleRequired": "Please select a role",
     "userUpdated": "User updated",
     "userCreated": "User created",
-    "userDeleted": "User deleted",
-    "saveUserFailed": "Failed to save user",
-    "deleteUserFailed": "Failed to delete user",
-    "loadUsersFailed": "Failed to load users"
+    "userDeleted": "User deleted"
   },
   "roles": {
     "title": "Roles & Permissions",
@@ -515,10 +512,7 @@
     "roleNameRequired": "Role name is required",
     "roleUpdated": "Role updated successfully",
     "roleCreated": "Role created successfully",
-    "roleDeleted": "Role deleted",
-    "saveRoleFailed": "Failed to save role",
-    "deleteRoleFailed": "Failed to delete role",
-    "loadRolesFailed": "Failed to load roles"
+    "roleDeleted": "Role deleted"
   },
   "teams": {
     "title": "Teams",
@@ -571,13 +565,7 @@
     "teamCreated": "Team created successfully",
     "teamDeleted": "Team deleted",
     "memberAdded": "{name} added to team",
-    "memberRemoved": "Member removed from team",
-    "saveTeamFailed": "Failed to save team",
-    "deleteTeamFailed": "Failed to delete team",
-    "loadTeamsFailed": "Failed to load teams",
-    "loadMembersFailed": "Failed to load team members",
-    "addMemberFailed": "Failed to add member",
-    "removeMemberFailed": "Failed to remove member"
+    "memberRemoved": "Member removed from team"
   },
   "tags": {
     "title": "Tags",
@@ -611,10 +599,7 @@
     "nameRequired": "Name is required",
     "tagUpdated": "Tag updated successfully",
     "tagCreated": "Tag created successfully",
-    "tagDeleted": "Tag deleted",
-    "saveTagFailed": "Failed to save tag",
-    "deleteTagFailed": "Failed to delete tag",
-    "loadTagsFailed": "Failed to load tags"
+    "tagDeleted": "Tag deleted"
   },
   "analytics": {
     "title": "Analytics",
@@ -746,10 +731,6 @@
     "nameBodyRequired": "Template name and body content are required",
     "selectAccountRequired": "Please select a WhatsApp account",
     "selectAccountFirst": "Please select a WhatsApp account first",
-    "saveFailed": "Failed to save template",
-    "deleteFailed": "Failed to delete template",
-    "loadFailed": "Failed to load templates",
-    "uploadFailed": "Failed to upload media",
     "maxButtons": "Maximum 3 buttons allowed",
     "editDialogTitle": "Edit Template",
     "createDialogTitle": "Create Template",
@@ -799,11 +780,6 @@
     "clientIdRequired": "Client ID is required",
     "clientSecretRequired": "Client Secret is required for new providers",
     "customUrlsRequired": "Auth URL, Token URL, and User Info URL are required for custom providers",
-    "providerSaved": "SSO provider saved successfully",
-    "providerRemoved": "SSO provider removed",
-    "saveFailed": "Failed to save SSO provider",
-    "removeFailed": "Failed to remove SSO provider",
-    "loadFailed": "Failed to load SSO settings",
     "google": "Google",
     "googleDesc": "Login with Google accounts",
     "microsoft": "Microsoft",
@@ -846,13 +822,7 @@
     "deleteApiKey": "Delete API Key",
     "deleteWarning": "Any applications using this key will stop working.",
     "never": "Never",
-    "nameRequired": "Name is required",
-    "apiKeyCreatedSuccess": "API key created successfully",
-    "apiKeyDeleted": "API key deleted successfully",
-    "createFailed": "Failed to create API key",
-    "deleteFailed": "Failed to delete API key",
-    "loadFailed": "Failed to load API keys",
-    "copiedToClipboard": "Copied to clipboard"
+    "nameRequired": "Name is required"
   },
   "webhooks": {
     "title": "Webhooks",
@@ -885,17 +855,8 @@
     "nameRequired": "Name is required",
     "urlRequired": "URL is required",
     "eventRequired": "At least one event must be selected",
-    "webhookUpdated": "Webhook updated successfully",
-    "webhookCreated": "Webhook created successfully",
-    "webhookDeleted": "Webhook deleted",
-    "webhookEnabled": "Webhook enabled",
-    "webhookDisabled": "Webhook disabled",
     "testSent": "Test webhook sent successfully",
-    "testFailed": "Webhook test failed",
-    "saveFailed": "Failed to save webhook",
-    "deleteFailed": "Failed to delete webhook",
-    "updateFailed": "Failed to update webhook",
-    "loadFailed": "Failed to load webhooks"
+    "testFailed": "Webhook test failed"
   },
   "cannedResponses": {
     "title": "Canned Responses",
@@ -922,13 +883,6 @@
     "editDesc": "Update the response details.",
     "createDesc": "Add a new quick response.",
     "nameContentRequired": "Name and content are required",
-    "responseUpdated": "Canned response updated",
-    "responseCreated": "Canned response created",
-    "responseDeleted": "Canned response deleted",
-    "saveFailed": "Failed to save canned response",
-    "deleteFailed": "Failed to delete canned response",
-    "loadFailed": "Failed to load canned responses",
-    "copiedToClipboard": "Copied to clipboard",
     "deleteTitle": "Delete Canned Response"
   },
   "customActions": {
@@ -974,16 +928,7 @@
     "deleteTitle": "Delete Custom Action",
     "nameRequired": "Name is required",
     "urlRequired": "URL is required",
-    "jsCodeRequired": "JavaScript code is required",
-    "actionUpdated": "Custom action updated",
-    "actionCreated": "Custom action created",
-    "actionDeleted": "Custom action deleted",
-    "actionEnabled": "Action enabled",
-    "actionDisabled": "Action disabled",
-    "saveFailed": "Failed to save custom action",
-    "deleteFailed": "Failed to delete action",
-    "updateFailed": "Failed to update action",
-    "loadFailed": "Failed to load custom actions"
+    "jsCodeRequired": "JavaScript code is required"
   },
   "errors": {
     "generic": "Something went wrong. Please try again.",
@@ -1069,14 +1014,8 @@
     "autoReadReceipt": "Automatically send read receipts",
     "updateAccount": "Update Account",
     "createAccountBtn": "Create Account",
-    "accountUpdated": "Account updated successfully",
-    "accountCreated": "Account created successfully",
-    "accountDeleted": "Account deleted",
     "fillRequired": "Please fill in all required fields",
     "accessTokenRequired": "Access token is required for new accounts",
-    "saveAccountFailed": "Failed to save account",
-    "deleteAccountFailed": "Failed to delete account",
-    "loadAccountsFailed": "Failed to load accounts",
     "test": "Test",
     "testConnection": "Test connection",
     "connectionSuccess": "Connection successful!",
