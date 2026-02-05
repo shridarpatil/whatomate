@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { ref, onMounted, computed, watch } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import DataTable from '@/components/shared/DataTable.vue'
@@ -62,6 +63,7 @@ import { Line, Bar, Doughnut } from '@/lib/charts'
 import { useToast } from '@/components/ui/toast'
 
 const { toast } = useToast()
+const { t } = useI18n()
 
 // State
 const isLoading = ref(true)
@@ -148,9 +150,9 @@ const savePreferences = () => {
 }
 
 const selectedAccountName = computed(() => {
-  if (selectedAccountId.value === 'all') return 'All Accounts'
+  if (selectedAccountId.value === 'all') return t('metaInsights.allAccounts')
   const account = accounts.value.find(a => a.id === selectedAccountId.value)
-  return account?.name || 'Select account'
+  return account?.name || t('metaInsights.selectAccount')
 })
 
 const formatDateLocal = (date: Date): string => {
@@ -261,15 +263,15 @@ const refreshCache = async () => {
   try {
     await metaAnalyticsService.refresh()
     toast({
-      title: 'Cache Cleared',
-      description: 'Analytics cache has been refreshed. Fetching fresh data...'
+      title: t('metaInsights.cacheCleared'),
+      description: t('metaInsights.cacheRefreshed')
     })
     await fetchAnalytics()
   } catch (error) {
     console.error('Failed to refresh cache:', error)
     toast({
-      title: 'Error',
-      description: 'Failed to refresh cache',
+      title: t('common.error'),
+      description: t('metaInsights.refreshFailed'),
       variant: 'destructive'
     })
   } finally {
@@ -516,17 +518,17 @@ const templateSortKey = ref('sent')
 const templateSortDirection = ref<'asc' | 'desc'>('desc')
 
 // Template table columns definition
-const templateColumns: Column<any>[] = [
-  { key: 'name', label: 'Template', sortable: true },
-  { key: 'sent', label: 'Sent', align: 'right', sortable: true },
-  { key: 'delivered', label: 'Delivered', align: 'right', sortable: true },
-  { key: 'read', label: 'Read', align: 'right', sortable: true },
-  { key: 'replied', label: 'Replied', align: 'right', sortable: true },
-  { key: 'clicked', label: 'Clicked', align: 'right', sortable: true },
-  { key: 'deliveryRate', label: 'Delivery %', align: 'right', sortable: true },
-  { key: 'readRate', label: 'Read %', align: 'right', sortable: true },
-  { key: 'cost', label: 'Cost', align: 'right', sortable: true },
-]
+const templateColumns = computed<Column<any>[]>(() => [
+  { key: 'name', label: t('metaInsights.template'), sortable: true },
+  { key: 'sent', label: t('metaInsights.sent'), align: 'right', sortable: true },
+  { key: 'delivered', label: t('metaInsights.delivered'), align: 'right', sortable: true },
+  { key: 'read', label: t('metaInsights.read'), align: 'right', sortable: true },
+  { key: 'replied', label: t('metaInsights.replied'), align: 'right', sortable: true },
+  { key: 'clicked', label: t('metaInsights.clicked'), align: 'right', sortable: true },
+  { key: 'deliveryRate', label: t('metaInsights.deliveryPercent'), align: 'right', sortable: true },
+  { key: 'readRate', label: t('metaInsights.readPercent'), align: 'right', sortable: true },
+  { key: 'cost', label: t('metaInsights.cost'), align: 'right', sortable: true },
+])
 
 const filteredTemplateData = computed(() => {
   if (!aggregatedData.value || activeTab.value !== 'template_analytics') {
@@ -591,16 +593,16 @@ const messagingChartData = computed(() => {
     labels: data.timeSeries.map(t => formatTimestamp(t.time)),
     datasets: [
       {
-        label: 'Sent',
-        data: data.timeSeries.map(t => t.sent),
+        label: t('metaInsights.sent'),
+        data: data.timeSeries.map(d => d.sent),
         borderColor: 'rgb(59, 130, 246)',
         backgroundColor: 'rgba(59, 130, 246, 0.1)',
         fill: true,
         tension: 0.3
       },
       {
-        label: 'Delivered',
-        data: data.timeSeries.map(t => t.delivered),
+        label: t('metaInsights.delivered'),
+        data: data.timeSeries.map(d => d.delivered),
         borderColor: 'rgb(16, 185, 129)',
         backgroundColor: 'rgba(16, 185, 129, 0.1)',
         fill: true,
@@ -622,12 +624,12 @@ const pricingChartData = computed(() => {
     labels: categories.map(([cat]) => formatCategory(cat)),
     datasets: [
       {
-        label: 'Messages',
+        label: t('metaInsights.messaging'),
         data: categories.map(([, val]) => val.volume),
         backgroundColor: 'rgba(59, 130, 246, 0.8)'
       },
       {
-        label: 'Cost',
+        label: t('metaInsights.cost'),
         data: categories.map(([, val]) => val.cost),
         backgroundColor: 'rgba(16, 185, 129, 0.8)'
       }
@@ -694,8 +696,8 @@ const doughnutOptions = {
 <template>
   <div class="flex flex-col h-full">
     <PageHeader
-      title="Meta Insights"
-      description="WhatsApp Business Analytics from Meta"
+      :title="$t('metaInsights.title')"
+      :description="$t('metaInsights.subtitle')"
       :icon="BarChart3"
       icon-gradient="bg-gradient-to-br from-green-500 to-emerald-600 shadow-green-500/20"
     >
@@ -711,16 +713,16 @@ const doughnutOptions = {
             </PopoverTrigger>
             <PopoverContent class="w-[180px] p-0">
               <Command>
-                <CommandInput placeholder="Search account..." />
+                <CommandInput :placeholder="$t('metaInsights.searchAccount')" />
                 <CommandList>
-                  <CommandEmpty>No account found.</CommandEmpty>
+                  <CommandEmpty>{{ $t('metaInsights.noAccountFound') }}</CommandEmpty>
                   <CommandGroup>
                     <CommandItem
                       value="all"
                       @select="() => { selectedAccountId = 'all'; accountComboboxOpen = false }"
                     >
                       <Check :class="['mr-2 h-4 w-4', selectedAccountId === 'all' ? 'opacity-100' : 'opacity-0']" />
-                      All Accounts
+                      {{ $t('metaInsights.allAccounts') }}
                     </CommandItem>
                     <CommandItem
                       v-for="account in accounts"
@@ -741,26 +743,26 @@ const doughnutOptions = {
         <!-- Granularity Filter -->
         <Select v-model="selectedGranularity">
           <SelectTrigger class="w-[130px]">
-            <SelectValue placeholder="Granularity" />
+            <SelectValue :placeholder="$t('metaInsights.granularity')" />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="HALF_HOUR">Half Hour</SelectItem>
-            <SelectItem value="DAY">Daily</SelectItem>
-            <SelectItem value="MONTH">Monthly</SelectItem>
+            <SelectItem value="HALF_HOUR">{{ $t('metaInsights.halfHour') }}</SelectItem>
+            <SelectItem value="DAY">{{ $t('metaInsights.daily') }}</SelectItem>
+            <SelectItem value="MONTH">{{ $t('metaInsights.monthly') }}</SelectItem>
           </SelectContent>
         </Select>
 
         <!-- Time Range Filter -->
         <Select v-model="selectedRange">
           <SelectTrigger class="w-[150px]">
-            <SelectValue placeholder="Select range" />
+            <SelectValue :placeholder="$t('metaInsights.selectRange')" />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="today">Today</SelectItem>
-            <SelectItem value="7days">Last 7 days</SelectItem>
-            <SelectItem value="30days">Last 30 days</SelectItem>
-            <SelectItem value="this_month">This month</SelectItem>
-            <SelectItem value="custom">Custom range</SelectItem>
+            <SelectItem value="today">{{ $t('metaInsights.today') }}</SelectItem>
+            <SelectItem value="7days">{{ $t('metaInsights.last7Days') }}</SelectItem>
+            <SelectItem value="30days">{{ $t('metaInsights.last30Days') }}</SelectItem>
+            <SelectItem value="this_month">{{ $t('metaInsights.thisMonth') }}</SelectItem>
+            <SelectItem value="custom">{{ $t('metaInsights.customRange') }}</SelectItem>
           </SelectContent>
         </Select>
 
@@ -768,14 +770,14 @@ const doughnutOptions = {
           <PopoverTrigger as-child>
             <Button variant="outline" class="w-auto">
               <CalendarIcon class="h-4 w-4 mr-2" />
-              {{ formatDateRange || 'Select dates' }}
+              {{ formatDateRange || $t('metaInsights.selectDates') }}
             </Button>
           </PopoverTrigger>
           <PopoverContent class="w-auto p-4" align="end">
             <div class="space-y-4">
               <RangeCalendar v-model="customDateRange" :number-of-months="2" />
               <Button class="w-full" @click="applyCustomRange" :disabled="!customDateRange.start || !customDateRange.end">
-                Apply Range
+                {{ $t('metaInsights.applyRange') }}
               </Button>
             </div>
           </PopoverContent>
@@ -788,7 +790,7 @@ const doughnutOptions = {
 
         <!-- Cache indicator -->
         <Badge v-if="isCached" variant="secondary" class="ml-2">
-          Cached
+          {{ $t('metaInsights.cached') }}
         </Badge>
       </template>
     </PageHeader>
@@ -801,19 +803,19 @@ const doughnutOptions = {
           <TabsList class="grid w-full grid-cols-4 lg:w-auto lg:inline-flex">
             <TabsTrigger value="analytics">
               <MessageSquare class="h-4 w-4 lg:mr-2" />
-              <span class="hidden lg:inline">Messaging</span>
+              <span class="hidden lg:inline">{{ $t('metaInsights.messaging') }}</span>
             </TabsTrigger>
             <TabsTrigger value="pricing_analytics">
               <DollarSign class="h-4 w-4 lg:mr-2" />
-              <span class="hidden lg:inline">Pricing</span>
+              <span class="hidden lg:inline">{{ $t('metaInsights.pricing') }}</span>
             </TabsTrigger>
             <TabsTrigger value="template_analytics">
               <FileText class="h-4 w-4 lg:mr-2" />
-              <span class="hidden lg:inline">Templates</span>
+              <span class="hidden lg:inline">{{ $t('metaInsights.templates') }}</span>
             </TabsTrigger>
             <TabsTrigger value="call_analytics">
               <Phone class="h-4 w-4 lg:mr-2" />
-              <span class="hidden lg:inline">Calls</span>
+              <span class="hidden lg:inline">{{ $t('metaInsights.calls') }}</span>
             </TabsTrigger>
           </TabsList>
 
@@ -832,7 +834,7 @@ const doughnutOptions = {
               <div class="grid gap-4 md:grid-cols-3">
                 <div class="card-depth rounded-xl border border-white/[0.08] bg-white/[0.04] p-6 light:bg-white light:border-gray-200">
                   <div class="flex flex-row items-center justify-between space-y-0 pb-2">
-                    <span class="text-sm font-medium text-white/50 light:text-gray-500">Messages Sent</span>
+                    <span class="text-sm font-medium text-white/50 light:text-gray-500">{{ $t('metaInsights.messagesSent') }}</span>
                     <div class="h-10 w-10 rounded-lg bg-blue-500/20 flex items-center justify-center">
                       <Send class="h-5 w-5 text-blue-400" />
                     </div>
@@ -846,7 +848,7 @@ const doughnutOptions = {
 
                 <div class="card-depth rounded-xl border border-white/[0.08] bg-white/[0.04] p-6 light:bg-white light:border-gray-200">
                   <div class="flex flex-row items-center justify-between space-y-0 pb-2">
-                    <span class="text-sm font-medium text-white/50 light:text-gray-500">Messages Delivered</span>
+                    <span class="text-sm font-medium text-white/50 light:text-gray-500">{{ $t('metaInsights.messagesDelivered') }}</span>
                     <div class="h-10 w-10 rounded-lg bg-emerald-500/20 flex items-center justify-center">
                       <CheckCircle class="h-5 w-5 text-emerald-400" />
                     </div>
@@ -860,7 +862,7 @@ const doughnutOptions = {
 
                 <div class="card-depth rounded-xl border border-white/[0.08] bg-white/[0.04] p-6 light:bg-white light:border-gray-200">
                   <div class="flex flex-row items-center justify-between space-y-0 pb-2">
-                    <span class="text-sm font-medium text-white/50 light:text-gray-500">Delivery Rate</span>
+                    <span class="text-sm font-medium text-white/50 light:text-gray-500">{{ $t('metaInsights.deliveryRate') }}</span>
                     <div class="h-10 w-10 rounded-lg bg-purple-500/20 flex items-center justify-center">
                       <TrendingUp class="h-5 w-5 text-purple-400" />
                     </div>
@@ -878,14 +880,14 @@ const doughnutOptions = {
               <!-- Chart -->
               <Card>
                 <CardHeader>
-                  <CardTitle>Message Delivery Over Time</CardTitle>
-                  <CardDescription>Sent vs Delivered messages</CardDescription>
+                  <CardTitle>{{ $t('metaInsights.messageDeliveryOverTime') }}</CardTitle>
+                  <CardDescription>{{ $t('metaInsights.sentVsDelivered') }}</CardDescription>
                 </CardHeader>
                 <CardContent>
                   <div class="h-80">
                     <Line v-if="messagingChartData.labels.length > 0" :data="messagingChartData" :options="chartOptions" />
                     <div v-else class="h-full flex items-center justify-center text-muted-foreground">
-                      No data available for the selected period
+                      {{ $t('metaInsights.noDataForPeriod') }}
                     </div>
                   </div>
                 </CardContent>
@@ -893,7 +895,7 @@ const doughnutOptions = {
             </template>
             <template v-else>
               <div class="text-center py-12 text-muted-foreground">
-                No messaging analytics data available
+                {{ $t('metaInsights.noMessagingData') }}
               </div>
             </template>
           </TabsContent>
@@ -907,7 +909,7 @@ const doughnutOptions = {
               <div class="grid gap-4 md:grid-cols-2">
                 <div class="card-depth rounded-xl border border-white/[0.08] bg-white/[0.04] p-6 light:bg-white light:border-gray-200">
                   <div class="flex flex-row items-center justify-between space-y-0 pb-2">
-                    <span class="text-sm font-medium text-white/50 light:text-gray-500">Total Messages</span>
+                    <span class="text-sm font-medium text-white/50 light:text-gray-500">{{ $t('metaInsights.totalMessages') }}</span>
                     <div class="h-10 w-10 rounded-lg bg-blue-500/20 flex items-center justify-center">
                       <MessagesSquare class="h-5 w-5 text-blue-400" />
                     </div>
@@ -921,7 +923,7 @@ const doughnutOptions = {
 
                 <div class="card-depth rounded-xl border border-white/[0.08] bg-white/[0.04] p-6 light:bg-white light:border-gray-200">
                   <div class="flex flex-row items-center justify-between space-y-0 pb-2">
-                    <span class="text-sm font-medium text-white/50 light:text-gray-500">Total Cost</span>
+                    <span class="text-sm font-medium text-white/50 light:text-gray-500">{{ $t('metaInsights.totalCost') }}</span>
                     <div class="h-10 w-10 rounded-lg bg-emerald-500/20 flex items-center justify-center">
                       <DollarSign class="h-5 w-5 text-emerald-400" />
                     </div>
@@ -937,14 +939,14 @@ const doughnutOptions = {
               <!-- Chart -->
               <Card>
                 <CardHeader>
-                  <CardTitle>Messages & Cost by Category</CardTitle>
-                  <CardDescription>Breakdown by pricing category</CardDescription>
+                  <CardTitle>{{ $t('metaInsights.messagesCostByCategory') }}</CardTitle>
+                  <CardDescription>{{ $t('metaInsights.breakdownByCategory') }}</CardDescription>
                 </CardHeader>
                 <CardContent>
                   <div class="h-80">
                     <Bar v-if="pricingChartData.labels.length > 0" :data="pricingChartData" :options="chartOptions" />
                     <div v-else class="h-full flex items-center justify-center text-muted-foreground">
-                      No data available for the selected period
+                      {{ $t('metaInsights.noDataForPeriod') }}
                     </div>
                   </div>
                 </CardContent>
@@ -955,21 +957,21 @@ const doughnutOptions = {
                 <!-- Free Messages Breakdown -->
                 <Card>
                   <CardHeader>
-                    <CardTitle>Free Messages</CardTitle>
-                    <CardDescription>Free tier message breakdown</CardDescription>
+                    <CardTitle>{{ $t('metaInsights.freeMessages') }}</CardTitle>
+                    <CardDescription>{{ $t('metaInsights.freeTierBreakdown') }}</CardDescription>
                   </CardHeader>
                   <CardContent>
                     <div class="space-y-3">
                       <div class="flex items-center justify-between py-2 border-b border-white/[0.08] light:border-gray-100">
-                        <span class="text-sm text-white/70 light:text-gray-600">Free Customer Service</span>
+                        <span class="text-sm text-white/70 light:text-gray-600">{{ $t('metaInsights.freeCustomerService') }}</span>
                         <span class="font-semibold text-white light:text-gray-900">{{ (aggregatedData as ReturnType<typeof aggregatePricingData>).freeMessages.customerService.toLocaleString() }}</span>
                       </div>
                       <div class="flex items-center justify-between py-2 border-b border-white/[0.08] light:border-gray-100">
-                        <span class="text-sm text-white/70 light:text-gray-600">Free Entry Point</span>
+                        <span class="text-sm text-white/70 light:text-gray-600">{{ $t('metaInsights.freeEntryPoint') }}</span>
                         <span class="font-semibold text-white light:text-gray-900">{{ (aggregatedData as ReturnType<typeof aggregatePricingData>).freeMessages.entryPoint.toLocaleString() }}</span>
                       </div>
                       <div class="flex items-center justify-between py-2 bg-green-500/10 rounded px-2 -mx-2">
-                        <span class="text-sm font-medium text-green-400 light:text-green-600">Total Free</span>
+                        <span class="text-sm font-medium text-green-400 light:text-green-600">{{ $t('metaInsights.totalFree') }}</span>
                         <span class="font-bold text-green-400 light:text-green-600">{{ (aggregatedData as ReturnType<typeof aggregatePricingData>).freeMessages.total.toLocaleString() }}</span>
                       </div>
                     </div>
@@ -979,8 +981,8 @@ const doughnutOptions = {
                 <!-- Paid Messages by Category -->
                 <Card>
                   <CardHeader>
-                    <CardTitle>Paid Messages</CardTitle>
-                    <CardDescription>Paid message breakdown by category</CardDescription>
+                    <CardTitle>{{ $t('metaInsights.paidMessages') }}</CardTitle>
+                    <CardDescription>{{ $t('metaInsights.paidBreakdown') }}</CardDescription>
                   </CardHeader>
                   <CardContent>
                     <div class="space-y-3">
@@ -989,10 +991,10 @@ const doughnutOptions = {
                         <span class="font-semibold text-white light:text-gray-900">{{ (count as number).toLocaleString() }}</span>
                       </div>
                       <div v-if="Object.keys((aggregatedData as ReturnType<typeof aggregatePricingData>).paidMessages.byCategory).length === 0" class="text-center text-white/40 light:text-gray-400 py-4">
-                        No paid messages
+                        {{ $t('metaInsights.noPaidMessages') }}
                       </div>
                       <div v-else class="flex items-center justify-between py-2 bg-amber-500/10 rounded px-2 -mx-2">
-                        <span class="text-sm font-medium text-amber-400 light:text-amber-600">Total Paid</span>
+                        <span class="text-sm font-medium text-amber-400 light:text-amber-600">{{ $t('metaInsights.totalPaid') }}</span>
                         <span class="font-bold text-amber-400 light:text-amber-600">{{ (aggregatedData as ReturnType<typeof aggregatePricingData>).paidMessages.total.toLocaleString() }}</span>
                       </div>
                     </div>
@@ -1002,8 +1004,8 @@ const doughnutOptions = {
                 <!-- Cost by Category -->
                 <Card>
                   <CardHeader>
-                    <CardTitle>Cost by Category</CardTitle>
-                    <CardDescription>Approximate charges breakdown</CardDescription>
+                    <CardTitle>{{ $t('metaInsights.costByCategory') }}</CardTitle>
+                    <CardDescription>{{ $t('metaInsights.approximateCharges') }}</CardDescription>
                   </CardHeader>
                   <CardContent>
                     <div class="space-y-3">
@@ -1012,7 +1014,7 @@ const doughnutOptions = {
                         <span class="font-semibold text-white light:text-gray-900">{{ formatCurrency(cost as number) }}</span>
                       </div>
                       <div class="flex items-center justify-between py-2 bg-emerald-500/10 rounded px-2 -mx-2">
-                        <span class="text-sm font-medium text-emerald-400 light:text-emerald-600">Total Cost</span>
+                        <span class="text-sm font-medium text-emerald-400 light:text-emerald-600">{{ $t('metaInsights.totalCost') }}</span>
                         <span class="font-bold text-emerald-400 light:text-emerald-600">{{ formatCurrency((aggregatedData as ReturnType<typeof aggregatePricingData>).totals.cost) }}</span>
                       </div>
                     </div>
@@ -1022,15 +1024,15 @@ const doughnutOptions = {
                 <!-- By Country -->
                 <Card>
                   <CardHeader>
-                    <CardTitle>By Country</CardTitle>
-                    <CardDescription>Message and cost breakdown by country</CardDescription>
+                    <CardTitle>{{ $t('metaInsights.byCountry') }}</CardTitle>
+                    <CardDescription>{{ $t('metaInsights.messagesCostByCountry') }}</CardDescription>
                   </CardHeader>
                   <CardContent>
                     <div class="space-y-3">
                       <div v-for="(data, country) in (aggregatedData as ReturnType<typeof aggregatePricingData>).byCountry" :key="country" class="flex items-center justify-between py-2 border-b border-white/[0.08] light:border-gray-100 last:border-0">
                         <span class="text-sm text-white/70 light:text-gray-600">{{ country }}</span>
                         <div class="text-right">
-                          <span class="font-semibold text-white light:text-gray-900">{{ (data as {volume: number, cost: number}).volume.toLocaleString() }} msgs</span>
+                          <span class="font-semibold text-white light:text-gray-900">{{ (data as {volume: number, cost: number}).volume.toLocaleString() }} {{ $t('metaInsights.msgs') }}</span>
                           <span class="text-white/50 light:text-gray-500 ml-2">{{ formatCurrency((data as {volume: number, cost: number}).cost) }}</span>
                         </div>
                       </div>
@@ -1041,7 +1043,7 @@ const doughnutOptions = {
             </template>
             <template v-else>
               <div class="text-center py-12 text-muted-foreground">
-                No pricing analytics data available
+                {{ $t('metaInsights.noPricingData') }}
               </div>
             </template>
           </TabsContent>
@@ -1061,7 +1063,7 @@ const doughnutOptions = {
               <div class="grid gap-4 md:grid-cols-6">
                 <div class="card-depth rounded-xl border border-white/[0.08] bg-white/[0.04] p-6 light:bg-white light:border-gray-200">
                   <div class="flex flex-row items-center justify-between space-y-0 pb-2">
-                    <span class="text-sm font-medium text-white/50 light:text-gray-500">Sent</span>
+                    <span class="text-sm font-medium text-white/50 light:text-gray-500">{{ $t('metaInsights.sent') }}</span>
                     <div class="h-10 w-10 rounded-lg bg-blue-500/20 flex items-center justify-center">
                       <Send class="h-5 w-5 text-blue-400" />
                     </div>
@@ -1075,7 +1077,7 @@ const doughnutOptions = {
 
                 <div class="card-depth rounded-xl border border-white/[0.08] bg-white/[0.04] p-6 light:bg-white light:border-gray-200">
                   <div class="flex flex-row items-center justify-between space-y-0 pb-2">
-                    <span class="text-sm font-medium text-white/50 light:text-gray-500">Delivered</span>
+                    <span class="text-sm font-medium text-white/50 light:text-gray-500">{{ $t('metaInsights.delivered') }}</span>
                     <div class="h-10 w-10 rounded-lg bg-emerald-500/20 flex items-center justify-center">
                       <CheckCircle class="h-5 w-5 text-emerald-400" />
                     </div>
@@ -1089,7 +1091,7 @@ const doughnutOptions = {
 
                 <div class="card-depth rounded-xl border border-white/[0.08] bg-white/[0.04] p-6 light:bg-white light:border-gray-200">
                   <div class="flex flex-row items-center justify-between space-y-0 pb-2">
-                    <span class="text-sm font-medium text-white/50 light:text-gray-500">Read</span>
+                    <span class="text-sm font-medium text-white/50 light:text-gray-500">{{ $t('metaInsights.read') }}</span>
                     <div class="h-10 w-10 rounded-lg bg-purple-500/20 flex items-center justify-center">
                       <Eye class="h-5 w-5 text-purple-400" />
                     </div>
@@ -1103,7 +1105,7 @@ const doughnutOptions = {
 
                 <div class="card-depth rounded-xl border border-white/[0.08] bg-white/[0.04] p-6 light:bg-white light:border-gray-200">
                   <div class="flex flex-row items-center justify-between space-y-0 pb-2">
-                    <span class="text-sm font-medium text-white/50 light:text-gray-500">Replied</span>
+                    <span class="text-sm font-medium text-white/50 light:text-gray-500">{{ $t('metaInsights.replied') }}</span>
                     <div class="h-10 w-10 rounded-lg bg-amber-500/20 flex items-center justify-center">
                       <MessagesSquare class="h-5 w-5 text-amber-400" />
                     </div>
@@ -1117,7 +1119,7 @@ const doughnutOptions = {
 
                 <div class="card-depth rounded-xl border border-white/[0.08] bg-white/[0.04] p-6 light:bg-white light:border-gray-200">
                   <div class="flex flex-row items-center justify-between space-y-0 pb-2">
-                    <span class="text-sm font-medium text-white/50 light:text-gray-500">Clicked</span>
+                    <span class="text-sm font-medium text-white/50 light:text-gray-500">{{ $t('metaInsights.clicked') }}</span>
                     <div class="h-10 w-10 rounded-lg bg-cyan-500/20 flex items-center justify-center">
                       <MousePointerClick class="h-5 w-5 text-cyan-400" />
                     </div>
@@ -1131,7 +1133,7 @@ const doughnutOptions = {
 
                 <div class="card-depth rounded-xl border border-white/[0.08] bg-white/[0.04] p-6 light:bg-white light:border-gray-200">
                   <div class="flex flex-row items-center justify-between space-y-0 pb-2">
-                    <span class="text-sm font-medium text-white/50 light:text-gray-500">Total Cost</span>
+                    <span class="text-sm font-medium text-white/50 light:text-gray-500">{{ $t('metaInsights.totalCost') }}</span>
                     <div class="h-10 w-10 rounded-lg bg-rose-500/20 flex items-center justify-center">
                       <DollarSign class="h-5 w-5 text-rose-400" />
                     </div>
@@ -1151,14 +1153,14 @@ const doughnutOptions = {
                 <CardHeader>
                   <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
                     <div>
-                      <CardTitle>Template Performance</CardTitle>
-                      <CardDescription>Performance metrics by template</CardDescription>
+                      <CardTitle>{{ $t('metaInsights.templatePerformance') }}</CardTitle>
+                      <CardDescription>{{ $t('metaInsights.performanceByTemplate') }}</CardDescription>
                     </div>
                     <div class="relative w-full sm:w-64">
                       <Search class="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-white/40 light:text-gray-400" />
                       <Input
                         v-model="templateSearchQuery"
-                        placeholder="Search templates..."
+                        :placeholder="$t('metaInsights.searchTemplates')"
                         class="pl-9"
                       />
                     </div>
@@ -1170,8 +1172,8 @@ const doughnutOptions = {
                     :columns="templateColumns"
                     v-model:sort-key="templateSortKey"
                     v-model:sort-direction="templateSortDirection"
-                    :empty-title="templateSearchQuery ? 'No templates matching search' : 'No template data available'"
-                    :empty-description="templateSearchQuery ? '' : 'No data for the selected period'"
+                    :empty-title="templateSearchQuery ? $t('metaInsights.noTemplatesMatching') : $t('metaInsights.noTemplateData')"
+                    :empty-description="templateSearchQuery ? '' : $t('metaInsights.noDataForSelectedPeriod')"
                   >
                     <template #cell-name="{ item }">
                       <div class="font-medium">{{ item.name }}</div>
@@ -1207,7 +1209,7 @@ const doughnutOptions = {
             </template>
             <template v-else>
               <div class="text-center py-12 text-muted-foreground">
-                No template analytics data available
+                {{ $t('metaInsights.noTemplateAnalytics') }}
               </div>
             </template>
           </TabsContent>
@@ -1227,7 +1229,7 @@ const doughnutOptions = {
               <div class="grid gap-4 md:grid-cols-2">
                 <div class="card-depth rounded-xl border border-white/[0.08] bg-white/[0.04] p-6 light:bg-white light:border-gray-200">
                   <div class="flex flex-row items-center justify-between space-y-0 pb-2">
-                    <span class="text-sm font-medium text-white/50 light:text-gray-500">Total Calls</span>
+                    <span class="text-sm font-medium text-white/50 light:text-gray-500">{{ $t('metaInsights.totalCalls') }}</span>
                     <div class="h-10 w-10 rounded-lg bg-blue-500/20 flex items-center justify-center">
                       <Phone class="h-5 w-5 text-blue-400" />
                     </div>
@@ -1241,7 +1243,7 @@ const doughnutOptions = {
 
                 <div class="card-depth rounded-xl border border-white/[0.08] bg-white/[0.04] p-6 light:bg-white light:border-gray-200">
                   <div class="flex flex-row items-center justify-between space-y-0 pb-2">
-                    <span class="text-sm font-medium text-white/50 light:text-gray-500">Total Duration</span>
+                    <span class="text-sm font-medium text-white/50 light:text-gray-500">{{ $t('metaInsights.totalDuration') }}</span>
                     <div class="h-10 w-10 rounded-lg bg-emerald-500/20 flex items-center justify-center">
                       <TrendingUp class="h-5 w-5 text-emerald-400" />
                     </div>
@@ -1258,7 +1260,7 @@ const doughnutOptions = {
               <div class="grid gap-4 md:grid-cols-2">
                 <Card>
                   <CardHeader>
-                    <CardTitle>Calls by Type</CardTitle>
+                    <CardTitle>{{ $t('metaInsights.callsByType') }}</CardTitle>
                   </CardHeader>
                   <CardContent>
                     <div class="space-y-3">
@@ -1271,7 +1273,7 @@ const doughnutOptions = {
                         <span class="font-medium text-white light:text-gray-900">{{ count.toLocaleString() }}</span>
                       </div>
                       <div v-if="Object.keys((aggregatedData as ReturnType<typeof aggregateCallData>).byType).length === 0" class="text-muted-foreground text-center py-4">
-                        No call data available
+                        {{ $t('metaInsights.noCallData') }}
                       </div>
                     </div>
                   </CardContent>
@@ -1279,7 +1281,7 @@ const doughnutOptions = {
 
                 <Card>
                   <CardHeader>
-                    <CardTitle>Calls by Direction</CardTitle>
+                    <CardTitle>{{ $t('metaInsights.callsByDirection') }}</CardTitle>
                   </CardHeader>
                   <CardContent>
                     <div class="space-y-3">
@@ -1292,7 +1294,7 @@ const doughnutOptions = {
                         <span class="font-medium text-white light:text-gray-900">{{ count.toLocaleString() }}</span>
                       </div>
                       <div v-if="Object.keys((aggregatedData as ReturnType<typeof aggregateCallData>).byDirection).length === 0" class="text-muted-foreground text-center py-4">
-                        No call data available
+                        {{ $t('metaInsights.noCallData') }}
                       </div>
                     </div>
                   </CardContent>
@@ -1301,7 +1303,7 @@ const doughnutOptions = {
             </template>
             <template v-else>
               <div class="text-center py-12 text-muted-foreground">
-                No call analytics data available
+                {{ $t('metaInsights.noCallAnalytics') }}
               </div>
             </template>
           </TabsContent>
