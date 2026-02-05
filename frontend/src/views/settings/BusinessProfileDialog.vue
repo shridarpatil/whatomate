@@ -152,7 +152,7 @@ async function saveProfile() {
     emit('update:open', false)
   } catch (error: any) {
     console.error('Failed to update profile:', error)
-    const message = error.response?.data?.message || t('businessProfile.updateFailed')
+    const message = error.response?.data?.message || t('common.failedUpdate', { resource: 'business profile' })
     toast.error(message)
   } finally {
     isSubmitting.value = false
