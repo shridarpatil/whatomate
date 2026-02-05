@@ -528,11 +528,15 @@ func (a *App) ImportData(r *fastglue.Request) error {
 			}
 		}
 
-		// Create new record
+		// Create new record using model type
 		recordMap["id"] = uuid.New()
 
-		// Use raw SQL insert for flexibility
-		if err := a.DB.Table(tableName).Create(recordMap).Error; err != nil {
+		// Create instance of the model type and populate it
+		modelType := reflect.TypeOf(config.Model).Elem()
+		newRecord := reflect.New(modelType).Interface()
+
+		// Use GORM to create - this handles PostgreSQL properly
+		if err := a.DB.Model(newRecord).Create(recordMap).Error; err != nil {
 			errors++
 			errorMessages = append(errorMessages, fmt.Sprintf("Row %d: failed to create - %s", rowNum, err.Error()))
 			continue
