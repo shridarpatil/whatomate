@@ -1,0 +1,301 @@
+---
+title: Organizations
+description: Organization and member management API
+---
+
+import { Aside } from '@astrojs/starlight/components';
+
+## Overview
+
+Whatomate is multi-tenant — each organization has its own isolated data (contacts, conversations, templates, etc.). Users can belong to multiple organizations with different roles in each.
+
+## List Organizations
+
+Retrieve all organizations. Requires super admin or `organizations:read` permission.
+
+```bash
+GET /api/organizations
+```
+
+### Response
+
+```json
+{
+  "status": "success",
+  "data": {
+    "organizations": [
+      {
+        "id": "uuid",
+        "name": "Acme Corp",
+        "slug": "acme-corp-a1b2c3d4",
+        "created_at": "2024-01-01T00:00:00Z"
+      }
+    ]
+  }
+}
+```
+
+## Get Current Organization
+
+Retrieve the current organization's details.
+
+```bash
+GET /api/organizations/current
+```
+
+### Response
+
+```json
+{
+  "status": "success",
+  "data": {
+    "id": "uuid",
+    "name": "Acme Corp",
+    "slug": "acme-corp-a1b2c3d4",
+    "created_at": "2024-01-01T00:00:00Z"
+  }
+}
+```
+
+## Create Organization
+
+Create a new organization. The creator is automatically added as an admin. System roles (Admin, Manager, Agent) and default chatbot settings are seeded automatically.
+
+```bash
+POST /api/organizations
+```
+
+<Aside type="note">
+  Requires `organizations:write` permission.
+</Aside>
+
+### Request Body
+
+```json
+{
+  "name": "New Organization"
+}
+```
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `name` | string | Yes | Organization name |
+
+### Response
+
+```json
+{
+  "status": "success",
+  "data": {
+    "id": "uuid",
+    "name": "New Organization",
+    "slug": "new-organization-a1b2c3d4",
+    "created_at": "2024-01-01T00:00:00Z"
+  }
+}
+```
+
+## Organization Members
+
+Manage which users have access to an organization. Members are users from other organizations who have been granted access with a specific role.
+
+### List Members
+
+Retrieve all members of the current organization.
+
+```bash
+GET /api/organizations/members
+```
+
+<Aside type="note">
+  Requires `organizations:read` permission.
+</Aside>
+
+#### Query Parameters
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `search` | string | Filter by name or email |
+| `page` | integer | Page number (default: 1) |
+| `limit` | integer | Items per page (default: 50) |
+
+#### Response
+
+```json
+{
+  "status": "success",
+  "data": {
+    "members": [
+      {
+        "id": "uuid",
+        "user_id": "uuid",
+        "organization_id": "uuid",
+        "role_id": "uuid",
+        "role_name": "agent",
+        "is_default": true,
+        "email": "user@example.com",
+        "full_name": "John Doe",
+        "is_active": true,
+        "created_at": "2024-01-01T00:00:00Z"
+      }
+    ],
+    "total": 1,
+    "page": 1,
+    "limit": 50
+  }
+}
+```
+
+### Add Member
+
+Add an existing user to the organization. The user can be identified by `user_id` or `email`.
+
+```bash
+POST /api/organizations/members
+```
+
+<Aside type="note">
+  Requires `organizations:assign` permission.
+</Aside>
+
+#### Request Body
+
+```json
+{
+  "user_id": "uuid",
+  "role_id": "uuid"
+}
+```
+
+Or by email:
+
+```json
+{
+  "email": "user@example.com",
+  "role_id": "uuid"
+}
+```
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `user_id` | string | One of `user_id` or `email` | UUID of the user to add |
+| `email` | string | One of `user_id` or `email` | Email of the user to add |
+| `role_id` | string | No | Role to assign. If omitted, uses the organization's default role |
+
+#### Response
+
+```json
+{
+  "status": "success",
+  "data": {
+    "message": "Member added successfully"
+  }
+}
+```
+
+### Update Member Role
+
+Change a member's role within the organization.
+
+```bash
+PUT /api/organizations/members/{member_id}
+```
+
+<Aside type="note">
+  Requires `organizations:assign` permission. The `member_id` is the user's UUID.
+</Aside>
+
+#### Request Body
+
+```json
+{
+  "role_id": "uuid"
+}
+```
+
+#### Response
+
+```json
+{
+  "status": "success",
+  "data": {
+    "message": "Member role updated successfully"
+  }
+}
+```
+
+### Remove Member
+
+Remove a user from the organization. This only removes the membership — the user's account remains intact.
+
+```bash
+DELETE /api/organizations/members/{member_id}
+```
+
+<Aside type="note">
+  Requires `organizations:assign` permission.
+</Aside>
+
+<Aside type="caution">
+  You cannot remove yourself from the organization.
+</Aside>
+
+#### Response
+
+```json
+{
+  "status": "success",
+  "data": {
+    "message": "Member removed successfully"
+  }
+}
+```
+
+## Organization Settings
+
+### Get Settings
+
+```bash
+GET /api/organizations/settings
+```
+
+#### Response
+
+```json
+{
+  "status": "success",
+  "data": {
+    "name": "Acme Corp",
+    "settings": {
+      "mask_phone_numbers": false,
+      "timezone": "UTC",
+      "date_format": "YYYY-MM-DD"
+    }
+  }
+}
+```
+
+### Update Settings
+
+```bash
+PUT /api/organizations/settings
+```
+
+#### Request Body
+
+```json
+{
+  "name": "Updated Name",
+  "mask_phone_numbers": true,
+  "timezone": "Asia/Kolkata",
+  "date_format": "DD/MM/YYYY"
+}
+```
+
+All fields are optional — only provided fields are updated.
+
+## See Also
+
+- [Authentication](/whatomate/api-reference/authentication) - Organization switching via `POST /api/auth/switch-org`
+- [Users](/whatomate/api-reference/users) - User management within an organization
+- [Roles & Permissions](/whatomate/features/roles-permissions) - Permission system details

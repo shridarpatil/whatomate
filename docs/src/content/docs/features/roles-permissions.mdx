@@ -71,6 +71,7 @@ Permissions follow the format `resource:action`. Available actions are:
 | `chatbot` | Chatbot settings |
 | `webhooks` | Webhook configuration |
 | `api_keys` | API key management |
+| `organizations` | Organization and member management |
 | `accounts` | WhatsApp account settings |
 | `settings` | Organization settings |
 | `analytics` | Analytics and reporting |
@@ -104,25 +105,38 @@ Contacts
   Changes to permissions take effect immediately. Users will see updated menu items and access controls without needing to log out.
 </Aside>
 
-## Super Admin
+## Multi-Organization Access
 
-Super admins have special privileges:
-
-- Access to all organizations (for multi-tenant setups)
-- Can switch between organizations using the organization switcher
-- Organization switching uses the `X-Organization-ID` header for API requests
-
-<Aside type="caution">
-  The `X-Organization-ID` header is only respected for super admin users. Regular users cannot use this header to access other organizations.
-</Aside>
+Users can belong to multiple organizations, each with a different role. The organization switcher appears in the sidebar for users who are members of more than one organization.
 
 ### Organization Switching
 
-Super admins see an organization switcher in the sidebar. When switching organizations:
+When switching organizations:
 
-1. All data views refresh to show the selected organization's data
-2. API requests include the `X-Organization-ID` header
-3. The selected organization persists across page navigation
+1. New JWT tokens are issued scoped to the target organization via `POST /api/auth/switch-org`
+2. The user's role and permissions are loaded from their membership in the target organization
+3. All data views refresh to show the selected organization's data
+4. The selected organization persists across page navigation
+
+### Cross-Organization Members
+
+Users added to an organization from another org appear with a **Member** badge in the user list. Members have limited management:
+
+- **Role updates** — only the org-specific role can be changed
+- **Removal** — removes the user from the organization without deleting their account
+- Other fields (email, password, name, active status) are managed in the user's home organization
+
+### Super Admin
+
+Super admins have additional privileges:
+
+- Access to all organizations, even without explicit membership
+- Can switch to any organization using the `X-Organization-ID` header
+- Can create new organizations
+
+<Aside type="caution">
+  The `X-Organization-ID` header for direct API access is only respected for super admin users. Regular multi-org users must use the `POST /api/auth/switch-org` endpoint.
+</Aside>
 
 ## UI Behavior
 

@@ -16,10 +16,10 @@ After logging in, you receive an access token and refresh token. Include the acc
 
 ## Register
 
-Create a new user account.
+Create a new user account within an existing organization. Registration requires an `organization_id`, which is typically provided via an invitation link.
 
 <Aside type="note">
-  Registration may be disabled in production environments. Contact your administrator for access.
+  If the email already exists and the password matches, the user is added to the organization as a member instead of creating a new account.
 </Aside>
 
 ```bash
@@ -32,9 +32,17 @@ POST /api/auth/register
 {
   "email": "user@example.com",
   "password": "securepassword123",
-  "name": "John Doe"
+  "full_name": "John Doe",
+  "organization_id": "uuid"
 }
 ```
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `email` | string | Yes | User's email address |
+| `password` | string | Yes | Minimum 8 characters |
+| `full_name` | string | Yes | Display name |
+| `organization_id` | string | Yes | UUID of the organization to join |
 
 ### Response
 
@@ -45,8 +53,12 @@ POST /api/auth/register
     "user": {
       "id": "uuid",
       "email": "user@example.com",
-      "name": "John Doe",
-      "created_at": "2024-01-01T00:00:00Z"
+      "full_name": "John Doe",
+      "organization_id": "uuid",
+      "role": {
+        "id": "uuid",
+        "name": "agent"
+      }
     },
     "access_token": "eyJhbGciOiJIUzI1NiIs...",
     "refresh_token": "eyJhbGciOiJIUzI1NiIs...",
@@ -112,6 +124,53 @@ POST /api/auth/refresh
 {
   "status": "success",
   "data": {
+    "access_token": "eyJhbGciOiJIUzI1NiIs...",
+    "refresh_token": "eyJhbGciOiJIUzI1NiIs...",
+    "expires_in": 3600
+  }
+}
+```
+
+## Switch Organization
+
+Switch the current user's active organization. Returns new tokens scoped to the target organization with the user's org-specific role and permissions.
+
+<Aside type="note">
+  Non-super-admin users must be a member of the target organization. Super admins can switch to any organization.
+</Aside>
+
+```bash
+POST /api/auth/switch-org
+```
+
+### Request Body
+
+```json
+{
+  "organization_id": "uuid"
+}
+```
+
+### Response
+
+```json
+{
+  "status": "success",
+  "data": {
+    "user": {
+      "id": "uuid",
+      "email": "user@example.com",
+      "full_name": "John Doe",
+      "organization_id": "uuid",
+      "role": {
+        "id": "uuid",
+        "name": "agent",
+        "permissions": [
+          { "resource": "contacts", "action": "read" },
+          { "resource": "messages", "action": "read" }
+        ]
+      }
+    },
     "access_token": "eyJhbGciOiJIUzI1NiIs...",
     "refresh_token": "eyJhbGciOiJIUzI1NiIs...",
     "expires_in": 3600

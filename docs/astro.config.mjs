@@ -40,6 +40,7 @@ export default defineConfig({
             { label: 'Authentication', slug: 'api-reference/authentication' },
             { label: 'API Keys', slug: 'api-reference/api-keys' },
             { label: 'Users', slug: 'api-reference/users' },
+            { label: 'Organizations', slug: 'api-reference/organizations' },
             { label: 'Roles', slug: 'api-reference/roles' },
             { label: 'Accounts', slug: 'api-reference/accounts' },
             { label: 'Contacts', slug: 'api-reference/contacts' },
