@@ -229,7 +229,7 @@ func (a *App) CreateUser(r *fastglue.Request) error {
 		}
 	}
 
-	// Check if email already exists
+	// Check if email already exists (including soft-deleted users)
 	var existingUser models.User
 	if err := a.DB.Where("email = ?", req.Email).First(&existingUser).Error; err == nil {
 		return r.SendErrorEnvelope(fasthttp.StatusConflict, "Email already exists", nil, "")
@@ -242,6 +242,65 @@ func (a *App) CreateUser(r *fastglue.Request) error {
 		return r.SendErrorEnvelope(fasthttp.StatusInternalServerError, "Failed to create user", nil, "")
 	}
 
+	isSuperAdmin := false
+	if req.IsSuperAdmin != nil && *req.IsSuperAdmin {
+		if !a.IsSuperAdmin(userID) {
+			return r.SendErrorEnvelope(fasthttp.StatusForbidden, "Only super admins can create super admins", nil, "")
+		}
+		isSuperAdmin = true
+	}
+
+	// Check for soft-deleted user with same email and restore them
+	var softDeleted models.User
+	if err := a.DB.Unscoped().Where("email = ? AND deleted_at IS NOT NULL", req.Email).First(&softDeleted).Error; err == nil {
+		// Restore the soft-deleted user with new details
+		if err := a.DB.Unscoped().Model(&softDeleted).Updates(map[string]interface{}{
+			"deleted_at":      nil,
+			"organization_id": orgID,
+			"password_hash":   string(hashedPassword),
+			"full_name":       req.FullName,
+			"role_id":         roleID,
+			"is_active":       true,
+			"is_super_admin":  isSuperAdmin,
+		}).Error; err != nil {
+			a.Log.Error("Failed to restore user", "error", err)
+			return r.SendErrorEnvelope(fasthttp.StatusInternalServerError, "Failed to create user", nil, "")
+		}
+
+		// Restore or create UserOrganization entry
+		var existingOrg models.UserOrganization
+		if err := a.DB.Unscoped().Where("user_id = ? AND organization_id = ?", softDeleted.ID, orgID).First(&existingOrg).Error; err == nil {
+			a.DB.Unscoped().Model(&existingOrg).Updates(map[string]interface{}{
+				"deleted_at": nil,
+				"role_id":    roleID,
+				"is_default": true,
+			})
+		} else {
+			a.DB.Create(&models.UserOrganization{
+				UserID:         softDeleted.ID,
+				OrganizationID: orgID,
+				RoleID:         roleID,
+				IsDefault:      true,
+			})
+		}
+
+		// Load role for response
+		if roleID != nil {
+			var role models.CustomRole
+			if err := a.DB.Where("id = ?", *roleID).First(&role).Error; err == nil {
+				softDeleted.Role = &role
+			}
+		}
+		softDeleted.OrganizationID = orgID
+		softDeleted.PasswordHash = string(hashedPassword)
+		softDeleted.FullName = req.FullName
+		softDeleted.RoleID = roleID
+		softDeleted.IsActive = true
+		softDeleted.IsSuperAdmin = isSuperAdmin
+
+		return r.SendEnvelope(userToResponse(softDeleted))
+	}
+
 	user := models.User{
 		OrganizationID: orgID,
 		Email:          req.Email,
@@ -249,14 +308,7 @@ func (a *App) CreateUser(r *fastglue.Request) error {
 		FullName:       req.FullName,
 		RoleID:         roleID,
 		IsActive:       true,
-	}
-
-	// Only superadmins can create other superadmins
-	if req.IsSuperAdmin != nil && *req.IsSuperAdmin {
-		if !a.IsSuperAdmin(userID) {
-			return r.SendErrorEnvelope(fasthttp.StatusForbidden, "Only super admins can create super admins", nil, "")
-		}
-		user.IsSuperAdmin = true
+		IsSuperAdmin:   isSuperAdmin,
 	}
 
 	if err := a.DB.Create(&user).Error; err != nil {
