@@ -1,6 +1,8 @@
-import { test, expect } from '@playwright/test'
+import { test, expect, request as playwrightRequest } from '@playwright/test'
 import { TablePage, DialogPage } from '../../pages'
-import { loginAsAdmin, createUserFixture } from '../../helpers'
+import { loginAsAdmin, login, createUserFixture, ApiHelper } from '../../helpers'
+
+const BASE_URL = process.env.BASE_URL || 'http://localhost:8080'
 
 test.describe('Users Management', () => {
   let tablePage: TablePage
@@ -173,17 +175,82 @@ test.describe('Users - Copy Invite Link', () => {
   })
 })
 
-test.describe('Users - Add Existing User', () => {
-  let tablePage: TablePage
-
+test.describe('Users - Add Existing User (Single Org)', () => {
   test.beforeEach(async ({ page }) => {
     await loginAsAdmin(page)
+    await page.goto('/settings/users')
+    await page.waitForLoadState('networkidle')
+  })
+
+  test('should hide add existing user button in single-org mode', async ({ page }) => {
+    const addExistingButton = page.getByRole('button', { name: /Add Existing User/i })
+    await expect(addExistingButton).not.toBeVisible()
+  })
+})
+
+test.describe('Users - Add Existing User (Multi Org)', () => {
+  let tablePage: TablePage
+  let testUserEmail: string
+  let testUserId: string
+  let testRoleId: string
+  let secondOrgId: string
+  const testPassword = 'Password123!'
+
+  // Set up: create a user with organizations:assign permission in multiple orgs
+  test.beforeAll(async () => {
+    const reqContext = await playwrightRequest.newContext()
+    const api = new ApiHelper(reqContext)
+    await api.login('admin@admin.com', 'admin')
+
+    // Create a role with organizations:assign + users:read (needed to view the page)
+    const permissions = await api.findPermissionKeys([
+      { resource: 'users', action: 'read' },
+      { resource: 'users', action: 'write' },
+      { resource: 'organizations', action: 'assign' },
+    ])
+    const role = await api.createRole({
+      name: `E2E OrgAssign Role ${Date.now()}`,
+      description: 'E2E test role with organizations:assign',
+      permissions,
+    })
+    testRoleId = role.id
+
+    // Create a test user with this role
+    testUserEmail = `e2e-orgassign-${Date.now()}@test.com`
+    const user = await api.createUser({
+      email: testUserEmail,
+      password: testPassword,
+      full_name: 'E2E OrgAssign User',
+      role_id: testRoleId,
+    })
+    testUserId = user.id
+
+    // Create a second org and add the user to it
+    const org = await api.createOrganization(`E2E Multi-Org ${Date.now()}`)
+    secondOrgId = org.id
+    await api.addOrgMember(testUserId, undefined, secondOrgId)
+
+    await reqContext.dispose()
+  })
+
+  test.afterAll(async () => {
+    const reqContext = await playwrightRequest.newContext()
+    const api = new ApiHelper(reqContext)
+    await api.login('admin@admin.com', 'admin')
+    try { await api.removeOrgMember(testUserId, secondOrgId) } catch { /* ignore */ }
+    try { await api.deleteUser(testUserId) } catch { /* ignore */ }
+    try { await api.deleteRole(testRoleId) } catch { /* ignore */ }
+    await reqContext.dispose()
+  })
+
+  test.beforeEach(async ({ page }) => {
+    await login(page, { email: testUserEmail, password: testPassword, role: 'admin' })
     await page.goto('/settings/users')
     await page.waitForLoadState('networkidle')
     tablePage = new TablePage(page)
   })
 
-  test('should show add existing user button', async ({ page }) => {
+  test('should show add existing user button in multi-org mode', async ({ page }) => {
     const addExistingButton = page.getByRole('button', { name: /Add Existing User/i })
     await expect(addExistingButton).toBeVisible()
   })
