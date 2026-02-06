@@ -189,6 +189,117 @@ test.describe('Organization Switching (Super Admin)', () => {
   })
 })
 
+test.describe('Create Organization via Sidebar', () => {
+  async function loginAsSuperAdmin(page: any) {
+    await page.goto('/login')
+    await page.locator('input[type="email"]').fill(ADMIN_EMAIL)
+    await page.locator('input[type="password"]').fill(ADMIN_PASSWORD)
+    await page.locator('button[type="submit"]').click()
+
+    // Wait for redirect or error toast
+    try {
+      await page.waitForURL((url: URL) => !url.pathname.includes('/login'), { timeout: 10000 })
+      return true
+    } catch {
+      // First attempt failed, try fallback
+    }
+
+    await page.locator('input[type="email"]').fill(FALLBACK_ADMIN_EMAIL)
+    await page.locator('input[type="password"]').fill(FALLBACK_ADMIN_PASSWORD)
+    await page.locator('button[type="submit"]').click()
+
+    try {
+      await page.waitForURL((url: URL) => !url.pathname.includes('/login'), { timeout: 10000 })
+      return true
+    } catch {
+      return false
+    }
+  }
+
+  // Helper to find the plus button in the org switcher
+  async function getOrgPlusButton(page: any) {
+    const sidebar = page.locator('aside')
+    // Use exact match for the "Organization" label to avoid matching "No organizations found"
+    const orgLabel = sidebar.getByText('Organization', { exact: true })
+    await expect(orgLabel).toBeVisible({ timeout: 10000 })
+    return orgLabel.locator('..').locator('button').filter({ has: page.locator('.lucide-plus-icon') })
+  }
+
+  test('should show plus button in org switcher for super admin', async ({ page }) => {
+    const loggedIn = await loginAsSuperAdmin(page)
+    if (!loggedIn) { test.skip(true, 'No admin credentials available'); return }
+
+    const plusButton = await getOrgPlusButton(page)
+    await expect(plusButton).toBeVisible()
+  })
+
+  test('should open create organization dialog on plus click', async ({ page }) => {
+    const loggedIn = await loginAsSuperAdmin(page)
+    if (!loggedIn) { test.skip(true, 'No admin credentials available'); return }
+
+    const plusButton = await getOrgPlusButton(page)
+    await plusButton.click()
+
+    // Dialog should appear with title and input
+    const dialog = page.getByRole('dialog')
+    await expect(dialog).toBeVisible()
+    await expect(dialog.locator('input')).toBeVisible()
+
+    // Cancel should close the dialog
+    await dialog.getByRole('button', { name: /Cancel/i }).click()
+    await expect(dialog).not.toBeVisible()
+  })
+
+  test('should create a new organization via plus button', async ({ page, request }) => {
+    const loggedIn = await loginAsSuperAdmin(page)
+    if (!loggedIn) { test.skip(true, 'No admin credentials available'); return }
+
+    const orgName = `E2E Test Org ${Date.now()}`
+
+    const plusButton = await getOrgPlusButton(page)
+    await plusButton.click()
+
+    // Fill in the name and submit
+    const dialog = page.getByRole('dialog')
+    await expect(dialog).toBeVisible()
+    await dialog.locator('input').fill(orgName)
+    await dialog.getByRole('button', { name: /Create/i }).click()
+
+    // Dialog should close after successful creation
+    await expect(dialog).not.toBeVisible({ timeout: 10000 })
+
+    // Success toast should appear (use .first() since login toast may still be visible)
+    const toast = page.locator('[data-sonner-toast]').first()
+    await expect(toast).toBeVisible({ timeout: 5000 })
+
+    // Verify the org was actually created via API
+    const api = new ApiHelper(request)
+    try {
+      await api.login(ADMIN_EMAIL, ADMIN_PASSWORD)
+    } catch {
+      await api.login(FALLBACK_ADMIN_EMAIL, FALLBACK_ADMIN_PASSWORD)
+    }
+    const orgs = await api.getOrganizations()
+    const created = orgs.find((o: any) => o.name === orgName)
+    expect(created).toBeTruthy()
+  })
+
+  test('should not submit with empty org name', async ({ page }) => {
+    const loggedIn = await loginAsSuperAdmin(page)
+    if (!loggedIn) { test.skip(true, 'No admin credentials available'); return }
+
+    const plusButton = await getOrgPlusButton(page)
+    await plusButton.click()
+
+    const dialog = page.getByRole('dialog')
+    await expect(dialog).toBeVisible()
+
+    // Create button should be disabled when input is empty
+    const createButton = dialog.getByRole('button', { name: /Create/i })
+    await expect(createButton).toBeDisabled()
+  })
+})
+
 test.describe('Organization Data Isolation', () => {
   test('users from one org are not visible in another org', async ({ request }) => {
     // Login as super admin to create orgs and test cross-org access
