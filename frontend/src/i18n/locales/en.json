@@ -548,7 +548,16 @@
     "superAdminDesc": "Super admins can access all organizations",
     "fillEmailName": "Please fill in email and name",
     "passwordRequired": "Password is required for new users",
-    "selectRoleRequired": "Please select a role"
+    "selectRoleRequired": "Please select a role",
+    "member": "Member",
+    "removeMember": "Remove Member",
+    "removeMemberTooltip": "Remove from organization",
+    "removeMemberWarning": "This will remove the user from this organization. They will lose access to all organization resources but their account will not be deleted.",
+    "memberRemoved": "Member removed from organization",
+    "updateMemberRole": "Update Role",
+    "updateMemberRoleTitle": "Update Member Role",
+    "updateMemberRoleDesc": "Change the role for this member in this organization.",
+    "memberRoleUpdated": "Member role updated"
   },
   "roles": {
     "title": "Roles & Permissions",

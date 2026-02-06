@@ -88,6 +88,7 @@ func TestCORS(t *testing.T) {
 			assert.Contains(t, string(result.RequestCtx.Response.Header.Peek("Access-Control-Allow-Methods")), "POST")
 			assert.Contains(t, string(result.RequestCtx.Response.Header.Peek("Access-Control-Allow-Headers")), "Authorization")
 			assert.Contains(t, string(result.RequestCtx.Response.Header.Peek("Access-Control-Allow-Headers")), "X-API-Key")
+			assert.Contains(t, string(result.RequestCtx.Response.Header.Peek("Access-Control-Allow-Headers")), "X-Organization-ID")
 			assert.Equal(t, "true", string(result.RequestCtx.Response.Header.Peek("Access-Control-Allow-Credentials")))
 		})
 	}

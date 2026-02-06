@@ -362,6 +362,28 @@ func (a *App) SwitchOrg(r *fastglue.Request) error {
 	// Set the target org on the user for token generation
 	user.OrganizationID = req.OrganizationID
 
+	// Preload role with permissions for the response
+	if user.RoleID != nil {
+		var role models.CustomRole
+		if err := a.DB.Where("id = ?", *user.RoleID).First(&role).Error; err == nil {
+			user.Role = &role
+			cachedPerms, err := a.GetRolePermissionsCached(*user.RoleID)
+			if err == nil {
+				permissions := make([]models.Permission, 0, len(cachedPerms))
+				for _, p := range cachedPerms {
+					parts := splitPermission(p)
+					if len(parts) == 2 {
+						permissions = append(permissions, models.Permission{
+							Resource: parts[0],
+							Action:   parts[1],
+						})
+					}
+				}
+				user.Role.Permissions = permissions
+			}
+		}
+	}
+
 	// Generate new tokens with the target org
 	accessToken, err := a.generateAccessToken(&user)
 	if err != nil {

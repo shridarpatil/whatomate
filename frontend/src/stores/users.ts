@@ -17,6 +17,7 @@ export interface User {
   role?: UserRole
   is_active: boolean
   is_super_admin?: boolean
+  is_member?: boolean
   organization_id: string
   created_at: string
   updated_at: string

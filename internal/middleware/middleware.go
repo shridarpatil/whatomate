@@ -58,7 +58,7 @@ func CORS() fastglue.FastMiddleware {
 
 		r.RequestCtx.Response.Header.Set("Access-Control-Allow-Origin", origin)
 		r.RequestCtx.Response.Header.Set("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS, PATCH")
-		r.RequestCtx.Response.Header.Set("Access-Control-Allow-Headers", "Content-Type, Authorization, X-API-Key, X-Requested-With")
+		r.RequestCtx.Response.Header.Set("Access-Control-Allow-Headers", "Content-Type, Authorization, X-API-Key, X-Requested-With, X-Organization-ID")
 		r.RequestCtx.Response.Header.Set("Access-Control-Allow-Credentials", "true")
 		r.RequestCtx.Response.Header.Set("Access-Control-Max-Age", "86400")
 

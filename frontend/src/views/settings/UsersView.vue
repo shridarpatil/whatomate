@@ -18,7 +18,7 @@ import { useRolesStore } from '@/stores/roles'
 import { useOrganizationsStore } from '@/stores/organizations'
 import { organizationsService } from '@/services/api'
 import { toast } from 'vue-sonner'
-import { Plus, Pencil, Trash2, User as UserIcon, Shield, ShieldCheck, UserCog, Users, Link, UserPlus, Loader2 } from 'lucide-vue-next'
+import { Plus, Pencil, Trash2, UserMinus, User as UserIcon, Shield, ShieldCheck, UserCog, Users, Link, UserPlus, Loader2 } from 'lucide-vue-next'
 import { useCrudState } from '@/composables/useCrudState'
 import { getErrorMessage } from '@/lib/api-utils'
 import { formatDate } from '@/lib/utils'
@@ -136,8 +136,42 @@ async function saveUser() {
 
 async function confirmDelete() {
   if (!userToDelete.value) return
-  try { await usersStore.deleteUser(userToDelete.value.id); toast.success(t('common.deletedSuccess', { resource: t('resources.User') })); closeDeleteDialog(); await fetchUsers() }
-  catch (e) { toast.error(getErrorMessage(e, t('common.failedDelete', { resource: t('resources.user') }))) }
+  const isMemberRemoval = userToDelete.value.is_member
+  try {
+    await usersStore.deleteUser(userToDelete.value.id)
+    toast.success(isMemberRemoval ? t('users.memberRemoved') : t('common.deletedSuccess', { resource: t('resources.User') }))
+    closeDeleteDialog()
+    await fetchUsers()
+  } catch (e) {
+    toast.error(getErrorMessage(e, t('common.failedDelete', { resource: t('resources.user') })))
+  }
+}
+
+// Member role update dialog
+const isMemberRoleOpen = ref(false)
+const memberRoleUser = ref<User | null>(null)
+const memberRoleId = ref('')
+const isMemberRoleSubmitting = ref(false)
+
+function openMemberRoleDialog(user: User) {
+  memberRoleUser.value = user
+  memberRoleId.value = user.role_id || ''
+  isMemberRoleOpen.value = true
+}
+
+async function submitMemberRole() {
+  if (!memberRoleUser.value || !memberRoleId.value) return
+  isMemberRoleSubmitting.value = true
+  try {
+    await usersStore.updateUser(memberRoleUser.value.id, { role_id: memberRoleId.value })
+    toast.success(t('users.memberRoleUpdated'))
+    isMemberRoleOpen.value = false
+    await fetchUsers()
+  } catch (e) {
+    toast.error(getErrorMessage(e, t('common.failedSave', { resource: t('resources.user') })))
+  } finally {
+    isMemberRoleSubmitting.value = false
+  }
 }
 
 function getRoleBadgeVariant(name: string): 'default' | 'secondary' | 'outline' { return ROLE_BADGE_VARIANTS[name.toLowerCase()] || 'outline' }
@@ -220,6 +254,7 @@ function copyInviteLink() {
                         <p class="font-medium truncate">{{ user.full_name }}</p>
                         <Badge v-if="user.id === currentUserId" variant="outline" class="text-xs">{{ $t('users.you') }}</Badge>
                         <Badge v-if="user.is_super_admin" variant="default" class="text-xs">{{ $t('users.superAdmin') }}</Badge>
+                        <Badge v-if="user.is_member" variant="secondary" class="text-xs">{{ $t('users.member') }}</Badge>
                       </div>
                       <p class="text-sm text-muted-foreground truncate">{{ user.email }}</p>
                     </div>
@@ -236,8 +271,16 @@ function copyInviteLink() {
                 </template>
                 <template #cell-actions="{ item: user }">
                   <div class="flex items-center justify-end gap-1">
-                    <Tooltip><TooltipTrigger as-child><Button variant="ghost" size="icon" class="h-8 w-8" @click="openEditDialog(user)"><Pencil class="h-4 w-4" /></Button></TooltipTrigger><TooltipContent>{{ $t('users.editUserTooltip') }}</TooltipContent></Tooltip>
-                    <Tooltip><TooltipTrigger as-child><Button variant="ghost" size="icon" class="h-8 w-8" @click="openDeleteDialog(user)" :disabled="user.id === currentUserId"><Trash2 class="h-4 w-4 text-destructive" /></Button></TooltipTrigger><TooltipContent>{{ user.id === currentUserId ? $t('users.cantDeleteYourself') : $t('users.deleteUserTooltip') }}</TooltipContent></Tooltip>
+                    <template v-if="user.is_member">
+                      <!-- Member actions: update role + remove -->
+                      <Tooltip><TooltipTrigger as-child><Button variant="ghost" size="icon" class="h-8 w-8" @click="openMemberRoleDialog(user)"><Pencil class="h-4 w-4" /></Button></TooltipTrigger><TooltipContent>{{ $t('users.updateMemberRole') }}</TooltipContent></Tooltip>
+                      <Tooltip><TooltipTrigger as-child><Button variant="ghost" size="icon" class="h-8 w-8" @click="openDeleteDialog(user)" :disabled="user.id === currentUserId"><UserMinus class="h-4 w-4 text-destructive" /></Button></TooltipTrigger><TooltipContent>{{ $t('users.removeMemberTooltip') }}</TooltipContent></Tooltip>
+                    </template>
+                    <template v-else>
+                      <!-- Native user actions: full edit + delete -->
+                      <Tooltip><TooltipTrigger as-child><Button variant="ghost" size="icon" class="h-8 w-8" @click="openEditDialog(user)"><Pencil class="h-4 w-4" /></Button></TooltipTrigger><TooltipContent>{{ $t('users.editUserTooltip') }}</TooltipContent></Tooltip>
+                      <Tooltip><TooltipTrigger as-child><Button variant="ghost" size="icon" class="h-8 w-8" @click="openDeleteDialog(user)" :disabled="user.id === currentUserId"><Trash2 class="h-4 w-4 text-destructive" /></Button></TooltipTrigger><TooltipContent>{{ user.id === currentUserId ? $t('users.cantDeleteYourself') : $t('users.deleteUserTooltip') }}</TooltipContent></Tooltip>
+                    </template>
                   </div>
                 </template>
                 <template #empty-action>
@@ -281,7 +324,51 @@ function copyInviteLink() {
       </div>
     </CrudFormDialog>
 
-    <DeleteConfirmDialog v-model:open="deleteDialogOpen" :title="$t('users.deleteUser')" :item-name="userToDelete?.full_name" @confirm="confirmDelete" />
+    <DeleteConfirmDialog v-model:open="deleteDialogOpen" :title="userToDelete?.is_member ? $t('users.removeMember') : $t('users.deleteUser')" :description="userToDelete?.is_member ? $t('users.removeMemberWarning') : undefined" :item-name="userToDelete?.full_name" @confirm="confirmDelete" />
+
+    <!-- Member Role Update Dialog -->
+    <Dialog v-model:open="isMemberRoleOpen">
+      <DialogContent class="max-w-md">
+        <DialogHeader>
+          <DialogTitle>{{ $t('users.updateMemberRoleTitle') }}</DialogTitle>
+          <DialogDescription>{{ $t('users.updateMemberRoleDesc') }}</DialogDescription>
+        </DialogHeader>
+        <div class="space-y-4 py-4">
+          <div class="flex items-center gap-3 p-3 rounded-lg bg-muted/50">
+            <div class="h-9 w-9 rounded-full bg-primary/10 flex items-center justify-center flex-shrink-0">
+              <UserIcon class="h-4 w-4 text-primary" />
+            </div>
+            <div class="min-w-0">
+              <p class="font-medium truncate">{{ memberRoleUser?.full_name }}</p>
+              <p class="text-sm text-muted-foreground truncate">{{ memberRoleUser?.email }}</p>
+            </div>
+          </div>
+          <div class="space-y-2">
+            <Label>{{ $t('users.role') }} <span class="text-destructive">*</span></Label>
+            <Select v-model="memberRoleId">
+              <SelectTrigger>
+                <SelectValue :placeholder="$t('users.selectRole')" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem v-for="role in rolesStore.roles" :key="role.id" :value="role.id">
+                  <div class="flex items-center gap-2">
+                    <span class="capitalize">{{ role.name }}</span>
+                    <Badge v-if="role.is_system" variant="secondary" class="text-xs">{{ $t('users.system') }}</Badge>
+                  </div>
+                </SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+        </div>
+        <DialogFooter>
+          <Button variant="outline" @click="isMemberRoleOpen = false">{{ $t('common.cancel') }}</Button>
+          <Button @click="submitMemberRole" :disabled="isMemberRoleSubmitting || !memberRoleId">
+            <Loader2 v-if="isMemberRoleSubmitting" class="h-4 w-4 mr-2 animate-spin" />
+            {{ $t('users.updateMemberRole') }}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
 
     <!-- Add Existing User Dialog -->
     <Dialog v-model:open="isAddExistingOpen">
