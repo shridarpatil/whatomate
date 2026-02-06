@@ -312,3 +312,84 @@ export class ChatbotFlowsPage extends BasePage {
     return this.getToggleButton().isVisible()
   }
 }
+
+export class ChatbotFlowBuilderPage extends BasePage {
+  // Left panel
+  readonly stepsHeading: Locator
+  readonly addStepButton: Locator
+
+  // Right panel
+  readonly propertiesHeading: Locator
+
+  constructor(page: Page) {
+    super(page)
+    this.stepsHeading = page.getByRole('heading', { name: 'Steps' })
+    this.addStepButton = page.getByRole('button', { name: /^Add$/ })
+    this.propertiesHeading = page.getByRole('heading', { name: /Step Properties|Flow Settings/i })
+  }
+
+  async gotoNew() {
+    await this.page.goto('/chatbot/flows/new')
+    await this.page.waitForLoadState('networkidle')
+  }
+
+  /** Click "Add" in the steps panel to create a new step */
+  async addStep() {
+    await this.addStepButton.click()
+  }
+
+  /** Click on a step in the left panel by its index (1-based badge) */
+  async selectStep(index: number) {
+    await this.page.locator('.font-mono').filter({ hasText: String(index) }).click()
+  }
+
+  /** Click a message type button in the center preview palette */
+  async selectMessageType(type: 'Text' | 'Buttons' | 'API' | 'Flow' | 'Transfer') {
+    await this.page.getByRole('button', { name: type, exact: true }).click()
+  }
+
+  /** Get the step properties panel (right side) */
+  get propertiesPanel() {
+    return this.page.locator('div').filter({ has: this.propertiesHeading }).first()
+  }
+
+  /** Get the "Button Options" label in step properties */
+  get buttonOptionsLabel() {
+    return this.page.getByText(/Button Options/i)
+  }
+
+  /** Get the "Reply" add-button in the buttons config section */
+  get addReplyButton() {
+    return this.page.getByRole('button', { name: /^Reply$/ })
+  }
+
+  /** Get the "URL" add-button in the buttons config section */
+  get addUrlButton() {
+    return this.page.getByRole('button', { name: /^URL$/ })
+  }
+
+  /** Get a button title input by index (0-based) */
+  getButtonTitleInput(index: number) {
+    return this.page.getByPlaceholder(/Button Title/i).nth(index)
+  }
+
+  /** Get the message text textarea in step properties */
+  get messageTextarea() {
+    return this.page.getByPlaceholder(/Enter your message/i)
+  }
+
+  /** Get the "Go to" select for a button's conditional routing */
+  getButtonGoToSelect(index: number) {
+    return this.page.getByText(/Go to/i).nth(index)
+  }
+
+  /** Get all button config cards in step properties */
+  get buttonCards() {
+    return this.page.locator('.p-2.border.rounded-md.space-y-2')
+  }
+
+  /** Get delete button for a specific button config (0-based) */
+  getButtonDeleteButton(index: number) {
+    return this.buttonCards.nth(index).locator('button').filter({ has: this.page.locator('.text-destructive') })
+  }
+}
