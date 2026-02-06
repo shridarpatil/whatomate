@@ -122,11 +122,18 @@ export const useAuthStore = defineStore('auth', () => {
     email: string
     password: string
     full_name: string
-    organization_name: string
+    organization_id: string
   }): Promise<void> {
     const response = await api.post('/auth/register', data)
     // fastglue wraps response in { status: "success", data: {...} }
     setAuth(response.data.data)
+  }
+
+  async function switchOrg(organizationId: string): Promise<void> {
+    const response = await api.post('/auth/switch-org', { organization_id: organizationId })
+    setAuth(response.data.data)
+    // Update localStorage org override
+    localStorage.setItem('selected_organization_id', organizationId)
   }
 
   async function logout(): Promise<void> {
@@ -226,6 +233,7 @@ export const useAuthStore = defineStore('auth', () => {
     refreshUserData,
     login,
     register,
+    switchOrg,
     logout,
     refreshAccessToken,
     setAvailability,

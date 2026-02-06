@@ -105,7 +105,7 @@ func (a *App) ListAgentTransfers(r *fastglue.Request) error {
 	}
 
 	// Check permissions - users with write permission have full access (like admin)
-	hasFullAccess := a.HasPermission(userID, models.ResourceTransfers, models.ActionWrite)
+	hasFullAccess := a.HasPermission(userID, models.ResourceTransfers, models.ActionWrite, orgID)
 
 	// Query params
 	status := string(r.RequestCtx.QueryArgs().Peek("status"))
@@ -690,7 +690,7 @@ func (a *App) AssignAgentTransfer(r *fastglue.Request) error {
 	}
 
 	// Check permissions - users with write permission can assign transfers to others
-	hasWriteAccess := a.HasPermission(userID, models.ResourceTransfers, models.ActionWrite)
+	hasWriteAccess := a.HasPermission(userID, models.ResourceTransfers, models.ActionWrite, orgID)
 
 	transferID, err := parsePathUUID(r, "id", "transfer")
 	if err != nil {
@@ -830,8 +830,8 @@ func (a *App) PickNextTransfer(r *fastglue.Request) error {
 	}
 
 	// Check permissions - users with write permission have full access
-	hasFullAccess := a.HasPermission(userID, models.ResourceTransfers, models.ActionWrite)
-	hasPickupPermission := a.HasPermission(userID, models.ResourceTransfers, models.ActionPickup)
+	hasFullAccess := a.HasPermission(userID, models.ResourceTransfers, models.ActionWrite, orgID)
+	hasPickupPermission := a.HasPermission(userID, models.ResourceTransfers, models.ActionPickup, orgID)
 
 	// Check if agent queue pickup is allowed (use cache)
 	settings, _ := a.getChatbotSettingsCached(orgID, "")

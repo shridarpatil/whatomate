@@ -1,6 +1,6 @@
 <script setup lang="ts">
-import { ref } from 'vue'
-import { useRouter } from 'vue-router'
+import { ref, computed } from 'vue'
+import { useRouter, useRoute } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { useAuthStore } from '@/stores/auth'
 import { Button } from '@/components/ui/button'
@@ -12,17 +12,24 @@ import { MessageSquare, Loader2 } from 'lucide-vue-next'
 
 const { t } = useI18n()
 const router = useRouter()
+const route = useRoute()
 const authStore = useAuthStore()
 
 const fullName = ref('')
 const email = ref('')
 const password = ref('')
 const confirmPassword = ref('')
-const organizationName = ref('')
 const isLoading = ref(false)
 
+const organizationId = computed(() => (route.query.org as string) || '')
+
 const handleRegister = async () => {
-  if (!fullName.value || !email.value || !password.value || !organizationName.value) {
+  if (!organizationId.value) {
+    toast.error(t('auth.invitationRequired'))
+    return
+  }
+
+  if (!fullName.value || !email.value || !password.value) {
     toast.error(t('auth.fillAllFields'))
     return
   }
@@ -44,7 +51,7 @@ const handleRegister = async () => {
       full_name: fullName.value,
       email: email.value,
       password: password.value,
-      organization_name: organizationName.value
+      organization_id: organizationId.value
     })
     toast.success(t('auth.registrationSuccess'))
     router.push('/')
@@ -71,7 +78,27 @@ const handleRegister = async () => {
           {{ $t('auth.createAccountDesc') }}
         </CardDescription>
       </CardHeader>
-      <form @submit.prevent="handleRegister">
+
+      <!-- No org ID in URL — show invitation required message -->
+      <template v-if="!organizationId">
+        <CardContent>
+          <div class="text-center py-4">
+            <p class="text-sm text-muted-foreground">
+              {{ $t('auth.invitationRequired') }}
+            </p>
+          </div>
+        </CardContent>
+        <CardFooter class="flex flex-col space-y-4">
+          <RouterLink to="/login" class="w-full">
+            <Button variant="outline" class="w-full">
+              {{ $t('auth.signIn') }}
+            </Button>
+          </RouterLink>
+        </CardFooter>
+      </template>
+
+      <!-- Has org ID — show registration form -->
+      <form v-else @submit.prevent="handleRegister">
         <CardContent class="space-y-4">
           <div class="space-y-2">
             <Label for="fullName">{{ $t('auth.fullName') }}</Label>
@@ -93,16 +120,6 @@ const handleRegister = async () => {
               :placeholder="$t('auth.emailPlaceholder')"
               :disabled="isLoading"
               autocomplete="email"
-            />
-          </div>
-          <div class="space-y-2">
-            <Label for="organizationName">{{ $t('auth.organizationName') }}</Label>
-            <Input
-              id="organizationName"
-              v-model="organizationName"
-              type="text"
-              :placeholder="$t('auth.organizationPlaceholder')"
-              :disabled="isLoading"
             />
           </div>
           <div class="space-y-2">

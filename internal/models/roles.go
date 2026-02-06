@@ -70,6 +70,7 @@ const (
 	ResourceAPIKeys         = "api_keys"
 	ResourceCannedResponses = "canned_responses"
 	ResourceCustomActions   = "custom_actions"
+	ResourceOrganizations   = "organizations"
 )
 
 // PermissionAction constants for available actions
@@ -82,6 +83,7 @@ const (
 	ActionImport  = "import"
 	ActionExport  = "export"
 	ActionPickup  = "pickup"
+	ActionAssign  = "assign"
 )
 
 // DefaultPermissions returns the list of all available permissions to seed
@@ -193,6 +195,12 @@ func DefaultPermissions() []Permission {
 		{Resource: ResourceCustomActions, Action: ActionRead, Description: "View custom actions"},
 		{Resource: ResourceCustomActions, Action: ActionWrite, Description: "Create and edit custom actions"},
 		{Resource: ResourceCustomActions, Action: ActionDelete, Description: "Delete custom actions"},
+
+		// Organizations
+		{Resource: ResourceOrganizations, Action: ActionRead, Description: "View organizations"},
+		{Resource: ResourceOrganizations, Action: ActionWrite, Description: "Create organizations"},
+		{Resource: ResourceOrganizations, Action: ActionDelete, Description: "Delete organizations"},
+		{Resource: ResourceOrganizations, Action: ActionAssign, Description: "Manage organization members"},
 	}
 }
 
@@ -238,6 +246,8 @@ func SystemRolePermissions() map[string][]string {
 		"canned_responses:read", "canned_responses:write", "canned_responses:delete",
 		// Custom Actions
 		"custom_actions:read", "custom_actions:write", "custom_actions:delete",
+		// Organizations (read only)
+		"organizations:read",
 	}
 
 	agentPermissions := []string{

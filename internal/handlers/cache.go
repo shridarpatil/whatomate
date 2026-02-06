@@ -385,10 +385,21 @@ type UserPermissions struct {
 	Permissions  []string  `json:"permissions"` // Format: "resource:action"
 }
 
-// getUserPermissionsCached retrieves user permissions from cache or database
-func (a *App) getUserPermissionsCached(userID uuid.UUID) (*UserPermissions, error) {
+// getUserPermissionsCached retrieves user permissions from cache or database.
+// When orgID is provided, it looks up the user's role from user_organizations for that org.
+// When orgID is not provided, it falls back to the user's default RoleID.
+func (a *App) getUserPermissionsCached(userID uuid.UUID, orgIDs ...uuid.UUID) (*UserPermissions, error) {
 	ctx := context.Background()
-	cacheKey := fmt.Sprintf("%s%s", userPermissionsCachePrefix, userID.String())
+
+	// Determine cache key based on whether orgID is provided
+	var cacheKey string
+	var orgID uuid.UUID
+	if len(orgIDs) > 0 && orgIDs[0] != uuid.Nil {
+		orgID = orgIDs[0]
+		cacheKey = fmt.Sprintf("%s%s:%s", userPermissionsCachePrefix, userID.String(), orgID.String())
+	} else {
+		cacheKey = fmt.Sprintf("%s%s", userPermissionsCachePrefix, userID.String())
+	}
 
 	// Try cache first (if Redis is available)
 	if a.Redis != nil {
@@ -403,24 +414,45 @@ func (a *App) getUserPermissionsCached(userID uuid.UUID) (*UserPermissions, erro
 
 	// Cache miss - fetch from database
 	var user models.User
-	if err := a.DB.Preload("Role.Permissions").Where("id = ?", userID).First(&user).Error; err != nil {
+	if err := a.DB.Where("id = ?", userID).First(&user).Error; err != nil {
 		return nil, err
 	}
 
-	if user.Role == nil {
+	// Determine which role to use
+	var roleID *uuid.UUID
+	if orgID != uuid.Nil {
+		// Look up role from user_organizations for this specific org
+		var userOrg models.UserOrganization
+		if err := a.DB.Where("user_id = ? AND organization_id = ?", userID, orgID).First(&userOrg).Error; err == nil && userOrg.RoleID != nil {
+			roleID = userOrg.RoleID
+		} else {
+			// Fall back to user's default role
+			roleID = user.RoleID
+		}
+	} else {
+		roleID = user.RoleID
+	}
+
+	if roleID == nil {
 		return nil, gorm.ErrRecordNotFound
+	}
+
+	// Fetch role with permissions
+	var role models.CustomRole
+	if err := a.DB.Preload("Permissions").Where("id = ?", roleID).First(&role).Error; err != nil {
+		return nil, err
 	}
 
 	// Build permissions list
 	perms := UserPermissions{
-		RoleID:       user.Role.ID,
-		RoleName:     user.Role.Name,
-		IsSystem:     user.Role.IsSystem,
+		RoleID:       role.ID,
+		RoleName:     role.Name,
+		IsSystem:     role.IsSystem,
 		IsSuperAdmin: user.IsSuperAdmin,
-		Permissions:  make([]string, 0, len(user.Role.Permissions)),
+		Permissions:  make([]string, 0, len(role.Permissions)),
 	}
 
-	for _, p := range user.Role.Permissions {
+	for _, p := range role.Permissions {
 		perms.Permissions = append(perms.Permissions, p.Resource+":"+p.Action)
 	}
 
@@ -434,10 +466,11 @@ func (a *App) getUserPermissionsCached(userID uuid.UUID) (*UserPermissions, erro
 	return &perms, nil
 }
 
-// HasPermission checks if a user has a specific permission
-// Super admins have all permissions automatically
-func (a *App) HasPermission(userID uuid.UUID, resource, action string) bool {
-	perms, err := a.getUserPermissionsCached(userID)
+// HasPermission checks if a user has a specific permission.
+// Super admins have all permissions automatically.
+// Optional orgIDs parameter allows checking permissions for a specific org.
+func (a *App) HasPermission(userID uuid.UUID, resource, action string, orgIDs ...uuid.UUID) bool {
+	perms, err := a.getUserPermissionsCached(userID, orgIDs...)
 	if err != nil {
 		a.Log.Error("Failed to get user permissions", "error", err, "user_id", userID)
 		return false
@@ -458,8 +491,9 @@ func (a *App) HasPermission(userID uuid.UUID, resource, action string) bool {
 	return false
 }
 
-// HasAnyPermission checks if a user has any of the specified permissions
-// Super admins have all permissions automatically
+// HasAnyPermission checks if a user has any of the specified permissions.
+// Super admins have all permissions automatically.
+// To check in a specific org, use HasAnyPermissionInOrg instead.
 func (a *App) HasAnyPermission(userID uuid.UUID, permissions ...string) bool {
 	perms, err := a.getUserPermissionsCached(userID)
 	if err != nil {
@@ -544,8 +578,12 @@ func (a *App) GetRolePermissionsCached(roleID uuid.UUID) ([]string, error) {
 // InvalidateUserPermissionsCache invalidates the permissions cache for a user
 func (a *App) InvalidateUserPermissionsCache(userID uuid.UUID) {
 	ctx := context.Background()
+	// Delete the base key (no org suffix)
 	cacheKey := fmt.Sprintf("%s%s", userPermissionsCachePrefix, userID.String())
 	a.Redis.Del(ctx, cacheKey)
+	// Delete all org-specific keys
+	pattern := fmt.Sprintf("%s%s:*", userPermissionsCachePrefix, userID.String())
+	a.deleteKeysByPattern(ctx, pattern)
 
 	// Notify user via WebSocket to refresh their permissions
 	a.notifyUserPermissionsChanged(userID)

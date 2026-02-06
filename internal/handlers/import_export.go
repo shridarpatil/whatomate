@@ -190,7 +190,7 @@ func (a *App) ExportData(r *fastglue.Request) error {
 	}
 
 	// Check permission
-	if !a.HasPermission(userID, config.Resource, models.ActionExport) {
+	if !a.HasPermission(userID, config.Resource, models.ActionExport, orgID) {
 		return r.SendErrorEnvelope(fasthttp.StatusForbidden, "You do not have permission to export "+req.Table, nil, "")
 	}
 
@@ -356,7 +356,7 @@ func (a *App) ImportData(r *fastglue.Request) error {
 	}
 
 	// Check permission
-	if !a.HasPermission(userID, config.Resource, models.ActionImport) {
+	if !a.HasPermission(userID, config.Resource, models.ActionImport, orgID) {
 		return r.SendErrorEnvelope(fasthttp.StatusForbidden, "You do not have permission to import "+tableName, nil, "")
 	}
 
@@ -588,7 +588,7 @@ func (a *App) ImportData(r *fastglue.Request) error {
 
 // GetExportConfig returns the export configuration for a table
 func (a *App) GetExportConfig(r *fastglue.Request) error {
-	_, userID, err := a.getOrgAndUserID(r)
+	orgID, userID, err := a.getOrgAndUserID(r)
 	if err != nil {
 		return r.SendErrorEnvelope(fasthttp.StatusUnauthorized, "Unauthorized", nil, "")
 	}
@@ -601,7 +601,7 @@ func (a *App) GetExportConfig(r *fastglue.Request) error {
 	}
 
 	// Check permission
-	if !a.HasPermission(userID, config.Resource, models.ActionExport) {
+	if !a.HasPermission(userID, config.Resource, models.ActionExport, orgID) {
 		return r.SendErrorEnvelope(fasthttp.StatusForbidden, "You do not have permission to export "+tableName, nil, "")
 	}
 
@@ -627,7 +627,7 @@ func (a *App) GetExportConfig(r *fastglue.Request) error {
 
 // GetImportConfig returns the import configuration for a table
 func (a *App) GetImportConfig(r *fastglue.Request) error {
-	_, userID, err := a.getOrgAndUserID(r)
+	orgID, userID, err := a.getOrgAndUserID(r)
 	if err != nil {
 		return r.SendErrorEnvelope(fasthttp.StatusUnauthorized, "Unauthorized", nil, "")
 	}
@@ -640,7 +640,7 @@ func (a *App) GetImportConfig(r *fastglue.Request) error {
 	}
 
 	// Check permission
-	if !a.HasPermission(userID, config.Resource, models.ActionImport) {
+	if !a.HasPermission(userID, config.Resource, models.ActionImport, orgID) {
 		return r.SendErrorEnvelope(fasthttp.StatusForbidden, "You do not have permission to import "+tableName, nil, "")
 	}
 

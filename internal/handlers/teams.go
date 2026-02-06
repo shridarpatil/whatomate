@@ -60,7 +60,7 @@ func (a *App) ListTeams(r *fastglue.Request) error {
 	var total int64
 
 	// Users with teams:read permission can see all teams, others see only their teams
-	if a.HasPermission(userID, models.ResourceTeams, models.ActionRead) {
+	if a.HasPermission(userID, models.ResourceTeams, models.ActionRead, orgID) {
 		baseQuery := a.ScopeToOrg(a.DB, userID, orgID)
 		if search != "" {
 			baseQuery = baseQuery.Where("name ILIKE ?", "%"+search+"%")
@@ -120,7 +120,7 @@ func (a *App) GetTeam(r *fastglue.Request) error {
 	}
 
 	// Check access: users with teams:read permission can see all teams, otherwise must be a member
-	if !a.HasPermission(userID, models.ResourceTeams, models.ActionRead) {
+	if !a.HasPermission(userID, models.ResourceTeams, models.ActionRead, orgID) {
 		hasAccess := false
 		for _, m := range team.Members {
 			if m.UserID == userID {
@@ -200,7 +200,7 @@ func (a *App) UpdateTeam(r *fastglue.Request) error {
 	}
 
 	// Check access: users with teams:write permission OR team managers can update
-	if !a.HasPermission(userID, models.ResourceTeams, models.ActionWrite) {
+	if !a.HasPermission(userID, models.ResourceTeams, models.ActionWrite, orgID) {
 		isManager := false
 		for _, m := range team.Members {
 			if m.UserID == userID && m.Role == models.TeamRoleManager {
@@ -297,7 +297,7 @@ func (a *App) ListTeamMembers(r *fastglue.Request) error {
 	}
 
 	// Check access: users with teams:read permission can see all, otherwise must be a member
-	if !a.HasPermission(userID, models.ResourceTeams, models.ActionRead) {
+	if !a.HasPermission(userID, models.ResourceTeams, models.ActionRead, orgID) {
 		hasAccess := false
 		for _, m := range team.Members {
 			if m.UserID == userID {
@@ -345,7 +345,7 @@ func (a *App) AddTeamMember(r *fastglue.Request) error {
 		return r.SendErrorEnvelope(fasthttp.StatusNotFound, "Team not found", nil, "")
 	}
 
-	hasWritePermission := a.HasPermission(userID, models.ResourceTeams, models.ActionWrite)
+	hasWritePermission := a.HasPermission(userID, models.ResourceTeams, models.ActionWrite, orgID)
 
 	// Check access: users with teams:write permission OR team managers can add members
 	if !hasWritePermission {
@@ -442,7 +442,7 @@ func (a *App) RemoveTeamMember(r *fastglue.Request) error {
 		return r.SendErrorEnvelope(fasthttp.StatusNotFound, "Team not found", nil, "")
 	}
 
-	hasWritePermission := a.HasPermission(userID, models.ResourceTeams, models.ActionWrite)
+	hasWritePermission := a.HasPermission(userID, models.ResourceTeams, models.ActionWrite, orgID)
 
 	// Check access: users with teams:write permission OR team managers can remove members
 	if !hasWritePermission {

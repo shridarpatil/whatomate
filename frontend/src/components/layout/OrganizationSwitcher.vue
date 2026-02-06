@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, onMounted, watch } from 'vue'
+import { ref, computed, onMounted, watch } from 'vue'
 import { useOrganizationsStore } from '@/stores/organizations'
 import { useAuthStore } from '@/stores/auth'
 import { Button } from '@/components/ui/button'
@@ -20,11 +20,32 @@ const organizationsStore = useOrganizationsStore()
 const authStore = useAuthStore()
 const isRefreshing = ref(false)
 
-// Only show for super admins
-const isSuperAdmin = () => authStore.user?.is_super_admin || false
+const isSuperAdmin = computed(() => authStore.user?.is_super_admin || false)
+
+const shouldShowSwitcher = computed(() =>
+  isSuperAdmin.value || organizationsStore.isMultiOrg
+)
+
+// Build the org list depending on user type
+const orgList = computed(() => {
+  if (isSuperAdmin.value) {
+    return organizationsStore.organizations.map(org => ({ id: org.id, name: org.name }))
+  }
+  return organizationsStore.myOrganizations.map(org => ({ id: org.organization_id, name: org.name }))
+})
+
+const currentOrgId = computed(() => {
+  if (isSuperAdmin.value) {
+    return organizationsStore.selectedOrgId || ''
+  }
+  return authStore.user?.organization_id || ''
+})
 
 onMounted(async () => {
-  if (isSuperAdmin()) {
+  // Fetch user's org memberships for all authenticated users
+  await organizationsStore.fetchMyOrganizations()
+
+  if (isSuperAdmin.value) {
     organizationsStore.init()
     await organizationsStore.fetchOrganizations()
 
@@ -36,31 +57,44 @@ onMounted(async () => {
 })
 
 // Watch for auth changes
-watch(() => authStore.user?.is_super_admin, async (isSuperAdmin) => {
-  if (isSuperAdmin) {
+watch(() => authStore.user?.is_super_admin, async (superAdmin) => {
+  if (superAdmin) {
     organizationsStore.init()
     await organizationsStore.fetchOrganizations()
-  } else {
-    organizationsStore.reset()
   }
 })
 
-const handleOrgChange = (value: string | number | bigint | Record<string, any> | null) => {
+const handleOrgChange = async (value: string | number | bigint | Record<string, any> | null) => {
   if (!value || typeof value !== 'string') return
-  organizationsStore.selectOrganization(value)
-  // Reload the page to refresh data with new org context
-  window.location.reload()
+
+  if (isSuperAdmin.value) {
+    // Super admins: set localStorage header and reload
+    organizationsStore.selectOrganization(value)
+    window.location.reload()
+  } else {
+    // Multi-org users: call switchOrg API for new JWT tokens, then reload
+    try {
+      await authStore.switchOrg(value)
+      window.location.reload()
+    } catch {
+      // If switch fails, don't reload
+    }
+  }
 }
 
 const refreshOrgs = async () => {
   isRefreshing.value = true
-  await organizationsStore.fetchOrganizations()
+  if (isSuperAdmin.value) {
+    await organizationsStore.fetchOrganizations()
+  } else {
+    await organizationsStore.fetchMyOrganizations()
+  }
   isRefreshing.value = false
 }
 </script>
 
 <template>
-  <div v-if="isSuperAdmin()" class="px-2 py-2 border-b">
+  <div v-if="shouldShowSwitcher" class="px-2 py-2 border-b">
     <div v-if="!collapsed" class="space-y-1">
       <div class="flex items-center justify-between">
         <span class="text-[11px] font-medium text-muted-foreground uppercase tracking-wide px-1">
@@ -77,8 +111,8 @@ const refreshOrgs = async () => {
         </Button>
       </div>
       <Select
-        v-if="organizationsStore.organizations.length > 0"
-        :model-value="organizationsStore.selectedOrgId || ''"
+        v-if="orgList.length > 0"
+        :model-value="currentOrgId"
         @update:model-value="handleOrgChange"
       >
         <SelectTrigger class="h-8 text-[13px]">
@@ -86,7 +120,7 @@ const refreshOrgs = async () => {
         </SelectTrigger>
         <SelectContent>
           <SelectItem
-            v-for="org in organizationsStore.organizations"
+            v-for="org in orgList"
             :key="org.id"
             :value="org.id"
           >

@@ -60,6 +60,7 @@ func GetMigrationModels() []MigrationModel {
 		{"Permission", &models.Permission{}},
 		{"CustomRole", &models.CustomRole{}},
 		{"User", &models.User{}},
+		{"UserOrganization", &models.UserOrganization{}},
 		{"Team", &models.Team{}},
 		{"TeamMember", &models.TeamMember{}},
 		{"APIKey", &models.APIKey{}},
@@ -172,6 +173,12 @@ func RunMigrationWithProgress(db *gorm.DB, adminCfg *config.DefaultAdminConfig) 
 		return err
 	}
 
+	// Backfill user_organizations from existing users
+	if err := MigrateUserOrganizations(silentDB); err != nil {
+		fmt.Printf("\n  \033[31m✗ Failed to backfill user organizations\033[0m\n\n")
+		return err
+	}
+
 	// Create default admin (only runs if no users exist)
 	printProgress(currentStep, totalSteps)
 	if err := CreateDefaultAdmin(silentDB, adminCfg); err != nil {
@@ -247,6 +254,8 @@ func getIndexes() []string {
 		`CREATE INDEX IF NOT EXISTS idx_custom_roles_org_default ON custom_roles(organization_id, is_default) WHERE is_default = true`,
 		// GIN index for JSONB tag filtering
 		`CREATE INDEX IF NOT EXISTS idx_contacts_tags ON contacts USING GIN (tags)`,
+		// User organizations
+		`CREATE UNIQUE INDEX IF NOT EXISTS idx_user_org_unique ON user_organizations(user_id, organization_id) WHERE deleted_at IS NULL`,
 	}
 }
 
@@ -323,7 +332,30 @@ func CreateDefaultAdmin(db *gorm.DB, cfg *config.DefaultAdminConfig) error {
 		return fmt.Errorf("failed to create default admin user: %w", err)
 	}
 
+	// Create UserOrganization entry for the default admin
+	userOrg := models.UserOrganization{
+		BaseModel:      models.BaseModel{ID: uuid.New()},
+		UserID:         admin.ID,
+		OrganizationID: org.ID,
+		RoleID:         &adminRole.ID,
+		IsDefault:      true,
+	}
+	if err := db.Create(&userOrg).Error; err != nil {
+		return fmt.Errorf("failed to create user organization entry: %w", err)
+	}
+
 	return nil
+}
+
+// MigrateUserOrganizations backfills user_organizations from existing users
+func MigrateUserOrganizations(db *gorm.DB) error {
+	return db.Exec(`
+		INSERT INTO user_organizations (id, user_id, organization_id, role_id, is_default, created_at, updated_at)
+		SELECT gen_random_uuid(), u.id, u.organization_id, u.role_id, true, NOW(), NOW()
+		FROM users u
+		LEFT JOIN user_organizations uo ON uo.user_id = u.id AND uo.organization_id = u.organization_id AND uo.deleted_at IS NULL
+		WHERE uo.id IS NULL AND u.deleted_at IS NULL
+	`).Error
 }
 
 // SeedPermissionsAndRoles seeds the default permissions and system roles

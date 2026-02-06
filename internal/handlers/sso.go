@@ -311,6 +311,18 @@ func (a *App) CallbackSSO(r *fastglue.Request) error {
 			return nil
 		}
 
+		// Create UserOrganization entry
+		userOrg := models.UserOrganization{
+			UserID:         user.ID,
+			OrganizationID: orgID,
+			RoleID:         &customRole.ID,
+			IsDefault:      true,
+		}
+		if err := a.DB.Create(&userOrg).Error; err != nil {
+			a.Log.Error("Failed to create user organization entry for SSO user", "error", err)
+			// Non-fatal: user was already created
+		}
+
 		a.Log.Info("Created SSO user", "user_id", user.ID, "email", user.Email, "provider", provider)
 	} else {
 		// User exists - update SSO info if not set

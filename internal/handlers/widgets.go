@@ -145,7 +145,7 @@ func (a *App) ListWidgets(r *fastglue.Request) error {
 	}
 
 	// Check analytics read permission
-	if !a.HasPermission(userID, models.ResourceAnalytics, models.ActionRead) {
+	if !a.HasPermission(userID, models.ResourceAnalytics, models.ActionRead, orgID) {
 		return r.SendErrorEnvelope(fasthttp.StatusForbidden, "You don't have permission to view analytics", nil, "")
 	}
 
@@ -178,7 +178,7 @@ func (a *App) GetWidget(r *fastglue.Request) error {
 	}
 
 	// Check analytics read permission
-	if !a.HasPermission(userID, models.ResourceAnalytics, models.ActionRead) {
+	if !a.HasPermission(userID, models.ResourceAnalytics, models.ActionRead, orgID) {
 		return r.SendErrorEnvelope(fasthttp.StatusForbidden, "You don't have permission to view analytics", nil, "")
 	}
 
@@ -206,7 +206,7 @@ func (a *App) CreateWidget(r *fastglue.Request) error {
 	}
 
 	// Check analytics write permission
-	if !a.HasPermission(userID, models.ResourceAnalytics, models.ActionWrite) {
+	if !a.HasPermission(userID, models.ResourceAnalytics, models.ActionWrite, orgID) {
 		return r.SendErrorEnvelope(fasthttp.StatusForbidden, "You don't have permission to create widgets", nil, "")
 	}
 
@@ -364,7 +364,7 @@ func (a *App) UpdateWidget(r *fastglue.Request) error {
 	}
 
 	// Check analytics write permission
-	if !a.HasPermission(userID, models.ResourceAnalytics, models.ActionWrite) {
+	if !a.HasPermission(userID, models.ResourceAnalytics, models.ActionWrite, orgID) {
 		return r.SendErrorEnvelope(fasthttp.StatusForbidden, "You don't have permission to edit widgets", nil, "")
 	}
 
@@ -487,7 +487,7 @@ func (a *App) DeleteWidget(r *fastglue.Request) error {
 	}
 
 	// Check analytics delete permission
-	if !a.HasPermission(userID, models.ResourceAnalytics, models.ActionDelete) {
+	if !a.HasPermission(userID, models.ResourceAnalytics, models.ActionDelete, orgID) {
 		return r.SendErrorEnvelope(fasthttp.StatusForbidden, "You don't have permission to delete widgets", nil, "")
 	}
 

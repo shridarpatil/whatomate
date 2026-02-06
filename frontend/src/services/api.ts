@@ -19,7 +19,7 @@ api.interceptors.request.use(
     if (token) {
       config.headers.Authorization = `Bearer ${token}`
     }
-    // Add organization override header for super admins
+    // Add organization override header for org switching
     const selectedOrgId = localStorage.getItem('selected_organization_id')
     if (selectedOrgId) {
       config.headers['X-Organization-ID'] = selectedOrgId
@@ -78,7 +78,7 @@ export const authService = {
   login: (email: string, password: string) =>
     api.post('/auth/login', { email, password }),
 
-  register: (data: { email: string; password: string; full_name: string; organization_name: string }) =>
+  register: (data: { email: string; password: string; full_name: string; organization_id: string }) =>
     api.post('/auth/register', data),
 
   logout: () => api.post('/auth/logout'),
@@ -86,7 +86,10 @@ export const authService = {
   refreshToken: (refreshToken: string) =>
     api.post('/auth/refresh', { refresh_token: refreshToken }),
 
-  me: () => api.get('/auth/me')
+  me: () => api.get('/auth/me'),
+
+  switchOrg: (organizationId: string) =>
+    api.post('/auth/switch-org', { organization_id: organizationId }),
 }
 
 export const usersService = {
@@ -104,7 +107,8 @@ export const usersService = {
   changePassword: (data: { current_password: string; new_password: string }) =>
     api.put('/me/password', data),
   updateAvailability: (isAvailable: boolean) =>
-    api.put('/me/availability', { is_available: isAvailable })
+    api.put('/me/availability', { is_available: isAvailable }),
+  listMyOrganizations: () => api.get('/me/organizations'),
 }
 
 export const apiKeysService = {
@@ -619,7 +623,7 @@ export const organizationService = {
   }) => api.put('/org/settings', data)
 }
 
-// Organizations (super admin only)
+// Organizations
 export interface Organization {
   id: string
   name: string
@@ -629,7 +633,16 @@ export interface Organization {
 
 export const organizationsService = {
   list: () => api.get<{ organizations: Organization[] }>('/organizations'),
-  getCurrent: () => api.get<Organization>('/organizations/current')
+  getCurrent: () => api.get<Organization>('/organizations/current'),
+  create: (data: { name: string }) => api.post('/organizations', data),
+  // Members
+  listMembers: () => api.get('/organizations/members'),
+  addMember: (data: { user_id: string; role_id?: string }) =>
+    api.post('/organizations/members', data),
+  updateMemberRole: (userId: string, data: { role_id: string }) =>
+    api.put(`/organizations/members/${userId}`, data),
+  removeMember: (userId: string) =>
+    api.delete(`/organizations/members/${userId}`),
 }
 
 export interface Webhook {

@@ -153,7 +153,7 @@ func (a *App) ServeMedia(r *fastglue.Request) error {
 	}
 
 	// Users without contacts:read permission can only access media from their assigned contacts
-	if !a.HasPermission(userID, models.ResourceContacts, models.ActionRead) {
+	if !a.HasPermission(userID, models.ResourceContacts, models.ActionRead, orgID) {
 		var contact models.Contact
 		if err := a.DB.Where("id = ? AND assigned_user_id = ?", message.ContactID, userID).First(&contact).Error; err != nil {
 			return r.SendErrorEnvelope(fasthttp.StatusForbidden, "Access denied", nil, "")

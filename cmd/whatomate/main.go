@@ -392,6 +392,7 @@ func setupRoutes(g *fastglue.Fastglue, app *handlers.App, lo logf.Logger, basePa
 	g.POST("/api/auth/login", app.Login)
 	g.POST("/api/auth/register", app.Register)
 	g.POST("/api/auth/refresh", app.RefreshToken)
+	g.POST("/api/auth/switch-org", app.SwitchOrg)
 
 	// SSO routes (public)
 	g.GET("/api/auth/sso/providers", app.GetPublicSSOProviders)
@@ -453,6 +454,7 @@ func setupRoutes(g *fastglue.Fastglue, app *handlers.App, lo logf.Logger, basePa
 	g.PUT("/api/me/settings", app.UpdateCurrentUserSettings)
 	g.PUT("/api/me/password", app.ChangePassword)
 	g.PUT("/api/me/availability", app.UpdateAvailability)
+	g.GET("/api/me/organizations", app.ListMyOrganizations)
 
 	// User Management (admin only - enforced by middleware)
 	g.GET("/api/users", app.ListUsers)
@@ -641,9 +643,14 @@ func setupRoutes(g *fastglue.Fastglue, app *handlers.App, lo logf.Logger, basePa
 	g.GET("/api/org/settings", app.GetOrganizationSettings)
 	g.PUT("/api/org/settings", app.UpdateOrganizationSettings)
 
-	// Organizations (super admin only)
+	// Organizations
 	g.GET("/api/organizations", app.ListOrganizations)
+	g.POST("/api/organizations", app.CreateOrganization)
 	g.GET("/api/organizations/current", app.GetCurrentOrganization)
+	g.GET("/api/organizations/members", app.ListOrganizationMembers)
+	g.POST("/api/organizations/members", app.AddOrganizationMember)
+	g.PUT("/api/organizations/members/{user_id}", app.UpdateOrganizationMemberRole)
+	g.DELETE("/api/organizations/members/{user_id}", app.RemoveOrganizationMember)
 
 	// SSO Settings (admin only - enforced by middleware)
 	g.GET("/api/settings/sso", app.GetSSOSettings)

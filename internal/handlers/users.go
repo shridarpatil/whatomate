@@ -207,6 +207,18 @@ func (a *App) CreateUser(r *fastglue.Request) error {
 		return r.SendErrorEnvelope(fasthttp.StatusInternalServerError, "Failed to create user", nil, "")
 	}
 
+	// Create UserOrganization entry
+	userOrg := models.UserOrganization{
+		UserID:         user.ID,
+		OrganizationID: orgID,
+		RoleID:         roleID,
+		IsDefault:      true,
+	}
+	if err := a.DB.Create(&userOrg).Error; err != nil {
+		a.Log.Error("Failed to create user organization entry", "error", err)
+		// Non-fatal: user was already created
+	}
+
 	// Load role for response
 	a.DB.Preload("Role").First(&user, user.ID)
 
@@ -228,7 +240,7 @@ func (a *App) UpdateUser(r *fastglue.Request) error {
 	}
 
 	// Users can update themselves, others need users:write permission
-	if currentUserID != id && !a.HasPermission(currentUserID, models.ResourceUsers, models.ActionWrite) {
+	if currentUserID != id && !a.HasPermission(currentUserID, models.ResourceUsers, models.ActionWrite, orgID) {
 		return r.SendErrorEnvelope(fasthttp.StatusForbidden, "Insufficient permissions", nil, "")
 	}
 
@@ -244,7 +256,7 @@ func (a *App) UpdateUser(r *fastglue.Request) error {
 	}
 
 	// Only users with users:write permission can change roles
-	if req.RoleID != nil && !a.HasPermission(currentUserID, models.ResourceUsers, models.ActionWrite) {
+	if req.RoleID != nil && !a.HasPermission(currentUserID, models.ResourceUsers, models.ActionWrite, orgID) {
 		return r.SendErrorEnvelope(fasthttp.StatusForbidden, "Insufficient permissions to change roles", nil, "")
 	}
 
@@ -314,6 +326,10 @@ func (a *App) UpdateUser(r *fastglue.Request) error {
 
 	// Invalidate permissions cache if role changed
 	if roleChanged {
+		// Sync role change to UserOrganization for this org
+		a.DB.Model(&models.UserOrganization{}).
+			Where("user_id = ? AND organization_id = ?", user.ID, orgID).
+			Update("role_id", user.RoleID)
 		a.InvalidateUserPermissionsCache(user.ID)
 	}
 
@@ -331,7 +347,7 @@ func (a *App) DeleteUser(r *fastglue.Request) error {
 	}
 
 	currentUserID, _ := r.RequestCtx.UserValue("user_id").(uuid.UUID)
-	if !a.HasPermission(currentUserID, models.ResourceUsers, models.ActionDelete) {
+	if !a.HasPermission(currentUserID, models.ResourceUsers, models.ActionDelete, orgID) {
 		return r.SendErrorEnvelope(fasthttp.StatusForbidden, "Insufficient permissions", nil, "")
 	}
 
@@ -371,6 +387,9 @@ func (a *App) DeleteUser(r *fastglue.Request) error {
 	if result.RowsAffected == 0 {
 		return r.SendErrorEnvelope(fasthttp.StatusNotFound, "User not found", nil, "")
 	}
+
+	// Delete all UserOrganization entries for this user
+	a.DB.Where("user_id = ?", id).Delete(&models.UserOrganization{})
 
 	return r.SendEnvelope(map[string]string{"message": "User deleted successfully"})
 }
@@ -547,6 +566,54 @@ func userToResponse(user models.User) UserResponse {
 	}
 
 	return resp
+}
+
+// MyOrganizationResponse represents an organization in the user's org list
+type MyOrganizationResponse struct {
+	OrganizationID uuid.UUID `json:"organization_id"`
+	Name           string    `json:"name"`
+	Slug           string    `json:"slug"`
+	RoleID         *uuid.UUID `json:"role_id,omitempty"`
+	RoleName       string    `json:"role_name,omitempty"`
+	IsDefault      bool      `json:"is_default"`
+}
+
+// ListMyOrganizations returns all organizations the current user belongs to
+func (a *App) ListMyOrganizations(r *fastglue.Request) error {
+	userID, ok := r.RequestCtx.UserValue("user_id").(uuid.UUID)
+	if !ok {
+		return r.SendErrorEnvelope(fasthttp.StatusUnauthorized, "Unauthorized", nil, "")
+	}
+
+	var userOrgs []models.UserOrganization
+	if err := a.DB.Where("user_id = ?", userID).
+		Preload("Organization").
+		Preload("Role").
+		Find(&userOrgs).Error; err != nil {
+		a.Log.Error("Failed to list user organizations", "error", err)
+		return r.SendErrorEnvelope(fasthttp.StatusInternalServerError, "Failed to list organizations", nil, "")
+	}
+
+	response := make([]MyOrganizationResponse, 0, len(userOrgs))
+	for _, uo := range userOrgs {
+		item := MyOrganizationResponse{
+			OrganizationID: uo.OrganizationID,
+			IsDefault:      uo.IsDefault,
+			RoleID:         uo.RoleID,
+		}
+		if uo.Organization != nil {
+			item.Name = uo.Organization.Name
+			item.Slug = uo.Organization.Slug
+		}
+		if uo.Role != nil {
+			item.RoleName = uo.Role.Name
+		}
+		response = append(response, item)
+	}
+
+	return r.SendEnvelope(map[string]interface{}{
+		"organizations": response,
+	})
 }
 
 // AvailabilityRequest represents the request body for updating availability

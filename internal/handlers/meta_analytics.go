@@ -48,7 +48,7 @@ func (a *App) GetMetaAnalytics(r *fastglue.Request) error {
 	}
 
 	// Check permission
-	if !a.HasPermission(userID, "analytics", "read") {
+	if !a.HasPermission(userID, "analytics", "read", orgID) {
 		return r.SendErrorEnvelope(fasthttp.StatusForbidden, "Permission denied", nil, "")
 	}
 
@@ -345,7 +345,7 @@ func (a *App) ListMetaAccountsForAnalytics(r *fastglue.Request) error {
 	}
 
 	// Check permission
-	if !a.HasPermission(userID, "analytics", "read") {
+	if !a.HasPermission(userID, "analytics", "read", orgID) {
 		return r.SendErrorEnvelope(fasthttp.StatusForbidden, "Permission denied", nil, "")
 	}
 
@@ -382,7 +382,7 @@ func (a *App) RefreshMetaAnalyticsCache(r *fastglue.Request) error {
 	}
 
 	// Check permission
-	if !a.HasPermission(userID, "analytics", "write") {
+	if !a.HasPermission(userID, "analytics", "write", orgID) {
 		return r.SendErrorEnvelope(fasthttp.StatusForbidden, "Permission denied", nil, "")
 	}
 

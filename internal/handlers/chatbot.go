@@ -655,7 +655,7 @@ func (a *App) ListChatbotFlows(r *fastglue.Request) error {
 		return r.SendErrorEnvelope(fasthttp.StatusUnauthorized, "Unauthorized", nil, "")
 	}
 
-	if !a.HasPermission(userID, models.ResourceFlowsChatbot, models.ActionRead) {
+	if !a.HasPermission(userID, models.ResourceFlowsChatbot, models.ActionRead, orgID) {
 		return r.SendErrorEnvelope(fasthttp.StatusForbidden, "Permission denied", nil, "")
 	}
 
@@ -728,7 +728,7 @@ func (a *App) CreateChatbotFlow(r *fastglue.Request) error {
 		return r.SendErrorEnvelope(fasthttp.StatusUnauthorized, "Unauthorized", nil, "")
 	}
 
-	if !a.HasPermission(userID, models.ResourceFlowsChatbot, models.ActionWrite) {
+	if !a.HasPermission(userID, models.ResourceFlowsChatbot, models.ActionWrite, orgID) {
 		return r.SendErrorEnvelope(fasthttp.StatusForbidden, "Permission denied", nil, "")
 	}
 
@@ -835,7 +835,7 @@ func (a *App) GetChatbotFlow(r *fastglue.Request) error {
 		return r.SendErrorEnvelope(fasthttp.StatusUnauthorized, "Unauthorized", nil, "")
 	}
 
-	if !a.HasPermission(userID, models.ResourceFlowsChatbot, models.ActionRead) {
+	if !a.HasPermission(userID, models.ResourceFlowsChatbot, models.ActionRead, orgID) {
 		return r.SendErrorEnvelope(fasthttp.StatusForbidden, "Permission denied", nil, "")
 	}
 
@@ -863,7 +863,7 @@ func (a *App) UpdateChatbotFlow(r *fastglue.Request) error {
 		return r.SendErrorEnvelope(fasthttp.StatusUnauthorized, "Unauthorized", nil, "")
 	}
 
-	if !a.HasPermission(userID, models.ResourceFlowsChatbot, models.ActionWrite) {
+	if !a.HasPermission(userID, models.ResourceFlowsChatbot, models.ActionWrite, orgID) {
 		return r.SendErrorEnvelope(fasthttp.StatusForbidden, "Permission denied", nil, "")
 	}
 
@@ -996,7 +996,7 @@ func (a *App) DeleteChatbotFlow(r *fastglue.Request) error {
 		return r.SendErrorEnvelope(fasthttp.StatusUnauthorized, "Unauthorized", nil, "")
 	}
 
-	if !a.HasPermission(userID, models.ResourceFlowsChatbot, models.ActionDelete) {
+	if !a.HasPermission(userID, models.ResourceFlowsChatbot, models.ActionDelete, orgID) {
 		return r.SendErrorEnvelope(fasthttp.StatusForbidden, "Permission denied", nil, "")
 	}
 

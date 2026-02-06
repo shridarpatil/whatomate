@@ -63,23 +63,28 @@ func (a *App) getOrgID(r *fastglue.Request) (uuid.UUID, error) {
 		return uuid.Nil, errors.New("organization_id is not a valid UUID")
 	}
 
-	// Check if super admin is trying to switch organizations
+	// Check for X-Organization-ID header to switch organizations
 	userID, _ := r.RequestCtx.UserValue("user_id").(uuid.UUID)
-	if a.IsSuperAdmin(userID) {
-		// Check for X-Organization-ID header
-		overrideOrgID := string(r.RequestCtx.Request.Header.Peek("X-Organization-ID"))
-		if overrideOrgID != "" {
-			// Header present = super admin selected a specific org
-			parsedOrgID, err := uuid.Parse(overrideOrgID)
-			if err == nil {
-				// Verify the organization exists
+	overrideOrgID := string(r.RequestCtx.Request.Header.Peek("X-Organization-ID"))
+	if overrideOrgID != "" {
+		parsedOrgID, err := uuid.Parse(overrideOrgID)
+		if err == nil && parsedOrgID != defaultOrgID {
+			if a.IsSuperAdmin(userID) {
+				// Super admins can access any org
 				var count int64
 				if err := a.DB.Table("organizations").Where("id = ?", parsedOrgID).Count(&count).Error; err == nil && count > 0 {
 					return parsedOrgID, nil
 				}
+			} else {
+				// Non-super-admins can switch if they have membership
+				var count int64
+				if err := a.DB.Table("user_organizations").
+					Where("user_id = ? AND organization_id = ? AND deleted_at IS NULL", userID, parsedOrgID).
+					Count(&count).Error; err == nil && count > 0 {
+					return parsedOrgID, nil
+				}
 			}
 		}
-		// No header or invalid org ID - fall back to user's org
 	}
 
 	return defaultOrgID, nil
@@ -193,8 +198,10 @@ func (a *App) getOrgAndUserID(r *fastglue.Request) (orgID, userID uuid.UUID, err
 
 // requirePermission checks if the user has the required permission.
 // Returns nil if permitted, otherwise sends a 403 error envelope and returns errEnvelopeSent.
+// Automatically extracts orgID from the request for org-aware permission checks.
 func (a *App) requirePermission(r *fastglue.Request, userID uuid.UUID, resource, action string) error {
-	if !a.HasPermission(userID, resource, action) {
+	orgID, _ := a.getOrgID(r)
+	if !a.HasPermission(userID, resource, action, orgID) {
 		_ = r.SendErrorEnvelope(fasthttp.StatusForbidden, "Insufficient permissions", nil, "")
 		return errEnvelopeSent
 	}

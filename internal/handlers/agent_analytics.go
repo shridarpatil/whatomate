@@ -92,7 +92,7 @@ func (a *App) GetAgentAnalytics(r *fastglue.Request) error {
 
 	// Check if filtering by specific agent (requires analytics permission)
 	var filterAgentID *uuid.UUID
-	if a.HasPermission(userID, models.ResourceAnalytics, models.ActionRead) && agentIDStr != "" {
+	if a.HasPermission(userID, models.ResourceAnalytics, models.ActionRead, orgID) && agentIDStr != "" {
 		parsedID, err := uuid.Parse(agentIDStr)
 		if err == nil {
 			filterAgentID = &parsedID
@@ -106,7 +106,7 @@ func (a *App) GetAgentAnalytics(r *fastglue.Request) error {
 		response.TrendData = a.calculateTrendData(orgID, periodStart, periodEnd, groupBy, filterAgentID)
 		// Calculate summary for this specific agent
 		a.calculateAgentSummaryStats(orgID, *filterAgentID, periodStart, periodEnd, &response.Summary)
-	} else if !a.HasPermission(userID, models.ResourceAnalytics, models.ActionRead) {
+	} else if !a.HasPermission(userID, models.ResourceAnalytics, models.ActionRead, orgID) {
 		// Users without analytics permission only see their own stats
 		myStats := a.calculateAgentStats(orgID, userID, periodStart, periodEnd)
 		response.MyStats = &myStats
@@ -187,7 +187,7 @@ func (a *App) GetAgentComparison(r *fastglue.Request) error {
 		return r.SendErrorEnvelope(fasthttp.StatusUnauthorized, "Unauthorized", nil, "")
 	}
 
-	if !a.HasPermission(userID, models.ResourceAnalytics, models.ActionRead) {
+	if !a.HasPermission(userID, models.ResourceAnalytics, models.ActionRead, orgID) {
 		return r.SendErrorEnvelope(fasthttp.StatusForbidden, "Access denied", nil, "")
 	}
 

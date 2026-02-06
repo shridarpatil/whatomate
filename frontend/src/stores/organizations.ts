@@ -1,11 +1,18 @@
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
-import { organizationsService, type Organization } from '@/services/api'
+import { organizationsService, usersService, type Organization } from '@/services/api'
 
 const SELECTED_ORG_KEY = 'selected_organization_id'
 
 export const useOrganizationsStore = defineStore('organizations', () => {
   const organizations = ref<Organization[]>([])
+  const myOrganizations = ref<Array<{
+    organization_id: string
+    name: string
+    slug: string
+    role_name: string
+    is_default: boolean
+  }>>([])
   const selectedOrgId = ref<string | null>(null)
   const loading = ref(false)
   const error = ref<string | null>(null)
@@ -14,6 +21,8 @@ export const useOrganizationsStore = defineStore('organizations', () => {
     if (!selectedOrgId.value) return null
     return organizations.value.find(org => org.id === selectedOrgId.value) || null
   })
+
+  const isMultiOrg = computed(() => myOrganizations.value.length > 1)
 
   // Initialize from localStorage
   function init() {
@@ -34,6 +43,15 @@ export const useOrganizationsStore = defineStore('organizations', () => {
       organizations.value = []
     } finally {
       loading.value = false
+    }
+  }
+
+  async function fetchMyOrganizations(): Promise<void> {
+    try {
+      const response = await usersService.listMyOrganizations()
+      myOrganizations.value = (response.data as any).data?.organizations || []
+    } catch {
+      myOrganizations.value = []
     }
   }
 
@@ -59,12 +77,15 @@ export const useOrganizationsStore = defineStore('organizations', () => {
 
   return {
     organizations,
+    myOrganizations,
+    isMultiOrg,
     selectedOrgId,
     selectedOrganization,
     loading,
     error,
     init,
     fetchOrganizations,
+    fetchMyOrganizations,
     selectOrganization,
     clearSelection,
     reset
