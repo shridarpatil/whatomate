@@ -464,7 +464,7 @@ func (a *App) RemoveOrganizationMember(r *fastglue.Request) error {
 		return nil
 	}
 
-	targetUserID, err := parsePathUUID(r, "user_id", "user")
+	targetUserID, err := parsePathUUID(r, "member_id", "member")
 	if err != nil {
 		return nil
 	}
@@ -506,7 +506,7 @@ func (a *App) UpdateOrganizationMemberRole(r *fastglue.Request) error {
 		return nil
 	}
 
-	targetUserID, err := parsePathUUID(r, "user_id", "user")
+	targetUserID, err := parsePathUUID(r, "member_id", "member")
 	if err != nil {
 		return nil
 	}

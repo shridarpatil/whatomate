@@ -281,7 +281,7 @@ func TestApp_RemoveOrganizationMember_Success(t *testing.T) {
 	req := testutil.NewGETRequest(t)
 	req.RequestCtx.Request.Header.SetMethod("DELETE")
 	testutil.SetAuthContext(req, org.ID, admin.ID)
-	testutil.SetPathParam(req, "user_id", targetUser.ID.String())
+	testutil.SetPathParam(req, "member_id", targetUser.ID.String())
 
 	err := app.RemoveOrganizationMember(req)
 	require.NoError(t, err)
@@ -305,7 +305,7 @@ func TestApp_RemoveOrganizationMember_CannotRemoveSelf(t *testing.T) {
 	req := testutil.NewGETRequest(t)
 	req.RequestCtx.Request.Header.SetMethod("DELETE")
 	testutil.SetAuthContext(req, org.ID, admin.ID)
-	testutil.SetPathParam(req, "user_id", admin.ID.String())
+	testutil.SetPathParam(req, "member_id", admin.ID.String())
 
 	err := app.RemoveOrganizationMember(req)
 	require.NoError(t, err)
@@ -324,7 +324,7 @@ func TestApp_RemoveOrganizationMember_NotFound(t *testing.T) {
 	req := testutil.NewGETRequest(t)
 	req.RequestCtx.Request.Header.SetMethod("DELETE")
 	testutil.SetAuthContext(req, org.ID, admin.ID)
-	testutil.SetPathParam(req, "user_id", uuid.New().String())
+	testutil.SetPathParam(req, "member_id", uuid.New().String())
 
 	err := app.RemoveOrganizationMember(req)
 	require.NoError(t, err)
@@ -338,7 +338,7 @@ func TestApp_RemoveOrganizationMember_Unauthorized(t *testing.T) {
 
 	req := testutil.NewGETRequest(t)
 	req.RequestCtx.Request.Header.SetMethod("DELETE")
-	testutil.SetPathParam(req, "user_id", uuid.New().String())
+	testutil.SetPathParam(req, "member_id", uuid.New().String())
 
 	err := app.RemoveOrganizationMember(req)
 	require.NoError(t, err)
@@ -364,7 +364,7 @@ func TestApp_UpdateOrganizationMemberRole_Success(t *testing.T) {
 		"role_id": agentRole.ID.String(),
 	})
 	testutil.SetAuthContext(req, org.ID, admin.ID)
-	testutil.SetPathParam(req, "user_id", targetUser.ID.String())
+	testutil.SetPathParam(req, "member_id", targetUser.ID.String())
 
 	err := app.UpdateOrganizationMemberRole(req)
 	require.NoError(t, err)
@@ -388,7 +388,7 @@ func TestApp_UpdateOrganizationMemberRole_MissingRoleID(t *testing.T) {
 
 	req := testutil.NewJSONRequest(t, map[string]any{})
 	testutil.SetAuthContext(req, org.ID, admin.ID)
-	testutil.SetPathParam(req, "user_id", uuid.New().String())
+	testutil.SetPathParam(req, "member_id", uuid.New().String())
 
 	err := app.UpdateOrganizationMemberRole(req)
 	require.NoError(t, err)
@@ -410,7 +410,7 @@ func TestApp_UpdateOrganizationMemberRole_InvalidRole(t *testing.T) {
 		"role_id": uuid.New().String(), // non-existent role
 	})
 	testutil.SetAuthContext(req, org.ID, admin.ID)
-	testutil.SetPathParam(req, "user_id", targetUser.ID.String())
+	testutil.SetPathParam(req, "member_id", targetUser.ID.String())
 
 	err := app.UpdateOrganizationMemberRole(req)
 	require.NoError(t, err)
@@ -431,7 +431,7 @@ func TestApp_UpdateOrganizationMemberRole_MemberNotFound(t *testing.T) {
 		"role_id": agentRole.ID.String(),
 	})
 	testutil.SetAuthContext(req, org.ID, admin.ID)
-	testutil.SetPathParam(req, "user_id", uuid.New().String())
+	testutil.SetPathParam(req, "member_id", uuid.New().String())
 
 	err := app.UpdateOrganizationMemberRole(req)
 	require.NoError(t, err)
@@ -446,7 +446,7 @@ func TestApp_UpdateOrganizationMemberRole_Unauthorized(t *testing.T) {
 	req := testutil.NewJSONRequest(t, map[string]any{
 		"role_id": uuid.New().String(),
 	})
-	testutil.SetPathParam(req, "user_id", uuid.New().String())
+	testutil.SetPathParam(req, "member_id", uuid.New().String())
 
 	err := app.UpdateOrganizationMemberRole(req)
 	require.NoError(t, err)
