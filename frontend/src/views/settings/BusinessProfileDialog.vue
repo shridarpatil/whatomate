@@ -277,7 +277,7 @@ async function handleFileChange(event: Event) {
         <!-- Description -->
         <div class="md:col-span-2 space-y-2">
           <Label for="description">{{ $t('businessProfile.businessDescription') }}</Label>
-          <Textarea id="description" v-model="profile.description" :placeholder="$t('businessProfile.descriptionPlaceholder')" rows="3" maxlength="512" />
+          <Textarea id="description" v-model="profile.description" :placeholder="$t('businessProfile.descriptionPlaceholder')" :rows="3" maxlength="512" />
           <p class="text-xs text-muted-foreground text-right">{{ profile.description.length }}/512</p>
         </div>
 

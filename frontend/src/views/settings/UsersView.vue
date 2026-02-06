@@ -123,9 +123,13 @@ async function saveUser() {
       await usersStore.updateUser(editingUser.value.id, data)
       toast.success(t('common.updatedSuccess', { resource: t('resources.User') }))
     } else {
-      data.password = formData.value.password
-      if (isSuperAdmin.value && formData.value.is_super_admin) data.is_super_admin = true
-      await usersStore.createUser(data)
+      await usersStore.createUser({
+        email: formData.value.email,
+        password: formData.value.password,
+        full_name: formData.value.full_name,
+        role_id: formData.value.role_id || undefined,
+        is_super_admin: isSuperAdmin.value && formData.value.is_super_admin ? true : undefined,
+      })
       toast.success(t('common.createdSuccess', { resource: t('resources.User') }))
     }
     closeDialog()

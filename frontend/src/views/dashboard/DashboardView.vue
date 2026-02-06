@@ -699,7 +699,7 @@ const saveWidget = async () => {
     config = { shortcuts: [...selectedShortcuts.value] }
   }
 
-  const payload: Record<string, any> = {
+  const payload = {
     name: widgetForm.value.name,
     description: widgetForm.value.description,
     data_source: widgetForm.value.data_source,

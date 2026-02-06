@@ -1,4 +1,4 @@
-import { ref, type Ref, type UnwrapRef } from 'vue'
+import { ref, type Ref } from 'vue'
 
 export interface CrudState<T, F> {
   items: Ref<T[]>
@@ -34,7 +34,7 @@ export interface CrudState<T, F> {
  * } = useCrudState<User, typeof defaultForm>(defaultForm)
  * ```
  */
-export function useCrudState<T, F extends Record<string, unknown>>(
+export function useCrudState<T, F extends Record<string, any>>(
   defaultFormData: F
 ): CrudState<T, F> {
   // Core state
@@ -61,7 +61,7 @@ export function useCrudState<T, F extends Record<string, unknown>>(
    */
   function openCreateDialog(): void {
     editingItem.value = null
-    formData.value = { ...defaultFormData } as UnwrapRef<F>
+    formData.value = { ...defaultFormData } as F
     isDialogOpen.value = true
   }
 
@@ -72,7 +72,7 @@ export function useCrudState<T, F extends Record<string, unknown>>(
    */
   function openEditDialog(item: T, mapToForm: (item: T) => F): void {
     editingItem.value = item
-    formData.value = { ...mapToForm(item) } as UnwrapRef<F>
+    formData.value = { ...mapToForm(item) } as F
     isDialogOpen.value = true
   }
 
@@ -105,7 +105,7 @@ export function useCrudState<T, F extends Record<string, unknown>>(
    * Resets the form to default values
    */
   function resetForm(): void {
-    formData.value = { ...defaultFormData } as UnwrapRef<F>
+    formData.value = { ...defaultFormData } as F
   }
 
   return {

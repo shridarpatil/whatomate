@@ -59,7 +59,7 @@ import {
 } from 'lucide-vue-next'
 import type { DateRange } from 'reka-ui'
 import { CalendarDate } from '@internationalized/date'
-import { Line, Bar, Doughnut } from '@/lib/charts'
+import { Line, Bar } from '@/lib/charts'
 import { useToast } from '@/components/ui/toast'
 
 const { toast } = useToast()
@@ -681,15 +681,6 @@ const chartOptions = {
   }
 }
 
-const doughnutOptions = {
-  responsive: true,
-  maintainAspectRatio: false,
-  plugins: {
-    legend: {
-      position: 'bottom' as const
-    }
-  }
-}
 
 </script>
 
