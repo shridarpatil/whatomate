@@ -58,13 +58,13 @@ export class ApiHelper {
     return this.login('admin@test.com', 'password')
   }
 
-  // Register creates a new organization and user
+  // Register a user into an existing organization
   async register(data: {
     email: string
     password: string
     full_name: string
-    organization_name: string
-  }): Promise<{ user: User; organization: Organization; access_token: string }> {
+    organization_id: string
+  }): Promise<{ user: User; access_token: string }> {
     const response = await this.request.post(`${BASE_URL}/api/auth/register`, {
       data
     })
@@ -75,8 +75,87 @@ export class ApiHelper {
     this.accessToken = result.data.access_token
     return {
       user: result.data.user,
-      organization: { id: result.data.user.organization_id, name: data.organization_name },
       access_token: result.data.access_token
+    }
+  }
+
+  // Create a new organization (requires organizations:write permission)
+  async createOrganization(name: string): Promise<Organization> {
+    const response = await this.request.post(`${BASE_URL}/api/organizations`, {
+      headers: this.headers,
+      data: { name }
+    })
+    if (!response.ok()) {
+      throw new Error(`Failed to create organization: ${await response.text()}`)
+    }
+    const result = await response.json()
+    return result.data
+  }
+
+  // Switch to a different organization (returns new tokens)
+  async switchOrg(organizationId: string): Promise<string> {
+    const response = await this.request.post(`${BASE_URL}/api/auth/switch-org`, {
+      headers: this.headers,
+      data: { organization_id: organizationId }
+    })
+    if (!response.ok()) {
+      throw new Error(`Failed to switch org: ${await response.text()}`)
+    }
+    const result = await response.json()
+    this.accessToken = result.data.access_token
+    return this.accessToken
+  }
+
+  // List the current user's organization memberships
+  async getMyOrganizations(): Promise<Array<{ organization_id: string; name: string; slug: string; role_name: string; is_default: boolean }>> {
+    const response = await this.request.get(`${BASE_URL}/api/me/organizations`, {
+      headers: this.headers
+    })
+    if (!response.ok()) {
+      throw new Error(`Failed to get my organizations: ${await response.text()}`)
+    }
+    const data = await response.json()
+    return data.data?.organizations || []
+  }
+
+  // List members of the current organization
+  async getOrgMembers(orgId?: string): Promise<any[]> {
+    const hdrs = { ...this.headers } as Record<string, string>
+    if (orgId) hdrs['X-Organization-ID'] = orgId
+    const response = await this.request.get(`${BASE_URL}/api/organizations/members`, {
+      headers: hdrs
+    })
+    if (!response.ok()) {
+      throw new Error(`Failed to get org members: ${await response.text()}`)
+    }
+    const data = await response.json()
+    return data.data?.members || []
+  }
+
+  // Add a member to the current organization
+  async addOrgMember(userId: string, roleId?: string, orgId?: string): Promise<void> {
+    const hdrs = { ...this.headers } as Record<string, string>
+    if (orgId) hdrs['X-Organization-ID'] = orgId
+    const body: Record<string, string> = { user_id: userId }
+    if (roleId) body.role_id = roleId
+    const response = await this.request.post(`${BASE_URL}/api/organizations/members`, {
+      headers: hdrs,
+      data: body
+    })
+    if (!response.ok()) {
+      throw new Error(`Failed to add org member: ${await response.text()}`)
+    }
+  }
+
+  // Remove a member from the current organization
+  async removeOrgMember(userId: string, orgId?: string): Promise<void> {
+    const hdrs = { ...this.headers } as Record<string, string>
+    if (orgId) hdrs['X-Organization-ID'] = orgId
+    const response = await this.request.delete(`${BASE_URL}/api/organizations/members/${userId}`, {
+      headers: hdrs
+    })
+    if (!response.ok()) {
+      throw new Error(`Failed to remove org member: ${await response.text()}`)
     }
   }
 
