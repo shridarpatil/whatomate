@@ -133,7 +133,7 @@ func (a *App) Register(r *fastglue.Request) error {
 	if err := a.DB.Where("email = ?", req.Email).First(&existingUser).Error; err == nil {
 		// User exists — verify password and add to this org
 		if err := bcrypt.CompareHashAndPassword([]byte(existingUser.PasswordHash), []byte(req.Password)); err != nil {
-			return r.SendErrorEnvelope(fasthttp.StatusUnauthorized, "Invalid password. If you already have an account, use your existing password.", nil, "")
+			return r.SendErrorEnvelope(fasthttp.StatusConflict, "An account with this email already exists. Please sign in and ask your organization admin to add you.", nil, "")
 		}
 
 		// Check if already a member of this org
