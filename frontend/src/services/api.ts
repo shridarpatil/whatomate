@@ -845,4 +845,26 @@ export const tagsService = {
   delete: (name: string) => api.delete(`/tags/${encodeURIComponent(name)}`)
 }
 
+// Conversation Notes
+export interface ConversationNote {
+  id: string
+  contact_id: string
+  created_by_id: string
+  created_by_name: string
+  content: string
+  created_at: string
+  updated_at: string
+}
+
+export const notesService = {
+  list: (contactId: string, params?: { limit?: number; before?: string }) =>
+    api.get<{ notes: ConversationNote[]; total: number; has_more: boolean }>(`/contacts/${contactId}/notes`, { params }),
+  create: (contactId: string, data: { content: string }) =>
+    api.post<ConversationNote>(`/contacts/${contactId}/notes`, data),
+  update: (contactId: string, noteId: string, data: { content: string }) =>
+    api.put<ConversationNote>(`/contacts/${contactId}/notes/${noteId}`, data),
+  delete: (contactId: string, noteId: string) =>
+    api.delete(`/contacts/${contactId}/notes/${noteId}`)
+}
+
 export default api

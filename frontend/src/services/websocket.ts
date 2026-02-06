@@ -1,6 +1,7 @@
 import { useContactsStore } from '@/stores/contacts'
 import { useTransfersStore } from '@/stores/transfers'
 import { useAuthStore } from '@/stores/auth'
+import { useNotesStore } from '@/stores/notes'
 import { toast } from 'vue-sonner'
 import router from '@/router'
 
@@ -59,6 +60,11 @@ const WS_TYPE_CAMPAIGN_STATS_UPDATE = 'campaign_stats_update'
 
 // Permission types
 const WS_TYPE_PERMISSIONS_UPDATED = 'permissions_updated'
+
+// Conversation note types
+const WS_TYPE_CONVERSATION_NOTE_CREATED = 'conversation_note_created'
+const WS_TYPE_CONVERSATION_NOTE_UPDATED = 'conversation_note_updated'
+const WS_TYPE_CONVERSATION_NOTE_DELETED = 'conversation_note_deleted'
 
 interface WSMessage {
   type: string
@@ -164,6 +170,15 @@ class WebSocketService {
           break
         case WS_TYPE_PERMISSIONS_UPDATED:
           this.handlePermissionsUpdated()
+          break
+        case WS_TYPE_CONVERSATION_NOTE_CREATED:
+          useNotesStore().addNote(message.payload)
+          break
+        case WS_TYPE_CONVERSATION_NOTE_UPDATED:
+          useNotesStore().onNoteUpdated(message.payload)
+          break
+        case WS_TYPE_CONVERSATION_NOTE_DELETED:
+          useNotesStore().onNoteDeleted(message.payload.id)
           break
         default:
           // Unknown message type, ignore

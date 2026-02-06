@@ -74,6 +74,28 @@ export function getInitials(name: string): string {
     .slice(0, 2)
 }
 
+const avatarGradients = [
+  'from-violet-500 to-purple-600',
+  'from-blue-500 to-cyan-600',
+  'from-rose-500 to-pink-600',
+  'from-amber-500 to-orange-600',
+  'from-emerald-500 to-teal-600',
+  'from-indigo-500 to-blue-600',
+  'from-fuchsia-500 to-purple-600',
+  'from-cyan-500 to-blue-600',
+  'from-orange-500 to-red-600',
+  'from-teal-500 to-emerald-600',
+]
+
+export function getAvatarGradient(name: string): string {
+  if (!name) return avatarGradients[0]
+  let hash = 0
+  for (let i = 0; i < name.length; i++) {
+    hash = name.charCodeAt(i) + ((hash << 5) - hash)
+  }
+  return avatarGradients[Math.abs(hash) % avatarGradients.length]
+}
+
 export function sleep(ms: number): Promise<void> {
   return new Promise(resolve => setTimeout(resolve, ms))
 }

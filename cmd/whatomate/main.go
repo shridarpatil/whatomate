@@ -519,6 +519,12 @@ func setupRoutes(g *fastglue.Fastglue, app *handlers.App, lo logf.Logger, basePa
 	g.POST("/api/messages/media", app.SendMediaMessage)
 	g.PUT("/api/messages/{id}/read", app.MarkMessageRead)
 
+	// Conversation Notes
+	g.GET("/api/contacts/{id}/notes", app.ListConversationNotes)
+	g.POST("/api/contacts/{id}/notes", app.CreateConversationNote)
+	g.PUT("/api/contacts/{id}/notes/{note_id}", app.UpdateConversationNote)
+	g.DELETE("/api/contacts/{id}/notes/{note_id}", app.DeleteConversationNote)
+
 	// Media (serves media files for messages, auth-protected)
 	g.GET("/api/media/{message_id}", app.ServeMedia)
 

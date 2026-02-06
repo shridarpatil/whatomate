@@ -27,6 +27,11 @@ const (
 
 	// Permission types
 	TypePermissionsUpdated = "permissions_updated"
+
+	// Conversation note types
+	TypeConversationNoteCreated = "conversation_note_created"
+	TypeConversationNoteUpdated = "conversation_note_updated"
+	TypeConversationNoteDeleted = "conversation_note_deleted"
 )
 
 // BroadcastMessage represents a message to be broadcast to clients

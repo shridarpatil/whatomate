@@ -101,6 +101,9 @@ func GetMigrationModels() []MigrationModel {
 
 		// Dashboard
 		{"Widget", &models.Widget{}},
+
+		// Conversation Notes
+		{"ConversationNote", &models.ConversationNote{}},
 	}
 }
 
@@ -256,6 +259,8 @@ func getIndexes() []string {
 		`CREATE INDEX IF NOT EXISTS idx_contacts_tags ON contacts USING GIN (tags)`,
 		// User organizations
 		`CREATE UNIQUE INDEX IF NOT EXISTS idx_user_org_unique ON user_organizations(user_id, organization_id) WHERE deleted_at IS NULL`,
+		// Conversation notes
+		`CREATE INDEX IF NOT EXISTS idx_conversation_notes_contact ON conversation_notes(organization_id, contact_id, created_at DESC)`,
 	}
 }
 

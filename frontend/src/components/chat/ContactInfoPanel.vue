@@ -24,7 +24,7 @@ import {
 } from '@/components/ui/command'
 import { X, ChevronDown, Phone, User, Plus, Check, Tags, Loader2 } from 'lucide-vue-next'
 import { TagBadge } from '@/components/ui/tag-badge'
-import { getInitials } from '@/lib/utils'
+import { getInitials, getAvatarGradient } from '@/lib/utils'
 import { getTagColorClass } from '@/lib/constants'
 import { useTagsStore } from '@/stores/tags'
 import { useAuthStore } from '@/stores/auth'
@@ -134,29 +134,6 @@ watch(() => props.sessionData, (newData) => {
 
 function toggleSection(sectionId: string) {
   collapsedSections.value[sectionId] = !collapsedSections.value[sectionId]
-}
-
-// Avatar gradient colors for unique per-contact styling
-const avatarGradients = [
-  'from-violet-500 to-purple-600',
-  'from-blue-500 to-cyan-600',
-  'from-rose-500 to-pink-600',
-  'from-amber-500 to-orange-600',
-  'from-emerald-500 to-teal-600',
-  'from-indigo-500 to-blue-600',
-  'from-fuchsia-500 to-purple-600',
-  'from-cyan-500 to-blue-600',
-  'from-orange-500 to-red-600',
-  'from-teal-500 to-emerald-600',
-]
-
-function getAvatarGradient(name: string): string {
-  if (!name) return avatarGradients[0]
-  let hash = 0
-  for (let i = 0; i < name.length; i++) {
-    hash = name.charCodeAt(i) + ((hash << 5) - hash)
-  }
-  return avatarGradients[Math.abs(hash) % avatarGradients.length]
 }
 
 function isSectionCollapsed(sectionId: string): boolean {
