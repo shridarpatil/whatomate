@@ -15,7 +15,7 @@ import { Input } from '@/components/ui/input'
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { organizationsService } from '@/services/api'
 import { toast } from 'vue-sonner'
-import { Building2, RefreshCw, Plus, Loader2 } from 'lucide-vue-next'
+import { Building2, Plus, Loader2 } from 'lucide-vue-next'
 
 const props = defineProps<{
   collapsed?: boolean
@@ -24,7 +24,6 @@ const props = defineProps<{
 const { t } = useI18n()
 const organizationsStore = useOrganizationsStore()
 const authStore = useAuthStore()
-const isRefreshing = ref(false)
 
 const isSuperAdmin = computed(() => authStore.user?.is_super_admin || false)
 const canCreateOrg = computed(() => authStore.hasPermission('organizations', 'write'))
@@ -111,13 +110,11 @@ async function submitCreateOrg() {
 }
 
 const refreshOrgs = async () => {
-  isRefreshing.value = true
   if (isSuperAdmin.value) {
     await organizationsStore.fetchOrganizations()
   } else {
     await organizationsStore.fetchMyOrganizations()
   }
-  isRefreshing.value = false
 }
 </script>
 
@@ -129,13 +126,13 @@ const refreshOrgs = async () => {
           Organization
         </span>
         <Button
+          v-if="canCreateOrg"
           variant="ghost"
           size="icon"
           class="h-5 w-5"
-          @click="refreshOrgs"
-          :disabled="isRefreshing"
+          @click="isCreateDialogOpen = true"
         >
-          <RefreshCw :class="['h-3 w-3', isRefreshing && 'animate-spin']" />
+          <Plus class="h-3 w-3" />
         </Button>
       </div>
       <Select
@@ -168,16 +165,6 @@ const refreshOrgs = async () => {
       <div v-else class="text-[12px] text-muted-foreground px-1">
         No organizations found
       </div>
-      <Button
-        v-if="canCreateOrg"
-        variant="ghost"
-        size="sm"
-        class="w-full justify-start text-[12px] h-7 px-1"
-        @click="isCreateDialogOpen = true"
-      >
-        <Plus class="h-3.5 w-3.5 mr-1.5" />
-        {{ t('organizations.createNew') }}
-      </Button>
     </div>
 
     <!-- Collapsed view - just show icon with selected org initial -->
