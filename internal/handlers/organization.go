@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"encoding/json"
+	"time"
 
 	"github.com/google/uuid"
 	"github.com/shridarpatil/whatomate/internal/database"
@@ -325,7 +326,7 @@ type MemberResponse struct {
 	Email          string     `json:"email"`
 	FullName       string     `json:"full_name"`
 	IsActive       bool       `json:"is_active"`
-	CreatedAt      string     `json:"created_at"`
+	CreatedAt      time.Time  `json:"created_at"`
 }
 
 // ListOrganizationMembers returns all members of the current organization
@@ -339,34 +340,18 @@ func (a *App) ListOrganizationMembers(r *fastglue.Request) error {
 		return nil
 	}
 
-	var userOrgs []models.UserOrganization
-	if err := a.DB.Where("organization_id = ?", orgID).
-		Preload("User").
-		Preload("Role").
-		Find(&userOrgs).Error; err != nil {
+	var response []MemberResponse
+	if err := a.DB.Table("user_organizations").
+		Select(`user_organizations.id, user_organizations.user_id, user_organizations.organization_id,
+			user_organizations.role_id, user_organizations.is_default, user_organizations.created_at,
+			users.email, users.full_name, users.is_active,
+			custom_roles.name AS role_name`).
+		Joins("LEFT JOIN users ON users.id = user_organizations.user_id AND users.deleted_at IS NULL").
+		Joins("LEFT JOIN custom_roles ON custom_roles.id = user_organizations.role_id AND custom_roles.deleted_at IS NULL").
+		Where("user_organizations.organization_id = ? AND user_organizations.deleted_at IS NULL", orgID).
+		Scan(&response).Error; err != nil {
 		a.Log.Error("Failed to list organization members", "error", err)
 		return r.SendErrorEnvelope(fasthttp.StatusInternalServerError, "Failed to list members", nil, "")
-	}
-
-	response := make([]MemberResponse, 0, len(userOrgs))
-	for _, uo := range userOrgs {
-		item := MemberResponse{
-			ID:             uo.ID,
-			UserID:         uo.UserID,
-			OrganizationID: uo.OrganizationID,
-			RoleID:         uo.RoleID,
-			IsDefault:      uo.IsDefault,
-			CreatedAt:      uo.CreatedAt.Format("2006-01-02T15:04:05Z"),
-		}
-		if uo.User != nil {
-			item.Email = uo.User.Email
-			item.FullName = uo.User.FullName
-			item.IsActive = uo.User.IsActive
-		}
-		if uo.Role != nil {
-			item.RoleName = uo.Role.Name
-		}
-		response = append(response, item)
 	}
 
 	return r.SendEnvelope(map[string]interface{}{
