@@ -89,15 +89,6 @@ func TestApp_ListOrganizationMembers_Success(t *testing.T) {
 	role := testutil.CreateTestRole(t, app.DB, org.ID, "admin", allPerms)
 	user := testutil.CreateTestUser(t, app.DB, org.ID, testutil.WithEmail(testutil.UniqueEmail("list-members")), testutil.WithRoleID(&role.ID))
 
-	// Add the user as an org member
-	userOrg := models.UserOrganization{
-		UserID:         user.ID,
-		OrganizationID: org.ID,
-		RoleID:         &role.ID,
-		IsDefault:      true,
-	}
-	require.NoError(t, app.DB.Create(&userOrg).Error)
-
 	req := testutil.NewGETRequest(t)
 	testutil.SetAuthContext(req, org.ID, user.ID)
 
@@ -210,13 +201,8 @@ func TestApp_AddOrganizationMember_AlreadyMember(t *testing.T) {
 	role := testutil.CreateTestRole(t, app.DB, org.ID, "admin", allPerms)
 	admin := testutil.CreateTestUser(t, app.DB, org.ID, testutil.WithEmail(testutil.UniqueEmail("add-dup-admin")), testutil.WithRoleID(&role.ID))
 
-	// Create user and add as member
+	// Create user in same org (CreateTestUser auto-creates user_organizations entry)
 	targetUser := testutil.CreateTestUser(t, app.DB, org.ID, testutil.WithEmail(testutil.UniqueEmail("add-dup-target")))
-	require.NoError(t, app.DB.Create(&models.UserOrganization{
-		UserID:         targetUser.ID,
-		OrganizationID: org.ID,
-		IsDefault:      true,
-	}).Error)
 
 	req := testutil.NewJSONRequest(t, map[string]any{
 		"user_id": targetUser.ID.String(),
@@ -289,13 +275,8 @@ func TestApp_RemoveOrganizationMember_Success(t *testing.T) {
 	role := testutil.CreateTestRole(t, app.DB, org.ID, "admin", allPerms)
 	admin := testutil.CreateTestUser(t, app.DB, org.ID, testutil.WithEmail(testutil.UniqueEmail("remove-admin")), testutil.WithRoleID(&role.ID))
 
-	// Add a target user as member
+	// Add a target user as member (CreateTestUser auto-creates user_organizations entry)
 	targetUser := testutil.CreateTestUser(t, app.DB, org.ID, testutil.WithEmail(testutil.UniqueEmail("remove-target")))
-	require.NoError(t, app.DB.Create(&models.UserOrganization{
-		UserID:         targetUser.ID,
-		OrganizationID: org.ID,
-		IsDefault:      false,
-	}).Error)
 
 	req := testutil.NewGETRequest(t)
 	req.RequestCtx.Request.Header.SetMethod("DELETE")
@@ -376,14 +357,8 @@ func TestApp_UpdateOrganizationMemberRole_Success(t *testing.T) {
 	agentRole := testutil.CreateTestRole(t, app.DB, org.ID, "agent", nil)
 	admin := testutil.CreateTestUser(t, app.DB, org.ID, testutil.WithEmail(testutil.UniqueEmail("update-role-admin")), testutil.WithRoleID(&adminRole.ID))
 
-	// Add a target user as member with admin role
+	// Target user is member via CreateTestUser (auto-creates user_organizations entry)
 	targetUser := testutil.CreateTestUser(t, app.DB, org.ID, testutil.WithEmail(testutil.UniqueEmail("update-role-target")))
-	require.NoError(t, app.DB.Create(&models.UserOrganization{
-		UserID:         targetUser.ID,
-		OrganizationID: org.ID,
-		RoleID:         &adminRole.ID,
-		IsDefault:      false,
-	}).Error)
 
 	req := testutil.NewJSONRequest(t, map[string]any{
 		"role_id": agentRole.ID.String(),
@@ -430,11 +405,6 @@ func TestApp_UpdateOrganizationMemberRole_InvalidRole(t *testing.T) {
 	admin := testutil.CreateTestUser(t, app.DB, org.ID, testutil.WithEmail(testutil.UniqueEmail("update-role-invalid")), testutil.WithRoleID(&role.ID))
 
 	targetUser := testutil.CreateTestUser(t, app.DB, org.ID, testutil.WithEmail(testutil.UniqueEmail("update-role-inv-target")))
-	require.NoError(t, app.DB.Create(&models.UserOrganization{
-		UserID:         targetUser.ID,
-		OrganizationID: org.ID,
-		IsDefault:      false,
-	}).Error)
 
 	req := testutil.NewJSONRequest(t, map[string]any{
 		"role_id": uuid.New().String(), // non-existent role
@@ -493,13 +463,9 @@ func TestApp_ListMyOrganizations_Success(t *testing.T) {
 	org2 := testutil.CreateTestOrganization(t, app.DB)
 	user := testutil.CreateTestUser(t, app.DB, org1.ID, testutil.WithEmail(testutil.UniqueEmail("list-my-orgs")))
 
-	// Add user to both orgs
+	// Add user to org2 (org1 membership is auto-created by CreateTestUser)
 	require.NoError(t, app.DB.Create(&models.UserOrganization{
-		UserID:         user.ID,
-		OrganizationID: org1.ID,
-		IsDefault:      true,
-	}).Error)
-	require.NoError(t, app.DB.Create(&models.UserOrganization{
+		BaseModel:      models.BaseModel{ID: uuid.New()},
 		UserID:         user.ID,
 		OrganizationID: org2.ID,
 		IsDefault:      false,
@@ -536,14 +502,14 @@ func TestApp_ListMyOrganizations_Success(t *testing.T) {
 	assert.True(t, orgIDs[org2.ID])
 }
 
-func TestApp_ListMyOrganizations_Empty(t *testing.T) {
+func TestApp_ListMyOrganizations_SingleOrg(t *testing.T) {
 	t.Parallel()
 
 	app := newTestApp(t)
 	org := testutil.CreateTestOrganization(t, app.DB)
-	user := testutil.CreateTestUser(t, app.DB, org.ID, testutil.WithEmail(testutil.UniqueEmail("list-my-orgs-empty")))
+	user := testutil.CreateTestUser(t, app.DB, org.ID, testutil.WithEmail(testutil.UniqueEmail("list-my-orgs-single")))
 
-	// User has no org memberships in user_organizations table
+	// User has one org membership (auto-created by CreateTestUser)
 	req := testutil.NewGETRequest(t)
 	testutil.SetPathParam(req, "user_id", user.ID)
 
@@ -553,13 +519,16 @@ func TestApp_ListMyOrganizations_Empty(t *testing.T) {
 
 	var resp struct {
 		Data struct {
-			Organizations []any `json:"organizations"`
+			Organizations []struct {
+				OrganizationID uuid.UUID `json:"organization_id"`
+			} `json:"organizations"`
 		} `json:"data"`
 	}
 	err = json.Unmarshal(testutil.GetResponseBody(req), &resp)
 	require.NoError(t, err)
 
-	assert.Empty(t, resp.Data.Organizations)
+	assert.Len(t, resp.Data.Organizations, 1)
+	assert.Equal(t, org.ID, resp.Data.Organizations[0].OrganizationID)
 }
 
 func TestApp_ListMyOrganizations_Unauthorized(t *testing.T) {

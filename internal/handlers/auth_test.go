@@ -140,13 +140,17 @@ func TestApp_Login_UserWithRole(t *testing.T) {
 
 func TestApp_Register_Success(t *testing.T) {
 	app := newTestApp(t)
+	org := testutil.CreateTestOrganization(t, app.DB)
 	email := testutil.UniqueEmail("register")
 
-	req := testutil.NewJSONRequest(t, map[string]string{
-		"email":             email,
-		"password":          "securepassword123",
-		"full_name":         "New User",
-		"organization_name": "New Organization " + uuid.New().String()[:8],
+	// Create a default role for the org (Register looks for is_default=true, then falls back to name="agent" + is_system=true)
+	defaultRole := testutil.CreateTestRoleExact(t, app.DB, org.ID, "agent", true, true, nil)
+
+	req := testutil.NewJSONRequest(t, map[string]interface{}{
+		"email":           email,
+		"password":        "securepassword123",
+		"full_name":       "New User",
+		"organization_id": org.ID.String(),
 	})
 
 	err := app.Register(req)
@@ -178,32 +182,75 @@ func TestApp_Register_Success(t *testing.T) {
 	assert.NotEmpty(t, resp.Data.User.RoleID, "User should have a role assigned")
 	assert.True(t, resp.Data.User.IsActive)
 
-	// Verify the user has admin role in the database
+	// Verify the user has the default role in the database
 	userID, err := uuid.Parse(resp.Data.User.ID)
 	require.NoError(t, err)
 	var user models.User
 	require.NoError(t, app.DB.Preload("Role").Where("id = ?", userID).First(&user).Error)
 	assert.NotNil(t, user.Role)
-	assert.Equal(t, "admin", user.Role.Name)
+	assert.Equal(t, defaultRole.Name, user.Role.Name)
 	assert.True(t, user.Role.IsSystem)
+
+	// Verify user_organizations entry was created
+	var userOrg models.UserOrganization
+	require.NoError(t, app.DB.Where("user_id = ? AND organization_id = ?", userID, org.ID).First(&userOrg).Error)
+	assert.True(t, userOrg.IsDefault)
 }
 
-func TestApp_Register_EmailAlreadyExists(t *testing.T) {
+func TestApp_Register_EmailAlreadyExists_WrongPassword(t *testing.T) {
 	app := newTestApp(t)
 	org := testutil.CreateTestOrganization(t, app.DB)
 	email := testutil.UniqueEmail("existing")
 	testutil.CreateTestUser(t, app.DB, org.ID, testutil.WithEmail(email), testutil.WithPassword("password123"))
 
-	req := testutil.NewJSONRequest(t, map[string]string{
-		"email":             email,
-		"password":          "securepassword123",
-		"full_name":         "Another User",
-		"organization_name": "Another Org",
+	// Create a second org to register into
+	org2 := testutil.CreateTestOrganization(t, app.DB)
+	testutil.CreateTestRoleExact(t, app.DB, org2.ID, "agent", true, true, nil)
+
+	req := testutil.NewJSONRequest(t, map[string]interface{}{
+		"email":           email,
+		"password":        "wrongpassword123",
+		"full_name":       "Another User",
+		"organization_id": org2.ID.String(),
 	})
 
 	err := app.Register(req)
 	require.NoError(t, err)
-	testutil.AssertErrorResponse(t, req, fasthttp.StatusConflict, "Email already registered")
+	testutil.AssertErrorResponse(t, req, fasthttp.StatusConflict, "An account with this email already exists")
+}
+
+func TestApp_Register_ExistingUser_JoinsNewOrg(t *testing.T) {
+	app := newTestApp(t)
+	org := testutil.CreateTestOrganization(t, app.DB)
+	email := testutil.UniqueEmail("multiorg")
+	testutil.CreateTestUser(t, app.DB, org.ID, testutil.WithEmail(email), testutil.WithPassword("password123"))
+
+	// Create a second org with a default role
+	org2 := testutil.CreateTestOrganization(t, app.DB)
+	testutil.CreateTestRoleExact(t, app.DB, org2.ID, "agent", true, true, nil)
+
+	req := testutil.NewJSONRequest(t, map[string]interface{}{
+		"email":           email,
+		"password":        "password123",
+		"full_name":       "Same User",
+		"organization_id": org2.ID.String(),
+	})
+
+	err := app.Register(req)
+	require.NoError(t, err)
+	assert.Equal(t, fasthttp.StatusOK, testutil.GetResponseStatusCode(req))
+
+	var resp struct {
+		Status string `json:"status"`
+		Data   struct {
+			AccessToken  string `json:"access_token"`
+			RefreshToken string `json:"refresh_token"`
+		} `json:"data"`
+	}
+	err = json.Unmarshal(testutil.GetResponseBody(req), &resp)
+	require.NoError(t, err)
+	assert.Equal(t, "success", resp.Status)
+	assert.NotEmpty(t, resp.Data.AccessToken)
 }
 
 func TestApp_Register_InvalidRequestBody(t *testing.T) {

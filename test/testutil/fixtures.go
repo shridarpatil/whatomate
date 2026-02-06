@@ -113,6 +113,16 @@ func CreateTestUser(t *testing.T, db *gorm.DB, orgID uuid.UUID, opts ...UserOpti
 		user.IsActive = false
 	}
 
+	// Also create user_organizations entry for the user's home org
+	userOrg := &models.UserOrganization{
+		BaseModel:      models.BaseModel{ID: uuid.New()},
+		UserID:         user.ID,
+		OrganizationID: orgID,
+		RoleID:         user.RoleID,
+		IsDefault:      true,
+	}
+	require.NoError(t, db.Create(userOrg).Error)
+
 	return user
 }
 

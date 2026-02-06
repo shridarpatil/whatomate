@@ -84,6 +84,7 @@ func runMigrations(db *gorm.DB) error {
 		&models.Permission{},
 		&models.CustomRole{},
 		&models.User{},
+		&models.UserOrganization{},
 		&models.Team{},
 		&models.TeamMember{},
 		&models.APIKey{},
@@ -164,6 +165,7 @@ func cleanupTables(db *gorm.DB) {
 		"webhooks",
 		"custom_actions",
 		"user_availability_logs",
+		"user_organizations",
 		"users",
 		"organizations",
 	}
@@ -207,6 +209,7 @@ func TruncateTables(db *gorm.DB) {
 		"webhooks",
 		"custom_actions",
 		"user_availability_logs",
+		"user_organizations",
 		"users",
 		"organizations",
 	}
