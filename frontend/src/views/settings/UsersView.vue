@@ -181,7 +181,7 @@ function copyInviteLink() {
   const orgId = authStore.organizationId
   const url = `${window.location.origin}/register?org=${orgId}`
   navigator.clipboard.writeText(url)
-  toast.success(t('members.inviteLinkCopied'))
+  toast.success(t('users.inviteLinkCopied'))
 }
 </script>
 
@@ -189,7 +189,7 @@ function copyInviteLink() {
   <div class="flex flex-col h-full bg-[#0a0a0b] light:bg-gray-50">
     <PageHeader :title="$t('users.title')" :icon="Users" icon-gradient="bg-gradient-to-br from-blue-500 to-indigo-600 shadow-blue-500/20" back-link="/settings" :breadcrumbs="breadcrumbs">
       <template #actions>
-        <Button variant="outline" size="sm" @click="copyInviteLink"><Link class="h-4 w-4 mr-2" />{{ $t('members.copyInviteLink') }}</Button>
+        <Button variant="outline" size="sm" @click="copyInviteLink"><Link class="h-4 w-4 mr-2" />{{ $t('users.copyInviteLink') }}</Button>
         <Button variant="outline" size="sm" @click="openAddExistingDialog"><UserPlus class="h-4 w-4 mr-2" />{{ $t('users.addExistingUser') }}</Button>
         <Button variant="outline" size="sm" @click="openCreateDialog"><Plus class="h-4 w-4 mr-2" />{{ $t('users.addUser') }}</Button>
       </template>

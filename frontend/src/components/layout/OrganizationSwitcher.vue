@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { ref, computed, onMounted, watch } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { useOrganizationsStore } from '@/stores/organizations'
 import { useAuthStore } from '@/stores/auth'
 import { Button } from '@/components/ui/button'
@@ -10,17 +11,23 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
-import { Building2, RefreshCw } from 'lucide-vue-next'
+import { Input } from '@/components/ui/input'
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
+import { organizationsService } from '@/services/api'
+import { toast } from 'vue-sonner'
+import { Building2, RefreshCw, Plus, Loader2 } from 'lucide-vue-next'
 
 const props = defineProps<{
   collapsed?: boolean
 }>()
 
+const { t } = useI18n()
 const organizationsStore = useOrganizationsStore()
 const authStore = useAuthStore()
 const isRefreshing = ref(false)
 
 const isSuperAdmin = computed(() => authStore.user?.is_super_admin || false)
+const canCreateOrg = computed(() => authStore.hasPermission('organizations', 'write'))
 
 const shouldShowSwitcher = computed(() =>
   isSuperAdmin.value || organizationsStore.isMultiOrg
@@ -82,6 +89,27 @@ const handleOrgChange = async (value: string | number | bigint | Record<string, 
   }
 }
 
+// Create org dialog
+const isCreateDialogOpen = ref(false)
+const newOrgName = ref('')
+const isCreating = ref(false)
+
+async function submitCreateOrg() {
+  if (!newOrgName.value.trim()) return
+  isCreating.value = true
+  try {
+    await organizationsService.create({ name: newOrgName.value.trim() })
+    toast.success(t('organizations.created'))
+    isCreateDialogOpen.value = false
+    newOrgName.value = ''
+    await refreshOrgs()
+  } catch {
+    toast.error(t('organizations.createFailed'))
+  } finally {
+    isCreating.value = false
+  }
+}
+
 const refreshOrgs = async () => {
   isRefreshing.value = true
   if (isSuperAdmin.value) {
@@ -140,6 +168,16 @@ const refreshOrgs = async () => {
       <div v-else class="text-[12px] text-muted-foreground px-1">
         No organizations found
       </div>
+      <Button
+        v-if="canCreateOrg"
+        variant="ghost"
+        size="sm"
+        class="w-full justify-start text-[12px] h-7 px-1"
+        @click="isCreateDialogOpen = true"
+      >
+        <Plus class="h-3.5 w-3.5 mr-1.5" />
+        {{ t('organizations.createNew') }}
+      </Button>
     </div>
 
     <!-- Collapsed view - just show icon with selected org initial -->
@@ -154,4 +192,28 @@ const refreshOrgs = async () => {
       </Button>
     </div>
   </div>
+
+  <!-- Create Org Dialog -->
+  <Dialog v-model:open="isCreateDialogOpen">
+    <DialogContent class="max-w-sm">
+      <DialogHeader>
+        <DialogTitle>{{ t('organizations.createTitle') }}</DialogTitle>
+        <DialogDescription>{{ t('organizations.createDesc') }}</DialogDescription>
+      </DialogHeader>
+      <div class="py-4">
+        <Input
+          v-model="newOrgName"
+          :placeholder="t('organizations.namePlaceholder')"
+          @keydown.enter="submitCreateOrg"
+        />
+      </div>
+      <DialogFooter>
+        <Button variant="outline" @click="isCreateDialogOpen = false">{{ t('common.cancel') }}</Button>
+        <Button @click="submitCreateOrg" :disabled="isCreating || !newOrgName.trim()">
+          <Loader2 v-if="isCreating" class="h-4 w-4 mr-2 animate-spin" />
+          {{ t('common.create') }}
+        </Button>
+      </DialogFooter>
+    </DialogContent>
+  </Dialog>
 </template>

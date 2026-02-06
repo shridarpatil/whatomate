@@ -636,14 +636,8 @@ export const organizationsService = {
   getCurrent: () => api.get<Organization>('/organizations/current'),
   create: (data: { name: string }) => api.post('/organizations', data),
   // Members
-  listMembers: (params?: { page?: number; limit?: number; search?: string }) =>
-    api.get('/organizations/members', { params }),
   addMember: (data: { user_id?: string; email?: string; role_id?: string }) =>
     api.post('/organizations/members', data),
-  updateMemberRole: (userId: string, data: { role_id: string }) =>
-    api.put(`/organizations/members/${userId}`, data),
-  removeMember: (userId: string) =>
-    api.delete(`/organizations/members/${userId}`),
 }
 
 export interface Webhook {
