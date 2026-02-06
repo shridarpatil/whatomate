@@ -359,7 +359,18 @@
     "templateMessage": "Template Message",
     "mediaSent": "Media sent successfully",
     "mediaFailed": "Failed to send media",
-    "mediaFailedDesc": "Please try again"
+    "mediaFailedDesc": "Please try again",
+    "internalNotes": "Notes",
+    "addNote": "Add Note",
+    "writeNote": "Write a note",
+    "noNotes": "No notes yet",
+    "noteAdded": "Note added",
+    "noteAddFailed": "Failed to add note",
+    "noteUpdated": "Note updated",
+    "noteUpdateFailed": "Failed to update note",
+    "noteDeleted": "Note deleted",
+    "noteDeleteFailed": "Failed to delete note",
+    "confirmDeleteNote": "Are you sure you want to delete this note?"
   },
   "contacts": {
     "title": "Contacts",
