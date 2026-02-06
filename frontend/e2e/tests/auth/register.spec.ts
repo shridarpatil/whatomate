@@ -19,8 +19,8 @@ test.describe('Register', () => {
     // Should show invitation required message
     await expect(page.locator('text=/invitation/i')).toBeVisible()
 
-    // Should show sign in link
-    await expect(page.getByRole('button', { name: /Sign in/i }).or(page.locator('a').filter({ hasText: /Sign in/i }))).toBeVisible()
+    // Should show sign in link (RouterLink wraps a Button, so use the link role)
+    await expect(page.getByRole('link', { name: /Sign in/i })).toBeVisible()
   })
 
   test('should display registration form with org query param', async ({ page, request }) => {
@@ -156,7 +156,7 @@ test.describe('Register', () => {
 
   test('should navigate to login page from invitation required', async ({ page }) => {
     await page.goto('/register')
-    await page.getByRole('button', { name: /Sign in/i }).or(page.locator('a').filter({ hasText: /Sign in/i })).click()
+    await page.getByRole('link', { name: /Sign in/i }).click()
     await expect(page).toHaveURL(/\/login/)
   })
 

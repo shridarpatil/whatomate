@@ -32,7 +32,7 @@ test.describe('Users Management', () => {
   })
 
   test('should open create user dialog', async ({ page }) => {
-    await tablePage.clickAddButton()
+    await page.getByRole('button', { name: /^Add User$/i }).click()
     await dialogPage.waitForOpen()
     await expect(dialogPage.dialog).toBeVisible()
   })
@@ -40,7 +40,7 @@ test.describe('Users Management', () => {
   test('should create a new user', async ({ page }) => {
     const newUser = createUserFixture()
 
-    await tablePage.clickAddButton()
+    await page.getByRole('button', { name: /^Add User$/i }).click()
     await dialogPage.waitForOpen()
 
     await dialogPage.fillField('Email', newUser.email)
@@ -57,7 +57,7 @@ test.describe('Users Management', () => {
   })
 
   test('should show validation error for invalid email', async ({ page }) => {
-    await tablePage.clickAddButton()
+    await page.getByRole('button', { name: /^Add User$/i }).click()
     await dialogPage.waitForOpen()
 
     await dialogPage.fillField('Email', 'invalid-email')
@@ -74,7 +74,7 @@ test.describe('Users Management', () => {
     // First create a user to edit
     const user = createUserFixture()
 
-    await tablePage.clickAddButton()
+    await page.getByRole('button', { name: /^Add User$/i }).click()
     await dialogPage.waitForOpen()
     await dialogPage.fillField('Email', user.email)
     await dialogPage.fillField('Name', user.fullName)
@@ -101,7 +101,7 @@ test.describe('Users Management', () => {
     // First create a user to delete
     const user = createUserFixture({ fullName: 'User To Delete' })
 
-    await tablePage.clickAddButton()
+    await page.getByRole('button', { name: /^Add User$/i }).click()
     await dialogPage.waitForOpen()
     await dialogPage.fillField('Email', user.email)
     await dialogPage.fillField('Name', user.fullName)
@@ -124,7 +124,7 @@ test.describe('Users Management', () => {
   })
 
   test('should cancel user creation', async ({ page }) => {
-    await tablePage.clickAddButton()
+    await page.getByRole('button', { name: /^Add User$/i }).click()
     await dialogPage.waitForOpen()
 
     await dialogPage.fillField('Email', 'cancelled@test.com')
@@ -141,6 +141,79 @@ test.describe('Users - Role-based Access', () => {
   test.skip('agent should not access users page', async ({ page }) => {
     // Skip: Role-based access control may be implemented differently
     // This test should be updated based on actual RBAC implementation
+  })
+})
+
+test.describe('Users - Copy Invite Link', () => {
+  test.beforeEach(async ({ page }) => {
+    await loginAsAdmin(page)
+    await page.goto('/settings/users')
+    await page.waitForLoadState('networkidle')
+  })
+
+  test('should show copy invite link button', async ({ page }) => {
+    const copyButton = page.getByRole('button', { name: /Copy Invite Link/i })
+    await expect(copyButton).toBeVisible()
+  })
+
+  test('should copy invite link to clipboard', async ({ page, context }) => {
+    // Grant clipboard permission
+    await context.grantPermissions(['clipboard-read', 'clipboard-write'])
+
+    const copyButton = page.getByRole('button', { name: /Copy Invite Link/i })
+    await copyButton.click()
+
+    // Should show success toast
+    const toast = page.locator('[data-sonner-toast]')
+    await expect(toast).toBeVisible({ timeout: 5000 })
+
+    // Verify clipboard contains a registration URL with org param
+    const clipboardText = await page.evaluate(() => navigator.clipboard.readText())
+    expect(clipboardText).toContain('/register?org=')
+  })
+})
+
+test.describe('Users - Add Existing User', () => {
+  let tablePage: TablePage
+
+  test.beforeEach(async ({ page }) => {
+    await loginAsAdmin(page)
+    await page.goto('/settings/users')
+    await page.waitForLoadState('networkidle')
+    tablePage = new TablePage(page)
+  })
+
+  test('should show add existing user button', async ({ page }) => {
+    const addExistingButton = page.getByRole('button', { name: /Add Existing User/i })
+    await expect(addExistingButton).toBeVisible()
+  })
+
+  test('should open add existing user dialog', async ({ page }) => {
+    const addExistingButton = page.getByRole('button', { name: /Add Existing User/i })
+    await addExistingButton.click()
+
+    // Dialog should appear
+    const dialog = page.getByRole('dialog')
+    await expect(dialog).toBeVisible()
+
+    // Should have email input and role select
+    await expect(dialog.locator('input[type="email"]')).toBeVisible()
+
+    // Close dialog
+    await dialog.getByRole('button', { name: /Cancel/i }).click()
+    await expect(dialog).not.toBeVisible()
+  })
+
+  test('should show error for empty email in add existing dialog', async ({ page }) => {
+    const addExistingButton = page.getByRole('button', { name: /Add Existing User/i })
+    await addExistingButton.click()
+
+    const dialog = page.getByRole('dialog')
+    await expect(dialog).toBeVisible()
+
+    // Try to submit without email — the submit button should be disabled
+    const submitButton = dialog.getByRole('button', { name: /Add Existing User/i })
+    await expect(submitButton).toBeDisabled()
   })
 })
 
