@@ -153,6 +153,70 @@ export class ChatPage extends BasePage {
     await this.sendMessage(replyText)
   }
 
+  // Notes panel helpers
+  get notesButton(): Locator {
+    return this.page.locator('#notes-button')
+  }
+
+  get notesPanel(): Locator {
+    return this.page.locator('#notes-panel')
+  }
+
+  get notesBadge(): Locator {
+    return this.page.locator('#notes-badge')
+  }
+
+  get noteInput(): Locator {
+    return this.notesPanel.locator('textarea').last()
+  }
+
+  async openNotesPanel() {
+    await this.notesButton.click()
+    await this.notesPanel.waitFor({ state: 'visible' })
+  }
+
+  async closeNotesPanel() {
+    // The close button is the button with X in the panel header (first button in panel)
+    const headerBtn = this.notesPanel.locator('button').first()
+    await headerBtn.click()
+    await this.notesPanel.waitFor({ state: 'hidden' })
+  }
+
+  async addNote(content: string) {
+    await this.noteInput.fill(content)
+    await this.noteInput.press('Enter')
+  }
+
+  getNoteCard(content: string): Locator {
+    return this.notesPanel.locator('.group').filter({ hasText: content }).first()
+  }
+
+  async editNote(oldContent: string, newContent: string) {
+    const noteCard = this.getNoteCard(oldContent)
+    await noteCard.scrollIntoViewIfNeeded()
+    await noteCard.hover()
+    // Action buttons use group-hover opacity — force click to bypass visibility check
+    const actionBtns = noteCard.locator('div.absolute button')
+    await actionBtns.first().click({ force: true })
+    // After clicking edit, the text moves from <p> to textarea value,
+    // so the hasText-based noteCard locator becomes stale.
+    // Find the edit textarea + Save button directly in the panel.
+    const editCard = this.notesPanel.locator('.group').filter({ has: this.page.getByRole('button', { name: /Save/i }) })
+    const editTextarea = editCard.locator('textarea')
+    await editTextarea.waitFor({ state: 'visible', timeout: 5000 })
+    await editTextarea.fill(newContent)
+    await editCard.getByRole('button', { name: /Save/i }).click()
+  }
+
+  async deleteNote(content: string) {
+    const noteCard = this.getNoteCard(content)
+    await noteCard.scrollIntoViewIfNeeded()
+    await noteCard.hover()
+    // Action buttons use group-hover opacity — force click
+    const actionBtns = noteCard.locator('div.absolute button')
+    await actionBtns.last().click({ force: true })
+  }
+
   // Custom actions
   async executeCustomAction(actionName: string) {
     await this.page.getByRole('button').filter({ has: this.page.locator('.lucide-zap') }).click()

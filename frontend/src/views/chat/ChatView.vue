@@ -1407,6 +1407,7 @@ async function sendMediaMessage() {
                 <Button
                   variant="ghost"
                   size="icon"
+                  id="notes-button"
                   class="h-8 w-8 relative text-white/50 hover:text-white hover:bg-white/[0.08] light:text-gray-500 light:hover:text-gray-900 light:hover:bg-gray-100"
                   :class="isNotesPanelOpen && 'bg-amber-500/10 text-amber-400 light:bg-amber-50 light:text-amber-600'"
                   @click="isNotesPanelOpen = !isNotesPanelOpen"
@@ -1414,6 +1415,7 @@ async function sendMediaMessage() {
                   <StickyNote class="h-4 w-4" />
                   <span
                     v-if="notesStore.notes.length > 0 && !isNotesPanelOpen"
+                    id="notes-badge"
                     class="absolute -top-0.5 -right-0.5 h-4 min-w-[16px] rounded-full bg-amber-500 text-[10px] text-white flex items-center justify-center px-1"
                   >
                     {{ notesStore.notes.length }}

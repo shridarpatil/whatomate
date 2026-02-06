@@ -160,7 +160,7 @@ function formatNoteTime(dateStr: string) {
 </script>
 
 <template>
-  <div class="w-80 border-l border-white/[0.08] light:border-gray-200 bg-[#111113] light:bg-white flex flex-col">
+  <div id="notes-panel" class="w-80 border-l border-white/[0.08] light:border-gray-200 bg-[#111113] light:bg-white flex flex-col">
     <!-- Header -->
     <div class="px-4 py-3 border-b border-white/[0.08] light:border-gray-200 flex items-center justify-between">
       <div class="flex items-center gap-2">

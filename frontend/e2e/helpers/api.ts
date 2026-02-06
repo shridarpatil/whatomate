@@ -261,4 +261,61 @@ export class ApiHelper {
     const result = await response.json()
     return result.data.user
   }
+
+  // Contacts
+  async getContacts(): Promise<any[]> {
+    const response = await this.request.get(`${BASE_URL}/api/contacts`, {
+      headers: this.headers
+    })
+    if (!response.ok()) {
+      throw new Error(`Failed to get contacts: ${await response.text()}`)
+    }
+    const data = await response.json()
+    return data.data?.contacts || []
+  }
+
+  // Conversation Notes
+  async listNotes(contactId: string): Promise<any[]> {
+    const response = await this.request.get(`${BASE_URL}/api/contacts/${contactId}/notes`, {
+      headers: this.headers
+    })
+    if (!response.ok()) {
+      throw new Error(`Failed to list notes: ${await response.text()}`)
+    }
+    const data = await response.json()
+    return data.data?.notes || []
+  }
+
+  async createNote(contactId: string, content: string): Promise<any> {
+    const response = await this.request.post(`${BASE_URL}/api/contacts/${contactId}/notes`, {
+      headers: this.headers,
+      data: { content }
+    })
+    if (!response.ok()) {
+      throw new Error(`Failed to create note: ${await response.text()}`)
+    }
+    const data = await response.json()
+    return data.data
+  }
+
+  async updateNote(contactId: string, noteId: string, content: string): Promise<any> {
+    const response = await this.request.put(`${BASE_URL}/api/contacts/${contactId}/notes/${noteId}`, {
+      headers: this.headers,
+      data: { content }
+    })
+    if (!response.ok()) {
+      throw new Error(`Failed to update note: ${await response.text()}`)
+    }
+    const data = await response.json()
+    return data.data
+  }
+
+  async deleteNote(contactId: string, noteId: string): Promise<void> {
+    const response = await this.request.delete(`${BASE_URL}/api/contacts/${contactId}/notes/${noteId}`, {
+      headers: this.headers
+    })
+    if (!response.ok()) {
+      throw new Error(`Failed to delete note: ${await response.text()}`)
+    }
+  }
 }
