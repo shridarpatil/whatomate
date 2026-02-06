@@ -11,12 +11,14 @@ import { Switch } from '@/components/ui/switch'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { PageHeader, SearchInput, DataTable, CrudFormDialog, DeleteConfirmDialog, type Column } from '@/components/shared'
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { useUsersStore, type User } from '@/stores/users'
 import { useAuthStore } from '@/stores/auth'
 import { useRolesStore } from '@/stores/roles'
 import { useOrganizationsStore } from '@/stores/organizations'
+import { organizationsService } from '@/services/api'
 import { toast } from 'vue-sonner'
-import { Plus, Pencil, Trash2, User as UserIcon, Shield, ShieldCheck, UserCog, Users } from 'lucide-vue-next'
+import { Plus, Pencil, Trash2, User as UserIcon, Shield, ShieldCheck, UserCog, Users, Link, UserPlus, Loader2 } from 'lucide-vue-next'
 import { useCrudState } from '@/composables/useCrudState'
 import { getErrorMessage } from '@/lib/api-utils'
 import { formatDate } from '@/lib/utils'
@@ -141,12 +143,54 @@ async function confirmDelete() {
 function getRoleBadgeVariant(name: string): 'default' | 'secondary' | 'outline' { return ROLE_BADGE_VARIANTS[name.toLowerCase()] || 'outline' }
 function getRoleIcon(name: string) { return { admin: ShieldCheck, manager: Shield }[name.toLowerCase()] || UserCog }
 function getRoleName(user: User) { return user.role?.name || t('users.noRole') }
+
+// Add existing user dialog
+const isAddExistingOpen = ref(false)
+const addExistingEmail = ref('')
+const addExistingRoleId = ref('')
+const isAddExistingSubmitting = ref(false)
+
+function openAddExistingDialog() {
+  addExistingEmail.value = ''
+  addExistingRoleId.value = ''
+  isAddExistingOpen.value = true
+}
+
+async function submitAddExisting() {
+  if (!addExistingEmail.value.trim()) {
+    toast.error(t('users.enterEmail'))
+    return
+  }
+  isAddExistingSubmitting.value = true
+  try {
+    await organizationsService.addMember({
+      email: addExistingEmail.value.trim(),
+      role_id: addExistingRoleId.value || undefined,
+    })
+    toast.success(t('users.existingUserAdded'))
+    isAddExistingOpen.value = false
+    await fetchUsers()
+  } catch (e) {
+    toast.error(getErrorMessage(e, t('users.addExistingFailed')))
+  } finally {
+    isAddExistingSubmitting.value = false
+  }
+}
+
+function copyInviteLink() {
+  const orgId = authStore.organizationId
+  const url = `${window.location.origin}/register?org=${orgId}`
+  navigator.clipboard.writeText(url)
+  toast.success(t('members.inviteLinkCopied'))
+}
 </script>
 
 <template>
   <div class="flex flex-col h-full bg-[#0a0a0b] light:bg-gray-50">
     <PageHeader :title="$t('users.title')" :icon="Users" icon-gradient="bg-gradient-to-br from-blue-500 to-indigo-600 shadow-blue-500/20" back-link="/settings" :breadcrumbs="breadcrumbs">
       <template #actions>
+        <Button variant="outline" size="sm" @click="copyInviteLink"><Link class="h-4 w-4 mr-2" />{{ $t('members.copyInviteLink') }}</Button>
+        <Button variant="outline" size="sm" @click="openAddExistingDialog"><UserPlus class="h-4 w-4 mr-2" />{{ $t('users.addExistingUser') }}</Button>
         <Button variant="outline" size="sm" @click="openCreateDialog"><Plus class="h-4 w-4 mr-2" />{{ $t('users.addUser') }}</Button>
       </template>
     </PageHeader>
@@ -238,5 +282,41 @@ function getRoleName(user: User) { return user.role?.name || t('users.noRole') }
     </CrudFormDialog>
 
     <DeleteConfirmDialog v-model:open="deleteDialogOpen" :title="$t('users.deleteUser')" :item-name="userToDelete?.full_name" @confirm="confirmDelete" />
+
+    <!-- Add Existing User Dialog -->
+    <Dialog v-model:open="isAddExistingOpen">
+      <DialogContent class="max-w-md">
+        <DialogHeader>
+          <DialogTitle>{{ $t('users.addExistingUserTitle') }}</DialogTitle>
+          <DialogDescription>{{ $t('users.addExistingUserDesc') }}</DialogDescription>
+        </DialogHeader>
+        <div class="space-y-4 py-4">
+          <div class="space-y-2">
+            <Label for="existing-email">{{ $t('common.email') }} <span class="text-destructive">*</span></Label>
+            <Input id="existing-email" v-model="addExistingEmail" type="email" :placeholder="$t('users.existingEmailPlaceholder')" />
+          </div>
+          <div class="space-y-2">
+            <Label>{{ $t('users.role') }}</Label>
+            <Select v-model="addExistingRoleId">
+              <SelectTrigger>
+                <SelectValue :placeholder="$t('users.selectRole')" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem v-for="role in rolesStore.roles" :key="role.id" :value="role.id">
+                  <span class="capitalize">{{ role.name }}</span>
+                </SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+        </div>
+        <DialogFooter>
+          <Button variant="outline" @click="isAddExistingOpen = false">{{ $t('common.cancel') }}</Button>
+          <Button @click="submitAddExisting" :disabled="isAddExistingSubmitting || !addExistingEmail.trim()">
+            <Loader2 v-if="isAddExistingSubmitting" class="h-4 w-4 mr-2 animate-spin" />
+            {{ $t('users.addExistingUser') }}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   </div>
 </template>

@@ -636,8 +636,9 @@ export const organizationsService = {
   getCurrent: () => api.get<Organization>('/organizations/current'),
   create: (data: { name: string }) => api.post('/organizations', data),
   // Members
-  listMembers: () => api.get('/organizations/members'),
-  addMember: (data: { user_id: string; role_id?: string }) =>
+  listMembers: (params?: { page?: number; limit?: number; search?: string }) =>
+    api.get('/organizations/members', { params }),
+  addMember: (data: { user_id?: string; email?: string; role_id?: string }) =>
     api.post('/organizations/members', data),
   updateMemberRole: (userId: string, data: { role_id: string }) =>
     api.put(`/organizations/members/${userId}`, data),

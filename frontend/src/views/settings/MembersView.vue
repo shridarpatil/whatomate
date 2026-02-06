@@ -14,7 +14,7 @@ import { useAuthStore } from '@/stores/auth'
 import { useOrganizationsStore } from '@/stores/organizations'
 import { organizationsService, rolesService, usersService } from '@/services/api'
 import { toast } from 'vue-sonner'
-import { Plus, Pencil, Trash2, Loader2, Building2 } from 'lucide-vue-next'
+import { Plus, Pencil, Trash2, Loader2, Building2, Link } from 'lucide-vue-next'
 import { getErrorMessage } from '@/lib/api-utils'
 import { formatDate } from '@/lib/utils'
 import { useDebounceFn } from '@vueuse/core'
@@ -50,6 +50,9 @@ interface RoleOption {
 const members = ref<OrgMember[]>([])
 const isLoading = ref(true)
 const searchQuery = ref('')
+const currentPage = ref(1)
+const totalItems = ref(0)
+const pageSize = 20
 const users = ref<UserOption[]>([])
 const roles = ref<RoleOption[]>([])
 
@@ -88,15 +91,6 @@ const columns = computed<Column<OrgMember>[]>(() => [
 const sortKey = ref('full_name')
 const sortDirection = ref<'asc' | 'desc'>('asc')
 
-// Filtered members based on search
-const filteredMembers = computed(() => {
-  if (!searchQuery.value) return members.value
-  const q = searchQuery.value.toLowerCase()
-  return members.value.filter(
-    m => m.full_name.toLowerCase().includes(q) || m.email.toLowerCase().includes(q)
-  )
-})
-
 // Users not yet in the org (for add dialog)
 const availableUsers = computed(() => {
   const memberUserIds = new Set(members.value.map(m => m.user_id))
@@ -104,8 +98,14 @@ const availableUsers = computed(() => {
 })
 
 const debouncedSearch = useDebounceFn(() => {
-  // Client-side filtering, no API call needed
+  currentPage.value = 1
+  fetchMembers()
 }, 300)
+
+function handlePageChange(page: number) {
+  currentPage.value = page
+  fetchMembers()
+}
 
 watch(searchQuery, () => debouncedSearch())
 watch(() => organizationsStore.selectedOrgId, () => fetchMembers())
@@ -117,11 +117,18 @@ onMounted(async () => {
 async function fetchMembers() {
   isLoading.value = true
   try {
-    const response = await organizationsService.listMembers()
-    members.value = (response.data as any).data?.members || []
+    const response = await organizationsService.listMembers({
+      page: currentPage.value,
+      limit: pageSize,
+      search: searchQuery.value || undefined,
+    })
+    const data = (response.data as any).data
+    members.value = data?.members || []
+    totalItems.value = data?.total || 0
   } catch {
     toast.error(t('common.failedLoad', { resource: t('resources.members') }))
     members.value = []
+    totalItems.value = 0
   } finally {
     isLoading.value = false
   }
@@ -145,6 +152,14 @@ async function fetchUsersAndRoles() {
   } catch {
     // Non-critical — dialogs just won't have options
   }
+}
+
+// Copy invite link
+function copyInviteLink() {
+  const orgId = authStore.organizationId
+  const url = `${window.location.origin}/register?org=${orgId}`
+  navigator.clipboard.writeText(url)
+  toast.success(t('members.inviteLinkCopied'))
 }
 
 // Add member
@@ -233,6 +248,9 @@ async function confirmDelete() {
       :breadcrumbs="breadcrumbs"
     >
       <template #actions>
+        <Button v-if="canManageMembers" variant="outline" size="sm" @click="copyInviteLink">
+          <Link class="h-4 w-4 mr-2" />{{ $t('members.copyInviteLink') }}
+        </Button>
         <Button v-if="canManageMembers" variant="outline" size="sm" @click="openAddDialog">
           <Plus class="h-4 w-4 mr-2" />{{ $t('members.addMember') }}
         </Button>
@@ -254,7 +272,7 @@ async function confirmDelete() {
             </CardHeader>
             <CardContent>
               <DataTable
-                :items="filteredMembers"
+                :items="members"
                 :columns="columns"
                 :is-loading="isLoading"
                 :empty-icon="Building2"
@@ -262,7 +280,12 @@ async function confirmDelete() {
                 :empty-description="searchQuery ? $t('members.noMatchingMembersDesc') : $t('members.noMembersYetDesc')"
                 v-model:sort-key="sortKey"
                 v-model:sort-direction="sortDirection"
+                server-pagination
+                :current-page="currentPage"
+                :total-items="totalItems"
+                :page-size="pageSize"
                 item-name="members"
+                @page-change="handlePageChange"
               >
                 <template #empty-action>
                   <Button v-if="canManageMembers" variant="outline" size="sm" @click="openAddDialog">

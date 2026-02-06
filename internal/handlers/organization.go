@@ -340,15 +340,28 @@ func (a *App) ListOrganizationMembers(r *fastglue.Request) error {
 		return nil
 	}
 
+	pg := parsePagination(r)
+	search := string(r.RequestCtx.QueryArgs().Peek("search"))
+
+	baseQuery := a.DB.Table("user_organizations").
+		Joins("LEFT JOIN users ON users.id = user_organizations.user_id AND users.deleted_at IS NULL").
+		Joins("LEFT JOIN custom_roles ON custom_roles.id = user_organizations.role_id AND custom_roles.deleted_at IS NULL").
+		Where("user_organizations.organization_id = ? AND user_organizations.deleted_at IS NULL", orgID)
+
+	if search != "" {
+		baseQuery = baseQuery.Where("users.full_name ILIKE ? OR users.email ILIKE ?", "%"+search+"%", "%"+search+"%")
+	}
+
+	var total int64
+	baseQuery.Count(&total)
+
 	var response []MemberResponse
-	if err := a.DB.Table("user_organizations").
+	if err := pg.Apply(baseQuery.
 		Select(`user_organizations.id, user_organizations.user_id, user_organizations.organization_id,
 			user_organizations.role_id, user_organizations.is_default, user_organizations.created_at,
 			users.email, users.full_name, users.is_active,
 			custom_roles.name AS role_name`).
-		Joins("LEFT JOIN users ON users.id = user_organizations.user_id AND users.deleted_at IS NULL").
-		Joins("LEFT JOIN custom_roles ON custom_roles.id = user_organizations.role_id AND custom_roles.deleted_at IS NULL").
-		Where("user_organizations.organization_id = ? AND user_organizations.deleted_at IS NULL", orgID).
+		Order("user_organizations.created_at DESC")).
 		Scan(&response).Error; err != nil {
 		a.Log.Error("Failed to list organization members", "error", err)
 		return r.SendErrorEnvelope(fasthttp.StatusInternalServerError, "Failed to list members", nil, "")
@@ -356,12 +369,16 @@ func (a *App) ListOrganizationMembers(r *fastglue.Request) error {
 
 	return r.SendEnvelope(map[string]interface{}{
 		"members": response,
+		"total":   total,
+		"page":    pg.Page,
+		"limit":   pg.Limit,
 	})
 }
 
 // AddMemberRequest represents the request body for adding a member to an organization
 type AddMemberRequest struct {
 	UserID uuid.UUID  `json:"user_id"`
+	Email  string     `json:"email"`
 	RoleID *uuid.UUID `json:"role_id"`
 }
 
@@ -381,20 +398,24 @@ func (a *App) AddOrganizationMember(r *fastglue.Request) error {
 		return nil
 	}
 
-	if req.UserID == uuid.Nil {
-		return r.SendErrorEnvelope(fasthttp.StatusBadRequest, "user_id is required", nil, "")
-	}
-
-	// Validate target user exists
+	// Resolve target user by user_id or email
 	var targetUser models.User
-	if err := a.DB.Where("id = ?", req.UserID).First(&targetUser).Error; err != nil {
-		return r.SendErrorEnvelope(fasthttp.StatusNotFound, "User not found", nil, "")
+	if req.UserID != uuid.Nil {
+		if err := a.DB.Where("id = ?", req.UserID).First(&targetUser).Error; err != nil {
+			return r.SendErrorEnvelope(fasthttp.StatusNotFound, "User not found", nil, "")
+		}
+	} else if req.Email != "" {
+		if err := a.DB.Where("email = ?", req.Email).First(&targetUser).Error; err != nil {
+			return r.SendErrorEnvelope(fasthttp.StatusNotFound, "No user found with this email", nil, "")
+		}
+	} else {
+		return r.SendErrorEnvelope(fasthttp.StatusBadRequest, "user_id or email is required", nil, "")
 	}
 
 	// Check if already a member
 	var existingCount int64
 	a.DB.Model(&models.UserOrganization{}).
-		Where("user_id = ? AND organization_id = ?", req.UserID, orgID).
+		Where("user_id = ? AND organization_id = ?", targetUser.ID, orgID).
 		Count(&existingCount)
 	if existingCount > 0 {
 		return r.SendErrorEnvelope(fasthttp.StatusConflict, "User is already a member of this organization", nil, "")
@@ -418,7 +439,7 @@ func (a *App) AddOrganizationMember(r *fastglue.Request) error {
 	}
 
 	userOrg := models.UserOrganization{
-		UserID:         req.UserID,
+		UserID:         targetUser.ID,
 		OrganizationID: orgID,
 		RoleID:         roleID,
 		IsDefault:      false,

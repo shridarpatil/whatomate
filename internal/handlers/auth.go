@@ -120,36 +120,74 @@ func (a *App) Register(r *fastglue.Request) error {
 		return r.SendErrorEnvelope(fasthttp.StatusNotFound, "Organization not found", nil, "")
 	}
 
+	// Get the org's default role
+	var defaultRole models.CustomRole
+	if err := a.DB.Where("organization_id = ? AND is_default = ?", req.OrganizationID, true).First(&defaultRole).Error; err != nil {
+		if err := a.DB.Where("organization_id = ? AND name = ? AND is_system = ?", req.OrganizationID, "agent", true).First(&defaultRole).Error; err != nil {
+			return r.SendErrorEnvelope(fasthttp.StatusInternalServerError, "Failed to find default role", nil, "")
+		}
+	}
+
 	// Check if email already exists
 	var existingUser models.User
 	if err := a.DB.Where("email = ?", req.Email).First(&existingUser).Error; err == nil {
-		return r.SendErrorEnvelope(fasthttp.StatusConflict, "Email already registered", nil, "")
+		// User exists — verify password and add to this org
+		if err := bcrypt.CompareHashAndPassword([]byte(existingUser.PasswordHash), []byte(req.Password)); err != nil {
+			return r.SendErrorEnvelope(fasthttp.StatusUnauthorized, "Invalid password. If you already have an account, use your existing password.", nil, "")
+		}
+
+		// Check if already a member of this org
+		var count int64
+		a.DB.Model(&models.UserOrganization{}).
+			Where("user_id = ? AND organization_id = ?", existingUser.ID, req.OrganizationID).
+			Count(&count)
+		if count > 0 {
+			return r.SendErrorEnvelope(fasthttp.StatusConflict, "You are already a member of this organization", nil, "")
+		}
+
+		// Add as member with default role
+		userOrg := models.UserOrganization{
+			UserID:         existingUser.ID,
+			OrganizationID: req.OrganizationID,
+			RoleID:         &defaultRole.ID,
+			IsDefault:      false,
+		}
+		if err := a.DB.Create(&userOrg).Error; err != nil {
+			a.Log.Error("Failed to add existing user to organization", "error", err)
+			return r.SendErrorEnvelope(fasthttp.StatusInternalServerError, "Failed to join organization", nil, "")
+		}
+
+		a.Log.Info("Existing user joined organization", "user_id", existingUser.ID, "org_id", req.OrganizationID)
+
+		// Set org context to the new org for token generation
+		existingUser.OrganizationID = req.OrganizationID
+		existingUser.Role = &defaultRole
+		existingUser.RoleID = &defaultRole.ID
+
+		accessToken, _ := a.generateAccessToken(&existingUser)
+		refreshToken, _ := a.generateRefreshToken(&existingUser)
+
+		return r.SendEnvelope(AuthResponse{
+			AccessToken:  accessToken,
+			RefreshToken: refreshToken,
+			ExpiresIn:    a.Config.JWT.AccessExpiryMins * 60,
+			User:         existingUser,
+		})
 	}
 
-	// Hash password
+	// New user — create account
 	hashedPassword, err := bcrypt.GenerateFromPassword([]byte(req.Password), bcrypt.DefaultCost)
 	if err != nil {
 		a.Log.Error("Failed to hash password", "error", err)
 		return r.SendErrorEnvelope(fasthttp.StatusInternalServerError, "Failed to create account", nil, "")
 	}
 
-	// Get the org's default role (agent)
-	var defaultRole models.CustomRole
-	if err := a.DB.Where("organization_id = ? AND is_default = ?", req.OrganizationID, true).First(&defaultRole).Error; err != nil {
-		// Fall back to agent role
-		if err := a.DB.Where("organization_id = ? AND name = ? AND is_system = ?", req.OrganizationID, "agent", true).First(&defaultRole).Error; err != nil {
-			return r.SendErrorEnvelope(fasthttp.StatusInternalServerError, "Failed to find default role", nil, "")
-		}
-	}
-
-	// Start transaction
 	tx := a.DB.Begin()
 	if tx.Error != nil {
 		a.Log.Error("Failed to begin transaction", "error", tx.Error)
 		return r.SendErrorEnvelope(fasthttp.StatusInternalServerError, "Failed to create account", nil, "")
 	}
 
-	// Create user
 	user := models.User{
 		OrganizationID: req.OrganizationID,
 		Email:          req.Email,
@@ -165,7 +203,6 @@ func (a *App) Register(r *fastglue.Request) error {
 		return r.SendErrorEnvelope(fasthttp.StatusInternalServerError, "Failed to create account", nil, "")
 	}
 
-	// Create UserOrganization entry
 	userOrg := models.UserOrganization{
 		UserID:         user.ID,
 		OrganizationID: req.OrganizationID,
@@ -185,10 +222,8 @@ func (a *App) Register(r *fastglue.Request) error {
 
 	a.Log.Info("Registration completed", "user_id", user.ID, "org_id", req.OrganizationID)
 
-	// Populate the role for the response
 	user.Role = &defaultRole
 
-	// Generate tokens
 	accessToken, _ := a.generateAccessToken(&user)
 	refreshToken, _ := a.generateRefreshToken(&user)
 

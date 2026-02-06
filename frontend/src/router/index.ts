@@ -195,12 +195,6 @@ const router = createRouter({
           meta: { permission: 'teams' }
         },
         {
-          path: 'settings/members',
-          name: 'org-members',
-          component: () => import('@/views/settings/MembersView.vue'),
-          meta: { permission: 'organizations' }
-        },
-        {
           path: 'settings/api-keys',
           name: 'api-keys',
           component: () => import('@/views/settings/APIKeysView.vue'),
@@ -259,7 +253,6 @@ const navigationOrder = [
     { path: '/settings/contacts', permission: 'contacts' },
     { path: '/settings/tags', permission: 'tags' },
     { path: '/settings/teams', permission: 'teams' },
-    { path: '/settings/members', permission: 'organizations' },
     { path: '/settings/users', permission: 'users' },
     { path: '/settings/roles', permission: 'roles' },
     { path: '/settings/api-keys', permission: 'api_keys' },

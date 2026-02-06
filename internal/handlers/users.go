@@ -80,9 +80,12 @@ func (a *App) ListUsers(r *fastglue.Request) error {
 	pg := parsePagination(r)
 	search := string(r.RequestCtx.QueryArgs().Peek("search"))
 
-	baseQuery := a.ScopeToOrg(a.DB, userID, orgID)
+	// Query users via user_organizations to include cross-org members.
+	baseQuery := a.DB.
+		Joins("JOIN user_organizations ON user_organizations.user_id = users.id AND user_organizations.organization_id = ? AND user_organizations.deleted_at IS NULL", orgID).
+		Where("users.deleted_at IS NULL")
 	if search != "" {
-		baseQuery = baseQuery.Where("full_name ILIKE ? OR email ILIKE ?", "%"+search+"%", "%"+search+"%")
+		baseQuery = baseQuery.Where("users.full_name ILIKE ? OR users.email ILIKE ?", "%"+search+"%", "%"+search+"%")
 	}
 
 	// Get total count
@@ -91,16 +94,38 @@ func (a *App) ListUsers(r *fastglue.Request) error {
 
 	var users []models.User
 	if err := pg.Apply(baseQuery.
-		Preload("Role").
-		Order("created_at DESC")).
+		Order("users.created_at DESC")).
 		Find(&users).Error; err != nil {
 		a.Log.Error("Failed to list users", "error", err)
 		return r.SendErrorEnvelope(fasthttp.StatusInternalServerError, "Failed to list users", nil, "")
 	}
 
-	// Convert to response format (hide sensitive data)
+	// Fetch org-specific roles from user_organizations
+	userIDs := make([]uuid.UUID, len(users))
+	for i, u := range users {
+		userIDs[i] = u.ID
+	}
+	var orgMemberships []models.UserOrganization
+	if len(userIDs) > 0 {
+		a.DB.Where("user_id IN ? AND organization_id = ?", userIDs, orgID).
+			Preload("Role").
+			Find(&orgMemberships)
+	}
+	orgRoleMap := make(map[uuid.UUID]*models.CustomRole, len(orgMemberships))
+	for _, m := range orgMemberships {
+		if m.Role != nil {
+			orgRoleMap[m.UserID] = m.Role
+		}
+	}
+
+	// Convert to response format, using org-specific role
 	response := make([]UserResponse, len(users))
 	for i, user := range users {
+		// Override user's role with org-specific role for response
+		if orgRole, ok := orgRoleMap[user.ID]; ok {
+			user.Role = orgRole
+			user.RoleID = &orgRole.ID
+		}
 		response[i] = userToResponse(user)
 	}
 
