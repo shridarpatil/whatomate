@@ -263,6 +263,18 @@ export class ApiHelper {
   }
 
   // Contacts
+  async createContact(phoneNumber: string, profileName?: string): Promise<any> {
+    const response = await this.request.post(`${BASE_URL}/api/contacts`, {
+      headers: this.headers,
+      data: { phone_number: phoneNumber, profile_name: profileName || '' }
+    })
+    if (!response.ok()) {
+      throw new Error(`Failed to create contact: ${await response.text()}`)
+    }
+    const data = await response.json()
+    return data.data
+  }
+
   async getContacts(): Promise<any[]> {
     const response = await this.request.get(`${BASE_URL}/api/contacts`, {
       headers: this.headers

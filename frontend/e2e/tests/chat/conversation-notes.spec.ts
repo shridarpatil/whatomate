@@ -39,8 +39,11 @@ test.describe('Conversation Notes - UI', () => {
     const reqContext = await playwrightRequest.newContext()
     const api = new ApiHelper(reqContext)
     await api.loginAsAdmin()
-    const contacts = await api.getContacts()
-    if (contacts.length === 0) throw new Error('No contacts available for notes UI tests')
+    let contacts = await api.getContacts()
+    if (contacts.length === 0) {
+      await api.createContact(`91${Date.now().toString().slice(-10)}`, 'Notes UI Test')
+      contacts = await api.getContacts()
+    }
     contactId = contacts[0].id
     await cleanupNotes(api, contactId)
     await reqContext.dispose()
@@ -170,8 +173,11 @@ test.describe('Conversation Notes - API CRUD', () => {
     const reqContext = await playwrightRequest.newContext()
     api = new ApiHelper(reqContext)
     await api.loginAsAdmin()
-    const contacts = await api.getContacts()
-    if (contacts.length === 0) throw new Error('No contacts available for notes API tests')
+    let contacts = await api.getContacts()
+    if (contacts.length < 2) {
+      await api.createContact(`91${(Date.now() + 1).toString().slice(-10)}`, 'Notes API Test')
+      contacts = await api.getContacts()
+    }
     // Use a different contact than UI tests to avoid parallel conflicts
     contactId = contacts.length > 1 ? contacts[1].id : contacts[0].id
     await cleanupNotes(api, contactId)
