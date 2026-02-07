@@ -173,8 +173,6 @@ export class ChatPage extends BasePage {
   async openNotesPanel() {
     await this.notesButton.click()
     await this.notesPanel.waitFor({ state: 'visible' })
-    // Wait for notes API call to complete after panel mounts
-    await this.page.waitForLoadState('networkidle')
   }
 
   async closeNotesPanel() {
