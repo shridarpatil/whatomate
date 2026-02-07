@@ -1198,7 +1198,7 @@ onMounted(() => {
               </div>
 
               <div class="flex-1 min-h-0 overflow-y-auto px-6 pb-6">
-                <div class="grid grid-cols-2 lg:grid-cols-3 gap-3">
+                <div :class="['grid gap-3 pt-1', item.w >= 8 ? 'grid-cols-3' : 'grid-cols-2']">
                   <template v-for="key in (getWidgetById(item.i)!.config?.shortcuts || [])" :key="key">
                     <RouterLink
                       v-if="SHORTCUT_REGISTRY[key as keyof typeof SHORTCUT_REGISTRY]"
