@@ -58,10 +58,19 @@ func (a *App) ListRoles(r *fastglue.Request) error {
 
 	var roles []models.CustomRole
 	if err := pg.Apply(baseQuery.
-		Preload("Permissions").
 		Order("is_system DESC, name ASC")).
 		Find(&roles).Error; err != nil {
 		a.Log.Error("Failed to list roles", "error", err)
+		return r.SendErrorEnvelope(fasthttp.StatusInternalServerError, "Failed to list roles", nil, "")
+	}
+
+	// Load permissions via JOIN instead of GORM's Preload IN query
+	rolePtrs := make([]*models.CustomRole, len(roles))
+	for i := range roles {
+		rolePtrs[i] = &roles[i]
+	}
+	if err := a.loadRolePermissions(rolePtrs...); err != nil {
+		a.Log.Error("Failed to load role permissions", "error", err)
 		return r.SendErrorEnvelope(fasthttp.StatusInternalServerError, "Failed to list roles", nil, "")
 	}
 
@@ -95,9 +104,13 @@ func (a *App) GetRole(r *fastglue.Request) error {
 
 	var role models.CustomRole
 	if err := a.DB.Where("id = ? AND organization_id = ?", id, orgID).
-		Preload("Permissions").
 		First(&role).Error; err != nil {
 		return r.SendErrorEnvelope(fasthttp.StatusNotFound, "Role not found", nil, "")
+	}
+
+	if err := a.loadRolePermissions(&role); err != nil {
+		a.Log.Error("Failed to load role permissions", "error", err)
+		return r.SendErrorEnvelope(fasthttp.StatusInternalServerError, "Failed to get role", nil, "")
 	}
 
 	var userCount int64
@@ -175,9 +188,13 @@ func (a *App) UpdateRole(r *fastglue.Request) error {
 
 	var role models.CustomRole
 	if err := a.DB.Where("id = ? AND organization_id = ?", id, orgID).
-		Preload("Permissions").
 		First(&role).Error; err != nil {
 		return r.SendErrorEnvelope(fasthttp.StatusNotFound, "Role not found", nil, "")
+	}
+
+	if err := a.loadRolePermissions(&role); err != nil {
+		a.Log.Error("Failed to load role permissions", "error", err)
+		return r.SendErrorEnvelope(fasthttp.StatusInternalServerError, "Failed to update role", nil, "")
 	}
 
 	// System roles can only have their description updated
@@ -396,6 +413,42 @@ func (a *App) getPermissionsByKeys(keys []string) ([]models.Permission, error) {
 	}
 
 	return permissions, nil
+}
+
+// loadRolePermissions loads permissions for roles via JOIN instead of GORM's
+// Preload, which generates a slow IN query with all permission UUIDs.
+func (a *App) loadRolePermissions(roles ...*models.CustomRole) error {
+	if len(roles) == 0 {
+		return nil
+	}
+	roleIDs := make([]uuid.UUID, len(roles))
+	roleMap := make(map[uuid.UUID]*models.CustomRole, len(roles))
+	for i, r := range roles {
+		roleIDs[i] = r.ID
+		r.Permissions = []models.Permission{}
+		roleMap[r.ID] = r
+	}
+
+	var results []struct {
+		models.Permission
+		CustomRoleID uuid.UUID `gorm:"column:custom_role_id"`
+	}
+	err := a.DB.Table("permissions").
+		Select("permissions.*, role_permissions.custom_role_id").
+		Joins("JOIN role_permissions ON role_permissions.permission_id = permissions.id").
+		Where("role_permissions.custom_role_id IN ?", roleIDs).
+		Where("permissions.deleted_at IS NULL").
+		Find(&results).Error
+	if err != nil {
+		return err
+	}
+
+	for _, r := range results {
+		if role, ok := roleMap[r.CustomRoleID]; ok {
+			role.Permissions = append(role.Permissions, r.Permission)
+		}
+	}
+	return nil
 }
 
 // splitPermissionKey splits "resource:action" into ["resource", "action"]

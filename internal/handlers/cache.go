@@ -437,9 +437,12 @@ func (a *App) getUserPermissionsCached(userID uuid.UUID, orgIDs ...uuid.UUID) (*
 		return nil, gorm.ErrRecordNotFound
 	}
 
-	// Fetch role with permissions
+	// Fetch role and load permissions via JOIN
 	var role models.CustomRole
-	if err := a.DB.Preload("Permissions").Where("id = ?", roleID).First(&role).Error; err != nil {
+	if err := a.DB.Where("id = ?", roleID).First(&role).Error; err != nil {
+		return nil, err
+	}
+	if err := a.loadRolePermissions(&role); err != nil {
 		return nil, err
 	}
 
@@ -555,9 +558,12 @@ func (a *App) GetRolePermissionsCached(roleID uuid.UUID) ([]string, error) {
 		}
 	}
 
-	// Cache miss - fetch from database
+	// Cache miss - fetch from database via JOIN
 	var role models.CustomRole
-	if err := a.DB.Preload("Permissions").Where("id = ?", roleID).First(&role).Error; err != nil {
+	if err := a.DB.Where("id = ?", roleID).First(&role).Error; err != nil {
+		return nil, err
+	}
+	if err := a.loadRolePermissions(&role); err != nil {
 		return nil, err
 	}
 
