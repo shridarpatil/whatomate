@@ -121,6 +121,11 @@ func runServer(args []string) {
 		lo.Warn("JWT secret is empty, using a random secret (tokens will not persist across restarts)")
 	}
 
+	// Warn if debug mode is on in production
+	if cfg.App.Environment == "production" && cfg.App.Debug {
+		lo.Warn("Debug mode is enabled in production! This may expose sensitive information.")
+	}
+
 	// Set log level based on environment
 	if cfg.App.Environment == "production" {
 		lo = logf.New(logf.Opts{

@@ -84,7 +84,12 @@ export const useAuthStore = defineStore('auth', () => {
       try {
         token.value = storedToken
         refreshToken.value = storedRefreshToken
-        user.value = JSON.parse(storedUser)
+        const parsed = JSON.parse(storedUser)
+        if (!parsed || typeof parsed !== 'object' || !parsed.id || !parsed.email) {
+          clearAuth()
+          return false
+        }
+        user.value = parsed
         // Fetch fresh user data in background to get updated permissions
         refreshUserData()
         return true

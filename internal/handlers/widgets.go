@@ -1017,6 +1017,18 @@ func (a *App) getGroupedData(orgID uuid.UUID, widget models.Widget, filters []Fi
 		return dataPoints
 	}
 
+	// Validate GroupByField against whitelist to prevent SQL injection
+	allowedGroupByFields := map[string]bool{
+		"status": true, "message_status": true, "direction": true,
+		"message_type": true, "assigned_user_id": true, "channel": true,
+		"is_active": true, "priority": true, "category": true,
+		"type": true, "action_type": true, "provider": true,
+	}
+	if !allowedGroupByFields[widget.GroupByField] {
+		a.Log.Error("Invalid GroupByField", "field", widget.GroupByField)
+		return dataPoints
+	}
+
 	query := fmt.Sprintf(`
 		SELECT %s as label, COUNT(*) as value
 		FROM %s

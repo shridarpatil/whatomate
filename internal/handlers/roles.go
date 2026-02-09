@@ -5,6 +5,7 @@ import (
 	"github.com/shridarpatil/whatomate/internal/models"
 	"github.com/valyala/fasthttp"
 	"github.com/zerodha/fastglue"
+	"gorm.io/gorm"
 )
 
 // RoleRequest represents the request body for creating/updating a role
@@ -159,11 +160,18 @@ func (a *App) CreateRole(r *fastglue.Request) error {
 		Permissions:    permissions,
 	}
 
-	// If setting as default, unset other defaults
+	// If setting as default, unset other defaults (in a transaction)
 	if req.IsDefault {
-		a.DB.Model(&models.CustomRole{}).
-			Where("organization_id = ? AND is_default = ?", orgID, true).
-			Update("is_default", false)
+		if err := a.DB.Transaction(func(tx *gorm.DB) error {
+			tx.Model(&models.CustomRole{}).
+				Where("organization_id = ? AND is_default = ?", orgID, true).
+				Update("is_default", false)
+			return tx.Create(&role).Error
+		}); err != nil {
+			a.Log.Error("Failed to create role", "error", err)
+			return r.SendErrorEnvelope(fasthttp.StatusInternalServerError, "Failed to create role", nil, "")
+		}
+		return r.SendEnvelope(roleToResponse(role, 0))
 	}
 
 	if err := a.DB.Create(&role).Error; err != nil {
@@ -269,20 +277,26 @@ func (a *App) UpdateRole(r *fastglue.Request) error {
 		role.Permissions = permissions
 	}
 
-	// Handle default flag
+	// Handle default flag (in a transaction to prevent race conditions)
 	if req.IsDefault && !role.IsDefault {
-		// Unset other defaults
-		a.DB.Model(&models.CustomRole{}).
-			Where("organization_id = ? AND is_default = ? AND id != ?", orgID, true, role.ID).
-			Update("is_default", false)
 		role.IsDefault = true
-	} else if !req.IsDefault && role.IsDefault {
-		role.IsDefault = false
-	}
-
-	if err := a.DB.Save(&role).Error; err != nil {
-		a.Log.Error("Failed to update role", "error", err)
-		return r.SendErrorEnvelope(fasthttp.StatusInternalServerError, "Failed to update role", nil, "")
+		if err := a.DB.Transaction(func(tx *gorm.DB) error {
+			tx.Model(&models.CustomRole{}).
+				Where("organization_id = ? AND is_default = ? AND id != ?", orgID, true, role.ID).
+				Update("is_default", false)
+			return tx.Save(&role).Error
+		}); err != nil {
+			a.Log.Error("Failed to update role", "error", err)
+			return r.SendErrorEnvelope(fasthttp.StatusInternalServerError, "Failed to update role", nil, "")
+		}
+	} else {
+		if !req.IsDefault && role.IsDefault {
+			role.IsDefault = false
+		}
+		if err := a.DB.Save(&role).Error; err != nil {
+			a.Log.Error("Failed to update role", "error", err)
+			return r.SendErrorEnvelope(fasthttp.StatusInternalServerError, "Failed to update role", nil, "")
+		}
 	}
 
 	// Invalidate permissions cache for all users with this role

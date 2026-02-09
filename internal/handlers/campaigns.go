@@ -402,6 +402,14 @@ func (a *App) StartCampaign(r *fastglue.Request) error {
 		return r.SendErrorEnvelope(fasthttp.StatusBadRequest, "Campaign has no pending recipients", nil, "")
 	}
 
+	// Validate template still exists
+	if campaign.TemplateID != uuid.Nil {
+		var template models.Template
+		if err := a.DB.Where("id = ? AND organization_id = ?", campaign.TemplateID, orgID).First(&template).Error; err != nil {
+			return r.SendErrorEnvelope(fasthttp.StatusBadRequest, "Campaign template no longer exists", nil, "")
+		}
+	}
+
 	// Update status to processing
 	now := time.Now()
 	updates := map[string]interface{}{
@@ -803,10 +811,21 @@ func (a *App) UploadCampaignMedia(r *fastglue.Request) error {
 		return r.SendErrorEnvelope(fasthttp.StatusBadRequest, "File too large. Maximum size is 16MB", nil, "")
 	}
 
-	// Determine mime type from header content type or file extension
+	// Determine and validate MIME type
 	mimeType := fileHeader.Header.Get("Content-Type")
 	if mimeType == "" {
 		mimeType = "application/octet-stream"
+	}
+	allowedMIME := map[string]bool{
+		"image/jpeg": true, "image/png": true, "image/webp": true,
+		"video/mp4": true, "video/3gpp": true,
+		"audio/aac": true, "audio/mp4": true, "audio/mpeg": true, "audio/ogg": true,
+		"application/pdf": true, "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": true,
+		"application/vnd.openxmlformats-officedocument.wordprocessingml.document": true,
+		"application/vnd.openxmlformats-officedocument.presentationml.presentation": true,
+	}
+	if !allowedMIME[mimeType] {
+		return r.SendErrorEnvelope(fasthttp.StatusBadRequest, "Unsupported file type: "+mimeType, nil, "")
 	}
 
 	// Upload to WhatsApp

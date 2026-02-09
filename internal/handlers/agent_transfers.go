@@ -115,7 +115,7 @@ func (a *App) ListAgentTransfers(r *fastglue.Request) error {
 	limit := 100 // Default limit
 	offset := 0
 	if limitStr := string(r.RequestCtx.QueryArgs().Peek("limit")); limitStr != "" {
-		if parsed, err := strconv.Atoi(limitStr); err == nil && parsed > 0 && parsed <= 500 {
+		if parsed, err := strconv.Atoi(limitStr); err == nil && parsed > 0 && parsed <= 100 {
 			limit = parsed
 		}
 	}

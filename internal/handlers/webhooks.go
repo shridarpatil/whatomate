@@ -208,13 +208,19 @@ func (a *App) CreateWebhook(r *fastglue.Request) error {
 		headers[k] = v
 	}
 
+	// Auto-generate secret if not provided
+	secret := req.Secret
+	if secret == "" {
+		secret = generateVerifyToken() // Reuse the 32-byte hex generator
+	}
+
 	webhook := models.Webhook{
 		OrganizationID: orgID,
 		Name:           req.Name,
 		URL:            req.URL,
 		Events:         req.Events,
 		Headers:        headers,
-		Secret:         req.Secret,
+		Secret:         secret,
 		IsActive:       true,
 	}
 

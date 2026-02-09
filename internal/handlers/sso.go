@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	appcrypto "github.com/shridarpatil/whatomate/internal/crypto"
 	"github.com/shridarpatil/whatomate/internal/models"
 	"github.com/valyala/fasthttp"
 	"github.com/zerodha/fastglue"
@@ -445,7 +446,12 @@ func (a *App) UpdateSSOProvider(r *fastglue.Request) error {
 	// Update fields
 	ssoConfig.ClientID = req.ClientID
 	if req.ClientSecret != "" {
-		ssoConfig.ClientSecret = req.ClientSecret
+		enc, err := appcrypto.Encrypt(req.ClientSecret, a.Config.App.EncryptionKey)
+		if err != nil {
+			a.Log.Error("Failed to encrypt SSO client secret", "error", err)
+			return r.SendErrorEnvelope(fasthttp.StatusInternalServerError, "Failed to save SSO configuration", nil, "")
+		}
+		ssoConfig.ClientSecret = enc
 	}
 	ssoConfig.IsEnabled = req.IsEnabled
 	ssoConfig.AllowAutoCreate = req.AllowAutoCreate
@@ -526,9 +532,16 @@ func (a *App) buildOAuthConfig(provider string, ssoConfig *models.SSOProvider, r
 	basePath := sanitizeRedirectPath(a.Config.Server.BasePath)
 	callbackURL := fmt.Sprintf("%s://%s%s/api/auth/sso/%s/callback", scheme, host, basePath, provider)
 
+	// Decrypt SSO client secret
+	decryptedSecret, err := appcrypto.Decrypt(ssoConfig.ClientSecret, a.Config.App.EncryptionKey)
+	if err != nil {
+		a.Log.Error("Failed to decrypt SSO client secret", "error", err)
+		return nil
+	}
+
 	return &oauth2.Config{
 		ClientID:     ssoConfig.ClientID,
-		ClientSecret: ssoConfig.ClientSecret,
+		ClientSecret: decryptedSecret,
 		Endpoint:     endpoint,
 		Scopes:       scopes,
 		RedirectURL:  callbackURL,
@@ -702,7 +715,10 @@ func sanitizeRedirectPath(path string) string {
 
 func generateRandomString(n int) string {
 	b := make([]byte, n)
-	_, _ = rand.Read(b)
+	if _, err := rand.Read(b); err != nil {
+		// Fallback: this should never happen but don't silently continue with zero bytes
+		panic("crypto/rand.Read failed: " + err.Error())
+	}
 	return base64.URLEncoding.EncodeToString(b)[:n]
 }
 

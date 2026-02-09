@@ -17,13 +17,13 @@ import (
 // LoginRequest represents login credentials
 type LoginRequest struct {
 	Email    string `json:"email" validate:"required,email"`
-	Password string `json:"password" validate:"required,min=6"`
+	Password string `json:"password" validate:"required,min=12"`
 }
 
 // RegisterRequest represents registration data
 type RegisterRequest struct {
 	Email          string    `json:"email" validate:"required,email"`
-	Password       string    `json:"password" validate:"required,min=8"`
+	Password       string    `json:"password" validate:"required,min=12"`
 	FullName       string    `json:"full_name" validate:"required"`
 	OrganizationID uuid.UUID `json:"organization_id" validate:"required"`
 }
@@ -51,6 +51,8 @@ func (a *App) Login(r *fastglue.Request) error {
 	// Find user by email with role preloaded
 	var user models.User
 	if err := a.DB.Preload("Role").Where("email = ?", req.Email).First(&user).Error; err != nil {
+		// Run dummy bcrypt to prevent timing-based account enumeration
+		_ = bcrypt.CompareHashAndPassword([]byte("$2a$10$xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"), []byte(req.Password))
 		return r.SendErrorEnvelope(fasthttp.StatusUnauthorized, "Invalid credentials", nil, "")
 	}
 
