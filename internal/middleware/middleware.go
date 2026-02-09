@@ -48,18 +48,46 @@ func RequestLogger(log logf.Logger) fastglue.FastMiddleware {
 	}
 }
 
-// CORS handles Cross-Origin Resource Sharing
-func CORS() fastglue.FastMiddleware {
+// ParseAllowedOrigins parses a comma-separated list of allowed origins into a set.
+func ParseAllowedOrigins(allowedOrigins string) map[string]bool {
+	origins := make(map[string]bool)
+	for _, o := range strings.Split(allowedOrigins, ",") {
+		o = strings.TrimSpace(o)
+		if o != "" {
+			origins[o] = true
+		}
+	}
+	return origins
+}
+
+// IsOriginAllowed checks if origin is in the allowed set.
+// If no origins are configured, all origins are allowed (development mode).
+func IsOriginAllowed(origin string, allowedOrigins map[string]bool) bool {
+	if len(allowedOrigins) == 0 {
+		return true // No whitelist configured = allow all (development)
+	}
+	return allowedOrigins[origin]
+}
+
+// CORS handles Cross-Origin Resource Sharing with origin validation.
+func CORS(allowedOrigins map[string]bool) fastglue.FastMiddleware {
 	return func(r *fastglue.Request) *fastglue.Request {
 		origin := string(r.RequestCtx.Request.Header.Peek("Origin"))
-		if origin == "" {
-			origin = "*"
-		}
 
-		r.RequestCtx.Response.Header.Set("Access-Control-Allow-Origin", origin)
+		if origin != "" && IsOriginAllowed(origin, allowedOrigins) {
+			r.RequestCtx.Response.Header.Set("Access-Control-Allow-Origin", origin)
+			r.RequestCtx.Response.Header.Set("Access-Control-Allow-Credentials", "true")
+		} else if len(allowedOrigins) == 0 {
+			// Development: no whitelist configured, allow the request origin
+			if origin != "" {
+				r.RequestCtx.Response.Header.Set("Access-Control-Allow-Origin", origin)
+			}
+		}
+		// If origin is not allowed, no Access-Control-Allow-Origin header is set,
+		// which causes the browser to block the request.
+
 		r.RequestCtx.Response.Header.Set("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS, PATCH")
-		r.RequestCtx.Response.Header.Set("Access-Control-Allow-Headers", "Content-Type, Authorization, X-API-Key, X-Requested-With, X-Organization-ID")
-		r.RequestCtx.Response.Header.Set("Access-Control-Allow-Credentials", "true")
+		r.RequestCtx.Response.Header.Set("Access-Control-Allow-Headers", "Content-Type, Authorization, X-API-Key, X-Organization-ID")
 		r.RequestCtx.Response.Header.Set("Access-Control-Max-Age", "86400")
 
 		return r

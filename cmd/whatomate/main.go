@@ -113,6 +113,14 @@ func runServer(args []string) {
 		lo.Fatal("Failed to load config", "error", err)
 	}
 
+	// Validate JWT secret
+	if cfg.App.Environment == "production" && len(cfg.JWT.Secret) < 32 {
+		lo.Fatal("JWT secret must be at least 32 characters in production")
+	}
+	if cfg.JWT.Secret == "" {
+		lo.Warn("JWT secret is empty, using a random secret (tokens will not persist across restarts)")
+	}
+
 	// Set log level based on environment
 	if cfg.App.Environment == "production" {
 		lo = logf.New(logf.Opts{
@@ -163,6 +171,7 @@ func runServer(args []string) {
 	httpClient := &http.Client{
 		Timeout: 30 * time.Second,
 		Transport: &http.Transport{
+			DialContext:         handlers.SSRFSafeDialer(),
 			MaxIdleConns:        100,
 			MaxIdleConnsPerHost: 10,
 			IdleConnTimeout:     90 * time.Second,
@@ -185,6 +194,9 @@ func runServer(args []string) {
 		lo.Error("Failed to start campaign stats subscriber", "error", err)
 	}
 
+	// Parse allowed origins for CORS
+	allowedOrigins := middleware.ParseAllowedOrigins(cfg.Server.AllowedOrigins)
+
 	// Setup middleware (CORS is handled by corsWrapper at fasthttp level)
 	g.Before(middleware.RequestLogger(lo))
 	g.Before(middleware.Recovery(lo))
@@ -194,7 +206,7 @@ func runServer(args []string) {
 
 	// Create server with CORS wrapper
 	server := &fasthttp.Server{
-		Handler:      corsWrapper(g.Handler()),
+		Handler:      corsWrapper(g.Handler(), allowedOrigins),
 		ReadTimeout:  time.Duration(cfg.Server.ReadTimeout) * time.Second,
 		WriteTimeout: time.Duration(cfg.Server.WriteTimeout) * time.Second,
 		Name:         "Whatomate",
@@ -392,6 +404,7 @@ func setupRoutes(g *fastglue.Fastglue, app *handlers.App, lo logf.Logger, basePa
 	g.POST("/api/auth/login", app.Login)
 	g.POST("/api/auth/register", app.Register)
 	g.POST("/api/auth/refresh", app.RefreshToken)
+	g.POST("/api/auth/logout", app.Logout)
 	g.POST("/api/auth/switch-org", app.SwitchOrg)
 
 	// SSO routes (public)
@@ -417,7 +430,7 @@ func setupRoutes(g *fastglue.Fastglue, app *handlers.App, lo logf.Logger, basePa
 		// Skip auth for public routes
 		if path == "/health" || path == "/ready" ||
 			path == "/api/auth/login" || path == "/api/auth/register" || path == "/api/auth/refresh" ||
-			path == "/api/webhook" || path == "/ws" {
+			path == "/api/auth/logout" || path == "/api/webhook" || path == "/ws" {
 			return r
 		}
 		// Skip auth for SSO routes (they handle their own auth via state tokens)
@@ -712,19 +725,22 @@ func setupRoutes(g *fastglue.Fastglue, app *handlers.App, lo logf.Logger, basePa
 	}
 }
 
-// corsWrapper wraps a handler with CORS support at the fasthttp level
-// This ensures CORS headers are set even for auto-handled OPTIONS requests
-func corsWrapper(next fasthttp.RequestHandler) fasthttp.RequestHandler {
+// corsWrapper wraps a handler with CORS support at the fasthttp level.
+// This ensures CORS headers are set even for auto-handled OPTIONS requests.
+func corsWrapper(next fasthttp.RequestHandler, allowedOrigins map[string]bool) fasthttp.RequestHandler {
 	return func(ctx *fasthttp.RequestCtx) {
 		origin := string(ctx.Request.Header.Peek("Origin"))
-		if origin == "" {
-			origin = "*"
+
+		if origin != "" && middleware.IsOriginAllowed(origin, allowedOrigins) {
+			ctx.Response.Header.Set("Access-Control-Allow-Origin", origin)
+			ctx.Response.Header.Set("Access-Control-Allow-Credentials", "true")
+		} else if len(allowedOrigins) == 0 && origin != "" {
+			// Development: no whitelist configured
+			ctx.Response.Header.Set("Access-Control-Allow-Origin", origin)
 		}
 
-		ctx.Response.Header.Set("Access-Control-Allow-Origin", origin)
 		ctx.Response.Header.Set("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS, PATCH")
-		ctx.Response.Header.Set("Access-Control-Allow-Headers", "Content-Type, Authorization, X-API-Key, X-Requested-With, X-Organization-ID")
-		ctx.Response.Header.Set("Access-Control-Allow-Credentials", "true")
+		ctx.Response.Header.Set("Access-Control-Allow-Headers", "Content-Type, Authorization, X-API-Key, X-Organization-ID")
 		ctx.Response.Header.Set("Access-Control-Max-Age", "86400")
 
 		// Handle preflight OPTIONS requests

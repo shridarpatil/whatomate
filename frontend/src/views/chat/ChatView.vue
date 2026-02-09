@@ -282,29 +282,8 @@ async function executeCustomAction(action: CustomAction) {
     const response = await customActionsService.execute(action.id, contactsStore.currentContact.id)
     let result: ActionResult = (response.data as any).data || response.data
 
-    // Handle JavaScript action - execute code in frontend
-    if (result.data?.code && result.data?.context) {
-      try {
-        // Create a function from the code and execute with context
-        const context = result.data.context
-        const code = result.data.code
-        // The code should return an object like: { toast: {...}, clipboard: '...', url: '...' }
-        const fn = new Function('context', 'contact', 'user', 'organization', code)
-        const jsResult = fn(context, context.contact, context.user, context.organization)
-
-        // Merge JS result into action result
-        if (jsResult) {
-          if (jsResult.toast) result.toast = jsResult.toast
-          if (jsResult.clipboard) result.clipboard = jsResult.clipboard
-          if (jsResult.url) result.redirect_url = jsResult.url
-          if (jsResult.message) result.message = jsResult.message
-        }
-      } catch (jsError: any) {
-        console.error('JavaScript action error:', jsError)
-        toast.error(t('chat.jsError') + ': ' + jsError.message)
-        return
-      }
-    }
+    // JavaScript actions are now executed server-side via goja.
+    // The response already contains structured result fields (toast, clipboard, redirect_url, message).
 
     // Handle different result types
     if (result.redirect_url) {

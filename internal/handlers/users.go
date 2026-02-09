@@ -10,14 +10,30 @@ import (
 	"golang.org/x/crypto/bcrypt"
 )
 
-// UserRequest represents the request body for creating/updating a user
+// UserRequest represents the request body for creating/updating a user.
+// Note: is_super_admin is intentionally excluded to prevent mass assignment.
+// Super admin status changes are handled via parseSuperAdminField.
 type UserRequest struct {
-	Email        string     `json:"email"`
-	Password     string     `json:"password"`
-	FullName     string     `json:"full_name"`
-	RoleID       *uuid.UUID `json:"role_id"`
-	IsActive     *bool      `json:"is_active"`
-	IsSuperAdmin *bool      `json:"is_super_admin"`
+	Email    string     `json:"email"`
+	Password string     `json:"password"`
+	FullName string     `json:"full_name"`
+	RoleID   *uuid.UUID `json:"role_id"`
+	IsActive *bool      `json:"is_active"`
+}
+
+// superAdminField is used to extract is_super_admin separately from the request body.
+// Only super admins can use this field.
+type superAdminField struct {
+	IsSuperAdmin *bool `json:"is_super_admin"`
+}
+
+// parseSuperAdminField extracts is_super_admin from the raw request body.
+func parseSuperAdminField(r *fastglue.Request) *bool {
+	var f superAdminField
+	if err := r.Decode(&f, "json"); err != nil {
+		return nil
+	}
+	return f.IsSuperAdmin
 }
 
 // UserResponse represents the response for a user (without sensitive data)
@@ -243,7 +259,7 @@ func (a *App) CreateUser(r *fastglue.Request) error {
 	}
 
 	isSuperAdmin := false
-	if req.IsSuperAdmin != nil && *req.IsSuperAdmin {
+	if saField := parseSuperAdminField(r); saField != nil && *saField {
 		if !a.IsSuperAdmin(userID) {
 			return r.SendErrorEnvelope(fasthttp.StatusForbidden, "Only super admins can create super admins", nil, "")
 		}
@@ -462,15 +478,15 @@ func (a *App) UpdateUser(r *fastglue.Request) error {
 	}
 
 	// Handle super admin update - only superadmins can change this
-	if req.IsSuperAdmin != nil {
+	if saField := parseSuperAdminField(r); saField != nil {
 		if !a.IsSuperAdmin(currentUserID) {
 			return r.SendErrorEnvelope(fasthttp.StatusForbidden, "Only super admins can modify super admin status", nil, "")
 		}
 		// Prevent removing own super admin status
-		if currentUserID == id && !*req.IsSuperAdmin && user.IsSuperAdmin {
+		if currentUserID == id && !*saField && user.IsSuperAdmin {
 			return r.SendErrorEnvelope(fasthttp.StatusBadRequest, "Cannot remove your own super admin status", nil, "")
 		}
-		user.IsSuperAdmin = *req.IsSuperAdmin
+		user.IsSuperAdmin = *saField
 	}
 
 	if err := a.DB.Save(&user).Error; err != nil {

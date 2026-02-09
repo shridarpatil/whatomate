@@ -1,6 +1,8 @@
 package handlers
 
 import (
+	"context"
+	"fmt"
 	"time"
 
 	"github.com/golang-jwt/jwt/v5"
@@ -235,7 +237,8 @@ func (a *App) Register(r *fastglue.Request) error {
 	})
 }
 
-// RefreshToken refreshes access token using refresh token
+// RefreshToken refreshes access token using refresh token with rotation.
+// The old refresh token is invalidated (single-use) and a new one is issued.
 func (a *App) RefreshToken(r *fastglue.Request) error {
 	var req RefreshRequest
 	if err := a.decodeRequest(r, &req); err != nil {
@@ -256,6 +259,17 @@ func (a *App) RefreshToken(r *fastglue.Request) error {
 		return r.SendErrorEnvelope(fasthttp.StatusUnauthorized, "Invalid token claims", nil, "")
 	}
 
+	// Validate JTI in Redis (single-use: delete on consumption)
+	if claims.ID != "" {
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		deleted, err := a.Redis.Del(ctx, refreshTokenKey(claims.ID)).Result()
+		if err != nil || deleted == 0 {
+			// Token was already used or revoked
+			return r.SendErrorEnvelope(fasthttp.StatusUnauthorized, "Refresh token has been revoked", nil, "")
+		}
+	}
+
 	// Get user
 	var user models.User
 	if err := a.DB.Where("id = ?", claims.UserID).First(&user).Error; err != nil {
@@ -266,7 +280,7 @@ func (a *App) RefreshToken(r *fastglue.Request) error {
 		return r.SendErrorEnvelope(fasthttp.StatusUnauthorized, "Account is disabled", nil, "")
 	}
 
-	// Generate new tokens
+	// Generate new tokens (rotation: new refresh token with new JTI)
 	accessToken, _ := a.generateAccessToken(&user)
 	refreshToken, _ := a.generateRefreshToken(&user)
 
@@ -297,6 +311,9 @@ func (a *App) generateAccessToken(user *models.User) (string, error) {
 }
 
 func (a *App) generateRefreshToken(user *models.User) (string, error) {
+	jti := uuid.New().String()
+	expiry := time.Duration(a.Config.JWT.RefreshExpiryDays) * 24 * time.Hour
+
 	claims := middleware.JWTClaims{
 		UserID:         user.ID,
 		OrganizationID: user.OrganizationID,
@@ -304,14 +321,32 @@ func (a *App) generateRefreshToken(user *models.User) (string, error) {
 		RoleID:         user.RoleID,
 		IsSuperAdmin:   user.IsSuperAdmin,
 		RegisteredClaims: jwt.RegisteredClaims{
-			ExpiresAt: jwt.NewNumericDate(time.Now().Add(time.Duration(a.Config.JWT.RefreshExpiryDays) * 24 * time.Hour)),
+			ID:        jti,
+			ExpiresAt: jwt.NewNumericDate(time.Now().Add(expiry)),
 			IssuedAt:  jwt.NewNumericDate(time.Now()),
 			Issuer:    "whatomate",
 		},
 	}
 
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
-	return token.SignedString([]byte(a.Config.JWT.Secret))
+	signed, err := token.SignedString([]byte(a.Config.JWT.Secret))
+	if err != nil {
+		return "", err
+	}
+
+	// Store JTI in Redis so it can be revoked
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	if err := a.Redis.Set(ctx, refreshTokenKey(jti), user.ID.String(), expiry).Err(); err != nil {
+		a.Log.Error("Failed to store refresh token in Redis", "error", err)
+	}
+
+	return signed, nil
+}
+
+// refreshTokenKey returns the Redis key for a refresh token JTI.
+func refreshTokenKey(jti string) string {
+	return fmt.Sprintf("refresh:%s", jti)
 }
 
 // SwitchOrgRequest represents the request body for switching organization
@@ -403,6 +438,34 @@ func (a *App) SwitchOrg(r *fastglue.Request) error {
 		ExpiresIn:    a.Config.JWT.AccessExpiryMins * 60,
 		User:         user,
 	})
+}
+
+// LogoutRequest represents logout request body
+type LogoutRequest struct {
+	RefreshToken string `json:"refresh_token"`
+}
+
+// Logout invalidates the user's refresh token
+func (a *App) Logout(r *fastglue.Request) error {
+	var req LogoutRequest
+	// Best-effort: try to decode the refresh token from the body
+	_ = r.Decode(&req, "json")
+
+	if req.RefreshToken != "" {
+		// Parse the token to extract JTI (don't need to fully validate — just extract claims)
+		token, _ := jwt.ParseWithClaims(req.RefreshToken, &middleware.JWTClaims{}, func(token *jwt.Token) (interface{}, error) {
+			return []byte(a.Config.JWT.Secret), nil
+		})
+		if token != nil {
+			if claims, ok := token.Claims.(*middleware.JWTClaims); ok && claims.ID != "" {
+				ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+				defer cancel()
+				a.Redis.Del(ctx, refreshTokenKey(claims.ID))
+			}
+		}
+	}
+
+	return r.SendEnvelope(map[string]string{"status": "logged_out"})
 }
 
 func generateSlug(name string) string {

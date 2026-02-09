@@ -231,7 +231,7 @@ func TestApp_CreateCustomAction(t *testing.T) {
 			"name":        "Copy Phone",
 			"action_type": "javascript",
 			"config": map[string]any{
-				"code": "navigator.clipboard.writeText(context.contact.phone_number)",
+				"code": "return { clipboard: contact.phone_number, toast: { message: 'Copied!', type: 'success' } }",
 			},
 			"is_active": true,
 		})
@@ -806,7 +806,7 @@ func TestApp_ExecuteCustomAction(t *testing.T) {
 
 		action := createTestCustomAction(t, app, org.ID, "Copy Phone", models.ActionTypeJavascript,
 			map[string]interface{}{
-				"code": "navigator.clipboard.writeText(context.contact.phone_number)",
+				"code": "return { clipboard: contact.phone_number, toast: { message: 'Copied!', type: 'success' } }",
 			}, true, 0)
 
 		req := testutil.NewJSONRequest(t, map[string]any{
@@ -826,9 +826,7 @@ func TestApp_ExecuteCustomAction(t *testing.T) {
 		require.NoError(t, err)
 		assert.True(t, resp.Data.Success)
 		assert.Equal(t, "JavaScript action executed", resp.Data.Message)
-		assert.NotNil(t, resp.Data.Data)
-		assert.NotEmpty(t, resp.Data.Data["code"])
-		assert.NotNil(t, resp.Data.Data["context"])
+		assert.NotEmpty(t, resp.Data.Clipboard)
 		assert.NotNil(t, resp.Data.Toast)
 		assert.Equal(t, "success", resp.Data.Toast.Type)
 	})

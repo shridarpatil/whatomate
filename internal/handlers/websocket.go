@@ -10,12 +10,23 @@ import (
 	"github.com/zerodha/fastglue"
 )
 
-var upgrader = websocket.FastHTTPUpgrader{
-	ReadBufferSize:  1024,
-	WriteBufferSize: 1024,
-	CheckOrigin: func(ctx *fasthttp.RequestCtx) bool {
-		return true // Allow all origins in development
-	},
+// newUpgrader creates a WebSocket upgrader that validates origins against the
+// configured allowed origins. If no origins are configured, all are allowed.
+func newUpgrader(allowedOrigins map[string]bool) websocket.FastHTTPUpgrader {
+	return websocket.FastHTTPUpgrader{
+		ReadBufferSize:  1024,
+		WriteBufferSize: 1024,
+		CheckOrigin: func(ctx *fasthttp.RequestCtx) bool {
+			origin := string(ctx.Request.Header.Peek("Origin"))
+			return middleware.IsOriginAllowed(origin, allowedOrigins)
+		},
+	}
+}
+
+// wsUpgrader returns a WebSocket upgrader configured with the app's allowed origins.
+func (a *App) wsUpgrader() websocket.FastHTTPUpgrader {
+	allowedOrigins := middleware.ParseAllowedOrigins(a.Config.Server.AllowedOrigins)
+	return newUpgrader(allowedOrigins)
 }
 
 // WebSocketHandler handles WebSocket connections
@@ -34,7 +45,8 @@ func (a *App) WebSocketHandler(r *fastglue.Request) error {
 	}
 
 	// Upgrade to WebSocket
-	err = upgrader.Upgrade(r.RequestCtx, func(conn *websocket.Conn) {
+	up := a.wsUpgrader()
+	err = up.Upgrade(r.RequestCtx, func(conn *websocket.Conn) {
 		client := ws.NewClient(a.WSHub, conn, userID, orgID)
 
 		// Register client with hub

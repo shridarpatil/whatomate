@@ -138,7 +138,7 @@ export const useAuthStore = defineStore('auth', () => {
 
   async function logout(): Promise<void> {
     try {
-      await api.post('/auth/logout')
+      await api.post('/auth/logout', { refresh_token: refreshToken.value })
     } catch {
       // Ignore logout errors
     } finally {
@@ -156,7 +156,9 @@ export const useAuthStore = defineStore('auth', () => {
       // fastglue wraps response in { status: "success", data: {...} }
       const data = response.data.data
       token.value = data.access_token
+      refreshToken.value = data.refresh_token
       localStorage.setItem('auth_token', data.access_token)
+      localStorage.setItem('refresh_token', data.refresh_token)
       return true
     } catch {
       clearAuth()
