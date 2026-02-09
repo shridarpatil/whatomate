@@ -218,7 +218,86 @@ To unassign a contact, set `user_id` to `null`:
 ```
 
 <Aside type="tip">
-  Use the `metadata` field to store custom data like customer IDs, order numbers, or any business-specific information.
+  Use the `metadata` field to store custom data like customer IDs, order numbers, or any business-specific information. Metadata is displayed automatically in the **Contact Info** panel in the chat view.
+</Aside>
+
+## Contact Metadata
+
+The `metadata` field is a freeform JSON object that can hold any structured data. It is displayed in the Contact Info panel alongside tags and session data.
+
+### Supported Data Types
+
+Different value types are rendered differently in the panel:
+
+| Type | Display |
+|------|---------|
+| String, number | Key-value row |
+| Boolean | `Yes` / `No` badge |
+| Object | Collapsible section with key-value rows |
+| Array of objects | Collapsible table with column headers |
+| Array of primitives | Inline badges |
+
+### Example
+
+```json
+{
+  "metadata": {
+    "plan": "premium",
+    "age": 30,
+    "active": true,
+    "address": {
+      "city": "Mumbai",
+      "state": "Maharashtra",
+      "zip": "400001"
+    },
+    "orders": [
+      { "id": "ORD-001", "amount": 1500, "status": "delivered" },
+      { "id": "ORD-002", "amount": 2300, "status": "pending" }
+    ],
+    "interests": ["fitness", "tech", "travel"]
+  }
+}
+```
+
+This renders as:
+
+- **General** section — `plan`, `age`, and `active` as key-value rows (boolean shown as a badge)
+- **Address** section — collapsible key-value pairs for `city`, `state`, `zip`
+- **Orders** section — collapsible table with `Id`, `Amount`, `Status` columns
+- **Interests** section — inline badges: `fitness`, `tech`, `travel`
+
+### Nesting Depth
+
+The panel supports **one level of nesting**. Top-level keys are organized as follows:
+
+| Top-level value | Rendered as |
+|-----------------|-------------|
+| Primitive (string, number, boolean) | Row in the **General** section |
+| Object | Its own collapsible section with key-value rows |
+| Array of objects | Its own collapsible section with a table |
+| Array of primitives | Its own collapsible section with badges |
+
+Values **inside** a nested object or array are always displayed as flat text. If a nested object contains another object, the inner value is shown as a raw JSON string. For example:
+
+```json
+{
+  "metadata": {
+    "address": {
+      "city": "Mumbai",
+      "location": { "lat": 19.07, "lng": 72.87 }
+    }
+  }
+}
+```
+
+Here `city` displays as `Mumbai`, but `location` displays as `{"lat":19.07,"lng":72.87}`.
+
+<Aside type="caution">
+  Keep metadata **flat or one level deep** for the best display. Deeply nested structures will fall back to raw JSON strings in the panel.
+</Aside>
+
+<Aside type="note">
+  Keys are automatically formatted for display: `snake_case` and `camelCase` are converted to title case (e.g. `first_name` → "First Name", `lastName` → "Last Name").
 </Aside>
 
 ## Get Session Data
