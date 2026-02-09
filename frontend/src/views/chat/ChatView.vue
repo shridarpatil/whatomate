@@ -1429,6 +1429,7 @@ async function sendMediaMessage() {
                 <Button
                   variant="ghost"
                   size="icon"
+                  id="info-button"
                   class="h-8 w-8 text-white/50 hover:text-white hover:bg-white/[0.08] light:text-gray-500 light:hover:text-gray-900 light:hover:bg-gray-100"
                   :class="isInfoPanelOpen && 'bg-white/[0.08] text-white light:bg-gray-100 light:text-gray-900'"
                   @click="isInfoPanelOpen = !isInfoPanelOpen"

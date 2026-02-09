@@ -286,6 +286,18 @@ export class ApiHelper {
     return data.data?.contacts || []
   }
 
+  async updateContact(contactId: string, data: Record<string, any>): Promise<any> {
+    const response = await this.request.put(`${BASE_URL}/api/contacts/${contactId}`, {
+      headers: this.headers,
+      data
+    })
+    if (!response.ok()) {
+      throw new Error(`Failed to update contact: ${await response.text()}`)
+    }
+    const result = await response.json()
+    return result.data
+  }
+
   // Conversation Notes
   async listNotes(contactId: string): Promise<any[]> {
     const response = await this.request.get(`${BASE_URL}/api/contacts/${contactId}/notes`, {
