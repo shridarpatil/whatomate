@@ -24,7 +24,8 @@ import {
 } from '@/components/ui/command'
 import { X, ChevronDown, Phone, User, Plus, Check, Tags, Loader2 } from 'lucide-vue-next'
 import { TagBadge } from '@/components/ui/tag-badge'
-import { getInitials, getAvatarGradient } from '@/lib/utils'
+import MetadataSection from '@/components/chat/MetadataSection.vue'
+import { getInitials, getAvatarGradient, formatLabel } from '@/lib/utils'
 import { getTagColorClass } from '@/lib/constants'
 import { useTagsStore } from '@/stores/tags'
 import { useAuthStore } from '@/stores/auth'
@@ -172,6 +173,26 @@ const sortedSections = computed(() => {
 const contactTags = computed(() => {
   if (!props.contact.tags || !Array.isArray(props.contact.tags)) return []
   return props.contact.tags as string[]
+})
+
+// Contact metadata
+const hasMetadata = computed(() => {
+  const md = props.contact.metadata
+  return md && typeof md === 'object' && Object.keys(md).length > 0
+})
+
+const metadataPrimitives = computed(() => {
+  if (!hasMetadata.value) return []
+  return Object.entries(props.contact.metadata).filter(
+    ([, v]) => v === null || typeof v !== 'object'
+  )
+})
+
+const metadataSections = computed(() => {
+  if (!hasMetadata.value) return []
+  return Object.entries(props.contact.metadata).filter(
+    ([, v]) => v !== null && typeof v === 'object'
+  )
 })
 
 // Get tag details for display
@@ -328,6 +349,23 @@ async function updateContactTags(tags: string[]) {
             <span v-else class="text-sm text-muted-foreground">No tags</span>
             <Loader2 v-if="isUpdatingTags" class="h-4 w-4 animate-spin text-muted-foreground" />
           </div>
+        </div>
+
+        <!-- Contact Metadata -->
+        <div v-if="hasMetadata" class="space-y-1">
+          <!-- General section: top-level primitives -->
+          <MetadataSection
+            v-if="metadataPrimitives.length > 0"
+            label="General"
+            :data="Object.fromEntries(metadataPrimitives)"
+          />
+          <!-- Object / array sections -->
+          <MetadataSection
+            v-for="[key, val] in metadataSections"
+            :key="key"
+            :label="formatLabel(key)"
+            :data="val"
+          />
         </div>
 
         <!-- No Session Data or no panel config -->

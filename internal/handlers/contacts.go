@@ -30,7 +30,7 @@ type ContactResponse struct {
 	AvatarURL          string     `json:"avatar_url"`
 	Status             string     `json:"status"`
 	Tags               []string   `json:"tags"`
-	CustomFields       any        `json:"custom_fields"`
+	Metadata           any        `json:"metadata"`
 	LastMessageAt      *time.Time `json:"last_message_at"`
 	LastMessagePreview string     `json:"last_message_preview"`
 	UnreadCount        int        `json:"unread_count"`
@@ -169,7 +169,7 @@ func (a *App) ListContacts(r *fastglue.Request) error {
 			ProfileName:        profileName,
 			Status:             "active",
 			Tags:               tags,
-			CustomFields:       c.Metadata,
+			Metadata:           c.Metadata,
 			LastMessageAt:      c.LastMessageAt,
 			LastMessagePreview: c.LastMessagePreview,
 			UnreadCount:        int(unreadCount),
@@ -241,7 +241,7 @@ func (a *App) GetContact(r *fastglue.Request) error {
 		ProfileName:        profileName,
 		Status:             "active",
 		Tags:               tags,
-		CustomFields:       contact.Metadata,
+		Metadata:           contact.Metadata,
 		LastMessageAt:      contact.LastMessageAt,
 		LastMessagePreview: contact.LastMessagePreview,
 		UnreadCount:        int(unreadCount),
@@ -1484,7 +1484,7 @@ func (a *App) buildContactResponse(contact *models.Contact, orgID uuid.UUID) Con
 		ProfileName:        profileName,
 		Status:             "active",
 		Tags:               tags,
-		CustomFields:       contact.Metadata,
+		Metadata:           contact.Metadata,
 		LastMessageAt:      contact.LastMessageAt,
 		LastMessagePreview: contact.LastMessagePreview,
 		UnreadCount:        int(unreadCount),

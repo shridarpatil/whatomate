@@ -10,7 +10,7 @@ export interface Contact {
   avatar_url?: string
   status: string
   tags: string[]
-  custom_fields: Record<string, any>
+  metadata: Record<string, any>
   last_message_at?: string
   unread_count: number
   assigned_user_id?: string
