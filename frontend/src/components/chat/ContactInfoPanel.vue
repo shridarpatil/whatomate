@@ -285,7 +285,7 @@ async function updateContactTags(tags: string[]) {
         </div>
 
         <!-- Tags Section (always shown) -->
-        <div class="border-b pb-4">
+        <div class="pb-4">
           <div class="flex items-center justify-between py-2">
             <h5 class="text-sm font-medium flex items-center gap-2">
               <Tags class="h-4 w-4 text-muted-foreground" />
@@ -352,7 +352,7 @@ async function updateContactTags(tags: string[]) {
         </div>
 
         <!-- Contact Metadata -->
-        <div v-if="hasMetadata" class="space-y-1">
+        <div v-if="hasMetadata" class="space-y-3">
           <!-- General section: top-level primitives -->
           <MetadataSection
             v-if="metadataPrimitives.length > 0"
@@ -369,7 +369,7 @@ async function updateContactTags(tags: string[]) {
         </div>
 
         <!-- No Session Data or no panel config -->
-        <div v-if="!props.sessionData || sortedSections.length === 0" class="text-center py-6 text-muted-foreground">
+        <div v-if="!props.sessionData || sortedSections.length === 0" class="text-center py-6 text-muted-foreground border-t">
           <User class="h-8 w-8 mx-auto mb-2 opacity-50" />
           <p class="text-sm">No data configured</p>
           <p class="text-xs mt-1">Configure panel display in the chatbot flow settings.</p>
