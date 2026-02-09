@@ -140,6 +140,11 @@ func (a *App) Register(r *fastglue.Request) error {
 			return r.SendErrorEnvelope(fasthttp.StatusConflict, "An account with this email already exists. Please sign in and ask your organization admin to add you.", nil, "")
 		}
 
+		// Check if user account is disabled
+		if !existingUser.IsActive {
+			return r.SendErrorEnvelope(fasthttp.StatusUnauthorized, "Account is disabled", nil, "")
+		}
+
 		// Check if already a member of this org
 		var count int64
 		a.DB.Model(&models.UserOrganization{}).
@@ -179,7 +184,10 @@ func (a *App) Register(r *fastglue.Request) error {
 		})
 	}
 
-	// New user — create account
+	// New user — run dummy bcrypt to prevent timing-based account enumeration
+	_ = bcrypt.CompareHashAndPassword([]byte("$2a$10$xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"), []byte(req.Password))
+
+	// Create account
 	hashedPassword, err := bcrypt.GenerateFromPassword([]byte(req.Password), bcrypt.DefaultCost)
 	if err != nil {
 		a.Log.Error("Failed to hash password", "error", err)

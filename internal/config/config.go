@@ -20,6 +20,7 @@ type Config struct {
 	AI            AIConfig            `koanf:"ai"`
 	Storage       StorageConfig       `koanf:"storage"`
 	DefaultAdmin  DefaultAdminConfig  `koanf:"default_admin"`
+	RateLimit     RateLimitConfig     `koanf:"rate_limit"`
 }
 
 type AppConfig struct {
@@ -88,6 +89,15 @@ type DefaultAdminConfig struct {
 	Email    string `koanf:"email"`
 	Password string `koanf:"password"`
 	FullName string `koanf:"full_name"`
+}
+
+type RateLimitConfig struct {
+	Enabled             bool `koanf:"enabled"`
+	LoginMaxAttempts    int  `koanf:"login_max_attempts"`
+	RegisterMaxAttempts int  `koanf:"register_max_attempts"`
+	RefreshMaxAttempts  int  `koanf:"refresh_max_attempts"`
+	WindowSeconds       int  `koanf:"window_seconds"`
+	TrustProxy          bool `koanf:"trust_proxy"`
 }
 
 // Load loads configuration from file and environment variables
@@ -184,5 +194,18 @@ func setDefaults(cfg *Config) {
 	}
 	if cfg.DefaultAdmin.FullName == "" {
 		cfg.DefaultAdmin.FullName = "Admin"
+	}
+	// Rate limiting defaults
+	if cfg.RateLimit.LoginMaxAttempts == 0 {
+		cfg.RateLimit.LoginMaxAttempts = 10
+	}
+	if cfg.RateLimit.RegisterMaxAttempts == 0 {
+		cfg.RateLimit.RegisterMaxAttempts = 10
+	}
+	if cfg.RateLimit.RefreshMaxAttempts == 0 {
+		cfg.RateLimit.RefreshMaxAttempts = 30
+	}
+	if cfg.RateLimit.WindowSeconds == 0 {
+		cfg.RateLimit.WindowSeconds = 60
 	}
 }

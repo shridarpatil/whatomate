@@ -48,6 +48,15 @@ s3_region = ""
 s3_key = ""
 s3_secret = ""
 
+# Rate limiting for auth endpoints (uses Redis fixed-window counters)
+[rate_limit]
+enabled = false                # Set to true to enable rate limiting
+login_max_attempts = 10        # Max login attempts per IP per window
+register_max_attempts = 10     # Max register attempts per IP per window
+refresh_max_attempts = 30      # Max token refresh attempts per IP per window
+window_seconds = 60            # Time window in seconds
+trust_proxy = false            # Trust X-Forwarded-For / X-Real-IP headers (set true behind reverse proxy)
+
 # Default admin credentials (only used during initial setup when no users exist)
 [default_admin]
 email = "admin@admin.com"

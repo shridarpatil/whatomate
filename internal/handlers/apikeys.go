@@ -146,8 +146,8 @@ func (a *App) CreateAPIKey(r *fastglue.Request) error {
 		return r.SendErrorEnvelope(fasthttp.StatusInternalServerError, "Failed to create API key", nil, "")
 	}
 
-	// Extract prefix (first 8 chars after "whm_")
-	keyPrefix := fullKey[4:12]
+	// Extract prefix (first 16 chars after "whm_")
+	keyPrefix := fullKey[4:20]
 
 	apiKey := models.APIKey{
 		OrganizationID: orgID,

@@ -193,12 +193,14 @@ func validateAPIKey(r *fastglue.Request, key string, db *gorm.DB) bool {
 		return false
 	}
 
-	// Extract prefix for lookup (first 8 chars after "whm_")
-	keyPrefix := key[4:12]
+	// Extract both new (16-char) and old (8-char) prefixes for backward compatibility.
+	// New keys store 16 chars; old keys store 8 chars. Query matches either.
+	newPrefix := key[4:20]
+	oldPrefix := key[4:12]
 
-	// Find API keys with matching prefix
+	// Find API keys with matching prefix (supports both old and new prefix lengths)
 	var apiKeys []models.APIKey
-	if err := db.Preload("User").Where("key_prefix = ? AND is_active = ?", keyPrefix, true).Find(&apiKeys).Error; err != nil {
+	if err := db.Preload("User").Where("(key_prefix = ? OR key_prefix = ?) AND is_active = ?", newPrefix, oldPrefix, true).Find(&apiKeys).Error; err != nil {
 		return false
 	}
 

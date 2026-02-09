@@ -204,7 +204,7 @@ type APIKey struct {
 	OrganizationID uuid.UUID  `gorm:"type:uuid;index;not null" json:"organization_id"`
 	UserID         uuid.UUID  `gorm:"type:uuid;index;not null" json:"user_id"` // Creator
 	Name           string     `gorm:"size:255;not null" json:"name"`
-	KeyPrefix      string     `gorm:"size:8;index" json:"key_prefix"` // First 8 chars for identification
+	KeyPrefix      string     `gorm:"size:16;index" json:"key_prefix"` // First 16 chars for identification
 	KeyHash        string     `gorm:"size:255;not null" json:"-"`     // bcrypt hash of full key
 	LastUsedAt     *time.Time `json:"last_used_at,omitempty"`
 	ExpiresAt      *time.Time `json:"expires_at,omitempty"` // null = never expires

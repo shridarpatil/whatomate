@@ -10,6 +10,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/redis/go-redis/v9"
 	"github.com/shridarpatil/whatomate/internal/config"
 	"github.com/shridarpatil/whatomate/internal/database"
 	"github.com/shridarpatil/whatomate/internal/frontend"
@@ -208,7 +209,7 @@ func runServer(args []string) {
 	g.Before(middleware.Recovery(lo))
 
 	// Setup routes
-	setupRoutes(g, app, lo, cfg.Server.BasePath)
+	setupRoutes(g, app, lo, cfg.Server.BasePath, rdb, cfg)
 
 	// Create server with CORS wrapper
 	server := &fasthttp.Server{
@@ -401,15 +402,34 @@ func runWorker(args []string) {
 // ROUTES
 // ============================================================================
 
-func setupRoutes(g *fastglue.Fastglue, app *handlers.App, lo logf.Logger, basePath string) {
+func setupRoutes(g *fastglue.Fastglue, app *handlers.App, lo logf.Logger, basePath string, rdb *redis.Client, cfg *config.Config) {
 	// Health check
 	g.GET("/health", app.HealthCheck)
 	g.GET("/ready", app.ReadyCheck)
 
-	// Auth routes (public)
-	g.POST("/api/auth/login", app.Login)
-	g.POST("/api/auth/register", app.Register)
-	g.POST("/api/auth/refresh", app.RefreshToken)
+	// Auth routes (public, optionally rate-limited)
+	if cfg.RateLimit.Enabled {
+		window := time.Duration(cfg.RateLimit.WindowSeconds) * time.Second
+		lo.Info("Rate limiting enabled on auth endpoints",
+			"login_max", cfg.RateLimit.LoginMaxAttempts,
+			"register_max", cfg.RateLimit.RegisterMaxAttempts,
+			"refresh_max", cfg.RateLimit.RefreshMaxAttempts,
+			"window_seconds", cfg.RateLimit.WindowSeconds)
+
+		g.POST("/api/auth/login", withRateLimit(app.Login, middleware.RateLimitOpts{
+			Redis: rdb, Log: lo, Max: cfg.RateLimit.LoginMaxAttempts, Window: window, KeyPrefix: "login", TrustProxy: cfg.RateLimit.TrustProxy,
+		}))
+		g.POST("/api/auth/register", withRateLimit(app.Register, middleware.RateLimitOpts{
+			Redis: rdb, Log: lo, Max: cfg.RateLimit.RegisterMaxAttempts, Window: window, KeyPrefix: "register", TrustProxy: cfg.RateLimit.TrustProxy,
+		}))
+		g.POST("/api/auth/refresh", withRateLimit(app.RefreshToken, middleware.RateLimitOpts{
+			Redis: rdb, Log: lo, Max: cfg.RateLimit.RefreshMaxAttempts, Window: window, KeyPrefix: "refresh", TrustProxy: cfg.RateLimit.TrustProxy,
+		}))
+	} else {
+		g.POST("/api/auth/login", app.Login)
+		g.POST("/api/auth/register", app.Register)
+		g.POST("/api/auth/refresh", app.RefreshToken)
+	}
 	g.POST("/api/auth/logout", app.Logout)
 	g.POST("/api/auth/switch-org", app.SwitchOrg)
 
@@ -728,6 +748,17 @@ func setupRoutes(g *fastglue.Fastglue, app *handlers.App, lo logf.Logger, basePa
 		})
 	} else {
 		lo.Info("Frontend not embedded, API-only mode")
+	}
+}
+
+// withRateLimit wraps a handler with the rate limit middleware.
+func withRateLimit(handler fastglue.FastRequestHandler, opts middleware.RateLimitOpts) fastglue.FastRequestHandler {
+	rl := middleware.RateLimit(opts)
+	return func(r *fastglue.Request) error {
+		if rl(r) == nil {
+			return nil // Rate limited — response already sent.
+		}
+		return handler(r)
 	}
 }
 
