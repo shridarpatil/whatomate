@@ -358,7 +358,8 @@ func (a *App) TestWebhook(r *fastglue.Request) error {
 	defer cancel()
 
 	if err := a.sendWebhookRequest(ctx, *webhook, jsonData); err != nil {
-		return r.SendErrorEnvelope(fasthttp.StatusBadGateway, "Webhook test failed: "+err.Error(), nil, "")
+		a.Log.Error("Webhook test failed", "error", err, "webhook_id", webhook.ID)
+		return r.SendErrorEnvelope(fasthttp.StatusBadGateway, "Webhook test failed", nil, "")
 	}
 
 	return r.SendEnvelope(map[string]string{"message": "Test webhook sent successfully"})

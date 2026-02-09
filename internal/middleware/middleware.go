@@ -94,6 +94,19 @@ func CORS(allowedOrigins map[string]bool) fastglue.FastMiddleware {
 	}
 }
 
+// SecurityHeaders adds standard security headers to every response.
+func SecurityHeaders() fastglue.FastMiddleware {
+	return func(r *fastglue.Request) *fastglue.Request {
+		h := &r.RequestCtx.Response.Header
+		h.Set("X-Content-Type-Options", "nosniff")
+		h.Set("X-Frame-Options", "DENY")
+		h.Set("Referrer-Policy", "strict-origin-when-cross-origin")
+		h.Set("Permissions-Policy", "camera=(), microphone=(), geolocation=()")
+		h.Set("X-XSS-Protection", "0") // Disabled per OWASP recommendation (use CSP instead)
+		return r
+	}
+}
+
 // Recovery recovers from panics
 func Recovery(log logf.Logger) fastglue.FastMiddleware {
 	return func(r *fastglue.Request) *fastglue.Request {

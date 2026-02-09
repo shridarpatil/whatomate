@@ -310,7 +310,7 @@ func (a *App) SaveFlowToMeta(r *fastglue.Request) error {
 		metaFlowID, err = waClient.CreateFlow(ctx, waAccount, flow.Name, categories)
 		if err != nil {
 			a.Log.Error("Failed to create flow in Meta", "error", err, "flow_id", id, "business_id", account.BusinessID)
-			return r.SendErrorEnvelope(fasthttp.StatusInternalServerError, "Failed to create flow in Meta: "+err.Error(), nil, "")
+			return r.SendErrorEnvelope(fasthttp.StatusInternalServerError, "Failed to create flow in Meta", nil, "")
 		}
 	} else {
 		metaFlowID = flow.MetaFlowID
@@ -337,7 +337,7 @@ func (a *App) SaveFlowToMeta(r *fastglue.Request) error {
 			a.DB.Model(flow).Updates(map[string]interface{}{
 				"meta_flow_id": metaFlowID,
 			})
-			return r.SendErrorEnvelope(fasthttp.StatusInternalServerError, "Failed to update flow JSON: "+err.Error(), nil, "")
+			return r.SendErrorEnvelope(fasthttp.StatusInternalServerError, "Failed to update flow JSON", nil, "")
 		}
 	}
 
@@ -405,7 +405,7 @@ func (a *App) PublishFlow(r *fastglue.Request) error {
 	// Publish the flow
 	if err := waClient.PublishFlow(ctx, waAccount, flow.MetaFlowID); err != nil {
 		a.Log.Error("Failed to publish flow in Meta", "error", err, "flow_id", id, "meta_flow_id", flow.MetaFlowID)
-		return r.SendErrorEnvelope(fasthttp.StatusInternalServerError, "Failed to publish flow: "+err.Error(), nil, "")
+		return r.SendErrorEnvelope(fasthttp.StatusInternalServerError, "Failed to publish flow", nil, "")
 	}
 
 	// Get the flow details including preview URL
@@ -471,7 +471,7 @@ func (a *App) DeprecateFlow(r *fastglue.Request) error {
 		ctx := context.Background()
 		if err := waClient.DeprecateFlow(ctx, waAccount, flow.MetaFlowID); err != nil {
 			a.Log.Error("Failed to deprecate flow in Meta", "error", err, "flow_id", id, "meta_flow_id", flow.MetaFlowID)
-			return r.SendErrorEnvelope(fasthttp.StatusInternalServerError, "Failed to deprecate flow in Meta: "+err.Error(), nil, "")
+			return r.SendErrorEnvelope(fasthttp.StatusInternalServerError, "Failed to deprecate flow in Meta", nil, "")
 		}
 	}
 
@@ -572,7 +572,7 @@ func (a *App) SyncFlows(r *fastglue.Request) error {
 	metaFlows, err := waClient.ListFlows(ctx, waAccount)
 	if err != nil {
 		a.Log.Error("Failed to fetch flows from Meta", "error", err)
-		return r.SendErrorEnvelope(fasthttp.StatusInternalServerError, "Failed to fetch flows from Meta: "+err.Error(), nil, "")
+		return r.SendErrorEnvelope(fasthttp.StatusInternalServerError, "Failed to fetch flows from Meta", nil, "")
 	}
 
 	// Sync each flow

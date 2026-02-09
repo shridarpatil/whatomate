@@ -311,7 +311,7 @@ func (a *App) TestAccountConnection(r *fastglue.Request) error {
 		a.Log.Error("Account test failed", "error", err, "account", account.Name)
 		return r.SendEnvelope(map[string]interface{}{
 			"success": false,
-			"error":   err.Error(),
+			"error":   "Account credential validation failed. Check your access token and phone ID.",
 		})
 	}
 
@@ -324,9 +324,10 @@ func (a *App) TestAccountConnection(r *fastglue.Request) error {
 
 	resp, err := a.HTTPClient.Do(req)
 	if err != nil {
+		a.Log.Error("Failed to connect to WhatsApp API", "error", err)
 		return r.SendEnvelope(map[string]interface{}{
 			"success": false,
-			"error":   "Failed to connect to WhatsApp API: " + err.Error(),
+			"error":   "Failed to connect to WhatsApp API",
 		})
 	}
 	defer func() { _ = resp.Body.Close() }()
@@ -436,7 +437,7 @@ func (a *App) SubscribeApp(r *fastglue.Request) error {
 		a.Log.Error("Failed to subscribe app to webhooks", "error", err, "account", account.Name)
 		return r.SendEnvelope(map[string]interface{}{
 			"success": false,
-			"error":   err.Error(),
+			"error":   "Failed to subscribe app to webhooks. Check your credentials.",
 		})
 	}
 

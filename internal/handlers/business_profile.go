@@ -31,7 +31,7 @@ func (a *App) GetBusinessProfile(r *fastglue.Request) error {
 	profile, err := a.WhatsApp.GetBusinessProfile(ctx, a.toWhatsAppAccount(account))
 	if err != nil {
 		a.Log.Error("Failed to get business profile", "error", err)
-		return r.SendErrorEnvelope(fasthttp.StatusInternalServerError, "Failed to get business profile: "+err.Error(), nil, "")
+		return r.SendErrorEnvelope(fasthttp.StatusInternalServerError, "Failed to get business profile", nil, "")
 	}
 
 	return r.SendEnvelope(profile)
@@ -64,7 +64,7 @@ func (a *App) UpdateBusinessProfile(r *fastglue.Request) error {
 
 	if err := a.WhatsApp.UpdateBusinessProfile(ctx, waAccount, input); err != nil {
 		a.Log.Error("Failed to update business profile", "error", err)
-		return r.SendErrorEnvelope(fasthttp.StatusInternalServerError, "Failed to update business profile: "+err.Error(), nil, "")
+		return r.SendErrorEnvelope(fasthttp.StatusInternalServerError, "Failed to update business profile", nil, "")
 	}
 
 	// Re-fetch to ensure we have the latest state
@@ -121,7 +121,7 @@ func (a *App) UpdateProfilePicture(r *fastglue.Request) error {
 	handle, err := a.WhatsApp.UploadProfilePicture(ctx, waAccount, fileContent, fileHeader.Header.Get("Content-Type"))
 	if err != nil {
 		a.Log.Error("Failed to upload profile picture", "error", err)
-		return r.SendErrorEnvelope(fasthttp.StatusInternalServerError, "Failed to upload to Meta: "+err.Error(), nil, "")
+		return r.SendErrorEnvelope(fasthttp.StatusInternalServerError, "Failed to upload profile picture", nil, "")
 	}
 
 	// Update Business Profile with the handle
@@ -134,7 +134,7 @@ func (a *App) UpdateProfilePicture(r *fastglue.Request) error {
 
 	if err != nil {
 		a.Log.Error("Failed to update profile request", "error", err)
-		return r.SendErrorEnvelope(fasthttp.StatusInternalServerError, "Uploaded but failed to set profile: "+err.Error(), nil, "")
+		return r.SendErrorEnvelope(fasthttp.StatusInternalServerError, "Uploaded but failed to set profile picture", nil, "")
 	}
 
 	return r.SendEnvelope(map[string]string{

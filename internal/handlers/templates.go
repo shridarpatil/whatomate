@@ -382,7 +382,7 @@ func (a *App) SyncTemplates(r *fastglue.Request) error {
 	templates, err := a.fetchTemplatesFromMeta(&account)
 	if err != nil {
 		a.Log.Error("Failed to fetch templates from Meta", "error", err)
-		return r.SendErrorEnvelope(fasthttp.StatusBadGateway, "Failed to fetch templates from Meta: "+err.Error(), nil, "")
+		return r.SendErrorEnvelope(fasthttp.StatusBadGateway, "Failed to fetch templates from Meta", nil, "")
 	}
 
 	// Sync to database
@@ -593,7 +593,7 @@ func (a *App) UploadTemplateMedia(r *fastglue.Request) error {
 	handle, err := a.WhatsApp.ResumableUpload(ctx, waAccount, fileData, mimeType, fileHeader.Filename)
 	if err != nil {
 		a.Log.Error("Failed to upload template media", "error", err)
-		return r.SendErrorEnvelope(fasthttp.StatusBadGateway, "Failed to upload media to Meta: "+err.Error(), nil, "")
+		return r.SendErrorEnvelope(fasthttp.StatusBadGateway, "Failed to upload media to Meta", nil, "")
 	}
 
 	return r.SendEnvelope(map[string]interface{}{

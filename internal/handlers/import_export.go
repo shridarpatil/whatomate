@@ -385,8 +385,12 @@ func (a *App) ImportData(r *fastglue.Request) error {
 	}
 	defer file.Close()
 
+	// Limit CSV file size to 10MB
+	const maxCSVSize = 10 << 20
+	limitedReader := io.LimitReader(file, maxCSVSize+1)
+
 	// Parse CSV
-	reader := csv.NewReader(file)
+	reader := csv.NewReader(limitedReader)
 
 	// Read header
 	header, err := reader.Read()

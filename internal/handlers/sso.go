@@ -257,10 +257,10 @@ func (a *App) CallbackSSO(r *fastglue.Request) error {
 			a.redirectWithError(r, "Invalid email from provider")
 			return nil
 		}
-		emailDomain := strings.TrimSpace(emailParts[1])
+		emailDomain := strings.ToLower(strings.TrimSpace(emailParts[1]))
 		allowed := false
 		for _, d := range domains {
-			if strings.TrimSpace(d) == emailDomain {
+			if strings.ToLower(strings.TrimSpace(d)) == emailDomain {
 				allowed = true
 				break
 			}

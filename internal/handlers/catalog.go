@@ -123,7 +123,7 @@ func (a *App) CreateCatalog(r *fastglue.Request) error {
 	metaCatalogID, err := a.WhatsApp.CreateCatalog(ctx, waAccount, req.Name)
 	if err != nil {
 		a.Log.Error("Failed to create catalog in Meta", "error", err)
-		return r.SendErrorEnvelope(fasthttp.StatusInternalServerError, "Failed to create catalog: "+err.Error(), nil, "")
+		return r.SendErrorEnvelope(fasthttp.StatusInternalServerError, "Failed to create catalog", nil, "")
 	}
 
 	// Store catalog locally
@@ -243,7 +243,7 @@ func (a *App) SyncCatalogs(r *fastglue.Request) error {
 	metaCatalogs, err := a.WhatsApp.ListCatalogs(ctx, waAccount)
 	if err != nil {
 		a.Log.Error("Failed to fetch catalogs from Meta", "error", err)
-		return r.SendErrorEnvelope(fasthttp.StatusInternalServerError, "Failed to fetch catalogs: "+err.Error(), nil, "")
+		return r.SendErrorEnvelope(fasthttp.StatusInternalServerError, "Failed to fetch catalogs", nil, "")
 	}
 
 	// Sync each catalog
@@ -370,7 +370,7 @@ func (a *App) CreateCatalogProduct(r *fastglue.Request) error {
 	metaProductID, err := a.WhatsApp.CreateProduct(ctx, waAccount, catalog.MetaCatalogID, productInput)
 	if err != nil {
 		a.Log.Error("Failed to create product in Meta", "error", err)
-		return r.SendErrorEnvelope(fasthttp.StatusInternalServerError, "Failed to create product: "+err.Error(), nil, "")
+		return r.SendErrorEnvelope(fasthttp.StatusInternalServerError, "Failed to create product", nil, "")
 	}
 
 	// Store product locally
@@ -465,7 +465,7 @@ func (a *App) UpdateCatalogProduct(r *fastglue.Request) error {
 
 	if err := a.WhatsApp.UpdateProduct(ctx, waAccount, product.MetaProductID, productInput); err != nil {
 		a.Log.Error("Failed to update product in Meta", "error", err)
-		return r.SendErrorEnvelope(fasthttp.StatusInternalServerError, "Failed to update product: "+err.Error(), nil, "")
+		return r.SendErrorEnvelope(fasthttp.StatusInternalServerError, "Failed to update product", nil, "")
 	}
 
 	// Update locally

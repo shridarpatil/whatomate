@@ -161,7 +161,7 @@ func setDefaults(cfg *Config) {
 		cfg.JWT.AccessExpiryMins = 15
 	}
 	if cfg.JWT.RefreshExpiryDays == 0 {
-		cfg.JWT.RefreshExpiryDays = 7
+		cfg.JWT.RefreshExpiryDays = 1
 	}
 	if cfg.WhatsApp.APIVersion == "" {
 		cfg.WhatsApp.APIVersion = "v18.0"

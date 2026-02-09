@@ -198,6 +198,7 @@ func runServer(args []string) {
 	allowedOrigins := middleware.ParseAllowedOrigins(cfg.Server.AllowedOrigins)
 
 	// Setup middleware (CORS is handled by corsWrapper at fasthttp level)
+	g.Before(middleware.SecurityHeaders())
 	g.Before(middleware.RequestLogger(lo))
 	g.Before(middleware.Recovery(lo))
 

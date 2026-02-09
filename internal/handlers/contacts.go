@@ -541,7 +541,7 @@ func (a *App) SendMessage(r *fastglue.Request) error {
 	// Get WhatsApp account
 	account, err := a.resolveWhatsAppAccount(orgID, contact.WhatsAppAccount)
 	if err != nil {
-		return r.SendErrorEnvelope(fasthttp.StatusBadRequest, err.Error(), nil, "")
+		return r.SendErrorEnvelope(fasthttp.StatusBadRequest, "Failed to resolve WhatsApp account", nil, "")
 	}
 
 	// Handle reply context

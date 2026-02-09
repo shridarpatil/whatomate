@@ -337,8 +337,8 @@ func (a *App) ExecuteCustomAction(r *fastglue.Request) error {
 		a.Log.Error("Failed to execute custom action", "error", err, "action_id", actionID)
 		return r.SendEnvelope(ActionResult{
 			Success: false,
-			Message: err.Error(),
-			Toast:   &ToastConfig{Message: "Action failed: " + err.Error(), Type: "error"},
+			Message: "Action execution failed",
+			Toast:   &ToastConfig{Message: "Action failed", Type: "error"},
 		})
 	}
 

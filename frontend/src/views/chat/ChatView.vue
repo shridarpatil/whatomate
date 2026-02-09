@@ -293,7 +293,14 @@ async function executeCustomAction(action: CustomAction) {
         const basePath = ((window as any).__BASE_PATH__ ?? '').replace(/\/$/, '')
         redirectUrl = basePath + redirectUrl
       }
-      window.open(redirectUrl, '_blank')
+      try {
+        const parsed = new URL(redirectUrl, window.location.origin)
+        if (parsed.protocol === 'http:' || parsed.protocol === 'https:') {
+          window.open(parsed.href, '_blank')
+        }
+      } catch {
+        // Invalid URL, ignore
+      }
     }
 
     if (result.clipboard) {
