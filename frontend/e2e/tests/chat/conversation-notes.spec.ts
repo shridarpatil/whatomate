@@ -233,15 +233,12 @@ test.describe('Conversation Notes - API CRUD', () => {
     const allNotes = await api.listNotes(contactId)
     expect(allNotes.length).toBeGreaterThanOrEqual(5)
 
-    // Use the same api instance to test pagination via raw request
-    const BASE_URL = process.env.BASE_URL || 'http://localhost:8080'
+    // Use a fresh ApiHelper context to test pagination
     const reqContext = await playwrightRequest.newContext()
     const paginationApi = new ApiHelper(reqContext)
     await paginationApi.loginAsAdmin()
 
-    const response = await reqContext.get(`${BASE_URL}/api/contacts/${contactId}/notes?limit=3`, {
-      headers: { Authorization: `Bearer ${paginationApi.getToken()}` }
-    })
+    const response = await paginationApi.get(`/api/contacts/${contactId}/notes?limit=3`)
     const data = await response.json()
     expect(data.data.notes.length).toBe(3)
     expect(data.data.has_more).toBe(true)

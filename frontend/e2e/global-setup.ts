@@ -9,6 +9,18 @@ interface CreateUser {
   role_name: string
 }
 
+/**
+ * Extract the whm_csrf cookie value from Set-Cookie response headers.
+ */
+function extractCSRFToken(response: { headersArray: () => Array<{ name: string; value: string }> }): string | null {
+  const cookieHeaders = response.headersArray().filter(h => h.name.toLowerCase() === 'set-cookie')
+  for (const header of cookieHeaders) {
+    const match = header.value.match(/whm_csrf=([^;]+)/)
+    if (match) return match[1]
+  }
+  return null
+}
+
 async function globalSetup() {
   console.log('\n🔧 Global Setup: Creating test users...')
 
@@ -23,7 +35,7 @@ async function globalSetup() {
     password: 'admin',
   }
 
-  let accessToken: string | null = null
+  let csrfToken: string | null = null
 
   try {
     const loginResponse = await context.post('/api/auth/login', {
@@ -31,8 +43,8 @@ async function globalSetup() {
     })
 
     if (loginResponse.ok()) {
-      const data = await loginResponse.json()
-      accessToken = data.data?.access_token
+      // Auth cookies are auto-persisted by Playwright's APIRequestContext
+      csrfToken = extractCSRFToken(loginResponse)
       console.log(`  ✅ Logged in as superadmin: ${defaultAdmin.email}`)
     } else {
       console.log(`  ❌ Failed to login as superadmin: ${await loginResponse.text()}`)
@@ -42,19 +54,12 @@ async function globalSetup() {
     console.log(`  ❌ Error logging in as superadmin:`, error)
   }
 
-  if (!accessToken) {
-    console.log('  ❌ No access token, cannot create test users')
-    await context.dispose()
-    return
-  }
-
   // Step 2: Get the roles to find admin, manager and agent role IDs
   const roleIds: Record<string, string> = {}
 
   try {
-    const rolesResponse = await context.get('/api/roles', {
-      headers: { Authorization: `Bearer ${accessToken}` },
-    })
+    // GET requests don't need CSRF token — cookies auto-sent by Playwright
+    const rolesResponse = await context.get('/api/roles')
 
     if (rolesResponse.ok()) {
       const data = await rolesResponse.json()
@@ -80,9 +85,7 @@ async function globalSetup() {
   // Get existing users to check for duplicates
   let existingEmails: Set<string> = new Set()
   try {
-    const listResponse = await context.get('/api/users', {
-      headers: { Authorization: `Bearer ${accessToken}` },
-    })
+    const listResponse = await context.get('/api/users')
     if (listResponse.ok()) {
       const data = await listResponse.json()
       const users = data.data?.users || []
@@ -91,6 +94,8 @@ async function globalSetup() {
   } catch (error) {
     console.log(`  ⚠️  Error fetching existing users:`, error)
   }
+
+  const csrfHeaders: Record<string, string> = csrfToken ? { 'X-CSRF-Token': csrfToken } : {}
 
   for (const user of usersToCreate) {
     if (existingEmails.has(user.email)) {
@@ -102,7 +107,7 @@ async function globalSetup() {
       const roleId = roleIds[user.role_name] || null
 
       const createResponse = await context.post('/api/users', {
-        headers: { Authorization: `Bearer ${accessToken}` },
+        headers: csrfHeaders,
         data: {
           email: user.email,
           password: user.password,
