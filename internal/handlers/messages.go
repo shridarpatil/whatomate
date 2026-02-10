@@ -386,7 +386,11 @@ func (a *App) broadcastNewMessage(orgID uuid.UUID, msg *models.Message, contact 
 	if contact.AssignedUserID != nil {
 		payload["assigned_user_id"] = contact.AssignedUserID.String()
 	}
-	payload["profile_name"] = contact.ProfileName
+	profileName := contact.ProfileName
+	if a.ShouldMaskPhoneNumbers(orgID) {
+		profileName = MaskIfPhoneNumber(profileName)
+	}
+	payload["profile_name"] = profileName
 
 	// Add media fields
 	if msg.MediaURL != "" {

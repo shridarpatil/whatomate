@@ -2314,11 +2314,15 @@ func (a *App) saveIncomingMessage(account *models.WhatsAppAccount, contact *mode
 		if contact.AssignedUserID != nil {
 			assignedUserIDStr = contact.AssignedUserID.String()
 		}
+		profileName := contact.ProfileName
+		if a.ShouldMaskPhoneNumbers(account.OrganizationID) {
+			profileName = MaskIfPhoneNumber(profileName)
+		}
 		wsPayload := map[string]any{
 			"id":               message.ID.String(),
 			"contact_id":       contact.ID.String(),
 			"assigned_user_id": assignedUserIDStr,
-			"profile_name":     contact.ProfileName,
+			"profile_name":     profileName,
 			"direction":        message.Direction,
 			"message_type":     message.MessageType,
 			"content":          map[string]string{"body": message.Content},

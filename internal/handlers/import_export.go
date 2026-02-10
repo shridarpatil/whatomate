@@ -309,6 +309,17 @@ func (a *App) ExportData(r *fastglue.Request) error {
 				csvRow[i] = formatExportValue(val, colTypes[i+1])
 			}
 		}
+		// Apply phone masking for contacts export
+		if req.Table == "contacts" && a.ShouldMaskPhoneNumbers(orgID) {
+			for i, col := range safeColumns {
+				if col == "phone_number" {
+					csvRow[i] = MaskPhoneNumber(csvRow[i])
+				} else if col == "profile_name" {
+					csvRow[i] = MaskIfPhoneNumber(csvRow[i])
+				}
+			}
+		}
+
 		// Escape CSV injection: prefix dangerous first chars with a single quote
 		// Only escape '=' and '@' which trigger formulas. '+' and '-' are skipped
 		// because they appear in legitimate data (phone numbers, negative values).

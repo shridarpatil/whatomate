@@ -1048,11 +1048,18 @@ func (a *App) broadcastTransferCreated(transfer *models.AgentTransfer, contact *
 		return
 	}
 
+	contactName := contact.ProfileName
+	phoneNumber := transfer.PhoneNumber
+	if a.ShouldMaskPhoneNumbers(transfer.OrganizationID) {
+		contactName = MaskIfPhoneNumber(contactName)
+		phoneNumber = MaskPhoneNumber(phoneNumber)
+	}
+
 	payload := map[string]any{
 		"id":               transfer.ID.String(),
 		"contact_id":       transfer.ContactID.String(),
-		"contact_name":     contact.ProfileName,
-		"phone_number":     transfer.PhoneNumber,
+		"contact_name":     contactName,
+		"phone_number":     phoneNumber,
 		"whatsapp_account": transfer.WhatsAppAccount,
 		"status":           transfer.Status,
 		"source":           transfer.Source,

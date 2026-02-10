@@ -230,13 +230,20 @@ func (p *SLAProcessor) notifyEscalation(transfer models.AgentTransfer, settings 
 
 	// Broadcast escalation notification to the organization
 	// Escalation contacts will receive this via the org-wide broadcast
+	contactName := contact.ProfileName
+	phoneNumber := contact.PhoneNumber
+	if p.app.ShouldMaskPhoneNumbers(transfer.OrganizationID) {
+		contactName = MaskIfPhoneNumber(contactName)
+		phoneNumber = MaskPhoneNumber(phoneNumber)
+	}
+
 	p.app.WSHub.BroadcastToOrg(transfer.OrganizationID, websocket.WSMessage{
 		Type: "transfer_escalation",
 		Payload: map[string]interface{}{
 			"transfer_id":           transfer.ID.String(),
 			"contact_id":            transfer.ContactID.String(),
-			"contact_name":          contact.ProfileName,
-			"phone_number":          contact.PhoneNumber,
+			"contact_name":          contactName,
+			"phone_number":          phoneNumber,
 			"escalation_level":      level,
 			"level_name":            levelName,
 			"waiting_since":         transfer.TransferredAt.Format(time.RFC3339),
@@ -328,13 +335,20 @@ func (p *SLAProcessor) broadcastTransferUpdate(transfer models.AgentTransfer, ev
 	var contact models.Contact
 	p.app.DB.Where("id = ?", transfer.ContactID).First(&contact)
 
+	contactName := contact.ProfileName
+	phoneNumber := contact.PhoneNumber
+	if p.app.ShouldMaskPhoneNumbers(transfer.OrganizationID) {
+		contactName = MaskIfPhoneNumber(contactName)
+		phoneNumber = MaskPhoneNumber(phoneNumber)
+	}
+
 	p.app.WSHub.BroadcastToOrg(transfer.OrganizationID, websocket.WSMessage{
 		Type: "transfer_" + eventType,
 		Payload: map[string]interface{}{
 			"id":               transfer.ID.String(),
 			"contact_id":       transfer.ContactID.String(),
-			"contact_name":     contact.ProfileName,
-			"phone_number":     contact.PhoneNumber,
+			"contact_name":     contactName,
+			"phone_number":     phoneNumber,
 			"status":           transfer.Status,
 			"escalation_level": transfer.SLA.EscalationLevel,
 			"sla_breached":     transfer.SLA.Breached,

@@ -695,6 +695,13 @@ func (a *App) GetCampaignRecipients(r *fastglue.Request) error {
 		return r.SendErrorEnvelope(fasthttp.StatusInternalServerError, "Failed to list recipients", nil, "")
 	}
 
+	if a.ShouldMaskPhoneNumbers(orgID) {
+		for i := range recipients {
+			recipients[i].PhoneNumber = MaskPhoneNumber(recipients[i].PhoneNumber)
+			recipients[i].RecipientName = MaskIfPhoneNumber(recipients[i].RecipientName)
+		}
+	}
+
 	return r.SendEnvelope(map[string]interface{}{
 		"recipients": recipients,
 		"total":      len(recipients),
