@@ -59,6 +59,7 @@ enabled = false                # Set to true to enable rate limiting
 login_max_attempts = 10        # Max login attempts per IP per window
 register_max_attempts = 10     # Max register attempts per IP per window
 refresh_max_attempts = 30      # Max token refresh attempts per IP per window
+sso_max_attempts = 10          # Max SSO init/callback attempts per IP per window
 window_seconds = 60            # Time window in seconds
 trust_proxy = false            # Trust X-Forwarded-For / X-Real-IP headers (set true behind reverse proxy)
 

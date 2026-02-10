@@ -102,6 +102,7 @@ type RateLimitConfig struct {
 	LoginMaxAttempts    int  `koanf:"login_max_attempts"`
 	RegisterMaxAttempts int  `koanf:"register_max_attempts"`
 	RefreshMaxAttempts  int  `koanf:"refresh_max_attempts"`
+	SSOMaxAttempts      int  `koanf:"sso_max_attempts"`
 	WindowSeconds       int  `koanf:"window_seconds"`
 	TrustProxy          bool `koanf:"trust_proxy"`
 }
@@ -214,6 +215,9 @@ func setDefaults(cfg *Config) {
 	}
 	if cfg.RateLimit.RefreshMaxAttempts == 0 {
 		cfg.RateLimit.RefreshMaxAttempts = 30
+	}
+	if cfg.RateLimit.SSOMaxAttempts == 0 {
+		cfg.RateLimit.SSOMaxAttempts = 10
 	}
 	if cfg.RateLimit.WindowSeconds == 0 {
 		cfg.RateLimit.WindowSeconds = 60

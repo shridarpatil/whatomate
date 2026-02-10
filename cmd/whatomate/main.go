@@ -415,6 +415,7 @@ func setupRoutes(g *fastglue.Fastglue, app *handlers.App, lo logf.Logger, basePa
 			"login_max", cfg.RateLimit.LoginMaxAttempts,
 			"register_max", cfg.RateLimit.RegisterMaxAttempts,
 			"refresh_max", cfg.RateLimit.RefreshMaxAttempts,
+			"sso_max", cfg.RateLimit.SSOMaxAttempts,
 			"window_seconds", cfg.RateLimit.WindowSeconds)
 
 		g.POST("/api/auth/login", withRateLimit(app.Login, middleware.RateLimitOpts{
@@ -435,16 +436,26 @@ func setupRoutes(g *fastglue.Fastglue, app *handlers.App, lo logf.Logger, basePa
 	g.POST("/api/auth/switch-org", app.SwitchOrg)
 	g.GET("/api/auth/ws-token", app.GetWSToken)
 
-	// SSO routes (public)
+	// SSO routes (public, optionally rate-limited)
 	g.GET("/api/auth/sso/providers", app.GetPublicSSOProviders)
-	g.GET("/api/auth/sso/{provider}/init", app.InitSSO)
-	g.GET("/api/auth/sso/{provider}/callback", app.CallbackSSO)
+	if cfg.RateLimit.Enabled {
+		window := time.Duration(cfg.RateLimit.WindowSeconds) * time.Second
+		g.GET("/api/auth/sso/{provider}/init", withRateLimit(app.InitSSO, middleware.RateLimitOpts{
+			Redis: rdb, Log: lo, Max: cfg.RateLimit.SSOMaxAttempts, Window: window, KeyPrefix: "sso_init", TrustProxy: cfg.RateLimit.TrustProxy,
+		}))
+		g.GET("/api/auth/sso/{provider}/callback", withRateLimit(app.CallbackSSO, middleware.RateLimitOpts{
+			Redis: rdb, Log: lo, Max: cfg.RateLimit.SSOMaxAttempts, Window: window, KeyPrefix: "sso_callback", TrustProxy: cfg.RateLimit.TrustProxy,
+		}))
+	} else {
+		g.GET("/api/auth/sso/{provider}/init", app.InitSSO)
+		g.GET("/api/auth/sso/{provider}/callback", app.CallbackSSO)
+	}
 
 	// Webhook routes (public - for Meta)
 	g.GET("/api/webhook", app.WebhookVerify)
 	g.POST("/api/webhook", app.WebhookHandler)
 
-	// WebSocket route (auth handled in handler via query param)
+	// WebSocket route (auth via message-based flow after upgrade)
 	g.GET("/ws", app.WebSocketHandler)
 
 	// For protected routes, we'll use a path-based middleware approach

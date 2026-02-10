@@ -40,6 +40,7 @@ function showNotification(title: string, body: string, contactId: string) {
 }
 
 // WebSocket message types
+const WS_TYPE_AUTH = 'auth'
 const WS_TYPE_NEW_MESSAGE = 'new_message'
 const WS_TYPE_STATUS_UPDATE = 'status_update'
 const WS_TYPE_SET_CONTACT = 'set_contact'
@@ -101,12 +102,15 @@ class WebSocketService {
     const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
     const host = window.location.host
     const basePath = ((window as any).__BASE_PATH__ ?? '').replace(/\/$/, '')
-    const url = `${protocol}//${host}${basePath}/ws?token=${token}`
+    const url = `${protocol}//${host}${basePath}/ws`
 
     try {
       this.ws = new WebSocket(url)
 
       this.ws.onopen = () => {
+        // Send auth message as the first message (token not in URL for security)
+        this.send({ type: WS_TYPE_AUTH, payload: { token } })
+
         const isReconnection = this.hasConnectedBefore
         this.isConnected = true
         this.hasConnectedBefore = true

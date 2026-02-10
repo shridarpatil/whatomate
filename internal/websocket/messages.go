@@ -10,6 +10,7 @@ type WSMessage struct {
 
 // Message types
 const (
+	TypeAuth          = "auth"
 	TypeNewMessage    = "new_message"
 	TypeStatusUpdate  = "status_update"
 	TypeContactUpdate = "contact_update"
@@ -40,6 +41,11 @@ type BroadcastMessage struct {
 	UserID    uuid.UUID // Optional: only send to specific user
 	ContactID uuid.UUID // Optional: only send to users viewing this contact
 	Message   WSMessage
+}
+
+// AuthPayload is the payload for auth messages from client
+type AuthPayload struct {
+	Token string `json:"token"`
 }
 
 // SetContactPayload is the payload for set_contact messages from client
