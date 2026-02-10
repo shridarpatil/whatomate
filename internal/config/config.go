@@ -21,6 +21,7 @@ type Config struct {
 	Storage       StorageConfig       `koanf:"storage"`
 	DefaultAdmin  DefaultAdminConfig  `koanf:"default_admin"`
 	RateLimit     RateLimitConfig     `koanf:"rate_limit"`
+	Cookie        CookieConfig        `koanf:"cookie"`
 }
 
 type AppConfig struct {
@@ -89,6 +90,11 @@ type DefaultAdminConfig struct {
 	Email    string `koanf:"email"`
 	Password string `koanf:"password"`
 	FullName string `koanf:"full_name"`
+}
+
+type CookieConfig struct {
+	Domain string `koanf:"domain"` // Cookie domain (e.g., ".example.com"). Empty = current host.
+	Secure bool   `koanf:"secure"` // Set Secure flag. Auto-set true when environment=production.
 }
 
 type RateLimitConfig struct {
@@ -194,6 +200,10 @@ func setDefaults(cfg *Config) {
 	}
 	if cfg.DefaultAdmin.FullName == "" {
 		cfg.DefaultAdmin.FullName = "Admin"
+	}
+	// Cookie defaults
+	if cfg.App.Environment == "production" {
+		cfg.Cookie.Secure = true
 	}
 	// Rate limiting defaults
 	if cfg.RateLimit.LoginMaxAttempts == 0 {

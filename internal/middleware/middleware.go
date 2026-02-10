@@ -87,7 +87,7 @@ func CORS(allowedOrigins map[string]bool) fastglue.FastMiddleware {
 		// which causes the browser to block the request.
 
 		r.RequestCtx.Response.Header.Set("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS, PATCH")
-		r.RequestCtx.Response.Header.Set("Access-Control-Allow-Headers", "Content-Type, Authorization, X-API-Key, X-Organization-ID")
+		r.RequestCtx.Response.Header.Set("Access-Control-Allow-Headers", "Content-Type, Authorization, X-API-Key, X-Organization-ID, X-CSRF-Token")
 		r.RequestCtx.Response.Header.Set("Access-Control-Max-Age", "86400")
 
 		return r
@@ -142,20 +142,26 @@ func AuthWithDB(secret string, db *gorm.DB) fastglue.FastMiddleware {
 			return nil
 		}
 
-		// Fall back to JWT authentication
-		if authHeader == "" {
-			_ = r.SendErrorEnvelope(fasthttp.StatusUnauthorized, "Missing authorization header", nil, "")
-			return nil
+		// Fall back to JWT authentication (Bearer header or cookie)
+		var tokenString string
+
+		if authHeader != "" {
+			// Extract token from "Bearer <token>"
+			parts := strings.Split(authHeader, " ")
+			if len(parts) != 2 || parts[0] != "Bearer" {
+				_ = r.SendErrorEnvelope(fasthttp.StatusUnauthorized, "Invalid authorization header format", nil, "")
+				return nil
+			}
+			tokenString = parts[1]
+		} else {
+			// Fall back to whm_access cookie
+			tokenString = string(r.RequestCtx.Request.Header.Cookie("whm_access"))
 		}
 
-		// Extract token from "Bearer <token>"
-		parts := strings.Split(authHeader, " ")
-		if len(parts) != 2 || parts[0] != "Bearer" {
-			_ = r.SendErrorEnvelope(fasthttp.StatusUnauthorized, "Invalid authorization header format", nil, "")
+		if tokenString == "" {
+			_ = r.SendErrorEnvelope(fasthttp.StatusUnauthorized, "Missing authorization", nil, "")
 			return nil
 		}
-
-		tokenString := parts[1]
 
 		// Parse and validate token
 		token, err := jwt.ParseWithClaims(tokenString, &JWTClaims{}, func(token *jwt.Token) (interface{}, error) {

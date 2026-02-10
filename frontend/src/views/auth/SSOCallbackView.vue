@@ -16,40 +16,16 @@ const status = ref<'loading' | 'success' | 'error'>('loading')
 const errorMessage = ref('')
 
 onMounted(async () => {
-  // Parse tokens from URL fragment (hash)
-  const hash = window.location.hash.substring(1)
-  const params = new URLSearchParams(hash)
-
-  const accessToken = params.get('access_token')
-  const refreshToken = params.get('refresh_token')
-
-  if (!accessToken || !refreshToken) {
-    status.value = 'error'
-    errorMessage.value = t('auth.ssoMissingTokens')
-    return
-  }
-
   try {
-    // Store tokens temporarily to make the /me API call
-    localStorage.setItem('auth_token', accessToken)
-    localStorage.setItem('refresh_token', refreshToken)
-
-    // Fetch user info
+    // Cookies were set by the SSO redirect — call /me to get the user object
     const response = await api.get('/me')
     const user = response.data.data
 
-    // Set auth in store
-    authStore.setAuth({
-      user,
-      access_token: accessToken,
-      refresh_token: refreshToken
-    })
+    // Set auth in store (only user — tokens are in httpOnly cookies)
+    authStore.setAuth({ user })
 
     status.value = 'success'
     toast.success(t('auth.ssoLoginSuccess'))
-
-    // Clear hash from URL
-    window.history.replaceState(null, '', window.location.pathname)
 
     // Redirect based on role
     setTimeout(() => {
@@ -62,9 +38,6 @@ onMounted(async () => {
   } catch (error: any) {
     status.value = 'error'
     errorMessage.value = error.response?.data?.message || t('auth.ssoLoginFailed')
-    // Clear any stored tokens
-    localStorage.removeItem('auth_token')
-    localStorage.removeItem('refresh_token')
   }
 })
 </script>

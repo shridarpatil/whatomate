@@ -207,6 +207,7 @@ func runServer(args []string) {
 	g.Before(middleware.SecurityHeaders())
 	g.Before(middleware.RequestLogger(lo))
 	g.Before(middleware.Recovery(lo))
+	g.Before(middleware.CSRFProtection())
 
 	// Setup routes
 	setupRoutes(g, app, lo, cfg.Server.BasePath, rdb, cfg)
@@ -432,6 +433,7 @@ func setupRoutes(g *fastglue.Fastglue, app *handlers.App, lo logf.Logger, basePa
 	}
 	g.POST("/api/auth/logout", app.Logout)
 	g.POST("/api/auth/switch-org", app.SwitchOrg)
+	g.GET("/api/auth/ws-token", app.GetWSToken)
 
 	// SSO routes (public)
 	g.GET("/api/auth/sso/providers", app.GetPublicSSOProviders)
@@ -777,7 +779,7 @@ func corsWrapper(next fasthttp.RequestHandler, allowedOrigins map[string]bool) f
 		}
 
 		ctx.Response.Header.Set("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS, PATCH")
-		ctx.Response.Header.Set("Access-Control-Allow-Headers", "Content-Type, Authorization, X-API-Key, X-Organization-ID")
+		ctx.Response.Header.Set("Access-Control-Allow-Headers", "Content-Type, Authorization, X-API-Key, X-Organization-ID, X-CSRF-Token")
 		ctx.Response.Header.Set("Access-Control-Max-Age", "86400")
 
 		// Handle preflight OPTIONS requests

@@ -989,17 +989,9 @@ async function loadMediaForMessage(message: Message) {
   mediaLoadingStates.value[message.id] = true
 
   try {
-    const token = authStore.token
-    if (!token) {
-      console.error('No auth token available')
-      return
-    }
-
     const basePath = ((window as any).__BASE_PATH__ ?? '').replace(/\/$/, '')
     const response = await fetch(`${basePath}/api/media/${message.id}`, {
-      headers: {
-        'Authorization': `Bearer ${token}`
-      }
+      credentials: 'include'
     })
 
     if (!response.ok) {
@@ -1121,18 +1113,15 @@ async function sendMediaMessage() {
       formData.append('caption', mediaCaption.value.trim())
     }
 
-    const token = authStore.token
-    if (!token) {
-      toast.error(t('errors.unauthorized'))
-      return
-    }
+    // Read CSRF token for mutating request
+    const csrfMatch = document.cookie.match(/(?:^|; )whm_csrf=([^;]*)/)
+    const csrfToken = csrfMatch ? decodeURIComponent(csrfMatch[1]) : ''
 
     const basePath = ((window as any).__BASE_PATH__ ?? '').replace(/\/$/, '')
     const response = await fetch(`${basePath}/api/messages/media`, {
       method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${token}`
-      },
+      credentials: 'include',
+      headers: csrfToken ? { 'X-CSRF-Token': csrfToken } : {},
       body: formData
     })
 

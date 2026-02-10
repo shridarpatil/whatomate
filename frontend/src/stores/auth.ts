@@ -38,59 +38,52 @@ export interface User {
 
 export interface AuthState {
   user: User | null
-  token: string | null
-  refreshToken: string | null
 }
 
 export const useAuthStore = defineStore('auth', () => {
   const user = ref<User | null>(null)
-  const token = ref<string | null>(null)
-  const refreshToken = ref<string | null>(null)
   const breakStartedAt = ref<string | null>(null)
 
-  const isAuthenticated = computed(() => !!token.value && !!user.value)
+  const isAuthenticated = computed(() => !!user.value)
   const userRole = computed(() => user.value?.role?.name || 'agent')
   const organizationId = computed(() => user.value?.organization_id || '')
   const userSettings = computed(() => user.value?.settings || {})
   const isAvailable = computed(() => user.value?.is_available ?? true)
 
-  function setAuth(authData: { user: User; access_token: string; refresh_token: string }) {
+  function setAuth(authData: { user: User }) {
     user.value = authData.user
-    token.value = authData.access_token
-    refreshToken.value = authData.refresh_token
-
-    // Store in localStorage
-    localStorage.setItem('auth_token', authData.access_token)
-    localStorage.setItem('refresh_token', authData.refresh_token)
     localStorage.setItem('user', JSON.stringify(authData.user))
   }
 
   function clearAuth() {
     user.value = null
-    token.value = null
-    refreshToken.value = null
 
+    // Clean up localStorage (including legacy token keys)
+    localStorage.removeItem('user')
     localStorage.removeItem('auth_token')
     localStorage.removeItem('refresh_token')
-    localStorage.removeItem('user')
   }
 
   function restoreSession(): boolean {
-    const storedToken = localStorage.getItem('auth_token')
-    const storedRefreshToken = localStorage.getItem('refresh_token')
     const storedUser = localStorage.getItem('user')
 
-    if (storedToken && storedUser) {
+    // Remove legacy token keys if present
+    if (localStorage.getItem('auth_token')) {
+      localStorage.removeItem('auth_token')
+    }
+    if (localStorage.getItem('refresh_token')) {
+      localStorage.removeItem('refresh_token')
+    }
+
+    if (storedUser) {
       try {
-        token.value = storedToken
-        refreshToken.value = storedRefreshToken
         const parsed = JSON.parse(storedUser)
         if (!parsed || typeof parsed !== 'object' || !parsed.id || !parsed.email) {
           clearAuth()
           return false
         }
         user.value = parsed
-        // Fetch fresh user data in background to get updated permissions
+        // Fetch fresh user data in background to verify session + get updated permissions
         refreshUserData()
         return true
       } catch {
@@ -103,8 +96,6 @@ export const useAuthStore = defineStore('auth', () => {
 
   // Fetch fresh user data from API (including updated permissions)
   async function refreshUserData(): Promise<boolean> {
-    if (!token.value) return false
-
     try {
       const response = await api.get('/me')
       const freshUser = response.data.data
@@ -119,8 +110,8 @@ export const useAuthStore = defineStore('auth', () => {
 
   async function login(email: string, password: string): Promise<void> {
     const response = await api.post('/auth/login', { email, password })
-    // fastglue wraps response in { status: "success", data: {...} }
-    setAuth(response.data.data)
+    // Server sets cookies; response body has { user, expires_in }
+    setAuth({ user: response.data.data.user })
   }
 
   async function register(data: {
@@ -130,20 +121,19 @@ export const useAuthStore = defineStore('auth', () => {
     organization_id: string
   }): Promise<void> {
     const response = await api.post('/auth/register', data)
-    // fastglue wraps response in { status: "success", data: {...} }
-    setAuth(response.data.data)
+    setAuth({ user: response.data.data.user })
   }
 
   async function switchOrg(organizationId: string): Promise<void> {
     const response = await api.post('/auth/switch-org', { organization_id: organizationId })
-    setAuth(response.data.data)
+    setAuth({ user: response.data.data.user })
     // Update localStorage org override
     localStorage.setItem('selected_organization_id', organizationId)
   }
 
   async function logout(): Promise<void> {
     try {
-      await api.post('/auth/logout', { refresh_token: refreshToken.value })
+      await api.post('/auth/logout', {})
     } catch {
       // Ignore logout errors
     } finally {
@@ -152,18 +142,9 @@ export const useAuthStore = defineStore('auth', () => {
   }
 
   async function refreshAccessToken(): Promise<boolean> {
-    if (!refreshToken.value) return false
-
     try {
-      const response = await api.post('/auth/refresh', {
-        refresh_token: refreshToken.value
-      })
-      // fastglue wraps response in { status: "success", data: {...} }
-      const data = response.data.data
-      token.value = data.access_token
-      refreshToken.value = data.refresh_token
-      localStorage.setItem('auth_token', data.access_token)
-      localStorage.setItem('refresh_token', data.refresh_token)
+      // Browser sends whm_refresh cookie automatically
+      await api.post('/auth/refresh', {})
       return true
     } catch {
       clearAuth()
@@ -225,8 +206,6 @@ export const useAuthStore = defineStore('auth', () => {
 
   return {
     user,
-    token,
-    refreshToken,
     breakStartedAt,
     isAuthenticated,
     userRole,

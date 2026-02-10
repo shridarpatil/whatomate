@@ -48,6 +48,11 @@ s3_region = ""
 s3_key = ""
 s3_secret = ""
 
+# Auth cookie settings (tokens are stored in httpOnly cookies)
+[cookie]
+domain = ""    # Cookie domain (e.g., ".example.com"). Empty = current host only.
+secure = false # Set Secure flag on cookies. Auto-set true when environment=production.
+
 # Rate limiting for auth endpoints (uses Redis fixed-window counters)
 [rate_limit]
 enabled = false                # Set to true to enable rate limiting

@@ -7,17 +7,28 @@ const API_BASE_URL = import.meta.env.VITE_API_URL || `${basePath}/api`
 export const api: AxiosInstance = axios.create({
   baseURL: API_BASE_URL,
   timeout: 30000,
+  withCredentials: true,
   headers: {
     'Content-Type': 'application/json'
   }
 })
 
-// Request interceptor to add auth token and organization header
+// Helper to read a cookie by name
+function getCookie(name: string): string | null {
+  const match = document.cookie.match(new RegExp('(?:^|; )' + name + '=([^;]*)'))
+  return match ? decodeURIComponent(match[1]) : null
+}
+
+// Request interceptor to add CSRF token and organization header
 api.interceptors.request.use(
   (config: InternalAxiosRequestConfig) => {
-    const token = localStorage.getItem('auth_token')
-    if (token) {
-      config.headers.Authorization = `Bearer ${token}`
+    // Add CSRF token on mutating requests (cookie-based auth sends cookies automatically)
+    const method = (config.method || '').toUpperCase()
+    if (method === 'POST' || method === 'PUT' || method === 'DELETE' || method === 'PATCH') {
+      const csrfToken = getCookie('whm_csrf')
+      if (csrfToken) {
+        config.headers['X-CSRF-Token'] = csrfToken
+      }
     }
     // Add organization override header for org switching
     const selectedOrgId = localStorage.getItem('selected_organization_id')
@@ -44,27 +55,17 @@ api.interceptors.response.use(
     if (error.response?.status === 401 && !originalRequest._retry && !isAuthEndpoint) {
       originalRequest._retry = true
 
-      const refreshToken = localStorage.getItem('refresh_token')
-      if (refreshToken) {
-        try {
-          const response = await axios.post(`${API_BASE_URL}/auth/refresh`, {
-            refresh_token: refreshToken
-          })
+      try {
+        // Browser sends whm_refresh cookie automatically via withCredentials
+        await axios.post(`${API_BASE_URL}/auth/refresh`, {}, { withCredentials: true })
 
-          // fastglue wraps response in { status: "success", data: {...} }
-          const newToken = response.data.data.access_token
-          localStorage.setItem('auth_token', newToken)
-
-          originalRequest.headers.Authorization = `Bearer ${newToken}`
-          return api(originalRequest)
-        } catch {
-          // Refresh failed, clear auth and redirect to login
-          localStorage.removeItem('auth_token')
-          localStorage.removeItem('refresh_token')
-          localStorage.removeItem('user')
-          window.location.href = '/login'
-        }
-      } else {
+        // Cookies are updated by the server response — retry the original request
+        return api(originalRequest)
+      } catch {
+        // Refresh failed, clear user and redirect to login
+        localStorage.removeItem('user')
+        localStorage.removeItem('auth_token')
+        localStorage.removeItem('refresh_token')
         window.location.href = '/login'
       }
     }
@@ -90,6 +91,8 @@ export const authService = {
 
   switchOrg: (organizationId: string) =>
     api.post('/auth/switch-org', { organization_id: organizationId }),
+
+  getWSToken: () => api.get('/auth/ws-token'),
 }
 
 export const usersService = {
@@ -223,10 +226,10 @@ export const templatesService = {
     const formData = new FormData()
     formData.append('file', file)
     formData.append('account', accountName)
+    const csrfToken = getCookie('whm_csrf')
     return axios.post(`${api.defaults.baseURL}/templates/upload-media`, formData, {
-      headers: {
-        'Authorization': `Bearer ${localStorage.getItem('auth_token')}`
-      }
+      withCredentials: true,
+      headers: csrfToken ? { 'X-CSRF-Token': csrfToken } : {}
     })
   }
 }
@@ -267,10 +270,10 @@ export const campaignsService = {
   uploadMedia: (campaignId: string, file: File) => {
     const formData = new FormData()
     formData.append('file', file)
+    const csrfToken = getCookie('whm_csrf')
     return axios.post(`${api.defaults.baseURL}/campaigns/${campaignId}/media`, formData, {
-      headers: {
-        'Authorization': `Bearer ${localStorage.getItem('auth_token')}`
-      }
+      withCredentials: true,
+      headers: csrfToken ? { 'X-CSRF-Token': csrfToken } : {}
     })
   },
   getMedia: (campaignId: string) =>

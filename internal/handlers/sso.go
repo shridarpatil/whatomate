@@ -355,10 +355,12 @@ func (a *App) CallbackSSO(r *fastglue.Request) error {
 		return nil
 	}
 
-	// Redirect to frontend with tokens in URL fragment
+	// Set auth cookies (tokens no longer exposed in URL)
+	a.setAuthCookies(r, accessToken, refreshToken)
+
+	// Redirect to frontend SSO callback page (cookies already set)
 	basePath := sanitizeRedirectPath(a.Config.Server.BasePath)
-	redirectURL := fmt.Sprintf("%s/auth/sso/callback#access_token=%s&refresh_token=%s&expires_in=%d",
-		basePath, accessToken, refreshToken, a.Config.JWT.AccessExpiryMins*60)
+	redirectURL := fmt.Sprintf("%s/auth/sso/callback", basePath)
 
 	r.RequestCtx.Redirect(redirectURL, fasthttp.StatusTemporaryRedirect)
 	return nil

@@ -13,6 +13,7 @@ import {
   X
 } from 'lucide-vue-next'
 import { wsService } from '@/services/websocket'
+import { authService } from '@/services/api'
 import OrganizationSwitcher from './OrganizationSwitcher.vue'
 import UserMenu from './UserMenu.vue'
 import { navigationItems } from './navigation'
@@ -25,11 +26,17 @@ const authStore = useAuthStore()
 const isCollapsed = ref(false)
 const isMobileMenuOpen = ref(false)
 
-// Connect WebSocket on mount
+// Connect WebSocket on mount using short-lived WS token
 onMounted(() => {
-  const token = localStorage.getItem('auth_token')
-  if (token) {
-    wsService.connect(token)
+  if (authStore.isAuthenticated) {
+    wsService.connect(async () => {
+      try {
+        const resp = await authService.getWSToken()
+        return resp.data.data.token
+      } catch {
+        return null
+      }
+    })
   }
 })
 
