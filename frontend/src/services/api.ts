@@ -66,7 +66,7 @@ api.interceptors.response.use(
         localStorage.removeItem('user')
         localStorage.removeItem('auth_token')
         localStorage.removeItem('refresh_token')
-        window.location.href = '/login'
+        window.location.href = basePath + '/login'
       }
     }
 

@@ -18,15 +18,16 @@ const (
 func (a *App) setAuthCookies(r *fastglue.Request, accessToken, refreshToken string) {
 	secure := a.Config.Cookie.Secure
 	domain := a.Config.Cookie.Domain
+	bp := a.Config.Server.BasePath // e.g. "/whatomate" or ""
 
-	// Access token cookie — httpOnly, scoped to /api
+	// Access token cookie — httpOnly, scoped to basePath/api
 	ac := fasthttp.AcquireCookie()
 	ac.SetKey(cookieAccessName)
 	ac.SetValue(accessToken)
 	ac.SetHTTPOnly(true)
 	ac.SetSecure(secure)
 	ac.SetSameSite(fasthttp.CookieSameSiteLaxMode)
-	ac.SetPath("/api")
+	ac.SetPath(bp + "/api")
 	ac.SetMaxAge(a.Config.JWT.AccessExpiryMins * 60)
 	if domain != "" {
 		ac.SetDomain(domain)
@@ -41,7 +42,7 @@ func (a *App) setAuthCookies(r *fastglue.Request, accessToken, refreshToken stri
 	rc.SetHTTPOnly(true)
 	rc.SetSecure(secure)
 	rc.SetSameSite(fasthttp.CookieSameSiteLaxMode)
-	rc.SetPath("/api/auth/refresh")
+	rc.SetPath(bp + "/api/auth/refresh")
 	rc.SetMaxAge(a.Config.JWT.RefreshExpiryDays * 86400)
 	if domain != "" {
 		rc.SetDomain(domain)
@@ -57,7 +58,7 @@ func (a *App) setAuthCookies(r *fastglue.Request, accessToken, refreshToken stri
 	cc.SetHTTPOnly(false)
 	cc.SetSecure(secure)
 	cc.SetSameSite(fasthttp.CookieSameSiteLaxMode)
-	cc.SetPath("/")
+	cc.SetPath(bp + "/")
 	cc.SetMaxAge(a.Config.JWT.RefreshExpiryDays * 86400)
 	if domain != "" {
 		cc.SetDomain(domain)
@@ -70,6 +71,7 @@ func (a *App) setAuthCookies(r *fastglue.Request, accessToken, refreshToken stri
 func (a *App) clearAuthCookies(r *fastglue.Request) {
 	domain := a.Config.Cookie.Domain
 
+	bp := a.Config.Server.BasePath
 	for _, name := range []string{cookieAccessName, cookieRefreshName, cookieCSRFName} {
 		c := fasthttp.AcquireCookie()
 		c.SetKey(name)
@@ -80,11 +82,11 @@ func (a *App) clearAuthCookies(r *fastglue.Request) {
 		c.SetSameSite(fasthttp.CookieSameSiteLaxMode)
 		switch name {
 		case cookieAccessName:
-			c.SetPath("/api")
+			c.SetPath(bp + "/api")
 		case cookieRefreshName:
-			c.SetPath("/api/auth/refresh")
+			c.SetPath(bp + "/api/auth/refresh")
 		default:
-			c.SetPath("/")
+			c.SetPath(bp + "/")
 		}
 		if domain != "" {
 			c.SetDomain(domain)
