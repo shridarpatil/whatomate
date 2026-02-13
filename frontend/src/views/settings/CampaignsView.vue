@@ -468,7 +468,8 @@ watch([filterStatus, selectedRange], () => {
 async function fetchTemplates() {
   try {
     const response = await templatesService.list()
-    templates.value = response.data?.templates || []
+    const data = (response.data as any).data || response.data
+    templates.value = data.templates || []
   } catch (error) {
     console.error('Failed to fetch templates:', error)
     templates.value = []
