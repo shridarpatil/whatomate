@@ -103,7 +103,29 @@ func (p *SLAProcessor) autoCloseExpiredTransfers(orgID uuid.UUID, settings model
 		return
 	}
 
+	closedCount := 0
 	for _, transfer := range transfers {
+		// Check if the assigned agent has been actively responding.
+		// If so, extend the expiry deadline instead of auto-closing.
+		deadline := transfer.SLA.ExpiresAt
+		if deadline != nil && p.agentRespondedSince(transfer, deadline.Add(-time.Duration(settings.SLA.AutoCloseHours)*time.Hour)) {
+			newExpiry := now.Add(time.Duration(settings.SLA.AutoCloseHours) * time.Hour)
+			if err := p.app.DB.Model(&transfer).Update("expires_at", newExpiry).Error; err != nil {
+				p.app.Log.Error("Failed to extend transfer expiry", "error", err, "transfer_id", transfer.ID)
+			} else {
+				p.app.Log.Info("Extended transfer expiry due to agent activity",
+					"transfer_id", transfer.ID,
+					"new_expires_at", newExpiry,
+				)
+			}
+			// Also record first_response_at if not yet set
+			p.app.UpdateSLAOnFirstResponse(&transfer)
+			if transfer.SLA.FirstResponseAt != nil {
+				p.app.DB.Model(&transfer).Update("first_response_at", transfer.SLA.FirstResponseAt)
+			}
+			continue
+		}
+
 		// Send auto-close message to customer if configured
 		if settings.SLA.AutoCloseMessage != "" {
 			p.sendSLAAutoCloseToCustomer(transfer, settings.SLA.AutoCloseMessage)
@@ -119,6 +141,7 @@ func (p *SLAProcessor) autoCloseExpiredTransfers(orgID uuid.UUID, settings model
 			continue
 		}
 
+		closedCount++
 		p.app.Log.Info("Transfer auto-closed due to expiry",
 			"transfer_id", transfer.ID,
 			"contact_id", transfer.ContactID,
@@ -129,8 +152,8 @@ func (p *SLAProcessor) autoCloseExpiredTransfers(orgID uuid.UUID, settings model
 		p.broadcastTransferUpdate(transfer, string(models.TransferStatusExpired))
 	}
 
-	if len(transfers) > 0 {
-		p.app.Log.Info("Auto-closed expired transfers", "count", len(transfers), "org_id", orgID)
+	if closedCount > 0 {
+		p.app.Log.Info("Auto-closed expired transfers", "count", closedCount, "org_id", orgID)
 	}
 }
 
@@ -145,7 +168,29 @@ func (p *SLAProcessor) escalateTransfers(orgID uuid.UUID, settings models.Chatbo
 		return
 	}
 
+	escalatedCount := 0
 	for _, transfer := range transfers {
+		// Check if the assigned agent has been actively responding.
+		// If so, push the escalation deadline forward instead of escalating.
+		escalationAt := transfer.SLA.EscalationAt
+		if escalationAt != nil && p.agentRespondedSince(transfer, escalationAt.Add(-time.Duration(settings.SLA.EscalationMinutes)*time.Minute)) {
+			newEscalation := now.Add(time.Duration(settings.SLA.EscalationMinutes) * time.Minute)
+			if err := p.app.DB.Model(&transfer).Update("sla_escalation_at", newEscalation).Error; err != nil {
+				p.app.Log.Error("Failed to extend transfer escalation", "error", err, "transfer_id", transfer.ID)
+			} else {
+				p.app.Log.Info("Extended transfer escalation due to agent activity",
+					"transfer_id", transfer.ID,
+					"new_escalation_at", newEscalation,
+				)
+			}
+			// Also record first_response_at if not yet set
+			p.app.UpdateSLAOnFirstResponse(&transfer)
+			if transfer.SLA.FirstResponseAt != nil {
+				p.app.DB.Model(&transfer).Update("first_response_at", transfer.SLA.FirstResponseAt)
+			}
+			continue
+		}
+
 		newLevel := transfer.SLA.EscalationLevel + 1
 
 		// Update transfer
@@ -165,6 +210,7 @@ func (p *SLAProcessor) escalateTransfers(orgID uuid.UUID, settings models.Chatbo
 			continue
 		}
 
+		escalatedCount++
 		p.app.Log.Warn("Transfer escalated",
 			"transfer_id", transfer.ID,
 			"contact_id", transfer.ContactID,
@@ -184,8 +230,8 @@ func (p *SLAProcessor) escalateTransfers(orgID uuid.UUID, settings models.Chatbo
 		}
 	}
 
-	if len(transfers) > 0 {
-		p.app.Log.Info("Escalated transfers", "count", len(transfers), "org_id", orgID)
+	if escalatedCount > 0 {
+		p.app.Log.Info("Escalated transfers", "count", escalatedCount, "org_id", orgID)
 	}
 }
 
@@ -354,6 +400,23 @@ func (p *SLAProcessor) broadcastTransferUpdate(transfer models.AgentTransfer, ev
 			"sla_breached":     transfer.SLA.Breached,
 		},
 	})
+}
+
+// agentRespondedSince checks if the assigned agent sent an outgoing message
+// after the given timestamp. This is used to detect active agent conversations
+// so that SLA deadlines can be extended instead of firing warnings/auto-close.
+func (p *SLAProcessor) agentRespondedSince(transfer models.AgentTransfer, since time.Time) bool {
+	if transfer.AgentID == nil {
+		return false
+	}
+
+	var count int64
+	p.app.DB.Model(&models.Message{}).
+		Where("contact_id = ? AND sent_by_user_id = ? AND direction = ? AND created_at > ?",
+			transfer.ContactID, *transfer.AgentID, models.DirectionOutgoing, since,
+		).Count(&count)
+
+	return count > 0
 }
 
 // SetSLADeadlines sets SLA deadlines on a new transfer based on settings
