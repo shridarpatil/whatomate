@@ -120,6 +120,10 @@ const isInfoPanelOpen = ref(false)
 const isNotesPanelOpen = ref(false)
 const contactSessionData = ref<any>(null)
 
+// Multi-account state
+const selectedAccount = ref<string | null>(null)
+const contactAccounts = ref<string[]>([])
+
 // File upload state
 const fileInputRef = ref<HTMLInputElement | null>(null)
 const selectedFile = ref<File | null>(null)
@@ -180,7 +184,7 @@ const messagesScroll = useInfiniteScroll({
   onLoadMore: async () => {
     if (!contactsStore.currentContact) return
     await messagesScroll.preserveScrollPosition(async () => {
-      await contactsStore.fetchOlderMessages(contactsStore.currentContact!.id)
+      await contactsStore.fetchOlderMessages(contactsStore.currentContact!.id, selectedAccount.value || undefined)
       await nextTick()
       // Load media for any new messages
       try {
@@ -450,8 +454,42 @@ async function selectContact(id: string) {
     // Remove old scroll listener before switching contacts
     messagesScroll.cleanup()
 
+    // Reset account selection when switching contacts
+    selectedAccount.value = null
+    contactAccounts.value = []
+    contactsStore.setAccountFilter(null)
+
     contactsStore.setCurrentContact(contact)
     await contactsStore.fetchMessages(id)
+
+    // Discover distinct accounts from the unfiltered message set
+    const accounts = new Set<string>()
+    for (const msg of contactsStore.messages) {
+      if (msg.whatsapp_account) accounts.add(msg.whatsapp_account)
+    }
+    contactAccounts.value = Array.from(accounts).sort()
+
+    // Auto-select account if multi-account contact
+    if (contactAccounts.value.length > 1) {
+      // Find account of the most recent incoming message
+      for (let i = contactsStore.messages.length - 1; i >= 0; i--) {
+        const msg = contactsStore.messages[i]
+        if (msg.direction === 'incoming' && msg.whatsapp_account) {
+          selectedAccount.value = msg.whatsapp_account
+          break
+        }
+      }
+      // Fallback to contact's default account
+      if (!selectedAccount.value) {
+        selectedAccount.value = contact.whatsapp_account || contactAccounts.value[0]
+      }
+      // Re-fetch messages filtered by selected account
+      if (selectedAccount.value) {
+        contactsStore.setAccountFilter(selectedAccount.value)
+        await contactsStore.fetchMessages(id, { account: selectedAccount.value })
+      }
+    }
+
     // Tell WebSocket server which contact we're viewing
     wsService.setCurrentContact(id)
     // Wait for DOM to render messages before scrolling
@@ -504,6 +542,20 @@ watch(() => contactsStore.messages, () => {
   }
 }, { deep: true })
 
+async function switchAccount(accountName: string) {
+  if (!contactsStore.currentContact || accountName === selectedAccount.value) return
+  selectedAccount.value = accountName
+  contactsStore.setAccountFilter(accountName)
+  await contactsStore.fetchMessages(contactsStore.currentContact.id, { account: accountName })
+  await nextTick()
+  try {
+    loadMediaForMessages()
+  } catch (e) {
+    console.error('Error loading media:', e)
+  }
+  scrollToBottom(true)
+}
+
 function handleContactClick(contact: Contact) {
   router.push(`/chat/${contact.id}`)
 }
@@ -517,7 +569,8 @@ async function sendMessage() {
       contactsStore.currentContact.id,
       'text',
       { body: messageInput.value },
-      contactsStore.replyingTo?.id
+      contactsStore.replyingTo?.id,
+      selectedAccount.value || undefined
     )
     messageInput.value = ''
     contactsStore.clearReplyingTo()
@@ -544,7 +597,9 @@ async function retryMessage(message: Message) {
     await contactsStore.sendMessage(
       contactsStore.currentContact.id,
       message.message_type,
-      content
+      content,
+      undefined,
+      message.whatsapp_account || selectedAccount.value || undefined
     )
 
     // Remove the failed message from the list after successful retry
@@ -1112,6 +1167,9 @@ async function sendMediaMessage() {
     if (mediaCaption.value.trim()) {
       formData.append('caption', mediaCaption.value.trim())
     }
+    if (selectedAccount.value) {
+      formData.append('whatsapp_account', selectedAccount.value)
+    }
 
     // Read CSRF token for mutating request
     const csrfMatch = document.cookie.match(/(?:^|; )whm_csrf=([^;]*)/)
@@ -1322,7 +1380,7 @@ async function sendMediaMessage() {
       <!-- Chat Interface -->
       <template v-else>
         <!-- Chat Header -->
-        <div class="h-14 px-4 border-b border-white/[0.08] light:border-gray-200 flex items-center justify-between bg-[#0f0f10] light:bg-white">
+        <div class="h-14 flex-shrink-0 px-4 border-b border-white/[0.08] light:border-gray-200 flex items-center justify-between bg-[#0f0f10] light:bg-white">
           <div class="flex items-center gap-2">
             <Avatar class="h-8 w-8 ring-2 ring-white/[0.1] light:ring-gray-200">
               <AvatarImage :src="contactsStore.currentContact.avatar_url" />
@@ -1441,6 +1499,28 @@ async function sendMediaMessage() {
                 </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
+          </div>
+        </div>
+
+        <!-- Account Tabs (shown when contact has messages from multiple WhatsApp accounts) -->
+        <div
+          v-if="contactAccounts.length > 1 && selectedAccount"
+          class="flex-shrink-0 px-4 py-2 border-b border-white/[0.08] light:border-gray-200 bg-[#0a0a0b] light:bg-gray-50"
+        >
+          <div class="inline-flex items-center gap-1 rounded-lg bg-white/[0.06] light:bg-gray-100 p-1">
+            <button
+              v-for="acct in contactAccounts"
+              :key="acct"
+              :class="[
+                'rounded-md px-3 py-1 text-xs font-medium whitespace-nowrap transition-all',
+                acct === selectedAccount
+                  ? 'bg-emerald-600 text-white shadow-sm'
+                  : 'bg-white/[0.08] text-white/70 hover:text-white/90 hover:bg-white/[0.12] light:bg-gray-200 light:text-gray-600 light:hover:text-gray-800 light:hover:bg-gray-300'
+              ]"
+              @click="switchAccount(acct)"
+            >
+              {{ acct }}
+            </button>
           </div>
         </div>
 
