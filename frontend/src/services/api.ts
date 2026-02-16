@@ -204,9 +204,9 @@ export const dataService = {
 }
 
 export const messagesService = {
-  list: (contactId: string, params?: { page?: number; limit?: number; before_id?: string }) =>
+  list: (contactId: string, params?: { page?: number; limit?: number; before_id?: string; account?: string }) =>
     api.get(`/contacts/${contactId}/messages`, { params }),
-  send: (contactId: string, data: { type: string; content: any; reply_to_message_id?: string }) =>
+  send: (contactId: string, data: { type: string; content: any; reply_to_message_id?: string; whatsapp_account?: string }) =>
     api.post(`/contacts/${contactId}/messages`, data),
   sendTemplate: (contactId: string, data: { template_name: string; components?: any[] }) =>
     api.post(`/contacts/${contactId}/messages/template`, data),

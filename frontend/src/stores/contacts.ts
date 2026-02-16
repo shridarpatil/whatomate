@@ -14,6 +14,7 @@ export interface Contact {
   last_message_at?: string
   unread_count: number
   assigned_user_id?: string
+  whatsapp_account?: string
   created_at: string
   updated_at: string
 }
@@ -61,6 +62,7 @@ export interface Message {
   reply_to_message_id?: string
   reply_to_message?: ReplyPreview
   reactions?: Reaction[]
+  whatsapp_account?: string
   created_at: string
   updated_at: string
 }
@@ -76,6 +78,7 @@ export const useContactsStore = defineStore('contacts', () => {
   const searchQuery = ref('')
   const selectedTags = ref<string[]>([])
   const replyingTo = ref<Message | null>(null)
+  const accountFilter = ref<string | null>(null)
 
   // Contacts pagination
   const contactsPage = ref(1)
@@ -171,7 +174,7 @@ export const useContactsStore = defineStore('contacts', () => {
     }
   }
 
-  async function fetchMessages(contactId: string, params?: { page?: number; limit?: number }) {
+  async function fetchMessages(contactId: string, params?: { page?: number; limit?: number; account?: string }) {
     isLoadingMessages.value = true
     try {
       const response = await messagesService.list(contactId, params)
@@ -186,7 +189,7 @@ export const useContactsStore = defineStore('contacts', () => {
     }
   }
 
-  async function fetchOlderMessages(contactId: string) {
+  async function fetchOlderMessages(contactId: string, account?: string) {
     if (isLoadingOlderMessages.value || !hasMoreMessages.value || messages.value.length === 0) {
       return
     }
@@ -195,7 +198,7 @@ export const useContactsStore = defineStore('contacts', () => {
     try {
       // Get the oldest message ID for cursor-based pagination
       const oldestMessageId = messages.value[0].id
-      const response = await messagesService.list(contactId, { before_id: oldestMessageId })
+      const response = await messagesService.list(contactId, { before_id: oldestMessageId, account })
       const data = response.data.data || response.data
       const olderMessages = data.messages || []
 
@@ -211,9 +214,9 @@ export const useContactsStore = defineStore('contacts', () => {
     }
   }
 
-  async function sendMessage(contactId: string, type: string, content: any, replyToMessageId?: string) {
+  async function sendMessage(contactId: string, type: string, content: any, replyToMessageId?: string, whatsappAccount?: string) {
     try {
-      const response = await messagesService.send(contactId, { type, content, reply_to_message_id: replyToMessageId })
+      const response = await messagesService.send(contactId, { type, content, reply_to_message_id: replyToMessageId, whatsapp_account: whatsappAccount })
       // API returns { status: "success", data: { ... } }
       const newMessage = response.data.data || response.data
       // Use addMessage which has duplicate checking (WebSocket may also broadcast this)
@@ -251,19 +254,24 @@ export const useContactsStore = defineStore('contacts', () => {
   }
 
   function addMessage(message: Message) {
+    // Update contact metadata regardless of account filter
+    const contact = contacts.value.find(c => c.id === message.contact_id)
+    if (contact) {
+      contact.last_message_at = message.created_at
+      if (message.direction === 'incoming') {
+        contact.unread_count++
+      }
+    }
+
+    // Skip adding to messages array if account filter is active and doesn't match
+    if (accountFilter.value && message.whatsapp_account && message.whatsapp_account !== accountFilter.value) {
+      return
+    }
+
     // Check if message already exists
     const exists = messages.value.some(m => m.id === message.id)
     if (!exists) {
       messages.value.push(message)
-
-      // Update contact
-      const contact = contacts.value.find(c => c.id === message.contact_id)
-      if (contact) {
-        contact.last_message_at = message.created_at
-        if (message.direction === 'incoming') {
-          contact.unread_count++
-        }
-      }
     }
   }
 
@@ -282,9 +290,14 @@ export const useContactsStore = defineStore('contacts', () => {
     }
   }
 
+  function setAccountFilter(account: string | null) {
+    accountFilter.value = account
+  }
+
   function clearMessages() {
     messages.value = []
     hasMoreMessages.value = false
+    accountFilter.value = null
   }
 
   function updateMessageReactions(messageId: string, reactions: Reaction[]) {
@@ -337,6 +350,7 @@ export const useContactsStore = defineStore('contacts', () => {
     updateMessageStatus,
     setCurrentContact,
     clearMessages,
+    setAccountFilter,
     setReplyingTo,
     clearReplyingTo,
     updateMessageReactions,
