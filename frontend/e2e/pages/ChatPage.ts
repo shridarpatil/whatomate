@@ -217,6 +217,32 @@ export class ChatPage extends BasePage {
     await actionBtns.last().click({ force: true })
   }
 
+  // Account tabs helpers
+  get accountTabsContainer(): Locator {
+    return this.page.locator('[class*="flex-shrink-0"]').filter({ has: this.page.locator('button') }).filter({ hasText: /.+/ }).last()
+  }
+
+  getAccountTab(accountName: string): Locator {
+    return this.page.locator('button.rounded-md.text-xs').filter({ hasText: accountName })
+  }
+
+  get accountTabs(): Locator {
+    return this.page.locator('button.rounded-md.text-xs.font-medium')
+  }
+
+  get activeAccountTab(): Locator {
+    return this.page.locator('button.rounded-md.text-xs[class*="bg-emerald"]')
+  }
+
+  get inactiveAccountTabs(): Locator {
+    return this.page.locator('button.rounded-md.text-xs:not([class*="bg-emerald"])')
+  }
+
+  async switchAccount(accountName: string) {
+    await this.getAccountTab(accountName).click()
+    await this.page.waitForLoadState('networkidle')
+  }
+
   // Custom actions
   async executeCustomAction(actionName: string) {
     await this.page.getByRole('button').filter({ has: this.page.locator('.lucide-zap') }).click()
