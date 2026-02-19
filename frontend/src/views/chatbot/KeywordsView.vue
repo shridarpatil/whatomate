@@ -25,6 +25,7 @@ import {
   SelectValue,
 } from '@/components/ui/select'
 import { chatbotService } from '@/services/api'
+import { useCrudState } from '@/composables/useCrudState'
 import { toast } from 'vue-sonner'
 import { PageHeader, SearchInput, DataTable, DeleteConfirmDialog, type Column } from '@/components/shared'
 import { getErrorMessage } from '@/lib/api-utils'
@@ -49,14 +50,28 @@ interface KeywordRule {
   created_at: string
 }
 
+interface KeywordFormData {
+  keywords: string
+  match_type: 'exact' | 'contains' | 'regex'
+  response_type: 'template' | 'text' | 'flow' | 'transfer'
+  response_content: string
+  buttons: ButtonItem[]
+  priority: number
+  enabled: boolean
+}
+
+const defaultFormData: KeywordFormData = {
+  keywords: '', match_type: 'contains', response_type: 'text',
+  response_content: '', buttons: [], priority: 0, enabled: true
+}
+
 const rules = ref<KeywordRule[]>([])
 const isLoading = ref(true)
-const isDialogOpen = ref(false)
-const isSubmitting = ref(false)
 const searchQuery = ref('')
-const editingRule = ref<KeywordRule | null>(null)
-const deleteDialogOpen = ref(false)
-const ruleToDelete = ref<KeywordRule | null>(null)
+const {
+  isSubmitting, isDialogOpen, editingItem: editingRule, deleteDialogOpen, itemToDelete: ruleToDelete,
+  formData, openCreateDialog: baseOpenCreateDialog, openEditDialog: baseOpenEditDialog, openDeleteDialog, closeDialog, closeDeleteDialog,
+} = useCrudState<KeywordRule, KeywordFormData>(defaultFormData)
 
 // Pagination state
 const currentPage = ref(1)
@@ -74,16 +89,6 @@ const columns = computed<Column<KeywordRule>[]>(() => [
 
 const sortKey = ref('priority')
 const sortDirection = ref<'asc' | 'desc'>('desc')
-
-const formData = ref({
-  keywords: '',
-  match_type: 'contains' as 'exact' | 'contains' | 'regex',
-  response_type: 'text' as 'template' | 'text' | 'flow' | 'transfer',
-  response_content: '',
-  buttons: [] as ButtonItem[],
-  priority: 0,
-  enabled: true
-})
 
 function addButton() {
   if (formData.value.buttons.length >= 10) {
@@ -138,31 +143,20 @@ function handlePageChange(page: number) {
 }
 
 function openCreateDialog() {
-  editingRule.value = null
-  formData.value = {
-    keywords: '',
-    match_type: 'contains',
-    response_type: 'text',
-    response_content: '',
-    buttons: [],
-    priority: 0,
-    enabled: true
-  }
-  isDialogOpen.value = true
+  baseOpenCreateDialog()
+  formData.value.buttons = [] // fresh array to avoid shared reference
 }
 
 function openEditDialog(rule: KeywordRule) {
-  editingRule.value = rule
-  formData.value = {
-    keywords: rule.keywords.join(', '),
-    match_type: rule.match_type,
-    response_type: rule.response_type,
-    response_content: rule.response_content?.body || '',
-    buttons: rule.response_content?.buttons || [],
-    priority: rule.priority,
-    enabled: rule.enabled
-  }
-  isDialogOpen.value = true
+  baseOpenEditDialog(rule, (r) => ({
+    keywords: r.keywords.join(', '),
+    match_type: r.match_type,
+    response_type: r.response_type,
+    response_content: r.response_content?.body || '',
+    buttons: [...(r.response_content?.buttons || [])],
+    priority: r.priority,
+    enabled: r.enabled
+  }))
 }
 
 async function saveRule() {
@@ -202,7 +196,7 @@ async function saveRule() {
       toast.success(t('common.createdSuccess', { resource: t('resources.KeywordRule') }))
     }
 
-    isDialogOpen.value = false
+    closeDialog()
     await fetchRules()
   } catch (error: any) {
     toast.error(getErrorMessage(error, t('common.failedSave', { resource: t('resources.keywordRule') })))
@@ -211,19 +205,13 @@ async function saveRule() {
   }
 }
 
-function openDeleteDialog(rule: KeywordRule) {
-  ruleToDelete.value = rule
-  deleteDialogOpen.value = true
-}
-
 async function confirmDeleteRule() {
   if (!ruleToDelete.value) return
 
   try {
     await chatbotService.deleteKeyword(ruleToDelete.value.id)
     toast.success(t('common.deletedSuccess', { resource: t('resources.KeywordRule') }))
-    deleteDialogOpen.value = false
-    ruleToDelete.value = null
+    closeDeleteDialog()
     await fetchRules()
   } catch (error: any) {
     toast.error(getErrorMessage(error, t('common.failedDelete', { resource: t('resources.keywordRule') })))

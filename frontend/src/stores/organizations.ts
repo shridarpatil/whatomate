@@ -64,17 +64,6 @@ export const useOrganizationsStore = defineStore('organizations', () => {
     }
   }
 
-  function clearSelection() {
-    selectedOrgId.value = null
-    localStorage.removeItem(SELECTED_ORG_KEY)
-  }
-
-  function reset() {
-    organizations.value = []
-    selectedOrgId.value = null
-    localStorage.removeItem(SELECTED_ORG_KEY)
-  }
-
   return {
     organizations,
     myOrganizations,
@@ -86,8 +75,6 @@ export const useOrganizationsStore = defineStore('organizations', () => {
     init,
     fetchOrganizations,
     fetchMyOrganizations,
-    selectOrganization,
-    clearSelection,
-    reset
+    selectOrganization
   }
 })

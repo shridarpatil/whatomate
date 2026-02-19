@@ -52,20 +52,9 @@ export function useColorMode() {
     colorMode.value = mode
   }
 
-  function toggleColorMode() {
-    if (colorMode.value === 'light') {
-      colorMode.value = 'dark'
-    } else if (colorMode.value === 'dark') {
-      colorMode.value = 'system'
-    } else {
-      colorMode.value = 'light'
-    }
-  }
-
   return {
     colorMode,
     isDark,
-    setColorMode,
-    toggleColorMode
+    setColorMode
   }
 }

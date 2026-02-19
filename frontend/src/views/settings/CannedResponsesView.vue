@@ -12,6 +12,7 @@ import { Switch } from '@/components/ui/switch'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { PageHeader, SearchInput, CrudFormDialog, DeleteConfirmDialog, DataTable, type Column } from '@/components/shared'
 import { cannedResponsesService, type CannedResponse } from '@/services/api'
+import { useCrudState } from '@/composables/useCrudState'
 import { toast } from 'vue-sonner'
 import { Plus, MessageSquareText, Pencil, Trash2, Copy } from 'lucide-vue-next'
 import { getErrorMessage } from '@/lib/api-utils'
@@ -32,12 +33,10 @@ const defaultFormData: CannedResponseFormData = { name: '', shortcut: '', conten
 
 const cannedResponses = ref<CannedResponse[]>([])
 const isLoading = ref(false)
-const isSubmitting = ref(false)
-const isDialogOpen = ref(false)
-const editingResponse = ref<CannedResponse | null>(null)
-const deleteDialogOpen = ref(false)
-const responseToDelete = ref<CannedResponse | null>(null)
-const formData = ref<CannedResponseFormData>({ ...defaultFormData })
+const {
+  isSubmitting, isDialogOpen, editingItem: editingResponse, deleteDialogOpen, itemToDelete: responseToDelete,
+  formData, openCreateDialog, openEditDialog: baseOpenEditDialog, openDeleteDialog, closeDialog, closeDeleteDialog,
+} = useCrudState<CannedResponse, CannedResponseFormData>(defaultFormData)
 const searchQuery = ref('')
 const selectedCategory = ref('all')
 
@@ -94,32 +93,10 @@ function handlePageChange(page: number) {
   fetchItems()
 }
 
-function openCreateDialog() {
-  editingResponse.value = null
-  formData.value = { ...defaultFormData }
-  isDialogOpen.value = true
-}
-
 function openEditDialog(response: CannedResponse) {
-  editingResponse.value = response
-  formData.value = { name: response.name, shortcut: response.shortcut || '', content: response.content, category: response.category || '', is_active: response.is_active }
-  isDialogOpen.value = true
-}
-
-function openDeleteDialog(response: CannedResponse) {
-  responseToDelete.value = response
-  deleteDialogOpen.value = true
-}
-
-function closeDialog() {
-  isDialogOpen.value = false
-  editingResponse.value = null
-  formData.value = { ...defaultFormData }
-}
-
-function closeDeleteDialog() {
-  deleteDialogOpen.value = false
-  responseToDelete.value = null
+  baseOpenEditDialog(response, (r) => ({
+    name: r.name, shortcut: r.shortcut || '', content: r.content, category: r.category || '', is_active: r.is_active
+  }))
 }
 
 onMounted(() => fetchItems())

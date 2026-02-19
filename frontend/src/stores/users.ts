@@ -128,18 +128,6 @@ export const useUsersStore = defineStore('users', () => {
     }
   }
 
-  function getUserById(id: string): User | undefined {
-    return users.value.find(u => u.id === id)
-  }
-
-  function getUsersByRoleId(roleId: string): User[] {
-    return users.value.filter(u => u.role_id === roleId)
-  }
-
-  function getUsersByRoleName(roleName: string): User[] {
-    return users.value.filter(u => u.role?.name === roleName)
-  }
-
   return {
     users,
     loading,
@@ -147,9 +135,6 @@ export const useUsersStore = defineStore('users', () => {
     fetchUsers,
     createUser,
     updateUser,
-    deleteUser,
-    getUserById,
-    getUsersByRoleId,
-    getUsersByRoleName
+    deleteUser
   }
 })

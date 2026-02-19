@@ -76,29 +76,12 @@ api.interceptors.response.use(
 
 // API service methods
 export const authService = {
-  login: (email: string, password: string) =>
-    api.post('/auth/login', { email, password }),
-
-  register: (data: { email: string; password: string; full_name: string; organization_id: string }) =>
-    api.post('/auth/register', data),
-
-  logout: () => api.post('/auth/logout'),
-
-  refreshToken: (refreshToken: string) =>
-    api.post('/auth/refresh', { refresh_token: refreshToken }),
-
-  me: () => api.get('/auth/me'),
-
-  switchOrg: (organizationId: string) =>
-    api.post('/auth/switch-org', { organization_id: organizationId }),
-
   getWSToken: () => api.get('/auth/ws-token'),
 }
 
 export const usersService = {
   list: (params?: { search?: string; page?: number; limit?: number }) =>
     api.get('/users', { params }),
-  get: (id: string) => api.get(`/users/${id}`),
   create: (data: { email: string; password: string; full_name: string; role_id?: string }) =>
     api.post('/users', data),
   update: (id: string, data: { email?: string; password?: string; full_name?: string; role_id?: string; is_active?: boolean }) =>
@@ -123,11 +106,7 @@ export const apiKeysService = {
 }
 
 export const accountsService = {
-  list: () => api.get('/accounts'),
-  get: (id: string) => api.get(`/accounts/${id}`),
-  create: (data: any) => api.post('/accounts', data),
-  update: (id: string, data: any) => api.put(`/accounts/${id}`, data),
-  delete: (id: string) => api.delete(`/accounts/${id}`)
+  list: () => api.get('/accounts')
 }
 
 export const contactsService = {
@@ -218,9 +197,6 @@ export const templatesService = {
   list: (params?: { status?: string; category?: string; account?: string; search?: string; page?: number; limit?: number }) =>
     api.get<{ templates: any[]; total?: number }>('/templates', { params }),
   get: (id: string) => api.get(`/templates/${id}`),
-  create: (data: any) => api.post('/templates', data),
-  update: (id: string, data: any) => api.put(`/templates/${id}`, data),
-  delete: (id: string) => api.delete(`/templates/${id}`),
   sync: () => api.post('/templates/sync'),
   uploadMedia: (accountName: string, file: File) => {
     const formData = new FormData()
@@ -237,13 +213,11 @@ export const templatesService = {
 export const flowsService = {
   list: (params?: { account?: string; search?: string; page?: number; limit?: number }) =>
     api.get<{ flows: any[]; total?: number }>('/flows', { params }),
-  get: (id: string) => api.get(`/flows/${id}`),
   create: (data: any) => api.post('/flows', data),
   update: (id: string, data: any) => api.put(`/flows/${id}`, data),
   delete: (id: string) => api.delete(`/flows/${id}`),
   saveToMeta: (id: string) => api.post(`/flows/${id}/save-to-meta`),
   publish: (id: string) => api.post(`/flows/${id}/publish`),
-  deprecate: (id: string) => api.post(`/flows/${id}/deprecate`),
   duplicate: (id: string) => api.post(`/flows/${id}/duplicate`),
   sync: (whatsappAccount: string) => api.post('/flows/sync', { whatsapp_account: whatsappAccount })
 }
@@ -251,7 +225,6 @@ export const flowsService = {
 export const campaignsService = {
   list: (params?: { status?: string; from?: string; to?: string; search?: string; page?: number; limit?: number }) =>
     api.get('/campaigns', { params }),
-  get: (id: string) => api.get(`/campaigns/${id}`),
   create: (data: any) => api.post('/campaigns', data),
   update: (id: string, data: any) => api.put(`/campaigns/${id}`, data),
   delete: (id: string) => api.delete(`/campaigns/${id}`),
@@ -259,7 +232,6 @@ export const campaignsService = {
   pause: (id: string) => api.post(`/campaigns/${id}/pause`),
   cancel: (id: string) => api.post(`/campaigns/${id}/cancel`),
   retryFailed: (id: string) => api.post(`/campaigns/${id}/retry-failed`),
-  stats: (id: string) => api.get(`/campaigns/${id}/stats`),
   // Recipients
   getRecipients: (id: string) => api.get(`/campaigns/${id}/recipients`),
   addRecipients: (id: string, recipients: Array<{ phone_number: string; recipient_name?: string; template_params?: Record<string, any> }>) =>
@@ -288,7 +260,6 @@ export const chatbotService = {
   // Keywords
   listKeywords: (params?: { search?: string; page?: number; limit?: number }) =>
     api.get<{ rules: any[]; total?: number }>('/chatbot/keywords', { params }),
-  getKeyword: (id: string) => api.get(`/chatbot/keywords/${id}`),
   createKeyword: (data: any) => api.post('/chatbot/keywords', data),
   updateKeyword: (id: string, data: any) => api.put(`/chatbot/keywords/${id}`, data),
   deleteKeyword: (id: string) => api.delete(`/chatbot/keywords/${id}`),
@@ -304,15 +275,9 @@ export const chatbotService = {
   // AI Contexts
   listAIContexts: (params?: { search?: string; page?: number; limit?: number }) =>
     api.get<{ contexts: any[]; total?: number }>('/chatbot/ai-contexts', { params }),
-  getAIContext: (id: string) => api.get(`/chatbot/ai-contexts/${id}`),
   createAIContext: (data: any) => api.post('/chatbot/ai-contexts', data),
   updateAIContext: (id: string, data: any) => api.put(`/chatbot/ai-contexts/${id}`, data),
   deleteAIContext: (id: string) => api.delete(`/chatbot/ai-contexts/${id}`),
-
-  // Sessions
-  listSessions: (params?: { status?: string; contact_id?: string }) =>
-    api.get('/chatbot/sessions', { params }),
-  getSession: (id: string) => api.get(`/chatbot/sessions/${id}`),
 
   // Agent Transfers
   listTransfers: (params?: {
@@ -351,7 +316,6 @@ export interface CannedResponse {
 export const cannedResponsesService = {
   list: (params?: { category?: string; search?: string; active_only?: string; page?: number; limit?: number }) =>
     api.get<{ canned_responses: CannedResponse[]; total?: number }>('/canned-responses', { params }),
-  get: (id: string) => api.get(`/canned-responses/${id}`),
   create: (data: { name: string; shortcut?: string; content: string; category?: string }) =>
     api.post('/canned-responses', data),
   update: (id: string, data: { name?: string; shortcut?: string; content?: string; category?: string; is_active?: boolean }) =>
@@ -360,24 +324,9 @@ export const cannedResponsesService = {
   use: (id: string) => api.post(`/canned-responses/${id}/use`)
 }
 
-export const analyticsService = {
-  dashboard: (params?: { from?: string; to?: string }) =>
-    api.get('/analytics/dashboard', { params }),
-  messages: (params?: { from?: string; to?: string; group_by?: string }) =>
-    api.get('/analytics/messages', { params }),
-  campaigns: (params?: { from?: string; to?: string }) =>
-    api.get('/analytics/campaigns', { params }),
-  chatbot: (params?: { from?: string; to?: string }) =>
-    api.get('/analytics/chatbot', { params })
-}
-
 export const agentAnalyticsService = {
   getSummary: (params?: { from?: string; to?: string; agent_id?: string }) =>
-    api.get('/analytics/agents', { params }),
-  getAgentDetails: (id: string, params?: { from?: string; to?: string }) =>
-    api.get(`/analytics/agents/${id}`, { params }),
-  getComparison: (params?: { from?: string; to?: string }) =>
-    api.get('/analytics/agents/comparison', { params })
+    api.get('/analytics/agents', { params })
 }
 
 // Meta WhatsApp Analytics Types
@@ -568,7 +517,6 @@ export interface LayoutItem {
 
 export const widgetsService = {
   list: () => api.get<{ widgets: DashboardWidget[] }>('/widgets'),
-  get: (id: string) => api.get<DashboardWidget>(`/widgets/${id}`),
   create: (data: {
     name: string
     description?: string
@@ -602,8 +550,6 @@ export const widgetsService = {
     is_shared: boolean
   }>) => api.put<DashboardWidget>(`/widgets/${id}`, data),
   delete: (id: string) => api.delete(`/widgets/${id}`),
-  getData: (id: string, params?: { from?: string; to?: string }) =>
-    api.get<WidgetData>(`/widgets/${id}/data`, { params }),
   getAllData: (params?: { from?: string; to?: string }) =>
     api.get<{ data: Record<string, WidgetData> }>('/widgets/data', { params }),
   getDataSources: () => api.get<{
@@ -636,7 +582,6 @@ export interface Organization {
 
 export const organizationsService = {
   list: () => api.get<{ organizations: Organization[] }>('/organizations'),
-  getCurrent: () => api.get<Organization>('/organizations/current'),
   create: (data: { name: string }) => api.post('/organizations', data),
   // Members
   addMember: (data: { user_id?: string; email?: string; role_id?: string }) =>

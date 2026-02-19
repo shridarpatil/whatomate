@@ -10,6 +10,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { TagBadge } from '@/components/ui/tag-badge'
 import { PageHeader, SearchInput, DataTable, CrudFormDialog, DeleteConfirmDialog, type Column } from '@/components/shared'
 import { tagsService, type Tag } from '@/services/api'
+import { useCrudState } from '@/composables/useCrudState'
 import { toast } from 'vue-sonner'
 import { Plus, Tags, Pencil, Trash2 } from 'lucide-vue-next'
 import { getErrorMessage } from '@/lib/api-utils'
@@ -28,12 +29,10 @@ const defaultFormData: TagFormData = { name: '', color: 'gray' }
 
 const tags = ref<Tag[]>([])
 const isLoading = ref(false)
-const isSubmitting = ref(false)
-const isDialogOpen = ref(false)
-const editingTag = ref<Tag | null>(null)
-const deleteDialogOpen = ref(false)
-const tagToDelete = ref<Tag | null>(null)
-const formData = ref<TagFormData>({ ...defaultFormData })
+const {
+  isSubmitting, isDialogOpen, editingItem: editingTag, deleteDialogOpen, itemToDelete: tagToDelete,
+  formData, openCreateDialog, openEditDialog: baseOpenEditDialog, openDeleteDialog, closeDialog, closeDeleteDialog,
+} = useCrudState<Tag, TagFormData>(defaultFormData)
 const searchQuery = ref('')
 
 // Pagination state
@@ -52,32 +51,8 @@ const columns = computed<Column<Tag>[]>(() => [
   { key: 'actions', label: t('common.actions'), align: 'right' },
 ])
 
-function openCreateDialog() {
-  editingTag.value = null
-  formData.value = { ...defaultFormData }
-  isDialogOpen.value = true
-}
-
 function openEditDialog(tag: Tag) {
-  editingTag.value = tag
-  formData.value = { name: tag.name, color: tag.color || 'gray' }
-  isDialogOpen.value = true
-}
-
-function openDeleteDialog(tag: Tag) {
-  tagToDelete.value = tag
-  deleteDialogOpen.value = true
-}
-
-function closeDialog() {
-  isDialogOpen.value = false
-  editingTag.value = null
-  formData.value = { ...defaultFormData }
-}
-
-function closeDeleteDialog() {
-  deleteDialogOpen.value = false
-  tagToDelete.value = null
+  baseOpenEditDialog(tag, (t) => ({ name: t.name, color: t.color || 'gray' }))
 }
 
 async function fetchTags() {

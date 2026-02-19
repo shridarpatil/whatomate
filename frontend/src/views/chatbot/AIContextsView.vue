@@ -25,6 +25,7 @@ import {
   SelectValue,
 } from '@/components/ui/select'
 import { chatbotService } from '@/services/api'
+import { useCrudState } from '@/composables/useCrudState'
 import { toast } from 'vue-sonner'
 import { PageHeader, DataTable, DeleteConfirmDialog, SearchInput, type Column } from '@/components/shared'
 import { getErrorMessage } from '@/lib/api-utils'
@@ -53,14 +54,32 @@ interface AIContext {
   created_at: string
 }
 
+interface AIContextFormData {
+  name: string
+  context_type: string
+  trigger_keywords: string
+  static_content: string
+  api_url: string
+  api_method: string
+  api_headers: string
+  api_response_path: string
+  priority: number
+  enabled: boolean
+}
+
+const defaultFormData: AIContextFormData = {
+  name: '', context_type: 'static', trigger_keywords: '', static_content: '',
+  api_url: '', api_method: 'GET', api_headers: '', api_response_path: '',
+  priority: 10, enabled: true
+}
+
 const contexts = ref<AIContext[]>([])
 const isLoading = ref(true)
 const searchQuery = ref('')
-const isDialogOpen = ref(false)
-const isSubmitting = ref(false)
-const editingContext = ref<AIContext | null>(null)
-const deleteDialogOpen = ref(false)
-const contextToDelete = ref<AIContext | null>(null)
+const {
+  isSubmitting, isDialogOpen, editingItem: editingContext, deleteDialogOpen, itemToDelete: contextToDelete,
+  formData, openCreateDialog, openEditDialog: baseOpenEditDialog, openDeleteDialog, closeDialog, closeDeleteDialog,
+} = useCrudState<AIContext, AIContextFormData>(defaultFormData)
 
 // Pagination state
 const currentPage = ref(1)
@@ -78,19 +97,6 @@ const columns = computed<Column<AIContext>[]>(() => [
 
 const sortKey = ref('priority')
 const sortDirection = ref<'asc' | 'desc'>('desc')
-
-const formData = ref({
-  name: '',
-  context_type: 'static',
-  trigger_keywords: '',
-  static_content: '',
-  api_url: '',
-  api_method: 'GET',
-  api_headers: '',
-  api_response_path: '',
-  priority: 10,
-  enabled: true
-})
 
 // Helper to display variable placeholders without Vue parsing issues
 const variableExample = (name: string) => `{{${name}}}`
@@ -135,39 +141,20 @@ function handlePageChange(page: number) {
   fetchContexts()
 }
 
-function openCreateDialog() {
-  editingContext.value = null
-  formData.value = {
-    name: '',
-    context_type: 'static',
-    trigger_keywords: '',
-    static_content: '',
-    api_url: '',
-    api_method: 'GET',
-    api_headers: '',
-    api_response_path: '',
-    priority: 10,
-    enabled: true
-  }
-  isDialogOpen.value = true
-}
-
 function openEditDialog(context: AIContext) {
-  editingContext.value = context
   const apiConfig = context.api_config || {} as ApiConfig
-  formData.value = {
-    name: context.name,
-    context_type: context.context_type || 'static',
-    trigger_keywords: (context.trigger_keywords || []).join(', '),
-    static_content: context.static_content || '',
+  baseOpenEditDialog(context, (c) => ({
+    name: c.name,
+    context_type: c.context_type || 'static',
+    trigger_keywords: (c.trigger_keywords || []).join(', '),
+    static_content: c.static_content || '',
     api_url: apiConfig.url || '',
     api_method: apiConfig.method || 'GET',
     api_headers: apiConfig.headers ? JSON.stringify(apiConfig.headers, null, 2) : '',
     api_response_path: apiConfig.response_path || '',
-    priority: context.priority || 10,
-    enabled: context.enabled
-  }
-  isDialogOpen.value = true
+    priority: c.priority || 10,
+    enabled: c.enabled
+  }))
 }
 
 async function saveContext() {
@@ -218,7 +205,7 @@ async function saveContext() {
       toast.success(t('common.createdSuccess', { resource: t('resources.AIContext') }))
     }
 
-    isDialogOpen.value = false
+    closeDialog()
     await fetchContexts()
   } catch (error: any) {
     toast.error(getErrorMessage(error, t('common.failedSave', { resource: t('resources.AIContext') })))
@@ -227,19 +214,13 @@ async function saveContext() {
   }
 }
 
-function openDeleteDialog(context: AIContext) {
-  contextToDelete.value = context
-  deleteDialogOpen.value = true
-}
-
 async function confirmDeleteContext() {
   if (!contextToDelete.value) return
 
   try {
     await chatbotService.deleteAIContext(contextToDelete.value.id)
     toast.success(t('common.deletedSuccess', { resource: t('resources.AIContext') }))
-    deleteDialogOpen.value = false
-    contextToDelete.value = null
+    closeDeleteDialog()
     await fetchContexts()
   } catch (error: any) {
     toast.error(getErrorMessage(error, t('common.failedDelete', { resource: t('resources.AIContext') })))

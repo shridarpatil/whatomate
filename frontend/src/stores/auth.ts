@@ -141,17 +141,6 @@ export const useAuthStore = defineStore('auth', () => {
     }
   }
 
-  async function refreshAccessToken(): Promise<boolean> {
-    try {
-      // Browser sends whm_refresh cookie automatically
-      await api.post('/auth/refresh', {})
-      return true
-    } catch {
-      clearAuth()
-      return false
-    }
-  }
-
   function setAvailability(available: boolean, breakStart?: string | null) {
     if (user.value) {
       user.value = { ...user.value, is_available: available }
@@ -189,21 +178,6 @@ export const useAuthStore = defineStore('auth', () => {
     return permissions.some(p => p.resource === resource && p.action === action)
   }
 
-  // Check if user has any permission for a resource
-  function hasAnyPermission(resource: string): boolean {
-    // Super admins have all permissions
-    if (user.value?.is_super_admin) {
-      return true
-    }
-
-    const permissions = user.value?.role?.permissions
-    if (!permissions || permissions.length === 0) {
-      return false
-    }
-
-    return permissions.some(p => p.resource === resource)
-  }
-
   return {
     user,
     breakStartedAt,
@@ -221,9 +195,7 @@ export const useAuthStore = defineStore('auth', () => {
     register,
     switchOrg,
     logout,
-    refreshAccessToken,
     setAvailability,
-    hasPermission,
-    hasAnyPermission
+    hasPermission
   }
 })

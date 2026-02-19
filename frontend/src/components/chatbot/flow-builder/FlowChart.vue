@@ -18,8 +18,9 @@ import {
 interface ButtonConfig {
   id: string
   title: string
-  type?: 'reply' | 'url'
+  type?: 'reply' | 'url' | 'phone'
   url?: string
+  phone_number?: string
 }
 
 interface FlowStep {

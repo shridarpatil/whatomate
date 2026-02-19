@@ -143,15 +143,6 @@ export const useRolesStore = defineStore('roles', () => {
     }
   }
 
-  function getRoleById(id: string): Role | undefined {
-    return roles.value.find(r => r.id === id)
-  }
-
-  // Check if a role has a specific permission
-  function roleHasPermission(role: Role, permissionKey: string): boolean {
-    return role.permissions.includes(permissionKey)
-  }
-
   return {
     roles,
     permissions,
@@ -162,8 +153,6 @@ export const useRolesStore = defineStore('roles', () => {
     fetchPermissions,
     createRole,
     updateRole,
-    deleteRole,
-    getRoleById,
-    roleHasPermission
+    deleteRole
   }
 })
