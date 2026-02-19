@@ -1,0 +1,50 @@
+{
+  "common": {
+    "save": "Guardar",
+    "cancel": "Cancelar",
+    "delete": "Eliminar",
+    "edit": "Editar",
+    "create": "Crear",
+    "close": "Cerrar",
+    "confirm": "Confirmar",
+    "back": "Volver",
+    "loading": "Cargando",
+    "search": "Buscar",
+    "actions": "Acciones",
+    "status": "Estado",
+    "name": "Nombre",
+    "error": "Error",
+    "success": "Éxito"
+  },
+  "nav": {
+    "dashboard": "Panel",
+    "chat": "Chat",
+    "contacts": "Contactos",
+    "analytics": "Analíticas",
+    "settings": "Configuración"
+  },
+  "settings": {
+    "title": "Configuración",
+    "subtitle": "Administra la configuración de tu organización",
+    "general": "General",
+    "generalSettings": "Configuración General",
+    "generalSettingsDesc": "Configuración básica de la organización y visualización",
+    "language": "Idioma",
+    "languageDesc": "Elige tu idioma de visualización preferido",
+    "selectLanguage": "Seleccionar idioma",
+    "notifications": "Notificaciones",
+    "notificationsDesc": "Administra cómo recibes las notificaciones",
+    "save": "Guardar",
+    "generalSaved": "Configuración general guardada"
+  },
+  "userMenu": {
+    "myAccount": "Mi Cuenta",
+    "status": "Estado",
+    "available": "Disponible",
+    "away": "Ausente",
+    "profile": "Perfil",
+    "theme": "Tema",
+    "language": "Idioma",
+    "logOut": "Cerrar sesión"
+  }
+}

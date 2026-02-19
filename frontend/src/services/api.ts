@@ -197,7 +197,6 @@ export const templatesService = {
   list: (params?: { status?: string; category?: string; account?: string; search?: string; page?: number; limit?: number }) =>
     api.get<{ templates: any[]; total?: number }>('/templates', { params }),
   get: (id: string) => api.get(`/templates/${id}`),
-  sync: () => api.post('/templates/sync'),
   uploadMedia: (accountName: string, file: File) => {
     const formData = new FormData()
     formData.append('file', file)

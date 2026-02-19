@@ -248,6 +248,7 @@
     "away": "Away",
     "profile": "Profile",
     "theme": "Theme",
+    "language": "Language",
     "logOut": "Log out",
     "availableDesc": "You are now available to receive transfers",
     "awayDesc": "You will not receive new transfer assignments",

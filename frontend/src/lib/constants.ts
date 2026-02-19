@@ -57,15 +57,6 @@ export const RESOURCE_LABELS: Record<string, string> = {
   tags: 'Tags',
 } as const
 
-// Supported languages for templates
-export const SUPPORTED_LANGUAGES = [
-  { code: 'en', name: 'English' },
-  { code: 'en_US', name: 'English (US)' },
-  { code: 'es', name: 'Spanish' },
-  { code: 'pt_BR', name: 'Portuguese (BR)' },
-  { code: 'de', name: 'German' },
-] as const
-
 // Default pagination settings
 export const DEFAULT_PAGE_SIZE = 20
 export const PAGE_SIZE_OPTIONS = [10, 20, 50, 100] as const

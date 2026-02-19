@@ -27,6 +27,7 @@ import { LogOut, User } from 'lucide-vue-next'
 import { toast } from 'vue-sonner'
 import { getInitials } from '@/lib/utils'
 import ThemeSwitcher from './ThemeSwitcher.vue'
+import LanguageSwitcher from '@/components/LanguageSwitcher.vue'
 
 const { t } = useI18n()
 
@@ -228,6 +229,11 @@ const handleLogout = () => {
         <Separator class="my-1 bg-white/[0.08] light:bg-gray-200" />
         <div class="text-xs font-medium px-2 py-1 text-white/40 light:text-gray-500">{{ $t('userMenu.theme') }}</div>
         <ThemeSwitcher />
+        <Separator class="my-1 bg-white/[0.08] light:bg-gray-200" />
+        <div class="text-xs font-medium px-2 py-1 text-white/40 light:text-gray-500">{{ $t('userMenu.language') }}</div>
+        <div class="px-1.5 py-1">
+          <LanguageSwitcher />
+        </div>
         <Separator class="my-1 bg-white/[0.08] light:bg-gray-200" />
         <Button
           variant="ghost"
