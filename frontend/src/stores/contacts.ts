@@ -127,10 +127,6 @@ export const useContactsStore = defineStore('contacts', () => {
     }
   }
 
-  function setContactsLimit(limit: number) {
-    contactsLimit.value = limit
-  }
-
   async function loadMoreContacts() {
     if (isLoadingMoreContacts.value || !hasMoreContacts.value) return
 
@@ -333,11 +329,9 @@ export const useContactsStore = defineStore('contacts', () => {
     filteredContacts,
     sortedContacts,
     // Contacts pagination
-    contactsLimit,
     contactsTotal,
     hasMoreContacts,
     isLoadingMoreContacts,
-    setContactsLimit,
     fetchContacts,
     loadMoreContacts,
     // Other

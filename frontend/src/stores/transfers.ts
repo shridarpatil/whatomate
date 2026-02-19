@@ -109,8 +109,6 @@ export const useTransfersStore = defineStore('transfers', () => {
 
   // Pagination state
   const totalCount = ref(0)
-  const currentLimit = ref(100)
-  const currentOffset = ref(0)
 
   async function fetchTransfers(params?: {
     status?: string
@@ -134,8 +132,6 @@ export const useTransfersStore = defineStore('transfers', () => {
       generalQueueCount.value = data.general_queue_count ?? 0
       teamQueueCounts.value = data.team_queue_counts ?? {}
       totalCount.value = data.total_count ?? transfers.value.length
-      currentLimit.value = data.limit ?? 100
-      currentOffset.value = data.offset ?? 0
     } catch (error) {
       console.error('Failed to fetch transfers:', error)
     } finally {
