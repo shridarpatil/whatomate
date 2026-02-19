@@ -11,7 +11,8 @@ import { TagBadge } from '@/components/ui/tag-badge'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '@/components/ui/command'
 import { PageHeader, SearchInput, DataTable, CrudFormDialog, DeleteConfirmDialog, CreateContactDialog, ImportExportDialog, type Column } from '@/components/shared'
-import { contactsService, tagsService, accountsService, type Tag, type ImportResult } from '@/services/api'
+import { contactsService, accountsService, type Tag, type ImportResult } from '@/services/api'
+import { useTagsStore } from '@/stores/tags'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { toast } from 'vue-sonner'
 import { Plus, Users, Pencil, Trash2, MessageSquare, Check, ChevronsUpDown, X, Download } from 'lucide-vue-next'
@@ -25,6 +26,7 @@ import { useAuthStore } from '@/stores/auth'
 const { t } = useI18n()
 const router = useRouter()
 const authStore = useAuthStore()
+const tagsStore = useTagsStore()
 
 const canWriteContacts = authStore.hasPermission('contacts', 'write')
 const canImportContacts = authStore.hasPermission('contacts', 'import')
@@ -152,11 +154,9 @@ async function fetchContacts() {
 
 async function fetchTags() {
   try {
-    const response = await tagsService.list({ limit: 100 })
-    const data = response.data as any
-    const responseData = data.data || data
-    availableTags.value = responseData.tags || []
-  } catch (error) {
+    const response = await tagsStore.fetchTags({ limit: 100 })
+    availableTags.value = response.tags
+  } catch {
     // Silently fail - tags are optional
   }
 }

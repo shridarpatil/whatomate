@@ -64,6 +64,15 @@ export const useOrganizationsStore = defineStore('organizations', () => {
     }
   }
 
+  async function addMember(data: { email: string; role_id?: string }): Promise<void> {
+    try {
+      await organizationsService.addMember(data)
+    } catch (err: any) {
+      error.value = err.response?.data?.message || 'Failed to add member'
+      throw err
+    }
+  }
+
   return {
     organizations,
     myOrganizations,
@@ -75,6 +84,7 @@ export const useOrganizationsStore = defineStore('organizations', () => {
     init,
     fetchOrganizations,
     fetchMyOrganizations,
-    selectOrganization
+    selectOrganization,
+    addMember
   }
 })

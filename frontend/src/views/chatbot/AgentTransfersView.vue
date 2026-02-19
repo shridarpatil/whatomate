@@ -12,9 +12,11 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { PageHeader } from '@/components/shared'
-import { chatbotService, usersService, teamsService, type Team } from '@/services/api'
+import { chatbotService, type Team } from '@/services/api'
 import { useTransfersStore, type AgentTransfer, getSLAStatus } from '@/stores/transfers'
 import { useAuthStore } from '@/stores/auth'
+import { useUsersStore } from '@/stores/users'
+import { useTeamsStore } from '@/stores/teams'
 import { toast } from 'vue-sonner'
 import { useRouter } from 'vue-router'
 import { UserX, Play, MessageSquare, User, Clock, Loader2, Users, UserPlus, AlertTriangle, CheckCircle2, XCircle } from 'lucide-vue-next'
@@ -25,6 +27,8 @@ const { t } = useI18n()
 const router = useRouter()
 const transfersStore = useTransfersStore()
 const authStore = useAuthStore()
+const usersStore = useUsersStore()
+const teamsStore = useTeamsStore()
 
 const isLoading = ref(true)
 const isPicking = ref(false)
@@ -115,13 +119,10 @@ async function fetchTransfers() {
 
 async function fetchAgents() {
   try {
-    const response = await usersService.list()
-    const data = response.data.data || response.data
-    const usersList = data.users || data || []
-    agents.value = usersList.filter((u: any) => u.is_active !== false).map((u: any) => ({
-      id: u.id,
-      full_name: u.full_name
-    }))
+    await usersStore.fetchUsers()
+    agents.value = usersStore.users
+      .filter((u) => u.is_active !== false)
+      .map((u) => ({ id: u.id, full_name: u.full_name }))
   } catch {
     toast.error(t('agentTransfers.failedLoadAgents'))
   }
@@ -129,9 +130,8 @@ async function fetchAgents() {
 
 async function fetchTeams() {
   try {
-    const response = await teamsService.list()
-    const data = (response.data as any).data || response.data
-    teams.value = (data.teams || []).filter((t: Team) => t.is_active)
+    await teamsStore.fetchTeams()
+    teams.value = teamsStore.teams.filter((t: Team) => t.is_active)
   } catch {
     teams.value = []
   }

@@ -33,7 +33,8 @@ import {
   CollapsibleContent,
   CollapsibleTrigger,
 } from '@/components/ui/collapsible'
-import { chatbotService, flowsService, teamsService, type Team } from '@/services/api'
+import { chatbotService, flowsService, type Team } from '@/services/api'
+import { useTeamsStore } from '@/stores/teams'
 import { toast } from 'vue-sonner'
 import {
   ArrowLeft,
@@ -139,6 +140,7 @@ interface WhatsAppFlow {
 const route = useRoute()
 const router = useRouter()
 const { t } = useI18n()
+const teamsStore = useTeamsStore()
 
 const isLoading = ref(true)
 const isSaving = ref(false)
@@ -405,9 +407,8 @@ async function fetchWhatsAppFlows() {
 
 async function fetchTeams() {
   try {
-    const response = await teamsService.list()
-    const data = (response.data as any).data || response.data
-    teams.value = (data.teams || []).filter((t: Team) => t.is_active)
+    await teamsStore.fetchTeams()
+    teams.value = teamsStore.teams.filter((t: Team) => t.is_active)
   } catch (error) {
     console.error('Failed to load teams:', error)
     teams.value = []
