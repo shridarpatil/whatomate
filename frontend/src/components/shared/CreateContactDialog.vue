@@ -9,13 +9,15 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '@/components/ui/command'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog'
-import { contactsService, tagsService, accountsService, type Tag } from '@/services/api'
+import { contactsService, accountsService, type Tag } from '@/services/api'
+import { useTagsStore } from '@/stores/tags'
 import { toast } from 'vue-sonner'
 import { Loader2, Check, ChevronsUpDown, X } from 'lucide-vue-next'
 import { getErrorMessage } from '@/lib/api-utils'
 import { getTagColorClass } from '@/lib/constants'
 
 const { t } = useI18n()
+const tagsStore = useTagsStore()
 
 interface Props {
   open: boolean
@@ -52,11 +54,9 @@ watch(() => props.open, (isOpen) => {
 
 async function fetchTags() {
   try {
-    const response = await tagsService.list({ limit: 100 })
-    const data = response.data as any
-    const responseData = data.data || data
-    availableTags.value = responseData.tags || []
-  } catch (error) {
+    const response = await tagsStore.fetchTags({ limit: 100 })
+    availableTags.value = response.tags
+  } catch {
     // Silently fail - tags are optional
   }
 }
