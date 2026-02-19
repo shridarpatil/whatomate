@@ -86,11 +86,12 @@ export function useCrudState<T, F extends Record<string, any>>(
   }
 
   /**
-   * Closes the create/edit dialog and resets the editing item
+   * Closes the create/edit dialog, resets the editing item and form data
    */
   function closeDialog(): void {
     isDialogOpen.value = false
     editingItem.value = null
+    formData.value = { ...defaultFormData } as F
   }
 
   /**
