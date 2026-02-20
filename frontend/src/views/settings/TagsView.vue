@@ -9,7 +9,9 @@ import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { TagBadge } from '@/components/ui/tag-badge'
 import { PageHeader, SearchInput, DataTable, CrudFormDialog, DeleteConfirmDialog, type Column } from '@/components/shared'
-import { tagsService, type Tag } from '@/services/api'
+import type { Tag } from '@/services/api'
+import { useTagsStore } from '@/stores/tags'
+import { useCrudState } from '@/composables/useCrudState'
 import { toast } from 'vue-sonner'
 import { Plus, Tags, Pencil, Trash2 } from 'lucide-vue-next'
 import { getErrorMessage } from '@/lib/api-utils'
@@ -18,6 +20,7 @@ import { formatDate } from '@/lib/utils'
 import { useDebounceFn } from '@vueuse/core'
 
 const { t } = useI18n()
+const tagsStore = useTagsStore()
 
 interface TagFormData {
   name: string
@@ -28,12 +31,10 @@ const defaultFormData: TagFormData = { name: '', color: 'gray' }
 
 const tags = ref<Tag[]>([])
 const isLoading = ref(false)
-const isSubmitting = ref(false)
-const isDialogOpen = ref(false)
-const editingTag = ref<Tag | null>(null)
-const deleteDialogOpen = ref(false)
-const tagToDelete = ref<Tag | null>(null)
-const formData = ref<TagFormData>({ ...defaultFormData })
+const {
+  isSubmitting, isDialogOpen, editingItem: editingTag, deleteDialogOpen, itemToDelete: tagToDelete,
+  formData, openCreateDialog, openEditDialog: baseOpenEditDialog, openDeleteDialog, closeDialog, closeDeleteDialog,
+} = useCrudState<Tag, TagFormData>(defaultFormData)
 const searchQuery = ref('')
 
 // Pagination state
@@ -52,48 +53,20 @@ const columns = computed<Column<Tag>[]>(() => [
   { key: 'actions', label: t('common.actions'), align: 'right' },
 ])
 
-function openCreateDialog() {
-  editingTag.value = null
-  formData.value = { ...defaultFormData }
-  isDialogOpen.value = true
-}
-
 function openEditDialog(tag: Tag) {
-  editingTag.value = tag
-  formData.value = { name: tag.name, color: tag.color || 'gray' }
-  isDialogOpen.value = true
-}
-
-function openDeleteDialog(tag: Tag) {
-  tagToDelete.value = tag
-  deleteDialogOpen.value = true
-}
-
-function closeDialog() {
-  isDialogOpen.value = false
-  editingTag.value = null
-  formData.value = { ...defaultFormData }
-}
-
-function closeDeleteDialog() {
-  deleteDialogOpen.value = false
-  tagToDelete.value = null
+  baseOpenEditDialog(tag, (t) => ({ name: t.name, color: t.color || 'gray' }))
 }
 
 async function fetchTags() {
   isLoading.value = true
   try {
-    const response = await tagsService.list({
+    const response = await tagsStore.fetchTags({
       search: searchQuery.value || undefined,
       page: currentPage.value,
       limit: pageSize
     })
-    const data = response.data as any
-    // Handle both wrapped and unwrapped responses
-    const responseData = data.data || data
-    tags.value = responseData.tags || []
-    // Use total from response if available, otherwise use items length
-    totalItems.value = responseData.total ?? tags.value.length
+    tags.value = response.tags
+    totalItems.value = response.total
   } catch (error) {
     toast.error(getErrorMessage(error, t('common.failedLoad', { resource: t('resources.tags') })))
   } finally {
@@ -127,10 +100,10 @@ async function saveTag() {
   isSubmitting.value = true
   try {
     if (editingTag.value) {
-      await tagsService.update(editingTag.value.name, formData.value)
+      await tagsStore.updateTag(editingTag.value.name, formData.value)
       toast.success(t('common.updatedSuccess', { resource: t('resources.Tag') }))
     } else {
-      await tagsService.create(formData.value)
+      await tagsStore.createTag(formData.value)
       toast.success(t('common.createdSuccess', { resource: t('resources.Tag') }))
     }
     closeDialog()
@@ -146,7 +119,7 @@ async function saveTag() {
 async function confirmDelete() {
   if (!tagToDelete.value) return
   try {
-    await tagsService.delete(tagToDelete.value.name)
+    await tagsStore.deleteTag(tagToDelete.value.name)
     toast.success(t('common.deletedSuccess', { resource: t('resources.Tag') }))
     closeDeleteDialog()
     // Refresh from server to keep pagination in sync

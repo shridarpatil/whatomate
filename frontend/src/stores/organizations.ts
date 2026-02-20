@@ -64,15 +64,13 @@ export const useOrganizationsStore = defineStore('organizations', () => {
     }
   }
 
-  function clearSelection() {
-    selectedOrgId.value = null
-    localStorage.removeItem(SELECTED_ORG_KEY)
-  }
-
-  function reset() {
-    organizations.value = []
-    selectedOrgId.value = null
-    localStorage.removeItem(SELECTED_ORG_KEY)
+  async function addMember(data: { email: string; role_id?: string }): Promise<void> {
+    try {
+      await organizationsService.addMember(data)
+    } catch (err: any) {
+      error.value = err.response?.data?.message || 'Failed to add member'
+      throw err
+    }
   }
 
   return {
@@ -87,7 +85,6 @@ export const useOrganizationsStore = defineStore('organizations', () => {
     fetchOrganizations,
     fetchMyOrganizations,
     selectOrganization,
-    clearSelection,
-    reset
+    addMember
   }
 })

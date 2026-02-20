@@ -5,6 +5,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"time"
 
@@ -15,6 +16,7 @@ import (
 	"github.com/valyala/fasthttp"
 	"github.com/zerodha/fastglue"
 	"gorm.io/gorm"
+	"gorm.io/gorm/clause"
 )
 
 // CampaignRequest represents campaign create/update request
@@ -162,8 +164,7 @@ func (a *App) CreateCampaign(r *fastglue.Request) error {
 	}
 
 	// Validate WhatsApp account exists
-	var account models.WhatsAppAccount
-	if err := a.DB.Where("name = ? AND organization_id = ?", req.WhatsAppAccount, orgID).First(&account).Error; err != nil {
+	if _, err := a.resolveWhatsAppAccount(orgID, req.WhatsAppAccount); err != nil {
 		return r.SendErrorEnvelope(fasthttp.StatusBadRequest, "WhatsApp account not found", nil, "")
 	}
 
@@ -399,6 +400,14 @@ func (a *App) StartCampaign(r *fastglue.Request) error {
 
 	if len(recipients) == 0 {
 		return r.SendErrorEnvelope(fasthttp.StatusBadRequest, "Campaign has no pending recipients", nil, "")
+	}
+
+	// Validate template still exists
+	if campaign.TemplateID != uuid.Nil {
+		var template models.Template
+		if err := a.DB.Where("id = ? AND organization_id = ?", campaign.TemplateID, orgID).First(&template).Error; err != nil {
+			return r.SendErrorEnvelope(fasthttp.StatusBadRequest, "Campaign template no longer exists", nil, "")
+		}
 	}
 
 	// Update status to processing
@@ -686,6 +695,13 @@ func (a *App) GetCampaignRecipients(r *fastglue.Request) error {
 		return r.SendErrorEnvelope(fasthttp.StatusInternalServerError, "Failed to list recipients", nil, "")
 	}
 
+	if a.ShouldMaskPhoneNumbers(orgID) {
+		for i := range recipients {
+			recipients[i].PhoneNumber = MaskPhoneNumber(recipients[i].PhoneNumber)
+			recipients[i].RecipientName = MaskIfPhoneNumber(recipients[i].RecipientName)
+		}
+	}
+
 	return r.SendEnvelope(map[string]interface{}{
 		"recipients": recipients,
 		"total":      len(recipients),
@@ -769,8 +785,8 @@ func (a *App) UploadCampaignMedia(r *fastglue.Request) error {
 	}
 
 	// Get WhatsApp account
-	var account models.WhatsAppAccount
-	if err := a.DB.Where("name = ? AND organization_id = ?", campaign.WhatsAppAccount, orgID).First(&account).Error; err != nil {
+	account, err := a.resolveWhatsAppAccount(orgID, campaign.WhatsAppAccount)
+	if err != nil {
 		return r.SendErrorEnvelope(fasthttp.StatusBadRequest, "WhatsApp account not found", nil, "")
 	}
 
@@ -792,26 +808,41 @@ func (a *App) UploadCampaignMedia(r *fastglue.Request) error {
 	}
 	defer func() { _ = file.Close() }()
 
-	// Read file content
-	data, err := io.ReadAll(file)
+	// Read file content (limit to 16MB)
+	const maxMediaSize = 16 << 20 // 16MB
+	data, err := io.ReadAll(io.LimitReader(file, maxMediaSize+1))
 	if err != nil {
 		return r.SendErrorEnvelope(fasthttp.StatusInternalServerError, "Failed to read file", nil, "")
 	}
+	if len(data) > maxMediaSize {
+		return r.SendErrorEnvelope(fasthttp.StatusBadRequest, "File too large. Maximum size is 16MB", nil, "")
+	}
 
-	// Determine mime type from header content type or file extension
+	// Determine and validate MIME type
 	mimeType := fileHeader.Header.Get("Content-Type")
 	if mimeType == "" {
 		mimeType = "application/octet-stream"
 	}
+	allowedMIME := map[string]bool{
+		"image/jpeg": true, "image/png": true, "image/webp": true,
+		"video/mp4": true, "video/3gpp": true,
+		"audio/aac": true, "audio/mp4": true, "audio/mpeg": true, "audio/ogg": true,
+		"application/pdf": true, "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": true,
+		"application/vnd.openxmlformats-officedocument.wordprocessingml.document": true,
+		"application/vnd.openxmlformats-officedocument.presentationml.presentation": true,
+	}
+	if !allowedMIME[mimeType] {
+		return r.SendErrorEnvelope(fasthttp.StatusBadRequest, "Unsupported file type: "+mimeType, nil, "")
+	}
 
 	// Upload to WhatsApp
-	waAccount := a.toWhatsAppAccount(&account)
+	waAccount := a.toWhatsAppAccount(account)
 
 	ctx := r.RequestCtx
 	mediaID, err := a.WhatsApp.UploadMedia(ctx, waAccount, data, mimeType, fileHeader.Filename)
 	if err != nil {
 		a.Log.Error("Failed to upload media to WhatsApp", "error", err)
-		return r.SendErrorEnvelope(fasthttp.StatusInternalServerError, "Failed to upload media to WhatsApp: "+err.Error(), nil, "")
+		return r.SendErrorEnvelope(fasthttp.StatusInternalServerError, "Failed to upload media to WhatsApp", nil, "")
 	}
 
 	// Save file locally for preview
@@ -824,7 +855,7 @@ func (a *App) UploadCampaignMedia(r *fastglue.Request) error {
 	// Update campaign with media ID, filename, mime type, and local path
 	updates := map[string]interface{}{
 		"header_media_id":         mediaID,
-		"header_media_filename":   fileHeader.Filename,
+		"header_media_filename":   sanitizeFilename(fileHeader.Filename),
 		"header_media_mime_type":  mimeType,
 		"header_media_local_path": localPath,
 	}
@@ -899,18 +930,24 @@ func (a *App) ServeCampaignMedia(r *fastglue.Request) error {
 		return r.SendErrorEnvelope(fasthttp.StatusNotFound, "No media found", nil, "")
 	}
 
-	// Security: prevent directory traversal
-	filePath := campaign.HeaderMediaLocalPath
-	if strings.Contains(filePath, "..") {
+	// Security: prevent directory traversal and symlink attacks
+	filePath := filepath.Clean(campaign.HeaderMediaLocalPath)
+	baseDir, err := filepath.Abs(a.getMediaStoragePath())
+	if err != nil {
+		return r.SendErrorEnvelope(fasthttp.StatusInternalServerError, "Storage configuration error", nil, "")
+	}
+	fullPath, err := filepath.Abs(filepath.Join(baseDir, filePath))
+	if err != nil || !strings.HasPrefix(fullPath, baseDir+string(os.PathSeparator)) {
 		return r.SendErrorEnvelope(fasthttp.StatusBadRequest, "Invalid file path", nil, "")
 	}
 
-	// Build full path
-	fullPath := filepath.Join(a.getMediaStoragePath(), filePath)
-
-	// Check if file exists
-	if _, err := os.Stat(fullPath); os.IsNotExist(err) {
+	// Reject symlinks
+	info, err := os.Lstat(fullPath)
+	if err != nil {
 		return r.SendErrorEnvelope(fasthttp.StatusNotFound, "File not found", nil, "")
+	}
+	if info.Mode()&os.ModeSymlink != 0 {
+		return r.SendErrorEnvelope(fasthttp.StatusBadRequest, "Invalid file path", nil, "")
 	}
 
 	// Read file
@@ -981,28 +1018,31 @@ func (a *App) incrementCampaignStat(campaignID string, status string) {
 		return
 	}
 
-	if err := a.DB.Model(&models.BulkMessageCampaign{}).
-		Where("id = ?", campaignUUID).
-		Update(column, gorm.Expr(column+" + 1")).Error; err != nil {
-		a.Log.Error("Failed to increment campaign stat", "error", err, "campaign_id", campaignID, "column", column)
+	var campaign models.BulkMessageCampaign
+	campaign.ID = campaignUUID
+
+	// atomic update and return updated record
+	result := a.DB.Model(&campaign).
+		Clauses(clause.Returning{}).
+		Update(column, gorm.Expr(column+" + 1"))
+
+	if result.Error != nil {
+		a.Log.Error("Failed to increment campaign stat", "error", result.Error, "campaign_id", campaignID, "column", column)
 		return
 	}
 
 	// Broadcast stats update via WebSocket
-	if a.WSHub != nil {
-		var campaign models.BulkMessageCampaign
-		if err := a.DB.Where("id = ?", campaignUUID).First(&campaign).Error; err == nil {
-			a.WSHub.BroadcastToOrg(campaign.OrganizationID, websocket.WSMessage{
-				Type: websocket.TypeCampaignStatsUpdate,
-				Payload: map[string]interface{}{
-					"campaign_id":     campaignID,
-					"sent_count":      campaign.SentCount,
-					"delivered_count": campaign.DeliveredCount,
-					"read_count":      campaign.ReadCount,
-					"failed_count":    campaign.FailedCount,
-				},
-			})
-		}
+	if a.WSHub != nil && result.RowsAffected > 0 {
+		a.WSHub.BroadcastToOrg(campaign.OrganizationID, websocket.WSMessage{
+			Type: websocket.TypeCampaignStatsUpdate,
+			Payload: map[string]interface{}{
+				"campaign_id":     campaignID,
+				"sent_count":      campaign.SentCount,
+				"delivered_count": campaign.DeliveredCount,
+				"read_count":      campaign.ReadCount,
+				"failed_count":    campaign.FailedCount,
+			},
+		})
 	}
 }
 
@@ -1036,5 +1076,23 @@ func (a *App) recalculateCampaignStats(campaignID uuid.UUID) {
 		}).Error; err != nil {
 		a.Log.Error("Failed to recalculate campaign stats", "error", err, "campaign_id", campaignID)
 	}
+}
+
+// sanitizeFilename removes path separators, dangerous characters, and truncates length.
+var safeFilenameRe = regexp.MustCompile(`[^a-zA-Z0-9._-]`)
+
+func sanitizeFilename(name string) string {
+	// Strip any path component
+	name = filepath.Base(name)
+	// Replace unsafe characters
+	name = safeFilenameRe.ReplaceAllString(name, "_")
+	// Truncate to 255 chars
+	if len(name) > 255 {
+		name = name[:255]
+	}
+	if name == "" || name == "." || name == ".." {
+		name = "unnamed"
+	}
+	return name
 }
 

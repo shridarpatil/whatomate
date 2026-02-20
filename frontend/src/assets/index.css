@@ -58,7 +58,7 @@
     --muted-foreground: 0 0% 45%;
     --accent: 0 0% 96%;
     --accent-foreground: 0 0% 9%;
-    --destructive: 0 84% 60%;
+    --destructive: 0 72% 51%;
     --destructive-foreground: 0 0% 100%;
     --border: 0 0% 90%;
     --input: 0 0% 90%;
@@ -317,6 +317,16 @@
 .dark .chat-bubble-outgoing {
   background-color: #38674a;
   color: #e9edef;
+}
+
+.chat-bubble-outgoing .text-destructive {
+  color: #fd7878fc;
+  font-size: 0.80rem;
+}
+
+.light .chat-bubble-outgoing .text-destructive {
+  color: #dc2626;
+  font-size: 0.80rem;
 }
 
 /* Time and status */

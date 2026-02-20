@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test'
-import { ApiHelper, generateUniqueName } from '../../helpers'
+import { ApiHelper } from '../../helpers'
 
 // Admin credentials - try super admin first, fall back to test admin
 const ADMIN_EMAIL = 'admin@admin.com'
@@ -7,23 +7,27 @@ const ADMIN_PASSWORD = 'admin'
 const FALLBACK_ADMIN_EMAIL = 'admin@test.com'
 const FALLBACK_ADMIN_PASSWORD = 'password'
 
+/** Login as super admin, falling back to test admin. Returns ApiHelper or null. */
+async function loginAdmin(api: ApiHelper): Promise<boolean> {
+  try {
+    await api.login(ADMIN_EMAIL, ADMIN_PASSWORD)
+    return true
+  } catch {
+    try {
+      await api.login(FALLBACK_ADMIN_EMAIL, FALLBACK_ADMIN_PASSWORD)
+      return true
+    } catch {
+      return false
+    }
+  }
+}
+
 test.describe('Organization Switching (Super Admin)', () => {
   let api: ApiHelper
 
   test.beforeAll(async ({ request }) => {
     api = new ApiHelper(request)
-
-    // Login as super admin (admin@admin.com) or fall back to admin@test.com
-    try {
-      await api.login(ADMIN_EMAIL, ADMIN_PASSWORD)
-    } catch {
-      // Try alternate admin
-      try {
-        await api.login(FALLBACK_ADMIN_EMAIL, FALLBACK_ADMIN_PASSWORD)
-      } catch {
-        // No admin available, tests will skip as needed
-      }
-    }
+    await loginAdmin(api)
   })
 
   test.afterAll(async () => {
@@ -71,9 +75,6 @@ test.describe('Organization Switching (Super Admin)', () => {
 
   test('switching organization updates users list', async ({ page, request }) => {
     // This test verifies that when super admin switches org, the users list updates
-    api = new ApiHelper(request)
-
-    // Try to login
     await page.goto('/login')
     await page.locator('input[type="email"]').fill(ADMIN_EMAIL)
     await page.locator('input[type="password"]').fill(ADMIN_PASSWORD)
@@ -120,57 +121,27 @@ test.describe('Organization Switching (Super Admin)', () => {
   })
 
   test('API respects X-Organization-ID header for super admin', async ({ request }) => {
-    api = new ApiHelper(request)
-
-    // Login as super admin
-    let token: string | null = null
-    try {
-      token = await api.login(ADMIN_EMAIL, ADMIN_PASSWORD)
-    } catch {
-      try {
-        token = await api.login(FALLBACK_ADMIN_EMAIL, FALLBACK_ADMIN_PASSWORD)
-      } catch {
-        test.skip(true, 'No admin credentials available')
-        return
-      }
-    }
+    const api = new ApiHelper(request)
+    const ok = await loginAdmin(api)
+    if (!ok) { test.skip(true, 'No admin credentials available'); return }
 
     // Get users without header - should get default org users
-    const response1 = await request.get('/api/users', {
-      headers: {
-        Authorization: `Bearer ${token}`
-      }
-    })
-    expect(response1.ok()).toBeTruthy()
+    const response = await api.get('/api/users')
+    expect(response.ok()).toBeTruthy()
   })
 
   test('API ignores X-Organization-ID header for regular user', async ({ request }) => {
-    // Login as regular user
-    const loginResponse = await request.post('/api/auth/login', {
-      data: { email: 'agent@test.com', password: 'password' }
-    })
-
-    if (!loginResponse.ok()) {
+    const api = new ApiHelper(request)
+    try {
+      await api.login('agent@test.com', 'password')
+    } catch {
       test.skip(true, 'agent@test.com not available')
-      return
-    }
-
-    const loginData = await loginResponse.json()
-    const token = loginData.data?.access_token
-
-    if (!token) {
-      test.skip(true, 'No access token')
       return
     }
 
     // Get users with a fake org ID header - should be ignored
     const fakeOrgId = '00000000-0000-0000-0000-000000000000'
-    const response = await request.get('/api/users', {
-      headers: {
-        Authorization: `Bearer ${token}`,
-        'X-Organization-ID': fakeOrgId
-      }
-    })
+    const response = await api.get('/api/users', { 'X-Organization-ID': fakeOrgId })
 
     // The response should either:
     // 1. Return OK with users from their org (not the fake org)
@@ -179,11 +150,9 @@ test.describe('Organization Switching (Super Admin)', () => {
     if (response.ok()) {
       const data = await response.json()
       // If they have access, verify we got data from their org
-      // The key point is the request didn't fail because of the fake org header
       expect(data.data?.users).toBeDefined()
     } else {
       // 403 is acceptable - means they don't have permission
-      // The test passes because it didn't try to access fake org
       expect(response.status()).toBe(403)
     }
   })
@@ -274,11 +243,7 @@ test.describe('Create Organization via Sidebar', () => {
 
     // Verify the org was actually created via API
     const api = new ApiHelper(request)
-    try {
-      await api.login(ADMIN_EMAIL, ADMIN_PASSWORD)
-    } catch {
-      await api.login(FALLBACK_ADMIN_EMAIL, FALLBACK_ADMIN_PASSWORD)
-    }
+    await loginAdmin(api)
     const orgs = await api.getOrganizations()
     const created = orgs.find((o: any) => o.name === orgName)
     expect(created).toBeTruthy()
@@ -304,17 +269,8 @@ test.describe('Organization Data Isolation', () => {
   test('users from one org are not visible in another org', async ({ request }) => {
     // Login as super admin to create orgs and test cross-org access
     const superAdminApi = new ApiHelper(request)
-    let token: string | null = null
-    try {
-      token = await superAdminApi.login(ADMIN_EMAIL, ADMIN_PASSWORD)
-    } catch {
-      try {
-        token = await superAdminApi.login(FALLBACK_ADMIN_EMAIL, FALLBACK_ADMIN_PASSWORD)
-      } catch {
-        test.skip(true, 'No super admin credentials available')
-        return
-      }
-    }
+    const ok = await loginAdmin(superAdminApi)
+    if (!ok) { test.skip(true, 'No super admin credentials available'); return }
 
     const timestamp = Date.now()
     const org1Email = `org1-admin-${timestamp}@test.com`
@@ -374,16 +330,8 @@ test.describe('Organization Data Isolation', () => {
   test('regular user cannot access other organization data via API', async ({ request }) => {
     // Login as super admin to create an org
     const superAdminApi = new ApiHelper(request)
-    try {
-      await superAdminApi.login(ADMIN_EMAIL, ADMIN_PASSWORD)
-    } catch {
-      try {
-        await superAdminApi.login(FALLBACK_ADMIN_EMAIL, FALLBACK_ADMIN_PASSWORD)
-      } catch {
-        test.skip(true, 'No super admin credentials available')
-        return
-      }
-    }
+    const ok = await loginAdmin(superAdminApi)
+    if (!ok) { test.skip(true, 'No super admin credentials available'); return }
 
     const uniqueOrgName = `Isolated Org ${Date.now()}`
     const uniqueEmail = `isolated-admin-${Date.now()}@test.com`
@@ -394,35 +342,28 @@ test.describe('Organization Data Isolation', () => {
       myOrgId = org.id
 
       // Register a user into the new org
-      const api = new ApiHelper(request)
-      await api.register({
+      const regApi = new ApiHelper(request)
+      await regApi.register({
         email: uniqueEmail,
         password: 'password123',
         full_name: 'Isolated Admin',
         organization_id: myOrgId
       })
 
-      // Use this user's token for the rest of the test
+      // Login as this user via ApiHelper (cookies auto-managed)
       const userApi = new ApiHelper(request)
       await userApi.login(uniqueEmail, 'password123')
 
       // This user (org member, not super admin) should not be able to use X-Organization-ID header
-      const ownOrgResponse = await request.get('/api/organizations/current', {
-        headers: {
-          Authorization: `Bearer ${userApi.getToken()}`
-        }
-      })
+      const ownOrgResponse = await userApi.get('/api/organizations/current')
       expect(ownOrgResponse.ok()).toBeTruthy()
       const ownOrgData = await ownOrgResponse.json()
       expect(ownOrgData.data?.id || ownOrgData.data?.ID).toBe(myOrgId)
 
       // Now try to access with a different org ID header - should be ignored
       const otherOrgId = '00000000-0000-0000-0000-000000000001'
-      const responseWithHeader = await request.get('/api/organizations/current', {
-        headers: {
-          Authorization: `Bearer ${userApi.getToken()}`,
-          'X-Organization-ID': otherOrgId
-        }
+      const responseWithHeader = await userApi.get('/api/organizations/current', {
+        'X-Organization-ID': otherOrgId
       })
 
       expect(responseWithHeader.ok()).toBeTruthy()

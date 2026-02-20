@@ -109,8 +109,6 @@ export const useTransfersStore = defineStore('transfers', () => {
 
   // Pagination state
   const totalCount = ref(0)
-  const currentLimit = ref(100)
-  const currentOffset = ref(0)
 
   async function fetchTransfers(params?: {
     status?: string
@@ -134,30 +132,11 @@ export const useTransfersStore = defineStore('transfers', () => {
       generalQueueCount.value = data.general_queue_count ?? 0
       teamQueueCounts.value = data.team_queue_counts ?? {}
       totalCount.value = data.total_count ?? transfers.value.length
-      currentLimit.value = data.limit ?? 100
-      currentOffset.value = data.offset ?? 0
     } catch (error) {
       console.error('Failed to fetch transfers:', error)
     } finally {
       isLoading.value = false
     }
-  }
-
-  // Check if more transfers are available
-  const hasMoreTransfers = computed(() =>
-    currentOffset.value + currentLimit.value < totalCount.value
-  )
-
-  // Load more transfers (pagination)
-  async function loadMoreTransfers() {
-    if (!hasMoreTransfers.value || isLoading.value) return
-
-    await fetchTransfers({
-      status: 'active',
-      offset: currentOffset.value + currentLimit.value,
-      limit: currentLimit.value,
-      append: true
-    })
   }
 
   // Fetch transfer history (resumed transfers) with pagination
@@ -286,12 +265,6 @@ export const useTransfersStore = defineStore('transfers', () => {
     }
   }
 
-  // Check if WebSocket sync is stale (no updates in given ms)
-  function isSyncStale(thresholdMs: number = 60000): boolean {
-    if (lastSyncedAt.value === 0) return true // Never synced
-    return Date.now() - lastSyncedAt.value > thresholdMs
-  }
-
   return {
     transfers,
     queueCount,
@@ -304,9 +277,7 @@ export const useTransfersStore = defineStore('transfers', () => {
     unassignedCount,
     // Pagination
     totalCount,
-    hasMoreTransfers,
     fetchTransfers,
-    loadMoreTransfers,
     // History
     historyTransfers,
     historyTotalCount,
@@ -318,7 +289,6 @@ export const useTransfersStore = defineStore('transfers', () => {
     addTransfer,
     updateTransfer,
     removeTransfer,
-    getActiveTransferForContact,
-    isSyncStale
+    getActiveTransferForContact
   }
 })

@@ -14,8 +14,9 @@ import {
   SelectTrigger,
   SelectValue
 } from '@/components/ui/select'
-import { agentAnalyticsService, usersService } from '@/services/api'
+import { agentAnalyticsService } from '@/services/api'
 import { useAuthStore } from '@/stores/auth'
+import { useUsersStore } from '@/stores/users'
 import { PageHeader } from '@/components/shared'
 import {
   Command,
@@ -81,6 +82,7 @@ interface AgentAnalyticsResponse {
 
 const { t } = useI18n()
 const authStore = useAuthStore()
+const usersStore = useUsersStore()
 const isAdminOrManager = computed(() => ['admin', 'manager'].includes(authStore.user?.role?.name || ''))
 
 const analytics = ref<AgentAnalyticsResponse | null>(null)
@@ -224,11 +226,9 @@ const formatMinutes = (mins: number): string => {
 const fetchAgents = async () => {
   if (!isAdminOrManager.value) return
   try {
-    const response = await usersService.list()
-    const data = response.data.data || response.data
-    // Show all users for filtering (granular roles)
-    agents.value = (data.users || data || [])
-      .map((u: any) => ({ id: u.id, full_name: u.full_name, role: u.role?.name }))
+    await usersStore.fetchUsers()
+    agents.value = usersStore.users
+      .map((u) => ({ id: u.id, full_name: u.full_name, role: u.role?.name || '' }))
   } catch (error) {
     console.error('Failed to load agents:', error)
   }

@@ -2,6 +2,7 @@ package websocket_test
 
 import (
 	"encoding/json"
+	"fmt"
 	"testing"
 	"time"
 
@@ -353,4 +354,289 @@ func assertNoMessage(t *testing.T, client *websocket.Client) {
 // that we add to the package via an export_test.go file.
 func clientSendChan(c *websocket.Client) <-chan []byte {
 	return websocket.ClientSendChan(c)
+}
+
+// --- Message-based auth: constructors ---
+
+// successAuthFn returns an AuthenticateFn that always succeeds with fixed IDs.
+func successAuthFn(userID, orgID uuid.UUID) websocket.AuthenticateFn {
+	return func(token string) (uuid.UUID, uuid.UUID, error) {
+		return userID, orgID, nil
+	}
+}
+
+// failAuthFn returns an AuthenticateFn that always fails.
+func failAuthFn() websocket.AuthenticateFn {
+	return func(token string) (uuid.UUID, uuid.UUID, error) {
+		return uuid.Nil, uuid.Nil, fmt.Errorf("invalid token")
+	}
+}
+
+func TestNewClient_WithUserID_IsPreAuthenticated(t *testing.T) {
+	hub := newTestHub(t)
+	userID := uuid.New()
+	orgID := uuid.New()
+
+	client := websocket.NewClient(hub, nil, userID, orgID)
+
+	assert.True(t, websocket.ClientAuthenticated(client))
+	assert.Equal(t, userID, websocket.ClientUserID(client))
+	assert.Equal(t, orgID, websocket.ClientOrgID(client))
+}
+
+func TestNewClient_WithNilUUID_IsNotAuthenticated(t *testing.T) {
+	hub := newTestHub(t)
+
+	client := websocket.NewClient(hub, nil, uuid.Nil, uuid.Nil)
+
+	assert.False(t, websocket.ClientAuthenticated(client))
+}
+
+func TestNewUnauthenticatedClient_IsNotAuthenticated(t *testing.T) {
+	hub := newTestHub(t)
+	authFn := successAuthFn(uuid.New(), uuid.New())
+
+	client := websocket.NewUnauthenticatedClient(hub, nil, authFn)
+
+	assert.False(t, websocket.ClientAuthenticated(client))
+	assert.Equal(t, uuid.Nil, websocket.ClientUserID(client))
+	assert.Equal(t, uuid.Nil, websocket.ClientOrgID(client))
+}
+
+// --- Message-based auth: handleAuthMessage ---
+
+func TestHandleAuthMessage_ValidAuth_Succeeds(t *testing.T) {
+	hub := newTestHub(t)
+	userID := uuid.New()
+	orgID := uuid.New()
+	authFn := successAuthFn(userID, orgID)
+
+	client := websocket.NewUnauthenticatedClient(hub, nil, authFn)
+
+	msg := websocket.WSMessage{
+		Type:    websocket.TypeAuth,
+		Payload: map[string]interface{}{"token": "valid-token"},
+	}
+	data, err := json.Marshal(msg)
+	require.NoError(t, err)
+
+	ok := websocket.ClientHandleAuthMessage(client, data)
+
+	assert.True(t, ok)
+	assert.True(t, websocket.ClientAuthenticated(client))
+	assert.Equal(t, userID, websocket.ClientUserID(client))
+	assert.Equal(t, orgID, websocket.ClientOrgID(client))
+
+	// Client should have self-registered with the hub
+	waitForClientCount(t, hub, 1)
+}
+
+func TestHandleAuthMessage_InvalidToken_Fails(t *testing.T) {
+	hub := newTestHub(t)
+	authFn := failAuthFn()
+
+	client := websocket.NewUnauthenticatedClient(hub, nil, authFn)
+
+	msg := websocket.WSMessage{
+		Type:    websocket.TypeAuth,
+		Payload: map[string]interface{}{"token": "bad-token"},
+	}
+	data, err := json.Marshal(msg)
+	require.NoError(t, err)
+
+	ok := websocket.ClientHandleAuthMessage(client, data)
+
+	assert.False(t, ok)
+	assert.False(t, websocket.ClientAuthenticated(client))
+	assert.Equal(t, uuid.Nil, websocket.ClientUserID(client))
+	assert.Equal(t, 0, hub.GetClientCount())
+}
+
+func TestHandleAuthMessage_WrongMessageType_Fails(t *testing.T) {
+	hub := newTestHub(t)
+	authFn := successAuthFn(uuid.New(), uuid.New())
+
+	client := websocket.NewUnauthenticatedClient(hub, nil, authFn)
+
+	msg := websocket.WSMessage{
+		Type:    websocket.TypePing,
+		Payload: map[string]interface{}{},
+	}
+	data, err := json.Marshal(msg)
+	require.NoError(t, err)
+
+	ok := websocket.ClientHandleAuthMessage(client, data)
+
+	assert.False(t, ok)
+	assert.False(t, websocket.ClientAuthenticated(client))
+}
+
+func TestHandleAuthMessage_EmptyToken_Fails(t *testing.T) {
+	hub := newTestHub(t)
+	authFn := successAuthFn(uuid.New(), uuid.New())
+
+	client := websocket.NewUnauthenticatedClient(hub, nil, authFn)
+
+	msg := websocket.WSMessage{
+		Type:    websocket.TypeAuth,
+		Payload: map[string]interface{}{"token": ""},
+	}
+	data, err := json.Marshal(msg)
+	require.NoError(t, err)
+
+	ok := websocket.ClientHandleAuthMessage(client, data)
+
+	assert.False(t, ok)
+	assert.False(t, websocket.ClientAuthenticated(client))
+}
+
+func TestHandleAuthMessage_MissingTokenField_Fails(t *testing.T) {
+	hub := newTestHub(t)
+	authFn := successAuthFn(uuid.New(), uuid.New())
+
+	client := websocket.NewUnauthenticatedClient(hub, nil, authFn)
+
+	msg := websocket.WSMessage{
+		Type:    websocket.TypeAuth,
+		Payload: map[string]interface{}{"wrong_field": "value"},
+	}
+	data, err := json.Marshal(msg)
+	require.NoError(t, err)
+
+	ok := websocket.ClientHandleAuthMessage(client, data)
+
+	assert.False(t, ok)
+	assert.False(t, websocket.ClientAuthenticated(client))
+}
+
+func TestHandleAuthMessage_InvalidJSON_Fails(t *testing.T) {
+	hub := newTestHub(t)
+	authFn := successAuthFn(uuid.New(), uuid.New())
+
+	client := websocket.NewUnauthenticatedClient(hub, nil, authFn)
+
+	ok := websocket.ClientHandleAuthMessage(client, []byte("not json"))
+
+	assert.False(t, ok)
+	assert.False(t, websocket.ClientAuthenticated(client))
+}
+
+func TestHandleAuthMessage_NilAuthFn_Fails(t *testing.T) {
+	hub := newTestHub(t)
+
+	client := websocket.NewUnauthenticatedClient(hub, nil, nil)
+
+	msg := websocket.WSMessage{
+		Type:    websocket.TypeAuth,
+		Payload: map[string]interface{}{"token": "some-token"},
+	}
+	data, err := json.Marshal(msg)
+	require.NoError(t, err)
+
+	ok := websocket.ClientHandleAuthMessage(client, data)
+
+	assert.False(t, ok)
+	assert.False(t, websocket.ClientAuthenticated(client))
+}
+
+// --- AuthPayload type ---
+
+func TestAuthPayload_JSONRoundTrip(t *testing.T) {
+	original := websocket.AuthPayload{Token: "my-jwt-token"}
+	data, err := json.Marshal(original)
+	require.NoError(t, err)
+
+	var decoded websocket.AuthPayload
+	err = json.Unmarshal(data, &decoded)
+	require.NoError(t, err)
+
+	assert.Equal(t, "my-jwt-token", decoded.Token)
+}
+
+// --- Auth + Hub interaction ---
+
+func TestHandleAuthMessage_ValidAuth_ReceivesBroadcastAfterAuth(t *testing.T) {
+	hub := newTestHub(t)
+	userID := uuid.New()
+	orgID := uuid.New()
+	authFn := successAuthFn(userID, orgID)
+
+	client := websocket.NewUnauthenticatedClient(hub, nil, authFn)
+
+	// Before auth: hub has no clients
+	assert.Equal(t, 0, hub.GetClientCount())
+
+	// Authenticate
+	msg := websocket.WSMessage{
+		Type:    websocket.TypeAuth,
+		Payload: map[string]interface{}{"token": "valid-token"},
+	}
+	data, err := json.Marshal(msg)
+	require.NoError(t, err)
+	require.True(t, websocket.ClientHandleAuthMessage(client, data))
+
+	// After auth: hub has 1 client
+	waitForClientCount(t, hub, 1)
+
+	// Broadcast to org — authenticated client should receive it
+	broadcast := websocket.WSMessage{Type: websocket.TypeNewMessage, Payload: "hello"}
+	hub.BroadcastToOrg(orgID, broadcast)
+
+	assertReceivesMessage(t, client, websocket.TypeNewMessage)
+}
+
+func TestHandleAuthMessage_ValidAuth_ReceivesUserTargetedBroadcast(t *testing.T) {
+	hub := newTestHub(t)
+	userID := uuid.New()
+	orgID := uuid.New()
+	otherUserID := uuid.New()
+	authFn := successAuthFn(userID, orgID)
+
+	client := websocket.NewUnauthenticatedClient(hub, nil, authFn)
+
+	// Authenticate
+	msg := websocket.WSMessage{
+		Type:    websocket.TypeAuth,
+		Payload: map[string]interface{}{"token": "valid-token"},
+	}
+	data, err := json.Marshal(msg)
+	require.NoError(t, err)
+	require.True(t, websocket.ClientHandleAuthMessage(client, data))
+	waitForClientCount(t, hub, 1)
+
+	// Broadcast to a different user — our client should NOT receive it
+	otherMsg := websocket.WSMessage{Type: websocket.TypePermissionsUpdated, Payload: "other"}
+	hub.BroadcastToUser(orgID, otherUserID, otherMsg)
+	assertNoMessage(t, client)
+
+	// Broadcast to our user — should receive it
+	myMsg := websocket.WSMessage{Type: websocket.TypePermissionsUpdated, Payload: "mine"}
+	hub.BroadcastToUser(orgID, userID, myMsg)
+	assertReceivesMessage(t, client, websocket.TypePermissionsUpdated)
+}
+
+func TestHandleAuthMessage_FailedAuth_DoesNotReceiveBroadcast(t *testing.T) {
+	hub := newTestHub(t)
+	orgID := uuid.New()
+	authFn := failAuthFn()
+
+	client := websocket.NewUnauthenticatedClient(hub, nil, authFn)
+
+	// Attempt auth (will fail)
+	msg := websocket.WSMessage{
+		Type:    websocket.TypeAuth,
+		Payload: map[string]interface{}{"token": "bad-token"},
+	}
+	data, err := json.Marshal(msg)
+	require.NoError(t, err)
+	require.False(t, websocket.ClientHandleAuthMessage(client, data))
+
+	// Hub should have no clients
+	assert.Equal(t, 0, hub.GetClientCount())
+
+	// Broadcast to org — no one should receive
+	broadcast := websocket.WSMessage{Type: websocket.TypeNewMessage, Payload: "hello"}
+	hub.BroadcastToOrg(orgID, broadcast)
+
+	assertNoMessage(t, client)
 }

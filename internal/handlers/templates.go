@@ -60,6 +60,7 @@ func (a *App) ListTemplates(r *fastglue.Request) error {
 	accountName := string(r.RequestCtx.QueryArgs().Peek("account")) // Filter by account name
 	status := string(r.RequestCtx.QueryArgs().Peek("status"))
 	category := string(r.RequestCtx.QueryArgs().Peek("category"))
+	search := string(r.RequestCtx.QueryArgs().Peek("search"))
 
 	query := a.DB.Where("organization_id = ?", orgID)
 
@@ -71,6 +72,9 @@ func (a *App) ListTemplates(r *fastglue.Request) error {
 	}
 	if category != "" {
 		query = query.Where("category = ?", category)
+	}
+	if search != "" {
+		query = query.Where("name ILIKE ? OR display_name ILIKE ?", "%"+search+"%", "%"+search+"%")
 	}
 
 	var total int64
@@ -114,8 +118,7 @@ func (a *App) CreateTemplate(r *fastglue.Request) error {
 	}
 
 	// Verify account belongs to organization
-	var account models.WhatsAppAccount
-	if err := a.DB.Where("name = ? AND organization_id = ?", req.WhatsAppAccount, orgID).First(&account).Error; err != nil {
+	if _, err := a.resolveWhatsAppAccount(orgID, req.WhatsAppAccount); err != nil {
 		return r.SendErrorEnvelope(fasthttp.StatusBadRequest, "WhatsApp account not found", nil, "")
 	}
 
@@ -256,10 +259,9 @@ func (a *App) DeleteTemplate(r *fastglue.Request) error {
 
 	// If template exists on Meta, delete it there too
 	if template.MetaTemplateID != "" {
-		var account models.WhatsAppAccount
-		if err := a.DB.Where("name = ? AND organization_id = ?", template.WhatsAppAccount, orgID).First(&account).Error; err == nil {
+		if account, err := a.resolveWhatsAppAccount(orgID, template.WhatsAppAccount); err == nil {
 			// Delete from Meta API
-			go a.deleteTemplateFromMeta(&account, template.Name)
+			go a.deleteTemplateFromMeta(account, template.Name)
 		}
 	}
 
@@ -294,8 +296,8 @@ func (a *App) SubmitTemplate(r *fastglue.Request) error {
 	}
 
 	// Get the WhatsApp account
-	var account models.WhatsAppAccount
-	if err := a.DB.Where("name = ? AND organization_id = ?", template.WhatsAppAccount, orgID).First(&account).Error; err != nil {
+	account, err := a.resolveWhatsAppAccount(orgID, template.WhatsAppAccount)
+	if err != nil {
 		return r.SendErrorEnvelope(fasthttp.StatusBadRequest, "WhatsApp account not found", nil, "")
 	}
 
@@ -303,7 +305,7 @@ func (a *App) SubmitTemplate(r *fastglue.Request) error {
 	isUpdate := template.MetaTemplateID != ""
 
 	// Submit template to Meta
-	metaTemplateID, submitErr := a.submitTemplateToMeta(&account, template)
+	metaTemplateID, submitErr := a.submitTemplateToMeta(account, template)
 	if submitErr != nil {
 		a.Log.Error("Failed to submit template to Meta", "error", submitErr)
 		return r.SendErrorEnvelope(fasthttp.StatusBadGateway, "Failed to submit template to Meta: "+submitErr.Error(), nil, "")
@@ -373,16 +375,16 @@ func (a *App) SyncTemplates(r *fastglue.Request) error {
 		return r.SendErrorEnvelope(fasthttp.StatusBadRequest, "whatsapp_account is required", nil, "")
 	}
 
-	var account models.WhatsAppAccount
-	if err := a.DB.Where("name = ? AND organization_id = ?", accountName, orgID).First(&account).Error; err != nil {
+	account, err := a.resolveWhatsAppAccount(orgID, accountName)
+	if err != nil {
 		return r.SendErrorEnvelope(fasthttp.StatusNotFound, "WhatsApp account not found", nil, "")
 	}
 
 	// Fetch templates from Meta API
-	templates, err := a.fetchTemplatesFromMeta(&account)
+	templates, err := a.fetchTemplatesFromMeta(account)
 	if err != nil {
 		a.Log.Error("Failed to fetch templates from Meta", "error", err)
-		return r.SendErrorEnvelope(fasthttp.StatusBadGateway, "Failed to fetch templates from Meta: "+err.Error(), nil, "")
+		return r.SendErrorEnvelope(fasthttp.StatusBadGateway, "Failed to fetch templates from Meta", nil, "")
 	}
 
 	// Sync to database
@@ -538,8 +540,8 @@ func (a *App) UploadTemplateMedia(r *fastglue.Request) error {
 	}
 
 	// Verify account belongs to organization
-	var account models.WhatsAppAccount
-	if err := a.DB.Where("name = ? AND organization_id = ?", accountName, orgID).First(&account).Error; err != nil {
+	account, err := a.resolveWhatsAppAccount(orgID, accountName)
+	if err != nil {
 		return r.SendErrorEnvelope(fasthttp.StatusBadRequest, "WhatsApp account not found", nil, "")
 	}
 
@@ -586,14 +588,14 @@ func (a *App) UploadTemplateMedia(r *fastglue.Request) error {
 	}
 
 	// Create whatsapp account with AppID
-	waAccount := a.toWhatsAppAccount(&account)
+	waAccount := a.toWhatsAppAccount(account)
 
 	// Perform resumable upload to get handle
 	ctx := context.Background()
 	handle, err := a.WhatsApp.ResumableUpload(ctx, waAccount, fileData, mimeType, fileHeader.Filename)
 	if err != nil {
 		a.Log.Error("Failed to upload template media", "error", err)
-		return r.SendErrorEnvelope(fasthttp.StatusBadGateway, "Failed to upload media to Meta: "+err.Error(), nil, "")
+		return r.SendErrorEnvelope(fasthttp.StatusBadGateway, "Failed to upload media to Meta", nil, "")
 	}
 
 	return r.SendEnvelope(map[string]interface{}{

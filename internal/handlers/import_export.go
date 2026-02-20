@@ -237,7 +237,8 @@ func (a *App) ExportData(r *fastglue.Request) error {
 			if tag != "" {
 				// Use proper JSONB containment with explicit cast
 				conditions = append(conditions, "tags @> ?::jsonb")
-				args = append(args, fmt.Sprintf(`["%s"]`, tag))
+				tagJSON, _ := json.Marshal([]string{tag})
+				args = append(args, string(tagJSON))
 			}
 		}
 		if len(conditions) > 0 {
@@ -306,6 +307,25 @@ func (a *App) ExportData(r *fastglue.Request) error {
 				csvRow[i] = transform(val)
 			} else {
 				csvRow[i] = formatExportValue(val, colTypes[i+1])
+			}
+		}
+		// Apply phone masking for contacts export
+		if req.Table == "contacts" && a.ShouldMaskPhoneNumbers(orgID) {
+			for i, col := range safeColumns {
+				if col == "phone_number" {
+					csvRow[i] = MaskPhoneNumber(csvRow[i])
+				} else if col == "profile_name" {
+					csvRow[i] = MaskIfPhoneNumber(csvRow[i])
+				}
+			}
+		}
+
+		// Escape CSV injection: prefix dangerous first chars with a single quote
+		// Only escape '=' and '@' which trigger formulas. '+' and '-' are skipped
+		// because they appear in legitimate data (phone numbers, negative values).
+		for j, cell := range csvRow {
+			if len(cell) > 0 && (cell[0] == '=' || cell[0] == '@') {
+				csvRow[j] = "'" + cell
 			}
 		}
 		_ = writer.Write(csvRow)
@@ -385,8 +405,12 @@ func (a *App) ImportData(r *fastglue.Request) error {
 	}
 	defer file.Close()
 
+	// Limit CSV file size to 10MB
+	const maxCSVSize = 10 << 20
+	limitedReader := io.LimitReader(file, maxCSVSize+1)
+
 	// Parse CSV
-	reader := csv.NewReader(file)
+	reader := csv.NewReader(limitedReader)
 
 	// Read header
 	header, err := reader.Read()
@@ -435,7 +459,8 @@ func (a *App) ImportData(r *fastglue.Request) error {
 		}
 	}
 
-	// Process rows
+	// Process rows (limit to 10,000)
+	const maxImportRows = 10000
 	var created, updated, skipped, errors int
 	var errorMessages []string
 
@@ -446,6 +471,10 @@ func (a *App) ImportData(r *fastglue.Request) error {
 			break
 		}
 		rowNum++
+		if rowNum > maxImportRows+1 { // +1 for header row
+			errorMessages = append(errorMessages, fmt.Sprintf("Import limited to %d rows", maxImportRows))
+			break
+		}
 		if err != nil {
 			errors++
 			errorMessages = append(errorMessages, fmt.Sprintf("Row %d: failed to parse", rowNum))
@@ -462,6 +491,13 @@ func (a *App) ImportData(r *fastglue.Request) error {
 				continue
 			}
 			val := strings.TrimSpace(record[idx])
+
+			// Validate field length
+			if len(val) > 10000 {
+				hasError = true
+				errorMessages = append(errorMessages, fmt.Sprintf("Row %d: %s exceeds max length", rowNum, col))
+				break
+			}
 
 			// Apply transform if available
 			if transform, ok := config.ColumnTransform[col]; ok {

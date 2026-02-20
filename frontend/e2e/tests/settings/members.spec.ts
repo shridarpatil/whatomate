@@ -128,8 +128,11 @@ test.describe('Organization Members - API Tests', () => {
     }
 
     // Switch to the new org — super admin can switch to any org
-    const newToken = await api.switchOrg(org.id)
-    expect(newToken).toBeTruthy()
-    expect(typeof newToken).toBe('string')
+    // switchOrg sets new auth cookies (no token returned in cookie-based auth)
+    await api.switchOrg(org.id)
+
+    // Verify the switch worked by checking current org
+    const currentOrg = await api.getCurrentOrg()
+    expect(currentOrg.id).toBe(org.id)
   })
 })

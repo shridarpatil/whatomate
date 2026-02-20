@@ -16,9 +16,11 @@ import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, Command
 import { PageHeader } from '@/components/shared'
 import { toast } from 'vue-sonner'
 import { Bot, Loader2, Brain, Plus, X, Clock, AlertTriangle, UserPlus, MessageSquare, Users } from 'lucide-vue-next'
-import { usersService, chatbotService } from '@/services/api'
+import { chatbotService } from '@/services/api'
+import { useUsersStore } from '@/stores/users'
 
 const { t } = useI18n()
+const usersStore = useUsersStore()
 
 const isSubmitting = ref(false)
 const isLoading = ref(true)
@@ -171,18 +173,15 @@ watch(isSLAEnabled, (newValue) => {
 
 onMounted(async () => {
   try {
-    const [chatbotResponse, usersResponse] = await Promise.all([
+    const [chatbotResponse] = await Promise.all([
       chatbotService.getSettings(),
-      usersService.list()
+      usersStore.fetchUsers()
     ])
 
     // Users for escalation notify
-    const usersData = usersResponse.data.data || usersResponse.data
-    const usersList = usersData.users || usersData || []
-    availableUsers.value = usersList.filter((u: any) => u.is_active !== false).map((u: any) => ({
-      id: u.id,
-      full_name: u.full_name
-    }))
+    availableUsers.value = usersStore.users
+      .filter((u) => u.is_active !== false)
+      .map((u) => ({ id: u.id, full_name: u.full_name }))
 
     // Chatbot settings
     const chatbotData = chatbotResponse.data.data || chatbotResponse.data

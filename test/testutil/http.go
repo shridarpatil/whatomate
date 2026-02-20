@@ -104,6 +104,19 @@ func ParseEnvelopeResponse(t *testing.T, req *fastglue.Request, target any) {
 	}
 }
 
+// GetResponseCookie reads a Set-Cookie value from the response by name.
+func GetResponseCookie(req *fastglue.Request, name string) string {
+	var value string
+	req.RequestCtx.Response.Header.VisitAllCookie(func(key, val []byte) {
+		c := fasthttp.AcquireCookie()
+		defer fasthttp.ReleaseCookie(c)
+		if err := c.ParseBytes(val); err == nil && string(c.Key()) == name {
+			value = string(c.Value())
+		}
+	})
+	return value
+}
+
 // AssertErrorResponse asserts that the response is an error with the expected message.
 func AssertErrorResponse(t *testing.T, req *fastglue.Request, expectedStatus int, expectedMessage string) {
 	t.Helper()

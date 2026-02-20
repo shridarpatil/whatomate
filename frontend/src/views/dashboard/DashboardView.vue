@@ -55,7 +55,20 @@ import {
   BarChart3,
   FileText,
   X,
-  GripVertical
+  GripVertical,
+  Megaphone,
+  Settings,
+  Contact,
+  Workflow,
+  Key,
+  UserX,
+  MessageSquareText,
+  Webhook,
+  ShieldCheck,
+  Zap,
+  Shield,
+  LineChart,
+  Tags
 } from 'lucide-vue-next'
 // Centralized Chart.js setup (registered once)
 import { Line, Bar, Pie } from '@/lib/charts'
@@ -117,11 +130,25 @@ const selectedShortcuts = ref<string[]>([])
 // Shortcut registry
 const SHORTCUT_REGISTRY = computed(() => ({
   chat: { label: t('dashboard.startChat'), to: '/chat', icon: MessageSquare, gradient: 'from-emerald-500 to-green-600' },
-  campaigns: { label: t('dashboard.campaigns'), to: '/campaigns', icon: Send, gradient: 'from-orange-500 to-amber-600' },
-  templates: { label: t('dashboard.templates'), to: '/templates', icon: FileText, gradient: 'from-blue-500 to-cyan-600' },
-  chatbot: { label: t('dashboard.chatbot'), to: '/chatbot', icon: Bot, gradient: 'from-purple-500 to-pink-600' },
-  contacts: { label: t('dashboard.contacts'), to: '/settings/contacts', icon: Users, gradient: 'from-cyan-500 to-blue-600' },
-  analytics: { label: t('dashboard.analytics'), to: '/analytics', icon: BarChart3, gradient: 'from-green-500 to-emerald-600' },
+  campaigns: { label: t('nav.campaigns'), to: '/campaigns', icon: Megaphone, gradient: 'from-orange-500 to-amber-600' },
+  templates: { label: t('nav.templates'), to: '/templates', icon: FileText, gradient: 'from-blue-500 to-cyan-600' },
+  chatbot: { label: t('nav.chatbot'), to: '/chatbot', icon: Bot, gradient: 'from-purple-500 to-pink-600' },
+  contacts: { label: t('nav.contacts'), to: '/settings/contacts', icon: Contact, gradient: 'from-cyan-500 to-blue-600' },
+  flows: { label: t('nav.flows'), to: '/flows', icon: Workflow, gradient: 'from-indigo-500 to-violet-600' },
+  transfers: { label: t('nav.transfers'), to: '/chatbot/transfers', icon: UserX, gradient: 'from-rose-500 to-red-600' },
+  agentAnalytics: { label: t('nav.agentAnalytics'), to: '/analytics/agents', icon: BarChart3, gradient: 'from-teal-500 to-cyan-600' },
+  metaInsights: { label: t('nav.metaInsights'), to: '/analytics/meta-insights', icon: LineChart, gradient: 'from-sky-500 to-blue-600' },
+  settings: { label: t('nav.settings'), to: '/settings', icon: Settings, gradient: 'from-gray-500 to-zinc-600' },
+  accounts: { label: t('nav.accounts'), to: '/settings/accounts', icon: Users, gradient: 'from-violet-500 to-purple-600' },
+  cannedResponses: { label: t('nav.cannedResponses'), to: '/settings/canned-responses', icon: MessageSquareText, gradient: 'from-amber-500 to-yellow-600' },
+  tags: { label: t('nav.tags'), to: '/settings/tags', icon: Tags, gradient: 'from-pink-500 to-rose-600' },
+  teams: { label: t('nav.teams'), to: '/settings/teams', icon: Users, gradient: 'from-lime-500 to-green-600' },
+  users: { label: t('nav.users'), to: '/settings/users', icon: Users, gradient: 'from-fuchsia-500 to-pink-600' },
+  roles: { label: t('nav.roles'), to: '/settings/roles', icon: Shield, gradient: 'from-slate-500 to-gray-600' },
+  apiKeys: { label: t('nav.apiKeys'), to: '/settings/api-keys', icon: Key, gradient: 'from-yellow-500 to-orange-600' },
+  webhooks: { label: t('nav.webhooks'), to: '/settings/webhooks', icon: Webhook, gradient: 'from-red-500 to-rose-600' },
+  customActions: { label: t('nav.customActions'), to: '/settings/custom-actions', icon: Zap, gradient: 'from-amber-500 to-orange-600' },
+  sso: { label: t('nav.sso'), to: '/settings/sso', icon: ShieldCheck, gradient: 'from-emerald-500 to-teal-600' },
 }))
 
 // Color options
@@ -699,7 +726,7 @@ const saveWidget = async () => {
     config = { shortcuts: [...selectedShortcuts.value] }
   }
 
-  const payload: Record<string, any> = {
+  const payload = {
     name: widgetForm.value.name,
     description: widgetForm.value.description,
     data_source: widgetForm.value.data_source,
@@ -1170,8 +1197,8 @@ onMounted(() => {
                 </div>
               </div>
 
-              <div class="flex-1 min-h-0 px-6 pb-6">
-                <div class="grid grid-cols-2 gap-3">
+              <div class="flex-1 min-h-0 overflow-y-auto px-6 pb-6">
+                <div :class="['grid gap-3 pt-1', item.w >= 8 ? 'grid-cols-3' : 'grid-cols-2']">
                   <template v-for="key in (getWidgetById(item.i)!.config?.shortcuts || [])" :key="key">
                     <RouterLink
                       v-if="SHORTCUT_REGISTRY[key as keyof typeof SHORTCUT_REGISTRY]"
@@ -1325,7 +1352,7 @@ onMounted(() => {
           <!-- Shortcuts selector (only for shortcuts display type) -->
           <div v-if="widgetForm.display_type === 'shortcuts'" class="space-y-2">
             <Label class="text-white/70 light:text-gray-700">{{ $t('dashboard.selectShortcuts') }}</Label>
-            <div class="space-y-2">
+            <div class="space-y-2 max-h-64 overflow-y-auto pr-1">
               <label
                 v-for="(shortcut, key) in SHORTCUT_REGISTRY"
                 :key="key"

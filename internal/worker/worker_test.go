@@ -8,6 +8,8 @@ import (
 	"testing"
 
 	"github.com/google/uuid"
+	"github.com/shridarpatil/whatomate/internal/config"
+	"github.com/shridarpatil/whatomate/internal/crypto"
 	"github.com/shridarpatil/whatomate/internal/models"
 	"github.com/shridarpatil/whatomate/internal/queue"
 	"github.com/shridarpatil/whatomate/internal/templateutil"
@@ -776,6 +778,112 @@ func TestWorker_HandleRecipientJob_TemplateParamSubstitution(t *testing.T) {
 	assert.Contains(t, message.Content, "ORD-456")
 	assert.NotContains(t, message.Content, "{{1}}")
 	assert.NotContains(t, message.Content, "{{2}}")
+}
+
+func TestWorker_DecryptAccountSecrets_WithEncryptionKey(t *testing.T) {
+	w := &Worker{
+		Config: &config.Config{
+			App: config.AppConfig{EncryptionKey: "test-secret-key-for-aes256"},
+		},
+	}
+
+	// Encrypt a token
+	plainToken := "EAAI2ZCP4ZAMv8BQtest"
+	plainSecret := "app-secret-123"
+	encToken, err := crypto.Encrypt(plainToken, w.Config.App.EncryptionKey)
+	require.NoError(t, err)
+	encSecret, err := crypto.Encrypt(plainSecret, w.Config.App.EncryptionKey)
+	require.NoError(t, err)
+
+	// Verify they are actually encrypted
+	assert.True(t, crypto.IsEncrypted(encToken))
+	assert.True(t, crypto.IsEncrypted(encSecret))
+
+	account := &models.WhatsAppAccount{
+		AccessToken: encToken,
+		AppSecret:   encSecret,
+	}
+
+	w.decryptAccountSecrets(account)
+
+	assert.Equal(t, plainToken, account.AccessToken)
+	assert.Equal(t, plainSecret, account.AppSecret)
+}
+
+func TestWorker_DecryptAccountSecrets_NilConfig(t *testing.T) {
+	w := &Worker{}
+
+	account := &models.WhatsAppAccount{
+		AccessToken: "plain-token",
+		AppSecret:   "plain-secret",
+	}
+
+	w.decryptAccountSecrets(account)
+
+	// Should remain unchanged (no-op)
+	assert.Equal(t, "plain-token", account.AccessToken)
+	assert.Equal(t, "plain-secret", account.AppSecret)
+}
+
+func TestWorker_HandleRecipientJob_WithEncryptedToken(t *testing.T) {
+	w := testWorker(t)
+
+	encKey := "test-encryption-key-for-aes"
+	w.Config = &config.Config{
+		App: config.AppConfig{EncryptionKey: encKey},
+	}
+
+	org, account, template, campaign, recipient := createTestCampaignData(t, w)
+
+	// Encrypt the token in the DB (simulating production)
+	encToken, err := crypto.Encrypt("test-token", encKey)
+	require.NoError(t, err)
+	require.NoError(t, w.DB.Model(account).Updates(map[string]interface{}{
+		"access_token": encToken,
+		"api_version":  "v21.0",
+	}).Error)
+
+	// Create mock server that verifies the decrypted token arrives
+	var capturedAuth string
+	server := httptest.NewServer(http.HandlerFunc(func(rw http.ResponseWriter, r *http.Request) {
+		capturedAuth = r.Header.Get("Authorization")
+		rw.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(rw).Encode(map[string]interface{}{
+			"messages": []map[string]interface{}{
+				{"id": "wamid.encrypted123"},
+			},
+		})
+	}))
+	defer server.Close()
+
+	w.WhatsApp = whatsapp.NewWithBaseURL(w.Log, server.URL)
+
+	job := &queue.RecipientJob{
+		CampaignID:     campaign.ID,
+		RecipientID:    recipient.ID,
+		OrganizationID: org.ID,
+		PhoneNumber:    recipient.PhoneNumber,
+		RecipientName:  recipient.RecipientName,
+		TemplateParams: recipient.TemplateParams,
+	}
+
+	err = w.HandleRecipientJob(context.Background(), job)
+	require.NoError(t, err)
+
+	// Verify the decrypted token was sent to Meta API (not the encrypted one)
+	assert.Equal(t, "Bearer test-token", capturedAuth)
+	assert.NotContains(t, capturedAuth, "enc:")
+
+	// Verify recipient marked as sent
+	var updatedRecipient models.BulkMessageRecipient
+	require.NoError(t, w.DB.First(&updatedRecipient, recipient.ID).Error)
+	assert.Equal(t, models.MessageStatusSent, updatedRecipient.Status)
+	assert.Equal(t, "wamid.encrypted123", updatedRecipient.WhatsAppMessageID)
+
+	// Verify message record created
+	var message models.Message
+	require.NoError(t, w.DB.Where("template_name = ?", template.Name).Order("created_at desc").First(&message).Error)
+	assert.Equal(t, models.MessageStatusSent, message.Status)
 }
 
 // Unit tests for parameter resolution functions (no database required)

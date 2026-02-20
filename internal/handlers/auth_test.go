@@ -31,14 +31,12 @@ func TestApp_Login_Success(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, fasthttp.StatusOK, testutil.GetResponseStatusCode(req))
 
-	// Parse the response
+	// Parse the response — tokens are in cookies, not body
 	var resp struct {
 		Status string `json:"status"`
 		Data   struct {
-			AccessToken  string `json:"access_token"`
-			RefreshToken string `json:"refresh_token"`
-			ExpiresIn    int    `json:"expires_in"`
-			User         struct {
+			ExpiresIn int `json:"expires_in"`
+			User      struct {
 				Email string `json:"email"`
 				Role  string `json:"role"`
 			} `json:"user"`
@@ -48,10 +46,13 @@ func TestApp_Login_Success(t *testing.T) {
 	require.NoError(t, err)
 
 	assert.Equal(t, "success", resp.Status)
-	assert.NotEmpty(t, resp.Data.AccessToken)
-	assert.NotEmpty(t, resp.Data.RefreshToken)
 	assert.Equal(t, 15*60, resp.Data.ExpiresIn)
 	assert.Equal(t, email, resp.Data.User.Email)
+
+	// Tokens should be in Set-Cookie headers
+	assert.NotEmpty(t, testutil.GetResponseCookie(req, "whm_access"))
+	assert.NotEmpty(t, testutil.GetResponseCookie(req, "whm_refresh"))
+	assert.NotEmpty(t, testutil.GetResponseCookie(req, "whm_csrf"))
 }
 
 func TestApp_Login_WrongPassword(t *testing.T) {
@@ -146,7 +147,7 @@ func TestApp_Register_Success(t *testing.T) {
 	// Create a default role for the org (Register looks for is_default=true, then falls back to name="agent" + is_system=true)
 	defaultRole := testutil.CreateTestRoleExact(t, app.DB, org.ID, "agent", true, true, nil)
 
-	req := testutil.NewJSONRequest(t, map[string]interface{}{
+	req := testutil.NewJSONRequest(t, map[string]any{
 		"email":           email,
 		"password":        "securepassword123",
 		"full_name":       "New User",
@@ -160,9 +161,8 @@ func TestApp_Register_Success(t *testing.T) {
 	var resp struct {
 		Status string `json:"status"`
 		Data   struct {
-			AccessToken  string `json:"access_token"`
-			RefreshToken string `json:"refresh_token"`
-			User         struct {
+			ExpiresIn int `json:"expires_in"`
+			User      struct {
 				ID       string `json:"id"`
 				Email    string `json:"email"`
 				FullName string `json:"full_name"`
@@ -175,12 +175,14 @@ func TestApp_Register_Success(t *testing.T) {
 	require.NoError(t, err)
 
 	assert.Equal(t, "success", resp.Status)
-	assert.NotEmpty(t, resp.Data.AccessToken)
-	assert.NotEmpty(t, resp.Data.RefreshToken)
 	assert.Equal(t, email, resp.Data.User.Email)
 	assert.Equal(t, "New User", resp.Data.User.FullName)
 	assert.NotEmpty(t, resp.Data.User.RoleID, "User should have a role assigned")
 	assert.True(t, resp.Data.User.IsActive)
+
+	// Tokens should be in cookies
+	assert.NotEmpty(t, testutil.GetResponseCookie(req, "whm_access"))
+	assert.NotEmpty(t, testutil.GetResponseCookie(req, "whm_refresh"))
 
 	// Verify the user has the default role in the database
 	userID, err := uuid.Parse(resp.Data.User.ID)
@@ -207,7 +209,7 @@ func TestApp_Register_EmailAlreadyExists_WrongPassword(t *testing.T) {
 	org2 := testutil.CreateTestOrganization(t, app.DB)
 	testutil.CreateTestRoleExact(t, app.DB, org2.ID, "agent", true, true, nil)
 
-	req := testutil.NewJSONRequest(t, map[string]interface{}{
+	req := testutil.NewJSONRequest(t, map[string]any{
 		"email":           email,
 		"password":        "wrongpassword123",
 		"full_name":       "Another User",
@@ -229,7 +231,7 @@ func TestApp_Register_ExistingUser_JoinsNewOrg(t *testing.T) {
 	org2 := testutil.CreateTestOrganization(t, app.DB)
 	testutil.CreateTestRoleExact(t, app.DB, org2.ID, "agent", true, true, nil)
 
-	req := testutil.NewJSONRequest(t, map[string]interface{}{
+	req := testutil.NewJSONRequest(t, map[string]any{
 		"email":           email,
 		"password":        "password123",
 		"full_name":       "Same User",
@@ -240,17 +242,8 @@ func TestApp_Register_ExistingUser_JoinsNewOrg(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, fasthttp.StatusOK, testutil.GetResponseStatusCode(req))
 
-	var resp struct {
-		Status string `json:"status"`
-		Data   struct {
-			AccessToken  string `json:"access_token"`
-			RefreshToken string `json:"refresh_token"`
-		} `json:"data"`
-	}
-	err = json.Unmarshal(testutil.GetResponseBody(req), &resp)
-	require.NoError(t, err)
-	assert.Equal(t, "success", resp.Status)
-	assert.NotEmpty(t, resp.Data.AccessToken)
+	// Tokens should be in cookies, not body
+	assert.NotEmpty(t, testutil.GetResponseCookie(req, "whm_access"))
 }
 
 func TestApp_Register_InvalidRequestBody(t *testing.T) {
@@ -282,18 +275,18 @@ func TestApp_RefreshToken_Success(t *testing.T) {
 	var resp struct {
 		Status string `json:"status"`
 		Data   struct {
-			AccessToken  string `json:"access_token"`
-			RefreshToken string `json:"refresh_token"`
-			ExpiresIn    int    `json:"expires_in"`
+			ExpiresIn int `json:"expires_in"`
 		} `json:"data"`
 	}
 	err = json.Unmarshal(testutil.GetResponseBody(req), &resp)
 	require.NoError(t, err)
 
 	assert.Equal(t, "success", resp.Status)
-	assert.NotEmpty(t, resp.Data.AccessToken)
-	assert.NotEmpty(t, resp.Data.RefreshToken)
 	assert.Equal(t, 15*60, resp.Data.ExpiresIn)
+
+	// Tokens should be in cookies
+	assert.NotEmpty(t, testutil.GetResponseCookie(req, "whm_access"))
+	assert.NotEmpty(t, testutil.GetResponseCookie(req, "whm_refresh"))
 }
 
 func TestApp_RefreshToken_Expired(t *testing.T) {
@@ -382,7 +375,8 @@ func TestApp_RefreshToken_InvalidRequestBody(t *testing.T) {
 
 	err := app.RefreshToken(req)
 	require.NoError(t, err)
-	assert.Equal(t, fasthttp.StatusBadRequest, testutil.GetResponseStatusCode(req))
+	// No cookie and no valid body → 401 "Missing refresh token"
+	testutil.AssertErrorResponse(t, req, fasthttp.StatusUnauthorized, "Missing refresh token")
 }
 
 func TestApp_GeneratedTokensAreValid(t *testing.T) {
@@ -400,17 +394,14 @@ func TestApp_GeneratedTokensAreValid(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, fasthttp.StatusOK, testutil.GetResponseStatusCode(req))
 
-	var resp struct {
-		Data struct {
-			AccessToken  string `json:"access_token"`
-			RefreshToken string `json:"refresh_token"`
-		} `json:"data"`
-	}
-	err = json.Unmarshal(testutil.GetResponseBody(req), &resp)
-	require.NoError(t, err)
+	// Read tokens from cookies
+	accessTokenStr := testutil.GetResponseCookie(req, "whm_access")
+	refreshTokenStr := testutil.GetResponseCookie(req, "whm_refresh")
+	require.NotEmpty(t, accessTokenStr)
+	require.NotEmpty(t, refreshTokenStr)
 
 	// Verify access token can be parsed
-	accessToken, err := jwt.ParseWithClaims(resp.Data.AccessToken, &middleware.JWTClaims{}, func(token *jwt.Token) (any, error) {
+	accessToken, err := jwt.ParseWithClaims(accessTokenStr, &middleware.JWTClaims{}, func(token *jwt.Token) (any, error) {
 		return []byte(testutil.TestJWTSecret), nil
 	})
 	require.NoError(t, err)
@@ -425,7 +416,7 @@ func TestApp_GeneratedTokensAreValid(t *testing.T) {
 	assert.Equal(t, "whatomate", accessClaims.Issuer)
 
 	// Verify refresh token can be parsed
-	refreshToken, err := jwt.ParseWithClaims(resp.Data.RefreshToken, &middleware.JWTClaims{}, func(token *jwt.Token) (any, error) {
+	refreshToken, err := jwt.ParseWithClaims(refreshTokenStr, &middleware.JWTClaims{}, func(token *jwt.Token) (any, error) {
 		return []byte(testutil.TestJWTSecret), nil
 	})
 	require.NoError(t, err)

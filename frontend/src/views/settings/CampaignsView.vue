@@ -68,10 +68,6 @@ import {
   Check,
   RefreshCw,
   CalendarIcon,
-  Image,
-  FileText,
-  Video,
-  X,
   MessageSquare
 } from 'lucide-vue-next'
 import { formatDate } from '@/lib/utils'
@@ -268,10 +264,6 @@ const selectedTemplate = ref<Template | null>(null)
 const addRecipientsTab = ref('manual')
 
 // Media upload state
-const mediaFile = ref<File | null>(null)
-const isUploadingMedia = ref(false)
-const mediaPreviewUrl = ref<string | null>(null)
-
 // Computed: template parameter format hints
 const templateParamNames = computed(() => {
   if (!selectedTemplate.value) return []
@@ -329,51 +321,6 @@ const recipientPlaceholder = computed(() => {
   }).join(', ')}`
   return `${line1}\n${line2}`
 })
-
-function handleMediaFileSelect(event: Event) {
-  const input = event.target as HTMLInputElement
-  if (input.files && input.files[0]) {
-    mediaFile.value = input.files[0]
-    // Create preview URL for images
-    if (mediaFile.value.type.startsWith('image/')) {
-      mediaPreviewUrl.value = URL.createObjectURL(mediaFile.value)
-    } else {
-      mediaPreviewUrl.value = null
-    }
-  }
-}
-
-function clearMediaFile() {
-  mediaFile.value = null
-  if (mediaPreviewUrl.value) {
-    URL.revokeObjectURL(mediaPreviewUrl.value)
-    mediaPreviewUrl.value = null
-  }
-}
-
-async function uploadCampaignMedia() {
-  if (!selectedCampaign.value || !mediaFile.value) return
-
-  isUploadingMedia.value = true
-  try {
-    const response = await campaignsService.uploadMedia(selectedCampaign.value.id, mediaFile.value)
-    const result = response.data.data
-    toast.success(t('common.uploadedSuccess', { resource: t('resources.Media') }))
-    // Update campaign with media ID
-    selectedCampaign.value.header_media_id = result.media_id
-    await fetchCampaigns()
-    // Update selectedCampaign with fresh data
-    const updated = campaigns.value.find(c => c.id === selectedCampaign.value?.id)
-    if (updated) {
-      selectedCampaign.value = updated
-    }
-    clearMediaFile()
-  } catch (error: any) {
-    toast.error(getErrorMessage(error, t('common.failedUpload', { resource: t('resources.media') })))
-  } finally {
-    isUploadingMedia.value = false
-  }
-}
 
 // Manual input validation
 interface ManualInputValidation {
@@ -440,7 +387,6 @@ let unsubscribeCampaignStats: (() => void) | null = null
 onMounted(async () => {
   await Promise.all([
     fetchCampaigns(),
-    fetchTemplates(),
     fetchAccounts()
   ])
 
@@ -518,15 +464,26 @@ watch([filterStatus, selectedRange], () => {
   }
 })
 
-async function fetchTemplates() {
+async function fetchTemplates(account?: string) {
   try {
-    const response = await templatesService.list()
-    templates.value = response.data.data?.templates || []
+    const response = await templatesService.list(account ? { account } : undefined)
+    const data = (response.data as any).data || response.data
+    templates.value = data.templates || []
   } catch (error) {
     console.error('Failed to fetch templates:', error)
     templates.value = []
   }
 }
+
+// Re-fetch templates when account changes
+watch(() => newCampaign.value.whatsapp_account, (account) => {
+  newCampaign.value.template_id = ''
+  if (account) {
+    fetchTemplates(account)
+  } else {
+    templates.value = []
+  }
+})
 
 async function fetchAccounts() {
   try {
@@ -735,36 +692,6 @@ function getProgressPercentage(campaign: Campaign): number {
   return Math.round((campaign.sent_count / campaign.total_recipients) * 100)
 }
 
-// Helper functions for media upload
-function getTemplateHeaderType(templateId: string | undefined): string | null {
-  if (!templateId) return null
-  const template = templates.value.find(t => t.id === templateId)
-  return template?.header_type || null
-}
-
-function getMediaIcon(headerType: string | null) {
-  switch (headerType) {
-    case 'IMAGE': return Image
-    case 'VIDEO': return Video
-    case 'DOCUMENT': return FileText
-    default: return FileText
-  }
-}
-
-function getAcceptedMediaTypes(headerType: string | null): string {
-  switch (headerType) {
-    case 'IMAGE': return 'image/jpeg,image/png'
-    case 'VIDEO': return 'video/mp4,video/3gpp'
-    case 'DOCUMENT': return 'application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document'
-    default: return '*/*'
-  }
-}
-
-function triggerMediaFileInput(campaignId: string) {
-  const input = window.document.querySelector(`input[data-campaign-id="${campaignId}"]`) as HTMLInputElement
-  input?.click()
-}
-
 // Cache for media blob URLs and loading states
 const mediaBlobUrls = ref<Record<string, string>>({})
 const mediaLoadingState = ref<Record<string, 'loading' | 'loaded' | 'error'>>({})
@@ -785,29 +712,15 @@ async function loadMediaPreview(campaignId: string) {
 }
 
 function getMediaPreviewUrl(campaignId: string): string {
-  return mediaBlobUrls.value[campaignId] || ''
-}
-
-function isMediaPreviewAvailable(campaignId: string): boolean {
-  // Trigger loading if not started
   if (!mediaLoadingState.value[campaignId]) {
     loadMediaPreview(campaignId)
   }
-  return mediaLoadingState.value[campaignId] === 'loaded'
-}
-
-function isMediaPreviewLoading(campaignId: string): boolean {
-  return mediaLoadingState.value[campaignId] === 'loading'
+  return mediaBlobUrls.value[campaignId] || ''
 }
 
 // Media preview dialog
 const showMediaPreviewDialog = ref(false)
 const previewingCampaign = ref<Campaign | null>(null)
-
-function openMediaPreview(campaign: Campaign) {
-  previewingCampaign.value = campaign
-  showMediaPreviewDialog.value = true
-}
 
 // Recipients functions
 const deletingRecipientId = ref<string | null>(null)

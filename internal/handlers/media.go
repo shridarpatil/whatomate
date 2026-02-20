@@ -153,10 +153,21 @@ func (a *App) ServeMedia(r *fastglue.Request) error {
 	}
 
 	// Users without contacts:read permission can only access media from their assigned contacts
+	// or from contacts with an active team transfer where the user is a team member.
 	if !a.HasPermission(userID, models.ResourceContacts, models.ActionRead, orgID) {
 		var contact models.Contact
 		if err := a.DB.Where("id = ? AND assigned_user_id = ?", message.ContactID, userID).First(&contact).Error; err != nil {
-			return r.SendErrorEnvelope(fasthttp.StatusForbidden, "Access denied", nil, "")
+			// Not directly assigned — check team membership via active transfer
+			var transfer models.AgentTransfer
+			if err := a.DB.Where("contact_id = ? AND organization_id = ? AND status = ? AND team_id IS NOT NULL",
+				message.ContactID, orgID, models.TransferStatusActive).First(&transfer).Error; err != nil {
+				return r.SendErrorEnvelope(fasthttp.StatusForbidden, "Access denied", nil, "")
+			}
+			var count int64
+			a.DB.Model(&models.TeamMember{}).Where("team_id = ? AND user_id = ?", transfer.TeamID, userID).Count(&count)
+			if count == 0 {
+				return r.SendErrorEnvelope(fasthttp.StatusForbidden, "Access denied", nil, "")
+			}
 		}
 	}
 
@@ -165,18 +176,24 @@ func (a *App) ServeMedia(r *fastglue.Request) error {
 		return r.SendErrorEnvelope(fasthttp.StatusNotFound, "No media found", nil, "")
 	}
 
-	// Security: prevent directory traversal
-	filePath := message.MediaURL
-	if strings.Contains(filePath, "..") {
+	// Security: prevent directory traversal and symlink attacks
+	filePath := filepath.Clean(message.MediaURL)
+	baseDir, err := filepath.Abs(a.getMediaStoragePath())
+	if err != nil {
+		return r.SendErrorEnvelope(fasthttp.StatusInternalServerError, "Storage configuration error", nil, "")
+	}
+	fullPath, err := filepath.Abs(filepath.Join(baseDir, filePath))
+	if err != nil || !strings.HasPrefix(fullPath, baseDir+string(os.PathSeparator)) {
 		return r.SendErrorEnvelope(fasthttp.StatusBadRequest, "Invalid file path", nil, "")
 	}
 
-	// Build full path
-	fullPath := filepath.Join(a.getMediaStoragePath(), filePath)
-
-	// Check if file exists
-	if _, err := os.Stat(fullPath); os.IsNotExist(err) {
+	// Reject symlinks
+	info, err := os.Lstat(fullPath)
+	if err != nil {
 		return r.SendErrorEnvelope(fasthttp.StatusNotFound, "File not found", nil, "")
+	}
+	if info.Mode()&os.ModeSymlink != 0 {
+		return r.SendErrorEnvelope(fasthttp.StatusBadRequest, "Invalid file path", nil, "")
 	}
 
 	// Read file

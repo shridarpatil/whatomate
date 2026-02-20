@@ -281,6 +281,10 @@ func (a *App) createOutgoingMessage(req OutgoingMessageRequest, opts MessageSend
 				"template_name": req.Template.Name,
 				"template_id":   req.Template.ID.String(),
 			}
+			// Store template buttons so they render in the chat bubble
+			if len(req.Template.Buttons) > 0 {
+				msg.InteractiveData = a.buildInteractiveData(req)
+			}
 		}
 	}
 
@@ -294,8 +298,16 @@ func (a *App) createOutgoingMessage(req OutgoingMessageRequest, opts MessageSend
 	return msg
 }
 
-// buildInteractiveData creates the InteractiveData JSONB for interactive messages
+// buildInteractiveData creates the InteractiveData JSONB for interactive and template messages
 func (a *App) buildInteractiveData(req OutgoingMessageRequest) models.JSONB {
+	// Template buttons: stored as JSONBArray on Template.Buttons
+	if req.Template != nil && len(req.Template.Buttons) > 0 {
+		return models.JSONB{
+			"type":    "button",
+			"buttons": req.Template.Buttons,
+		}
+	}
+
 	switch req.InteractiveType {
 	case "cta_url":
 		return models.JSONB{
@@ -332,11 +344,26 @@ func (a *App) finalizeMessageSend(msg *models.Message, req OutgoingMessageReques
 	// Use Where instead of Model(msg) to avoid mutating the shared msg struct,
 	// which may be read concurrently by the caller when sending is async.
 	if err != nil {
+		errMsg := err.Error()
+
 		a.DB.Model(&models.Message{}).Where("id = ?", msg.ID).Updates(map[string]any{
 			"status":        models.MessageStatusFailed,
-			"error_message": err.Error(),
+			"error_message": errMsg,
 		})
 		a.Log.Error("Failed to send message", "error", err, "message_id", msg.ID, "type", msg.MessageType)
+
+		// Broadcast failure status via WebSocket so frontend updates immediately
+		if opts.BroadcastWebSocket && a.WSHub != nil {
+			a.WSHub.BroadcastToOrg(req.Account.OrganizationID, websocket.WSMessage{
+				Type: websocket.TypeStatusUpdate,
+				Payload: map[string]any{
+					"message_id":    msg.ID,
+					"contact_id":    req.Contact.ID,
+					"status":        models.MessageStatusFailed,
+					"error_message": errMsg,
+				},
+			})
+		}
 		return
 	}
 
@@ -354,7 +381,7 @@ func (a *App) finalizeMessageSend(msg *models.Message, req OutgoingMessageReques
 	// Broadcast status update via WebSocket
 	if opts.BroadcastWebSocket && a.WSHub != nil {
 		a.WSHub.BroadcastToOrg(req.Account.OrganizationID, websocket.WSMessage{
-			Type: "message_status",
+			Type: websocket.TypeStatusUpdate,
 			Payload: map[string]any{
 				"message_id": msg.ID,
 				"contact_id": req.Contact.ID,
@@ -386,7 +413,11 @@ func (a *App) broadcastNewMessage(orgID uuid.UUID, msg *models.Message, contact 
 	if contact.AssignedUserID != nil {
 		payload["assigned_user_id"] = contact.AssignedUserID.String()
 	}
-	payload["profile_name"] = contact.ProfileName
+	profileName := contact.ProfileName
+	if a.ShouldMaskPhoneNumbers(orgID) {
+		profileName = MaskIfPhoneNumber(profileName)
+	}
+	payload["profile_name"] = profileName
 
 	// Add media fields
 	if msg.MediaURL != "" {
@@ -546,7 +577,6 @@ func (a *App) SendTemplateMessage(r *fastglue.Request) error {
 
 	// Get contact or use phone number directly
 	var contact *models.Contact
-	var phoneNumber string
 
 	if req.ContactID != "" {
 		cID, err := uuid.Parse(req.ContactID)
@@ -558,10 +588,9 @@ func (a *App) SendTemplateMessage(r *fastglue.Request) error {
 			return nil
 		}
 		contact = c
-		phoneNumber = c.PhoneNumber
 	} else {
 		// Find or create contact from phone number
-		phoneNumber = req.PhoneNumber
+		phoneNumber := req.PhoneNumber
 		var c models.Contact
 		err := a.DB.Where("phone_number = ? AND organization_id = ?", phoneNumber, orgID).First(&c).Error
 		if err != nil {
@@ -580,27 +609,18 @@ func (a *App) SendTemplateMessage(r *fastglue.Request) error {
 		contact = &c
 	}
 
-	// Get WhatsApp account
-	var account models.WhatsAppAccount
-	if req.AccountName != "" {
-		if err := a.DB.Where("name = ? AND organization_id = ?", req.AccountName, orgID).First(&account).Error; err != nil {
-			return r.SendErrorEnvelope(fasthttp.StatusBadRequest, "WhatsApp account not found", nil, "")
-		}
-	} else if template.WhatsAppAccount != "" {
-		if err := a.DB.Where("name = ? AND organization_id = ?", template.WhatsAppAccount, orgID).First(&account).Error; err != nil {
-			return r.SendErrorEnvelope(fasthttp.StatusBadRequest, "Template's WhatsApp account not found", nil, "")
-		}
-	} else if contact != nil && contact.WhatsAppAccount != "" {
-		if err := a.DB.Where("name = ? AND organization_id = ?", contact.WhatsAppAccount, orgID).First(&account).Error; err != nil {
-			return r.SendErrorEnvelope(fasthttp.StatusBadRequest, "Contact's WhatsApp account not found", nil, "")
-		}
-	} else {
-		// Get default outgoing account
-		if err := a.DB.Where("organization_id = ? AND is_default_outgoing = ?", orgID, true).First(&account).Error; err != nil {
-			if err := a.DB.Where("organization_id = ?", orgID).First(&account).Error; err != nil {
-				return r.SendErrorEnvelope(fasthttp.StatusBadRequest, "No WhatsApp account configured", nil, "")
-			}
-		}
+	// Determine which WhatsApp account to use (explicit > template > contact > default)
+	accountName := req.AccountName
+	if accountName == "" {
+		accountName = template.WhatsAppAccount
+	}
+	if accountName == "" && contact != nil {
+		accountName = contact.WhatsAppAccount
+	}
+
+	account, err := a.resolveWhatsAppAccount(orgID, accountName)
+	if err != nil {
+		return r.SendErrorEnvelope(fasthttp.StatusBadRequest, err.Error(), nil, "")
 	}
 
 	// Extract parameter names and resolve values
@@ -624,7 +644,7 @@ func (a *App) SendTemplateMessage(r *fastglue.Request) error {
 
 	// Send using unified message sender
 	msgReq := OutgoingMessageRequest{
-		Account:    &account,
+		Account:    account,
 		Contact:    contact,
 		Type:       models.MessageTypeTemplate,
 		Template:   &template,
@@ -640,11 +660,20 @@ func (a *App) SendTemplateMessage(r *fastglue.Request) error {
 		return r.SendErrorEnvelope(fasthttp.StatusInternalServerError, "Failed to send template message", nil, "")
 	}
 
-	return r.SendEnvelope(map[string]any{
-		"message_id":    message.ID,
-		"status":        "pending",
-		"template_name": template.Name,
-		"phone_number":  phoneNumber,
-	})
+	// Build full message response (same shape as SendMessage)
+	response := MessageResponse{
+		ID:              message.ID,
+		ContactID:       message.ContactID,
+		Direction:       message.Direction,
+		MessageType:     message.MessageType,
+		Content:         map[string]string{"body": message.Content},
+		InteractiveData: message.InteractiveData,
+		Status:          message.Status,
+		IsReply:         message.IsReply,
+		WhatsAppAccount: message.WhatsAppAccount,
+		CreatedAt:       message.CreatedAt,
+		UpdatedAt:       message.UpdatedAt,
+	}
+	return r.SendEnvelope(response)
 }
 

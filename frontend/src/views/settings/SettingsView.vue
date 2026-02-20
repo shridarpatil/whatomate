@@ -10,25 +10,15 @@ import { Switch } from '@/components/ui/switch'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { PageHeader } from '@/components/shared'
+import LanguageSwitcher from '@/components/LanguageSwitcher.vue'
 import { toast } from 'vue-sonner'
 import { Settings, Bell, Loader2, Globe } from 'lucide-vue-next'
 import { usersService, organizationService } from '@/services/api'
-import { SUPPORTED_LOCALES, setLocale, getLocale } from '@/i18n'
 
 const { t } = useI18n()
 
 const isSubmitting = ref(false)
 const isLoading = ref(true)
-
-// Language Setting
-const selectedLocale = ref(getLocale())
-
-function changeLocale(value: unknown) {
-  if (typeof value === 'string') {
-    selectedLocale.value = value
-    setLocale(value)
-  }
-}
 
 // General Settings
 const generalSettings = ref({
@@ -181,21 +171,7 @@ async function saveNotificationSettings() {
                     <Globe class="h-4 w-4 inline mr-1" />
                     {{ $t('settings.language') }}
                   </Label>
-                  <Select :model-value="selectedLocale" @update:model-value="changeLocale">
-                    <SelectTrigger class="w-full max-w-xs bg-white/[0.04] border-white/[0.1] text-white/70 light:bg-white light:border-gray-200 light:text-gray-700">
-                      <SelectValue :placeholder="$t('settings.selectLanguage')" />
-                    </SelectTrigger>
-                    <SelectContent class="bg-[#141414] border-white/[0.08] light:bg-white light:border-gray-200">
-                      <SelectItem
-                        v-for="locale in SUPPORTED_LOCALES"
-                        :key="locale.code"
-                        :value="locale.code"
-                        class="text-white/70 focus:bg-white/[0.08] focus:text-white light:text-gray-700 light:focus:bg-gray-100"
-                      >
-                        {{ locale.nativeName }}
-                      </SelectItem>
-                    </SelectContent>
-                  </Select>
+                  <LanguageSwitcher class="max-w-xs" />
                   <p class="text-xs text-white/40 light:text-gray-500">{{ $t('settings.languageDesc') }}</p>
                 </div>
                 <Separator class="bg-white/[0.08] light:bg-gray-200" />

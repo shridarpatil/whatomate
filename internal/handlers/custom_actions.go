@@ -12,6 +12,9 @@ import (
 	"sync"
 	"time"
 
+	"fmt"
+
+	"github.com/dop251/goja"
 	"github.com/google/uuid"
 	"github.com/shridarpatil/whatomate/internal/models"
 	"github.com/valyala/fasthttp"
@@ -334,8 +337,8 @@ func (a *App) ExecuteCustomAction(r *fastglue.Request) error {
 		a.Log.Error("Failed to execute custom action", "error", err, "action_id", actionID)
 		return r.SendEnvelope(ActionResult{
 			Success: false,
-			Message: err.Error(),
-			Toast:   &ToastConfig{Message: "Action failed: " + err.Error(), Type: "error"},
+			Message: "Action execution failed",
+			Toast:   &ToastConfig{Message: "Action failed", Type: "error"},
 		})
 	}
 
@@ -492,9 +495,9 @@ func (a *App) executeURLAction(action models.CustomAction, context map[string]in
 	}, nil
 }
 
-// executeJavaScriptAction executes a JavaScript action
+// executeJavaScriptAction executes a JavaScript action server-side using goja.
+// The code runs in a sandboxed VM with no access to filesystem, network, or globals.
 func (a *App) executeJavaScriptAction(action models.CustomAction, context map[string]interface{}) (*ActionResult, error) {
-	// Parse config from JSONB (already a map)
 	configBytes, err := json.Marshal(action.Config)
 	if err != nil {
 		return nil, err
@@ -506,17 +509,63 @@ func (a *App) executeJavaScriptAction(action models.CustomAction, context map[st
 		return nil, err
 	}
 
-	// For MVP: Just return the context data and let frontend handle it
-	// In future: Use goja to execute JavaScript on the server
-	return &ActionResult{
+	if config.Code == "" {
+		return &ActionResult{Success: true, Message: "No code to execute"}, nil
+	}
+
+	vm := goja.New()
+
+	// Inject context variables (read-only data)
+	if err := vm.Set("context", context); err != nil {
+		return nil, fmt.Errorf("failed to set context: %w", err)
+	}
+	if contact, ok := context["contact"]; ok {
+		_ = vm.Set("contact", contact)
+	}
+	if user, ok := context["user"]; ok {
+		_ = vm.Set("user", user)
+	}
+	if org, ok := context["organization"]; ok {
+		_ = vm.Set("organization", org)
+	}
+
+	// Wrap user code in an IIFE so return works
+	wrapped := fmt.Sprintf("(function(context, contact, user, organization) { %s })(context, contact, user, organization)", config.Code)
+
+	val, err := vm.RunString(wrapped)
+	if err != nil {
+		return nil, fmt.Errorf("javascript execution error: %w", err)
+	}
+
+	result := &ActionResult{
 		Success: true,
 		Message: "JavaScript action executed",
-		Data: map[string]interface{}{
-			"code":    config.Code,
-			"context": context,
-		},
-		Toast: &ToastConfig{Message: "Action completed", Type: "success"},
-	}, nil
+		Toast:   &ToastConfig{Message: "Action completed", Type: "success"},
+	}
+
+	// Extract structured result from the JS return value
+	if val != nil && !goja.IsUndefined(val) && !goja.IsNull(val) {
+		exported := val.Export()
+		if jsResult, ok := exported.(map[string]interface{}); ok {
+			if t, ok := jsResult["toast"].(map[string]interface{}); ok {
+				result.Toast = &ToastConfig{
+					Message: fmt.Sprintf("%v", t["message"]),
+					Type:    fmt.Sprintf("%v", t["type"]),
+				}
+			}
+			if clip, ok := jsResult["clipboard"].(string); ok {
+				result.Clipboard = clip
+			}
+			if url, ok := jsResult["url"].(string); ok {
+				result.RedirectURL = url
+			}
+			if msg, ok := jsResult["message"].(string); ok {
+				result.Message = msg
+			}
+		}
+	}
+
+	return result, nil
 }
 
 // buildActionContext builds the context object for variable replacement
@@ -582,8 +631,14 @@ func replaceVariables(template string, context map[string]interface{}) string {
 func validateActionConfig(actionType models.ActionType, config map[string]interface{}) error {
 	switch actionType {
 	case models.ActionTypeWebhook:
-		if _, ok := config["url"]; !ok {
+		urlVal, ok := config["url"]
+		if !ok {
 			return &ValidationError{Field: "config.url", Message: "URL is required for webhook actions"}
+		}
+		if urlStr, ok := urlVal.(string); ok {
+			if err := validateWebhookURL(urlStr); err != nil {
+				return &ValidationError{Field: "config.url", Message: err.Error()}
+			}
 		}
 	case models.ActionTypeURL:
 		if _, ok := config["url"]; !ok {

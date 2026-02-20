@@ -572,18 +572,19 @@ func TestApp_SwitchOrg_Success(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, fasthttp.StatusOK, testutil.GetResponseStatusCode(req))
 
+	// Tokens are now in httpOnly cookies, not in the response body
+	accessCookie := testutil.GetResponseCookie(req, "whm_access")
+	refreshCookie := testutil.GetResponseCookie(req, "whm_refresh")
+	assert.NotEmpty(t, accessCookie, "whm_access cookie should be set")
+	assert.NotEmpty(t, refreshCookie, "whm_refresh cookie should be set")
+
 	var resp struct {
 		Data struct {
-			AccessToken  string `json:"access_token"`
-			RefreshToken string `json:"refresh_token"`
-			ExpiresIn    int    `json:"expires_in"`
+			ExpiresIn int `json:"expires_in"`
 		} `json:"data"`
 	}
 	err = json.Unmarshal(testutil.GetResponseBody(req), &resp)
 	require.NoError(t, err)
-
-	assert.NotEmpty(t, resp.Data.AccessToken)
-	assert.NotEmpty(t, resp.Data.RefreshToken)
 	assert.Greater(t, resp.Data.ExpiresIn, 0)
 }
 

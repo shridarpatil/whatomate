@@ -12,7 +12,7 @@ import { Loader2, ArrowUpDown, ArrowUp, ArrowDown } from 'lucide-vue-next'
 import PaginationControls from './PaginationControls.vue'
 import type { Component } from 'vue'
 
-export interface Column<T> {
+export interface Column<_T = unknown> {
   key: string
   label: string
   width?: string

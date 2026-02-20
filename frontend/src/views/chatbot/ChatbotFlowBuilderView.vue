@@ -33,7 +33,8 @@ import {
   CollapsibleContent,
   CollapsibleTrigger,
 } from '@/components/ui/collapsible'
-import { chatbotService, flowsService, teamsService, type Team } from '@/services/api'
+import { chatbotService, flowsService, type Team } from '@/services/api'
+import { useTeamsStore } from '@/stores/teams'
 import { toast } from 'vue-sonner'
 import {
   ArrowLeft,
@@ -51,6 +52,7 @@ import {
   Settings,
   ExternalLink,
   Reply,
+  Phone,
 } from 'lucide-vue-next'
 import draggable from 'vuedraggable'
 import FlowChart from '@/components/chatbot/flow-builder/FlowChart.vue'
@@ -68,8 +70,9 @@ interface ApiConfig {
 interface ButtonConfig {
   id: string
   title: string
-  type?: 'reply' | 'url'
+  type?: 'reply' | 'url' | 'phone'
   url?: string
+  phone_number?: string
 }
 
 interface TransferConfig {
@@ -137,6 +140,7 @@ interface WhatsAppFlow {
 const route = useRoute()
 const router = useRouter()
 const { t } = useI18n()
+const teamsStore = useTeamsStore()
 
 const isLoading = ref(true)
 const isSaving = ref(false)
@@ -390,7 +394,7 @@ onMounted(async () => {
 async function fetchWhatsAppFlows() {
   try {
     const response = await flowsService.list()
-    const data = response.data.data || response.data
+    const data = response.data
     const allFlows = data.flows || []
     whatsappFlows.value = allFlows.filter(
       (f: WhatsAppFlow) => f.meta_flow_id && f.status?.toUpperCase() === 'PUBLISHED'
@@ -403,9 +407,8 @@ async function fetchWhatsAppFlows() {
 
 async function fetchTeams() {
   try {
-    const response = await teamsService.list()
-    const data = (response.data as any).data || response.data
-    teams.value = (data.teams || []).filter((t: Team) => t.is_active)
+    await teamsStore.fetchTeams()
+    teams.value = teamsStore.teams.filter((t: Team) => t.is_active)
   } catch (error) {
     console.error('Failed to load teams:', error)
     teams.value = []
@@ -558,7 +561,7 @@ function setInputType(type: string | number | bigint | Record<string, any> | nul
 }
 
 // Button helpers
-function addButton(type: 'reply' | 'url' = 'reply') {
+function addButton(type: 'reply' | 'url' | 'phone' = 'reply') {
   if (!selectedStep.value) return
   if (selectedStep.value.buttons.length >= 10) {
     toast.error(t('flowBuilder.maxOptionsError'))
@@ -571,9 +574,22 @@ function addButton(type: 'reply' | 'url' = 'reply') {
   }
   if (type === 'url') {
     newButton.url = ''
+  } else if (type === 'phone') {
+    newButton.phone_number = ''
   }
   selectedStep.value.buttons.push(newButton)
 }
+
+// WhatsApp doesn't allow mixing reply buttons with CTA (URL/phone) buttons.
+// CTA buttons are limited to max 2 per message (can mix URL + phone).
+const hasReplyButtons = computed(() =>
+  selectedStep.value?.buttons.some((b: ButtonConfig) => !b.type || b.type === 'reply') ?? false
+)
+const ctaButtonCount = computed(() =>
+  selectedStep.value?.buttons.filter((b: ButtonConfig) => b.type === 'url' || b.type === 'phone').length ?? 0
+)
+const hasCtaButtons = computed(() => ctaButtonCount.value > 0)
+const ctaLimitReached = computed(() => ctaButtonCount.value >= 2)
 
 function removeButton(index: number) {
   if (!selectedStep.value) return
@@ -760,6 +776,14 @@ async function saveFlow() {
             new URL(btn.url)
           } catch {
             toast.error(t('flowBuilder.invalidUrl', { step: step.step_name || `Step ${i + 1}`, title: btn.title }))
+            selectStep(i)
+            return
+          }
+        }
+        // Check phone number for phone buttons
+        if (btn.type === 'phone') {
+          if (!btn.phone_number?.trim()) {
+            toast.error(t('flowBuilder.phoneButtonWithoutNumber', { step: step.step_name || `Step ${i + 1}`, title: btn.title }))
             selectStep(i)
             return
           }
@@ -1355,15 +1379,19 @@ function confirmCancel() {
                 <template v-if="selectedStep.message_type === 'buttons'">
                   <div class="space-y-3">
                     <div class="flex items-center justify-between">
-                      <Label class="text-xs">{{ $t('flowBuilder.buttonOptions') }} ({{ selectedStep.buttons.length }}/10)</Label>
+                      <Label class="text-xs">{{ $t('flowBuilder.buttonOptions') }} ({{ selectedStep.buttons.length }}/{{ hasCtaButtons ? 2 : 10 }})</Label>
                       <div class="flex gap-1">
-                        <Button variant="outline" size="sm" class="h-6 text-xs" @click="addButton('reply')" :disabled="selectedStep.buttons.length >= 10">
+                        <Button variant="outline" size="sm" class="h-6 text-xs" @click="addButton('reply')" :disabled="selectedStep.buttons.length >= 10 || hasCtaButtons">
                           <Reply class="h-3 w-3 mr-1" />
                           {{ $t('flowBuilder.replyButton') }}
                         </Button>
-                        <Button variant="outline" size="sm" class="h-6 text-xs" @click="addButton('url')" :disabled="selectedStep.buttons.length >= 10">
+                        <Button variant="outline" size="sm" class="h-6 text-xs" @click="addButton('url')" :disabled="ctaLimitReached || hasReplyButtons">
                           <ExternalLink class="h-3 w-3 mr-1" />
                           {{ $t('flowBuilder.urlButton') }}
+                        </Button>
+                        <Button variant="outline" size="sm" class="h-6 text-xs" @click="addButton('phone')" :disabled="ctaLimitReached || hasReplyButtons">
+                          <Phone class="h-3 w-3 mr-1" />
+                          {{ $t('flowBuilder.phoneButton') }}
                         </Button>
                       </div>
                     </div>
@@ -1371,8 +1399,8 @@ function confirmCancel() {
                       <div v-for="(btn, idx) in selectedStep.buttons" :key="idx" class="p-2 border rounded-md bg-muted/30 space-y-2">
                         <div class="flex items-center gap-2">
                           <Badge variant="outline" class="text-[10px] px-1.5">
-                            <component :is="btn.type === 'url' ? ExternalLink : Reply" class="h-2.5 w-2.5 mr-1" />
-                            {{ btn.type === 'url' ? 'URL' : $t('flowBuilder.replyButton') }}
+                            <component :is="btn.type === 'url' ? ExternalLink : btn.type === 'phone' ? Phone : Reply" class="h-2.5 w-2.5 mr-1" />
+                            {{ btn.type === 'url' ? 'URL' : btn.type === 'phone' ? $t('flowBuilder.phoneButton') : $t('flowBuilder.replyButton') }}
                           </Badge>
                           <Input :model-value="btn.title" @update:model-value="updateButtonTitle(idx, $event)" :placeholder="$t('flowBuilder.buttonTitle')" class="h-7 flex-1 text-xs" />
                           <Button variant="ghost" size="icon" class="h-7 w-7" @click="removeButton(idx)">
@@ -1381,6 +1409,9 @@ function confirmCancel() {
                         </div>
                         <div v-if="btn.type === 'url'" class="flex gap-2">
                           <Input v-model="btn.url" :placeholder="$t('flowBuilder.exampleUrlPlaceholder')" class="h-7 text-xs flex-1" />
+                        </div>
+                        <div v-else-if="btn.type === 'phone'" class="flex gap-2">
+                          <Input v-model="btn.phone_number" :placeholder="$t('flowBuilder.phoneNumberPlaceholder')" class="h-7 text-xs flex-1" />
                         </div>
                         <div v-else class="space-y-2">
                           <Input v-model="btn.id" :placeholder="$t('flowBuilder.buttonIdPlaceholder')" class="h-7 text-xs" />

@@ -142,10 +142,6 @@ export const useTeamsStore = defineStore('teams', () => {
     }
   }
 
-  function getTeamById(id: string): Team | undefined {
-    return teams.value.find(t => t.id === id)
-  }
-
   return {
     teams,
     loading,
@@ -156,7 +152,6 @@ export const useTeamsStore = defineStore('teams', () => {
     deleteTeam,
     fetchTeamMembers,
     addTeamMember,
-    removeTeamMember,
-    getTeamById
+    removeTeamMember
   }
 })

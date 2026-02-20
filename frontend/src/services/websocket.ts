@@ -1,6 +1,7 @@
 import { useContactsStore } from '@/stores/contacts'
 import { useTransfersStore } from '@/stores/transfers'
 import { useAuthStore } from '@/stores/auth'
+import { useNotesStore } from '@/stores/notes'
 import { toast } from 'vue-sonner'
 import router from '@/router'
 
@@ -39,6 +40,7 @@ function showNotification(title: string, body: string, contactId: string) {
 }
 
 // WebSocket message types
+const WS_TYPE_AUTH = 'auth'
 const WS_TYPE_NEW_MESSAGE = 'new_message'
 const WS_TYPE_STATUS_UPDATE = 'status_update'
 const WS_TYPE_SET_CONTACT = 'set_contact'
@@ -60,6 +62,11 @@ const WS_TYPE_CAMPAIGN_STATS_UPDATE = 'campaign_stats_update'
 // Permission types
 const WS_TYPE_PERMISSIONS_UPDATED = 'permissions_updated'
 
+// Conversation note types
+const WS_TYPE_CONVERSATION_NOTE_CREATED = 'conversation_note_created'
+const WS_TYPE_CONVERSATION_NOTE_UPDATED = 'conversation_note_updated'
+const WS_TYPE_CONVERSATION_NOTE_DELETED = 'conversation_note_deleted'
+
 interface WSMessage {
   type: string
   payload: any
@@ -74,21 +81,36 @@ class WebSocketService {
   private isConnected = false
   private hasConnectedBefore = false
   private campaignStatsCallbacks: ((payload: any) => void)[] = []
+  private getTokenFn: (() => Promise<string | null>) | null = null
 
-  connect(token: string) {
+  async connect(getToken?: () => Promise<string | null>) {
     if (this.ws?.readyState === WebSocket.OPEN) {
+      return
+    }
+
+    // Store the token function for reconnects
+    if (getToken) {
+      this.getTokenFn = getToken
+    }
+
+    // Get a fresh short-lived WS token
+    const token = this.getTokenFn ? await this.getTokenFn() : null
+    if (!token) {
       return
     }
 
     const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
     const host = window.location.host
     const basePath = ((window as any).__BASE_PATH__ ?? '').replace(/\/$/, '')
-    const url = `${protocol}//${host}${basePath}/ws?token=${token}`
+    const url = `${protocol}//${host}${basePath}/ws`
 
     try {
       this.ws = new WebSocket(url)
 
       this.ws.onopen = () => {
+        // Send auth message as the first message (token not in URL for security)
+        this.send({ type: WS_TYPE_AUTH, payload: { token } })
+
         const isReconnection = this.hasConnectedBefore
         this.isConnected = true
         this.hasConnectedBefore = true
@@ -108,14 +130,14 @@ class WebSocketService {
       this.ws.onclose = () => {
         this.isConnected = false
         this.stopPing()
-        this.handleReconnect(token)
+        this.handleReconnect()
       }
 
       this.ws.onerror = () => {
         // Error handled by onclose
       }
     } catch {
-      this.handleReconnect(token)
+      this.handleReconnect()
     }
   }
 
@@ -164,6 +186,15 @@ class WebSocketService {
           break
         case WS_TYPE_PERMISSIONS_UPDATED:
           this.handlePermissionsUpdated()
+          break
+        case WS_TYPE_CONVERSATION_NOTE_CREATED:
+          useNotesStore().addNote(message.payload)
+          break
+        case WS_TYPE_CONVERSATION_NOTE_UPDATED:
+          useNotesStore().onNoteUpdated(message.payload)
+          break
+        case WS_TYPE_CONVERSATION_NOTE_DELETED:
+          useNotesStore().onNoteDeleted(message.payload.id)
           break
         default:
           // Unknown message type, ignore
@@ -238,7 +269,7 @@ class WebSocketService {
   }
 
   private handleStatusUpdate(store: ReturnType<typeof useContactsStore>, payload: any) {
-    store.updateMessageStatus(payload.message_id, payload.status)
+    store.updateMessageStatus(payload.message_id, payload.status, payload.error_message)
   }
 
   private handleReactionUpdate(store: ReturnType<typeof useContactsStore>, payload: any) {
@@ -400,7 +431,7 @@ class WebSocketService {
     }
   }
 
-  private handleReconnect(token: string) {
+  private handleReconnect() {
     if (this.reconnectAttempts >= this.maxReconnectAttempts) {
       return
     }
@@ -409,7 +440,7 @@ class WebSocketService {
     const delay = this.reconnectDelay * Math.pow(2, this.reconnectAttempts - 1)
 
     setTimeout(() => {
-      this.connect(token)
+      this.connect()
     }, delay)
   }
 

@@ -7,17 +7,28 @@ const API_BASE_URL = import.meta.env.VITE_API_URL || `${basePath}/api`
 export const api: AxiosInstance = axios.create({
   baseURL: API_BASE_URL,
   timeout: 30000,
+  withCredentials: true,
   headers: {
     'Content-Type': 'application/json'
   }
 })
 
-// Request interceptor to add auth token and organization header
+// Helper to read a cookie by name
+function getCookie(name: string): string | null {
+  const match = document.cookie.match(new RegExp('(?:^|; )' + name + '=([^;]*)'))
+  return match ? decodeURIComponent(match[1]) : null
+}
+
+// Request interceptor to add CSRF token and organization header
 api.interceptors.request.use(
   (config: InternalAxiosRequestConfig) => {
-    const token = localStorage.getItem('auth_token')
-    if (token) {
-      config.headers.Authorization = `Bearer ${token}`
+    // Add CSRF token on mutating requests (cookie-based auth sends cookies automatically)
+    const method = (config.method || '').toUpperCase()
+    if (method === 'POST' || method === 'PUT' || method === 'DELETE' || method === 'PATCH') {
+      const csrfToken = getCookie('whm_csrf')
+      if (csrfToken) {
+        config.headers['X-CSRF-Token'] = csrfToken
+      }
     }
     // Add organization override header for org switching
     const selectedOrgId = localStorage.getItem('selected_organization_id')
@@ -44,28 +55,18 @@ api.interceptors.response.use(
     if (error.response?.status === 401 && !originalRequest._retry && !isAuthEndpoint) {
       originalRequest._retry = true
 
-      const refreshToken = localStorage.getItem('refresh_token')
-      if (refreshToken) {
-        try {
-          const response = await axios.post(`${API_BASE_URL}/auth/refresh`, {
-            refresh_token: refreshToken
-          })
+      try {
+        // Browser sends whm_refresh cookie automatically via withCredentials
+        await axios.post(`${API_BASE_URL}/auth/refresh`, {}, { withCredentials: true })
 
-          // fastglue wraps response in { status: "success", data: {...} }
-          const newToken = response.data.data.access_token
-          localStorage.setItem('auth_token', newToken)
-
-          originalRequest.headers.Authorization = `Bearer ${newToken}`
-          return api(originalRequest)
-        } catch {
-          // Refresh failed, clear auth and redirect to login
-          localStorage.removeItem('auth_token')
-          localStorage.removeItem('refresh_token')
-          localStorage.removeItem('user')
-          window.location.href = '/login'
-        }
-      } else {
-        window.location.href = '/login'
+        // Cookies are updated by the server response — retry the original request
+        return api(originalRequest)
+      } catch {
+        // Refresh failed, clear user and redirect to login
+        localStorage.removeItem('user')
+        localStorage.removeItem('auth_token')
+        localStorage.removeItem('refresh_token')
+        window.location.href = basePath + '/login'
       }
     }
 
@@ -75,27 +76,12 @@ api.interceptors.response.use(
 
 // API service methods
 export const authService = {
-  login: (email: string, password: string) =>
-    api.post('/auth/login', { email, password }),
-
-  register: (data: { email: string; password: string; full_name: string; organization_id: string }) =>
-    api.post('/auth/register', data),
-
-  logout: () => api.post('/auth/logout'),
-
-  refreshToken: (refreshToken: string) =>
-    api.post('/auth/refresh', { refresh_token: refreshToken }),
-
-  me: () => api.get('/auth/me'),
-
-  switchOrg: (organizationId: string) =>
-    api.post('/auth/switch-org', { organization_id: organizationId }),
+  getWSToken: () => api.get('/auth/ws-token'),
 }
 
 export const usersService = {
   list: (params?: { search?: string; page?: number; limit?: number }) =>
     api.get('/users', { params }),
-  get: (id: string) => api.get(`/users/${id}`),
   create: (data: { email: string; password: string; full_name: string; role_id?: string }) =>
     api.post('/users', data),
   update: (id: string, data: { email?: string; password?: string; full_name?: string; role_id?: string; is_active?: boolean }) =>
@@ -120,11 +106,7 @@ export const apiKeysService = {
 }
 
 export const accountsService = {
-  list: () => api.get('/accounts'),
-  get: (id: string) => api.get(`/accounts/${id}`),
-  create: (data: any) => api.post('/accounts', data),
-  update: (id: string, data: any) => api.put(`/accounts/${id}`, data),
-  delete: (id: string) => api.delete(`/accounts/${id}`)
+  list: () => api.get('/accounts')
 }
 
 export const contactsService = {
@@ -201,12 +183,12 @@ export const dataService = {
 }
 
 export const messagesService = {
-  list: (contactId: string, params?: { page?: number; limit?: number; before_id?: string }) =>
+  list: (contactId: string, params?: { page?: number; limit?: number; before_id?: string; account?: string }) =>
     api.get(`/contacts/${contactId}/messages`, { params }),
-  send: (contactId: string, data: { type: string; content: any; reply_to_message_id?: string }) =>
+  send: (contactId: string, data: { type: string; content: any; reply_to_message_id?: string; whatsapp_account?: string }) =>
     api.post(`/contacts/${contactId}/messages`, data),
-  sendTemplate: (contactId: string, data: { template_name: string; components?: any[] }) =>
-    api.post(`/contacts/${contactId}/messages/template`, data),
+  sendTemplate: (contactId: string, data: { template_name: string; template_params?: Record<string, string>; account_name?: string }) =>
+    api.post('/messages/template', { contact_id: contactId, ...data }),
   sendReaction: (contactId: string, messageId: string, emoji: string) =>
     api.post(`/contacts/${contactId}/messages/${messageId}/reaction`, { emoji })
 }
@@ -215,18 +197,14 @@ export const templatesService = {
   list: (params?: { status?: string; category?: string; account?: string; search?: string; page?: number; limit?: number }) =>
     api.get<{ templates: any[]; total?: number }>('/templates', { params }),
   get: (id: string) => api.get(`/templates/${id}`),
-  create: (data: any) => api.post('/templates', data),
-  update: (id: string, data: any) => api.put(`/templates/${id}`, data),
-  delete: (id: string) => api.delete(`/templates/${id}`),
-  sync: () => api.post('/templates/sync'),
   uploadMedia: (accountName: string, file: File) => {
     const formData = new FormData()
     formData.append('file', file)
     formData.append('account', accountName)
+    const csrfToken = getCookie('whm_csrf')
     return axios.post(`${api.defaults.baseURL}/templates/upload-media`, formData, {
-      headers: {
-        'Authorization': `Bearer ${localStorage.getItem('auth_token')}`
-      }
+      withCredentials: true,
+      headers: csrfToken ? { 'X-CSRF-Token': csrfToken } : {}
     })
   }
 }
@@ -234,13 +212,11 @@ export const templatesService = {
 export const flowsService = {
   list: (params?: { account?: string; search?: string; page?: number; limit?: number }) =>
     api.get<{ flows: any[]; total?: number }>('/flows', { params }),
-  get: (id: string) => api.get(`/flows/${id}`),
   create: (data: any) => api.post('/flows', data),
   update: (id: string, data: any) => api.put(`/flows/${id}`, data),
   delete: (id: string) => api.delete(`/flows/${id}`),
   saveToMeta: (id: string) => api.post(`/flows/${id}/save-to-meta`),
   publish: (id: string) => api.post(`/flows/${id}/publish`),
-  deprecate: (id: string) => api.post(`/flows/${id}/deprecate`),
   duplicate: (id: string) => api.post(`/flows/${id}/duplicate`),
   sync: (whatsappAccount: string) => api.post('/flows/sync', { whatsapp_account: whatsappAccount })
 }
@@ -248,7 +224,6 @@ export const flowsService = {
 export const campaignsService = {
   list: (params?: { status?: string; from?: string; to?: string; search?: string; page?: number; limit?: number }) =>
     api.get('/campaigns', { params }),
-  get: (id: string) => api.get(`/campaigns/${id}`),
   create: (data: any) => api.post('/campaigns', data),
   update: (id: string, data: any) => api.put(`/campaigns/${id}`, data),
   delete: (id: string) => api.delete(`/campaigns/${id}`),
@@ -256,7 +231,6 @@ export const campaignsService = {
   pause: (id: string) => api.post(`/campaigns/${id}/pause`),
   cancel: (id: string) => api.post(`/campaigns/${id}/cancel`),
   retryFailed: (id: string) => api.post(`/campaigns/${id}/retry-failed`),
-  stats: (id: string) => api.get(`/campaigns/${id}/stats`),
   // Recipients
   getRecipients: (id: string) => api.get(`/campaigns/${id}/recipients`),
   addRecipients: (id: string, recipients: Array<{ phone_number: string; recipient_name?: string; template_params?: Record<string, any> }>) =>
@@ -267,10 +241,10 @@ export const campaignsService = {
   uploadMedia: (campaignId: string, file: File) => {
     const formData = new FormData()
     formData.append('file', file)
+    const csrfToken = getCookie('whm_csrf')
     return axios.post(`${api.defaults.baseURL}/campaigns/${campaignId}/media`, formData, {
-      headers: {
-        'Authorization': `Bearer ${localStorage.getItem('auth_token')}`
-      }
+      withCredentials: true,
+      headers: csrfToken ? { 'X-CSRF-Token': csrfToken } : {}
     })
   },
   getMedia: (campaignId: string) =>
@@ -285,7 +259,6 @@ export const chatbotService = {
   // Keywords
   listKeywords: (params?: { search?: string; page?: number; limit?: number }) =>
     api.get<{ rules: any[]; total?: number }>('/chatbot/keywords', { params }),
-  getKeyword: (id: string) => api.get(`/chatbot/keywords/${id}`),
   createKeyword: (data: any) => api.post('/chatbot/keywords', data),
   updateKeyword: (id: string, data: any) => api.put(`/chatbot/keywords/${id}`, data),
   deleteKeyword: (id: string) => api.delete(`/chatbot/keywords/${id}`),
@@ -301,15 +274,9 @@ export const chatbotService = {
   // AI Contexts
   listAIContexts: (params?: { search?: string; page?: number; limit?: number }) =>
     api.get<{ contexts: any[]; total?: number }>('/chatbot/ai-contexts', { params }),
-  getAIContext: (id: string) => api.get(`/chatbot/ai-contexts/${id}`),
   createAIContext: (data: any) => api.post('/chatbot/ai-contexts', data),
   updateAIContext: (id: string, data: any) => api.put(`/chatbot/ai-contexts/${id}`, data),
   deleteAIContext: (id: string) => api.delete(`/chatbot/ai-contexts/${id}`),
-
-  // Sessions
-  listSessions: (params?: { status?: string; contact_id?: string }) =>
-    api.get('/chatbot/sessions', { params }),
-  getSession: (id: string) => api.get(`/chatbot/sessions/${id}`),
 
   // Agent Transfers
   listTransfers: (params?: {
@@ -348,7 +315,6 @@ export interface CannedResponse {
 export const cannedResponsesService = {
   list: (params?: { category?: string; search?: string; active_only?: string; page?: number; limit?: number }) =>
     api.get<{ canned_responses: CannedResponse[]; total?: number }>('/canned-responses', { params }),
-  get: (id: string) => api.get(`/canned-responses/${id}`),
   create: (data: { name: string; shortcut?: string; content: string; category?: string }) =>
     api.post('/canned-responses', data),
   update: (id: string, data: { name?: string; shortcut?: string; content?: string; category?: string; is_active?: boolean }) =>
@@ -357,24 +323,9 @@ export const cannedResponsesService = {
   use: (id: string) => api.post(`/canned-responses/${id}/use`)
 }
 
-export const analyticsService = {
-  dashboard: (params?: { from?: string; to?: string }) =>
-    api.get('/analytics/dashboard', { params }),
-  messages: (params?: { from?: string; to?: string; group_by?: string }) =>
-    api.get('/analytics/messages', { params }),
-  campaigns: (params?: { from?: string; to?: string }) =>
-    api.get('/analytics/campaigns', { params }),
-  chatbot: (params?: { from?: string; to?: string }) =>
-    api.get('/analytics/chatbot', { params })
-}
-
 export const agentAnalyticsService = {
   getSummary: (params?: { from?: string; to?: string; agent_id?: string }) =>
-    api.get('/analytics/agents', { params }),
-  getAgentDetails: (id: string, params?: { from?: string; to?: string }) =>
-    api.get(`/analytics/agents/${id}`, { params }),
-  getComparison: (params?: { from?: string; to?: string }) =>
-    api.get('/analytics/agents/comparison', { params })
+    api.get('/analytics/agents', { params })
 }
 
 // Meta WhatsApp Analytics Types
@@ -400,7 +351,7 @@ export interface MetaMessagingDataPoint {
   delivered: number
 }
 
-export interface MetaConversationDataPoint {
+interface MetaConversationDataPoint {
   start: number
   end: number
   conversation: number
@@ -421,12 +372,12 @@ export interface MetaPricingDataPoint {
   tier?: string                 // Pricing tier
 }
 
-export interface MetaTemplateCostItem {
+interface MetaTemplateCostItem {
   type: string    // amount_spent, cost_per_delivered, cost_per_url_button_click
   value?: number  // The cost value
 }
 
-export interface MetaTemplateClickItem {
+interface MetaTemplateClickItem {
   type: string           // quick_reply_button, unique_url_button
   button_content: string // The button text
   count: number          // Number of clicks
@@ -453,7 +404,7 @@ export interface MetaCallDataPoint {
   call_direction: string
 }
 
-export interface MetaAnalyticsData {
+interface MetaAnalyticsData {
   id: string
   analytics?: {
     granularity: string
@@ -549,7 +500,7 @@ export interface WidgetData {
   }>
 }
 
-export interface DataSourceInfo {
+interface DataSourceInfo {
   name: string
   label: string
   fields: string[]
@@ -565,7 +516,6 @@ export interface LayoutItem {
 
 export const widgetsService = {
   list: () => api.get<{ widgets: DashboardWidget[] }>('/widgets'),
-  get: (id: string) => api.get<DashboardWidget>(`/widgets/${id}`),
   create: (data: {
     name: string
     description?: string
@@ -599,8 +549,6 @@ export const widgetsService = {
     is_shared: boolean
   }>) => api.put<DashboardWidget>(`/widgets/${id}`, data),
   delete: (id: string) => api.delete(`/widgets/${id}`),
-  getData: (id: string, params?: { from?: string; to?: string }) =>
-    api.get<WidgetData>(`/widgets/${id}/data`, { params }),
   getAllData: (params?: { from?: string; to?: string }) =>
     api.get<{ data: Record<string, WidgetData> }>('/widgets/data', { params }),
   getDataSources: () => api.get<{
@@ -633,7 +581,6 @@ export interface Organization {
 
 export const organizationsService = {
   list: () => api.get<{ organizations: Organization[] }>('/organizations'),
-  getCurrent: () => api.get<Organization>('/organizations/current'),
   create: (data: { name: string }) => api.post('/organizations', data),
   // Members
   addMember: (data: { user_id?: string; email?: string; role_id?: string }) =>
@@ -843,6 +790,28 @@ export const tagsService = {
   update: (name: string, data: { name?: string; color?: string }) =>
     api.put<Tag>(`/tags/${encodeURIComponent(name)}`, data),
   delete: (name: string) => api.delete(`/tags/${encodeURIComponent(name)}`)
+}
+
+// Conversation Notes
+export interface ConversationNote {
+  id: string
+  contact_id: string
+  created_by_id: string
+  created_by_name: string
+  content: string
+  created_at: string
+  updated_at: string
+}
+
+export const notesService = {
+  list: (contactId: string, params?: { limit?: number; before?: string }) =>
+    api.get<{ notes: ConversationNote[]; total: number; has_more: boolean }>(`/contacts/${contactId}/notes`, { params }),
+  create: (contactId: string, data: { content: string }) =>
+    api.post<ConversationNote>(`/contacts/${contactId}/notes`, data),
+  update: (contactId: string, noteId: string, data: { content: string }) =>
+    api.put<ConversationNote>(`/contacts/${contactId}/notes/${noteId}`, data),
+  delete: (contactId: string, noteId: string) =>
+    api.delete(`/contacts/${contactId}/notes/${noteId}`)
 }
 
 export default api

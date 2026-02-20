@@ -3,6 +3,10 @@ package handlers
 import (
 	"context"
 	"encoding/json"
+	"fmt"
+	"net"
+	"net/url"
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
@@ -10,6 +14,74 @@ import (
 	"github.com/valyala/fasthttp"
 	"github.com/zerodha/fastglue"
 )
+
+// validateWebhookURL performs structural validation of a webhook URL.
+// It blocks known-internal hostnames and IP literals pointing to private ranges.
+// Runtime SSRF protection (DNS rebinding) is handled by SSRFSafeDialer.
+func validateWebhookURL(rawURL string) error {
+	u, err := url.Parse(rawURL)
+	if err != nil {
+		return fmt.Errorf("invalid URL: %w", err)
+	}
+
+	if u.Scheme != "https" && u.Scheme != "http" {
+		return fmt.Errorf("URL scheme must be http or https")
+	}
+
+	hostname := u.Hostname()
+	if hostname == "" {
+		return fmt.Errorf("URL must have a hostname")
+	}
+
+	// Block obvious internal hostnames
+	lower := strings.ToLower(hostname)
+	if lower == "localhost" || lower == "0.0.0.0" || strings.HasSuffix(lower, ".local") ||
+		strings.HasSuffix(lower, ".internal") {
+		return fmt.Errorf("URL must not point to internal addresses")
+	}
+
+	// Block private/loopback IP literals (e.g. http://127.0.0.1, http://[::1])
+	if ip := net.ParseIP(hostname); ip != nil {
+		if ip.IsLoopback() || ip.IsPrivate() || ip.IsLinkLocalUnicast() ||
+			ip.IsLinkLocalMulticast() || ip.IsUnspecified() {
+			return fmt.Errorf("URL must not point to internal addresses")
+		}
+	}
+
+	return nil
+}
+
+// SSRFSafeDialer returns a DialContext function that blocks connections to
+// private/loopback IPs after DNS resolution. Use this in http.Transport
+// for webhook and custom action HTTP calls.
+func SSRFSafeDialer() func(ctx context.Context, network, addr string) (net.Conn, error) {
+	dialer := &net.Dialer{Timeout: 10 * time.Second}
+	return func(ctx context.Context, network, addr string) (net.Conn, error) {
+		host, port, err := net.SplitHostPort(addr)
+		if err != nil {
+			return nil, err
+		}
+
+		ips, err := net.DefaultResolver.LookupHost(ctx, host)
+		if err != nil {
+			return nil, err
+		}
+
+		for _, ipStr := range ips {
+			ip := net.ParseIP(ipStr)
+			if ip == nil {
+				continue
+			}
+			if ip.IsLoopback() || ip.IsPrivate() || ip.IsLinkLocalUnicast() ||
+				ip.IsLinkLocalMulticast() || ip.IsUnspecified() {
+				return nil, fmt.Errorf("connection to private address %s is not allowed", ipStr)
+			}
+		}
+
+		// Connect to first resolved IP
+		return dialer.DialContext(ctx, network, net.JoinHostPort(ips[0], port))
+	}
+}
 
 // WebhookRequest represents the request body for creating/updating a webhook
 type WebhookRequest struct {
@@ -122,6 +194,10 @@ func (a *App) CreateWebhook(r *fastglue.Request) error {
 		return r.SendErrorEnvelope(fasthttp.StatusBadRequest, "name and url are required", nil, "")
 	}
 
+	if err := validateWebhookURL(req.URL); err != nil {
+		return r.SendErrorEnvelope(fasthttp.StatusBadRequest, err.Error(), nil, "")
+	}
+
 	if len(req.Events) == 0 {
 		return r.SendErrorEnvelope(fasthttp.StatusBadRequest, "at least one event must be selected", nil, "")
 	}
@@ -132,13 +208,19 @@ func (a *App) CreateWebhook(r *fastglue.Request) error {
 		headers[k] = v
 	}
 
+	// Auto-generate secret if not provided
+	secret := req.Secret
+	if secret == "" {
+		secret = generateVerifyToken() // Reuse the 32-byte hex generator
+	}
+
 	webhook := models.Webhook{
 		OrganizationID: orgID,
 		Name:           req.Name,
 		URL:            req.URL,
 		Events:         req.Events,
 		Headers:        headers,
-		Secret:         req.Secret,
+		Secret:         secret,
 		IsActive:       true,
 	}
 
@@ -179,6 +261,9 @@ func (a *App) UpdateWebhook(r *fastglue.Request) error {
 		webhook.Name = req.Name
 	}
 	if req.URL != "" {
+		if err := validateWebhookURL(req.URL); err != nil {
+			return r.SendErrorEnvelope(fasthttp.StatusBadRequest, err.Error(), nil, "")
+		}
 		webhook.URL = req.URL
 	}
 	if len(req.Events) > 0 {
@@ -279,7 +364,8 @@ func (a *App) TestWebhook(r *fastglue.Request) error {
 	defer cancel()
 
 	if err := a.sendWebhookRequest(ctx, *webhook, jsonData); err != nil {
-		return r.SendErrorEnvelope(fasthttp.StatusBadGateway, "Webhook test failed: "+err.Error(), nil, "")
+		a.Log.Error("Webhook test failed", "error", err, "webhook_id", webhook.ID)
+		return r.SendErrorEnvelope(fasthttp.StatusBadGateway, "Webhook test failed", nil, "")
 	}
 
 	return r.SendEnvelope(map[string]string{"message": "Test webhook sent successfully"})

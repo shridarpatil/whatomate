@@ -8,6 +8,7 @@
 name = "Whatomate"
 environment = "development"  # development, staging, production
 debug = true
+encryption_key = ""  # AES-256 key for encrypting secrets at rest (32+ chars, required in production)
 
 [server]
 host = "0.0.0.0"
@@ -15,6 +16,7 @@ port = 8080
 read_timeout = 30
 write_timeout = 30
 base_path = ""  # Set to "/subpath" if behind nginx proxy pass
+allowed_origins = ""  # Comma-separated CORS origins (e.g., "https://app.example.com,https://admin.example.com"). Empty = allow all (dev only).
 
 [database]
 host = "db"  # Use "localhost" for local development
@@ -34,9 +36,9 @@ password = ""
 db = 0
 
 [jwt]
-secret = "your-super-secret-jwt-key-change-in-production"
+secret = "your-super-secret-jwt-key-change-in-production"  # Must be 32+ chars in production
 access_expiry_mins = 15
-refresh_expiry_days = 7
+refresh_expiry_days = 1
 
 [storage]
 type = "local"  # local, s3
@@ -53,6 +55,21 @@ base_url = "https://graph.facebook.com"
 app_id = ""      # Meta App ID for Embedded Signup
 app_secret = ""  # Meta App Secret
 config_id = ""  # WhatsApp Config ID for frontend login
+
+# Auth cookie settings (tokens are stored in httpOnly cookies)
+[cookie]
+domain = ""    # Cookie domain (e.g., ".example.com"). Empty = current host only.
+secure = false # Set Secure flag on cookies. Auto-set true when environment=production.
+
+# Rate limiting for auth endpoints (uses Redis fixed-window counters)
+[rate_limit]
+enabled = false                # Set to true to enable rate limiting
+login_max_attempts = 10        # Max login attempts per IP per window
+register_max_attempts = 10     # Max register attempts per IP per window
+refresh_max_attempts = 30      # Max token refresh attempts per IP per window
+sso_max_attempts = 10          # Max SSO init/callback attempts per IP per window
+window_seconds = 60            # Time window in seconds
+trust_proxy = false            # Trust X-Forwarded-For / X-Real-IP headers (set true behind reverse proxy)
 
 # Default admin credentials (only used during initial setup when no users exist)
 [default_admin]

@@ -48,20 +48,61 @@ func RequestLogger(log logf.Logger) fastglue.FastMiddleware {
 	}
 }
 
-// CORS handles Cross-Origin Resource Sharing
-func CORS() fastglue.FastMiddleware {
+// ParseAllowedOrigins parses a comma-separated list of allowed origins into a set.
+func ParseAllowedOrigins(allowedOrigins string) map[string]bool {
+	origins := make(map[string]bool)
+	for _, o := range strings.Split(allowedOrigins, ",") {
+		o = strings.TrimSpace(o)
+		if o != "" {
+			origins[o] = true
+		}
+	}
+	return origins
+}
+
+// IsOriginAllowed checks if origin is in the allowed set.
+// If no origins are configured, all origins are allowed (development mode).
+func IsOriginAllowed(origin string, allowedOrigins map[string]bool) bool {
+	if len(allowedOrigins) == 0 {
+		return true // No whitelist configured = allow all (development)
+	}
+	return allowedOrigins[origin]
+}
+
+// CORS handles Cross-Origin Resource Sharing with origin validation.
+func CORS(allowedOrigins map[string]bool) fastglue.FastMiddleware {
 	return func(r *fastglue.Request) *fastglue.Request {
 		origin := string(r.RequestCtx.Request.Header.Peek("Origin"))
-		if origin == "" {
-			origin = "*"
-		}
 
-		r.RequestCtx.Response.Header.Set("Access-Control-Allow-Origin", origin)
+		if origin != "" && IsOriginAllowed(origin, allowedOrigins) {
+			r.RequestCtx.Response.Header.Set("Access-Control-Allow-Origin", origin)
+			r.RequestCtx.Response.Header.Set("Access-Control-Allow-Credentials", "true")
+		} else if len(allowedOrigins) == 0 {
+			// Development: no whitelist configured, allow the request origin
+			if origin != "" {
+				r.RequestCtx.Response.Header.Set("Access-Control-Allow-Origin", origin)
+			}
+		}
+		// If origin is not allowed, no Access-Control-Allow-Origin header is set,
+		// which causes the browser to block the request.
+
 		r.RequestCtx.Response.Header.Set("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS, PATCH")
-		r.RequestCtx.Response.Header.Set("Access-Control-Allow-Headers", "Content-Type, Authorization, X-API-Key, X-Requested-With, X-Organization-ID")
-		r.RequestCtx.Response.Header.Set("Access-Control-Allow-Credentials", "true")
+		r.RequestCtx.Response.Header.Set("Access-Control-Allow-Headers", "Content-Type, Authorization, X-API-Key, X-Organization-ID, X-CSRF-Token")
 		r.RequestCtx.Response.Header.Set("Access-Control-Max-Age", "86400")
 
+		return r
+	}
+}
+
+// SecurityHeaders adds standard security headers to every response.
+func SecurityHeaders() fastglue.FastMiddleware {
+	return func(r *fastglue.Request) *fastglue.Request {
+		h := &r.RequestCtx.Response.Header
+		h.Set("X-Content-Type-Options", "nosniff")
+		h.Set("X-Frame-Options", "DENY")
+		h.Set("Referrer-Policy", "strict-origin-when-cross-origin")
+		h.Set("Permissions-Policy", "camera=(), microphone=(), geolocation=()")
+		h.Set("X-XSS-Protection", "0") // Disabled per OWASP recommendation (use CSP instead)
 		return r
 	}
 }
@@ -101,20 +142,26 @@ func AuthWithDB(secret string, db *gorm.DB) fastglue.FastMiddleware {
 			return nil
 		}
 
-		// Fall back to JWT authentication
-		if authHeader == "" {
-			_ = r.SendErrorEnvelope(fasthttp.StatusUnauthorized, "Missing authorization header", nil, "")
-			return nil
+		// Fall back to JWT authentication (Bearer header or cookie)
+		var tokenString string
+
+		if authHeader != "" {
+			// Extract token from "Bearer <token>"
+			parts := strings.Split(authHeader, " ")
+			if len(parts) != 2 || parts[0] != "Bearer" {
+				_ = r.SendErrorEnvelope(fasthttp.StatusUnauthorized, "Invalid authorization header format", nil, "")
+				return nil
+			}
+			tokenString = parts[1]
+		} else {
+			// Fall back to whm_access cookie
+			tokenString = string(r.RequestCtx.Request.Header.Cookie("whm_access"))
 		}
 
-		// Extract token from "Bearer <token>"
-		parts := strings.Split(authHeader, " ")
-		if len(parts) != 2 || parts[0] != "Bearer" {
-			_ = r.SendErrorEnvelope(fasthttp.StatusUnauthorized, "Invalid authorization header format", nil, "")
+		if tokenString == "" {
+			_ = r.SendErrorEnvelope(fasthttp.StatusUnauthorized, "Missing authorization", nil, "")
 			return nil
 		}
-
-		tokenString := parts[1]
 
 		// Parse and validate token
 		token, err := jwt.ParseWithClaims(tokenString, &JWTClaims{}, func(token *jwt.Token) (interface{}, error) {
@@ -152,12 +199,14 @@ func validateAPIKey(r *fastglue.Request, key string, db *gorm.DB) bool {
 		return false
 	}
 
-	// Extract prefix for lookup (first 8 chars after "whm_")
-	keyPrefix := key[4:12]
+	// Extract both new (16-char) and old (8-char) prefixes for backward compatibility.
+	// New keys store 16 chars; old keys store 8 chars. Query matches either.
+	newPrefix := key[4:20]
+	oldPrefix := key[4:12]
 
-	// Find API keys with matching prefix
+	// Find API keys with matching prefix (supports both old and new prefix lengths)
 	var apiKeys []models.APIKey
-	if err := db.Preload("User").Where("key_prefix = ? AND is_active = ?", keyPrefix, true).Find(&apiKeys).Error; err != nil {
+	if err := db.Preload("User").Where("(key_prefix = ? OR key_prefix = ?) AND is_active = ?", newPrefix, oldPrefix, true).Find(&apiKeys).Error; err != nil {
 		return false
 	}
 

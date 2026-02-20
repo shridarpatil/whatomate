@@ -9,6 +9,7 @@ import (
 	"github.com/redis/go-redis/v9"
 	"github.com/shridarpatil/whatomate/internal/config"
 	"github.com/shridarpatil/whatomate/internal/contactutil"
+	"github.com/shridarpatil/whatomate/internal/crypto"
 	"github.com/shridarpatil/whatomate/internal/models"
 	"github.com/shridarpatil/whatomate/internal/queue"
 	"github.com/shridarpatil/whatomate/internal/templateutil"
@@ -88,6 +89,7 @@ func (w *Worker) HandleRecipientJob(ctx context.Context, job *queue.RecipientJob
 		w.incrementCampaignCount(job.CampaignID, "failed_count")
 		return nil // Don't retry, mark as failed
 	}
+	w.decryptAccountSecrets(&account)
 
 	// Get or create contact for this recipient
 	contact, _, err := contactutil.GetOrCreateContact(w.DB, job.OrganizationID, job.PhoneNumber, job.RecipientName)
@@ -309,6 +311,20 @@ func buildMediaParameter(headerType, keyName, value string) map[string]interface
 		mediaType: map[string]interface{}{
 			keyName: value,
 		},
+	}
+}
+
+// decryptAccountSecrets decrypts the encrypted secrets on a WhatsApp account.
+func (w *Worker) decryptAccountSecrets(account *models.WhatsAppAccount) {
+	var key string
+	if w.Config != nil {
+		key = w.Config.App.EncryptionKey
+	}
+	if dec, err := crypto.Decrypt(account.AccessToken, key); err == nil {
+		account.AccessToken = dec
+	}
+	if dec, err := crypto.Decrypt(account.AppSecret, key); err == nil {
+		account.AppSecret = dec
 	}
 }
 

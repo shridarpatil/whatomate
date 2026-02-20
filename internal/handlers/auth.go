@@ -1,6 +1,8 @@
 package handlers
 
 import (
+	"context"
+	"fmt"
 	"time"
 
 	"github.com/golang-jwt/jwt/v5"
@@ -15,28 +17,27 @@ import (
 // LoginRequest represents login credentials
 type LoginRequest struct {
 	Email    string `json:"email" validate:"required,email"`
-	Password string `json:"password" validate:"required,min=6"`
+	Password string `json:"password" validate:"required,min=12"`
 }
 
 // RegisterRequest represents registration data
 type RegisterRequest struct {
 	Email          string    `json:"email" validate:"required,email"`
-	Password       string    `json:"password" validate:"required,min=8"`
+	Password       string    `json:"password" validate:"required,min=12"`
 	FullName       string    `json:"full_name" validate:"required"`
 	OrganizationID uuid.UUID `json:"organization_id" validate:"required"`
 }
 
-// AuthResponse represents authentication response
-type AuthResponse struct {
-	AccessToken  string      `json:"access_token"`
-	RefreshToken string      `json:"refresh_token"`
-	ExpiresIn    int         `json:"expires_in"`
-	User         models.User `json:"user"`
+// CookieAuthResponse represents authentication response when tokens are in cookies.
+// No tokens in the body — only the expiry hint and user object.
+type CookieAuthResponse struct {
+	ExpiresIn int         `json:"expires_in"`
+	User      models.User `json:"user"`
 }
 
 // RefreshRequest represents token refresh request
 type RefreshRequest struct {
-	RefreshToken string `json:"refresh_token" validate:"required"`
+	RefreshToken string `json:"refresh_token"`
 }
 
 // Login authenticates a user and returns tokens
@@ -49,6 +50,8 @@ func (a *App) Login(r *fastglue.Request) error {
 	// Find user by email with role preloaded
 	var user models.User
 	if err := a.DB.Preload("Role").Where("email = ?", req.Email).First(&user).Error; err != nil {
+		// Run dummy bcrypt to prevent timing-based account enumeration
+		_ = bcrypt.CompareHashAndPassword([]byte("$2a$10$xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"), []byte(req.Password))
 		return r.SendErrorEnvelope(fasthttp.StatusUnauthorized, "Invalid credentials", nil, "")
 	}
 
@@ -95,11 +98,11 @@ func (a *App) Login(r *fastglue.Request) error {
 		return r.SendErrorEnvelope(fasthttp.StatusInternalServerError, "Failed to generate token", nil, "")
 	}
 
-	return r.SendEnvelope(AuthResponse{
-		AccessToken:  accessToken,
-		RefreshToken: refreshToken,
-		ExpiresIn:    a.Config.JWT.AccessExpiryMins * 60,
-		User:         user,
+	a.setAuthCookies(r, accessToken, refreshToken)
+
+	return r.SendEnvelope(CookieAuthResponse{
+		ExpiresIn: a.Config.JWT.AccessExpiryMins * 60,
+		User:      user,
 	})
 }
 
@@ -136,6 +139,11 @@ func (a *App) Register(r *fastglue.Request) error {
 			return r.SendErrorEnvelope(fasthttp.StatusConflict, "An account with this email already exists. Please sign in and ask your organization admin to add you.", nil, "")
 		}
 
+		// Check if user account is disabled
+		if !existingUser.IsActive {
+			return r.SendErrorEnvelope(fasthttp.StatusUnauthorized, "Account is disabled", nil, "")
+		}
+
 		// Check if already a member of this org
 		var count int64
 		a.DB.Model(&models.UserOrganization{}).
@@ -167,15 +175,18 @@ func (a *App) Register(r *fastglue.Request) error {
 		accessToken, _ := a.generateAccessToken(&existingUser)
 		refreshToken, _ := a.generateRefreshToken(&existingUser)
 
-		return r.SendEnvelope(AuthResponse{
-			AccessToken:  accessToken,
-			RefreshToken: refreshToken,
-			ExpiresIn:    a.Config.JWT.AccessExpiryMins * 60,
-			User:         existingUser,
+		a.setAuthCookies(r, accessToken, refreshToken)
+
+		return r.SendEnvelope(CookieAuthResponse{
+			ExpiresIn: a.Config.JWT.AccessExpiryMins * 60,
+			User:      existingUser,
 		})
 	}
 
-	// New user — create account
+	// New user — run dummy bcrypt to prevent timing-based account enumeration
+	_ = bcrypt.CompareHashAndPassword([]byte("$2a$10$xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"), []byte(req.Password))
+
+	// Create account
 	hashedPassword, err := bcrypt.GenerateFromPassword([]byte(req.Password), bcrypt.DefaultCost)
 	if err != nil {
 		a.Log.Error("Failed to hash password", "error", err)
@@ -227,23 +238,30 @@ func (a *App) Register(r *fastglue.Request) error {
 	accessToken, _ := a.generateAccessToken(&user)
 	refreshToken, _ := a.generateRefreshToken(&user)
 
-	return r.SendEnvelope(AuthResponse{
-		AccessToken:  accessToken,
-		RefreshToken: refreshToken,
-		ExpiresIn:    a.Config.JWT.AccessExpiryMins * 60,
-		User:         user,
+	a.setAuthCookies(r, accessToken, refreshToken)
+
+	return r.SendEnvelope(CookieAuthResponse{
+		ExpiresIn: a.Config.JWT.AccessExpiryMins * 60,
+		User:      user,
 	})
 }
 
-// RefreshToken refreshes access token using refresh token
+// RefreshToken refreshes access token using refresh token with rotation.
+// The old refresh token is invalidated (single-use) and a new one is issued.
 func (a *App) RefreshToken(r *fastglue.Request) error {
-	var req RefreshRequest
-	if err := a.decodeRequest(r, &req); err != nil {
-		return nil
+	// Read refresh token from cookie first, fall back to JSON body.
+	refreshTokenStr := string(r.RequestCtx.Request.Header.Cookie(cookieRefreshName))
+	if refreshTokenStr == "" {
+		var req RefreshRequest
+		_ = r.Decode(&req, "json")
+		refreshTokenStr = req.RefreshToken
+	}
+	if refreshTokenStr == "" {
+		return r.SendErrorEnvelope(fasthttp.StatusUnauthorized, "Missing refresh token", nil, "")
 	}
 
 	// Parse and validate refresh token
-	token, err := jwt.ParseWithClaims(req.RefreshToken, &middleware.JWTClaims{}, func(token *jwt.Token) (interface{}, error) {
+	token, err := jwt.ParseWithClaims(refreshTokenStr, &middleware.JWTClaims{}, func(token *jwt.Token) (interface{}, error) {
 		return []byte(a.Config.JWT.Secret), nil
 	})
 
@@ -256,6 +274,17 @@ func (a *App) RefreshToken(r *fastglue.Request) error {
 		return r.SendErrorEnvelope(fasthttp.StatusUnauthorized, "Invalid token claims", nil, "")
 	}
 
+	// Validate JTI in Redis (single-use: delete on consumption)
+	if claims.ID != "" {
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		deleted, err := a.Redis.Del(ctx, refreshTokenKey(claims.ID)).Result()
+		if err != nil || deleted == 0 {
+			// Token was already used or revoked
+			return r.SendErrorEnvelope(fasthttp.StatusUnauthorized, "Refresh token has been revoked", nil, "")
+		}
+	}
+
 	// Get user
 	var user models.User
 	if err := a.DB.Where("id = ?", claims.UserID).First(&user).Error; err != nil {
@@ -266,15 +295,15 @@ func (a *App) RefreshToken(r *fastglue.Request) error {
 		return r.SendErrorEnvelope(fasthttp.StatusUnauthorized, "Account is disabled", nil, "")
 	}
 
-	// Generate new tokens
+	// Generate new tokens (rotation: new refresh token with new JTI)
 	accessToken, _ := a.generateAccessToken(&user)
-	refreshToken, _ := a.generateRefreshToken(&user)
+	newRefreshToken, _ := a.generateRefreshToken(&user)
 
-	return r.SendEnvelope(AuthResponse{
-		AccessToken:  accessToken,
-		RefreshToken: refreshToken,
-		ExpiresIn:    a.Config.JWT.AccessExpiryMins * 60,
-		User:         user,
+	a.setAuthCookies(r, accessToken, newRefreshToken)
+
+	return r.SendEnvelope(CookieAuthResponse{
+		ExpiresIn: a.Config.JWT.AccessExpiryMins * 60,
+		User:      user,
 	})
 }
 
@@ -297,6 +326,9 @@ func (a *App) generateAccessToken(user *models.User) (string, error) {
 }
 
 func (a *App) generateRefreshToken(user *models.User) (string, error) {
+	jti := uuid.New().String()
+	expiry := time.Duration(a.Config.JWT.RefreshExpiryDays) * 24 * time.Hour
+
 	claims := middleware.JWTClaims{
 		UserID:         user.ID,
 		OrganizationID: user.OrganizationID,
@@ -304,14 +336,32 @@ func (a *App) generateRefreshToken(user *models.User) (string, error) {
 		RoleID:         user.RoleID,
 		IsSuperAdmin:   user.IsSuperAdmin,
 		RegisteredClaims: jwt.RegisteredClaims{
-			ExpiresAt: jwt.NewNumericDate(time.Now().Add(time.Duration(a.Config.JWT.RefreshExpiryDays) * 24 * time.Hour)),
+			ID:        jti,
+			ExpiresAt: jwt.NewNumericDate(time.Now().Add(expiry)),
 			IssuedAt:  jwt.NewNumericDate(time.Now()),
 			Issuer:    "whatomate",
 		},
 	}
 
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
-	return token.SignedString([]byte(a.Config.JWT.Secret))
+	signed, err := token.SignedString([]byte(a.Config.JWT.Secret))
+	if err != nil {
+		return "", err
+	}
+
+	// Store JTI in Redis so it can be revoked
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	if err := a.Redis.Set(ctx, refreshTokenKey(jti), user.ID.String(), expiry).Err(); err != nil {
+		a.Log.Error("Failed to store refresh token in Redis", "error", err)
+	}
+
+	return signed, nil
+}
+
+// refreshTokenKey returns the Redis key for a refresh token JTI.
+func refreshTokenKey(jti string) string {
+	return fmt.Sprintf("refresh:%s", jti)
 }
 
 // SwitchOrgRequest represents the request body for switching organization
@@ -397,12 +447,46 @@ func (a *App) SwitchOrg(r *fastglue.Request) error {
 		return r.SendErrorEnvelope(fasthttp.StatusInternalServerError, "Failed to generate token", nil, "")
 	}
 
-	return r.SendEnvelope(AuthResponse{
-		AccessToken:  accessToken,
-		RefreshToken: refreshToken,
-		ExpiresIn:    a.Config.JWT.AccessExpiryMins * 60,
-		User:         user,
+	a.setAuthCookies(r, accessToken, refreshToken)
+
+	return r.SendEnvelope(CookieAuthResponse{
+		ExpiresIn: a.Config.JWT.AccessExpiryMins * 60,
+		User:      user,
 	})
+}
+
+// LogoutRequest represents logout request body
+type LogoutRequest struct {
+	RefreshToken string `json:"refresh_token"`
+}
+
+// Logout invalidates the user's refresh token
+func (a *App) Logout(r *fastglue.Request) error {
+	// Read refresh token from cookie first, fall back to body.
+	refreshTokenStr := string(r.RequestCtx.Request.Header.Cookie(cookieRefreshName))
+	if refreshTokenStr == "" {
+		var req LogoutRequest
+		_ = r.Decode(&req, "json")
+		refreshTokenStr = req.RefreshToken
+	}
+
+	if refreshTokenStr != "" {
+		// Parse the token to extract JTI (don't need to fully validate — just extract claims)
+		token, _ := jwt.ParseWithClaims(refreshTokenStr, &middleware.JWTClaims{}, func(token *jwt.Token) (interface{}, error) {
+			return []byte(a.Config.JWT.Secret), nil
+		})
+		if token != nil {
+			if claims, ok := token.Claims.(*middleware.JWTClaims); ok && claims.ID != "" {
+				ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+				defer cancel()
+				a.Redis.Del(ctx, refreshTokenKey(claims.ID))
+			}
+		}
+	}
+
+	a.clearAuthCookies(r)
+
+	return r.SendEnvelope(map[string]string{"status": "logged_out"})
 }
 
 func generateSlug(name string) string {
@@ -418,4 +502,35 @@ func generateSlug(name string) string {
 		}
 	}
 	return slug + "-" + uuid.New().String()[:8]
+}
+
+// GetWSToken returns a short-lived single-use JWT for WebSocket authentication.
+// This is needed because httpOnly cookies cannot be read by JavaScript to pass
+// as a query parameter to the WebSocket connection URL.
+func (a *App) GetWSToken(r *fastglue.Request) error {
+	userID, ok := r.RequestCtx.UserValue("user_id").(uuid.UUID)
+	if !ok {
+		return r.SendErrorEnvelope(fasthttp.StatusUnauthorized, "Unauthorized", nil, "")
+	}
+	orgID, _ := r.RequestCtx.UserValue("organization_id").(uuid.UUID)
+
+	claims := middleware.JWTClaims{
+		UserID:         userID,
+		OrganizationID: orgID,
+		RegisteredClaims: jwt.RegisteredClaims{
+			ExpiresAt: jwt.NewNumericDate(time.Now().Add(30 * time.Second)),
+			IssuedAt:  jwt.NewNumericDate(time.Now()),
+			Issuer:    "whatomate",
+			Subject:   "ws",
+		},
+	}
+
+	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
+	signed, err := token.SignedString([]byte(a.Config.JWT.Secret))
+	if err != nil {
+		a.Log.Error("Failed to generate WS token", "error", err)
+		return r.SendErrorEnvelope(fasthttp.StatusInternalServerError, "Failed to generate token", nil, "")
+	}
+
+	return r.SendEnvelope(map[string]string{"token": signed})
 }

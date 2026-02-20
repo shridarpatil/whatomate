@@ -10,6 +10,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/redis/go-redis/v9"
 	"github.com/shridarpatil/whatomate/internal/config"
 	"github.com/shridarpatil/whatomate/internal/database"
 	"github.com/shridarpatil/whatomate/internal/frontend"
@@ -113,6 +114,19 @@ func runServer(args []string) {
 		lo.Fatal("Failed to load config", "error", err)
 	}
 
+	// Validate JWT secret
+	if cfg.App.Environment == "production" && len(cfg.JWT.Secret) < 32 {
+		lo.Fatal("JWT secret must be at least 32 characters in production")
+	}
+	if cfg.JWT.Secret == "" {
+		lo.Warn("JWT secret is empty, using a random secret (tokens will not persist across restarts)")
+	}
+
+	// Warn if debug mode is on in production
+	if cfg.App.Environment == "production" && cfg.App.Debug {
+		lo.Warn("Debug mode is enabled in production! This may expose sensitive information.")
+	}
+
 	// Set log level based on environment
 	if cfg.App.Environment == "production" {
 		lo = logf.New(logf.Opts{
@@ -163,6 +177,7 @@ func runServer(args []string) {
 	httpClient := &http.Client{
 		Timeout: 30 * time.Second,
 		Transport: &http.Transport{
+			DialContext:         handlers.SSRFSafeDialer(),
 			MaxIdleConns:        100,
 			MaxIdleConnsPerHost: 10,
 			IdleConnTimeout:     90 * time.Second,
@@ -185,18 +200,24 @@ func runServer(args []string) {
 		lo.Error("Failed to start campaign stats subscriber", "error", err)
 	}
 
+	// Parse allowed origins for CORS
+	allowedOrigins := middleware.ParseAllowedOrigins(cfg.Server.AllowedOrigins)
+
 	// Setup middleware (CORS is handled by corsWrapper at fasthttp level)
+	g.Before(middleware.SecurityHeaders())
 	g.Before(middleware.RequestLogger(lo))
 	g.Before(middleware.Recovery(lo))
+	g.Before(middleware.CSRFProtection())
 
 	// Setup routes
-	setupRoutes(g, app, lo, cfg.Server.BasePath)
+	setupRoutes(g, app, lo, cfg.Server.BasePath, rdb, cfg)
 
 	// Create server with CORS wrapper
 	server := &fasthttp.Server{
-		Handler:      corsWrapper(g.Handler()),
+		Handler:      corsWrapper(g.Handler(), allowedOrigins),
 		ReadTimeout:  time.Duration(cfg.Server.ReadTimeout) * time.Second,
 		WriteTimeout: time.Duration(cfg.Server.WriteTimeout) * time.Second,
+		MaxRequestBodySize: 15 * 1024 * 1024,
 		Name:         "Whatomate",
 	}
 
@@ -383,30 +404,62 @@ func runWorker(args []string) {
 // ROUTES
 // ============================================================================
 
-func setupRoutes(g *fastglue.Fastglue, app *handlers.App, lo logf.Logger, basePath string) {
+func setupRoutes(g *fastglue.Fastglue, app *handlers.App, lo logf.Logger, basePath string, rdb *redis.Client, cfg *config.Config) {
 	// Health check
 	g.GET("/health", app.HealthCheck)
 	g.GET("/ready", app.ReadyCheck)
 
-	// Client config (public - for frontend)
-	g.GET("/api/config", app.GetClientConfig)
 
-	// Auth routes (public)
-	g.POST("/api/auth/login", app.Login)
-	g.POST("/api/auth/register", app.Register)
-	g.POST("/api/auth/refresh", app.RefreshToken)
+  g.GET("/api/config", app.GetClientConfig)
+
+	// Auth routes (public, optionally rate-limited)
+	if cfg.RateLimit.Enabled {
+		window := time.Duration(cfg.RateLimit.WindowSeconds) * time.Second
+		lo.Info("Rate limiting enabled on auth endpoints",
+			"login_max", cfg.RateLimit.LoginMaxAttempts,
+			"register_max", cfg.RateLimit.RegisterMaxAttempts,
+			"refresh_max", cfg.RateLimit.RefreshMaxAttempts,
+			"sso_max", cfg.RateLimit.SSOMaxAttempts,
+			"window_seconds", cfg.RateLimit.WindowSeconds)
+
+		g.POST("/api/auth/login", withRateLimit(app.Login, middleware.RateLimitOpts{
+			Redis: rdb, Log: lo, Max: cfg.RateLimit.LoginMaxAttempts, Window: window, KeyPrefix: "login", TrustProxy: cfg.RateLimit.TrustProxy,
+		}))
+		g.POST("/api/auth/register", withRateLimit(app.Register, middleware.RateLimitOpts{
+			Redis: rdb, Log: lo, Max: cfg.RateLimit.RegisterMaxAttempts, Window: window, KeyPrefix: "register", TrustProxy: cfg.RateLimit.TrustProxy,
+		}))
+		g.POST("/api/auth/refresh", withRateLimit(app.RefreshToken, middleware.RateLimitOpts{
+			Redis: rdb, Log: lo, Max: cfg.RateLimit.RefreshMaxAttempts, Window: window, KeyPrefix: "refresh", TrustProxy: cfg.RateLimit.TrustProxy,
+		}))
+	} else {
+		g.POST("/api/auth/login", app.Login)
+		g.POST("/api/auth/register", app.Register)
+		g.POST("/api/auth/refresh", app.RefreshToken)
+	}
+	g.POST("/api/auth/logout", app.Logout)
 	g.POST("/api/auth/switch-org", app.SwitchOrg)
+	g.GET("/api/auth/ws-token", app.GetWSToken)
 
-	// SSO routes (public)
+	// SSO routes (public, optionally rate-limited)
 	g.GET("/api/auth/sso/providers", app.GetPublicSSOProviders)
-	g.GET("/api/auth/sso/{provider}/init", app.InitSSO)
-	g.GET("/api/auth/sso/{provider}/callback", app.CallbackSSO)
+	if cfg.RateLimit.Enabled {
+		window := time.Duration(cfg.RateLimit.WindowSeconds) * time.Second
+		g.GET("/api/auth/sso/{provider}/init", withRateLimit(app.InitSSO, middleware.RateLimitOpts{
+			Redis: rdb, Log: lo, Max: cfg.RateLimit.SSOMaxAttempts, Window: window, KeyPrefix: "sso_init", TrustProxy: cfg.RateLimit.TrustProxy,
+		}))
+		g.GET("/api/auth/sso/{provider}/callback", withRateLimit(app.CallbackSSO, middleware.RateLimitOpts{
+			Redis: rdb, Log: lo, Max: cfg.RateLimit.SSOMaxAttempts, Window: window, KeyPrefix: "sso_callback", TrustProxy: cfg.RateLimit.TrustProxy,
+		}))
+	} else {
+		g.GET("/api/auth/sso/{provider}/init", app.InitSSO)
+		g.GET("/api/auth/sso/{provider}/callback", app.CallbackSSO)
+	}
 
 	// Webhook routes (public - for Meta)
 	g.GET("/api/webhook", app.WebhookVerify)
 	g.POST("/api/webhook", app.WebhookHandler)
 
-	// WebSocket route (auth handled in handler via query param)
+	// WebSocket route (auth via message-based flow after upgrade)
 	g.GET("/ws", app.WebSocketHandler)
 
 	// For protected routes, we'll use a path-based middleware approach
@@ -420,7 +473,7 @@ func setupRoutes(g *fastglue.Fastglue, app *handlers.App, lo logf.Logger, basePa
 		// Skip auth for public routes
 		if path == "/health" || path == "/ready" || path == "/api/config" ||
 			path == "/api/auth/login" || path == "/api/auth/register" || path == "/api/auth/refresh" ||
-			path == "/api/webhook" || path == "/ws" {
+			path == "/api/auth/logout" || path == "/api/webhook" || path == "/ws" {
 			return r
 		}
 		// Skip auth for SSO routes (they handle their own auth via state tokens)
@@ -523,6 +576,12 @@ func setupRoutes(g *fastglue.Fastglue, app *handlers.App, lo logf.Logger, basePa
 	g.POST("/api/messages/template", app.SendTemplateMessage)
 	g.POST("/api/messages/media", app.SendMediaMessage)
 	g.PUT("/api/messages/{id}/read", app.MarkMessageRead)
+
+	// Conversation Notes
+	g.GET("/api/contacts/{id}/notes", app.ListConversationNotes)
+	g.POST("/api/contacts/{id}/notes", app.CreateConversationNote)
+	g.PUT("/api/contacts/{id}/notes/{note_id}", app.UpdateConversationNote)
+	g.DELETE("/api/contacts/{id}/notes/{note_id}", app.DeleteConversationNote)
 
 	// Media (serves media files for messages, auth-protected)
 	g.GET("/api/media/{message_id}", app.ServeMedia)
@@ -711,19 +770,33 @@ func setupRoutes(g *fastglue.Fastglue, app *handlers.App, lo logf.Logger, basePa
 	}
 }
 
-// corsWrapper wraps a handler with CORS support at the fasthttp level
-// This ensures CORS headers are set even for auto-handled OPTIONS requests
-func corsWrapper(next fasthttp.RequestHandler) fasthttp.RequestHandler {
+// withRateLimit wraps a handler with the rate limit middleware.
+func withRateLimit(handler fastglue.FastRequestHandler, opts middleware.RateLimitOpts) fastglue.FastRequestHandler {
+	rl := middleware.RateLimit(opts)
+	return func(r *fastglue.Request) error {
+		if rl(r) == nil {
+			return nil // Rate limited — response already sent.
+		}
+		return handler(r)
+	}
+}
+
+// corsWrapper wraps a handler with CORS support at the fasthttp level.
+// This ensures CORS headers are set even for auto-handled OPTIONS requests.
+func corsWrapper(next fasthttp.RequestHandler, allowedOrigins map[string]bool) fasthttp.RequestHandler {
 	return func(ctx *fasthttp.RequestCtx) {
 		origin := string(ctx.Request.Header.Peek("Origin"))
-		if origin == "" {
-			origin = "*"
+
+		if origin != "" && middleware.IsOriginAllowed(origin, allowedOrigins) {
+			ctx.Response.Header.Set("Access-Control-Allow-Origin", origin)
+			ctx.Response.Header.Set("Access-Control-Allow-Credentials", "true")
+		} else if len(allowedOrigins) == 0 && origin != "" {
+			// Development: no whitelist configured
+			ctx.Response.Header.Set("Access-Control-Allow-Origin", origin)
 		}
 
-		ctx.Response.Header.Set("Access-Control-Allow-Origin", origin)
 		ctx.Response.Header.Set("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS, PATCH")
-		ctx.Response.Header.Set("Access-Control-Allow-Headers", "Content-Type, Authorization, X-API-Key, X-Requested-With, X-Organization-ID")
-		ctx.Response.Header.Set("Access-Control-Allow-Credentials", "true")
+		ctx.Response.Header.Set("Access-Control-Allow-Headers", "Content-Type, Authorization, X-API-Key, X-Organization-ID, X-CSRF-Token")
 		ctx.Response.Header.Set("Access-Control-Max-Age", "86400")
 
 		// Handle preflight OPTIONS requests

@@ -59,7 +59,7 @@ func TestCORS(t *testing.T) {
 		{
 			name:       "without origin header",
 			origin:     "",
-			wantOrigin: "*",
+			wantOrigin: "", // No origin sent = no CORS header set
 		},
 		{
 			name:       "localhost origin",
@@ -77,7 +77,7 @@ func TestCORS(t *testing.T) {
 				req.RequestCtx.Request.Header.Set("Origin", tt.origin)
 			}
 
-			corsMiddleware := middleware.CORS()
+			corsMiddleware := middleware.CORS(nil)
 			result := corsMiddleware(req)
 
 			require.NotNil(t, result, "CORS middleware should return request")
@@ -89,7 +89,9 @@ func TestCORS(t *testing.T) {
 			assert.Contains(t, string(result.RequestCtx.Response.Header.Peek("Access-Control-Allow-Headers")), "Authorization")
 			assert.Contains(t, string(result.RequestCtx.Response.Header.Peek("Access-Control-Allow-Headers")), "X-API-Key")
 			assert.Contains(t, string(result.RequestCtx.Response.Header.Peek("Access-Control-Allow-Headers")), "X-Organization-ID")
-			assert.Equal(t, "true", string(result.RequestCtx.Response.Header.Peek("Access-Control-Allow-Credentials")))
+			if tt.origin != "" {
+				assert.Equal(t, "true", string(result.RequestCtx.Response.Header.Peek("Access-Control-Allow-Credentials")))
+			}
 		})
 	}
 }
@@ -524,7 +526,7 @@ func TestAuth_MultipleMiddlewareChain(t *testing.T) {
 	req.RequestCtx.Request.Header.Set("Origin", "https://example.com")
 
 	// Apply CORS first
-	corsMiddleware := middleware.CORS()
+	corsMiddleware := middleware.CORS(nil)
 	req = corsMiddleware(req)
 	require.NotNil(t, req)
 

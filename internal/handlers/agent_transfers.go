@@ -115,7 +115,7 @@ func (a *App) ListAgentTransfers(r *fastglue.Request) error {
 	limit := 100 // Default limit
 	offset := 0
 	if limitStr := string(r.RequestCtx.QueryArgs().Peek("limit")); limitStr != "" {
-		if parsed, err := strconv.Atoi(limitStr); err == nil && parsed > 0 && parsed <= 500 {
+		if parsed, err := strconv.Atoi(limitStr); err == nil && parsed > 0 && parsed <= 100 {
 			limit = parsed
 		}
 	}
@@ -1048,11 +1048,18 @@ func (a *App) broadcastTransferCreated(transfer *models.AgentTransfer, contact *
 		return
 	}
 
+	contactName := contact.ProfileName
+	phoneNumber := transfer.PhoneNumber
+	if a.ShouldMaskPhoneNumbers(transfer.OrganizationID) {
+		contactName = MaskIfPhoneNumber(contactName)
+		phoneNumber = MaskPhoneNumber(phoneNumber)
+	}
+
 	payload := map[string]any{
 		"id":               transfer.ID.String(),
 		"contact_id":       transfer.ContactID.String(),
-		"contact_name":     contact.ProfileName,
-		"phone_number":     transfer.PhoneNumber,
+		"contact_name":     contactName,
+		"phone_number":     phoneNumber,
 		"whatsapp_account": transfer.WhatsAppAccount,
 		"status":           transfer.Status,
 		"source":           transfer.Source,

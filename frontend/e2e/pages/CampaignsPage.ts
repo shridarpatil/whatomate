@@ -159,6 +159,23 @@ export class CampaignsPage extends BasePage {
     await this.page.locator('[role="option"]').filter({ hasText: templateName }).click()
   }
 
+  // Template dropdown helpers
+  getTemplateSelectTrigger(): Locator {
+    return this.createDialog.locator('button[role="combobox"]').nth(1)
+  }
+
+  getTemplateOptions(): Locator {
+    return this.page.locator('[role="option"]')
+  }
+
+  getNoTemplatesMessage(): Locator {
+    return this.createDialog.getByText(/No templates found/i)
+  }
+
+  async openTemplateDropdown() {
+    await this.getTemplateSelectTrigger().click()
+  }
+
   // Recipients dialog helpers
   getManualEntryTab(): Locator {
     return this.createDialog.getByRole('tab', { name: /Manual Entry/i })

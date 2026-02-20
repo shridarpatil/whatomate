@@ -4,10 +4,13 @@ import (
 	"crypto/hmac"
 	"crypto/sha256"
 	"encoding/hex"
+	"encoding/json"
 	"testing"
+	"time"
 
 	"github.com/google/uuid"
 	"github.com/shridarpatil/whatomate/internal/models"
+	"github.com/shridarpatil/whatomate/internal/websocket"
 	"github.com/shridarpatil/whatomate/test/testutil"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -356,4 +359,162 @@ func TestUpdateMessageStatus_FailedUpdatesMessage(t *testing.T) {
 	var updatedCampaign models.BulkMessageCampaign
 	require.NoError(t, app.DB.First(&updatedCampaign, campaign.ID).Error)
 	assert.Equal(t, 1, updatedCampaign.FailedCount)
+}
+
+func TestUpdateMessageStatus_FailedBroadcastsErrorMessageViaWebSocket(t *testing.T) {
+	// Create app with a real WebSocket hub
+	db := testutil.SetupTestDB(t)
+	log := testutil.NopLogger()
+	hub := websocket.NewHub(log)
+	go hub.Run()
+
+	app := &App{
+		DB:    db,
+		Log:   log,
+		WSHub: hub,
+	}
+
+	uid := uuid.New().String()[:8]
+	org := models.Organization{
+		BaseModel: models.BaseModel{ID: uuid.New()},
+		Name:      "ws-test-" + uid,
+		Slug:      "ws-test-" + uid,
+	}
+	require.NoError(t, app.DB.Create(&org).Error)
+
+	contact := models.Contact{
+		BaseModel:      models.BaseModel{ID: uuid.New()},
+		OrganizationID: org.ID,
+		PhoneNumber:    "91777" + uid,
+		ProfileName:    "WS Test",
+	}
+	require.NoError(t, app.DB.Create(&contact).Error)
+
+	waMsgID := "wamid.ws-test-" + uid
+	msg := models.Message{
+		BaseModel:         models.BaseModel{ID: uuid.New()},
+		OrganizationID:    org.ID,
+		WhatsAppAccount:   "test-account",
+		ContactID:         contact.ID,
+		WhatsAppMessageID: waMsgID,
+		Direction:         models.DirectionOutgoing,
+		MessageType:       models.MessageTypeTemplate,
+		Content:           "test message",
+		Status:            models.MessageStatusSent,
+	}
+	require.NoError(t, app.DB.Create(&msg).Error)
+
+	// Register a WS client for this org
+	userID := uuid.New()
+	client := websocket.NewClient(hub, nil, userID, org.ID)
+	hub.Register(client)
+
+	// Wait for the client to be registered
+	deadline := time.Now().Add(2 * time.Second)
+	for time.Now().Before(deadline) {
+		if hub.GetClientCount() == 1 {
+			break
+		}
+		time.Sleep(5 * time.Millisecond)
+	}
+	require.Equal(t, 1, hub.GetClientCount())
+
+	// Trigger a failed status update with error message
+	errors := []WebhookStatusError{
+		{Code: 131047, Title: "Re-engagement message", Message: "This message was not delivered to maintain healthy ecosystem engagement."},
+	}
+	app.updateMessageStatus(waMsgID, "failed", errors)
+
+	// Read from the client's send channel and verify the WS broadcast
+	select {
+	case data := <-client.SendChan():
+		var wsMsg websocket.WSMessage
+		require.NoError(t, json.Unmarshal(data, &wsMsg))
+		assert.Equal(t, websocket.TypeStatusUpdate, wsMsg.Type)
+
+		payload, ok := wsMsg.Payload.(map[string]interface{})
+		require.True(t, ok, "payload should be a map")
+		assert.Equal(t, msg.ID.String(), payload["message_id"])
+		assert.Equal(t, "failed", payload["status"])
+		assert.Contains(t, payload["error_message"].(string), "healthy ecosystem engagement")
+	case <-time.After(2 * time.Second):
+		t.Fatal("timed out waiting for WebSocket broadcast")
+	}
+}
+
+func TestUpdateMessageStatus_DeliveredBroadcastsViaWebSocket_NoErrorMessage(t *testing.T) {
+	// Create app with a real WebSocket hub
+	db := testutil.SetupTestDB(t)
+	log := testutil.NopLogger()
+	hub := websocket.NewHub(log)
+	go hub.Run()
+
+	app := &App{
+		DB:    db,
+		Log:   log,
+		WSHub: hub,
+	}
+
+	uid := uuid.New().String()[:8]
+	org := models.Organization{
+		BaseModel: models.BaseModel{ID: uuid.New()},
+		Name:      "ws-del-" + uid,
+		Slug:      "ws-del-" + uid,
+	}
+	require.NoError(t, app.DB.Create(&org).Error)
+
+	contact := models.Contact{
+		BaseModel:      models.BaseModel{ID: uuid.New()},
+		OrganizationID: org.ID,
+		PhoneNumber:    "91888" + uid,
+		ProfileName:    "WS Delivered",
+	}
+	require.NoError(t, app.DB.Create(&contact).Error)
+
+	waMsgID := "wamid.ws-del-" + uid
+	msg := models.Message{
+		BaseModel:         models.BaseModel{ID: uuid.New()},
+		OrganizationID:    org.ID,
+		WhatsAppAccount:   "test-account",
+		ContactID:         contact.ID,
+		WhatsAppMessageID: waMsgID,
+		Direction:         models.DirectionOutgoing,
+		MessageType:       models.MessageTypeText,
+		Content:           "hello",
+		Status:            models.MessageStatusSent,
+	}
+	require.NoError(t, app.DB.Create(&msg).Error)
+
+	// Register a WS client for this org
+	client := websocket.NewClient(hub, nil, uuid.New(), org.ID)
+	hub.Register(client)
+
+	deadline := time.Now().Add(2 * time.Second)
+	for time.Now().Before(deadline) {
+		if hub.GetClientCount() == 1 {
+			break
+		}
+		time.Sleep(5 * time.Millisecond)
+	}
+	require.Equal(t, 1, hub.GetClientCount())
+
+	// Trigger a delivered status update (no errors)
+	app.updateMessageStatus(waMsgID, "delivered", nil)
+
+	// Read from the client's send channel and verify NO error_message
+	select {
+	case data := <-client.SendChan():
+		var wsMsg websocket.WSMessage
+		require.NoError(t, json.Unmarshal(data, &wsMsg))
+		assert.Equal(t, websocket.TypeStatusUpdate, wsMsg.Type)
+
+		payload, ok := wsMsg.Payload.(map[string]interface{})
+		require.True(t, ok, "payload should be a map")
+		assert.Equal(t, msg.ID.String(), payload["message_id"])
+		assert.Equal(t, "delivered", payload["status"])
+		_, hasError := payload["error_message"]
+		assert.False(t, hasError, "delivered status should not have error_message")
+	case <-time.After(2 * time.Second):
+		t.Fatal("timed out waiting for WebSocket broadcast")
+	}
 }

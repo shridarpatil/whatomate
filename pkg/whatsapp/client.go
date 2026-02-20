@@ -153,7 +153,7 @@ func (c *Client) ValidateCredentials(ctx context.Context, phoneID, businessID, a
 	}
 
 	// Check verification status (skip for sandbox/test numbers)
-	isTestNumber := phoneResult.AccountMode == "SANDBOX"
+	isTestNumber := phoneResult.AccountMode == "SANDBOX" || phoneResult.VerifiedName == "Test Number"
 	var warning string
 	if !isTestNumber {
 		if phoneResult.CodeVerificationStatus == "NOT_VERIFIED" {

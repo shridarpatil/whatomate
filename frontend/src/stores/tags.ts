@@ -12,17 +12,37 @@ export interface UpdateTagData {
   color?: string
 }
 
+export interface FetchTagsParams {
+  search?: string
+  page?: number
+  limit?: number
+}
+
+export interface FetchTagsResponse {
+  tags: Tag[]
+  total: number
+  page: number
+  limit: number
+}
+
 export const useTagsStore = defineStore('tags', () => {
   const tags = ref<Tag[]>([])
   const loading = ref(false)
   const error = ref<string | null>(null)
 
-  async function fetchTags(): Promise<void> {
+  async function fetchTags(params?: FetchTagsParams): Promise<FetchTagsResponse> {
     loading.value = true
     error.value = null
     try {
-      const response = await tagsService.list()
-      tags.value = (response.data as any).data?.tags || response.data?.tags || []
+      const response = await tagsService.list(params)
+      const data = (response.data as any).data || response.data
+      tags.value = data.tags || []
+      return {
+        tags: data.tags || [],
+        total: data.total ?? tags.value.length,
+        page: data.page ?? 1,
+        limit: data.limit ?? 50
+      }
     } catch (err: any) {
       error.value = err.response?.data?.message || 'Failed to fetch tags'
       throw err

@@ -149,7 +149,7 @@ func TestApp_CreateAPIKey(t *testing.T) {
 		assert.True(t, len(resp.Data.Key) > 4, "key should have whm_ prefix plus random bytes")
 		assert.Equal(t, "whm_", resp.Data.Key[:4])
 		assert.NotEmpty(t, resp.Data.KeyPrefix)
-		assert.Equal(t, resp.Data.Key[4:12], resp.Data.KeyPrefix)
+		assert.Equal(t, resp.Data.Key[4:20], resp.Data.KeyPrefix)
 		assert.NotEmpty(t, resp.Data.CreatedAt)
 
 		// Verify the key was persisted in the database
@@ -411,8 +411,8 @@ func TestApp_CreateAPIKey_KeyFormat(t *testing.T) {
 			"character '%c' should be valid lowercase hex", c)
 	}
 
-	// KeyPrefix should be the first 8 chars of the hex part
-	assert.Equal(t, hexPart[:8], resp.Data.KeyPrefix)
+	// KeyPrefix should be the first 16 chars of the hex part
+	assert.Equal(t, hexPart[:16], resp.Data.KeyPrefix)
 }
 
 func TestApp_CreateAPIKey_UniqueKeys(t *testing.T) {

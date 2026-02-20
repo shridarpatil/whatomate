@@ -16,7 +16,6 @@ import { useUsersStore, type User } from '@/stores/users'
 import { useAuthStore } from '@/stores/auth'
 import { useRolesStore } from '@/stores/roles'
 import { useOrganizationsStore } from '@/stores/organizations'
-import { organizationsService } from '@/services/api'
 import { toast } from 'vue-sonner'
 import { Plus, Pencil, Trash2, UserMinus, User as UserIcon, Shield, ShieldCheck, UserCog, Users, Link, UserPlus, Loader2 } from 'lucide-vue-next'
 import { useCrudState } from '@/composables/useCrudState'
@@ -123,9 +122,13 @@ async function saveUser() {
       await usersStore.updateUser(editingUser.value.id, data)
       toast.success(t('common.updatedSuccess', { resource: t('resources.User') }))
     } else {
-      data.password = formData.value.password
-      if (isSuperAdmin.value && formData.value.is_super_admin) data.is_super_admin = true
-      await usersStore.createUser(data)
+      await usersStore.createUser({
+        email: formData.value.email,
+        password: formData.value.password,
+        full_name: formData.value.full_name,
+        role_id: formData.value.role_id || undefined,
+        is_super_admin: isSuperAdmin.value && formData.value.is_super_admin ? true : undefined,
+      })
       toast.success(t('common.createdSuccess', { resource: t('resources.User') }))
     }
     closeDialog()
@@ -197,7 +200,7 @@ async function submitAddExisting() {
   }
   isAddExistingSubmitting.value = true
   try {
-    await organizationsService.addMember({
+    await organizationsStore.addMember({
       email: addExistingEmail.value.trim(),
       role_id: addExistingRoleId.value || undefined,
     })
@@ -213,7 +216,8 @@ async function submitAddExisting() {
 
 function copyInviteLink() {
   const orgId = organizationsStore.selectedOrgId || authStore.organizationId
-  const url = `${window.location.origin}/register?org=${orgId}`
+  const basePath = ((window as any).__BASE_PATH__ ?? '').replace(/\/$/, '')
+  const url = `${window.location.origin}${basePath}/register?org=${orgId}`
   navigator.clipboard.writeText(url)
   toast.success(t('users.inviteLinkCopied'))
 }
@@ -224,7 +228,7 @@ function copyInviteLink() {
     <PageHeader :title="$t('users.title')" :icon="Users" icon-gradient="bg-gradient-to-br from-blue-500 to-indigo-600 shadow-blue-500/20" back-link="/settings" :breadcrumbs="breadcrumbs">
       <template #actions>
         <Button variant="outline" size="sm" @click="copyInviteLink"><Link class="h-4 w-4 mr-2" />{{ $t('users.copyInviteLink') }}</Button>
-        <Button variant="outline" size="sm" @click="openAddExistingDialog"><UserPlus class="h-4 w-4 mr-2" />{{ $t('users.addExistingUser') }}</Button>
+        <Button v-if="organizationsStore.isMultiOrg && authStore.hasPermission('organizations', 'assign')" variant="outline" size="sm" @click="openAddExistingDialog"><UserPlus class="h-4 w-4 mr-2" />{{ $t('users.addExistingUser') }}</Button>
         <Button variant="outline" size="sm" @click="openCreateDialog"><Plus class="h-4 w-4 mr-2" />{{ $t('users.addUser') }}</Button>
       </template>
     </PageHeader>

@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/shridarpatil/whatomate/internal/crypto"
 	"github.com/shridarpatil/whatomate/internal/models"
 	"github.com/shridarpatil/whatomate/internal/websocket"
 	"gorm.io/gorm"
@@ -225,6 +226,7 @@ func (a *App) getWhatsAppAccountCached(phoneID string) (*models.WhatsAppAccount,
 		if err := json.Unmarshal([]byte(cached), &cacheData); err == nil {
 			cacheData.WhatsAppAccount.AccessToken = cacheData.AccessToken
 			cacheData.WhatsAppAccount.AppSecret = cacheData.AppSecret
+			a.decryptAccountSecrets(&cacheData.WhatsAppAccount)
 			return &cacheData.WhatsAppAccount, nil
 		}
 	}
@@ -245,7 +247,21 @@ func (a *App) getWhatsAppAccountCached(phoneID string) (*models.WhatsAppAccount,
 		a.Redis.Set(ctx, cacheKey, data, whatsappAccountCacheTTL)
 	}
 
+	// Decrypt secrets before returning
+	a.decryptAccountSecrets(&account)
 	return &account, nil
+}
+
+// decryptAccountSecrets decrypts the encrypted secrets on a WhatsApp account.
+// Handles both encrypted ("enc:" prefixed) and legacy unencrypted values transparently.
+func (a *App) decryptAccountSecrets(account *models.WhatsAppAccount) {
+	encKey := a.Config.App.EncryptionKey
+	if dec, err := crypto.Decrypt(account.AccessToken, encKey); err == nil {
+		account.AccessToken = dec
+	}
+	if dec, err := crypto.Decrypt(account.AppSecret, encKey); err == nil {
+		account.AppSecret = dec
+	}
 }
 
 // InvalidateWhatsAppAccountCache invalidates the WhatsApp account cache
@@ -437,9 +453,12 @@ func (a *App) getUserPermissionsCached(userID uuid.UUID, orgIDs ...uuid.UUID) (*
 		return nil, gorm.ErrRecordNotFound
 	}
 
-	// Fetch role with permissions
+	// Fetch role and load permissions via JOIN
 	var role models.CustomRole
-	if err := a.DB.Preload("Permissions").Where("id = ?", roleID).First(&role).Error; err != nil {
+	if err := a.DB.Where("id = ?", roleID).First(&role).Error; err != nil {
+		return nil, err
+	}
+	if err := a.loadRolePermissions(&role); err != nil {
 		return nil, err
 	}
 
@@ -555,9 +574,12 @@ func (a *App) GetRolePermissionsCached(roleID uuid.UUID) ([]string, error) {
 		}
 	}
 
-	// Cache miss - fetch from database
+	// Cache miss - fetch from database via JOIN
 	var role models.CustomRole
-	if err := a.DB.Preload("Permissions").Where("id = ?", roleID).First(&role).Error; err != nil {
+	if err := a.DB.Where("id = ?", roleID).First(&role).Error; err != nil {
+		return nil, err
+	}
+	if err := a.loadRolePermissions(&role); err != nil {
 		return nil, err
 	}
 

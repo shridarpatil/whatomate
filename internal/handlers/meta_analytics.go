@@ -167,7 +167,9 @@ func (a *App) GetMetaAnalytics(r *fastglue.Request) error {
 	a.Log.Debug("Meta analytics cache miss", "cache_key", cacheKey)
 
 	var results []MetaAnalyticsResponse
-	for _, account := range accounts {
+	for i := range accounts {
+		a.decryptAccountSecrets(&accounts[i])
+		account := accounts[i]
 		waAccount := a.toWhatsAppAccount(&account)
 
 		req := &whatsapp.AnalyticsRequest{

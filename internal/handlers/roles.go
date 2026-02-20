@@ -5,6 +5,7 @@ import (
 	"github.com/shridarpatil/whatomate/internal/models"
 	"github.com/valyala/fasthttp"
 	"github.com/zerodha/fastglue"
+	"gorm.io/gorm"
 )
 
 // RoleRequest represents the request body for creating/updating a role
@@ -58,10 +59,19 @@ func (a *App) ListRoles(r *fastglue.Request) error {
 
 	var roles []models.CustomRole
 	if err := pg.Apply(baseQuery.
-		Preload("Permissions").
 		Order("is_system DESC, name ASC")).
 		Find(&roles).Error; err != nil {
 		a.Log.Error("Failed to list roles", "error", err)
+		return r.SendErrorEnvelope(fasthttp.StatusInternalServerError, "Failed to list roles", nil, "")
+	}
+
+	// Load permissions via JOIN instead of GORM's Preload IN query
+	rolePtrs := make([]*models.CustomRole, len(roles))
+	for i := range roles {
+		rolePtrs[i] = &roles[i]
+	}
+	if err := a.loadRolePermissions(rolePtrs...); err != nil {
+		a.Log.Error("Failed to load role permissions", "error", err)
 		return r.SendErrorEnvelope(fasthttp.StatusInternalServerError, "Failed to list roles", nil, "")
 	}
 
@@ -95,9 +105,13 @@ func (a *App) GetRole(r *fastglue.Request) error {
 
 	var role models.CustomRole
 	if err := a.DB.Where("id = ? AND organization_id = ?", id, orgID).
-		Preload("Permissions").
 		First(&role).Error; err != nil {
 		return r.SendErrorEnvelope(fasthttp.StatusNotFound, "Role not found", nil, "")
+	}
+
+	if err := a.loadRolePermissions(&role); err != nil {
+		a.Log.Error("Failed to load role permissions", "error", err)
+		return r.SendErrorEnvelope(fasthttp.StatusInternalServerError, "Failed to get role", nil, "")
 	}
 
 	var userCount int64
@@ -146,11 +160,18 @@ func (a *App) CreateRole(r *fastglue.Request) error {
 		Permissions:    permissions,
 	}
 
-	// If setting as default, unset other defaults
+	// If setting as default, unset other defaults (in a transaction)
 	if req.IsDefault {
-		a.DB.Model(&models.CustomRole{}).
-			Where("organization_id = ? AND is_default = ?", orgID, true).
-			Update("is_default", false)
+		if err := a.DB.Transaction(func(tx *gorm.DB) error {
+			tx.Model(&models.CustomRole{}).
+				Where("organization_id = ? AND is_default = ?", orgID, true).
+				Update("is_default", false)
+			return tx.Create(&role).Error
+		}); err != nil {
+			a.Log.Error("Failed to create role", "error", err)
+			return r.SendErrorEnvelope(fasthttp.StatusInternalServerError, "Failed to create role", nil, "")
+		}
+		return r.SendEnvelope(roleToResponse(role, 0))
 	}
 
 	if err := a.DB.Create(&role).Error; err != nil {
@@ -175,9 +196,13 @@ func (a *App) UpdateRole(r *fastglue.Request) error {
 
 	var role models.CustomRole
 	if err := a.DB.Where("id = ? AND organization_id = ?", id, orgID).
-		Preload("Permissions").
 		First(&role).Error; err != nil {
 		return r.SendErrorEnvelope(fasthttp.StatusNotFound, "Role not found", nil, "")
+	}
+
+	if err := a.loadRolePermissions(&role); err != nil {
+		a.Log.Error("Failed to load role permissions", "error", err)
+		return r.SendErrorEnvelope(fasthttp.StatusInternalServerError, "Failed to update role", nil, "")
 	}
 
 	// System roles can only have their description updated
@@ -252,20 +277,26 @@ func (a *App) UpdateRole(r *fastglue.Request) error {
 		role.Permissions = permissions
 	}
 
-	// Handle default flag
+	// Handle default flag (in a transaction to prevent race conditions)
 	if req.IsDefault && !role.IsDefault {
-		// Unset other defaults
-		a.DB.Model(&models.CustomRole{}).
-			Where("organization_id = ? AND is_default = ? AND id != ?", orgID, true, role.ID).
-			Update("is_default", false)
 		role.IsDefault = true
-	} else if !req.IsDefault && role.IsDefault {
-		role.IsDefault = false
-	}
-
-	if err := a.DB.Save(&role).Error; err != nil {
-		a.Log.Error("Failed to update role", "error", err)
-		return r.SendErrorEnvelope(fasthttp.StatusInternalServerError, "Failed to update role", nil, "")
+		if err := a.DB.Transaction(func(tx *gorm.DB) error {
+			tx.Model(&models.CustomRole{}).
+				Where("organization_id = ? AND is_default = ? AND id != ?", orgID, true, role.ID).
+				Update("is_default", false)
+			return tx.Save(&role).Error
+		}); err != nil {
+			a.Log.Error("Failed to update role", "error", err)
+			return r.SendErrorEnvelope(fasthttp.StatusInternalServerError, "Failed to update role", nil, "")
+		}
+	} else {
+		if !req.IsDefault && role.IsDefault {
+			role.IsDefault = false
+		}
+		if err := a.DB.Save(&role).Error; err != nil {
+			a.Log.Error("Failed to update role", "error", err)
+			return r.SendErrorEnvelope(fasthttp.StatusInternalServerError, "Failed to update role", nil, "")
+		}
 	}
 
 	// Invalidate permissions cache for all users with this role
@@ -396,6 +427,42 @@ func (a *App) getPermissionsByKeys(keys []string) ([]models.Permission, error) {
 	}
 
 	return permissions, nil
+}
+
+// loadRolePermissions loads permissions for roles via JOIN instead of GORM's
+// Preload, which generates a slow IN query with all permission UUIDs.
+func (a *App) loadRolePermissions(roles ...*models.CustomRole) error {
+	if len(roles) == 0 {
+		return nil
+	}
+	roleIDs := make([]uuid.UUID, len(roles))
+	roleMap := make(map[uuid.UUID]*models.CustomRole, len(roles))
+	for i, r := range roles {
+		roleIDs[i] = r.ID
+		r.Permissions = []models.Permission{}
+		roleMap[r.ID] = r
+	}
+
+	var results []struct {
+		models.Permission
+		CustomRoleID uuid.UUID `gorm:"column:custom_role_id"`
+	}
+	err := a.DB.Table("permissions").
+		Select("permissions.*, role_permissions.custom_role_id").
+		Joins("JOIN role_permissions ON role_permissions.permission_id = permissions.id").
+		Where("role_permissions.custom_role_id IN ?", roleIDs).
+		Where("permissions.deleted_at IS NULL").
+		Find(&results).Error
+	if err != nil {
+		return err
+	}
+
+	for _, r := range results {
+		if role, ok := roleMap[r.CustomRoleID]; ok {
+			role.Permissions = append(role.Permissions, r.Permission)
+		}
+	}
+	return nil
 }
 
 // splitPermissionKey splits "resource:action" into ["resource", "action"]
