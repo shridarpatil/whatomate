@@ -83,7 +83,9 @@ func (c *Client) ReadPump() {
 			c.hub.log.Error("Recovered from panic in ReadPump", "error", r, "user_id", c.userID)
 		}
 		if c.authenticated {
-			c.hub.unregister <- c
+			c.hub.unregister <- c // Hub will close c.send
+		} else {
+			close(c.send) // Signal WritePump to exit for unauthenticated clients
 		}
 		if c.conn != nil {
 			_ = c.conn.Close()
