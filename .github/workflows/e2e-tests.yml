@@ -128,6 +128,7 @@ jobs:
         run: cd frontend && npm run test:e2e
         env:
           BASE_URL: http://localhost:8080
+          TEST_DATABASE_URL: postgres://test:test@127.0.0.1:5432/whatomate_test
           CI: true
 
       - name: Upload Playwright report
