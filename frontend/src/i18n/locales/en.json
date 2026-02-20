@@ -378,7 +378,9 @@
     "templateSent": "Template sent",
     "templateSendFailed": "Failed to send template",
     "parameterRequired": "All parameters are required",
-    "preview": "Preview"
+    "preview": "Preview",
+    "serviceWindowExpired": "The 24-hour messaging window has expired. Only template messages can be sent until the customer replies.",
+    "sendTemplateAction": "Send Template"
   },
   "contacts": {
     "title": "Contacts",

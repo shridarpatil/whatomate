@@ -197,6 +197,12 @@ func RunMigrationWithProgress(db *gorm.DB, adminCfg *config.DefaultAdminConfig) 
 		return err
 	}
 
+	// Backfill last_inbound_at from existing messages
+	if err := BackfillLastInboundAt(silentDB); err != nil {
+		fmt.Printf("\n  \033[31m✗ Failed to backfill last_inbound_at\033[0m\n\n")
+		return err
+	}
+
 	printProgress(currentStep, totalSteps)
 	fmt.Printf("\n  \033[32m✓ Migration completed\033[0m\n\n")
 
@@ -360,6 +366,22 @@ func MigrateUserOrganizations(db *gorm.DB) error {
 		FROM users u
 		LEFT JOIN user_organizations uo ON uo.user_id = u.id AND uo.organization_id = u.organization_id AND uo.deleted_at IS NULL
 		WHERE uo.id IS NULL AND u.deleted_at IS NULL
+	`).Error
+}
+
+// BackfillLastInboundAt sets last_inbound_at for existing contacts from their
+// most recent incoming message. Only updates contacts where the field is NULL.
+func BackfillLastInboundAt(db *gorm.DB) error {
+	return db.Exec(`
+		UPDATE contacts c
+		SET last_inbound_at = sub.max_created
+		FROM (
+			SELECT contact_id, MAX(created_at) AS max_created
+			FROM messages
+			WHERE direction = 'incoming' AND deleted_at IS NULL
+			GROUP BY contact_id
+		) sub
+		WHERE c.id = sub.contact_id AND c.last_inbound_at IS NULL AND c.deleted_at IS NULL
 	`).Error
 }
 

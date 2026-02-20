@@ -150,6 +150,7 @@ let stickyDateTimeout: ReturnType<typeof setTimeout> | null = null
 const emojiPickerOpen = ref(false)
 
 // Template picker state
+const templatePickerRef = ref<HTMLElement | null>(null)
 const templateDialogOpen = ref(false)
 const selectedTemplate = ref<any>(null)
 const templateParamNames = ref<string[]>([])
@@ -162,6 +163,18 @@ const executingActionId = ref<string | null>(null)
 
 // Tags filter state
 const isTagFilterOpen = ref(false)
+
+// Service window state
+const isServiceWindowExpired = computed(() => {
+  const contact = contactsStore.currentContact
+  if (!contact) return false
+  return contact.service_window_open === false
+})
+
+function openTemplatePicker() {
+  const btn = templatePickerRef.value?.querySelector('button')
+  btn?.click()
+}
 
 // Add contact dialog state
 const isAddContactOpen = ref(false)
@@ -1847,17 +1860,14 @@ async function sendMediaMessage() {
                     {{ reaction.emoji }}
                   </span>
                 </div>
-                <!-- Failed message retry indicator (not for template messages) -->
-                <button
+                <!-- Failed message error (not for template messages) -->
+                <span
                   v-if="message.status === 'failed' && message.direction === 'outgoing' && message.message_type !== 'template'"
-                  class="flex items-center gap-1 mt-1 text-xs text-destructive hover:underline cursor-pointer"
-                  :disabled="retryingMessageId === message.id"
-                  @click="retryMessage(message)"
+                  class="flex items-center gap-1 mt-1 text-xs text-destructive"
                 >
-                  <Loader2 v-if="retryingMessageId === message.id" class="h-3 w-3 animate-spin" />
-                  <RotateCw v-else class="h-3 w-3" />
-                  <span>{{ retryingMessageId === message.id ? 'Retrying...' : 'Failed - Tap to retry' }}</span>
-                </button>
+                  <AlertCircle class="h-3 w-3" />
+                  <span>{{ message.error_message || 'Failed to send' }}</span>
+                </span>
                 <!-- Failed template message indicator (no retry) -->
                 <span
                   v-if="message.status === 'failed' && message.direction === 'outgoing' && message.message_type === 'template'"
@@ -1946,6 +1956,18 @@ async function sendMediaMessage() {
         </ScrollArea>
         </div>
 
+        <!-- Service window expired banner -->
+        <div
+          v-if="isServiceWindowExpired"
+          class="px-4 py-2.5 border-t border-red-500/20 bg-red-500/10 flex items-center gap-2"
+        >
+          <Clock class="h-4 w-4 text-red-500 shrink-0" />
+          <span class="text-sm text-red-500 flex-1">{{ $t('chat.serviceWindowExpired') }}</span>
+          <Button variant="outline" size="sm" class="border-red-500/30 text-red-500 hover:bg-red-500/10 shrink-0" @click="openTemplatePicker">
+            {{ $t('chat.sendTemplateAction') }}
+          </Button>
+        </div>
+
         <!-- Reply indicator -->
         <div
           v-if="contactsStore.replyingTo"
@@ -2005,7 +2027,7 @@ async function sendMediaMessage() {
             </Tooltip>
             <Tooltip>
               <TooltipTrigger as-child>
-                <span>
+                <span ref="templatePickerRef">
                   <TemplatePicker
                     :selected-account="selectedAccount"
                     @select-with-params="handleTemplateWithParams"

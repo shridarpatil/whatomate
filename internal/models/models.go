@@ -320,6 +320,7 @@ type Contact struct {
 	IsRead             bool       `gorm:"default:true" json:"is_read"`
 	Tags               JSONBArray `gorm:"type:jsonb;default:'[]'" json:"tags"`
 	Metadata           JSONB      `gorm:"type:jsonb;default:'{}'" json:"metadata"`
+	LastInboundAt      *time.Time `json:"last_inbound_at,omitempty"` // When customer last sent a message (for 24h window tracking)
 
 	// Chatbot SLA tracking
 	ChatbotLastMessageAt *time.Time `json:"chatbot_last_message_at,omitempty"` // When chatbot last sent a message

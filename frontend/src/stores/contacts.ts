@@ -12,6 +12,8 @@ export interface Contact {
   tags: string[]
   metadata: Record<string, any>
   last_message_at?: string
+  last_inbound_at?: string
+  service_window_open?: boolean
   unread_count: number
   assigned_user_id?: string
   whatsapp_account?: string
@@ -262,7 +264,14 @@ export const useContactsStore = defineStore('contacts', () => {
       contact.last_message_at = message.created_at
       if (message.direction === 'incoming') {
         contact.unread_count++
+        contact.last_inbound_at = message.created_at
+        contact.service_window_open = true
       }
+    }
+    // Also update currentContact if it matches
+    if (currentContact.value && currentContact.value.id === message.contact_id && message.direction === 'incoming') {
+      currentContact.value.last_inbound_at = message.created_at
+      currentContact.value.service_window_open = true
     }
 
     // Skip adding to messages array if account filter is active and doesn't match

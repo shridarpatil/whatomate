@@ -344,9 +344,11 @@ func (a *App) finalizeMessageSend(msg *models.Message, req OutgoingMessageReques
 	// Use Where instead of Model(msg) to avoid mutating the shared msg struct,
 	// which may be read concurrently by the caller when sending is async.
 	if err != nil {
+		errMsg := err.Error()
+
 		a.DB.Model(&models.Message{}).Where("id = ?", msg.ID).Updates(map[string]any{
 			"status":        models.MessageStatusFailed,
-			"error_message": err.Error(),
+			"error_message": errMsg,
 		})
 		a.Log.Error("Failed to send message", "error", err, "message_id", msg.ID, "type", msg.MessageType)
 
@@ -358,7 +360,7 @@ func (a *App) finalizeMessageSend(msg *models.Message, req OutgoingMessageReques
 					"message_id":    msg.ID,
 					"contact_id":    req.Contact.ID,
 					"status":        models.MessageStatusFailed,
-					"error_message": err.Error(),
+					"error_message": errMsg,
 				},
 			})
 		}

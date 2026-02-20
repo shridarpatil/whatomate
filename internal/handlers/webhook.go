@@ -50,9 +50,12 @@ func (a *App) WebhookVerify(r *fastglue.Request) error {
 
 // WebhookStatusError represents an error in a status update
 type WebhookStatusError struct {
-	Code    int    `json:"code"`
-	Title   string `json:"title"`
-	Message string `json:"message"`
+	Code      int    `json:"code"`
+	Title     string `json:"title"`
+	Message   string `json:"message"`
+	ErrorData struct {
+		Details string `json:"details"`
+	} `json:"error_data"`
 }
 
 // TemplateStatusUpdate represents a template status update from Meta webhook
@@ -361,7 +364,16 @@ func (a *App) updateMessageStatus(whatsappMsgID, statusValue string, errors []We
 	case models.MessageStatusFailed:
 		updates["status"] = models.MessageStatusFailed
 		if len(errors) > 0 {
-			updates["error_message"] = errors[0].Message
+			// Prefer error_data.details (most descriptive), then Message, then Title.
+			errText := errors[0].ErrorData.Details
+			if errText == "" {
+				errText = errors[0].Message
+			}
+			if errText == "" || errText == errors[0].Title {
+				errText = errors[0].Title
+			}
+
+			updates["error_message"] = errText
 		}
 	default:
 		a.Log.Debug("Ignoring message status update", "status", statusValue)

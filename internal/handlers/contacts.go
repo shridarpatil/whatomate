@@ -36,6 +36,8 @@ type ContactResponse struct {
 	UnreadCount        int        `json:"unread_count"`
 	AssignedUserID     *uuid.UUID `json:"assigned_user_id,omitempty"`
 	WhatsAppAccount    string     `json:"whatsapp_account,omitempty"`
+	LastInboundAt      *time.Time `json:"last_inbound_at,omitempty"`
+	ServiceWindowOpen  bool       `json:"service_window_open"`
 	CreatedAt          time.Time  `json:"created_at"`
 	UpdatedAt          time.Time  `json:"updated_at"`
 }
@@ -169,6 +171,8 @@ func (a *App) ListContacts(r *fastglue.Request) error {
 			profileName = MaskIfPhoneNumber(profileName)
 		}
 
+		serviceWindowOpen := c.LastInboundAt != nil && time.Since(*c.LastInboundAt) < 24*time.Hour
+
 		response[i] = ContactResponse{
 			ID:                 c.ID,
 			PhoneNumber:        phoneNumber,
@@ -182,6 +186,8 @@ func (a *App) ListContacts(r *fastglue.Request) error {
 			UnreadCount:        int(unreadCount),
 			AssignedUserID:     c.AssignedUserID,
 			WhatsAppAccount:    c.WhatsAppAccount,
+			LastInboundAt:      c.LastInboundAt,
+			ServiceWindowOpen:  serviceWindowOpen,
 			CreatedAt:          c.CreatedAt,
 			UpdatedAt:          c.UpdatedAt,
 		}
@@ -1497,6 +1503,9 @@ func (a *App) buildContactResponse(contact *models.Contact, orgID uuid.UUID) Con
 		profileName = MaskIfPhoneNumber(profileName)
 	}
 
+	// 24-hour service window: open if customer messaged within the last 24 hours.
+	serviceWindowOpen := contact.LastInboundAt != nil && time.Since(*contact.LastInboundAt) < 24*time.Hour
+
 	return ContactResponse{
 		ID:                 contact.ID,
 		PhoneNumber:        phoneNumber,
@@ -1510,6 +1519,8 @@ func (a *App) buildContactResponse(contact *models.Contact, orgID uuid.UUID) Con
 		UnreadCount:        int(unreadCount),
 		AssignedUserID:     contact.AssignedUserID,
 		WhatsAppAccount:    contact.WhatsAppAccount,
+		LastInboundAt:      contact.LastInboundAt,
+		ServiceWindowOpen:  serviceWindowOpen,
 		CreatedAt:          contact.CreatedAt,
 		UpdatedAt:          contact.UpdatedAt,
 	}

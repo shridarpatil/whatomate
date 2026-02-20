@@ -436,7 +436,7 @@ func TestUpdateMessageStatus_FailedBroadcastsErrorMessageViaWebSocket(t *testing
 		require.True(t, ok, "payload should be a map")
 		assert.Equal(t, msg.ID.String(), payload["message_id"])
 		assert.Equal(t, "failed", payload["status"])
-		assert.Equal(t, "This message was not delivered to maintain healthy ecosystem engagement.", payload["error_message"])
+		assert.Contains(t, payload["error_message"].(string), "healthy ecosystem engagement")
 	case <-time.After(2 * time.Second):
 		t.Fatal("timed out waiting for WebSocket broadcast")
 	}
