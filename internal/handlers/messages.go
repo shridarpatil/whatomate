@@ -575,7 +575,6 @@ func (a *App) SendTemplateMessage(r *fastglue.Request) error {
 
 	// Get contact or use phone number directly
 	var contact *models.Contact
-	var phoneNumber string
 
 	if req.ContactID != "" {
 		cID, err := uuid.Parse(req.ContactID)
@@ -587,10 +586,9 @@ func (a *App) SendTemplateMessage(r *fastglue.Request) error {
 			return nil
 		}
 		contact = c
-		phoneNumber = c.PhoneNumber
 	} else {
 		// Find or create contact from phone number
-		phoneNumber = req.PhoneNumber
+		phoneNumber := req.PhoneNumber
 		var c models.Contact
 		err := a.DB.Where("phone_number = ? AND organization_id = ?", phoneNumber, orgID).First(&c).Error
 		if err != nil {
