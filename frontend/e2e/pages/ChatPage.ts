@@ -249,6 +249,24 @@ export class ChatPage extends BasePage {
     await this.page.locator('[role="menuitem"], .action-item').filter({ hasText: actionName }).click()
   }
 
+  // Service window helpers
+  get serviceWindowBanner(): Locator {
+    return this.page.locator('text=24-hour messaging window has expired')
+  }
+
+  get serviceWindowSendTemplateButton(): Locator {
+    return this.page.getByRole('button', { name: /Send Template/i })
+  }
+
+  async expectServiceWindowExpired() {
+    await expect(this.serviceWindowBanner).toBeVisible({ timeout: 5000 })
+    await expect(this.serviceWindowSendTemplateButton).toBeVisible()
+  }
+
+  async expectServiceWindowOpen() {
+    await expect(this.serviceWindowBanner).not.toBeVisible()
+  }
+
   // Template picker helpers
   get templatePickerButton(): Locator {
     return this.page.getByRole('button').filter({ has: this.page.locator('.lucide-layout-template-icon') })
