@@ -77,6 +77,9 @@ func TestApp_SendTemplateMessage(t *testing.T) {
 		require.True(t, ok)
 		assert.Equal(t, "Hello Alice! Your order ORD-42 has been confirmed.", contentMap["body"])
 
+		// Wait for async send to complete before checking mock
+		app.WaitForBackgroundTasks()
+
 		// Verify message was sent to WhatsApp API
 		require.Len(t, mockServer.sentMessages, 1)
 		sentMsg := mockServer.sentMessages[0]
