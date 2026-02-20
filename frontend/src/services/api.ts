@@ -187,8 +187,8 @@ export const messagesService = {
     api.get(`/contacts/${contactId}/messages`, { params }),
   send: (contactId: string, data: { type: string; content: any; reply_to_message_id?: string; whatsapp_account?: string }) =>
     api.post(`/contacts/${contactId}/messages`, data),
-  sendTemplate: (contactId: string, data: { template_name: string; components?: any[] }) =>
-    api.post(`/contacts/${contactId}/messages/template`, data),
+  sendTemplate: (contactId: string, data: { template_name: string; template_params?: Record<string, string>; account_name?: string }) =>
+    api.post('/messages/template', { contact_id: contactId, ...data }),
   sendReaction: (contactId: string, messageId: string, emoji: string) =>
     api.post(`/contacts/${contactId}/messages/${messageId}/reaction`, { emoji })
 }
@@ -351,7 +351,7 @@ export interface MetaMessagingDataPoint {
   delivered: number
 }
 
-export interface MetaConversationDataPoint {
+interface MetaConversationDataPoint {
   start: number
   end: number
   conversation: number
@@ -372,12 +372,12 @@ export interface MetaPricingDataPoint {
   tier?: string                 // Pricing tier
 }
 
-export interface MetaTemplateCostItem {
+interface MetaTemplateCostItem {
   type: string    // amount_spent, cost_per_delivered, cost_per_url_button_click
   value?: number  // The cost value
 }
 
-export interface MetaTemplateClickItem {
+interface MetaTemplateClickItem {
   type: string           // quick_reply_button, unique_url_button
   button_content: string // The button text
   count: number          // Number of clicks
@@ -404,7 +404,7 @@ export interface MetaCallDataPoint {
   call_direction: string
 }
 
-export interface MetaAnalyticsData {
+interface MetaAnalyticsData {
   id: string
   analytics?: {
     granularity: string
@@ -500,7 +500,7 @@ export interface WidgetData {
   }>
 }
 
-export interface DataSourceInfo {
+interface DataSourceInfo {
   name: string
   label: string
   fields: string[]

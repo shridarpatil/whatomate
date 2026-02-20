@@ -398,12 +398,16 @@ func (a *App) updateMessageStatus(whatsappMsgID, statusValue string, errors []We
 
 	// Broadcast status update via WebSocket
 	if a.WSHub != nil {
+		wsPayload := map[string]any{
+			"message_id": message.ID.String(),
+			"status":     statusValue,
+		}
+		if errMsg, ok := updates["error_message"].(string); ok && errMsg != "" {
+			wsPayload["error_message"] = errMsg
+		}
 		a.WSHub.BroadcastToOrg(message.OrganizationID, websocket.WSMessage{
-			Type: websocket.TypeStatusUpdate,
-			Payload: map[string]any{
-				"message_id": message.ID.String(),
-				"status":     statusValue,
-			},
+			Type:    websocket.TypeStatusUpdate,
+			Payload: wsPayload,
 		})
 	}
 }

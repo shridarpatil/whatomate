@@ -249,6 +249,72 @@ export class ChatPage extends BasePage {
     await this.page.locator('[role="menuitem"], .action-item').filter({ hasText: actionName }).click()
   }
 
+  // Template picker helpers
+  get templatePickerButton(): Locator {
+    return this.page.getByRole('button').filter({ has: this.page.locator('.lucide-layout-template-icon') })
+  }
+
+  get templatePopover(): Locator {
+    return this.page.locator('[data-radix-popper-content-wrapper], [data-state="open"][role="dialog"]').filter({ has: this.page.locator('input[placeholder*="earch template"]') })
+  }
+
+  get templateSearchInput(): Locator {
+    return this.page.locator('input[placeholder*="earch template"]')
+  }
+
+  get templateDialog(): Locator {
+    return this.page.locator('[role="dialog"][data-state="open"]').filter({ hasText: /Preview|Fill Parameters/i })
+  }
+
+  get templateDialogSendButton(): Locator {
+    return this.templateDialog.getByRole('button', { name: /Send/i })
+  }
+
+  get templateDialogCancelButton(): Locator {
+    return this.templateDialog.getByRole('button', { name: /Cancel/i })
+  }
+
+  async openTemplatePicker() {
+    await this.templatePickerButton.click()
+    await this.templateSearchInput.waitFor({ state: 'visible' })
+  }
+
+  async searchTemplates(term: string) {
+    await this.templateSearchInput.fill(term)
+    await this.page.waitForTimeout(300)
+  }
+
+  getTemplateItem(name: string): Locator {
+    return this.page.locator('button.w-full.text-left').filter({ hasText: name })
+  }
+
+  async selectTemplate(name: string) {
+    await this.getTemplateItem(name).click()
+    await this.templateDialog.waitFor({ state: 'visible' })
+  }
+
+  async fillTemplateParam(paramName: string, value: string) {
+    const paramField = this.templateDialog.locator('.space-y-1').filter({ hasText: paramName }).locator('input')
+    await paramField.fill(value)
+  }
+
+  async sendTemplate() {
+    await this.templateDialogSendButton.click()
+  }
+
+  async cancelTemplateDialog() {
+    await this.templateDialogCancelButton.click()
+    await this.templateDialog.waitFor({ state: 'hidden' })
+  }
+
+  getTemplatePreviewBubble(): Locator {
+    return this.templateDialog.locator('.chat-bubble')
+  }
+
+  getTemplatePreviewButtons(): Locator {
+    return this.templateDialog.locator('.interactive-buttons > div')
+  }
+
   // Toast helpers
   async expectToast(text: string | RegExp) {
     const toast = this.page.locator('[data-sonner-toast]').filter({ hasText: text })

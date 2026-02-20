@@ -90,6 +90,7 @@ import { getInitials, getAvatarGradient } from '@/lib/utils'
 import { useColorMode } from '@/composables/useColorMode'
 import { useInfiniteScroll } from '@/composables/useInfiniteScroll'
 import CannedResponsePicker from '@/components/chat/CannedResponsePicker.vue'
+import TemplatePicker from '@/components/chat/TemplatePicker.vue'
 import ContactInfoPanel from '@/components/chat/ContactInfoPanel.vue'
 import ConversationNotes from '@/components/chat/ConversationNotes.vue'
 import { useNotesStore } from '@/stores/notes'
@@ -147,6 +148,13 @@ let stickyDateTimeout: ReturnType<typeof setTimeout> | null = null
 
 // Emoji picker state
 const emojiPickerOpen = ref(false)
+
+// Template picker state
+const templateDialogOpen = ref(false)
+const selectedTemplate = ref<any>(null)
+const templateParamNames = ref<string[]>([])
+const templateParamValues = ref<Record<string, string>>({})
+const isSendingTemplate = ref(false)
 
 // Custom actions state
 const customActions = ref<CustomAction[]>([])
@@ -687,6 +695,57 @@ function insertEmoji(emoji: string) {
   emojiPickerOpen.value = false
 }
 
+// Template message handling
+function getTemplateBodyContent(tpl: any): string {
+  return tpl.body_content || ''
+}
+
+const templatePreview = computed(() => {
+  if (!selectedTemplate.value) return ''
+  let body = getTemplateBodyContent(selectedTemplate.value)
+  for (const [key, value] of Object.entries(templateParamValues.value)) {
+    body = body.replace(new RegExp(`\\{\\{${key}\\}\\}`, 'g'), value || `{{${key}}}`)
+  }
+  return body
+})
+
+function handleTemplateWithParams(template: any, paramNames: string[]) {
+  selectedTemplate.value = template
+  templateParamNames.value = paramNames
+  templateParamValues.value = Object.fromEntries(paramNames.map(n => [n, '']))
+  templateDialogOpen.value = true
+}
+
+async function sendTemplateMessage() {
+  if (!contactsStore.currentContact || !selectedTemplate.value) return
+
+  // Validate all params are filled
+  const missing = templateParamNames.value.some(n => !templateParamValues.value[n]?.trim())
+  if (missing) {
+    toast.error(t('chat.parameterRequired'))
+    return
+  }
+
+  isSendingTemplate.value = true
+  try {
+    await contactsStore.sendTemplate(
+      contactsStore.currentContact.id,
+      selectedTemplate.value.name,
+      templateParamValues.value,
+      selectedAccount.value || undefined
+    )
+    toast.success(t('chat.templateSent'))
+    templateDialogOpen.value = false
+    selectedTemplate.value = null
+    templateParamNames.value = []
+    templateParamValues.value = {}
+  } catch {
+    toast.error(t('chat.templateSendFailed'))
+  } finally {
+    isSendingTemplate.value = false
+  }
+}
+
 // Reaction handling
 const reactionPickerMessageId = ref<string | null>(null)
 const quickReactionEmojis = ['👍', '❤️', '😂', '😮', '😢', '🙏']
@@ -988,7 +1047,11 @@ function getGoogleMapsUrl(location: LocationData): string {
 }
 
 function getInteractiveButtons(message: Message): Array<{ id: string; title: string }> {
-  if (message.message_type !== 'interactive' || !message.interactive_data) {
+  if (!message.interactive_data) {
+    return []
+  }
+  // Support both interactive and template messages with buttons
+  if (message.message_type !== 'interactive' && message.message_type !== 'template') {
     return []
   }
   // Handle both "buttons" (<=3) and "rows" (>3 list format)
@@ -998,7 +1061,7 @@ function getInteractiveButtons(message: Message): Array<{ id: string; title: str
   }
   return items.map((btn: any) => ({
     id: btn.reply?.id || btn.id || '',
-    title: btn.reply?.title || btn.title || ''
+    title: btn.reply?.title || btn.title || btn.text || ''
   }))
 }
 
@@ -1801,7 +1864,7 @@ async function sendMediaMessage() {
                   class="flex items-center gap-1 mt-1 text-xs text-destructive"
                 >
                   <AlertCircle class="h-3 w-3" />
-                  <span>Failed to send</span>
+                  <span>{{ message.error_message || 'Failed to send' }}</span>
                 </span>
               </div>
               <!-- Action buttons for incoming messages -->
@@ -1942,6 +2005,17 @@ async function sendMediaMessage() {
             </Tooltip>
             <Tooltip>
               <TooltipTrigger as-child>
+                <span>
+                  <TemplatePicker
+                    :selected-account="selectedAccount"
+                    @select-with-params="handleTemplateWithParams"
+                  />
+                </span>
+              </TooltipTrigger>
+              <TooltipContent>{{ $t('chat.sendTemplate') }}</TooltipContent>
+            </Tooltip>
+            <Tooltip>
+              <TooltipTrigger as-child>
                 <button type="button" class="w-9 h-9 rounded-lg hover:bg-white/[0.08] light:hover:bg-gray-200 flex items-center justify-center transition-colors" @click="openFilePicker">
                   <Paperclip class="w-[18px] h-[18px] text-white/40 light:text-gray-500" />
                 </button>
@@ -1987,6 +2061,53 @@ async function sendMediaMessage() {
       @close="isInfoPanelOpen = false"
       @tags-updated="(tags) => contactsStore.updateContactTags(contactsStore.currentContact!.id, tags)"
     />
+
+    <!-- Template Params Dialog -->
+    <Dialog v-model:open="templateDialogOpen">
+      <DialogContent class="max-w-sm">
+        <DialogHeader>
+          <DialogTitle>{{ templateParamNames.length > 0 ? $t('chat.fillParameters') : $t('chat.preview') }}</DialogTitle>
+          <DialogDescription>
+            {{ selectedTemplate?.display_name || selectedTemplate?.name }}
+          </DialogDescription>
+        </DialogHeader>
+        <div class="py-4 space-y-3">
+          <div v-for="param in templateParamNames" :key="param" class="space-y-1">
+            <label class="text-sm font-medium">{{ param }}</label>
+            <Input
+              v-model="templateParamValues[param]"
+              :placeholder="param"
+              class="h-9"
+            />
+          </div>
+          <div v-if="templatePreview" class="space-y-1">
+            <label class="text-xs font-medium text-muted-foreground">{{ $t('chat.preview') }}</label>
+            <div class="chat-bubble chat-bubble-outgoing ml-auto" style="max-width: 100%;">
+              <span class="whitespace-pre-wrap break-words text-sm">{{ templatePreview }}</span>
+              <div
+                v-if="selectedTemplate?.buttons?.length"
+                class="interactive-buttons mt-2 -mx-2 -mb-1.5 border-t"
+              >
+                <div
+                  v-for="(btn, index) in selectedTemplate.buttons"
+                  :key="index"
+                  :class="['py-2 text-sm text-center font-medium', Number(index) > 0 && 'border-t']"
+                >
+                  {{ btn.text }}
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="flex justify-end gap-2">
+          <Button variant="outline" @click="templateDialogOpen = false">{{ $t('common.cancel') }}</Button>
+          <Button @click="sendTemplateMessage" :disabled="isSendingTemplate">
+            <Loader2 v-if="isSendingTemplate" class="h-4 w-4 mr-2 animate-spin" />
+            {{ $t('chat.send') }}
+          </Button>
+        </div>
+      </DialogContent>
+    </Dialog>
 
     <!-- Assign Contact Dialog -->
     <Dialog v-model:open="isAssignDialogOpen" @update:open="(open) => !open && (assignSearchQuery = '')">

@@ -27,24 +27,6 @@ export function formatDateTime(date: string | Date): string {
   return `${formatDate(date)} ${formatTime(date)}`
 }
 
-export function formatPhoneNumber(phone: string): string {
-  // Remove all non-digits
-  const cleaned = phone.replace(/\D/g, '')
-
-  // Format based on length
-  if (cleaned.length === 10) {
-    return `(${cleaned.slice(0, 3)}) ${cleaned.slice(3, 6)}-${cleaned.slice(6)}`
-  } else if (cleaned.length === 11) {
-    return `+${cleaned[0]} (${cleaned.slice(1, 4)}) ${cleaned.slice(4, 7)}-${cleaned.slice(7)}`
-  } else if (cleaned.length > 11) {
-    const countryCode = cleaned.slice(0, cleaned.length - 10)
-    const rest = cleaned.slice(-10)
-    return `+${countryCode} (${rest.slice(0, 3)}) ${rest.slice(3, 6)}-${rest.slice(6)}`
-  }
-
-  return phone
-}
-
 export function truncate(str: string, length: number): string {
   if (str.length <= length) return str
   return str.slice(0, length) + '...'
@@ -94,10 +76,6 @@ export function getAvatarGradient(name: string): string {
     hash = name.charCodeAt(i) + ((hash << 5) - hash)
   }
   return avatarGradients[Math.abs(hash) % avatarGradients.length]
-}
-
-export function sleep(ms: number): Promise<void> {
-  return new Promise(resolve => setTimeout(resolve, ms))
 }
 
 export function formatLabel(key: string): string {

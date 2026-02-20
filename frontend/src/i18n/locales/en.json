@@ -371,7 +371,14 @@
     "noteUpdateFailed": "Failed to update note",
     "noteDeleted": "Note deleted",
     "noteDeleteFailed": "Failed to delete note",
-    "confirmDeleteNote": "Are you sure you want to delete this note?"
+    "confirmDeleteNote": "Are you sure you want to delete this note?",
+    "searchTemplates": "Search templates...",
+    "fillParameters": "Fill Parameters",
+    "noApprovedTemplates": "No approved templates",
+    "templateSent": "Template sent",
+    "templateSendFailed": "Failed to send template",
+    "parameterRequired": "All parameters are required",
+    "preview": "Preview"
   },
   "contacts": {
     "title": "Contacts",

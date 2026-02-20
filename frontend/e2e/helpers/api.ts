@@ -333,6 +333,69 @@ export class ApiHelper {
     }
   }
 
+  // Templates
+  async createTemplate(data: {
+    name: string
+    display_name?: string
+    language?: string
+    category?: string
+    body_content: string
+    status?: string
+    whatsapp_account?: string
+    buttons?: Array<{ type: string; text: string }>
+  }): Promise<any> {
+    const response = await this.request.post(`${BASE_URL}/api/templates`, {
+      headers: this.csrfHeaders,
+      data: {
+        language: 'en',
+        category: 'UTILITY',
+        status: 'APPROVED',
+        ...data
+      }
+    })
+    if (!response.ok()) {
+      throw new Error(`Failed to create template: ${await response.text()}`)
+    }
+    const result = await response.json()
+    return result.data
+  }
+
+  async getTemplates(): Promise<any[]> {
+    const response = await this.request.get(`${BASE_URL}/api/templates`)
+    if (!response.ok()) {
+      throw new Error(`Failed to get templates: ${await response.text()}`)
+    }
+    const data = await response.json()
+    return data.data?.templates || []
+  }
+
+  // WhatsApp Accounts
+  async getWhatsAppAccounts(): Promise<any[]> {
+    const response = await this.request.get(`${BASE_URL}/api/accounts`)
+    if (!response.ok()) {
+      throw new Error(`Failed to get WhatsApp accounts: ${await response.text()}`)
+    }
+    const data = await response.json()
+    return data.data?.accounts || []
+  }
+
+  async createWhatsAppAccount(data: {
+    name: string
+    phone_id: string
+    business_id: string
+    access_token: string
+  }): Promise<any> {
+    const response = await this.request.post(`${BASE_URL}/api/accounts`, {
+      headers: this.csrfHeaders,
+      data
+    })
+    if (!response.ok()) {
+      throw new Error(`Failed to create WhatsApp account: ${await response.text()}`)
+    }
+    const result = await response.json()
+    return result.data
+  }
+
   // Generic authenticated requests — use these instead of raw request calls
   async get(path: string, extraHeaders?: Record<string, string>) {
     return this.request.get(`${BASE_URL}${path}`, {

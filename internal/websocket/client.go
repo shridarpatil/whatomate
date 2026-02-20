@@ -273,6 +273,11 @@ func (c *Client) handleSetContact(payload any) {
 	}
 }
 
+// SendChan returns the client's send channel for use in tests.
+func (c *Client) SendChan() <-chan []byte {
+	return c.send
+}
+
 // sendPong sends a pong response to the client
 func (c *Client) sendPong() {
 	msg := WSMessage{Type: TypePong}

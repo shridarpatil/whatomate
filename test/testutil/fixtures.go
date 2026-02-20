@@ -12,6 +12,7 @@ import (
 	"github.com/zerodha/fastglue"
 	"golang.org/x/crypto/bcrypt"
 	"gorm.io/gorm"
+	"gorm.io/gorm/clause"
 )
 
 // TestJWTSecret is the shared JWT secret for tests.
@@ -289,8 +290,12 @@ func GetOrCreateTestPermissions(t *testing.T, db *gorm.DB) []models.Permission {
 	for i := range perms {
 		perms[i].ID = uuid.New()
 	}
-	require.NoError(t, db.Create(&perms).Error)
-	return perms
+	require.NoError(t, db.Clauses(clause.OnConflict{DoNothing: true}).Create(&perms).Error)
+
+	// Re-fetch to get actual IDs (some may have existed already)
+	var allPerms []models.Permission
+	require.NoError(t, db.Order("resource, action").Find(&allPerms).Error)
+	return allPerms
 }
 
 // CreateTestRole creates a role with specified permissions for testing.

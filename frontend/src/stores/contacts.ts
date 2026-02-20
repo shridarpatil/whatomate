@@ -225,28 +225,34 @@ export const useContactsStore = defineStore('contacts', () => {
     }
   }
 
+  async function sendTemplate(
+    contactId: string,
+    templateName: string,
+    templateParams?: Record<string, string>,
+    accountName?: string
+  ) {
+    try {
+      const response = await messagesService.sendTemplate(contactId, {
+        template_name: templateName,
+        template_params: templateParams,
+        account_name: accountName
+      })
+      const data = response.data.data || response.data
+      // Use addMessage which has duplicate checking (WebSocket may also broadcast this)
+      addMessage(data)
+      return data
+    } catch (error) {
+      console.error('Failed to send template:', error)
+      throw error
+    }
+  }
+
   function setReplyingTo(message: Message | null) {
     replyingTo.value = message
   }
 
   function clearReplyingTo() {
     replyingTo.value = null
-  }
-
-  async function sendTemplate(contactId: string, templateName: string, components?: any[]) {
-    try {
-      const response = await messagesService.sendTemplate(contactId, {
-        template_name: templateName,
-        components
-      })
-      const newMessage = response.data
-      // Use addMessage which has duplicate checking (WebSocket may also broadcast this)
-      addMessage(newMessage)
-      return newMessage
-    } catch (error) {
-      console.error('Failed to send template:', error)
-      throw error
-    }
   }
 
   function addMessage(message: Message) {
@@ -271,10 +277,14 @@ export const useContactsStore = defineStore('contacts', () => {
     }
   }
 
-  function updateMessageStatus(messageId: string, status: string) {
-    const message = messages.value.find(m => m.id === messageId)
-    if (message) {
-      message.status = status
+  function updateMessageStatus(messageId: string, status: string, errorMessage?: string) {
+    const index = messages.value.findIndex(m => m.id === messageId)
+    if (index !== -1) {
+      messages.value[index] = {
+        ...messages.value[index],
+        status,
+        ...(errorMessage ? { error_message: errorMessage } : {})
+      }
     }
   }
 

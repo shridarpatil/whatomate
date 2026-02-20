@@ -269,7 +269,7 @@ class WebSocketService {
   }
 
   private handleStatusUpdate(store: ReturnType<typeof useContactsStore>, payload: any) {
-    store.updateMessageStatus(payload.message_id, payload.status)
+    store.updateMessageStatus(payload.message_id, payload.status, payload.error_message)
   }
 
   private handleReactionUpdate(store: ReturnType<typeof useContactsStore>, payload: any) {
