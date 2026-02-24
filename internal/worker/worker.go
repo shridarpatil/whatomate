@@ -289,7 +289,7 @@ func (w *Worker) sendTemplateMessage(ctx context.Context, account *models.WhatsA
 		})
 	}
 
-	return w.WhatsApp.SendTemplateMessageWithComponents(ctx, waAccount, recipient.PhoneNumber, template.Name, template.Language, components)
+	return w.WhatsApp.SendTemplateMessage(ctx, waAccount, recipient.PhoneNumber, template.Name, template.Language, components)
 }
 
 // buildMediaParameter creates a media parameter for WhatsApp template headers.
@@ -320,12 +320,7 @@ func (w *Worker) decryptAccountSecrets(account *models.WhatsAppAccount) {
 	if w.Config != nil {
 		key = w.Config.App.EncryptionKey
 	}
-	if dec, err := crypto.Decrypt(account.AccessToken, key); err == nil {
-		account.AccessToken = dec
-	}
-	if dec, err := crypto.Decrypt(account.AppSecret, key); err == nil {
-		account.AppSecret = dec
-	}
+	crypto.DecryptFields(key, &account.AccessToken, &account.AppSecret)
 }
 
 // Close cleans up worker resources

@@ -111,7 +111,7 @@ onMounted(async () => {
 async function fetchTransfers() {
   isLoading.value = true
   try {
-    await transfersStore.fetchTransfers()
+    await transfersStore.fetchTransfers({ status: 'active' })
   } finally {
     isLoading.value = false
   }

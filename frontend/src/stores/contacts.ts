@@ -84,7 +84,7 @@ export const useContactsStore = defineStore('contacts', () => {
 
   // Contacts pagination
   const contactsPage = ref(1)
-  const contactsLimit = ref(25)
+  const contactsLimit = ref(50)
   const contactsTotal = ref(0)
   const isLoadingMoreContacts = ref(false)
   const hasMoreContacts = computed(() => contacts.value.length < contactsTotal.value)

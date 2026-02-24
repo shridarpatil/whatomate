@@ -255,13 +255,7 @@ func (a *App) getWhatsAppAccountCached(phoneID string) (*models.WhatsAppAccount,
 // decryptAccountSecrets decrypts the encrypted secrets on a WhatsApp account.
 // Handles both encrypted ("enc:" prefixed) and legacy unencrypted values transparently.
 func (a *App) decryptAccountSecrets(account *models.WhatsAppAccount) {
-	encKey := a.Config.App.EncryptionKey
-	if dec, err := crypto.Decrypt(account.AccessToken, encKey); err == nil {
-		account.AccessToken = dec
-	}
-	if dec, err := crypto.Decrypt(account.AppSecret, encKey); err == nil {
-		account.AppSecret = dec
-	}
+	crypto.DecryptFields(a.Config.App.EncryptionKey, &account.AccessToken, &account.AppSecret)
 }
 
 // InvalidateWhatsAppAccountCache invalidates the WhatsApp account cache

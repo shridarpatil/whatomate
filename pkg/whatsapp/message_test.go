@@ -270,7 +270,8 @@ func TestClient_SendTemplateMessage(t *testing.T) {
 			}
 			ctx := testutil.TestContext(t)
 
-			msgID, err := client.SendTemplateMessage(ctx, account, tt.phone, tt.templateName, tt.language, tt.bodyParams)
+			components := whatsapp.BodyParamsToComponents(tt.bodyParams)
+			msgID, err := client.SendTemplateMessage(ctx, account, tt.phone, tt.templateName, tt.language, components)
 
 			if tt.wantErr {
 				require.Error(t, err)
@@ -405,7 +406,7 @@ func TestClient_SendCTAURLButton(t *testing.T) {
 	}
 }
 
-func TestClient_SendTemplateMessageWithComponents(t *testing.T) {
+func TestClient_SendTemplateMessage_WithComponents(t *testing.T) {
 	t.Parallel()
 
 	var capturedBody map[string]interface{}
@@ -450,7 +451,7 @@ func TestClient_SendTemplateMessageWithComponents(t *testing.T) {
 		},
 	}
 
-	msgID, err := client.SendTemplateMessageWithComponents(ctx, account, "1234567890", "order_template", "en", components)
+	msgID, err := client.SendTemplateMessage(ctx, account, "1234567890", "order_template", "en", components)
 
 	require.NoError(t, err)
 	assert.Equal(t, "wamid.comp123", msgID)

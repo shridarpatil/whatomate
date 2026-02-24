@@ -303,7 +303,7 @@ class WebSocketService {
     })
 
     // Refresh to get complete data including SLA fields
-    transfersStore.fetchTransfers()
+    transfersStore.fetchTransfers({ status: 'active' })
 
     // Show toast notification for admin/manager or assigned agent
     const userRole = authStore.user?.role?.name

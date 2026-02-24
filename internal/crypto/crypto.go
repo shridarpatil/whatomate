@@ -80,6 +80,17 @@ func Decrypt(ciphertext, key string) (string, error) {
 	return string(plaintext), nil
 }
 
+// DecryptFields decrypts multiple string fields in place using the given key.
+// Each field pointer is updated with its decrypted value if decryption succeeds;
+// otherwise the original value is preserved (supports legacy unencrypted data).
+func DecryptFields(key string, fields ...*string) {
+	for _, f := range fields {
+		if dec, err := Decrypt(*f, key); err == nil {
+			*f = dec
+		}
+	}
+}
+
 // IsEncrypted checks if a value has the encryption prefix.
 func IsEncrypted(value string) bool {
 	return len(value) >= len(prefix) && value[:len(prefix)] == prefix
