@@ -30,7 +30,7 @@ COPY whatomate .
 # Install Piper TTS binary + shared libraries
 COPY --from=piper-dl /tmp/piper/piper /usr/local/bin/piper
 COPY --from=piper-dl /tmp/piper/lib*.so* /usr/local/lib/
-COPY --from=piper-dl /tmp/piper/espeak-ng-data /usr/local/share/espeak-ng-data
+COPY --from=piper-dl /tmp/piper/espeak-ng-data /usr/share/espeak-ng-data
 RUN ldconfig
 
 # Install default voice model

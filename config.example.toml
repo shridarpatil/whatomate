@@ -72,12 +72,12 @@ window_seconds = 60            # Time window in seconds
 trust_proxy = false            # Trust X-Forwarded-For / X-Real-IP headers (set true behind reverse proxy)
 
 # Text-to-Speech for IVR greetings (optional, requires piper + opusenc installed)
-# Download piper: https://github.com/rhasspy/piper/releases
+# Download piper: https://github.com/rhasspy/piper/releases (standalone binary)
 # Download voice models: https://huggingface.co/rhasspy/piper-voices
 # Install opusenc: apt install opus-tools (Debian/Ubuntu) / dnf install opus-tools (Fedora)
 [tts]
-piper_binary = "/usr/local/bin/piper"
-piper_model = "/opt/piper/models/en_US-lessac-medium.onnx"
+# piper_binary = "/usr/local/bin/piper"
+# piper_model = "/opt/piper/models/en_US-lessac-medium.onnx"
 # opusenc_binary = "opusenc"  # defaults to finding in PATH
 
 # WhatsApp Calling / WebRTC

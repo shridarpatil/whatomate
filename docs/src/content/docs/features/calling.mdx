@@ -158,7 +158,7 @@ Calling is enabled per-organization in the database. Set `calling_enabled = true
 
 ## Text-to-Speech (IVR Greetings)
 
-Whatomate uses [Piper](https://github.com/rhasspy/piper) for offline text-to-speech generation. When admins type greeting text in the IVR flow editor, the server generates OGG/Opus audio files using Piper + `opusenc`. This is optional — you can also upload pre-recorded audio files directly.
+Whatomate uses [Piper](https://github.com/OHF-Voice/piper1-gpl) for offline text-to-speech generation. When admins type greeting text in the IVR flow editor, the server generates OGG/Opus audio files using Piper + `opusenc`. This is optional — you can also upload pre-recorded audio files directly.
 
 ### Install Dependencies
 
@@ -183,7 +183,7 @@ sudo mv piper/piper /usr/local/bin/
 
 ### Download a Voice Model
 
-Piper voices are available at [huggingface.co/rhasspy/piper-voices](https://huggingface.co/rhasspy/piper-voices). Each voice has a `.onnx` model file and a `.onnx.json` config file — both are required.
+Piper voices are available at [huggingface.co/rhasspy/piper-voices](https://huggingface.co/rhasspy/piper-voices) (mirrors at [OHF-Voice](https://huggingface.co/OHF-Voice)). Each voice has a `.onnx` model file and a `.onnx.json` config file — both are required.
 
 **Choosing a voice:**
 - Browse voices and listen to samples at [rhasspy.github.io/piper-samples](https://rhasspy.github.io/piper-samples/)
