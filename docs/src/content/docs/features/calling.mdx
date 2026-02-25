@@ -1,0 +1,239 @@
+---
+title: Calling
+description: WhatsApp voice calling with IVR menus, call transfers, and recording
+---
+
+import { Aside, Steps, Card, CardGrid } from '@astrojs/starlight/components';
+
+## Overview
+
+Whatomate supports WhatsApp voice calling with WebRTC-based audio bridging. Incoming calls are handled by an Interactive Voice Response (IVR) system that plays greetings, collects DTMF input, and routes callers to agent teams. Agents answer calls from the browser — no phone hardware required.
+
+<CardGrid>
+  <Card title="IVR Menus" icon="list-format">
+    Multi-level menus with audio greetings and DTMF digit routing
+  </Card>
+  <Card title="Call Transfers" icon="forward-slash">
+    Route callers to agent teams with hold music
+  </Card>
+  <Card title="Call Recording" icon="recording">
+    Record agent-caller audio as OGG/Opus, stored in S3
+  </Card>
+  <Card title="Outgoing Calls" icon="external">
+    Agents can place outbound calls to contacts from the chat view
+  </Card>
+</CardGrid>
+
+## How It Works
+
+<Steps>
+1. A WhatsApp user calls your business number
+2. WhatsApp sends a webhook with the SDP offer
+3. Whatomate establishes a WebRTC peer connection and plays the IVR greeting
+4. The caller presses digits (DTMF) to navigate the menu
+5. Based on their selection, the call is transferred to an agent team, routed to another IVR flow, or hung up
+6. An available agent accepts the transfer in the browser and speaks with the caller
+</Steps>
+
+## IVR Flow Builder
+
+IVR flows are configured from **Settings > IVR Flows** in the admin UI.
+
+### Creating a Flow
+
+Each flow has:
+- **Name** and optional description
+- **WhatsApp Account** — which phone number this flow handles
+- **Active** toggle — disabled flows are skipped
+- **Call Start** toggle — marks this as the entry flow for incoming calls (one per account)
+
+### Menu Configuration
+
+Each menu level has:
+- **Greeting** — audio played when entering the menu (uploaded file or text-to-speech)
+- **Timeout** — seconds to wait for DTMF input (default: 10)
+- **Max retries** — retry attempts before hanging up (default: 3)
+- **Options** — digit-to-action mappings
+
+### Actions
+
+| Action | Description |
+|--------|-------------|
+| **Transfer** | Route the caller to a team queue. An agent from the team picks up the call. |
+| **Submenu** | Navigate to a nested menu with its own greeting and options. |
+| **Go to flow** | Jump to a different IVR flow (for modular menu trees). |
+| **Go back** | Return to the parent menu. |
+| **Repeat** | Replay the current menu greeting. |
+| **Hang up** | Terminate the call. |
+
+### Example Flow
+
+```
+Main Menu (greeting: "Welcome to Acme Corp")
+  Press 1 → Transfer to "Sales" team
+  Press 2 → Submenu: "Support"
+    Press 1 → Transfer to "Technical Support" team
+    Press 2 → Transfer to "Billing" team
+    Press 9 → Go back to Main Menu
+  Press 0 → Hang up
+```
+
+## Call Transfers
+
+When a caller selects a transfer action:
+
+1. Hold music plays for the caller
+2. A transfer notification appears for all agents in the target team
+3. The first agent to accept connects to the caller
+4. The call is bridged — both parties hear each other through the browser
+
+<Aside type="note">
+  Transfer timeout is configurable (default: 120 seconds). If no agent accepts, the call is terminated.
+</Aside>
+
+## Call Recording
+
+When enabled, calls are recorded during the agent-caller bridge phase. Recordings are saved as OGG/Opus files and uploaded to S3.
+
+To enable, add to your `config.toml`:
+
+```toml
+[calling]
+recording_enabled = true
+
+[storage]
+s3_bucket = "your-bucket"
+s3_region = "us-east-1"
+s3_key = "AKIA..."
+s3_secret = "..."
+```
+
+Recordings are accessible from the call log detail view, which generates time-limited presigned URLs for playback.
+
+## Call Logs
+
+All calls (incoming and outgoing) are logged with:
+- Caller phone number and contact name
+- Direction, status, and duration
+- IVR flow traversal path (shown as a tree)
+- Agent who handled the call
+- Recording playback (if enabled)
+
+Filter logs by status, direction, account, or IVR flow.
+
+## Configuration
+
+Add to your `config.toml`:
+
+```toml
+[calling]
+audio_dir = "./audio"                  # Directory for IVR audio files
+hold_music_file = "hold-music.ogg"     # Hold music file (relative to audio_dir)
+ringback_file = "ringback.ogg"         # Ringback tone for outgoing calls
+max_call_duration = 3600               # Max call duration in seconds
+transfer_timeout_secs = 120            # Seconds to wait for agent to accept
+recording_enabled = false              # Enable call recording to S3
+udp_port_min = 10000                   # WebRTC UDP port range start
+udp_port_max = 10100                   # WebRTC UDP port range end
+public_ip = ""                         # Public IP for NAT (required on cloud/AWS)
+relay_only = false                     # Force all media through TURN relay
+
+# ICE servers (STUN/TURN) for WebRTC connectivity
+[[calling.ice_servers]]
+urls = ["stun:stun.l.google.com:19302"]
+
+[[calling.ice_servers]]
+urls = ["turn:your-turn-server:3478"]
+username = "user"
+credential = "pass"
+```
+
+<Aside type="caution">
+  On cloud providers (AWS, GCP, etc.), you must set `public_ip` to your server's public IP address. Without it, WebRTC candidates will advertise the private IP and calls will fail to connect.
+</Aside>
+
+### Enabling Calling per Organization
+
+Calling is enabled per-organization in the database. Set `calling_enabled = true` on the organization record to allow calls for that org.
+
+## Text-to-Speech (IVR Greetings)
+
+Whatomate uses [Piper](https://github.com/rhasspy/piper) for offline text-to-speech generation. When admins type greeting text in the IVR flow editor, the server generates OGG/Opus audio files using Piper + `opusenc`. This is optional — you can also upload pre-recorded audio files directly.
+
+### Install Dependencies
+
+Piper requires the `espeak-ng` shared library at runtime, and `opusenc` is needed to convert WAV output to OGG/Opus:
+
+```bash
+# Debian/Ubuntu
+sudo apt install espeak-ng opus-tools
+
+# Fedora
+sudo dnf install espeak-ng opus-tools
+```
+
+### Install Piper
+
+```bash
+# Download Piper binary (Linux x86_64)
+wget https://github.com/rhasspy/piper/releases/download/2023.11.14-2/piper_linux_x86_64.tar.gz
+tar xf piper_linux_x86_64.tar.gz
+sudo mv piper/piper /usr/local/bin/
+```
+
+### Download a Voice Model
+
+Piper voices are available at [huggingface.co/rhasspy/piper-voices](https://huggingface.co/rhasspy/piper-voices). Each voice has a `.onnx` model file and a `.onnx.json` config file — both are required.
+
+**Choosing a voice:**
+- Browse voices and listen to samples at [rhasspy.github.io/piper-samples](https://rhasspy.github.io/piper-samples/)
+- Voices come in quality levels: `low`, `medium`, and `high` — `medium` is a good balance of quality and speed
+- For US English, `en_US-lessac-medium` is recommended (~60MB)
+
+```bash
+mkdir -p /opt/piper/models
+
+# Download model and config
+wget https://huggingface.co/rhasspy/piper-voices/resolve/main/en/en_US/lessac/medium/en_US-lessac-medium.onnx \
+  -O /opt/piper/models/en_US-lessac-medium.onnx
+wget https://huggingface.co/rhasspy/piper-voices/resolve/main/en/en_US/lessac/medium/en_US-lessac-medium.onnx.json \
+  -O /opt/piper/models/en_US-lessac-medium.onnx.json
+```
+
+### Configure TTS
+
+Add to your `config.toml`:
+
+```toml
+[tts]
+piper_binary = "/usr/local/bin/piper"
+piper_model = "/opt/piper/models/en_US-lessac-medium.onnx"
+# opusenc_binary = "opusenc"  # defaults to finding in PATH
+```
+
+### Test TTS
+
+```bash
+echo "Press 1 for sales, press 2 for support." | piper \
+  --model /opt/piper/models/en_US-lessac-medium.onnx \
+  --output_file test.wav
+opusenc --bitrate 24 test.wav test.ogg
+# Play: aplay test.wav  OR  ffplay test.ogg
+```
+
+<Aside type="tip">
+  Generated audio files are cached in the `audio_dir` (default: `./audio`) using a SHA256 hash of the text. The same text always reuses the existing file, so regeneration is instant after the first run.
+</Aside>
+
+## Firewall & Network
+
+For WebRTC to work, ensure the following ports are open:
+
+| Port | Protocol | Purpose |
+|------|----------|---------|
+| 10000–10100 | UDP | WebRTC media (configurable via `udp_port_min`/`udp_port_max`) |
+| 3478 | TCP/UDP | TURN server (if using relay) |
+
+<Aside type="tip">
+  If direct UDP connectivity is unreliable (e.g., behind strict NATs), set `relay_only = true` and configure a TURN server. This routes all media through the TURN relay at the cost of slightly higher latency.
+</Aside>

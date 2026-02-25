@@ -33,6 +33,9 @@ Modern, open-source WhatsApp Business Platform. Single binary app.
 - **Canned Responses**
   Pre-defined quick replies with slash commands (`/shortcut`) and dynamic placeholders.
 
+- **Voice Calling & IVR**
+  Incoming and outgoing WhatsApp calls with IVR menus, DTMF routing, call transfers to agent teams, hold music, and call recording. See [calling docs](https://shridarpatil.github.io/whatomate/features/calling/).
+
 - **Analytics Dashboard**
   Track messages, engagement, and campaign performance.
 

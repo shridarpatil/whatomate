@@ -40,6 +40,9 @@ const props = withDefaults(defineProps<{
   totalItems?: number
   pageSize?: number
   itemName?: string
+  // Optional max height for the table area (e.g., 'calc(100vh - 320px)')
+  // When set, the table body becomes scrollable while header and pagination stay fixed
+  maxHeight?: string
 }>(), {
   rowKey: 'id',
   serverPagination: false,
@@ -150,6 +153,7 @@ function getRowKey(item: T, index: number): string {
 </script>
 
 <template>
+  <div :class="maxHeight ? 'overflow-auto' : ''" :style="maxHeight ? { maxHeight } : {}">
   <Table>
     <TableHeader>
       <TableRow>
@@ -226,9 +230,10 @@ function getRowKey(item: T, index: number): string {
       </TableRow>
     </TableBody>
   </Table>
+  </div>
 
   <!-- Server-side Pagination -->
-  <div v-if="needsPagination && !isLoading" class="mt-4">
+  <div v-if="needsPagination && !isLoading" class="border-t px-4 py-3">
     <PaginationControls
       :current-page="currentPage"
       :total-pages="totalPages"

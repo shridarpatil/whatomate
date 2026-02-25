@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"github.com/google/uuid"
+	"github.com/shridarpatil/whatomate/internal/calling"
 	"github.com/shridarpatil/whatomate/internal/handlers"
 	"github.com/shridarpatil/whatomate/internal/models"
 	"github.com/shridarpatil/whatomate/test/testutil"
@@ -288,4 +289,350 @@ func TestApp_GetCurrentOrganization_NotFound(t *testing.T) {
 	err := app.GetCurrentOrganization(req)
 	require.NoError(t, err)
 	assert.Equal(t, fasthttp.StatusNotFound, testutil.GetResponseStatusCode(req))
+}
+
+// --- Calling Config in Organization Settings Tests ---
+
+func TestApp_GetOrganizationSettings_CallingDefaults(t *testing.T) {
+	t.Parallel()
+
+	app := newTestApp(t)
+	// Set global calling config defaults
+	app.Config.Calling.MaxCallDuration = 3600
+	app.Config.Calling.TransferTimeoutSecs = 60
+
+	org := testutil.CreateTestOrganization(t, app.DB)
+	user := testutil.CreateTestUser(t, app.DB, org.ID, testutil.WithEmail(testutil.UniqueEmail("calling-defaults")))
+
+	req := testutil.NewGETRequest(t)
+	testutil.SetAuthContext(req, org.ID, user.ID)
+
+	err := app.GetOrganizationSettings(req)
+	require.NoError(t, err)
+	assert.Equal(t, fasthttp.StatusOK, testutil.GetResponseStatusCode(req))
+
+	var resp struct {
+		Data struct {
+			Settings handlers.OrganizationSettings `json:"settings"`
+		} `json:"data"`
+	}
+	err = json.Unmarshal(testutil.GetResponseBody(req), &resp)
+	require.NoError(t, err)
+
+	// Calling should be disabled by default, with global config fallbacks
+	assert.Equal(t, false, resp.Data.Settings.CallingEnabled)
+	assert.Equal(t, 3600, resp.Data.Settings.MaxCallDuration)
+	assert.Equal(t, 60, resp.Data.Settings.TransferTimeoutSecs)
+}
+
+func TestApp_GetOrganizationSettings_CallingOverrides(t *testing.T) {
+	t.Parallel()
+
+	app := newTestApp(t)
+	app.Config.Calling.MaxCallDuration = 3600
+	app.Config.Calling.TransferTimeoutSecs = 60
+
+	org := testutil.CreateTestOrganization(t, app.DB)
+	user := testutil.CreateTestUser(t, app.DB, org.ID, testutil.WithEmail(testutil.UniqueEmail("calling-overrides")))
+
+	// Set org-level calling overrides
+	org.Settings = models.JSONB{
+		"calling_enabled":       true,
+		"max_call_duration":     float64(1800),
+		"transfer_timeout_secs": float64(90),
+	}
+	require.NoError(t, app.DB.Save(org).Error)
+
+	req := testutil.NewGETRequest(t)
+	testutil.SetAuthContext(req, org.ID, user.ID)
+
+	err := app.GetOrganizationSettings(req)
+	require.NoError(t, err)
+	assert.Equal(t, fasthttp.StatusOK, testutil.GetResponseStatusCode(req))
+
+	var resp struct {
+		Data struct {
+			Settings handlers.OrganizationSettings `json:"settings"`
+		} `json:"data"`
+	}
+	err = json.Unmarshal(testutil.GetResponseBody(req), &resp)
+	require.NoError(t, err)
+
+	assert.Equal(t, true, resp.Data.Settings.CallingEnabled)
+	assert.Equal(t, 1800, resp.Data.Settings.MaxCallDuration)
+	assert.Equal(t, 90, resp.Data.Settings.TransferTimeoutSecs)
+}
+
+func TestApp_UpdateOrganizationSettings_CallingFields(t *testing.T) {
+	t.Parallel()
+
+	app := newTestApp(t)
+	org := testutil.CreateTestOrganization(t, app.DB)
+	user := testutil.CreateTestUser(t, app.DB, org.ID, testutil.WithEmail(testutil.UniqueEmail("update-calling")))
+
+	// Enable calling with custom values
+	req := testutil.NewJSONRequest(t, map[string]any{
+		"calling_enabled":       true,
+		"max_call_duration":     1800,
+		"transfer_timeout_secs": 90,
+	})
+	testutil.SetAuthContext(req, org.ID, user.ID)
+
+	err := app.UpdateOrganizationSettings(req)
+	require.NoError(t, err)
+	assert.Equal(t, fasthttp.StatusOK, testutil.GetResponseStatusCode(req))
+
+	// Verify persisted in DB
+	var updatedOrg models.Organization
+	require.NoError(t, app.DB.Where("id = ?", org.ID).First(&updatedOrg).Error)
+
+	assert.Equal(t, true, updatedOrg.Settings["calling_enabled"])
+	// JSON numbers are float64
+	assert.Equal(t, float64(1800), updatedOrg.Settings["max_call_duration"])
+	assert.Equal(t, float64(90), updatedOrg.Settings["transfer_timeout_secs"])
+}
+
+func TestApp_UpdateOrganizationSettings_CallingPartialUpdate(t *testing.T) {
+	t.Parallel()
+
+	app := newTestApp(t)
+	org := testutil.CreateTestOrganization(t, app.DB)
+	user := testutil.CreateTestUser(t, app.DB, org.ID, testutil.WithEmail(testutil.UniqueEmail("calling-partial")))
+
+	// Set initial calling settings
+	org.Settings = models.JSONB{
+		"calling_enabled":       true,
+		"max_call_duration":     float64(3600),
+		"transfer_timeout_secs": float64(60),
+	}
+	require.NoError(t, app.DB.Save(org).Error)
+
+	// Only update transfer timeout
+	req := testutil.NewJSONRequest(t, map[string]any{
+		"transfer_timeout_secs": 120,
+	})
+	testutil.SetAuthContext(req, org.ID, user.ID)
+
+	err := app.UpdateOrganizationSettings(req)
+	require.NoError(t, err)
+	assert.Equal(t, fasthttp.StatusOK, testutil.GetResponseStatusCode(req))
+
+	// Verify only transfer_timeout_secs changed
+	var updatedOrg models.Organization
+	require.NoError(t, app.DB.Where("id = ?", org.ID).First(&updatedOrg).Error)
+
+	assert.Equal(t, true, updatedOrg.Settings["calling_enabled"])
+	assert.Equal(t, float64(3600), updatedOrg.Settings["max_call_duration"])
+	assert.Equal(t, float64(120), updatedOrg.Settings["transfer_timeout_secs"])
+}
+
+func TestApp_UpdateOrganizationSettings_CallingDisable(t *testing.T) {
+	t.Parallel()
+
+	app := newTestApp(t)
+	org := testutil.CreateTestOrganization(t, app.DB)
+	user := testutil.CreateTestUser(t, app.DB, org.ID, testutil.WithEmail(testutil.UniqueEmail("calling-disable")))
+
+	// Start with calling enabled
+	org.Settings = models.JSONB{
+		"calling_enabled": true,
+	}
+	require.NoError(t, app.DB.Save(org).Error)
+
+	// Disable calling
+	req := testutil.NewJSONRequest(t, map[string]any{
+		"calling_enabled": false,
+	})
+	testutil.SetAuthContext(req, org.ID, user.ID)
+
+	err := app.UpdateOrganizationSettings(req)
+	require.NoError(t, err)
+	assert.Equal(t, fasthttp.StatusOK, testutil.GetResponseStatusCode(req))
+
+	var updatedOrg models.Organization
+	require.NoError(t, app.DB.Where("id = ?", org.ID).First(&updatedOrg).Error)
+	assert.Equal(t, false, updatedOrg.Settings["calling_enabled"])
+}
+
+func TestApp_UpdateOrganizationSettings_CallingZeroDurationIgnored(t *testing.T) {
+	t.Parallel()
+
+	app := newTestApp(t)
+	org := testutil.CreateTestOrganization(t, app.DB)
+	user := testutil.CreateTestUser(t, app.DB, org.ID, testutil.WithEmail(testutil.UniqueEmail("calling-zero")))
+
+	// Set initial calling settings
+	org.Settings = models.JSONB{
+		"max_call_duration": float64(3600),
+	}
+	require.NoError(t, app.DB.Save(org).Error)
+
+	// Send zero/negative values — should be ignored (guard: > 0)
+	req := testutil.NewJSONRequest(t, map[string]any{
+		"max_call_duration":     0,
+		"transfer_timeout_secs": -1,
+	})
+	testutil.SetAuthContext(req, org.ID, user.ID)
+
+	err := app.UpdateOrganizationSettings(req)
+	require.NoError(t, err)
+	assert.Equal(t, fasthttp.StatusOK, testutil.GetResponseStatusCode(req))
+
+	var updatedOrg models.Organization
+	require.NoError(t, app.DB.Where("id = ?", org.ID).First(&updatedOrg).Error)
+
+	// Original value should be preserved
+	assert.Equal(t, float64(3600), updatedOrg.Settings["max_call_duration"])
+	// transfer_timeout_secs should not have been set
+	_, exists := updatedOrg.Settings["transfer_timeout_secs"]
+	assert.False(t, exists)
+}
+
+// --- IsCallingEnabledForOrg Tests ---
+
+func TestApp_IsCallingEnabledForOrg_NoCallManager(t *testing.T) {
+	t.Parallel()
+
+	app := newTestApp(t)
+	app.CallManager = nil // no infrastructure
+
+	org := testutil.CreateTestOrganization(t, app.DB)
+	org.Settings = models.JSONB{"calling_enabled": true}
+	require.NoError(t, app.DB.Save(org).Error)
+
+	// Even with org setting enabled, returns false without CallManager
+	assert.False(t, app.IsCallingEnabledForOrg(org.ID))
+}
+
+func TestApp_IsCallingEnabledForOrg_DisabledByDefault(t *testing.T) {
+	t.Parallel()
+
+	app := newTestApp(t)
+	// Simulate CallManager being set (non-nil pointer)
+	app.CallManager = &calling.Manager{}
+
+	org := testutil.CreateTestOrganization(t, app.DB)
+	// No settings — calling_enabled defaults to false
+
+	assert.False(t, app.IsCallingEnabledForOrg(org.ID))
+}
+
+func TestApp_IsCallingEnabledForOrg_Enabled(t *testing.T) {
+	t.Parallel()
+
+	app := newTestApp(t)
+	app.CallManager = &calling.Manager{}
+
+	org := testutil.CreateTestOrganization(t, app.DB)
+	org.Settings = models.JSONB{"calling_enabled": true}
+	require.NoError(t, app.DB.Save(org).Error)
+
+	assert.True(t, app.IsCallingEnabledForOrg(org.ID))
+}
+
+func TestApp_IsCallingEnabledForOrg_ExplicitlyDisabled(t *testing.T) {
+	t.Parallel()
+
+	app := newTestApp(t)
+	app.CallManager = &calling.Manager{}
+
+	org := testutil.CreateTestOrganization(t, app.DB)
+	org.Settings = models.JSONB{"calling_enabled": false}
+	require.NoError(t, app.DB.Save(org).Error)
+
+	assert.False(t, app.IsCallingEnabledForOrg(org.ID))
+}
+
+func TestApp_IsCallingEnabledForOrg_NonExistentOrg(t *testing.T) {
+	t.Parallel()
+
+	app := newTestApp(t)
+	app.CallManager = &calling.Manager{}
+
+	assert.False(t, app.IsCallingEnabledForOrg(uuid.New()))
+}
+
+func TestApp_IsCallingEnabledForOrg_OrgIsolation(t *testing.T) {
+	t.Parallel()
+
+	app := newTestApp(t)
+	app.CallManager = &calling.Manager{}
+
+	org1 := testutil.CreateTestOrganization(t, app.DB)
+	org1.Settings = models.JSONB{"calling_enabled": true}
+	require.NoError(t, app.DB.Save(org1).Error)
+
+	org2 := testutil.CreateTestOrganization(t, app.DB)
+	// org2 has no calling_enabled setting
+
+	assert.True(t, app.IsCallingEnabledForOrg(org1.ID))
+	assert.False(t, app.IsCallingEnabledForOrg(org2.ID))
+}
+
+// --- GetOrgCallingConfig Tests ---
+
+func TestApp_GetOrgCallingConfig_GlobalDefaults(t *testing.T) {
+	t.Parallel()
+
+	app := newTestApp(t)
+	app.Config.Calling.MaxCallDuration = 3600
+	app.Config.Calling.TransferTimeoutSecs = 60
+
+	org := testutil.CreateTestOrganization(t, app.DB)
+	// No org-level overrides
+
+	maxDuration, transferTimeout := app.GetOrgCallingConfig(org.ID)
+	assert.Equal(t, 3600, maxDuration)
+	assert.Equal(t, 60, transferTimeout)
+}
+
+func TestApp_GetOrgCallingConfig_OrgOverrides(t *testing.T) {
+	t.Parallel()
+
+	app := newTestApp(t)
+	app.Config.Calling.MaxCallDuration = 3600
+	app.Config.Calling.TransferTimeoutSecs = 60
+
+	org := testutil.CreateTestOrganization(t, app.DB)
+	org.Settings = models.JSONB{
+		"max_call_duration":     float64(1800),
+		"transfer_timeout_secs": float64(90),
+	}
+	require.NoError(t, app.DB.Save(org).Error)
+
+	maxDuration, transferTimeout := app.GetOrgCallingConfig(org.ID)
+	assert.Equal(t, 1800, maxDuration)
+	assert.Equal(t, 90, transferTimeout)
+}
+
+func TestApp_GetOrgCallingConfig_PartialOverride(t *testing.T) {
+	t.Parallel()
+
+	app := newTestApp(t)
+	app.Config.Calling.MaxCallDuration = 3600
+	app.Config.Calling.TransferTimeoutSecs = 60
+
+	org := testutil.CreateTestOrganization(t, app.DB)
+	// Only override max_call_duration
+	org.Settings = models.JSONB{
+		"max_call_duration": float64(900),
+	}
+	require.NoError(t, app.DB.Save(org).Error)
+
+	maxDuration, transferTimeout := app.GetOrgCallingConfig(org.ID)
+	assert.Equal(t, 900, maxDuration)
+	assert.Equal(t, 60, transferTimeout) // falls back to global
+}
+
+func TestApp_GetOrgCallingConfig_NonExistentOrg(t *testing.T) {
+	t.Parallel()
+
+	app := newTestApp(t)
+	app.Config.Calling.MaxCallDuration = 3600
+	app.Config.Calling.TransferTimeoutSecs = 60
+
+	// Non-existent org should return global defaults
+	maxDuration, transferTimeout := app.GetOrgCallingConfig(uuid.New())
+	assert.Equal(t, 3600, maxDuration)
+	assert.Equal(t, 60, transferTimeout)
 }

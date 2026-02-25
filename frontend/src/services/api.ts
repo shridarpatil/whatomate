@@ -568,6 +568,9 @@ export const organizationService = {
     timezone?: string
     date_format?: string
     name?: string
+    calling_enabled?: boolean
+    max_call_duration?: number
+    transfer_timeout_secs?: number
   }) => api.put('/org/settings', data)
 }
 
@@ -812,6 +815,175 @@ export const notesService = {
     api.put<ConversationNote>(`/contacts/${contactId}/notes/${noteId}`, data),
   delete: (contactId: string, noteId: string) =>
     api.delete(`/contacts/${contactId}/notes/${noteId}`)
+}
+
+// Calling - Call Logs & IVR Flows
+export interface CallLog {
+  id: string
+  organization_id: string
+  whatsapp_account: string
+  contact_id: string
+  whatsapp_call_id: string
+  caller_phone: string
+  direction: 'incoming' | 'outgoing'
+  status: 'ringing' | 'answered' | 'completed' | 'missed' | 'rejected' | 'failed' | 'initiating' | 'accepted'
+  duration: number
+  ivr_flow_id?: string
+  ivr_path?: Record<string, any>
+  agent_id?: string
+  started_at?: string
+  answered_at?: string
+  ended_at?: string
+  error_message?: string
+  recording_s3_key?: string
+  recording_duration?: number
+  contact?: {
+    id: string
+    phone_number: string
+    profile_name: string
+  }
+  agent?: {
+    id: string
+    full_name: string
+    email: string
+  }
+  ivr_flow?: IVRFlow
+  created_at: string
+  updated_at: string
+}
+
+export interface IVRMenuOption {
+  label: string
+  action: 'transfer' | 'submenu' | 'parent' | 'repeat' | 'hangup' | 'goto_flow'
+  target?: string
+  menu?: IVRMenu
+}
+
+export interface IVRMenu {
+  greeting: string
+  greeting_text?: string
+  options: Record<string, IVRMenuOption>
+  timeout_seconds?: number
+  max_retries?: number
+  invalid_input_message?: string
+}
+
+export interface IVRFlow {
+  id: string
+  organization_id: string
+  whatsapp_account: string
+  name: string
+  description: string
+  is_active: boolean
+  is_call_start: boolean
+  menu: IVRMenu
+  welcome_audio_url: string
+  created_at: string
+  updated_at: string
+}
+
+export interface CallTransfer {
+  id: string
+  organization_id: string
+  call_log_id: string
+  whatsapp_call_id: string
+  caller_phone: string
+  contact_id: string
+  whatsapp_account: string
+  status: 'waiting' | 'connected' | 'completed' | 'abandoned' | 'no_answer'
+  team_id?: string
+  agent_id?: string
+  transferred_at: string
+  connected_at?: string
+  completed_at?: string
+  hold_duration: number
+  talk_duration: number
+  ivr_path?: Record<string, any>
+  contact?: {
+    id: string
+    phone_number: string
+    profile_name: string
+  }
+  agent?: {
+    id: string
+    full_name: string
+    email: string
+  }
+  team?: {
+    id: string
+    name: string
+  }
+  call_log?: CallLog
+  created_at: string
+  updated_at: string
+}
+
+// Outgoing Calls
+export interface CallPermission {
+  id: string
+  contact_id: string
+  whatsapp_account: string
+  status: 'pending' | 'accepted' | 'declined' | 'expired'
+  message_id?: string
+  requested_at: string
+  responded_at?: string
+  expires_at?: string
+}
+
+export const outgoingCallsService = {
+  initiate: (data: { contact_id: string; whatsapp_account: string; sdp_offer: string }) =>
+    api.post<{ call_log_id: string; sdp_answer: string }>('/calls/outgoing', data),
+  hangup: (callLogId: string) =>
+    api.post(`/calls/outgoing/${callLogId}/hangup`),
+  requestPermission: (data: { contact_id: string; whatsapp_account: string }) =>
+    api.post<{ permission_id: string }>('/calls/permission-request', data),
+  getPermission: (contactId: string, whatsappAccount: string) =>
+    api.get<CallPermission>(`/calls/permission/${contactId}`, { params: { whatsapp_account: whatsappAccount } }),
+  getICEServers: () =>
+    api.get<{ ice_servers: Array<{ urls: string[]; username?: string; credential?: string }> }>('/calls/ice-servers'),
+}
+
+export const callLogsService = {
+  list: (params?: { status?: string; account?: string; contact_id?: string; direction?: string; ivr_flow_id?: string; phone?: string; from?: string; to?: string; page?: number; limit?: number }) =>
+    api.get<{ call_logs: CallLog[]; total: number }>('/call-logs', { params }),
+  get: (id: string) => api.get<CallLog>(`/call-logs/${id}`),
+  getRecordingURL: (id: string) =>
+    api.get<{ url: string; duration: number }>(`/call-logs/${id}/recording`)
+}
+
+export const callTransfersService = {
+  list: (params?: { status?: string; page?: number; limit?: number }) =>
+    api.get<{ call_transfers: CallTransfer[]; total: number }>('/call-transfers', { params }),
+  get: (id: string) => api.get<CallTransfer>(`/call-transfers/${id}`),
+  connect: (id: string, sdpOffer: string) =>
+    api.post<{ sdp_answer: string }>(`/call-transfers/${id}/connect`, { sdp_offer: sdpOffer }),
+  hangup: (id: string) =>
+    api.post(`/call-transfers/${id}/hangup`),
+}
+
+export const ivrFlowsService = {
+  list: (params?: { search?: string; page?: number; limit?: number }) =>
+    api.get<{ ivr_flows: IVRFlow[]; total: number }>('/ivr-flows', { params }),
+  get: (id: string) => api.get<IVRFlow>(`/ivr-flows/${id}`),
+  create: (data: { whatsapp_account: string; name: string; description?: string; is_call_start?: boolean; menu: IVRMenu; welcome_audio_url?: string }) =>
+    api.post<IVRFlow>('/ivr-flows', data),
+  update: (id: string, data: { name?: string; description?: string; is_active?: boolean; is_call_start?: boolean; menu?: IVRMenu; welcome_audio_url?: string }) =>
+    api.put<IVRFlow>(`/ivr-flows/${id}`, data),
+  delete: (id: string) => api.delete(`/ivr-flows/${id}`),
+  uploadAudio: (file: File) => {
+    const formData = new FormData()
+    formData.append('file', file)
+    const csrfToken = getCookie('whm_csrf')
+    const headers: Record<string, string> = {}
+    if (csrfToken) headers['X-CSRF-Token'] = csrfToken
+    const selectedOrgId = localStorage.getItem('selected_organization_id')
+    if (selectedOrgId) headers['X-Organization-ID'] = selectedOrgId
+    return axios.post(`${api.defaults.baseURL}/ivr-flows/audio`, formData, {
+      withCredentials: true,
+      headers,
+    })
+  },
+  getAudioUrl: (filename: string) => `${api.defaults.baseURL}/ivr-flows/audio/${encodeURIComponent(filename)}`
 }
 
 export default api

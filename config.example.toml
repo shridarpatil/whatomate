@@ -71,6 +71,52 @@ sso_max_attempts = 10          # Max SSO init/callback attempts per IP per windo
 window_seconds = 60            # Time window in seconds
 trust_proxy = false            # Trust X-Forwarded-For / X-Real-IP headers (set true behind reverse proxy)
 
+# Text-to-Speech for IVR greetings (optional, requires piper + opusenc installed)
+# Download piper: https://github.com/rhasspy/piper/releases
+# Download voice models: https://huggingface.co/rhasspy/piper-voices
+# Install opusenc: apt install opus-tools (Debian/Ubuntu) / dnf install opus-tools (Fedora)
+[tts]
+piper_binary = "/usr/local/bin/piper"
+piper_model = "/opt/piper/models/en_US-lessac-medium.onnx"
+# opusenc_binary = "opusenc"  # defaults to finding in PATH
+
+# WhatsApp Calling / WebRTC
+[calling]
+max_call_duration = 300       # Max call duration in seconds
+audio_dir = "./audio"         # Directory for IVR audio files
+# hold_music_file = "hold_music.opus"
+# ringback_file = "ringback.opus"
+transfer_timeout_secs = 120   # How long to wait for agent to accept transfer
+recording_enabled = true      # Record calls to S3 (requires [storage] s3 config)
+udp_port_min = 10000          # WebRTC UDP port range start
+udp_port_max = 10100          # WebRTC UDP port range end
+# public_ip = "1.2.3.4"      # Public IP for NAT mapping (required on AWS/cloud)
+# relay_only = true           # Force all media through TURN relay (no direct UDP needed)
+
+# ICE servers for WebRTC NAT traversal
+# Configure STUN, TURN, or both. Only what you configure is used.
+# - STUN only: works when direct UDP is not blocked by firewall
+# - TURN only: relays all traffic, works behind any firewall
+# - Both: tries direct (STUN) first, falls back to TURN
+
+# Option A: STUN only (simple, no relay server needed)
+# [[calling.ice_servers]]
+# urls = ["stun:stun.l.google.com:19302"]
+
+# Option B: TURN only (use when firewall blocks direct UDP)
+# [[calling.ice_servers]]
+# urls = ["turn:your-turn-server.com:3478"]
+# username = "user"
+# credential = "password"
+
+# Option C: Both (recommended — direct when possible, relay as fallback)
+# [[calling.ice_servers]]
+# urls = ["stun:stun.l.google.com:19302"]
+# [[calling.ice_servers]]
+# urls = ["turn:your-turn-server.com:3478"]
+# username = "user"
+# credential = "password"
+
 # Default admin credentials (only used during initial setup when no users exist)
 [default_admin]
 email = "admin@admin.com"

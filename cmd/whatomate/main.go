@@ -11,7 +11,10 @@ import (
 	"time"
 
 	"github.com/redis/go-redis/v9"
+	"github.com/shridarpatil/whatomate/internal/calling"
 	"github.com/shridarpatil/whatomate/internal/config"
+	"github.com/shridarpatil/whatomate/internal/storage"
+	"github.com/shridarpatil/whatomate/internal/tts"
 	"github.com/shridarpatil/whatomate/internal/database"
 	"github.com/shridarpatil/whatomate/internal/frontend"
 	"github.com/shridarpatil/whatomate/internal/handlers"
@@ -193,6 +196,34 @@ func runServer(args []string) {
 		WSHub:      wsHub,
 		Queue:      jobQueue,
 		HTTPClient: httpClient,
+	}
+
+	// Initialize S3 client for call recordings (optional)
+	var s3Client *storage.S3Client
+	if cfg.Calling.RecordingEnabled && cfg.Storage.S3Bucket != "" {
+		var err error
+		s3Client, err = storage.NewS3Client(&cfg.Storage)
+		if err != nil {
+			lo.Warn("Failed to initialize S3 client for recordings, recording disabled", "error", err)
+		} else {
+			lo.Info("S3 client initialized for call recordings", "bucket", cfg.Storage.S3Bucket)
+		}
+	}
+
+	// Initialize CallManager (per-org calling_enabled DB setting controls access)
+	app.CallManager = calling.NewManager(&cfg.Calling, s3Client, db, waClient, wsHub, lo)
+	app.S3Client = s3Client
+	lo.Info("Call manager initialized")
+
+	// Initialize TTS if configured (requires piper binary + model)
+	if cfg.TTS.PiperBinary != "" && cfg.TTS.PiperModel != "" {
+		app.TTS = &tts.PiperTTS{
+			BinaryPath:    cfg.TTS.PiperBinary,
+			ModelPath:     cfg.TTS.PiperModel,
+			OpusencBinary: cfg.TTS.OpusencBinary,
+			AudioDir:      cfg.Calling.AudioDir,
+		}
+		lo.Info("TTS initialized", "piper", cfg.TTS.PiperBinary, "model", cfg.TTS.PiperModel)
 	}
 
 	// Start campaign stats subscriber for real-time WebSocket updates from worker
@@ -737,6 +768,33 @@ func setupRoutes(g *fastglue.Fastglue, app *handlers.App, lo logf.Logger, basePa
 	g.DELETE("/api/custom-actions/{id}", app.DeleteCustomAction)
 	g.POST("/api/custom-actions/{id}/execute", app.ExecuteCustomAction)
 	g.GET("/api/custom-actions/redirect/{token}", app.CustomActionRedirect)
+
+	// IVR Flows
+	g.GET("/api/ivr-flows", app.ListIVRFlows)
+	g.GET("/api/ivr-flows/{id}", app.GetIVRFlow)
+	g.POST("/api/ivr-flows", app.CreateIVRFlow)
+	g.PUT("/api/ivr-flows/{id}", app.UpdateIVRFlow)
+	g.DELETE("/api/ivr-flows/{id}", app.DeleteIVRFlow)
+	g.POST("/api/ivr-flows/audio", app.UploadIVRAudio)
+	g.GET("/api/ivr-flows/audio/{filename}", app.ServeIVRAudio)
+
+	// Call Logs
+	g.GET("/api/call-logs", app.ListCallLogs)
+	g.GET("/api/call-logs/{id}", app.GetCallLog)
+	g.GET("/api/call-logs/{id}/recording", app.GetCallRecording)
+
+	// Call Transfers
+	g.GET("/api/call-transfers", app.ListCallTransfers)
+	g.GET("/api/call-transfers/{id}", app.GetCallTransfer)
+	g.POST("/api/call-transfers/{id}/connect", app.ConnectCallTransfer)
+	g.POST("/api/call-transfers/{id}/hangup", app.HangupCallTransfer)
+
+	// Outgoing Calls
+	g.POST("/api/calls/outgoing", app.InitiateOutgoingCall)
+	g.POST("/api/calls/outgoing/{id}/hangup", app.HangupOutgoingCall)
+	g.POST("/api/calls/permission-request", app.SendCallPermissionRequest)
+	g.GET("/api/calls/permission/{contactId}", app.GetCallPermission)
+	g.GET("/api/calls/ice-servers", app.GetICEServers)
 
 	// Catalogs
 	g.GET("/api/catalogs", app.ListCatalogs)

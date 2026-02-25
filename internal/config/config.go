@@ -22,6 +22,34 @@ type Config struct {
 	DefaultAdmin  DefaultAdminConfig  `koanf:"default_admin"`
 	RateLimit     RateLimitConfig     `koanf:"rate_limit"`
 	Cookie        CookieConfig        `koanf:"cookie"`
+	Calling       CallingConfig       `koanf:"calling"`
+	TTS           TTSConfig           `koanf:"tts"`
+}
+
+type TTSConfig struct {
+	PiperBinary   string `koanf:"piper_binary"`   // path to piper executable
+	PiperModel    string `koanf:"piper_model"`    // path to .onnx voice model
+	OpusencBinary string `koanf:"opusenc_binary"` // path to opusenc (defaults to "opusenc")
+}
+
+type ICEServerConfig struct {
+	URLs       []string `koanf:"urls"`
+	Username   string   `koanf:"username"`
+	Credential string   `koanf:"credential"`
+}
+
+type CallingConfig struct {
+	MaxCallDuration     int              `koanf:"max_call_duration"`
+	AudioDir            string           `koanf:"audio_dir"`
+	HoldMusicFile       string           `koanf:"hold_music_file"`
+	TransferTimeoutSecs int              `koanf:"transfer_timeout_secs"`
+	RingbackFile        string           `koanf:"ringback_file"`
+	UDPPortMin          uint16           `koanf:"udp_port_min"`  // WebRTC UDP port range start (default: 10000)
+	UDPPortMax          uint16           `koanf:"udp_port_max"`  // WebRTC UDP port range end (default: 10100)
+	PublicIP            string           `koanf:"public_ip"`     // Public IP for NAT mapping (required on AWS/cloud)
+	RelayOnly           bool             `koanf:"relay_only"`    // Force all media through TURN relay (no direct UDP)
+	ICEServers          []ICEServerConfig `koanf:"ice_servers"`
+	RecordingEnabled    bool             `koanf:"recording_enabled"` // Enable call recording to S3
 }
 
 type AppConfig struct {
@@ -224,5 +252,18 @@ func setDefaults(cfg *Config) {
 	}
 	if cfg.RateLimit.WindowSeconds == 0 {
 		cfg.RateLimit.WindowSeconds = 60
+	}
+	// Calling defaults
+	if cfg.Calling.MaxCallDuration == 0 {
+		cfg.Calling.MaxCallDuration = 300
+	}
+	if cfg.Calling.AudioDir == "" {
+		cfg.Calling.AudioDir = "./audio"
+	}
+	if cfg.Calling.HoldMusicFile == "" {
+		cfg.Calling.HoldMusicFile = "hold_music.opus"
+	}
+	if cfg.Calling.TransferTimeoutSecs == 0 {
+		cfg.Calling.TransferTimeoutSecs = 120
 	}
 }

@@ -1,5 +1,6 @@
 import { useContactsStore } from '@/stores/contacts'
 import { useTransfersStore } from '@/stores/transfers'
+import { useCallingStore } from '@/stores/calling'
 import { useAuthStore } from '@/stores/auth'
 import { useNotesStore } from '@/stores/notes'
 import { toast } from 'vue-sonner'
@@ -61,6 +62,25 @@ const WS_TYPE_CAMPAIGN_STATS_UPDATE = 'campaign_stats_update'
 
 // Permission types
 const WS_TYPE_PERMISSIONS_UPDATED = 'permissions_updated'
+
+// Call types
+const WS_TYPE_CALL_INCOMING = 'call_incoming'
+const WS_TYPE_CALL_ANSWERED = 'call_answered'
+const WS_TYPE_CALL_ENDED = 'call_ended'
+
+// Call transfer types
+const WS_TYPE_CALL_TRANSFER_WAITING = 'call_transfer_waiting'
+const WS_TYPE_CALL_TRANSFER_CONNECTED = 'call_transfer_connected'
+const WS_TYPE_CALL_TRANSFER_COMPLETED = 'call_transfer_completed'
+const WS_TYPE_CALL_TRANSFER_ABANDONED = 'call_transfer_abandoned'
+const WS_TYPE_CALL_TRANSFER_NO_ANSWER = 'call_transfer_no_answer'
+
+// Outgoing call types
+const WS_TYPE_OUTGOING_CALL_INITIATED = 'outgoing_call_initiated'
+const WS_TYPE_OUTGOING_CALL_RINGING = 'outgoing_call_ringing'
+const WS_TYPE_OUTGOING_CALL_ANSWERED = 'outgoing_call_answered'
+const WS_TYPE_OUTGOING_CALL_REJECTED = 'outgoing_call_rejected'
+const WS_TYPE_OUTGOING_CALL_ENDED = 'outgoing_call_ended'
 
 // Conversation note types
 const WS_TYPE_CONVERSATION_NOTE_CREATED = 'conversation_note_created'
@@ -186,6 +206,29 @@ class WebSocketService {
           break
         case WS_TYPE_PERMISSIONS_UPDATED:
           this.handlePermissionsUpdated()
+          break
+        case WS_TYPE_CALL_INCOMING:
+          this.handleCallIncoming(message.payload)
+          break
+        case WS_TYPE_CALL_ANSWERED:
+        case WS_TYPE_CALL_ENDED:
+          useCallingStore().handleCallEvent(message.type, message.payload)
+          break
+        case WS_TYPE_CALL_TRANSFER_WAITING:
+          this.handleCallTransferWaiting(message.payload)
+          break
+        case WS_TYPE_CALL_TRANSFER_CONNECTED:
+        case WS_TYPE_CALL_TRANSFER_COMPLETED:
+        case WS_TYPE_CALL_TRANSFER_ABANDONED:
+        case WS_TYPE_CALL_TRANSFER_NO_ANSWER:
+          useCallingStore().handleCallEvent(message.type, message.payload)
+          break
+        case WS_TYPE_OUTGOING_CALL_INITIATED:
+        case WS_TYPE_OUTGOING_CALL_RINGING:
+        case WS_TYPE_OUTGOING_CALL_ANSWERED:
+        case WS_TYPE_OUTGOING_CALL_REJECTED:
+        case WS_TYPE_OUTGOING_CALL_ENDED:
+          useCallingStore().handleCallEvent(message.type, message.payload)
           break
         case WS_TYPE_CONVERSATION_NOTE_CREATED:
           useNotesStore().addNote(message.payload)
@@ -394,6 +437,40 @@ class WebSocketService {
         }
       })
     }
+  }
+
+  private handleCallIncoming(payload: any) {
+    const callingStore = useCallingStore()
+    callingStore.handleCallEvent('call_incoming', payload)
+
+    const contactName = payload.caller_phone || 'Unknown'
+    playNotificationSound()
+    toast.info('Incoming Call', {
+      description: `Call from ${contactName}`,
+      duration: 5000,
+      action: {
+        label: 'View',
+        onClick: () => router.push('/calling/logs')
+      }
+    })
+  }
+
+  private handleCallTransferWaiting(payload: any) {
+    const callingStore = useCallingStore()
+    callingStore.handleCallEvent('call_transfer_waiting', payload)
+
+    const contactName = payload.caller_phone || 'Unknown'
+    playNotificationSound()
+    toast.info('Incoming Call Transfer', {
+      description: `Call from ${contactName} waiting for an agent`,
+      duration: 10000,
+      action: {
+        label: 'Accept',
+        onClick: () => {
+          router.push('/calling/transfers')
+        }
+      }
+    })
   }
 
   private handleCampaignStatsUpdate(payload: any) {

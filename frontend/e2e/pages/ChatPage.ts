@@ -297,9 +297,19 @@ export class ChatPage extends BasePage {
     await this.templateSearchInput.waitFor({ state: 'visible' })
   }
 
+  /** Wait for the loading spinner to disappear and at least one template item to appear */
+  async waitForTemplatesLoaded() {
+    // Wait for the loader to disappear (if it was shown)
+    const loader = this.templatePopover.locator('.animate-spin')
+    await loader.waitFor({ state: 'hidden', timeout: 15000 }).catch(() => {})
+    // Wait for at least one template button to be visible
+    await this.templatePopover.locator('button.w-full.text-left').first().waitFor({ state: 'visible', timeout: 15000 })
+  }
+
   async searchTemplates(term: string) {
     await this.templateSearchInput.fill(term)
-    await this.page.waitForTimeout(300)
+    // Wait for filtered results to settle
+    await this.templatePopover.locator('button.w-full.text-left').first().waitFor({ state: 'visible', timeout: 10000 })
   }
 
   getTemplateItem(name: string): Locator {
@@ -307,7 +317,9 @@ export class ChatPage extends BasePage {
   }
 
   async selectTemplate(name: string) {
-    await this.getTemplateItem(name).click()
+    const item = this.getTemplateItem(name)
+    await item.waitFor({ state: 'visible', timeout: 10000 })
+    await item.click()
     await this.templateDialog.waitFor({ state: 'visible' })
   }
 

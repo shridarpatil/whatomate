@@ -260,7 +260,7 @@ func TestConsume_ProcessesJob(t *testing.T) {
 	// Create consumer.
 	consumer, err := queue.NewRedisConsumer(client, log)
 	require.NoError(t, err)
-	defer consumer.Close()
+	defer consumer.Close() //nolint:errcheck
 
 	handler := &mockHandler{}
 
@@ -295,7 +295,7 @@ func TestConsume_EmptyQueue(t *testing.T) {
 
 	consumer, err := queue.NewRedisConsumer(client, log)
 	require.NoError(t, err)
-	defer consumer.Close()
+	defer consumer.Close() //nolint:errcheck
 
 	handler := &mockHandler{}
 
@@ -329,7 +329,7 @@ func TestConsume_MultipleJobs(t *testing.T) {
 
 	consumer, err := queue.NewRedisConsumer(client, log)
 	require.NoError(t, err)
-	defer consumer.Close()
+	defer consumer.Close() //nolint:errcheck
 
 	handler := &mockHandler{}
 
@@ -392,7 +392,7 @@ func TestSubscribeCampaignStats_ReceivesUpdate(t *testing.T) {
 
 	pub := queue.NewPublisher(client, log)
 	sub := queue.NewSubscriber(client, log)
-	defer sub.Close()
+	defer sub.Close() //nolint:errcheck
 
 	// Use a unique campaign ID to filter out messages from parallel tests
 	// sharing the same pub/sub channel.
@@ -470,7 +470,7 @@ func TestEnqueueRecipient_InvalidRedis(t *testing.T) {
 		Addr:        "localhost:1", // Invalid port
 		DialTimeout: 100 * time.Millisecond,
 	})
-	defer badClient.Close()
+	defer badClient.Close() //nolint:errcheck
 
 	q := queue.NewRedisQueue(badClient, log)
 	ctx, cancel := context.WithTimeout(context.Background(), 500*time.Millisecond)
@@ -489,7 +489,7 @@ func TestEnqueueRecipients_InvalidRedis(t *testing.T) {
 		Addr:        "localhost:1",
 		DialTimeout: 100 * time.Millisecond,
 	})
-	defer badClient.Close()
+	defer badClient.Close() //nolint:errcheck
 
 	q := queue.NewRedisQueue(badClient, log)
 	ctx, cancel := context.WithTimeout(context.Background(), 500*time.Millisecond)
@@ -508,7 +508,7 @@ func TestNewRedisConsumer_InvalidRedis(t *testing.T) {
 		Addr:        "localhost:1",
 		DialTimeout: 100 * time.Millisecond,
 	})
-	defer badClient.Close()
+	defer badClient.Close() //nolint:errcheck
 
 	_, err := queue.NewRedisConsumer(badClient, log)
 	assert.Error(t, err)
@@ -522,7 +522,7 @@ func TestPublishCampaignStats_InvalidRedis(t *testing.T) {
 		Addr:        "localhost:1",
 		DialTimeout: 100 * time.Millisecond,
 	})
-	defer badClient.Close()
+	defer badClient.Close() //nolint:errcheck
 
 	pub := queue.NewPublisher(badClient, log)
 	ctx, cancel := context.WithTimeout(context.Background(), 500*time.Millisecond)

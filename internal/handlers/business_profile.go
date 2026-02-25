@@ -104,7 +104,7 @@ func (a *App) UpdateProfilePicture(r *fastglue.Request) error {
 	if err != nil {
 		return r.SendErrorEnvelope(fasthttp.StatusInternalServerError, "Failed to open file", nil, "")
 	}
-	defer file.Close()
+	defer file.Close() //nolint:errcheck
 
 	fileSize := fileHeader.Size
 	fileContent := make([]byte, fileSize)

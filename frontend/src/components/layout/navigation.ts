@@ -18,7 +18,10 @@ import {
   Zap,
   Shield,
   LineChart,
-  Tags
+  Tags,
+  Phone,
+  PhoneCall,
+  PhoneForwarded
 } from 'lucide-vue-next'
 import type { Component } from 'vue'
 
@@ -92,6 +95,18 @@ export const navigationItems: NavItem[] = [
     path: '/campaigns',
     icon: Megaphone,
     permission: 'campaigns'
+  },
+  {
+    name: 'nav.calling',
+    path: '/calling',
+    icon: Phone,
+    permission: 'call_logs',
+    childPermissions: ['call_logs', 'ivr_flows', 'call_transfers'],
+    children: [
+      { name: 'nav.callLogs', path: '/calling/logs', icon: PhoneCall, permission: 'call_logs' },
+      { name: 'nav.ivrFlows', path: '/calling/ivr-flows', icon: Workflow, permission: 'ivr_flows' },
+      { name: 'nav.callTransfers', path: '/calling/transfers', icon: PhoneForwarded, permission: 'call_transfers' }
+    ]
   },
   {
     name: 'nav.settings',

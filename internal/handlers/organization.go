@@ -13,9 +13,12 @@ import (
 
 // OrganizationSettings represents the settings structure
 type OrganizationSettings struct {
-	MaskPhoneNumbers bool   `json:"mask_phone_numbers"`
-	Timezone         string `json:"timezone"`
-	DateFormat       string `json:"date_format"`
+	MaskPhoneNumbers    bool   `json:"mask_phone_numbers"`
+	Timezone            string `json:"timezone"`
+	DateFormat          string `json:"date_format"`
+	CallingEnabled      bool   `json:"calling_enabled"`
+	MaxCallDuration     int    `json:"max_call_duration"`
+	TransferTimeoutSecs int    `json:"transfer_timeout_secs"`
 }
 
 // GetOrganizationSettings returns the organization settings
@@ -32,9 +35,12 @@ func (a *App) GetOrganizationSettings(r *fastglue.Request) error {
 
 	// Parse settings from JSONB
 	settings := OrganizationSettings{
-		MaskPhoneNumbers: false,
-		Timezone:         "UTC",
-		DateFormat:       "YYYY-MM-DD",
+		MaskPhoneNumbers:    false,
+		Timezone:            "UTC",
+		DateFormat:          "YYYY-MM-DD",
+		CallingEnabled:      false,
+		MaxCallDuration:     callingConfigDefault(a.Config.Calling.MaxCallDuration, 3600),
+		TransferTimeoutSecs: callingConfigDefault(a.Config.Calling.TransferTimeoutSecs, 60),
 	}
 
 	if org.Settings != nil {
@@ -46,6 +52,15 @@ func (a *App) GetOrganizationSettings(r *fastglue.Request) error {
 		}
 		if v, ok := org.Settings["date_format"].(string); ok && v != "" {
 			settings.DateFormat = v
+		}
+		if v, ok := org.Settings["calling_enabled"].(bool); ok {
+			settings.CallingEnabled = v
+		}
+		if v, ok := org.Settings["max_call_duration"].(float64); ok && v > 0 {
+			settings.MaxCallDuration = int(v)
+		}
+		if v, ok := org.Settings["transfer_timeout_secs"].(float64); ok && v > 0 {
+			settings.TransferTimeoutSecs = int(v)
 		}
 	}
 
@@ -63,10 +78,13 @@ func (a *App) UpdateOrganizationSettings(r *fastglue.Request) error {
 	}
 
 	var req struct {
-		MaskPhoneNumbers *bool   `json:"mask_phone_numbers"`
-		Timezone         *string `json:"timezone"`
-		DateFormat       *string `json:"date_format"`
-		Name             *string `json:"name"`
+		MaskPhoneNumbers    *bool   `json:"mask_phone_numbers"`
+		Timezone            *string `json:"timezone"`
+		DateFormat          *string `json:"date_format"`
+		Name                *string `json:"name"`
+		CallingEnabled      *bool   `json:"calling_enabled"`
+		MaxCallDuration     *int    `json:"max_call_duration"`
+		TransferTimeoutSecs *int    `json:"transfer_timeout_secs"`
 	}
 
 	if err := json.Unmarshal(r.RequestCtx.PostBody(), &req); err != nil {
@@ -92,6 +110,15 @@ func (a *App) UpdateOrganizationSettings(r *fastglue.Request) error {
 	if req.DateFormat != nil {
 		org.Settings["date_format"] = *req.DateFormat
 	}
+	if req.CallingEnabled != nil {
+		org.Settings["calling_enabled"] = *req.CallingEnabled
+	}
+	if req.MaxCallDuration != nil && *req.MaxCallDuration > 0 {
+		org.Settings["max_call_duration"] = *req.MaxCallDuration
+	}
+	if req.TransferTimeoutSecs != nil && *req.TransferTimeoutSecs > 0 {
+		org.Settings["transfer_timeout_secs"] = *req.TransferTimeoutSecs
+	}
 	if req.Name != nil && *req.Name != "" {
 		org.Name = *req.Name
 	}
@@ -103,6 +130,52 @@ func (a *App) UpdateOrganizationSettings(r *fastglue.Request) error {
 	return r.SendEnvelope(map[string]interface{}{
 		"message": "Settings updated successfully",
 	})
+}
+
+// IsCallingEnabledForOrg checks if calling is enabled for an organization.
+// Both the global CallManager and the per-org setting must be active.
+func (a *App) IsCallingEnabledForOrg(orgID interface{}) bool {
+	if a.CallManager == nil {
+		return false
+	}
+	var org models.Organization
+	if err := a.DB.Where("id = ?", orgID).First(&org).Error; err != nil {
+		return false
+	}
+	if org.Settings != nil {
+		if v, ok := org.Settings["calling_enabled"].(bool); ok {
+			return v
+		}
+	}
+	return false
+}
+
+// GetOrgCallingConfig returns org-level calling config values, falling back to global defaults.
+func (a *App) GetOrgCallingConfig(orgID interface{}) (maxDuration, transferTimeout int) {
+	maxDuration = callingConfigDefault(a.Config.Calling.MaxCallDuration, 3600)
+	transferTimeout = callingConfigDefault(a.Config.Calling.TransferTimeoutSecs, 60)
+
+	var org models.Organization
+	if err := a.DB.Where("id = ?", orgID).First(&org).Error; err != nil {
+		return
+	}
+	if org.Settings != nil {
+		if v, ok := org.Settings["max_call_duration"].(float64); ok && v > 0 {
+			maxDuration = int(v)
+		}
+		if v, ok := org.Settings["transfer_timeout_secs"].(float64); ok && v > 0 {
+			transferTimeout = int(v)
+		}
+	}
+	return
+}
+
+// callingConfigDefault returns val if positive, otherwise fallback.
+func callingConfigDefault(val, fallback int) int {
+	if val > 0 {
+		return val
+	}
+	return fallback
 }
 
 // MaskPhoneNumber masks a phone number showing only last 4 digits

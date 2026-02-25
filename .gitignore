@@ -53,6 +53,7 @@ logs/
 tmp/
 temp/
 uploads/
+audio/
 
 # Test results
 test-results/

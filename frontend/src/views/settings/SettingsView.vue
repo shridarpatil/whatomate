@@ -12,7 +12,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { PageHeader } from '@/components/shared'
 import LanguageSwitcher from '@/components/LanguageSwitcher.vue'
 import { toast } from 'vue-sonner'
-import { Settings, Bell, Loader2, Globe } from 'lucide-vue-next'
+import { Settings, Bell, Loader2, Globe, Phone } from 'lucide-vue-next'
 import { usersService, organizationService } from '@/services/api'
 
 const { t } = useI18n()
@@ -35,6 +35,13 @@ const notificationSettings = ref({
   campaign_updates: true
 })
 
+// Calling Settings
+const callingSettings = ref({
+  calling_enabled: false,
+  max_call_duration: 300,
+  transfer_timeout_secs: 120
+})
+
 onMounted(async () => {
   try {
     const [orgResponse, userResponse] = await Promise.all([
@@ -50,6 +57,11 @@ onMounted(async () => {
         default_timezone: orgData.settings?.timezone || 'UTC',
         date_format: orgData.settings?.date_format || 'YYYY-MM-DD',
         mask_phone_numbers: orgData.settings?.mask_phone_numbers || false
+      }
+      callingSettings.value = {
+        calling_enabled: orgData.settings?.calling_enabled || false,
+        max_call_duration: orgData.settings?.max_call_duration || 300,
+        transfer_timeout_secs: orgData.settings?.transfer_timeout_secs || 120
       }
     }
 
@@ -101,6 +113,22 @@ async function saveNotificationSettings() {
     isSubmitting.value = false
   }
 }
+
+async function saveCallingSettings() {
+  isSubmitting.value = true
+  try {
+    await organizationService.updateSettings({
+      calling_enabled: callingSettings.value.calling_enabled,
+      max_call_duration: callingSettings.value.max_call_duration,
+      transfer_timeout_secs: callingSettings.value.transfer_timeout_secs
+    })
+    toast.success(t('settings.callingSaved'))
+  } catch (error) {
+    toast.error(t('common.failedSave', { resource: t('resources.settings') }))
+  } finally {
+    isSubmitting.value = false
+  }
+}
 </script>
 
 <template>
@@ -109,7 +137,7 @@ async function saveNotificationSettings() {
     <ScrollArea class="flex-1">
       <div class="p-6 space-y-4 max-w-4xl mx-auto">
         <Tabs default-value="general" class="w-full">
-          <TabsList class="grid w-full grid-cols-2 mb-6 bg-white/[0.04] border border-white/[0.08] light:bg-gray-100 light:border-gray-200">
+          <TabsList class="grid w-full grid-cols-3 mb-6 bg-white/[0.04] border border-white/[0.08] light:bg-gray-100 light:border-gray-200">
             <TabsTrigger value="general" class="data-[state=active]:bg-white/[0.08] data-[state=active]:text-white text-white/50 light:data-[state=active]:bg-white light:data-[state=active]:text-gray-900 light:text-gray-500">
               <Settings class="h-4 w-4 mr-2" />
               {{ $t('settings.general') }}
@@ -117,6 +145,10 @@ async function saveNotificationSettings() {
             <TabsTrigger value="notifications" class="data-[state=active]:bg-white/[0.08] data-[state=active]:text-white text-white/50 light:data-[state=active]:bg-white light:data-[state=active]:text-gray-900 light:text-gray-500">
               <Bell class="h-4 w-4 mr-2" />
               {{ $t('settings.notifications') }}
+            </TabsTrigger>
+            <TabsTrigger value="calling" class="data-[state=active]:bg-white/[0.08] data-[state=active]:text-white text-white/50 light:data-[state=active]:bg-white light:data-[state=active]:text-gray-900 light:text-gray-500">
+              <Phone class="h-4 w-4 mr-2" />
+              {{ $t('settings.calling') }}
             </TabsTrigger>
           </TabsList>
 
@@ -237,6 +269,59 @@ async function saveNotificationSettings() {
                 </div>
                 <div class="flex justify-end pt-4">
                   <Button variant="outline" size="sm" class="bg-white/[0.04] border-white/[0.1] text-white/70 hover:bg-white/[0.08] hover:text-white light:bg-white light:border-gray-200 light:text-gray-700 light:hover:bg-gray-50" @click="saveNotificationSettings" :disabled="isSubmitting">
+                    <Loader2 v-if="isSubmitting" class="mr-2 h-4 w-4 animate-spin" />
+                    {{ $t('settings.save') }}
+                  </Button>
+                </div>
+              </div>
+            </div>
+          </TabsContent>
+
+          <!-- Calling Settings Tab -->
+          <TabsContent value="calling">
+            <div class="rounded-xl border border-white/[0.08] bg-white/[0.02] light:bg-white light:border-gray-200">
+              <div class="p-6 pb-3">
+                <h3 class="text-lg font-semibold text-white light:text-gray-900">{{ $t('settings.callingSettings') }}</h3>
+                <p class="text-sm text-white/40 light:text-gray-500">{{ $t('settings.callingSettingsDesc') }}</p>
+              </div>
+              <div class="p-6 pt-3 space-y-4">
+                <div class="flex items-center justify-between">
+                  <div>
+                    <p class="font-medium text-white light:text-gray-900">{{ $t('settings.callingEnabled') }}</p>
+                    <p class="text-sm text-white/40 light:text-gray-500">{{ $t('settings.callingEnabledDesc') }}</p>
+                  </div>
+                  <Switch
+                    :checked="callingSettings.calling_enabled"
+                    @update:checked="callingSettings.calling_enabled = $event"
+                  />
+                </div>
+                <Separator class="bg-white/[0.08] light:bg-gray-200" />
+                <div class="grid grid-cols-2 gap-4" :class="{ 'opacity-50 pointer-events-none': !callingSettings.calling_enabled }">
+                  <div class="space-y-2">
+                    <Label for="max_call_duration" class="text-white/70 light:text-gray-700">{{ $t('settings.maxCallDuration') }}</Label>
+                    <Input
+                      id="max_call_duration"
+                      type="number"
+                      v-model.number="callingSettings.max_call_duration"
+                      :min="60"
+                      :max="3600"
+                    />
+                    <p class="text-xs text-white/40 light:text-gray-500">{{ $t('settings.maxCallDurationDesc') }}</p>
+                  </div>
+                  <div class="space-y-2">
+                    <Label for="transfer_timeout" class="text-white/70 light:text-gray-700">{{ $t('settings.transferTimeout') }}</Label>
+                    <Input
+                      id="transfer_timeout"
+                      type="number"
+                      v-model.number="callingSettings.transfer_timeout_secs"
+                      :min="30"
+                      :max="600"
+                    />
+                    <p class="text-xs text-white/40 light:text-gray-500">{{ $t('settings.transferTimeoutDesc') }}</p>
+                  </div>
+                </div>
+                <div class="flex justify-end pt-4">
+                  <Button variant="outline" size="sm" class="bg-white/[0.04] border-white/[0.1] text-white/70 hover:bg-white/[0.08] hover:text-white light:bg-white light:border-gray-200 light:text-gray-700 light:hover:bg-gray-50" @click="saveCallingSettings" :disabled="isSubmitting">
                     <Loader2 v-if="isSubmitting" class="mr-2 h-4 w-4 animate-spin" />
                     {{ $t('settings.save') }}
                   </Button>

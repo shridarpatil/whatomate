@@ -104,6 +104,12 @@ func GetMigrationModels() []MigrationModel {
 
 		// Conversation Notes
 		{"ConversationNote", &models.ConversationNote{}},
+
+		// Calling / IVR
+		{"CallLog", &models.CallLog{}},
+		{"IVRFlow", &models.IVRFlow{}},
+		{"CallTransfer", &models.CallTransfer{}},
+		{"CallPermission", &models.CallPermission{}},
 	}
 }
 
@@ -267,6 +273,13 @@ func getIndexes() []string {
 		`CREATE UNIQUE INDEX IF NOT EXISTS idx_user_org_unique ON user_organizations(user_id, organization_id) WHERE deleted_at IS NULL`,
 		// Conversation notes
 		`CREATE INDEX IF NOT EXISTS idx_conversation_notes_contact ON conversation_notes(organization_id, contact_id, created_at DESC)`,
+		// Call logs
+		`CREATE INDEX IF NOT EXISTS idx_call_logs_org_status ON call_logs(organization_id, status, created_at DESC)`,
+		`CREATE INDEX IF NOT EXISTS idx_call_logs_contact ON call_logs(contact_id, created_at DESC)`,
+		`CREATE INDEX IF NOT EXISTS idx_call_logs_wa_call_id ON call_logs(whatsapp_call_id) WHERE whatsapp_call_id != ''`,
+		// IVR flows
+		`CREATE INDEX IF NOT EXISTS idx_ivr_flows_org_active ON ivr_flows(organization_id, whatsapp_account, is_active)`,
+		`CREATE UNIQUE INDEX IF NOT EXISTS idx_ivr_flows_org_call_start ON ivr_flows(organization_id, whatsapp_account) WHERE is_call_start = true AND is_active = true AND deleted_at IS NULL`,
 	}
 }
 

@@ -1,18 +1,43 @@
 # Dockerfile for GoReleaser builds
 # The binary is pre-built by GoReleaser
 
-FROM alpine:3.19
+# Piper TTS download stage
+FROM debian:bookworm-slim AS piper-dl
+RUN apt-get update && apt-get install -y --no-install-recommends wget ca-certificates && rm -rf /var/lib/apt/lists/*
+RUN wget -q https://github.com/rhasspy/piper/releases/download/2023.11.14-2/piper_linux_x86_64.tar.gz -O /tmp/piper.tar.gz \
+    && tar xf /tmp/piper.tar.gz -C /tmp \
+    && rm /tmp/piper.tar.gz
+# Download default English voice model (~60MB)
+RUN mkdir -p /tmp/piper-models \
+    && wget -q https://huggingface.co/rhasspy/piper-voices/resolve/main/en/en_US/lessac/medium/en_US-lessac-medium.onnx \
+       -O /tmp/piper-models/en_US-lessac-medium.onnx \
+    && wget -q https://huggingface.co/rhasspy/piper-voices/resolve/main/en/en_US/lessac/medium/en_US-lessac-medium.onnx.json \
+       -O /tmp/piper-models/en_US-lessac-medium.onnx.json
+
+# Final stage (Debian for glibc — required by Piper TTS)
+FROM debian:bookworm-slim
 
 WORKDIR /app
 
-# Install runtime dependencies
-RUN apk add --no-cache ca-certificates tzdata
+# Install runtime dependencies (TTS: espeak-ng, opus-tools)
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    ca-certificates tzdata espeak-ng opus-tools \
+    && rm -rf /var/lib/apt/lists/*
 
 # Copy pre-built binary from GoReleaser
 COPY whatomate .
 
-# Create uploads directory
-RUN mkdir -p /app/uploads
+# Install Piper TTS binary + shared libraries
+COPY --from=piper-dl /tmp/piper/piper /usr/local/bin/piper
+COPY --from=piper-dl /tmp/piper/lib*.so* /usr/local/lib/
+COPY --from=piper-dl /tmp/piper/espeak-ng-data /usr/local/share/espeak-ng-data
+RUN ldconfig
+
+# Install default voice model
+COPY --from=piper-dl /tmp/piper-models /opt/piper/models
+
+# Create directories
+RUN mkdir -p /app/uploads /app/audio
 
 # Expose port
 EXPOSE 8080

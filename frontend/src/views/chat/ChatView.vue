@@ -93,6 +93,7 @@ import CannedResponsePicker from '@/components/chat/CannedResponsePicker.vue'
 import TemplatePicker from '@/components/chat/TemplatePicker.vue'
 import ContactInfoPanel from '@/components/chat/ContactInfoPanel.vue'
 import ConversationNotes from '@/components/chat/ConversationNotes.vue'
+import CallButton from '@/components/calling/CallButton.vue'
 import { useNotesStore } from '@/stores/notes'
 import { CreateContactDialog } from '@/components/shared'
 import { Info } from 'lucide-vue-next'
@@ -490,7 +491,7 @@ async function selectContact(id: string) {
     }
     contactAccounts.value = Array.from(accounts).sort()
 
-    // Auto-select account if multi-account contact
+    // Auto-select account
     if (contactAccounts.value.length > 1) {
       // Find account of the most recent incoming message
       for (let i = contactsStore.messages.length - 1; i >= 0; i--) {
@@ -509,6 +510,10 @@ async function selectContact(id: string) {
         contactsStore.setAccountFilter(selectedAccount.value)
         await contactsStore.fetchMessages(id, { account: selectedAccount.value })
       }
+    } else if (contactAccounts.value.length === 1) {
+      selectedAccount.value = contactAccounts.value[0]
+    } else if (contact.whatsapp_account) {
+      selectedAccount.value = contact.whatsapp_account
     }
 
     // Tell WebSocket server which contact we're viewing
@@ -1479,6 +1484,13 @@ async function sendMediaMessage() {
             </div>
           </div>
           <div class="flex items-center gap-1">
+            <CallButton
+              v-if="contactsStore.currentContact?.phone_number && selectedAccount"
+              :contact-id="contactsStore.currentContact.id"
+              :contact-phone="contactsStore.currentContact.phone_number"
+              :contact-name="contactsStore.currentContact.name || contactsStore.currentContact.phone_number"
+              :whatsapp-account="selectedAccount"
+            />
             <Tooltip v-if="canAssignContacts">
               <TooltipTrigger as-child>
                 <Button variant="ghost" size="icon" class="h-8 w-8 text-white/50 hover:text-white hover:bg-white/[0.08] light:text-gray-500 light:hover:text-gray-900 light:hover:bg-gray-100" @click="isAssignDialogOpen = true">

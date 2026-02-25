@@ -16,6 +16,8 @@ import { wsService } from '@/services/websocket'
 import { authService } from '@/services/api'
 import OrganizationSwitcher from './OrganizationSwitcher.vue'
 import UserMenu from './UserMenu.vue'
+import IncomingCallBanner from '@/components/calling/IncomingCallBanner.vue'
+import ActiveCallPanel from '@/components/calling/ActiveCallPanel.vue'
 import { navigationItems } from './navigation'
 
 useI18n() // Enable $t() in template
@@ -212,7 +214,9 @@ const handleLogout = async () => {
 
     <!-- Main content -->
     <main id="main-content" class="flex-1 overflow-hidden pt-12 md:pt-0 bg-[#0a0a0b] light:bg-gray-50" role="main">
+      <IncomingCallBanner />
       <RouterView />
+      <ActiveCallPanel />
     </main>
   </div>
 </template>
