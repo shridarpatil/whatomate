@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"path/filepath"
 	"sync"
 	"time"
 
@@ -49,6 +50,9 @@ type CallSession struct {
 	HoldPlayer        *AudioPlayer
 	TransferCancel    context.CancelFunc
 	BridgeStarted     chan struct{} // closed when bridge takes over caller track
+
+	// Ringback (outgoing calls)
+	RingbackPlayer *AudioPlayer
 
 	// Outgoing call fields
 	Direction      models.CallDirection
@@ -230,6 +234,33 @@ func (m *Manager) getOrgTransferTimeout(orgID uuid.UUID) int {
 	return m.config.TransferTimeoutSecs
 }
 
+// getOrgHoldMusic returns the hold music file path for a session's organization,
+// falling back to the global config default.
+func (m *Manager) getOrgHoldMusic(orgID uuid.UUID) string {
+	var org models.Organization
+	if err := m.db.Where("id = ?", orgID).First(&org).Error; err == nil && org.Settings != nil {
+		if v, ok := org.Settings["hold_music_file"].(string); ok && v != "" {
+			return filepath.Join(m.config.AudioDir, v)
+		}
+	}
+	return filepath.Join(m.config.AudioDir, m.config.HoldMusicFile)
+}
+
+// getOrgRingback returns the ringback file path for a session's organization,
+// falling back to the global config default.
+func (m *Manager) getOrgRingback(orgID uuid.UUID) string {
+	var org models.Organization
+	if err := m.db.Where("id = ?", orgID).First(&org).Error; err == nil && org.Settings != nil {
+		if v, ok := org.Settings["ringback_file"].(string); ok && v != "" {
+			return filepath.Join(m.config.AudioDir, v)
+		}
+	}
+	if m.config.RingbackFile != "" {
+		return filepath.Join(m.config.AudioDir, m.config.RingbackFile)
+	}
+	return ""
+}
+
 // cleanupSession removes a session and releases WebRTC resources
 func (m *Manager) cleanupSession(callID string) {
 	m.mu.Lock()
@@ -252,6 +283,9 @@ func (m *Manager) cleanupSession(callID string) {
 	}
 	if session.HoldPlayer != nil {
 		session.HoldPlayer.Stop()
+	}
+	if session.RingbackPlayer != nil {
+		session.RingbackPlayer.Stop()
 	}
 	if session.IVRPlayer != nil {
 		session.IVRPlayer.Stop()

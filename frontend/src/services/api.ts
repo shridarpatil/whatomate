@@ -571,7 +571,16 @@ export const organizationService = {
     calling_enabled?: boolean
     max_call_duration?: number
     transfer_timeout_secs?: number
-  }) => api.put('/org/settings', data)
+    hold_music_file?: string
+    ringback_file?: string
+  }) => api.put('/org/settings', data),
+  uploadOrgAudio: (file: File, type: 'hold_music' | 'ringback') => {
+    const formData = new FormData()
+    formData.append('file', file)
+    return api.post(`/org/audio?type=${type}`, formData, {
+      headers: { 'Content-Type': 'multipart/form-data' }
+    })
+  }
 }
 
 // Organizations

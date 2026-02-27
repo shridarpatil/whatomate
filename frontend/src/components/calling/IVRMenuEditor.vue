@@ -43,8 +43,9 @@ const menu = computed({
 })
 
 // Greeting mode: 'audio' for uploaded files, 'text' for TTS
+// If greeting_text exists (even alongside a generated audio file), default to text tab
 const greetingTab = computed(() =>
-  menu.value.greeting_text ? 'text' : 'audio'
+  menu.value.greeting_text !== undefined && menu.value.greeting_text !== '' ? 'text' : 'audio'
 )
 
 const optionEntries = computed(() => {
@@ -84,18 +85,15 @@ const actionOptions = [
 ]
 
 function onGreetingTabChange(tab: string | number) {
+  stopAudio()
   if (tab === 'text') {
-    // Switching to text mode: clear uploaded audio
-    stopAudio()
-    emit('update:modelValue', { ...menu.value, greeting: '', greeting_text: menu.value.greeting_text || '' })
-  } else {
-    // Switching to audio mode: clear greeting text
-    emit('update:modelValue', { ...menu.value, greeting_text: undefined })
+    // Switching to text mode: preserve greeting (TTS audio) and ensure greeting_text exists
+    emit('update:modelValue', { ...menu.value, greeting_text: menu.value.greeting_text || '' })
   }
 }
 
 function updateGreetingText(text: string) {
-  emit('update:modelValue', { ...menu.value, greeting_text: text, greeting: '' })
+  emit('update:modelValue', { ...menu.value, greeting_text: text })
 }
 
 function triggerFileUpload() {
@@ -245,7 +243,7 @@ function updateSubmenu(digit: string, submenu: IVRMenu) {
           <!-- Upload Audio tab -->
           <TabsContent value="audio" class="mt-2">
             <div class="flex items-center gap-2">
-              <div v-if="menu.greeting && !menu.greeting_text" class="flex items-center gap-2 flex-1 min-w-0 px-3 py-1.5 border rounded-md bg-muted/50">
+              <div v-if="menu.greeting" class="flex items-center gap-2 flex-1 min-w-0 px-3 py-1.5 border rounded-md bg-muted/50">
                 <Button variant="ghost" size="icon" class="h-6 w-6 shrink-0" @click="togglePlayback">
                   <Pause v-if="isPlaying" class="h-3 w-3" />
                   <Play v-else class="h-3 w-3" />

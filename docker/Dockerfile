@@ -1,4 +1,17 @@
-# Build stage
+# Frontend build stage
+FROM node:22-alpine AS frontend-builder
+
+WORKDIR /app/frontend
+
+# Copy frontend dependency files first for caching
+COPY frontend/package.json frontend/package-lock.json ./
+RUN npm ci
+
+# Copy frontend source and build
+COPY frontend/ .
+RUN npm run build
+
+# Go build stage
 FROM golang:1.24.5-alpine AS builder
 
 WORKDIR /app
@@ -12,6 +25,9 @@ RUN go mod download
 
 # Copy source code
 COPY . .
+
+# Embed frontend build into Go binary
+COPY --from=frontend-builder /app/frontend/dist/ ./internal/frontend/dist/
 
 # Build the binary
 RUN CGO_ENABLED=0 GOOS=linux go build -a -installsuffix cgo -o whatomate ./cmd/whatomate
@@ -34,9 +50,9 @@ FROM debian:bookworm-slim
 
 WORKDIR /app
 
-# Install runtime dependencies (TTS: espeak-ng, opus-tools)
+# Install runtime dependencies (TTS: espeak-ng, opus-tools; transcoding: ffmpeg)
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    ca-certificates tzdata espeak-ng opus-tools \
+    ca-certificates tzdata espeak-ng opus-tools ffmpeg \
     && rm -rf /var/lib/apt/lists/*
 
 # Copy binary from builder

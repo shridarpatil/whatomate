@@ -530,7 +530,16 @@
     "maxCallDurationDesc": "Maximum allowed call duration before auto-disconnect",
     "transferTimeout": "Transfer Timeout (seconds)",
     "transferTimeoutDesc": "How long to wait for an agent to accept a transferred call",
-    "callingSaved": "Calling settings saved"
+    "callingSaved": "Calling settings saved",
+    "holdMusic": "Hold Music",
+    "holdMusicDesc": "Audio played to callers while on hold during transfers",
+    "ringbackTone": "Ringback Tone",
+    "ringbackToneDesc": "Audio played to agents while waiting for the remote party to answer",
+    "uploadAudio": "Upload",
+    "currentFile": "Current file",
+    "noFileUploaded": "Using default",
+    "audioUploaded": "Audio file uploaded successfully",
+    "audioUploadFailed": "Failed to upload audio file"
   },
   "users": {
     "title": "User Management",

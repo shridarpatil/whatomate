@@ -330,6 +330,18 @@ func (m *Manager) HandleOutgoingCallWebhook(callID, event, sdpAnswer string) {
 		session.Status = models.CallStatusRinging
 		session.mu.Unlock()
 
+		// Start ringback tone on the agent's speaker while the remote phone rings
+		ringbackFile := m.getOrgRingback(session.OrganizationID)
+		if ringbackFile != "" {
+			session.mu.Lock()
+			if session.AgentAudioTrack != nil && session.RingbackPlayer == nil {
+				player := NewAudioPlayer(session.AgentAudioTrack)
+				session.RingbackPlayer = player
+				go func() { _ = player.PlayFileLoop(ringbackFile) }()
+			}
+			session.mu.Unlock()
+		}
+
 		m.db.Model(&models.CallLog{}).
 			Where("id = ?", session.CallLogID).
 			Update("status", models.CallStatusRinging)
@@ -342,7 +354,12 @@ func (m *Manager) HandleOutgoingCallWebhook(callID, event, sdpAnswer string) {
 		})
 
 	case "accepted", "in_call", "connect":
+		// Stop ringback tone
 		session.mu.Lock()
+		if session.RingbackPlayer != nil {
+			session.RingbackPlayer.Stop()
+			session.RingbackPlayer = nil
+		}
 		session.Status = models.CallStatusAnswered
 		session.mu.Unlock()
 
