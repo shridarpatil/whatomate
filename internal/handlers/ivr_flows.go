@@ -1,10 +1,12 @@
 package handlers
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
 	"io"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 
@@ -334,12 +336,6 @@ func (a *App) UploadIVRAudio(r *fastglue.Request) error {
 		return r.SendErrorEnvelope(fasthttp.StatusBadRequest, "Unsupported audio type: "+mimeType, nil, "")
 	}
 
-	// Determine extension
-	ext := getExtensionFromMimeType(mimeType)
-	if ext == "" {
-		ext = ".bin"
-	}
-
 	// Ensure audio directory exists
 	audioDir := a.getAudioDir()
 	if err := os.MkdirAll(audioDir, 0755); err != nil {
@@ -347,17 +343,29 @@ func (a *App) UploadIVRAudio(r *fastglue.Request) error {
 		return r.SendErrorEnvelope(fasthttp.StatusInternalServerError, "Failed to create audio directory", nil, "")
 	}
 
-	// Generate filename: uuid + extension
-	filename := uuid.New().String() + ext
+	// Save uploaded file to a temp location for transcoding
+	tmpInput, err := os.CreateTemp("", "ivr-audio-input-*")
+	if err != nil {
+		return r.SendErrorEnvelope(fasthttp.StatusInternalServerError, "Failed to create temp file", nil, "")
+	}
+	defer os.Remove(tmpInput.Name())
+
+	if _, err := tmpInput.Write(data); err != nil {
+		tmpInput.Close()
+		return r.SendErrorEnvelope(fasthttp.StatusInternalServerError, "Failed to write temp file", nil, "")
+	}
+	tmpInput.Close()
+
+	// Transcode to OGG/Opus 48kHz mono for WebRTC compatibility
+	filename := uuid.New().String() + ".ogg"
 	filePath := filepath.Join(audioDir, filename)
 
-	// Save file
-	if err := os.WriteFile(filePath, data, 0644); err != nil {
-		a.Log.Error("Failed to save audio file", "error", err)
-		return r.SendErrorEnvelope(fasthttp.StatusInternalServerError, "Failed to save audio file", nil, "")
+	if err := transcodeToOpus(tmpInput.Name(), filePath); err != nil {
+		a.Log.Error("IVR audio transcoding failed", "error", err, "original_mime", mimeType)
+		return r.SendErrorEnvelope(fasthttp.StatusInternalServerError, "Failed to transcode audio to Opus format", nil, "")
 	}
 
-	a.Log.Info("IVR audio uploaded", "filename", filename, "mime_type", mimeType, "size", len(data))
+	a.Log.Info("IVR audio uploaded", "filename", filename, "original_mime", mimeType, "size", len(data))
 
 	return r.SendEnvelope(map[string]any{
 		"filename":  filename,
@@ -414,6 +422,140 @@ func (a *App) ServeIVRAudio(r *fastglue.Request) error {
 	r.RequestCtx.Response.Header.Set("Cache-Control", "private, max-age=3600")
 	r.RequestCtx.SetBody(data)
 
+	return nil
+}
+
+// UploadOrgAudio handles multipart audio file uploads for org-level hold music and ringback tones.
+// The "type" query parameter must be "hold_music" or "ringback".
+func (a *App) UploadOrgAudio(r *fastglue.Request) error {
+	orgID, userID, err := a.getOrgAndUserID(r)
+	if err != nil {
+		return r.SendErrorEnvelope(fasthttp.StatusUnauthorized, "Unauthorized", nil, "")
+	}
+	if err := a.requirePermission(r, userID, models.ResourceOrganizations, models.ActionWrite); err != nil {
+		return nil
+	}
+
+	audioType := string(r.RequestCtx.QueryArgs().Peek("type"))
+	if audioType != "hold_music" && audioType != "ringback" {
+		return r.SendErrorEnvelope(fasthttp.StatusBadRequest, "Query parameter 'type' must be 'hold_music' or 'ringback'", nil, "")
+	}
+
+	// Parse multipart form
+	form, err := r.RequestCtx.MultipartForm()
+	if err != nil {
+		return r.SendErrorEnvelope(fasthttp.StatusBadRequest, "Invalid multipart form: "+err.Error(), nil, "")
+	}
+
+	files := form.File["file"]
+	if len(files) == 0 {
+		return r.SendErrorEnvelope(fasthttp.StatusBadRequest, "No file provided", nil, "")
+	}
+
+	fileHeader := files[0]
+	file, err := fileHeader.Open()
+	if err != nil {
+		return r.SendErrorEnvelope(fasthttp.StatusBadRequest, "Failed to open file", nil, "")
+	}
+	defer func() { _ = file.Close() }()
+
+	// Read file content (limit to 5MB)
+	const maxAudioSize = 5 << 20
+	data, err := io.ReadAll(io.LimitReader(file, maxAudioSize+1))
+	if err != nil {
+		return r.SendErrorEnvelope(fasthttp.StatusInternalServerError, "Failed to read file", nil, "")
+	}
+	if len(data) > maxAudioSize {
+		return r.SendErrorEnvelope(fasthttp.StatusBadRequest, "File too large. Maximum size is 5MB", nil, "")
+	}
+
+	// Validate MIME type
+	mimeType := fileHeader.Header.Get("Content-Type")
+	allowedAudio := map[string]bool{
+		"audio/ogg": true, "audio/opus": true,
+		"audio/mpeg": true, "audio/mp3": true,
+		"audio/wav": true, "audio/x-wav": true, "audio/wave": true,
+		"application/ogg": true, "application/octet-stream": true,
+		"video/ogg": true,
+	}
+	if !allowedAudio[mimeType] {
+		return r.SendErrorEnvelope(fasthttp.StatusBadRequest, "Unsupported audio type: "+mimeType, nil, "")
+	}
+
+	// Ensure audio directory exists
+	audioDir := a.getAudioDir()
+	if err := os.MkdirAll(audioDir, 0755); err != nil {
+		return r.SendErrorEnvelope(fasthttp.StatusInternalServerError, "Failed to create audio directory", nil, "")
+	}
+
+	// Save uploaded file to a temp location for transcoding
+	tmpInput, err := os.CreateTemp("", "org-audio-input-*")
+	if err != nil {
+		return r.SendErrorEnvelope(fasthttp.StatusInternalServerError, "Failed to create temp file", nil, "")
+	}
+	defer os.Remove(tmpInput.Name())
+
+	if _, err := tmpInput.Write(data); err != nil {
+		tmpInput.Close()
+		return r.SendErrorEnvelope(fasthttp.StatusInternalServerError, "Failed to write temp file", nil, "")
+	}
+	tmpInput.Close()
+
+	// Transcode to OGG/Opus 48kHz mono using ffmpeg
+	filename := fmt.Sprintf("org_%s_%s.ogg", orgID.String(), audioType)
+	filePath := filepath.Join(audioDir, filename)
+
+	if err := transcodeToOpus(tmpInput.Name(), filePath); err != nil {
+		a.Log.Error("Audio transcoding failed", "error", err, "org_id", orgID, "type", audioType)
+		return r.SendErrorEnvelope(fasthttp.StatusInternalServerError, "Failed to transcode audio to Opus format", nil, "")
+	}
+
+	// Update org settings with the new filename
+	var org models.Organization
+	if err := a.DB.Where("id = ?", orgID).First(&org).Error; err != nil {
+		return r.SendErrorEnvelope(fasthttp.StatusInternalServerError, "Failed to load organization", nil, "")
+	}
+	if org.Settings == nil {
+		org.Settings = models.JSONB{}
+	}
+	settingsKey := audioType + "_file"
+	org.Settings[settingsKey] = filename
+	if err := a.DB.Save(&org).Error; err != nil {
+		return r.SendErrorEnvelope(fasthttp.StatusInternalServerError, "Failed to update organization settings", nil, "")
+	}
+
+	a.Log.Info("Org audio uploaded", "org_id", orgID, "type", audioType, "filename", filename, "size", len(data))
+
+	return r.SendEnvelope(map[string]any{
+		"filename":  filename,
+		"type":      audioType,
+		"mime_type": mimeType,
+		"size":      len(data),
+	})
+}
+
+// transcodeToOpus converts any audio file to OGG/Opus 48kHz mono using ffmpeg.
+// This ensures the file is compatible with the WebRTC AudioPlayer.
+func transcodeToOpus(inputPath, outputPath string) error {
+	cmd := exec.Command("ffmpeg",
+		"-y",            // overwrite output
+		"-i", inputPath, // input file
+		"-ac", "1",      // mono
+		"-ar", "48000",  // 48kHz (Opus standard)
+		"-c:a", "libopus",
+		"-b:a", "48k", // bitrate
+		"-application", "audio",
+		"-frame_duration", "20", // 20ms frames (matches RTP packetization)
+		"-vn",        // strip video/cover art
+		outputPath,
+	)
+
+	var stderr bytes.Buffer
+	cmd.Stderr = &stderr
+
+	if err := cmd.Run(); err != nil {
+		return fmt.Errorf("ffmpeg failed: %w (stderr: %s)", err, stderr.String())
+	}
 	return nil
 }
 

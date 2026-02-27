@@ -3,7 +3,6 @@ package calling
 import (
 	"context"
 	"fmt"
-	"path/filepath"
 	"time"
 
 	"github.com/google/uuid"
@@ -57,8 +56,8 @@ func (m *Manager) initiateTransfer(session *CallSession, waAccount string, teamT
 	session.TransferStatus = models.CallTransferStatusWaiting
 	session.mu.Unlock()
 
-	// Start hold music on the caller's audio track
-	holdFile := filepath.Join(m.config.AudioDir, m.config.HoldMusicFile)
+	// Start hold music on the caller's audio track (org-level override or global default)
+	holdFile := m.getOrgHoldMusic(session.OrganizationID)
 	player := NewAudioPlayer(session.AudioTrack)
 
 	session.mu.Lock()

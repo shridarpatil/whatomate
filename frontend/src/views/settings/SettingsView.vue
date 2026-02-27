@@ -12,7 +12,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { PageHeader } from '@/components/shared'
 import LanguageSwitcher from '@/components/LanguageSwitcher.vue'
 import { toast } from 'vue-sonner'
-import { Settings, Bell, Loader2, Globe, Phone } from 'lucide-vue-next'
+import { Settings, Bell, Loader2, Globe, Phone, Upload, Play, Pause, Music } from 'lucide-vue-next'
 import { usersService, organizationService } from '@/services/api'
 
 const { t } = useI18n()
@@ -39,8 +39,19 @@ const notificationSettings = ref({
 const callingSettings = ref({
   calling_enabled: false,
   max_call_duration: 300,
-  transfer_timeout_secs: 120
+  transfer_timeout_secs: 120,
+  hold_music_file: '',
+  ringback_file: ''
 })
+
+const isUploadingHoldMusic = ref(false)
+const isUploadingRingback = ref(false)
+const holdMusicInput = ref<HTMLInputElement | null>(null)
+const ringbackInput = ref<HTMLInputElement | null>(null)
+const holdMusicAudio = ref<HTMLAudioElement | null>(null)
+const ringbackAudio = ref<HTMLAudioElement | null>(null)
+const playingHoldMusic = ref(false)
+const playingRingback = ref(false)
 
 onMounted(async () => {
   try {
@@ -61,7 +72,9 @@ onMounted(async () => {
       callingSettings.value = {
         calling_enabled: orgData.settings?.calling_enabled || false,
         max_call_duration: orgData.settings?.max_call_duration || 300,
-        transfer_timeout_secs: orgData.settings?.transfer_timeout_secs || 120
+        transfer_timeout_secs: orgData.settings?.transfer_timeout_secs || 120,
+        hold_music_file: orgData.settings?.hold_music_file || '',
+        ringback_file: orgData.settings?.ringback_file || ''
       }
     }
 
@@ -128,6 +141,52 @@ async function saveCallingSettings() {
   } finally {
     isSubmitting.value = false
   }
+}
+
+async function uploadAudio(type: 'hold_music' | 'ringback', event: Event) {
+  const input = event.target as HTMLInputElement
+  const file = input?.files?.[0]
+  if (!file) return
+
+  const isHold = type === 'hold_music'
+  if (isHold) isUploadingHoldMusic.value = true
+  else isUploadingRingback.value = true
+
+  try {
+    const response = await organizationService.uploadOrgAudio(file, type)
+    const data = response.data.data || response.data
+    if (isHold) callingSettings.value.hold_music_file = data.filename
+    else callingSettings.value.ringback_file = data.filename
+    toast.success(t('settings.audioUploaded'))
+  } catch (error) {
+    toast.error(t('settings.audioUploadFailed'))
+  } finally {
+    if (isHold) isUploadingHoldMusic.value = false
+    else isUploadingRingback.value = false
+    input.value = ''
+  }
+}
+
+function togglePlayAudio(type: 'hold_music' | 'ringback') {
+  const isHold = type === 'hold_music'
+  const filename = isHold ? callingSettings.value.hold_music_file : callingSettings.value.ringback_file
+  if (!filename) return
+
+  const audioRef = isHold ? holdMusicAudio : ringbackAudio
+  const playingRef = isHold ? playingHoldMusic : playingRingback
+
+  if (playingRef.value && audioRef.value) {
+    audioRef.value.pause()
+    audioRef.value.currentTime = 0
+    playingRef.value = false
+    return
+  }
+
+  const audio = new Audio(`/api/ivr-flows/audio/${filename}`)
+  audioRef.value = audio
+  playingRef.value = true
+  audio.play()
+  audio.onended = () => { playingRef.value = false }
 }
 </script>
 
@@ -318,6 +377,75 @@ async function saveCallingSettings() {
                       :max="600"
                     />
                     <p class="text-xs text-white/40 light:text-gray-500">{{ $t('settings.transferTimeoutDesc') }}</p>
+                  </div>
+                </div>
+                <Separator class="bg-white/[0.08] light:bg-gray-200" />
+                <!-- Hold Music Upload -->
+                <div class="space-y-3" :class="{ 'opacity-50 pointer-events-none': !callingSettings.calling_enabled }">
+                  <div>
+                    <Label class="text-white/70 light:text-gray-700 flex items-center gap-2">
+                      <Music class="h-4 w-4" />
+                      {{ $t('settings.holdMusic') }}
+                    </Label>
+                    <p class="text-xs text-white/40 light:text-gray-500 mt-1">{{ $t('settings.holdMusicDesc') }}</p>
+                  </div>
+                  <div class="flex items-center gap-3">
+                    <span class="text-sm text-white/50 light:text-gray-500">
+                      {{ callingSettings.hold_music_file ? `${$t('settings.currentFile')}: ${callingSettings.hold_music_file}` : $t('settings.noFileUploaded') }}
+                    </span>
+                    <Button
+                      v-if="callingSettings.hold_music_file"
+                      variant="ghost"
+                      size="sm"
+                      class="h-8 w-8 p-0 text-white/50 hover:text-white light:text-gray-500 light:hover:text-gray-900"
+                      @click="togglePlayAudio('hold_music')"
+                    >
+                      <Pause v-if="playingHoldMusic" class="h-4 w-4" />
+                      <Play v-else class="h-4 w-4" />
+                    </Button>
+                  </div>
+                  <div class="flex items-center gap-2">
+                    <input ref="holdMusicInput" type="file" accept=".ogg,.opus,.mp3,.wav" class="hidden" @change="uploadAudio('hold_music', $event)" />
+                    <Button variant="outline" size="sm" class="bg-white/[0.04] border-white/[0.1] text-white/70 hover:bg-white/[0.08] hover:text-white light:bg-white light:border-gray-200 light:text-gray-700 light:hover:bg-gray-50" @click="holdMusicInput?.click()" :disabled="isUploadingHoldMusic">
+                      <Loader2 v-if="isUploadingHoldMusic" class="mr-2 h-4 w-4 animate-spin" />
+                      <Upload v-else class="mr-2 h-4 w-4" />
+                      {{ $t('settings.uploadAudio') }}
+                    </Button>
+                    <span class="text-xs text-white/30 light:text-gray-400">.ogg, .opus, .mp3, .wav (max 5MB)</span>
+                  </div>
+                </div>
+                <!-- Ringback Tone Upload -->
+                <div class="space-y-3" :class="{ 'opacity-50 pointer-events-none': !callingSettings.calling_enabled }">
+                  <div>
+                    <Label class="text-white/70 light:text-gray-700 flex items-center gap-2">
+                      <Phone class="h-4 w-4" />
+                      {{ $t('settings.ringbackTone') }}
+                    </Label>
+                    <p class="text-xs text-white/40 light:text-gray-500 mt-1">{{ $t('settings.ringbackToneDesc') }}</p>
+                  </div>
+                  <div class="flex items-center gap-3">
+                    <span class="text-sm text-white/50 light:text-gray-500">
+                      {{ callingSettings.ringback_file ? `${$t('settings.currentFile')}: ${callingSettings.ringback_file}` : $t('settings.noFileUploaded') }}
+                    </span>
+                    <Button
+                      v-if="callingSettings.ringback_file"
+                      variant="ghost"
+                      size="sm"
+                      class="h-8 w-8 p-0 text-white/50 hover:text-white light:text-gray-500 light:hover:text-gray-900"
+                      @click="togglePlayAudio('ringback')"
+                    >
+                      <Pause v-if="playingRingback" class="h-4 w-4" />
+                      <Play v-else class="h-4 w-4" />
+                    </Button>
+                  </div>
+                  <div class="flex items-center gap-2">
+                    <input ref="ringbackInput" type="file" accept=".ogg,.opus,.mp3,.wav" class="hidden" @change="uploadAudio('ringback', $event)" />
+                    <Button variant="outline" size="sm" class="bg-white/[0.04] border-white/[0.1] text-white/70 hover:bg-white/[0.08] hover:text-white light:bg-white light:border-gray-200 light:text-gray-700 light:hover:bg-gray-50" @click="ringbackInput?.click()" :disabled="isUploadingRingback">
+                      <Loader2 v-if="isUploadingRingback" class="mr-2 h-4 w-4 animate-spin" />
+                      <Upload v-else class="mr-2 h-4 w-4" />
+                      {{ $t('settings.uploadAudio') }}
+                    </Button>
+                    <span class="text-xs text-white/30 light:text-gray-400">.ogg, .opus, .mp3, .wav (max 5MB)</span>
                   </div>
                 </div>
                 <div class="flex justify-end pt-4">

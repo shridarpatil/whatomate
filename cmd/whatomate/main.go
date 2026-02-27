@@ -737,6 +737,7 @@ func setupRoutes(g *fastglue.Fastglue, app *handlers.App, lo logf.Logger, basePa
 	// Organization Settings
 	g.GET("/api/org/settings", app.GetOrganizationSettings)
 	g.PUT("/api/org/settings", app.UpdateOrganizationSettings)
+	g.POST("/api/org/audio", app.UploadOrgAudio)
 
 	// Organizations
 	g.GET("/api/organizations", app.ListOrganizations)
