@@ -103,12 +103,6 @@
   * {
     @apply border-border;
   }
-  html[dir="rtl"], html[dir="rtl"] * {
-    direction: rtl;
-  }
-  html[dir="ltr"], html[dir="ltr"] * {
-    direction: ltr;
-  }
   html {
     font-size: 14px;
     -webkit-font-smoothing: antialiased;

@@ -27,11 +27,11 @@ interface WhatsAppFlow {
 }
 interface Account { id: string; name: string }
 
-const flowCategories = [
-  { value: 'SIGN_UP', label: 'Sign Up' }, { value: 'SIGN_IN', label: 'Sign In' }, { value: 'APPOINTMENT_BOOKING', label: 'Appointment Booking' },
-  { value: 'LEAD_GENERATION', label: 'Lead Generation' }, { value: 'CONTACT_US', label: 'Contact Us' }, { value: 'CUSTOMER_SUPPORT', label: 'Customer Support' },
-  { value: 'SURVEY', label: 'Survey' }, { value: 'OTHER', label: 'Other' },
-]
+const flowCategories = computed(() => [
+  { value: 'SIGN_UP', label: t('flows.categories.SIGN_UP') }, { value: 'SIGN_IN', label: t('flows.categories.SIGN_IN') }, { value: 'APPOINTMENT_BOOKING', label: t('flows.categories.APPOINTMENT_BOOKING') },
+  { value: 'LEAD_GENERATION', label: t('flows.categories.LEAD_GENERATION') }, { value: 'CONTACT_US', label: t('flows.categories.CONTACT_US') }, { value: 'CUSTOMER_SUPPORT', label: t('flows.categories.CUSTOMER_SUPPORT') },
+  { value: 'SURVEY', label: t('flows.categories.SURVEY') }, { value: 'OTHER', label: t('flows.categories.OTHER') },
+])
 
 const flows = ref<WhatsAppFlow[]>([])
 const accounts = ref<Account[]>([])
