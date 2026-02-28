@@ -231,11 +231,11 @@ function updateSubmenu(digit: string, submenu: IVRMenu) {
         <Tabs :default-value="greetingTab" @update:model-value="onGreetingTabChange">
           <TabsList class="h-8">
             <TabsTrigger value="audio" class="text-xs h-7 px-3">
-              <Upload class="h-3 w-3 mr-1" />
+              <Upload class="h-3 w-3 me-1" />
               {{ t('calling.uploadAudioTab') }}
             </TabsTrigger>
             <TabsTrigger value="text" class="text-xs h-7 px-3">
-              <Type class="h-3 w-3 mr-1" />
+              <Type class="h-3 w-3 me-1" />
               {{ t('calling.textToSpeechTab') }}
             </TabsTrigger>
           </TabsList>
@@ -249,7 +249,7 @@ function updateSubmenu(digit: string, submenu: IVRMenu) {
                   <Play v-else class="h-3 w-3" />
                 </Button>
                 <span class="text-sm truncate">{{ menu.greeting }}</span>
-                <Button variant="ghost" size="icon" class="h-6 w-6 shrink-0 ml-auto" @click="removeAudio">
+                <Button variant="ghost" size="icon" class="h-6 w-6 shrink-0 ms-auto" @click="removeAudio">
                   <X class="h-3 w-3 text-destructive" />
                 </Button>
               </div>
@@ -257,8 +257,8 @@ function updateSubmenu(digit: string, submenu: IVRMenu) {
                 {{ t('calling.greetingPlaceholder') }}
               </div>
               <Button variant="outline" size="sm" class="h-8 shrink-0" @click="triggerFileUpload" :disabled="isUploading">
-                <Loader2 v-if="isUploading" class="h-3 w-3 mr-1 animate-spin" />
-                <Upload v-else class="h-3 w-3 mr-1" />
+                <Loader2 v-if="isUploading" class="h-3 w-3 me-1 animate-spin" />
+                <Upload v-else class="h-3 w-3 me-1" />
                 {{ t('calling.uploadAudio') }}
               </Button>
               <input
@@ -281,7 +281,7 @@ function updateSubmenu(digit: string, submenu: IVRMenu) {
                 class="min-h-[80px] text-sm resize-none"
                 :maxlength="500"
               />
-              <span class="absolute bottom-2 right-2 text-xs text-muted-foreground">
+              <span class="absolute bottom-2 end-2 text-xs text-muted-foreground">
                 {{ (menu.greeting_text || '').length }}/500
               </span>
             </div>
@@ -326,7 +326,7 @@ function updateSubmenu(digit: string, submenu: IVRMenu) {
             :disabled="availableDigits.length === 0"
             class="h-7 text-xs"
           >
-            <Plus class="h-3 w-3 mr-1" />
+            <Plus class="h-3 w-3 me-1" />
             {{ t('calling.addOption') }}
           </Button>
         </div>
@@ -371,7 +371,7 @@ function updateSubmenu(digit: string, submenu: IVRMenu) {
           </div>
 
           <!-- Transfer target (team) -->
-          <div v-if="option.action === 'transfer'" class="pl-8">
+          <div v-if="option.action === 'transfer'" class="ps-8">
             <Select
               :model-value="option.target || 'none'"
               @update:model-value="(v: any) => updateOption(digit, 'target', String(v) === 'none' ? '' : String(v))"
@@ -389,7 +389,7 @@ function updateSubmenu(digit: string, submenu: IVRMenu) {
           </div>
 
           <!-- Goto flow target -->
-          <div v-if="option.action === 'goto_flow'" class="pl-8">
+          <div v-if="option.action === 'goto_flow'" class="ps-8">
             <Select
               :model-value="option.target || 'none'"
               @update:model-value="(v: any) => updateOption(digit, 'target', String(v) === 'none' ? '' : String(v))"
@@ -407,7 +407,7 @@ function updateSubmenu(digit: string, submenu: IVRMenu) {
           </div>
 
           <!-- Submenu (recursive) -->
-          <div v-if="option.action === 'submenu' && option.menu" class="pl-4 mt-2">
+          <div v-if="option.action === 'submenu' && option.menu" class="ps-4 mt-2">
             <IVRMenuEditor
               :model-value="option.menu"
               @update:model-value="(v: IVRMenu) => updateSubmenu(digit, v)"

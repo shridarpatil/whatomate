@@ -1297,16 +1297,16 @@ async function sendMediaMessage() {
 <template>
   <div class="flex h-full bg-[#0a0a0b] light:bg-gray-50">
     <!-- Contacts List -->
-    <div class="w-80 border-r border-white/[0.08] light:border-gray-200 flex flex-col bg-[#0a0a0b] light:bg-white">
+    <div class="w-80 border-e border-white/[0.08] light:border-gray-200 flex flex-col bg-[#0a0a0b] light:bg-white">
       <!-- Search Header -->
       <div class="p-2 border-b border-white/[0.08] light:border-gray-200">
         <div class="flex items-center gap-2">
           <div class="relative flex-1">
-            <Search class="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-white/40 light:text-gray-400" />
+            <Search class="absolute start-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-white/40 light:text-gray-400" />
             <Input
               v-model="contactsStore.searchQuery"
               :placeholder="$t('chat.searchContacts') + '...'"
-              class="pl-8 h-8 text-sm bg-white/[0.04] border-white/[0.1] text-white placeholder:text-white/40 light:bg-gray-50 light:border-gray-200 light:text-gray-900 light:placeholder:text-gray-400"
+              class="ps-8 h-8 text-sm bg-white/[0.04] border-white/[0.1] text-white placeholder:text-white/40 light:bg-gray-50 light:border-gray-200 light:text-gray-900 light:placeholder:text-gray-400"
             />
           </div>
           <!-- Add Contact -->
@@ -1365,7 +1365,7 @@ async function sendMediaMessage() {
                     @click="toggleTagFilter(tag.name)"
                   >
                     <span :class="['w-2 h-2 rounded-full shrink-0', getTagColorClass(tag.color).split(' ')[0]]" />
-                    <span class="flex-1 text-left truncate">{{ tag.name }}</span>
+                    <span class="flex-1 text-start truncate">{{ tag.name }}</span>
                     <Check
                       v-if="contactsStore.selectedTags.includes(tag.name)"
                       class="h-4 w-4 text-emerald-400 shrink-0"
@@ -1386,7 +1386,7 @@ async function sendMediaMessage() {
             @click="toggleTagFilter(tagName)"
           >
             {{ tagName }}
-            <X class="h-3 w-3 ml-1" />
+            <X class="h-3 w-3 ms-1" />
           </TagBadge>
         </div>
       </div>
@@ -1422,7 +1422,7 @@ async function sendMediaMessage() {
                 <p class="text-xs text-white/50 light:text-gray-500 truncate">
                   {{ contact.phone_number }}
                 </p>
-                <Badge v-if="contact.unread_count > 0" class="ml-2 h-5 text-[10px] bg-emerald-500/20 text-emerald-400 light:bg-emerald-100 light:text-emerald-700">
+                <Badge v-if="contact.unread_count > 0" class="ms-2 h-5 text-[10px] bg-emerald-500/20 text-emerald-400 light:bg-emerald-100 light:text-emerald-700">
                   {{ contact.unread_count }}
                 </Badge>
               </div>
@@ -1570,19 +1570,19 @@ async function sendMediaMessage() {
                 <DropdownMenuLabel>{{ $t('chat.contactOptions') }}</DropdownMenuLabel>
                 <DropdownMenuSeparator />
                 <DropdownMenuItem v-if="canAssignContacts" @click="isAssignDialogOpen = true">
-                  <UserPlus class="mr-2 h-4 w-4" />
+                  <UserPlus class="me-2 h-4 w-4" />
                   <span>{{ $t('chat.assignToAgent') }}</span>
                 </DropdownMenuItem>
                 <DropdownMenuItem v-if="!activeTransferId" @click="transferToAgent" :disabled="isTransferring">
-                  <UserX class="mr-2 h-4 w-4" />
+                  <UserX class="me-2 h-4 w-4" />
                   <span>{{ $t('chat.transferToAgent') }}</span>
                 </DropdownMenuItem>
                 <DropdownMenuItem v-if="activeTransferId" @click="resumeChatbot" :disabled="isResuming">
-                  <Play class="mr-2 h-4 w-4" />
+                  <Play class="me-2 h-4 w-4" />
                   <span>{{ $t('chat.resumeChatbot') }}</span>
                 </DropdownMenuItem>
                 <DropdownMenuItem @click="isInfoPanelOpen = !isInfoPanelOpen">
-                  <Info class="mr-2 h-4 w-4" />
+                  <Info class="me-2 h-4 w-4" />
                   <span>{{ isInfoPanelOpen ? $t('chat.hideContactDetails') : $t('chat.viewContactDetails') }}</span>
                 </DropdownMenuItem>
               </DropdownMenuContent>
@@ -1890,7 +1890,7 @@ async function sendMediaMessage() {
                 </span>
               </div>
               <!-- Action buttons for incoming messages -->
-              <div v-if="message.direction === 'incoming'" class="flex flex-col gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity self-center ml-1">
+              <div v-if="message.direction === 'incoming'" class="flex flex-col gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity self-center ms-1">
                 <Popover :open="reactionPickerMessageId === message.id" @update:open="(open: boolean) => reactionPickerMessageId = open ? message.id : null">
                   <PopoverTrigger as-child>
                     <Button variant="ghost" size="icon" class="h-6 w-6">
@@ -1920,7 +1920,7 @@ async function sendMediaMessage() {
                 </Button>
               </div>
               <!-- Reply button for outgoing messages (shown on hover) -->
-              <div v-if="message.direction === 'outgoing'" class="flex flex-col gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity self-center ml-1">
+              <div v-if="message.direction === 'outgoing'" class="flex flex-col gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity self-center ms-1">
                 <Popover :open="reactionPickerMessageId === message.id" @update:open="(open: boolean) => reactionPickerMessageId = open ? message.id : null">
                   <PopoverTrigger as-child>
                     <Button variant="ghost" size="icon" class="h-6 w-6">
@@ -2116,7 +2116,7 @@ async function sendMediaMessage() {
           </div>
           <div v-if="templatePreview" class="space-y-1">
             <label class="text-xs font-medium text-muted-foreground">{{ $t('chat.preview') }}</label>
-            <div class="chat-bubble chat-bubble-outgoing ml-auto" style="max-width: 100%;">
+            <div class="chat-bubble chat-bubble-outgoing ms-auto" style="max-width: 100%;">
               <span class="whitespace-pre-wrap break-words text-sm">{{ templatePreview }}</span>
               <div
                 v-if="selectedTemplate?.buttons?.length"
@@ -2136,7 +2136,7 @@ async function sendMediaMessage() {
         <div class="flex justify-end gap-2">
           <Button variant="outline" @click="templateDialogOpen = false">{{ $t('common.cancel') }}</Button>
           <Button @click="sendTemplateMessage" :disabled="isSendingTemplate">
-            <Loader2 v-if="isSendingTemplate" class="h-4 w-4 mr-2 animate-spin" />
+            <Loader2 v-if="isSendingTemplate" class="h-4 w-4 me-2 animate-spin" />
             {{ $t('chat.send') }}
           </Button>
         </div>
@@ -2155,11 +2155,11 @@ async function sendMediaMessage() {
         <div class="py-4 space-y-3">
           <!-- Search input -->
           <div class="relative">
-            <Search class="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+            <Search class="absolute start-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
             <Input
               v-model="assignSearchQuery"
               :placeholder="$t('chat.searchUsers') + '...'"
-              class="pl-9 h-9"
+              class="ps-9 h-9"
             />
           </div>
           <Button
@@ -2168,7 +2168,7 @@ async function sendMediaMessage() {
             class="w-full justify-start"
             @click="assignContactToUser(null); isAssignDialogOpen = false"
           >
-            <UserMinus class="mr-2 h-4 w-4" />
+            <UserMinus class="me-2 h-4 w-4" />
             {{ $t('chat.unassignContact') }}
           </Button>
           <Separator />
@@ -2181,13 +2181,13 @@ async function sendMediaMessage() {
                 class="w-full justify-start"
                 @click="assignContactToUser(user.id); isAssignDialogOpen = false"
               >
-                <User class="mr-2 h-4 w-4" />
+                <User class="me-2 h-4 w-4" />
                 <span>{{ user.full_name }}</span>
                 <Check
                   v-if="contactsStore.currentContact?.assigned_user_id === user.id"
-                  class="ml-auto h-4 w-4 text-primary"
+                  class="ms-auto h-4 w-4 text-primary"
                 />
-                <Badge v-else variant="outline" class="ml-auto text-xs">
+                <Badge v-else variant="outline" class="ms-auto text-xs">
                   {{ user.role?.name }}
                 </Badge>
               </Button>
@@ -2269,7 +2269,7 @@ async function sendMediaMessage() {
               {{ $t('common.cancel') }}
             </Button>
             <Button @click="sendMediaMessage" :disabled="isUploadingMedia">
-              <Send v-if="!isUploadingMedia" class="mr-2 h-4 w-4" />
+              <Send v-if="!isUploadingMedia" class="me-2 h-4 w-4" />
               <span v-if="isUploadingMedia">{{ $t('chat.sending') }}...</span>
               <span v-else>{{ $t('chat.send') }}</span>
             </Button>

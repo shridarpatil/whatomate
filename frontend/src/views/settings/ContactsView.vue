@@ -257,9 +257,9 @@ function getDisplayName(contact: Contact): string {
     <PageHeader :title="$t('contacts.title')" :subtitle="$t('contacts.subtitle')" :icon="Users" icon-gradient="bg-gradient-to-br from-blue-500 to-cyan-600 shadow-blue-500/20">
       <template v-if="canWriteContacts || canImportContacts || canExportContacts" #actions>
         <Button v-if="canImportContacts || canExportContacts" variant="outline" size="sm" @click="isImportExportOpen = true">
-          <Download class="h-4 w-4 mr-2" />{{ $t('common.import') }}/{{ $t('common.export') }}
+          <Download class="h-4 w-4 me-2" />{{ $t('common.import') }}/{{ $t('common.export') }}
         </Button>
-        <Button v-if="canWriteContacts" variant="outline" size="sm" @click="openCreateDialog"><Plus class="h-4 w-4 mr-2" />{{ $t('contacts.addContact') }}</Button>
+        <Button v-if="canWriteContacts" variant="outline" size="sm" @click="openCreateDialog"><Plus class="h-4 w-4 me-2" />{{ $t('contacts.addContact') }}</Button>
       </template>
     </PageHeader>
 
@@ -329,7 +329,7 @@ function getDisplayName(contact: Contact): string {
                 </template>
                 <template v-if="canWriteContacts" #empty-action>
                   <Button variant="outline" size="sm" @click="openCreateDialog">
-                    <Plus class="h-4 w-4 mr-2" />
+                    <Plus class="h-4 w-4 me-2" />
                     {{ $t('contacts.addContact') }}
                   </Button>
                 </template>
@@ -384,7 +384,7 @@ function getDisplayName(contact: Contact): string {
               <Button variant="outline" role="combobox" class="w-full justify-between">
                 <span v-if="formData.tags.length === 0" class="text-muted-foreground">{{ $t('contacts.selectTags') }}</span>
                 <span v-else>{{ formData.tags.length }} {{ $t('contacts.tagsSelected') }}</span>
-                <ChevronsUpDown class="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                <ChevronsUpDown class="ms-2 h-4 w-4 shrink-0 opacity-50" />
               </Button>
             </PopoverTrigger>
             <PopoverContent class="w-[300px] p-0" @interact-outside="(e) => e.preventDefault()">
@@ -420,7 +420,7 @@ function getDisplayName(contact: Contact): string {
               {{ tagName }}
               <button
                 type="button"
-                class="ml-1 rounded-full hover:bg-black/10 dark:hover:bg-white/10 p-0.5 transition-colors"
+                class="ms-1 rounded-full hover:bg-black/10 dark:hover:bg-white/10 p-0.5 transition-colors"
                 @click.stop="removeTag(tagName)"
               >
                 <X class="h-3 w-3" />

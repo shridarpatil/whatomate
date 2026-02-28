@@ -141,7 +141,7 @@ function getCategoryLabel(category: string): string { return getLabelFromValue(C
   <div class="flex flex-col h-full bg-[#0a0a0b] light:bg-gray-50">
     <PageHeader :title="$t('cannedResponses.title')" :subtitle="$t('cannedResponses.subtitle')" :icon="MessageSquareText" icon-gradient="bg-gradient-to-br from-teal-500 to-emerald-600 shadow-teal-500/20">
       <template #actions>
-        <Button variant="outline" size="sm" @click="openCreateDialog"><Plus class="h-4 w-4 mr-2" />{{ $t('cannedResponses.addResponse') }}</Button>
+        <Button variant="outline" size="sm" @click="openCreateDialog"><Plus class="h-4 w-4 me-2" />{{ $t('cannedResponses.addResponse') }}</Button>
       </template>
     </PageHeader>
 
@@ -218,7 +218,7 @@ function getCategoryLabel(category: string): string { return getLabelFromValue(C
                 </template>
                 <template #empty-action>
                   <Button variant="outline" size="sm" @click="openCreateDialog">
-                    <Plus class="h-4 w-4 mr-2" />{{ $t('cannedResponses.addResponse') }}
+                    <Plus class="h-4 w-4 me-2" />{{ $t('cannedResponses.addResponse') }}
                   </Button>
                 </template>
               </DataTable>
@@ -234,7 +234,7 @@ function getCategoryLabel(category: string): string { return getLabelFromValue(C
         <div class="grid grid-cols-2 gap-4">
           <div class="space-y-2">
             <Label>{{ $t('cannedResponses.shortcut') }}</Label>
-            <div class="relative"><span class="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground">/</span><Input v-model="formData.shortcut" placeholder="welcome" class="pl-7" /></div>
+            <div class="relative"><span class="absolute start-3 top-1/2 -translate-y-1/2 text-muted-foreground">/</span><Input v-model="formData.shortcut" placeholder="welcome" class="ps-7" /></div>
             <p class="text-xs text-muted-foreground">{{ $t('cannedResponses.shortcutHint') }}</p>
           </div>
           <div class="space-y-2">

@@ -147,7 +147,7 @@ const handleRegister = async () => {
         </CardContent>
         <CardFooter class="flex flex-col space-y-4">
           <Button type="submit" class="w-full" :disabled="isLoading">
-            <Loader2 v-if="isLoading" class="mr-2 h-4 w-4 animate-spin" />
+            <Loader2 v-if="isLoading" class="me-2 h-4 w-4 animate-spin" />
             {{ $t('auth.createAccountBtn') }}
           </Button>
           <p class="text-sm text-center text-muted-foreground">

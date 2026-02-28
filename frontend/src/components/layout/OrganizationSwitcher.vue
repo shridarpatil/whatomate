@@ -197,7 +197,7 @@ const refreshOrgs = async () => {
       <DialogFooter>
         <Button variant="outline" @click="isCreateDialogOpen = false">{{ t('common.cancel') }}</Button>
         <Button @click="submitCreateOrg" :disabled="isCreating || !newOrgName.trim()">
-          <Loader2 v-if="isCreating" class="h-4 w-4 mr-2 animate-spin" />
+          <Loader2 v-if="isCreating" class="h-4 w-4 me-2 animate-spin" />
           {{ t('common.create') }}
         </Button>
       </DialogFooter>

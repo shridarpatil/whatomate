@@ -180,7 +180,7 @@ const handleLogout = () => {
               {{ getInitials(authStore.user?.full_name || 'U') }}
             </AvatarFallback>
           </Avatar>
-          <div v-if="!collapsed" class="flex flex-col items-start text-left">
+          <div v-if="!collapsed" class="flex flex-col items-start text-start">
             <span class="text-[13px] font-medium truncate max-w-[140px] text-white light:text-gray-900">
               {{ authStore.user?.full_name }}
             </span>
@@ -222,7 +222,7 @@ const handleLogout = () => {
             class="w-full justify-start px-2 py-1 h-auto text-[13px] font-normal text-white/70 hover:text-white hover:bg-white/[0.04] light:text-gray-600 light:hover:text-gray-900 light:hover:bg-gray-100"
             @click="isUserMenuOpen = false"
           >
-            <User class="mr-2 h-3.5 w-3.5" aria-hidden="true" />
+            <User class="me-2 h-3.5 w-3.5" aria-hidden="true" />
             <span>{{ $t('userMenu.profile') }}</span>
           </Button>
         </RouterLink>
@@ -240,7 +240,7 @@ const handleLogout = () => {
           class="w-full justify-start px-2 py-1 h-auto text-[13px] font-normal text-white/70 hover:text-white hover:bg-white/[0.04] light:text-gray-600 light:hover:text-gray-900 light:hover:bg-gray-100"
           @click="handleLogout"
         >
-          <LogOut class="mr-2 h-3.5 w-3.5" aria-hidden="true" />
+          <LogOut class="me-2 h-3.5 w-3.5" aria-hidden="true" />
           <span>{{ $t('userMenu.logOut') }}</span>
         </Button>
       </PopoverContent>

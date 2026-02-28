@@ -73,7 +73,7 @@ const localListPickerOpen = computed({
           }"
           @click="mode = 'edit'"
         >
-          <Edit3 class="h-3.5 w-3.5 mr-1.5" />
+          <Edit3 class="h-3.5 w-3.5 me-1.5" />
           Edit
         </Button>
         <Button
@@ -86,7 +86,7 @@ const localListPickerOpen = computed({
           }"
           @click="mode = 'preview'"
         >
-          <Play class="h-3.5 w-3.5 mr-1.5" />
+          <Play class="h-3.5 w-3.5 me-1.5" />
           Preview
         </Button>
       </div>
@@ -113,7 +113,7 @@ const localListPickerOpen = computed({
                 class="h-8 text-xs"
                 @click="handleSelectMessageType(type)"
               >
-                <component :is="icon" class="h-3.5 w-3.5 mr-1.5" />
+                <component :is="icon" class="h-3.5 w-3.5 me-1.5" />
                 {{ type === 'api_fetch' ? 'API' : type === 'whatsapp_flow' ? 'Flow' : type.charAt(0).toUpperCase() + type.slice(1) }}
               </Button>
             </div>
@@ -144,7 +144,7 @@ const localListPickerOpen = computed({
                       <div class="bg-white dark:bg-[#202c33] rounded-lg rounded-tl-none shadow-sm p-3">
                         <p v-if="selectedStep.message" class="text-sm text-gray-800 dark:text-gray-200 whitespace-pre-wrap">{{ selectedStep.message }}</p>
                         <p v-else class="text-sm text-gray-400 italic">No message configured</p>
-                        <p class="text-[10px] text-gray-400 text-right mt-1">12:00 PM</p>
+                        <p class="text-[10px] text-gray-400 text-end mt-1">12:00 PM</p>
                       </div>
 
                       <!-- Interactive Buttons (up to 3) -->
@@ -199,7 +199,7 @@ const localListPickerOpen = computed({
                             User types {{ selectedStep.input_type }}...
                           </template>
                         </p>
-                        <p class="text-[10px] text-gray-500 dark:text-gray-400 text-right mt-1 flex items-center justify-end gap-1">
+                        <p class="text-[10px] text-gray-500 dark:text-gray-400 text-end mt-1 flex items-center justify-end gap-1">
                           12:01 PM
                           <svg class="h-4 w-4 text-[#53bdeb]" viewBox="0 0 24 24" fill="currentColor">
                             <path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41L9 16.17z"/>

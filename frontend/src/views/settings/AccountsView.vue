@@ -299,7 +299,7 @@ const webhookUrl = window.location.origin + basePath + '/api/webhook'
     >
       <template #actions>
         <Button variant="outline" size="sm" @click="openCreateDialog">
-          <Plus class="h-4 w-4 mr-2" />
+          <Plus class="h-4 w-4 me-2" />
           {{ $t('accounts.addAccount') }}
         </Button>
       </template>
@@ -374,7 +374,7 @@ const webhookUrl = window.location.origin + basePath + '/api/webhook'
                     </span>
                     <!-- Test Number Badge -->
                     <Badge v-if="testResults[account.id]?.is_test_number" variant="outline" class="border-amber-600 text-amber-600 light:border-amber-500 light:text-amber-700">
-                      <TestTube2 class="h-3 w-3 mr-1" />
+                      <TestTube2 class="h-3 w-3 me-1" />
                       {{ $t('accounts.testNumber') }}
                     </Badge>
                   </div>
@@ -443,15 +443,15 @@ const webhookUrl = window.location.origin + basePath + '/api/webhook'
                   <!-- Defaults -->
                   <div class="mt-3 flex items-center gap-3 flex-wrap">
                     <Badge v-if="account.is_default_incoming" variant="outline">
-                      <Check class="h-3 w-3 mr-1" />
+                      <Check class="h-3 w-3 me-1" />
                       {{ $t('accounts.defaultIncoming') }}
                     </Badge>
                     <Badge v-if="account.is_default_outgoing" variant="outline">
-                      <Check class="h-3 w-3 mr-1" />
+                      <Check class="h-3 w-3 me-1" />
                       {{ $t('accounts.defaultOutgoing') }}
                     </Badge>
                     <Badge v-if="account.auto_read_receipt" variant="outline">
-                      <Check class="h-3 w-3 mr-1" />
+                      <Check class="h-3 w-3 me-1" />
                       {{ $t('accounts.autoReadReceipt') }}
                     </Badge>
                   </div>
@@ -479,7 +479,7 @@ const webhookUrl = window.location.origin + basePath + '/api/webhook'
                 >
                   <Loader2 v-if="testingAccountId === account.id" class="h-4 w-4 animate-spin" />
                   <RefreshCw v-else class="h-4 w-4" />
-                  <span class="ml-1">{{ $t('accounts.test') }}</span>
+                  <span class="ms-1">{{ $t('accounts.test') }}</span>
                 </Button>
                 <Tooltip>
                   <TooltipTrigger as-child>
@@ -491,7 +491,7 @@ const webhookUrl = window.location.origin + basePath + '/api/webhook'
                     >
                       <Loader2 v-if="subscribingAccountId === account.id" class="h-4 w-4 animate-spin" />
                       <Bell v-else class="h-4 w-4" />
-                      <span class="ml-1">{{ $t('accounts.subscribe') }}</span>
+                      <span class="ms-1">{{ $t('accounts.subscribe') }}</span>
                     </Button>
                   </TooltipTrigger>
                   <TooltipContent>{{ $t('accounts.subscribeTooltip') }}</TooltipContent>
@@ -534,7 +534,7 @@ const webhookUrl = window.location.origin + basePath + '/api/webhook'
             <p class="text-lg font-medium text-white light:text-gray-900">{{ $t('accounts.noAccounts') }}</p>
             <p class="text-sm mb-4">{{ $t('accounts.noAccountsDesc') }}</p>
             <Button variant="outline" size="sm" @click="openCreateDialog">
-              <Plus class="h-4 w-4 mr-2" />
+              <Plus class="h-4 w-4 me-2" />
               {{ $t('accounts.addAccount') }}
             </Button>
           </div>

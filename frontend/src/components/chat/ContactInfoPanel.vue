@@ -252,7 +252,7 @@ async function updateContactTags(tags: string[]) {
   >
     <!-- Resize Handle -->
     <div
-      class="absolute left-0 top-0 bottom-0 w-1 cursor-col-resize hover:bg-primary/20 active:bg-primary/30 z-10 border-l"
+      class="absolute start-0 top-0 bottom-0 w-1 cursor-col-resize hover:bg-primary/20 active:bg-primary/30 z-10 border-s"
       :class="{ 'bg-primary/30': isResizing }"
       @mousedown="startResize"
     />
@@ -338,7 +338,7 @@ async function updateContactTags(tags: string[]) {
                 <button
                   v-if="canEditTags"
                   type="button"
-                  class="ml-1 rounded-full hover:bg-black/10 dark:hover:bg-white/10 p-0.5 transition-colors"
+                  class="ms-1 rounded-full hover:bg-black/10 dark:hover:bg-white/10 p-0.5 transition-colors"
                   :disabled="isUpdatingTags"
                   @click.stop="removeTag(tagName)"
                 >

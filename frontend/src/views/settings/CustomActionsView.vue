@@ -162,7 +162,7 @@ onMounted(() => fetchActions())
   <div class="flex flex-col h-full bg-[#0a0a0b] light:bg-gray-50">
     <PageHeader :title="$t('customActions.title')" :subtitle="$t('customActions.subtitle')" :icon="Zap" icon-gradient="bg-gradient-to-br from-yellow-500 to-orange-600 shadow-yellow-500/20">
       <template #actions>
-        <Button variant="outline" size="sm" @click="openCreateDialog"><Plus class="h-4 w-4 mr-2" />{{ $t('customActions.addAction') }}</Button>
+        <Button variant="outline" size="sm" @click="openCreateDialog"><Plus class="h-4 w-4 me-2" />{{ $t('customActions.addAction') }}</Button>
       </template>
     </PageHeader>
 
@@ -196,7 +196,7 @@ onMounted(() => fetchActions())
                   </div>
                 </template>
                 <template #empty-action>
-                  <Button variant="outline" size="sm" @click="openCreateDialog"><Plus class="h-4 w-4 mr-2" />{{ $t('customActions.addAction') }}</Button>
+                  <Button variant="outline" size="sm" @click="openCreateDialog"><Plus class="h-4 w-4 me-2" />{{ $t('customActions.addAction') }}</Button>
                 </template>
               </DataTable>
             </CardContent>
@@ -276,7 +276,7 @@ onMounted(() => fetchActions())
         </div>
         <DialogFooter>
           <Button variant="outline" @click="isDialogOpen = false">{{ $t('common.cancel') }}</Button>
-          <Button @click="saveAction" :disabled="isSaving"><Loader2 v-if="isSaving" class="h-4 w-4 mr-2 animate-spin" />{{ isEditing ? $t('common.update') : $t('common.create') }}</Button>
+          <Button @click="saveAction" :disabled="isSaving"><Loader2 v-if="isSaving" class="h-4 w-4 me-2 animate-spin" />{{ isEditing ? $t('common.update') : $t('common.create') }}</Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>

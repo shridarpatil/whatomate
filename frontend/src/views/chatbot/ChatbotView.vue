@@ -126,7 +126,7 @@ const statCards = computed(() => [
             :disabled="isToggling"
             :class="settings.enabled ? 'border-red-500/50 text-red-400 hover:bg-red-500/10' : 'border-emerald-500/50 text-emerald-400 hover:bg-emerald-500/10'"
           >
-            <Power class="h-4 w-4 mr-2" />
+            <Power class="h-4 w-4 me-2" />
             {{ settings.enabled ? $t('chatbot.disable') : $t('chatbot.enable') }}
           </Button>
         </div>
@@ -250,7 +250,7 @@ const statCards = computed(() => [
               </div>
               <RouterLink to="/settings/chatbot">
                 <Button variant="outline" size="sm">
-                  <Settings class="h-4 w-4 mr-2" />
+                  <Settings class="h-4 w-4 me-2" />
                   {{ $t('chatbot.editSettings') }}
                 </Button>
               </RouterLink>

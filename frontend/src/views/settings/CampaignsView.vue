@@ -1154,7 +1154,7 @@ async function addRecipientsFromCSV() {
     >
       <template #actions>
         <Button variant="outline" size="sm" @click="openCreateDialog">
-          <Plus class="h-4 w-4 mr-2" />
+          <Plus class="h-4 w-4 me-2" />
           {{ $t('campaigns.createCampaign') }}
         </Button>
       </template>
@@ -1216,7 +1216,7 @@ async function addRecipientsFromCSV() {
                 {{ $t('common.cancel') }}
               </Button>
               <Button size="sm" @click="saveCampaign" :disabled="isCreating">
-                <Loader2 v-if="isCreating" class="h-4 w-4 mr-2 animate-spin" />
+                <Loader2 v-if="isCreating" class="h-4 w-4 me-2 animate-spin" />
                 {{ editingCampaignId ? $t('campaigns.saveChanges') : $t('campaigns.createCampaign') }}
               </Button>
             </DialogFooter>
@@ -1261,7 +1261,7 @@ async function addRecipientsFromCSV() {
                   <Popover v-if="selectedRange === 'custom'" v-model:open="isDatePickerOpen">
                     <PopoverTrigger as-child>
                       <Button variant="outline" size="sm">
-                        <CalendarIcon class="h-4 w-4 mr-1" />
+                        <CalendarIcon class="h-4 w-4 me-1" />
                         {{ formatDateRangeDisplay || $t('common.select') }}
                       </Button>
                     </PopoverTrigger>
@@ -1302,7 +1302,7 @@ async function addRecipientsFromCSV() {
                 </template>
                 <template #cell-status="{ item: campaign }">
                   <Badge variant="outline" :class="[getStatusClass(campaign.status), 'text-xs']">
-                    <component :is="getStatusIcon(campaign.status)" class="h-3 w-3 mr-1" />
+                    <component :is="getStatusIcon(campaign.status)" class="h-3 w-3 me-1" />
                     {{ campaign.status }}
                   </Badge>
                 </template>
@@ -1313,7 +1313,7 @@ async function addRecipientsFromCSV() {
                       <span class="text-xs text-muted-foreground">{{ getProgressPercentage(campaign) }}%</span>
                     </div>
                     <div class="flex items-center gap-3 text-xs">
-                      <span title="Recipients"><Users class="h-3 w-3 inline mr-0.5" />{{ campaign.total_recipients }}</span>
+                      <span title="Recipients"><Users class="h-3 w-3 inline me-0.5" />{{ campaign.total_recipients }}</span>
                       <span class="text-green-600" title="Delivered">{{ campaign.delivered_count }}</span>
                       <span class="text-blue-600" title="Read">{{ campaign.read_count }}</span>
                       <span v-if="campaign.failed_count > 0" class="text-destructive" title="Failed">{{ campaign.failed_count }}</span>
@@ -1398,7 +1398,7 @@ async function addRecipientsFromCSV() {
                 </template>
                 <template #empty-action>
                   <Button v-if="!searchQuery" variant="outline" size="sm" @click="showCreateDialog = true">
-                    <Plus class="h-4 w-4 mr-2" />
+                    <Plus class="h-4 w-4 me-2" />
                     {{ $t('campaigns.createCampaign') }}
                   </Button>
                 </template>
@@ -1432,7 +1432,7 @@ async function addRecipientsFromCSV() {
               class="mt-4"
               @click="showRecipientsDialog = false; openAddRecipientsDialog(selectedCampaign as any)"
             >
-              <UserPlus class="h-4 w-4 mr-2" />
+              <UserPlus class="h-4 w-4 me-2" />
               {{ $t('campaigns.addRecipients') }}
             </Button>
           </div>
@@ -1440,10 +1440,10 @@ async function addRecipientsFromCSV() {
             <table class="w-full text-sm">
               <thead class="sticky top-0 bg-background border-b">
                 <tr>
-                  <th class="text-left py-2 px-2">{{ $t('campaigns.phoneNumber') }}</th>
-                  <th class="text-left py-2 px-2">{{ $t('campaigns.name') }}</th>
-                  <th class="text-left py-2 px-2">{{ $t('campaigns.status') }}</th>
-                  <th class="text-left py-2 px-2">{{ $t('campaigns.sentAt') }}</th>
+                  <th class="text-start py-2 px-2">{{ $t('campaigns.phoneNumber') }}</th>
+                  <th class="text-start py-2 px-2">{{ $t('campaigns.name') }}</th>
+                  <th class="text-start py-2 px-2">{{ $t('campaigns.status') }}</th>
+                  <th class="text-start py-2 px-2">{{ $t('campaigns.sentAt') }}</th>
                   <th v-if="selectedCampaign?.status === 'draft'" class="text-center py-2 px-2 w-16"></th>
                 </tr>
               </thead>
@@ -1488,7 +1488,7 @@ async function addRecipientsFromCSV() {
             size="sm"
             @click="showRecipientsDialog = false; openAddRecipientsDialog(selectedCampaign as any)"
           >
-            <UserPlus class="h-4 w-4 mr-2" />
+            <UserPlus class="h-4 w-4 me-2" />
             {{ $t('campaigns.addMore') }}
           </Button>
           <Button variant="outline" size="sm" @click="showRecipientsDialog = false">{{ $t('common.close') }}</Button>
@@ -1521,11 +1521,11 @@ async function addRecipientsFromCSV() {
         <Tabs v-model="addRecipientsTab" class="w-full">
           <TabsList class="grid w-full grid-cols-2">
             <TabsTrigger value="manual">
-              <UserPlus class="h-4 w-4 mr-2" />
+              <UserPlus class="h-4 w-4 me-2" />
               {{ $t('campaigns.manualEntry') }}
             </TabsTrigger>
             <TabsTrigger value="csv">
-              <FileSpreadsheet class="h-4 w-4 mr-2" />
+              <FileSpreadsheet class="h-4 w-4 me-2" />
               {{ $t('campaigns.uploadCsv') }}
             </TabsTrigger>
           </TabsList>
@@ -1575,8 +1575,8 @@ async function addRecipientsFromCSV() {
               </div>
               <div class="flex justify-end">
                 <Button @click="addRecipients" :disabled="isAddingRecipients || !manualInputValidation.isValid">
-                  <Loader2 v-if="isAddingRecipients" class="h-4 w-4 mr-2 animate-spin" />
-                  <Upload v-else class="h-4 w-4 mr-2" />
+                  <Loader2 v-if="isAddingRecipients" class="h-4 w-4 me-2 animate-spin" />
+                  <Upload v-else class="h-4 w-4 me-2" />
                   {{ $t('campaigns.addRecipients') }}
                 </Button>
               </div>
@@ -1624,7 +1624,7 @@ async function addRecipientsFromCSV() {
               <!-- Validation Results -->
               <div v-if="isValidatingCSV" class="flex items-center justify-center py-8">
                 <Loader2 class="h-6 w-6 animate-spin text-muted-foreground" />
-                <span class="ml-2 text-muted-foreground">{{ $t('campaigns.validatingCsv') }}</span>
+                <span class="ms-2 text-muted-foreground">{{ $t('campaigns.validatingCsv') }}</span>
               </div>
 
               <div v-else-if="csvValidation" class="space-y-4">
@@ -1691,10 +1691,10 @@ async function addRecipientsFromCSV() {
                     <table class="w-full text-sm">
                       <thead class="sticky top-0 bg-muted border-b">
                         <tr>
-                          <th class="text-left py-2 px-3 w-8"></th>
-                          <th class="text-left py-2 px-3">{{ $t('campaigns.phone') }}</th>
-                          <th class="text-left py-2 px-3">{{ $t('campaigns.name') }}</th>
-                          <th class="text-left py-2 px-3">{{ $t('campaigns.parameters') }}</th>
+                          <th class="text-start py-2 px-3 w-8"></th>
+                          <th class="text-start py-2 px-3">{{ $t('campaigns.phone') }}</th>
+                          <th class="text-start py-2 px-3">{{ $t('campaigns.name') }}</th>
+                          <th class="text-start py-2 px-3">{{ $t('campaigns.parameters') }}</th>
                         </tr>
                       </thead>
                       <tbody>
@@ -1737,8 +1737,8 @@ async function addRecipientsFromCSV() {
                     @click="addRecipientsFromCSV"
                     :disabled="isAddingRecipients || !csvValidation.isValid || csvValidation.rows.filter(r => r.isValid).length === 0"
                   >
-                    <Loader2 v-if="isAddingRecipients" class="h-4 w-4 mr-2 animate-spin" />
-                    <Upload v-else class="h-4 w-4 mr-2" />
+                    <Loader2 v-if="isAddingRecipients" class="h-4 w-4 me-2 animate-spin" />
+                    <Upload v-else class="h-4 w-4 me-2" />
                     {{ $t('campaigns.importRecipients', { count: csvValidation.rows.filter(r => r.isValid).length }) }}
                   </Button>
                 </div>

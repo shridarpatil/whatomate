@@ -135,7 +135,7 @@ async function confirmDeleteFlow() {
     >
       <template #actions>
         <Button variant="outline" size="sm" @click="createFlow">
-          <Plus class="h-4 w-4 mr-2" />
+          <Plus class="h-4 w-4 me-2" />
           {{ $t('chatbotFlows.createFlow') }}
         </Button>
       </template>
@@ -209,7 +209,7 @@ async function confirmDeleteFlow() {
                 </template>
                 <template #empty-action>
                   <Button v-if="!searchQuery" variant="outline" size="sm" @click="createFlow">
-                    <Plus class="h-4 w-4 mr-2" />
+                    <Plus class="h-4 w-4 me-2" />
                     {{ $t('chatbotFlows.createFlow') }}
                   </Button>
                 </template>

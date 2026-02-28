@@ -160,7 +160,7 @@ function formatNoteTime(dateStr: string) {
 </script>
 
 <template>
-  <div id="notes-panel" class="w-80 border-l border-white/[0.08] light:border-gray-200 bg-[#111113] light:bg-white flex flex-col">
+  <div id="notes-panel" class="w-80 border-s border-white/[0.08] light:border-gray-200 bg-[#111113] light:bg-white flex flex-col">
     <!-- Header -->
     <div class="px-4 py-3 border-b border-white/[0.08] light:border-gray-200 flex items-center justify-between">
       <div class="flex items-center gap-2">
@@ -203,7 +203,7 @@ function formatNoteTime(dateStr: string) {
             class="group relative rounded-xl p-3 backdrop-blur-sm border border-white/[0.06] light:border-gray-200 bg-gradient-to-br from-white/[0.04] to-white/[0.02] light:from-gray-50 light:to-white hover:from-white/[0.06] hover:to-white/[0.03] light:hover:from-gray-100 light:hover:to-gray-50 transition-all duration-200"
           >
             <!-- Gradient accent line -->
-            <div class="absolute top-0 left-3 right-3 h-[2px] rounded-full bg-gradient-to-r from-amber-500/60 via-orange-500/40 to-transparent" />
+            <div class="absolute top-0 start-3 end-3 h-[2px] rounded-full bg-gradient-to-r from-amber-500/60 via-orange-500/40 to-transparent" />
 
             <!-- Editing mode -->
             <template v-if="editingNoteId === note.id">
@@ -224,8 +224,8 @@ function formatNoteTime(dateStr: string) {
                   :disabled="!editingContent.trim() || isSaving"
                   @click="saveEdit(note.id)"
                 >
-                  <Loader2 v-if="isSaving" class="h-3 w-3 mr-1 animate-spin" />
-                  <Check v-else class="h-3 w-3 mr-1" />
+                  <Loader2 v-if="isSaving" class="h-3 w-3 me-1 animate-spin" />
+                  <Check v-else class="h-3 w-3 me-1" />
                   {{ t('common.save') }}
                 </Button>
               </div>
@@ -251,7 +251,7 @@ function formatNoteTime(dateStr: string) {
               <!-- Hover actions (own notes only) -->
               <div
                 v-if="note.created_by_id === authStore.user?.id"
-                class="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity flex gap-0.5"
+                class="absolute top-2 end-2 opacity-0 group-hover:opacity-100 transition-opacity flex gap-0.5"
               >
                 <button
                   class="h-6 w-6 rounded-md flex items-center justify-center hover:bg-white/[0.08] light:hover:bg-gray-200 text-white/30 hover:text-white/60 light:text-gray-400 light:hover:text-gray-600 transition-colors"

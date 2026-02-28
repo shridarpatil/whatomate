@@ -162,7 +162,7 @@ function getRowKey(item: T, index: number): string {
           :key="col.key"
           :class="[
             col.width,
-            col.align === 'right' && 'text-right',
+            col.align === 'right' && 'text-end',
             col.align === 'center' && 'text-center',
             col.sortable && 'cursor-pointer select-none hover:text-foreground transition-colors',
           ]"
@@ -219,7 +219,7 @@ function getRowKey(item: T, index: number): string {
           v-for="col in columns"
           :key="col.key"
           :class="[
-            col.align === 'right' && 'text-right',
+            col.align === 'right' && 'text-end',
             col.align === 'center' && 'text-center',
           ]"
         >

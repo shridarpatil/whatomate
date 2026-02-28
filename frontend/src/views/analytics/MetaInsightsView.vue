@@ -699,7 +699,7 @@ const chartOptions = {
             <PopoverTrigger as-child>
               <Button variant="outline" role="combobox" :aria-expanded="accountComboboxOpen" class="w-[180px] justify-between">
                 <span class="truncate">{{ selectedAccountName }}</span>
-                <ChevronsUpDown class="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                <ChevronsUpDown class="ms-2 h-4 w-4 shrink-0 opacity-50" />
               </Button>
             </PopoverTrigger>
             <PopoverContent class="w-[180px] p-0">
@@ -760,7 +760,7 @@ const chartOptions = {
         <Popover v-if="selectedRange === 'custom'" v-model:open="isDatePickerOpen">
           <PopoverTrigger as-child>
             <Button variant="outline" class="w-auto">
-              <CalendarIcon class="h-4 w-4 mr-2" />
+              <CalendarIcon class="h-4 w-4 me-2" />
               {{ formatDateRange || $t('metaInsights.selectDates') }}
             </Button>
           </PopoverTrigger>
@@ -780,7 +780,7 @@ const chartOptions = {
         </Button>
 
         <!-- Cache indicator -->
-        <Badge v-if="isCached" variant="secondary" class="ml-2">
+        <Badge v-if="isCached" variant="secondary" class="ms-2">
           {{ $t('metaInsights.cached') }}
         </Badge>
       </template>
@@ -793,19 +793,19 @@ const chartOptions = {
         <Tabs v-model="activeTab" class="w-full">
           <TabsList class="grid w-full grid-cols-4 lg:w-auto lg:inline-flex">
             <TabsTrigger value="analytics">
-              <MessageSquare class="h-4 w-4 lg:mr-2" />
+              <MessageSquare class="h-4 w-4 lg:me-2" />
               <span class="hidden lg:inline">{{ $t('metaInsights.messaging') }}</span>
             </TabsTrigger>
             <TabsTrigger value="pricing_analytics">
-              <DollarSign class="h-4 w-4 lg:mr-2" />
+              <DollarSign class="h-4 w-4 lg:me-2" />
               <span class="hidden lg:inline">{{ $t('metaInsights.pricing') }}</span>
             </TabsTrigger>
             <TabsTrigger value="template_analytics">
-              <FileText class="h-4 w-4 lg:mr-2" />
+              <FileText class="h-4 w-4 lg:me-2" />
               <span class="hidden lg:inline">{{ $t('metaInsights.templates') }}</span>
             </TabsTrigger>
             <TabsTrigger value="call_analytics">
-              <Phone class="h-4 w-4 lg:mr-2" />
+              <Phone class="h-4 w-4 lg:me-2" />
               <span class="hidden lg:inline">{{ $t('metaInsights.calls') }}</span>
             </TabsTrigger>
           </TabsList>
@@ -1022,9 +1022,9 @@ const chartOptions = {
                     <div class="space-y-3">
                       <div v-for="(data, country) in (aggregatedData as ReturnType<typeof aggregatePricingData>).byCountry" :key="country" class="flex items-center justify-between py-2 border-b border-white/[0.08] light:border-gray-100 last:border-0">
                         <span class="text-sm text-white/70 light:text-gray-600">{{ country }}</span>
-                        <div class="text-right">
+                        <div class="text-end">
                           <span class="font-semibold text-white light:text-gray-900">{{ (data as {volume: number, cost: number}).volume.toLocaleString() }} {{ $t('metaInsights.msgs') }}</span>
-                          <span class="text-white/50 light:text-gray-500 ml-2">{{ formatCurrency((data as {volume: number, cost: number}).cost) }}</span>
+                          <span class="text-white/50 light:text-gray-500 ms-2">{{ formatCurrency((data as {volume: number, cost: number}).cost) }}</span>
                         </div>
                       </div>
                     </div>
@@ -1148,11 +1148,11 @@ const chartOptions = {
                       <CardDescription>{{ $t('metaInsights.performanceByTemplate') }}</CardDescription>
                     </div>
                     <div class="relative w-full sm:w-64">
-                      <Search class="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-white/40 light:text-gray-400" />
+                      <Search class="absolute start-3 top-1/2 -translate-y-1/2 h-4 w-4 text-white/40 light:text-gray-400" />
                       <Input
                         v-model="templateSearchQuery"
                         :placeholder="$t('metaInsights.searchTemplates')"
-                        class="pl-9"
+                        class="ps-9"
                       />
                     </div>
                   </div>

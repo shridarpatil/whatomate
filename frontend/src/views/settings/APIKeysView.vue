@@ -138,7 +138,7 @@ onMounted(() => fetchItems())
   <div class="flex flex-col h-full bg-[#0a0a0b] light:bg-gray-50">
     <PageHeader :title="$t('apiKeys.title')" :subtitle="$t('apiKeys.subtitle')" :icon="Key" icon-gradient="bg-gradient-to-br from-amber-500 to-orange-600 shadow-amber-500/20">
       <template #actions>
-        <Button variant="outline" size="sm" @click="openCreateDialogBase"><Plus class="h-4 w-4 mr-2" />{{ $t('apiKeys.createApiKey') }}</Button>
+        <Button variant="outline" size="sm" @click="openCreateDialogBase"><Plus class="h-4 w-4 me-2" />{{ $t('apiKeys.createApiKey') }}</Button>
       </template>
     </PageHeader>
 
@@ -170,7 +170,7 @@ onMounted(() => fetchItems())
                   <Button variant="ghost" size="icon" @click="openDeleteDialog(key)"><Trash2 class="h-4 w-4 text-destructive" /></Button>
                 </template>
                 <template #empty-action>
-                  <Button variant="outline" size="sm" @click="openCreateDialogBase"><Plus class="h-4 w-4 mr-2" />{{ $t('apiKeys.createApiKey') }}</Button>
+                  <Button variant="outline" size="sm" @click="openCreateDialogBase"><Plus class="h-4 w-4 me-2" />{{ $t('apiKeys.createApiKey') }}</Button>
                 </template>
               </DataTable>
             </CardContent>

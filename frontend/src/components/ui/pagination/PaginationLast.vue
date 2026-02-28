@@ -22,7 +22,7 @@ const forwarded = useForwardProps(delegatedProps)
 <template>
   <PaginationLast
     data-slot="pagination-last"
-    :class="cn(buttonVariants({ variant: 'ghost', size }), 'gap-1 px-2.5 sm:pr-2.5', props.class)"
+    :class="cn(buttonVariants({ variant: 'ghost', size }), 'gap-1 px-2.5 sm:pe-2.5', props.class)"
     v-bind="forwarded"
   >
     <slot>

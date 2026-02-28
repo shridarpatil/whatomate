@@ -92,7 +92,7 @@ const handleLogout = async () => {
     <a href="#main-content" class="skip-link">{{ $t('nav.skipToMain') }}</a>
 
     <!-- Mobile header -->
-    <header class="fixed top-0 left-0 right-0 z-50 flex h-12 items-center justify-between border-b border-white/[0.08] light:border-gray-200 bg-[#0a0a0b]/95 light:bg-white/95 backdrop-blur-sm px-3 md:hidden">
+    <header class="fixed top-0 start-0 end-0 z-50 flex h-12 items-center justify-between border-b border-white/[0.08] light:border-gray-200 bg-[#0a0a0b]/95 light:bg-white/95 backdrop-blur-sm px-3 md:hidden">
       <RouterLink to="/" class="flex items-center gap-2">
         <div class="h-7 w-7 rounded-lg bg-gradient-to-br from-emerald-500 to-green-600 flex items-center justify-center shadow-lg shadow-emerald-500/20">
           <MessageSquare class="h-4 w-4 text-white" />
@@ -122,8 +122,8 @@ const handleLogout = async () => {
     <!-- Sidebar -->
     <aside
       :class="[
-        'flex flex-col border-r border-white/[0.08] light:border-gray-200 bg-[#0a0a0b] light:bg-white transition-all duration-300',
-        'fixed inset-y-0 left-0 z-40 md:relative',
+        'flex flex-col border-e border-white/[0.08] light:border-gray-200 bg-[#0a0a0b] light:bg-white transition-all duration-300',
+        'fixed inset-y-0 start-0 z-40 md:relative',
         'transform md:transform-none',
         isMobileMenuOpen ? 'translate-x-0' : '-translate-x-full md:translate-x-0',
         isCollapsed ? 'w-64 md:w-16' : 'w-64'
@@ -190,7 +190,7 @@ const handleLogout = async () => {
                 :key="child.path"
                 :to="child.path"
                 :class="[
-                  'flex items-center gap-2.5 rounded-lg px-2.5 py-1.5 text-[13px] font-medium transition-all duration-200 ml-4',
+                  'flex items-center gap-2.5 rounded-lg px-2.5 py-1.5 text-[13px] font-medium transition-all duration-200 ms-4',
                   route.path === child.path
                     ? 'bg-white/[0.06] text-white light:bg-gray-100 light:text-gray-900'
                     : 'text-white/40 hover:text-white/70 hover:bg-white/[0.04] light:text-gray-400 light:hover:text-gray-700 light:hover:bg-gray-50'

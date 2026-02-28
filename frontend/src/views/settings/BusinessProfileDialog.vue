@@ -271,14 +271,14 @@ async function handleFileChange(event: Event) {
         <div class="md:col-span-2 space-y-2">
           <Label for="about">{{ $t('businessProfile.about') }}</Label>
           <Input id="about" v-model="profile.about" :placeholder="$t('businessProfile.aboutPlaceholder')" maxlength="139" />
-          <p class="text-xs text-muted-foreground text-right">{{ profile.about.length }}/139</p>
+          <p class="text-xs text-muted-foreground text-end">{{ profile.about.length }}/139</p>
         </div>
 
         <!-- Description -->
         <div class="md:col-span-2 space-y-2">
           <Label for="description">{{ $t('businessProfile.businessDescription') }}</Label>
           <Textarea id="description" v-model="profile.description" :placeholder="$t('businessProfile.descriptionPlaceholder')" :rows="3" maxlength="512" />
-          <p class="text-xs text-muted-foreground text-right">{{ profile.description.length }}/512</p>
+          <p class="text-xs text-muted-foreground text-end">{{ profile.description.length }}/512</p>
         </div>
 
         <!-- Vertical (Category) -->
@@ -302,8 +302,8 @@ async function handleFileChange(event: Event) {
         <div class="space-y-2">
           <Label for="email">{{ $t('businessProfile.contactEmail') }}</Label>
           <div class="relative">
-            <Mail class="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
-            <Input id="email" v-model="profile.email" type="email" class="pl-9" :placeholder="$t('businessProfile.emailPlaceholder')" maxlength="128" />
+            <Mail class="absolute start-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+            <Input id="email" v-model="profile.email" type="email" class="ps-9" :placeholder="$t('businessProfile.emailPlaceholder')" maxlength="128" />
           </div>
         </div>
 
@@ -311,8 +311,8 @@ async function handleFileChange(event: Event) {
         <div class="md:col-span-2 space-y-2">
           <Label for="address">{{ $t('businessProfile.businessAddress') }}</Label>
           <div class="relative">
-            <MapPin class="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
-            <Input id="address" v-model="profile.address" class="pl-9" :placeholder="$t('businessProfile.addressPlaceholder')" maxlength="256" />
+            <MapPin class="absolute start-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+            <Input id="address" v-model="profile.address" class="ps-9" :placeholder="$t('businessProfile.addressPlaceholder')" maxlength="256" />
           </div>
         </div>
 
@@ -320,8 +320,8 @@ async function handleFileChange(event: Event) {
         <div class="md:col-span-2 space-y-3">
           <Label>{{ $t('businessProfile.websites') }}</Label>
           <div v-for="(_, index) in profile.websites" :key="index" class="relative">
-            <Globe class="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
-            <Input v-model="profile.websites[index]" class="pl-9" :placeholder="$t('businessProfile.websitePlaceholder')" maxlength="256" />
+            <Globe class="absolute start-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+            <Input v-model="profile.websites[index]" class="ps-9" :placeholder="$t('businessProfile.websitePlaceholder')" maxlength="256" />
           </div>
         </div>
       </div>

@@ -212,11 +212,11 @@ function downloadSampleCsv() {
       <Tabs v-model="activeTab" class="w-full">
         <TabsList v-if="canExport && canImport" class="grid w-full grid-cols-2">
           <TabsTrigger value="export">
-            <Download class="h-4 w-4 mr-2" />
+            <Download class="h-4 w-4 me-2" />
             {{ $t('importExport.export') }}
           </TabsTrigger>
           <TabsTrigger value="import">
-            <Upload class="h-4 w-4 mr-2" />
+            <Upload class="h-4 w-4 me-2" />
             {{ $t('importExport.import') }}
           </TabsTrigger>
         </TabsList>
@@ -246,8 +246,8 @@ function downloadSampleCsv() {
             <div class="flex justify-end gap-2 pt-2">
               <Button variant="outline" @click="closeDialog">{{ $t('common.cancel') }}</Button>
               <Button @click="handleExport" :disabled="isExporting || selectedColumns.length === 0">
-                <Loader2 v-if="isExporting" class="h-4 w-4 mr-2 animate-spin" />
-                <Download v-else class="h-4 w-4 mr-2" />
+                <Loader2 v-if="isExporting" class="h-4 w-4 me-2 animate-spin" />
+                <Download v-else class="h-4 w-4 me-2" />
                 {{ $t('importExport.exportCsv') }}
               </Button>
             </div>
@@ -264,18 +264,18 @@ function downloadSampleCsv() {
             <div class="space-y-2">
               <div class="text-sm">
                 <span class="font-medium">{{ $t('importExport.requiredColumns') }}:</span>
-                <span class="text-muted-foreground ml-1">
+                <span class="text-muted-foreground ms-1">
                   {{ importRequiredColumns.map(c => translateColumnLabel(c)).join(', ') }}
                 </span>
               </div>
               <div v-if="importOptionalColumns.length > 0" class="text-sm">
                 <span class="font-medium">{{ $t('importExport.optionalColumns') }}:</span>
-                <span class="text-muted-foreground ml-1">
+                <span class="text-muted-foreground ms-1">
                   {{ importOptionalColumns.map(c => translateColumnLabel(c)).join(', ') }}
                 </span>
               </div>
               <Button variant="link" size="sm" class="h-auto p-0 text-xs" @click="downloadSampleCsv">
-                <FileSpreadsheet class="h-3 w-3 mr-1" />
+                <FileSpreadsheet class="h-3 w-3 me-1" />
                 {{ $t('importExport.downloadSample') }}
               </Button>
             </div>
@@ -323,8 +323,8 @@ function downloadSampleCsv() {
             <div class="flex justify-end gap-2 pt-2">
               <Button variant="outline" @click="closeDialog">{{ $t('common.cancel') }}</Button>
               <Button @click="handleImport" :disabled="isImporting || !importFile">
-                <Loader2 v-if="isImporting" class="h-4 w-4 mr-2 animate-spin" />
-                <Upload v-else class="h-4 w-4 mr-2" />
+                <Loader2 v-if="isImporting" class="h-4 w-4 me-2 animate-spin" />
+                <Upload v-else class="h-4 w-4 me-2" />
                 {{ $t('importExport.importCsv') }}
               </Button>
             </div>

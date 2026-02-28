@@ -11,6 +11,12 @@
         var mode = localStorage.getItem('color-mode');
         var isDark = mode === 'dark' || (mode === 'system' || !mode) && window.matchMedia('(prefers-color-scheme: dark)').matches;
         if (isDark) document.documentElement.classList.add('dark');
+        var locale = localStorage.getItem('locale');
+        var rtl = ['ar', 'he', 'fa', 'ur'];
+        if (locale && rtl.indexOf(locale) !== -1) {
+          document.documentElement.setAttribute('dir', 'rtl');
+          document.documentElement.setAttribute('lang', locale);
+        }
       })();
     </script>
   </head>

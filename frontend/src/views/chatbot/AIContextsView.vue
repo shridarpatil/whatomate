@@ -249,7 +249,7 @@ async function toggleContext(context: AIContext) {
     >
       <template #actions>
         <Button variant="outline" size="sm" @click="openCreateDialog">
-          <Plus class="h-4 w-4 mr-2" />
+          <Plus class="h-4 w-4 me-2" />
           {{ $t('aiContexts.addContext') }}
         </Button>
       </template>
@@ -330,7 +330,7 @@ async function toggleContext(context: AIContext) {
                 </template>
                 <template #empty-action>
                   <Button v-if="!searchQuery" variant="outline" size="sm" @click="openCreateDialog">
-                    <Plus class="h-4 w-4 mr-2" />
+                    <Plus class="h-4 w-4 me-2" />
                     {{ $t('aiContexts.addContext') }}
                   </Button>
                 </template>

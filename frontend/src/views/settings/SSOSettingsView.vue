@@ -283,7 +283,7 @@ onMounted(() => {
                   class="flex-1"
                   @click="openEditDialog(key)"
                 >
-                  <Settings2 class="h-4 w-4 mr-2" />
+                  <Settings2 class="h-4 w-4 me-2" />
                   {{ getConfiguredProvider(key) ? $t('sso.configure') : $t('sso.setUp') }}
                 </Button>
                 <Button
@@ -359,7 +359,7 @@ onMounted(() => {
           <div class="space-y-2">
             <Label for="client_secret">
               {{ $t('sso.clientSecret') }}
-              <span v-if="getConfiguredProvider(editingProvider)?.has_secret" class="text-xs text-muted-foreground ml-1">
+              <span v-if="getConfiguredProvider(editingProvider)?.has_secret" class="text-xs text-muted-foreground ms-1">
                 {{ $t('sso.clientSecretKeepExisting') }}
               </span>
             </Label>
@@ -462,7 +462,7 @@ onMounted(() => {
             {{ $t('common.cancel') }}
           </Button>
           <Button size="sm" @click="saveProvider" :disabled="isSaving">
-            <Loader2 v-if="isSaving" class="h-4 w-4 mr-2 animate-spin" />{{ $t('common.save') }}
+            <Loader2 v-if="isSaving" class="h-4 w-4 me-2 animate-spin" />{{ $t('common.save') }}
           </Button>
         </DialogFooter>
       </DialogContent>

@@ -247,7 +247,7 @@ const emptyDescription = computed(() => {
     >
       <template #actions>
         <Button variant="outline" size="sm" @click="openCreateDialog">
-          <Plus class="h-4 w-4 mr-2" />
+          <Plus class="h-4 w-4 me-2" />
           {{ $t('keywords.addRule') }}
         </Button>
       </template>
@@ -327,7 +327,7 @@ const emptyDescription = computed(() => {
                 </template>
                 <template #empty-action>
                   <Button v-if="!searchQuery" variant="outline" size="sm" @click="openCreateDialog">
-                    <Plus class="h-4 w-4 mr-2" />
+                    <Plus class="h-4 w-4 me-2" />
                     {{ $t('keywords.addRule') }}
                   </Button>
                 </template>
@@ -407,7 +407,7 @@ const emptyDescription = computed(() => {
                 @click="addButton"
                 :disabled="formData.buttons.length >= 10"
               >
-                <Plus class="h-3 w-3 mr-1" />
+                <Plus class="h-3 w-3 me-1" />
                 {{ $t('keywords.addButton') }}
               </Button>
             </div>

@@ -159,7 +159,7 @@ function closeDialog() {
               <Button variant="outline" role="combobox" class="w-full justify-between">
                 <span v-if="formData.tags.length === 0" class="text-muted-foreground">{{ $t('contacts.selectTags') }}</span>
                 <span v-else>{{ formData.tags.length }} {{ $t('contacts.tagsSelected') }}</span>
-                <ChevronsUpDown class="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                <ChevronsUpDown class="ms-2 h-4 w-4 shrink-0 opacity-50" />
               </Button>
             </PopoverTrigger>
             <PopoverContent class="w-[300px] p-0" @interact-outside="(e) => e.preventDefault()">
@@ -195,7 +195,7 @@ function closeDialog() {
               {{ tagName }}
               <button
                 type="button"
-                class="ml-1 rounded-full hover:bg-black/10 dark:hover:bg-white/10 p-0.5 transition-colors"
+                class="ms-1 rounded-full hover:bg-black/10 dark:hover:bg-white/10 p-0.5 transition-colors"
                 @click.stop="removeTag(tagName)"
               >
                 <X class="h-3 w-3" />
@@ -207,7 +207,7 @@ function closeDialog() {
       <div class="flex justify-end gap-2">
         <Button variant="outline" @click="closeDialog">{{ $t('common.cancel') }}</Button>
         <Button @click="saveContact" :disabled="isSubmitting">
-          <Loader2 v-if="isSubmitting" class="h-4 w-4 mr-2 animate-spin" />
+          <Loader2 v-if="isSubmitting" class="h-4 w-4 me-2 animate-spin" />
           {{ $t('common.create') }}
         </Button>
       </div>

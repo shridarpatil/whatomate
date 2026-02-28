@@ -421,12 +421,12 @@ void _displayStats.value // Suppress unused warning
     >
       <template #actions>
         <!-- Agent Filter (Admin/Manager only) -->
-        <div v-if="isAdminOrManager" class="flex items-center gap-2 mr-4">
+        <div v-if="isAdminOrManager" class="flex items-center gap-2 me-4">
           <Popover v-model:open="agentComboboxOpen">
             <PopoverTrigger as-child>
               <Button variant="outline" role="combobox" :aria-expanded="agentComboboxOpen" class="w-[200px] justify-between">
                 <span class="truncate">{{ selectedAgentName }}</span>
-                <ChevronsUpDown class="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                <ChevronsUpDown class="ms-2 h-4 w-4 shrink-0 opacity-50" />
               </Button>
             </PopoverTrigger>
             <PopoverContent class="w-[200px] p-0">
@@ -476,7 +476,7 @@ void _displayStats.value // Suppress unused warning
           <Popover v-if="selectedRange === 'custom'" v-model:open="isDatePickerOpen">
             <PopoverTrigger as-child>
               <Button variant="outline" class="w-auto">
-                <CalendarIcon class="h-4 w-4 mr-2" />
+                <CalendarIcon class="h-4 w-4 me-2" />
                 {{ formatDateRange || $t('agentAnalytics.selectDates') }}
               </Button>
             </PopoverTrigger>

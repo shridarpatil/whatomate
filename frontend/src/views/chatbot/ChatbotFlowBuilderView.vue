@@ -884,7 +884,7 @@ function confirmCancel() {
 
           <Button variant="outline" @click="handleCancel">{{ $t('flowBuilder.cancel') }}</Button>
           <Button @click="saveFlow" :disabled="isSaving">
-            <Save class="h-4 w-4 mr-2" />
+            <Save class="h-4 w-4 me-2" />
             {{ isSaving ? $t('flowBuilder.saving') + '...' : $t('flowBuilder.saveFlow') }}
           </Button>
         </div>
@@ -900,14 +900,14 @@ function confirmCancel() {
     <div v-else class="flex-1 flex overflow-hidden">
       <!-- Steps Panel (Left) -->
       <Card
-        class="flex-shrink-0 rounded-none border-y-0 border-l-0 flex flex-col"
+        class="flex-shrink-0 rounded-none border-y-0 border-s-0 flex flex-col"
         :style="{ width: stepsPanelWidth + 'px' }"
       >
         <CardHeader class="py-3 px-4 border-b">
           <div class="flex items-center justify-between">
             <CardTitle class="text-sm font-medium">{{ $t('flowBuilder.steps') }}</CardTitle>
             <Button variant="outline" size="sm" @click="addStep">
-              <Plus class="h-4 w-4 mr-1" />
+              <Plus class="h-4 w-4 me-1" />
               {{ $t('flowBuilder.add') }}
             </Button>
           </div>
@@ -1029,7 +1029,7 @@ function confirmCancel() {
 
       <!-- Properties Panel (Right) -->
       <Card
-        class="flex-shrink-0 rounded-none border-y-0 border-r-0 flex flex-col"
+        class="flex-shrink-0 rounded-none border-y-0 border-e-0 flex flex-col"
         :style="{ width: propertiesPanelWidth + 'px' }"
       >
         <CardHeader class="py-3 px-4 border-b">
@@ -1210,7 +1210,7 @@ function confirmCancel() {
                   <div class="flex items-center justify-between">
                     <Label class="text-xs">{{ $t('flowBuilder.sections') }}</Label>
                     <Button variant="outline" size="sm" class="h-6 text-xs" @click="addPanelSection">
-                      <Plus class="h-3 w-3 mr-1" />
+                      <Plus class="h-3 w-3 me-1" />
                       {{ $t('flowBuilder.addSection') }}
                     </Button>
                   </div>
@@ -1382,15 +1382,15 @@ function confirmCancel() {
                       <Label class="text-xs">{{ $t('flowBuilder.buttonOptions') }} ({{ selectedStep.buttons.length }}/{{ hasCtaButtons ? 2 : 10 }})</Label>
                       <div class="flex gap-1">
                         <Button variant="outline" size="sm" class="h-6 text-xs" @click="addButton('reply')" :disabled="selectedStep.buttons.length >= 10 || hasCtaButtons">
-                          <Reply class="h-3 w-3 mr-1" />
+                          <Reply class="h-3 w-3 me-1" />
                           {{ $t('flowBuilder.replyButton') }}
                         </Button>
                         <Button variant="outline" size="sm" class="h-6 text-xs" @click="addButton('url')" :disabled="ctaLimitReached || hasReplyButtons">
-                          <ExternalLink class="h-3 w-3 mr-1" />
+                          <ExternalLink class="h-3 w-3 me-1" />
                           {{ $t('flowBuilder.urlButton') }}
                         </Button>
                         <Button variant="outline" size="sm" class="h-6 text-xs" @click="addButton('phone')" :disabled="ctaLimitReached || hasReplyButtons">
-                          <Phone class="h-3 w-3 mr-1" />
+                          <Phone class="h-3 w-3 me-1" />
                           {{ $t('flowBuilder.phoneButton') }}
                         </Button>
                       </div>
@@ -1399,7 +1399,7 @@ function confirmCancel() {
                       <div v-for="(btn, idx) in selectedStep.buttons" :key="idx" class="p-2 border rounded-md bg-muted/30 space-y-2">
                         <div class="flex items-center gap-2">
                           <Badge variant="outline" class="text-[10px] px-1.5">
-                            <component :is="btn.type === 'url' ? ExternalLink : btn.type === 'phone' ? Phone : Reply" class="h-2.5 w-2.5 mr-1" />
+                            <component :is="btn.type === 'url' ? ExternalLink : btn.type === 'phone' ? Phone : Reply" class="h-2.5 w-2.5 me-1" />
                             {{ btn.type === 'url' ? 'URL' : btn.type === 'phone' ? $t('flowBuilder.phoneButton') : $t('flowBuilder.replyButton') }}
                           </Badge>
                           <Input :model-value="btn.title" @update:model-value="updateButtonTitle(idx, $event)" :placeholder="$t('flowBuilder.buttonTitle')" class="h-7 flex-1 text-xs" />
@@ -1672,7 +1672,7 @@ function confirmCancel() {
                     type="number"
                     min="1"
                     max="10"
-                    class="h-7 w-16 text-xs ml-auto"
+                    class="h-7 w-16 text-xs ms-auto"
                   />
                 </div>
               </CollapsibleContent>

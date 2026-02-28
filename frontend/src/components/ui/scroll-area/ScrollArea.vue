@@ -22,7 +22,7 @@ const props = defineProps<{
     <ScrollAreaScrollbar
       v-if="orientation !== 'horizontal'"
       orientation="vertical"
-      class="flex touch-none select-none transition-colors h-full w-2.5 border-l border-l-transparent p-[1px]"
+      class="flex touch-none select-none transition-colors h-full w-2.5 border-s border-s-transparent p-[1px]"
     >
       <ScrollAreaThumb class="relative flex-1 rounded-full bg-border" />
     </ScrollAreaScrollbar>

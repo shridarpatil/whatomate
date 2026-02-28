@@ -825,7 +825,7 @@ onMounted(() => {
     <!-- Header -->
     <header class="border-b border-white/[0.08] light:border-gray-200 bg-[#0a0a0b]/95 light:bg-white/95 backdrop-blur">
       <div class="flex h-16 items-center px-6">
-        <div class="h-8 w-8 rounded-lg bg-gradient-to-br from-emerald-500 to-green-600 flex items-center justify-center mr-3 shadow-lg shadow-emerald-500/20">
+        <div class="h-8 w-8 rounded-lg bg-gradient-to-br from-emerald-500 to-green-600 flex items-center justify-center me-3 shadow-lg shadow-emerald-500/20">
           <LayoutDashboard class="h-4 w-4 text-white" />
         </div>
         <div class="flex-1">
@@ -836,7 +836,7 @@ onMounted(() => {
         <!-- Time Range Filter -->
         <div class="flex items-center gap-2">
           <Button v-if="canCreateWidget" variant="outline" size="sm" @click="openAddWidgetDialog" class="bg-white/[0.04] border-white/[0.1] text-white/70 hover:bg-white/[0.08] hover:text-white light:bg-white light:border-gray-200 light:text-gray-700">
-            <Plus class="h-4 w-4 mr-2" />
+            <Plus class="h-4 w-4 me-2" />
             {{ $t('dashboard.addWidget') }}
           </Button>
 
@@ -851,7 +851,7 @@ onMounted(() => {
                 : 'bg-white/[0.04] border-white/[0.1] text-white/70 hover:bg-white/[0.08] hover:text-white light:bg-white light:border-gray-200 light:text-gray-700'
             ]"
           >
-            <GripVertical class="h-4 w-4 mr-2" />
+            <GripVertical class="h-4 w-4 me-2" />
             {{ isDragMode ? $t('common.done') : $t('dashboard.editLayout') }}
           </Button>
 
@@ -871,7 +871,7 @@ onMounted(() => {
           <Popover v-if="selectedRange === 'custom'" v-model:open="isDatePickerOpen">
             <PopoverTrigger as-child>
               <Button variant="outline" class="w-auto bg-white/[0.04] border-white/[0.1] text-white/70 hover:bg-white/[0.08] hover:text-white light:bg-white light:border-gray-200 light:text-gray-700 light:hover:bg-gray-50">
-                <CalendarIcon class="h-4 w-4 mr-2" />
+                <CalendarIcon class="h-4 w-4 me-2" />
                 {{ formatDateRange || $t('dashboard.selectDates') }}
               </Button>
             </PopoverTrigger>
@@ -936,7 +936,7 @@ onMounted(() => {
               class="group relative h-full card-depth rounded-xl border border-white/[0.08] bg-white/[0.04] p-6 light:bg-white light:border-gray-200 hover:bg-white/[0.06] light:hover:bg-gray-50 transition-colors overflow-hidden"
             >
               <!-- Drag handle indicator -->
-              <div v-if="isDragMode" class="widget-drag-handle absolute top-2 left-2 text-white/20 light:text-gray-300 cursor-grab active:cursor-grabbing z-10">
+              <div v-if="isDragMode" class="widget-drag-handle absolute top-2 start-2 text-white/20 light:text-gray-300 cursor-grab active:cursor-grabbing z-10">
                 <GripVertical class="h-4 w-4" />
               </div>
 
@@ -990,14 +990,14 @@ onMounted(() => {
                   <component
                     :is="widgetData[item.i]?.change > 0 ? TrendingUp : widgetData[item.i]?.change < 0 ? TrendingDown : Minus"
                     :class="[
-                      'h-3 w-3 mr-1',
+                      'h-3 w-3 me-1',
                       widgetData[item.i]?.change > 0 ? 'text-emerald-400' : widgetData[item.i]?.change < 0 ? 'text-red-400' : 'text-white/30'
                     ]"
                   />
                   <span :class="widgetData[item.i]?.change > 0 ? 'text-emerald-400' : widgetData[item.i]?.change < 0 ? 'text-red-400' : 'text-white/30 light:text-gray-400'">
                     {{ Math.abs(widgetData[item.i]?.change || 0).toFixed(1) }}%
                   </span>
-                  <span class="ml-1">{{ comparisonPeriodLabel }}</span>
+                  <span class="ms-1">{{ comparisonPeriodLabel }}</span>
                 </div>
               </div>
             </div>
@@ -1008,7 +1008,7 @@ onMounted(() => {
               class="group relative h-full flex flex-col card-depth rounded-xl border border-white/[0.08] bg-white/[0.04] p-6 light:bg-white light:border-gray-200 hover:bg-white/[0.06] light:hover:bg-gray-50 transition-colors overflow-hidden"
             >
               <!-- Drag handle indicator -->
-              <div v-if="isDragMode" class="widget-drag-handle absolute top-2 left-2 text-white/20 light:text-gray-300 cursor-grab active:cursor-grabbing z-10">
+              <div v-if="isDragMode" class="widget-drag-handle absolute top-2 start-2 text-white/20 light:text-gray-300 cursor-grab active:cursor-grabbing z-10">
                 <GripVertical class="h-4 w-4" />
               </div>
 
@@ -1068,7 +1068,7 @@ onMounted(() => {
               class="group relative h-full flex flex-col card-depth rounded-xl border border-white/[0.08] bg-white/[0.04] light:bg-white light:border-gray-200 hover:bg-white/[0.06] light:hover:bg-gray-50 transition-colors overflow-hidden"
             >
               <!-- Drag handle -->
-              <div v-if="isDragMode" class="widget-drag-handle absolute top-2 left-2 text-white/20 light:text-gray-300 cursor-grab active:cursor-grabbing z-10">
+              <div v-if="isDragMode" class="widget-drag-handle absolute top-2 start-2 text-white/20 light:text-gray-300 cursor-grab active:cursor-grabbing z-10">
                 <GripVertical class="h-4 w-4" />
               </div>
 
@@ -1098,14 +1098,14 @@ onMounted(() => {
                   <table class="w-full">
                     <thead>
                       <tr class="border-b border-white/[0.08] light:border-gray-200">
-                        <th class="text-left py-2 text-xs font-medium text-white/40 light:text-gray-500 uppercase">{{ getWidgetById(item.i)!.group_by_field }}</th>
-                        <th class="text-right py-2 text-xs font-medium text-white/40 light:text-gray-500 uppercase">{{ $t('dashboard.count') }}</th>
+                        <th class="text-start py-2 text-xs font-medium text-white/40 light:text-gray-500 uppercase">{{ getWidgetById(item.i)!.group_by_field }}</th>
+                        <th class="text-end py-2 text-xs font-medium text-white/40 light:text-gray-500 uppercase">{{ $t('dashboard.count') }}</th>
                       </tr>
                     </thead>
                     <tbody>
                       <tr v-for="dp in widgetData[item.i]?.data_points" :key="dp.label" class="border-b border-white/[0.04] light:border-gray-100">
                         <td class="py-2 text-sm text-white/70 light:text-gray-700">{{ dp.label }}</td>
-                        <td class="py-2 text-sm text-right text-white light:text-gray-900 font-medium">{{ dp.value }}</td>
+                        <td class="py-2 text-sm text-end text-white light:text-gray-900 font-medium">{{ dp.value }}</td>
                       </tr>
                     </tbody>
                   </table>
@@ -1176,7 +1176,7 @@ onMounted(() => {
               class="group relative h-full flex flex-col card-depth rounded-xl border border-white/[0.08] bg-white/[0.04] light:bg-white light:border-gray-200 hover:bg-white/[0.06] light:hover:bg-gray-50 transition-colors overflow-hidden"
             >
               <!-- Drag handle -->
-              <div v-if="isDragMode" class="widget-drag-handle absolute top-2 left-2 text-white/20 light:text-gray-300 cursor-grab active:cursor-grabbing z-10">
+              <div v-if="isDragMode" class="widget-drag-handle absolute top-2 start-2 text-white/20 light:text-gray-300 cursor-grab active:cursor-grabbing z-10">
                 <GripVertical class="h-4 w-4" />
               </div>
 
@@ -1352,7 +1352,7 @@ onMounted(() => {
           <!-- Shortcuts selector (only for shortcuts display type) -->
           <div v-if="widgetForm.display_type === 'shortcuts'" class="space-y-2">
             <Label class="text-white/70 light:text-gray-700">{{ $t('dashboard.selectShortcuts') }}</Label>
-            <div class="space-y-2 max-h-64 overflow-y-auto pr-1">
+            <div class="space-y-2 max-h-64 overflow-y-auto pe-1">
               <label
                 v-for="(shortcut, key) in SHORTCUT_REGISTRY"
                 :key="key"
@@ -1379,7 +1379,7 @@ onMounted(() => {
             <div class="flex items-center justify-between">
               <Label class="text-white/70 light:text-gray-700">{{ $t('dashboard.filters') }} ({{ widgetForm.filters.length }})</Label>
               <Button type="button" variant="outline" size="sm" @click.stop.prevent="addFilter" class="border-white/20 text-white hover:bg-white/10 light:border-gray-300 light:text-gray-700">
-                <Plus class="h-4 w-4 mr-1" />
+                <Plus class="h-4 w-4 me-1" />
                 {{ $t('dashboard.addFilter') }}
               </Button>
             </div>

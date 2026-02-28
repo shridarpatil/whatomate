@@ -199,7 +199,7 @@ watch(phoneSearch, () => {
         <p class="text-muted-foreground">{{ t('calling.callLogsDesc') }}</p>
       </div>
       <Button variant="outline" size="sm" @click="fetchLogs">
-        <RefreshCw class="h-4 w-4 mr-2" />
+        <RefreshCw class="h-4 w-4 me-2" />
         {{ t('common.refresh') }}
       </Button>
     </div>
@@ -290,7 +290,7 @@ watch(phoneSearch, () => {
           </template>
           <template #cell-status="{ item: log }">
             <Badge :variant="statusVariant(log.status)">
-              <component :is="statusIcon(log.status)" class="h-3 w-3 mr-1" />
+              <component :is="statusIcon(log.status)" class="h-3 w-3 me-1" />
               {{ t(`calling.${log.status}`) }}
             </Badge>
           </template>
@@ -302,7 +302,7 @@ watch(phoneSearch, () => {
           </template>
           <template #cell-disconnected_by="{ item: log }">
             <Badge v-if="log.disconnected_by" :variant="disconnectedByVariant(log.disconnected_by)">
-              <component :is="disconnectedByIcon(log.disconnected_by)" class="h-3 w-3 mr-1" />
+              <component :is="disconnectedByIcon(log.disconnected_by)" class="h-3 w-3 me-1" />
               {{ t(`calling.disconnectedBy${log.disconnected_by.charAt(0).toUpperCase() + log.disconnected_by.slice(1)}`) }}
             </Badge>
             <span v-else class="text-muted-foreground">-</span>
@@ -368,7 +368,7 @@ watch(phoneSearch, () => {
             <div v-if="selectedLog.disconnected_by">
               <p class="text-muted-foreground">{{ t('calling.disconnectedBy') }}</p>
               <Badge :variant="disconnectedByVariant(selectedLog.disconnected_by)">
-                <component :is="disconnectedByIcon(selectedLog.disconnected_by)" class="h-3 w-3 mr-1" />
+                <component :is="disconnectedByIcon(selectedLog.disconnected_by)" class="h-3 w-3 me-1" />
                 {{ t(`calling.disconnectedBy${selectedLog.disconnected_by.charAt(0).toUpperCase() + selectedLog.disconnected_by.slice(1)}`) }}
               </Badge>
             </div>

@@ -71,11 +71,11 @@ function getTableColumns(arr: Record<string, any>[]): string[] {
           <Badge
             v-if="typeof val === 'boolean'"
             :variant="val ? 'default' : 'secondary'"
-            class="text-[10px] ml-2"
+            class="text-[10px] ms-2"
           >
             {{ val ? 'Yes' : 'No' }}
           </Badge>
-          <span v-else class="text-xs font-medium text-right max-w-[60%] break-words ml-2">
+          <span v-else class="text-xs font-medium text-end max-w-[60%] break-words ms-2">
             {{ formatValue(val) }}
           </span>
         </div>
@@ -89,7 +89,7 @@ function getTableColumns(arr: Record<string, any>[]): string[] {
               <th
                 v-for="col in getTableColumns(data)"
                 :key="col"
-                class="px-3 py-1.5 text-left font-medium text-muted-foreground"
+                class="px-3 py-1.5 text-start font-medium text-muted-foreground"
               >
                 {{ formatLabel(col) }}
               </th>
@@ -127,11 +127,11 @@ function getTableColumns(arr: Record<string, any>[]): string[] {
           <Badge
             v-if="typeof data === 'boolean'"
             :variant="data ? 'default' : 'secondary'"
-            class="text-[10px] ml-2"
+            class="text-[10px] ms-2"
           >
             {{ data ? 'Yes' : 'No' }}
           </Badge>
-          <span v-else class="text-xs font-medium text-right max-w-[60%] break-words ml-2">
+          <span v-else class="text-xs font-medium text-end max-w-[60%] break-words ms-2">
             {{ formatValue(data) }}
           </span>
         </div>

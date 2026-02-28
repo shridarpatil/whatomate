@@ -103,7 +103,7 @@ onMounted(() => {
         <h1 class="text-2xl font-bold">{{ t('callTransfers.title') }}</h1>
       </div>
       <Button variant="outline" size="sm" @click="store.fetchWaitingTransfers(); fetchHistory()">
-        <RefreshCw class="h-4 w-4 mr-2" />
+        <RefreshCw class="h-4 w-4 me-2" />
         {{ t('common.refresh') }}
       </Button>
     </div>
@@ -112,7 +112,7 @@ onMounted(() => {
       <TabsList>
         <TabsTrigger value="waiting">
           {{ t('callTransfers.waiting') }}
-          <Badge v-if="store.waitingTransfers.length > 0" variant="destructive" class="ml-2 h-5 min-w-[20px]">
+          <Badge v-if="store.waitingTransfers.length > 0" variant="destructive" class="ms-2 h-5 min-w-[20px]">
             {{ store.waitingTransfers.length }}
           </Badge>
         </TabsTrigger>
@@ -149,7 +149,7 @@ onMounted(() => {
                   class="bg-green-600 hover:bg-green-500 text-white"
                   @click="handleAccept(transfer.id)"
                 >
-                  <Phone class="h-3.5 w-3.5 mr-1" />
+                  <Phone class="h-3.5 w-3.5 me-1" />
                   {{ t('callTransfers.accept') }}
                 </Button>
               </template>

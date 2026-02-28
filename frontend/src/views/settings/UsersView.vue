@@ -227,9 +227,9 @@ function copyInviteLink() {
   <div class="flex flex-col h-full bg-[#0a0a0b] light:bg-gray-50">
     <PageHeader :title="$t('users.title')" :icon="Users" icon-gradient="bg-gradient-to-br from-blue-500 to-indigo-600 shadow-blue-500/20" back-link="/settings" :breadcrumbs="breadcrumbs">
       <template #actions>
-        <Button variant="outline" size="sm" @click="copyInviteLink"><Link class="h-4 w-4 mr-2" />{{ $t('users.copyInviteLink') }}</Button>
-        <Button v-if="organizationsStore.isMultiOrg && authStore.hasPermission('organizations', 'assign')" variant="outline" size="sm" @click="openAddExistingDialog"><UserPlus class="h-4 w-4 mr-2" />{{ $t('users.addExistingUser') }}</Button>
-        <Button variant="outline" size="sm" @click="openCreateDialog"><Plus class="h-4 w-4 mr-2" />{{ $t('users.addUser') }}</Button>
+        <Button variant="outline" size="sm" @click="copyInviteLink"><Link class="h-4 w-4 me-2" />{{ $t('users.copyInviteLink') }}</Button>
+        <Button v-if="organizationsStore.isMultiOrg && authStore.hasPermission('organizations', 'assign')" variant="outline" size="sm" @click="openAddExistingDialog"><UserPlus class="h-4 w-4 me-2" />{{ $t('users.addExistingUser') }}</Button>
+        <Button variant="outline" size="sm" @click="openCreateDialog"><Plus class="h-4 w-4 me-2" />{{ $t('users.addUser') }}</Button>
       </template>
     </PageHeader>
 
@@ -288,7 +288,7 @@ function copyInviteLink() {
                   </div>
                 </template>
                 <template #empty-action>
-                  <Button variant="outline" size="sm" @click="openCreateDialog"><Plus class="h-4 w-4 mr-2" />{{ $t('users.addUser') }}</Button>
+                  <Button variant="outline" size="sm" @click="openCreateDialog"><Plus class="h-4 w-4 me-2" />{{ $t('users.addUser') }}</Button>
                 </template>
               </DataTable>
             </CardContent>
@@ -309,7 +309,7 @@ function copyInviteLink() {
               <SelectValue :placeholder="$t('users.selectRole')">
                 <template v-if="formData.role_id">
                   <span class="capitalize">{{ rolesStore.roles.find(r => r.id === formData.role_id)?.name }}</span>
-                  <Badge v-if="rolesStore.roles.find(r => r.id === formData.role_id)?.is_system" variant="secondary" class="text-xs ml-2">{{ $t('users.system') }}</Badge>
+                  <Badge v-if="rolesStore.roles.find(r => r.id === formData.role_id)?.is_system" variant="secondary" class="text-xs ms-2">{{ $t('users.system') }}</Badge>
                 </template>
               </SelectValue>
             </SelectTrigger>
@@ -367,7 +367,7 @@ function copyInviteLink() {
         <DialogFooter>
           <Button variant="outline" @click="isMemberRoleOpen = false">{{ $t('common.cancel') }}</Button>
           <Button @click="submitMemberRole" :disabled="isMemberRoleSubmitting || !memberRoleId">
-            <Loader2 v-if="isMemberRoleSubmitting" class="h-4 w-4 mr-2 animate-spin" />
+            <Loader2 v-if="isMemberRoleSubmitting" class="h-4 w-4 me-2 animate-spin" />
             {{ $t('users.updateMemberRole') }}
           </Button>
         </DialogFooter>
@@ -403,7 +403,7 @@ function copyInviteLink() {
         <DialogFooter>
           <Button variant="outline" @click="isAddExistingOpen = false">{{ $t('common.cancel') }}</Button>
           <Button @click="submitAddExisting" :disabled="isAddExistingSubmitting || !addExistingEmail.trim()">
-            <Loader2 v-if="isAddExistingSubmitting" class="h-4 w-4 mr-2 animate-spin" />
+            <Loader2 v-if="isAddExistingSubmitting" class="h-4 w-4 me-2 animate-spin" />
             {{ $t('users.addExistingUser') }}
           </Button>
         </DialogFooter>

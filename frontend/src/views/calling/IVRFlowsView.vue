@@ -185,11 +185,11 @@ onMounted(async () => {
       </div>
       <div class="flex gap-2">
         <Button variant="outline" size="sm" @click="store.fetchIVRFlows()">
-          <RefreshCw class="h-4 w-4 mr-2" />
+          <RefreshCw class="h-4 w-4 me-2" />
           {{ t('common.refresh') }}
         </Button>
         <Button @click="openCreate">
-          <Plus class="h-4 w-4 mr-2" />
+          <Plus class="h-4 w-4 me-2" />
           {{ t('calling.createFlow') }}
         </Button>
       </div>
@@ -205,7 +205,7 @@ onMounted(async () => {
               <TableHead>{{ t('calling.account') }}</TableHead>
               <TableHead>{{ t('calling.status') }}</TableHead>
               <TableHead>{{ t('calling.options') }}</TableHead>
-              <TableHead class="text-right">{{ t('calling.actions') }}</TableHead>
+              <TableHead class="text-end">{{ t('calling.actions') }}</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -239,7 +239,7 @@ onMounted(async () => {
               <TableCell>
                 {{ Object.keys(flow.menu?.options || {}).length }} {{ t('calling.menuOptions') }}
               </TableCell>
-              <TableCell class="text-right">
+              <TableCell class="text-end">
                 <div class="flex justify-end gap-2">
                   <Button variant="ghost" size="icon" @click="openEdit(flow)">
                     <Pencil class="h-4 w-4" />
@@ -328,7 +328,7 @@ onMounted(async () => {
         <DialogFooter>
           <Button variant="outline" @click="showEditor = false">{{ t('common.cancel') }}</Button>
           <Button :disabled="saving" @click="saveFlow">
-            <span v-if="saving" class="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2" />
+            <span v-if="saving" class="animate-spin rounded-full h-4 w-4 border-b-2 border-white me-2" />
             {{ editingFlow ? t('common.update') : t('common.create') }}
           </Button>
         </DialogFooter>

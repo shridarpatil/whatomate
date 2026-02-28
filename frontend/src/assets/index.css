@@ -103,6 +103,12 @@
   * {
     @apply border-border;
   }
+  html[dir="rtl"], html[dir="rtl"] * {
+    direction: rtl;
+  }
+  html[dir="ltr"], html[dir="ltr"] * {
+    direction: ltr;
+  }
   html {
     font-size: 14px;
     -webkit-font-smoothing: antialiased;
@@ -150,7 +156,7 @@
 
 /* Skip link for accessibility */
 .skip-link {
-  @apply sr-only focus:not-sr-only focus:absolute focus:top-4 focus:left-4 focus:z-50 focus:px-4 focus:py-2 focus:bg-primary focus:text-primary-foreground focus:rounded-md;
+  @apply sr-only focus:not-sr-only focus:absolute focus:top-4 focus:start-4 focus:z-50 focus:px-4 focus:py-2 focus:bg-primary focus:text-primary-foreground focus:rounded-md;
 }
 
 /* Custom scrollbar */
@@ -196,7 +202,7 @@
   content: '';
   position: absolute;
   bottom: 0;
-  left: 0;
+  inset-inline-start: 0;
   width: 100%;
   height: 2px;
   background: linear-gradient(90deg, #22c55e, #10b981, #059669);
@@ -285,14 +291,14 @@
 .chat-bubble-incoming {
   background-color: rgba(255, 255, 255, 0.08);
   color: #e9edef;
-  border-bottom-left-radius: 0.375rem;
+  border-end-start-radius: 0.375rem;
 }
 
 /* Outgoing bubble - WhatsApp dark mode teal green */
 .chat-bubble-outgoing {
   background-color: #38674a;
   color: #e9edef;
-  border-bottom-right-radius: 0.375rem;
+  border-end-end-radius: 0.375rem;
 }
 
 /* Light mode bubbles */
@@ -331,8 +337,8 @@
 
 /* Time and status */
 .chat-bubble-time {
-  @apply text-[10px] mt-1 flex items-center gap-1.5 float-right;
-  margin-left: 8px;
+  @apply text-[10px] mt-1 flex items-center gap-1.5 float-end;
+  margin-inline-start: 8px;
   margin-bottom: -4px;
   position: relative;
   top: 4px;
@@ -380,9 +386,9 @@
 
 /* Reply preview inside chat bubble */
 .reply-preview {
-  @apply border-l-2 rounded-lg;
+  @apply border-s-2 rounded-lg;
   background: rgba(255, 255, 255, 0.06);
-  border-left-color: #4ade80;
+  border-inline-start-color: #4ade80;
   margin-bottom: 8px;
   padding: 8px 10px;
 }
@@ -397,7 +403,7 @@
 
 .light .reply-preview {
   background: rgba(0, 0, 0, 0.04);
-  border-left-color: #16a34a;
+  border-inline-start-color: #16a34a;
 }
 
 .light .reply-preview p {
@@ -410,7 +416,7 @@
 
 .chat-bubble-outgoing .reply-preview {
   background: rgba(0, 0, 0, 0.2);
-  border-left-color: rgba(255, 255, 255, 0.5);
+  border-inline-start-color: rgba(255, 255, 255, 0.5);
 }
 
 .chat-bubble-outgoing .reply-preview p {
@@ -423,7 +429,7 @@
 
 .light .chat-bubble-outgoing .reply-preview {
   background: rgba(0, 0, 0, 0.08);
-  border-left-color: #166534;
+  border-inline-start-color: #166534;
 }
 
 .light .chat-bubble-outgoing .reply-preview p {

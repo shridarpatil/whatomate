@@ -170,7 +170,7 @@ onMounted(() => fetchWebhooks())
   <div class="flex flex-col h-full bg-[#0a0a0b] light:bg-gray-50">
     <PageHeader :title="$t('webhooks.title')" :subtitle="$t('webhooks.subtitle')" :icon="WebhookIcon" icon-gradient="bg-gradient-to-br from-indigo-500 to-purple-600 shadow-indigo-500/20">
       <template #actions>
-        <Button variant="outline" size="sm" @click="openCreateDialog"><Plus class="h-4 w-4 mr-2" />{{ $t('webhooks.addWebhook') }}</Button>
+        <Button variant="outline" size="sm" @click="openCreateDialog"><Plus class="h-4 w-4 me-2" />{{ $t('webhooks.addWebhook') }}</Button>
       </template>
     </PageHeader>
 
@@ -212,7 +212,7 @@ onMounted(() => fetchWebhooks())
                   </div>
                 </template>
                 <template #empty-action>
-                  <Button variant="outline" size="sm" @click="openCreateDialog"><Plus class="h-4 w-4 mr-2" />{{ $t('webhooks.addWebhook') }}</Button>
+                  <Button variant="outline" size="sm" @click="openCreateDialog"><Plus class="h-4 w-4 me-2" />{{ $t('webhooks.addWebhook') }}</Button>
                 </template>
               </DataTable>
             </CardContent>
@@ -263,7 +263,7 @@ onMounted(() => fetchWebhooks())
         </div>
         <DialogFooter>
           <Button variant="outline" @click="isDialogOpen = false">{{ $t('common.cancel') }}</Button>
-          <Button @click="saveWebhook" :disabled="isSaving"><Loader2 v-if="isSaving" class="h-4 w-4 mr-2 animate-spin" />{{ isEditing ? $t('common.update') : $t('common.create') }}</Button>
+          <Button @click="saveWebhook" :disabled="isSaving"><Loader2 v-if="isSaving" class="h-4 w-4 me-2 animate-spin" />{{ isEditing ? $t('common.update') : $t('common.create') }}</Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>

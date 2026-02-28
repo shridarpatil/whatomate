@@ -114,7 +114,7 @@ async function changePassword() {
                 />
                 <button
                   type="button"
-                  class="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                  class="absolute end-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
                   @click="showCurrentPassword = !showCurrentPassword"
                 >
                   <Eye v-if="!showCurrentPassword" class="h-4 w-4" />
@@ -133,7 +133,7 @@ async function changePassword() {
                 />
                 <button
                   type="button"
-                  class="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                  class="absolute end-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
                   @click="showNewPassword = !showNewPassword"
                 >
                   <Eye v-if="!showNewPassword" class="h-4 w-4" />
@@ -153,7 +153,7 @@ async function changePassword() {
                 />
                 <button
                   type="button"
-                  class="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                  class="absolute end-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
                   @click="showConfirmPassword = !showConfirmPassword"
                 >
                   <Eye v-if="!showConfirmPassword" class="h-4 w-4" />
@@ -163,7 +163,7 @@ async function changePassword() {
             </div>
             <div class="flex justify-end">
               <Button variant="outline" size="sm" @click="changePassword" :disabled="isChangingPassword">
-                <Loader2 v-if="isChangingPassword" class="mr-2 h-4 w-4 animate-spin" />
+                <Loader2 v-if="isChangingPassword" class="me-2 h-4 w-4 animate-spin" />
                 {{ $t('profile.changePassword') }}
               </Button>
             </div>

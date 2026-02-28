@@ -25,13 +25,13 @@ defineProps<{
   <header class="border-b border-white/[0.08] light:border-gray-200 bg-[#0a0a0b]/95 light:bg-white/95 backdrop-blur">
     <div class="flex h-16 items-center px-6">
       <RouterLink v-if="backLink" :to="backLink">
-        <Button variant="ghost" size="icon" class="mr-3">
+        <Button variant="ghost" size="icon" class="me-3">
           <ArrowLeft class="h-5 w-5" />
         </Button>
       </RouterLink>
       <div
         v-if="icon"
-        class="h-8 w-8 rounded-lg flex items-center justify-center mr-3 shadow-lg"
+        class="h-8 w-8 rounded-lg flex items-center justify-center me-3 shadow-lg"
         :class="iconGradient || 'bg-gradient-to-br from-blue-500 to-indigo-600 shadow-blue-500/20'"
       >
         <component :is="icon" class="h-4 w-4 text-white" />

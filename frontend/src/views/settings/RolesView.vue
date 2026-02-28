@@ -136,7 +136,7 @@ async function confirmDelete() {
   <div class="flex flex-col h-full bg-[#0a0a0b] light:bg-gray-50">
     <PageHeader :title="$t('roles.title')" :subtitle="$t('roles.subtitle')" :icon="Shield" icon-gradient="bg-gradient-to-br from-purple-500 to-indigo-600 shadow-purple-500/20" back-link="/settings">
       <template #actions>
-        <Button variant="outline" size="sm" @click="openCreateDialog"><Plus class="h-4 w-4 mr-2" />{{ $t('roles.addRole') }}</Button>
+        <Button variant="outline" size="sm" @click="openCreateDialog"><Plus class="h-4 w-4 me-2" />{{ $t('roles.addRole') }}</Button>
       </template>
     </PageHeader>
 
@@ -158,8 +158,8 @@ async function confirmDelete() {
                 <template #cell-role="{ item: role }">
                   <div class="flex items-center gap-2">
                     <span class="font-medium">{{ role.name }}</span>
-                    <Badge v-if="role.is_system" variant="secondary"><Lock class="h-3 w-3 mr-1" />{{ $t('roles.system') }}</Badge>
-                    <Badge v-if="role.is_default" variant="outline"><Star class="h-3 w-3 mr-1" />{{ $t('roles.default') }}</Badge>
+                    <Badge v-if="role.is_system" variant="secondary"><Lock class="h-3 w-3 me-1" />{{ $t('roles.system') }}</Badge>
+                    <Badge v-if="role.is_default" variant="outline"><Star class="h-3 w-3 me-1" />{{ $t('roles.default') }}</Badge>
                   </div>
                 </template>
                 <template #cell-description="{ item: role }">
@@ -181,7 +181,7 @@ async function confirmDelete() {
                   </div>
                 </template>
                 <template #empty-action>
-                  <Button variant="outline" size="sm" @click="openCreateDialog"><Plus class="h-4 w-4 mr-2" />{{ $t('roles.addRole') }}</Button>
+                  <Button variant="outline" size="sm" @click="openCreateDialog"><Plus class="h-4 w-4 me-2" />{{ $t('roles.addRole') }}</Button>
                 </template>
               </DataTable>
             </CardContent>
@@ -197,7 +197,7 @@ async function confirmDelete() {
           <DialogTitle>{{ editingRole ? (editingRole.is_system && !isSuperAdmin ? $t('roles.viewRole') : $t('roles.editRole')) : $t('roles.createRole') }}</DialogTitle>
           <DialogDescription>{{ editingRole?.is_system ? (isSuperAdmin ? $t('roles.superAdminCanEdit') : $t('roles.systemRoleViewOnly')) : editingRole ? $t('roles.updateRoleDesc') : $t('roles.createRoleDesc') }}</DialogDescription>
         </DialogHeader>
-        <div class="flex-1 overflow-y-auto space-y-4 py-4 pr-2">
+        <div class="flex-1 overflow-y-auto space-y-4 py-4 pe-2">
           <div class="space-y-2"><Label for="name">{{ $t('roles.name') }} <span class="text-destructive">*</span></Label><Input id="name" v-model="formData.name" :placeholder="$t('roles.namePlaceholder')" :disabled="editingRole?.is_system" /></div>
           <div class="space-y-2"><Label for="description">{{ $t('roles.description') }}</Label><Textarea id="description" v-model="formData.description" :placeholder="$t('roles.descriptionPlaceholder')" :rows="2" :disabled="editingRole?.is_system && !isSuperAdmin" /></div>
           <div v-if="!editingRole?.is_system" class="flex items-center justify-between">
@@ -213,7 +213,7 @@ async function confirmDelete() {
         </div>
         <DialogFooter class="pt-4 border-t">
           <Button variant="outline" size="sm" @click="isDialogOpen = false">{{ editingRole?.is_system && !isSuperAdmin ? $t('common.close') : $t('common.cancel') }}</Button>
-          <Button v-if="!editingRole?.is_system || isSuperAdmin" size="sm" @click="saveRole" :disabled="isSubmitting"><Loader2 v-if="isSubmitting" class="h-4 w-4 mr-2 animate-spin" />{{ editingRole ? $t('roles.updateRole') : $t('roles.createRole') }}</Button>
+          <Button v-if="!editingRole?.is_system || isSuperAdmin" size="sm" @click="saveRole" :disabled="isSubmitting"><Loader2 v-if="isSubmitting" class="h-4 w-4 me-2 animate-spin" />{{ editingRole ? $t('roles.updateRole') : $t('roles.createRole') }}</Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>

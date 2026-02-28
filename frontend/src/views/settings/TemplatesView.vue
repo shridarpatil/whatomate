@@ -597,12 +597,12 @@ function formatPreview(text: string, samples: any[]): string {
     <PageHeader :title="$t('templates.title')" :subtitle="$t('templates.subtitle')" :icon="FileText" icon-gradient="bg-gradient-to-br from-blue-500 to-cyan-600 shadow-blue-500/20">
       <template #actions>
         <Button variant="outline" size="sm" @click="syncTemplates" :disabled="isSyncing || !selectedAccount || selectedAccount === 'all'">
-          <Loader2 v-if="isSyncing" class="h-4 w-4 mr-2 animate-spin" />
-          <RefreshCw v-else class="h-4 w-4 mr-2" />
+          <Loader2 v-if="isSyncing" class="h-4 w-4 me-2 animate-spin" />
+          <RefreshCw v-else class="h-4 w-4 me-2" />
           {{ $t('templates.syncFromMeta') }}
         </Button>
         <Button variant="outline" size="sm" @click="openCreateDialog">
-          <Plus class="h-4 w-4 mr-2" />
+          <Plus class="h-4 w-4 me-2" />
           {{ $t('templates.createTemplate') }}
         </Button>
       </template>
@@ -712,11 +712,11 @@ function formatPreview(text: string, samples: any[]): string {
                 <template #empty-action>
                   <div class="flex items-center justify-center gap-2">
                     <Button variant="outline" size="sm" @click="syncTemplates" :disabled="!selectedAccount || selectedAccount === 'all'">
-                      <RefreshCw class="h-4 w-4 mr-2" />
+                      <RefreshCw class="h-4 w-4 me-2" />
                       {{ $t('templates.syncFromMeta') }}
                     </Button>
                     <Button variant="outline" size="sm" @click="openCreateDialog">
-                      <Plus class="h-4 w-4 mr-2" />
+                      <Plus class="h-4 w-4 me-2" />
                       {{ $t('templates.createTemplate') }}
                     </Button>
                   </div>
@@ -789,7 +789,7 @@ function formatPreview(text: string, samples: any[]): string {
                     :disabled="!!editingTemplate"
                   >
                     <span>{{ getLanguageName(formData.language) }}</span>
-                    <ChevronsUpDown class="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                    <ChevronsUpDown class="ms-2 h-4 w-4 shrink-0 opacity-50" />
                   </Button>
                 </PopoverTrigger>
                 <PopoverContent class="w-[300px] p-0">
@@ -860,7 +860,7 @@ function formatPreview(text: string, samples: any[]): string {
                   type="file"
                   :accept="getAcceptedFileTypes()"
                   @change="onHeaderMediaFileChange"
-                  class="w-full text-sm file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:text-sm file:font-medium file:bg-primary file:text-primary-foreground hover:file:bg-primary/90 cursor-pointer"
+                  class="w-full text-sm file:me-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:text-sm file:font-medium file:bg-primary file:text-primary-foreground hover:file:bg-primary/90 cursor-pointer"
                 />
               </div>
               <Button
@@ -869,8 +869,8 @@ function formatPreview(text: string, samples: any[]): string {
                 @click="uploadHeaderMedia"
                 :disabled="!headerMediaFile || headerMediaUploading || !formData.whatsapp_account"
               >
-                <Loader2 v-if="headerMediaUploading" class="h-4 w-4 mr-1 animate-spin" />
-                <Upload v-else class="h-4 w-4 mr-1" />
+                <Loader2 v-if="headerMediaUploading" class="h-4 w-4 me-1 animate-spin" />
+                <Upload v-else class="h-4 w-4 me-1" />
                 {{ $t('templates.uploadMedia') }}
               </Button>
             </div>
@@ -931,7 +931,7 @@ function formatPreview(text: string, samples: any[]): string {
                 @click="addButton"
                 :disabled="formData.buttons.length >= 3"
               >
-                <Plus class="h-4 w-4 mr-1" />
+                <Plus class="h-4 w-4 me-1" />
                 {{ $t('templates.addButton') }}
               </Button>
             </div>
@@ -1034,7 +1034,7 @@ function formatPreview(text: string, samples: any[]): string {
         <DialogFooter>
           <Button variant="outline" size="sm" @click="isDialogOpen = false">{{ $t('common.cancel') }}</Button>
           <Button size="sm" @click="saveTemplate" :disabled="isSubmitting">
-            <Loader2 v-if="isSubmitting" class="h-4 w-4 mr-2 animate-spin" />
+            <Loader2 v-if="isSubmitting" class="h-4 w-4 me-2 animate-spin" />
             {{ editingTemplate ? $t('templates.updateTemplate') : $t('templates.createTemplate') }}
           </Button>
         </DialogFooter>
@@ -1117,8 +1117,8 @@ function formatPreview(text: string, samples: any[]): string {
             @click="openPublishDialog(previewTemplate!); isPreviewOpen = false"
             :disabled="publishingTemplateId === previewTemplate?.id"
           >
-            <Loader2 v-if="publishingTemplateId === previewTemplate?.id" class="h-4 w-4 mr-2 animate-spin" />
-            <Send v-else class="h-4 w-4 mr-2" />
+            <Loader2 v-if="publishingTemplateId === previewTemplate?.id" class="h-4 w-4 me-2 animate-spin" />
+            <Send v-else class="h-4 w-4 me-2" />
             {{ previewTemplate?.meta_template_id ? $t('templates.republishToMeta') : $t('templates.publishToMeta') }}
           </Button>
         </DialogFooter>

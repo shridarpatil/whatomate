@@ -198,15 +198,15 @@ function togglePlayAudio(type: 'hold_music' | 'ringback') {
         <Tabs default-value="general" class="w-full">
           <TabsList class="grid w-full grid-cols-3 mb-6 bg-white/[0.04] border border-white/[0.08] light:bg-gray-100 light:border-gray-200">
             <TabsTrigger value="general" class="data-[state=active]:bg-white/[0.08] data-[state=active]:text-white text-white/50 light:data-[state=active]:bg-white light:data-[state=active]:text-gray-900 light:text-gray-500">
-              <Settings class="h-4 w-4 mr-2" />
+              <Settings class="h-4 w-4 me-2" />
               {{ $t('settings.general') }}
             </TabsTrigger>
             <TabsTrigger value="notifications" class="data-[state=active]:bg-white/[0.08] data-[state=active]:text-white text-white/50 light:data-[state=active]:bg-white light:data-[state=active]:text-gray-900 light:text-gray-500">
-              <Bell class="h-4 w-4 mr-2" />
+              <Bell class="h-4 w-4 me-2" />
               {{ $t('settings.notifications') }}
             </TabsTrigger>
             <TabsTrigger value="calling" class="data-[state=active]:bg-white/[0.08] data-[state=active]:text-white text-white/50 light:data-[state=active]:bg-white light:data-[state=active]:text-gray-900 light:text-gray-500">
-              <Phone class="h-4 w-4 mr-2" />
+              <Phone class="h-4 w-4 me-2" />
               {{ $t('settings.calling') }}
             </TabsTrigger>
           </TabsList>
@@ -259,7 +259,7 @@ function togglePlayAudio(type: 'hold_music' | 'ringback') {
                 </div>
                 <div class="space-y-2">
                   <Label class="text-white/70 light:text-gray-700">
-                    <Globe class="h-4 w-4 inline mr-1" />
+                    <Globe class="h-4 w-4 inline me-1" />
                     {{ $t('settings.language') }}
                   </Label>
                   <LanguageSwitcher class="max-w-xs" />
@@ -278,7 +278,7 @@ function togglePlayAudio(type: 'hold_music' | 'ringback') {
                 </div>
                 <div class="flex justify-end">
                   <Button variant="outline" size="sm" class="bg-white/[0.04] border-white/[0.1] text-white/70 hover:bg-white/[0.08] hover:text-white light:bg-white light:border-gray-200 light:text-gray-700 light:hover:bg-gray-50" @click="saveGeneralSettings" :disabled="isSubmitting">
-                    <Loader2 v-if="isSubmitting" class="mr-2 h-4 w-4 animate-spin" />
+                    <Loader2 v-if="isSubmitting" class="me-2 h-4 w-4 animate-spin" />
                     {{ $t('settings.save') }}
                   </Button>
                 </div>
@@ -328,7 +328,7 @@ function togglePlayAudio(type: 'hold_music' | 'ringback') {
                 </div>
                 <div class="flex justify-end pt-4">
                   <Button variant="outline" size="sm" class="bg-white/[0.04] border-white/[0.1] text-white/70 hover:bg-white/[0.08] hover:text-white light:bg-white light:border-gray-200 light:text-gray-700 light:hover:bg-gray-50" @click="saveNotificationSettings" :disabled="isSubmitting">
-                    <Loader2 v-if="isSubmitting" class="mr-2 h-4 w-4 animate-spin" />
+                    <Loader2 v-if="isSubmitting" class="me-2 h-4 w-4 animate-spin" />
                     {{ $t('settings.save') }}
                   </Button>
                 </div>
@@ -407,8 +407,8 @@ function togglePlayAudio(type: 'hold_music' | 'ringback') {
                   <div class="flex items-center gap-2">
                     <input ref="holdMusicInput" type="file" accept=".ogg,.opus,.mp3,.wav" class="hidden" @change="uploadAudio('hold_music', $event)" />
                     <Button variant="outline" size="sm" class="bg-white/[0.04] border-white/[0.1] text-white/70 hover:bg-white/[0.08] hover:text-white light:bg-white light:border-gray-200 light:text-gray-700 light:hover:bg-gray-50" @click="holdMusicInput?.click()" :disabled="isUploadingHoldMusic">
-                      <Loader2 v-if="isUploadingHoldMusic" class="mr-2 h-4 w-4 animate-spin" />
-                      <Upload v-else class="mr-2 h-4 w-4" />
+                      <Loader2 v-if="isUploadingHoldMusic" class="me-2 h-4 w-4 animate-spin" />
+                      <Upload v-else class="me-2 h-4 w-4" />
                       {{ $t('settings.uploadAudio') }}
                     </Button>
                     <span class="text-xs text-white/30 light:text-gray-400">.ogg, .opus, .mp3, .wav (max 5MB)</span>
@@ -441,8 +441,8 @@ function togglePlayAudio(type: 'hold_music' | 'ringback') {
                   <div class="flex items-center gap-2">
                     <input ref="ringbackInput" type="file" accept=".ogg,.opus,.mp3,.wav" class="hidden" @change="uploadAudio('ringback', $event)" />
                     <Button variant="outline" size="sm" class="bg-white/[0.04] border-white/[0.1] text-white/70 hover:bg-white/[0.08] hover:text-white light:bg-white light:border-gray-200 light:text-gray-700 light:hover:bg-gray-50" @click="ringbackInput?.click()" :disabled="isUploadingRingback">
-                      <Loader2 v-if="isUploadingRingback" class="mr-2 h-4 w-4 animate-spin" />
-                      <Upload v-else class="mr-2 h-4 w-4" />
+                      <Loader2 v-if="isUploadingRingback" class="me-2 h-4 w-4 animate-spin" />
+                      <Upload v-else class="me-2 h-4 w-4" />
                       {{ $t('settings.uploadAudio') }}
                     </Button>
                     <span class="text-xs text-white/30 light:text-gray-400">.ogg, .opus, .mp3, .wav (max 5MB)</span>
@@ -450,7 +450,7 @@ function togglePlayAudio(type: 'hold_music' | 'ringback') {
                 </div>
                 <div class="flex justify-end pt-4">
                   <Button variant="outline" size="sm" class="bg-white/[0.04] border-white/[0.1] text-white/70 hover:bg-white/[0.08] hover:text-white light:bg-white light:border-gray-200 light:text-gray-700 light:hover:bg-gray-50" @click="saveCallingSettings" :disabled="isSubmitting">
-                    <Loader2 v-if="isSubmitting" class="mr-2 h-4 w-4 animate-spin" />
+                    <Loader2 v-if="isSubmitting" class="me-2 h-4 w-4 animate-spin" />
                     {{ $t('settings.save') }}
                   </Button>
                 </div>

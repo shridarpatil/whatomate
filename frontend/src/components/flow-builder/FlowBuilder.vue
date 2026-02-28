@@ -415,7 +415,7 @@ defineExpose({
 
       <div v-if="selectedScreen" class="flex-1 flex overflow-hidden">
         <!-- Component Palette -->
-        <ScrollArea class="w-48 border-r flex-shrink-0">
+        <ScrollArea class="w-48 border-e flex-shrink-0">
           <div class="p-3">
             <p class="text-xs font-medium text-muted-foreground mb-2">Add Components</p>
             <div class="grid grid-cols-2 gap-1">
@@ -581,7 +581,7 @@ defineExpose({
           <Layers class="h-12 w-12 mx-auto mb-4 opacity-50" />
           <p>Add a screen to get started</p>
           <Button class="mt-4" @click="addScreen">
-            <Plus class="h-4 w-4 mr-2" />
+            <Plus class="h-4 w-4 me-2" />
             Add Screen
           </Button>
         </div>
@@ -677,7 +677,7 @@ defineExpose({
             <div class="flex items-center justify-between">
               <Label class="text-xs">Options</Label>
               <Button variant="ghost" size="sm" class="h-6 text-xs" @click="addOption">
-                <Plus class="h-3 w-3 mr-1" />
+                <Plus class="h-3 w-3 me-1" />
                 Add
               </Button>
             </div>

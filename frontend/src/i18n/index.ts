@@ -72,6 +72,9 @@ export const i18n = createI18n({
   messages,
 })
 
+// RTL locales
+const RTL_LOCALES = new Set(['ar', 'he', 'fa', 'ur'])
+
 // Helper to change locale
 export function setLocale(locale: string) {
   if (!messages[locale]) {
@@ -81,7 +84,11 @@ export function setLocale(locale: string) {
   i18n.global.locale.value = locale
   localStorage.setItem('locale', locale)
   document.documentElement.setAttribute('lang', locale)
+  document.documentElement.setAttribute('dir', RTL_LOCALES.has(locale) ? 'rtl' : 'ltr')
 }
+
+// Set dir on initial load
+document.documentElement.setAttribute('dir', RTL_LOCALES.has(getDefaultLocale()) ? 'rtl' : 'ltr')
 
 // Get current locale
 export function getLocale(): string {

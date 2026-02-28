@@ -73,7 +73,7 @@ async function handleAccept(id: string) {
   <Teleport to="body">
     <div
       v-if="showPanel"
-      class="fixed bottom-6 right-6 z-50 bg-zinc-900 border border-zinc-700 rounded-xl shadow-2xl p-4 min-w-[260px]"
+      class="fixed bottom-6 end-6 z-50 bg-zinc-900 border border-zinc-700 rounded-xl shadow-2xl p-4 min-w-[260px]"
     >
       <!-- Caller info -->
       <div class="flex items-center gap-3 mb-3">

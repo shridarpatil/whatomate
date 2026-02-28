@@ -97,7 +97,7 @@ function handlePlayPause() {
 </script>
 
 <template>
-  <div class="h-full flex flex-col bg-gray-50 dark:bg-[#111b21] border-l border-gray-200 dark:border-gray-700">
+  <div class="h-full flex flex-col bg-gray-50 dark:bg-[#111b21] border-s border-gray-200 dark:border-gray-700">
     <!-- Header -->
     <div class="px-3 py-2 border-b border-gray-200 dark:border-gray-700 bg-white dark:bg-[#202c33]">
       <div class="flex items-center justify-between">
@@ -170,7 +170,7 @@ function handlePlayPause() {
             <ChevronRight v-else class="h-4 w-4" />
             <Braces class="h-4 w-4" />
             Variables
-            <span class="ml-auto text-xs text-gray-400">{{ variableEntries.length }}</span>
+            <span class="ms-auto text-xs text-gray-400">{{ variableEntries.length }}</span>
           </CollapsibleTrigger>
           <CollapsibleContent>
             <div class="mt-1 px-2 py-1 bg-white dark:bg-[#202c33] rounded border border-gray-200 dark:border-gray-700">
@@ -200,7 +200,7 @@ function handlePlayPause() {
             <ChevronRight v-else class="h-4 w-4" />
             <ListTree class="h-4 w-4" />
             Steps
-            <span class="ml-auto text-xs text-gray-400">{{ steps.length }}</span>
+            <span class="ms-auto text-xs text-gray-400">{{ steps.length }}</span>
           </CollapsibleTrigger>
           <CollapsibleContent>
             <div class="mt-1 px-2 py-1 bg-white dark:bg-[#202c33] rounded border border-gray-200 dark:border-gray-700 max-h-40 overflow-y-auto">
@@ -234,7 +234,7 @@ function handlePlayPause() {
             <ChevronDown v-if="timelineExpanded" class="h-4 w-4" />
             <ChevronRight v-else class="h-4 w-4" />
             Timeline
-            <span class="ml-auto text-xs text-gray-400">{{ state.executionLog.length }}</span>
+            <span class="ms-auto text-xs text-gray-400">{{ state.executionLog.length }}</span>
           </CollapsibleTrigger>
           <CollapsibleContent>
             <div class="mt-1 bg-white dark:bg-[#202c33] rounded border border-gray-200 dark:border-gray-700 max-h-60 overflow-y-auto">

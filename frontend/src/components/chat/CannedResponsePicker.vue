@@ -132,11 +132,11 @@ function selectResponse(response: CannedResponse) {
     <PopoverContent side="top" align="start" class="w-80 p-0">
       <div class="p-3 border-b">
         <div class="relative">
-          <Search class="absolute left-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+          <Search class="absolute start-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
           <Input
             v-model="searchQuery"
             placeholder="Search responses..."
-            class="pl-8 h-9"
+            class="ps-8 h-9"
             @keydown.stop
           />
         </div>
@@ -160,7 +160,7 @@ function selectResponse(response: CannedResponse) {
               v-for="response in items"
               :key="response.id"
               @click="selectResponse(response)"
-              class="w-full text-left px-3 py-2 rounded-md hover:bg-accent transition-colors"
+              class="w-full text-start px-3 py-2 rounded-md hover:bg-accent transition-colors"
             >
               <div class="flex items-center justify-between">
                 <span class="font-medium text-sm">{{ response.name }}</span>

@@ -135,7 +135,7 @@ const TreeNodes = defineComponent({
           if (hasChildren) {
             elements.push(
               h('div', {
-                class: 'ml-3 pl-4 border-l-2 border-muted-foreground/30'
+                class: 'ml-3 ps-4 border-s-2 border-muted-foreground/30'
               }, [
                 h(TreeNodes, { nodes: node.children, depth: props.depth + 1 })
               ])
