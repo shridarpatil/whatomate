@@ -85,7 +85,6 @@
     "deleteConfirmMessage": "இந்த {resource} -ஐ நீக்க விரும்புகிறீர்களா? இதை மீட்க முடியாது.",
     "searchPlaceholder": "{resource} -ஐ தேடுக",
     "selectPlaceholder": "{resource} -ஐ தேர்வுசெய்க",
-    "fieldRequired": "{field} கட்டாயமாகும்",
     "copiedToClipboard": "கிளிப்போர்டுக்கு நகலெடுக்கப்பட்டது"
   },
   "auth": {
@@ -243,8 +242,7 @@
     "skipToMain": "முதன்மை உள்ளடக்கத்திற்குச் செல்க",
     "expandSidebar": "பக்கப்பட்டியை விரிவாக்கு",
     "collapseSidebar": "பக்கப்பட்டியைச் சுருக்கு",
-    "toggleMenu": "மெனுவை மாற்று",
-    "organizations": "நிறுவனங்கள்"
+    "toggleMenu": "மெனுவை மாற்று"
   },
   "userMenu": {
     "myAccount": "எனது கணக்கு",
@@ -531,7 +529,16 @@
     "maxCallDurationDesc": "தானியங்கி துண்டிப்புக்கு முன் அனுமதிக்கப்பட்ட அதிகபட்ச அழைப்பு காலம்",
     "transferTimeout": "மாற்றுகை நேரம் முடிவு (வினாடிகள்)",
     "transferTimeoutDesc": "மாற்றப்பட்ட அழைப்பை ஏற்க முகவருக்காகக் காத்திருக்க வேண்டிய நேரம்",
-    "callingSaved": "அழைப்பு அமைப்புகள் சேமிக்கப்பட்டன"
+    "callingSaved": "அழைப்பு அமைப்புகள் சேமிக்கப்பட்டன",
+    "holdMusic": "Hold Music",
+    "holdMusicDesc": "Audio played to callers while on hold during transfers",
+    "ringbackTone": "Ringback Tone",
+    "ringbackToneDesc": "Audio played to agents while waiting for the remote party to answer",
+    "uploadAudio": "Upload",
+    "currentFile": "Current file",
+    "noFileUploaded": "Using default",
+    "audioUploaded": "Audio file uploaded successfully",
+    "audioUploadFailed": "Failed to upload audio file"
   },
   "users": {
     "title": "பயனர் மேலாண்மை",
@@ -691,22 +698,7 @@
     "createDesc": "தனி பணியிடத்தை நிர்வகிக்க புதிய நிறுவனத்தை உருவாக்கவும்.",
     "namePlaceholder": "நிறுவனப் பெயர்",
     "created": "நிறுவனம் உருவாக்கப்பட்டது",
-    "createFailed": "நிறுவனத்தை உருவாக்க முடியவில்லை",
-    "title": "நிறுவனங்கள்",
-    "subtitle": "அமைப்பில் உள்ள அனைத்து நிறுவனங்களையும் நிர்வகிக்கவும்",
-    "table": {
-      "name": "பெயர்",
-      "slug": "ஸ்லக்",
-      "createdAt": "உருவாக்கப்பட்ட தேதி",
-      "status": "நிலை",
-      "actions": "செயல்கள்"
-    },
-    "activate": "செயல்படுத்து",
-    "deactivate": "செயல்நீக்கு",
-    "activated": "நிறுவனம் செயல்படுத்தப்பட்டது",
-    "deactivated": "நிறுவனம் செயல்நீக்கப்பட்டது",
-    "confirmDeactivate": "இந்த நிறுவனத்தை செயல்நீக்க விரும்புகிறீர்களா? மீண்டும் செயல்படுத்தப்படும் வரை பயனர்கள் அணுகலை இழப்பார்கள்.",
-    "searchPlaceholder": "நிறுவனங்களைத் தேடுக..."
+    "createFailed": "நிறுவனத்தை உருவாக்க முடியவில்லை"
   },
   "tags": {
     "title": "குறிச்சொற்கள்",
@@ -2104,6 +2096,10 @@
     "time": "நேரம்",
     "startedAt": "தொடங்கிய நேரம்",
     "endedAt": "முடிந்த நேரம்",
+    "disconnectedBy": "Disconnected By",
+    "disconnectedByClient": "Client",
+    "disconnectedByAgent": "Agent",
+    "disconnectedBySystem": "System",
     "recording": "பதிவு",
     "error": "பிழை",
     "rootMenu": "ரூட் மெனு",
@@ -2124,6 +2120,9 @@
     "missed": "தவறவிட்டது",
     "rejected": "நிராகரிக்கப்பட்டது",
     "failed": "தோல்வியடைந்தது",
+    "transferring": "Transferring",
+    "initiating": "Initiating",
+    "accepted": "Accepted",
     "ivrFlows": "IVR பாய்வுகள்",
     "ivrFlowsDesc": "உள்வரும் அழைப்புகளுக்கான ஊடாடும் குரல் பதில் மெனுக்களை உள்ளமைக்கவும்.",
     "createFlow": "பாய்வை உருவாக்கு",
