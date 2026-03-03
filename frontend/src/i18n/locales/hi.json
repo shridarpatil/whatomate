@@ -85,7 +85,6 @@
     "deleteConfirmMessage": "क्या आप वाकई इस {resource} को हटाना चाहते हैं? यह कार्रवाई वापस नहीं ली जा सकती।",
     "searchPlaceholder": "{resource} खोजें",
     "selectPlaceholder": "{resource} चुनें",
-    "fieldRequired": "{field} अनिवार्य है",
     "copiedToClipboard": "क्लिपबोर्ड पर कॉपी किया गया"
   },
   "auth": {
@@ -359,7 +358,7 @@
     "customer": "ग्राहक",
     "you": "आप",
     "yourself": "स्वयं",
-    "chatMedia": "मीडिया",
+    "media": "Media",
     "interactiveMessage": "इंटरैक्टिव संदेश",
     "templateMessage": "टेम्पलेट संदेश",
     "mediaSent": "मीडिया सफलतापूर्वक भेजा गया",
@@ -748,7 +747,7 @@
     "today": "आज",
     "thisWeek": "इस सप्ताह",
     "thisMonth": "इस महीने",
-    "customRange": "कस्टम रेंज",
+    "custom": "Custom Range",
     "from": "से",
     "to": "तक",
     "exportReport": "रिपोर्ट एक्सपोर्ट करें"
@@ -1068,7 +1067,7 @@
     "timeout": "समय समाप्त।"
   },
   "validation": {
-    "validationRequired": "यह फ़ील्ड अनिवार्य है",
+    "required": "This field is required",
     "email": "मान्य ईमेल दर्ज करें",
     "phone": "मान्य फ़ोन नंबर दर्ज करें",
     "minLength": "कम से कम {min} अक्षर",
@@ -1989,7 +1988,7 @@
     "message": "संदेश",
     "messageText": "टेक्स्ट",
     "messagePlaceholder": "दर्ज करें",
-   "dynamicValuesHint": "{'{{'}variable{'}}'} उपयोग करें",
+    "dynamicValuesHint": "{'{{'}variable{'}}'} उपयोग करें",
     "buttonOptions": "बटन",
     "replyButton": "जवाब",
     "urlButton": "URL",
