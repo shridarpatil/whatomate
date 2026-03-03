@@ -47,18 +47,10 @@ func (m *Manager) InitiateOutgoingCall(
 	}
 
 	// 3. Add local audio track for server → agent
-	agentLocalTrack, err := webrtc.NewTrackLocalStaticRTP(
-		webrtc.RTPCodecCapability{MimeType: webrtc.MimeTypeOpus},
-		"audio",
-		"server-to-agent",
-	)
+	agentLocalTrack, err := createOpusTrack(agentPC, "server-to-agent")
 	if err != nil {
 		_ = agentPC.Close()
 		return uuid.Nil, "", fmt.Errorf("failed to create agent local track: %w", err)
-	}
-	if _, err := agentPC.AddTrack(agentLocalTrack); err != nil {
-		_ = agentPC.Close()
-		return uuid.Nil, "", fmt.Errorf("failed to add agent local track: %w", err)
 	}
 
 	// Create session early so OnTrack can reference it
@@ -127,20 +119,10 @@ func (m *Manager) InitiateOutgoingCall(
 	}
 
 	// Wait for ICE gathering
-	gatherComplete := webrtc.GatheringCompletePromise(agentPC)
-	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
-	defer cancel()
-	select {
-	case <-gatherComplete:
-	case <-ctx.Done():
+	agentSDP, err := waitForICEGathering(agentPC, 15*time.Second)
+	if err != nil {
 		_ = agentPC.Close()
-		return uuid.Nil, "", fmt.Errorf("agent ICE gathering timed out")
-	}
-
-	agentSDP := agentPC.LocalDescription()
-	if agentSDP == nil {
-		_ = agentPC.Close()
-		return uuid.Nil, "", fmt.Errorf("no agent local description")
+		return uuid.Nil, "", fmt.Errorf("agent ICE gathering: %w", err)
 	}
 
 	// 7. Create WhatsApp PeerConnection
@@ -151,20 +133,11 @@ func (m *Manager) InitiateOutgoingCall(
 	}
 
 	// 8. Add local audio track for server → WhatsApp
-	waLocalTrack, err := webrtc.NewTrackLocalStaticRTP(
-		webrtc.RTPCodecCapability{MimeType: webrtc.MimeTypeOpus},
-		"audio",
-		"server-to-wa",
-	)
+	waLocalTrack, err := createOpusTrack(waPC, "server-to-wa")
 	if err != nil {
 		_ = agentPC.Close()
 		_ = waPC.Close()
 		return uuid.Nil, "", fmt.Errorf("failed to create WA local track: %w", err)
-	}
-	if _, err := waPC.AddTrack(waLocalTrack); err != nil {
-		_ = agentPC.Close()
-		_ = waPC.Close()
-		return uuid.Nil, "", fmt.Errorf("failed to add WA local track: %w", err)
 	}
 
 	// 9. Capture WhatsApp's remote track → start bridge
@@ -212,22 +185,11 @@ func (m *Manager) InitiateOutgoingCall(
 		return uuid.Nil, "", fmt.Errorf("failed to set WA local desc: %w", err)
 	}
 
-	waGatherComplete := webrtc.GatheringCompletePromise(waPC)
-	ctx2, cancel2 := context.WithTimeout(context.Background(), 15*time.Second)
-	defer cancel2()
-	select {
-	case <-waGatherComplete:
-	case <-ctx2.Done():
+	waLocalDesc, err := waitForICEGathering(waPC, 15*time.Second)
+	if err != nil {
 		_ = agentPC.Close()
 		_ = waPC.Close()
-		return uuid.Nil, "", fmt.Errorf("WA ICE gathering timed out")
-	}
-
-	waLocalDesc := waPC.LocalDescription()
-	if waLocalDesc == nil {
-		_ = agentPC.Close()
-		_ = waPC.Close()
-		return uuid.Nil, "", fmt.Errorf("no WA local description")
+		return uuid.Nil, "", fmt.Errorf("WA ICE gathering: %w", err)
 	}
 
 	// 11. Call WhatsApp API to initiate the call
@@ -240,9 +202,10 @@ func (m *Manager) InitiateOutgoingCall(
 		_ = waPC.Close()
 		// Update call log as failed
 		m.db.Model(&callLog).Updates(map[string]any{
-			"status":        models.CallStatusFailed,
-			"error_message": err.Error(),
-			"ended_at":      time.Now(),
+			"status":          models.CallStatusFailed,
+			"error_message":   err.Error(),
+			"ended_at":        time.Now(),
+			"disconnected_by": models.DisconnectedBySystem,
 		})
 		return uuid.Nil, "", fmt.Errorf("failed to initiate call via API: %w", err)
 	}
@@ -382,8 +345,9 @@ func (m *Manager) HandleOutgoingCallWebhook(callID, event, sdpAnswer string) {
 		m.db.Model(&models.CallLog{}).
 			Where("id = ?", session.CallLogID).
 			Updates(map[string]any{
-				"status":   models.CallStatusRejected,
-				"ended_at": now,
+				"status":          models.CallStatusRejected,
+				"ended_at":        now,
+				"disconnected_by": models.DisconnectedByClient,
 			})
 
 		m.broadcastOutgoingEvent(session.OrganizationID, websocket.TypeOutgoingCallRejected, map[string]any{
@@ -398,24 +362,33 @@ func (m *Manager) HandleOutgoingCallWebhook(callID, event, sdpAnswer string) {
 	case "ended", "terminated", "terminate":
 		// Calculate duration
 		var callLog models.CallLog
+		disconnectedBy := "client"
 		if err := m.db.Where("id = ?", session.CallLogID).First(&callLog).Error; err == nil {
 			duration := 0
 			if callLog.AnsweredAt != nil {
 				duration = int(now.Sub(*callLog.AnsweredAt).Seconds())
 			}
-			m.db.Model(&callLog).Updates(map[string]any{
+			updates := map[string]any{
 				"status":   models.CallStatusCompleted,
 				"ended_at": now,
 				"duration": duration,
-			})
+			}
+			// Only set disconnected_by if not already set (agent hangup sets it first)
+			if callLog.DisconnectedBy == "" {
+				updates["disconnected_by"] = models.DisconnectedByClient
+			} else {
+				disconnectedBy = string(callLog.DisconnectedBy)
+			}
+			m.db.Model(&callLog).Updates(updates)
 		}
 
 		m.broadcastOutgoingEvent(session.OrganizationID, websocket.TypeOutgoingCallEnded, map[string]any{
-			"call_log_id":   session.CallLogID.String(),
-			"call_id":       callID,
-			"contact_id":    session.ContactID.String(),
-			"contact_phone": session.TargetPhone,
-			"ended_at":      now.Format(time.RFC3339),
+			"call_log_id":      session.CallLogID.String(),
+			"call_id":          callID,
+			"contact_id":       session.ContactID.String(),
+			"contact_phone":    session.TargetPhone,
+			"ended_at":         now.Format(time.RFC3339),
+			"disconnected_by":  disconnectedBy,
 		})
 
 		m.cleanupSession(callID)
@@ -433,22 +406,15 @@ func (m *Manager) HangupOutgoingCall(callLogID, agentID uuid.UUID) error {
 		return fmt.Errorf("not an outgoing call")
 	}
 
-	// Terminate via WhatsApp API
-	waAccount := &whatsapp.Account{
-		PhoneID:     "", // will be looked up from the stored session
-		AccessToken: "",
-	}
-
-	// Look up account from DB
+	// Terminate via WhatsApp API — look up account from DB
 	var account models.WhatsAppAccount
 	if err := m.db.Where("organization_id = ? AND name = ?", session.OrganizationID, session.AccountName).
-		First(&account).Error; err == nil {
-		waAccount.PhoneID = account.PhoneID
-		waAccount.BusinessID = account.BusinessID
-		waAccount.APIVersion = account.APIVersion
-		waAccount.AccessToken = account.AccessToken
+		First(&account).Error; err != nil {
+		m.log.Error("Failed to look up WhatsApp account for hangup", "error", err, "call_id", session.ID)
+		// Continue with cleanup even if we can't terminate via API
 	}
 
+	waAccount := account.ToWAAccount()
 	if waAccount.AccessToken != "" {
 		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 		defer cancel()
@@ -467,18 +433,20 @@ func (m *Manager) HangupOutgoingCall(callLogID, agentID uuid.UUID) error {
 			duration = int(now.Sub(*callLog.AnsweredAt).Seconds())
 		}
 		m.db.Model(&callLog).Updates(map[string]any{
-			"status":   models.CallStatusCompleted,
-			"ended_at": now,
-			"duration": duration,
+			"status":          models.CallStatusCompleted,
+			"ended_at":        now,
+			"duration":        duration,
+			"disconnected_by": models.DisconnectedByAgent,
 		})
 	}
 
 	m.broadcastOutgoingEvent(session.OrganizationID, websocket.TypeOutgoingCallEnded, map[string]any{
-		"call_log_id":   callLogID.String(),
-		"call_id":       session.ID,
-		"contact_id":    session.ContactID.String(),
-		"contact_phone": session.TargetPhone,
-		"ended_at":      now.Format(time.RFC3339),
+		"call_log_id":      callLogID.String(),
+		"call_id":          session.ID,
+		"contact_id":       session.ContactID.String(),
+		"contact_phone":    session.TargetPhone,
+		"ended_at":         now.Format(time.RFC3339),
+		"disconnected_by":  "agent",
 	})
 
 	m.cleanupSession(session.ID)

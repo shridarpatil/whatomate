@@ -1,6 +1,10 @@
 package whatsapp
 
-import "time"
+import (
+	"encoding/json"
+	"fmt"
+	"time"
+)
 
 // Account represents WhatsApp Business Account credentials
 type Account struct {
@@ -39,6 +43,24 @@ type MetaAPIError struct {
 		} `json:"error_data"`
 		FBTraceID string `json:"fbtrace_id"`
 	} `json:"error"`
+}
+
+// ParseError attempts to parse respBody as a Meta API error. If successful,
+// it returns a formatted error including code, message, details, and user message.
+// If parsing fails, it returns a generic error with the status code and raw body.
+func ParseMetaAPIError(statusCode int, respBody []byte) error {
+	var apiErr MetaAPIError
+	if err := json.Unmarshal(respBody, &apiErr); err == nil && apiErr.Error.Message != "" {
+		errMsg := fmt.Sprintf("API error %d: %s", apiErr.Error.Code, apiErr.Error.Message)
+		if apiErr.Error.ErrorData.Details != "" {
+			errMsg += " - Details: " + apiErr.Error.ErrorData.Details
+		}
+		if apiErr.Error.ErrorUserMsg != "" {
+			errMsg += " - " + apiErr.Error.ErrorUserMsg
+		}
+		return fmt.Errorf("%s", errMsg)
+	}
+	return fmt.Errorf("API returned status %d: %s", statusCode, string(respBody))
 }
 
 // TemplateResponse represents response from template submission

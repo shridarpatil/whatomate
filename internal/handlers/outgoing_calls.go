@@ -3,7 +3,6 @@ package handlers
 import (
 	"github.com/google/uuid"
 	"github.com/shridarpatil/whatomate/internal/models"
-	"github.com/shridarpatil/whatomate/pkg/whatsapp"
 	"github.com/valyala/fasthttp"
 	"github.com/zerodha/fastglue"
 )
@@ -32,8 +31,8 @@ func (a *App) InitiateOutgoingCall(r *fastglue.Request) error {
 		return r.SendErrorEnvelope(fasthttp.StatusBadRequest, "contact_id, whatsapp_account, and sdp_offer are required", nil, "")
 	}
 
-	if !a.IsCallingEnabledForOrg(orgID) {
-		return r.SendErrorEnvelope(fasthttp.StatusServiceUnavailable, "Calling is not enabled for this organization", nil, "")
+	if err := a.requireCallingEnabled(r, orgID); err != nil {
+		return nil
 	}
 
 	// Look up account
@@ -55,12 +54,7 @@ func (a *App) InitiateOutgoingCall(r *fastglue.Request) error {
 		return r.SendErrorEnvelope(fasthttp.StatusNotFound, "Contact not found", nil, "")
 	}
 
-	waAccount := &whatsapp.Account{
-		PhoneID:     account.PhoneID,
-		BusinessID:  account.BusinessID,
-		APIVersion:  account.APIVersion,
-		AccessToken: account.AccessToken,
-	}
+	waAccount := account.ToWAAccount()
 
 	callLogID, sdpAnswer, err := a.CallManager.InitiateOutgoingCall(
 		orgID, userID, contact.ID,
@@ -101,6 +95,11 @@ func (a *App) HangupOutgoingCall(r *fastglue.Request) error {
 		return r.SendErrorEnvelope(fasthttp.StatusBadRequest, err.Error(), nil, "")
 	}
 
+	// Mark the call as disconnected by agent
+	a.DB.Model(&models.CallLog{}).
+		Where("id = ?", callLogID).
+		Update("disconnected_by", models.DisconnectedByAgent)
+
 	return r.SendEnvelope(map[string]string{"status": "ok"})
 }
 
@@ -126,8 +125,8 @@ func (a *App) SendCallPermissionRequest(r *fastglue.Request) error {
 		return r.SendErrorEnvelope(fasthttp.StatusBadRequest, "contact_id and whatsapp_account are required", nil, "")
 	}
 
-	if !a.IsCallingEnabledForOrg(orgID) {
-		return r.SendErrorEnvelope(fasthttp.StatusServiceUnavailable, "Calling is not enabled for this organization", nil, "")
+	if err := a.requireCallingEnabled(r, orgID); err != nil {
+		return nil
 	}
 
 	contactID, parseErr := uuid.Parse(req.ContactID)
@@ -148,12 +147,7 @@ func (a *App) SendCallPermissionRequest(r *fastglue.Request) error {
 		return r.SendErrorEnvelope(fasthttp.StatusNotFound, "WhatsApp account not found", nil, "")
 	}
 
-	waAccount := &whatsapp.Account{
-		PhoneID:     account.PhoneID,
-		BusinessID:  account.BusinessID,
-		APIVersion:  account.APIVersion,
-		AccessToken: account.AccessToken,
-	}
+	waAccount := account.ToWAAccount()
 
 	// Send permission request via WhatsApp Messages API
 	ctx := r.RequestCtx
@@ -244,12 +238,7 @@ func (a *App) GetCallPermission(r *fastglue.Request) error {
 		return r.SendErrorEnvelope(fasthttp.StatusNotFound, "WhatsApp account not found", nil, "")
 	}
 
-	waAccount := &whatsapp.Account{
-		PhoneID:     account.PhoneID,
-		BusinessID:  account.BusinessID,
-		APIVersion:  account.APIVersion,
-		AccessToken: account.AccessToken,
-	}
+	waAccount := account.ToWAAccount()
 
 	// Check permission via WhatsApp API
 	ctx := r.RequestCtx

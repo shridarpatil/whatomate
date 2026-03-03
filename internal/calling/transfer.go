@@ -9,11 +9,24 @@ import (
 	"github.com/pion/webrtc/v4"
 	"github.com/shridarpatil/whatomate/internal/models"
 	"github.com/shridarpatil/whatomate/internal/websocket"
-	"github.com/shridarpatil/whatomate/pkg/whatsapp"
 )
 
 // initiateTransfer starts the transfer flow: puts caller on hold, notifies agents via WebSocket.
 func (m *Manager) initiateTransfer(session *CallSession, waAccount string, teamTarget string, ivrPath []map[string]string) {
+	// Load org-level calling overrides once
+	orgSettings := m.getOrgCallingSettings(session.OrganizationID)
+
+	// Start hold music immediately to avoid silence while DB operations run
+	player := NewAudioPlayer(session.AudioTrack)
+
+	session.mu.Lock()
+	session.HoldPlayer = player
+	session.mu.Unlock()
+
+	go func() {
+		_ = player.PlayFileLoop(orgSettings.HoldMusicFile)
+	}()
+
 	var teamID *uuid.UUID
 	if teamTarget != "" {
 		if parsed, err := uuid.Parse(teamTarget); err == nil {
@@ -42,6 +55,7 @@ func (m *Manager) initiateTransfer(session *CallSession, waAccount string, teamT
 
 	if err := m.db.Create(&transfer).Error; err != nil {
 		m.log.Error("Failed to create call transfer", "error", err, "call_id", session.ID)
+		player.Stop()
 		return
 	}
 
@@ -56,20 +70,8 @@ func (m *Manager) initiateTransfer(session *CallSession, waAccount string, teamT
 	session.TransferStatus = models.CallTransferStatusWaiting
 	session.mu.Unlock()
 
-	// Start hold music on the caller's audio track (org-level override or global default)
-	holdFile := m.getOrgHoldMusic(session.OrganizationID)
-	player := NewAudioPlayer(session.AudioTrack)
-
-	session.mu.Lock()
-	session.HoldPlayer = player
-	session.mu.Unlock()
-
-	go func() {
-		_ = player.PlayFileLoop(holdFile)
-	}()
-
-	// Start timeout goroutine (use org-level override if set)
-	transferTimeout := m.getOrgTransferTimeout(session.OrganizationID)
+	// Start timeout goroutine
+	transferTimeout := orgSettings.TransferTimeoutSecs
 	ctx, cancel := context.WithTimeout(context.Background(), time.Duration(transferTimeout)*time.Second)
 
 	session.mu.Lock()
@@ -127,19 +129,10 @@ func (m *Manager) ConnectAgentToTransfer(transferID, agentID uuid.UUID, sdpOffer
 	}
 
 	// Create local audio track (server → agent: caller's voice will be forwarded here)
-	agentAudioTrack, err := webrtc.NewTrackLocalStaticRTP(
-		webrtc.RTPCodecCapability{MimeType: webrtc.MimeTypeOpus},
-		"audio",
-		"caller-audio",
-	)
+	agentAudioTrack, err := createOpusTrack(agentPC, "caller-audio")
 	if err != nil {
 		_ = agentPC.Close()
 		return "", fmt.Errorf("failed to create agent audio track: %w", err)
-	}
-
-	if _, err := agentPC.AddTrack(agentAudioTrack); err != nil {
-		_ = agentPC.Close()
-		return "", fmt.Errorf("failed to add agent audio track: %w", err)
 	}
 
 	// Channel to signal when agent's remote track (mic) is available
@@ -187,19 +180,11 @@ func (m *Manager) ConnectAgentToTransfer(transferID, agentID uuid.UUID, sdpOffer
 		return "", fmt.Errorf("failed to set agent local description: %w", err)
 	}
 
-	// Wait for ICE gathering
-	gatherComplete := webrtc.GatheringCompletePromise(agentPC)
-	select {
-	case <-gatherComplete:
-	case <-time.After(5 * time.Second):
+	// Wait for ICE gathering (15s, consistent with other call flows)
+	localDesc, err := waitForICEGathering(agentPC, 15*time.Second)
+	if err != nil {
 		_ = agentPC.Close()
-		return "", fmt.Errorf("ICE gathering timed out for agent")
-	}
-
-	localDesc := agentPC.LocalDescription()
-	if localDesc == nil {
-		_ = agentPC.Close()
-		return "", fmt.Errorf("no local description available for agent")
+		return "", fmt.Errorf("agent ICE gathering: %w", err)
 	}
 
 	// Store agent PC in session
@@ -247,7 +232,11 @@ func (m *Manager) completeTransferConnection(session *CallSession, transferID, a
 
 	// Signal that bridge is taking over the caller track
 	session.mu.Lock()
-	close(session.BridgeStarted)
+	select {
+	case <-session.BridgeStarted:
+	default:
+		close(session.BridgeStarted)
+	}
 	session.mu.Unlock()
 
 	// Update transfer status
@@ -310,27 +299,30 @@ func (m *Manager) EndTransfer(transferID uuid.UUID) {
 	}
 	session.TransferStatus = models.CallTransferStatusCompleted
 
-	// Stop bridge
-	if session.Bridge != nil {
-		session.Bridge.Stop()
-	}
-
-	// Stop hold music
-	if session.HoldPlayer != nil {
-		session.HoldPlayer.Stop()
-	}
-
-	// Cancel timeout
-	if session.TransferCancel != nil {
-		session.TransferCancel()
-	}
-
-	// Close agent PC
-	if session.AgentPC != nil {
-		_ = session.AgentPC.Close()
-	}
-
+	// Snapshot and nil resources under lock so we can release before calling Stop/Close
+	bridge := session.Bridge
+	session.Bridge = nil
+	holdPlayer := session.HoldPlayer
+	session.HoldPlayer = nil
+	transferCancel := session.TransferCancel
+	session.TransferCancel = nil
+	agentPC := session.AgentPC
+	session.AgentPC = nil
 	session.mu.Unlock()
+
+	// Stop/close resources outside lock
+	if bridge != nil {
+		bridge.Stop()
+	}
+	if holdPlayer != nil {
+		holdPlayer.Stop()
+	}
+	if transferCancel != nil {
+		transferCancel()
+	}
+	if agentPC != nil {
+		_ = agentPC.Close()
+	}
 
 	// Calculate durations and update DB
 	now := time.Now()
@@ -374,12 +366,7 @@ func (m *Manager) EndTransfer(transferID uuid.UUID) {
 	var account models.WhatsAppAccount
 	if err := m.db.Where("organization_id = ? AND name = ?", session.OrganizationID, session.AccountName).
 		First(&account).Error; err == nil {
-		waAccount := &whatsapp.Account{
-			PhoneID:     account.PhoneID,
-			BusinessID:  account.BusinessID,
-			APIVersion:  account.APIVersion,
-			AccessToken: account.AccessToken,
-		}
+		waAccount := account.ToWAAccount()
 		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 		defer cancel()
 		if err := m.whatsapp.TerminateCall(ctx, waAccount, session.ID); err != nil {
@@ -415,6 +402,11 @@ func (m *Manager) waitForTransferTimeout(ctx context.Context, session *CallSessi
 			"status":       models.CallTransferStatusNoAnswer,
 			"completed_at": now,
 		})
+
+	// Mark call as disconnected by system (transfer timeout)
+	m.db.Model(&models.CallLog{}).
+		Where("id = ?", session.CallLogID).
+		Update("disconnected_by", models.DisconnectedBySystem)
 
 	// Stop hold music
 	session.mu.Lock()
@@ -454,6 +446,11 @@ func (m *Manager) HandleCallerHangupDuringTransfer(session *CallSession) {
 			"completed_at": now,
 		})
 
+	// Mark call as disconnected by client (caller hung up during transfer)
+	m.db.Model(&models.CallLog{}).
+		Where("id = ?", session.CallLogID).
+		Update("disconnected_by", models.DisconnectedByClient)
+
 	// Stop hold music and cancel timeout
 	session.mu.Lock()
 	session.TransferStatus = models.CallTransferStatusAbandoned
@@ -476,9 +473,13 @@ func (m *Manager) HandleCallerHangupDuringTransfer(session *CallSession) {
 // findSessionByTransferID looks up a session by its transfer ID.
 func (m *Manager) findSessionByTransferID(transferID uuid.UUID) *CallSession {
 	m.mu.RLock()
-	defer m.mu.RUnlock()
-
+	snapshot := make([]*CallSession, 0, len(m.sessions))
 	for _, s := range m.sessions {
+		snapshot = append(snapshot, s)
+	}
+	m.mu.RUnlock()
+
+	for _, s := range snapshot {
 		s.mu.Lock()
 		tid := s.TransferID
 		s.mu.Unlock()

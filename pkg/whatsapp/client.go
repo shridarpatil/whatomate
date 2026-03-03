@@ -98,21 +98,7 @@ func (c *Client) doRequest(ctx context.Context, method, url string, body interfa
 	}
 
 	if resp.StatusCode != http.StatusOK {
-		// Log the raw body for debugging purposes
-		c.Log.Error("Meta API Error Raw Response", "status_code", resp.StatusCode, "body", string(respBody))
-
-		var apiErr MetaAPIError
-		if err := json.Unmarshal(respBody, &apiErr); err == nil && apiErr.Error.Message != "" {
-			errMsg := fmt.Sprintf("API error %d: %s", apiErr.Error.Code, apiErr.Error.Message)
-			if apiErr.Error.ErrorData.Details != "" {
-				errMsg += " - Details: " + apiErr.Error.ErrorData.Details
-			}
-			if apiErr.Error.ErrorUserMsg != "" {
-				errMsg += " - " + apiErr.Error.ErrorUserMsg
-			}
-			return nil, fmt.Errorf("%s", errMsg)
-		}
-		return nil, fmt.Errorf("API returned status %d: %s", resp.StatusCode, string(respBody))
+		return nil, ParseMetaAPIError(resp.StatusCode, respBody)
 	}
 
 	return respBody, nil

@@ -546,13 +546,7 @@ func (a *App) CreateAgentTransfer(r *fastglue.Request) error {
 	a.DB.Preload("Agent").Preload("Team").Preload("TransferredByUser").First(&transfer, transfer.ID)
 
 	// Apply phone masking if enabled
-	shouldMask := a.ShouldMaskPhoneNumbers(orgID)
-	phoneNumber := transfer.PhoneNumber
-	contactName := contact.ProfileName
-	if shouldMask {
-		phoneNumber = MaskPhoneNumber(phoneNumber)
-		contactName = MaskIfPhoneNumber(contactName)
-	}
+	contactName, phoneNumber := a.MaskContactFields(orgID, contact.ProfileName, transfer.PhoneNumber)
 
 	resp := AgentTransferResponse{
 		ID:              transfer.ID.String(),
@@ -834,9 +828,13 @@ func (a *App) PickNextTransfer(r *fastglue.Request) error {
 	hasPickupPermission := a.HasPermission(userID, models.ResourceTransfers, models.ActionPickup, orgID)
 
 	// Check if agent queue pickup is allowed (use cache)
-	settings, _ := a.getChatbotSettingsCached(orgID, "")
+	settings, err := a.getChatbotSettingsCached(orgID, "")
+	if err != nil {
+		a.Log.Error("Failed to load chatbot settings for queue pickup check", "error", err, "org_id", orgID)
+	}
 
-	// Users without full access need pickup permission and AllowQueuePickup setting enabled
+	// Users without full access need AllowQueuePickup enabled when settings exist.
+	// If settings haven't been configured yet (nil), allow pickup by default.
 	if !hasFullAccess && settings != nil && !settings.AgentAssignment.AllowQueuePickup {
 		return r.SendErrorEnvelope(fasthttp.StatusForbidden, "Queue pickup is not allowed", nil, "")
 	}
@@ -1048,12 +1046,7 @@ func (a *App) broadcastTransferCreated(transfer *models.AgentTransfer, contact *
 		return
 	}
 
-	contactName := contact.ProfileName
-	phoneNumber := transfer.PhoneNumber
-	if a.ShouldMaskPhoneNumbers(transfer.OrganizationID) {
-		contactName = MaskIfPhoneNumber(contactName)
-		phoneNumber = MaskPhoneNumber(phoneNumber)
-	}
+	contactName, phoneNumber := a.MaskContactFields(transfer.OrganizationID, contact.ProfileName, transfer.PhoneNumber)
 
 	payload := map[string]any{
 		"id":               transfer.ID.String(),

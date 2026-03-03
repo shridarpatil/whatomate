@@ -101,6 +101,13 @@ func (p *AudioPlayer) IsStopped() bool {
 	}
 }
 
+// ResetAfterInterrupt prepares the player for reuse after Stop() was called
+// to interrupt playback. Must only be called after the interrupted PlayFile
+// goroutine has fully exited.
+func (p *AudioPlayer) ResetAfterInterrupt() {
+	p.stop = make(chan struct{})
+}
+
 // PlayFileLoop plays an OGG/Opus audio file in a continuous loop until Stop() is called.
 func (p *AudioPlayer) PlayFileLoop(filePath string) error {
 	for {

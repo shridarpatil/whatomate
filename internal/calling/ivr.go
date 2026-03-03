@@ -94,22 +94,50 @@ func (m *Manager) runIVRFlow(session *CallSession, waAccount *whatsapp.Account) 
 			break
 		}
 
-		// Play greeting audio if available
+		// Drain any stale DTMF digits from a previous menu
+		m.drainDTMF(session)
+
+		// Play greeting audio (interruptible by DTMF) and wait for digit
+		var digit byte
+		var ok bool
+
 		if currentMenu.Greeting != "" && m.config.AudioDir != "" {
 			audioFile := filepath.Join(m.config.AudioDir, currentMenu.Greeting)
 			m.log.Info("Playing IVR greeting", "call_id", session.ID, "file", audioFile)
-			packets, err := player.PlayFile(audioFile)
-			if err != nil {
-				m.log.Error("Failed to play greeting audio", "error", err, "call_id", session.ID, "file", audioFile)
-			} else {
-				m.log.Info("IVR greeting playback finished", "call_id", session.ID, "packets_sent", packets)
+
+			// Play in a goroutine so we can listen for DTMF concurrently
+			playDone := make(chan struct{})
+			go func() {
+				packets, err := player.PlayFile(audioFile)
+				if err != nil {
+					m.log.Error("Failed to play greeting audio", "error", err, "call_id", session.ID, "file", audioFile)
+				} else {
+					m.log.Info("IVR greeting playback finished", "call_id", session.ID, "packets_sent", packets)
+				}
+				close(playDone)
+			}()
+
+			// Wait for either playback to finish or a DTMF digit
+			select {
+			case <-playDone:
+				// Greeting played fully, now wait for DTMF input
+				digit, ok = m.waitForDTMF(session, time.Duration(currentMenu.TimeoutSeconds)*time.Second, currentMenu.MaxRetries)
+			case d, chOk := <-session.DTMFBuffer:
+				// Caller pressed a digit during playback — stop audio and use it
+				player.Stop()
+				<-playDone // wait for goroutine to exit
+				player.ResetAfterInterrupt()
+				if chOk {
+					digit = d
+					ok = true
+					m.log.Info("IVR greeting interrupted by DTMF", "call_id", session.ID, "digit", string(d))
+				}
 			}
 		} else {
 			m.log.Warn("No greeting configured for IVR menu", "call_id", session.ID, "greeting", currentMenu.Greeting, "audio_dir", m.config.AudioDir)
+			digit, ok = m.waitForDTMF(session, time.Duration(currentMenu.TimeoutSeconds)*time.Second, currentMenu.MaxRetries)
 		}
 
-		// Wait for DTMF input
-		digit, ok := m.waitForDTMF(session, time.Duration(currentMenu.TimeoutSeconds)*time.Second, currentMenu.MaxRetries)
 		if !ok {
 			// Timeout or max retries exceeded - hang up
 			m.log.Info("IVR timeout/max retries, terminating call", "call_id", session.ID)
@@ -214,6 +242,18 @@ func (m *Manager) runIVRFlow(session *CallSession, waAccount *whatsapp.Account) 
 
 	// Save the IVR path to the call log
 	m.saveIVRPath(session, ivrPath)
+}
+
+// drainDTMF discards any buffered DTMF digits so stale input from a
+// previous menu doesn't trigger options in the next one.
+func (m *Manager) drainDTMF(session *CallSession) {
+	for {
+		select {
+		case <-session.DTMFBuffer:
+		default:
+			return
+		}
+	}
 }
 
 // waitForDTMF waits for a DTMF digit with timeout and retries

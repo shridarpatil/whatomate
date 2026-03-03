@@ -174,26 +174,32 @@ func (m *Manager) HandleCallEvent(callID, event string) {
 	}
 
 	session.mu.Lock()
-	defer session.mu.Unlock()
+	var action string
+	var transferID uuid.UUID
 
 	switch event {
 	case "in_call", "connect":
 		session.Status = models.CallStatusAnswered
 	case "ended", "terminate", "missed", "unanswered":
-		// If caller hangs up during a transfer, mark it as abandoned
-		if session.TransferStatus == models.CallTransferStatusWaiting {
-			session.mu.Unlock()
-			m.HandleCallerHangupDuringTransfer(session)
-			return
+		switch session.TransferStatus {
+		case models.CallTransferStatusWaiting:
+			action = "hangup_transfer"
+		case models.CallTransferStatusConnected:
+			action = "end_transfer"
+			transferID = session.TransferID
+		default:
+			session.Status = models.CallStatusCompleted
+			action = "cleanup"
 		}
-		// If caller hangs up during a connected transfer, end it
-		if session.TransferStatus == models.CallTransferStatusConnected {
-			transferID := session.TransferID
-			session.mu.Unlock()
-			m.EndTransfer(transferID)
-			return
-		}
-		session.Status = models.CallStatusCompleted
+	}
+	session.mu.Unlock()
+
+	switch action {
+	case "hangup_transfer":
+		m.HandleCallerHangupDuringTransfer(session)
+	case "end_transfer":
+		m.EndTransfer(transferID)
+	case "cleanup":
 		go m.cleanupSession(callID)
 	}
 }
@@ -222,43 +228,45 @@ func (m *Manager) GetSessionByCallLogID(callLogID uuid.UUID) *CallSession {
 	return nil
 }
 
-// getOrgTransferTimeout returns the transfer timeout for a session's organization,
-// falling back to the global config default.
-func (m *Manager) getOrgTransferTimeout(orgID uuid.UUID) int {
-	var org models.Organization
-	if err := m.db.Where("id = ?", orgID).First(&org).Error; err == nil && org.Settings != nil {
-		if v, ok := org.Settings["transfer_timeout_secs"].(float64); ok && v > 0 {
-			return int(v)
-		}
-	}
-	return m.config.TransferTimeoutSecs
+// orgCallingSettings holds per-org calling overrides resolved from a single DB query.
+type orgCallingSettings struct {
+	TransferTimeoutSecs int
+	HoldMusicFile       string
+	RingbackFile        string
 }
 
-// getOrgHoldMusic returns the hold music file path for a session's organization,
-// falling back to the global config default.
-func (m *Manager) getOrgHoldMusic(orgID uuid.UUID) string {
-	var org models.Organization
-	if err := m.db.Where("id = ?", orgID).First(&org).Error; err == nil && org.Settings != nil {
-		if v, ok := org.Settings["hold_music_file"].(string); ok && v != "" {
-			return filepath.Join(m.config.AudioDir, v)
-		}
-	}
-	return filepath.Join(m.config.AudioDir, m.config.HoldMusicFile)
-}
-
-// getOrgRingback returns the ringback file path for a session's organization,
-// falling back to the global config default.
-func (m *Manager) getOrgRingback(orgID uuid.UUID) string {
-	var org models.Organization
-	if err := m.db.Where("id = ?", orgID).First(&org).Error; err == nil && org.Settings != nil {
-		if v, ok := org.Settings["ringback_file"].(string); ok && v != "" {
-			return filepath.Join(m.config.AudioDir, v)
-		}
+// getOrgCallingSettings loads org-level calling overrides with a single DB query,
+// falling back to global config defaults for any missing values.
+func (m *Manager) getOrgCallingSettings(orgID uuid.UUID) orgCallingSettings {
+	s := orgCallingSettings{
+		TransferTimeoutSecs: m.config.TransferTimeoutSecs,
+		HoldMusicFile:       filepath.Join(m.config.AudioDir, m.config.HoldMusicFile),
 	}
 	if m.config.RingbackFile != "" {
-		return filepath.Join(m.config.AudioDir, m.config.RingbackFile)
+		s.RingbackFile = filepath.Join(m.config.AudioDir, m.config.RingbackFile)
 	}
-	return ""
+
+	var org models.Organization
+	if err := m.db.Where("id = ?", orgID).First(&org).Error; err != nil || org.Settings == nil {
+		return s
+	}
+
+	if v, ok := org.Settings["transfer_timeout_secs"].(float64); ok && v > 0 {
+		s.TransferTimeoutSecs = int(v)
+	}
+	if v, ok := org.Settings["hold_music_file"].(string); ok && v != "" {
+		s.HoldMusicFile = filepath.Join(m.config.AudioDir, v)
+	}
+	if v, ok := org.Settings["ringback_file"].(string); ok && v != "" {
+		s.RingbackFile = filepath.Join(m.config.AudioDir, v)
+	}
+
+	return s
+}
+
+// getOrgRingback returns the ringback file path for a session's organization.
+func (m *Manager) getOrgRingback(orgID uuid.UUID) string {
+	return m.getOrgCallingSettings(orgID).RingbackFile
 }
 
 // cleanupSession removes a session and releases WebRTC resources
@@ -274,56 +282,105 @@ func (m *Manager) cleanupSession(callID string) {
 		return
 	}
 
+	// Snapshot state and resources under lock, then release before calling external methods
 	session.mu.Lock()
-	defer session.mu.Unlock()
 
-	// Stop transfer resources
-	if session.Bridge != nil {
-		session.Bridge.Stop()
+	// Transfer state snapshot for DB updates
+	transferID := session.TransferID
+	transferStatus := session.TransferStatus
+	callLogID := session.CallLogID
+	orgID := session.OrganizationID
+
+	if transferID != uuid.Nil && transferStatus == models.CallTransferStatusWaiting {
+		session.TransferStatus = models.CallTransferStatusAbandoned
 	}
-	if session.HoldPlayer != nil {
-		session.HoldPlayer.Stop()
+
+	// Snapshot and nil resources to prevent double-close
+	bridge := session.Bridge
+	session.Bridge = nil
+	holdPlayer := session.HoldPlayer
+	session.HoldPlayer = nil
+	ringbackPlayer := session.RingbackPlayer
+	session.RingbackPlayer = nil
+	ivrPlayer := session.IVRPlayer
+	session.IVRPlayer = nil
+	transferCancel := session.TransferCancel
+	session.TransferCancel = nil
+	agentPC := session.AgentPC
+	session.AgentPC = nil
+	waPeerConn := session.WAPeerConn
+	session.WAPeerConn = nil
+	peerConn := session.PeerConnection
+	session.PeerConnection = nil
+	dtmfBuffer := session.DTMFBuffer
+	session.DTMFBuffer = nil
+	recorder := session.Recorder
+	session.Recorder = nil
+
+	session.mu.Unlock()
+
+	// DB operations and broadcasts (outside lock)
+	if transferID != uuid.Nil && transferStatus == models.CallTransferStatusWaiting {
+		now := time.Now()
+		m.db.Model(&models.CallTransfer{}).
+			Where("id = ? AND status = ?", transferID, models.CallTransferStatusWaiting).
+			Updates(map[string]any{
+				"status":       models.CallTransferStatusAbandoned,
+				"completed_at": now,
+			})
+		m.db.Model(&models.CallLog{}).
+			Where("id = ?", callLogID).
+			Update("disconnected_by", models.DisconnectedByClient)
+		m.broadcastTransferEvent(orgID, websocket.TypeCallTransferAbandoned, map[string]any{
+			"id":           transferID.String(),
+			"completed_at": now.Format(time.RFC3339),
+		})
+		m.log.Info("Transfer marked abandoned during cleanup", "transfer_id", transferID, "call_id", callID)
 	}
-	if session.RingbackPlayer != nil {
-		session.RingbackPlayer.Stop()
+
+	// Stop resources (outside lock)
+	if bridge != nil {
+		bridge.Stop()
 	}
-	if session.IVRPlayer != nil {
-		session.IVRPlayer.Stop()
+	if holdPlayer != nil {
+		holdPlayer.Stop()
 	}
-	if session.TransferCancel != nil {
-		session.TransferCancel()
+	if ringbackPlayer != nil {
+		ringbackPlayer.Stop()
 	}
-	if session.AgentPC != nil {
-		if err := session.AgentPC.Close(); err != nil {
+	if ivrPlayer != nil {
+		ivrPlayer.Stop()
+	}
+	if transferCancel != nil {
+		transferCancel()
+	}
+	if agentPC != nil {
+		if err := agentPC.Close(); err != nil {
 			m.log.Error("Failed to close agent peer connection", "error", err, "call_id", callID)
 		}
 	}
 
 	// Close WhatsApp peer connection (outgoing calls)
-	if session.WAPeerConn != nil {
-		if err := session.WAPeerConn.Close(); err != nil {
+	if waPeerConn != nil {
+		if err := waPeerConn.Close(); err != nil {
 			m.log.Error("Failed to close WA peer connection", "error", err, "call_id", callID)
 		}
 	}
 
 	// Close caller peer connection
-	if session.PeerConnection != nil {
-		if err := session.PeerConnection.Close(); err != nil {
+	if peerConn != nil {
+		if err := peerConn.Close(); err != nil {
 			m.log.Error("Failed to close peer connection", "error", err, "call_id", callID)
 		}
 	}
 
 	// Close DTMF buffer channel
-	if session.DTMFBuffer != nil {
-		close(session.DTMFBuffer)
+	if dtmfBuffer != nil {
+		close(dtmfBuffer)
 	}
 
 	// Finalize recording (async — don't block cleanup)
-	if session.Recorder != nil {
-		recorder := session.Recorder
-		session.Recorder = nil
-		orgID := session.OrganizationID
-		callLogID := session.CallLogID
+	if recorder != nil {
 		go m.finalizeRecording(orgID, callLogID, recorder)
 	}
 

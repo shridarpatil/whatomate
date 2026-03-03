@@ -267,7 +267,11 @@ func (a *App) ExportData(r *fastglue.Request) error {
 	defer rows.Close() //nolint:errcheck
 
 	// Get column types
-	colTypes, _ := rows.ColumnTypes()
+	colTypes, err := rows.ColumnTypes()
+	if err != nil {
+		a.Log.Error("Failed to get column types", "error", err)
+		return r.SendErrorEnvelope(fasthttp.StatusInternalServerError, "Failed to export data", nil, "")
+	}
 
 	// Build CSV
 	var buf strings.Builder

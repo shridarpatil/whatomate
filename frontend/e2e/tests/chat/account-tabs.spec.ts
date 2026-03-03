@@ -3,12 +3,13 @@ import { loginAsAdmin } from '../../helpers'
 import { ChatPage } from '../../pages'
 
 /**
- * Multi-account tabs: when a contact has messages from multiple WhatsApp
- * accounts, tabs should appear below the chat header to let the agent
- * switch between accounts.
+ * Multi-account tabs: when the organisation has multiple WhatsApp accounts
+ * configured, tabs should appear below the chat header to let the agent
+ * switch between accounts — even if the current contact only has messages
+ * from one account.
  *
  * These tests use route interception to simulate multi-account and
- * single-account contacts without requiring real WhatsApp accounts.
+ * single-account orgs without requiring real WhatsApp accounts.
  */
 
 const CONTACT_ID = '00000000-0000-0000-0000-000000000001'
@@ -38,6 +39,15 @@ const MULTI_ACCOUNT_MESSAGES = [
 const SINGLE_ACCOUNT_MESSAGES = [
   makeMessage({ whatsapp_account: 'account-1', created_at: '2026-02-16T10:00:00Z' }),
   makeMessage({ whatsapp_account: 'account-1', direction: 'outgoing', created_at: '2026-02-16T10:01:00Z' }),
+]
+
+const TWO_ORG_ACCOUNTS = [
+  { name: 'account-1', id: '1' },
+  { name: 'account-2', id: '2' },
+]
+
+const ONE_ORG_ACCOUNT = [
+  { name: 'account-1', id: '1' },
 ]
 
 const CONTACT = {
@@ -85,11 +95,16 @@ function contactEnvelope() {
 }
 
 /**
- * Intercept contacts + messages API to inject mock data.
+ * Intercept contacts + messages + accounts API to inject mock data.
  * Returns a function to update the messages fixture mid-test.
  */
-async function setupMockRoutes(page: Page, messages: any[]) {
+async function setupMockRoutes(page: Page, messages: any[], orgAccounts: any[] = TWO_ORG_ACCOUNTS) {
   let currentMessages = messages
+
+  // Mock org-level accounts list
+  await page.route('**/api/accounts', async (route: Route) => {
+    await route.fulfill({ json: { status: 'success', data: { accounts: orgAccounts } } })
+  })
 
   // Mock contacts list
   await page.route('**/api/contacts?*', async (route: Route) => {
@@ -153,12 +168,12 @@ test.describe('Multi-Account Tabs', () => {
     await expect(chatPage.getAccountTab('account-2')).toBeVisible()
   })
 
-  test('should NOT show account tabs for single-account contact', async ({ page }) => {
-    await setupMockRoutes(page, SINGLE_ACCOUNT_MESSAGES)
+  test('should NOT show account tabs when org has single account', async ({ page }) => {
+    await setupMockRoutes(page, SINGLE_ACCOUNT_MESSAGES, ONE_ORG_ACCOUNT)
     await chatPage.goto(CONTACT_ID)
     await page.waitForTimeout(500)
 
-    // Should not show tabs when only one account
+    // Should not show tabs when org only has one account
     const tabs = chatPage.accountTabs
     await expect(tabs).toHaveCount(0)
   })

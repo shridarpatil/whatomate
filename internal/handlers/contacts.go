@@ -15,7 +15,6 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/shridarpatil/whatomate/internal/models"
-	"github.com/shridarpatil/whatomate/internal/websocket"
 	"github.com/shridarpatil/whatomate/pkg/whatsapp"
 	"github.com/valyala/fasthttp"
 	"github.com/zerodha/fastglue"
@@ -984,16 +983,7 @@ func (a *App) SendReaction(r *fastglue.Request) error {
 	go a.sendWhatsAppReaction(account, &contact, &message, req.Emoji)
 
 	// Broadcast via WebSocket
-	if a.WSHub != nil {
-		a.WSHub.BroadcastToOrg(orgID, websocket.WSMessage{
-			Type: "reaction_update",
-			Payload: map[string]any{
-				"message_id": message.ID.String(),
-				"contact_id": contact.ID.String(),
-				"reactions":  newReactions,
-			},
-		})
-	}
+	a.broadcastReactionUpdate(orgID, message.ID, contact.ID, newReactions)
 
 	return r.SendEnvelope(map[string]any{
 		"message_id": message.ID.String(),

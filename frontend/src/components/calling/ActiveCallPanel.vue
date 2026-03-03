@@ -1,12 +1,14 @@
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useCallingStore } from '@/stores/calling'
 import { Button } from '@/components/ui/button'
-import { Phone, PhoneOff, Mic, MicOff } from 'lucide-vue-next'
+import { Phone, PhoneOff, PhoneIncoming, Mic, MicOff } from 'lucide-vue-next'
+import { toast } from 'vue-sonner'
 
 const { t } = useI18n()
 const store = useCallingStore()
+const acceptingId = ref<string | null>(null)
 
 const formattedDuration = computed(() => {
   const m = Math.floor(store.callDuration / 60)
@@ -18,7 +20,15 @@ const displayName = computed(() => {
   if (store.isOutgoingCall) {
     return store.outgoingContactName || store.outgoingContactPhone || 'Unknown'
   }
-  return store.activeTransfer?.contact?.profile_name || store.activeTransfer?.caller_phone || 'Unknown'
+  if (store.activeTransfer) {
+    return store.activeTransfer.contact?.profile_name || store.activeTransfer.caller_phone || 'Unknown'
+  }
+  // Show first waiting transfer if not on call yet
+  if (store.waitingTransfers.length > 0) {
+    const t = store.waitingTransfers[0]
+    return t.contact?.profile_name || t.caller_phone || 'Unknown'
+  }
+  return 'Unknown'
 })
 
 const statusText = computed(() => {
@@ -30,19 +40,48 @@ const statusText = computed(() => {
       default: return ''
     }
   }
-  return t('callTransfers.callConnected')
+  if (store.isOnCall) {
+    return t('callTransfers.callConnected')
+  }
+  if (store.waitingTransfers.length > 0) {
+    return t('callTransfers.incomingTransfer')
+  }
+  return ''
 })
+
+const showPanel = computed(() => store.isOnCall || store.waitingTransfers.length > 0)
+
+// The first waiting transfer (for single-panel accept button)
+const firstWaiting = computed(() => store.waitingTransfers[0] ?? null)
+
+async function handleAccept(id: string) {
+  acceptingId.value = id
+  try {
+    await store.acceptTransfer(id)
+    toast.success(t('callTransfers.callConnected'))
+  } catch (err: any) {
+    toast.error(t('callTransfers.acceptFailed'), {
+      description: err.message || ''
+    })
+  } finally {
+    acceptingId.value = null
+  }
+}
 </script>
 
 <template>
   <Teleport to="body">
     <div
-      v-if="store.isOnCall"
+      v-if="showPanel"
       class="fixed bottom-6 right-6 z-50 bg-zinc-900 border border-zinc-700 rounded-xl shadow-2xl p-4 min-w-[260px]"
     >
+      <!-- Caller info -->
       <div class="flex items-center gap-3 mb-3">
-        <div class="w-8 h-8 rounded-full bg-green-600/20 flex items-center justify-center">
-          <Phone class="h-4 w-4 text-green-400" />
+        <div class="w-8 h-8 rounded-full flex items-center justify-center"
+          :class="store.isOnCall ? 'bg-green-600/20' : 'bg-green-600/20'"
+        >
+          <PhoneIncoming v-if="!store.isOnCall && firstWaiting" class="h-4 w-4 text-green-400 animate-pulse" />
+          <Phone v-else class="h-4 w-4 text-green-400" />
         </div>
         <div>
           <p class="text-sm font-medium text-zinc-100">
@@ -52,12 +91,16 @@ const statusText = computed(() => {
         </div>
       </div>
 
-      <div class="text-center mb-3">
+      <!-- Timer (only when on active call) -->
+      <div v-if="store.isOnCall" class="text-center mb-3">
         <span class="text-2xl font-mono text-zinc-200">{{ formattedDuration }}</span>
       </div>
 
+      <!-- Call controls -->
       <div class="flex items-center justify-center gap-3">
+        <!-- Mute (only when on call) -->
         <Button
+          v-if="store.isOnCall"
           size="sm"
           variant="outline"
           class="h-10 w-10 rounded-full p-0"
@@ -68,7 +111,22 @@ const statusText = computed(() => {
           <Mic v-else class="h-4 w-4 text-zinc-300" />
         </Button>
 
+        <!-- Accept incoming transfer (green) -->
         <Button
+          v-if="firstWaiting"
+          variant="ghost"
+          size="sm"
+          class="h-10 w-10 rounded-full p-0 bg-green-600 hover:bg-green-500"
+          :disabled="acceptingId === firstWaiting.id"
+          @click="handleAccept(firstWaiting.id)"
+        >
+          <Phone class="h-4 w-4 text-white" />
+        </Button>
+
+        <!-- Hangup / Decline (red) -->
+        <Button
+          v-if="store.isOnCall"
+          variant="ghost"
           size="sm"
           class="h-10 w-10 rounded-full p-0 bg-red-600 hover:bg-red-500"
           @click="store.endCall()"

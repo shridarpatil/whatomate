@@ -152,11 +152,7 @@ func (c *Client) UpdateFlowJSON(ctx context.Context, account *Account, flowID st
 	}
 
 	if resp.StatusCode != http.StatusOK {
-		var apiErr MetaAPIError
-		if err := json.Unmarshal(respBody, &apiErr); err == nil && apiErr.Error.Message != "" {
-			return fmt.Errorf("API error %d: %s", apiErr.Error.Code, apiErr.Error.Message)
-		}
-		return fmt.Errorf("API returned status %d: %s", resp.StatusCode, string(respBody))
+		return ParseMetaAPIError(resp.StatusCode, respBody)
 	}
 
 	var result FlowUpdateResponse

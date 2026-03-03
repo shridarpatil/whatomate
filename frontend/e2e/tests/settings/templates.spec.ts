@@ -73,8 +73,50 @@ test.describe('Template Form Fields', () => {
   })
 
   test('should have language selector', async () => {
-    const langSelect = templatesPage.dialog.locator('label').filter({ hasText: /^Language/ }).locator('..').locator('select')
-    await expect(langSelect).toBeVisible()
+    const langCombobox = templatesPage.dialog.locator('label').filter({ hasText: /^Language/ }).locator('..').locator('[role="combobox"]')
+    await expect(langCombobox).toBeVisible()
+    await expect(langCombobox).toContainText('English')
+  })
+
+  test('should search and select language', async ({ page }) => {
+    const langContainer = templatesPage.dialog.locator('label').filter({ hasText: /^Language/ }).locator('..')
+    const langCombobox = langContainer.locator('[role="combobox"]')
+
+    // Open the language combobox
+    await langCombobox.click()
+    const searchInput = page.locator('input[placeholder="Search language..."]')
+    await expect(searchInput).toBeVisible()
+
+    // Type to search for Hindi
+    await searchInput.fill('Hindi')
+
+    // Should show Hindi in filtered results
+    const hindiOption = page.locator('[role="option"]').filter({ hasText: 'Hindi' })
+    await expect(hindiOption).toBeVisible()
+
+    // Non-matching languages should be hidden
+    const frenchOption = page.locator('[role="option"]').filter({ hasText: 'French' })
+    await expect(frenchOption).not.toBeVisible()
+
+    // Select Hindi
+    await hindiOption.click()
+
+    // Combobox should now show Hindi and popover should close
+    await expect(langCombobox).toContainText('Hindi')
+    await expect(searchInput).not.toBeVisible()
+  })
+
+  test('should show no results for invalid language search', async ({ page }) => {
+    const langCombobox = templatesPage.dialog.locator('label').filter({ hasText: /^Language/ }).locator('..').locator('[role="combobox"]')
+
+    await langCombobox.click()
+    const searchInput = page.locator('input[placeholder="Search language..."]')
+    await expect(searchInput).toBeVisible()
+
+    await searchInput.fill('xyznonexistent')
+
+    // Should show "No language found" empty state
+    await expect(page.getByText('No language found.')).toBeVisible()
   })
 
   test('should have category selector', async () => {

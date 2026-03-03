@@ -13,11 +13,13 @@ import { Separator } from '@/components/ui/separator'
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
+import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '@/components/ui/command'
 import { PageHeader, SearchInput, DataTable, DeleteConfirmDialog, type Column } from '@/components/shared'
 import { api, templatesService } from '@/services/api'
 import { useOrganizationsStore } from '@/stores/organizations'
 import { toast } from 'vue-sonner'
-import { Plus, RefreshCw, FileText, Eye, Pencil, Trash2, Loader2, MessageSquare, Image, FileIcon, Video, X, Check, AlertCircle, Send, Upload } from 'lucide-vue-next'
+import { Plus, RefreshCw, FileText, Eye, Pencil, Trash2, Loader2, MessageSquare, Image, FileIcon, Video, X, Check, AlertCircle, Send, Upload, ChevronsUpDown } from 'lucide-vue-next'
 import { getErrorMessage } from '@/lib/api-utils'
 import { useDebounceFn } from '@vueuse/core'
 
@@ -106,16 +108,84 @@ const sortKey = ref('name')
 const sortDirection = ref<'asc' | 'desc'>('asc')
 
 const languages = [
-  { code: 'en', name: 'English' },
-  { code: 'en_US', name: 'English (US)' },
-  { code: 'en_GB', name: 'English (UK)' },
-  { code: 'es', name: 'Spanish' },
-  { code: 'pt_BR', name: 'Portuguese (BR)' },
-  { code: 'hi', name: 'Hindi' },
+  { code: 'af', name: 'Afrikaans' },
+  { code: 'sq', name: 'Albanian' },
   { code: 'ar', name: 'Arabic' },
+  { code: 'az', name: 'Azerbaijani' },
+  { code: 'bn', name: 'Bengali' },
+  { code: 'bg', name: 'Bulgarian' },
+  { code: 'ca', name: 'Catalan' },
+  { code: 'zh_CN', name: 'Chinese (CHN)' },
+  { code: 'zh_HK', name: 'Chinese (HKG)' },
+  { code: 'zh_TW', name: 'Chinese (TAI)' },
+  { code: 'hr', name: 'Croatian' },
+  { code: 'cs', name: 'Czech' },
+  { code: 'da', name: 'Danish' },
+  { code: 'nl', name: 'Dutch' },
+  { code: 'en', name: 'English' },
+  { code: 'en_GB', name: 'English (UK)' },
+  { code: 'en_US', name: 'English (US)' },
+  { code: 'et', name: 'Estonian' },
+  { code: 'fil', name: 'Filipino' },
+  { code: 'fi', name: 'Finnish' },
   { code: 'fr', name: 'French' },
+  { code: 'ka', name: 'Georgian' },
   { code: 'de', name: 'German' },
+  { code: 'el', name: 'Greek' },
+  { code: 'gu', name: 'Gujarati' },
+  { code: 'ha', name: 'Hausa' },
+  { code: 'he', name: 'Hebrew' },
+  { code: 'hi', name: 'Hindi' },
+  { code: 'hu', name: 'Hungarian' },
+  { code: 'id', name: 'Indonesian' },
+  { code: 'ga', name: 'Irish' },
+  { code: 'it', name: 'Italian' },
+  { code: 'ja', name: 'Japanese' },
+  { code: 'kn', name: 'Kannada' },
+  { code: 'kk', name: 'Kazakh' },
+  { code: 'rw_RW', name: 'Kinyarwanda' },
+  { code: 'ko', name: 'Korean' },
+  { code: 'ky_KG', name: 'Kyrgyz (Kyrgyzstan)' },
+  { code: 'lo', name: 'Lao' },
+  { code: 'lv', name: 'Latvian' },
+  { code: 'lt', name: 'Lithuanian' },
+  { code: 'mk', name: 'Macedonian' },
+  { code: 'ms', name: 'Malay' },
+  { code: 'ml', name: 'Malayalam' },
+  { code: 'mr', name: 'Marathi' },
+  { code: 'nb', name: 'Norwegian (Bokmål)' },
+  { code: 'fa', name: 'Persian' },
+  { code: 'pl', name: 'Polish' },
+  { code: 'pt_BR', name: 'Portuguese (BR)' },
+  { code: 'pt_PT', name: 'Portuguese (POR)' },
+  { code: 'pa', name: 'Punjabi' },
+  { code: 'ro', name: 'Romanian' },
+  { code: 'ru', name: 'Russian' },
+  { code: 'sr', name: 'Serbian' },
+  { code: 'sk', name: 'Slovak' },
+  { code: 'sl', name: 'Slovenian' },
+  { code: 'es', name: 'Spanish' },
+  { code: 'es_AR', name: 'Spanish (ARG)' },
+  { code: 'es_MX', name: 'Spanish (MEX)' },
+  { code: 'es_ES', name: 'Spanish (SPA)' },
+  { code: 'sw', name: 'Swahili' },
+  { code: 'sv', name: 'Swedish' },
+  { code: 'ta', name: 'Tamil' },
+  { code: 'te', name: 'Telugu' },
+  { code: 'th', name: 'Thai' },
+  { code: 'tr', name: 'Turkish' },
+  { code: 'uk', name: 'Ukrainian' },
+  { code: 'ur', name: 'Urdu' },
+  { code: 'uz', name: 'Uzbek' },
+  { code: 'vi', name: 'Vietnamese' },
+  { code: 'zu', name: 'Zulu' },
 ]
+
+const languageSelectorOpen = ref(false)
+
+function getLanguageName(code: string): string {
+  return languages.find(l => l.code === code)?.name || code
+}
 
 const categories = [
   { value: 'UTILITY', label: 'Utility', description: 'Order updates, account alerts' },
@@ -601,7 +671,7 @@ function formatPreview(text: string, samples: any[]): string {
                   </Badge>
                 </template>
                 <template #cell-language="{ item: template }">
-                  <span class="text-muted-foreground">{{ template.language }}</span>
+                  <span class="text-muted-foreground">{{ getLanguageName(template.language) }}</span>
                 </template>
                 <template #cell-header_type="{ item: template }">
                   <div class="flex items-center gap-1">
@@ -710,15 +780,39 @@ function formatPreview(text: string, samples: any[]): string {
             <!-- Language -->
             <div class="space-y-2">
               <Label>{{ $t('templates.language') }} <span class="text-destructive">*</span></Label>
-              <select
-                v-model="formData.language"
-                class="w-full h-10 rounded-md border bg-background px-3 disabled:cursor-not-allowed disabled:opacity-50"
-                :disabled="!!editingTemplate"
-              >
-                <option v-for="lang in languages" :key="lang.code" :value="lang.code">
-                  {{ lang.name }}
-                </option>
-              </select>
+              <Popover v-model:open="languageSelectorOpen">
+                <PopoverTrigger as-child>
+                  <Button
+                    variant="outline"
+                    role="combobox"
+                    class="w-full justify-between"
+                    :disabled="!!editingTemplate"
+                  >
+                    <span>{{ getLanguageName(formData.language) }}</span>
+                    <ChevronsUpDown class="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent class="w-[300px] p-0">
+                  <Command>
+                    <CommandInput placeholder="Search language..." />
+                    <CommandList>
+                      <CommandEmpty>No language found.</CommandEmpty>
+                      <CommandGroup>
+                        <CommandItem
+                          v-for="lang in languages"
+                          :key="lang.code"
+                          :value="lang.name"
+                          class="flex items-center gap-2 cursor-pointer"
+                          @select="formData.language = lang.code; languageSelectorOpen = false"
+                        >
+                          <span class="flex-1">{{ lang.name }}</span>
+                          <Check v-if="formData.language === lang.code" class="h-4 w-4 text-primary" />
+                        </CommandItem>
+                      </CommandGroup>
+                    </CommandList>
+                  </Command>
+                </PopoverContent>
+              </Popover>
             </div>
 
             <!-- Category -->
@@ -1006,7 +1100,7 @@ function formatPreview(text: string, samples: any[]): string {
             </div>
             <div class="flex justify-between">
               <span class="text-muted-foreground">{{ $t('templates.language') }}:</span>
-              <span>{{ previewTemplate.language }}</span>
+              <span>{{ getLanguageName(previewTemplate.language) }}</span>
             </div>
             <div v-if="previewTemplate.meta_template_id" class="flex justify-between">
               <span class="text-muted-foreground">{{ $t('templates.metaId') }}:</span>

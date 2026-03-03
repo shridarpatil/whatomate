@@ -309,7 +309,11 @@ func (a *App) WebhookHandler(r *fastglue.Request) error {
 					msg.Interactive.Type == "call_permission_reply" &&
 					msg.Interactive.CallPermissionReply != nil {
 					cpr := msg.Interactive.CallPermissionReply
-					expTS, _ := cpr.ExpirationTimestamp.Int64()
+					expTS, err := cpr.ExpirationTimestamp.Int64()
+					if err != nil {
+						a.Log.Error("Failed to parse call permission expiration timestamp", "error", err, "from", msg.From)
+						continue
+					}
 					go a.processCallPermissionReply(phoneNumberID, msg.From, &CallPermissionReplyData{
 						Response:            cpr.Response,
 						IsPermanent:         cpr.IsPermanent,

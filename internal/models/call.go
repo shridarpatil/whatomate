@@ -29,6 +29,15 @@ const (
 	CallStatusAccepted     CallStatus = "accepted"   // outgoing: consumer picked up
 )
 
+// DisconnectedBy indicates who ended the call
+type DisconnectedBy string
+
+const (
+	DisconnectedByClient  DisconnectedBy = "client"
+	DisconnectedByAgent   DisconnectedBy = "agent"
+	DisconnectedBySystem  DisconnectedBy = "system"  // timeout, error, etc.
+)
+
 // CallLog represents a voice call record
 type CallLog struct {
 	BaseModel
@@ -46,6 +55,7 @@ type CallLog struct {
 	StartedAt       *time.Time    `json:"started_at,omitempty"`
 	AnsweredAt      *time.Time    `json:"answered_at,omitempty"`
 	EndedAt         *time.Time    `json:"ended_at,omitempty"`
+	DisconnectedBy  DisconnectedBy `gorm:"size:20" json:"disconnected_by,omitempty"`
 	ErrorMessage      string        `gorm:"type:text" json:"error_message,omitempty"`
 	RecordingS3Key    string        `gorm:"size:500" json:"recording_s3_key,omitempty"`
 	RecordingDuration int           `gorm:"default:0" json:"recording_duration,omitempty"`

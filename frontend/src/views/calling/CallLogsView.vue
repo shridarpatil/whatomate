@@ -8,7 +8,7 @@ import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog'
-import { Phone, PhoneIncoming, PhoneOutgoing, PhoneOff, PhoneMissed, Clock, RefreshCw, Mic } from 'lucide-vue-next'
+import { Phone, PhoneIncoming, PhoneOutgoing, PhoneOff, PhoneMissed, Clock, RefreshCw, Mic, User, Monitor, Headphones } from 'lucide-vue-next'
 import DataTable, { type Column } from '@/components/shared/DataTable.vue'
 import SearchInput from '@/components/shared/SearchInput.vue'
 import IVRPathTree from '@/components/calling/IVRPathTree.vue'
@@ -41,7 +41,9 @@ const statusOptions = [
   { value: 'ringing', label: t('calling.ringing') },
   { value: 'answered', label: t('calling.answered') },
   { value: 'rejected', label: t('calling.rejected') },
-  { value: 'failed', label: t('calling.failed') }
+  { value: 'failed', label: t('calling.failed') },
+  { value: 'transferring', label: t('calling.transferring') },
+  { value: 'initiating', label: t('calling.initiating') }
 ]
 
 const columns = computed<Column<CallLog>[]>(() => [
@@ -49,6 +51,7 @@ const columns = computed<Column<CallLog>[]>(() => [
   { key: 'direction', label: t('calling.direction') },
   { key: 'status', label: t('calling.status') },
   { key: 'duration', label: t('calling.duration') },
+  { key: 'disconnected_by', label: t('calling.disconnectedBy') },
   { key: 'ivr_flow', label: t('calling.ivrFlow') },
   { key: 'whatsapp_account', label: t('calling.account') },
   { key: 'started_at', label: t('calling.time') },
@@ -109,7 +112,10 @@ function statusVariant(status: string): 'default' | 'secondary' | 'destructive' 
   switch (status) {
     case 'completed': return 'default'
     case 'answered': return 'default'
+    case 'accepted': return 'default'
     case 'ringing': return 'secondary'
+    case 'initiating': return 'secondary'
+    case 'transferring': return 'secondary'
     case 'missed': return 'outline'
     case 'rejected': return 'destructive'
     case 'failed': return 'destructive'
@@ -117,15 +123,37 @@ function statusVariant(status: string): 'default' | 'secondary' | 'destructive' 
   }
 }
 
+function disconnectedByIcon(value: string) {
+  switch (value) {
+    case 'client': return User
+    case 'agent': return Headphones
+    case 'system': return Monitor
+    default: return null
+  }
+}
+
+function disconnectedByVariant(value: string): 'default' | 'secondary' | 'outline' {
+  switch (value) {
+    case 'client': return 'outline'
+    case 'agent': return 'secondary'
+    case 'system': return 'default'
+    default: return 'outline'
+  }
+}
+
 function statusIcon(status: string) {
   switch (status) {
     case 'completed':
     case 'answered':
+    case 'accepted':
       return Phone
     case 'missed':
       return PhoneMissed
     case 'ringing':
+    case 'initiating':
       return Clock
+    case 'transferring':
+      return PhoneOutgoing
     default:
       return PhoneOff
   }
@@ -272,6 +300,13 @@ watch(phoneSearch, () => {
               <Mic v-if="log.recording_s3_key" class="h-3.5 w-3.5 text-muted-foreground" :title="t('calling.recording')" />
             </span>
           </template>
+          <template #cell-disconnected_by="{ item: log }">
+            <Badge v-if="log.disconnected_by" :variant="disconnectedByVariant(log.disconnected_by)">
+              <component :is="disconnectedByIcon(log.disconnected_by)" class="h-3 w-3 mr-1" />
+              {{ t(`calling.disconnectedBy${log.disconnected_by.charAt(0).toUpperCase() + log.disconnected_by.slice(1)}`) }}
+            </Badge>
+            <span v-else class="text-muted-foreground">-</span>
+          </template>
           <template #cell-ivr_flow="{ item: log }">
             {{ log.ivr_flow?.name || '-' }}
           </template>
@@ -329,6 +364,13 @@ watch(phoneSearch, () => {
             <div>
               <p class="text-muted-foreground">{{ t('calling.endedAt') }}</p>
               <p class="font-medium">{{ formatDate(selectedLog.ended_at) }}</p>
+            </div>
+            <div v-if="selectedLog.disconnected_by">
+              <p class="text-muted-foreground">{{ t('calling.disconnectedBy') }}</p>
+              <Badge :variant="disconnectedByVariant(selectedLog.disconnected_by)">
+                <component :is="disconnectedByIcon(selectedLog.disconnected_by)" class="h-3 w-3 mr-1" />
+                {{ t(`calling.disconnectedBy${selectedLog.disconnected_by.charAt(0).toUpperCase() + selectedLog.disconnected_by.slice(1)}`) }}
+              </Badge>
             </div>
           </div>
 

@@ -348,13 +348,13 @@ func (a *App) UploadIVRAudio(r *fastglue.Request) error {
 	if err != nil {
 		return r.SendErrorEnvelope(fasthttp.StatusInternalServerError, "Failed to create temp file", nil, "")
 	}
-	defer os.Remove(tmpInput.Name())
+	defer func() { _ = os.Remove(tmpInput.Name()) }()
 
 	if _, err := tmpInput.Write(data); err != nil {
-		tmpInput.Close()
+		_ = tmpInput.Close()
 		return r.SendErrorEnvelope(fasthttp.StatusInternalServerError, "Failed to write temp file", nil, "")
 	}
-	tmpInput.Close()
+	_ = tmpInput.Close()
 
 	// Transcode to OGG/Opus 48kHz mono for WebRTC compatibility
 	filename := uuid.New().String() + ".ogg"
@@ -493,13 +493,13 @@ func (a *App) UploadOrgAudio(r *fastglue.Request) error {
 	if err != nil {
 		return r.SendErrorEnvelope(fasthttp.StatusInternalServerError, "Failed to create temp file", nil, "")
 	}
-	defer os.Remove(tmpInput.Name())
+	defer func() { _ = os.Remove(tmpInput.Name()) }()
 
 	if _, err := tmpInput.Write(data); err != nil {
-		tmpInput.Close()
+		_ = tmpInput.Close()
 		return r.SendErrorEnvelope(fasthttp.StatusInternalServerError, "Failed to write temp file", nil, "")
 	}
-	tmpInput.Close()
+	_ = tmpInput.Close()
 
 	// Transcode to OGG/Opus 48kHz mono using ffmpeg
 	filename := fmt.Sprintf("org_%s_%s.ogg", orgID.String(), audioType)

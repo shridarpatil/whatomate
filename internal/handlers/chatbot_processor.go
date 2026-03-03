@@ -14,7 +14,6 @@ import (
 	"github.com/google/uuid"
 	"github.com/shridarpatil/whatomate/internal/contactutil"
 	"github.com/shridarpatil/whatomate/internal/models"
-	"github.com/shridarpatil/whatomate/internal/websocket"
 	"github.com/shridarpatil/whatomate/pkg/whatsapp"
 )
 
@@ -1503,6 +1502,57 @@ func (a *App) sendStepMessage(account *models.WhatsAppAccount, session *models.C
 }
 
 // ApiResponse represents a response from an external API that may include buttons
+// executeConfiguredAPI builds and executes an HTTP request from a chatbot API config.
+// replaceVar is called to substitute variables in the URL, body, and header values.
+// Returns the response body and status code.
+func (a *App) executeConfiguredAPI(apiConfig models.JSONB, replaceVar func(string) string) ([]byte, int, error) {
+	apiURL, ok := apiConfig["url"].(string)
+	if !ok || apiURL == "" {
+		return nil, 0, fmt.Errorf("API URL is required")
+	}
+	apiURL = replaceVar(apiURL)
+
+	method := "GET"
+	if m, ok := apiConfig["method"].(string); ok && m != "" {
+		method = strings.ToUpper(m)
+	}
+
+	var bodyReader io.Reader
+	if bodyTemplate, ok := apiConfig["body"].(string); ok && bodyTemplate != "" {
+		bodyReader = strings.NewReader(replaceVar(bodyTemplate))
+	}
+
+	req, err := http.NewRequest(method, apiURL, bodyReader)
+	if err != nil {
+		return nil, 0, fmt.Errorf("failed to create request: %w", err)
+	}
+
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Accept", "application/json")
+
+	if headers, ok := apiConfig["headers"].(map[string]interface{}); ok {
+		for key, value := range headers {
+			if strVal, ok := value.(string); ok {
+				req.Header.Set(key, replaceVar(strVal))
+			}
+		}
+	}
+
+	resp, err := a.HTTPClient.Do(req)
+	if err != nil {
+		return nil, 0, fmt.Errorf("API request failed: %w", err)
+	}
+	defer func() { _ = resp.Body.Close() }()
+
+	limitReader := io.LimitReader(resp.Body, 1024*1024)
+	body, err := io.ReadAll(limitReader)
+	if err != nil {
+		return nil, 0, fmt.Errorf("failed to read response: %w", err)
+	}
+
+	return body, resp.StatusCode, nil
+}
+
 type ApiResponse struct {
 	Message      string
 	Buttons      []map[string]interface{}
@@ -1517,64 +1567,14 @@ func (a *App) fetchApiResponse(apiConfig models.JSONB, sessionData models.JSONB,
 		return nil, fmt.Errorf("API config is empty")
 	}
 
-	// Get API URL (required)
-	apiURL, ok := apiConfig["url"].(string)
-	if !ok || apiURL == "" {
-		return nil, fmt.Errorf("API URL is required")
-	}
-
-	// Replace variables in URL using template engine
-	apiURL = processTemplate(apiURL, sessionData)
-
-	// Get HTTP method (default: GET)
-	method := "GET"
-	if m, ok := apiConfig["method"].(string); ok && m != "" {
-		method = strings.ToUpper(m)
-	}
-
-	// Prepare request body if configured
-	var bodyReader io.Reader
-	if bodyTemplate, ok := apiConfig["body"].(string); ok && bodyTemplate != "" {
-		bodyWithVars := processTemplate(bodyTemplate, sessionData)
-		bodyReader = strings.NewReader(bodyWithVars)
-	}
-
-	// Create request
-	req, err := http.NewRequest(method, apiURL, bodyReader)
+	replaceVar := func(s string) string { return processTemplate(s, sessionData) }
+	respBody, statusCode, err := a.executeConfiguredAPI(apiConfig, replaceVar)
 	if err != nil {
-		return nil, fmt.Errorf("failed to create request: %w", err)
+		return nil, err
 	}
 
-	// Set default headers
-	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("Accept", "application/json")
-
-	// Add custom headers if configured
-	if headers, ok := apiConfig["headers"].(map[string]interface{}); ok {
-		for key, value := range headers {
-			if strVal, ok := value.(string); ok {
-				// Replace variables in header values
-				req.Header.Set(key, processTemplate(strVal, sessionData))
-			}
-		}
-	}
-
-	// Make the request
-	resp, err := a.HTTPClient.Do(req)
-	if err != nil {
-		return nil, fmt.Errorf("API request failed: %w", err)
-	}
-	defer func() { _ = resp.Body.Close() }()
-
-	// Read response body (limit to 1MB to prevent memory issues)
-	limitReader := io.LimitReader(resp.Body, 1024*1024)
-	respBody, err := io.ReadAll(limitReader)
-	if err != nil {
-		return nil, fmt.Errorf("failed to read response: %w", err)
-	}
-
-	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		return nil, fmt.Errorf("API returned status %d: %s", resp.StatusCode, string(respBody))
+	if statusCode < 200 || statusCode >= 300 {
+		return nil, fmt.Errorf("API returned status %d: %s", statusCode, string(respBody))
 	}
 
 	// Parse JSON response
@@ -1722,12 +1722,6 @@ func (a *App) fetchAPIContext(apiConfig models.JSONB, session *models.ChatbotSes
 		return "", fmt.Errorf("API config is empty")
 	}
 
-	// Get API URL (required)
-	apiURL, ok := apiConfig["url"].(string)
-	if !ok || apiURL == "" {
-		return "", fmt.Errorf("API URL is required")
-	}
-
 	// Build session data for variable replacement
 	sessionData := models.JSONB{}
 	if session != nil {
@@ -1739,56 +1733,14 @@ func (a *App) fetchAPIContext(apiConfig models.JSONB, session *models.ChatbotSes
 		sessionData["user_message"] = userMessage
 	}
 
-	// Replace variables in URL
-	apiURL = a.replaceVariables(apiURL, sessionData)
-
-	// Get HTTP method (default: GET)
-	method := "GET"
-	if m, ok := apiConfig["method"].(string); ok && m != "" {
-		method = strings.ToUpper(m)
-	}
-
-	// Prepare request body if configured
-	var bodyReader io.Reader
-	if bodyTemplate, ok := apiConfig["body"].(string); ok && bodyTemplate != "" {
-		bodyWithVars := a.replaceVariables(bodyTemplate, sessionData)
-		bodyReader = strings.NewReader(bodyWithVars)
-	}
-
-	// Create request
-	req, err := http.NewRequest(method, apiURL, bodyReader)
+	replaceVar := func(s string) string { return a.replaceVariables(s, sessionData) }
+	respBody, statusCode, err := a.executeConfiguredAPI(apiConfig, replaceVar)
 	if err != nil {
-		return "", fmt.Errorf("failed to create request: %w", err)
+		return "", err
 	}
 
-	// Set default headers
-	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("Accept", "application/json")
-
-	// Add custom headers if configured
-	if headers, ok := apiConfig["headers"].(map[string]interface{}); ok {
-		for key, value := range headers {
-			if strVal, ok := value.(string); ok {
-				req.Header.Set(key, a.replaceVariables(strVal, sessionData))
-			}
-		}
-	}
-
-	// Make the request
-	resp, err := a.HTTPClient.Do(req)
-	if err != nil {
-		return "", fmt.Errorf("API request failed: %w", err)
-	}
-	defer func() { _ = resp.Body.Close() }()
-
-	// Read response body
-	respBody, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return "", fmt.Errorf("failed to read response: %w", err)
-	}
-
-	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		return "", fmt.Errorf("API returned status %d", resp.StatusCode)
+	if statusCode < 200 || statusCode >= 300 {
+		return "", fmt.Errorf("API returned status %d", statusCode)
 	}
 
 	// Check for response_path to extract specific field
@@ -2239,16 +2191,7 @@ func (a *App) handleIncomingReaction(account *models.WhatsAppAccount, fromPhone,
 	a.Log.Info("Updated message reaction", "message_id", message.ID, "reactions_count", len(newReactions))
 
 	// Broadcast via WebSocket
-	if a.WSHub != nil {
-		a.WSHub.BroadcastToOrg(account.OrganizationID, websocket.WSMessage{
-			Type: "reaction_update",
-			Payload: map[string]any{
-				"message_id": message.ID.String(),
-				"contact_id": contact.ID.String(),
-				"reactions":  newReactions,
-			},
-		})
-	}
+	a.broadcastReactionUpdate(account.OrganizationID, message.ID, contact.ID, newReactions)
 }
 
 // Helper function to safely get string from map
@@ -2327,51 +2270,7 @@ func (a *App) saveIncomingMessage(account *models.WhatsAppAccount, contact *mode
 	a.Log.Info("Saved incoming message", "message_id", message.ID, "contact_id", contact.ID, "media_url", message.MediaURL)
 
 	// Broadcast new message via WebSocket
-	if a.WSHub != nil {
-		var assignedUserIDStr string
-		if contact.AssignedUserID != nil {
-			assignedUserIDStr = contact.AssignedUserID.String()
-		}
-		profileName := contact.ProfileName
-		if a.ShouldMaskPhoneNumbers(account.OrganizationID) {
-			profileName = MaskIfPhoneNumber(profileName)
-		}
-		wsPayload := map[string]any{
-			"id":               message.ID.String(),
-			"contact_id":       contact.ID.String(),
-			"assigned_user_id": assignedUserIDStr,
-			"profile_name":     profileName,
-			"direction":        message.Direction,
-			"message_type":     message.MessageType,
-			"content":          map[string]string{"body": message.Content},
-			"media_url":        message.MediaURL,
-			"media_mime_type":  message.MediaMimeType,
-			"media_filename":   message.MediaFilename,
-			"status":           message.Status,
-			"wamid":            message.WhatsAppMessageID,
-			"created_at":       message.CreatedAt,
-			"updated_at":       message.UpdatedAt,
-			"is_reply":         message.IsReply,
-		}
-		// Include reply context if this is a reply
-		if message.IsReply && message.ReplyToMessageID != nil {
-			wsPayload["reply_to_message_id"] = message.ReplyToMessageID.String()
-			// Load the replied-to message for preview
-			var replyToMsg models.Message
-			if err := a.DB.First(&replyToMsg, message.ReplyToMessageID).Error; err == nil {
-				wsPayload["reply_to_message"] = map[string]any{
-					"id":           replyToMsg.ID.String(),
-					"content":      map[string]string{"body": replyToMsg.Content},
-					"message_type": replyToMsg.MessageType,
-					"direction":    replyToMsg.Direction,
-				}
-			}
-		}
-		a.WSHub.BroadcastToOrg(account.OrganizationID, websocket.WSMessage{
-			Type:    websocket.TypeNewMessage,
-			Payload: wsPayload,
-		})
-	}
+	a.broadcastNewMessage(account.OrganizationID, &message, contact)
 
 	// Dispatch webhook for incoming message
 	a.DispatchWebhook(account.OrganizationID, models.WebhookEventMessageIncoming, MessageEventData{

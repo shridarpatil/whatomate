@@ -317,7 +317,11 @@ func (a *App) TestAccountConnection(r *fastglue.Request) error {
 	url := fmt.Sprintf("%s/%s/%s?fields=display_phone_number,verified_name,code_verification_status,account_mode,quality_rating,messaging_limit_tier",
 		a.Config.WhatsApp.BaseURL, account.APIVersion, account.PhoneID)
 
-	req, _ := http.NewRequest(http.MethodGet, url, nil)
+	req, err := http.NewRequest(http.MethodGet, url, nil)
+	if err != nil {
+		a.Log.Error("Failed to create request", "error", err)
+		return r.SendErrorEnvelope(fasthttp.StatusInternalServerError, "Failed to test account", nil, "")
+	}
 	req.Header.Set("Authorization", "Bearer "+account.AccessToken)
 
 	resp, err := a.HTTPClient.Do(req)

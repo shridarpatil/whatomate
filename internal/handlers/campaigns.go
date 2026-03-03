@@ -1037,6 +1037,7 @@ func (a *App) incrementCampaignStat(campaignID string, status string) {
 			Type: websocket.TypeCampaignStatsUpdate,
 			Payload: map[string]interface{}{
 				"campaign_id":     campaignID,
+				"status":          campaign.Status,
 				"sent_count":      campaign.SentCount,
 				"delivered_count": campaign.DeliveredCount,
 				"read_count":      campaign.ReadCount,

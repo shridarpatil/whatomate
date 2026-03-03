@@ -23,12 +23,7 @@ func (m *Manager) negotiateWebRTC(session *CallSession, account *models.WhatsApp
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 
-	waAccount := &whatsapp.Account{
-		PhoneID:     account.PhoneID,
-		BusinessID:  account.BusinessID,
-		APIVersion:  account.APIVersion,
-		AccessToken: account.AccessToken,
-	}
+	waAccount := account.ToWAAccount()
 
 	// Create peer connection with Opus codec
 	pc, err := m.createPeerConnection()
@@ -43,20 +38,9 @@ func (m *Manager) negotiateWebRTC(session *CallSession, account *models.WhatsApp
 	session.mu.Unlock()
 
 	// Add local audio track for IVR playback / server→caller audio
-	audioTrack, err := webrtc.NewTrackLocalStaticRTP(
-		webrtc.RTPCodecCapability{MimeType: webrtc.MimeTypeOpus},
-		"audio",
-		"ivr-audio",
-	)
+	audioTrack, err := createOpusTrack(pc, "ivr-audio")
 	if err != nil {
 		m.log.Error("Failed to create audio track", "error", err)
-		m.rejectCall(ctx, waAccount, session.ID)
-		return
-	}
-
-	_, err = pc.AddTrack(audioTrack)
-	if err != nil {
-		m.log.Error("Failed to add audio track", "error", err)
 		m.rejectCall(ctx, waAccount, session.ID)
 		return
 	}
@@ -135,19 +119,9 @@ func (m *Manager) negotiateWebRTC(session *CallSession, account *models.WhatsApp
 	}
 
 	// Wait for ICE gathering to complete
-	gatherComplete := webrtc.GatheringCompletePromise(pc)
-	select {
-	case <-gatherComplete:
-		// ICE gathering complete
-	case <-ctx.Done():
-		m.log.Error("ICE gathering timed out", "call_id", session.ID)
-		m.rejectCall(ctx, waAccount, session.ID)
-		return
-	}
-
-	localDesc := pc.LocalDescription()
-	if localDesc == nil {
-		m.log.Error("No local description available", "call_id", session.ID)
+	localDesc, err := waitForICEGathering(pc, 15*time.Second)
+	if err != nil {
+		m.log.Error("ICE gathering failed", "error", err, "call_id", session.ID)
 		m.rejectCall(ctx, waAccount, session.ID)
 		return
 	}
@@ -192,6 +166,38 @@ func (m *Manager) negotiateWebRTC(session *CallSession, account *models.WhatsApp
 	if session.IVRFlow != nil {
 		go m.runIVRFlow(session, waAccount)
 	}
+}
+
+// waitForICEGathering waits for ICE gathering to complete on a PeerConnection
+// and returns the local description, or an error on timeout.
+func waitForICEGathering(pc *webrtc.PeerConnection, timeout time.Duration) (*webrtc.SessionDescription, error) {
+	gatherComplete := webrtc.GatheringCompletePromise(pc)
+	select {
+	case <-gatherComplete:
+	case <-time.After(timeout):
+		return nil, fmt.Errorf("ICE gathering timed out")
+	}
+	localDesc := pc.LocalDescription()
+	if localDesc == nil {
+		return nil, fmt.Errorf("no local description available")
+	}
+	return localDesc, nil
+}
+
+// createOpusTrack creates a new Opus audio track and adds it to the PeerConnection.
+func createOpusTrack(pc *webrtc.PeerConnection, streamID string) (*webrtc.TrackLocalStaticRTP, error) {
+	track, err := webrtc.NewTrackLocalStaticRTP(
+		webrtc.RTPCodecCapability{MimeType: webrtc.MimeTypeOpus},
+		"audio",
+		streamID,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create opus track: %w", err)
+	}
+	if _, err := pc.AddTrack(track); err != nil {
+		return nil, fmt.Errorf("failed to add opus track: %w", err)
+	}
+	return track, nil
 }
 
 // createPeerConnection creates a new WebRTC peer connection with Opus codec support

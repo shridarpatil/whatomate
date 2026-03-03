@@ -232,13 +232,7 @@ func (a *App) SendOutgoingMessage(ctx context.Context, req OutgoingMessageReques
 
 // toWhatsAppAccount converts models.WhatsAppAccount to whatsapp.Account
 func (a *App) toWhatsAppAccount(account *models.WhatsAppAccount) *whatsapp.Account {
-	return &whatsapp.Account{
-		PhoneID:     account.PhoneID,
-		BusinessID:  account.BusinessID,
-		AppID:       account.AppID,
-		APIVersion:  account.APIVersion,
-		AccessToken: account.AccessToken,
-	}
+	return account.ToWAAccount()
 }
 
 // createOutgoingMessage creates a Message model from the request
@@ -399,32 +393,31 @@ func (a *App) broadcastNewMessage(orgID uuid.UUID, msg *models.Message, contact 
 		return
 	}
 
-	payload := map[string]any{
-		"id":           msg.ID,
-		"contact_id":   contact.ID.String(),
-		"direction":    msg.Direction,
-		"message_type": msg.MessageType,
-		"content":      map[string]string{"body": msg.Content},
-		"status":       msg.Status,
-		"created_at":   msg.CreatedAt,
-		"updated_at":   msg.UpdatedAt,
-	}
-
-	// Add assigned user info
+	var assignedUserIDStr string
 	if contact.AssignedUserID != nil {
-		payload["assigned_user_id"] = contact.AssignedUserID.String()
+		assignedUserIDStr = contact.AssignedUserID.String()
 	}
 	profileName := contact.ProfileName
 	if a.ShouldMaskPhoneNumbers(orgID) {
 		profileName = MaskIfPhoneNumber(profileName)
 	}
-	payload["profile_name"] = profileName
 
-	// Add media fields
-	if msg.MediaURL != "" {
-		payload["media_url"] = msg.MediaURL
-		payload["media_mime_type"] = msg.MediaMimeType
-		payload["media_filename"] = msg.MediaFilename
+	payload := map[string]any{
+		"id":               msg.ID.String(),
+		"contact_id":       contact.ID.String(),
+		"assigned_user_id": assignedUserIDStr,
+		"profile_name":     profileName,
+		"direction":        msg.Direction,
+		"message_type":     msg.MessageType,
+		"content":          map[string]string{"body": msg.Content},
+		"media_url":        msg.MediaURL,
+		"media_mime_type":  msg.MediaMimeType,
+		"media_filename":   msg.MediaFilename,
+		"status":           msg.Status,
+		"wamid":            msg.WhatsAppMessageID,
+		"created_at":       msg.CreatedAt,
+		"updated_at":       msg.UpdatedAt,
+		"is_reply":         msg.IsReply,
 	}
 
 	// Add interactive data
@@ -434,7 +427,6 @@ func (a *App) broadcastNewMessage(orgID uuid.UUID, msg *models.Message, contact 
 
 	// Add reply context
 	if msg.IsReply && msg.ReplyToMessageID != nil {
-		payload["is_reply"] = true
 		payload["reply_to_message_id"] = msg.ReplyToMessageID.String()
 
 		// Include reply preview for UI
@@ -442,7 +434,7 @@ func (a *App) broadcastNewMessage(orgID uuid.UUID, msg *models.Message, contact 
 		if err := a.DB.First(&replyToMsg, msg.ReplyToMessageID).Error; err == nil {
 			payload["reply_to_message"] = map[string]any{
 				"id":           replyToMsg.ID.String(),
-				"content":      replyToMsg.Content,
+				"content":      map[string]string{"body": replyToMsg.Content},
 				"message_type": replyToMsg.MessageType,
 				"direction":    replyToMsg.Direction,
 			}
@@ -452,6 +444,21 @@ func (a *App) broadcastNewMessage(orgID uuid.UUID, msg *models.Message, contact 
 	a.WSHub.BroadcastToOrg(orgID, websocket.WSMessage{
 		Type:    websocket.TypeNewMessage,
 		Payload: payload,
+	})
+}
+
+// broadcastReactionUpdate broadcasts a reaction update via WebSocket
+func (a *App) broadcastReactionUpdate(orgID uuid.UUID, messageID, contactID uuid.UUID, reactions any) {
+	if a.WSHub == nil {
+		return
+	}
+	a.WSHub.BroadcastToOrg(orgID, websocket.WSMessage{
+		Type: "reaction_update",
+		Payload: map[string]any{
+			"message_id": messageID.String(),
+			"contact_id": contactID.String(),
+			"reactions":  reactions,
+		},
 	})
 }
 

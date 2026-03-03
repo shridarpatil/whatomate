@@ -30,6 +30,8 @@ const localeNames: Record<string, { name: string; nativeName: string }> = {
   ms: { name: 'Malay', nativeName: 'Bahasa Melayu' },
   pl: { name: 'Polish', nativeName: 'Polski' },
   uk: { name: 'Ukrainian', nativeName: 'Українська' },
+  ta: { name: 'Tamil', nativeName: 'தமிழ்' },
+
 }
 
 // Auto-generate SUPPORTED_LOCALES from available files

@@ -19,9 +19,12 @@ const (
 	TypePong          = "pong"
 
 	// Agent transfer types
-	TypeAgentTransfer       = "agent_transfer"
-	TypeAgentTransferResume = "agent_transfer_resume"
-	TypeAgentTransferAssign = "agent_transfer_assign"
+	TypeAgentTransfer        = "agent_transfer"
+	TypeAgentTransferResume  = "agent_transfer_resume"
+	TypeAgentTransferAssign  = "agent_transfer_assign"
+	TypeTransferEscalation = "transfer_escalation"
+	TypeTransferExpired    = "transfer_expired"
+	TypeTransferEscalated  = "transfer_escalated"
 
 	// Campaign types
 	TypeCampaignStatsUpdate = "campaign_stats_update"

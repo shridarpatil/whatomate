@@ -168,6 +168,15 @@ func (a *App) IsCallingEnabledForOrg(orgID interface{}) bool {
 	return false
 }
 
+// requireCallingEnabled checks if calling is enabled for the org and returns an error
+// envelope if not. Returns nil when calling is enabled and the handler can proceed.
+func (a *App) requireCallingEnabled(r *fastglue.Request, orgID uuid.UUID) error {
+	if !a.IsCallingEnabledForOrg(orgID) {
+		return r.SendErrorEnvelope(fasthttp.StatusServiceUnavailable, "Calling is not enabled for this organization", nil, "")
+	}
+	return nil
+}
+
 // GetOrgCallingConfig returns org-level calling config values, falling back to global defaults.
 func (a *App) GetOrgCallingConfig(orgID interface{}) (maxDuration, transferTimeout int) {
 	maxDuration = callingConfigDefault(a.Config.Calling.MaxCallDuration, 3600)
@@ -230,6 +239,15 @@ func MaskIfPhoneNumber(s string) string {
 		return MaskPhoneNumber(s)
 	}
 	return s
+}
+
+// MaskContactFields conditionally masks a profile name and phone number
+// if phone masking is enabled for the given organization.
+func (a *App) MaskContactFields(orgID interface{}, profileName, phoneNumber string) (string, string) {
+	if a.ShouldMaskPhoneNumbers(orgID) {
+		return MaskIfPhoneNumber(profileName), MaskPhoneNumber(phoneNumber)
+	}
+	return profileName, phoneNumber
 }
 
 // ShouldMaskPhoneNumbers checks if phone masking is enabled for the organization

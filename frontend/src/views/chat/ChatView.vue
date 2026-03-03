@@ -7,7 +7,7 @@ import { useAuthStore } from '@/stores/auth'
 import { useUsersStore } from '@/stores/users'
 import { useTransfersStore } from '@/stores/transfers'
 import { wsService } from '@/services/websocket'
-import { contactsService, chatbotService, messagesService, customActionsService, type CustomAction, type ActionResult } from '@/services/api'
+import { contactsService, chatbotService, messagesService, customActionsService, accountsService, type CustomAction, type ActionResult } from '@/services/api'
 import { useTagsStore } from '@/stores/tags'
 import { TagBadge } from '@/components/ui/tag-badge'
 import { getTagColorClass } from '@/lib/constants'
@@ -125,6 +125,7 @@ const contactSessionData = ref<any>(null)
 // Multi-account state
 const selectedAccount = ref<string | null>(null)
 const contactAccounts = ref<string[]>([])
+const orgAccounts = ref<any[]>([])
 
 // File upload state
 const fileInputRef = ref<HTMLInputElement | null>(null)
@@ -399,6 +400,14 @@ onMounted(async () => {
     fetchCustomActions()
   }
 
+  // Fetch org-level WhatsApp accounts for account tabs
+  try {
+    const res = await accountsService.list()
+    orgAccounts.value = res.data.data?.accounts || []
+  } catch {
+    orgAccounts.value = []
+  }
+
   // Fetch available tags for filtering (if not already loaded)
   if (tagsStore.tags.length === 0) {
     tagsStore.fetchTags().catch(() => {})
@@ -492,7 +501,7 @@ async function selectContact(id: string) {
     contactAccounts.value = Array.from(accounts).sort()
 
     // Auto-select account
-    if (contactAccounts.value.length > 1) {
+    if (orgAccounts.value.length > 1) {
       // Find account of the most recent incoming message
       for (let i = contactsStore.messages.length - 1; i >= 0; i--) {
         const msg = contactsStore.messages[i]
@@ -501,9 +510,9 @@ async function selectContact(id: string) {
           break
         }
       }
-      // Fallback to contact's default account
+      // Fallback to contact's default account, then first org account
       if (!selectedAccount.value) {
-        selectedAccount.value = contact.whatsapp_account || contactAccounts.value[0]
+        selectedAccount.value = contact.whatsapp_account || contactAccounts.value[0] || orgAccounts.value[0]?.name
       }
       // Re-fetch messages filtered by selected account
       if (selectedAccount.value) {
@@ -1592,22 +1601,22 @@ async function sendMediaMessage() {
 
         <!-- Account Tabs (shown when contact has messages from multiple WhatsApp accounts) -->
         <div
-          v-if="contactAccounts.length > 1 && selectedAccount"
+          v-if="orgAccounts.length > 1 && selectedAccount"
           class="flex-shrink-0 px-4 py-2 border-b border-white/[0.08] light:border-gray-200 bg-[#0a0a0b] light:bg-gray-50"
         >
           <div class="inline-flex items-center gap-1 rounded-lg bg-white/[0.06] light:bg-gray-100 p-1">
             <button
-              v-for="acct in contactAccounts"
-              :key="acct"
+              v-for="acct in orgAccounts"
+              :key="acct.name"
               :class="[
                 'rounded-md px-3 py-1 text-xs font-medium whitespace-nowrap transition-all',
-                acct === selectedAccount
+                acct.name === selectedAccount
                   ? 'bg-emerald-600 text-white shadow-sm'
                   : 'bg-white/[0.08] text-white/70 hover:text-white/90 hover:bg-white/[0.12] light:bg-gray-200 light:text-gray-600 light:hover:text-gray-800 light:hover:bg-gray-300'
               ]"
-              @click="switchAccount(acct)"
+              @click="switchAccount(acct.name)"
             >
-              {{ acct }}
+              {{ acct.name }}
             </button>
           </div>
         </div>

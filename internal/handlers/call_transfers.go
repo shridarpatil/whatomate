@@ -133,8 +133,8 @@ func (a *App) ConnectCallTransfer(r *fastglue.Request) error {
 		return r.SendErrorEnvelope(fasthttp.StatusBadRequest, "sdp_offer is required", nil, "")
 	}
 
-	if !a.IsCallingEnabledForOrg(orgID) {
-		return r.SendErrorEnvelope(fasthttp.StatusServiceUnavailable, "Calling is not enabled for this organization", nil, "")
+	if err := a.requireCallingEnabled(r, orgID); err != nil {
+		return nil
 	}
 
 	sdpAnswer, err := a.CallManager.ConnectAgentToTransfer(transferID, userID, req.SDPOffer)
@@ -179,6 +179,11 @@ func (a *App) HangupCallTransfer(r *fastglue.Request) error {
 	}
 
 	a.CallManager.EndTransfer(transferID)
+
+	// Mark the call as disconnected by agent
+	a.DB.Model(&models.CallLog{}).
+		Where("id = ?", transfer.CallLogID).
+		Update("disconnected_by", models.DisconnectedByAgent)
 
 	return r.SendEnvelope(map[string]string{
 		"status": "completed",

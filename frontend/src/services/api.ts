@@ -835,7 +835,7 @@ export interface CallLog {
   whatsapp_call_id: string
   caller_phone: string
   direction: 'incoming' | 'outgoing'
-  status: 'ringing' | 'answered' | 'completed' | 'missed' | 'rejected' | 'failed' | 'initiating' | 'accepted'
+  status: 'ringing' | 'answered' | 'completed' | 'missed' | 'rejected' | 'failed' | 'initiating' | 'accepted' | 'transferring'
   duration: number
   ivr_flow_id?: string
   ivr_path?: Record<string, any>
@@ -843,6 +843,7 @@ export interface CallLog {
   started_at?: string
   answered_at?: string
   ended_at?: string
+  disconnected_by?: 'client' | 'agent' | 'system'
   error_message?: string
   recording_s3_key?: string
   recording_duration?: number

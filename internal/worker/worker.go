@@ -9,7 +9,6 @@ import (
 	"github.com/redis/go-redis/v9"
 	"github.com/shridarpatil/whatomate/internal/config"
 	"github.com/shridarpatil/whatomate/internal/contactutil"
-	"github.com/shridarpatil/whatomate/internal/crypto"
 	"github.com/shridarpatil/whatomate/internal/models"
 	"github.com/shridarpatil/whatomate/internal/queue"
 	"github.com/shridarpatil/whatomate/internal/templateutil"
@@ -240,12 +239,7 @@ func (w *Worker) checkCampaignCompletion(ctx context.Context, campaignID, organi
 
 // sendTemplateMessage sends a template message via WhatsApp Cloud API
 func (w *Worker) sendTemplateMessage(ctx context.Context, account *models.WhatsAppAccount, template *models.Template, recipient *models.BulkMessageRecipient, campaignHeaderMediaID string) (string, error) {
-	waAccount := &whatsapp.Account{
-		PhoneID:     account.PhoneID,
-		BusinessID:  account.BusinessID,
-		APIVersion:  account.APIVersion,
-		AccessToken: account.AccessToken,
-	}
+	waAccount := account.ToWAAccount()
 
 	// Build template components with parameters
 	var components []map[string]interface{}
@@ -320,7 +314,7 @@ func (w *Worker) decryptAccountSecrets(account *models.WhatsAppAccount) {
 	if w.Config != nil {
 		key = w.Config.App.EncryptionKey
 	}
-	crypto.DecryptFields(key, &account.AccessToken, &account.AppSecret)
+	account.DecryptSecrets(key)
 }
 
 // Close cleans up worker resources
