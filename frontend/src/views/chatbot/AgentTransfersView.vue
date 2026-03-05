@@ -338,7 +338,7 @@ function formatTimeRemaining(deadline: string | undefined): string {
                         {{ getSourceBadge(transfer.source).label }}
                       </Badge>
                     </TableCell>
-                    <TableCell class="text-end space-x-2">
+                    <TableCell class="text-end flex items-center justify-end gap-2">
                       <Tooltip>
                         <TooltipTrigger asChild>
                           <Button size="sm" variant="outline" @click="viewChat(transfer)">
@@ -423,7 +423,7 @@ function formatTimeRemaining(deadline: string | undefined): string {
                           </Badge>
                         </TableCell>
                         <TableCell class="max-w-[200px] truncate">{{ transfer.notes || '-' }}</TableCell>
-                        <TableCell class="text-end space-x-2">
+                        <TableCell class="text-end flex items-center justify-end gap-2">
                           <Button size="sm" variant="outline" @click="viewChat(transfer)">
                             <MessageSquare class="h-4 w-4 me-1" />
                             {{ $t('agentTransfers.chat') }}
@@ -533,7 +533,7 @@ function formatTimeRemaining(deadline: string | undefined): string {
                             {{ getSourceBadge(transfer.source).label }}
                           </Badge>
                         </TableCell>
-                        <TableCell class="text-end space-x-2">
+                        <TableCell class="text-end flex items-center justify-end gap-2">
                           <Button size="sm" variant="outline" @click="openAssignDialog(transfer)">
                             <UserPlus class="h-4 w-4 me-1" />
                             {{ $t('agentTransfers.assign') }}
@@ -617,7 +617,7 @@ function formatTimeRemaining(deadline: string | undefined): string {
                             {{ getSourceBadge(transfer.source).label }}
                           </Badge>
                         </TableCell>
-                        <TableCell class="text-end space-x-2">
+                        <TableCell class="text-end flex items-center justify-end gap-2">
                           <Button size="sm" variant="outline" @click="openAssignDialog(transfer)">
                             <UserPlus class="h-4 w-4" />
                           </Button>

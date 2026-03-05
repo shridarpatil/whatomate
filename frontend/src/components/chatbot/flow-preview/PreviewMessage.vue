@@ -26,7 +26,7 @@ const isDebug = computed(() => props.message.type === 'debug')
   <div v-if="isBot" class="flex justify-start">
     <div class="max-w-[85%]">
       <div
-        class="bg-white dark:bg-[#202c33] rounded-lg rounded-tl-none shadow-sm p-3"
+        class="bg-white dark:bg-[#202c33] rounded-lg rounded-ss-none shadow-sm p-3"
         :class="{ 'border-s-2 border-red-400': message.isValidationError }"
       >
         <p class="text-sm text-gray-800 dark:text-gray-200 whitespace-pre-wrap">
@@ -45,7 +45,7 @@ const isDebug = computed(() => props.message.type === 'debug')
   <!-- User Message -->
   <div v-else-if="isUser" class="flex justify-end">
     <div class="max-w-[85%]">
-      <div class="bg-[#005c4b] light:bg-[#d9fdd3] rounded-lg rounded-tr-none shadow-sm p-3">
+      <div class="bg-[#005c4b] light:bg-[#d9fdd3] rounded-lg rounded-se-none shadow-sm p-3">
         <p class="text-sm text-gray-200 light:text-gray-800">{{ message.content }}</p>
         <p class="text-[10px] text-gray-400 light:text-gray-500 text-end mt-1 flex items-center justify-end gap-1">
           {{ formattedTime }}

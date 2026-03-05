@@ -231,7 +231,7 @@ function downloadSampleCsv() {
               <Label>{{ $t('importExport.selectColumns') }}</Label>
               <ScrollArea class="h-48 border rounded-md p-3">
                 <div class="space-y-2">
-                  <div v-for="col in exportColumns" :key="col.key" class="flex items-center space-x-2">
+                  <div v-for="col in exportColumns" :key="col.key" class="flex items-center gap-2">
                     <Checkbox
                       :id="'col-' + col.key"
                       :checked="isColumnSelected(col.key)"
@@ -291,7 +291,7 @@ function downloadSampleCsv() {
             </div>
 
             <!-- Update on duplicate -->
-            <div v-if="uniqueColumn" class="flex items-center space-x-2">
+            <div v-if="uniqueColumn" class="flex items-center gap-2">
               <Checkbox
                 id="update-dup"
                 :checked="updateOnDuplicate"

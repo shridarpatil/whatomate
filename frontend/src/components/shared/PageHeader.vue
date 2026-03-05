@@ -26,7 +26,7 @@ defineProps<{
     <div class="flex h-16 items-center px-6">
       <RouterLink v-if="backLink" :to="backLink">
         <Button variant="ghost" size="icon" class="me-3">
-          <ArrowLeft class="h-5 w-5" />
+          <ArrowLeft class="h-5 w-5 rtl:rotate-180" />
         </Button>
       </RouterLink>
       <div

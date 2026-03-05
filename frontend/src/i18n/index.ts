@@ -72,7 +72,7 @@ export const i18n = createI18n({
   messages,
 })
 
-// RTL locales
+// RTL locales — keep in sync with index.html and App.vue
 const RTL_LOCALES = new Set(['ar', 'he', 'fa', 'ur'])
 
 // Helper to change locale

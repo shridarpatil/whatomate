@@ -11,11 +11,14 @@
         var mode = localStorage.getItem('color-mode');
         var isDark = mode === 'dark' || (mode === 'system' || !mode) && window.matchMedia('(prefers-color-scheme: dark)').matches;
         if (isDark) document.documentElement.classList.add('dark');
+        // RTL locales — keep in sync with App.vue and i18n/index.ts
         var locale = localStorage.getItem('locale');
         var rtl = ['ar', 'he', 'fa', 'ur'];
-        if (locale && rtl.indexOf(locale) !== -1) {
-          document.documentElement.setAttribute('dir', 'rtl');
+        if (locale) {
           document.documentElement.setAttribute('lang', locale);
+          if (rtl.indexOf(locale) !== -1) {
+            document.documentElement.setAttribute('dir', 'rtl');
+          }
         }
       })();
     </script>

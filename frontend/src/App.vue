@@ -11,6 +11,7 @@ import { useColorMode } from '@/composables/useColorMode'
 const { colorMode } = useColorMode()
 
 const { locale } = useI18n()
+// RTL locales — keep in sync with index.html and i18n/index.ts
 const RTL_LOCALES = new Set(['ar', 'he', 'fa', 'ur'])
 const dir = computed(() => RTL_LOCALES.has(locale.value) ? 'rtl' as const : 'ltr' as const)
 const toastPosition = computed(() => dir.value === 'rtl' ? 'top-left' as const : 'top-right' as const)

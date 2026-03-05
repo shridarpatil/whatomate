@@ -174,7 +174,7 @@ watch(() => props.selectedPermissions, (newPerms, oldPerms) => {
             <div
               v-for="permission in group.permissions"
               :key="permission.key"
-              class="flex items-start space-x-2"
+              class="flex items-start gap-2"
             >
               <Checkbox
                 :id="permission.key"

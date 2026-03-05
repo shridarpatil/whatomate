@@ -203,7 +203,7 @@ function formatNoteTime(dateStr: string) {
             class="group relative rounded-xl p-3 backdrop-blur-sm border border-white/[0.06] light:border-gray-200 bg-gradient-to-br from-white/[0.04] to-white/[0.02] light:from-gray-50 light:to-white hover:from-white/[0.06] hover:to-white/[0.03] light:hover:from-gray-100 light:hover:to-gray-50 transition-all duration-200"
           >
             <!-- Gradient accent line -->
-            <div class="absolute top-0 start-3 end-3 h-[2px] rounded-full bg-gradient-to-r from-amber-500/60 via-orange-500/40 to-transparent" />
+            <div class="absolute top-0 start-3 end-3 h-[2px] rounded-full bg-gradient-to-r rtl:bg-gradient-to-l from-amber-500/60 via-orange-500/40 to-transparent" />
 
             <!-- Editing mode -->
             <template v-if="editingNoteId === note.id">

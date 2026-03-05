@@ -13,7 +13,7 @@ import { Home, ArrowLeft } from 'lucide-vue-next'
       </p>
       <div class="flex items-center justify-center gap-4 mt-8">
         <Button variant="outline" @click="$router.back()">
-          <ArrowLeft class="h-4 w-4 me-2" />
+          <ArrowLeft class="h-4 w-4 me-2 rtl:rotate-180" />
           {{ $t('notFound.goBack') }}
         </Button>
         <RouterLink to="/">

@@ -505,7 +505,7 @@ onUnmounted(() => {
     >
       <!-- SVG Connection Lines - Now with higher z-index -->
       <svg
-        class="absolute top-0 start-0 pointer-events-none"
+        class="absolute top-0 left-0 pointer-events-none"
         style="z-index: 5;"
         :width="svgSize.width"
         :height="svgSize.height"

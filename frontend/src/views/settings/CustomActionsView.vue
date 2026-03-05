@@ -223,9 +223,9 @@ onMounted(() => fetchActions())
           <div class="space-y-2">
             <Label>{{ $t('customActions.actionType') }}</Label>
             <RadioGroup v-model="formData.action_type" class="flex flex-col gap-2">
-              <div class="flex items-center space-x-2"><RadioGroupItem value="webhook" id="type-webhook" /><Label for="type-webhook" class="flex items-center gap-2 cursor-pointer font-normal"><Webhook class="h-4 w-4" />{{ $t('customActions.webhookType') }}</Label></div>
-              <div class="flex items-center space-x-2"><RadioGroupItem value="url" id="type-url" /><Label for="type-url" class="flex items-center gap-2 cursor-pointer font-normal"><Globe class="h-4 w-4" />{{ $t('customActions.urlType') }}</Label></div>
-              <div class="flex items-center space-x-2"><RadioGroupItem value="javascript" id="type-javascript" /><Label for="type-javascript" class="flex items-center gap-2 cursor-pointer font-normal"><Code class="h-4 w-4" />{{ $t('customActions.javascriptType') }}</Label></div>
+              <div class="flex items-center gap-2"><RadioGroupItem value="webhook" id="type-webhook" /><Label for="type-webhook" class="flex items-center gap-2 cursor-pointer font-normal"><Webhook class="h-4 w-4" />{{ $t('customActions.webhookType') }}</Label></div>
+              <div class="flex items-center gap-2"><RadioGroupItem value="url" id="type-url" /><Label for="type-url" class="flex items-center gap-2 cursor-pointer font-normal"><Globe class="h-4 w-4" />{{ $t('customActions.urlType') }}</Label></div>
+              <div class="flex items-center gap-2"><RadioGroupItem value="javascript" id="type-javascript" /><Label for="type-javascript" class="flex items-center gap-2 cursor-pointer font-normal"><Code class="h-4 w-4" />{{ $t('customActions.javascriptType') }}</Label></div>
             </RadioGroup>
           </div>
 
@@ -259,7 +259,7 @@ onMounted(() => fetchActions())
           <template v-if="formData.action_type === 'url'">
             <div class="border-t pt-4 space-y-4">
               <div class="space-y-2"><Label for="url">{{ $t('customActions.urlLabel') }}</Label><Input id="url" v-model="formData.config.url" type="url" :placeholder="$t('customActions.urlPlaceholder')" /><p class="text-xs text-muted-foreground">{{ $t('customActions.urlHint') }}</p></div>
-              <div class="flex items-center space-x-2"><Switch id="new-tab" :checked="formData.config.open_in_new_tab" @update:checked="formData.config.open_in_new_tab = $event" /><Label for="new-tab" class="cursor-pointer">{{ $t('customActions.openInNewTab') }}</Label></div>
+              <div class="flex items-center gap-2"><Switch id="new-tab" :checked="formData.config.open_in_new_tab" @update:checked="formData.config.open_in_new_tab = $event" /><Label for="new-tab" class="cursor-pointer">{{ $t('customActions.openInNewTab') }}</Label></div>
             </div>
           </template>
 
