@@ -425,7 +425,7 @@ func (a *App) processIncomingMessageFull(phoneNumberID string, msg IncomingTextM
 	// If no keyword matched, try AI response if enabled
 	if settings.AI.Enabled && settings.AI.Provider != "" && settings.AI.APIKey != "" {
 		a.Log.Info("Attempting AI response", "provider", settings.AI.Provider, "model", settings.AI.Model)
-		aiResponse, err := a.generateAIResponse(settings, session, messageText)
+		aiResponse, err := a.generateAIResponse(settings, session, messageText, contact)
 		if err != nil {
 			a.Log.Error("AI response failed", "error", err, "provider", settings.AI.Provider, "model", settings.AI.Model)
 			// Fall through to default response
@@ -1192,6 +1192,42 @@ func (a *App) closeSession(session *models.ChatbotSession) {
 	a.ClearContactChatbotTracking(session.ContactID)
 }
 
+// mergeSessionDataWithContext merges session data with contact/org context for template processing.
+func mergeSessionDataWithContext(sessionData models.JSONB, ctx map[string]interface{}) models.JSONB {
+	merged := make(models.JSONB)
+	for k, v := range sessionData {
+		merged[k] = v
+	}
+	for k, v := range ctx {
+		merged[k] = v
+	}
+	return merged
+}
+
+// buildChatbotAPIContext builds contact and organization context for API variable replacement.
+// Matches the structure used in custom actions (buildActionContext) so {{contact.phone_number}},
+// {{organization.name}}, etc. work in API URLs, headers, and body.
+func buildChatbotAPIContext(contact *models.Contact, org *models.Organization) map[string]interface{} {
+	ctx := map[string]interface{}{}
+	if contact != nil {
+		ctx["contact"] = map[string]interface{}{
+			"id":           contact.ID.String(),
+			"phone_number": contact.PhoneNumber,
+			"name":         contact.ProfileName,
+			"profile_name": contact.ProfileName,
+			"tags":         contact.Tags,
+			"metadata":     contact.Metadata,
+		}
+	}
+	if org != nil {
+		ctx["organization"] = map[string]interface{}{
+			"id":   org.ID.String(),
+			"name": org.Name,
+		}
+	}
+	return ctx
+}
+
 // replaceVariables replaces {{variable}} placeholders with session data values
 func (a *App) replaceVariables(message string, data models.JSONB) string {
 	if data == nil {
@@ -1330,14 +1366,23 @@ func (a *App) sendStepMessage(account *models.WhatsAppAccount, session *models.C
 	case models.FlowStepTypeAPIFetch:
 		// Fetch response from external API (may include message + buttons)
 		// Pass the step message as template - it will be processed with API response data
-		apiResp, err := a.fetchApiResponse(step.ApiConfig, session.SessionData, step.Message)
+		// Load org for contact/organization context in API URL, headers, body
+		var org models.Organization
+		var orgPtr *models.Organization
+		if err := a.DB.Where("id = ?", account.OrganizationID).First(&org).Error; err == nil {
+			orgPtr = &org
+		} else {
+			a.Log.Warn("Could not load organization for API context", "org_id", account.OrganizationID, "error", err)
+		}
+		apiResp, err := a.fetchApiResponse(step.ApiConfig, session.SessionData, step.Message, contact, orgPtr)
 		if err != nil {
 			a.Log.Error("Failed to fetch API response", "error", err, "step", step.StepName)
 			// Use fallback message if configured, otherwise use the step message
+			apiData := mergeSessionDataWithContext(session.SessionData, buildChatbotAPIContext(contact, orgPtr))
 			if fallback, ok := step.ApiConfig["fallback_message"].(string); ok && fallback != "" {
-				message = processTemplate(fallback, session.SessionData)
+				message = processTemplate(fallback, apiData)
 			} else if step.Message != "" {
-				message = processTemplate(step.Message, session.SessionData)
+				message = processTemplate(step.Message, apiData)
 			} else {
 				message = "Sorry, there was an error processing your request."
 			}
@@ -1561,13 +1606,24 @@ type ApiResponse struct {
 }
 
 // fetchApiResponse fetches a response from an external API, supporting message + buttons
-// and response_mapping for storing API data in session variables
-func (a *App) fetchApiResponse(apiConfig models.JSONB, sessionData models.JSONB, messageTemplate string) (*ApiResponse, error) {
+// and response_mapping for storing API data in session variables.
+// contact and org are merged into the template context so {{contact.phone_number}},
+// {{organization.name}}, etc. work in URL, headers, and body.
+func (a *App) fetchApiResponse(apiConfig models.JSONB, sessionData models.JSONB, messageTemplate string, contact *models.Contact, org *models.Organization) (*ApiResponse, error) {
 	if apiConfig == nil {
 		return nil, fmt.Errorf("API config is empty")
 	}
 
-	replaceVar := func(s string) string { return processTemplate(s, sessionData) }
+	// Merge contact and org into context for variable replacement
+	apiData := make(models.JSONB)
+	for k, v := range sessionData {
+		apiData[k] = v
+	}
+	for k, v := range buildChatbotAPIContext(contact, org) {
+		apiData[k] = v
+	}
+
+	replaceVar := func(s string) string { return processTemplate(s, apiData) }
 	respBody, statusCode, err := a.executeConfiguredAPI(apiConfig, replaceVar)
 	if err != nil {
 		return nil, err
@@ -1599,15 +1655,16 @@ func (a *App) fetchApiResponse(apiConfig models.JSONB, sessionData models.JSONB,
 		}
 		result.MappedData = extractResponseMapping(jsonResp, mappingStrings)
 
-		// Merge mapped data into sessionData for template processing
+		// Merge mapped data into sessionData for persistence and apiData for template processing
 		for k, v := range result.MappedData {
 			sessionData[k] = v
+			apiData[k] = v
 		}
 	}
 
-	// Process the message template with all available data (including mapped data)
+	// Process the message template with all available data (including mapped data, contact, org)
 	if messageTemplate != "" {
-		result.Message = processTemplate(messageTemplate, sessionData)
+		result.Message = processTemplate(messageTemplate, apiData)
 	} else if msg, ok := jsonResp["message"].(string); ok {
 		// Fallback: check for "message" field in response
 		result.Message = msg
@@ -1647,9 +1704,15 @@ func (a *App) fetchApiResponse(apiConfig models.JSONB, sessionData models.JSONB,
 }
 
 // generateAIResponse generates a response using the configured AI provider
-func (a *App) generateAIResponse(settings *models.ChatbotSettings, session *models.ChatbotSession, userMessage string) (string, error) {
+func (a *App) generateAIResponse(settings *models.ChatbotSettings, session *models.ChatbotSession, userMessage string, contact *models.Contact) (string, error) {
+	// Load org for contact/organization context in API calls
+	var org models.Organization
+	var orgPtr *models.Organization
+	if err := a.DB.Where("id = ?", settings.OrganizationID).First(&org).Error; err == nil {
+		orgPtr = &org
+	}
 	// Build context from AIContext entries
-	contextData := a.buildAIContext(settings.OrganizationID, session, userMessage)
+	contextData := a.buildAIContext(settings.OrganizationID, session, userMessage, contact, orgPtr)
 
 	switch settings.AI.Provider {
 	case models.AIProviderOpenAI:
@@ -1664,7 +1727,7 @@ func (a *App) generateAIResponse(settings *models.ChatbotSettings, session *mode
 }
 
 // buildAIContext fetches and combines all AI context data
-func (a *App) buildAIContext(orgID uuid.UUID, session *models.ChatbotSession, userMessage string) string {
+func (a *App) buildAIContext(orgID uuid.UUID, session *models.ChatbotSession, userMessage string, contact *models.Contact, org *models.Organization) string {
 	// Get WhatsApp account for cache key
 	whatsAppAccount := ""
 	if session != nil {
@@ -1691,7 +1754,7 @@ func (a *App) buildAIContext(orgID uuid.UUID, session *models.ChatbotSession, us
 			content = ctx.StaticContent
 
 			// Fetch data from external API and append
-			apiContent, err := a.fetchAPIContext(ctx.ApiConfig, session, userMessage)
+			apiContent, err := a.fetchAPIContext(ctx.ApiConfig, session, userMessage, contact, org)
 			if err != nil {
 				a.Log.Error("Failed to fetch API context", "context_name", ctx.Name, "error", err)
 				// Still use static content if API fails
@@ -1716,24 +1779,28 @@ func (a *App) buildAIContext(orgID uuid.UUID, session *models.ChatbotSession, us
 	return "## Context Information\n\n" + strings.Join(contextParts, "\n\n")
 }
 
-// fetchAPIContext fetches context data from an external API
-func (a *App) fetchAPIContext(apiConfig models.JSONB, session *models.ChatbotSession, userMessage string) (string, error) {
+// fetchAPIContext fetches context data from an external API.
+// contact and org are merged into the template context so {{contact.phone_number}},
+// {{organization.name}}, etc. work in URL, headers, and body.
+func (a *App) fetchAPIContext(apiConfig models.JSONB, session *models.ChatbotSession, userMessage string, contact *models.Contact, org *models.Organization) (string, error) {
 	if apiConfig == nil {
 		return "", fmt.Errorf("API config is empty")
 	}
 
-	// Build session data for variable replacement
+	// Build session data for variable replacement, including contact and org
 	sessionData := models.JSONB{}
 	if session != nil {
-		sessionData = session.SessionData
-		if sessionData == nil {
-			sessionData = models.JSONB{}
+		if session.SessionData != nil {
+			for k, v := range session.SessionData {
+				sessionData[k] = v
+			}
 		}
 		sessionData["phone_number"] = session.PhoneNumber
 		sessionData["user_message"] = userMessage
 	}
+	apiData := mergeSessionDataWithContext(sessionData, buildChatbotAPIContext(contact, org))
 
-	replaceVar := func(s string) string { return a.replaceVariables(s, sessionData) }
+	replaceVar := func(s string) string { return processTemplate(s, apiData) }
 	respBody, statusCode, err := a.executeConfiguredAPI(apiConfig, replaceVar)
 	if err != nil {
 		return "", err
