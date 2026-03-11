@@ -235,6 +235,12 @@ const router = createRouter({
           meta: { permission: 'ivr_flows' }
         },
         {
+          path: 'calling/ivr-flows/:id/edit',
+          name: 'ivr-flow-editor',
+          component: () => import('@/views/calling/IVRFlowEditorView.vue'),
+          meta: { permission: 'ivr_flows' }
+        },
+        {
           path: 'calling/transfers',
           name: 'call-transfers',
           component: () => import('@/views/calling/CallTransfersView.vue'),

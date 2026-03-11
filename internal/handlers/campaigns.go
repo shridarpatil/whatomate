@@ -812,6 +812,7 @@ func (a *App) UploadCampaignMedia(r *fastglue.Request) error {
 	const maxMediaSize = 16 << 20 // 16MB
 	data, err := io.ReadAll(io.LimitReader(file, maxMediaSize+1))
 	if err != nil {
+		a.Log.Error("Failed to read file", "error", err)
 		return r.SendErrorEnvelope(fasthttp.StatusInternalServerError, "Failed to read file", nil, "")
 	}
 	if len(data) > maxMediaSize {
@@ -934,6 +935,7 @@ func (a *App) ServeCampaignMedia(r *fastglue.Request) error {
 	filePath := filepath.Clean(campaign.HeaderMediaLocalPath)
 	baseDir, err := filepath.Abs(a.getMediaStoragePath())
 	if err != nil {
+		a.Log.Error("Storage configuration error", "error", err)
 		return r.SendErrorEnvelope(fasthttp.StatusInternalServerError, "Storage configuration error", nil, "")
 	}
 	fullPath, err := filepath.Abs(filepath.Join(baseDir, filePath))

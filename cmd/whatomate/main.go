@@ -789,6 +789,7 @@ func setupRoutes(g *fastglue.Fastglue, app *handlers.App, lo logf.Logger, basePa
 	g.GET("/api/call-transfers/{id}", app.GetCallTransfer)
 	g.POST("/api/call-transfers/{id}/connect", app.ConnectCallTransfer)
 	g.POST("/api/call-transfers/{id}/hangup", app.HangupCallTransfer)
+	g.POST("/api/call-transfers/initiate", app.InitiateAgentTransfer)
 
 	// Outgoing Calls
 	g.POST("/api/calls/outgoing", app.InitiateOutgoingCall)

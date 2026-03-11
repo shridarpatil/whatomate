@@ -1,91 +1,53 @@
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
+import { useRouter } from 'vue-router'
 import { useCallingStore } from '@/stores/calling'
-import { accountsService, type IVRFlow, type IVRMenu } from '@/services/api'
+import { accountsService, type IVRFlow, type IVRFlowData } from '@/services/api'
 import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
-import { Switch } from '@/components/ui/switch'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog'
 import { Plus, Pencil, Trash2, Phone, RefreshCw } from 'lucide-vue-next'
 import { toast } from 'vue-sonner'
-import IVRMenuEditor from '@/components/calling/IVRMenuEditor.vue'
 
 const { t } = useI18n()
+const router = useRouter()
 const store = useCallingStore()
 
 const accounts = ref<{ name: string }[]>([])
-const showEditor = ref(false)
+const showCreateDialog = ref(false)
 const showDeleteConfirm = ref(false)
-const editingFlow = ref<IVRFlow | null>(null)
 const deletingFlow = ref<IVRFlow | null>(null)
 const saving = ref(false)
 
-// Form state
-const form = ref({
+// Create form state
+const createForm = ref({
   name: '',
   description: '',
   whatsapp_account: '',
-  welcome_audio_url: '',
-  is_active: true,
-  is_call_start: false,
-  menu: {
-    greeting: '',
-    options: {},
-    timeout_seconds: 10,
-    max_retries: 3,
-    invalid_input_message: 'Invalid option, please try again'
-  } as IVRMenu
 })
 
-function resetForm() {
-  form.value = {
+function resetCreateForm() {
+  createForm.value = {
     name: '',
     description: '',
     whatsapp_account: accounts.value[0]?.name || '',
-    welcome_audio_url: '',
-    is_active: true,
-    is_call_start: false,
-    menu: {
-      greeting: '',
-      options: {},
-      timeout_seconds: 10,
-      max_retries: 3,
-      invalid_input_message: 'Invalid option, please try again'
-    }
   }
 }
 
 function openCreate() {
-  editingFlow.value = null
-  resetForm()
-  showEditor.value = true
+  resetCreateForm()
+  showCreateDialog.value = true
 }
 
 function openEdit(flow: IVRFlow) {
-  editingFlow.value = flow
-  form.value = {
-    name: flow.name,
-    description: flow.description || '',
-    whatsapp_account: flow.whatsapp_account,
-    welcome_audio_url: flow.welcome_audio_url || '',
-    is_active: flow.is_active,
-    is_call_start: flow.is_call_start,
-    menu: flow.menu || {
-      greeting: '',
-      options: {},
-      timeout_seconds: 10,
-      max_retries: 3,
-      invalid_input_message: 'Invalid option, please try again'
-    }
-  }
-  showEditor.value = true
+  router.push({ name: 'ivr-flow-editor', params: { id: flow.id } })
 }
 
 function confirmDelete(flow: IVRFlow) {
@@ -93,40 +55,38 @@ function confirmDelete(flow: IVRFlow) {
   showDeleteConfirm.value = true
 }
 
-async function saveFlow() {
-  if (!form.value.name.trim()) {
+async function createFlow() {
+  if (!createForm.value.name.trim()) {
     toast.error(t('calling.nameRequired'))
     return
   }
-  if (!form.value.whatsapp_account) {
+  if (!createForm.value.whatsapp_account) {
     toast.error(t('calling.accountRequired'))
     return
   }
 
   saving.value = true
   try {
-    if (editingFlow.value) {
-      await store.updateIVRFlow(editingFlow.value.id, {
-        name: form.value.name,
-        description: form.value.description,
-        is_active: form.value.is_active,
-        is_call_start: form.value.is_call_start,
-        menu: form.value.menu,
-        welcome_audio_url: form.value.welcome_audio_url
-      })
-      toast.success(t('calling.flowUpdated'))
-    } else {
-      await store.createIVRFlow({
-        name: form.value.name,
-        description: form.value.description,
-        whatsapp_account: form.value.whatsapp_account,
-        menu: form.value.menu,
-        welcome_audio_url: form.value.welcome_audio_url
-      })
-      toast.success(t('calling.flowCreated'))
+    // Create with empty v2 flow data
+    const emptyFlow: IVRFlowData = {
+      version: 2,
+      nodes: [],
+      edges: [],
+      entry_node: '',
     }
-    showEditor.value = false
-    store.fetchIVRFlows()
+    const flow = await store.createIVRFlow({
+      name: createForm.value.name,
+      description: createForm.value.description,
+      whatsapp_account: createForm.value.whatsapp_account,
+      menu: emptyFlow,
+    })
+    showCreateDialog.value = false
+    // Navigate to the editor
+    const created = (flow as any)?.data?.data || (flow as any)?.data || flow
+    if (created?.id) {
+      router.push({ name: 'ivr-flow-editor', params: { id: created.id } })
+    }
+    toast.success(t('calling.flowCreated'))
   } catch {
     toast.error(t('calling.flowSaveFailed'))
   } finally {
@@ -148,7 +108,11 @@ async function deleteFlow() {
 
 async function toggleActive(flow: IVRFlow) {
   try {
-    await store.updateIVRFlow(flow.id, { is_active: !flow.is_active })
+    await store.updateIVRFlow(flow.id, {
+      is_active: !flow.is_active,
+      is_call_start: flow.is_call_start,
+      is_outgoing_end: flow.is_outgoing_end,
+    })
     store.fetchIVRFlows()
   } catch {
     toast.error(t('calling.flowSaveFailed'))
@@ -157,7 +121,11 @@ async function toggleActive(flow: IVRFlow) {
 
 async function toggleCallStart(flow: IVRFlow) {
   try {
-    await store.updateIVRFlow(flow.id, { is_call_start: !flow.is_call_start })
+    await store.updateIVRFlow(flow.id, {
+      is_active: flow.is_active,
+      is_call_start: !flow.is_call_start,
+      is_outgoing_end: flow.is_outgoing_end,
+    })
     store.fetchIVRFlows()
   } catch {
     toast.error(t('calling.flowSaveFailed'))
@@ -234,10 +202,16 @@ onMounted(async () => {
                   >
                     {{ flow.is_call_start ? t('calling.callStart') : t('calling.secondary') }}
                   </Badge>
+                  <Badge
+                    v-if="flow.is_active && flow.is_outgoing_end"
+                    variant="default"
+                  >
+                    {{ t('calling.outgoingEnd') }}
+                  </Badge>
                 </div>
               </TableCell>
               <TableCell>
-                {{ Object.keys(flow.menu?.options || {}).length }} {{ t('calling.menuOptions') }}
+                {{ flow.menu?.nodes?.length || 0 }} nodes
               </TableCell>
               <TableCell class="text-right">
                 <div class="flex justify-end gap-2">
@@ -270,66 +244,45 @@ onMounted(async () => {
       </CardContent>
     </Card>
 
-    <!-- Editor Dialog -->
-    <Dialog v-model:open="showEditor">
-      <DialogContent class="max-w-2xl max-h-[85vh] overflow-y-auto">
+    <!-- Create Dialog -->
+    <Dialog v-model:open="showCreateDialog">
+      <DialogContent class="max-w-md">
         <DialogHeader>
-          <DialogTitle>
-            {{ editingFlow ? t('calling.editFlow') : t('calling.createFlow') }}
-          </DialogTitle>
+          <DialogTitle>{{ t('calling.createFlow') }}</DialogTitle>
           <DialogDescription>
             {{ t('calling.flowEditorDesc') }}
           </DialogDescription>
         </DialogHeader>
 
         <div class="space-y-4">
-          <div class="grid grid-cols-2 gap-4">
-            <div class="space-y-2">
-              <Label>{{ t('calling.name') }}</Label>
-              <Input v-model="form.name" :placeholder="t('calling.flowNamePlaceholder')" />
-            </div>
-            <div class="space-y-2">
-              <Label>{{ t('calling.account') }}</Label>
-              <Select v-model="form.whatsapp_account" :disabled="!!editingFlow">
-                <SelectTrigger>
-                  <SelectValue :placeholder="t('calling.selectAccount')" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem v-for="acc in accounts" :key="acc.name" :value="acc.name">
-                    {{ acc.name }}
-                  </SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
+          <div class="space-y-2">
+            <Label>{{ t('calling.name') }}</Label>
+            <Input v-model="createForm.name" :placeholder="t('calling.flowNamePlaceholder')" />
           </div>
-
+          <div class="space-y-2">
+            <Label>{{ t('calling.account') }}</Label>
+            <Select v-model="createForm.whatsapp_account">
+              <SelectTrigger>
+                <SelectValue :placeholder="t('calling.selectAccount')" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem v-for="acc in accounts" :key="acc.name" :value="acc.name">
+                  {{ acc.name }}
+                </SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
           <div class="space-y-2">
             <Label>{{ t('calling.description') }}</Label>
-            <Textarea v-model="form.description" :placeholder="t('calling.descriptionPlaceholder')" :rows="2" />
-          </div>
-
-          <div class="flex items-center gap-4">
-            <div class="flex items-center gap-2">
-              <Switch v-model:checked="form.is_active" />
-              <Label>{{ t('calling.enabledToggle') }}</Label>
-            </div>
-            <div class="flex items-center gap-2">
-              <Switch v-model:checked="form.is_call_start" :disabled="!form.is_active" />
-              <Label>{{ t('calling.callStartToggle') }}</Label>
-            </div>
-          </div>
-
-          <div class="space-y-2">
-            <Label>{{ t('calling.menuConfiguration') }}</Label>
-            <IVRMenuEditor v-model="form.menu" :current-flow-id="editingFlow?.id" />
+            <Textarea v-model="createForm.description" :placeholder="t('calling.descriptionPlaceholder')" :rows="2" />
           </div>
         </div>
 
         <DialogFooter>
-          <Button variant="outline" @click="showEditor = false">{{ t('common.cancel') }}</Button>
-          <Button :disabled="saving" @click="saveFlow">
+          <Button variant="outline" @click="showCreateDialog = false">{{ t('common.cancel') }}</Button>
+          <Button :disabled="saving" @click="createFlow">
             <span v-if="saving" class="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2" />
-            {{ editingFlow ? t('common.update') : t('common.create') }}
+            {{ t('common.create') }}
           </Button>
         </DialogFooter>
       </DialogContent>

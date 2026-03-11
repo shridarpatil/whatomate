@@ -79,6 +79,7 @@ type IVRFlow struct {
 	Description     string    `gorm:"type:text" json:"description"`
 	IsActive        bool      `gorm:"default:true" json:"is_active"`
 	IsCallStart     bool      `gorm:"default:false" json:"is_call_start"`
+	IsOutgoingEnd   bool      `gorm:"default:false" json:"is_outgoing_end"`
 	Menu            JSONB     `gorm:"type:jsonb" json:"menu"`
 	WelcomeAudioURL string    `gorm:"type:text" json:"welcome_audio_url"`
 
@@ -112,7 +113,8 @@ type CallTransfer struct {
 	WhatsAppAccount string             `gorm:"size:100;not null" json:"whatsapp_account"`
 	Status          CallTransferStatus `gorm:"size:20;not null;default:'waiting'" json:"status"`
 	TeamID          *uuid.UUID         `gorm:"type:uuid;index" json:"team_id,omitempty"`
-	AgentID         *uuid.UUID         `gorm:"type:uuid" json:"agent_id,omitempty"`
+	AgentID           *uuid.UUID         `gorm:"type:uuid" json:"agent_id,omitempty"`
+	InitiatingAgentID *uuid.UUID         `gorm:"type:uuid" json:"initiating_agent_id,omitempty"`
 	TransferredAt   time.Time          `gorm:"autoCreateTime" json:"transferred_at"`
 	ConnectedAt     *time.Time         `json:"connected_at,omitempty"`
 	CompletedAt     *time.Time         `json:"completed_at,omitempty"`
@@ -120,10 +122,11 @@ type CallTransfer struct {
 	TalkDuration    int                `gorm:"default:0" json:"talk_duration"`
 	IVRPath         JSONB              `gorm:"type:jsonb" json:"ivr_path,omitempty"`
 	// Relations
-	CallLog *CallLog `gorm:"foreignKey:CallLogID" json:"call_log,omitempty"`
-	Contact *Contact `gorm:"foreignKey:ContactID" json:"contact,omitempty"`
-	Agent   *User    `gorm:"foreignKey:AgentID" json:"agent,omitempty"`
-	Team    *Team    `gorm:"foreignKey:TeamID" json:"team,omitempty"`
+	CallLog         *CallLog `gorm:"foreignKey:CallLogID" json:"call_log,omitempty"`
+	Contact         *Contact `gorm:"foreignKey:ContactID" json:"contact,omitempty"`
+	Agent           *User    `gorm:"foreignKey:AgentID" json:"agent,omitempty"`
+	InitiatingAgent *User    `gorm:"foreignKey:InitiatingAgentID" json:"initiating_agent,omitempty"`
+	Team            *Team    `gorm:"foreignKey:TeamID" json:"team,omitempty"`
 }
 
 func (CallTransfer) TableName() string {

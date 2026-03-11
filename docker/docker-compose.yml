@@ -13,6 +13,8 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
+    env_file:
+      - .env
     volumes:
       - ./uploads:/app/uploads:rw
       - ./config.toml:/app/config.toml:ro

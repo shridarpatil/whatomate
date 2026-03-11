@@ -862,20 +862,33 @@ export interface CallLog {
   updated_at: string
 }
 
-export interface IVRMenuOption {
-  label: string
-  action: 'transfer' | 'submenu' | 'parent' | 'repeat' | 'hangup' | 'goto_flow'
-  target?: string
-  menu?: IVRMenu
+// v2 Node-based IVR Flow types
+export type IVRNodeType = 'greeting' | 'menu' | 'gather' | 'http_callback' | 'transfer' | 'goto_flow' | 'timing' | 'hangup'
+
+export interface IVRNodePosition {
+  x: number
+  y: number
 }
 
-export interface IVRMenu {
-  greeting: string
-  greeting_text?: string
-  options: Record<string, IVRMenuOption>
-  timeout_seconds?: number
-  max_retries?: number
-  invalid_input_message?: string
+export interface IVRNode {
+  id: string
+  type: IVRNodeType
+  label: string
+  position: IVRNodePosition
+  config: Record<string, any>
+}
+
+export interface IVREdge {
+  from: string
+  to: string
+  condition: string
+}
+
+export interface IVRFlowData {
+  version: 2
+  nodes: IVRNode[]
+  edges: IVREdge[]
+  entry_node: string
 }
 
 export interface IVRFlow {
@@ -886,7 +899,8 @@ export interface IVRFlow {
   description: string
   is_active: boolean
   is_call_start: boolean
-  menu: IVRMenu
+  is_outgoing_end: boolean
+  menu: IVRFlowData
   welcome_audio_url: string
   created_at: string
   updated_at: string
@@ -903,6 +917,7 @@ export interface CallTransfer {
   status: 'waiting' | 'connected' | 'completed' | 'abandoned' | 'no_answer'
   team_id?: string
   agent_id?: string
+  initiating_agent_id?: string
   transferred_at: string
   connected_at?: string
   completed_at?: string
@@ -915,6 +930,11 @@ export interface CallTransfer {
     profile_name: string
   }
   agent?: {
+    id: string
+    full_name: string
+    email: string
+  }
+  initiating_agent?: {
     id: string
     full_name: string
     email: string
@@ -969,15 +989,17 @@ export const callTransfersService = {
     api.post<{ sdp_answer: string }>(`/call-transfers/${id}/connect`, { sdp_offer: sdpOffer }),
   hangup: (id: string) =>
     api.post(`/call-transfers/${id}/hangup`),
+  initiate: (data: { call_log_id: string; team_id: string; agent_id?: string }) =>
+    api.post<{ status: string }>('/call-transfers/initiate', data),
 }
 
 export const ivrFlowsService = {
   list: (params?: { search?: string; page?: number; limit?: number }) =>
     api.get<{ ivr_flows: IVRFlow[]; total: number }>('/ivr-flows', { params }),
   get: (id: string) => api.get<IVRFlow>(`/ivr-flows/${id}`),
-  create: (data: { whatsapp_account: string; name: string; description?: string; is_call_start?: boolean; menu: IVRMenu; welcome_audio_url?: string }) =>
+  create: (data: { whatsapp_account: string; name: string; description?: string; is_call_start?: boolean; menu: IVRFlowData; welcome_audio_url?: string }) =>
     api.post<IVRFlow>('/ivr-flows', data),
-  update: (id: string, data: { name?: string; description?: string; is_active?: boolean; is_call_start?: boolean; menu?: IVRMenu; welcome_audio_url?: string }) =>
+  update: (id: string, data: { name?: string; description?: string; is_active?: boolean; is_call_start?: boolean; is_outgoing_end?: boolean; menu?: IVRFlowData; welcome_audio_url?: string }) =>
     api.put<IVRFlow>(`/ivr-flows/${id}`, data),
   delete: (id: string) => api.delete(`/ivr-flows/${id}`),
   uploadAudio: (file: File) => {

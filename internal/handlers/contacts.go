@@ -615,6 +615,7 @@ func (a *App) SendMessage(r *fastglue.Request) error {
 	ctx := context.Background()
 	message, err := a.SendOutgoingMessage(ctx, msgReq, opts)
 	if err != nil {
+		a.Log.Error("Failed to send message", "error", err)
 		return r.SendErrorEnvelope(fasthttp.StatusInternalServerError, "Failed to send message", nil, "")
 	}
 
@@ -746,6 +747,7 @@ func (a *App) SendMediaMessage(r *fastglue.Request) error {
 	// Read file data
 	fileData, err := io.ReadAll(file)
 	if err != nil {
+		a.Log.Error("Failed to read file data", "error", err)
 		return r.SendErrorEnvelope(fasthttp.StatusInternalServerError, "Failed to read file data", nil, "")
 	}
 
@@ -800,6 +802,7 @@ func (a *App) SendMediaMessage(r *fastglue.Request) error {
 	ctx := context.Background()
 	message, err := a.SendOutgoingMessage(ctx, msgReq, opts)
 	if err != nil {
+		a.Log.Error("Failed to send message", "error", err)
 		return r.SendErrorEnvelope(fasthttp.StatusInternalServerError, "Failed to send message", nil, "")
 	}
 

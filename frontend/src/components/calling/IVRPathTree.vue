@@ -3,9 +3,13 @@ import { computed } from 'vue'
 import { Phone, ArrowRight } from 'lucide-vue-next'
 
 interface Step {
-  digit?: string
+  node?: string
+  type?: string
   label?: string
-  action?: string
+  digit?: string
+  option_label?: string
+  outcome?: string
+  action?: string // flow_start
   flow?: string
 }
 
@@ -18,15 +22,7 @@ const props = defineProps<{
   steps: Step[]
 }>()
 
-function isFlowStep(step: Step) {
-  return step.action === 'flow_start' || (step.action === 'goto_flow' && step.flow)
-}
-
-// Build a tree from the flat step list.
-// flow_start / goto_flow (with flow field) → creates a group, children nested under it.
-// submenu → creates a node, children nested under it.
-// parent → leaf, pops one level.
-// everything else → leaf node.
+// Build a tree: flow_start and goto_flow nest subsequent steps as children.
 const tree = computed(() => {
   const root: TreeNode[] = []
   const stack: TreeNode[][] = [root]
@@ -34,18 +30,10 @@ const tree = computed(() => {
   for (const step of props.steps) {
     const current = stack[stack.length - 1]
 
-    if (isFlowStep(step)) {
-      // Flow nodes nest all subsequent steps as children
+    if (step.action === 'flow_start' || step.type === 'goto_flow') {
       const node: TreeNode = { step, children: [] }
       current.push(node)
       stack.push(node.children)
-    } else if (step.action === 'submenu') {
-      const node: TreeNode = { step, children: [] }
-      current.push(node)
-      stack.push(node.children)
-    } else if (step.action === 'parent') {
-      current.push({ step, children: [] })
-      if (stack.length > 1) stack.pop()
     } else {
       current.push({ step, children: [] })
     }
@@ -65,7 +53,10 @@ const tree = computed(() => {
 import { defineComponent, h, type PropType } from 'vue'
 
 interface TNode {
-  step: { digit?: string; label?: string; action?: string; flow?: string }
+  step: {
+    node?: string; type?: string; label?: string; digit?: string
+    option_label?: string; outcome?: string; action?: string; flow?: string
+  }
   children: TNode[]
 }
 
@@ -81,22 +72,20 @@ const TreeNodes = defineComponent({
 
       return h('div', { class: 'flex flex-col gap-1' },
         props.nodes.map((node, idx) => {
-          const isFlow = node.step.action === 'flow_start' ||
-            (node.step.action === 'goto_flow' && node.step.flow)
-          const isGotoFlow = node.step.action === 'goto_flow' && node.step.flow
+          const step = node.step
+          const isFlow = step.action === 'flow_start' || step.type === 'goto_flow'
           const hasChildren = node.children.length > 0
 
-          // The row content
           let rowContent
+
           if (isFlow) {
             const flowParts = []
 
-            // For goto_flow that has a digit, show the digit badge first
-            if (isGotoFlow && node.step.digit) {
+            if (step.digit) {
               flowParts.push(
                 h('div', {
                   class: 'flex items-center justify-center h-6 w-6 rounded border bg-muted text-xs font-mono font-bold shrink-0'
-                }, node.step.digit)
+                }, step.digit)
               )
               flowParts.push(
                 h(ArrowRight, { class: 'h-3.5 w-3.5 text-muted-foreground shrink-0' })
@@ -109,27 +98,62 @@ const TreeNodes = defineComponent({
               }, [h(Phone, { class: 'h-3 w-3 text-primary-foreground' })])
             )
             flowParts.push(
-              h('span', { class: 'font-semibold text-sm' }, node.step.flow || '?')
+              h('span', { class: 'font-semibold text-sm' }, step.flow || step.label || '?')
             )
 
             rowContent = h('div', { class: 'flex items-center gap-2 py-1' }, flowParts)
-          } else if (node.step.action === 'submenu') {
+          } else if (step.type === 'menu' && step.digit) {
+            // Menu with digit: digit badge + option label + node label
+            const displayLabel = step.option_label
+              ? step.label ? `${step.option_label} (${step.label})` : step.option_label
+              : step.label || '-'
             rowContent = h('div', { class: 'flex items-center gap-2 py-1' }, [
               h('div', {
                 class: 'flex items-center justify-center h-6 w-6 rounded border bg-muted text-xs font-mono font-bold shrink-0'
-              }, node.step.digit || '?'),
-              h('span', { class: 'text-sm font-medium' }, node.step.label || '-'),
+              }, step.digit),
+              h('span', { class: 'text-sm font-medium' }, displayLabel),
+            ])
+          } else if (step.type === 'menu') {
+            // Menu without digit (timeout/max_retries)
+            rowContent = h('div', { class: 'flex items-center gap-2 py-1' }, [
+              h('div', {
+                class: 'flex items-center justify-center h-6 px-1.5 rounded bg-muted text-xs font-medium shrink-0'
+              }, 'menu'),
+              h('span', { class: 'text-sm' }, step.label || '-'),
+              step.outcome ? h('span', { class: 'text-xs text-muted-foreground' }, `(${step.outcome})`) : null,
+            ])
+          } else if (step.type === 'transfer') {
+            rowContent = h('div', { class: 'flex items-center gap-2 py-1' }, [
+              h('div', {
+                class: 'flex items-center justify-center h-6 w-6 rounded-full bg-amber-600 shrink-0'
+              }, [h(ArrowRight, { class: 'h-3 w-3 text-white' })]),
+              h('span', { class: 'text-sm' }, step.label || 'Transfer'),
+            ])
+          } else if (step.type === 'hangup') {
+            rowContent = h('div', { class: 'flex items-center gap-2 py-1' }, [
+              h('div', {
+                class: 'flex items-center justify-center h-6 w-6 rounded-full bg-red-600 shrink-0 text-white text-xs'
+              }, 'x'),
+              h('span', { class: 'text-sm' }, step.label || 'Hangup'),
+            ])
+          } else if (step.type) {
+            // greeting, timing, http_callback, gather, etc.
+            rowContent = h('div', { class: 'flex items-center gap-2 py-1' }, [
+              h('div', {
+                class: 'flex items-center justify-center h-6 px-1.5 rounded bg-muted text-xs font-medium shrink-0 capitalize'
+              }, step.type.replace('_', ' ')),
+              h('span', { class: 'text-sm' }, step.label || '-'),
             ])
           } else {
+            // Fallback
             rowContent = h('div', { class: 'flex items-center gap-2 py-1' }, [
               h('div', {
                 class: 'flex items-center justify-center h-6 w-6 rounded border bg-muted text-xs font-mono font-bold shrink-0'
-              }, node.step.digit || '?'),
-              h('span', { class: 'text-sm' }, node.step.label || '-'),
+              }, step.digit || '?'),
+              h('span', { class: 'text-sm' }, step.label || '-'),
             ])
           }
 
-          // Build the node with optional children
           const elements = [rowContent]
 
           if (hasChildren) {

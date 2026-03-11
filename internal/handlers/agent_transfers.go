@@ -245,6 +245,7 @@ func (a *App) ListAgentTransfers(r *fastglue.Request) error {
 
 	var transfers []agentTransferRow
 	if err := query.Scan(&transfers).Error; err != nil {
+		a.Log.Error("Failed to fetch transfers", "error", err)
 		return r.SendErrorEnvelope(fasthttp.StatusInternalServerError, "Failed to fetch transfers", nil, "")
 	}
 
@@ -638,6 +639,7 @@ func (a *App) ResumeFromTransfer(r *fastglue.Request) error {
 	transfer.ResumedBy = &userID
 
 	if err := a.DB.Save(transfer).Error; err != nil {
+		a.Log.Error("Failed to resume transfer", "error", err, "transfer_id", transfer.ID)
 		return r.SendErrorEnvelope(fasthttp.StatusInternalServerError, "Failed to resume transfer", nil, "")
 	}
 
@@ -767,6 +769,7 @@ func (a *App) AssignAgentTransfer(r *fastglue.Request) error {
 	}
 
 	if err := a.DB.Save(&transfer).Error; err != nil {
+		a.Log.Error("Failed to assign transfer", "error", err, "transfer_id", transfer.ID)
 		return r.SendErrorEnvelope(fasthttp.StatusInternalServerError, "Failed to assign transfer", nil, "")
 	}
 
@@ -928,17 +931,20 @@ func (a *App) PickNextTransfer(r *fastglue.Request) error {
 
 	if err := tx.Save(&transfer).Error; err != nil {
 		tx.Rollback()
+		a.Log.Error("Failed to pick transfer", "error", err, "transfer_id", transfer.ID)
 		return r.SendErrorEnvelope(fasthttp.StatusInternalServerError, "Failed to pick transfer", nil, "")
 	}
 
 	// Update contact assignment within transaction
 	if err := tx.Model(&models.Contact{}).Where("id = ?", transfer.ContactID).Update("assigned_user_id", userID).Error; err != nil {
 		tx.Rollback()
+		a.Log.Error("Failed to update contact assignment", "error", err, "transfer_id", transfer.ID)
 		return r.SendErrorEnvelope(fasthttp.StatusInternalServerError, "Failed to update contact assignment", nil, "")
 	}
 
 	// Commit the transaction
 	if err := tx.Commit().Error; err != nil {
+		a.Log.Error("Failed to complete pickup", "error", err, "transfer_id", transfer.ID)
 		return r.SendErrorEnvelope(fasthttp.StatusInternalServerError, "Failed to complete pickup", nil, "")
 	}
 

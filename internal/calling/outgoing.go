@@ -230,7 +230,7 @@ func (m *Manager) InitiateOutgoingCall(
 	go m.waitForWASDPAnswer(session, waPC)
 
 	// 15. Broadcast event
-	m.broadcastOutgoingEvent(orgID, websocket.TypeOutgoingCallInitiated, map[string]any{
+	m.broadcastEvent(orgID, websocket.TypeOutgoingCallInitiated, map[string]any{
 		"call_log_id":    callLog.ID.String(),
 		"call_id":        callID,
 		"contact_id":     contactID.String(),
@@ -309,7 +309,7 @@ func (m *Manager) HandleOutgoingCallWebhook(callID, event, sdpAnswer string) {
 			Where("id = ?", session.CallLogID).
 			Update("status", models.CallStatusRinging)
 
-		m.broadcastOutgoingEvent(session.OrganizationID, websocket.TypeOutgoingCallRinging, map[string]any{
+		m.broadcastEvent(session.OrganizationID, websocket.TypeOutgoingCallRinging, map[string]any{
 			"call_log_id":   session.CallLogID.String(),
 			"call_id":       callID,
 			"contact_id":    session.ContactID.String(),
@@ -333,7 +333,7 @@ func (m *Manager) HandleOutgoingCallWebhook(callID, event, sdpAnswer string) {
 				"answered_at": now,
 			})
 
-		m.broadcastOutgoingEvent(session.OrganizationID, websocket.TypeOutgoingCallAnswered, map[string]any{
+		m.broadcastEvent(session.OrganizationID, websocket.TypeOutgoingCallAnswered, map[string]any{
 			"call_log_id":   session.CallLogID.String(),
 			"call_id":       callID,
 			"contact_id":    session.ContactID.String(),
@@ -350,7 +350,7 @@ func (m *Manager) HandleOutgoingCallWebhook(callID, event, sdpAnswer string) {
 				"disconnected_by": models.DisconnectedByClient,
 			})
 
-		m.broadcastOutgoingEvent(session.OrganizationID, websocket.TypeOutgoingCallRejected, map[string]any{
+		m.broadcastEvent(session.OrganizationID, websocket.TypeOutgoingCallRejected, map[string]any{
 			"call_log_id":   session.CallLogID.String(),
 			"call_id":       callID,
 			"contact_id":    session.ContactID.String(),
@@ -360,18 +360,29 @@ func (m *Manager) HandleOutgoingCallWebhook(callID, event, sdpAnswer string) {
 		m.cleanupSession(callID)
 
 	case "ended", "terminated", "terminate":
+		// If post-call IVR is active (agent already hung up, IVR goroutine is
+		// running), mark the session as completed so the IVR loop exits cleanly
+		// on its next iteration, then let the IVR goroutine handle final cleanup.
+		session.mu.Lock()
+		ivrActive := session.IVRFlow != nil && session.AgentPC == nil
+		session.mu.Unlock()
+
+		if ivrActive {
+			session.mu.Lock()
+			session.Status = models.CallStatusCompleted
+			session.mu.Unlock()
+			m.log.Info("Contact hung up during post-call IVR, signalling IVR to stop", "call_id", callID)
+			return
+		}
+
 		// Calculate duration
 		var callLog models.CallLog
 		disconnectedBy := "client"
 		if err := m.db.Where("id = ?", session.CallLogID).First(&callLog).Error; err == nil {
-			duration := 0
-			if callLog.AnsweredAt != nil {
-				duration = int(now.Sub(*callLog.AnsweredAt).Seconds())
-			}
 			updates := map[string]any{
 				"status":   models.CallStatusCompleted,
 				"ended_at": now,
-				"duration": duration,
+				"duration": durationSince(callLog.AnsweredAt, now),
 			}
 			// Only set disconnected_by if not already set (agent hangup sets it first)
 			if callLog.DisconnectedBy == "" {
@@ -382,7 +393,7 @@ func (m *Manager) HandleOutgoingCallWebhook(callID, event, sdpAnswer string) {
 			m.db.Model(&callLog).Updates(updates)
 		}
 
-		m.broadcastOutgoingEvent(session.OrganizationID, websocket.TypeOutgoingCallEnded, map[string]any{
+		m.broadcastEvent(session.OrganizationID, websocket.TypeOutgoingCallEnded, map[string]any{
 			"call_log_id":      session.CallLogID.String(),
 			"call_id":          callID,
 			"contact_id":       session.ContactID.String(),
@@ -396,6 +407,9 @@ func (m *Manager) HandleOutgoingCallWebhook(callID, event, sdpAnswer string) {
 }
 
 // HangupOutgoingCall terminates an outgoing call initiated by an agent.
+// If a post-call IVR flow (is_outgoing_end) is configured for the session's
+// WhatsApp account, the agent side is torn down but the WhatsApp leg stays
+// open so the contact can hear the IVR.
 func (m *Manager) HangupOutgoingCall(callLogID, agentID uuid.UUID) error {
 	session := m.GetSessionByCallLogID(callLogID)
 	if session == nil {
@@ -406,50 +420,134 @@ func (m *Manager) HangupOutgoingCall(callLogID, agentID uuid.UUID) error {
 		return fmt.Errorf("not an outgoing call")
 	}
 
-	// Terminate via WhatsApp API — look up account from DB
-	var account models.WhatsAppAccount
-	if err := m.db.Where("organization_id = ? AND name = ?", session.OrganizationID, session.AccountName).
-		First(&account).Error; err != nil {
-		m.log.Error("Failed to look up WhatsApp account for hangup", "error", err, "call_id", session.ID)
-		// Continue with cleanup even if we can't terminate via API
+	// Look up a post-call IVR flow for this account
+	var ivrFlow models.IVRFlow
+	hasPostCallIVR := m.db.Where(
+		"organization_id = ? AND whatsapp_account = ? AND is_outgoing_end = ? AND is_active = ?",
+		session.OrganizationID, session.AccountName, true, true,
+	).First(&ivrFlow).Error == nil
+
+	if !hasPostCallIVR {
+		// No post-call IVR — original behavior: terminate + cleanup
+		m.terminateCallBySession(session)
+
+		now := time.Now()
+		var callLog models.CallLog
+		if err := m.db.Where("id = ?", callLogID).First(&callLog).Error; err == nil {
+			m.db.Model(&callLog).Updates(map[string]any{
+				"status":          models.CallStatusCompleted,
+				"ended_at":        now,
+				"duration":        durationSince(callLog.AnsweredAt, now),
+				"disconnected_by": models.DisconnectedByAgent,
+			})
+		}
+
+		m.broadcastEvent(session.OrganizationID, websocket.TypeOutgoingCallEnded, map[string]any{
+			"call_log_id":     callLogID.String(),
+			"call_id":         session.ID,
+			"contact_id":      session.ContactID.String(),
+			"contact_phone":   session.TargetPhone,
+			"ended_at":        now.Format(time.RFC3339),
+			"disconnected_by": "agent",
+		})
+
+		m.cleanupSession(session.ID)
+		return nil
 	}
 
-	waAccount := account.ToWAAccount()
-	if waAccount.AccessToken != "" {
-		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-		defer cancel()
-		if err := m.whatsapp.TerminateCall(ctx, waAccount, session.ID); err != nil {
-			m.log.Error("Failed to terminate outgoing call via API", "error", err, "call_id", session.ID)
-		}
-	}
+	// --- Post-call IVR path ---
 
-	now := time.Now()
-
-	// Calculate duration
-	var callLog models.CallLog
-	if err := m.db.Where("id = ?", callLogID).First(&callLog).Error; err == nil {
-		duration := 0
-		if callLog.AnsweredAt != nil {
-			duration = int(now.Sub(*callLog.AnsweredAt).Seconds())
-		}
-		m.db.Model(&callLog).Updates(map[string]any{
-			"status":          models.CallStatusCompleted,
-			"ended_at":        now,
-			"duration":        duration,
-			"disconnected_by": models.DisconnectedByAgent,
+	// 1. Disable agent PC's OnConnectionStateChange to prevent it from
+	//    calling EndCall when the agent PC closes.
+	session.mu.Lock()
+	agentPC := session.AgentPC
+	session.mu.Unlock()
+	if agentPC != nil {
+		agentPC.OnConnectionStateChange(func(state webrtc.PeerConnectionState) {
+			m.log.Debug("Agent PC state after hangup (ignored)", "call_id", session.ID, "state", state.String())
 		})
 	}
 
-	m.broadcastOutgoingEvent(session.OrganizationID, websocket.TypeOutgoingCallEnded, map[string]any{
-		"call_log_id":      callLogID.String(),
-		"call_id":          session.ID,
-		"contact_id":       session.ContactID.String(),
-		"contact_phone":    session.TargetPhone,
-		"ended_at":         now.Format(time.RFC3339),
-		"disconnected_by":  "agent",
+	// 2. Stop bridge and save last RTP sequence for IVR player continuity
+	session.mu.Lock()
+	bridge := session.Bridge
+	session.Bridge = nil
+	session.mu.Unlock()
+
+	if bridge != nil {
+		bridge.Stop()
+		bridge.Wait()
+		seq, ts := bridge.LastCallerSeq()
+		session.mu.Lock()
+		session.LastRTPSeq = seq
+		session.LastRTPTimestamp = ts
+		session.mu.Unlock()
+	}
+
+	// 3. Close agent-side resources
+	session.mu.Lock()
+	ap := session.AgentPC
+	session.AgentPC = nil
+	session.PeerConnection = nil
+	session.AgentAudioTrack = nil
+	session.AgentRemoteTrack = nil
+	callerRec := session.CallerRecorder
+	session.CallerRecorder = nil
+	agentRec := session.AgentRecorder
+	session.AgentRecorder = nil
+	session.mu.Unlock()
+
+	if ap != nil {
+		_ = ap.Close()
+	}
+
+	// Finalize recording before IVR starts
+	if callerRec != nil || agentRec != nil {
+		go m.finalizeRecording(session.OrganizationID, session.CallLogID, callerRec, agentRec)
+	}
+
+	// 4. Set IVR flow on the session
+	session.mu.Lock()
+	session.IVRFlow = &ivrFlow
+	session.mu.Unlock()
+
+	// 5. Update call log
+	m.db.Model(&models.CallLog{}).
+		Where("id = ?", callLogID).
+		Updates(map[string]any{
+			"disconnected_by": models.DisconnectedByAgent,
+			"ivr_flow_id":     ivrFlow.ID,
+		})
+
+	// 6. Broadcast event with ivr_active flag
+	m.broadcastEvent(session.OrganizationID, websocket.TypeOutgoingCallEnded, map[string]any{
+		"call_log_id":     callLogID.String(),
+		"call_id":         session.ID,
+		"contact_id":      session.ContactID.String(),
+		"contact_phone":   session.TargetPhone,
+		"disconnected_by": "agent",
+		"ivr_active":      true,
 	})
 
-	m.cleanupSession(session.ID)
+	// 7. Run IVR in a goroutine — when done, terminate and clean up
+	go func() {
+		m.runIVRFlow(session, nil)
+
+		m.terminateCallBySession(session)
+
+		now := time.Now()
+		var callLog models.CallLog
+		if err := m.db.Where("id = ?", callLogID).First(&callLog).Error; err == nil {
+			m.db.Model(&callLog).Updates(map[string]any{
+				"status":   models.CallStatusCompleted,
+				"ended_at": now,
+				"duration": durationSince(callLog.AnsweredAt, now),
+			})
+		}
+
+		m.cleanupSession(session.ID)
+	}()
+
 	return nil
 }
 
@@ -463,18 +561,9 @@ func (m *Manager) startOutgoingBridge(
 	waLocal *webrtc.TrackLocalStaticRTP,
 ) {
 	// Signal that bridge is taking over
-	select {
-	case <-session.BridgeStarted:
-	default:
-		close(session.BridgeStarted)
-	}
+	safeClose(session.BridgeStarted)
 
-	recorder := m.newRecorderIfEnabled()
-	bridge := NewAudioBridge(recorder)
-	session.mu.Lock()
-	session.Bridge = bridge
-	session.Recorder = recorder
-	session.mu.Unlock()
+	bridge := m.setupAudioBridge(session)
 
 	m.log.Info("Starting outgoing call audio bridge", "call_id", session.ID)
 
@@ -482,13 +571,3 @@ func (m *Manager) startOutgoingBridge(
 	go bridge.Start(waRemote, agentLocal, agentRemote, waLocal)
 }
 
-// broadcastOutgoingEvent broadcasts an outgoing call event via WebSocket.
-func (m *Manager) broadcastOutgoingEvent(orgID uuid.UUID, eventType string, payload map[string]any) {
-	if m.wsHub == nil {
-		return
-	}
-	m.wsHub.BroadcastToOrg(orgID, websocket.WSMessage{
-		Type:    eventType,
-		Payload: payload,
-	})
-}

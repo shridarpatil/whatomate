@@ -74,7 +74,8 @@ const selectedTeam = ref<Team | null>(null)
 const teamMembers = ref<TeamMember[]>([])
 const loadingMembers = ref(false)
 
-const isAdmin = computed(() => authStore.userRole === 'admin')
+const canWriteTeams = computed(() => authStore.hasPermission('teams', 'write'))
+const canDeleteTeams = computed(() => authStore.hasPermission('teams', 'delete'))
 const breadcrumbs = computed(() => [{ label: t('nav.settings'), href: '/settings' }, { label: t('nav.teams') }])
 
 const availableUsers = computed(() => {
@@ -174,7 +175,7 @@ function getStrategyIcon(strategy: string) { return { round_robin: RotateCcw, lo
   <div class="flex flex-col h-full bg-[#0a0a0b] light:bg-gray-50">
     <PageHeader :title="$t('teams.title')" :icon="Users" icon-gradient="bg-gradient-to-br from-cyan-500 to-blue-600 shadow-cyan-500/20" back-link="/settings" :breadcrumbs="breadcrumbs">
       <template #actions>
-        <Button v-if="isAdmin" variant="outline" size="sm" @click="openCreateDialog"><Plus class="h-4 w-4 mr-2" />{{ $t('teams.addTeam') }}</Button>
+        <Button v-if="canWriteTeams" variant="outline" size="sm" @click="openCreateDialog"><Plus class="h-4 w-4 mr-2" />{{ $t('teams.addTeam') }}</Button>
       </template>
     </PageHeader>
 
@@ -194,7 +195,7 @@ function getStrategyIcon(strategy: string) { return { round_robin: RotateCcw, lo
             <CardContent>
               <DataTable :items="teams" :columns="columns" :is-loading="isLoading" :empty-icon="Users" :empty-title="searchQuery ? $t('teams.noMatchingTeams') : $t('teams.noTeamsYet')" :empty-description="searchQuery ? $t('teams.noMatchingTeamsDesc') : $t('teams.noTeamsYetDesc')" v-model:sort-key="sortKey" v-model:sort-direction="sortDirection" server-pagination :current-page="currentPage" :total-items="totalItems" :page-size="pageSize" item-name="teams" @page-change="handlePageChange">
                 <template #empty-action>
-                  <Button v-if="isAdmin" variant="outline" size="sm" @click="openCreateDialog"><Plus class="h-4 w-4 mr-2" />{{ $t('teams.addTeam') }}</Button>
+                  <Button v-if="canWriteTeams" variant="outline" size="sm" @click="openCreateDialog"><Plus class="h-4 w-4 mr-2" />{{ $t('teams.addTeam') }}</Button>
                 </template>
                 <template #cell-team="{ item: team }">
                   <div class="flex items-center gap-3">
@@ -224,7 +225,7 @@ function getStrategyIcon(strategy: string) { return { round_robin: RotateCcw, lo
                   <div class="flex items-center justify-end gap-1">
                     <Tooltip><TooltipTrigger as-child><Button variant="ghost" size="icon" class="h-8 w-8" @click="openMembersDialog(team)"><UserPlus class="h-4 w-4" /></Button></TooltipTrigger><TooltipContent>{{ $t('teams.manageMembers') }}</TooltipContent></Tooltip>
                     <Tooltip><TooltipTrigger as-child><Button variant="ghost" size="icon" class="h-8 w-8" @click="openEditDialog(team)"><Pencil class="h-4 w-4" /></Button></TooltipTrigger><TooltipContent>{{ $t('teams.editTeamTooltip') }}</TooltipContent></Tooltip>
-                    <Tooltip v-if="isAdmin"><TooltipTrigger as-child><Button variant="ghost" size="icon" class="h-8 w-8" @click="openDeleteDialog(team)"><Trash2 class="h-4 w-4 text-destructive" /></Button></TooltipTrigger><TooltipContent>{{ $t('teams.deleteTeamTooltip') }}</TooltipContent></Tooltip>
+                    <Tooltip v-if="canDeleteTeams"><TooltipTrigger as-child><Button variant="ghost" size="icon" class="h-8 w-8" @click="openDeleteDialog(team)"><Trash2 class="h-4 w-4 text-destructive" /></Button></TooltipTrigger><TooltipContent>{{ $t('teams.deleteTeamTooltip') }}</TooltipContent></Tooltip>
                   </div>
                 </template>
               </DataTable>
@@ -281,7 +282,7 @@ function getStrategyIcon(strategy: string) { return { round_robin: RotateCcw, lo
                 </div>
                 <div class="flex items-center gap-1">
                   <Button variant="outline" size="sm" class="h-7 text-xs" @click="addMember(user, 'agent')">{{ $t('teams.addAsAgent') }}</Button>
-                  <Button v-if="isAdmin" variant="outline" size="sm" class="h-7 text-xs" @click="addMember(user, 'manager')">{{ $t('teams.addAsManager') }}</Button>
+                  <Button v-if="canWriteTeams" variant="outline" size="sm" class="h-7 text-xs" @click="addMember(user, 'manager')">{{ $t('teams.addAsManager') }}</Button>
                 </div>
               </div>
             </div>

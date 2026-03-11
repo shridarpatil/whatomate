@@ -1049,7 +1049,7 @@ func (a *App) completeFlow(account *models.WhatsAppAccount, session *models.Chat
 
 	// Send completion message
 	if flow.CompletionMessage != "" {
-		message := a.replaceVariables(flow.CompletionMessage, session.SessionData)
+		message := processTemplate(flow.CompletionMessage, session.SessionData)
 		if err := a.sendAndSaveTextMessage(account, contact, message); err != nil {
 			a.Log.Error("Failed to send flow completion message", "error", err, "contact", contact.PhoneNumber)
 		}
@@ -1085,7 +1085,7 @@ func (a *App) sendFlowCompletionWebhook(flow *models.ChatbotFlow, session *model
 	}
 
 	// Replace variables in URL
-	webhookURL = a.replaceVariables(webhookURL, session.SessionData)
+	webhookURL = processTemplate(webhookURL, session.SessionData)
 
 	// Get HTTP method (default: POST)
 	method := "POST"
@@ -1109,7 +1109,7 @@ func (a *App) sendFlowCompletionWebhook(flow *models.ChatbotFlow, session *model
 	var bodyReader io.Reader
 	if bodyTemplate, ok := config["body"].(string); ok && bodyTemplate != "" {
 		// Replace variables in body template
-		bodyWithVars := a.replaceVariables(bodyTemplate, session.SessionData)
+		bodyWithVars := processTemplate(bodyTemplate, session.SessionData)
 		bodyReader = strings.NewReader(bodyWithVars)
 	} else {
 		// Use default payload
@@ -1136,7 +1136,7 @@ func (a *App) sendFlowCompletionWebhook(flow *models.ChatbotFlow, session *model
 	if headers, ok := config["headers"].(map[string]interface{}); ok {
 		for key, value := range headers {
 			if strVal, ok := value.(string); ok {
-				req.Header.Set(key, a.replaceVariables(strVal, session.SessionData))
+				req.Header.Set(key, processTemplate(strVal, session.SessionData))
 			}
 		}
 	}
@@ -1190,21 +1190,6 @@ func (a *App) closeSession(session *models.ChatbotSession) {
 
 	// Clear chatbot tracking on contact
 	a.ClearContactChatbotTracking(session.ContactID)
-}
-
-// replaceVariables replaces {{variable}} placeholders with session data values
-func (a *App) replaceVariables(message string, data models.JSONB) string {
-	if data == nil {
-		return message
-	}
-	result := message
-	for key, value := range data {
-		placeholder := "{{" + key + "}}"
-		if strVal, ok := value.(string); ok {
-			result = strings.ReplaceAll(result, placeholder, strVal)
-		}
-	}
-	return result
 }
 
 // sendStepWithSkipCheck checks if a step should be skipped and sends the appropriate step message
@@ -1733,7 +1718,7 @@ func (a *App) fetchAPIContext(apiConfig models.JSONB, session *models.ChatbotSes
 		sessionData["user_message"] = userMessage
 	}
 
-	replaceVar := func(s string) string { return a.replaceVariables(s, sessionData) }
+	replaceVar := func(s string) string { return processTemplate(s, sessionData) }
 	respBody, statusCode, err := a.executeConfiguredAPI(apiConfig, replaceVar)
 	if err != nil {
 		return "", err

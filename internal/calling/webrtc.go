@@ -343,27 +343,14 @@ func (m *Manager) consumeAudioWithDTMF(session *CallSession, track *webrtc.Track
 				eventID := pkt.Payload[0]
 				endBit := (pkt.Payload[1] & 0x80) != 0
 
-				if endBit && (lastDTMFEvent != eventID || !lastEndBit) {
-					if digit, ok := dtmfDigits[eventID]; ok {
-						m.log.Info("DTMF digit detected (inline)",
-							"call_id", session.ID,
-							"digit", string(digit),
-							"event_id", eventID,
-						)
-
-						select {
-						case session.DTMFBuffer <- digit:
-						default:
-							m.log.Warn("DTMF buffer full, dropping digit",
-								"call_id", session.ID,
-								"digit", string(digit),
-							)
-						}
-					}
+				if digit, ok := decodeDTMFEvent(eventID, endBit, &lastDTMFEvent, &lastEndBit); ok {
+					m.log.Info("DTMF digit detected (inline)",
+						"call_id", session.ID,
+						"digit", string(digit),
+						"event_id", eventID,
+					)
+					sendDTMFDigit(session, digit, m.log)
 				}
-
-				lastDTMFEvent = eventID
-				lastEndBit = endBit
 			}
 		} else if packetCount == 1 {
 			m.log.Debug("First audio packet received",

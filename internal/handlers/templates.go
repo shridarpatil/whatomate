@@ -558,6 +558,7 @@ func (a *App) UploadTemplateMedia(r *fastglue.Request) error {
 
 	file, err := fileHeader.Open()
 	if err != nil {
+		a.Log.Error("Failed to open uploaded file", "error", err)
 		return r.SendErrorEnvelope(fasthttp.StatusInternalServerError, "Failed to open uploaded file", nil, "")
 	}
 	defer func() { _ = file.Close() }()
@@ -565,6 +566,7 @@ func (a *App) UploadTemplateMedia(r *fastglue.Request) error {
 	// Read file data
 	fileData := make([]byte, fileHeader.Size)
 	if _, err := file.Read(fileData); err != nil {
+		a.Log.Error("Failed to read file data", "error", err)
 		return r.SendErrorEnvelope(fasthttp.StatusInternalServerError, "Failed to read file data", nil, "")
 	}
 

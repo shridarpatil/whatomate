@@ -127,6 +127,7 @@ func (a *App) Register(r *fastglue.Request) error {
 	var defaultRole models.CustomRole
 	if err := a.DB.Where("organization_id = ? AND is_default = ?", req.OrganizationID, true).First(&defaultRole).Error; err != nil {
 		if err := a.DB.Where("organization_id = ? AND name = ? AND is_system = ?", req.OrganizationID, "agent", true).First(&defaultRole).Error; err != nil {
+			a.Log.Error("Failed to find default role", "error", err)
 			return r.SendErrorEnvelope(fasthttp.StatusInternalServerError, "Failed to find default role", nil, "")
 		}
 	}

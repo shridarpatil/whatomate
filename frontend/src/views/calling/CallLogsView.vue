@@ -2,13 +2,13 @@
 import { ref, computed, onMounted, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useCallingStore } from '@/stores/calling'
-import { accountsService, callLogsService, ivrFlowsService, type CallLog, type IVRFlow } from '@/services/api'
+import { accountsService, callLogsService, ivrFlowsService, type CallLog, type CallTransfer, type IVRFlow } from '@/services/api'
 import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog'
-import { Phone, PhoneIncoming, PhoneOutgoing, PhoneOff, PhoneMissed, Clock, RefreshCw, Mic, User, Monitor, Headphones } from 'lucide-vue-next'
+import { Phone, PhoneIncoming, PhoneOutgoing, PhoneOff, PhoneMissed, Clock, RefreshCw, Mic, User, Monitor, Headphones, ArrowRightLeft } from 'lucide-vue-next'
 import DataTable, { type Column } from '@/components/shared/DataTable.vue'
 import SearchInput from '@/components/shared/SearchInput.vue'
 import IVRPathTree from '@/components/calling/IVRPathTree.vue'
@@ -31,6 +31,7 @@ const ivrFlows = ref<IVRFlow[]>([])
 // Detail dialog
 const showDetail = ref(false)
 const selectedLog = ref<CallLog | null>(null)
+const selectedTransfers = ref<CallTransfer[]>([])
 const recordingURL = ref<string | null>(null)
 const recordingLoading = ref(false)
 
@@ -51,6 +52,7 @@ const columns = computed<Column<CallLog>[]>(() => [
   { key: 'direction', label: t('calling.direction') },
   { key: 'status', label: t('calling.status') },
   { key: 'duration', label: t('calling.duration') },
+  { key: 'agent', label: t('calling.agent') },
   { key: 'disconnected_by', label: t('calling.disconnectedBy') },
   { key: 'ivr_flow', label: t('calling.ivrFlow') },
   { key: 'whatsapp_account', label: t('calling.account') },
@@ -74,10 +76,25 @@ function handlePageChange(page: number) {
   fetchLogs()
 }
 
-function viewDetail(log: CallLog) {
+async function viewDetail(log: CallLog) {
   selectedLog.value = log
+  selectedTransfers.value = []
   showDetail.value = true
   recordingURL.value = null
+
+  // Fetch full call log detail (includes transfers)
+  try {
+    const res = await callLogsService.get(log.id)
+    const data = (res.data as any).data ?? res.data
+    if (data.call_log) {
+      selectedLog.value = data.call_log
+    }
+    if (data.transfers) {
+      selectedTransfers.value = data.transfers
+    }
+  } catch {
+    // Fall back to list data
+  }
 
   // Fetch recording URL if recording exists
   if (log.recording_s3_key) {
@@ -300,6 +317,10 @@ watch(phoneSearch, () => {
               <Mic v-if="log.recording_s3_key" class="h-3.5 w-3.5 text-muted-foreground" :title="t('calling.recording')" />
             </span>
           </template>
+          <template #cell-agent="{ item: log }">
+            <span v-if="log.agent" class="text-sm">{{ log.agent.full_name }}</span>
+            <span v-else class="text-muted-foreground">-</span>
+          </template>
           <template #cell-disconnected_by="{ item: log }">
             <Badge v-if="log.disconnected_by" :variant="disconnectedByVariant(log.disconnected_by)">
               <component :is="disconnectedByIcon(log.disconnected_by)" class="h-3 w-3 mr-1" />
@@ -371,6 +392,43 @@ watch(phoneSearch, () => {
                 <component :is="disconnectedByIcon(selectedLog.disconnected_by)" class="h-3 w-3 mr-1" />
                 {{ t(`calling.disconnectedBy${selectedLog.disconnected_by.charAt(0).toUpperCase() + selectedLog.disconnected_by.slice(1)}`) }}
               </Badge>
+            </div>
+            <div v-if="selectedLog.agent">
+              <p class="text-muted-foreground">{{ t('calling.pickedBy') }}</p>
+              <p class="font-medium inline-flex items-center gap-1.5">
+                <Headphones class="h-3.5 w-3.5" />
+                {{ selectedLog.agent.full_name }}
+              </p>
+            </div>
+          </div>
+
+          <div v-if="selectedTransfers.length > 0" class="space-y-2">
+            <p class="text-sm text-muted-foreground flex items-center gap-1.5">
+              <ArrowRightLeft class="h-3.5 w-3.5" />
+              {{ t('calling.transferHistory') }}
+            </p>
+            <div class="space-y-2">
+              <div
+                v-for="transfer in selectedTransfers"
+                :key="transfer.id"
+                class="border rounded-lg p-3 text-sm space-y-1"
+              >
+                <div class="flex items-center justify-between">
+                  <Badge :variant="transfer.status === 'connected' || transfer.status === 'completed' ? 'default' : 'secondary'">
+                    {{ transfer.status }}
+                  </Badge>
+                  <span class="text-xs text-muted-foreground">{{ formatDate(transfer.transferred_at) }}</span>
+                </div>
+                <div v-if="transfer.team" class="text-muted-foreground">
+                  {{ t('calling.team') }}: <span class="text-foreground font-medium">{{ transfer.team.name }}</span>
+                </div>
+                <div v-if="transfer.initiating_agent" class="text-muted-foreground">
+                  {{ t('calling.transferredBy') }}: <span class="text-foreground font-medium">{{ transfer.initiating_agent.full_name }}</span>
+                </div>
+                <div v-if="transfer.agent" class="text-muted-foreground">
+                  {{ t('calling.pickedBy') }}: <span class="text-foreground font-medium">{{ transfer.agent.full_name }}</span>
+                </div>
+              </div>
             </div>
           </div>
 

@@ -69,6 +69,7 @@ func (a *App) ListTeams(r *fastglue.Request) error {
 		if err := pg.Apply(baseQuery.
 			Preload("Members").Preload("Members.User").
 			Order("name ASC")).Find(&teams).Error; err != nil {
+			a.Log.Error("Failed to list teams", "error", err)
 			return r.SendErrorEnvelope(fasthttp.StatusInternalServerError, "Failed to list teams", nil, "")
 		}
 	} else {
@@ -82,6 +83,7 @@ func (a *App) ListTeams(r *fastglue.Request) error {
 		if err := pg.Apply(baseQuery.
 			Preload("Members").Preload("Members.User").
 			Order("teams.name ASC")).Find(&teams).Error; err != nil {
+			a.Log.Error("Failed to list teams", "error", err)
 			return r.SendErrorEnvelope(fasthttp.StatusInternalServerError, "Failed to list teams", nil, "")
 		}
 	}

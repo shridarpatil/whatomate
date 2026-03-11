@@ -102,6 +102,7 @@ func (a *App) UpdateProfilePicture(r *fastglue.Request) error {
 	// 2. Open and read file
 	file, err := fileHeader.Open()
 	if err != nil {
+		a.Log.Error("Failed to open file", "error", err)
 		return r.SendErrorEnvelope(fasthttp.StatusInternalServerError, "Failed to open file", nil, "")
 	}
 	defer file.Close() //nolint:errcheck
@@ -110,6 +111,7 @@ func (a *App) UpdateProfilePicture(r *fastglue.Request) error {
 	fileContent := make([]byte, fileSize)
 	_, err = file.Read(fileContent)
 	if err != nil {
+		a.Log.Error("Failed to read file", "error", err)
 		return r.SendErrorEnvelope(fasthttp.StatusInternalServerError, "Failed to read file", nil, "")
 	}
 

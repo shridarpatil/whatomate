@@ -109,6 +109,7 @@ async function fetchUsers() {
 
 async function saveUser() {
   if (!formData.value.email.trim() || !formData.value.full_name.trim()) { toast.error(t('users.fillEmailName')); return }
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formData.value.email.trim())) { toast.error(t('validation.email')); return }
   if (!editingUser.value && !formData.value.password.trim()) { toast.error(t('users.passwordRequired')); return }
   if (!formData.value.role_id) { toast.error(t('users.selectRoleRequired')); return }
 

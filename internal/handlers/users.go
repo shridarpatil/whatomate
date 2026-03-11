@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"net/mail"
 	"time"
 
 	"github.com/google/uuid"
@@ -228,6 +229,11 @@ func (a *App) CreateUser(r *fastglue.Request) error {
 		return r.SendErrorEnvelope(fasthttp.StatusBadRequest, "Email, password, and full_name are required", nil, "")
 	}
 
+	// Validate email format
+	if _, err := mail.ParseAddress(req.Email); err != nil {
+		return r.SendErrorEnvelope(fasthttp.StatusBadRequest, "Invalid email format", nil, "")
+	}
+
 	// Determine role
 	var roleID *uuid.UUID
 	if req.RoleID != nil {
@@ -432,6 +438,9 @@ func (a *App) UpdateUser(r *fastglue.Request) error {
 
 	// Native user: full update
 	if req.Email != "" {
+		if _, err := mail.ParseAddress(req.Email); err != nil {
+			return r.SendErrorEnvelope(fasthttp.StatusBadRequest, "Invalid email format", nil, "")
+		}
 		var existingUser models.User
 		if err := a.DB.Where("email = ? AND id != ?", req.Email, id).First(&existingUser).Error; err == nil {
 			return r.SendErrorEnvelope(fasthttp.StatusConflict, "Email already exists", nil, "")

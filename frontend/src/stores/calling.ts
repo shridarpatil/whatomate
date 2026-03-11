@@ -34,6 +34,7 @@ export const useCallingStore = defineStore('calling', () => {
   const outgoingCallStatus = ref<'initiating' | 'ringing' | 'answered' | 'ended' | null>(null)
   const outgoingContactName = ref<string>('')
   const outgoingContactPhone = ref<string>('')
+  const isTransferring = ref(false)
 
   // Computed
   const activeFlows = computed(() => ivrFlows.value.filter(f => f.is_active && f.is_call_start))
@@ -336,6 +337,22 @@ export const useCallingStore = defineStore('calling', () => {
     }, 1000)
   }
 
+  async function initiateTransfer(teamId: string, agentId?: string) {
+    const callLogId = outgoingCallLogId.value ?? activeTransfer.value?.call_log_id
+    if (!callLogId) throw new Error('No active call to transfer')
+    isTransferring.value = true
+    try {
+      await callTransfersService.initiate({
+        call_log_id: callLogId,
+        team_id: teamId,
+        ...(agentId ? { agent_id: agentId } : {}),
+      })
+      cleanup() // Agent is disconnected — tear down local WebRTC
+    } finally {
+      isTransferring.value = false
+    }
+  }
+
   async function endCall() {
     if (outgoingCallLogId.value) {
       // Outgoing call hangup
@@ -468,6 +485,8 @@ export const useCallingStore = defineStore('calling', () => {
     endCall,
     toggleMute,
     cleanup,
+    isTransferring,
+    initiateTransfer,
     // Outgoing calls
     outgoingCallLogId,
     outgoingCallStatus,

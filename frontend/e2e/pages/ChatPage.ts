@@ -196,7 +196,7 @@ export class ChatPage extends BasePage {
     await noteCard.scrollIntoViewIfNeeded()
     await noteCard.hover()
     // Action buttons use group-hover opacity — force click to bypass visibility check
-    const actionBtns = noteCard.locator('div.absolute button')
+    const actionBtns = noteCard.locator('button.h-5.w-5')
     await actionBtns.first().click({ force: true })
     // After clicking edit, the text moves from <p> to textarea value,
     // so the hasText-based noteCard locator becomes stale.
@@ -213,7 +213,7 @@ export class ChatPage extends BasePage {
     await noteCard.scrollIntoViewIfNeeded()
     await noteCard.hover()
     // Action buttons use group-hover opacity — force click
-    const actionBtns = noteCard.locator('div.absolute button')
+    const actionBtns = noteCard.locator('button.h-5.w-5')
     await actionBtns.last().click({ force: true })
   }
 

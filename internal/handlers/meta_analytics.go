@@ -135,6 +135,7 @@ func (a *App) GetMetaAnalytics(r *fastglue.Request) error {
 	} else {
 		// All accounts for the organization
 		if err := a.DB.Where("organization_id = ?", orgID).Find(&accounts).Error; err != nil {
+			a.Log.Error("Failed to fetch accounts", "error", err)
 			return r.SendErrorEnvelope(fasthttp.StatusInternalServerError, "Failed to fetch accounts", nil, "")
 		}
 	}
@@ -359,6 +360,7 @@ func (a *App) ListMetaAccountsForAnalytics(r *fastglue.Request) error {
 
 	var accounts []models.WhatsAppAccount
 	if err := a.DB.Select("id, name, phone_id").Where("organization_id = ?", orgID).Find(&accounts).Error; err != nil {
+		a.Log.Error("Failed to fetch accounts", "error", err)
 		return r.SendErrorEnvelope(fasthttp.StatusInternalServerError, "Failed to fetch accounts", nil, "")
 	}
 

@@ -101,7 +101,7 @@ func SecurityHeaders() fastglue.FastMiddleware {
 		h.Set("X-Content-Type-Options", "nosniff")
 		h.Set("X-Frame-Options", "DENY")
 		h.Set("Referrer-Policy", "strict-origin-when-cross-origin")
-		h.Set("Permissions-Policy", "camera=(), microphone=(), geolocation=()")
+		h.Set("Permissions-Policy", "camera=(), microphone=(self), geolocation=()")
 		h.Set("X-XSS-Protection", "0") // Disabled per OWASP recommendation (use CSP instead)
 		return r
 	}

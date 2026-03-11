@@ -2,6 +2,7 @@ package calling
 
 import (
 	"github.com/pion/webrtc/v4"
+	"github.com/zerodha/logf"
 )
 
 // DTMF digit mapping from RFC 4733 event IDs to characters
@@ -18,6 +19,32 @@ var dtmfDigits = map[byte]byte{
 	9:  '9',
 	10: '*',
 	11: '#',
+}
+
+// decodeDTMFEvent checks whether an RTP telephone-event represents a new DTMF
+// digit press using end-bit debouncing. Returns the digit and true if a new
+// press is detected, or (0, false) otherwise. Caller must pass pointers to
+// persistent state variables that track the previous event.
+func decodeDTMFEvent(eventID byte, endBit bool, lastEvent *byte, lastEndBit *bool) (byte, bool) {
+	defer func() { *lastEvent = eventID; *lastEndBit = endBit }()
+	if endBit && (*lastEvent != eventID || !*lastEndBit) {
+		if digit, ok := dtmfDigits[eventID]; ok {
+			return digit, true
+		}
+	}
+	return 0, false
+}
+
+// sendDTMFDigit sends a decoded digit to the session's DTMF buffer (non-blocking).
+func sendDTMFDigit(session *CallSession, digit byte, log logf.Logger) {
+	select {
+	case session.DTMFBuffer <- digit:
+	default:
+		log.Warn("DTMF buffer full, dropping digit",
+			"call_id", session.ID,
+			"digit", string(digit),
+		)
+	}
 }
 
 // handleDTMFTrack reads RTP telephone-event packets and extracts DTMF digits.
@@ -52,27 +79,13 @@ func (m *Manager) handleDTMFTrack(session *CallSession, track *webrtc.TrackRemot
 		endBit := (buf[1] & 0x80) != 0
 
 		// Debounce: only emit on the first end-bit packet for each event
-		if endBit && (lastEvent != eventID || !lastEndBit) {
-			if digit, ok := dtmfDigits[eventID]; ok {
-				m.log.Info("DTMF digit detected",
-					"call_id", session.ID,
-					"digit", string(digit),
-					"event_id", eventID,
-				)
-
-				// Non-blocking send to buffer
-				select {
-				case session.DTMFBuffer <- digit:
-				default:
-					m.log.Warn("DTMF buffer full, dropping digit",
-						"call_id", session.ID,
-						"digit", string(digit),
-					)
-				}
-			}
+		if digit, ok := decodeDTMFEvent(eventID, endBit, &lastEvent, &lastEndBit); ok {
+			m.log.Info("DTMF digit detected",
+				"call_id", session.ID,
+				"digit", string(digit),
+				"event_id", eventID,
+			)
+			sendDTMFDigit(session, digit, m.log)
 		}
-
-		lastEvent = eventID
-		lastEndBit = endBit
 	}
 }

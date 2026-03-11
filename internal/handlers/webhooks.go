@@ -356,6 +356,7 @@ func (a *App) TestWebhook(r *fastglue.Request) error {
 
 	jsonData, err := json.Marshal(payload)
 	if err != nil {
+		a.Log.Error("Failed to create test payload", "error", err)
 		return r.SendErrorEnvelope(fasthttp.StatusInternalServerError, "Failed to create test payload", nil, "")
 	}
 

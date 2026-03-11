@@ -242,29 +242,30 @@ function formatNoteTime(dateStr: string) {
                 <div class="flex-1 min-w-0">
                   <div class="flex items-center justify-between mb-1">
                     <span class="text-xs font-medium text-white/70 light:text-gray-700">{{ note.created_by_name }}</span>
-                    <span class="text-[10px] text-white/30 light:text-gray-400">{{ formatNoteTime(note.created_at) }}</span>
+                    <div class="flex items-center gap-1">
+                      <!-- Hover actions (own notes only) -->
+                      <div
+                        v-if="note.created_by_id === authStore.user?.id"
+                        class="opacity-0 group-hover:opacity-100 transition-opacity flex gap-0.5"
+                      >
+                        <button
+                          class="h-5 w-5 rounded-md flex items-center justify-center hover:bg-white/[0.08] light:hover:bg-gray-200 text-white/30 hover:text-white/60 light:text-gray-400 light:hover:text-gray-600 transition-colors"
+                          @click="startEditing(note.id, note.content)"
+                        >
+                          <Pencil class="h-3 w-3" />
+                        </button>
+                        <button
+                          class="h-5 w-5 rounded-md flex items-center justify-center hover:bg-red-500/10 text-white/30 hover:text-red-400 light:text-gray-400 light:hover:text-red-500 transition-colors"
+                          @click="deleteNote(note.id)"
+                        >
+                          <Trash2 class="h-3 w-3" />
+                        </button>
+                      </div>
+                      <span class="text-[10px] text-white/30 light:text-gray-400">{{ formatNoteTime(note.created_at) }}</span>
+                    </div>
                   </div>
                   <p class="text-[13px] text-white/60 light:text-gray-600 leading-relaxed whitespace-pre-wrap break-words">{{ note.content }}</p>
                 </div>
-              </div>
-
-              <!-- Hover actions (own notes only) -->
-              <div
-                v-if="note.created_by_id === authStore.user?.id"
-                class="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity flex gap-0.5"
-              >
-                <button
-                  class="h-6 w-6 rounded-md flex items-center justify-center hover:bg-white/[0.08] light:hover:bg-gray-200 text-white/30 hover:text-white/60 light:text-gray-400 light:hover:text-gray-600 transition-colors"
-                  @click="startEditing(note.id, note.content)"
-                >
-                  <Pencil class="h-3 w-3" />
-                </button>
-                <button
-                  class="h-6 w-6 rounded-md flex items-center justify-center hover:bg-red-500/10 text-white/30 hover:text-red-400 light:text-gray-400 light:hover:text-red-500 transition-colors"
-                  @click="deleteNote(note.id)"
-                >
-                  <Trash2 class="h-3 w-3" />
-                </button>
               </div>
             </template>
           </div>

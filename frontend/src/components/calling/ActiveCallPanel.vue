@@ -3,12 +3,14 @@ import { computed, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useCallingStore } from '@/stores/calling'
 import { Button } from '@/components/ui/button'
-import { Phone, PhoneOff, PhoneIncoming, Mic, MicOff } from 'lucide-vue-next'
+import { Phone, PhoneOff, PhoneIncoming, Mic, MicOff, ArrowRightLeft } from 'lucide-vue-next'
+import CallTransferPicker from '@/components/calling/CallTransferPicker.vue'
 import { toast } from 'vue-sonner'
 
 const { t } = useI18n()
 const store = useCallingStore()
 const acceptingId = ref<string | null>(null)
+const showTransferPicker = ref(false)
 
 const formattedDuration = computed(() => {
   const m = Math.floor(store.callDuration / 60)
@@ -102,13 +104,25 @@ async function handleAccept(id: string) {
         <Button
           v-if="store.isOnCall"
           size="sm"
-          variant="outline"
-          class="h-10 w-10 rounded-full p-0"
-          :class="store.isMuted ? 'bg-red-900/30 border-red-700' : 'border-zinc-600'"
+          variant="ghost"
+          class="h-10 w-10 rounded-full p-0 border !text-zinc-300"
+          :class="store.isMuted ? '!bg-red-900/30 !border-red-700 hover:!bg-red-900/50' : '!bg-zinc-800 !border-zinc-600 hover:!bg-zinc-700'"
           @click="store.toggleMute()"
         >
-          <MicOff v-if="store.isMuted" class="h-4 w-4 text-red-400" />
-          <Mic v-else class="h-4 w-4 text-zinc-300" />
+          <MicOff v-if="store.isMuted" class="h-4 w-4 !text-red-400" />
+          <Mic v-else class="h-4 w-4" />
+        </Button>
+
+        <!-- Transfer (only when on active call) -->
+        <Button
+          v-if="store.isOnCall"
+          size="sm"
+          variant="ghost"
+          class="h-10 w-10 rounded-full p-0 border !bg-zinc-800 !border-zinc-600 !text-zinc-300 hover:!bg-zinc-700"
+          :title="t('callTransfers.transfer')"
+          @click="showTransferPicker = true"
+        >
+          <ArrowRightLeft class="h-4 w-4" />
         </Button>
 
         <!-- Accept incoming transfer (green) -->
@@ -116,11 +130,11 @@ async function handleAccept(id: string) {
           v-if="firstWaiting"
           variant="ghost"
           size="sm"
-          class="h-10 w-10 rounded-full p-0 bg-green-600 hover:bg-green-500"
+          class="h-10 w-10 rounded-full p-0 !bg-green-600 !text-white hover:!bg-green-500"
           :disabled="acceptingId === firstWaiting.id"
           @click="handleAccept(firstWaiting.id)"
         >
-          <Phone class="h-4 w-4 text-white" />
+          <Phone class="h-4 w-4" />
         </Button>
 
         <!-- Hangup / Decline (red) -->
@@ -128,12 +142,14 @@ async function handleAccept(id: string) {
           v-if="store.isOnCall"
           variant="ghost"
           size="sm"
-          class="h-10 w-10 rounded-full p-0 bg-red-600 hover:bg-red-500"
+          class="h-10 w-10 rounded-full p-0 !bg-red-600 !text-white hover:!bg-red-500"
           @click="store.endCall()"
         >
-          <PhoneOff class="h-4 w-4 text-white" />
+          <PhoneOff class="h-4 w-4" />
         </Button>
       </div>
     </div>
+
+    <CallTransferPicker v-if="showTransferPicker" @close="showTransferPicker = false" />
   </Teleport>
 </template>

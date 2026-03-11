@@ -112,14 +112,17 @@ func (a *App) ReadyCheck(r *fastglue.Request) error {
 	// Check database connection
 	sqlDB, err := a.DB.DB()
 	if err != nil {
+		a.Log.Error("Database connection error", "error", err)
 		return r.SendErrorEnvelope(500, "Database connection error", nil, "")
 	}
 	if err := sqlDB.Ping(); err != nil {
+		a.Log.Error("Database ping failed", "error", err)
 		return r.SendErrorEnvelope(500, "Database ping failed", nil, "")
 	}
 
 	// Check Redis connection
 	if err := a.Redis.Ping(r.RequestCtx).Err(); err != nil {
+		a.Log.Error("Redis connection error", "error", err)
 		return r.SendErrorEnvelope(500, "Redis connection error", nil, "")
 	}
 

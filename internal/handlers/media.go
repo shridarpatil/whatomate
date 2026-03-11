@@ -180,6 +180,7 @@ func (a *App) ServeMedia(r *fastglue.Request) error {
 	filePath := filepath.Clean(message.MediaURL)
 	baseDir, err := filepath.Abs(a.getMediaStoragePath())
 	if err != nil {
+		a.Log.Error("Storage configuration error", "error", err)
 		return r.SendErrorEnvelope(fasthttp.StatusInternalServerError, "Storage configuration error", nil, "")
 	}
 	fullPath, err := filepath.Abs(filepath.Join(baseDir, filePath))

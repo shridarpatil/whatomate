@@ -1,17 +1,18 @@
 ---
 title: Calling
-description: WhatsApp voice calling with IVR menus, call transfers, and recording
+description: WhatsApp voice calling with IVR flow builder, call transfers, and recording
 ---
 
 import { Aside, Steps, Card, CardGrid } from '@astrojs/starlight/components';
+import ivrFlowExample from '../../../assets/ivr-flow-example.png';
 
 ## Overview
 
-Whatomate supports WhatsApp voice calling with WebRTC-based audio bridging. Incoming calls are handled by an Interactive Voice Response (IVR) system that plays greetings, collects DTMF input, and routes callers to agent teams. Agents answer calls from the browser — no phone hardware required.
+Whatomate supports WhatsApp voice calling with WebRTC-based audio bridging. Incoming calls are handled by an Interactive Voice Response (IVR) system built using a visual drag-and-drop flow editor. The IVR plays greetings, collects DTMF input, makes HTTP callbacks, and routes callers to agent teams. Agents answer calls from the browser — no phone hardware required.
 
 <CardGrid>
-  <Card title="IVR Menus" icon="list-format">
-    Multi-level menus with audio greetings and DTMF digit routing
+  <Card title="Visual Flow Editor" icon="pencil">
+    Drag-and-drop node-based IVR builder with 8 node types
   </Card>
   <Card title="Call Transfers" icon="forward-slash">
     Route callers to agent teams with hold music
@@ -29,15 +30,15 @@ Whatomate supports WhatsApp voice calling with WebRTC-based audio bridging. Inco
 <Steps>
 1. A WhatsApp user calls your business number
 2. WhatsApp sends a webhook with the SDP offer
-3. Whatomate establishes a WebRTC peer connection and plays the IVR greeting
-4. The caller presses digits (DTMF) to navigate the menu
-5. Based on their selection, the call is transferred to an agent team, routed to another IVR flow, or hung up
+3. Whatomate establishes a WebRTC peer connection and runs the IVR flow
+4. The caller hears greetings, presses digits (DTMF) to navigate menus, and provides input
+5. Based on the flow logic, the call is transferred to an agent team, routed to another flow, or hung up
 6. An available agent accepts the transfer in the browser and speaks with the caller
 </Steps>
 
 ## IVR Flow Builder
 
-IVR flows are configured from **Settings > IVR Flows** in the admin UI.
+IVR flows are configured from **Settings > IVR Flows** in the admin UI. The editor uses a visual canvas where you drag and drop nodes, then connect them with edges to define the call flow.
 
 ### Creating a Flow
 
@@ -45,42 +46,153 @@ Each flow has:
 - **Name** and optional description
 - **WhatsApp Account** — which phone number this flow handles
 - **Active** toggle — disabled flows are skipped
-- **Call Start** toggle — marks this as the entry flow for incoming calls (one per account)
+- **Call Start** toggle — marks this as the entry flow for incoming calls
 
-### Menu Configuration
+<Aside type="caution">
+  Each WhatsApp account must have exactly **one** flow with "Call Start" enabled. This is the flow that runs when an incoming call arrives. If no flow is marked as call start, incoming calls will not have IVR and will be rejected. Enabling "Call Start" on a flow automatically disables it on any other flow for the same account.
+</Aside>
 
-Each menu level has:
-- **Greeting** — audio played when entering the menu (uploaded file or text-to-speech)
-- **Timeout** — seconds to wait for DTMF input (default: 10)
-- **Max retries** — retry attempts before hanging up (default: 3)
-- **Options** — digit-to-action mappings
+### Node Types
 
-### Actions
+The flow editor provides 8 node types. Drag them from the palette onto the canvas, configure their properties in the side panel, and connect them with edges.
 
-| Action | Description |
-|--------|-------------|
-| **Transfer** | Route the caller to a team queue. An agent from the team picks up the call. |
-| **Submenu** | Navigate to a nested menu with its own greeting and options. |
-| **Go to flow** | Jump to a different IVR flow (for modular menu trees). |
-| **Go back** | Return to the parent menu. |
-| **Repeat** | Replay the current menu greeting. |
-| **Hang up** | Terminate the call. |
+#### Greeting
+
+Plays an audio message to the caller. The audio can be uploaded as a file or generated from text using TTS (text-to-speech).
+
+| Property | Description |
+|----------|-------------|
+| **Audio** | Upload an audio file (OGG, MP3, WAV, etc.) — automatically transcoded to Opus |
+| **TTS Text** | Type text to generate audio using Piper TTS |
+| **Interruptible** | If enabled, the caller can press a digit to skip the greeting |
+
+The greeting node has one output (`default`) that connects to the next node.
+
+#### Menu
+
+Plays an audio prompt and waits for the caller to press a DTMF digit. Routes the call based on the digit pressed.
+
+| Property | Description |
+|----------|-------------|
+| **Audio / TTS** | The prompt audio (e.g., "Press 1 for sales, press 2 for support") |
+| **Timeout** | Seconds to wait for input (default: 10) |
+| **Max Retries** | Number of retries on invalid/no input before following the `max_retries` edge (default: 3) |
+| **Options** | Digit-to-label mappings (e.g., `1` → "Sales", `2` → "Support") |
+
+**Output handles:**
+- `digit:1`, `digit:2`, etc. — one per configured option
+- `timeout` — triggered when the caller doesn't press anything
+- `max_retries` — triggered after exhausting all retries
+- `default` — fallback for unconfigured digits
+
+Connect each output handle to the appropriate next node.
+
+#### Gather
+
+Collects multi-digit input from the caller (e.g., account number, PIN). The collected digits are stored as a context variable for use in subsequent HTTP callbacks.
+
+| Property | Description |
+|----------|-------------|
+| **Audio / TTS** | Prompt audio (e.g., "Please enter your account number") |
+| **Max Digits** | Maximum number of digits to collect (default: 10) |
+| **Terminator** | Character that ends input (default: `#`) |
+| **Store As** | Variable name to store the input (e.g., `account_number`) |
+| **Timeout** | Seconds to wait for input (default: 10) |
+| **Max Retries** | Retries before following `max_retries` edge (default: 3) |
+
+**Output handles:** `default`, `timeout`, `max_retries`
+
+Stored variables can be used in HTTP callback URL and body templates as `{{variable_name}}`.
+
+#### HTTP Callback
+
+Makes an HTTP request to an external API during the call flow. Useful for looking up caller information, validating input, or triggering actions in other systems.
+
+| Property | Description |
+|----------|-------------|
+| **URL** | The endpoint URL (supports `{{variable}}` interpolation) |
+| **Method** | `GET` or `POST` |
+| **Headers** | Custom HTTP headers (key-value pairs) |
+| **Body Template** | Request body with variable interpolation (e.g., `{"phone": "{{caller_phone}}"}`) |
+| **Timeout** | Request timeout in seconds (default: 10) |
+| **Store Response As** | Variable name to store the response body |
+
+**Built-in variables** available for interpolation:
+- `{{caller_phone}}` — the caller's phone number
+- `{{call_id}}` — the WhatsApp call ID
+- Any variable set by a previous Gather node
+
+**Output handles:** `default` (continues regardless of response status)
+
+#### Transfer
+
+Routes the caller to an agent team. This is a **terminal node** — it cannot have outgoing edges. Once the transfer starts, hold music plays while agents are notified.
+
+| Property | Description |
+|----------|-------------|
+| **Team** | The agent team to transfer to |
+
+When a transfer executes:
+1. Hold music plays for the caller
+2. A transfer notification appears for all online agents in the target team
+3. The first agent to accept connects to the caller via WebRTC audio bridge
+4. If no agent accepts within the transfer timeout, the call is terminated
+
+#### Goto Flow
+
+Jumps to a different IVR flow. This is a **terminal node**. Use this to split complex IVR trees into reusable modules (e.g., a shared "Account Verification" flow).
+
+| Property | Description |
+|----------|-------------|
+| **Target Flow** | The IVR flow to jump to |
+
+The target flow starts from its entry node. The caller's context variables carry over.
+
+<Aside type="note">
+  The target flow must be saved in the v2 node-based format. If it uses the old format, the IVR will log an error and end the call.
+</Aside>
+
+#### Timing
+
+Branches the call based on business hours. Configure a weekly schedule with per-day enable/disable and start/end times.
+
+| Property | Description |
+|----------|-------------|
+| **Timezone** | IANA timezone (e.g., `Asia/Kolkata`, `America/New_York`) |
+| **Schedule** | Per-day enabled/disabled with start and end times |
+
+**Output handles:**
+- `in_hours` — current time is within the configured schedule
+- `out_of_hours` — current time is outside the schedule
+
+#### Hangup
+
+Plays an optional goodbye message and terminates the call. This is a **terminal node** — it cannot have outgoing edges.
+
+| Property | Description |
+|----------|-------------|
+| **Audio / TTS** | Optional goodbye message |
+
+### Building a Flow
+
+<Steps>
+1. Click **Add Flow** and give it a name, select the WhatsApp account, and enable "Active" and "Call Start"
+2. Drag nodes from the palette at the top onto the canvas
+3. Click a node to configure its properties in the right panel
+4. Connect nodes by dragging from an output handle (bottom/right of a node) to the input (top) of another node
+5. The first node added becomes the **entry node** (marked with a green indicator). You can change this by deleting and re-adding nodes
+6. Click **Save** to persist the flow
+</Steps>
 
 ### Example Flow
 
-```
-Main Menu (greeting: "Welcome to Acme Corp")
-  Press 1 → Transfer to "Sales" team
-  Press 2 → Submenu: "Support"
-    Press 1 → Transfer to "Technical Support" team
-    Press 2 → Transfer to "Billing" team
-    Press 9 → Go back to Main Menu
-  Press 0 → Hang up
-```
+Below is a screenshot of an example IVR flow built in the visual editor:
+
+<img src={ivrFlowExample.src} alt="Example IVR flow in the visual editor" />
 
 ## Call Transfers
 
-When a caller selects a transfer action:
+When a caller reaches a Transfer node:
 
 1. Hold music plays for the caller
 2. A transfer notification appears for all agents in the target team
@@ -110,12 +222,17 @@ s3_secret = "..."
 
 Recordings are accessible from the call log detail view, which generates time-limited presigned URLs for playback.
 
+<Aside type="note">
+  Only the agent-caller conversation is recorded. The IVR portion (automated prompts before an agent connects) is not recorded.
+</Aside>
+
 ## Call Logs
 
 All calls (incoming and outgoing) are logged with:
 - Caller phone number and contact name
 - Direction, status, and duration
-- IVR flow traversal path (shown as a tree)
+- Who disconnected the call (client, agent, or system)
+- IVR flow traversal path (shown as a step-by-step trace)
 - Agent who handled the call
 - Recording playback (if enabled)
 
@@ -149,7 +266,11 @@ credential = "pass"
 ```
 
 <Aside type="caution">
-  On cloud providers (AWS, GCP, etc.), you must set `public_ip` to your server's public IP address. Without it, WebRTC candidates will advertise the private IP and calls will fail to connect.
+  On cloud providers (AWS, GCP, etc.), you must set `public_ip` to your server's public IP address. Without it, WebRTC candidates will advertise the private IP and calls will fail to connect. If running in Docker, use `--network=host` or map the UDP port range.
+</Aside>
+
+<Aside type="caution">
+  When using `relay_only = true`, do **not** set `public_ip` — it can cause ICE negotiation errors. The TURN server handles all media relaying.
 </Aside>
 
 ### Enabling Calling per Organization

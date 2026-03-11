@@ -885,31 +885,27 @@ func TestSaveIncomingMessage_LongContent(t *testing.T) {
 }
 
 // =============================================================================
-// replaceVariables
+// processTemplate with session data (replaces former replaceVariables)
 // =============================================================================
 
-func TestReplaceVariables_Basic(t *testing.T) {
-	app := newProcessorTestApp(t)
-
-	result := app.replaceVariables("Hello {{name}}, your order is {{order_id}}", models.JSONB{
+func TestProcessTemplateSessionData_Basic(t *testing.T) {
+	result := processTemplate("Hello {{name}}, your order is {{order_id}}", models.JSONB{
 		"name":     "John",
 		"order_id": "12345",
 	})
 	assert.Equal(t, "Hello John, your order is 12345", result)
 }
 
-func TestReplaceVariables_NilData(t *testing.T) {
-	app := newProcessorTestApp(t)
-
-	result := app.replaceVariables("Hello {{name}}", nil)
-	assert.Equal(t, "Hello {{name}}", result)
+func TestProcessTemplateSessionData_NilData(t *testing.T) {
+	result := processTemplate("Hello {{name}}", nil)
+	// processTemplate replaces unresolved variables with empty string
+	assert.Equal(t, "Hello ", result)
 }
 
-func TestReplaceVariables_MissingVariable(t *testing.T) {
-	app := newProcessorTestApp(t)
-
-	result := app.replaceVariables("Hello {{name}}", models.JSONB{})
-	assert.Equal(t, "Hello {{name}}", result)
+func TestProcessTemplateSessionData_MissingVariable(t *testing.T) {
+	result := processTemplate("Hello {{name}}", models.JSONB{})
+	// processTemplate replaces unresolved variables with empty string
+	assert.Equal(t, "Hello ", result)
 }
 
 // =============================================================================

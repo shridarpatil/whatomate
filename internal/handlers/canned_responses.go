@@ -237,6 +237,7 @@ func (a *App) IncrementCannedResponseUsage(r *fastglue.Request) error {
 	if err := a.DB.Model(&models.CannedResponse{}).
 		Where("id = ? AND organization_id = ?", id, orgID).
 		UpdateColumn("usage_count", gorm.Expr("usage_count + 1")).Error; err != nil {
+		a.Log.Error("Failed to update usage", "error", err)
 		return r.SendErrorEnvelope(fasthttp.StatusInternalServerError,
 			"Failed to update usage", nil, "")
 	}

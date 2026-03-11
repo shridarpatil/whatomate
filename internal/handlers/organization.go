@@ -142,6 +142,7 @@ func (a *App) UpdateOrganizationSettings(r *fastglue.Request) error {
 	}
 
 	if err := a.DB.Save(&org).Error; err != nil {
+		a.Log.Error("Failed to update settings", "error", err)
 		return r.SendErrorEnvelope(fasthttp.StatusInternalServerError, "Failed to update settings", nil, "")
 	}
 
@@ -406,6 +407,13 @@ func (a *App) CreateOrganization(r *fastglue.Request) error {
 	if err := tx.Create(&userOrg).Error; err != nil {
 		tx.Rollback()
 		a.Log.Error("Failed to add creator to organization", "error", err)
+		return r.SendErrorEnvelope(fasthttp.StatusInternalServerError, "Failed to create organization", nil, "")
+	}
+
+	// Seed default dashboard widgets for the new organization
+	if err := database.SeedDefaultWidgetsForOrg(tx, org.ID, userID); err != nil {
+		tx.Rollback()
+		a.Log.Error("Failed to seed default widgets", "error", err, "org_id", org.ID)
 		return r.SendErrorEnvelope(fasthttp.StatusInternalServerError, "Failed to create organization", nil, "")
 	}
 
