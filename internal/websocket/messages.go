@@ -55,6 +55,9 @@ const (
 	TypeOutgoingCallAnswered  = "outgoing_call_answered"
 	TypeOutgoingCallRejected  = "outgoing_call_rejected"
 	TypeOutgoingCallEnded     = "outgoing_call_ended"
+
+	// Call permission types
+	TypeCallPermissionUpdate = "call_permission_update"
 )
 
 // BroadcastMessage represents a message to be broadcast to clients

@@ -16,6 +16,7 @@ The fastest way to get started:
 git clone https://github.com/shridarpatil/whatomate.git
 cd whatomate
 cp config.example.toml docker/config.toml
+cp docker/.env.example docker/.env  # Edit to set PostgreSQL credentials and timezone
 
 # Start all services (PostgreSQL, Redis, Server)
 make docker-up
@@ -23,6 +24,10 @@ make docker-up
 # Access the application
 open http://localhost:8080
 ```
+
+<Aside type="note">
+  The `.env` file is required by Docker Compose. It sets PostgreSQL credentials (`POSTGRES_USER`, `POSTGRES_PASSWORD`, `POSTGRES_DB`) and the server timezone (`TZ`). Copy `docker/.env.example` to `docker/.env` and edit as needed.
+</Aside>
 
 **Default login:** `admin@admin.com` / `admin`
 
