@@ -379,8 +379,14 @@ func (a *App) processCallPermissionReply(phoneNumberID, fromPhone string, reply 
 		"responded_at": now,
 	}
 
+	var expiresAt *time.Time
 	if reply.Response == "accept" {
 		updates["status"] = models.CallPermissionAccepted
+		if reply.ExpirationTimestamp > 0 {
+			t := time.Unix(reply.ExpirationTimestamp, 0)
+			expiresAt = &t
+			updates["expires_at"] = t
+		}
 		a.Log.Info("Call permission accepted",
 			"contact_id", contact.ID,
 			"is_permanent", reply.IsPermanent,
@@ -392,6 +398,18 @@ func (a *App) processCallPermissionReply(phoneNumberID, fromPhone string, reply 
 	}
 
 	a.DB.Model(&permission).Updates(updates)
+
+	// Broadcast permission update to agents via WebSocket
+	wsPayload := map[string]any{
+		"contact_id":    contact.ID,
+		"contact_phone": contact.PhoneNumber,
+		"contact_name":  contact.ProfileName,
+		"status":        updates["status"],
+	}
+	if expiresAt != nil {
+		wsPayload["expires_at"] = expiresAt.Format(time.RFC3339)
+	}
+	a.broadcastCallEvent(account.OrganizationID, websocket.TypeCallPermissionUpdate, wsPayload)
 }
 
 // broadcastCallEvent sends a call event to all connected clients in an organization
