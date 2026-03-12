@@ -814,6 +814,7 @@
     "buttonTextPlaceholder": "பொத்தான் உரை",
     "buttonUrl": "URL",
     "buttonUrlHint": "டைனமிக் URL பின்னொட்டுக்கு {'{'}{'{'}path{'}'}{'}'} பயன்படுத்தவும்",
+    "buttonUrlExample": "உதாரண URL (டைனமிக் URL-களுக்கு தேவை)",
     "buttonPhoneNumber": "தொலைபேசி எண்",
     "quickReply": "விரைவு பதில்",
     "quickReplyDesc": "எளிய பதில் பொத்தான்",

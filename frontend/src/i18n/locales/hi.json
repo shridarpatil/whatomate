@@ -814,6 +814,7 @@
     "buttonTextPlaceholder": "बटन टेक्स्ट",
     "buttonUrl": "URL",
     "buttonUrlHint": "{'{{'}path{'}}'} का उपयोग करें",
+    "buttonUrlExample": "उदाहरण URL (डायनामिक URL के लिए आवश्यक)",
     "buttonPhoneNumber": "फ़ोन नंबर",
     "quickReply": "त्वरित उत्तर",
     "quickReplyDesc": "सरल उत्तर बटन",

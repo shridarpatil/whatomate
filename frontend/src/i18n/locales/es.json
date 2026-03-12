@@ -814,6 +814,7 @@
     "buttonTextPlaceholder": "Texto del botón",
     "buttonUrl": "URL",
     "buttonUrlHint": "Use {'{'}{'{'}path{'}'}{'}'} for dynamic URL suffix",
+    "buttonUrlExample": "URL de ejemplo (requerido para URLs dinámicas)",
     "buttonPhoneNumber": "Número de teléfono",
     "quickReply": "Respuesta rápida",
     "quickReplyDesc": "Botón de respuesta simple",
