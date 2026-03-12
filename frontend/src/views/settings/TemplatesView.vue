@@ -19,7 +19,7 @@ import { PageHeader, SearchInput, DataTable, DeleteConfirmDialog, type Column } 
 import { api, templatesService } from '@/services/api'
 import { useOrganizationsStore } from '@/stores/organizations'
 import { toast } from 'vue-sonner'
-import { Plus, RefreshCw, FileText, Eye, Pencil, Trash2, Loader2, MessageSquare, Image, FileIcon, Video, X, Check, AlertCircle, Send, Upload, ChevronsUpDown } from 'lucide-vue-next'
+import { Plus, RefreshCw, FileText, Eye, Pencil, Trash2, Loader2, MessageSquare, Image, FileIcon, Video, X, Check, AlertCircle, Send, Upload, ChevronsUpDown, ExternalLink, Phone, Reply } from 'lucide-vue-next'
 import { getErrorMessage } from '@/lib/api-utils'
 import { useDebounceFn } from '@vueuse/core'
 
@@ -578,6 +578,14 @@ function formatPreview(text: string, samples: any[]): string {
   // Sanitize the base text first
   let result = DOMPurify.sanitize(text, { ALLOWED_TAGS: [] })
 
+  // Apply WhatsApp text formatting
+  // Bold: *text*
+  result = result.replace(/\*([^*\n]+)\*/g, '<strong class="font-bold">$1</strong>')
+  // Italic: _text_
+  result = result.replace(/_([^\n_]+)_/g, '<em class="italic">$1</em>')
+  // Strikethrough: ~text~
+  result = result.replace(/~([^~\n]+)~/g, '<del class="line-through">$1</del>')
+
   // Handle named parameters with param_name field
   samples.forEach((sample) => {
     if (sample && sample.param_name && sample.value) {
@@ -730,7 +738,7 @@ function formatPreview(text: string, samples: any[]): string {
 
     <!-- Create/Edit Dialog -->
     <Dialog v-model:open="isDialogOpen">
-      <DialogContent class="max-w-2xl max-h-[90vh] overflow-y-auto">
+      <DialogContent class="max-w-5xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>{{ editingTemplate ? $t('templates.editDialogTitle') : $t('templates.createDialogTitle') }}</DialogTitle>
           <DialogDescription>
@@ -738,7 +746,9 @@ function formatPreview(text: string, samples: any[]): string {
           </DialogDescription>
         </DialogHeader>
 
-        <div class="space-y-4 py-4">
+        <div class="grid grid-cols-1 lg:grid-cols-3 gap-6 py-4">
+          <!-- Form fields column -->
+          <div class="space-y-4 lg:col-span-2">
           <!-- Account Selection -->
           <div class="space-y-2">
             <Label>{{ $t('templates.whatsappAccount') }} <span class="text-destructive">*</span></Label>
@@ -1026,6 +1036,49 @@ function formatPreview(text: string, samples: any[]): string {
                 <p class="mt-1">
                   {{ $t('templates.templateSubmissionHint') }}
                 </p>
+              </div>
+            </div>
+          </div>
+          </div>
+
+          <!-- Live Preview column -->
+          <div class="lg:col-span-1 space-y-4">
+            <h3 class="font-medium text-sm text-muted-foreground">{{ $t('templates.livePreview', 'Live Preview') }}</h3>
+            <div class="bg-gray-800 light:bg-[#e5ddd5] rounded-xl p-4 sticky top-4">
+              <div class="bg-gray-700 light:bg-white rounded-lg shadow w-full overflow-hidden text-left">
+                <!-- Header -->
+                <div v-if="formData.header_type && formData.header_type !== 'NONE'" class="p-3 border-b">
+                  <div v-if="formData.header_type === 'TEXT'" class="font-semibold text-sm">
+                    {{ formData.header_content || 'Header Text' }}
+                  </div>
+                  <div v-else class="h-32 bg-gray-600 light:bg-gray-200 rounded flex flex-col items-center justify-center relative overflow-hidden group">
+                    <!-- If an image logic is implemented it could go here, otherwise generic placeholder -->
+                    <component :is="getHeaderIcon(formData.header_type)" class="h-8 w-8 text-gray-400" />
+                    <span class="text-xs text-gray-400 mt-2">{{ formData.header_type }} Preview</span>
+                  </div>
+                </div>
+
+                <!-- Body -->
+                <div class="p-3">
+                  <p v-if="formData.body_content" class="text-[13px] leading-relaxed whitespace-pre-wrap break-words text-gray-200 light:text-gray-800" v-html="formatPreview(formData.body_content, formData.sample_values)"></p>
+                  <p v-else class="text-[13px] italic text-gray-400 light:text-gray-500">Your message body...</p>
+                </div>
+
+                <!-- Footer -->
+                <div v-if="formData.footer_content" class="px-3 pb-3">
+                  <p class="text-[11px] text-gray-400 light:text-gray-500 uppercase">{{ formData.footer_content }}</p>
+                </div>
+
+                <!-- Buttons -->
+                <div v-if="formData.buttons && formData.buttons.length > 0" class="border-t">
+                  <div v-for="(btn, idx) in formData.buttons" :key="idx" class="border-b last:border-b-0 text-center">
+                    <div class="w-full py-2.5 px-3 text-[14px] text-[#53bdeb] light:text-[#00a884] font-medium truncate bg-transparent flex items-center justify-center gap-2">
+                       <span v-if="btn.type === 'URL'" class="flex items-center gap-1.5"><ExternalLink class="h-4 w-4" /> {{ btn.text || 'URL Button' }}</span>
+                       <span v-else-if="btn.type === 'PHONE_NUMBER'" class="flex items-center gap-1.5"><Phone class="h-4 w-4" /> {{ btn.text || 'Call Button' }}</span>
+                       <span v-else class="flex items-center gap-1.5"><Reply class="h-4 w-4" /> {{ btn.text || 'Quick Reply' }}</span>
+                    </div>
+                  </div>
+                </div>
               </div>
             </div>
           </div>
