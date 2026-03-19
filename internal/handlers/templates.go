@@ -295,6 +295,13 @@ func (a *App) SubmitTemplate(r *fastglue.Request) error {
 		return r.SendErrorEnvelope(fasthttp.StatusBadRequest, "Template is pending approval and cannot be modified", nil, "")
 	}
 
+	// Validate media header has a handle uploaded
+	if (template.HeaderType == "IMAGE" || template.HeaderType == "VIDEO" || template.HeaderType == "DOCUMENT") && template.HeaderContent == "" {
+		return r.SendErrorEnvelope(fasthttp.StatusBadRequest,
+			fmt.Sprintf("Template has %s header but no media file has been uploaded. Please upload a sample %s first.",
+				template.HeaderType, strings.ToLower(template.HeaderType)), nil, "")
+	}
+
 	// Get the WhatsApp account
 	account, err := a.resolveWhatsAppAccount(orgID, template.WhatsAppAccount)
 	if err != nil {

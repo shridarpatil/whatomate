@@ -127,6 +127,11 @@ func (w *Worker) HandleRecipientJob(ctx context.Context, job *queue.RecipientJob
 		message.TemplateName = campaign.Template.Name
 		content := templateutil.ReplaceWithJSONBParams(campaign.Template.BodyContent, campaign.Template.BodyContent, job.TemplateParams)
 		message.Content = content
+		// Store campaign header media so it renders in the chat bubble
+		if campaign.HeaderMediaLocalPath != "" {
+			message.MediaURL = campaign.HeaderMediaLocalPath
+			message.MediaMimeType = campaign.HeaderMediaMimeType
+		}
 	}
 
 	if err != nil {
@@ -241,71 +246,22 @@ func (w *Worker) checkCampaignCompletion(ctx context.Context, campaignID, organi
 func (w *Worker) sendTemplateMessage(ctx context.Context, account *models.WhatsAppAccount, template *models.Template, recipient *models.BulkMessageRecipient, campaignHeaderMediaID string) (string, error) {
 	waAccount := account.ToWAAccount()
 
-	// Build template components with parameters
-	var components []map[string]interface{}
-
-	// Handle header component (for media templates)
-	if template.HeaderType != "" && template.HeaderType != "TEXT" {
-		// Use campaign's uploaded media ID if available
-		if campaignHeaderMediaID != "" {
-			headerParam := buildMediaParameter(template.HeaderType, "id", campaignHeaderMediaID)
-			if headerParam != nil {
-				components = append(components, map[string]interface{}{
-					"type":       "header",
-					"parameters": []map[string]interface{}{headerParam},
-				})
-			}
-		} else if template.HeaderContent != "" {
-			// Fall back to template's header content (URL)
-			headerParam := buildMediaParameter(template.HeaderType, "link", template.HeaderContent)
-			if headerParam != nil {
-				components = append(components, map[string]interface{}{
-					"type":       "header",
-					"parameters": []map[string]interface{}{headerParam},
-				})
-			}
-		}
-	}
-
-	// Resolve body parameters (supports both named and positional)
+	// Resolve body parameters into a map for BuildTemplateComponents
 	resolvedParams := templateutil.ResolveParams(template.BodyContent, recipient.TemplateParams)
-	if len(resolvedParams) > 0 {
-		bodyParams := make([]map[string]interface{}, len(resolvedParams))
-		for i, val := range resolvedParams {
-			bodyParams[i] = map[string]interface{}{
-				"type": "text",
-				"text": val,
-			}
+	bodyParams := make(map[string]string, len(resolvedParams))
+	paramNames := templateutil.ExtParamNames(template.BodyContent)
+	for i, val := range resolvedParams {
+		if i < len(paramNames) {
+			bodyParams[paramNames[i]] = val
+		} else {
+			bodyParams[fmt.Sprintf("%d", i+1)] = val
 		}
-		components = append(components, map[string]interface{}{
-			"type":       "body",
-			"parameters": bodyParams,
-		})
 	}
+
+	// Use the shared component builder (same as chat template sending)
+	components := whatsapp.BuildTemplateComponents(bodyParams, template.HeaderType, campaignHeaderMediaID)
 
 	return w.WhatsApp.SendTemplateMessage(ctx, waAccount, recipient.PhoneNumber, template.Name, template.Language, components)
-}
-
-// buildMediaParameter creates a media parameter for WhatsApp template headers.
-// keyName is "id" for Meta media IDs or "link" for external URLs.
-func buildMediaParameter(headerType, keyName, value string) map[string]interface{} {
-	var mediaType string
-	switch headerType {
-	case "IMAGE":
-		mediaType = "image"
-	case "VIDEO":
-		mediaType = "video"
-	case "DOCUMENT":
-		mediaType = "document"
-	default:
-		return nil
-	}
-	return map[string]interface{}{
-		"type": mediaType,
-		mediaType: map[string]interface{}{
-			keyName: value,
-		},
-	}
 }
 
 // decryptAccountSecrets decrypts the encrypted secrets on a WhatsApp account.

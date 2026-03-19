@@ -2,7 +2,10 @@ package handlers
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
+	"io"
+	"net/http"
 	"strings"
 	"time"
 
@@ -47,8 +50,9 @@ type OutgoingMessageRequest struct {
 	URL             string            // For CTA URL button
 
 	// Template messages
-	Template   *models.Template
-	BodyParams map[string]string // Parameter name -> value (supports both named and positional)
+	Template      *models.Template
+	BodyParams    map[string]string // Parameter name -> value (supports both named and positional)
+	HeaderMediaID string            // WhatsApp media ID for template header (IMAGE/VIDEO/DOCUMENT)
 
 	// WhatsApp Flow messages
 	FlowID          string // Meta Flow ID
@@ -180,7 +184,7 @@ func (a *App) SendOutgoingMessage(ctx context.Context, req OutgoingMessageReques
 			if req.Template == nil {
 				return "", fmt.Errorf("template is required for template messages")
 			}
-			components := whatsapp.BodyParamsToComponents(req.BodyParams)
+			components := whatsapp.BuildTemplateComponents(req.BodyParams, req.Template.HeaderType, req.HeaderMediaID)
 			return a.WhatsApp.SendTemplateMessage(sendCtx, waAccount, req.Contact.PhoneNumber, req.Template.Name, req.Template.Language, components)
 
 		case models.MessageTypeFlow:
@@ -275,6 +279,11 @@ func (a *App) createOutgoingMessage(req OutgoingMessageRequest, opts MessageSend
 			msg.Metadata = models.JSONB{
 				"template_name": req.Template.Name,
 				"template_id":   req.Template.ID.String(),
+			}
+			// Store header media so it renders in the chat bubble
+			if req.MediaURL != "" {
+				msg.MediaURL = req.MediaURL
+				msg.MediaMimeType = req.MediaMimeType
 			}
 			// Store template buttons so they render in the chat bubble
 			if len(req.Template.Buttons) > 0 {
@@ -536,9 +545,18 @@ type SendTemplateMessageRequest struct {
 	TemplateID     string            `json:"template_id"`     // Alternative: template UUID
 	TemplateParams map[string]string `json:"template_params"` // Named or positional params
 	AccountName    string            `json:"account_name"`    // Optional: specific WhatsApp account
+
+	// Header media for templates with IMAGE/VIDEO/DOCUMENT headers.
+	// Three options (in priority order):
+	//   1. header_media_id  — pre-uploaded WhatsApp media ID (skip upload)
+	//   2. header_media_url — URL to fetch the media from (server downloads & uploads to WhatsApp)
+	//   3. multipart header_file — raw file upload via multipart/form-data
+	HeaderMediaID  string `json:"header_media_id"`  // Already-uploaded WhatsApp media ID
+	HeaderMediaURL string `json:"header_media_url"` // URL to download media from
 }
 
-// SendTemplateMessage sends a template message to a contact or phone number
+// SendTemplateMessage sends a template message to a contact or phone number.
+// Accepts either JSON body or multipart/form-data (when a header media file is included).
 func (a *App) SendTemplateMessage(r *fastglue.Request) error {
 	orgID, userID, err := a.getOrgAndUserID(r)
 	if err != nil {
@@ -546,8 +564,58 @@ func (a *App) SendTemplateMessage(r *fastglue.Request) error {
 	}
 
 	var req SendTemplateMessageRequest
-	if err := a.decodeRequest(r, &req); err != nil {
-		return nil
+	var headerFileData []byte
+	var headerFileMimeType string
+
+	contentType := string(r.RequestCtx.Request.Header.ContentType())
+	if strings.HasPrefix(contentType, "multipart/form-data") {
+		// Parse multipart form — used when template has a media header
+		form, err := r.RequestCtx.MultipartForm()
+		if err != nil {
+			return r.SendErrorEnvelope(fasthttp.StatusBadRequest, "Invalid multipart form", nil, "")
+		}
+		if v := form.Value["contact_id"]; len(v) > 0 {
+			req.ContactID = v[0]
+		}
+		if v := form.Value["phone_number"]; len(v) > 0 {
+			req.PhoneNumber = v[0]
+		}
+		if v := form.Value["template_name"]; len(v) > 0 {
+			req.TemplateName = v[0]
+		}
+		if v := form.Value["template_id"]; len(v) > 0 {
+			req.TemplateID = v[0]
+		}
+		if v := form.Value["account_name"]; len(v) > 0 {
+			req.AccountName = v[0]
+		}
+		// Parse template_params from JSON string
+		if v := form.Value["template_params"]; len(v) > 0 && v[0] != "" {
+			if err := json.Unmarshal([]byte(v[0]), &req.TemplateParams); err != nil {
+				return r.SendErrorEnvelope(fasthttp.StatusBadRequest, "Invalid template_params JSON", nil, "")
+			}
+		}
+		// Read header media file
+		if files := form.File["header_file"]; len(files) > 0 {
+			fh := files[0]
+			f, err := fh.Open()
+			if err != nil {
+				return r.SendErrorEnvelope(fasthttp.StatusBadRequest, "Failed to read header file", nil, "")
+			}
+			defer f.Close()
+			headerFileData, err = io.ReadAll(f)
+			if err != nil {
+				return r.SendErrorEnvelope(fasthttp.StatusInternalServerError, "Failed to read header file", nil, "")
+			}
+			headerFileMimeType = fh.Header.Get("Content-Type")
+			if headerFileMimeType == "" {
+				headerFileMimeType = "application/octet-stream"
+			}
+		}
+	} else {
+		if err := a.decodeRequest(r, &req); err != nil {
+			return nil
+		}
 	}
 
 	// Must have either contact_id or phone_number
@@ -650,13 +718,73 @@ func (a *App) SendTemplateMessage(r *fastglue.Request) error {
 		}
 	}
 
+	// Resolve header media for templates with IMAGE/VIDEO/DOCUMENT headers.
+	// Priority: header_media_id > header_media_url > multipart header_file
+	var headerMediaID string
+	var headerMediaData []byte
+	var headerMimeType string
+	if template.HeaderType == "IMAGE" || template.HeaderType == "VIDEO" || template.HeaderType == "DOCUMENT" {
+		if req.HeaderMediaID != "" {
+			// Option 1: Pre-uploaded WhatsApp media ID — use directly (no local preview)
+			headerMediaID = req.HeaderMediaID
+		} else if req.HeaderMediaURL != "" {
+			// Option 2: Download from URL, then upload to WhatsApp
+			resp, err := http.Get(req.HeaderMediaURL)
+			if err != nil {
+				return r.SendErrorEnvelope(fasthttp.StatusBadRequest, "Failed to download header media from URL", nil, "")
+			}
+			defer resp.Body.Close()
+			if resp.StatusCode != http.StatusOK {
+				return r.SendErrorEnvelope(fasthttp.StatusBadRequest, fmt.Sprintf("Header media URL returned status %d", resp.StatusCode), nil, "")
+			}
+			headerMediaData, err = io.ReadAll(resp.Body)
+			if err != nil {
+				return r.SendErrorEnvelope(fasthttp.StatusInternalServerError, "Failed to read header media from URL", nil, "")
+			}
+			headerMimeType = resp.Header.Get("Content-Type")
+			if headerMimeType == "" {
+				headerMimeType = "application/octet-stream"
+			}
+		} else if len(headerFileData) > 0 {
+			// Option 3: Multipart file upload
+			headerMediaData = headerFileData
+			headerMimeType = headerFileMimeType
+		}
+
+		// Upload to WhatsApp if we have raw data (options 2 & 3)
+		if len(headerMediaData) > 0 {
+			waAcct := a.toWhatsAppAccount(account)
+			mediaID, err := a.WhatsApp.UploadMedia(context.Background(), waAcct, headerMediaData, headerMimeType, "header")
+			if err != nil {
+				a.Log.Error("Failed to upload template header media", "error", err)
+				return r.SendErrorEnvelope(fasthttp.StatusInternalServerError, "Failed to upload header media to WhatsApp", nil, "")
+			}
+			headerMediaID = mediaID
+		}
+	}
+
+	// Save header media locally so it can be served for chat preview
+	var headerLocalPath string
+	if len(headerMediaData) > 0 {
+		localPath, err := a.saveMediaLocally(headerMediaData, headerMimeType, "header")
+		if err != nil {
+			a.Log.Error("Failed to save template header media locally", "error", err)
+			// Non-fatal — message will still send, just won't show preview
+		} else {
+			headerLocalPath = localPath
+		}
+	}
+
 	// Send using unified message sender
 	msgReq := OutgoingMessageRequest{
-		Account:    account,
-		Contact:    contact,
-		Type:       models.MessageTypeTemplate,
-		Template:   &template,
-		BodyParams: req.TemplateParams,
+		Account:       account,
+		Contact:       contact,
+		Type:          models.MessageTypeTemplate,
+		Template:      &template,
+		BodyParams:    req.TemplateParams,
+		HeaderMediaID: headerMediaID,
+		MediaURL:      headerLocalPath,
+		MediaMimeType: headerMimeType,
 	}
 
 	opts := DefaultSendOptions()

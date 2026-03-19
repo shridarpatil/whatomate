@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"sort"
 	"strconv"
+	"strings"
 	"time"
 )
 
@@ -267,6 +268,36 @@ func BodyParamsToComponents(bodyParams map[string]string) []map[string]interface
 			"parameters": params,
 		},
 	}
+}
+
+// BuildTemplateComponents builds the full WhatsApp template components array,
+// including an optional header component (for IMAGE/VIDEO/DOCUMENT) and body parameters.
+func BuildTemplateComponents(bodyParams map[string]string, headerType string, headerMediaID string) []map[string]interface{} {
+	var components []map[string]interface{}
+
+	// Add header component if media is provided
+	if headerMediaID != "" {
+		mediaType := strings.ToLower(headerType) // "image", "video", "document"
+		headerParam := map[string]interface{}{
+			"type": mediaType,
+			mediaType: map[string]interface{}{
+				"id": headerMediaID,
+			},
+		}
+		components = append(components, map[string]interface{}{
+			"type":       "header",
+			"parameters": []map[string]interface{}{headerParam},
+		})
+	}
+
+	// Add body component with text parameters
+	bodyComponents := BodyParamsToComponents(bodyParams)
+	components = append(components, bodyComponents...)
+
+	if len(components) == 0 {
+		return nil
+	}
+	return components
 }
 
 // SendFlowMessage sends an interactive WhatsApp Flow message

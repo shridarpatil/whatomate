@@ -231,14 +231,15 @@ export const useContactsStore = defineStore('contacts', () => {
     contactId: string,
     templateName: string,
     templateParams?: Record<string, string>,
-    accountName?: string
+    accountName?: string,
+    headerFile?: File
   ) {
     try {
       const response = await messagesService.sendTemplate(contactId, {
         template_name: templateName,
         template_params: templateParams,
         account_name: accountName
-      })
+      }, headerFile)
       const data = response.data.data || response.data
       // Use addMessage which has duplicate checking (WebSocket may also broadcast this)
       addMessage(data)

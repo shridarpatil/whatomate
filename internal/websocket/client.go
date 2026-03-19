@@ -146,15 +146,13 @@ func (c *Client) WritePump() {
 	for {
 		select {
 		case message, ok := <-c.send:
-			if c.conn == nil {
+			if !ok || c.conn == nil {
+				// Hub closed the channel or connection is gone — exit immediately.
+				// Don't try to write a close frame; ReadPump may have already
+				// closed the underlying connection.
 				return
 			}
 			_ = c.conn.SetWriteDeadline(time.Now().Add(writeWait))
-			if !ok {
-				// Hub closed the channel
-				_ = c.conn.WriteMessage(websocket.CloseMessage, []byte{})
-				return
-			}
 
 			// Only forward messages if authenticated
 			if !c.authenticated {

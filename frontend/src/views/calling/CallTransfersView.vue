@@ -9,7 +9,8 @@ import { Badge } from '@/components/ui/badge'
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs'
 import { Phone, PhoneOff, PhoneForwarded, RefreshCw, Clock } from 'lucide-vue-next'
 import { toast } from 'vue-sonner'
-import DataTable, { type Column } from '@/components/shared/DataTable.vue'
+import DataTable from '@/components/shared/DataTable.vue'
+import type { Column } from '@/components/shared/types'
 
 const { t } = useI18n()
 const store = useCallingStore()

@@ -11,15 +11,7 @@ import {
 import { Loader2, ArrowUpDown, ArrowUp, ArrowDown } from 'lucide-vue-next'
 import PaginationControls from './PaginationControls.vue'
 import type { Component } from 'vue'
-
-export interface Column<_T = unknown> {
-  key: string
-  label: string
-  width?: string
-  align?: 'left' | 'center' | 'right'
-  sortable?: boolean
-  sortKey?: string // Custom sort key if different from display key
-}
+import type { Column } from './types'
 
 const props = withDefaults(defineProps<{
   items: T[]

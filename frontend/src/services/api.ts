@@ -19,6 +19,25 @@ function getCookie(name: string): string | null {
   return match ? decodeURIComponent(match[1]) : null
 }
 
+/**
+ * Build standard headers for native fetch() calls.
+ * Includes X-Organization-ID (for org switching) and optionally X-CSRF-Token (for mutating requests).
+ */
+export function getRequestHeaders(opts?: { csrf?: boolean }): Record<string, string> {
+  const headers: Record<string, string> = {}
+  const selectedOrgId = localStorage.getItem('selected_organization_id')
+  if (selectedOrgId) {
+    headers['X-Organization-ID'] = selectedOrgId
+  }
+  if (opts?.csrf) {
+    const csrfToken = getCookie('whm_csrf')
+    if (csrfToken) {
+      headers['X-CSRF-Token'] = csrfToken
+    }
+  }
+  return headers
+}
+
 // Request interceptor to add CSRF token and organization header
 api.interceptors.request.use(
   (config: InternalAxiosRequestConfig) => {
@@ -187,8 +206,24 @@ export const messagesService = {
     api.get(`/contacts/${contactId}/messages`, { params }),
   send: (contactId: string, data: { type: string; content: any; reply_to_message_id?: string; whatsapp_account?: string }) =>
     api.post(`/contacts/${contactId}/messages`, data),
-  sendTemplate: (contactId: string, data: { template_name: string; template_params?: Record<string, string>; account_name?: string }) =>
-    api.post('/messages/template', { contact_id: contactId, ...data }),
+  sendTemplate: (contactId: string, data: { template_name: string; template_params?: Record<string, string>; account_name?: string }, headerFile?: File) => {
+    if (headerFile) {
+      const formData = new FormData()
+      formData.append('contact_id', contactId)
+      formData.append('template_name', data.template_name)
+      if (data.template_params) {
+        formData.append('template_params', JSON.stringify(data.template_params))
+      }
+      if (data.account_name) {
+        formData.append('account_name', data.account_name)
+      }
+      formData.append('header_file', headerFile)
+      return api.post('/messages/template', formData, {
+        headers: { 'Content-Type': 'multipart/form-data' }
+      })
+    }
+    return api.post('/messages/template', { contact_id: contactId, ...data })
+  },
   sendReaction: (contactId: string, messageId: string, emoji: string) =>
     api.post(`/contacts/${contactId}/messages/${messageId}/reaction`, { emoji })
 }
@@ -201,10 +236,8 @@ export const templatesService = {
     const formData = new FormData()
     formData.append('file', file)
     formData.append('account', accountName)
-    const csrfToken = getCookie('whm_csrf')
-    return axios.post(`${api.defaults.baseURL}/templates/upload-media`, formData, {
-      withCredentials: true,
-      headers: csrfToken ? { 'X-CSRF-Token': csrfToken } : {}
+    return api.post('/templates/upload-media', formData, {
+      headers: { 'Content-Type': 'multipart/form-data' }
     })
   }
 }
@@ -241,10 +274,8 @@ export const campaignsService = {
   uploadMedia: (campaignId: string, file: File) => {
     const formData = new FormData()
     formData.append('file', file)
-    const csrfToken = getCookie('whm_csrf')
-    return axios.post(`${api.defaults.baseURL}/campaigns/${campaignId}/media`, formData, {
-      withCredentials: true,
-      headers: csrfToken ? { 'X-CSRF-Token': csrfToken } : {}
+    return api.post(`/campaigns/${campaignId}/media`, formData, {
+      headers: { 'Content-Type': 'multipart/form-data' }
     })
   },
   getMedia: (campaignId: string) =>
@@ -1005,14 +1036,8 @@ export const ivrFlowsService = {
   uploadAudio: (file: File) => {
     const formData = new FormData()
     formData.append('file', file)
-    const csrfToken = getCookie('whm_csrf')
-    const headers: Record<string, string> = {}
-    if (csrfToken) headers['X-CSRF-Token'] = csrfToken
-    const selectedOrgId = localStorage.getItem('selected_organization_id')
-    if (selectedOrgId) headers['X-Organization-ID'] = selectedOrgId
-    return axios.post(`${api.defaults.baseURL}/ivr-flows/audio`, formData, {
-      withCredentials: true,
-      headers,
+    return api.post('/ivr-flows/audio', formData, {
+      headers: { 'Content-Type': 'multipart/form-data' }
     })
   },
   getAudioUrl: (filename: string) => `${api.defaults.baseURL}/ivr-flows/audio/${encodeURIComponent(filename)}`

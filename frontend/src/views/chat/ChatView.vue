@@ -7,7 +7,7 @@ import { useAuthStore } from '@/stores/auth'
 import { useUsersStore } from '@/stores/users'
 import { useTransfersStore } from '@/stores/transfers'
 import { wsService } from '@/services/websocket'
-import { contactsService, chatbotService, messagesService, customActionsService, accountsService, type CustomAction, type ActionResult } from '@/services/api'
+import { contactsService, chatbotService, messagesService, customActionsService, accountsService, getRequestHeaders, type CustomAction, type ActionResult } from '@/services/api'
 import { useTagsStore } from '@/stores/tags'
 import { TagBadge } from '@/components/ui/tag-badge'
 import { getTagColorClass } from '@/lib/constants'
@@ -95,7 +95,9 @@ import ContactInfoPanel from '@/components/chat/ContactInfoPanel.vue'
 import ConversationNotes from '@/components/chat/ConversationNotes.vue'
 import CallButton from '@/components/calling/CallButton.vue'
 import { useNotesStore } from '@/stores/notes'
+import { useHeaderMedia } from '@/composables/useHeaderMedia'
 import { CreateContactDialog } from '@/components/shared'
+import HeaderMediaUpload from '@/components/shared/HeaderMediaUpload.vue'
 import { Info } from 'lucide-vue-next'
 
 const { t } = useI18n()
@@ -158,6 +160,15 @@ const selectedTemplate = ref<any>(null)
 const templateParamNames = ref<string[]>([])
 const templateParamValues = ref<Record<string, string>>({})
 const isSendingTemplate = ref(false)
+const templateHeaderType = computed(() => selectedTemplate.value?.header_type)
+const {
+  file: templateHeaderFile,
+  previewUrl: templateHeaderPreview,
+  needsMedia: templateNeedsHeaderMedia,
+  acceptTypes: templateHeaderAccept,
+  handleFileChange: handleTemplateHeaderFile,
+  clear: clearTemplateHeaderMedia,
+} = useHeaderMedia(templateHeaderType)
 
 // Custom actions state
 const customActions = ref<CustomAction[]>([])
@@ -740,6 +751,7 @@ function handleTemplateWithParams(template: any, paramNames: string[]) {
   selectedTemplate.value = template
   templateParamNames.value = paramNames
   templateParamValues.value = Object.fromEntries(paramNames.map(n => [n, '']))
+  clearTemplateHeaderMedia()
   templateDialogOpen.value = true
 }
 
@@ -753,19 +765,27 @@ async function sendTemplateMessage() {
     return
   }
 
+  // Validate header media if required
+  if (templateNeedsHeaderMedia.value && !templateHeaderFile.value) {
+    toast.error(t('chat.headerMediaRequired'))
+    return
+  }
+
   isSendingTemplate.value = true
   try {
     await contactsStore.sendTemplate(
       contactsStore.currentContact.id,
       selectedTemplate.value.name,
       templateParamValues.value,
-      selectedAccount.value || undefined
+      selectedAccount.value || undefined,
+      templateHeaderFile.value || undefined
     )
     toast.success(t('chat.templateSent'))
     templateDialogOpen.value = false
     selectedTemplate.value = null
     templateParamNames.value = []
     templateParamValues.value = {}
+    clearTemplateHeaderMedia()
   } catch {
     toast.error(t('chat.templateSendFailed'))
   } finally {
@@ -1136,7 +1156,8 @@ async function loadMediaForMessage(message: Message) {
   try {
     const basePath = ((window as any).__BASE_PATH__ ?? '').replace(/\/$/, '')
     const response = await fetch(`${basePath}/api/media/${message.id}`, {
-      credentials: 'include'
+      credentials: 'include',
+      headers: getRequestHeaders()
     })
 
     if (!response.ok) {
@@ -1261,15 +1282,11 @@ async function sendMediaMessage() {
       formData.append('whatsapp_account', selectedAccount.value)
     }
 
-    // Read CSRF token for mutating request
-    const csrfMatch = document.cookie.match(/(?:^|; )whm_csrf=([^;]*)/)
-    const csrfToken = csrfMatch ? decodeURIComponent(csrfMatch[1]) : ''
-
     const basePath = ((window as any).__BASE_PATH__ ?? '').replace(/\/$/, '')
     const response = await fetch(`${basePath}/api/messages/media`, {
       method: 'POST',
       credentials: 'include',
-      headers: csrfToken ? { 'X-CSRF-Token': csrfToken } : {},
+      headers: getRequestHeaders({ csrf: true }),
       body: formData
     })
 
@@ -1684,8 +1701,37 @@ async function sendMediaMessage() {
                     {{ getReplyPreviewContent(message) }}
                   </p>
                 </div>
+                <!-- Template header media (image/video/document shown above template text) -->
+                <div v-if="message.message_type === 'template' && message.media_url" class="mb-2">
+                  <div v-if="isMediaLoading(message)" class="w-[200px] h-[150px] bg-muted rounded-lg animate-pulse flex items-center justify-center">
+                    <span class="text-muted-foreground text-sm">{{ $t('common.loading') }}...</span>
+                  </div>
+                  <img
+                    v-else-if="message.media_mime_type?.startsWith('image/') && getMediaBlobUrl(message)"
+                    :src="getMediaBlobUrl(message)"
+                    alt="Template header"
+                    class="max-w-[280px] max-h-[300px] rounded-lg cursor-pointer object-cover"
+                    @click="openMediaPreview(message)"
+                    @error="handleImageError($event)"
+                  />
+                  <video
+                    v-else-if="message.media_mime_type?.startsWith('video/') && getMediaBlobUrl(message)"
+                    :src="getMediaBlobUrl(message)"
+                    controls
+                    class="max-w-[280px] max-h-[300px] rounded-lg"
+                  />
+                  <a
+                    v-else-if="getMediaBlobUrl(message)"
+                    :href="getMediaBlobUrl(message)"
+                    :download="message.media_filename || 'document'"
+                    class="flex items-center gap-2 px-3 py-2 bg-background/50 rounded-lg hover:bg-background/80 transition-colors"
+                  >
+                    <FileText class="h-5 w-5 text-muted-foreground" />
+                    <span class="text-sm truncate max-w-[200px]">{{ message.media_filename || 'Document' }}</span>
+                  </a>
+                </div>
                 <!-- Image message -->
-                <div v-if="message.message_type === 'image' && message.media_url" class="mb-2">
+                <div v-else-if="message.message_type === 'image' && message.media_url" class="mb-2">
                   <div v-if="isMediaLoading(message)" class="w-[200px] h-[150px] bg-muted rounded-lg animate-pulse flex items-center justify-center">
                     <span class="text-muted-foreground text-sm">{{ $t('common.loading') }}...</span>
                   </div>
@@ -2115,6 +2161,17 @@ async function sendMediaMessage() {
           </DialogDescription>
         </DialogHeader>
         <div class="py-4 space-y-3">
+          <!-- Header media upload -->
+          <HeaderMediaUpload
+            v-if="templateNeedsHeaderMedia"
+            :file="templateHeaderFile"
+            :preview-url="templateHeaderPreview"
+            :accept-types="templateHeaderAccept"
+            :label="selectedTemplate?.header_type === 'IMAGE' ? $t('chat.headerImage') : selectedTemplate?.header_type === 'VIDEO' ? $t('chat.headerVideo') : $t('chat.headerDocument')"
+            @change="handleTemplateHeaderFile"
+            @clear="clearTemplateHeaderMedia"
+          />
+
           <div v-for="param in templateParamNames" :key="param" class="space-y-1">
             <label class="text-sm font-medium">{{ param }}</label>
             <Input
@@ -2126,6 +2183,7 @@ async function sendMediaMessage() {
           <div v-if="templatePreview" class="space-y-1">
             <label class="text-xs font-medium text-muted-foreground">{{ $t('chat.preview') }}</label>
             <div class="chat-bubble chat-bubble-outgoing ml-auto" style="max-width: 100%;">
+              <img v-if="templateHeaderPreview" :src="templateHeaderPreview" class="rounded-lg mb-2 max-h-40 w-full object-cover" />
               <span class="whitespace-pre-wrap break-words text-sm">{{ templatePreview }}</span>
               <div
                 v-if="selectedTemplate?.buttons?.length"

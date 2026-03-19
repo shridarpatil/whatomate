@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, onMounted, onUnmounted, computed, watch } from 'vue'
+import { ref, onMounted, onUnmounted, computed, watch, nextTick } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -46,6 +46,8 @@ import { wsService } from '@/services/websocket'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { toast } from 'vue-sonner'
 import { PageHeader, DataTable, DeleteConfirmDialog, SearchInput, type Column } from '@/components/shared'
+import HeaderMediaUpload from '@/components/shared/HeaderMediaUpload.vue'
+import { useHeaderMedia } from '@/composables/useHeaderMedia'
 import { getErrorMessage } from '@/lib/api-utils'
 import {
   Plus,
@@ -68,7 +70,9 @@ import {
   Check,
   RefreshCw,
   CalendarIcon,
-  MessageSquare
+  MessageSquare,
+  ImageIcon,
+  FileText
 } from 'lucide-vue-next'
 import { formatDate } from '@/lib/utils'
 import { useDebounceFn } from '@vueuse/core'
@@ -147,6 +151,7 @@ const isLoading = ref(true)
 const isCreating = ref(false)
 const showCreateDialog = ref(false)
 const editingCampaignId = ref<string | null>(null) // null = create mode, string = edit mode
+const isUploadingMedia = ref(false)
 
 const columns = computed<Column<Campaign>[]>(() => [
   { key: 'name', label: t('campaigns.campaign'), sortable: true },
@@ -475,6 +480,21 @@ async function fetchTemplates(account?: string) {
   }
 }
 
+const selectedTemplateObj = computed(() =>
+  templates.value.find(t => t.id === newCampaign.value.template_id)
+)
+
+const campaignHeaderType = computed(() => selectedTemplateObj.value?.header_type)
+const {
+  file: campaignMediaFile,
+  previewUrl: campaignMediaPreview,
+  needsMedia: selectedTemplateNeedsMedia,
+  acceptTypes: campaignMediaAccept,
+  mediaLabel: campaignMediaLabel,
+  handleFileChange: handleCampaignMediaFile,
+  clear: clearCampaignMedia,
+} = useHeaderMedia(campaignHeaderType)
+
 // Re-fetch templates when account changes
 watch(() => newCampaign.value.whatsapp_account, (account) => {
   newCampaign.value.template_id = ''
@@ -511,11 +531,20 @@ async function createCampaign() {
 
   isCreating.value = true
   try {
-    await campaignsService.create({
+    const response = await campaignsService.create({
       name: newCampaign.value.name,
       whatsapp_account: newCampaign.value.whatsapp_account,
       template_id: newCampaign.value.template_id
     })
+    const created = response.data.data || response.data
+    // Upload media if a file was selected
+    if (campaignMediaFile.value && created?.id) {
+      try {
+        await campaignsService.uploadMedia(created.id, campaignMediaFile.value)
+      } catch (err) {
+        toast.error(t('campaigns.mediaUploadFailed'))
+      }
+    }
     toast.success(t('common.createdSuccess', { resource: t('resources.Campaign') }))
     showCreateDialog.value = false
     resetForm()
@@ -533,6 +562,7 @@ function resetForm() {
     whatsapp_account: '',
     template_id: ''
   }
+  clearCampaignMedia()
 }
 
 function openEditDialog(campaign: Campaign) {
@@ -566,6 +596,14 @@ async function saveCampaign() {
         whatsapp_account: newCampaign.value.whatsapp_account,
         template_id: newCampaign.value.template_id
       })
+      // Upload media if a file was selected
+      if (campaignMediaFile.value) {
+        try {
+          await campaignsService.uploadMedia(editingCampaignId.value, campaignMediaFile.value)
+        } catch (err) {
+          toast.error(t('campaigns.mediaUploadFailed'))
+        }
+      }
       toast.success(t('common.updatedSuccess', { resource: t('resources.Campaign') }))
       showCreateDialog.value = false
       editingCampaignId.value = null
@@ -692,6 +730,55 @@ function getProgressPercentage(campaign: Campaign): number {
   return Math.round((campaign.sent_count / campaign.total_recipients) * 100)
 }
 
+// Standalone media upload from table action
+const mediaUploadTarget = ref<Campaign | null>(null)
+
+function triggerMediaUpload(campaign: Campaign) {
+  mediaUploadTarget.value = campaign
+  nextTick(() => {
+    const input = document.getElementById('campaign-media-upload') as HTMLInputElement
+    if (input) {
+      input.value = ''
+      input.click()
+    }
+  })
+}
+
+async function handleStandaloneMediaUpload(event: Event) {
+  const input = event.target as HTMLInputElement
+  const file = input.files?.[0]
+  if (!file || !mediaUploadTarget.value) return
+
+  isUploadingMedia.value = true
+  try {
+    await campaignsService.uploadMedia(mediaUploadTarget.value.id, file)
+    toast.success(t('campaigns.mediaUploaded'))
+    // Clear cached preview so it reloads
+    delete mediaBlobUrls.value[mediaUploadTarget.value.id]
+    delete mediaLoadingState.value[mediaUploadTarget.value.id]
+    await fetchCampaigns()
+  } catch (error: any) {
+    toast.error(getErrorMessage(error, t('campaigns.mediaUploadFailed')))
+  } finally {
+    isUploadingMedia.value = false
+    mediaUploadTarget.value = null
+  }
+}
+
+function campaignNeedsMedia(campaign: Campaign): boolean {
+  const tpl = templates.value.find(t => t.id === campaign.template_id)
+  if (tpl) {
+    const ht = tpl.header_type
+    return ht === 'IMAGE' || ht === 'VIDEO' || ht === 'DOCUMENT'
+  }
+  // If template not in local list, check if campaign already has media fields
+  return !!campaign.header_media_id
+}
+
+function campaignHasMedia(campaign: Campaign): boolean {
+  return !!campaign.header_media_id
+}
+
 // Cache for media blob URLs and loading states
 const mediaBlobUrls = ref<Record<string, string>>({})
 const mediaLoadingState = ref<Record<string, 'loading' | 'loaded' | 'error'>>({})
@@ -721,6 +808,11 @@ function getMediaPreviewUrl(campaignId: string): string {
 // Media preview dialog
 const showMediaPreviewDialog = ref(false)
 const previewingCampaign = ref<Campaign | null>(null)
+
+function openMediaPreview(campaign: Campaign) {
+  previewingCampaign.value = campaign
+  showMediaPreviewDialog.value = true
+}
 
 // Recipients functions
 const deletingRecipientId = ref<string | null>(null)
@@ -1210,6 +1302,17 @@ async function addRecipientsFromCSV() {
                   {{ $t('campaigns.noTemplatesFound') }}
                 </p>
               </div>
+              <!-- Header media upload (shown when template needs IMAGE/VIDEO/DOCUMENT) -->
+              <HeaderMediaUpload
+                v-if="selectedTemplateNeedsMedia"
+                :file="campaignMediaFile"
+                :preview-url="campaignMediaPreview"
+                :accept-types="campaignMediaAccept"
+                :media-label="campaignMediaLabel"
+                :label="$t('campaigns.headerMedia')"
+                @change="handleCampaignMediaFile"
+                @clear="clearCampaignMedia"
+              />
             </div>
             <DialogFooter>
               <Button variant="outline" size="sm" @click="showCreateDialog = false; editingCampaignId = null" :disabled="isCreating">
@@ -1296,7 +1399,10 @@ async function addRecipientsFromCSV() {
               >
                 <template #cell-name="{ item: campaign }">
                   <div>
-                    <span class="font-medium">{{ campaign.name }}</span>
+                    <div class="flex items-center gap-1.5">
+                      <span class="font-medium">{{ campaign.name }}</span>
+                      <ImageIcon v-if="campaignHasMedia(campaign)" class="h-3.5 w-3.5 text-muted-foreground cursor-pointer hover:text-foreground" :title="campaign.header_media_filename" @click.stop="openMediaPreview(campaign)" />
+                    </div>
                     <p class="text-xs text-muted-foreground">{{ campaign.template_name || $t('campaigns.noTemplate') }}</p>
                   </div>
                 </template>
@@ -1334,6 +1440,22 @@ async function addRecipientsFromCSV() {
                     <Button v-if="campaign.status === 'draft'" variant="ghost" size="icon" class="h-8 w-8" @click="openEditDialog(campaign)" title="Edit">
                       <Pencil class="h-4 w-4" />
                     </Button>
+                    <Tooltip v-if="campaign.status === 'draft' && campaignNeedsMedia(campaign) && !campaignHasMedia(campaign)">
+                      <TooltipTrigger as-child>
+                        <Button variant="ghost" size="icon" class="h-8 w-8 text-amber-500" @click="triggerMediaUpload(campaign)">
+                          <ImageIcon class="h-4 w-4" />
+                        </Button>
+                      </TooltipTrigger>
+                      <TooltipContent>{{ $t('campaigns.uploadMedia') }}</TooltipContent>
+                    </Tooltip>
+                    <Tooltip v-if="campaignHasMedia(campaign)">
+                      <TooltipTrigger as-child>
+                        <Button variant="ghost" size="icon" class="h-8 w-8 text-green-600" @click="openMediaPreview(campaign)">
+                          <ImageIcon class="h-4 w-4" />
+                        </Button>
+                      </TooltipTrigger>
+                      <TooltipContent>{{ $t('campaigns.viewMedia') }}</TooltipContent>
+                    </Tooltip>
                     <Button
                       v-if="campaign.status === 'draft' || campaign.status === 'scheduled'"
                       variant="ghost"
@@ -1791,6 +1913,7 @@ async function addRecipientsFromCSV() {
           <DialogTitle>{{ $t('campaigns.mediaPreview') }}</DialogTitle>
           <DialogDescription>
             {{ previewingCampaign?.header_media_filename }}
+            <span v-if="previewingCampaign?.header_media_mime_type" class="text-xs"> ({{ previewingCampaign.header_media_mime_type }})</span>
           </DialogDescription>
         </DialogHeader>
         <div class="flex items-center justify-center py-4">
@@ -1806,11 +1929,24 @@ async function addRecipientsFromCSV() {
             controls
             class="max-w-full max-h-[60vh] rounded"
           />
+          <div v-else class="flex flex-col items-center gap-3 py-6 text-muted-foreground">
+            <FileText class="h-16 w-16" />
+            <span class="text-sm font-medium">{{ previewingCampaign?.header_media_filename }}</span>
+          </div>
         </div>
         <DialogFooter>
+          <Button
+            v-if="previewingCampaign?.status === 'draft'"
+            variant="outline"
+            @click="showMediaPreviewDialog = false; triggerMediaUpload(previewingCampaign!)"
+          >
+            {{ $t('campaigns.replaceMedia') }}
+          </Button>
           <Button variant="outline" @click="showMediaPreviewDialog = false">{{ $t('common.close') }}</Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>
+    <!-- Hidden file input for standalone media upload from table -->
+    <input id="campaign-media-upload" type="file" accept="image/jpeg,image/png,image/webp,video/mp4,video/3gpp,.pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx" class="hidden" @change="handleStandaloneMediaUpload" />
   </div>
 </template>

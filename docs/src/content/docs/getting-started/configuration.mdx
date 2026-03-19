@@ -35,8 +35,10 @@ sslmode = "disable"
 [redis]
 host = "localhost"
 port = 6379
+username = ""  # Redis ACL username (Redis 6+). Leave empty to use the default user.
 password = ""
 db = 0
+tls = false    # Set to true for TLS connections (e.g. Upstash, Redis Cloud)
 
 # JWT settings
 [jwt]
@@ -68,6 +70,9 @@ Configuration values can be overridden using environment variables:
 | `WHATOMATE_DATABASE_NAME` | Database name |
 | `WHATOMATE_REDIS_HOST` | Redis host |
 | `WHATOMATE_REDIS_PORT` | Redis port |
+| `WHATOMATE_REDIS_USERNAME` | Redis ACL username (leave empty for default user) |
+| `WHATOMATE_REDIS_PASSWORD` | Redis password |
+| `WHATOMATE_REDIS_TLS` | Enable TLS (`true`/`false`) |
 | `WHATOMATE_JWT_SECRET` | JWT signing secret |
 
 ## Database Setup
@@ -206,7 +211,8 @@ For production deployments:
 - Set `environment = "production"` and `debug = false`
 - Use strong, unique values for `jwt.secret`
 - Enable SSL for database connections (`sslmode = "require"`)
-- Use Redis authentication in production
+- Use Redis authentication in production (`password`, and `username` for Redis 6+ ACL)
+- Enable `tls = true` for managed Redis services (Upstash, Redis Cloud, etc.)
 - Configure proper firewall rules
 - Set up SSL/TLS termination (nginx, Caddy, or cloud load balancer)
 - Consider running API and workers separately for better scaling
