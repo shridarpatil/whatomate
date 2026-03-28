@@ -85,7 +85,11 @@
     "deleteConfirmMessage": "இந்த {resource} -ஐ நீக்க விரும்புகிறீர்களா? இதை மீட்க முடியாது.",
     "searchPlaceholder": "{resource} -ஐ தேடுக",
     "selectPlaceholder": "{resource} -ஐ தேர்வுசெய்க",
-    "copiedToClipboard": "கிளிப்போர்டுக்கு நகலெடுக்கப்பட்டது"
+    "copiedToClipboard": "கிளிப்போர்டுக்கு நகலெடுக்கப்பட்டது",
+    "clipboardFailed": "Failed to copy to clipboard",
+    "loadErrorTitle": "Something went wrong",
+    "loadErrorDescription": "Failed to load data. Please try again.",
+    "retryLoad": "Retry"
   },
   "auth": {
     "login": "உள்நுழைய",
@@ -701,7 +705,11 @@
     "deleteTeamWarning": "செயலில் உள்ள மாற்றுகைகள் இருக்கும், ஆனால் அவை இந்தக் குழுவுடன் தொடர்புடையதாக இருக்காது.",
     "enterTeamName": "குழுப் பெயரை உள்ளிடுக",
     "memberAdded": "{name} குழுவில் சேர்க்கப்பட்டார்",
-    "memberRemoved": "உறுப்பினர் குழுவிலிருந்து அகற்றப்பட்டார்"
+    "memberRemoved": "உறுப்பினர் குழுவிலிருந்து அகற்றப்பட்டார்",
+    "confirmRemoveMemberTitle": "Remove Team Member",
+    "confirmRemoveMemberDescription": "Are you sure you want to remove {name} from this team?",
+    "fetchErrorTitle": "Failed to load teams",
+    "fetchErrorDescription": "Something went wrong while loading teams. Please try again."
   },
   "organizations": {
     "createNew": "நிறுவனத்தை உருவாக்கு",
@@ -879,7 +887,12 @@
     "editDialogTitle": "வார்ப்புருவைத் திருத்து",
     "createDialogTitle": "வார்ப்புருவை உருவாக்கு",
     "editDialogDesc": "உங்கள் செய்தி வார்ப்புருவைப் புதுப்பிக்கவும்.",
-    "createDialogDesc": "புதிய WhatsApp செய்தி வார்ப்புருவை உருவாக்கவும்."
+    "createDialogDesc": "புதிய WhatsApp செய்தி வார்ப்புருவை உருவாக்கவும்.",
+    "previewTemplate": "Preview template",
+    "editTemplateLabel": "Edit template",
+    "publishTemplateLabel": "Publish template",
+    "deleteTemplateLabel": "Delete template",
+    "errorLoadingTemplates": "Failed to load templates. Please try again."
   },
   "sso": {
     "title": "ஒற்றை உள்நுழைவு (SSO)",
@@ -934,7 +947,11 @@
     "facebookDesc": "Facebook கணக்குகளுடன் உள்நுழைக",
     "customOidc": "தனிப்பயன் OIDC",
     "customOidcDesc": "தனிப்பயன் OAuth2/OIDC வழங்குநரை உள்ளமைக்கவும்",
-    "enterCredentials": "{provider} -இலிருந்து உங்கள் OAuth சான்றுகளை உள்ளிடுக."
+    "enterCredentials": "{provider} -இலிருந்து உங்கள் OAuth சான்றுகளை உள்ளிடுக.",
+    "confirmDeleteTitle": "Remove SSO Provider",
+    "confirmDeleteDescription": "Are you sure you want to remove the {provider} SSO provider? Users will no longer be able to sign in with this provider.",
+    "fetchErrorTitle": "Failed to load SSO providers",
+    "fetchErrorDescription": "Something went wrong while loading SSO settings. Please try again."
   },
   "apiKeys": {
     "title": "API விசைகள்",
@@ -966,7 +983,10 @@
     "deleteApiKey": "API விசையை நீக்கு",
     "deleteWarning": "இந்த விசையைப் பயன்படுத்தும் எந்த பயன்பாடுகளும் வேலை செய்வதை நிறுத்தும்.",
     "never": "ஒருபோதும் இல்லை",
-    "nameRequired": "பெயர் கட்டாயமாகும்"
+    "nameRequired": "பெயர் கட்டாயமாகும்",
+    "deleteApiKeyLabel": "Delete API key",
+    "copyApiKey": "Copy API key",
+    "errorLoadingApiKeys": "Failed to load API keys. Please try again."
   },
   "webhooks": {
     "title": "வெப்ஹூக்குகள்",
@@ -1000,7 +1020,12 @@
     "urlRequired": "URL கட்டாயமாகும்",
     "eventRequired": "குறைந்தது ஒரு நிகழ்வையாவது தேர்வு செய்ய வேண்டும்",
     "testSent": "சோதனை வெப்ஹூக் வெற்றிகரமாக அனுப்பப்பட்டது",
-    "testFailed": "வெப்ஹூக் சோதனை தோல்வியடைந்தது"
+    "testFailed": "வெப்ஹூக் சோதனை தோல்வியடைந்தது",
+    "confirmDisableTitle": "Disable Webhook",
+    "confirmDisableDescription": "This webhook will stop receiving events. You can re-enable it at any time.",
+    "fetchErrorTitle": "Failed to load webhooks",
+    "fetchErrorDescription": "Something went wrong while loading your webhooks. Please try again.",
+    "testWebhook": "Test webhook"
   },
   "cannedResponses": {
     "title": "முன்பதிவு பதில்கள்",
@@ -1027,7 +1052,11 @@
     "editDesc": "பதில் விவரங்களைப் புதுப்பிக்கவும்.",
     "createDesc": "புதிய விரைவான பதிலைச் சேர்க்கவும்.",
     "nameContentRequired": "பெயர் மற்றும் உள்ளடக்கம் கட்டாயமாகும்",
-    "deleteTitle": "முன்பதிவு பதிலை நீக்கு"
+    "deleteTitle": "முன்பதிவு பதிலை நீக்கு",
+    "copyContent": "Copy content",
+    "editResponse": "Edit response",
+    "deleteResponse": "Delete response",
+    "errorLoadingResponses": "Failed to load canned responses. Please try again."
   },
   "customActions": {
     "title": "தனிப்பயன் செயல்கள்",
@@ -1072,7 +1101,11 @@
     "deleteTitle": "தனிப்பயன் செயலை நீக்கு",
     "nameRequired": "பெயர் கட்டாயமாகும்",
     "urlRequired": "URL கட்டாயமாகும்",
-    "jsCodeRequired": "JavaScript குறியீடு கட்டாயமாகும்"
+    "jsCodeRequired": "JavaScript குறியீடு கட்டாயமாகும்",
+    "confirmDisableTitle": "Disable Custom Action",
+    "confirmDisableDescription": "This action will no longer appear in chat headers. You can re-enable it at any time.",
+    "fetchErrorTitle": "Failed to load custom actions",
+    "fetchErrorDescription": "Something went wrong while loading your custom actions. Please try again."
   },
   "errors": {
     "generic": "ஏதோ தவறு நடந்துள்ளது. மீண்டும் முயல்க.",
@@ -1195,7 +1228,10 @@
     "setupStep6": "செய்திகள் வெப்ஹூக் புலத்திற்குப் பதிவுசெய்க",
     "connectDescription": "Meta Cloud API ஐப் பயன்படுத்தி உங்கள் WhatsApp வணிக கணக்கை இணைக்கவும்.",
     "businessProfile": "வணிக சுயவிவரம்",
-    "contactOptions": "தொடர்பு விருப்பங்கள்"
+    "contactOptions": "தொடர்பு விருப்பங்கள்",
+    "copyWebhookUrl": "Copy webhook URL",
+    "copyPhoneId": "Copy phone ID",
+    "copyVerifyToken": "Copy verify token"
   },
   "dashboard": {
     "title": "டாஷ்போர்டு",
@@ -1341,7 +1377,13 @@
     "updateOnMeta": "Meta -இல் புதுப்பி",
     "saveToMeta": "Meta க்குச் சேமி",
     "publishTooltip": "வெளியிடு",
-    "deleteTooltip": "பாய்வை நீக்கு"
+    "deleteTooltip": "பாய்வை நீக்கு",
+    "publishConfirmTitle": "Publish Flow",
+    "publishConfirmDescription": "Publishing \"{name}\" is irreversible. Once published, the flow cannot be reverted to draft. Are you sure you want to continue?",
+    "saveToMetaConfirmTitle": "Save Flow to Meta",
+    "saveToMetaConfirmDescription": "This will push the current version of \"{name}\" to Meta. Are you sure you want to continue?",
+    "fetchErrorTitle": "Failed to load flows",
+    "fetchErrorDescription": "Something went wrong while loading flows. Please try again."
   },
   "businessProfile": {
     "title": "வணிக சுயவிவரம்",
@@ -1474,8 +1516,14 @@
     "selectTemplateRequired": "ஒரு வார்ப்புருவைத் தேர்வுசெய்க",
     "campaignStarted": "பிரச்சாரம் தொடங்கப்பட்டது",
     "startFailed": "பிரச்சாரத்தைத் தொடங்க முடியவில்லை",
+    "startConfirmTitle": "Start Campaign",
+    "startConfirmDesc": "Are you sure you want to start \"{name}\"? Messages will be sent to all recipients.",
     "campaignPaused": "பிரச்சாரம் இடைநிறுத்தப்பட்டது",
     "pauseFailed": "பிரச்சாரத்தை இடைநிறுத்த முடியவில்லை",
+    "pauseConfirmTitle": "Pause Campaign",
+    "pauseConfirmDesc": "Are you sure you want to pause \"{name}\"? No further messages will be sent until resumed.",
+    "fetchFailed": "Failed to load campaigns",
+    "fetchFailedTitle": "Failed to load campaigns",
     "campaignCancelled": "பிரச்சாரம் ரத்துசெய்யப்பட்டது",
     "cancelFailed": "பிரச்சாரத்தை ரத்துசெய்ய முடியவில்லை",
     "retryingFailed": "{count} தோல்வியடைந்த செய்தி(களை) மீண்டும் முயல்கிறது",
@@ -1676,7 +1724,11 @@
     "chatbotNowActive": "இந்தத் தொடர்புக்கு அரட்டைப்பேச்சி இப்போது செயலில் உள்ளது",
     "failedResumeTransfer": "மாற்றுகையைத் தொடர முடியவில்லை",
     "failedAssignTransfer": "மாற்றுகையை ஒதுக்க முடியவில்லை",
-    "failedLoadAgents": "முகவர்கள் பட்டியலை ஏற்ற முடியவில்லை"
+    "failedLoadAgents": "முகவர்கள் பட்டியலை ஏற்ற முடியவில்லை",
+    "fetchError": "Failed to load transfers. Please try again.",
+    "confirmResumeTitle": "Resume Chatbot",
+    "confirmResumeDescription": "Are you sure you want to resume the chatbot for this contact? The agent transfer will end and the chatbot will take over.",
+    "confirmResumeLabel": "Resume"
   },
   "aiContexts": {
     "title": "AI சூழல்கள்",
@@ -1733,7 +1785,10 @@
     "deleteContext": "AI சூழலை நீக்கு",
     "enterName": "பெயரை உள்ளிடுக",
     "enterApiUrl": "API URL ஐ உள்ளிடுக",
-    "invalidHeaders": "தலைப்புகளுக்கான தவறான JSON வடிவம்"
+    "invalidHeaders": "தலைப்புகளுக்கான தவறான JSON வடிவம்",
+    "fetchError": "Failed to load AI contexts. Please try again.",
+    "editContextLabel": "Edit context",
+    "deleteContextLabel": "Delete context"
   },
   "keywords": {
     "title": "முக்கியவார்த்தை விதிகள்",
@@ -1787,7 +1842,11 @@
     "deleteRuleDesc": "இந்த முக்கியவார்த்தை விதியை நீக்க விரும்புகிறீர்களா? இதை மீட்க முடியாது.",
     "enterKeyword": "குறைந்தது ஒரு முக்கியவார்த்தையையாவது உள்ளிடுக",
     "enterResponse": "பதில் செய்தியை உள்ளிடுக",
-    "maxButtonsError": "அதிகபட்சம் 10 பொத்தான்கள் அனுமதிக்கப்படும்"
+    "maxButtonsError": "அதிகபட்சம் 10 பொத்தான்கள் அனுமதிக்கப்படும்",
+    "fetchError": "Failed to load keyword rules. Please try again.",
+    "editRuleLabel": "Edit rule",
+    "deleteRuleLabel": "Delete rule",
+    "removeButtonLabel": "Remove button"
   },
   "chatbotFlows": {
     "title": "உரையாடல் பாய்வுகள்",
@@ -1810,7 +1869,10 @@
     "active": "செயலில்",
     "inactive": "செயலற்று",
     "editFlow": "பாய்வைத் திருத்து",
-    "deleteFlow": "பாய்வை நீக்கு"
+    "deleteFlow": "பாய்வை நீக்கு",
+    "fetchError": "Failed to load flows. Please try again.",
+    "editFlowLabel": "Edit flow",
+    "deleteFlowLabel": "Delete flow"
   },
   "chatbot": {
     "title": "அரட்டைப்பேச்சி",
@@ -1841,7 +1903,13 @@
     "sessionTimeout": "அமர்வு நேரம் முடிவு",
     "minutes": "{count} நிமிடங்கள்",
     "aiProvider": "AI வழங்குநர்",
-    "disabled": "முடக்கப்பட்டது"
+    "disabled": "முடக்கப்பட்டது",
+    "confirmDisableTitle": "Disable Chatbot",
+    "confirmDisableDescription": "The chatbot will stop responding to incoming messages. You can re-enable it at any time.",
+    "confirmEnableTitle": "Enable Chatbot",
+    "confirmEnableDescription": "The chatbot will start responding to incoming messages automatically.",
+    "fetchErrorTitle": "Failed to Load",
+    "fetchErrorDescription": "Could not load chatbot settings. Please try again."
   },
   "agentAnalytics": {
     "title": "முகவர் பகுப்பாய்வு",
@@ -1878,7 +1946,8 @@
     "agentComparison": "முகவர் ஒப்பீடு",
     "performanceComparison": "முகவர்கள் முழுவதும் செயல்திறன் ஒப்பீடு",
     "noDataAvailable": "தரவு எதுவும் இல்லை",
-    "noAgentsFound": "முகவர்கள் எதுவும் இல்லை"
+    "noAgentsFound": "முகவர்கள் எதுவும் இல்லை",
+    "errorLoadingAnalytics": "Failed to load agent analytics. Please try again."
   },
   "metaInsights": {
     "title": "Meta நுண்ணறிவுகள்",
@@ -1958,7 +2027,9 @@
     "outgoing": "Outgoing",
     "callsOverTime": "Calls Over Time",
     "noCallData": "அழைப்பு தரவு இல்லை",
-    "noCallAnalytics": "அழைப்பு பகுப்பாய்வு தரவு இல்லை"
+    "noCallAnalytics": "அழைப்பு பகுப்பாய்வு தரவு இல்லை",
+    "refreshCache": "Refresh cache",
+    "errorLoadingInsights": "Failed to load Meta insights. Please try again."
   },
   "flowBuilder": {
     "steps": "படிகள்",
@@ -2138,6 +2209,7 @@
     "team": "Team",
     "rootMenu": "ரூட் மெனு",
     "noCallLogs": "அழைப்புப் பதிவுகள் எதுவும் இல்லை.",
+    "errorLoadingCallLogs": "Failed to load call logs. Please try again.",
     "searchByPhone": "தொலைபேசி எண்ணைத் தேடுக",
     "filterByStatus": "நிலையின் படி வடிகட்டு",
     "filterByDirection": "திசையின் படி வடிகட்டு",
@@ -2208,7 +2280,27 @@
     "selectTargetFlow": "IVR பாய்வைத் தேர்வுசெய்க",
     "uploadAudioTab": "ஆடியோ பதிவேற்று",
     "textToSpeechTab": "உரையிலிருந்து பேச்சு",
-    "greetingTextPlaceholder": "உங்கள் IVR வரவேற்பு செய்தியைத் தட்டச்சுக..."
+    "greetingTextPlaceholder": "உங்கள் IVR வரவேற்பு செய்தியைத் தட்டச்சுக...",
+    "toggleActiveConfirmTitle": "Toggle Flow Status",
+    "toggleActiveConfirmEnable": "Are you sure you want to enable \"{name}\"? It will start processing calls.",
+    "toggleActiveConfirmDisable": "Are you sure you want to disable \"{name}\"? It will stop processing calls.",
+    "toggleCallStartConfirmTitle": "Toggle Call Start",
+    "toggleCallStartConfirmEnable": "Are you sure you want to set \"{name}\" as the call start flow? Incoming calls will begin here.",
+    "toggleCallStartConfirmDisable": "Are you sure you want to remove \"{name}\" as the call start flow?",
+    "toggleActiveAriaEnable": "Enable flow {name}",
+    "toggleActiveAriaDisable": "Disable flow {name}",
+    "toggleCallStartAriaEnable": "Set {name} as call start",
+    "toggleCallStartAriaDisable": "Remove {name} as call start",
+    "editFlowAriaLabel": "Edit flow {name}",
+    "deleteFlowAriaLabel": "Delete flow {name}",
+    "flowLoadFailed": "Failed to load IVR flow",
+    "flowLoadFailedDesc": "Could not load the flow data. Please try again or go back.",
+    "goBack": "Go Back",
+    "backToFlows": "Back to IVR flows",
+    "deleteNodeConfirmTitle": "Delete Node",
+    "deleteNodeConfirmDesc": "Are you sure you want to delete this node? All connected edges will also be removed.",
+    "flowSaving": "Saving...",
+    "flowSave": "Save"
   },
   "callTransfers": {
     "title": "அழைப்பு மாற்றுகைகள்",
@@ -2238,7 +2330,8 @@
     "transferring": "Transferring",
     "transferFailed": "Failed to transfer call",
     "back": "Back",
-    "noTeams": "No teams available"
+    "noTeams": "No teams available",
+    "errorLoadingTransfers": "Failed to load call transfers. Please try again."
   },
   "outgoingCalls": {
     "initiating": "தொடங்குகிறது",
