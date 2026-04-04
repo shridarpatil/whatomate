@@ -66,6 +66,7 @@ func newTestApp(t *testing.T, opts ...appOption) *handlers.App {
 		DB:     db,
 		Log:    log,
 		Redis:  redisClient,
+		Queue:  queue.NewRedisQueue(redisClient, log),
 		HTTPClient: &http.Client{
 			Timeout: 30 * time.Second,
 		},

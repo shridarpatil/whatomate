@@ -249,6 +249,11 @@ func (a *App) SendEmailAsync(ctx context.Context, orgID uuid.UUID, templateName 
 		TemplateData:   data,
 	}
 
+	if a.Queue == nil {
+		a.Log.Warn("Task queue not initialized, skipping async email", "template", templateName, "org_id", orgID)
+		return
+	}
+
 	if err := a.Queue.EnqueueEmail(ctx, job); err != nil {
 		a.Log.Error("Failed to enqueue email", "error", err, "template", templateName, "org_id", orgID)
 	}
