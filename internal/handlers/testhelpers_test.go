@@ -50,6 +50,10 @@ func newTestApp(t *testing.T, opts ...appOption) *handlers.App {
 	}
 
 	cfg := &config.Config{
+		App: config.AppConfig{
+			Name:      "Whatomate Test",
+			PublicURL: "http://localhost:5173",
+		},
 		JWT: config.JWTConfig{
 			Secret:            testutil.TestJWTSecret,
 			AccessExpiryMins:  15,

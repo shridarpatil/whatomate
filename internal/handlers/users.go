@@ -371,7 +371,10 @@ func (a *App) CreateUser(r *fastglue.Request) error {
 		inviterName = "Administrator"
 	}
 
-	publicURL := strings.TrimSuffix(a.Config.App.PublicURL, "/")
+	publicURL := "http://localhost:5173" // Default fallback
+	if a.Config != nil && a.Config.App.PublicURL != "" {
+		publicURL = strings.TrimSuffix(a.Config.App.PublicURL, "/")
+	}
 	inviteURL := fmt.Sprintf("%s/register?org=%s", publicURL, orgID.String())
 
 	// Send Invitation Email
