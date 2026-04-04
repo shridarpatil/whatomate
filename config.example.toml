@@ -9,6 +9,7 @@ name = "Whatomate"
 environment = "development"  # development, staging, production
 debug = true
 encryption_key = ""  # AES-256 key for encrypting secrets at rest (32+ chars, required in production)
+public_url = "http://localhost:5173" # Public URL for the frontend, used in emails
 
 [server]
 host = "0.0.0.0"

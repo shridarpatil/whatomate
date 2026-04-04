@@ -186,6 +186,13 @@ func (a *App) Register(r *fastglue.Request) error {
 
 		a.setAuthCookies(r, accessToken, refreshToken)
 
+		// Send welcome email for joining new organization
+		a.SendEmailAsync(r.RequestCtx, req.OrganizationID, "welcome.html", []string{existingUser.Email}, "Welcome to "+defaultRole.Organization.Name, map[string]any{
+			"FullName": existingUser.FullName,
+			"OrgName":  defaultRole.Organization.Name,
+			"LoginURL": a.Config.App.PublicURL + "/login",
+		})
+
 		return r.SendEnvelope(CookieAuthResponse{
 			ExpiresIn: a.Config.JWT.AccessExpiryMins * 60,
 			User:      existingUser,
@@ -256,6 +263,13 @@ func (a *App) Register(r *fastglue.Request) error {
 	}
 
 	a.setAuthCookies(r, accessToken, refreshToken)
+
+	// Send welcome email
+	a.SendEmailAsync(r.RequestCtx, req.OrganizationID, "welcome.html", []string{user.Email}, "Welcome to Whatomate", map[string]any{
+		"FullName": user.FullName,
+		"OrgName":  defaultRole.Organization.Name,
+		"LoginURL": a.Config.App.PublicURL + "/login",
+	})
 
 	return r.SendEnvelope(CookieAuthResponse{
 		ExpiresIn: a.Config.JWT.AccessExpiryMins * 60,

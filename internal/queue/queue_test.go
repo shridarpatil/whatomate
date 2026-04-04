@@ -64,6 +64,10 @@ func (h *mockHandler) HandleRecipientJob(_ context.Context, job *queue.Recipient
 	return h.err
 }
 
+func (h *mockHandler) HandleEmailJob(_ context.Context, _ *queue.EmailJob) error {
+	return h.err
+}
+
 func (h *mockHandler) getJobs() []*queue.RecipientJob {
 	h.mu.Lock()
 	defer h.mu.Unlock()

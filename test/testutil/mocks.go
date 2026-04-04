@@ -309,6 +309,17 @@ func (m *MockQueue) EnqueueRecipients(ctx context.Context, jobs []*queue.Recipie
 	return nil
 }
 
+// EnqueueEmail mocks enqueueing an email job.
+func (m *MockQueue) EnqueueEmail(ctx context.Context, job *queue.EmailJob) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	if m.Error != nil {
+		return m.Error
+	}
+	return nil
+}
+
 // Close is a no-op for the mock.
 func (m *MockQueue) Close() error {
 	return nil
@@ -373,6 +384,17 @@ func (m *MockJobHandler) HandleRecipientJob(ctx context.Context, job *queue.Reci
 	}
 	if m.HandleFunc != nil {
 		return m.HandleFunc(ctx, job)
+	}
+	return nil
+}
+
+// HandleEmailJob mocks handling an email job.
+func (m *MockJobHandler) HandleEmailJob(ctx context.Context, job *queue.EmailJob) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	if m.Error != nil {
+		return m.Error
 	}
 	return nil
 }

@@ -141,8 +141,14 @@ export const usersService = {
     api.put(`/users/${id}`, data),
   delete: (id: string) => api.delete(`/users/${id}`),
   me: () => api.get('/me'),
-  updateSettings: (data: { email_notifications: boolean; new_message_alerts: boolean; campaign_updates: boolean }) =>
-    api.put('/me/settings', data),
+  updateSettings: (data: { 
+    email_notifications: boolean; 
+    new_message_alerts: boolean; 
+    campaign_updates: boolean;
+    weekly_report: boolean;
+    audit_logs: boolean;
+    plan_limits: boolean;
+  }) => api.put('/me/settings', data),
   changePassword: (data: { current_password: string; new_password: string }) =>
     api.put('/me/password', data),
   updateAvailability: (isAvailable: boolean) =>
@@ -645,6 +651,18 @@ export const organizationService = {
     hold_music_file?: string
     ringback_file?: string
   }) => api.put('/org/settings', data),
+  getEmailSettings: () => api.get('/org/email/settings'),
+  updateEmailSettings: (data: {
+    enabled?: boolean
+    smtp_host?: string
+    smtp_port?: number
+    smtp_user?: string
+    smtp_pass?: string
+    email_from_address?: string
+    email_from_name?: string
+    smtp_tls?: boolean
+  }) => api.put('/org/email/settings', data),
+  testEmailSettings: (data: { recipient_email: string }) => api.post('/org/email/test', data),
   uploadOrgAudio: (file: File, type: 'hold_music' | 'ringback') => {
     const formData = new FormData()
     formData.append('file', file)

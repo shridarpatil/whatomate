@@ -107,6 +107,33 @@ func (q *RedisQueue) Close() error {
 	return nil // Redis client is managed externally
 }
 
+// EnqueueEmail adds an email job to the queue
+func (q *RedisQueue) EnqueueEmail(ctx context.Context, job *EmailJob) error {
+	if job.EnqueuedAt.IsZero() {
+		job.EnqueuedAt = time.Now()
+	}
+
+	payload, err := json.Marshal(job)
+	if err != nil {
+		return fmt.Errorf("failed to marshal email job: %w", err)
+	}
+
+	_, err = q.client.XAdd(ctx, &redis.XAddArgs{
+		Stream: StreamName,
+		Values: map[string]any{
+			"type":    string(JobTypeEmail),
+			"payload": string(payload),
+		},
+	}).Result()
+
+	if err != nil {
+		return fmt.Errorf("failed to enqueue email job: %w", err)
+	}
+
+	q.log.Info("Email job enqueued", "to", job.To, "template", job.TemplateName)
+	return nil
+}
+
 // RedisConsumer implements the Consumer interface using Redis Streams
 type RedisConsumer struct {
 	client     *redis.Client
@@ -267,6 +294,14 @@ func (c *RedisConsumer) processMessage(ctx context.Context, msg redis.XMessage, 
 		}
 		c.log.Debug("Processing recipient job", "campaign_id", job.CampaignID, "recipient_id", job.RecipientID, "message_id", msg.ID)
 		return handler.HandleRecipientJob(ctx, &job)
+
+	case JobTypeEmail:
+		var job EmailJob
+		if err := json.Unmarshal([]byte(payload), &job); err != nil {
+			return fmt.Errorf("failed to unmarshal email job: %w", err)
+		}
+		c.log.Debug("Processing email job", "to", job.To, "template", job.TemplateName, "message_id", msg.ID)
+		return handler.HandleEmailJob(ctx, &job)
 
 	default:
 		return fmt.Errorf("unknown job type: %s", jobType)

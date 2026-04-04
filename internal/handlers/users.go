@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"fmt"
 	"net/mail"
 	"time"
 
@@ -73,9 +74,13 @@ type RoleInfo struct {
 
 // UserSettingsRequest represents notification/settings preferences
 type UserSettingsRequest struct {
-	EmailNotifications bool `json:"email_notifications"`
-	NewMessageAlerts   bool `json:"new_message_alerts"`
-	CampaignUpdates    bool `json:"campaign_updates"`
+	EmailNotifications bool   `json:"email_notifications"`
+	NewMessageAlerts   bool   `json:"new_message_alerts"`
+	CampaignUpdates    bool   `json:"campaign_updates"`
+	WeeklyReport       bool   `json:"weekly_report"`
+	AuditLogs          bool   `json:"audit_logs"`
+	PlanLimits         bool   `json:"plan_limits"`
+	ImportationTime    string `json:"importation_time"` // e.g., "09:00", "daily", "weekly"
 }
 
 // ChangePasswordRequest represents the request body for changing password
@@ -352,6 +357,28 @@ func (a *App) CreateUser(r *fastglue.Request) error {
 
 	// Load role for response
 	a.DB.Preload("Role").First(&user, user.ID)
+
+	// Fetch Org Name for email
+	var org models.Organization
+	a.DB.Select("name").First(&org, orgID)
+
+	// Fetch Inviter Name for email
+	var adminUser models.User
+	a.DB.Select("full_name").Where("id = ?", userID).First(&adminUser)
+	inviterName := adminUser.FullName
+	if inviterName == "" {
+		inviterName = "Administrator"
+	}
+
+	// Send Invitation Email
+	a.SendEmailAsync(r.RequestCtx, orgID, "invite.html", []string{user.Email}, "You've been invited to join "+org.Name, map[string]any{
+		"InviteeName": user.FullName,
+		"InviterName": inviterName,
+		"OrgName":     org.Name,
+		"Email":       user.Email,
+		"Password":    req.Password, // Provide the temporary password set by the admin
+		"InviteURL":   fmt.Sprintf("%s/register?org=%s", a.Config.App.PublicURL, orgID.String()),
+	})
 
 	return r.SendEnvelope(userToResponse(user))
 }
@@ -685,6 +712,10 @@ func (a *App) UpdateCurrentUserSettings(r *fastglue.Request) error {
 	user.Settings["email_notifications"] = req.EmailNotifications
 	user.Settings["new_message_alerts"] = req.NewMessageAlerts
 	user.Settings["campaign_updates"] = req.CampaignUpdates
+	user.Settings["weekly_report"] = req.WeeklyReport
+	user.Settings["audit_logs"] = req.AuditLogs
+	user.Settings["plan_limits"] = req.PlanLimits
+	user.Settings["importation_time"] = req.ImportationTime
 
 	if err := a.DB.Save(&user).Error; err != nil {
 		a.Log.Error("Failed to update user settings", "error", err)
@@ -742,6 +773,15 @@ func (a *App) ChangePassword(r *fastglue.Request) error {
 		return r.SendErrorEnvelope(fasthttp.StatusInternalServerError, "Failed to change password", nil, "")
 	}
 
+	// Send Password Changed Email (Security Alert)
+	if a.ShouldNotifyUser(user.ID, "email_notifications") {
+		orgID, _ := r.RequestCtx.UserValue("organization_id").(uuid.UUID)
+		a.SendEmailAsync(r.RequestCtx, orgID, "password_reset.html", []string{user.Email}, "Security Alert: Password Changed", map[string]any{
+			"FullName": user.FullName,
+			"LoginURL": a.Config.App.PublicURL + "/login",
+		})
+	}
+
 	return r.SendEnvelope(map[string]string{"message": "Password changed successfully"})
 }
 
@@ -789,12 +829,12 @@ func userToResponse(user models.User) UserResponse {
 
 // MyOrganizationResponse represents an organization in the user's org list
 type MyOrganizationResponse struct {
-	OrganizationID uuid.UUID `json:"organization_id"`
-	Name           string    `json:"name"`
-	Slug           string    `json:"slug"`
+	OrganizationID uuid.UUID  `json:"organization_id"`
+	Name           string     `json:"name"`
+	Slug           string     `json:"slug"`
 	RoleID         *uuid.UUID `json:"role_id,omitempty"`
-	RoleName       string    `json:"role_name,omitempty"`
-	IsDefault      bool      `json:"is_default"`
+	RoleName       string     `json:"role_name,omitempty"`
+	IsDefault      bool       `json:"is_default"`
 }
 
 // ListMyOrganizations returns all organizations the current user belongs to
@@ -905,10 +945,10 @@ func (a *App) UpdateAvailability(r *fastglue.Request) error {
 	}
 
 	return r.SendEnvelope(map[string]any{
-		"message":             "Availability updated successfully",
-		"is_available":        user.IsAvailable,
-		"status":              status,
-		"break_started_at":    breakStartedAt,
-		"transfers_to_queue":  transfersReturned,
+		"message":            "Availability updated successfully",
+		"is_available":       user.IsAvailable,
+		"status":             status,
+		"break_started_at":   breakStartedAt,
+		"transfers_to_queue": transfersReturned,
 	})
 }

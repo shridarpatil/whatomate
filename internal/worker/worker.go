@@ -9,6 +9,8 @@ import (
 	"github.com/redis/go-redis/v9"
 	"github.com/shridarpatil/whatomate/internal/config"
 	"github.com/shridarpatil/whatomate/internal/contactutil"
+	"github.com/shridarpatil/whatomate/internal/crypto"
+	"github.com/shridarpatil/whatomate/internal/email"
 	"github.com/shridarpatil/whatomate/internal/models"
 	"github.com/shridarpatil/whatomate/internal/queue"
 	"github.com/shridarpatil/whatomate/internal/templateutil"
@@ -50,7 +52,6 @@ func New(cfg *config.Config, db *gorm.DB, rdb *redis.Client, log logf.Logger) (*
 		Publisher: publisher,
 	}, nil
 }
-
 
 // Run starts the worker and processes jobs until context is cancelled
 func (w *Worker) Run(ctx context.Context) error {
@@ -276,6 +277,108 @@ func (w *Worker) decryptAccountSecrets(account *models.WhatsAppAccount) {
 	account.DecryptSecrets(key)
 }
 
+// HandleEmailJob processes an email sending job.
+func (w *Worker) HandleEmailJob(ctx context.Context, job *queue.EmailJob) error {
+	// Load organization to get SMTP settings
+	var org models.Organization
+	if err := w.DB.Where("id = ?", job.OrganizationID).First(&org).Error; err != nil {
+		w.Log.Error("Failed to load organization for email", "error", err, "org_id", job.OrganizationID)
+		return fmt.Errorf("failed to load organization: %w", err)
+	}
+
+	// Extract and decrypt SMTP config from org settings
+	cfg := w.extractEmailConfig(org.Settings)
+	if cfg == nil {
+		w.Log.Warn("Email not configured for organization, skipping", "org_id", job.OrganizationID)
+		return nil // Not an error — org just hasn't configured email
+	}
+
+	// Create mailer
+	mailer := email.New(*cfg)
+	if mailer == nil {
+		w.Log.Warn("Invalid email config for organization", "org_id", job.OrganizationID)
+		return nil
+	}
+
+	// Render template
+	renderer, err := email.NewTemplateRenderer()
+	if err != nil {
+		w.Log.Error("Failed to create template renderer", "error", err)
+		return fmt.Errorf("failed to create template renderer: %w", err)
+	}
+
+	htmlBody, err := renderer.Render(job.TemplateName, job.TemplateData)
+	if err != nil {
+		w.Log.Error("Failed to render email template", "error", err, "template", job.TemplateName)
+		return fmt.Errorf("failed to render template: %w", err)
+	}
+
+	// Send
+	msg := &email.Message{
+		To:       job.To,
+		Subject:  job.Subject,
+		HTMLBody: htmlBody,
+	}
+
+	if err := mailer.Send(ctx, msg); err != nil {
+		w.Log.Error("Failed to send email", "error", err, "to", job.To, "template", job.TemplateName)
+		return fmt.Errorf("failed to send email: %w", err)
+	}
+
+	w.Log.Info("Email sent successfully", "to", job.To, "template", job.TemplateName, "org_id", job.OrganizationID)
+	return nil
+}
+
+// extractEmailConfig extracts and decrypts SMTP configuration from org settings.
+func (w *Worker) extractEmailConfig(settings models.JSONB) *email.Config {
+	if settings == nil {
+		return nil
+	}
+
+	host, _ := settings["smtp_host"].(string)
+	if host == "" {
+		return nil
+	}
+
+	var encryptionKey string
+	if w.Config != nil {
+		encryptionKey = w.Config.App.EncryptionKey
+	}
+
+	port := 587
+	if v, ok := settings["smtp_port"].(float64); ok && v > 0 {
+		port = int(v)
+	}
+
+	password, _ := settings["smtp_pass"].(string)
+	if password != "" {
+		if dec, err := crypto.Decrypt(password, encryptionKey); err == nil {
+			password = dec
+		}
+	}
+
+	useTLS := false
+	if v, ok := settings["smtp_tls"].(bool); ok {
+		useTLS = v
+	}
+
+	return &email.Config{
+		Host:      host,
+		Port:      port,
+		Username:  stringFromSettings(settings, "smtp_user"),
+		Password:  password,
+		FromEmail: stringFromSettings(settings, "email_from_address"),
+		FromName:  stringFromSettings(settings, "email_from_name"),
+		TLS:       useTLS,
+	}
+}
+
+// stringFromSettings safely extracts a string from JSONB settings.
+func stringFromSettings(settings models.JSONB, key string) string {
+	v, _ := settings[key].(string)
+	return v
+}
+
 // Close cleans up worker resources
 func (w *Worker) Close() error {
 	if w.Consumer != nil {
@@ -283,4 +386,3 @@ func (w *Worker) Close() error {
 	}
 	return nil
 }
-

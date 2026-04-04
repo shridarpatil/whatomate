@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Weekly Intelligence Report</title>
+<style>
+  body { margin: 0; padding: 0; background-color: #0a0a0b; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; color: rgba(255, 255, 255, 0.7); }
+  .wrapper { width: 100%; background-color: #0a0a0b; padding: 48px 0; }
+  .container { max-width: 600px; margin: 0 auto; background-color: rgba(255, 255, 255, 0.02); border-radius: 16px; border: 1px solid rgba(255, 255, 255, 0.08); overflow: hidden; }
+  .header { padding: 32px 40px; text-align: center; }
+  .logo { font-size: 20px; font-weight: 700; color: #ffffff; letter-spacing: -0.02em; }
+  .content { padding: 0 40px 40px; }
+  h1 { font-size: 24px; font-weight: 600; color: #ffffff; margin: 0 0 16px; line-height: 1.25; }
+  p { font-size: 15px; line-height: 1.6; margin: 0 0 20px; }
+  .highlight { color: #ffffff; font-weight: 600; }
+  .stats-grid { display: block; border-top: 1px solid rgba(255, 255, 255, 0.08); padding-top: 24px; margin-top: 24px; }
+  .stat-card { background-color: rgba(255, 255, 255, 0.03); border: 1px solid rgba(255, 255, 255, 0.05); padding: 20px; border-radius: 12px; margin-bottom: 16px; }
+  .stat-label { font-size: 11px; text-transform: uppercase; color: rgba(255, 255, 255, 0.4); font-weight: 700; margin-bottom: 4px; }
+  .stat-value { font-size: 28px; font-weight: 800; color: #ffffff; }
+  .footer { padding: 24px 40px; text-align: center; border-top: 1px solid rgba(255, 255, 255, 0.08); font-size: 11px; color: rgba(255, 255, 255, 0.3); line-height: 1.5; }
+  @media only screen and (max-width: 600px) {
+    .header, .content, .footer { padding-left: 24px; padding-right: 24px; }
+  }
+</style>
+</head>
+<body>
+<div class="wrapper">
+  <div class="container">
+    <div class="header">
+      <div class="logo">Whatomate</div>
+    </div>
+    <div class="content">
+      <h1>Weekly summary.</h1>
+      <p>Here is your weekly performance breakdown for <span class="highlight">{{.OrgName}}</span> from <span class="highlight">{{.ReportPeriod}}</span>.</p>
+      <div class="stats-grid">
+        <div class="stat-card">
+          <div class="stat-label">Total Messages Sent</div>
+          <div class="stat-value" style="color: #22c55e;">{{.TotalMessages}}</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-label">Active Campaigns</div>
+          <div class="stat-value" style="color: #f59e0b;">{{.ActiveCampaigns}}</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-label">New Contacts</div>
+          <div class="stat-value" style="color: #ef4444;">{{.NewContacts}}</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-label">Platform Usage Score</div>
+          <div class="stat-value" style="color: #3b82f6;">{{.UsageScore}}</div>
+        </div>
+      </div>
+    </div>
+    <div class="footer">
+      <p>Sent by Whatomate &middot; WhatsApp Business API Platform</p>
+      <p style="margin-top: 4px;">This is an automated message. Please do not reply directly.</p>
+    </div>
+  </div>
+</div>
+</body>
+</html>

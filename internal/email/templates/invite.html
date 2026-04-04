@@ -1,0 +1,53 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Invitation to Whatomate</title>
+<style>
+  body { margin: 0; padding: 0; background-color: #0a0a0b; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; color: rgba(255, 255, 255, 0.7); }
+  .wrapper { width: 100%; background-color: #0a0a0b; padding: 48px 0; }
+  .container { max-width: 540px; margin: 0 auto; background-color: rgba(255, 255, 255, 0.02); border-radius: 16px; border: 1px solid rgba(255, 255, 255, 0.08); overflow: hidden; }
+  .header { padding: 32px 40px; text-align: center; }
+  .logo { font-size: 20px; font-weight: 700; color: #ffffff; letter-spacing: -0.02em; }
+  .content { padding: 0 40px 40px; }
+  h1 { font-size: 24px; font-weight: 600; color: #ffffff; margin: 0 0 16px; line-height: 1.25; }
+  p { font-size: 15px; line-height: 1.6; margin: 0 0 20px; }
+  .highlight { color: #ffffff; font-weight: 600; }
+  .btn { display: inline-block; padding: 12px 32px; background-color: #ffffff; color: #000000; font-weight: 600; font-size: 14px; text-decoration: none; border-radius: 8px; }
+  .footer { padding: 24px 40px; text-align: center; border-top: 1px solid rgba(255, 255, 255, 0.08); font-size: 11px; color: rgba(255, 255, 255, 0.3); line-height: 1.5; }
+  @media only screen and (max-width: 600px) {
+    .header, .content, .footer { padding-left: 24px; padding-right: 24px; }
+  }
+</style>
+</head>
+<body>
+<div class="wrapper">
+  <div class="container">
+    <div class="header">
+      <div class="logo">Whatomate</div>
+    </div>
+    <div class="content">
+      <h1>Join the mission.</h1>
+      <p>Hi <span class="highlight">{{.InviteeName}}</span>,</p>
+      <p>You have been invited by <span class="highlight">{{.InviterName}}</span> to join <span class="highlight">{{.OrgName}}</span> on Whatomate.</p>
+      <p>Collaborate with your team, manage AI agents, and build powerful automation workflows together.</p>
+      <div style="background-color: rgba(255, 255, 255, 0.03); border: 1px solid rgba(255, 255, 255, 0.05); padding: 20px; border-radius: 12px; margin: 24px 0;">
+        <p style="font-size: 13px; margin-bottom: 8px; color: rgba(255, 255, 255, 0.4); text-transform: uppercase; font-weight: 700; letter-spacing: 0.05em;">Your Account Credentials</p>
+        <p style="margin-bottom: 8px;">Email: <span class="highlight">{{.Email}}</span></p>
+        {{if .Password}}
+        <p style="margin-bottom: 0;">Password: <span class="highlight">{{.Password}}</span></p>
+        {{end}}
+      </div>
+      <div style="margin-top: 32px;">
+        <a href="{{.InviteURL}}" class="btn">Join Organization</a>
+      </div>
+    </div>
+    <div class="footer">
+      <p>Sent by Whatomate &middot; WhatsApp Business API Platform</p>
+      <p style="margin-top: 4px;">This is an automated message. Please do not reply directly.</p>
+    </div>
+  </div>
+</div>
+</body>
+</html>

@@ -1,0 +1,48 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Whatomate - Connection Test</title>
+<style>
+  body { margin: 0; padding: 0; background-color: #0a0a0b; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; color: rgba(255, 255, 255, 0.7); }
+  .wrapper { width: 100%; background-color: #0a0a0b; padding: 48px 0; }
+  .container { max-width: 540px; margin: 0 auto; background-color: rgba(255, 255, 255, 0.02); border-radius: 16px; border: 1px solid rgba(255, 255, 255, 0.08); overflow: hidden; }
+  .header { padding: 32px 40px; text-align: center; }
+  .logo { font-size: 20px; font-weight: 700; color: #ffffff; letter-spacing: -0.02em; }
+  .content { padding: 0 40px 40px; }
+  h1 { font-size: 24px; font-weight: 600; color: #ffffff; margin: 0 0 16px; line-height: 1.25; }
+  p { font-size: 15px; line-height: 1.6; margin: 0 0 20px; }
+  .highlight { color: #ffffff; font-weight: 600; }
+  .success-box { background-color: rgba(34, 197, 94, 0.1); border-left: 4px solid #22c55e; padding: 16px; margin: 20px 0; border-radius: 4px; }
+  .footer { padding: 24px 40px; text-align: center; border-top: 1px solid rgba(255, 255, 255, 0.08); font-size: 11px; color: rgba(255, 255, 255, 0.3); line-height: 1.5; }
+  @media only screen and (max-width: 600px) {
+    .header, .content, .footer { padding-left: 24px; padding-right: 24px; }
+  }
+</style>
+</head>
+<body>
+<div class="wrapper">
+  <div class="container">
+    <div class="header">
+      <div class="logo">Whatomate</div>
+    </div>
+    <div class="content">
+      <h1>SMTP verified.</h1>
+      <p>Hi <span class="highlight">{{.OrgName}}</span> Admin,</p>
+      <div class="success-box">
+        <p style="color: #22c55e; font-weight: 600; margin-bottom: 0;">Connection Confirmed</p>
+        <p style="margin-top: 8px; color: rgba(255, 255, 255, 0.8);">This is a test email from Whatomate to confirm your SMTP relay is configured correctly.</p>
+      </div>
+      <p>Source Host: <span class="highlight">{{.SMTPHost}}</span></p>
+      <p>Sender Address: <span class="highlight">{{.FromEmail}}</span></p>
+      <p>Your mail server is now fully operational within the platform.</p>
+    </div>
+    <div class="footer">
+      <p>Sent by Whatomate &middot; WhatsApp Business API Platform</p>
+      <p style="margin-top: 4px;">This is an automated message. Please do not reply directly.</p>
+    </div>
+  </div>
+</div>
+</body>
+</html>

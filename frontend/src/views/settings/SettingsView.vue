@@ -12,7 +12,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { PageHeader } from '@/components/shared'
 import LanguageSwitcher from '@/components/LanguageSwitcher.vue'
 import { toast } from 'vue-sonner'
-import { Settings, Bell, Loader2, Globe, Phone, Upload, Play, Pause, Music } from 'lucide-vue-next'
+import { Settings, Bell, Loader2, Globe, Phone, Upload, Play, Pause, Music, Mail } from 'lucide-vue-next'
 import { usersService, organizationService } from '@/services/api'
 
 const { t } = useI18n()
@@ -32,7 +32,10 @@ const generalSettings = ref({
 const notificationSettings = ref({
   email_notifications: true,
   new_message_alerts: true,
-  campaign_updates: true
+  campaign_updates: true,
+  weekly_report: true,
+  audit_logs: true,
+  plan_limits: true
 })
 
 // Calling Settings
@@ -43,6 +46,20 @@ const callingSettings = ref({
   hold_music_file: '',
   ringback_file: ''
 })
+
+// SMTP Settings
+const smtpSettings = ref({
+  enabled: false,
+  smtp_host: '',
+  smtp_port: 587,
+  smtp_user: '',
+  smtp_pass: '',
+  email_from_address: '',
+  email_from_name: '',
+  smtp_tls: false
+})
+const testEmailAddress = ref('')
+const isTestingEmail = ref(false)
 
 const isUploadingHoldMusic = ref(false)
 const isUploadingRingback = ref(false)
@@ -55,9 +72,10 @@ const playingRingback = ref(false)
 
 onMounted(async () => {
   try {
-    const [orgResponse, userResponse] = await Promise.all([
+    const [orgResponse, userResponse, smtpResponse] = await Promise.all([
       organizationService.getSettings(),
-      usersService.me()
+      usersService.me(),
+      organizationService.getEmailSettings().catch(() => ({ data: {} })) // ignore 404/403
     ])
 
     // Organization settings
@@ -78,13 +96,31 @@ onMounted(async () => {
       }
     }
 
+    // SMTP Settings
+    const smtpData = smtpResponse?.data?.data || smtpResponse?.data
+    if (smtpData && Object.keys(smtpData).length > 0) {
+      smtpSettings.value = {
+        enabled: smtpData.enabled || false,
+        smtp_host: smtpData.smtp_host || '',
+        smtp_port: smtpData.smtp_port || 587,
+        smtp_user: smtpData.smtp_user || '',
+        smtp_pass: smtpData.smtp_pass || '',
+        email_from_address: smtpData.email_from_address || '',
+        email_from_name: smtpData.email_from_name || '',
+        smtp_tls: smtpData.smtp_tls || false
+      }
+    }
+
     // User notification settings
     const user = userResponse.data.data || userResponse.data
     if (user.settings) {
       notificationSettings.value = {
         email_notifications: user.settings.email_notifications ?? true,
         new_message_alerts: user.settings.new_message_alerts ?? true,
-        campaign_updates: user.settings.campaign_updates ?? true
+        campaign_updates: user.settings.campaign_updates ?? true,
+        weekly_report: user.settings.weekly_report ?? true,
+        audit_logs: user.settings.audit_logs ?? true,
+        plan_limits: user.settings.plan_limits ?? true
       }
     }
   } catch (error) {
@@ -117,7 +153,10 @@ async function saveNotificationSettings() {
     await usersService.updateSettings({
       email_notifications: notificationSettings.value.email_notifications,
       new_message_alerts: notificationSettings.value.new_message_alerts,
-      campaign_updates: notificationSettings.value.campaign_updates
+      campaign_updates: notificationSettings.value.campaign_updates,
+      weekly_report: notificationSettings.value.weekly_report,
+      audit_logs: notificationSettings.value.audit_logs,
+      plan_limits: notificationSettings.value.plan_limits
     })
     toast.success(t('settings.notificationsSaved'))
   } catch (error) {
@@ -140,6 +179,43 @@ async function saveCallingSettings() {
     toast.error(t('common.failedSave', { resource: t('resources.settings') }))
   } finally {
     isSubmitting.value = false
+  }
+}
+
+async function saveSmtpSettings() {
+  isSubmitting.value = true
+  try {
+    await organizationService.updateEmailSettings({
+      enabled: smtpSettings.value.enabled,
+      smtp_host: smtpSettings.value.smtp_host,
+      smtp_port: smtpSettings.value.smtp_port,
+      smtp_user: smtpSettings.value.smtp_user,
+      smtp_pass: smtpSettings.value.smtp_pass,
+      email_from_address: smtpSettings.value.email_from_address,
+      email_from_name: smtpSettings.value.email_from_name,
+      smtp_tls: smtpSettings.value.smtp_tls
+    })
+    toast.success('SMTP settings saved successfully')
+  } catch (error) {
+    toast.error('Failed to save SMTP settings')
+  } finally {
+    isSubmitting.value = false
+  }
+}
+
+async function testSmtpSettings() {
+  if (!testEmailAddress.value) {
+    toast.error('Please enter a test email address')
+    return
+  }
+  isTestingEmail.value = true
+  try {
+    await organizationService.testEmailSettings({ recipient_email: testEmailAddress.value })
+    toast.success(`Test email sent to ${testEmailAddress.value}`)
+  } catch (error: any) {
+    toast.error(error.response?.data?.error || error.response?.data?.message || 'Failed to send test email')
+  } finally {
+    isTestingEmail.value = false
   }
 }
 
@@ -196,10 +272,14 @@ function togglePlayAudio(type: 'hold_music' | 'ringback') {
     <ScrollArea class="flex-1">
       <div class="p-6 space-y-4 max-w-4xl mx-auto">
         <Tabs default-value="general" class="w-full">
-          <TabsList class="grid w-full grid-cols-3 mb-6 bg-white/[0.04] border border-white/[0.08] light:bg-gray-100 light:border-gray-200">
+          <TabsList class="grid w-full grid-cols-4 mb-6 bg-white/[0.04] border border-white/[0.08] light:bg-gray-100 light:border-gray-200">
             <TabsTrigger value="general" class="data-[state=active]:bg-white/[0.08] data-[state=active]:text-white text-white/50 light:data-[state=active]:bg-white light:data-[state=active]:text-gray-900 light:text-gray-500">
               <Settings class="h-4 w-4 mr-2" />
               {{ $t('settings.general') }}
+            </TabsTrigger>
+            <TabsTrigger value="smtp" class="data-[state=active]:bg-white/[0.08] data-[state=active]:text-white text-white/50 light:data-[state=active]:bg-white light:data-[state=active]:text-gray-900 light:text-gray-500">
+              <Mail class="h-4 w-4 mr-2" />
+              SMTP Relay
             </TabsTrigger>
             <TabsTrigger value="notifications" class="data-[state=active]:bg-white/[0.08] data-[state=active]:text-white text-white/50 light:data-[state=active]:bg-white light:data-[state=active]:text-gray-900 light:text-gray-500">
               <Bell class="h-4 w-4 mr-2" />
@@ -286,6 +366,86 @@ function togglePlayAudio(type: 'hold_music' | 'ringback') {
             </div>
           </TabsContent>
 
+          <!-- SMTP Relay Tab -->
+          <TabsContent value="smtp">
+            <div class="rounded-xl border border-white/[0.08] bg-white/[0.02] light:bg-white light:border-gray-200">
+              <div class="p-6 pb-3">
+                <h3 class="text-lg font-semibold text-white light:text-gray-900">Custom SMTP Relay</h3>
+                <p class="text-sm text-white/40 light:text-gray-500">Setup your organization's own mail delivery server.</p>
+              </div>
+              <div class="p-6 pt-3 space-y-6">
+                <div class="flex items-center justify-between">
+                  <div>
+                    <p class="font-medium text-white light:text-gray-900">Enable Custom SMTP Relay</p>
+                  </div>
+                  <Switch
+                    :checked="smtpSettings.enabled"
+                    @update:checked="smtpSettings.enabled = $event"
+                  />
+                </div>
+                <Separator class="bg-white/[0.08] light:bg-gray-200" />
+
+                <div class="grid grid-cols-2 gap-4" :class="{ 'opacity-50 pointer-events-none': !smtpSettings.enabled }">
+                  <div class="space-y-2">
+                    <Label for="smtp_host" class="text-white/70 light:text-gray-700">SMTP HOST</Label>
+                    <Input id="smtp_host" v-model="smtpSettings.smtp_host" placeholder="smtp.example.com" />
+                  </div>
+                  <div class="space-y-2">
+                    <Label for="smtp_port" class="text-white/70 light:text-gray-700">PORT</Label>
+                    <Input id="smtp_port" type="number" v-model.number="smtpSettings.smtp_port" placeholder="587" />
+                  </div>
+                  <div class="space-y-2">
+                    <Label for="smtp_user" class="text-white/70 light:text-gray-700">USERNAME</Label>
+                    <Input id="smtp_user" v-model="smtpSettings.smtp_user" placeholder="user@example.com" />
+                  </div>
+                  <div class="space-y-2">
+                    <Label for="smtp_pass" class="text-white/70 light:text-gray-700">PASSWORD</Label>
+                    <Input id="smtp_pass" type="password" v-model="smtpSettings.smtp_pass" placeholder="••••••••••••" />
+                  </div>
+                  <div class="space-y-2">
+                    <Label for="smtp_from" class="text-white/70 light:text-gray-700">FROM EMAIL</Label>
+                    <Input id="smtp_from" v-model="smtpSettings.email_from_address" placeholder="no-reply@example.com" />
+                  </div>
+                  <div class="space-y-2">
+                    <Label for="smtp_name" class="text-white/70 light:text-gray-700">FROM NAME</Label>
+                    <Input id="smtp_name" v-model="smtpSettings.email_from_name" placeholder="Acme Inc Notifications" />
+                  </div>
+                  <div class="space-y-2 col-span-2">
+                    <Label for="smtp_tls" class="text-white/70 light:text-gray-700">ENCRYPTION</Label>
+                    <Select :model-value="smtpSettings.smtp_tls ? 'true' : 'false'" @update:model-value="(v) => smtpSettings.smtp_tls = (v === 'true')">
+                      <SelectTrigger class="bg-white/[0.04] border-white/[0.1] text-white/70 light:bg-white light:border-gray-200 light:text-gray-700 w-full mb-4">
+                        <SelectValue placeholder="Select Encryption Type" />
+                      </SelectTrigger>
+                      <SelectContent class="bg-[#141414] border-white/[0.08] light:bg-white light:border-gray-200">
+                        <SelectItem value="false" class="text-white/70 focus:bg-white/[0.08] focus:text-white light:text-gray-700 light:focus:bg-gray-100">STARTTLS (Usually port 587 or 25)</SelectItem>
+                        <SelectItem value="true" class="text-white/70 focus:bg-white/[0.08] focus:text-white light:text-gray-700 light:focus:bg-gray-100">Implicit TLS (Usually port 465)</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
+
+                <div class="flex items-end gap-4" :class="{ 'opacity-50 pointer-events-none': !smtpSettings.enabled }">
+                  <div class="flex-1 space-y-2">
+                    <Label for="test_email" class="text-white/70 light:text-gray-700">TEST RECIPIENT EMAIL</Label>
+                    <Input id="test_email" v-model="testEmailAddress" placeholder="name@example.com" />
+                  </div>
+                  <Button variant="outline" size="sm" class="bg-white/[0.04] border-white/[0.1] text-white/70 hover:bg-white/[0.08] hover:text-white light:bg-white light:border-gray-200 light:text-gray-700 light:hover:bg-gray-50 h-10" @click="testSmtpSettings" :disabled="isTestingEmail || !testEmailAddress">
+                    <Loader2 v-if="isTestingEmail" class="mr-2 h-4 w-4 animate-spin" />
+                    <Mail v-else class="mr-2 h-4 w-4" />
+                    Send Test Email
+                  </Button>
+                </div>
+
+                <div class="flex justify-end pt-4 border-t border-white/[0.08] light:border-gray-200">
+                  <Button variant="outline" size="sm" class="bg-white/[0.04] border-white/[0.1] text-white/70 hover:bg-white/[0.08] hover:text-white light:bg-white light:border-gray-200 light:text-gray-700 light:hover:bg-gray-50" @click="saveSmtpSettings" :disabled="isSubmitting">
+                    <Loader2 v-if="isSubmitting" class="mr-2 h-4 w-4 animate-spin" />
+                    {{ $t('settings.save') }}
+                  </Button>
+                </div>
+              </div>
+            </div>
+          </TabsContent>
+
           <!-- Notification Settings Tab -->
           <TabsContent value="notifications">
             <div class="rounded-xl border border-white/[0.08] bg-white/[0.02] light:bg-white light:border-gray-200">
@@ -293,41 +453,81 @@ function togglePlayAudio(type: 'hold_music' | 'ringback') {
                 <h3 class="text-lg font-semibold text-white light:text-gray-900">{{ $t('settings.notifications') }}</h3>
                 <p class="text-sm text-white/40 light:text-gray-500">{{ $t('settings.notificationsDesc') }}</p>
               </div>
-              <div class="p-6 pt-3 space-y-4">
-                <div class="flex items-center justify-between">
-                  <div>
-                    <p class="font-medium text-white light:text-gray-900">{{ $t('settings.emailNotifications') }}</p>
-                    <p class="text-sm text-white/40 light:text-gray-500">{{ $t('settings.emailNotificationsDesc') }}</p>
+              
+              <div class="p-6 pt-0 space-y-6">
+                <!-- Notification Items List -->
+                <div class="space-y-4">
+                  <div class="flex items-center justify-between p-4 rounded-xl border border-white/[0.08] bg-white/[0.01] hover:bg-white/[0.03] transition-all">
+                    <div class="space-y-1">
+                      <p class="font-medium text-white light:text-gray-900">{{ $t('settings.emailNotifications') }}</p>
+                      <p class="text-xs text-white/40 light:text-gray-500">{{ $t('settings.emailNotificationsDesc') }}</p>
+                    </div>
+                    <Switch
+                      :checked="notificationSettings.email_notifications"
+                      @update:checked="notificationSettings.email_notifications = $event"
+                    />
                   </div>
-                  <Switch
-                    :checked="notificationSettings.email_notifications"
-                    @update:checked="notificationSettings.email_notifications = $event"
-                  />
-                </div>
-                <Separator class="bg-white/[0.08] light:bg-gray-200" />
-                <div class="flex items-center justify-between">
-                  <div>
-                    <p class="font-medium text-white light:text-gray-900">{{ $t('settings.newMessageAlerts') }}</p>
-                    <p class="text-sm text-white/40 light:text-gray-500">{{ $t('settings.newMessageAlertsDesc') }}</p>
+
+                  <div class="flex items-center justify-between p-4 rounded-xl border border-white/[0.08] bg-white/[0.01] hover:bg-white/[0.03] transition-all">
+                    <div class="space-y-1">
+                      <p class="font-medium text-white light:text-gray-900">{{ $t('settings.newMessageAlerts') }}</p>
+                      <p class="text-xs text-white/40 light:text-gray-500">{{ $t('settings.newMessageAlertsDesc') }}</p>
+                    </div>
+                    <Switch
+                      :checked="notificationSettings.new_message_alerts"
+                      @update:checked="notificationSettings.new_message_alerts = $event"
+                    />
                   </div>
-                  <Switch
-                    :checked="notificationSettings.new_message_alerts"
-                    @update:checked="notificationSettings.new_message_alerts = $event"
-                  />
-                </div>
-                <Separator class="bg-white/[0.08] light:bg-gray-200" />
-                <div class="flex items-center justify-between">
-                  <div>
-                    <p class="font-medium text-white light:text-gray-900">{{ $t('settings.campaignUpdates') }}</p>
-                    <p class="text-sm text-white/40 light:text-gray-500">{{ $t('settings.campaignUpdatesDesc') }}</p>
+
+                  <div class="flex items-center justify-between p-4 rounded-xl border border-white/[0.08] bg-white/[0.01] hover:bg-white/[0.03] transition-all">
+                    <div class="space-y-1">
+                      <p class="font-medium text-white light:text-gray-900">{{ $t('settings.campaignUpdates') }}</p>
+                      <p class="text-xs text-white/40 light:text-gray-500">{{ $t('settings.campaignUpdatesDesc') }}</p>
+                    </div>
+                    <Switch
+                      :checked="notificationSettings.campaign_updates"
+                      @update:checked="notificationSettings.campaign_updates = $event"
+                    />
                   </div>
-                  <Switch
-                    :checked="notificationSettings.campaign_updates"
-                    @update:checked="notificationSettings.campaign_updates = $event"
-                  />
+
+                  <div class="flex items-center justify-between p-4 rounded-xl border border-white/[0.08] bg-white/[0.01] hover:bg-white/[0.03] transition-all">
+                    <div class="space-y-1">
+                      <p class="font-medium text-white light:text-gray-900 text-emerald-400">Weekly Performance Report</p>
+                      <p class="text-xs text-white/40 light:text-gray-500">Receive a weekly summary of your organization's activity.</p>
+                    </div>
+                    <Switch
+                      :checked="notificationSettings.weekly_report"
+                      @update:checked="notificationSettings.weekly_report = $event"
+                    />
+                  </div>
+
+                  <div class="flex items-center justify-between p-4 rounded-xl border border-white/[0.08] bg-white/[0.01] hover:bg-white/[0.03] transition-all">
+                    <div class="space-y-1">
+                      <p class="font-medium text-white light:text-gray-900 text-amber-400">Security Audit Logs</p>
+                      <p class="text-xs text-white/40 light:text-gray-500">Get notified about significant system and administrative actions.</p>
+                    </div>
+                    <Switch
+                      :checked="notificationSettings.audit_logs"
+                      @update:checked="notificationSettings.audit_logs = $event"
+                    />
+                  </div>
+
+                  <div class="flex items-center justify-between p-4 rounded-xl border border-white/[0.08] bg-white/[0.01] hover:bg-white/[0.03] transition-all">
+                    <div class="space-y-1">
+                      <p class="font-medium text-white light:text-gray-900 text-rose-400">Plan & Quota Limits</p>
+                      <p class="text-xs text-white/40 light:text-gray-500">Alerts when you approach or exceed your platform limits.</p>
+                    </div>
+                    <Switch
+                      :checked="notificationSettings.plan_limits"
+                      @update:checked="notificationSettings.plan_limits = $event"
+                    />
+                  </div>
                 </div>
-                <div class="flex justify-end pt-4">
-                  <Button variant="outline" size="sm" class="bg-white/[0.04] border-white/[0.1] text-white/70 hover:bg-white/[0.08] hover:text-white light:bg-white light:border-gray-200 light:text-gray-700 light:hover:bg-gray-50" @click="saveNotificationSettings" :disabled="isSubmitting">
+
+
+
+                <div class="flex justify-end pt-2">
+                  <Button variant="outline" size="sm" class="bg-white/[0.04] border-white/[0.1] text-white/70 hover:bg-white/[0.08] hover:text-white light:bg-white light:border-gray-200 light:text-gray-700 light:hover:bg-gray-50 h-10 px-6 font-semibold" @click="saveNotificationSettings" :disabled="isSubmitting">
                     <Loader2 v-if="isSubmitting" class="mr-2 h-4 w-4 animate-spin" />
                     {{ $t('settings.save') }}
                   </Button>

@@ -11,6 +11,7 @@ import (
 	"github.com/shridarpatil/whatomate/internal/assignment"
 	"github.com/shridarpatil/whatomate/internal/calling"
 	"github.com/shridarpatil/whatomate/internal/config"
+	"github.com/shridarpatil/whatomate/internal/models"
 	"github.com/shridarpatil/whatomate/internal/queue"
 	"github.com/shridarpatil/whatomate/internal/storage"
 	"github.com/shridarpatil/whatomate/internal/tts"
@@ -236,4 +237,39 @@ func (a *App) decodeRequest(r *fastglue.Request, v any) error {
 		return errEnvelopeSent
 	}
 	return nil
+}
+
+// SendEmailAsync is a convenience helper for enqueueing an email out of the HTTP request thread.
+func (a *App) SendEmailAsync(ctx context.Context, orgID uuid.UUID, templateName string, to []string, subject string, data map[string]any) {
+	job := &queue.EmailJob{
+		OrganizationID: orgID,
+		TemplateName:   templateName,
+		To:             to,
+		Subject:        subject,
+		TemplateData:   data,
+	}
+
+	if err := a.Queue.EnqueueEmail(ctx, job); err != nil {
+		a.Log.Error("Failed to enqueue email", "error", err, "template", templateName, "org_id", orgID)
+	}
+}
+
+// ShouldNotifyUser checks if a specific notification type is enabled for a user.
+// Returns true if preferred, false if the user has opted out.
+func (a *App) ShouldNotifyUser(userID uuid.UUID, prefKey string) bool {
+	var user models.User
+	if err := a.DB.Select("settings").Where("id = ?", userID).First(&user).Error; err != nil {
+		return false
+	}
+
+	if user.Settings == nil {
+		return true // Default to true if no settings exist
+	}
+
+	enabled, ok := user.Settings[prefKey].(bool)
+	if !ok {
+		return true // Default to true if key is missing or not a bool
+	}
+
+	return enabled
 }

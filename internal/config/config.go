@@ -58,6 +58,7 @@ type AppConfig struct {
 	Environment   string `koanf:"environment"` // development, staging, production
 	Debug         bool   `koanf:"debug"`
 	EncryptionKey string `koanf:"encryption_key"` // AES-256 key for encrypting secrets at rest
+	PublicURL     string `koanf:"public_url"`     // Public URL of the frontend
 }
 
 type ServerConfig struct {
@@ -174,6 +175,9 @@ func setDefaults(cfg *Config) {
 	}
 	if cfg.App.Environment == "" {
 		cfg.App.Environment = "development"
+	}
+	if cfg.App.PublicURL == "" {
+		cfg.App.PublicURL = "http://localhost:5173"
 	}
 	if cfg.Server.Host == "" {
 		cfg.Server.Host = "0.0.0.0"
