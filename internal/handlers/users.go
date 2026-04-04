@@ -3,6 +3,7 @@ package handlers
 import (
 	"fmt"
 	"net/mail"
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
@@ -370,6 +371,9 @@ func (a *App) CreateUser(r *fastglue.Request) error {
 		inviterName = "Administrator"
 	}
 
+	publicURL := strings.TrimSuffix(a.Config.App.PublicURL, "/")
+	inviteURL := fmt.Sprintf("%s/register?org=%s", publicURL, orgID.String())
+
 	// Send Invitation Email
 	a.SendEmailAsync(r.RequestCtx, orgID, "invite.html", []string{user.Email}, "You've been invited to join "+org.Name, map[string]any{
 		"InviteeName": user.FullName,
@@ -377,7 +381,7 @@ func (a *App) CreateUser(r *fastglue.Request) error {
 		"OrgName":     org.Name,
 		"Email":       user.Email,
 		"Password":    req.Password, // Provide the temporary password set by the admin
-		"InviteURL":   fmt.Sprintf("%s/register?org=%s", a.Config.App.PublicURL, orgID.String()),
+		"InviteURL":   inviteURL,
 	})
 
 	return r.SendEnvelope(userToResponse(user))

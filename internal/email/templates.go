@@ -72,6 +72,8 @@ type InviteData struct {
 	InviteeName string
 	InviterName string
 	OrgName     string
+	Email       string
+	Password    string
 	InviteURL   string
 }
 
