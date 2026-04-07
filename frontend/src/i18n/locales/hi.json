@@ -298,6 +298,7 @@
     "goAway": "Away सेट करें"
   },
   "chat": {
+    "marketingOptOut": "Marketing Opt-out",
     "conversations": "बातचीत",
     "messages": "संदेश",
     "noContacts": "कोई संपर्क नहीं मिला",
