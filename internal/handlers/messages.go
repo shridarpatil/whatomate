@@ -831,6 +831,27 @@ func (a *App) SendTemplateMessage(r *fastglue.Request) error {
 		return r.SendErrorEnvelope(fasthttp.StatusBadRequest, "Contact has opted out of marketing messages", nil, "")
 	}
 
+	// For authentication templates with OTP COPY_CODE buttons, Meta expects
+	// a button component with sub_type "url" and the OTP code as a text parameter.
+	// Auto-populate from template_params["1"] so callers don't need button_params.
+	buttonParams := req.ButtonParams
+	if strings.EqualFold(template.Category, "AUTHENTICATION") && len(buttonParams) == 0 {
+		if code, ok := req.TemplateParams["1"]; ok && code != "" {
+			for i, raw := range template.Buttons {
+				if btn, ok := raw.(map[string]any); ok {
+					btnType, _ := btn["type"].(string)
+					if strings.EqualFold(btnType, "OTP") {
+						if buttonParams == nil {
+							buttonParams = make(map[string]string)
+						}
+						buttonParams[fmt.Sprintf("%d", i)] = code
+						break
+					}
+				}
+			}
+		}
+	}
+
 	// Send using unified message sender
 	msgReq := OutgoingMessageRequest{
 		Account:         account,
@@ -841,7 +862,7 @@ func (a *App) SendTemplateMessage(r *fastglue.Request) error {
 		HeaderMediaID:   headerMediaID,
 		MediaURL:        headerLocalPath,
 		MediaMimeType:   headerMimeType,
-		ButtonURLParams: req.ButtonParams,
+		ButtonURLParams: buttonParams,
 	}
 
 	opts := DefaultSendOptions()

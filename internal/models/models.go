@@ -422,6 +422,11 @@ type Template struct {
 	FooterContent   string     `gorm:"type:text" json:"footer_content"`
 	Buttons         JSONBArray  `gorm:"type:jsonb;default:'[]'" json:"buttons"`
 	SampleValues    JSONBArray  `gorm:"type:jsonb;default:'[]'" json:"sample_values"`
+
+	// Authentication template fields
+	AddSecurityRecommendation bool `gorm:"default:false" json:"add_security_recommendation"`
+	CodeExpirationMinutes     int  `gorm:"default:0" json:"code_expiration_minutes"`
+
 	CreatedByID     *uuid.UUID  `gorm:"type:uuid" json:"created_by_id,omitempty"`
 	UpdatedByID     *uuid.UUID  `gorm:"type:uuid" json:"updated_by_id,omitempty"`
 

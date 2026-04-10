@@ -16,17 +16,21 @@ import (
 
 // TemplateRequest represents the request body for creating/updating a template
 type TemplateRequest struct {
-	WhatsAppAccount string        `json:"whatsapp_account" validate:"required"` // WhatsApp account name
-	Name            string        `json:"name" validate:"required"`
-	DisplayName     string        `json:"display_name"`
-	Language        string        `json:"language" validate:"required"`
-	Category        string        `json:"category" validate:"required"` // MARKETING, UTILITY, AUTHENTICATION
-	HeaderType      string        `json:"header_type"`                  // TEXT, IMAGE, DOCUMENT, VIDEO, NONE
-	HeaderContent   string        `json:"header_content"`
-	BodyContent     string        `json:"body_content" validate:"required"`
-	FooterContent   string        `json:"footer_content"`
-	Buttons         []any `json:"buttons"`
-	SampleValues    []any `json:"sample_values"`
+	WhatsAppAccount string `json:"whatsapp_account" validate:"required"` // WhatsApp account name
+	Name            string `json:"name" validate:"required"`
+	DisplayName     string `json:"display_name"`
+	Language        string `json:"language" validate:"required"`
+	Category        string `json:"category" validate:"required"` // MARKETING, UTILITY, AUTHENTICATION
+	HeaderType      string `json:"header_type"`                  // TEXT, IMAGE, DOCUMENT, VIDEO, NONE
+	HeaderContent   string `json:"header_content"`
+	BodyContent     string `json:"body_content"`
+	FooterContent   string `json:"footer_content"`
+	Buttons         []any  `json:"buttons"`
+	SampleValues    []any  `json:"sample_values"`
+
+	// Authentication template fields
+	AddSecurityRecommendation bool `json:"add_security_recommendation"` // Add "For your security, do not share this code."
+	CodeExpirationMinutes     int  `json:"code_expiration_minutes"`     // 1-90, 0 means no expiration footer
 }
 
 // TemplateResponse represents the response for a template
@@ -43,8 +47,10 @@ type TemplateResponse struct {
 	HeaderContent   string        `json:"header_content"`
 	BodyContent     string        `json:"body_content"`
 	FooterContent   string        `json:"footer_content"`
-	Buttons         []any `json:"buttons"`
-	SampleValues    []any `json:"sample_values"`
+	Buttons         []any  `json:"buttons"`
+	SampleValues    []any  `json:"sample_values"`
+	AddSecurityRecommendation bool `json:"add_security_recommendation"`
+	CodeExpirationMinutes     int  `json:"code_expiration_minutes"`
 	CreatedByName   string        `json:"created_by_name,omitempty"`
 	UpdatedByName   string        `json:"updated_by_name,omitempty"`
 	CreatedAt       string        `json:"created_at"`
@@ -117,17 +123,26 @@ func (a *App) CreateTemplate(r *fastglue.Request) error {
 	}
 
 	// Validate required fields
-	if req.WhatsAppAccount == "" || req.Name == "" || req.Language == "" || req.Category == "" || req.BodyContent == "" {
-		return r.SendErrorEnvelope(fasthttp.StatusBadRequest, "whatsapp_account, name, language, category, and body_content are required", nil, "")
+	isAuthTemplate := strings.ToUpper(req.Category) == "AUTHENTICATION"
+	if req.WhatsAppAccount == "" || req.Name == "" || req.Language == "" || req.Category == "" {
+		return r.SendErrorEnvelope(fasthttp.StatusBadRequest, "whatsapp_account, name, language, and category are required", nil, "")
+	}
+	if !isAuthTemplate && req.BodyContent == "" {
+		return r.SendErrorEnvelope(fasthttp.StatusBadRequest, "body_content is required", nil, "")
+	}
+	if isAuthTemplate && req.CodeExpirationMinutes != 0 && (req.CodeExpirationMinutes < 1 || req.CodeExpirationMinutes > 90) {
+		return r.SendErrorEnvelope(fasthttp.StatusBadRequest, "code_expiration_minutes must be between 1 and 90", nil, "")
 	}
 
-	// Validate no mixed positional and named parameters
-	if err := templateutil.ValidateNoMixedParams(req.BodyContent); err != nil {
-		return r.SendErrorEnvelope(fasthttp.StatusBadRequest, err.Error(), nil, "")
-	}
-	if req.HeaderType == "TEXT" {
-		if err := templateutil.ValidateNoMixedParams(req.HeaderContent); err != nil {
+	// Validate no mixed positional and named parameters (non-auth only)
+	if !isAuthTemplate {
+		if err := templateutil.ValidateNoMixedParams(req.BodyContent); err != nil {
 			return r.SendErrorEnvelope(fasthttp.StatusBadRequest, err.Error(), nil, "")
+		}
+		if req.HeaderType == "TEXT" {
+			if err := templateutil.ValidateNoMixedParams(req.HeaderContent); err != nil {
+				return r.SendErrorEnvelope(fasthttp.StatusBadRequest, err.Error(), nil, "")
+			}
 		}
 	}
 
@@ -164,6 +179,8 @@ func (a *App) CreateTemplate(r *fastglue.Request) error {
 		FooterContent:   req.FooterContent,
 		Buttons:         convertToJSONBArray(req.Buttons),
 		SampleValues:    convertToJSONBArray(req.SampleValues),
+		AddSecurityRecommendation: req.AddSecurityRecommendation,
+		CodeExpirationMinutes:     req.CodeExpirationMinutes,
 		CreatedByID:     &userID,
 		UpdatedByID:     &userID,
 	}
@@ -238,16 +255,24 @@ func (a *App) UpdateTemplate(r *fastglue.Request) error {
 		return nil
 	}
 
-	// Validate no mixed positional and named parameters
-	if req.BodyContent != "" {
-		if err := templateutil.ValidateNoMixedParams(req.BodyContent); err != nil {
-			return r.SendErrorEnvelope(fasthttp.StatusBadRequest, err.Error(), nil, "")
+	isAuthTemplate := strings.ToUpper(req.Category) == "AUTHENTICATION" ||
+		(req.Category == "" && strings.ToUpper(template.Category) == "AUTHENTICATION")
+
+	// Validate no mixed positional and named parameters (non-auth only)
+	if !isAuthTemplate {
+		if req.BodyContent != "" {
+			if err := templateutil.ValidateNoMixedParams(req.BodyContent); err != nil {
+				return r.SendErrorEnvelope(fasthttp.StatusBadRequest, err.Error(), nil, "")
+			}
+		}
+		if req.HeaderType == "TEXT" && req.HeaderContent != "" {
+			if err := templateutil.ValidateNoMixedParams(req.HeaderContent); err != nil {
+				return r.SendErrorEnvelope(fasthttp.StatusBadRequest, err.Error(), nil, "")
+			}
 		}
 	}
-	if req.HeaderType == "TEXT" && req.HeaderContent != "" {
-		if err := templateutil.ValidateNoMixedParams(req.HeaderContent); err != nil {
-			return r.SendErrorEnvelope(fasthttp.StatusBadRequest, err.Error(), nil, "")
-		}
+	if isAuthTemplate && req.CodeExpirationMinutes != 0 && (req.CodeExpirationMinutes < 1 || req.CodeExpirationMinutes > 90) {
+		return r.SendErrorEnvelope(fasthttp.StatusBadRequest, "code_expiration_minutes must be between 1 and 90", nil, "")
 	}
 
 	// Update fields
@@ -274,6 +299,8 @@ func (a *App) UpdateTemplate(r *fastglue.Request) error {
 	if req.SampleValues != nil {
 		template.SampleValues = convertToJSONBArray(req.SampleValues)
 	}
+	template.AddSecurityRecommendation = req.AddSecurityRecommendation
+	template.CodeExpirationMinutes = req.CodeExpirationMinutes
 	template.UpdatedByID = &userID
 
 	if err := a.DB.Save(template).Error; err != nil {
@@ -416,6 +443,8 @@ func (a *App) submitTemplateToMeta(account *models.WhatsAppAccount, template *mo
 		FooterContent:  template.FooterContent,
 		Buttons:        template.Buttons,
 		SampleValues:   template.SampleValues,
+		AddSecurityRecommendation: template.AddSecurityRecommendation,
+		CodeExpirationMinutes:     template.CodeExpirationMinutes,
 	}
 
 	ctx := context.Background()
@@ -556,6 +585,8 @@ func templateToResponse(t models.Template) TemplateResponse {
 		FooterContent:   t.FooterContent,
 		Buttons:         convertFromJSONBArray(t.Buttons),
 		SampleValues:    convertFromJSONBArray(t.SampleValues),
+		AddSecurityRecommendation: t.AddSecurityRecommendation,
+		CodeExpirationMinutes:     t.CodeExpirationMinutes,
 		CreatedAt:       t.CreatedAt.Format("2006-01-02T15:04:05Z"),
 		UpdatedAt:       t.UpdatedAt.Format("2006-01-02T15:04:05Z"),
 	}

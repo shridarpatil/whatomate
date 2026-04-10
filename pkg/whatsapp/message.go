@@ -347,13 +347,26 @@ func ButtonURLParamsToComponents(buttonParams map[string]string, templateButtons
 		return nil
 	}
 
-	// Build a lookup of button index -> type from template buttons
+	// Build a lookup of button index -> effective type from template buttons.
+	// OTP buttons resolve to their otp_type (COPY_CODE, ONE_TAP, ZERO_TAP)
+	// so the message sending logic handles them correctly.
+	// btnIsOTP tracks whether the button was originally an OTP button (auth templates
+	// need sub_type "url" instead of "copy_code").
 	btnTypes := map[string]string{}
+	btnIsOTP := map[string]bool{}
 	if len(templateButtons) > 0 {
 		for i, raw := range templateButtons[0] {
 			if btn, ok := raw.(map[string]any); ok {
 				if t, ok := btn["type"].(string); ok {
-					btnTypes[fmt.Sprintf("%d", i)] = strings.ToUpper(t)
+					key := fmt.Sprintf("%d", i)
+					effectiveType := strings.ToUpper(t)
+					if effectiveType == "OTP" {
+						btnIsOTP[key] = true
+						if otpType, ok := btn["otp_type"].(string); ok {
+							effectiveType = strings.ToUpper(otpType)
+						}
+					}
+					btnTypes[key] = effectiveType
 				}
 			}
 		}
@@ -369,10 +382,11 @@ func ButtonURLParamsToComponents(buttonParams map[string]string, templateButtons
 	for _, index := range keys {
 		value := buttonParams[index]
 		// Skip button types that don't accept dynamic parameters
-		if t := btnTypes[index]; t == "QUICK_REPLY" || t == "FLOW" || t == "PHONE_NUMBER" || t == "VOICE_CALL" || t == "OTP" {
+		if t := btnTypes[index]; t == "QUICK_REPLY" || t == "FLOW" || t == "PHONE_NUMBER" || t == "VOICE_CALL" || t == "ONE_TAP" || t == "ZERO_TAP" {
 			continue
 		}
-		if btnTypes[index] == "COPY_CODE" {
+		if btnTypes[index] == "COPY_CODE" && !btnIsOTP[index] {
+			// Regular COPY_CODE button (e.g. coupon codes)
 			components = append(components, map[string]any{
 				"type":     "button",
 				"sub_type": "copy_code",
