@@ -15,7 +15,7 @@ test.describe('Roles Management', () => {
     dialogPage = new DialogPage(page)
   })
 
-  test('should display roles list', async ({ page }) => {
+  test('should display roles list', async ({ page: _page }) => {
     // Should show table with roles
     await expect(tablePage.tableBody).toBeVisible()
     // System roles (admin, manager, agent) should exist
@@ -34,7 +34,7 @@ test.describe('Roles Management', () => {
     await tablePage.expectRowExists('admin')
   })
 
-  test('should open create role dialog', async ({ page }) => {
+  test('should open create role dialog', async ({ page: _page }) => {
     await tablePage.clickAddButton()
     await dialogPage.waitForOpen()
     await expect(dialogPage.dialog).toBeVisible()
@@ -42,7 +42,7 @@ test.describe('Roles Management', () => {
     await expect(dialogPage.dialog.locator('label').filter({ hasText: 'Permissions' })).toBeVisible()
   })
 
-  test('should create a new custom role', async ({ page }) => {
+  test('should create a new custom role', async ({ page: _page }) => {
     const roleName = `Test Role ${Date.now()}`
 
     await tablePage.clickAddButton()
@@ -77,7 +77,7 @@ test.describe('Roles Management', () => {
     await expect(page.locator('text=Name is required').or(page.locator('text=required'))).toBeVisible()
   })
 
-  test('should view system role permissions (read-only)', async ({ page }) => {
+  test('should view system role permissions (read-only)', async ({ page: _page }) => {
     // Find and click edit on a system role
     await tablePage.search('admin')
     await tablePage.editRow('admin')
@@ -95,7 +95,7 @@ test.describe('Roles Management', () => {
     await dialogPage.waitForClose()
   })
 
-  test('should edit custom role', async ({ page }) => {
+  test('should edit custom role', async ({ page: _page }) => {
     // First create a role to edit
     const originalName = `Edit Role ${Date.now()}`
 
@@ -122,7 +122,7 @@ test.describe('Roles Management', () => {
     await tablePage.expectRowExists(updatedName)
   })
 
-  test('should delete custom role', async ({ page }) => {
+  test('should delete custom role', async ({ page: _page }) => {
     // First create a role to delete
     const roleName = `Delete Role ${Date.now()}`
 
@@ -203,7 +203,7 @@ test.describe('Roles Management', () => {
     await expect(defaultBadge).toBeVisible()
   })
 
-  test('should cancel role creation', async ({ page }) => {
+  test('should cancel role creation', async ({ page: _page }) => {
     await tablePage.clickAddButton()
     await dialogPage.waitForOpen()
 

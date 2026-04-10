@@ -26,7 +26,8 @@ import {
   Activity,
   ChevronsUpDown,
   Check,
-  Coffee
+  Coffee,
+  UserCheck
 } from 'lucide-vue-next'
 // Centralized Chart.js setup (registered once)
 import { Line, Bar, Doughnut } from '@/lib/charts'
@@ -289,6 +290,11 @@ const comparisonChartOptions = {
   }
 }
 
+const availableAgentsCount = computed(() => {
+  if (!analytics.value?.agent_stats?.length) return 0
+  return analytics.value.agent_stats.filter(s => s.is_available).length
+})
+
 // Stats to display based on role (reserved for future use)
 const _displayStats = computed(() => {
   if (isAdminOrManager.value) {
@@ -372,7 +378,7 @@ void _displayStats.value // Suppress unused warning
         />
 
         <!-- Stats Cards -->
-        <div v-if="!error" class="grid gap-4 md:grid-cols-2 lg:grid-cols-5">
+        <div v-if="!error" class="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
           <template v-if="isLoading">
             <div v-for="i in 5" :key="i" class="rounded-xl border border-white/[0.08] bg-white/[0.02] p-6 light:bg-white light:border-gray-200">
               <div class="flex flex-row items-center justify-between space-y-0 pb-2">
@@ -485,6 +491,22 @@ void _displayStats.value // Suppress unused warning
                 <p class="text-xs text-white/40 light:text-gray-500 mt-1">
                   {{ $t('agentAnalytics.breaksTaken', { count: analytics.my_stats?.break_count ?? analytics.summary?.break_count ?? 0 }) }}
                 </p>
+              </div>
+            </div>
+
+            <!-- Available Agents (Always show for all view) -->
+            <div v-if="selectedAgentId === 'all'" class="card-depth rounded-xl border border-white/[0.08] bg-white/[0.04] p-6 light:bg-white light:border-gray-200">
+              <div class="flex flex-row items-center justify-between space-y-0 pb-2">
+                <span class="text-sm font-medium text-white/50 light:text-gray-500">{{ $t('agentAnalytics.availableAgents', 'Available Agents') }}</span>
+                <div class="h-10 w-10 rounded-lg bg-emerald-500/20 flex items-center justify-center">
+                  <UserCheck class="h-5 w-5 text-emerald-400" />
+                </div>
+              </div>
+              <div class="pt-2">
+                <div class="text-3xl font-bold text-white light:text-gray-900">
+                  {{ availableAgentsCount }}
+                </div>
+                <p class="text-xs text-white/40 light:text-gray-500 mt-1">{{ $t('agentAnalytics.readyToAssist', 'Ready to assist customers') }}</p>
               </div>
             </div>
           </template>

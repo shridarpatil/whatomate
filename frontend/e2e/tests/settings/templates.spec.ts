@@ -212,7 +212,7 @@ test.describe('Message Templates - Detail Page', () => {
       // Publish button is only visible for DRAFT or REJECTED templates
       const publishBtn = page.getByRole('button', { name: /Publish|Republish/i })
       // This may or may not be visible depending on template status
-      const isVisible = await publishBtn.isVisible({ timeout: 3000 }).catch(() => false)
+      await publishBtn.isVisible({ timeout: 3000 }).catch(() => false)
       // Just verify the page loaded correctly -- publish availability depends on status
       expect(true).toBeTruthy()
     }

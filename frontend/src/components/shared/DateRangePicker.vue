@@ -13,7 +13,7 @@ import {
 import { CalendarIcon } from 'lucide-vue-next'
 import type { TimeRangePreset } from '@/composables/useDateRange'
 
-const props = defineProps<{
+defineProps<{
   selectedRange: TimeRangePreset
   customDateRange: any
   isDatePickerOpen: boolean

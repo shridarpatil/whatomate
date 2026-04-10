@@ -28,7 +28,7 @@ test.describe('Tags Management', () => {
     await tagsPage.expectToast('required')
   })
 
-  test('should create a new tag', async ({ page }) => {
+  test('should create a new tag', async ({ page: _page }) => {
     const tagName = `Test Tag ${Date.now()}`
 
     await tagsPage.openCreateDialog()
@@ -39,7 +39,7 @@ test.describe('Tags Management', () => {
     await tagsPage.expectTagBadgeVisible(tagName)
   })
 
-  test('should create a tag with different color', async ({ page }) => {
+  test('should create a tag with different color', async ({ page: _page }) => {
     const tagName = `Purple Tag ${Date.now()}`
 
     await tagsPage.openCreateDialog()
@@ -50,7 +50,7 @@ test.describe('Tags Management', () => {
     await tagsPage.expectTagBadgeVisible(tagName)
   })
 
-  test('should edit existing tag', async ({ page }) => {
+  test('should edit existing tag', async ({ page: _page }) => {
     // First create a tag
     const tagName = `Edit Tag ${Date.now()}`
 
@@ -73,7 +73,7 @@ test.describe('Tags Management', () => {
     await tagsPage.expectToast('updated')
   })
 
-  test('should delete tag', async ({ page }) => {
+  test('should delete tag', async ({ page: _page }) => {
     // First create a tag
     const tagName = `Delete Tag ${Date.now()}`
 

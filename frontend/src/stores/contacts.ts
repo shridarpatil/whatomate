@@ -1,6 +1,9 @@
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
 import { contactsService, messagesService } from '@/services/api'
+import { isDeepEqual } from '@/lib/utils'
+ 
+const ACCOUNT_FILTER_KEY = 'whatsapp_account_filter'
 
 export interface Contact {
   id: string
@@ -82,6 +85,14 @@ export const useContactsStore = defineStore('contacts', () => {
   const selectedTags = ref<string[]>([])
   const replyingTo = ref<Message | null>(null)
   const accountFilter = ref<string | null>(null)
+ 
+  // Initialize from localStorage
+  function init() {
+    const stored = localStorage.getItem(ACCOUNT_FILTER_KEY)
+    if (stored) {
+      accountFilter.value = stored
+    }
+  }
 
   // Contacts pagination
   const contactsPage = ref(1)
@@ -120,8 +131,17 @@ export const useContactsStore = defineStore('contacts', () => {
       })
       // API returns { status: "success", data: { contacts: [...], total: number } }
       const data = response.data.data || response.data
-      contacts.value = data.contacts || []
-      contactsTotal.value = data.total ?? contacts.value.length
+      const newContacts = data.contacts || []
+      const newTotal = data.total ?? newContacts.length
+
+      // Stability Check: Only update if anything changed
+      if (!isDeepEqual(contacts.value, newContacts)) {
+        contacts.value = newContacts
+      }
+      if (contactsTotal.value !== newTotal) {
+        contactsTotal.value = newTotal
+      }
+
       contactsPage.value = 1
     } catch (error) {
       console.error('Failed to fetch contacts:', error)
@@ -165,7 +185,11 @@ export const useContactsStore = defineStore('contacts', () => {
       const response = await contactsService.get(id)
       // API returns { status: "success", data: { ... } }
       const data = response.data.data || response.data
-      currentContact.value = data
+
+      // Stability Check
+      if (!isDeepEqual(currentContact.value, data)) {
+        currentContact.value = data
+      }
       return data
     } catch (error) {
       console.error('Failed to fetch contact:', error)
@@ -179,8 +203,16 @@ export const useContactsStore = defineStore('contacts', () => {
       const response = await messagesService.list(contactId, params)
       // API returns { status: "success", data: { messages: [...], has_more: boolean } }
       const data = response.data.data || response.data
-      messages.value = data.messages || []
-      hasMoreMessages.value = data.has_more === true
+      const newMessages = data.messages || []
+      const newHasMore = data.has_more === true
+
+      // Stability Check
+      if (!isDeepEqual(messages.value, newMessages)) {
+        messages.value = newMessages
+      }
+      if (hasMoreMessages.value !== newHasMore) {
+        hasMoreMessages.value = newHasMore
+      }
     } catch (error) {
       console.error('Failed to fetch messages:', error)
     } finally {
@@ -311,6 +343,11 @@ export const useContactsStore = defineStore('contacts', () => {
 
   function setAccountFilter(account: string | null) {
     accountFilter.value = account
+    if (account) {
+      localStorage.setItem(ACCOUNT_FILTER_KEY, account)
+    } else {
+      localStorage.removeItem(ACCOUNT_FILTER_KEY)
+    }
   }
 
   function clearMessages() {
@@ -358,6 +395,7 @@ export const useContactsStore = defineStore('contacts', () => {
     fetchContacts,
     loadMoreContacts,
     // Other
+    accountFilter,
     fetchContact,
     fetchMessages,
     fetchOlderMessages,
@@ -368,6 +406,7 @@ export const useContactsStore = defineStore('contacts', () => {
     setCurrentContact,
     clearMessages,
     setAccountFilter,
+    init,
     setReplyingTo,
     clearReplyingTo,
     updateMessageReactions,

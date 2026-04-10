@@ -4,98 +4,98 @@
 
 @layer base {
   /* Dark-first: Linear/Vercel inspired dark mode */
+  /* Dark-first: Linear/Vercel inspired dark mode with subtle depth */
   :root {
-    /* True black background like Linear/Vercel */
-    --background: 0 0% 2.5%;
+    /* Deep matte black background for maximum contrast with elements */
+    --background: 0 0% 0%;
     --foreground: 0 0% 98%;
 
-    /* Glass morphism cards - slightly transparent */
-    --card: 0 0% 5%;
+    /* Glass morphism cards - very subtle translucency */
+    --card: 0 0% 1.5%;
     --card-foreground: 0 0% 98%;
-    --popover: 0 0% 7%;
+    --popover: 0 0% 2%;
     --popover-foreground: 0 0% 98%;
 
-    /* Emerald green primary (WhatsApp style) */
-    --primary: 160 84% 39%;
+    /* Pure white primary (Modern minimal style) or Emerald */
+    --primary: 160 84% 45%;
     --primary-foreground: 0 0% 100%;
 
-    /* Subtle secondary/muted for glass effect */
-    --secondary: 0 0% 8%;
+    /* Subtle secondary/muted for high-end look */
+    --secondary: 0 0% 3%;
     --secondary-foreground: 0 0% 90%;
-    --muted: 0 0% 10%;
-    --muted-foreground: 0 0% 55%;
-    --accent: 0 0% 10%;
+    --muted: 0 0% 4.5%;
+    --muted-foreground: 0 0% 50%;
+    --accent: 0 0% 6%;
     --accent-foreground: 0 0% 98%;
 
-    --destructive: 0 72% 51%;
+    --destructive: 0 84.2% 60.2%;
     --destructive-foreground: 0 0% 100%;
 
-    /* Subtle borders - key for Linear look */
-    --border: 0 0% 12%;
-    --input: 0 0% 12%;
-    --ring: 160 84% 39%;
+    /* Ultra-subtle borders - keep it clean */
+    --border: 0 0% 7%;
+    --input: 0 0% 7%;
+    --ring: 160 84% 45%;
     --radius: 0.75rem;
 
-    /* Glass effect utilities */
-    --glass-bg: rgba(255, 255, 255, 0.03);
-    --glass-bg-hover: rgba(255, 255, 255, 0.06);
-    --glass-border: rgba(255, 255, 255, 0.06);
+    /* Enhanced glass effect utilities */
+    --glass-bg: rgba(255, 255, 255, 0.015);
+    --glass-bg-hover: rgba(255, 255, 255, 0.03);
+    --glass-border: rgba(255, 255, 255, 0.04);
   }
 
-  /* Light mode - clean white like Vercel */
+  /* Light mode - soft off-white background */
   .light {
-    --background: 0 0% 98%;
-    --foreground: 0 0% 9%;
+    --background: 0 0% 98.5%;
+    --foreground: 0 0% 10%;
     --card: 0 0% 100%;
-    --card-foreground: 0 0% 9%;
+    --card-foreground: 0 0% 10%;
     --popover: 0 0% 100%;
-    --popover-foreground: 0 0% 9%;
+    --popover-foreground: 0 0% 10%;
     --primary: 160 84% 39%;
     --primary-foreground: 0 0% 100%;
-    --secondary: 0 0% 96%;
-    --secondary-foreground: 0 0% 9%;
-    --muted: 0 0% 96%;
+    --secondary: 0 0% 95%;
+    --secondary-foreground: 0 0% 10%;
+    --muted: 0 0% 94%;
     --muted-foreground: 0 0% 45%;
-    --accent: 0 0% 96%;
-    --accent-foreground: 0 0% 9%;
-    --destructive: 0 72% 51%;
+    --accent: 0 0% 94%;
+    --accent-foreground: 0 0% 10%;
+    --destructive: 0 84.2% 60.2%;
     --destructive-foreground: 0 0% 100%;
-    --border: 0 0% 90%;
-    --input: 0 0% 90%;
+    --border: 0 0% 91%;
+    --input: 0 0% 91%;
     --ring: 160 84% 39%;
 
     /* Glass effect utilities for light mode */
-    --glass-bg: rgba(0, 0, 0, 0.02);
-    --glass-bg-hover: rgba(0, 0, 0, 0.04);
-    --glass-border: rgba(0, 0, 0, 0.06);
+    --glass-bg: rgba(0, 0, 0, 0.01);
+    --glass-bg-hover: rgba(0, 0, 0, 0.02);
+    --glass-border: rgba(0, 0, 0, 0.04);
   }
 
-  /* Legacy dark class support */
+  /* Support for Explicit dark class if needed */
   .dark {
-    --background: 0 0% 2.5%;
+    --background: 0 0% 0%;
     --foreground: 0 0% 98%;
-    --card: 0 0% 5%;
+    --card: 0 0% 1.5%;
     --card-foreground: 0 0% 98%;
-    --popover: 0 0% 7%;
+    --popover: 0 0% 2%;
     --popover-foreground: 0 0% 98%;
-    --primary: 160 84% 39%;
+    --primary: 160 84% 45%;
     --primary-foreground: 0 0% 100%;
-    --secondary: 0 0% 8%;
+    --secondary: 0 0% 3%;
     --secondary-foreground: 0 0% 90%;
-    --muted: 0 0% 10%;
-    --muted-foreground: 0 0% 55%;
-    --accent: 0 0% 10%;
+    --muted: 0 0% 4.5%;
+    --muted-foreground: 0 0% 50%;
+    --accent: 0 0% 6%;
     --accent-foreground: 0 0% 98%;
-    --destructive: 0 72% 51%;
+    --destructive: 0 84.2% 60.2%;
     --destructive-foreground: 0 0% 100%;
-    --border: 0 0% 12%;
-    --input: 0 0% 12%;
-    --ring: 160 84% 39%;
+    --border: 0 0% 7%;
+    --input: 0 0% 7%;
+    --ring: 160 84% 45%;
 
-    /* Glass effect utilities */
-    --glass-bg: rgba(255, 255, 255, 0.03);
-    --glass-bg-hover: rgba(255, 255, 255, 0.06);
-    --glass-border: rgba(255, 255, 255, 0.06);
+    --glass-bg: rgba(255, 255, 255, 0.015);
+    --glass-bg-hover: rgba(255, 255, 255, 0.03);
+    --glass-border: rgba(255, 255, 255, 0.04);
   }
 }
 

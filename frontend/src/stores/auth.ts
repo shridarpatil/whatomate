@@ -1,6 +1,7 @@
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
 import { api } from '@/services/api'
+import { isDeepEqual } from '@/lib/utils'
 
 export interface UserSettings {
   email_notifications?: boolean
@@ -103,8 +104,12 @@ export const useAuthStore = defineStore('auth', () => {
     try {
       const response = await api.get('/me')
       const freshUser = response.data.data
-      user.value = freshUser
-      localStorage.setItem('user', JSON.stringify(freshUser))
+
+      // Stability Check: Only update if anything changed
+      if (!isDeepEqual(user.value, freshUser)) {
+        user.value = freshUser
+        localStorage.setItem('user', JSON.stringify(freshUser))
+      }
       return true
     } catch {
       // If unauthorized, clear auth

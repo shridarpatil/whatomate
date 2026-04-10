@@ -1,4 +1,4 @@
-import { Page, Locator } from '@playwright/test'
+import { Page } from '@playwright/test'
 
 export class BasePage {
   constructor(protected page: Page) {}

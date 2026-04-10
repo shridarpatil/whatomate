@@ -54,7 +54,7 @@ test.describe('Contacts Management', () => {
     await contactsPage.expectContactExists(phoneNumber)
   })
 
-  test('should edit existing contact', async ({ page }) => {
+  test('should edit existing contact', async ({ page: _page }) => {
     // First create a contact
     const phoneNumber = `91${Date.now().toString().slice(-10)}`
     const originalName = `Original Name ${Date.now()}`
@@ -79,7 +79,7 @@ test.describe('Contacts Management', () => {
     await contactsPage.expectContactExists(newName)
   })
 
-  test('should delete contact', async ({ page }) => {
+  test('should delete contact', async ({ page: _page }) => {
     // First create a contact
     const phoneNumber = `91${Date.now().toString().slice(-10)}`
     const contactName = `Delete Contact ${Date.now()}`
@@ -101,7 +101,7 @@ test.describe('Contacts Management', () => {
     await contactsPage.expectToast(/deleted/i)
   })
 
-  test('should search contacts', async ({ page }) => {
+  test('should search contacts', async ({ page: _page }) => {
     // First create a contact with unique name
     const phoneNumber = `91${Date.now().toString().slice(-10)}`
     const uniqueName = `UniqueSearch${Date.now()}`
@@ -209,7 +209,7 @@ test.describe('Contacts Import/Export', () => {
     await expect(contactsPage.importExportDialog).toContainText('Phone Number')
   })
 
-  test('should import contacts from CSV', async ({ page }) => {
+  test('should import contacts from CSV', async ({ page: _page }) => {
     // Create a test CSV file
     const timestamp = Date.now()
     const csvContent = `Phone Number,Name

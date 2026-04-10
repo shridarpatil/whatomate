@@ -12,7 +12,7 @@ import { Button } from '@/components/ui/button'
 
 const open = defineModel<boolean>('open', { default: false })
 
-const props = withDefaults(defineProps<{
+withDefaults(defineProps<{
   title: string
   description?: string
   confirmLabel?: string

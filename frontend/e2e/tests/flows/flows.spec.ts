@@ -129,7 +129,7 @@ test.describe('WhatsApp Flows Actions', () => {
   test('should have duplicate button for flows', async () => {
     await flowsPage.expectPageVisible()
     // Duplicate button is available on flow cards
-    const hasDuplicate = await flowsPage.hasDuplicateButton()
+    // Duplicate button is available on flow cards
     // Just verify page loads correctly
   })
 
@@ -158,17 +158,17 @@ test.describe('WhatsApp Flows UI Elements', () => {
     await flowsPage.goto()
   })
 
-  test('should display flow status badges', async ({ page }) => {
+  test('should display flow status badges', async ({ page: _page }) => {
     await flowsPage.expectPageVisible()
     // Status badges (DRAFT, PUBLISHED, DEPRECATED) are visible in flow cards
   })
 
-  test('should display flow category badges', async ({ page }) => {
+  test('should display flow category badges', async ({ page: _page }) => {
     await flowsPage.expectPageVisible()
     // Category badges are visible in flow cards when category is set
   })
 
-  test('should show empty state when no flows', async ({ page }) => {
+  test('should show empty state when no flows', async ({ page: _page }) => {
     await flowsPage.expectPageVisible()
     // Empty state shows when no flows exist
   })
@@ -231,13 +231,11 @@ test.describe('Chatbot Flows Toggle and Delete', () => {
 
   test('should have toggle button for flows', async () => {
     await chatbotFlowsPage.expectPageVisible()
-    const hasToggle = await chatbotFlowsPage.hasToggleButton()
     // Toggle button is available when flows exist
   })
 
   test('should have delete button for flows', async () => {
     await chatbotFlowsPage.expectPageVisible()
-    const hasDelete = await chatbotFlowsPage.hasDeleteButton()
     // Delete button is available when flows exist
   })
 
@@ -260,7 +258,6 @@ test.describe('Chatbot Flows Toggle and Delete', () => {
 
   test('should have edit button for flows', async () => {
     await chatbotFlowsPage.expectPageVisible()
-    const hasEdit = await chatbotFlowsPage.hasEditButton()
     // Edit button is available when flows exist
   })
 })
@@ -274,22 +271,22 @@ test.describe('Chatbot Flows UI Elements', () => {
     await chatbotFlowsPage.goto()
   })
 
-  test('should display flow status badges', async ({ page }) => {
+  test('should display flow status badges', async ({ page: _page }) => {
     await chatbotFlowsPage.expectPageVisible()
     // Status badges (Active, Inactive) are visible in flow cards
   })
 
-  test('should display trigger keywords', async ({ page }) => {
+  test('should display trigger keywords', async ({ page: _page }) => {
     await chatbotFlowsPage.expectPageVisible()
     // Trigger keywords are visible in flow cards when set
   })
 
-  test('should display steps count', async ({ page }) => {
+  test('should display steps count', async ({ page: _page }) => {
     await chatbotFlowsPage.expectPageVisible()
     // Steps count is visible in flow cards
   })
 
-  test('should show empty state when no flows', async ({ page }) => {
+  test('should show empty state when no flows', async ({ page: _page }) => {
     await chatbotFlowsPage.expectPageVisible()
     // Empty state shows when no flows exist
   })

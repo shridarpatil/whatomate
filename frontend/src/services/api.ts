@@ -123,6 +123,18 @@ api.interceptors.response.use(
       }
     }
 
+    // Extract deterministic platform error code and enrich diagnostic info
+    const data = (error.response?.data as any) || {}
+    const errorCode = data.error_code || (error.response?.status ? `ERR_HTTP_${error.response.status}` : 'ERR_UNKNOWN')
+    
+    // Attach enriched diagnostic information to the error object
+    try {
+      const { getDiagnosticInfo } = await import('@/lib/error-taxonomy')
+      ;(error as any).diagnostic = getDiagnosticInfo(errorCode)
+    } catch (e) {
+      console.warn('Failed to load error taxonomy library', e)
+    }
+
     return Promise.reject(error)
   }
 )

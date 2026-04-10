@@ -15,6 +15,13 @@ const normalizedBasePath = basePath.endsWith('/') ? basePath : basePath + '/'
 
 const router = createRouter({
   history: createWebHistory(normalizedBasePath),
+  scrollBehavior(_, __, savedPosition) {
+    if (savedPosition) {
+      return savedPosition
+    } else {
+      return { top: 0, behavior: 'smooth' }
+    }
+  },
   routes: [
     {
       path: '/login',
@@ -293,9 +300,20 @@ const router = createRouter({
           name: 'call-transfers',
           component: () => import('@/views/calling/CallTransfersView.vue'),
           meta: { permission: 'call_transfers' }
+        },
+        {
+          path: 'notifications',
+          name: 'notifications',
+          component: () => import('@/views/notifications/NotificationsView.vue')
+        },
+        {
+          path: 'error',
+          name: 'error',
+          component: () => import('@/views/ErrorView.vue')
         }
       ]
     },
+
     {
       path: '/:pathMatch(.*)*',
       name: 'not-found',

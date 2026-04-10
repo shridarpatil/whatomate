@@ -15,9 +15,9 @@ import { Input } from '@/components/ui/input'
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { organizationsService } from '@/services/api'
 import { toast } from 'vue-sonner'
-import { Building2, Plus, Loader2 } from 'lucide-vue-next'
+import { Building2, Loader2 } from 'lucide-vue-next'
 
-const props = defineProps<{
+defineProps<{
   collapsed?: boolean
 }>()
 
@@ -26,7 +26,6 @@ const organizationsStore = useOrganizationsStore()
 const authStore = useAuthStore()
 
 const isSuperAdmin = computed(() => authStore.user?.is_super_admin || false)
-const canCreateOrg = computed(() => authStore.hasPermission('organizations', 'write'))
 
 const shouldShowSwitcher = computed(() =>
   isSuperAdmin.value || organizationsStore.isMultiOrg
@@ -119,65 +118,43 @@ const refreshOrgs = async () => {
 </script>
 
 <template>
-  <div v-if="shouldShowSwitcher" class="px-2 py-2 border-b">
-    <div v-if="!collapsed" class="space-y-1">
-      <div class="flex items-center justify-between">
-        <span class="text-[11px] font-medium text-muted-foreground uppercase tracking-wide px-1">
-          Organization
-        </span>
-        <Button
-          v-if="canCreateOrg"
-          variant="ghost"
-          size="icon"
-          class="h-5 w-5"
-          @click="isCreateDialogOpen = true"
-        >
-          <Plus class="h-3 w-3" />
-        </Button>
-      </div>
-      <Select
-        v-if="orgList.length > 0"
-        :model-value="currentOrgId"
-        @update:model-value="handleOrgChange"
-      >
-        <SelectTrigger class="h-8 text-[13px]">
-          <SelectValue placeholder="Select organization" />
-        </SelectTrigger>
-        <SelectContent>
-          <SelectItem
-            v-for="org in orgList"
-            :key="org.id"
-            :value="org.id"
-          >
-            <div class="flex items-center gap-2">
-              <Building2 class="h-3.5 w-3.5 text-muted-foreground" />
-              <span>{{ org.name }}</span>
-            </div>
-          </SelectItem>
-        </SelectContent>
-      </Select>
-      <div v-else-if="organizationsStore.loading" class="text-[12px] text-muted-foreground px-1">
-        Loading...
-      </div>
-      <div v-else-if="organizationsStore.error" class="text-[12px] text-destructive px-1">
-        {{ organizationsStore.error }}
-      </div>
-      <div v-else class="text-[12px] text-muted-foreground px-1">
-        No organizations found
-      </div>
+  <div v-if="shouldShowSwitcher" class="flex items-center gap-2">
+    <Select v-if="orgList.length > 0" :model-value="currentOrgId" @update:model-value="handleOrgChange">
+      <SelectTrigger
+        class="h-9 min-w-[200px] bg-background/50 border border-border/50 hover:bg-muted/50 transition-all rounded-xl shadow-sm backdrop-blur-sm group px-2">
+        <div class="flex items-center gap-2.5 w-full">
+          <div
+            class="h-6 w-6 rounded-lg bg-primary/10 flex items-center justify-center text-[10px] font-black text-primary border border-primary/20 shrink-0 group-hover:bg-primary/20 transition-colors uppercase">
+            {{ organizationsStore.selectedOrganization?.name?.charAt(0) || '?' }}
+          </div>
+          <SelectValue :placeholder="t('organizations.select')" class="truncate" />
+        </div>
+      </SelectTrigger>
+      <SelectContent class="bg-popover border-border shadow-2xl">
+        <SelectItem v-for="org in orgList" :key="org.id" :value="org.id">
+          <div class="flex items-center gap-3 py-0.5">
+            <span class="text-[13px] font-bold tracking-tight">{{ org.name }}</span>
+          </div>
+        </SelectItem>
+      </SelectContent>
+    </Select>
+    <div v-else-if="organizationsStore.loading" class="text-[12px] text-muted-foreground px-1">
+      Loading...
     </div>
+    <div v-else-if="organizationsStore.error" class="text-[12px] text-destructive px-1">
+      {{ organizationsStore.error }}
+    </div>
+    <div v-else class="text-[12px] text-muted-foreground px-1">
+      No organizations found
+    </div>
+  </div>
 
-    <!-- Collapsed view - just show icon with selected org initial -->
-    <div v-else class="flex justify-center">
-      <Button
-        variant="ghost"
-        size="icon"
-        class="h-8 w-8"
-        :title="organizationsStore.selectedOrganization?.name || 'All Organizations'"
-      >
-        <Building2 class="h-4 w-4" />
-      </Button>
-    </div>
+  <!-- Collapsed view - just show icon with selected org initial -->
+  <div v-else class="flex justify-center">
+    <Button variant="ghost" size="icon" class="h-8 w-8"
+      :title="organizationsStore.selectedOrganization?.name || 'All Organizations'">
+      <Building2 class="h-4 w-4" />
+    </Button>
   </div>
 
   <!-- Create Org Dialog -->
@@ -188,11 +165,8 @@ const refreshOrgs = async () => {
         <DialogDescription>{{ t('organizations.createDesc') }}</DialogDescription>
       </DialogHeader>
       <div class="py-4">
-        <Input
-          v-model="newOrgName"
-          :placeholder="t('organizations.namePlaceholder')"
-          @keydown.enter="submitCreateOrg"
-        />
+        <Input v-model="newOrgName" :placeholder="t('organizations.namePlaceholder')"
+          @keydown.enter="submitCreateOrg" />
       </div>
       <DialogFooter>
         <Button variant="outline" @click="isCreateDialogOpen = false">{{ t('common.cancel') }}</Button>

@@ -75,7 +75,7 @@ test.describe('Password Change Form', () => {
     await profilePage.expectToast(/6 characters/i)
   })
 
-  test('should toggle current password visibility', async ({ page }) => {
+  test('should toggle current password visibility', async ({ page: _page }) => {
     await expect(profilePage.currentPasswordInput).toHaveAttribute('type', 'password')
 
     const toggleBtn = profilePage.currentPasswordInput.locator('..').locator('button')
@@ -84,7 +84,7 @@ test.describe('Password Change Form', () => {
     await expect(profilePage.currentPasswordInput).toHaveAttribute('type', 'text')
   })
 
-  test('should toggle new password visibility', async ({ page }) => {
+  test('should toggle new password visibility', async ({ page: _page }) => {
     await expect(profilePage.newPasswordInput).toHaveAttribute('type', 'password')
 
     const toggleBtn = profilePage.newPasswordInput.locator('..').locator('button')
@@ -93,7 +93,7 @@ test.describe('Password Change Form', () => {
     await expect(profilePage.newPasswordInput).toHaveAttribute('type', 'text')
   })
 
-  test('should toggle confirm password visibility', async ({ page }) => {
+  test('should toggle confirm password visibility', async ({ page: _page }) => {
     await expect(profilePage.confirmPasswordInput).toHaveAttribute('type', 'password')
 
     const toggleBtn = profilePage.confirmPasswordInput.locator('..').locator('button')

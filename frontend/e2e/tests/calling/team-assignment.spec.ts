@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test'
-import { loginAsAdmin, ApiHelper, createTeamFixture } from '../../helpers'
+import { loginAsAdmin, ApiHelper } from '../../helpers'
 
 test.describe('Team Assignment Strategy for Calls', () => {
   test.beforeEach(async ({ page }) => {

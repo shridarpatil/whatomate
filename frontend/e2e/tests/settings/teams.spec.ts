@@ -12,7 +12,7 @@ test.describe('Teams - List View', () => {
     tablePage = new TablePage(page)
   })
 
-  test('should display teams list', async ({ page }) => {
+  test('should display teams list', async ({ page: _page }) => {
     await expect(tablePage.tableBody).toBeVisible()
   })
 

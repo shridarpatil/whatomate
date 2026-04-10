@@ -164,7 +164,7 @@ test.describe('Settings Tab Navigation', () => {
     await expect(page.getByText('Email Notifications')).toBeVisible()
   })
 
-  test('should switch back to General tab', async ({ page }) => {
+  test('should switch back to General tab', async ({ page: _page }) => {
     await settingsPage.switchToNotificationsTab()
     await settingsPage.switchToGeneralTab()
     await expect(settingsPage.orgNameInput).toBeVisible()

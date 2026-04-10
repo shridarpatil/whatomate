@@ -132,19 +132,19 @@ test.describe('Campaign UI Elements', () => {
     await campaignsPage.goto()
   })
 
-  test('should display campaign statistics labels', async ({ page }) => {
+  test('should display campaign statistics labels', async ({ page: _page }) => {
     await campaignsPage.expectPageVisible()
     // Stats labels are visible when campaigns exist
-    const statsLabels = ['Recipients', 'Sent', 'Delivered', 'Read', 'Failed']
+    // Stats labels are visible when campaigns exist
     // Just verify page structure loads correctly
   })
 
-  test('should display campaign status badge', async ({ page }) => {
+  test('should display campaign status badge', async ({ page: _page }) => {
     await campaignsPage.expectPageVisible()
     // Status badges are visible in campaign cards
   })
 
-  test('should show empty state when no campaigns', async ({ page }) => {
+  test('should show empty state when no campaigns', async ({ page: _page }) => {
     await campaignsPage.expectPageVisible()
     // Empty state shows when no campaigns exist
   })

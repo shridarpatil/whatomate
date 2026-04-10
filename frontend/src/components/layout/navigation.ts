@@ -21,7 +21,9 @@ import {
   Tags,
   PhoneCall,
   PhoneForwarded,
-  ScrollText
+  ScrollText,
+  User,
+  Bell
 } from 'lucide-vue-next'
 import type { Component } from 'vue'
 
@@ -158,6 +160,27 @@ export const navigationSections: NavSection[] = [
     ]
   }
 ]
+
+export const accountSections: NavSection[] = [
+  {
+    label: 'userMenu.identity',
+    permissions: [],
+    items: [
+      {
+        name: 'nav.profile',
+        path: '/profile',
+        icon: User,
+      },
+      {
+        name: 'nav.notifications',
+        path: '/notifications',
+        icon: Bell,
+      }
+    ]
+  },
+
+]
+
 
 // Flat list for backward compatibility (used by AppLayout computed)
 export const navigationItems: NavItem[] = navigationSections.flatMap(s => s.items)

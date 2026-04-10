@@ -330,7 +330,7 @@ function sanitizeFlowForMeta(flowData: { screens: FlowScreen[] }): { screens: an
         type: screen.layout.type,
         children: screen.layout.children.map(comp => {
           // Create a copy without the 'id' if component type doesn't support it
-          const { id, ...rest } = comp
+          const { id: _, ...rest } = comp
           if (componentsWithoutId.includes(comp.type)) {
             return rest
           }

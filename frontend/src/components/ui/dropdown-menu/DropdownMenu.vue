@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { DropdownMenuRoot } from 'reka-ui'
 
-const props = defineProps<{
+defineProps<{
   open?: boolean
 }>()
 

@@ -84,7 +84,6 @@
     "optional": "Optional",
     "default": "Default",
     "selected": "selected",
-    "saving": "Saving",
     "createdSuccess": "{resource} created successfully",
     "updatedSuccess": "{resource} updated successfully",
     "deletedSuccess": "{resource} deleted",
@@ -106,7 +105,7 @@
     "deleteConfirmMessage": "Are you sure you want to delete this {resource}? This action cannot be undone.",
     "searchPlaceholder": "Search {resource}",
     "selectPlaceholder": "Select {resource}",
-    "required": "{field} is required",
+    "fieldRequired": "{field} is required",
     "copiedToClipboard": "Copied to clipboard",
     "clipboardFailed": "Failed to copy to clipboard",
     "loadErrorTitle": "Something went wrong",
@@ -237,7 +236,9 @@
     "webhooks": "webhooks",
     "Webhook": "Webhook",
     "widget": "widget",
-    "Widget": "Widget"
+    "Widget": "Widget",
+    "notification": "notification",
+    "errorLog": "error log"
   },
   "nav": {
     "dashboard": "Dashboard",
@@ -269,6 +270,9 @@
     "customActions": "Custom Actions",
     "sso": "SSO",
     "auditLogs": "Audit Logs",
+    "error": "Error Logs",
+    "notifications": "Notifications",
+    "billing": "Billing",
     "calling": "Calling",
     "callLogs": "Call Logs",
     "ivrFlows": "IVR Flows",
@@ -277,6 +281,7 @@
     "sectionMessaging": "Messaging",
     "sectionCalling": "Calling",
     "sectionAnalytics": "Analytics",
+    "sectionAdmin": "System",
     "skipToMain": "Skip to main content",
     "expandSidebar": "Expand sidebar",
     "collapseSidebar": "Collapse sidebar",
@@ -297,7 +302,9 @@
     "failedUpdateAvailability": "Failed to update availability",
     "awayWarningTitle": "Active Transfers Will Be Returned to Queue",
     "awayWarningDesc": "You have {count} active transfer(s) assigned to you. Setting your status to \"Away\" will return them to the queue for other agents to pick up.",
-    "goAway": "Go Away"
+    "goAway": "Go Away",
+    "identity": "Identity & Account",
+    "system": "System Management"
   },
   "chat": {
     "marketingOptOut": "Marketing Opt-out",
@@ -2493,5 +2500,11 @@
     "callFailed": "Failed to initiate call",
     "permissionSent": "Call permission request sent",
     "permissionSentDesc": "The contact needs to accept the call permission on WhatsApp before you can call them. Try again after they accept."
+  },
+  "setup": {
+    "general": "Global Parameters",
+    "channels": "Transmission Hubs",
+    "usersControl": "Access Governance",
+    "system": "Core Diagnostics"
   }
 }

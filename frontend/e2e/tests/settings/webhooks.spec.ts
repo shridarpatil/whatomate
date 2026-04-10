@@ -15,17 +15,17 @@ test.describe('Webhooks Management', () => {
     dialogPage = new DialogPage(page)
   })
 
-  test('should display webhooks list', async ({ page }) => {
+  test('should display webhooks list', async ({ page: _page }) => {
     await expect(tablePage.tableBody).toBeVisible()
   })
 
-  test('should open create webhook dialog', async ({ page }) => {
+  test('should open create webhook dialog', async ({ page: _page }) => {
     await tablePage.clickAddButton()
     await dialogPage.waitForOpen()
     await expect(dialogPage.dialog).toBeVisible()
   })
 
-  test('should create a new webhook', async ({ page }) => {
+  test('should create a new webhook', async ({ page: _page }) => {
     const webhook = createWebhookFixture()
 
     await tablePage.clickAddButton()
@@ -44,7 +44,7 @@ test.describe('Webhooks Management', () => {
     await tablePage.expectRowExists(webhook.name)
   })
 
-  test('should show validation error for invalid URL', async ({ page }) => {
+  test('should show validation error for invalid URL', async ({ page: _page }) => {
     await tablePage.clickAddButton()
     await dialogPage.waitForOpen()
 
@@ -58,7 +58,7 @@ test.describe('Webhooks Management', () => {
     await expect(dialogPage.dialog).toBeVisible()
   })
 
-  test('should show validation error when no events selected', async ({ page }) => {
+  test('should show validation error when no events selected', async ({ page: _page }) => {
     await tablePage.clickAddButton()
     await dialogPage.waitForOpen()
 
@@ -72,7 +72,7 @@ test.describe('Webhooks Management', () => {
     await expect(dialogPage.dialog).toBeVisible()
   })
 
-  test('should edit existing webhook', async ({ page }) => {
+  test('should edit existing webhook', async ({ page: _page }) => {
     // First create a webhook to edit
     const webhook = createWebhookFixture()
 
@@ -97,7 +97,7 @@ test.describe('Webhooks Management', () => {
     await tablePage.expectRowExists(updatedName)
   })
 
-  test('should delete webhook', async ({ page }) => {
+  test('should delete webhook', async ({ page: _page }) => {
     // First create a webhook to delete
     const webhook = createWebhookFixture({ name: 'Webhook To Delete ' + Date.now() })
 
@@ -119,7 +119,7 @@ test.describe('Webhooks Management', () => {
     await tablePage.expectRowNotExists(webhook.name)
   })
 
-  test('should toggle webhook events', async ({ page }) => {
+  test('should toggle webhook events', async ({ page: _page }) => {
     const webhook = createWebhookFixture()
 
     await tablePage.clickAddButton()
@@ -139,7 +139,7 @@ test.describe('Webhooks Management', () => {
     await tablePage.expectRowExists(webhook.name)
   })
 
-  test('should cancel webhook creation', async ({ page }) => {
+  test('should cancel webhook creation', async ({ page: _page }) => {
     const webhookName = 'Cancelled Webhook ' + Date.now()
 
     await tablePage.clickAddButton()

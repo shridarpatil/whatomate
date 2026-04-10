@@ -40,7 +40,7 @@ test.describe('Canned Responses Management', () => {
     await expect(cannedResponsesPage.page.locator('body')).toContainText(responseName)
   })
 
-  test('should edit existing canned response', async ({ page }) => {
+  test('should edit existing canned response', async ({ page: _page }) => {
     // First create a response
     const responseName = `Edit Response ${Date.now()}`
 
@@ -63,7 +63,7 @@ test.describe('Canned Responses Management', () => {
     await cannedResponsesPage.expectToast('updated')
   })
 
-  test('should delete canned response', async ({ page }) => {
+  test('should delete canned response', async ({ page: _page }) => {
     // First create a response
     const responseName = `Delete Response ${Date.now()}`
 

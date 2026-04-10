@@ -207,7 +207,7 @@ const componentsWithoutId = ['TextHeading', 'TextSubheading', 'TextBody', 'TextI
 function sanitizeScreensForMeta(screens: any[]): any[] {
   return screens.map(screen => ({
     id: screen.id, title: screen.title, data: screen.data || {},
-    layout: { type: screen.layout?.type || 'SingleColumnLayout', children: (screen.layout?.children || []).map((comp: any) => { const { id, ...rest } = comp; return componentsWithoutId.includes(comp.type) ? rest : comp }) }
+    layout: { type: screen.layout?.type || 'SingleColumnLayout', children: (screen.layout?.children || []).map((comp: any) => { const { id: _, ...rest } = comp; return componentsWithoutId.includes(comp.type) ? rest : comp }) }
   }))
 }
 </script>

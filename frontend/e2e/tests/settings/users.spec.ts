@@ -17,7 +17,7 @@ test.describe('Users Management', () => {
     dialogPage = new DialogPage(page)
   })
 
-  test('should display users list', async ({ page }) => {
+  test('should display users list', async ({ page: _page }) => {
     // Should show table with users
     await expect(tablePage.tableBody).toBeVisible()
     // At least the admin user should exist
@@ -25,7 +25,7 @@ test.describe('Users Management', () => {
     expect(rowCount).toBeGreaterThan(0)
   })
 
-  test('should search users', async ({ page }) => {
+  test('should search users', async ({ page: _page }) => {
     // Search by specific email to avoid multiple matches
     await tablePage.search('admin@test.com')
     // Should filter results
@@ -33,13 +33,13 @@ test.describe('Users Management', () => {
     await tablePage.expectRowExists('admin@test.com')
   })
 
-  test('should open create user dialog', async ({ page }) => {
+  test('should open create user dialog', async ({ page: _page }) => {
     await page.getByRole('button', { name: /^Add User$/i }).click()
     await dialogPage.waitForOpen()
     await expect(dialogPage.dialog).toBeVisible()
   })
 
-  test('should create a new user', async ({ page }) => {
+  test('should create a new user', async ({ page: _page }) => {
     const newUser = createUserFixture()
 
     await page.getByRole('button', { name: /^Add User$/i }).click()
@@ -58,7 +58,7 @@ test.describe('Users Management', () => {
     await tablePage.expectRowExists(newUser.email)
   })
 
-  test('should show validation error for invalid email', async ({ page }) => {
+  test('should show validation error for invalid email', async ({ page: _page }) => {
     await page.getByRole('button', { name: /^Add User$/i }).click()
     await dialogPage.waitForOpen()
 
@@ -72,7 +72,7 @@ test.describe('Users Management', () => {
     await expect(dialogPage.dialog).toBeVisible()
   })
 
-  test('should edit existing user', async ({ page }) => {
+  test('should edit existing user', async ({ page: _page }) => {
     // First create a user to edit
     const user = createUserFixture()
 
@@ -99,7 +99,7 @@ test.describe('Users Management', () => {
     await tablePage.expectRowExists(updatedName)
   })
 
-  test('should delete user', async ({ page }) => {
+  test('should delete user', async ({ page: _page }) => {
     // First create a user to delete
     const user = createUserFixture({ fullName: 'User To Delete' })
 
@@ -125,7 +125,7 @@ test.describe('Users Management', () => {
     await tablePage.expectRowNotExists(user.email)
   })
 
-  test('should cancel user creation', async ({ page }) => {
+  test('should cancel user creation', async ({ page: _page }) => {
     await page.getByRole('button', { name: /^Add User$/i }).click()
     await dialogPage.waitForOpen()
 
@@ -153,7 +153,7 @@ test.describe('Users - Copy Invite Link', () => {
     await page.waitForLoadState('networkidle')
   })
 
-  test('should show copy invite link button', async ({ page }) => {
+  test('should show copy invite link button', async ({ page: _page }) => {
     const copyButton = page.getByRole('button', { name: /Copy Invite Link/i })
     await expect(copyButton).toBeVisible()
   })
@@ -182,7 +182,7 @@ test.describe('Users - Add Existing User (Single Org)', () => {
     await page.waitForLoadState('networkidle')
   })
 
-  test('should hide add existing user button in single-org mode', async ({ page }) => {
+  test('should hide add existing user button in single-org mode', async ({ page: _page }) => {
     const addExistingButton = page.getByRole('button', { name: /Add Existing User/i })
     await expect(addExistingButton).not.toBeVisible()
   })
@@ -250,12 +250,12 @@ test.describe('Users - Add Existing User (Multi Org)', () => {
     tablePage = new TablePage(page)
   })
 
-  test('should show add existing user button in multi-org mode', async ({ page }) => {
+  test('should show add existing user button in multi-org mode', async ({ page: _page }) => {
     const addExistingButton = page.getByRole('button', { name: /Add Existing User/i })
     await expect(addExistingButton).toBeVisible()
   })
 
-  test('should open add existing user dialog', async ({ page }) => {
+  test('should open add existing user dialog', async ({ page: _page }) => {
     const addExistingButton = page.getByRole('button', { name: /Add Existing User/i })
     await addExistingButton.click()
 
@@ -271,7 +271,7 @@ test.describe('Users - Add Existing User (Multi Org)', () => {
     await expect(dialog).not.toBeVisible()
   })
 
-  test('should show error for empty email in add existing dialog', async ({ page }) => {
+  test('should show error for empty email in add existing dialog', async ({ page: _page }) => {
     const addExistingButton = page.getByRole('button', { name: /Add Existing User/i })
     await addExistingButton.click()
 

@@ -9,7 +9,7 @@ import {
 import { ChevronDown } from 'lucide-vue-next'
 import { formatLabel } from '@/lib/utils'
 
-const props = defineProps<{
+defineProps<{
   label: string
   data: any
 }>()

@@ -10,18 +10,18 @@ test.describe('Login', () => {
     await loginPage.goto()
   })
 
-  test('should display login form', async ({ page }) => {
+  test('should display login form', async ({ page: _page }) => {
     await expect(loginPage.emailInput).toBeVisible()
     await expect(loginPage.passwordInput).toBeVisible()
     await expect(loginPage.submitButton).toBeVisible()
   })
 
-  test('should login successfully with valid credentials', async ({ page }) => {
+  test('should login successfully with valid credentials', async ({ page: _page }) => {
     await loginPage.login(TEST_USERS.admin.email, TEST_USERS.admin.password)
     await loginPage.expectLoginSuccess()
   })
 
-  test('should show error with invalid credentials', async ({ page }) => {
+  test('should show error with invalid credentials', async ({ page: _page }) => {
     await loginPage.login('invalid@test.com', 'wrongpassword')
     await loginPage.expectLoginError()
   })

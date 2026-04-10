@@ -15,7 +15,7 @@ module.exports = {
   ignorePatterns: ['dist/', 'node_modules/', 'playwright-report/', 'test-results/'],
   rules: {
     'vue/multi-word-component-names': 'off',
-    '@typescript-eslint/no-unused-vars': ['warn', { argsIgnorePattern: '^_' }],
+    '@typescript-eslint/no-unused-vars': ['warn', { argsIgnorePattern: '^_', varsIgnorePattern: '^_' }],
     '@typescript-eslint/no-explicit-any': 'off',
     'no-inner-declarations': 'off'
   },

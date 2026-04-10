@@ -1,6 +1,7 @@
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
 import { organizationsService, usersService, type Organization } from '@/services/api'
+import { isDeepEqual } from '@/lib/utils'
 
 const SELECTED_ORG_KEY = 'selected_organization_id'
 
@@ -37,7 +38,12 @@ export const useOrganizationsStore = defineStore('organizations', () => {
     error.value = null
     try {
       const response = await organizationsService.list()
-      organizations.value = (response.data as any).data?.organizations || response.data?.organizations || []
+      const newOrgs = (response.data as any).data?.organizations || response.data?.organizations || []
+
+      // Stability Check
+      if (!isDeepEqual(organizations.value, newOrgs)) {
+        organizations.value = newOrgs
+      }
     } catch (err: any) {
       error.value = err.response?.data?.message || 'Failed to fetch organizations'
       organizations.value = []
@@ -49,7 +55,12 @@ export const useOrganizationsStore = defineStore('organizations', () => {
   async function fetchMyOrganizations(): Promise<void> {
     try {
       const response = await usersService.listMyOrganizations()
-      myOrganizations.value = (response.data as any).data?.organizations || []
+      const newMyOrgs = (response.data as any).data?.organizations || []
+
+      // Stability Check
+      if (!isDeepEqual(myOrganizations.value, newMyOrgs)) {
+        myOrganizations.value = newMyOrgs
+      }
     } catch {
       myOrganizations.value = []
     }
