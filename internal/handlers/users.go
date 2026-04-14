@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/shridarpatil/whatomate/internal/audit"
 	"github.com/shridarpatil/whatomate/internal/models"
 	"github.com/valyala/fasthttp"
 	"github.com/zerodha/fastglue"
@@ -653,8 +654,8 @@ func splitPermission(p string) []string {
 
 // UpdateCurrentUserSettings updates the current user's notification/preferences settings
 func (a *App) UpdateCurrentUserSettings(r *fastglue.Request) error {
-	userID, ok := r.RequestCtx.UserValue("user_id").(uuid.UUID)
-	if !ok {
+	orgID, userID, err := a.getOrgAndUserID(r)
+	if err != nil {
 		return r.SendErrorEnvelope(fasthttp.StatusUnauthorized, "Unauthorized", nil, "")
 	}
 
@@ -673,6 +674,8 @@ func (a *App) UpdateCurrentUserSettings(r *fastglue.Request) error {
 		user.Settings = make(models.JSONB)
 	}
 
+	oldNotif := notificationSettingsSnapshot(user.Settings)
+
 	// Update notification settings
 	user.Settings["email_notifications"] = req.EmailNotifications
 	user.Settings["new_message_alerts"] = req.NewMessageAlerts
@@ -683,10 +686,24 @@ func (a *App) UpdateCurrentUserSettings(r *fastglue.Request) error {
 		return r.SendErrorEnvelope(fasthttp.StatusInternalServerError, "Failed to update settings", nil, "")
 	}
 
+	newNotif := notificationSettingsSnapshot(user.Settings)
+	audit.LogAudit(a.DB, orgID, userID, audit.GetUserName(a.DB, userID),
+		models.ResourceSettingsNotification, userID, models.AuditActionUpdated, oldNotif, newNotif)
+
 	return r.SendEnvelope(map[string]any{
 		"message":  "Settings updated successfully",
 		"settings": user.Settings,
 	})
+}
+
+// notificationSettingsSnapshot extracts notification-preference fields from
+// a user's JSONB settings into a map suitable for audit diffing.
+func notificationSettingsSnapshot(settings models.JSONB) map[string]any {
+	return map[string]any{
+		"email_notifications": settings["email_notifications"],
+		"new_message_alerts":  settings["new_message_alerts"],
+		"campaign_updates":    settings["campaign_updates"],
+	}
 }
 
 // ChangePassword changes the current user's password

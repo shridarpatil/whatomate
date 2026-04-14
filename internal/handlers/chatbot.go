@@ -204,8 +204,72 @@ func (a *App) GetChatbotSettings(r *fastglue.Request) error {
 }
 
 // UpdateChatbotSettings updates chatbot settings
+// chatbotMessagesSnapshot captures the fields shown on the Chatbot "Messages" tab.
+func chatbotMessagesSnapshot(s *models.ChatbotSettings) map[string]any {
+	return map[string]any{
+		"enabled":                 s.IsEnabled,
+		"greeting_message":        s.DefaultResponse,
+		"greeting_buttons":        s.GreetingButtons,
+		"fallback_message":        s.FallbackMessage,
+		"fallback_buttons":        s.FallbackButtons,
+		"session_timeout_minutes": s.SessionTimeoutMins,
+	}
+}
+
+// chatbotAgentsSnapshot captures the fields shown on the Chatbot "Agents" tab.
+func chatbotAgentsSnapshot(s *models.ChatbotSettings) map[string]any {
+	return map[string]any{
+		"allow_agent_queue_pickup":        s.AgentAssignment.AllowQueuePickup,
+		"assign_to_same_agent":            s.AgentAssignment.AssignToSameAgent,
+		"agent_current_conversation_only": s.AgentAssignment.CurrentConversationOnly,
+	}
+}
+
+// chatbotHoursSnapshot captures the fields shown on the Chatbot "Business Hours" tab.
+func chatbotHoursSnapshot(s *models.ChatbotSettings) map[string]any {
+	return map[string]any{
+		"business_hours_enabled":        s.BusinessHours.Enabled,
+		"business_hours":                s.BusinessHours.Hours,
+		"out_of_hours_message":          s.BusinessHours.OutOfHoursMessage,
+		"allow_automated_outside_hours": s.BusinessHours.AllowAutomatedOutside,
+	}
+}
+
+// chatbotSLASnapshot captures the fields shown on the Chatbot "SLA" tab
+// (SLA + Client Inactivity live on the same tab in the UI).
+func chatbotSLASnapshot(s *models.ChatbotSettings) map[string]any {
+	return map[string]any{
+		"sla_enabled":               s.SLA.Enabled,
+		"sla_response_minutes":      s.SLA.ResponseMinutes,
+		"sla_resolution_minutes":    s.SLA.ResolutionMinutes,
+		"sla_escalation_minutes":    s.SLA.EscalationMinutes,
+		"sla_auto_close_hours":      s.SLA.AutoCloseHours,
+		"sla_auto_close_message":    s.SLA.AutoCloseMessage,
+		"sla_warning_message":       s.SLA.WarningMessage,
+		"sla_escalation_notify_ids": s.SLA.EscalationNotifyIDs,
+		"client_reminder_enabled":   s.ClientInactivity.ReminderEnabled,
+		"client_reminder_minutes":   s.ClientInactivity.ReminderMinutes,
+		"client_reminder_message":   s.ClientInactivity.ReminderMessage,
+		"client_auto_close_minutes": s.ClientInactivity.AutoCloseMinutes,
+		"client_auto_close_message": s.ClientInactivity.AutoCloseMessage,
+	}
+}
+
+// chatbotAISnapshot captures the fields shown on the Chatbot "AI" tab.
+// The API key is intentionally excluded — it's a secret, not a user-facing
+// change the activity log should surface.
+func chatbotAISnapshot(s *models.ChatbotSettings) map[string]any {
+	return map[string]any{
+		"ai_enabled":       s.AI.Enabled,
+		"ai_provider":      s.AI.Provider,
+		"ai_model":         s.AI.Model,
+		"ai_max_tokens":    s.AI.MaxTokens,
+		"ai_system_prompt": s.AI.SystemPrompt,
+	}
+}
+
 func (a *App) UpdateChatbotSettings(r *fastglue.Request) error {
-	orgID, err := a.getOrgID(r)
+	orgID, userID, err := a.getOrgAndUserID(r)
 	if err != nil {
 		return r.SendErrorEnvelope(fasthttp.StatusUnauthorized, "Unauthorized", nil, "")
 	}
@@ -263,6 +327,33 @@ func (a *App) UpdateChatbotSettings(r *fastglue.Request) error {
 			OrganizationID: orgID,
 		}
 	}
+
+	// Snapshot each tab's state before mutation so we can compute per-tab
+	// diffs for the activity log. LogAudit is a no-op when no fields changed.
+	oldMessages := chatbotMessagesSnapshot(&settings)
+	oldAgents := chatbotAgentsSnapshot(&settings)
+	oldHours := chatbotHoursSnapshot(&settings)
+	oldSLA := chatbotSLASnapshot(&settings)
+	oldAI := chatbotAISnapshot(&settings)
+
+	// Track which tabs the request touched so we only write audit entries
+	// for tabs the user actually submitted.
+	messagesTouched := req.Enabled != nil || req.GreetingMessage != nil ||
+		req.GreetingButtons != nil || req.FallbackMessage != nil ||
+		req.FallbackButtons != nil || req.SessionTimeoutMinutes != nil
+	agentsTouched := req.AllowAgentQueuePickup != nil || req.AssignToSameAgent != nil ||
+		req.AgentCurrentConversationOnly != nil
+	hoursTouched := req.BusinessHoursEnabled != nil || req.BusinessHours != nil ||
+		req.OutOfHoursMessage != nil || req.AllowAutomatedOutsideHours != nil
+	slaTouched := req.SLAEnabled != nil || req.SLAResponseMinutes != nil ||
+		req.SLAResolutionMinutes != nil || req.SLAEscalationMinutes != nil ||
+		req.SLAAutoCloseHours != nil || req.SLAAutoCloseMessage != nil ||
+		req.SLAWarningMessage != nil || req.SLAEscalationNotifyIDs != nil ||
+		req.ClientReminderEnabled != nil || req.ClientReminderMinutes != nil ||
+		req.ClientReminderMessage != nil || req.ClientAutoCloseMinutes != nil ||
+		req.ClientAutoCloseMessage != nil
+	aiTouched := req.AIEnabled != nil || req.AIProvider != nil || req.AIAPIKey != nil ||
+		req.AIModel != nil || req.AIMaxTokens != nil || req.AISystemPrompt != nil
 
 	// Update fields if provided
 	if req.Enabled != nil {
@@ -414,6 +505,34 @@ func (a *App) UpdateChatbotSettings(r *fastglue.Request) error {
 	// Invalidate caches
 	a.InvalidateChatbotSettingsCache(orgID)
 	a.InvalidateSLASettingsCache() // SLA settings are part of chatbot settings
+
+	// Emit per-tab audit entries. LogAudit is a no-op when no fields changed.
+	userName := audit.GetUserName(a.DB, userID)
+	if messagesTouched {
+		audit.LogAudit(a.DB, orgID, userID, userName,
+			models.ResourceSettingsChatbotMessages, orgID, models.AuditActionUpdated,
+			oldMessages, chatbotMessagesSnapshot(&settings))
+	}
+	if agentsTouched {
+		audit.LogAudit(a.DB, orgID, userID, userName,
+			models.ResourceSettingsChatbotAgents, orgID, models.AuditActionUpdated,
+			oldAgents, chatbotAgentsSnapshot(&settings))
+	}
+	if hoursTouched {
+		audit.LogAudit(a.DB, orgID, userID, userName,
+			models.ResourceSettingsChatbotHours, orgID, models.AuditActionUpdated,
+			oldHours, chatbotHoursSnapshot(&settings))
+	}
+	if slaTouched {
+		audit.LogAudit(a.DB, orgID, userID, userName,
+			models.ResourceSettingsChatbotSLA, orgID, models.AuditActionUpdated,
+			oldSLA, chatbotSLASnapshot(&settings))
+	}
+	if aiTouched {
+		audit.LogAudit(a.DB, orgID, userID, userName,
+			models.ResourceSettingsChatbotAI, orgID, models.AuditActionUpdated,
+			oldAI, chatbotAISnapshot(&settings))
+	}
 
 	return r.SendEnvelope(map[string]any{
 		"message": "Settings updated successfully",
