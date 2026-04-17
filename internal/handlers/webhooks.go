@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/shridarpatil/whatomate/internal/audit"
 	"github.com/shridarpatil/whatomate/internal/models"
 	"github.com/valyala/fasthttp"
 	"github.com/zerodha/fastglue"
@@ -180,7 +181,7 @@ func (a *App) GetWebhook(r *fastglue.Request) error {
 
 // CreateWebhook creates a new webhook
 func (a *App) CreateWebhook(r *fastglue.Request) error {
-	orgID, err := a.getOrgID(r)
+	orgID, userID, err := a.getOrgAndUserID(r)
 	if err != nil {
 		return r.SendErrorEnvelope(fasthttp.StatusUnauthorized, "Unauthorized", nil, "")
 	}
@@ -232,12 +233,15 @@ func (a *App) CreateWebhook(r *fastglue.Request) error {
 	// Invalidate cache
 	a.InvalidateWebhooksCache(orgID)
 
+	audit.LogAudit(a.DB, orgID, userID, audit.GetUserName(a.DB, userID),
+		"webhook", webhook.ID, models.AuditActionCreated, nil, webhookAuditSnapshot(&webhook))
+
 	return r.SendEnvelope(webhookToResponse(webhook))
 }
 
 // UpdateWebhook updates an existing webhook
 func (a *App) UpdateWebhook(r *fastglue.Request) error {
-	orgID, err := a.getOrgID(r)
+	orgID, userID, err := a.getOrgAndUserID(r)
 	if err != nil {
 		return r.SendErrorEnvelope(fasthttp.StatusUnauthorized, "Unauthorized", nil, "")
 	}
@@ -251,6 +255,8 @@ func (a *App) UpdateWebhook(r *fastglue.Request) error {
 	if err != nil {
 		return nil
 	}
+
+	oldSnap := webhookAuditSnapshot(webhook)
 
 	var req WebhookRequest
 	if err := a.decodeRequest(r, &req); err != nil {
@@ -294,12 +300,15 @@ func (a *App) UpdateWebhook(r *fastglue.Request) error {
 	// Invalidate cache
 	a.InvalidateWebhooksCache(orgID)
 
+	audit.LogAudit(a.DB, orgID, userID, audit.GetUserName(a.DB, userID),
+		"webhook", webhook.ID, models.AuditActionUpdated, oldSnap, webhookAuditSnapshot(webhook))
+
 	return r.SendEnvelope(webhookToResponse(*webhook))
 }
 
 // DeleteWebhook deletes a webhook
 func (a *App) DeleteWebhook(r *fastglue.Request) error {
-	orgID, err := a.getOrgID(r)
+	orgID, userID, err := a.getOrgAndUserID(r)
 	if err != nil {
 		return r.SendErrorEnvelope(fasthttp.StatusUnauthorized, "Unauthorized", nil, "")
 	}
@@ -309,17 +318,21 @@ func (a *App) DeleteWebhook(r *fastglue.Request) error {
 		return nil
 	}
 
-	result := a.DB.Where("id = ? AND organization_id = ?", webhookID, orgID).Delete(&models.Webhook{})
-	if result.Error != nil {
-		a.Log.Error("Failed to delete webhook", "error", result.Error)
-		return r.SendErrorEnvelope(fasthttp.StatusInternalServerError, "Failed to delete webhook", nil, "")
-	}
-	if result.RowsAffected == 0 {
+	var webhook models.Webhook
+	if err := a.DB.Where("id = ? AND organization_id = ?", webhookID, orgID).First(&webhook).Error; err != nil {
 		return r.SendErrorEnvelope(fasthttp.StatusNotFound, "Webhook not found", nil, "")
+	}
+
+	if err := a.DB.Delete(&webhook).Error; err != nil {
+		a.Log.Error("Failed to delete webhook", "error", err)
+		return r.SendErrorEnvelope(fasthttp.StatusInternalServerError, "Failed to delete webhook", nil, "")
 	}
 
 	// Invalidate cache
 	a.InvalidateWebhooksCache(orgID)
+
+	audit.LogAudit(a.DB, orgID, userID, audit.GetUserName(a.DB, userID),
+		"webhook", webhookID, models.AuditActionDeleted, webhookAuditSnapshot(&webhook), nil)
 
 	return r.SendEnvelope(map[string]string{"message": "Webhook deleted successfully"})
 }
@@ -370,6 +383,20 @@ func (a *App) TestWebhook(r *fastglue.Request) error {
 	}
 
 	return r.SendEnvelope(map[string]string{"message": "Test webhook sent successfully"})
+}
+
+func webhookAuditSnapshot(wh *models.Webhook) map[string]any {
+	if wh == nil {
+		return nil
+	}
+	events := make([]string, len(wh.Events))
+	copy(events, wh.Events)
+	return map[string]any{
+		"name":      wh.Name,
+		"url":       wh.URL,
+		"events":    events,
+		"is_active": wh.IsActive,
+	}
 }
 
 func webhookToResponse(wh models.Webhook) WebhookResponse {

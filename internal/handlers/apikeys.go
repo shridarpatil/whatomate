@@ -101,6 +101,86 @@ func (a *App) ListAPIKeys(r *fastglue.Request) error {
 	})
 }
 
+// GetAPIKey returns a single API key by ID
+func (a *App) GetAPIKey(r *fastglue.Request) error {
+	orgID, userID, err := a.getOrgAndUserID(r)
+	if err != nil {
+		return r.SendErrorEnvelope(fasthttp.StatusUnauthorized, "Unauthorized", nil, "")
+	}
+
+	if err := a.requirePermission(r, userID, models.ResourceAPIKeys, models.ActionRead); err != nil {
+		return nil
+	}
+
+	id, err := parsePathUUID(r, "id", "API key")
+	if err != nil {
+		return nil
+	}
+
+	var apiKey models.APIKey
+	if err := a.DB.Where("id = ? AND organization_id = ?", id, orgID).First(&apiKey).Error; err != nil {
+		return r.SendErrorEnvelope(fasthttp.StatusNotFound, "API key not found", nil, "")
+	}
+
+	return r.SendEnvelope(APIKeyResponse{
+		ID:         apiKey.ID,
+		Name:       apiKey.Name,
+		KeyPrefix:  apiKey.KeyPrefix,
+		LastUsedAt: apiKey.LastUsedAt,
+		ExpiresAt:  apiKey.ExpiresAt,
+		IsActive:   apiKey.IsActive,
+		CreatedAt:  apiKey.CreatedAt.Format("2006-01-02T15:04:05Z"),
+	})
+}
+
+// UpdateAPIKey updates an API key (currently only is_active toggle)
+func (a *App) UpdateAPIKey(r *fastglue.Request) error {
+	orgID, userID, err := a.getOrgAndUserID(r)
+	if err != nil {
+		return r.SendErrorEnvelope(fasthttp.StatusUnauthorized, "Unauthorized", nil, "")
+	}
+
+	if err := a.requirePermission(r, userID, models.ResourceAPIKeys, models.ActionWrite); err != nil {
+		return nil
+	}
+
+	id, err := parsePathUUID(r, "id", "API key")
+	if err != nil {
+		return nil
+	}
+
+	var apiKey models.APIKey
+	if err := a.DB.Where("id = ? AND organization_id = ?", id, orgID).First(&apiKey).Error; err != nil {
+		return r.SendErrorEnvelope(fasthttp.StatusNotFound, "API key not found", nil, "")
+	}
+
+	var req struct {
+		IsActive *bool `json:"is_active"`
+	}
+	if err := a.decodeRequest(r, &req); err != nil {
+		return nil
+	}
+
+	if req.IsActive != nil {
+		apiKey.IsActive = *req.IsActive
+	}
+
+	if err := a.DB.Save(&apiKey).Error; err != nil {
+		a.Log.Error("Failed to update API key", "error", err)
+		return r.SendErrorEnvelope(fasthttp.StatusInternalServerError, "Failed to update API key", nil, "")
+	}
+
+	return r.SendEnvelope(APIKeyResponse{
+		ID:         apiKey.ID,
+		Name:       apiKey.Name,
+		KeyPrefix:  apiKey.KeyPrefix,
+		LastUsedAt: apiKey.LastUsedAt,
+		ExpiresAt:  apiKey.ExpiresAt,
+		IsActive:   apiKey.IsActive,
+		CreatedAt:  apiKey.CreatedAt.Format("2006-01-02T15:04:05Z"),
+	})
+}
+
 // CreateAPIKey creates a new API key
 func (a *App) CreateAPIKey(r *fastglue.Request) error {
 	orgID, userID, err := a.getOrgAndUserID(r)

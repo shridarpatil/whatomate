@@ -249,9 +249,21 @@ const router = createRouter({
           meta: { permission: 'api_keys' }
         },
         {
+          path: 'settings/api-keys/:id',
+          name: 'api-key-detail',
+          component: () => import('@/views/settings/APIKeyDetailView.vue'),
+          meta: { permission: 'api_keys' }
+        },
+        {
           path: 'settings/webhooks',
           name: 'webhooks',
           component: () => import('@/views/settings/WebhooksView.vue'),
+          meta: { permission: 'webhooks' }
+        },
+        {
+          path: 'settings/webhooks/:id',
+          name: 'webhook-detail',
+          component: () => import('@/views/settings/WebhookDetailView.vue'),
           meta: { permission: 'webhooks' }
         },
         {
