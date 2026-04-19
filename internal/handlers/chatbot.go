@@ -1384,10 +1384,11 @@ func (a *App) CreateAIContext(r *fastglue.Request) error {
 	}
 
 	var req struct {
-		Name            string            `json:"name"`
+		Name            string             `json:"name"`
 		ContextType     models.ContextType `json:"context_type"`
 		TriggerKeywords []string          `json:"trigger_keywords"`
 		StaticContent   string            `json:"static_content"`
+		ApiConfig       models.JSONB      `json:"api_config"`
 		Priority        int               `json:"priority"`
 		Enabled         bool              `json:"enabled"`
 	}
@@ -1410,6 +1411,7 @@ func (a *App) CreateAIContext(r *fastglue.Request) error {
 		ContextType:     req.ContextType,
 		TriggerKeywords: req.TriggerKeywords,
 		StaticContent:   req.StaticContent,
+		ApiConfig:       req.ApiConfig,
 		Priority:        req.Priority,
 		IsEnabled:       req.Enabled,
 		CreatedByID:     &userID,
@@ -1498,6 +1500,7 @@ func (a *App) UpdateAIContext(r *fastglue.Request) error {
 		ContextType     *models.ContextType `json:"context_type"`
 		TriggerKeywords []string            `json:"trigger_keywords"`
 		StaticContent   *string             `json:"static_content"`
+		ApiConfig       *models.JSONB       `json:"api_config"`
 		Priority        *int                `json:"priority"`
 		Enabled         *bool               `json:"enabled"`
 	}
@@ -1517,6 +1520,9 @@ func (a *App) UpdateAIContext(r *fastglue.Request) error {
 	}
 	if req.StaticContent != nil {
 		aiCtx.StaticContent = *req.StaticContent
+	}
+	if req.ApiConfig != nil {
+		aiCtx.ApiConfig = *req.ApiConfig
 	}
 	if req.Priority != nil {
 		aiCtx.Priority = *req.Priority
