@@ -8,6 +8,7 @@ import (
 	"io"
 	"maps"
 	"net/http"
+	"net/url"
 	"regexp"
 	"strings"
 	"time"
@@ -17,6 +18,27 @@ import (
 	"github.com/shridarpatil/whatomate/internal/models"
 	"github.com/shridarpatil/whatomate/pkg/whatsapp"
 )
+
+func redactURLForLog(raw string) string {
+	parsed, err := url.Parse(raw)
+	if err != nil {
+		return "<invalid_url>"
+	}
+
+	if parsed.Scheme == "" || parsed.Host == "" {
+		return parsed.Path
+	}
+
+	return parsed.Scheme + "://" + parsed.Host + parsed.Path
+}
+
+func truncateLogValue(value string, maxLen int) string {
+	if len(value) <= maxLen {
+		return value
+	}
+
+	return value[:maxLen] + "...(truncated)"
+}
 
 // IncomingTextMessage represents a text, interactive, or media message from the webhook
 type IncomingTextMessage struct {
@@ -1515,6 +1537,7 @@ func (a *App) executeConfiguredAPI(apiConfig models.JSONB, replaceVar func(strin
 		return nil, 0, fmt.Errorf("API URL is required")
 	}
 	apiURL = replaceVar(apiURL)
+	logURL := redactURLForLog(apiURL)
 
 	method := "GET"
 	if m, ok := apiConfig["method"].(string); ok && m != "" {
@@ -1542,8 +1565,11 @@ func (a *App) executeConfiguredAPI(apiConfig models.JSONB, replaceVar func(strin
 		}
 	}
 
+	a.Log.Info("Executing configured API request", "method", method, "url", logURL)
+
 	resp, err := a.HTTPClient.Do(req)
 	if err != nil {
+		a.Log.Error("Configured API request failed", "method", method, "url", logURL, "error", err)
 		return nil, 0, fmt.Errorf("API request failed: %w", err)
 	}
 	defer func() { _ = resp.Body.Close() }()
@@ -1551,7 +1577,26 @@ func (a *App) executeConfiguredAPI(apiConfig models.JSONB, replaceVar func(strin
 	limitReader := io.LimitReader(resp.Body, 1024*1024)
 	body, err := io.ReadAll(limitReader)
 	if err != nil {
+		a.Log.Error("Failed to read configured API response", "method", method, "url", logURL, "status_code", resp.StatusCode, "error", err)
 		return nil, 0, fmt.Errorf("failed to read response: %w", err)
+	}
+
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		a.Log.Warn(
+			"Configured API request returned non-2xx",
+			"method", method,
+			"url", logURL,
+			"status_code", resp.StatusCode,
+			"response_preview", truncateLogValue(string(body), 300),
+		)
+	} else {
+		a.Log.Info(
+			"Configured API request completed",
+			"method", method,
+			"url", logURL,
+			"status_code", resp.StatusCode,
+			"response_bytes", len(body),
+		)
 	}
 
 	return body, resp.StatusCode, nil
