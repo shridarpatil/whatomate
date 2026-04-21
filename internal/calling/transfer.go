@@ -555,9 +555,14 @@ func (m *Manager) completeTransferConnection(session *CallSession, transferID, a
 		}
 	}()
 
-	m.log.Info("Call transfer connected",
+	m.log.Info("Call transfer connected — starting bridge",
 		"transfer_id", transferID,
 		"agent_id", agentID,
+		"caller_remote_nil", callerRemote == nil,
+		"agent_local_nil", agentLocal == nil,
+		"agent_remote_nil", agentRemote == nil,
+		"caller_local_nil", callerLocal == nil,
+		"hold_seq", holdSeq,
 	)
 
 	// Start audio bridge (blocks until stopped)

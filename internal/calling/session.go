@@ -604,6 +604,14 @@ func (m *Manager) finalizeRecording(orgID, callLogID uuid.UUID, callerRec, agent
 		}
 	}
 
+	m.log.Info("Recording finalized",
+		"call_log_id", callLogID,
+		"caller_packets", callerCount,
+		"agent_packets", agentCount,
+		"caller_path", callerPath,
+		"agent_path", agentPath,
+	)
+
 	maxCount := callerCount
 	if agentCount > maxCount {
 		maxCount = agentCount
