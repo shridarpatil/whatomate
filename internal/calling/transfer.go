@@ -468,13 +468,22 @@ func (m *Manager) completeTransferConnection(session *CallSession, transferID, a
 	session.AgentRemoteTrack = agentRemoteTrack
 	session.mu.Unlock()
 
-	// Stop hold music and clear the player so the agent can hold again later
+	// Stop hold music and wait for it to fully exit so it stops writing
+	// to callerLocal before the bridge takes over.
+	var holdSeq uint16
+	var holdTS uint32
 	session.mu.Lock()
-	if session.HoldPlayer != nil {
-		session.HoldPlayer.Stop()
-		session.HoldPlayer = nil
-	}
+	holdPlayer := session.HoldPlayer
+	session.HoldPlayer = nil
 	session.mu.Unlock()
+	if holdPlayer != nil {
+		holdPlayer.Stop()
+		// PlayFile checks the stop channel every 20ms tick, so a brief
+		// sleep ensures the goroutine has exited and no more packets are
+		// written to callerLocal.
+		time.Sleep(25 * time.Millisecond)
+		holdSeq, holdTS = holdPlayer.Sequence()
+	}
 
 	// Cancel transfer timeout
 	session.mu.Lock()
@@ -498,9 +507,16 @@ func (m *Manager) completeTransferConnection(session *CallSession, transferID, a
 		callerLocal = session.AudioTrack
 	}
 	agentLocal := session.AgentAudioTrack
+	agentRemote := session.AgentRemoteTrack
 	session.mu.Unlock()
 
 	bridge := m.setupAudioBridge(session)
+
+	// Seed the bridge so agent→caller RTP continues past hold music seq numbers.
+	// Without this, the receiver drops agent packets as "old".
+	if holdSeq > 0 {
+		bridge.SeedSequence(holdSeq, holdTS)
+	}
 
 	// Signal that bridge is taking over the caller track
 	session.mu.Lock()
@@ -545,7 +561,7 @@ func (m *Manager) completeTransferConnection(session *CallSession, transferID, a
 	)
 
 	// Start audio bridge (blocks until stopped)
-	bridge.Start(callerRemote, agentLocal, agentRemoteTrack, callerLocal)
+	bridge.Start(callerRemote, agentLocal, agentRemote, callerLocal)
 }
 
 // EndTransfer terminates an active transfer, cleans up resources, and updates the database.
