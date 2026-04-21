@@ -693,7 +693,7 @@ func mergeRecordings(file1, file2 string) (string, error) {
 	cmd := exec.CommandContext(ctx, "ffmpeg",
 		"-i", file1,
 		"-i", file2,
-		"-filter_complex", "amix=inputs=2:duration=longest",
+		"-filter_complex", "amix=inputs=2:duration=longest:normalize=0",
 		"-c:a", "libopus",
 		"-y", outPath,
 	)
