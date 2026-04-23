@@ -201,6 +201,12 @@ const router = createRouter({
           meta: { permission: 'contacts' }
         },
         {
+          path: 'settings/contacts/:id',
+          name: 'contact-detail',
+          component: () => import('@/views/settings/ContactDetailView.vue'),
+          meta: { permission: 'contacts' }
+        },
+        {
           path: 'settings/tags',
           name: 'tags',
           component: () => import('@/views/settings/TagsView.vue'),
