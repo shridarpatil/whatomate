@@ -510,9 +510,8 @@ func (a *App) CreateAgentTransfer(r *fastglue.Request) error {
 		return r.SendErrorEnvelope(fasthttp.StatusInternalServerError, "Failed to create transfer", nil, "")
 	}
 
-	// Update contact assignment only when AssignToSameAgent is enabled,
-	// otherwise a manually set relationship manager would be overwritten.
-	if agentID != nil && settings != nil && settings.AgentAssignment.AssignToSameAgent {
+	// Update contact assignment if agent assigned
+	if agentID != nil {
 		a.DB.Model(contact).Update("assigned_user_id", agentID)
 	}
 
