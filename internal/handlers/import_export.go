@@ -125,7 +125,7 @@ var importConfigs = map[string]ImportConfig{
 		Model:           &models.Contact{},
 		Resource:        "contacts",
 		RequiredColumns: []string{"phone_number"},
-		OptionalColumns: []string{"profile_name", "whats_app_account", "tags"},
+		OptionalColumns: []string{"profile_name", "whats_app_account", "tags", "assigned_user_id"},
 		UniqueColumn:    "phone_number",
 		ColumnTransform: map[string]func(string) (any, error){
 			"phone_number": func(s string) (any, error) {
@@ -138,6 +138,17 @@ var importConfigs = map[string]ImportConfig{
 					return nil, fmt.Errorf("phone number is required")
 				}
 				return phone, nil
+			},
+			"assigned_user_id": func(s string) (any, error) {
+				s = strings.TrimSpace(s)
+				if s == "" {
+					return nil, nil
+				}
+				parsed, err := uuid.Parse(s)
+				if err != nil {
+					return nil, fmt.Errorf("invalid user ID: %s", s)
+				}
+				return &parsed, nil
 			},
 			"tags": func(s string) (any, error) {
 				if s == "" {
