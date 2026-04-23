@@ -510,6 +510,12 @@ func (a *App) CreateAgentTransfer(r *fastglue.Request) error {
 		return r.SendErrorEnvelope(fasthttp.StatusInternalServerError, "Failed to create transfer", nil, "")
 	}
 
+	// When AssignToSameAgent is enabled, update contact assignment so
+	// future chats auto-route to the same agent
+	if agentID != nil && settings != nil && settings.AgentAssignment.AssignToSameAgent {
+		a.DB.Model(contact).Update("assigned_user_id", agentID)
+	}
+
 	// End any active chatbot session
 	a.DB.Model(&models.ChatbotSession{}).
 		Where("organization_id = ? AND contact_id = ? AND status = ?", orgID, contactID, models.SessionStatusActive).
