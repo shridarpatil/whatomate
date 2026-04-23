@@ -98,8 +98,14 @@ func (a *App) ListContacts(r *fastglue.Request) error {
 	query := a.ScopeToOrg(a.DB, userID, orgID)
 
 	// Users without contacts:read permission can only see contacts assigned to them
+	// or contacts with an active chat transfer to them
 	if !a.HasPermission(userID, models.ResourceContacts, models.ActionRead, orgID) {
-		query = query.Where("assigned_user_id = ?", userID)
+		query = query.Where("assigned_user_id = ? OR id IN (?)",
+			userID,
+			a.DB.Model(&models.AgentTransfer{}).
+				Select("contact_id").
+				Where("agent_id = ? AND organization_id = ? AND status = ?", userID, orgID, models.TransferStatusActive),
+		)
 	}
 
 	if search != "" {
@@ -219,8 +225,14 @@ func (a *App) GetContact(r *fastglue.Request) error {
 	query := a.DB.Where("id = ? AND organization_id = ?", contactID, orgID)
 
 	// Users without contacts:read permission can only access their assigned contacts
+	// or contacts with an active chat transfer to them
 	if !a.HasPermission(userID, models.ResourceContacts, models.ActionRead, orgID) {
-		query = query.Where("assigned_user_id = ?", userID)
+		query = query.Where("assigned_user_id = ? OR id IN (?)",
+			userID,
+			a.DB.Model(&models.AgentTransfer{}).
+				Select("contact_id").
+				Where("agent_id = ? AND organization_id = ? AND status = ?", userID, orgID, models.TransferStatusActive),
+		)
 	}
 
 	if err := query.First(&contact).Error; err != nil {
