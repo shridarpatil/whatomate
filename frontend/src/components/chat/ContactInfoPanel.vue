@@ -22,14 +22,13 @@ import {
   CommandItem,
   CommandList
 } from '@/components/ui/command'
-import { X, ChevronDown, Phone, User, UserCheck, Plus, Check, Tags, Loader2 } from 'lucide-vue-next'
+import { X, ChevronDown, Phone, User, Plus, Check, Tags, Loader2 } from 'lucide-vue-next'
 import { TagBadge } from '@/components/ui/tag-badge'
 import MetadataSection from '@/components/chat/MetadataSection.vue'
 import { getInitials, getAvatarGradient, formatLabel } from '@/lib/utils'
 import { getTagColorClass } from '@/lib/constants'
 import { useTagsStore } from '@/stores/tags'
 import { useAuthStore } from '@/stores/auth'
-import { useUsersStore } from '@/stores/users'
 import { contactsService, type Tag } from '@/services/api'
 import { toast } from 'vue-sonner'
 import type { Contact } from '@/stores/contacts'
@@ -76,13 +75,9 @@ const emit = defineEmits<{
 
 const tagsStore = useTagsStore()
 const authStore = useAuthStore()
-const usersStore = useUsersStore()
-
 const collapsedSections = ref<Record<string, boolean>>({})
 const tagSelectorOpen = ref(false)
 const isUpdatingTags = ref(false)
-const rmSelectorOpen = ref(false)
-const isUpdatingRM = ref(false)
 
 // Resizable panel state
 const MIN_WIDTH = 280
@@ -93,33 +88,10 @@ const isResizing = ref(false)
 // Check if user can edit tags
 const canEditTags = computed(() => authStore.hasPermission('contacts', 'write'))
 
-const assignedUserName = computed(() => {
-  if (!props.contact.assigned_user_id) return null
-  const user = usersStore.users.find(u => u.id === props.contact.assigned_user_id)
-  return user?.full_name || null
-})
-
-async function setAssignedAgent(userId: string | null) {
-  isUpdatingRM.value = true
-  try {
-    await contactsService.update(props.contact.id, { assigned_user_id: userId })
-    props.contact.assigned_user_id = userId ?? undefined
-    rmSelectorOpen.value = false
-    toast.success(userId ? 'Relationship manager assigned' : 'Relationship manager removed')
-  } catch (e: any) {
-    toast.error(e.response?.data?.message || 'Failed to update')
-  } finally {
-    isUpdatingRM.value = false
-  }
-}
-
-// Fetch tags and users on mount
+// Fetch tags on mount
 onMounted(async () => {
   if (tagsStore.tags.length === 0) {
     try { await tagsStore.fetchTags() } catch { /* tags won't be available */ }
-  }
-  if (usersStore.users.length === 0) {
-    try { await usersStore.fetchUsers() } catch { /* users won't be available */ }
   }
 })
 
@@ -371,65 +343,6 @@ async function updateContactTags(tags: string[]) {
             </template>
             <span v-else class="text-sm text-muted-foreground">No tags</span>
             <Loader2 v-if="isUpdatingTags" class="h-4 w-4 animate-spin text-muted-foreground" />
-          </div>
-        </div>
-
-        <!-- Assigned Agent / Relationship Manager -->
-        <div class="pb-4 border-b">
-          <div class="flex items-center justify-between py-2">
-            <h5 class="text-sm font-medium flex items-center gap-2">
-              <UserCheck class="h-4 w-4 text-muted-foreground" />
-              Relationship Manager
-            </h5>
-            <Popover v-if="canEditTags" v-model:open="rmSelectorOpen">
-              <PopoverTrigger as-child>
-                <Button variant="ghost" size="sm" class="h-7 px-2">
-                  <Plus class="h-3.5 w-3.5" />
-                </Button>
-              </PopoverTrigger>
-              <PopoverContent class="w-[220px] p-0" align="end">
-                <Command>
-                  <CommandInput placeholder="Search agents..." />
-                  <CommandList>
-                    <CommandEmpty>
-                      <div class="py-4 text-center text-sm text-muted-foreground">No agents found</div>
-                    </CommandEmpty>
-                    <CommandGroup>
-                      <CommandItem
-                        v-if="contact.assigned_user_id"
-                        value="__unassign__"
-                        class="flex items-center gap-2 text-muted-foreground"
-                        @select="setAssignedAgent(null)"
-                      >
-                        <X class="h-3.5 w-3.5" />
-                        <span>Remove assignment</span>
-                      </CommandItem>
-                      <CommandItem
-                        v-for="user in usersStore.users"
-                        :key="user.id"
-                        :value="user.full_name"
-                        class="flex items-center gap-2"
-                        @select="setAssignedAgent(user.id)"
-                      >
-                        <User class="h-3.5 w-3.5" />
-                        <span class="flex-1">{{ user.full_name }}</span>
-                        <Check v-if="contact.assigned_user_id === user.id" class="h-4 w-4 text-primary" />
-                      </CommandItem>
-                    </CommandGroup>
-                  </CommandList>
-                </Command>
-              </PopoverContent>
-            </Popover>
-          </div>
-          <div class="flex items-center gap-2 mt-1">
-            <template v-if="assignedUserName">
-              <Badge variant="secondary" class="flex items-center gap-1">
-                <User class="h-3 w-3" />
-                {{ assignedUserName }}
-              </Badge>
-            </template>
-            <span v-else class="text-sm text-muted-foreground">Not assigned</span>
-            <Loader2 v-if="isUpdatingRM" class="h-4 w-4 animate-spin text-muted-foreground" />
           </div>
         </div>
 
