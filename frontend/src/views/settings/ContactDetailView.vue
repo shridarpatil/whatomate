@@ -144,12 +144,17 @@ async function save() {
 
   isSaving.value = true
   try {
-    await contactsService.update(contact.value.id, {
+    const payload: Record<string, any> = {
       profile_name: form.value.profile_name,
       whatsapp_account: form.value.whatsapp_account,
       tags: form.value.tags,
-      assigned_user_id: form.value.assigned_user_id || null,
-    })
+    }
+    if (form.value.assigned_user_id) {
+      payload.assigned_user_id = form.value.assigned_user_id
+    } else {
+      payload.clear_assigned_agent = true
+    }
+    await contactsService.update(contact.value.id, payload)
     toast.success(t('common.updatedSuccess', { resource: t('resources.Contact') }))
     await loadContact()
   } catch (e) {
