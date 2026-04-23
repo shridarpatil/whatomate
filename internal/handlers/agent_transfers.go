@@ -510,9 +510,10 @@ func (a *App) CreateAgentTransfer(r *fastglue.Request) error {
 		return r.SendErrorEnvelope(fasthttp.StatusInternalServerError, "Failed to create transfer", nil, "")
 	}
 
-	// When AssignToSameAgent is enabled, update contact assignment so
-	// future chats auto-route to the same agent
-	if agentID != nil && settings != nil && settings.AgentAssignment.AssignToSameAgent {
+	// When AssignToSameAgent is enabled and no agent is already assigned,
+	// set the contact's assigned agent for future chat routing.
+	// Skip if already assigned to preserve a manually set relationship manager.
+	if agentID != nil && settings != nil && settings.AgentAssignment.AssignToSameAgent && contact.AssignedUserID == nil {
 		a.DB.Model(contact).Update("assigned_user_id", agentID)
 	}
 
