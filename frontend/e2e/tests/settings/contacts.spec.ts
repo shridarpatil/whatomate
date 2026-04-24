@@ -74,12 +74,14 @@ test.describe('Contacts Management', () => {
     await contactsPage.editContact(phoneNumber)
 
     // Update profile name on the detail page
-    const nameInput = page.locator('input').first()
+    const nameInput = page.locator('div.space-y-1\\.5:has(> label:has-text("Profile Name")) input').first()
     await nameInput.fill(newName)
     await page.waitForTimeout(300)
 
     // Save
-    await page.getByRole('button', { name: /^Save$/i }).click()
+    const saveBtn = page.getByRole('button', { name: /^Save$/i })
+    await expect(saveBtn).toBeVisible({ timeout: 5000 })
+    await saveBtn.click()
     await page.waitForLoadState('networkidle')
 
     // Verify in list
