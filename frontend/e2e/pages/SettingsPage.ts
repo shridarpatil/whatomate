@@ -520,9 +520,10 @@ export class ContactsPage extends TableSettingsPage {
   async editContact(identifier: string) {
     const row = this.getContactRow(identifier)
     await expect(row).toBeVisible({ timeout: 10000 })
-    // Edit is second button in actions column
-    await row.locator('td:last-child button').nth(1).click()
-    await this.dialog.waitFor({ state: 'visible' })
+    // Edit links to detail page (second element in actions column)
+    await row.locator('td:last-child a').first().click()
+    await this.page.waitForURL(/\/settings\/contacts\/[a-f0-9-]+$/)
+    await this.page.waitForLoadState('networkidle')
   }
 
   async deleteContact(identifier: string) {

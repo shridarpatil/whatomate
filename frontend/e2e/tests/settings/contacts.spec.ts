@@ -69,13 +69,22 @@ test.describe('Contacts Management', () => {
     // Wait for contact to appear
     await contactsPage.expectContactExists(phoneNumber)
 
-    // Edit the contact
+    // Edit the contact via detail page
     const newName = `Updated Name ${Date.now()}`
     await contactsPage.editContact(phoneNumber)
-    await contactsPage.fillEditForm(newName)
-    await contactsPage.submitDialog('Update')
 
-    await contactsPage.expectToast(/updated/i)
+    // Update profile name on the detail page
+    const nameInput = page.locator('input').first()
+    await nameInput.fill(newName)
+    await page.waitForTimeout(300)
+
+    // Save
+    await page.getByRole('button', { name: /^Save$/i }).click()
+    await page.waitForLoadState('networkidle')
+
+    // Verify in list
+    await page.goto('/settings/contacts')
+    await page.waitForLoadState('networkidle')
     await contactsPage.expectContactExists(newName)
   })
 
