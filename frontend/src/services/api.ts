@@ -135,6 +135,7 @@ export const authService = {
 export const usersService = {
   list: (params?: { search?: string; page?: number; limit?: number }) =>
     api.get('/users', { params }),
+  get: (id: string) => api.get(`/users/${id}`),
   create: (data: { email: string; password: string; full_name: string; role_id?: string }) =>
     api.post('/users', data),
   update: (id: string, data: { email?: string; password?: string; full_name?: string; role_id?: string; is_active?: boolean }) =>
@@ -153,8 +154,11 @@ export const usersService = {
 export const apiKeysService = {
   list: (params?: { search?: string; page?: number; limit?: number }) =>
     api.get<{ api_keys: any[]; total?: number }>('/api-keys', { params }),
+  get: (id: string) => api.get(`/api-keys/${id}`),
   create: (data: { name: string; expires_at?: string }) =>
     api.post('/api-keys', data),
+  update: (id: string, data: { is_active?: boolean }) =>
+    api.put(`/api-keys/${id}`, data),
   delete: (id: string) => api.delete(`/api-keys/${id}`)
 }
 

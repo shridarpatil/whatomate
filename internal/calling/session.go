@@ -604,6 +604,14 @@ func (m *Manager) finalizeRecording(orgID, callLogID uuid.UUID, callerRec, agent
 		}
 	}
 
+	m.log.Info("Recording finalized",
+		"call_log_id", callLogID,
+		"caller_packets", callerCount,
+		"agent_packets", agentCount,
+		"caller_path", callerPath,
+		"agent_path", agentPath,
+	)
+
 	maxCount := callerCount
 	if agentCount > maxCount {
 		maxCount = agentCount
@@ -690,10 +698,14 @@ func mergeRecordings(file1, file2 string) (string, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 90*time.Second)
 	defer cancel()
 
+	// file1 = caller, file2 = agent. Agent browser mic is typically quieter
+	// than WhatsApp's caller audio. Boost agent volume and use loudnorm to
+	// level both streams before mixing.
 	cmd := exec.CommandContext(ctx, "ffmpeg",
 		"-i", file1,
 		"-i", file2,
-		"-filter_complex", "amix=inputs=2:duration=longest",
+		"-filter_complex",
+		"[0:a]loudnorm=I=-16:TP=-1.5:LRA=11[a1];[1:a]volume=3,loudnorm=I=-16:TP=-1.5:LRA=11[a2];[a1][a2]amix=inputs=2:duration=longest:normalize=0",
 		"-c:a", "libopus",
 		"-y", outPath,
 	)

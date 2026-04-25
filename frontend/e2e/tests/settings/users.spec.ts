@@ -73,7 +73,7 @@ test.describe('Users Management', () => {
   })
 
   test('should edit existing user', async ({ page }) => {
-    // First create a user to edit
+    // First create a user to edit (still uses the create dialog)
     const user = createUserFixture()
 
     await page.getByRole('button', { name: /^Add User$/i }).click()
@@ -85,17 +85,30 @@ test.describe('Users Management', () => {
     await dialogPage.submit()
     await dialogPage.waitForClose()
 
-    // Now edit the user
+    // Open the detail page via the pencil icon
     await tablePage.search(user.email)
     await tablePage.editRow(user.email)
-    await dialogPage.waitForOpen()
+    await page.waitForURL(/\/settings\/users\/[a-f0-9-]+$/)
+    await page.waitForLoadState('networkidle')
 
+    // Update Full Name on the detail page
     const updatedName = 'Updated User Name'
-    await dialogPage.fillField('Name', updatedName)
-    await dialogPage.submit()
-    await dialogPage.waitForClose()
+    const nameInput = page
+      .locator('div.space-y-1\\.5:has(> label:has-text("Full Name")) input')
+      .first()
+    await nameInput.fill(updatedName)
+    await page.waitForTimeout(300)
 
-    // Verify update
+    // Save button is only visible when there are changes
+    const saveBtn = page.getByRole('button', { name: /^Save$/i })
+    await expect(saveBtn).toBeVisible({ timeout: 5000 })
+    await saveBtn.click()
+    await page.waitForLoadState('networkidle')
+
+    // Verify updated name via the list view
+    await page.goto('/settings/users')
+    await page.waitForLoadState('networkidle')
+    await tablePage.search(user.email)
     await tablePage.expectRowExists(updatedName)
   })
 

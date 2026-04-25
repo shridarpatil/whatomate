@@ -1,10 +1,37 @@
-import { test, expect } from '@playwright/test'
-import { TablePage, DialogPage } from '../../pages'
+import { test, expect, type Page, type Locator } from '@playwright/test'
+import { TablePage } from '../../pages'
 import { loginAsAdmin } from '../../helpers'
+
+// Detail-page form helpers
+function nameInput(page: Page): Locator {
+  return page.getByPlaceholder('e.g., Support Lead')
+}
+
+function descriptionInput(page: Page): Locator {
+  return page.getByPlaceholder('Describe what this role is for...')
+}
+
+function saveButton(page: Page): Locator {
+  return page.getByRole('button', { name: /^(Create|Save)$/i }).first()
+}
+
+async function gotoCreateRole(page: Page) {
+  await page.getByRole('button', { name: /^Add Role$/i }).first().click()
+  await page.waitForURL(/\/settings\/roles\/new$/)
+  await page.waitForLoadState('networkidle')
+}
+
+async function openRoleDetail(tablePage: TablePage, page: Page, rowText: string) {
+  await tablePage.search(rowText)
+  // Click the exact-name link to avoid colliding with rows whose names share the prefix
+  // (e.g. "admin" vs "admin_fe9fb00b" left over from earlier runs).
+  await page.locator('tbody tr .font-medium').getByText(rowText, { exact: true }).first().click()
+  await page.waitForURL(/\/settings\/roles\/[a-f0-9-]+$/)
+  await page.waitForLoadState('networkidle')
+}
 
 test.describe('Roles Management', () => {
   let tablePage: TablePage
-  let dialogPage: DialogPage
 
   test.beforeEach(async ({ page }) => {
     await loginAsAdmin(page)
@@ -12,7 +39,6 @@ test.describe('Roles Management', () => {
     await page.waitForLoadState('networkidle')
 
     tablePage = new TablePage(page)
-    dialogPage = new DialogPage(page)
   })
 
   test('should display roles list', async ({ page }) => {
@@ -31,108 +57,108 @@ test.describe('Roles Management', () => {
   test('should search roles', async ({ page }) => {
     await tablePage.search('admin')
     await page.waitForTimeout(500)
-    await tablePage.expectRowExists('admin')
+    // The system "admin" role must be present; match the name span exactly so we
+    // don't collide with custom roles whose names contain "admin".
+    await expect(
+      page.locator('tbody tr .font-medium').getByText('admin', { exact: true }).first()
+    ).toBeVisible()
   })
 
-  test('should open create role dialog', async ({ page }) => {
-    await tablePage.clickAddButton()
-    await dialogPage.waitForOpen()
-    await expect(dialogPage.dialog).toBeVisible()
-    // Should show permissions section (label inside dialog)
-    await expect(dialogPage.dialog.locator('label').filter({ hasText: 'Permissions' })).toBeVisible()
+  test('should navigate to create role page', async ({ page }) => {
+    await gotoCreateRole(page)
+    expect(page.url()).toContain('/settings/roles/new')
+    // Name input and permissions heading should be visible
+    await expect(nameInput(page)).toBeVisible()
+    await expect(page.getByText(/^Permissions$/).first()).toBeVisible()
   })
 
   test('should create a new custom role', async ({ page }) => {
     const roleName = `Test Role ${Date.now()}`
 
-    await tablePage.clickAddButton()
-    await dialogPage.waitForOpen()
+    await gotoCreateRole(page)
+    await nameInput(page).fill(roleName)
+    await descriptionInput(page).fill('A custom test role for E2E testing')
 
-    await dialogPage.fillField('Name', roleName)
-    await dialogPage.fillField('Description', 'A custom test role for E2E testing')
-
-    // Select some permissions - click a checkbox in the permissions accordion
-    const permissionCheckbox = dialogPage.dialog.locator('button[role="checkbox"]').first()
+    // Select a permission (first checkbox in the matrix)
+    const permissionCheckbox = page.locator('button[role="checkbox"]').first()
     if (await permissionCheckbox.isVisible()) {
       await permissionCheckbox.click()
     }
 
-    await dialogPage.submit()
-    await dialogPage.waitForClose()
+    await saveButton(page).click()
+    await page.waitForLoadState('networkidle')
 
     // Verify role appears in list
+    await page.goto('/settings/roles')
+    await page.waitForLoadState('networkidle')
     await tablePage.search(roleName)
     await tablePage.expectRowExists(roleName)
   })
 
   test('should require role name', async ({ page }) => {
-    await tablePage.clickAddButton()
-    await dialogPage.waitForOpen()
+    await gotoCreateRole(page)
 
-    // Try to submit without name
-    await dialogPage.fillField('Description', 'Role without name')
-    await dialogPage.submit()
+    // Fill description but leave name empty
+    await descriptionInput(page).fill('Role without name')
+    await saveButton(page).click()
 
-    // Should show error and stay open
-    await expect(page.locator('text=Name is required').or(page.locator('text=required'))).toBeVisible()
+    // Error toast should appear (we stay on /new)
+    const toast = page.locator('[data-sonner-toast]')
+    await expect(toast).toBeVisible({ timeout: 5000 })
+    expect(page.url()).toContain('/settings/roles/new')
   })
 
-  test('should view system role permissions (read-only)', async ({ page }) => {
-    // Find and click edit on a system role
-    await tablePage.search('admin')
-    await tablePage.editRow('admin')
-    await dialogPage.waitForOpen()
+  test('should view system role details (read-only)', async ({ page }) => {
+    // Open the system admin role's detail page
+    await openRoleDetail(tablePage, page, 'admin')
 
-    // Dialog title should indicate view mode for system roles
-    const dialogTitle = dialogPage.dialog.getByRole('heading')
-    await expect(dialogTitle.filter({ hasText: 'View Role' })).toBeVisible()
+    // Name input should be disabled for system roles
+    const input = nameInput(page)
+    await expect(input).toBeDisabled()
 
-    // Should show message about system roles being read-only
-    await expect(dialogPage.dialog.locator('text=System roles cannot be modified')).toBeVisible()
-
-    // Close the view dialog (uses "Close" button, not "Cancel")
-    await dialogPage.dialog.getByRole('button', { name: 'Close' }).first().click()
-    await dialogPage.waitForClose()
+    // System badge should be shown
+    await expect(page.locator('text=System').first()).toBeVisible()
   })
 
   test('should edit custom role', async ({ page }) => {
-    // First create a role to edit
+    // Create a role via the detail page
     const originalName = `Edit Role ${Date.now()}`
+    await gotoCreateRole(page)
+    await nameInput(page).fill(originalName)
+    await descriptionInput(page).fill('Original description')
+    await saveButton(page).click()
+    await page.waitForLoadState('networkidle')
 
-    await tablePage.clickAddButton()
-    await dialogPage.waitForOpen()
-    await dialogPage.fillField('Name', originalName)
-    await dialogPage.fillField('Description', 'Original description')
-    await dialogPage.submit()
-    await dialogPage.waitForClose()
-
-    // Now edit the role
-    await tablePage.search(originalName)
-    await tablePage.editRow(originalName)
-    await dialogPage.waitForOpen()
+    // Navigate back to list and open edit for the new role
+    await page.goto('/settings/roles')
+    await page.waitForLoadState('networkidle')
+    await openRoleDetail(tablePage, page, originalName)
 
     const updatedName = `Updated Role ${Date.now()}`
-    await dialogPage.fillField('Name', updatedName)
-    await dialogPage.fillField('Description', 'Updated description')
-    await dialogPage.submit()
-    await dialogPage.waitForClose()
+    await nameInput(page).fill(updatedName)
+    await descriptionInput(page).fill('Updated description')
+    await page.waitForTimeout(300)
+    await saveButton(page).click()
+    await page.waitForLoadState('networkidle')
 
-    // Verify update
+    // Verify update appears in the list
+    await page.goto('/settings/roles')
+    await page.waitForLoadState('networkidle')
     await tablePage.search(updatedName)
     await tablePage.expectRowExists(updatedName)
   })
 
   test('should delete custom role', async ({ page }) => {
-    // First create a role to delete
+    // Create a role via the detail page
     const roleName = `Delete Role ${Date.now()}`
+    await gotoCreateRole(page)
+    await nameInput(page).fill(roleName)
+    await saveButton(page).click()
+    await page.waitForLoadState('networkidle')
 
-    await tablePage.clickAddButton()
-    await dialogPage.waitForOpen()
-    await dialogPage.fillField('Name', roleName)
-    await dialogPage.submit()
-    await dialogPage.waitForClose()
-
-    // Search and delete
+    // Navigate back and delete from the list
+    await page.goto('/settings/roles')
+    await page.waitForLoadState('networkidle')
     await tablePage.search(roleName)
     await tablePage.expectRowExists(roleName)
     await tablePage.deleteRow(roleName)
@@ -156,16 +182,16 @@ test.describe('Roles Management', () => {
   })
 
   test('should show delete confirmation when deleting custom role', async ({ page }) => {
-    // Create a role to delete
+    // Create a role via the detail page
     const roleName = `Role To Delete ${Date.now()}`
+    await gotoCreateRole(page)
+    await nameInput(page).fill(roleName)
+    await saveButton(page).click()
+    await page.waitForLoadState('networkidle')
 
-    await tablePage.clickAddButton()
-    await dialogPage.waitForOpen()
-    await dialogPage.fillField('Name', roleName)
-    await dialogPage.submit()
-    await dialogPage.waitForClose()
-
-    // Search for the role
+    // Search for the role in the list
+    await page.goto('/settings/roles')
+    await page.waitForLoadState('networkidle')
     await tablePage.search(roleName)
     await tablePage.expectRowExists(roleName)
 
@@ -183,34 +209,44 @@ test.describe('Roles Management', () => {
   })
 
   test('should toggle default role flag', async ({ page }) => {
-    // Create a role and set it as default
+    // Create a role and set it as default via the detail page
     const roleName = `Default Role ${Date.now()}`
 
-    await tablePage.clickAddButton()
-    await dialogPage.waitForOpen()
-    await dialogPage.fillField('Name', roleName)
+    await gotoCreateRole(page)
+    await nameInput(page).fill(roleName)
 
-    // Toggle the default switch
-    const defaultSwitch = page.locator('button[role="switch"]#is_default, [id="is_default"]')
+    // Toggle the default switch (only one switch on the create page)
+    const defaultSwitch = page.locator('button[role="switch"]').first()
     await defaultSwitch.click()
 
-    await dialogPage.submit()
-    await dialogPage.waitForClose()
+    await saveButton(page).click()
+    await page.waitForLoadState('networkidle')
 
-    // Verify the role shows default badge (the badge div, not the role name)
+    // Verify the role shows default badge in the list
+    await page.goto('/settings/roles')
+    await page.waitForLoadState('networkidle')
     await tablePage.search(roleName)
     const defaultBadge = page.locator(`tr:has-text("${roleName}") .rounded-full`).filter({ hasText: 'Default' })
     await expect(defaultBadge).toBeVisible()
   })
 
-  test('should cancel role creation', async ({ page }) => {
-    await tablePage.clickAddButton()
-    await dialogPage.waitForOpen()
+  test('should abandon role creation via unsaved changes dialog', async ({ page }) => {
+    await gotoCreateRole(page)
+    await nameInput(page).fill('Cancelled Role')
+    await page.waitForTimeout(300)
 
-    await dialogPage.fillField('Name', 'Cancelled Role')
-    await dialogPage.cancel()
+    // Clicking the back link triggers the unsaved-changes guard
+    await page.goto('/settings/roles')
 
-    await dialogPage.waitForClose()
+    const leaveDialog = page.locator('[role="alertdialog"]')
+    if (await leaveDialog.isVisible({ timeout: 2000 }).catch(() => false)) {
+      await leaveDialog.getByRole('button', { name: /Leave/i }).click()
+    }
+
+    await page.waitForURL('**/settings/roles', { timeout: 5000 }).catch(() => {})
+    await page.goto('/settings/roles')
+    await page.waitForLoadState('networkidle')
+
     // Role should not be created
     await tablePage.search('Cancelled Role')
     await tablePage.expectRowNotExists('Cancelled Role')
@@ -287,11 +323,7 @@ test.describe('Roles - Permissions Selection', () => {
     await page.goto('/settings/roles')
     await page.waitForLoadState('networkidle')
 
-    const tablePage = new TablePage(page)
-    const dialogPage = new DialogPage(page)
-
-    await tablePage.clickAddButton()
-    await dialogPage.waitForOpen()
+    await gotoCreateRole(page)
 
     // Should show permission groups (Users, Contacts, Messages, etc.)
     await expect(page.locator('text=Users').first()).toBeVisible()
@@ -303,11 +335,7 @@ test.describe('Roles - Permissions Selection', () => {
     await page.goto('/settings/roles')
     await page.waitForLoadState('networkidle')
 
-    const tablePage = new TablePage(page)
-    const dialogPage = new DialogPage(page)
-
-    await tablePage.clickAddButton()
-    await dialogPage.waitForOpen()
+    await gotoCreateRole(page)
 
     // Click the group checkbox to select all
     const groupCheckbox = page.locator('[data-testid="group-users-checkbox"]').or(

@@ -510,8 +510,10 @@ func (a *App) CreateAgentTransfer(r *fastglue.Request) error {
 		return r.SendErrorEnvelope(fasthttp.StatusInternalServerError, "Failed to create transfer", nil, "")
 	}
 
-	// Update contact assignment if agent assigned
-	if agentID != nil {
+	// When AssignToSameAgent is enabled and no agent is already assigned,
+	// set the contact's assigned agent for future chat routing.
+	// Skip if already assigned to preserve a manually set relationship manager.
+	if agentID != nil && settings != nil && settings.AgentAssignment.AssignToSameAgent && contact.AssignedUserID == nil {
 		a.DB.Model(contact).Update("assigned_user_id", agentID)
 	}
 
@@ -647,16 +649,6 @@ func (a *App) ResumeFromTransfer(r *fastglue.Request) error {
 
 	// Clear chatbot tracking so client inactivity SLA doesn't trigger after transfer is closed
 	a.ClearContactChatbotTracking(transfer.ContactID)
-
-	// Get chatbot settings to check AssignToSameAgent (use cache)
-	settings, _ := a.getChatbotSettingsCached(orgID, transfer.WhatsAppAccount)
-
-	// If AssignToSameAgent is disabled, unassign the contact
-	if settings != nil && !settings.AgentAssignment.AssignToSameAgent {
-		a.DB.Model(&models.Contact{}).
-			Where("id = ?", transfer.ContactID).
-			Update("assigned_user_id", nil)
-	}
 
 	// Broadcast WebSocket notification
 	a.broadcastTransferResumed(transfer)

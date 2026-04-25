@@ -831,6 +831,41 @@ func TestApp_ExecuteCustomAction(t *testing.T) {
 		assert.Equal(t, "success", resp.Data.Toast.Type)
 	})
 
+	t.Run("JavaScript_URL_WrappedInRedirectToken", func(t *testing.T) {
+		t.Parallel()
+
+		app := newTestApp(t, withHTTPClient(&http.Client{Timeout: 5 * time.Second}))
+		org := testutil.CreateTestOrganization(t, app.DB)
+		user := testutil.CreateTestUser(t, app.DB, org.ID)
+		contact := testutil.CreateTestContact(t, app.DB, org.ID)
+
+		action := createTestCustomAction(t, app, org.ID, "Open External", models.ActionTypeJavascript,
+			map[string]interface{}{
+				"code": `return { url: "https://evil.example.com/phish" }`,
+			}, true, 0)
+
+		req := testutil.NewJSONRequest(t, map[string]any{
+			"contact_id": contact.ID.String(),
+		})
+		testutil.SetAuthContext(req, org.ID, user.ID)
+		testutil.SetPathParam(req, "id", action.ID.String())
+
+		err := app.ExecuteCustomAction(req)
+		require.NoError(t, err)
+		assert.Equal(t, fasthttp.StatusOK, testutil.GetResponseStatusCode(req))
+
+		var resp struct {
+			Data handlers.ActionResult `json:"data"`
+		}
+		err = json.Unmarshal(testutil.GetResponseBody(req), &resp)
+		require.NoError(t, err)
+		assert.True(t, resp.Data.Success)
+		// URL must be wrapped in a redirect token, never returned raw
+		assert.Contains(t, resp.Data.RedirectURL, "/api/custom-actions/redirect/")
+		assert.NotContains(t, resp.Data.RedirectURL, "evil.example.com",
+			"raw external URL must not be returned to the client")
+	})
+
 	t.Run("InactiveAction", func(t *testing.T) {
 		t.Parallel()
 

@@ -201,6 +201,12 @@ const router = createRouter({
           meta: { permission: 'contacts' }
         },
         {
+          path: 'settings/contacts/:id',
+          name: 'contact-detail',
+          component: () => import('@/views/settings/ContactDetailView.vue'),
+          meta: { permission: 'contacts' }
+        },
+        {
           path: 'settings/tags',
           name: 'tags',
           component: () => import('@/views/settings/TagsView.vue'),
@@ -213,9 +219,21 @@ const router = createRouter({
           meta: { permission: 'users' }
         },
         {
+          path: 'settings/users/:id',
+          name: 'user-detail',
+          component: () => import('@/views/settings/UserDetailView.vue'),
+          meta: { permission: 'users' }
+        },
+        {
           path: 'settings/roles',
           name: 'roles',
           component: () => import('@/views/settings/RolesView.vue'),
+          meta: { permission: 'roles' }
+        },
+        {
+          path: 'settings/roles/:id',
+          name: 'role-detail',
+          component: () => import('@/views/settings/RoleDetailView.vue'),
           meta: { permission: 'roles' }
         },
         {
@@ -237,9 +255,21 @@ const router = createRouter({
           meta: { permission: 'api_keys' }
         },
         {
+          path: 'settings/api-keys/:id',
+          name: 'api-key-detail',
+          component: () => import('@/views/settings/APIKeyDetailView.vue'),
+          meta: { permission: 'api_keys' }
+        },
+        {
           path: 'settings/webhooks',
           name: 'webhooks',
           component: () => import('@/views/settings/WebhooksView.vue'),
+          meta: { permission: 'webhooks' }
+        },
+        {
+          path: 'settings/webhooks/:id',
+          name: 'webhook-detail',
+          component: () => import('@/views/settings/WebhookDetailView.vue'),
           meta: { permission: 'webhooks' }
         },
         {

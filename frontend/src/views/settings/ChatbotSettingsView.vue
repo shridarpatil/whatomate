@@ -13,14 +13,37 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '@/components/ui/command'
-import { PageHeader } from '@/components/shared'
+import { PageHeader, AuditLogPanel } from '@/components/shared'
 import { toast } from 'vue-sonner'
 import { Bot, Loader2, Brain, Plus, X, Clock, AlertTriangle, UserPlus, MessageSquare, Users } from 'lucide-vue-next'
 import { chatbotService } from '@/services/api'
 import { useUsersStore } from '@/stores/users'
+import { useAuthStore } from '@/stores/auth'
 
 const { t } = useI18n()
 const usersStore = useUsersStore()
+const authStore = useAuthStore()
+
+// The active org may be overridden by the X-Organization-ID header
+// (localStorage.selected_organization_id) when a super admin switches orgs.
+// That override is what the backend uses for scoping, so we must read it here
+// too — otherwise the activity log panel would query the user's default org.
+const orgID = computed(
+  () => localStorage.getItem('selected_organization_id') || authStore.organizationId,
+)
+
+// Bump these keys to force the AuditLogPanel to remount and refetch after
+// a save. The backend writes audit entries asynchronously in a goroutine,
+// so we delay the remount slightly to give the write time to land.
+const messagesLogKey = ref(0)
+const agentsLogKey = ref(0)
+const hoursLogKey = ref(0)
+const slaLogKey = ref(0)
+const aiLogKey = ref(0)
+
+function refreshActivityLog(key: typeof messagesLogKey) {
+  setTimeout(() => { key.value++ }, 500)
+}
 
 const isSubmitting = ref(false)
 const isLoading = ref(true)
@@ -267,6 +290,7 @@ async function saveMessagesSettings() {
       session_timeout_minutes: chatbotSettings.value.session_timeout_minutes
     })
     toast.success(t('chatbotSettings.messagesSaved'))
+    refreshActivityLog(messagesLogKey)
   } catch (error) {
     toast.error(t('common.failedSave', { resource: t('resources.chatbotSettings') }))
   } finally {
@@ -283,6 +307,7 @@ async function saveAgentSettings() {
       agent_current_conversation_only: chatbotSettings.value.agent_current_conversation_only
     })
     toast.success(t('chatbotSettings.agentSettingsSaved'))
+    refreshActivityLog(agentsLogKey)
   } catch (error) {
     toast.error(t('common.failedSave', { resource: t('resources.chatbotSettings') }))
   } finally {
@@ -300,6 +325,7 @@ async function saveBusinessHoursSettings() {
       allow_automated_outside_hours: chatbotSettings.value.allow_automated_outside_hours
     })
     toast.success(t('chatbotSettings.businessHoursSaved'))
+    refreshActivityLog(hoursLogKey)
   } catch (error) {
     toast.error(t('common.failedSave', { resource: t('resources.chatbotSettings') }))
   } finally {
@@ -323,6 +349,7 @@ async function saveAISettings() {
     await chatbotService.updateSettings(payload)
     toast.success(t('chatbotSettings.aiSettingsSaved'))
     aiSettings.value.ai_api_key = ''
+    refreshActivityLog(aiLogKey)
   } catch (error) {
     toast.error(t('chatbotSettings.aiSaveFailed'))
   } finally {
@@ -349,6 +376,7 @@ async function saveSLASettings() {
       client_auto_close_message: slaSettings.value.client_auto_close_message
     })
     toast.success(t('chatbotSettings.slaSettingsSaved'))
+    refreshActivityLog(slaLogKey)
   } catch (error) {
     toast.error(t('chatbotSettings.slaSaveFailed'))
   } finally {
@@ -517,6 +545,9 @@ function removeEscalationUser(userId: string) {
                 </div>
               </CardContent>
             </Card>
+            <div v-if="orgID" class="mt-4">
+              <AuditLogPanel :key="messagesLogKey" resource-type="settings.chatbot.messages" :resource-id="orgID" />
+            </div>
           </TabsContent>
 
           <!-- Agents Tab -->
@@ -572,6 +603,9 @@ function removeEscalationUser(userId: string) {
                 </div>
               </CardContent>
             </Card>
+            <div v-if="orgID" class="mt-4">
+              <AuditLogPanel :key="agentsLogKey" resource-type="settings.chatbot.agents" :resource-id="orgID" />
+            </div>
           </TabsContent>
 
           <!-- Business Hours Tab -->
@@ -660,6 +694,9 @@ function removeEscalationUser(userId: string) {
                 </div>
               </CardContent>
             </Card>
+            <div v-if="orgID" class="mt-4">
+              <AuditLogPanel :key="hoursLogKey" resource-type="settings.chatbot.hours" :resource-id="orgID" />
+            </div>
           </TabsContent>
 
           <!-- SLA Tab -->
@@ -838,6 +875,9 @@ function removeEscalationUser(userId: string) {
                 </div>
               </CardContent>
             </Card>
+            <div v-if="orgID" class="mt-4">
+              <AuditLogPanel :key="slaLogKey" resource-type="settings.chatbot.sla" :resource-id="orgID" />
+            </div>
           </TabsContent>
 
           <!-- AI Tab -->
@@ -924,6 +964,9 @@ function removeEscalationUser(userId: string) {
                 </div>
               </CardContent>
             </Card>
+            <div v-if="orgID" class="mt-4">
+              <AuditLogPanel :key="aiLogKey" resource-type="settings.chatbot.ai" :resource-id="orgID" />
+            </div>
           </TabsContent>
         </Tabs>
       </div>

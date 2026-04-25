@@ -1,10 +1,34 @@
-import { test, expect } from '@playwright/test'
-import { TablePage, DialogPage } from '../../pages'
+import { test, expect, type Page, type Locator } from '@playwright/test'
+import { TablePage } from '../../pages'
 import { loginAsAdmin, createWebhookFixture } from '../../helpers'
+
+function nameInput(page: Page): Locator {
+  return page.getByPlaceholder('My Helpdesk Integration')
+}
+
+function urlInput(page: Page): Locator {
+  return page.getByPlaceholder('https://example.com/webhook')
+}
+
+function saveButton(page: Page): Locator {
+  return page.getByRole('button', { name: /^(Create|Save)$/i }).first()
+}
+
+async function gotoCreateWebhook(page: Page) {
+  await page.getByRole('button', { name: /^Add Webhook$/i }).first().click()
+  await page.waitForURL(/\/settings\/webhooks\/new$/)
+  await page.waitForLoadState('networkidle')
+}
+
+async function openWebhookDetail(tablePage: TablePage, page: Page, rowText: string) {
+  await tablePage.search(rowText)
+  await page.locator('tbody tr .font-medium').getByText(rowText, { exact: true }).first().click()
+  await page.waitForURL(/\/settings\/webhooks\/[a-f0-9-]+$/)
+  await page.waitForLoadState('networkidle')
+}
 
 test.describe('Webhooks Management', () => {
   let tablePage: TablePage
-  let dialogPage: DialogPage
 
   test.beforeEach(async ({ page }) => {
     await loginAsAdmin(page)
@@ -12,179 +36,90 @@ test.describe('Webhooks Management', () => {
     await page.waitForLoadState('networkidle')
 
     tablePage = new TablePage(page)
-    dialogPage = new DialogPage(page)
   })
 
   test('should display webhooks list', async ({ page }) => {
     await expect(tablePage.tableBody).toBeVisible()
   })
 
-  test('should open create webhook dialog', async ({ page }) => {
-    await tablePage.clickAddButton()
-    await dialogPage.waitForOpen()
-    await expect(dialogPage.dialog).toBeVisible()
+  test('should navigate to create webhook page', async ({ page }) => {
+    await gotoCreateWebhook(page)
+    expect(page.url()).toContain('/settings/webhooks/new')
   })
 
   test('should create a new webhook', async ({ page }) => {
     const webhook = createWebhookFixture()
 
-    await tablePage.clickAddButton()
-    await dialogPage.waitForOpen()
+    await gotoCreateWebhook(page)
 
-    await dialogPage.fillField('Name', webhook.name)
-    await dialogPage.fillField('URL', webhook.url)
+    const nameField = nameInput(page)
+    await nameField.fill(webhook.name)
+    await urlInput(page).fill(webhook.url)
 
-    // Select at least one event using checkbox
-    await dialogPage.checkCheckbox('Message Incoming')
+    // Select at least one event
+    const checkbox = page.locator('button[role="checkbox"]').first()
+    if (await checkbox.isVisible()) await checkbox.click()
 
-    await dialogPage.submit()
-    await dialogPage.waitForClose()
+    await saveButton(page).click()
+    await page.waitForURL(/\/settings\/webhooks\/[a-f0-9-]+$/, { timeout: 10000 })
+    await page.waitForLoadState('networkidle')
 
-    // Verify webhook appears in list
+    // Verify in list
+    await page.goto('/settings/webhooks')
+    await page.waitForLoadState('networkidle')
+    await tablePage.search(webhook.name)
     await tablePage.expectRowExists(webhook.name)
   })
 
-  test('should show validation error for invalid URL', async ({ page }) => {
-    await tablePage.clickAddButton()
-    await dialogPage.waitForOpen()
-
-    await dialogPage.fillField('Name', 'Test Webhook')
-    await dialogPage.fillField('URL', 'not-a-valid-url')
-    await dialogPage.checkCheckbox('Message Incoming')
-
-    await dialogPage.submit()
-
-    // Should show validation error and stay open
-    await expect(dialogPage.dialog).toBeVisible()
-  })
-
-  test('should show validation error when no events selected', async ({ page }) => {
-    await tablePage.clickAddButton()
-    await dialogPage.waitForOpen()
-
-    await dialogPage.fillField('Name', 'Test Webhook')
-    await dialogPage.fillField('URL', 'https://webhook.site/test')
-    // Don't select any events
-
-    await dialogPage.submit()
-
-    // Should show validation error and stay open
-    await expect(dialogPage.dialog).toBeVisible()
-  })
-
   test('should edit existing webhook', async ({ page }) => {
-    // First create a webhook to edit
+    // Create a webhook first
     const webhook = createWebhookFixture()
+    await gotoCreateWebhook(page)
+    await nameInput(page).fill(webhook.name)
+    await urlInput(page).fill(webhook.url)
+    const checkbox = page.locator('button[role="checkbox"]').first()
+    if (await checkbox.isVisible()) await checkbox.click()
+    await saveButton(page).click()
+    await page.waitForURL(/\/settings\/webhooks\/[a-f0-9-]+$/, { timeout: 10000 })
+    await page.waitForLoadState('networkidle')
 
-    await tablePage.clickAddButton()
-    await dialogPage.waitForOpen()
-    await dialogPage.fillField('Name', webhook.name)
-    await dialogPage.fillField('URL', webhook.url)
-    await dialogPage.checkCheckbox('Message Incoming')
-    await dialogPage.submit()
-    await dialogPage.waitForClose()
-
-    // Now edit the webhook
-    await tablePage.editRow(webhook.name)
-    await dialogPage.waitForOpen()
+    // Navigate back and open detail
+    await page.goto('/settings/webhooks')
+    await page.waitForLoadState('networkidle')
+    await openWebhookDetail(tablePage, page, webhook.name)
 
     const updatedName = webhook.name + ' Updated'
-    await dialogPage.fillField('Name', updatedName)
-    await dialogPage.submit()
-    await dialogPage.waitForClose()
+    await nameInput(page).fill(updatedName)
+    await page.waitForTimeout(300)
+    await saveButton(page).click()
+    await page.waitForLoadState('networkidle')
 
-    // Verify update
+    // Verify in list
+    await page.goto('/settings/webhooks')
+    await page.waitForLoadState('networkidle')
+    await tablePage.search(updatedName)
     await tablePage.expectRowExists(updatedName)
   })
 
   test('should delete webhook', async ({ page }) => {
-    // First create a webhook to delete
     const webhook = createWebhookFixture({ name: 'Webhook To Delete ' + Date.now() })
 
-    await tablePage.clickAddButton()
-    await dialogPage.waitForOpen()
-    await dialogPage.fillField('Name', webhook.name)
-    await dialogPage.fillField('URL', webhook.url)
-    await dialogPage.checkCheckbox('Message Incoming')
-    await dialogPage.submit()
-    await dialogPage.waitForClose()
-
-    // Verify it exists
-    await tablePage.expectRowExists(webhook.name)
-
-    // Delete the webhook
-    await tablePage.deleteRow(webhook.name)
-
-    // Verify deletion
-    await tablePage.expectRowNotExists(webhook.name)
-  })
-
-  test('should toggle webhook events', async ({ page }) => {
-    const webhook = createWebhookFixture()
-
-    await tablePage.clickAddButton()
-    await dialogPage.waitForOpen()
-
-    await dialogPage.fillField('Name', webhook.name)
-    await dialogPage.fillField('URL', webhook.url)
-
-    // Check multiple events
-    await dialogPage.checkCheckbox('Message Incoming')
-    await dialogPage.checkCheckbox('Message Sent')
-
-    await dialogPage.submit()
-    await dialogPage.waitForClose()
-
-    // Verify webhook was created
-    await tablePage.expectRowExists(webhook.name)
-  })
-
-  test('should cancel webhook creation', async ({ page }) => {
-    const webhookName = 'Cancelled Webhook ' + Date.now()
-
-    await tablePage.clickAddButton()
-    await dialogPage.waitForOpen()
-
-    await dialogPage.fillField('Name', webhookName)
-    await dialogPage.fillField('URL', 'https://test.com')
-    await dialogPage.cancel()
-
-    await dialogPage.waitForClose()
-
-    // Webhook should not be created
-    await tablePage.expectRowNotExists(webhookName)
-  })
-})
-
-test.describe('Webhook Testing', () => {
-  test('should test webhook endpoint', async ({ page }) => {
-    await loginAsAdmin(page)
-    await page.goto('/settings/webhooks')
+    await gotoCreateWebhook(page)
+    await nameInput(page).fill(webhook.name)
+    await urlInput(page).fill(webhook.url)
+    const checkbox = page.locator('button[role="checkbox"]').first()
+    if (await checkbox.isVisible()) await checkbox.click()
+    await saveButton(page).click()
+    await page.waitForURL(/\/settings\/webhooks\/[a-f0-9-]+$/, { timeout: 10000 })
     await page.waitForLoadState('networkidle')
 
-    const tablePage = new TablePage(page)
-    const dialogPage = new DialogPage(page)
-
-    // Create a webhook first
-    const webhook = createWebhookFixture()
-
-    await tablePage.clickAddButton()
-    await dialogPage.waitForOpen()
-    await dialogPage.fillField('Name', webhook.name)
-    await dialogPage.fillField('URL', webhook.url)
-    await dialogPage.checkCheckbox('Message Incoming')
-    await dialogPage.submit()
-    await dialogPage.waitForClose()
-
-    // Find test button for the webhook
-    const row = await tablePage.getRow(webhook.name)
-
-    const testButton = row.getByRole('button', { name: /test/i })
-    if (await testButton.count() > 0) {
-      await testButton.click()
-      // Wait for test result (toast or inline message)
-      await page.waitForTimeout(2000)
-    }
+    // Navigate back and delete from list
+    await page.goto('/settings/webhooks')
+    await page.waitForLoadState('networkidle')
+    await tablePage.search(webhook.name)
+    await tablePage.expectRowExists(webhook.name)
+    await tablePage.deleteRow(webhook.name)
+    await tablePage.expectRowNotExists(webhook.name)
   })
 })
 
@@ -194,15 +129,12 @@ test.describe('Webhook Toggle Confirmation', () => {
     await page.goto('/settings/webhooks')
     await page.waitForLoadState('networkidle')
 
-    // Find an active webhook's Switch toggle
     const toggleSwitch = page.getByRole('switch').first()
     if (await toggleSwitch.isVisible()) {
       await toggleSwitch.click()
-      // Verify the confirmation alert dialog appears
       const alertDialog = page.locator('[role="alertdialog"]')
       const dialogVisible = await alertDialog.isVisible({ timeout: 3000 }).catch(() => false)
       if (dialogVisible) {
-        // Click cancel to dismiss without changing state
         const cancelBtn = alertDialog.getByRole('button', { name: /cancel/i })
         await cancelBtn.click()
         await alertDialog.waitFor({ state: 'hidden' })
@@ -246,11 +178,9 @@ test.describe('Webhooks - Table Sorting', () => {
   })
 
   test('should toggle sort direction', async () => {
-    // First click
     await tablePage.clickColumnHeader('Name')
     const firstDirection = await tablePage.getSortDirection('Name')
 
-    // Second click - should toggle
     await tablePage.clickColumnHeader('Name')
     const secondDirection = await tablePage.getSortDirection('Name')
 

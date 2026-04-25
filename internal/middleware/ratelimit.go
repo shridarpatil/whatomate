@@ -7,6 +7,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/redis/go-redis/v9"
 	"github.com/valyala/fasthttp"
 	"github.com/zerodha/fastglue"
@@ -59,6 +60,53 @@ func RateLimit(opts RateLimitOpts) fastglue.FastMiddleware {
 				retryAfter = 1
 			}
 
+			r.RequestCtx.Response.Header.Set("Retry-After", fmt.Sprintf("%d", retryAfter))
+			_ = r.SendErrorEnvelope(fasthttp.StatusTooManyRequests,
+				"Too many requests. Please try again later.", nil, "")
+			return nil
+		}
+
+		return r
+	}
+}
+
+// UserAwareRateLimit returns a middleware that keys by authenticated user ID
+// when available, falling back to client IP for unauthenticated requests.
+// This prevents shared-IP environments (VPNs, offices) from pooling quotas.
+func UserAwareRateLimit(opts RateLimitOpts) fastglue.FastMiddleware {
+	return func(r *fastglue.Request) *fastglue.Request {
+		identity := ""
+		if uid, ok := r.RequestCtx.UserValue(ContextKeyUserID).(uuid.UUID); ok && uid != uuid.Nil {
+			identity = "u:" + uid.String()
+		} else {
+			identity = "ip:" + extractClientIP(r, opts.TrustProxy)
+		}
+		key := fmt.Sprintf("ratelimit:%s:%s", opts.KeyPrefix, identity)
+
+		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+		defer cancel()
+
+		count, err := opts.Redis.Incr(ctx, key).Result()
+		if err != nil {
+			opts.Log.Error("Rate limit Redis INCR failed", "error", err, "key", key)
+			return r
+		}
+
+		if count == 1 {
+			if err := opts.Redis.Expire(ctx, key, opts.Window).Err(); err != nil {
+				opts.Log.Error("Rate limit Redis EXPIRE failed", "error", err, "key", key)
+			}
+		}
+
+		if count > int64(opts.Max) {
+			ttl, err := opts.Redis.TTL(ctx, key).Result()
+			if err != nil || ttl < 0 {
+				ttl = opts.Window
+			}
+			retryAfter := int(ttl.Seconds())
+			if retryAfter < 1 {
+				retryAfter = 1
+			}
 			r.RequestCtx.Response.Header.Set("Retry-After", fmt.Sprintf("%d", retryAfter))
 			_ = r.SendErrorEnvelope(fasthttp.StatusTooManyRequests,
 				"Too many requests. Please try again later.", nil, "")

@@ -244,8 +244,28 @@ func (a *App) WebhookHandler(r *fastglue.Request) error {
 		return r.SendErrorEnvelope(fasthttp.StatusBadRequest, "Invalid payload", nil, "")
 	}
 
-	// Track if signature has been verified (only need to verify once per request)
-	signatureVerified := false
+	// Verify webhook signature before processing any fields.
+	// Find a phoneNumberID from any change to look up the account's AppSecret.
+	if len(signature) > 0 {
+		for _, entry := range payload.Entry {
+			for _, change := range entry.Changes {
+				phoneNumberID := change.Value.Metadata.PhoneNumberID
+				if phoneNumberID == "" {
+					continue
+				}
+				account, err := a.getWhatsAppAccountCached(phoneNumberID)
+				if err != nil || account.AppSecret == "" {
+					continue
+				}
+				if !verifyWebhookSignature(body, signature, []byte(account.AppSecret)) {
+					a.Log.Warn("Invalid webhook signature", "phone_id", phoneNumberID)
+					return r.SendErrorEnvelope(fasthttp.StatusForbidden, "Invalid signature", nil, "")
+				}
+				a.Log.Debug("Webhook signature verified successfully")
+				break
+			}
+		}
+	}
 
 	// Process each entry
 	for _, entry := range payload.Entry {
@@ -308,19 +328,6 @@ func (a *App) WebhookHandler(r *fastglue.Request) error {
 			}
 
 			phoneNumberID := change.Value.Metadata.PhoneNumberID
-
-			// Verify webhook signature on first message processing (uses cached account)
-			if !signatureVerified && len(signature) > 0 && phoneNumberID != "" {
-				account, err := a.getWhatsAppAccountCached(phoneNumberID)
-				if err == nil && account.AppSecret != "" {
-					if !verifyWebhookSignature(body, signature, []byte(account.AppSecret)) {
-						a.Log.Warn("Invalid webhook signature", "phone_id", phoneNumberID)
-						return r.SendErrorEnvelope(fasthttp.StatusForbidden, "Invalid signature", nil, "")
-					}
-					a.Log.Debug("Webhook signature verified successfully")
-				}
-				signatureVerified = true
-			}
 
 			// Process messages
 			for _, msg := range change.Value.Messages {

@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/shridarpatil/whatomate/internal/audit"
 	"github.com/shridarpatil/whatomate/internal/models"
 	"github.com/valyala/fasthttp"
 	"github.com/zerodha/fastglue"
@@ -312,6 +313,9 @@ func (a *App) CreateUser(r *fastglue.Request) error {
 		softDeleted.IsActive = true
 		softDeleted.IsSuperAdmin = isSuperAdmin
 
+		audit.LogAudit(a.DB, orgID, userID, audit.GetUserName(a.DB, userID),
+			"user", softDeleted.ID, models.AuditActionCreated, nil, userAuditSnapshot(&softDeleted))
+
 		return r.SendEnvelope(userToResponse(softDeleted))
 	}
 
@@ -344,6 +348,9 @@ func (a *App) CreateUser(r *fastglue.Request) error {
 
 	// Load role for response
 	a.DB.Preload("Role").First(&user, user.ID)
+
+	audit.LogAudit(a.DB, orgID, userID, audit.GetUserName(a.DB, userID),
+		"user", user.ID, models.AuditActionCreated, nil, userAuditSnapshot(&user))
 
 	return r.SendEnvelope(userToResponse(user))
 }
@@ -390,6 +397,9 @@ func (a *App) UpdateUser(r *fastglue.Request) error {
 		}
 	}
 
+	// Snapshot before changes for audit log diff.
+	oldSnap := userAuditSnapshot(&user)
+
 	var req UserRequest
 	if err := r.Decode(&req, "json"); err != nil {
 		a.Log.Error("UpdateUser: Failed to decode request", "error", err, "body", string(r.RequestCtx.PostBody()))
@@ -423,6 +433,10 @@ func (a *App) UpdateUser(r *fastglue.Request) error {
 		// Return updated response
 		user.RoleID = req.RoleID
 		user.Role = &newRole
+
+		audit.LogAudit(a.DB, orgID, currentUserID, audit.GetUserName(a.DB, currentUserID),
+			"user", user.ID, models.AuditActionUpdated, oldSnap, userAuditSnapshot(&user))
+
 		resp := userToResponse(user)
 		resp.IsMember = true
 		return r.SendEnvelope(resp)
@@ -507,6 +521,9 @@ func (a *App) UpdateUser(r *fastglue.Request) error {
 	// Load role for response
 	a.DB.Preload("Role").First(&user, user.ID)
 
+	audit.LogAudit(a.DB, orgID, currentUserID, audit.GetUserName(a.DB, currentUserID),
+		"user", user.ID, models.AuditActionUpdated, oldSnap, userAuditSnapshot(&user))
+
 	return r.SendEnvelope(userToResponse(user))
 }
 
@@ -554,6 +571,10 @@ func (a *App) DeleteUser(r *fastglue.Request) error {
 			return r.SendErrorEnvelope(fasthttp.StatusInternalServerError, "Failed to remove member", nil, "")
 		}
 		a.InvalidateUserPermissionsCache(id)
+
+		audit.LogAudit(a.DB, orgID, currentUserID, audit.GetUserName(a.DB, currentUserID),
+			"user", id, models.AuditActionDeleted, userAuditSnapshot(&user), nil)
+
 		return r.SendEnvelope(map[string]string{"message": "Member removed from organization"})
 	}
 
@@ -585,6 +606,9 @@ func (a *App) DeleteUser(r *fastglue.Request) error {
 
 	// Delete all UserOrganization entries for this user
 	a.DB.Where("user_id = ?", id).Delete(&models.UserOrganization{})
+
+	audit.LogAudit(a.DB, orgID, currentUserID, audit.GetUserName(a.DB, currentUserID),
+		"user", id, models.AuditActionDeleted, userAuditSnapshot(&user), nil)
 
 	return r.SendEnvelope(map[string]string{"message": "User deleted successfully"})
 }
@@ -653,8 +677,8 @@ func splitPermission(p string) []string {
 
 // UpdateCurrentUserSettings updates the current user's notification/preferences settings
 func (a *App) UpdateCurrentUserSettings(r *fastglue.Request) error {
-	userID, ok := r.RequestCtx.UserValue("user_id").(uuid.UUID)
-	if !ok {
+	orgID, userID, err := a.getOrgAndUserID(r)
+	if err != nil {
 		return r.SendErrorEnvelope(fasthttp.StatusUnauthorized, "Unauthorized", nil, "")
 	}
 
@@ -673,6 +697,8 @@ func (a *App) UpdateCurrentUserSettings(r *fastglue.Request) error {
 		user.Settings = make(models.JSONB)
 	}
 
+	oldNotif := notificationSettingsSnapshot(user.Settings)
+
 	// Update notification settings
 	user.Settings["email_notifications"] = req.EmailNotifications
 	user.Settings["new_message_alerts"] = req.NewMessageAlerts
@@ -683,10 +709,24 @@ func (a *App) UpdateCurrentUserSettings(r *fastglue.Request) error {
 		return r.SendErrorEnvelope(fasthttp.StatusInternalServerError, "Failed to update settings", nil, "")
 	}
 
+	newNotif := notificationSettingsSnapshot(user.Settings)
+	audit.LogAudit(a.DB, orgID, userID, audit.GetUserName(a.DB, userID),
+		models.ResourceSettingsNotification, userID, models.AuditActionUpdated, oldNotif, newNotif)
+
 	return r.SendEnvelope(map[string]any{
 		"message":  "Settings updated successfully",
 		"settings": user.Settings,
 	})
+}
+
+// notificationSettingsSnapshot extracts notification-preference fields from
+// a user's JSONB settings into a map suitable for audit diffing.
+func notificationSettingsSnapshot(settings models.JSONB) map[string]any {
+	return map[string]any{
+		"email_notifications": settings["email_notifications"],
+		"new_message_alerts":  settings["new_message_alerts"],
+		"campaign_updates":    settings["campaign_updates"],
+	}
 }
 
 // ChangePassword changes the current user's password
@@ -738,6 +778,27 @@ func (a *App) ChangePassword(r *fastglue.Request) error {
 }
 
 // Helper function to convert User to UserResponse
+// userAuditSnapshot returns a minimal, diff-friendly representation of a user
+// for audit logging. Sensitive fields (password hash) and noisy fields (settings,
+// availability, timestamps) are intentionally excluded.
+func userAuditSnapshot(user *models.User) map[string]any {
+	if user == nil {
+		return nil
+	}
+	snap := map[string]any{
+		"full_name":      user.FullName,
+		"email":          user.Email,
+		"is_active":      user.IsActive,
+		"is_super_admin": user.IsSuperAdmin,
+	}
+	if user.Role != nil {
+		snap["role"] = user.Role.Name
+	} else {
+		snap["role"] = ""
+	}
+	return snap
+}
+
 func userToResponse(user models.User) UserResponse {
 	resp := UserResponse{
 		ID:             user.ID,

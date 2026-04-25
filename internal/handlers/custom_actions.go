@@ -557,7 +557,16 @@ func (a *App) executeJavaScriptAction(action models.CustomAction, context map[st
 				result.Clipboard = clip
 			}
 			if url, ok := jsResult["url"].(string); ok {
-				result.RedirectURL = url
+				tokenBytes := make([]byte, 16)
+				_, _ = rand.Read(tokenBytes)
+				token := hex.EncodeToString(tokenBytes)
+				redirectTokenMutex.Lock()
+				redirectTokens[token] = redirectToken{
+					URL:       url,
+					ExpiresAt: time.Now().Add(30 * time.Second),
+				}
+				redirectTokenMutex.Unlock()
+				result.RedirectURL = "/api/custom-actions/redirect/" + token
 			}
 			if msg, ok := jsResult["message"].(string); ok {
 				result.Message = msg

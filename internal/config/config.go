@@ -136,6 +136,8 @@ type RateLimitConfig struct {
 	SSOMaxAttempts      int  `koanf:"sso_max_attempts"`
 	WindowSeconds       int  `koanf:"window_seconds"`
 	TrustProxy          bool `koanf:"trust_proxy"`
+	APIMaxRequests      int  `koanf:"api_max_requests"`
+	APIWindowSeconds    int  `koanf:"api_window_seconds"`
 }
 
 // Load loads configuration from file and environment variables

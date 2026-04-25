@@ -2058,6 +2058,50 @@ func TestApp_CreateAIContext_Additional(t *testing.T) {
 		assert.Equal(t, models.ContextTypeAPI, ctx.ContextType)
 		assert.Equal(t, 50, ctx.Priority)
 	})
+
+	t.Run("persist api_config for API context", func(t *testing.T) {
+		app := newTestApp(t)
+		org := testutil.CreateTestOrganization(t, app.DB)
+		user := testutil.CreateTestUser(t, app.DB, org.ID)
+
+		req := testutil.NewJSONRequest(t, map[string]any{
+			"name":         "API Context With Config",
+			"context_type": "api",
+			"api_config": map[string]any{
+				"url":           "https://example.com/context?message={{user_message}}",
+				"method":        "GET",
+				"headers":       map[string]any{"Authorization": "Bearer token"},
+				"response_path": "data.context",
+			},
+			"enabled": true,
+		})
+		testutil.SetAuthContext(req, org.ID, user.ID)
+
+		err := app.CreateAIContext(req)
+		require.NoError(t, err)
+		assert.Equal(t, fasthttp.StatusOK, testutil.GetResponseStatusCode(req))
+
+		var resp struct {
+			Data struct {
+				ID string `json:"id"`
+			} `json:"data"`
+		}
+		err = json.Unmarshal(testutil.GetResponseBody(req), &resp)
+		require.NoError(t, err)
+
+		parsedID, err := uuid.Parse(resp.Data.ID)
+		require.NoError(t, err)
+
+		var ctx models.AIContext
+		require.NoError(t, app.DB.First(&ctx, "id = ?", parsedID).Error)
+		require.NotNil(t, ctx.ApiConfig)
+		assert.Equal(t, "https://example.com/context?message={{user_message}}", ctx.ApiConfig["url"])
+		assert.Equal(t, "GET", ctx.ApiConfig["method"])
+		assert.Equal(t, "data.context", ctx.ApiConfig["response_path"])
+		headers, ok := ctx.ApiConfig["headers"].(map[string]any)
+		require.True(t, ok)
+		assert.Equal(t, "Bearer token", headers["Authorization"])
+	})
 }
 
 // =============================================================================
@@ -2168,6 +2212,37 @@ func TestApp_UpdateAIContext(t *testing.T) {
 		var updated models.AIContext
 		require.NoError(t, app.DB.First(&updated, "id = ?", aiCtx.ID).Error)
 		assert.Equal(t, models.ContextTypeAPI, updated.ContextType)
+	})
+
+	t.Run("update api_config for API context", func(t *testing.T) {
+		app := newTestApp(t)
+		org := testutil.CreateTestOrganization(t, app.DB)
+		user := testutil.CreateTestUser(t, app.DB, org.ID)
+		aiCtx := createTestAIContext(t, app, org.ID, "API Config Update Ctx")
+
+		req := testutil.NewJSONRequest(t, map[string]any{
+			"context_type": "api",
+			"api_config": map[string]any{
+				"url":           "https://example.com/lookup?phone={{phone_number}}&message={{user_message}}",
+				"method":        "GET",
+				"headers":       map[string]any{},
+				"response_path": "",
+			},
+		})
+		testutil.SetAuthContext(req, org.ID, user.ID)
+		testutil.SetPathParam(req, "id", aiCtx.ID.String())
+
+		err := app.UpdateAIContext(req)
+		require.NoError(t, err)
+		assert.Equal(t, fasthttp.StatusOK, testutil.GetResponseStatusCode(req))
+
+		var updated models.AIContext
+		require.NoError(t, app.DB.First(&updated, "id = ?", aiCtx.ID).Error)
+		assert.Equal(t, models.ContextTypeAPI, updated.ContextType)
+		require.NotNil(t, updated.ApiConfig)
+		assert.Equal(t, "https://example.com/lookup?phone={{phone_number}}&message={{user_message}}", updated.ApiConfig["url"])
+		assert.Equal(t, "GET", updated.ApiConfig["method"])
+		assert.Equal(t, "", updated.ApiConfig["response_path"])
 	})
 }
 

@@ -98,8 +98,14 @@ func (a *App) ListContacts(r *fastglue.Request) error {
 	query := a.ScopeToOrg(a.DB, userID, orgID)
 
 	// Users without contacts:read permission can only see contacts assigned to them
+	// or contacts with an active chat transfer to them
 	if !a.HasPermission(userID, models.ResourceContacts, models.ActionRead, orgID) {
-		query = query.Where("assigned_user_id = ?", userID)
+		query = query.Where("assigned_user_id = ? OR id IN (?)",
+			userID,
+			a.DB.Model(&models.AgentTransfer{}).
+				Select("contact_id").
+				Where("agent_id = ? AND organization_id = ? AND status = ?", userID, orgID, models.TransferStatusActive),
+		)
 	}
 
 	if search != "" {
@@ -219,8 +225,14 @@ func (a *App) GetContact(r *fastglue.Request) error {
 	query := a.DB.Where("id = ? AND organization_id = ?", contactID, orgID)
 
 	// Users without contacts:read permission can only access their assigned contacts
+	// or contacts with an active chat transfer to them
 	if !a.HasPermission(userID, models.ResourceContacts, models.ActionRead, orgID) {
-		query = query.Where("assigned_user_id = ?", userID)
+		query = query.Where("assigned_user_id = ? OR id IN (?)",
+			userID,
+			a.DB.Model(&models.AgentTransfer{}).
+				Select("contact_id").
+				Where("agent_id = ? AND organization_id = ? AND status = ?", userID, orgID, models.TransferStatusActive),
+		)
 	}
 
 	if err := query.First(&contact).Error; err != nil {
@@ -1372,13 +1384,16 @@ func (a *App) CreateContact(r *fastglue.Request) error {
 	return r.SendEnvelope(a.buildContactResponse(&contact, orgID))
 }
 
-// UpdateContactRequest represents the request body for updating a contact
+// UpdateContactRequest represents the request body for updating a contact.
+// AssignedUserID uses *string so we can distinguish "not sent" (nil) from
+// "sent as null" (pointer to empty string) to allow clearing the field.
 type UpdateContactRequest struct {
-	ProfileName     *string         `json:"profile_name"`
-	WhatsAppAccount *string         `json:"whatsapp_account"`
-	Tags            []string        `json:"tags"`
-	Metadata        *map[string]any `json:"metadata"`
-	AssignedUserID  *uuid.UUID      `json:"assigned_user_id"`
+	ProfileName        *string         `json:"profile_name"`
+	WhatsAppAccount    *string         `json:"whatsapp_account"`
+	Tags               []string        `json:"tags"`
+	Metadata           *map[string]any `json:"metadata"`
+	AssignedUserID     *uuid.UUID      `json:"assigned_user_id"`
+	ClearAssignedAgent *bool           `json:"clear_assigned_agent"`
 }
 
 // UpdateContact updates an existing contact
@@ -1428,8 +1443,9 @@ func (a *App) UpdateContact(r *fastglue.Request) error {
 	if req.Metadata != nil {
 		updates["metadata"] = models.JSONB(*req.Metadata)
 	}
-	if req.AssignedUserID != nil {
-		// Verify user exists in same org
+	if req.ClearAssignedAgent != nil && *req.ClearAssignedAgent {
+		updates["assigned_user_id"] = nil
+	} else if req.AssignedUserID != nil {
 		var user models.User
 		if err := a.DB.Where("id = ? AND organization_id = ?", req.AssignedUserID, orgID).First(&user).Error; err != nil {
 			return r.SendErrorEnvelope(fasthttp.StatusBadRequest, "Assigned user not found", nil, "")

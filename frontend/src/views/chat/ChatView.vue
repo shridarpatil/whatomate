@@ -138,8 +138,7 @@ const mediaCaption = ref('')
 const isUploadingMedia = ref(false)
 
 // Cache for media blob URLs (message_id -> blob URL)
-const mediaBlobUrls = ref<Record<string, string>>({})
-const mediaLoadingStates = ref<Record<string, boolean>>({})
+
 
 // Canned responses slash command state
 const cannedPickerOpen = ref(false)
@@ -223,7 +222,6 @@ const messagesScroll = useInfiniteScroll({
       await nextTick()
       // Load media for any new messages
       try {
-        loadMediaForMessages()
       } catch (e) {
         console.error('Error loading media:', e)
       }
@@ -435,11 +433,6 @@ onUnmounted(() => {
   // Clear current contact when leaving chat view so notifications work on other pages
   contactsStore.setCurrentContact(null)
   notesStore.clearNotes()
-  // Clean up blob URLs to prevent memory leaks
-  Object.values(mediaBlobUrls.value).forEach(url => {
-    URL.revokeObjectURL(url)
-  })
-  mediaBlobUrls.value = {}
   // Clear sticky date timeout
   if (stickyDateTimeout) clearTimeout(stickyDateTimeout)
 })
@@ -546,7 +539,6 @@ async function selectContact(id: string) {
     await nextTick()
     // Load media for messages after messages are fetched
     try {
-      loadMediaForMessages()
     } catch (e) {
       console.error('Error loading media:', e)
     }
@@ -577,7 +569,6 @@ async function selectContact(id: string) {
 watch(() => contactsStore.messages.length, () => {
   scrollToBottom()
   try {
-    loadMediaForMessages()
   } catch (e) {
     console.error('Error loading media:', e)
   }
@@ -586,7 +577,6 @@ watch(() => contactsStore.messages.length, () => {
 // Watch for messages changes to load media
 watch(() => contactsStore.messages, () => {
   try {
-    loadMediaForMessages()
   } catch (e) {
     console.error('Error loading media:', e)
   }
@@ -599,7 +589,6 @@ async function switchAccount(accountName: string) {
   await contactsStore.fetchMessages(contactsStore.currentContact.id, { account: accountName })
   await nextTick()
   try {
-    loadMediaForMessages()
   } catch (e) {
     console.error('Error loading media:', e)
   }
@@ -1187,58 +1176,14 @@ function isMediaMessage(message: Message): boolean {
   return ['image', 'video', 'audio', 'document'].includes(message.message_type)
 }
 
-function getMediaBlobUrl(message: Message): string {
-  return mediaBlobUrls.value[message.id] || ''
-}
-
-function isMediaLoading(message: Message): boolean {
-  return mediaLoadingStates.value[message.id] || false
-}
-
-async function loadMediaForMessage(message: Message) {
-  if (!message.media_url || mediaBlobUrls.value[message.id] || mediaLoadingStates.value[message.id]) {
-    return
-  }
-
-  mediaLoadingStates.value[message.id] = true
-
-  try {
-    const basePath = ((window as any).__BASE_PATH__ ?? '').replace(/\/$/, '')
-    const response = await fetch(`${basePath}/api/media/${message.id}`, {
-      credentials: 'include',
-      headers: getRequestHeaders()
-    })
-
-    if (!response.ok) {
-      throw new Error(`Failed to load media: ${response.status}`)
-    }
-
-    const blob = await response.blob()
-    const blobUrl = URL.createObjectURL(blob)
-    mediaBlobUrls.value[message.id] = blobUrl
-  } catch (error) {
-    console.error('Failed to load media:', error, 'message_id:', message.id)
-  } finally {
-    mediaLoadingStates.value[message.id] = false
-  }
-}
-
-// Load media for all messages that have media_url
-function loadMediaForMessages() {
-  try {
-    for (const message of contactsStore.messages) {
-      if (message.media_url && !mediaBlobUrls.value[message.id]) {
-        // Fire and forget - errors are handled inside loadMediaForMessage
-        loadMediaForMessage(message).catch(() => {})
-      }
-    }
-  } catch (e) {
-    console.error('Error in loadMediaForMessages:', e)
-  }
+function getMediaUrl(message: Message): string {
+  if (!message.media_url) return ''
+  const basePath = ((window as any).__BASE_PATH__ ?? '').replace(/\/$/, '')
+  return `${basePath}/api/media/${message.id}`
 }
 
 function openMediaPreview(message: Message) {
-  const url = getMediaBlobUrl(message)
+  const url = getMediaUrl(message)
   if (url) {
     window.open(url, '_blank')
   }
@@ -1350,11 +1295,6 @@ async function sendMediaMessage() {
     if (result.data) {
       contactsStore.addMessage(result.data)
       scrollToBottom()
-      // Load media for the new message
-      await nextTick()
-      if (result.data.media_url) {
-        loadMediaForMessage(result.data)
-      }
     }
 
     toast.success(t('chat.mediaSent'))
@@ -1755,26 +1695,23 @@ async function sendMediaMessage() {
                 </div>
                 <!-- Template header media (image/video/document shown above template text) -->
                 <div v-if="message.message_type === 'template' && message.media_url" class="mb-2">
-                  <div v-if="isMediaLoading(message)" class="w-[200px] h-[150px] bg-muted rounded-lg animate-pulse flex items-center justify-center">
-                    <span class="text-muted-foreground text-sm">{{ $t('common.loading') }}...</span>
-                  </div>
                   <img
-                    v-else-if="message.media_mime_type?.startsWith('image/') && getMediaBlobUrl(message)"
-                    :src="getMediaBlobUrl(message)"
+                    v-if="message.media_mime_type?.startsWith('image/')"
+                    :src="getMediaUrl(message)"
                     alt="Template header"
                     class="max-w-[280px] max-h-[300px] rounded-lg cursor-pointer object-cover"
                     @click="openMediaPreview(message)"
                     @error="handleImageError($event)"
                   />
                   <video
-                    v-else-if="message.media_mime_type?.startsWith('video/') && getMediaBlobUrl(message)"
-                    :src="getMediaBlobUrl(message)"
+                    v-else-if="message.media_mime_type?.startsWith('video/')"
+                    :src="getMediaUrl(message)"
                     controls
                     class="max-w-[280px] max-h-[300px] rounded-lg"
                   />
                   <a
-                    v-else-if="getMediaBlobUrl(message)"
-                    :href="getMediaBlobUrl(message)"
+                    v-else
+                    :href="getMediaUrl(message)"
                     :download="message.media_filename || 'document'"
                     class="flex items-center gap-2 px-3 py-2 bg-background/50 rounded-lg hover:bg-background/80 transition-colors"
                   >
@@ -1784,71 +1721,46 @@ async function sendMediaMessage() {
                 </div>
                 <!-- Image message -->
                 <div v-else-if="message.message_type === 'image' && message.media_url" class="mb-2">
-                  <div v-if="isMediaLoading(message)" class="w-[200px] h-[150px] bg-muted rounded-lg animate-pulse flex items-center justify-center">
-                    <span class="text-muted-foreground text-sm">{{ $t('common.loading') }}...</span>
-                  </div>
                   <img
-                    v-else-if="getMediaBlobUrl(message)"
-                    :src="getMediaBlobUrl(message)"
+                    :src="getMediaUrl(message)"
                     :alt="message.content?.body || 'Image'"
                     class="max-w-[280px] max-h-[300px] rounded-lg cursor-pointer object-cover"
                     @click="openMediaPreview(message)"
                     @error="handleImageError($event)"
                   />
-                  <div v-else class="w-[200px] h-[150px] bg-muted rounded-lg flex items-center justify-center">
-                    <span class="text-muted-foreground text-sm">[Image]</span>
-                  </div>
                 </div>
                 <!-- Sticker message -->
                 <div v-else-if="message.message_type === 'sticker' && message.media_url" class="mb-2">
-                  <div v-if="isMediaLoading(message)" class="w-[128px] h-[128px] bg-muted rounded-lg animate-pulse flex items-center justify-center">
-                    <span class="text-muted-foreground text-sm">{{ $t('common.loading') }}...</span>
-                  </div>
                   <img
-                    v-else-if="getMediaBlobUrl(message)"
-                    :src="getMediaBlobUrl(message)"
+                    :src="getMediaUrl(message)"
                     alt="Sticker"
                     class="max-w-[128px] max-h-[128px] cursor-pointer"
                     @click="openMediaPreview(message)"
                     @error="handleImageError($event)"
                   />
-                  <div v-else class="w-[128px] h-[128px] bg-muted rounded-lg flex items-center justify-center">
-                    <span class="text-muted-foreground text-sm">[Sticker]</span>
-                  </div>
                 </div>
                 <!-- Video message -->
                 <div v-else-if="message.message_type === 'video' && message.media_url" class="mb-2">
-                  <div v-if="isMediaLoading(message)" class="w-[200px] h-[150px] bg-muted rounded-lg animate-pulse flex items-center justify-center">
-                    <span class="text-muted-foreground text-sm">{{ $t('common.loading') }}...</span>
-                  </div>
                   <video
-                    v-else-if="getMediaBlobUrl(message)"
-                    :src="getMediaBlobUrl(message)"
+                    :src="getMediaUrl(message)"
                     controls
                     class="max-w-[280px] max-h-[300px] rounded-lg"
                     @error="handleMediaError($event, 'video')"
                   />
-                  <div v-else class="w-[200px] h-[150px] bg-muted rounded-lg flex items-center justify-center">
-                    <span class="text-muted-foreground text-sm">[Video]</span>
-                  </div>
                 </div>
                 <!-- Audio message -->
                 <div v-else-if="message.message_type === 'audio' && message.media_url" class="mb-2">
-                  <div v-if="isMediaLoading(message)" class="w-[200px] h-[40px] bg-muted rounded-lg animate-pulse"></div>
                   <audio
-                    v-else-if="getMediaBlobUrl(message)"
-                    :src="getMediaBlobUrl(message)"
+                    :src="getMediaUrl(message)"
                     controls
                     class="max-w-[280px]"
                     @error="handleMediaError($event, 'audio')"
                   />
-                  <div v-else class="text-muted-foreground text-sm">[Audio]</div>
                 </div>
                 <!-- Document message -->
                 <div v-else-if="message.message_type === 'document' && message.media_url" class="mb-2">
                   <a
-                    v-if="getMediaBlobUrl(message)"
-                    :href="getMediaBlobUrl(message)"
+                    :href="getMediaUrl(message)"
                     :download="message.media_filename || 'document'"
                     class="flex items-center gap-2 px-3 py-2 bg-background/50 rounded-lg hover:bg-background/80 transition-colors"
                   >
@@ -1857,14 +1769,6 @@ async function sendMediaMessage() {
                       {{ message.media_filename || 'Document' }}
                     </span>
                   </a>
-                  <div v-else-if="isMediaLoading(message)" class="flex items-center gap-2 px-3 py-2 bg-background/50 rounded-lg">
-                    <FileText class="h-5 w-5 text-muted-foreground" />
-                    <span class="text-sm text-muted-foreground">{{ $t('common.loading') }}...</span>
-                  </div>
-                  <div v-else class="flex items-center gap-2 px-3 py-2 bg-background/50 rounded-lg">
-                    <FileText class="h-5 w-5 text-muted-foreground" />
-                    <span class="text-sm text-muted-foreground">[Document]</span>
-                  </div>
                 </div>
                 <!-- Location message -->
                 <div v-else-if="message.message_type === 'location' && getLocationData(message)" class="mb-2">

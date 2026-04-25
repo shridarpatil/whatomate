@@ -1,12 +1,34 @@
 package handlers
 
 import (
+	"sort"
+
 	"github.com/google/uuid"
+	"github.com/shridarpatil/whatomate/internal/audit"
 	"github.com/shridarpatil/whatomate/internal/models"
 	"github.com/valyala/fasthttp"
 	"github.com/zerodha/fastglue"
 	"gorm.io/gorm"
 )
+
+// roleAuditSnapshot returns a diff-friendly representation of a role.
+func roleAuditSnapshot(role *models.CustomRole) map[string]any {
+	if role == nil {
+		return nil
+	}
+	perms := make([]string, len(role.Permissions))
+	for i, p := range role.Permissions {
+		perms[i] = p.Resource + ":" + p.Action
+	}
+	sort.Strings(perms)
+	return map[string]any{
+		"name":        role.Name,
+		"description": role.Description,
+		"is_default":  role.IsDefault,
+		"is_system":   role.IsSystem,
+		"permissions": perms,
+	}
+}
 
 // RoleRequest represents the request body for creating/updating a role
 type RoleRequest struct {
@@ -122,7 +144,7 @@ func (a *App) GetRole(r *fastglue.Request) error {
 
 // CreateRole creates a new custom role
 func (a *App) CreateRole(r *fastglue.Request) error {
-	orgID, err := a.getOrgID(r)
+	orgID, userID, err := a.getOrgAndUserID(r)
 	if err != nil {
 		return r.SendErrorEnvelope(fasthttp.StatusUnauthorized, "Unauthorized", nil, "")
 	}
@@ -171,6 +193,8 @@ func (a *App) CreateRole(r *fastglue.Request) error {
 			a.Log.Error("Failed to create role", "error", err)
 			return r.SendErrorEnvelope(fasthttp.StatusInternalServerError, "Failed to create role", nil, "")
 		}
+		audit.LogAudit(a.DB, orgID, userID, audit.GetUserName(a.DB, userID),
+			"role", role.ID, models.AuditActionCreated, nil, roleAuditSnapshot(&role))
 		return r.SendEnvelope(roleToResponse(role, 0))
 	}
 
@@ -179,12 +203,15 @@ func (a *App) CreateRole(r *fastglue.Request) error {
 		return r.SendErrorEnvelope(fasthttp.StatusInternalServerError, "Failed to create role", nil, "")
 	}
 
+	audit.LogAudit(a.DB, orgID, userID, audit.GetUserName(a.DB, userID),
+		"role", role.ID, models.AuditActionCreated, nil, roleAuditSnapshot(&role))
+
 	return r.SendEnvelope(roleToResponse(role, 0))
 }
 
 // UpdateRole updates a custom role
 func (a *App) UpdateRole(r *fastglue.Request) error {
-	orgID, err := a.getOrgID(r)
+	orgID, userID, err := a.getOrgAndUserID(r)
 	if err != nil {
 		return r.SendErrorEnvelope(fasthttp.StatusUnauthorized, "Unauthorized", nil, "")
 	}
@@ -204,6 +231,8 @@ func (a *App) UpdateRole(r *fastglue.Request) error {
 		a.Log.Error("Failed to load role permissions", "error", err)
 		return r.SendErrorEnvelope(fasthttp.StatusInternalServerError, "Failed to update role", nil, "")
 	}
+
+	oldSnap := roleAuditSnapshot(&role)
 
 	// System roles can only have their description updated
 	var req RoleRequest
@@ -241,6 +270,9 @@ func (a *App) UpdateRole(r *fastglue.Request) error {
 
 		// Invalidate permissions cache for all users with this role
 		a.InvalidateRolePermissionsCache(role.ID)
+
+		audit.LogAudit(a.DB, orgID, userID, audit.GetUserName(a.DB, userID),
+			"role", role.ID, models.AuditActionUpdated, oldSnap, roleAuditSnapshot(&role))
 
 		var userCount int64
 		a.DB.Model(&models.User{}).Where("role_id = ?", role.ID).Count(&userCount)
@@ -300,6 +332,9 @@ func (a *App) UpdateRole(r *fastglue.Request) error {
 	// Invalidate permissions cache for all users with this role
 	a.InvalidateRolePermissionsCache(role.ID)
 
+	audit.LogAudit(a.DB, orgID, userID, audit.GetUserName(a.DB, userID),
+		"role", role.ID, models.AuditActionUpdated, oldSnap, roleAuditSnapshot(&role))
+
 	var userCount int64
 	a.DB.Model(&models.User{}).Where("role_id = ?", role.ID).Count(&userCount)
 	return r.SendEnvelope(roleToResponse(role, userCount))
@@ -307,7 +342,7 @@ func (a *App) UpdateRole(r *fastglue.Request) error {
 
 // DeleteRole deletes a custom role
 func (a *App) DeleteRole(r *fastglue.Request) error {
-	orgID, err := a.getOrgID(r)
+	orgID, userID, err := a.getOrgAndUserID(r)
 	if err != nil {
 		return r.SendErrorEnvelope(fasthttp.StatusUnauthorized, "Unauthorized", nil, "")
 	}
@@ -334,11 +369,18 @@ func (a *App) DeleteRole(r *fastglue.Request) error {
 		return r.SendErrorEnvelope(fasthttp.StatusBadRequest, "Cannot delete role with assigned users", nil, "")
 	}
 
+	// Load permissions for audit snapshot before deletion
+	_ = a.loadRolePermissions(role)
+	oldSnap := roleAuditSnapshot(role)
+
 	// Delete the role (permissions associations will be cleared automatically)
 	if err := a.DB.Delete(role).Error; err != nil {
 		a.Log.Error("Failed to delete role", "error", err)
 		return r.SendErrorEnvelope(fasthttp.StatusInternalServerError, "Failed to delete role", nil, "")
 	}
+
+	audit.LogAudit(a.DB, orgID, userID, audit.GetUserName(a.DB, userID),
+		"role", id, models.AuditActionDeleted, oldSnap, nil)
 
 	return r.SendEnvelope(map[string]string{"message": "Role deleted successfully"})
 }

@@ -79,6 +79,20 @@ export const useUsersStore = defineStore('users', () => {
     }
   }
 
+  async function fetchUser(id: string): Promise<User> {
+    loading.value = true
+    error.value = null
+    try {
+      const response = await usersService.get(id)
+      return response.data.data || response.data
+    } catch (err: any) {
+      error.value = err.response?.data?.message || 'Failed to fetch user'
+      throw err
+    } finally {
+      loading.value = false
+    }
+  }
+
   async function createUser(data: CreateUserData): Promise<User> {
     loading.value = true
     error.value = null
@@ -133,6 +147,7 @@ export const useUsersStore = defineStore('users', () => {
     loading,
     error,
     fetchUsers,
+    fetchUser,
     createUser,
     updateUser,
     deleteUser
