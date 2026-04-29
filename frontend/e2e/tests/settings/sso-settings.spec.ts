@@ -70,9 +70,18 @@ test.describe('SSO Settings', () => {
     await page.goto('/settings/sso')
     await page.waitForLoadState('networkidle')
 
-    const githubCard = page.locator('[class*="card"], div').filter({ hasText: /^GitHub$/ }).filter({ hasText: /Enabled|Disabled/ }).first()
+    // Find the card by composing two `has:` filters: it must contain BOTH the
+    // GitHub heading and an "Enabled" badge. The previous version used
+    // `hasText: /^GitHub$/` which only matched the bare CardTitle <h3>; that
+    // h3 has no badge inside it (the badge is a sibling), so the second
+    // `.filter` found nothing. `has:` with `getByRole`/`getByText` walks
+    // descendants, so this matches the parent card.
+    const githubCard = page
+      .locator('div')
+      .filter({ has: page.getByRole('heading', { name: 'GitHub', exact: true }) })
+      .filter({ has: page.getByText('Enabled', { exact: true }) })
+      .first()
     await expect(githubCard).toBeVisible()
-    await expect(githubCard.getByText(/Enabled/i).first()).toBeVisible()
   })
 
   test('GET /api/settings/sso never leaks the client_secret', async () => {
