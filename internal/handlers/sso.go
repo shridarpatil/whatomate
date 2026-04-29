@@ -492,7 +492,10 @@ func (a *App) UpdateSSOProvider(r *fastglue.Request) error {
 	})
 }
 
-// DeleteSSOProvider removes an SSO provider config (admin only)
+// DeleteSSOProvider removes an SSO provider config (admin only).
+// Hard-deletes (Unscoped) because the unique index on (organization_id, provider)
+// doesn't ignore deleted_at — a soft-deleted row would block re-creating the
+// same provider until the row is purged.
 func (a *App) DeleteSSOProvider(r *fastglue.Request) error {
 	orgID, err := a.getOrgID(r)
 	if err != nil {
@@ -501,7 +504,7 @@ func (a *App) DeleteSSOProvider(r *fastglue.Request) error {
 
 	provider := r.RequestCtx.UserValue("provider").(string)
 
-	result := a.DB.Where("organization_id = ? AND provider = ?", orgID, provider).Delete(&models.SSOProvider{})
+	result := a.DB.Unscoped().Where("organization_id = ? AND provider = ?", orgID, provider).Delete(&models.SSOProvider{})
 	if result.Error != nil {
 		a.Log.Error("Failed to delete SSO provider", "error", result.Error, "provider", provider)
 		return r.SendErrorEnvelope(fasthttp.StatusInternalServerError, "Failed to delete SSO provider", nil, "")

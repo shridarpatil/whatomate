@@ -3,46 +3,64 @@ import { ApiHelper, loginAsAdmin, generateUniqueName, verifyAuditLogged } from '
 
 /**
  * Audit logs E2E:
- *  - Generates a few audit entries via the API (create/update/delete a contact),
- *    so we have predictable rows to assert on.
+ *  - Generates predictable audit entries via the API (uses webhooks, since the
+ *    contact handler currently doesn't call audit.LogAudit — see fixme in
+ *    audit-trail.spec.ts).
  *  - Loads the list page, verifies entries appear.
- *  - Exercises filters (resource_type, action) and the detail view.
- *  - Confirms the API filter contract by calling /api/audit-logs directly via the
- *    shared verifyAuditLogged helper.
+ *  - Exercises filters (action) and the detail view.
+ *  - Confirms the API filter contract by querying /api/audit-logs directly.
+ *
+ * NOTE on auth: Playwright's `request` fixture is shared across before/test/
+ * after hooks for one test run. Calling api.login() more than once on the
+ * same context fails CSRF (the access cookie is already set, but login
+ * doesn't send X-CSRF-Token). We therefore log in exactly once per test, and
+ * use admin@admin.com (created by Go migrations) instead of admin@test.com
+ * (which depends on global-setup having succeeded).
  */
 test.describe('Audit Logs', () => {
+  // Helper: create + update + delete a webhook to produce three audit entries.
+  async function generateAuditEntries(api: ApiHelper) {
+    const createResp = await api.post('/api/webhooks', {
+      name: generateUniqueName('AuditPageHook'),
+      url: 'https://webhook.site/audit-page',
+      events: ['message.received'],
+      is_active: true,
+    })
+    if (!createResp.ok()) {
+      throw new Error(`Failed to seed webhook: ${createResp.status()} ${await createResp.text()}`)
+    }
+    const wh = (await createResp.json()).data
+    return wh
+  }
+
   test('list view renders entries created via the API', async ({ page, request }) => {
     const api = new ApiHelper(request)
-    await api.loginAsAdmin()
+    await api.login('admin@admin.com', 'admin')
 
-    // Create test data so the list isn't empty / dependent on prior runs.
-    const contact = await api.createContact(`+1555${Date.now().toString().slice(-7)}`, generateUniqueName('AuditCt'))
-    await verifyAuditLogged(request, 'contact', contact.id, 'created')
+    const wh = await generateAuditEntries(api)
+    await verifyAuditLogged(request, 'webhook', wh.id, 'created')
 
     await loginAsAdmin(page)
     await page.goto('/settings/audit-logs')
     await page.waitForLoadState('networkidle')
 
-    // Page header + table skeleton present.
     await expect(page.getByRole('heading', { level: 1 })).toContainText(/Audit/i)
     await expect(page.locator('tbody')).toBeVisible()
     await expect.poll(async () => page.locator('tbody tr').count(), {
       timeout: 5_000,
     }).toBeGreaterThan(0)
 
-    // The contact-create row we just produced should appear (admin user is the actor).
     const createdBadge = page.locator('tbody tr').filter({ hasText: /Created/i }).first()
     await expect(createdBadge).toBeVisible()
   })
 
   test('filter by action narrows the list', async ({ page, request }) => {
     const api = new ApiHelper(request)
-    await api.loginAsAdmin()
+    await api.login('admin@admin.com', 'admin')
 
-    // Generate one of each action.
-    const contact = await api.createContact(`+1555${Date.now().toString().slice(-7)}`, generateUniqueName('AuditCt'))
-    await api.updateContact(contact.id, { profile_name: generateUniqueName('AuditCtUpd') })
-    await verifyAuditLogged(request, 'contact', contact.id, 'updated')
+    const wh = await generateAuditEntries(api)
+    await api.put(`/api/webhooks/${wh.id}`, { url: 'https://webhook.site/audit-page-updated' })
+    await verifyAuditLogged(request, 'webhook', wh.id, 'updated')
 
     await loginAsAdmin(page)
     await page.goto('/settings/audit-logs')
@@ -55,7 +73,6 @@ test.describe('Audit Logs', () => {
     await page.getByRole('option', { name: /^Updated$/ }).click()
     await page.waitForLoadState('networkidle')
 
-    // Every visible action badge should be the filtered one.
     await expect.poll(async () => page.locator('tbody tr').count()).toBeGreaterThan(0)
     const badges = page.locator('tbody tr').locator('text=/^(Created|Updated|Deleted)$/i')
     const count = await badges.count()
@@ -66,54 +83,48 @@ test.describe('Audit Logs', () => {
 
   test('clicking a row navigates to the detail view with the change diff', async ({ page, request }) => {
     const api = new ApiHelper(request)
-    await api.loginAsAdmin()
+    await api.login('admin@admin.com', 'admin')
 
-    // Create a contact then update its profile_name to produce a diff entry.
-    const contact = await api.createContact(`+1555${Date.now().toString().slice(-7)}`, generateUniqueName('Before'))
-    const newName = generateUniqueName('After')
-    await api.updateContact(contact.id, { profile_name: newName })
-    const updateLog = await verifyAuditLogged(request, 'contact', contact.id, 'updated', {
-      expectedFields: ['profile_name'],
-    })
+    const wh = await generateAuditEntries(api)
+    const newURL = `https://webhook.site/audit-detail-${Date.now()}`
+    await api.put(`/api/webhooks/${wh.id}`, { url: newURL })
+    const updateLog = await verifyAuditLogged(request, 'webhook', wh.id, 'updated')
 
     await loginAsAdmin(page)
     await page.goto(`/settings/audit-logs/${updateLog.id}`)
     await page.waitForLoadState('networkidle')
 
-    // Detail view shows the changed field.
     await expect(page.getByText(/Changes/i).first()).toBeVisible()
-    await expect(page.getByText(/Profile Name/i).first()).toBeVisible()
-    await expect(page.getByText(newName).first()).toBeVisible()
+    // The diff should mention the URL field that changed.
+    await expect(page.getByText(/Url/i).first()).toBeVisible()
+    await expect(page.getByText(newURL).first()).toBeVisible()
     // Action badge shows "Updated".
     await expect(page.getByText(/^Updated$/).first()).toBeVisible()
   })
 
   test('detail view for a non-existent log shows not-found state', async ({ page }) => {
     await loginAsAdmin(page)
-    // Random UUID — no such log exists.
     await page.goto('/settings/audit-logs/00000000-0000-0000-0000-000000000000')
     await page.waitForLoadState('networkidle')
-    // The DetailPageLayout shows the not-found title from the view.
     await expect(page.getByText(/No (logs|audit logs)/i).first()).toBeVisible()
   })
 
   test('API filter by resource_type + resource_id returns scoped entries', async ({ request }) => {
     const api = new ApiHelper(request)
-    await api.loginAsAdmin()
+    await api.login('admin@admin.com', 'admin')
 
-    const contact = await api.createContact(`+1555${Date.now().toString().slice(-7)}`, generateUniqueName('ScopedCt'))
-    await verifyAuditLogged(request, 'contact', contact.id, 'created')
+    const wh = await generateAuditEntries(api)
+    await verifyAuditLogged(request, 'webhook', wh.id, 'created')
 
-    // Calling the same endpoint with a wildcard resource_id (none specified) should
-    // return many entries; with the specific contact id, only ours.
-    const resp = await request.get(`${process.env.BASE_URL || 'http://localhost:8080'}/api/audit-logs?resource_type=contact&resource_id=${contact.id}&limit=10`)
+    const baseURL = process.env.BASE_URL || 'http://localhost:8080'
+    const resp = await request.get(`${baseURL}/api/audit-logs?resource_type=webhook&resource_id=${wh.id}&limit=10`)
     expect(resp.ok()).toBe(true)
     const body = await resp.json()
     const logs = body.data?.audit_logs ?? []
     expect(logs.length).toBeGreaterThan(0)
     for (const l of logs) {
-      expect(l.resource_type).toBe('contact')
-      expect(l.resource_id).toBe(contact.id)
+      expect(l.resource_type).toBe('webhook')
+      expect(l.resource_id).toBe(wh.id)
     }
   })
 })
