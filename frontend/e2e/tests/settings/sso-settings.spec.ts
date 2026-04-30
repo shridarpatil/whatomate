@@ -89,23 +89,36 @@ test.describe('SSO Settings', () => {
     })
     expect(putResp.ok(), `PUT failed: ${putResp.status()} ${await putResp.text()}`).toBe(true)
 
-    // Wait for the SSO list GET to land before asserting on the rendered cards
-    // — networkidle is unreliable under CI worker contention.
-    const ssoListPromise = page.waitForResponse(
-      r => r.url().includes('/api/settings/sso') && r.request().method() === 'GET',
-      { timeout: 15000 }
-    )
-    await page.goto('/settings/sso')
-    await ssoListPromise
+    // Confirm via API that github is configured + enabled in this user's org.
+    // If this fails, the UI assertion can't possibly succeed and we'd rather
+    // get a precise data error than a vague locator timeout.
+    await expect.poll(async () => {
+      const r = await page.request.get('/api/settings/sso')
+      if (!r.ok()) return null
+      const body = await r.json()
+      const list = (body.data ?? []) as Array<{ provider: string; is_enabled: boolean }>
+      return list.find(p => p.provider === 'github')
+    }, {
+      timeout: 10000,
+      message: 'github should appear in /api/settings/sso with is_enabled=true',
+    }).toMatchObject({ provider: 'github', is_enabled: true })
 
-    // The card div contains BOTH the GitHub heading and the "Enabled" badge.
-    // `has:` walks descendants, so this matches the Card root.
-    const githubCard = page
-      .locator('div')
-      .filter({ has: page.getByRole('heading', { name: 'GitHub', exact: true }) })
-      .filter({ has: page.getByText('Enabled', { exact: true }) })
-      .first()
-    await expect(githubCard).toBeVisible({ timeout: 15000 })
+    await page.goto('/settings/sso')
+    await page.waitForLoadState('networkidle')
+
+    // Split assertions so a CI failure pinpoints whether the page rendered the
+    // card at all (heading) vs. the badge specifically. The previous combined
+    // div.filter().filter() locator gave the same opaque "element(s) not found"
+    // either way.
+    const ghHeading = page.getByRole('heading', { name: 'GitHub', exact: true })
+    await expect(ghHeading, 'GitHub card should render').toBeVisible({ timeout: 15000 })
+
+    // Walk up to the Card root, then look for the Enabled badge inside it.
+    const ghCard = ghHeading.locator('xpath=ancestor::*[contains(@class, "rounded-lg")][1]')
+    await expect(
+      ghCard.getByText('Enabled', { exact: true }),
+      'Enabled badge should render inside the GitHub card',
+    ).toBeVisible({ timeout: 10000 })
   })
 
   test('GET /api/settings/sso never leaks the client_secret', async () => {
