@@ -114,7 +114,9 @@ test.describe('SSO Settings', () => {
     await expect(ghHeading, 'GitHub card should render').toBeVisible({ timeout: 15000 })
 
     // Walk up to the Card root, then look for the Enabled badge inside it.
-    const ghCard = ghHeading.locator('xpath=ancestor::*[contains(@class, "rounded-lg")][1]')
+    // shadcn-vue's Card.vue renders with `rounded-xl` (not rounded-lg), so we
+    // anchor on that class — it's the closest ancestor unique to a card.
+    const ghCard = ghHeading.locator('xpath=ancestor::*[contains(@class, "rounded-xl")][1]')
     await expect(
       ghCard.getByText('Enabled', { exact: true }),
       'Enabled badge should render inside the GitHub card',
