@@ -66,15 +66,14 @@ test.describe('Keyword Rules - List View', () => {
   })
 
   test('should show delete confirmation from list', async ({ page, request }) => {
-    const hasRows = await page.locator('tbody tr a').first().isVisible({ timeout: 3000 }).catch(() => false)
-    if (!hasRows) {
-      const id = await seedKeywordRuleViaAPI(request)
-      expect(id, 'API seed must succeed').toBeTruthy()
-      await keywordsPage.goto()
-    }
+    // Always seed via API — under parallel workers, relying on pre-existing
+    // rows is racy because another worker may delete them mid-test.
+    const id = await seedKeywordRuleViaAPI(request)
+    expect(id, 'API seed must succeed').toBeTruthy()
+    await keywordsPage.goto()
 
-    const deleteBtn = page.locator('tbody tr').first().getByRole('button', { name: /delete/i })
-    await expect(deleteBtn).toBeVisible({ timeout: 5000 })
+    const deleteBtn = page.locator('tbody').getByRole('button', { name: /delete/i }).first()
+    await expect(deleteBtn).toBeVisible({ timeout: 10000 })
     await deleteBtn.click()
     await expect(keywordsPage.alertDialog).toBeVisible({ timeout: 5000 })
     await keywordsPage.alertDialog.getByRole('button', { name: /Cancel/i }).click()

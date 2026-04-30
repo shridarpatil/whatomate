@@ -62,15 +62,14 @@ test.describe('AI Contexts - List View', () => {
   })
 
   test('should show delete confirmation from list', async ({ page, request }) => {
-    const hasRows = await page.locator('tbody tr a').first().isVisible({ timeout: 3000 }).catch(() => false)
-    if (!hasRows) {
-      const id = await seedAIContextViaAPI(request)
-      expect(id, 'API seed must succeed').toBeTruthy()
-      await aiPage.goto()
-    }
+    // Always seed via API — under parallel workers, relying on pre-existing
+    // rows is racy because another worker may delete them mid-test.
+    const id = await seedAIContextViaAPI(request)
+    expect(id, 'API seed must succeed').toBeTruthy()
+    await aiPage.goto()
 
-    const deleteBtn = page.locator('tbody tr').first().getByRole('button', { name: /delete/i })
-    await expect(deleteBtn).toBeVisible({ timeout: 5000 })
+    const deleteBtn = page.locator('tbody').getByRole('button', { name: /delete/i }).first()
+    await expect(deleteBtn).toBeVisible({ timeout: 10000 })
     await deleteBtn.click()
     await expect(aiPage.alertDialog).toBeVisible({ timeout: 5000 })
     await aiPage.alertDialog.getByRole('button', { name: /Cancel/i }).click()

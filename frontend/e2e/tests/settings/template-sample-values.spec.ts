@@ -123,19 +123,14 @@ test.describe('Template Preview with Sample Values', () => {
       })
       accountName = acc.name
     }
-    await api.createTemplate({
+    const tpl = await api.createTemplate({
       name: `tpl_sample_${Date.now()}`,
       body_content: 'Hello {{1}}, welcome',
       whatsapp_account: accountName,
     })
 
     await loginAsAdmin(page)
-    await page.goto('/templates')
-    await page.waitForLoadState('domcontentloaded')
-
-    const firstLink = page.locator('tbody tr a, tbody tr td').first()
-    await expect(firstLink).toBeVisible({ timeout: 10000 })
-    await firstLink.click()
+    await page.goto(`/templates/${tpl.id}`)
     await page.waitForLoadState('domcontentloaded')
 
     const previewBtn = page.getByRole('button', { name: /Preview/i })
