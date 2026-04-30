@@ -103,8 +103,18 @@ test.describe('SSO Settings', () => {
       message: 'github should appear in /api/settings/sso with is_enabled=true',
     }).toMatchObject({ provider: 'github', is_enabled: true })
 
+    // Wait for the SSO list GET that fires from the lazy-loaded view's
+    // onMounted. networkidle alone is NOT sufficient: SSOSettingsView is a
+    // dynamic import (router uses `component: () => import(...)`), so
+    // networkidle fires when the route shell is done — before the chunk
+    // downloads, the component mounts, and fetchProviders runs. The Enabled
+    // badge is v-if'd on `providers`, so it only renders after this GET lands.
+    const ssoListPromise = page.waitForResponse(
+      r => r.url().includes('/api/settings/sso') && r.request().method() === 'GET' && r.ok(),
+      { timeout: 20000 },
+    )
     await page.goto('/settings/sso')
-    await page.waitForLoadState('networkidle')
+    await ssoListPromise
 
     // Split assertions so a CI failure pinpoints whether the page rendered the
     // card at all (heading) vs. the badge specifically. The previous combined
