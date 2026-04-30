@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/shridarpatil/whatomate/internal/audit"
 	"github.com/shridarpatil/whatomate/internal/models"
 	"github.com/shridarpatil/whatomate/internal/utils"
 	"github.com/shridarpatil/whatomate/pkg/whatsapp"
@@ -1381,6 +1382,9 @@ func (a *App) CreateContact(r *fastglue.Request) error {
 		return r.SendErrorEnvelope(fasthttp.StatusInternalServerError, "Failed to create contact", nil, "")
 	}
 
+	audit.LogAudit(a.DB, orgID, userID, audit.GetUserName(a.DB, userID),
+		"contact", contact.ID, models.AuditActionCreated, nil, &contact)
+
 	return r.SendEnvelope(a.buildContactResponse(&contact, orgID))
 }
 
@@ -1423,6 +1427,7 @@ func (a *App) UpdateContact(r *fastglue.Request) error {
 	if err != nil {
 		return nil
 	}
+	oldContact := *contact
 
 	// Build updates map
 	updates := map[string]any{}
@@ -1465,6 +1470,9 @@ func (a *App) UpdateContact(r *fastglue.Request) error {
 	// Reload contact
 	a.DB.First(contact, contactID)
 
+	audit.LogAudit(a.DB, orgID, userID, audit.GetUserName(a.DB, userID),
+		"contact", contact.ID, models.AuditActionUpdated, &oldContact, contact)
+
 	return r.SendEnvelope(a.buildContactResponse(contact, orgID))
 }
 
@@ -1496,6 +1504,9 @@ func (a *App) DeleteContact(r *fastglue.Request) error {
 		a.Log.Error("Failed to delete contact", "error", err)
 		return r.SendErrorEnvelope(fasthttp.StatusInternalServerError, "Failed to delete contact", nil, "")
 	}
+
+	audit.LogAudit(a.DB, orgID, userID, audit.GetUserName(a.DB, userID),
+		"contact", contactID, models.AuditActionDeleted, contact, nil)
 
 	return r.SendEnvelope(map[string]any{
 		"message": "Contact deleted successfully",
