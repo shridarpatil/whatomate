@@ -81,7 +81,9 @@ test.describe('SSO Settings', () => {
       .filter({ has: page.getByRole('heading', { name: 'GitHub', exact: true }) })
       .filter({ has: page.getByText('Enabled', { exact: true }) })
       .first()
-    await expect(githubCard).toBeVisible()
+    // 15s instead of the default 5s: the SSO list GET fires onMounted and the
+    // Vue reactive re-render can lag past networkidle under CI worker contention.
+    await expect(githubCard).toBeVisible({ timeout: 15000 })
   })
 
   test('GET /api/settings/sso never leaks the client_secret', async () => {

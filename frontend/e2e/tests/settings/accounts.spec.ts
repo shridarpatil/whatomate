@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test'
-import { loginAsAdmin, navigateToFirstItem, expectMetadataVisible, expectActivityLogVisible, expectDeleteFromForm } from '../../helpers'
+import { loginAsAdmin, navigateToFirstItem, expectMetadataVisible, expectActivityLogVisible, expectDeleteFromForm, ApiHelper, generateUniqueName } from '../../helpers'
 import { AccountsPage } from '../../pages'
 
 test.describe('WhatsApp Accounts - List View', () => {
@@ -145,12 +145,24 @@ test.describe('WhatsApp Accounts - Detail Page CRUD', () => {
     }
   })
 
-  test('should show setup guide', async ({ page }) => {
-    await page.goto('/settings/accounts')
+  test('should show setup guide', async ({ page, request }) => {
+    // Seed our own account so we don't race with parallel workers that
+    // create-then-delete accounts (e.g. audit-trail.spec). navigateToFirstItem
+    // grabs the first row's href, but if another worker deletes that account
+    // before goto lands, the detail page renders the "not found" error state
+    // and Setup Guide never appears.
+    const api = new ApiHelper(request)
+    await api.login('admin@admin.com', 'admin')
+    const acc = await api.createWhatsAppAccount({
+      name: generateUniqueName('SetupGuideAcct').replace(/\s/g, '-').toLowerCase(),
+      phone_id: `phone-setup-${Date.now()}`,
+      business_id: `biz-setup-${Date.now()}`,
+      access_token: 'test-token-e2e',
+    })
+
+    await page.goto(`/settings/accounts/${acc.id}`)
     await page.waitForLoadState('networkidle')
 
-    if (await navigateToFirstItem(page)) {
-      await expect(page.getByText('Setup Guide')).toBeVisible({ timeout: 15000 })
-    }
+    await expect(page.getByText('Setup Guide')).toBeVisible({ timeout: 15000 })
   })
 })
