@@ -34,6 +34,16 @@ test.describe('SSO Settings', () => {
   test.beforeEach(async ({ request }) => {
     api = new ApiHelper(request)
     await api.login('admin@admin.com', 'admin')
+    // Reset to the default org before reading current. A prior failed run of
+    // the "cross-org isolation" test could have left super admin pinned to a
+    // throwaway org, which would make beforeEach + the test body operate on
+    // the wrong org — and admin@test.com (used for the UI) wouldn't see the
+    // PUT'd providers because it lives in the default org.
+    const memberships = await api.getMyOrganizations()
+    const defaultOrg = memberships.find(m => m.is_default) ?? memberships[0]
+    if (defaultOrg) {
+      await api.switchOrg(defaultOrg.organization_id)
+    }
     const org = await api.getCurrentOrg()
     orgId = org.id
     await cleanProviders(api)
@@ -205,11 +215,16 @@ test.describe('SSO Settings', () => {
     const newOrg = await api.createOrganization(`Iso Org ${Date.now()}`)
     await api.switchOrg(newOrg.id)
 
-    const list = await (await api.get('/api/settings/sso')).json()
-    const providers = list.data as Array<{ provider: string }>
-    expect(providers).toEqual([])
-
-    // Switch back so the afterEach cleanup runs against the right org.
-    await api.switchOrg(orgId)
+    try {
+      const list = await (await api.get('/api/settings/sso')).json()
+      const providers = list.data as Array<{ provider: string }>
+      expect(providers).toEqual([])
+    } finally {
+      // Always switch back, even on assertion failure. Otherwise super admin
+      // is left in the throwaway org and the next run's beforeEach reads
+      // SSO settings from the wrong org, breaking sibling tests like
+      // "newly-configured provider appears with the configured badge".
+      await api.switchOrg(orgId)
+    }
   })
 })

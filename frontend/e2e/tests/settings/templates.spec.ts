@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test'
-import { loginAsAdmin, navigateToFirstItem, expectMetadataVisible, expectActivityLogVisible, expectDeleteFromForm } from '../../helpers'
+import { loginAsAdmin, navigateToFirstItem, expectMetadataVisible, expectActivityLogVisible, expectDeleteFromForm, ApiHelper, generateUniqueName } from '../../helpers'
 import { TemplatesPage } from '../../pages'
 
 test.describe('Message Templates - List View', () => {
@@ -153,12 +153,32 @@ test.describe('Message Templates - Detail Page', () => {
     }
   })
 
-  test('should edit template on detail page', async ({ page }) => {
-    await page.goto('/templates')
-    await page.waitForLoadState('networkidle')
+  test('should edit template on detail page', async ({ page, request }) => {
+    // Seed our own template via API so we don't race with parallel workers
+    // (e.g. audit-trail.spec) that create-then-delete templates. Picking the
+    // first row could land on a deleted template's URL → not-found state →
+    // the "Details" card never renders.
+    const api = new ApiHelper(request)
+    await api.login('admin@admin.com', 'admin')
+    const accounts = await api.getWhatsAppAccounts()
+    let accountName = accounts[0]?.name
+    if (!accountName) {
+      const acc = await api.createWhatsAppAccount({
+        name: generateUniqueName('TplEditAcct').replace(/\s/g, '-').toLowerCase(),
+        phone_id: `phone-tpl-edit-${Date.now()}`,
+        business_id: `biz-tpl-edit-${Date.now()}`,
+        access_token: 'test-token-e2e',
+      })
+      accountName = acc.name
+    }
+    const tpl = await api.createTemplate({
+      name: `tpl_edit_${Date.now()}`,
+      body_content: 'Hello edit-test',
+      whatsapp_account: accountName,
+    })
 
-    const href = await navigateToFirstItem(page)
-    if (!href) { test.skip(true, 'No templates exist'); return }
+    await page.goto(`/templates/${tpl.id}`)
+    await page.waitForLoadState('networkidle')
 
     // Expand the collapsible details card by clicking its header
     const detailsCard = page.locator('text=Details').first()
