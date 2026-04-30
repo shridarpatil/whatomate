@@ -1,6 +1,6 @@
 import { test, expect, request as playwrightRequest } from '@playwright/test'
 import { TablePage, DialogPage } from '../../pages'
-import { loginAsAdmin, login, createUserFixture, ApiHelper } from '../../helpers'
+import { loginAsAdmin, login, createUserFixture, ApiHelper, TEST_USERS } from '../../helpers'
 
 const BASE_URL = process.env.BASE_URL || 'http://localhost:8080'
 
@@ -153,9 +153,14 @@ test.describe('Users Management', () => {
 })
 
 test.describe('Users - Role-based Access', () => {
-  test.skip('agent should not access users page', async ({ page }) => {
-    // Skip: Role-based access control may be implemented differently
-    // This test should be updated based on actual RBAC implementation
+  test('agent should be redirected away from /settings/users', async ({ page }) => {
+    // Agent role lacks the `users` permission. The navigation guard in
+    // router/index.ts redirects unauthorized routes to the first accessible
+    // page rather than showing the view.
+    await login(page, TEST_USERS.agent)
+    await page.goto('/settings/users')
+    await page.waitForURL(url => !url.pathname.endsWith('/settings/users'), { timeout: 5000 })
+    expect(page.url()).not.toContain('/settings/users')
   })
 })
 

@@ -1330,6 +1330,7 @@ async function sendMediaMessage() {
               <Button
                 variant="ghost"
                 size="icon"
+                :aria-label="$t('chat.addContact')"
                 class="h-8 w-8 shrink-0 text-white/40 hover:text-white hover:bg-white/[0.08] light:text-gray-500 light:hover:text-gray-900 light:hover:bg-gray-100"
                 @click="openAddContactDialog"
               >

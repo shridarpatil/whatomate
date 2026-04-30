@@ -47,20 +47,23 @@ test.describe('Organization Members - API Tests', () => {
       return
     }
 
-    // Create a user in the default org to add to the new org
+    // Create a user in the default org to add to the new org. The handler
+    // requires a non-empty role_id (sending '' returns 400, which the
+    // previous version caught and silently skipped). Look up the agent role
+    // explicitly.
+    const rolesResp = await api.get('/api/roles')
+    expect(rolesResp.ok(), `roles fetch: ${rolesResp.status()} ${await rolesResp.text()}`).toBe(true)
+    const roles = ((await rolesResp.json()).data?.roles ?? []) as Array<{ id: string; name: string }>
+    const agentRole = roles.find(r => r.name.toLowerCase() === 'agent')
+    expect(agentRole, 'agent role must exist (created by Go migrations)').toBeDefined()
+
     const testEmail = generateUniqueEmail('member-test')
-    let testUser: any
-    try {
-      testUser = await api.createUser({
-        email: testEmail,
-        password: 'password123',
-        full_name: 'Member Test User',
-        role_id: '', // Will get default role
-      })
-    } catch {
-      test.skip(true, 'Failed to create test user')
-      return
-    }
+    const testUser = await api.createUser({
+      email: testEmail,
+      password: 'password123',
+      full_name: 'Member Test User',
+      role_id: agentRole!.id,
+    })
 
     // Add the user to the new org
     await api.addOrgMember(testUser.id, undefined, org.id)

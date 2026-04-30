@@ -278,37 +278,30 @@ test.describe('Organization Data Isolation', () => {
     const org1Name = `E2E Org 1 ${timestamp}`
     const org2Name = `E2E Org 2 ${timestamp}`
 
-    let org1Id: string
-    let org2Id: string
+    // Create two organizations via API (super admin)
+    const org1 = await superAdminApi.createOrganization(org1Name)
+    const org1Id = org1.id
 
-    try {
-      // Create two organizations via API (super admin)
-      const org1 = await superAdminApi.createOrganization(org1Name)
-      org1Id = org1.id
+    const org2 = await superAdminApi.createOrganization(org2Name)
+    const org2Id = org2.id
 
-      const org2 = await superAdminApi.createOrganization(org2Name)
-      org2Id = org2.id
+    // Create a user in each org via POST /api/users + X-Organization-ID header.
+    // We avoid /api/auth/register because it sets new auth cookies for the
+    // registered user, which would clobber the super admin's session on the
+    // shared Playwright request context.
+    const createUser1 = await superAdminApi.post('/api/users', {
+      email: org1Email,
+      password: 'password123',
+      full_name: 'Org 1 Admin',
+    }, { 'X-Organization-ID': org1Id })
+    expect(createUser1.ok(), `create user1: ${await createUser1.text()}`).toBe(true)
 
-      // Register users into each org
-      const api1 = new ApiHelper(request)
-      await api1.register({
-        email: org1Email,
-        password: 'password123',
-        full_name: 'Org 1 Admin',
-        organization_id: org1Id
-      })
-
-      const api2 = new ApiHelper(request)
-      await api2.register({
-        email: org2Email,
-        password: 'password123',
-        full_name: 'Org 2 Admin',
-        organization_id: org2Id
-      })
-    } catch (error) {
-      test.skip(true, `Failed to create test organizations: ${error}`)
-      return
-    }
+    const createUser2 = await superAdminApi.post('/api/users', {
+      email: org2Email,
+      password: 'password123',
+      full_name: 'Org 2 Admin',
+    }, { 'X-Organization-ID': org2Id })
+    expect(createUser2.ok(), `create user2: ${await createUser2.text()}`).toBe(true)
 
     // Get users for first org using X-Organization-ID header
     const org1Users = await superAdminApi.getUsersWithOrgHeader(org1Id)
@@ -336,44 +329,39 @@ test.describe('Organization Data Isolation', () => {
     const uniqueOrgName = `Isolated Org ${Date.now()}`
     const uniqueEmail = `isolated-admin-${Date.now()}@test.com`
 
-    let myOrgId: string
-    try {
-      const org = await superAdminApi.createOrganization(uniqueOrgName)
-      myOrgId = org.id
+    const org = await superAdminApi.createOrganization(uniqueOrgName)
+    const myOrgId = org.id
 
-      // Register a user into the new org
-      const regApi = new ApiHelper(request)
-      await regApi.register({
-        email: uniqueEmail,
-        password: 'password123',
-        full_name: 'Isolated Admin',
-        organization_id: myOrgId
-      })
+    // Create a user in the new org via POST /api/users (super admin path).
+    // /api/auth/register would clobber super admin's auth cookies on the shared
+    // request context, so we use the admin endpoint and pin the org via header.
+    const createResp = await superAdminApi.post('/api/users', {
+      email: uniqueEmail,
+      password: 'password123',
+      full_name: 'Isolated Admin',
+    }, { 'X-Organization-ID': myOrgId })
+    expect(createResp.ok(), `create user: ${await createResp.text()}`).toBe(true)
 
-      // Login as this user via ApiHelper (cookies auto-managed)
-      const userApi = new ApiHelper(request)
-      await userApi.login(uniqueEmail, 'password123')
+    // Login as this user via ApiHelper (cookies auto-managed)
+    const userApi = new ApiHelper(request)
+    await userApi.login(uniqueEmail, 'password123')
 
-      // This user (org member, not super admin) should not be able to use X-Organization-ID header
-      const ownOrgResponse = await userApi.get('/api/organizations/current')
-      expect(ownOrgResponse.ok()).toBeTruthy()
-      const ownOrgData = await ownOrgResponse.json()
-      expect(ownOrgData.data?.id || ownOrgData.data?.ID).toBe(myOrgId)
+    // This user (org member, not super admin) should not be able to use X-Organization-ID header
+    const ownOrgResponse = await userApi.get('/api/organizations/current')
+    expect(ownOrgResponse.ok()).toBeTruthy()
+    const ownOrgData = await ownOrgResponse.json()
+    expect(ownOrgData.data?.id || ownOrgData.data?.ID).toBe(myOrgId)
 
-      // Now try to access with a different org ID header - should be ignored
-      const otherOrgId = '00000000-0000-0000-0000-000000000001'
-      const responseWithHeader = await userApi.get('/api/organizations/current', {
-        'X-Organization-ID': otherOrgId
-      })
+    // Now try to access with a different org ID header - should be ignored
+    const otherOrgId = '00000000-0000-0000-0000-000000000001'
+    const responseWithHeader = await userApi.get('/api/organizations/current', {
+      'X-Organization-ID': otherOrgId
+    })
 
-      expect(responseWithHeader.ok()).toBeTruthy()
-      const dataWithHeader = await responseWithHeader.json()
-      const returnedOrgId = dataWithHeader.data?.id || dataWithHeader.data?.ID
-      expect(returnedOrgId).toBe(myOrgId)
-      expect(returnedOrgId).not.toBe(otherOrgId)
-    } catch (error) {
-      test.skip(true, `Failed to create test organization: ${error}`)
-      return
-    }
+    expect(responseWithHeader.ok()).toBeTruthy()
+    const dataWithHeader = await responseWithHeader.json()
+    const returnedOrgId = dataWithHeader.data?.id || dataWithHeader.data?.ID
+    expect(returnedOrgId).toBe(myOrgId)
+    expect(returnedOrgId).not.toBe(otherOrgId)
   })
 })

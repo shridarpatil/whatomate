@@ -104,33 +104,25 @@ test.describe('Team Assignment Strategy - API', () => {
     await api.loginAsAdmin()
   })
 
-  test('should create team with per_agent_timeout_secs via API', async ({ request }) => {
-    const BASE_URL = process.env.BASE_URL || 'http://localhost:8080'
-
-    const response = await request.post(`${BASE_URL}/api/teams`, {
-      headers: { 'X-CSRF-Token': '' },
-      data: {
-        name: `API Team ${Date.now()}`,
-        description: 'Test team with per-agent timeout',
-        assignment_strategy: 'round_robin',
-        per_agent_timeout_secs: 30,
-        is_active: true,
-      },
+  test('should create team with per_agent_timeout_secs via API', async () => {
+    // Use the shared ApiHelper from beforeEach — it carries the CSRF token
+    // extracted from the login response. The previous version posted via
+    // raw `request.post(..., { headers: { 'X-CSRF-Token': '' } })` and got
+    // a 403, then silently skipped — never actually exercising the contract.
+    const response = await api.post('/api/teams', {
+      name: `API Team ${Date.now()}`,
+      description: 'Test team with per-agent timeout',
+      assignment_strategy: 'round_robin',
+      per_agent_timeout_secs: 30,
+      is_active: true,
     })
+    expect(response.ok(), `POST /api/teams failed: ${response.status()} ${await response.text()}`).toBe(true)
 
-    // If CSRF is required, skip this test gracefully
-    if (response.status() === 403) {
-      test.skip()
-      return
-    }
-
-    if (response.ok()) {
-      const data = await response.json()
-      const team = data.data?.team || data.team
-      expect(team).toBeDefined()
-      expect(team.assignment_strategy).toBe('round_robin')
-      expect(team.per_agent_timeout_secs).toBe(30)
-    }
+    const data = await response.json()
+    const team = data.data?.team || data.team || data.data
+    expect(team).toBeDefined()
+    expect(team.assignment_strategy).toBe('round_robin')
+    expect(team.per_agent_timeout_secs).toBe(30)
   })
 })
 
