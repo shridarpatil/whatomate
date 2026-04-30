@@ -66,33 +66,45 @@ test.describe('SSO Settings', () => {
   })
 
   test('newly-configured provider appears with the configured badge', async ({ page }) => {
-    const resp = await api.put('/api/settings/sso/github', {
-      client_id: 'gh-client-id-e2e',
-      client_secret: 'gh-secret-must-not-be-exposed',
-      is_enabled: true,
-      allow_auto_create: false,
-      default_role: 'agent',
-      allowed_domains: 'example.com',
-    })
-    expect(resp.ok()).toBe(true)
-
+    // Log in to the UI first so the page's APIRequestContext is authenticated
+    // as admin@test.com. We then PUT through page.request — that guarantees
+    // the SSO row is written into the SAME org as the UI session reads from.
+    // Using the file-level `api` (super admin) for the PUT was the source of
+    // residual flakes: if super admin's current org didn't match
+    // admin@test.com's home org, the UI would render an empty card grid even
+    // though the PUT returned 200.
     await loginAsAdmin(page)
-    await page.goto('/settings/sso')
-    await page.waitForLoadState('networkidle')
 
-    // Find the card by composing two `has:` filters: it must contain BOTH the
-    // GitHub heading and an "Enabled" badge. The previous version used
-    // `hasText: /^GitHub$/` which only matched the bare CardTitle <h3>; that
-    // h3 has no badge inside it (the badge is a sibling), so the second
-    // `.filter` found nothing. `has:` with `getByRole`/`getByText` walks
-    // descendants, so this matches the parent card.
+    const csrfCookie = (await page.context().cookies()).find(c => c.name === 'whm_csrf')
+    const putResp = await page.request.put('/api/settings/sso/github', {
+      headers: csrfCookie ? { 'X-CSRF-Token': csrfCookie.value } : {},
+      data: {
+        client_id: 'gh-client-id-e2e',
+        client_secret: 'gh-secret-must-not-be-exposed',
+        is_enabled: true,
+        allow_auto_create: false,
+        default_role: 'agent',
+        allowed_domains: 'example.com',
+      },
+    })
+    expect(putResp.ok(), `PUT failed: ${putResp.status()} ${await putResp.text()}`).toBe(true)
+
+    // Wait for the SSO list GET to land before asserting on the rendered cards
+    // — networkidle is unreliable under CI worker contention.
+    const ssoListPromise = page.waitForResponse(
+      r => r.url().includes('/api/settings/sso') && r.request().method() === 'GET',
+      { timeout: 15000 }
+    )
+    await page.goto('/settings/sso')
+    await ssoListPromise
+
+    // The card div contains BOTH the GitHub heading and the "Enabled" badge.
+    // `has:` walks descendants, so this matches the Card root.
     const githubCard = page
       .locator('div')
       .filter({ has: page.getByRole('heading', { name: 'GitHub', exact: true }) })
       .filter({ has: page.getByText('Enabled', { exact: true }) })
       .first()
-    // 15s instead of the default 5s: the SSO list GET fires onMounted and the
-    // Vue reactive re-render can lag past networkidle under CI worker contention.
     await expect(githubCard).toBeVisible({ timeout: 15000 })
   })
 
