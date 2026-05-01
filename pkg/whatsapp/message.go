@@ -227,6 +227,35 @@ type TemplateParam struct {
 }
 
 // SendTemplateMessage sends a template message
+// sortParamKeys returns the keys of paramMap in the order they should be sent
+// to Meta. Named templates (forceLexical=true, or any non-numeric key) sort
+// lexicographically. Otherwise keys are treated as positional indices and
+// sorted numerically — required so that "1","2",..,"10","11" stay in order
+// instead of becoming "1","10","11",..,"2","9".
+func sortParamKeys(paramMap map[string]string, forceLexical bool) []string {
+	keys := make([]string, 0, len(paramMap))
+	for k := range paramMap {
+		keys = append(keys, k)
+	}
+	if forceLexical {
+		sort.Strings(keys)
+		return keys
+	}
+	for _, k := range keys {
+		if _, err := strconv.Atoi(k); err != nil {
+			// Mixed/named keys — fall back to lexical to keep behaviour stable.
+			sort.Strings(keys)
+			return keys
+		}
+	}
+	sort.Slice(keys, func(i, j int) bool {
+		ni, _ := strconv.Atoi(keys[i])
+		nj, _ := strconv.Atoi(keys[j])
+		return ni < nj
+	})
+	return keys
+}
+
 // BodyParamsToComponents converts a bodyParams map into WhatsApp template components.
 // Supports both positional (numeric keys) and named parameters.
 func BodyParamsToComponents(bodyParams map[string]string) []map[string]any {
@@ -243,12 +272,12 @@ func BodyParamsToComponents(bodyParams map[string]string) []map[string]any {
 		}
 	}
 
-	// Get sorted keys for deterministic ordering
-	keys := make([]string, 0, len(bodyParams))
-	for k := range bodyParams {
-		keys = append(keys, k)
-	}
-	sort.Strings(keys)
+	// Get sorted keys for deterministic ordering. For positional templates the
+	// keys are numeric strings ("1".."14") and MUST be ordered numerically —
+	// sort.Strings would yield "1","10","11",..,"2",..,"9" and ship parameters
+	// to Meta in the wrong slot, so {{2}}..{{9}} render as the values that
+	// belonged in {{10}}+ on the recipient's device (issue #354).
+	keys := sortParamKeys(bodyParams, isNamedParams)
 
 	params := make([]map[string]any, 0, len(bodyParams))
 	for _, key := range keys {
@@ -372,11 +401,9 @@ func ButtonURLParamsToComponents(buttonParams map[string]string, templateButtons
 		}
 	}
 
-	keys := make([]string, 0, len(buttonParams))
-	for k := range buttonParams {
-		keys = append(keys, k)
-	}
-	sort.Strings(keys)
+	// Button indices are always numeric strings ("0", "1", ...) so sort
+	// numerically — same lexical-sort hazard as positional body params.
+	keys := sortParamKeys(buttonParams, false)
 
 	components := make([]map[string]any, 0, len(buttonParams))
 	for _, index := range keys {

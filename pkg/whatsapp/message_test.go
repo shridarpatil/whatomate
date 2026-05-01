@@ -558,3 +558,49 @@ func TestButtonURLParamsToComponents(t *testing.T) {
 	})
 }
 
+// Regression for issue #354. Lexical sort would order positional keys as
+// "1","10","11",..,"2",..,"9", which silently shipped recipients the value
+// from {{10}}+ in the {{2}}..{{9}} slots.
+func TestBodyParamsToComponents_PositionalNumericOrder(t *testing.T) {
+	bodyParams := map[string]string{
+		"1":  "v1",
+		"2":  "v2",
+		"3":  "v3",
+		"9":  "v9",
+		"10": "v10",
+		"11": "v11",
+		"14": "v14",
+	}
+
+	components := whatsapp.BodyParamsToComponents(bodyParams)
+	require.Len(t, components, 1)
+
+	params := components[0]["parameters"].([]map[string]any)
+	got := make([]string, len(params))
+	for i, p := range params {
+		got[i] = p["text"].(string)
+		// Positional templates must NOT carry parameter_name (Meta rejects it).
+		_, hasName := p["parameter_name"]
+		assert.False(t, hasName, "positional params must not include parameter_name")
+	}
+	assert.Equal(t, []string{"v1", "v2", "v3", "v9", "v10", "v11", "v14"}, got)
+}
+
+func TestBodyParamsToComponents_NamedParamsRetainLexicalOrder(t *testing.T) {
+	bodyParams := map[string]string{
+		"order_id": "o1",
+		"name":     "alice",
+	}
+
+	components := whatsapp.BodyParamsToComponents(bodyParams)
+	require.Len(t, components, 1)
+	params := components[0]["parameters"].([]map[string]any)
+
+	// Named templates must include parameter_name and stay lexically sorted.
+	require.Len(t, params, 2)
+	assert.Equal(t, "name", params[0]["parameter_name"])
+	assert.Equal(t, "alice", params[0]["text"])
+	assert.Equal(t, "order_id", params[1]["parameter_name"])
+	assert.Equal(t, "o1", params[1]["text"])
+}
+
