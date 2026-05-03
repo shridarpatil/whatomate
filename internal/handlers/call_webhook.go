@@ -61,7 +61,7 @@ func (a *App) processCallWebhook(phoneNumberID string, call any) {
 	// Handle business-initiated events when session is already cleaned up
 	// (e.g., terminate webhook arrives after PeerConnection closed)
 	if ce.Direction == "BUSINESS_INITIATED" {
-		a.handleOrphanedOutgoingCallEvent(phoneNumberID, ce.ID, ce.Event, ce.Duration)
+		a.handleOrphanedOutgoingCallEvent(ce.ID, ce.Event, ce.Duration)
 		return
 	}
 
@@ -280,7 +280,7 @@ func (a *App) getOrCreateCallLog(account *models.WhatsAppAccount, contact *model
 // handleOrphanedOutgoingCallEvent handles business-initiated call webhooks
 // when the session has already been cleaned up (e.g., terminate arrives after
 // PeerConnection closed). Updates the call log and broadcasts WebSocket events.
-func (a *App) handleOrphanedOutgoingCallEvent(phoneNumberID, callID, event string, duration int) {
+func (a *App) handleOrphanedOutgoingCallEvent(callID, event string, duration int) {
 	// Find the call log by WhatsApp call ID
 	var callLog models.CallLog
 	if err := a.DB.Where("whatsapp_call_id = ?", callID).First(&callLog).Error; err != nil {

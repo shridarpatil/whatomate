@@ -278,13 +278,6 @@ func (a *App) ExportData(r *fastglue.Request) error {
 	}
 	defer rows.Close() //nolint:errcheck
 
-	// Get column types
-	colTypes, err := rows.ColumnTypes()
-	if err != nil {
-		a.Log.Error("Failed to get column types", "error", err)
-		return r.SendErrorEnvelope(fasthttp.StatusInternalServerError, "Failed to export data", nil, "")
-	}
-
 	// Build CSV
 	var buf strings.Builder
 	writer := csv.NewWriter(&buf)
@@ -322,7 +315,7 @@ func (a *App) ExportData(r *fastglue.Request) error {
 			if transform, ok := config.ColumnTransform[col]; ok {
 				csvRow[i] = transform(val)
 			} else {
-				csvRow[i] = formatExportValue(val, colTypes[i+1])
+				csvRow[i] = formatExportValue(val)
 			}
 		}
 		// Apply phone masking for contacts export
@@ -768,7 +761,7 @@ func snakeToPascal(s string) string {
 }
 
 // Helper function to format values for CSV export
-func formatExportValue(v any, colType any) string {
+func formatExportValue(v any) string {
 	if v == nil {
 		return ""
 	}

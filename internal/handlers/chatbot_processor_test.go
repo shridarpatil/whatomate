@@ -958,12 +958,12 @@ func TestMatchFlowTrigger_Match(t *testing.T) {
 	}
 	require.NoError(t, app.DB.Create(flow).Error)
 
-	result := app.matchFlowTrigger(org.ID, account.Name, "I want to order")
+	result := app.matchFlowTrigger(org.ID, "I want to order")
 	require.NotNil(t, result)
 	assert.Equal(t, flow.ID, result.ID)
 
 	// No match
-	noMatch := app.matchFlowTrigger(org.ID, account.Name, "hello there")
+	noMatch := app.matchFlowTrigger(org.ID, "hello there")
 	assert.Nil(t, noMatch)
 }
 

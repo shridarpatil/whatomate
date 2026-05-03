@@ -413,7 +413,7 @@ func (a *App) processIncomingMessageFull(phoneNumberID string, msg IncomingTextM
 	}
 
 	// Try to match flow trigger keywords first (before greeting to avoid duplicate messages)
-	if flow := a.matchFlowTrigger(account.OrganizationID, account.Name, messageText); flow != nil {
+	if flow := a.matchFlowTrigger(account.OrganizationID, messageText); flow != nil {
 		a.startFlow(account, session, contact, flow)
 		return
 	}
@@ -804,7 +804,7 @@ func (a *App) logSessionMessage(sessionID uuid.UUID, direction models.Direction,
 }
 
 // matchFlowTrigger checks if the message triggers any flow
-func (a *App) matchFlowTrigger(orgID uuid.UUID, accountName, messageText string) *models.ChatbotFlow {
+func (a *App) matchFlowTrigger(orgID uuid.UUID, messageText string) *models.ChatbotFlow {
 	// Use cached flows (includes steps)
 	flows, err := a.getChatbotFlowsCached(orgID)
 	if err != nil {

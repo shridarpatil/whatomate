@@ -87,7 +87,7 @@ func (p *SLAProcessor) processOrganizationSLA(settings models.ChatbotSettings, n
 
 	// 3. Mark SLA breached for transfers past response deadline
 	if settings.SLA.ResponseMinutes > 0 {
-		p.markSLABreached(orgID, settings, now)
+		p.markSLABreached(orgID, now)
 	}
 
 	// 4. Handle client inactivity (reminders and auto-close)
@@ -240,7 +240,7 @@ func (p *SLAProcessor) escalateTransfers(orgID uuid.UUID, settings models.Chatbo
 }
 
 // markSLABreached marks transfers as SLA breached when past response deadline
-func (p *SLAProcessor) markSLABreached(orgID uuid.UUID, settings models.ChatbotSettings, now time.Time) {
+func (p *SLAProcessor) markSLABreached(orgID uuid.UUID, now time.Time) {
 	result := p.app.DB.Model(&models.AgentTransfer{}).Where(
 		"organization_id = ? AND status = ? AND sla_breached = ? AND sla_response_deadline IS NOT NULL AND sla_response_deadline < ? AND agent_id IS NULL",
 		orgID, models.TransferStatusActive, false, now,
