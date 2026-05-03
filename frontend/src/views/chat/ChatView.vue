@@ -1426,19 +1426,19 @@ async function sendMediaMessage() {
               </AvatarFallback>
             </Avatar>
             <div class="flex-1 min-w-0">
-              <div class="flex items-center justify-between">
-                <p class="text-sm font-medium truncate text-white light:text-gray-900">
+              <div class="flex items-center justify-between gap-2">
+                <p class="flex-1 min-w-0 text-sm font-medium truncate text-white light:text-gray-900">
                   {{ contact.name || contact.phone_number }}
                 </p>
-                <span class="text-[11px] text-white/40 light:text-gray-500">
+                <span class="flex-shrink-0 text-[11px] text-white/40 light:text-gray-500">
                   {{ formatContactTime(contact.last_message_at) }}
                 </span>
               </div>
-              <div class="flex items-center justify-between">
-                <p class="text-xs text-white/50 light:text-gray-500 truncate">
+              <div class="flex items-center justify-between gap-2">
+                <p class="flex-1 min-w-0 text-xs text-white/50 light:text-gray-500 truncate">
                   {{ contact.phone_number }}
                 </p>
-                <Badge v-if="contact.unread_count > 0" class="ml-2 h-5 text-[10px] bg-emerald-500/20 text-emerald-400 light:bg-emerald-100 light:text-emerald-700">
+                <Badge v-if="contact.unread_count > 0" class="flex-shrink-0 h-5 text-[10px] bg-emerald-500/20 text-emerald-400 light:bg-emerald-100 light:text-emerald-700">
                   {{ contact.unread_count }}
                 </Badge>
               </div>
