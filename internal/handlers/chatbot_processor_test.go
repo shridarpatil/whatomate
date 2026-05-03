@@ -1061,6 +1061,54 @@ func TestFetchApiResponse_InjectsPhoneNumber(t *testing.T) {
 	assert.Equal(t, "+15551234567", capturedHeader, "header template should be substituted")
 }
 
+// TestSendFlowCompletionWebhook_CustomBodyInjectsPhoneNumber verifies that
+// {{phone_number}} in a flow-completion webhook's custom body / URL / header
+// template is substituted from session.PhoneNumber. Before the fix, only the
+// default payload carried phone_number; custom templates expanded to empty.
+func TestSendFlowCompletionWebhook_CustomBodyInjectsPhoneNumber(t *testing.T) {
+	app := newFetchApiResponseTestApp(t)
+
+	var capturedPath, capturedBody, capturedHeader string
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		capturedPath = r.URL.Path
+		capturedHeader = r.Header.Get("X-User-Phone")
+		buf := make([]byte, r.ContentLength)
+		_, _ = r.Body.Read(buf)
+		capturedBody = string(buf)
+		w.WriteHeader(http.StatusOK)
+	}))
+	t.Cleanup(server.Close)
+
+	flow := &models.ChatbotFlow{
+		BaseModel: models.BaseModel{ID: uuid.New()},
+		Name:      "test-flow",
+		CompletionConfig: models.JSONB{
+			"url":    server.URL + "/hook/{{phone_number}}",
+			"method": "POST",
+			"body":   `{"caller":"{{phone_number}}"}`,
+			"headers": map[string]any{
+				"X-User-Phone": "{{phone_number}}",
+			},
+		},
+	}
+	session := &models.ChatbotSession{
+		BaseModel:   models.BaseModel{ID: uuid.New()},
+		PhoneNumber: "+15551234567",
+		SessionData: models.JSONB{},
+	}
+	contact := &models.Contact{
+		BaseModel:   models.BaseModel{ID: uuid.New()},
+		ProfileName: "Tester",
+		PhoneNumber: "+15551234567",
+	}
+
+	app.sendFlowCompletionWebhook(flow, session, contact)
+
+	assert.Contains(t, capturedPath, "15551234567", "URL template should be substituted")
+	assert.Equal(t, `{"caller":"+15551234567"}`, capturedBody, "custom body template should be substituted")
+	assert.Equal(t, "+15551234567", capturedHeader, "header template should be substituted")
+}
+
 // TestFetchApiResponse_NilSession ensures the function tolerates a nil session
 // (e.g. defensive callers) without panicking.
 func TestFetchApiResponse_NilSession(t *testing.T) {

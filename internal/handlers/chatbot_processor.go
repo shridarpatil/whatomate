@@ -1127,6 +1127,14 @@ func (a *App) sendFlowCompletionWebhook(flow *models.ChatbotFlow, session *model
 		return
 	}
 
+	// Seed phone_number into the substitution map so custom URL/body/header
+	// templates can reference {{phone_number}} (parity with fetchAPIContext
+	// and the flow-step API fetch path).
+	if session.SessionData == nil {
+		session.SessionData = models.JSONB{}
+	}
+	session.SessionData["phone_number"] = session.PhoneNumber
+
 	// Replace variables in URL
 	webhookURL = processTemplate(webhookURL, session.SessionData)
 
