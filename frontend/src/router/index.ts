@@ -46,13 +46,7 @@ const router = createRouter({
           meta: { permission: 'analytics' }
         },
         {
-          path: 'chat',
-          name: 'chat',
-          component: () => import('@/views/chat/ChatView.vue'),
-          meta: { permission: 'chat' }
-        },
-        {
-          path: 'chat/:contactId',
+          path: 'chat/:contactId?',
           name: 'chat-conversation',
           component: () => import('@/views/chat/ChatView.vue'),
           props: true,
