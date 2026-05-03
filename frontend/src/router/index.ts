@@ -50,7 +50,7 @@ const router = createRouter({
           name: 'chat-conversation',
           component: () => import('@/views/chat/ChatView.vue'),
           props: true,
-          meta: { permission: 'chat' }
+          meta: { permission: 'chat', stableKey: true }
         },
         {
           path: 'profile',
