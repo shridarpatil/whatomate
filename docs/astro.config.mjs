@@ -26,6 +26,7 @@ export default defineConfig({
             { label: 'Dashboard', slug: 'features/dashboard' },
             { label: 'Roles & Permissions', slug: 'features/roles-permissions' },
             { label: 'SSO (Single Sign-On)', slug: 'features/sso' },
+            { label: 'Audit Logs', slug: 'features/audit-logs' },
             { label: 'Chatbot Automation', slug: 'features/chatbot' },
             { label: 'Canned Responses', slug: 'features/canned-responses' },
             { label: 'Custom Actions', slug: 'features/custom-actions' },
