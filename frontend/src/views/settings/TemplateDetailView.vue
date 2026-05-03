@@ -779,7 +779,7 @@ onMounted(async () => {
               type="button"
               size="sm"
               @click="uploadHeaderMedia"
-              :disabled="!headerMediaFile || headerMediaUploading || !form.whatsapp_account"
+              :disabled="!headerMediaFile || headerMediaUploading"
             >
               <Loader2 v-if="headerMediaUploading" class="h-3.5 w-3.5 mr-1 animate-spin" />
               <Upload v-else class="h-3.5 w-3.5 mr-1" />
