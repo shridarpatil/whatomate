@@ -32,33 +32,33 @@ type CampaignRequest struct {
 
 // CampaignResponse represents campaign in API responses
 type CampaignResponse struct {
-	ID                    uuid.UUID             `json:"id"`
-	Name                  string                `json:"name"`
-	WhatsAppAccount       string                `json:"whatsapp_account"`
-	TemplateID            uuid.UUID             `json:"template_id"`
-	TemplateName          string                `json:"template_name,omitempty"`
-	HeaderMediaID         string                `json:"header_media_id,omitempty"`
-	HeaderMediaFilename   string                `json:"header_media_filename,omitempty"`
-	HeaderMediaMimeType   string                `json:"header_media_mime_type,omitempty"`
-	Status                models.CampaignStatus `json:"status"`
-	TotalRecipients int                  `json:"total_recipients"`
-	SentCount       int                  `json:"sent_count"`
-	DeliveredCount  int                  `json:"delivered_count"`
-	ReadCount       int                  `json:"read_count"`
-	FailedCount     int                  `json:"failed_count"`
-	ScheduledAt     *time.Time           `json:"scheduled_at,omitempty"`
-	StartedAt       *time.Time           `json:"started_at,omitempty"`
-	CompletedAt     *time.Time           `json:"completed_at,omitempty"`
-	CreatedByName   string               `json:"created_by_name,omitempty"`
-	UpdatedByName   string               `json:"updated_by_name,omitempty"`
-	CreatedAt       time.Time            `json:"created_at"`
-	UpdatedAt       time.Time            `json:"updated_at"`
+	ID                  uuid.UUID             `json:"id"`
+	Name                string                `json:"name"`
+	WhatsAppAccount     string                `json:"whatsapp_account"`
+	TemplateID          uuid.UUID             `json:"template_id"`
+	TemplateName        string                `json:"template_name,omitempty"`
+	HeaderMediaID       string                `json:"header_media_id,omitempty"`
+	HeaderMediaFilename string                `json:"header_media_filename,omitempty"`
+	HeaderMediaMimeType string                `json:"header_media_mime_type,omitempty"`
+	Status              models.CampaignStatus `json:"status"`
+	TotalRecipients     int                   `json:"total_recipients"`
+	SentCount           int                   `json:"sent_count"`
+	DeliveredCount      int                   `json:"delivered_count"`
+	ReadCount           int                   `json:"read_count"`
+	FailedCount         int                   `json:"failed_count"`
+	ScheduledAt         *time.Time            `json:"scheduled_at,omitempty"`
+	StartedAt           *time.Time            `json:"started_at,omitempty"`
+	CompletedAt         *time.Time            `json:"completed_at,omitempty"`
+	CreatedByName       string                `json:"created_by_name,omitempty"`
+	UpdatedByName       string                `json:"updated_by_name,omitempty"`
+	CreatedAt           time.Time             `json:"created_at"`
+	UpdatedAt           time.Time             `json:"updated_at"`
 }
 
 // RecipientRequest represents recipient import request
 type RecipientRequest struct {
-	PhoneNumber    string                 `json:"phone_number" validate:"required"`
-	RecipientName  string                 `json:"recipient_name"`
+	PhoneNumber    string         `json:"phone_number" validate:"required"`
+	RecipientName  string         `json:"recipient_name"`
 	TemplateParams map[string]any `json:"template_params"`
 }
 
@@ -177,7 +177,7 @@ func (a *App) CreateCampaign(r *fastglue.Request) error {
 		WhatsAppAccount: req.WhatsAppAccount,
 		Name:            req.Name,
 		TemplateID:      templateID,
-		HeaderMediaID:  req.HeaderMediaID,
+		HeaderMediaID:   req.HeaderMediaID,
 		Status:          models.CampaignStatusDraft,
 		ScheduledAt:     req.ScheduledAt,
 		CreatedBy:       userID,
@@ -298,9 +298,9 @@ func (a *App) UpdateCampaign(r *fastglue.Request) error {
 
 	// Update fields
 	updates := map[string]any{
-		"name":           req.Name,
-		"scheduled_at":   req.ScheduledAt,
-		"updated_by_id":  userID,
+		"name":          req.Name,
+		"scheduled_at":  req.ScheduledAt,
+		"updated_by_id": userID,
 	}
 
 	if req.TemplateID != "" {
@@ -885,7 +885,7 @@ func (a *App) UploadCampaignMedia(r *fastglue.Request) error {
 		"video/mp4": true, "video/3gpp": true,
 		"audio/aac": true, "audio/mp4": true, "audio/mpeg": true, "audio/ogg": true,
 		"application/pdf": true, "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": true,
-		"application/vnd.openxmlformats-officedocument.wordprocessingml.document": true,
+		"application/vnd.openxmlformats-officedocument.wordprocessingml.document":   true,
 		"application/vnd.openxmlformats-officedocument.presentationml.presentation": true,
 	}
 	if !allowedMIME[mimeType] {
@@ -1154,4 +1154,3 @@ func sanitizeFilename(name string) string {
 	}
 	return name
 }
-

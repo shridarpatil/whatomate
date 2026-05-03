@@ -17,7 +17,7 @@ func NewRedis(cfg *config.RedisConfig) (*redis.Client, error) {
 		Password: cfg.Password,
 		DB:       cfg.DB,
 	}
-	
+
 	if cfg.TLS {
 		opts.TLSConfig = &tls.Config{
 			MinVersion: tls.VersionTLS12,

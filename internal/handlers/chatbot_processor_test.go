@@ -26,7 +26,7 @@ func newProcessorTestApp(t *testing.T) *App {
 	// Mock WhatsApp API server that accepts all requests.
 	waServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
-		_ = json.NewEncoder(w).Encode(map[string]interface{}{
+		_ = json.NewEncoder(w).Encode(map[string]any{
 			"messages": []map[string]string{{"id": "wamid.mock_" + uuid.New().String()[:8]}},
 		})
 	}))
@@ -326,9 +326,9 @@ func TestMatchKeywordRules_WithButtons(t *testing.T) {
 		ResponseType:    models.ResponseTypeText,
 		ResponseContent: models.JSONB{
 			"body": "Choose an option:",
-			"buttons": []interface{}{
-				map[string]interface{}{"id": "opt1", "title": "Option 1"},
-				map[string]interface{}{"id": "opt2", "title": "Option 2"},
+			"buttons": []any{
+				map[string]any{"id": "opt1", "title": "Option 1"},
+				map[string]any{"id": "opt2", "title": "Option 2"},
 			},
 		},
 		Priority:  10,
@@ -426,7 +426,7 @@ func TestIsWithinBusinessHours_WithinHours(t *testing.T) {
 	dayOfWeek := float64(now.Weekday())
 
 	hours := models.JSONBArray{
-		map[string]interface{}{
+		map[string]any{
 			"day":        dayOfWeek,
 			"enabled":    true,
 			"start_time": "00:00",
@@ -446,7 +446,7 @@ func TestIsWithinBusinessHours_OutsideHours(t *testing.T) {
 	// Set hours to a time window that has definitely passed
 	// Use a very narrow window in the past
 	hours := models.JSONBArray{
-		map[string]interface{}{
+		map[string]any{
 			"day":        dayOfWeek,
 			"enabled":    true,
 			"start_time": "00:00",
@@ -468,7 +468,7 @@ func TestIsWithinBusinessHours_DayDisabled(t *testing.T) {
 	dayOfWeek := float64(now.Weekday())
 
 	hours := models.JSONBArray{
-		map[string]interface{}{
+		map[string]any{
 			"day":        dayOfWeek,
 			"enabled":    false,
 			"start_time": "00:00",
@@ -487,7 +487,7 @@ func TestIsWithinBusinessHours_NoMatchingDay(t *testing.T) {
 	otherDay := float64((int(now.Weekday()) + 1) % 7)
 
 	hours := models.JSONBArray{
-		map[string]interface{}{
+		map[string]any{
 			"day":        otherDay,
 			"enabled":    true,
 			"start_time": "00:00",
@@ -518,7 +518,7 @@ func TestShouldSkipStep_NoCondition(t *testing.T) {
 		SkipCondition: "",
 	}
 
-	result := app.shouldSkipStep(step, map[string]interface{}{})
+	result := app.shouldSkipStep(step, map[string]any{})
 	assert.False(t, result)
 }
 
@@ -530,7 +530,7 @@ func TestShouldSkipStep_ConditionTrue(t *testing.T) {
 		SkipCondition: "status == 'vip'",
 	}
 
-	result := app.shouldSkipStep(step, map[string]interface{}{"status": "vip"})
+	result := app.shouldSkipStep(step, map[string]any{"status": "vip"})
 	assert.True(t, result)
 }
 
@@ -542,7 +542,7 @@ func TestShouldSkipStep_ConditionFalse(t *testing.T) {
 		SkipCondition: "status == 'vip'",
 	}
 
-	result := app.shouldSkipStep(step, map[string]interface{}{"status": "regular"})
+	result := app.shouldSkipStep(step, map[string]any{"status": "regular"})
 	assert.False(t, result)
 }
 
@@ -555,14 +555,14 @@ func TestShouldSkipStep_ComplexConditionAND(t *testing.T) {
 	}
 
 	// Both conditions true
-	result := app.shouldSkipStep(step, map[string]interface{}{
+	result := app.shouldSkipStep(step, map[string]any{
 		"status":  "vip",
 		"country": "US",
 	})
 	assert.True(t, result)
 
 	// One condition false
-	result2 := app.shouldSkipStep(step, map[string]interface{}{
+	result2 := app.shouldSkipStep(step, map[string]any{
 		"status":  "vip",
 		"country": "UK",
 	})
@@ -577,10 +577,10 @@ func TestShouldSkipStep_ComplexConditionOR(t *testing.T) {
 		SkipCondition: "status == 'vip' OR status == 'premium'",
 	}
 
-	result := app.shouldSkipStep(step, map[string]interface{}{"status": "premium"})
+	result := app.shouldSkipStep(step, map[string]any{"status": "premium"})
 	assert.True(t, result)
 
-	result2 := app.shouldSkipStep(step, map[string]interface{}{"status": "regular"})
+	result2 := app.shouldSkipStep(step, map[string]any{"status": "regular"})
 	assert.False(t, result2)
 }
 
@@ -592,7 +592,7 @@ func TestShouldSkipStep_MissingVariable(t *testing.T) {
 		SkipCondition: "nonexistent == 'value'",
 	}
 
-	result := app.shouldSkipStep(step, map[string]interface{}{})
+	result := app.shouldSkipStep(step, map[string]any{})
 	assert.False(t, result)
 }
 
@@ -972,34 +972,34 @@ func TestMatchFlowTrigger_Match(t *testing.T) {
 // =============================================================================
 
 func TestEvaluateExpression_SimpleEquality(t *testing.T) {
-	assert.True(t, evaluateExpression("status == 'active'", map[string]interface{}{"status": "active"}))
-	assert.False(t, evaluateExpression("status == 'active'", map[string]interface{}{"status": "inactive"}))
+	assert.True(t, evaluateExpression("status == 'active'", map[string]any{"status": "active"}))
+	assert.False(t, evaluateExpression("status == 'active'", map[string]any{"status": "inactive"}))
 }
 
 func TestEvaluateExpression_NotEquals(t *testing.T) {
-	assert.True(t, evaluateExpression("status != 'inactive'", map[string]interface{}{"status": "active"}))
-	assert.False(t, evaluateExpression("status != 'active'", map[string]interface{}{"status": "active"}))
+	assert.True(t, evaluateExpression("status != 'inactive'", map[string]any{"status": "active"}))
+	assert.False(t, evaluateExpression("status != 'active'", map[string]any{"status": "active"}))
 }
 
 func TestEvaluateExpression_ANDOperator(t *testing.T) {
-	data := map[string]interface{}{"a": "1", "b": "2"}
+	data := map[string]any{"a": "1", "b": "2"}
 	assert.True(t, evaluateExpression("a == '1' AND b == '2'", data))
 	assert.False(t, evaluateExpression("a == '1' AND b == '3'", data))
 }
 
 func TestEvaluateExpression_OROperator(t *testing.T) {
-	data := map[string]interface{}{"a": "1", "b": "2"}
+	data := map[string]any{"a": "1", "b": "2"}
 	assert.True(t, evaluateExpression("a == '1' OR b == '3'", data))
 	assert.True(t, evaluateExpression("a == '9' OR b == '2'", data))
 	assert.False(t, evaluateExpression("a == '9' OR b == '9'", data))
 }
 
 func TestEvaluateExpression_Parentheses(t *testing.T) {
-	data := map[string]interface{}{"a": "1", "b": "2", "c": "3"}
+	data := map[string]any{"a": "1", "b": "2", "c": "3"}
 	assert.True(t, evaluateExpression("(a == '1' OR b == '9') AND c == '3'", data))
 	assert.False(t, evaluateExpression("(a == '9' OR b == '9') AND c == '3'", data))
 }
 
 func TestEvaluateExpression_EmptyExpression(t *testing.T) {
-	assert.False(t, evaluateExpression("", map[string]interface{}{}))
+	assert.False(t, evaluateExpression("", map[string]any{}))
 }

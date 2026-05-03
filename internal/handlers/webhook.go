@@ -116,7 +116,7 @@ type WebhookPayload struct {
 					ID         string `json:"id"`
 					Timestamp  string `json:"timestamp"`
 					Type       string `json:"type"`
-					Text      *struct {
+					Text       *struct {
 						Body string `json:"body"`
 					} `json:"text,omitempty"`
 					Image *struct {
@@ -196,37 +196,37 @@ type WebhookPayload struct {
 					} `json:"context,omitempty"`
 				} `json:"messages,omitempty"`
 				Statuses        []WebhookStatus `json:"statuses,omitempty"`
-			UserPreferences []struct {
-				WaID      string `json:"wa_id"`
-				UserID    string `json:"user_id,omitempty"`
-				Category  string `json:"category"`
-				Value     string `json:"value"`
-				Timestamp int64  `json:"timestamp"`
-			} `json:"user_preferences,omitempty"`
-			Calls []struct {
-				ID         string `json:"id"`
-				From       string `json:"from"`
-				FromUserID string `json:"from_user_id,omitempty"` // BSUID
-				To         string `json:"to"`
-				ToUserID   string `json:"to_user_id,omitempty"` // BSUID
-				Timestamp string `json:"timestamp"`
-				Type      string `json:"type"`
-				Event     string `json:"event"`
-				Direction string `json:"direction,omitempty"`
-				Session   *struct {
-					SDPType string `json:"sdp_type"`
-					SDP     string `json:"sdp"`
-				} `json:"session,omitempty"`
-				Error *struct {
-					Code    int    `json:"code"`
-					Message string `json:"message"`
-				} `json:"error,omitempty"`
-				// Terminate webhook fields
-				Status    json.RawMessage `json:"status,omitempty"`
-				StartTime string          `json:"start_time,omitempty"`
-				EndTime   string          `json:"end_time,omitempty"`
-				Duration  int             `json:"duration,omitempty"`
-			} `json:"calls,omitempty"`
+				UserPreferences []struct {
+					WaID      string `json:"wa_id"`
+					UserID    string `json:"user_id,omitempty"`
+					Category  string `json:"category"`
+					Value     string `json:"value"`
+					Timestamp int64  `json:"timestamp"`
+				} `json:"user_preferences,omitempty"`
+				Calls []struct {
+					ID         string `json:"id"`
+					From       string `json:"from"`
+					FromUserID string `json:"from_user_id,omitempty"` // BSUID
+					To         string `json:"to"`
+					ToUserID   string `json:"to_user_id,omitempty"` // BSUID
+					Timestamp  string `json:"timestamp"`
+					Type       string `json:"type"`
+					Event      string `json:"event"`
+					Direction  string `json:"direction,omitempty"`
+					Session    *struct {
+						SDPType string `json:"sdp_type"`
+						SDP     string `json:"sdp"`
+					} `json:"session,omitempty"`
+					Error *struct {
+						Code    int    `json:"code"`
+						Message string `json:"message"`
+					} `json:"error,omitempty"`
+					// Terminate webhook fields
+					Status    json.RawMessage `json:"status,omitempty"`
+					StartTime string          `json:"start_time,omitempty"`
+					EndTime   string          `json:"end_time,omitempty"`
+					Duration  int             `json:"duration,omitempty"`
+				} `json:"calls,omitempty"`
 			} `json:"value"`
 			Field string `json:"field"`
 		} `json:"changes"`

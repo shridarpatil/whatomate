@@ -10,10 +10,10 @@ import (
 // AudioBridge forwards RTP packets bidirectionally between two WebRTC tracks.
 // It bridges the caller's remote track to the agent's local track, and vice versa.
 type AudioBridge struct {
-	stop          chan struct{}
-	wg            sync.WaitGroup
-	callerRec     *CallRecorder // records caller's audio (caller→agent direction), may be nil
-	agentRec      *CallRecorder // records agent's audio (agent→caller direction), may be nil
+	stop      chan struct{}
+	wg        sync.WaitGroup
+	callerRec *CallRecorder // records caller's audio (caller→agent direction), may be nil
+	agentRec  *CallRecorder // records agent's audio (agent→caller direction), may be nil
 
 	// lastCallerSeq and lastCallerTS track the last RTP sequence number and
 	// timestamp forwarded to the caller's track (agent→caller direction).

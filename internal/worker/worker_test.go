@@ -374,7 +374,7 @@ func TestWorker_checkCampaignCompletion_CompletesWhenAllProcessed(t *testing.T) 
 	org, _, _, campaign := createMinimalCampaignData(t, w, models.CampaignStatusProcessing)
 
 	// Update campaign counts for this test
-	require.NoError(t, w.DB.Model(campaign).Updates(map[string]interface{}{
+	require.NoError(t, w.DB.Model(campaign).Updates(map[string]any{
 		"total_recipients": 2,
 		"sent_count":       2,
 	}).Error)
@@ -409,7 +409,7 @@ func TestWorker_checkCampaignCompletion_DoesNotCompleteWithPending(t *testing.T)
 	org, _, _, campaign := createMinimalCampaignData(t, w, models.CampaignStatusProcessing)
 
 	// Update campaign counts for this test
-	require.NoError(t, w.DB.Model(campaign).Updates(map[string]interface{}{
+	require.NoError(t, w.DB.Model(campaign).Updates(map[string]any{
 		"total_recipients": 2,
 		"sent_count":       1,
 	}).Error)
@@ -455,12 +455,12 @@ func TestWorker_sendTemplateMessage_BuildsComponents(t *testing.T) {
 	w := testWorker(t)
 
 	// Create mock server
-	var capturedBody map[string]interface{}
+	var capturedBody map[string]any
 	server := httptest.NewServer(http.HandlerFunc(func(rw http.ResponseWriter, r *http.Request) {
 		_ = json.NewDecoder(r.Body).Decode(&capturedBody)
 		rw.Header().Set("Content-Type", "application/json")
-		_ = json.NewEncoder(rw).Encode(map[string]interface{}{
-			"messages": []map[string]interface{}{
+		_ = json.NewEncoder(rw).Encode(map[string]any{
+			"messages": []map[string]any{
 				{"id": "wamid.test123"},
 			},
 		})
@@ -496,32 +496,32 @@ func TestWorker_sendTemplateMessage_BuildsComponents(t *testing.T) {
 	assert.Equal(t, "wamid.test123", msgID)
 
 	// Verify request structure
-	templateData := capturedBody["template"].(map[string]interface{})
+	templateData := capturedBody["template"].(map[string]any)
 	assert.Equal(t, "test_template", templateData["name"])
-	assert.Equal(t, "en", templateData["language"].(map[string]interface{})["code"])
+	assert.Equal(t, "en", templateData["language"].(map[string]any)["code"])
 
-	components := templateData["components"].([]interface{})
+	components := templateData["components"].([]any)
 	require.Len(t, components, 1)
 
-	bodyComponent := components[0].(map[string]interface{})
+	bodyComponent := components[0].(map[string]any)
 	assert.Equal(t, "body", bodyComponent["type"])
 
-	params := bodyComponent["parameters"].([]interface{})
+	params := bodyComponent["parameters"].([]any)
 	require.Len(t, params, 2)
-	assert.Equal(t, "Hello", params[0].(map[string]interface{})["text"])
-	assert.Equal(t, "World", params[1].(map[string]interface{})["text"])
+	assert.Equal(t, "Hello", params[0].(map[string]any)["text"])
+	assert.Equal(t, "World", params[1].(map[string]any)["text"])
 }
 
 func TestWorker_sendTemplateMessage_NoParams(t *testing.T) {
 	w := testWorker(t)
 
 	// Create mock server
-	var capturedBody map[string]interface{}
+	var capturedBody map[string]any
 	server := httptest.NewServer(http.HandlerFunc(func(rw http.ResponseWriter, r *http.Request) {
 		_ = json.NewDecoder(r.Body).Decode(&capturedBody)
 		rw.Header().Set("Content-Type", "application/json")
-		_ = json.NewEncoder(rw).Encode(map[string]interface{}{
-			"messages": []map[string]interface{}{
+		_ = json.NewEncoder(rw).Encode(map[string]any{
+			"messages": []map[string]any{
 				{"id": "wamid.test456"},
 			},
 		})
@@ -552,7 +552,7 @@ func TestWorker_sendTemplateMessage_NoParams(t *testing.T) {
 	assert.Equal(t, "wamid.test456", msgID)
 
 	// Verify no components when no params
-	templateData := capturedBody["template"].(map[string]interface{})
+	templateData := capturedBody["template"].(map[string]any)
 	components, hasComponents := templateData["components"]
 	if hasComponents {
 		assert.Empty(t, components)
@@ -575,8 +575,8 @@ func TestWorker_HandleRecipientJob_Success(t *testing.T) {
 	// Create mock server
 	server := httptest.NewServer(http.HandlerFunc(func(rw http.ResponseWriter, r *http.Request) {
 		rw.Header().Set("Content-Type", "application/json")
-		_ = json.NewEncoder(rw).Encode(map[string]interface{}{
-			"messages": []map[string]interface{}{
+		_ = json.NewEncoder(rw).Encode(map[string]any{
+			"messages": []map[string]any{
 				{"id": "wamid.success123"},
 			},
 		})
@@ -627,8 +627,8 @@ func TestWorker_HandleRecipientJob_WhatsAppError(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(rw http.ResponseWriter, r *http.Request) {
 		rw.Header().Set("Content-Type", "application/json")
 		rw.WriteHeader(http.StatusBadRequest)
-		_ = json.NewEncoder(rw).Encode(map[string]interface{}{
-			"error": map[string]interface{}{
+		_ = json.NewEncoder(rw).Encode(map[string]any{
+			"error": map[string]any{
 				"message": "Invalid phone number",
 				"code":    100,
 			},
@@ -670,8 +670,8 @@ func TestWorker_HandleRecipientJob_CreatesContact(t *testing.T) {
 	// Create mock server
 	server := httptest.NewServer(http.HandlerFunc(func(rw http.ResponseWriter, r *http.Request) {
 		rw.Header().Set("Content-Type", "application/json")
-		_ = json.NewEncoder(rw).Encode(map[string]interface{}{
-			"messages": []map[string]interface{}{
+		_ = json.NewEncoder(rw).Encode(map[string]any{
+			"messages": []map[string]any{
 				{"id": "wamid.contact123"},
 			},
 		})
@@ -708,8 +708,8 @@ func TestWorker_HandleRecipientJob_CampaignCompletion(t *testing.T) {
 	// Create mock server
 	server := httptest.NewServer(http.HandlerFunc(func(rw http.ResponseWriter, r *http.Request) {
 		rw.Header().Set("Content-Type", "application/json")
-		_ = json.NewEncoder(rw).Encode(map[string]interface{}{
-			"messages": []map[string]interface{}{
+		_ = json.NewEncoder(rw).Encode(map[string]any{
+			"messages": []map[string]any{
 				{"id": "wamid.complete123"},
 			},
 		})
@@ -745,8 +745,8 @@ func TestWorker_HandleRecipientJob_TemplateParamSubstitution(t *testing.T) {
 	// Create mock server
 	server := httptest.NewServer(http.HandlerFunc(func(rw http.ResponseWriter, r *http.Request) {
 		rw.Header().Set("Content-Type", "application/json")
-		_ = json.NewEncoder(rw).Encode(map[string]interface{}{
-			"messages": []map[string]interface{}{
+		_ = json.NewEncoder(rw).Encode(map[string]any{
+			"messages": []map[string]any{
 				{"id": "wamid.subst123"},
 			},
 		})
@@ -838,7 +838,7 @@ func TestWorker_HandleRecipientJob_WithEncryptedToken(t *testing.T) {
 	// Encrypt the token in the DB (simulating production)
 	encToken, err := crypto.Encrypt("test-token", encKey)
 	require.NoError(t, err)
-	require.NoError(t, w.DB.Model(account).Updates(map[string]interface{}{
+	require.NoError(t, w.DB.Model(account).Updates(map[string]any{
 		"access_token": encToken,
 		"api_version":  "v21.0",
 	}).Error)
@@ -848,8 +848,8 @@ func TestWorker_HandleRecipientJob_WithEncryptedToken(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(rw http.ResponseWriter, r *http.Request) {
 		capturedAuth = r.Header.Get("Authorization")
 		rw.Header().Set("Content-Type", "application/json")
-		_ = json.NewEncoder(rw).Encode(map[string]interface{}{
-			"messages": []map[string]interface{}{
+		_ = json.NewEncoder(rw).Encode(map[string]any{
+			"messages": []map[string]any{
 				{"id": "wamid.encrypted123"},
 			},
 		})

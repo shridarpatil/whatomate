@@ -34,17 +34,17 @@ type AccountRequest struct {
 
 // AccountResponse represents the response for an account (without sensitive data)
 type AccountResponse struct {
-	ID                 uuid.UUID `json:"id"`
-	Name               string    `json:"name"`
-	AppID              string    `json:"app_id"`
-	PhoneID            string    `json:"phone_id"`
-	BusinessID         string    `json:"business_id"`
-	WebhookVerifyToken string    `json:"webhook_verify_token"`
-	APIVersion         string    `json:"api_version"`
-	IsDefaultIncoming  bool      `json:"is_default_incoming"`
-	IsDefaultOutgoing  bool      `json:"is_default_outgoing"`
-	AutoReadReceipt    bool      `json:"auto_read_receipt"`
-	Status             string    `json:"status"`
+	ID                 uuid.UUID  `json:"id"`
+	Name               string     `json:"name"`
+	AppID              string     `json:"app_id"`
+	PhoneID            string     `json:"phone_id"`
+	BusinessID         string     `json:"business_id"`
+	WebhookVerifyToken string     `json:"webhook_verify_token"`
+	APIVersion         string     `json:"api_version"`
+	IsDefaultIncoming  bool       `json:"is_default_incoming"`
+	IsDefaultOutgoing  bool       `json:"is_default_outgoing"`
+	AutoReadReceipt    bool       `json:"auto_read_receipt"`
+	Status             string     `json:"status"`
 	HasAccessToken     bool       `json:"has_access_token"`
 	HasAppSecret       bool       `json:"has_app_secret"`
 	PhoneNumber        string     `json:"phone_number,omitempty"`

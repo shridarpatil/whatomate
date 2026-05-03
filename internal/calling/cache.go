@@ -12,8 +12,8 @@ import (
 )
 
 const (
-	ivrFlowCachePrefix    = "ivr_flow:"
-	ivrFlowCfgCachePrefix = "ivr_flow:cfg:"
+	ivrFlowCachePrefix     = "ivr_flow:"
+	ivrFlowCfgCachePrefix  = "ivr_flow:cfg:"
 	orgSettingsCachePrefix = "org:calling_settings:"
 	callingCacheTTL        = 6 * time.Hour
 )
@@ -87,10 +87,10 @@ func (m *Manager) getIVRFlowByConfigCached(orgID uuid.UUID, accountName, configT
 
 // cachedOrgSettings is the JSON-serializable subset of org settings used for calling.
 type cachedOrgSettings struct {
-	TransferTimeoutSecs int               `json:"transfer_timeout_secs,omitempty"`
-	HoldMusicFile       string            `json:"hold_music_file,omitempty"`
-	RingbackFile        string            `json:"ringback_file,omitempty"`
-	Settings            map[string]any    `json:"settings,omitempty"`
+	TransferTimeoutSecs int            `json:"transfer_timeout_secs,omitempty"`
+	HoldMusicFile       string         `json:"hold_music_file,omitempty"`
+	RingbackFile        string         `json:"ringback_file,omitempty"`
+	Settings            map[string]any `json:"settings,omitempty"`
 }
 
 // getOrgCallingSettingsCached loads org calling overrides with Redis caching.

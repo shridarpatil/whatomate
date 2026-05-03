@@ -23,21 +23,21 @@ import (
 
 // CallSession represents an active call with its WebRTC state
 type CallSession struct {
-	ID              string // WhatsApp call_id
-	OrganizationID  uuid.UUID
-	AccountName     string
-	CallerPhone     string
-	ContactID       uuid.UUID
-	CallLogID       uuid.UUID
-	Status          models.CallStatus
-	PeerConnection  *webrtc.PeerConnection
-	AudioTrack      *webrtc.TrackLocalStaticRTP
-	IVRGraph        *IVRFlowGraph
-	IVRCtx          *IVRContext
-	IVRFlow         *models.IVRFlow
-	IVRPlayer       *AudioPlayer // persists across goto_flow for RTP continuity
-	DTMFBuffer      chan byte
-	StartedAt       time.Time
+	ID             string // WhatsApp call_id
+	OrganizationID uuid.UUID
+	AccountName    string
+	CallerPhone    string
+	ContactID      uuid.UUID
+	CallLogID      uuid.UUID
+	Status         models.CallStatus
+	PeerConnection *webrtc.PeerConnection
+	AudioTrack     *webrtc.TrackLocalStaticRTP
+	IVRGraph       *IVRFlowGraph
+	IVRCtx         *IVRContext
+	IVRFlow        *models.IVRFlow
+	IVRPlayer      *AudioPlayer // persists across goto_flow for RTP continuity
+	DTMFBuffer     chan byte
+	StartedAt      time.Time
 
 	// Recording (one per direction for correct OGG/Opus playback)
 	CallerRecorder *CallRecorder // caller's audio stream
@@ -59,8 +59,8 @@ type CallSession struct {
 	BridgeStarted     chan struct{} // closed when bridge takes over caller track
 	TransferAccepted  chan struct{} // closed when an agent accepts the transfer (rotation signal)
 	TransferDone      chan string   // outcome sent when transfer ends; nil = terminal
-	LastRTPSeq        uint16       // last RTP seq from bridge, for post-transfer player
-	LastRTPTimestamp   uint32       // last RTP timestamp from bridge
+	LastRTPSeq        uint16        // last RTP seq from bridge, for post-transfer player
+	LastRTPTimestamp  uint32        // last RTP timestamp from bridge
 
 	// Ringback (outgoing calls)
 	RingbackPlayer *AudioPlayer
@@ -69,10 +69,10 @@ type CallSession struct {
 	Direction      models.CallDirection
 	AgentID        uuid.UUID
 	TargetPhone    string
-	WAPeerConn     *webrtc.PeerConnection           // WhatsApp-side PC (outgoing only)
-	WAAudioTrack   *webrtc.TrackLocalStaticRTP       // server→WhatsApp audio track
-	WARemoteTrack  *webrtc.TrackRemote               // WhatsApp's remote audio track
-	SDPAnswerReady chan string                        // webhook delivers SDP answer here
+	WAPeerConn     *webrtc.PeerConnection      // WhatsApp-side PC (outgoing only)
+	WAAudioTrack   *webrtc.TrackLocalStaticRTP // server→WhatsApp audio track
+	WARemoteTrack  *webrtc.TrackRemote         // WhatsApp's remote audio track
+	SDPAnswerReady chan string                 // webhook delivers SDP answer here
 
 	mu sync.Mutex
 }
@@ -113,11 +113,11 @@ type IVRNodePosition struct {
 
 // IVRNode represents a single node (applet) in an IVR flow graph.
 type IVRNode struct {
-	ID       string                 `json:"id"`
-	Type     IVRNodeType            `json:"type"`
-	Label    string                 `json:"label"`
-	Position IVRNodePosition        `json:"position"`
-	Config   map[string]any `json:"config"`
+	ID       string          `json:"id"`
+	Type     IVRNodeType     `json:"type"`
+	Label    string          `json:"label"`
+	Position IVRNodePosition `json:"position"`
+	Config   map[string]any  `json:"config"`
 }
 
 // IVREdge connects two nodes in the flow graph.
@@ -671,7 +671,7 @@ func (m *Manager) finalizeRecording(orgID, callLogID uuid.UUID, callerRec, agent
 	if err := m.db.Model(&models.CallLog{}).
 		Where("id = ?", callLogID).
 		Updates(map[string]any{
-			"recording_s3_key":    s3Key,
+			"recording_s3_key":   s3Key,
 			"recording_duration": durationSecs,
 		}).Error; err != nil {
 		m.log.Error("Failed to update call log with recording metadata", "error", err, "s3_key", s3Key, "call_log_id", callLogID)

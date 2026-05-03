@@ -1032,11 +1032,11 @@ func TestApp_GetChatbotSettings_ExistingSettings(t *testing.T) {
 
 		// Create settings directly in the DB
 		settings := &models.ChatbotSettings{
-			BaseModel:      models.BaseModel{ID: uuid.New()},
-			OrganizationID: org.ID,
-			IsEnabled:      true,
-			DefaultResponse: "Custom greeting!",
-			FallbackMessage: "I do not understand.",
+			BaseModel:          models.BaseModel{ID: uuid.New()},
+			OrganizationID:     org.ID,
+			IsEnabled:          true,
+			DefaultResponse:    "Custom greeting!",
+			FallbackMessage:    "I do not understand.",
 			SessionTimeoutMins: 45,
 			AI: models.AIConfig{
 				Enabled:  true,
@@ -1265,13 +1265,13 @@ func TestApp_UpdateChatbotSettings_PartialUpdate(t *testing.T) {
 		user := testutil.CreateTestUser(t, app.DB, org.ID)
 
 		req := testutil.NewJSONRequest(t, map[string]any{
-			"sla_enabled":           true,
-			"sla_response_minutes":  5,
+			"sla_enabled":            true,
+			"sla_response_minutes":   5,
 			"sla_resolution_minutes": 120,
 			"sla_escalation_minutes": 45,
-			"sla_auto_close_hours":  48,
+			"sla_auto_close_hours":   48,
 			"sla_auto_close_message": "Conversation auto-closed.",
-			"sla_warning_message":   "SLA warning: response time exceeded.",
+			"sla_warning_message":    "SLA warning: response time exceeded.",
 		})
 		testutil.SetAuthContext(req, org.ID, user.ID)
 
@@ -2310,14 +2310,14 @@ func createSessionForChatbotTest(t *testing.T, app *handlers.App, orgID, contact
 
 	now := time.Now()
 	session := &models.ChatbotSession{
-		BaseModel:       models.BaseModel{ID: uuid.New()},
-		OrganizationID:  orgID,
-		ContactID:       contactID,
-		PhoneNumber:     phone,
-		Status:          status,
-		SessionData:     models.JSONB{},
-		StartedAt:       now,
-		LastActivityAt:  now,
+		BaseModel:      models.BaseModel{ID: uuid.New()},
+		OrganizationID: orgID,
+		ContactID:      contactID,
+		PhoneNumber:    phone,
+		Status:         status,
+		SessionData:    models.JSONB{},
+		StartedAt:      now,
+		LastActivityAt: now,
 	}
 	require.NoError(t, app.DB.Create(session).Error)
 	return session

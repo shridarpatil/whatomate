@@ -35,26 +35,26 @@ type TemplateRequest struct {
 
 // TemplateResponse represents the response for a template
 type TemplateResponse struct {
-	ID              uuid.UUID     `json:"id"`
-	WhatsAppAccount string        `json:"whatsapp_account"` // WhatsApp account name
-	MetaTemplateID  string        `json:"meta_template_id"`
-	Name            string        `json:"name"`
-	DisplayName     string        `json:"display_name"`
-	Language        string        `json:"language"`
-	Category        string        `json:"category"`
-	Status          string        `json:"status"`
-	HeaderType      string        `json:"header_type"`
-	HeaderContent   string        `json:"header_content"`
-	BodyContent     string        `json:"body_content"`
-	FooterContent   string        `json:"footer_content"`
-	Buttons         []any  `json:"buttons"`
-	SampleValues    []any  `json:"sample_values"`
-	AddSecurityRecommendation bool `json:"add_security_recommendation"`
-	CodeExpirationMinutes     int  `json:"code_expiration_minutes"`
-	CreatedByName   string        `json:"created_by_name,omitempty"`
-	UpdatedByName   string        `json:"updated_by_name,omitempty"`
-	CreatedAt       string        `json:"created_at"`
-	UpdatedAt       string        `json:"updated_at"`
+	ID                        uuid.UUID `json:"id"`
+	WhatsAppAccount           string    `json:"whatsapp_account"` // WhatsApp account name
+	MetaTemplateID            string    `json:"meta_template_id"`
+	Name                      string    `json:"name"`
+	DisplayName               string    `json:"display_name"`
+	Language                  string    `json:"language"`
+	Category                  string    `json:"category"`
+	Status                    string    `json:"status"`
+	HeaderType                string    `json:"header_type"`
+	HeaderContent             string    `json:"header_content"`
+	BodyContent               string    `json:"body_content"`
+	FooterContent             string    `json:"footer_content"`
+	Buttons                   []any     `json:"buttons"`
+	SampleValues              []any     `json:"sample_values"`
+	AddSecurityRecommendation bool      `json:"add_security_recommendation"`
+	CodeExpirationMinutes     int       `json:"code_expiration_minutes"`
+	CreatedByName             string    `json:"created_by_name,omitempty"`
+	UpdatedByName             string    `json:"updated_by_name,omitempty"`
+	CreatedAt                 string    `json:"created_at"`
+	UpdatedAt                 string    `json:"updated_at"`
 }
 
 // ListTemplates returns all templates for the organization
@@ -166,23 +166,23 @@ func (a *App) CreateTemplate(r *fastglue.Request) error {
 	}
 
 	template := models.Template{
-		OrganizationID:  orgID,
-		WhatsAppAccount: req.WhatsAppAccount,
-		Name:            templateName,
-		DisplayName:     displayName,
-		Language:        req.Language,
-		Category:        strings.ToUpper(req.Category),
-		Status:          "DRAFT", // Local draft until submitted to Meta
-		HeaderType:      strings.ToUpper(req.HeaderType),
-		HeaderContent:   req.HeaderContent,
-		BodyContent:     req.BodyContent,
-		FooterContent:   req.FooterContent,
-		Buttons:         convertToJSONBArray(req.Buttons),
-		SampleValues:    convertToJSONBArray(req.SampleValues),
+		OrganizationID:            orgID,
+		WhatsAppAccount:           req.WhatsAppAccount,
+		Name:                      templateName,
+		DisplayName:               displayName,
+		Language:                  req.Language,
+		Category:                  strings.ToUpper(req.Category),
+		Status:                    "DRAFT", // Local draft until submitted to Meta
+		HeaderType:                strings.ToUpper(req.HeaderType),
+		HeaderContent:             req.HeaderContent,
+		BodyContent:               req.BodyContent,
+		FooterContent:             req.FooterContent,
+		Buttons:                   convertToJSONBArray(req.Buttons),
+		SampleValues:              convertToJSONBArray(req.SampleValues),
 		AddSecurityRecommendation: req.AddSecurityRecommendation,
 		CodeExpirationMinutes:     req.CodeExpirationMinutes,
-		CreatedByID:     &userID,
-		UpdatedByID:     &userID,
+		CreatedByID:               &userID,
+		UpdatedByID:               &userID,
 	}
 
 	if err := a.DB.Create(&template).Error; err != nil {
@@ -433,16 +433,16 @@ func (a *App) submitTemplateToMeta(account *models.WhatsAppAccount, template *mo
 	waAccount := a.toWhatsAppAccount(account)
 
 	submission := &whatsapp.TemplateSubmission{
-		MetaTemplateID: template.MetaTemplateID, // If set, will update instead of create
-		Name:           template.Name,
-		Language:       template.Language,
-		Category:       template.Category,
-		HeaderType:     template.HeaderType,
-		HeaderContent:  template.HeaderContent,
-		BodyContent:    template.BodyContent,
-		FooterContent:  template.FooterContent,
-		Buttons:        template.Buttons,
-		SampleValues:   template.SampleValues,
+		MetaTemplateID:            template.MetaTemplateID, // If set, will update instead of create
+		Name:                      template.Name,
+		Language:                  template.Language,
+		Category:                  template.Category,
+		HeaderType:                template.HeaderType,
+		HeaderContent:             template.HeaderContent,
+		BodyContent:               template.BodyContent,
+		FooterContent:             template.FooterContent,
+		Buttons:                   template.Buttons,
+		SampleValues:              template.SampleValues,
 		AddSecurityRecommendation: template.AddSecurityRecommendation,
 		CodeExpirationMinutes:     template.CodeExpirationMinutes,
 	}
@@ -571,24 +571,24 @@ func (a *App) deleteTemplateFromMeta(account *models.WhatsAppAccount, templateNa
 
 func templateToResponse(t models.Template) TemplateResponse {
 	return TemplateResponse{
-		ID:              t.ID,
-		WhatsAppAccount: t.WhatsAppAccount,
-		MetaTemplateID:  t.MetaTemplateID,
-		Name:            t.Name,
-		DisplayName:     t.DisplayName,
-		Language:        t.Language,
-		Category:        t.Category,
-		Status:          t.Status,
-		HeaderType:      t.HeaderType,
-		HeaderContent:   t.HeaderContent,
-		BodyContent:     t.BodyContent,
-		FooterContent:   t.FooterContent,
-		Buttons:         convertFromJSONBArray(t.Buttons),
-		SampleValues:    convertFromJSONBArray(t.SampleValues),
+		ID:                        t.ID,
+		WhatsAppAccount:           t.WhatsAppAccount,
+		MetaTemplateID:            t.MetaTemplateID,
+		Name:                      t.Name,
+		DisplayName:               t.DisplayName,
+		Language:                  t.Language,
+		Category:                  t.Category,
+		Status:                    t.Status,
+		HeaderType:                t.HeaderType,
+		HeaderContent:             t.HeaderContent,
+		BodyContent:               t.BodyContent,
+		FooterContent:             t.FooterContent,
+		Buttons:                   convertFromJSONBArray(t.Buttons),
+		SampleValues:              convertFromJSONBArray(t.SampleValues),
 		AddSecurityRecommendation: t.AddSecurityRecommendation,
 		CodeExpirationMinutes:     t.CodeExpirationMinutes,
-		CreatedAt:       t.CreatedAt.Format("2006-01-02T15:04:05Z"),
-		UpdatedAt:       t.UpdatedAt.Format("2006-01-02T15:04:05Z"),
+		CreatedAt:                 t.CreatedAt.Format("2006-01-02T15:04:05Z"),
+		UpdatedAt:                 t.UpdatedAt.Format("2006-01-02T15:04:05Z"),
 	}
 }
 

@@ -34,7 +34,7 @@ func TestClient_SubmitTemplate_Success(t *testing.T) {
 		assert.Contains(t, r.URL.Path, "/message_templates")
 		assert.Equal(t, "Bearer test-access-token", r.Header.Get("Authorization"))
 
-		var body map[string]interface{}
+		var body map[string]any
 		err := json.NewDecoder(r.Body).Decode(&body)
 		require.NoError(t, err)
 		assert.Equal(t, "hello_world", body["name"])
@@ -66,14 +66,14 @@ func TestClient_SubmitTemplate_WithVariables(t *testing.T) {
 	t.Parallel()
 
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		var body map[string]interface{}
+		var body map[string]any
 		_ = json.NewDecoder(r.Body).Decode(&body)
 
-		components := body["components"].([]interface{})
+		components := body["components"].([]any)
 		// Should have BODY component
-		var bodyComp map[string]interface{}
+		var bodyComp map[string]any
 		for _, c := range components {
-			comp := c.(map[string]interface{})
+			comp := c.(map[string]any)
 			if comp["type"] == "BODY" {
 				bodyComp = comp
 			}
@@ -95,9 +95,9 @@ func TestClient_SubmitTemplate_WithVariables(t *testing.T) {
 		Language:    "en",
 		Category:    "UTILITY",
 		BodyContent: "Hello {{1}}! Your order {{2}} is ready.",
-		SampleValues: []interface{}{
-			map[string]interface{}{"component": "body", "index": 1, "value": "John"},
-			map[string]interface{}{"component": "body", "index": 2, "value": "ORD-123"},
+		SampleValues: []any{
+			map[string]any{"component": "body", "index": 1, "value": "John"},
+			map[string]any{"component": "body", "index": 2, "value": "ORD-123"},
 		},
 	}
 
@@ -165,7 +165,7 @@ func TestClient_SubmitTemplate_MissingVariableSamples(t *testing.T) {
 		Language:     "en",
 		Category:     "UTILITY",
 		BodyContent:  "Hello {{1}}!",
-		SampleValues: []interface{}{}, // Empty samples
+		SampleValues: []any{},
 	}
 
 	_, err := client.SubmitTemplate(context.Background(), account, tmpl)
@@ -183,8 +183,8 @@ func TestClient_FetchTemplates_Success(t *testing.T) {
 		assert.Contains(t, r.URL.Path, "/message_templates")
 
 		w.WriteHeader(http.StatusOK)
-		_ = json.NewEncoder(w).Encode(map[string]interface{}{
-			"data": []map[string]interface{}{
+		_ = json.NewEncoder(w).Encode(map[string]any{
+			"data": []map[string]any{
 				{"id": "1", "name": "hello", "language": "en", "category": "MARKETING", "status": "APPROVED"},
 				{"id": "2", "name": "goodbye", "language": "en", "category": "UTILITY", "status": "PENDING"},
 			},
@@ -208,7 +208,7 @@ func TestClient_FetchTemplates_Empty(t *testing.T) {
 
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
-		_ = json.NewEncoder(w).Encode(map[string]interface{}{"data": []interface{}{}})
+		_ = json.NewEncoder(w).Encode(map[string]any{"data": []any{}})
 	}))
 	defer server.Close()
 

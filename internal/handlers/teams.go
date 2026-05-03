@@ -12,11 +12,11 @@ import (
 
 // TeamRequest represents create/update team request
 type TeamRequest struct {
-	Name               string                   `json:"name" validate:"required"`
-	Description        string                   `json:"description"`
+	Name                string                    `json:"name" validate:"required"`
+	Description         string                    `json:"description"`
 	AssignmentStrategy  models.AssignmentStrategy `json:"assignment_strategy"` // round_robin, load_balanced, manual
-	PerAgentTimeoutSecs int                      `json:"per_agent_timeout_secs"`
-	IsActive            bool                     `json:"is_active"`
+	PerAgentTimeoutSecs int                       `json:"per_agent_timeout_secs"`
+	IsActive            bool                      `json:"is_active"`
 }
 
 // TeamMemberRequest represents add member request

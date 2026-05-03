@@ -47,7 +47,7 @@ type IncomingTextMessage struct {
 	ID         string `json:"id"`
 	Timestamp  string `json:"timestamp"`
 	Type       string `json:"type"`
-	Text      *struct {
+	Text       *struct {
 		Body string `json:"body"`
 	} `json:"text,omitempty"`
 	Interactive *struct {
@@ -753,7 +753,6 @@ func (a *App) sendAndSaveFlowMessage(account *models.WhatsAppAccount, contact *m
 	}, ChatbotSendOptions())
 	return err
 }
-
 
 // getOrCreateSession finds an active session or creates a new one
 // Returns the session and a boolean indicating if it's a new session

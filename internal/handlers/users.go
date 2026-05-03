@@ -842,12 +842,12 @@ func userToResponse(user models.User) UserResponse {
 
 // MyOrganizationResponse represents an organization in the user's org list
 type MyOrganizationResponse struct {
-	OrganizationID uuid.UUID `json:"organization_id"`
-	Name           string    `json:"name"`
-	Slug           string    `json:"slug"`
+	OrganizationID uuid.UUID  `json:"organization_id"`
+	Name           string     `json:"name"`
+	Slug           string     `json:"slug"`
 	RoleID         *uuid.UUID `json:"role_id,omitempty"`
-	RoleName       string    `json:"role_name,omitempty"`
-	IsDefault      bool      `json:"is_default"`
+	RoleName       string     `json:"role_name,omitempty"`
+	IsDefault      bool       `json:"is_default"`
 }
 
 // ListMyOrganizations returns all organizations the current user belongs to
@@ -958,10 +958,10 @@ func (a *App) UpdateAvailability(r *fastglue.Request) error {
 	}
 
 	return r.SendEnvelope(map[string]any{
-		"message":             "Availability updated successfully",
-		"is_available":        user.IsAvailable,
-		"status":              status,
-		"break_started_at":    breakStartedAt,
-		"transfers_to_queue":  transfersReturned,
+		"message":            "Availability updated successfully",
+		"is_available":       user.IsAvailable,
+		"status":             status,
+		"break_started_at":   breakStartedAt,
+		"transfers_to_queue": transfersReturned,
 	})
 }

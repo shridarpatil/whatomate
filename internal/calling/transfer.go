@@ -357,13 +357,13 @@ func (m *Manager) InitiateAgentTransfer(callLogID, initiatingAgentID uuid.UUID, 
 
 		payload := map[string]any{
 			"id":                  transfer.ID.String(),
-			"call_log_id":        transfer.CallLogID.String(),
-			"whatsapp_call_id":   transfer.WhatsAppCallID,
-			"caller_phone":       m.maybeMaskPhone(transfer.OrganizationID, transfer.CallerPhone),
-			"contact_id":         transfer.ContactID.String(),
-			"whatsapp_account":   transfer.WhatsAppAccount,
+			"call_log_id":         transfer.CallLogID.String(),
+			"whatsapp_call_id":    transfer.WhatsAppCallID,
+			"caller_phone":        m.maybeMaskPhone(transfer.OrganizationID, transfer.CallerPhone),
+			"contact_id":          transfer.ContactID.String(),
+			"whatsapp_account":    transfer.WhatsAppAccount,
 			"initiating_agent_id": initiatingAgentID.String(),
-			"transferred_at":     transfer.TransferredAt.Format(time.RFC3339),
+			"transferred_at":      transfer.TransferredAt.Format(time.RFC3339),
 		}
 		m.wsHub.BroadcastToUser(session.OrganizationID, *targetAgentID, websocket.WSMessage{
 			Type:    websocket.TypeCallTransferWaiting,
@@ -389,13 +389,13 @@ func (m *Manager) InitiateAgentTransfer(callLogID, initiatingAgentID uuid.UUID, 
 
 		payload := map[string]any{
 			"id":                  transfer.ID.String(),
-			"call_log_id":        transfer.CallLogID.String(),
-			"whatsapp_call_id":   transfer.WhatsAppCallID,
-			"caller_phone":       m.maybeMaskPhone(transfer.OrganizationID, transfer.CallerPhone),
-			"contact_id":         transfer.ContactID.String(),
-			"whatsapp_account":   transfer.WhatsAppAccount,
+			"call_log_id":         transfer.CallLogID.String(),
+			"whatsapp_call_id":    transfer.WhatsAppCallID,
+			"caller_phone":        m.maybeMaskPhone(transfer.OrganizationID, transfer.CallerPhone),
+			"contact_id":          transfer.ContactID.String(),
+			"whatsapp_account":    transfer.WhatsAppAccount,
 			"initiating_agent_id": initiatingAgentID.String(),
-			"transferred_at":     transfer.TransferredAt.Format(time.RFC3339),
+			"transferred_at":      transfer.TransferredAt.Format(time.RFC3339),
 		}
 		m.broadcastEvent(session.OrganizationID, websocket.TypeCallTransferWaiting, payload)
 	}
@@ -1365,4 +1365,3 @@ func (m *Manager) ResumeCall(callLogID uuid.UUID) error {
 
 	return nil
 }
-

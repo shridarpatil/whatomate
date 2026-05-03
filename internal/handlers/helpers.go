@@ -63,7 +63,6 @@ func parsePaginationWithDefaults(r *fastglue.Request, defaultLimit, maxLimit int
 	}
 }
 
-
 // parseDateParam parses a YYYY-MM-DD date from the named query parameter.
 // Returns the parsed time and true on success, or zero time and false if the
 // parameter is missing or malformed.

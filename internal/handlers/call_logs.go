@@ -144,8 +144,8 @@ func (a *App) GetCallLog(r *fastglue.Request) error {
 		Find(&transfers)
 
 	return r.SendEnvelope(map[string]any{
-		"call_log":   callLog,
-		"transfers":  transfers,
+		"call_log":  callLog,
+		"transfers": transfers,
 	})
 }
 

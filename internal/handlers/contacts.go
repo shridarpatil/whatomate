@@ -535,11 +535,11 @@ type SendMessageRequest struct {
 
 // InteractiveContent holds interactive message data
 type InteractiveContent struct {
-	Type       string           `json:"type"`                  // "button", "list", "cta_url"
-	Body       string           `json:"body"`                  // Body text
-	Buttons    []ButtonContent  `json:"buttons,omitempty"`     // For button type
-	ButtonText string           `json:"button_text,omitempty"` // For cta_url type
-	URL        string           `json:"url,omitempty"`         // For cta_url type
+	Type       string          `json:"type"`                  // "button", "list", "cta_url"
+	Body       string          `json:"body"`                  // Body text
+	Buttons    []ButtonContent `json:"buttons,omitempty"`     // For button type
+	ButtonText string          `json:"button_text,omitempty"` // For cta_url type
+	URL        string          `json:"url,omitempty"`         // For cta_url type
 }
 
 // ButtonContent represents a button in interactive messages

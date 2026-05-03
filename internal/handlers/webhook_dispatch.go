@@ -15,12 +15,11 @@ import (
 	"github.com/shridarpatil/whatomate/internal/models"
 )
 
-
 // OutboundWebhookPayload represents the structure sent to external webhook endpoints
 type OutboundWebhookPayload struct {
-	Event     string      `json:"event"`
-	Timestamp time.Time   `json:"timestamp"`
-	Data      any `json:"data"`
+	Event     string    `json:"event"`
+	Timestamp time.Time `json:"timestamp"`
+	Data      any       `json:"data"`
 }
 
 // MessageEventData represents data for message events

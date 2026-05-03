@@ -231,12 +231,12 @@ func (m *Manager) InitiateOutgoingCall(
 
 	// 15. Broadcast event
 	m.broadcastEvent(orgID, websocket.TypeOutgoingCallInitiated, map[string]any{
-		"call_log_id":    callLog.ID.String(),
-		"call_id":        callID,
-		"contact_id":     contactID.String(),
-		"contact_phone":  contactPhone,
-		"agent_id":       agentID.String(),
-		"started_at":     now.Format(time.RFC3339),
+		"call_log_id":   callLog.ID.String(),
+		"call_id":       callID,
+		"contact_id":    contactID.String(),
+		"contact_phone": contactPhone,
+		"agent_id":      agentID.String(),
+		"started_at":    now.Format(time.RFC3339),
 	})
 
 	return callLog.ID, agentSDP.SDP, nil
@@ -394,12 +394,12 @@ func (m *Manager) HandleOutgoingCallWebhook(callID, event, sdpAnswer string) {
 		}
 
 		m.broadcastEvent(session.OrganizationID, websocket.TypeOutgoingCallEnded, map[string]any{
-			"call_log_id":      session.CallLogID.String(),
-			"call_id":          callID,
-			"contact_id":       session.ContactID.String(),
-			"contact_phone":    session.TargetPhone,
-			"ended_at":         now.Format(time.RFC3339),
-			"disconnected_by":  disconnectedBy,
+			"call_log_id":     session.CallLogID.String(),
+			"call_id":         callID,
+			"contact_id":      session.ContactID.String(),
+			"contact_phone":   session.TargetPhone,
+			"ended_at":        now.Format(time.RFC3339),
+			"disconnected_by": disconnectedBy,
 		})
 
 		m.cleanupSession(callID)
@@ -571,4 +571,3 @@ func (m *Manager) startOutgoingBridge(
 	// WA audio → Agent speaker, Agent mic → WA speaker
 	go bridge.Start(waRemote, agentLocal, agentRemote, waLocal)
 }
-

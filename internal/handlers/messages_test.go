@@ -20,19 +20,19 @@ import (
 // mockWhatsAppServer creates a mock WhatsApp API server for testing.
 // It handles various endpoints and returns configurable responses.
 type mockWhatsAppServer struct {
-	server         *httptest.Server
-	sentMessages   []map[string]interface{}
-	uploadedMedia  []map[string]interface{}
-	returnError    bool
-	errorMessage   string
-	nextMessageID  string
-	nextMediaID    string
+	server        *httptest.Server
+	sentMessages  []map[string]any
+	uploadedMedia []map[string]any
+	returnError   bool
+	errorMessage  string
+	nextMessageID string
+	nextMediaID   string
 }
 
 func newMockWhatsAppServer() *mockWhatsAppServer {
 	m := &mockWhatsAppServer{
-		sentMessages:  make([]map[string]interface{}, 0),
-		uploadedMedia: make([]map[string]interface{}, 0),
+		sentMessages:  make([]map[string]any, 0),
+		uploadedMedia: make([]map[string]any, 0),
 		nextMessageID: "wamid.test-" + uuid.New().String()[:8],
 		nextMediaID:   "media-" + uuid.New().String()[:8],
 	}
@@ -42,8 +42,8 @@ func newMockWhatsAppServer() *mockWhatsAppServer {
 		auth := r.Header.Get("Authorization")
 		if auth != "Bearer test-token" {
 			w.WriteHeader(http.StatusUnauthorized)
-			_ = json.NewEncoder(w).Encode(map[string]interface{}{
-				"error": map[string]interface{}{
+			_ = json.NewEncoder(w).Encode(map[string]any{
+				"error": map[string]any{
 					"message": "Invalid access token",
 					"code":    190,
 				},
@@ -68,8 +68,8 @@ func newMockWhatsAppServer() *mockWhatsAppServer {
 func (m *mockWhatsAppServer) handleMessages(w http.ResponseWriter, r *http.Request) {
 	if m.returnError {
 		w.WriteHeader(http.StatusBadRequest)
-		_ = json.NewEncoder(w).Encode(map[string]interface{}{
-			"error": map[string]interface{}{
+		_ = json.NewEncoder(w).Encode(map[string]any{
+			"error": map[string]any{
 				"message": m.errorMessage,
 				"code":    100,
 			},
@@ -77,7 +77,7 @@ func (m *mockWhatsAppServer) handleMessages(w http.ResponseWriter, r *http.Reque
 		return
 	}
 
-	var body map[string]interface{}
+	var body map[string]any
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
 		w.WriteHeader(http.StatusBadRequest)
 		return
@@ -86,7 +86,7 @@ func (m *mockWhatsAppServer) handleMessages(w http.ResponseWriter, r *http.Reque
 	m.sentMessages = append(m.sentMessages, body)
 
 	w.WriteHeader(http.StatusOK)
-	_ = json.NewEncoder(w).Encode(map[string]interface{}{
+	_ = json.NewEncoder(w).Encode(map[string]any{
 		"messages": []map[string]string{{"id": m.nextMessageID}},
 	})
 }
@@ -97,12 +97,12 @@ func (m *mockWhatsAppServer) handleMediaUpload(w http.ResponseWriter, r *http.Re
 		return
 	}
 
-	m.uploadedMedia = append(m.uploadedMedia, map[string]interface{}{
+	m.uploadedMedia = append(m.uploadedMedia, map[string]any{
 		"content_type": r.Header.Get("Content-Type"),
 	})
 
 	w.WriteHeader(http.StatusOK)
-	_ = json.NewEncoder(w).Encode(map[string]interface{}{
+	_ = json.NewEncoder(w).Encode(map[string]any{
 		"id": m.nextMediaID,
 	})
 }
@@ -110,7 +110,6 @@ func (m *mockWhatsAppServer) handleMediaUpload(w http.ResponseWriter, r *http.Re
 func (m *mockWhatsAppServer) close() {
 	m.server.Close()
 }
-
 
 // testServerTransport redirects all requests to the test server
 type testServerTransport struct {
@@ -156,7 +155,6 @@ func createTestAccount(t *testing.T, app *handlers.App, orgID uuid.UUID) *models
 	return account
 }
 
-
 // --- SendOutgoingMessage Tests ---
 
 func TestApp_SendOutgoingMessage_TextMessage_Success(t *testing.T) {
@@ -198,7 +196,7 @@ func TestApp_SendOutgoingMessage_TextMessage_Success(t *testing.T) {
 	assert.Equal(t, "text", sentMsg["type"])
 	assert.Equal(t, contact.PhoneNumber, sentMsg["to"])
 
-	textContent := sentMsg["text"].(map[string]interface{})
+	textContent := sentMsg["text"].(map[string]any)
 	assert.Equal(t, "Hello, World!", textContent["body"])
 
 	// Verify message status was updated in DB
@@ -276,7 +274,7 @@ func TestApp_SendOutgoingMessage_ImageMessage_WithMediaID(t *testing.T) {
 	sentMsg := mockServer.sentMessages[0]
 	assert.Equal(t, "image", sentMsg["type"])
 
-	imageContent := sentMsg["image"].(map[string]interface{})
+	imageContent := sentMsg["image"].(map[string]any)
 	assert.Equal(t, "existing-media-id", imageContent["id"])
 	assert.Equal(t, "Check this out!", imageContent["caption"])
 
@@ -320,7 +318,7 @@ func TestApp_SendOutgoingMessage_ImageMessage_WithMediaData(t *testing.T) {
 	sentMsg := mockServer.sentMessages[0]
 	assert.Equal(t, "image", sentMsg["type"])
 
-	imageContent := sentMsg["image"].(map[string]interface{})
+	imageContent := sentMsg["image"].(map[string]any)
 	assert.Equal(t, mockServer.nextMediaID, imageContent["id"])
 }
 
@@ -357,7 +355,7 @@ func TestApp_SendOutgoingMessage_DocumentMessage(t *testing.T) {
 	sentMsg := mockServer.sentMessages[0]
 	assert.Equal(t, "document", sentMsg["type"])
 
-	docContent := sentMsg["document"].(map[string]interface{})
+	docContent := sentMsg["document"].(map[string]any)
 	assert.Equal(t, "doc-media-id", docContent["id"])
 	assert.Equal(t, "report.pdf", docContent["filename"])
 	assert.Equal(t, "Monthly report", docContent["caption"])
@@ -394,7 +392,7 @@ func TestApp_SendOutgoingMessage_VideoMessage(t *testing.T) {
 	sentMsg := mockServer.sentMessages[0]
 	assert.Equal(t, "video", sentMsg["type"])
 
-	videoContent := sentMsg["video"].(map[string]interface{})
+	videoContent := sentMsg["video"].(map[string]any)
 	assert.Equal(t, "video-media-id", videoContent["id"])
 	assert.Equal(t, "Watch this!", videoContent["caption"])
 }
@@ -429,7 +427,7 @@ func TestApp_SendOutgoingMessage_AudioMessage(t *testing.T) {
 	sentMsg := mockServer.sentMessages[0]
 	assert.Equal(t, "audio", sentMsg["type"])
 
-	audioContent := sentMsg["audio"].(map[string]interface{})
+	audioContent := sentMsg["audio"].(map[string]any)
 	assert.Equal(t, "audio-media-id", audioContent["id"])
 }
 
@@ -472,14 +470,14 @@ func TestApp_SendOutgoingMessage_InteractiveButtons(t *testing.T) {
 	sentMsg := mockServer.sentMessages[0]
 	assert.Equal(t, "interactive", sentMsg["type"])
 
-	interactive := sentMsg["interactive"].(map[string]interface{})
+	interactive := sentMsg["interactive"].(map[string]any)
 	assert.Equal(t, "button", interactive["type"])
 
-	body := interactive["body"].(map[string]interface{})
+	body := interactive["body"].(map[string]any)
 	assert.Equal(t, "Choose an option:", body["text"])
 
-	action := interactive["action"].(map[string]interface{})
-	buttons := action["buttons"].([]interface{})
+	action := interactive["action"].(map[string]any)
+	buttons := action["buttons"].([]any)
 	assert.Len(t, buttons, 2)
 }
 
@@ -521,7 +519,7 @@ func TestApp_SendOutgoingMessage_InteractiveCTAURL(t *testing.T) {
 	sentMsg := mockServer.sentMessages[0]
 	assert.Equal(t, "interactive", sentMsg["type"])
 
-	interactive := sentMsg["interactive"].(map[string]interface{})
+	interactive := sentMsg["interactive"].(map[string]any)
 	assert.Equal(t, "cta_url", interactive["type"])
 }
 
@@ -579,9 +577,9 @@ func TestApp_SendOutgoingMessage_TemplateMessage(t *testing.T) {
 	sentMsg := mockServer.sentMessages[0]
 	assert.Equal(t, "template", sentMsg["type"])
 
-	templateData := sentMsg["template"].(map[string]interface{})
+	templateData := sentMsg["template"].(map[string]any)
 	assert.Equal(t, "hello_world", templateData["name"])
-	assert.Equal(t, "en", templateData["language"].(map[string]interface{})["code"])
+	assert.Equal(t, "en", templateData["language"].(map[string]any)["code"])
 }
 
 func TestApp_SendOutgoingMessage_TemplateMessage_MissingTemplate(t *testing.T) {

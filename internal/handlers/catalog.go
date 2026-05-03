@@ -33,7 +33,7 @@ type CatalogResponse struct {
 type CatalogProductRequest struct {
 	Name        string `json:"name"`
 	Description string `json:"description"`
-	Price       int64  `json:"price"`    // Price in cents
+	Price       int64  `json:"price"` // Price in cents
 	Currency    string `json:"currency"`
 	URL         string `json:"url"`
 	ImageURL    string `json:"image_url"`

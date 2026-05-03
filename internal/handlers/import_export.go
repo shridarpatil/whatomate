@@ -29,13 +29,13 @@ type ExportConfig struct {
 
 // ImportConfig defines allowed tables and their importable columns
 type ImportConfig struct {
-	Model            any
-	Resource         string // For permission check
-	RequiredColumns  []string
-	OptionalColumns  []string
-	ColumnTransform  map[string]func(string) (any, error)
-	UniqueColumn     string // Column to check for duplicates (e.g., "phone_number")
-	BeforeCreate     func(db *gorm.DB, orgID uuid.UUID, record map[string]any) error
+	Model           any
+	Resource        string // For permission check
+	RequiredColumns []string
+	OptionalColumns []string
+	ColumnTransform map[string]func(string) (any, error)
+	UniqueColumn    string // Column to check for duplicates (e.g., "phone_number")
+	BeforeCreate    func(db *gorm.DB, orgID uuid.UUID, record map[string]any) error
 }
 
 // Supported export/import configurations

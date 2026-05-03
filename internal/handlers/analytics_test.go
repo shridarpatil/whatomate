@@ -151,8 +151,8 @@ func TestApp_GetDashboardStats_Success(t *testing.T) {
 
 	var resp struct {
 		Data struct {
-			Stats          handlers.DashboardStats            `json:"stats"`
-			RecentMessages []handlers.RecentMessageResponse   `json:"recent_messages"`
+			Stats          handlers.DashboardStats          `json:"stats"`
+			RecentMessages []handlers.RecentMessageResponse `json:"recent_messages"`
 		} `json:"data"`
 	}
 	err = json.Unmarshal(testutil.GetResponseBody(req), &resp)

@@ -26,21 +26,21 @@ type agentTransferRow struct {
 	PhoneNumber           string                `gorm:"column:phone_number"`
 	Status                models.TransferStatus `gorm:"column:status"`
 	Source                models.TransferSource `gorm:"column:source"`
-	AgentID               *uuid.UUID `gorm:"column:agent_id"`
-	TeamID                *uuid.UUID `gorm:"column:team_id"`
-	TransferredByUserID   *uuid.UUID `gorm:"column:transferred_by_user_id"`
-	Notes                 string     `gorm:"column:notes"`
-	TransferredAt         time.Time  `gorm:"column:transferred_at"`
-	ResumedAt             *time.Time `gorm:"column:resumed_at"`
-	ResumedBy             *uuid.UUID `gorm:"column:resumed_by"`
-	SLAResponseDeadline   *time.Time `gorm:"column:sla_response_deadline"`
-	SLAResolutionDeadline *time.Time `gorm:"column:sla_resolution_deadline"`
-	SLABreached           bool       `gorm:"column:sla_breached"`
-	SLABreachedAt         *time.Time `gorm:"column:sla_breached_at"`
-	EscalationLevel       int        `gorm:"column:escalation_level"`
-	EscalatedAt           *time.Time `gorm:"column:escalated_at"`
-	PickedUpAt            *time.Time `gorm:"column:picked_up_at"`
-	ExpiresAt             *time.Time `gorm:"column:expires_at"`
+	AgentID               *uuid.UUID            `gorm:"column:agent_id"`
+	TeamID                *uuid.UUID            `gorm:"column:team_id"`
+	TransferredByUserID   *uuid.UUID            `gorm:"column:transferred_by_user_id"`
+	Notes                 string                `gorm:"column:notes"`
+	TransferredAt         time.Time             `gorm:"column:transferred_at"`
+	ResumedAt             *time.Time            `gorm:"column:resumed_at"`
+	ResumedBy             *uuid.UUID            `gorm:"column:resumed_by"`
+	SLAResponseDeadline   *time.Time            `gorm:"column:sla_response_deadline"`
+	SLAResolutionDeadline *time.Time            `gorm:"column:sla_resolution_deadline"`
+	SLABreached           bool                  `gorm:"column:sla_breached"`
+	SLABreachedAt         *time.Time            `gorm:"column:sla_breached_at"`
+	EscalationLevel       int                   `gorm:"column:escalation_level"`
+	EscalatedAt           *time.Time            `gorm:"column:escalated_at"`
+	PickedUpAt            *time.Time            `gorm:"column:picked_up_at"`
+	ExpiresAt             *time.Time            `gorm:"column:expires_at"`
 
 	// Joined fields
 	ContactName       *string `gorm:"column:contact_name"`
@@ -52,11 +52,11 @@ type agentTransferRow struct {
 
 // CreateAgentTransferRequest represents the request to create an agent transfer
 type CreateAgentTransferRequest struct {
-	ContactID       string               `json:"contact_id"`
-	WhatsAppAccount string               `json:"whatsapp_account"`
-	AgentID         *string              `json:"agent_id"`
-	TeamID          *string              `json:"team_id"` // Optional team queue
-	Notes           string               `json:"notes"`
+	ContactID       string                `json:"contact_id"`
+	WhatsAppAccount string                `json:"whatsapp_account"`
+	AgentID         *string               `json:"agent_id"`
+	TeamID          *string               `json:"team_id"` // Optional team queue
+	Notes           string                `json:"notes"`
 	Source          models.TransferSource `json:"source"` // manual, flow, keyword
 }
 
@@ -68,24 +68,24 @@ type AssignTransferRequest struct {
 
 // AgentTransferResponse represents an agent transfer in API responses
 type AgentTransferResponse struct {
-	ID                string               `json:"id"`
-	ContactID         string               `json:"contact_id"`
-	ContactName       string               `json:"contact_name"`
-	PhoneNumber       string               `json:"phone_number"`
-	WhatsAppAccount   string               `json:"whatsapp_account"`
+	ID                string                `json:"id"`
+	ContactID         string                `json:"contact_id"`
+	ContactName       string                `json:"contact_name"`
+	PhoneNumber       string                `json:"phone_number"`
+	WhatsAppAccount   string                `json:"whatsapp_account"`
 	Status            models.TransferStatus `json:"status"`
 	Source            models.TransferSource `json:"source"`
-	AgentID           *string              `json:"agent_id,omitempty"`
-	AgentName         *string              `json:"agent_name,omitempty"`
-	TeamID            *string              `json:"team_id,omitempty"`
-	TeamName          *string              `json:"team_name,omitempty"`
-	TransferredBy     *string              `json:"transferred_by,omitempty"`
-	TransferredByName *string              `json:"transferred_by_name,omitempty"`
-	Notes             string               `json:"notes"`
-	TransferredAt     string               `json:"transferred_at"`
-	ResumedAt         *string              `json:"resumed_at,omitempty"`
-	ResumedBy         *string              `json:"resumed_by,omitempty"`
-	ResumedByName     *string              `json:"resumed_by_name,omitempty"`
+	AgentID           *string               `json:"agent_id,omitempty"`
+	AgentName         *string               `json:"agent_name,omitempty"`
+	TeamID            *string               `json:"team_id,omitempty"`
+	TeamName          *string               `json:"team_name,omitempty"`
+	TransferredBy     *string               `json:"transferred_by,omitempty"`
+	TransferredByName *string               `json:"transferred_by_name,omitempty"`
+	Notes             string                `json:"notes"`
+	TransferredAt     string                `json:"transferred_at"`
+	ResumedAt         *string               `json:"resumed_at,omitempty"`
+	ResumedBy         *string               `json:"resumed_by,omitempty"`
+	ResumedByName     *string               `json:"resumed_by_name,omitempty"`
 
 	// SLA fields
 	SLAResponseDeadline   *string `json:"sla_response_deadline,omitempty"`
@@ -1250,7 +1250,6 @@ func (a *App) createTransferFromKeyword(account *models.WhatsAppAccount, contact
 	)
 }
 
-
 // createTransferToTeam creates an agent transfer to a specific team with appropriate assignment
 func (a *App) createTransferToTeam(account *models.WhatsAppAccount, contact *models.Contact, teamID uuid.UUID, notes string, source models.TransferSource) {
 	if a.hasActiveAgentTransfer(account.OrganizationID, contact.ID) {
@@ -1296,7 +1295,6 @@ func (a *App) createTransferToTeam(account *models.WhatsAppAccount, contact *mod
 		"source", source,
 	)
 }
-
 
 // ReturnAgentTransfersToQueue returns all active transfers assigned to an agent back to their team queues
 // Called when an agent goes offline/unavailable

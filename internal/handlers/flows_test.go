@@ -678,8 +678,8 @@ func TestApp_DuplicateFlow_PreservesFlowJSON(t *testing.T) {
 		MetaFlowID:      "meta-flow-123",
 		FlowJSON:        models.JSONB{"version": "6.0"},
 		Screens: models.JSONBArray{
-			map[string]interface{}{
-				"id":   "SCREEN_ONE",
+			map[string]any{
+				"id":    "SCREEN_ONE",
 				"title": "Welcome",
 			},
 		},

@@ -14,24 +14,24 @@ import (
 
 // WidgetRequest represents the request body for creating/updating a widget
 type WidgetRequest struct {
-	Name        string        `json:"name"`
-	Description string        `json:"description"`
-	DataSource  string        `json:"data_source"`  // messages, contacts, campaigns, transfers, sessions
-	Metric      string        `json:"metric"`       // count, sum, avg
-	Field       string        `json:"field"`        // Field for sum/avg
-	Filters     []FilterInput `json:"filters"`      // Filter conditions
-	DisplayType  string        `json:"display_type"`   // number, percentage, chart
-	ChartType    string        `json:"chart_type"`     // line, bar, pie
-	GroupByField string        `json:"group_by_field"` // Field to group by
-	ShowChange   *bool         `json:"show_change"`
-	Color       string        `json:"color"`
-	Size        string        `json:"size"` // small, medium, large
-	Config      map[string]any `json:"config"`
-	IsShared    *bool         `json:"is_shared"`
-	GridX       *int          `json:"grid_x"`
-	GridY       *int          `json:"grid_y"`
-	GridW       *int          `json:"grid_w"`
-	GridH       *int          `json:"grid_h"`
+	Name         string         `json:"name"`
+	Description  string         `json:"description"`
+	DataSource   string         `json:"data_source"`    // messages, contacts, campaigns, transfers, sessions
+	Metric       string         `json:"metric"`         // count, sum, avg
+	Field        string         `json:"field"`          // Field for sum/avg
+	Filters      []FilterInput  `json:"filters"`        // Filter conditions
+	DisplayType  string         `json:"display_type"`   // number, percentage, chart
+	ChartType    string         `json:"chart_type"`     // line, bar, pie
+	GroupByField string         `json:"group_by_field"` // Field to group by
+	ShowChange   *bool          `json:"show_change"`
+	Color        string         `json:"color"`
+	Size         string         `json:"size"` // small, medium, large
+	Config       map[string]any `json:"config"`
+	IsShared     *bool          `json:"is_shared"`
+	GridX        *int           `json:"grid_x"`
+	GridY        *int           `json:"grid_y"`
+	GridW        *int           `json:"grid_w"`
+	GridH        *int           `json:"grid_h"`
 }
 
 // FilterInput represents a filter condition from the request
@@ -43,31 +43,31 @@ type FilterInput struct {
 
 // WidgetResponse represents the response for a widget
 type WidgetResponse struct {
-	ID           uuid.UUID     `json:"id"`
-	Name         string        `json:"name"`
-	Description  string        `json:"description"`
-	DataSource   string        `json:"data_source"`
-	Metric       string        `json:"metric"`
-	Field        string        `json:"field"`
-	Filters      []FilterInput `json:"filters"`
-	DisplayType  string        `json:"display_type"`
-	ChartType    string        `json:"chart_type"`
-	GroupByField string        `json:"group_by_field"`
-	ShowChange   bool          `json:"show_change"`
-	Color        string        `json:"color"`
-	Size         string        `json:"size"`
-	DisplayOrder int           `json:"display_order"`
-	GridX        int           `json:"grid_x"`
-	GridY        int           `json:"grid_y"`
-	GridW        int           `json:"grid_w"`
-	GridH        int           `json:"grid_h"`
+	ID           uuid.UUID      `json:"id"`
+	Name         string         `json:"name"`
+	Description  string         `json:"description"`
+	DataSource   string         `json:"data_source"`
+	Metric       string         `json:"metric"`
+	Field        string         `json:"field"`
+	Filters      []FilterInput  `json:"filters"`
+	DisplayType  string         `json:"display_type"`
+	ChartType    string         `json:"chart_type"`
+	GroupByField string         `json:"group_by_field"`
+	ShowChange   bool           `json:"show_change"`
+	Color        string         `json:"color"`
+	Size         string         `json:"size"`
+	DisplayOrder int            `json:"display_order"`
+	GridX        int            `json:"grid_x"`
+	GridY        int            `json:"grid_y"`
+	GridW        int            `json:"grid_w"`
+	GridH        int            `json:"grid_h"`
 	Config       map[string]any `json:"config"`
-	IsShared     bool          `json:"is_shared"`
-	IsDefault    bool          `json:"is_default"`
-	IsOwner      bool          `json:"is_owner"` // True if current user created this widget
-	CreatedBy    string        `json:"created_by"`
-	CreatedAt    string        `json:"created_at"`
-	UpdatedAt    string        `json:"updated_at"`
+	IsShared     bool           `json:"is_shared"`
+	IsDefault    bool           `json:"is_default"`
+	IsOwner      bool           `json:"is_owner"` // True if current user created this widget
+	CreatedBy    string         `json:"created_by"`
+	CreatedAt    string         `json:"created_at"`
+	UpdatedAt    string         `json:"updated_at"`
 }
 
 // TableRow represents a single row in a table widget
@@ -84,17 +84,17 @@ type TableRow struct {
 type WidgetDataResponse struct {
 	WidgetID      uuid.UUID          `json:"widget_id"`
 	Value         float64            `json:"value"`
-	Change        float64            `json:"change"`          // Percentage change from previous period
-	ChartData     []ChartPoint       `json:"chart_data"`      // For chart display type
-	PrevValue     float64            `json:"prev_value"`      // Previous period value
-	DataPoints    []DataPoint        `json:"data_points"`     // Breakdown data
-	GroupedSeries *GroupedSeriesData `json:"grouped_series"`  // For grouped time-series (line charts with group_by)
-	TableRows     []TableRow         `json:"table_rows"`      // For table display type
+	Change        float64            `json:"change"`         // Percentage change from previous period
+	ChartData     []ChartPoint       `json:"chart_data"`     // For chart display type
+	PrevValue     float64            `json:"prev_value"`     // Previous period value
+	DataPoints    []DataPoint        `json:"data_points"`    // Breakdown data
+	GroupedSeries *GroupedSeriesData `json:"grouped_series"` // For grouped time-series (line charts with group_by)
+	TableRows     []TableRow         `json:"table_rows"`     // For table display type
 }
 
 // GroupedSeriesData represents multiple datasets for grouped time-series charts
 type GroupedSeriesData struct {
-	Labels   []string              `json:"labels"`
+	Labels   []string               `json:"labels"`
 	Datasets []GroupedSeriesDataset `json:"datasets"`
 }
 

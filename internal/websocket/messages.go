@@ -19,12 +19,12 @@ const (
 	TypePong          = "pong"
 
 	// Agent transfer types
-	TypeAgentTransfer        = "agent_transfer"
-	TypeAgentTransferResume  = "agent_transfer_resume"
-	TypeAgentTransferAssign  = "agent_transfer_assign"
-	TypeTransferEscalation = "transfer_escalation"
-	TypeTransferExpired    = "transfer_expired"
-	TypeTransferEscalated  = "transfer_escalated"
+	TypeAgentTransfer       = "agent_transfer"
+	TypeAgentTransferResume = "agent_transfer_resume"
+	TypeAgentTransferAssign = "agent_transfer_assign"
+	TypeTransferEscalation  = "transfer_escalation"
+	TypeTransferExpired     = "transfer_expired"
+	TypeTransferEscalated   = "transfer_escalated"
 
 	// Campaign types
 	TypeCampaignStatsUpdate = "campaign_stats_update"
@@ -43,11 +43,11 @@ const (
 	TypeCallEnded    = "call_ended"
 
 	// Call transfer types
-	TypeCallTransferWaiting   = "call_transfer_waiting"
-	TypeCallTransferConnected = "call_transfer_connected"
-	TypeCallTransferCompleted = "call_transfer_completed"
-	TypeCallTransferAbandoned = "call_transfer_abandoned"
-	TypeCallTransferNoAnswer    = "call_transfer_no_answer"
+	TypeCallTransferWaiting    = "call_transfer_waiting"
+	TypeCallTransferConnected  = "call_transfer_connected"
+	TypeCallTransferCompleted  = "call_transfer_completed"
+	TypeCallTransferAbandoned  = "call_transfer_abandoned"
+	TypeCallTransferNoAnswer   = "call_transfer_no_answer"
 	TypeCallTransferReassigned = "call_transfer_reassigned"
 
 	// Call hold types

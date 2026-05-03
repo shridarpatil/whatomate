@@ -256,4 +256,3 @@ func (a *App) GetCallPermission(r *fastglue.Request) error {
 		"status": status,
 	})
 }
-

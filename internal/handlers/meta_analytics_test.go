@@ -431,4 +431,3 @@ func TestApp_RefreshMetaAnalyticsCache_ClearsOnlyOrgScopedKeys(t *testing.T) {
 		assert.Equal(t, int64(1), exists, "orgB key must NOT be deleted: %s", k)
 	}
 }
-

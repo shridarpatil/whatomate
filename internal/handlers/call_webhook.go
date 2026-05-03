@@ -20,11 +20,11 @@ func (a *App) processCallWebhook(phoneNumberID string, call any) {
 		FromUserID string `json:"from_user_id,omitempty"` // BSUID
 		To         string `json:"to"`
 		ToUserID   string `json:"to_user_id,omitempty"` // BSUID
-		Timestamp string `json:"timestamp"`
-		Type      string `json:"type"`
-		Event     string `json:"event"`
-		Direction string `json:"direction,omitempty"`
-		Session   *struct {
+		Timestamp  string `json:"timestamp"`
+		Type       string `json:"type"`
+		Event      string `json:"event"`
+		Direction  string `json:"direction,omitempty"`
+		Session    *struct {
 			SDPType string `json:"sdp_type"`
 			SDP     string `json:"sdp"`
 		} `json:"session,omitempty"`

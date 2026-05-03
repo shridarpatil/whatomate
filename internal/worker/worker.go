@@ -52,7 +52,6 @@ func New(cfg *config.Config, db *gorm.DB, rdb *redis.Client, log logf.Logger) (*
 	}, nil
 }
 
-
 // Run starts the worker and processes jobs until context is cancelled
 func (w *Worker) Run(ctx context.Context) error {
 	w.Log.Info("Worker starting")
@@ -293,4 +292,3 @@ func (w *Worker) Close() error {
 	}
 	return nil
 }
-

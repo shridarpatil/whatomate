@@ -14,29 +14,29 @@ import (
 
 // FlowRequest represents the request body for creating/updating a flow
 type FlowRequest struct {
-	WhatsAppAccount string                 `json:"whatsapp_account" validate:"required"`
-	Name            string                 `json:"name" validate:"required"`
-	Category        string                 `json:"category"`
-	JSONVersion     string                 `json:"json_version"`
+	WhatsAppAccount string         `json:"whatsapp_account" validate:"required"`
+	Name            string         `json:"name" validate:"required"`
+	Category        string         `json:"category"`
+	JSONVersion     string         `json:"json_version"`
 	FlowJSON        map[string]any `json:"flow_json"`
 	Screens         []any          `json:"screens"`
 }
 
 // FlowResponse represents the response for a flow
 type FlowResponse struct {
-	ID              uuid.UUID              `json:"id"`
-	WhatsAppAccount string                 `json:"whatsapp_account"`
-	MetaFlowID      string                 `json:"meta_flow_id"`
-	Name            string                 `json:"name"`
-	Status          string                 `json:"status"`
-	Category        string                 `json:"category"`
-	JSONVersion     string                 `json:"json_version"`
+	ID              uuid.UUID      `json:"id"`
+	WhatsAppAccount string         `json:"whatsapp_account"`
+	MetaFlowID      string         `json:"meta_flow_id"`
+	Name            string         `json:"name"`
+	Status          string         `json:"status"`
+	Category        string         `json:"category"`
+	JSONVersion     string         `json:"json_version"`
 	FlowJSON        map[string]any `json:"flow_json"`
 	Screens         []any          `json:"screens"`
-	PreviewURL      string                 `json:"preview_url"`
-	HasLocalChanges bool                   `json:"has_local_changes"`
-	CreatedAt       string                 `json:"created_at"`
-	UpdatedAt       string                 `json:"updated_at"`
+	PreviewURL      string         `json:"preview_url"`
+	HasLocalChanges bool           `json:"has_local_changes"`
+	CreatedAt       string         `json:"created_at"`
+	UpdatedAt       string         `json:"updated_at"`
 }
 
 // ListFlows returns all flows for the organization

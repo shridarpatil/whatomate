@@ -217,7 +217,7 @@ func TestClearContactChatbotTracking_ClearsFields(t *testing.T) {
 
 	// Set chatbot tracking fields first
 	now := time.Now()
-	require.NoError(t, app.DB.Model(contact).Updates(map[string]interface{}{
+	require.NoError(t, app.DB.Model(contact).Updates(map[string]any{
 		"chatbot_last_message_at": now,
 		"chatbot_reminder_sent":   true,
 	}).Error)

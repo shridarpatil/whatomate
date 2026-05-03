@@ -120,7 +120,7 @@ func (c *Client) buildAuthComponents(template *TemplateSubmission) []map[string]
 	// FOOTER component — only code_expiration_minutes (optional, 1-90)
 	if template.CodeExpirationMinutes > 0 {
 		components = append(components, map[string]any{
-			"type":                   "FOOTER",
+			"type":                    "FOOTER",
 			"code_expiration_minutes": template.CodeExpirationMinutes,
 		})
 	}

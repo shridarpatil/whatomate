@@ -891,4 +891,3 @@ func (a *App) SendTemplateMessage(r *fastglue.Request) error {
 	}
 	return r.SendEnvelope(response)
 }
-
