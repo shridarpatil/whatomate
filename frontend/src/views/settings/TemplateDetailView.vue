@@ -447,6 +447,13 @@ async function save() {
     toast.error(t('templates.bodyRequired', 'Body content is required'))
     return
   }
+  if (!isAuthentication.value
+    && ['IMAGE', 'VIDEO', 'DOCUMENT'].includes(form.value.header_type)
+    && !form.value.header_content) {
+    const fallback = `Upload a sample ${form.value.header_type.toLowerCase()} before saving — Meta requires it for template approval.`
+    toast.error(t('templates.headerMediaRequired', fallback))
+    return
+  }
   if (!isAuthentication.value) {
     if (hasMixedVariables.value) {
       toast.error(t('templates.mixedVariables', 'Cannot mix positional ({{1}}, {{2}}) and named ({{name}}) variables. Use one type only.'))
@@ -485,7 +492,7 @@ async function save() {
       language: form.value.language,
       category: form.value.category,
       header_type: isAuthentication.value ? 'NONE' : form.value.header_type,
-      header_content: form.value.header_type === 'TEXT' && !isAuthentication.value ? form.value.header_content : '',
+      header_content: isAuthentication.value ? '' : form.value.header_content,
       body_content: isAuthentication.value ? '{{1}} is your verification code.' : form.value.body_content,
       footer_content: isAuthentication.value ? '' : form.value.footer_content,
       buttons: form.value.buttons,

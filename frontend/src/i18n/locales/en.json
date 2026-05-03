@@ -865,6 +865,7 @@
     "uploadMedia": "Upload",
     "selectedFile": "Selected: {filename} (click Upload to get handle)",
     "mediaUploadedSuccess": "Media uploaded successfully",
+    "headerMediaRequired": "Upload a sample media file before saving — Meta requires it for template approval.",
     "acceptedFormats": "Accepted formats",
     "imageFormats": "Accepted: JPEG, PNG (max 5MB)",
     "videoFormats": "Accepted: MP4 (max 16MB)",

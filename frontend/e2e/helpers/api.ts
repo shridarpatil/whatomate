@@ -357,6 +357,8 @@ export class ApiHelper {
     status?: string
     whatsapp_account?: string
     buttons?: Array<{ type: string; text: string }>
+    header_type?: string
+    header_content?: string
   }): Promise<any> {
     const response = await this.request.post(`${BASE_URL}/api/templates`, {
       headers: this.csrfHeaders,
