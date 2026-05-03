@@ -215,15 +215,31 @@ The "Fetch from API" step type allows you to call external APIs and use the resp
 1. **Set API URL and Method**
 
    Enter the API endpoint URL and select the HTTP method (GET, POST, PUT, PATCH).
-   Use `{{variable}}` syntax to include session data in the URL.
+   Use `{{variable}}` syntax to include session data, including built-in
+   variables like `{{phone_number}}` (see [Built-in variables](#built-in-variables)
+   below).
+
+   ```
+   https://api.example.com/users/{{phone_number}}
+   ```
 
 2. **Add Headers (Optional)**
 
    Configure custom headers like Authorization tokens or API keys.
+   Variables are substituted in header values too:
+
+   ```
+   X-User-Phone: {{phone_number}}
+   Authorization: Bearer {{api_token}}
+   ```
 
 3. **Configure Request Body (POST/PUT/PATCH)**
 
-   Enter JSON body with variables: `{"phone": "{{phone_number}}", "name": "{{name}}"}`
+   Enter JSON body with variables. The same substitution rules apply:
+
+   ```json
+   {"phone": "{{phone_number}}", "name": "{{name}}"}
+   ```
 
 4. **Set Response Mapping**
 
@@ -237,6 +253,35 @@ The "Fetch from API" step type allows you to call external APIs and use the resp
    Use the template syntax to format the API response data.
 
 </Steps>
+
+#### Built-in variables
+
+The following variables are always available inside a flow-step API
+config (URL, headers, body) — no capture step required:
+
+| Variable | Value |
+|---|---|
+| `{{phone_number}}` | The contact's WhatsApp number in E.164 format (e.g. `+919876543210`). |
+| `{{_flow_id}}` | UUID of the running flow. |
+| `{{_flow_name}}` | Human-readable name of the flow. |
+
+Anything else has to come from somewhere — typically:
+- An earlier flow step with a `Store As` configured (user input gets saved
+  under that key for later steps).
+- A previous API step's `response_mapping` (mapped fields are persisted
+  into the session for the rest of the flow).
+
+The same built-ins are also substituted in **flow-completion webhook**
+URLs, custom bodies, and custom headers, so you can fire any of these
+at downstream systems when a flow finishes.
+
+<Aside type="note">
+  Substitution is verbatim — there's no URL-encoding pass. For
+  `{{phone_number}}` (which always starts with `+`), this is fine inside
+  URL paths but not inside query strings, where some servers parse `+`
+  as a space. Prefer `https://api.example.com/users/{{phone_number}}`
+  over `?phone={{phone_number}}` when possible.
+</Aside>
 
 ### Template Syntax
 
