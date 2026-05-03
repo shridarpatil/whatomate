@@ -35,6 +35,46 @@ View and manage template details:
 - **Footer** - Optional footer text
 - **Buttons** - Call-to-action or quick reply buttons
 
+## Media Headers (Image, Video, Document)
+
+Templates with an `IMAGE`, `VIDEO`, or `DOCUMENT` header require a **sample media file** that Meta will review along with the template text. Without this sample, Meta will reject the template — and Whatomate enforces the same check before submission, so a template with a media header can't be saved or published until you've uploaded one.
+
+### Uploading a sample
+
+1. Pick the WhatsApp account in the Details card. The upload calls Meta's API and needs to know which account it belongs to.
+2. In the Header card, change **Header Type** to `Image`, `Video`, or `Document`.
+3. Pick a file using the file selector that appears.
+4. Click **Upload**. The button stays disabled until you've selected a file. On success a green "Media uploaded" pill appears with a truncated handle (`4::aW1hZ2Uv…`) — that's the reference Meta will use when reviewing.
+5. Click **Save**. **The handle is only persisted on save** — leaving the page after upload but before saving will lose the handle and you'll have to re-upload.
+6. Click **Publish** (or **Republish** if you're updating an approved template) to send the template + sample to Meta for approval.
+
+### File limits
+
+| Header type | Accepted formats | Max size |
+|---|---|---|
+| IMAGE | JPEG, PNG | 5 MB |
+| VIDEO | MP4 | 16 MB |
+| DOCUMENT | PDF | 100 MB |
+
+<Aside type="note">
+  The sample you upload here is **only used by Meta for template review**. When you actually send a message using the template, the recipient sees the media you supply at send time (via `header_params` in the API or by attaching media in the chat composer) — the sample is not the media that goes out to customers.
+</Aside>
+
+<Aside type="caution">
+  Don't upload customer data or anything sensitive as the sample. Meta's review team will see it. Use a generic placeholder image / document.
+</Aside>
+
+## Publishing Templates
+
+The lifecycle of a template is **Draft → Pending → Approved (or Rejected)**:
+
+1. **Create** — fill in the editor and click **Save**. The template lands in your local DB as `DRAFT`. It is not visible to Meta yet, and cannot be used to send messages.
+2. **Publish** — click **Publish**. Whatomate submits the template (including any media handle) to Meta and the status becomes `PENDING`.
+3. **Meta reviews** — typically minutes to 24 hours. The status updates to `APPROVED` or `REJECTED` on the next sync.
+4. **Republish** — only `DRAFT` and `REJECTED` templates can be edited and republished. Approved templates are locked except for the body of `MARKETING` and `UTILITY` categories (Meta limits which fields are editable post-approval).
+
+If publish fails with "Template has IMAGE header but no media file has been uploaded", the upload either wasn't completed or wasn't saved — go back to step 4 of [Uploading a sample](#uploading-a-sample).
+
 ## Template Variables
 
 Templates support dynamic variables that are replaced with actual values when sending messages.
