@@ -1003,3 +1003,79 @@ func TestEvaluateExpression_Parentheses(t *testing.T) {
 func TestEvaluateExpression_EmptyExpression(t *testing.T) {
 	assert.False(t, evaluateExpression("", map[string]interface{}{}))
 }
+
+// =============================================================================
+// fetchApiResponse — phone_number injection (parity with fetchAPIContext)
+// =============================================================================
+
+// newFetchApiResponseTestApp builds a minimal App that exercises only the HTTP
+// path of fetchApiResponse — no DB / Redis / WhatsApp client. Lets the test
+// run without TEST_DATABASE_URL.
+func newFetchApiResponseTestApp(t *testing.T) *App {
+	t.Helper()
+	return &App{
+		Log:        testutil.NopLogger(),
+		HTTPClient: http.DefaultClient,
+	}
+}
+
+// TestFetchApiResponse_InjectsPhoneNumber verifies that {{phone_number}} in
+// flow-step API URLs, bodies, and headers is substituted from session.PhoneNumber,
+// matching the implicit-variable behavior of fetchAPIContext.
+func TestFetchApiResponse_InjectsPhoneNumber(t *testing.T) {
+	app := newFetchApiResponseTestApp(t)
+
+	var capturedPath, capturedBody, capturedHeader string
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		capturedPath = r.URL.Path + "?" + r.URL.RawQuery
+		capturedHeader = r.Header.Get("X-User-Phone")
+		buf := make([]byte, r.ContentLength)
+		_, _ = r.Body.Read(buf)
+		capturedBody = string(buf)
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte(`{"message":"ok"}`))
+	}))
+	t.Cleanup(server.Close)
+
+	session := &models.ChatbotSession{
+		PhoneNumber: "+15551234567",
+		SessionData: models.JSONB{},
+	}
+	apiConfig := models.JSONB{
+		"url":    server.URL + "/lookup?phone={{phone_number}}",
+		"method": "POST",
+		"body":   `{"caller":"{{phone_number}}"}`,
+		"headers": map[string]any{
+			"X-User-Phone": "{{phone_number}}",
+		},
+	}
+
+	resp, err := app.fetchApiResponse(apiConfig, session, "")
+	require.NoError(t, err)
+	require.NotNil(t, resp)
+
+	// executeConfiguredAPI does verbatim string substitution (no URL encoding).
+	// We just need to confirm the placeholder was replaced.
+	assert.Contains(t, capturedPath, "15551234567", "URL query should be substituted")
+	assert.Equal(t, `{"caller":"+15551234567"}`, capturedBody, "body template should be substituted")
+	assert.Equal(t, "+15551234567", capturedHeader, "header template should be substituted")
+}
+
+// TestFetchApiResponse_NilSession ensures the function tolerates a nil session
+// (e.g. defensive callers) without panicking.
+func TestFetchApiResponse_NilSession(t *testing.T) {
+	app := newFetchApiResponseTestApp(t)
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte(`{"message":"ok"}`))
+	}))
+	t.Cleanup(server.Close)
+
+	apiConfig := models.JSONB{
+		"url":    server.URL,
+		"method": "GET",
+	}
+	resp, err := app.fetchApiResponse(apiConfig, nil, "hello")
+	require.NoError(t, err)
+	assert.Equal(t, "hello", resp.Message)
+}

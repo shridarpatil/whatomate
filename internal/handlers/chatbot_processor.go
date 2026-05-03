@@ -1358,7 +1358,7 @@ func (a *App) sendStepMessage(account *models.WhatsAppAccount, session *models.C
 	case models.FlowStepTypeAPIFetch:
 		// Fetch response from external API (may include message + buttons)
 		// Pass the step message as template - it will be processed with API response data
-		apiResp, err := a.fetchApiResponse(step.ApiConfig, session.SessionData, step.Message)
+		apiResp, err := a.fetchApiResponse(step.ApiConfig, session, step.Message)
 		if err != nil {
 			a.Log.Error("Failed to fetch API response", "error", err, "step", step.StepName)
 			// Use fallback message if configured, otherwise use the step message
@@ -1610,10 +1610,23 @@ type ApiResponse struct {
 }
 
 // fetchApiResponse fetches a response from an external API, supporting message + buttons
-// and response_mapping for storing API data in session variables
-func (a *App) fetchApiResponse(apiConfig models.JSONB, sessionData models.JSONB, messageTemplate string) (*ApiResponse, error) {
+// and response_mapping for storing API data in session variables.
+//
+// Mirrors fetchAPIContext in seeding implicit variables (phone_number) so flow-step
+// API templates can interpolate {{phone_number}} just like AI-context API templates.
+func (a *App) fetchApiResponse(apiConfig models.JSONB, session *models.ChatbotSession, messageTemplate string) (*ApiResponse, error) {
 	if apiConfig == nil {
 		return nil, fmt.Errorf("API config is empty")
+	}
+
+	sessionData := models.JSONB{}
+	if session != nil {
+		sessionData = session.SessionData
+		if sessionData == nil {
+			sessionData = models.JSONB{}
+			session.SessionData = sessionData
+		}
+		sessionData["phone_number"] = session.PhoneNumber
 	}
 
 	replaceVar := func(s string) string { return processTemplate(s, sessionData) }
