@@ -1408,8 +1408,8 @@ async function sendMediaMessage() {
       </div>
 
       <!-- Contacts -->
-      <ScrollArea :ref="(el: any) => contactsScroll.scrollAreaRef.value = el" class="flex-1">
-        <div class="py-1">
+      <ScrollArea :ref="(el: any) => contactsScroll.scrollAreaRef.value = el" orientation="vertical" class="flex-1">
+        <div class="py-1 w-full">
           <div
             v-for="contact in contactsStore.sortedContacts"
             :key="contact.id"
@@ -1427,7 +1427,10 @@ async function sendMediaMessage() {
             </Avatar>
             <div class="flex-1 min-w-0">
               <div class="flex items-center justify-between gap-2">
-                <p class="flex-1 min-w-0 text-sm font-medium truncate text-white light:text-gray-900">
+                <p
+                  class="flex-1 min-w-0 text-sm font-medium truncate text-white light:text-gray-900"
+                  :title="contact.name || contact.phone_number"
+                >
                   {{ contact.name || contact.phone_number }}
                 </p>
                 <span class="flex-shrink-0 text-[11px] text-white/40 light:text-gray-500">
