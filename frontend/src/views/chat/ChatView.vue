@@ -120,11 +120,12 @@ const isSending = ref(false)
 const isAssignDialogOpen = ref(false)
 const isTransferring = ref(false)
 const isResuming = ref(false)
-// Tracks new incoming messages that arrived while the user is scrolled up.
+// Tracks incoming messages that arrived while the chat is open.
 // Surfaced as a "N unread messages" pill at the top of the chat panel
-// (WhatsApp-style); cleared when the user scrolls to the bottom or clicks
-// the pill. See issue #280.
+// (WhatsApp-style). Click the pill to jump up to the first message of
+// the unread batch; cleared on click or contact switch. See issue #280.
 const newMessagesCount = ref(0)
+const firstUnreadId = ref<string | null>(null)
 const isAtBottom = ref(true)
 const SCROLL_BOTTOM_THRESHOLD = 80
 const isInfoPanelOpen = ref(false)
@@ -506,6 +507,7 @@ async function selectContact(id: string) {
   if (contact) {
     // Reset unread pill — fetchMessages will mark everything read on the server
     newMessagesCount.value = 0
+    firstUnreadId.value = null
     isAtBottom.value = true
 
     // Remove old scroll listener before switching contacts
@@ -585,16 +587,21 @@ async function selectContact(id: string) {
   }
 }
 
-// Watch for new messages. Outgoing (own sends) scroll to bottom as before.
-// Incoming messages bump the unread pill instead of auto-scrolling — the
-// pill is the user's signal, click it to jump to the latest (issue #280).
+// Watch for new messages. Auto-scroll if the user is already at the
+// bottom (or sent the message themselves). Every incoming message also
+// increments the unread pill; the pill click jumps up to the first
+// message of the batch so the user can read forward (issue #280).
 watch(() => contactsStore.messages.length, (newLen, oldLen) => {
   if (newLen <= oldLen) return
   const latest = contactsStore.messages[newLen - 1]
   const isIncoming = latest?.direction === 'incoming'
   if (isIncoming) {
+    if (newMessagesCount.value === 0) {
+      firstUnreadId.value = latest.id
+    }
     newMessagesCount.value += 1
-  } else {
+  }
+  if (isAtBottom.value || !isIncoming) {
     scrollToBottom()
   }
 })
@@ -981,10 +988,15 @@ function scrollToBottom(instant = false) {
   })
 }
 
-function jumpToLatest() {
+function jumpToFirstUnread() {
+  if (firstUnreadId.value) {
+    const el = document.getElementById(`message-${firstUnreadId.value}`)
+    if (el) {
+      el.scrollIntoView({ behavior: 'smooth', block: 'start' })
+    }
+  }
   newMessagesCount.value = 0
-  isAtBottom.value = true
-  scrollToBottom()
+  firstUnreadId.value = null
 }
 
 function getMessageStatusIcon(status: string) {
@@ -1683,7 +1695,7 @@ async function sendMediaMessage() {
               v-if="newMessagesCount > 0"
               type="button"
               class="absolute top-2 left-1/2 -translate-x-1/2 z-20 px-3 py-1 bg-white/[0.08] light:bg-gray-200 backdrop-blur-sm rounded-full text-[11px] text-white/70 light:text-gray-700 font-medium shadow-sm hover:bg-white/[0.12] light:hover:bg-gray-300 transition-colors"
-              @click="jumpToLatest"
+              @click="jumpToFirstUnread"
             >
               {{ newMessagesCount }} {{ newMessagesCount === 1 ? $t('chat.unreadMessage', 'unread message') : $t('chat.unreadMessages', 'unread messages') }}
             </button>
@@ -2038,7 +2050,7 @@ async function sendMediaMessage() {
               </div>
             </div>
             </template>
-            <div ref="messagesEndRef" style="overflow-anchor: none" />
+            <div ref="messagesEndRef" />
           </div>
         </ScrollArea>
         </div>
