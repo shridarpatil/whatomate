@@ -2038,7 +2038,7 @@ async function sendMediaMessage() {
               </div>
             </div>
             </template>
-            <div ref="messagesEndRef" />
+            <div ref="messagesEndRef" style="overflow-anchor: none" />
           </div>
         </ScrollArea>
         </div>
