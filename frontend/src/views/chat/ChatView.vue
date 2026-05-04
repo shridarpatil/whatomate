@@ -246,7 +246,14 @@ const messagesScroll = useInfiniteScroll({
 
 function updateAtBottom(el: HTMLElement) {
   const distanceFromBottom = el.scrollHeight - el.clientHeight - el.scrollTop
+  const wasAtBottom = isAtBottom.value
   isAtBottom.value = distanceFromBottom < SCROLL_BOTTOM_THRESHOLD
+  // User scrolled to the bottom on their own — they've "seen" the new
+  // messages, drop the unread divider.
+  if (!wasAtBottom && isAtBottom.value) {
+    newMessagesCount.value = 0
+    firstUnreadId.value = null
+  }
 }
 
 const contactId = computed(() => route.params.contactId as string | undefined)
@@ -587,15 +594,16 @@ async function selectContact(id: string) {
   }
 }
 
-// Watch for new messages. Auto-scroll if the user is already at the
-// bottom (or sent the message themselves). Every incoming message also
-// increments the unread pill; the pill click jumps up to the first
-// message of the batch so the user can read forward (issue #280).
+// Watch for new messages. WhatsApp Web style: while the browser tab is
+// focused on this chat the user is "watching", so just auto-scroll. When
+// they're on another tab, surface a "N unread messages" divider above
+// the first message that arrived while away (issue #280).
 watch(() => contactsStore.messages.length, (newLen, oldLen) => {
   if (newLen <= oldLen) return
   const latest = contactsStore.messages[newLen - 1]
   const isIncoming = latest?.direction === 'incoming'
-  if (isIncoming) {
+  const tabHidden = typeof document !== 'undefined' && document.visibilityState === 'hidden'
+  if (isIncoming && tabHidden) {
     if (newMessagesCount.value === 0) {
       firstUnreadId.value = latest.id
     }
@@ -988,16 +996,6 @@ function scrollToBottom(instant = false) {
   })
 }
 
-function jumpToFirstUnread() {
-  if (firstUnreadId.value) {
-    const el = document.getElementById(`message-${firstUnreadId.value}`)
-    if (el) {
-      el.scrollIntoView({ behavior: 'smooth', block: 'start' })
-    }
-  }
-  newMessagesCount.value = 0
-  firstUnreadId.value = null
-}
 
 function getMessageStatusIcon(status: string) {
   switch (status) {
@@ -1689,18 +1687,6 @@ async function sendMediaMessage() {
             </div>
           </Transition>
 
-          <!-- Unread-messages pill (WhatsApp-style; click to jump to bottom) -->
-          <Transition name="sticky-date">
-            <button
-              v-if="newMessagesCount > 0"
-              type="button"
-              class="absolute top-2 left-1/2 -translate-x-1/2 z-20 px-3 py-1 bg-white/[0.08] light:bg-gray-200 backdrop-blur-sm rounded-full text-[11px] text-white/70 light:text-gray-700 font-medium shadow-sm hover:bg-white/[0.12] light:hover:bg-gray-300 transition-colors"
-              @click="jumpToFirstUnread"
-            >
-              {{ newMessagesCount }} {{ newMessagesCount === 1 ? $t('chat.unreadMessage', 'unread message') : $t('chat.unreadMessages', 'unread messages') }}
-            </button>
-          </Transition>
-
           <ScrollArea :ref="(el: any) => messagesScroll.scrollAreaRef.value = el" class="h-full p-3 chat-background">
             <div class="space-y-2">
               <!-- Loading indicator for older messages -->
@@ -1723,6 +1709,19 @@ async function sendMediaMessage() {
                   <div class="px-3 py-1 bg-white/[0.06] light:bg-gray-200 rounded-full text-[11px] text-white/40 light:text-gray-600 font-medium">
                     {{ getDateLabel(message.created_at) }}
                   </div>
+                </div>
+
+                <!-- Unread divider (WhatsApp-style; appears above the first
+                     message that arrived while the tab was hidden) -->
+                <div
+                  v-if="newMessagesCount > 0 && message.id === firstUnreadId"
+                  class="flex items-center justify-center my-3"
+                >
+                  <div class="flex-1 h-px bg-emerald-500/30" />
+                  <div class="px-3 text-[11px] text-emerald-400 light:text-emerald-700 font-medium uppercase tracking-wide">
+                    {{ newMessagesCount }} {{ newMessagesCount === 1 ? $t('chat.unreadMessage', 'unread message') : $t('chat.unreadMessages', 'unread messages') }}
+                  </div>
+                  <div class="flex-1 h-px bg-emerald-500/30" />
                 </div>
 
               <!-- Message bubble -->
