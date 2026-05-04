@@ -603,3 +603,41 @@ func TestBodyParamsToComponents_NamedParamsRetainLexicalOrder(t *testing.T) {
 	assert.Equal(t, "order_id", params[1]["parameter_name"])
 	assert.Equal(t, "o1", params[1]["text"])
 }
+
+// Document headers must include filename — Meta returns 132012 "Header
+// Format Mismatch" without it. Issue #351.
+func TestBuildTemplateComponents_DocumentHeaderIncludesFilename(t *testing.T) {
+	components := whatsapp.BuildTemplateComponents(nil, "DOCUMENT", "media-id-123", "invoice.pdf")
+	require.Len(t, components, 1)
+	assert.Equal(t, "header", components[0]["type"])
+
+	params := components[0]["parameters"].([]map[string]any)
+	require.Len(t, params, 1)
+	assert.Equal(t, "document", params[0]["type"])
+
+	doc := params[0]["document"].(map[string]any)
+	assert.Equal(t, "media-id-123", doc["id"])
+	assert.Equal(t, "invoice.pdf", doc["filename"])
+}
+
+func TestBuildTemplateComponents_ImageHeaderOmitsFilename(t *testing.T) {
+	components := whatsapp.BuildTemplateComponents(nil, "IMAGE", "media-id-456", "photo.jpg")
+	require.Len(t, components, 1)
+	params := components[0]["parameters"].([]map[string]any)
+	img := params[0]["image"].(map[string]any)
+	assert.Equal(t, "media-id-456", img["id"])
+	_, hasFilename := img["filename"]
+	assert.False(t, hasFilename, "image headers must not include filename")
+}
+
+func TestBuildTemplateComponents_DocumentHeaderEmptyFilename(t *testing.T) {
+	// If no filename was supplied, don't include the key — better than sending
+	// an empty string Meta might reject.
+	components := whatsapp.BuildTemplateComponents(nil, "DOCUMENT", "media-id-789", "")
+	require.Len(t, components, 1)
+	params := components[0]["parameters"].([]map[string]any)
+	doc := params[0]["document"].(map[string]any)
+	assert.Equal(t, "media-id-789", doc["id"])
+	_, hasFilename := doc["filename"]
+	assert.False(t, hasFilename, "empty filename should not be set")
+}
