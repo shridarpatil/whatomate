@@ -585,19 +585,16 @@ async function selectContact(id: string) {
   }
 }
 
-// Watch for new messages. Auto-scroll only when the user is already at
-// the bottom (or sent the message themselves) — otherwise we'd yank them
-// out of older history they're reading. Every new incoming message bumps
-// the unread pill regardless; the pill clears only on click or contact
-// switch (issue #280).
+// Watch for new messages. Outgoing (own sends) scroll to bottom as before.
+// Incoming messages bump the unread pill instead of auto-scrolling — the
+// pill is the user's signal, click it to jump to the latest (issue #280).
 watch(() => contactsStore.messages.length, (newLen, oldLen) => {
   if (newLen <= oldLen) return
   const latest = contactsStore.messages[newLen - 1]
   const isIncoming = latest?.direction === 'incoming'
   if (isIncoming) {
     newMessagesCount.value += 1
-  }
-  if (isAtBottom.value || !isIncoming) {
+  } else {
     scrollToBottom()
   }
 })
