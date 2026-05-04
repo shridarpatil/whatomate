@@ -246,14 +246,7 @@ const messagesScroll = useInfiniteScroll({
 
 function updateAtBottom(el: HTMLElement) {
   const distanceFromBottom = el.scrollHeight - el.clientHeight - el.scrollTop
-  const wasAtBottom = isAtBottom.value
   isAtBottom.value = distanceFromBottom < SCROLL_BOTTOM_THRESHOLD
-  // User scrolled to the bottom on their own — they've "seen" the new
-  // messages, drop the unread divider.
-  if (!wasAtBottom && isAtBottom.value) {
-    newMessagesCount.value = 0
-    firstUnreadId.value = null
-  }
 }
 
 const contactId = computed(() => route.params.contactId as string | undefined)
@@ -450,7 +443,30 @@ onMounted(async () => {
   if (contactId.value) {
     await selectContact(contactId.value)
   }
+
+  // Auto-scroll to the unread divider and mark messages read when the agent
+  // returns — covers both tab-switch (visibilitychange) and OS window focus
+  // (focus event), since "tab visible but window unfocused" is a real state
+  // and we don't want to send blue-tick receipts when no one is looking.
+  // See issue #280.
+  document.addEventListener('visibilitychange', onUserActive)
+  window.addEventListener('focus', onUserActive)
 })
+
+function onUserActive() {
+  if (document.visibilityState !== 'visible' || !document.hasFocus()) return
+  if (!firstUnreadId.value) return
+  if (contactsStore.currentContact) {
+    contactsService.markRead(contactsStore.currentContact.id)
+      .catch(() => { /* non-critical */ })
+  }
+  nextTick(() => {
+    const el = document.getElementById(`message-${firstUnreadId.value}`)
+    if (el) {
+      el.scrollIntoView({ behavior: 'smooth', block: 'start' })
+    }
+  })
+}
 
 onUnmounted(() => {
   wsService.setCurrentContact(null)
@@ -459,6 +475,8 @@ onUnmounted(() => {
   notesStore.clearNotes()
   // Clear sticky date timeout
   if (stickyDateTimeout) clearTimeout(stickyDateTimeout)
+  document.removeEventListener('visibilitychange', onUserActive)
+  window.removeEventListener('focus', onUserActive)
 })
 
 function updateStickyDate(scrollContainer: HTMLElement) {
@@ -595,19 +613,30 @@ async function selectContact(id: string) {
 }
 
 // Watch for new messages. WhatsApp Web style: while the browser tab is
-// focused on this chat the user is "watching", so just auto-scroll. When
-// they're on another tab, surface a "N unread messages" divider above
-// the first message that arrived while away (issue #280).
+// focused on this chat the user is "watching", so auto-scroll if they're
+// at the bottom. When they're on another tab, pile up unread and surface
+// a divider above the first message that arrived while away (issue #280).
+// The two branches are mutually exclusive — auto-scrolling while the tab
+// is hidden races with the divider state.
 watch(() => contactsStore.messages.length, (newLen, oldLen) => {
   if (newLen <= oldLen) return
   const latest = contactsStore.messages[newLen - 1]
   const isIncoming = latest?.direction === 'incoming'
-  const tabHidden = typeof document !== 'undefined' && document.visibilityState === 'hidden'
-  if (isIncoming && tabHidden) {
+  // "Not actively looking" covers both other-tab (hidden) and other-window
+  // (visible but unfocused). The divider should pile in either case.
+  const userAway = typeof document !== 'undefined'
+    && (document.visibilityState === 'hidden' || !document.hasFocus())
+  if (isIncoming && userAway) {
     if (newMessagesCount.value === 0) {
       firstUnreadId.value = latest.id
     }
     newMessagesCount.value += 1
+    return
+  }
+  // Outgoing (the agent replied) — they've seen the unread, drop the divider.
+  if (!isIncoming && newMessagesCount.value > 0) {
+    newMessagesCount.value = 0
+    firstUnreadId.value = null
   }
   if (isAtBottom.value || !isIncoming) {
     scrollToBottom()
@@ -1715,13 +1744,11 @@ async function sendMediaMessage() {
                      message that arrived while the tab was hidden) -->
                 <div
                   v-if="newMessagesCount > 0 && message.id === firstUnreadId"
-                  class="flex items-center justify-center my-3"
+                  class="flex items-center justify-center my-4"
                 >
-                  <div class="flex-1 h-px bg-emerald-500/30" />
-                  <div class="px-3 text-[11px] text-emerald-400 light:text-emerald-700 font-medium uppercase tracking-wide">
+                  <div class="px-3 py-1 bg-white/[0.06] light:bg-gray-200 rounded-full text-[11px] text-white/40 light:text-gray-600 font-medium">
                     {{ newMessagesCount }} {{ newMessagesCount === 1 ? $t('chat.unreadMessage', 'unread message') : $t('chat.unreadMessages', 'unread messages') }}
                   </div>
-                  <div class="flex-1 h-px bg-emerald-500/30" />
                 </div>
 
               <!-- Message bubble -->
