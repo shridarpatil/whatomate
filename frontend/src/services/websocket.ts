@@ -312,8 +312,11 @@ class WebSocketService {
     // the server before refetching so the unread badge stays at zero
     // (otherwise the new message comes back as unread and the sidebar flashes
     // a count for a chat that's already open). See issue #280.
-    if (isViewingThisContact && payload.direction === 'incoming') {
-      contactsService.markRead(payload.contact_id)
+    // Use currentContact.id (already validated, from our /contacts response)
+    // rather than the WS payload value to avoid pushing untrusted data into
+    // a request URL.
+    if (isViewingThisContact && currentContact && payload.direction === 'incoming') {
+      contactsService.markRead(currentContact.id)
         .catch(() => { /* non-critical, will resync on next chat-open */ })
         .finally(() => store.fetchContacts())
     } else {
