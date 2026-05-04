@@ -177,7 +177,8 @@ export const contactsService = {
     api.put(`/contacts/${id}/assign`, { user_id: userId }),
   updateTags: (id: string, tags: string[]) =>
     api.put(`/contacts/${id}/tags`, { tags }),
-  getSessionData: (id: string) => api.get(`/contacts/${id}/session-data`)
+  getSessionData: (id: string) => api.get(`/contacts/${id}/session-data`),
+  markRead: (id: string) => api.post(`/contacts/${id}/mark-read`)
 }
 
 // Generic Import/Export Service

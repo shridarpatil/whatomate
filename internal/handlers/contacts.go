@@ -479,6 +479,34 @@ func (a *App) buildMessagesResponse(messages []models.Message) []MessageResponse
 	return response
 }
 
+// MarkContactRead marks all incoming messages from a contact as read.
+// Called from the frontend when a new message arrives for the chat the
+// user is currently viewing, so the sidebar unread badge stays at zero.
+func (a *App) MarkContactRead(r *fastglue.Request) error {
+	orgID, userID, err := a.getOrgAndUserID(r)
+	if err != nil {
+		return r.SendErrorEnvelope(fasthttp.StatusUnauthorized, "Unauthorized", nil, "")
+	}
+	contactID, err := parsePathUUID(r, "id", "contact")
+	if err != nil {
+		return nil
+	}
+
+	hasContactsReadPermission := a.HasPermission(userID, models.ResourceContacts, models.ActionRead, orgID)
+
+	var contact models.Contact
+	query := a.DB.Where("id = ? AND organization_id = ?", contactID, orgID)
+	if !hasContactsReadPermission {
+		query = query.Where("assigned_user_id = ?", userID)
+	}
+	if err := query.First(&contact).Error; err != nil {
+		return r.SendErrorEnvelope(fasthttp.StatusNotFound, "Contact not found", nil, "")
+	}
+
+	a.markMessagesAsRead(orgID, contactID, &contact)
+	return r.SendEnvelope(map[string]any{"status": "ok"})
+}
+
 // markMessagesAsRead marks messages as read and sends read receipts
 func (a *App) markMessagesAsRead(orgID uuid.UUID, contactID uuid.UUID, contact *models.Contact) {
 	var unreadMessages []models.Message

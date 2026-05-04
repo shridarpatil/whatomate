@@ -3,6 +3,7 @@ import { useTransfersStore } from '@/stores/transfers'
 import { useCallingStore } from '@/stores/calling'
 import { useAuthStore } from '@/stores/auth'
 import { useNotesStore } from '@/stores/notes'
+import { contactsService } from '@/services/api'
 import { toast } from 'vue-sonner'
 import router from '@/router'
 
@@ -307,8 +308,17 @@ class WebSocketService {
       }
     }
 
-    // Update contacts list (for unread count, last message preview)
-    store.fetchContacts()
+    // If the user is actively viewing this contact, mark messages read on
+    // the server before refetching so the unread badge stays at zero
+    // (otherwise the new message comes back as unread and the sidebar flashes
+    // a count for a chat that's already open). See issue #280.
+    if (isViewingThisContact && payload.direction === 'incoming') {
+      contactsService.markRead(payload.contact_id)
+        .catch(() => { /* non-critical, will resync on next chat-open */ })
+        .finally(() => store.fetchContacts())
+    } else {
+      store.fetchContacts()
+    }
   }
 
   private handleStatusUpdate(store: ReturnType<typeof useContactsStore>, payload: any) {
