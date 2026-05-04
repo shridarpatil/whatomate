@@ -1039,6 +1039,22 @@ func (a *App) hasActiveAgentTransfer(orgID, contactID uuid.UUID) bool {
 	return count > 0
 }
 
+// willChatbotHandle returns true when an incoming message is expected to be
+// handled by the chatbot — i.e. chatbot is enabled for the account and the
+// contact has no active agent transfer. Used to pre-mark messages as read
+// so the agent's contact-list unread count doesn't flash for bot-handled
+// conversations.
+func (a *App) willChatbotHandle(account *models.WhatsAppAccount, contact *models.Contact) bool {
+	if a.hasActiveAgentTransfer(account.OrganizationID, contact.ID) {
+		return false
+	}
+	settings, err := a.getChatbotSettingsCached(account.OrganizationID, account.Name)
+	if err != nil || !settings.IsEnabled {
+		return false
+	}
+	return true
+}
+
 // WebSocket broadcast helpers
 
 func (a *App) broadcastTransferCreated(transfer *models.AgentTransfer, contact *models.Contact) {

@@ -85,6 +85,11 @@ type MessageSendOptions struct {
 	// Async if true, sends in background goroutine and returns immediately
 	// Message is persisted before send, status updated after
 	Async bool
+
+	// MarkIncomingRead marks the contact's incoming messages as read after a
+	// successful send. Used for chatbot replies so a bot-handled exchange
+	// doesn't leave an "unread" badge in the agent's contact list.
+	MarkIncomingRead bool
 }
 
 // DefaultSendOptions returns options suitable for agent UI sends
@@ -104,6 +109,7 @@ func ChatbotSendOptions() MessageSendOptions {
 		DispatchWebhook:    false,
 		TrackSLA:           true,
 		Async:              false,
+		MarkIncomingRead:   true,
 	}
 }
 
@@ -432,6 +438,13 @@ func (a *App) finalizeMessageSend(msg *models.Message, req OutgoingMessageReques
 				"wamid":      wamid,
 			},
 		})
+	}
+
+	// Mark the contact's incoming messages as read once a chatbot reply has
+	// gone out. Keeps the agent's contact-list unread count clean for
+	// conversations the bot is auto-handling. See issue #280.
+	if opts.MarkIncomingRead {
+		a.markMessagesAsRead(req.Account.OrganizationID, req.Contact.ID, req.Contact)
 	}
 }
 

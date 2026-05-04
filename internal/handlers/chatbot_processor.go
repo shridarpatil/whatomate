@@ -2317,6 +2317,16 @@ func (a *App) saveIncomingMessage(account *models.WhatsAppAccount, contact *mode
 		return
 	}
 
+	// If the chatbot will handle this conversation (enabled + no active
+	// agent transfer), pre-mark the message as read so the contact-list
+	// unread badge doesn't briefly flash before the bot's reply arrives.
+	// See issue #280.
+	if a.willChatbotHandle(account, contact) {
+		a.DB.Model(&models.Message{}).Where("id = ?", message.ID).
+			Update("status", models.MessageStatusRead)
+		message.Status = models.MessageStatusRead
+	}
+
 	// Update contact's last message info
 	preview := content
 	if len(preview) > 100 {
