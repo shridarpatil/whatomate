@@ -120,6 +120,13 @@ const isSending = ref(false)
 const isAssignDialogOpen = ref(false)
 const isTransferring = ref(false)
 const isResuming = ref(false)
+// Tracks new incoming messages that arrived while the user is scrolled up.
+// Surfaced as a "N unread messages" pill at the top of the chat panel
+// (WhatsApp-style); cleared when the user scrolls to the bottom or clicks
+// the pill. See issue #280.
+const newMessagesCount = ref(0)
+const isAtBottom = ref(true)
+const SCROLL_BOTTOM_THRESHOLD = 80
 const isInfoPanelOpen = ref(false)
 const isNotesPanelOpen = ref(false)
 const contactSessionData = ref<any>(null)
@@ -229,8 +236,17 @@ const messagesScroll = useInfiniteScroll({
   },
   hasMore: computed(() => contactsStore.hasMoreMessages),
   isLoading: computed(() => contactsStore.isLoadingOlderMessages),
-  onScroll: (event) => updateStickyDate(event.target as HTMLElement)
+  onScroll: (event) => {
+    const el = event.target as HTMLElement
+    updateStickyDate(el)
+    updateAtBottom(el)
+  }
 })
+
+function updateAtBottom(el: HTMLElement) {
+  const distanceFromBottom = el.scrollHeight - el.clientHeight - el.scrollTop
+  isAtBottom.value = distanceFromBottom < SCROLL_BOTTOM_THRESHOLD
+}
 
 const contactId = computed(() => route.params.contactId as string | undefined)
 
@@ -488,6 +504,10 @@ watch(contactId, async (newId) => {
 async function selectContact(id: string) {
   const contact = contactsStore.contacts.find(c => c.id === id)
   if (contact) {
+    // Reset unread pill — fetchMessages will mark everything read on the server
+    newMessagesCount.value = 0
+    isAtBottom.value = true
+
     // Remove old scroll listener before switching contacts
     messagesScroll.cleanup()
 
@@ -565,12 +585,20 @@ async function selectContact(id: string) {
   }
 }
 
-// Watch for new messages to auto-scroll and load media
-watch(() => contactsStore.messages.length, () => {
-  scrollToBottom()
-  try {
-  } catch (e) {
-    console.error('Error loading media:', e)
+// Watch for new messages. Auto-scroll only when the user is already at
+// the bottom (or sent the message themselves) — otherwise we'd yank them
+// out of older history they're reading. Every new incoming message bumps
+// the unread pill regardless; the pill clears only on click or contact
+// switch (issue #280).
+watch(() => contactsStore.messages.length, (newLen, oldLen) => {
+  if (newLen <= oldLen) return
+  const latest = contactsStore.messages[newLen - 1]
+  const isIncoming = latest?.direction === 'incoming'
+  if (isIncoming) {
+    newMessagesCount.value += 1
+  }
+  if (isAtBottom.value || !isIncoming) {
+    scrollToBottom()
   }
 })
 
@@ -954,6 +982,12 @@ function scrollToBottom(instant = false) {
       })
     }
   })
+}
+
+function jumpToLatest() {
+  newMessagesCount.value = 0
+  isAtBottom.value = true
+  scrollToBottom()
 }
 
 function getMessageStatusIcon(status: string) {
@@ -1644,6 +1678,18 @@ async function sendMediaMessage() {
             >
               {{ stickyDate }}
             </div>
+          </Transition>
+
+          <!-- Unread-messages pill (WhatsApp-style; click to jump to bottom) -->
+          <Transition name="sticky-date">
+            <button
+              v-if="newMessagesCount > 0"
+              type="button"
+              class="absolute top-2 left-1/2 -translate-x-1/2 z-20 px-3 py-1 bg-white/[0.08] light:bg-gray-200 backdrop-blur-sm rounded-full text-[11px] text-white/70 light:text-gray-700 font-medium shadow-sm hover:bg-white/[0.12] light:hover:bg-gray-300 transition-colors"
+              @click="jumpToLatest"
+            >
+              {{ newMessagesCount }} {{ newMessagesCount === 1 ? $t('chat.unreadMessage', 'unread message') : $t('chat.unreadMessages', 'unread messages') }}
+            </button>
           </Transition>
 
           <ScrollArea :ref="(el: any) => messagesScroll.scrollAreaRef.value = el" class="h-full p-3 chat-background">
