@@ -301,17 +301,23 @@ func BodyParamsToComponents(bodyParams map[string]string) []map[string]any {
 
 // BuildTemplateComponents builds the full WhatsApp template components array,
 // including an optional header component (for IMAGE/VIDEO/DOCUMENT) and body parameters.
-func BuildTemplateComponents(bodyParams map[string]string, headerType string, headerMediaID string) []map[string]any {
+//
+// headerMediaFilename is required by Meta for DOCUMENT headers — without it, the
+// API returns error 132012 "Header Format Mismatch (Expected DOCUMENT, received
+// UNKNOWN)". It is ignored for IMAGE/VIDEO.
+func BuildTemplateComponents(bodyParams map[string]string, headerType, headerMediaID, headerMediaFilename string) []map[string]any {
 	var components []map[string]any
 
 	// Add header component if media is provided
 	if headerMediaID != "" {
 		mediaType := strings.ToLower(headerType) // "image", "video", "document"
+		mediaObj := map[string]any{"id": headerMediaID}
+		if mediaType == "document" && headerMediaFilename != "" {
+			mediaObj["filename"] = headerMediaFilename
+		}
 		headerParam := map[string]any{
-			"type": mediaType,
-			mediaType: map[string]any{
-				"id": headerMediaID,
-			},
+			"type":    mediaType,
+			mediaType: mediaObj,
 		}
 		components = append(components, map[string]any{
 			"type":       "header",
