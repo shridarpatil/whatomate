@@ -18,7 +18,10 @@ async function loginWithCredentials(page: Page, email: string, password: string)
 }
 
 test.describe('Transfers tabs respect transfers:write permission', () => {
-  const customRoleName = generateUniqueName('E2E Transfer Manager')
+  // Role names deliberately avoid the words "Agent" / "Manager" so they
+  // don't collide with users.spec.ts's hasText('Agent') filter on the role
+  // dropdown — leftover soft-deleted rows would otherwise break that test.
+  const customRoleName = generateUniqueName('E2E Tx Full')
   const fullAccessEmail = generateUniqueEmail('e2e-transfers-write')
   const readOnlyEmail = generateUniqueEmail('e2e-transfers-read')
   const password = 'Password123!'
@@ -62,7 +65,7 @@ test.describe('Transfers tabs respect transfers:write permission', () => {
       { resource: 'transfers', action: 'pickup' },
     ])
     const readRole = await api.createRole({
-      name: generateUniqueName('E2E Transfer Agent'),
+      name: generateUniqueName('E2E Tx Read'),
       description: 'Custom role with read-only transfers for e2e',
       permissions: readPerms,
     })
