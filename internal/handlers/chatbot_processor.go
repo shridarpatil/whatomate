@@ -1423,6 +1423,23 @@ func (a *App) sendStepMessage(account *models.WhatsAppAccount, session *models.C
 		a.logSessionMessage(session.ID, models.DirectionOutgoing, message, step.StepName)
 
 	case models.FlowStepTypeTransfer:
+		// Outside business hours: skip both the transfer-step message
+		// ("Connecting you to an agent...") AND the transfer itself.
+		// Send only the out-of-hours message so the customer doesn't
+		// see a confusing "transferring..." followed by "we're closed".
+		settings, _ := a.getChatbotSettingsCached(account.OrganizationID, account.Name)
+		if settings != nil && settings.BusinessHours.Enabled && len(settings.BusinessHours.Hours) > 0 {
+			if !a.isWithinBusinessHours(settings.BusinessHours.Hours) {
+				if settings.BusinessHours.OutOfHoursMessage != "" {
+					if err := a.sendAndSaveTextMessage(account, contact, settings.BusinessHours.OutOfHoursMessage); err != nil {
+						a.Log.Error("Failed to send out-of-hours message", "error", err, "contact", contact.PhoneNumber)
+					}
+				}
+				a.exitFlow(session)
+				return
+			}
+		}
+
 		// Transfer to team/agent queue
 		message = processTemplate(step.Message, session.SessionData)
 		if message != "" {
