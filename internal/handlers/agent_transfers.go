@@ -1190,6 +1190,19 @@ func (a *App) createTransferToQueue(account *models.WhatsAppAccount, contact *mo
 
 	settings, _ := a.getChatbotSettingsCached(account.OrganizationID, account.Name)
 
+	// Suppress transfers outside business hours — flow steps and the
+	// chatbot-disabled fallback would otherwise hand off to a human at
+	// 11pm. createTransferFromKeyword already does this; mirror it here.
+	if settings != nil && settings.BusinessHours.Enabled && len(settings.BusinessHours.Hours) > 0 {
+		if !a.isWithinBusinessHours(settings.BusinessHours.Hours) {
+			a.Log.Info("Outside business hours, sending out-of-hours message instead of queue transfer", "contact_id", contact.ID, "source", source)
+			if settings.BusinessHours.OutOfHoursMessage != "" {
+				_ = a.sendAndSaveTextMessage(account, contact, settings.BusinessHours.OutOfHoursMessage)
+			}
+			return
+		}
+	}
+
 	transfer := models.AgentTransfer{
 		BaseModel:       models.BaseModel{ID: uuid.New()},
 		OrganizationID:  account.OrganizationID,
@@ -1274,6 +1287,18 @@ func (a *App) createTransferToTeam(account *models.WhatsAppAccount, contact *mod
 	}
 
 	settings, _ := a.getChatbotSettingsCached(account.OrganizationID, account.Name)
+
+	// Suppress transfers outside business hours (same reason as
+	// createTransferToQueue / createTransferFromKeyword).
+	if settings != nil && settings.BusinessHours.Enabled && len(settings.BusinessHours.Hours) > 0 {
+		if !a.isWithinBusinessHours(settings.BusinessHours.Hours) {
+			a.Log.Info("Outside business hours, sending out-of-hours message instead of team transfer", "contact_id", contact.ID, "team_id", teamID, "source", source)
+			if settings.BusinessHours.OutOfHoursMessage != "" {
+				_ = a.sendAndSaveTextMessage(account, contact, settings.BusinessHours.OutOfHoursMessage)
+			}
+			return
+		}
+	}
 
 	var agentID *uuid.UUID
 	if a.Assigner != nil {
