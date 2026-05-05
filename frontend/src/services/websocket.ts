@@ -373,12 +373,13 @@ class WebSocketService {
     // Refresh to get complete data including SLA fields
     transfersStore.fetchTransfers({ status: 'active' })
 
-    // Show toast notification for admin/manager or assigned agent
-    const userRole = authStore.user?.role?.name
+    // Toast only the assigned agent — managers/admins get notification noise
+    // for every transfer in the org otherwise. They can keep the Transfers
+    // page open if they want live updates.
     const currentUserId = authStore.user?.id
     const isAssignedToMe = payload.agent_id === currentUserId
 
-    if (userRole === 'admin' || userRole === 'manager' || isAssignedToMe) {
+    if (isAssignedToMe) {
       const contactName = payload.contact_name || payload.phone_number
       toast.info('New Transfer', {
         description: `${contactName} has been transferred to ${isAssignedToMe ? 'you' : 'agent queue'}`,
@@ -441,11 +442,10 @@ class WebSocketService {
     const notifyIds: string[] = payload.escalation_notify_ids || []
     const shouldNotify = notifyIds.includes(currentUserId || '')
 
-    // Also notify admins/managers
-    const userRole = authStore.user?.role?.name
-    const isAdminOrManager = userRole === 'admin' || userRole === 'manager'
-
-    if (shouldNotify || isAdminOrManager) {
+    // Trust the backend's escalation_notify_ids list — it already includes
+    // the right people per the escalation rules. Don't broadcast to every
+    // manager too; that's just noise and risks burying real alerts.
+    if (shouldNotify) {
       const levelName = payload.level_name === 'critical' ? 'Critical' : 'Warning'
       const contactName = payload.contact_name || payload.phone_number
 

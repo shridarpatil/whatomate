@@ -46,8 +46,10 @@ const agents = ref<{ id: string; full_name: string }[]>([])
 const teams = ref<Team[]>([])
 const selectedTeamFilter = ref<string>('all')
 
-const userRole = computed(() => authStore.user?.role?.name)
-const isAdminOrManager = computed(() => userRole.value === 'admin' || userRole.value === 'manager')
+// Backend grants full transfer visibility on transfers:write (agent_transfers.go:110).
+// Honor the same permission here instead of hardcoding role names — otherwise
+// custom roles with the right permissions still see the agent-only view.
+const isAdminOrManager = computed(() => authStore.hasPermission('transfers', 'write'))
 const currentUserId = computed(() => authStore.user?.id)
 
 const myTransfers = computed(() =>
