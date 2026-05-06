@@ -252,3 +252,77 @@ test.describe('Chat template bubble', () => {
     await expect(bubble.locator('.status-icon')).toBeVisible()
   })
 })
+
+test.describe('Sending a text message via the UI', () => {
+  test.describe.configure({ mode: 'serial' })
+  test.setTimeout(60_000)
+
+  let contactId: string
+
+  test.beforeAll(async () => {
+    const ctx = await playwrightRequest.newContext()
+    const api = new ApiHelper(ctx)
+    await api.loginAsAdmin()
+
+    const contact = await api.createContact(scope.phone(), scope.name('send-contact'))
+    contactId = contact.id
+
+    // Reuse / create a WhatsApp account and pin the contact to it. Without
+    // this the message input falls back to the "no account" state and the
+    // composer is hidden.
+    const accounts = await api.getWhatsAppAccounts().catch(() => [] as { name: string }[])
+    let accountName: string
+    if (accounts.length > 0) {
+      accountName = accounts[0]!.name
+    } else {
+      const acc = await api.createWhatsAppAccount({
+        name: scope.name('send-acc').toLowerCase().replace(/\s/g, '-'),
+        phone_id: `phone-${Date.now()}`,
+        business_id: `biz-${Date.now()}`,
+        access_token: 'test-token-bubbles',
+      })
+      accountName = acc.name
+    }
+    // Open the 24-hour service window so the freeform composer is enabled
+    // (NULL last_inbound_at would render the "expired" banner instead).
+    await execSQL(`
+      UPDATE contacts
+      SET whats_app_account = '${accountName}',
+          last_inbound_at = NOW() - INTERVAL '1 hour'
+      WHERE id = '${contactId}'
+    `)
+
+    await ctx.dispose()
+  })
+
+  test('typing into the composer and clicking Send creates an outgoing bubble', async ({ page }) => {
+    await loginAsAdmin(page)
+    const chatPage = new ChatPage(page)
+    await chatPage.goto(contactId)
+
+    const messageText = `Hello via UI ${Date.now()}`
+
+    // Composer is the textarea with the Type a message... placeholder.
+    const composer = page.getByPlaceholder(/Type a message/i)
+    await expect(composer).toBeVisible({ timeout: 10_000 })
+    await composer.fill(messageText)
+
+    // Submit through the form. The textarea also binds Enter to sendMessage,
+    // but pressing Enter via .press() works too — submitting via the button
+    // exercises the same handler and is closer to a click-driven user flow.
+    await page.locator('form button[type="submit"]').last().click()
+
+    // The send hits POST /api/contacts/:id/messages — the backend persists
+    // the message and the store appends it to the list. The bubble must
+    // appear with our typed text and the outgoing class. Status (read /
+    // delivered / failed) depends on whether the test WhatsApp account
+    // accepts the send; we only assert the bubble renders.
+    const bubble = page.locator('.chat-bubble-outgoing').filter({ hasText: messageText }).last()
+    await expect(bubble).toBeVisible({ timeout: 10_000 })
+    await expect(bubble).toContainText(messageText)
+    await expect(bubble.locator('.chat-bubble-time')).toBeVisible()
+
+    // The composer should be cleared after a successful send.
+    await expect(composer).toHaveValue('')
+  })
+})
