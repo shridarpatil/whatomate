@@ -754,6 +754,11 @@ func (a *App) AssignAgentTransfer(r *fastglue.Request) error {
 		}
 	}
 
+	// Capture the previous agent before we overwrite — the unassign branch
+	// below needs it to decide whether the contact's relationship-manager
+	// pointer was pointing at the agent we're removing.
+	previousAgentID := transfer.AgentID
+
 	// Update transfer
 	transfer.AgentID = targetAgentID
 
@@ -767,12 +772,22 @@ func (a *App) AssignAgentTransfer(r *fastglue.Request) error {
 		return r.SendErrorEnvelope(fasthttp.StatusInternalServerError, "Failed to assign transfer", nil, "")
 	}
 
-	// Update contact assignment
+	// Update contact assignment using the same rule as pickup / auto-assign:
+	// only pin the relationship manager when AssignToSameAgent is enabled and
+	// the contact has no existing manager. Active transfers already grant the
+	// assigned agent visibility, so we don't need to over-write contact.AssignedUserID.
 	if targetAgentID != nil && transfer.Contact != nil {
-		a.DB.Model(transfer.Contact).Update("assigned_user_id", targetAgentID)
+		settings, _ := a.getChatbotSettingsCached(orgID, "")
+		if settings != nil && settings.AgentAssignment.AssignToSameAgent && transfer.Contact.AssignedUserID == nil {
+			a.DB.Model(transfer.Contact).Update("assigned_user_id", targetAgentID)
+		}
 	} else if targetAgentID == nil && transfer.Contact != nil {
-		// Clear assignment when unassigning
-		a.DB.Model(transfer.Contact).Update("assigned_user_id", nil)
+		// Unassigning (returning to queue) — clear the relationship-manager
+		// pointer iff it was pointing at the agent we just removed. Don't
+		// blow away a manually set manager that wasn't this transfer's agent.
+		if previousAgentID != nil && transfer.Contact.AssignedUserID != nil && *transfer.Contact.AssignedUserID == *previousAgentID {
+			a.DB.Model(transfer.Contact).Update("assigned_user_id", nil)
+		}
 	}
 
 	// Broadcast WebSocket notification
@@ -929,11 +944,22 @@ func (a *App) PickNextTransfer(r *fastglue.Request) error {
 		return r.SendErrorEnvelope(fasthttp.StatusInternalServerError, "Failed to pick transfer", nil, "")
 	}
 
-	// Update contact assignment within transaction
-	if err := tx.Model(&models.Contact{}).Where("id = ?", transfer.ContactID).Update("assigned_user_id", userID).Error; err != nil {
-		tx.Rollback()
-		a.Log.Error("Failed to update contact assignment", "error", err, "transfer_id", transfer.ID)
-		return r.SendErrorEnvelope(fasthttp.StatusInternalServerError, "Failed to update contact assignment", nil, "")
+	// Pin the agent as the contact's relationship manager only when the org
+	// has opted into AssignToSameAgent and no manager is already set. The
+	// active transfer itself grants this agent visibility into the chat (see
+	// ListContacts query in contacts.go), so we don't need contact.AssignedUserID
+	// for visibility. Setting it unconditionally would leak this conversation
+	// into the agent's chat list permanently after resume.
+	if settings != nil && settings.AgentAssignment.AssignToSameAgent {
+		// Re-fetch contact for the up-to-date assigned_user_id under the tx.
+		var contact models.Contact
+		if err := tx.Where("id = ?", transfer.ContactID).First(&contact).Error; err == nil && contact.AssignedUserID == nil {
+			if err := tx.Model(&models.Contact{}).Where("id = ?", transfer.ContactID).Update("assigned_user_id", userID).Error; err != nil {
+				tx.Rollback()
+				a.Log.Error("Failed to update contact assignment", "error", err, "transfer_id", transfer.ID)
+				return r.SendErrorEnvelope(fasthttp.StatusInternalServerError, "Failed to update contact assignment", nil, "")
+			}
+		}
 	}
 
 	// Commit the transaction
@@ -1160,8 +1186,10 @@ func (a *App) saveAndFinalizeTransfer(transfer *models.AgentTransfer, account *m
 		return err
 	}
 
-	// Update contact assignment if agent assigned
-	if transfer.AgentID != nil {
+	// Update contact assignment if agent assigned, but only when AssignToSameAgent
+	// is enabled and no relationship manager is already set. Active transfers
+	// already grant the assigned agent visibility into the chat.
+	if transfer.AgentID != nil && settings != nil && settings.AgentAssignment.AssignToSameAgent && contact.AssignedUserID == nil {
 		a.DB.Model(contact).Update("assigned_user_id", transfer.AgentID)
 	}
 

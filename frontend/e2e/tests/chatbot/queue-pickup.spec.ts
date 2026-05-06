@@ -288,3 +288,227 @@ test.describe('Pick from queue — admin assign flow', () => {
     expect(rows[0]!.agent_id).toBe(assignee.user.id)
   })
 })
+
+// Drive a settings update through the API so the Redis settings cache
+// invalidates. Updating chatbot_settings directly via SQL works for the row
+// but PickNextTransfer reads from a 6h-TTL cache. Each call opens a fresh
+// APIRequestContext because Playwright's `request` fixture from beforeAll
+// can't be reused inside test bodies.
+async function updateChatbotSetting(field: string, value: boolean): Promise<void> {
+  const ctx = await playwrightRequest.newContext()
+  const settingsApi = new ApiHelper(ctx)
+  try {
+    await settingsApi.login(SUPER_ADMIN.email, SUPER_ADMIN.password)
+    const resp = await settingsApi.put('/api/chatbot/settings', { [field]: value })
+    if (!resp.ok()) {
+      throw new Error(`Failed to set ${field}=${value}: ${resp.status()} ${await resp.text()}`)
+    }
+  } finally {
+    await ctx.dispose()
+  }
+}
+
+test.describe('Queue pickup gated by allow_agent_queue_pickup', () => {
+  test.describe.configure({ mode: 'serial' })
+  test.setTimeout(60_000)
+
+  let api: ApiHelper
+  let agent: TestUserHandle
+  let orgId: string
+
+  test.beforeAll(async ({ request }) => {
+    api = new ApiHelper(request)
+    await api.login(SUPER_ADMIN.email, SUPER_ADMIN.password)
+
+    agent = await createUserWithPermissions(api, scope, {
+      userSlug: 'gated-agent',
+      permissions: [
+        { resource: 'chat', action: 'read' },
+        { resource: 'transfers', action: 'read' },
+        { resource: 'transfers', action: 'pickup' },
+        { resource: 'contacts', action: 'read' },
+      ],
+    })
+
+    const userRows = await execSQL(
+      `SELECT uo.organization_id::text AS org FROM users u
+       JOIN user_organizations uo ON uo.user_id = u.id AND uo.is_default = true
+       WHERE u.email = '${agent.email}' LIMIT 1`,
+    )
+    orgId = userRows[0]!.org as string
+  })
+
+  test.afterAll(async () => {
+    // Restore the default so other specs don't see the kill switch flipped.
+    await updateChatbotSetting('allow_agent_queue_pickup', true).catch(() => {})
+    if (agent) {
+      await api.deleteUser(agent.user.id).catch(() => {})
+      await api.deleteRole(agent.role.id).catch(() => {})
+    }
+  })
+
+  test('Pick Next is disabled with a tooltip when the toggle is off', async ({ page }) => {
+    await updateChatbotSetting('allow_agent_queue_pickup', false)
+
+    await loginAs(page, agent)
+    await page.goto('/chatbot/transfers')
+    await page.waitForLoadState('networkidle')
+
+    const pickBtn = page.getByRole('button', { name: /Pick Next/i })
+    await expect(pickBtn).toBeVisible({ timeout: 10_000 })
+    await expect(pickBtn).toBeDisabled()
+
+    // Tooltip explains why it's disabled. We hover the wrapping span (the
+    // tooltip trigger) — disabled buttons don't receive pointer events, and
+    // the trigger wraps the button precisely for this reason.
+    await pickBtn.locator('xpath=ancestor::span[1]').hover()
+    await expect(
+      page.getByText(/Queue pickup is disabled by your administrator/i),
+    ).toBeVisible({ timeout: 5_000 })
+  })
+
+  test('Pick Next is enabled again when the toggle is flipped back on', async ({ page }) => {
+    await updateChatbotSetting('allow_agent_queue_pickup', true)
+
+    await loginAs(page, agent)
+    await page.goto('/chatbot/transfers')
+    await page.waitForLoadState('networkidle')
+
+    // No queued transfers seeded → button stays disabled for the empty-queue
+    // reason. We just need to confirm the kill-switch tooltip is gone.
+    // <Tooltip :disabled="true"> means the TooltipContent never renders even
+    // on hover, so a static count check is sufficient.
+    await expect(
+      page.getByText(/Queue pickup is disabled by your administrator/i),
+    ).toHaveCount(0)
+  })
+})
+
+test.describe('Pickup respects assign_to_same_agent', () => {
+  test.describe.configure({ mode: 'serial' })
+  test.setTimeout(60_000)
+
+  let api: ApiHelper
+  let agent: TestUserHandle
+  let orgId: string
+  let accountName: string
+
+  async function seedContactAndQueue(slug: string): Promise<{ contactId: string; transferId: string }> {
+    // Fresh request context: the beforeAll-bound `api` can't be reused inside
+    // test bodies. Login each time — cheaper than passing the auth state around.
+    const ctx = await playwrightRequest.newContext()
+    const localApi = new ApiHelper(ctx)
+    try {
+      await localApi.login(SUPER_ADMIN.email, SUPER_ADMIN.password)
+      const phone = scope.phone()
+      const contact = await localApi.createContact(phone, scope.name(slug))
+      await execSQL(`UPDATE contacts SET whats_app_account = '${accountName}' WHERE id = '${contact.id}'`)
+      const transferId = await seedQueuedTransfer(orgId, contact.id, phone, scope.name(slug), accountName)
+      return { contactId: contact.id, transferId }
+    } finally {
+      await ctx.dispose()
+    }
+  }
+
+  async function readContactAssignedUser(contactId: string): Promise<string | null> {
+    const rows = await execSQL(
+      `SELECT assigned_user_id::text AS assigned_user_id FROM contacts WHERE id = '${contactId}'`,
+    )
+    return (rows[0]!.assigned_user_id as string | null) ?? null
+  }
+
+  test.beforeAll(async ({ request }) => {
+    api = new ApiHelper(request)
+    await api.login(SUPER_ADMIN.email, SUPER_ADMIN.password)
+
+    agent = await createUserWithPermissions(api, scope, {
+      userSlug: 'assign-toggle-agent',
+      permissions: [
+        { resource: 'chat', action: 'read' },
+        { resource: 'transfers', action: 'read' },
+        { resource: 'transfers', action: 'pickup' },
+        { resource: 'contacts', action: 'read' },
+      ],
+    })
+
+    const userRows = await execSQL(
+      `SELECT uo.organization_id::text AS org FROM users u
+       JOIN user_organizations uo ON uo.user_id = u.id AND uo.is_default = true
+       WHERE u.email = '${agent.email}' LIMIT 1`,
+    )
+    orgId = userRows[0]!.org as string
+
+    const accounts = await api.getWhatsAppAccounts().catch(() => [] as { name: string }[])
+    accountName = accounts[0]?.name ?? 'test-account'
+  })
+
+  test.afterAll(async () => {
+    await updateChatbotSetting('assign_to_same_agent', true).catch(() => {})
+    await clearQueueForOrg(orgId).catch(() => {})
+    if (agent) {
+      await api.deleteUser(agent.user.id).catch(() => {})
+      await api.deleteRole(agent.role.id).catch(() => {})
+    }
+  })
+
+  test('with assign_to_same_agent=true (default) pickup pins the agent as relationship manager', async ({ page }) => {
+    await updateChatbotSetting('assign_to_same_agent', true)
+    const { contactId } = await seedContactAndQueue('rm-on')
+
+    await loginAs(page, agent)
+    await page.goto('/chatbot/transfers')
+    await page.waitForLoadState('networkidle')
+
+    await page.getByRole('button', { name: /Pick Next/i }).click()
+    await page.waitForURL(new RegExp(`/chat/${contactId}`), { timeout: 10_000 })
+
+    expect(await readContactAssignedUser(contactId)).toBe(agent.user.id)
+  })
+
+  test('with assign_to_same_agent=false pickup does NOT touch contact.assigned_user_id', async ({ page }) => {
+    await updateChatbotSetting('assign_to_same_agent', false)
+    const { contactId } = await seedContactAndQueue('rm-off')
+
+    // Sanity: nobody is assigned before the pick.
+    expect(await readContactAssignedUser(contactId)).toBeNull()
+
+    await loginAs(page, agent)
+    await page.goto('/chatbot/transfers')
+    await page.waitForLoadState('networkidle')
+
+    await page.getByRole('button', { name: /Pick Next/i }).click()
+    await page.waitForURL(new RegExp(`/chat/${contactId}`), { timeout: 10_000 })
+
+    // After pickup the agent has visibility through the active transfer
+    // (agent_transfers.agent_id), but the relationship-manager pointer must
+    // stay nil so the chat doesn't stick to them after resume.
+    expect(await readContactAssignedUser(contactId)).toBeNull()
+
+    // Wait until the chat view has hydrated the active transfer state. The
+    // "Paused" badge in the chat header is gated on activeTransferId, so its
+    // visibility means the transfers store has loaded.
+    await expect(page.getByText('Paused').first()).toBeVisible({ timeout: 10_000 })
+
+    // Click the standalone Resume button in the chat header. The button is
+    // icon-only (Play icon, no aria-label). Lucide-vue-next renders icons
+    // with a class attribute like "lucide lucide-play" on the SVG, but
+    // Playwright's :has(svg.X) selector struggles with SVG namespacing —
+    // use attribute matching instead.
+    const resumeBtn = page.locator('main button').filter({
+      has: page.locator('[class*="lucide-play"]'),
+    }).first()
+    await expect(resumeBtn).toBeVisible({ timeout: 10_000 })
+    await resumeBtn.click()
+
+    await expect(
+      page.locator('[data-sonner-toast]').filter({ hasText: /resumed/i }),
+    ).toBeVisible({ timeout: 10_000 })
+
+    // Re-read: assigned_user_id remains nil, transfer is resumed.
+    expect(await readContactAssignedUser(contactId)).toBeNull()
+    const transferRows = await execSQL(
+      `SELECT status FROM agent_transfers WHERE contact_id = '${contactId}' ORDER BY transferred_at DESC LIMIT 1`,
+    )
+    expect(transferRows[0]!.status).toBe('resumed')
+  })
+})

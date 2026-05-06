@@ -33,6 +33,11 @@ const teamsStore = useTeamsStore()
 const isLoading = ref(true)
 const error = ref<string | null>(null)
 const isPicking = ref(false)
+// Org-level kill switch surfaced from chatbot settings. The backend rejects
+// pickup with 403 when this is false (PickNextTransfer in agent_transfers.go),
+// so the UI must hide / disable the action to match. Default true mirrors the
+// server default so we don't briefly disable the button while settings load.
+const allowQueuePickup = ref(true)
 const isAssigning = ref(false)
 const isResuming = ref(false)
 const activeTab = ref('my-transfers')
@@ -104,7 +109,7 @@ watch(activeTab, async (newTab) => {
 })
 
 onMounted(async () => {
-  await Promise.all([fetchTransfers(), fetchTeams()])
+  await Promise.all([fetchTransfers(), fetchTeams(), fetchAllowQueuePickup()])
   // Always try to fetch agents for admin/manager - the API will reject if unauthorized
   if (isAdminOrManager.value) {
     await fetchAgents()
@@ -112,6 +117,23 @@ onMounted(async () => {
   // No polling - WebSocket handles real-time updates
   // Reconnection refresh handles sync after disconnect
 })
+
+async function fetchAllowQueuePickup() {
+  // Agents (no transfers:write) are gated by allow_agent_queue_pickup; admins
+  // bypass the toggle, so we only need the setting for the agent-only view.
+  if (isAdminOrManager.value) return
+  try {
+    const resp = await chatbotService.getSettings()
+    // API returns { data: { settings: {...}, stats: {...} } }.
+    const settings = resp.data?.data?.settings ?? resp.data?.settings
+    if (typeof settings?.allow_agent_queue_pickup === 'boolean') {
+      allowQueuePickup.value = settings.allow_agent_queue_pickup
+    }
+  } catch {
+    // Settings endpoint may be unavailable for some users; fall back to the
+    // server default (true) — backend will still 403 if pickup is disabled.
+  }
+}
 
 async function fetchTransfers() {
   isLoading.value = true
@@ -302,11 +324,23 @@ function formatTimeRemaining(deadline: string | undefined): string {
             <Users class="h-4 w-4 inline mr-1" />
             {{ $t('agentTransfers.waitingInQueue', { count: transfersStore.queueCount }) }}
           </div>
-          <Button variant="outline" size="sm" @click="pickNextTransfer" :disabled="isPicking || transfersStore.queueCount === 0">
-            <Loader2 v-if="isPicking" class="mr-2 h-4 w-4 animate-spin" />
-            <Play v-else class="mr-2 h-4 w-4" />
-            {{ $t('agentTransfers.pickNext') }}
-          </Button>
+          <Tooltip :disabled="allowQueuePickup">
+            <TooltipTrigger as-child>
+              <span>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  @click="pickNextTransfer"
+                  :disabled="!allowQueuePickup || isPicking || transfersStore.queueCount === 0"
+                >
+                  <Loader2 v-if="isPicking" class="mr-2 h-4 w-4 animate-spin" />
+                  <Play v-else class="mr-2 h-4 w-4" />
+                  {{ $t('agentTransfers.pickNext') }}
+                </Button>
+              </span>
+            </TooltipTrigger>
+            <TooltipContent>{{ $t('agentTransfers.queuePickupDisabled') }}</TooltipContent>
+          </Tooltip>
         </div>
       </template>
     </PageHeader>

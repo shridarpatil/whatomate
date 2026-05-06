@@ -1788,6 +1788,7 @@
     "subtitle": "Manage agent transfers and queue",
     "waitingInQueue": "{count} waiting in queue",
     "pickNext": "Pick Next",
+    "queuePickupDisabled": "Queue pickup is disabled by your administrator",
     "myTransfers": "My Transfers",
     "transfersAssignedToYou": "Transfers assigned to you",
     "contactsTransferred": "Contacts transferred to you for human support",
