@@ -178,9 +178,12 @@ test.describe('Create Organization via Sidebar', () => {
     // Dialog should close after successful creation
     await expect(dialog).not.toBeVisible({ timeout: 10000 })
 
-    // The new org should appear in the sidebar org list
-    const sidebar = page.locator('aside')
-    await expect(sidebar.getByText(orgName, { exact: true })).toBeVisible({ timeout: 10000 })
+    // The org switcher is a closed Select; opening it reveals the org list
+    // (rendered into a portal, not inside aside, so don't scope to aside).
+    await page.locator('aside').getByRole('combobox').first().click()
+    await expect(
+      page.getByRole('option').filter({ hasText: orgName }),
+    ).toBeVisible({ timeout: 10000 })
   })
 
   test('should not submit with empty org name', async ({ page }) => {

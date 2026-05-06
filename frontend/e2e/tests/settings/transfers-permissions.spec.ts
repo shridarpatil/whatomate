@@ -26,8 +26,12 @@ test.describe('Transfers tabs respect transfers:write permission', () => {
     api = new ApiHelper(request)
     await api.login(SUPER_ADMIN.email, SUPER_ADMIN.password)
 
+    // userSlug values intentionally avoid "agent"/"manager"/"admin" — those
+    // would generate role names that collide with the seeded system roles
+    // when other specs do `select.filter({ hasText: 'Agent' })` (substring,
+    // case-insensitive).
     fullAccess = await createUserWithPermissions(api, scope, {
-      userSlug: 'full',
+      userSlug: 'tx-full',
       permissions: [
         { resource: 'chat', action: 'read' },
         { resource: 'transfers', action: 'read' },
@@ -37,7 +41,7 @@ test.describe('Transfers tabs respect transfers:write permission', () => {
     })
 
     agentOnly = await createUserWithPermissions(api, scope, {
-      userSlug: 'agent',
+      userSlug: 'tx-pickup',
       permissions: [
         { resource: 'chat', action: 'read' },
         { resource: 'transfers', action: 'read' },
