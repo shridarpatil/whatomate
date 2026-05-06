@@ -1,5 +1,6 @@
 import { test, expect } from '@playwright/test'
 import { ApiHelper, loginAsAdmin } from '../../helpers'
+import { SUPER_ADMIN } from '../../framework'
 
 const BASE_URL = process.env.BASE_URL || 'http://localhost:8080'
 
@@ -33,7 +34,7 @@ test.describe('SSO Settings', () => {
 
   test.beforeEach(async ({ request }) => {
     api = new ApiHelper(request)
-    await api.login('admin@admin.com', 'admin')
+    await api.login(SUPER_ADMIN.email, SUPER_ADMIN.password)
     // Reset to the default org before reading current. A prior failed run of
     // the "cross-org isolation" test could have left super admin pinned to a
     // throwaway org, which would make beforeEach + the test body operate on

@@ -1,6 +1,9 @@
 import { test, expect } from '@playwright/test'
 import { TablePage } from '../../pages'
-import { loginAsAdmin, createTeamFixture, navigateToFirstItem, expectMetadataVisible, expectActivityLogVisible, expectDeleteFromForm, ApiHelper, generateUniqueName } from '../../helpers'
+import { loginAsAdmin, createTeamFixture, navigateToFirstItem, expectMetadataVisible, expectActivityLogVisible, expectDeleteFromForm, ApiHelper } from '../../helpers'
+import { createTestScope, SUPER_ADMIN } from '../../framework'
+
+const scope = createTestScope('teams')
 
 test.describe('Teams - List View', () => {
   let tablePage: TablePage
@@ -152,9 +155,9 @@ test.describe('Teams - Detail Page CRUD', () => {
     // detail page renders the "not found" error state and Activity Log
     // never appears.
     const api = new ApiHelper(request)
-    await api.login('admin@admin.com', 'admin')
+    await api.login(SUPER_ADMIN.email, SUPER_ADMIN.password)
     const teamResp = await api.post('/api/teams', {
-      name: generateUniqueName('ActivityLogTeam'),
+      name: scope.name('activity-log'),
       description: 'seeded for activity-log test',
     })
     expect(teamResp.ok(), `seed team: ${await teamResp.text()}`).toBe(true)

@@ -4,6 +4,7 @@ import {
   createTestScope,
   createUserWithPermissions,
   loginAs,
+  SUPER_ADMIN,
   type TestUserHandle,
 } from '../../framework'
 
@@ -23,7 +24,7 @@ test.describe('Transfers tabs respect transfers:write permission', () => {
 
   test.beforeAll(async ({ request }) => {
     api = new ApiHelper(request)
-    await api.login('admin@admin.com', 'admin')
+    await api.login(SUPER_ADMIN.email, SUPER_ADMIN.password)
 
     fullAccess = await createUserWithPermissions(api, scope, {
       userSlug: 'full',

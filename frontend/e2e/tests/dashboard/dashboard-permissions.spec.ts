@@ -4,6 +4,7 @@ import {
   createTestScope,
   createUserWithPermissions,
   loginAs,
+  SUPER_ADMIN,
   type TestUserHandle,
 } from '../../framework'
 
@@ -37,7 +38,7 @@ test.describe('Dashboard Widget Permissions', () => {
 
     test.beforeAll(async ({ request }) => {
       api = new ApiHelper(request)
-      await api.login('admin@admin.com', 'admin')
+      await api.login(SUPER_ADMIN.email, SUPER_ADMIN.password)
       user = await createUserWithPermissions(api, scope, {
         permissions: [
           { resource: 'analytics', action: 'read' },
@@ -79,7 +80,7 @@ test.describe('Dashboard Widget Permissions', () => {
 
     test.beforeAll(async ({ request }) => {
       api = new ApiHelper(request)
-      await api.login('admin@admin.com', 'admin')
+      await api.login(SUPER_ADMIN.email, SUPER_ADMIN.password)
       user = await createUserWithPermissions(api, scope, {
         permissions: [
           { resource: 'analytics', action: 'read' },
@@ -132,7 +133,7 @@ test.describe('Dashboard Widget Permissions', () => {
 
     test.beforeAll(async ({ request }) => {
       api = new ApiHelper(request)
-      await api.login('admin@admin.com', 'admin')
+      await api.login(SUPER_ADMIN.email, SUPER_ADMIN.password)
       user = await createUserWithPermissions(api, scope, {
         permissions: [{ resource: 'analytics', action: 'read' }],
       })
@@ -193,7 +194,7 @@ test.describe('Dashboard Widget Permissions', () => {
 
     test.beforeAll(async ({ request }) => {
       api = new ApiHelper(request)
-      await api.login('admin@admin.com', 'admin')
+      await api.login(SUPER_ADMIN.email, SUPER_ADMIN.password)
       user = await createUserWithPermissions(api, scope, {
         permissions: [
           { resource: 'analytics', action: 'read' },

@@ -1,5 +1,8 @@
 import { test, expect } from '@playwright/test'
-import { loginAsAdmin, navigateToFirstItem, expectMetadataVisible, expectActivityLogVisible, expectDeleteFromForm, ApiHelper, generateUniqueName } from '../../helpers'
+import { loginAsAdmin, navigateToFirstItem, expectMetadataVisible, expectActivityLogVisible, expectDeleteFromForm, ApiHelper } from '../../helpers'
+import { createTestScope, SUPER_ADMIN } from '../../framework'
+
+const scope = createTestScope('templates')
 import { TemplatesPage } from '../../pages'
 
 test.describe('Message Templates - List View', () => {
@@ -159,12 +162,12 @@ test.describe('Message Templates - Detail Page', () => {
     // first row could land on a deleted template's URL → not-found state →
     // the "Details" card never renders.
     const api = new ApiHelper(request)
-    await api.login('admin@admin.com', 'admin')
+    await api.login(SUPER_ADMIN.email, SUPER_ADMIN.password)
     const accounts = await api.getWhatsAppAccounts()
     let accountName = accounts[0]?.name
     if (!accountName) {
       const acc = await api.createWhatsAppAccount({
-        name: generateUniqueName('TplEditAcct').replace(/\s/g, '-').toLowerCase(),
+        name: scope.name('edit-acct').toLowerCase().replace(/\s/g, '-'),
         phone_id: `phone-tpl-edit-${Date.now()}`,
         business_id: `biz-tpl-edit-${Date.now()}`,
         access_token: 'test-token-e2e',

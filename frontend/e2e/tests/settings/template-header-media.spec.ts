@@ -1,5 +1,8 @@
 import { test, expect } from '@playwright/test'
-import { ApiHelper, generateUniqueName, loginAsAdmin } from '../../helpers'
+import { ApiHelper, loginAsAdmin } from '../../helpers'
+import { createTestScope, SUPER_ADMIN } from '../../framework'
+
+const scope = createTestScope('tpl-header-media')
 
 /**
  * Regression coverage for issue #355 — IMAGE/VIDEO/DOCUMENT header templates
@@ -21,13 +24,13 @@ test.describe('Template media header — issue #355', () => {
 
   test.beforeEach(async ({ request }) => {
     api = new ApiHelper(request)
-    await api.login('admin@admin.com', 'admin')
+    await api.login(SUPER_ADMIN.email, SUPER_ADMIN.password)
 
     const accounts = await api.getWhatsAppAccounts()
     accountName = accounts[0]?.name
     if (!accountName) {
       const acc = await api.createWhatsAppAccount({
-        name: generateUniqueName('TplMediaAcct').replace(/\s/g, '-').toLowerCase(),
+        name: scope.name('acct').toLowerCase().replace(/\s/g, '-'),
         phone_id: `phone-tpl-media-${Date.now()}`,
         business_id: `biz-tpl-media-${Date.now()}`,
         access_token: 'test-token-e2e',

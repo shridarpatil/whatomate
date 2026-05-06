@@ -1,5 +1,8 @@
 import { test, expect } from '@playwright/test'
-import { ApiHelper, generateUniqueEmail, generateUniqueName, verifyAuditLogged } from '../../helpers'
+import { ApiHelper, verifyAuditLogged } from '../../helpers'
+import { createTestScope, SUPER_ADMIN } from '../../framework'
+
+const scope = createTestScope('audit-trail')
 
 /**
  * Audit-trail regression check.
@@ -16,7 +19,7 @@ import { ApiHelper, generateUniqueEmail, generateUniqueName, verifyAuditLogged }
 test.describe('Audit trail — CRUD writes audit log entries', () => {
   test('user create/update/delete', async ({ request }) => {
     const api = new ApiHelper(request)
-    await api.login('admin@admin.com', 'admin')
+    await api.login(SUPER_ADMIN.email, SUPER_ADMIN.password)
 
     const roles = (await (await api.get('/api/roles')).json()).data?.roles ?? []
     const agentRole = roles.find((r: { name: string }) => r.name.toLowerCase() === 'agent')
@@ -24,9 +27,9 @@ test.describe('Audit trail — CRUD writes audit log entries', () => {
     expect(agentRole, 'agent role must exist').toBeDefined()
 
     const created = await api.createUser({
-      email: generateUniqueEmail('audit-trail-user'),
+      email: scope.email('user'),
       password: 'Password123!',
-      full_name: generateUniqueName('AuditUser'),
+      full_name: scope.name('user'),
       role_id: agentRole.id,
     })
     await verifyAuditLogged(request, 'user', created.id, 'created')
@@ -44,13 +47,13 @@ test.describe('Audit trail — CRUD writes audit log entries', () => {
 
   test('contact create/update/delete', async ({ request }) => {
     const api = new ApiHelper(request)
-    await api.login('admin@admin.com', 'admin')
+    await api.login(SUPER_ADMIN.email, SUPER_ADMIN.password)
 
     const phone = `+1555${Date.now().toString().slice(-7)}`
-    const created = await api.createContact(phone, generateUniqueName('AuditCt'))
+    const created = await api.createContact(phone, scope.name('contact'))
     await verifyAuditLogged(request, 'contact', created.id, 'created')
 
-    await api.updateContact(created.id, { profile_name: generateUniqueName('AuditCtUpd') })
+    await api.updateContact(created.id, { profile_name: scope.name('contact-upd') })
     await verifyAuditLogged(request, 'contact', created.id, 'updated', { expectedFields: ['profile_name'] })
 
     const delResp = await api.del(`/api/contacts/${created.id}`)
@@ -60,10 +63,10 @@ test.describe('Audit trail — CRUD writes audit log entries', () => {
 
   test('whatsapp account create/update/delete', async ({ request }) => {
     const api = new ApiHelper(request)
-    await api.login('admin@admin.com', 'admin')
+    await api.login(SUPER_ADMIN.email, SUPER_ADMIN.password)
 
     const acc = await api.createWhatsAppAccount({
-      name: generateUniqueName('AuditAcct').replace(/\s/g, '-').toLowerCase(),
+      name: scope.name('acct').toLowerCase().replace(/\s/g, '-'),
       phone_id: `phone-${Date.now()}`,
       business_id: `biz-${Date.now()}`,
       access_token: 'test-token-e2e',
@@ -81,11 +84,11 @@ test.describe('Audit trail — CRUD writes audit log entries', () => {
 
   test('template create/update/delete', async ({ request }) => {
     const api = new ApiHelper(request)
-    await api.login('admin@admin.com', 'admin')
+    await api.login(SUPER_ADMIN.email, SUPER_ADMIN.password)
 
     // Templates need a WhatsApp account to be linked to.
     const acc = await api.createWhatsAppAccount({
-      name: generateUniqueName('TplAcct').replace(/\s/g, '-').toLowerCase(),
+      name: scope.name('tpl-acct').toLowerCase().replace(/\s/g, '-'),
       phone_id: `phone-tpl-${Date.now()}`,
       business_id: `biz-tpl-${Date.now()}`,
       access_token: 'test-token-e2e',
@@ -113,10 +116,10 @@ test.describe('Audit trail — CRUD writes audit log entries', () => {
 
   test('webhook create/update/delete', async ({ request }) => {
     const api = new ApiHelper(request)
-    await api.login('admin@admin.com', 'admin')
+    await api.login(SUPER_ADMIN.email, SUPER_ADMIN.password)
 
     const createResp = await api.post('/api/webhooks', {
-      name: generateUniqueName('AuditHook'),
+      name: scope.name('hook'),
       url: 'https://webhook.site/audit-trail-test',
       events: ['message.received'],
       is_active: true,

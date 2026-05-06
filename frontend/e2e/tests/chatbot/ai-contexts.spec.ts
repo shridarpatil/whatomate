@@ -1,15 +1,18 @@
 import { test, expect } from '@playwright/test'
 import { loginAsAdmin, navigateToFirstItem, expectMetadataVisible, expectActivityLogVisible, expectDeleteFromForm, ApiHelper } from '../../helpers'
 import { AIContextsPage } from '../../pages'
+import { createTestScope, SUPER_ADMIN } from '../../framework'
+
+const scope = createTestScope('ai-contexts')
 
 // Seed an AI context via the API. Returns the new resource's ID, or null on
 // failure. Replaces the old UI-based seed which was flaky (async permission
 // loading, dialog/click race conditions, silently skipped on any failure).
 async function seedAIContextViaAPI(request: import('@playwright/test').APIRequestContext): Promise<string | null> {
   const api = new ApiHelper(request)
-  await api.login('admin@admin.com', 'admin')
+  await api.login(SUPER_ADMIN.email, SUPER_ADMIN.password)
   const resp = await api.post('/api/chatbot/ai-contexts', {
-    name: `e2e-ctx-${Date.now()}`,
+    name: scope.name('ctx'),
     context_type: 'static',
     static_content: 'E2E seeded AI context content',
     enabled: true,

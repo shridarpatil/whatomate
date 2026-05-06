@@ -1,6 +1,9 @@
 import { test, expect } from '@playwright/test'
-import { loginAsAdmin, navigateToFirstItem, expectMetadataVisible, expectActivityLogVisible, expectDeleteFromForm, ApiHelper, generateUniqueName } from '../../helpers'
+import { loginAsAdmin, navigateToFirstItem, expectMetadataVisible, expectActivityLogVisible, expectDeleteFromForm, ApiHelper } from '../../helpers'
 import { AccountsPage } from '../../pages'
+import { createTestScope, SUPER_ADMIN } from '../../framework'
+
+const scope = createTestScope('accounts')
 
 test.describe('WhatsApp Accounts - List View', () => {
   let accountsPage: AccountsPage
@@ -152,9 +155,9 @@ test.describe('WhatsApp Accounts - Detail Page CRUD', () => {
     // before goto lands, the detail page renders the "not found" error state
     // and Setup Guide never appears.
     const api = new ApiHelper(request)
-    await api.login('admin@admin.com', 'admin')
+    await api.login(SUPER_ADMIN.email, SUPER_ADMIN.password)
     const acc = await api.createWhatsAppAccount({
-      name: generateUniqueName('SetupGuideAcct').replace(/\s/g, '-').toLowerCase(),
+      name: scope.name('setup-guide').toLowerCase().replace(/\s/g, '-'),
       phone_id: `phone-setup-${Date.now()}`,
       business_id: `biz-setup-${Date.now()}`,
       access_token: 'test-token-e2e',

@@ -1,5 +1,8 @@
 import { test, expect, Page } from '@playwright/test'
-import { loginAsAdmin, ApiHelper, generateUniqueName } from '../../helpers'
+import { loginAsAdmin, ApiHelper } from '../../helpers'
+import { createTestScope, SUPER_ADMIN } from '../../framework'
+
+const scope = createTestScope('tpl-sample-values')
 
 async function gotoNewTemplate(page: Page) {
   await page.goto('/templates/new')
@@ -111,12 +114,12 @@ test.describe('Template Preview with Sample Values', () => {
     // Seed a template via API so the test doesn't depend on prior runs leaving
     // data behind. Need a WhatsApp account first since templates link to one.
     const api = new ApiHelper(request)
-    await api.login('admin@admin.com', 'admin')
+    await api.login(SUPER_ADMIN.email, SUPER_ADMIN.password)
     const accounts = await api.getWhatsAppAccounts()
     let accountName = accounts[0]?.name
     if (!accountName) {
       const acc = await api.createWhatsAppAccount({
-        name: generateUniqueName('TplSampleAcct').replace(/\s/g, '-').toLowerCase(),
+        name: scope.name('acct').toLowerCase().replace(/\s/g, '-'),
         phone_id: `phone-tpl-sample-${Date.now()}`,
         business_id: `biz-tpl-sample-${Date.now()}`,
         access_token: 'test-token-e2e',

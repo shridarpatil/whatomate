@@ -1,5 +1,8 @@
 import { test, expect } from '@playwright/test'
-import { ApiHelper, loginAsAdmin, generateUniqueName, verifyAuditLogged } from '../../helpers'
+import { ApiHelper, loginAsAdmin, verifyAuditLogged } from '../../helpers'
+import { createTestScope, SUPER_ADMIN } from '../../framework'
+
+const scope = createTestScope('audit-logs')
 
 /**
  * Audit logs E2E:
@@ -21,7 +24,7 @@ test.describe('Audit Logs', () => {
   // Helper: create + update + delete a webhook to produce three audit entries.
   async function generateAuditEntries(api: ApiHelper) {
     const createResp = await api.post('/api/webhooks', {
-      name: generateUniqueName('AuditPageHook'),
+      name: scope.name('hook'),
       url: 'https://webhook.site/audit-page',
       events: ['message.received'],
       is_active: true,
@@ -35,7 +38,7 @@ test.describe('Audit Logs', () => {
 
   test('list view renders entries created via the API', async ({ page, request }) => {
     const api = new ApiHelper(request)
-    await api.login('admin@admin.com', 'admin')
+    await api.login(SUPER_ADMIN.email, SUPER_ADMIN.password)
 
     const wh = await generateAuditEntries(api)
     await verifyAuditLogged(request, 'webhook', wh.id, 'created')
@@ -56,7 +59,7 @@ test.describe('Audit Logs', () => {
 
   test('filter by action narrows the list', async ({ page, request }) => {
     const api = new ApiHelper(request)
-    await api.login('admin@admin.com', 'admin')
+    await api.login(SUPER_ADMIN.email, SUPER_ADMIN.password)
 
     const wh = await generateAuditEntries(api)
     await api.put(`/api/webhooks/${wh.id}`, { url: 'https://webhook.site/audit-page-updated' })
@@ -83,7 +86,7 @@ test.describe('Audit Logs', () => {
 
   test('clicking a row navigates to the detail view with the change diff', async ({ page, request }) => {
     const api = new ApiHelper(request)
-    await api.login('admin@admin.com', 'admin')
+    await api.login(SUPER_ADMIN.email, SUPER_ADMIN.password)
 
     const wh = await generateAuditEntries(api)
     const newURL = `https://webhook.site/audit-detail-${Date.now()}`
@@ -111,7 +114,7 @@ test.describe('Audit Logs', () => {
 
   test('API filter by resource_type + resource_id returns scoped entries', async ({ request }) => {
     const api = new ApiHelper(request)
-    await api.login('admin@admin.com', 'admin')
+    await api.login(SUPER_ADMIN.email, SUPER_ADMIN.password)
 
     const wh = await generateAuditEntries(api)
     await verifyAuditLogged(request, 'webhook', wh.id, 'created')

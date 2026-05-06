@@ -4,6 +4,7 @@ import {
   createTestScope,
   createUserWithPermissions,
   loginAs,
+  SUPER_ADMIN,
   type TestUserHandle,
 } from '../../framework'
 
@@ -26,7 +27,7 @@ test.describe('Custom Role with Limited Permissions', () => {
 
   test.beforeAll(async ({ request }) => {
     api = new ApiHelper(request)
-    await api.login('admin@admin.com', 'admin')
+    await api.login(SUPER_ADMIN.email, SUPER_ADMIN.password)
     user = await createUserWithPermissions(api, scope, {
       permissions: [{ resource: 'chat', action: 'read' }],
     })
@@ -77,7 +78,7 @@ test.describe('Role with Settings Access', () => {
 
   test.beforeAll(async ({ request }) => {
     api = new ApiHelper(request)
-    await api.login('admin@admin.com', 'admin')
+    await api.login(SUPER_ADMIN.email, SUPER_ADMIN.password)
     user = await createUserWithPermissions(api, scope, {
       permissions: [
         { resource: 'chat', action: 'read' },
@@ -156,7 +157,7 @@ test.describe('Dynamic Role Updates', () => {
 
   test.beforeAll(async ({ request }) => {
     api = new ApiHelper(request)
-    await api.login('admin@admin.com', 'admin')
+    await api.login(SUPER_ADMIN.email, SUPER_ADMIN.password)
     user = await createUserWithPermissions(api, scope, {
       permissions: [{ resource: 'chat', action: 'read' }],
     })

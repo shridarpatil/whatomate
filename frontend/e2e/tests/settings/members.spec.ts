@@ -1,24 +1,27 @@
 import { test, expect } from '@playwright/test'
-import { ApiHelper, generateUniqueEmail } from '../../helpers'
+import { ApiHelper } from '../../helpers'
+import { createTestScope, SUPER_ADMIN } from '../../framework'
 
-const ADMIN_EMAIL = 'admin@admin.com'
-const ADMIN_PASSWORD = 'admin'
-const FALLBACK_ADMIN_EMAIL = 'admin@test.com'
-const FALLBACK_ADMIN_PASSWORD = 'password'
+const scope = createTestScope('members-api')
+
+async function loginApi(api: ApiHelper): Promise<boolean> {
+  try {
+    await api.login(SUPER_ADMIN.email, SUPER_ADMIN.password)
+    return true
+  } catch {
+    try {
+      await api.login('admin@test.com', 'password')
+      return true
+    } catch {
+      return false
+    }
+  }
+}
 
 test.describe('Organization Members - API Tests', () => {
   test('should list organization members via API', async ({ request }) => {
     const api = new ApiHelper(request)
-    try {
-      await api.login(ADMIN_EMAIL, ADMIN_PASSWORD)
-    } catch {
-      try {
-        await api.login(FALLBACK_ADMIN_EMAIL, FALLBACK_ADMIN_PASSWORD)
-      } catch {
-        test.skip(true, 'No admin credentials available')
-        return
-      }
-    }
+    test.skip(!(await loginApi(api)), 'No admin credentials available')
 
     const members = await api.getOrgMembers()
     expect(Array.isArray(members)).toBeTruthy()
@@ -26,57 +29,38 @@ test.describe('Organization Members - API Tests', () => {
 
   test('should add and remove organization member via API', async ({ request }) => {
     const api = new ApiHelper(request)
-    try {
-      await api.login(ADMIN_EMAIL, ADMIN_PASSWORD)
-    } catch {
-      try {
-        await api.login(FALLBACK_ADMIN_EMAIL, FALLBACK_ADMIN_PASSWORD)
-      } catch {
-        test.skip(true, 'No admin credentials available')
-        return
-      }
-    }
+    test.skip(!(await loginApi(api)), 'No admin credentials available')
 
-    // Create a new org to test with
-    const orgName = `Member Test Org ${Date.now()}`
     let org: any
     try {
-      org = await api.createOrganization(orgName)
+      org = await api.createOrganization(scope.name('add-remove-org'))
     } catch {
       test.skip(true, 'Failed to create test organization')
       return
     }
 
-    // Create a user in the default org to add to the new org. The handler
-    // requires a non-empty role_id (sending '' returns 400, which the
-    // previous version caught and silently skipped). Look up the agent role
-    // explicitly.
+    // Need a real role_id; the agent role is seeded by Go migrations.
     const rolesResp = await api.get('/api/roles')
     expect(rolesResp.ok(), `roles fetch: ${rolesResp.status()} ${await rolesResp.text()}`).toBe(true)
     const roles = ((await rolesResp.json()).data?.roles ?? []) as Array<{ id: string; name: string }>
     const agentRole = roles.find(r => r.name.toLowerCase() === 'agent')
     expect(agentRole, 'agent role must exist (created by Go migrations)').toBeDefined()
 
-    const testEmail = generateUniqueEmail('member-test')
     const testUser = await api.createUser({
-      email: testEmail,
+      email: scope.email('member'),
       password: 'password123',
-      full_name: 'Member Test User',
+      full_name: scope.name('member'),
       role_id: agentRole!.id,
     })
 
-    // Add the user to the new org
     await api.addOrgMember(testUser.id, undefined, org.id)
 
-    // List members and verify user is included
     const members = await api.getOrgMembers(org.id)
     const memberIds = members.map((m: any) => m.user_id)
     expect(memberIds).toContain(testUser.id)
 
-    // Remove the user from the org
     await api.removeOrgMember(testUser.id, org.id)
 
-    // Verify user is no longer a member
     const membersAfter = await api.getOrgMembers(org.id)
     const memberIdsAfter = membersAfter.map((m: any) => m.user_id)
     expect(memberIdsAfter).not.toContain(testUser.id)
@@ -84,23 +68,12 @@ test.describe('Organization Members - API Tests', () => {
 
   test('should list my organizations via API', async ({ request }) => {
     const api = new ApiHelper(request)
-    try {
-      await api.login(ADMIN_EMAIL, ADMIN_PASSWORD)
-    } catch {
-      try {
-        await api.login(FALLBACK_ADMIN_EMAIL, FALLBACK_ADMIN_PASSWORD)
-      } catch {
-        test.skip(true, 'No admin credentials available')
-        return
-      }
-    }
+    test.skip(!(await loginApi(api)), 'No admin credentials available')
 
     const orgs = await api.getMyOrganizations()
     expect(Array.isArray(orgs)).toBeTruthy()
-    // The logged-in user should belong to at least one org
     expect(orgs.length).toBeGreaterThanOrEqual(1)
 
-    // Each org should have required fields
     for (const org of orgs) {
       expect(org.organization_id).toBeTruthy()
       expect(org.name).toBeTruthy()
@@ -109,32 +82,18 @@ test.describe('Organization Members - API Tests', () => {
 
   test('should switch organization via API', async ({ request }) => {
     const api = new ApiHelper(request)
-    try {
-      await api.login(ADMIN_EMAIL, ADMIN_PASSWORD)
-    } catch {
-      try {
-        await api.login(FALLBACK_ADMIN_EMAIL, FALLBACK_ADMIN_PASSWORD)
-      } catch {
-        test.skip(true, 'No admin credentials available')
-        return
-      }
-    }
+    test.skip(!(await loginApi(api)), 'No admin credentials available')
 
-    // Create a second org
-    const orgName = `Switch Test Org ${Date.now()}`
     let org: any
     try {
-      org = await api.createOrganization(orgName)
+      org = await api.createOrganization(scope.name('switch-org'))
     } catch {
       test.skip(true, 'Failed to create test organization')
       return
     }
 
-    // Switch to the new org — super admin can switch to any org
-    // switchOrg sets new auth cookies (no token returned in cookie-based auth)
     await api.switchOrg(org.id)
 
-    // Verify the switch worked by checking current org
     const currentOrg = await api.getCurrentOrg()
     expect(currentOrg.id).toBe(org.id)
   })

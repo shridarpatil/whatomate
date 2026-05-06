@@ -1,15 +1,18 @@
 import { test, expect } from '@playwright/test'
 import { loginAsAdmin, navigateToFirstItem, expectMetadataVisible, expectActivityLogVisible, expectDeleteFromForm, ApiHelper } from '../../helpers'
 import { KeywordsPage } from '../../pages'
+import { createTestScope, SUPER_ADMIN } from '../../framework'
+
+const scope = createTestScope('keywords')
 
 // Seed a keyword rule via the API. Returns the new resource's ID, or null on
 // failure. Replaces the old UI-based seed which silently skipped when
 // permissions or click-timing didn't cooperate.
 async function seedKeywordRuleViaAPI(request: import('@playwright/test').APIRequestContext): Promise<string | null> {
   const api = new ApiHelper(request)
-  await api.login('admin@admin.com', 'admin')
+  await api.login(SUPER_ADMIN.email, SUPER_ADMIN.password)
   const resp = await api.post('/api/chatbot/keywords', {
-    name: `e2e-seed-${Date.now()}`,
+    name: scope.name('seed'),
     keywords: [`seedkw-${Date.now()}`],
     match_type: 'contains',
     response_type: 'text',
