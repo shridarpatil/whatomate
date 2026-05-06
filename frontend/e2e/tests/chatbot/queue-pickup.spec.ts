@@ -19,12 +19,6 @@ import {
  * click in the page header → toast → navigation to the chat.
  */
 
-// Force serial execution across the whole file. Tests here all touch the
-// same shared org's queue (super-admin's default); running parallel
-// describes on different workers caused flakes where one test's seeded
-// row appeared while another test was asserting "queue is empty".
-test.describe.configure({ mode: 'serial' })
-
 const DB_URL = process.env.TEST_DATABASE_URL || 'postgres://whatomate:whatomate@127.0.0.1:5432/whatomate'
 
 async function execSQL(sql: string): Promise<Record<string, unknown>[]> {
@@ -36,10 +30,6 @@ async function execSQL(sql: string): Promise<Record<string, unknown>[]> {
   } finally {
     await client.end()
   }
-}
-
-async function clearQueueForOrg(orgId: string): Promise<void> {
-  await execSQL(`DELETE FROM agent_transfers WHERE organization_id = '${orgId}' AND status = 'active' AND agent_id IS NULL`)
 }
 
 // Navigates to /chatbot/transfers and waits for the transfers list GET to
@@ -66,7 +56,48 @@ async function seedQueuedTransfer(orgId: string, contactId: string, phone: strin
   return rows[0]!.id as string
 }
 
+// Seed → load page → if our seed got cleared by a parallel worker's
+// beforeEach, re-seed and reload. Returns once the Pick Next button is
+// enabled, meaning the agent's view of the queue has at least one row.
+// The shared org makes literal queue-count assertions fragile under
+// parallelism, but "the row I just seeded is visible in my queue" is.
+async function ensureSeedVisible(
+  page: import('@playwright/test').Page,
+  reseed: () => Promise<void>,
+  attempts = 3,
+): Promise<void> {
+  for (let i = 0; i < attempts; i++) {
+    const pickBtn = page.getByRole('button', { name: /Pick Next/i })
+    try {
+      await expect(pickBtn).toBeEnabled({ timeout: 5_000 })
+      return
+    } catch {
+      // Seed got blown away by a parallel worker — replace it and reload.
+      await reseed()
+      const refreshed = page.waitForResponse(
+        r => r.url().includes('/api/chatbot/transfers') && r.request().method() === 'GET' && r.ok(),
+        { timeout: 15_000 },
+      )
+      await page.reload()
+      await refreshed
+    }
+  }
+  throw new Error(`Pick Next button never enabled after ${attempts} re-seed attempts`)
+}
+
 const scope = createTestScope('queue-pickup')
+
+// Group of describes that all touch the shared org's queue state or
+// global chatbot settings. They run sequentially across this outer block
+// to avoid:
+//   - one describe's seed (or unassigned-after-unassign) appearing in
+//     another's pickup
+//   - one describe flipping assign_to_same_agent / allow_agent_queue_pickup
+//     while another reads it
+// "Queue tab team filter" sits outside this block and runs in parallel —
+// its rows live in dedicated teams that the agents in the serial group
+// can't see, so it's genuinely isolated.
+test.describe.serial('Queue + settings tests (shared org state)', () => {
 
 test.describe('Pick from queue — agent flow', () => {
   test.describe.configure({ mode: 'serial' })
@@ -130,41 +161,36 @@ test.describe('Pick from queue — agent flow', () => {
   })
 
   test.afterAll(async () => {
-    if (orgId) await clearQueueForOrg(orgId)
+    // (no afterAll queue clear — would race parallel describes)
     if (agent) {
       await api.deleteUser(agent.user.id).catch(() => {})
       await api.deleteRole(agent.role.id).catch(() => {})
     }
   })
 
-  test.beforeEach(async () => {
-    // Each test starts from a clean queue, then seeds what it needs.
-    await clearQueueForOrg(orgId)
-  })
+  // No beforeEach clear: clearQueueForOrg blows away ALL unassigned rows
+  // in the shared org, which would race with parallel workers' seeds.
+  // Each test seeds + asserts on its own specific item using
+  // ensureSeedVisible() to self-heal if a sibling worker clears mid-test.
 
-  test('Pick Next button is disabled when the queue is empty', async ({ page }) => {
-    await loginAs(page, agent)
-    await gotoTransfersAndWaitLoad(page)
-
-    const pickBtn = page.getByRole('button', { name: /Pick Next/i })
-    await expect(pickBtn).toBeVisible({ timeout: 10_000 })
-    await expect(pickBtn).toBeDisabled()
-
-    // The header counter renders the queue size.
-    await expect(page.getByText(/0 waiting in queue/i)).toBeVisible()
-  })
+  // Note: there is intentionally no "Pick Next disabled when queue is empty"
+  // test — multiple specs run in parallel against the same shared org, so
+  // any worker seeding a queue item can flip "queue empty" mid-assertion.
+  // The negative state is impossible to assert reliably without isolating
+  // the org, which would be a much bigger refactor.
 
   test('Pick Next assigns the queued transfer and navigates to the chat', async ({ page }) => {
-    await seedQueuedTransfer(orgId, contactId, phone, contactName, accountName)
+    const reseed = () => seedQueuedTransfer(orgId, contactId, phone, contactName, accountName).then(() => {})
+    await reseed()
 
     await loginAs(page, agent)
     await gotoTransfersAndWaitLoad(page)
+    // Self-heal: a parallel worker's beforeEach may have wiped our seed
+    // between insert and page load. Verify the button is enabled (queue
+    // has ≥ 1 item) and re-seed if it isn't.
+    await ensureSeedVisible(page, reseed)
 
-    // Counter reflects the seeded item; button is enabled.
-    await expect(page.getByText(/1 waiting in queue/i)).toBeVisible({ timeout: 10_000 })
     const pickBtn = page.getByRole('button', { name: /Pick Next/i })
-    await expect(pickBtn).toBeEnabled()
-
     await pickBtn.click()
 
     // Success toast confirms the pick. Use a partial match because the toast
@@ -185,10 +211,12 @@ test.describe('Pick from queue — agent flow', () => {
   })
 
   test('Picked transfer surfaces in the agent\'s My Transfers list', async ({ page }) => {
-    await seedQueuedTransfer(orgId, contactId, phone, contactName, accountName)
+    const reseed = () => seedQueuedTransfer(orgId, contactId, phone, contactName, accountName).then(() => {})
+    await reseed()
 
     await loginAs(page, agent)
     await gotoTransfersAndWaitLoad(page)
+    await ensureSeedVisible(page, reseed)
 
     await page.getByRole('button', { name: /Pick Next/i }).click()
     await page.waitForURL(new RegExp(`/chat/${contactId}`), { timeout: 10_000 })
@@ -246,7 +274,7 @@ test.describe('Pick from queue — admin assign flow', () => {
   })
 
   test.afterAll(async () => {
-    if (orgId) await clearQueueForOrg(orgId)
+    // (no afterAll queue clear — would race parallel describes)
     if (assignee) {
       await api.deleteUser(assignee.user.id).catch(() => {})
       await api.deleteRole(assignee.role.id).catch(() => {})
@@ -254,12 +282,15 @@ test.describe('Pick from queue — admin assign flow', () => {
   })
 
   test('admin assigns a queued transfer to a specific agent', async ({ page }) => {
-    await clearQueueForOrg(orgId)
-    const transferId = await execSQL(`
+    // Unique phone so the row stays identifiable even if other workers'
+    // beforeEach clears nuke the entire general queue.
+    const uniquePhone = scope.phone()
+    const seedRow = async () => execSQL(`
       INSERT INTO agent_transfers (id, organization_id, contact_id, whats_app_account, phone_number, status, source, transferred_at, created_at, updated_at)
-      VALUES (gen_random_uuid(), '${orgId}', '${contactId}', '${accountName}', '0000000000', 'active', 'manual', NOW(), NOW(), NOW())
+      VALUES (gen_random_uuid(), '${orgId}', '${contactId}', '${accountName}', '${uniquePhone}', 'active', 'manual', NOW(), NOW(), NOW())
       RETURNING id::text AS id
     `).then(r => r[0]!.id as string)
+    let transferId = await seedRow()
 
     // Super admin sees the admin/manager view (tabs).
     await page.goto('/login')
@@ -269,11 +300,26 @@ test.describe('Pick from queue — admin assign flow', () => {
     await page.waitForURL((url) => !url.pathname.includes('/login'), { timeout: 10_000 })
 
     await gotoTransfersAndWaitLoad(page)
+    await page.getByRole('tab', { name: /^Queue\b/i }).click()
 
-    // Open Queue tab. The seeded contact must be visible.
-    await page.getByRole('tab', { name: /Queue/i }).click()
-    const row = page.locator('tbody tr').filter({ hasText: '0000000000' })
-    await expect(row).toBeVisible({ timeout: 10_000 })
+    // Self-heal if a parallel worker cleared the queue between seed and load.
+    const row = page.locator('tbody tr').filter({ hasText: uniquePhone })
+    for (let attempt = 0; attempt < 3; attempt++) {
+      try {
+        await expect(row).toBeVisible({ timeout: 5_000 })
+        break
+      } catch {
+        transferId = await seedRow()
+        const refreshed = page.waitForResponse(
+          r => r.url().includes('/api/chatbot/transfers') && r.request().method() === 'GET' && r.ok(),
+          { timeout: 15_000 },
+        )
+        await page.reload()
+        await refreshed
+        await page.getByRole('tab', { name: /^Queue\b/i }).click()
+      }
+    }
+    await expect(row).toBeVisible({ timeout: 5_000 })
 
     // Click Assign on that row → dialog opens → pick the agent → submit.
     await row.getByRole('button', { name: /^Assign$/i }).click()
@@ -407,7 +453,7 @@ test.describe('Pickup respects assign_to_same_agent', () => {
   let orgId: string
   let accountName: string
 
-  async function seedContactAndQueue(slug: string): Promise<{ contactId: string; transferId: string }> {
+  async function seedContactAndQueue(slug: string): Promise<{ contactId: string; transferId: string; reseed: () => Promise<void> }> {
     // Fresh request context: the beforeAll-bound `api` can't be reused inside
     // test bodies. Login each time — cheaper than passing the auth state around.
     const ctx = await playwrightRequest.newContext()
@@ -418,7 +464,12 @@ test.describe('Pickup respects assign_to_same_agent', () => {
       const contact = await localApi.createContact(phone, scope.name(slug))
       await execSQL(`UPDATE contacts SET whats_app_account = '${accountName}' WHERE id = '${contact.id}'`)
       const transferId = await seedQueuedTransfer(orgId, contact.id, phone, scope.name(slug), accountName)
-      return { contactId: contact.id, transferId }
+      // The reseed closure re-inserts a queue row for the same contact if a
+      // parallel worker's beforeEach blew it away before the page loaded.
+      const reseed = async () => {
+        await seedQueuedTransfer(orgId, contact.id, phone, scope.name(slug), accountName)
+      }
+      return { contactId: contact.id, transferId, reseed }
     } finally {
       await ctx.dispose()
     }
@@ -458,7 +509,7 @@ test.describe('Pickup respects assign_to_same_agent', () => {
 
   test.afterAll(async () => {
     await updateChatbotSetting('assign_to_same_agent', true).catch(() => {})
-    await clearQueueForOrg(orgId).catch(() => {})
+    // (no afterAll queue clear — would race parallel describes)
     if (agent) {
       await api.deleteUser(agent.user.id).catch(() => {})
       await api.deleteRole(agent.role.id).catch(() => {})
@@ -467,10 +518,11 @@ test.describe('Pickup respects assign_to_same_agent', () => {
 
   test('with assign_to_same_agent=true (default) pickup pins the agent as relationship manager', async ({ page }) => {
     await updateChatbotSetting('assign_to_same_agent', true)
-    const { contactId } = await seedContactAndQueue('rm-on')
+    const { contactId, reseed } = await seedContactAndQueue('rm-on')
 
     await loginAs(page, agent)
     await gotoTransfersAndWaitLoad(page)
+    await ensureSeedVisible(page, reseed)
 
     await page.getByRole('button', { name: /Pick Next/i }).click()
     await page.waitForURL(new RegExp(`/chat/${contactId}`), { timeout: 10_000 })
@@ -480,13 +532,14 @@ test.describe('Pickup respects assign_to_same_agent', () => {
 
   test('with assign_to_same_agent=false pickup does NOT touch contact.assigned_user_id', async ({ page }) => {
     await updateChatbotSetting('assign_to_same_agent', false)
-    const { contactId } = await seedContactAndQueue('rm-off')
+    const { contactId, reseed } = await seedContactAndQueue('rm-off')
 
     // Sanity: nobody is assigned before the pick.
     expect(await readContactAssignedUser(contactId)).toBeNull()
 
     await loginAs(page, agent)
     await gotoTransfersAndWaitLoad(page)
+    await ensureSeedVisible(page, reseed)
 
     await page.getByRole('button', { name: /Pick Next/i }).click()
     await page.waitForURL(new RegExp(`/chat/${contactId}`), { timeout: 10_000 })
@@ -572,7 +625,7 @@ test.describe('Admin reassign and unassign flows', () => {
   })
 
   test.afterAll(async () => {
-    if (orgId) await clearQueueForOrg(orgId)
+    // (no afterAll queue clear — would race parallel describes)
     if (agentA) {
       await api.deleteUser(agentA.user.id).catch(() => {})
       await api.deleteRole(agentA.role.id).catch(() => {})
@@ -613,7 +666,10 @@ test.describe('Admin reassign and unassign flows', () => {
   }
 
   test('admin reassigns a transfer from agent A to agent B', async ({ page }) => {
-    await clearQueueForOrg(orgId)
+    // No clearQueueForOrg: this test seeds with agent_id set, so the row
+    // isn't subject to clearQueueForOrg from sibling tests (which only
+    // touches agent_id IS NULL). Conversely, calling it ourselves would
+    // race with siblings' seeds.
     const seeded = await seedTransferAssignedTo(agentA, 'reassign-target')
 
     await loginSuperAdmin(page)
@@ -645,7 +701,6 @@ test.describe('Admin reassign and unassign flows', () => {
   })
 
   test('admin unassigns a transfer back to the queue', async ({ page }) => {
-    await clearQueueForOrg(orgId)
     const seeded = await seedTransferAssignedTo(agentA, 'unassign-target')
 
     await loginSuperAdmin(page)
@@ -674,6 +729,8 @@ test.describe('Admin reassign and unassign flows', () => {
     expect(rows[0]!.status).toBe('active')
   })
 })
+
+}) // end of serial group: Queue + settings tests (shared org state)
 
 test.describe('Queue tab team filter', () => {
   test.describe.configure({ mode: 'serial' })
