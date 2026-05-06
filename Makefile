@@ -49,7 +49,7 @@ run-migrate:
 # Install:  go install gotest.tools/gotestsum@latest
 test:
 	@if command -v gotestsum >/dev/null 2>&1; then \
-		gotestsum --format pkgname --hide-summary=skipped -- ./...; \
+		gotestsum --format testname --hide-summary=skipped -- ./...; \
 	else \
 		echo "(install gotestsum for nicer output: go install gotest.tools/gotestsum@latest)"; \
 		$(GOTEST) -v ./...; \
@@ -58,7 +58,7 @@ test:
 # Run tests with coverage. Same gotestsum fallback as `make test`.
 test-coverage:
 	@if command -v gotestsum >/dev/null 2>&1; then \
-		gotestsum --format pkgname --hide-summary=skipped -- -coverprofile=coverage.out ./...; \
+		gotestsum --format testname --hide-summary=skipped -- -coverprofile=coverage.out ./...; \
 	else \
 		echo "(install gotestsum for nicer output: go install gotest.tools/gotestsum@latest)"; \
 		$(GOTEST) -v -coverprofile=coverage.out ./...; \
