@@ -1382,6 +1382,7 @@ func (a *App) ReturnAgentTransfersToQueue(userID, orgID uuid.UUID) int {
 	// Return each transfer to its team queue (or general queue)
 	for i := range transfers {
 		transfer := &transfers[i]
+		previousAgentID := transfer.AgentID
 		transfer.AgentID = nil
 
 		if err := a.DB.Save(transfer).Error; err != nil {
@@ -1389,8 +1390,11 @@ func (a *App) ReturnAgentTransfersToQueue(userID, orgID uuid.UUID) int {
 			continue
 		}
 
-		// Clear contact assignment
-		if transfer.ContactID != uuid.Nil {
+		// Clear the contact's relationship-manager pointer only if it was
+		// pointing at the agent we just removed. Don't blow away a manually
+		// set manager assigned via /api/contacts/<id>/assign.
+		if transfer.ContactID != uuid.Nil && previousAgentID != nil && transfer.Contact != nil &&
+			transfer.Contact.AssignedUserID != nil && *transfer.Contact.AssignedUserID == *previousAgentID {
 			a.DB.Model(&models.Contact{}).Where("id = ?", transfer.ContactID).Update("assigned_user_id", nil)
 		}
 
