@@ -1,9 +1,12 @@
 import { test, expect } from '@playwright/test'
 import { loginAsAdmin } from '../../helpers'
 import { ContactsPage } from '../../pages'
+import { createTestScope } from '../../framework'
 import * as path from 'path'
 import * as fs from 'fs'
 import * as os from 'os'
+
+const scope = createTestScope('contacts')
 
 test.describe('Contacts Management', () => {
   let contactsPage: ContactsPage
@@ -32,8 +35,8 @@ test.describe('Contacts Management', () => {
   })
 
   test('should create a new contact', async () => {
-    const phoneNumber = `91${Date.now().toString().slice(-10)}`
-    const contactName = `Test Contact ${Date.now()}`
+    const phoneNumber = scope.phone()
+    const contactName = scope.name('test')
 
     await contactsPage.openCreateDialog()
     await contactsPage.fillContactForm(phoneNumber, contactName)
@@ -44,7 +47,7 @@ test.describe('Contacts Management', () => {
   })
 
   test('should create contact with just phone number', async () => {
-    const phoneNumber = `91${Date.now().toString().slice(-10)}`
+    const phoneNumber = scope.phone()
 
     await contactsPage.openCreateDialog()
     await contactsPage.fillContactForm(phoneNumber)
@@ -56,8 +59,8 @@ test.describe('Contacts Management', () => {
 
   test('should edit existing contact', async ({ page }) => {
     // First create a contact
-    const phoneNumber = `91${Date.now().toString().slice(-10)}`
-    const originalName = `Original Name ${Date.now()}`
+    const phoneNumber = scope.phone()
+    const originalName = scope.name('original')
 
     await contactsPage.openCreateDialog()
     await contactsPage.fillContactForm(phoneNumber, originalName)
@@ -70,7 +73,7 @@ test.describe('Contacts Management', () => {
     await contactsPage.expectContactExists(phoneNumber)
 
     // Edit the contact via detail page
-    const newName = `Updated Name ${Date.now()}`
+    const newName = scope.name('updated')
     await contactsPage.editContact(phoneNumber)
 
     // Update profile name on the detail page
@@ -92,8 +95,8 @@ test.describe('Contacts Management', () => {
 
   test('should delete contact', async ({ page }) => {
     // First create a contact
-    const phoneNumber = `91${Date.now().toString().slice(-10)}`
-    const contactName = `Delete Contact ${Date.now()}`
+    const phoneNumber = scope.phone()
+    const contactName = scope.name('delete')
 
     await contactsPage.openCreateDialog()
     await contactsPage.fillContactForm(phoneNumber, contactName)
@@ -114,8 +117,8 @@ test.describe('Contacts Management', () => {
 
   test('should search contacts', async ({ page }) => {
     // First create a contact with unique name
-    const phoneNumber = `91${Date.now().toString().slice(-10)}`
-    const uniqueName = `UniqueSearch${Date.now()}`
+    const phoneNumber = scope.phone()
+    const uniqueName = scope.name('search')
 
     await contactsPage.openCreateDialog()
     await contactsPage.fillContactForm(phoneNumber, uniqueName)
@@ -134,7 +137,7 @@ test.describe('Contacts Management', () => {
   })
 
   test('should prevent duplicate phone numbers', async ({ page }) => {
-    const phoneNumber = `91${Date.now().toString().slice(-10)}`
+    const phoneNumber = scope.phone()
 
     // Create first contact
     await contactsPage.openCreateDialog()
@@ -241,8 +244,8 @@ test.describe('Contacts Import/Export', () => {
 
   test('should update existing contacts on import with flag', async ({ page }) => {
     // First create a contact
-    const phoneNumber = `91${Date.now().toString().slice(-10)}`
-    const originalName = `Original Import ${Date.now()}`
+    const phoneNumber = scope.phone()
+    const originalName = scope.name('original-import')
 
     await contactsPage.openCreateDialog()
     await contactsPage.fillContactForm(phoneNumber, originalName)
@@ -253,7 +256,7 @@ test.describe('Contacts Import/Export', () => {
     await page.locator('[data-sonner-toast]').waitFor({ state: 'hidden', timeout: 10000 })
 
     // Create CSV with same phone number but different name
-    const newName = `Updated Via Import ${Date.now()}`
+    const newName = scope.name('updated-via-import')
     const csvContent = `Phone Number,Name
 ${phoneNumber},${newName}`
 
@@ -306,8 +309,8 @@ test.describe('Contacts in Chat View', () => {
     await page.goto('/chat')
     await page.waitForLoadState('networkidle')
 
-    const phoneNumber = `91${Date.now().toString().slice(-10)}`
-    const contactName = `Chat Create ${Date.now()}`
+    const phoneNumber = scope.phone()
+    const contactName = scope.name('chat-create')
 
     await page.getByRole('button', { name: /add contact/i }).first().click()
     const dialog = page.locator('[role="dialog"][data-state="open"]')

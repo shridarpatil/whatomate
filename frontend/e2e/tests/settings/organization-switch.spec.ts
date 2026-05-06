@@ -1,9 +1,13 @@
 import { test, expect } from '@playwright/test'
 import { ApiHelper } from '../../helpers'
+import { createTestScope, SUPER_ADMIN } from '../../framework'
 
-// Admin credentials - try super admin first, fall back to test admin
-const ADMIN_EMAIL = 'admin@admin.com'
-const ADMIN_PASSWORD = 'admin'
+const scope = createTestScope('org-switch')
+
+// Falls back to admin@test.com when super admin login fails (e.g. password
+// rotated locally) so the spec is still useful in dev environments.
+const ADMIN_EMAIL = SUPER_ADMIN.email
+const ADMIN_PASSWORD = SUPER_ADMIN.password
 const FALLBACK_ADMIN_EMAIL = 'admin@test.com'
 const FALLBACK_ADMIN_PASSWORD = 'password'
 
@@ -223,7 +227,7 @@ test.describe('Create Organization via Sidebar', () => {
     const loggedIn = await loginAsSuperAdmin(page)
     if (!loggedIn) { test.skip(true, 'No admin credentials available'); return }
 
-    const orgName = `E2E Test Org ${Date.now()}`
+    const orgName = scope.name('test-org')
 
     const plusButton = await getOrgPlusButton(page)
     await plusButton.click()
@@ -272,11 +276,10 @@ test.describe('Organization Data Isolation', () => {
     const ok = await loginAdmin(superAdminApi)
     if (!ok) { test.skip(true, 'No super admin credentials available'); return }
 
-    const timestamp = Date.now()
-    const org1Email = `org1-admin-${timestamp}@test.com`
-    const org2Email = `org2-admin-${timestamp}@test.com`
-    const org1Name = `E2E Org 1 ${timestamp}`
-    const org2Name = `E2E Org 2 ${timestamp}`
+    const org1Email = scope.email('org1-admin')
+    const org2Email = scope.email('org2-admin')
+    const org1Name = scope.name('org1')
+    const org2Name = scope.name('org2')
 
     // Create two organizations via API (super admin)
     const org1 = await superAdminApi.createOrganization(org1Name)
@@ -326,8 +329,8 @@ test.describe('Organization Data Isolation', () => {
     const ok = await loginAdmin(superAdminApi)
     if (!ok) { test.skip(true, 'No super admin credentials available'); return }
 
-    const uniqueOrgName = `Isolated Org ${Date.now()}`
-    const uniqueEmail = `isolated-admin-${Date.now()}@test.com`
+    const uniqueOrgName = scope.name('isolated-org')
+    const uniqueEmail = scope.email('isolated-admin')
 
     const org = await superAdminApi.createOrganization(uniqueOrgName)
     const myOrgId = org.id

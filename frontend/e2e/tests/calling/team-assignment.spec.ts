@@ -1,5 +1,8 @@
 import { test, expect } from '@playwright/test'
 import { loginAsAdmin, ApiHelper, createTeamFixture } from '../../helpers'
+import { createTestScope } from '../../framework'
+
+const scope = createTestScope('team-assignment')
 
 test.describe('Team Assignment Strategy for Calls', () => {
   test.beforeEach(async ({ page }) => {
@@ -7,7 +10,7 @@ test.describe('Team Assignment Strategy for Calls', () => {
   })
 
   test('should create team with round_robin strategy', async ({ page }) => {
-    const teamName = `RR Team ${Date.now()}`
+    const teamName = scope.name('rr')
 
     // Navigate to create page
     await page.goto('/settings/teams/new')
@@ -42,7 +45,7 @@ test.describe('Team Assignment Strategy for Calls', () => {
   })
 
   test('should create team with load_balanced strategy', async ({ page }) => {
-    const teamName = `LB Team ${Date.now()}`
+    const teamName = scope.name('lb')
 
     await page.goto('/settings/teams/new')
     await page.waitForLoadState('networkidle')
@@ -69,7 +72,7 @@ test.describe('Team Assignment Strategy for Calls', () => {
   })
 
   test('should create team with manual strategy', async ({ page }) => {
-    const teamName = `Manual Team ${Date.now()}`
+    const teamName = scope.name('manual')
 
     await page.goto('/settings/teams/new')
     await page.waitForLoadState('networkidle')
@@ -110,7 +113,7 @@ test.describe('Team Assignment Strategy - API', () => {
     // raw `request.post(..., { headers: { 'X-CSRF-Token': '' } })` and got
     // a 403, then silently skipped — never actually exercising the contract.
     const response = await api.post('/api/teams', {
-      name: `API Team ${Date.now()}`,
+      name: scope.name('api'),
       description: 'Test team with per-agent timeout',
       assignment_strategy: 'round_robin',
       per_agent_timeout_secs: 30,

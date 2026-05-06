@@ -1,6 +1,9 @@
 import { test, expect, type Page, type Locator } from '@playwright/test'
 import { TablePage } from '../../pages'
 import { loginAsAdmin, createWebhookFixture } from '../../helpers'
+import { createTestScope } from '../../framework'
+
+const scope = createTestScope('webhooks')
 
 function nameInput(page: Page): Locator {
   return page.getByPlaceholder('My Helpdesk Integration')
@@ -102,7 +105,7 @@ test.describe('Webhooks Management', () => {
   })
 
   test('should delete webhook', async ({ page }) => {
-    const webhook = createWebhookFixture({ name: 'Webhook To Delete ' + Date.now() })
+    const webhook = createWebhookFixture({ name: scope.name('delete') })
 
     await gotoCreateWebhook(page)
     await nameInput(page).fill(webhook.name)

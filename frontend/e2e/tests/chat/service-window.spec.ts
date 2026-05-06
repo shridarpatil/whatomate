@@ -2,6 +2,9 @@ import { test, expect, request as playwrightRequest } from '@playwright/test'
 import { Client } from 'pg'
 import { loginAsAdmin, ApiHelper } from '../../helpers'
 import { ChatPage } from '../../pages'
+import { createTestScope } from '../../framework'
+
+const scope = createTestScope('service-window')
 
 const DB_URL = process.env.TEST_DATABASE_URL || 'postgres://whatomate:whatomate@127.0.0.1:5432/whatomate'
 
@@ -35,8 +38,8 @@ test.describe('24-Hour Service Window', () => {
     await api.loginAsAdmin()
 
     // Create a dedicated contact for service window tests
-    const phone = `91${Date.now().toString().slice(-10)}`
-    const contact = await api.createContact(phone, 'Service Window Test')
+    const phone = scope.phone()
+    const contact = await api.createContact(phone, scope.name('contact'))
     contactId = contact.id
 
     await reqContext.dispose()

@@ -1,6 +1,9 @@
 import { test, expect } from '@playwright/test'
 import { loginAsAdmin } from '../../helpers'
 import { CustomActionsPage } from '../../pages'
+import { createTestScope } from '../../framework'
+
+const scope = createTestScope('custom-actions')
 
 test.describe('Custom Actions Management', () => {
   let customActionsPage: CustomActionsPage
@@ -29,7 +32,7 @@ test.describe('Custom Actions Management', () => {
   })
 
   test('should create a webhook custom action', async () => {
-    const actionName = `Webhook Action ${Date.now()}`
+    const actionName = scope.name('webhook')
 
     await customActionsPage.openCreateDialog()
     await customActionsPage.fillWebhookAction(actionName, 'https://api.example.com/webhook')
@@ -40,7 +43,7 @@ test.describe('Custom Actions Management', () => {
   })
 
   test('should create a URL custom action', async () => {
-    const actionName = `URL Action ${Date.now()}`
+    const actionName = scope.name('url')
 
     await customActionsPage.openCreateDialog()
     await customActionsPage.fillUrlAction(actionName, 'https://crm.example.com/contact')
@@ -51,7 +54,7 @@ test.describe('Custom Actions Management', () => {
   })
 
   test('should create a JavaScript custom action', async () => {
-    const actionName = `JS Action ${Date.now()}`
+    const actionName = scope.name('js')
 
     await customActionsPage.openCreateDialog()
     await customActionsPage.fillJsAction(actionName, 'return { clipboard: contact.phone_number }')
@@ -63,7 +66,7 @@ test.describe('Custom Actions Management', () => {
 
   test('should edit existing custom action', async () => {
     // First create an action
-    const actionName = `Edit Action ${Date.now()}`
+    const actionName = scope.name('edit')
 
     await customActionsPage.openCreateDialog()
     await customActionsPage.fillUrlAction(actionName, 'https://example.com')
@@ -86,7 +89,7 @@ test.describe('Custom Actions Management', () => {
 
   test('should delete custom action', async () => {
     // First create an action
-    const actionName = `Delete Action ${Date.now()}`
+    const actionName = scope.name('delete')
 
     await customActionsPage.openCreateDialog()
     await customActionsPage.fillUrlAction(actionName, 'https://todelete.com')
@@ -108,7 +111,7 @@ test.describe('Custom Actions Management', () => {
 
   test('should toggle custom action status', async () => {
     // First create an action
-    const actionName = `Toggle Action ${Date.now()}`
+    const actionName = scope.name('toggle')
 
     await customActionsPage.openCreateDialog()
     await customActionsPage.fillUrlAction(actionName, 'https://toggle.com')

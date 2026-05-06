@@ -1,6 +1,9 @@
 import { test, expect } from '@playwright/test'
 import { loginAsAdmin } from '../../helpers'
 import { TagsPage } from '../../pages'
+import { createTestScope } from '../../framework'
+
+const scope = createTestScope('tags')
 
 test.describe('Tags Management', () => {
   let tagsPage: TagsPage
@@ -29,7 +32,7 @@ test.describe('Tags Management', () => {
   })
 
   test('should create a new tag', async ({ page }) => {
-    const tagName = `Test Tag ${Date.now()}`
+    const tagName = scope.name('test')
 
     await tagsPage.openCreateDialog()
     await tagsPage.fillTagForm(tagName, 'Blue')
@@ -40,7 +43,7 @@ test.describe('Tags Management', () => {
   })
 
   test('should create a tag with different color', async ({ page }) => {
-    const tagName = `Purple Tag ${Date.now()}`
+    const tagName = scope.name('purple')
 
     await tagsPage.openCreateDialog()
     await tagsPage.fillTagForm(tagName, 'Purple')
@@ -52,7 +55,7 @@ test.describe('Tags Management', () => {
 
   test('should edit existing tag', async ({ page }) => {
     // First create a tag
-    const tagName = `Edit Tag ${Date.now()}`
+    const tagName = scope.name('edit')
 
     await tagsPage.openCreateDialog()
     await tagsPage.fillTagForm(tagName, 'Green')
@@ -75,7 +78,7 @@ test.describe('Tags Management', () => {
 
   test('should delete tag', async ({ page }) => {
     // First create a tag
-    const tagName = `Delete Tag ${Date.now()}`
+    const tagName = scope.name('delete')
 
     await tagsPage.openCreateDialog()
     await tagsPage.fillTagForm(tagName, 'Gray')
@@ -97,7 +100,7 @@ test.describe('Tags Management', () => {
 
   test('should search tags', async ({ page }) => {
     // First create a tag with unique name
-    const uniqueName = `Unique${Date.now()}`
+    const uniqueName = scope.name('unique')
 
     await tagsPage.openCreateDialog()
     await tagsPage.fillTagForm(uniqueName, 'Yellow')
@@ -114,7 +117,7 @@ test.describe('Tags Management', () => {
   })
 
   test('should prevent duplicate tag names', async ({ page }) => {
-    const tagName = `Duplicate ${Date.now()}`
+    const tagName = scope.name('duplicate')
 
     // Create first tag
     await tagsPage.openCreateDialog()

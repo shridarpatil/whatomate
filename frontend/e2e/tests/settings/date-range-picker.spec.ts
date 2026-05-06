@@ -1,4 +1,5 @@
-import { test, expect, Page } from '@playwright/test'
+import { test, expect } from '@playwright/test'
+import { loginAsSuperAdmin } from '../../framework'
 
 /**
  * Regression: a custom date range saved to localStorage was being restored
@@ -7,13 +8,6 @@ import { test, expect, Page } from '@playwright/test'
  * only the Apply button — no calendar grid. Now restored as CalendarDate
  * instances.
  */
-async function loginAsSuperAdmin(page: Page) {
-  await page.goto('/login')
-  await page.locator('input[name="email"], input[type="email"]').fill('admin@admin.com')
-  await page.locator('input[name="password"], input[type="password"]').fill('admin')
-  await page.locator('button[type="submit"]').click()
-  await page.waitForURL((url) => !url.pathname.includes('/login'), { timeout: 10000 })
-}
 
 test.describe('DateRangePicker — re-open after Apply', () => {
   test.beforeEach(async ({ page }) => {

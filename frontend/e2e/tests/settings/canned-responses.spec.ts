@@ -1,6 +1,9 @@
 import { test, expect } from '@playwright/test'
 import { loginAsAdmin } from '../../helpers'
 import { CannedResponsesPage } from '../../pages'
+import { createTestScope } from '../../framework'
+
+const scope = createTestScope('canned-responses')
 
 test.describe('Canned Responses Management', () => {
   let cannedResponsesPage: CannedResponsesPage
@@ -29,7 +32,7 @@ test.describe('Canned Responses Management', () => {
   })
 
   test('should create a new canned response', async () => {
-    const responseName = `Test Response ${Date.now()}`
+    const responseName = scope.name('test')
     const responseContent = 'Hello! Thank you for contacting us.'
 
     await cannedResponsesPage.openCreateDialog()
@@ -42,7 +45,7 @@ test.describe('Canned Responses Management', () => {
 
   test('should edit existing canned response', async ({ page }) => {
     // First create a response
-    const responseName = `Edit Response ${Date.now()}`
+    const responseName = scope.name('edit')
 
     await cannedResponsesPage.openCreateDialog()
     await cannedResponsesPage.fillResponseForm(responseName, 'Original content')
@@ -65,7 +68,7 @@ test.describe('Canned Responses Management', () => {
 
   test('should delete canned response', async ({ page }) => {
     // First create a response
-    const responseName = `Delete Response ${Date.now()}`
+    const responseName = scope.name('delete')
 
     await cannedResponsesPage.openCreateDialog()
     await cannedResponsesPage.fillResponseForm(responseName, 'To be deleted')
@@ -92,7 +95,7 @@ test.describe('Canned Responses Management', () => {
 
   test('should search canned responses', async ({ page }) => {
     // First create a response with unique text
-    const uniqueText = `Unique${Date.now()}`
+    const uniqueText = scope.name('unique')
 
     await cannedResponsesPage.openCreateDialog()
     await cannedResponsesPage.fillResponseForm(uniqueText, 'Search test content')

@@ -1,6 +1,9 @@
 import { test, expect, type Page, type Locator } from '@playwright/test'
 import { TablePage } from '../../pages'
 import { loginAsAdmin } from '../../helpers'
+import { createTestScope } from '../../framework'
+
+const scope = createTestScope('api-keys')
 
 function nameInput(page: Page): Locator {
   return page.getByPlaceholder('e.g., Production Integration')
@@ -36,7 +39,7 @@ test.describe('API Keys Management', () => {
   })
 
   test('should create a new API key', async ({ page }) => {
-    const keyName = `Test Key ${Date.now()}`
+    const keyName = scope.name('test')
 
     await gotoCreateApiKey(page)
     await nameInput(page).fill(keyName)
@@ -57,7 +60,7 @@ test.describe('API Keys Management', () => {
   })
 
   test('should create API key with expiration', async ({ page }) => {
-    const keyName = `Expiring Key ${Date.now()}`
+    const keyName = scope.name('expiring')
     const tomorrow = new Date()
     tomorrow.setDate(tomorrow.getDate() + 1)
     const dateStr = tomorrow.toISOString().slice(0, 16)
@@ -76,7 +79,7 @@ test.describe('API Keys Management', () => {
   })
 
   test('should navigate to API key detail view', async ({ page }) => {
-    const keyName = `Detail Key ${Date.now()}`
+    const keyName = scope.name('detail')
 
     await gotoCreateApiKey(page)
     await nameInput(page).fill(keyName)
@@ -99,7 +102,7 @@ test.describe('API Keys Management', () => {
   })
 
   test('should delete API key from list', async ({ page }) => {
-    const keyName = `Delete Key ${Date.now()}`
+    const keyName = scope.name('delete')
 
     await gotoCreateApiKey(page)
     await nameInput(page).fill(keyName)

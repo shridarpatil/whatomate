@@ -2,6 +2,9 @@ import { test, expect, request as playwrightRequest } from '@playwright/test'
 import { loginAsAdmin } from '../../helpers'
 import { ApiHelper } from '../../helpers/api'
 import { ChatPage } from '../../pages'
+import { createTestScope, SUPER_ADMIN } from '../../framework'
+
+const scope = createTestScope('conversation-notes')
 
 // Helper to clean up all notes for a contact using both superadmin and test admin
 // (creator-only delete means we need to try both users)
@@ -18,7 +21,7 @@ async function cleanupAllNotes(contactId: string) {
   // Try with superadmin first (for notes created via manual UI testing)
   const ctx1 = await playwrightRequest.newContext()
   const superApi = new ApiHelper(ctx1)
-  await superApi.login('admin@admin.com', 'admin')
+  await superApi.login(SUPER_ADMIN.email, SUPER_ADMIN.password)
   await cleanupNotes(superApi, contactId)
   await ctx1.dispose()
   // Then with test admin (for notes created by test user)
@@ -41,7 +44,7 @@ test.describe('Conversation Notes - UI', () => {
     await api.loginAsAdmin()
     let contacts = await api.getContacts()
     if (contacts.length === 0) {
-      await api.createContact(`91${Date.now().toString().slice(-10)}`, 'Notes UI Test')
+      await api.createContact(scope.phone(), scope.name('ui-contact'))
       contacts = await api.getContacts()
     }
     contactId = contacts[0].id
@@ -175,7 +178,7 @@ test.describe('Conversation Notes - API CRUD', () => {
     await api.loginAsAdmin()
     let contacts = await api.getContacts()
     if (contacts.length < 2) {
-      await api.createContact(`91${(Date.now() + 1).toString().slice(-10)}`, 'Notes API Test')
+      await api.createContact(scope.phone(), scope.name('api-contact'))
       contacts = await api.getContacts()
     }
     // Use a different contact than UI tests to avoid parallel conflicts

@@ -2,6 +2,9 @@ import { test, expect, request as playwrightRequest } from '@playwright/test'
 import { Client } from 'pg'
 import { loginAsAdmin, ApiHelper } from '../../helpers'
 import { ChatPage } from '../../pages'
+import { createTestScope } from '../../framework'
+
+const scope = createTestScope('template-sending')
 
 const DB_URL = process.env.TEST_DATABASE_URL || 'postgres://whatomate:whatomate@127.0.0.1:5432/whatomate'
 
@@ -47,8 +50,8 @@ test.describe('Template Sending', () => {
 
     // Always create a fresh contact for template tests so it has no
     // message history from other accounts (which would override selectedAccount).
-    const tplPhone = `91${Date.now().toString().slice(-10)}`
-    await api.createContact(tplPhone, 'Template Test Contact')
+    const tplPhone = scope.phone()
+    await api.createContact(tplPhone, scope.name('contact'))
     const contacts = await api.getContacts()
     // Find the contact we just created (most recent by phone)
     const tplContact = contacts.find((c: any) => c.phone_number === tplPhone) || contacts[0]

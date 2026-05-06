@@ -1,6 +1,9 @@
 import { test, expect, type Page, type Locator } from '@playwright/test'
 import { TablePage } from '../../pages'
 import { loginAsAdmin } from '../../helpers'
+import { createTestScope } from '../../framework'
+
+const scope = createTestScope('roles')
 
 // Detail-page form helpers
 function nameInput(page: Page): Locator {
@@ -73,7 +76,7 @@ test.describe('Roles Management', () => {
   })
 
   test('should create a new custom role', async ({ page }) => {
-    const roleName = `Test Role ${Date.now()}`
+    const roleName = scope.name('test')
 
     await gotoCreateRole(page)
     await nameInput(page).fill(roleName)
@@ -122,7 +125,7 @@ test.describe('Roles Management', () => {
 
   test('should edit custom role', async ({ page }) => {
     // Create a role via the detail page
-    const originalName = `Edit Role ${Date.now()}`
+    const originalName = scope.name('edit')
     await gotoCreateRole(page)
     await nameInput(page).fill(originalName)
     await descriptionInput(page).fill('Original description')
@@ -134,7 +137,7 @@ test.describe('Roles Management', () => {
     await page.waitForLoadState('networkidle')
     await openRoleDetail(tablePage, page, originalName)
 
-    const updatedName = `Updated Role ${Date.now()}`
+    const updatedName = scope.name('updated')
     await nameInput(page).fill(updatedName)
     await descriptionInput(page).fill('Updated description')
     await page.waitForTimeout(300)
@@ -150,7 +153,7 @@ test.describe('Roles Management', () => {
 
   test('should delete custom role', async ({ page }) => {
     // Create a role via the detail page
-    const roleName = `Delete Role ${Date.now()}`
+    const roleName = scope.name('delete')
     await gotoCreateRole(page)
     await nameInput(page).fill(roleName)
     await saveButton(page).click()
@@ -183,7 +186,7 @@ test.describe('Roles Management', () => {
 
   test('should show delete confirmation when deleting custom role', async ({ page }) => {
     // Create a role via the detail page
-    const roleName = `Role To Delete ${Date.now()}`
+    const roleName = scope.name('confirm-delete')
     await gotoCreateRole(page)
     await nameInput(page).fill(roleName)
     await saveButton(page).click()
@@ -210,7 +213,7 @@ test.describe('Roles Management', () => {
 
   test('should toggle default role flag', async ({ page }) => {
     // Create a role and set it as default via the detail page
-    const roleName = `Default Role ${Date.now()}`
+    const roleName = scope.name('default')
 
     await gotoCreateRole(page)
     await nameInput(page).fill(roleName)
