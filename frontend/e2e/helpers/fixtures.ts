@@ -1,8 +1,12 @@
 // Test data fixtures for E2E tests
 
+import { randomBytes } from 'node:crypto'
+
 export function generateUniqueEmail(prefix = 'test'): string {
   const timestamp = Date.now()
-  const random = Math.random().toString(36).substring(7)
+  // node:crypto satisfies CodeQL's js/insecure-randomness rule — these
+  // values flow into API requests in the helpers below.
+  const random = randomBytes(4).toString('hex').slice(0, 6)
   return `${prefix}-${timestamp}-${random}@test.com`
 }
 

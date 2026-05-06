@@ -18,6 +18,8 @@
  *   scope.phone()        // '911745236847123'
  */
 
+import { randomBytes, randomInt } from 'node:crypto'
+
 export interface TestScope {
   /** Stable identifier for everything this spec creates. */
   readonly prefix: string
@@ -44,12 +46,16 @@ export function createTestScope(specName: string): TestScope {
       return `${prefix.toLowerCase()}-${local}@e2e.test`
     },
     phone() {
-      // 91 (country) + 10-digit local suffix derived from time + random
-      return `91${Date.now().toString().slice(-7)}${Math.floor(Math.random() * 1000).toString().padStart(3, '0')}`
+      // 91 (country) + 10-digit local suffix derived from time + random.
+      // node:crypto satisfies CodeQL's js/insecure-randomness — these values
+      // flow into API calls so the linter treats them as security-sensitive
+      // even though the phones are throwaway test data.
+      const suffix = randomInt(0, 1000).toString().padStart(3, '0')
+      return `91${Date.now().toString().slice(-7)}${suffix}`
     },
   }
 }
 
 function randomSuffix(): string {
-  return Math.random().toString(36).slice(2, 8)
+  return randomBytes(4).toString('hex').slice(0, 6)
 }
