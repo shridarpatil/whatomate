@@ -1,6 +1,8 @@
 import { test, expect } from '@playwright/test'
 import { ApiHelper, loginAsAdmin } from '../../helpers'
-import { SUPER_ADMIN } from '../../framework'
+import { createTestScope, SUPER_ADMIN } from '../../framework'
+
+const scope = createTestScope('sso')
 
 const BASE_URL = process.env.BASE_URL || 'http://localhost:8080'
 
@@ -250,7 +252,7 @@ test.describe('SSO Settings', () => {
     })
 
     // Spin up a new org and switch into it.
-    const newOrg = await api.createOrganization(`Iso Org ${Date.now()}`)
+    const newOrg = await api.createOrganization(scope.name('iso-org'))
     await api.switchOrg(newOrg.id)
 
     try {
