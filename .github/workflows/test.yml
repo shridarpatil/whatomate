@@ -53,14 +53,23 @@ jobs:
       - name: Download dependencies
         run: go mod download
 
+      - name: Install gotestsum
+        run: go install gotest.tools/gotestsum@latest
+
       - name: Run tests
         env:
           TEST_DATABASE_URL: postgres://postgres:postgres@localhost:5432/whatomate_test?sslmode=disable
           TEST_REDIS_URL: redis://localhost:6379
         run: |
-          # Run tests with coverage, excluding test utility packages from coverage calculation
-          # -p 1 runs packages sequentially to avoid database conflicts (all packages share the test DB)
-          go test -v -race -p 1 -coverprofile=coverage.out $(go list ./... | grep -v /test/)
+          # gotestsum gives live "Running N/M tests" output, names failed
+          # tests prominently at the end, and re-prints failure logs in a
+          # final summary so we don't have to scroll.
+          # -p 1 runs packages sequentially to avoid database conflicts
+          # (all packages share the test DB).
+          gotestsum \
+            --format pkgname \
+            --hide-summary=skipped \
+            -- -race -p 1 -coverprofile=coverage.out $(go list ./... | grep -v /test/)
 
       - name: Display coverage
         run: go tool cover -func=coverage.out | grep "total:"
