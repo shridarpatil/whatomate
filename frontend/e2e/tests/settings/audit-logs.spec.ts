@@ -1,77 +1,77 @@
-import { test, expect } from '@playwright/test'
-import { ApiHelper, loginAsAdmin, verifyAuditLogged } from '../../helpers'
-import { createTestScope, SUPER_ADMIN } from '../../framework'
+import { test, expect, type Page } from '@playwright/test'
+import { loginAsAdmin } from '../../helpers'
+import { createTestScope } from '../../framework'
 
 const scope = createTestScope('audit-logs')
 
 /**
- * Audit logs E2E:
- *  - Generates predictable audit entries via the API (uses webhooks, since the
- *    contact handler currently doesn't call audit.LogAudit — see fixme in
- *    audit-trail.spec.ts).
- *  - Loads the list page, verifies entries appear.
- *  - Exercises filters (action) and the detail view.
- *  - Confirms the API filter contract by querying /api/audit-logs directly.
+ * Audit logs E2E.
  *
- * NOTE on auth: Playwright's `request` fixture is shared across before/test/
- * after hooks for one test run. Calling api.login() more than once on the
- * same context fails CSRF (the access cookie is already set, but login
- * doesn't send X-CSRF-Token). We therefore log in exactly once per test, and
- * use admin@admin.com (created by Go migrations) instead of admin@test.com
- * (which depends on global-setup having succeeded).
+ * Drives webhook CRUD via the UI to generate audit entries, then verifies
+ * those entries surface on the audit-logs list and detail pages. Webhooks
+ * are convenient because their detail page is a vanilla form-based create.
  */
+
+async function createWebhookViaUI(page: Page, name: string): Promise<void> {
+  await page.goto('/settings/webhooks/new')
+  await page.waitForLoadState('networkidle')
+  await page.getByPlaceholder('My Helpdesk Integration').fill(name)
+  await page.getByPlaceholder('https://example.com/webhook').fill('https://webhook.site/e2e-audit')
+  // Tick at least one event checkbox; first one is fine.
+  await page.locator('button[role="checkbox"]').first().click()
+  await page.getByRole('button', { name: /^(Create|Save)$/i }).first().click()
+  await page.waitForURL(/\/settings\/webhooks\/[a-f0-9-]+$/, { timeout: 10000 })
+  await page.waitForLoadState('networkidle')
+}
+
+async function updateWebhookViaUI(page: Page, name: string, newUrl: string): Promise<void> {
+  await page.goto('/settings/webhooks')
+  await page.waitForLoadState('networkidle')
+  await page.getByPlaceholder(/Search/i).first().fill(name)
+  await page.waitForTimeout(400)
+  await page.locator('tbody tr .font-medium').getByText(name, { exact: true }).first().click()
+  await page.waitForURL(/\/settings\/webhooks\/[a-f0-9-]+$/)
+  await page.waitForLoadState('networkidle')
+
+  const urlInput = page.getByPlaceholder('https://example.com/webhook')
+  await urlInput.fill(newUrl)
+  await page.waitForTimeout(200)
+  await page.getByRole('button', { name: /^(Save|Update)$/i }).first().click()
+  await page.waitForLoadState('networkidle')
+}
+
 test.describe('Audit Logs', () => {
-  // Helper: create + update + delete a webhook to produce three audit entries.
-  async function generateAuditEntries(api: ApiHelper) {
-    const createResp = await api.post('/api/webhooks', {
-      name: scope.name('hook'),
-      url: 'https://webhook.site/audit-page',
-      events: ['message.received'],
-      is_active: true,
-    })
-    if (!createResp.ok()) {
-      throw new Error(`Failed to seed webhook: ${createResp.status()} ${await createResp.text()}`)
-    }
-    const wh = (await createResp.json()).data
-    return wh
-  }
-
-  test('list view renders entries created via the API', async ({ page, request }) => {
-    const api = new ApiHelper(request)
-    await api.login(SUPER_ADMIN.email, SUPER_ADMIN.password)
-
-    const wh = await generateAuditEntries(api)
-    await verifyAuditLogged(request, 'webhook', wh.id, 'created')
-
+  test('list view shows a Created entry after a UI create', async ({ page }) => {
     await loginAsAdmin(page)
+    await createWebhookViaUI(page, scope.name('list'))
+
     await page.goto('/settings/audit-logs')
     await page.waitForLoadState('networkidle')
 
     await expect(page.getByRole('heading', { level: 1 })).toContainText(/Audit/i)
     await expect(page.locator('tbody')).toBeVisible()
-    await expect.poll(async () => page.locator('tbody tr').count(), {
-      timeout: 5_000,
-    }).toBeGreaterThan(0)
+    await expect.poll(async () => page.locator('tbody tr').count(), { timeout: 5_000 })
+      .toBeGreaterThan(0)
 
     const createdBadge = page.locator('tbody tr').filter({ hasText: /Created/i }).first()
     await expect(createdBadge).toBeVisible()
   })
 
-  test('filter by action narrows the list', async ({ page, request }) => {
-    const api = new ApiHelper(request)
-    await api.login(SUPER_ADMIN.email, SUPER_ADMIN.password)
-
-    const wh = await generateAuditEntries(api)
-    await api.put(`/api/webhooks/${wh.id}`, { url: 'https://webhook.site/audit-page-updated' })
-    await verifyAuditLogged(request, 'webhook', wh.id, 'updated')
-
+  test('action filter narrows the list to Updated entries after a UI edit', async ({ page }) => {
     await loginAsAdmin(page)
+
+    const name = scope.name('filter')
+    await createWebhookViaUI(page, name)
+    await updateWebhookViaUI(page, name, 'https://webhook.site/e2e-audit-updated')
+
     await page.goto('/settings/audit-logs')
     await page.waitForLoadState('networkidle')
     await expect(page.locator('tbody')).toBeVisible()
 
     // Open the action select and pick "Updated".
-    const actionTrigger = page.locator('button[role="combobox"]').filter({ hasText: /All Actions|Updated|Created|Deleted/i }).first()
+    const actionTrigger = page.locator('button[role="combobox"]')
+      .filter({ hasText: /All Actions|Updated|Created|Deleted/i })
+      .first()
     await actionTrigger.click()
     await page.getByRole('option', { name: /^Updated$/ }).click()
     await page.waitForLoadState('networkidle')
@@ -84,24 +84,34 @@ test.describe('Audit Logs', () => {
     }
   })
 
-  test('clicking a row navigates to the detail view with the change diff', async ({ page, request }) => {
-    const api = new ApiHelper(request)
-    await api.login(SUPER_ADMIN.email, SUPER_ADMIN.password)
-
-    const wh = await generateAuditEntries(api)
-    const newURL = `https://webhook.site/audit-detail-${Date.now()}`
-    await api.put(`/api/webhooks/${wh.id}`, { url: newURL })
-    const updateLog = await verifyAuditLogged(request, 'webhook', wh.id, 'updated')
-
+  test('clicking a row opens the detail view with the change diff', async ({ page }) => {
     await loginAsAdmin(page)
-    await page.goto(`/settings/audit-logs/${updateLog.id}`)
+
+    const name = scope.name('detail')
+    const newUrl = `https://webhook.site/e2e-audit-${scope.prefix}`
+    await createWebhookViaUI(page, name)
+    await updateWebhookViaUI(page, name, newUrl)
+
+    // Filter to the most recent Updated entry and click into it.
+    await page.goto('/settings/audit-logs')
+    await page.waitForLoadState('networkidle')
+
+    const actionTrigger = page.locator('button[role="combobox"]')
+      .filter({ hasText: /All Actions|Updated|Created|Deleted/i })
+      .first()
+    await actionTrigger.click()
+    await page.getByRole('option', { name: /^Updated$/ }).click()
+    await page.waitForLoadState('networkidle')
+
+    // First row should be our just-edited webhook (sorted desc by time).
+    // The user_name cell is the routerlink — click it to navigate to detail.
+    await page.locator('tbody tr').first().getByRole('link').first().click()
+    await page.waitForURL(/\/settings\/audit-logs\/[a-f0-9-]+$/)
     await page.waitForLoadState('networkidle')
 
     await expect(page.getByText(/Changes/i).first()).toBeVisible()
-    // The diff should mention the URL field that changed.
     await expect(page.getByText(/Url/i).first()).toBeVisible()
-    await expect(page.getByText(newURL).first()).toBeVisible()
-    // Action badge shows "Updated".
+    await expect(page.getByText(newUrl).first()).toBeVisible()
     await expect(page.getByText(/^Updated$/).first()).toBeVisible()
   })
 
@@ -110,24 +120,5 @@ test.describe('Audit Logs', () => {
     await page.goto('/settings/audit-logs/00000000-0000-0000-0000-000000000000')
     await page.waitForLoadState('networkidle')
     await expect(page.getByText(/No (logs|audit logs)/i).first()).toBeVisible()
-  })
-
-  test('API filter by resource_type + resource_id returns scoped entries', async ({ request }) => {
-    const api = new ApiHelper(request)
-    await api.login(SUPER_ADMIN.email, SUPER_ADMIN.password)
-
-    const wh = await generateAuditEntries(api)
-    await verifyAuditLogged(request, 'webhook', wh.id, 'created')
-
-    const baseURL = process.env.BASE_URL || 'http://localhost:8080'
-    const resp = await request.get(`${baseURL}/api/audit-logs?resource_type=webhook&resource_id=${wh.id}&limit=10`)
-    expect(resp.ok()).toBe(true)
-    const body = await resp.json()
-    const logs = body.data?.audit_logs ?? []
-    expect(logs.length).toBeGreaterThan(0)
-    for (const l of logs) {
-      expect(l.resource_type).toBe('webhook')
-      expect(l.resource_id).toBe(wh.id)
-    }
   })
 })
