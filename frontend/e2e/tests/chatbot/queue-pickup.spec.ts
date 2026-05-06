@@ -19,6 +19,12 @@ import {
  * click in the page header → toast → navigation to the chat.
  */
 
+// Force serial execution across the whole file. Tests here all touch the
+// same shared org's queue (super-admin's default); running parallel
+// describes on different workers caused flakes where one test's seeded
+// row appeared while another test was asserting "queue is empty".
+test.describe.configure({ mode: 'serial' })
+
 const DB_URL = process.env.TEST_DATABASE_URL || 'postgres://whatomate:whatomate@127.0.0.1:5432/whatomate'
 
 async function execSQL(sql: string): Promise<Record<string, unknown>[]> {

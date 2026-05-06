@@ -122,25 +122,26 @@ test.describe('SSO Settings', () => {
     // Now remove it. Edit dialog → Remove → confirm in alert dialog.
     await ghCard.getByRole('button', { name: /Configure/i }).click()
     await expect(dialog).toBeVisible()
-    await dialog.getByRole('button', { name: /Remove/i }).click()
 
+    // Wait on the DELETE before clicking confirm so we don't race the
+    // request. URL match is a loose includes() — the path doesn't change
+    // but query strings sometimes do.
+    const deleted = page.waitForResponse(
+      r => r.url().includes('/api/settings/sso/github') && r.request().method() === 'DELETE',
+      { timeout: 15_000 },
+    )
+
+    await dialog.getByRole('button', { name: /Remove/i }).click()
     const confirm = page.locator('[role="alertdialog"]')
     await expect(confirm).toBeVisible({ timeout: 5000 })
-
-    // Wait on both the DELETE and the subsequent GET that re-fetches the
-    // providers list — the card label flips from "Configure" → "Set Up"
-    // only after that refresh completes, otherwise the assertion races.
-    const deleted = page.waitForResponse(
-      r => /\/api\/settings\/sso\/github$/.test(r.url()) && r.request().method() === 'DELETE' && r.ok(),
-      { timeout: 10_000 },
-    )
-    const refetched = page.waitForResponse(
-      r => /\/api\/settings\/sso(\?|$)/.test(r.url()) && r.request().method() === 'GET' && r.ok(),
-      { timeout: 10_000 },
-    )
     await confirm.getByRole('button', { name: /Remove|Delete|Confirm/i }).click()
-    await deleted
-    await refetched
+    const deletedResp = await deleted
+    expect(deletedResp.ok()).toBeTruthy()
+
+    // The "Set Up" label only appears after the providers list re-fetches.
+    // The list view re-loads from /api/settings/sso whenever it mounts, but
+    // the provider-card grid sits on the same page — the component refetches
+    // on its own, but timing varies. Just assert the visible end state.
 
     // Card returns to "Set Up" state and the Enabled badge is gone.
     await expect(
