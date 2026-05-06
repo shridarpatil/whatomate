@@ -131,6 +131,80 @@ export function createFlowBody(opts: BaseOpts & {
 }
 
 /**
+ * Body for "search filters the list" — types into a search box, asserts
+ * a known row appears (or doesn't).
+ *
+ * Most list pages use a placeholder like "Search..." for the input.
+ * Pass `searchInput` to override.
+ */
+export function searchListBody(opts: BaseOpts & {
+  searchInput?: RegExp
+  query: string
+  expectVisible?: string | RegExp
+  expectHidden?: string | RegExp
+}): (args: { page: Page }) => Promise<void> {
+  return async ({ page }) => {
+    await loginAs(page, opts.user())
+    await page.goto(opts.url)
+    await page.waitForLoadState('networkidle')
+
+    const placeholder = opts.searchInput ?? /Search/i
+    await page.getByPlaceholder(placeholder).first().fill(opts.query)
+    await page.waitForTimeout(400) // debounce window in most list views
+
+    if (opts.expectVisible) {
+      await expect(page.getByText(opts.expectVisible).first()).toBeVisible({ timeout: 5000 })
+    }
+    if (opts.expectHidden) {
+      await expect(page.getByText(opts.expectHidden)).toHaveCount(0, { timeout: 5000 })
+    }
+  }
+}
+
+/**
+ * Body for "edit flow" — finds a row by text, clicks edit, fills new
+ * values into the dialog, submits, expects success toast. Does NOT
+ * assert the new value renders in the list — caller should do that
+ * separately if it matters.
+ */
+export function editFlowBody(opts: BaseOpts & {
+  rowText: string | RegExp
+  /** Per-row edit affordance label. Default: /edit/i. */
+  rowEditButton?: RegExp
+  /** Submit button. Default: /Update|Save/i. */
+  submitButton?: RegExp
+  fields: FieldFill[]
+  successToast?: RegExp
+}): (args: { page: Page }) => Promise<void> {
+  return async ({ page }) => {
+    await loginAs(page, opts.user())
+    await page.goto(opts.url)
+    await page.waitForLoadState('networkidle')
+
+    const row = page.getByRole('row').filter({ hasText: opts.rowText }).first()
+    await expect(row).toBeVisible({ timeout: 5000 })
+
+    const editButton = opts.rowEditButton ?? /edit/i
+    await row.getByRole('button', { name: editButton }).click()
+
+    for (const field of opts.fields) {
+      const input = resolveFieldLocator(page, field)
+      await input.fill('')
+      await input.fill(field.value)
+    }
+
+    const submit = opts.submitButton ?? /Update|Save/i
+    await page.getByRole('button', { name: submit }).last().click()
+
+    const toast = opts.successToast ?? /updated|saved/i
+    await expect(
+      page.locator('[data-sonner-toast], [role="status"], [role="alert"]')
+        .filter({ hasText: toast }),
+    ).toBeVisible({ timeout: 5000 })
+  }
+}
+
+/**
  * Body for "delete flow" — finds a row by text, clicks its delete affordance,
  * confirms in the dialog, expects the row to disappear.
  */
