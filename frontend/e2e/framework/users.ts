@@ -51,7 +51,12 @@ export async function createUserWithPermissions(
   // Default role name derives from userSlug when present so two callers
   // sharing one scope get distinct roles. Falls back to a random suffix.
   const roleName = opts.roleName ?? scope.name(opts.userSlug ? `${opts.userSlug}-role` : undefined)
-  const email = scope.email(opts.userSlug ?? 'user')
+  // Always randomise the email even when a slug is present. Rationale: a
+  // beforeAll in a describe re-runs on flaky-test retries within the same
+  // worker, but the scope's runId is fixed at module load — so a slug-based
+  // email would collide with the row created on the previous attempt.
+  // Random emails dodge that without breaking the (slug-readable) role name.
+  const email = scope.email()
 
   const permissionIds = await api.findPermissionKeys(opts.permissions)
 

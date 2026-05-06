@@ -36,6 +36,21 @@ async function clearQueueForOrg(orgId: string): Promise<void> {
   await execSQL(`DELETE FROM agent_transfers WHERE organization_id = '${orgId}' AND status = 'active' AND agent_id IS NULL`)
 }
 
+// Navigates to /chatbot/transfers and waits for the transfers list GET to
+// resolve before returning. Plain `waitForLoadState('networkidle')` is
+// unreliable here — Vue's lazy-loaded view can fire the GET after the
+// network appears idle, so the queue-counter / button-enabled assertions
+// race against an empty initial store. Waiting on the response itself
+// makes those assertions deterministic.
+async function gotoTransfersAndWaitLoad(page: import('@playwright/test').Page): Promise<void> {
+  const transfersListed = page.waitForResponse(
+    r => r.url().includes('/api/chatbot/transfers') && r.request().method() === 'GET' && r.ok(),
+    { timeout: 15_000 },
+  )
+  await page.goto('/chatbot/transfers')
+  await transfersListed
+}
+
 async function seedQueuedTransfer(orgId: string, contactId: string, phone: string, contactName: string, accountName: string): Promise<string> {
   const rows = await execSQL(`
     INSERT INTO agent_transfers (id, organization_id, contact_id, whats_app_account, phone_number, status, source, transferred_at, created_at, updated_at)
@@ -123,8 +138,7 @@ test.describe('Pick from queue — agent flow', () => {
 
   test('Pick Next button is disabled when the queue is empty', async ({ page }) => {
     await loginAs(page, agent)
-    await page.goto('/chatbot/transfers')
-    await page.waitForLoadState('networkidle')
+    await gotoTransfersAndWaitLoad(page)
 
     const pickBtn = page.getByRole('button', { name: /Pick Next/i })
     await expect(pickBtn).toBeVisible({ timeout: 10_000 })
@@ -138,8 +152,7 @@ test.describe('Pick from queue — agent flow', () => {
     await seedQueuedTransfer(orgId, contactId, phone, contactName, accountName)
 
     await loginAs(page, agent)
-    await page.goto('/chatbot/transfers')
-    await page.waitForLoadState('networkidle')
+    await gotoTransfersAndWaitLoad(page)
 
     // Counter reflects the seeded item; button is enabled.
     await expect(page.getByText(/1 waiting in queue/i)).toBeVisible({ timeout: 10_000 })
@@ -169,16 +182,14 @@ test.describe('Pick from queue — agent flow', () => {
     await seedQueuedTransfer(orgId, contactId, phone, contactName, accountName)
 
     await loginAs(page, agent)
-    await page.goto('/chatbot/transfers')
-    await page.waitForLoadState('networkidle')
+    await gotoTransfersAndWaitLoad(page)
 
     await page.getByRole('button', { name: /Pick Next/i }).click()
     await page.waitForURL(new RegExp(`/chat/${contactId}`), { timeout: 10_000 })
 
     // Navigate back; the agent role's view shows their assigned transfers
     // directly (no tabs), so the just-picked contact must be in the table.
-    await page.goto('/chatbot/transfers')
-    await page.waitForLoadState('networkidle')
+    await gotoTransfersAndWaitLoad(page)
 
     // Multiple rows may match if previous tests left assigned transfers in
     // place; we just need one visible row for the contact.
@@ -251,8 +262,7 @@ test.describe('Pick from queue — admin assign flow', () => {
     await page.locator('button[type="submit"]').click()
     await page.waitForURL((url) => !url.pathname.includes('/login'), { timeout: 10_000 })
 
-    await page.goto('/chatbot/transfers')
-    await page.waitForLoadState('networkidle')
+    await gotoTransfersAndWaitLoad(page)
 
     // Open Queue tab. The seeded contact must be visible.
     await page.getByRole('tab', { name: /Queue/i }).click()
@@ -351,8 +361,7 @@ test.describe('Queue pickup gated by allow_agent_queue_pickup', () => {
     await updateChatbotSetting('allow_agent_queue_pickup', false)
 
     await loginAs(page, agent)
-    await page.goto('/chatbot/transfers')
-    await page.waitForLoadState('networkidle')
+    await gotoTransfersAndWaitLoad(page)
 
     const pickBtn = page.getByRole('button', { name: /Pick Next/i })
     await expect(pickBtn).toBeVisible({ timeout: 10_000 })
@@ -371,8 +380,7 @@ test.describe('Queue pickup gated by allow_agent_queue_pickup', () => {
     await updateChatbotSetting('allow_agent_queue_pickup', true)
 
     await loginAs(page, agent)
-    await page.goto('/chatbot/transfers')
-    await page.waitForLoadState('networkidle')
+    await gotoTransfersAndWaitLoad(page)
 
     // No queued transfers seeded → button stays disabled for the empty-queue
     // reason. We just need to confirm the kill-switch tooltip is gone.
@@ -456,8 +464,7 @@ test.describe('Pickup respects assign_to_same_agent', () => {
     const { contactId } = await seedContactAndQueue('rm-on')
 
     await loginAs(page, agent)
-    await page.goto('/chatbot/transfers')
-    await page.waitForLoadState('networkidle')
+    await gotoTransfersAndWaitLoad(page)
 
     await page.getByRole('button', { name: /Pick Next/i }).click()
     await page.waitForURL(new RegExp(`/chat/${contactId}`), { timeout: 10_000 })
@@ -473,8 +480,7 @@ test.describe('Pickup respects assign_to_same_agent', () => {
     expect(await readContactAssignedUser(contactId)).toBeNull()
 
     await loginAs(page, agent)
-    await page.goto('/chatbot/transfers')
-    await page.waitForLoadState('networkidle')
+    await gotoTransfersAndWaitLoad(page)
 
     await page.getByRole('button', { name: /Pick Next/i }).click()
     await page.waitForURL(new RegExp(`/chat/${contactId}`), { timeout: 10_000 })
@@ -605,8 +611,7 @@ test.describe('Admin reassign and unassign flows', () => {
     const seeded = await seedTransferAssignedTo(agentA, 'reassign-target')
 
     await loginSuperAdmin(page)
-    await page.goto('/chatbot/transfers')
-    await page.waitForLoadState('networkidle')
+    await gotoTransfersAndWaitLoad(page)
 
     // Reassign happens from the All Active tab where assigned transfers
     // surface. The admin/manager view is the only one with this tab.
@@ -638,8 +643,7 @@ test.describe('Admin reassign and unassign flows', () => {
     const seeded = await seedTransferAssignedTo(agentA, 'unassign-target')
 
     await loginSuperAdmin(page)
-    await page.goto('/chatbot/transfers')
-    await page.waitForLoadState('networkidle')
+    await gotoTransfersAndWaitLoad(page)
 
     await page.getByRole('tab', { name: /All Active/i }).click()
     const row = page.locator('tbody tr').filter({ hasText: seeded.phone })
@@ -739,8 +743,7 @@ test.describe('Queue tab team filter', () => {
     await page.locator('button[type="submit"]').click()
     await page.waitForURL((url) => !url.pathname.includes('/login'), { timeout: 10_000 })
 
-    await page.goto('/chatbot/transfers')
-    await page.waitForLoadState('networkidle')
+    await gotoTransfersAndWaitLoad(page)
     // The Queue tab's accessible name includes the badge count, e.g. "Queue 2".
     await page.getByRole('tab', { name: /^Queue\b/i }).click()
 

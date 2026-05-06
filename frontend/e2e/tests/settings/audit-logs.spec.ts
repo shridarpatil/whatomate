@@ -12,7 +12,7 @@ const scope = createTestScope('audit-logs')
  * are convenient because their detail page is a vanilla form-based create.
  */
 
-async function createWebhookViaUI(page: Page, name: string): Promise<void> {
+async function createWebhookViaUI(page: Page, name: string): Promise<string> {
   await page.goto('/settings/webhooks/new')
   await page.waitForLoadState('networkidle')
   await page.getByPlaceholder('My Helpdesk Integration').fill(name)
@@ -22,6 +22,9 @@ async function createWebhookViaUI(page: Page, name: string): Promise<void> {
   await page.getByRole('button', { name: /^(Create|Save)$/i }).first().click()
   await page.waitForURL(/\/settings\/webhooks\/[a-f0-9-]+$/, { timeout: 10000 })
   await page.waitForLoadState('networkidle')
+  // Detail page URL has the new webhook ID — return it for caller use.
+  const match = page.url().match(/\/settings\/webhooks\/([a-f0-9-]+)/)
+  return match ? match[1] : ''
 }
 
 async function updateWebhookViaUI(page: Page, name: string, newUrl: string): Promise<void> {
@@ -89,24 +92,22 @@ test.describe('Audit Logs', () => {
 
     const name = scope.name('detail')
     const newUrl = `https://webhook.site/e2e-audit-${scope.prefix}`
-    await createWebhookViaUI(page, name)
+    const webhookId = await createWebhookViaUI(page, name)
     await updateWebhookViaUI(page, name, newUrl)
 
-    // Filter to the most recent Updated entry and click into it.
-    await page.goto('/settings/audit-logs')
-    await page.waitForLoadState('networkidle')
+    // Look up the audit-log ID for THIS webhook update via the API. The
+    // list view doesn't show resource names, only resource type + field, so
+    // visually picking the right row is unreliable when other specs are
+    // also producing webhook updates in parallel.
+    const auditResp = await page.request.get(
+      `/api/audit-logs?resource_type=webhook&resource_id=${webhookId}&action=updated&limit=1`,
+    )
+    expect(auditResp.ok()).toBe(true)
+    const auditBody = await auditResp.json()
+    const auditLogId = auditBody.data?.audit_logs?.[0]?.id
+    expect(auditLogId, 'audit log entry for the webhook update should exist').toBeTruthy()
 
-    const actionTrigger = page.locator('button[role="combobox"]')
-      .filter({ hasText: /All Actions|Updated|Created|Deleted/i })
-      .first()
-    await actionTrigger.click()
-    await page.getByRole('option', { name: /^Updated$/ }).click()
-    await page.waitForLoadState('networkidle')
-
-    // First row should be our just-edited webhook (sorted desc by time).
-    // The user_name cell is the routerlink — click it to navigate to detail.
-    await page.locator('tbody tr').first().getByRole('link').first().click()
-    await page.waitForURL(/\/settings\/audit-logs\/[a-f0-9-]+$/)
+    await page.goto(`/settings/audit-logs/${auditLogId}`)
     await page.waitForLoadState('networkidle')
 
     await expect(page.getByText(/Changes/i).first()).toBeVisible()

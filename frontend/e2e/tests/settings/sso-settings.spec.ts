@@ -126,7 +126,21 @@ test.describe('SSO Settings', () => {
 
     const confirm = page.locator('[role="alertdialog"]')
     await expect(confirm).toBeVisible({ timeout: 5000 })
+
+    // Wait on both the DELETE and the subsequent GET that re-fetches the
+    // providers list — the card label flips from "Configure" → "Set Up"
+    // only after that refresh completes, otherwise the assertion races.
+    const deleted = page.waitForResponse(
+      r => /\/api\/settings\/sso\/github$/.test(r.url()) && r.request().method() === 'DELETE' && r.ok(),
+      { timeout: 10_000 },
+    )
+    const refetched = page.waitForResponse(
+      r => /\/api\/settings\/sso(\?|$)/.test(r.url()) && r.request().method() === 'GET' && r.ok(),
+      { timeout: 10_000 },
+    )
     await confirm.getByRole('button', { name: /Remove|Delete|Confirm/i }).click()
+    await deleted
+    await refetched
 
     // Card returns to "Set Up" state and the Enabled badge is gone.
     await expect(
