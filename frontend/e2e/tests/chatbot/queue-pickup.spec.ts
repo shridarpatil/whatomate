@@ -512,3 +512,251 @@ test.describe('Pickup respects assign_to_same_agent', () => {
     expect(transferRows[0]!.status).toBe('resumed')
   })
 })
+
+test.describe('Admin reassign and unassign flows', () => {
+  test.describe.configure({ mode: 'serial' })
+  test.setTimeout(60_000)
+
+  let api: ApiHelper
+  let agentA: TestUserHandle
+  let agentB: TestUserHandle
+  let orgId: string
+  let accountName: string
+
+  test.beforeAll(async ({ request }) => {
+    api = new ApiHelper(request)
+    await api.login(SUPER_ADMIN.email, SUPER_ADMIN.password)
+
+    // Two pickup-eligible agents. Slugs deliberately avoid the substring
+    // "agent" / "manager" / "admin" so the assign-dialog option lookup
+    // (which matches by hasText) doesn't collide with the seeded system
+    // roles (see DialogPage.selectOption history).
+    agentA = await createUserWithPermissions(api, scope, {
+      userSlug: 'reassign-pickup-a',
+      permissions: [
+        { resource: 'chat', action: 'read' },
+        { resource: 'transfers', action: 'read' },
+        { resource: 'transfers', action: 'pickup' },
+      ],
+    })
+    agentB = await createUserWithPermissions(api, scope, {
+      userSlug: 'reassign-pickup-b',
+      permissions: [
+        { resource: 'chat', action: 'read' },
+        { resource: 'transfers', action: 'read' },
+        { resource: 'transfers', action: 'pickup' },
+      ],
+    })
+
+    const userRows = await execSQL(
+      `SELECT uo.organization_id::text AS org FROM users u
+       JOIN user_organizations uo ON uo.user_id = u.id AND uo.is_default = true
+       WHERE u.email = '${agentA.email}' LIMIT 1`,
+    )
+    orgId = userRows[0]!.org as string
+
+    const accounts = await api.getWhatsAppAccounts().catch(() => [] as { name: string }[])
+    accountName = accounts[0]?.name ?? 'test-account'
+  })
+
+  test.afterAll(async () => {
+    if (orgId) await clearQueueForOrg(orgId)
+    if (agentA) {
+      await api.deleteUser(agentA.user.id).catch(() => {})
+      await api.deleteRole(agentA.role.id).catch(() => {})
+    }
+    if (agentB) {
+      await api.deleteUser(agentB.user.id).catch(() => {})
+      await api.deleteRole(agentB.role.id).catch(() => {})
+    }
+  })
+
+  // Login the super-admin into the browser for the dialog-driven actions.
+  async function loginSuperAdmin(page: import('@playwright/test').Page) {
+    await page.goto('/login')
+    await page.locator('input[type="email"]').fill(SUPER_ADMIN.email)
+    await page.locator('input[type="password"]').fill(SUPER_ADMIN.password)
+    await page.locator('button[type="submit"]').click()
+    await page.waitForURL((url) => !url.pathname.includes('/login'), { timeout: 10_000 })
+  }
+
+  async function seedTransferAssignedTo(agent: TestUserHandle, slug: string): Promise<{ contactId: string; transferId: string; phone: string; contactName: string }> {
+    const ctx = await playwrightRequest.newContext()
+    const localApi = new ApiHelper(ctx)
+    try {
+      await localApi.login(SUPER_ADMIN.email, SUPER_ADMIN.password)
+      const phone = scope.phone()
+      const contactName = scope.name(slug)
+      const contact = await localApi.createContact(phone, contactName)
+      await execSQL(`UPDATE contacts SET whats_app_account = '${accountName}' WHERE id = '${contact.id}'`)
+      const rows = await execSQL(`
+        INSERT INTO agent_transfers (id, organization_id, contact_id, whats_app_account, phone_number, status, source, agent_id, transferred_at, created_at, updated_at)
+        VALUES (gen_random_uuid(), '${orgId}', '${contact.id}', '${accountName}', '${phone}', 'active', 'manual', '${agent.user.id}', NOW(), NOW(), NOW())
+        RETURNING id::text AS id
+      `)
+      return { contactId: contact.id, transferId: rows[0]!.id as string, phone, contactName }
+    } finally {
+      await ctx.dispose()
+    }
+  }
+
+  test('admin reassigns a transfer from agent A to agent B', async ({ page }) => {
+    await clearQueueForOrg(orgId)
+    const seeded = await seedTransferAssignedTo(agentA, 'reassign-target')
+
+    await loginSuperAdmin(page)
+    await page.goto('/chatbot/transfers')
+    await page.waitForLoadState('networkidle')
+
+    // Reassign happens from the All Active tab where assigned transfers
+    // surface. The admin/manager view is the only one with this tab.
+    await page.getByRole('tab', { name: /All Active/i }).click()
+    const row = page.locator('tbody tr').filter({ hasText: seeded.phone })
+    await expect(row).toBeVisible({ timeout: 10_000 })
+    await row.getByRole('button', { name: /^Assign$/i }).click()
+
+    const dialog = page.getByRole('dialog')
+    await expect(dialog).toBeVisible({ timeout: 5_000 })
+
+    // Second combobox is the agent select. Pick agent B by slug.
+    await dialog.getByRole('combobox').nth(1).click()
+    await page.getByRole('option').filter({ hasText: /reassign-pickup-b/i }).first().click()
+    await dialog.getByRole('button', { name: /^Save$/i }).click()
+
+    await expect(
+      page.locator('[data-sonner-toast]').filter({ hasText: /updated|assigned/i }),
+    ).toBeVisible({ timeout: 10_000 })
+
+    const rows = await execSQL(
+      `SELECT agent_id::text AS agent_id FROM agent_transfers WHERE id = '${seeded.transferId}'`,
+    )
+    expect(rows[0]!.agent_id).toBe(agentB.user.id)
+  })
+
+  test('admin unassigns a transfer back to the queue', async ({ page }) => {
+    await clearQueueForOrg(orgId)
+    const seeded = await seedTransferAssignedTo(agentA, 'unassign-target')
+
+    await loginSuperAdmin(page)
+    await page.goto('/chatbot/transfers')
+    await page.waitForLoadState('networkidle')
+
+    await page.getByRole('tab', { name: /All Active/i }).click()
+    const row = page.locator('tbody tr').filter({ hasText: seeded.phone })
+    await expect(row).toBeVisible({ timeout: 10_000 })
+    await row.getByRole('button', { name: /^Assign$/i }).click()
+
+    const dialog = page.getByRole('dialog')
+    await expect(dialog).toBeVisible({ timeout: 5_000 })
+    await dialog.getByRole('combobox').nth(1).click()
+    // The "Unassigned (in queue)" option returns the transfer to the queue.
+    await page.getByRole('option').filter({ hasText: /Unassigned/i }).first().click()
+    await dialog.getByRole('button', { name: /^Save$/i }).click()
+
+    await expect(
+      page.locator('[data-sonner-toast]').filter({ hasText: /updated|assigned/i }),
+    ).toBeVisible({ timeout: 10_000 })
+
+    const rows = await execSQL(
+      `SELECT agent_id::text AS agent_id, status FROM agent_transfers WHERE id = '${seeded.transferId}'`,
+    )
+    expect(rows[0]!.agent_id).toBeNull()
+    expect(rows[0]!.status).toBe('active')
+  })
+})
+
+test.describe('Queue tab team filter', () => {
+  test.describe.configure({ mode: 'serial' })
+  test.setTimeout(60_000)
+
+  let api: ApiHelper
+  let orgId: string
+  let accountName: string
+  let teamAlphaId: string
+  let teamBetaId: string
+  let alphaContactName: string
+  let betaContactName: string
+
+  test.beforeAll(async ({ request }) => {
+    api = new ApiHelper(request)
+    await api.login(SUPER_ADMIN.email, SUPER_ADMIN.password)
+
+    // Derive the super admin's default org rather than hardcoding a name —
+    // CI seeds something like "Test Org <hash>", not a stable label.
+    const orgRows = await execSQL(`
+      SELECT uo.organization_id::text AS id
+      FROM user_organizations uo
+      JOIN users u ON u.id = uo.user_id
+      WHERE u.email = '${SUPER_ADMIN.email}' AND uo.is_default = true
+      LIMIT 1
+    `)
+    orgId = orgRows[0]!.id as string
+
+    const accounts = await api.getWhatsAppAccounts().catch(() => [] as { name: string }[])
+    accountName = accounts[0]?.name ?? 'test-account'
+
+    // Create two teams via API.
+    const tA = await api.post('/api/teams', { name: scope.name('team-alpha'), description: 'team filter alpha' })
+    expect(tA.ok()).toBe(true)
+    teamAlphaId = (await tA.json()).data.team.id
+    const tB = await api.post('/api/teams', { name: scope.name('team-beta'), description: 'team filter beta' })
+    expect(tB.ok()).toBe(true)
+    teamBetaId = (await tB.json()).data.team.id
+
+    // Seed one queued transfer in each team.
+    const phoneA = scope.phone()
+    alphaContactName = scope.name('alpha-contact')
+    const ctA = await api.createContact(phoneA, alphaContactName)
+    await execSQL(`UPDATE contacts SET whats_app_account = '${accountName}' WHERE id = '${ctA.id}'`)
+    await execSQL(`
+      INSERT INTO agent_transfers (id, organization_id, contact_id, whats_app_account, phone_number, status, source, team_id, transferred_at, created_at, updated_at)
+      VALUES (gen_random_uuid(), '${orgId}', '${ctA.id}', '${accountName}', '${phoneA}', 'active', 'manual', '${teamAlphaId}', NOW(), NOW(), NOW())
+    `)
+
+    const phoneB = scope.phone()
+    betaContactName = scope.name('beta-contact')
+    const ctB = await api.createContact(phoneB, betaContactName)
+    await execSQL(`UPDATE contacts SET whats_app_account = '${accountName}' WHERE id = '${ctB.id}'`)
+    await execSQL(`
+      INSERT INTO agent_transfers (id, organization_id, contact_id, whats_app_account, phone_number, status, source, team_id, transferred_at, created_at, updated_at)
+      VALUES (gen_random_uuid(), '${orgId}', '${ctB.id}', '${accountName}', '${phoneB}', 'active', 'manual', '${teamBetaId}', NOW(), NOW(), NOW())
+    `)
+  })
+
+  test.afterAll(async () => {
+    if (orgId) {
+      await execSQL(
+        `DELETE FROM agent_transfers WHERE organization_id = '${orgId}' AND status = 'active' AND agent_id IS NULL AND team_id IN ('${teamAlphaId}', '${teamBetaId}')`,
+      )
+      await execSQL(`DELETE FROM teams WHERE id IN ('${teamAlphaId}', '${teamBetaId}')`)
+    }
+  })
+
+  test('admin can filter the queue to a single team', async ({ page }) => {
+    await page.goto('/login')
+    await page.locator('input[type="email"]').fill(SUPER_ADMIN.email)
+    await page.locator('input[type="password"]').fill(SUPER_ADMIN.password)
+    await page.locator('button[type="submit"]').click()
+    await page.waitForURL((url) => !url.pathname.includes('/login'), { timeout: 10_000 })
+
+    await page.goto('/chatbot/transfers')
+    await page.waitForLoadState('networkidle')
+    // The Queue tab's accessible name includes the badge count, e.g. "Queue 2".
+    await page.getByRole('tab', { name: /^Queue\b/i }).click()
+
+    const queueTable = page.locator('[role="tabpanel"]').filter({ hasText: /Transfer Queue/i }).locator('table')
+    await expect(queueTable).toBeVisible({ timeout: 10_000 })
+
+    // Without filter both contacts should be visible.
+    await expect(queueTable.getByText(alphaContactName)).toBeVisible()
+    await expect(queueTable.getByText(betaContactName)).toBeVisible()
+
+    // Apply alpha team filter — the team-filter combobox is the
+    // "Filter by team" select on the Queue tab header.
+    await page.getByRole('combobox').filter({ hasText: /All Queues|Filter by team/i }).first().click()
+    await page.getByRole('option').filter({ hasText: scope.name('team-alpha') }).first().click()
+
+    await expect(queueTable.getByText(alphaContactName)).toBeVisible({ timeout: 5_000 })
+    await expect(queueTable.getByText(betaContactName)).toHaveCount(0)
+  })
+})
