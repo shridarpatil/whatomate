@@ -1,6 +1,8 @@
 import { request } from '@playwright/test'
+import { cleanupE2EData } from './global-cleanup'
 
 const BASE_URL = process.env.BASE_URL || 'http://localhost:8080'
+const DB_URL = process.env.TEST_DATABASE_URL || 'postgres://whatomate:whatomate@127.0.0.1:5432/whatomate'
 
 interface CreateUser {
   email: string
@@ -22,7 +24,10 @@ function extractCSRFToken(response: { headersArray: () => Array<{ name: string; 
 }
 
 async function globalSetup() {
-  console.log('\n🔧 Global Setup: Creating test users...')
+  console.log('\n🔧 Global Setup: Cleaning leftover E2E data...')
+  await cleanupE2EData(DB_URL)
+
+  console.log('🔧 Global Setup: Creating test users...')
 
   const context = await request.newContext({
     baseURL: BASE_URL,
