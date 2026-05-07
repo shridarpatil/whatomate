@@ -352,20 +352,26 @@ test.describe('Canned Response Preview', () => {
     api = new ApiHelper(request)
     await api.login('admin@admin.com', 'admin')
 
-    contact = await api.createContact(cannedScope.phone(), cannedScope.name('contact'))
+    // Names use the random-suffix form (no second arg) so each test creates
+    // distinct rows. The DELETE endpoint soft-deletes, so a deterministic
+    // name would collide with the prior test's tombstone within the worker.
+    contact = await api.createContact(cannedScope.phone(), cannedScope.name())
+    const plainName = cannedScope.name()
     plain = await api.createCannedResponse({
-      name: cannedScope.name('plain'),
-      shortcut: cannedScope.name('plain').toLowerCase(),
+      name: plainName,
+      shortcut: plainName.toLowerCase(),
       content: 'Hello! Thanks for contacting us.',
     })
+    const orderName = cannedScope.name()
     withParam = await api.createCannedResponse({
-      name: cannedScope.name('order'),
-      shortcut: cannedScope.name('order').toLowerCase(),
+      name: orderName,
+      shortcut: orderName.toLowerCase(),
       content: 'Your order #{{order_id}} is ready.',
     })
+    const greetName = cannedScope.name()
     withContactName = await api.createCannedResponse({
-      name: cannedScope.name('greet'),
-      shortcut: cannedScope.name('greet').toLowerCase(),
+      name: greetName,
+      shortcut: greetName.toLowerCase(),
       content: 'Hi {{contact_name}}, how can I help?',
     })
 

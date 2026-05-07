@@ -2367,7 +2367,10 @@ async function sendMediaMessage() {
 
     <!-- Canned Response Preview Dialog -->
     <Dialog v-model:open="cannedDialogOpen">
-      <DialogContent id="canned-response-dialog" class="max-w-sm">
+      <DialogContent class="max-w-sm">
+        <!-- DialogContent doesn't forward $attrs (multi-root via DialogPortal),
+             so wrap the body in a div carrying the stable id used by e2e. -->
+        <div id="canned-response-dialog">
         <DialogHeader>
           <DialogTitle>{{ cannedParamNames.length > 0 ? $t('chat.fillParameters') : $t('chat.preview') }}</DialogTitle>
           <DialogDescription>
@@ -2397,6 +2400,7 @@ async function sendMediaMessage() {
             <Loader2 v-if="isSendingCanned" class="h-4 w-4 mr-2 animate-spin" />
             {{ $t('chat.send') }}
           </Button>
+        </div>
         </div>
       </DialogContent>
     </Dialog>
