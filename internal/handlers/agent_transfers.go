@@ -156,11 +156,18 @@ func (a *App) ListAgentTransfers(r *fastglue.Request) error {
 		selectCols = append(selectCols, "resumed_by.full_name AS resumed_by_name")
 	}
 
+	// Active queue uses FIFO (oldest first) so agents pick the longest-waiting
+	// transfer; history is browsed by recency, so newest-resumed first.
+	orderBy := "agent_transfers.transferred_at ASC" // FIFO for queue
+	if status == string(models.TransferStatusResumed) {
+		orderBy = "agent_transfers.resumed_at DESC NULLS LAST, agent_transfers.transferred_at DESC"
+	}
+
 	// Build query with conditional JOINs for better performance
 	query := a.DB.Table("agent_transfers").
 		Select(strings.Join(selectCols, ", ")).
 		Where("agent_transfers.organization_id = ?", orgID).
-		Order("agent_transfers.transferred_at ASC") // FIFO
+		Order(orderBy)
 
 	// Only add JOINs for requested relations (lazy loading)
 	if includeAll || includeSet["contact"] {
