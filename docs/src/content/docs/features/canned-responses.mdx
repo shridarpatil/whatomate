@@ -49,8 +49,9 @@ Navigate to **Settings > Canned Responses** to create and manage your responses.
 3. **Add Placeholders (Optional)**
 
    Include dynamic placeholders in your content:
-   - `{{contact_name}}` - Replaced with the contact's name
-   - `{{phone_number}}` - Replaced with the contact's phone number
+   - `{{contact_name}}` / `{{phone_number}}` — auto-filled from the contact
+   - `{{user_name}}` (alias `{{agent_name}}`) — auto-filled with the signed-in agent's name
+   - Any other `{{token}}` — the agent fills it in the preview dialog before sending
 
 4. **Save**
 
@@ -72,51 +73,62 @@ Organize your responses into categories for easier navigation:
 
 ## Using Canned Responses in Chat
 
-There are two ways to insert canned responses while chatting:
+There are two ways to pick a canned response while chatting:
 
 ### Method 1: Picker Button
 
 1. Click the **canned responses icon** (message bubble) next to the emoji button in the chat input area
 2. Search or browse through your responses
-3. Click a response to insert it into the message input
-4. Edit if needed, then send
+3. Click a response — the **preview dialog** opens (see below)
 
 ### Method 2: Slash Commands
 
 1. Type `/` followed by your shortcut in the chat input (e.g., `/welcome`)
-2. A picker will appear showing matching responses
-3. Select the response to insert it
-4. Edit if needed, then send
+2. A picker appears showing matching responses
+3. Select the response — the **preview dialog** opens (see below)
 
 <Aside type="tip">
-  Slash commands are the fastest way to insert responses. Create memorable shortcuts like `/hi`, `/thanks`, `/hours` for your most-used responses.
+  Slash commands are the fastest way to find responses. Create memorable shortcuts like `/hi`, `/thanks`, `/hours` for your most-used responses.
 </Aside>
+
+### Preview Dialog
+
+After picking a response, a preview dialog shows the resolved message. Auto-filled tokens (`{{contact_name}}`, `{{phone_number}}`, `{{user_name}}` / `{{agent_name}}`) appear already substituted. Any other `{{token}}` in the content gets its own input field — fill them in and the preview updates live. Click **Send** to deliver the message, or **Cancel** to back out without sending.
 
 ## Placeholders
 
-Make your responses personal by using dynamic placeholders that get replaced with actual contact data when inserted.
+Make your responses personal by using dynamic placeholders. Some are filled automatically; anything else becomes an input field in the preview dialog.
 
-### Available Placeholders
+### Auto-Filled Placeholders
 
-| Placeholder | Description | Example |
-|-------------|-------------|---------|
-| `{{contact_name}}` | Contact's profile name | "John Smith" |
-| `{{phone_number}}` | Contact's phone number | "+1234567890" |
+| Placeholder | Source | Example |
+|-------------|--------|---------|
+| `{{contact_name}}` | Contact's profile name (falls back to contact name, then `there`) | `Sarah` |
+| `{{phone_number}}` | Contact's phone number | `+1234567890` |
+| `{{user_name}}` | Signed-in agent's full name | `Alex Doe` |
+| `{{agent_name}}` | Alias for `{{user_name}}` | `Alex Doe` |
+
+### Custom Placeholders
+
+Any other `{{token}}` you put in the content (e.g. `{{order_id}}`, `{{tracking_number}}`) shows up as a labelled input in the preview dialog. The agent fills it in before sending, and the preview updates as they type.
 
 ### Example
 
 **Canned Response Content:**
 ```
-Hello {{contact_name}}! Thank you for reaching out to our support team. How can I help you today?
+Hi {{contact_name}}, your order #{{order_id}} has shipped. — {{user_name}}
 ```
 
-**After Insertion (for contact "Sarah"):**
+**Preview Dialog (contact "Sarah", agent "Alex"):**
+
+The dialog opens with one input field for `order_id`. Once Alex types `4521`, the preview shows:
+
 ```
-Hello Sarah! Thank you for reaching out to our support team. How can I help you today?
+Hi Sarah, your order #4521 has shipped. — Alex Doe
 ```
 
 <Aside type="note">
-  If a placeholder value is not available (e.g., contact has no name), it will be replaced with a default value or left empty.
+  Auto-filled placeholders with no available value (e.g. contact with no profile name) fall back to a sensible default or empty string. Custom placeholders are required — Send is blocked until every input is filled.
 </Aside>
 
 ## Usage Tracking
