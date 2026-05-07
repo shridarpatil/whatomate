@@ -7,7 +7,7 @@ import { useAuthStore } from '@/stores/auth'
 import { useUsersStore } from '@/stores/users'
 import { useTransfersStore } from '@/stores/transfers'
 import { wsService } from '@/services/websocket'
-import { contactsService, chatbotService, messagesService, customActionsService, accountsService, getRequestHeaders, type CustomAction, type ActionResult } from '@/services/api'
+import { contactsService, chatbotService, messagesService, customActionsService, accountsService, cannedResponsesService, getRequestHeaders, type CustomAction, type ActionResult, type CannedResponse } from '@/services/api'
 import { useTagsStore } from '@/stores/tags'
 import { TagBadge } from '@/components/ui/tag-badge'
 import { getTagColorClass } from '@/lib/constants'
@@ -151,6 +151,16 @@ const isUploadingMedia = ref(false)
 // Canned responses slash command state
 const cannedPickerOpen = ref(false)
 const cannedSearchQuery = ref('')
+
+// Canned response preview dialog state
+const cannedDialogOpen = ref(false)
+const selectedCannedResponse = ref<CannedResponse | null>(null)
+const cannedParamNames = ref<string[]>([])
+const cannedParamValues = ref<Record<string, string>>({})
+const isSendingCanned = ref(false)
+// Tokens that the chat already knows how to fill from the current contact;
+// these stay out of the input list and are resolved straight into the preview.
+const AUTO_RESOLVED_CANNED_TOKENS = new Set(['contact_name', 'phone_number', 'user_name', 'agent_name'])
 
 // Sticky date header state
 const stickyDate = ref('')
@@ -779,10 +789,83 @@ function scrollToMessage(messageId: string | undefined) {
   }
 }
 
-function insertCannedResponse(content: string) {
-  messageInput.value = content
+function extractCannedTokens(content: string): string[] {
+  const seen = new Set<string>()
+  const matches = content.matchAll(/\{\{\s*([\w.-]+)\s*\}\}/g)
+  for (const m of matches) seen.add(m[1])
+  return Array.from(seen)
+}
+
+const cannedPreview = computed(() => {
+  if (!selectedCannedResponse.value) return ''
+  const contact = contactsStore.currentContact
+  return selectedCannedResponse.value.content.replace(
+    /\{\{\s*([\w.-]+)\s*\}\}/g,
+    (_match, key: string) => {
+      if (key === 'contact_name') {
+        return contact?.profile_name || contact?.name || 'there'
+      }
+      if (key === 'phone_number') {
+        return contact?.phone_number || ''
+      }
+      if (key === 'user_name' || key === 'agent_name') {
+        return authStore.user?.full_name || ''
+      }
+      const value = cannedParamValues.value[key]
+      return value ? value : `{{${key}}}`
+    }
+  )
+})
+
+function handleCannedSelect(response: CannedResponse) {
+  selectedCannedResponse.value = response
+  const tokens = extractCannedTokens(response.content).filter(
+    t => !AUTO_RESOLVED_CANNED_TOKENS.has(t)
+  )
+  cannedParamNames.value = tokens
+  cannedParamValues.value = Object.fromEntries(tokens.map(t => [t, '']))
+  // Drop the slash command (or any stray text) so the textarea starts clean.
+  messageInput.value = ''
+  resetTextareaHeight()
   cannedPickerOpen.value = false
   cannedSearchQuery.value = ''
+  cannedDialogOpen.value = true
+}
+
+async function sendCannedResponse() {
+  if (!contactsStore.currentContact || !selectedCannedResponse.value) return
+
+  const missing = cannedParamNames.value.some(n => !cannedParamValues.value[n]?.trim())
+  if (missing) {
+    toast.error(t('chat.parameterRequired'))
+    return
+  }
+
+  const body = cannedPreview.value
+  const responseId = selectedCannedResponse.value.id
+
+  isSendingCanned.value = true
+  try {
+    await contactsStore.sendMessage(
+      contactsStore.currentContact.id,
+      'text',
+      { body },
+      contactsStore.replyingTo?.id,
+      selectedAccount.value || undefined
+    )
+    cannedResponsesService.use(responseId).catch(() => {})
+    contactsStore.clearReplyingTo()
+    cannedDialogOpen.value = false
+    selectedCannedResponse.value = null
+    cannedParamNames.value = []
+    cannedParamValues.value = {}
+    await nextTick()
+    scrollToBottom()
+  } catch (error) {
+    toast.error(t('chat.sendMessageFailed'))
+  } finally {
+    isSendingCanned.value = false
+  }
 }
 
 function closeCannedPicker() {
@@ -2140,10 +2223,9 @@ async function sendMediaMessage() {
               <TooltipTrigger as-child>
                 <span>
                   <CannedResponsePicker
-                    :contact="contactsStore.currentContact"
                     :external-open="cannedPickerOpen"
                     :external-search="cannedSearchQuery"
-                    @select="insertCannedResponse"
+                    @select="handleCannedSelect"
                     @close="closeCannedPicker"
                   />
                 </span>
@@ -2272,6 +2354,41 @@ async function sendMediaMessage() {
           <Button variant="outline" @click="templateDialogOpen = false">{{ $t('common.cancel') }}</Button>
           <Button @click="sendTemplateMessage" :disabled="isSendingTemplate">
             <Loader2 v-if="isSendingTemplate" class="h-4 w-4 mr-2 animate-spin" />
+            {{ $t('chat.send') }}
+          </Button>
+        </div>
+      </DialogContent>
+    </Dialog>
+
+    <!-- Canned Response Preview Dialog -->
+    <Dialog v-model:open="cannedDialogOpen">
+      <DialogContent class="max-w-sm">
+        <DialogHeader>
+          <DialogTitle>{{ cannedParamNames.length > 0 ? $t('chat.fillParameters') : $t('chat.preview') }}</DialogTitle>
+          <DialogDescription>
+            {{ selectedCannedResponse?.name }}
+          </DialogDescription>
+        </DialogHeader>
+        <div class="py-4 space-y-3">
+          <div v-for="param in cannedParamNames" :key="param" class="space-y-1">
+            <label class="text-sm font-medium">{{ param }}</label>
+            <Input
+              v-model="cannedParamValues[param]"
+              :placeholder="param"
+              class="h-9"
+            />
+          </div>
+          <div v-if="cannedPreview" class="space-y-1">
+            <label class="text-xs font-medium text-muted-foreground">{{ $t('chat.preview') }}</label>
+            <div class="chat-bubble chat-bubble-outgoing ml-auto" style="max-width: 100%;">
+              <span class="whitespace-pre-wrap break-words text-sm">{{ cannedPreview }}</span>
+            </div>
+          </div>
+        </div>
+        <div class="flex justify-end gap-2">
+          <Button variant="outline" @click="cannedDialogOpen = false">{{ $t('common.cancel') }}</Button>
+          <Button @click="sendCannedResponse" :disabled="isSendingCanned">
+            <Loader2 v-if="isSendingCanned" class="h-4 w-4 mr-2 animate-spin" />
             {{ $t('chat.send') }}
           </Button>
         </div>

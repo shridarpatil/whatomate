@@ -10,16 +10,14 @@ import {
 } from '@/components/ui/popover'
 import { cannedResponsesService, type CannedResponse } from '@/services/api'
 import { MessageSquareText, Search, Loader2 } from 'lucide-vue-next'
-import type { Contact } from '@/stores/contacts'
 
 const props = defineProps<{
-  contact: Contact | null
   externalOpen?: boolean
   externalSearch?: string
 }>()
 
 const emit = defineEmits<{
-  (e: 'select', content: string): void
+  (e: 'select', response: CannedResponse): void
   (e: 'close'): void
 }>()
 
@@ -104,19 +102,8 @@ function getCategoryLabel(category: string): string {
   return categoryLabels[category] || category
 }
 
-function replacePlaceholders(content: string): string {
-  if (!props.contact) return content
-
-  return content
-    .replace(/\{\{contact_name\}\}/gi, props.contact.profile_name || props.contact.name || 'there')
-    .replace(/\{\{phone_number\}\}/gi, props.contact.phone_number || '')
-}
-
 function selectResponse(response: CannedResponse) {
-  const content = replacePlaceholders(response.content)
-  emit('select', content)
-  // Track usage
-  cannedResponsesService.use(response.id).catch(() => {})
+  emit('select', response)
   isOpen.value = false
   searchQuery.value = ''
 }
