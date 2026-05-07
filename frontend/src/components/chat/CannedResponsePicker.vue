@@ -112,7 +112,7 @@ function selectResponse(response: CannedResponse) {
 <template>
   <Popover v-model:open="isOpen">
     <PopoverTrigger as-child>
-      <Button type="button" variant="ghost" size="icon">
+      <Button id="canned-response-picker-button" type="button" variant="ghost" size="icon">
         <MessageSquareText class="h-5 w-5" />
       </Button>
     </PopoverTrigger>

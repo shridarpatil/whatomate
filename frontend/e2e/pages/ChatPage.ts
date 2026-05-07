@@ -25,7 +25,7 @@ export class ChatPage extends BasePage {
     this.sendButton = page.getByRole('button').filter({ has: page.locator('.lucide-send') })
     this.attachButton = page.getByRole('button').filter({ has: page.locator('.lucide-paperclip') })
     this.emojiButton = page.getByRole('button').filter({ has: page.locator('.lucide-smile') })
-    this.cannedResponsesButton = page.getByRole('button').filter({ has: page.locator('.lucide-message-square-text') })
+    this.cannedResponsesButton = page.locator('#canned-response-picker-button')
     this.contactInfoPanel = page.locator('.contact-info, [data-testid="contact-info"]')
     this.messageList = page.locator('.messages-container, [data-testid="messages"]')
     this.assignDialog = page.locator('[role="dialog"][data-state="open"]')
