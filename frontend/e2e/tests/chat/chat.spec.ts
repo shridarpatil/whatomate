@@ -1,9 +1,13 @@
 import { test, expect } from '@playwright/test'
-import { ApiHelper, loginAsAdmin } from '../../helpers'
+import { ApiHelper, login, loginAsAdmin } from '../../helpers'
 import { ChatPage } from '../../pages'
 import { createTestScope } from '../../framework'
 
 const cannedScope = createTestScope('chat-canned-preview')
+// Seed via API as admin@admin.com (always exists per migrations) and log the
+// browser in as the same user — otherwise the API-created contact lives in a
+// different org from the UI session and the chat composer never renders.
+const ADMIN_USER = { email: 'admin@admin.com', password: 'admin', role: 'admin' as const }
 
 test.describe('Chat Page', () => {
   let chatPage: ChatPage
@@ -365,7 +369,7 @@ test.describe('Canned Response Preview', () => {
       content: 'Hi {{contact_name}}, how can I help?',
     })
 
-    await loginAsAdmin(page)
+    await login(page, ADMIN_USER)
     chatPage = new ChatPage(page)
     await chatPage.goto(contact.id)
   })
