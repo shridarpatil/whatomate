@@ -104,6 +104,53 @@ export class ChatPage extends BasePage {
     await this.page.locator('[role="option"], .canned-item').filter({ hasText: shortcut }).click()
   }
 
+  /** Picker items render as full-width buttons inside the popover. */
+  getCannedPickerItem(name: string): Locator {
+    return this.page.locator('button.w-full.text-left').filter({ hasText: name })
+  }
+
+  async selectCannedPickerItem(name: string) {
+    await this.getCannedPickerItem(name).click()
+  }
+
+  // Canned response preview dialog
+  get cannedDialog(): Locator {
+    return this.page.locator('#canned-response-dialog')
+  }
+
+  get cannedDialogPreview(): Locator {
+    return this.page.locator('#canned-response-preview')
+  }
+
+  get cannedDialogParamInputs(): Locator {
+    return this.cannedDialog.locator('input.canned-response-param')
+  }
+
+  cannedDialogParamInput(name: string): Locator {
+    return this.page.locator(`#canned-response-param-${name}`)
+  }
+
+  get cannedDialogSendButton(): Locator {
+    return this.page.locator('#canned-response-send')
+  }
+
+  get cannedDialogCancelButton(): Locator {
+    return this.page.locator('#canned-response-cancel')
+  }
+
+  async fillCannedParam(name: string, value: string) {
+    await this.cannedDialogParamInput(name).fill(value)
+  }
+
+  async sendCannedDialog() {
+    await this.cannedDialogSendButton.click()
+  }
+
+  async cancelCannedDialog() {
+    await this.cannedDialogCancelButton.click()
+    await this.cannedDialog.waitFor({ state: 'hidden' })
+  }
+
   // Contact actions
   async openContactInfo() {
     await this.page.getByRole('button').filter({ has: this.page.locator('.lucide-info') }).click()

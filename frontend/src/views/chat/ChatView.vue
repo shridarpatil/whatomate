@@ -2362,7 +2362,7 @@ async function sendMediaMessage() {
 
     <!-- Canned Response Preview Dialog -->
     <Dialog v-model:open="cannedDialogOpen">
-      <DialogContent class="max-w-sm">
+      <DialogContent id="canned-response-dialog" class="max-w-sm">
         <DialogHeader>
           <DialogTitle>{{ cannedParamNames.length > 0 ? $t('chat.fillParameters') : $t('chat.preview') }}</DialogTitle>
           <DialogDescription>
@@ -2371,23 +2371,24 @@ async function sendMediaMessage() {
         </DialogHeader>
         <div class="py-4 space-y-3">
           <div v-for="param in cannedParamNames" :key="param" class="space-y-1">
-            <label class="text-sm font-medium">{{ param }}</label>
+            <label class="text-sm font-medium" :for="`canned-response-param-${param}`">{{ param }}</label>
             <Input
+              :id="`canned-response-param-${param}`"
               v-model="cannedParamValues[param]"
               :placeholder="param"
-              class="h-9"
+              class="h-9 canned-response-param"
             />
           </div>
           <div v-if="cannedPreview" class="space-y-1">
             <label class="text-xs font-medium text-muted-foreground">{{ $t('chat.preview') }}</label>
-            <div class="chat-bubble chat-bubble-outgoing ml-auto" style="max-width: 100%;">
+            <div id="canned-response-preview" class="chat-bubble chat-bubble-outgoing ml-auto" style="max-width: 100%;">
               <span class="whitespace-pre-wrap break-words text-sm">{{ cannedPreview }}</span>
             </div>
           </div>
         </div>
         <div class="flex justify-end gap-2">
-          <Button variant="outline" @click="cannedDialogOpen = false">{{ $t('common.cancel') }}</Button>
-          <Button @click="sendCannedResponse" :disabled="isSendingCanned">
+          <Button id="canned-response-cancel" variant="outline" @click="cannedDialogOpen = false">{{ $t('common.cancel') }}</Button>
+          <Button id="canned-response-send" :disabled="isSendingCanned" @click="sendCannedResponse">
             <Loader2 v-if="isSendingCanned" class="h-4 w-4 mr-2 animate-spin" />
             {{ $t('chat.send') }}
           </Button>

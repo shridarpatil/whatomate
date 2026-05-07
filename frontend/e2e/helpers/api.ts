@@ -385,6 +385,30 @@ export class ApiHelper {
     return data.data?.templates || []
   }
 
+  // Canned Responses
+  async createCannedResponse(data: {
+    name: string
+    content: string
+    shortcut?: string
+    category?: string
+  }): Promise<{ id: string; name: string; shortcut: string; content: string; category: string }> {
+    const response = await this.request.post(`${BASE_URL}/api/canned-responses`, {
+      headers: this.csrfHeaders,
+      data: { category: 'general', ...data }
+    })
+    if (!response.ok()) {
+      throw new Error(`Failed to create canned response: ${await response.text()}`)
+    }
+    const result = await response.json()
+    return result.data
+  }
+
+  async deleteCannedResponse(id: string): Promise<void> {
+    await this.request.delete(`${BASE_URL}/api/canned-responses/${id}`, {
+      headers: this.csrfHeaders
+    })
+  }
+
   // WhatsApp Accounts
   async getWhatsAppAccounts(): Promise<any[]> {
     const response = await this.request.get(`${BASE_URL}/api/accounts`)
