@@ -538,7 +538,12 @@ watch(contactId, async (newId) => {
 })
 
 async function selectContact(id: string) {
-  const contact = contactsStore.contacts.find(c => c.id === id)
+  // Direct deep links to /chat/:id may target a contact that isn't in the
+  // currently-loaded (paginated) list — fall back to fetching it directly.
+  let contact = contactsStore.contacts.find(c => c.id === id)
+  if (!contact) {
+    contact = await contactsStore.fetchContact(id)
+  }
   if (contact) {
     // Reset unread pill — fetchMessages will mark everything read on the server
     newMessagesCount.value = 0
