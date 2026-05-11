@@ -127,6 +127,11 @@ async function save() {
       })
       toast.success(t('common.createdSuccess', { resource: t('resources.CannedResponse') }))
       const created = (res.data as any).data || res.data
+      // Set the response locally so the (reused) component switches to edit
+      // mode without re-fetching. responseId watcher below guards against a
+      // duplicate load when the route param flips from "new" to the new UUID.
+      response.value = created
+      await nextTick()
       hasChanges.value = false
       router.replace(`/settings/canned-responses/${created.id}`)
     } else if (response.value) {
@@ -159,6 +164,16 @@ async function deleteResponse() {
   }
   deleteDialogOpen.value = false
 }
+
+// Same component handles /new and /:id, so route-param changes don't remount.
+// Reload when the id genuinely changes — but skip when we just set the response
+// locally (e.g. immediately after create) to avoid an unnecessary fetch and the
+// race it causes with hasChanges reset.
+watch(responseId, async (newId, oldId) => {
+  if (!newId || newId === 'new' || newId === oldId) return
+  if (response.value?.id === newId) return
+  await loadResponse()
+})
 
 onMounted(() => { loadResponse() })
 </script>
