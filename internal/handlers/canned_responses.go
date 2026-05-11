@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"github.com/google/uuid"
+	"github.com/shridarpatil/whatomate/internal/audit"
 	"github.com/shridarpatil/whatomate/internal/models"
 	"github.com/valyala/fasthttp"
 	"github.com/zerodha/fastglue"
@@ -125,6 +126,9 @@ func (a *App) CreateCannedResponse(r *fastglue.Request) error {
 			"Failed to create canned response", nil, "")
 	}
 
+	audit.LogAudit(a.DB, orgID, userID, audit.GetUserName(a.DB, userID),
+		"canned_response", cannedResponse.ID, models.AuditActionCreated, nil, cannedResponseAuditSnapshot(&cannedResponse))
+
 	return r.SendEnvelope(cannedResponseToResponse(cannedResponse))
 }
 
@@ -152,7 +156,7 @@ func (a *App) GetCannedResponse(r *fastglue.Request) error {
 
 // UpdateCannedResponse updates an existing canned response
 func (a *App) UpdateCannedResponse(r *fastglue.Request) error {
-	orgID, err := a.getOrgID(r)
+	orgID, userID, err := a.getOrgAndUserID(r)
 	if err != nil {
 		return r.SendErrorEnvelope(fasthttp.StatusUnauthorized, "Unauthorized", nil, "")
 	}
@@ -174,6 +178,8 @@ func (a *App) UpdateCannedResponse(r *fastglue.Request) error {
 		return nil
 	}
 
+	oldSnap := cannedResponseAuditSnapshot(&cannedResponse)
+
 	// Update fields
 	if req.Name != "" {
 		cannedResponse.Name = req.Name
@@ -191,12 +197,15 @@ func (a *App) UpdateCannedResponse(r *fastglue.Request) error {
 			"Failed to update canned response", nil, "")
 	}
 
+	audit.LogAudit(a.DB, orgID, userID, audit.GetUserName(a.DB, userID),
+		"canned_response", cannedResponse.ID, models.AuditActionUpdated, oldSnap, cannedResponseAuditSnapshot(&cannedResponse))
+
 	return r.SendEnvelope(cannedResponseToResponse(cannedResponse))
 }
 
 // DeleteCannedResponse deletes a canned response
 func (a *App) DeleteCannedResponse(r *fastglue.Request) error {
-	orgID, err := a.getOrgID(r)
+	orgID, userID, err := a.getOrgAndUserID(r)
 	if err != nil {
 		return r.SendErrorEnvelope(fasthttp.StatusUnauthorized, "Unauthorized", nil, "")
 	}
@@ -218,6 +227,9 @@ func (a *App) DeleteCannedResponse(r *fastglue.Request) error {
 		return r.SendErrorEnvelope(fasthttp.StatusInternalServerError,
 			"Failed to delete canned response", nil, "")
 	}
+
+	audit.LogAudit(a.DB, orgID, userID, audit.GetUserName(a.DB, userID),
+		"canned_response", cannedResponse.ID, models.AuditActionDeleted, cannedResponseAuditSnapshot(&cannedResponse), nil)
 
 	return r.SendEnvelope(map[string]string{"message": "Canned response deleted"})
 }
@@ -243,6 +255,22 @@ func (a *App) IncrementCannedResponseUsage(r *fastglue.Request) error {
 	}
 
 	return r.SendEnvelope(map[string]string{"message": "Usage incremented"})
+}
+
+// cannedResponseAuditSnapshot returns a diff-friendly representation of a
+// canned response for audit logging. Noisy fields (usage_count, timestamps) are
+// intentionally excluded so the activity log reflects user edits only.
+func cannedResponseAuditSnapshot(cr *models.CannedResponse) map[string]any {
+	if cr == nil {
+		return nil
+	}
+	return map[string]any{
+		"name":      cr.Name,
+		"shortcut":  cr.Shortcut,
+		"content":   cr.Content,
+		"category":  cr.Category,
+		"is_active": cr.IsActive,
+	}
 }
 
 func cannedResponseToResponse(cr models.CannedResponse) CannedResponseResponse {

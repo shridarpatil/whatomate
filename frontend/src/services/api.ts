@@ -391,6 +391,7 @@ export interface CannedResponse {
 export const cannedResponsesService = {
   list: (params?: { category?: string; search?: string; active_only?: string; page?: number; limit?: number }) =>
     api.get<{ canned_responses: CannedResponse[]; total?: number }>('/canned-responses', { params }),
+  get: (id: string) => api.get<CannedResponse>(`/canned-responses/${id}`),
   create: (data: { name: string; shortcut?: string; content: string; category?: string }) =>
     api.post('/canned-responses', data),
   update: (id: string, data: { name?: string; shortcut?: string; content?: string; category?: string; is_active?: boolean }) =>

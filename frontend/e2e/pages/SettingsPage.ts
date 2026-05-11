@@ -275,7 +275,7 @@ export class CannedResponsesPage extends TableSettingsPage {
 
   constructor(page: Page) {
     super(page, { headingText: 'Canned Responses', addButtonText: 'Add Response' })
-    // Category filter is now the second combobox (after search)
+    // Category filter is the first combobox in the card header (search is an input)
     this.categoryFilter = page.locator('button[role="combobox"]').first()
   }
 
@@ -295,42 +295,79 @@ export class CannedResponsesPage extends TableSettingsPage {
     await this.page.waitForTimeout(300)
   }
 
-  async fillResponseForm(name: string, content: string, shortcut?: string, category?: string) {
-    await this.dialog.locator('input').first().fill(name)
-    if (shortcut) {
-      await this.dialog.locator('input').nth(1).fill(shortcut)
-    }
-    await this.dialog.locator('textarea').fill(content)
-    if (category) {
-      await this.dialog.locator('button[role="combobox"]').click()
-      await this.page.locator('[role="option"]').filter({ hasText: category }).click()
-    }
+  // --- Detail-page (full-page) form helpers ---
+
+  /** Click "Add Response" — navigates to /settings/canned-responses/new. */
+  async openCreate() {
+    await this.addButton.click()
+    await this.page.waitForURL(/\/settings\/canned-responses\/new$/)
+    await this.page.waitForLoadState('networkidle')
   }
 
-  // Table helpers - buttons in order: copy, edit, delete
+  /** Fill the detail-page form (works for both create and edit). */
+  async fillResponseForm(name: string, content: string, shortcut?: string, category?: string) {
+    const nameInput = this.page.locator('div.space-y-1\\.5:has(> label:has-text("Name")) input').first()
+    const shortcutInput = this.page.locator('div.space-y-1\\.5:has(> label:has-text("Shortcut")) input').first()
+    const textarea = this.page.locator('div.space-y-1\\.5:has(> label:has-text("Content")) textarea').first()
+
+    await nameInput.fill(name)
+    if (shortcut !== undefined) {
+      await shortcutInput.fill(shortcut)
+    }
+    await textarea.fill(content)
+    if (category) {
+      await this.page
+        .locator('div.space-y-1\\.5:has(> label:has-text("Category")) button[role="combobox"]')
+        .first()
+        .click()
+      await this.page.locator('[role="option"]').filter({ hasText: category }).click()
+    }
+    // Let the watcher mark the form dirty and reveal the Save button.
+    await this.page.waitForTimeout(300)
+  }
+
+  /** Click the Save button on the detail page. */
+  async saveDetail() {
+    const saveBtn = this.page.getByRole('button', { name: /^Save$/i })
+    await expect(saveBtn).toBeVisible({ timeout: 5000 })
+    await saveBtn.click()
+  }
+
+  /** Click the Delete button on the detail page and confirm in the alert. */
+  async deleteFromDetail() {
+    const deleteBtn = this.page.getByRole('button', { name: /^Delete$/i }).first()
+    await expect(deleteBtn).toBeVisible({ timeout: 5000 })
+    await deleteBtn.click()
+    await this.alertDialog.waitFor({ state: 'visible' })
+    await this.alertDialog.getByRole('button', { name: /^Delete$/i }).click()
+  }
+
+  // --- Table helpers ---
+
   getResponseRow(name: string): Locator {
     return this.page.locator('tbody tr').filter({ hasText: name })
   }
 
+  /** Action column order: copy, edit, delete. */
   async copyResponse(name: string) {
     const row = this.getResponseRow(name)
     await expect(row).toBeVisible({ timeout: 10000 })
-    // Copy is first button in actions column
     await row.locator('td:last-child button').first().click()
   }
 
+  /** Click the Edit (pencil) action → navigates to the detail page. */
   async editResponse(name: string) {
     const row = this.getResponseRow(name)
     await expect(row).toBeVisible({ timeout: 10000 })
-    // Edit is second button in actions column
     await row.locator('td:last-child button').nth(1).click()
-    await this.dialog.waitFor({ state: 'visible' })
+    await this.page.waitForURL(/\/settings\/canned-responses\/[a-f0-9-]+$/)
+    await this.page.waitForLoadState('networkidle')
   }
 
+  /** Click the row-level Delete action → opens the confirm AlertDialog. */
   async deleteResponse(name: string) {
     const row = this.getResponseRow(name)
     await expect(row).toBeVisible({ timeout: 10000 })
-    // Delete is third button in actions column
     await row.locator('td:last-child button').nth(2).click()
     await this.alertDialog.waitFor({ state: 'visible' })
   }
@@ -341,15 +378,6 @@ export class CannedResponsesPage extends TableSettingsPage {
 
   async expectResponseNotExists(name: string) {
     await expect(this.getResponseRow(name)).not.toBeVisible()
-  }
-
-  // Dialog helpers for tests
-  getDialogInput(index: number): Locator {
-    return this.dialog.locator('input').nth(index)
-  }
-
-  getDialogTextarea(): Locator {
-    return this.dialog.locator('textarea')
   }
 }
 

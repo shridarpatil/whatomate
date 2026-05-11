@@ -189,6 +189,12 @@ const router = createRouter({
           meta: { permission: 'canned_responses' }
         },
         {
+          path: 'settings/canned-responses/:id',
+          name: 'canned-response-detail',
+          component: () => import('@/views/settings/CannedResponseDetailView.vue'),
+          meta: { permission: 'canned_responses' }
+        },
+        {
           path: 'settings/contacts',
           name: 'contacts',
           component: () => import('@/views/settings/ContactsView.vue'),

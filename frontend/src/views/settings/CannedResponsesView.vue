@@ -1,16 +1,13 @@
 <script setup lang="ts">
 import { ref, onMounted, watch, computed } from 'vue'
 import { useI18n } from 'vue-i18n'
+import { useRouter } from 'vue-router'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
-import { Label } from '@/components/ui/label'
 import { Badge } from '@/components/ui/badge'
 import { ScrollArea } from '@/components/ui/scroll-area'
-import { Textarea } from '@/components/ui/textarea'
-import { Switch } from '@/components/ui/switch'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
-import { PageHeader, SearchInput, CrudFormDialog, DeleteConfirmDialog, DataTable, IconButton, ErrorState, type Column } from '@/components/shared'
+import { PageHeader, SearchInput, DeleteConfirmDialog, DataTable, IconButton, ErrorState, type Column } from '@/components/shared'
 import { cannedResponsesService, type CannedResponse } from '@/services/api'
 import { useCrudState } from '@/composables/useCrudState'
 import { toast } from 'vue-sonner'
@@ -20,25 +17,18 @@ import { CANNED_RESPONSE_CATEGORIES, getLabelFromValue } from '@/lib/constants'
 import { useSearchPagination } from '@/composables/useSearchPagination'
 
 const { t } = useI18n()
-
-interface CannedResponseFormData {
-  name: string
-  shortcut: string
-  content: string
-  category: string
-  is_active: boolean
-}
-
-const defaultFormData: CannedResponseFormData = { name: '', shortcut: '', content: '', category: '', is_active: true }
+const router = useRouter()
 
 const cannedResponses = ref<CannedResponse[]>([])
 const isLoading = ref(false)
 const error = ref<string | null>(null)
 const {
-  isSubmitting, isDialogOpen, editingItem: editingResponse, deleteDialogOpen, itemToDelete: responseToDelete,
-  formData, openCreateDialog, openEditDialog: baseOpenEditDialog, openDeleteDialog, closeDialog, closeDeleteDialog,
-} = useCrudState<CannedResponse, CannedResponseFormData>(defaultFormData)
+  deleteDialogOpen, itemToDelete: responseToDelete,
+  openDeleteDialog, closeDeleteDialog,
+} = useCrudState<CannedResponse, Record<string, never>>({})
 const selectedCategory = ref('all')
+
+const breadcrumbs = computed(() => [{ label: t('nav.settings'), href: '/settings' }, { label: t('cannedResponses.title') }])
 
 const columns = computed<Column<CannedResponse>[]>(() => [
   { key: 'name', label: t('cannedResponses.name'), sortable: true },
@@ -81,33 +71,10 @@ watch(selectedCategory, () => {
   resetAndFetch()
 })
 
-function openEditDialog(response: CannedResponse) {
-  baseOpenEditDialog(response, (r) => ({
-    name: r.name, shortcut: r.shortcut || '', content: r.content, category: r.category || '', is_active: r.is_active
-  }))
-}
+function openCreate() { router.push('/settings/canned-responses/new') }
+function openEdit(response: CannedResponse) { router.push(`/settings/canned-responses/${response.id}`) }
 
 onMounted(() => fetchItems())
-
-async function saveResponse() {
-  if (!formData.value.name.trim() || !formData.value.content.trim()) { toast.error(t('cannedResponses.nameContentRequired')); return }
-  isSubmitting.value = true
-  try {
-    if (editingResponse.value) {
-      await cannedResponsesService.update(editingResponse.value.id, formData.value)
-      toast.success(t('common.updatedSuccess', { resource: t('resources.CannedResponse') }))
-    } else {
-      await cannedResponsesService.create(formData.value)
-      toast.success(t('common.createdSuccess', { resource: t('resources.CannedResponse') }))
-    }
-    closeDialog()
-    await fetchItems()
-  } catch (error) {
-    toast.error(getErrorMessage(error, t('common.failedSave', { resource: t('resources.cannedResponse') })))
-  } finally {
-    isSubmitting.value = false
-  }
-}
 
 const isDeleting = ref(false)
 
@@ -132,23 +99,25 @@ function getCategoryLabel(category: string): string { return getLabelFromValue(C
 
 <template>
   <div class="flex flex-col h-full bg-[#0a0a0b] light:bg-gray-50">
-    <PageHeader :title="$t('cannedResponses.title')" :subtitle="$t('cannedResponses.subtitle')" :icon="MessageSquareText" icon-gradient="bg-gradient-to-br from-teal-500 to-emerald-600 shadow-teal-500/20">
+    <PageHeader :title="$t('cannedResponses.title')" :icon="MessageSquareText" icon-gradient="bg-gradient-to-br from-teal-500 to-emerald-600 shadow-teal-500/20" back-link="/settings" :breadcrumbs="breadcrumbs">
       <template #actions>
-        <Button variant="outline" size="sm" @click="openCreateDialog"><Plus class="h-4 w-4 mr-2" />{{ $t('cannedResponses.addResponse') }}</Button>
+        <Button variant="outline" size="sm" @click="openCreate"><Plus class="h-4 w-4 mr-2" />{{ $t('cannedResponses.addResponse') }}</Button>
       </template>
     </PageHeader>
 
-    <ScrollArea class="flex-1">
+    <ErrorState
+      v-if="error && !isLoading"
+      :title="$t('common.loadErrorTitle')"
+      :description="error"
+      :retry-label="$t('common.retry')"
+      class="flex-1"
+      @retry="fetchItems"
+    />
+
+    <ScrollArea v-else class="flex-1">
       <div class="p-6">
-        <div class="max-w-6xl mx-auto">
-          <ErrorState
-            v-if="error && !isLoading"
-            :title="$t('common.loadErrorTitle')"
-            :description="error"
-            :retry-label="$t('common.retry')"
-            @retry="fetchItems"
-          />
-          <Card v-else>
+        <div>
+          <Card>
             <CardHeader>
               <div class="flex items-center justify-between flex-wrap gap-4">
                 <div>
@@ -185,10 +154,12 @@ function getCategoryLabel(category: string): string { return getLabelFromValue(C
                 @page-change="handlePageChange"
               >
                 <template #cell-name="{ item: response }">
-                  <div>
-                    <span class="font-medium">{{ response.name }}</span>
-                    <p v-if="response.shortcut" class="text-xs font-mono text-muted-foreground">/{{ response.shortcut }}</p>
-                  </div>
+                  <RouterLink :to="`/settings/canned-responses/${response.id}`" class="text-inherit no-underline hover:opacity-80">
+                    <div>
+                      <span class="font-medium">{{ response.name }}</span>
+                      <p v-if="response.shortcut" class="text-xs font-mono text-muted-foreground">/{{ response.shortcut }}</p>
+                    </div>
+                  </RouterLink>
                 </template>
                 <template #cell-category="{ item: response }">
                   <Badge variant="outline" class="text-xs">{{ getCategoryLabel(response.category) }}</Badge>
@@ -215,7 +186,7 @@ function getCategoryLabel(category: string): string { return getLabelFromValue(C
                       :icon="Pencil"
                       :label="$t('cannedResponses.editResponse')"
                       class="h-8 w-8"
-                      @click="openEditDialog(response)"
+                      @click="openEdit(response)"
                     />
                     <IconButton
                       :icon="Trash2"
@@ -227,7 +198,7 @@ function getCategoryLabel(category: string): string { return getLabelFromValue(C
                   </div>
                 </template>
                 <template #empty-action>
-                  <Button variant="outline" size="sm" @click="openCreateDialog">
+                  <Button variant="outline" size="sm" @click="openCreate">
                     <Plus class="h-4 w-4 mr-2" />{{ $t('cannedResponses.addResponse') }}
                   </Button>
                 </template>
@@ -237,29 +208,6 @@ function getCategoryLabel(category: string): string { return getLabelFromValue(C
         </div>
       </div>
     </ScrollArea>
-
-    <CrudFormDialog v-model:open="isDialogOpen" :is-editing="!!editingResponse" :is-submitting="isSubmitting" :edit-title="$t('cannedResponses.editTitle')" :create-title="$t('cannedResponses.createTitle')" :edit-description="$t('cannedResponses.editDesc')" :create-description="$t('cannedResponses.createDesc')" max-width="max-w-lg" @submit="saveResponse">
-      <div class="space-y-4">
-        <div class="space-y-2"><Label>{{ $t('cannedResponses.name') }} <span class="text-destructive">*</span></Label><Input v-model="formData.name" placeholder="Welcome Message" /></div>
-        <div class="grid grid-cols-2 gap-4">
-          <div class="space-y-2">
-            <Label>{{ $t('cannedResponses.shortcut') }}</Label>
-            <div class="relative"><span class="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground">/</span><Input v-model="formData.shortcut" placeholder="welcome" class="pl-7" /></div>
-            <p class="text-xs text-muted-foreground">{{ $t('cannedResponses.shortcutHint') }}</p>
-          </div>
-          <div class="space-y-2">
-            <Label>{{ $t('cannedResponses.category') }}</Label>
-            <Select v-model="formData.category"><SelectTrigger><SelectValue :placeholder="$t('cannedResponses.category')" /></SelectTrigger><SelectContent><SelectItem v-for="cat in CANNED_RESPONSE_CATEGORIES" :key="cat.value" :value="cat.value">{{ cat.label }}</SelectItem></SelectContent></Select>
-          </div>
-        </div>
-        <div class="space-y-2">
-          <Label>{{ $t('cannedResponses.content') }} <span class="text-destructive">*</span></Label>
-          <Textarea v-model="formData.content" :placeholder="$t('cannedResponses.contentPlaceholder')" :rows="5" />
-          <p class="text-xs text-muted-foreground">{{ $t('cannedResponses.placeholderHint') }}</p>
-        </div>
-        <div v-if="editingResponse" class="flex items-center justify-between"><Label>{{ $t('common.active') }}</Label><Switch v-model:checked="formData.is_active" /></div>
-      </div>
-    </CrudFormDialog>
 
     <DeleteConfirmDialog v-model:open="deleteDialogOpen" :title="$t('cannedResponses.deleteTitle')" :item-name="responseToDelete?.name" :is-submitting="isDeleting" @confirm="confirmDelete" />
   </div>
