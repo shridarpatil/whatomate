@@ -117,12 +117,11 @@ watch(form, () => {
 }, { deep: true })
 
 // Validate the button combination against WhatsApp Cloud API's free-form
-// interactive-message rules. Returns null if the combo is sendable, or a
-// human-readable reason if it isn't. Sendable shapes:
+// interactive-message rules. Sendable shapes:
 //   - 0 buttons
-//   - 1–3 reply buttons (all reply)
+//   - 1–10 reply buttons (1–3 send as reply buttons; 4–10 send as a list)
 //   - exactly 1 URL button (cta_url)
-// Phone buttons and multi-URL / mixed combos cannot be carried by any
+// Phone buttons and multi-URL / mixed combos can't be carried by any
 // free-form interactive message and would otherwise silently fall back to
 // plain text on send, so we block save instead of confusing the agent.
 const buttonsValidationError = computed<string | null>(() => {
@@ -150,10 +149,10 @@ const buttonsValidationError = computed<string | null>(() => {
       'Reply and URL buttons cannot be mixed in a single WhatsApp message.',
     )
   }
-  if (reply.length > 3) {
+  if (reply.length > 10) {
     return t(
       'cannedResponses.errorTooManyReply',
-      'WhatsApp allows at most 3 reply buttons.',
+      'WhatsApp allows at most 10 reply buttons.',
     )
   }
   return null

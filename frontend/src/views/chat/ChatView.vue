@@ -887,22 +887,24 @@ async function sendCannedResponse() {
   const replyButtons = buttons.filter(b => !b.type || b.type === 'reply')
   const urlButtons = buttons.filter(b => b.type === 'url')
 
-  // WhatsApp Cloud API supports interactive button (≤3 reply) or single
-  // cta_url. Phone buttons and multi-URL combos aren't representable, so we
-  // fall back to plain text in those cases — same body, just no inline buttons.
+  // WhatsApp Cloud API supports: 1-3 reply buttons (interactive.button),
+  // 4-10 reply rows (interactive.list — backend's SendInteractiveButtons
+  // auto-picks the right shape), or a single cta_url. Phone buttons and
+  // multi-URL / mixed combos aren't representable; the detail-page validator
+  // blocks save for those, so the text fallback here is just a safety net.
   let sendType: 'text' | 'interactive' = 'text'
   let interactive: {
-    type: 'button' | 'cta_url'
+    type: 'button' | 'list' | 'cta_url'
     body: string
     buttons?: Array<{ id: string; title: string }>
     button_text?: string
     url?: string
   } | undefined
 
-  if (buttons.length > 0 && replyButtons.length === buttons.length && replyButtons.length <= 3) {
+  if (buttons.length > 0 && replyButtons.length === buttons.length && replyButtons.length <= 10) {
     sendType = 'interactive'
     interactive = {
-      type: 'button',
+      type: replyButtons.length <= 3 ? 'button' : 'list',
       body,
       buttons: replyButtons.map(b => ({ id: b.id, title: b.title })),
     }
