@@ -90,6 +90,7 @@ import { getInitials, getAvatarGradient } from '@/lib/utils'
 import { useColorMode } from '@/composables/useColorMode'
 import { useInfiniteScroll } from '@/composables/useInfiniteScroll'
 import CannedResponsePicker from '@/components/chat/CannedResponsePicker.vue'
+import PreviewButtonGroup from '@/components/chatbot/flow-preview/PreviewButtonGroup.vue'
 import TemplatePicker from '@/components/chat/TemplatePicker.vue'
 import ContactInfoPanel from '@/components/chat/ContactInfoPanel.vue'
 import ConversationNotes from '@/components/chat/ConversationNotes.vue'
@@ -836,6 +837,18 @@ function resolveCannedTokens(text: string): string {
 const cannedPreview = computed(() =>
   selectedCannedResponse.value ? resolveCannedTokens(selectedCannedResponse.value.content) : '',
 )
+
+// Resolved buttons (with {{...}} substitution applied) for the dialog preview.
+// Empty array when no response is selected or it has no buttons.
+const cannedPreviewButtons = computed(() => {
+  const raw = selectedCannedResponse.value?.buttons || []
+  return raw.map(b => ({
+    ...b,
+    title: resolveCannedTokens(b.title),
+    ...(b.url !== undefined ? { url: resolveCannedTokens(b.url) } : {}),
+    ...(b.phone_number !== undefined ? { phone_number: resolveCannedTokens(b.phone_number) } : {}),
+  }))
+})
 
 function handleCannedSelect(response: CannedResponse) {
   selectedCannedResponse.value = response
@@ -2442,10 +2455,15 @@ async function sendMediaMessage() {
               class="h-9 canned-response-param"
             />
           </div>
-          <div v-if="cannedPreview" class="space-y-1">
+          <div v-if="cannedPreview || cannedPreviewButtons.length" class="space-y-1">
             <label class="text-xs font-medium text-muted-foreground">{{ $t('chat.preview') }}</label>
             <div id="canned-response-preview" class="chat-bubble chat-bubble-outgoing ml-auto" style="max-width: 100%;">
-              <span class="whitespace-pre-wrap break-words text-sm">{{ cannedPreview }}</span>
+              <span v-if="cannedPreview" class="whitespace-pre-wrap break-words text-sm">{{ cannedPreview }}</span>
+              <PreviewButtonGroup
+                v-if="cannedPreviewButtons.length"
+                :buttons="cannedPreviewButtons"
+                disabled
+              />
             </div>
           </div>
         </div>
