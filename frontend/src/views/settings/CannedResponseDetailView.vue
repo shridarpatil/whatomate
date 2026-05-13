@@ -116,9 +116,58 @@ watch(form, () => {
   hasChanges.value = true
 }, { deep: true })
 
+// Validate the button combination against WhatsApp Cloud API's free-form
+// interactive-message rules. Returns null if the combo is sendable, or a
+// human-readable reason if it isn't. Sendable shapes:
+//   - 0 buttons
+//   - 1–3 reply buttons (all reply)
+//   - exactly 1 URL button (cta_url)
+// Phone buttons and multi-URL / mixed combos cannot be carried by any
+// free-form interactive message and would otherwise silently fall back to
+// plain text on send, so we block save instead of confusing the agent.
+const buttonsValidationError = computed<string | null>(() => {
+  const list = form.value.buttons
+  if (!list.length) return null
+  const reply = list.filter(b => !b.type || b.type === 'reply')
+  const url = list.filter(b => b.type === 'url')
+  const phone = list.filter(b => b.type === 'phone')
+
+  if (phone.length > 0) {
+    return t(
+      'cannedResponses.errorPhoneUnsupported',
+      'Phone buttons cannot be sent in free-form WhatsApp messages — only in approved templates. Remove the phone button or convert it to a URL.',
+    )
+  }
+  if (url.length > 1) {
+    return t(
+      'cannedResponses.errorMultiUrl',
+      'WhatsApp allows only one URL button per message. Remove the extra URL button.',
+    )
+  }
+  if (reply.length > 0 && url.length > 0) {
+    return t(
+      'cannedResponses.errorMixedButtons',
+      'Reply and URL buttons cannot be mixed in a single WhatsApp message.',
+    )
+  }
+  if (reply.length > 3) {
+    return t(
+      'cannedResponses.errorTooManyReply',
+      'WhatsApp allows at most 3 reply buttons.',
+    )
+  }
+  return null
+})
+
+const canSave = computed(() => !buttonsValidationError.value)
+
 async function save() {
   if (!form.value.name.trim() || !form.value.content.trim()) {
     toast.error(t('cannedResponses.nameContentRequired'))
+    return
+  }
+  if (buttonsValidationError.value) {
+    toast.error(buttonsValidationError.value)
     return
   }
   isSaving.value = true
@@ -199,7 +248,7 @@ onMounted(() => { loadResponse() })
     >
       <template #actions>
         <div class="flex items-center gap-2">
-          <Button v-if="canWrite && (hasChanges || isNew)" size="sm" @click="save" :disabled="isSaving">
+          <Button v-if="canWrite && (hasChanges || isNew)" size="sm" @click="save" :disabled="isSaving || !canSave">
             <Save class="h-4 w-4 mr-1" />
             {{ isSaving ? $t('common.saving', 'Saving...') : $t('common.save') }}
           </Button>
@@ -277,9 +326,17 @@ onMounted(() => { loadResponse() })
         <CardContent class="space-y-4">
           <MessageButtonsEditor
             :buttons="form.buttons"
+            :allowed-types="['reply', 'url']"
             :disabled="!canWrite"
             @update:buttons="form.buttons = $event"
           />
+
+          <p
+            v-if="buttonsValidationError"
+            class="text-xs text-destructive rounded-md border border-destructive/30 bg-destructive/10 px-3 py-2"
+          >
+            {{ buttonsValidationError }}
+          </p>
 
           <!-- WhatsApp-style preview -->
           <div v-if="form.buttons.length > 0" class="border-t pt-3">
