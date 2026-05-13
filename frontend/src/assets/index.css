@@ -552,3 +552,186 @@
   --v3-picker-input-focus-border: hsl(142 70% 49%);
   --v3-picker-emoji-hover: hsl(210 40% 96.1%);
 }
+
+/* ─── Page transitions ─── */
+.page-enter-active,
+.page-leave-active {
+  transition: opacity 0.15s ease, transform 0.15s ease;
+}
+
+.page-enter-from {
+  opacity: 0;
+  transform: translateY(6px);
+}
+
+.page-leave-to {
+  opacity: 0;
+  transform: translateY(-6px);
+}
+
+/* ─── Micro-interactions ─── */
+
+/* Button press effect */
+.btn-press:active {
+  transform: scale(0.97);
+}
+
+/* Staggered list item entrance */
+@keyframes list-in {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.animate-list-in {
+  animation: list-in 0.25s ease both;
+}
+
+/* Success checkmark pop */
+@keyframes pop-in {
+  0% {
+    opacity: 0;
+    transform: scale(0.5);
+  }
+  70% {
+    transform: scale(1.1);
+  }
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+.animate-pop-in {
+  animation: pop-in 0.3s ease both;
+}
+
+/* Sidebar active indicator bar */
+.nav-active-indicator {
+  position: relative;
+}
+
+.nav-active-indicator::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 25%;
+  height: 50%;
+  width: 3px;
+  border-radius: 0 3px 3px 0;
+  background: hsl(var(--primary));
+  opacity: 0;
+  transform: scaleY(0);
+  transition: opacity 0.2s ease, transform 0.2s ease;
+}
+
+.nav-active-indicator[data-active="true"]::before {
+  opacity: 1;
+  transform: scaleY(1);
+}
+
+/* Skeleton shimmer (replaces plain pulse) */
+@keyframes shimmer {
+  0% {
+    background-position: -200% 0;
+  }
+  100% {
+    background-position: 200% 0;
+  }
+}
+
+.skeleton-shimmer {
+  background: linear-gradient(
+    90deg,
+    rgba(255, 255, 255, 0.04) 25%,
+    rgba(255, 255, 255, 0.08) 50%,
+    rgba(255, 255, 255, 0.04) 75%
+  );
+  background-size: 200% 100%;
+  animation: shimmer 1.5s ease-in-out infinite;
+}
+
+.light .skeleton-shimmer {
+  background: linear-gradient(
+    90deg,
+    rgba(0, 0, 0, 0.04) 25%,
+    rgba(0, 0, 0, 0.08) 50%,
+    rgba(0, 0, 0, 0.04) 75%
+  );
+  background-size: 200% 100%;
+}
+
+/* Badge pulse for notifications */
+@keyframes badge-pulse {
+  0%, 100% {
+    box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.4);
+  }
+  50% {
+    box-shadow: 0 0 0 4px rgba(16, 185, 129, 0);
+  }
+}
+
+.badge-pulse {
+  animation: badge-pulse 2s ease-in-out infinite;
+}
+
+/* Status dot for active badges */
+.badge-dot::before {
+  content: '';
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: currentColor;
+  margin-right: 6px;
+  opacity: 0.8;
+}
+
+/* Avatar gradient ring */
+.avatar-ring {
+  position: relative;
+}
+
+.avatar-ring::after {
+  content: '';
+  position: absolute;
+  inset: -2px;
+  border-radius: 9999px;
+  background: linear-gradient(135deg, hsl(var(--primary)), hsl(160 84% 55%));
+  z-index: -1;
+}
+
+/* Online status dot */
+.avatar-status {
+  position: relative;
+}
+
+.avatar-status::after {
+  content: '';
+  position: absolute;
+  bottom: 0;
+  right: 0;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: #22c55e;
+  border: 2px solid hsl(var(--background));
+  z-index: 1;
+}
+
+.avatar-status.offline::after {
+  background: #6b7280;
+}
+
+.avatar-status.away::after {
+  background: #f59e0b;
+}
+
+.avatar-status-pulse::after {
+  animation: badge-pulse 2s ease-in-out infinite;
+}

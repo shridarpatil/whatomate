@@ -12,7 +12,7 @@ const { colorMode } = useColorMode()
   <TooltipProvider>
     <div class="min-h-screen bg-background font-sans antialiased">
       <RouterView />
-      <Toaster position="top-right" richColors :theme="colorMode" />
+      <Toaster position="top-right" richColors :theme="colorMode" offset="72px" />
     </div>
   </TooltipProvider>
 </template>

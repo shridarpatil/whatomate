@@ -11,7 +11,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
-import { PageHeader } from '@/components/shared'
+import { PageHeader, IconButton, ErrorState, ConfirmDialog } from '@/components/shared'
 import { chatbotService, type Team } from '@/services/api'
 import { useTransfersStore, type AgentTransfer, getSLAStatus } from '@/stores/transfers'
 import { useAuthStore } from '@/stores/auth'
@@ -31,11 +31,19 @@ const usersStore = useUsersStore()
 const teamsStore = useTeamsStore()
 
 const isLoading = ref(true)
+const error = ref<string | null>(null)
 const isPicking = ref(false)
+// Org-level kill switch surfaced from chatbot settings. The backend rejects
+// pickup with 403 when this is false (PickNextTransfer in agent_transfers.go),
+// so the UI must hide / disable the action to match. Default true mirrors the
+// server default so we don't briefly disable the button while settings load.
+const allowQueuePickup = ref(true)
 const isAssigning = ref(false)
 const isResuming = ref(false)
 const activeTab = ref('my-transfers')
 const assignDialogOpen = ref(false)
+const resumeDialogOpen = ref(false)
+const transferToResume = ref<AgentTransfer | null>(null)
 const transferToAssign = ref<AgentTransfer | null>(null)
 const selectedAgentId = ref<string>('')
 const selectedTeamId = ref<string>('')
@@ -43,8 +51,10 @@ const agents = ref<{ id: string; full_name: string }[]>([])
 const teams = ref<Team[]>([])
 const selectedTeamFilter = ref<string>('all')
 
-const userRole = computed(() => authStore.user?.role?.name)
-const isAdminOrManager = computed(() => userRole.value === 'admin' || userRole.value === 'manager')
+// Backend grants full transfer visibility on transfers:write (agent_transfers.go:110).
+// Honor the same permission here instead of hardcoding role names — otherwise
+// custom roles with the right permissions still see the agent-only view.
+const isAdminOrManager = computed(() => authStore.hasPermission('transfers', 'write'))
 const currentUserId = computed(() => authStore.user?.id)
 
 const myTransfers = computed(() =>
@@ -99,7 +109,7 @@ watch(activeTab, async (newTab) => {
 })
 
 onMounted(async () => {
-  await Promise.all([fetchTransfers(), fetchTeams()])
+  await Promise.all([fetchTransfers(), fetchTeams(), fetchAllowQueuePickup()])
   // Always try to fetch agents for admin/manager - the API will reject if unauthorized
   if (isAdminOrManager.value) {
     await fetchAgents()
@@ -108,10 +118,31 @@ onMounted(async () => {
   // Reconnection refresh handles sync after disconnect
 })
 
+async function fetchAllowQueuePickup() {
+  // Agents (no transfers:write) are gated by allow_agent_queue_pickup; admins
+  // bypass the toggle, so we only need the setting for the agent-only view.
+  if (isAdminOrManager.value) return
+  try {
+    const resp = await chatbotService.getSettings()
+    // API returns { data: { settings: {...}, stats: {...} } }.
+    const settings = resp.data?.data?.settings ?? resp.data?.settings
+    if (typeof settings?.allow_agent_queue_pickup === 'boolean') {
+      allowQueuePickup.value = settings.allow_agent_queue_pickup
+    }
+  } catch {
+    // Settings endpoint may be unavailable for some users; fall back to the
+    // server default (true) — backend will still 403 if pickup is disabled.
+  }
+}
+
 async function fetchTransfers() {
   isLoading.value = true
+  error.value = null
   try {
     await transfersStore.fetchTransfers({ status: 'active' })
+  } catch (err) {
+    console.error('Failed to load transfers:', err)
+    error.value = t('agentTransfers.fetchError')
   } finally {
     isLoading.value = false
   }
@@ -167,16 +198,25 @@ async function pickNextTransfer() {
   }
 }
 
-async function resumeTransfer(transfer: AgentTransfer) {
+function openResumeDialog(transfer: AgentTransfer) {
+  transferToResume.value = transfer
+  resumeDialogOpen.value = true
+}
+
+async function confirmResumeTransfer() {
+  if (!transferToResume.value) return
+
   isResuming.value = true
   try {
-    await chatbotService.resumeTransfer(transfer.id)
+    await chatbotService.resumeTransfer(transferToResume.value.id)
     toast.success(t('agentTransfers.transferResumed'), {
       description: t('agentTransfers.chatbotNowActive')
     })
+    resumeDialogOpen.value = false
+    transferToResume.value = null
     await fetchTransfers()
-  } catch (error) {
-    toast.error(getErrorMessage(error, t('agentTransfers.failedResumeTransfer')))
+  } catch (err) {
+    toast.error(getErrorMessage(err, t('agentTransfers.failedResumeTransfer')))
   } finally {
     isResuming.value = false
   }
@@ -284,11 +324,23 @@ function formatTimeRemaining(deadline: string | undefined): string {
             <Users class="h-4 w-4 inline mr-1" />
             {{ $t('agentTransfers.waitingInQueue', { count: transfersStore.queueCount }) }}
           </div>
-          <Button variant="outline" size="sm" @click="pickNextTransfer" :disabled="isPicking || transfersStore.queueCount === 0">
-            <Loader2 v-if="isPicking" class="mr-2 h-4 w-4 animate-spin" />
-            <Play v-else class="mr-2 h-4 w-4" />
-            {{ $t('agentTransfers.pickNext') }}
-          </Button>
+          <Tooltip :disabled="allowQueuePickup">
+            <TooltipTrigger as-child>
+              <span>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  @click="pickNextTransfer"
+                  :disabled="!allowQueuePickup || isPicking || transfersStore.queueCount === 0"
+                >
+                  <Loader2 v-if="isPicking" class="mr-2 h-4 w-4 animate-spin" />
+                  <Play v-else class="mr-2 h-4 w-4" />
+                  {{ $t('agentTransfers.pickNext') }}
+                </Button>
+              </span>
+            </TooltipTrigger>
+            <TooltipContent>{{ $t('agentTransfers.queuePickupDisabled') }}</TooltipContent>
+          </Tooltip>
         </div>
       </template>
     </PageHeader>
@@ -301,6 +353,15 @@ function formatTimeRemaining(deadline: string | undefined): string {
           <Skeleton class="h-12 w-full bg-white/[0.08] light:bg-gray-200 rounded-xl" />
           <Skeleton class="h-64 w-full bg-white/[0.08] light:bg-gray-200 rounded-xl" />
         </div>
+
+        <!-- Error state -->
+        <ErrorState
+          v-else-if="error"
+          :title="$t('common.loadErrorTitle')"
+          :description="error"
+          :retry-label="$t('common.retry')"
+          @retry="fetchTransfers"
+        />
 
         <!-- Agent View (no tabs, just their transfers) -->
         <div v-else-if="!isAdminOrManager">
@@ -339,27 +400,8 @@ function formatTimeRemaining(deadline: string | undefined): string {
                       </Badge>
                     </TableCell>
                     <TableCell class="text-right space-x-2">
-                      <Tooltip>
-                        <TooltipTrigger asChild>
-                          <Button size="sm" variant="outline" @click="viewChat(transfer)">
-                            <MessageSquare class="h-4 w-4" />
-                          </Button>
-                        </TooltipTrigger>
-                        <TooltipContent>{{ $t('agentTransfers.viewChat') }}</TooltipContent>
-                      </Tooltip>
-                      <Tooltip>
-                        <TooltipTrigger asChild>
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            @click="resumeTransfer(transfer)"
-                            :disabled="isResuming"
-                          >
-                            <Play class="h-4 w-4" />
-                          </Button>
-                        </TooltipTrigger>
-                        <TooltipContent>{{ $t('agentTransfers.resumeChatbot') }}</TooltipContent>
-                      </Tooltip>
+                      <IconButton :icon="MessageSquare" :label="$t('agentTransfers.viewChat')" variant="outline" size="sm" @click="viewChat(transfer)" />
+                      <IconButton :icon="Play" :label="$t('agentTransfers.resumeChatbot')" variant="outline" size="sm" :disabled="isResuming" @click="openResumeDialog(transfer)" />
                     </TableCell>
                   </TableRow>
                 </TableBody>
@@ -431,7 +473,7 @@ function formatTimeRemaining(deadline: string | undefined): string {
                           <Button
                             size="sm"
                             variant="outline"
-                            @click="resumeTransfer(transfer)"
+                            @click="openResumeDialog(transfer)"
                             :disabled="isResuming"
                           >
                             <Play class="h-4 w-4 mr-1" />
@@ -618,20 +660,9 @@ function formatTimeRemaining(deadline: string | undefined): string {
                           </Badge>
                         </TableCell>
                         <TableCell class="text-right space-x-2">
-                          <Button size="sm" variant="outline" @click="openAssignDialog(transfer)">
-                            <UserPlus class="h-4 w-4" />
-                          </Button>
-                          <Button size="sm" variant="outline" @click="viewChat(transfer)">
-                            <MessageSquare class="h-4 w-4" />
-                          </Button>
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            @click="resumeTransfer(transfer)"
-                            :disabled="isResuming"
-                          >
-                            <Play class="h-4 w-4" />
-                          </Button>
+                          <IconButton :icon="UserPlus" :label="$t('agentTransfers.assign')" variant="outline" size="sm" @click="openAssignDialog(transfer)" />
+                          <IconButton :icon="MessageSquare" :label="$t('agentTransfers.chat')" variant="outline" size="sm" @click="viewChat(transfer)" />
+                          <IconButton :icon="Play" :label="$t('agentTransfers.resumeChatbot')" variant="outline" size="sm" :disabled="isResuming" @click="openResumeDialog(transfer)" />
                         </TableCell>
                       </TableRow>
                     </TableBody>
@@ -764,5 +795,16 @@ function formatTimeRemaining(deadline: string | undefined): string {
         </DialogFooter>
       </DialogContent>
     </Dialog>
+
+    <!-- Resume Confirmation Dialog -->
+    <ConfirmDialog
+      v-model:open="resumeDialogOpen"
+      :title="$t('agentTransfers.confirmResumeTitle')"
+      :description="$t('agentTransfers.confirmResumeDescription')"
+      :confirm-label="$t('agentTransfers.confirmResumeLabel')"
+      :cancel-label="$t('common.cancel')"
+      :is-submitting="isResuming"
+      @confirm="confirmResumeTransfer"
+    />
   </div>
 </template>

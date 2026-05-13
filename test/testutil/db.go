@@ -119,6 +119,15 @@ func runMigrations(db *gorm.DB) error {
 		&models.CannedResponse{},
 		// Dashboard
 		&models.Widget{},
+		// Conversation Notes
+		&models.ConversationNote{},
+		// Calling / IVR
+		&models.CallLog{},
+		&models.IVRFlow{},
+		&models.CallTransfer{},
+		&models.CallPermission{},
+		// Audit
+		&models.AuditLog{},
 	)
 }
 

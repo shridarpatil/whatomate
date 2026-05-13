@@ -1,5 +1,5 @@
-# Frontend build stage
-FROM node:22-alpine AS frontend-builder
+# Frontend build stage — pinned to BUILDPLATFORM (output is arch-agnostic JS).
+FROM --platform=$BUILDPLATFORM node:22-alpine AS frontend-builder
 
 WORKDIR /app/frontend
 
@@ -11,8 +11,12 @@ RUN npm ci
 COPY frontend/ .
 RUN npm run build
 
-# Go build stage
-FROM golang:1.24.5-alpine AS builder
+# Go build stage — runs on BUILDPLATFORM, cross-compiles to TARGETOS/TARGETARCH
+# so multi-arch builds don't emulate the Go toolchain under QEMU.
+FROM --platform=$BUILDPLATFORM golang:1.25.3-alpine AS builder
+
+ARG TARGETOS
+ARG TARGETARCH
 
 WORKDIR /app
 
@@ -30,12 +34,19 @@ COPY . .
 COPY --from=frontend-builder /app/frontend/dist/ ./internal/frontend/dist/
 
 # Build the binary
-RUN CGO_ENABLED=0 GOOS=linux go build -a -installsuffix cgo -o whatomate ./cmd/whatomate
+RUN CGO_ENABLED=0 GOOS=${TARGETOS} GOARCH=${TARGETARCH} go build -a -installsuffix cgo -o whatomate ./cmd/whatomate
 
-# Piper TTS download stage
-FROM debian:bookworm-slim AS piper-dl
+# Piper TTS download stage — runs on BUILDPLATFORM (just wget+tar, no native exec),
+# selects the tarball matching TARGETARCH so the final image gets a binary that runs.
+FROM --platform=$BUILDPLATFORM debian:bookworm-slim AS piper-dl
+ARG TARGETARCH
 RUN apt-get update && apt-get install -y --no-install-recommends wget ca-certificates && rm -rf /var/lib/apt/lists/*
-RUN wget -q https://github.com/rhasspy/piper/releases/download/2023.11.14-2/piper_linux_x86_64.tar.gz -O /tmp/piper.tar.gz \
+RUN case "${TARGETARCH}" in \
+      amd64) PIPER_ARCH=x86_64 ;; \
+      arm64) PIPER_ARCH=aarch64 ;; \
+      *) echo "unsupported TARGETARCH: ${TARGETARCH}" >&2; exit 1 ;; \
+    esac \
+    && wget -q "https://github.com/rhasspy/piper/releases/download/2023.11.14-2/piper_linux_${PIPER_ARCH}.tar.gz" -O /tmp/piper.tar.gz \
     && tar xf /tmp/piper.tar.gz -C /tmp \
     && rm /tmp/piper.tar.gz
 # Download default English voice model (~60MB)

@@ -25,7 +25,7 @@ const outputHandles = computed(() => {
 
 <template>
   <BaseNode :label="data?.label || 'Menu'" header-class="bg-purple-600" :output-handles="outputHandles" :has-input="!data?.isEntryNode">
-    <template #icon><Grid3X3 class="w-3 h-3" /></template>
+    <template #icon><Grid3X3 class="w-4 h-4" /></template>
     <div v-if="options.length > 0" class="space-y-0.5">
       <div v-for="[digit, opt] in options" :key="digit" class="flex gap-1">
         <span class="font-mono font-bold">{{ digit }}:</span>

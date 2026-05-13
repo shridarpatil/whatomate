@@ -19,6 +19,25 @@ function getCookie(name: string): string | null {
   return match ? decodeURIComponent(match[1]) : null
 }
 
+/**
+ * Build standard headers for native fetch() calls.
+ * Includes X-Organization-ID (for org switching) and optionally X-CSRF-Token (for mutating requests).
+ */
+export function getRequestHeaders(opts?: { csrf?: boolean }): Record<string, string> {
+  const headers: Record<string, string> = {}
+  const selectedOrgId = localStorage.getItem('selected_organization_id')
+  if (selectedOrgId) {
+    headers['X-Organization-ID'] = selectedOrgId
+  }
+  if (opts?.csrf) {
+    const csrfToken = getCookie('whm_csrf')
+    if (csrfToken) {
+      headers['X-CSRF-Token'] = csrfToken
+    }
+  }
+  return headers
+}
+
 // Request interceptor to add CSRF token and organization header
 api.interceptors.request.use(
   (config: InternalAxiosRequestConfig) => {
@@ -42,6 +61,18 @@ api.interceptors.request.use(
   }
 )
 
+// Token refresh mutex — ensures only one refresh runs at a time.
+// Without this, multiple concurrent 401s each trigger a refresh, but the
+// single-use refresh token (JTI deleted from Redis) causes all but the first
+// to fail, which clears auth and logs the user out.
+let isRefreshing = false
+let refreshSubscribers: Array<(success: boolean) => void> = []
+
+function onRefreshComplete(success: boolean) {
+  refreshSubscribers.forEach(cb => cb(success))
+  refreshSubscribers = []
+}
+
 // Response interceptor for error handling
 api.interceptors.response.use(
   (response) => response,
@@ -55,14 +86,36 @@ api.interceptors.response.use(
     if (error.response?.status === 401 && !originalRequest._retry && !isAuthEndpoint) {
       originalRequest._retry = true
 
+      // If a refresh is already in flight, queue this request to wait for it
+      if (isRefreshing) {
+        return new Promise((resolve, reject) => {
+          refreshSubscribers.push((success: boolean) => {
+            if (success) {
+              resolve(api(originalRequest))
+            } else {
+              reject(error)
+            }
+          })
+        })
+      }
+
+      isRefreshing = true
+
       try {
         // Browser sends whm_refresh cookie automatically via withCredentials
         await axios.post(`${API_BASE_URL}/auth/refresh`, {}, { withCredentials: true })
 
-        // Cookies are updated by the server response — retry the original request
+        // Cookies are updated by the server response — notify waiting requests
+        onRefreshComplete(true)
+        isRefreshing = false
+
+        // Retry the original request
         return api(originalRequest)
       } catch {
-        // Refresh failed, clear user and redirect to login
+        // Refresh failed — notify waiting requests and redirect to login
+        onRefreshComplete(false)
+        isRefreshing = false
+
         localStorage.removeItem('user')
         localStorage.removeItem('auth_token')
         localStorage.removeItem('refresh_token')
@@ -82,6 +135,7 @@ export const authService = {
 export const usersService = {
   list: (params?: { search?: string; page?: number; limit?: number }) =>
     api.get('/users', { params }),
+  get: (id: string) => api.get(`/users/${id}`),
   create: (data: { email: string; password: string; full_name: string; role_id?: string }) =>
     api.post('/users', data),
   update: (id: string, data: { email?: string; password?: string; full_name?: string; role_id?: string; is_active?: boolean }) =>
@@ -100,8 +154,11 @@ export const usersService = {
 export const apiKeysService = {
   list: (params?: { search?: string; page?: number; limit?: number }) =>
     api.get<{ api_keys: any[]; total?: number }>('/api-keys', { params }),
+  get: (id: string) => api.get(`/api-keys/${id}`),
   create: (data: { name: string; expires_at?: string }) =>
     api.post('/api-keys', data),
+  update: (id: string, data: { is_active?: boolean }) =>
+    api.put(`/api-keys/${id}`, data),
   delete: (id: string) => api.delete(`/api-keys/${id}`)
 }
 
@@ -120,7 +177,8 @@ export const contactsService = {
     api.put(`/contacts/${id}/assign`, { user_id: userId }),
   updateTags: (id: string, tags: string[]) =>
     api.put(`/contacts/${id}/tags`, { tags }),
-  getSessionData: (id: string) => api.get(`/contacts/${id}/session-data`)
+  getSessionData: (id: string) => api.get(`/contacts/${id}/session-data`),
+  markRead: (id: string) => api.post(`/contacts/${encodeURIComponent(id)}/mark-read`)
 }
 
 // Generic Import/Export Service
@@ -185,10 +243,44 @@ export const dataService = {
 export const messagesService = {
   list: (contactId: string, params?: { page?: number; limit?: number; before_id?: string; account?: string }) =>
     api.get(`/contacts/${contactId}/messages`, { params }),
-  send: (contactId: string, data: { type: string; content: any; reply_to_message_id?: string; whatsapp_account?: string }) =>
-    api.post(`/contacts/${contactId}/messages`, data),
-  sendTemplate: (contactId: string, data: { template_name: string; template_params?: Record<string, string>; account_name?: string }) =>
-    api.post('/messages/template', { contact_id: contactId, ...data }),
+  send: (
+    contactId: string,
+    data: {
+      type: string
+      content: any
+      reply_to_message_id?: string
+      whatsapp_account?: string
+      // Interactive button / cta_url payload. Mirrors backend InteractiveContent.
+      interactive?: {
+        type: 'button' | 'cta_url' | 'list'
+        body: string
+        buttons?: Array<{ id: string; title: string }>
+        button_text?: string
+        url?: string
+      }
+    },
+  ) => api.post(`/contacts/${contactId}/messages`, data),
+  sendTemplate: (contactId: string, data: { template_name: string; template_params?: Record<string, string>; button_params?: Record<string, string>; account_name?: string }, headerFile?: File) => {
+    if (headerFile) {
+      const formData = new FormData()
+      formData.append('contact_id', contactId)
+      formData.append('template_name', data.template_name)
+      if (data.template_params) {
+        formData.append('template_params', JSON.stringify(data.template_params))
+      }
+      if (data.button_params) {
+        formData.append('button_params', JSON.stringify(data.button_params))
+      }
+      if (data.account_name) {
+        formData.append('account_name', data.account_name)
+      }
+      formData.append('header_file', headerFile)
+      return api.post('/messages/template', formData, {
+        headers: { 'Content-Type': 'multipart/form-data' }
+      })
+    }
+    return api.post('/messages/template', { contact_id: contactId, ...data })
+  },
   sendReaction: (contactId: string, messageId: string, emoji: string) =>
     api.post(`/contacts/${contactId}/messages/${messageId}/reaction`, { emoji })
 }
@@ -201,10 +293,8 @@ export const templatesService = {
     const formData = new FormData()
     formData.append('file', file)
     formData.append('account', accountName)
-    const csrfToken = getCookie('whm_csrf')
-    return axios.post(`${api.defaults.baseURL}/templates/upload-media`, formData, {
-      withCredentials: true,
-      headers: csrfToken ? { 'X-CSRF-Token': csrfToken } : {}
+    return api.post('/templates/upload-media', formData, {
+      headers: { 'Content-Type': 'multipart/form-data' }
     })
   }
 }
@@ -224,6 +314,7 @@ export const flowsService = {
 export const campaignsService = {
   list: (params?: { status?: string; from?: string; to?: string; search?: string; page?: number; limit?: number }) =>
     api.get('/campaigns', { params }),
+  get: (id: string) => api.get(`/campaigns/${id}`),
   create: (data: any) => api.post('/campaigns', data),
   update: (id: string, data: any) => api.put(`/campaigns/${id}`, data),
   delete: (id: string) => api.delete(`/campaigns/${id}`),
@@ -241,10 +332,8 @@ export const campaignsService = {
   uploadMedia: (campaignId: string, file: File) => {
     const formData = new FormData()
     formData.append('file', file)
-    const csrfToken = getCookie('whm_csrf')
-    return axios.post(`${api.defaults.baseURL}/campaigns/${campaignId}/media`, formData, {
-      withCredentials: true,
-      headers: csrfToken ? { 'X-CSRF-Token': csrfToken } : {}
+    return api.post(`/campaigns/${campaignId}/media`, formData, {
+      headers: { 'Content-Type': 'multipart/form-data' }
     })
   },
   getMedia: (campaignId: string) =>
@@ -259,6 +348,7 @@ export const chatbotService = {
   // Keywords
   listKeywords: (params?: { search?: string; page?: number; limit?: number }) =>
     api.get<{ rules: any[]; total?: number }>('/chatbot/keywords', { params }),
+  getKeyword: (id: string) => api.get(`/chatbot/keywords/${id}`),
   createKeyword: (data: any) => api.post('/chatbot/keywords', data),
   updateKeyword: (id: string, data: any) => api.put(`/chatbot/keywords/${id}`, data),
   deleteKeyword: (id: string) => api.delete(`/chatbot/keywords/${id}`),
@@ -274,6 +364,7 @@ export const chatbotService = {
   // AI Contexts
   listAIContexts: (params?: { search?: string; page?: number; limit?: number }) =>
     api.get<{ contexts: any[]; total?: number }>('/chatbot/ai-contexts', { params }),
+  getAIContext: (id: string) => api.get(`/chatbot/ai-contexts/${id}`),
   createAIContext: (data: any) => api.post('/chatbot/ai-contexts', data),
   updateAIContext: (id: string, data: any) => api.put(`/chatbot/ai-contexts/${id}`, data),
   deleteAIContext: (id: string) => api.delete(`/chatbot/ai-contexts/${id}`),
@@ -300,6 +391,14 @@ export const chatbotService = {
     api.put(`/chatbot/transfers/${id}/assign`, { agent_id: agentId, team_id: teamId })
 }
 
+export interface CannedResponseButton {
+  id: string
+  title: string
+  type?: 'reply' | 'url' | 'phone'
+  url?: string
+  phone_number?: string
+}
+
 export interface CannedResponse {
   id: string
   name: string
@@ -308,16 +407,27 @@ export interface CannedResponse {
   category: string
   is_active: boolean
   usage_count: number
+  buttons?: CannedResponseButton[]
   created_at: string
   updated_at: string
+}
+
+interface CannedResponseUpsertPayload {
+  name?: string
+  shortcut?: string
+  content?: string
+  category?: string
+  is_active?: boolean
+  buttons?: CannedResponseButton[]
 }
 
 export const cannedResponsesService = {
   list: (params?: { category?: string; search?: string; active_only?: string; page?: number; limit?: number }) =>
     api.get<{ canned_responses: CannedResponse[]; total?: number }>('/canned-responses', { params }),
-  create: (data: { name: string; shortcut?: string; content: string; category?: string }) =>
+  get: (id: string) => api.get<CannedResponse>(`/canned-responses/${id}`),
+  create: (data: CannedResponseUpsertPayload & { name: string; content: string }) =>
     api.post('/canned-responses', data),
-  update: (id: string, data: { name?: string; shortcut?: string; content?: string; category?: string; is_active?: boolean }) =>
+  update: (id: string, data: CannedResponseUpsertPayload) =>
     api.put(`/canned-responses/${id}`, data),
   delete: (id: string) => api.delete(`/canned-responses/${id}`),
   use: (id: string) => api.post(`/canned-responses/${id}/use`)
@@ -398,10 +508,10 @@ export interface MetaTemplateDataPoint {
 export interface MetaCallDataPoint {
   start: number
   end: number
-  total_calls: number
-  call_duration: number
-  call_type: string
-  call_direction: string
+  count: number
+  cost: number
+  average_duration: number
+  direction?: string // USER_INITIATED or BUSINESS_INITIATED
 }
 
 interface MetaAnalyticsData {
@@ -622,8 +732,14 @@ export interface Team {
   name: string
   description: string
   assignment_strategy: 'round_robin' | 'load_balanced' | 'manual'
+  per_agent_timeout_secs: number
   is_active: boolean
   member_count: number
+  members?: TeamMember[]
+  created_by_id?: string
+  created_by_name?: string
+  updated_by_id?: string
+  updated_by_name?: string
   created_at: string
   updated_at: string
 }
@@ -655,11 +771,13 @@ export const teamsService = {
     name: string
     description?: string
     assignment_strategy?: 'round_robin' | 'load_balanced' | 'manual'
+    per_agent_timeout_secs?: number
   }) => api.post<{ team: Team }>('/teams', data),
   update: (id: string, data: {
     name?: string
     description?: string
     assignment_strategy?: 'round_robin' | 'load_balanced' | 'manual'
+    per_agent_timeout_secs?: number
     is_active?: boolean
   }) => api.put<{ team: Team }>(`/teams/${id}`, data),
   delete: (id: string) => api.delete(`/teams/${id}`),
@@ -669,6 +787,40 @@ export const teamsService = {
     api.post<{ member: TeamMember }>(`/teams/${teamId}/members`, data),
   removeMember: (teamId: string, userId: string) =>
     api.delete(`/teams/${teamId}/members/${userId}`)
+}
+
+// Audit Logs
+export interface AuditLogChange {
+  field: string
+  old_value: any
+  new_value: any
+}
+
+export interface AuditLogEntry {
+  id: string
+  resource_type: string
+  resource_id: string
+  user_id: string
+  user_name: string
+  action: 'created' | 'updated' | 'deleted'
+  changes: AuditLogChange[]
+  created_at: string
+}
+
+export const auditLogsService = {
+  get: (id: string) =>
+    api.get<AuditLogEntry>(`/audit-logs/${id}`),
+  list: (params?: {
+    resource_type?: string
+    resource_id?: string
+    user_id?: string
+    action?: string
+    from?: string
+    to?: string
+    page?: number
+    limit?: number
+  }) =>
+    api.get<{ audit_logs: AuditLogEntry[]; total: number }>('/audit-logs', { params }),
 }
 
 export const webhooksService = {
@@ -978,7 +1130,11 @@ export const callLogsService = {
     api.get<{ call_logs: CallLog[]; total: number }>('/call-logs', { params }),
   get: (id: string) => api.get<CallLog>(`/call-logs/${id}`),
   getRecordingURL: (id: string) =>
-    api.get<{ url: string; duration: number }>(`/call-logs/${id}/recording`)
+    api.get<{ url: string; duration: number }>(`/call-logs/${id}/recording`),
+  hold: (id: string) =>
+    api.post<{ status: string }>(`/call-logs/${id}/hold`),
+  resume: (id: string) =>
+    api.post<{ status: string }>(`/call-logs/${id}/resume`),
 }
 
 export const callTransfersService = {
@@ -1005,14 +1161,8 @@ export const ivrFlowsService = {
   uploadAudio: (file: File) => {
     const formData = new FormData()
     formData.append('file', file)
-    const csrfToken = getCookie('whm_csrf')
-    const headers: Record<string, string> = {}
-    if (csrfToken) headers['X-CSRF-Token'] = csrfToken
-    const selectedOrgId = localStorage.getItem('selected_organization_id')
-    if (selectedOrgId) headers['X-Organization-ID'] = selectedOrgId
-    return axios.post(`${api.defaults.baseURL}/ivr-flows/audio`, formData, {
-      withCredentials: true,
-      headers,
+    return api.post('/ivr-flows/audio', formData, {
+      headers: { 'Content-Type': 'multipart/form-data' }
     })
   },
   getAudioUrl: (filename: string) => `${api.defaults.baseURL}/ivr-flows/audio/${encodeURIComponent(filename)}`

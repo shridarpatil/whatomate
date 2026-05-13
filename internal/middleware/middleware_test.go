@@ -47,9 +47,9 @@ func TestCORS(t *testing.T) {
 	t.Parallel()
 
 	tests := []struct {
-		name         string
-		origin       string
-		wantOrigin   string
+		name       string
+		origin     string
+		wantOrigin string
 	}{
 		{
 			name:       "with origin header",
@@ -274,19 +274,19 @@ func TestRequirePermission(t *testing.T) {
 	t.Parallel()
 
 	tests := []struct {
-		name        string
+		name          string
 		hasPermission bool
-		wantAllowed bool
+		wantAllowed   bool
 	}{
 		{
-			name:        "user with permission allowed",
+			name:          "user with permission allowed",
 			hasPermission: true,
-			wantAllowed: true,
+			wantAllowed:   true,
 		},
 		{
-			name:        "user without permission denied",
+			name:          "user without permission denied",
 			hasPermission: false,
-			wantAllowed: false,
+			wantAllowed:   false,
 		},
 	}
 
@@ -337,10 +337,10 @@ func TestRequireAnyPermission(t *testing.T) {
 	t.Parallel()
 
 	tests := []struct {
-		name           string
-		allowedPerms   map[string]bool
-		checkPerms     []string
-		wantAllowed    bool
+		name         string
+		allowedPerms map[string]bool
+		checkPerms   []string
+		wantAllowed  bool
 	}{
 		{
 			name:         "user with first permission allowed",
@@ -496,7 +496,7 @@ func TestJWTClaims(t *testing.T) {
 	require.NoError(t, err)
 
 	// Parse token back
-	parsedToken, err := jwt.ParseWithClaims(tokenString, &middleware.JWTClaims{}, func(token *jwt.Token) (interface{}, error) {
+	parsedToken, err := jwt.ParseWithClaims(tokenString, &middleware.JWTClaims{}, func(token *jwt.Token) (any, error) {
 		return []byte(testJWTSecret), nil
 	})
 	require.NoError(t, err)

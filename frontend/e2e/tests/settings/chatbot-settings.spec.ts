@@ -96,16 +96,19 @@ test.describe('Agents Tab', () => {
     await chatbotSettingsPage.expectAgentsTabVisible()
   })
 
+  // exact:true anchors on the toggle label and avoids matching the
+  // recent-activity / audit-log panel which renders entries like
+  // "Assign To Same Agent: false" (different casing + trailing colon).
   test('should have allow queue pickup toggle', async ({ page }) => {
-    await expect(page.getByText('Allow Agents to Pick from Queue')).toBeVisible()
+    await expect(page.getByText('Allow Agents to Pick from Queue', { exact: true })).toBeVisible()
   })
 
   test('should have assign to same agent toggle', async ({ page }) => {
-    await expect(page.getByText('Assign to Same Agent')).toBeVisible()
+    await expect(page.getByText('Assign to Same Agent', { exact: true })).toBeVisible()
   })
 
   test('should have current conversation only toggle', async ({ page }) => {
-    await expect(page.getByText('Agents See Current Conversation Only')).toBeVisible()
+    await expect(page.getByText('Agents See Current Conversation Only', { exact: true })).toBeVisible()
   })
 
   test('should toggle agent queue pickup', async ({ page }) => {

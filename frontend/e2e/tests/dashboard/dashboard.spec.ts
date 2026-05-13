@@ -31,14 +31,14 @@ test.describe('Dashboard', () => {
     // Open time range dropdown
     await page.locator('button[role="combobox"]').first().click()
 
-    // Select "Last 7 days"
-    await page.locator('[role="option"]').filter({ hasText: 'Last 7 days' }).click()
+    // Select "Last 7 Days"
+    await page.locator('[role="option"]').filter({ hasText: 'Last 7 Days' }).click()
 
     // Should reload data
     await page.waitForLoadState('networkidle')
 
     // Check that the selection is updated
-    await expect(page.locator('button[role="combobox"]').first()).toContainText('Last 7 days')
+    await expect(page.locator('button[role="combobox"]').first()).toContainText('Last 7 Days')
   })
 
   test('should display recent messages widget', async ({ page }) => {
@@ -84,11 +84,11 @@ test.describe('Dashboard', () => {
     // Open time range dropdown
     await page.locator('button[role="combobox"]').first().click()
 
-    // Select "Custom range"
-    await page.locator('[role="option"]').filter({ hasText: 'Custom range' }).click()
+    // Select "Custom Range"
+    await page.locator('[role="option"]').filter({ hasText: 'Custom Range' }).click()
 
     // Should show date picker button
-    await expect(page.getByRole('button', { name: /Select dates|Calendar/i })).toBeVisible()
+    await expect(page.getByRole('button', { name: /Select|Calendar/i })).toBeVisible()
   })
 
   test('should display percentage change indicators', async ({ page }) => {

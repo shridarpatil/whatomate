@@ -12,17 +12,19 @@ import (
 
 // processCallWebhook handles a call webhook event for both incoming and outgoing calls.
 // It creates/updates the CallLog and delegates to the CallManager for WebRTC handling.
-func (a *App) processCallWebhook(phoneNumberID string, call interface{}) {
+func (a *App) processCallWebhook(phoneNumberID string, call any) {
 	// The webhook handler passes an anonymous struct. Convert via JSON round-trip.
 	type callEvent struct {
-		ID        string `json:"id"`
-		From      string `json:"from"`
-		To        string `json:"to"`
-		Timestamp string `json:"timestamp"`
-		Type      string `json:"type"`
-		Event     string `json:"event"`
-		Direction string `json:"direction,omitempty"`
-		Session   *struct {
+		ID         string `json:"id"`
+		From       string `json:"from"`
+		FromUserID string `json:"from_user_id,omitempty"` // BSUID
+		To         string `json:"to"`
+		ToUserID   string `json:"to_user_id,omitempty"` // BSUID
+		Timestamp  string `json:"timestamp"`
+		Type       string `json:"type"`
+		Event      string `json:"event"`
+		Direction  string `json:"direction,omitempty"`
+		Session    *struct {
 			SDPType string `json:"sdp_type"`
 			SDP     string `json:"sdp"`
 		} `json:"session,omitempty"`
@@ -59,7 +61,7 @@ func (a *App) processCallWebhook(phoneNumberID string, call interface{}) {
 	// Handle business-initiated events when session is already cleaned up
 	// (e.g., terminate webhook arrives after PeerConnection closed)
 	if ce.Direction == "BUSINESS_INITIATED" {
-		a.handleOrphanedOutgoingCallEvent(phoneNumberID, ce.ID, ce.Event, ce.Duration)
+		a.handleOrphanedOutgoingCallEvent(ce.ID, ce.Event, ce.Duration)
 		return
 	}
 
@@ -69,6 +71,13 @@ func (a *App) processCallWebhook(phoneNumberID string, call interface{}) {
 	account, err := a.getWhatsAppAccountCached(phoneNumberID)
 	if err != nil {
 		a.Log.Error("Failed to find WhatsApp account for call", "error", err, "phone_id", phoneNumberID)
+		return
+	}
+
+	// Skip if phone number is missing (username user — BSUID-only calling not yet supported)
+	if ce.From == "" {
+		a.Log.Warn("Incoming call without phone number (username user), skipping",
+			"bsuid", ce.FromUserID, "call_id", ce.ID)
 		return
 	}
 
@@ -254,11 +263,9 @@ func (a *App) getOrCreateCallLog(account *models.WhatsAppAccount, contact *model
 		StartedAt:       &now,
 	}
 
-	// Find the call-start IVR flow for this account (must also be enabled)
-	var ivrFlow models.IVRFlow
-	if err := a.DB.Where("organization_id = ? AND whatsapp_account = ? AND is_call_start = ? AND is_active = ? AND deleted_at IS NULL",
-		account.OrganizationID, account.Name, true, true).First(&ivrFlow).Error; err == nil {
-		callLog.IVRFlowID = &ivrFlow.ID
+	// Find the call-start IVR flow for this account (cached)
+	if flow := a.CallManager.GetIVRFlowByConfig(account.OrganizationID, account.Name, "call_start"); flow != nil {
+		callLog.IVRFlowID = &flow.ID
 	}
 
 	if err := a.DB.Create(&callLog).Error; err != nil {
@@ -273,7 +280,7 @@ func (a *App) getOrCreateCallLog(account *models.WhatsAppAccount, contact *model
 // handleOrphanedOutgoingCallEvent handles business-initiated call webhooks
 // when the session has already been cleaned up (e.g., terminate arrives after
 // PeerConnection closed). Updates the call log and broadcasts WebSocket events.
-func (a *App) handleOrphanedOutgoingCallEvent(phoneNumberID, callID, event string, duration int) {
+func (a *App) handleOrphanedOutgoingCallEvent(callID, event string, duration int) {
 	// Find the call log by WhatsApp call ID
 	var callLog models.CallLog
 	if err := a.DB.Where("whatsapp_call_id = ?", callID).First(&callLog).Error; err != nil {
@@ -379,8 +386,14 @@ func (a *App) processCallPermissionReply(phoneNumberID, fromPhone string, reply 
 		"responded_at": now,
 	}
 
+	var expiresAt *time.Time
 	if reply.Response == "accept" {
 		updates["status"] = models.CallPermissionAccepted
+		if reply.ExpirationTimestamp > 0 {
+			t := time.Unix(reply.ExpirationTimestamp, 0)
+			expiresAt = &t
+			updates["expires_at"] = t
+		}
 		a.Log.Info("Call permission accepted",
 			"contact_id", contact.ID,
 			"is_permanent", reply.IsPermanent,
@@ -392,6 +405,18 @@ func (a *App) processCallPermissionReply(phoneNumberID, fromPhone string, reply 
 	}
 
 	a.DB.Model(&permission).Updates(updates)
+
+	// Broadcast permission update to agents via WebSocket
+	wsPayload := map[string]any{
+		"contact_id":    contact.ID,
+		"contact_phone": contact.PhoneNumber,
+		"contact_name":  contact.ProfileName,
+		"status":        updates["status"],
+	}
+	if expiresAt != nil {
+		wsPayload["expires_at"] = expiresAt.Format(time.RFC3339)
+	}
+	a.broadcastCallEvent(account.OrganizationID, websocket.TypeCallPermissionUpdate, wsPayload)
 }
 
 // broadcastCallEvent sends a call event to all connected clients in an organization

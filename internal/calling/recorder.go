@@ -29,22 +29,23 @@ func init() {
 // ~20ms intervals (960 samples at 48kHz). The recorder is safe for
 // concurrent use from multiple goroutines (the two bridge directions).
 type CallRecorder struct {
-	mu            sync.Mutex
-	file          *os.File
-	path          string
-	granulePos    uint64
-	pageSeqNo     uint32
-	packetCount   int
-	stopped       bool
+	mu          sync.Mutex
+	file        *os.File
+	path        string
+	granulePos  uint64
+	pageSeqNo   uint32
+	packetCount int
+	stopped     bool
+	writeErr    error // first disk write error (sticky)
 
 	// Buffer packets into OGG pages (flush every N packets)
-	pageBuf       [][]byte
-	pageBufBytes  int
+	pageBuf      [][]byte
+	pageBufBytes int
 }
 
 const (
-	samplesPerFrame20ms = 960  // 48kHz * 20ms
-	maxPagePackets      = 48   // ~960ms per page — keeps pages reasonable
+	samplesPerFrame20ms = 960 // 48kHz * 20ms
+	maxPagePackets      = 48  // ~960ms per page — keeps pages reasonable
 	oggPageHeaderLen    = 27
 )
 
@@ -92,13 +93,14 @@ func (r *CallRecorder) WritePacket(opusData []byte) {
 }
 
 // Stop finalizes the OGG file and returns the path to the recording.
-// After Stop, WritePacket calls are no-ops.
-func (r *CallRecorder) Stop() (string, int) {
+// After Stop, WritePacket calls are no-ops. A non-nil error indicates
+// a disk write failed during recording, so the file may be incomplete.
+func (r *CallRecorder) Stop() (string, int, error) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 
 	if r.stopped {
-		return r.path, r.packetCount
+		return r.path, r.packetCount, r.writeErr
 	}
 	r.stopped = true
 
@@ -108,7 +110,7 @@ func (r *CallRecorder) Stop() (string, int) {
 	}
 
 	_ = r.file.Close()
-	return r.path, r.packetCount
+	return r.path, r.packetCount, r.writeErr
 }
 
 // PacketCount returns the number of packets written so far.
@@ -125,12 +127,12 @@ func (r *CallRecorder) writeHeaders() error {
 	// OpusHead: https://www.rfc-editor.org/rfc/rfc7845#section-5.1
 	opusHead := make([]byte, 19)
 	copy(opusHead[0:8], "OpusHead")
-	opusHead[8] = 1   // version
-	opusHead[9] = 1   // channel count (mono)
+	opusHead[8] = 1                                       // version
+	opusHead[9] = 1                                       // channel count (mono)
 	binary.LittleEndian.PutUint16(opusHead[10:12], 0)     // pre-skip
 	binary.LittleEndian.PutUint32(opusHead[12:16], 48000) // input sample rate
 	binary.LittleEndian.PutUint16(opusHead[16:18], 0)     // output gain
-	opusHead[18] = 0 // channel mapping family
+	opusHead[18] = 0                                      // channel mapping family
 
 	if err := r.writePage(opusHead, true, false, 0); err != nil {
 		return err
@@ -181,9 +183,9 @@ func (r *CallRecorder) flushPage(lastPage bool) {
 	headerSize := oggPageHeaderLen + len(segTable)
 	page := make([]byte, headerSize+len(payload))
 
-	copy(page[0:4], "OggS")     // capture pattern
-	page[4] = 0                 // version
-	page[5] = 0                 // header type flags
+	copy(page[0:4], "OggS") // capture pattern
+	page[4] = 0             // version
+	page[5] = 0             // header type flags
 	if lastPage {
 		page[5] |= 0x04 // end of stream
 	}
@@ -202,6 +204,9 @@ func (r *CallRecorder) flushPage(lastPage bool) {
 	binary.LittleEndian.PutUint32(page[22:26], checksum)
 
 	if _, err := r.file.Write(page); err != nil {
+		if r.writeErr == nil {
+			r.writeErr = err
+		}
 		return
 	}
 	r.pageSeqNo++

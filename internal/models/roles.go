@@ -22,7 +22,7 @@ type CustomRole struct {
 	OrganizationID uuid.UUID    `gorm:"type:uuid;index;not null" json:"organization_id"`
 	Name           string       `gorm:"size:100;not null" json:"name"`
 	Description    string       `gorm:"size:500" json:"description"`
-	IsSystem       bool         `gorm:"default:false" json:"is_system"` // true for default admin/manager/agent
+	IsSystem       bool         `gorm:"default:false" json:"is_system"`  // true for default admin/manager/agent
 	IsDefault      bool         `gorm:"default:false" json:"is_default"` // default role for new users in org
 	Permissions    []Permission `gorm:"many2many:role_permissions;" json:"permissions"`
 
@@ -46,35 +46,45 @@ func (RolePermission) TableName() string {
 
 // PermissionResource constants for available resources
 const (
-	ResourceUsers           = "users"
-	ResourceTeams           = "teams"
-	ResourceRoles           = "roles"
-	ResourceSettingsGeneral = "settings.general"
-	ResourceSettingsChatbot = "settings.chatbot"
-	ResourceSettingsSSO     = "settings.sso"
-	ResourceAccounts        = "accounts"
-	ResourceTemplates       = "templates"
-	ResourceFlowsWhatsApp   = "flows.whatsapp"
-	ResourceFlowsChatbot    = "flows.chatbot"
-	ResourceCampaigns       = "campaigns"
-	ResourceChatbotKeywords = "chatbot.keywords"
-	ResourceChatbotAI       = "chatbot.ai"
-	ResourceChat            = "chat"
-	ResourceChatAssign      = "chat.assign"
-	ResourceContacts        = "contacts"
-	ResourceTags            = "tags"
-	ResourceAnalytics       = "analytics"
-	ResourceAnalyticsAgents = "analytics.agents"
-	ResourceTransfers       = "transfers"
-	ResourceWebhooks        = "webhooks"
-	ResourceAPIKeys         = "api_keys"
-	ResourceCannedResponses = "canned_responses"
-	ResourceCustomActions   = "custom_actions"
-	ResourceOrganizations   = "organizations"
-	ResourceCallLogs        = "call_logs"
-	ResourceIVRFlows        = "ivr_flows"
-	ResourceCallTransfers   = "call_transfers"
-	ResourceOutgoingCalls   = "outgoing_calls"
+	ResourceUsers                = "users"
+	ResourceTeams                = "teams"
+	ResourceRoles                = "roles"
+	ResourceSettingsGeneral      = "settings.general"
+	ResourceSettingsChatbot      = "settings.chatbot"
+	ResourceSettingsSSO          = "settings.sso"
+	ResourceSettingsCalling      = "settings.calling"
+	ResourceSettingsNotification = "settings.notification"
+	// Chatbot sub-resources — used only as audit_log resource_type values
+	// for per-tab activity feeds, not checked by the permission system.
+	ResourceSettingsChatbotMessages = "settings.chatbot.messages"
+	ResourceSettingsChatbotAgents   = "settings.chatbot.agents"
+	ResourceSettingsChatbotHours    = "settings.chatbot.hours"
+	ResourceSettingsChatbotSLA      = "settings.chatbot.sla"
+	ResourceSettingsChatbotAI       = "settings.chatbot.ai"
+	ResourceAccounts                = "accounts"
+	ResourceTemplates               = "templates"
+	ResourceFlowsWhatsApp           = "flows.whatsapp"
+	ResourceFlowsChatbot            = "flows.chatbot"
+	ResourceCampaigns               = "campaigns"
+	ResourceChatbotKeywords         = "chatbot.keywords"
+	ResourceChatbotAI               = "chatbot.ai"
+	ResourceChat                    = "chat"
+	ResourceChatAssign              = "chat.assign"
+	ResourceContacts                = "contacts"
+	ResourceTags                    = "tags"
+	ResourceAnalytics               = "analytics"
+	ResourceAnalyticsAgents         = "analytics.agents"
+	ResourceTransfers               = "transfers"
+	ResourceWebhooks                = "webhooks"
+	ResourceAPIKeys                 = "api_keys"
+	ResourceCannedResponses         = "canned_responses"
+	ResourceCustomActions           = "custom_actions"
+	ResourceOrganizations           = "organizations"
+	ResourceCallLogs                = "call_logs"
+	ResourceIVRFlows                = "ivr_flows"
+	ResourceCallTransfers           = "call_transfers"
+	ResourceOutgoingCalls           = "outgoing_calls"
+	ResourceAuditLogs               = "audit_logs"
 )
 
 // PermissionAction constants for available actions
@@ -151,6 +161,7 @@ func DefaultPermissions() []Permission {
 		// Chatbot AI
 		{Resource: ResourceChatbotAI, Action: ActionRead, Description: "View AI contexts"},
 		{Resource: ResourceChatbotAI, Action: ActionWrite, Description: "Create and edit AI contexts"},
+		{Resource: ResourceChatbotAI, Action: ActionDelete, Description: "Delete AI contexts"},
 
 		// Chat
 		{Resource: ResourceChat, Action: ActionRead, Description: "View chat conversations"},
@@ -221,6 +232,9 @@ func DefaultPermissions() []Permission {
 		// Outgoing Calls
 		{Resource: ResourceOutgoingCalls, Action: ActionRead, Description: "View outgoing call status"},
 		{Resource: ResourceOutgoingCalls, Action: ActionWrite, Description: "Initiate outgoing calls"},
+
+		// Audit Logs
+		{Resource: ResourceAuditLogs, Action: ActionRead, Description: "View audit logs"},
 	}
 }
 
@@ -249,7 +263,7 @@ func SystemRolePermissions() map[string][]string {
 		"campaigns:read", "campaigns:write", "campaigns:delete", "campaigns:execute",
 		// Chatbot
 		"chatbot.keywords:read", "chatbot.keywords:write", "chatbot.keywords:delete",
-		"chatbot.ai:read", "chatbot.ai:write",
+		"chatbot.ai:read", "chatbot.ai:write", "chatbot.ai:delete",
 		// Chat
 		"chat:read", "chat:write", "chat.assign:write",
 		// Contacts

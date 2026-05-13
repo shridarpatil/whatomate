@@ -2,6 +2,9 @@ import { test, expect, request as playwrightRequest } from '@playwright/test'
 import { loginAsAdmin } from '../../helpers'
 import { ApiHelper } from '../../helpers/api'
 import { ChatPage } from '../../pages'
+import { createTestScope } from '../../framework'
+
+const scope = createTestScope('contact-metadata')
 
 const TEST_METADATA = {
   plan: 'premium',
@@ -32,7 +35,7 @@ test.describe('Contact Metadata Panel', () => {
     // Get existing contacts or create one
     let contacts = await api.getContacts()
     if (contacts.length === 0) {
-      await api.createContact(`91${Date.now().toString().slice(-10)}`, 'Metadata Test')
+      await api.createContact(scope.phone(), scope.name('contact'))
       contacts = await api.getContacts()
     }
 
@@ -100,7 +103,7 @@ test.describe('Contact Metadata Panel', () => {
 
     // Table data
     await expect(page.getByText('ORD-001')).toBeVisible()
-    await expect(page.getByText('1500')).toBeVisible()
+    await expect(page.getByRole('cell', { name: '1500' })).toBeVisible()
     await expect(page.getByText('delivered')).toBeVisible()
     await expect(page.getByText('ORD-002')).toBeVisible()
   })

@@ -55,7 +55,7 @@ func TestApp_ListWebhooks_Success(t *testing.T) {
 
 	var resp struct {
 		Data struct {
-			Webhooks       []handlers.WebhookResponse `json:"webhooks"`
+			Webhooks        []handlers.WebhookResponse `json:"webhooks"`
 			AvailableEvents []map[string]string        `json:"available_events"`
 		} `json:"data"`
 	}
@@ -245,7 +245,7 @@ func TestApp_CreateWebhook_Success(t *testing.T) {
 	org := testutil.CreateTestOrganization(t, app.DB)
 	user := testutil.CreateTestUser(t, app.DB, org.ID)
 
-	req := testutil.NewJSONRequest(t, map[string]interface{}{
+	req := testutil.NewJSONRequest(t, map[string]any{
 		"name":      "Production Hook",
 		"url":       "https://api.example.com/webhook",
 		"events":    []string{"message.incoming", "contact.created"},
@@ -287,7 +287,7 @@ func TestApp_CreateWebhook_MissingName(t *testing.T) {
 	org := testutil.CreateTestOrganization(t, app.DB)
 	user := testutil.CreateTestUser(t, app.DB, org.ID)
 
-	req := testutil.NewJSONRequest(t, map[string]interface{}{
+	req := testutil.NewJSONRequest(t, map[string]any{
 		"url":    "https://example.com/hook",
 		"events": []string{"message.incoming"},
 	})
@@ -305,7 +305,7 @@ func TestApp_CreateWebhook_MissingURL(t *testing.T) {
 	org := testutil.CreateTestOrganization(t, app.DB)
 	user := testutil.CreateTestUser(t, app.DB, org.ID)
 
-	req := testutil.NewJSONRequest(t, map[string]interface{}{
+	req := testutil.NewJSONRequest(t, map[string]any{
 		"name":   "My Hook",
 		"events": []string{"message.incoming"},
 	})
@@ -323,7 +323,7 @@ func TestApp_CreateWebhook_MissingEvents(t *testing.T) {
 	org := testutil.CreateTestOrganization(t, app.DB)
 	user := testutil.CreateTestUser(t, app.DB, org.ID)
 
-	req := testutil.NewJSONRequest(t, map[string]interface{}{
+	req := testutil.NewJSONRequest(t, map[string]any{
 		"name": "My Hook",
 		"url":  "https://example.com/hook",
 	})
@@ -341,7 +341,7 @@ func TestApp_CreateWebhook_EmptyEvents(t *testing.T) {
 	org := testutil.CreateTestOrganization(t, app.DB)
 	user := testutil.CreateTestUser(t, app.DB, org.ID)
 
-	req := testutil.NewJSONRequest(t, map[string]interface{}{
+	req := testutil.NewJSONRequest(t, map[string]any{
 		"name":   "My Hook",
 		"url":    "https://example.com/hook",
 		"events": []string{},
@@ -358,7 +358,7 @@ func TestApp_CreateWebhook_Unauthorized(t *testing.T) {
 
 	app := newTestApp(t)
 
-	req := testutil.NewJSONRequest(t, map[string]interface{}{
+	req := testutil.NewJSONRequest(t, map[string]any{
 		"name":   "Hook",
 		"url":    "https://example.com",
 		"events": []string{"message.incoming"},
@@ -380,7 +380,7 @@ func TestApp_UpdateWebhook_Success(t *testing.T) {
 	user := testutil.CreateTestUser(t, app.DB, org.ID)
 	wh := createTestWebhook(t, app, org.ID, "Old Name", "https://old.example.com", []string{"message.incoming"})
 
-	req := testutil.NewJSONRequest(t, map[string]interface{}{
+	req := testutil.NewJSONRequest(t, map[string]any{
 		"name":      "Updated Name",
 		"url":       "https://new.example.com/hook",
 		"events":    []string{"message.sent", "contact.created"},
@@ -422,7 +422,7 @@ func TestApp_UpdateWebhook_PartialUpdate(t *testing.T) {
 	wh := createTestWebhook(t, app, org.ID, "Original", "https://original.example.com", []string{"message.incoming"})
 
 	// Only update the name
-	req := testutil.NewJSONRequest(t, map[string]interface{}{
+	req := testutil.NewJSONRequest(t, map[string]any{
 		"name":      "Only Name Changed",
 		"is_active": true,
 	})
@@ -451,7 +451,7 @@ func TestApp_UpdateWebhook_NotFound(t *testing.T) {
 	org := testutil.CreateTestOrganization(t, app.DB)
 	user := testutil.CreateTestUser(t, app.DB, org.ID)
 
-	req := testutil.NewJSONRequest(t, map[string]interface{}{
+	req := testutil.NewJSONRequest(t, map[string]any{
 		"name":      "Updated",
 		"is_active": true,
 	})
@@ -470,7 +470,7 @@ func TestApp_UpdateWebhook_InvalidID(t *testing.T) {
 	org := testutil.CreateTestOrganization(t, app.DB)
 	user := testutil.CreateTestUser(t, app.DB, org.ID)
 
-	req := testutil.NewJSONRequest(t, map[string]interface{}{
+	req := testutil.NewJSONRequest(t, map[string]any{
 		"name":      "Updated",
 		"is_active": true,
 	})
@@ -622,7 +622,7 @@ func TestApp_TestWebhook_Success(t *testing.T) {
 
 	// Verify payload contains test event
 	require.NotEmpty(t, receivedBody)
-	var payload map[string]interface{}
+	var payload map[string]any
 	err = json.Unmarshal(receivedBody, &payload)
 	require.NoError(t, err)
 	assert.Equal(t, "test", payload["event"])

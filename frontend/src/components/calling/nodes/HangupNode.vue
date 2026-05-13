@@ -9,7 +9,7 @@ defineProps<{ data: Record<string, any> }>()
 
 <template>
   <BaseNode :label="data?.label || 'Hangup'" header-class="bg-red-600" :output-handles="[]" :has-input="!data?.isEntryNode">
-    <template #icon><PhoneOff class="w-3 h-3" /></template>
+    <template #icon><PhoneOff class="w-4 h-4" /></template>
     <p v-if="data?.config?.audio_file || data?.config?.greeting_text" class="truncate">
       {{ data.config.greeting_text || data.config.audio_file }}
     </p>

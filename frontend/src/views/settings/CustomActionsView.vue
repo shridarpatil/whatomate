@@ -13,7 +13,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group'
-import { PageHeader, DataTable, SearchInput, DeleteConfirmDialog, type Column } from '@/components/shared'
+import { PageHeader, DataTable, SearchInput, DeleteConfirmDialog, ConfirmDialog, IconButton, ErrorState, type Column } from '@/components/shared'
 import { toast } from 'vue-sonner'
 import { Plus, Trash2, Pencil, Zap, Loader2, Globe, Webhook, Code, Ticket, User, BarChart, Link, Phone, Mail, FileText, ExternalLink } from 'lucide-vue-next'
 import { getErrorMessage } from '@/lib/api-utils'
@@ -25,6 +25,8 @@ const { t } = useI18n()
 const actions = ref<CustomAction[]>([])
 const isLoading = ref(false)
 const isSaving = ref(false)
+const isDeleting = ref(false)
+const error = ref(false)
 
 const isDialogOpen = ref(false)
 const isEditing = ref(false)
@@ -38,6 +40,10 @@ const newHeaderKey = ref('')
 const newHeaderValue = ref('')
 const isDeleteDialogOpen = ref(false)
 const actionToDelete = ref<CustomAction | null>(null)
+
+const isDisableDialogOpen = ref(false)
+const actionToToggle = ref<CustomAction | null>(null)
+const isToggling = ref(false)
 
 const iconOptions = [
   { value: 'ticket', label: 'Ticket', icon: Ticket }, { value: 'user', label: 'User', icon: User },
@@ -72,6 +78,7 @@ const getIconComponent = (iconName: string) => iconOptions.find(i => i.value ===
 
 async function fetchActions() {
   isLoading.value = true
+  error.value = false
   try {
     const response = await customActionsService.list({
       search: searchQuery.value || undefined,
@@ -81,7 +88,7 @@ async function fetchActions() {
     const data = (response.data as any).data || response.data
     actions.value = data.custom_actions || []
     totalItems.value = data.total ?? actions.value.length
-  } catch (e) { toast.error(getErrorMessage(e, t('common.failedLoad', { resource: t('resources.customActions') }))) }
+  } catch (e) { error.value = true; toast.error(getErrorMessage(e, t('common.failedLoad', { resource: t('resources.customActions') }))) }
   finally { isLoading.value = false }
 }
 
@@ -138,15 +145,37 @@ async function saveAction() {
   finally { isSaving.value = false }
 }
 
-async function toggleAction(action: CustomAction) {
-  try { await customActionsService.update(action.id, { is_active: !action.is_active }); await fetchActions(); toast.success(action.is_active ? t('common.disabledSuccess', { resource: t('resources.CustomAction') }) : t('common.enabledSuccess', { resource: t('resources.CustomAction') })) }
-  catch (e) { toast.error(getErrorMessage(e, t('common.failedUpdate', { resource: t('resources.customAction') }))) }
+function handleToggleAction(action: CustomAction) {
+  if (action.is_active) {
+    actionToToggle.value = action
+    isDisableDialogOpen.value = true
+  } else {
+    performToggleAction(action)
+  }
+}
+
+async function performToggleAction(action: CustomAction) {
+  isToggling.value = true
+  try {
+    await customActionsService.update(action.id, { is_active: !action.is_active })
+    await fetchActions()
+    toast.success(action.is_active ? t('common.disabledSuccess', { resource: t('resources.CustomAction') }) : t('common.enabledSuccess', { resource: t('resources.CustomAction') }))
+    isDisableDialogOpen.value = false
+    actionToToggle.value = null
+  } catch (e) { toast.error(getErrorMessage(e, t('common.failedUpdate', { resource: t('resources.customAction') }))) }
+  finally { isToggling.value = false }
+}
+
+function confirmDisableAction() {
+  if (actionToToggle.value) performToggleAction(actionToToggle.value)
 }
 
 async function deleteAction() {
   if (!actionToDelete.value) return
+  isDeleting.value = true
   try { await customActionsService.delete(actionToDelete.value.id); await fetchActions(); toast.success(t('common.deletedSuccess', { resource: t('resources.CustomAction') })); isDeleteDialogOpen.value = false; actionToDelete.value = null }
   catch (e) { toast.error(getErrorMessage(e, t('common.failedDelete', { resource: t('resources.customAction') }))) }
+  finally { isDeleting.value = false }
 }
 
 function addHeader() { if (newHeaderKey.value.trim() && newHeaderValue.value.trim()) { formData.value.config.headers[newHeaderKey.value.trim()] = newHeaderValue.value.trim(); newHeaderKey.value = ''; newHeaderValue.value = '' } }
@@ -166,7 +195,16 @@ onMounted(() => fetchActions())
       </template>
     </PageHeader>
 
-    <ScrollArea class="flex-1">
+    <ErrorState
+      v-if="error && !isLoading"
+      :title="$t('customActions.fetchErrorTitle')"
+      :description="$t('customActions.fetchErrorDescription')"
+      :retry-label="$t('common.retry')"
+      class="flex-1"
+      @retry="fetchActions"
+    />
+
+    <ScrollArea v-else class="flex-1">
       <div class="p-6">
         <div class="max-w-6xl mx-auto">
           <Card>
@@ -186,13 +224,13 @@ onMounted(() => fetchActions())
                 <template #cell-type="{ item: action }"><Badge :variant="getActionTypeBadge(action.action_type).variant">{{ getActionTypeBadge(action.action_type).label }}</Badge></template>
                 <template #cell-target="{ item: action }"><span class="max-w-[200px] truncate text-muted-foreground block">{{ action.action_type === 'javascript' ? $t('customActions.customScript') : action.config.url }}</span></template>
                 <template #cell-status="{ item: action }">
-                  <div class="flex items-center gap-2"><Switch :checked="action.is_active" @update:checked="toggleAction(action)" /><span class="text-sm text-muted-foreground">{{ action.is_active ? $t('common.active') : $t('common.inactive') }}</span></div>
+                  <div class="flex items-center gap-2"><Switch :checked="action.is_active" @update:checked="handleToggleAction(action)" /><span class="text-sm text-muted-foreground">{{ action.is_active ? $t('common.active') : $t('common.inactive') }}</span></div>
                 </template>
                 <template #cell-created="{ item: action }"><span class="text-muted-foreground">{{ formatDate(action.created_at) }}</span></template>
                 <template #cell-actions="{ item: action }">
                   <div class="flex items-center justify-end gap-1">
-                    <Button variant="ghost" size="icon" class="h-8 w-8" @click="openEditDialog(action)"><Pencil class="h-4 w-4" /></Button>
-                    <Button variant="ghost" size="icon" class="h-8 w-8 text-destructive" @click="actionToDelete = action; isDeleteDialogOpen = true"><Trash2 class="h-4 w-4" /></Button>
+                    <IconButton :icon="Pencil" :label="$t('common.edit')" class="h-8 w-8" @click="openEditDialog(action)" />
+                    <IconButton :icon="Trash2" :label="$t('common.delete')" class="h-8 w-8 text-destructive" @click="actionToDelete = action; isDeleteDialogOpen = true" />
                   </div>
                 </template>
                 <template #empty-action>
@@ -281,6 +319,16 @@ onMounted(() => fetchActions())
       </DialogContent>
     </Dialog>
 
-    <DeleteConfirmDialog v-model:open="isDeleteDialogOpen" :title="$t('customActions.deleteTitle')" :item-name="actionToDelete?.name" @confirm="deleteAction" />
+    <ConfirmDialog
+      v-model:open="isDisableDialogOpen"
+      :title="$t('customActions.confirmDisableTitle')"
+      :description="$t('customActions.confirmDisableDescription')"
+      :confirm-label="$t('common.confirm')"
+      variant="destructive"
+      :is-submitting="isToggling"
+      @confirm="confirmDisableAction"
+    />
+
+    <DeleteConfirmDialog v-model:open="isDeleteDialogOpen" :title="$t('customActions.deleteTitle')" :item-name="actionToDelete?.name" :is-submitting="isDeleting" @confirm="deleteAction" />
   </div>
 </template>

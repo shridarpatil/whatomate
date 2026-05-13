@@ -11,6 +11,7 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/shridarpatil/whatomate/internal/models"
+	"github.com/shridarpatil/whatomate/internal/utils"
 	"github.com/valyala/fasthttp"
 	"github.com/zerodha/fastglue"
 	"gorm.io/gorm"
@@ -18,23 +19,23 @@ import (
 
 // ExportConfig defines allowed tables and their exportable columns
 type ExportConfig struct {
-	Model           interface{}
+	Model           any
 	Resource        string // For permission check
 	AllowedColumns  []string
 	DefaultColumns  []string
 	ColumnLabels    map[string]string // Column name -> CSV header label
-	ColumnTransform map[string]func(interface{}) string
+	ColumnTransform map[string]func(any) string
 }
 
 // ImportConfig defines allowed tables and their importable columns
 type ImportConfig struct {
-	Model            interface{}
-	Resource         string // For permission check
-	RequiredColumns  []string
-	OptionalColumns  []string
-	ColumnTransform  map[string]func(string) (interface{}, error)
-	UniqueColumn     string // Column to check for duplicates (e.g., "phone_number")
-	BeforeCreate     func(db *gorm.DB, orgID uuid.UUID, record map[string]interface{}) error
+	Model           any
+	Resource        string // For permission check
+	RequiredColumns []string
+	OptionalColumns []string
+	ColumnTransform map[string]func(string) (any, error)
+	UniqueColumn    string // Column to check for duplicates (e.g., "phone_number")
+	BeforeCreate    func(db *gorm.DB, orgID uuid.UUID, record map[string]any) error
 }
 
 // Supported export/import configurations
@@ -57,8 +58,8 @@ var exportConfigs = map[string]ExportConfig{
 			"created_at":        "Created At",
 			"updated_at":        "Updated At",
 		},
-		ColumnTransform: map[string]func(interface{}) string{
-			"tags": func(v interface{}) string {
+		ColumnTransform: map[string]func(any) string{
+			"tags": func(v any) string {
 				if v == nil {
 					return ""
 				}
@@ -73,7 +74,7 @@ var exportConfigs = map[string]ExportConfig{
 				}
 				return ""
 			},
-			"last_message_at": func(v interface{}) string {
+			"last_message_at": func(v any) string {
 				if v == nil {
 					return ""
 				}
@@ -82,19 +83,19 @@ var exportConfigs = map[string]ExportConfig{
 				}
 				return ""
 			},
-			"created_at": func(v interface{}) string {
+			"created_at": func(v any) string {
 				if t, ok := v.(time.Time); ok {
 					return t.Format(time.RFC3339)
 				}
 				return ""
 			},
-			"updated_at": func(v interface{}) string {
+			"updated_at": func(v any) string {
 				if t, ok := v.(time.Time); ok {
 					return t.Format(time.RFC3339)
 				}
 				return ""
 			},
-			"assigned_user_id": func(v interface{}) string {
+			"assigned_user_id": func(v any) string {
 				if v == nil {
 					return ""
 				}
@@ -124,10 +125,10 @@ var importConfigs = map[string]ImportConfig{
 		Model:           &models.Contact{},
 		Resource:        "contacts",
 		RequiredColumns: []string{"phone_number"},
-		OptionalColumns: []string{"profile_name", "whats_app_account", "tags"},
+		OptionalColumns: []string{"profile_name", "whats_app_account", "tags", "assigned_user_id"},
 		UniqueColumn:    "phone_number",
-		ColumnTransform: map[string]func(string) (interface{}, error){
-			"phone_number": func(s string) (interface{}, error) {
+		ColumnTransform: map[string]func(string) (any, error){
+			"phone_number": func(s string) (any, error) {
 				// Normalize phone number - remove + prefix
 				phone := strings.TrimSpace(s)
 				if len(phone) > 0 && phone[0] == '+' {
@@ -138,7 +139,18 @@ var importConfigs = map[string]ImportConfig{
 				}
 				return phone, nil
 			},
-			"tags": func(s string) (interface{}, error) {
+			"assigned_user_id": func(s string) (any, error) {
+				s = strings.TrimSpace(s)
+				if s == "" {
+					return nil, nil
+				}
+				parsed, err := uuid.Parse(s)
+				if err != nil {
+					return nil, fmt.Errorf("invalid user ID: %s", s)
+				}
+				return &parsed, nil
+			},
+			"tags": func(s string) (any, error) {
 				if s == "" {
 					return nil, nil
 				}
@@ -231,7 +243,7 @@ func (a *App) ExportData(r *fastglue.Request) error {
 	if tags, ok := req.Filters["tags"]; ok && tags != "" {
 		tagList := strings.Split(tags, ",")
 		conditions := make([]string, 0, len(tagList))
-		args := make([]interface{}, 0, len(tagList))
+		args := make([]any, 0, len(tagList))
 		for _, tag := range tagList {
 			tag = strings.TrimSpace(tag)
 			if tag != "" {
@@ -266,13 +278,6 @@ func (a *App) ExportData(r *fastglue.Request) error {
 	}
 	defer rows.Close() //nolint:errcheck
 
-	// Get column types
-	colTypes, err := rows.ColumnTypes()
-	if err != nil {
-		a.Log.Error("Failed to get column types", "error", err)
-		return r.SendErrorEnvelope(fasthttp.StatusInternalServerError, "Failed to export data", nil, "")
-	}
-
 	// Build CSV
 	var buf strings.Builder
 	writer := csv.NewWriter(&buf)
@@ -290,9 +295,9 @@ func (a *App) ExportData(r *fastglue.Request) error {
 
 	// Write rows
 	for rows.Next() {
-		// Create a slice of interface{} to scan into
-		values := make([]interface{}, len(selectCols))
-		valuePtrs := make([]interface{}, len(selectCols))
+		// Create a slice of any to scan into
+		values := make([]any, len(selectCols))
+		valuePtrs := make([]any, len(selectCols))
 		for i := range values {
 			valuePtrs[i] = &values[i]
 		}
@@ -310,7 +315,7 @@ func (a *App) ExportData(r *fastglue.Request) error {
 			if transform, ok := config.ColumnTransform[col]; ok {
 				csvRow[i] = transform(val)
 			} else {
-				csvRow[i] = formatExportValue(val, colTypes[i+1])
+				csvRow[i] = formatExportValue(val)
 			}
 		}
 		// Apply phone masking for contacts export
@@ -318,9 +323,9 @@ func (a *App) ExportData(r *fastglue.Request) error {
 			for i, col := range safeColumns {
 				switch col {
 				case "phone_number":
-					csvRow[i] = MaskPhoneNumber(csvRow[i])
+					csvRow[i] = utils.MaskPhoneNumber(csvRow[i])
 				case "profile_name":
-					csvRow[i] = MaskIfPhoneNumber(csvRow[i])
+					csvRow[i] = utils.MaskIfPhoneNumber(csvRow[i])
 				}
 			}
 		}
@@ -487,7 +492,7 @@ func (a *App) ImportData(r *fastglue.Request) error {
 		}
 
 		// Build record map
-		recordMap := make(map[string]interface{})
+		recordMap := make(map[string]any)
 		recordMap["organization_id"] = orgID
 
 		hasError := false
@@ -542,7 +547,7 @@ func (a *App) ImportData(r *fastglue.Request) error {
 		// Check for duplicate based on unique column
 		if config.UniqueColumn != "" {
 			uniqueVal := recordMap[config.UniqueColumn]
-			var existing interface{}
+			var existing any
 
 			// Use reflection to create a new instance of the model type
 			modelType := reflect.TypeOf(config.Model).Elem()
@@ -618,7 +623,7 @@ func (a *App) ImportData(r *fastglue.Request) error {
 		created++
 	}
 
-	return r.SendEnvelope(map[string]interface{}{
+	return r.SendEnvelope(map[string]any{
 		"created":  created,
 		"updated":  updated,
 		"skipped":  skipped,
@@ -659,7 +664,7 @@ func (a *App) GetExportConfig(r *fastglue.Request) error {
 		}
 	}
 
-	return r.SendEnvelope(map[string]interface{}{
+	return r.SendEnvelope(map[string]any{
 		"table":           tableName,
 		"columns":         columns,
 		"default_columns": config.DefaultColumns,
@@ -720,7 +725,7 @@ func (a *App) GetImportConfig(r *fastglue.Request) error {
 		}
 	}
 
-	return r.SendEnvelope(map[string]interface{}{
+	return r.SendEnvelope(map[string]any{
 		"table":            tableName,
 		"required_columns": requiredCols,
 		"optional_columns": optionalCols,
@@ -756,7 +761,7 @@ func snakeToPascal(s string) string {
 }
 
 // Helper function to format values for CSV export
-func formatExportValue(v interface{}, colType interface{}) string {
+func formatExportValue(v any) string {
 	if v == nil {
 		return ""
 	}

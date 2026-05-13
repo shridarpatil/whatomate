@@ -16,7 +16,7 @@ func (c *Client) buildCallsURL(account *Account) string {
 // Per the WhatsApp Business Calling API, pre_accept requires the session object
 // with the SDP answer to keep the call alive while WebRTC is finalized.
 func (c *Client) PreAcceptCall(ctx context.Context, account *Account, callID, sdpAnswer string) error {
-	payload := map[string]interface{}{
+	payload := map[string]any{
 		"messaging_product": "whatsapp",
 		"call_id":           callID,
 		"action":            "pre_accept",
@@ -42,7 +42,7 @@ func (c *Client) PreAcceptCall(ctx context.Context, account *Account, callID, sd
 // Per the WhatsApp Business Calling API, accept uses the same session object format.
 // The API returns { success: true } on success.
 func (c *Client) AcceptCall(ctx context.Context, account *Account, callID, sdpAnswer string) error {
-	payload := map[string]interface{}{
+	payload := map[string]any{
 		"messaging_product": "whatsapp",
 		"call_id":           callID,
 		"action":            "accept",
@@ -87,17 +87,16 @@ func (c *Client) RejectCall(ctx context.Context, account *Account, callID string
 // SendCallPermissionRequest sends an interactive call_permission_request message
 // to the consumer. The consumer must accept before outgoing calls can be placed.
 // Permission is valid for 72 hours once accepted.
-func (c *Client) SendCallPermissionRequest(ctx context.Context, account *Account, phoneNumber, bodyText string) (string, error) {
+func (c *Client) SendCallPermissionRequest(ctx context.Context, account *Account, rcpt Recipient, bodyText string) (string, error) {
 	if bodyText == "" {
 		bodyText = "We'd like to call you to assist with your query."
 	}
 
-	payload := map[string]interface{}{
+	payload := map[string]any{
 		"messaging_product": "whatsapp",
 		"recipient_type":    "individual",
-		"to":                phoneNumber,
 		"type":              "interactive",
-		"interactive": map[string]interface{}{
+		"interactive": map[string]any{
 			"type": "call_permission_request",
 			"action": map[string]string{
 				"name": "call_permission_request",
@@ -107,9 +106,10 @@ func (c *Client) SendCallPermissionRequest(ctx context.Context, account *Account
 			},
 		},
 	}
+	rcpt.SetOnPayload(payload)
 
 	url := c.buildMessagesURL(account)
-	c.Log.Info("Sending call permission request", "phone", phoneNumber)
+	c.Log.Info("Sending call permission request", "phone", rcpt.Phone)
 
 	respBody, err := c.doRequest(ctx, http.MethodPost, url, payload, account.AccessToken)
 	if err != nil {
@@ -123,7 +123,7 @@ func (c *Client) SendCallPermissionRequest(ctx context.Context, account *Account
 		} `json:"messages"`
 	}
 	if parseErr := json.Unmarshal(respBody, &resp); parseErr == nil && len(resp.Messages) > 0 {
-		c.Log.Info("Call permission request sent", "phone", phoneNumber, "message_id", resp.Messages[0].ID)
+		c.Log.Info("Call permission request sent", "phone", rcpt.Phone, "message_id", resp.Messages[0].ID)
 		return resp.Messages[0].ID, nil
 	}
 
@@ -155,19 +155,19 @@ func (c *Client) GetCallPermission(ctx context.Context, account *Account, userPh
 
 // InitiateCall places an outgoing call to a WhatsApp user with an SDP offer.
 // Returns the call_id assigned by WhatsApp on success.
-func (c *Client) InitiateCall(ctx context.Context, account *Account, phoneNumber, sdpOffer string) (string, error) {
-	payload := map[string]interface{}{
+func (c *Client) InitiateCall(ctx context.Context, account *Account, rcpt Recipient, sdpOffer string) (string, error) {
+	payload := map[string]any{
 		"messaging_product": "whatsapp",
-		"to":                phoneNumber,
 		"action":            "connect",
 		"session": map[string]string{
 			"sdp_type": "offer",
 			"sdp":      sdpOffer,
 		},
 	}
+	rcpt.SetOnPayload(payload)
 
 	url := c.buildCallsURL(account)
-	c.Log.Info("Initiating outgoing call", "phone", phoneNumber)
+	c.Log.Info("Initiating outgoing call", "phone", rcpt.Phone)
 
 	respBody, err := c.doRequest(ctx, http.MethodPost, url, payload, account.AccessToken)
 	if err != nil {
@@ -184,7 +184,7 @@ func (c *Client) InitiateCall(ctx context.Context, account *Account, phoneNumber
 		return "", fmt.Errorf("failed to parse call_id from response: %s", string(respBody))
 	}
 
-	c.Log.Info("Outgoing call initiated", "phone", phoneNumber, "call_id", resp.Calls[0].ID)
+	c.Log.Info("Outgoing call initiated", "phone", rcpt.Phone, "call_id", resp.Calls[0].ID)
 	return resp.Calls[0].ID, nil
 }
 

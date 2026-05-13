@@ -1,8 +1,13 @@
 import { test, expect, request as playwrightRequest } from '@playwright/test'
 import { TablePage, DialogPage } from '../../pages'
-import { loginAsAdmin, login, createUserFixture, ApiHelper } from '../../helpers'
-
-const BASE_URL = process.env.BASE_URL || 'http://localhost:8080'
+import { loginAsAdmin, login, createUserFixture, ApiHelper, TEST_USERS } from '../../helpers'
+import {
+  createTestScope,
+  createUserWithPermissions,
+  loginAs,
+  SUPER_ADMIN,
+  type TestUserHandle,
+} from '../../framework'
 
 test.describe('Users Management', () => {
   let tablePage: TablePage
@@ -73,7 +78,7 @@ test.describe('Users Management', () => {
   })
 
   test('should edit existing user', async ({ page }) => {
-    // First create a user to edit
+    // First create a user to edit (still uses the create dialog)
     const user = createUserFixture()
 
     await page.getByRole('button', { name: /^Add User$/i }).click()
@@ -85,17 +90,30 @@ test.describe('Users Management', () => {
     await dialogPage.submit()
     await dialogPage.waitForClose()
 
-    // Now edit the user
+    // Open the detail page via the pencil icon
     await tablePage.search(user.email)
     await tablePage.editRow(user.email)
-    await dialogPage.waitForOpen()
+    await page.waitForURL(/\/settings\/users\/[a-f0-9-]+$/)
+    await page.waitForLoadState('networkidle')
 
+    // Update Full Name on the detail page
     const updatedName = 'Updated User Name'
-    await dialogPage.fillField('Name', updatedName)
-    await dialogPage.submit()
-    await dialogPage.waitForClose()
+    const nameInput = page
+      .locator('div.space-y-1\\.5:has(> label:has-text("Full Name")) input')
+      .first()
+    await nameInput.fill(updatedName)
+    await page.waitForTimeout(300)
 
-    // Verify update
+    // Save button is only visible when there are changes
+    const saveBtn = page.getByRole('button', { name: /^Save$/i })
+    await expect(saveBtn).toBeVisible({ timeout: 5000 })
+    await saveBtn.click()
+    await page.waitForLoadState('networkidle')
+
+    // Verify updated name via the list view
+    await page.goto('/settings/users')
+    await page.waitForLoadState('networkidle')
+    await tablePage.search(user.email)
     await tablePage.expectRowExists(updatedName)
   })
 
@@ -140,9 +158,14 @@ test.describe('Users Management', () => {
 })
 
 test.describe('Users - Role-based Access', () => {
-  test.skip('agent should not access users page', async ({ page }) => {
-    // Skip: Role-based access control may be implemented differently
-    // This test should be updated based on actual RBAC implementation
+  test('agent should be redirected away from /settings/users', async ({ page }) => {
+    // Agent role lacks the `users` permission. The navigation guard in
+    // router/index.ts redirects unauthorized routes to the first accessible
+    // page rather than showing the view.
+    await login(page, TEST_USERS.agent)
+    await page.goto('/settings/users')
+    await page.waitForURL(url => !url.pathname.endsWith('/settings/users'), { timeout: 5000 })
+    expect(page.url()).not.toContain('/settings/users')
   })
 })
 
@@ -189,46 +212,27 @@ test.describe('Users - Add Existing User (Single Org)', () => {
 })
 
 test.describe('Users - Add Existing User (Multi Org)', () => {
+  const scope = createTestScope('users-multi-org')
   let tablePage: TablePage
-  let testUserEmail: string
-  let testUserId: string
-  let testRoleId: string
+  let user: TestUserHandle
   let secondOrgId: string
-  const testPassword = 'Password123!'
 
-  // Set up: create a user with organizations:assign permission in multiple orgs
   test.beforeAll(async () => {
     const reqContext = await playwrightRequest.newContext()
     const api = new ApiHelper(reqContext)
-    await api.login('admin@admin.com', 'admin')
+    await api.login(SUPER_ADMIN.email, SUPER_ADMIN.password)
 
-    // Create a role with organizations:assign + users:read (needed to view the page)
-    const permissions = await api.findPermissionKeys([
-      { resource: 'users', action: 'read' },
-      { resource: 'users', action: 'write' },
-      { resource: 'organizations', action: 'assign' },
-    ])
-    const role = await api.createRole({
-      name: `E2E OrgAssign Role ${Date.now()}`,
-      description: 'E2E test role with organizations:assign',
-      permissions,
+    user = await createUserWithPermissions(api, scope, {
+      permissions: [
+        { resource: 'users', action: 'read' },
+        { resource: 'users', action: 'write' },
+        { resource: 'organizations', action: 'assign' },
+      ],
     })
-    testRoleId = role.id
 
-    // Create a test user with this role
-    testUserEmail = `e2e-orgassign-${Date.now()}@test.com`
-    const user = await api.createUser({
-      email: testUserEmail,
-      password: testPassword,
-      full_name: 'E2E OrgAssign User',
-      role_id: testRoleId,
-    })
-    testUserId = user.id
-
-    // Create a second org and add the user to it
-    const org = await api.createOrganization(`E2E Multi-Org ${Date.now()}`)
+    const org = await api.createOrganization(scope.name('second-org'))
     secondOrgId = org.id
-    await api.addOrgMember(testUserId, undefined, secondOrgId)
+    await api.addOrgMember(user.user.id, undefined, secondOrgId)
 
     await reqContext.dispose()
   })
@@ -236,15 +240,15 @@ test.describe('Users - Add Existing User (Multi Org)', () => {
   test.afterAll(async () => {
     const reqContext = await playwrightRequest.newContext()
     const api = new ApiHelper(reqContext)
-    await api.login('admin@admin.com', 'admin')
-    try { await api.removeOrgMember(testUserId, secondOrgId) } catch { /* ignore */ }
-    try { await api.deleteUser(testUserId) } catch { /* ignore */ }
-    try { await api.deleteRole(testRoleId) } catch { /* ignore */ }
+    await api.login(SUPER_ADMIN.email, SUPER_ADMIN.password)
+    try { await api.removeOrgMember(user.user.id, secondOrgId) } catch { /* ignore */ }
+    try { await api.deleteUser(user.user.id) } catch { /* ignore */ }
+    try { await api.deleteRole(user.role.id) } catch { /* ignore */ }
     await reqContext.dispose()
   })
 
   test.beforeEach(async ({ page }) => {
-    await login(page, { email: testUserEmail, password: testPassword, role: 'admin' })
+    await loginAs(page, user)
     await page.goto('/settings/users')
     await page.waitForLoadState('networkidle')
     tablePage = new TablePage(page)

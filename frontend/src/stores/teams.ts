@@ -6,12 +6,14 @@ export interface CreateTeamData {
   name: string
   description?: string
   assignment_strategy?: 'round_robin' | 'load_balanced' | 'manual'
+  per_agent_timeout_secs?: number
 }
 
 export interface UpdateTeamData {
   name?: string
   description?: string
   assignment_strategy?: 'round_robin' | 'load_balanced' | 'manual'
+  per_agent_timeout_secs?: number
   is_active?: boolean
 }
 

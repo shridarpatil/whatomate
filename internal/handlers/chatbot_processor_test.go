@@ -26,7 +26,7 @@ func newProcessorTestApp(t *testing.T) *App {
 	// Mock WhatsApp API server that accepts all requests.
 	waServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
-		_ = json.NewEncoder(w).Encode(map[string]interface{}{
+		_ = json.NewEncoder(w).Encode(map[string]any{
 			"messages": []map[string]string{{"id": "wamid.mock_" + uuid.New().String()[:8]}},
 		})
 	}))
@@ -326,9 +326,9 @@ func TestMatchKeywordRules_WithButtons(t *testing.T) {
 		ResponseType:    models.ResponseTypeText,
 		ResponseContent: models.JSONB{
 			"body": "Choose an option:",
-			"buttons": []interface{}{
-				map[string]interface{}{"id": "opt1", "title": "Option 1"},
-				map[string]interface{}{"id": "opt2", "title": "Option 2"},
+			"buttons": []any{
+				map[string]any{"id": "opt1", "title": "Option 1"},
+				map[string]any{"id": "opt2", "title": "Option 2"},
 			},
 		},
 		Priority:  10,
@@ -426,7 +426,7 @@ func TestIsWithinBusinessHours_WithinHours(t *testing.T) {
 	dayOfWeek := float64(now.Weekday())
 
 	hours := models.JSONBArray{
-		map[string]interface{}{
+		map[string]any{
 			"day":        dayOfWeek,
 			"enabled":    true,
 			"start_time": "00:00",
@@ -446,7 +446,7 @@ func TestIsWithinBusinessHours_OutsideHours(t *testing.T) {
 	// Set hours to a time window that has definitely passed
 	// Use a very narrow window in the past
 	hours := models.JSONBArray{
-		map[string]interface{}{
+		map[string]any{
 			"day":        dayOfWeek,
 			"enabled":    true,
 			"start_time": "00:00",
@@ -468,7 +468,7 @@ func TestIsWithinBusinessHours_DayDisabled(t *testing.T) {
 	dayOfWeek := float64(now.Weekday())
 
 	hours := models.JSONBArray{
-		map[string]interface{}{
+		map[string]any{
 			"day":        dayOfWeek,
 			"enabled":    false,
 			"start_time": "00:00",
@@ -487,7 +487,7 @@ func TestIsWithinBusinessHours_NoMatchingDay(t *testing.T) {
 	otherDay := float64((int(now.Weekday()) + 1) % 7)
 
 	hours := models.JSONBArray{
-		map[string]interface{}{
+		map[string]any{
 			"day":        otherDay,
 			"enabled":    true,
 			"start_time": "00:00",
@@ -518,7 +518,7 @@ func TestShouldSkipStep_NoCondition(t *testing.T) {
 		SkipCondition: "",
 	}
 
-	result := app.shouldSkipStep(step, map[string]interface{}{})
+	result := app.shouldSkipStep(step, map[string]any{})
 	assert.False(t, result)
 }
 
@@ -530,7 +530,7 @@ func TestShouldSkipStep_ConditionTrue(t *testing.T) {
 		SkipCondition: "status == 'vip'",
 	}
 
-	result := app.shouldSkipStep(step, map[string]interface{}{"status": "vip"})
+	result := app.shouldSkipStep(step, map[string]any{"status": "vip"})
 	assert.True(t, result)
 }
 
@@ -542,7 +542,7 @@ func TestShouldSkipStep_ConditionFalse(t *testing.T) {
 		SkipCondition: "status == 'vip'",
 	}
 
-	result := app.shouldSkipStep(step, map[string]interface{}{"status": "regular"})
+	result := app.shouldSkipStep(step, map[string]any{"status": "regular"})
 	assert.False(t, result)
 }
 
@@ -555,14 +555,14 @@ func TestShouldSkipStep_ComplexConditionAND(t *testing.T) {
 	}
 
 	// Both conditions true
-	result := app.shouldSkipStep(step, map[string]interface{}{
+	result := app.shouldSkipStep(step, map[string]any{
 		"status":  "vip",
 		"country": "US",
 	})
 	assert.True(t, result)
 
 	// One condition false
-	result2 := app.shouldSkipStep(step, map[string]interface{}{
+	result2 := app.shouldSkipStep(step, map[string]any{
 		"status":  "vip",
 		"country": "UK",
 	})
@@ -577,10 +577,10 @@ func TestShouldSkipStep_ComplexConditionOR(t *testing.T) {
 		SkipCondition: "status == 'vip' OR status == 'premium'",
 	}
 
-	result := app.shouldSkipStep(step, map[string]interface{}{"status": "premium"})
+	result := app.shouldSkipStep(step, map[string]any{"status": "premium"})
 	assert.True(t, result)
 
-	result2 := app.shouldSkipStep(step, map[string]interface{}{"status": "regular"})
+	result2 := app.shouldSkipStep(step, map[string]any{"status": "regular"})
 	assert.False(t, result2)
 }
 
@@ -592,7 +592,7 @@ func TestShouldSkipStep_MissingVariable(t *testing.T) {
 		SkipCondition: "nonexistent == 'value'",
 	}
 
-	result := app.shouldSkipStep(step, map[string]interface{}{})
+	result := app.shouldSkipStep(step, map[string]any{})
 	assert.False(t, result)
 }
 
@@ -958,12 +958,12 @@ func TestMatchFlowTrigger_Match(t *testing.T) {
 	}
 	require.NoError(t, app.DB.Create(flow).Error)
 
-	result := app.matchFlowTrigger(org.ID, account.Name, "I want to order")
+	result := app.matchFlowTrigger(org.ID, "I want to order")
 	require.NotNil(t, result)
 	assert.Equal(t, flow.ID, result.ID)
 
 	// No match
-	noMatch := app.matchFlowTrigger(org.ID, account.Name, "hello there")
+	noMatch := app.matchFlowTrigger(org.ID, "hello there")
 	assert.Nil(t, noMatch)
 }
 
@@ -972,34 +972,158 @@ func TestMatchFlowTrigger_Match(t *testing.T) {
 // =============================================================================
 
 func TestEvaluateExpression_SimpleEquality(t *testing.T) {
-	assert.True(t, evaluateExpression("status == 'active'", map[string]interface{}{"status": "active"}))
-	assert.False(t, evaluateExpression("status == 'active'", map[string]interface{}{"status": "inactive"}))
+	assert.True(t, evaluateExpression("status == 'active'", map[string]any{"status": "active"}))
+	assert.False(t, evaluateExpression("status == 'active'", map[string]any{"status": "inactive"}))
 }
 
 func TestEvaluateExpression_NotEquals(t *testing.T) {
-	assert.True(t, evaluateExpression("status != 'inactive'", map[string]interface{}{"status": "active"}))
-	assert.False(t, evaluateExpression("status != 'active'", map[string]interface{}{"status": "active"}))
+	assert.True(t, evaluateExpression("status != 'inactive'", map[string]any{"status": "active"}))
+	assert.False(t, evaluateExpression("status != 'active'", map[string]any{"status": "active"}))
 }
 
 func TestEvaluateExpression_ANDOperator(t *testing.T) {
-	data := map[string]interface{}{"a": "1", "b": "2"}
+	data := map[string]any{"a": "1", "b": "2"}
 	assert.True(t, evaluateExpression("a == '1' AND b == '2'", data))
 	assert.False(t, evaluateExpression("a == '1' AND b == '3'", data))
 }
 
 func TestEvaluateExpression_OROperator(t *testing.T) {
-	data := map[string]interface{}{"a": "1", "b": "2"}
+	data := map[string]any{"a": "1", "b": "2"}
 	assert.True(t, evaluateExpression("a == '1' OR b == '3'", data))
 	assert.True(t, evaluateExpression("a == '9' OR b == '2'", data))
 	assert.False(t, evaluateExpression("a == '9' OR b == '9'", data))
 }
 
 func TestEvaluateExpression_Parentheses(t *testing.T) {
-	data := map[string]interface{}{"a": "1", "b": "2", "c": "3"}
+	data := map[string]any{"a": "1", "b": "2", "c": "3"}
 	assert.True(t, evaluateExpression("(a == '1' OR b == '9') AND c == '3'", data))
 	assert.False(t, evaluateExpression("(a == '9' OR b == '9') AND c == '3'", data))
 }
 
 func TestEvaluateExpression_EmptyExpression(t *testing.T) {
-	assert.False(t, evaluateExpression("", map[string]interface{}{}))
+	assert.False(t, evaluateExpression("", map[string]any{}))
+}
+
+// =============================================================================
+// fetchApiResponse — phone_number injection (parity with fetchAPIContext)
+// =============================================================================
+
+// newFetchApiResponseTestApp builds a minimal App that exercises only the HTTP
+// path of fetchApiResponse — no DB / Redis / WhatsApp client. Lets the test
+// run without TEST_DATABASE_URL.
+func newFetchApiResponseTestApp(t *testing.T) *App {
+	t.Helper()
+	return &App{
+		Log:        testutil.NopLogger(),
+		HTTPClient: http.DefaultClient,
+	}
+}
+
+// TestFetchApiResponse_InjectsPhoneNumber verifies that {{phone_number}} in
+// flow-step API URLs, bodies, and headers is substituted from session.PhoneNumber,
+// matching the implicit-variable behavior of fetchAPIContext.
+func TestFetchApiResponse_InjectsPhoneNumber(t *testing.T) {
+	app := newFetchApiResponseTestApp(t)
+
+	var capturedPath, capturedBody, capturedHeader string
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		capturedPath = r.URL.Path + "?" + r.URL.RawQuery
+		capturedHeader = r.Header.Get("X-User-Phone")
+		buf := make([]byte, r.ContentLength)
+		_, _ = r.Body.Read(buf)
+		capturedBody = string(buf)
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte(`{"message":"ok"}`))
+	}))
+	t.Cleanup(server.Close)
+
+	session := &models.ChatbotSession{
+		PhoneNumber: "+15551234567",
+		SessionData: models.JSONB{},
+	}
+	apiConfig := models.JSONB{
+		"url":    server.URL + "/lookup?phone={{phone_number}}",
+		"method": "POST",
+		"body":   `{"caller":"{{phone_number}}"}`,
+		"headers": map[string]any{
+			"X-User-Phone": "{{phone_number}}",
+		},
+	}
+
+	resp, err := app.fetchApiResponse(apiConfig, session, "")
+	require.NoError(t, err)
+	require.NotNil(t, resp)
+
+	// executeConfiguredAPI does verbatim string substitution (no URL encoding).
+	// We just need to confirm the placeholder was replaced.
+	assert.Contains(t, capturedPath, "15551234567", "URL query should be substituted")
+	assert.Equal(t, `{"caller":"+15551234567"}`, capturedBody, "body template should be substituted")
+	assert.Equal(t, "+15551234567", capturedHeader, "header template should be substituted")
+}
+
+// TestSendFlowCompletionWebhook_CustomBodyInjectsPhoneNumber verifies that
+// {{phone_number}} in a flow-completion webhook's custom body / URL / header
+// template is substituted from session.PhoneNumber. Before the fix, only the
+// default payload carried phone_number; custom templates expanded to empty.
+func TestSendFlowCompletionWebhook_CustomBodyInjectsPhoneNumber(t *testing.T) {
+	app := newFetchApiResponseTestApp(t)
+
+	var capturedPath, capturedBody, capturedHeader string
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		capturedPath = r.URL.Path
+		capturedHeader = r.Header.Get("X-User-Phone")
+		buf := make([]byte, r.ContentLength)
+		_, _ = r.Body.Read(buf)
+		capturedBody = string(buf)
+		w.WriteHeader(http.StatusOK)
+	}))
+	t.Cleanup(server.Close)
+
+	flow := &models.ChatbotFlow{
+		BaseModel: models.BaseModel{ID: uuid.New()},
+		Name:      "test-flow",
+		CompletionConfig: models.JSONB{
+			"url":    server.URL + "/hook/{{phone_number}}",
+			"method": "POST",
+			"body":   `{"caller":"{{phone_number}}"}`,
+			"headers": map[string]any{
+				"X-User-Phone": "{{phone_number}}",
+			},
+		},
+	}
+	session := &models.ChatbotSession{
+		BaseModel:   models.BaseModel{ID: uuid.New()},
+		PhoneNumber: "+15551234567",
+		SessionData: models.JSONB{},
+	}
+	contact := &models.Contact{
+		BaseModel:   models.BaseModel{ID: uuid.New()},
+		ProfileName: "Tester",
+		PhoneNumber: "+15551234567",
+	}
+
+	app.sendFlowCompletionWebhook(flow, session, contact)
+
+	assert.Contains(t, capturedPath, "15551234567", "URL template should be substituted")
+	assert.Equal(t, `{"caller":"+15551234567"}`, capturedBody, "custom body template should be substituted")
+	assert.Equal(t, "+15551234567", capturedHeader, "header template should be substituted")
+}
+
+// TestFetchApiResponse_NilSession ensures the function tolerates a nil session
+// (e.g. defensive callers) without panicking.
+func TestFetchApiResponse_NilSession(t *testing.T) {
+	app := newFetchApiResponseTestApp(t)
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte(`{"message":"ok"}`))
+	}))
+	t.Cleanup(server.Close)
+
+	apiConfig := models.JSONB{
+		"url":    server.URL,
+		"method": "GET",
+	}
+	resp, err := app.fetchApiResponse(apiConfig, nil, "hello")
+	require.NoError(t, err)
+	assert.Equal(t, "hello", resp.Message)
 }

@@ -11,15 +11,16 @@ import (
 	"time"
 
 	"github.com/redis/go-redis/v9"
+	"github.com/shridarpatil/whatomate/internal/assignment"
 	"github.com/shridarpatil/whatomate/internal/calling"
 	"github.com/shridarpatil/whatomate/internal/config"
-	"github.com/shridarpatil/whatomate/internal/storage"
-	"github.com/shridarpatil/whatomate/internal/tts"
 	"github.com/shridarpatil/whatomate/internal/database"
 	"github.com/shridarpatil/whatomate/internal/frontend"
 	"github.com/shridarpatil/whatomate/internal/handlers"
 	"github.com/shridarpatil/whatomate/internal/middleware"
 	"github.com/shridarpatil/whatomate/internal/queue"
+	"github.com/shridarpatil/whatomate/internal/storage"
+	"github.com/shridarpatil/whatomate/internal/tts"
 	"github.com/shridarpatil/whatomate/internal/websocket"
 	"github.com/shridarpatil/whatomate/internal/worker"
 	"github.com/shridarpatil/whatomate/pkg/whatsapp"
@@ -130,6 +131,11 @@ func runServer(args []string) {
 		lo.Warn("Debug mode is enabled in production! This may expose sensitive information.")
 	}
 
+	// Require explicit CORS origins in production
+	if cfg.App.Environment == "production" && cfg.Server.AllowedOrigins == "" {
+		lo.Fatal("server.allowed_origins must be set in production (e.g. \"https://app.example.com\")")
+	}
+
 	// Set log level based on environment
 	if cfg.App.Environment == "production" {
 		lo = logf.New(logf.Opts{
@@ -210,8 +216,12 @@ func runServer(args []string) {
 		}
 	}
 
+	// Initialize shared assignment engine (used by both chat and call transfers)
+	assigner := assignment.New(db, rdb, lo)
+	app.Assigner = assigner
+
 	// Initialize CallManager (per-org calling_enabled DB setting controls access)
-	app.CallManager = calling.NewManager(&cfg.Calling, s3Client, db, waClient, wsHub, lo)
+	app.CallManager = calling.NewManager(&cfg.Calling, s3Client, db, rdb, waClient, wsHub, assigner, lo)
 	app.S3Client = s3Client
 	lo.Info("Call manager initialized")
 
@@ -245,11 +255,11 @@ func runServer(args []string) {
 
 	// Create server with CORS wrapper
 	server := &fasthttp.Server{
-		Handler:      corsWrapper(g.Handler(), allowedOrigins),
-		ReadTimeout:  time.Duration(cfg.Server.ReadTimeout) * time.Second,
-		WriteTimeout: time.Duration(cfg.Server.WriteTimeout) * time.Second,
+		Handler:            corsWrapper(g.Handler(), allowedOrigins),
+		ReadTimeout:        time.Duration(cfg.Server.ReadTimeout) * time.Second,
+		WriteTimeout:       time.Duration(cfg.Server.WriteTimeout) * time.Second,
 		MaxRequestBodySize: 15 * 1024 * 1024,
-		Name:         "Whatomate",
+		Name:               "Whatomate",
 	}
 
 	// Start server in goroutine
@@ -522,6 +532,34 @@ func setupRoutes(g *fastglue.Fastglue, app *handlers.App, lo logf.Logger, basePa
 		return r
 	})
 
+	// Global rate limit on all /api/ routes, keyed by user ID (or IP if unauthenticated).
+	// Runs after auth so the user identity is available.
+	if cfg.RateLimit.Enabled {
+		apiMax := cfg.RateLimit.APIMaxRequests
+		if apiMax == 0 {
+			apiMax = 200
+		}
+		apiWindow := cfg.RateLimit.APIWindowSeconds
+		if apiWindow == 0 {
+			apiWindow = 60
+		}
+		apiRL := middleware.UserAwareRateLimit(middleware.RateLimitOpts{
+			Redis:      rdb,
+			Log:        lo,
+			Max:        apiMax,
+			Window:     time.Duration(apiWindow) * time.Second,
+			KeyPrefix:  "api_global",
+			TrustProxy: cfg.RateLimit.TrustProxy,
+		})
+		g.Before(func(r *fastglue.Request) *fastglue.Request {
+			path := string(r.RequestCtx.Path())
+			if len(path) > 4 && path[:4] == "/api" {
+				return apiRL(r)
+			}
+			return r
+		})
+	}
+
 	// Role-based access control middleware
 	g.Before(func(r *fastglue.Request) *fastglue.Request {
 		method := string(r.RequestCtx.Method())
@@ -560,7 +598,9 @@ func setupRoutes(g *fastglue.Fastglue, app *handlers.App, lo logf.Logger, basePa
 
 	// API Keys (admin only - enforced by middleware)
 	g.GET("/api/api-keys", app.ListAPIKeys)
+	g.GET("/api/api-keys/{id}", app.GetAPIKey)
 	g.POST("/api/api-keys", app.CreateAPIKey)
+	g.PUT("/api/api-keys/{id}", app.UpdateAPIKey)
 	g.DELETE("/api/api-keys/{id}", app.DeleteAPIKey)
 
 	// Accounts
@@ -602,6 +642,7 @@ func setupRoutes(g *fastglue.Fastglue, app *handlers.App, lo logf.Logger, basePa
 	// Messages
 	g.GET("/api/contacts/{id}/messages", app.GetMessages)
 	g.POST("/api/contacts/{id}/messages", app.SendMessage)
+	g.POST("/api/contacts/{id}/mark-read", app.MarkContactRead)
 	g.POST("/api/contacts/{id}/messages/{message_id}/reaction", app.SendReaction)
 	g.POST("/api/messages", app.SendMessage) // Legacy route
 	g.POST("/api/messages/template", app.SendTemplateMessage)
@@ -698,6 +739,10 @@ func setupRoutes(g *fastglue.Fastglue, app *handlers.App, lo logf.Logger, basePa
 	g.POST("/api/teams/{id}/members", app.AddTeamMember)
 	g.DELETE("/api/teams/{id}/members/{member_user_id}", app.RemoveTeamMember)
 
+	// Audit Logs
+	g.GET("/api/audit-logs", app.ListAuditLogs)
+	g.GET("/api/audit-logs/{id}", app.GetAuditLog)
+
 	// Canned Responses
 	g.GET("/api/canned-responses", app.ListCannedResponses)
 	g.POST("/api/canned-responses", app.CreateCannedResponse)
@@ -790,6 +835,10 @@ func setupRoutes(g *fastglue.Fastglue, app *handlers.App, lo logf.Logger, basePa
 	g.POST("/api/call-transfers/{id}/connect", app.ConnectCallTransfer)
 	g.POST("/api/call-transfers/{id}/hangup", app.HangupCallTransfer)
 	g.POST("/api/call-transfers/initiate", app.InitiateAgentTransfer)
+
+	// Call Hold
+	g.POST("/api/call-logs/{id}/hold", app.HoldCall)
+	g.POST("/api/call-logs/{id}/resume", app.ResumeCall)
 
 	// Outgoing Calls
 	g.POST("/api/calls/outgoing", app.InitiateOutgoingCall)

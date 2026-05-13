@@ -49,7 +49,7 @@ func NewPostgres(cfg *config.DatabaseConfig, debug bool) (*gorm.DB, error) {
 // MigrationModel holds model info for migration progress
 type MigrationModel struct {
 	Name  string
-	Model interface{}
+	Model any
 }
 
 // GetMigrationModels returns all models to migrate with their names
@@ -110,6 +110,7 @@ func GetMigrationModels() []MigrationModel {
 		{"IVRFlow", &models.IVRFlow{}},
 		{"CallTransfer", &models.CallTransfer{}},
 		{"CallPermission", &models.CallPermission{}},
+		{"AuditLog", &models.AuditLog{}},
 	}
 }
 
@@ -702,7 +703,7 @@ func SeedDefaultWidgetsForOrg(db *gorm.DB, orgID, userID uuid.UUID) error {
 		{"Chatbot Sessions", "Active chatbot conversation sessions", "sessions", "number", "purple", nil, 3, 6, 0, 3, 3},
 		{"Total Campaigns", "Number of bulk message campaigns", "campaigns", "number", "orange", nil, 4, 9, 0, 3, 3},
 		{"Recent Messages", "Latest conversations from your contacts", "messages", "table", "", nil, 5, 0, 3, 6, 8},
-		{"Quick Actions", "Common tasks and shortcuts", "shortcuts", "shortcuts", "", models.JSONB{"shortcuts": []interface{}{"chat", "campaigns", "templates", "chatbot"}}, 6, 6, 3, 6, 8},
+		{"Quick Actions", "Common tasks and shortcuts", "shortcuts", "shortcuts", "", models.JSONB{"shortcuts": []any{"chat", "campaigns", "templates", "chatbot"}}, 6, 6, 3, 6, 8},
 	}
 
 	for _, wd := range defaultWidgetsData {

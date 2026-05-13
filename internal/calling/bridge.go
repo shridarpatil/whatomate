@@ -10,16 +10,26 @@ import (
 // AudioBridge forwards RTP packets bidirectionally between two WebRTC tracks.
 // It bridges the caller's remote track to the agent's local track, and vice versa.
 type AudioBridge struct {
-	stop          chan struct{}
-	wg            sync.WaitGroup
-	callerRec     *CallRecorder // records caller's audio (caller→agent direction), may be nil
-	agentRec      *CallRecorder // records agent's audio (agent→caller direction), may be nil
+	stop      chan struct{}
+	wg        sync.WaitGroup
+	callerRec *CallRecorder // records caller's audio (caller→agent direction), may be nil
+	agentRec  *CallRecorder // records agent's audio (agent→caller direction), may be nil
 
 	// lastCallerSeq and lastCallerTS track the last RTP sequence number and
 	// timestamp forwarded to the caller's track (agent→caller direction).
 	// Used to maintain RTP stream continuity when switching to hold music.
 	lastCallerSeq uint16
 	lastCallerTS  uint32
+
+	// seqOffset / tsOffset are added to agent→caller RTP packets so the
+	// receiver sees a continuous stream after hold music. Without this,
+	// the agent's low sequence numbers are discarded as "old" because the
+	// hold music player advanced the receiver's high-water mark.
+	seqOffset     uint16
+	tsOffset      uint32
+	firstAgentSeq bool // true until the first agent packet sets the base
+	agentBaseSeq  uint16
+	agentBaseTS   uint32
 }
 
 // NewAudioBridge creates a new audio bridge with optional per-direction recorders.
@@ -33,24 +43,40 @@ func NewAudioBridge(callerRec, agentRec *CallRecorder) *AudioBridge {
 	}
 }
 
+// SeedSequence sets the starting sequence/timestamp for the agent→caller
+// direction so that packets continue past the hold music high-water mark.
+func (b *AudioBridge) SeedSequence(seq uint16, ts uint32) {
+	b.seqOffset = seq
+	b.tsOffset = ts
+	b.firstAgentSeq = true
+}
+
 // Start begins bidirectional RTP forwarding. It blocks until both directions end.
+// Nil tracks are skipped to avoid panics when a PeerConnection never connected.
 func (b *AudioBridge) Start(
 	callerRemote *webrtc.TrackRemote, agentLocal *webrtc.TrackLocalStaticRTP,
 	agentRemote *webrtc.TrackRemote, callerLocal *webrtc.TrackLocalStaticRTP,
 ) {
-	b.wg.Add(2)
-
 	// Caller audio → Agent speaker (record caller's voice)
-	go b.forward(callerRemote, agentLocal, b.callerRec, false)
+	if callerRemote != nil && agentLocal != nil {
+		b.wg.Add(1)
+		go b.forward(callerRemote, agentLocal, b.callerRec, false)
+	}
 
 	// Agent mic → Caller speaker (record agent's voice, track seq/ts)
-	go b.forward(agentRemote, callerLocal, b.agentRec, true)
+	if agentRemote != nil && callerLocal != nil {
+		b.wg.Add(1)
+		go b.forward(agentRemote, callerLocal, b.agentRec, true)
+	}
 
 	b.wg.Wait()
 }
 
 // forward reads RTP packets from src and writes them to dst until stopped.
 // If rec is non-nil, the Opus payload of each packet is teed to it.
+// When trackSeq is true and a sequence offset has been seeded via SeedSequence,
+// the agent's RTP seq/ts are rewritten to continue past the hold music
+// high-water mark so the receiver doesn't discard them as old.
 func (b *AudioBridge) forward(src *webrtc.TrackRemote, dst *webrtc.TrackLocalStaticRTP, rec *CallRecorder, trackSeq bool) {
 	defer b.wg.Done()
 
@@ -67,6 +93,39 @@ func (b *AudioBridge) forward(src *webrtc.TrackRemote, dst *webrtc.TrackLocalSta
 			return
 		}
 
+		// Rewrite seq/ts for agent→caller direction when seeded
+		if trackSeq && b.firstAgentSeq {
+			pkt := &rtp.Packet{}
+			if err := pkt.Unmarshal(buf[:n]); err == nil {
+				b.agentBaseSeq = pkt.SequenceNumber
+				b.agentBaseTS = pkt.Timestamp
+				b.firstAgentSeq = false
+			}
+		}
+
+		if trackSeq && b.seqOffset > 0 {
+			pkt := &rtp.Packet{}
+			if err := pkt.Unmarshal(buf[:n]); err == nil {
+				pkt.SequenceNumber = b.seqOffset + (pkt.SequenceNumber - b.agentBaseSeq) + 1
+				pkt.Timestamp = b.tsOffset + (pkt.Timestamp - b.agentBaseTS) + 960
+
+				b.lastCallerSeq = pkt.SequenceNumber
+				b.lastCallerTS = pkt.Timestamp
+
+				rewritten, err := pkt.Marshal()
+				if err == nil {
+					if _, err := dst.Write(rewritten); err != nil {
+						return
+					}
+				}
+
+				if rec != nil && len(pkt.Payload) > 0 {
+					rec.WritePacket(pkt.Payload)
+				}
+				continue
+			}
+		}
+
 		if _, err := dst.Write(buf[:n]); err != nil {
 			return
 		}
@@ -76,8 +135,8 @@ func (b *AudioBridge) forward(src *webrtc.TrackRemote, dst *webrtc.TrackLocalSta
 			pkt := &rtp.Packet{}
 			if err := pkt.Unmarshal(buf[:n]); err == nil {
 				if trackSeq {
-					b.lastCallerSeq = pkt.Header.SequenceNumber
-					b.lastCallerTS = pkt.Header.Timestamp
+					b.lastCallerSeq = pkt.SequenceNumber
+					b.lastCallerTS = pkt.Timestamp
 				}
 				if rec != nil && len(pkt.Payload) > 0 {
 					rec.WritePacket(pkt.Payload)

@@ -56,7 +56,17 @@ export class ApiHelper {
   }
 
   async login(email: string, password: string): Promise<void> {
+    // If the shared request context already carries a whm_csrf cookie from a
+    // prior login (common in tests that reuse the same `request` fixture), the
+    // backend's double-submit check rejects POST without a matching header.
+    // Pre-seed the header from storageState if we don't have one yet.
+    if (!this.csrfToken) {
+      const state = await this.request.storageState()
+      const cookie = state.cookies.find((c: { name: string }) => c.name === 'whm_csrf')
+      if (cookie) this.csrfToken = cookie.value
+    }
     const response = await this.request.post(`${BASE_URL}/api/auth/login`, {
+      headers: this.csrfHeaders,
       data: { email, password }
     })
     if (!response.ok()) {
@@ -78,7 +88,11 @@ export class ApiHelper {
     full_name: string
     organization_id: string
   }): Promise<{ user: User }> {
+    // CSRF header is required because the shared request context may carry a
+    // whm_csrf cookie from a prior login; the double-submit check will reject
+    // the request otherwise.
     const response = await this.request.post(`${BASE_URL}/api/auth/register`, {
+      headers: this.csrfHeaders,
       data
     })
     if (!response.ok()) {
@@ -343,6 +357,8 @@ export class ApiHelper {
     status?: string
     whatsapp_account?: string
     buttons?: Array<{ type: string; text: string }>
+    header_type?: string
+    header_content?: string
   }): Promise<any> {
     const response = await this.request.post(`${BASE_URL}/api/templates`, {
       headers: this.csrfHeaders,
@@ -367,6 +383,30 @@ export class ApiHelper {
     }
     const data = await response.json()
     return data.data?.templates || []
+  }
+
+  // Canned Responses
+  async createCannedResponse(data: {
+    name: string
+    content: string
+    shortcut?: string
+    category?: string
+  }): Promise<{ id: string; name: string; shortcut: string; content: string; category: string }> {
+    const response = await this.request.post(`${BASE_URL}/api/canned-responses`, {
+      headers: this.csrfHeaders,
+      data: { category: 'general', ...data }
+    })
+    if (!response.ok()) {
+      throw new Error(`Failed to create canned response: ${await response.text()}`)
+    }
+    const result = await response.json()
+    return result.data
+  }
+
+  async deleteCannedResponse(id: string): Promise<void> {
+    await this.request.delete(`${BASE_URL}/api/canned-responses/${id}`, {
+      headers: this.csrfHeaders
+    })
   }
 
   // WhatsApp Accounts

@@ -3,6 +3,7 @@ import { useTransfersStore } from '@/stores/transfers'
 import { useCallingStore } from '@/stores/calling'
 import { useAuthStore } from '@/stores/auth'
 import { useNotesStore } from '@/stores/notes'
+import { contactsService } from '@/services/api'
 import { toast } from 'vue-sonner'
 import router from '@/router'
 
@@ -307,8 +308,32 @@ class WebSocketService {
       }
     }
 
-    // Update contacts list (for unread count, last message preview)
-    store.fetchContacts()
+    // If the user is actively viewing this contact, mark messages read on
+    // the server before refetching so the unread badge stays at zero
+    // (otherwise the new message comes back as unread and the sidebar flashes
+    // a count for a chat that's already open). See issue #280.
+    // Use currentContact.id (already validated, from our /contacts response)
+    // rather than the WS payload value to avoid pushing untrusted data into
+    // a request URL.
+    // Skip the call when the message already arrived as 'read' — the backend
+    // pre-marks chatbot-handled messages at save time, and re-marking just
+    // touches DB rows that are already in the right state.
+    // Also skip when the agent isn't actually looking — that includes both
+    // tab-hidden (different browser tab) and window-unfocused (browser is
+    // visible but agent is in another OS window). Firing markRead in those
+    // cases would send a WhatsApp read receipt to the customer (blue ticks)
+    // for a message no one has read. The mark fires when the user comes
+    // back instead (handled in ChatView's focus/visibility listeners).
+    const alreadyRead = payload.status === 'read'
+    const userActive = typeof document === 'undefined'
+      || (document.visibilityState === 'visible' && document.hasFocus())
+    if (isViewingThisContact && currentContact && payload.direction === 'incoming' && !alreadyRead && userActive) {
+      contactsService.markRead(currentContact.id)
+        .catch(() => { /* non-critical, will resync on next chat-open */ })
+        .finally(() => store.fetchContacts())
+    } else {
+      store.fetchContacts()
+    }
   }
 
   private handleStatusUpdate(store: ReturnType<typeof useContactsStore>, payload: any) {
@@ -348,12 +373,13 @@ class WebSocketService {
     // Refresh to get complete data including SLA fields
     transfersStore.fetchTransfers({ status: 'active' })
 
-    // Show toast notification for admin/manager or assigned agent
-    const userRole = authStore.user?.role?.name
+    // Toast only the assigned agent — managers/admins get notification noise
+    // for every transfer in the org otherwise. They can keep the Transfers
+    // page open if they want live updates.
     const currentUserId = authStore.user?.id
     const isAssignedToMe = payload.agent_id === currentUserId
 
-    if (userRole === 'admin' || userRole === 'manager' || isAssignedToMe) {
+    if (isAssignedToMe) {
       const contactName = payload.contact_name || payload.phone_number
       toast.info('New Transfer', {
         description: `${contactName} has been transferred to ${isAssignedToMe ? 'you' : 'agent queue'}`,
@@ -416,11 +442,10 @@ class WebSocketService {
     const notifyIds: string[] = payload.escalation_notify_ids || []
     const shouldNotify = notifyIds.includes(currentUserId || '')
 
-    // Also notify admins/managers
-    const userRole = authStore.user?.role?.name
-    const isAdminOrManager = userRole === 'admin' || userRole === 'manager'
-
-    if (shouldNotify || isAdminOrManager) {
+    // Trust the backend's escalation_notify_ids list — it already includes
+    // the right people per the escalation rules. Don't broadcast to every
+    // manager too; that's just noise and risks burying real alerts.
+    if (shouldNotify) {
       const levelName = payload.level_name === 'critical' ? 'Critical' : 'Warning'
       const contactName = payload.contact_name || payload.phone_number
 

@@ -10,9 +10,9 @@ import (
 
 // AnalyticsRequest represents parameters for fetching analytics from Meta API
 type AnalyticsRequest struct {
-	Start        int64    `json:"start"`        // Unix timestamp (seconds)
-	End          int64    `json:"end"`          // Unix timestamp (seconds)
-	Granularity  string   `json:"granularity"`  // "HALF_HOUR", "DAY", "MONTH"
+	Start        int64    `json:"start"`         // Unix timestamp (seconds)
+	End          int64    `json:"end"`           // Unix timestamp (seconds)
+	Granularity  string   `json:"granularity"`   // "HALF_HOUR", "DAY", "MONTH"
 	PhoneNumbers []string `json:"phone_numbers"` // Optional filter by phone numbers
 	TemplateIDs  []string `json:"template_ids"`  // Optional filter for template analytics
 	CountryCodes []string `json:"country_codes"` // Optional filter by country codes
@@ -61,12 +61,12 @@ type MessagingAnalytics struct {
 type PricingAnalyticsDataPoint struct {
 	Start           int64   `json:"start"`
 	End             int64   `json:"end"`
-	Volume          int64   `json:"volume"`                      // Message count
-	Cost            float64 `json:"cost"`                        // Cost in account currency
-	Country         string  `json:"country,omitempty"`           // Country code (IN, US, etc.)
-	PricingType     string  `json:"pricing_type,omitempty"`      // FREE_CUSTOMER_SERVICE, FREE_ENTRY_POINT, REGULAR
-	PricingCategory string  `json:"pricing_category,omitempty"`  // MARKETING, UTILITY, AUTHENTICATION, SERVICE, etc.
-	Tier            string  `json:"tier,omitempty"`              // Pricing tier
+	Volume          int64   `json:"volume"`                     // Message count
+	Cost            float64 `json:"cost"`                       // Cost in account currency
+	Country         string  `json:"country,omitempty"`          // Country code (IN, US, etc.)
+	PricingType     string  `json:"pricing_type,omitempty"`     // FREE_CUSTOMER_SERVICE, FREE_ENTRY_POINT, REGULAR
+	PricingCategory string  `json:"pricing_category,omitempty"` // MARKETING, UTILITY, AUTHENTICATION, SERVICE, etc.
+	Tier            string  `json:"tier,omitempty"`             // Pricing tier
 }
 
 // PricingAnalyticsEntry represents a single phone number's pricing data
@@ -136,12 +136,12 @@ type TemplateAnalytics struct {
 
 // CallAnalyticsDataPoint represents a single data point for call analytics
 type CallAnalyticsDataPoint struct {
-	Start         int64  `json:"start"`
-	End           int64  `json:"end"`
-	TotalCalls    int64  `json:"total_calls"`
-	CallDuration  int64  `json:"call_duration"`  // Total duration in seconds
-	CallType      string `json:"call_type"`      // "VOICE", "VIDEO"
-	CallDirection string `json:"call_direction"` // "INBOUND", "OUTBOUND"
+	Start           int64   `json:"start"`
+	End             int64   `json:"end"`
+	Count           int64   `json:"count"`
+	Cost            float64 `json:"cost"`
+	AverageDuration int64   `json:"average_duration"`    // Average duration in seconds
+	Direction       string  `json:"direction,omitempty"` // USER_INITIATED or BUSINESS_INITIATED (from dimensions)
 }
 
 // CallAnalyticsEntry represents a single phone number's call data
@@ -332,6 +332,12 @@ func (c *Client) buildAnalyticsURL(account *Account, analyticsType AnalyticsType
 		filters = append(filters, "dimensions(PRICING_CATEGORY,PRICING_TYPE,COUNTRY)")
 	}
 
+	// Add dimensions for call_analytics to get direction breakdown
+	if analyticsType == AnalyticsTypeCall {
+		filters = append(filters, "dimensions(direction)")
+		filters = append(filters, "metric_types(COUNT,COST,AVERAGE_DURATION)")
+	}
+
 	field := fmt.Sprintf("%s.%s", analyticsType, strings.Join(filters, "."))
 
 	return fmt.Sprintf("%s/%s/%s?fields=%s", c.getBaseURL(), account.APIVersion, account.BusinessID, field)
@@ -474,4 +480,3 @@ func (c *Client) parseTemplateAnalyticsResponse(ctx context.Context, account *Ac
 
 	return response, nil
 }
-

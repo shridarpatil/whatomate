@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import type { ButtonConfig } from '@/types/flow-preview'
-import { ExternalLink } from 'lucide-vue-next'
+import { ExternalLink, Phone } from 'lucide-vue-next'
 
 defineProps<{
   buttons: ButtonConfig[]
@@ -12,12 +12,7 @@ const emit = defineEmits<{
 }>()
 
 function handleClick(button: ButtonConfig) {
-  if (button.type === 'url' && button.url) {
-    // For URL buttons, just acknowledge in preview
-    emit('select', button)
-  } else {
-    emit('select', button)
-  }
+  emit('select', button)
 }
 </script>
 
@@ -35,6 +30,7 @@ function handleClick(button: ButtonConfig) {
       @click="handleClick(btn)"
     >
       <ExternalLink v-if="btn.type === 'url'" class="h-4 w-4" />
+      <Phone v-else-if="btn.type === 'phone'" class="h-4 w-4" />
       {{ btn.title || 'Option' }}
     </button>
   </div>

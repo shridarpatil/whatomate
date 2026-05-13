@@ -9,8 +9,10 @@ import { Badge } from '@/components/ui/badge'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog'
 import { Phone, PhoneIncoming, PhoneOutgoing, PhoneOff, PhoneMissed, Clock, RefreshCw, Mic, User, Monitor, Headphones, ArrowRightLeft } from 'lucide-vue-next'
-import DataTable, { type Column } from '@/components/shared/DataTable.vue'
+import DataTable from '@/components/shared/DataTable.vue'
+import type { Column } from '@/components/shared/types'
 import SearchInput from '@/components/shared/SearchInput.vue'
+import { ErrorState } from '@/components/shared'
 import IVRPathTree from '@/components/calling/IVRPathTree.vue'
 
 const { t } = useI18n()
@@ -27,6 +29,7 @@ let searchTimeout: number | null = null
 const pageSize = 20
 const accounts = ref<{ name: string }[]>([])
 const ivrFlows = ref<IVRFlow[]>([])
+const error = ref<string | null>(null)
 
 // Detail dialog
 const showDetail = ref(false)
@@ -59,16 +62,21 @@ const columns = computed<Column<CallLog>[]>(() => [
   { key: 'started_at', label: t('calling.time') },
 ])
 
-function fetchLogs() {
-  store.fetchCallLogs({
-    status: statusFilter.value !== 'all' ? statusFilter.value : undefined,
-    account: accountFilter.value !== 'all' ? accountFilter.value : undefined,
-    direction: directionFilter.value !== 'all' ? directionFilter.value : undefined,
-    ivr_flow_id: ivrFlowFilter.value !== 'all' ? ivrFlowFilter.value : undefined,
-    phone: phoneSearch.value || undefined,
-    page: currentPage.value,
-    limit: pageSize
-  })
+async function fetchLogs() {
+  error.value = null
+  try {
+    await store.fetchCallLogs({
+      status: statusFilter.value !== 'all' ? statusFilter.value : undefined,
+      account: accountFilter.value !== 'all' ? accountFilter.value : undefined,
+      direction: directionFilter.value !== 'all' ? directionFilter.value : undefined,
+      ivr_flow_id: ivrFlowFilter.value !== 'all' ? ivrFlowFilter.value : undefined,
+      phone: phoneSearch.value || undefined,
+      page: currentPage.value,
+      limit: pageSize
+    })
+  } catch {
+    error.value = t('calling.errorLoadingCallLogs')
+  }
 }
 
 function handlePageChange(page: number) {
@@ -221,8 +229,17 @@ watch(phoneSearch, () => {
       </Button>
     </div>
 
+    <!-- Error State -->
+    <ErrorState
+      v-if="error && !store.callLogsLoading"
+      :title="$t('common.loadErrorTitle')"
+      :description="error"
+      :retry-label="$t('common.retry')"
+      @retry="fetchLogs"
+    />
+
     <!-- Filters -->
-    <Card>
+    <Card v-if="!error">
       <CardContent class="pt-6">
         <div class="flex gap-4 flex-wrap items-center">
           <SearchInput v-model="phoneSearch" :placeholder="t('calling.searchByPhone')" class="w-48" />
@@ -276,7 +293,7 @@ watch(phoneSearch, () => {
     </Card>
 
     <!-- Table -->
-    <Card>
+    <Card v-if="!error">
       <CardContent class="pt-6">
         <DataTable
           :items="store.callLogs"

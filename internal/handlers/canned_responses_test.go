@@ -461,7 +461,7 @@ func TestApp_UpdateCannedResponse(t *testing.T) {
 		cr := createTestCannedResponse(t, app, org.ID, user.ID, "Keep Name", "/keep", "Keep content", "keep-cat")
 
 		req := testutil.NewJSONRequest(t, map[string]any{
-			"content":  "Only content changed",
+			"content":   "Only content changed",
 			"is_active": true,
 		})
 		testutil.SetAuthContext(req, org.ID, user.ID)

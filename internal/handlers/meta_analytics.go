@@ -25,19 +25,19 @@ const (
 
 // MetaAnalyticsRequest represents the request parameters for Meta analytics
 type MetaAnalyticsRequest struct {
-	AccountID     string `json:"account_id"`      // Optional: specific account ID or empty for all
-	AnalyticsType string `json:"analytics_type"`  // Required: analytics, pricing_analytics, template_analytics, call_analytics
-	Start         string `json:"start"`           // Required: YYYY-MM-DD format
-	End           string `json:"end"`             // Required: YYYY-MM-DD format
-	Granularity   string `json:"granularity"`     // Optional: HALF_HOUR, DAY, MONTH (default: DAY)
+	AccountID     string `json:"account_id"`     // Optional: specific account ID or empty for all
+	AnalyticsType string `json:"analytics_type"` // Required: analytics, pricing_analytics, template_analytics, call_analytics
+	Start         string `json:"start"`          // Required: YYYY-MM-DD format
+	End           string `json:"end"`            // Required: YYYY-MM-DD format
+	Granularity   string `json:"granularity"`    // Optional: HALF_HOUR, DAY, MONTH (default: DAY)
 }
 
 // MetaAnalyticsResponse represents the response for Meta analytics
 type MetaAnalyticsResponse struct {
-	AccountID    string                          `json:"account_id"`
-	AccountName  string                          `json:"account_name"`
-	Data         *whatsapp.MetaAnalyticsResponse `json:"data"`
-	TemplateNames map[string]string              `json:"template_names,omitempty"` // meta_template_id -> template name
+	AccountID     string                          `json:"account_id"`
+	AccountName   string                          `json:"account_name"`
+	Data          *whatsapp.MetaAnalyticsResponse `json:"data"`
+	TemplateNames map[string]string               `json:"template_names,omitempty"` // meta_template_id -> template name
 }
 
 // GetMetaAnalytics fetches Meta WhatsApp analytics with Redis caching
@@ -141,7 +141,7 @@ func (a *App) GetMetaAnalytics(r *fastglue.Request) error {
 	}
 
 	if len(accounts) == 0 {
-		return r.SendEnvelope(map[string]interface{}{
+		return r.SendEnvelope(map[string]any{
 			"accounts": []MetaAnalyticsResponse{},
 			"message":  "No WhatsApp accounts found",
 		})
@@ -157,7 +157,7 @@ func (a *App) GetMetaAnalytics(r *fastglue.Request) error {
 		var cachedResponse []MetaAnalyticsResponse
 		if err := json.Unmarshal([]byte(cached), &cachedResponse); err == nil {
 			a.Log.Debug("Meta analytics cache hit", "cache_key", cacheKey)
-			return r.SendEnvelope(map[string]interface{}{
+			return r.SendEnvelope(map[string]any{
 				"accounts": cachedResponse,
 				"cached":   true,
 			})
@@ -326,7 +326,7 @@ func (a *App) GetMetaAnalytics(r *fastglue.Request) error {
 		a.Redis.Set(ctx, cacheKey, cacheData, cacheTTL)
 	}
 
-	response := map[string]interface{}{
+	response := map[string]any{
 		"accounts": results,
 		"cached":   false,
 	}
@@ -373,7 +373,7 @@ func (a *App) ListMetaAccountsForAnalytics(r *fastglue.Request) error {
 		})
 	}
 
-	return r.SendEnvelope(map[string]interface{}{
+	return r.SendEnvelope(map[string]any{
 		"accounts": result,
 	})
 }
@@ -395,7 +395,7 @@ func (a *App) RefreshMetaAnalyticsCache(r *fastglue.Request) error {
 	pattern := fmt.Sprintf("%s%s:*", metaAnalyticsCachePrefix, orgID.String())
 	a.deleteKeysByPattern(ctx, pattern)
 
-	return r.SendEnvelope(map[string]interface{}{
+	return r.SendEnvelope(map[string]any{
 		"message": "Analytics cache cleared successfully",
 	})
 }

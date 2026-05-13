@@ -2,11 +2,15 @@ package calling
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
+	"maps"
+	"strconv"
 	"time"
 
 	"github.com/google/uuid"
 	"github.com/pion/webrtc/v4"
+	"github.com/shridarpatil/whatomate/internal/assignment"
 	"github.com/shridarpatil/whatomate/internal/models"
 	"github.com/shridarpatil/whatomate/internal/websocket"
 )
@@ -68,39 +72,123 @@ func (m *Manager) initiateTransfer(session *CallSession, waAccount string, teamT
 		Where("id = ?", session.CallLogID).
 		Update("status", models.CallStatusTransferring)
 
+	// Fire on_waiting callback
+	session.mu.Lock()
+	cb := session.TransferCallbacks
+	session.mu.Unlock()
+	if cb != nil {
+		m.fireTransferCallback(session, cb.OnWaiting, buildTransferVars(&transfer))
+	}
+
 	// Update session state
 	session.mu.Lock()
 	session.TransferID = transfer.ID
 	session.TransferStatus = models.CallTransferStatusWaiting
 	session.mu.Unlock()
 
-	// Start timeout goroutine
-	transferTimeout := orgSettings.TransferTimeoutSecs
-	ctx, cancel := context.WithTimeout(context.Background(), time.Duration(transferTimeout)*time.Second)
+	// Check if the contact has an assigned agent (relationship manager).
+	// If so, ring them first before falling back to team rotation/broadcast.
+	var assignedAgentID *uuid.UUID
+	if session.ContactID != uuid.Nil {
+		var contact models.Contact
+		if m.db.Select("assigned_user_id").Where("id = ?", session.ContactID).First(&contact).Error == nil && contact.AssignedUserID != nil {
+			var agent models.User
+			if m.db.Where("id = ? AND is_available = ?", contact.AssignedUserID, true).First(&agent).Error == nil {
+				assignedAgentID = contact.AssignedUserID
+				m.log.Info("Routing call to assigned agent (relationship manager)",
+					"call_id", session.ID, "agent_id", assignedAgentID, "contact_id", session.ContactID)
+			}
+		}
+	}
 
-	session.mu.Lock()
-	session.TransferCancel = cancel
-	session.mu.Unlock()
+	if assignedAgentID != nil {
+		// Ring the assigned agent first, then fall back to team/broadcast
+		perAgentTimeout := m.config.PerAgentTimeoutSecs
+		if perAgentTimeout <= 0 {
+			perAgentTimeout = 15
+		}
+		ctx, cancel := context.WithTimeout(context.Background(), time.Duration(perAgentTimeout)*time.Second)
 
-	go m.waitForTransferTimeout(ctx, session, transfer.ID)
+		session.mu.Lock()
+		session.TransferCancel = cancel
+		session.TransferAccepted = make(chan struct{})
+		session.mu.Unlock()
 
-	// Broadcast WebSocket event
+		payload := map[string]any{
+			"id":               transfer.ID.String(),
+			"call_log_id":      transfer.CallLogID.String(),
+			"whatsapp_call_id": transfer.WhatsAppCallID,
+			"caller_phone":     m.maybeMaskPhone(transfer.OrganizationID, transfer.CallerPhone),
+			"contact_id":       transfer.ContactID.String(),
+			"whatsapp_account": transfer.WhatsAppAccount,
+			"transferred_at":   transfer.TransferredAt.Format(time.RFC3339),
+		}
+		m.wsHub.BroadcastToUser(session.OrganizationID, *assignedAgentID, websocket.WSMessage{
+			Type:    websocket.TypeCallTransferWaiting,
+			Payload: payload,
+		})
+
+		// Wait for assigned agent to accept or timeout
+		go func() {
+			select {
+			case <-session.TransferAccepted:
+				cancel()
+				return
+			case <-ctx.Done():
+				// Assigned agent didn't answer — fall back to team or broadcast
+				session.mu.Lock()
+				accepted := session.TransferStatus == models.CallTransferStatusConnected
+				session.mu.Unlock()
+				if accepted {
+					return
+				}
+				m.log.Info("Assigned agent did not answer, falling back to team",
+					"call_id", session.ID, "agent_id", assignedAgentID)
+				if teamID != nil {
+					session.mu.Lock()
+					session.TransferAccepted = make(chan struct{})
+					session.mu.Unlock()
+					m.runTransferRotation(session, transfer, orgSettings)
+				} else {
+					m.broadcastEvent(transfer.OrganizationID, websocket.TypeCallTransferWaiting, payload)
+					m.waitForTransferTimeout(ctx, session, transfer.ID)
+				}
+			}
+		}()
+	} else if teamID != nil {
+		// Team transfer: use rotation (per-agent timeout with fallback)
+		session.mu.Lock()
+		session.TransferAccepted = make(chan struct{})
+		session.mu.Unlock()
+
+		go m.runTransferRotation(session, transfer, orgSettings)
+	} else {
+		// No team: broadcast to entire org with simple timeout
+		transferTimeout := orgSettings.TransferTimeoutSecs
+		ctx, cancel := context.WithTimeout(context.Background(), time.Duration(transferTimeout)*time.Second)
+
+		session.mu.Lock()
+		session.TransferCancel = cancel
+		session.mu.Unlock()
+
+		go m.waitForTransferTimeout(ctx, session, transfer.ID)
+
+		payload := map[string]any{
+			"id":               transfer.ID.String(),
+			"call_log_id":      transfer.CallLogID.String(),
+			"whatsapp_call_id": transfer.WhatsAppCallID,
+			"caller_phone":     m.maybeMaskPhone(transfer.OrganizationID, transfer.CallerPhone),
+			"contact_id":       transfer.ContactID.String(),
+			"whatsapp_account": transfer.WhatsAppAccount,
+			"transferred_at":   transfer.TransferredAt.Format(time.RFC3339),
+		}
+		m.broadcastEvent(transfer.OrganizationID, websocket.TypeCallTransferWaiting, payload)
+	}
+
 	var teamIDStr string
 	if teamID != nil {
 		teamIDStr = teamID.String()
 	}
-
-	m.broadcastEvent(transfer.OrganizationID, websocket.TypeCallTransferWaiting, map[string]any{
-		"id":               transfer.ID.String(),
-		"call_log_id":      transfer.CallLogID.String(),
-		"whatsapp_call_id": transfer.WhatsAppCallID,
-		"caller_phone":     transfer.CallerPhone,
-		"contact_id":       transfer.ContactID.String(),
-		"whatsapp_account": transfer.WhatsAppAccount,
-		"team_id":          teamIDStr,
-		"transferred_at":   transfer.TransferredAt.Format(time.RFC3339),
-	})
-
 	m.log.Info("Call transfer initiated",
 		"call_id", session.ID,
 		"transfer_id", transfer.ID,
@@ -256,45 +344,66 @@ func (m *Manager) InitiateAgentTransfer(callLogID, initiatingAgentID uuid.UUID, 
 	session.TransferID = transfer.ID
 	session.mu.Unlock()
 
-	// Start timeout goroutine
-	transferTimeout := orgSettings.TransferTimeoutSecs
-	ctx, cancel := context.WithTimeout(context.Background(), time.Duration(transferTimeout)*time.Second)
-
-	session.mu.Lock()
-	session.TransferCancel = cancel
-	session.mu.Unlock()
-
-	go m.waitForTransferTimeout(ctx, session, transfer.ID)
-
-	// Broadcast WebSocket event
-	var teamIDStr string
-	if teamID != nil {
-		teamIDStr = teamID.String()
-	}
-
-	payload := map[string]any{
-		"id":                  transfer.ID.String(),
-		"call_log_id":        transfer.CallLogID.String(),
-		"whatsapp_call_id":   transfer.WhatsAppCallID,
-		"caller_phone":       transfer.CallerPhone,
-		"contact_id":         transfer.ContactID.String(),
-		"whatsapp_account":   transfer.WhatsAppAccount,
-		"team_id":            teamIDStr,
-		"initiating_agent_id": initiatingAgentID.String(),
-		"transferred_at":     transfer.TransferredAt.Format(time.RFC3339),
-	}
-
 	if targetAgentID != nil {
-		// Direct transfer: notify only the target agent
+		// Direct transfer to specific agent: simple timeout + notify
+		transferTimeout := orgSettings.TransferTimeoutSecs
+		ctx, cancel := context.WithTimeout(context.Background(), time.Duration(transferTimeout)*time.Second)
+
+		session.mu.Lock()
+		session.TransferCancel = cancel
+		session.mu.Unlock()
+
+		go m.waitForTransferTimeout(ctx, session, transfer.ID)
+
+		payload := map[string]any{
+			"id":                  transfer.ID.String(),
+			"call_log_id":         transfer.CallLogID.String(),
+			"whatsapp_call_id":    transfer.WhatsAppCallID,
+			"caller_phone":        m.maybeMaskPhone(transfer.OrganizationID, transfer.CallerPhone),
+			"contact_id":          transfer.ContactID.String(),
+			"whatsapp_account":    transfer.WhatsAppAccount,
+			"initiating_agent_id": initiatingAgentID.String(),
+			"transferred_at":      transfer.TransferredAt.Format(time.RFC3339),
+		}
 		m.wsHub.BroadcastToUser(session.OrganizationID, *targetAgentID, websocket.WSMessage{
 			Type:    websocket.TypeCallTransferWaiting,
 			Payload: payload,
 		})
+	} else if teamID != nil {
+		// Team transfer: use rotation (per-agent timeout with fallback)
+		session.mu.Lock()
+		session.TransferAccepted = make(chan struct{})
+		session.mu.Unlock()
+
+		go m.runTransferRotation(session, transfer, orgSettings)
 	} else {
-		// Team transfer: broadcast to entire org
+		// No target: broadcast to entire org with simple timeout
+		transferTimeout := orgSettings.TransferTimeoutSecs
+		ctx, cancel := context.WithTimeout(context.Background(), time.Duration(transferTimeout)*time.Second)
+
+		session.mu.Lock()
+		session.TransferCancel = cancel
+		session.mu.Unlock()
+
+		go m.waitForTransferTimeout(ctx, session, transfer.ID)
+
+		payload := map[string]any{
+			"id":                  transfer.ID.String(),
+			"call_log_id":         transfer.CallLogID.String(),
+			"whatsapp_call_id":    transfer.WhatsAppCallID,
+			"caller_phone":        m.maybeMaskPhone(transfer.OrganizationID, transfer.CallerPhone),
+			"contact_id":          transfer.ContactID.String(),
+			"whatsapp_account":    transfer.WhatsAppAccount,
+			"initiating_agent_id": initiatingAgentID.String(),
+			"transferred_at":      transfer.TransferredAt.Format(time.RFC3339),
+		}
 		m.broadcastEvent(session.OrganizationID, websocket.TypeCallTransferWaiting, payload)
 	}
 
+	var teamIDStr string
+	if teamID != nil {
+		teamIDStr = teamID.String()
+	}
 	m.log.Info("Agent-initiated call transfer started",
 		"call_id", session.ID,
 		"transfer_id", transfer.ID,
@@ -321,7 +430,18 @@ func (m *Manager) ConnectAgentToTransfer(transferID, agentID uuid.UUID, sdpOffer
 	}
 	// Claim the transfer atomically so a second agent gets rejected
 	session.TransferStatus = models.CallTransferStatusConnected
+	// Signal rotation goroutine to stop (no-op if not using rotation)
+	if session.TransferAccepted != nil {
+		safeClose(session.TransferAccepted)
+	}
 	session.mu.Unlock()
+
+	// Broadcast immediately so other agents' UI removes this transfer before
+	// the WebRTC setup completes (which can take several seconds).
+	m.broadcastEvent(session.OrganizationID, websocket.TypeCallTransferConnected, map[string]any{
+		"id":       transferID.String(),
+		"agent_id": agentID.String(),
+	})
 
 	// Create PeerConnection for agent (reuses same codec config)
 	agentPC, err := m.createPeerConnection()
@@ -417,12 +537,22 @@ func (m *Manager) completeTransferConnection(session *CallSession, transferID, a
 	session.AgentRemoteTrack = agentRemoteTrack
 	session.mu.Unlock()
 
-	// Stop hold music
+	// Stop hold music and wait for it to fully exit so it stops writing
+	// to callerLocal before the bridge takes over.
+	var holdSeq uint16
+	var holdTS uint32
 	session.mu.Lock()
-	if session.HoldPlayer != nil {
-		session.HoldPlayer.Stop()
-	}
+	holdPlayer := session.HoldPlayer
+	session.HoldPlayer = nil
 	session.mu.Unlock()
+	if holdPlayer != nil {
+		holdPlayer.Stop()
+		// PlayFile checks the stop channel every 20ms tick, so a brief
+		// sleep ensures the goroutine has exited and no more packets are
+		// written to callerLocal.
+		time.Sleep(25 * time.Millisecond)
+		holdSeq, holdTS = holdPlayer.Sequence()
+	}
 
 	// Cancel transfer timeout
 	session.mu.Lock()
@@ -431,27 +561,9 @@ func (m *Manager) completeTransferConnection(session *CallSession, transferID, a
 	}
 	session.mu.Unlock()
 
-	// Signal that bridge is taking over the caller track
-	session.mu.Lock()
-	safeClose(session.BridgeStarted)
-	session.mu.Unlock()
-
-	// Update transfer status
-	now := time.Now()
-	m.db.Model(&models.CallTransfer{}).
-		Where("id = ?", transferID).
-		Updates(map[string]any{
-			"status":       models.CallTransferStatusConnected,
-			"agent_id":     agentID,
-			"connected_at": now,
-		})
-
-	// Also set agent_id on the CallLog so the webhook "ended" handler
-	// knows an agent was connected and doesn't mark the call as "missed".
-	m.db.Model(&models.CallLog{}).
-		Where("id = ?", session.CallLogID).
-		Update("agent_id", agentID)
-
+	// Prepare track references and bridge BEFORE signaling BridgeStarted
+	// so the bridge can start reading immediately — no gap where caller
+	// RTP packets are dropped.
 	session.mu.Lock()
 	session.TransferStatus = models.CallTransferStatusConnected
 	var callerRemote *webrtc.TrackRemote
@@ -464,23 +576,66 @@ func (m *Manager) completeTransferConnection(session *CallSession, transferID, a
 		callerLocal = session.AudioTrack
 	}
 	agentLocal := session.AgentAudioTrack
+	agentRemote := session.AgentRemoteTrack
 	session.mu.Unlock()
 
-	// Broadcast connected event
-	m.broadcastEvent(session.OrganizationID, websocket.TypeCallTransferConnected, map[string]any{
-		"id":           transferID.String(),
-		"agent_id":     agentID.String(),
-		"connected_at": now.Format(time.RFC3339),
-	})
+	bridge := m.setupAudioBridge(session)
 
-	m.log.Info("Call transfer connected",
+	// Seed the bridge so agent→caller RTP continues past hold music seq numbers.
+	// Without this, the receiver drops agent packets as "old".
+	if holdSeq > 0 {
+		bridge.SeedSequence(holdSeq, holdTS)
+	}
+
+	// Signal that bridge is taking over the caller track
+	session.mu.Lock()
+	safeClose(session.BridgeStarted)
+	session.mu.Unlock()
+
+	// Run DB updates and callbacks in background so the bridge starts
+	// forwarding audio immediately without waiting for I/O.
+	go func() {
+		now := time.Now()
+		m.db.Model(&models.CallTransfer{}).
+			Where("id = ?", transferID).
+			Updates(map[string]any{
+				"status":       models.CallTransferStatusConnected,
+				"agent_id":     agentID,
+				"connected_at": now,
+			})
+
+		// Also set agent_id on the CallLog so the webhook "ended" handler
+		// knows an agent was connected and doesn't mark the call as "missed".
+		m.db.Model(&models.CallLog{}).
+			Where("id = ?", session.CallLogID).
+			Update("agent_id", agentID)
+
+		// Fire on_connect callback
+		session.mu.Lock()
+		cbConnect := session.TransferCallbacks
+		session.mu.Unlock()
+		if cbConnect != nil && cbConnect.OnConnect != nil {
+			var updatedTransfer models.CallTransfer
+			if m.db.First(&updatedTransfer, transferID).Error == nil {
+				vars := buildTransferVars(&updatedTransfer)
+				m.addAgentVars(vars, agentID)
+				m.fireTransferCallback(session, cbConnect.OnConnect, vars)
+			}
+		}
+	}()
+
+	m.log.Info("Call transfer connected — starting bridge",
 		"transfer_id", transferID,
 		"agent_id", agentID,
+		"caller_remote_nil", callerRemote == nil,
+		"agent_local_nil", agentLocal == nil,
+		"agent_remote_nil", agentRemote == nil,
+		"caller_local_nil", callerLocal == nil,
+		"hold_seq", holdSeq,
 	)
 
-	// Create recorder and start audio bridge (blocks until stopped)
-	bridge := m.setupAudioBridge(session)
-	bridge.Start(callerRemote, agentLocal, agentRemoteTrack, callerLocal)
+	// Start audio bridge (blocks until stopped)
+	bridge.Start(callerRemote, agentLocal, agentRemote, callerLocal)
 }
 
 // EndTransfer terminates an active transfer, cleans up resources, and updates the database.
@@ -603,7 +758,198 @@ func (m *Manager) EndTransfer(transferID uuid.UUID) {
 	}
 }
 
+// runTransferRotation implements per-agent timeout rotation for team transfers.
+// It assigns agents one at a time using the team's assignment strategy, waiting
+// PerAgentTimeoutSecs for each. If all agents are exhausted, it falls back to
+// broadcasting to the remaining team members.
+func (m *Manager) runTransferRotation(session *CallSession, transfer models.CallTransfer, orgSettings orgCallingSettings) {
+	teamID := *transfer.TeamID
+	orgID := transfer.OrganizationID
+	triedAgents := []uuid.UUID{}
+
+	// Resolve per-agent timeout: team > global default
+	teamCfg := m.assigner.GetTeamConfig(teamID)
+	teamTimeout := 0
+	if teamCfg != nil {
+		teamTimeout = teamCfg.PerAgentTimeoutSecs
+	}
+	perAgentSecs := assignment.ResolvePerAgentTimeout(teamTimeout, 0, m.config.PerAgentTimeoutSecs)
+	perAgentTimeout := time.Duration(perAgentSecs) * time.Second
+
+	// Total deadline for the entire transfer
+	totalDeadline := time.Now().Add(time.Duration(orgSettings.TransferTimeoutSecs) * time.Second)
+	totalCtx, totalCancel := context.WithDeadline(context.Background(), totalDeadline)
+	defer totalCancel()
+
+	session.mu.Lock()
+	session.TransferCancel = totalCancel
+	session.mu.Unlock()
+
+	// Build the base WS payload once
+	basePayload := map[string]any{
+		"id":               transfer.ID.String(),
+		"call_log_id":      transfer.CallLogID.String(),
+		"whatsapp_call_id": transfer.WhatsAppCallID,
+		"caller_phone":     m.maybeMaskPhone(transfer.OrganizationID, transfer.CallerPhone),
+		"contact_id":       transfer.ContactID.String(),
+		"whatsapp_account": transfer.WhatsAppAccount,
+		"team_id":          teamID.String(),
+		"transferred_at":   transfer.TransferredAt.Format(time.RFC3339),
+	}
+	if transfer.InitiatingAgentID != nil {
+		basePayload["initiating_agent_id"] = transfer.InitiatingAgentID.String()
+	}
+
+	for totalCtx.Err() == nil {
+		session.mu.Lock()
+		status := session.TransferStatus
+		session.mu.Unlock()
+		if status != models.CallTransferStatusWaiting {
+			return // Transfer was accepted or abandoned
+		}
+
+		// Try to assign the next agent
+		agentID := m.assigner.AssignToTeam(teamID, orgID, triedAgents, assignment.CallLoadCounter)
+		if agentID == nil {
+			// No more agents available — break to fallback
+			break
+		}
+
+		triedAgents = append(triedAgents, *agentID)
+
+		// Skip agents who are not online (no active WebSocket connection)
+		if !m.wsHub.IsUserOnline(orgID, *agentID) {
+			m.log.Debug("Rotation: skipping offline agent",
+				"transfer_id", transfer.ID,
+				"agent_id", *agentID,
+			)
+			continue
+		}
+
+		// Update DB: set agent_id and tried_agent_ids
+		triedIDs := make(models.JSONBArray, len(triedAgents))
+		for i, id := range triedAgents {
+			triedIDs[i] = id.String()
+		}
+		m.db.Model(&models.CallTransfer{}).Where("id = ?", transfer.ID).Updates(map[string]any{
+			"agent_id":        agentID,
+			"tried_agent_ids": triedIDs,
+		})
+
+		// Notify this specific agent
+		agentPayload := make(map[string]any)
+		maps.Copy(agentPayload, basePayload)
+		agentPayload["assigned_to_you"] = true
+		agentPayload["agent_id"] = agentID.String()
+		m.wsHub.BroadcastToUser(orgID, *agentID, websocket.WSMessage{
+			Type:    websocket.TypeCallTransferWaiting,
+			Payload: agentPayload,
+		})
+
+		m.log.Info("Rotation: assigned call transfer to agent",
+			"transfer_id", transfer.ID,
+			"agent_id", *agentID,
+			"attempt", len(triedAgents),
+		)
+
+		// Wait for per-agent timeout, acceptance, or total timeout
+		agentTimer := time.NewTimer(perAgentTimeout)
+		session.mu.Lock()
+		accepted := session.TransferAccepted
+		session.mu.Unlock()
+
+		select {
+		case <-agentTimer.C:
+			// Agent didn't accept — notify them and move on
+			m.wsHub.BroadcastToUser(orgID, *agentID, websocket.WSMessage{
+				Type: websocket.TypeCallTransferReassigned,
+				Payload: map[string]any{
+					"id":     transfer.ID.String(),
+					"reason": "timeout",
+				},
+			})
+			// Clear agent_id so next iteration sets the new one
+			m.db.Model(&models.CallTransfer{}).Where("id = ?", transfer.ID).
+				Update("agent_id", nil)
+			continue
+
+		case <-accepted:
+			// Agent accepted — rotation is done
+			agentTimer.Stop()
+			return
+
+		case <-totalCtx.Done():
+			agentTimer.Stop()
+			// Notify current agent the transfer moved on
+			m.wsHub.BroadcastToUser(orgID, *agentID, websocket.WSMessage{
+				Type: websocket.TypeCallTransferReassigned,
+				Payload: map[string]any{
+					"id":     transfer.ID.String(),
+					"reason": "total_timeout",
+				},
+			})
+			// Clear agent_id before fallback
+			m.db.Model(&models.CallTransfer{}).Where("id = ?", transfer.ID).
+				Update("agent_id", nil)
+		}
+		break // Exit loop on totalCtx.Done
+	}
+
+	// Check if transfer was already accepted while we were breaking out
+	session.mu.Lock()
+	status := session.TransferStatus
+	session.mu.Unlock()
+	if status != models.CallTransferStatusWaiting {
+		return
+	}
+
+	// Fallback: broadcast to all remaining available AND online team members
+	remaining := m.assigner.GetAvailableAgents(teamID, triedAgents)
+	remaining = m.wsHub.FilterOnlineUsers(orgID, remaining)
+	if len(remaining) == 0 {
+		// No agents online — go straight to no_answer instead of
+		// holding the caller on hold music for the full timeout.
+		m.log.Info("No agents online for transfer, ending immediately",
+			"transfer_id", transfer.ID,
+		)
+		m.handleTransferNoAnswer(session, transfer.ID)
+		return
+	}
+
+	// Clear agent_id so any team member can accept
+	m.db.Model(&models.CallTransfer{}).Where("id = ?", transfer.ID).
+		Update("agent_id", nil)
+
+	fallbackPayload := make(map[string]any)
+	maps.Copy(fallbackPayload, basePayload)
+	fallbackPayload["broadcast_fallback"] = true
+	m.wsHub.BroadcastToUsers(orgID, remaining, websocket.WSMessage{
+		Type:    websocket.TypeCallTransferWaiting,
+		Payload: fallbackPayload,
+	})
+
+	m.log.Info("Rotation exhausted, broadcasting to remaining team",
+		"transfer_id", transfer.ID,
+		"remaining_agents", len(remaining),
+	)
+
+	// Wait for total timeout or acceptance
+	session.mu.Lock()
+	accepted := session.TransferAccepted
+	session.mu.Unlock()
+
+	select {
+	case <-accepted:
+		return // Someone accepted during fallback
+	case <-totalCtx.Done():
+		if totalCtx.Err() == context.DeadlineExceeded {
+			m.handleTransferNoAnswer(session, transfer.ID)
+		}
+	}
+}
+
 // waitForTransferTimeout marks the transfer as no_answer if nobody accepts in time.
+// Used for non-team transfers (org-wide broadcast, direct agent transfers).
 func (m *Manager) waitForTransferTimeout(ctx context.Context, session *CallSession, transferID uuid.UUID) {
 	<-ctx.Done()
 
@@ -612,6 +958,12 @@ func (m *Manager) waitForTransferTimeout(ctx context.Context, session *CallSessi
 		return
 	}
 
+	m.handleTransferNoAnswer(session, transferID)
+}
+
+// handleTransferNoAnswer performs the no_answer cleanup: updates DB, stops hold
+// music, broadcasts the event, and signals the IVR loop or cleans up the session.
+func (m *Manager) handleTransferNoAnswer(session *CallSession, transferID uuid.UUID) {
 	session.mu.Lock()
 	if session.TransferStatus != models.CallTransferStatusWaiting {
 		session.mu.Unlock()
@@ -698,7 +1050,7 @@ func (m *Manager) HandleCallerHangupDuringTransfer(session *CallSession) {
 		Where("id = ?", session.CallLogID).
 		Update("disconnected_by", models.DisconnectedByClient)
 
-	// Stop hold music and cancel timeout
+	// Stop hold music, cancel timeout, and signal rotation goroutine
 	session.mu.Lock()
 	session.TransferStatus = models.CallTransferStatusAbandoned
 	if session.HoldPlayer != nil {
@@ -706,6 +1058,9 @@ func (m *Manager) HandleCallerHangupDuringTransfer(session *CallSession) {
 	}
 	if session.TransferCancel != nil {
 		session.TransferCancel()
+	}
+	if session.TransferAccepted != nil {
+		safeClose(session.TransferAccepted)
 	}
 	session.mu.Unlock()
 
@@ -751,3 +1106,262 @@ func (m *Manager) findSessionByTransferID(transferID uuid.UUID) *CallSession {
 	return nil
 }
 
+// parseTransferCallbacks extracts HTTP callback configs from a transfer IVR node's config map.
+func parseTransferCallbacks(config map[string]any) *TransferCallbacks {
+	cb := &TransferCallbacks{}
+	cb.OnWaiting = parseOneCallback(config, "on_waiting")
+	cb.OnConnect = parseOneCallback(config, "on_connect")
+	if cb.OnWaiting == nil && cb.OnConnect == nil {
+		return nil
+	}
+	return cb
+}
+
+func parseOneCallback(config map[string]any, key string) *TransferHTTPCallback {
+	raw, ok := config[key].(map[string]any)
+	if !ok {
+		return nil
+	}
+	url, _ := raw["url"].(string)
+	if url == "" {
+		return nil
+	}
+	method, _ := raw["method"].(string)
+	bodyTemplate, _ := raw["body_template"].(string)
+
+	headers := make(map[string]string)
+	if hdrs, ok := raw["headers"].(map[string]any); ok {
+		for k, v := range hdrs {
+			if s, ok := v.(string); ok {
+				headers[k] = s
+			}
+		}
+	}
+
+	return &TransferHTTPCallback{
+		URL:          url,
+		Method:       method,
+		Headers:      headers,
+		BodyTemplate: bodyTemplate,
+	}
+}
+
+// fireTransferCallback runs an HTTP callback asynchronously with interpolated template variables.
+func (m *Manager) fireTransferCallback(session *CallSession, hook *TransferHTTPCallback, vars map[string]string) {
+	if hook == nil || hook.URL == "" {
+		return
+	}
+	go func() {
+		url := interpolateTemplate(hook.URL, vars)
+		body := interpolateTemplate(hook.BodyTemplate, vars)
+		headers := make(map[string]string)
+		for k, v := range hook.Headers {
+			headers[k] = interpolateTemplate(v, vars)
+		}
+		method := hook.Method
+		if method == "" {
+			method = "POST"
+		}
+		result, err := executeHTTPCallback(url, method, headers, body, 10*time.Second)
+		if err != nil {
+			m.log.Error("Transfer callback failed", "error", err, "call_id", session.ID, "hook_url", url)
+		} else {
+			m.log.Info("Transfer callback completed", "call_id", session.ID, "hook_url", url, "status", result.StatusCode)
+		}
+	}()
+}
+
+// buildTransferVars builds the template variable map for transfer callbacks.
+func buildTransferVars(transfer *models.CallTransfer) map[string]string {
+	vars := map[string]string{
+		"caller_phone":     transfer.CallerPhone,
+		"contact_id":       transfer.ContactID.String(),
+		"call_log_id":      transfer.CallLogID.String(),
+		"transfer_id":      transfer.ID.String(),
+		"whatsapp_account": transfer.WhatsAppAccount,
+		"status":           string(transfer.Status),
+	}
+	if transfer.TeamID != nil {
+		vars["team_id"] = transfer.TeamID.String()
+	}
+	if transfer.AgentID != nil {
+		vars["agent_id"] = transfer.AgentID.String()
+	}
+	if transfer.InitiatingAgentID != nil {
+		vars["initiating_agent_id"] = transfer.InitiatingAgentID.String()
+	}
+	vars["transferred_at"] = transfer.TransferredAt.Format(time.RFC3339)
+	if transfer.ConnectedAt != nil {
+		vars["connected_at"] = transfer.ConnectedAt.Format(time.RFC3339)
+	}
+	if transfer.CompletedAt != nil {
+		vars["completed_at"] = transfer.CompletedAt.Format(time.RFC3339)
+	}
+	vars["hold_duration"] = strconv.Itoa(transfer.HoldDuration)
+	vars["talk_duration"] = strconv.Itoa(transfer.TalkDuration)
+	if transfer.IVRPath != nil {
+		if b, err := json.Marshal(transfer.IVRPath); err == nil {
+			vars["ivr_path"] = string(b)
+		}
+	}
+	return vars
+}
+
+// addAgentVars loads agent details from DB and adds them to the vars map.
+func (m *Manager) addAgentVars(vars map[string]string, agentID uuid.UUID) {
+	var user models.User
+	if err := m.db.Select("id, full_name, email").Where("id = ?", agentID).First(&user).Error; err == nil {
+		vars["agent_id"] = user.ID.String()
+		vars["agent_email"] = user.Email
+		vars["agent_name"] = user.FullName
+	}
+}
+
+// HoldCall puts an active call on hold by stopping the audio bridge and
+// playing hold music to the caller. The agent's WebRTC connection stays alive.
+func (m *Manager) HoldCall(callLogID uuid.UUID) error {
+	session := m.GetSessionByCallLogID(callLogID)
+	if session == nil {
+		return fmt.Errorf("no active session for call log %s", callLogID)
+	}
+
+	orgSettings := m.getOrgCallingSettings(session.OrganizationID)
+
+	session.mu.Lock()
+	if session.HoldPlayer != nil {
+		session.mu.Unlock()
+		return fmt.Errorf("call is already on hold")
+	}
+	if session.Bridge == nil {
+		session.mu.Unlock()
+		return fmt.Errorf("no active audio bridge")
+	}
+
+	// Pick the correct caller track based on call direction
+	var callerLocal *webrtc.TrackLocalStaticRTP
+	var callerRemote *webrtc.TrackRemote
+	if session.Direction == models.CallDirectionOutgoing {
+		callerLocal = session.WAAudioTrack
+		callerRemote = session.WARemoteTrack
+	} else {
+		callerLocal = session.AudioTrack
+		callerRemote = session.CallerRemoteTrack
+	}
+
+	if callerLocal == nil {
+		session.mu.Unlock()
+		return fmt.Errorf("no caller audio track available for hold music")
+	}
+
+	bridge := session.Bridge
+	session.Bridge = nil
+	session.BridgeStarted = make(chan struct{})
+	session.mu.Unlock()
+
+	// Stop bridge and wait for goroutines to finish so lastCallerSeq is final
+	bridge.Stop()
+	bridge.Wait()
+
+	// Create hold music player and advance past the bridge's last seq/ts
+	player := NewAudioPlayer(callerLocal)
+	seq, ts := bridge.LastCallerSeq()
+	if seq > 0 {
+		player.SetSequence(seq, ts)
+	}
+
+	session.mu.Lock()
+	session.HoldPlayer = player
+	session.mu.Unlock()
+
+	// Drain caller's remote track to prevent buffer buildup
+	if callerRemote != nil {
+		go m.consumeAudioTrack(session, callerRemote)
+	}
+
+	// Drain agent's remote track to prevent buffer buildup
+	session.mu.Lock()
+	agentRemote := session.AgentRemoteTrack
+	session.mu.Unlock()
+	if agentRemote != nil {
+		go m.consumeAudioTrack(session, agentRemote)
+	}
+
+	// Start hold music
+	holdFile := orgSettings.HoldMusicFile
+	go func() {
+		packets, err := player.PlayFile(holdFile)
+		if err != nil {
+			m.log.Error("Hold music first play failed", "error", err, "call_id", session.ID, "packets_sent", packets)
+			return
+		}
+		if player.IsStopped() {
+			return
+		}
+		if err := player.PlayFileLoop(holdFile); err != nil {
+			m.log.Error("Hold music playback failed", "error", err, "call_id", session.ID)
+		}
+	}()
+
+	// Broadcast hold event
+	m.broadcastEvent(session.OrganizationID, websocket.TypeCallHold, map[string]any{
+		"call_log_id": callLogID.String(),
+	})
+
+	m.log.Info("Call put on hold", "call_id", session.ID, "call_log_id", callLogID)
+	return nil
+}
+
+// ResumeCall takes a call off hold by stopping hold music and restarting the
+// audio bridge between agent and caller.
+func (m *Manager) ResumeCall(callLogID uuid.UUID) error {
+	session := m.GetSessionByCallLogID(callLogID)
+	if session == nil {
+		return fmt.Errorf("no active session for call log %s", callLogID)
+	}
+
+	session.mu.Lock()
+	if session.HoldPlayer == nil {
+		session.mu.Unlock()
+		return fmt.Errorf("call is not on hold")
+	}
+
+	holdPlayer := session.HoldPlayer
+	session.HoldPlayer = nil
+
+	// Resolve tracks for the bridge
+	var callerRemote *webrtc.TrackRemote
+	var callerLocal *webrtc.TrackLocalStaticRTP
+	if session.Direction == models.CallDirectionOutgoing {
+		callerRemote = session.WARemoteTrack
+		callerLocal = session.WAAudioTrack
+	} else {
+		callerRemote = session.CallerRemoteTrack
+		callerLocal = session.AudioTrack
+	}
+	agentLocal := session.AgentAudioTrack
+	agentRemote := session.AgentRemoteTrack
+	session.mu.Unlock()
+
+	// Stop hold music
+	holdPlayer.Stop()
+
+	// Set up a new bridge (reuses existing recorders)
+	bridge := m.setupAudioBridge(session)
+
+	// Signal BridgeStarted so consumeAudioTrack goroutines exit
+	session.mu.Lock()
+	safeClose(session.BridgeStarted)
+	session.mu.Unlock()
+
+	// Broadcast resume event before bridge blocks
+	m.broadcastEvent(session.OrganizationID, websocket.TypeCallResumed, map[string]any{
+		"call_log_id": callLogID.String(),
+	})
+
+	m.log.Info("Call resumed from hold", "call_id", session.ID, "call_log_id", callLogID)
+
+	// Start bridge (blocks until stopped)
+	go bridge.Start(callerRemote, agentLocal, agentRemote, callerLocal)
+
+	return nil
+}

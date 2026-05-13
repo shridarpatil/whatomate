@@ -196,7 +196,7 @@ func (m *Manager) InitiateOutgoingCall(
 	callCtx, callCancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer callCancel()
 
-	callID, err := m.whatsapp.InitiateCall(callCtx, waAccount, contactPhone, waLocalDesc.SDP)
+	callID, err := m.whatsapp.InitiateCall(callCtx, waAccount, whatsapp.Recipient{Phone: contactPhone}, waLocalDesc.SDP)
 	if err != nil {
 		_ = agentPC.Close()
 		_ = waPC.Close()
@@ -231,12 +231,12 @@ func (m *Manager) InitiateOutgoingCall(
 
 	// 15. Broadcast event
 	m.broadcastEvent(orgID, websocket.TypeOutgoingCallInitiated, map[string]any{
-		"call_log_id":    callLog.ID.String(),
-		"call_id":        callID,
-		"contact_id":     contactID.String(),
-		"contact_phone":  contactPhone,
-		"agent_id":       agentID.String(),
-		"started_at":     now.Format(time.RFC3339),
+		"call_log_id":   callLog.ID.String(),
+		"call_id":       callID,
+		"contact_id":    contactID.String(),
+		"contact_phone": contactPhone,
+		"agent_id":      agentID.String(),
+		"started_at":    now.Format(time.RFC3339),
 	})
 
 	return callLog.ID, agentSDP.SDP, nil
@@ -394,12 +394,12 @@ func (m *Manager) HandleOutgoingCallWebhook(callID, event, sdpAnswer string) {
 		}
 
 		m.broadcastEvent(session.OrganizationID, websocket.TypeOutgoingCallEnded, map[string]any{
-			"call_log_id":      session.CallLogID.String(),
-			"call_id":          callID,
-			"contact_id":       session.ContactID.String(),
-			"contact_phone":    session.TargetPhone,
-			"ended_at":         now.Format(time.RFC3339),
-			"disconnected_by":  disconnectedBy,
+			"call_log_id":     session.CallLogID.String(),
+			"call_id":         callID,
+			"contact_id":      session.ContactID.String(),
+			"contact_phone":   session.TargetPhone,
+			"ended_at":        now.Format(time.RFC3339),
+			"disconnected_by": disconnectedBy,
 		})
 
 		m.cleanupSession(callID)
@@ -420,12 +420,13 @@ func (m *Manager) HangupOutgoingCall(callLogID, agentID uuid.UUID) error {
 		return fmt.Errorf("not an outgoing call")
 	}
 
-	// Look up a post-call IVR flow for this account
+	// Look up a post-call IVR flow for this account (cached)
+	ivrFlowPtr := m.getIVRFlowByConfigCached(session.OrganizationID, session.AccountName, "outgoing_end")
+	hasPostCallIVR := ivrFlowPtr != nil
 	var ivrFlow models.IVRFlow
-	hasPostCallIVR := m.db.Where(
-		"organization_id = ? AND whatsapp_account = ? AND is_outgoing_end = ? AND is_active = ?",
-		session.OrganizationID, session.AccountName, true, true,
-	).First(&ivrFlow).Error == nil
+	if hasPostCallIVR {
+		ivrFlow = *ivrFlowPtr
+	}
 
 	if !hasPostCallIVR {
 		// No post-call IVR — original behavior: terminate + cleanup
@@ -570,4 +571,3 @@ func (m *Manager) startOutgoingBridge(
 	// WA audio → Agent speaker, Agent mic → WA speaker
 	go bridge.Start(waRemote, agentLocal, agentRemote, waLocal)
 }
-

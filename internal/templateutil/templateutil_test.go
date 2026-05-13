@@ -94,7 +94,7 @@ func TestResolveParamsFromMap_EmptyInputs(t *testing.T) {
 
 func TestResolveParams(t *testing.T) {
 	bodyContent := "Hello {{name}}, order {{order_id}}"
-	params := map[string]interface{}{
+	params := map[string]any{
 		"name":     "John",
 		"order_id": "ORD-123",
 	}
@@ -104,7 +104,7 @@ func TestResolveParams(t *testing.T) {
 
 func TestResolveParams_Positional(t *testing.T) {
 	bodyContent := "Hello {{name}}, order {{order_id}}"
-	params := map[string]interface{}{
+	params := map[string]any{
 		"1": "John",
 		"2": "ORD-123",
 	}
@@ -113,10 +113,10 @@ func TestResolveParams_Positional(t *testing.T) {
 }
 
 func TestResolveParams_Empty(t *testing.T) {
-	result := ResolveParams("Hello {{name}}", map[string]interface{}{})
+	result := ResolveParams("Hello {{name}}", map[string]any{})
 	assert.Nil(t, result)
 
-	result = ResolveParams("Hello world", map[string]interface{}{"a": "b"})
+	result = ResolveParams("Hello world", map[string]any{"a": "b"})
 	assert.Nil(t, result)
 }
 
@@ -138,7 +138,7 @@ func TestReplaceWithStringParams_Empty(t *testing.T) {
 func TestReplaceWithJSONBParams(t *testing.T) {
 	bodyContent := "Hello {{name}}, order {{order_id}}"
 	content := "Hello {{name}}, order {{order_id}}"
-	params := map[string]interface{}{
+	params := map[string]any{
 		"name":     "John",
 		"order_id": "ORD-123",
 	}
@@ -147,6 +147,32 @@ func TestReplaceWithJSONBParams(t *testing.T) {
 }
 
 func TestReplaceWithJSONBParams_Empty(t *testing.T) {
-	result := ReplaceWithJSONBParams("Hello {{name}}", "Hello {{name}}", map[string]interface{}{})
+	result := ReplaceWithJSONBParams("Hello {{name}}", "Hello {{name}}", map[string]any{})
 	assert.Equal(t, "Hello {{name}}", result)
+}
+
+func TestValidateNoMixedParams_PositionalOnly(t *testing.T) {
+	err := ValidateNoMixedParams("Hello {{1}}, your order {{2}} is ready!")
+	assert.NoError(t, err)
+}
+
+func TestValidateNoMixedParams_NamedOnly(t *testing.T) {
+	err := ValidateNoMixedParams("Hello {{name}}, your order {{order_id}} is ready!")
+	assert.NoError(t, err)
+}
+
+func TestValidateNoMixedParams_Mixed(t *testing.T) {
+	err := ValidateNoMixedParams("Hello {{1}}, your order {{order_id}} is ready!")
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "cannot mix positional")
+}
+
+func TestValidateNoMixedParams_NoParams(t *testing.T) {
+	err := ValidateNoMixedParams("Hello, your order is ready!")
+	assert.NoError(t, err)
+}
+
+func TestValidateNoMixedParams_Empty(t *testing.T) {
+	err := ValidateNoMixedParams("")
+	assert.NoError(t, err)
 }

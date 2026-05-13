@@ -162,8 +162,12 @@ func (a *App) InitSSO(r *fastglue.Request) error {
 	stateJSON, _ := json.Marshal(state)
 	stateKey := "sso:state:" + nonce
 
-	// Store state in Redis (5 min TTL)
-	if err := a.Redis.Set(r.RequestCtx, stateKey, stateJSON, 5*time.Minute).Err(); err != nil {
+	// Store state in Redis (5 min TTL). Use a fresh context with timeout instead
+	// of r.RequestCtx so the OAuth state survives even if the client disconnects
+	// after the redirect is issued.
+	redisCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	if err := a.Redis.Set(redisCtx, stateKey, stateJSON, 5*time.Minute).Err(); err != nil {
 		a.Log.Error("Failed to store SSO state", "error", err)
 		return r.SendErrorEnvelope(fasthttp.StatusInternalServerError, "Failed to initiate SSO", nil, "")
 	}
@@ -196,16 +200,19 @@ func (a *App) CallbackSSO(r *fastglue.Request) error {
 		return nil
 	}
 
-	// Retrieve and validate state from Redis
+	// Retrieve and validate state from Redis. Detached context so a client
+	// reload mid-callback can't cancel the lookup.
+	redisCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
 	stateKey := "sso:state:" + stateNonce
-	stateJSON, err := a.Redis.Get(r.RequestCtx, stateKey).Bytes()
+	stateJSON, err := a.Redis.Get(redisCtx, stateKey).Bytes()
 	if err != nil {
 		a.redirectWithError(r, "Invalid or expired state")
 		return nil
 	}
 
 	// Delete state immediately to prevent replay
-	a.Redis.Del(r.RequestCtx, stateKey)
+	a.Redis.Del(redisCtx, stateKey)
 
 	var state SSOState
 	if err := json.Unmarshal(stateJSON, &state); err != nil {
@@ -485,7 +492,10 @@ func (a *App) UpdateSSOProvider(r *fastglue.Request) error {
 	})
 }
 
-// DeleteSSOProvider removes an SSO provider config (admin only)
+// DeleteSSOProvider removes an SSO provider config (admin only).
+// Hard-deletes (Unscoped) because the unique index on (organization_id, provider)
+// doesn't ignore deleted_at — a soft-deleted row would block re-creating the
+// same provider until the row is purged.
 func (a *App) DeleteSSOProvider(r *fastglue.Request) error {
 	orgID, err := a.getOrgID(r)
 	if err != nil {
@@ -494,7 +504,7 @@ func (a *App) DeleteSSOProvider(r *fastglue.Request) error {
 
 	provider := r.RequestCtx.UserValue("provider").(string)
 
-	result := a.DB.Where("organization_id = ? AND provider = ?", orgID, provider).Delete(&models.SSOProvider{})
+	result := a.DB.Unscoped().Where("organization_id = ? AND provider = ?", orgID, provider).Delete(&models.SSOProvider{})
 	if result.Error != nil {
 		a.Log.Error("Failed to delete SSO provider", "error", result.Error, "provider", provider)
 		return r.SendErrorEnvelope(fasthttp.StatusInternalServerError, "Failed to delete SSO provider", nil, "")
@@ -594,7 +604,7 @@ func (a *App) fetchUserInfo(provider string, ssoConfig *models.SSOProvider, toke
 
 	// Parse based on provider
 	var userInfo UserInfo
-	var rawData map[string]interface{}
+	var rawData map[string]any
 	if err := json.Unmarshal(body, &rawData); err != nil {
 		return nil, err
 	}
@@ -724,7 +734,7 @@ func generateRandomString(n int) string {
 	return base64.URLEncoding.EncodeToString(b)[:n]
 }
 
-func getString(data map[string]interface{}, key string) string {
+func getString(data map[string]any, key string) string {
 	if val, ok := data[key]; ok {
 		if str, ok := val.(string); ok {
 			return str

@@ -1,6 +1,18 @@
 import { defineStore } from 'pinia'
-import { ref, computed } from 'vue'
+import { ref, computed, watch } from 'vue'
 import { contactsService, messagesService } from '@/services/api'
+
+// Phones are stored without leading + or whitespace (see CreateContact in
+// internal/handlers/contacts.go). Strip them from a digit-only query so a user
+// typing "+91 98765 43210" still matches a stored "919876543210" via the
+// server's substring LIKE.
+function normalizeContactSearch(raw: string): string {
+  const trimmed = raw.trim().replace(/^\+/, '')
+  if (trimmed && /^[\d\s+()-]+$/.test(trimmed)) {
+    return trimmed.replace(/[\s+()-]/g, '')
+  }
+  return trimmed
+}
 
 export interface Contact {
   id: string
@@ -17,6 +29,7 @@ export interface Contact {
   unread_count: number
   assigned_user_id?: string
   whatsapp_account?: string
+  marketing_opt_out?: boolean
   created_at: string
   updated_at: string
 }
@@ -89,15 +102,9 @@ export const useContactsStore = defineStore('contacts', () => {
   const isLoadingMoreContacts = ref(false)
   const hasMoreContacts = computed(() => contacts.value.length < contactsTotal.value)
 
-  const filteredContacts = computed(() => {
-    if (!searchQuery.value) return contacts.value
-    const query = searchQuery.value.toLowerCase()
-    return contacts.value.filter(c =>
-      c.name.toLowerCase().includes(query) ||
-      c.phone_number.includes(query) ||
-      (c.profile_name?.toLowerCase().includes(query))
-    )
-  })
+  // Search is now driven server-side via fetchContacts({ search }), so the
+  // visible list is whatever the server returned — no extra local filtering.
+  const filteredContacts = computed(() => contacts.value)
 
   const sortedContacts = computed(() => {
     return [...filteredContacts.value].sort((a, b) => {
@@ -136,10 +143,12 @@ export const useContactsStore = defineStore('contacts', () => {
     try {
       const nextPage = contactsPage.value + 1
       const tagsParam = selectedTags.value.length > 0 ? selectedTags.value.join(',') : undefined
+      const search = normalizeContactSearch(searchQuery.value) || undefined
       const response = await contactsService.list({
         page: nextPage,
         limit: contactsLimit.value,
-        tags: tagsParam
+        tags: tagsParam,
+        search
       })
       const data = response.data.data || response.data
       const newContacts = data.contacts || []
@@ -212,9 +221,22 @@ export const useContactsStore = defineStore('contacts', () => {
     }
   }
 
-  async function sendMessage(contactId: string, type: string, content: any, replyToMessageId?: string, whatsappAccount?: string) {
+  async function sendMessage(
+    contactId: string,
+    type: string,
+    content: any,
+    replyToMessageId?: string,
+    whatsappAccount?: string,
+    extra?: { interactive?: Parameters<typeof messagesService.send>[1]['interactive'] },
+  ) {
     try {
-      const response = await messagesService.send(contactId, { type, content, reply_to_message_id: replyToMessageId, whatsapp_account: whatsappAccount })
+      const response = await messagesService.send(contactId, {
+        type,
+        content,
+        reply_to_message_id: replyToMessageId,
+        whatsapp_account: whatsappAccount,
+        ...(extra?.interactive ? { interactive: extra.interactive } : {}),
+      })
       // API returns { status: "success", data: { ... } }
       const newMessage = response.data.data || response.data
       // Use addMessage which has duplicate checking (WebSocket may also broadcast this)
@@ -231,14 +253,17 @@ export const useContactsStore = defineStore('contacts', () => {
     contactId: string,
     templateName: string,
     templateParams?: Record<string, string>,
-    accountName?: string
+    accountName?: string,
+    headerFile?: File,
+    buttonParams?: Record<string, string>
   ) {
     try {
       const response = await messagesService.sendTemplate(contactId, {
         template_name: templateName,
         template_params: templateParams,
+        button_params: buttonParams,
         account_name: accountName
-      })
+      }, headerFile)
       const data = response.data.data || response.data
       // Use addMessage which has duplicate checking (WebSocket may also broadcast this)
       addMessage(data)
@@ -333,6 +358,16 @@ export const useContactsStore = defineStore('contacts', () => {
       currentContact.value = { ...currentContact.value, tags }
     }
   }
+
+  // Debounce server-side search so each keystroke doesn't fire a request.
+  let searchDebounceHandle: ReturnType<typeof setTimeout> | null = null
+  watch(searchQuery, (query) => {
+    if (searchDebounceHandle) clearTimeout(searchDebounceHandle)
+    searchDebounceHandle = setTimeout(() => {
+      const search = normalizeContactSearch(query) || undefined
+      fetchContacts({ search })
+    }, 300)
+  })
 
   return {
     contacts,

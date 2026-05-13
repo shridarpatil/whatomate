@@ -32,8 +32,10 @@ conn_max_lifetime = 300
 [redis]
 host = "redis"  # Use "localhost" for local development
 port = 6379
+username = ""  # Redis ACL username (Redis 6+). Leave empty to use the default user.
 password = ""
 db = 0
+tls = false    # Set to true for TLS connections (e.g. Upstash, Redis Cloud)
 
 [jwt]
 secret = "your-super-secret-jwt-key-change-in-production"  # Must be 32+ chars in production
@@ -70,6 +72,8 @@ refresh_max_attempts = 30      # Max token refresh attempts per IP per window
 sso_max_attempts = 10          # Max SSO init/callback attempts per IP per window
 window_seconds = 60            # Time window in seconds
 trust_proxy = false            # Trust X-Forwarded-For / X-Real-IP headers (set true behind reverse proxy)
+api_max_requests = 200         # Max requests per IP per window for all /api/ routes (0 = 200)
+api_window_seconds = 60        # Time window for global API rate limit (0 = 60)
 
 # Text-to-Speech for IVR greetings (optional, requires piper + opusenc installed)
 # Download piper: https://github.com/rhasspy/piper/releases (standalone binary)

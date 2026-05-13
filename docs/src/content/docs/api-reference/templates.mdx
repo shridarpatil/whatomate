@@ -281,6 +281,34 @@ When using named parameters, provide sample values with `param_name`:
 }
 ```
 
+### URL Button Parameters
+
+Templates can include URL buttons with dynamic variables. For example, a "Track Order" button with URL `https://example.com/track/{{1}}`:
+
+```json
+{
+  "type": "BUTTONS",
+  "buttons": [
+    {
+      "type": "URL",
+      "text": "Track Order",
+      "url": "https://example.com/track/{{1}}",
+      "example": "https://example.com/track/12345"
+    }
+  ]
+}
+```
+
+When sending a template with dynamic URL buttons, provide the dynamic values via the `button_params` field in the [Send Template Message](/api-reference/messages/#send-template-message) endpoint. The key is the zero-based button index:
+
+```json
+{
+  "template_name": "order_shipped",
+  "template_params": { "1": "John", "2": "12345" },
+  "button_params": { "0": "12345" }
+}
+```
+
 <Aside type="note">
   Whatomate automatically detects if your template uses named parameters (non-numeric placeholders) and sets the appropriate format when submitting to Meta.
 </Aside>

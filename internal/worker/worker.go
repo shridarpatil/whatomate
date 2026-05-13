@@ -3,6 +3,7 @@ package worker
 import (
 	"context"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
@@ -51,7 +52,6 @@ func New(cfg *config.Config, db *gorm.DB, rdb *redis.Client, log logf.Logger) (*
 	}, nil
 }
 
-
 // Run starts the worker and processes jobs until context is cancelled
 func (w *Worker) Run(ctx context.Context) error {
 	w.Log.Info("Worker starting")
@@ -99,6 +99,14 @@ func (w *Worker) HandleRecipientJob(ctx context.Context, job *queue.RecipientJob
 		return nil // Don't retry
 	}
 
+	// Check marketing opt-out
+	if contact.MarketingOptOut && campaign.Template != nil && strings.EqualFold(campaign.Template.Category, "MARKETING") {
+		w.Log.Info("Skipping marketing message for opted-out contact", "contact_id", contact.ID, "phone", job.PhoneNumber)
+		w.updateRecipientStatus(job.RecipientID, models.MessageStatusFailed, "", "Contact opted out of marketing messages")
+		w.incrementCampaignCount(job.CampaignID, "failed_count")
+		return nil
+	}
+
 	// Build recipient for sending
 	recipient := &models.BulkMessageRecipient{
 		PhoneNumber:    job.PhoneNumber,
@@ -107,7 +115,7 @@ func (w *Worker) HandleRecipientJob(ctx context.Context, job *queue.RecipientJob
 	}
 
 	// Send template message
-	waMessageID, err := w.sendTemplateMessage(ctx, &account, campaign.Template, recipient, campaign.HeaderMediaID)
+	waMessageID, err := w.sendTemplateMessage(ctx, &account, campaign.Template, recipient, campaign.HeaderMediaID, campaign.HeaderMediaFilename)
 
 	// Create Message record
 	message := models.Message{
@@ -127,6 +135,11 @@ func (w *Worker) HandleRecipientJob(ctx context.Context, job *queue.RecipientJob
 		message.TemplateName = campaign.Template.Name
 		content := templateutil.ReplaceWithJSONBParams(campaign.Template.BodyContent, campaign.Template.BodyContent, job.TemplateParams)
 		message.Content = content
+		// Store campaign header media so it renders in the chat bubble
+		if campaign.HeaderMediaLocalPath != "" {
+			message.MediaURL = campaign.HeaderMediaLocalPath
+			message.MediaMimeType = campaign.HeaderMediaMimeType
+		}
 	}
 
 	if err != nil {
@@ -155,7 +168,7 @@ func (w *Worker) HandleRecipientJob(ctx context.Context, job *queue.RecipientJob
 
 // updateRecipientStatus updates the recipient's status in the database
 func (w *Worker) updateRecipientStatus(recipientID uuid.UUID, status models.MessageStatus, waMessageID, errorMsg string) {
-	updates := map[string]interface{}{
+	updates := map[string]any{
 		"status":               status,
 		"whats_app_message_id": waMessageID,
 	}
@@ -214,7 +227,7 @@ func (w *Worker) checkCampaignCompletion(ctx context.Context, campaignID, organi
 		}
 
 		now := time.Now()
-		w.DB.Model(&campaign).Updates(map[string]interface{}{
+		w.DB.Model(&campaign).Updates(map[string]any{
 			"status":       models.CampaignStatusCompleted,
 			"completed_at": now,
 		})
@@ -238,74 +251,29 @@ func (w *Worker) checkCampaignCompletion(ctx context.Context, campaignID, organi
 }
 
 // sendTemplateMessage sends a template message via WhatsApp Cloud API
-func (w *Worker) sendTemplateMessage(ctx context.Context, account *models.WhatsAppAccount, template *models.Template, recipient *models.BulkMessageRecipient, campaignHeaderMediaID string) (string, error) {
+func (w *Worker) sendTemplateMessage(ctx context.Context, account *models.WhatsAppAccount, template *models.Template, recipient *models.BulkMessageRecipient, campaignHeaderMediaID, campaignHeaderMediaFilename string) (string, error) {
 	waAccount := account.ToWAAccount()
 
-	// Build template components with parameters
-	var components []map[string]interface{}
-
-	// Handle header component (for media templates)
-	if template.HeaderType != "" && template.HeaderType != "TEXT" {
-		// Use campaign's uploaded media ID if available
-		if campaignHeaderMediaID != "" {
-			headerParam := buildMediaParameter(template.HeaderType, "id", campaignHeaderMediaID)
-			if headerParam != nil {
-				components = append(components, map[string]interface{}{
-					"type":       "header",
-					"parameters": []map[string]interface{}{headerParam},
-				})
-			}
-		} else if template.HeaderContent != "" {
-			// Fall back to template's header content (URL)
-			headerParam := buildMediaParameter(template.HeaderType, "link", template.HeaderContent)
-			if headerParam != nil {
-				components = append(components, map[string]interface{}{
-					"type":       "header",
-					"parameters": []map[string]interface{}{headerParam},
-				})
-			}
-		}
-	}
-
-	// Resolve body parameters (supports both named and positional)
+	// Resolve body parameters into a map for BuildTemplateComponents
 	resolvedParams := templateutil.ResolveParams(template.BodyContent, recipient.TemplateParams)
-	if len(resolvedParams) > 0 {
-		bodyParams := make([]map[string]interface{}, len(resolvedParams))
-		for i, val := range resolvedParams {
-			bodyParams[i] = map[string]interface{}{
-				"type": "text",
-				"text": val,
-			}
+	bodyParams := make(map[string]string, len(resolvedParams))
+	paramNames := templateutil.ExtParamNames(template.BodyContent)
+	for i, val := range resolvedParams {
+		if i < len(paramNames) {
+			bodyParams[paramNames[i]] = val
+		} else {
+			bodyParams[fmt.Sprintf("%d", i+1)] = val
 		}
-		components = append(components, map[string]interface{}{
-			"type":       "body",
-			"parameters": bodyParams,
-		})
 	}
 
-	return w.WhatsApp.SendTemplateMessage(ctx, waAccount, recipient.PhoneNumber, template.Name, template.Language, components)
-}
+	// Use the shared component builder (same as chat template sending)
+	components := whatsapp.BuildTemplateComponents(bodyParams, template.HeaderType, campaignHeaderMediaID, campaignHeaderMediaFilename)
+	// Add auto-generated button components (Flow needs flow_token)
+	flowComponents := whatsapp.AutoButtonComponents(template.Buttons)
+	components = append(components, flowComponents...)
 
-// buildMediaParameter creates a media parameter for WhatsApp template headers.
-// keyName is "id" for Meta media IDs or "link" for external URLs.
-func buildMediaParameter(headerType, keyName, value string) map[string]interface{} {
-	var mediaType string
-	switch headerType {
-	case "IMAGE":
-		mediaType = "image"
-	case "VIDEO":
-		mediaType = "video"
-	case "DOCUMENT":
-		mediaType = "document"
-	default:
-		return nil
-	}
-	return map[string]interface{}{
-		"type": mediaType,
-		mediaType: map[string]interface{}{
-			keyName: value,
-		},
-	}
+	rcpt := whatsapp.Recipient{Phone: recipient.PhoneNumber}
+	return w.WhatsApp.SendTemplateMessage(ctx, waAccount, rcpt, template.Name, template.Language, components)
 }
 
 // decryptAccountSecrets decrypts the encrypted secrets on a WhatsApp account.
@@ -324,4 +292,3 @@ func (w *Worker) Close() error {
 	}
 	return nil
 }
-

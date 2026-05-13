@@ -45,7 +45,7 @@ jobs:
       - name: Setup Go
         uses: actions/setup-go@v5
         with:
-          go-version: '1.23'
+          go-version: '1.25'
           cache: true
 
       - name: Setup Node.js
@@ -84,8 +84,10 @@ jobs:
           [redis]
           host = "localhost"
           port = 6379
+          username = ""
           password = ""
           db = 0
+          tls = false
 
           [jwt]
           secret = "test-secret-key-for-ci"

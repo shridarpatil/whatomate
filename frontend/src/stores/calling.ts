@@ -1,6 +1,8 @@
 import { defineStore } from 'pinia'
-import { ref, computed } from 'vue'
+import { ref, reactive, computed } from 'vue'
 import { callLogsService, ivrFlowsService, callTransfersService, outgoingCallsService, type CallLog, type IVRFlow, type CallTransfer } from '@/services/api'
+import { toast } from 'vue-sonner'
+import { i18n } from '@/i18n'
 
 export const useCallingStore = defineStore('calling', () => {
   // Call Logs state
@@ -29,11 +31,15 @@ export const useCallingStore = defineStore('calling', () => {
   const isMuted = ref(false)
   let durationTimer: number | null = null
 
+  // Call permission state (in-memory only, cleared on refresh)
+  const callPermissions = reactive(new Map<string, { status: string, expiresAt?: string }>())
+
   // Outgoing call state
   const outgoingCallLogId = ref<string | null>(null)
   const outgoingCallStatus = ref<'initiating' | 'ringing' | 'answered' | 'ended' | null>(null)
   const outgoingContactName = ref<string>('')
   const outgoingContactPhone = ref<string>('')
+  const isOnHold = ref(false)
   const isTransferring = ref(false)
 
   // Computed
@@ -161,6 +167,12 @@ export const useCallingStore = defineStore('calling', () => {
   }
 
   async function acceptTransfer(id: string) {
+    // Snapshot the transfer before the API call — the server broadcasts
+    // call_transfer_connected immediately which removes it from waitingTransfers
+    // via the WebSocket handler before this function completes.
+    const transfer = waitingTransfers.value.find(t => t.id === id)
+    waitingTransfers.value = waitingTransfers.value.filter(t => t.id !== id)
+
     // Get microphone access
     let stream: MediaStream
     try {
@@ -231,12 +243,10 @@ export const useCallingStore = defineStore('calling', () => {
       sdp: sdpAnswer
     }))
 
-    // Transfer is now connected
-    const transfer = waitingTransfers.value.find(t => t.id === id)
+    // Transfer is now connected — use the snapshot taken before the API call
     if (transfer) {
       activeTransfer.value = { ...transfer, status: 'connected' }
     }
-    waitingTransfers.value = waitingTransfers.value.filter(t => t.id !== id)
     isOnCall.value = true
     callDuration.value = 0
 
@@ -382,6 +392,20 @@ export const useCallingStore = defineStore('calling', () => {
     }
   }
 
+  async function holdCall() {
+    const callLogId = outgoingCallLogId.value ?? activeTransfer.value?.call_log_id
+    if (!callLogId) return
+    await callLogsService.hold(callLogId)
+    isOnHold.value = true
+  }
+
+  async function resumeCall() {
+    const callLogId = outgoingCallLogId.value ?? activeTransfer.value?.call_log_id
+    if (!callLogId) return
+    await callLogsService.resume(callLogId)
+    isOnHold.value = false
+  }
+
   function cleanup() {
     if (durationTimer) {
       clearInterval(durationTimer)
@@ -396,6 +420,7 @@ export const useCallingStore = defineStore('calling', () => {
       localStream.value = null
     }
     isOnCall.value = false
+    isOnHold.value = false
     activeTransfer.value = null
     outgoingCallLogId.value = null
     outgoingCallStatus.value = null
@@ -403,6 +428,15 @@ export const useCallingStore = defineStore('calling', () => {
     outgoingContactPhone.value = ''
     callDuration.value = 0
     isMuted.value = false
+  }
+
+  // Call permission helpers
+  function getCallPermission(contactId: string) {
+    return callPermissions.get(contactId) ?? null
+  }
+
+  function setCallPermissionPending(contactId: string) {
+    callPermissions.set(contactId, { status: 'pending' })
   }
 
   // WebSocket handler for call events
@@ -426,6 +460,16 @@ export const useCallingStore = defineStore('calling', () => {
           cleanup()
         }
         break
+      case 'call_hold':
+        if (isOnCall.value) {
+          isOnHold.value = true
+        }
+        break
+      case 'call_resumed':
+        if (isOnCall.value) {
+          isOnHold.value = false
+        }
+        break
       case 'call_ended':
         // If the agent is on a call that just ended, clean up
         if (isOnCall.value) {
@@ -446,6 +490,24 @@ export const useCallingStore = defineStore('calling', () => {
       case 'outgoing_call_ended':
         cleanup()
         break
+      case 'call_permission_update': {
+        const t = i18n.global.t
+        const contactId = payload.contact_id
+        callPermissions.set(contactId, {
+          status: payload.status,
+          expiresAt: payload.expires_at,
+        })
+        if (payload.status === 'accepted') {
+          toast.success(t('outgoingCalls.permissionAccepted'), {
+            description: payload.contact_name || payload.contact_phone,
+          })
+        } else {
+          toast.error(t('outgoingCalls.permissionDeclined'), {
+            description: payload.contact_name || payload.contact_phone,
+          })
+        }
+        break
+      }
       default:
         // For regular call events, refresh call logs
         fetchCallLogs()
@@ -480,10 +542,13 @@ export const useCallingStore = defineStore('calling', () => {
     isOnCall,
     callDuration,
     isMuted,
+    isOnHold,
     fetchWaitingTransfers,
     acceptTransfer,
     endCall,
     toggleMute,
+    holdCall,
+    resumeCall,
     cleanup,
     isTransferring,
     initiateTransfer,
@@ -494,6 +559,10 @@ export const useCallingStore = defineStore('calling', () => {
     outgoingContactPhone,
     isOutgoingCall,
     makeOutgoingCall,
+    // Call permissions
+    callPermissions,
+    getCallPermission,
+    setCallPermissionPending,
     // WS handler
     handleCallEvent
   }

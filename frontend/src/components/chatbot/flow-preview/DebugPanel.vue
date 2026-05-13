@@ -128,7 +128,7 @@ function handlePlayPause() {
             variant="ghost"
             size="icon"
             class="h-7 w-7"
-            :disabled="state.status !== 'paused'"
+            :disabled="state.status === 'idle' || state.status === 'completed' || state.status === 'error' || state.status === 'waiting_input'"
             @click="emit('stepForward')"
           >
             <SkipForward class="h-4 w-4" />

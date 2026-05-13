@@ -1,6 +1,13 @@
 import { test, expect } from '@playwright/test'
-import { loginAsAdmin } from '../../helpers'
+import { ApiHelper, login, loginAsAdmin } from '../../helpers'
 import { ChatPage } from '../../pages'
+import { createTestScope } from '../../framework'
+
+const cannedScope = createTestScope('chat-canned-preview')
+// Seed via API as admin@admin.com (always exists per migrations) and log the
+// browser in as the same user — otherwise the API-created contact lives in a
+// different org from the UI session and the chat composer never renders.
+const ADMIN_USER = { email: 'admin@admin.com', password: 'admin', role: 'admin' as const }
 
 test.describe('Chat Page', () => {
   let chatPage: ChatPage
@@ -330,5 +337,120 @@ test.describe('Custom Actions', () => {
         await expect(actionsBtn.first()).toBeVisible()
       }
     }
+  })
+})
+
+test.describe('Canned Response Preview', () => {
+  let api: ApiHelper
+  let chatPage: ChatPage
+  let contact: { id: string; profile_name: string }
+  let plain: { id: string; name: string; shortcut: string }
+  let withParam: { id: string; name: string; shortcut: string }
+  let withContactName: { id: string; name: string; shortcut: string }
+
+  test.beforeEach(async ({ page, request }) => {
+    api = new ApiHelper(request)
+    await api.login('admin@admin.com', 'admin')
+
+    // Names use the random-suffix form (no second arg) so each test creates
+    // distinct rows. The DELETE endpoint soft-deletes, so a deterministic
+    // name would collide with the prior test's tombstone within the worker.
+    contact = await api.createContact(cannedScope.phone(), cannedScope.name())
+    const plainName = cannedScope.name()
+    plain = await api.createCannedResponse({
+      name: plainName,
+      shortcut: plainName.toLowerCase(),
+      content: 'Hello! Thanks for contacting us.',
+    })
+    const orderName = cannedScope.name()
+    withParam = await api.createCannedResponse({
+      name: orderName,
+      shortcut: orderName.toLowerCase(),
+      content: 'Your order #{{order_id}} is ready.',
+    })
+    const greetName = cannedScope.name()
+    withContactName = await api.createCannedResponse({
+      name: greetName,
+      shortcut: greetName.toLowerCase(),
+      content: 'Hi {{contact_name}}, how can I help?',
+    })
+
+    await login(page, ADMIN_USER)
+    chatPage = new ChatPage(page)
+    await chatPage.goto(contact.id)
+  })
+
+  test.afterEach(async () => {
+    for (const id of [plain?.id, withParam?.id, withContactName?.id]) {
+      if (id) await api.deleteCannedResponse(id).catch(() => {})
+    }
+  })
+
+  test('opens preview dialog with no inputs when content has no placeholders', async () => {
+    await chatPage.openCannedResponses()
+    await chatPage.selectCannedPickerItem(plain.name)
+
+    await chatPage.cannedDialog.waitFor({ state: 'visible' })
+    await expect(chatPage.cannedDialog).toContainText(plain.name)
+    await expect(chatPage.cannedDialogPreview).toContainText('Hello! Thanks for contacting us.')
+    await expect(chatPage.cannedDialogParamInputs).toHaveCount(0)
+  })
+
+  test('renders an input for each {{custom}} token and updates preview live', async () => {
+    await chatPage.openCannedResponses()
+    await chatPage.selectCannedPickerItem(withParam.name)
+
+    await chatPage.cannedDialog.waitFor({ state: 'visible' })
+    await expect(chatPage.cannedDialogParamInputs).toHaveCount(1)
+    // Until the agent fills the input the preview keeps the literal token.
+    await expect(chatPage.cannedDialogPreview).toContainText('{{order_id}}')
+
+    await chatPage.fillCannedParam('order_id', '12345')
+    await expect(chatPage.cannedDialogPreview).toContainText('Your order #12345 is ready.')
+    await expect(chatPage.cannedDialogPreview).not.toContainText('{{order_id}}')
+  })
+
+  test('auto-resolves {{contact_name}} without exposing an input', async () => {
+    await chatPage.openCannedResponses()
+    await chatPage.selectCannedPickerItem(withContactName.name)
+
+    await chatPage.cannedDialog.waitFor({ state: 'visible' })
+    await expect(chatPage.cannedDialogParamInputs).toHaveCount(0)
+    await expect(chatPage.cannedDialogPreview).toContainText(`Hi ${contact.profile_name}, how can I help?`)
+  })
+
+  test('Send dispatches the resolved body to the messages API', async ({ page }) => {
+    let postedBody: { type?: string; content?: { body?: string } } | null = null
+    // Intercept the POST so we can assert the resolved body without depending
+    // on a real WhatsApp account being configured in the test backend.
+    await page.route(`**/api/contacts/${contact.id}/messages`, async (route) => {
+      postedBody = JSON.parse(route.request().postData() || '{}')
+      await route.fulfill({
+        status: 500,
+        contentType: 'application/json',
+        body: JSON.stringify({ status: 'error', message: 'mocked' }),
+      })
+    })
+
+    await chatPage.openCannedResponses()
+    await chatPage.selectCannedPickerItem(withParam.name)
+    await chatPage.cannedDialog.waitFor({ state: 'visible' })
+    await chatPage.fillCannedParam('order_id', '99')
+    await chatPage.sendCannedDialog()
+
+    await expect.poll(() => postedBody, { timeout: 5000 }).not.toBeNull()
+    expect(postedBody!.type).toBe('text')
+    expect(postedBody!.content?.body).toBe('Your order #99 is ready.')
+  })
+
+  test('Cancel closes the dialog and clears any leftover slash command', async () => {
+    // Open the picker via slash command, then cancel — the textarea should
+    // be empty afterwards (the slash command is dropped on selection).
+    await chatPage.messageInput.fill(`/${plain.shortcut}`)
+    await chatPage.selectCannedPickerItem(plain.name)
+    await chatPage.cannedDialog.waitFor({ state: 'visible' })
+
+    await chatPage.cancelCannedDialog()
+    await expect(chatPage.messageInput).toHaveValue('')
   })
 })

@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/shridarpatil/whatomate/internal/audit"
 	"github.com/shridarpatil/whatomate/internal/models"
 	"github.com/valyala/fasthttp"
 	"github.com/zerodha/fastglue"
@@ -136,18 +137,10 @@ func (a *App) ListUsers(r *fastglue.Request) error {
 		}
 	}
 
-	// Fetch actual home org IDs (separate query avoids JOIN column conflict)
+	// Build home org map from already-fetched users (no extra query needed)
 	homeOrgMap := make(map[uuid.UUID]uuid.UUID, len(users))
-	if len(userIDs) > 0 {
-		type idOrg struct {
-			ID             uuid.UUID
-			OrganizationID uuid.UUID
-		}
-		var homeOrgs []idOrg
-		a.DB.Model(&models.User{}).Select("id, organization_id").Where("id IN ?", userIDs).Find(&homeOrgs)
-		for _, ho := range homeOrgs {
-			homeOrgMap[ho.ID] = ho.OrganizationID
-		}
+	for _, u := range users {
+		homeOrgMap[u.ID] = u.OrganizationID
 	}
 
 	// Convert to response format, using org-specific role
@@ -163,7 +156,7 @@ func (a *App) ListUsers(r *fastglue.Request) error {
 		response[i] = resp
 	}
 
-	return r.SendEnvelope(map[string]interface{}{
+	return r.SendEnvelope(map[string]any{
 		"users": response,
 		"total": total,
 		"page":  pg.Page,
@@ -276,7 +269,7 @@ func (a *App) CreateUser(r *fastglue.Request) error {
 	var softDeleted models.User
 	if err := a.DB.Unscoped().Where("email = ? AND deleted_at IS NOT NULL", req.Email).First(&softDeleted).Error; err == nil {
 		// Restore the soft-deleted user with new details
-		if err := a.DB.Unscoped().Model(&softDeleted).Updates(map[string]interface{}{
+		if err := a.DB.Unscoped().Model(&softDeleted).Updates(map[string]any{
 			"deleted_at":      nil,
 			"organization_id": orgID,
 			"password_hash":   string(hashedPassword),
@@ -292,7 +285,7 @@ func (a *App) CreateUser(r *fastglue.Request) error {
 		// Restore or create UserOrganization entry
 		var existingOrg models.UserOrganization
 		if err := a.DB.Unscoped().Where("user_id = ? AND organization_id = ?", softDeleted.ID, orgID).First(&existingOrg).Error; err == nil {
-			a.DB.Unscoped().Model(&existingOrg).Updates(map[string]interface{}{
+			a.DB.Unscoped().Model(&existingOrg).Updates(map[string]any{
 				"deleted_at": nil,
 				"role_id":    roleID,
 				"is_default": true,
@@ -319,6 +312,9 @@ func (a *App) CreateUser(r *fastglue.Request) error {
 		softDeleted.RoleID = roleID
 		softDeleted.IsActive = true
 		softDeleted.IsSuperAdmin = isSuperAdmin
+
+		audit.LogAudit(a.DB, orgID, userID, audit.GetUserName(a.DB, userID),
+			"user", softDeleted.ID, models.AuditActionCreated, nil, userAuditSnapshot(&softDeleted))
 
 		return r.SendEnvelope(userToResponse(softDeleted))
 	}
@@ -352,6 +348,9 @@ func (a *App) CreateUser(r *fastglue.Request) error {
 
 	// Load role for response
 	a.DB.Preload("Role").First(&user, user.ID)
+
+	audit.LogAudit(a.DB, orgID, userID, audit.GetUserName(a.DB, userID),
+		"user", user.ID, models.AuditActionCreated, nil, userAuditSnapshot(&user))
 
 	return r.SendEnvelope(userToResponse(user))
 }
@@ -398,6 +397,9 @@ func (a *App) UpdateUser(r *fastglue.Request) error {
 		}
 	}
 
+	// Snapshot before changes for audit log diff.
+	oldSnap := userAuditSnapshot(&user)
+
 	var req UserRequest
 	if err := r.Decode(&req, "json"); err != nil {
 		a.Log.Error("UpdateUser: Failed to decode request", "error", err, "body", string(r.RequestCtx.PostBody()))
@@ -431,6 +433,10 @@ func (a *App) UpdateUser(r *fastglue.Request) error {
 		// Return updated response
 		user.RoleID = req.RoleID
 		user.Role = &newRole
+
+		audit.LogAudit(a.DB, orgID, currentUserID, audit.GetUserName(a.DB, currentUserID),
+			"user", user.ID, models.AuditActionUpdated, oldSnap, userAuditSnapshot(&user))
+
 		resp := userToResponse(user)
 		resp.IsMember = true
 		return r.SendEnvelope(resp)
@@ -515,6 +521,9 @@ func (a *App) UpdateUser(r *fastglue.Request) error {
 	// Load role for response
 	a.DB.Preload("Role").First(&user, user.ID)
 
+	audit.LogAudit(a.DB, orgID, currentUserID, audit.GetUserName(a.DB, currentUserID),
+		"user", user.ID, models.AuditActionUpdated, oldSnap, userAuditSnapshot(&user))
+
 	return r.SendEnvelope(userToResponse(user))
 }
 
@@ -562,6 +571,10 @@ func (a *App) DeleteUser(r *fastglue.Request) error {
 			return r.SendErrorEnvelope(fasthttp.StatusInternalServerError, "Failed to remove member", nil, "")
 		}
 		a.InvalidateUserPermissionsCache(id)
+
+		audit.LogAudit(a.DB, orgID, currentUserID, audit.GetUserName(a.DB, currentUserID),
+			"user", id, models.AuditActionDeleted, userAuditSnapshot(&user), nil)
+
 		return r.SendEnvelope(map[string]string{"message": "Member removed from organization"})
 	}
 
@@ -593,6 +606,9 @@ func (a *App) DeleteUser(r *fastglue.Request) error {
 
 	// Delete all UserOrganization entries for this user
 	a.DB.Where("user_id = ?", id).Delete(&models.UserOrganization{})
+
+	audit.LogAudit(a.DB, orgID, currentUserID, audit.GetUserName(a.DB, currentUserID),
+		"user", id, models.AuditActionDeleted, userAuditSnapshot(&user), nil)
 
 	return r.SendEnvelope(map[string]string{"message": "User deleted successfully"})
 }
@@ -661,8 +677,8 @@ func splitPermission(p string) []string {
 
 // UpdateCurrentUserSettings updates the current user's notification/preferences settings
 func (a *App) UpdateCurrentUserSettings(r *fastglue.Request) error {
-	userID, ok := r.RequestCtx.UserValue("user_id").(uuid.UUID)
-	if !ok {
+	orgID, userID, err := a.getOrgAndUserID(r)
+	if err != nil {
 		return r.SendErrorEnvelope(fasthttp.StatusUnauthorized, "Unauthorized", nil, "")
 	}
 
@@ -681,6 +697,8 @@ func (a *App) UpdateCurrentUserSettings(r *fastglue.Request) error {
 		user.Settings = make(models.JSONB)
 	}
 
+	oldNotif := notificationSettingsSnapshot(user.Settings)
+
 	// Update notification settings
 	user.Settings["email_notifications"] = req.EmailNotifications
 	user.Settings["new_message_alerts"] = req.NewMessageAlerts
@@ -691,10 +709,24 @@ func (a *App) UpdateCurrentUserSettings(r *fastglue.Request) error {
 		return r.SendErrorEnvelope(fasthttp.StatusInternalServerError, "Failed to update settings", nil, "")
 	}
 
-	return r.SendEnvelope(map[string]interface{}{
+	newNotif := notificationSettingsSnapshot(user.Settings)
+	audit.LogAudit(a.DB, orgID, userID, audit.GetUserName(a.DB, userID),
+		models.ResourceSettingsNotification, userID, models.AuditActionUpdated, oldNotif, newNotif)
+
+	return r.SendEnvelope(map[string]any{
 		"message":  "Settings updated successfully",
 		"settings": user.Settings,
 	})
+}
+
+// notificationSettingsSnapshot extracts notification-preference fields from
+// a user's JSONB settings into a map suitable for audit diffing.
+func notificationSettingsSnapshot(settings models.JSONB) map[string]any {
+	return map[string]any{
+		"email_notifications": settings["email_notifications"],
+		"new_message_alerts":  settings["new_message_alerts"],
+		"campaign_updates":    settings["campaign_updates"],
+	}
 }
 
 // ChangePassword changes the current user's password
@@ -746,6 +778,27 @@ func (a *App) ChangePassword(r *fastglue.Request) error {
 }
 
 // Helper function to convert User to UserResponse
+// userAuditSnapshot returns a minimal, diff-friendly representation of a user
+// for audit logging. Sensitive fields (password hash) and noisy fields (settings,
+// availability, timestamps) are intentionally excluded.
+func userAuditSnapshot(user *models.User) map[string]any {
+	if user == nil {
+		return nil
+	}
+	snap := map[string]any{
+		"full_name":      user.FullName,
+		"email":          user.Email,
+		"is_active":      user.IsActive,
+		"is_super_admin": user.IsSuperAdmin,
+	}
+	if user.Role != nil {
+		snap["role"] = user.Role.Name
+	} else {
+		snap["role"] = ""
+	}
+	return snap
+}
+
 func userToResponse(user models.User) UserResponse {
 	resp := UserResponse{
 		ID:             user.ID,
@@ -789,12 +842,12 @@ func userToResponse(user models.User) UserResponse {
 
 // MyOrganizationResponse represents an organization in the user's org list
 type MyOrganizationResponse struct {
-	OrganizationID uuid.UUID `json:"organization_id"`
-	Name           string    `json:"name"`
-	Slug           string    `json:"slug"`
+	OrganizationID uuid.UUID  `json:"organization_id"`
+	Name           string     `json:"name"`
+	Slug           string     `json:"slug"`
 	RoleID         *uuid.UUID `json:"role_id,omitempty"`
-	RoleName       string    `json:"role_name,omitempty"`
-	IsDefault      bool      `json:"is_default"`
+	RoleName       string     `json:"role_name,omitempty"`
+	IsDefault      bool       `json:"is_default"`
 }
 
 // ListMyOrganizations returns all organizations the current user belongs to
@@ -830,7 +883,7 @@ func (a *App) ListMyOrganizations(r *fastglue.Request) error {
 		response = append(response, item)
 	}
 
-	return r.SendEnvelope(map[string]interface{}{
+	return r.SendEnvelope(map[string]any{
 		"organizations": response,
 	})
 }
@@ -904,11 +957,11 @@ func (a *App) UpdateAvailability(r *fastglue.Request) error {
 		}
 	}
 
-	return r.SendEnvelope(map[string]interface{}{
-		"message":             "Availability updated successfully",
-		"is_available":        user.IsAvailable,
-		"status":              status,
-		"break_started_at":    breakStartedAt,
-		"transfers_to_queue":  transfersReturned,
+	return r.SendEnvelope(map[string]any{
+		"message":            "Availability updated successfully",
+		"is_available":       user.IsAvailable,
+		"status":             status,
+		"break_started_at":   breakStartedAt,
+		"transfers_to_queue": transfersReturned,
 	})
 }

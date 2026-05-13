@@ -8,9 +8,9 @@ export default defineConfig({
     starlight({
       title: 'Whatomate',
       description: 'A modern WhatsApp Business Platform',
-      social: {
-        github: 'https://github.com/shridarpatil/whatomate',
-      },
+      social: [
+        { icon: 'github', label: 'GitHub', href: 'https://github.com/shridarpatil/whatomate' },
+      ],
       sidebar: [
         {
           label: 'Getting Started',
@@ -25,6 +25,8 @@ export default defineConfig({
           items: [
             { label: 'Dashboard', slug: 'features/dashboard' },
             { label: 'Roles & Permissions', slug: 'features/roles-permissions' },
+            { label: 'SSO (Single Sign-On)', slug: 'features/sso' },
+            { label: 'Audit Logs', slug: 'features/audit-logs' },
             { label: 'Chatbot Automation', slug: 'features/chatbot' },
             { label: 'Canned Responses', slug: 'features/canned-responses' },
             { label: 'Custom Actions', slug: 'features/custom-actions' },

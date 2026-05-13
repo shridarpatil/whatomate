@@ -5,11 +5,37 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/shridarpatil/whatomate/internal/audit"
 	"github.com/shridarpatil/whatomate/internal/database"
 	"github.com/shridarpatil/whatomate/internal/models"
+	"github.com/shridarpatil/whatomate/internal/utils"
 	"github.com/valyala/fasthttp"
 	"github.com/zerodha/fastglue"
 )
+
+// generalSettingsSnapshot extracts the fields shown on the General tab into a
+// map suitable for audit diffing. Reading from a nil JSONB map returns the
+// zero value (nil), which is treated as "unset" by the audit comparator.
+func generalSettingsSnapshot(name string, settings models.JSONB) map[string]any {
+	return map[string]any{
+		"name":               name,
+		"timezone":           settings["timezone"],
+		"date_format":        settings["date_format"],
+		"mask_phone_numbers": settings["mask_phone_numbers"],
+	}
+}
+
+// callingSettingsSnapshot extracts the fields shown on the Calling tab into a
+// map suitable for audit diffing.
+func callingSettingsSnapshot(settings models.JSONB) map[string]any {
+	return map[string]any{
+		"calling_enabled":       settings["calling_enabled"],
+		"max_call_duration":     settings["max_call_duration"],
+		"transfer_timeout_secs": settings["transfer_timeout_secs"],
+		"hold_music_file":       settings["hold_music_file"],
+		"ringback_file":         settings["ringback_file"],
+	}
+}
 
 // OrganizationSettings represents the settings structure
 type OrganizationSettings struct {
@@ -74,7 +100,7 @@ func (a *App) GetOrganizationSettings(r *fastglue.Request) error {
 		}
 	}
 
-	return r.SendEnvelope(map[string]interface{}{
+	return r.SendEnvelope(map[string]any{
 		"settings": settings,
 		"name":     org.Name,
 	})
@@ -82,7 +108,7 @@ func (a *App) GetOrganizationSettings(r *fastglue.Request) error {
 
 // UpdateOrganizationSettings updates the organization settings
 func (a *App) UpdateOrganizationSettings(r *fastglue.Request) error {
-	orgID, err := a.getOrgID(r)
+	orgID, userID, err := a.getOrgAndUserID(r)
 	if err != nil {
 		return r.SendErrorEnvelope(fasthttp.StatusUnauthorized, "Unauthorized", nil, "")
 	}
@@ -107,6 +133,14 @@ func (a *App) UpdateOrganizationSettings(r *fastglue.Request) error {
 	if err := a.DB.Where("id = ?", orgID).First(&org).Error; err != nil {
 		return r.SendErrorEnvelope(fasthttp.StatusNotFound, "Organization not found", nil, "")
 	}
+
+	// Snapshot before mutation so we can compute per-tab diffs.
+	oldGeneral := generalSettingsSnapshot(org.Name, org.Settings)
+	oldCalling := callingSettingsSnapshot(org.Settings)
+
+	// Track which tabs received updates so we only audit the relevant ones.
+	generalTouched := req.MaskPhoneNumbers != nil || req.Timezone != nil || req.DateFormat != nil || (req.Name != nil && *req.Name != "")
+	callingTouched := req.CallingEnabled != nil || req.MaxCallDuration != nil || req.TransferTimeoutSecs != nil || req.HoldMusicFile != nil || req.RingbackFile != nil
 
 	// Update settings
 	if org.Settings == nil {
@@ -146,14 +180,31 @@ func (a *App) UpdateOrganizationSettings(r *fastglue.Request) error {
 		return r.SendErrorEnvelope(fasthttp.StatusInternalServerError, "Failed to update settings", nil, "")
 	}
 
-	return r.SendEnvelope(map[string]interface{}{
+	if a.CallManager != nil {
+		a.CallManager.InvalidateOrgCallingSettingsCache(orgID)
+	}
+
+	// Emit per-tab audit entries. LogAudit is a no-op when there are zero changes.
+	userName := audit.GetUserName(a.DB, userID)
+	if generalTouched {
+		newGeneral := generalSettingsSnapshot(org.Name, org.Settings)
+		audit.LogAudit(a.DB, orgID, userID, userName,
+			models.ResourceSettingsGeneral, orgID, models.AuditActionUpdated, oldGeneral, newGeneral)
+	}
+	if callingTouched {
+		newCalling := callingSettingsSnapshot(org.Settings)
+		audit.LogAudit(a.DB, orgID, userID, userName,
+			models.ResourceSettingsCalling, orgID, models.AuditActionUpdated, oldCalling, newCalling)
+	}
+
+	return r.SendEnvelope(map[string]any{
 		"message": "Settings updated successfully",
 	})
 }
 
 // IsCallingEnabledForOrg checks if calling is enabled for an organization.
 // Both the global CallManager and the per-org setting must be active.
-func (a *App) IsCallingEnabledForOrg(orgID interface{}) bool {
+func (a *App) IsCallingEnabledForOrg(orgID any) bool {
 	if a.CallManager == nil {
 		return false
 	}
@@ -179,7 +230,7 @@ func (a *App) requireCallingEnabled(r *fastglue.Request, orgID uuid.UUID) error 
 }
 
 // GetOrgCallingConfig returns org-level calling config values, falling back to global defaults.
-func (a *App) GetOrgCallingConfig(orgID interface{}) (maxDuration, transferTimeout int) {
+func (a *App) GetOrgCallingConfig(orgID any) (maxDuration, transferTimeout int) {
 	maxDuration = callingConfigDefault(a.Config.Calling.MaxCallDuration, 3600)
 	transferTimeout = callingConfigDefault(a.Config.Calling.TransferTimeoutSecs, 60)
 
@@ -206,53 +257,17 @@ func callingConfigDefault(val, fallback int) int {
 	return fallback
 }
 
-// MaskPhoneNumber masks a phone number showing only last 4 digits
-func MaskPhoneNumber(phone string) string {
-	if len(phone) <= 4 {
-		return phone
-	}
-	masked := ""
-	for i := 0; i < len(phone)-4; i++ {
-		masked += "*"
-	}
-	return masked + phone[len(phone)-4:]
-}
-
-// LooksLikePhoneNumber checks if a string looks like a phone number
-// (mostly digits, optionally with common phone formatting characters)
-func LooksLikePhoneNumber(s string) bool {
-	if len(s) < 7 {
-		return false
-	}
-	digitCount := 0
-	for _, c := range s {
-		if c >= '0' && c <= '9' {
-			digitCount++
-		}
-	}
-	// If at least 7 digits and more than 70% of the string is digits
-	return digitCount >= 7 && float64(digitCount)/float64(len(s)) > 0.7
-}
-
-// MaskIfPhoneNumber masks a string if it looks like a phone number
-func MaskIfPhoneNumber(s string) string {
-	if LooksLikePhoneNumber(s) {
-		return MaskPhoneNumber(s)
-	}
-	return s
-}
-
 // MaskContactFields conditionally masks a profile name and phone number
 // if phone masking is enabled for the given organization.
-func (a *App) MaskContactFields(orgID interface{}, profileName, phoneNumber string) (string, string) {
+func (a *App) MaskContactFields(orgID any, profileName, phoneNumber string) (string, string) {
 	if a.ShouldMaskPhoneNumbers(orgID) {
-		return MaskIfPhoneNumber(profileName), MaskPhoneNumber(phoneNumber)
+		return utils.MaskIfPhoneNumber(profileName), utils.MaskPhoneNumber(phoneNumber)
 	}
 	return profileName, phoneNumber
 }
 
 // ShouldMaskPhoneNumbers checks if phone masking is enabled for the organization
-func (a *App) ShouldMaskPhoneNumbers(orgID interface{}) bool {
+func (a *App) ShouldMaskPhoneNumbers(orgID any) bool {
 	var org models.Organization
 	if err := a.DB.Where("id = ?", orgID).First(&org).Error; err != nil {
 		return false
@@ -484,7 +499,7 @@ func (a *App) ListOrganizationMembers(r *fastglue.Request) error {
 		return r.SendErrorEnvelope(fasthttp.StatusInternalServerError, "Failed to list members", nil, "")
 	}
 
-	return r.SendEnvelope(map[string]interface{}{
+	return r.SendEnvelope(map[string]any{
 		"members": response,
 		"total":   total,
 		"page":    pg.Page,

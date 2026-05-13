@@ -2,45 +2,18 @@
 import { ref, onMounted, watch, computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
-import { Label } from '@/components/ui/label'
-import { Textarea } from '@/components/ui/textarea'
 import { Badge } from '@/components/ui/badge'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { Switch } from '@/components/ui/switch'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from '@/components/ui/dialog'
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select'
 import { chatbotService } from '@/services/api'
-import { useCrudState } from '@/composables/useCrudState'
 import { toast } from 'vue-sonner'
-import { PageHeader, DataTable, DeleteConfirmDialog, SearchInput, type Column } from '@/components/shared'
+import { PageHeader, DataTable, DeleteConfirmDialog, SearchInput, IconButton, ErrorState, type Column } from '@/components/shared'
 import { getErrorMessage } from '@/lib/api-utils'
 import { Plus, Pencil, Trash2, Sparkles } from 'lucide-vue-next'
 import { useDebounceFn } from '@vueuse/core'
 
 const { t } = useI18n()
-
-interface ApiConfig {
-  url: string
-  method: string
-  headers: Record<string, string>
-  body: string
-  response_path: string
-}
 
 interface AIContext {
   id: string
@@ -48,38 +21,35 @@ interface AIContext {
   context_type: string
   trigger_keywords: string[]
   static_content: string
-  api_config: ApiConfig
+  api_config: {
+    url: string
+    method: string
+    headers: Record<string, string>
+    body: string
+    response_path: string
+  }
   priority: number
   enabled: boolean
   created_at: string
 }
 
-interface AIContextFormData {
-  name: string
-  context_type: string
-  trigger_keywords: string
-  static_content: string
-  api_url: string
-  api_method: string
-  api_headers: string
-  api_response_path: string
-  priority: number
-  enabled: boolean
-}
-
-const defaultFormData: AIContextFormData = {
-  name: '', context_type: 'static', trigger_keywords: '', static_content: '',
-  api_url: '', api_method: 'GET', api_headers: '', api_response_path: '',
-  priority: 10, enabled: true
-}
-
 const contexts = ref<AIContext[]>([])
 const isLoading = ref(true)
+const isDeleting = ref(false)
+const error = ref<string | null>(null)
 const searchQuery = ref('')
-const {
-  isSubmitting, isDialogOpen, editingItem: editingContext, deleteDialogOpen, itemToDelete: contextToDelete,
-  formData, openCreateDialog, openEditDialog: baseOpenEditDialog, openDeleteDialog, closeDialog, closeDeleteDialog,
-} = useCrudState<AIContext, AIContextFormData>(defaultFormData)
+const deleteDialogOpen = ref(false)
+const contextToDelete = ref<AIContext | null>(null)
+
+function openDeleteDialog(context: AIContext) {
+  contextToDelete.value = context
+  deleteDialogOpen.value = true
+}
+
+function closeDeleteDialog() {
+  deleteDialogOpen.value = false
+  contextToDelete.value = null
+}
 
 // Pagination state
 const currentPage = ref(1)
@@ -98,15 +68,13 @@ const columns = computed<Column<AIContext>[]>(() => [
 const sortKey = ref('priority')
 const sortDirection = ref<'asc' | 'desc'>('desc')
 
-// Helper to display variable placeholders without Vue parsing issues
-const variableExample = (name: string) => `{{${name}}}`
-
 onMounted(async () => {
   await fetchContexts()
 })
 
 async function fetchContexts() {
   isLoading.value = true
+  error.value = null
   try {
     const response = await chatbotService.listAIContexts({
       search: searchQuery.value || undefined,
@@ -117,8 +85,9 @@ async function fetchContexts() {
     const data = (response.data as any).data || response.data
     contexts.value = data.contexts || []
     totalItems.value = data.total ?? contexts.value.length
-  } catch (error) {
-    console.error('Failed to load AI contexts:', error)
+  } catch (err) {
+    console.error('Failed to load AI contexts:', err)
+    error.value = t('aiContexts.fetchError')
     contexts.value = []
   } finally {
     isLoading.value = false
@@ -141,82 +110,11 @@ function handlePageChange(page: number) {
   fetchContexts()
 }
 
-function openEditDialog(context: AIContext) {
-  const apiConfig = context.api_config || {} as ApiConfig
-  baseOpenEditDialog(context, (c) => ({
-    name: c.name,
-    context_type: c.context_type || 'static',
-    trigger_keywords: (c.trigger_keywords || []).join(', '),
-    static_content: c.static_content || '',
-    api_url: apiConfig.url || '',
-    api_method: apiConfig.method || 'GET',
-    api_headers: apiConfig.headers ? JSON.stringify(apiConfig.headers, null, 2) : '',
-    api_response_path: apiConfig.response_path || '',
-    priority: c.priority || 10,
-    enabled: c.enabled
-  }))
-}
-
-async function saveContext() {
-  if (!formData.value.name.trim()) {
-    toast.error(t('aiContexts.enterName'))
-    return
-  }
-
-  if (formData.value.context_type === 'api' && !formData.value.api_url.trim()) {
-    toast.error(t('aiContexts.enterApiUrl'))
-    return
-  }
-
-  isSubmitting.value = true
-  try {
-    // Parse headers JSON if provided
-    let headers = {}
-    if (formData.value.api_headers.trim()) {
-      try {
-        headers = JSON.parse(formData.value.api_headers)
-      } catch (e) {
-        toast.error(t('aiContexts.invalidHeaders'))
-        isSubmitting.value = false
-        return
-      }
-    }
-
-    const data: any = {
-      name: formData.value.name,
-      context_type: formData.value.context_type,
-      trigger_keywords: formData.value.trigger_keywords.split(',').map(k => k.trim()).filter(Boolean),
-      static_content: formData.value.static_content,
-      api_config: formData.value.context_type === 'api' ? {
-        url: formData.value.api_url,
-        method: formData.value.api_method,
-        headers: headers,
-        response_path: formData.value.api_response_path
-      } : null,
-      priority: formData.value.priority,
-      enabled: formData.value.enabled
-    }
-
-    if (editingContext.value) {
-      await chatbotService.updateAIContext(editingContext.value.id, data)
-      toast.success(t('common.updatedSuccess', { resource: t('resources.AIContext') }))
-    } else {
-      await chatbotService.createAIContext(data)
-      toast.success(t('common.createdSuccess', { resource: t('resources.AIContext') }))
-    }
-
-    closeDialog()
-    await fetchContexts()
-  } catch (error: any) {
-    toast.error(getErrorMessage(error, t('common.failedSave', { resource: t('resources.AIContext') })))
-  } finally {
-    isSubmitting.value = false
-  }
-}
 
 async function confirmDeleteContext() {
   if (!contextToDelete.value) return
 
+  isDeleting.value = true
   try {
     await chatbotService.deleteAIContext(contextToDelete.value.id)
     toast.success(t('common.deletedSuccess', { resource: t('resources.AIContext') }))
@@ -224,6 +122,8 @@ async function confirmDeleteContext() {
     await fetchContexts()
   } catch (error: any) {
     toast.error(getErrorMessage(error, t('common.failedDelete', { resource: t('resources.AIContext') })))
+  } finally {
+    isDeleting.value = false
   }
 }
 
@@ -248,16 +148,18 @@ async function toggleContext(context: AIContext) {
       :breadcrumbs="[{ label: $t('aiContexts.backToChatbot'), href: '/chatbot' }, { label: $t('nav.aiContexts') }]"
     >
       <template #actions>
-        <Button variant="outline" size="sm" @click="openCreateDialog">
-          <Plus class="h-4 w-4 mr-2" />
-          {{ $t('aiContexts.addContext') }}
-        </Button>
+        <RouterLink to="/chatbot/ai/new">
+          <Button variant="outline" size="sm">
+            <Plus class="h-4 w-4 mr-2" />
+            {{ $t('aiContexts.addContext') }}
+          </Button>
+        </RouterLink>
       </template>
     </PageHeader>
 
     <ScrollArea class="flex-1">
       <div class="p-6">
-        <div class="max-w-6xl mx-auto">
+        <div>
           <Card>
             <CardHeader>
               <div class="flex items-center justify-between flex-wrap gap-4">
@@ -269,7 +171,15 @@ async function toggleContext(context: AIContext) {
               </div>
             </CardHeader>
             <CardContent>
+              <ErrorState
+                v-if="error"
+                :title="$t('common.loadErrorTitle')"
+                :description="error"
+                :retry-label="$t('common.retry')"
+                @retry="fetchContexts"
+              />
               <DataTable
+                v-else
                 :items="contexts"
                 :columns="columns"
                 :is-loading="isLoading"
@@ -286,7 +196,7 @@ async function toggleContext(context: AIContext) {
                 @page-change="handlePageChange"
               >
                 <template #cell-name="{ item: context }">
-                  <span class="font-medium">{{ context.name }}</span>
+                  <RouterLink :to="`/chatbot/ai/${context.id}`" class="font-medium text-inherit no-underline hover:opacity-80">{{ context.name }}</RouterLink>
                 </template>
                 <template #cell-context_type="{ item: context }">
                   <Badge
@@ -320,19 +230,17 @@ async function toggleContext(context: AIContext) {
                 </template>
                 <template #cell-actions="{ item: context }">
                   <div class="flex items-center justify-end gap-1">
-                    <Button variant="ghost" size="icon" class="h-8 w-8" @click="openEditDialog(context)">
-                      <Pencil class="h-4 w-4" />
-                    </Button>
-                    <Button variant="ghost" size="icon" class="h-8 w-8 text-destructive" @click="openDeleteDialog(context)">
-                      <Trash2 class="h-4 w-4" />
-                    </Button>
+                    <RouterLink :to="`/chatbot/ai/${context.id}`"><IconButton :icon="Pencil" :label="$t('aiContexts.editContextLabel')" class="h-8 w-8" /></RouterLink>
+                    <IconButton :icon="Trash2" :label="$t('aiContexts.deleteContextLabel')" class="h-8 w-8 text-destructive" @click="openDeleteDialog(context)" />
                   </div>
                 </template>
                 <template #empty-action>
-                  <Button v-if="!searchQuery" variant="outline" size="sm" @click="openCreateDialog">
-                    <Plus class="h-4 w-4 mr-2" />
-                    {{ $t('aiContexts.addContext') }}
-                  </Button>
+                  <RouterLink v-if="!searchQuery" to="/chatbot/ai/new">
+                    <Button variant="outline" size="sm">
+                      <Plus class="h-4 w-4 mr-2" />
+                      {{ $t('aiContexts.addContext') }}
+                    </Button>
+                  </RouterLink>
                 </template>
               </DataTable>
             </CardContent>
@@ -341,153 +249,11 @@ async function toggleContext(context: AIContext) {
       </div>
     </ScrollArea>
 
-    <!-- Create/Edit Dialog -->
-    <Dialog v-model:open="isDialogOpen">
-      <DialogContent class="max-w-2xl">
-        <DialogHeader>
-          <DialogTitle>{{ editingContext ? $t('aiContexts.editContext') : $t('aiContexts.createContext') }} {{ $t('aiContexts.aiContext') }}</DialogTitle>
-          <DialogDescription>
-            {{ $t('aiContexts.dialogDesc') }}
-          </DialogDescription>
-        </DialogHeader>
-        <div class="grid gap-4 py-4 max-h-[60vh] overflow-y-auto">
-          <div class="grid grid-cols-2 gap-4">
-            <div class="space-y-2">
-              <Label for="name">{{ $t('aiContexts.nameRequired') }}</Label>
-              <Input
-                id="name"
-                v-model="formData.name"
-                :placeholder="$t('aiContexts.namePlaceholder')"
-              />
-            </div>
-            <div class="space-y-2">
-              <Label for="context_type">{{ $t('aiContexts.contextType') }}</Label>
-              <Select v-model="formData.context_type">
-                <SelectTrigger>
-                  <SelectValue :placeholder="$t('aiContexts.selectType')" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="static">{{ $t('aiContexts.staticContent') }}</SelectItem>
-                  <SelectItem value="api">{{ $t('aiContexts.apiFetch') }}</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-          </div>
-
-          <div class="space-y-2">
-            <Label for="trigger_keywords">{{ $t('aiContexts.triggerKeywords') }}</Label>
-            <Input
-              id="trigger_keywords"
-              v-model="formData.trigger_keywords"
-              :placeholder="$t('aiContexts.triggerKeywordsPlaceholder')"
-            />
-            <p class="text-xs text-muted-foreground">
-              {{ $t('aiContexts.triggerKeywordsHint') }}
-            </p>
-          </div>
-
-          <div class="space-y-2">
-            <Label for="static_content">{{ $t('aiContexts.contentPrompt') }}</Label>
-            <Textarea
-              id="static_content"
-              v-model="formData.static_content"
-              :placeholder="$t('aiContexts.contentPlaceholder') + '...'"
-              :rows="6"
-            />
-            <p class="text-xs text-muted-foreground">
-              {{ $t('aiContexts.contentHint') }}
-            </p>
-          </div>
-
-          <div v-if="formData.context_type === 'api'" class="space-y-4 border-t pt-4">
-            <p class="text-sm font-medium">{{ $t('aiContexts.apiConfiguration') }}</p>
-            <p class="text-xs text-muted-foreground">{{ $t('aiContexts.apiConfigHint') }}</p>
-
-            <div class="grid grid-cols-4 gap-4">
-              <div class="col-span-1 space-y-2">
-                <Label for="api_method">{{ $t('aiContexts.method') }}</Label>
-                <Select v-model="formData.api_method">
-                  <SelectTrigger>
-                    <SelectValue :placeholder="$t('aiContexts.method')" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="GET">GET</SelectItem>
-                    <SelectItem value="POST">POST</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-              <div class="col-span-3 space-y-2">
-                <Label for="api_url">{{ $t('aiContexts.apiUrl') }}</Label>
-                <Input
-                  id="api_url"
-                  v-model="formData.api_url"
-                  :placeholder="$t('aiContexts.apiUrlPlaceholder')"
-                />
-              </div>
-            </div>
-            <p class="text-xs text-muted-foreground">
-              {{ $t('aiContexts.variables') }}: <code class="bg-muted px-1 rounded">{{ variableExample('phone_number') }}</code>, <code class="bg-muted px-1 rounded">{{ variableExample('user_message') }}</code>
-            </p>
-
-            <div class="space-y-2">
-              <Label for="api_headers">{{ $t('aiContexts.headersOptional') }}</Label>
-              <Textarea
-                id="api_headers"
-                v-model="formData.api_headers"
-                :placeholder="$t('aiContexts.headersPlaceholder')"
-                :rows="2"
-              />
-              <p class="text-xs text-muted-foreground">
-                {{ $t('aiContexts.headersHint') }}
-              </p>
-            </div>
-
-            <div class="space-y-2">
-              <Label for="api_response_path">{{ $t('aiContexts.responsePath') }}</Label>
-              <Input
-                id="api_response_path"
-                v-model="formData.api_response_path"
-                :placeholder="$t('aiContexts.responsePathPlaceholder')"
-              />
-              <p class="text-xs text-muted-foreground">{{ $t('aiContexts.responsePathHint') }}</p>
-            </div>
-          </div>
-
-          <div class="grid grid-cols-2 gap-4">
-            <div class="space-y-2">
-              <Label for="priority">{{ $t('aiContexts.priorityLabel') }}</Label>
-              <Input
-                id="priority"
-                v-model.number="formData.priority"
-                type="number"
-                min="1"
-                max="100"
-              />
-              <p class="text-xs text-muted-foreground">{{ $t('aiContexts.priorityHint') }}</p>
-            </div>
-            <div class="flex items-center gap-2 pt-8">
-              <Switch
-                id="enabled"
-                :checked="formData.enabled"
-                @update:checked="formData.enabled = $event"
-              />
-              <Label for="enabled">{{ $t('aiContexts.enabled') }}</Label>
-            </div>
-          </div>
-        </div>
-        <DialogFooter>
-          <Button variant="outline" size="sm" @click="isDialogOpen = false">{{ $t('common.cancel') }}</Button>
-          <Button size="sm" @click="saveContext" :disabled="isSubmitting">
-            {{ editingContext ? $t('common.update') : $t('common.create') }}
-          </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
-
     <DeleteConfirmDialog
       v-model:open="deleteDialogOpen"
       :title="$t('aiContexts.deleteContext')"
       :item-name="contextToDelete?.name"
+      :is-submitting="isDeleting"
       @confirm="confirmDeleteContext"
     />
   </div>

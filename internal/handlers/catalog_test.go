@@ -39,8 +39,8 @@ func newMockCatalogServer() *mockCatalogServer {
 		auth := r.Header.Get("Authorization")
 		if auth != "Bearer test-token" {
 			w.WriteHeader(http.StatusUnauthorized)
-			_ = json.NewEncoder(w).Encode(map[string]interface{}{
-				"error": map[string]interface{}{
+			_ = json.NewEncoder(w).Encode(map[string]any{
+				"error": map[string]any{
 					"message": "Invalid access token",
 					"code":    190,
 				},
@@ -50,8 +50,8 @@ func newMockCatalogServer() *mockCatalogServer {
 
 		if m.returnError {
 			w.WriteHeader(http.StatusBadRequest)
-			_ = json.NewEncoder(w).Encode(map[string]interface{}{
-				"error": map[string]interface{}{
+			_ = json.NewEncoder(w).Encode(map[string]any{
+				"error": map[string]any{
 					"message": m.errorMessage,
 					"code":    100,
 				},
@@ -63,18 +63,18 @@ func newMockCatalogServer() *mockCatalogServer {
 		case http.MethodPost:
 			// Handle catalog or product creation
 			w.WriteHeader(http.StatusOK)
-			_ = json.NewEncoder(w).Encode(map[string]interface{}{
+			_ = json.NewEncoder(w).Encode(map[string]any{
 				"id": m.nextCatalogID,
 			})
 		case http.MethodDelete:
 			w.WriteHeader(http.StatusOK)
-			_ = json.NewEncoder(w).Encode(map[string]interface{}{
+			_ = json.NewEncoder(w).Encode(map[string]any{
 				"success": true,
 			})
 		case http.MethodGet:
 			// List catalogs
 			w.WriteHeader(http.StatusOK)
-			_ = json.NewEncoder(w).Encode(map[string]interface{}{
+			_ = json.NewEncoder(w).Encode(map[string]any{
 				"data": []map[string]string{},
 			})
 		default:
@@ -316,7 +316,7 @@ func TestApp_CreateCatalog_Success(t *testing.T) {
 	user := testutil.CreateTestUser(t, app.DB, org.ID)
 	account := createCatalogTestAccount(t, app, org.ID)
 
-	req := testutil.NewJSONRequest(t, map[string]interface{}{
+	req := testutil.NewJSONRequest(t, map[string]any{
 		"name":             "My Test Catalog",
 		"whatsapp_account": account.Name,
 	})
@@ -354,23 +354,23 @@ func TestApp_CreateCatalog_MissingFields(t *testing.T) {
 
 	tests := []struct {
 		name string
-		body map[string]interface{}
+		body map[string]any
 	}{
 		{
 			name: "missing_name",
-			body: map[string]interface{}{
+			body: map[string]any{
 				"whatsapp_account": "some-account",
 			},
 		},
 		{
 			name: "missing_whatsapp_account",
-			body: map[string]interface{}{
+			body: map[string]any{
 				"name": "My Catalog",
 			},
 		},
 		{
 			name: "all_fields_empty",
-			body: map[string]interface{}{},
+			body: map[string]any{},
 		},
 	}
 
@@ -393,7 +393,7 @@ func TestApp_CreateCatalog_AccountNotFound(t *testing.T) {
 	org := testutil.CreateTestOrganization(t, app.DB)
 	user := testutil.CreateTestUser(t, app.DB, org.ID)
 
-	req := testutil.NewJSONRequest(t, map[string]interface{}{
+	req := testutil.NewJSONRequest(t, map[string]any{
 		"name":             "My Catalog",
 		"whatsapp_account": "nonexistent-account",
 	})
@@ -409,7 +409,7 @@ func TestApp_CreateCatalog_Unauthorized(t *testing.T) {
 
 	app := newTestApp(t)
 
-	req := testutil.NewJSONRequest(t, map[string]interface{}{
+	req := testutil.NewJSONRequest(t, map[string]any{
 		"name":             "My Catalog",
 		"whatsapp_account": "some-account",
 	})
@@ -746,7 +746,7 @@ func TestApp_CreateCatalogProduct_Success(t *testing.T) {
 
 	catalog := createTestCatalog(t, app, org.ID, account.Name, "Test Catalog")
 
-	req := testutil.NewJSONRequest(t, map[string]interface{}{
+	req := testutil.NewJSONRequest(t, map[string]any{
 		"name":        "New Product",
 		"description": "A great product",
 		"price":       2500,
@@ -797,7 +797,7 @@ func TestApp_CreateCatalogProduct_DefaultCurrency(t *testing.T) {
 
 	catalog := createTestCatalog(t, app, org.ID, account.Name, "Test Catalog")
 
-	req := testutil.NewJSONRequest(t, map[string]interface{}{
+	req := testutil.NewJSONRequest(t, map[string]any{
 		"name":  "Product Without Currency",
 		"price": 1000,
 	})
@@ -828,30 +828,30 @@ func TestApp_CreateCatalogProduct_MissingFields(t *testing.T) {
 
 	tests := []struct {
 		name string
-		body map[string]interface{}
+		body map[string]any
 	}{
 		{
 			name: "missing_name",
-			body: map[string]interface{}{
+			body: map[string]any{
 				"price": 1000,
 			},
 		},
 		{
 			name: "missing_price",
-			body: map[string]interface{}{
+			body: map[string]any{
 				"name": "Product Without Price",
 			},
 		},
 		{
 			name: "zero_price",
-			body: map[string]interface{}{
+			body: map[string]any{
 				"name":  "Product With Zero Price",
 				"price": 0,
 			},
 		},
 		{
 			name: "negative_price",
-			body: map[string]interface{}{
+			body: map[string]any{
 				"name":  "Product With Negative Price",
 				"price": -100,
 			},
@@ -878,7 +878,7 @@ func TestApp_CreateCatalogProduct_CatalogNotFound(t *testing.T) {
 	org := testutil.CreateTestOrganization(t, app.DB)
 	user := testutil.CreateTestUser(t, app.DB, org.ID)
 
-	req := testutil.NewJSONRequest(t, map[string]interface{}{
+	req := testutil.NewJSONRequest(t, map[string]any{
 		"name":  "Product",
 		"price": 1000,
 	})
@@ -994,7 +994,7 @@ func TestApp_UpdateCatalogProduct_Success(t *testing.T) {
 	catalog := createTestCatalog(t, app, org.ID, account.Name, "Test Catalog")
 	product := createTestCatalogProduct(t, app, org.ID, catalog.ID, "Original Product", 1000)
 
-	req := testutil.NewJSONRequest(t, map[string]interface{}{
+	req := testutil.NewJSONRequest(t, map[string]any{
 		"name":        "Updated Product",
 		"description": "Updated description",
 		"price":       2500,
@@ -1045,7 +1045,7 @@ func TestApp_UpdateCatalogProduct_PartialUpdate(t *testing.T) {
 	product := createTestCatalogProduct(t, app, org.ID, catalog.ID, "Original Product", 1000)
 
 	// Only update the name
-	req := testutil.NewJSONRequest(t, map[string]interface{}{
+	req := testutil.NewJSONRequest(t, map[string]any{
 		"name": "Only Name Changed",
 	})
 	testutil.SetAuthContext(req, org.ID, user.ID)
@@ -1074,7 +1074,7 @@ func TestApp_UpdateCatalogProduct_NotFound(t *testing.T) {
 	org := testutil.CreateTestOrganization(t, app.DB)
 	user := testutil.CreateTestUser(t, app.DB, org.ID)
 
-	req := testutil.NewJSONRequest(t, map[string]interface{}{
+	req := testutil.NewJSONRequest(t, map[string]any{
 		"name": "Updated Name",
 	})
 	testutil.SetAuthContext(req, org.ID, user.ID)
@@ -1092,7 +1092,7 @@ func TestApp_UpdateCatalogProduct_InvalidID(t *testing.T) {
 	org := testutil.CreateTestOrganization(t, app.DB)
 	user := testutil.CreateTestUser(t, app.DB, org.ID)
 
-	req := testutil.NewJSONRequest(t, map[string]interface{}{
+	req := testutil.NewJSONRequest(t, map[string]any{
 		"name": "Updated Name",
 	})
 	testutil.SetAuthContext(req, org.ID, user.ID)

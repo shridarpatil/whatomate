@@ -100,7 +100,8 @@ POST /api/messages/template
 | `phone_number` | string | One of contact_id or phone_number | Phone number (creates contact if not exists) |
 | `template_name` | string | One of template_name or template_id | Name of the template |
 | `template_id` | string | One of template_name or template_id | UUID of the template |
-| `template_params` | object | No | Named or positional parameters |
+| `template_params` | object | No | Named or positional body parameters |
+| `button_params` | object | No | Dynamic URL button parameters (button index → value) |
 | `account_name` | string | No | Specific WhatsApp account to use |
 
 ### Examples
@@ -151,6 +152,28 @@ If your template has placeholders like `Hello {{name}}, your order {{order_id}} 
   }
 }
 ```
+
+**With URL button parameters:**
+
+If your template has a URL button with a dynamic variable (e.g., `https://example.com/track/{{1}}`), provide the dynamic value via `button_params`. The key is the button index (starting from `"0"`):
+
+```json
+{
+  "contact_id": "uuid",
+  "template_name": "order_shipped",
+  "template_params": {
+    "name": "John",
+    "order_id": "12345"
+  },
+  "button_params": {
+    "0": "12345"
+  }
+}
+```
+
+<Aside type="note">
+  The `button_params` key corresponds to the button's position index in the template (zero-based). For example, if the first button is a URL button with `{{1}}`, use `"0"` as the key. The value replaces the dynamic part of the URL.
+</Aside>
 
 ### Response
 

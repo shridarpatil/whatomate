@@ -22,7 +22,7 @@ const outputHandles = [
 
 <template>
   <BaseNode :label="data?.label || 'Timing'" header-class="bg-cyan-600" :output-handles="outputHandles" :has-input="!data?.isEntryNode">
-    <template #icon><Clock class="w-3 h-3" /></template>
+    <template #icon><Clock class="w-4 h-4" /></template>
     <p class="truncate">{{ summary }}</p>
   </BaseNode>
 </template>

@@ -9,8 +9,7 @@ import { Label } from '@/components/ui/label'
 import { Badge } from '@/components/ui/badge'
 import { Switch } from '@/components/ui/switch'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
-import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
-import { PageHeader, SearchInput, DataTable, CrudFormDialog, DeleteConfirmDialog, type Column } from '@/components/shared'
+import { PageHeader, SearchInput, DataTable, CrudFormDialog, DeleteConfirmDialog, IconButton, ErrorState, type Column } from '@/components/shared'
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { useUsersStore, type User } from '@/stores/users'
 import { useAuthStore } from '@/stores/auth'
@@ -22,7 +21,7 @@ import { useCrudState } from '@/composables/useCrudState'
 import { getErrorMessage } from '@/lib/api-utils'
 import { formatDate } from '@/lib/utils'
 import { ROLE_BADGE_VARIANTS } from '@/lib/constants'
-import { useDebounceFn } from '@vueuse/core'
+import { useSearchPagination } from '@/composables/useSearchPagination'
 
 const { t } = useI18n()
 
@@ -43,33 +42,21 @@ interface UserFormData {
 const defaultFormData: UserFormData = { email: '', password: '', full_name: '', role_id: '', is_active: true, is_super_admin: false }
 
 const {
-  isLoading, isSubmitting, isDialogOpen, editingItem: editingUser, deleteDialogOpen, itemToDelete: userToDelete,
-  formData, openCreateDialog: baseOpenCreateDialog, openEditDialog: baseOpenEditDialog, openDeleteDialog, closeDialog, closeDeleteDialog,
+  isLoading, isSubmitting, isDialogOpen, deleteDialogOpen, itemToDelete: userToDelete,
+  formData, openCreateDialog: baseOpenCreateDialog, openDeleteDialog, closeDialog, closeDeleteDialog,
 } = useCrudState<User, UserFormData>(defaultFormData)
 
 const users = ref<User[]>([])
-const searchQuery = ref('')
+const isDeleting = ref(false)
+const error = ref(false)
 
-// Pagination state
-const currentPage = ref(1)
-const totalItems = ref(0)
-const pageSize = 20
-
-// Debounced search
-const debouncedSearch = useDebounceFn(() => {
-  currentPage.value = 1
-  fetchUsers()
-}, 300)
-
-watch(searchQuery, () => debouncedSearch())
-
-function handlePageChange(page: number) {
-  currentPage.value = page
-  fetchUsers()
-}
+const { searchQuery, currentPage, totalItems, pageSize, handlePageChange } = useSearchPagination({
+  fetchFn: () => fetchUsers(),
+})
 
 const columns = computed<Column<User>[]>(() => [
-  { key: 'user', label: t('users.user'), width: 'w-[300px]', sortable: true, sortKey: 'full_name' },
+  { key: 'user', label: t('users.user'), width: 'w-[280px]', sortable: true, sortKey: 'full_name' },
+  { key: 'email', label: t('common.email'), sortable: true, sortKey: 'email' },
   { key: 'role', label: t('users.role'), sortable: true, sortKey: 'role.name' },
   { key: 'status', label: t('users.status'), sortable: true, sortKey: 'is_active' },
   { key: 'created', label: t('users.created'), sortable: true, sortKey: 'created_at' },
@@ -86,15 +73,13 @@ const breadcrumbs = computed(() => [{ label: t('nav.settings'), href: '/settings
 const getDefaultRoleId = () => rolesStore.roles.find(r => r.name === 'agent' && r.is_system)?.id || ''
 
 function openCreateDialog() { formData.value.role_id = getDefaultRoleId(); baseOpenCreateDialog() }
-function openEditDialog(user: User) {
-  baseOpenEditDialog(user, (u) => ({ email: u.email, password: '', full_name: u.full_name, role_id: u.role_id || '', is_active: u.is_active, is_super_admin: u.is_super_admin || false }))
-}
 
 watch(() => organizationsStore.selectedOrgId, () => { fetchUsers(); rolesStore.fetchRoles() })
 onMounted(() => { fetchUsers(); rolesStore.fetchRoles() })
 
 async function fetchUsers() {
   isLoading.value = true
+  error.value = false
   try {
     const response = await usersStore.fetchUsers({
       search: searchQuery.value || undefined,
@@ -103,35 +88,28 @@ async function fetchUsers() {
     })
     users.value = response.users
     totalItems.value = response.total
-  } catch { toast.error(t('common.failedLoad', { resource: t('resources.users') })) }
-  finally { isLoading.value = false }
+  } catch {
+    toast.error(t('common.failedLoad', { resource: t('resources.users') }))
+    error.value = true
+  } finally { isLoading.value = false }
 }
 
-async function saveUser() {
+async function createUser() {
   if (!formData.value.email.trim() || !formData.value.full_name.trim()) { toast.error(t('users.fillEmailName')); return }
   if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formData.value.email.trim())) { toast.error(t('validation.email')); return }
-  if (!editingUser.value && !formData.value.password.trim()) { toast.error(t('users.passwordRequired')); return }
+  if (!formData.value.password.trim()) { toast.error(t('users.passwordRequired')); return }
   if (!formData.value.role_id) { toast.error(t('users.selectRoleRequired')); return }
 
   isSubmitting.value = true
   try {
-    const data: Record<string, unknown> = { email: formData.value.email, full_name: formData.value.full_name, role_id: formData.value.role_id }
-    if (editingUser.value) {
-      data.is_active = formData.value.is_active
-      if (formData.value.password) data.password = formData.value.password
-      if (isSuperAdmin.value) data.is_super_admin = formData.value.is_super_admin
-      await usersStore.updateUser(editingUser.value.id, data)
-      toast.success(t('common.updatedSuccess', { resource: t('resources.User') }))
-    } else {
-      await usersStore.createUser({
-        email: formData.value.email,
-        password: formData.value.password,
-        full_name: formData.value.full_name,
-        role_id: formData.value.role_id || undefined,
-        is_super_admin: isSuperAdmin.value && formData.value.is_super_admin ? true : undefined,
-      })
-      toast.success(t('common.createdSuccess', { resource: t('resources.User') }))
-    }
+    await usersStore.createUser({
+      email: formData.value.email,
+      password: formData.value.password,
+      full_name: formData.value.full_name,
+      role_id: formData.value.role_id || undefined,
+      is_super_admin: isSuperAdmin.value && formData.value.is_super_admin ? true : undefined,
+    })
+    toast.success(t('common.createdSuccess', { resource: t('resources.User') }))
     closeDialog()
     await fetchUsers()
   } catch (e) { toast.error(getErrorMessage(e, t('common.failedSave', { resource: t('resources.user') }))) }
@@ -141,6 +119,7 @@ async function saveUser() {
 async function confirmDelete() {
   if (!userToDelete.value) return
   const isMemberRemoval = userToDelete.value.is_member
+  isDeleting.value = true
   try {
     await usersStore.deleteUser(userToDelete.value.id)
     toast.success(isMemberRemoval ? t('users.memberRemoved') : t('common.deletedSuccess', { resource: t('resources.User') }))
@@ -148,33 +127,8 @@ async function confirmDelete() {
     await fetchUsers()
   } catch (e) {
     toast.error(getErrorMessage(e, t('common.failedDelete', { resource: t('resources.user') })))
-  }
-}
-
-// Member role update dialog
-const isMemberRoleOpen = ref(false)
-const memberRoleUser = ref<User | null>(null)
-const memberRoleId = ref('')
-const isMemberRoleSubmitting = ref(false)
-
-function openMemberRoleDialog(user: User) {
-  memberRoleUser.value = user
-  memberRoleId.value = user.role_id || ''
-  isMemberRoleOpen.value = true
-}
-
-async function submitMemberRole() {
-  if (!memberRoleUser.value || !memberRoleId.value) return
-  isMemberRoleSubmitting.value = true
-  try {
-    await usersStore.updateUser(memberRoleUser.value.id, { role_id: memberRoleId.value })
-    toast.success(t('users.memberRoleUpdated'))
-    isMemberRoleOpen.value = false
-    await fetchUsers()
-  } catch (e) {
-    toast.error(getErrorMessage(e, t('common.failedSave', { resource: t('resources.user') })))
   } finally {
-    isMemberRoleSubmitting.value = false
+    isDeleting.value = false
   }
 }
 
@@ -215,12 +169,16 @@ async function submitAddExisting() {
   }
 }
 
-function copyInviteLink() {
+async function copyInviteLink() {
   const orgId = organizationsStore.selectedOrgId || authStore.organizationId
   const basePath = ((window as any).__BASE_PATH__ ?? '').replace(/\/$/, '')
   const url = `${window.location.origin}${basePath}/register?org=${orgId}`
-  navigator.clipboard.writeText(url)
-  toast.success(t('users.inviteLinkCopied'))
+  try {
+    await navigator.clipboard.writeText(url)
+    toast.success(t('users.inviteLinkCopied'))
+  } catch {
+    toast.error(t('common.clipboardFailed'))
+  }
 }
 </script>
 
@@ -234,9 +192,19 @@ function copyInviteLink() {
       </template>
     </PageHeader>
 
-    <ScrollArea class="flex-1">
+    <!-- Error State -->
+    <ErrorState
+      v-if="error && !isLoading"
+      :title="$t('common.loadErrorTitle')"
+      :description="$t('common.loadErrorDescription')"
+      :retry-label="$t('common.retryLoad')"
+      class="flex-1"
+      @retry="fetchUsers"
+    />
+
+    <ScrollArea v-else class="flex-1">
       <div class="p-6">
-        <div class="max-w-6xl mx-auto">
+        <div>
           <Card>
             <CardHeader>
               <div class="flex items-center justify-between flex-wrap gap-4">
@@ -250,7 +218,7 @@ function copyInviteLink() {
             <CardContent>
               <DataTable :items="users" :columns="columns" :is-loading="isLoading" :empty-icon="UserIcon" :empty-title="searchQuery ? $t('users.noMatchingUsers') : $t('users.noUsersFound')" :empty-description="searchQuery ? $t('users.noMatchingUsersDesc') : $t('users.noUsersFoundDesc')" v-model:sort-key="sortKey" v-model:sort-direction="sortDirection" server-pagination :current-page="currentPage" :total-items="totalItems" :page-size="pageSize" item-name="users" @page-change="handlePageChange">
                 <template #cell-user="{ item: user }">
-                  <div class="flex items-center gap-3">
+                  <RouterLink :to="`/settings/users/${user.id}`" class="flex items-center gap-3 text-inherit no-underline hover:opacity-80">
                     <div class="h-9 w-9 rounded-full bg-primary/10 flex items-center justify-center flex-shrink-0">
                       <component :is="getRoleIcon(getRoleName(user))" class="h-4 w-4 text-primary" />
                     </div>
@@ -261,9 +229,11 @@ function copyInviteLink() {
                         <Badge v-if="user.is_super_admin" variant="default" class="text-xs">{{ $t('users.superAdmin') }}</Badge>
                         <Badge v-if="user.is_member" variant="secondary" class="text-xs">{{ $t('users.member') }}</Badge>
                       </div>
-                      <p class="text-sm text-muted-foreground truncate">{{ user.email }}</p>
                     </div>
-                  </div>
+                  </RouterLink>
+                </template>
+                <template #cell-email="{ item: user }">
+                  <span class="text-sm text-muted-foreground truncate">{{ user.email }}</span>
                 </template>
                 <template #cell-role="{ item: user }">
                   <Badge :variant="getRoleBadgeVariant(getRoleName(user))" class="capitalize">{{ getRoleName(user) }}</Badge>
@@ -276,16 +246,19 @@ function copyInviteLink() {
                 </template>
                 <template #cell-actions="{ item: user }">
                   <div class="flex items-center justify-end gap-1">
-                    <template v-if="user.is_member">
-                      <!-- Member actions: update role + remove -->
-                      <Tooltip><TooltipTrigger as-child><Button variant="ghost" size="icon" class="h-8 w-8" @click="openMemberRoleDialog(user)"><Pencil class="h-4 w-4" /></Button></TooltipTrigger><TooltipContent>{{ $t('users.updateMemberRole') }}</TooltipContent></Tooltip>
-                      <Tooltip><TooltipTrigger as-child><Button variant="ghost" size="icon" class="h-8 w-8" @click="openDeleteDialog(user)" :disabled="user.id === currentUserId"><UserMinus class="h-4 w-4 text-destructive" /></Button></TooltipTrigger><TooltipContent>{{ $t('users.removeMemberTooltip') }}</TooltipContent></Tooltip>
-                    </template>
-                    <template v-else>
-                      <!-- Native user actions: full edit + delete -->
-                      <Tooltip><TooltipTrigger as-child><Button variant="ghost" size="icon" class="h-8 w-8" @click="openEditDialog(user)"><Pencil class="h-4 w-4" /></Button></TooltipTrigger><TooltipContent>{{ $t('users.editUserTooltip') }}</TooltipContent></Tooltip>
-                      <Tooltip><TooltipTrigger as-child><Button variant="ghost" size="icon" class="h-8 w-8" @click="openDeleteDialog(user)" :disabled="user.id === currentUserId"><Trash2 class="h-4 w-4 text-destructive" /></Button></TooltipTrigger><TooltipContent>{{ user.id === currentUserId ? $t('users.cantDeleteYourself') : $t('users.deleteUserTooltip') }}</TooltipContent></Tooltip>
-                    </template>
+                    <RouterLink :to="`/settings/users/${user.id}`">
+                      <IconButton :icon="Pencil" :label="$t('users.editUserTooltip')" class="h-8 w-8" />
+                    </RouterLink>
+                    <IconButton
+                      :label="user.is_member
+                        ? $t('users.removeMemberTooltip')
+                        : (user.id === currentUserId ? $t('users.cantDeleteYourself') : $t('users.deleteUserTooltip'))"
+                      class="h-8 w-8"
+                      :disabled="user.id === currentUserId"
+                      @click="openDeleteDialog(user)"
+                    >
+                      <component :is="user.is_member ? UserMinus : Trash2" class="h-4 w-4 text-destructive" />
+                    </IconButton>
                   </div>
                 </template>
                 <template #empty-action>
@@ -298,11 +271,11 @@ function copyInviteLink() {
       </div>
     </ScrollArea>
 
-    <CrudFormDialog v-model:open="isDialogOpen" :is-editing="!!editingUser" :is-submitting="isSubmitting" :edit-title="$t('users.editUserTitle')" :create-title="$t('users.addUserTitle')" :edit-description="$t('users.editUserDesc')" :create-description="$t('users.addUserDesc')" :edit-submit-label="$t('users.updateUser')" :create-submit-label="$t('users.createUser')" @submit="saveUser">
+    <CrudFormDialog v-model:open="isDialogOpen" :is-editing="false" :is-submitting="isSubmitting" :edit-title="$t('users.editUserTitle')" :create-title="$t('users.addUserTitle')" :edit-description="$t('users.editUserDesc')" :create-description="$t('users.addUserDesc')" :edit-submit-label="$t('users.updateUser')" :create-submit-label="$t('users.createUser')" @submit="createUser">
       <div class="space-y-4">
         <div class="space-y-2"><Label for="full_name">{{ $t('users.fullName') }} <span class="text-destructive">*</span></Label><Input id="full_name" v-model="formData.full_name" :placeholder="$t('users.fullNamePlaceholder')" /></div>
         <div class="space-y-2"><Label for="email">{{ $t('common.email') }} <span class="text-destructive">*</span></Label><Input id="email" v-model="formData.email" type="email" :placeholder="$t('users.emailPlaceholder')" /></div>
-        <div class="space-y-2"><Label for="password">{{ $t('users.password') }} <span v-if="!editingUser" class="text-destructive">*</span><span v-else class="text-muted-foreground">{{ $t('users.keepExisting') }}</span></Label><Input id="password" v-model="formData.password" type="password" :placeholder="$t('users.passwordPlaceholder')" /></div>
+        <div class="space-y-2"><Label for="password">{{ $t('users.password') }} <span class="text-destructive">*</span></Label><Input id="password" v-model="formData.password" type="password" :placeholder="$t('users.passwordPlaceholder')" /></div>
         <div class="space-y-2">
           <Label for="role">{{ $t('users.role') }} <span class="text-destructive">*</span></Label>
           <Select v-model="formData.role_id">
@@ -324,56 +297,11 @@ function copyInviteLink() {
             </SelectContent>
           </Select>
         </div>
-        <div v-if="editingUser" class="flex items-center justify-between"><Label for="is_active" class="font-normal cursor-pointer">{{ $t('users.accountActive') }}</Label><Switch id="is_active" :checked="formData.is_active" @update:checked="formData.is_active = $event" :disabled="editingUser?.id === currentUserId" /></div>
-        <div v-if="isSuperAdmin" class="flex items-center justify-between border-t pt-4"><div><Label for="is_super_admin" class="font-normal cursor-pointer">{{ $t('users.superAdminLabel') }}</Label><p class="text-xs text-muted-foreground">{{ $t('users.superAdminDesc') }}</p></div><Switch id="is_super_admin" :checked="formData.is_super_admin" @update:checked="formData.is_super_admin = $event" :disabled="editingUser?.id === currentUserId && editingUser?.is_super_admin" /></div>
+        <div v-if="isSuperAdmin" class="flex items-center justify-between border-t pt-4"><div><Label for="is_super_admin" class="font-normal cursor-pointer">{{ $t('users.superAdminLabel') }}</Label><p class="text-xs text-muted-foreground">{{ $t('users.superAdminDesc') }}</p></div><Switch id="is_super_admin" :checked="formData.is_super_admin" @update:checked="formData.is_super_admin = $event" /></div>
       </div>
     </CrudFormDialog>
 
-    <DeleteConfirmDialog v-model:open="deleteDialogOpen" :title="userToDelete?.is_member ? $t('users.removeMember') : $t('users.deleteUser')" :description="userToDelete?.is_member ? $t('users.removeMemberWarning') : undefined" :item-name="userToDelete?.full_name" @confirm="confirmDelete" />
-
-    <!-- Member Role Update Dialog -->
-    <Dialog v-model:open="isMemberRoleOpen">
-      <DialogContent class="max-w-md">
-        <DialogHeader>
-          <DialogTitle>{{ $t('users.updateMemberRoleTitle') }}</DialogTitle>
-          <DialogDescription>{{ $t('users.updateMemberRoleDesc') }}</DialogDescription>
-        </DialogHeader>
-        <div class="space-y-4 py-4">
-          <div class="flex items-center gap-3 p-3 rounded-lg bg-muted/50">
-            <div class="h-9 w-9 rounded-full bg-primary/10 flex items-center justify-center flex-shrink-0">
-              <UserIcon class="h-4 w-4 text-primary" />
-            </div>
-            <div class="min-w-0">
-              <p class="font-medium truncate">{{ memberRoleUser?.full_name }}</p>
-              <p class="text-sm text-muted-foreground truncate">{{ memberRoleUser?.email }}</p>
-            </div>
-          </div>
-          <div class="space-y-2">
-            <Label>{{ $t('users.role') }} <span class="text-destructive">*</span></Label>
-            <Select v-model="memberRoleId">
-              <SelectTrigger>
-                <SelectValue :placeholder="$t('users.selectRole')" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem v-for="role in rolesStore.roles" :key="role.id" :value="role.id">
-                  <div class="flex items-center gap-2">
-                    <span class="capitalize">{{ role.name }}</span>
-                    <Badge v-if="role.is_system" variant="secondary" class="text-xs">{{ $t('users.system') }}</Badge>
-                  </div>
-                </SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-        </div>
-        <DialogFooter>
-          <Button variant="outline" @click="isMemberRoleOpen = false">{{ $t('common.cancel') }}</Button>
-          <Button @click="submitMemberRole" :disabled="isMemberRoleSubmitting || !memberRoleId">
-            <Loader2 v-if="isMemberRoleSubmitting" class="h-4 w-4 mr-2 animate-spin" />
-            {{ $t('users.updateMemberRole') }}
-          </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
+    <DeleteConfirmDialog v-model:open="deleteDialogOpen" :title="userToDelete?.is_member ? $t('users.removeMember') : $t('users.deleteUser')" :description="userToDelete?.is_member ? $t('users.removeMemberWarning') : undefined" :item-name="userToDelete?.full_name" :is-submitting="isDeleting" @confirm="confirmDelete" />
 
     <!-- Add Existing User Dialog -->
     <Dialog v-model:open="isAddExistingOpen">

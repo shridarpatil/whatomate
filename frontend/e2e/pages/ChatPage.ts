@@ -25,7 +25,7 @@ export class ChatPage extends BasePage {
     this.sendButton = page.getByRole('button').filter({ has: page.locator('.lucide-send') })
     this.attachButton = page.getByRole('button').filter({ has: page.locator('.lucide-paperclip') })
     this.emojiButton = page.getByRole('button').filter({ has: page.locator('.lucide-smile') })
-    this.cannedResponsesButton = page.getByRole('button').filter({ has: page.locator('.lucide-message-square-text') })
+    this.cannedResponsesButton = page.locator('#canned-response-picker-button')
     this.contactInfoPanel = page.locator('.contact-info, [data-testid="contact-info"]')
     this.messageList = page.locator('.messages-container, [data-testid="messages"]')
     this.assignDialog = page.locator('[role="dialog"][data-state="open"]')
@@ -102,6 +102,53 @@ export class ChatPage extends BasePage {
 
   async selectCannedResponse(shortcut: string) {
     await this.page.locator('[role="option"], .canned-item').filter({ hasText: shortcut }).click()
+  }
+
+  /** Picker items render as full-width buttons inside the popover. */
+  getCannedPickerItem(name: string): Locator {
+    return this.page.locator('button.w-full.text-left').filter({ hasText: name })
+  }
+
+  async selectCannedPickerItem(name: string) {
+    await this.getCannedPickerItem(name).click()
+  }
+
+  // Canned response preview dialog
+  get cannedDialog(): Locator {
+    return this.page.locator('#canned-response-dialog')
+  }
+
+  get cannedDialogPreview(): Locator {
+    return this.page.locator('#canned-response-preview')
+  }
+
+  get cannedDialogParamInputs(): Locator {
+    return this.cannedDialog.locator('input.canned-response-param')
+  }
+
+  cannedDialogParamInput(name: string): Locator {
+    return this.page.locator(`#canned-response-param-${name}`)
+  }
+
+  get cannedDialogSendButton(): Locator {
+    return this.page.locator('#canned-response-send')
+  }
+
+  get cannedDialogCancelButton(): Locator {
+    return this.page.locator('#canned-response-cancel')
+  }
+
+  async fillCannedParam(name: string, value: string) {
+    await this.cannedDialogParamInput(name).fill(value)
+  }
+
+  async sendCannedDialog() {
+    await this.cannedDialogSendButton.click()
+  }
+
+  async cancelCannedDialog() {
+    await this.cannedDialogCancelButton.click()
+    await this.cannedDialog.waitFor({ state: 'hidden' })
   }
 
   // Contact actions

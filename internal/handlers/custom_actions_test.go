@@ -18,7 +18,7 @@ import (
 )
 
 // createTestCustomAction creates a custom action directly in the database.
-func createTestCustomAction(t *testing.T, app *handlers.App, orgID uuid.UUID, name string, actionType models.ActionType, config map[string]interface{}, isActive bool, displayOrder int) *models.CustomAction {
+func createTestCustomAction(t *testing.T, app *handlers.App, orgID uuid.UUID, name string, actionType models.ActionType, config map[string]any, isActive bool, displayOrder int) *models.CustomAction {
 	t.Helper()
 
 	action := &models.CustomAction{
@@ -53,9 +53,9 @@ func TestApp_ListCustomActions(t *testing.T) {
 		user := testutil.CreateTestUser(t, app.DB, org.ID)
 
 		createTestCustomAction(t, app, org.ID, "Action A", models.ActionTypeWebhook,
-			map[string]interface{}{"url": "https://example.com/hook"}, true, 2)
+			map[string]any{"url": "https://example.com/hook"}, true, 2)
 		createTestCustomAction(t, app, org.ID, "Action B", models.ActionTypeURL,
-			map[string]interface{}{"url": "https://example.com"}, true, 1)
+			map[string]any{"url": "https://example.com"}, true, 1)
 
 		req := testutil.NewGETRequest(t)
 		testutil.SetAuthContext(req, org.ID, user.ID)
@@ -111,7 +111,7 @@ func TestApp_GetCustomAction(t *testing.T) {
 		user := testutil.CreateTestUser(t, app.DB, org.ID)
 
 		action := createTestCustomAction(t, app, org.ID, "My Webhook", models.ActionTypeWebhook,
-			map[string]interface{}{"url": "https://example.com/hook", "method": "POST"}, true, 0)
+			map[string]any{"url": "https://example.com/hook", "method": "POST"}, true, 0)
 
 		req := testutil.NewGETRequest(t)
 		testutil.SetAuthContext(req, org.ID, user.ID)
@@ -390,7 +390,7 @@ func TestApp_UpdateCustomAction(t *testing.T) {
 		user := testutil.CreateTestUser(t, app.DB, org.ID)
 
 		action := createTestCustomAction(t, app, org.ID, "Original Name", models.ActionTypeWebhook,
-			map[string]interface{}{"url": "https://example.com/hook"}, true, 0)
+			map[string]any{"url": "https://example.com/hook"}, true, 0)
 
 		req := testutil.NewJSONRequest(t, map[string]any{
 			"name":          "Updated Name",
@@ -423,7 +423,7 @@ func TestApp_UpdateCustomAction(t *testing.T) {
 		user := testutil.CreateTestUser(t, app.DB, org.ID)
 
 		action := createTestCustomAction(t, app, org.ID, "Webhook Action", models.ActionTypeWebhook,
-			map[string]interface{}{"url": "https://old.example.com/hook"}, true, 0)
+			map[string]any{"url": "https://old.example.com/hook"}, true, 0)
 
 		req := testutil.NewJSONRequest(t, map[string]any{
 			"config": map[string]any{
@@ -472,7 +472,7 @@ func TestApp_UpdateCustomAction(t *testing.T) {
 		user2 := testutil.CreateTestUser(t, app.DB, org2.ID)
 
 		action := createTestCustomAction(t, app, org1.ID, "Org1 Action", models.ActionTypeWebhook,
-			map[string]interface{}{"url": "https://example.com/hook"}, true, 0)
+			map[string]any{"url": "https://example.com/hook"}, true, 0)
 
 		// User from org2 tries to update org1's action
 		req := testutil.NewJSONRequest(t, map[string]any{
@@ -499,7 +499,7 @@ func TestApp_DeleteCustomAction(t *testing.T) {
 		user := testutil.CreateTestUser(t, app.DB, org.ID)
 
 		action := createTestCustomAction(t, app, org.ID, "To Delete", models.ActionTypeWebhook,
-			map[string]interface{}{"url": "https://example.com/hook"}, true, 0)
+			map[string]any{"url": "https://example.com/hook"}, true, 0)
 
 		req := testutil.NewGETRequest(t)
 		testutil.SetAuthContext(req, org.ID, user.ID)
@@ -546,7 +546,7 @@ func TestApp_DeleteCustomAction(t *testing.T) {
 		user2 := testutil.CreateTestUser(t, app.DB, org2.ID)
 
 		action := createTestCustomAction(t, app, org1.ID, "Org1 Action", models.ActionTypeWebhook,
-			map[string]interface{}{"url": "https://example.com/hook"}, true, 0)
+			map[string]any{"url": "https://example.com/hook"}, true, 0)
 
 		// User from org2 tries to delete org1's action
 		req := testutil.NewGETRequest(t)
@@ -577,9 +577,9 @@ func TestApp_ListCustomActions_CrossOrgIsolation(t *testing.T) {
 	user2 := testutil.CreateTestUser(t, app.DB, org2.ID)
 
 	createTestCustomAction(t, app, org1.ID, "Org1 Action", models.ActionTypeWebhook,
-		map[string]interface{}{"url": "https://example.com/hook1"}, true, 0)
+		map[string]any{"url": "https://example.com/hook1"}, true, 0)
 	createTestCustomAction(t, app, org2.ID, "Org2 Action", models.ActionTypeURL,
-		map[string]interface{}{"url": "https://example.com/page"}, true, 0)
+		map[string]any{"url": "https://example.com/page"}, true, 0)
 
 	// User1 should only see org1's action
 	req1 := testutil.NewGETRequest(t)
@@ -630,7 +630,7 @@ func TestApp_GetCustomAction_CrossOrgIsolation(t *testing.T) {
 	user2 := testutil.CreateTestUser(t, app.DB, org2.ID)
 
 	action := createTestCustomAction(t, app, org1.ID, "Org1 Secret Action", models.ActionTypeWebhook,
-		map[string]interface{}{"url": "https://example.com/hook"}, true, 0)
+		map[string]any{"url": "https://example.com/hook"}, true, 0)
 
 	// User from org2 tries to get org1's action
 	req := testutil.NewGETRequest(t)
@@ -670,7 +670,7 @@ func TestApp_UpdateCustomAction_InvalidActionType(t *testing.T) {
 	user := testutil.CreateTestUser(t, app.DB, org.ID)
 
 	action := createTestCustomAction(t, app, org.ID, "Test Action", models.ActionTypeWebhook,
-		map[string]interface{}{"url": "https://example.com/hook"}, true, 0)
+		map[string]any{"url": "https://example.com/hook"}, true, 0)
 
 	req := testutil.NewJSONRequest(t, map[string]any{
 		"action_type": "invalid_type",
@@ -694,7 +694,7 @@ func TestApp_UpdateCustomAction_InvalidConfig(t *testing.T) {
 	user := testutil.CreateTestUser(t, app.DB, org.ID)
 
 	action := createTestCustomAction(t, app, org.ID, "Webhook Action", models.ActionTypeWebhook,
-		map[string]interface{}{"url": "https://example.com/hook"}, true, 0)
+		map[string]any{"url": "https://example.com/hook"}, true, 0)
 
 	// Try to update config without required url for webhook type
 	req := testutil.NewJSONRequest(t, map[string]any{
@@ -735,7 +735,7 @@ func TestApp_ExecuteCustomAction(t *testing.T) {
 		contact := testutil.CreateTestContact(t, app.DB, org.ID)
 
 		action := createTestCustomAction(t, app, org.ID, "CRM Webhook", models.ActionTypeWebhook,
-			map[string]interface{}{"url": server.URL, "method": "POST"}, true, 0)
+			map[string]any{"url": server.URL, "method": "POST"}, true, 0)
 
 		req := testutil.NewJSONRequest(t, map[string]any{
 			"contact_id": contact.ID.String(),
@@ -770,7 +770,7 @@ func TestApp_ExecuteCustomAction(t *testing.T) {
 		contact := testutil.CreateTestContact(t, app.DB, org.ID)
 
 		action := createTestCustomAction(t, app, org.ID, "Open CRM", models.ActionTypeURL,
-			map[string]interface{}{
+			map[string]any{
 				"url":             "https://crm.example.com/contact/{{contact.id}}",
 				"open_in_new_tab": true,
 			}, true, 0)
@@ -805,7 +805,7 @@ func TestApp_ExecuteCustomAction(t *testing.T) {
 		contact := testutil.CreateTestContact(t, app.DB, org.ID)
 
 		action := createTestCustomAction(t, app, org.ID, "Copy Phone", models.ActionTypeJavascript,
-			map[string]interface{}{
+			map[string]any{
 				"code": "return { clipboard: contact.phone_number, toast: { message: 'Copied!', type: 'success' } }",
 			}, true, 0)
 
@@ -831,6 +831,41 @@ func TestApp_ExecuteCustomAction(t *testing.T) {
 		assert.Equal(t, "success", resp.Data.Toast.Type)
 	})
 
+	t.Run("JavaScript_URL_WrappedInRedirectToken", func(t *testing.T) {
+		t.Parallel()
+
+		app := newTestApp(t, withHTTPClient(&http.Client{Timeout: 5 * time.Second}))
+		org := testutil.CreateTestOrganization(t, app.DB)
+		user := testutil.CreateTestUser(t, app.DB, org.ID)
+		contact := testutil.CreateTestContact(t, app.DB, org.ID)
+
+		action := createTestCustomAction(t, app, org.ID, "Open External", models.ActionTypeJavascript,
+			map[string]any{
+				"code": `return { url: "https://evil.example.com/phish" }`,
+			}, true, 0)
+
+		req := testutil.NewJSONRequest(t, map[string]any{
+			"contact_id": contact.ID.String(),
+		})
+		testutil.SetAuthContext(req, org.ID, user.ID)
+		testutil.SetPathParam(req, "id", action.ID.String())
+
+		err := app.ExecuteCustomAction(req)
+		require.NoError(t, err)
+		assert.Equal(t, fasthttp.StatusOK, testutil.GetResponseStatusCode(req))
+
+		var resp struct {
+			Data handlers.ActionResult `json:"data"`
+		}
+		err = json.Unmarshal(testutil.GetResponseBody(req), &resp)
+		require.NoError(t, err)
+		assert.True(t, resp.Data.Success)
+		// URL must be wrapped in a redirect token, never returned raw
+		assert.Contains(t, resp.Data.RedirectURL, "/api/custom-actions/redirect/")
+		assert.NotContains(t, resp.Data.RedirectURL, "evil.example.com",
+			"raw external URL must not be returned to the client")
+	})
+
 	t.Run("InactiveAction", func(t *testing.T) {
 		t.Parallel()
 
@@ -841,7 +876,7 @@ func TestApp_ExecuteCustomAction(t *testing.T) {
 
 		// Create an inactive action
 		action := createTestCustomAction(t, app, org.ID, "Disabled Action", models.ActionTypeWebhook,
-			map[string]interface{}{"url": "https://example.com/hook"}, false, 0)
+			map[string]any{"url": "https://example.com/hook"}, false, 0)
 
 		req := testutil.NewJSONRequest(t, map[string]any{
 			"contact_id": contact.ID.String(),
@@ -880,7 +915,7 @@ func TestApp_ExecuteCustomAction(t *testing.T) {
 		user := testutil.CreateTestUser(t, app.DB, org.ID)
 
 		action := createTestCustomAction(t, app, org.ID, "Test Action", models.ActionTypeWebhook,
-			map[string]interface{}{"url": "https://example.com/hook"}, true, 0)
+			map[string]any{"url": "https://example.com/hook"}, true, 0)
 
 		req := testutil.NewJSONRequest(t, map[string]any{
 			"contact_id": "not-a-valid-uuid",
@@ -901,7 +936,7 @@ func TestApp_ExecuteCustomAction(t *testing.T) {
 		user := testutil.CreateTestUser(t, app.DB, org.ID)
 
 		action := createTestCustomAction(t, app, org.ID, "Test Action", models.ActionTypeWebhook,
-			map[string]interface{}{"url": "https://example.com/hook"}, true, 0)
+			map[string]any{"url": "https://example.com/hook"}, true, 0)
 
 		req := testutil.NewJSONRequest(t, map[string]any{
 			"contact_id": uuid.New().String(),
@@ -926,7 +961,7 @@ func TestApp_ExecuteCustomAction(t *testing.T) {
 
 		// Create action in org1
 		action := createTestCustomAction(t, app, org1.ID, "Org1 Action", models.ActionTypeWebhook,
-			map[string]interface{}{"url": "https://example.com/hook"}, true, 0)
+			map[string]any{"url": "https://example.com/hook"}, true, 0)
 
 		// User from org2 tries to execute org1's action
 		req := testutil.NewJSONRequest(t, map[string]any{
@@ -972,7 +1007,7 @@ func TestApp_ExecuteCustomAction(t *testing.T) {
 		contact := testutil.CreateTestContact(t, app.DB, org.ID)
 
 		action := createTestCustomAction(t, app, org.ID, "Failing Webhook", models.ActionTypeWebhook,
-			map[string]interface{}{"url": server.URL, "method": "POST"}, true, 0)
+			map[string]any{"url": server.URL, "method": "POST"}, true, 0)
 
 		req := testutil.NewJSONRequest(t, map[string]any{
 			"contact_id": contact.ID.String(),
@@ -1014,7 +1049,7 @@ func TestApp_ExecuteCustomAction(t *testing.T) {
 
 		// Use a URL with variable template
 		action := createTestCustomAction(t, app, org.ID, "Variable Webhook", models.ActionTypeWebhook,
-			map[string]interface{}{
+			map[string]any{
 				"url":    server.URL + "/contact/{{contact.id}}",
 				"method": "GET",
 			}, true, 0)
@@ -1048,7 +1083,7 @@ func TestApp_CustomActionRedirect(t *testing.T) {
 		contact := testutil.CreateTestContact(t, app.DB, org.ID)
 
 		action := createTestCustomAction(t, app, org.ID, "Open URL", models.ActionTypeURL,
-			map[string]interface{}{
+			map[string]any{
 				"url": "https://crm.example.com/contact/view",
 			}, true, 0)
 
@@ -1111,7 +1146,7 @@ func TestApp_CustomActionRedirect(t *testing.T) {
 		contact := testutil.CreateTestContact(t, app.DB, org.ID)
 
 		action := createTestCustomAction(t, app, org.ID, "One-Time URL", models.ActionTypeURL,
-			map[string]interface{}{
+			map[string]any{
 				"url": "https://crm.example.com/secret",
 			}, true, 0)
 
@@ -1180,7 +1215,7 @@ func TestApp_CreateCustomAction_DuplicateName(t *testing.T) {
 	user := testutil.CreateTestUser(t, app.DB, org.ID)
 
 	createTestCustomAction(t, app, org.ID, "Same Name", models.ActionTypeWebhook,
-		map[string]interface{}{"url": "https://example.com/hook1"}, true, 0)
+		map[string]any{"url": "https://example.com/hook1"}, true, 0)
 
 	req := testutil.NewJSONRequest(t, map[string]any{
 		"name":        "Same Name",
@@ -1212,7 +1247,7 @@ func TestApp_UpdateCustomAction_ChangeActionType(t *testing.T) {
 	user := testutil.CreateTestUser(t, app.DB, org.ID)
 
 	action := createTestCustomAction(t, app, org.ID, "Convert Action", models.ActionTypeWebhook,
-		map[string]interface{}{"url": "https://example.com/hook"}, true, 0)
+		map[string]any{"url": "https://example.com/hook"}, true, 0)
 
 	// Change from webhook to javascript
 	req := testutil.NewJSONRequest(t, map[string]any{

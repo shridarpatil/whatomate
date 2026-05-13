@@ -33,7 +33,7 @@ type CatalogResponse struct {
 type CatalogProductRequest struct {
 	Name        string `json:"name"`
 	Description string `json:"description"`
-	Price       int64  `json:"price"`    // Price in cents
+	Price       int64  `json:"price"` // Price in cents
 	Currency    string `json:"currency"`
 	URL         string `json:"url"`
 	ImageURL    string `json:"image_url"`
@@ -89,7 +89,7 @@ func (a *App) ListCatalogs(r *fastglue.Request) error {
 		result[i] = catalogToResponse(c, int(productCount))
 	}
 
-	return r.SendEnvelope(map[string]interface{}{
+	return r.SendEnvelope(map[string]any{
 		"catalogs": result,
 	})
 }
@@ -273,7 +273,7 @@ func (a *App) SyncCatalogs(r *fastglue.Request) error {
 		}
 	}
 
-	return r.SendEnvelope(map[string]interface{}{
+	return r.SendEnvelope(map[string]any{
 		"message": "Catalogs synced",
 		"synced":  synced,
 		"total":   len(metaCatalogs),
@@ -310,7 +310,7 @@ func (a *App) ListCatalogProducts(r *fastglue.Request) error {
 		result[i] = productToResponse(p)
 	}
 
-	return r.SendEnvelope(map[string]interface{}{
+	return r.SendEnvelope(map[string]any{
 		"products": result,
 	})
 }
