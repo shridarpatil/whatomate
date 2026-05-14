@@ -159,9 +159,11 @@ const selectedCannedResponse = ref<CannedResponse | null>(null)
 const cannedParamNames = ref<string[]>([])
 const cannedParamValues = ref<Record<string, string>>({})
 const isSendingCanned = ref(false)
-// Tokens that the chat already knows how to fill from the current contact;
-// these stay out of the input list and are resolved straight into the preview.
-const AUTO_RESOLVED_CANNED_TOKENS = new Set(['contact_name', 'phone_number', 'user_name', 'agent_name'])
+// Tokens that the chat already knows how to fill from the current contact /
+// signed-in agent. Shared by canned responses (resolved client-side into the
+// outgoing message) and templates (pre-filled into the param payload so the
+// backend forwards the resolved value to Meta).
+const AUTO_RESOLVED_CONTEXT_TOKENS = new Set(['contact_name', 'phone_number', 'user_name', 'agent_name'])
 
 // Sticky date header state
 const stickyDate = ref('')
@@ -814,21 +816,25 @@ function extractCannedTokensFromResponse(r: CannedResponse): string[] {
   return Array.from(seen)
 }
 
+// Resolve a single context token (contact_name / phone_number / user_name /
+// agent_name) against the current chat. Returns null for any key that isn't
+// in AUTO_RESOLVED_CONTEXT_TOKENS so callers can fall back to their own param
+// dict.
+function resolveContextToken(key: string): string | null {
+  const contact = contactsStore.currentContact
+  if (key === 'contact_name') return contact?.profile_name || contact?.name || 'there'
+  if (key === 'phone_number') return contact?.phone_number || ''
+  if (key === 'user_name' || key === 'agent_name') return authStore.user?.full_name || ''
+  return null
+}
+
 // Shared {{...}} resolver used by the body preview and the button fields, so
 // `{{phone_number}}` works inside a button URL the same way it does in content.
 function resolveCannedTokens(text: string): string {
   if (!text) return text
-  const contact = contactsStore.currentContact
   return text.replace(/\{\{\s*([\w.-]+)\s*\}\}/g, (_match, key: string) => {
-    if (key === 'contact_name') {
-      return contact?.profile_name || contact?.name || 'there'
-    }
-    if (key === 'phone_number') {
-      return contact?.phone_number || ''
-    }
-    if (key === 'user_name' || key === 'agent_name') {
-      return authStore.user?.full_name || ''
-    }
+    const ctx = resolveContextToken(key)
+    if (ctx !== null) return ctx
     const value = cannedParamValues.value[key]
     return value ? value : `{{${key}}}`
   })
@@ -853,7 +859,7 @@ const cannedPreviewButtons = computed(() => {
 function handleCannedSelect(response: CannedResponse) {
   selectedCannedResponse.value = response
   const tokens = extractCannedTokensFromResponse(response).filter(
-    t => !AUTO_RESOLVED_CANNED_TOKENS.has(t)
+    t => !AUTO_RESOLVED_CONTEXT_TOKENS.has(t)
   )
   cannedParamNames.value = tokens
   cannedParamValues.value = Object.fromEntries(tokens.map(t => [t, '']))
@@ -960,11 +966,14 @@ function getTemplateBodyContent(tpl: any): string {
 
 const templatePreview = computed(() => {
   if (!selectedTemplate.value) return ''
-  let body = getTemplateBodyContent(selectedTemplate.value)
-  for (const [key, value] of Object.entries(templateParamValues.value)) {
-    body = body.replace(new RegExp(`\\{\\{${key}\\}\\}`, 'g'), value || `{{${key}}}`)
-  }
-  return body
+  const body = getTemplateBodyContent(selectedTemplate.value)
+  return body.replace(/\{\{\s*([\w.-]+)\s*\}\}/g, (_match, key: string) => {
+    const supplied = templateParamValues.value[key]
+    if (supplied) return supplied
+    const ctx = resolveContextToken(key)
+    if (ctx !== null) return ctx
+    return `{{${key}}}`
+  })
 })
 
 function extractButtonUrlParams(buttons: any[]): { index: number; text: string; value: string; type: string }[] {
@@ -984,8 +993,17 @@ function extractButtonUrlParams(buttons: any[]): { index: number; text: string; 
 
 function handleTemplateWithParams(template: any, paramNames: string[]) {
   selectedTemplate.value = template
-  templateParamNames.value = paramNames
-  templateParamValues.value = Object.fromEntries(paramNames.map(n => [n, '']))
+  // Pre-fill context tokens from the conversation; keep them in the payload
+  // dict so the backend forwards them to Meta, but hide them from the dialog
+  // so the agent doesn't have to type values we already know — same pattern
+  // as canned responses (see handleCannedSelect).
+  const initial: Record<string, string> = {}
+  for (const name of paramNames) {
+    const resolved = resolveContextToken(name)
+    initial[name] = resolved ?? ''
+  }
+  templateParamValues.value = initial
+  templateParamNames.value = paramNames.filter(n => !AUTO_RESOLVED_CONTEXT_TOKENS.has(n))
   clearTemplateHeaderMedia()
   templateButtonUrlParams.value = extractButtonUrlParams(template.buttons)
   templateDialogOpen.value = true
