@@ -554,7 +554,7 @@ func extractNamedExamplesForComponent(sampleValues []any, componentType, content
 			continue
 		}
 		comp, _ := svMap["component"].(string)
-		if comp != componentType && !(comp == "" && componentType == "body") {
+		if comp != componentType && (comp != "" || componentType != "body") {
 			continue
 		}
 		value, _ := svMap["value"].(string)
