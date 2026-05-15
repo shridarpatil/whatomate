@@ -51,8 +51,10 @@ const isDeleting = ref(false)
 const error = ref(false)
 const onlineCount = ref(0)
 
-// Filters
-const roleFilter = ref<string>('')   // '' means "all roles"
+// Filters. Radix's <SelectItem> can't take value="", so use a sentinel for
+// "no role filter" and translate it to undefined before hitting the API.
+const ALL_ROLES = '__all'
+const roleFilter = ref<string>(ALL_ROLES)
 const onlineOnly = ref(false)
 
 const { searchQuery, currentPage, totalItems, pageSize, handlePageChange } = useSearchPagination({
@@ -96,7 +98,7 @@ async function fetchUsers() {
       search: searchQuery.value || undefined,
       page: currentPage.value,
       limit: pageSize,
-      role_id: roleFilter.value || undefined,
+      role_id: roleFilter.value === ALL_ROLES ? undefined : roleFilter.value,
       online_only: onlineOnly.value || undefined,
     })
     users.value = response.users
@@ -238,7 +240,7 @@ async function copyInviteLink() {
                       <SelectValue :placeholder="$t('users.allRoles', 'All roles')" />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="">{{ $t('users.allRoles', 'All roles') }}</SelectItem>
+                      <SelectItem :value="ALL_ROLES">{{ $t('users.allRoles', 'All roles') }}</SelectItem>
                       <SelectItem v-for="role in rolesStore.roles" :key="role.id" :value="role.id" class="capitalize">
                         {{ role.name }}
                       </SelectItem>
