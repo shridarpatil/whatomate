@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"context"
 	"encoding/json"
 	"strings"
 	"time"
@@ -129,7 +130,7 @@ func (a *App) processCallWebhook(phoneNumberID string, call any) {
 		// payload tags the originating agent, ring just that agent. Falls
 		// back to the org-wide broadcast on any failure (malformed payload,
 		// wrong org, agent offline / unavailable).
-		stickyAgentID := a.resolveStickyAgent(ce.BizOpaqueCallbackData, account.OrganizationID, contact.ID)
+		stickyAgentID := a.resolveStickyAgent(context.Background(), ce.BizOpaqueCallbackData, account.OrganizationID, contact.PhoneNumber)
 		if stickyAgentID != nil {
 			payload["sticky_agent_id"] = stickyAgentID.String()
 			a.Log.Info("Sticky-routing incoming call to originating agent",
@@ -163,7 +164,7 @@ func (a *App) processCallWebhook(phoneNumberID string, call any) {
 		if a.IsCallingEnabledForOrg(account.OrganizationID) && sdpOffer != "" {
 			session := a.CallManager.GetSession(ce.ID)
 			if session == nil {
-				stickyAgentID := a.resolveStickyAgent(ce.BizOpaqueCallbackData, account.OrganizationID, contact.ID)
+				stickyAgentID := a.resolveStickyAgent(context.Background(), ce.BizOpaqueCallbackData, account.OrganizationID, contact.PhoneNumber)
 				a.CallManager.HandleIncomingCall(account, contact, callLog, sdpOffer, stickyAgentID)
 			} else {
 				a.CallManager.HandleCallEvent(ce.ID, ce.Event)
@@ -476,39 +477,54 @@ func (a *App) validateStickyAgent(agentID, orgID uuid.UUID) *uuid.UUID {
 	return &agentID
 }
 
-// findOriginatingAgentFromHistory looks up the most-recent outgoing
-// voice_call interactive message we sent to this contact within the last
-// 60 minutes, and returns its sender's user id.
+// stickyCallKey returns the Redis key for a pending voice_call sticky
+// route. Keyed by (org, caller-phone) because the incoming-call webhook
+// gives us the phone before any contact lookup, and it's the same value
+// the sender writes (contact.PhoneNumber).
+func stickyCallKey(orgID uuid.UUID, phone string) string {
+	return "vc_sticky:" + orgID.String() + ":" + phone
+}
+
+// MarkPendingStickyCall stores the originating agent id when an outbound
+// voice_call button is sent, with a TTL matching the button's clickable
+// lifetime. When the customer taps the button and our number rings, the
+// call_webhook handler reads this back to route directly to the agent
+// who sent it.
 //
-// This is the load-bearing fallback: Meta does not (today) echo the
-// voice_call button's `payload` parameter back on the incoming-call
-// webhook, so we recover the originating agent from our own message
-// history instead. 60 min matches the maximum ttl_minutes the canned-
-// response editor accepts — buttons older than that have expired
-// Meta-side and can't initiate a call anyway.
-//
-// Edge case worth knowing: if two agents send a voice_call button to the
-// same contact within the window, "most recent" wins, even if the
-// customer tapped the older button. Acceptable trade-off — there's no
-// way to distinguish without Meta's cooperation.
-func (a *App) findOriginatingAgentFromHistory(contactID uuid.UUID) *uuid.UUID {
-	if contactID == uuid.Nil {
+// Best-effort: a Redis failure logs and degrades to today's default
+// (org-wide broadcast + IVR). Doesn't error out a successful send.
+func (a *App) MarkPendingStickyCall(ctx context.Context, orgID uuid.UUID, phone string, agentID uuid.UUID, ttlMinutes int) {
+	if a.Redis == nil || phone == "" {
+		return
+	}
+	if ttlMinutes <= 0 {
+		ttlMinutes = 15 // Meta's default for voice_call buttons
+	}
+	if err := a.Redis.Set(ctx, stickyCallKey(orgID, phone), agentID.String(),
+		time.Duration(ttlMinutes)*time.Minute).Err(); err != nil {
+		a.Log.Warn("Failed to mark pending sticky call in Redis",
+			"error", err, "phone", phone)
+	}
+}
+
+// findStickyAgentInRedis returns the agent id stored when the outbound
+// voice_call button was sent (set by MarkPendingStickyCall), or nil if
+// no key, expired, malformed, or Redis is unhealthy. Nil is a graceful
+// signal — the caller falls through to today's default routing.
+func (a *App) findStickyAgentInRedis(ctx context.Context, orgID uuid.UUID, phone string) *uuid.UUID {
+	if a.Redis == nil || phone == "" {
 		return nil
 	}
-	var msg models.Message
-	err := a.DB.
-		Where("contact_id = ? AND direction = ? AND message_type = ?",
-			contactID, models.DirectionOutgoing, models.MessageTypeInteractive).
-		Where("interactive_data->>'type' = ?", "voice_call").
-		Where("sent_by_user_id IS NOT NULL").
-		Where("created_at > ?", time.Now().Add(-60*time.Minute)).
-		Order("created_at DESC").
-		Limit(1).
-		First(&msg).Error
-	if err != nil || msg.SentByUserID == nil {
+	val, err := a.Redis.Get(ctx, stickyCallKey(orgID, phone)).Result()
+	if err != nil {
 		return nil
 	}
-	return msg.SentByUserID
+	agentID, err := uuid.Parse(val)
+	if err != nil {
+		a.Log.Warn("Stored sticky-call agent id is malformed", "value", val)
+		return nil
+	}
+	return &agentID
 }
 
 // resolveStickyAgent picks the agent (if any) who should receive this
@@ -517,19 +533,24 @@ func (a *App) findOriginatingAgentFromHistory(contactID uuid.UUID) *uuid.UUID {
 //  1. The voice_call button's `payload` echoed back by Meta. As of
 //     2026-05, Meta does not surface this on the call webhook; we keep
 //     the parsing for forward-compat in case they add it later.
-//  2. Our own message history — the most recent voice_call we sent to
-//     this contact in the last 60 min identifies the originating agent.
+//  2. Redis: a key set by MarkPendingStickyCall when the outbound
+//     button was sent, with a TTL matching the button's clickable
+//     lifetime.
 //
 // Either source's result goes through validateStickyAgent so the agent
 // must still be in the same org, on-shift, and online. On any failure
 // return nil and let the caller fall back to today's org-wide broadcast.
-func (a *App) resolveStickyAgent(rawPayload string, orgID, contactID uuid.UUID) *uuid.UUID {
+//
+// Why Redis instead of a DB lookup: O(1) GET vs an unindexed JSONB scan
+// of `messages`, and the TTL is enforced by Redis natively (no
+// "last 60 min" window math).
+func (a *App) resolveStickyAgent(ctx context.Context, rawPayload string, orgID uuid.UUID, callerPhone string) *uuid.UUID {
 	// Source 1: Meta-echoed payload.
 	if suffix, ok := strings.CutPrefix(rawPayload, "agent:"); ok {
 		if agentID, err := uuid.Parse(suffix); err == nil {
 			if validated := a.validateStickyAgent(agentID, orgID); validated != nil {
 				a.Log.Info("Sticky-route: matched on Meta-echoed payload",
-					"agent_id", agentID, "contact_id", contactID)
+					"agent_id", agentID, "phone", callerPhone)
 				return validated
 			}
 		} else {
@@ -538,11 +559,11 @@ func (a *App) resolveStickyAgent(rawPayload string, orgID, contactID uuid.UUID) 
 		}
 	}
 
-	// Source 2: most-recent voice_call sender from our message history.
-	if originator := a.findOriginatingAgentFromHistory(contactID); originator != nil {
+	// Source 2: pending sticky-call key set when the button was sent.
+	if originator := a.findStickyAgentInRedis(ctx, orgID, callerPhone); originator != nil {
 		if validated := a.validateStickyAgent(*originator, orgID); validated != nil {
-			a.Log.Info("Sticky-route: matched on recent voice_call sender",
-				"agent_id", *originator, "contact_id", contactID)
+			a.Log.Info("Sticky-route: matched on Redis pending key",
+				"agent_id", *originator, "phone", callerPhone)
 			return validated
 		}
 	}
