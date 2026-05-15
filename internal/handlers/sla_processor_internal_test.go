@@ -217,14 +217,20 @@ func TestSLAEscalationSkippedWhenAgentActive(t *testing.T) {
 	account := testutil.CreateTestWhatsAppAccount(t, app.DB, org.ID)
 
 	escalationMinutes := 30
-	// Escalation was due 5 minutes ago
+	// Realistic flow: transfer started ~35 min ago, original escalation was
+	// due 5 min ago. Without forcing transferred_at into the past, GORM's
+	// autoCreate sets it to now and the agent's 10-min-old reply ends up
+	// "before" the transfer existed — which the variant-2 semantic
+	// correctly treats as "not a response to this transfer."
 	escalationAt := time.Now().Add(-5 * time.Minute)
+	transferredAt := time.Now().Add(-35 * time.Minute)
 	transfer := createSLATestTransfer(t, app, org.ID, contact.ID, agent.ID, account.Name, models.SLATracking{
 		EscalationAt:    &escalationAt,
 		EscalationLevel: 0,
 	})
+	require.NoError(t, app.DB.Model(transfer).Update("transferred_at", transferredAt).Error)
 
-	// Agent sent a message 10 minutes ago (after the escalation was originally set)
+	// Agent sent a message 10 minutes ago (after the transfer started)
 	createTestAgentMessage(t, app, org.ID, contact.ID, agent.ID, account.Name, time.Now().Add(-10*time.Minute))
 
 	settings := models.ChatbotSettings{
