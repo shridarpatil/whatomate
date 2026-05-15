@@ -129,7 +129,7 @@ func (a *App) processCallWebhook(phoneNumberID string, call any) {
 		// payload tags the originating agent, ring just that agent. Falls
 		// back to the org-wide broadcast on any failure (malformed payload,
 		// wrong org, agent offline / unavailable).
-		stickyAgentID := a.resolveStickyAgent(ce.BizOpaqueCallbackData, account.OrganizationID)
+		stickyAgentID := a.resolveStickyAgent(ce.BizOpaqueCallbackData, account.OrganizationID, contact.ID)
 		if stickyAgentID != nil {
 			payload["sticky_agent_id"] = stickyAgentID.String()
 			a.Log.Info("Sticky-routing incoming call to originating agent",
@@ -163,7 +163,7 @@ func (a *App) processCallWebhook(phoneNumberID string, call any) {
 		if a.IsCallingEnabledForOrg(account.OrganizationID) && sdpOffer != "" {
 			session := a.CallManager.GetSession(ce.ID)
 			if session == nil {
-				stickyAgentID := a.resolveStickyAgent(ce.BizOpaqueCallbackData, account.OrganizationID)
+				stickyAgentID := a.resolveStickyAgent(ce.BizOpaqueCallbackData, account.OrganizationID, contact.ID)
 				a.CallManager.HandleIncomingCall(account, contact, callLog, sdpOffer, stickyAgentID)
 			} else {
 				a.CallManager.HandleCallEvent(ce.ID, ce.Event)
@@ -454,30 +454,11 @@ func (a *App) processCallPermissionReply(phoneNumberID, fromPhone string, reply 
 	a.broadcastCallEvent(account.OrganizationID, websocket.TypeCallPermissionUpdate, wsPayload)
 }
 
-// resolveStickyAgent decodes the voice_call `payload` (echoed back as
-// `biz_opaque_callback_data`) and decides whether to sticky-route the
-// resulting call to the originating agent.
-//
-// Sticky routing is honored only when all of these hold:
-//   - payload is "agent:<uuid>" (any other shape is ignored, not an error)
-//   - the user belongs to this org (defends against a malicious sender
-//     embedding another org's agent id)
-//   - is_active && is_available (agent is on-shift and not "away")
-//   - has at least one live WebSocket connection (Hub.IsUserOnline)
-//
-// On any failure mode return nil; the caller falls back to the default
-// org-wide broadcast. All skip reasons are logged at info so the rollout
-// can be observed without escalating.
-func (a *App) resolveStickyAgent(rawPayload string, orgID uuid.UUID) *uuid.UUID {
-	if !strings.HasPrefix(rawPayload, "agent:") {
-		return nil
-	}
-	agentID, err := uuid.Parse(strings.TrimPrefix(rawPayload, "agent:"))
-	if err != nil {
-		a.Log.Info("Sticky-route skipped: malformed agent id",
-			"payload", rawPayload, "error", err)
-		return nil
-	}
+// validateStickyAgent runs the per-call eligibility checks (same-org,
+// IsActive, IsAvailable, online) on a candidate agent. Returns the id on
+// pass, nil on fail (with the reason logged). Used by both sticky-agent
+// sources in resolveStickyAgent.
+func (a *App) validateStickyAgent(agentID, orgID uuid.UUID) *uuid.UUID {
 	var user models.User
 	if err := a.DB.Where(
 		"id = ? AND organization_id = ? AND is_active = ? AND is_available = ?",
@@ -493,6 +474,80 @@ func (a *App) resolveStickyAgent(rawPayload string, orgID uuid.UUID) *uuid.UUID 
 		return nil
 	}
 	return &agentID
+}
+
+// findOriginatingAgentFromHistory looks up the most-recent outgoing
+// voice_call interactive message we sent to this contact within the last
+// 60 minutes, and returns its sender's user id.
+//
+// This is the load-bearing fallback: Meta does not (today) echo the
+// voice_call button's `payload` parameter back on the incoming-call
+// webhook, so we recover the originating agent from our own message
+// history instead. 60 min matches the maximum ttl_minutes the canned-
+// response editor accepts — buttons older than that have expired
+// Meta-side and can't initiate a call anyway.
+//
+// Edge case worth knowing: if two agents send a voice_call button to the
+// same contact within the window, "most recent" wins, even if the
+// customer tapped the older button. Acceptable trade-off — there's no
+// way to distinguish without Meta's cooperation.
+func (a *App) findOriginatingAgentFromHistory(contactID uuid.UUID) *uuid.UUID {
+	if contactID == uuid.Nil {
+		return nil
+	}
+	var msg models.Message
+	err := a.DB.
+		Where("contact_id = ? AND direction = ? AND message_type = ?",
+			contactID, models.DirectionOutgoing, models.MessageTypeInteractive).
+		Where("interactive_data->>'type' = ?", "voice_call").
+		Where("sent_by_user_id IS NOT NULL").
+		Where("created_at > ?", time.Now().Add(-60*time.Minute)).
+		Order("created_at DESC").
+		Limit(1).
+		First(&msg).Error
+	if err != nil || msg.SentByUserID == nil {
+		return nil
+	}
+	return msg.SentByUserID
+}
+
+// resolveStickyAgent picks the agent (if any) who should receive this
+// incoming call. Two sources are tried in order:
+//
+//  1. The voice_call button's `payload` echoed back by Meta. As of
+//     2026-05, Meta does not surface this on the call webhook; we keep
+//     the parsing for forward-compat in case they add it later.
+//  2. Our own message history — the most recent voice_call we sent to
+//     this contact in the last 60 min identifies the originating agent.
+//
+// Either source's result goes through validateStickyAgent so the agent
+// must still be in the same org, on-shift, and online. On any failure
+// return nil and let the caller fall back to today's org-wide broadcast.
+func (a *App) resolveStickyAgent(rawPayload string, orgID, contactID uuid.UUID) *uuid.UUID {
+	// Source 1: Meta-echoed payload.
+	if suffix, ok := strings.CutPrefix(rawPayload, "agent:"); ok {
+		if agentID, err := uuid.Parse(suffix); err == nil {
+			if validated := a.validateStickyAgent(agentID, orgID); validated != nil {
+				a.Log.Info("Sticky-route: matched on Meta-echoed payload",
+					"agent_id", agentID, "contact_id", contactID)
+				return validated
+			}
+		} else {
+			a.Log.Info("Sticky-route: malformed agent id in payload",
+				"payload", rawPayload, "error", err)
+		}
+	}
+
+	// Source 2: most-recent voice_call sender from our message history.
+	if originator := a.findOriginatingAgentFromHistory(contactID); originator != nil {
+		if validated := a.validateStickyAgent(*originator, orgID); validated != nil {
+			a.Log.Info("Sticky-route: matched on recent voice_call sender",
+				"agent_id", *originator, "contact_id", contactID)
+			return validated
+		}
+	}
+
+	return nil
 }
 
 // broadcastCallEvent sends a call event to all connected clients in an organization
