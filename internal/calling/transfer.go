@@ -159,8 +159,28 @@ func (m *Manager) initiateTransfer(session *CallSession, waAccount string, teamT
 					session.mu.Unlock()
 					m.runTransferRotation(session, transfer, orgSettings)
 				} else {
+					// Per-agent ctx above is already Done — passing it
+					// straight to waitForTransferTimeout would fire
+					// NoAnswer instantly, so we mint a fresh one keyed
+					// off the org's transfer timeout. Also reset the
+					// TransferAccepted channel so any agent who races to
+					// accept after the broadcast finds a live signal,
+					// and rebind TransferCancel so their acceptance can
+					// cancel this new wait.
+					fallbackTimeout := orgSettings.TransferTimeoutSecs
+					if fallbackTimeout <= 0 {
+						fallbackTimeout = 30
+					}
+					fallbackCtx, fallbackCancel := context.WithTimeout(
+						context.Background(),
+						time.Duration(fallbackTimeout)*time.Second,
+					)
+					session.mu.Lock()
+					session.TransferCancel = fallbackCancel
+					session.TransferAccepted = make(chan struct{})
+					session.mu.Unlock()
 					m.broadcastEvent(transfer.OrganizationID, websocket.TypeCallTransferWaiting, payload)
-					m.waitForTransferTimeout(ctx, session, transfer.ID)
+					m.waitForTransferTimeout(fallbackCtx, session, transfer.ID)
 				}
 			}
 		}()
