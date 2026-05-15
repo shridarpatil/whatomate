@@ -304,6 +304,11 @@ type WhatsAppAccount struct {
 	IsDefaultIncoming  bool       `gorm:"default:false" json:"is_default_incoming"`
 	IsDefaultOutgoing  bool       `gorm:"default:false" json:"is_default_outgoing"`
 	AutoReadReceipt    bool       `gorm:"default:false" json:"auto_read_receipt"`
+	// BusinessCallingEnabled gates outbound voice_call interactive buttons.
+	// Set to true only after Meta enrolls this number in the WhatsApp Business
+	// Calling API. Used by the canned-response editor to disable the Call
+	// button option, and by the send path to refuse voice_call sends.
+	BusinessCallingEnabled bool       `gorm:"default:false" json:"business_calling_enabled"`
 	Status             string     `gorm:"size:20;default:'active'" json:"status"`
 	CreatedByID        *uuid.UUID `gorm:"type:uuid" json:"created_by_id,omitempty"`
 	UpdatedByID        *uuid.UUID `gorm:"type:uuid" json:"updated_by_id,omitempty"`

@@ -261,7 +261,14 @@ func (c *Client) SendVoiceCallButton(ctx context.Context, account *Account, rcpt
 	rcpt.SetOnPayload(msg)
 
 	url := c.buildMessagesURL(account)
-	c.Log.Debug("Sending voice_call button message", "phone", rcpt.Phone)
+	// Logged at info during the sticky-routing rollout: confirms display_text,
+	// ttl_minutes, and the agent-id payload actually leave our box, so when
+	// the incoming-call webhook arrives we know whether Meta echoed it back.
+	// The payload is an opaque "agent:<uuid>" — not PII.
+	c.Log.Info("Sending voice_call button message",
+		"phone", rcpt.Phone,
+		"parameters", parameters,
+	)
 
 	respBody, err := c.doRequest(ctx, "POST", url, msg, account.AccessToken)
 	if err != nil {

@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import type { ButtonConfig } from '@/types/flow-preview'
-import { ExternalLink, Phone } from 'lucide-vue-next'
+import { ExternalLink, Phone, PhoneCall } from 'lucide-vue-next'
 
 defineProps<{
   buttons: ButtonConfig[]
@@ -31,6 +31,7 @@ function handleClick(button: ButtonConfig) {
     >
       <ExternalLink v-if="btn.type === 'url'" class="h-4 w-4" />
       <Phone v-else-if="btn.type === 'phone'" class="h-4 w-4" />
+      <PhoneCall v-else-if="btn.type === 'voice_call'" class="h-4 w-4" />
       {{ btn.title || 'Option' }}
     </button>
   </div>

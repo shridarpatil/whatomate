@@ -65,6 +65,13 @@ type CallSession struct {
 	// Ringback (outgoing calls)
 	RingbackPlayer *AudioPlayer
 
+	// Sticky agent for voice_call-button incoming calls. When set,
+	// HandleIncomingCall skips the IVR load and the post-media branch in
+	// webrtc.go kicks off a transfer to this agent directly (see
+	// initiateTransfer, which prefers this over the contact's
+	// assigned_user_id).
+	StickyAgentID *uuid.UUID
+
 	// Outgoing call fields
 	Direction      models.CallDirection
 	AgentID        uuid.UUID
@@ -231,7 +238,12 @@ func NewManager(cfg *config.CallingConfig, s3Client *storage.S3Client, db *gorm.
 // HandleIncomingCall processes a new incoming call and starts WebRTC negotiation.
 // The sdpOffer parameter is the consumer's SDP offer received from the webhook's
 // session.sdp field in the "connect" event.
-func (m *Manager) HandleIncomingCall(account *models.WhatsAppAccount, contact *models.Contact, callLog *models.CallLog, sdpOffer string) {
+//
+// stickyAgentID, if non-nil, comes from the voice_call button payload — the
+// caller pre-validated the agent's eligibility. We bypass the IVR for these
+// calls; after WebRTC media connects, webrtc.go kicks off a transfer to this
+// agent directly instead of running runIVRFlow.
+func (m *Manager) HandleIncomingCall(account *models.WhatsAppAccount, contact *models.Contact, callLog *models.CallLog, sdpOffer string, stickyAgentID *uuid.UUID) {
 	session := &CallSession{
 		ID:             callLog.WhatsAppCallID,
 		OrganizationID: account.OrganizationID,
@@ -243,10 +255,12 @@ func (m *Manager) HandleIncomingCall(account *models.WhatsAppAccount, contact *m
 		DTMFBuffer:     make(chan byte, 32),
 		StartedAt:      time.Now(),
 		BridgeStarted:  make(chan struct{}),
+		StickyAgentID:  stickyAgentID,
 	}
 
-	// Load IVR flow if assigned (cached)
-	if callLog.IVRFlowID != nil {
+	// Load IVR flow if assigned (cached). Skipped for sticky-routed calls —
+	// those bypass IVR entirely and go straight to a transfer.
+	if stickyAgentID == nil && callLog.IVRFlowID != nil {
 		session.IVRFlow = m.getIVRFlowCached(*callLog.IVRFlowID)
 	}
 
@@ -335,6 +349,18 @@ type orgCallingSettings struct {
 	MaskPhoneNumbers    bool
 	HoldMusicFile       string
 	RingbackFile        string
+}
+
+// transferRingFile returns the audio file the caller should hear while a
+// transfer is pending an agent's acceptance. Prefers RingbackFile (sounds
+// like "we're connecting you", closer to what a customer expects) and
+// falls back to HoldMusicFile when no ringback asset is configured for
+// the org. Empty string ⇒ silence.
+func (s orgCallingSettings) transferRingFile() string {
+	if s.RingbackFile != "" {
+		return s.RingbackFile
+	}
+	return s.HoldMusicFile
 }
 
 // getOrgCallingSettings returns cached org-level calling overrides,

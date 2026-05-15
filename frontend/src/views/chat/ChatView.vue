@@ -11,6 +11,7 @@ import { contactsService, chatbotService, messagesService, customActionsService,
 import { useTagsStore } from '@/stores/tags'
 import { TagBadge } from '@/components/ui/tag-badge'
 import { getTagColorClass } from '@/lib/constants'
+import { getErrorMessage } from '@/lib/api-utils'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
@@ -60,6 +61,7 @@ import {
   Smile,
   MoreVertical,
   Phone,
+  PhoneCall,
   Check,
   CheckCheck,
   Clock,
@@ -704,7 +706,7 @@ async function sendMessage() {
     await nextTick()
     scrollToBottom()
   } catch (error) {
-    toast.error(t('chat.sendMessageFailed'))
+    toast.error(getErrorMessage(error, t('chat.sendMessageFailed')))
   } finally {
     isSending.value = false
   }
@@ -739,7 +741,7 @@ async function retryMessage(message: Message) {
 
     toast.success(t('chat.messageSent'))
   } catch (error) {
-    toast.error(t('chat.sendMessageFailed'))
+    toast.error(getErrorMessage(error, t('chat.sendMessageFailed')))
   } finally {
     retryingMessageId.value = null
   }
@@ -895,19 +897,35 @@ async function sendCannedResponse() {
 
   // WhatsApp Cloud API supports: 1-3 reply buttons (interactive.button),
   // 4-10 reply rows (interactive.list — backend's SendInteractiveButtons
-  // auto-picks the right shape), or a single cta_url. Phone buttons and
-  // multi-URL / mixed combos aren't representable; the detail-page validator
-  // blocks save for those, so the text fallback here is just a safety net.
+  // auto-picks the right shape), a single cta_url, or a single voice_call
+  // (Business Calling click-to-call). Phone buttons and multi-URL / mixed
+  // combos aren't representable; the detail-page validator blocks save for
+  // those, so the text fallback here is just a safety net.
+  const voiceCallButtons = buttons.filter(b => b.type === 'voice_call')
   let sendType: 'text' | 'interactive' = 'text'
   let interactive: {
-    type: 'button' | 'list' | 'cta_url'
+    type: 'button' | 'list' | 'cta_url' | 'voice_call'
     body: string
     buttons?: Array<{ id: string; title: string }>
     button_text?: string
     url?: string
+    display_text?: string
+    ttl_minutes?: number
   } | undefined
 
-  if (buttons.length > 0 && replyButtons.length === buttons.length && replyButtons.length <= 10) {
+  if (buttons.length === 1 && voiceCallButtons.length === 1) {
+    const vc = voiceCallButtons[0]
+    sendType = 'interactive'
+    interactive = {
+      type: 'voice_call',
+      body,
+      // {{...}} tokens already resolved in the canned-preview path; the
+      // button title is what becomes Meta's display_text. Backend
+      // truncates to 20 chars and stamps the agent-id payload.
+      display_text: resolveCannedTokens(vc.title),
+      ttl_minutes: vc.ttl_minutes ?? 15,
+    }
+  } else if (buttons.length > 0 && replyButtons.length === buttons.length && replyButtons.length <= 10) {
     sendType = 'interactive'
     interactive = {
       type: replyButtons.length <= 3 ? 'button' : 'list',
@@ -943,7 +961,7 @@ async function sendCannedResponse() {
     await nextTick()
     scrollToBottom()
   } catch (error) {
-    toast.error(t('chat.sendMessageFailed'))
+    toast.error(getErrorMessage(error, t('chat.sendMessageFailed')))
   } finally {
     isSendingCanned.value = false
   }
@@ -1405,6 +1423,24 @@ function getCTAUrlData(message: Message): CTAUrlData | null {
     body: message.interactive_data.body || '',
     button_text: (message.interactive_data as any).button_text || 'Open',
     url: (message.interactive_data as any).url || ''
+  }
+}
+
+interface VoiceCallData {
+  display_text: string
+  ttl_minutes?: number
+}
+
+function getVoiceCallData(message: Message): VoiceCallData | null {
+  if (message.message_type !== 'interactive' || !message.interactive_data) {
+    return null
+  }
+  if (message.interactive_data.type !== 'voice_call') {
+    return null
+  }
+  return {
+    display_text: (message.interactive_data as any).display_text || 'Call',
+    ttl_minutes: (message.interactive_data as any).ttl_minutes,
   }
 }
 
@@ -2129,6 +2165,16 @@ async function sendMediaMessage() {
                     {{ getCTAUrlData(message)?.button_text }}
                   </div>
                 </a>
+                <!-- Voice call button - WhatsApp style, non-clickable in our chat -->
+                <div
+                  v-if="getVoiceCallData(message)"
+                  class="interactive-buttons mt-2 -mx-2 -mb-1.5 border-t"
+                >
+                  <div class="py-2 text-sm text-center font-medium flex items-center justify-center gap-1.5">
+                    <PhoneCall class="h-3.5 w-3.5" />
+                    {{ getVoiceCallData(message)?.display_text }}
+                  </div>
+                </div>
                 <!-- Flow button - WhatsApp style -->
                 <div
                   v-if="getFlowButtonText(message)"
