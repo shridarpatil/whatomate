@@ -44,6 +44,8 @@ export interface FetchUsersParams {
   search?: string
   page?: number
   limit?: number
+  role_id?: string
+  online_only?: boolean
 }
 
 export interface FetchUsersResponse {
@@ -51,6 +53,7 @@ export interface FetchUsersResponse {
   total: number
   page: number
   limit: number
+  online_count: number
 }
 
 export const useUsersStore = defineStore('users', () => {
@@ -69,7 +72,8 @@ export const useUsersStore = defineStore('users', () => {
         users: data.users || [],
         total: data.total ?? users.value.length,
         page: data.page ?? 1,
-        limit: data.limit ?? 50
+        limit: data.limit ?? 50,
+        online_count: data.online_count ?? 0
       }
     } catch (err: any) {
       error.value = err.response?.data?.message || 'Failed to fetch users'
