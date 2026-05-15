@@ -31,8 +31,17 @@ func (m *Manager) initiateTransfer(session *CallSession, waAccount string, teamT
 	session.HoldPlayer = player
 	session.mu.Unlock()
 
+	// Play ringback (if configured) instead of hold music while waiting for
+	// an agent to accept — "trrrring" feels right for a customer who just
+	// initiated a call, hold music feels right only after they've been
+	// explicitly told they're on hold. Falls back to hold music if no
+	// ringback asset is configured.
+	ringFile := orgSettings.transferRingFile()
 	go func() {
-		_ = player.PlayFileLoop(orgSettings.HoldMusicFile)
+		if ringFile == "" {
+			return
+		}
+		_ = player.PlayFileLoop(ringFile)
 	}()
 
 	var teamID *uuid.UUID

@@ -351,6 +351,18 @@ type orgCallingSettings struct {
 	RingbackFile        string
 }
 
+// transferRingFile returns the audio file the caller should hear while a
+// transfer is pending an agent's acceptance. Prefers RingbackFile (sounds
+// like "we're connecting you", closer to what a customer expects) and
+// falls back to HoldMusicFile when no ringback asset is configured for
+// the org. Empty string ⇒ silence.
+func (s orgCallingSettings) transferRingFile() string {
+	if s.RingbackFile != "" {
+		return s.RingbackFile
+	}
+	return s.HoldMusicFile
+}
+
 // getOrgCallingSettings returns cached org-level calling overrides,
 // falling back to global config defaults for any missing values.
 func (m *Manager) getOrgCallingSettings(orgID uuid.UUID) orgCallingSettings {
