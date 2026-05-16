@@ -408,12 +408,31 @@ func (a *App) processIncomingMessageFull(phoneNumberID string, msg IncomingTextM
 
 	// Check if user is in an active flow
 	if session.CurrentFlowID != nil {
+		if flow, err := a.getChatbotFlowByIDCached(account.OrganizationID, *session.CurrentFlowID); err == nil && flow.Graph != nil {
+			if err := a.runChatGraph(account, contact, session, flow, messageText, buttonID); err != nil {
+				a.Log.Error("Chat graph runner failed", "error", err, "session", session.ID, "flow", flow.ID)
+			}
+			return
+		}
 		a.processFlowResponse(account, session, contact, messageText, buttonID, flowResponseData)
 		return
 	}
 
 	// Try to match flow trigger keywords first (before greeting to avoid duplicate messages)
 	if flow := a.matchFlowTrigger(account.OrganizationID, messageText); flow != nil {
+		if flow.Graph != nil {
+			session.CurrentFlowID = &flow.ID
+			session.CurrentStep = ""
+			session.StepRetries = 0
+			session.SessionData = models.JSONB{
+				"_flow_id":   flow.ID.String(),
+				"_flow_name": flow.Name,
+			}
+			if err := a.runChatGraph(account, contact, session, flow, messageText, buttonID); err != nil {
+				a.Log.Error("Chat graph runner failed at flow start", "error", err, "session", session.ID, "flow", flow.ID)
+			}
+			return
+		}
 		a.startFlow(account, session, contact, flow)
 		return
 	}
