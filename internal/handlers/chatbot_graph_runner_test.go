@@ -962,6 +962,81 @@ func TestRunChatGraph_Transfer_GeneralStringRoutesToQueue(t *testing.T) {
 	assert.Nil(t, transfer.TeamID)
 }
 
+// newWebhookFlow builds a webhook → end graph.
+func newWebhookFlow(t *testing.T, app *App, org *models.Organization, account *models.WhatsAppAccount, url string) *models.ChatbotFlow {
+	t.Helper()
+	flow := &models.ChatbotFlow{
+		BaseModel:       models.BaseModel{ID: uuid.New()},
+		OrganizationID:  org.ID,
+		WhatsAppAccount: account.Name,
+		Name:            "webhook-flow",
+		IsEnabled:       true,
+		Graph: models.JSONB{
+			"version":    2,
+			"entry_node": "wh",
+			"nodes": []any{
+				map[string]any{"id": "wh", "type": "webhook", "label": "hook", "config": map[string]any{
+					"url": url, "method": "POST", "body": `{"phone":"{{phone_number}}"}`,
+				}},
+				map[string]any{"id": "end", "type": "end"},
+			},
+			"edges": []any{
+				map[string]any{"from": "wh", "to": "end", "condition": "default"},
+			},
+		},
+	}
+	require.NoError(t, app.DB.Create(flow).Error)
+	return flow
+}
+
+func TestRunChatGraph_Webhook_SuccessAdvances(t *testing.T) {
+	called := false
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		called = true
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer server.Close()
+
+	app, org, account, contact, session := newGraphTestFixtures(t)
+	flow := newWebhookFlow(t, app, org, account, server.URL)
+
+	require.NoError(t, app.runChatGraph(account, contact, session, flow, "start", ""))
+	require.NoError(t, app.DB.First(session, session.ID).Error)
+	assert.Equal(t, models.SessionStatusCompleted, session.Status)
+	assert.True(t, called, "webhook should fire")
+
+	path := chatGraphPath(t, session)
+	require.GreaterOrEqual(t, len(path), 1)
+	assert.Equal(t, "default", path[0]["outcome"])
+}
+
+func TestRunChatGraph_Webhook_Non2xxStillAdvances(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusInternalServerError)
+	}))
+	defer server.Close()
+
+	app, org, account, contact, session := newGraphTestFixtures(t)
+	flow := newWebhookFlow(t, app, org, account, server.URL)
+
+	require.NoError(t, app.runChatGraph(account, contact, session, flow, "start", ""))
+	require.NoError(t, app.DB.First(session, session.ID).Error)
+	assert.Equal(t, models.SessionStatusCompleted, session.Status, "non-2xx should not block advancement")
+}
+
+func TestRunChatGraph_Webhook_NetworkErrorStillAdvances(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(_ http.ResponseWriter, _ *http.Request) {}))
+	url := server.URL
+	server.Close()
+
+	app, org, account, contact, session := newGraphTestFixtures(t)
+	flow := newWebhookFlow(t, app, org, account, url)
+
+	require.NoError(t, app.runChatGraph(account, contact, session, flow, "start", ""))
+	require.NoError(t, app.DB.First(session, session.ID).Error)
+	assert.Equal(t, models.SessionStatusCompleted, session.Status)
+}
+
 // TestRunChatGraph_Prompt_NoRegexAcceptsAnything verifies the executor
 // treats a prompt with no validation_regex as accept-all.
 func TestRunChatGraph_Prompt_NoRegexAcceptsAnything(t *testing.T) {

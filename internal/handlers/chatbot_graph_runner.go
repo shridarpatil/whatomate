@@ -149,6 +149,8 @@ func (a *App) executeChatNode(node *ChatNode, ctx *chatNodeCtx) (nodeOutcome, er
 		return a.execChatAIResponse(node, ctx)
 	case ChatNodeTransfer:
 		return a.execChatTransfer(node, ctx)
+	case ChatNodeWebhook:
+		return a.execChatWebhook(node, ctx)
 	case ChatNodeEnd:
 		return a.execChatEnd(node, ctx)
 	default:
@@ -647,6 +649,42 @@ func (a *App) execChatTransfer(node *ChatNode, ctx *chatNodeCtx) (nodeOutcome, e
 
 	ctx.session.Status = models.SessionStatusCompleted
 	return nodeOutcome{yield: true}, nil
+}
+
+// execChatWebhook fires a best-effort HTTP request. Unlike api_call, the
+// response is discarded — success, non-2xx, and network errors all
+// advance via the "default" edge. Use api_call when the flow needs to
+// branch on the response or capture data.
+//
+// Non-blocking; the call is synchronous to keep test semantics simple
+// but the flow does not depend on the outcome.
+//
+// Config (same shape as api_call minus response_mapping):
+//
+//	{
+//	  "url":     "https://example.com/hook?phone={{phone_number}}",
+//	  "method":  "POST",
+//	  "headers": { "Authorization": "Bearer …" },
+//	  "body":    "{\"event\":\"flow_completed\"}"
+//	}
+func (a *App) execChatWebhook(node *ChatNode, ctx *chatNodeCtx) (nodeOutcome, error) {
+	if ctx.session.SessionData == nil {
+		ctx.session.SessionData = models.JSONB{}
+	}
+	sessionData := ctx.session.SessionData
+	sessionData["phone_number"] = ctx.session.PhoneNumber
+
+	replaceVar := func(s string) string { return processTemplate(s, sessionData) }
+	_, statusCode, err := a.executeConfiguredAPI(models.JSONB(node.Config), replaceVar)
+	switch {
+	case err != nil:
+		a.Log.Warn("webhook node request errored (continuing)",
+			"node", node.ID, "session", ctx.session.ID, "error", err)
+	case statusCode < 200 || statusCode >= 300:
+		a.Log.Warn("webhook node returned non-2xx (continuing)",
+			"node", node.ID, "session", ctx.session.ID, "status", statusCode)
+	}
+	return nodeOutcome{outcome: "default"}, nil
 }
 
 // execChatEnd optionally sends a final message and returns an empty
