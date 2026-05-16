@@ -699,6 +699,94 @@ func TestRunChatGraph_Timing_RoutesByCurrentTime(t *testing.T) {
 	assert.Equal(t, "open", path[1]["node"])
 }
 
+// newSetVariableFlow builds a two-node graph (set_variable → end) whose
+// set_variable config is supplied by the caller.
+func newSetVariableFlow(t *testing.T, app *App, org *models.Organization, account *models.WhatsAppAccount, set map[string]any) *models.ChatbotFlow {
+	t.Helper()
+	flow := &models.ChatbotFlow{
+		BaseModel:       models.BaseModel{ID: uuid.New()},
+		OrganizationID:  org.ID,
+		WhatsAppAccount: account.Name,
+		Name:            "set-var-flow",
+		IsEnabled:       true,
+		Graph: models.JSONB{
+			"version":    2,
+			"entry_node": "s1",
+			"nodes": []any{
+				map[string]any{"id": "s1", "type": "set_variable", "label": "set", "config": map[string]any{"set": set}},
+				map[string]any{"id": "end", "type": "end"},
+			},
+			"edges": []any{
+				map[string]any{"from": "s1", "to": "end", "condition": "default"},
+			},
+		},
+	}
+	require.NoError(t, app.DB.Create(flow).Error)
+	return flow
+}
+
+func TestRunChatGraph_SetVariable_Constant(t *testing.T) {
+	app, org, account, contact, session := newGraphTestFixtures(t)
+	flow := newSetVariableFlow(t, app, org, account, map[string]any{
+		"tier": "premium",
+	})
+
+	require.NoError(t, app.runChatGraph(account, contact, session, flow, "start", ""))
+	require.NoError(t, app.DB.First(session, session.ID).Error)
+	assert.Equal(t, "premium", session.SessionData["tier"])
+}
+
+func TestRunChatGraph_SetVariable_TemplateReferencesExisting(t *testing.T) {
+	app, org, account, contact, session := newGraphTestFixtures(t)
+	session.SessionData = models.JSONB{"customer_name": "Shri"}
+	require.NoError(t, app.DB.Save(session).Error)
+
+	flow := newSetVariableFlow(t, app, org, account, map[string]any{
+		"greeting": "Hello {{customer_name}}!",
+	})
+
+	require.NoError(t, app.runChatGraph(account, contact, session, flow, "start", ""))
+	require.NoError(t, app.DB.First(session, session.ID).Error)
+	assert.Equal(t, "Hello Shri!", session.SessionData["greeting"])
+}
+
+func TestRunChatGraph_SetVariable_MultipleAtOnce(t *testing.T) {
+	app, org, account, contact, session := newGraphTestFixtures(t)
+	flow := newSetVariableFlow(t, app, org, account, map[string]any{
+		"a": "1",
+		"b": "2",
+		"c": "3",
+	})
+
+	require.NoError(t, app.runChatGraph(account, contact, session, flow, "start", ""))
+	require.NoError(t, app.DB.First(session, session.ID).Error)
+	assert.Equal(t, "1", session.SessionData["a"])
+	assert.Equal(t, "2", session.SessionData["b"])
+	assert.Equal(t, "3", session.SessionData["c"])
+}
+
+func TestRunChatGraph_SetVariable_EmptyConfigNoOp(t *testing.T) {
+	app, org, account, contact, session := newGraphTestFixtures(t)
+	flow := newSetVariableFlow(t, app, org, account, map[string]any{})
+
+	require.NoError(t, app.runChatGraph(account, contact, session, flow, "start", ""))
+	require.NoError(t, app.DB.First(session, session.ID).Error)
+	assert.Equal(t, models.SessionStatusCompleted, session.Status)
+}
+
+func TestRunChatGraph_SetVariable_NonStringStoredVerbatim(t *testing.T) {
+	app, org, account, contact, session := newGraphTestFixtures(t)
+	flow := newSetVariableFlow(t, app, org, account, map[string]any{
+		"count":     float64(42),
+		"is_active": true,
+	})
+
+	require.NoError(t, app.runChatGraph(account, contact, session, flow, "start", ""))
+	require.NoError(t, app.DB.First(session, session.ID).Error)
+	assert.Equal(t, float64(42), session.SessionData["count"])
+	assert.Equal(t, true, session.SessionData["is_active"])
+}
+
 // TestRunChatGraph_Prompt_NoRegexAcceptsAnything verifies the executor
 // treats a prompt with no validation_regex as accept-all.
 func TestRunChatGraph_Prompt_NoRegexAcceptsAnything(t *testing.T) {

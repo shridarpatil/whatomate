@@ -142,6 +142,8 @@ func (a *App) executeChatNode(node *ChatNode, ctx *chatNodeCtx) (nodeOutcome, er
 		return a.execChatCondition(node, ctx)
 	case ChatNodeTiming:
 		return a.execChatTiming(node, ctx)
+	case ChatNodeSetVariable:
+		return a.execChatSetVariable(node, ctx)
 	case ChatNodeEnd:
 		return a.execChatEnd(node, ctx)
 	default:
@@ -496,6 +498,45 @@ func evaluateTimingSchedule(now time.Time, schedule []any, log scheduleLogger) s
 // needs. Defined locally to avoid pulling logf into the test imports.
 type scheduleLogger interface {
 	Warn(msg string, args ...any)
+}
+
+// execChatSetVariable assigns one or more values into SessionData. Each
+// value runs through processTemplate against current SessionData first,
+// so authors can compose new variables from existing ones (e.g.
+// "greeting" = "Hello {{customer_name}}!"). Non-blocking; outcome
+// "default".
+//
+// Config:
+//
+//	{
+//	  "set": {
+//	    "greeting":  "Hello {{customer_name}}!",
+//	    "tier":      "premium"
+//	  }
+//	}
+func (a *App) execChatSetVariable(node *ChatNode, ctx *chatNodeCtx) (nodeOutcome, error) {
+	assignments, _ := node.Config["set"].(map[string]any)
+	if len(assignments) == 0 {
+		return nodeOutcome{outcome: "default"}, nil
+	}
+
+	if ctx.session.SessionData == nil {
+		ctx.session.SessionData = models.JSONB{}
+	}
+	for name, raw := range assignments {
+		if name == "" {
+			continue
+		}
+		tmpl, ok := raw.(string)
+		if !ok {
+			// Non-string assignments are stored verbatim — useful for
+			// numbers or booleans authored directly in the editor.
+			ctx.session.SessionData[name] = raw
+			continue
+		}
+		ctx.session.SessionData[name] = processTemplate(tmpl, ctx.session.SessionData)
+	}
+	return nodeOutcome{outcome: "default"}, nil
 }
 
 // execChatEnd optionally sends a final message and returns an empty
