@@ -13,6 +13,7 @@ import ChatbotApiNode from '@/components/chatbot/nodes/ChatbotApiNode.vue'
 import ChatbotWhatsAppFlowNode from '@/components/chatbot/nodes/ChatbotWhatsAppFlowNode.vue'
 import ChatbotTransferNode from '@/components/chatbot/nodes/ChatbotTransferNode.vue'
 import ChatbotEndNode from '@/components/chatbot/nodes/ChatbotEndNode.vue'
+import ChatbotConditionNode from '@/components/chatbot/nodes/ChatbotConditionNode.vue'
 
 interface FlowChartStep {
   step_name: string
@@ -53,6 +54,7 @@ const messageTypePalette = [
   { type: 'api_fetch', label: 'API Fetch', icon: Globe, color: 'bg-orange-600' },
   { type: 'whatsapp_flow', label: 'WA Flow', icon: MessageCircle, color: 'bg-green-600' },
   { type: 'transfer', label: 'Transfer', icon: UserPlus, color: 'bg-amber-600' },
+  { type: 'condition', label: 'Condition', icon: GitBranch, color: 'bg-indigo-600' },
   { type: 'end', label: 'End', icon: StopCircle, color: 'bg-slate-600' },
 ]
 
@@ -73,6 +75,7 @@ const nodeTypes: Record<string, any> = {
   chatbot_whatsapp_flow: markRaw(ChatbotWhatsAppFlowNode),
   chatbot_transfer: markRaw(ChatbotTransferNode),
   chatbot_end: markRaw(ChatbotEndNode),
+  chatbot_condition: markRaw(ChatbotConditionNode),
 }
 
 const flowNodes = ref<Node[]>([])

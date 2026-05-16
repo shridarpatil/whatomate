@@ -657,6 +657,16 @@ function onChangeStepType(stepIndex: number, newType: string) {
     actual.input_config = { whatsapp_flow_id: '', flow_header: '', flow_cta: '' }
     actual.input_type = 'none'
   }
+  if (newType === 'condition') {
+    actual.input_config = { variable: '', operator: 'eq', value: '' }
+    actual.input_type = 'none'
+    actual.conditional_next = {}
+  }
+  if (newType === 'end') {
+    actual.input_type = 'none'
+    actual.conditional_next = {}
+    actual.next_step = ''
+  }
 
   hasUnsavedChanges.value = true
 }
@@ -1723,6 +1733,55 @@ function confirmCancel() {
                       <Label class="text-xs">{{ $t('flowBuilder.buttonText') }}</Label>
                       <Input v-model="selectedStep.input_config.flow_cta" :placeholder="$t('flowBuilder.buttonTextPlaceholder')" maxlength="20" class="h-8 text-xs" />
                     </div>
+                  </div>
+                </template>
+
+                <!-- Condition Configuration -->
+                <template v-if="selectedStep.message_type === 'condition'">
+                  <div class="space-y-3">
+                    <div class="space-y-1.5">
+                      <Label class="text-xs">Variable</Label>
+                      <Input
+                        :model-value="(selectedStep.input_config?.variable as string) || ''"
+                        @update:model-value="(v) => { if (selectedStep) selectedStep.input_config = { ...selectedStep.input_config, variable: v } }"
+                        placeholder="SessionData key (e.g. status)"
+                        class="h-8 text-xs"
+                      />
+                    </div>
+                    <div class="space-y-1.5">
+                      <Label class="text-xs">Operator</Label>
+                      <Select
+                        :model-value="(selectedStep.input_config?.operator as string) || 'eq'"
+                        @update:model-value="(v) => { if (selectedStep) selectedStep.input_config = { ...selectedStep.input_config, operator: v } }"
+                      >
+                        <SelectTrigger class="h-8 text-xs">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="eq">equals (=)</SelectItem>
+                          <SelectItem value="neq">not equals (≠)</SelectItem>
+                          <SelectItem value="contains">contains</SelectItem>
+                          <SelectItem value="starts_with">starts with</SelectItem>
+                          <SelectItem value="not_empty">is set (not empty)</SelectItem>
+                          <SelectItem value="empty">is empty</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div
+                      v-if="!['empty', 'not_empty', 'exists'].includes(((selectedStep.input_config?.operator as string) || 'eq'))"
+                      class="space-y-1.5"
+                    >
+                      <Label class="text-xs">Value</Label>
+                      <Input
+                        :model-value="(selectedStep.input_config?.value as string) || ''"
+                        @update:model-value="(v) => { if (selectedStep) selectedStep.input_config = { ...selectedStep.input_config, value: v } }"
+                        placeholder="String to compare against"
+                        class="h-8 text-xs"
+                      />
+                    </div>
+                    <p class="text-xs text-muted-foreground">
+                      Connect the True / False handles below the node to choose the next step for each branch.
+                    </p>
                   </div>
                 </template>
 
