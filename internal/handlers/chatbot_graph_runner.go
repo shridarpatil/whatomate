@@ -391,10 +391,9 @@ func (a *App) execChatAPICall(node *ChatNode, ctx *chatNodeCtx) (nodeOutcome, er
 	return nodeOutcome{outcome: "http:2xx"}, nil
 }
 
-// execChatCondition is a pure-branch node: reads a value out of
-// SessionData, compares against config.value using config.operator, and
-// returns outcome "true" or "false" so an edge can route accordingly.
-// No message is sent.
+// execChatCondition is a pure-branch node: evaluates one or more clauses
+// against SessionData, joins them via config.combinator ("and" / "or"),
+// and returns outcome "true" or "false". No message is sent.
 //
 // Operators:
 //   - "eq" / "equals"          : string equality after coercion
@@ -404,55 +403,115 @@ func (a *App) execChatAPICall(node *ChatNode, ctx *chatNodeCtx) (nodeOutcome, er
 //   - "empty"                  : variable missing OR coerces to empty string
 //   - "not_empty" / "exists"   : variable present and non-empty
 //
-// Config:
+// Config (compound form, preferred):
 //
 //	{
-//	  "variable": "customer_status",
-//	  "operator": "eq",
-//	  "value":    "active"
+//	  "combinator": "and",   // or "or"; default "and"
+//	  "conditions": [
+//	    { "variable": "status", "operator": "eq",  "value": "active"  },
+//	    { "variable": "tier",   "operator": "eq",  "value": "premium" }
+//	  ]
 //	}
+//
+// Config (single-clause shorthand, legacy):
+//
+//	{ "variable": "customer_status", "operator": "eq", "value": "active" }
 //
 // A missing or misconfigured node logs a warning and returns "false" so
 // downstream "default" / "false" edges still have something to route on.
 func (a *App) execChatCondition(node *ChatNode, ctx *chatNodeCtx) (nodeOutcome, error) {
-	varName := stringFromConfig(node.Config, "variable", "var")
-	if varName == "" {
-		a.Log.Warn("condition node missing variable",
+	clauses := readConditionClauses(node.Config)
+	if len(clauses) == 0 {
+		a.Log.Warn("condition node has no clauses",
 			"node", node.ID, "session", ctx.session.ID)
 		return nodeOutcome{outcome: "false"}, nil
 	}
 
-	op := stringFromConfig(node.Config, "operator", "op")
-	if op == "" {
-		op = "eq"
-	}
-	target := stringFromConfig(node.Config, "value")
-
-	actual, present := lookupSessionVar(ctx.session.SessionData, varName)
-
-	matched := false
-	switch op {
-	case "eq", "equals":
-		matched = present && actual == target
-	case "neq", "not_equals":
-		matched = !(present && actual == target)
-	case "contains":
-		matched = present && strings.Contains(actual, target)
-	case "starts_with":
-		matched = present && strings.HasPrefix(actual, target)
-	case "empty":
-		matched = !present || actual == ""
-	case "not_empty", "exists":
-		matched = present && actual != ""
-	default:
-		a.Log.Warn("condition node has unknown operator, defaulting to false",
-			"node", node.ID, "operator", op)
+	combinator := strings.ToLower(stringFromConfig(node.Config, "combinator"))
+	if combinator == "" {
+		combinator = "and"
 	}
 
+	matched := evaluateConditionClauses(clauses, combinator, ctx.session.SessionData, a, node.ID)
 	if matched {
 		return nodeOutcome{outcome: "true"}, nil
 	}
 	return nodeOutcome{outcome: "false"}, nil
+}
+
+// readConditionClauses normalises both forms (compound array + legacy
+// flat shape) into a single slice of clause maps with `variable`,
+// `operator`, `value`.
+func readConditionClauses(cfg map[string]any) []map[string]any {
+	if raw, ok := cfg["conditions"].([]any); ok && len(raw) > 0 {
+		out := make([]map[string]any, 0, len(raw))
+		for _, item := range raw {
+			if m, ok := item.(map[string]any); ok {
+				out = append(out, m)
+			}
+		}
+		return out
+	}
+	// Legacy flat shape — synthesise a single clause from the top-level
+	// fields so the new evaluator can handle it uniformly.
+	if v, ok := cfg["variable"].(string); ok && v != "" {
+		return []map[string]any{{
+			"variable": v,
+			"operator": cfg["operator"],
+			"value":    cfg["value"],
+		}}
+	}
+	return nil
+}
+
+func evaluateConditionClauses(clauses []map[string]any, combinator string, data models.JSONB, a *App, nodeID string) bool {
+	for _, clause := range clauses {
+		ok := evaluateOneClause(clause, data, a, nodeID)
+		if combinator == "or" && ok {
+			return true
+		}
+		if combinator != "or" && !ok {
+			// "and" (the default) — first false short-circuits to false.
+			return false
+		}
+	}
+	// All loops finished without short-circuit: "and" → all true, "or" → all false.
+	return combinator != "or"
+}
+
+func evaluateOneClause(clause map[string]any, data models.JSONB, a *App, nodeID string) bool {
+	varName, _ := clause["variable"].(string)
+	if varName == "" {
+		return false
+	}
+	op, _ := clause["operator"].(string)
+	if op == "" {
+		op = "eq"
+	}
+	target, _ := clause["value"].(string)
+
+	actual, present := lookupSessionVar(data, varName)
+
+	switch op {
+	case "eq", "equals":
+		return present && actual == target
+	case "neq", "not_equals":
+		return !(present && actual == target)
+	case "contains":
+		return present && strings.Contains(actual, target)
+	case "starts_with":
+		return present && strings.HasPrefix(actual, target)
+	case "empty":
+		return !present || actual == ""
+	case "not_empty", "exists":
+		return present && actual != ""
+	default:
+		if a != nil {
+			a.Log.Warn("condition clause has unknown operator, treating as false",
+				"node", nodeID, "operator", op)
+		}
+		return false
+	}
 }
 
 // lookupSessionVar reads a value from SessionData and coerces it to a
