@@ -392,36 +392,11 @@ func (a *App) execChatAPICall(node *ChatNode, ctx *chatNodeCtx) (nodeOutcome, er
 	return nodeOutcome{outcome: "http:2xx"}, nil
 }
 
-// execChatCondition is a pure-branch node: evaluates one or more clauses
-// against SessionData, joins them via config.combinator ("and" / "or"),
-// and returns outcome "true" or "false". No message is sent.
+// execChatCondition is a pure-branch node: evaluates a free-form
+// boolean expression against SessionData and returns "true" or "false"
+// so an edge can route accordingly. No message is sent.
 //
-// Operators:
-//   - "eq" / "equals"          : string equality after coercion
-//   - "neq" / "not_equals"     : negation of eq
-//   - "contains"               : substring match
-//   - "starts_with"            : prefix match
-//   - "empty"                  : variable missing OR coerces to empty string
-//   - "not_empty" / "exists"   : variable present and non-empty
-//
-// Config (compound form, preferred):
-//
-//	{
-//	  "combinator": "and",   // or "or"; default "and"
-//	  "conditions": [
-//	    { "variable": "status", "operator": "eq",  "value": "active"  },
-//	    { "variable": "tier",   "operator": "eq",  "value": "premium" }
-//	  ]
-//	}
-//
-// Config (single-clause shorthand, legacy):
-//
-//	{ "variable": "customer_status", "operator": "eq", "value": "active" }
-//
-// A missing or misconfigured node logs a warning and returns "false" so
-// downstream "default" / "false" edges still have something to route on.
-//
-// Free-form expression form (preferred):
+// Config:
 //
 //	{
 //	  "expression": "status == \"active\" and (tier == \"premium\" or amount > 100)"
@@ -430,34 +405,22 @@ func (a *App) execChatAPICall(node *ChatNode, ctx *chatNodeCtx) (nodeOutcome, er
 // The expression is evaluated by github.com/expr-lang/expr. SessionData
 // keys are available as top-level identifiers. Unknown identifiers
 // resolve to nil (so `status == "active"` evaluates false when status
-// isn't set, rather than throwing).
+// isn't set, rather than throwing). Compile/runtime errors map to
+// outcome "false" so the inbound webhook doesn't error.
 func (a *App) execChatCondition(node *ChatNode, ctx *chatNodeCtx) (nodeOutcome, error) {
-	if expression := stringFromConfig(node.Config, "expression"); expression != "" {
-		matched, err := evaluateConditionExpression(expression, ctx.session.SessionData)
-		if err != nil {
-			a.Log.Warn("condition node expression failed",
-				"node", node.ID, "session", ctx.session.ID, "expression", expression, "error", err)
-			return nodeOutcome{outcome: "false"}, nil
-		}
-		if matched {
-			return nodeOutcome{outcome: "true"}, nil
-		}
-		return nodeOutcome{outcome: "false"}, nil
-	}
-
-	clauses := readConditionClauses(node.Config)
-	if len(clauses) == 0 {
-		a.Log.Warn("condition node has no clauses",
+	expression := stringFromConfig(node.Config, "expression")
+	if expression == "" {
+		a.Log.Warn("condition node missing expression",
 			"node", node.ID, "session", ctx.session.ID)
 		return nodeOutcome{outcome: "false"}, nil
 	}
 
-	combinator := strings.ToLower(stringFromConfig(node.Config, "combinator"))
-	if combinator == "" {
-		combinator = "and"
+	matched, err := evaluateConditionExpression(expression, ctx.session.SessionData)
+	if err != nil {
+		a.Log.Warn("condition node expression failed",
+			"node", node.ID, "session", ctx.session.ID, "expression", expression, "error", err)
+		return nodeOutcome{outcome: "false"}, nil
 	}
-
-	matched := evaluateConditionClauses(clauses, combinator, ctx.session.SessionData, a, node.ID)
 	if matched {
 		return nodeOutcome{outcome: "true"}, nil
 	}
@@ -493,113 +456,6 @@ func evaluateConditionExpression(expression string, data models.JSONB) (bool, er
 	}
 	// Anything else (slices, maps) counts as truthy if non-nil.
 	return out != nil, nil
-}
-
-// readConditionClauses normalises both forms (compound array + legacy
-// flat shape) into a single slice of clause maps with `variable`,
-// `operator`, `value`.
-func readConditionClauses(cfg map[string]any) []map[string]any {
-	if raw, ok := cfg["conditions"].([]any); ok && len(raw) > 0 {
-		out := make([]map[string]any, 0, len(raw))
-		for _, item := range raw {
-			if m, ok := item.(map[string]any); ok {
-				out = append(out, m)
-			}
-		}
-		return out
-	}
-	// Legacy flat shape — synthesise a single clause from the top-level
-	// fields so the new evaluator can handle it uniformly.
-	if v, ok := cfg["variable"].(string); ok && v != "" {
-		return []map[string]any{{
-			"variable": v,
-			"operator": cfg["operator"],
-			"value":    cfg["value"],
-		}}
-	}
-	return nil
-}
-
-func evaluateConditionClauses(clauses []map[string]any, combinator string, data models.JSONB, a *App, nodeID string) bool {
-	for _, clause := range clauses {
-		ok := evaluateOneClause(clause, data, a, nodeID)
-		if combinator == "or" && ok {
-			return true
-		}
-		if combinator != "or" && !ok {
-			// "and" (the default) — first false short-circuits to false.
-			return false
-		}
-	}
-	// All loops finished without short-circuit: "and" → all true, "or" → all false.
-	return combinator != "or"
-}
-
-func evaluateOneClause(clause map[string]any, data models.JSONB, a *App, nodeID string) bool {
-	varName, _ := clause["variable"].(string)
-	if varName == "" {
-		return false
-	}
-	op, _ := clause["operator"].(string)
-	if op == "" {
-		op = "eq"
-	}
-	target, _ := clause["value"].(string)
-
-	actual, present := lookupSessionVar(data, varName)
-
-	switch op {
-	case "eq", "equals":
-		return present && actual == target
-	case "neq", "not_equals":
-		return !(present && actual == target)
-	case "contains":
-		return present && strings.Contains(actual, target)
-	case "starts_with":
-		return present && strings.HasPrefix(actual, target)
-	case "empty":
-		return !present || actual == ""
-	case "not_empty", "exists":
-		return present && actual != ""
-	default:
-		if a != nil {
-			a.Log.Warn("condition clause has unknown operator, treating as false",
-				"node", nodeID, "operator", op)
-		}
-		return false
-	}
-}
-
-// lookupSessionVar reads a value from SessionData and coerces it to a
-// string for comparison. Returns (value, present); present is true iff
-// the key exists, regardless of value.
-func lookupSessionVar(data models.JSONB, key string) (string, bool) {
-	if data == nil {
-		return "", false
-	}
-	raw, ok := data[key]
-	if !ok {
-		return "", false
-	}
-	switch v := raw.(type) {
-	case string:
-		return v, true
-	case float64:
-		// JSON numbers decode to float64; format without trailing .0 for
-		// integer-valued floats so "active=5" matches "5".
-		if v == float64(int64(v)) {
-			return fmt.Sprintf("%d", int64(v)), true
-		}
-		return fmt.Sprintf("%g", v), true
-	case bool:
-		if v {
-			return "true", true
-		}
-		return "false", true
-	case nil:
-		return "", true
-	}
-	return fmt.Sprintf("%v", raw), true
 }
 
 // execChatTiming routes "in_hours" / "out_of_hours" based on a per-day

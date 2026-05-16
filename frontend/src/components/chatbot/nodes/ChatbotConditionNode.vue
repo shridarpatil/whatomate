@@ -7,27 +7,10 @@ defineOptions({ inheritAttrs: false })
 
 const props = defineProps<{ data: any }>()
 
-const operatorLabels: Record<string, string> = {
-  eq: '=',
-  equals: '=',
-  neq: '≠',
-  not_equals: '≠',
-  contains: 'contains',
-  starts_with: 'starts with',
-  empty: 'is empty',
-  not_empty: 'is set',
-  exists: 'is set',
-}
-
 const summary = computed(() => {
-  const cfg = props.data?.config?.input_config || props.data?.config || {}
-  const variable = cfg.variable || '?'
-  const op = operatorLabels[cfg.operator] || cfg.operator || '=='
-  if (cfg.operator === 'empty' || cfg.operator === 'not_empty' || cfg.operator === 'exists') {
-    return `${variable} ${op}`
-  }
-  const value = cfg.value ?? ''
-  return `${variable} ${op} ${value}`
+  const expression = props.data?.config?.input_config?.expression as string | undefined
+  if (!expression) return 'No expression'
+  return expression.length > 60 ? expression.slice(0, 60) + '…' : expression
 })
 
 const outputHandles = [

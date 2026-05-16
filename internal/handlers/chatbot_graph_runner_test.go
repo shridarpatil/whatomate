@@ -544,39 +544,6 @@ func TestRunChatGraph_APICall_NetworkErrorRoutesNon2xx(t *testing.T) {
 	assert.Equal(t, "http:non2xx", path[0]["outcome"])
 }
 
-// newConditionFlow builds a three-node graph (condition → true_msg /
-// false_msg → end). The condition's config is supplied by the caller so
-// each test can poke at a different operator. seedData populates the
-// session's variable bag before the run.
-func newConditionFlow(t *testing.T, app *App, org *models.Organization, account *models.WhatsAppAccount, condCfg map[string]any) *models.ChatbotFlow {
-	t.Helper()
-	flow := &models.ChatbotFlow{
-		BaseModel:       models.BaseModel{ID: uuid.New()},
-		OrganizationID:  org.ID,
-		WhatsAppAccount: account.Name,
-		Name:            "condition-flow",
-		IsEnabled:       true,
-		Graph: models.JSONB{
-			"version":    2,
-			"entry_node": "c1",
-			"nodes": []any{
-				map[string]any{"id": "c1", "type": "condition", "label": "check", "config": condCfg},
-				map[string]any{"id": "yes", "type": "message", "label": "yes", "config": map[string]any{"message": "matched"}},
-				map[string]any{"id": "no", "type": "message", "label": "no", "config": map[string]any{"message": "not matched"}},
-				map[string]any{"id": "end", "type": "end", "label": "done"},
-			},
-			"edges": []any{
-				map[string]any{"from": "c1", "to": "yes", "condition": "true"},
-				map[string]any{"from": "c1", "to": "no", "condition": "false"},
-				map[string]any{"from": "yes", "to": "end", "condition": "default"},
-				map[string]any{"from": "no", "to": "end", "condition": "default"},
-			},
-		},
-	}
-	require.NoError(t, app.DB.Create(flow).Error)
-	return flow
-}
-
 // runConditionFlow seeds session.SessionData with `seed`, runs the flow,
 // reloads the session, and returns it for assertion.
 func runConditionFlow(t *testing.T, app *App, account *models.WhatsAppAccount, contact *models.Contact, session *models.ChatbotSession, flow *models.ChatbotFlow, seed models.JSONB) *models.ChatbotSession {
@@ -590,109 +557,8 @@ func runConditionFlow(t *testing.T, app *App, account *models.WhatsAppAccount, c
 	return session
 }
 
-func TestRunChatGraph_Condition_EqMatch(t *testing.T) {
-	app, org, account, contact, session := newGraphTestFixtures(t)
-	flow := newConditionFlow(t, app, org, account, map[string]any{
-		"variable": "status", "operator": "eq", "value": "active",
-	})
-	s := runConditionFlow(t, app, account, contact, session, flow, models.JSONB{"status": "active"})
-
-	path := chatGraphPath(t, s)
-	require.GreaterOrEqual(t, len(path), 2)
-	assert.Equal(t, "true", path[0]["outcome"])
-	assert.Equal(t, "yes", path[1]["node"])
-}
-
-func TestRunChatGraph_Condition_EqMismatch(t *testing.T) {
-	app, org, account, contact, session := newGraphTestFixtures(t)
-	flow := newConditionFlow(t, app, org, account, map[string]any{
-		"variable": "status", "operator": "eq", "value": "active",
-	})
-	s := runConditionFlow(t, app, account, contact, session, flow, models.JSONB{"status": "banned"})
-
-	path := chatGraphPath(t, s)
-	require.GreaterOrEqual(t, len(path), 2)
-	assert.Equal(t, "false", path[0]["outcome"])
-	assert.Equal(t, "no", path[1]["node"])
-}
-
-func TestRunChatGraph_Condition_Contains(t *testing.T) {
-	app, org, account, contact, session := newGraphTestFixtures(t)
-	flow := newConditionFlow(t, app, org, account, map[string]any{
-		"variable": "subject", "operator": "contains", "value": "billing",
-	})
-	s := runConditionFlow(t, app, account, contact, session, flow, models.JSONB{"subject": "billing question"})
-	path := chatGraphPath(t, s)
-	assert.Equal(t, "true", path[0]["outcome"])
-}
-
-func TestRunChatGraph_Condition_MissingVariableIsFalse(t *testing.T) {
-	app, org, account, contact, session := newGraphTestFixtures(t)
-	flow := newConditionFlow(t, app, org, account, map[string]any{
-		"variable": "never_set", "operator": "eq", "value": "x",
-	})
-	s := runConditionFlow(t, app, account, contact, session, flow, nil)
-	path := chatGraphPath(t, s)
-	assert.Equal(t, "false", path[0]["outcome"])
-}
-
-func TestRunChatGraph_Condition_NotEmpty(t *testing.T) {
-	app, org, account, contact, session := newGraphTestFixtures(t)
-	flow := newConditionFlow(t, app, org, account, map[string]any{
-		"variable": "customer_id", "operator": "not_empty",
-	})
-
-	// Without the var: false
-	s := runConditionFlow(t, app, account, contact, session, flow, nil)
-	path := chatGraphPath(t, s)
-	assert.Equal(t, "false", path[0]["outcome"])
-
-	// With the var: re-run on a fresh session
-	_, _, account2, contact2, session2 := newGraphTestFixtures(t)
-	flow2 := newConditionFlow(t, app, org, account2, map[string]any{
-		"variable": "customer_id", "operator": "not_empty",
-	})
-	s2 := runConditionFlow(t, app, account2, contact2, session2, flow2, models.JSONB{"customer_id": "cust-42"})
-	path2 := chatGraphPath(t, s2)
-	assert.Equal(t, "true", path2[0]["outcome"])
-}
-
-// newConditionFlowMulti builds a condition flow whose config uses the
-// compound form: combinator + array of clauses.
-func newConditionFlowMulti(t *testing.T, app *App, org *models.Organization, account *models.WhatsAppAccount, combinator string, clauses []any) *models.ChatbotFlow {
-	t.Helper()
-	flow := &models.ChatbotFlow{
-		BaseModel:       models.BaseModel{ID: uuid.New()},
-		OrganizationID:  org.ID,
-		WhatsAppAccount: account.Name,
-		Name:            "condition-multi",
-		IsEnabled:       true,
-		Graph: models.JSONB{
-			"version":    2,
-			"entry_node": "c1",
-			"nodes": []any{
-				map[string]any{"id": "c1", "type": "condition", "label": "check", "config": map[string]any{
-					"combinator": combinator,
-					"conditions": clauses,
-				}},
-				map[string]any{"id": "yes", "type": "message", "config": map[string]any{"message": "matched"}},
-				map[string]any{"id": "no", "type": "message", "config": map[string]any{"message": "not matched"}},
-				map[string]any{"id": "end", "type": "end"},
-			},
-			"edges": []any{
-				map[string]any{"from": "c1", "to": "yes", "condition": "true"},
-				map[string]any{"from": "c1", "to": "no", "condition": "false"},
-				map[string]any{"from": "yes", "to": "end", "condition": "default"},
-				map[string]any{"from": "no", "to": "end", "condition": "default"},
-			},
-		},
-	}
-	require.NoError(t, app.DB.Create(flow).Error)
-	return flow
-}
-
 // newConditionFlowExpr builds a condition flow whose config uses a
-// free-form expr-lang expression (preferred form).
+// free-form expr-lang expression.
 func newConditionFlowExpr(t *testing.T, app *App, org *models.Organization, account *models.WhatsAppAccount, expression string) *models.ChatbotFlow {
 	t.Helper()
 	flow := &models.ChatbotFlow{
@@ -771,62 +637,6 @@ func TestRunChatGraph_Condition_ExpressionContainsString(t *testing.T) {
 	// https://expr-lang.org/docs/language-definition for the full list.
 	flow := newConditionFlowExpr(t, app, org, account, `subject contains "billing"`)
 	s := runConditionFlow(t, app, account, contact, session, flow, models.JSONB{"subject": "billing question"})
-	path := chatGraphPath(t, s)
-	assert.Equal(t, "true", path[0]["outcome"])
-}
-
-func TestRunChatGraph_Condition_AndAllMatch(t *testing.T) {
-	app, org, account, contact, session := newGraphTestFixtures(t)
-	flow := newConditionFlowMulti(t, app, org, account, "and", []any{
-		map[string]any{"variable": "status", "operator": "eq", "value": "active"},
-		map[string]any{"variable": "tier", "operator": "eq", "value": "premium"},
-	})
-	s := runConditionFlow(t, app, account, contact, session, flow, models.JSONB{"status": "active", "tier": "premium"})
-	path := chatGraphPath(t, s)
-	assert.Equal(t, "true", path[0]["outcome"])
-}
-
-func TestRunChatGraph_Condition_AndOneFalse(t *testing.T) {
-	app, org, account, contact, session := newGraphTestFixtures(t)
-	flow := newConditionFlowMulti(t, app, org, account, "and", []any{
-		map[string]any{"variable": "status", "operator": "eq", "value": "active"},
-		map[string]any{"variable": "tier", "operator": "eq", "value": "premium"},
-	})
-	s := runConditionFlow(t, app, account, contact, session, flow, models.JSONB{"status": "active", "tier": "free"})
-	path := chatGraphPath(t, s)
-	assert.Equal(t, "false", path[0]["outcome"])
-}
-
-func TestRunChatGraph_Condition_OrAnyMatch(t *testing.T) {
-	app, org, account, contact, session := newGraphTestFixtures(t)
-	flow := newConditionFlowMulti(t, app, org, account, "or", []any{
-		map[string]any{"variable": "status", "operator": "eq", "value": "active"},
-		map[string]any{"variable": "tier", "operator": "eq", "value": "premium"},
-	})
-	s := runConditionFlow(t, app, account, contact, session, flow, models.JSONB{"status": "banned", "tier": "premium"})
-	path := chatGraphPath(t, s)
-	assert.Equal(t, "true", path[0]["outcome"])
-}
-
-func TestRunChatGraph_Condition_OrNoneMatch(t *testing.T) {
-	app, org, account, contact, session := newGraphTestFixtures(t)
-	flow := newConditionFlowMulti(t, app, org, account, "or", []any{
-		map[string]any{"variable": "status", "operator": "eq", "value": "active"},
-		map[string]any{"variable": "tier", "operator": "eq", "value": "premium"},
-	})
-	s := runConditionFlow(t, app, account, contact, session, flow, models.JSONB{"status": "banned", "tier": "free"})
-	path := chatGraphPath(t, s)
-	assert.Equal(t, "false", path[0]["outcome"])
-}
-
-func TestRunChatGraph_Condition_NumericValueCoerced(t *testing.T) {
-	app, org, account, contact, session := newGraphTestFixtures(t)
-	flow := newConditionFlow(t, app, org, account, map[string]any{
-		"variable": "balance", "operator": "eq", "value": "100",
-	})
-	// JSON numbers decode to float64; lookupSessionVar coerces back to int
-	// string for integer-valued floats so "100" matches.
-	s := runConditionFlow(t, app, account, contact, session, flow, models.JSONB{"balance": float64(100)})
 	path := chatGraphPath(t, s)
 	assert.Equal(t, "true", path[0]["outcome"])
 }

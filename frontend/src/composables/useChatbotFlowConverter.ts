@@ -263,13 +263,9 @@ export function stepsToGraph(steps: StepInput[], canvasLayout?: CanvasLayout): C
       // marking the session complete.
       config.message = step.message
     } else if (nodeType === 'condition') {
-      // Condition stores its operands in input_config so the v1 FlowStep
-      // model didn't need new fields. See onChangeStepType in
-      // ChatbotFlowBuilderView for the reset semantics.
-      const ic = step.input_config || {}
-      config.variable = (ic.variable as string) || ''
-      config.operator = (ic.operator as string) || 'eq'
-      config.value = (ic.value as string) || ''
+      // Free-form boolean expression evaluated by expr-lang/expr on the
+      // backend. SessionData keys are available as top-level identifiers.
+      config.expression = (step.input_config?.expression as string) || ''
     } else if (nodeType === 'timing') {
       // Schedule lives in input_config.schedule — array of
       // {day, enabled, start_time, end_time}. Mirrors IVR's shape so
@@ -445,11 +441,7 @@ export function graphToSteps(graph: ChatFlowGraph): { steps: FlowStep[]; canvas_
     } else if (node.type === 'end') {
       step.message = (cfg.message as string) || ''
     } else if (node.type === 'condition') {
-      step.input_config = {
-        variable: (cfg.variable as string) || '',
-        operator: (cfg.operator as string) || 'eq',
-        value: (cfg.value as string) || '',
-      }
+      step.input_config = { expression: (cfg.expression as string) || '' }
     } else if (node.type === 'timing') {
       step.input_config = {
         schedule: (cfg.schedule as any[]) || [],

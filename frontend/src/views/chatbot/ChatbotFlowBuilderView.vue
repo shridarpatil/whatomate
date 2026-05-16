@@ -610,7 +610,7 @@ function addStep(type?: string) {
       step.input_type = 'none'
     }
     if (type === 'condition') {
-      step.input_config = { variable: '', operator: 'eq', value: '' }
+      step.input_config = { expression: '' }
     }
     if (type === 'timing') {
       step.input_config = { schedule: defaultTimingSchedule() }
@@ -694,7 +694,7 @@ function onChangeStepType(stepIndex: number, newType: string) {
     actual.input_type = 'none'
   }
   if (newType === 'condition') {
-    actual.input_config = { variable: '', operator: 'eq', value: '' }
+    actual.input_config = { expression: '' }
     actual.input_type = 'none'
     actual.conditional_next = {}
   }
@@ -1783,49 +1783,20 @@ function confirmCancel() {
                   </div>
                 </template>
 
-                <!-- Condition Configuration -->
+                <!-- Condition Configuration (free-form expression) -->
                 <template v-if="selectedStep.message_type === 'condition'">
-                  <div class="space-y-3">
-                    <div class="space-y-1.5">
-                      <Label class="text-xs">Variable</Label>
-                      <Input
-                        :model-value="(selectedStep.input_config?.variable as string) || ''"
-                        @update:model-value="(v) => { if (selectedStep) selectedStep.input_config = { ...selectedStep.input_config, variable: v } }"
-                        placeholder="SessionData key (e.g. status)"
-                        class="h-8 text-xs"
-                      />
-                    </div>
-                    <div class="space-y-1.5">
-                      <Label class="text-xs">Operator</Label>
-                      <Select
-                        :model-value="(selectedStep.input_config?.operator as string) || 'eq'"
-                        @update:model-value="(v) => { if (selectedStep) selectedStep.input_config = { ...selectedStep.input_config, operator: v } }"
-                      >
-                        <SelectTrigger class="h-8 text-xs">
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="eq">equals (=)</SelectItem>
-                          <SelectItem value="neq">not equals (≠)</SelectItem>
-                          <SelectItem value="contains">contains</SelectItem>
-                          <SelectItem value="starts_with">starts with</SelectItem>
-                          <SelectItem value="not_empty">is set (not empty)</SelectItem>
-                          <SelectItem value="empty">is empty</SelectItem>
-                        </SelectContent>
-                      </Select>
-                    </div>
-                    <div
-                      v-if="!['empty', 'not_empty', 'exists'].includes(((selectedStep.input_config?.operator as string) || 'eq'))"
-                      class="space-y-1.5"
-                    >
-                      <Label class="text-xs">Value</Label>
-                      <Input
-                        :model-value="(selectedStep.input_config?.value as string) || ''"
-                        @update:model-value="(v) => { if (selectedStep) selectedStep.input_config = { ...selectedStep.input_config, value: v } }"
-                        placeholder="String to compare against"
-                        class="h-8 text-xs"
-                      />
-                    </div>
+                  <div class="space-y-2">
+                    <Label class="text-xs">Expression</Label>
+                    <Textarea
+                      :model-value="(selectedStep.input_config?.expression as string) || ''"
+                      @update:model-value="(v) => { if (selectedStep) selectedStep.input_config = { ...selectedStep.input_config, expression: v } }"
+                      :rows="3"
+                      class="font-mono text-xs"
+                      placeholder='status == "active" and (tier == "premium" or amount > 100)'
+                    />
+                    <p class="text-xs text-muted-foreground">
+                      Boolean expression evaluated against session variables. Supports <code>and</code>, <code>or</code>, <code>not</code>, parentheses, comparisons (<code>==</code>, <code>!=</code>, <code>&lt;</code>, <code>&gt;</code>), and string helpers (<code>contains</code>, <code>startsWith</code>). See expr-lang docs.
+                    </p>
                     <p class="text-xs text-muted-foreground">
                       Connect the True / False handles below the node to choose the next step for each branch.
                     </p>
