@@ -85,6 +85,8 @@ interface TransferConfig {
 interface FlowStep {
   id?: string
   step_name: string
+  /** Human-readable label shown on the canvas; defaults to step_name. */
+  label?: string
   step_order: number
   message: string
   message_type: string
@@ -505,6 +507,7 @@ async function loadFlow(id: string) {
       steps: stepsSource.map((s: any, idx: number) => ({
         id: s.id || s.ID,
         step_name: s.step_name || s.StepName || `step_${idx + 1}`,
+        label: s.label || s.Label || '',
         step_order: s.step_order ?? s.StepOrder ?? idx + 1,
         message: s.message || s.Message || '',
         message_type: s.message_type || s.MessageType || 'text',
@@ -542,11 +545,32 @@ async function loadFlow(id: string) {
   }
 }
 
+// Human-readable defaults for the label shown on the canvas. Keys match
+// message_type values; the displayed label is suffixed with a per-type
+// counter ("Text 1", "Buttons 2", "Condition 1").
+const stepTypeLabels: Record<string, string> = {
+  text: 'Text',
+  buttons: 'Buttons',
+  api_fetch: 'API Fetch',
+  whatsapp_flow: 'WhatsApp Flow',
+  transfer: 'Transfer',
+  end: 'End',
+  condition: 'Condition',
+}
+
+function nextLabelForType(type: string): string {
+  const base = stepTypeLabels[type] || type
+  const existing = formData.value.steps.filter(s => s.message_type === type).length
+  return `${base} ${existing + 1}`
+}
+
 function addStep(type?: string) {
   const newOrder = formData.value.steps.length + 1
+  const resolvedType = type || 'text'
   const step: any = {
     ...defaultStep,
     step_name: `step_${newOrder}`,
+    label: nextLabelForType(resolvedType),
     step_order: newOrder,
   }
   if (type) {
@@ -555,8 +579,11 @@ function addStep(type?: string) {
       step.input_config = { whatsapp_flow_id: '', flow_header: '', flow_cta: '' }
       step.input_type = 'none'
     }
-    if (type === 'transfer') {
+    if (type === 'transfer' || type === 'end' || type === 'condition') {
       step.input_type = 'none'
+    }
+    if (type === 'condition') {
+      step.input_config = { variable: '', operator: 'eq', value: '' }
     }
   }
   formData.value.steps.push(step)
@@ -1495,10 +1522,15 @@ function confirmCancel() {
             <!-- Basic Properties -->
             <div class="space-y-3">
               <div class="space-y-1.5">
-                <Label class="text-xs">{{ $t('flowBuilder.stepName') }}</Label>
-                <Input v-model="selectedStep.step_name" :placeholder="$t('flowBuilder.stepNamePlaceholder')" class="h-8" />
+                <Label class="text-xs">Label</Label>
+                <Input v-model="selectedStep.label" placeholder="Shown on the canvas" class="h-8" />
               </div>
               <div class="space-y-1.5">
+                <Label class="text-xs">{{ $t('flowBuilder.stepName') }}</Label>
+                <Input v-model="selectedStep.step_name" :placeholder="$t('flowBuilder.stepNamePlaceholder')" class="h-8" />
+                <p class="text-xs text-muted-foreground">Internal identifier; referenced by edges. Avoid renaming after connecting steps.</p>
+              </div>
+              <div v-if="selectedStep.message_type !== 'end' && selectedStep.message_type !== 'condition' && selectedStep.message_type !== 'transfer'" class="space-y-1.5">
                 <Label class="text-xs">{{ $t('flowBuilder.storeResponseAs') }}</Label>
                 <Input v-model="selectedStep.store_as" :placeholder="$t('flowBuilder.variableNamePlaceholder')" class="h-8" />
                 <p class="text-xs text-muted-foreground">{{ $t('flowBuilder.storeResponseHint') }}</p>

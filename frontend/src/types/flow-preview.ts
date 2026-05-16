@@ -27,9 +27,11 @@ export interface TransferConfig {
 export interface FlowStep {
   id?: string
   step_name: string
+  /** Human-readable label shown on the canvas; defaults to step_name. */
+  label?: string
   step_order: number
   message: string
-  message_type: 'text' | 'buttons' | 'api_fetch' | 'whatsapp_flow' | 'transfer' | 'end'
+  message_type: 'text' | 'buttons' | 'api_fetch' | 'whatsapp_flow' | 'transfer' | 'end' | 'condition'
   input_type: 'none' | 'text' | 'number' | 'email' | 'phone' | 'date' | 'select'
   input_config: Record<string, any>
   api_config: ApiConfig

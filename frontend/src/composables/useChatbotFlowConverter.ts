@@ -55,7 +55,7 @@ export function stepsToNodesAndEdges(steps: FlowStep[], canvasLayout?: CanvasLay
         ? { x: saved.x, y: saved.y }
         : { x: isNonSequentialTarget ? 500 : 300, y: index * 150 },
       data: {
-        label: step.step_name,
+        label: step.label || step.step_name,
         config: { ...step },
         isEntryNode: index === 0,
       },
@@ -159,7 +159,7 @@ export function extractCanvasLayout(nodes: Node[]): CanvasLayout {
 // the backend executor implements today. Anything outside this set forces
 // the flow to keep using the legacy steps[] wire format until the matching
 // node type lands.
-const V2_SUPPORTED_MESSAGE_TYPES = new Set(['text', 'buttons', 'end'])
+const V2_SUPPORTED_MESSAGE_TYPES = new Set(['text', 'buttons', 'end', 'condition'])
 
 function messageTypeToNodeType(messageType: string): ChatNodeType | null {
   switch (messageType) {
@@ -169,6 +169,8 @@ function messageTypeToNodeType(messageType: string): ChatNodeType | null {
       return 'buttons'
     case 'end':
       return 'end'
+    case 'condition':
+      return 'condition'
     default:
       return null
   }
@@ -182,6 +184,8 @@ function nodeTypeToMessageType(nodeType: string): string | null {
       return 'buttons'
     case 'end':
       return 'end'
+    case 'condition':
+      return 'condition'
     default:
       return null
   }
@@ -191,7 +195,7 @@ function nodeTypeToMessageType(nodeType: string): string | null {
 // parameter to a structural type lets callers pass FlowStep variants
 // where message_type is `string` rather than the strict union (the chat
 // flow builder defines a local relaxed FlowStep on top of v1 fields).
-type StepInput = Pick<FlowStep, 'step_name' | 'step_order' | 'message' | 'next_step' | 'conditional_next' | 'buttons'> & { message_type: string }
+type StepInput = Pick<FlowStep, 'step_name' | 'step_order' | 'message' | 'next_step' | 'conditional_next' | 'buttons' | 'label' | 'input_config'> & { message_type: string }
 
 /**
  * Convert the v1 FlowStep[] model to a v2 graph payload. Returns null
@@ -225,12 +229,20 @@ export function stepsToGraph(steps: StepInput[], canvasLayout?: CanvasLayout): C
       // Optional completion message; backend execChatEnd sends it before
       // marking the session complete.
       config.message = step.message
+    } else if (nodeType === 'condition') {
+      // Condition stores its operands in input_config so the v1 FlowStep
+      // model didn't need new fields. See onChangeStepType in
+      // ChatbotFlowBuilderView for the reset semantics.
+      const ic = step.input_config || {}
+      config.variable = (ic.variable as string) || ''
+      config.operator = (ic.operator as string) || 'eq'
+      config.value = (ic.value as string) || ''
     }
 
     return {
       id: step.step_name,
       type: nodeType,
-      label: step.step_name,
+      label: step.label || step.step_name,
       position: { x: pos.x, y: pos.y },
       config,
     }
@@ -255,6 +267,16 @@ export function stepsToGraph(steps: StepInput[], canvasLayout?: CanvasLayout): C
           if (btn.id && !mapped.has(btn.id)) {
             edges.push({ from: step.step_name, to: nextSequential, condition: `button:${btn.id}` })
           }
+        }
+      }
+    } else if (step.message_type === 'condition') {
+      // Two explicit branches via conditional_next.true / .false; no
+      // sequential fallthrough — author must wire both handles.
+      const conditional = step.conditional_next || {}
+      for (const branch of ['true', 'false'] as const) {
+        const target = conditional[branch]
+        if (target && stepNames.has(target)) {
+          edges.push({ from: step.step_name, to: target, condition: branch })
         }
       }
     } else if (step.next_step && stepNames.has(step.next_step)) {
@@ -326,6 +348,7 @@ export function graphToSteps(graph: ChatFlowGraph): { steps: FlowStep[]; canvas_
     const cfg = node.config || {}
     const step: FlowStep = {
       step_name: node.id,
+      label: node.label || node.id,
       step_order: index + 1,
       message_type: nodeTypeToMessageType(node.type) as string,
       message: '',
@@ -351,6 +374,12 @@ export function graphToSteps(graph: ChatFlowGraph): { steps: FlowStep[]; canvas_
       step.buttons = (cfg.buttons as any[]) || []
     } else if (node.type === 'end') {
       step.message = (cfg.message as string) || ''
+    } else if (node.type === 'condition') {
+      step.input_config = {
+        variable: (cfg.variable as string) || '',
+        operator: (cfg.operator as string) || 'eq',
+        value: (cfg.value as string) || '',
+      }
     }
 
     // Translate outgoing edges back into next_step / conditional_next.
@@ -360,6 +389,10 @@ export function graphToSteps(graph: ChatFlowGraph): { steps: FlowStep[]; canvas_
       if (edge.condition.startsWith('button:')) {
         const buttonId = edge.condition.slice('button:'.length)
         conditional[buttonId] = edge.to
+      } else if (edge.condition === 'true' || edge.condition === 'false') {
+        // Condition-node branches surface to the editor as
+        // conditional_next entries keyed by the handle id.
+        conditional[edge.condition] = edge.to
       } else if (edge.condition === 'default') {
         step.next_step = edge.to
       }
