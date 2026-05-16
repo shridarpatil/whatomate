@@ -3,6 +3,7 @@ package handlers
 import (
 	"errors"
 	"fmt"
+	"regexp"
 	"time"
 
 	"github.com/shridarpatil/whatomate/internal/models"
@@ -130,6 +131,8 @@ func (a *App) executeChatNode(node *ChatNode, ctx *chatNodeCtx) (nodeOutcome, er
 		return a.execChatMessage(node, ctx)
 	case ChatNodeButtons:
 		return a.execChatButtons(node, ctx)
+	case ChatNodePrompt:
+		return a.execChatPrompt(node, ctx)
 	case ChatNodeEnd:
 		return a.execChatEnd(node, ctx)
 	default:
@@ -175,6 +178,92 @@ func (a *App) execChatButtons(node *ChatNode, ctx *chatNodeCtx) (nodeOutcome, er
 		return nodeOutcome{}, fmt.Errorf("send buttons: %w", err)
 	}
 	a.logSessionMessage(ctx.session.ID, models.DirectionOutgoing, body, node.ID)
+	return nodeOutcome{yield: true}, nil
+}
+
+// execChatPrompt asks the user for input. On first entry (no userInput),
+// sends the prompt body and yields to wait for a reply. On a later inbound,
+// validates ctx.userInput against an optional regex:
+//   - valid (or no regex): stores the input in SessionData under store_as,
+//     resets StepRetries, returns outcome="default" so the runner advances.
+//   - invalid + StepRetries+1 < max_retries: sends the validation error,
+//     yields to re-prompt (the same node will fire again on next inbound).
+//   - invalid + StepRetries+1 >= max_retries: returns outcome="max_retries"
+//     so the runner can route to an error branch (or terminate if none).
+//
+// Config:
+//
+//	{
+//	  "body": "...",                 // prompt sent on first entry
+//	  "validation_regex": "...",     // optional; default = accept anything
+//	  "validation_error": "...",     // optional; default fallback message
+//	  "store_as": "var_name",        // optional; persists input into SessionData
+//	  "max_retries": 3               // optional; default 3
+//	}
+func (a *App) execChatPrompt(node *ChatNode, ctx *chatNodeCtx) (nodeOutcome, error) {
+	body := stringFromConfig(node.Config, "body", "message", "text")
+
+	// No input yet → send prompt and wait.
+	if !ctx.consumed && ctx.userInput == "" {
+		if body == "" {
+			return nodeOutcome{}, fmt.Errorf("prompt node %q has no body configured", node.ID)
+		}
+		if err := a.sendAndSaveTextMessage(ctx.account, ctx.contact, body); err != nil {
+			return nodeOutcome{}, fmt.Errorf("send prompt: %w", err)
+		}
+		a.logSessionMessage(ctx.session.ID, models.DirectionOutgoing, body, node.ID)
+		return nodeOutcome{yield: true}, nil
+	}
+
+	if ctx.consumed {
+		// Input was already consumed by an earlier blocking node in this
+		// run — defensive guard. Treat as fresh entry.
+		return nodeOutcome{yield: true}, nil
+	}
+
+	ctx.consumed = true
+	input := ctx.userInput
+
+	validationRegex := stringFromConfig(node.Config, "validation_regex")
+	if validationRegex != "" {
+		re, err := regexp.Compile(validationRegex)
+		if err != nil {
+			a.Log.Error("prompt node has invalid regex",
+				"node", node.ID, "regex", validationRegex, "error", err)
+			// Skip validation rather than failing the user-facing flow.
+		} else if !re.MatchString(input) {
+			return a.handleChatPromptInvalid(node, ctx)
+		}
+	}
+
+	// Valid → persist + advance.
+	if storeAs := stringFromConfig(node.Config, "store_as"); storeAs != "" {
+		if ctx.session.SessionData == nil {
+			ctx.session.SessionData = models.JSONB{}
+		}
+		ctx.session.SessionData[storeAs] = input
+	}
+	ctx.session.StepRetries = 0
+	return nodeOutcome{outcome: "default"}, nil
+}
+
+func (a *App) handleChatPromptInvalid(node *ChatNode, ctx *chatNodeCtx) (nodeOutcome, error) {
+	ctx.session.StepRetries++
+
+	maxRetries := intFromConfig(node.Config, "max_retries", 3)
+	if ctx.session.StepRetries >= maxRetries {
+		ctx.session.StepRetries = 0
+		return nodeOutcome{outcome: "max_retries"}, nil
+	}
+
+	errorMsg := stringFromConfig(node.Config, "validation_error")
+	if errorMsg == "" {
+		errorMsg = "Invalid input. Please try again."
+	}
+	if err := a.sendAndSaveTextMessage(ctx.account, ctx.contact, errorMsg); err != nil {
+		return nodeOutcome{}, fmt.Errorf("send validation error: %w", err)
+	}
+	a.logSessionMessage(ctx.session.ID, models.DirectionOutgoing, errorMsg, node.ID)
 	return nodeOutcome{yield: true}, nil
 }
 
@@ -234,6 +323,19 @@ func stringFromConfig(cfg map[string]any, keys ...string) string {
 		}
 	}
 	return ""
+}
+
+// intFromConfig returns an int value from config at the given key, falling
+// back to def. JSON numbers decode as float64 in map[string]any, so accept
+// both float64 and int.
+func intFromConfig(cfg map[string]any, key string, def int) int {
+	switch v := cfg[key].(type) {
+	case float64:
+		return int(v)
+	case int:
+		return v
+	}
+	return def
 }
 
 // buttonsFromConfig normalizes node.Config["buttons"] into the shape the

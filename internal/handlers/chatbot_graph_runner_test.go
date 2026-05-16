@@ -278,3 +278,109 @@ func TestRunChatGraph_RunawayCycle(t *testing.T) {
 	err := app.runChatGraph(account, contact, session, flow, "start", "")
 	require.ErrorIs(t, err, errChatGraphRunaway)
 }
+
+// newPromptFlow builds a two-node graph (prompt → end) with an optional
+// regex + max_retries on the prompt. Used by the prompt-node test suite.
+func newPromptFlow(t *testing.T, app *App, org *models.Organization, account *models.WhatsAppAccount, regex string, maxRetries int) *models.ChatbotFlow {
+	t.Helper()
+	cfg := map[string]any{
+		"body":     "What's your email?",
+		"store_as": "email",
+	}
+	if regex != "" {
+		cfg["validation_regex"] = regex
+		cfg["validation_error"] = "Not a valid email, try again."
+	}
+	if maxRetries > 0 {
+		cfg["max_retries"] = maxRetries
+	}
+	flow := &models.ChatbotFlow{
+		BaseModel:       models.BaseModel{ID: uuid.New()},
+		OrganizationID:  org.ID,
+		WhatsAppAccount: account.Name,
+		Name:            "prompt-flow",
+		IsEnabled:       true,
+		Graph: models.JSONB{
+			"version":    2,
+			"entry_node": "p1",
+			"nodes": []any{
+				map[string]any{"id": "p1", "type": "prompt", "label": "ask", "config": cfg},
+				map[string]any{"id": "e1", "type": "end", "label": "done"},
+			},
+			"edges": []any{
+				map[string]any{"from": "p1", "to": "e1", "condition": "default"},
+				map[string]any{"from": "p1", "to": "e1", "condition": "max_retries"},
+			},
+		},
+	}
+	require.NoError(t, app.DB.Create(flow).Error)
+	return flow
+}
+
+// TestRunChatGraph_Prompt_HappyPath: first inbound sends prompt + yields;
+// second inbound validates, stores into SessionData, advances to terminal.
+func TestRunChatGraph_Prompt_HappyPath(t *testing.T) {
+	app, org, account, contact, session := newGraphTestFixtures(t)
+	flow := newPromptFlow(t, app, org, account, `^[^@]+@[^@]+$`, 3)
+
+	require.NoError(t, app.runChatGraph(account, contact, session, flow, "start", ""))
+	require.NoError(t, app.DB.First(session, session.ID).Error)
+	assert.Equal(t, "p1", session.CurrentStep, "should park at prompt on first inbound")
+
+	require.NoError(t, app.runChatGraph(account, contact, session, flow, "shri@example.com", ""))
+	require.NoError(t, app.DB.First(session, session.ID).Error)
+	assert.Equal(t, models.SessionStatusCompleted, session.Status)
+	assert.Equal(t, "shri@example.com", session.SessionData["email"], "input should be stored under store_as")
+	assert.Equal(t, 0, session.StepRetries, "retries should reset on valid input")
+}
+
+// TestRunChatGraph_Prompt_RetryOnInvalid: invalid input re-sends the error
+// and stays at the prompt node.
+func TestRunChatGraph_Prompt_RetryOnInvalid(t *testing.T) {
+	app, org, account, contact, session := newGraphTestFixtures(t)
+	flow := newPromptFlow(t, app, org, account, `^[^@]+@[^@]+$`, 3)
+
+	require.NoError(t, app.runChatGraph(account, contact, session, flow, "start", ""))
+
+	// First invalid attempt
+	require.NoError(t, app.runChatGraph(account, contact, session, flow, "not-an-email", ""))
+	require.NoError(t, app.DB.First(session, session.ID).Error)
+	assert.Equal(t, "p1", session.CurrentStep, "should stay at prompt on invalid")
+	assert.Equal(t, 1, session.StepRetries)
+	assert.Equal(t, models.SessionStatusActive, session.Status)
+	_, stored := session.SessionData["email"]
+	assert.False(t, stored, "invalid input must not be stored")
+}
+
+// TestRunChatGraph_Prompt_MaxRetriesRoutesToEdge: once retries reach max,
+// the runner advances via the max_retries edge instead of looping.
+func TestRunChatGraph_Prompt_MaxRetriesRoutesToEdge(t *testing.T) {
+	app, org, account, contact, session := newGraphTestFixtures(t)
+	flow := newPromptFlow(t, app, org, account, `^[^@]+@[^@]+$`, 2) // 2 strikes
+
+	require.NoError(t, app.runChatGraph(account, contact, session, flow, "start", ""))
+
+	// First invalid → retry
+	require.NoError(t, app.runChatGraph(account, contact, session, flow, "x", ""))
+	require.NoError(t, app.DB.First(session, session.ID).Error)
+	require.Equal(t, "p1", session.CurrentStep)
+	require.Equal(t, 1, session.StepRetries)
+
+	// Second invalid → max_retries → end
+	require.NoError(t, app.runChatGraph(account, contact, session, flow, "y", ""))
+	require.NoError(t, app.DB.First(session, session.ID).Error)
+	assert.Equal(t, models.SessionStatusCompleted, session.Status)
+}
+
+// TestRunChatGraph_Prompt_NoRegexAcceptsAnything verifies the executor
+// treats a prompt with no validation_regex as accept-all.
+func TestRunChatGraph_Prompt_NoRegexAcceptsAnything(t *testing.T) {
+	app, org, account, contact, session := newGraphTestFixtures(t)
+	flow := newPromptFlow(t, app, org, account, "", 3)
+
+	require.NoError(t, app.runChatGraph(account, contact, session, flow, "start", ""))
+	require.NoError(t, app.runChatGraph(account, contact, session, flow, "literally anything", ""))
+	require.NoError(t, app.DB.First(session, session.ID).Error)
+	assert.Equal(t, models.SessionStatusCompleted, session.Status)
+	assert.Equal(t, "literally anything", session.SessionData["email"])
+}
