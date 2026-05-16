@@ -266,14 +266,6 @@ export function stepsToGraph(steps: StepInput[], canvasLayout?: CanvasLayout): C
       config.schedule = (ic.schedule as any[]) || []
     }
 
-    // Universal: any node can carry variable assignments. The backend's
-    // applyNodeSetConfig pre-step processes these before the node's
-    // type-specific executor runs.
-    const setMap = (step.input_config?.set as Record<string, any>) || {}
-    if (Object.keys(setMap).length > 0) {
-      config.set = setMap
-    }
-
     return {
       id: step.step_name,
       type: nodeType,
@@ -427,15 +419,6 @@ export function graphToSteps(graph: ChatFlowGraph): { steps: FlowStep[]; canvas_
     } else if (node.type === 'timing') {
       step.input_config = {
         schedule: (cfg.schedule as any[]) || [],
-      }
-    }
-
-    // Universal: carry config.set back into input_config.set so the
-    // editor's Variables section can render it on any node type.
-    if (cfg.set && typeof cfg.set === 'object') {
-      step.input_config = {
-        ...(step.input_config || {}),
-        set: cfg.set as Record<string, any>,
       }
     }
 

@@ -1037,42 +1037,6 @@ func TestRunChatGraph_Webhook_NetworkErrorStillAdvances(t *testing.T) {
 	assert.Equal(t, models.SessionStatusCompleted, session.Status)
 }
 
-// TestRunChatGraph_UniversalSetConfig verifies that any node carrying
-// config.set applies its assignments to SessionData before the node's
-// type-specific executor runs.
-func TestRunChatGraph_UniversalSetConfig(t *testing.T) {
-	app, org, account, contact, session := newGraphTestFixtures(t)
-
-	flow := &models.ChatbotFlow{
-		BaseModel:       models.BaseModel{ID: uuid.New()},
-		OrganizationID:  org.ID,
-		WhatsAppAccount: account.Name,
-		Name:            "set-on-message",
-		IsEnabled:       true,
-		Graph: models.JSONB{
-			"version":    2,
-			"entry_node": "m1",
-			"nodes": []any{
-				map[string]any{"id": "m1", "type": "message", "label": "greet", "config": map[string]any{
-					"message": "Hello {{customer_name}}!",
-					"set":     map[string]any{"customer_name": "Shri"},
-				}},
-				map[string]any{"id": "e1", "type": "end"},
-			},
-			"edges": []any{
-				map[string]any{"from": "m1", "to": "e1", "condition": "default"},
-			},
-		},
-	}
-	require.NoError(t, app.DB.Create(flow).Error)
-
-	require.NoError(t, app.runChatGraph(account, contact, session, flow, "start", ""))
-	require.NoError(t, app.DB.First(session, session.ID).Error)
-	// Set ran before the message executor → SessionData captured the value.
-	assert.Equal(t, "Shri", session.SessionData["customer_name"])
-	assert.Equal(t, models.SessionStatusCompleted, session.Status)
-}
-
 // newGotoTargetFlow builds a one-node graph (message → end-by-no-edge)
 // for use as a goto_flow target.
 func newGotoTargetFlow(t *testing.T, app *App, org *models.Organization, account *models.WhatsAppAccount, name, messageText string) *models.ChatbotFlow {
