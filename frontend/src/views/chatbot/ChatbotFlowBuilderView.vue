@@ -546,8 +546,7 @@ async function loadFlow(id: string) {
 }
 
 // Human-readable defaults for the label shown on the canvas. Keys match
-// message_type values; the displayed label is suffixed with a per-type
-// counter ("Text 1", "Buttons 2", "Condition 1").
+// message_type values. The user can rename freely via the detail panel.
 const stepTypeLabels: Record<string, string> = {
   text: 'Text',
   buttons: 'Buttons',
@@ -558,10 +557,8 @@ const stepTypeLabels: Record<string, string> = {
   condition: 'Condition',
 }
 
-function nextLabelForType(type: string): string {
-  const base = stepTypeLabels[type] || type
-  const existing = formData.value.steps.filter(s => s.message_type === type).length
-  return `${base} ${existing + 1}`
+function defaultLabelForType(type: string): string {
+  return stepTypeLabels[type] || type
 }
 
 function addStep(type?: string) {
@@ -570,7 +567,7 @@ function addStep(type?: string) {
   const step: any = {
     ...defaultStep,
     step_name: `step_${newOrder}`,
-    label: nextLabelForType(resolvedType),
+    label: defaultLabelForType(resolvedType),
     step_order: newOrder,
   }
   if (type) {

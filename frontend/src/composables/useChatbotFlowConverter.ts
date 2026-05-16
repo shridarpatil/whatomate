@@ -7,6 +7,23 @@ function getNodeType(messageType: string): string {
   return 'chatbot_' + messageType
 }
 
+// Human-readable fallback when a step has no explicit `label`. Used by
+// stepsToNodesAndEdges so legacy flows show "Text" / "Buttons" on the
+// canvas instead of the internal "step_1" / "step_2" identifiers.
+const defaultLabels: Record<string, string> = {
+  text: 'Text',
+  buttons: 'Buttons',
+  api_fetch: 'API Fetch',
+  whatsapp_flow: 'WhatsApp Flow',
+  transfer: 'Transfer',
+  end: 'End',
+  condition: 'Condition',
+}
+
+function fallbackLabel(step: { message_type: string; step_name: string }): string {
+  return defaultLabels[step.message_type] || step.step_name
+}
+
 /**
  * Canvas layout storing node positions.
  */
@@ -55,7 +72,7 @@ export function stepsToNodesAndEdges(steps: FlowStep[], canvasLayout?: CanvasLay
         ? { x: saved.x, y: saved.y }
         : { x: isNonSequentialTarget ? 500 : 300, y: index * 150 },
       data: {
-        label: step.label || step.step_name,
+        label: step.label || fallbackLabel(step),
         config: { ...step },
         isEntryNode: index === 0,
       },
