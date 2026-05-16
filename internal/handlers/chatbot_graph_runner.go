@@ -100,6 +100,12 @@ func (a *App) runChatGraph(
 			return fmt.Errorf("node %q not found", session.CurrentStep)
 		}
 
+		// Universal pre-step: any node can carry config.set to assign
+		// SessionData variables before its type-specific executor runs.
+		// Replaces the dedicated set_variable node — authors attach
+		// assignments inline on any step instead.
+		applyNodeSetConfig(node, ctx.session)
+
 		res, err := a.executeChatNode(node, ctx)
 		if err != nil {
 			a.persistChatSession(session)
@@ -532,6 +538,34 @@ func evaluateTimingSchedule(now time.Time, schedule []any, log scheduleLogger) s
 // needs. Defined locally to avoid pulling logf into the test imports.
 type scheduleLogger interface {
 	Warn(msg string, args ...any)
+}
+
+// applyNodeSetConfig is a universal pre-step that any node's config.set
+// triggers. Each value runs through processTemplate against current
+// SessionData first so authors can compose new variables from existing
+// ones (e.g. "greeting" = "Hello {{customer_name}}!"). Used inline on
+// every node — the dedicated set_variable node is retained for
+// backwards compatibility with already-authored graphs but no longer
+// the recommended way to author assignments.
+func applyNodeSetConfig(node *ChatNode, session *models.ChatbotSession) {
+	assignments, _ := node.Config["set"].(map[string]any)
+	if len(assignments) == 0 {
+		return
+	}
+	if session.SessionData == nil {
+		session.SessionData = models.JSONB{}
+	}
+	for name, raw := range assignments {
+		if name == "" {
+			continue
+		}
+		tmpl, ok := raw.(string)
+		if !ok {
+			session.SessionData[name] = raw
+			continue
+		}
+		session.SessionData[name] = processTemplate(tmpl, session.SessionData)
+	}
 }
 
 // execChatSetVariable assigns one or more values into SessionData. Each
