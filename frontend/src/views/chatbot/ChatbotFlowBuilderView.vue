@@ -567,7 +567,7 @@ async function loadFlow(id: string) {
 const stepTypeLabels: Record<string, string> = {
   text: 'Text',
   buttons: 'Buttons',
-  api_fetch: 'API Fetch',
+  api_fetch: 'API',
   whatsapp_flow: 'WhatsApp Flow',
   transfer: 'Transfer',
   end: 'End',

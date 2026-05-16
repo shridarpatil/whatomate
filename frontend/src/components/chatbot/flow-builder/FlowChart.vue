@@ -53,7 +53,7 @@ const emit = defineEmits<{
 const messageTypePalette = [
   { type: 'text', label: 'Text', icon: MessageSquare, color: 'bg-blue-600' },
   { type: 'buttons', label: 'Buttons', icon: MousePointerClick, color: 'bg-purple-600' },
-  { type: 'api_fetch', label: 'API Fetch', icon: Globe, color: 'bg-orange-600' },
+  { type: 'api_fetch', label: 'API', icon: Globe, color: 'bg-orange-600' },
   { type: 'whatsapp_flow', label: 'WA Flow', icon: MessageCircle, color: 'bg-green-600' },
   { type: 'transfer', label: 'Transfer', icon: UserPlus, color: 'bg-amber-600' },
   { type: 'condition', label: 'Condition', icon: GitBranch, color: 'bg-indigo-600' },

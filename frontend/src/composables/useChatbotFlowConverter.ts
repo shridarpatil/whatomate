@@ -13,7 +13,7 @@ function getNodeType(messageType: string): string {
 const defaultLabels: Record<string, string> = {
   text: 'Text',
   buttons: 'Buttons',
-  api_fetch: 'API Fetch',
+  api_fetch: 'API',
   whatsapp_flow: 'WhatsApp Flow',
   transfer: 'Transfer',
   end: 'End',
@@ -178,7 +178,7 @@ export function extractCanvasLayout(nodes: Node[]): CanvasLayout {
 // the backend executor implements today. Anything outside this set forces
 // the flow to keep using the legacy steps[] wire format until the matching
 // node type lands.
-const V2_SUPPORTED_MESSAGE_TYPES = new Set(['text', 'buttons', 'end', 'condition', 'timing', 'goto_flow'])
+const V2_SUPPORTED_MESSAGE_TYPES = new Set(['text', 'buttons', 'end', 'condition', 'timing', 'goto_flow', 'api_fetch'])
 
 function messageTypeToNodeType(messageType: string): ChatNodeType | null {
   switch (messageType) {
@@ -194,6 +194,10 @@ function messageTypeToNodeType(messageType: string): ChatNodeType | null {
       return 'timing'
     case 'goto_flow':
       return 'goto_flow'
+    case 'api_fetch':
+      // v1 api_fetch bundles fetch + send-templated-message; the backend
+      // api_call node implements the same shape via message_template.
+      return 'api_call'
     default:
       return null
   }
@@ -213,6 +217,8 @@ function nodeTypeToMessageType(nodeType: string): string | null {
       return 'timing'
     case 'goto_flow':
       return 'goto_flow'
+    case 'api_call':
+      return 'api_fetch'
     default:
       return null
   }
@@ -222,7 +228,7 @@ function nodeTypeToMessageType(nodeType: string): string | null {
 // parameter to a structural type lets callers pass FlowStep variants
 // where message_type is `string` rather than the strict union (the chat
 // flow builder defines a local relaxed FlowStep on top of v1 fields).
-type StepInput = Pick<FlowStep, 'step_name' | 'step_order' | 'message' | 'next_step' | 'conditional_next' | 'buttons' | 'label' | 'input_config'> & { message_type: string }
+type StepInput = Pick<FlowStep, 'step_name' | 'step_order' | 'message' | 'next_step' | 'conditional_next' | 'buttons' | 'label' | 'input_config' | 'api_config'> & { message_type: string }
 
 /**
  * Convert the v1 FlowStep[] model to a v2 graph payload. Returns null
@@ -275,6 +281,23 @@ export function stepsToGraph(steps: StepInput[], canvasLayout?: CanvasLayout): C
       // execChatGotoFlow validates org + account scope at runtime.
       const ic = step.input_config || {}
       config.flow_id = (ic.flow_id as string) || ''
+    } else if (nodeType === 'api_call') {
+      // v1 api_fetch step → v2 api_call node. Carries the HTTP config
+      // verbatim from step.api_config plus the templated message (if any)
+      // as message_template so the backend's optional render+send path
+      // reproduces the v1 fetch+send behavior in a single node.
+      const ac = step.api_config || {}
+      config.url = (ac as any).url || ''
+      config.method = (ac as any).method || 'GET'
+      config.headers = (ac as any).headers || {}
+      config.body = (ac as any).body || ''
+      config.response_mapping = (ac as any).response_mapping || {}
+      if ((ac as any).fallback_message) {
+        config.fallback_message = (ac as any).fallback_message
+      }
+      if (step.message) {
+        config.message_template = step.message
+      }
     }
 
     return {
@@ -434,6 +457,18 @@ export function graphToSteps(graph: ChatFlowGraph): { steps: FlowStep[]; canvas_
     } else if (node.type === 'goto_flow') {
       step.input_config = {
         flow_id: (cfg.flow_id as string) || '',
+      }
+    } else if (node.type === 'api_call') {
+      step.api_config = {
+        url: (cfg.url as string) || '',
+        method: (cfg.method as string) || 'GET',
+        headers: (cfg.headers as Record<string, string>) || {},
+        body: (cfg.body as string) || '',
+        fallback_message: (cfg.fallback_message as string) || '',
+        response_mapping: (cfg.response_mapping as Record<string, string>) || {},
+      }
+      if (cfg.message_template) {
+        step.message = cfg.message_template as string
       }
     }
 
