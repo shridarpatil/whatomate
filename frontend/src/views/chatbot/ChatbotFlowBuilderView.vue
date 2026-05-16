@@ -249,6 +249,7 @@ const inputOpen = ref(true)
 const validationOpen = ref(true)
 const advancedOpen = ref(false)
 const panelConfigOpen = ref(false)
+const variablesOpen = ref(false)
 
 const defaultApiConfig: ApiConfig = {
   url: '',
@@ -424,9 +425,10 @@ onMounted(async () => {
     formData.value.steps = [{
       ...defaultStep,
       step_name: 'step_1',
+      label: defaultLabelForType('text'),
       step_order: 1,
-      message: 'What is your name?',
-      store_as: 'name'
+      message: '',
+      store_as: ''
     }]
     isLoading.value = false
   }
@@ -571,6 +573,44 @@ function defaultTimingSchedule(): Array<Record<string, any>> {
 
 function defaultLabelForType(type: string): string {
   return stepTypeLabels[type] || type
+}
+
+// Universal "Variables" section — any selected step can carry a set of
+// variable assignments stored under input_config.set. The backend's
+// applyNodeSetConfig pre-step processes them before each node runs.
+const stepVariableEntries = computed(() => {
+  if (!selectedStep.value) return []
+  const set = (selectedStep.value.input_config?.set as Record<string, any>) || {}
+  return Object.entries(set).map(([name, value]) => ({ name, value: String(value ?? '') }))
+})
+
+function writeStepVariableEntries(entries: { name: string; value: string }[]) {
+  if (!selectedStep.value) return
+  const set: Record<string, string> = {}
+  for (const e of entries) {
+    if (!e.name) continue
+    set[e.name] = e.value
+  }
+  selectedStep.value.input_config = { ...(selectedStep.value.input_config || {}), set }
+  hasUnsavedChanges.value = true
+}
+
+function addStepVariableEntry() {
+  writeStepVariableEntries([...stepVariableEntries.value, { name: '', value: '' }])
+}
+
+function removeStepVariableEntry(idx: number) {
+  const next = [...stepVariableEntries.value]
+  next.splice(idx, 1)
+  writeStepVariableEntries(next)
+}
+
+function renameStepVariableKey(idx: number, newName: string) {
+  writeStepVariableEntries(stepVariableEntries.value.map((e, i) => (i === idx ? { ...e, name: newName } : e)))
+}
+
+function updateStepVariableValue(idx: number, newValue: string) {
+  writeStepVariableEntries(stepVariableEntries.value.map((e, i) => (i === idx ? { ...e, value: newValue } : e)))
 }
 
 function addStep(type?: string) {
@@ -1868,6 +1908,42 @@ function confirmCancel() {
                     </div>
                   </div>
                 </template>
+              </CollapsibleContent>
+            </Collapsible>
+
+            <Separator />
+
+            <!-- Variables (universal — applies to every node type) -->
+            <Collapsible v-model:open="variablesOpen">
+              <CollapsibleTrigger class="flex items-center justify-between w-full py-1 text-sm font-medium">
+                Variables
+                <component :is="variablesOpen ? ChevronDown : ChevronRight" class="h-4 w-4" />
+              </CollapsibleTrigger>
+              <CollapsibleContent class="pt-3 space-y-2">
+                <p class="text-xs text-muted-foreground">
+                  Assign session variables before this step runs. Values can reference earlier variables using template syntax.
+                </p>
+                <div
+                  v-for="(entry, idx) in stepVariableEntries"
+                  :key="idx"
+                  class="flex items-center gap-2"
+                >
+                  <Input
+                    :model-value="entry.name"
+                    @update:model-value="(v) => renameStepVariableKey(idx, v)"
+                    placeholder="name"
+                    class="h-7 text-xs flex-1"
+                  />
+                  <span class="text-xs text-muted-foreground">=</span>
+                  <Input
+                    :model-value="entry.value"
+                    @update:model-value="(v) => updateStepVariableValue(idx, v)"
+                    placeholder="value (templates allowed)"
+                    class="h-7 text-xs flex-1"
+                  />
+                  <Button variant="ghost" size="sm" class="h-7 w-7 p-0" @click="removeStepVariableEntry(idx)">×</Button>
+                </div>
+                <Button variant="outline" size="sm" class="h-7 text-xs" @click="addStepVariableEntry">+ Add</Button>
               </CollapsibleContent>
             </Collapsible>
 
