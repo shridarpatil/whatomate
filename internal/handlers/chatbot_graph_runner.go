@@ -113,6 +113,31 @@ func (a *App) runChatGraph(
 			return a.persistChatSession(session)
 		}
 
+		// goto_flow may have switched the session to a different flow.
+		// Reload graph + flow and continue at the new entry node within
+		// the same run, mirroring IVR's executeGotoFlow recursion. The
+		// outer loop's max-iteration guard prevents A→B→A pathologies.
+		if session.CurrentFlowID != nil && *session.CurrentFlowID != flow.ID {
+			newFlow, err := a.getChatbotFlowByIDCached(account.OrganizationID, *session.CurrentFlowID)
+			if err != nil {
+				a.persistChatSession(session)
+				return fmt.Errorf("goto_flow: load target: %w", err)
+			}
+			if newFlow.Graph == nil {
+				a.persistChatSession(session)
+				return errors.New("goto_flow: target flow has no v2 graph")
+			}
+			newGraph, err := parseChatGraph(newFlow.Graph)
+			if err != nil {
+				a.persistChatSession(session)
+				return fmt.Errorf("goto_flow: parse target graph: %w", err)
+			}
+			flow = newFlow
+			graph = newGraph
+			session.CurrentStep = newGraph.EntryNode
+			continue
+		}
+
 		next := graph.resolveEdge(node.ID, res.outcome)
 		if next == "" {
 			// No matching edge → terminal.
@@ -151,6 +176,8 @@ func (a *App) executeChatNode(node *ChatNode, ctx *chatNodeCtx) (nodeOutcome, er
 		return a.execChatTransfer(node, ctx)
 	case ChatNodeWebhook:
 		return a.execChatWebhook(node, ctx)
+	case ChatNodeGotoFlow:
+		return a.execChatGotoFlow(node, ctx)
 	case ChatNodeEnd:
 		return a.execChatEnd(node, ctx)
 	default:
@@ -685,6 +712,78 @@ func (a *App) execChatWebhook(node *ChatNode, ctx *chatNodeCtx) (nodeOutcome, er
 			"node", node.ID, "session", ctx.session.ID, "status", statusCode)
 	}
 	return nodeOutcome{outcome: "default"}, nil
+}
+
+// execChatGotoFlow jumps execution to another flow within the same
+// organization + WhatsApp account. SessionData (variables, path) is
+// carried forward — this is the whole point of sub-flows.
+//
+// Mirrors IVR's executeGotoFlow (internal/calling/ivr.go:495). Not a
+// "call" — there's no return stack — so once the target flow ends, the
+// session ends. The runner detects the CurrentFlowID change and reloads
+// the graph + entry node within the same webhook run.
+//
+// Config:
+//
+//	{ "flow_id": "<uuid>" }
+//
+// Misconfiguration (missing/invalid id, target disabled, cross-account)
+// is logged and terminates the source flow gracefully rather than
+// erroring the inbound webhook.
+func (a *App) execChatGotoFlow(node *ChatNode, ctx *chatNodeCtx) (nodeOutcome, error) {
+	targetIDStr := stringFromConfig(node.Config, "flow_id")
+	if targetIDStr == "" {
+		a.Log.Warn("goto_flow node missing flow_id",
+			"node", node.ID, "session", ctx.session.ID)
+		return nodeOutcome{}, nil
+	}
+	targetID, err := uuid.Parse(targetIDStr)
+	if err != nil {
+		a.Log.Warn("goto_flow node has invalid flow_id",
+			"node", node.ID, "flow_id", targetIDStr, "error", err)
+		return nodeOutcome{}, nil
+	}
+
+	target, err := a.getChatbotFlowByIDCached(ctx.account.OrganizationID, targetID)
+	if err != nil || target == nil {
+		a.Log.Warn("goto_flow target not found",
+			"node", node.ID, "flow_id", targetID, "error", err)
+		return nodeOutcome{}, nil
+	}
+	if !target.IsEnabled {
+		a.Log.Warn("goto_flow target is disabled",
+			"node", node.ID, "flow_id", targetID)
+		return nodeOutcome{}, nil
+	}
+	if target.WhatsAppAccount != ctx.session.WhatsAppAccount {
+		a.Log.Warn("goto_flow target belongs to a different WA account; refusing",
+			"node", node.ID, "target_account", target.WhatsAppAccount,
+			"session_account", ctx.session.WhatsAppAccount)
+		return nodeOutcome{}, nil
+	}
+	if target.Graph == nil {
+		a.Log.Warn("goto_flow target has no v2 graph",
+			"node", node.ID, "flow_id", targetID)
+		return nodeOutcome{}, nil
+	}
+
+	// Record the jump on the path for audit visibility.
+	if ctx.session.SessionData == nil {
+		ctx.session.SessionData = models.JSONB{}
+	}
+	path, _ := ctx.session.SessionData["__path__"].([]any)
+	path = append(path, map[string]any{
+		"action":  "goto_flow",
+		"flow":    target.Name,
+		"flow_id": target.ID.String(),
+	})
+	ctx.session.SessionData["__path__"] = path
+
+	// Signal the switch — the runner detects CurrentFlowID change and
+	// reloads + resets CurrentStep to the new entry node.
+	ctx.session.CurrentFlowID = &target.ID
+
+	return nodeOutcome{outcome: "goto"}, nil
 }
 
 // execChatEnd optionally sends a final message and returns an empty

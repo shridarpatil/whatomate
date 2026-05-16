@@ -1037,6 +1037,202 @@ func TestRunChatGraph_Webhook_NetworkErrorStillAdvances(t *testing.T) {
 	assert.Equal(t, models.SessionStatusCompleted, session.Status)
 }
 
+// newGotoTargetFlow builds a one-node graph (message → end-by-no-edge)
+// for use as a goto_flow target.
+func newGotoTargetFlow(t *testing.T, app *App, org *models.Organization, account *models.WhatsAppAccount, name, messageText string) *models.ChatbotFlow {
+	t.Helper()
+	flow := &models.ChatbotFlow{
+		BaseModel:       models.BaseModel{ID: uuid.New()},
+		OrganizationID:  org.ID,
+		WhatsAppAccount: account.Name,
+		Name:            name,
+		IsEnabled:       true,
+		Graph: models.JSONB{
+			"version":    2,
+			"entry_node": "m1",
+			"nodes": []any{
+				map[string]any{"id": "m1", "type": "message", "label": "msg", "config": map[string]any{"message": messageText}},
+			},
+			"edges": []any{},
+		},
+	}
+	require.NoError(t, app.DB.Create(flow).Error)
+	return flow
+}
+
+// TestRunChatGraph_GotoFlow_JumpsAndRunsTarget verifies execution
+// continues into the target flow within the same webhook run.
+func TestRunChatGraph_GotoFlow_JumpsAndRunsTarget(t *testing.T) {
+	app, org, account, contact, session := newGraphTestFixtures(t)
+	target := newGotoTargetFlow(t, app, org, account, "target-flow", "From target")
+
+	source := &models.ChatbotFlow{
+		BaseModel:       models.BaseModel{ID: uuid.New()},
+		OrganizationID:  org.ID,
+		WhatsAppAccount: account.Name,
+		Name:            "source-flow",
+		IsEnabled:       true,
+		Graph: models.JSONB{
+			"version":    2,
+			"entry_node": "g1",
+			"nodes": []any{
+				map[string]any{"id": "g1", "type": "goto_flow", "label": "jump", "config": map[string]any{"flow_id": target.ID.String()}},
+			},
+			"edges": []any{},
+		},
+	}
+	require.NoError(t, app.DB.Create(source).Error)
+
+	require.NoError(t, app.runChatGraph(account, contact, session, source, "start", ""))
+	require.NoError(t, app.DB.First(session, session.ID).Error)
+	require.NotNil(t, session.CurrentFlowID)
+	assert.Equal(t, target.ID, *session.CurrentFlowID, "should now be in target flow")
+	assert.Equal(t, models.SessionStatusCompleted, session.Status, "target's terminal message ended the run")
+
+	path := chatGraphPath(t, session)
+	// Path order: executor's direct "goto_flow" jump entry, then the
+	// runner's appendChatPath for the source g1 node, then the target's
+	// entry node entry from appendChatPath after the reload.
+	require.GreaterOrEqual(t, len(path), 3)
+	assert.Equal(t, "goto_flow", path[0]["action"])
+	assert.Equal(t, target.Name, path[0]["flow"])
+	assert.Equal(t, "g1", path[1]["node"])
+	assert.Equal(t, "m1", path[2]["node"], "target's entry node should run after the jump")
+}
+
+// TestRunChatGraph_GotoFlow_VariablesCarryForward checks SessionData
+// survives the jump.
+func TestRunChatGraph_GotoFlow_VariablesCarryForward(t *testing.T) {
+	app, org, account, contact, session := newGraphTestFixtures(t)
+	session.SessionData = models.JSONB{"customer_name": "Shri"}
+	require.NoError(t, app.DB.Save(session).Error)
+
+	target := newGotoTargetFlow(t, app, org, account, "target-vars", "ignored")
+	source := &models.ChatbotFlow{
+		BaseModel:       models.BaseModel{ID: uuid.New()},
+		OrganizationID:  org.ID,
+		WhatsAppAccount: account.Name,
+		Name:            "source-vars",
+		IsEnabled:       true,
+		Graph: models.JSONB{
+			"version":    2,
+			"entry_node": "g1",
+			"nodes": []any{
+				map[string]any{"id": "g1", "type": "goto_flow", "label": "jump", "config": map[string]any{"flow_id": target.ID.String()}},
+			},
+			"edges": []any{},
+		},
+	}
+	require.NoError(t, app.DB.Create(source).Error)
+
+	require.NoError(t, app.runChatGraph(account, contact, session, source, "start", ""))
+	require.NoError(t, app.DB.First(session, session.ID).Error)
+	assert.Equal(t, "Shri", session.SessionData["customer_name"], "variables must survive the jump")
+}
+
+// TestRunChatGraph_GotoFlow_DisabledTargetIsTerminal verifies graceful
+// handling — log + terminal, no panic.
+func TestRunChatGraph_GotoFlow_DisabledTargetIsTerminal(t *testing.T) {
+	app, org, account, contact, session := newGraphTestFixtures(t)
+	target := newGotoTargetFlow(t, app, org, account, "disabled-target", "x")
+	target.IsEnabled = false
+	require.NoError(t, app.DB.Save(target).Error)
+
+	source := &models.ChatbotFlow{
+		BaseModel:       models.BaseModel{ID: uuid.New()},
+		OrganizationID:  org.ID,
+		WhatsAppAccount: account.Name,
+		Name:            "src-disabled",
+		IsEnabled:       true,
+		Graph: models.JSONB{
+			"version":    2,
+			"entry_node": "g1",
+			"nodes": []any{
+				map[string]any{"id": "g1", "type": "goto_flow", "label": "jump", "config": map[string]any{"flow_id": target.ID.String()}},
+			},
+			"edges": []any{},
+		},
+	}
+	require.NoError(t, app.DB.Create(source).Error)
+
+	require.NoError(t, app.runChatGraph(account, contact, session, source, "start", ""))
+	require.NoError(t, app.DB.First(session, session.ID).Error)
+	assert.Equal(t, models.SessionStatusCompleted, session.Status, "disabled target should terminate cleanly")
+	// CurrentFlowID stays whatever it was before runChatGraph was called
+	// (the dispatcher sets it; the runner doesn't on its own). What
+	// matters here is that we did NOT switch to the disabled target.
+	if session.CurrentFlowID != nil {
+		assert.NotEqual(t, target.ID, *session.CurrentFlowID, "should not switch to disabled target")
+	}
+}
+
+// TestRunChatGraph_GotoFlow_MissingFlowIDTerminates: malformed config →
+// terminal, no error to dispatcher.
+func TestRunChatGraph_GotoFlow_MissingFlowIDTerminates(t *testing.T) {
+	app, org, account, contact, session := newGraphTestFixtures(t)
+	source := &models.ChatbotFlow{
+		BaseModel:       models.BaseModel{ID: uuid.New()},
+		OrganizationID:  org.ID,
+		WhatsAppAccount: account.Name,
+		Name:            "src-missing",
+		IsEnabled:       true,
+		Graph: models.JSONB{
+			"version":    2,
+			"entry_node": "g1",
+			"nodes": []any{
+				map[string]any{"id": "g1", "type": "goto_flow", "label": "jump", "config": map[string]any{}},
+			},
+			"edges": []any{},
+		},
+	}
+	require.NoError(t, app.DB.Create(source).Error)
+
+	require.NoError(t, app.runChatGraph(account, contact, session, source, "start", ""))
+	require.NoError(t, app.DB.First(session, session.ID).Error)
+	assert.Equal(t, models.SessionStatusCompleted, session.Status)
+}
+
+// TestRunChatGraph_GotoFlow_CycleBoundedByMaxIterations: A→B→A cycle
+// returns errChatGraphRunaway rather than hanging.
+func TestRunChatGraph_GotoFlow_CycleBoundedByMaxIterations(t *testing.T) {
+	app, org, account, contact, session := newGraphTestFixtures(t)
+
+	// Two stub flows referencing each other.
+	flowA := &models.ChatbotFlow{
+		BaseModel:       models.BaseModel{ID: uuid.New()},
+		OrganizationID:  org.ID,
+		WhatsAppAccount: account.Name,
+		Name:            "flow-a",
+		IsEnabled:       true,
+	}
+	flowB := &models.ChatbotFlow{
+		BaseModel:       models.BaseModel{ID: uuid.New()},
+		OrganizationID:  org.ID,
+		WhatsAppAccount: account.Name,
+		Name:            "flow-b",
+		IsEnabled:       true,
+	}
+	flowA.Graph = models.JSONB{
+		"version":    2,
+		"entry_node": "g",
+		"nodes": []any{
+			map[string]any{"id": "g", "type": "goto_flow", "config": map[string]any{"flow_id": flowB.ID.String()}},
+		},
+	}
+	flowB.Graph = models.JSONB{
+		"version":    2,
+		"entry_node": "g",
+		"nodes": []any{
+			map[string]any{"id": "g", "type": "goto_flow", "config": map[string]any{"flow_id": flowA.ID.String()}},
+		},
+	}
+	require.NoError(t, app.DB.Create(flowA).Error)
+	require.NoError(t, app.DB.Create(flowB).Error)
+
+	err := app.runChatGraph(account, contact, session, flowA, "start", "")
+	require.ErrorIs(t, err, errChatGraphRunaway)
+}
+
 // TestRunChatGraph_Prompt_NoRegexAcceptsAnything verifies the executor
 // treats a prompt with no validation_regex as accept-all.
 func TestRunChatGraph_Prompt_NoRegexAcceptsAnything(t *testing.T) {
