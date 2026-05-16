@@ -29,7 +29,7 @@ export interface FlowStep {
   step_name: string
   step_order: number
   message: string
-  message_type: 'text' | 'buttons' | 'api_fetch' | 'whatsapp_flow' | 'transfer'
+  message_type: 'text' | 'buttons' | 'api_fetch' | 'whatsapp_flow' | 'transfer' | 'end'
   input_type: 'none' | 'text' | 'number' | 'email' | 'phone' | 'date' | 'select'
   input_config: Record<string, any>
   api_config: ApiConfig

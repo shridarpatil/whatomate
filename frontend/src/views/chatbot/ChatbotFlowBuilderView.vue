@@ -1514,13 +1514,13 @@ function confirmCancel() {
                 <component :is="messagesOpen ? ChevronDown : ChevronRight" class="h-4 w-4" />
               </CollapsibleTrigger>
               <CollapsibleContent class="pt-3 space-y-3">
-                <!-- Text / Buttons Message -->
-                <template v-if="selectedStep.message_type === 'text' || selectedStep.message_type === 'buttons'">
+                <!-- Text / Buttons / End Message -->
+                <template v-if="selectedStep.message_type === 'text' || selectedStep.message_type === 'buttons' || selectedStep.message_type === 'end'">
                   <div class="space-y-1.5">
-                    <Label class="text-xs">{{ $t('flowBuilder.messageText') }}</Label>
+                    <Label class="text-xs">{{ selectedStep.message_type === 'end' ? 'Final message (optional)' : $t('flowBuilder.messageText') }}</Label>
                     <Textarea
                       v-model="selectedStep.message"
-                      :placeholder="$t('flowBuilder.messagePlaceholder')"
+                      :placeholder="selectedStep.message_type === 'end' ? 'Sent when the flow ends. Leave blank for silent terminal.' : $t('flowBuilder.messagePlaceholder')"
                       :rows="3"
                       class="text-sm"
                     />
@@ -1727,10 +1727,10 @@ function confirmCancel() {
               </CollapsibleContent>
             </Collapsible>
 
-            <Separator v-if="selectedStep.message_type !== 'transfer'" />
+            <Separator v-if="selectedStep.message_type !== 'transfer' && selectedStep.message_type !== 'end'" />
 
             <!-- Input Configuration (not for transfer) -->
-            <Collapsible v-if="selectedStep.message_type !== 'transfer'" v-model:open="inputOpen">
+            <Collapsible v-if="selectedStep.message_type !== 'transfer' && selectedStep.message_type !== 'end'" v-model:open="inputOpen">
               <CollapsibleTrigger class="flex items-center justify-between w-full py-1 text-sm font-medium">
                 {{ $t('flowBuilder.input') }}
                 <component :is="inputOpen ? ChevronDown : ChevronRight" class="h-4 w-4" />
@@ -1765,10 +1765,10 @@ function confirmCancel() {
               </CollapsibleContent>
             </Collapsible>
 
-            <Separator v-if="selectedStep.message_type !== 'transfer'" />
+            <Separator v-if="selectedStep.message_type !== 'transfer' && selectedStep.message_type !== 'end'" />
 
             <!-- Validation (not for transfer) -->
-            <Collapsible v-if="selectedStep.message_type !== 'transfer'" v-model:open="validationOpen">
+            <Collapsible v-if="selectedStep.message_type !== 'transfer' && selectedStep.message_type !== 'end'" v-model:open="validationOpen">
               <CollapsibleTrigger class="flex items-center justify-between w-full py-1 text-sm font-medium">
                 {{ $t('flowBuilder.validation') }}
                 <component :is="validationOpen ? ChevronDown : ChevronRight" class="h-4 w-4" />
@@ -1800,10 +1800,10 @@ function confirmCancel() {
               </CollapsibleContent>
             </Collapsible>
 
-            <Separator v-if="selectedStep.message_type !== 'transfer'" />
+            <Separator v-if="selectedStep.message_type !== 'transfer' && selectedStep.message_type !== 'end'" />
 
             <!-- Advanced (not for transfer) -->
-            <Collapsible v-if="selectedStep.message_type !== 'transfer'" v-model:open="advancedOpen">
+            <Collapsible v-if="selectedStep.message_type !== 'transfer' && selectedStep.message_type !== 'end'" v-model:open="advancedOpen">
               <CollapsibleTrigger class="flex items-center justify-between w-full py-1 text-sm font-medium">
                 {{ $t('flowBuilder.advanced') }}
                 <component :is="advancedOpen ? ChevronDown : ChevronRight" class="h-4 w-4" />

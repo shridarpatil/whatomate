@@ -69,7 +69,7 @@ export function stepsToNodesAndEdges(steps: FlowStep[], canvasLayout?: CanvasLay
   sorted.forEach((step, index) => {
     const nextSequentialStep = index < sorted.length - 1 ? sorted[index + 1].step_name : null
 
-    if (step.message_type === 'transfer') {
+    if (step.message_type === 'transfer' || step.message_type === 'end') {
       // Terminal node -- no outgoing edges
       return
     }
@@ -158,8 +158,8 @@ export function extractCanvasLayout(nodes: Node[]): CanvasLayout {
 // Message types in the v1 editor that map cleanly to v2 graph node types
 // the backend executor implements today. Anything outside this set forces
 // the flow to keep using the legacy steps[] wire format until the matching
-// node type lands in Phase 3.
-const V2_SUPPORTED_MESSAGE_TYPES = new Set(['text', 'buttons'])
+// node type lands.
+const V2_SUPPORTED_MESSAGE_TYPES = new Set(['text', 'buttons', 'end'])
 
 function messageTypeToNodeType(messageType: string): ChatNodeType | null {
   switch (messageType) {
@@ -167,6 +167,8 @@ function messageTypeToNodeType(messageType: string): ChatNodeType | null {
       return 'message'
     case 'buttons':
       return 'buttons'
+    case 'end':
+      return 'end'
     default:
       return null
   }
@@ -178,6 +180,8 @@ function nodeTypeToMessageType(nodeType: string): string | null {
       return 'text'
     case 'buttons':
       return 'buttons'
+    case 'end':
+      return 'end'
     default:
       return null
   }
@@ -217,6 +221,10 @@ export function stepsToGraph(steps: StepInput[], canvasLayout?: CanvasLayout): C
     } else if (nodeType === 'buttons') {
       config.body = step.message
       config.buttons = step.buttons || []
+    } else if (nodeType === 'end' && step.message) {
+      // Optional completion message; backend execChatEnd sends it before
+      // marking the session complete.
+      config.message = step.message
     }
 
     return {
@@ -341,6 +349,8 @@ export function graphToSteps(graph: ChatFlowGraph): { steps: FlowStep[]; canvas_
     } else if (node.type === 'buttons') {
       step.message = (cfg.body as string) || (cfg.message as string) || ''
       step.buttons = (cfg.buttons as any[]) || []
+    } else if (node.type === 'end') {
+      step.message = (cfg.message as string) || ''
     }
 
     // Translate outgoing edges back into next_step / conditional_next.
