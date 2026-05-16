@@ -3,7 +3,7 @@ import { ref, watch, markRaw, nextTick } from 'vue'
 import { useVueFlow, MarkerType } from '@vue-flow/core'
 import type { Node, Edge, NodeMouseEvent, Connection } from '@vue-flow/core'
 import { Button } from '@/components/ui/button'
-import { GitBranch, Play, Plus, MessageSquare, MousePointerClick, Globe, MessageCircle, UserPlus, StopCircle } from 'lucide-vue-next'
+import { GitBranch, Play, Plus, MessageSquare, MousePointerClick, Globe, MessageCircle, UserPlus, StopCircle, Clock } from 'lucide-vue-next'
 import { stepsToNodesAndEdges, extractCanvasLayout } from '@/composables/useChatbotFlowConverter'
 import type { CanvasLayout } from '@/composables/useChatbotFlowConverter'
 import FlowCanvas from '@/components/shared/FlowCanvas.vue'
@@ -14,6 +14,7 @@ import ChatbotWhatsAppFlowNode from '@/components/chatbot/nodes/ChatbotWhatsAppF
 import ChatbotTransferNode from '@/components/chatbot/nodes/ChatbotTransferNode.vue'
 import ChatbotEndNode from '@/components/chatbot/nodes/ChatbotEndNode.vue'
 import ChatbotConditionNode from '@/components/chatbot/nodes/ChatbotConditionNode.vue'
+import ChatbotTimingNode from '@/components/chatbot/nodes/ChatbotTimingNode.vue'
 
 interface FlowChartStep {
   step_name: string
@@ -55,6 +56,7 @@ const messageTypePalette = [
   { type: 'whatsapp_flow', label: 'WA Flow', icon: MessageCircle, color: 'bg-green-600' },
   { type: 'transfer', label: 'Transfer', icon: UserPlus, color: 'bg-amber-600' },
   { type: 'condition', label: 'Condition', icon: GitBranch, color: 'bg-indigo-600' },
+  { type: 'timing', label: 'Timing', icon: Clock, color: 'bg-cyan-600' },
   { type: 'end', label: 'End', icon: StopCircle, color: 'bg-slate-600' },
 ]
 
@@ -76,6 +78,7 @@ const nodeTypes: Record<string, any> = {
   chatbot_transfer: markRaw(ChatbotTransferNode),
   chatbot_end: markRaw(ChatbotEndNode),
   chatbot_condition: markRaw(ChatbotConditionNode),
+  chatbot_timing: markRaw(ChatbotTimingNode),
 }
 
 const flowNodes = ref<Node[]>([])

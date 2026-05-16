@@ -176,7 +176,7 @@ export function extractCanvasLayout(nodes: Node[]): CanvasLayout {
 // the backend executor implements today. Anything outside this set forces
 // the flow to keep using the legacy steps[] wire format until the matching
 // node type lands.
-const V2_SUPPORTED_MESSAGE_TYPES = new Set(['text', 'buttons', 'end', 'condition'])
+const V2_SUPPORTED_MESSAGE_TYPES = new Set(['text', 'buttons', 'end', 'condition', 'timing'])
 
 function messageTypeToNodeType(messageType: string): ChatNodeType | null {
   switch (messageType) {
@@ -188,6 +188,8 @@ function messageTypeToNodeType(messageType: string): ChatNodeType | null {
       return 'end'
     case 'condition':
       return 'condition'
+    case 'timing':
+      return 'timing'
     default:
       return null
   }
@@ -203,6 +205,8 @@ function nodeTypeToMessageType(nodeType: string): string | null {
       return 'end'
     case 'condition':
       return 'condition'
+    case 'timing':
+      return 'timing'
     default:
       return null
   }
@@ -254,6 +258,12 @@ export function stepsToGraph(steps: StepInput[], canvasLayout?: CanvasLayout): C
       config.variable = (ic.variable as string) || ''
       config.operator = (ic.operator as string) || 'eq'
       config.value = (ic.value as string) || ''
+    } else if (nodeType === 'timing') {
+      // Schedule lives in input_config.schedule — array of
+      // {day, enabled, start_time, end_time}. Mirrors IVR's shape so
+      // backend evaluateTimingSchedule can read it as-is.
+      const ic = step.input_config || {}
+      config.schedule = (ic.schedule as any[]) || []
     }
 
     return {
@@ -291,6 +301,15 @@ export function stepsToGraph(steps: StepInput[], canvasLayout?: CanvasLayout): C
       // sequential fallthrough — author must wire both handles.
       const conditional = step.conditional_next || {}
       for (const branch of ['true', 'false'] as const) {
+        const target = conditional[branch]
+        if (target && stepNames.has(target)) {
+          edges.push({ from: step.step_name, to: target, condition: branch })
+        }
+      }
+    } else if (step.message_type === 'timing') {
+      // Two business-hours branches: in_hours / out_of_hours.
+      const conditional = step.conditional_next || {}
+      for (const branch of ['in_hours', 'out_of_hours'] as const) {
         const target = conditional[branch]
         if (target && stepNames.has(target)) {
           edges.push({ from: step.step_name, to: target, condition: branch })
@@ -397,6 +416,10 @@ export function graphToSteps(graph: ChatFlowGraph): { steps: FlowStep[]; canvas_
         operator: (cfg.operator as string) || 'eq',
         value: (cfg.value as string) || '',
       }
+    } else if (node.type === 'timing') {
+      step.input_config = {
+        schedule: (cfg.schedule as any[]) || [],
+      }
     }
 
     // Translate outgoing edges back into next_step / conditional_next.
@@ -409,6 +432,9 @@ export function graphToSteps(graph: ChatFlowGraph): { steps: FlowStep[]; canvas_
       } else if (edge.condition === 'true' || edge.condition === 'false') {
         // Condition-node branches surface to the editor as
         // conditional_next entries keyed by the handle id.
+        conditional[edge.condition] = edge.to
+      } else if (edge.condition === 'in_hours' || edge.condition === 'out_of_hours') {
+        // Timing-node branches likewise.
         conditional[edge.condition] = edge.to
       } else if (edge.condition === 'default') {
         step.next_step = edge.to

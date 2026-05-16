@@ -555,6 +555,18 @@ const stepTypeLabels: Record<string, string> = {
   transfer: 'Transfer',
   end: 'End',
   condition: 'Condition',
+  timing: 'Timing',
+}
+
+const TIMING_DAYS = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'] as const
+
+function defaultTimingSchedule(): Array<Record<string, any>> {
+  return TIMING_DAYS.map((day) => ({
+    day,
+    enabled: day !== 'saturday' && day !== 'sunday',
+    start_time: '09:00',
+    end_time: '18:00',
+  }))
 }
 
 function defaultLabelForType(type: string): string {
@@ -576,11 +588,14 @@ function addStep(type?: string) {
       step.input_config = { whatsapp_flow_id: '', flow_header: '', flow_cta: '' }
       step.input_type = 'none'
     }
-    if (type === 'transfer' || type === 'end' || type === 'condition') {
+    if (type === 'transfer' || type === 'end' || type === 'condition' || type === 'timing') {
       step.input_type = 'none'
     }
     if (type === 'condition') {
       step.input_config = { variable: '', operator: 'eq', value: '' }
+    }
+    if (type === 'timing') {
+      step.input_config = { schedule: defaultTimingSchedule() }
     }
   }
   formData.value.steps.push(step)
@@ -659,6 +674,11 @@ function onChangeStepType(stepIndex: number, newType: string) {
   }
   if (newType === 'condition') {
     actual.input_config = { variable: '', operator: 'eq', value: '' }
+    actual.input_type = 'none'
+    actual.conditional_next = {}
+  }
+  if (newType === 'timing') {
+    actual.input_config = { schedule: defaultTimingSchedule() }
     actual.input_type = 'none'
     actual.conditional_next = {}
   }
@@ -1537,7 +1557,7 @@ function confirmCancel() {
                 <Input v-model="selectedStep.step_name" :placeholder="$t('flowBuilder.stepNamePlaceholder')" class="h-8" />
                 <p class="text-xs text-muted-foreground">Internal identifier; referenced by edges. Avoid renaming after connecting steps.</p>
               </div>
-              <div v-if="selectedStep.message_type !== 'end' && selectedStep.message_type !== 'condition' && selectedStep.message_type !== 'transfer'" class="space-y-1.5">
+              <div v-if="selectedStep.message_type !== 'end' && selectedStep.message_type !== 'condition' && selectedStep.message_type !== 'timing' && selectedStep.message_type !== 'transfer'" class="space-y-1.5">
                 <Label class="text-xs">{{ $t('flowBuilder.storeResponseAs') }}</Label>
                 <Input v-model="selectedStep.store_as" :placeholder="$t('flowBuilder.variableNamePlaceholder')" class="h-8" />
                 <p class="text-xs text-muted-foreground">{{ $t('flowBuilder.storeResponseHint') }}</p>
@@ -1785,6 +1805,42 @@ function confirmCancel() {
                   </div>
                 </template>
 
+                <!-- Timing Configuration -->
+                <template v-if="selectedStep.message_type === 'timing'">
+                  <div class="space-y-2">
+                    <Label class="text-xs">Business hours</Label>
+                    <div
+                      v-for="(day, idx) in (selectedStep.input_config?.schedule as any[]) || []"
+                      :key="day.day"
+                      class="flex items-center gap-2"
+                    >
+                      <Switch
+                        :checked="!!day.enabled"
+                        @update:checked="(v) => { if (selectedStep && selectedStep.input_config) { const sched = [...((selectedStep.input_config.schedule as any[]) || [])]; sched[idx] = { ...sched[idx], enabled: v }; selectedStep.input_config = { ...selectedStep.input_config, schedule: sched } } }"
+                      />
+                      <span class="text-xs w-20 capitalize">{{ day.day }}</span>
+                      <Input
+                        :model-value="day.start_time || '09:00'"
+                        type="time"
+                        :disabled="!day.enabled"
+                        class="h-7 text-xs flex-1"
+                        @update:model-value="(v) => { if (selectedStep && selectedStep.input_config) { const sched = [...((selectedStep.input_config.schedule as any[]) || [])]; sched[idx] = { ...sched[idx], start_time: v }; selectedStep.input_config = { ...selectedStep.input_config, schedule: sched } } }"
+                      />
+                      <span class="text-xs">–</span>
+                      <Input
+                        :model-value="day.end_time || '18:00'"
+                        type="time"
+                        :disabled="!day.enabled"
+                        class="h-7 text-xs flex-1"
+                        @update:model-value="(v) => { if (selectedStep && selectedStep.input_config) { const sched = [...((selectedStep.input_config.schedule as any[]) || [])]; sched[idx] = { ...sched[idx], end_time: v }; selectedStep.input_config = { ...selectedStep.input_config, schedule: sched } } }"
+                      />
+                    </div>
+                    <p class="text-xs text-muted-foreground">
+                      Connect the Open / Closed handles to route based on whether the inbound arrives within business hours.
+                    </p>
+                  </div>
+                </template>
+
                 <!-- Transfer Configuration -->
                 <template v-if="selectedStep.message_type === 'transfer'">
                   <div class="space-y-3">
@@ -1815,10 +1871,10 @@ function confirmCancel() {
               </CollapsibleContent>
             </Collapsible>
 
-            <Separator v-if="selectedStep.message_type !== 'transfer' && selectedStep.message_type !== 'end'" />
+            <Separator v-if="selectedStep.message_type !== 'transfer' && selectedStep.message_type !== 'end' && selectedStep.message_type !== 'condition' && selectedStep.message_type !== 'timing'" />
 
             <!-- Input Configuration (not for transfer) -->
-            <Collapsible v-if="selectedStep.message_type !== 'transfer' && selectedStep.message_type !== 'end'" v-model:open="inputOpen">
+            <Collapsible v-if="selectedStep.message_type !== 'transfer' && selectedStep.message_type !== 'end' && selectedStep.message_type !== 'condition' && selectedStep.message_type !== 'timing'" v-model:open="inputOpen">
               <CollapsibleTrigger class="flex items-center justify-between w-full py-1 text-sm font-medium">
                 {{ $t('flowBuilder.input') }}
                 <component :is="inputOpen ? ChevronDown : ChevronRight" class="h-4 w-4" />
@@ -1853,10 +1909,10 @@ function confirmCancel() {
               </CollapsibleContent>
             </Collapsible>
 
-            <Separator v-if="selectedStep.message_type !== 'transfer' && selectedStep.message_type !== 'end'" />
+            <Separator v-if="selectedStep.message_type !== 'transfer' && selectedStep.message_type !== 'end' && selectedStep.message_type !== 'condition' && selectedStep.message_type !== 'timing'" />
 
             <!-- Validation (not for transfer) -->
-            <Collapsible v-if="selectedStep.message_type !== 'transfer' && selectedStep.message_type !== 'end'" v-model:open="validationOpen">
+            <Collapsible v-if="selectedStep.message_type !== 'transfer' && selectedStep.message_type !== 'end' && selectedStep.message_type !== 'condition' && selectedStep.message_type !== 'timing'" v-model:open="validationOpen">
               <CollapsibleTrigger class="flex items-center justify-between w-full py-1 text-sm font-medium">
                 {{ $t('flowBuilder.validation') }}
                 <component :is="validationOpen ? ChevronDown : ChevronRight" class="h-4 w-4" />
@@ -1888,10 +1944,10 @@ function confirmCancel() {
               </CollapsibleContent>
             </Collapsible>
 
-            <Separator v-if="selectedStep.message_type !== 'transfer' && selectedStep.message_type !== 'end'" />
+            <Separator v-if="selectedStep.message_type !== 'transfer' && selectedStep.message_type !== 'end' && selectedStep.message_type !== 'condition' && selectedStep.message_type !== 'timing'" />
 
             <!-- Advanced (not for transfer) -->
-            <Collapsible v-if="selectedStep.message_type !== 'transfer' && selectedStep.message_type !== 'end'" v-model:open="advancedOpen">
+            <Collapsible v-if="selectedStep.message_type !== 'transfer' && selectedStep.message_type !== 'end' && selectedStep.message_type !== 'condition' && selectedStep.message_type !== 'timing'" v-model:open="advancedOpen">
               <CollapsibleTrigger class="flex items-center justify-between w-full py-1 text-sm font-medium">
                 {{ $t('flowBuilder.advanced') }}
                 <component :is="advancedOpen ? ChevronDown : ChevronRight" class="h-4 w-4" />
