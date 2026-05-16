@@ -416,6 +416,63 @@ func newAPICallFlow(t *testing.T, app *App, org *models.Organization, account *m
 	return flow
 }
 
+// TestRunChatGraph_APICall_MessageTemplateSendsAfter2xx verifies the
+// optional message_template path: on 2xx, after response_mapping
+// populates SessionData, the templated message is rendered and sent.
+// This is the path the converter uses to collapse v1 api_fetch (which
+// bundled fetch + send) onto a single v2 api_call node.
+func TestRunChatGraph_APICall_MessageTemplateSendsAfter2xx(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(map[string]any{
+			"data": map[string]any{"id": "cust-42"},
+		})
+	}))
+	defer server.Close()
+
+	app, org, account, contact, session := newGraphTestFixtures(t)
+	flow := &models.ChatbotFlow{
+		BaseModel:       models.BaseModel{ID: uuid.New()},
+		OrganizationID:  org.ID,
+		WhatsAppAccount: account.Name,
+		Name:            "api-with-message",
+		IsEnabled:       true,
+		Graph: models.JSONB{
+			"version":    2,
+			"entry_node": "api",
+			"nodes": []any{
+				map[string]any{"id": "api", "type": "api_call", "label": "fetch", "config": map[string]any{
+					"url":              server.URL,
+					"method":           "GET",
+					"response_mapping": map[string]any{"customer_id": "data.id"},
+					"message_template": "Hello {{customer_id}}!",
+				}},
+				map[string]any{"id": "end", "type": "end"},
+			},
+			"edges": []any{
+				map[string]any{"from": "api", "to": "end", "condition": "http:2xx"},
+			},
+		},
+	}
+	require.NoError(t, app.DB.Create(flow).Error)
+
+	require.NoError(t, app.runChatGraph(account, contact, session, flow, "start", ""))
+	require.NoError(t, app.DB.First(session, session.ID).Error)
+	assert.Equal(t, models.SessionStatusCompleted, session.Status)
+	assert.Equal(t, "cust-42", session.SessionData["customer_id"])
+
+	// Verify the rendered message was logged on the session.
+	var msgs []models.ChatbotSessionMessage
+	require.NoError(t, app.DB.Where("session_id = ? AND direction = ?", session.ID, models.DirectionOutgoing).Find(&msgs).Error)
+	rendered := ""
+	for _, m := range msgs {
+		if m.Message == "Hello cust-42!" {
+			rendered = m.Message
+		}
+	}
+	assert.Equal(t, "Hello cust-42!", rendered, "message_template should render with response_mapping vars and be logged")
+}
+
 // TestRunChatGraph_APICall_2xxRoutesAndMapsResponse verifies the 2xx
 // branch fires AND response_mapping pulls fields into SessionData.
 func TestRunChatGraph_APICall_2xxRoutesAndMapsResponse(t *testing.T) {

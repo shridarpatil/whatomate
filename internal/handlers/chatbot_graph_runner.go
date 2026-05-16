@@ -329,7 +329,12 @@ func (a *App) handleChatPromptInvalid(node *ChatNode, ctx *chatNodeCtx) (nodeOut
 //	  "method":  "POST",
 //	  "headers": { "Authorization": "Bearer {{token}}" },
 //	  "body":    "{\"phone\":\"{{phone_number}}\"}",
-//	  "response_mapping": { "customer_id": "data.id", "status": "data.status" }
+//	  "response_mapping": { "customer_id": "data.id", "status": "data.status" },
+//	  // Optional. If set, a 2xx response renders this template against
+//	  // SessionData (post-response_mapping) and sends it to the user.
+//	  // Lets the same node act as v1's "fetch + send templated message"
+//	  // pattern without forcing authors to chain a separate message node.
+//	  "message_template": "Hello {{customer_id}}!"
 //	}
 func (a *App) execChatAPICall(node *ChatNode, ctx *chatNodeCtx) (nodeOutcome, error) {
 	cfgJSONB := models.JSONB(node.Config)
@@ -364,6 +369,22 @@ func (a *App) execChatAPICall(node *ChatNode, ctx *chatNodeCtx) (nodeOutcome, er
 			}
 			extracted := extractResponseMapping(jsonResp, mappingStrings)
 			maps.Copy(sessionData, extracted)
+		}
+	}
+
+	// Optionally render and send a message after the fetch. Mirrors v1
+	// api_fetch's bundled "fetch + send" behavior so the converter can
+	// keep collapsing api_fetch steps onto a single api_call node.
+	if tmpl := stringFromConfig(node.Config, "message_template"); tmpl != "" {
+		rendered := processTemplate(tmpl, sessionData)
+		if rendered != "" {
+			if err := a.sendAndSaveTextMessage(ctx.account, ctx.contact, rendered); err != nil {
+				a.Log.Error("api_call node failed to send message_template",
+					"node", node.ID, "session", ctx.session.ID, "error", err)
+				// Still advance via http:2xx — the data fetch succeeded.
+			} else {
+				a.logSessionMessage(ctx.session.ID, models.DirectionOutgoing, rendered, node.ID)
+			}
 		}
 	}
 
