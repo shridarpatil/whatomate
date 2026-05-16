@@ -1,6 +1,9 @@
 package handlers
 
 import (
+	"encoding/json"
+	"net/http"
+	"net/http/httptest"
 	"testing"
 	"time"
 
@@ -370,6 +373,117 @@ func TestRunChatGraph_Prompt_MaxRetriesRoutesToEdge(t *testing.T) {
 	require.NoError(t, app.runChatGraph(account, contact, session, flow, "y", ""))
 	require.NoError(t, app.DB.First(session, session.ID).Error)
 	assert.Equal(t, models.SessionStatusCompleted, session.Status)
+}
+
+// newAPICallFlow builds a three-node graph (api_call → message → end)
+// where the api_call's outgoing edges route to differently-labelled
+// message nodes for 2xx vs non-2xx, making it easy to assert which
+// branch ran.
+func newAPICallFlow(t *testing.T, app *App, org *models.Organization, account *models.WhatsAppAccount, apiURL string, mapping map[string]any) *models.ChatbotFlow {
+	t.Helper()
+	cfg := map[string]any{
+		"url":    apiURL,
+		"method": "GET",
+	}
+	if mapping != nil {
+		cfg["response_mapping"] = mapping
+	}
+	flow := &models.ChatbotFlow{
+		BaseModel:       models.BaseModel{ID: uuid.New()},
+		OrganizationID:  org.ID,
+		WhatsAppAccount: account.Name,
+		Name:            "api-call-flow",
+		IsEnabled:       true,
+		Graph: models.JSONB{
+			"version":    2,
+			"entry_node": "api",
+			"nodes": []any{
+				map[string]any{"id": "api", "type": "api_call", "label": "fetch", "config": cfg},
+				map[string]any{"id": "ok", "type": "message", "label": "success", "config": map[string]any{"message": "ok"}},
+				map[string]any{"id": "bad", "type": "message", "label": "error", "config": map[string]any{"message": "boom"}},
+				map[string]any{"id": "end", "type": "end", "label": "done"},
+			},
+			"edges": []any{
+				map[string]any{"from": "api", "to": "ok", "condition": "http:2xx"},
+				map[string]any{"from": "api", "to": "bad", "condition": "http:non2xx"},
+				map[string]any{"from": "ok", "to": "end", "condition": "default"},
+				map[string]any{"from": "bad", "to": "end", "condition": "default"},
+			},
+		},
+	}
+	require.NoError(t, app.DB.Create(flow).Error)
+	return flow
+}
+
+// TestRunChatGraph_APICall_2xxRoutesAndMapsResponse verifies the 2xx
+// branch fires AND response_mapping pulls fields into SessionData.
+func TestRunChatGraph_APICall_2xxRoutesAndMapsResponse(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(map[string]any{
+			"data": map[string]any{"id": "cust-42", "status": "active"},
+		})
+	}))
+	defer server.Close()
+
+	app, org, account, contact, session := newGraphTestFixtures(t)
+	flow := newAPICallFlow(t, app, org, account, server.URL, map[string]any{
+		"customer_id": "data.id",
+		"status":      "data.status",
+	})
+
+	require.NoError(t, app.runChatGraph(account, contact, session, flow, "start", ""))
+	require.NoError(t, app.DB.First(session, session.ID).Error)
+	assert.Equal(t, models.SessionStatusCompleted, session.Status)
+	assert.Equal(t, "cust-42", session.SessionData["customer_id"])
+	assert.Equal(t, "active", session.SessionData["status"])
+
+	path := chatGraphPath(t, session)
+	require.GreaterOrEqual(t, len(path), 2)
+	assert.Equal(t, "api", path[0]["node"])
+	assert.Equal(t, "http:2xx", path[0]["outcome"])
+	assert.Equal(t, "ok", path[1]["node"], "should advance via http:2xx edge to success branch")
+}
+
+// TestRunChatGraph_APICall_Non2xxRoutesToErrorBranch verifies the
+// http:non2xx outcome.
+func TestRunChatGraph_APICall_Non2xxRoutesToErrorBranch(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusInternalServerError)
+	}))
+	defer server.Close()
+
+	app, org, account, contact, session := newGraphTestFixtures(t)
+	flow := newAPICallFlow(t, app, org, account, server.URL, nil)
+
+	require.NoError(t, app.runChatGraph(account, contact, session, flow, "start", ""))
+	require.NoError(t, app.DB.First(session, session.ID).Error)
+	assert.Equal(t, models.SessionStatusCompleted, session.Status)
+
+	path := chatGraphPath(t, session)
+	require.GreaterOrEqual(t, len(path), 2)
+	assert.Equal(t, "api", path[0]["node"])
+	assert.Equal(t, "http:non2xx", path[0]["outcome"])
+	assert.Equal(t, "bad", path[1]["node"], "should advance via http:non2xx edge to error branch")
+}
+
+// TestRunChatGraph_APICall_NetworkErrorRoutesNon2xx verifies that a
+// connection failure (server closed) maps to http:non2xx rather than
+// returning an error up to the dispatcher.
+func TestRunChatGraph_APICall_NetworkErrorRoutesNon2xx(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(_ http.ResponseWriter, _ *http.Request) {}))
+	url := server.URL
+	server.Close() // shut it down so the request fails
+
+	app, org, account, contact, session := newGraphTestFixtures(t)
+	flow := newAPICallFlow(t, app, org, account, url, nil)
+
+	require.NoError(t, app.runChatGraph(account, contact, session, flow, "start", ""))
+	require.NoError(t, app.DB.First(session, session.ID).Error)
+
+	path := chatGraphPath(t, session)
+	require.GreaterOrEqual(t, len(path), 1)
+	assert.Equal(t, "http:non2xx", path[0]["outcome"])
 }
 
 // TestRunChatGraph_Prompt_NoRegexAcceptsAnything verifies the executor

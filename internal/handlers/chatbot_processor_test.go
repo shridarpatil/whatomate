@@ -33,9 +33,10 @@ func newProcessorTestApp(t *testing.T) *App {
 	t.Cleanup(waServer.Close)
 
 	app := &App{
-		DB:       db,
-		Log:      log,
-		WhatsApp: whatsapp.NewWithBaseURL(log, waServer.URL),
+		DB:         db,
+		Log:        log,
+		WhatsApp:   whatsapp.NewWithBaseURL(log, waServer.URL),
+		HTTPClient: &http.Client{Timeout: 5 * time.Second},
 	}
 	if rdb := testutil.SetupTestRedis(t); rdb != nil {
 		app.Redis = rdb

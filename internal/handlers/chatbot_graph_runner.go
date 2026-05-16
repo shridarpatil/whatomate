@@ -1,8 +1,10 @@
 package handlers
 
 import (
+	"encoding/json"
 	"errors"
 	"fmt"
+	"maps"
 	"regexp"
 	"time"
 
@@ -133,6 +135,8 @@ func (a *App) executeChatNode(node *ChatNode, ctx *chatNodeCtx) (nodeOutcome, er
 		return a.execChatButtons(node, ctx)
 	case ChatNodePrompt:
 		return a.execChatPrompt(node, ctx)
+	case ChatNodeAPICall:
+		return a.execChatAPICall(node, ctx)
 	case ChatNodeEnd:
 		return a.execChatEnd(node, ctx)
 	default:
@@ -265,6 +269,64 @@ func (a *App) handleChatPromptInvalid(node *ChatNode, ctx *chatNodeCtx) (nodeOut
 	}
 	a.logSessionMessage(ctx.session.ID, models.DirectionOutgoing, errorMsg, node.ID)
 	return nodeOutcome{yield: true}, nil
+}
+
+// execChatAPICall fires an HTTP request defined in node.Config and routes
+// via "http:2xx" / "http:non2xx" outcomes. Mirrors fetchApiResponse's
+// approach to template interpolation (seeds {{phone_number}}) and
+// response_mapping (extracted keys are merged into SessionData so later
+// nodes can reference them through processTemplate).
+//
+// Non-blocking — the runner immediately advances via resolveEdge after
+// this returns. Network errors are mapped to "http:non2xx" so the graph
+// can route to a fallback path; logged for visibility.
+//
+// Config:
+//
+//	{
+//	  "url":     "https://api.example.com/lookup?phone={{phone_number}}",
+//	  "method":  "POST",
+//	  "headers": { "Authorization": "Bearer {{token}}" },
+//	  "body":    "{\"phone\":\"{{phone_number}}\"}",
+//	  "response_mapping": { "customer_id": "data.id", "status": "data.status" }
+//	}
+func (a *App) execChatAPICall(node *ChatNode, ctx *chatNodeCtx) (nodeOutcome, error) {
+	cfgJSONB := models.JSONB(node.Config)
+
+	if ctx.session.SessionData == nil {
+		ctx.session.SessionData = models.JSONB{}
+	}
+	sessionData := ctx.session.SessionData
+	sessionData["phone_number"] = ctx.session.PhoneNumber
+
+	replaceVar := func(s string) string { return processTemplate(s, sessionData) }
+	respBody, statusCode, err := a.executeConfiguredAPI(cfgJSONB, replaceVar)
+	if err != nil {
+		a.Log.Error("api_call node request failed",
+			"node", node.ID, "session", ctx.session.ID, "error", err)
+		return nodeOutcome{outcome: "http:non2xx"}, nil
+	}
+
+	if statusCode < 200 || statusCode >= 300 {
+		return nodeOutcome{outcome: "http:non2xx"}, nil
+	}
+
+	// 2xx: optionally extract response_mapping → SessionData.
+	if mapping, ok := node.Config["response_mapping"].(map[string]any); ok && len(mapping) > 0 {
+		var jsonResp map[string]any
+		if err := json.Unmarshal(respBody, &jsonResp); err == nil {
+			mappingStrings := make(map[string]string, len(mapping))
+			for varName, path := range mapping {
+				if pathStr, ok := path.(string); ok {
+					mappingStrings[varName] = pathStr
+				}
+			}
+			extracted := extractResponseMapping(jsonResp, mappingStrings)
+			maps.Copy(sessionData, extracted)
+		}
+	}
+
+	return nodeOutcome{outcome: "http:2xx"}, nil
 }
 
 // execChatEnd optionally sends a final message and returns an empty
