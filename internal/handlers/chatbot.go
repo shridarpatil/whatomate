@@ -909,6 +909,7 @@ func (a *App) CreateChatbotFlow(r *fastglue.Request) error {
 		CompletionConfig  map[string]any    `json:"completion_config"`
 		PanelConfig       map[string]any    `json:"panel_config"`
 		CanvasLayout      map[string]any    `json:"canvas_layout"`
+		Graph             map[string]any    `json:"graph"`
 		Enabled           bool              `json:"enabled"`
 		Steps             []FlowStepRequest `json:"steps"`
 	}
@@ -937,6 +938,7 @@ func (a *App) CreateChatbotFlow(r *fastglue.Request) error {
 		CompletionConfig:  models.JSONB(req.CompletionConfig),
 		PanelConfig:       models.JSONB(req.PanelConfig),
 		CanvasLayout:      models.JSONB(req.CanvasLayout),
+		Graph:             models.JSONB(req.Graph),
 		IsEnabled:         req.Enabled,
 		CreatedByID:       &userID,
 		UpdatedByID:       &userID,
@@ -1066,6 +1068,7 @@ func (a *App) UpdateChatbotFlow(r *fastglue.Request) error {
 		CompletionConfig  map[string]any    `json:"completion_config"`
 		PanelConfig       map[string]any    `json:"panel_config"`
 		CanvasLayout      map[string]any    `json:"canvas_layout"`
+		Graph             map[string]any    `json:"graph"`
 		Enabled           *bool             `json:"enabled"`
 		Steps             []FlowStepRequest `json:"steps"`
 	}
@@ -1102,6 +1105,9 @@ func (a *App) UpdateChatbotFlow(r *fastglue.Request) error {
 	}
 	if req.CanvasLayout != nil {
 		flow.CanvasLayout = models.JSONB(req.CanvasLayout)
+	}
+	if req.Graph != nil {
+		flow.Graph = models.JSONB(req.Graph)
 	}
 	if req.Enabled != nil {
 		flow.IsEnabled = *req.Enabled

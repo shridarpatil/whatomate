@@ -161,7 +161,8 @@ type ChatbotFlow struct {
 	TimeoutMessage     string       `gorm:"type:text" json:"timeout_message"`
 	CancelKeywords     StringArray  `gorm:"type:jsonb" json:"cancel_keywords"`
 	PanelConfig        JSONB        `gorm:"type:jsonb;default:'{}'" json:"panel_config"`  // Contact info panel configuration
-	CanvasLayout       JSONB        `gorm:"type:jsonb;default:'{}'" json:"canvas_layout"` // Node positions for flow diagram
+	CanvasLayout       JSONB        `gorm:"type:jsonb;default:'{}'" json:"canvas_layout"` // Node positions for flow diagram (legacy v1)
+	Graph              JSONB        `gorm:"type:jsonb" json:"graph"`                      // v2 flow graph: {version, nodes, edges, entry_node}. nil = legacy Steps-based flow.
 	CreatedByID        *uuid.UUID   `gorm:"type:uuid" json:"created_by_id,omitempty"`
 	UpdatedByID        *uuid.UUID   `gorm:"type:uuid" json:"updated_by_id,omitempty"`
 
