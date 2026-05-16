@@ -424,9 +424,10 @@ onMounted(async () => {
     formData.value.steps = [{
       ...defaultStep,
       step_name: 'step_1',
+      label: defaultLabelForType('text'),
       step_order: 1,
-      message: 'What is your name?',
-      store_as: 'name'
+      message: '',
+      store_as: ''
     }]
     isLoading.value = false
   }
