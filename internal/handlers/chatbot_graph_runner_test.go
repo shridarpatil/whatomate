@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 	"time"
 
@@ -609,6 +610,93 @@ func TestRunChatGraph_Condition_NumericValueCoerced(t *testing.T) {
 	s := runConditionFlow(t, app, account, contact, session, flow, models.JSONB{"balance": float64(100)})
 	path := chatGraphPath(t, s)
 	assert.Equal(t, "true", path[0]["outcome"])
+}
+
+// TestEvaluateTimingSchedule covers the pure time-decision function so the
+// timing node's behavior is testable without depending on time.Now().
+func TestEvaluateTimingSchedule(t *testing.T) {
+	// Mon 2026-03-02 10:30 — inside a 09:00-18:00 Monday schedule.
+	now := time.Date(2026, 3, 2, 10, 30, 0, 0, time.UTC)
+	in := []any{
+		map[string]any{"day": "monday", "enabled": true, "start_time": "09:00", "end_time": "18:00"},
+	}
+	assert.Equal(t, "in_hours", evaluateTimingSchedule(now, in, nil))
+
+	// Before the window.
+	early := time.Date(2026, 3, 2, 8, 0, 0, 0, time.UTC)
+	assert.Equal(t, "out_of_hours", evaluateTimingSchedule(early, in, nil))
+
+	// After the window.
+	late := time.Date(2026, 3, 2, 19, 0, 0, 0, time.UTC)
+	assert.Equal(t, "out_of_hours", evaluateTimingSchedule(late, in, nil))
+
+	// Day disabled.
+	disabled := []any{
+		map[string]any{"day": "monday", "enabled": false},
+	}
+	assert.Equal(t, "out_of_hours", evaluateTimingSchedule(now, disabled, nil))
+
+	// Day not in schedule.
+	otherDay := []any{
+		map[string]any{"day": "sunday", "enabled": true, "start_time": "00:00", "end_time": "23:59"},
+	}
+	assert.Equal(t, "out_of_hours", evaluateTimingSchedule(now, otherDay, nil))
+
+	// Malformed time strings — graceful.
+	bad := []any{
+		map[string]any{"day": "monday", "enabled": true, "start_time": "x", "end_time": "y"},
+	}
+	assert.Equal(t, "out_of_hours", evaluateTimingSchedule(now, bad, nil))
+
+	// Empty schedule.
+	assert.Equal(t, "out_of_hours", evaluateTimingSchedule(now, nil, nil))
+}
+
+// TestRunChatGraph_Timing_RoutesByCurrentTime exercises the full executor
+// against a schedule that's guaranteed to cover "now" for the in_hours
+// case, and a fully-disabled schedule for the out_of_hours case.
+func TestRunChatGraph_Timing_RoutesByCurrentTime(t *testing.T) {
+	app, org, account, contact, session := newGraphTestFixtures(t)
+
+	// Today's weekday, 00:00-23:59 — always in hours regardless of when
+	// the test runs.
+	today := strings.ToLower(time.Now().Weekday().String())
+	flow := &models.ChatbotFlow{
+		BaseModel:       models.BaseModel{ID: uuid.New()},
+		OrganizationID:  org.ID,
+		WhatsAppAccount: account.Name,
+		Name:            "timing-flow",
+		IsEnabled:       true,
+		Graph: models.JSONB{
+			"version":    2,
+			"entry_node": "t1",
+			"nodes": []any{
+				map[string]any{"id": "t1", "type": "timing", "label": "biz hours", "config": map[string]any{
+					"schedule": []any{
+						map[string]any{"day": today, "enabled": true, "start_time": "00:00", "end_time": "23:59"},
+					},
+				}},
+				map[string]any{"id": "open", "type": "message", "config": map[string]any{"message": "We're open."}},
+				map[string]any{"id": "closed", "type": "message", "config": map[string]any{"message": "Closed."}},
+				map[string]any{"id": "end", "type": "end"},
+			},
+			"edges": []any{
+				map[string]any{"from": "t1", "to": "open", "condition": "in_hours"},
+				map[string]any{"from": "t1", "to": "closed", "condition": "out_of_hours"},
+				map[string]any{"from": "open", "to": "end", "condition": "default"},
+				map[string]any{"from": "closed", "to": "end", "condition": "default"},
+			},
+		},
+	}
+	require.NoError(t, app.DB.Create(flow).Error)
+
+	require.NoError(t, app.runChatGraph(account, contact, session, flow, "start", ""))
+	require.NoError(t, app.DB.First(session, session.ID).Error)
+
+	path := chatGraphPath(t, session)
+	require.GreaterOrEqual(t, len(path), 2)
+	assert.Equal(t, "in_hours", path[0]["outcome"])
+	assert.Equal(t, "open", path[1]["node"])
 }
 
 // TestRunChatGraph_Prompt_NoRegexAcceptsAnything verifies the executor

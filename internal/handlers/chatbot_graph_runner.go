@@ -140,6 +140,8 @@ func (a *App) executeChatNode(node *ChatNode, ctx *chatNodeCtx) (nodeOutcome, er
 		return a.execChatAPICall(node, ctx)
 	case ChatNodeCondition:
 		return a.execChatCondition(node, ctx)
+	case ChatNodeTiming:
+		return a.execChatTiming(node, ctx)
 	case ChatNodeEnd:
 		return a.execChatEnd(node, ctx)
 	default:
@@ -426,6 +428,74 @@ func lookupSessionVar(data models.JSONB, key string) (string, bool) {
 		return "", true
 	}
 	return fmt.Sprintf("%v", raw), true
+}
+
+// execChatTiming routes "in_hours" / "out_of_hours" based on a per-day
+// schedule. Mirrors IVR's executeTiming (internal/calling/ivr.go:539).
+// Non-blocking; no message sent.
+//
+// Config:
+//
+//	{
+//	  "schedule": [
+//	    { "day": "monday", "enabled": true,  "start_time": "09:00", "end_time": "18:00" },
+//	    { "day": "sunday", "enabled": false }
+//	  ]
+//	}
+//
+// Days not listed in the schedule are treated as out_of_hours, matching
+// IVR's behavior.
+func (a *App) execChatTiming(node *ChatNode, ctx *chatNodeCtx) (nodeOutcome, error) {
+	rawSchedule, _ := node.Config["schedule"].([]any)
+	outcome := evaluateTimingSchedule(time.Now(), rawSchedule, a.Log)
+	_ = ctx // ctx unused — included for symmetry with other executors
+	return nodeOutcome{outcome: outcome}, nil
+}
+
+// evaluateTimingSchedule is the pure decision function, factored out for
+// unit-testing with a fixed clock. Returns "in_hours" or "out_of_hours".
+func evaluateTimingSchedule(now time.Time, schedule []any, log scheduleLogger) string {
+	dayName := strings.ToLower(now.Weekday().String())
+	for _, item := range schedule {
+		entry, ok := item.(map[string]any)
+		if !ok {
+			continue
+		}
+		day, _ := entry["day"].(string)
+		if strings.ToLower(day) != dayName {
+			continue
+		}
+		enabled, _ := entry["enabled"].(bool)
+		if !enabled {
+			return "out_of_hours"
+		}
+		startStr, _ := entry["start_time"].(string)
+		endStr, _ := entry["end_time"].(string)
+		startTime, err1 := time.Parse("15:04", startStr)
+		endTime, err2 := time.Parse("15:04", endStr)
+		if err1 != nil || err2 != nil {
+			if log != nil {
+				log.Warn("timing node has invalid time format",
+					"start", startStr, "end", endStr)
+			}
+			return "out_of_hours"
+		}
+		nowMinutes := now.Hour()*60 + now.Minute()
+		startMinutes := startTime.Hour()*60 + startTime.Minute()
+		endMinutes := endTime.Hour()*60 + endTime.Minute()
+		if nowMinutes >= startMinutes && nowMinutes < endMinutes {
+			return "in_hours"
+		}
+		return "out_of_hours"
+	}
+	// Day not configured — treat as out of hours.
+	return "out_of_hours"
+}
+
+// scheduleLogger is the subset of the app logger evaluateTimingSchedule
+// needs. Defined locally to avoid pulling logf into the test imports.
+type scheduleLogger interface {
+	Warn(msg string, args ...any)
 }
 
 // execChatEnd optionally sends a final message and returns an empty
