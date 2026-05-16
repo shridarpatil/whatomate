@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"maps"
 	"regexp"
+	"strings"
 	"time"
 
 	"github.com/shridarpatil/whatomate/internal/models"
@@ -137,6 +138,8 @@ func (a *App) executeChatNode(node *ChatNode, ctx *chatNodeCtx) (nodeOutcome, er
 		return a.execChatPrompt(node, ctx)
 	case ChatNodeAPICall:
 		return a.execChatAPICall(node, ctx)
+	case ChatNodeCondition:
+		return a.execChatCondition(node, ctx)
 	case ChatNodeEnd:
 		return a.execChatEnd(node, ctx)
 	default:
@@ -327,6 +330,102 @@ func (a *App) execChatAPICall(node *ChatNode, ctx *chatNodeCtx) (nodeOutcome, er
 	}
 
 	return nodeOutcome{outcome: "http:2xx"}, nil
+}
+
+// execChatCondition is a pure-branch node: reads a value out of
+// SessionData, compares against config.value using config.operator, and
+// returns outcome "true" or "false" so an edge can route accordingly.
+// No message is sent.
+//
+// Operators:
+//   - "eq" / "equals"          : string equality after coercion
+//   - "neq" / "not_equals"     : negation of eq
+//   - "contains"               : substring match
+//   - "starts_with"            : prefix match
+//   - "empty"                  : variable missing OR coerces to empty string
+//   - "not_empty" / "exists"   : variable present and non-empty
+//
+// Config:
+//
+//	{
+//	  "variable": "customer_status",
+//	  "operator": "eq",
+//	  "value":    "active"
+//	}
+//
+// A missing or misconfigured node logs a warning and returns "false" so
+// downstream "default" / "false" edges still have something to route on.
+func (a *App) execChatCondition(node *ChatNode, ctx *chatNodeCtx) (nodeOutcome, error) {
+	varName := stringFromConfig(node.Config, "variable", "var")
+	if varName == "" {
+		a.Log.Warn("condition node missing variable",
+			"node", node.ID, "session", ctx.session.ID)
+		return nodeOutcome{outcome: "false"}, nil
+	}
+
+	op := stringFromConfig(node.Config, "operator", "op")
+	if op == "" {
+		op = "eq"
+	}
+	target := stringFromConfig(node.Config, "value")
+
+	actual, present := lookupSessionVar(ctx.session.SessionData, varName)
+
+	matched := false
+	switch op {
+	case "eq", "equals":
+		matched = present && actual == target
+	case "neq", "not_equals":
+		matched = !(present && actual == target)
+	case "contains":
+		matched = present && strings.Contains(actual, target)
+	case "starts_with":
+		matched = present && strings.HasPrefix(actual, target)
+	case "empty":
+		matched = !present || actual == ""
+	case "not_empty", "exists":
+		matched = present && actual != ""
+	default:
+		a.Log.Warn("condition node has unknown operator, defaulting to false",
+			"node", node.ID, "operator", op)
+	}
+
+	if matched {
+		return nodeOutcome{outcome: "true"}, nil
+	}
+	return nodeOutcome{outcome: "false"}, nil
+}
+
+// lookupSessionVar reads a value from SessionData and coerces it to a
+// string for comparison. Returns (value, present); present is true iff
+// the key exists, regardless of value.
+func lookupSessionVar(data models.JSONB, key string) (string, bool) {
+	if data == nil {
+		return "", false
+	}
+	raw, ok := data[key]
+	if !ok {
+		return "", false
+	}
+	switch v := raw.(type) {
+	case string:
+		return v, true
+	case float64:
+		// JSON numbers decode to float64; format without trailing .0 for
+		// integer-valued floats so "active=5" matches "5".
+		if v == float64(int64(v)) {
+			return fmt.Sprintf("%d", int64(v)), true
+		}
+		return fmt.Sprintf("%g", v), true
+	case bool:
+		if v {
+			return "true", true
+		}
+		return "false", true
+	case nil:
+		return "", true
+	}
+	return fmt.Sprintf("%v", raw), true
 }
 
 // execChatEnd optionally sends a final message and returns an empty
