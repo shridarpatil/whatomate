@@ -9,6 +9,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/expr-lang/expr"
 	"github.com/google/uuid"
 	"github.com/shridarpatil/whatomate/internal/models"
 )
@@ -419,7 +420,31 @@ func (a *App) execChatAPICall(node *ChatNode, ctx *chatNodeCtx) (nodeOutcome, er
 //
 // A missing or misconfigured node logs a warning and returns "false" so
 // downstream "default" / "false" edges still have something to route on.
+//
+// Free-form expression form (preferred):
+//
+//	{
+//	  "expression": "status == \"active\" and (tier == \"premium\" or amount > 100)"
+//	}
+//
+// The expression is evaluated by github.com/expr-lang/expr. SessionData
+// keys are available as top-level identifiers. Unknown identifiers
+// resolve to nil (so `status == "active"` evaluates false when status
+// isn't set, rather than throwing).
 func (a *App) execChatCondition(node *ChatNode, ctx *chatNodeCtx) (nodeOutcome, error) {
+	if expression := stringFromConfig(node.Config, "expression"); expression != "" {
+		matched, err := evaluateConditionExpression(expression, ctx.session.SessionData)
+		if err != nil {
+			a.Log.Warn("condition node expression failed",
+				"node", node.ID, "session", ctx.session.ID, "expression", expression, "error", err)
+			return nodeOutcome{outcome: "false"}, nil
+		}
+		if matched {
+			return nodeOutcome{outcome: "true"}, nil
+		}
+		return nodeOutcome{outcome: "false"}, nil
+	}
+
 	clauses := readConditionClauses(node.Config)
 	if len(clauses) == 0 {
 		a.Log.Warn("condition node has no clauses",
@@ -437,6 +462,37 @@ func (a *App) execChatCondition(node *ChatNode, ctx *chatNodeCtx) (nodeOutcome, 
 		return nodeOutcome{outcome: "true"}, nil
 	}
 	return nodeOutcome{outcome: "false"}, nil
+}
+
+// evaluateConditionExpression compiles + runs a boolean expression via
+// expr-lang/expr against SessionData. The result is coerced to bool —
+// non-bool truthy values count as true (matches expr's natural casting).
+func evaluateConditionExpression(expression string, data models.JSONB) (bool, error) {
+	env := make(map[string]any, len(data)+1)
+	maps.Copy(env, data)
+
+	program, err := expr.Compile(expression, expr.Env(env), expr.AllowUndefinedVariables())
+	if err != nil {
+		return false, fmt.Errorf("compile: %w", err)
+	}
+	out, err := expr.Run(program, env)
+	if err != nil {
+		return false, fmt.Errorf("run: %w", err)
+	}
+	switch v := out.(type) {
+	case bool:
+		return v, nil
+	case nil:
+		return false, nil
+	case string:
+		return v != "" && strings.ToLower(v) != "false", nil
+	case float64:
+		return v != 0, nil
+	case int:
+		return v != 0, nil
+	}
+	// Anything else (slices, maps) counts as truthy if non-nil.
+	return out != nil, nil
 }
 
 // readConditionClauses normalises both forms (compound array + legacy

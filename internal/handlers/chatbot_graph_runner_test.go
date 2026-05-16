@@ -691,6 +691,90 @@ func newConditionFlowMulti(t *testing.T, app *App, org *models.Organization, acc
 	return flow
 }
 
+// newConditionFlowExpr builds a condition flow whose config uses a
+// free-form expr-lang expression (preferred form).
+func newConditionFlowExpr(t *testing.T, app *App, org *models.Organization, account *models.WhatsAppAccount, expression string) *models.ChatbotFlow {
+	t.Helper()
+	flow := &models.ChatbotFlow{
+		BaseModel:       models.BaseModel{ID: uuid.New()},
+		OrganizationID:  org.ID,
+		WhatsAppAccount: account.Name,
+		Name:            "condition-expr",
+		IsEnabled:       true,
+		Graph: models.JSONB{
+			"version":    2,
+			"entry_node": "c1",
+			"nodes": []any{
+				map[string]any{"id": "c1", "type": "condition", "label": "check", "config": map[string]any{
+					"expression": expression,
+				}},
+				map[string]any{"id": "yes", "type": "message", "config": map[string]any{"message": "matched"}},
+				map[string]any{"id": "no", "type": "message", "config": map[string]any{"message": "not matched"}},
+				map[string]any{"id": "end", "type": "end"},
+			},
+			"edges": []any{
+				map[string]any{"from": "c1", "to": "yes", "condition": "true"},
+				map[string]any{"from": "c1", "to": "no", "condition": "false"},
+				map[string]any{"from": "yes", "to": "end", "condition": "default"},
+				map[string]any{"from": "no", "to": "end", "condition": "default"},
+			},
+		},
+	}
+	require.NoError(t, app.DB.Create(flow).Error)
+	return flow
+}
+
+func TestRunChatGraph_Condition_ExpressionAndOr(t *testing.T) {
+	app, org, account, contact, session := newGraphTestFixtures(t)
+	flow := newConditionFlowExpr(t, app, org, account, `status == "active" and (tier == "premium" or amount > 100)`)
+	s := runConditionFlow(t, app, account, contact, session, flow, models.JSONB{
+		"status": "active",
+		"tier":   "free",
+		"amount": float64(250),
+	})
+	path := chatGraphPath(t, s)
+	assert.Equal(t, "true", path[0]["outcome"], "premium-or-high-amount AND active should be true")
+}
+
+func TestRunChatGraph_Condition_ExpressionNot(t *testing.T) {
+	app, org, account, contact, session := newGraphTestFixtures(t)
+	flow := newConditionFlowExpr(t, app, org, account, `not banned and status == "active"`)
+	s := runConditionFlow(t, app, account, contact, session, flow, models.JSONB{
+		"banned": false,
+		"status": "active",
+	})
+	path := chatGraphPath(t, s)
+	assert.Equal(t, "true", path[0]["outcome"])
+}
+
+func TestRunChatGraph_Condition_ExpressionMissingVariableIsFalse(t *testing.T) {
+	app, org, account, contact, session := newGraphTestFixtures(t)
+	// Referencing an undefined variable is allowed (returns nil), and
+	// `== "x"` with nil evaluates false.
+	flow := newConditionFlowExpr(t, app, org, account, `never_set == "x"`)
+	s := runConditionFlow(t, app, account, contact, session, flow, nil)
+	path := chatGraphPath(t, s)
+	assert.Equal(t, "false", path[0]["outcome"])
+}
+
+func TestRunChatGraph_Condition_ExpressionSyntaxErrorIsFalse(t *testing.T) {
+	app, org, account, contact, session := newGraphTestFixtures(t)
+	flow := newConditionFlowExpr(t, app, org, account, `status ==`) // broken
+	s := runConditionFlow(t, app, account, contact, session, flow, models.JSONB{"status": "active"})
+	path := chatGraphPath(t, s)
+	assert.Equal(t, "false", path[0]["outcome"], "compile error should yield false, not error the inbound")
+}
+
+func TestRunChatGraph_Condition_ExpressionContainsString(t *testing.T) {
+	app, org, account, contact, session := newGraphTestFixtures(t)
+	// expr-lang provides string helpers — see
+	// https://expr-lang.org/docs/language-definition for the full list.
+	flow := newConditionFlowExpr(t, app, org, account, `subject contains "billing"`)
+	s := runConditionFlow(t, app, account, contact, session, flow, models.JSONB{"subject": "billing question"})
+	path := chatGraphPath(t, s)
+	assert.Equal(t, "true", path[0]["outcome"])
+}
+
 func TestRunChatGraph_Condition_AndAllMatch(t *testing.T) {
 	app, org, account, contact, session := newGraphTestFixtures(t)
 	flow := newConditionFlowMulti(t, app, org, account, "and", []any{
