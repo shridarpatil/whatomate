@@ -157,6 +157,9 @@ const wasV2Flow = ref(false)
 
 const whatsappFlows = ref<WhatsAppFlow[]>([])
 const teams = ref<Team[]>([])
+// Other flows in the same org for the goto_flow picker (excludes the
+// flow being edited so authors can't self-reference accidentally).
+const otherFlows = ref<{ id: string; name: string }[]>([])
 
 const selectedStepIndex = ref<number | null>(null)
 const showFlowSettings = ref(false)
@@ -415,7 +418,7 @@ watch(formData, () => {
 }, { deep: true })
 
 onMounted(async () => {
-  await Promise.all([fetchWhatsAppFlows(), fetchTeams()])
+  await Promise.all([fetchWhatsAppFlows(), fetchTeams(), fetchOtherFlows()])
 
   if (!isNewFlow.value && flowId.value) {
     await loadFlow(flowId.value)
@@ -448,6 +451,19 @@ async function fetchWhatsAppFlows() {
   } catch (error) {
     console.error('Failed to load WhatsApp flows:', error)
     whatsappFlows.value = []
+  }
+}
+
+async function fetchOtherFlows() {
+  try {
+    const response = await chatbotService.listFlows({ limit: 200 })
+    const data = response.data as any
+    const list = data.data?.flows ?? data.flows ?? []
+    otherFlows.value = list
+      .filter((f: any) => f.id && f.id !== flowId.value)
+      .map((f: any) => ({ id: f.id, name: f.name || f.Name || f.id }))
+  } catch {
+    otherFlows.value = []
   }
 }
 
@@ -557,6 +573,7 @@ const stepTypeLabels: Record<string, string> = {
   end: 'End',
   condition: 'Condition',
   timing: 'Timing',
+  goto_flow: 'Go to Flow',
 }
 
 const TIMING_DAYS = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'] as const
@@ -589,7 +606,7 @@ function addStep(type?: string) {
       step.input_config = { whatsapp_flow_id: '', flow_header: '', flow_cta: '' }
       step.input_type = 'none'
     }
-    if (type === 'transfer' || type === 'end' || type === 'condition' || type === 'timing') {
+    if (type === 'transfer' || type === 'end' || type === 'condition' || type === 'timing' || type === 'goto_flow') {
       step.input_type = 'none'
     }
     if (type === 'condition') {
@@ -597,6 +614,9 @@ function addStep(type?: string) {
     }
     if (type === 'timing') {
       step.input_config = { schedule: defaultTimingSchedule() }
+    }
+    if (type === 'goto_flow') {
+      step.input_config = { flow_id: '' }
     }
   }
   formData.value.steps.push(step)
@@ -682,6 +702,12 @@ function onChangeStepType(stepIndex: number, newType: string) {
     actual.input_config = { schedule: defaultTimingSchedule() }
     actual.input_type = 'none'
     actual.conditional_next = {}
+  }
+  if (newType === 'goto_flow') {
+    actual.input_config = { flow_id: '' }
+    actual.input_type = 'none'
+    actual.conditional_next = {}
+    actual.next_step = ''
   }
   if (newType === 'end') {
     actual.input_type = 'none'
@@ -1558,7 +1584,7 @@ function confirmCancel() {
                 <Input v-model="selectedStep.step_name" :placeholder="$t('flowBuilder.stepNamePlaceholder')" class="h-8" />
                 <p class="text-xs text-muted-foreground">Internal identifier; referenced by edges. Avoid renaming after connecting steps.</p>
               </div>
-              <div v-if="selectedStep.message_type !== 'end' && selectedStep.message_type !== 'condition' && selectedStep.message_type !== 'timing' && selectedStep.message_type !== 'transfer'" class="space-y-1.5">
+              <div v-if="selectedStep.message_type !== 'end' && selectedStep.message_type !== 'condition' && selectedStep.message_type !== 'timing' && selectedStep.message_type !== 'transfer' && selectedStep.message_type !== 'goto_flow'" class="space-y-1.5">
                 <Label class="text-xs">{{ $t('flowBuilder.storeResponseAs') }}</Label>
                 <Input v-model="selectedStep.store_as" :placeholder="$t('flowBuilder.variableNamePlaceholder')" class="h-8" />
                 <p class="text-xs text-muted-foreground">{{ $t('flowBuilder.storeResponseHint') }}</p>
@@ -1842,6 +1868,30 @@ function confirmCancel() {
                   </div>
                 </template>
 
+                <!-- Goto Flow Configuration -->
+                <template v-if="selectedStep.message_type === 'goto_flow'">
+                  <div class="space-y-2">
+                    <Label class="text-xs">Target flow</Label>
+                    <Select
+                      :model-value="(selectedStep.input_config?.flow_id as string) || ''"
+                      @update:model-value="(v) => { if (selectedStep) selectedStep.input_config = { ...selectedStep.input_config, flow_id: v } }"
+                    >
+                      <SelectTrigger class="h-8 text-xs">
+                        <SelectValue placeholder="Pick a flow" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem v-if="otherFlows.length === 0" value="_none" disabled>No other flows available</SelectItem>
+                        <SelectItem v-for="f in otherFlows" :key="f.id" :value="f.id">
+                          {{ f.name }}
+                        </SelectItem>
+                      </SelectContent>
+                    </Select>
+                    <p class="text-xs text-muted-foreground">
+                      Session variables carry forward to the target flow. The target must belong to the same WhatsApp account.
+                    </p>
+                  </div>
+                </template>
+
                 <!-- Transfer Configuration -->
                 <template v-if="selectedStep.message_type === 'transfer'">
                   <div class="space-y-3">
@@ -1872,10 +1922,10 @@ function confirmCancel() {
               </CollapsibleContent>
             </Collapsible>
 
-            <Separator v-if="selectedStep.message_type !== 'transfer' && selectedStep.message_type !== 'end' && selectedStep.message_type !== 'condition' && selectedStep.message_type !== 'timing'" />
+            <Separator v-if="selectedStep.message_type !== 'transfer' && selectedStep.message_type !== 'end' && selectedStep.message_type !== 'condition' && selectedStep.message_type !== 'timing' && selectedStep.message_type !== 'goto_flow'" />
 
             <!-- Input Configuration (not for transfer) -->
-            <Collapsible v-if="selectedStep.message_type !== 'transfer' && selectedStep.message_type !== 'end' && selectedStep.message_type !== 'condition' && selectedStep.message_type !== 'timing'" v-model:open="inputOpen">
+            <Collapsible v-if="selectedStep.message_type !== 'transfer' && selectedStep.message_type !== 'end' && selectedStep.message_type !== 'condition' && selectedStep.message_type !== 'timing' && selectedStep.message_type !== 'goto_flow'" v-model:open="inputOpen">
               <CollapsibleTrigger class="flex items-center justify-between w-full py-1 text-sm font-medium">
                 {{ $t('flowBuilder.input') }}
                 <component :is="inputOpen ? ChevronDown : ChevronRight" class="h-4 w-4" />
@@ -1910,10 +1960,10 @@ function confirmCancel() {
               </CollapsibleContent>
             </Collapsible>
 
-            <Separator v-if="selectedStep.message_type !== 'transfer' && selectedStep.message_type !== 'end' && selectedStep.message_type !== 'condition' && selectedStep.message_type !== 'timing'" />
+            <Separator v-if="selectedStep.message_type !== 'transfer' && selectedStep.message_type !== 'end' && selectedStep.message_type !== 'condition' && selectedStep.message_type !== 'timing' && selectedStep.message_type !== 'goto_flow'" />
 
             <!-- Validation (not for transfer) -->
-            <Collapsible v-if="selectedStep.message_type !== 'transfer' && selectedStep.message_type !== 'end' && selectedStep.message_type !== 'condition' && selectedStep.message_type !== 'timing'" v-model:open="validationOpen">
+            <Collapsible v-if="selectedStep.message_type !== 'transfer' && selectedStep.message_type !== 'end' && selectedStep.message_type !== 'condition' && selectedStep.message_type !== 'timing' && selectedStep.message_type !== 'goto_flow'" v-model:open="validationOpen">
               <CollapsibleTrigger class="flex items-center justify-between w-full py-1 text-sm font-medium">
                 {{ $t('flowBuilder.validation') }}
                 <component :is="validationOpen ? ChevronDown : ChevronRight" class="h-4 w-4" />
@@ -1945,10 +1995,10 @@ function confirmCancel() {
               </CollapsibleContent>
             </Collapsible>
 
-            <Separator v-if="selectedStep.message_type !== 'transfer' && selectedStep.message_type !== 'end' && selectedStep.message_type !== 'condition' && selectedStep.message_type !== 'timing'" />
+            <Separator v-if="selectedStep.message_type !== 'transfer' && selectedStep.message_type !== 'end' && selectedStep.message_type !== 'condition' && selectedStep.message_type !== 'timing' && selectedStep.message_type !== 'goto_flow'" />
 
             <!-- Advanced (not for transfer) -->
-            <Collapsible v-if="selectedStep.message_type !== 'transfer' && selectedStep.message_type !== 'end' && selectedStep.message_type !== 'condition' && selectedStep.message_type !== 'timing'" v-model:open="advancedOpen">
+            <Collapsible v-if="selectedStep.message_type !== 'transfer' && selectedStep.message_type !== 'end' && selectedStep.message_type !== 'condition' && selectedStep.message_type !== 'timing' && selectedStep.message_type !== 'goto_flow'" v-model:open="advancedOpen">
               <CollapsibleTrigger class="flex items-center justify-between w-full py-1 text-sm font-medium">
                 {{ $t('flowBuilder.advanced') }}
                 <component :is="advancedOpen ? ChevronDown : ChevronRight" class="h-4 w-4" />

@@ -18,6 +18,8 @@ const defaultLabels: Record<string, string> = {
   transfer: 'Transfer',
   end: 'End',
   condition: 'Condition',
+  timing: 'Timing',
+  goto_flow: 'Go to Flow',
 }
 
 function fallbackLabel(step: { message_type: string; step_name: string }): string {
@@ -86,7 +88,7 @@ export function stepsToNodesAndEdges(steps: FlowStep[], canvasLayout?: CanvasLay
   sorted.forEach((step, index) => {
     const nextSequentialStep = index < sorted.length - 1 ? sorted[index + 1].step_name : null
 
-    if (step.message_type === 'transfer' || step.message_type === 'end') {
+    if (step.message_type === 'transfer' || step.message_type === 'end' || step.message_type === 'goto_flow') {
       // Terminal node -- no outgoing edges
       return
     }
@@ -176,7 +178,7 @@ export function extractCanvasLayout(nodes: Node[]): CanvasLayout {
 // the backend executor implements today. Anything outside this set forces
 // the flow to keep using the legacy steps[] wire format until the matching
 // node type lands.
-const V2_SUPPORTED_MESSAGE_TYPES = new Set(['text', 'buttons', 'end', 'condition', 'timing'])
+const V2_SUPPORTED_MESSAGE_TYPES = new Set(['text', 'buttons', 'end', 'condition', 'timing', 'goto_flow'])
 
 function messageTypeToNodeType(messageType: string): ChatNodeType | null {
   switch (messageType) {
@@ -190,6 +192,8 @@ function messageTypeToNodeType(messageType: string): ChatNodeType | null {
       return 'condition'
     case 'timing':
       return 'timing'
+    case 'goto_flow':
+      return 'goto_flow'
     default:
       return null
   }
@@ -207,6 +211,8 @@ function nodeTypeToMessageType(nodeType: string): string | null {
       return 'condition'
     case 'timing':
       return 'timing'
+    case 'goto_flow':
+      return 'goto_flow'
     default:
       return null
   }
@@ -264,6 +270,11 @@ export function stepsToGraph(steps: StepInput[], canvasLayout?: CanvasLayout): C
       // backend evaluateTimingSchedule can read it as-is.
       const ic = step.input_config || {}
       config.schedule = (ic.schedule as any[]) || []
+    } else if (nodeType === 'goto_flow') {
+      // Target flow id stored on input_config.flow_id. Backend
+      // execChatGotoFlow validates org + account scope at runtime.
+      const ic = step.input_config || {}
+      config.flow_id = (ic.flow_id as string) || ''
     }
 
     return {
@@ -419,6 +430,10 @@ export function graphToSteps(graph: ChatFlowGraph): { steps: FlowStep[]; canvas_
     } else if (node.type === 'timing') {
       step.input_config = {
         schedule: (cfg.schedule as any[]) || [],
+      }
+    } else if (node.type === 'goto_flow') {
+      step.input_config = {
+        flow_id: (cfg.flow_id as string) || '',
       }
     }
 
