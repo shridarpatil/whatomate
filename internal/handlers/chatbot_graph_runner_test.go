@@ -872,6 +872,96 @@ func TestRunChatGraph_AIResponse_MissingAPIKeyFallsThrough(t *testing.T) {
 	assert.Equal(t, models.SessionStatusCompleted, session.Status)
 }
 
+// newTransferFlow builds a single-node graph (transfer) with caller-
+// supplied config. Transfer is terminal so no outgoing edges.
+func newTransferFlow(t *testing.T, app *App, org *models.Organization, account *models.WhatsAppAccount, cfg map[string]any) *models.ChatbotFlow {
+	t.Helper()
+	flow := &models.ChatbotFlow{
+		BaseModel:       models.BaseModel{ID: uuid.New()},
+		OrganizationID:  org.ID,
+		WhatsAppAccount: account.Name,
+		Name:            "transfer-flow",
+		IsEnabled:       true,
+		Graph: models.JSONB{
+			"version":    2,
+			"entry_node": "t1",
+			"nodes": []any{
+				map[string]any{"id": "t1", "type": "transfer", "label": "handoff", "config": cfg},
+			},
+			"edges": []any{},
+		},
+	}
+	require.NoError(t, app.DB.Create(flow).Error)
+	return flow
+}
+
+// TestRunChatGraph_Transfer_ToQueueCompletesSession verifies that a
+// transfer node with no team_id creates a queue transfer and marks the
+// session completed.
+func TestRunChatGraph_Transfer_ToQueueCompletesSession(t *testing.T) {
+	app, org, account, contact, session := newGraphTestFixtures(t)
+	flow := newTransferFlow(t, app, org, account, map[string]any{
+		"body":  "Connecting you to a human.",
+		"notes": "context",
+	})
+
+	require.NoError(t, app.runChatGraph(account, contact, session, flow, "help", ""))
+	require.NoError(t, app.DB.First(session, session.ID).Error)
+	assert.Equal(t, models.SessionStatusCompleted, session.Status)
+	require.NotNil(t, session.CompletedAt)
+
+	var transfer models.AgentTransfer
+	err := app.DB.Where("organization_id = ? AND contact_id = ? AND source = ?",
+		org.ID, contact.ID, models.TransferSourceFlow).First(&transfer).Error
+	require.NoError(t, err, "transfer row should be created")
+	assert.Equal(t, models.TransferStatusActive, transfer.Status)
+	assert.Nil(t, transfer.TeamID, "no team_id config → queue transfer")
+}
+
+// TestRunChatGraph_Transfer_ToSpecificTeam exercises the team path.
+func TestRunChatGraph_Transfer_ToSpecificTeam(t *testing.T) {
+	app, org, account, contact, session := newGraphTestFixtures(t)
+	team := &models.Team{
+		BaseModel:          models.BaseModel{ID: uuid.New()},
+		OrganizationID:     org.ID,
+		Name:               "Test Team " + uuid.New().String()[:8],
+		IsActive:           true,
+		AssignmentStrategy: models.AssignmentStrategyRoundRobin,
+	}
+	require.NoError(t, app.DB.Create(team).Error)
+
+	flow := newTransferFlow(t, app, org, account, map[string]any{
+		"team_id": team.ID.String(),
+	})
+
+	require.NoError(t, app.runChatGraph(account, contact, session, flow, "help", ""))
+	require.NoError(t, app.DB.First(session, session.ID).Error)
+	assert.Equal(t, models.SessionStatusCompleted, session.Status)
+
+	var transfer models.AgentTransfer
+	err := app.DB.Where("organization_id = ? AND contact_id = ?", org.ID, contact.ID).First(&transfer).Error
+	require.NoError(t, err)
+	require.NotNil(t, transfer.TeamID)
+	assert.Equal(t, team.ID, *transfer.TeamID)
+}
+
+// TestRunChatGraph_Transfer_GeneralStringRoutesToQueue: "_general" is a
+// sentinel matching the legacy editor's "general queue" option.
+func TestRunChatGraph_Transfer_GeneralStringRoutesToQueue(t *testing.T) {
+	app, org, account, contact, session := newGraphTestFixtures(t)
+	flow := newTransferFlow(t, app, org, account, map[string]any{
+		"team_id": "_general",
+	})
+
+	require.NoError(t, app.runChatGraph(account, contact, session, flow, "help", ""))
+	require.NoError(t, app.DB.First(session, session.ID).Error)
+
+	var transfer models.AgentTransfer
+	err := app.DB.Where("organization_id = ? AND contact_id = ?", org.ID, contact.ID).First(&transfer).Error
+	require.NoError(t, err)
+	assert.Nil(t, transfer.TeamID)
+}
+
 // TestRunChatGraph_Prompt_NoRegexAcceptsAnything verifies the executor
 // treats a prompt with no validation_regex as accept-all.
 func TestRunChatGraph_Prompt_NoRegexAcceptsAnything(t *testing.T) {

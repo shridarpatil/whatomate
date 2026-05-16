@@ -9,6 +9,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/shridarpatil/whatomate/internal/models"
 )
 
@@ -146,6 +147,8 @@ func (a *App) executeChatNode(node *ChatNode, ctx *chatNodeCtx) (nodeOutcome, er
 		return a.execChatSetVariable(node, ctx)
 	case ChatNodeAIResponse:
 		return a.execChatAIResponse(node, ctx)
+	case ChatNodeTransfer:
+		return a.execChatTransfer(node, ctx)
 	case ChatNodeEnd:
 		return a.execChatEnd(node, ctx)
 	default:
@@ -595,6 +598,55 @@ func (a *App) execChatAIResponse(node *ChatNode, ctx *chatNodeCtx) (nodeOutcome,
 	}
 	a.logSessionMessage(ctx.session.ID, models.DirectionOutgoing, answer, node.ID)
 	return nodeOutcome{outcome: "default"}, nil
+}
+
+// execChatTransfer hands the session off to a human team or the general
+// queue. Optionally sends a body message first (e.g. "Connecting you to
+// an agent…"), then creates the transfer row via the same helpers the
+// legacy flow uses (createTransferToTeam / createTransferToQueue, source
+// = TransferSourceFlow), and marks the session completed.
+//
+// Terminal: returns yield=true so the runner stops and persists. No
+// outgoing edges are expected on this node.
+//
+// Config:
+//
+//	{
+//	  "body":    "Connecting you to a human…",  // optional
+//	  "team_id": "<uuid>",                       // empty or "_general" = queue
+//	  "notes":   "Last seen {{last_query}}"      // optional; templated
+//	}
+func (a *App) execChatTransfer(node *ChatNode, ctx *chatNodeCtx) (nodeOutcome, error) {
+	if body := stringFromConfig(node.Config, "body", "message", "text"); body != "" {
+		message := processTemplate(body, ctx.session.SessionData)
+		if err := a.sendAndSaveTextMessage(ctx.account, ctx.contact, message); err != nil {
+			a.Log.Error("transfer node failed to send body",
+				"node", node.ID, "session", ctx.session.ID, "error", err)
+		} else {
+			a.logSessionMessage(ctx.session.ID, models.DirectionOutgoing, message, node.ID)
+		}
+	}
+
+	notes := ""
+	if rawNotes := stringFromConfig(node.Config, "notes"); rawNotes != "" {
+		notes = processTemplate(rawNotes, ctx.session.SessionData)
+	}
+
+	teamIDStr := stringFromConfig(node.Config, "team_id")
+	if teamIDStr != "" && teamIDStr != "_general" {
+		if parsed, err := uuid.Parse(teamIDStr); err == nil {
+			a.createTransferToTeam(ctx.account, ctx.contact, parsed, notes, models.TransferSourceFlow)
+		} else {
+			a.Log.Warn("transfer node has invalid team_id, falling back to queue",
+				"node", node.ID, "team_id", teamIDStr, "error", err)
+			a.createTransferToQueue(ctx.account, ctx.contact, models.TransferSourceFlow)
+		}
+	} else {
+		a.createTransferToQueue(ctx.account, ctx.contact, models.TransferSourceFlow)
+	}
+
+	ctx.session.Status = models.SessionStatusCompleted
+	return nodeOutcome{yield: true}, nil
 }
 
 // execChatEnd optionally sends a final message and returns an empty
