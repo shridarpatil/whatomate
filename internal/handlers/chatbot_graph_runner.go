@@ -144,6 +144,8 @@ func (a *App) executeChatNode(node *ChatNode, ctx *chatNodeCtx) (nodeOutcome, er
 		return a.execChatTiming(node, ctx)
 	case ChatNodeSetVariable:
 		return a.execChatSetVariable(node, ctx)
+	case ChatNodeAIResponse:
+		return a.execChatAIResponse(node, ctx)
 	case ChatNodeEnd:
 		return a.execChatEnd(node, ctx)
 	default:
@@ -536,6 +538,62 @@ func (a *App) execChatSetVariable(node *ChatNode, ctx *chatNodeCtx) (nodeOutcome
 		}
 		ctx.session.SessionData[name] = processTemplate(tmpl, ctx.session.SessionData)
 	}
+	return nodeOutcome{outcome: "default"}, nil
+}
+
+// execChatAIResponse invokes the configured LLM provider via the
+// existing generateAIResponse helper, sends the answer back to the user,
+// and falls through. Reuses the org's chatbot settings (provider,
+// model, api key, system prompt) so authors don't have to duplicate
+// credentials per node.
+//
+// Input to the LLM is, in priority order:
+//  1. config.prompt_template — runs through processTemplate, useful when
+//     the AI should respond to a structured request rather than the raw
+//     user text (e.g. "Summarise the customer's situation: {{summary}}").
+//  2. ctx.userInput — the user's latest message.
+//
+// Outcome is always "default". AI failures, empty replies, or AI being
+// disabled all advance via the default edge and log a warning — the
+// graph author can route to a fallback message there.
+func (a *App) execChatAIResponse(node *ChatNode, ctx *chatNodeCtx) (nodeOutcome, error) {
+	settings, err := a.getChatbotSettingsCached(ctx.account.OrganizationID, ctx.account.Name)
+	if err != nil {
+		a.Log.Error("ai_response node failed to load chatbot settings",
+			"node", node.ID, "session", ctx.session.ID, "error", err)
+		return nodeOutcome{outcome: "default"}, nil
+	}
+	if !settings.AI.Enabled || settings.AI.Provider == "" || settings.AI.APIKey == "" {
+		a.Log.Warn("ai_response node hit but AI not configured",
+			"node", node.ID, "session", ctx.session.ID,
+			"ai_enabled", settings.AI.Enabled, "has_provider", settings.AI.Provider != "")
+		return nodeOutcome{outcome: "default"}, nil
+	}
+
+	userMessage := ctx.userInput
+	if tmpl := stringFromConfig(node.Config, "prompt_template", "prompt"); tmpl != "" {
+		if ctx.session.SessionData == nil {
+			ctx.session.SessionData = models.JSONB{}
+		}
+		userMessage = processTemplate(tmpl, ctx.session.SessionData)
+	}
+
+	answer, err := a.generateAIResponse(settings, ctx.session, userMessage)
+	if err != nil {
+		a.Log.Error("ai_response node generateAIResponse failed",
+			"node", node.ID, "session", ctx.session.ID, "error", err)
+		return nodeOutcome{outcome: "default"}, nil
+	}
+	if answer == "" {
+		a.Log.Warn("ai_response node got empty answer from provider",
+			"node", node.ID, "session", ctx.session.ID)
+		return nodeOutcome{outcome: "default"}, nil
+	}
+
+	if err := a.sendAndSaveTextMessage(ctx.account, ctx.contact, answer); err != nil {
+		return nodeOutcome{}, fmt.Errorf("send ai response: %w", err)
+	}
+	a.logSessionMessage(ctx.session.ID, models.DirectionOutgoing, answer, node.ID)
 	return nodeOutcome{outcome: "default"}, nil
 }
 

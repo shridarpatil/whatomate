@@ -787,6 +787,91 @@ func TestRunChatGraph_SetVariable_NonStringStoredVerbatim(t *testing.T) {
 	assert.Equal(t, true, session.SessionData["is_active"])
 }
 
+// newAIResponseFlow builds a two-node graph (ai_response → end).
+func newAIResponseFlow(t *testing.T, app *App, org *models.Organization, account *models.WhatsAppAccount, promptTemplate string) *models.ChatbotFlow {
+	t.Helper()
+	cfg := map[string]any{}
+	if promptTemplate != "" {
+		cfg["prompt_template"] = promptTemplate
+	}
+	flow := &models.ChatbotFlow{
+		BaseModel:       models.BaseModel{ID: uuid.New()},
+		OrganizationID:  org.ID,
+		WhatsAppAccount: account.Name,
+		Name:            "ai-flow",
+		IsEnabled:       true,
+		Graph: models.JSONB{
+			"version":    2,
+			"entry_node": "ai",
+			"nodes": []any{
+				map[string]any{"id": "ai", "type": "ai_response", "label": "ask", "config": cfg},
+				map[string]any{"id": "end", "type": "end"},
+			},
+			"edges": []any{
+				map[string]any{"from": "ai", "to": "end", "condition": "default"},
+			},
+		},
+	}
+	require.NoError(t, app.DB.Create(flow).Error)
+	return flow
+}
+
+func createChatbotSettings(t *testing.T, app *App, orgID uuid.UUID, accountName string, ai models.AIConfig) {
+	t.Helper()
+	s := models.ChatbotSettings{
+		BaseModel:       models.BaseModel{ID: uuid.New()},
+		OrganizationID:  orgID,
+		WhatsAppAccount: accountName,
+		IsEnabled:       true,
+		AI:              ai,
+	}
+	require.NoError(t, app.DB.Create(&s).Error)
+}
+
+// TestRunChatGraph_AIResponse_DisabledFallsThrough: when AI is disabled
+// in settings, the node logs + advances via default without sending.
+func TestRunChatGraph_AIResponse_DisabledFallsThrough(t *testing.T) {
+	app, org, account, contact, session := newGraphTestFixtures(t)
+	createChatbotSettings(t, app, org.ID, account.Name, models.AIConfig{Enabled: false})
+	flow := newAIResponseFlow(t, app, org, account, "")
+
+	require.NoError(t, app.runChatGraph(account, contact, session, flow, "hi", ""))
+	require.NoError(t, app.DB.First(session, session.ID).Error)
+	assert.Equal(t, models.SessionStatusCompleted, session.Status)
+
+	path := chatGraphPath(t, session)
+	require.GreaterOrEqual(t, len(path), 2)
+	assert.Equal(t, "default", path[0]["outcome"])
+}
+
+// TestRunChatGraph_AIResponse_NoSettingsRowFallsThrough verifies the
+// graceful path when no settings have been configured yet.
+func TestRunChatGraph_AIResponse_NoSettingsRowFallsThrough(t *testing.T) {
+	app, org, account, contact, session := newGraphTestFixtures(t)
+	// Intentionally no createChatbotSettings call.
+	flow := newAIResponseFlow(t, app, org, account, "")
+
+	require.NoError(t, app.runChatGraph(account, contact, session, flow, "hi", ""))
+	require.NoError(t, app.DB.First(session, session.ID).Error)
+	assert.Equal(t, models.SessionStatusCompleted, session.Status)
+}
+
+// TestRunChatGraph_AIResponse_MissingAPIKeyFallsThrough: provider set
+// but no API key → graceful default outcome (no panic, no upstream call).
+func TestRunChatGraph_AIResponse_MissingAPIKeyFallsThrough(t *testing.T) {
+	app, org, account, contact, session := newGraphTestFixtures(t)
+	createChatbotSettings(t, app, org.ID, account.Name, models.AIConfig{
+		Enabled:  true,
+		Provider: models.AIProviderOpenAI,
+		APIKey:   "",
+	})
+	flow := newAIResponseFlow(t, app, org, account, "")
+
+	require.NoError(t, app.runChatGraph(account, contact, session, flow, "hi", ""))
+	require.NoError(t, app.DB.First(session, session.ID).Error)
+	assert.Equal(t, models.SessionStatusCompleted, session.Status)
+}
+
 // TestRunChatGraph_Prompt_NoRegexAcceptsAnything verifies the executor
 // treats a prompt with no validation_regex as accept-all.
 func TestRunChatGraph_Prompt_NoRegexAcceptsAnything(t *testing.T) {
