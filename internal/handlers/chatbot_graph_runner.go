@@ -106,7 +106,7 @@ func (a *App) runChatGraph(
 
 		res, err := a.executeChatNode(node, ctx)
 		if err != nil {
-			a.persistChatSession(session)
+			_ = a.persistChatSession(session)
 			return err
 		}
 
@@ -124,16 +124,16 @@ func (a *App) runChatGraph(
 		if session.CurrentFlowID != nil && *session.CurrentFlowID != flow.ID {
 			newFlow, err := a.getChatbotFlowByIDCached(account.OrganizationID, *session.CurrentFlowID)
 			if err != nil {
-				a.persistChatSession(session)
+				_ = a.persistChatSession(session)
 				return fmt.Errorf("goto_flow: load target: %w", err)
 			}
 			if newFlow.Graph == nil {
-				a.persistChatSession(session)
+				_ = a.persistChatSession(session)
 				return errors.New("goto_flow: target flow has no v2 graph")
 			}
 			newGraph, err := parseChatGraph(newFlow.Graph)
 			if err != nil {
-				a.persistChatSession(session)
+				_ = a.persistChatSession(session)
 				return fmt.Errorf("goto_flow: parse target graph: %w", err)
 			}
 			flow = newFlow
@@ -151,7 +151,7 @@ func (a *App) runChatGraph(
 		session.CurrentStep = next
 	}
 
-	a.persistChatSession(session)
+	_ = a.persistChatSession(session)
 	return errChatGraphRunaway
 }
 
