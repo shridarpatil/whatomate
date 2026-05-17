@@ -640,11 +640,9 @@ func TestApp_CreateChatbotFlow(t *testing.T) {
 		require.NoError(t, err)
 
 		var flow models.ChatbotFlow
-		require.NoError(t, app.DB.Preload("Steps").First(&flow, "id = ?", parsedID).Error)
+		require.NoError(t, app.DB.First(&flow, "id = ?", parsedID).Error)
 		assert.Equal(t, "Onboarding Flow", flow.Name)
 		assert.True(t, flow.IsEnabled)
-		assert.Len(t, flow.Steps, 2)
-		assert.Equal(t, "ask_name", flow.Steps[0].StepName)
 	})
 }
 
@@ -1707,9 +1705,8 @@ func TestApp_CreateChatbotFlow_Additional(t *testing.T) {
 		require.NoError(t, err)
 
 		var flow models.ChatbotFlow
-		require.NoError(t, app.DB.Preload("Steps").First(&flow, "id = ?", parsedID).Error)
+		require.NoError(t, app.DB.First(&flow, "id = ?", parsedID).Error)
 		assert.Equal(t, "No Steps Flow", flow.Name)
-		assert.Len(t, flow.Steps, 0)
 	})
 
 	t.Run("create flow with completion config", func(t *testing.T) {
@@ -1860,22 +1857,9 @@ func TestApp_UpdateChatbotFlow_Additional(t *testing.T) {
 		require.NoError(t, err)
 		assert.Equal(t, fasthttp.StatusOK, testutil.GetResponseStatusCode(updateReq))
 
-		// Verify old step is gone and new steps exist
-		parsedID, err := uuid.Parse(createResp.Data.ID)
-		require.NoError(t, err)
-
-		var flow models.ChatbotFlow
-		require.NoError(t, app.DB.Preload("Steps").First(&flow, "id = ?", parsedID).Error)
-		assert.Len(t, flow.Steps, 2)
-
-		// Steps should be ordered
-		stepNames := make([]string, len(flow.Steps))
-		for i, s := range flow.Steps {
-			stepNames[i] = s.StepName
-		}
-		assert.Contains(t, stepNames, "new_step_1")
-		assert.Contains(t, stepNames, "new_step_2")
-		assert.NotContains(t, stepNames, "old_step")
+		// Flow no longer persists Steps[] — v2 graph is the only wire
+		// format. We just verify the update call succeeded above.
+		_ = createResp
 	})
 
 	t.Run("update trigger keywords", func(t *testing.T) {

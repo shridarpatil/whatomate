@@ -84,7 +84,6 @@ type ChatbotFlowResponse struct {
 	Description     string   `json:"description"`
 	TriggerKeywords []string `json:"trigger_keywords"`
 	Enabled         bool     `json:"enabled"`
-	StepsCount      int      `json:"steps_count"`
 	CreatedAt       string   `json:"created_at"`
 }
 
@@ -852,7 +851,6 @@ func (a *App) ListChatbotFlows(r *fastglue.Request) error {
 			Description:     flow.Description,
 			TriggerKeywords: flow.TriggerKeywords,
 			Enabled:         flow.IsEnabled,
-			StepsCount:      len(flow.Steps),
 			CreatedAt:       flow.CreatedAt.Format(time.RFC3339),
 		}
 	}

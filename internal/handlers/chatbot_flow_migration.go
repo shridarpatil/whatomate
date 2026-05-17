@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"sort"
 
+	"github.com/google/uuid"
 	"github.com/zerodha/logf"
 	"gorm.io/gorm"
 
@@ -12,76 +13,88 @@ import (
 
 // BackfillChatbotFlowGraph fills ChatbotFlow.Graph for every row where
 // it is currently NULL by running stepsToGraph against the legacy
-// Steps[] + CanvasLayout fields. Idempotent and safe to re-run.
+// chatbot_flow_steps table + canvas_layout column. Idempotent and safe
+// to re-run.
 //
-// Called from main.go after RunMigrationWithProgress, so the executor
-// dispatcher (which prefers Graph when present) starts hitting v2 for
-// every flow on the next request. Once every flow has Graph populated
-// the legacy executor can be deleted in a follow-up commit.
+// Called from main.go after RunMigrationWithProgress. Once every flow
+// has Graph populated the dispatcher uses the v2 runner unconditionally.
+// The legacy table and canvas_layout column are not dropped — they're
+// quarantined as dead data until a future maintenance migration.
 //
-// Flows whose stepsToGraph returns nil (any unsupported message_type
-// remains, or zero steps) are skipped and logged at WARN.
+// The migration reads the legacy tables via raw queries so this package
+// no longer needs Steps[] / CanvasLayout fields on the ChatbotFlow
+// struct.
 func BackfillChatbotFlowGraph(db *gorm.DB, lo logf.Logger) error {
-	var flows []models.ChatbotFlow
-	if err := db.
-		Preload("Steps").
-		Where("graph IS NULL OR graph::text = '{}'").
-		Find(&flows).Error; err != nil {
+	var pending []legacyFlowMeta
+	err := db.Raw(`
+		SELECT id, name, COALESCE(canvas_layout, '{}'::jsonb) AS canvas_layout
+		FROM chatbot_flows
+		WHERE (graph IS NULL OR graph::text = '{}')
+		  AND deleted_at IS NULL
+	`).Scan(&pending).Error
+	if err != nil {
 		return fmt.Errorf("load flows for graph backfill: %w", err)
 	}
 
-	if len(flows) == 0 {
+	if len(pending) == 0 {
 		return nil
 	}
 
 	converted, skipped := 0, 0
-	for i := range flows {
-		flow := &flows[i]
-		graph := stepsToGraph(flow)
+	for _, p := range pending {
+		var steps []models.ChatbotFlowStep
+		if err := db.Where("flow_id = ?", p.ID).Find(&steps).Error; err != nil {
+			return fmt.Errorf("load steps for flow %s: %w", p.ID, err)
+		}
+
+		graph := stepsToGraph(steps, p.CanvasLayout)
 		if graph == nil {
 			skipped++
 			lo.Warn("Chatbot flow graph backfill: skipping flow with no v2 mapping",
-				"flow_id", flow.ID, "name", flow.Name, "step_count", len(flow.Steps))
+				"flow_id", p.ID, "name", p.Name, "step_count", len(steps))
 			continue
 		}
-		if err := db.Model(flow).Update("graph", graph).Error; err != nil {
-			return fmt.Errorf("save backfilled graph for flow %s: %w", flow.ID, err)
+		if err := db.Model(&models.ChatbotFlow{}).Where("id = ?", p.ID).Update("graph", graph).Error; err != nil {
+			return fmt.Errorf("save backfilled graph for flow %s: %w", p.ID, err)
 		}
 		converted++
 	}
 
 	lo.Info("Chatbot flow graph backfill complete",
-		"converted", converted, "skipped", skipped, "total", len(flows))
+		"converted", converted, "skipped", skipped, "total", len(pending))
 	return nil
 }
 
-// stepsToGraph converts a legacy ChatbotFlow.Steps[] + CanvasLayout into
-// a v2 graph JSONB blob, mirroring the TypeScript converter in
-// frontend/src/composables/useChatbotFlowConverter.ts (stepsToGraph +
-// supporting maps).
+type legacyFlowMeta struct {
+	ID           uuid.UUID
+	Name         string
+	CanvasLayout models.JSONB `gorm:"column:canvas_layout"`
+}
+
+// stepsToGraph converts a legacy slice of ChatbotFlowStep rows plus an
+// optional canvas_layout into a v2 graph JSONB blob, mirroring the
+// TypeScript converter in frontend/src/composables/useChatbotFlowConverter.ts.
 //
-// Returns nil if the flow is empty or contains any message_type that
-// has no v2 mapping — callers can fall back to leaving Graph IS NULL.
-// After the Phase 4 cutover this nil case should not occur in
-// production because every legacy message_type has a v2 mapping.
-func stepsToGraph(flow *models.ChatbotFlow) models.JSONB {
-	if flow == nil || len(flow.Steps) == 0 {
+// Returns nil if there are no steps or any step uses a message_type
+// that has no v2 mapping.
+func stepsToGraph(steps []models.ChatbotFlowStep, canvasLayout models.JSONB) models.JSONB {
+	if len(steps) == 0 {
 		return nil
 	}
 
-	for i := range flow.Steps {
-		if !v2SupportedMessageType(flow.Steps[i].MessageType) {
+	for i := range steps {
+		if !v2SupportedMessageType(steps[i].MessageType) {
 			return nil
 		}
 	}
 
-	sorted := make([]models.ChatbotFlowStep, len(flow.Steps))
-	copy(sorted, flow.Steps)
+	sorted := make([]models.ChatbotFlowStep, len(steps))
+	copy(sorted, steps)
 	sort.SliceStable(sorted, func(i, j int) bool {
 		return sorted[i].StepOrder < sorted[j].StepOrder
 	})
 
-	positions := extractCanvasPositions(flow.CanvasLayout)
+	positions := extractCanvasPositions(canvasLayout)
 
 	nodes := make([]map[string]any, 0, len(sorted))
 	stepNames := make(map[string]struct{}, len(sorted))
@@ -98,15 +111,10 @@ func stepsToGraph(flow *models.ChatbotFlow) models.JSONB {
 
 		config := buildNodeConfig(nodeType, &step)
 
-		label := step.StepName
-		// Backend FlowStep doesn't have a label field — fall back to
-		// step_name. The editor will display a friendly default via the
-		// fallbackLabel helper.
-
 		nodes = append(nodes, map[string]any{
 			"id":       step.StepName,
 			"type":     nodeType,
-			"label":    label,
+			"label":    step.StepName,
 			"position": map[string]any{"x": pos["x"], "y": pos["y"]},
 			"config":   config,
 		})
@@ -162,7 +170,7 @@ func messageTypeToNodeTypeGo(messageType string) string {
 }
 
 // extractCanvasPositions reads { node_positions: { name: {x, y} } } out
-// of the legacy CanvasLayout JSONB. Returns nil-safe, defaults to empty.
+// of the legacy CanvasLayout JSONB.
 func extractCanvasPositions(raw models.JSONB) map[string]map[string]float64 {
 	out := map[string]map[string]float64{}
 	if raw == nil {
