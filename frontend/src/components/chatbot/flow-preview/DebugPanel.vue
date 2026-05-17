@@ -140,6 +140,7 @@ function handlePlayPause() {
             variant="ghost"
             size="icon"
             class="h-7 w-7"
+            title="Step back"
             :disabled="!canUndo"
             @click="emit('undo')"
           >
@@ -150,6 +151,7 @@ function handlePlayPause() {
             variant="ghost"
             size="icon"
             class="h-7 w-7"
+            title="Restart"
             @click="emit('reset')"
           >
             <RotateCcw class="h-4 w-4" />
