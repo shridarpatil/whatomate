@@ -33,7 +33,7 @@ func TestClient_CreateFlow_Success(t *testing.T) {
 	client := newTestClient(t, server)
 	account := testAccount(server.URL)
 
-	id, err := client.CreateFlow(context.Background(), account, "Test Flow", []string{"OTHER"})
+	id, err := client.CreateFlow(context.Background(), account, "Test Flow", []string{"OTHER"}, "https://app.whatomate.com/api/flows/webhook")
 	require.NoError(t, err)
 	assert.Equal(t, "flow-123", id)
 }
@@ -65,7 +65,7 @@ func TestClient_CreateFlow_APIError(t *testing.T) {
 	client := newTestClient(t, server)
 	account := testAccount(server.URL)
 
-	_, err := client.CreateFlow(context.Background(), account, "", nil)
+	_, err := client.CreateFlow(context.Background(), account, "", nil, "https://app.whatomate.com/api/flows/webhook")
 	require.Error(t, err)
 }
 

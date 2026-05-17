@@ -13,8 +13,9 @@ import (
 
 // FlowCreateRequest represents the request to create a flow
 type FlowCreateRequest struct {
-	Name       string   `json:"name"`
-	Categories []string `json:"categories"`
+	Name        string   `json:"name"`
+	Categories  []string `json:"categories"`
+	EndpointURI string   `json:"endpoint_uri,omitempty"`
 }
 
 // FlowCreateResponse represents the response from creating a flow
@@ -62,15 +63,16 @@ type FlowJSON struct {
 }
 
 // CreateFlow creates a new flow in Meta
-func (c *Client) CreateFlow(ctx context.Context, account *Account, name string, categories []string) (string, error) {
+func (c *Client) CreateFlow(ctx context.Context, account *Account, name string, categories []string, endpointURI string) (string, error) {
 	url := c.buildFlowsURL(account)
 
 	payload := FlowCreateRequest{
-		Name:       name,
-		Categories: categories,
+		Name:        name,
+		Categories:  categories,
+		EndpointURI: endpointURI,
 	}
 
-	c.Log.Info("Creating flow in Meta", "name", name, "categories", categories, "url", url, "business_id", account.BusinessID)
+	c.Log.Info("Creating flow in Meta", "name", name, "categories", categories, "endpoint_uri", endpointURI, "url", url, "business_id", account.BusinessID)
 
 	respBody, err := c.doRequest(ctx, http.MethodPost, url, payload, account.AccessToken)
 	if err != nil {
@@ -85,6 +87,25 @@ func (c *Client) CreateFlow(ctx context.Context, account *Account, name string, 
 
 	c.Log.Info("Flow created in Meta", "flow_id", result.ID, "name", name)
 	return result.ID, nil
+}
+
+// UpdateFlowEndpoint updates the endpoint URI for an existing flow in Meta
+func (c *Client) UpdateFlowEndpoint(ctx context.Context, account *Account, flowID string, endpointURI string) error {
+	url := fmt.Sprintf("%s/%s/%s", c.getBaseURL(), account.APIVersion, flowID)
+	payload := map[string]string{
+		"endpoint_uri": endpointURI,
+	}
+
+	c.Log.Info("Updating flow endpoint in Meta", "flow_id", flowID, "endpoint_uri", endpointURI)
+
+	respBody, err := c.doRequest(ctx, http.MethodPost, url, payload, account.AccessToken)
+	if err != nil {
+		c.Log.Error("Failed to update flow endpoint", "error", err, "flow_id", flowID)
+		return err
+	}
+
+	c.Log.Info("Flow endpoint updated in Meta", "flow_id", flowID, "resp", string(respBody))
+	return nil
 }
 
 // UpdateFlowJSON updates the flow's JSON definition

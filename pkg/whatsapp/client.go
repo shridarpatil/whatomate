@@ -560,3 +560,20 @@ func (c *Client) SubscribeApp(ctx context.Context, account *Account) error {
 	c.Log.Info("App subscribed to webhooks", "business_id", account.BusinessID)
 	return nil
 }
+
+// UpdateWhatsAppBusinessEncryption uploads the RSA public key to Meta Graph API for WhatsApp Flows encryption.
+func (c *Client) UpdateWhatsAppBusinessEncryption(ctx context.Context, phoneID, publicKeyPEM, accessToken, apiVersion string) error {
+	url := fmt.Sprintf("%s/%s/%s/whatsapp_business_encryption", c.getBaseURL(), apiVersion, phoneID)
+
+	payload := map[string]string{
+		"business_public_key": publicKeyPEM,
+	}
+
+	_, err := c.doRequest(ctx, http.MethodPost, url, payload, accessToken)
+	if err != nil {
+		return fmt.Errorf("failed to update whatsapp business encryption key: %w", err)
+	}
+
+	c.Log.Info("WhatsApp business encryption public key updated successfully", "phone_id", phoneID)
+	return nil
+}

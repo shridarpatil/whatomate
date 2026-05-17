@@ -168,4 +168,22 @@ test.describe('WhatsApp Accounts - Detail Page CRUD', () => {
 
     await expect(page.getByText('Setup Guide')).toBeVisible({ timeout: 15000 })
   })
+
+  test('should show Meta Business Encryption card and have generate keys button', async ({ page, request }) => {
+    const api = new ApiHelper(request)
+    await api.login(SUPER_ADMIN.email, SUPER_ADMIN.password)
+    const acc = await api.createWhatsAppAccount({
+      name: scope.name('encryption-test').toLowerCase().replace(/\s/g, '-'),
+      phone_id: `phone-enc-${Date.now()}`,
+      business_id: `biz-enc-${Date.now()}`,
+      access_token: 'test-token-e2e',
+    })
+
+    await page.goto(`/settings/accounts/${acc.id}`)
+    await page.waitForLoadState('networkidle')
+
+    await expect(page.getByText('Meta Business Encryption (WhatsApp Flows)')).toBeVisible({ timeout: 15000 })
+    await expect(page.getByRole('button', { name: /Generate Secure Key Pairs/i })).toBeVisible()
+  })
 })
+

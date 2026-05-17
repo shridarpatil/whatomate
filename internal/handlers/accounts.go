@@ -49,6 +49,8 @@ type AccountResponse struct {
 	Status                 string     `json:"status"`
 	HasAccessToken     bool       `json:"has_access_token"`
 	HasAppSecret       bool       `json:"has_app_secret"`
+	EncryptionPublicKey    string     `json:"encryption_public_key,omitempty"`
+	EncryptionEndpointURI  string     `json:"encryption_endpoint_uri,omitempty"`
 	PhoneNumber        string     `json:"phone_number,omitempty"`
 	DisplayName        string     `json:"display_name,omitempty"`
 	CreatedByID        *uuid.UUID `json:"created_by_id,omitempty"`
@@ -435,6 +437,8 @@ func accountToResponse(acc models.WhatsAppAccount) AccountResponse {
 		Status:                 acc.Status,
 		HasAccessToken:     acc.AccessToken != "",
 		HasAppSecret:       acc.AppSecret != "",
+		EncryptionPublicKey:    acc.EncryptionPublicKey,
+		EncryptionEndpointURI:  acc.EncryptionEndpointURI,
 		CreatedByID:        acc.CreatedByID,
 		UpdatedByID:        acc.UpdatedByID,
 		CreatedAt:          acc.CreatedAt.Format("2006-01-02T15:04:05Z"),
@@ -499,4 +503,66 @@ func (a *App) SubscribeApp(r *fastglue.Request) error {
 		"success": true,
 		"message": "App subscribed to webhooks successfully. You should now receive incoming messages.",
 	})
+}
+
+func generateSecureKeyPairsInternal(ctx context.Context, a *App, account *models.WhatsAppAccount, r *fastglue.Request) error {
+	privPEM, pubPEM, err := crypto.GenerateRSAKeyPair()
+	if err != nil {
+		return fmt.Errorf("failed to generate RSA key pair: %w", err)
+	}
+
+	encPriv, err := crypto.Encrypt(privPEM, a.Config.App.EncryptionKey)
+	if err != nil {
+		return fmt.Errorf("failed to encrypt private key: %w", err)
+	}
+
+	scheme := "https"
+	if a.Config.App.Environment == "development" {
+		scheme = "http"
+	}
+	host := string(r.RequestCtx.Request.Header.Peek("X-Forwarded-Host"))
+	if host == "" {
+		host = string(r.RequestCtx.Host())
+	}
+
+	account.EncryptionPrivateKey = encPriv
+	account.EncryptionPublicKey = pubPEM
+	account.EncryptionEndpointURI = fmt.Sprintf("%s://%s/api/exchange-keys/%s", scheme, host, account.PhoneID)
+
+	if err := a.WhatsApp.UpdateWhatsAppBusinessEncryption(ctx, account.PhoneID, pubPEM, account.AccessToken, account.APIVersion); err != nil {
+		a.Log.Warn("Failed to update WhatsApp business encryption key with Meta (might be permission issue)", "error", err)
+	}
+
+	if err := a.DB.Save(account).Error; err != nil {
+		return fmt.Errorf("failed to save account encryption keys: %w", err)
+	}
+
+	a.Log.Info("Secure key pairs generated and updated successfully", "account_id", account.ID, "phone_id", account.PhoneID)
+	return nil
+}
+
+// GenerateSecureKeyPairs handles the API request to generate secure key pairs for an account
+func (a *App) GenerateSecureKeyPairs(r *fastglue.Request) error {
+	orgID, err := a.getOrgID(r)
+	if err != nil {
+		return r.SendErrorEnvelope(fasthttp.StatusUnauthorized, "Unauthorized", nil, "")
+	}
+
+	id, err := parsePathUUID(r, "id", "account")
+	if err != nil {
+		return nil
+	}
+
+	account, err := a.resolveWhatsAppAccountByID(r, id, orgID)
+	if err != nil {
+		return nil
+	}
+
+	ctx := context.Background()
+	if err := generateSecureKeyPairsInternal(ctx, a, account, r); err != nil {
+		a.Log.Error("Failed to generate secure key pairs", "error", err)
+		return r.SendErrorEnvelope(fasthttp.StatusInternalServerError, "Failed to generate secure key pairs: "+err.Error(), nil, "")
+	}
+
+	return r.SendEnvelope(accountToResponse(*account))
 }

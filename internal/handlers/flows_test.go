@@ -24,7 +24,7 @@ func createTestFlow(t *testing.T, app *handlers.App, orgID uuid.UUID, accountNam
 		Name:            name,
 		Status:          "DRAFT",
 		Category:        "SIGN_UP",
-		JSONVersion:     "6.0",
+		JSONVersion:     "7.3",
 	}
 	require.NoError(t, app.DB.Create(flow).Error)
 	return flow
@@ -145,7 +145,7 @@ func TestApp_CreateFlow_Success(t *testing.T) {
 		"whatsapp_account": account.Name,
 		"name":             "My New Flow",
 		"category":         "SIGN_UP",
-		"json_version":     "6.0",
+		"json_version":     "7.3",
 	})
 	testutil.SetAuthContext(req, org.ID, user.ID)
 
@@ -164,7 +164,7 @@ func TestApp_CreateFlow_Success(t *testing.T) {
 	assert.Equal(t, account.Name, resp.Data.Flow.WhatsAppAccount)
 	assert.Equal(t, "DRAFT", resp.Data.Flow.Status)
 	assert.Equal(t, "SIGN_UP", resp.Data.Flow.Category)
-	assert.Equal(t, "6.0", resp.Data.Flow.JSONVersion)
+	assert.Equal(t, "7.3", resp.Data.Flow.JSONVersion)
 	assert.NotEqual(t, uuid.Nil, resp.Data.Flow.ID)
 }
 
@@ -193,7 +193,7 @@ func TestApp_CreateFlow_DefaultJSONVersion(t *testing.T) {
 	}
 	err = json.Unmarshal(testutil.GetResponseBody(req), &resp)
 	require.NoError(t, err)
-	assert.Equal(t, "6.0", resp.Data.Flow.JSONVersion)
+	assert.Equal(t, "7.3", resp.Data.Flow.JSONVersion)
 }
 
 func TestApp_CreateFlow_MissingName(t *testing.T) {
@@ -674,9 +674,9 @@ func TestApp_DuplicateFlow_PreservesFlowJSON(t *testing.T) {
 		Name:            "Flow With JSON",
 		Status:          "PUBLISHED",
 		Category:        "SIGN_UP",
-		JSONVersion:     "6.0",
+		JSONVersion:     "7.3",
 		MetaFlowID:      "meta-flow-123",
-		FlowJSON:        models.JSONB{"version": "6.0"},
+		FlowJSON:        models.JSONB{"version": "7.3"},
 		Screens: models.JSONBArray{
 			map[string]any{
 				"id":    "SCREEN_ONE",
@@ -710,4 +710,72 @@ func TestApp_DuplicateFlow_PreservesFlowJSON(t *testing.T) {
 
 	// MetaFlowID should be empty (it's a new local-only flow)
 	assert.Empty(t, resp.Data.Flow.MetaFlowID)
+}
+
+func TestApp_UpdateFlow_RoutingModel(t *testing.T) {
+	t.Parallel()
+
+	app := newTestApp(t)
+	org := testutil.CreateTestOrganization(t, app.DB)
+	user := testutil.CreateTestUser(t, app.DB, org.ID)
+	account := testutil.CreateTestWhatsAppAccount(t, app.DB, org.ID)
+	flow := createTestFlow(t, app, org.ID, account.Name, "Routing Flow")
+
+	routingModel := map[string]any{
+		"SCREEN_A": []any{
+			"SCREEN_END",
+			"SCREEN_B",
+		},
+	}
+
+	req := testutil.NewJSONRequest(t, map[string]any{
+		"name": "Updated Routing Flow",
+		"flow_json": map[string]any{
+			"version":       "7.3",
+			"routing_model": routingModel,
+		},
+		"screens": []any{
+			map[string]any{
+				"id": "SCREEN_A",
+				"layout": map[string]any{
+					"children": []any{
+						map[string]any{
+							"type": "RadioButtonsGroup",
+							"name": "question_1",
+						},
+						map[string]any{
+							"type": "Footer",
+							"label": "Next",
+							"on-click-action": map[string]any{
+								"name": "navigate",
+							},
+						},
+					},
+				},
+			},
+			map[string]any{
+				"id": "SCREEN_B",
+			},
+			map[string]any{
+				"id": "SCREEN_END",
+				"terminal": true,
+			},
+		},
+	})
+	testutil.SetAuthContext(req, org.ID, user.ID)
+	testutil.SetPathParam(req, "id", flow.ID.String())
+
+	err := app.UpdateFlow(req)
+	require.NoError(t, err)
+	assert.Equal(t, fasthttp.StatusOK, testutil.GetResponseStatusCode(req))
+
+	var resp struct {
+		Data struct {
+			Flow handlers.FlowResponse `json:"flow"`
+		} `json:"data"`
+	}
+	err = json.Unmarshal(testutil.GetResponseBody(req), &resp)
+	require.NoError(t, err)
+	assert.Equal(t, "Updated Routing Flow", resp.Data.Flow.Name)
+	require.NotNil(t, resp.Data.Flow.FlowJSON["routing_model"])
 }

@@ -310,6 +310,9 @@ type WhatsAppAccount struct {
 	// button option, and by the send path to refuse voice_call sends.
 	BusinessCallingEnabled bool       `gorm:"default:false" json:"business_calling_enabled"`
 	Status             string     `gorm:"size:20;default:'active'" json:"status"`
+    EncryptionPrivateKey  string     `gorm:"type:text" json:"-"`
+    EncryptionPublicKey   string     `gorm:"type:text" json:"encryption_public_key"`
+    EncryptionEndpointURI string     `gorm:"size:500" json:"encryption_endpoint_uri"`
 	CreatedByID        *uuid.UUID `gorm:"type:uuid" json:"created_by_id,omitempty"`
 	UpdatedByID        *uuid.UUID `gorm:"type:uuid" json:"updated_by_id,omitempty"`
 
@@ -334,9 +337,9 @@ func (a *WhatsAppAccount) ToWAAccount() *whatsapp.Account {
 	}
 }
 
-// DecryptSecrets decrypts the encrypted access token and app secret fields.
+// DecryptSecrets decrypts the encrypted access token, app secret, and encryption private key fields.
 func (a *WhatsAppAccount) DecryptSecrets(encryptionKey string) {
-	crypto.DecryptFields(encryptionKey, &a.AccessToken, &a.AppSecret)
+	crypto.DecryptFields(encryptionKey, &a.AccessToken, &a.AppSecret, &a.EncryptionPrivateKey)
 }
 
 // Contact represents a WhatsApp contact/profile

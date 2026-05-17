@@ -44,6 +44,8 @@ import {
   TestTube2,
   Check,
   X,
+  ShieldCheck,
+  Key,
 } from 'lucide-vue-next'
 
 interface WhatsAppAccount {
@@ -68,6 +70,9 @@ interface WhatsAppAccount {
   updated_by_name?: string
   created_at: string
   updated_at: string
+  encryption_public_key?: string
+  encryption_endpoint_uri?: string
+  business_calling_enabled?: boolean
 }
 
 interface TestResult {
@@ -259,6 +264,24 @@ async function copyToClipboard(text: string) {
   }
 }
 
+const generatingKeys = ref(false)
+
+async function generateKeys() {
+  if (!account.value) return
+  generatingKeys.value = true
+  try {
+    const response = await api.post(`/accounts/${account.value.id}/generate-keys`)
+    const data = response.data.data || response.data
+    account.value = data
+    syncForm()
+    toast.success(t('accounts.generateKeysSuccess', 'Secure key pairs generated and updated successfully'))
+  } catch (e) {
+    toast.error(getErrorMessage(e, t('accounts.generateKeysFailed', 'Failed to generate secure key pairs')))
+  } finally {
+    generatingKeys.value = false
+  }
+}
+
 onMounted(async () => {
   if (isNew.value) {
     isLoading.value = false
@@ -438,6 +461,39 @@ onMounted(async () => {
           <div class="flex items-center gap-2 mt-1">
             <code class="px-2 py-1 bg-muted rounded text-xs font-mono flex-1 truncate">{{ account?.webhook_verify_token }}</code>
             <IconButton :icon="Copy" label="Copy" @click="copyToClipboard(account?.webhook_verify_token || '')" />
+          </div>
+        </div>
+      </CardContent>
+    </Card>
+
+    <!-- Meta Business Encryption Card -->
+    <Card v-if="!isNew">
+      <CardHeader class="pb-3">
+        <div class="flex items-center justify-between">
+          <CardTitle class="text-sm font-medium flex items-center gap-2">
+            <ShieldCheck class="h-4 w-4 text-emerald-500" />
+            {{ $t('accounts.encryptionConfig', 'Meta Business Encryption (WhatsApp Flows)') }}
+          </CardTitle>
+          <Button variant="outline" size="sm" :disabled="generatingKeys || !canWrite" @click="generateKeys">
+            <Loader2 v-if="generatingKeys" class="h-4 w-4 animate-spin mr-1" />
+            <Key v-else class="h-4 w-4 mr-1" />
+            {{ $t('accounts.generateKeys', 'Generate Secure Key Pairs') }}
+          </Button>
+        </div>
+      </CardHeader>
+      <CardContent class="space-y-3">
+        <div>
+          <Label class="text-xs text-muted-foreground">{{ $t('accounts.encryptionEndpointUri', 'Encryption Endpoint URI') }}</Label>
+          <div class="flex items-center gap-2 mt-1">
+            <code class="px-2 py-1 bg-muted rounded text-xs font-mono flex-1 truncate">{{ account?.encryption_endpoint_uri || '—' }}</code>
+            <IconButton v-if="account?.encryption_endpoint_uri" :icon="Copy" label="Copy" @click="copyToClipboard(account?.encryption_endpoint_uri || '')" />
+          </div>
+        </div>
+        <div>
+          <Label class="text-xs text-muted-foreground">{{ $t('accounts.encryptionPublicKey', 'Public Key (RSA-2048)') }}</Label>
+          <div class="flex items-center gap-2 mt-1">
+            <code class="px-2 py-1 bg-muted rounded text-xs font-mono flex-1 truncate max-h-20 overflow-y-auto">{{ account?.encryption_public_key || '—' }}</code>
+            <IconButton v-if="account?.encryption_public_key" :icon="Copy" label="Copy" @click="copyToClipboard(account?.encryption_public_key || '')" />
           </div>
         </div>
       </CardContent>

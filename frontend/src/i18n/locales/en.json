@@ -141,14 +141,14 @@
     "logoutSuccess": "Successfully logged out",
     "invalidCredentials": "Invalid credentials",
     "sessionExpired": "Your session has expired. Please login again.",
-    "welcomeTitle": "Welcome to Whatomate",
+    "welcomeTitle": "Welcome to CloudWa",
     "welcomeSubtitle": "Enter your credentials to access your account",
     "emailPlaceholder": "name{'@'}example.com",
     "enterEmailPassword": "Please enter email and password",
     "orContinueWith": "or continue with",
     "noAccount": "Don't have an account?",
     "createAccount": "Create an account",
-    "createAccountDesc": "Start your WhatsApp Business journey with Whatomate",
+    "createAccountDesc": "Start your WhatsApp Business journey with CloudWa",
     "fullName": "Full Name",
     "fullNamePlaceholder": "John Doe",
     "invitationRequired": "Registration requires an invitation link from your organization admin.",
@@ -760,12 +760,16 @@
     "searchUsers": "Search users"
   },
   "organizations": {
+    "title": "Organizations",
     "createNew": "Create Organization",
     "createTitle": "Create Organization",
     "createDesc": "Create a new organization to manage a separate workspace.",
     "namePlaceholder": "Organization name",
     "created": "Organization created",
-    "createFailed": "Failed to create organization"
+    "createFailed": "Failed to create organization",
+    "selectOrg": "Select organization",
+    "noMatchingOrgs": "No organizations found",
+    "allOrgs": "All Organizations"
   },
   "tags": {
     "title": "Tags",
@@ -1088,7 +1092,7 @@
     "customHeaders": "Custom Headers (optional)",
     "headerName": "Header name",
     "headerValue": "Value",
-    "configureWebhook": "Configure a webhook to receive events from Whatomate",
+    "configureWebhook": "Configure a webhook to receive events from CloudWa",
     "deleteWebhook": "Delete Webhook",
     "nameRequired": "Name is required",
     "urlRequired": "URL is required",
@@ -1339,7 +1343,13 @@
     "outgoing": "Outgoing",
     "webhookUrl": "Webhook URL",
     "yourAccounts": "Your Accounts",
-    "yourAccountsDesc": "WhatsApp Business accounts connected to your organization."
+    "yourAccountsDesc": "WhatsApp Business accounts connected to your organization.",
+    "encryptionConfig": "Meta Business Encryption Keys",
+    "encryptionEndpointUri": "Encryption Endpoint URI",
+    "encryptionPublicKey": "Public Key (RSA-2048)",
+    "generateKeys": "Generate Secure Key Pairs",
+    "generateKeysSuccess": "Secure key pairs generated and updated successfully",
+    "generateKeysFailed": "Failed to generate secure key pairs"
   },
   "dashboard": {
     "title": "Dashboard",
@@ -1491,7 +1501,15 @@
     "saveToMetaConfirmTitle": "Save Flow to Meta",
     "saveToMetaConfirmDescription": "This will push the current version of \"{name}\" to Meta. Are you sure you want to continue?",
     "fetchErrorTitle": "Failed to load flows",
-    "fetchErrorDescription": "Something went wrong while loading flows. Please try again."
+    "fetchErrorDescription": "Something went wrong while loading flows. Please try again.",
+    "validationNoScreens": "Flow must have at least one screen. Please add a screen before saving.",
+    "validationEmptyScreen": "{title} has no components. Please add at least one component.",
+    "validationMissingTarget": "Please select a target screen for the navigation button on {title}.",
+    "validationMissingRouting": "Please configure routing rules or a fallback destination for the navigation button on {title}.",
+    "validationNoComplete": "Flow must have a Footer button with 'Complete Flow' action. Please add a Footer component to your last screen.",
+    "metaPrerequisitesTitle": "Meta Prerequisites for Publishing Flows:",
+    "metaPrereqKey": "Public Key Encryption: You must generate an RSA key pair, upload the public key to your WhatsApp Business Account / Phone Number in WhatsApp Manager, and sign it.",
+    "metaPrereqHealth": "Endpoint Health Check: You must verify the webhook endpoint by running the Health Check in WhatsApp Manager (under Flow Setup -> Endpoint)."
   },
   "businessProfile": {
     "title": "Business Profile",
