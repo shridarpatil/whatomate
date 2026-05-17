@@ -9,7 +9,6 @@ import (
 	"github.com/shridarpatil/whatomate/internal/models"
 	"github.com/valyala/fasthttp"
 	"github.com/zerodha/fastglue"
-	"gorm.io/gorm"
 )
 
 // ChatbotSettingsResponse represents the response for chatbot settings
@@ -837,7 +836,7 @@ func (a *App) ListChatbotFlows(r *fastglue.Request) error {
 	query.Count(&total)
 
 	var flows []models.ChatbotFlow
-	if err := pg.Apply(query.Preload("Steps").Order("created_at DESC")).
+	if err := pg.Apply(query.Order("created_at DESC")).
 		Find(&flows).Error; err != nil {
 		a.Log.Error("Failed to fetch flows", "error", err)
 		return r.SendErrorEnvelope(fasthttp.StatusInternalServerError, "Failed to fetch flows", nil, "")
@@ -947,9 +946,6 @@ func (a *App) GetChatbotFlow(r *fastglue.Request) error {
 
 	var flow models.ChatbotFlow
 	if err := a.DB.Where("id = ? AND organization_id = ?", id, orgID).
-		Preload("Steps", func(db *gorm.DB) *gorm.DB {
-			return db.Order("step_order ASC")
-		}).
 		Preload("CreatedBy").Preload("UpdatedBy").
 		First(&flow).Error; err != nil {
 		return r.SendErrorEnvelope(fasthttp.StatusNotFound, "Flow not found", nil, "")
