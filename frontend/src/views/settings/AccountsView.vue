@@ -19,17 +19,7 @@ import {
   Trash2,
   Phone,
   Check,
-  X,
-  RefreshCw,
   Loader2,
-  Copy,
-  ExternalLink,
-  AlertCircle,
-  CheckCircle2,
-  Settings2,
-  TestTube2,
-  Store,
-  Bell,
   Facebook
 } from 'lucide-vue-next'
 
@@ -58,10 +48,6 @@ const fetchError = ref(false)
 const deleteDialogOpen = ref(false)
 const accountToDelete = ref<WhatsAppAccount | null>(null)
 const isDeleting = ref(false)
-
-// Business Profile Dialog State
-const isProfileDialogOpen = ref(false)
-const profileAccount = ref<WhatsAppAccount | null>(null)
 
 // Facebook Embedded Signup State
 const whatsappConfig = ref<{ app_id: string; config_id: string; api_version: string } | null>(null)
@@ -237,11 +223,6 @@ async function exchangeCodeForToken(code: string, phoneNumberId: string, wabaId:
   }
 }
 
-function openProfileDialog(account: WhatsAppAccount) {
-  profileAccount.value = account
-  isProfileDialogOpen.value = true
-}
-
 function openDeleteDialog(account: WhatsAppAccount) {
   accountToDelete.value = account
   deleteDialogOpen.value = true
@@ -386,14 +367,6 @@ async function confirmDelete() {
                 </template>
                 <template #cell-actions="{ item: account }">
                   <div class="flex items-center justify-end gap-1">
-                    <Tooltip>
-                      <TooltipTrigger as-child>
-                        <Button variant="ghost" size="icon" class="h-8 w-8" @click="openProfileDialog(account)">
-                          <Store class="h-4 w-4 text-emerald-500" />
-                        </Button>
-                      </TooltipTrigger>
-                      <TooltipContent>{{ $t('accounts.businessProfile') }}</TooltipContent>
-                    </Tooltip>
                     <Tooltip>
                       <TooltipTrigger as-child>
                         <RouterLink :to="`/settings/accounts/${account.id}`">
