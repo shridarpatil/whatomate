@@ -230,36 +230,10 @@ func (a *App) execChatMessage(node *ChatNode, ctx *chatNodeCtx) (nodeOutcome, er
 // wait for a click); on a later inbound that carries a buttonID, consumes
 // the selection and returns "button:<id>" so the runner can resolve the
 // next edge and advance.
-//
-// When validation_regex is configured, the received button id is matched
-// against it; a non-match increments StepRetries and re-prompts up to
-// max_retries (default 3), after which the runner emits "max_retries"
-// so the graph can route to a fallback.
-//
-// Config:
-//
-//	{
-//	  "body":             "...",
-//	  "buttons":          [{ "id": "...", "title": "..." }, ...],
-//	  "validation_regex": "^(yes|no)$",   // optional
-//	  "validation_error": "...",          // optional
-//	  "max_retries":      3                // optional; default 3
-//	}
+// Config: { "body": "...", "buttons": [{ "id": "...", "title": "..." }, ...] }
 func (a *App) execChatButtons(node *ChatNode, ctx *chatNodeCtx) (nodeOutcome, error) {
 	if !ctx.consumed && ctx.buttonID != "" {
 		ctx.consumed = true
-
-		if regex := stringFromConfig(node.Config, "validation_regex"); regex != "" {
-			re, err := regexp.Compile(regex)
-			if err != nil {
-				a.Log.Error("buttons node has invalid regex; skipping validation",
-					"node", node.ID, "regex", regex, "error", err)
-			} else if !re.MatchString(ctx.buttonID) {
-				return a.handleChatPromptInvalid(node, ctx)
-			}
-		}
-
-		ctx.session.StepRetries = 0
 		return nodeOutcome{outcome: "button:" + ctx.buttonID}, nil
 	}
 
