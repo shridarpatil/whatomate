@@ -31,8 +31,6 @@ import {
   Clock,
   ExternalLink,
   StopCircle,
-  HelpCircle,
-  Webhook,
   ChevronDown,
   ChevronRight,
   Plus,
@@ -117,9 +115,10 @@ const nodeTypes: any = {
   webhook: markRaw(ChatbotApiNode),
 }
 
+// Palette: 'prompt' and 'webhook' are internal-only — a Text node
+// becomes a prompt when the author sets an expected response.
 const palette: { type: ChatNodeType; label: string; icon: any; color: string }[] = [
-  { type: 'message', label: 'Message', icon: MessageSquare, color: 'bg-blue-600' },
-  { type: 'prompt', label: 'Prompt', icon: HelpCircle, color: 'bg-sky-600' },
+  { type: 'message', label: 'Text', icon: MessageSquare, color: 'bg-blue-600' },
   { type: 'buttons', label: 'Buttons', icon: MousePointerClick, color: 'bg-purple-600' },
   { type: 'api_call', label: 'API', icon: Globe, color: 'bg-orange-600' },
   { type: 'whatsapp_flow', label: 'WA Flow', icon: MessageCircle, color: 'bg-green-600' },
@@ -127,7 +126,6 @@ const palette: { type: ChatNodeType; label: string; icon: any; color: string }[]
   { type: 'condition', label: 'Condition', icon: GitBranch, color: 'bg-indigo-600' },
   { type: 'timing', label: 'Timing', icon: Clock, color: 'bg-cyan-600' },
   { type: 'goto_flow', label: 'Go to Flow', icon: ExternalLink, color: 'bg-teal-600' },
-  { type: 'webhook', label: 'Webhook', icon: Webhook, color: 'bg-rose-600' },
   { type: 'end', label: 'End', icon: StopCircle, color: 'bg-slate-600' },
 ]
 
@@ -812,7 +810,7 @@ onMounted(async () => {
 
     <!-- Preview overlay -->
     <Dialog v-model:open="showPreview">
-      <DialogContent class="max-w-[480px] h-[90vh] p-0 flex flex-col">
+      <DialogContent class="max-w-[900px] w-[90vw] h-[90vh] p-0 flex flex-col">
         <DialogTitle class="sr-only">Flow preview</DialogTitle>
         <InteractivePreview
           :graph="previewGraph"

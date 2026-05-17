@@ -37,6 +37,58 @@ function updateLabel(label: string) {
   emit('update:node', { ...props.node, label })
 }
 
+// "Text" in the palette covers both v2 `message` (fire-and-forget) and
+// v2 `prompt` (blocking + validating). The author chooses by picking an
+// expected response type — anything other than "none" flips the node to
+// `prompt` under the hood and exposes validation + store_as fields.
+const isTextNode = computed(() => props.node.type === 'message' || props.node.type === 'prompt')
+
+const expectedResponse = computed<string>(() => {
+  if (props.node.type === 'message') return 'none'
+  return (props.node.config?.input_type as string) || 'text'
+})
+
+function setExpectedResponse(value: string) {
+  if (value === 'none') {
+    // Drop prompt-only fields, switch type back to message.
+    const { input_type: _unused, validation_regex: _r, validation_error: _e, store_as: _s, max_retries: _m, body, ...rest } = props.node.config || {}
+    void _unused; void _r; void _e; void _s; void _m
+    emit('update:node', {
+      ...props.node,
+      type: 'message',
+      config: {
+        ...rest,
+        // The text in the message body lived under either `body` (prompt
+        // shape) or `message` (message shape) depending on history —
+        // collapse to `message` for fire-and-forget.
+        message: body || props.node.config?.message || '',
+      },
+    })
+    return
+  }
+  // Switch to prompt and remember the response variant.
+  const { message, ...rest } = props.node.config || {}
+  emit('update:node', {
+    ...props.node,
+    type: 'prompt',
+    config: {
+      ...rest,
+      body: rest.body || message || '',
+      input_type: value,
+    },
+  })
+}
+
+const textBodyValue = computed(() => {
+  if (props.node.type === 'prompt') return (props.node.config?.body as string) || ''
+  return (props.node.config?.message as string) || ''
+})
+
+function updateTextBody(value: string) {
+  const key = props.node.type === 'prompt' ? 'body' : 'message'
+  updateConfig(key, value)
+}
+
 // Buttons helpers
 function addReplyButton() {
   const buttons = [...(config.value.buttons || [])]
@@ -190,69 +242,74 @@ const typeLabel: Record<string, string> = {
       <Input :model-value="node.label" @update:model-value="(v) => updateLabel(String(v ?? ''))" class="h-8 text-sm" />
     </div>
 
-    <!-- message -->
-    <template v-if="node.type === 'message'">
+    <!-- text (message OR prompt) -->
+    <template v-if="isTextNode">
       <div class="space-y-1.5">
         <Label class="text-xs">Message</Label>
         <Textarea
-          :model-value="config.message || ''"
-          @update:model-value="(v: string) => updateConfig('message', v)"
+          :model-value="textBodyValue"
+          @update:model-value="(v: string) => updateTextBody(String(v ?? ''))"
           placeholder="Enter your message"
           class="min-h-[80px] text-xs"
         />
-        <p class="text-[10px] text-muted-foreground">Use double-brace placeholders (<code>var</code>) to interpolate session variables.</p>
-      </div>
-    </template>
-
-    <!-- prompt -->
-    <template v-if="node.type === 'prompt'">
-      <div class="space-y-1.5">
-        <Label class="text-xs">Prompt body</Label>
-        <Textarea
-          :model-value="config.body || ''"
-          @update:model-value="(v: string) => updateConfig('body', v)"
-          placeholder="Ask the user a question"
-          class="min-h-[80px] text-xs"
-        />
+        <p class="text-[10px] text-muted-foreground">Use double-brace placeholders (e.g. <code>customer_name</code>) to interpolate session variables.</p>
       </div>
       <div class="space-y-1.5">
-        <Label class="text-xs">Store response as</Label>
-        <Input
-          :model-value="config.store_as || ''"
-          @update:model-value="(v: string) => updateConfig('store_as', v)"
-          placeholder="variable_name"
-          class="h-8 text-sm font-mono"
-        />
+        <Label class="text-xs">Expected response</Label>
+        <Select :model-value="expectedResponse" @update:model-value="(v: any) => setExpectedResponse(v)">
+          <SelectTrigger class="h-8 text-sm"><SelectValue /></SelectTrigger>
+          <SelectContent>
+            <SelectItem value="none">None (fire-and-forget)</SelectItem>
+            <SelectItem value="text">Text</SelectItem>
+            <SelectItem value="number">Number</SelectItem>
+            <SelectItem value="email">Email</SelectItem>
+            <SelectItem value="phone">Phone</SelectItem>
+            <SelectItem value="date">Date</SelectItem>
+            <SelectItem value="select">Selection</SelectItem>
+          </SelectContent>
+        </Select>
+        <p class="text-[10px] text-muted-foreground">When set, the flow waits for the user's reply before continuing.</p>
       </div>
-      <div class="space-y-1.5">
-        <Label class="text-xs">Validation regex (optional)</Label>
-        <Input
-          :model-value="config.validation_regex || ''"
-          @update:model-value="(v: string) => updateConfig('validation_regex', v)"
-          placeholder="^[0-9]+$"
-          class="h-8 text-xs font-mono"
-        />
-      </div>
-      <div class="space-y-1.5">
-        <Label class="text-xs">Validation error message</Label>
-        <Input
-          :model-value="config.validation_error || ''"
-          @update:model-value="(v: string) => updateConfig('validation_error', v)"
-          placeholder="Invalid input. Please try again."
-          class="h-8 text-xs"
-        />
-      </div>
-      <div class="space-y-1.5">
-        <Label class="text-xs">Max retries</Label>
-        <Input
-          type="number"
-          :model-value="String(config.max_retries ?? 3)"
-          @update:model-value="(v: string) => updateConfig('max_retries', parseInt(v) || 3)"
-          class="h-8 text-sm"
-          min="1"
-          max="10"
-        />
-      </div>
+      <template v-if="node.type === 'prompt'">
+        <div class="space-y-1.5">
+          <Label class="text-xs">Store response as</Label>
+          <Input
+            :model-value="config.store_as || ''"
+            @update:model-value="(v: string) => updateConfig('store_as', v)"
+            placeholder="variable_name"
+            class="h-8 text-sm font-mono"
+          />
+        </div>
+        <div class="space-y-1.5">
+          <Label class="text-xs">Validation regex (optional)</Label>
+          <Input
+            :model-value="config.validation_regex || ''"
+            @update:model-value="(v: string) => updateConfig('validation_regex', v)"
+            placeholder="^[0-9]+$"
+            class="h-8 text-xs font-mono"
+          />
+        </div>
+        <div class="space-y-1.5">
+          <Label class="text-xs">Validation error message</Label>
+          <Input
+            :model-value="config.validation_error || ''"
+            @update:model-value="(v: string) => updateConfig('validation_error', v)"
+            placeholder="Invalid input. Please try again."
+            class="h-8 text-xs"
+          />
+        </div>
+        <div class="space-y-1.5">
+          <Label class="text-xs">Max retries</Label>
+          <Input
+            type="number"
+            :model-value="String(config.max_retries ?? 3)"
+            @update:model-value="(v: string) => updateConfig('max_retries', parseInt(v) || 3)"
+            class="h-8 text-sm"
+            min="1"
+            max="10"
+          />
+        </div>
+      </template>
     </template>
 
     <!-- buttons -->
@@ -577,5 +634,19 @@ const typeLabel: Record<string, string> = {
         />
       </div>
     </template>
+
+    <!-- Skip condition (universal). Evaluated by the runner before
+         executing this node; truthy → fall through via the default
+         edge without sending anything. -->
+    <div v-if="node.type !== 'end'" class="pt-2 border-t space-y-1.5">
+      <Label class="text-xs">Skip condition (optional)</Label>
+      <Input
+        :model-value="config.skip_condition || ''"
+        @update:model-value="(v: string) => updateConfig('skip_condition', v)"
+        placeholder='tier == "premium"'
+        class="h-8 text-xs font-mono"
+      />
+      <p class="text-[10px] text-muted-foreground">Skip this node when the expression evaluates truthy. Uses expr-lang syntax.</p>
+    </div>
   </div>
 </template>
