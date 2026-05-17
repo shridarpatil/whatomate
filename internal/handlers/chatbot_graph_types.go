@@ -23,8 +23,9 @@ const (
 	ChatNodeAIResponse  ChatNodeType = "ai_response"
 	ChatNodeTransfer    ChatNodeType = "transfer"
 	ChatNodeWebhook     ChatNodeType = "webhook"
-	ChatNodeGotoFlow    ChatNodeType = "goto_flow"
-	ChatNodeEnd         ChatNodeType = "end"
+	ChatNodeGotoFlow     ChatNodeType = "goto_flow"
+	ChatNodeWhatsAppFlow ChatNodeType = "whatsapp_flow"
+	ChatNodeEnd          ChatNodeType = "end"
 )
 
 // ChatNodePosition is the visual editor placement.

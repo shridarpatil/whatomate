@@ -28,12 +28,13 @@ var errChatGraphRunaway = errors.New("chat graph: too many non-blocking nodes in
 // as its outcome, so a later blocking node in the same run doesn't see
 // stale input.
 type chatNodeCtx struct {
-	account   *models.WhatsAppAccount
-	contact   *models.Contact
-	session   *models.ChatbotSession
-	userInput string
-	buttonID  string
-	consumed  bool
+	account          *models.WhatsAppAccount
+	contact          *models.Contact
+	session          *models.ChatbotSession
+	userInput        string
+	buttonID         string
+	flowResponseData map[string]any // form fields from a WhatsApp Flow submission
+	consumed         bool
 }
 
 // nodeOutcome is the return value of a node executor.
@@ -68,6 +69,7 @@ func (a *App) runChatGraph(
 	flow *models.ChatbotFlow,
 	userInput string,
 	buttonID string,
+	flowResponseData map[string]any,
 ) error {
 	graph, err := parseChatGraph(flow.Graph)
 	if err != nil {
@@ -78,11 +80,12 @@ func (a *App) runChatGraph(
 	}
 
 	ctx := &chatNodeCtx{
-		account:   account,
-		contact:   contact,
-		session:   session,
-		userInput: userInput,
-		buttonID:  buttonID,
+		account:          account,
+		contact:          contact,
+		session:          session,
+		userInput:        userInput,
+		buttonID:         buttonID,
+		flowResponseData: flowResponseData,
 	}
 
 	if session.CurrentStep == "" {
@@ -179,6 +182,8 @@ func (a *App) executeChatNode(node *ChatNode, ctx *chatNodeCtx) (nodeOutcome, er
 		return a.execChatWebhook(node, ctx)
 	case ChatNodeGotoFlow:
 		return a.execChatGotoFlow(node, ctx)
+	case ChatNodeWhatsAppFlow:
+		return a.execChatWhatsAppFlow(node, ctx)
 	case ChatNodeEnd:
 		return a.execChatEnd(node, ctx)
 	default:
@@ -776,6 +781,75 @@ func (a *App) execChatGotoFlow(node *ChatNode, ctx *chatNodeCtx) (nodeOutcome, e
 	ctx.session.CurrentFlowID = &target.ID
 
 	return nodeOutcome{outcome: "goto"}, nil
+}
+
+// execChatWhatsAppFlow sends an interactive WhatsApp Flow form on first
+// entry (yields to wait for the user's submission). On a later inbound
+// that carries a parsed flow_response_data, merges those fields into
+// SessionData and advances via the "default" edge.
+//
+// Config:
+//
+//	{
+//	  "flow_id": "<meta_flow_id>",   // required
+//	  "header":  "Header text",       // optional, templated
+//	  "body":    "Body text",         // optional, templated
+//	  "cta":     "Open form"           // optional CTA label
+//	}
+//
+// Submitted fields land in SessionData keyed by their form field names.
+// A misconfigured node logs + advances via default so the conversation
+// doesn't dead-end.
+func (a *App) execChatWhatsAppFlow(node *ChatNode, ctx *chatNodeCtx) (nodeOutcome, error) {
+	if !ctx.consumed && len(ctx.flowResponseData) > 0 {
+		ctx.consumed = true
+		if ctx.session.SessionData == nil {
+			ctx.session.SessionData = models.JSONB{}
+		}
+		maps.Copy(ctx.session.SessionData, ctx.flowResponseData)
+		return nodeOutcome{outcome: "default"}, nil
+	}
+
+	flowID := stringFromConfig(node.Config, "flow_id")
+	if flowID == "" {
+		a.Log.Warn("whatsapp_flow node missing flow_id",
+			"node", node.ID, "session", ctx.session.ID)
+		return nodeOutcome{outcome: "default"}, nil
+	}
+
+	body := processTemplate(stringFromConfig(node.Config, "body", "message", "text"), ctx.session.SessionData)
+	header := processTemplate(stringFromConfig(node.Config, "header"), ctx.session.SessionData)
+	cta := stringFromConfig(node.Config, "cta")
+
+	// Look up the first screen — same pattern as the legacy executor so
+	// existing WhatsAppFlow rows continue to work.
+	firstScreen := ""
+	var waFlow models.WhatsAppFlow
+	if err := a.DB.Where("meta_flow_id = ?", flowID).First(&waFlow).Error; err == nil {
+		if len(waFlow.Screens) > 0 {
+			if screenMap, ok := waFlow.Screens[0].(map[string]any); ok {
+				if id, ok := screenMap["id"].(string); ok {
+					firstScreen = id
+				}
+			}
+		}
+		if firstScreen == "" && waFlow.FlowJSON != nil {
+			if screens, ok := waFlow.FlowJSON["screens"].([]any); ok && len(screens) > 0 {
+				if screenMap, ok := screens[0].(map[string]any); ok {
+					if id, ok := screenMap["id"].(string); ok {
+						firstScreen = id
+					}
+				}
+			}
+		}
+	}
+
+	flowToken := fmt.Sprintf("chatbot_%s_%s_%d", ctx.session.ID.String(), node.ID, time.Now().UnixNano())
+	if err := a.sendAndSaveFlowMessage(ctx.account, ctx.contact, flowID, header, body, cta, flowToken, firstScreen); err != nil {
+		return nodeOutcome{}, fmt.Errorf("send whatsapp_flow: %w", err)
+	}
+	a.logSessionMessage(ctx.session.ID, models.DirectionOutgoing, body, node.ID)
+	return nodeOutcome{yield: true}, nil
 }
 
 // execChatEnd optionally sends a final message and returns an empty
