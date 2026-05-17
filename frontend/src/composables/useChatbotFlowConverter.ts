@@ -197,7 +197,7 @@ export function extractCanvasLayout(nodes: Node[]): CanvasLayout {
 // the backend executor implements today. Anything outside this set forces
 // the flow to keep using the legacy steps[] wire format until the matching
 // node type lands.
-const V2_SUPPORTED_MESSAGE_TYPES = new Set(['text', 'buttons', 'end', 'condition', 'timing', 'goto_flow', 'api_fetch', 'whatsapp_flow'])
+const V2_SUPPORTED_MESSAGE_TYPES = new Set(['text', 'buttons', 'end', 'condition', 'timing', 'goto_flow', 'api_fetch', 'whatsapp_flow', 'transfer'])
 
 function messageTypeToNodeType(messageType: string): ChatNodeType | null {
   switch (messageType) {
@@ -219,6 +219,8 @@ function messageTypeToNodeType(messageType: string): ChatNodeType | null {
       return 'api_call'
     case 'whatsapp_flow':
       return 'whatsapp_flow'
+    case 'transfer':
+      return 'transfer'
     default:
       return null
   }
@@ -242,6 +244,8 @@ function nodeTypeToMessageType(nodeType: string): string | null {
       return 'api_fetch'
     case 'whatsapp_flow':
       return 'whatsapp_flow'
+    case 'transfer':
+      return 'transfer'
     default:
       return null
   }
@@ -251,7 +255,7 @@ function nodeTypeToMessageType(nodeType: string): string | null {
 // parameter to a structural type lets callers pass FlowStep variants
 // where message_type is `string` rather than the strict union (the chat
 // flow builder defines a local relaxed FlowStep on top of v1 fields).
-type StepInput = Pick<FlowStep, 'step_name' | 'step_order' | 'message' | 'next_step' | 'conditional_next' | 'buttons' | 'label' | 'input_config' | 'api_config'> & { message_type: string }
+type StepInput = Pick<FlowStep, 'step_name' | 'step_order' | 'message' | 'next_step' | 'conditional_next' | 'buttons' | 'label' | 'input_config' | 'api_config' | 'transfer_config'> & { message_type: string }
 
 /**
  * Convert the v1 FlowStep[] model to a v2 graph payload. Returns null
@@ -326,6 +330,19 @@ export function stepsToGraph(steps: StepInput[], canvasLayout?: CanvasLayout): C
       config.flow_id = (ic.whatsapp_flow_id as string) || (ic.flow_id as string) || ''
       config.header = (ic.flow_header as string) || (ic.header as string) || ''
       config.cta = (ic.flow_cta as string) || (ic.cta as string) || ''
+      if (step.message) {
+        config.body = step.message
+      }
+    } else if (nodeType === 'transfer') {
+      // v1 transfer step → v2 transfer node. Body comes from
+      // step.message; team_id + notes from step.transfer_config.
+      const tc = step.transfer_config || {}
+      if ((tc as any).team_id) {
+        config.team_id = (tc as any).team_id
+      }
+      if ((tc as any).notes) {
+        config.notes = (tc as any).notes
+      }
       if (step.message) {
         config.body = step.message
       }
@@ -502,6 +519,14 @@ export function graphToSteps(graph: ChatFlowGraph): { steps: FlowStep[]; canvas_
         whatsapp_flow_id: (cfg.flow_id as string) || '',
         flow_header: (cfg.header as string) || '',
         flow_cta: (cfg.cta as string) || '',
+      }
+      if (cfg.body) {
+        step.message = cfg.body as string
+      }
+    } else if (node.type === 'transfer') {
+      step.transfer_config = {
+        team_id: (cfg.team_id as string) || '_general',
+        notes: (cfg.notes as string) || '',
       }
       if (cfg.body) {
         step.message = cfg.body as string
