@@ -559,6 +559,19 @@ type SendMessageRequest struct {
 
 	// Interactive message fields (for type="interactive")
 	Interactive *InteractiveContent `json:"interactive,omitempty"`
+
+	// Flow message fields (for type="flow")
+	Flow *FlowContent `json:"flow,omitempty"`
+}
+
+// FlowContent holds WhatsApp Flow message data
+type FlowContent struct {
+	FlowID      string `json:"flow_id"`
+	HeaderText  string `json:"header_text,omitempty"`
+	BodyText    string `json:"body_text"`
+	CTAText     string `json:"cta_text,omitempty"`
+	FlowToken   string `json:"flow_token,omitempty"`
+	FirstScreen string `json:"first_screen,omitempty"`
 }
 
 // InteractiveContent holds interactive message data
@@ -639,6 +652,19 @@ func (a *App) SendMessage(r *fastglue.Request) error {
 		Type:           req.Type,
 		Content:        req.Content.Body,
 		ReplyToMessage: replyToMessage,
+	}
+
+	// Handle flow messages
+	if req.Type == models.MessageTypeFlow && req.Flow != nil {
+		msgReq.FlowID = req.Flow.FlowID
+		msgReq.FlowHeader = req.Flow.HeaderText
+		msgReq.BodyText = req.Flow.BodyText
+		if msgReq.Content == "" {
+			msgReq.Content = req.Flow.BodyText
+		}
+		msgReq.FlowCTA = req.Flow.CTAText
+		msgReq.FlowToken = req.Flow.FlowToken
+		msgReq.FlowFirstScreen = req.Flow.FirstScreen
 	}
 
 	// Handle interactive messages

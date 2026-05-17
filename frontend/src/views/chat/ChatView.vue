@@ -94,6 +94,7 @@ import { useInfiniteScroll } from '@/composables/useInfiniteScroll'
 import CannedResponsePicker from '@/components/chat/CannedResponsePicker.vue'
 import PreviewButtonGroup from '@/components/chatbot/flow-preview/PreviewButtonGroup.vue'
 import TemplatePicker from '@/components/chat/TemplatePicker.vue'
+import FlowPicker from '@/components/chat/FlowPicker.vue'
 import ContactInfoPanel from '@/components/chat/ContactInfoPanel.vue'
 import ConversationNotes from '@/components/chat/ConversationNotes.vue'
 import CallButton from '@/components/calling/CallButton.vue'
@@ -192,6 +193,57 @@ const {
   handleFileChange: handleTemplateHeaderFile,
   clear: clearTemplateHeaderMedia,
 } = useHeaderMedia(templateHeaderType)
+
+// Flow picker state
+const flowDialogOpen = ref(false)
+const selectedFlow = ref<any>(null)
+const flowHeaderText = ref('')
+const flowBodyText = ref('')
+const flowCtaText = ref('Open')
+const isSendingFlow = ref(false)
+
+function handleFlowSelect(flow: any) {
+  selectedFlow.value = flow
+  flowHeaderText.value = ''
+  flowBodyText.value = t('chat.defaultFlowBody', 'Please fill out this form:')
+  flowCtaText.value = 'Open'
+  flowDialogOpen.value = true
+}
+
+async function sendFlowMessage() {
+  if (!contactsStore.currentContact || !selectedFlow.value) return
+
+  if (!flowBodyText.value?.trim()) {
+    toast.error(t('chat.parameterRequired'))
+    return
+  }
+
+  isSendingFlow.value = true
+  try {
+    await contactsStore.sendMessage(
+      contactsStore.currentContact.id,
+      'flow',
+      flowBodyText.value,
+      contactsStore.replyingTo?.id,
+      selectedAccount.value || undefined,
+      {
+        flow: {
+          flow_id: selectedFlow.value.meta_flow_id || selectedFlow.value.id,
+          header_text: flowHeaderText.value || undefined,
+          body_text: flowBodyText.value,
+          cta_text: flowCtaText.value || 'Open',
+        }
+      }
+    )
+    toast.success(t('chat.messageSent'))
+    flowDialogOpen.value = false
+    contactsStore.clearReplyingTo()
+  } catch (error) {
+    toast.error(t('chat.failedToSend'))
+  } finally {
+    isSendingFlow.value = false
+  }
+}
 
 // Custom actions state
 const customActions = ref<CustomAction[]>([])
@@ -2384,6 +2436,17 @@ async function sendMediaMessage() {
             </Tooltip>
             <Tooltip>
               <TooltipTrigger as-child>
+                <span>
+                  <FlowPicker
+                    :selected-account="selectedAccount"
+                    @select="handleFlowSelect"
+                  />
+                </span>
+              </TooltipTrigger>
+              <TooltipContent>{{ $t('chat.sendFlow', 'Send Flow') }}</TooltipContent>
+            </Tooltip>
+            <Tooltip>
+              <TooltipTrigger as-child>
                 <button type="button" class="w-9 h-9 rounded-lg hover:bg-white/[0.08] light:hover:bg-gray-200 flex items-center justify-center transition-colors" @click="openFilePicker">
                   <Paperclip class="w-[18px] h-[18px] text-white/40 light:text-gray-500" />
                 </button>
@@ -2493,6 +2556,64 @@ async function sendMediaMessage() {
           <Button variant="outline" @click="templateDialogOpen = false">{{ $t('common.cancel') }}</Button>
           <Button @click="sendTemplateMessage" :disabled="isSendingTemplate">
             <Loader2 v-if="isSendingTemplate" class="h-4 w-4 mr-2 animate-spin" />
+            {{ $t('chat.send') }}
+          </Button>
+        </div>
+      </DialogContent>
+    </Dialog>
+
+    <!-- Flow Params Dialog -->
+    <Dialog v-model:open="flowDialogOpen">
+      <DialogContent class="max-w-sm">
+        <DialogHeader>
+          <DialogTitle>{{ $t('chat.sendFlow', 'Send WhatsApp Flow') }}</DialogTitle>
+          <DialogDescription>
+            {{ selectedFlow?.name }}
+          </DialogDescription>
+        </DialogHeader>
+        <div class="py-4 space-y-3">
+          <div class="space-y-1">
+            <label class="text-sm font-medium">{{ $t('chat.headerText', 'Header Text (Optional)') }}</label>
+            <Input
+              v-model="flowHeaderText"
+              :placeholder="$t('chat.headerTextPlaceholder', 'Enter header text...')"
+              class="h-9"
+            />
+          </div>
+          <div class="space-y-1">
+            <label class="text-sm font-medium">{{ $t('chat.bodyText', 'Body Text') }}</label>
+            <Textarea
+              v-model="flowBodyText"
+              :placeholder="$t('chat.bodyTextPlaceholder', 'Enter message body...')"
+              class="resize-none"
+              :rows="2"
+            />
+          </div>
+          <div class="space-y-1">
+            <label class="text-sm font-medium">{{ $t('chat.ctaText', 'Button Text') }}</label>
+            <Input
+              v-model="flowCtaText"
+              :placeholder="$t('chat.ctaTextPlaceholder', 'Open')"
+              class="h-9"
+            />
+          </div>
+          <div class="space-y-1">
+            <label class="text-xs font-medium text-muted-foreground">{{ $t('chat.preview') }}</label>
+            <div class="chat-bubble chat-bubble-outgoing ml-auto" style="max-width: 100%;">
+              <div v-if="flowHeaderText" class="font-semibold text-xs mb-1">{{ flowHeaderText }}</div>
+              <span class="whitespace-pre-wrap break-words text-sm">{{ flowBodyText }}</span>
+              <div class="interactive-buttons mt-2 -mx-2 -mb-1.5 border-t">
+                <div class="py-2 text-sm text-center font-medium text-primary">
+                  {{ flowCtaText || 'Open' }}
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="flex justify-end gap-2">
+          <Button variant="outline" @click="flowDialogOpen = false">{{ $t('common.cancel') }}</Button>
+          <Button @click="sendFlowMessage" :disabled="isSendingFlow">
+            <Loader2 v-if="isSendingFlow" class="h-4 w-4 mr-2 animate-spin" />
             {{ $t('chat.send') }}
           </Button>
         </div>
