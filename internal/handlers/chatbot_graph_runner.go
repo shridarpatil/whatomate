@@ -436,7 +436,7 @@ func (a *App) execChatCondition(node *ChatNode, ctx *chatNodeCtx) (nodeOutcome, 
 // expr-lang/expr against SessionData. The result is coerced to bool —
 // non-bool truthy values count as true (matches expr's natural casting).
 func evaluateConditionExpression(expression string, data models.JSONB) (bool, error) {
-	env := make(map[string]any, len(data)+1)
+	env := make(map[string]any, len(data))
 	maps.Copy(env, data)
 
 	program, err := expr.Compile(expression, expr.Env(env), expr.AllowUndefinedVariables())
