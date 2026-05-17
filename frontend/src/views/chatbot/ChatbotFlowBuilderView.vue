@@ -313,6 +313,12 @@ function onEdgeUpdate({ edge, connection }: { edge: Edge; connection: Connection
 function onUpdateNode(updated: ChatNode) {
   const node = nodes.value.find((n) => n.id === updated.id)
   if (!node) return
+  if (updated.type !== node.type) {
+    // "Text" nodes flip between v2 message / prompt when the author
+    // sets an expected response. Vue Flow keys components off node.type
+    // so this swap has to land back in the canvas state too.
+    node.type = updated.type
+  }
   node.data = {
     ...node.data,
     label: updated.label,
