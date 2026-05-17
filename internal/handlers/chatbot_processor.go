@@ -406,34 +406,43 @@ func (a *App) processIncomingMessageFull(phoneNumberID string, msg IncomingTextM
 		return
 	}
 
-	// Check if user is in an active flow
+	// Check if user is in an active flow. After Phase 4.2 every flow has
+	// a v2 Graph populated; any flow without one is a misconfiguration
+	// (manual DB edit or failed backfill) — log and exit cleanly.
 	if session.CurrentFlowID != nil {
-		if flow, err := a.getChatbotFlowByIDCached(account.OrganizationID, *session.CurrentFlowID); err == nil && flow.Graph != nil {
-			if err := a.runChatGraph(account, contact, session, flow, messageText, buttonID, flowResponseData); err != nil {
-				a.Log.Error("Chat graph runner failed", "error", err, "session", session.ID, "flow", flow.ID)
-			}
+		flow, err := a.getChatbotFlowByIDCached(account.OrganizationID, *session.CurrentFlowID)
+		if err != nil || flow == nil {
+			a.Log.Error("Active chatbot flow not loadable", "error", err, "session", session.ID, "flow", session.CurrentFlowID)
+			a.exitFlow(session)
 			return
 		}
-		a.processFlowResponse(account, session, contact, messageText, buttonID, flowResponseData)
+		if flow.Graph == nil {
+			a.Log.Error("Active chatbot flow has no v2 graph; ignoring inbound", "session", session.ID, "flow", flow.ID)
+			a.exitFlow(session)
+			return
+		}
+		if err := a.runChatGraph(account, contact, session, flow, messageText, buttonID, flowResponseData); err != nil {
+			a.Log.Error("Chat graph runner failed", "error", err, "session", session.ID, "flow", flow.ID)
+		}
 		return
 	}
 
 	// Try to match flow trigger keywords first (before greeting to avoid duplicate messages)
 	if flow := a.matchFlowTrigger(account.OrganizationID, messageText); flow != nil {
-		if flow.Graph != nil {
-			session.CurrentFlowID = &flow.ID
-			session.CurrentStep = ""
-			session.StepRetries = 0
-			session.SessionData = models.JSONB{
-				"_flow_id":   flow.ID.String(),
-				"_flow_name": flow.Name,
-			}
-			if err := a.runChatGraph(account, contact, session, flow, messageText, buttonID, flowResponseData); err != nil {
-				a.Log.Error("Chat graph runner failed at flow start", "error", err, "session", session.ID, "flow", flow.ID)
-			}
+		if flow.Graph == nil {
+			a.Log.Error("Triggered chatbot flow has no v2 graph; ignoring", "flow", flow.ID)
 			return
 		}
-		a.startFlow(account, session, contact, flow)
+		session.CurrentFlowID = &flow.ID
+		session.CurrentStep = ""
+		session.StepRetries = 0
+		session.SessionData = models.JSONB{
+			"_flow_id":   flow.ID.String(),
+			"_flow_name": flow.Name,
+		}
+		if err := a.runChatGraph(account, contact, session, flow, messageText, buttonID, flowResponseData); err != nil {
+			a.Log.Error("Chat graph runner failed at flow start", "error", err, "session", session.ID, "flow", flow.ID)
+		}
 		return
 	}
 
