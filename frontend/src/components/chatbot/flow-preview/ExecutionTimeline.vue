@@ -44,12 +44,14 @@ const formattedEntries = computed(() => {
         icon = LogIn
         color = 'text-blue-500'
         label = `Enter: ${entry.stepName}`
-        details = `${entry.details.messageType}/${entry.details.inputType}`
+        details = (entry.details.type as string)
+          || `${entry.details.messageType || ''}/${entry.details.inputType || ''}`.replace(/^\/$/, '')
         break
       case 'step_exit':
         icon = LogOut
         color = 'text-gray-400'
         label = `Exit: ${entry.stepName}`
+        details = (entry.details.outcome as string) || (entry.details.next as string) || ''
         break
       case 'variable_set':
         icon = Tag
