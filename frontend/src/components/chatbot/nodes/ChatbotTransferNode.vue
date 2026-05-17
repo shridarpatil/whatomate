@@ -8,16 +8,17 @@ defineOptions({ inheritAttrs: false })
 const props = defineProps<{ data: any }>()
 
 const teamLabel = computed(() => {
-  const cfg = props.data?.config?.transfer_config
-  if (!cfg?.team_id || cfg.team_id === '_general') return 'General Queue'
-  // If a team_name was injected, use it
-  if (cfg.team_name) return cfg.team_name
-  // Fallback: show truncated team ID
-  return cfg.team_id.length > 12 ? cfg.team_id.slice(0, 12) + '…' : cfg.team_id
+  const cfg = props.data?.config || {}
+  const teamId = cfg.team_id || cfg.transfer_config?.team_id
+  const teamName = cfg.team_name || cfg.transfer_config?.team_name
+  if (!teamId || teamId === '_general') return 'General Queue'
+  if (teamName) return teamName
+  return teamId.length > 12 ? teamId.slice(0, 12) + '…' : teamId
 })
 
 const notes = computed(() => {
-  return props.data?.config?.transfer_config?.notes || ''
+  const cfg = props.data?.config || {}
+  return cfg.notes || cfg.transfer_config?.notes || ''
 })
 </script>
 

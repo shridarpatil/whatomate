@@ -8,7 +8,8 @@ defineOptions({ inheritAttrs: false })
 const props = defineProps<{ data: any }>()
 
 const message = computed(() => {
-  const msg = props.data?.config?.message || ''
+  const cfg = props.data?.config || {}
+  const msg = cfg.message || cfg.body || ''
   return msg.length > 60 ? msg.slice(0, 60) + '...' : msg || 'No message'
 })
 
