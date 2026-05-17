@@ -352,6 +352,12 @@ const typeLabel: Record<string, string> = {
             </Button>
           </div>
           <Input
+            :model-value="btn.id || ''"
+            @update:model-value="(v: string) => updateButton(Number(idx), 'id', v)"
+            placeholder="button_id"
+            class="h-7 text-xs font-mono"
+          />
+          <Input
             v-if="btn.type === 'url'"
             :model-value="btn.url || ''"
             @update:model-value="(v: string) => updateButton(Number(idx), 'url', v)"
@@ -366,6 +372,7 @@ const typeLabel: Record<string, string> = {
             class="h-7 text-xs font-mono"
           />
         </div>
+        <p class="text-[10px] text-muted-foreground">Reply buttons (max 10) send the user's choice back. URL / Phone buttons (max 2 per node, mutually exclusive with Reply) open a link or call. Wire reply buttons to next nodes by dragging from the button handle on the canvas.</p>
       </div>
     </template>
 
