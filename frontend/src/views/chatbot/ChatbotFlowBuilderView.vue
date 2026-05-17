@@ -589,6 +589,42 @@ function defaultLabelForType(type: string): string {
   return stepTypeLabels[type] || type
 }
 
+// renameSelectedStep keeps the canvas + edges in sync when the user
+// changes step_name. step_name is the identifier referenced by edges,
+// canvas_layout.node_positions, and other steps' next_step /
+// conditional_next, so the rename has to cascade.
+function renameSelectedStep(newName: string) {
+  if (!selectedStep.value) return
+  const oldName = selectedStep.value.step_name
+  if (oldName === newName) return
+
+  // Update inter-step references on every other step.
+  for (const step of formData.value.steps) {
+    if (step === selectedStep.value) continue
+    if (step.next_step === oldName) {
+      step.next_step = newName
+    }
+    if (step.conditional_next) {
+      for (const handle of Object.keys(step.conditional_next)) {
+        if (step.conditional_next[handle] === oldName) {
+          step.conditional_next[handle] = newName
+        }
+      }
+    }
+  }
+
+  // Move the saved canvas position to the new key so the node doesn't
+  // jump back to the default {x, y} on the next rebuild.
+  const positions = (formData.value.canvas_layout?.node_positions as Record<string, { x: number; y: number }> | undefined) || undefined
+  if (positions && positions[oldName]) {
+    positions[newName] = positions[oldName]
+    delete positions[oldName]
+  }
+
+  selectedStep.value.step_name = newName
+  hasUnsavedChanges.value = true
+}
+
 function addStep(type?: string) {
   const newOrder = formData.value.steps.length + 1
   const resolvedType = type || 'text'
@@ -1561,8 +1597,13 @@ function confirmCancel() {
               </div>
               <div class="space-y-1.5">
                 <Label class="text-xs">{{ $t('flowBuilder.stepName') }}</Label>
-                <Input v-model="selectedStep.step_name" :placeholder="$t('flowBuilder.stepNamePlaceholder')" class="h-8" />
-                <p class="text-xs text-muted-foreground">Internal identifier; referenced by edges. Avoid renaming after connecting steps.</p>
+                <Input
+                  :model-value="selectedStep.step_name"
+                  @update:model-value="(v) => renameSelectedStep(String(v ?? ''))"
+                  :placeholder="$t('flowBuilder.stepNamePlaceholder')"
+                  class="h-8"
+                />
+                <p class="text-xs text-muted-foreground">Internal identifier; referenced by edges. Renames cascade to canvas position and incoming connections.</p>
               </div>
               <div v-if="selectedStep.message_type !== 'end' && selectedStep.message_type !== 'condition' && selectedStep.message_type !== 'timing' && selectedStep.message_type !== 'transfer' && selectedStep.message_type !== 'goto_flow'" class="space-y-1.5">
                 <Label class="text-xs">{{ $t('flowBuilder.storeResponseAs') }}</Label>
