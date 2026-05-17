@@ -251,6 +251,11 @@ POST /api/chatbot/flows
 
 ### Request Body
 
+Flows are stored as a graph: `nodes` (each with an `id`, `type`, and
+type-specific `config`) connected by `edges` labelled with the
+outcome they handle. Execution starts at `entry_node` and walks edges
+until a node yields (waiting on user input) or terminates.
+
 ```json
 {
   "name": "Feedback Collection",
@@ -258,78 +263,93 @@ POST /api/chatbot/flows
   "initial_message": "Hi! I'd like to collect your feedback.",
   "completion_message": "Thank you for your feedback!",
   "enabled": true,
-  "panel_config": {
-    "sections": [
+  "graph": {
+    "version": 2,
+    "entry_node": "rating",
+    "nodes": [
       {
-        "id": "customer",
-        "label": "Customer Info",
-        "columns": 1,
-        "collapsible": true,
-        "default_collapsed": false,
-        "order": 1,
-        "fields": [
-          {"key": "rating", "label": "Rating", "order": 1},
-          {"key": "comment", "label": "Comment", "order": 2}
-        ]
+        "id": "rating",
+        "type": "buttons",
+        "label": "Ask for rating",
+        "position": {"x": 0, "y": 0},
+        "config": {
+          "body": "How would you rate your experience?",
+          "buttons": [
+            {"id": "excellent", "title": "Excellent"},
+            {"id": "good", "title": "Good"},
+            {"id": "poor", "title": "Poor"}
+          ]
+        }
+      },
+      {
+        "id": "comment",
+        "type": "prompt",
+        "label": "Collect comment",
+        "position": {"x": 250, "y": 0},
+        "config": {
+          "body": "Any additional comments?",
+          "store_as": "comment"
+        }
+      },
+      {
+        "id": "handoff",
+        "type": "transfer",
+        "label": "Transfer to team",
+        "position": {"x": 500, "y": 0},
+        "config": {
+          "body": "Connecting you with our team…",
+          "team_id": "<uuid>",
+          "notes": "Rating: {{rating}}"
+        }
       }
+    ],
+    "edges": [
+      {"from": "rating", "to": "comment", "condition": "button:excellent"},
+      {"from": "rating", "to": "comment", "condition": "button:good"},
+      {"from": "rating", "to": "handoff", "condition": "button:poor"},
+      {"from": "comment", "to": "handoff", "condition": "default"}
     ]
-  },
-  "steps": [
-    {
-      "step_name": "rating",
-      "step_order": 1,
-      "message": "How would you rate your experience?",
-      "message_type": "buttons",
-      "input_type": "select",
-      "buttons": [
-        {"id": "excellent", "title": "Excellent"},
-        {"id": "good", "title": "Good"},
-        {"id": "poor", "title": "Poor"}
-      ],
-      "store_as": "rating"
-    },
-    {
-      "step_name": "comment",
-      "step_order": 2,
-      "message": "Any additional comments?",
-      "message_type": "text",
-      "input_type": "text",
-      "store_as": "comment"
-    },
-    {
-      "step_name": "transfer",
-      "step_order": 3,
-      "message": "Connecting you with our team...",
-      "message_type": "transfer",
-      "transfer_config": {
-        "team_id": "uuid",
-        "notes": "Rating: {{rating}}"
-      }
-    }
-  ]
+  }
 }
 ```
 
-### Step Message Types
+### Node Types
 
-| Type | Description |
-|------|-------------|
-| `text` | Send a static text message |
-| `buttons` | Send message with interactive buttons |
-| `api_fetch` | Fetch message content from external API |
-| `whatsapp_flow` | Trigger a native WhatsApp Flow |
-| `transfer` | Transfer conversation to agent/team and end flow |
+Every node has the shape `{ "id", "type", "label", "position", "config" }`.
+The `config` schema depends on `type`.
 
-### Transfer Step Configuration
+| Type | Purpose | Key config fields | Outgoing edge conditions |
+|------|---------|-------------------|--------------------------|
+| `message` | Send a templated text message. | `message` | `default` |
+| `prompt` | Send a question; wait for and validate a reply. | `body`, `store_as`, `validation_regex`, `validation_error`, `max_retries` | `default`, `max_retries` |
+| `buttons` | Interactive reply buttons. | `body`, `buttons: [{id,title}]` | `button:<id>` per button |
+| `api_call` | HTTP request with response capture + optional templated reply. | `url`, `method`, `headers`, `body`, `response_mapping`, `message_template` | `http:2xx`, `http:non2xx` |
+| `condition` | Boolean expression branch ([expr-lang](https://expr-lang.org/) syntax) over session data. | `expression` | `true`, `false` |
+| `timing` | Business-hours routing. | `schedule: [{day,enabled,start_time,end_time}]` | `in_hours`, `out_of_hours` |
+| `whatsapp_flow` | Send a native WhatsApp Flow form. | `flow_id`, `header`, `body`, `cta` | `default` |
+| `transfer` | Hand off to a team / queue and end the session. | `body`, `team_id`, `notes` | (terminal) |
+| `goto_flow` | Jump to another flow in the same org/account. | `flow_id` | (handled internally) |
+| `webhook` | Fire-and-forget HTTP call; result ignored. | `url`, `method`, `headers`, `body` | `default` |
+| `end` | Optionally send a final message and terminate. | `message` | (terminal) |
 
-The `transfer` message type ends the flow and creates an agent transfer:
+### Edge resolution
+
+For a node `N` that produces outcome `O`, the runtime picks the first
+edge in `edges` where `from == N.id && condition == O`. If no exact
+match exists it falls back to a `condition: "default"` edge. With no
+match at all the session terminates as completed.
+
+### Transfer Node Configuration
+
+A `transfer` node ends the flow and creates an agent transfer:
 
 ```json
 {
-  "message_type": "transfer",
-  "message": "Connecting you with our support team...",
-  "transfer_config": {
-    "team_id": "uuid",
+  "id": "handoff",
+  "type": "transfer",
+  "config": {
+    "body": "Connecting you with our support team…",
+    "team_id": "<uuid>",
     "notes": "From flow: {{variable_name}}"
   }
 }
@@ -337,8 +357,9 @@ The `transfer` message type ends the flow and creates an agent transfer:
 
 | Field | Description |
 |-------|-------------|
-| `team_id` | Target team UUID (omit for general queue) |
-| `notes` | Internal notes for agents (supports `{{variable}}` placeholders) |
+| `body` | Optional message sent to the user before handoff (templated). |
+| `team_id` | Target team UUID. Omit or set to `"_general"` for the shared queue. |
+| `notes` | Internal notes for agents (supports `{{variable}}` placeholders). |
 
 ### Panel Configuration
 
