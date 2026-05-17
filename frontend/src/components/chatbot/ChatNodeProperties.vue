@@ -374,6 +374,50 @@ const typeLabel: Record<string, string> = {
         </div>
         <p class="text-[10px] text-muted-foreground">Reply buttons (max 10) send the user's choice back. URL / Phone buttons (max 2 per node, mutually exclusive with Reply) open a link or call. Wire reply buttons to next nodes by dragging from the button handle on the canvas.</p>
       </div>
+
+      <!-- Input — buttons always expect a button selection; surface this
+           for visual consistency with text nodes. -->
+      <div class="pt-2 border-t space-y-1.5">
+        <Label class="text-xs">Expected response</Label>
+        <Select model-value="button" disabled>
+          <SelectTrigger class="h-8 text-sm"><SelectValue /></SelectTrigger>
+          <SelectContent>
+            <SelectItem value="button">Selection (buttons)</SelectItem>
+          </SelectContent>
+        </Select>
+      </div>
+
+      <!-- Validation — applied to the button id the user picks. If the
+           id doesn't match, the runner increments retries and re-prompts. -->
+      <div class="space-y-1.5">
+        <Label class="text-xs">Validation regex (optional)</Label>
+        <Input
+          :model-value="config.validation_regex || ''"
+          @update:model-value="(v: string) => updateConfig('validation_regex', v)"
+          placeholder="^(docs_expert|docs_back)$"
+          class="h-8 text-xs font-mono"
+        />
+      </div>
+      <div class="space-y-1.5">
+        <Label class="text-xs">Validation error message</Label>
+        <Input
+          :model-value="config.validation_error || ''"
+          @update:model-value="(v: string) => updateConfig('validation_error', v)"
+          placeholder="That's not a valid option. Please tap one of the buttons."
+          class="h-8 text-xs"
+        />
+      </div>
+      <div class="space-y-1.5">
+        <Label class="text-xs">Max retries</Label>
+        <Input
+          type="number"
+          :model-value="String(config.max_retries ?? 3)"
+          @update:model-value="(v: string) => updateConfig('max_retries', parseInt(v) || 3)"
+          class="h-8 text-sm"
+          min="1"
+          max="10"
+        />
+      </div>
     </template>
 
     <!-- api_call -->
