@@ -62,13 +62,13 @@ const messageTypePalette = [
   { type: 'end', label: 'End', icon: StopCircle, color: 'bg-slate-600' },
 ]
 
-// Track which step is selected on the canvas (index)
-const selectedOnCanvas = ref<number | null>(null)
-
+// Selection source-of-truth lives in the parent (props.selectedStepIndex).
+// Reading from props lets the palette react to selection made either
+// here (canvas click) or in the steps list panel.
 function getSelectedStepType(): string | null {
-  if (selectedOnCanvas.value === null) return null
+  if (props.selectedStepIndex === null) return null
   const sorted = [...(props.steps || [])].sort((a, b) => a.step_order - b.step_order)
-  return sorted[selectedOnCanvas.value]?.message_type || null
+  return sorted[props.selectedStepIndex]?.message_type || null
 }
 
 const nodeTypes: Record<string, any> = {
@@ -158,19 +158,17 @@ function onNodeClick(event: NodeMouseEvent) {
   const sorted = [...(props.steps || [])].sort((a, b) => a.step_order - b.step_order)
   const idx = sorted.findIndex((s) => s.step_name === event.node.id)
   if (idx !== -1) {
-    selectedOnCanvas.value = idx
     emit('selectStep', idx)
   }
 }
 
 function onPaneClick() {
-  selectedOnCanvas.value = null
   emit('selectFlowSettings')
 }
 
 function onPaletteClick(type: string) {
-  if (selectedOnCanvas.value !== null) {
-    emit('changeStepType', selectedOnCanvas.value, type)
+  if (props.selectedStepIndex !== null) {
+    emit('changeStepType', props.selectedStepIndex, type)
   }
 }
 
@@ -243,7 +241,7 @@ function onEdgeRemove(edges: Edge[]) {
     <!-- Message Type Palette -->
     <div class="flex items-center gap-2 px-4 py-2 border-b bg-muted/30 overflow-x-auto shrink-0">
       <span class="text-xs text-muted-foreground shrink-0">
-        {{ selectedOnCanvas !== null ? 'Change type:' : 'Add step:' }}
+        {{ props.selectedStepIndex !== null ? 'Change type:' : 'Add step:' }}
       </span>
       <Button
         v-for="p in messageTypePalette"
@@ -251,7 +249,7 @@ function onEdgeRemove(edges: Edge[]) {
         :variant="getSelectedStepType() === p.type ? 'active' : 'outline'"
         size="sm"
         class="h-7 text-xs gap-1.5 shrink-0"
-        @click="selectedOnCanvas !== null ? onPaletteClick(p.type) : emit('addStep', p.type)"
+        @click="props.selectedStepIndex !== null ? onPaletteClick(p.type) : emit('addStep', p.type)"
       >
         <div :class="['w-2 h-2 rounded-full', p.color]" />
         <component :is="p.icon" class="w-3.5 h-3.5" />

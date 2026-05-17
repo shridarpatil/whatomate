@@ -695,13 +695,14 @@ function addStep(type?: string) {
 
 function selectStep(index: number) {
   selectedStepIndex.value = index
-  showFlowSettings.value = false
+  // Keep the canvas (FlowChart + its type palette) visible. The user can
+  // change step type or wire connections without losing context; the
+  // WhatsApp preview is accessed explicitly via the Preview button.
   previewMode.value = 'edit'
 }
 
 function selectStepFromCanvas(index: number) {
   selectedStepIndex.value = index
-  // Keep canvas visible, just update right panel to show step properties
 }
 
 function selectFlowSettings() {
