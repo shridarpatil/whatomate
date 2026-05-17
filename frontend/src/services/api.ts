@@ -1059,6 +1059,7 @@ export type ChatNodeType =
   | 'transfer'
   | 'webhook'
   | 'goto_flow'
+  | 'whatsapp_flow'
 
 export interface ChatNode {
   id: string

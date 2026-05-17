@@ -197,7 +197,7 @@ export function extractCanvasLayout(nodes: Node[]): CanvasLayout {
 // the backend executor implements today. Anything outside this set forces
 // the flow to keep using the legacy steps[] wire format until the matching
 // node type lands.
-const V2_SUPPORTED_MESSAGE_TYPES = new Set(['text', 'buttons', 'end', 'condition', 'timing', 'goto_flow', 'api_fetch'])
+const V2_SUPPORTED_MESSAGE_TYPES = new Set(['text', 'buttons', 'end', 'condition', 'timing', 'goto_flow', 'api_fetch', 'whatsapp_flow'])
 
 function messageTypeToNodeType(messageType: string): ChatNodeType | null {
   switch (messageType) {
@@ -217,6 +217,8 @@ function messageTypeToNodeType(messageType: string): ChatNodeType | null {
       // v1 api_fetch bundles fetch + send-templated-message; the backend
       // api_call node implements the same shape via message_template.
       return 'api_call'
+    case 'whatsapp_flow':
+      return 'whatsapp_flow'
     default:
       return null
   }
@@ -238,6 +240,8 @@ function nodeTypeToMessageType(nodeType: string): string | null {
       return 'goto_flow'
     case 'api_call':
       return 'api_fetch'
+    case 'whatsapp_flow':
+      return 'whatsapp_flow'
     default:
       return null
   }
@@ -312,6 +316,18 @@ export function stepsToGraph(steps: StepInput[], canvasLayout?: CanvasLayout): C
       }
       if (step.message) {
         config.message_template = step.message
+      }
+    } else if (nodeType === 'whatsapp_flow') {
+      // v1 whatsapp_flow step → v2 whatsapp_flow node. Body comes from
+      // step.message; the rest of the form metadata lives in
+      // step.input_config (same shape backend execChatWhatsAppFlow
+      // reads).
+      const ic = step.input_config || {}
+      config.flow_id = (ic.whatsapp_flow_id as string) || (ic.flow_id as string) || ''
+      config.header = (ic.flow_header as string) || (ic.header as string) || ''
+      config.cta = (ic.flow_cta as string) || (ic.cta as string) || ''
+      if (step.message) {
+        config.body = step.message
       }
     }
 
@@ -480,6 +496,15 @@ export function graphToSteps(graph: ChatFlowGraph): { steps: FlowStep[]; canvas_
       }
       if (cfg.message_template) {
         step.message = cfg.message_template as string
+      }
+    } else if (node.type === 'whatsapp_flow') {
+      step.input_config = {
+        whatsapp_flow_id: (cfg.flow_id as string) || '',
+        flow_header: (cfg.header as string) || '',
+        flow_cta: (cfg.cta as string) || '',
+      }
+      if (cfg.body) {
+        step.message = cfg.body as string
       }
     }
 
