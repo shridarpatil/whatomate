@@ -118,6 +118,9 @@ function handleResume() {
 
 function handleReset() {
   resetSimulation()
+  // "Reset" in the debug panel really means restart — users expect a
+  // fresh run, not a frozen idle screen.
+  startSimulation()
 }
 
 function handleStepForward() {

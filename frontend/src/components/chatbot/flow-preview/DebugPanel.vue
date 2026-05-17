@@ -86,7 +86,8 @@ const variableEntries = computed(() => {
 })
 
 function handlePlayPause() {
-  if (props.state.status === 'idle') {
+  // 'completed' restarts the flow (startSimulation wipes state).
+  if (props.state.status === 'idle' || props.state.status === 'completed') {
     emit('start')
   } else if (props.state.status === 'paused') {
     emit('resume')
@@ -117,7 +118,8 @@ function handlePlayPause() {
             variant="ghost"
             size="icon"
             class="h-7 w-7"
-            :disabled="state.status === 'completed' || state.status === 'error'"
+            :disabled="state.status === 'error'"
+            :title="state.status === 'completed' ? 'Restart' : (state.status === 'running' || state.status === 'waiting_input' ? 'Pause' : 'Start')"
             @click="handlePlayPause"
           >
             <Pause v-if="state.status === 'running' || state.status === 'waiting_input'" class="h-4 w-4" />
