@@ -230,6 +230,11 @@ function nodeTypeToMessageType(nodeType: string): string | null {
   switch (nodeType) {
     case 'message':
       return 'text'
+    case 'prompt':
+      // v2 prompt → v1 text step. The caller sets input_type from the
+      // existing config (or defaults to 'text') so the editor's input
+      // section renders properly.
+      return 'text'
     case 'buttons':
       return 'buttons'
     case 'end':
@@ -255,7 +260,7 @@ function nodeTypeToMessageType(nodeType: string): string | null {
 // parameter to a structural type lets callers pass FlowStep variants
 // where message_type is `string` rather than the strict union (the chat
 // flow builder defines a local relaxed FlowStep on top of v1 fields).
-type StepInput = Pick<FlowStep, 'step_name' | 'step_order' | 'message' | 'next_step' | 'conditional_next' | 'buttons' | 'label' | 'input_config' | 'api_config' | 'transfer_config'> & { message_type: string }
+type StepInput = Pick<FlowStep, 'step_name' | 'step_order' | 'message' | 'next_step' | 'conditional_next' | 'buttons' | 'label' | 'input_config' | 'api_config' | 'transfer_config' | 'input_type' | 'validation_regex' | 'validation_error' | 'store_as' | 'max_retries'> & { message_type: string }
 
 /**
  * Convert the v1 FlowStep[] model to a v2 graph payload. Returns null
@@ -276,12 +281,23 @@ export function stepsToGraph(steps: StepInput[], canvasLayout?: CanvasLayout): C
   const positions = canvasLayout?.node_positions || {}
 
   const nodes: ChatNode[] = sorted.map((step, index) => {
-    const nodeType = messageTypeToNodeType(step.message_type)!
+    // v1 text steps that ask for user input become v2 prompt nodes —
+    // prompt yields and validates, message just falls through.
+    const promptMode = step.message_type === 'text' && step.input_type && step.input_type !== 'none'
+    const nodeType: ChatNodeType = promptMode ? 'prompt' : messageTypeToNodeType(step.message_type)!
     const pos = positions[step.step_name] || { x: 300, y: index * 150 }
 
     const config: Record<string, any> = {}
     if (nodeType === 'message') {
       config.message = step.message
+    } else if (nodeType === 'prompt') {
+      // v1 text + input_type≠none → v2 prompt. Carry validation /
+      // store_as / retries so the runtime can mirror the legacy UX.
+      config.body = step.message
+      if (step.validation_regex) config.validation_regex = step.validation_regex
+      if (step.validation_error) config.validation_error = step.validation_error
+      if (step.store_as) config.store_as = step.store_as
+      if (step.max_retries) config.max_retries = step.max_retries
     } else if (nodeType === 'buttons') {
       config.body = step.message
       config.buttons = step.buttons || []
@@ -487,6 +503,13 @@ export function graphToSteps(graph: ChatFlowGraph): { steps: FlowStep[]; canvas_
 
     if (node.type === 'message') {
       step.message = (cfg.message as string) || ''
+    } else if (node.type === 'prompt') {
+      step.message = (cfg.body as string) || (cfg.message as string) || ''
+      step.input_type = 'text' as any
+      if (cfg.validation_regex) step.validation_regex = cfg.validation_regex as string
+      if (cfg.validation_error) step.validation_error = cfg.validation_error as string
+      if (cfg.store_as) step.store_as = cfg.store_as as string
+      if (cfg.max_retries) step.max_retries = cfg.max_retries as number
     } else if (node.type === 'buttons') {
       step.message = (cfg.body as string) || (cfg.message as string) || ''
       step.buttons = (cfg.buttons as any[]) || []

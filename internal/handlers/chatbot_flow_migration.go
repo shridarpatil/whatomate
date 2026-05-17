@@ -103,7 +103,13 @@ func stepsToGraph(steps []models.ChatbotFlowStep, canvasLayout models.JSONB) mod
 	}
 
 	for i, step := range sorted {
+		// v1 text steps with input_type≠none become v2 prompt nodes
+		// (blocking + validating), matching the editor's UX intent.
 		nodeType := messageTypeToNodeTypeGo(string(step.MessageType))
+		if step.MessageType == models.FlowStepTypeText && step.InputType != "" && step.InputType != models.InputTypeNone {
+			nodeType = "prompt"
+		}
+
 		pos := positions[step.StepName]
 		if pos == nil {
 			pos = map[string]float64{"x": 300, "y": float64(i * 150)}
@@ -197,6 +203,20 @@ func buildNodeConfig(nodeType string, step *models.ChatbotFlowStep) map[string]a
 	switch nodeType {
 	case "message":
 		config["message"] = step.Message
+	case "prompt":
+		config["body"] = step.Message
+		if step.ValidationRegex != "" {
+			config["validation_regex"] = step.ValidationRegex
+		}
+		if step.ValidationError != "" {
+			config["validation_error"] = step.ValidationError
+		}
+		if step.StoreAs != "" {
+			config["store_as"] = step.StoreAs
+		}
+		if step.MaxRetries > 0 {
+			config["max_retries"] = step.MaxRetries
+		}
 	case "buttons":
 		config["body"] = step.Message
 		config["buttons"] = jsonbArrayToSlice(step.Buttons)
