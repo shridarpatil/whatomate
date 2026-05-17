@@ -33,7 +33,7 @@ import {
   CollapsibleContent,
   CollapsibleTrigger,
 } from '@/components/ui/collapsible'
-import { chatbotService, flowsService, type Team, type ChatFlowGraph } from '@/services/api'
+import { chatbotService, flowsService, type Team } from '@/services/api'
 import { stepsToGraph, graphToSteps } from '@/composables/useChatbotFlowConverter'
 import { useTeamsStore } from '@/stores/teams'
 import { toast } from 'vue-sonner'
@@ -150,10 +150,6 @@ const isLoading = ref(true)
 const isSaving = ref(false)
 const flowId = computed(() => route.params.id as string | undefined)
 const isNewFlow = computed(() => !flowId.value || flowId.value === 'new')
-// True once a flow has been saved as a v2 graph (either created as v2 or
-// migrated). New flows default to false until first save; loadFlow sets it
-// based on whether the server returned a non-empty graph payload.
-const wasV2Flow = ref(false)
 
 const whatsappFlows = ref<WhatsAppFlow[]>([])
 const teams = ref<Team[]>([])
@@ -487,16 +483,18 @@ async function loadFlow(id: string) {
     // FlowStep[] + canvas_layout the editor binds against, so the rest of
     // loadFlow stays unchanged. If decoding fails (unsupported node types,
     // e.g. a Phase 3 flow being viewed on a Phase 2 client) we fall back
-    // to the legacy steps payload.
-    let stepsSource: any[] = flow.steps || flow.Steps || []
-    let canvasSource: any = flow.canvas_layout || {}
+    // From Phase 4 onward every flow has a v2 graph; legacy steps are
+    // converted on startup. The editor's in-memory model is still
+    // FlowStep[] for the existing UI bindings, so we decode the graph
+    // back into steps + canvas positions via graphToSteps.
+    let stepsSource: any[] = []
+    let canvasSource: any = {}
     const rawGraph = flow.graph || flow.Graph
     if (rawGraph && rawGraph.version === 2) {
       const decoded = graphToSteps(rawGraph)
       if (decoded) {
         stepsSource = decoded.steps
         canvasSource = decoded.canvas_layout
-        wasV2Flow.value = true
       }
     }
 
@@ -979,23 +977,16 @@ async function saveFlow() {
 
   isSaving.value = true
   try {
-    // Normalise steps (assign order + auto step_name) first so the v2
-    // graph and the legacy steps payload stay in sync.
+    // Normalise step names + order before converting to graph.
     const normalisedSteps = formData.value.steps.map((step, idx) => ({
       ...step,
       step_order: idx + 1,
       step_name: step.step_name || `step_${idx + 1}`
     }))
 
-    // Decide wire format: new flows and previously-v2 flows prefer the
-    // graph payload when all node types are v2-supported. Legacy flows
-    // (loaded as steps[]) stay on legacy until Phase 4 migration.
-    let graph: ChatFlowGraph | null = null
-    if (isNewFlow.value || wasV2Flow.value) {
-      graph = stepsToGraph(normalisedSteps, formData.value.canvas_layout)
-    }
-    if (wasV2Flow.value && graph === null) {
-      toast.error(t('flowBuilder.unsupportedV2NodeType', 'This flow uses a step type that has not been ported to v2 yet. Remove it or wait for the next release.'))
+    const graph = stepsToGraph(normalisedSteps, formData.value.canvas_layout)
+    if (graph === null) {
+      toast.error(t('flowBuilder.unsupportedV2NodeType', 'This flow uses a step type the backend graph runner does not yet support. Remove or replace it before saving.'))
       isSaving.value = false
       return
     }
@@ -1009,12 +1000,8 @@ async function saveFlow() {
       on_complete_action: formData.value.on_complete_action,
       completion_config: formData.value.on_complete_action === 'webhook' ? formData.value.completion_config : {},
       panel_config: formData.value.panel_config,
-      canvas_layout: formData.value.canvas_layout,
       enabled: formData.value.enabled,
-      steps: normalisedSteps,
-    }
-    if (graph) {
-      data.graph = graph
+      graph,
     }
 
     if (isNewFlow.value) {
@@ -1026,13 +1013,6 @@ async function saveFlow() {
     } else {
       await chatbotService.updateFlow(flowId.value!, data)
       toast.success(t('common.savedSuccess', { resource: t('resources.Flow') }))
-    }
-
-    // Once a flow has been persisted with a graph payload it should keep
-    // saving as v2 on subsequent edits — even if the user removes nodes
-    // that brought it into v2-supported territory the first time.
-    if (graph) {
-      wasV2Flow.value = true
     }
 
     hasUnsavedChanges.value = false
