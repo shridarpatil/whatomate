@@ -1,10 +1,59 @@
 package handlers
 
 import (
+	"fmt"
 	"sort"
+
+	"github.com/zerodha/logf"
+	"gorm.io/gorm"
 
 	"github.com/shridarpatil/whatomate/internal/models"
 )
+
+// BackfillChatbotFlowGraph fills ChatbotFlow.Graph for every row where
+// it is currently NULL by running stepsToGraph against the legacy
+// Steps[] + CanvasLayout fields. Idempotent and safe to re-run.
+//
+// Called from main.go after RunMigrationWithProgress, so the executor
+// dispatcher (which prefers Graph when present) starts hitting v2 for
+// every flow on the next request. Once every flow has Graph populated
+// the legacy executor can be deleted in a follow-up commit.
+//
+// Flows whose stepsToGraph returns nil (any unsupported message_type
+// remains, or zero steps) are skipped and logged at WARN.
+func BackfillChatbotFlowGraph(db *gorm.DB, lo logf.Logger) error {
+	var flows []models.ChatbotFlow
+	if err := db.
+		Preload("Steps").
+		Where("graph IS NULL OR graph::text = '{}'").
+		Find(&flows).Error; err != nil {
+		return fmt.Errorf("load flows for graph backfill: %w", err)
+	}
+
+	if len(flows) == 0 {
+		return nil
+	}
+
+	converted, skipped := 0, 0
+	for i := range flows {
+		flow := &flows[i]
+		graph := stepsToGraph(flow)
+		if graph == nil {
+			skipped++
+			lo.Warn("Chatbot flow graph backfill: skipping flow with no v2 mapping",
+				"flow_id", flow.ID, "name", flow.Name, "step_count", len(flow.Steps))
+			continue
+		}
+		if err := db.Model(flow).Update("graph", graph).Error; err != nil {
+			return fmt.Errorf("save backfilled graph for flow %s: %w", flow.ID, err)
+		}
+		converted++
+	}
+
+	lo.Info("Chatbot flow graph backfill complete",
+		"converted", converted, "skipped", skipped, "total", len(flows))
+	return nil
+}
 
 // stepsToGraph converts a legacy ChatbotFlow.Steps[] + CanvasLayout into
 // a v2 graph JSONB blob, mirroring the TypeScript converter in

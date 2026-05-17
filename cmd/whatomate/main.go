@@ -157,6 +157,11 @@ func runServer(args []string) {
 		if err := database.RunMigrationWithProgress(db, &cfg.DefaultAdmin); err != nil {
 			lo.Fatal("Migration failed", "error", err)
 		}
+		// Backfill v2 graph for any legacy chatbot flow still on Steps[].
+		// Idempotent — re-running is a no-op once every row is converted.
+		if err := handlers.BackfillChatbotFlowGraph(db, lo); err != nil {
+			lo.Fatal("Chatbot flow graph backfill failed", "error", err)
+		}
 	}
 
 	// Connect to Redis

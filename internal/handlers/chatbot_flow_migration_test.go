@@ -5,6 +5,7 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/shridarpatil/whatomate/internal/models"
+	"github.com/shridarpatil/whatomate/test/testutil"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -230,6 +231,76 @@ func TestStepsToGraph_OrderingFollowsStepOrder(t *testing.T) {
 	assert.Equal(t, "second", nodes[1]["id"])
 	assert.Equal(t, "third", nodes[2]["id"])
 }
+
+// TestBackfillChatbotFlowGraph_FillsNullGraphsAndLeavesOthersAlone
+// verifies the startup migration against a real DB: legacy flows get
+// Graph populated, already-v2 flows are untouched, idempotency holds.
+func TestBackfillChatbotFlowGraph_FillsNullGraphsAndLeavesOthersAlone(t *testing.T) {
+	app := newProcessorTestApp(t)
+	org, account := createProcessorTestOrg(t, app)
+
+	// Legacy: Steps[] only, no Graph.
+	legacy := &models.ChatbotFlow{
+		BaseModel:       models.BaseModel{ID: uuid.New()},
+		OrganizationID:  org.ID,
+		WhatsAppAccount: account.Name,
+		Name:            "legacy",
+		IsEnabled:       true,
+	}
+	require.NoError(t, app.DB.Create(legacy).Error)
+	// Create steps separately so the FK is satisfied.
+	require.NoError(t, app.DB.Create(&models.ChatbotFlowStep{
+		BaseModel:   models.BaseModel{ID: uuid.New()},
+		FlowID:      legacy.ID,
+		StepName:    "step_1",
+		StepOrder:   1,
+		MessageType: "text",
+		Message:     "Hello!",
+	}).Error)
+
+	// Already-v2: explicit Graph, no steps.
+	preExisting := models.JSONB{
+		"version":    2,
+		"entry_node": "m1",
+		"nodes": []any{
+			map[string]any{"id": "m1", "type": "message", "config": map[string]any{"message": "hi"}},
+		},
+		"edges": []any{},
+	}
+	v2flow := &models.ChatbotFlow{
+		BaseModel:       models.BaseModel{ID: uuid.New()},
+		OrganizationID:  org.ID,
+		WhatsAppAccount: account.Name,
+		Name:            "already-v2",
+		IsEnabled:       true,
+		Graph:           preExisting,
+	}
+	require.NoError(t, app.DB.Create(v2flow).Error)
+
+	require.NoError(t, BackfillChatbotFlowGraph(app.DB, app.Log))
+
+	var legacyAfter models.ChatbotFlow
+	require.NoError(t, app.DB.First(&legacyAfter, legacy.ID).Error)
+	require.NotNil(t, legacyAfter.Graph)
+	assert.EqualValues(t, 2, legacyAfter.Graph["version"])
+	assert.Equal(t, "step_1", legacyAfter.Graph["entry_node"])
+
+	var v2After models.ChatbotFlow
+	require.NoError(t, app.DB.First(&v2After, v2flow.ID).Error)
+	require.NotNil(t, v2After.Graph)
+	// Unchanged: nodes[0].id should still be m1, not auto-generated.
+	nodes, _ := v2After.Graph["nodes"].([]any)
+	require.Len(t, nodes, 1)
+	n0, _ := nodes[0].(map[string]any)
+	assert.Equal(t, "m1", n0["id"])
+
+	// Idempotent: re-running should be a no-op (no rows match the filter).
+	require.NoError(t, BackfillChatbotFlowGraph(app.DB, app.Log))
+}
+
+// Compile-time witness that testutil is used (silences unused import
+// warnings in IDEs when the file is read in isolation).
+var _ = testutil.NopLogger
 
 func TestStepsToGraph_CanvasPositionsApplied(t *testing.T) {
 	flow := &models.ChatbotFlow{
