@@ -4,10 +4,8 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"strings"
 
 	"github.com/google/uuid"
-	"github.com/shridarpatil/whatomate/internal/crypto"
 	"github.com/shridarpatil/whatomate/internal/models"
 	"github.com/shridarpatil/whatomate/pkg/whatsapp"
 	"github.com/valyala/fasthttp"
@@ -120,7 +118,7 @@ func (a *App) CreateFlow(r *fastglue.Request) error {
 	// Set defaults
 	jsonVersion := req.JSONVersion
 	if jsonVersion == "" {
-		jsonVersion = "7.3"
+		jsonVersion = "6.0"
 	}
 
 	flow := models.WhatsAppFlow{
@@ -299,20 +297,6 @@ func (a *App) SaveFlowToMeta(r *fastglue.Request) error {
 
 	ctx := context.Background()
 
-	scheme := "https"
-	if a.Config.App.Environment == "development" {
-		scheme = "http"
-	}
-	host := string(r.RequestCtx.Request.Header.Peek("X-Forwarded-Host"))
-	if host == "" {
-		host = string(r.RequestCtx.Host())
-	}
-	endpointURI := account.EncryptionEndpointURI
-	if endpointURI == "" {
-		endpointURI = fmt.Sprintf("%s://%s/api/exchange-keys/%s", scheme, host, account.PhoneID)
-	}
-
-
 	// Step 1: Create flow in Meta (if not already created)
 	var metaFlowID string
 	if flow.MetaFlowID == "" {
@@ -321,27 +305,20 @@ func (a *App) SaveFlowToMeta(r *fastglue.Request) error {
 			categories = append(categories, flow.Category)
 		}
 
-		a.Log.Info("SaveFlowToMeta: Creating flow in Meta", "name", flow.Name, "categories", categories, "endpoint_uri", endpointURI)
-		metaFlowID, err = waClient.CreateFlow(ctx, waAccount, flow.Name, categories, endpointURI)
+		a.Log.Info("SaveFlowToMeta: Creating flow in Meta", "name", flow.Name, "categories", categories)
+		metaFlowID, err = waClient.CreateFlow(ctx, waAccount, flow.Name, categories)
 		if err != nil {
 			a.Log.Error("Failed to create flow in Meta", "error", err, "flow_id", id, "business_id", account.BusinessID)
 			return r.SendErrorEnvelope(fasthttp.StatusInternalServerError, "Failed to create flow in Meta", nil, "")
 		}
 	} else {
 		metaFlowID = flow.MetaFlowID
-		// Update endpoint URI for existing flow
-		if err := waClient.UpdateFlowEndpoint(ctx, waAccount, metaFlowID, endpointURI); err != nil {
-			a.Log.Warn("Failed to update flow endpoint URI in Meta", "error", err, "flow_id", id, "meta_flow_id", metaFlowID)
-		}
 	}
 
 	// Step 2: Upload flow JSON if we have screens
 	if len(flow.Screens) > 0 {
-		fieldMap := collectFormFieldNamesMap([]any(flow.Screens))
-		routingModel := collectRoutingModel([]any(flow.Screens), fieldMap)
-
 		// Validate flow structure before sending to Meta
-		if err := validateFlowStructure([]any(flow.Screens), routingModel); err != nil {
+		if err := validateFlowStructure([]any(flow.Screens)); err != nil {
 			return r.SendErrorEnvelope(fasthttp.StatusBadRequest, err.Error(), nil, "")
 		}
 
@@ -349,10 +326,8 @@ func (a *App) SaveFlowToMeta(r *fastglue.Request) error {
 		sanitizedScreens := sanitizeScreensForMeta([]any(flow.Screens))
 
 		flowJSON := &whatsapp.FlowJSON{
-			Version:        flow.JSONVersion,
-			DataAPIVersion: "3.0",
-			RoutingModel:   routingModel,
-			Screens:        sanitizedScreens,
+			Version: flow.JSONVersion,
+			Screens: sanitizedScreens,
 		}
 
 		if err := waClient.UpdateFlowJSON(ctx, waAccount, metaFlowID, flowJSON); err != nil {
@@ -688,8 +663,8 @@ func (a *App) SyncFlows(r *fastglue.Request) error {
 
 // validateFlowStructure validates the flow structure before sending to Meta
 // - Ensures at least one screen has a Footer with "complete" action
-// - If multiple screens, only the last screen should have "complete" action (unless routing_model is used)
-func validateFlowStructure(screens []any, routingModel map[string]any) error {
+// - If multiple screens, only the last screen should have "complete" action
+func validateFlowStructure(screens []any) error {
 	if len(screens) == 0 {
 		return fmt.Errorf("flow must have at least one screen")
 	}
@@ -722,8 +697,8 @@ func validateFlowStructure(screens []any, routingModel map[string]any) error {
 		return fmt.Errorf("flow must have a Footer button with 'Complete Flow' action: add a Footer component to your last screen and set its action to 'Complete Flow'")
 	}
 
-	// If multiple screens and no routing_model is used, complete action should only be on the last screen
-	if len(screens) > 1 && (routingModel == nil || len(routingModel) == 0) {
+	// If multiple screens, complete action should only be on the last screen
+	if len(screens) > 1 {
 		lastScreenIndex := len(screens) - 1
 		for _, idx := range screensWithComplete {
 			if idx != lastScreenIndex {
@@ -759,8 +734,6 @@ func sanitizeScreensForMeta(screens []any) []any {
 	// First pass: collect form field names per screen
 	screenFields := collectFormFieldsPerScreen(screens)
 	allFieldNames := collectFormFieldNames(screens)
-	fieldMap := collectFormFieldNamesMap(screens)
-	fieldTypes := collectFormFieldTypes(screens)
 
 	result := make([]any, len(screens))
 
@@ -796,19 +769,9 @@ func sanitizeScreensForMeta(screens []any) []any {
 			}
 			// Add entries for fields from previous screens
 			for _, fieldName := range fieldsFromPreviousScreens {
-				if fieldTypes[fieldName] == "CheckboxGroup" {
-					dataModel[fieldName] = map[string]any{
-						"type": "array",
-						"items": map[string]any{
-							"type": "string",
-						},
-						"__example__": []string{},
-					}
-				} else {
-					dataModel[fieldName] = map[string]any{
-						"type":        "string",
-						"__example__": "",
-					}
+				dataModel[fieldName] = map[string]any{
+					"type":        "string",
+					"__example__": "",
 				}
 			}
 			newScreen["data"] = dataModel
@@ -824,7 +787,7 @@ func sanitizeScreensForMeta(screens []any) []any {
 
 			if children, ok := layout["children"].([]any); ok {
 				// Sanitize and auto-populate action payloads
-				sanitizedChildren := sanitizeComponentsWithPayload(children, allFieldNames, fieldsFromPreviousScreens, fieldMap)
+				sanitizedChildren := sanitizeComponentsWithPayload(children, allFieldNames, fieldsFromPreviousScreens)
 				newLayout["children"] = sanitizedChildren
 
 				// Check if any child has on-click-action with name "complete"
@@ -888,208 +851,6 @@ func collectFormFieldNames(screens []any) []string {
 
 	return fieldNames
 }
-
-// collectFormFieldNamesMap collects a map of original form field names to sanitized names
-func collectFormFieldNamesMap(screens []any) map[string]string {
-	fieldMap := make(map[string]string)
-
-	for _, screen := range screens {
-		screenMap, ok := screen.(map[string]any)
-		if !ok {
-			continue
-		}
-
-		layout, ok := screenMap["layout"].(map[string]any)
-		if !ok {
-			continue
-		}
-
-		children, ok := layout["children"].([]any)
-		if !ok {
-			continue
-		}
-
-		for _, child := range children {
-			compMap, ok := child.(map[string]any)
-			if !ok {
-				continue
-			}
-
-			if name, ok := compMap["name"].(string); ok && name != "" {
-				fieldMap[name] = sanitizeID(name)
-			}
-		}
-	}
-
-	return fieldMap
-}
-
-// collectFormFieldTypes collects a map of sanitized field name to component type
-func collectFormFieldTypes(screens []any) map[string]string {
-	fieldTypeMap := make(map[string]string)
-
-	for _, screen := range screens {
-		screenMap, ok := screen.(map[string]any)
-		if !ok {
-			continue
-		}
-
-		layout, ok := screenMap["layout"].(map[string]any)
-		if !ok {
-			continue
-		}
-
-		children, ok := layout["children"].([]any)
-		if !ok {
-			continue
-		}
-
-		for _, child := range children {
-			compMap, ok := child.(map[string]any)
-			if !ok {
-				continue
-			}
-
-			if name, ok := compMap["name"].(string); ok && name != "" {
-				sanitizedName := sanitizeID(name)
-				compType, _ := compMap["type"].(string)
-				fieldTypeMap[sanitizedName] = compType
-			}
-		}
-	}
-
-	return fieldTypeMap
-}
-
-// sanitizeRoutingModel sanitizes screen IDs and destinations in the routing model
-func sanitizeRoutingModel(rm map[string]any, fieldMap map[string]string) map[string]any {
-	if rm == nil {
-		return nil
-	}
-	result := make(map[string]any)
-	for screenID, rules := range rm {
-		sanitizedScreenID := sanitizeID(screenID)
-		rulesList, ok := rules.([]any)
-		if !ok {
-			continue
-		}
-		var newRules []any
-		for _, rule := range rulesList {
-			if destStr, ok := rule.(string); ok {
-				newRules = append(newRules, sanitizeID(destStr))
-			}
-		}
-		result[sanitizedScreenID] = newRules
-	}
-	return result
-}
-
-// collectRoutingModel scans all screens and components for navigation transitions
-// and dynamically constructs a complete, valid routing_model for Meta API.
-func collectRoutingModel(screens []any, fieldMap map[string]string) map[string]any {
-	routingModel := make(map[string]any)
-	hasRouting := false
-
-	for _, screen := range screens {
-		screenMap, ok := screen.(map[string]any)
-		if !ok {
-			continue
-		}
-		screenID, ok := screenMap["id"].(string)
-		if !ok || screenID == "" {
-			continue
-		}
-		sanitizedScreenID := sanitizeID(screenID)
-
-		layout, ok := screenMap["layout"].(map[string]any)
-		if !ok {
-			continue
-		}
-		children, ok := layout["children"].([]any)
-		if !ok {
-			continue
-		}
-
-		var destinations []string
-		destSet := make(map[string]bool)
-
-		for _, child := range children {
-			compMap, ok := child.(map[string]any)
-			if !ok {
-				continue
-			}
-
-			// Check if component has on-click-action
-			action, ok := compMap["on-click-action"].(map[string]any)
-			if !ok {
-				continue
-			}
-
-			actionName, _ := action["name"].(string)
-
-			// Check navigation-type on Footer or Button
-			navType, _ := compMap["navigation-type"].(string)
-
-			if actionName == "navigate" || navType == "conditional" || actionName == "data_exchange" {
-				if navType == "conditional" || actionName == "data_exchange" {
-					hasRouting = true
-					// Extract custom routing rules
-					if rules, ok := compMap["routing-rules"].([]any); ok {
-						for _, ruleAny := range rules {
-							rule, ok := ruleAny.(map[string]any)
-							if !ok {
-								continue
-							}
-							dest, _ := rule["destination"].(string)
-							if dest != "" {
-								sanitizedDest := sanitizeID(dest)
-								if !destSet[sanitizedDest] {
-									destSet[sanitizedDest] = true
-									destinations = append(destinations, sanitizedDest)
-								}
-							}
-						}
-					}
-					// Extract fallback destination
-					fallback, _ := compMap["fallback-destination"].(string)
-					if fallback == "" {
-						if nextMap, ok := action["next"].(map[string]any); ok {
-							fallback, _ = nextMap["name"].(string)
-						}
-					}
-					if fallback != "" {
-						sanitizedFallback := sanitizeID(fallback)
-						if !destSet[sanitizedFallback] {
-							destSet[sanitizedFallback] = true
-							destinations = append(destinations, sanitizedFallback)
-						}
-					}
-				} else if actionName == "navigate" {
-					if nextMap, ok := action["next"].(map[string]any); ok {
-						if nextName, ok := nextMap["name"].(string); ok && nextName != "" {
-							sanitizedNext := sanitizeID(nextName)
-							if !destSet[sanitizedNext] {
-								destSet[sanitizedNext] = true
-								destinations = append(destinations, sanitizedNext)
-							}
-						}
-					}
-				}
-			}
-		}
-
-		if len(destinations) > 0 {
-			routingModel[sanitizedScreenID] = destinations
-		}
-	}
-
-	if len(routingModel) > 0 || hasRouting {
-		return routingModel
-	}
-
-	return nil
-}
-
 
 // collectFormFieldsPerScreen collects form field names for each screen by index
 func collectFormFieldsPerScreen(screens []any) map[int][]string {
@@ -1184,7 +945,7 @@ func sanitizeID(id string) string {
 // sanitizeComponentsWithPayload sanitizes components and auto-populates action payloads
 // - For navigate actions: passes current screen's form fields using ${form.fieldName}
 // - For complete actions: uses ${data.fieldName} for previous screens, ${form.fieldName} for current
-func sanitizeComponentsWithPayload(children []any, allFieldNames []string, fieldsFromPreviousScreens []string, fieldMap map[string]string) []any {
+func sanitizeComponentsWithPayload(children []any, allFieldNames []string, fieldsFromPreviousScreens []string) []any {
 	result := make([]any, len(children))
 
 	// Collect this screen's field names
@@ -1224,16 +985,6 @@ func sanitizeComponentsWithPayload(children []any, allFieldNames []string, field
 			delete(newComp, "id")
 		}
 
-		var isConditionalNav bool
-		if compType == "Footer" {
-			if navType, ok := compMap["navigation-type"].(string); ok && navType == "conditional" {
-				isConditionalNav = true
-			}
-			delete(newComp, "routing-rules")
-			delete(newComp, "fallback-destination")
-			delete(newComp, "navigation-type")
-		}
-
 		// Sanitize name field if it contains numbers
 		if name, ok := newComp["name"].(string); ok {
 			newComp["name"] = sanitizeID(name)
@@ -1268,40 +1019,32 @@ func sanitizeComponentsWithPayload(children []any, allFieldNames []string, field
 				newAction[k] = v
 			}
 
-			if isConditionalNav {
-				actionName = "data_exchange"
-				newAction["name"] = "data_exchange"
-				delete(newAction, "next")
-			} else if nextMap, ok := newAction["next"].(map[string]any); ok {
-				if nextName, ok := nextMap["name"].(string); ok {
-					newNextMap := make(map[string]any)
-					for k, v := range nextMap {
-						newNextMap[k] = v
-					}
-					newNextMap["name"] = sanitizeID(nextName)
-					newAction["next"] = newNextMap
-				}
-			}
-
 			switch actionName {
 			case "complete":
 				// Complete action: include all form fields from all screens
+				// - Fields from previous screens: use ${data.fieldName} (passed via data model)
+				// - Fields on current screen: use ${form.fieldName} (form input)
 				payload := make(map[string]any)
 				for _, fieldName := range allFieldNames {
 					if thisScreenFieldSet[fieldName] {
+						// Current screen's field - use form reference
 						payload[fieldName] = "${form." + fieldName + "}"
 					} else {
+						// Previous screen's field - use data reference
 						payload[fieldName] = "${data." + fieldName + "}"
 					}
 				}
 				newAction["payload"] = payload
-			case "navigate", "data_exchange":
-				// Navigate/Data Exchange action: pass current screen's form fields and previous screens' fields
-				if len(thisScreenFields) > 0 || len(fieldsFromPreviousScreens) > 0 {
+			case "navigate":
+				// Navigate action: pass current screen's form fields to next screen
+				// Use ${form.fieldName} for current screen's fields
+				if len(thisScreenFields) > 0 {
 					payload := make(map[string]any)
+					// Pass previous screen data through
 					for _, fieldName := range fieldsFromPreviousScreens {
 						payload[fieldName] = "${data." + fieldName + "}"
 					}
+					// Add current screen's form fields
 					for _, fieldName := range thisScreenFields {
 						payload[fieldName] = "${form." + fieldName + "}"
 					}
@@ -1336,218 +1079,3 @@ func flowToResponse(f models.WhatsAppFlow) FlowResponse {
 		UpdatedAt:       f.UpdatedAt.Format("2006-01-02T15:04:05Z"),
 	}
 }
-
-// FlowWebhookRequest represents the incoming webhook from Meta for WhatsApp Flows Data Exchange
-type FlowWebhookRequest struct {
-	Version   string         `json:"version"`
-	Screen    string         `json:"screen"`
-	Data      map[string]any `json:"data"`
-	Action    string         `json:"action"` // "ping", "data_exchange", "INIT", "navigate"
-	FlowToken string         `json:"flow_token,omitempty"`
-}
-
-// EncryptedFlowWebhookRequest represents the outer encrypted webhook body from Meta
-type EncryptedFlowWebhookRequest struct {
-	EncryptedFlowData string `json:"encrypted_flow_data,omitempty"`
-	EncryptedAESKey   string `json:"encrypted_aes_key,omitempty"`
-	InitialVector     string `json:"initial_vector,omitempty"`
-	// Embed plaintext fields as well for fallback / unencrypted preview requests
-	Version   string         `json:"version,omitempty"`
-	Screen    string         `json:"screen,omitempty"`
-	Data      map[string]any `json:"data,omitempty"`
-	Action    string         `json:"action,omitempty"`
-	FlowToken string         `json:"flow_token,omitempty"`
-}
-
-// ExchangeKeysWebhookHandler handles Meta business encryption data exchange requests
-func (a *App) ExchangeKeysWebhookHandler(r *fastglue.Request) error {
-	body := r.RequestCtx.PostBody()
-	a.Log.Info("ExchangeKeysWebhookHandler received request", "body", string(body))
-
-	var account models.WhatsAppAccount
-	phoneID, _ := r.RequestCtx.UserValue("phone_id").(string)
-	if phoneID != "" {
-		if err := a.DB.Where("phone_id = ?", phoneID).First(&account).Error; err != nil {
-			a.Log.Warn("WhatsApp account not found for phone_id in webhook", "phone_id", phoneID)
-		}
-	} else {
-		// Fallback: find the first active account that has an encryption private key
-		if err := a.DB.Where("encryption_private_key IS NOT NULL AND encryption_private_key != ''").First(&account).Error; err != nil {
-			a.Log.Warn("No WhatsApp account found with encryption private key for global webhook")
-		}
-	}
-
-	var req FlowWebhookRequest
-	var isEncrypted bool
-	var aesKey []byte
-	var initialVector string
-
-	var encReq EncryptedFlowWebhookRequest
-	if err := json.Unmarshal(body, &encReq); err != nil {
-		a.Log.Error("Failed to parse flow webhook request", "error", err)
-		return r.SendErrorEnvelope(fasthttp.StatusBadRequest, "Invalid request body", nil, "")
-	}
-
-	if encReq.EncryptedFlowData != "" && encReq.EncryptedAESKey != "" && encReq.InitialVector != "" {
-		isEncrypted = true
-		initialVector = encReq.InitialVector
-		if account.EncryptionPrivateKey == "" {
-			a.Log.Error("Received encrypted flow webhook but no encryption private key found in account", "phone_id", phoneID)
-			return r.SendErrorEnvelope(fasthttp.StatusInternalServerError, "Encryption key not configured", nil, "")
-		}
-
-		// Decrypt private key
-		decPriv := account.EncryptionPrivateKey
-		if crypto.IsEncrypted(decPriv) {
-			dec, err := crypto.Decrypt(decPriv, a.Config.App.EncryptionKey)
-			if err == nil {
-				decPriv = dec
-			}
-		}
-
-		// 1. Decrypt AES Key
-		var err error
-		aesKey, err = crypto.DecryptFlowsAESKey(encReq.EncryptedAESKey, decPriv)
-		if err != nil {
-			a.Log.Error("Failed to decrypt flows AES key", "error", err)
-			return r.SendErrorEnvelope(fasthttp.StatusInternalServerError, "Failed to decrypt AES key", nil, "")
-		}
-
-		// 2. Decrypt Payload
-		plaintext, err := crypto.DecryptFlowsPayload(encReq.EncryptedFlowData, initialVector, aesKey)
-		if err != nil {
-			a.Log.Error("Failed to decrypt flows payload", "error", err)
-			return r.SendErrorEnvelope(fasthttp.StatusInternalServerError, "Failed to decrypt flows payload", nil, "")
-		}
-
-		a.Log.Info("Successfully decrypted flows webhook payload", "plaintext", string(plaintext))
-
-		if err := json.Unmarshal(plaintext, &req); err != nil {
-			a.Log.Error("Failed to unmarshal decrypted flows payload", "error", err)
-			return r.SendErrorEnvelope(fasthttp.StatusBadRequest, "Invalid decrypted payload", nil, "")
-		}
-	} else {
-		// Plaintext request (e.g. ping or Flow Builder preview)
-		req.Version = encReq.Version
-		req.Screen = encReq.Screen
-		req.Data = encReq.Data
-		req.Action = encReq.Action
-		req.FlowToken = encReq.FlowToken
-	}
-
-	// Handle ping request from Meta
-	if req.Action == "ping" {
-		respObj := map[string]any{
-			"version": req.Version,
-			"data": map[string]any{
-				"status": "active",
-			},
-		}
-		respBytes, err := json.Marshal(respObj)
-		if err != nil {
-			return r.SendErrorEnvelope(fasthttp.StatusInternalServerError, "Failed to encode response", nil, "")
-		}
-
-		if isEncrypted {
-			encResp, err := crypto.EncryptFlowsResponse(respBytes, initialVector, aesKey)
-			if err != nil {
-				a.Log.Error("Failed to encrypt ping response", "error", err)
-				return r.SendErrorEnvelope(fasthttp.StatusInternalServerError, "Failed to encrypt response", nil, "")
-			}
-			r.RequestCtx.SetStatusCode(fasthttp.StatusOK)
-			r.RequestCtx.SetContentType("text/plain")
-			r.RequestCtx.SetBody([]byte(encResp))
-			return nil
-		}
-
-		r.RequestCtx.SetStatusCode(fasthttp.StatusOK)
-		r.RequestCtx.SetContentType("application/json")
-		r.RequestCtx.SetBody(respBytes)
-		return nil
-	}
-
-	// Extract flow ID from flow_token (format: flowID_contactID or just flowID)
-	var flowIDStr string
-	parts := strings.Split(req.FlowToken, "_")
-	if len(parts) > 0 {
-		flowIDStr = parts[0]
-	}
-
-	var flow models.WhatsAppFlow
-	if flowIDStr != "" {
-		if err := a.DB.Where("id = ? OR meta_flow_id = ?", flowIDStr, flowIDStr).First(&flow).Error; err != nil {
-			a.Log.Warn("Flow not found from token", "flow_token", req.FlowToken, "error", err)
-		}
-	}
-
-	// Determine next screen based on routing_model in flow JSON if available
-	var nextScreen string
-	if rm, ok := flow.FlowJSON["routing_model"].(map[string]any); ok {
-		if dests, ok := rm[req.Screen].([]any); ok && len(dests) > 0 {
-			if next, ok := dests[0].(string); ok {
-				nextScreen = next
-			}
-		}
-	}
-
-	// If no next screen found in routing model, check screens list
-	if nextScreen == "" && len(flow.Screens) > 0 {
-		foundCurrent := false
-		for _, sAny := range flow.Screens {
-			sMap, ok := sAny.(map[string]any)
-			if !ok {
-				continue
-			}
-			sID, _ := sMap["id"].(string)
-			if foundCurrent {
-				nextScreen = sID
-				break
-			}
-			if sID == req.Screen {
-				foundCurrent = true
-			}
-		}
-	}
-
-	// Default fallback if still no next screen
-	if nextScreen == "" {
-		nextScreen = "SUCCESS"
-	}
-
-	// Echo back data or add acknowledgment
-	respData := req.Data
-	if respData == nil {
-		respData = make(map[string]any)
-	}
-	respData["acknowledged"] = true
-
-	response := map[string]any{
-		"version": req.Version,
-		"screen":  nextScreen,
-		"data":    respData,
-	}
-
-	a.Log.Info("ExchangeKeysWebhookHandler sending response", "screen", nextScreen, "action", req.Action)
-	respBytes, err := json.Marshal(response)
-	if err != nil {
-		return r.SendErrorEnvelope(fasthttp.StatusInternalServerError, "Failed to encode response", nil, "")
-	}
-
-	if isEncrypted {
-		encResp, err := crypto.EncryptFlowsResponse(respBytes, initialVector, aesKey)
-		if err != nil {
-			a.Log.Error("Failed to encrypt webhook response", "error", err)
-			return r.SendErrorEnvelope(fasthttp.StatusInternalServerError, "Failed to encrypt response", nil, "")
-		}
-		r.RequestCtx.SetStatusCode(fasthttp.StatusOK)
-		r.RequestCtx.SetContentType("text/plain")
-		r.RequestCtx.SetBody([]byte(encResp))
-		return nil
-	}
-
-	r.RequestCtx.SetStatusCode(fasthttp.StatusOK)
-	r.RequestCtx.SetContentType("application/json")
-	r.RequestCtx.SetBody(respBytes)
-	return nil
-}
-
