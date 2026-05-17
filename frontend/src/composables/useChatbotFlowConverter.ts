@@ -49,7 +49,7 @@ export function stepsToNodesAndEdges(steps: FlowStep[], canvasLayout?: CanvasLay
   sorted.forEach((step, index) => {
     const nextSequentialName = index < sorted.length - 1 ? sorted[index + 1].step_name : null
 
-    if (step.message_type === 'buttons' && step.conditional_next) {
+    if ((step.message_type === 'buttons' || step.message_type === 'condition' || step.message_type === 'timing') && step.conditional_next) {
       for (const targetStep of Object.values(step.conditional_next)) {
         if (targetStep && targetStep !== nextSequentialName) {
           nonSequentialTargets.add(targetStep)
@@ -135,6 +135,25 @@ export function stepsToNodesAndEdges(steps: FlowStep[], canvasLayout?: CanvasLay
               markerEnd: MarkerType.ArrowClosed,
             })
           }
+        }
+      }
+    } else if (step.message_type === 'condition' || step.message_type === 'timing') {
+      // Branching nodes — only emit edges from explicit conditional_next
+      // entries, no sequential fallthrough. The handle ids match each
+      // node's output handles (true/false for condition; in_hours/
+      // out_of_hours for timing).
+      const conditionalNext = step.conditional_next || {}
+      for (const [handle, targetStep] of Object.entries(conditionalNext)) {
+        if (targetStep && stepNameSet.has(targetStep)) {
+          edges.push({
+            id: `e-${step.step_name}-${targetStep}-${handle}`,
+            source: step.step_name,
+            target: targetStep,
+            sourceHandle: handle,
+            label: handle,
+            animated: true,
+            markerEnd: MarkerType.ArrowClosed,
+          })
         }
       }
     } else if (step.next_step && stepNameSet.has(step.next_step)) {
