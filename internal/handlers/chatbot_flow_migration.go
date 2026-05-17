@@ -25,6 +25,14 @@ import (
 // no longer needs Steps[] / CanvasLayout fields on the ChatbotFlow
 // struct.
 func BackfillChatbotFlowGraph(db *gorm.DB, lo logf.Logger) error {
+	// Fresh installs never had the legacy schema — chatbot_flows lacks
+	// the canvas_layout column and chatbot_flow_steps does not exist.
+	// Skip in that case so a clean boot doesn't fail.
+	mig := db.Migrator()
+	if !mig.HasColumn(&models.ChatbotFlow{}, "canvas_layout") || !mig.HasTable("chatbot_flow_steps") {
+		return nil
+	}
+
 	var pending []legacyFlowMeta
 	err := db.Raw(`
 		SELECT id, name, COALESCE(canvas_layout, '{}'::jsonb) AS canvas_layout
