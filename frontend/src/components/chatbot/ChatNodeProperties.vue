@@ -686,10 +686,18 @@ const typeLabel: Record<string, string> = {
       </div>
     </template>
 
-    <!-- Skip condition (universal). Evaluated by the runner before
-         executing this node; truthy → fall through via the default
-         edge without sending anything. -->
-    <div v-if="node.type !== 'end'" class="pt-2 border-t space-y-1.5">
+    <!-- Skip condition. Evaluated by the runner before executing the
+         node; truthy → fall through via the default edge without
+         sending anything.
+
+         Hidden for nodes whose whole purpose is branching (condition /
+         buttons / timing — they have no default edge) and terminal
+         nodes (end / transfer / goto_flow) where there's nothing to
+         skip past. -->
+    <div
+      v-if="!['end', 'transfer', 'goto_flow', 'condition', 'buttons', 'timing'].includes(node.type)"
+      class="pt-2 border-t space-y-1.5"
+    >
       <Label class="text-xs">Skip condition (optional)</Label>
       <Input
         :model-value="config.skip_condition || ''"
@@ -697,7 +705,7 @@ const typeLabel: Record<string, string> = {
         placeholder='tier == "premium"'
         class="h-8 text-xs font-mono"
       />
-      <p class="text-[10px] text-muted-foreground">Skip this node when the expression evaluates truthy. Uses expr-lang syntax.</p>
+      <p class="text-[10px] text-muted-foreground">Skip this node when the expression evaluates truthy — execution continues via the default edge.</p>
     </div>
   </div>
 </template>
