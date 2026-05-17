@@ -216,6 +216,13 @@ func TestBackfillChatbotFlowGraph_FillsNullGraphsAndLeavesOthersAlone(t *testing
 	app := newProcessorTestApp(t)
 	org, account := createProcessorTestOrg(t, app)
 
+	// AutoMigrate no longer creates the legacy canvas_layout column or
+	// the chatbot_flow_steps table — the model has moved fully to graph.
+	// Recreate just enough of the legacy schema so we can exercise the
+	// backfill against representative legacy data.
+	require.NoError(t, app.DB.Exec(`ALTER TABLE chatbot_flows ADD COLUMN IF NOT EXISTS canvas_layout JSONB`).Error)
+	require.NoError(t, app.DB.AutoMigrate(&models.ChatbotFlowStep{}))
+
 	// Legacy: stored as a row in chatbot_flows with steps in
 	// chatbot_flow_steps. canvas_layout column carries the position.
 	legacyID := uuid.New()
