@@ -815,12 +815,6 @@ function updateStepOrders() {
   })
 }
 
-function setMessageType(type: string) {
-  if (selectedStep.value) {
-    selectedStep.value.message_type = type
-  }
-}
-
 function setInputType(type: string | number | bigint | Record<string, any> | null) {
   if (!selectedStep.value || typeof type !== 'string') return
 
@@ -1267,7 +1261,6 @@ function confirmCancel() {
             :initial-mode="previewMode"
             :graph="previewGraph"
             @update:list-picker-open="listPickerOpen = $event"
-            @select-message-type="setMessageType"
           />
         </template>
       </div>
