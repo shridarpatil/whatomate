@@ -98,6 +98,15 @@ func (a *App) ListUsers(r *fastglue.Request) error {
 
 	pg := parsePagination(r)
 	search := string(r.RequestCtx.QueryArgs().Peek("search"))
+	roleIDParam := string(r.RequestCtx.QueryArgs().Peek("role_id"))
+	onlineOnly := string(r.RequestCtx.QueryArgs().Peek("online_only")) == "true"
+
+	// Online user IDs for this org — fetched once and reused for both the
+	// online_only filter and the online_count badge in the response.
+	var onlineIDs []uuid.UUID
+	if a.WSHub != nil {
+		onlineIDs = a.WSHub.OnlineUserIDs(orgID)
+	}
 
 	// Query users via user_organizations to include cross-org members.
 	joinClause := "JOIN user_organizations ON user_organizations.user_id = users.id AND user_organizations.organization_id = ? AND user_organizations.deleted_at IS NULL"
@@ -107,6 +116,25 @@ func (a *App) ListUsers(r *fastglue.Request) error {
 	if search != "" {
 		countQuery = countQuery.Where("users.full_name ILIKE ? OR users.email ILIKE ?", "%"+search+"%", "%"+search+"%")
 		dataQuery = dataQuery.Where("users.full_name ILIKE ? OR users.email ILIKE ?", "%"+search+"%", "%"+search+"%")
+	}
+	if roleIDParam != "" {
+		if roleUUID, err := uuid.Parse(roleIDParam); err == nil {
+			countQuery = countQuery.Where("user_organizations.role_id = ?", roleUUID)
+			dataQuery = dataQuery.Where("user_organizations.role_id = ?", roleUUID)
+		}
+	}
+	if onlineOnly {
+		if len(onlineIDs) == 0 {
+			return r.SendEnvelope(map[string]any{
+				"users":        []UserResponse{},
+				"total":        0,
+				"page":         pg.Page,
+				"limit":        pg.Limit,
+				"online_count": 0,
+			})
+		}
+		countQuery = countQuery.Where("users.id IN ?", onlineIDs)
+		dataQuery = dataQuery.Where("users.id IN ?", onlineIDs)
 	}
 
 	var total int64
@@ -157,10 +185,11 @@ func (a *App) ListUsers(r *fastglue.Request) error {
 	}
 
 	return r.SendEnvelope(map[string]any{
-		"users": response,
-		"total": total,
-		"page":  pg.Page,
-		"limit": pg.Limit,
+		"users":        response,
+		"total":        total,
+		"page":         pg.Page,
+		"limit":        pg.Limit,
+		"online_count": len(onlineIDs),
 	})
 }
 

@@ -45,11 +45,16 @@ type OutgoingMessageRequest struct {
 	Caption       string
 
 	// Interactive messages
-	InteractiveType string            // "button", "list", "cta_url"
+	InteractiveType string            // "button", "list", "cta_url", "voice_call"
 	BodyText        string            // Body text for interactive messages
 	Buttons         []whatsapp.Button // For button/list messages
 	ButtonText      string            // For CTA URL button
 	URL             string            // For CTA URL button
+
+	// voice_call interactive (WhatsApp Business Calling)
+	DisplayText      string // Button face label
+	TTLMinutes       int    // How long the button stays clickable; 0 ⇒ Meta default
+	VoiceCallPayload string // Opaque round-trip string; server-set, e.g. "agent:<uuid>" for sticky routing
 
 	// Template messages
 	Template            *models.Template
@@ -187,6 +192,8 @@ func (a *App) SendOutgoingMessage(ctx context.Context, req OutgoingMessageReques
 			switch req.InteractiveType {
 			case "cta_url":
 				return a.WhatsApp.SendCTAURLButton(sendCtx, waAccount, rcpt, req.BodyText, req.ButtonText, req.URL)
+			case "voice_call":
+				return a.WhatsApp.SendVoiceCallButton(sendCtx, waAccount, rcpt, req.BodyText, req.DisplayText, req.TTLMinutes, req.VoiceCallPayload)
 			default: // "button" or "list"
 				return a.WhatsApp.SendInteractiveButtons(sendCtx, waAccount, rcpt, req.BodyText, req.Buttons)
 			}
@@ -366,6 +373,18 @@ func (a *App) buildInteractiveData(req OutgoingMessageRequest) models.JSONB {
 			"button_text": req.ButtonText,
 			"url":         req.URL,
 		}
+	case "voice_call":
+		// Don't store the payload — it carries server-only context (the
+		// originating agent id) and the chat history doesn't need it.
+		out := models.JSONB{
+			"type":         "voice_call",
+			"body":         req.BodyText,
+			"display_text": req.DisplayText,
+		}
+		if req.TTLMinutes > 0 {
+			out["ttl_minutes"] = req.TTLMinutes
+		}
+		return out
 	case "list":
 		rows := make([]any, len(req.Buttons))
 		for i, btn := range req.Buttons {

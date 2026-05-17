@@ -1,7 +1,9 @@
 package handlers
 
 import (
+	"context"
 	"encoding/json"
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
@@ -33,6 +35,12 @@ func (a *App) processCallWebhook(phoneNumberID string, call any) {
 			Message string `json:"message"`
 		} `json:"error,omitempty"`
 		Duration int `json:"duration,omitempty"`
+		// BizOpaqueCallbackData is the opaque string we set as `payload` on a
+		// voice_call interactive button. Meta echoes it back here when the
+		// customer taps the button. Carries `agent:<uuid>` for sticky routing;
+		// parsed and acted on in a later PR — for now just logged so we can
+		// confirm Meta is round-tripping the value.
+		BizOpaqueCallbackData string `json:"biz_opaque_callback_data,omitempty"`
 	}
 
 	var ce callEvent
@@ -44,6 +52,14 @@ func (a *App) processCallWebhook(phoneNumberID string, call any) {
 
 	// Log raw payload to debug SDP and field mapping
 	a.Log.Debug("Raw call webhook payload", "payload", string(b))
+
+	// Surface the voice_call payload at info level so it shows up in
+	// production logs ahead of sticky-routing landing. Quiet when the
+	// caller didn't initiate via a voice_call button.
+	if ce.BizOpaqueCallbackData != "" {
+		a.Log.Info("Incoming call carries biz_opaque_callback_data",
+			"call_id", ce.ID, "payload", ce.BizOpaqueCallbackData)
+	}
 
 	// Check if this call_id belongs to an existing outgoing session
 	if a.CallManager != nil {
@@ -101,7 +117,7 @@ func (a *App) processCallWebhook(phoneNumberID string, call any) {
 	switch ce.Event {
 	case "ringing":
 		// Broadcast incoming call via WebSocket (no SDP yet, WebRTC starts on "connect")
-		a.broadcastCallEvent(account.OrganizationID, websocket.TypeCallIncoming, map[string]any{
+		payload := map[string]any{
 			"call_log_id":  callLog.ID.String(),
 			"call_id":      ce.ID,
 			"caller_phone": ce.From,
@@ -109,7 +125,23 @@ func (a *App) processCallWebhook(phoneNumberID string, call any) {
 			"contact_name": contact.ProfileName,
 			"ivr_flow_id":  callLog.IVRFlowID,
 			"started_at":   now.Format(time.RFC3339),
-		})
+		}
+		// Sticky routing: if the customer clicked a voice_call button whose
+		// payload tags the originating agent, ring just that agent. Falls
+		// back to the org-wide broadcast on any failure (malformed payload,
+		// wrong org, agent offline / unavailable).
+		stickyAgentID := a.resolveStickyAgent(context.Background(), ce.BizOpaqueCallbackData, account.OrganizationID, contact.PhoneNumber)
+		if stickyAgentID != nil {
+			payload["sticky_agent_id"] = stickyAgentID.String()
+			a.Log.Info("Sticky-routing incoming call to originating agent",
+				"call_id", ce.ID, "agent_id", *stickyAgentID)
+			a.WSHub.BroadcastToUser(account.OrganizationID, *stickyAgentID, websocket.WSMessage{
+				Type:    websocket.TypeCallIncoming,
+				Payload: payload,
+			})
+		} else {
+			a.broadcastCallEvent(account.OrganizationID, websocket.TypeCallIncoming, payload)
+		}
 
 	case "connect":
 		// "connect" carries the SDP offer from the consumer in session.sdp.
@@ -125,11 +157,15 @@ func (a *App) processCallWebhook(phoneNumberID string, call any) {
 			"answered_at": now,
 		})
 
-		// Delegate to CallManager with the SDP offer
+		// Delegate to CallManager with the SDP offer. Resolve the sticky
+		// agent again here — Meta echoes biz_opaque_callback_data on every
+		// call event, so we don't need to plumb state across the ringing →
+		// connect gap.
 		if a.IsCallingEnabledForOrg(account.OrganizationID) && sdpOffer != "" {
 			session := a.CallManager.GetSession(ce.ID)
 			if session == nil {
-				a.CallManager.HandleIncomingCall(account, contact, callLog, sdpOffer)
+				stickyAgentID := a.resolveStickyAgent(context.Background(), ce.BizOpaqueCallbackData, account.OrganizationID, contact.PhoneNumber)
+				a.CallManager.HandleIncomingCall(account, contact, callLog, sdpOffer, stickyAgentID)
 			} else {
 				a.CallManager.HandleCallEvent(ce.ID, ce.Event)
 			}
@@ -417,6 +453,122 @@ func (a *App) processCallPermissionReply(phoneNumberID, fromPhone string, reply 
 		wsPayload["expires_at"] = expiresAt.Format(time.RFC3339)
 	}
 	a.broadcastCallEvent(account.OrganizationID, websocket.TypeCallPermissionUpdate, wsPayload)
+}
+
+// validateStickyAgent runs the per-call eligibility checks (same-org,
+// IsActive, IsAvailable, online) on a candidate agent. Returns the id on
+// pass, nil on fail (with the reason logged). Used by both sticky-agent
+// sources in resolveStickyAgent.
+func (a *App) validateStickyAgent(agentID, orgID uuid.UUID) *uuid.UUID {
+	var user models.User
+	if err := a.DB.Where(
+		"id = ? AND organization_id = ? AND is_active = ? AND is_available = ?",
+		agentID, orgID, true, true,
+	).First(&user).Error; err != nil {
+		a.Log.Info("Sticky-route skipped: agent not eligible",
+			"agent_id", agentID, "org_id", orgID, "reason", err.Error())
+		return nil
+	}
+	if a.WSHub == nil || !a.WSHub.IsUserOnline(orgID, agentID) {
+		a.Log.Info("Sticky-route skipped: agent offline",
+			"agent_id", agentID)
+		return nil
+	}
+	return &agentID
+}
+
+// stickyCallKey returns the Redis key for a pending voice_call sticky
+// route. Keyed by (org, caller-phone) because the incoming-call webhook
+// gives us the phone before any contact lookup, and it's the same value
+// the sender writes (contact.PhoneNumber).
+func stickyCallKey(orgID uuid.UUID, phone string) string {
+	return "vc_sticky:" + orgID.String() + ":" + phone
+}
+
+// MarkPendingStickyCall stores the originating agent id when an outbound
+// voice_call button is sent, with a TTL matching the button's clickable
+// lifetime. When the customer taps the button and our number rings, the
+// call_webhook handler reads this back to route directly to the agent
+// who sent it.
+//
+// Best-effort: a Redis failure logs and degrades to today's default
+// (org-wide broadcast + IVR). Doesn't error out a successful send.
+func (a *App) MarkPendingStickyCall(ctx context.Context, orgID uuid.UUID, phone string, agentID uuid.UUID, ttlMinutes int) {
+	if a.Redis == nil || phone == "" {
+		return
+	}
+	if ttlMinutes <= 0 {
+		ttlMinutes = 15 // Meta's default for voice_call buttons
+	}
+	if err := a.Redis.Set(ctx, stickyCallKey(orgID, phone), agentID.String(),
+		time.Duration(ttlMinutes)*time.Minute).Err(); err != nil {
+		a.Log.Warn("Failed to mark pending sticky call in Redis",
+			"error", err, "phone", phone)
+	}
+}
+
+// findStickyAgentInRedis returns the agent id stored when the outbound
+// voice_call button was sent (set by MarkPendingStickyCall), or nil if
+// no key, expired, malformed, or Redis is unhealthy. Nil is a graceful
+// signal — the caller falls through to today's default routing.
+func (a *App) findStickyAgentInRedis(ctx context.Context, orgID uuid.UUID, phone string) *uuid.UUID {
+	if a.Redis == nil || phone == "" {
+		return nil
+	}
+	val, err := a.Redis.Get(ctx, stickyCallKey(orgID, phone)).Result()
+	if err != nil {
+		return nil
+	}
+	agentID, err := uuid.Parse(val)
+	if err != nil {
+		a.Log.Warn("Stored sticky-call agent id is malformed", "value", val)
+		return nil
+	}
+	return &agentID
+}
+
+// resolveStickyAgent picks the agent (if any) who should receive this
+// incoming call. Two sources are tried in order:
+//
+//  1. The voice_call button's `payload` echoed back by Meta. As of
+//     2026-05, Meta does not surface this on the call webhook; we keep
+//     the parsing for forward-compat in case they add it later.
+//  2. Redis: a key set by MarkPendingStickyCall when the outbound
+//     button was sent, with a TTL matching the button's clickable
+//     lifetime.
+//
+// Either source's result goes through validateStickyAgent so the agent
+// must still be in the same org, on-shift, and online. On any failure
+// return nil and let the caller fall back to today's org-wide broadcast.
+//
+// Why Redis instead of a DB lookup: O(1) GET vs an unindexed JSONB scan
+// of `messages`, and the TTL is enforced by Redis natively (no
+// "last 60 min" window math).
+func (a *App) resolveStickyAgent(ctx context.Context, rawPayload string, orgID uuid.UUID, callerPhone string) *uuid.UUID {
+	// Source 1: Meta-echoed payload.
+	if suffix, ok := strings.CutPrefix(rawPayload, "agent:"); ok {
+		if agentID, err := uuid.Parse(suffix); err == nil {
+			if validated := a.validateStickyAgent(agentID, orgID); validated != nil {
+				a.Log.Info("Sticky-route: matched on Meta-echoed payload",
+					"agent_id", agentID, "phone", callerPhone)
+				return validated
+			}
+		} else {
+			a.Log.Info("Sticky-route: malformed agent id in payload",
+				"payload", rawPayload, "error", err)
+		}
+	}
+
+	// Source 2: pending sticky-call key set when the button was sent.
+	if originator := a.findStickyAgentInRedis(ctx, orgID, callerPhone); originator != nil {
+		if validated := a.validateStickyAgent(*originator, orgID); validated != nil {
+			a.Log.Info("Sticky-route: matched on Redis pending key",
+				"agent_id", *originator, "phone", callerPhone)
+			return validated
+		}
+	}
+
+	return nil
 }
 
 // broadcastCallEvent sends a call event to all connected clients in an organization

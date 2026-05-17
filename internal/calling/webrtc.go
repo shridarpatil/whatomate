@@ -162,6 +162,16 @@ func (m *Manager) negotiateWebRTC(session *CallSession, account *models.WhatsApp
 	// Brief delay to let the media path stabilize before sending audio
 	time.Sleep(500 * time.Millisecond)
 
+	// Sticky-routed call: skip IVR entirely and ring the originating agent
+	// directly via the existing transfer flow. initiateTransfer's
+	// "ring-this-specific-agent-first" branch handles StickyAgentID; an
+	// empty team target keeps the no-team broadcast as the eventual
+	// fallback if the sticky agent doesn't answer.
+	if session.StickyAgentID != nil {
+		go m.initiateTransfer(session, session.AccountName, "", nil)
+		return
+	}
+
 	// Start IVR flow if configured
 	if session.IVRFlow != nil {
 		go m.runIVRFlow(session, waAccount)

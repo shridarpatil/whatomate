@@ -71,6 +71,50 @@ Organize your responses into categories for easier navigation:
 | **Closing** | Thank you messages, conversation endings |
 | **General** | Miscellaneous responses |
 
+## Interactive Buttons
+
+A canned response can include buttons that appear under the message in the
+customer's WhatsApp. Three types are supported, and the editor enforces
+which can be combined.
+
+| Type | What it does | How many |
+|------|--------------|----------|
+| **Reply** | Sends a tappable text reply back into the chat. | 1–10 per message. List format kicks in automatically above 3. |
+| **URL** | Opens a link in the customer's browser. | 1 per message. Can't be combined with reply buttons. |
+| **Call** | Lets the customer place a WhatsApp voice call to you with one tap. | 1 per message. Can't be combined with reply or URL buttons. |
+
+### Call buttons (click-to-call)
+
+Add a **Call** button when you want the customer to be able to start a
+voice call with one tap — e.g. "Talk to your account manager",
+"Call our support team".
+
+<Aside type="caution">
+  **Prerequisite:** the WhatsApp account sending the response must have
+  **Business Calling enabled** under **Settings > Accounts > [account] >
+  Defaults**. The toggle is off by default; enable it only after Meta has
+  enrolled the phone number in the WhatsApp Business Calling API. The
+  send will be rejected with a clear error if the toggle is off.
+</Aside>
+
+**Routing.** When the customer taps the Call button, the resulting call
+rings *the agent who sent the button* directly, skipping the IVR. The
+agent who originated the outreach gets the call; if they're offline,
+on another call, or off-shift, the call falls back to the account's
+normal incoming-call routing (IVR / team broadcast).
+
+**Configuring the button.** In the editor:
+
+- **Label** — shown on the button face. Max 20 characters. Supports
+  the same `{{contact_name}}` / `{{user_name}}` placeholders as the
+  body, resolved server-side.
+- **Expires after** — how long the button stays clickable (1–60
+  minutes, default 15). After this window Meta drops the button from
+  the customer's chat and they can't initiate a call from it.
+
+See the [Calling docs](/features/calling/) for the broader incoming-call
+flow (IVR, transfers, recording).
+
 ## Using Canned Responses in Chat
 
 There are two ways to pick a canned response while chatting:

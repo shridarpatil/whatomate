@@ -118,6 +118,7 @@ const form = ref({
   is_default_incoming: false,
   is_default_outgoing: false,
   auto_read_receipt: false,
+  business_calling_enabled: false,
 })
 
 const breadcrumbs = computed(() => [
@@ -162,6 +163,7 @@ function syncForm() {
     is_default_incoming: account.value.is_default_incoming,
     is_default_outgoing: account.value.is_default_outgoing,
     auto_read_receipt: account.value.auto_read_receipt,
+    business_calling_enabled: account.value.business_calling_enabled ?? false,
   }
 }
 
@@ -404,6 +406,15 @@ onMounted(async () => {
           <div class="flex items-center justify-between">
             <Label class="text-xs">{{ $t('accounts.autoReadReceipt', 'Auto Read Receipt') }}</Label>
             <Switch :checked="form.auto_read_receipt" @update:checked="form.auto_read_receipt = $event" :disabled="!canWrite" />
+          </div>
+          <div class="flex items-start justify-between gap-3">
+            <div class="space-y-0.5">
+              <Label class="text-xs">{{ $t('accounts.businessCallingEnabled', 'Business Calling enabled') }}</Label>
+              <p class="text-[11px] text-muted-foreground">
+                {{ $t('accounts.businessCallingEnabledDesc', 'Enable only after Meta enrolls this number in the WhatsApp Business Calling API. Required for click-to-call buttons in canned responses.') }}
+              </p>
+            </div>
+            <Switch :checked="form.business_calling_enabled" @update:checked="form.business_calling_enabled = $event" :disabled="!canWrite" />
           </div>
         </div>
       </CardContent>

@@ -3,7 +3,7 @@ import { ref, watch, markRaw, nextTick } from 'vue'
 import { useVueFlow, MarkerType } from '@vue-flow/core'
 import type { Node, Edge, NodeMouseEvent, Connection } from '@vue-flow/core'
 import { Button } from '@/components/ui/button'
-import { GitBranch, Play, Plus, MessageSquare, MousePointerClick, Globe, MessageCircle, UserPlus } from 'lucide-vue-next'
+import { GitBranch, Play, Plus, MessageSquare, MousePointerClick, Globe, MessageCircle, UserPlus, StopCircle, Clock, ExternalLink } from 'lucide-vue-next'
 import { stepsToNodesAndEdges, extractCanvasLayout } from '@/composables/useChatbotFlowConverter'
 import type { CanvasLayout } from '@/composables/useChatbotFlowConverter'
 import FlowCanvas from '@/components/shared/FlowCanvas.vue'
@@ -12,6 +12,10 @@ import ChatbotButtonsNode from '@/components/chatbot/nodes/ChatbotButtonsNode.vu
 import ChatbotApiNode from '@/components/chatbot/nodes/ChatbotApiNode.vue'
 import ChatbotWhatsAppFlowNode from '@/components/chatbot/nodes/ChatbotWhatsAppFlowNode.vue'
 import ChatbotTransferNode from '@/components/chatbot/nodes/ChatbotTransferNode.vue'
+import ChatbotEndNode from '@/components/chatbot/nodes/ChatbotEndNode.vue'
+import ChatbotConditionNode from '@/components/chatbot/nodes/ChatbotConditionNode.vue'
+import ChatbotTimingNode from '@/components/chatbot/nodes/ChatbotTimingNode.vue'
+import ChatbotGotoFlowNode from '@/components/chatbot/nodes/ChatbotGotoFlowNode.vue'
 
 interface FlowChartStep {
   step_name: string
@@ -49,18 +53,22 @@ const emit = defineEmits<{
 const messageTypePalette = [
   { type: 'text', label: 'Text', icon: MessageSquare, color: 'bg-blue-600' },
   { type: 'buttons', label: 'Buttons', icon: MousePointerClick, color: 'bg-purple-600' },
-  { type: 'api_fetch', label: 'API Fetch', icon: Globe, color: 'bg-orange-600' },
+  { type: 'api_fetch', label: 'API', icon: Globe, color: 'bg-orange-600' },
   { type: 'whatsapp_flow', label: 'WA Flow', icon: MessageCircle, color: 'bg-green-600' },
   { type: 'transfer', label: 'Transfer', icon: UserPlus, color: 'bg-amber-600' },
+  { type: 'condition', label: 'Condition', icon: GitBranch, color: 'bg-indigo-600' },
+  { type: 'timing', label: 'Timing', icon: Clock, color: 'bg-cyan-600' },
+  { type: 'goto_flow', label: 'Go to Flow', icon: ExternalLink, color: 'bg-teal-600' },
+  { type: 'end', label: 'End', icon: StopCircle, color: 'bg-slate-600' },
 ]
 
-// Track which step is selected on the canvas (index)
-const selectedOnCanvas = ref<number | null>(null)
-
+// Selection source-of-truth lives in the parent (props.selectedStepIndex).
+// Reading from props lets the palette react to selection made either
+// here (canvas click) or in the steps list panel.
 function getSelectedStepType(): string | null {
-  if (selectedOnCanvas.value === null) return null
+  if (props.selectedStepIndex === null) return null
   const sorted = [...(props.steps || [])].sort((a, b) => a.step_order - b.step_order)
-  return sorted[selectedOnCanvas.value]?.message_type || null
+  return sorted[props.selectedStepIndex]?.message_type || null
 }
 
 const nodeTypes: Record<string, any> = {
@@ -70,6 +78,10 @@ const nodeTypes: Record<string, any> = {
   chatbot_api_fetch: markRaw(ChatbotApiNode),
   chatbot_whatsapp_flow: markRaw(ChatbotWhatsAppFlowNode),
   chatbot_transfer: markRaw(ChatbotTransferNode),
+  chatbot_end: markRaw(ChatbotEndNode),
+  chatbot_condition: markRaw(ChatbotConditionNode),
+  chatbot_timing: markRaw(ChatbotTimingNode),
+  chatbot_goto_flow: markRaw(ChatbotGotoFlowNode),
 }
 
 const flowNodes = ref<Node[]>([])
@@ -146,19 +158,17 @@ function onNodeClick(event: NodeMouseEvent) {
   const sorted = [...(props.steps || [])].sort((a, b) => a.step_order - b.step_order)
   const idx = sorted.findIndex((s) => s.step_name === event.node.id)
   if (idx !== -1) {
-    selectedOnCanvas.value = idx
     emit('selectStep', idx)
   }
 }
 
 function onPaneClick() {
-  selectedOnCanvas.value = null
   emit('selectFlowSettings')
 }
 
 function onPaletteClick(type: string) {
-  if (selectedOnCanvas.value !== null) {
-    emit('changeStepType', selectedOnCanvas.value, type)
+  if (props.selectedStepIndex !== null) {
+    emit('changeStepType', props.selectedStepIndex, type)
   }
 }
 
@@ -231,7 +241,7 @@ function onEdgeRemove(edges: Edge[]) {
     <!-- Message Type Palette -->
     <div class="flex items-center gap-2 px-4 py-2 border-b bg-muted/30 overflow-x-auto shrink-0">
       <span class="text-xs text-muted-foreground shrink-0">
-        {{ selectedOnCanvas !== null ? 'Change type:' : 'Add step:' }}
+        {{ props.selectedStepIndex !== null ? 'Change type:' : 'Add step:' }}
       </span>
       <Button
         v-for="p in messageTypePalette"
@@ -239,7 +249,7 @@ function onEdgeRemove(edges: Edge[]) {
         :variant="getSelectedStepType() === p.type ? 'active' : 'outline'"
         size="sm"
         class="h-7 text-xs gap-1.5 shrink-0"
-        @click="selectedOnCanvas !== null ? onPaletteClick(p.type) : emit('addStep', p.type)"
+        @click="props.selectedStepIndex !== null ? onPaletteClick(p.type) : emit('addStep', p.type)"
       >
         <div :class="['w-2 h-2 rounded-full', p.color]" />
         <component :is="p.icon" class="w-3.5 h-3.5" />

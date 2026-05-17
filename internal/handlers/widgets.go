@@ -851,7 +851,7 @@ func (a *App) queryMessages(orgID uuid.UUID, metric, field string, filters []Fil
 
 	// Apply filters
 	for _, f := range filters {
-		query = applyFilter(query, f)
+		query = applyFilter("messages", query, f)
 	}
 
 	var result float64
@@ -861,8 +861,10 @@ func (a *App) queryMessages(orgID uuid.UUID, metric, field string, filters []Fil
 		query.Count(&count)
 		result = float64(count)
 	case "sum", "avg":
-		// For messages, sum/avg might be on a numeric field
-		if field != "" {
+		// For messages, sum/avg might be on a numeric field. The field name
+		// flows directly into SQL, so reject anything not in the whitelist
+		// (allowedAggregateFields["messages"]) to block injection.
+		if field != "" && allowedAggregateFields["messages"][field] {
 			var val float64
 			if metric == "sum" {
 				query.Select("COALESCE(SUM(" + field + "), 0)").Scan(&val)
@@ -880,7 +882,7 @@ func (a *App) queryContacts(orgID uuid.UUID, _ string, filters []FilterInput, st
 	query := a.DB.Model(&models.Contact{}).Where("organization_id = ? AND last_message_at >= ? AND last_message_at <= ?", orgID, start, end)
 
 	for _, f := range filters {
-		query = applyFilter(query, f)
+		query = applyFilter("contacts", query, f)
 	}
 
 	var count int64
@@ -892,7 +894,7 @@ func (a *App) queryCampaigns(orgID uuid.UUID, _ string, filters []FilterInput, s
 	query := a.DB.Model(&models.BulkMessageCampaign{}).Where("organization_id = ? AND created_at >= ? AND created_at <= ?", orgID, start, end)
 
 	for _, f := range filters {
-		query = applyFilter(query, f)
+		query = applyFilter("campaigns", query, f)
 	}
 
 	var count int64
@@ -904,7 +906,7 @@ func (a *App) queryTransfers(orgID uuid.UUID, metric, field string, filters []Fi
 	query := a.DB.Model(&models.AgentTransfer{}).Where("organization_id = ? AND transferred_at >= ? AND transferred_at <= ?", orgID, start, end)
 
 	for _, f := range filters {
-		query = applyFilter(query, f)
+		query = applyFilter("transfers", query, f)
 	}
 
 	var result float64
@@ -929,7 +931,7 @@ func (a *App) querySessions(orgID uuid.UUID, _ string, filters []FilterInput, st
 	query := a.DB.Model(&models.ChatbotSession{}).Where("organization_id = ? AND created_at >= ? AND created_at <= ?", orgID, start, end)
 
 	for _, f := range filters {
-		query = applyFilter(query, f)
+		query = applyFilter("sessions", query, f)
 	}
 
 	var count int64
@@ -953,7 +955,7 @@ func (a *App) getChartData(orgID uuid.UUID, widget models.Widget, filters []Filt
 	`, dateField, tableName, dateField, dateField)
 
 	args := []any{orgID, start, end}
-	query, args = appendFilterSQL(query, args, filters)
+	query, args = appendFilterSQL(widget.DataSource, query, args, filters)
 
 	query += fmt.Sprintf(" GROUP BY DATE_TRUNC('day', %s) ORDER BY date ASC", dateField)
 
@@ -976,6 +978,60 @@ func (a *App) getChartData(orgID uuid.UUID, widget models.Widget, filters []Filt
 }
 
 // resolveDataSourceTable returns the table name and date field for a data source
+// allowedFilterFields enumerates the columns each data source is allowed
+// to be filtered on. Filter column names get interpolated directly into
+// raw SQL (column identifiers can't be parameterized), so anything not
+// in this whitelist is rejected — otherwise an authenticated user with
+// widget-write permission can craft a malicious filter and inject SQL.
+//
+// Frontends should keep their filter pickers in sync with this list; any
+// filter whose `field` is not allowed will be silently dropped at query
+// time.
+var allowedFilterFields = map[string]map[string]bool{
+	"messages": {
+		"status":            true,
+		"direction":         true,
+		"message_type":      true,
+		"contact_id":        true,
+		"sent_by_user_id":   true,
+		"whatsapp_account":  true,
+		"conversation_id":   true,
+		"template_name":     true,
+	},
+	"contacts": {
+		"status":             true,
+		"assigned_user_id":   true,
+		"whatsapp_account":   true,
+	},
+	"campaigns": {
+		"status":           true,
+		"template_name":    true,
+		"created_by_id":    true,
+		"whatsapp_account": true,
+	},
+	"transfers": {
+		"status":     true,
+		"team_id":    true,
+		"agent_id":   true,
+		"from_team":  true,
+		"to_team":    true,
+	},
+	"sessions": {
+		"status":  true,
+		"flow_id": true,
+	},
+}
+
+// allowedAggregateFields enumerates the columns each data source is
+// allowed to be summed/averaged over (the `field` argument to metric
+// types "sum" / "avg"). Same threat model as allowedFilterFields — the
+// column name flows into raw SQL.
+var allowedAggregateFields = map[string]map[string]bool{
+	// Messages have no obvious numeric column to aggregate on today;
+	// leaving empty until a use case appears.
+	"messages": {},
+}
+
 func resolveDataSourceTable(dataSource string) (tableName, dateField string, ok bool) {
 	switch dataSource {
 	case "messages":
@@ -993,10 +1049,15 @@ func resolveDataSourceTable(dataSource string) (tableName, dateField string, ok 
 	}
 }
 
-// appendFilterSQL appends filter conditions to a raw SQL query string and args slice
-func appendFilterSQL(query string, args []any, filters []FilterInput) (string, []any) {
+// appendFilterSQL appends filter conditions to a raw SQL query string and args slice.
+// Filters whose field is not in allowedFilterFields[dataSource] are silently dropped —
+// they would otherwise be a SQL injection vector since column names interpolate raw.
+func appendFilterSQL(dataSource string, query string, args []any, filters []FilterInput) (string, []any) {
 	for _, f := range filters {
-		condition, value := buildFilterSQL(f)
+		condition, value, ok := buildFilterSQL(dataSource, f)
+		if !ok {
+			continue
+		}
 		query += " AND " + condition
 		args = append(args, value)
 	}
@@ -1036,7 +1097,7 @@ func (a *App) getGroupedData(orgID uuid.UUID, widget models.Widget, filters []Fi
 	`, widget.GroupByField, tableName, dateField, dateField)
 
 	args := []any{orgID, start, end}
-	query, args = appendFilterSQL(query, args, filters)
+	query, args = appendFilterSQL(widget.DataSource, query, args, filters)
 
 	query += fmt.Sprintf(" GROUP BY %s ORDER BY value DESC", widget.GroupByField)
 
@@ -1075,7 +1136,7 @@ func (a *App) getCampaignMessageStatusData(orgID uuid.UUID, filters []FilterInpu
 	`
 
 	args := []any{orgID, start, end}
-	query, args = appendFilterSQL(query, args, filters)
+	query, args = appendFilterSQL("campaigns", query, args, filters)
 
 	type CampaignCounts struct {
 		Sent      int64
@@ -1119,7 +1180,7 @@ func (a *App) getGroupedTimeSeriesData(orgID uuid.UUID, widget models.Widget, fi
 	`, dateField, widget.GroupByField, tableName, dateField, dateField)
 
 	args := []any{orgID, start, end}
-	query, args = appendFilterSQL(query, args, filters)
+	query, args = appendFilterSQL(widget.DataSource, query, args, filters)
 
 	query += fmt.Sprintf(" GROUP BY DATE_TRUNC('day', %s), %s ORDER BY date ASC", dateField, widget.GroupByField)
 
@@ -1203,7 +1264,7 @@ func (a *App) getCampaignMessageStatusTimeSeries(orgID uuid.UUID, filters []Filt
 	`
 
 	args := []any{orgID, start, end}
-	query, args = appendFilterSQL(query, args, filters)
+	query, args = appendFilterSQL("campaigns", query, args, filters)
 
 	query += " GROUP BY DATE_TRUNC('day', created_at) ORDER BY date ASC"
 
@@ -1243,32 +1304,46 @@ func (a *App) getCampaignMessageStatusTimeSeries(orgID uuid.UUID, filters []Filt
 	return result
 }
 
-func applyFilter(query *gorm.DB, filter FilterInput) *gorm.DB {
-	condition, value := buildFilterSQL(filter)
+// applyFilter chains a single user-supplied filter onto a GORM query. Skips
+// filters whose field isn't in the data-source whitelist — that's the SQL
+// injection guard. The query is unchanged in that case.
+func applyFilter(dataSource string, query *gorm.DB, filter FilterInput) *gorm.DB {
+	condition, value, ok := buildFilterSQL(dataSource, filter)
+	if !ok {
+		return query
+	}
 	return query.Where(condition, value)
 }
 
-func buildFilterSQL(filter FilterInput) (string, any) {
+// buildFilterSQL turns a user-supplied filter into a parameterized SQL
+// fragment. The value is always parameterized (`?`); the column name is
+// interpolated raw, which is why we whitelist the field against
+// allowedFilterFields[dataSource]. Returns ok=false (no condition, nil
+// value) for any field that isn't in the whitelist for this data source.
+func buildFilterSQL(dataSource string, filter FilterInput) (string, any, bool) {
+	if !allowedFilterFields[dataSource][filter.Field] {
+		return "", nil, false
+	}
 	field := filter.Field
 	value := filter.Value
 
 	switch filter.Operator {
 	case "equals":
-		return fmt.Sprintf("%s = ?", field), value
+		return fmt.Sprintf("%s = ?", field), value, true
 	case "not_equals":
-		return fmt.Sprintf("%s != ?", field), value
+		return fmt.Sprintf("%s != ?", field), value, true
 	case "contains":
-		return fmt.Sprintf("%s ILIKE ?", field), "%" + value + "%"
+		return fmt.Sprintf("%s ILIKE ?", field), "%" + value + "%", true
 	case "gt":
-		return fmt.Sprintf("%s > ?", field), value
+		return fmt.Sprintf("%s > ?", field), value, true
 	case "lt":
-		return fmt.Sprintf("%s < ?", field), value
+		return fmt.Sprintf("%s < ?", field), value, true
 	case "gte":
-		return fmt.Sprintf("%s >= ?", field), value
+		return fmt.Sprintf("%s >= ?", field), value, true
 	case "lte":
-		return fmt.Sprintf("%s <= ?", field), value
+		return fmt.Sprintf("%s <= ?", field), value, true
 	default:
-		return fmt.Sprintf("%s = ?", field), value
+		return fmt.Sprintf("%s = ?", field), value, true
 	}
 }
 
@@ -1321,7 +1396,7 @@ func (a *App) getTableRows(orgID uuid.UUID, widget models.Widget, filters []Filt
 
 	query := sql.base
 	args := []any{orgID, periodStart, periodEnd}
-	query, args = appendFilterSQL(query, args, filters)
+	query, args = appendFilterSQL(widget.DataSource, query, args, filters)
 	query += sql.orderBy
 
 	type row struct {

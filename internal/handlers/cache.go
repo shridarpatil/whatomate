@@ -100,9 +100,6 @@ func (a *App) getChatbotFlowsCached(orgID uuid.UUID) ([]models.ChatbotFlow, erro
 	// Cache miss - fetch from database
 	var flows []models.ChatbotFlow
 	if err := a.DB.Where("organization_id = ? AND is_enabled = true", orgID).
-		Preload("Steps", func(db *gorm.DB) *gorm.DB {
-			return db.Order("step_order ASC")
-		}).
 		Find(&flows).Error; err != nil {
 		return nil, err
 	}

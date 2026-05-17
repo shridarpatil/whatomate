@@ -34,6 +34,7 @@ import {
   CollapsibleTrigger,
 } from '@/components/ui/collapsible'
 import { chatbotService, flowsService, type Team } from '@/services/api'
+import { stepsToGraph, graphToSteps } from '@/composables/useChatbotFlowConverter'
 import { useTeamsStore } from '@/stores/teams'
 import { toast } from 'vue-sonner'
 import {
@@ -84,6 +85,8 @@ interface TransferConfig {
 interface FlowStep {
   id?: string
   step_name: string
+  /** Human-readable label shown on the canvas; defaults to step_name. */
+  label?: string
   step_order: number
   message: string
   message_type: string
@@ -150,6 +153,9 @@ const isNewFlow = computed(() => !flowId.value || flowId.value === 'new')
 
 const whatsappFlows = ref<WhatsAppFlow[]>([])
 const teams = ref<Team[]>([])
+// Other flows in the same org for the goto_flow picker (excludes the
+// flow being edited so authors can't self-reference accidentally).
+const otherFlows = ref<{ id: string; name: string }[]>([])
 
 const selectedStepIndex = ref<number | null>(null)
 const showFlowSettings = ref(false)
@@ -309,6 +315,19 @@ const selectedStep = computed(() => {
   return formData.value.steps[selectedStepIndex.value]
 })
 
+// previewGraph mirrors what saveFlow would emit — the interactive preview
+// executes the same v2 graph the backend would. Returns null when the
+// editor's current state isn't expressible as graph (preview shows an
+// empty state instead of crashing).
+const previewGraph = computed(() => {
+  const normalised = formData.value.steps.map((step, idx) => ({
+    ...step,
+    step_order: idx + 1,
+    step_name: step.step_name || `step_${idx + 1}`,
+  }))
+  return stepsToGraph(normalised, formData.value.canvas_layout)
+})
+
 // All steps with valid names for branching dropdowns
 const stepsWithNames = computed(() => {
   return formData.value.steps.filter(s => s.step_name && s.step_name.trim() !== '')
@@ -408,7 +427,7 @@ watch(formData, () => {
 }, { deep: true })
 
 onMounted(async () => {
-  await Promise.all([fetchWhatsAppFlows(), fetchTeams()])
+  await Promise.all([fetchWhatsAppFlows(), fetchTeams(), fetchOtherFlows()])
 
   if (!isNewFlow.value && flowId.value) {
     await loadFlow(flowId.value)
@@ -417,9 +436,10 @@ onMounted(async () => {
     formData.value.steps = [{
       ...defaultStep,
       step_name: 'step_1',
+      label: defaultLabelForType('text'),
       step_order: 1,
-      message: 'What is your name?',
-      store_as: 'name'
+      message: '',
+      store_as: ''
     }]
     isLoading.value = false
   }
@@ -443,6 +463,19 @@ async function fetchWhatsAppFlows() {
   }
 }
 
+async function fetchOtherFlows() {
+  try {
+    const response = await chatbotService.listFlows({ limit: 200 })
+    const data = response.data as any
+    const list = data.data?.flows ?? data.flows ?? []
+    otherFlows.value = list
+      .filter((f: any) => f.id && f.id !== flowId.value)
+      .map((f: any) => ({ id: f.id, name: f.name || f.Name || f.id }))
+  } catch {
+    otherFlows.value = []
+  }
+}
+
 async function fetchTeams() {
   try {
     await teamsStore.fetchTeams()
@@ -459,6 +492,25 @@ async function loadFlow(id: string) {
     const response = await chatbotService.getFlow(id)
     const flow = response.data.data || response.data
 
+    // v2 graph wins when present. graphToSteps decodes back into the same
+    // FlowStep[] + canvas_layout the editor binds against, so the rest of
+    // loadFlow stays unchanged. If decoding fails (unsupported node types,
+    // e.g. a Phase 3 flow being viewed on a Phase 2 client) we fall back
+    // From Phase 4 onward every flow has a v2 graph; legacy steps are
+    // converted on startup. The editor's in-memory model is still
+    // FlowStep[] for the existing UI bindings, so we decode the graph
+    // back into steps + canvas positions via graphToSteps.
+    let stepsSource: any[] = []
+    let canvasSource: any = {}
+    const rawGraph = flow.graph || flow.Graph
+    if (rawGraph && rawGraph.version === 2) {
+      const decoded = graphToSteps(rawGraph)
+      if (decoded) {
+        stepsSource = decoded.steps
+        canvasSource = decoded.canvas_layout
+      }
+    }
+
     formData.value = {
       name: flow.name || flow.Name || '',
       description: flow.description || flow.Description || '',
@@ -474,15 +526,16 @@ async function loadFlow(id: string) {
       panel_config: {
         sections: (flow.panel_config || flow.PanelConfig || {}).sections || []
       },
-      canvas_layout: flow.canvas_layout || {},
+      canvas_layout: canvasSource,
       enabled: flow.is_enabled ?? flow.IsEnabled ?? flow.enabled ?? true,
       created_at: flow.created_at || '',
       updated_at: flow.updated_at || '',
       created_by_name: flow.created_by_name || (flow.created_by?.full_name) || '',
       updated_by_name: flow.updated_by_name || (flow.updated_by?.full_name) || '',
-      steps: (flow.steps || flow.Steps || []).map((s: any, idx: number) => ({
+      steps: stepsSource.map((s: any, idx: number) => ({
         id: s.id || s.ID,
         step_name: s.step_name || s.StepName || `step_${idx + 1}`,
+        label: s.label || s.Label || '',
         step_order: s.step_order ?? s.StepOrder ?? idx + 1,
         message: s.message || s.Message || '',
         message_type: s.message_type || s.MessageType || 'text',
@@ -520,22 +573,121 @@ async function loadFlow(id: string) {
   }
 }
 
+// Human-readable defaults for the label shown on the canvas. Keys match
+// message_type values. The user can rename freely via the detail panel.
+const stepTypeLabels: Record<string, string> = {
+  text: 'Text',
+  buttons: 'Buttons',
+  api_fetch: 'API',
+  whatsapp_flow: 'WhatsApp Flow',
+  transfer: 'Transfer',
+  end: 'End',
+  condition: 'Condition',
+  timing: 'Timing',
+  goto_flow: 'Go to Flow',
+}
+
+// Default input_type per message_type. Drives the editor's input
+// section and — critically — picks whether a text step converts to a v2
+// `prompt` (blocking + validating) or a `message` (fire-and-forget) on
+// save. Authors can override per step in the right panel.
+const defaultInputTypeForMessageType: Record<string, string> = {
+  text: 'text',
+  buttons: 'button',
+  whatsapp_flow: 'whatsapp_flow',
+  api_fetch: 'none',
+  transfer: 'none',
+  end: 'none',
+  condition: 'none',
+  timing: 'none',
+  goto_flow: 'none',
+}
+
+function defaultInputTypeForType(type: string): string {
+  return defaultInputTypeForMessageType[type] ?? 'text'
+}
+
+// Steps where the right-panel "Expected Input" + "Validation" sections
+// make sense. Buttons / whatsapp_flow have their own dedicated input UI
+// above; control-flow nodes don't accept user input at all.
+const TEXT_INPUT_STEP_TYPES = new Set(['text', 'api_fetch'])
+const showInputSection = computed(() =>
+  !!selectedStep.value && TEXT_INPUT_STEP_TYPES.has(selectedStep.value.message_type)
+)
+
+const TIMING_DAYS = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'] as const
+
+function defaultTimingSchedule(): Array<Record<string, any>> {
+  return TIMING_DAYS.map((day) => ({
+    day,
+    enabled: day !== 'saturday' && day !== 'sunday',
+    start_time: '09:00',
+    end_time: '18:00',
+  }))
+}
+
+function defaultLabelForType(type: string): string {
+  return stepTypeLabels[type] || type
+}
+
+// renameSelectedStep keeps the canvas + edges in sync when the user
+// changes step_name. step_name is the identifier referenced by edges,
+// canvas_layout.node_positions, and other steps' next_step /
+// conditional_next, so the rename has to cascade.
+function renameSelectedStep(newName: string) {
+  if (!selectedStep.value) return
+  const oldName = selectedStep.value.step_name
+  if (oldName === newName) return
+
+  // Update inter-step references on every other step.
+  for (const step of formData.value.steps) {
+    if (step === selectedStep.value) continue
+    if (step.next_step === oldName) {
+      step.next_step = newName
+    }
+    if (step.conditional_next) {
+      for (const handle of Object.keys(step.conditional_next)) {
+        if (step.conditional_next[handle] === oldName) {
+          step.conditional_next[handle] = newName
+        }
+      }
+    }
+  }
+
+  // Move the saved canvas position to the new key so the node doesn't
+  // jump back to the default {x, y} on the next rebuild.
+  const positions = (formData.value.canvas_layout?.node_positions as Record<string, { x: number; y: number }> | undefined) || undefined
+  if (positions && positions[oldName]) {
+    positions[newName] = positions[oldName]
+    delete positions[oldName]
+  }
+
+  selectedStep.value.step_name = newName
+  hasUnsavedChanges.value = true
+}
+
 function addStep(type?: string) {
   const newOrder = formData.value.steps.length + 1
+  const resolvedType = type || 'text'
   const step: any = {
     ...defaultStep,
     step_name: `step_${newOrder}`,
+    label: defaultLabelForType(resolvedType),
     step_order: newOrder,
+    input_type: defaultInputTypeForType(resolvedType),
+    message_type: resolvedType,
   }
-  if (type) {
-    step.message_type = type
-    if (type === 'whatsapp_flow') {
-      step.input_config = { whatsapp_flow_id: '', flow_header: '', flow_cta: '' }
-      step.input_type = 'none'
-    }
-    if (type === 'transfer') {
-      step.input_type = 'none'
-    }
+  if (type === 'whatsapp_flow') {
+    step.input_config = { whatsapp_flow_id: '', flow_header: '', flow_cta: '' }
+  }
+  if (type === 'condition') {
+    step.input_config = { expression: '' }
+  }
+  if (type === 'timing') {
+    step.input_config = { schedule: defaultTimingSchedule() }
+  }
+  if (type === 'goto_flow') {
+    step.input_config = { flow_id: '' }
   }
   formData.value.steps.push(step)
   selectedStepIndex.value = formData.value.steps.length - 1
@@ -543,13 +695,14 @@ function addStep(type?: string) {
 
 function selectStep(index: number) {
   selectedStepIndex.value = index
-  showFlowSettings.value = false
+  // Keep the canvas (FlowChart + its type palette) visible. The user can
+  // change step type or wire connections without losing context; the
+  // WhatsApp preview is accessed explicitly via the Preview button.
   previewMode.value = 'edit'
 }
 
 function selectStepFromCanvas(index: number) {
   selectedStepIndex.value = index
-  // Keep canvas visible, just update right panel to show step properties
 }
 
 function selectFlowSettings() {
@@ -592,6 +745,7 @@ function onChangeStepType(stepIndex: number, newType: string) {
   if (!actual) return
 
   actual.message_type = newType
+  actual.input_type = defaultInputTypeForType(newType)
 
   // Reset type-specific fields when changing type
   if (newType !== 'buttons') {
@@ -604,12 +758,25 @@ function onChangeStepType(stepIndex: number, newType: string) {
   if (newType !== 'transfer') {
     actual.transfer_config = { team_id: '_general', notes: '' }
   }
-  if (newType === 'transfer') {
-    actual.input_type = 'none'
-  }
   if (newType === 'whatsapp_flow') {
     actual.input_config = { whatsapp_flow_id: '', flow_header: '', flow_cta: '' }
-    actual.input_type = 'none'
+  }
+  if (newType === 'condition') {
+    actual.input_config = { expression: '' }
+    actual.conditional_next = {}
+  }
+  if (newType === 'timing') {
+    actual.input_config = { schedule: defaultTimingSchedule() }
+    actual.conditional_next = {}
+  }
+  if (newType === 'goto_flow') {
+    actual.input_config = { flow_id: '' }
+    actual.conditional_next = {}
+    actual.next_step = ''
+  }
+  if (newType === 'end') {
+    actual.conditional_next = {}
+    actual.next_step = ''
   }
 
   hasUnsavedChanges.value = true
@@ -663,12 +830,6 @@ function updateStepOrders() {
   formData.value.steps.forEach((step, idx) => {
     step.step_order = idx + 1
   })
-}
-
-function setMessageType(type: string) {
-  if (selectedStep.value) {
-    selectedStep.value.message_type = type
-  }
 }
 
 function setInputType(type: string | number | bigint | Record<string, any> | null) {
@@ -876,7 +1037,21 @@ async function saveFlow() {
 
   isSaving.value = true
   try {
-    const data = {
+    // Normalise step names + order before converting to graph.
+    const normalisedSteps = formData.value.steps.map((step, idx) => ({
+      ...step,
+      step_order: idx + 1,
+      step_name: step.step_name || `step_${idx + 1}`
+    }))
+
+    const graph = stepsToGraph(normalisedSteps, formData.value.canvas_layout)
+    if (graph === null) {
+      toast.error(t('flowBuilder.unsupportedV2NodeType', 'This flow uses a step type the backend graph runner does not yet support. Remove or replace it before saving.'))
+      isSaving.value = false
+      return
+    }
+
+    const data: Record<string, any> = {
       name: formData.value.name,
       description: formData.value.description,
       trigger_keywords: formData.value.trigger_keywords.split(',').map(k => k.trim()).filter(Boolean),
@@ -885,13 +1060,8 @@ async function saveFlow() {
       on_complete_action: formData.value.on_complete_action,
       completion_config: formData.value.on_complete_action === 'webhook' ? formData.value.completion_config : {},
       panel_config: formData.value.panel_config,
-      canvas_layout: formData.value.canvas_layout,
       enabled: formData.value.enabled,
-      steps: formData.value.steps.map((step, idx) => ({
-        ...step,
-        step_order: idx + 1,
-        step_name: step.step_name || `step_${idx + 1}`
-      }))
+      graph,
     }
 
     if (isNewFlow.value) {
@@ -1106,8 +1276,8 @@ function confirmCancel() {
             :list-picker-open="listPickerOpen"
             :teams="teams"
             :initial-mode="previewMode"
+            :graph="previewGraph"
             @update:list-picker-open="listPickerOpen = $event"
-            @select-message-type="setMessageType"
           />
         </template>
       </div>
@@ -1446,10 +1616,20 @@ function confirmCancel() {
             <!-- Basic Properties -->
             <div class="space-y-3">
               <div class="space-y-1.5">
-                <Label class="text-xs">{{ $t('flowBuilder.stepName') }}</Label>
-                <Input v-model="selectedStep.step_name" :placeholder="$t('flowBuilder.stepNamePlaceholder')" class="h-8" />
+                <Label class="text-xs">Label</Label>
+                <Input v-model="selectedStep.label" placeholder="Shown on the canvas" class="h-8" />
               </div>
               <div class="space-y-1.5">
+                <Label class="text-xs">{{ $t('flowBuilder.stepName') }}</Label>
+                <Input
+                  :model-value="selectedStep.step_name"
+                  @update:model-value="(v) => renameSelectedStep(String(v ?? ''))"
+                  :placeholder="$t('flowBuilder.stepNamePlaceholder')"
+                  class="h-8"
+                />
+                <p class="text-xs text-muted-foreground">Internal identifier; referenced by edges. Renames cascade to canvas position and incoming connections.</p>
+              </div>
+              <div v-if="selectedStep.message_type !== 'end' && selectedStep.message_type !== 'condition' && selectedStep.message_type !== 'timing' && selectedStep.message_type !== 'transfer' && selectedStep.message_type !== 'goto_flow'" class="space-y-1.5">
                 <Label class="text-xs">{{ $t('flowBuilder.storeResponseAs') }}</Label>
                 <Input v-model="selectedStep.store_as" :placeholder="$t('flowBuilder.variableNamePlaceholder')" class="h-8" />
                 <p class="text-xs text-muted-foreground">{{ $t('flowBuilder.storeResponseHint') }}</p>
@@ -1465,13 +1645,13 @@ function confirmCancel() {
                 <component :is="messagesOpen ? ChevronDown : ChevronRight" class="h-4 w-4" />
               </CollapsibleTrigger>
               <CollapsibleContent class="pt-3 space-y-3">
-                <!-- Text / Buttons Message -->
-                <template v-if="selectedStep.message_type === 'text' || selectedStep.message_type === 'buttons'">
+                <!-- Text / Buttons / End Message -->
+                <template v-if="selectedStep.message_type === 'text' || selectedStep.message_type === 'buttons' || selectedStep.message_type === 'end'">
                   <div class="space-y-1.5">
-                    <Label class="text-xs">{{ $t('flowBuilder.messageText') }}</Label>
+                    <Label class="text-xs">{{ selectedStep.message_type === 'end' ? 'Final message (optional)' : $t('flowBuilder.messageText') }}</Label>
                     <Textarea
                       v-model="selectedStep.message"
-                      :placeholder="$t('flowBuilder.messagePlaceholder')"
+                      :placeholder="selectedStep.message_type === 'end' ? 'Sent when the flow ends. Leave blank for silent terminal.' : $t('flowBuilder.messagePlaceholder')"
                       :rows="3"
                       class="text-sm"
                     />
@@ -1648,6 +1828,86 @@ function confirmCancel() {
                   </div>
                 </template>
 
+                <!-- Condition Configuration (free-form expression) -->
+                <template v-if="selectedStep.message_type === 'condition'">
+                  <div class="space-y-2">
+                    <Label class="text-xs">Expression</Label>
+                    <Textarea
+                      :model-value="(selectedStep.input_config?.expression as string) || ''"
+                      @update:model-value="(v) => { if (selectedStep) selectedStep.input_config = { ...selectedStep.input_config, expression: v } }"
+                      :rows="3"
+                      class="font-mono text-xs"
+                      placeholder='status == "active" and (tier == "premium" or amount > 100)'
+                    />
+                    <p class="text-xs text-muted-foreground">
+                      Boolean expression evaluated against session variables. Supports <code>and</code>, <code>or</code>, <code>not</code>, parentheses, comparisons (<code>==</code>, <code>!=</code>, <code>&lt;</code>, <code>&gt;</code>), and string helpers (<code>contains</code>, <code>startsWith</code>). See expr-lang docs.
+                    </p>
+                    <p class="text-xs text-muted-foreground">
+                      Connect the True / False handles below the node to choose the next step for each branch.
+                    </p>
+                  </div>
+                </template>
+
+                <!-- Timing Configuration -->
+                <template v-if="selectedStep.message_type === 'timing'">
+                  <div class="space-y-2">
+                    <Label class="text-xs">Business hours</Label>
+                    <div
+                      v-for="(day, idx) in (selectedStep.input_config?.schedule as any[]) || []"
+                      :key="day.day"
+                      class="flex items-center gap-2"
+                    >
+                      <Switch
+                        :checked="!!day.enabled"
+                        @update:checked="(v) => { if (selectedStep && selectedStep.input_config) { const sched = [...((selectedStep.input_config.schedule as any[]) || [])]; sched[idx] = { ...sched[idx], enabled: v }; selectedStep.input_config = { ...selectedStep.input_config, schedule: sched } } }"
+                      />
+                      <span class="text-xs w-20 capitalize">{{ day.day }}</span>
+                      <Input
+                        :model-value="day.start_time || '09:00'"
+                        type="time"
+                        :disabled="!day.enabled"
+                        class="h-7 text-xs flex-1"
+                        @update:model-value="(v) => { if (selectedStep && selectedStep.input_config) { const sched = [...((selectedStep.input_config.schedule as any[]) || [])]; sched[idx] = { ...sched[idx], start_time: v }; selectedStep.input_config = { ...selectedStep.input_config, schedule: sched } } }"
+                      />
+                      <span class="text-xs">–</span>
+                      <Input
+                        :model-value="day.end_time || '18:00'"
+                        type="time"
+                        :disabled="!day.enabled"
+                        class="h-7 text-xs flex-1"
+                        @update:model-value="(v) => { if (selectedStep && selectedStep.input_config) { const sched = [...((selectedStep.input_config.schedule as any[]) || [])]; sched[idx] = { ...sched[idx], end_time: v }; selectedStep.input_config = { ...selectedStep.input_config, schedule: sched } } }"
+                      />
+                    </div>
+                    <p class="text-xs text-muted-foreground">
+                      Connect the Open / Closed handles to route based on whether the inbound arrives within business hours.
+                    </p>
+                  </div>
+                </template>
+
+                <!-- Goto Flow Configuration -->
+                <template v-if="selectedStep.message_type === 'goto_flow'">
+                  <div class="space-y-2">
+                    <Label class="text-xs">Target flow</Label>
+                    <Select
+                      :model-value="(selectedStep.input_config?.flow_id as string) || ''"
+                      @update:model-value="(v) => { if (selectedStep) selectedStep.input_config = { ...selectedStep.input_config, flow_id: v } }"
+                    >
+                      <SelectTrigger class="h-8 text-xs">
+                        <SelectValue placeholder="Pick a flow" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem v-if="otherFlows.length === 0" value="_none" disabled>No other flows available</SelectItem>
+                        <SelectItem v-for="f in otherFlows" :key="f.id" :value="f.id">
+                          {{ f.name }}
+                        </SelectItem>
+                      </SelectContent>
+                    </Select>
+                    <p class="text-xs text-muted-foreground">
+                      Session variables carry forward to the target flow. The target must belong to the same WhatsApp account.
+                    </p>
+                  </div>
+                </template>
+
                 <!-- Transfer Configuration -->
                 <template v-if="selectedStep.message_type === 'transfer'">
                   <div class="space-y-3">
@@ -1678,10 +1938,10 @@ function confirmCancel() {
               </CollapsibleContent>
             </Collapsible>
 
-            <Separator v-if="selectedStep.message_type !== 'transfer'" />
+            <Separator v-if="showInputSection" />
 
             <!-- Input Configuration (not for transfer) -->
-            <Collapsible v-if="selectedStep.message_type !== 'transfer'" v-model:open="inputOpen">
+            <Collapsible v-if="showInputSection" v-model:open="inputOpen">
               <CollapsibleTrigger class="flex items-center justify-between w-full py-1 text-sm font-medium">
                 {{ $t('flowBuilder.input') }}
                 <component :is="inputOpen ? ChevronDown : ChevronRight" class="h-4 w-4" />
@@ -1716,10 +1976,10 @@ function confirmCancel() {
               </CollapsibleContent>
             </Collapsible>
 
-            <Separator v-if="selectedStep.message_type !== 'transfer'" />
+            <Separator v-if="showInputSection" />
 
             <!-- Validation (not for transfer) -->
-            <Collapsible v-if="selectedStep.message_type !== 'transfer'" v-model:open="validationOpen">
+            <Collapsible v-if="showInputSection" v-model:open="validationOpen">
               <CollapsibleTrigger class="flex items-center justify-between w-full py-1 text-sm font-medium">
                 {{ $t('flowBuilder.validation') }}
                 <component :is="validationOpen ? ChevronDown : ChevronRight" class="h-4 w-4" />
@@ -1751,10 +2011,10 @@ function confirmCancel() {
               </CollapsibleContent>
             </Collapsible>
 
-            <Separator v-if="selectedStep.message_type !== 'transfer'" />
+            <Separator v-if="showInputSection" />
 
             <!-- Advanced (not for transfer) -->
-            <Collapsible v-if="selectedStep.message_type !== 'transfer'" v-model:open="advancedOpen">
+            <Collapsible v-if="showInputSection" v-model:open="advancedOpen">
               <CollapsibleTrigger class="flex items-center justify-between w-full py-1 text-sm font-medium">
                 {{ $t('flowBuilder.advanced') }}
                 <component :is="advancedOpen ? ChevronDown : ChevronRight" class="h-4 w-4" />

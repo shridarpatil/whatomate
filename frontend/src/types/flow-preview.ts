@@ -3,9 +3,11 @@
 export interface ButtonConfig {
   id: string
   title: string
-  type?: 'reply' | 'url' | 'phone'
+  type?: 'reply' | 'url' | 'phone' | 'voice_call'
   url?: string
   phone_number?: string
+  /** voice_call only: how long the button stays clickable; 0 = Meta default (15m). */
+  ttl_minutes?: number
 }
 
 export interface ApiConfig {
@@ -25,10 +27,12 @@ export interface TransferConfig {
 export interface FlowStep {
   id?: string
   step_name: string
+  /** Human-readable label shown on the canvas; defaults to step_name. */
+  label?: string
   step_order: number
   message: string
-  message_type: 'text' | 'buttons' | 'api_fetch' | 'whatsapp_flow' | 'transfer'
-  input_type: 'none' | 'text' | 'number' | 'email' | 'phone' | 'date' | 'select'
+  message_type: 'text' | 'buttons' | 'api_fetch' | 'whatsapp_flow' | 'transfer' | 'end' | 'condition' | 'timing' | 'goto_flow'
+  input_type: 'none' | 'text' | 'number' | 'email' | 'phone' | 'date' | 'select' | 'button' | 'whatsapp_flow'
   input_config: Record<string, any>
   api_config: ApiConfig
   buttons: ButtonConfig[]

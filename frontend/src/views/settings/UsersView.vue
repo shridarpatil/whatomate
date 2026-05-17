@@ -49,9 +49,22 @@ const {
 const users = ref<User[]>([])
 const isDeleting = ref(false)
 const error = ref(false)
+const onlineCount = ref(0)
+
+// Filters. Radix's <SelectItem> can't take value="", so use a sentinel for
+// "no role filter" and translate it to undefined before hitting the API.
+const ALL_ROLES = '__all'
+const roleFilter = ref<string>(ALL_ROLES)
+const onlineOnly = ref(false)
 
 const { searchQuery, currentPage, totalItems, pageSize, handlePageChange } = useSearchPagination({
   fetchFn: () => fetchUsers(),
+})
+
+// Re-fetch (and reset to page 1) whenever a filter changes.
+watch([roleFilter, onlineOnly], () => {
+  currentPage.value = 1
+  fetchUsers()
 })
 
 const columns = computed<Column<User>[]>(() => [
@@ -84,10 +97,13 @@ async function fetchUsers() {
     const response = await usersStore.fetchUsers({
       search: searchQuery.value || undefined,
       page: currentPage.value,
-      limit: pageSize
+      limit: pageSize,
+      role_id: roleFilter.value === ALL_ROLES ? undefined : roleFilter.value,
+      online_only: onlineOnly.value || undefined,
     })
     users.value = response.users
     totalItems.value = response.total
+    onlineCount.value = response.online_count
   } catch {
     toast.error(t('common.failedLoad', { resource: t('resources.users') }))
     error.value = true
@@ -209,10 +225,33 @@ async function copyInviteLink() {
             <CardHeader>
               <div class="flex items-center justify-between flex-wrap gap-4">
                 <div>
-                  <CardTitle>{{ $t('users.yourUsers') }}</CardTitle>
+                  <div class="flex items-center gap-2">
+                    <CardTitle>{{ $t('users.yourUsers') }}</CardTitle>
+                    <Badge variant="outline" class="border-green-600 text-green-600 gap-1.5">
+                      <span class="inline-block h-2 w-2 rounded-full bg-green-600" />
+                      {{ onlineCount }} {{ $t('users.online', 'online') }}
+                    </Badge>
+                  </div>
                   <CardDescription>{{ $t('users.subtitle') }}. <RouterLink to="/settings/roles" class="text-primary hover:underline">{{ $t('users.manageRoles') }}</RouterLink></CardDescription>
                 </div>
-                <SearchInput v-model="searchQuery" :placeholder="$t('users.searchUsers') + '...'" class="w-64" />
+                <div class="flex items-center gap-3 flex-wrap">
+                  <Select v-model="roleFilter">
+                    <SelectTrigger class="w-44 h-9">
+                      <SelectValue :placeholder="$t('users.allRoles', 'All roles')" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem :value="ALL_ROLES">{{ $t('users.allRoles', 'All roles') }}</SelectItem>
+                      <SelectItem v-for="role in rolesStore.roles" :key="role.id" :value="role.id" class="capitalize">
+                        {{ role.name }}
+                      </SelectItem>
+                    </SelectContent>
+                  </Select>
+                  <label class="flex items-center gap-2 text-sm">
+                    <Switch :checked="onlineOnly" @update:checked="onlineOnly = $event" />
+                    <span>{{ $t('users.onlineOnly', 'Online only') }}</span>
+                  </label>
+                  <SearchInput v-model="searchQuery" :placeholder="$t('users.searchUsers') + '...'" class="w-64" />
+                </div>
               </div>
             </CardHeader>
             <CardContent>

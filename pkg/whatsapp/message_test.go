@@ -406,6 +406,153 @@ func TestClient_SendCTAURLButton(t *testing.T) {
 	}
 }
 
+func TestClient_SendVoiceCallButton(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name            string
+		bodyText        string
+		displayText     string
+		ttlMinutes      int
+		payload         string
+		wantErr         bool
+		wantErrContains string
+		// Expected JSON shape under interactive.action.parameters
+		wantDisplayText string // empty means assert truncation explicitly
+		wantTTL         any    // nil => key must be absent
+		wantPayload     any    // nil => key must be absent
+	}{
+		{
+			name:            "valid voice_call button with ttl and payload",
+			bodyText:        "Call us now",
+			displayText:     "Call Agent",
+			ttlMinutes:      15,
+			payload:         "agent:abc-123",
+			wantDisplayText: "Call Agent",
+			wantTTL:         float64(15),
+			wantPayload:     "agent:abc-123",
+		},
+		{
+			name:            "omits ttl_minutes when zero",
+			bodyText:        "Call us",
+			displayText:     "Call",
+			ttlMinutes:      0,
+			payload:         "agent:abc",
+			wantDisplayText: "Call",
+			wantTTL:         nil,
+			wantPayload:     "agent:abc",
+		},
+		{
+			name:            "omits payload when empty",
+			bodyText:        "Call us",
+			displayText:     "Call",
+			ttlMinutes:      5,
+			payload:         "",
+			wantDisplayText: "Call",
+			wantTTL:         float64(5),
+			wantPayload:     nil,
+		},
+		{
+			name:            "truncates display_text to 20 chars",
+			bodyText:        "Call us",
+			displayText:     "This display text is much longer than allowed",
+			ttlMinutes:      10,
+			payload:         "x",
+			wantDisplayText: "This display text is",
+			wantTTL:         float64(10),
+			wantPayload:     "x",
+		},
+		{
+			name:            "empty body returns error",
+			bodyText:        "",
+			displayText:     "Call",
+			ttlMinutes:      15,
+			payload:         "x",
+			wantErr:         true,
+			wantErrContains: "body text is required",
+		},
+		{
+			name:            "empty display_text returns error",
+			bodyText:        "Call us",
+			displayText:     "",
+			ttlMinutes:      15,
+			payload:         "x",
+			wantErr:         true,
+			wantErrContains: "display text is required",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			var capturedBody map[string]any
+
+			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				_ = json.NewDecoder(r.Body).Decode(&capturedBody)
+				w.WriteHeader(http.StatusOK)
+				_ = json.NewEncoder(w).Encode(map[string]any{
+					"messages": []map[string]string{{"id": "wamid.vc123"}},
+				})
+			}))
+			defer server.Close()
+
+			log := testutil.NopLogger()
+			client := whatsapp.NewWithTimeout(log, 5*time.Second)
+			client.HTTPClient = &http.Client{
+				Transport: &testServerTransport{serverURL: server.URL},
+			}
+
+			account := &whatsapp.Account{
+				PhoneID:     "123456789",
+				BusinessID:  "987654321",
+				APIVersion:  "v21.0",
+				AccessToken: "test-token",
+			}
+			ctx := testutil.TestContext(t)
+
+			msgID, err := client.SendVoiceCallButton(ctx, account, whatsapp.Recipient{Phone: "1234567890"}, tt.bodyText, tt.displayText, tt.ttlMinutes, tt.payload)
+
+			if tt.wantErr {
+				require.Error(t, err)
+				if tt.wantErrContains != "" {
+					assert.Contains(t, err.Error(), tt.wantErrContains)
+				}
+				return
+			}
+
+			require.NoError(t, err)
+			assert.Equal(t, "wamid.vc123", msgID)
+
+			interactive := capturedBody["interactive"].(map[string]any)
+			assert.Equal(t, "voice_call", interactive["type"])
+
+			body := interactive["body"].(map[string]any)
+			assert.Equal(t, tt.bodyText, body["text"])
+
+			action := interactive["action"].(map[string]any)
+			assert.Equal(t, "voice_call", action["name"])
+
+			params := action["parameters"].(map[string]any)
+			assert.Equal(t, tt.wantDisplayText, params["display_text"])
+
+			if tt.wantTTL == nil {
+				_, present := params["ttl_minutes"]
+				assert.False(t, present, "ttl_minutes must be omitted when zero")
+			} else {
+				assert.Equal(t, tt.wantTTL, params["ttl_minutes"])
+			}
+
+			if tt.wantPayload == nil {
+				_, present := params["payload"]
+				assert.False(t, present, "payload must be omitted when empty")
+			} else {
+				assert.Equal(t, tt.wantPayload, params["payload"])
+			}
+		})
+	}
+}
+
 func TestClient_SendTemplateMessage_WithComponents(t *testing.T) {
 	t.Parallel()
 

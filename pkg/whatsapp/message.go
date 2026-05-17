@@ -210,6 +210,86 @@ func (c *Client) SendCTAURLButton(ctx context.Context, account *Account, rcpt Re
 	return messageID, nil
 }
 
+// SendVoiceCallButton sends an interactive message with a WhatsApp Business
+// Calling voice_call button. When the recipient taps the button, Meta
+// initiates a voice call back to our number; the resulting incoming-call
+// webhook echoes the `payload` string back as `biz_opaque_callback_data`, so
+// callers can use it for routing (e.g. sticky-assigning the call to the
+// agent who sent the button).
+//
+// ttlMinutes is how long the button remains clickable; pass 0 to use Meta's
+// default (15 min). The sending phone number must be enrolled in the
+// WhatsApp Business Calling API or Meta rejects the send.
+func (c *Client) SendVoiceCallButton(ctx context.Context, account *Account, rcpt Recipient, bodyText, displayText string, ttlMinutes int, payload string) (string, error) {
+	if bodyText == "" {
+		return "", fmt.Errorf("body text is required")
+	}
+	if displayText == "" {
+		return "", fmt.Errorf("display text is required")
+	}
+	if len(displayText) > 20 {
+		displayText = displayText[:20]
+	}
+
+	parameters := map[string]any{
+		"display_text": displayText,
+	}
+	if ttlMinutes > 0 {
+		parameters["ttl_minutes"] = ttlMinutes
+	}
+	if payload != "" {
+		parameters["payload"] = payload
+	}
+
+	interactive := map[string]any{
+		"type": "voice_call",
+		"body": map[string]any{
+			"text": bodyText,
+		},
+		"action": map[string]any{
+			"name":       "voice_call",
+			"parameters": parameters,
+		},
+	}
+
+	msg := map[string]any{
+		"messaging_product": "whatsapp",
+		"recipient_type":    "individual",
+		"type":              "interactive",
+		"interactive":       interactive,
+	}
+	rcpt.SetOnPayload(msg)
+
+	url := c.buildMessagesURL(account)
+	// Logged at info during the sticky-routing rollout: confirms display_text,
+	// ttl_minutes, and the agent-id payload actually leave our box, so when
+	// the incoming-call webhook arrives we know whether Meta echoed it back.
+	// The payload is an opaque "agent:<uuid>" — not PII.
+	c.Log.Info("Sending voice_call button message",
+		"phone", rcpt.Phone,
+		"parameters", parameters,
+	)
+
+	respBody, err := c.doRequest(ctx, "POST", url, msg, account.AccessToken)
+	if err != nil {
+		c.Log.Error("Failed to send voice_call button message", "error", err, "phone", rcpt.Phone)
+		return "", fmt.Errorf("failed to send voice_call button message: %w", err)
+	}
+
+	var resp MetaAPIResponse
+	if err := json.Unmarshal(respBody, &resp); err != nil {
+		return "", fmt.Errorf("failed to parse response: %w", err)
+	}
+
+	if len(resp.Messages) == 0 {
+		return "", fmt.Errorf("no message ID in response")
+	}
+
+	messageID := resp.Messages[0].ID
+	c.Log.Info("voice_call button message sent", "message_id", messageID, "phone", rcpt.Phone)
+	return messageID, nil
+}
+
 // TemplateParam represents a parameter for template message
 type TemplateParam struct {
 	Type  string `json:"type"`

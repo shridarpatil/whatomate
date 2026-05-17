@@ -174,15 +174,22 @@ func (p *SLAProcessor) escalateTransfers(orgID uuid.UUID, settings models.Chatbo
 
 	escalatedCount := 0
 	for _, transfer := range transfers {
-		// Check if the assigned agent has been actively responding.
-		// If so, push the escalation deadline forward instead of escalating.
-		escalationAt := transfer.SLA.EscalationAt
-		if escalationAt != nil && p.agentRespondedSince(transfer, escalationAt.Add(-time.Duration(settings.SLA.EscalationMinutes)*time.Minute)) {
+		// Anchor the escalation window at the customer's last incoming message
+		// (or the transfer's start when the customer hasn't spoken since). The
+		// agent is "responsive" only if they've replied *after* the customer's
+		// latest message — so a conversation where both sides have wound down
+		// stays in steady state instead of repeatedly warning the customer that
+		// "we'll respond shortly" when there's nothing pending. Previous
+		// behavior keyed off the escalation deadline minus EscalationMinutes,
+		// which meant agent silence alone triggered the warning regardless of
+		// whether the customer was actually waiting.
+		since := p.customerLastSpokeAt(transfer)
+		if p.agentRespondedSince(transfer, since) {
 			newEscalation := now.Add(time.Duration(settings.SLA.EscalationMinutes) * time.Minute)
 			if err := p.app.DB.Model(&transfer).Update("sla_escalation_at", newEscalation).Error; err != nil {
 				p.app.Log.Error("Failed to extend transfer escalation", "error", err, "transfer_id", transfer.ID)
 			} else {
-				p.app.Log.Info("Extended transfer escalation due to agent activity",
+				p.app.Log.Info("Extended transfer escalation — agent has replied since customer's last message",
 					"transfer_id", transfer.ID,
 					"new_escalation_at", newEscalation,
 				)
@@ -357,6 +364,23 @@ func (p *SLAProcessor) broadcastTransferUpdate(transfer models.AgentTransfer, ws
 			"sla_breached":     transfer.SLA.Breached,
 		},
 	})
+}
+
+// customerLastSpokeAt returns when the contact most recently sent an
+// incoming message, falling back to the transfer's start when they
+// haven't messaged since. Anchors the escalation window at the customer's
+// latest activity so escalation only fires when there's an outstanding
+// question.
+func (p *SLAProcessor) customerLastSpokeAt(transfer models.AgentTransfer) time.Time {
+	var t time.Time
+	p.app.DB.Model(&models.Message{}).
+		Where("contact_id = ? AND direction = ?", transfer.ContactID, models.DirectionIncoming).
+		Select("MAX(created_at)").
+		Scan(&t)
+	if t.Before(transfer.TransferredAt) {
+		return transfer.TransferredAt
+	}
+	return t
 }
 
 // agentRespondedSince checks if the assigned agent sent an outgoing message

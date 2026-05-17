@@ -31,8 +31,17 @@ func (m *Manager) initiateTransfer(session *CallSession, waAccount string, teamT
 	session.HoldPlayer = player
 	session.mu.Unlock()
 
+	// Play ringback (if configured) instead of hold music while waiting for
+	// an agent to accept — "trrrring" feels right for a customer who just
+	// initiated a call, hold music feels right only after they've been
+	// explicitly told they're on hold. Falls back to hold music if no
+	// ringback asset is configured.
+	ringFile := orgSettings.transferRingFile()
 	go func() {
-		_ = player.PlayFileLoop(orgSettings.HoldMusicFile)
+		if ringFile == "" {
+			return
+		}
+		_ = player.PlayFileLoop(ringFile)
 	}()
 
 	var teamID *uuid.UUID
@@ -86,10 +95,19 @@ func (m *Manager) initiateTransfer(session *CallSession, waAccount string, teamT
 	session.TransferStatus = models.CallTransferStatusWaiting
 	session.mu.Unlock()
 
-	// Check if the contact has an assigned agent (relationship manager).
-	// If so, ring them first before falling back to team rotation/broadcast.
+	// Pick which specific agent (if any) to ring first. Sticky routing from
+	// a voice_call button takes precedence — its eligibility was already
+	// validated when the webhook handler set StickyAgentID on the session,
+	// so we don't re-query is_available here. Otherwise fall back to the
+	// contact's assigned-user (relationship manager) rule; if neither
+	// matches, the call goes through team rotation / broadcast below.
 	var assignedAgentID *uuid.UUID
-	if session.ContactID != uuid.Nil {
+	switch {
+	case session.StickyAgentID != nil:
+		assignedAgentID = session.StickyAgentID
+		m.log.Info("Routing call to sticky agent (voice_call payload)",
+			"call_id", session.ID, "agent_id", assignedAgentID)
+	case session.ContactID != uuid.Nil:
 		var contact models.Contact
 		if m.db.Select("assigned_user_id").Where("id = ?", session.ContactID).First(&contact).Error == nil && contact.AssignedUserID != nil {
 			var agent models.User
@@ -150,8 +168,28 @@ func (m *Manager) initiateTransfer(session *CallSession, waAccount string, teamT
 					session.mu.Unlock()
 					m.runTransferRotation(session, transfer, orgSettings)
 				} else {
+					// Per-agent ctx above is already Done — passing it
+					// straight to waitForTransferTimeout would fire
+					// NoAnswer instantly, so we mint a fresh one keyed
+					// off the org's transfer timeout. Also reset the
+					// TransferAccepted channel so any agent who races to
+					// accept after the broadcast finds a live signal,
+					// and rebind TransferCancel so their acceptance can
+					// cancel this new wait.
+					fallbackTimeout := orgSettings.TransferTimeoutSecs
+					if fallbackTimeout <= 0 {
+						fallbackTimeout = 30
+					}
+					fallbackCtx, fallbackCancel := context.WithTimeout(
+						context.Background(),
+						time.Duration(fallbackTimeout)*time.Second,
+					)
+					session.mu.Lock()
+					session.TransferCancel = fallbackCancel
+					session.TransferAccepted = make(chan struct{})
+					session.mu.Unlock()
 					m.broadcastEvent(transfer.OrganizationID, websocket.TypeCallTransferWaiting, payload)
-					m.waitForTransferTimeout(ctx, session, transfer.ID)
+					m.waitForTransferTimeout(fallbackCtx, session, transfer.ID)
 				}
 			}
 		}()

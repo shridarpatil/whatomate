@@ -160,17 +160,16 @@ type ChatbotFlow struct {
 	CompletionConfig   JSONB        `gorm:"type:jsonb" json:"completion_config"`
 	TimeoutMessage     string       `gorm:"type:text" json:"timeout_message"`
 	CancelKeywords     StringArray  `gorm:"type:jsonb" json:"cancel_keywords"`
-	PanelConfig        JSONB        `gorm:"type:jsonb;default:'{}'" json:"panel_config"`  // Contact info panel configuration
-	CanvasLayout       JSONB        `gorm:"type:jsonb;default:'{}'" json:"canvas_layout"` // Node positions for flow diagram
+	PanelConfig        JSONB        `gorm:"type:jsonb;default:'{}'" json:"panel_config"` // Contact info panel configuration
+	Graph              JSONB        `gorm:"type:jsonb" json:"graph"`                     // v2 flow graph: {version, nodes, edges, entry_node}
 	CreatedByID        *uuid.UUID   `gorm:"type:uuid" json:"created_by_id,omitempty"`
 	UpdatedByID        *uuid.UUID   `gorm:"type:uuid" json:"updated_by_id,omitempty"`
 
 	// Relations
-	Organization    *Organization     `gorm:"foreignKey:OrganizationID" json:"organization,omitempty"`
-	InitialTemplate *Template         `gorm:"foreignKey:InitialTemplateID" json:"initial_template,omitempty"`
-	Steps           []ChatbotFlowStep `gorm:"foreignKey:FlowID" json:"steps,omitempty"`
-	CreatedBy       *User             `gorm:"foreignKey:CreatedByID" json:"created_by,omitempty"`
-	UpdatedBy       *User             `gorm:"foreignKey:UpdatedByID" json:"updated_by,omitempty"`
+	Organization    *Organization `gorm:"foreignKey:OrganizationID" json:"organization,omitempty"`
+	InitialTemplate *Template     `gorm:"foreignKey:InitialTemplateID" json:"initial_template,omitempty"`
+	CreatedBy       *User         `gorm:"foreignKey:CreatedByID" json:"created_by,omitempty"`
+	UpdatedBy       *User         `gorm:"foreignKey:UpdatedByID" json:"updated_by,omitempty"`
 }
 
 func (ChatbotFlow) TableName() string {

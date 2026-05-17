@@ -183,26 +183,59 @@ Design multi-step conversation flows with branching logic to guide customers thr
 <img src="/whatomate/images/conversation-flow-light.png" alt="Conversation Flow Builder" class="light-only" />
 <img src="/whatomate/images/conversation-flow-dark.png" alt="Conversation Flow Builder" class="dark-only" />
 
-The visual flow builder allows you to:
-- Create multiple conversation steps
-- Define user input types (text, buttons, lists)
-- Store responses in variables
-- Add conditional branching
-- Configure completion actions
+The visual flow builder is a node-and-edge graph editor. Drop nodes
+onto the canvas, wire them together, and the runtime walks the graph
+edge-by-edge for each inbound message. Each node has a `type` (what
+it does), a `config` blob (its parameters), and outgoing edges
+labelled with the outcome they handle (`default`, `button:<id>`,
+`true`/`false`, `in_hours`/`out_of_hours`, ...).
+
+### Node Types
+
+| Type | Purpose | Outgoing edges |
+|------|---------|----------------|
+| `message` | Send a templated text message and move on. | `default` |
+| `prompt` | Send a question, wait for the user's reply, optionally validate against a regex, and store the response. | `default`, `max_retries` |
+| `buttons` | Send interactive reply buttons and branch on which one the user taps. | `button:<id>` per button |
+| `api_call` | Fire an HTTP request, capture mapped fields into session data, optionally send a templated message. | `http:2xx`, `http:non2xx` |
+| `condition` | Evaluate an expression against session data and route on the result. | `true`, `false` |
+| `timing` | Route based on a per-day business-hours schedule. | `in_hours`, `out_of_hours` |
+| `whatsapp_flow` | Send a native WhatsApp Flow form and merge the submission into session data. | `default` |
+| `transfer` | Hand off to a team / queue and end the flow. | (terminal) |
+| `goto_flow` | Jump execution into another flow (variables carry over). | (handled internally) |
+| `webhook` | Fire-and-forget HTTP call; result is ignored. | `default` |
+| `end` | Optionally send a final message and terminate the session. | (terminal) |
+
+### Condition Expressions
+
+`condition` nodes use a small expression language
+([expr-lang](https://expr-lang.org/)) evaluated against session
+variables. Top-level identifiers refer to keys stored via
+`prompt.store_as`, `api_call.response_mapping`, or earlier inputs.
+
+```text
+tier == "premium" and amount > 100
+status in ["active", "trialing"]
+phone_number startsWith "+91"
+```
+
+Unknown identifiers resolve to `nil`, so missing data evaluates as
+"false" rather than throwing. Compile/runtime errors also resolve to
+the `false` edge — the webhook always succeeds, even on a typo.
 
 ### Flow Features
 
 | Feature | Description |
 |---------|-------------|
-| **Input Validation** | Validate user responses with regex patterns |
-| **Variable Storage** | Store user inputs for later use in the conversation |
-| **Conditional Logic** | Branch based on user responses |
+| **Input Validation** | Validate user responses on `prompt` nodes with regex patterns |
+| **Variable Storage** | Store user inputs and API response fields for later use |
+| **Conditional Logic** | Branch on expressions, button clicks, business hours, or HTTP status |
 | **API Integration** | Fetch data from external APIs with response mapping |
 | **Template Engine** | Format messages with variables, conditionals, and loops |
 | **Webhook Headers** | Configure custom headers for API calls and completion webhooks |
 | **Agent Transfer** | Transfer to human agent when needed |
 | **WhatsApp Flows** | Integrate native WhatsApp Flows |
-| **Drag & Drop Ordering** | Reorder steps by dragging them to new positions |
+| **Sub-flows** | `goto_flow` jumps into another flow, carrying variables forward |
 
 ### API Integration
 

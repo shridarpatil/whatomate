@@ -183,7 +183,7 @@ func (c *Client) buildStandardComponents(template *TemplateSubmission) ([]map[st
 			header["text"] = template.HeaderContent
 			if strings.Contains(template.HeaderContent, "{{") {
 				if isNamedParams {
-					namedExamples := extractNamedExamplesForComponent(template.SampleValues, "header")
+					namedExamples := extractNamedExamplesForComponent(template.SampleValues, "header", template.HeaderContent)
 					if len(namedExamples) > 0 {
 						header["example"] = map[string]any{
 							"header_text_named_params": namedExamples,
@@ -219,7 +219,7 @@ func (c *Client) buildStandardComponents(template *TemplateSubmission) ([]map[st
 	}
 	if strings.Contains(template.BodyContent, "{{") {
 		if isNamedParams {
-			namedExamples := extractNamedExamplesForComponent(template.SampleValues, "body")
+			namedExamples := extractNamedExamplesForComponent(template.SampleValues, "body", template.BodyContent)
 			if len(namedExamples) > 0 {
 				body["example"] = map[string]any{
 					"body_text_named_params": namedExamples,
@@ -506,26 +506,83 @@ func hasNamedParams(content string) bool {
 	return false
 }
 
-// extractNamedExamplesForComponent extracts named example values for Meta API format
-// Returns: [{"param_name": "name", "example": "John"}, ...]
-func extractNamedExamplesForComponent(sampleValues []any, componentType string) []map[string]string {
-	results := []map[string]string{}
-
-	for _, sv := range sampleValues {
-		if svMap, ok := sv.(map[string]any); ok {
-			comp, _ := svMap["component"].(string)
-			// Match component type or accept if not specified (for body)
-			if comp == componentType || (comp == "" && componentType == "body") {
-				paramName, _ := svMap["param_name"].(string)
-				value, _ := svMap["value"].(string)
-				if paramName != "" && value != "" {
-					results = append(results, map[string]string{
-						"param_name": paramName,
-						"example":    value,
-					})
-				}
+// extractNamedParamsInOrder returns the ordered list of named (non-numeric)
+// parameter names as they appear in the given content. Used to map a stored
+// sample value's positional `index` back to the named parameter it belongs to.
+func extractNamedParamsInOrder(content string) []string {
+	names := []string{}
+	parts := strings.Split(content, "{{")
+	for _, m := range parts[1:] {
+		end := strings.Index(m, "}}")
+		if end <= 0 {
+			continue
+		}
+		name := strings.TrimSpace(m[:end])
+		if name == "" {
+			continue
+		}
+		isNumeric := true
+		for _, c := range name {
+			if c < '0' || c > '9' {
+				isNumeric = false
+				break
 			}
 		}
+		if !isNumeric {
+			names = append(names, name)
+		}
+	}
+	return names
+}
+
+// extractNamedExamplesForComponent extracts named example values for Meta API format.
+// Returns: [{"param_name": "name", "example": "John"}, ...]
+//
+// `content` is the body/header text for the component; it's used to recover the
+// param name from a stored sample value that only carries a positional `index`
+// (the shape the frontend currently saves for both positional and named
+// templates).
+func extractNamedExamplesForComponent(sampleValues []any, componentType, content string) []map[string]string {
+	paramNames := extractNamedParamsInOrder(content)
+
+	results := []map[string]string{}
+	seen := map[string]bool{}
+
+	for _, sv := range sampleValues {
+		svMap, ok := sv.(map[string]any)
+		if !ok {
+			continue
+		}
+		comp, _ := svMap["component"].(string)
+		if comp != componentType && (comp != "" || componentType != "body") {
+			continue
+		}
+		value, _ := svMap["value"].(string)
+		if value == "" {
+			continue
+		}
+
+		paramName, _ := svMap["param_name"].(string)
+		if paramName == "" {
+			idx := 0
+			switch v := svMap["index"].(type) {
+			case float64:
+				idx = int(v)
+			case int:
+				idx = v
+			}
+			if idx >= 1 && idx <= len(paramNames) {
+				paramName = paramNames[idx-1]
+			}
+		}
+		if paramName == "" || seen[paramName] {
+			continue
+		}
+		seen[paramName] = true
+		results = append(results, map[string]string{
+			"param_name": paramName,
+			"example":    value,
+		})
 	}
 
 	return results

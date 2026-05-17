@@ -2,8 +2,6 @@ package handlers
 
 import (
 	"encoding/json"
-	"fmt"
-	"strings"
 	"time"
 
 	"github.com/google/uuid"
@@ -11,7 +9,6 @@ import (
 	"github.com/shridarpatil/whatomate/internal/models"
 	"github.com/valyala/fasthttp"
 	"github.com/zerodha/fastglue"
-	"gorm.io/gorm"
 )
 
 // ChatbotSettingsResponse represents the response for chatbot settings
@@ -86,7 +83,6 @@ type ChatbotFlowResponse struct {
 	Description     string   `json:"description"`
 	TriggerKeywords []string `json:"trigger_keywords"`
 	Enabled         bool     `json:"enabled"`
-	StepsCount      int      `json:"steps_count"`
 	CreatedAt       string   `json:"created_at"`
 }
 
@@ -840,7 +836,7 @@ func (a *App) ListChatbotFlows(r *fastglue.Request) error {
 	query.Count(&total)
 
 	var flows []models.ChatbotFlow
-	if err := pg.Apply(query.Preload("Steps").Order("created_at DESC")).
+	if err := pg.Apply(query.Order("created_at DESC")).
 		Find(&flows).Error; err != nil {
 		a.Log.Error("Failed to fetch flows", "error", err)
 		return r.SendErrorEnvelope(fasthttp.StatusInternalServerError, "Failed to fetch flows", nil, "")
@@ -854,7 +850,6 @@ func (a *App) ListChatbotFlows(r *fastglue.Request) error {
 			Description:     flow.Description,
 			TriggerKeywords: flow.TriggerKeywords,
 			Enabled:         flow.IsEnabled,
-			StepsCount:      len(flow.Steps),
 			CreatedAt:       flow.CreatedAt.Format(time.RFC3339),
 		}
 	}
@@ -865,27 +860,6 @@ func (a *App) ListChatbotFlows(r *fastglue.Request) error {
 		"page":  pg.Page,
 		"limit": pg.Limit,
 	})
-}
-
-// FlowStepRequest represents a step in a flow creation/update request
-type FlowStepRequest struct {
-	StepName        string              `json:"step_name"`
-	StepOrder       int                 `json:"step_order"`
-	Message         string              `json:"message"`
-	MessageType     models.FlowStepType `json:"message_type"`
-	InputType       models.InputType    `json:"input_type"`
-	InputConfig     map[string]any      `json:"input_config"`
-	ApiConfig       map[string]any      `json:"api_config"`
-	Buttons         []map[string]any    `json:"buttons"`
-	TransferConfig  map[string]any      `json:"transfer_config"`
-	ValidationRegex string              `json:"validation_regex"`
-	ValidationError string              `json:"validation_error"`
-	StoreAs         string              `json:"store_as"`
-	NextStep        string              `json:"next_step"`
-	ConditionalNext map[string]any      `json:"conditional_next"`
-	SkipCondition   string              `json:"skip_condition"`
-	RetryOnInvalid  bool                `json:"retry_on_invalid"`
-	MaxRetries      int                 `json:"max_retries"`
 }
 
 // CreateChatbotFlow creates a new chatbot flow
@@ -900,17 +874,16 @@ func (a *App) CreateChatbotFlow(r *fastglue.Request) error {
 	}
 
 	var req struct {
-		Name              string            `json:"name"`
-		Description       string            `json:"description"`
-		TriggerKeywords   []string          `json:"trigger_keywords"`
-		InitialMessage    string            `json:"initial_message"`
-		CompletionMessage string            `json:"completion_message"`
-		OnCompleteAction  string            `json:"on_complete_action"`
-		CompletionConfig  map[string]any    `json:"completion_config"`
-		PanelConfig       map[string]any    `json:"panel_config"`
-		CanvasLayout      map[string]any    `json:"canvas_layout"`
-		Enabled           bool              `json:"enabled"`
-		Steps             []FlowStepRequest `json:"steps"`
+		Name              string         `json:"name"`
+		Description       string         `json:"description"`
+		TriggerKeywords   []string       `json:"trigger_keywords"`
+		InitialMessage    string         `json:"initial_message"`
+		CompletionMessage string         `json:"completion_message"`
+		OnCompleteAction  string         `json:"on_complete_action"`
+		CompletionConfig  map[string]any `json:"completion_config"`
+		PanelConfig       map[string]any `json:"panel_config"`
+		Graph             map[string]any `json:"graph"`
+		Enabled           bool           `json:"enabled"`
 	}
 
 	if err := json.Unmarshal(r.RequestCtx.PostBody(), &req); err != nil {
@@ -921,12 +894,8 @@ func (a *App) CreateChatbotFlow(r *fastglue.Request) error {
 		return r.SendErrorEnvelope(fasthttp.StatusBadRequest, "Name is required", nil, "")
 	}
 
-	// Use transaction for flow + steps
-	tx := a.DB.Begin()
-
-	flowID := uuid.New()
 	flow := models.ChatbotFlow{
-		BaseModel:         models.BaseModel{ID: flowID},
+		BaseModel:         models.BaseModel{ID: uuid.New()},
 		OrganizationID:    orgID,
 		Name:              req.Name,
 		Description:       req.Description,
@@ -936,61 +905,16 @@ func (a *App) CreateChatbotFlow(r *fastglue.Request) error {
 		OnCompleteAction:  req.OnCompleteAction,
 		CompletionConfig:  models.JSONB(req.CompletionConfig),
 		PanelConfig:       models.JSONB(req.PanelConfig),
-		CanvasLayout:      models.JSONB(req.CanvasLayout),
+		Graph:             models.JSONB(req.Graph),
 		IsEnabled:         req.Enabled,
 		CreatedByID:       &userID,
 		UpdatedByID:       &userID,
 	}
 
-	if err := tx.Create(&flow).Error; err != nil {
-		tx.Rollback()
+	if err := a.DB.Create(&flow).Error; err != nil {
 		a.Log.Error("Failed to create flow", "error", err)
 		return r.SendErrorEnvelope(fasthttp.StatusInternalServerError, "Failed to create flow", nil, "")
 	}
-
-	// Create steps
-	for i, stepReq := range req.Steps {
-		// Convert buttons to JSONBArray
-		var buttons models.JSONBArray
-		for _, btn := range stepReq.Buttons {
-			buttons = append(buttons, btn)
-		}
-
-		step := models.ChatbotFlowStep{
-			BaseModel:       models.BaseModel{ID: uuid.New()},
-			FlowID:          flowID,
-			StepName:        stepReq.StepName,
-			StepOrder:       i + 1,
-			Message:         stepReq.Message,
-			MessageType:     stepReq.MessageType,
-			InputType:       stepReq.InputType,
-			InputConfig:     models.JSONB(stepReq.InputConfig),
-			ApiConfig:       models.JSONB(stepReq.ApiConfig),
-			Buttons:         buttons,
-			TransferConfig:  models.JSONB(stepReq.TransferConfig),
-			ValidationRegex: stepReq.ValidationRegex,
-			ValidationError: stepReq.ValidationError,
-			StoreAs:         stepReq.StoreAs,
-			NextStep:        stepReq.NextStep,
-			ConditionalNext: models.JSONB(stepReq.ConditionalNext),
-			SkipCondition:   stepReq.SkipCondition,
-			RetryOnInvalid:  stepReq.RetryOnInvalid,
-			MaxRetries:      stepReq.MaxRetries,
-		}
-		if step.MessageType == "" {
-			step.MessageType = models.FlowStepTypeText
-		}
-		if step.MaxRetries == 0 {
-			step.MaxRetries = 3
-		}
-		if err := tx.Create(&step).Error; err != nil {
-			tx.Rollback()
-			a.Log.Error("Failed to create flow step", "error", err)
-			return r.SendErrorEnvelope(fasthttp.StatusInternalServerError, "Failed to create flow step", nil, "")
-		}
-	}
-
-	tx.Commit()
 
 	// Invalidate cache
 	a.InvalidateChatbotFlowsCache(orgID)
@@ -1022,9 +946,6 @@ func (a *App) GetChatbotFlow(r *fastglue.Request) error {
 
 	var flow models.ChatbotFlow
 	if err := a.DB.Where("id = ? AND organization_id = ?", id, orgID).
-		Preload("Steps", func(db *gorm.DB) *gorm.DB {
-			return db.Order("step_order ASC")
-		}).
 		Preload("CreatedBy").Preload("UpdatedBy").
 		First(&flow).Error; err != nil {
 		return r.SendErrorEnvelope(fasthttp.StatusNotFound, "Flow not found", nil, "")
@@ -1049,7 +970,7 @@ func (a *App) UpdateChatbotFlow(r *fastglue.Request) error {
 		return nil
 	}
 
-	flow, err := findByIDAndOrg[models.ChatbotFlow](a.DB.Preload("Steps"), r, id, orgID, "Flow")
+	flow, err := findByIDAndOrg[models.ChatbotFlow](a.DB, r, id, orgID, "Flow")
 	if err != nil {
 		return nil
 	}
@@ -1057,24 +978,21 @@ func (a *App) UpdateChatbotFlow(r *fastglue.Request) error {
 	oldFlow := *flow // value copy for audit
 
 	var req struct {
-		Name              *string           `json:"name"`
-		Description       *string           `json:"description"`
-		TriggerKeywords   []string          `json:"trigger_keywords"`
-		InitialMessage    *string           `json:"initial_message"`
-		CompletionMessage *string           `json:"completion_message"`
-		OnCompleteAction  *string           `json:"on_complete_action"`
-		CompletionConfig  map[string]any    `json:"completion_config"`
-		PanelConfig       map[string]any    `json:"panel_config"`
-		CanvasLayout      map[string]any    `json:"canvas_layout"`
-		Enabled           *bool             `json:"enabled"`
-		Steps             []FlowStepRequest `json:"steps"`
+		Name              *string        `json:"name"`
+		Description       *string        `json:"description"`
+		TriggerKeywords   []string       `json:"trigger_keywords"`
+		InitialMessage    *string        `json:"initial_message"`
+		CompletionMessage *string        `json:"completion_message"`
+		OnCompleteAction  *string        `json:"on_complete_action"`
+		CompletionConfig  map[string]any `json:"completion_config"`
+		PanelConfig       map[string]any `json:"panel_config"`
+		Graph             map[string]any `json:"graph"`
+		Enabled           *bool          `json:"enabled"`
 	}
 
 	if err := json.Unmarshal(r.RequestCtx.PostBody(), &req); err != nil {
 		return r.SendErrorEnvelope(fasthttp.StatusBadRequest, "Invalid request body", nil, "")
 	}
-
-	tx := a.DB.Begin()
 
 	if req.Name != nil {
 		flow.Name = *req.Name
@@ -1100,162 +1018,23 @@ func (a *App) UpdateChatbotFlow(r *fastglue.Request) error {
 	if req.PanelConfig != nil {
 		flow.PanelConfig = models.JSONB(req.PanelConfig)
 	}
-	if req.CanvasLayout != nil {
-		flow.CanvasLayout = models.JSONB(req.CanvasLayout)
+	if req.Graph != nil {
+		flow.Graph = models.JSONB(req.Graph)
 	}
 	if req.Enabled != nil {
 		flow.IsEnabled = *req.Enabled
 	}
 	flow.UpdatedByID = &userID
 
-	if err := tx.Save(flow).Error; err != nil {
-		tx.Rollback()
+	if err := a.DB.Save(flow).Error; err != nil {
 		a.Log.Error("Failed to update flow", "error", err)
 		return r.SendErrorEnvelope(fasthttp.StatusInternalServerError, "Failed to update flow", nil, "")
 	}
 
-	// Update steps if provided
-	if len(req.Steps) > 0 {
-		// Delete existing steps
-		if err := tx.Where("flow_id = ?", id).Delete(&models.ChatbotFlowStep{}).Error; err != nil {
-			tx.Rollback()
-			a.Log.Error("Failed to update flow steps", "error", err)
-			return r.SendErrorEnvelope(fasthttp.StatusInternalServerError, "Failed to update flow steps", nil, "")
-		}
-
-		// Create new steps
-		for i, stepReq := range req.Steps {
-			// Convert buttons to JSONBArray
-			var buttons models.JSONBArray
-			for _, btn := range stepReq.Buttons {
-				buttons = append(buttons, btn)
-			}
-
-			step := models.ChatbotFlowStep{
-				BaseModel:       models.BaseModel{ID: uuid.New()},
-				FlowID:          id,
-				StepName:        stepReq.StepName,
-				StepOrder:       i + 1,
-				Message:         stepReq.Message,
-				MessageType:     stepReq.MessageType,
-				InputType:       stepReq.InputType,
-				InputConfig:     models.JSONB(stepReq.InputConfig),
-				ApiConfig:       models.JSONB(stepReq.ApiConfig),
-				Buttons:         buttons,
-				TransferConfig:  models.JSONB(stepReq.TransferConfig),
-				ValidationRegex: stepReq.ValidationRegex,
-				ValidationError: stepReq.ValidationError,
-				StoreAs:         stepReq.StoreAs,
-				NextStep:        stepReq.NextStep,
-				ConditionalNext: models.JSONB(stepReq.ConditionalNext),
-				SkipCondition:   stepReq.SkipCondition,
-				RetryOnInvalid:  stepReq.RetryOnInvalid,
-				MaxRetries:      stepReq.MaxRetries,
-			}
-			if step.MessageType == "" {
-				step.MessageType = models.FlowStepTypeText
-			}
-			if step.MaxRetries == 0 {
-				step.MaxRetries = 3
-			}
-			if err := tx.Create(&step).Error; err != nil {
-				tx.Rollback()
-				a.Log.Error("Failed to create flow step", "error", err)
-				return r.SendErrorEnvelope(fasthttp.StatusInternalServerError, "Failed to create flow step", nil, "")
-			}
-		}
-	}
-
-	tx.Commit()
-
-	// Invalidate cache
 	a.InvalidateChatbotFlowsCache(orgID)
 
-	// Build extra changes for steps if they were updated
-	var extraChanges []map[string]any
-	if len(req.Steps) > 0 {
-		// Build old step lookup by name
-		oldStepMap := make(map[string]models.ChatbotFlowStep)
-		for _, s := range oldFlow.Steps {
-			oldStepMap[s.StepName] = s
-		}
-
-		// Detect added, removed, and modified steps
-		var added, modified []string
-		newStepNames := make(map[string]bool)
-		for _, s := range req.Steps {
-			newStepNames[s.StepName] = true
-			old, exists := oldStepMap[s.StepName]
-			if !exists {
-				added = append(added, s.StepName)
-			} else {
-				// Check individual fields and log each change
-				if old.Message != s.Message {
-					extraChanges = append(extraChanges, map[string]any{
-						"field": s.StepName + " → message", "old_value": old.Message, "new_value": s.Message,
-					})
-					modified = append(modified, s.StepName)
-				}
-				if string(old.MessageType) != string(s.MessageType) {
-					extraChanges = append(extraChanges, map[string]any{
-						"field": s.StepName + " → type", "old_value": string(old.MessageType), "new_value": string(s.MessageType),
-					})
-					if len(modified) == 0 || modified[len(modified)-1] != s.StepName {
-						modified = append(modified, s.StepName)
-					}
-				}
-				if old.NextStep != s.NextStep {
-					extraChanges = append(extraChanges, map[string]any{
-						"field": s.StepName + " → next_step", "old_value": old.NextStep, "new_value": s.NextStep,
-					})
-					if len(modified) == 0 || modified[len(modified)-1] != s.StepName {
-						modified = append(modified, s.StepName)
-					}
-				}
-				if string(old.InputType) != string(s.InputType) {
-					extraChanges = append(extraChanges, map[string]any{
-						"field": s.StepName + " → input_type", "old_value": string(old.InputType), "new_value": s.InputType,
-					})
-					if len(modified) == 0 || modified[len(modified)-1] != s.StepName {
-						modified = append(modified, s.StepName)
-					}
-				}
-				if old.StoreAs != s.StoreAs {
-					extraChanges = append(extraChanges, map[string]any{
-						"field": s.StepName + " → store_as", "old_value": old.StoreAs, "new_value": s.StoreAs,
-					})
-					if len(modified) == 0 || modified[len(modified)-1] != s.StepName {
-						modified = append(modified, s.StepName)
-					}
-				}
-			}
-		}
-		var removed []string
-		for _, s := range oldFlow.Steps {
-			if !newStepNames[s.StepName] {
-				removed = append(removed, s.StepName)
-			}
-		}
-
-		if len(added) > 0 {
-			extraChanges = append(extraChanges, map[string]any{
-				"field": "steps_added", "old_value": nil, "new_value": strings.Join(added, ", "),
-			})
-		}
-		if len(removed) > 0 {
-			extraChanges = append(extraChanges, map[string]any{
-				"field": "steps_removed", "old_value": strings.Join(removed, ", "), "new_value": nil,
-			})
-		}
-		if len(oldFlow.Steps) != len(req.Steps) {
-			extraChanges = append(extraChanges, map[string]any{
-				"field": "step_count", "old_value": fmt.Sprintf("%d", len(oldFlow.Steps)), "new_value": fmt.Sprintf("%d", len(req.Steps)),
-			})
-		}
-	}
-
 	audit.LogAudit(a.DB, orgID, userID, audit.GetUserName(a.DB, userID),
-		"chatbot_flow", flow.ID, models.AuditActionUpdated, &oldFlow, flow, extraChanges...)
+		"chatbot_flow", flow.ID, models.AuditActionUpdated, &oldFlow, flow)
 
 	return r.SendEnvelope(map[string]any{
 		"message": "Flow updated successfully",

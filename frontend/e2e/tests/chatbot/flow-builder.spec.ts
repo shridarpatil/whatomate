@@ -18,8 +18,9 @@ test.describe('Chatbot Flow Builder - Step Properties', () => {
     await expect(builder.page.getByRole('heading', { name: 'Step Properties' })).toBeVisible()
   })
 
-  test('should show message type palette in center panel', async () => {
-    await expect(builder.page.getByText('Message Type')).toBeVisible()
+  test('should show message type palette in canvas toolbar', async () => {
+    // With a step selected, the palette label flips to "Change type:".
+    await expect(builder.page.getByText('Change type:')).toBeVisible()
     await expect(builder.page.getByRole('button', { name: 'Text', exact: true })).toBeVisible()
     await expect(builder.page.getByRole('button', { name: 'Buttons', exact: true })).toBeVisible()
     await expect(builder.page.getByRole('button', { name: 'API', exact: true })).toBeVisible()
