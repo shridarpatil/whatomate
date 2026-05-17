@@ -816,7 +816,7 @@ onMounted(async () => {
 
     <!-- Preview overlay -->
     <Dialog v-model:open="showPreview">
-      <DialogContent class="max-w-[900px] w-[90vw] h-[90vh] p-0 flex flex-col">
+      <DialogContent class="max-w-[1100px] w-[95vw] h-[92vh] p-0 flex flex-col">
         <DialogTitle class="sr-only">Flow preview</DialogTitle>
         <InteractivePreview
           :graph="previewGraph"
