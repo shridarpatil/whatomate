@@ -248,6 +248,7 @@ function addNodeFromPalette(type: ChatNodeType) {
     },
   ])
   if (isFirst) entryNodeId.value = id
+  selectedNodeId.value = id
   hasUnsavedChanges.value = true
 }
 
