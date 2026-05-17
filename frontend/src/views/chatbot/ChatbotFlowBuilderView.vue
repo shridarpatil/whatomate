@@ -607,6 +607,14 @@ function defaultInputTypeForType(type: string): string {
   return defaultInputTypeForMessageType[type] ?? 'text'
 }
 
+// Steps where the right-panel "Expected Input" + "Validation" sections
+// make sense. Buttons / whatsapp_flow have their own dedicated input UI
+// above; control-flow nodes don't accept user input at all.
+const TEXT_INPUT_STEP_TYPES = new Set(['text', 'api_fetch'])
+const showInputSection = computed(() =>
+  !!selectedStep.value && TEXT_INPUT_STEP_TYPES.has(selectedStep.value.message_type)
+)
+
 const TIMING_DAYS = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'] as const
 
 function defaultTimingSchedule(): Array<Record<string, any>> {
@@ -1929,10 +1937,10 @@ function confirmCancel() {
               </CollapsibleContent>
             </Collapsible>
 
-            <Separator v-if="selectedStep.message_type !== 'transfer' && selectedStep.message_type !== 'end' && selectedStep.message_type !== 'condition' && selectedStep.message_type !== 'timing' && selectedStep.message_type !== 'goto_flow'" />
+            <Separator v-if="showInputSection" />
 
             <!-- Input Configuration (not for transfer) -->
-            <Collapsible v-if="selectedStep.message_type !== 'transfer' && selectedStep.message_type !== 'end' && selectedStep.message_type !== 'condition' && selectedStep.message_type !== 'timing' && selectedStep.message_type !== 'goto_flow'" v-model:open="inputOpen">
+            <Collapsible v-if="showInputSection" v-model:open="inputOpen">
               <CollapsibleTrigger class="flex items-center justify-between w-full py-1 text-sm font-medium">
                 {{ $t('flowBuilder.input') }}
                 <component :is="inputOpen ? ChevronDown : ChevronRight" class="h-4 w-4" />
@@ -1967,10 +1975,10 @@ function confirmCancel() {
               </CollapsibleContent>
             </Collapsible>
 
-            <Separator v-if="selectedStep.message_type !== 'transfer' && selectedStep.message_type !== 'end' && selectedStep.message_type !== 'condition' && selectedStep.message_type !== 'timing' && selectedStep.message_type !== 'goto_flow'" />
+            <Separator v-if="showInputSection" />
 
             <!-- Validation (not for transfer) -->
-            <Collapsible v-if="selectedStep.message_type !== 'transfer' && selectedStep.message_type !== 'end' && selectedStep.message_type !== 'condition' && selectedStep.message_type !== 'timing' && selectedStep.message_type !== 'goto_flow'" v-model:open="validationOpen">
+            <Collapsible v-if="showInputSection" v-model:open="validationOpen">
               <CollapsibleTrigger class="flex items-center justify-between w-full py-1 text-sm font-medium">
                 {{ $t('flowBuilder.validation') }}
                 <component :is="validationOpen ? ChevronDown : ChevronRight" class="h-4 w-4" />
@@ -2002,10 +2010,10 @@ function confirmCancel() {
               </CollapsibleContent>
             </Collapsible>
 
-            <Separator v-if="selectedStep.message_type !== 'transfer' && selectedStep.message_type !== 'end' && selectedStep.message_type !== 'condition' && selectedStep.message_type !== 'timing' && selectedStep.message_type !== 'goto_flow'" />
+            <Separator v-if="showInputSection" />
 
             <!-- Advanced (not for transfer) -->
-            <Collapsible v-if="selectedStep.message_type !== 'transfer' && selectedStep.message_type !== 'end' && selectedStep.message_type !== 'condition' && selectedStep.message_type !== 'timing' && selectedStep.message_type !== 'goto_flow'" v-model:open="advancedOpen">
+            <Collapsible v-if="showInputSection" v-model:open="advancedOpen">
               <CollapsibleTrigger class="flex items-center justify-between w-full py-1 text-sm font-medium">
                 {{ $t('flowBuilder.advanced') }}
                 <component :is="advancedOpen ? ChevronDown : ChevronRight" class="h-4 w-4" />
