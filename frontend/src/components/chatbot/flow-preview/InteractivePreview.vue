@@ -1,7 +1,8 @@
 <script setup lang="ts">
 import { ref, computed, watch, nextTick } from 'vue'
-import type { FlowStep, FlowData, ButtonConfig } from '@/types/flow-preview'
-import { useFlowSimulation } from '@/composables/useFlowSimulation'
+import type { ChatFlowGraph } from '@/services/api'
+import type { FlowData, ButtonConfig } from '@/types/flow-preview'
+import { useFlowGraphSimulation } from '@/composables/useFlowGraphSimulation'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import PreviewMessage from './PreviewMessage.vue'
 import PreviewButtonGroup from './PreviewButtonGroup.vue'
@@ -12,11 +13,11 @@ import ApiMockDialog from './ApiMockDialog.vue'
 import { MessageSquare } from 'lucide-vue-next'
 
 const props = defineProps<{
-  steps: FlowStep[]
+  graph: ChatFlowGraph | null
   flowData: Partial<FlowData>
 }>()
 
-const stepsRef = computed(() => props.steps)
+const graphRef = computed(() => props.graph)
 const flowDataRef = computed(() => props.flowData)
 
 const {
@@ -34,8 +35,8 @@ const {
   undo,
   stepForward,
   goToStep,
-  apiMocker
-} = useFlowSimulation(stepsRef, flowDataRef)
+  apiMocker,
+} = useFlowGraphSimulation(graphRef, flowDataRef)
 
 const chatScrollRef = ref<InstanceType<typeof ScrollArea> | null>(null)
 
@@ -64,12 +65,31 @@ const lastButtonMessage = computed(() => {
   return lastBotMessage
 })
 
-// Get current step for API mock dialog
+// Shim for DebugPanel which expects FlowStep[]-shaped objects with step_name.
+const debugSteps = computed(() => (props.graph?.nodes || []).map((n) => ({
+  step_name: n.id,
+  message_type: n.type,
+})))
+
+// Get current node for API mock dialog (node-shaped, but the dialog only
+// reads step_name + api_config). We surface an adapter so existing
+// ApiMockDialog props keep working without a refactor.
 const currentApiStep = computed(() => {
-  if (apiMocker.currentMockStep.value) {
-    return props.steps.find(s => s.step_name === apiMocker.currentMockStep.value)
-  }
-  return null
+  const mockingId = apiMocker.currentMockStep.value
+  if (!mockingId) return null
+  const node = props.graph?.nodes.find((n) => n.id === mockingId)
+  if (!node) return null
+  return {
+    step_name: node.id,
+    api_config: {
+      url: (node.config?.url as string) || '',
+      method: (node.config?.method as string) || 'GET',
+      headers: (node.config?.headers as Record<string, string>) || {},
+      body: (node.config?.body as string) || '',
+      response_mapping: (node.config?.response_mapping as Record<string, string>) || {},
+      fallback_message: (node.config?.fallback_message as string) || '',
+    },
+  } as any
 })
 
 function handleButtonSelect(button: ButtonConfig) {
@@ -212,7 +232,7 @@ function handleGoToStep(stepName: string) {
     <div class="w-64 flex-shrink-0">
       <DebugPanel
         :state="state"
-        :steps="steps"
+        :steps="debugSteps as any"
         :can-undo="canUndo"
         @start="handleStart"
         @pause="handlePause"

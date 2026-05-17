@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { ref, computed, watch } from 'vue'
 import type { FlowStep, FlowData } from '@/types/flow-preview'
+import type { ChatFlowGraph } from '@/services/api'
 import { Button } from '@/components/ui/button'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import InteractivePreview from './InteractivePreview.vue'
@@ -23,6 +24,10 @@ const props = defineProps<{
   listPickerOpen: boolean
   teams: Array<{ id: string; name: string }>
   initialMode?: 'edit' | 'preview'
+  // v2 graph used by the interactive simulator. Edit-mode static preview
+  // continues to read selectedStep so the per-step WhatsApp render stays
+  // working off the editor's in-memory FlowStep model.
+  graph?: ChatFlowGraph | null
 }>()
 
 const emit = defineEmits<{
@@ -315,10 +320,10 @@ const localListPickerOpen = computed({
         </div>
       </template>
 
-      <!-- Preview Mode: Interactive Simulation -->
+      <!-- Preview Mode: Interactive Simulation (graph-based) -->
       <template v-else>
         <InteractivePreview
-          :steps="steps"
+          :graph="graph || null"
           :flow-data="flowData"
         />
       </template>

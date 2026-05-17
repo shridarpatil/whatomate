@@ -315,6 +315,19 @@ const selectedStep = computed(() => {
   return formData.value.steps[selectedStepIndex.value]
 })
 
+// previewGraph mirrors what saveFlow would emit — the interactive preview
+// executes the same v2 graph the backend would. Returns null when the
+// editor's current state isn't expressible as graph (preview shows an
+// empty state instead of crashing).
+const previewGraph = computed(() => {
+  const normalised = formData.value.steps.map((step, idx) => ({
+    ...step,
+    step_order: idx + 1,
+    step_name: step.step_name || `step_${idx + 1}`,
+  }))
+  return stepsToGraph(normalised, formData.value.canvas_layout)
+})
+
 // All steps with valid names for branching dropdowns
 const stepsWithNames = computed(() => {
   return formData.value.steps.filter(s => s.step_name && s.step_name.trim() !== '')
@@ -1252,6 +1265,7 @@ function confirmCancel() {
             :list-picker-open="listPickerOpen"
             :teams="teams"
             :initial-mode="previewMode"
+            :graph="previewGraph"
             @update:list-picker-open="listPickerOpen = $event"
             @select-message-type="setMessageType"
           />
