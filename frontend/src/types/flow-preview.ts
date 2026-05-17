@@ -32,7 +32,7 @@ export interface FlowStep {
   step_order: number
   message: string
   message_type: 'text' | 'buttons' | 'api_fetch' | 'whatsapp_flow' | 'transfer' | 'end' | 'condition' | 'timing' | 'goto_flow'
-  input_type: 'none' | 'text' | 'number' | 'email' | 'phone' | 'date' | 'select'
+  input_type: 'none' | 'text' | 'number' | 'email' | 'phone' | 'date' | 'select' | 'button' | 'whatsapp_flow'
   input_config: Record<string, any>
   api_config: ApiConfig
   buttons: ButtonConfig[]

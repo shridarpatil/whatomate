@@ -587,6 +587,26 @@ const stepTypeLabels: Record<string, string> = {
   goto_flow: 'Go to Flow',
 }
 
+// Default input_type per message_type. Drives the editor's input
+// section and — critically — picks whether a text step converts to a v2
+// `prompt` (blocking + validating) or a `message` (fire-and-forget) on
+// save. Authors can override per step in the right panel.
+const defaultInputTypeForMessageType: Record<string, string> = {
+  text: 'text',
+  buttons: 'button',
+  whatsapp_flow: 'whatsapp_flow',
+  api_fetch: 'none',
+  transfer: 'none',
+  end: 'none',
+  condition: 'none',
+  timing: 'none',
+  goto_flow: 'none',
+}
+
+function defaultInputTypeForType(type: string): string {
+  return defaultInputTypeForMessageType[type] ?? 'text'
+}
+
 const TIMING_DAYS = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'] as const
 
 function defaultTimingSchedule(): Array<Record<string, any>> {
@@ -646,25 +666,20 @@ function addStep(type?: string) {
     step_name: `step_${newOrder}`,
     label: defaultLabelForType(resolvedType),
     step_order: newOrder,
+    input_type: defaultInputTypeForType(resolvedType),
+    message_type: resolvedType,
   }
-  if (type) {
-    step.message_type = type
-    if (type === 'whatsapp_flow') {
-      step.input_config = { whatsapp_flow_id: '', flow_header: '', flow_cta: '' }
-      step.input_type = 'none'
-    }
-    if (type === 'transfer' || type === 'end' || type === 'condition' || type === 'timing' || type === 'goto_flow') {
-      step.input_type = 'none'
-    }
-    if (type === 'condition') {
-      step.input_config = { expression: '' }
-    }
-    if (type === 'timing') {
-      step.input_config = { schedule: defaultTimingSchedule() }
-    }
-    if (type === 'goto_flow') {
-      step.input_config = { flow_id: '' }
-    }
+  if (type === 'whatsapp_flow') {
+    step.input_config = { whatsapp_flow_id: '', flow_header: '', flow_cta: '' }
+  }
+  if (type === 'condition') {
+    step.input_config = { expression: '' }
+  }
+  if (type === 'timing') {
+    step.input_config = { schedule: defaultTimingSchedule() }
+  }
+  if (type === 'goto_flow') {
+    step.input_config = { flow_id: '' }
   }
   formData.value.steps.push(step)
   selectedStepIndex.value = formData.value.steps.length - 1
@@ -721,6 +736,7 @@ function onChangeStepType(stepIndex: number, newType: string) {
   if (!actual) return
 
   actual.message_type = newType
+  actual.input_type = defaultInputTypeForType(newType)
 
   // Reset type-specific fields when changing type
   if (newType !== 'buttons') {
@@ -733,31 +749,23 @@ function onChangeStepType(stepIndex: number, newType: string) {
   if (newType !== 'transfer') {
     actual.transfer_config = { team_id: '_general', notes: '' }
   }
-  if (newType === 'transfer') {
-    actual.input_type = 'none'
-  }
   if (newType === 'whatsapp_flow') {
     actual.input_config = { whatsapp_flow_id: '', flow_header: '', flow_cta: '' }
-    actual.input_type = 'none'
   }
   if (newType === 'condition') {
     actual.input_config = { expression: '' }
-    actual.input_type = 'none'
     actual.conditional_next = {}
   }
   if (newType === 'timing') {
     actual.input_config = { schedule: defaultTimingSchedule() }
-    actual.input_type = 'none'
     actual.conditional_next = {}
   }
   if (newType === 'goto_flow') {
     actual.input_config = { flow_id: '' }
-    actual.input_type = 'none'
     actual.conditional_next = {}
     actual.next_step = ''
   }
   if (newType === 'end') {
-    actual.input_type = 'none'
     actual.conditional_next = {}
     actual.next_step = ''
   }
