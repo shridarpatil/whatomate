@@ -104,6 +104,26 @@ func (a *App) runChatGraph(
 			return fmt.Errorf("node %q not found", session.CurrentStep)
 		}
 
+		// Skip condition: if the node config has a truthy expression,
+		// short-circuit through the default edge without executing the
+		// node. Authored from the editor's per-node Advanced section.
+		if expr := stringFromConfig(node.Config, "skip_condition"); expr != "" {
+			matched, err := evaluateConditionExpression(expr, session.SessionData)
+			if err != nil {
+				a.Log.Warn("skip_condition failed; ignoring",
+					"node", node.ID, "session", session.ID, "expression", expr, "error", err)
+			} else if matched {
+				appendChatPath(session, node, "skipped")
+				next := graph.resolveEdge(node.ID, "default")
+				if next == "" {
+					session.Status = models.SessionStatusCompleted
+					return a.persistChatSession(session)
+				}
+				session.CurrentStep = next
+				continue
+			}
+		}
+
 		res, err := a.executeChatNode(node, ctx)
 		if err != nil {
 			_ = a.persistChatSession(session)
