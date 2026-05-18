@@ -1,4 +1,4 @@
-import { reactive, computed, type Ref } from 'vue'
+import { reactive, computed, ref, type Ref } from 'vue'
 import type { ChatFlowGraph, ChatNode } from '@/services/api'
 import type {
   FlowData,
@@ -96,7 +96,23 @@ export function useFlowGraphSimulation(
     }
   })
 
-  const canUndo = computed(() => false) // Undo isn't ported yet; UI hides the button.
+  // History of state snapshots taken before each node executes, so the
+  // user can step backwards through a simulation.
+  const snapshots = ref<string[]>([])
+  const canUndo = computed(() => snapshots.value.length > 0)
+
+  function snapshot(): void {
+    snapshots.value.push(JSON.stringify({
+      status: state.status,
+      currentStepIndex: state.currentStepIndex,
+      currentStepName: state.currentStepName,
+      variables: state.variables,
+      messages: state.messages,
+      executionLog: state.executionLog,
+      currentRetryCount: state.currentRetryCount,
+    }))
+    if (snapshots.value.length > 50) snapshots.value.shift()
+  }
 
   function log(type: ExecutionLogType, nodeId?: string, details: Record<string, any> = {}): void {
     state.executionLog.push({
@@ -163,6 +179,7 @@ export function useFlowGraphSimulation(
     state.messages = []
     state.executionLog = []
     state.currentRetryCount = 0
+    snapshots.value = []
 
     log('flow_start', undefined, { nodeCount: g.nodes.length })
 
@@ -191,6 +208,8 @@ export function useFlowGraphSimulation(
         state.status = 'error'
         return
       }
+      // Snapshot before executing this node so Undo can rewind to it.
+      snapshot()
       state.currentStepName = currentId
       state.currentStepIndex = graph.value?.nodes.findIndex((n) => n.id === currentId) ?? null
       log('step_enter', currentId, { type: node.type })
@@ -484,10 +503,28 @@ export function useFlowGraphSimulation(
     state.executionLog = []
     state.currentRetryCount = 0
     state.errorMessage = undefined
+    snapshots.value = []
   }
 
   function undo(): boolean {
-    return false // not implemented for the graph runner yet
+    const snap = snapshots.value.pop()
+    if (!snap) return false
+    const restored = JSON.parse(snap)
+    state.status = 'paused'
+    state.currentStepIndex = restored.currentStepIndex
+    state.currentStepName = restored.currentStepName
+    state.variables = restored.variables
+    state.messages = (restored.messages || []).map((m: any) => ({
+      ...m,
+      timestamp: new Date(m.timestamp),
+    }))
+    state.executionLog = (restored.executionLog || []).map((e: any) => ({
+      ...e,
+      timestamp: new Date(e.timestamp),
+    }))
+    state.currentRetryCount = restored.currentRetryCount || 0
+    state.errorMessage = undefined
+    return true
   }
 
   async function stepForward(): Promise<void> {

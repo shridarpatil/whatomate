@@ -1,1066 +1,511 @@
 <script setup lang="ts">
-import { ref, computed, onMounted, watch } from 'vue'
-import { useRoute, useRouter } from 'vue-router'
+import { ref, computed, onMounted, markRaw, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { Card, CardHeader, CardTitle } from '@/components/ui/card'
+import { useRoute, useRouter } from 'vue-router'
+import { useVueFlow, MarkerType, type NodeMouseEvent, type Edge, type EdgeMouseEvent, type Connection } from '@vue-flow/core'
+import { toast } from 'vue-sonner'
+
+import FlowCanvas from '@/components/shared/FlowCanvas.vue'
+import { chatbotService } from '@/services/api'
+import type { ChatFlowGraph, ChatNode, ChatEdge, ChatNodeType } from '@/services/api'
+
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import { Textarea } from '@/components/ui/textarea'
-import { Badge } from '@/components/ui/badge'
-import { ScrollArea } from '@/components/ui/scroll-area'
 import { Switch } from '@/components/ui/switch'
+import { Textarea } from '@/components/ui/textarea'
+import { ScrollArea } from '@/components/ui/scroll-area'
+import { Card, CardHeader, CardTitle } from '@/components/ui/card'
 import { Separator } from '@/components/ui/separator'
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select'
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from '@/components/ui/alert-dialog'
-import {
-  Collapsible,
-  CollapsibleContent,
-  CollapsibleTrigger,
-} from '@/components/ui/collapsible'
-import { chatbotService, flowsService, type Team } from '@/services/api'
-import { stepsToGraph, graphToSteps } from '@/composables/useChatbotFlowConverter'
-import { useTeamsStore } from '@/stores/teams'
-import { toast } from 'vue-sonner'
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import {
   ArrowLeft,
-  Plus,
-  Trash2,
-  GripVertical,
+  Save,
   MessageSquare,
   MousePointerClick,
   Globe,
   MessageCircle,
   Users,
+  GitBranch,
+  Clock,
+  ExternalLink,
+  StopCircle,
   ChevronDown,
   ChevronRight,
-  Save,
-  Settings,
+  Plus,
+  Trash2,
+  Play,
 } from 'lucide-vue-next'
-import draggable from 'vuedraggable'
-import FlowChart from '@/components/chatbot/flow-builder/FlowChart.vue'
-import FlowPreviewPanel from '@/components/chatbot/flow-preview/FlowPreviewPanel.vue'
-import UnsavedChangesDialog from '@/components/shared/UnsavedChangesDialog.vue'
+
 import AuditLogPanel from '@/components/shared/AuditLogPanel.vue'
 import MetadataPanel from '@/components/shared/MetadataPanel.vue'
-import MessageButtonsEditor from '@/components/shared/MessageButtonsEditor.vue'
+import UnsavedChangesDialog from '@/components/shared/UnsavedChangesDialog.vue'
+import ConfirmDialog from '@/components/shared/ConfirmDialog.vue'
+import ErrorState from '@/components/shared/ErrorState.vue'
+import ChatNodeProperties from '@/components/chatbot/ChatNodeProperties.vue'
 
-interface ApiConfig {
-  url: string
-  method: string
-  headers: Record<string, string>
-  body: string
-  fallback_message: string
-  response_mapping: Record<string, string>
-}
+import ChatbotTextNode from '@/components/chatbot/nodes/ChatbotTextNode.vue'
+import ChatbotButtonsNode from '@/components/chatbot/nodes/ChatbotButtonsNode.vue'
+import ChatbotApiNode from '@/components/chatbot/nodes/ChatbotApiNode.vue'
+import ChatbotWhatsAppFlowNode from '@/components/chatbot/nodes/ChatbotWhatsAppFlowNode.vue'
+import ChatbotTransferNode from '@/components/chatbot/nodes/ChatbotTransferNode.vue'
+import ChatbotConditionNode from '@/components/chatbot/nodes/ChatbotConditionNode.vue'
+import ChatbotTimingNode from '@/components/chatbot/nodes/ChatbotTimingNode.vue'
+import ChatbotGotoFlowNode from '@/components/chatbot/nodes/ChatbotGotoFlowNode.vue'
+import ChatbotEndNode from '@/components/chatbot/nodes/ChatbotEndNode.vue'
 
-interface ButtonConfig {
-  id: string
-  title: string
-  type?: 'reply' | 'url' | 'phone'
-  url?: string
-  phone_number?: string
-}
+import InteractivePreview from '@/components/chatbot/flow-preview/InteractivePreview.vue'
+import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog'
 
-interface TransferConfig {
-  team_id: string
-  notes: string
-}
-
-interface FlowStep {
-  id?: string
-  step_name: string
-  /** Human-readable label shown on the canvas; defaults to step_name. */
-  label?: string
-  step_order: number
-  message: string
-  message_type: string
-  input_type: string
-  input_config: Record<string, any>
-  api_config: ApiConfig
-  buttons: ButtonConfig[]
-  transfer_config: TransferConfig
-  validation_regex: string
-  validation_error: string
-  store_as: string
-  next_step: string
-  conditional_next?: Record<string, string>  // Button ID -> target step name
-  retry_on_invalid: boolean
-  max_retries: number
-  skip_condition: string
-}
-
-interface WebhookConfig {
-  url: string
-  method: string
-  headers: Record<string, string>
-  body: string
-}
-
-interface PanelFieldConfig {
-  key: string
-  label: string
-  order: number
-  display_type?: string
-  color?: string
-}
-
-interface PanelSection {
-  id: string
-  label: string
-  columns: number
-  collapsible: boolean
-  default_collapsed: boolean
-  order: number
-  fields: PanelFieldConfig[]
-}
-
-interface PanelConfig {
-  sections: PanelSection[]
-}
-
-interface WhatsAppFlow {
-  id: string
-  name: string
-  status: string
-  meta_flow_id: string
-}
-
+const { t } = useI18n()
 const route = useRoute()
 const router = useRouter()
-const { t } = useI18n()
-const teamsStore = useTeamsStore()
+
+const flowId = computed(() => (route.params.id as string) || '')
+const isNewFlow = computed(() => !flowId.value || route.path.endsWith('/new'))
+
+// Top-level flow metadata
+const name = ref('')
+const description = ref('')
+const enabled = ref(true)
+const triggerKeywords = ref('')
+const initialMessage = ref('Hi! Let me help you with that.')
+const completionMessage = ref('Thank you! We have all the information we need.')
+const onCompleteAction = ref<'none' | 'webhook'>('none')
+const completionConfig = ref<{
+  url: string
+  method: string
+  headers: Record<string, string>
+  body: string
+}>({ url: '', method: 'POST', headers: {}, body: '' })
+const panelConfigJson = ref('{"sections": []}')
 
 const isLoading = ref(true)
+const loadError = ref(false)
 const isSaving = ref(false)
-const flowId = computed(() => route.params.id as string | undefined)
-const isNewFlow = computed(() => !flowId.value || flowId.value === 'new')
-
-const whatsappFlows = ref<WhatsAppFlow[]>([])
-const teams = ref<Team[]>([])
-// Other flows in the same org for the goto_flow picker (excludes the
-// flow being edited so authors can't self-reference accidentally).
-const otherFlows = ref<{ id: string; name: string }[]>([])
-
-const selectedStepIndex = ref<number | null>(null)
-const showFlowSettings = ref(false)
-const previewMode = ref<'edit' | 'preview'>('edit')
-const deleteStepDialogOpen = ref(false)
-const stepToDeleteIndex = ref<number | null>(null)
 const hasUnsavedChanges = ref(false)
-const auditRefreshKey = ref(0)
+const showDeleteNodeConfirm = ref(false)
 const cancelDialogOpen = ref(false)
-const webhookHeadersOpen = ref(false)
-const listPickerOpen = ref(false)
-
-// Panel resize
-const propertiesPanelWidth = ref(500)
-const stepsPanelWidth = ref(240)
-const isResizingRight = ref(false)
-const isResizingLeft = ref(false)
-const minPanelWidth = 200
-const maxPanelWidth = 500
-const minStepsPanelWidth = 180
-const maxStepsPanelWidth = 400
-
-// Direct DOM refs for instant resize (no Vue reactivity lag)
-let leftPanelEl: HTMLElement | null = null
-let rightPanelEl: HTMLElement | null = null
-let containerEl: HTMLElement | null = null
-
-function setResizeStyles() {
-  document.body.style.cursor = 'col-resize'
-  document.body.style.userSelect = 'none'
-  document.body.classList.add('resizing')
-  // Cache elements
-  containerEl = document.querySelector('.flow-builder-panels')
-  leftPanelEl = containerEl?.querySelector('[data-panel="left"]') as HTMLElement | null
-  rightPanelEl = containerEl?.querySelector('[data-panel="right"]') as HTMLElement | null
-}
-
-function clearResizeStyles() {
-  document.body.style.cursor = ''
-  document.body.style.userSelect = ''
-  document.body.classList.remove('resizing')
-}
-
-function startResizeRight(_e: MouseEvent) {
-  isResizingRight.value = true
-  setResizeStyles()
-  document.addEventListener('mousemove', handleResizeRight)
-  document.addEventListener('mouseup', stopResizeRight)
-}
-
-function handleResizeRight(e: MouseEvent) {
-  const w = Math.min(Math.max(window.innerWidth - e.clientX, minPanelWidth), maxPanelWidth)
-  if (rightPanelEl) rightPanelEl.style.width = w + 'px'
-}
-
-function stopResizeRight() {
-  isResizingRight.value = false
-  document.removeEventListener('mousemove', handleResizeRight)
-  document.removeEventListener('mouseup', stopResizeRight)
-  // Sync ref from DOM
-  if (rightPanelEl) propertiesPanelWidth.value = rightPanelEl.offsetWidth
-  clearResizeStyles()
-}
-
-function startResizeLeft(_e: MouseEvent) {
-  isResizingLeft.value = true
-  setResizeStyles()
-  document.addEventListener('mousemove', handleResizeLeft)
-  document.addEventListener('mouseup', stopResizeLeft)
-}
-
-function handleResizeLeft(e: MouseEvent) {
-  const offsetLeft = containerEl?.getBoundingClientRect().left ?? 0
-  const w = Math.min(Math.max(e.clientX - offsetLeft, minStepsPanelWidth), maxStepsPanelWidth)
-  if (leftPanelEl) leftPanelEl.style.width = w + 'px'
-}
-
-function stopResizeLeft() {
-  isResizingLeft.value = false
-  document.removeEventListener('mousemove', handleResizeLeft)
-  document.removeEventListener('mouseup', stopResizeLeft)
-  // Sync ref from DOM
-  if (leftPanelEl) stepsPanelWidth.value = leftPanelEl.offsetWidth
-  clearResizeStyles()
-}
-
-// Collapsible states for properties panel
-const messagesOpen = ref(true)
-const inputOpen = ref(true)
-const validationOpen = ref(true)
-const advancedOpen = ref(false)
+const showPreview = ref(false)
+const auditRefreshKey = ref(0)
+const completionConfigOpen = ref(false)
 const panelConfigOpen = ref(false)
 
-const defaultApiConfig: ApiConfig = {
-  url: '',
-  method: 'GET',
-  headers: {},
-  body: '',
-  fallback_message: '',
-  response_mapping: {}
+const createdAt = ref('')
+const updatedAt = ref('')
+const createdByName = ref('')
+const updatedByName = ref('')
+
+// All flows for goto_flow target picker
+const availableFlows = ref<{ id: string; name: string }[]>([])
+
+// Vue Flow custom node types (cast to `any` to bypass strict NodeComponent check)
+const nodeTypes: any = {
+  message: markRaw(ChatbotTextNode),
+  prompt: markRaw(ChatbotTextNode),
+  buttons: markRaw(ChatbotButtonsNode),
+  api_call: markRaw(ChatbotApiNode),
+  whatsapp_flow: markRaw(ChatbotWhatsAppFlowNode),
+  transfer: markRaw(ChatbotTransferNode),
+  condition: markRaw(ChatbotConditionNode),
+  timing: markRaw(ChatbotTimingNode),
+  goto_flow: markRaw(ChatbotGotoFlowNode),
+  end: markRaw(ChatbotEndNode),
+  webhook: markRaw(ChatbotApiNode),
 }
 
-const defaultTransferConfig: TransferConfig = {
-  team_id: '_general',
-  notes: ''
-}
+// Palette: 'prompt' and 'webhook' are internal-only — a Text node
+// becomes a prompt when the author sets an expected response.
+const palette: { type: ChatNodeType; label: string; icon: any; color: string }[] = [
+  { type: 'message', label: 'Text', icon: MessageSquare, color: 'bg-blue-600' },
+  { type: 'buttons', label: 'Buttons', icon: MousePointerClick, color: 'bg-purple-600' },
+  { type: 'api_call', label: 'API', icon: Globe, color: 'bg-orange-600' },
+  { type: 'whatsapp_flow', label: 'WA Flow', icon: MessageCircle, color: 'bg-green-600' },
+  { type: 'transfer', label: 'Transfer', icon: Users, color: 'bg-amber-600' },
+  { type: 'condition', label: 'Condition', icon: GitBranch, color: 'bg-indigo-600' },
+  { type: 'timing', label: 'Timing', icon: Clock, color: 'bg-cyan-600' },
+  { type: 'goto_flow', label: 'Go to Flow', icon: ExternalLink, color: 'bg-teal-600' },
+  { type: 'end', label: 'End', icon: StopCircle, color: 'bg-slate-600' },
+]
 
-const defaultWebhookConfig: WebhookConfig = {
-  url: '',
-  method: 'POST',
-  headers: {},
-  body: ''
-}
-
-const defaultStep: FlowStep = {
-  step_name: '',
-  step_order: 0,
-  message: '',
-  message_type: 'text',
-  input_type: 'text',
-  input_config: {},
-  api_config: { ...defaultApiConfig },
-  buttons: [],
-  transfer_config: { ...defaultTransferConfig },
-  validation_regex: '',
-  validation_error: 'Invalid input. Please try again.',
-  store_as: '',
-  next_step: '',
-  conditional_next: {},
-  retry_on_invalid: true,
-  max_retries: 3,
-  skip_condition: ''
-}
-
-const formData = ref({
-  name: '',
-  description: '',
-  trigger_keywords: '',
-  initial_message: 'Hi! Let me help you with that.',
-  completion_message: 'Thank you! We have all the information we need.',
-  on_complete_action: 'none',
-  completion_config: { ...defaultWebhookConfig },
-  panel_config: { sections: [] } as PanelConfig,
-  canvas_layout: {} as Record<string, any>,
-  enabled: true,
-  steps: [] as FlowStep[],
-  created_at: '',
-  updated_at: '',
-  created_by_name: '',
-  updated_by_name: '',
+const {
+  nodes,
+  edges,
+  addNodes,
+  addEdges,
+  removeNodes,
+  removeEdges,
+  onConnect,
+  project,
+  fitView,
+} = useVueFlow({
+  defaultEdgeOptions: {
+    type: 'default',
+    animated: true,
+    markerEnd: MarkerType.ArrowClosed,
+  },
 })
 
-const selectedStep = computed(() => {
-  if (selectedStepIndex.value === null || selectedStepIndex.value >= formData.value.steps.length) {
-    return null
+const entryNodeId = ref<string>('')
+const selectedNodeId = ref<string | null>(null)
+
+const selectedNode = computed(() => {
+  if (!selectedNodeId.value) return null
+  return nodes.value.find((n) => n.id === selectedNodeId.value) || null
+})
+
+// Properties panel reads a ChatNode-shaped object derived from the Vue Flow node.
+const selectedChatNode = computed<ChatNode | null>(() => {
+  const node = selectedNode.value
+  if (!node) return null
+  return {
+    id: node.id,
+    type: node.type as ChatNodeType,
+    label: node.data?.label || '',
+    position: node.position,
+    config: node.data?.config || {},
   }
-  return formData.value.steps[selectedStepIndex.value]
 })
 
-// previewGraph mirrors what saveFlow would emit — the interactive preview
-// executes the same v2 graph the backend would. Returns null when the
-// editor's current state isn't expressible as graph (preview shows an
-// empty state instead of crashing).
-const previewGraph = computed(() => {
-  const normalised = formData.value.steps.map((step, idx) => ({
-    ...step,
-    step_order: idx + 1,
-    step_name: step.step_name || `step_${idx + 1}`,
-  }))
-  return stepsToGraph(normalised, formData.value.canvas_layout)
-})
+function onNodeClick(event: NodeMouseEvent) {
+  selectedNodeId.value = event.node.id
+}
 
-// All steps with valid names for branching dropdowns
-const stepsWithNames = computed(() => {
-  return formData.value.steps.filter(s => s.step_name && s.step_name.trim() !== '')
-})
+function onPaneClick() {
+  selectedNodeId.value = null
+}
 
-// Extract available variables for panel configuration
-const availableVariables = computed(() => {
-  const variables: { key: string; source: string; stepName: string }[] = []
+let nodeCounter = 0
 
-  for (const step of formData.value.steps) {
-    // Add store_as variables
-    if (step.store_as && step.store_as.trim()) {
-      variables.push({
-        key: step.store_as.trim(),
-        source: 'StoreAs',
-        stepName: step.step_name || 'Unknown'
-      })
-    }
-
-    // Add response_mapping variables from api_fetch steps
-    if (step.message_type === 'api_fetch' && step.api_config?.response_mapping) {
-      for (const key of Object.keys(step.api_config.response_mapping)) {
-        if (key && key.trim()) {
-          variables.push({
-            key: key.trim(),
-            source: 'Response Mapping',
-            stepName: step.step_name || 'Unknown'
-          })
-        }
+function defaultConfigFor(type: ChatNodeType): Record<string, any> {
+  switch (type) {
+    case 'message':
+      return { message: '' }
+    case 'prompt':
+      return { body: '', store_as: '', validation_regex: '', validation_error: 'Invalid input. Please try again.', max_retries: 3 }
+    case 'buttons':
+      return { body: '', buttons: [] }
+    case 'api_call':
+      return { url: '', method: 'GET', headers: {}, body: '', response_mapping: {}, message_template: '' }
+    case 'whatsapp_flow':
+      return { flow_id: '', header: '', body: '', cta: 'Open' }
+    case 'transfer':
+      return { body: '', team_id: '_general', notes: '' }
+    case 'condition':
+      return { expression: '' }
+    case 'timing':
+      return {
+        schedule: [
+          { day: 'monday', enabled: true, start_time: '09:00', end_time: '18:00' },
+          { day: 'tuesday', enabled: true, start_time: '09:00', end_time: '18:00' },
+          { day: 'wednesday', enabled: true, start_time: '09:00', end_time: '18:00' },
+          { day: 'thursday', enabled: true, start_time: '09:00', end_time: '18:00' },
+          { day: 'friday', enabled: true, start_time: '09:00', end_time: '18:00' },
+          { day: 'saturday', enabled: false, start_time: '09:00', end_time: '18:00' },
+          { day: 'sunday', enabled: false, start_time: '09:00', end_time: '18:00' },
+        ],
       }
-    }
+    case 'goto_flow':
+      return { flow_id: '' }
+    case 'webhook':
+      return { url: '', method: 'POST', headers: {}, body: '' }
+    case 'end':
+      return { message: '' }
+    default:
+      return {}
   }
-
-  return variables
-})
-
-// Variables already assigned to panel sections
-const assignedVariables = computed(() => {
-  const assigned = new Set<string>()
-  for (const section of formData.value.panel_config.sections) {
-    for (const field of section.fields) {
-      assigned.add(field.key)
-    }
-  }
-  return assigned
-})
-
-// Variables not yet assigned to any section
-const unassignedVariables = computed(() => {
-  return availableVariables.value.filter(v => !assignedVariables.value.has(v.key))
-})
-
-const messageTypes = computed(() => [
-  { value: 'text', label: t('flowBuilder.messageTypeText'), icon: MessageSquare },
-  { value: 'buttons', label: t('flowBuilder.messageTypeButtons'), icon: MousePointerClick },
-  { value: 'api_fetch', label: t('flowBuilder.messageTypeApi'), icon: Globe },
-  { value: 'whatsapp_flow', label: t('flowBuilder.messageTypeWhatsappFlow'), icon: MessageCircle },
-  { value: 'transfer', label: t('flowBuilder.messageTypeTransfer'), icon: Users }
-])
-
-const inputTypes = computed(() => [
-  { value: 'none', label: t('flowBuilder.noInputRequired') },
-  { value: 'text', label: t('flowBuilder.textInput') },
-  { value: 'number', label: t('flowBuilder.numberInput') },
-  { value: 'email', label: t('flowBuilder.emailInput') },
-  { value: 'phone', label: t('flowBuilder.phoneInput') },
-  { value: 'date', label: t('flowBuilder.dateInput') },
-  { value: 'select', label: t('flowBuilder.selectionInput') }
-])
-
-const httpMethods = ['GET', 'POST', 'PUT', 'PATCH']
-
-function getStepIcon(messageType: string) {
-  const type = messageTypes.value.find(t => t.value === messageType)
-  return type?.icon || MessageSquare
 }
 
-function getStepColor(messageType: string): string {
-  const colors: Record<string, string> = {
-    text: 'border-l-blue-500',
-    buttons: 'border-l-purple-500',
-    api_fetch: 'border-l-orange-500',
-    whatsapp_flow: 'border-l-green-500',
-    transfer: 'border-l-amber-500',
-  }
-  return colors[messageType] || 'border-l-slate-400'
+const paletteLabels: Record<string, string> = {
+  message: 'Message',
+  prompt: 'Prompt',
+  buttons: 'Buttons',
+  api_call: 'API',
+  whatsapp_flow: 'WhatsApp Flow',
+  transfer: 'Transfer',
+  condition: 'Condition',
+  timing: 'Timing',
+  goto_flow: 'Go to Flow',
+  webhook: 'Webhook',
+  end: 'End',
 }
 
-function getStepLabel(messageType: string) {
-  const type = messageTypes.value.find(t => t.value === messageType)
-  return type?.label || t('flowBuilder.messageTypeText')
-}
-
-// Watch for changes to mark unsaved
-watch(formData, () => {
+function addNodeFromPalette(type: ChatNodeType) {
+  const pos = project({ x: window.innerWidth / 2 - 200, y: window.innerHeight / 2 - 200 })
+  const id = `node_${Date.now()}_${nodeCounter++}`
+  const isFirst = nodes.value.length === 0
+  addNodes([
+    {
+      id,
+      type,
+      position: { x: pos.x, y: pos.y },
+      data: {
+        label: paletteLabels[type] || type,
+        config: defaultConfigFor(type),
+        isEntryNode: isFirst,
+      },
+    },
+  ])
+  if (isFirst) entryNodeId.value = id
+  selectedNodeId.value = id
   hasUnsavedChanges.value = true
-}, { deep: true })
+}
 
-onMounted(async () => {
-  await Promise.all([fetchWhatsAppFlows(), fetchTeams(), fetchOtherFlows()])
+onConnect((params) => {
+  // Enforce single edge per source handle.
+  const existing = edges.value.filter(
+    (e) => e.source === params.source && e.sourceHandle === params.sourceHandle,
+  )
+  if (existing.length > 0) removeEdges(existing)
 
-  if (!isNewFlow.value && flowId.value) {
-    await loadFlow(flowId.value)
-  } else {
-    // Initialize with one default step
-    formData.value.steps = [{
-      ...defaultStep,
-      step_name: 'step_1',
-      label: defaultLabelForType('text'),
-      step_order: 1,
-      message: '',
-      store_as: ''
-    }]
-    isLoading.value = false
-  }
-  // Default to Flow Settings view
-  showFlowSettings.value = true
-  selectedStepIndex.value = null
-  hasUnsavedChanges.value = false
+  addEdges([
+    {
+      ...params,
+      type: 'default',
+      animated: true,
+      markerEnd: MarkerType.ArrowClosed,
+      label: params.sourceHandle || 'default',
+    },
+  ])
+  spreadParallelLabels()
+  hasUnsavedChanges.value = true
 })
 
-async function fetchWhatsAppFlows() {
-  try {
-    const response = await flowsService.list()
-    const data = response.data as any
-    const allFlows = data.data?.flows ?? data.flows ?? []
-    whatsappFlows.value = allFlows.filter(
-      (f: WhatsAppFlow) => f.meta_flow_id && f.status?.toUpperCase() === 'PUBLISHED'
-    )
-  } catch (error) {
-    console.error('Failed to load WhatsApp flows:', error)
-    whatsappFlows.value = []
+function spreadParallelLabels() {
+  const groups = new Map<string, Edge[]>()
+  for (const e of edges.value) {
+    const key = `${e.source}→${e.target}`
+    if (!groups.has(key)) groups.set(key, [])
+    groups.get(key)!.push(e)
+  }
+  for (const group of groups.values()) {
+    for (let i = 0; i < group.length; i++) {
+      const yOffset = group.length > 1 ? (i - (group.length - 1) / 2) * 22 : 0
+      group[i].labelStyle = { transform: `translateY(${yOffset}px)` }
+      group[i].labelBgStyle = { fill: 'none', fillOpacity: 0 }
+      group[i].labelBgPadding = [0, 0] as [number, number]
+    }
   }
 }
 
-async function fetchOtherFlows() {
-  try {
-    const response = await chatbotService.listFlows({ limit: 200 })
-    const data = response.data as any
-    const list = data.data?.flows ?? data.flows ?? []
-    otherFlows.value = list
-      .filter((f: any) => f.id && f.id !== flowId.value)
-      .map((f: any) => ({ id: f.id, name: f.name || f.Name || f.id }))
-  } catch {
-    otherFlows.value = []
+function onEdgeClick({ edge }: EdgeMouseEvent) {
+  nodes.value.forEach((n) => (n.selected = false))
+  edges.value.forEach((e) => (e.selected = false))
+  edge.selected = true
+  selectedNodeId.value = null
+}
+
+function onEdgeUpdate({ edge, connection }: { edge: Edge; connection: Connection }) {
+  removeEdges([edge])
+  addEdges([
+    {
+      ...connection,
+      type: 'default',
+      animated: true,
+      markerEnd: MarkerType.ArrowClosed,
+      label: connection.sourceHandle || 'default',
+    },
+  ])
+  spreadParallelLabels()
+  hasUnsavedChanges.value = true
+}
+
+function onUpdateNode(updated: ChatNode) {
+  const node = nodes.value.find((n) => n.id === updated.id)
+  if (!node) return
+  if (updated.type !== node.type) {
+    // "Text" nodes flip between v2 message / prompt when the author
+    // sets an expected response. Vue Flow keys components off node.type
+    // so this swap has to land back in the canvas state too.
+    node.type = updated.type
+  }
+  node.data = {
+    ...node.data,
+    label: updated.label,
+    config: updated.config,
+  }
+  hasUnsavedChanges.value = true
+}
+
+function requestDeleteSelectedNode() {
+  if (!selectedNode.value) return
+  showDeleteNodeConfirm.value = true
+}
+
+function confirmDeleteSelectedNode() {
+  const node = selectedNode.value
+  if (!node) return
+  const nodeId = node.id
+  const connected = edges.value.filter((e) => e.source === nodeId || e.target === nodeId)
+  if (connected.length > 0) removeEdges(connected)
+  removeNodes([nodeId])
+  selectedNodeId.value = null
+  showDeleteNodeConfirm.value = false
+
+  if (entryNodeId.value === nodeId && nodes.value.length > 0) {
+    const newEntry = nodes.value[0]
+    entryNodeId.value = newEntry.id
+    newEntry.data = { ...newEntry.data, isEntryNode: true }
+  }
+  hasUnsavedChanges.value = true
+}
+
+// Track node moves so unsaved-changes nags appear.
+function onNodeDragStop() {
+  hasUnsavedChanges.value = true
+}
+
+// Build the v2 graph payload to ship to the API.
+function toGraphPayload(): ChatFlowGraph {
+  const ivrNodes: ChatNode[] = nodes.value.map((n) => ({
+    id: n.id,
+    type: n.type as ChatNodeType,
+    label: n.data?.label || '',
+    position: { x: n.position.x, y: n.position.y },
+    config: n.data?.config || {},
+  }))
+
+  const ivrEdges: ChatEdge[] = edges.value.map((e) => ({
+    from: e.source,
+    to: e.target,
+    condition: e.sourceHandle || (e as any).label || 'default',
+  }))
+
+  // Entry node: prefer the one explicitly chosen; else the node without incoming edges.
+  const nodesWithIncoming = new Set(ivrEdges.map((e) => e.to))
+  const fallbackEntry = ivrNodes.find((n) => !nodesWithIncoming.has(n.id))?.id || ivrNodes[0]?.id || ''
+  const entry = entryNodeId.value && ivrNodes.some((n) => n.id === entryNodeId.value)
+    ? entryNodeId.value
+    : fallbackEntry
+
+  return {
+    version: 2,
+    nodes: ivrNodes,
+    edges: ivrEdges,
+    entry_node: entry,
   }
 }
 
-async function fetchTeams() {
-  try {
-    await teamsStore.fetchTeams()
-    teams.value = teamsStore.teams.filter((t: Team) => t.is_active)
-  } catch (error) {
-    console.error('Failed to load teams:', error)
-    teams.value = []
-  }
+// Reactive preview graph — InteractivePreview consumes this for simulation.
+const previewGraph = computed<ChatFlowGraph | null>(() => {
+  if (nodes.value.length === 0) return null
+  return toGraphPayload()
+})
+
+function loadGraph(graph: ChatFlowGraph) {
+  entryNodeId.value = graph.entry_node || ''
+
+  const vfNodes = graph.nodes.map((n) => ({
+    id: n.id,
+    type: n.type,
+    position: { x: n.position?.x ?? 0, y: n.position?.y ?? 0 },
+    data: {
+      label: n.label,
+      config: n.config,
+      isEntryNode: n.id === graph.entry_node,
+    },
+  }))
+
+  const vfEdges = (graph.edges || []).map((e, idx) => ({
+    id: `edge_${idx}`,
+    source: e.from,
+    target: e.to,
+    sourceHandle: e.condition,
+    type: 'default' as const,
+    animated: true,
+    markerEnd: MarkerType.ArrowClosed,
+    label: e.condition !== 'default' ? e.condition : '',
+  }))
+
+  addNodes(vfNodes)
+  addEdges(vfEdges)
+  spreadParallelLabels()
+
+  setTimeout(() => fitView({ padding: 0.2 }), 100)
 }
 
-async function loadFlow(id: string) {
+async function loadFlow() {
+  if (isNewFlow.value) {
+    isLoading.value = false
+    return
+  }
   isLoading.value = true
+  loadError.value = false
   try {
-    const response = await chatbotService.getFlow(id)
+    const response = await chatbotService.getFlow(flowId.value)
     const flow = response.data.data || response.data
 
-    // v2 graph wins when present. graphToSteps decodes back into the same
-    // FlowStep[] + canvas_layout the editor binds against, so the rest of
-    // loadFlow stays unchanged. If decoding fails (unsupported node types,
-    // e.g. a Phase 3 flow being viewed on a Phase 2 client) we fall back
-    // From Phase 4 onward every flow has a v2 graph; legacy steps are
-    // converted on startup. The editor's in-memory model is still
-    // FlowStep[] for the existing UI bindings, so we decode the graph
-    // back into steps + canvas positions via graphToSteps.
-    let stepsSource: any[] = []
-    let canvasSource: any = {}
-    const rawGraph = flow.graph || flow.Graph
-    if (rawGraph && rawGraph.version === 2) {
-      const decoded = graphToSteps(rawGraph)
-      if (decoded) {
-        stepsSource = decoded.steps
-        canvasSource = decoded.canvas_layout
-      }
+    name.value = flow.name || flow.Name || ''
+    description.value = flow.description || flow.Description || ''
+    enabled.value = flow.is_enabled ?? flow.IsEnabled ?? flow.enabled ?? true
+    triggerKeywords.value = (flow.trigger_keywords || flow.TriggerKeywords || []).join(', ')
+    initialMessage.value = flow.initial_message || flow.InitialMessage || ''
+    completionMessage.value = flow.completion_message || flow.CompletionMessage || ''
+    onCompleteAction.value = (flow.on_complete_action || flow.OnCompleteAction || 'none') as 'none' | 'webhook'
+    const wc = flow.completion_config || flow.CompletionConfig || {}
+    completionConfig.value = {
+      url: wc.url || '',
+      method: wc.method || 'POST',
+      headers: wc.headers || {},
+      body: wc.body || '',
     }
+    const pc = flow.panel_config || flow.PanelConfig || { sections: [] }
+    panelConfigJson.value = JSON.stringify(pc, null, 2)
 
-    formData.value = {
-      name: flow.name || flow.Name || '',
-      description: flow.description || flow.Description || '',
-      trigger_keywords: (flow.trigger_keywords || flow.TriggerKeywords || []).join(', '),
-      initial_message: flow.initial_message || flow.InitialMessage || '',
-      completion_message: flow.completion_message || flow.CompletionMessage || '',
-      on_complete_action: flow.on_complete_action || flow.OnCompleteAction || 'none',
-      completion_config: {
-        ...defaultWebhookConfig,
-        ...(flow.completion_config || flow.CompletionConfig || {}),
-        headers: (flow.completion_config || flow.CompletionConfig || {}).headers || {}
-      },
-      panel_config: {
-        sections: (flow.panel_config || flow.PanelConfig || {}).sections || []
-      },
-      canvas_layout: canvasSource,
-      enabled: flow.is_enabled ?? flow.IsEnabled ?? flow.enabled ?? true,
-      created_at: flow.created_at || '',
-      updated_at: flow.updated_at || '',
-      created_by_name: flow.created_by_name || (flow.created_by?.full_name) || '',
-      updated_by_name: flow.updated_by_name || (flow.updated_by?.full_name) || '',
-      steps: stepsSource.map((s: any, idx: number) => ({
-        id: s.id || s.ID,
-        step_name: s.step_name || s.StepName || `step_${idx + 1}`,
-        label: s.label || s.Label || '',
-        step_order: s.step_order ?? s.StepOrder ?? idx + 1,
-        message: s.message || s.Message || '',
-        message_type: s.message_type || s.MessageType || 'text',
-        input_type: s.input_type || s.InputType || 'text',
-        input_config: s.input_config || s.InputConfig || {},
-        api_config: {
-          ...defaultApiConfig,
-          ...(s.api_config || s.ApiConfig || {}),
-          headers: (s.api_config || s.ApiConfig || {}).headers || {},
-          response_mapping: (s.api_config || s.ApiConfig || {}).response_mapping || {}
-        },
-        buttons: s.buttons || s.Buttons || [],
-        transfer_config: {
-          ...defaultTransferConfig,
-          ...(s.transfer_config || s.TransferConfig || {}),
-          team_id: (s.transfer_config || s.TransferConfig || {}).team_id || '_general'
-        },
-        validation_regex: s.validation_regex || s.ValidationRegex || '',
-        validation_error: s.validation_error || s.ValidationError || 'Invalid input. Please try again.',
-        store_as: s.store_as || s.StoreAs || '',
-        next_step: s.next_step || s.NextStep || '',
-        conditional_next: s.conditional_next || s.ConditionalNext || {},
-        retry_on_invalid: s.retry_on_invalid ?? s.RetryOnInvalid ?? true,
-        max_retries: s.max_retries ?? s.MaxRetries ?? 3,
-        skip_condition: s.skip_condition || s.SkipCondition || ''
-      }))
+    createdAt.value = flow.created_at || ''
+    updatedAt.value = flow.updated_at || ''
+    createdByName.value = flow.created_by_name || flow.created_by?.full_name || ''
+    updatedByName.value = flow.updated_by_name || flow.updated_by?.full_name || ''
+
+    const graph = flow.graph || flow.Graph
+    if (graph && graph.version === 2) {
+      loadGraph(graph)
     }
-
-    // Flow Settings will be selected by default in onMounted
-  } catch (error) {
-    toast.error(t('common.failedLoad', { resource: t('resources.flow') }))
-    router.push('/chatbot/flows')
+  } catch {
+    loadError.value = true
   } finally {
     isLoading.value = false
   }
 }
 
-// Human-readable defaults for the label shown on the canvas. Keys match
-// message_type values. The user can rename freely via the detail panel.
-const stepTypeLabels: Record<string, string> = {
-  text: 'Text',
-  buttons: 'Buttons',
-  api_fetch: 'API',
-  whatsapp_flow: 'WhatsApp Flow',
-  transfer: 'Transfer',
-  end: 'End',
-  condition: 'Condition',
-  timing: 'Timing',
-  goto_flow: 'Go to Flow',
-}
-
-// Default input_type per message_type. Drives the editor's input
-// section and — critically — picks whether a text step converts to a v2
-// `prompt` (blocking + validating) or a `message` (fire-and-forget) on
-// save. Authors can override per step in the right panel.
-const defaultInputTypeForMessageType: Record<string, string> = {
-  text: 'text',
-  buttons: 'button',
-  whatsapp_flow: 'whatsapp_flow',
-  api_fetch: 'none',
-  transfer: 'none',
-  end: 'none',
-  condition: 'none',
-  timing: 'none',
-  goto_flow: 'none',
-}
-
-function defaultInputTypeForType(type: string): string {
-  return defaultInputTypeForMessageType[type] ?? 'text'
-}
-
-// Steps where the right-panel "Expected Input" + "Validation" sections
-// make sense. Buttons / whatsapp_flow have their own dedicated input UI
-// above; control-flow nodes don't accept user input at all.
-const TEXT_INPUT_STEP_TYPES = new Set(['text', 'api_fetch'])
-const showInputSection = computed(() =>
-  !!selectedStep.value && TEXT_INPUT_STEP_TYPES.has(selectedStep.value.message_type)
-)
-
-const TIMING_DAYS = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'] as const
-
-function defaultTimingSchedule(): Array<Record<string, any>> {
-  return TIMING_DAYS.map((day) => ({
-    day,
-    enabled: day !== 'saturday' && day !== 'sunday',
-    start_time: '09:00',
-    end_time: '18:00',
-  }))
-}
-
-function defaultLabelForType(type: string): string {
-  return stepTypeLabels[type] || type
-}
-
-// renameSelectedStep keeps the canvas + edges in sync when the user
-// changes step_name. step_name is the identifier referenced by edges,
-// canvas_layout.node_positions, and other steps' next_step /
-// conditional_next, so the rename has to cascade.
-function renameSelectedStep(newName: string) {
-  if (!selectedStep.value) return
-  const oldName = selectedStep.value.step_name
-  if (oldName === newName) return
-
-  // Update inter-step references on every other step.
-  for (const step of formData.value.steps) {
-    if (step === selectedStep.value) continue
-    if (step.next_step === oldName) {
-      step.next_step = newName
-    }
-    if (step.conditional_next) {
-      for (const handle of Object.keys(step.conditional_next)) {
-        if (step.conditional_next[handle] === oldName) {
-          step.conditional_next[handle] = newName
-        }
-      }
-    }
+async function loadAvailableFlows() {
+  try {
+    const res = await chatbotService.listFlows({ limit: 200 })
+    const list = (res.data as any)?.data?.flows || (res.data as any)?.flows || []
+    availableFlows.value = list.map((f: any) => ({ id: f.id || f.ID, name: f.name || f.Name }))
+  } catch {
+    availableFlows.value = []
   }
-
-  // Move the saved canvas position to the new key so the node doesn't
-  // jump back to the default {x, y} on the next rebuild.
-  const positions = (formData.value.canvas_layout?.node_positions as Record<string, { x: number; y: number }> | undefined) || undefined
-  if (positions && positions[oldName]) {
-    positions[newName] = positions[oldName]
-    delete positions[oldName]
-  }
-
-  selectedStep.value.step_name = newName
-  hasUnsavedChanges.value = true
-}
-
-function addStep(type?: string) {
-  const newOrder = formData.value.steps.length + 1
-  const resolvedType = type || 'text'
-  const step: any = {
-    ...defaultStep,
-    step_name: `step_${newOrder}`,
-    label: defaultLabelForType(resolvedType),
-    step_order: newOrder,
-    input_type: defaultInputTypeForType(resolvedType),
-    message_type: resolvedType,
-  }
-  if (type === 'whatsapp_flow') {
-    step.input_config = { whatsapp_flow_id: '', flow_header: '', flow_cta: '' }
-  }
-  if (type === 'condition') {
-    step.input_config = { expression: '' }
-  }
-  if (type === 'timing') {
-    step.input_config = { schedule: defaultTimingSchedule() }
-  }
-  if (type === 'goto_flow') {
-    step.input_config = { flow_id: '' }
-  }
-  formData.value.steps.push(step)
-  selectedStepIndex.value = formData.value.steps.length - 1
-}
-
-function selectStep(index: number) {
-  selectedStepIndex.value = index
-  // Keep the canvas (FlowChart + its type palette) visible. The user can
-  // change step type or wire connections without losing context; the
-  // WhatsApp preview is accessed explicitly via the Preview button.
-  previewMode.value = 'edit'
-}
-
-function selectStepFromCanvas(index: number) {
-  selectedStepIndex.value = index
-}
-
-function selectFlowSettings() {
-  showFlowSettings.value = true
-  selectedStepIndex.value = null
-  previewMode.value = 'edit'
-}
-
-function openPreview() {
-  showFlowSettings.value = false
-  previewMode.value = 'preview'
-}
-
-function onConnectSteps(sourceStep: string, targetStep: string, sourceHandle: string) {
-  const step = formData.value.steps.find(s => s.step_name === sourceStep)
-  if (!step) return
-
-  if (sourceHandle === 'default') {
-    // Non-button step: set next_step
-    step.next_step = targetStep
-  } else {
-    // Button step: set conditional_next for this button
-    if (!step.conditional_next) step.conditional_next = {}
-    step.conditional_next[sourceHandle] = targetStep
-  }
-  hasUnsavedChanges.value = true
-}
-
-function onUpdateCanvasLayout(layout: Record<string, any>) {
-  formData.value.canvas_layout = layout
-  hasUnsavedChanges.value = true
-}
-
-function onChangeStepType(stepIndex: number, newType: string) {
-  const sorted = [...formData.value.steps].sort((a, b) => a.step_order - b.step_order)
-  const step = sorted[stepIndex]
-  if (!step) return
-
-  const actual = formData.value.steps.find(s => s.step_name === step.step_name)
-  if (!actual) return
-
-  actual.message_type = newType
-  actual.input_type = defaultInputTypeForType(newType)
-
-  // Reset type-specific fields when changing type
-  if (newType !== 'buttons') {
-    actual.buttons = []
-    actual.conditional_next = {}
-  }
-  if (newType !== 'api_fetch') {
-    actual.api_config = { url: '', method: 'GET', headers: {}, body: '', fallback_message: '', response_mapping: {} }
-  }
-  if (newType !== 'transfer') {
-    actual.transfer_config = { team_id: '_general', notes: '' }
-  }
-  if (newType === 'whatsapp_flow') {
-    actual.input_config = { whatsapp_flow_id: '', flow_header: '', flow_cta: '' }
-  }
-  if (newType === 'condition') {
-    actual.input_config = { expression: '' }
-    actual.conditional_next = {}
-  }
-  if (newType === 'timing') {
-    actual.input_config = { schedule: defaultTimingSchedule() }
-    actual.conditional_next = {}
-  }
-  if (newType === 'goto_flow') {
-    actual.input_config = { flow_id: '' }
-    actual.conditional_next = {}
-    actual.next_step = ''
-  }
-  if (newType === 'end') {
-    actual.conditional_next = {}
-    actual.next_step = ''
-  }
-
-  hasUnsavedChanges.value = true
-}
-
-function onDisconnectSteps(sourceStep: string, sourceHandle: string) {
-  const step = formData.value.steps.find(s => s.step_name === sourceStep)
-  if (!step) return
-
-  if (sourceHandle === 'default') {
-    step.next_step = ''
-  } else {
-    if (step.conditional_next) {
-      delete step.conditional_next[sourceHandle]
-    }
-  }
-  hasUnsavedChanges.value = true
-}
-
-function confirmDeleteStep(index: number) {
-  stepToDeleteIndex.value = index
-  deleteStepDialogOpen.value = true
-}
-
-function deleteStep() {
-  if (stepToDeleteIndex.value === null) return
-
-  formData.value.steps.splice(stepToDeleteIndex.value, 1)
-  // Reorder remaining steps
-  formData.value.steps.forEach((step, idx) => {
-    step.step_order = idx + 1
-    if (step.step_name.startsWith('step_')) {
-      step.step_name = `step_${idx + 1}`
-    }
-  })
-
-  // Adjust selection
-  if (selectedStepIndex.value !== null) {
-    if (selectedStepIndex.value >= formData.value.steps.length) {
-      selectedStepIndex.value = formData.value.steps.length > 0 ? formData.value.steps.length - 1 : null
-    } else if (selectedStepIndex.value === stepToDeleteIndex.value) {
-      selectedStepIndex.value = formData.value.steps.length > 0 ? Math.min(stepToDeleteIndex.value, formData.value.steps.length - 1) : null
-    }
-  }
-
-  deleteStepDialogOpen.value = false
-  stepToDeleteIndex.value = null
-}
-
-function updateStepOrders() {
-  formData.value.steps.forEach((step, idx) => {
-    step.step_order = idx + 1
-  })
-}
-
-function setInputType(type: string | number | bigint | Record<string, any> | null) {
-  if (!selectedStep.value || typeof type !== 'string') return
-
-  selectedStep.value.input_type = type
-
-  // Auto-fill selection options from button titles if:
-  // - Input type is 'select'
-  // - Message type is 'buttons'
-  // - Buttons have titles
-  if (type === 'select' && selectedStep.value.message_type === 'buttons') {
-    syncButtonTitlesToOptions()
-  }
-}
-
-// Keep the `select` input type's options in sync with reply-button titles.
-// Wired via the MessageButtonsEditor @change event.
-function syncButtonTitlesToOptions() {
-  if (!selectedStep.value) return
-  if (selectedStep.value.input_type !== 'select') return
-  if (selectedStep.value.message_type !== 'buttons') return
-
-  const buttonTitles = selectedStep.value.buttons
-    ?.filter(btn => btn.title?.trim())
-    .map(btn => btn.title.trim()) || []
-
-  selectedStep.value.input_config = {
-    ...selectedStep.value.input_config,
-    options: buttonTitles
-  }
-}
-
-// Button conditional branching helpers
-function getButtonId(btn: ButtonConfig, index: number): string {
-  // Match backend logic: use btn.id if set, otherwise generate btn_1, btn_2, etc.
-  return btn.id || `btn_${index + 1}`
-}
-
-function getButtonNextStep(buttonId: string): string {
-  const target = selectedStep.value?.conditional_next?.[buttonId]
-  return target || '__default__'
-}
-
-function setButtonNextStep(buttonId: string, targetStep: string | number | bigint | Record<string, any> | null) {
-  if (!selectedStep.value || typeof targetStep !== 'string') return
-  if (!selectedStep.value.conditional_next) {
-    selectedStep.value.conditional_next = {}
-  }
-  // __default__ means no conditional routing (sequential flow)
-  if (targetStep && targetStep !== '__default__') {
-    selectedStep.value.conditional_next[buttonId] = targetStep
-  } else {
-    delete selectedStep.value.conditional_next[buttonId]
-  }
-}
-
-// API header helpers
-function addHeader() {
-  if (!selectedStep.value) return
-  const headerNum = Object.keys(selectedStep.value.api_config.headers).length + 1
-  selectedStep.value.api_config.headers[`Header-${headerNum}`] = ''
-}
-
-function updateHeaderKey(oldKey: string, newKey: string) {
-  if (!selectedStep.value || oldKey === newKey) return
-  const value = selectedStep.value.api_config.headers[oldKey]
-  delete selectedStep.value.api_config.headers[oldKey]
-  selectedStep.value.api_config.headers[newKey] = value
-}
-
-function removeHeader(key: string) {
-  if (!selectedStep.value) return
-  delete selectedStep.value.api_config.headers[key]
-}
-
-// Response mapping helpers
-function addResponseMapping() {
-  if (!selectedStep.value) return
-  const mappingNum = Object.keys(selectedStep.value.api_config.response_mapping).length + 1
-  selectedStep.value.api_config.response_mapping[`var_${mappingNum}`] = ''
-}
-
-function updateResponseMappingKey(oldKey: string, newKey: string) {
-  if (!selectedStep.value || oldKey === newKey) return
-  const value = selectedStep.value.api_config.response_mapping[oldKey]
-  delete selectedStep.value.api_config.response_mapping[oldKey]
-  selectedStep.value.api_config.response_mapping[newKey] = value
-}
-
-function removeResponseMapping(key: string) {
-  if (!selectedStep.value) return
-  delete selectedStep.value.api_config.response_mapping[key]
-}
-
-// Completion webhook header helpers
-function addCompletionHeader() {
-  const headerNum = Object.keys(formData.value.completion_config.headers).length + 1
-  formData.value.completion_config.headers[`Header-${headerNum}`] = ''
-}
-
-function updateCompletionHeaderKey(oldKey: string, newKey: string) {
-  if (oldKey === newKey) return
-  const value = formData.value.completion_config.headers[oldKey]
-  delete formData.value.completion_config.headers[oldKey]
-  formData.value.completion_config.headers[newKey] = value
-}
-
-function removeCompletionHeader(key: string) {
-  delete formData.value.completion_config.headers[key]
-}
-
-// Panel config helpers
-function addPanelSection() {
-  const newId = `section_${Date.now()}`
-  formData.value.panel_config.sections.push({
-    id: newId,
-    label: t('flowBuilder.newSection'),
-    columns: 1,
-    collapsible: true,
-    default_collapsed: false,
-    order: formData.value.panel_config.sections.length + 1,
-    fields: []
-  })
-}
-
-function removePanelSection(index: number) {
-  formData.value.panel_config.sections.splice(index, 1)
-  // Update order
-  formData.value.panel_config.sections.forEach((s, i) => s.order = i + 1)
-}
-
-function addFieldToSection(sectionIndex: number, variableKey: string | number | bigint | Record<string, any> | null) {
-  if (typeof variableKey !== 'string') return
-  const variable = availableVariables.value.find(v => v.key === variableKey)
-  if (!variable) return
-
-  const section = formData.value.panel_config.sections[sectionIndex]
-  if (!section) return
-
-  section.fields.push({
-    key: variableKey,
-    label: variableKey.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase()),
-    order: section.fields.length + 1
-  } as any)
-}
-
-function removeFieldFromSection(sectionIndex: number, fieldIndex: number) {
-  const section = formData.value.panel_config.sections[sectionIndex]
-  if (!section) return
-
-  section.fields.splice(fieldIndex, 1)
-  // Update order
-  section.fields.forEach((f, i) => f.order = i + 1)
 }
 
 async function saveFlow() {
-  if (!formData.value.name.trim()) {
-    toast.error(t('flowBuilder.enterFlowName'))
-    return
-  }
-  if (formData.value.steps.length === 0) {
-    toast.error(t('flowBuilder.addAtLeastOneStep'))
+  if (!name.value.trim()) {
+    toast.error(t('flowBuilder.nameRequired', 'Name is required'))
     return
   }
 
-  // Validate button titles and URLs
-  for (let i = 0; i < formData.value.steps.length; i++) {
-    const step = formData.value.steps[i]
-    if (step.message_type === 'buttons' && step.buttons?.length > 0) {
-      for (const btn of step.buttons) {
-        // Check title
-        if (!btn.title?.trim()) {
-          toast.error(t('flowBuilder.buttonTitleRequired', { step: step.step_name || `Step ${i + 1}` }))
-          selectStep(i)
-          return
-        }
-        // Check URL for URL buttons
-        if (btn.type === 'url') {
-          if (!btn.url?.trim()) {
-            toast.error(t('flowBuilder.urlButtonWithoutUrl', { step: step.step_name || `Step ${i + 1}`, title: btn.title }))
-            selectStep(i)
-            return
-          }
-          // Validate URL format
-          try {
-            new URL(btn.url)
-          } catch {
-            toast.error(t('flowBuilder.invalidUrl', { step: step.step_name || `Step ${i + 1}`, title: btn.title }))
-            selectStep(i)
-            return
-          }
-        }
-        // Check phone number for phone buttons
-        if (btn.type === 'phone') {
-          if (!btn.phone_number?.trim()) {
-            toast.error(t('flowBuilder.phoneButtonWithoutNumber', { step: step.step_name || `Step ${i + 1}`, title: btn.title }))
-            selectStep(i)
-            return
-          }
-        }
-      }
-    }
+  let parsedPanelConfig: Record<string, any> = { sections: [] }
+  try {
+    parsedPanelConfig = JSON.parse(panelConfigJson.value || '{"sections":[]}')
+  } catch {
+    toast.error(t('flowBuilder.invalidPanelConfig', 'Panel config is not valid JSON'))
+    return
   }
 
   isSaving.value = true
   try {
-    // Normalise step names + order before converting to graph.
-    const normalisedSteps = formData.value.steps.map((step, idx) => ({
-      ...step,
-      step_order: idx + 1,
-      step_name: step.step_name || `step_${idx + 1}`
-    }))
-
-    const graph = stepsToGraph(normalisedSteps, formData.value.canvas_layout)
-    if (graph === null) {
-      toast.error(t('flowBuilder.unsupportedV2NodeType', 'This flow uses a step type the backend graph runner does not yet support. Remove or replace it before saving.'))
-      isSaving.value = false
-      return
-    }
-
+    const graph = toGraphPayload()
     const data: Record<string, any> = {
-      name: formData.value.name,
-      description: formData.value.description,
-      trigger_keywords: formData.value.trigger_keywords.split(',').map(k => k.trim()).filter(Boolean),
-      initial_message: formData.value.initial_message,
-      completion_message: formData.value.completion_message,
-      on_complete_action: formData.value.on_complete_action,
-      completion_config: formData.value.on_complete_action === 'webhook' ? formData.value.completion_config : {},
-      panel_config: formData.value.panel_config,
-      enabled: formData.value.enabled,
+      name: name.value,
+      description: description.value,
+      trigger_keywords: triggerKeywords.value.split(',').map((k) => k.trim()).filter(Boolean),
+      initial_message: initialMessage.value,
+      completion_message: completionMessage.value,
+      on_complete_action: onCompleteAction.value,
+      completion_config: onCompleteAction.value === 'webhook' ? completionConfig.value : {},
+      panel_config: parsedPanelConfig,
+      enabled: enabled.value,
       graph,
     }
 
@@ -1068,17 +513,15 @@ async function saveFlow() {
       const response = await chatbotService.createFlow(data)
       const newFlow = response.data.data || response.data
       toast.success(t('common.createdSuccess', { resource: t('resources.Flow') }))
-      // Update URL to edit mode so subsequent saves work correctly
       router.replace(`/chatbot/flows/${newFlow.id}/edit`)
     } else {
-      await chatbotService.updateFlow(flowId.value!, data)
+      await chatbotService.updateFlow(flowId.value, data)
       toast.success(t('common.savedSuccess', { resource: t('resources.Flow') }))
     }
 
     hasUnsavedChanges.value = false
     auditRefreshKey.value++
-    // Stay on page - don't navigate away
-  } catch (error) {
+  } catch {
     toast.error(t('common.failedSave', { resource: t('resources.flow') }))
   } finally {
     isSaving.value = false
@@ -1097,10 +540,47 @@ function confirmCancel() {
   cancelDialogOpen.value = false
   router.push('/chatbot/flows')
 }
+
+// Webhook headers helpers (flow-level completion)
+function addCompletionHeader() {
+  completionConfig.value.headers = { ...(completionConfig.value.headers || {}), '': '' }
+  hasUnsavedChanges.value = true
+}
+
+function updateCompletionHeaderKey(oldKey: string, newKey: string) {
+  if (oldKey === newKey) return
+  const h = { ...(completionConfig.value.headers || {}) }
+  h[newKey] = h[oldKey]
+  delete h[oldKey]
+  completionConfig.value.headers = h
+  hasUnsavedChanges.value = true
+}
+
+function updateCompletionHeaderValue(key: string, value: string) {
+  completionConfig.value.headers = { ...(completionConfig.value.headers || {}), [key]: value }
+  hasUnsavedChanges.value = true
+}
+
+function removeCompletionHeader(key: string) {
+  const h = { ...(completionConfig.value.headers || {}) }
+  delete h[key]
+  completionConfig.value.headers = h
+  hasUnsavedChanges.value = true
+}
+
+// Mark changes from text inputs.
+watch([name, description, enabled, triggerKeywords, initialMessage, completionMessage, onCompleteAction, panelConfigJson], () => {
+  if (!isLoading.value) hasUnsavedChanges.value = true
+})
+
+onMounted(async () => {
+  loadAvailableFlows()
+  await loadFlow()
+})
 </script>
 
 <template>
-  <div class="flex flex-col h-full bg-muted/30">
+  <div class="flex flex-col h-screen bg-muted/30">
     <!-- Header -->
     <header class="border-b bg-background px-4 py-3 flex-shrink-0">
       <div class="flex items-center gap-4">
@@ -1111,31 +591,24 @@ function confirmCancel() {
         <div class="flex-1 flex items-center gap-6">
           <div class="flex items-center gap-2">
             <Label class="text-sm text-muted-foreground whitespace-nowrap">{{ $t('flowBuilder.name') }}</Label>
-            <Input
-              v-model="formData.name"
-              :placeholder="$t('flowBuilder.namePlaceholder')"
-              class="w-48 font-medium"
-            />
+            <Input v-model="name" :placeholder="$t('flowBuilder.namePlaceholder')" class="w-48 font-medium" />
           </div>
           <div class="flex items-center gap-2">
             <Label class="text-sm text-muted-foreground whitespace-nowrap">{{ $t('flowBuilder.description') }}</Label>
-            <Input
-              v-model="formData.description"
-              :placeholder="$t('flowBuilder.optional')"
-              class="w-64"
-            />
+            <Input v-model="description" :placeholder="$t('flowBuilder.optional')" class="w-64" />
           </div>
         </div>
 
         <div class="flex items-center gap-3">
           <div class="flex items-center gap-2">
-            <Switch
-              :checked="formData.enabled"
-              @update:checked="formData.enabled = $event"
-            />
-            <span class="text-sm">{{ formData.enabled ? $t('flowBuilder.enabled') : $t('flowBuilder.disabled') }}</span>
+            <Switch :checked="enabled" @update:checked="enabled = $event" />
+            <span class="text-sm">{{ enabled ? $t('flowBuilder.enabled') : $t('flowBuilder.disabled') }}</span>
           </div>
 
+          <Button variant="outline" size="sm" @click="showPreview = true" :disabled="nodes.length === 0">
+            <Play class="h-4 w-4 mr-1" />
+            {{ $t('flowBuilder.preview', 'Preview') }}
+          </Button>
           <Button variant="outline" @click="handleCancel">{{ $t('flowBuilder.cancel') }}</Button>
           <Button @click="saveFlow" :disabled="isSaving">
             <Save class="h-4 w-4 mr-2" />
@@ -1145,221 +618,112 @@ function confirmCancel() {
       </div>
     </header>
 
-    <!-- Loading state -->
-    <div v-if="isLoading" class="flex-1 flex items-center justify-center">
-      <div class="text-muted-foreground">{{ $t('flowBuilder.loading') }}...</div>
+    <!-- Node palette -->
+    <div class="flex items-center gap-2 px-4 py-2 border-b bg-muted/30 overflow-x-auto shrink-0">
+      <span class="text-xs text-muted-foreground shrink-0">Add node:</span>
+      <Button
+        v-for="p in palette"
+        :key="p.type"
+        variant="outline"
+        size="sm"
+        class="h-7 text-xs gap-1.5 shrink-0"
+        @click="addNodeFromPalette(p.type)"
+      >
+        <div :class="['w-2 h-2 rounded-full', p.color]" />
+        <component :is="p.icon" class="w-3 h-3" />
+        {{ p.label }}
+      </Button>
     </div>
 
-    <!-- Main 3-panel layout -->
-    <div v-else class="flow-builder-panels flex-1 flex overflow-hidden">
-      <!-- Steps Panel (Left) -->
-      <Card
-        data-panel="left"
-        class="flex-shrink-0 rounded-none border-y-0 border-l-0 flex flex-col"
-        :style="{ width: stepsPanelWidth + 'px' }"
-      >
-        <CardHeader class="py-3 px-4 border-b">
-          <div class="flex items-center justify-between">
-            <CardTitle class="text-sm font-medium">{{ $t('flowBuilder.steps') }}</CardTitle>
-            <Button variant="outline" size="sm" @click="addStep">
-              <Plus class="h-4 w-4 mr-1" />
-              {{ $t('flowBuilder.add') }}
-            </Button>
-          </div>
-        </CardHeader>
-        <ScrollArea class="flex-1">
-          <div class="p-2">
-            <!-- Flow Settings Option -->
-            <div
-              :class="[
-                'flex items-center gap-2 p-2 rounded-md cursor-pointer transition-colors mb-2',
-                showFlowSettings ? 'bg-primary/10 border border-primary/20' : 'hover:bg-muted'
-              ]"
-              @click="selectFlowSettings"
-            >
-              <Settings class="h-4 w-4 text-muted-foreground flex-shrink-0" />
-              <div class="flex-1 min-w-0">
-                <span class="text-sm font-medium">{{ $t('flowBuilder.flowSettings') }}</span>
-                <p class="text-xs text-muted-foreground">{{ $t('flowBuilder.messagesWebhook') }}</p>
-              </div>
+    <!-- Main: canvas + right panel -->
+    <div class="flex-1 flex overflow-hidden">
+      <!-- Canvas -->
+      <div class="flex-1 relative">
+        <div v-if="isLoading" class="absolute inset-0 flex items-center justify-center bg-background/80 z-10">
+          <div class="animate-spin rounded-full h-8 w-8 border-b-2 border-primary" />
+        </div>
+        <ErrorState
+          v-else-if="loadError"
+          :title="$t('flowBuilder.loadFailed', 'Failed to load flow')"
+          :description="$t('flowBuilder.loadFailedDesc', 'Try reloading or go back to the flow list.')"
+          class="absolute inset-0 z-10 bg-background"
+        >
+          <template #action>
+            <div class="flex gap-2">
+              <Button variant="outline" size="sm" @click="router.push('/chatbot/flows')">
+                {{ $t('common.goBack', 'Go back') }}
+              </Button>
+              <Button size="sm" @click="loadFlow">
+                {{ $t('common.retry') }}
+              </Button>
             </div>
-
-            <Separator class="my-2" />
-
-            <draggable
-              v-model="formData.steps"
-              item-key="step_name"
-              handle=".drag-handle"
-              class="space-y-2"
-              @end="updateStepOrders"
-            >
-              <template #item="{ element: step, index }">
-                <div>
-                  <div
-                    :class="[
-                      'group flex items-center gap-2 p-2 rounded-md cursor-pointer transition-colors border-l-[3px] shadow-[0_1px_2px_0_rgba(0,0,0,0.06)]',
-                      getStepColor(step.message_type),
-                      selectedStepIndex === index ? 'bg-primary/10' : 'hover:bg-muted'
-                    ]"
-                    @click="selectStep(index)"
-                  >
-                  <GripVertical class="h-4 w-4 text-muted-foreground cursor-grab drag-handle flex-shrink-0" />
-                  <div class="flex-1 min-w-0">
-                    <div class="flex items-center gap-2">
-                      <Badge variant="outline" class="font-mono text-xs px-1.5">{{ index + 1 }}</Badge>
-                      <span class="text-sm font-medium truncate">{{ step.step_name || `Step ${index + 1}` }}</span>
-                    </div>
-                    <div class="flex items-center gap-1 mt-1 text-xs text-muted-foreground">
-                      <component :is="getStepIcon(step.message_type)" class="h-3 w-3" />
-                      <span>{{ getStepLabel(step.message_type) }}</span>
-                    </div>
-                  </div>
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    class="h-7 w-7 opacity-0 group-hover:opacity-100 text-destructive flex-shrink-0"
-                    @click.stop="confirmDeleteStep(index)"
-                  >
-                    <Trash2 class="h-4 w-4" />
-                  </Button>
-                  </div>
-                </div>
-              </template>
-            </draggable>
-
-            <div v-if="formData.steps.length === 0" class="text-center py-8 text-muted-foreground text-sm">
-              {{ $t('flowBuilder.noStepsYet') }}<br />{{ $t('flowBuilder.clickAddToCreate') }}
-            </div>
-          </div>
-        </ScrollArea>
-      </Card>
-
-      <!-- Left Resize Handle -->
-      <div
-        class="w-1 hover:w-1.5 bg-transparent hover:bg-primary/20 cursor-col-resize transition-all flex-shrink-0 group relative"
-        @mousedown="startResizeLeft"
-      >
-        <div class="absolute inset-y-0 -left-1 -right-1"></div>
-        <div class="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-1 h-8 rounded-full bg-border group-hover:bg-primary/40 transition-colors"></div>
+          </template>
+        </ErrorState>
+        <FlowCanvas
+          :node-types="nodeTypes"
+          edge-type="default"
+          @node-click="onNodeClick"
+          @pane-click="onPaneClick"
+          @edge-click="onEdgeClick"
+          @edge-update="onEdgeUpdate"
+          @node-drag-stop="onNodeDragStop"
+        />
       </div>
 
-      <!-- Center Panel -->
-      <div class="flex-1 flex flex-col overflow-hidden">
-        <!-- Flow Chart (when viewing flow settings) -->
-        <template v-if="showFlowSettings">
-          <FlowChart
-            :steps="formData.steps"
-            :selected-step-index="selectedStepIndex"
-            :flow-name="formData.name"
-            :initial-message="formData.initial_message"
-            :completion-message="formData.completion_message"
-            :teams="teams"
-            :canvas-layout="formData.canvas_layout"
-            @select-step="selectStepFromCanvas"
-            @add-step="addStep"
-            @select-flow-settings="selectFlowSettings"
-            @open-preview="openPreview"
-            @connect-steps="onConnectSteps"
-            @disconnect-steps="onDisconnectSteps"
-            @change-step-type="onChangeStepType"
-            @update-canvas-layout="onUpdateCanvasLayout"
+      <!-- Right panel -->
+      <Card class="w-[420px] min-w-0 border-y-0 border-r-0 rounded-none shrink-0 flex flex-col">
+        <!-- Node properties when a node is selected -->
+        <div v-if="selectedChatNode" class="flex-1 overflow-y-auto">
+          <ChatNodeProperties
+            :node="selectedChatNode"
+            :current-flow-id="flowId"
+            :available-flows="availableFlows"
+            @update:node="onUpdateNode"
+            @delete="requestDeleteSelectedNode"
           />
-        </template>
+        </div>
 
-        <!-- Step Preview (when editing a step) -->
-        <template v-else>
-          <FlowPreviewPanel
-            :steps="formData.steps as any"
-            :flow-data="formData as any"
-            :selected-step="selectedStep as any"
-            :selected-step-index="selectedStepIndex"
-            :list-picker-open="listPickerOpen"
-            :teams="teams"
-            :initial-mode="previewMode"
-            :graph="previewGraph"
-            @update:list-picker-open="listPickerOpen = $event"
-          />
-        </template>
-      </div>
-
-      <!-- Right Resize Handle -->
-      <div
-        class="w-1 hover:w-1.5 bg-transparent hover:bg-primary/20 cursor-col-resize transition-all flex-shrink-0 group relative"
-        @mousedown="startResizeRight"
-      >
-        <div class="absolute inset-y-0 -left-1 -right-1"></div>
-        <div class="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-1 h-8 rounded-full bg-border group-hover:bg-primary/40 transition-colors"></div>
-      </div>
-
-      <!-- Properties Panel (Right) -->
-      <Card
-        data-panel="right"
-        class="flex-shrink-0 rounded-none border-y-0 border-r-0 flex flex-col"
-        :style="{ width: propertiesPanelWidth + 'px' }"
-      >
-        <CardHeader class="py-3 px-4 border-b">
-          <CardTitle class="text-sm font-medium">
-            {{ (showFlowSettings && selectedStepIndex === null) ? $t('flowBuilder.flowSettings') : $t('flowBuilder.stepProperties') }}
-          </CardTitle>
-        </CardHeader>
-
-        <!-- Flow Settings (only when no step selected) -->
-        <ScrollArea class="flex-1" v-if="showFlowSettings && selectedStepIndex === null">
+        <!-- Flow settings when nothing is selected -->
+        <ScrollArea v-else class="flex-1">
           <div class="p-4 space-y-4">
-            <!-- Trigger Keywords -->
+            <CardHeader class="p-0 pb-2">
+              <CardTitle class="text-sm font-medium">{{ $t('flowBuilder.flowSettings') }}</CardTitle>
+            </CardHeader>
+
+            <!-- Trigger keywords -->
             <div class="space-y-1.5">
               <Label class="text-xs">{{ $t('flowBuilder.triggerKeywords') }}</Label>
-              <Input
-                v-model="formData.trigger_keywords"
-                :placeholder="$t('flowBuilder.triggerKeywordsPlaceholder')"
-                class="h-8 text-xs"
-              />
+              <Input v-model="triggerKeywords" :placeholder="$t('flowBuilder.triggerKeywordsPlaceholder')" class="h-8 text-xs" />
               <p class="text-[10px] text-muted-foreground">{{ $t('flowBuilder.triggerKeywordsHint') }}</p>
             </div>
 
             <Separator />
 
-            <!-- Initial Message -->
+            <!-- Initial message -->
             <div class="space-y-1.5">
               <Label class="text-xs">{{ $t('flowBuilder.initialMessage') }}</Label>
-              <Textarea
-                v-model="formData.initial_message"
-                :placeholder="$t('flowBuilder.initialMessagePlaceholder')"
-                :rows="3"
-                class="text-xs"
-              />
-              <p class="text-[10px] text-muted-foreground">{{ $t('flowBuilder.initialMessageHint') }}</p>
+              <Textarea v-model="initialMessage" :placeholder="$t('flowBuilder.initialMessagePlaceholder')" :rows="2" class="text-xs" />
             </div>
 
-            <Separator />
-
-            <!-- Completion Message -->
+            <!-- Completion message -->
             <div class="space-y-1.5">
               <Label class="text-xs">{{ $t('flowBuilder.completionMessage') }}</Label>
-              <Textarea
-                v-model="formData.completion_message"
-                :placeholder="$t('flowBuilder.completionMessagePlaceholder')"
-                :rows="3"
-                class="text-xs"
-              />
-              <p class="text-[10px] text-muted-foreground">{{ $t('flowBuilder.completionMessageHint') }}</p>
+              <Textarea v-model="completionMessage" :placeholder="$t('flowBuilder.completionMessagePlaceholder')" :rows="2" class="text-xs" />
             </div>
 
             <Separator />
 
-            <!-- On Complete Action -->
-            <Collapsible v-model:open="webhookHeadersOpen">
+            <!-- On complete action -->
+            <Collapsible v-model:open="completionConfigOpen">
               <CollapsibleTrigger class="flex items-center justify-between w-full py-1 text-sm font-medium">
                 {{ $t('flowBuilder.onCompletion') }}
-                <component :is="webhookHeadersOpen ? ChevronDown : ChevronRight" class="h-4 w-4" />
+                <component :is="completionConfigOpen ? ChevronDown : ChevronRight" class="h-4 w-4" />
               </CollapsibleTrigger>
               <CollapsibleContent class="pt-3 space-y-3">
                 <div class="space-y-1.5">
                   <Label class="text-xs">{{ $t('flowBuilder.action') }}</Label>
-                  <Select v-model="formData.on_complete_action">
-                    <SelectTrigger class="h-8 text-xs">
-                      <SelectValue :placeholder="$t('flowBuilder.selectAction')" />
-                    </SelectTrigger>
+                  <Select v-model="onCompleteAction">
+                    <SelectTrigger class="h-8 text-xs"><SelectValue /></SelectTrigger>
                     <SelectContent>
                       <SelectItem value="none">{{ $t('flowBuilder.noAction') }}</SelectItem>
                       <SelectItem value="webhook">{{ $t('flowBuilder.sendToWebhook') }}</SelectItem>
@@ -1367,34 +731,26 @@ function confirmCancel() {
                   </Select>
                 </div>
 
-                <!-- Webhook Configuration -->
-                <template v-if="formData.on_complete_action === 'webhook'">
+                <template v-if="onCompleteAction === 'webhook'">
                   <div class="space-y-3 p-3 border rounded-lg bg-muted/30">
                     <div class="flex gap-2">
-                      <div class="w-16">
+                      <div class="w-20">
                         <Label class="text-[10px]">{{ $t('flowBuilder.method') }}</Label>
-                        <Select v-model="formData.completion_config.method">
-                          <SelectTrigger class="h-7 text-xs">
-                            <SelectValue />
-                          </SelectTrigger>
+                        <Select v-model="completionConfig.method">
+                          <SelectTrigger class="h-7 text-xs"><SelectValue /></SelectTrigger>
                           <SelectContent>
-                            <SelectItem v-for="method in httpMethods" :key="method" :value="method">
-                              {{ method }}
-                            </SelectItem>
+                            <SelectItem value="GET">GET</SelectItem>
+                            <SelectItem value="POST">POST</SelectItem>
+                            <SelectItem value="PUT">PUT</SelectItem>
+                            <SelectItem value="PATCH">PATCH</SelectItem>
                           </SelectContent>
                         </Select>
                       </div>
                       <div class="flex-1">
-                        <Label class="text-[10px]">{{ $t('flowBuilder.url') }}</Label>
-                        <Input
-                          v-model="formData.completion_config.url"
-                          :placeholder="$t('flowBuilder.urlPlaceholder')"
-                          class="h-7 text-xs"
-                        />
+                        <Label class="text-[10px]">URL</Label>
+                        <Input v-model="completionConfig.url" placeholder="https://example.com/hook" class="h-7 text-xs font-mono" />
                       </div>
                     </div>
-
-                    <!-- Headers -->
                     <div class="space-y-2">
                       <div class="flex items-center justify-between">
                         <Label class="text-[10px]">{{ $t('flowBuilder.headers') }}</Label>
@@ -1402,32 +758,27 @@ function confirmCancel() {
                           <Plus class="h-3 w-3" />
                         </Button>
                       </div>
-                      <div v-for="(_value, key) in formData.completion_config.headers" :key="key" class="flex gap-1">
+                      <div v-for="(val, key) in completionConfig.headers" :key="key" class="flex gap-1">
                         <Input
-                          :model-value="key"
-                          :placeholder="$t('flowBuilder.keyPlaceholder')"
-                          class="h-6 text-[10px] flex-1"
-                          @update:model-value="updateCompletionHeaderKey(key as string, $event)"
-                        />
-                        <Input
-                          v-model="formData.completion_config.headers[key as string]"
-                          :placeholder="$t('flowBuilder.valuePlaceholder')"
+                          :model-value="String(key)"
+                          @update:model-value="(v: string) => updateCompletionHeaderKey(String(key), v)"
+                          placeholder="Key"
                           class="h-6 text-[10px] flex-1"
                         />
-                        <Button variant="ghost" size="icon" class="h-6 w-6" @click="removeCompletionHeader(key as string)">
+                        <Input
+                          :model-value="String(val)"
+                          @update:model-value="(v: string) => updateCompletionHeaderValue(String(key), v)"
+                          placeholder="Value"
+                          class="h-6 text-[10px] flex-1"
+                        />
+                        <Button variant="ghost" size="icon" class="h-5 w-5" @click="removeCompletionHeader(String(key))">
                           <Trash2 class="h-3 w-3 text-destructive" />
                         </Button>
                       </div>
                     </div>
-
                     <div class="space-y-1">
-                      <Label class="text-[10px]">{{ $t('flowBuilder.bodyOptional') }}</Label>
-                      <Textarea
-                        v-model="formData.completion_config.body"
-                        :placeholder="$t('flowBuilder.jsonBodyExample')"
-                        :rows="2"
-                        class="text-[10px] font-mono"
-                      />
+                      <Label class="text-[10px]">Body</Label>
+                      <Textarea v-model="completionConfig.body" :rows="2" class="text-[10px] font-mono" />
                     </div>
                   </div>
                 </template>
@@ -1436,642 +787,54 @@ function confirmCancel() {
 
             <Separator />
 
-            <!-- Panel Display Settings -->
+            <!-- Panel config (raw JSON for now) -->
             <Collapsible v-model:open="panelConfigOpen">
               <CollapsibleTrigger class="flex items-center justify-between w-full py-1 text-sm font-medium">
-                {{ $t('flowBuilder.panelDisplaySettings') }}
+                Contact panel config (JSON)
                 <component :is="panelConfigOpen ? ChevronDown : ChevronRight" class="h-4 w-4" />
               </CollapsibleTrigger>
-              <CollapsibleContent class="pt-3 space-y-3">
-                <p class="text-[10px] text-muted-foreground">
-                  {{ $t('flowBuilder.panelConfigHint') }}
-                </p>
-
-                <!-- Available Variables -->
-                <div v-if="availableVariables.length > 0" class="space-y-2">
-                  <Label class="text-xs">{{ $t('flowBuilder.availableVariables') }}</Label>
-                  <div class="flex flex-wrap gap-1">
-                    <Badge
-                      v-for="variable in unassignedVariables"
-                      :key="variable.key"
-                      variant="outline"
-                      class="text-[10px] cursor-pointer hover:bg-primary/10"
-                      :title="`From ${variable.source} in ${variable.stepName}`"
-                    >
-                      {{ variable.key }}
-                    </Badge>
-                    <span v-if="unassignedVariables.length === 0" class="text-[10px] text-muted-foreground">
-                      {{ $t('flowBuilder.allVariablesAssigned') }}
-                    </span>
-                  </div>
-                </div>
-
-                <div v-else class="text-[10px] text-muted-foreground p-2 border rounded bg-muted/30">
-                  {{ $t('flowBuilder.noVariablesAvailable') }}
-                </div>
-
-                <!-- Sections -->
-                <div class="space-y-2">
-                  <div class="flex items-center justify-between">
-                    <Label class="text-xs">{{ $t('flowBuilder.sections') }}</Label>
-                    <Button variant="outline" size="sm" class="h-6 text-xs" @click="addPanelSection">
-                      <Plus class="h-3 w-3 mr-1" />
-                      {{ $t('flowBuilder.addSection') }}
-                    </Button>
-                  </div>
-
-                  <div v-if="formData.panel_config.sections.length === 0" class="text-[10px] text-muted-foreground p-2 border rounded bg-muted/30 text-center">
-                    {{ $t('flowBuilder.noSectionsConfigured') }}
-                  </div>
-
-                  <div v-for="(section, sectionIdx) in formData.panel_config.sections" :key="section.id" class="border rounded-md p-2 space-y-2 bg-muted/20">
-                    <div class="flex items-center gap-2">
-                      <Input
-                        v-model="section.label"
-                        :placeholder="$t('flowBuilder.sectionLabelPlaceholder')"
-                        class="h-7 text-xs flex-1"
-                      />
-                      <Button variant="ghost" size="icon" class="h-7 w-7" @click="removePanelSection(sectionIdx)">
-                        <Trash2 class="h-3 w-3 text-destructive" />
-                      </Button>
-                    </div>
-
-                    <div class="flex items-center gap-3 text-[10px]">
-                      <div class="flex items-center gap-1">
-                        <span class="text-muted-foreground">{{ $t('flowBuilder.columns') }}:</span>
-                        <Select v-model="section.columns">
-                          <SelectTrigger class="h-6 w-14 text-[10px]">
-                            <SelectValue />
-                          </SelectTrigger>
-                          <SelectContent>
-                            <SelectItem :value="1">1</SelectItem>
-                            <SelectItem :value="2">2</SelectItem>
-                          </SelectContent>
-                        </Select>
-                      </div>
-                      <div class="flex items-center gap-1">
-                        <Switch
-                          :checked="section.collapsible"
-                          @update:checked="section.collapsible = $event"
-                          class="scale-75"
-                        />
-                        <span class="text-muted-foreground">{{ $t('flowBuilder.collapsible') }}</span>
-                      </div>
-                      <div v-if="section.collapsible" class="flex items-center gap-1">
-                        <Switch
-                          :checked="section.default_collapsed"
-                          @update:checked="section.default_collapsed = $event"
-                          class="scale-75"
-                        />
-                        <span class="text-muted-foreground">{{ $t('flowBuilder.collapsed') }}</span>
-                      </div>
-                    </div>
-
-                    <!-- Fields in section -->
-                    <div class="space-y-1">
-                      <div class="flex items-center justify-between">
-                        <span class="text-[10px] text-muted-foreground">{{ $t('flowBuilder.fields') }}:</span>
-                        <Select @update:model-value="addFieldToSection(sectionIdx, $event)">
-                          <SelectTrigger class="h-6 w-24 text-[10px]">
-                            <SelectValue :placeholder="$t('flowBuilder.addFieldPlaceholder')" />
-                          </SelectTrigger>
-                          <SelectContent>
-                            <SelectItem
-                              v-for="variable in unassignedVariables"
-                              :key="variable.key"
-                              :value="variable.key"
-                            >
-                              {{ variable.key }}
-                            </SelectItem>
-                            <div v-if="unassignedVariables.length === 0" class="p-2 text-[10px] text-muted-foreground">
-                              {{ $t('flowBuilder.noVariablesAvailable') }}
-                            </div>
-                          </SelectContent>
-                        </Select>
-                      </div>
-
-                      <div v-if="section.fields.length === 0" class="text-[10px] text-muted-foreground text-center py-1">
-                        {{ $t('flowBuilder.noFieldsAdded') }}
-                      </div>
-
-                      <div v-for="(field, fieldIdx) in section.fields" :key="field.key" class="bg-background rounded p-2 space-y-2">
-                        <div class="flex items-center gap-1">
-                          <Badge variant="secondary" class="text-[10px] font-mono">{{ field.key }}</Badge>
-                          <Input
-                            v-model="field.label"
-                            :placeholder="$t('flowBuilder.displayLabel')"
-                            class="h-6 text-[10px] flex-1"
-                          />
-                          <Button variant="ghost" size="icon" class="h-6 w-6" @click="removeFieldFromSection(sectionIdx, fieldIdx)">
-                            <Trash2 class="h-3 w-3 text-destructive" />
-                          </Button>
-                        </div>
-                        <div class="flex items-center gap-2">
-                          <Select v-model="field.display_type">
-                            <SelectTrigger class="h-6 text-[10px] w-20">
-                              <SelectValue :placeholder="$t('flowBuilder.displayType')" />
-                            </SelectTrigger>
-                            <SelectContent>
-                              <SelectItem value="text">{{ $t('flowBuilder.textType') }}</SelectItem>
-                              <SelectItem value="badge">{{ $t('flowBuilder.badgeType') }}</SelectItem>
-                              <SelectItem value="tag">{{ $t('flowBuilder.tagType') }}</SelectItem>
-                            </SelectContent>
-                          </Select>
-                          <Select v-model="field.color" :disabled="field.display_type === 'text'">
-                            <SelectTrigger class="h-6 text-[10px] flex-1">
-                              <SelectValue :placeholder="$t('flowBuilder.colorLabel')" />
-                            </SelectTrigger>
-                            <SelectContent>
-                              <SelectItem value="default">{{ $t('flowBuilder.defaultColor') }}</SelectItem>
-                              <SelectItem value="success">{{ $t('flowBuilder.successColor') }}</SelectItem>
-                              <SelectItem value="warning">{{ $t('flowBuilder.warningColor') }}</SelectItem>
-                              <SelectItem value="error">{{ $t('flowBuilder.errorColor') }}</SelectItem>
-                              <SelectItem value="info">{{ $t('flowBuilder.infoColor') }}</SelectItem>
-                            </SelectContent>
-                          </Select>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                </div>
+              <CollapsibleContent class="pt-3">
+                <Textarea v-model="panelConfigJson" :rows="8" class="text-[10px] font-mono" />
+                <p class="text-[10px] text-muted-foreground mt-1">Advanced. Raw <code>panel_config</code> JSON.</p>
               </CollapsibleContent>
             </Collapsible>
 
-            <!-- Metadata -->
             <template v-if="!isNewFlow">
               <Separator />
               <MetadataPanel
-                :created-at="formData.created_at"
-                :updated-at="formData.updated_at"
-                :created-by-name="formData.created_by_name"
-                :updated-by-name="formData.updated_by_name"
+                :created-at="createdAt"
+                :updated-at="updatedAt"
+                :created-by-name="createdByName"
+                :updated-by-name="updatedByName"
               />
+              <Separator />
+              <AuditLogPanel :key="auditRefreshKey" resource-type="chatbot_flow" :resource-id="flowId" />
             </template>
           </div>
         </ScrollArea>
-
-        <!-- Step Properties -->
-        <ScrollArea class="flex-1" v-else-if="selectedStep">
-          <div class="p-4 space-y-4">
-            <!-- Basic Properties -->
-            <div class="space-y-3">
-              <div class="space-y-1.5">
-                <Label class="text-xs">Label</Label>
-                <Input v-model="selectedStep.label" placeholder="Shown on the canvas" class="h-8" />
-              </div>
-              <div class="space-y-1.5">
-                <Label class="text-xs">{{ $t('flowBuilder.stepName') }}</Label>
-                <Input
-                  :model-value="selectedStep.step_name"
-                  @update:model-value="(v) => renameSelectedStep(String(v ?? ''))"
-                  :placeholder="$t('flowBuilder.stepNamePlaceholder')"
-                  class="h-8"
-                />
-                <p class="text-xs text-muted-foreground">Internal identifier; referenced by edges. Renames cascade to canvas position and incoming connections.</p>
-              </div>
-              <div v-if="selectedStep.message_type !== 'end' && selectedStep.message_type !== 'condition' && selectedStep.message_type !== 'timing' && selectedStep.message_type !== 'transfer' && selectedStep.message_type !== 'goto_flow'" class="space-y-1.5">
-                <Label class="text-xs">{{ $t('flowBuilder.storeResponseAs') }}</Label>
-                <Input v-model="selectedStep.store_as" :placeholder="$t('flowBuilder.variableNamePlaceholder')" class="h-8" />
-                <p class="text-xs text-muted-foreground">{{ $t('flowBuilder.storeResponseHint') }}</p>
-              </div>
-            </div>
-
-            <Separator />
-
-            <!-- Message Configuration -->
-            <Collapsible v-model:open="messagesOpen">
-              <CollapsibleTrigger class="flex items-center justify-between w-full py-1 text-sm font-medium">
-                {{ $t('flowBuilder.message') }}
-                <component :is="messagesOpen ? ChevronDown : ChevronRight" class="h-4 w-4" />
-              </CollapsibleTrigger>
-              <CollapsibleContent class="pt-3 space-y-3">
-                <!-- Text / Buttons / End Message -->
-                <template v-if="selectedStep.message_type === 'text' || selectedStep.message_type === 'buttons' || selectedStep.message_type === 'end'">
-                  <div class="space-y-1.5">
-                    <Label class="text-xs">{{ selectedStep.message_type === 'end' ? 'Final message (optional)' : $t('flowBuilder.messageText') }}</Label>
-                    <Textarea
-                      v-model="selectedStep.message"
-                      :placeholder="selectedStep.message_type === 'end' ? 'Sent when the flow ends. Leave blank for silent terminal.' : $t('flowBuilder.messagePlaceholder')"
-                      :rows="3"
-                      class="text-sm"
-                    />
-                    <p class="text-xs text-muted-foreground">
-                      {{ $t('flowBuilder.dynamicValuesHint') }}
-                    </p>
-                  </div>
-                </template>
-
-                <!-- Buttons Configuration -->
-                <template v-if="selectedStep.message_type === 'buttons'">
-                  <MessageButtonsEditor
-                    :buttons="selectedStep.buttons"
-                    show-id-field
-                    @update:buttons="selectedStep.buttons = $event"
-                    @change="syncButtonTitlesToOptions"
-                  >
-                    <template #button-extra="{ button, index }">
-                      <div v-if="!button.type || button.type === 'reply'" class="flex items-center gap-2">
-                        <Label class="text-xs text-muted-foreground whitespace-nowrap">{{ $t('flowBuilder.goTo') }}:</Label>
-                        <Select
-                          :model-value="getButtonNextStep(getButtonId(button, index))"
-                          @update:model-value="setButtonNextStep(getButtonId(button, index), $event)"
-                        >
-                          <SelectTrigger class="h-7 text-xs flex-1">
-                            <SelectValue :placeholder="$t('flowBuilder.nextStepSequential')" />
-                          </SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="__default__">{{ $t('flowBuilder.nextStepSequential') }}</SelectItem>
-                            <SelectItem
-                              v-for="step in stepsWithNames"
-                              :key="`goto-${step.step_name}`"
-                              :value="step.step_name"
-                            >
-                              {{ step.step_name }}
-                            </SelectItem>
-                          </SelectContent>
-                        </Select>
-                      </div>
-                    </template>
-                  </MessageButtonsEditor>
-                  <p class="text-[10px] text-muted-foreground">
-                    {{ $t('flowBuilder.buttonsHint') }}
-                  </p>
-                </template>
-
-                <!-- API Fetch Configuration -->
-                <template v-if="selectedStep.message_type === 'api_fetch'">
-                  <div class="space-y-3">
-                    <div class="flex gap-2">
-                      <div class="w-20">
-                        <Label class="text-xs">{{ $t('flowBuilder.method') }}</Label>
-                        <Select v-model="selectedStep.api_config.method">
-                          <SelectTrigger class="h-8 text-xs">
-                            <SelectValue />
-                          </SelectTrigger>
-                          <SelectContent>
-                            <SelectItem v-for="m in httpMethods" :key="m" :value="m">{{ m }}</SelectItem>
-                          </SelectContent>
-                        </Select>
-                      </div>
-                      <div class="flex-1">
-                        <Label class="text-xs">{{ $t('flowBuilder.url') }}</Label>
-                        <Input v-model="selectedStep.api_config.url" :placeholder="$t('flowBuilder.urlPlaceholder')" class="h-8 text-xs" />
-                      </div>
-                    </div>
-
-                    <!-- Headers -->
-                    <div class="space-y-2">
-                      <div class="flex items-center justify-between">
-                        <Label class="text-xs">{{ $t('flowBuilder.headers') }}</Label>
-                        <Button variant="ghost" size="sm" class="h-6 text-xs" @click="addHeader">
-                          <Plus class="h-3 w-3" />
-                        </Button>
-                      </div>
-                      <div v-for="(_value, key) in selectedStep.api_config.headers" :key="key" class="flex gap-1">
-                        <Input
-                          :model-value="key"
-                          :placeholder="$t('flowBuilder.keyPlaceholder')"
-                          class="h-7 text-xs flex-1"
-                          @update:model-value="updateHeaderKey(key as string, $event)"
-                        />
-                        <Input
-                          v-model="selectedStep.api_config.headers[key as string]"
-                          :placeholder="$t('flowBuilder.valuePlaceholder')"
-                          class="h-7 text-xs flex-1"
-                        />
-                        <Button variant="ghost" size="icon" class="h-7 w-7" @click="removeHeader(key as string)">
-                          <Trash2 class="h-3 w-3 text-destructive" />
-                        </Button>
-                      </div>
-                    </div>
-
-                    <!-- Body -->
-                    <div v-if="selectedStep.api_config.method !== 'GET'" class="space-y-1.5">
-                      <Label class="text-xs">{{ $t('flowBuilder.requestBody') }}</Label>
-                      <Textarea v-model="selectedStep.api_config.body" :rows="2" class="text-xs font-mono" />
-                    </div>
-
-                    <!-- Response Mapping -->
-                    <div class="space-y-2">
-                      <div class="flex items-center justify-between">
-                        <Label class="text-xs">{{ $t('flowBuilder.responseMapping') }}</Label>
-                        <Button variant="ghost" size="sm" class="h-6 text-xs" @click="addResponseMapping">
-                          <Plus class="h-3 w-3" />
-                        </Button>
-                      </div>
-                      <div v-for="(_value, key) in selectedStep.api_config.response_mapping" :key="key" class="flex gap-1 items-center">
-                        <Input
-                          :model-value="key"
-                          :placeholder="$t('flowBuilder.variable')"
-                          class="h-7 text-xs flex-1"
-                          @update:model-value="updateResponseMappingKey(key as string, $event)"
-                        />
-                        <span class="text-xs text-muted-foreground">=</span>
-                        <Input
-                          v-model="selectedStep.api_config.response_mapping[key as string]"
-                          :placeholder="$t('flowBuilder.dataPathPlaceholder')"
-                          class="h-7 text-xs flex-1"
-                        />
-                        <Button variant="ghost" size="icon" class="h-7 w-7" @click="removeResponseMapping(key as string)">
-                          <Trash2 class="h-3 w-3 text-destructive" />
-                        </Button>
-                      </div>
-                    </div>
-
-                    <!-- Message Template -->
-                    <div class="space-y-1.5">
-                      <Label class="text-xs">{{ $t('flowBuilder.messageTemplate') }}</Label>
-                      <Textarea
-                        v-model="selectedStep.message"
-                        :placeholder="$t('flowBuilder.messageTemplatePlaceholder')"
-                        :rows="4"
-                        class="text-xs"
-                      />
-                    </div>
-
-                    <!-- Fallback -->
-                    <div class="space-y-1.5">
-                      <Label class="text-xs">{{ $t('flowBuilder.fallbackMessage') }}</Label>
-                      <Input v-model="selectedStep.api_config.fallback_message" class="h-8 text-xs" />
-                    </div>
-                  </div>
-                </template>
-
-                <!-- WhatsApp Flow Configuration -->
-                <template v-if="selectedStep.message_type === 'whatsapp_flow'">
-                  <div class="space-y-3">
-                    <div class="space-y-1.5">
-                      <Label class="text-xs">{{ $t('flowBuilder.whatsappFlow') }}</Label>
-                      <Select v-model="selectedStep.input_config.whatsapp_flow_id">
-                        <SelectTrigger class="h-8 text-xs">
-                          <SelectValue :placeholder="whatsappFlows.length === 0 ? $t('flowBuilder.noFlowsAvailable') : $t('flowBuilder.selectFlow')" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem v-for="wf in whatsappFlows" :key="wf.id" :value="wf.meta_flow_id">
-                            {{ wf.name }}
-                          </SelectItem>
-                        </SelectContent>
-                      </Select>
-                    </div>
-                    <div class="space-y-1.5">
-                      <Label class="text-xs">{{ $t('flowBuilder.headerText') }}</Label>
-                      <Input v-model="selectedStep.input_config.flow_header" class="h-8 text-xs" />
-                    </div>
-                    <div class="space-y-1.5">
-                      <Label class="text-xs">{{ $t('flowBuilder.bodyText') }}</Label>
-                      <Textarea v-model="selectedStep.message" :rows="2" class="text-xs" />
-                    </div>
-                    <div class="space-y-1.5">
-                      <Label class="text-xs">{{ $t('flowBuilder.buttonText') }}</Label>
-                      <Input v-model="selectedStep.input_config.flow_cta" :placeholder="$t('flowBuilder.buttonTextPlaceholder')" maxlength="20" class="h-8 text-xs" />
-                    </div>
-                  </div>
-                </template>
-
-                <!-- Condition Configuration (free-form expression) -->
-                <template v-if="selectedStep.message_type === 'condition'">
-                  <div class="space-y-2">
-                    <Label class="text-xs">Expression</Label>
-                    <Textarea
-                      :model-value="(selectedStep.input_config?.expression as string) || ''"
-                      @update:model-value="(v) => { if (selectedStep) selectedStep.input_config = { ...selectedStep.input_config, expression: v } }"
-                      :rows="3"
-                      class="font-mono text-xs"
-                      placeholder='status == "active" and (tier == "premium" or amount > 100)'
-                    />
-                    <p class="text-xs text-muted-foreground">
-                      Boolean expression evaluated against session variables. Supports <code>and</code>, <code>or</code>, <code>not</code>, parentheses, comparisons (<code>==</code>, <code>!=</code>, <code>&lt;</code>, <code>&gt;</code>), and string helpers (<code>contains</code>, <code>startsWith</code>). See expr-lang docs.
-                    </p>
-                    <p class="text-xs text-muted-foreground">
-                      Connect the True / False handles below the node to choose the next step for each branch.
-                    </p>
-                  </div>
-                </template>
-
-                <!-- Timing Configuration -->
-                <template v-if="selectedStep.message_type === 'timing'">
-                  <div class="space-y-2">
-                    <Label class="text-xs">Business hours</Label>
-                    <div
-                      v-for="(day, idx) in (selectedStep.input_config?.schedule as any[]) || []"
-                      :key="day.day"
-                      class="flex items-center gap-2"
-                    >
-                      <Switch
-                        :checked="!!day.enabled"
-                        @update:checked="(v) => { if (selectedStep && selectedStep.input_config) { const sched = [...((selectedStep.input_config.schedule as any[]) || [])]; sched[idx] = { ...sched[idx], enabled: v }; selectedStep.input_config = { ...selectedStep.input_config, schedule: sched } } }"
-                      />
-                      <span class="text-xs w-20 capitalize">{{ day.day }}</span>
-                      <Input
-                        :model-value="day.start_time || '09:00'"
-                        type="time"
-                        :disabled="!day.enabled"
-                        class="h-7 text-xs flex-1"
-                        @update:model-value="(v) => { if (selectedStep && selectedStep.input_config) { const sched = [...((selectedStep.input_config.schedule as any[]) || [])]; sched[idx] = { ...sched[idx], start_time: v }; selectedStep.input_config = { ...selectedStep.input_config, schedule: sched } } }"
-                      />
-                      <span class="text-xs">–</span>
-                      <Input
-                        :model-value="day.end_time || '18:00'"
-                        type="time"
-                        :disabled="!day.enabled"
-                        class="h-7 text-xs flex-1"
-                        @update:model-value="(v) => { if (selectedStep && selectedStep.input_config) { const sched = [...((selectedStep.input_config.schedule as any[]) || [])]; sched[idx] = { ...sched[idx], end_time: v }; selectedStep.input_config = { ...selectedStep.input_config, schedule: sched } } }"
-                      />
-                    </div>
-                    <p class="text-xs text-muted-foreground">
-                      Connect the Open / Closed handles to route based on whether the inbound arrives within business hours.
-                    </p>
-                  </div>
-                </template>
-
-                <!-- Goto Flow Configuration -->
-                <template v-if="selectedStep.message_type === 'goto_flow'">
-                  <div class="space-y-2">
-                    <Label class="text-xs">Target flow</Label>
-                    <Select
-                      :model-value="(selectedStep.input_config?.flow_id as string) || ''"
-                      @update:model-value="(v) => { if (selectedStep) selectedStep.input_config = { ...selectedStep.input_config, flow_id: v } }"
-                    >
-                      <SelectTrigger class="h-8 text-xs">
-                        <SelectValue placeholder="Pick a flow" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem v-if="otherFlows.length === 0" value="_none" disabled>No other flows available</SelectItem>
-                        <SelectItem v-for="f in otherFlows" :key="f.id" :value="f.id">
-                          {{ f.name }}
-                        </SelectItem>
-                      </SelectContent>
-                    </Select>
-                    <p class="text-xs text-muted-foreground">
-                      Session variables carry forward to the target flow. The target must belong to the same WhatsApp account.
-                    </p>
-                  </div>
-                </template>
-
-                <!-- Transfer Configuration -->
-                <template v-if="selectedStep.message_type === 'transfer'">
-                  <div class="space-y-3">
-                    <div class="space-y-1.5">
-                      <Label class="text-xs">{{ $t('flowBuilder.transferMessage') }}</Label>
-                      <Textarea v-model="selectedStep.message" :rows="2" class="text-xs" />
-                    </div>
-                    <div class="space-y-1.5">
-                      <Label class="text-xs">{{ $t('flowBuilder.assignToTeam') }}</Label>
-                      <Select v-model="selectedStep.transfer_config.team_id">
-                        <SelectTrigger class="h-8 text-xs">
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="_general">{{ $t('agentTransfers.generalQueue') }}</SelectItem>
-                          <SelectItem v-for="team in teams" :key="team.id" :value="team.id">
-                            {{ team.name }}
-                          </SelectItem>
-                        </SelectContent>
-                      </Select>
-                    </div>
-                    <div class="space-y-1.5">
-                      <Label class="text-xs">{{ $t('flowBuilder.transferNotes') }}</Label>
-                      <Input v-model="selectedStep.transfer_config.notes" class="h-8 text-xs" />
-                    </div>
-                  </div>
-                </template>
-              </CollapsibleContent>
-            </Collapsible>
-
-            <Separator v-if="showInputSection" />
-
-            <!-- Input Configuration (not for transfer) -->
-            <Collapsible v-if="showInputSection" v-model:open="inputOpen">
-              <CollapsibleTrigger class="flex items-center justify-between w-full py-1 text-sm font-medium">
-                {{ $t('flowBuilder.input') }}
-                <component :is="inputOpen ? ChevronDown : ChevronRight" class="h-4 w-4" />
-              </CollapsibleTrigger>
-              <CollapsibleContent class="pt-3 space-y-3">
-                <div class="space-y-1.5">
-                  <Label class="text-xs">{{ $t('flowBuilder.expectedInputType') }}</Label>
-                  <Select
-                    :model-value="selectedStep.input_type"
-                    @update:model-value="setInputType($event)"
-                  >
-                    <SelectTrigger class="h-8 text-xs">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem v-for="type in inputTypes" :key="type.value" :value="type.value">
-                        {{ type.label }}
-                      </SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-
-                <div v-if="selectedStep.input_type === 'select'" class="space-y-1.5">
-                  <Label class="text-xs">{{ $t('flowBuilder.optionsPerLine') }}</Label>
-                  <Textarea
-                    :model-value="(selectedStep.input_config.options || []).join('\n')"
-                    @update:model-value="selectedStep.input_config = { ...selectedStep.input_config, options: ($event as string).split('\n').filter(Boolean) }"
-                    :rows="3"
-                    class="text-xs"
-                  />
-                </div>
-              </CollapsibleContent>
-            </Collapsible>
-
-            <Separator v-if="showInputSection" />
-
-            <!-- Validation (not for transfer) -->
-            <Collapsible v-if="showInputSection" v-model:open="validationOpen">
-              <CollapsibleTrigger class="flex items-center justify-between w-full py-1 text-sm font-medium">
-                {{ $t('flowBuilder.validation') }}
-                <component :is="validationOpen ? ChevronDown : ChevronRight" class="h-4 w-4" />
-              </CollapsibleTrigger>
-              <CollapsibleContent class="pt-3 space-y-3">
-                <div class="space-y-1.5">
-                  <Label class="text-xs">{{ $t('flowBuilder.validationRegex') }}</Label>
-                  <Input v-model="selectedStep.validation_regex" :placeholder="$t('flowBuilder.validationRegexPlaceholder')" class="h-8 text-xs font-mono" />
-                </div>
-                <div class="space-y-1.5">
-                  <Label class="text-xs">{{ $t('flowBuilder.errorMessage') }}</Label>
-                  <Input v-model="selectedStep.validation_error" class="h-8 text-xs" />
-                </div>
-                <div class="flex items-center gap-2">
-                  <Switch
-                    :checked="selectedStep.retry_on_invalid"
-                    @update:checked="selectedStep.retry_on_invalid = $event"
-                  />
-                  <Label class="text-xs">{{ $t('flowBuilder.retryOnInvalid') }}</Label>
-                  <Input
-                    v-if="selectedStep.retry_on_invalid"
-                    v-model.number="selectedStep.max_retries"
-                    type="number"
-                    min="1"
-                    max="10"
-                    class="h-7 w-16 text-xs ml-auto"
-                  />
-                </div>
-              </CollapsibleContent>
-            </Collapsible>
-
-            <Separator v-if="showInputSection" />
-
-            <!-- Advanced (not for transfer) -->
-            <Collapsible v-if="showInputSection" v-model:open="advancedOpen">
-              <CollapsibleTrigger class="flex items-center justify-between w-full py-1 text-sm font-medium">
-                {{ $t('flowBuilder.advanced') }}
-                <component :is="advancedOpen ? ChevronDown : ChevronRight" class="h-4 w-4" />
-              </CollapsibleTrigger>
-              <CollapsibleContent class="pt-3 space-y-3">
-                <div class="space-y-1.5">
-                  <Label class="text-xs">{{ $t('flowBuilder.skipCondition') }}</Label>
-                  <Input v-model="selectedStep.skip_condition" :placeholder="$t('flowBuilder.skipConditionPlaceholder')" class="h-8 text-xs font-mono" />
-                  <p class="text-xs text-muted-foreground">{{ $t('flowBuilder.skipConditionHint') }}</p>
-                </div>
-              </CollapsibleContent>
-            </Collapsible>
-          </div>
-        </ScrollArea>
-        <div v-else class="flex-1 flex items-center justify-center text-muted-foreground text-sm p-4">
-          {{ $t('flowBuilder.selectStepToEdit') }}
-        </div>
       </Card>
     </div>
 
-    <!-- Activity Log (collapsible at the bottom) -->
-    <Collapsible v-if="!isNewFlow && flowId" class="border-t">
-      <CollapsibleTrigger class="flex items-center justify-between w-full px-4 py-2 text-sm font-medium hover:bg-muted/50 transition-colors">
-        {{ $t('common.activityLog', 'Activity Log') }}
-        <ChevronDown class="h-4 w-4" />
-      </CollapsibleTrigger>
-      <CollapsibleContent class="px-4 pb-4">
-        <AuditLogPanel :key="auditRefreshKey" resource-type="chatbot_flow" :resource-id="flowId" />
-      </CollapsibleContent>
-    </Collapsible>
+    <!-- Preview overlay -->
+    <Dialog v-model:open="showPreview">
+      <DialogContent class="max-w-[1100px] w-[95vw] h-[92vh] p-0 flex flex-col">
+        <DialogTitle class="sr-only">Flow preview</DialogTitle>
+        <InteractivePreview
+          :graph="previewGraph"
+          :flow-data="{ name, description, trigger_keywords: triggerKeywords, initial_message: initialMessage, completion_message: completionMessage, enabled, steps: [] } as any"
+        />
+      </DialogContent>
+    </Dialog>
 
-    <!-- Delete Step Dialog -->
-    <AlertDialog v-model:open="deleteStepDialogOpen">
-      <AlertDialogContent>
-        <AlertDialogHeader>
-          <AlertDialogTitle>{{ $t('flowBuilder.deleteStep') }}</AlertDialogTitle>
-          <AlertDialogDescription>
-            {{ $t('flowBuilder.deleteStepConfirm') }}
-          </AlertDialogDescription>
-        </AlertDialogHeader>
-        <AlertDialogFooter>
-          <AlertDialogCancel>{{ $t('common.cancel') }}</AlertDialogCancel>
-          <AlertDialogAction @click="deleteStep">{{ $t('common.delete') }}</AlertDialogAction>
-        </AlertDialogFooter>
-      </AlertDialogContent>
-    </AlertDialog>
-
-    <!-- Cancel Dialog -->
-    <UnsavedChangesDialog :open="cancelDialogOpen" @stay="cancelDialogOpen = false" @leave="confirmCancel" />
+    <!-- Dialogs -->
+    <ConfirmDialog
+      v-model:open="showDeleteNodeConfirm"
+      :title="$t('flowBuilder.deleteNodeConfirmTitle', 'Delete node?')"
+      :description="$t('flowBuilder.deleteNodeConfirmDesc', 'The node and all its connections will be removed.')"
+      :confirm-label="$t('common.delete')"
+      variant="destructive"
+      @confirm="confirmDeleteSelectedNode"
+    />
+    <UnsavedChangesDialog v-model:open="cancelDialogOpen" @confirm="confirmCancel" />
   </div>
 </template>
-
-<style>
-/* Prevent pointer events on canvas/iframes during panel resize */
-body.resizing .vue-flow,
-body.resizing iframe,
-body.resizing canvas {
-  pointer-events: none !important;
-}
-</style>

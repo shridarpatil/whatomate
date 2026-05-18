@@ -118,6 +118,9 @@ function handleResume() {
 
 function handleReset() {
   resetSimulation()
+  // "Reset" in the debug panel really means restart — users expect a
+  // fresh run, not a frozen idle screen.
+  startSimulation()
 }
 
 function handleStepForward() {
@@ -138,31 +141,42 @@ function handleGoToStep(stepName: string) {
     <!-- Chat Area -->
     <div class="flex-1 flex flex-col min-w-0">
       <!-- Phone Frame Container -->
-      <div class="flex-1 flex items-center justify-center p-4 bg-[#efeae2] dark:bg-[#0b141a]">
-        <div id="preview-phone-frame" class="w-full max-w-sm bg-[#efeae2] dark:bg-[#0b141a] rounded-2xl overflow-hidden shadow-xl flex flex-col h-[600px] relative">
-          <!-- Chat Header -->
-          <div class="bg-[#075e54] dark:bg-[#202c33] text-white px-4 py-3 flex items-center gap-3 flex-shrink-0">
-            <div class="w-10 h-10 rounded-full bg-white/20 flex items-center justify-center">
-              <MessageSquare class="h-5 w-5" />
+      <div class="flex-1 flex items-center justify-center p-6 bg-gray-100 dark:bg-gray-900">
+        <!-- Device bezel -->
+        <div
+          id="preview-phone-frame"
+          class="w-full max-w-[400px] h-full max-h-[760px] bg-black rounded-[40px] p-[10px] shadow-2xl flex flex-col"
+        >
+          <!-- Screen -->
+          <div class="flex-1 rounded-[32px] overflow-hidden flex flex-col bg-[#efeae2] dark:bg-[#0b141a]">
+            <!-- iOS-ish status bar -->
+            <div class="bg-[#008069] dark:bg-[#202c33] text-white px-5 py-1 flex items-center justify-between text-[11px] font-medium flex-shrink-0">
+              <span>9:41</span>
+              <div class="flex items-center gap-1">
+                <!-- signal -->
+                <svg width="14" height="10" viewBox="0 0 18 12" fill="currentColor"><rect x="0" y="8" width="3" height="4" rx="0.5"/><rect x="5" y="5" width="3" height="7" rx="0.5"/><rect x="10" y="2" width="3" height="10" rx="0.5"/><rect x="15" y="0" width="3" height="12" rx="0.5" opacity="0.4"/></svg>
+                <!-- battery -->
+                <svg width="22" height="10" viewBox="0 0 28 12" fill="none"><rect x="0.5" y="0.5" width="24" height="11" rx="2" stroke="currentColor"/><rect x="25.5" y="3.5" width="2" height="5" rx="0.5" fill="currentColor"/><rect x="2" y="2" width="19" height="8" rx="1" fill="currentColor"/></svg>
+              </div>
             </div>
-            <div>
-              <p class="font-medium text-sm">{{ flowData.name || 'Flow Preview' }}</p>
-              <p class="text-xs text-white/70">
-                <template v-if="state.status === 'idle'">
-                  Click Start to begin
-                </template>
-                <template v-else-if="state.currentStepName">
-                  Step {{ (state.currentStepIndex ?? 0) + 1 }}: {{ state.currentStepName }}
-                </template>
-                <template v-else>
-                  {{ state.status }}
-                </template>
-              </p>
-            </div>
-          </div>
 
-          <!-- Chat Messages -->
-          <ScrollArea ref="chatScrollRef" class="flex-1 p-4">
+            <!-- Chat Header -->
+            <div class="bg-[#008069] dark:bg-[#202c33] text-white px-3 py-2 flex items-center gap-3 flex-shrink-0">
+              <div class="w-9 h-9 rounded-full bg-white/20 flex items-center justify-center flex-shrink-0">
+                <MessageSquare class="h-4 w-4" />
+              </div>
+              <div class="flex-1 min-w-0">
+                <p class="font-medium text-sm truncate">{{ flowData.name || 'Flow Preview' }}</p>
+                <p class="text-[11px] text-white/80 truncate">
+                  <template v-if="state.status === 'idle'">tap Start to begin</template>
+                  <template v-else-if="state.currentStepName">{{ state.currentStepName }}</template>
+                  <template v-else>{{ state.status }}</template>
+                </p>
+              </div>
+            </div>
+
+            <!-- Chat Messages -->
+            <ScrollArea ref="chatScrollRef" class="flex-1 p-4 whatsapp-bg">
             <div class="space-y-3">
               <!-- Idle State -->
               <div v-if="state.status === 'idle' && state.messages.length === 0" class="text-center py-12">
@@ -218,12 +232,13 @@ function handleGoToStep(stepName: string) {
             </div>
           </ScrollArea>
 
-          <!-- Input Bar -->
-          <PreviewInputBar
-            :input-type="expectedInputType"
-            :disabled="!isWaitingForInput || expectedInputType === 'button' || expectedInputType === 'whatsapp_flow'"
-            @submit="handleTextSubmit"
-          />
+            <!-- Input Bar -->
+            <PreviewInputBar
+              :input-type="expectedInputType"
+              :disabled="!isWaitingForInput || expectedInputType === 'button' || expectedInputType === 'whatsapp_flow'"
+              @submit="handleTextSubmit"
+            />
+          </div>
         </div>
       </div>
     </div>
@@ -253,3 +268,18 @@ function handleGoToStep(stepName: string) {
     />
   </div>
 </template>
+
+<style scoped>
+/* Faint WhatsApp-style background pattern — speech bubbles + envelopes
+   only, at very low opacity. No hearts. */
+.whatsapp-bg {
+  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='140' height='140' viewBox='0 0 140 140'><g fill='none' stroke='%2300000010' stroke-width='1.3' stroke-linejoin='round'><path d='M18 24c0-3 2-5 5-5h18c3 0 5 2 5 5v12c0 3-2 5-5 5h-12l-6 6v-6c-3 0-5-2-5-5z'/><rect x='86' y='30' width='32' height='18' rx='1.5'/><path d='M86 30l16 11 16-11'/><path d='M30 92c0-3 2-5 5-5h14c3 0 5 2 5 5v9c0 3-2 5-5 5h-9l-5 5v-5c-3 0-5-2-5-5z'/><rect x='90' y='95' width='30' height='17' rx='1.5'/><path d='M90 95l15 10 15-10'/></g></svg>");
+  background-size: 140px 140px;
+  background-repeat: repeat;
+}
+
+:global(.dark) .whatsapp-bg {
+  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='140' height='140' viewBox='0 0 140 140'><g fill='none' stroke='%23ffffff0a' stroke-width='1.3' stroke-linejoin='round'><path d='M18 24c0-3 2-5 5-5h18c3 0 5 2 5 5v12c0 3-2 5-5 5h-12l-6 6v-6c-3 0-5-2-5-5z'/><rect x='86' y='30' width='32' height='18' rx='1.5'/><path d='M86 30l16 11 16-11'/><path d='M30 92c0-3 2-5 5-5h14c3 0 5 2 5 5v9c0 3-2 5-5 5h-9l-5 5v-5c-3 0-5-2-5-5z'/><rect x='90' y='95' width='30' height='17' rx='1.5'/><path d='M90 95l15 10 15-10'/></g></svg>");
+}
+</style>
+
