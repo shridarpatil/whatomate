@@ -1186,7 +1186,14 @@
     "setupStep6": "सब्सक्राइब करें",
     "connectDescription": "Connect Cloud API.",
     "businessProfile": "प्रोफ़ाइल",
-    "contactOptions": "विकल्प"
+    "contactOptions": "विकल्प",
+    "keysGeneratedSuccess": "एन्क्रिप्शन कुंजियाँ सफलतापूर्वक जनरेट की गईं",
+    "keysGenerateFailed": "एन्क्रिप्शन कुंजियाँ जनरेट करने में विफल",
+    "flowsEncryptionConfig": "WhatsApp Flows एन्क्रिप्शन",
+    "regenerateKeys": "कुंजियाँ पुनः जनरेट करें",
+    "generateKeys": "कुंजियाँ जनरेट करें",
+    "flowsWebhookUrl": "Flows वेबहुक URL",
+    "encryptionPublicKey": "एन्क्रिप्शन सार्वजनिक कुंजी"
   },
   "dashboard": {
     "title": "डैशबोर्ड",

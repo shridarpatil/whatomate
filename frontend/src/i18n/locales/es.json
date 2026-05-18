@@ -1186,7 +1186,14 @@
     "setupStep6": "Suscribirse al campo de webhook de mensajes",
     "connectDescription": "Conecte su cuenta de WhatsApp Business usando la API en la nube de Meta.",
     "businessProfile": "Perfil de negocio",
-    "contactOptions": "Opciones de contacto"
+    "contactOptions": "Opciones de contacto",
+    "keysGeneratedSuccess": "Claves de encriptación generadas exitosamente",
+    "keysGenerateFailed": "Error al generar las claves de encriptación",
+    "flowsEncryptionConfig": "Encriptación de WhatsApp Flows",
+    "regenerateKeys": "Regenerar claves",
+    "generateKeys": "Generar claves",
+    "flowsWebhookUrl": "URL del webhook de Flows",
+    "encryptionPublicKey": "Clave pública de encriptación"
   },
   "dashboard": {
     "title": "Panel de control",

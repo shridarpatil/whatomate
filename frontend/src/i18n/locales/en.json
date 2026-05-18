@@ -1339,7 +1339,14 @@
     "outgoing": "Outgoing",
     "webhookUrl": "Webhook URL",
     "yourAccounts": "Your Accounts",
-    "yourAccountsDesc": "WhatsApp Business accounts connected to your organization."
+    "yourAccountsDesc": "WhatsApp Business accounts connected to your organization.",
+    "keysGeneratedSuccess": "Encryption keys generated successfully",
+    "keysGenerateFailed": "Failed to generate encryption keys",
+    "flowsEncryptionConfig": "WhatsApp Flows Encryption",
+    "regenerateKeys": "Regenerate Keys",
+    "generateKeys": "Generate Keys",
+    "flowsWebhookUrl": "Flows Webhook URL",
+    "encryptionPublicKey": "Encryption Public Key"
   },
   "dashboard": {
     "title": "Dashboard",
