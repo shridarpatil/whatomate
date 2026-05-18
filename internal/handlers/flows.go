@@ -6,6 +6,7 @@ import (
 	"fmt"
 
 	"github.com/google/uuid"
+	"github.com/shridarpatil/whatomate/internal/crypto"
 	"github.com/shridarpatil/whatomate/internal/models"
 	"github.com/shridarpatil/whatomate/pkg/whatsapp"
 	"github.com/valyala/fasthttp"
@@ -1078,4 +1079,165 @@ func flowToResponse(f models.WhatsAppFlow) FlowResponse {
 		CreatedAt:       f.CreatedAt.Format("2006-01-02T15:04:05Z"),
 		UpdatedAt:       f.UpdatedAt.Format("2006-01-02T15:04:05Z"),
 	}
+}
+
+// FlowWebhookRequest represents the plaintext incoming webhook request from Meta WhatsApp Flows.
+type FlowWebhookRequest struct {
+	EncryptedFlowData string         `json:"encrypted_flow_data,omitempty"`
+	EncryptedAESKey   string         `json:"encrypted_aes_key,omitempty"`
+	InitialIV         string         `json:"initial_iv,omitempty"`
+	Action            string         `json:"action,omitempty"`
+	Screen            string         `json:"screen,omitempty"`
+	Data              map[string]any `json:"data,omitempty"`
+	FlowToken         string         `json:"flow_token,omitempty"`
+}
+
+// EncryptedFlowWebhookRequest represents the encrypted incoming webhook request from Meta WhatsApp Flows.
+type EncryptedFlowWebhookRequest struct {
+	EncryptedFlowData string `json:"encrypted_flow_data"`
+	EncryptedAESKey   string `json:"encrypted_aes_key"`
+	InitialIV         string `json:"initial_iv"`
+}
+
+// ExchangeKeysWebhookHandler securely processes incoming webhooks from Meta for WhatsApp Flows.
+func (a *App) ExchangeKeysWebhookHandler(r *fastglue.Request) error {
+	phoneID := r.RequestCtx.UserValue("phone_id")
+	var pID string
+	if phoneID != nil {
+		pID = phoneID.(string)
+	}
+
+	var req FlowWebhookRequest
+	if err := json.Unmarshal(r.RequestCtx.PostBody(), &req); err != nil {
+		a.Log.Error("Failed to decode webhook request body", "error", err)
+		return r.SendErrorEnvelope(fasthttp.StatusBadRequest, "Invalid request body", nil, "")
+	}
+
+	// Handle Health Check Ping (Plaintext fallback)
+	if req.Action == "ping" {
+		a.Log.Info("Received health check ping from Meta WhatsApp Flows")
+		return r.SendEnvelope(map[string]any{
+			"version": "3.0",
+			"data": map[string]any{
+				"status": "active",
+			},
+		})
+	}
+
+	// Identify Account & Retrieve Keys
+	var account *models.WhatsAppAccount
+	if pID != "" {
+		var acc models.WhatsAppAccount
+		if err := a.DB.Where("phone_id = ?", pID).First(&acc).Error; err == nil {
+			account = &acc
+		}
+	}
+	if account == nil {
+		// Fallback: Find by FlowToken or take first active account with private key
+		var acc models.WhatsAppAccount
+		if req.FlowToken != "" {
+			if err := a.DB.Where("encryption_private_key != ''").First(&acc).Error; err == nil {
+				account = &acc
+			}
+		} else {
+			if err := a.DB.Where("encryption_private_key != ''").First(&acc).Error; err == nil {
+				account = &acc
+			}
+		}
+	}
+
+	if account == nil || account.EncryptionPrivateKey == "" {
+		a.Log.Error("No valid WhatsApp account with encryption keys found for webhook")
+		return r.SendErrorEnvelope(fasthttp.StatusNotFound, "Encryption keys not configured", nil, "")
+	}
+
+	decryptedPrivPEM, err := crypto.Decrypt(account.EncryptionPrivateKey, a.Config.App.EncryptionKey)
+	if err != nil {
+		a.Log.Error("Failed to decrypt account private key", "error", err)
+		return r.SendErrorEnvelope(fasthttp.StatusInternalServerError, "Internal cryptographic error", nil, "")
+	}
+
+	// Decrypt Incoming Payload
+	var decryptedPayload []byte
+	if req.EncryptedFlowData != "" && req.EncryptedAESKey != "" && req.InitialIV != "" {
+		decryptedPayload, err = crypto.DecryptWhatsAppFlowsPayload(
+			req.EncryptedFlowData,
+			req.EncryptedAESKey,
+			req.InitialIV,
+			decryptedPrivPEM,
+		)
+		if err != nil {
+			a.Log.Error("Failed to decrypt WhatsApp Flows payload", "error", err)
+			return r.SendErrorEnvelope(fasthttp.StatusBadRequest, "Decryption failed", nil, "")
+		}
+	} else {
+		// Assume plaintext request if encryption fields are missing
+		decryptedPayload = r.RequestCtx.PostBody()
+	}
+
+	var flowReq map[string]any
+	if err := json.Unmarshal(decryptedPayload, &flowReq); err != nil {
+		a.Log.Error("Failed to parse decrypted flow payload", "error", err)
+		return r.SendErrorEnvelope(fasthttp.StatusBadRequest, "Invalid flow payload JSON", nil, "")
+	}
+
+	action, _ := flowReq["action"].(string)
+	screen, _ := flowReq["screen"].(string)
+	flowToken, _ := flowReq["flow_token"].(string)
+
+	a.Log.Info("Decrypted WhatsApp Flow Webhook", "action", action, "screen", screen, "flow_token", flowToken)
+
+	if action == "ping" {
+		respData := map[string]any{
+			"version": "3.0",
+			"data": map[string]any{
+				"status": "active",
+			},
+		}
+		if req.EncryptedFlowData != "" {
+			respBytes, _ := json.Marshal(respData)
+			encResp, err := crypto.EncryptWhatsAppFlowsResponse(respBytes, req.EncryptedAESKey, req.InitialIV, decryptedPrivPEM)
+			if err != nil {
+				a.Log.Error("Failed to encrypt ping response", "error", err)
+				return r.SendErrorEnvelope(fasthttp.StatusInternalServerError, "Encryption failure", nil, "")
+			}
+			r.RequestCtx.Response.Header.SetContentType("text/plain")
+			_, _ = r.RequestCtx.WriteString(encResp)
+			return nil
+		}
+		return r.SendEnvelope(respData)
+	}
+
+	if action == "data_exchange" {
+		// TODO: Future Implementation for WhatsApp Flows Dynamic Screen Navigation & Routing.
+		// In a future PR, evaluate rich screen routing rules, routing_model from Flow JSON,
+		// and dynamic data injection here. E.g.:
+		// 1. Evaluate Rich Screen Routing Rules
+		// 2. Fallback to Routing Model in Flow JSON
+		// 3. Sequential Screen Fallback
+
+		// Basic Data Exchange Response Handler (Temporary Fallback)
+		respData := map[string]any{
+			"version": "3.0",
+			"screen":  "SUCCESS_SCREEN",
+			"data": map[string]any{
+				"summary": "Data received successfully",
+			},
+		}
+
+		if req.EncryptedFlowData != "" {
+			respBytes, _ := json.Marshal(respData)
+			encResp, err := crypto.EncryptWhatsAppFlowsResponse(respBytes, req.EncryptedAESKey, req.InitialIV, decryptedPrivPEM)
+			if err != nil {
+				a.Log.Error("Failed to encrypt data_exchange response", "error", err)
+				return r.SendErrorEnvelope(fasthttp.StatusInternalServerError, "Encryption failure", nil, "")
+			}
+			r.RequestCtx.Response.Header.SetContentType("text/plain")
+			_, _ = r.RequestCtx.WriteString(encResp)
+			return nil
+		}
+		return r.SendEnvelope(respData)
+	}
+
+	return r.SendErrorEnvelope(fasthttp.StatusBadRequest, "Unsupported action", nil, "")
 }

@@ -60,6 +60,7 @@ interface WhatsAppAccount {
   status: string
   has_access_token: boolean
   has_app_secret: boolean
+  encryption_public_key?: string
   phone_number?: string
   display_name?: string
   created_by_id?: string
@@ -99,6 +100,7 @@ const deleteDialogOpen = ref(false)
 const testResult = ref<TestResult | null>(null)
 const testingConnection = ref(false)
 const subscribing = ref(false)
+const generatingKeys = ref(false)
 const isProfileDialogOpen = ref(false)
 
 const { showLeaveDialog, confirmLeave, cancelLeave } = useUnsavedChangesGuard(hasChanges)
@@ -129,6 +131,10 @@ const breadcrumbs = computed(() => [
 
 const basePath = ((window as any).__BASE_PATH__ ?? '').replace(/\/$/, '')
 const webhookUrl = window.location.origin + basePath + '/api/webhook'
+const flowsWebhookUrl = computed(() => {
+  if (!account.value?.phone_id) return ''
+  return window.location.origin + basePath + '/api/exchange-keys/' + account.value.phone_id
+})
 
 // Track form changes
 watch(form, () => { hasChanges.value = true }, { deep: true })
@@ -247,6 +253,21 @@ async function subscribeApp() {
     toast.error(getErrorMessage(e, t('accounts.subscribeError', 'Subscribe error')))
   } finally {
     subscribing.value = false
+  }
+}
+
+async function generateKeys() {
+  if (!account.value) return
+  generatingKeys.value = true
+  try {
+    const response = await api.post(`/accounts/${account.value.id}/generate-keys`)
+    const data = response.data.data || response.data
+    account.value = data
+    toast.success(t('accounts.keysGeneratedSuccess', 'Encryption keys generated successfully'))
+  } catch (e) {
+    toast.error(getErrorMessage(e, t('accounts.keysGenerateFailed', 'Failed to generate encryption keys')))
+  } finally {
+    generatingKeys.value = false
   }
 }
 
@@ -439,6 +460,41 @@ onMounted(async () => {
             <code class="px-2 py-1 bg-muted rounded text-xs font-mono flex-1 truncate">{{ account?.webhook_verify_token }}</code>
             <IconButton :icon="Copy" label="Copy" @click="copyToClipboard(account?.webhook_verify_token || '')" />
           </div>
+        </div>
+      </CardContent>
+    </Card>
+
+    <!-- Flows Encryption Config Card -->
+    <Card v-if="!isNew">
+      <CardHeader class="pb-3">
+        <div class="flex items-center justify-between">
+          <CardTitle class="text-sm font-medium">{{ $t('accounts.flowsEncryptionConfig', 'WhatsApp Flows Encryption') }}</CardTitle>
+          <Button variant="outline" size="sm" :disabled="generatingKeys" @click="generateKeys">
+            <Loader2 v-if="generatingKeys" class="h-4 w-4 animate-spin mr-1" />
+            <RefreshCw v-else class="h-4 w-4 mr-1" />
+            {{ account?.encryption_public_key ? $t('accounts.regenerateKeys', 'Regenerate Keys') : $t('accounts.generateKeys', 'Generate Keys') }}
+          </Button>
+        </div>
+      </CardHeader>
+      <CardContent class="space-y-3">
+        <div v-if="account?.encryption_public_key" class="space-y-3">
+          <div>
+            <Label class="text-xs text-muted-foreground">{{ $t('accounts.flowsWebhookUrl', 'Flows Webhook URL') }}</Label>
+            <div class="flex items-center gap-2 mt-1">
+              <code class="px-2 py-1 bg-muted rounded text-xs font-mono flex-1 truncate">{{ flowsWebhookUrl }}</code>
+              <IconButton :icon="Copy" label="Copy" @click="copyToClipboard(flowsWebhookUrl)" />
+            </div>
+          </div>
+          <div>
+            <Label class="text-xs text-muted-foreground">{{ $t('accounts.encryptionPublicKey', 'Encryption Public Key') }}</Label>
+            <div class="flex items-start gap-2 mt-1">
+              <pre class="p-2 bg-muted rounded text-[10px] font-mono flex-1 overflow-x-auto max-h-32 whitespace-pre-wrap">{{ account.encryption_public_key }}</pre>
+              <IconButton :icon="Copy" label="Copy" @click="copyToClipboard(account.encryption_public_key)" />
+            </div>
+          </div>
+        </div>
+        <div v-else class="py-4 text-center text-sm text-muted-foreground border-2 border-dashed rounded-lg">
+          {{ $t('accounts.noEncryptionKeys', 'No encryption keys generated for WhatsApp Flows yet.') }}
         </div>
       </CardContent>
     </Card>

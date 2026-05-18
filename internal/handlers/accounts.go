@@ -35,28 +35,29 @@ type AccountRequest struct {
 
 // AccountResponse represents the response for an account (without sensitive data)
 type AccountResponse struct {
-	ID                 uuid.UUID  `json:"id"`
-	Name               string     `json:"name"`
-	AppID              string     `json:"app_id"`
-	PhoneID            string     `json:"phone_id"`
-	BusinessID         string     `json:"business_id"`
-	WebhookVerifyToken string     `json:"webhook_verify_token"`
-	APIVersion         string     `json:"api_version"`
+	ID                     uuid.UUID  `json:"id"`
+	Name                   string     `json:"name"`
+	AppID                  string     `json:"app_id"`
+	PhoneID                string     `json:"phone_id"`
+	BusinessID             string     `json:"business_id"`
+	WebhookVerifyToken     string     `json:"webhook_verify_token"`
+	APIVersion             string     `json:"api_version"`
 	IsDefaultIncoming      bool       `json:"is_default_incoming"`
 	IsDefaultOutgoing      bool       `json:"is_default_outgoing"`
 	AutoReadReceipt        bool       `json:"auto_read_receipt"`
 	BusinessCallingEnabled bool       `json:"business_calling_enabled"`
 	Status                 string     `json:"status"`
-	HasAccessToken     bool       `json:"has_access_token"`
-	HasAppSecret       bool       `json:"has_app_secret"`
-	PhoneNumber        string     `json:"phone_number,omitempty"`
-	DisplayName        string     `json:"display_name,omitempty"`
-	CreatedByID        *uuid.UUID `json:"created_by_id,omitempty"`
-	CreatedByName      string     `json:"created_by_name,omitempty"`
-	UpdatedByID        *uuid.UUID `json:"updated_by_id,omitempty"`
-	UpdatedByName      string     `json:"updated_by_name,omitempty"`
-	CreatedAt          string     `json:"created_at"`
-	UpdatedAt          string     `json:"updated_at"`
+	HasAccessToken         bool       `json:"has_access_token"`
+	HasAppSecret           bool       `json:"has_app_secret"`
+	EncryptionPublicKey    string     `json:"encryption_public_key,omitempty"`
+	PhoneNumber            string     `json:"phone_number,omitempty"`
+	DisplayName            string     `json:"display_name,omitempty"`
+	CreatedByID            *uuid.UUID `json:"created_by_id,omitempty"`
+	CreatedByName          string     `json:"created_by_name,omitempty"`
+	UpdatedByID            *uuid.UUID `json:"updated_by_id,omitempty"`
+	UpdatedByName          string     `json:"updated_by_name,omitempty"`
+	CreatedAt              string     `json:"created_at"`
+	UpdatedAt              string     `json:"updated_at"`
 }
 
 // ListAccounts returns all WhatsApp accounts for the organization
@@ -75,7 +76,7 @@ func (a *App) ListAccounts(r *fastglue.Request) error {
 	// Convert to response format (hide sensitive data)
 	response := make([]AccountResponse, len(accounts))
 	for i, acc := range accounts {
-		response[i] = accountToResponse(acc)
+		response[i] = a.accountToResponse(acc, r)
 	}
 
 	return r.SendEnvelope(map[string]any{
@@ -164,7 +165,7 @@ func (a *App) CreateAccount(r *fastglue.Request) error {
 	audit.LogAudit(a.DB, orgID, userID, audit.GetUserName(a.DB, userID),
 		"account", account.ID, models.AuditActionCreated, nil, &account)
 
-	return r.SendEnvelope(accountToResponse(account))
+	return r.SendEnvelope(a.accountToResponse(account, r))
 }
 
 // GetAccount returns a single WhatsApp account
@@ -185,7 +186,7 @@ func (a *App) GetAccount(r *fastglue.Request) error {
 		return nil
 	}
 
-	return r.SendEnvelope(accountToResponse(*account))
+	return r.SendEnvelope(a.accountToResponse(*account, r))
 }
 
 // UpdateAccount updates a WhatsApp account
@@ -293,7 +294,7 @@ func (a *App) UpdateAccount(r *fastglue.Request) error {
 	audit.LogAudit(a.DB, orgID, userID, audit.GetUserName(a.DB, userID),
 		"account", account.ID, models.AuditActionUpdated, &oldAccount, account, sensitiveChanges...)
 
-	return r.SendEnvelope(accountToResponse(*account))
+	return r.SendEnvelope(a.accountToResponse(*account, r))
 }
 
 // DeleteAccount deletes a WhatsApp account
@@ -419,26 +420,27 @@ func (a *App) TestAccountConnection(r *fastglue.Request) error {
 
 // Helper functions
 
-func accountToResponse(acc models.WhatsAppAccount) AccountResponse {
+func (a *App) accountToResponse(acc models.WhatsAppAccount, r *fastglue.Request) AccountResponse {
 	resp := AccountResponse{
-		ID:                 acc.ID,
-		Name:               acc.Name,
-		AppID:              acc.AppID,
-		PhoneID:            acc.PhoneID,
-		BusinessID:         acc.BusinessID,
-		WebhookVerifyToken: acc.WebhookVerifyToken,
-		APIVersion:         acc.APIVersion,
+		ID:                     acc.ID,
+		Name:                   acc.Name,
+		AppID:                  acc.AppID,
+		PhoneID:                acc.PhoneID,
+		BusinessID:             acc.BusinessID,
+		WebhookVerifyToken:     acc.WebhookVerifyToken,
+		APIVersion:             acc.APIVersion,
 		IsDefaultIncoming:      acc.IsDefaultIncoming,
 		IsDefaultOutgoing:      acc.IsDefaultOutgoing,
 		AutoReadReceipt:        acc.AutoReadReceipt,
 		BusinessCallingEnabled: acc.BusinessCallingEnabled,
 		Status:                 acc.Status,
-		HasAccessToken:     acc.AccessToken != "",
-		HasAppSecret:       acc.AppSecret != "",
-		CreatedByID:        acc.CreatedByID,
-		UpdatedByID:        acc.UpdatedByID,
-		CreatedAt:          acc.CreatedAt.Format("2006-01-02T15:04:05Z"),
-		UpdatedAt:          acc.UpdatedAt.Format("2006-01-02T15:04:05Z"),
+		HasAccessToken:         acc.AccessToken != "",
+		HasAppSecret:           acc.AppSecret != "",
+		EncryptionPublicKey:    acc.EncryptionPublicKey,
+		CreatedByID:            acc.CreatedByID,
+		UpdatedByID:            acc.UpdatedByID,
+		CreatedAt:              acc.CreatedAt.Format("2006-01-02T15:04:05Z"),
+		UpdatedAt:              acc.UpdatedAt.Format("2006-01-02T15:04:05Z"),
 	}
 	if acc.CreatedBy != nil {
 		resp.CreatedByName = acc.CreatedBy.FullName
@@ -464,6 +466,58 @@ func (a *App) validateAccountCredentials(phoneID, businessID, accessToken, apiVe
 	}
 	a.Log.Info("Account credentials validated successfully", "phone_id", phoneID, "business_id", businessID)
 	return nil
+}
+
+func generateSecureKeyPairsInternal(ctx context.Context, a *App, account *models.WhatsAppAccount, r *fastglue.Request) error {
+	privPEM, pubPEM, err := crypto.GenerateRSAKeyPair()
+	if err != nil {
+		return fmt.Errorf("failed to generate RSA key pair: %w", err)
+	}
+
+	encPriv, err := crypto.Encrypt(privPEM, a.Config.App.EncryptionKey)
+	if err != nil {
+		return fmt.Errorf("failed to encrypt private key: %w", err)
+	}
+
+	account.EncryptionPrivateKey = encPriv
+	account.EncryptionPublicKey = pubPEM
+
+	if err := a.WhatsApp.UpdateWhatsAppBusinessEncryption(ctx, account.PhoneID, pubPEM, account.AccessToken, account.APIVersion); err != nil {
+		a.Log.Warn("Failed to update WhatsApp business encryption key with Meta (might be permission issue)", "error", err)
+	}
+
+	if err := a.DB.Save(account).Error; err != nil {
+		return fmt.Errorf("failed to save account encryption keys: %w", err)
+	}
+
+	a.Log.Info("Secure key pairs generated and updated successfully", "account_id", account.ID, "phone_id", account.PhoneID)
+	return nil
+}
+
+// GenerateSecureKeyPairs handles the API request to generate secure key pairs for an account
+func (a *App) GenerateSecureKeyPairs(r *fastglue.Request) error {
+	orgID, err := a.getOrgID(r)
+	if err != nil {
+		return r.SendErrorEnvelope(fasthttp.StatusUnauthorized, "Unauthorized", nil, "")
+	}
+
+	id, err := parsePathUUID(r, "id", "account")
+	if err != nil {
+		return nil
+	}
+
+	account, err := a.resolveWhatsAppAccountByID(r, id, orgID)
+	if err != nil {
+		return nil
+	}
+
+	ctx := context.Background()
+	if err := generateSecureKeyPairsInternal(ctx, a, account, r); err != nil {
+		a.Log.Error("Failed to generate secure key pairs", "error", err)
+		return r.SendErrorEnvelope(fasthttp.StatusInternalServerError, "Failed to generate secure key pairs: "+err.Error(), nil, "")
+	}
+
+	return r.SendEnvelope(a.accountToResponse(*account, r))
 }
 
 // SubscribeApp subscribes the app to webhooks for the WhatsApp Business Account.
