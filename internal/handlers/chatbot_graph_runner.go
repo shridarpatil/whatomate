@@ -88,12 +88,15 @@ func (a *App) runChatGraph(
 		flowResponseData: flowResponseData,
 	}
 
-	// Seed built-in template variables so {{phone_number}} works in any
-	// outgoing message without needing an upstream api_call to fill it.
+	// Seed built-in template variables so {{phone_number}} / {{contact_name}}
+	// work in any outgoing message without needing an upstream api_call.
 	if session.SessionData == nil {
 		session.SessionData = models.JSONB{}
 	}
 	session.SessionData["phone_number"] = session.PhoneNumber
+	if contact != nil {
+		session.SessionData["contact_name"] = contact.ProfileName
+	}
 
 	if session.CurrentStep == "" {
 		session.CurrentStep = graph.EntryNode
