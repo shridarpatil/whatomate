@@ -2,6 +2,7 @@ package handlers_test
 
 import (
 	"encoding/json"
+	"strings"
 	"testing"
 
 	"github.com/shridarpatil/whatomate/internal/config"
@@ -12,7 +13,7 @@ import (
 	"github.com/valyala/fasthttp"
 )
 
-func TestGetClientConfig(t *testing.T) {
+func TestGetEmbeddedSignupConfig(t *testing.T) {
 	t.Parallel()
 
 	// Setup test app with mock config
@@ -30,7 +31,7 @@ func TestGetClientConfig(t *testing.T) {
 	req := testutil.NewGETRequest(t)
 
 	// Call handler
-	err := app.GetClientConfig(req)
+	err := app.GetEmbeddedSignupConfig(req)
 	require.NoError(t, err)
 	assert.Equal(t, fasthttp.StatusOK, testutil.GetResponseStatusCode(req))
 
@@ -49,7 +50,7 @@ func TestGetClientConfig(t *testing.T) {
 	assert.Equal(t, "v21.0", resp.Data.WhatsAppAPIVersion)
 }
 
-func TestGetClientConfig_EmptyValues(t *testing.T) {
+func TestGetEmbeddedSignupConfig_EmptyValues(t *testing.T) {
 	t.Parallel()
 
 	// Setup test app with empty config
@@ -66,11 +67,16 @@ func TestGetClientConfig_EmptyValues(t *testing.T) {
 	req := testutil.NewGETRequest(t)
 
 	// Call handler
-	err := app.GetClientConfig(req)
+	err := app.GetEmbeddedSignupConfig(req)
 	require.NoError(t, err)
 	assert.Equal(t, fasthttp.StatusOK, testutil.GetResponseStatusCode(req))
 
-	// Parse response body - should still have structure
+	body := string(testutil.GetResponseBody(req))
+	// Verify that empty fields are omitted from JSON due to omitempty
+	assert.False(t, strings.Contains(body, "whatsapp_app_id"))
+	assert.False(t, strings.Contains(body, "whatsapp_config_id"))
+
+	// Parse response body - should still default to empty strings in the struct
 	var resp struct {
 		Data struct {
 			WhatsAppAppID      string `json:"whatsapp_app_id"`
@@ -78,7 +84,7 @@ func TestGetClientConfig_EmptyValues(t *testing.T) {
 			WhatsAppAPIVersion string `json:"whatsapp_api_version"`
 		} `json:"data"`
 	}
-	err = json.Unmarshal(testutil.GetResponseBody(req), &resp)
+	err = json.Unmarshal([]byte(body), &resp)
 	require.NoError(t, err)
 	assert.Equal(t, "", resp.Data.WhatsAppAppID)
 	assert.Equal(t, "", resp.Data.WhatsAppConfigID)
