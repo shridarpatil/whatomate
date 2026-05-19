@@ -657,8 +657,11 @@ func (a *App) ExchangeToken(r *fastglue.Request) error {
 	}
 
 	// 3. Attempt Auto-Registration with random PIN using WhatsApp service
-	generatedPin := generateNumericPIN(6)
-	a.Log.Info("[FB_SIGNUP] Attempting auto-registration", "phone_id", account.PhoneID, "pin_length", len(generatedPin))
+	generatedPin, err := generateNumericPIN(6)
+	if err != nil {
+		return r.SendErrorEnvelope(fasthttp.StatusInternalServerError, "Failed to generate secure random PIN", nil, "")
+	}
+	a.Log.Info("Attempting phone number auto-registration", "phone_id", account.PhoneID)
 	regErr := a.WhatsApp.RegisterPhoneNumber(ctx, account.PhoneID, generatedPin, accessToken, account.APIVersion)
 
 	if regErr == nil {
@@ -746,7 +749,11 @@ func (a *App) RegisterPhone(r *fastglue.Request) error {
 	// If PIN is not provided, generate a random one
 	pin := req.Pin
 	if pin == "" {
-		pin = generateNumericPIN(6)
+		var err error
+		pin, err = generateNumericPIN(6)
+		if err != nil {
+			return r.SendErrorEnvelope(fasthttp.StatusInternalServerError, "Failed to generate secure random PIN", nil, "")
+		}
 	}
 
 	// Call Meta Register endpoint using WhatsApp service
