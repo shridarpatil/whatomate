@@ -44,6 +44,8 @@ import UnsavedChangesDialog from '@/components/shared/UnsavedChangesDialog.vue'
 import ConfirmDialog from '@/components/shared/ConfirmDialog.vue'
 import ErrorState from '@/components/shared/ErrorState.vue'
 import ChatNodeProperties from '@/components/chatbot/ChatNodeProperties.vue'
+import PanelConfigEditor from '@/components/chatbot/PanelConfigEditor.vue'
+import type { PanelConfig, AvailableVariable } from '@/components/chatbot/PanelConfigEditor.vue'
 
 import ChatbotTextNode from '@/components/chatbot/nodes/ChatbotTextNode.vue'
 import ChatbotButtonsNode from '@/components/chatbot/nodes/ChatbotButtonsNode.vue'
@@ -79,7 +81,7 @@ const completionConfig = ref<{
   headers: Record<string, string>
   body: string
 }>({ url: '', method: 'POST', headers: {}, body: '' })
-const panelConfigJson = ref('{"sections": []}')
+const panelConfig = ref<PanelConfig>({ sections: [] })
 
 const isLoading = ref(true)
 const loadError = ref(false)
@@ -387,6 +389,24 @@ function toGraphPayload(): ChatFlowGraph {
   }
 }
 
+// Variables available to the contact-panel editor — captured from
+// prompt nodes (store_as) and api_call nodes (response_mapping keys).
+const availableVariables = computed<AvailableVariable[]>(() => {
+  const out: AvailableVariable[] = []
+  for (const n of nodes.value) {
+    const cfg = (n.data?.config || {}) as Record<string, any>
+    if (n.type === 'prompt' && typeof cfg.store_as === 'string' && cfg.store_as.trim()) {
+      out.push({ key: cfg.store_as.trim(), source: 'Store as', stepName: n.id })
+    }
+    if (n.type === 'api_call' && cfg.response_mapping && typeof cfg.response_mapping === 'object') {
+      for (const k of Object.keys(cfg.response_mapping)) {
+        if (k && k.trim()) out.push({ key: k.trim(), source: 'Response mapping', stepName: n.id })
+      }
+    }
+  }
+  return out
+})
+
 // Reactive preview graph — InteractivePreview consumes this for simulation.
 const previewGraph = computed<ChatFlowGraph | null>(() => {
   if (nodes.value.length === 0) return null
@@ -451,7 +471,7 @@ async function loadFlow() {
       body: wc.body || '',
     }
     const pc = flow.panel_config || flow.PanelConfig || { sections: [] }
-    panelConfigJson.value = JSON.stringify(pc, null, 2)
+    panelConfig.value = { sections: pc.sections || [] }
 
     createdAt.value = flow.created_at || ''
     updatedAt.value = flow.updated_at || ''
@@ -485,14 +505,6 @@ async function saveFlow() {
     return
   }
 
-  let parsedPanelConfig: Record<string, any> = { sections: [] }
-  try {
-    parsedPanelConfig = JSON.parse(panelConfigJson.value || '{"sections":[]}')
-  } catch {
-    toast.error(t('flowBuilder.invalidPanelConfig', 'Panel config is not valid JSON'))
-    return
-  }
-
   isSaving.value = true
   try {
     const graph = toGraphPayload()
@@ -504,7 +516,7 @@ async function saveFlow() {
       completion_message: completionMessage.value,
       on_complete_action: onCompleteAction.value,
       completion_config: onCompleteAction.value === 'webhook' ? completionConfig.value : {},
-      panel_config: parsedPanelConfig,
+      panel_config: panelConfig.value,
       enabled: enabled.value,
       graph,
     }
@@ -569,7 +581,7 @@ function removeCompletionHeader(key: string) {
 }
 
 // Mark changes from text inputs.
-watch([name, description, enabled, triggerKeywords, initialMessage, completionMessage, onCompleteAction, panelConfigJson], () => {
+watch([name, description, enabled, triggerKeywords, initialMessage, completionMessage, onCompleteAction, panelConfig], () => {
   if (!isLoading.value) hasUnsavedChanges.value = true
 })
 
@@ -787,15 +799,18 @@ onMounted(async () => {
 
             <Separator />
 
-            <!-- Panel config (raw JSON for now) -->
+            <!-- Contact panel display config -->
             <Collapsible v-model:open="panelConfigOpen">
               <CollapsibleTrigger class="flex items-center justify-between w-full py-1 text-sm font-medium">
-                Contact panel config (JSON)
+                Contact panel display
                 <component :is="panelConfigOpen ? ChevronDown : ChevronRight" class="h-4 w-4" />
               </CollapsibleTrigger>
               <CollapsibleContent class="pt-3">
-                <Textarea v-model="panelConfigJson" :rows="8" class="text-[10px] font-mono" />
-                <p class="text-[10px] text-muted-foreground mt-1">Advanced. Raw <code>panel_config</code> JSON.</p>
+                <PanelConfigEditor
+                  :panel-config="panelConfig"
+                  :available-variables="availableVariables"
+                  @update:panel-config="panelConfig = $event"
+                />
               </CollapsibleContent>
             </Collapsible>
 
