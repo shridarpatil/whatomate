@@ -97,7 +97,7 @@ async function fetchAccounts() {
 
 async function fetchWhatsAppConfig() {
   try {
-    const response = await api.get('/config')
+    const response = await api.get('/embedded-signup/config')
     whatsappConfig.value = {
       app_id: response.data.data.whatsapp_app_id,
       config_id: response.data.data.whatsapp_config_id,

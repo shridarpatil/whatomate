@@ -456,7 +456,7 @@ func setupRoutes(g *fastglue.Fastglue, app *handlers.App, lo logf.Logger, basePa
 	g.GET("/ready", app.ReadyCheck)
 
 
-  g.GET("/api/config", app.GetClientConfig)
+  g.GET("/api/embedded-signup/config", app.GetEmbeddedSignupConfig)
 
 	// Auth routes (public, optionally rate-limited)
 	if cfg.RateLimit.Enabled {
@@ -517,7 +517,7 @@ func setupRoutes(g *fastglue.Fastglue, app *handlers.App, lo logf.Logger, basePa
 		}
 		path := string(r.RequestCtx.Path())
 		// Skip auth for public routes
-		if path == "/health" || path == "/ready" || path == "/api/config" ||
+		if path == "/health" || path == "/ready" ||
 			path == "/api/auth/login" || path == "/api/auth/register" || path == "/api/auth/refresh" ||
 			path == "/api/auth/logout" || path == "/api/webhook" || path == "/ws" {
 			return r
