@@ -93,6 +93,7 @@ const showPreview = ref(false)
 const auditRefreshKey = ref(0)
 const completionConfigOpen = ref(false)
 const panelConfigOpen = ref(false)
+const activityOpen = ref(false)
 
 const createdAt = ref('')
 const updatedAt = ref('')
@@ -696,8 +697,8 @@ onMounted(async () => {
         </div>
 
         <!-- Flow settings when nothing is selected -->
-        <ScrollArea v-else class="flex-1">
-          <div class="p-4 space-y-4">
+        <ScrollArea v-else orientation="vertical" class="flex-1">
+          <div class="p-4 space-y-4 min-w-0">
             <CardHeader class="p-0 pb-2">
               <CardTitle class="text-sm font-medium">{{ $t('flowBuilder.flowSettings') }}</CardTitle>
             </CardHeader>
@@ -816,14 +817,21 @@ onMounted(async () => {
 
             <template v-if="!isNewFlow">
               <Separator />
-              <MetadataPanel
-                :created-at="createdAt"
-                :updated-at="updatedAt"
-                :created-by-name="createdByName"
-                :updated-by-name="updatedByName"
-              />
-              <Separator />
-              <AuditLogPanel :key="auditRefreshKey" resource-type="chatbot_flow" :resource-id="flowId" />
+              <Collapsible v-model:open="activityOpen">
+                <CollapsibleTrigger class="flex items-center justify-between w-full py-1 text-sm font-medium">
+                  Activity
+                  <component :is="activityOpen ? ChevronDown : ChevronRight" class="h-4 w-4" />
+                </CollapsibleTrigger>
+                <CollapsibleContent class="pt-3 space-y-3">
+                  <MetadataPanel
+                    :created-at="createdAt"
+                    :updated-at="updatedAt"
+                    :created-by-name="createdByName"
+                    :updated-by-name="updatedByName"
+                  />
+                  <AuditLogPanel :key="auditRefreshKey" resource-type="chatbot_flow" :resource-id="flowId" />
+                </CollapsibleContent>
+              </Collapsible>
             </template>
           </div>
         </ScrollArea>

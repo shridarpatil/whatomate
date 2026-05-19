@@ -130,7 +130,7 @@ function setField(sectionIndex: number, fieldIndex: number, patch: Partial<Panel
 </script>
 
 <template>
-  <div class="space-y-3">
+  <div class="space-y-3 min-w-0 overflow-hidden">
     <div v-if="availableVariables.length > 0" class="text-[10px] text-muted-foreground space-y-1">
       <div class="font-medium">Available variables</div>
       <div class="flex flex-wrap gap-1">
@@ -148,8 +148,8 @@ function setField(sectionIndex: number, fieldIndex: number, patch: Partial<Panel
     <div class="space-y-2">
       <div class="flex items-center justify-between">
         <Label class="text-xs">Sections</Label>
-        <Button variant="outline" size="sm" class="h-6 text-xs" @click="addSection">
-          <Plus class="h-3 w-3 mr-1" /> Add section
+        <Button variant="outline" size="sm" class="h-7 px-2 text-xs gap-1" @click="addSection">
+          <Plus class="h-3.5 w-3.5" /> Add Section
         </Button>
       </div>
 
@@ -163,7 +163,7 @@ function setField(sectionIndex: number, fieldIndex: number, patch: Partial<Panel
       <div
         v-for="(section, sectionIdx) in panelConfig.sections"
         :key="section.id"
-        class="border rounded-md p-2 space-y-2 bg-muted/20"
+        class="border rounded-md p-2 space-y-2 bg-muted/20 min-w-0"
       >
         <div class="flex items-center gap-2">
           <Input
