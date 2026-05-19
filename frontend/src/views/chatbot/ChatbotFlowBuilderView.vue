@@ -762,7 +762,7 @@ onMounted(async () => {
       <!-- Right panel -->
       <Card class="w-[420px] min-w-0 border-y-0 border-r-0 rounded-none shrink-0 flex flex-col">
         <!-- Node properties when a node is selected -->
-        <div v-if="selectedChatNode" class="flex-1 overflow-y-auto">
+        <div v-if="selectedChatNode && selectedChatNode.type !== 'start'" class="flex-1 overflow-y-auto">
           <ChatNodeProperties
             :node="selectedChatNode"
             :current-flow-id="flowId"
