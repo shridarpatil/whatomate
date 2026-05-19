@@ -1354,7 +1354,8 @@
     "classicTitle": "Direct Cloud API (Classic)",
     "classicDesc": "Migrate your number entirely to the Cloud API. The mobile app on your phone will be disconnected. Best for high-volume automation.",
     "classicRecommend": "Perfect for large teams & high-volume bots",
-    "selectMode": "Select Mode"
+    "selectMode": "Select Mode",
+    "connectFacebook": "Connect with Facebook"
   },
   "dashboard": {
     "title": "Dashboard",

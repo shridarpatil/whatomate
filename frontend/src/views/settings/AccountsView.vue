@@ -261,7 +261,7 @@ async function confirmDelete() {
           >
             <Loader2 v-if="isConnectingFB" class="h-4 w-4 mr-2 animate-spin" />
             <Facebook v-else class="h-4 w-4 mr-2" />
-            Connect with Facebook
+            {{ $t('accounts.connectFacebook', 'Connect with Facebook') }}
           </Button>
           <RouterLink to="/settings/accounts/new">
             <Button variant="outline" size="sm">
@@ -315,7 +315,7 @@ async function confirmDelete() {
                     >
                       <Facebook v-if="!isConnectingFB" class="mr-2 h-5 w-5" />
                       <Loader2 v-else class="mr-2 h-5 w-5 animate-spin" />
-                      Connect with Facebook
+                      {{ $t('accounts.connectFacebook', 'Connect with Facebook') }}
                     </Button>
                     <RouterLink to="/settings/accounts/new">
                       <Button variant="outline" size="lg">
