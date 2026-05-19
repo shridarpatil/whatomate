@@ -56,6 +56,7 @@ import ChatbotConditionNode from '@/components/chatbot/nodes/ChatbotConditionNod
 import ChatbotTimingNode from '@/components/chatbot/nodes/ChatbotTimingNode.vue'
 import ChatbotGotoFlowNode from '@/components/chatbot/nodes/ChatbotGotoFlowNode.vue'
 import ChatbotEndNode from '@/components/chatbot/nodes/ChatbotEndNode.vue'
+import ChatbotStartNode from '@/components/chatbot/nodes/ChatbotStartNode.vue'
 
 import InteractivePreview from '@/components/chatbot/flow-preview/InteractivePreview.vue'
 import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog'
@@ -104,7 +105,10 @@ const updatedByName = ref('')
 const availableFlows = ref<{ id: string; name: string }[]>([])
 
 // Vue Flow custom node types (cast to `any` to bypass strict NodeComponent check)
+const START_NODE_ID = '__start__'
+
 const nodeTypes: any = {
+  start: markRaw(ChatbotStartNode),
   message: markRaw(ChatbotTextNode),
   prompt: markRaw(ChatbotTextNode),
   buttons: markRaw(ChatbotButtonsNode),
@@ -237,7 +241,6 @@ const paletteLabels: Record<string, string> = {
 function addNodeFromPalette(type: ChatNodeType) {
   const pos = project({ x: window.innerWidth / 2 - 200, y: window.innerHeight / 2 - 200 })
   const id = `node_${Date.now()}_${nodeCounter++}`
-  const isFirst = nodes.value.length === 0
   addNodes([
     {
       id,
@@ -246,13 +249,41 @@ function addNodeFromPalette(type: ChatNodeType) {
       data: {
         label: paletteLabels[type] || type,
         config: defaultConfigFor(type),
-        isEntryNode: isFirst,
+        isEntryNode: false,
       },
     },
   ])
-  if (isFirst) entryNodeId.value = id
+  // First action node added → wire start → it so the flow has an entry
+  // path. Subsequent nodes are wired manually.
+  const startHasOutgoing = edges.value.some((e) => e.source === START_NODE_ID)
+  if (!startHasOutgoing && nodes.value.some((n) => n.id === START_NODE_ID)) {
+    addEdges([{
+      id: `edge_start_${id}`,
+      source: START_NODE_ID,
+      target: id,
+      sourceHandle: undefined,
+      type: 'default',
+      animated: true,
+      markerEnd: MarkerType.ArrowClosed,
+      label: '',
+    }])
+  }
   selectedNodeId.value = id
   hasUnsavedChanges.value = true
+}
+
+function ensureStartNode() {
+  if (nodes.value.some((n) => n.type === 'start')) return
+  addNodes([
+    {
+      id: START_NODE_ID,
+      type: 'start',
+      position: { x: 100, y: 100 },
+      data: { label: 'Start', config: {}, isEntryNode: true },
+      deletable: false,
+    },
+  ])
+  entryNodeId.value = START_NODE_ID
 }
 
 onConnect((params) => {
@@ -333,24 +364,20 @@ function onUpdateNode(updated: ChatNode) {
 
 function requestDeleteSelectedNode() {
   if (!selectedNode.value) return
+  if (selectedNode.value.type === 'start') return // Start node is fixed.
   showDeleteNodeConfirm.value = true
 }
 
 function confirmDeleteSelectedNode() {
   const node = selectedNode.value
   if (!node) return
+  if (node.type === 'start') return
   const nodeId = node.id
   const connected = edges.value.filter((e) => e.source === nodeId || e.target === nodeId)
   if (connected.length > 0) removeEdges(connected)
   removeNodes([nodeId])
   selectedNodeId.value = null
   showDeleteNodeConfirm.value = false
-
-  if (entryNodeId.value === nodeId && nodes.value.length > 0) {
-    const newEntry = nodes.value[0]
-    entryNodeId.value = newEntry.id
-    newEntry.data = { ...newEntry.data, isEntryNode: true }
-  }
   hasUnsavedChanges.value = true
 }
 
@@ -375,12 +402,17 @@ function toGraphPayload(): ChatFlowGraph {
     condition: e.sourceHandle || (e as any).label || 'default',
   }))
 
-  // Entry node: prefer the one explicitly chosen; else the node without incoming edges.
-  const nodesWithIncoming = new Set(ivrEdges.map((e) => e.to))
-  const fallbackEntry = ivrNodes.find((n) => !nodesWithIncoming.has(n.id))?.id || ivrNodes[0]?.id || ''
-  const entry = entryNodeId.value && ivrNodes.some((n) => n.id === entryNodeId.value)
-    ? entryNodeId.value
-    : fallbackEntry
+  // Entry node is always the start sentinel when present. Fall back to
+  // the node without incoming edges for any legacy graph that doesn't
+  // have one (loadGraph will have repaired most of those already).
+  const start = ivrNodes.find((n) => n.type === 'start')
+  let entry: string
+  if (start) {
+    entry = start.id
+  } else {
+    const nodesWithIncoming = new Set(ivrEdges.map((e) => e.to))
+    entry = ivrNodes.find((n) => !nodesWithIncoming.has(n.id))?.id || ivrNodes[0]?.id || ''
+  }
 
   return {
     version: 2,
@@ -415,7 +447,14 @@ const previewGraph = computed<ChatFlowGraph | null>(() => {
 })
 
 function loadGraph(graph: ChatFlowGraph) {
-  entryNodeId.value = graph.entry_node || ''
+  // Legacy graphs (saved before the start sentinel landed) may have an
+  // entry_node that points at a real action node. Inject a start node
+  // and rewire so the editor always shows a fixed entry point.
+  const hasStart = graph.nodes.some((n) => n.type === 'start')
+  const originalEntry = graph.entry_node || graph.nodes[0]?.id || ''
+  // Once we inject a start, only the start is the entry — the legacy
+  // entry node needs its target handle restored so the edge can land.
+  const effectiveEntry = hasStart ? graph.entry_node : START_NODE_ID
 
   const vfNodes = graph.nodes.map((n) => ({
     id: n.id,
@@ -424,20 +463,56 @@ function loadGraph(graph: ChatFlowGraph) {
     data: {
       label: n.label,
       config: n.config,
-      isEntryNode: n.id === graph.entry_node,
+      isEntryNode: n.id === effectiveEntry,
     },
+    deletable: n.type !== 'start',
   }))
 
   const vfEdges = (graph.edges || []).map((e, idx) => ({
     id: `edge_${idx}`,
     source: e.from,
     target: e.to,
-    sourceHandle: e.condition,
+    // BaseNode's plain source handle has no id, so only attach a
+    // sourceHandle for branch conditions (button:*, true/false,
+    // in_hours/out_of_hours). Plain "default" edges leave it
+    // undefined and Vue Flow routes to the node's only target.
+    sourceHandle: e.condition !== 'default' ? e.condition : undefined,
     type: 'default' as const,
     animated: true,
     markerEnd: MarkerType.ArrowClosed,
     label: e.condition !== 'default' ? e.condition : '',
   }))
+
+  if (!hasStart) {
+    // Place start directly above the original entry so the auto-wired
+    // edge flows top → bottom naturally on the canvas.
+    const entry = graph.nodes.find((n) => n.id === originalEntry)
+    const startPos = entry
+      ? { x: entry.position?.x ?? 100, y: (entry.position?.y ?? 100) - 140 }
+      : { x: 100, y: 100 }
+    vfNodes.unshift({
+      id: START_NODE_ID,
+      type: 'start',
+      position: startPos,
+      data: { label: 'Start', config: {}, isEntryNode: true },
+      deletable: false,
+    })
+    if (originalEntry) {
+      vfEdges.unshift({
+        id: 'edge_start',
+        source: START_NODE_ID,
+        target: originalEntry,
+        sourceHandle: undefined,
+        type: 'default' as const,
+        animated: true,
+        markerEnd: MarkerType.ArrowClosed,
+        label: '',
+      })
+    }
+    entryNodeId.value = START_NODE_ID
+  } else {
+    entryNodeId.value = graph.entry_node || ''
+  }
 
   addNodes(vfNodes)
   addEdges(vfEdges)
@@ -448,6 +523,7 @@ function loadGraph(graph: ChatFlowGraph) {
 
 async function loadFlow() {
   if (isNewFlow.value) {
+    ensureStartNode()
     isLoading.value = false
     return
   }

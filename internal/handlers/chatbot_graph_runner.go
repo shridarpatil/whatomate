@@ -190,6 +190,11 @@ func (a *App) runChatGraph(
 // PR lands.
 func (a *App) executeChatNode(node *ChatNode, ctx *chatNodeCtx) (nodeOutcome, error) {
 	switch node.Type {
+	case ChatNodeStart:
+		// Always-present entry sentinel. No side effect — falls through.
+		_ = node
+		_ = ctx
+		return nodeOutcome{outcome: "default"}, nil
 	case ChatNodeMessage:
 		return a.execChatMessage(node, ctx)
 	case ChatNodeButtons:

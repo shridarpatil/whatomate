@@ -213,6 +213,7 @@ const gotoFlowTargets = computed(() =>
 )
 
 const typeLabel: Record<string, string> = {
+  start: 'Start',
   message: 'Message',
   prompt: 'Prompt',
   buttons: 'Buttons',
@@ -231,13 +232,18 @@ const typeLabel: Record<string, string> = {
   <div class="space-y-4 p-4">
     <div class="flex items-center justify-between">
       <h3 class="font-semibold text-sm">{{ typeLabel[node.type] || node.type }}</h3>
-      <Button variant="ghost" size="icon" class="h-7 w-7" @click="emit('delete')">
+      <Button v-if="node.type !== 'start'" variant="ghost" size="icon" class="h-7 w-7" @click="emit('delete')">
         <Trash2 class="h-3.5 w-3.5 text-destructive" />
       </Button>
     </div>
 
+    <!-- Start: nothing to configure beyond the label. -->
+    <p v-if="node.type === 'start'" class="text-xs text-muted-foreground">
+      Flow entry point. Wire its output to the first node that should run.
+    </p>
+
     <!-- Label -->
-    <div class="space-y-1.5">
+    <div v-if="node.type !== 'start'" class="space-y-1.5">
       <Label class="text-xs">Label</Label>
       <Input :model-value="node.label" @update:model-value="(v) => updateLabel(String(v ?? ''))" class="h-8 text-sm" />
     </div>
@@ -664,7 +670,7 @@ const typeLabel: Record<string, string> = {
          nodes (end / transfer / goto_flow) where there's nothing to
          skip past. -->
     <div
-      v-if="!['end', 'transfer', 'goto_flow', 'condition', 'buttons', 'timing'].includes(node.type)"
+      v-if="!['start', 'end', 'transfer', 'goto_flow', 'condition', 'buttons', 'timing'].includes(node.type)"
       class="pt-2 border-t space-y-1.5"
     >
       <Label class="text-xs">Skip condition (optional)</Label>
