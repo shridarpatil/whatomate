@@ -88,6 +88,16 @@ func (a *App) runChatGraph(
 		flowResponseData: flowResponseData,
 	}
 
+	// Seed built-in template variables so {{phone_number}} / {{contact_name}}
+	// work in any outgoing message without needing an upstream api_call.
+	if session.SessionData == nil {
+		session.SessionData = models.JSONB{}
+	}
+	session.SessionData["phone_number"] = session.PhoneNumber
+	if contact != nil {
+		session.SessionData["contact_name"] = contact.ProfileName
+	}
+
 	if session.CurrentStep == "" {
 		session.CurrentStep = graph.EntryNode
 		// Trigger input is not "for" the entry node — clear it so we don't
@@ -180,6 +190,11 @@ func (a *App) runChatGraph(
 // PR lands.
 func (a *App) executeChatNode(node *ChatNode, ctx *chatNodeCtx) (nodeOutcome, error) {
 	switch node.Type {
+	case ChatNodeStart:
+		// Always-present entry sentinel. No side effect — falls through.
+		_ = node
+		_ = ctx
+		return nodeOutcome{outcome: "default"}, nil
 	case ChatNodeMessage:
 		return a.execChatMessage(node, ctx)
 	case ChatNodeButtons:
@@ -212,13 +227,16 @@ func (a *App) executeChatNode(node *ChatNode, ctx *chatNodeCtx) (nodeOutcome, er
 	}
 }
 
-// execChatMessage sends a text message and falls through.
+// execChatMessage sends a text message and falls through. The message
+// body is rendered with processTemplate against SessionData so authors
+// can interpolate captured variables (e.g. "Hi {{customer_name}}").
 // Config: { "message": "..." } or "text" for compatibility.
 func (a *App) execChatMessage(node *ChatNode, ctx *chatNodeCtx) (nodeOutcome, error) {
 	text := stringFromConfig(node.Config, "message", "text")
 	if text == "" {
 		return nodeOutcome{outcome: "default"}, nil
 	}
+	text = processTemplate(text, ctx.session.SessionData)
 	if err := a.sendAndSaveTextMessage(ctx.account, ctx.contact, text); err != nil {
 		return nodeOutcome{}, fmt.Errorf("send message: %w", err)
 	}
@@ -241,9 +259,19 @@ func (a *App) execChatButtons(node *ChatNode, ctx *chatNodeCtx) (nodeOutcome, er
 	if body == "" {
 		body = node.Label
 	}
+	body = processTemplate(body, ctx.session.SessionData)
 	buttons := buttonsFromConfig(node.Config)
 	if len(buttons) == 0 {
 		return nodeOutcome{}, fmt.Errorf("buttons node %q has no buttons configured", node.ID)
+	}
+	// Template each button's user-facing fields so authors can
+	// interpolate variables into titles / urls / phone numbers too.
+	for _, b := range buttons {
+		for _, key := range []string{"title", "url", "phone_number"} {
+			if s, ok := b[key].(string); ok && s != "" {
+				b[key] = processTemplate(s, ctx.session.SessionData)
+			}
+		}
 	}
 	if err := a.sendAndSaveInteractiveButtons(ctx.account, ctx.contact, body, buttons); err != nil {
 		return nodeOutcome{}, fmt.Errorf("send buttons: %w", err)
@@ -279,10 +307,11 @@ func (a *App) execChatPrompt(node *ChatNode, ctx *chatNodeCtx) (nodeOutcome, err
 		if body == "" {
 			return nodeOutcome{}, fmt.Errorf("prompt node %q has no body configured", node.ID)
 		}
-		if err := a.sendAndSaveTextMessage(ctx.account, ctx.contact, body); err != nil {
+		rendered := processTemplate(body, ctx.session.SessionData)
+		if err := a.sendAndSaveTextMessage(ctx.account, ctx.contact, rendered); err != nil {
 			return nodeOutcome{}, fmt.Errorf("send prompt: %w", err)
 		}
-		a.logSessionMessage(ctx.session.ID, models.DirectionOutgoing, body, node.ID)
+		a.logSessionMessage(ctx.session.ID, models.DirectionOutgoing, rendered, node.ID)
 		return nodeOutcome{yield: true}, nil
 	}
 
@@ -331,6 +360,7 @@ func (a *App) handleChatPromptInvalid(node *ChatNode, ctx *chatNodeCtx) (nodeOut
 	if errorMsg == "" {
 		errorMsg = "Invalid input. Please try again."
 	}
+	errorMsg = processTemplate(errorMsg, ctx.session.SessionData)
 	if err := a.sendAndSaveTextMessage(ctx.account, ctx.contact, errorMsg); err != nil {
 		return nodeOutcome{}, fmt.Errorf("send validation error: %w", err)
 	}
@@ -839,7 +869,7 @@ func (a *App) execChatWhatsAppFlow(node *ChatNode, ctx *chatNodeCtx) (nodeOutcom
 
 	body := processTemplate(stringFromConfig(node.Config, "body", "message", "text"), ctx.session.SessionData)
 	header := processTemplate(stringFromConfig(node.Config, "header"), ctx.session.SessionData)
-	cta := stringFromConfig(node.Config, "cta")
+	cta := processTemplate(stringFromConfig(node.Config, "cta"), ctx.session.SessionData)
 
 	// Look up the first screen — same pattern as the legacy executor so
 	// existing WhatsAppFlow rows continue to work.
@@ -878,6 +908,7 @@ func (a *App) execChatWhatsAppFlow(node *ChatNode, ctx *chatNodeCtx) (nodeOutcom
 // Config: { "message": "..." } (optional)
 func (a *App) execChatEnd(node *ChatNode, ctx *chatNodeCtx) (nodeOutcome, error) {
 	if msg := stringFromConfig(node.Config, "message"); msg != "" {
+		msg = processTemplate(msg, ctx.session.SessionData)
 		if err := a.sendAndSaveTextMessage(ctx.account, ctx.contact, msg); err != nil {
 			return nodeOutcome{}, fmt.Errorf("send end message: %w", err)
 		}

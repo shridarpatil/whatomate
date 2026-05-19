@@ -1047,6 +1047,7 @@ export interface IVRFlowData {
 // chat-specific node-type union. Only types listed in the union are
 // implemented today; others land in Phase 3.
 export type ChatNodeType =
+  | 'start'
   | 'message'
   | 'buttons'
   | 'end'

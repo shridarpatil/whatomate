@@ -38,12 +38,14 @@ func TestStepsToGraph_TextStepProducesMessageNode(t *testing.T) {
 	}
 	g := stepsToGraph(steps, nil)
 	require.Equal(t, 2, g["version"])
-	assert.Equal(t, "step_1", g["entry_node"])
+	// Entry is the injected start sentinel; the legacy step sits at [1].
+	assert.Equal(t, "__start__", g["entry_node"])
 
 	nodes := graphNodes(t, g)
-	require.Len(t, nodes, 1)
-	assert.Equal(t, "message", nodes[0]["type"])
-	cfg, _ := nodes[0]["config"].(map[string]any)
+	require.Len(t, nodes, 2)
+	assert.Equal(t, "start", nodes[0]["type"])
+	assert.Equal(t, "message", nodes[1]["type"])
+	cfg, _ := nodes[1]["config"].(map[string]any)
 	assert.Equal(t, "Hi!", cfg["message"])
 }
 
@@ -87,9 +89,10 @@ func TestStepsToGraph_ApiFetchToApiCall(t *testing.T) {
 		},
 	}
 	nodes := graphNodes(t, stepsToGraph(steps, nil))
-	require.Len(t, nodes, 1)
-	assert.Equal(t, "api_call", nodes[0]["type"])
-	cfg, _ := nodes[0]["config"].(map[string]any)
+	require.Len(t, nodes, 2)
+	assert.Equal(t, "start", nodes[0]["type"])
+	assert.Equal(t, "api_call", nodes[1]["type"])
+	cfg, _ := nodes[1]["config"].(map[string]any)
 	assert.Equal(t, "https://x/api", cfg["url"])
 	assert.Equal(t, "POST", cfg["method"])
 	assert.Equal(t, "Got {{customer_id}}", cfg["message_template"])
@@ -108,7 +111,7 @@ func TestStepsToGraph_WhatsAppFlowFieldRename(t *testing.T) {
 			},
 		},
 	}
-	cfg, _ := graphNodes(t, stepsToGraph(steps, nil))[0]["config"].(map[string]any)
+	cfg, _ := graphNodes(t, stepsToGraph(steps, nil))[1]["config"].(map[string]any)
 	assert.Equal(t, "meta-1", cfg["flow_id"])
 	assert.Equal(t, "Hello", cfg["header"])
 	assert.Equal(t, "Continue", cfg["cta"])
@@ -157,7 +160,7 @@ func TestStepsToGraph_ConditionExpressionPassthrough(t *testing.T) {
 			InputConfig: models.JSONB{"expression": `status == "active"`},
 		},
 	}
-	cfg, _ := graphNodes(t, stepsToGraph(steps, nil))[0]["config"].(map[string]any)
+	cfg, _ := graphNodes(t, stepsToGraph(steps, nil))[1]["config"].(map[string]any)
 	assert.Equal(t, `status == "active"`, cfg["expression"])
 }
 
@@ -170,7 +173,8 @@ func TestStepsToGraph_GotoFlowTerminalWithFlowID(t *testing.T) {
 		},
 	}
 	g := stepsToGraph(steps, nil)
-	cfg, _ := graphNodes(t, g)[0]["config"].(map[string]any)
+	// nodes[0] is the start sentinel; the goto_flow step is at [1].
+	cfg, _ := graphNodes(t, g)[1]["config"].(map[string]any)
 	assert.Equal(t, target.String(), cfg["flow_id"])
 	for _, e := range graphEdges(t, g) {
 		if e["from"] == "g1" {
@@ -186,12 +190,15 @@ func TestStepsToGraph_OrderingFollowsStepOrder(t *testing.T) {
 		{StepName: "second", StepOrder: 2, MessageType: "text", Message: "2"},
 	}
 	g := stepsToGraph(steps, nil)
-	assert.Equal(t, "first", g["entry_node"])
+	// entry_node is the injected start sentinel; the original first
+	// step sits behind it as start's default-edge target.
+	assert.Equal(t, "__start__", g["entry_node"])
 	nodes := graphNodes(t, g)
-	require.Len(t, nodes, 3)
-	assert.Equal(t, "first", nodes[0]["id"])
-	assert.Equal(t, "second", nodes[1]["id"])
-	assert.Equal(t, "third", nodes[2]["id"])
+	require.Len(t, nodes, 4)
+	assert.Equal(t, "__start__", nodes[0]["id"])
+	assert.Equal(t, "first", nodes[1]["id"])
+	assert.Equal(t, "second", nodes[2]["id"])
+	assert.Equal(t, "third", nodes[3]["id"])
 }
 
 func TestStepsToGraph_CanvasPositionsApplied(t *testing.T) {
@@ -203,7 +210,8 @@ func TestStepsToGraph_CanvasPositionsApplied(t *testing.T) {
 			"step_1": map[string]any{"x": 100.0, "y": 200.0},
 		},
 	}
-	pos, _ := graphNodes(t, stepsToGraph(steps, layout))[0]["position"].(map[string]any)
+	// nodes[0] is the start sentinel; the legacy step is at [1].
+	pos, _ := graphNodes(t, stepsToGraph(steps, layout))[1]["position"].(map[string]any)
 	assert.Equal(t, 100.0, pos["x"])
 	assert.Equal(t, 200.0, pos["y"])
 }
@@ -265,7 +273,7 @@ func TestBackfillChatbotFlowGraph_FillsNullGraphsAndLeavesOthersAlone(t *testing
 	require.NoError(t, app.DB.First(&legacyAfter, legacyID).Error)
 	require.NotNil(t, legacyAfter.Graph)
 	assert.EqualValues(t, 2, legacyAfter.Graph["version"])
-	assert.Equal(t, "step_1", legacyAfter.Graph["entry_node"])
+	assert.Equal(t, "__start__", legacyAfter.Graph["entry_node"])
 
 	var v2After models.ChatbotFlow
 	require.NoError(t, app.DB.First(&v2After, v2flow.ID).Error)
