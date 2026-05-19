@@ -7,6 +7,7 @@ import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { PageHeader, DataTable, DeleteConfirmDialog, ErrorState, type Column } from '@/components/shared'
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { api } from '@/services/api'
 import { useOrganizationsStore } from '@/stores/organizations'
 import { useAuthStore } from '@/stores/auth'
@@ -20,7 +21,9 @@ import {
   Phone,
   Check,
   Loader2,
-  Facebook
+  Facebook,
+  Smartphone,
+  Network
 } from 'lucide-vue-next'
 
 const { t } = useI18n()
@@ -53,6 +56,7 @@ const isDeleting = ref(false)
 const whatsappConfig = ref<{ app_id: string; config_id: string; api_version: string } | null>(null)
 const isFBSDKLoaded = ref(false)
 const isConnectingFB = ref(false)
+const showOnboardingDialog = ref(false)
 
 const canWrite = computed(() => authStore.hasPermission('accounts', 'write'))
 const canDelete = computed(() => authStore.hasPermission('accounts', 'delete'))
@@ -126,7 +130,7 @@ function loadFacebookSDK() {
   document.body.appendChild(script)
 }
 
-function launchWhatsAppSignup() {
+function launchWhatsAppSignup(isCoexistence: boolean = true) {
   if (!isFBSDKLoaded.value) {
     toast.error('Facebook SDK not loaded yet. Please wait...')
     return
@@ -137,12 +141,32 @@ function launchWhatsAppSignup() {
     return
   }
 
+  showOnboardingDialog.value = false
   isConnectingFB.value = true
-  console.log('[FB_SIGNUP] Launching Facebook login with config:', {
+  console.log('[FB_SIGNUP] Launching Facebook login with config (Coexistence:', isCoexistence, '):', {
     config_id: whatsappConfig.value.config_id,
     app_id: whatsappConfig.value.app_id,
     api_version: whatsappConfig.value.api_version
   })
+
+  const loginOptions: any = {
+    config_id: whatsappConfig.value.config_id,
+    response_type: 'code',
+    override_default_response_type: true
+  }
+
+  if (isCoexistence) {
+    loginOptions.extras = {
+      setup: {},
+      featureType: 'whatsapp_business_app_onboarding',
+      sessionInfoVersion: '3',
+      version: 'v3'
+    }
+  } else {
+    loginOptions.extras = {
+      setup: {}
+    }
+  }
 
   // @ts-ignore
   window.FB.login(
@@ -184,14 +208,7 @@ function launchWhatsAppSignup() {
         isConnectingFB.value = false
       }
     },
-    {
-      config_id: whatsappConfig.value.config_id,
-      response_type: 'code',
-      override_default_response_type: true,
-      extras: {
-        setup: {}
-      }
-    }
+    loginOptions
   )
 }
 
@@ -259,7 +276,7 @@ async function confirmDelete() {
           <Button
             v-if="whatsappConfig?.app_id && whatsappConfig?.config_id"
             size="sm"
-            @click="launchWhatsAppSignup"
+            @click="showOnboardingDialog = true"
             :disabled="isConnectingFB"
             class="bg-gradient-to-br from-[#1877F2] to-[#0C5DC7] hover:from-[#166FE5] hover:to-[#0A4DAD] text-white border-none shadow-none"
           >
@@ -313,7 +330,7 @@ async function confirmDelete() {
                     <Button
                       v-if="whatsappConfig?.app_id && whatsappConfig?.config_id"
                       size="lg"
-                      @click="launchWhatsAppSignup"
+                      @click="showOnboardingDialog = true"
                       :disabled="isConnectingFB || !isFBSDKLoaded"
                       class="bg-gradient-to-br from-[#1877F2] to-[#0C5DC7] hover:from-[#166FE5] hover:to-[#0A4DAD] text-white border-none shadow-none"
                     >
@@ -399,5 +416,79 @@ async function confirmDelete() {
       :is-submitting="isDeleting"
       @confirm="confirmDelete"
     />
+
+    <!-- Onboarding Method Selection Dialog -->
+    <Dialog v-model:open="showOnboardingDialog">
+      <DialogContent class="sm:max-w-2xl bg-[#0e0e11] border-[#222227] text-white light:bg-white light:border-gray-200 light:text-gray-900 p-6 shadow-2xl rounded-xl">
+        <DialogHeader class="mb-4">
+          <DialogTitle class="text-xl font-bold bg-gradient-to-r from-emerald-400 to-green-400 light:from-emerald-600 light:to-green-600 bg-clip-text text-transparent flex items-center gap-2">
+            {{ $t('accounts.connectTitle') }}
+          </DialogTitle>
+          <DialogDescription class="text-gray-400 light:text-gray-500 mt-1">
+            {{ $t('accounts.connectDesc') }}
+          </DialogDescription>
+        </DialogHeader>
+
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4 my-4">
+          <!-- Coexistence Option Card -->
+          <div
+            @click="launchWhatsAppSignup(true)"
+            class="relative group cursor-pointer flex flex-col p-5 rounded-xl border border-emerald-500/20 bg-[#141419] hover:bg-[#181822] hover:border-emerald-500/50 hover:shadow-[0_0_20px_rgba(16,185,129,0.1)] light:bg-gray-50/50 light:border-emerald-200 light:hover:bg-gray-100/70 light:hover:border-emerald-400 light:hover:shadow-[0_0_20px_rgba(16,185,129,0.05)] transition-all duration-300 overflow-hidden"
+          >
+            <!-- Badge -->
+            <div class="absolute top-3 right-3">
+              <span class="text-[10px] bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 px-2 py-0.5 rounded-full font-medium light:bg-emerald-50 light:text-emerald-600 light:border-emerald-200">
+                {{ $t('accounts.coexistenceRecommend') }}
+              </span>
+            </div>
+
+            <div class="h-10 w-10 rounded-lg bg-emerald-500/10 light:bg-emerald-100/60 flex items-center justify-center mb-4 group-hover:scale-110 transition-transform duration-300">
+              <Smartphone class="h-5 w-5 text-emerald-400 light:text-emerald-600" />
+            </div>
+
+            <h3 class="text-base font-semibold text-white light:text-gray-900 group-hover:text-emerald-400 light:group-hover:text-emerald-600 transition-colors duration-200">
+              {{ $t('accounts.coexistenceTitle') }}
+            </h3>
+            <p class="text-xs text-gray-400 light:text-gray-600 mt-2 flex-grow leading-relaxed">
+              {{ $t('accounts.coexistenceDesc') }}
+            </p>
+
+            <div class="mt-5 flex items-center justify-between text-xs font-medium text-emerald-400 light:text-emerald-600">
+              <span>{{ $t('accounts.selectMode') }}</span>
+              <span class="group-hover:translate-x-1 transition-transform duration-200">→</span>
+            </div>
+          </div>
+
+          <!-- Classic Option Card -->
+          <div
+            @click="launchWhatsAppSignup(false)"
+            class="relative group cursor-pointer flex flex-col p-5 rounded-xl border border-[#222227] bg-[#141419] hover:bg-[#181822] hover:border-blue-500/50 hover:shadow-[0_0_20px_rgba(59,130,246,0.1)] light:bg-gray-50/50 light:border-gray-200 light:hover:bg-gray-100/70 light:hover:border-blue-400 light:hover:shadow-[0_0_20px_rgba(59,130,246,0.05)] transition-all duration-300 overflow-hidden"
+          >
+            <!-- Badge -->
+            <div class="absolute top-3 right-3">
+              <span class="text-[10px] bg-blue-500/10 text-blue-400 border border-blue-500/20 px-2 py-0.5 rounded-full font-medium light:bg-blue-50 light:text-blue-600 light:border-blue-200">
+                {{ $t('accounts.classicRecommend') }}
+              </span>
+            </div>
+
+            <div class="h-10 w-10 rounded-lg bg-blue-500/10 light:bg-blue-100/60 flex items-center justify-center mb-4 group-hover:scale-110 transition-transform duration-300">
+              <Network class="h-5 w-5 text-blue-400 light:text-blue-600" />
+            </div>
+
+            <h3 class="text-base font-semibold text-white light:text-gray-900 group-hover:text-blue-400 light:group-hover:text-blue-600 transition-colors duration-200">
+              {{ $t('accounts.classicTitle') }}
+            </h3>
+            <p class="text-xs text-gray-400 light:text-gray-600 mt-2 flex-grow leading-relaxed">
+              {{ $t('accounts.classicDesc') }}
+            </p>
+
+            <div class="mt-5 flex items-center justify-between text-xs font-medium text-blue-400 light:text-blue-600">
+              <span>{{ $t('accounts.selectMode') }}</span>
+              <span class="group-hover:translate-x-1 transition-transform duration-200">→</span>
+            </div>
+          </div>
+        </div>
+      </DialogContent>
+    </Dialog>
   </div>
 </template>

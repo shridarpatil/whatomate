@@ -1339,7 +1339,22 @@
     "outgoing": "Outgoing",
     "webhookUrl": "Webhook URL",
     "yourAccounts": "Your Accounts",
-    "yourAccountsDesc": "WhatsApp Business accounts connected to your organization."
+    "yourAccountsDesc": "WhatsApp Business accounts connected to your organization.",
+    "encryptionConfig": "Meta Business Encryption Keys",
+    "encryptionEndpointUri": "Encryption Endpoint URI",
+    "encryptionPublicKey": "Public Key (RSA-2048)",
+    "generateKeys": "Generate Secure Key Pairs",
+    "generateKeysSuccess": "Secure key pairs generated and updated successfully",
+    "generateKeysFailed": "Failed to generate secure key pairs",
+    "connectTitle": "Choose Connection Method",
+    "connectDesc": "How would you like to onboard your WhatsApp Business number?",
+    "coexistenceTitle": "Sync with Mobile App (Recommended)",
+    "coexistenceDesc": "Keep using your existing WhatsApp Business mobile app on your phone. Outgoing messages are mirrored here and contacts stay in sync.",
+    "coexistenceRecommend": "Perfect for small & medium businesses",
+    "classicTitle": "Direct Cloud API (Classic)",
+    "classicDesc": "Migrate your number entirely to the Cloud API. The mobile app on your phone will be disconnected. Best for high-volume automation.",
+    "classicRecommend": "Perfect for large teams & high-volume bots",
+    "selectMode": "Select Mode"
   },
   "dashboard": {
     "title": "Dashboard",
