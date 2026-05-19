@@ -143,11 +143,6 @@ function launchWhatsAppSignup(isCoexistence: boolean = true) {
 
   showOnboardingDialog.value = false
   isConnectingFB.value = true
-  console.log('[FB_SIGNUP] Launching Facebook login with config (Coexistence:', isCoexistence, '):', {
-    config_id: whatsappConfig.value.config_id,
-    app_id: whatsappConfig.value.app_id,
-    api_version: whatsappConfig.value.api_version
-  })
 
   const loginOptions: any = {
     config_id: whatsappConfig.value.config_id,
@@ -171,39 +166,23 @@ function launchWhatsAppSignup(isCoexistence: boolean = true) {
   // @ts-ignore
   window.FB.login(
     (response: any) => {
-      console.log('[FB_SIGNUP] Facebook login response:', JSON.stringify(response, null, 2))
-
       if (response.authResponse) {
-        console.log('[FB_SIGNUP] Auth response received:', {
-          code_length: response.authResponse.code?.length || 0,
-          has_code: !!response.authResponse.code,
-          phone_number_id: response.authResponse.phone_number_id,
-          waba_id: response.authResponse.waba_id,
-          all_keys: Object.keys(response.authResponse)
-        })
-
         const code = response.authResponse.code
         const phoneNumberId = response.authResponse.phone_number_id
         const wabaId = response.authResponse.waba_id
 
         if (!code) {
-          console.error('[FB_SIGNUP] Missing code in response')
           toast.error('Incomplete data from Facebook: missing authorization code')
           isConnectingFB.value = false
           return
         }
 
-        if (!phoneNumberId || !wabaId) {
-          console.log('[FB_SIGNUP] Missing IDs in response, proceeding with code only (discovery mode)')
-        }
-
         exchangeCodeForToken(code, phoneNumberId, wabaId)
       } else if (response.error) {
-        console.error('[FB_SIGNUP] Facebook error:', response.error)
+        console.error('Facebook SDK error:', response.error)
         toast.error(`Facebook error: ${response.error.message || 'Unknown error'}`)
         isConnectingFB.value = false
       } else {
-        console.warn('[FB_SIGNUP] Login cancelled by user')
         toast.error('Facebook login was cancelled')
         isConnectingFB.value = false
       }
@@ -233,7 +212,7 @@ async function exchangeCodeForToken(code: string, phoneNumberId: string, wabaId:
 
     await fetchAccounts()
   } catch (error: any) {
-    console.error('[FB_SIGNUP] Exchange token error:', error)
+    console.error('Failed to exchange Facebook code for access token:', error)
     toast.error(getErrorMessage(error, 'Failed to connect WhatsApp account'))
   } finally {
     isConnectingFB.value = false
