@@ -273,7 +273,7 @@ func TestBackfillChatbotFlowGraph_FillsNullGraphsAndLeavesOthersAlone(t *testing
 	require.NoError(t, app.DB.First(&legacyAfter, legacyID).Error)
 	require.NotNil(t, legacyAfter.Graph)
 	assert.EqualValues(t, 2, legacyAfter.Graph["version"])
-	assert.Equal(t, "step_1", legacyAfter.Graph["entry_node"])
+	assert.Equal(t, "__start__", legacyAfter.Graph["entry_node"])
 
 	var v2After models.ChatbotFlow
 	require.NoError(t, app.DB.First(&v2After, v2flow.ID).Error)
