@@ -1008,7 +1008,8 @@ func (a *App) processContactSync(phoneNumberID, contactPhone, contactName, actio
 		return
 	}
 
-	if action == "add" {
+	switch action {
+	case "add":
 		contact, isNewContact, err := contactutil.GetOrCreateContact(a.DB, account.OrganizationID, contactPhone, contactName)
 		if err != nil {
 			a.Log.Error("Failed to sync new contact from app state sync", "phone", contactPhone, "error", err)
@@ -1025,7 +1026,7 @@ func (a *App) processContactSync(phoneNumberID, contactPhone, contactName, actio
 				WhatsAppAccount: account.Name,
 			})
 		}
-	} else if action == "remove" {
+	case "remove":
 		// Normalize contactPhone (strip leading + if present)
 		normalizedPhone := contactPhone
 		if len(normalizedPhone) > 0 && normalizedPhone[0] == '+' {
@@ -1043,7 +1044,7 @@ func (a *App) processContactSync(phoneNumberID, contactPhone, contactName, actio
 		} else {
 			a.Log.Info("Contact not found for sync remove", "phone", contactPhone)
 		}
-	} else {
+	default:
 		a.Log.Warn("Unknown contact sync action", "action", action)
 	}
 }
