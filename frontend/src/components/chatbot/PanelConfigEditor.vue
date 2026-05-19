@@ -131,15 +131,15 @@ function setField(sectionIndex: number, fieldIndex: number, patch: Partial<Panel
 
 <template>
   <div class="space-y-3">
-    <div v-if="availableVariables.length > 0" class="text-[10px] text-muted-foreground">
-      <span class="font-medium">Available variables:</span>
-      <span class="ml-1">
+    <div v-if="availableVariables.length > 0" class="text-[10px] text-muted-foreground space-y-1">
+      <div class="font-medium">Available variables</div>
+      <div class="flex flex-wrap gap-1">
         <code
           v-for="(v, i) in availableVariables"
           :key="v.key + i"
-          class="bg-muted px-1 py-0.5 rounded mr-1"
+          class="bg-muted px-1.5 py-0.5 rounded"
         >{{ v.key }}</code>
-      </span>
+      </div>
     </div>
     <div v-else class="text-[10px] text-muted-foreground p-2 border rounded bg-muted/30">
       No variables captured yet. Add a Prompt node with a "Store response as" value, or an API node with response mapping.
