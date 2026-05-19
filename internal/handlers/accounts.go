@@ -519,14 +519,9 @@ func (a *App) ExchangeToken(r *fastglue.Request) error {
 		return nil
 	}
 
-	// LOG: Incoming request from Facebook
-	a.Log.Info("[FB_SIGNUP] Received exchange token request",
-		"code_length", len(req.Code),
+	a.Log.Info("Received embedded signup exchange token request",
 		"phone_id", req.PhoneID,
 		"waba_id", req.WABAID,
-		"name_provided", req.Name != "",
-		"name", req.Name,
-		"webhook_token_provided", req.WebhookVerifyToken != "",
 		"organization_id", orgID)
 
 	if req.Code == "" {
@@ -535,29 +530,25 @@ func (a *App) ExchangeToken(r *fastglue.Request) error {
 
 	// 1. Exchange code for user access token using WhatsApp service
 	ctx := context.Background()
-	a.Log.Info("[FB_SIGNUP] Exchanging code for access token",
-		"app_id", a.Config.WhatsApp.AppID,
-		"api_version", a.Config.WhatsApp.APIVersion)
+	a.Log.Info("Exchanging code for access token")
 
 	accessToken, err := a.WhatsApp.ExchangeCodeForToken(ctx, req.Code,
 		a.Config.WhatsApp.AppID, a.Config.WhatsApp.AppSecret, a.Config.WhatsApp.APIVersion)
 	if err != nil {
-		a.Log.Error("[FB_SIGNUP] Failed to exchange token", "error", err, "code_length", len(req.Code))
+		a.Log.Error("Failed to exchange token", "error", err)
 		return r.SendErrorEnvelope(fasthttp.StatusBadRequest, err.Error(), nil, "")
 	}
 
-	a.Log.Info("[FB_SIGNUP] Token exchange successful", "token_length", len(accessToken))
-
 	// DISCOVERY: If IDs are missing, try to find them using the token
 	if req.PhoneID == "" || req.WABAID == "" {
-		a.Log.Info("[FB_SIGNUP] IDs missing, attempting discovery via debug_token")
+		a.Log.Info("Missing PhoneID/WABAID, attempting discovery via debug_token")
 
 		// 1. Debug the token to find the WABA ID in granular_scopes
 		appAccessToken := fmt.Sprintf("%s|%s", a.Config.WhatsApp.AppID, a.Config.WhatsApp.AppSecret)
 
 		debugInfo, err := a.WhatsApp.GetTokenDebugInfo(ctx, accessToken, appAccessToken)
 		if err != nil {
-			a.Log.Error("[FB_SIGNUP] Failed to debug token", "error", err)
+			a.Log.Error("Failed to debug token", "error", err)
 			return r.SendErrorEnvelope(fasthttp.StatusBadRequest, "Failed to validate token details: "+err.Error(), nil, "")
 		}
 
@@ -574,7 +565,7 @@ func (a *App) ExchangeToken(r *fastglue.Request) error {
 		}
 
 		if discoveredWABAID == "" {
-			a.Log.Warn("[FB_SIGNUP] No WABA ID found in granular scopes, falling back to /me/accounts strategy")
+			a.Log.Warn("No WABA ID found in granular scopes, falling back to /me/accounts strategy")
 			// Fallback to old strategy if granular scope is missing
 			sharedInfo, err := a.WhatsApp.GetSharedWABA(ctx, accessToken)
 			if err == nil && len(sharedInfo.Data) > 0 {
@@ -587,13 +578,13 @@ func (a *App) ExchangeToken(r *fastglue.Request) error {
 		}
 
 		req.WABAID = discoveredWABAID
-		a.Log.Info("[FB_SIGNUP] Discovered WABA ID", "waba_id", req.WABAID)
+		a.Log.Info("Discovered WABA ID", "waba_id", req.WABAID)
 
 		// 3. Fetch Phone Numbers for this WABA
 		if req.PhoneID == "" {
 			phonesResp, err := a.WhatsApp.GetWABAPhoneNumbers(ctx, req.WABAID, accessToken)
 			if err != nil {
-				a.Log.Error("[FB_SIGNUP] Failed to fetch phone numbers", "error", err)
+				a.Log.Error("Failed to fetch phone numbers from Meta", "error", err)
 				return r.SendErrorEnvelope(fasthttp.StatusBadRequest, "Failed to fetch phone numbers from WABA: "+err.Error(), nil, "")
 			}
 
@@ -605,7 +596,7 @@ func (a *App) ExchangeToken(r *fastglue.Request) error {
 			phone := phonesResp.Data[0]
 			req.PhoneID = phone.ID
 			req.Name = fmt.Sprintf("%s (%s)", phone.VerifiedName, phone.DisplayPhoneNumber)
-			a.Log.Info("[FB_SIGNUP] Discovered Phone", "phone_id", req.PhoneID, "name", req.Name)
+			a.Log.Info("Discovered Phone ID", "phone_id", req.PhoneID)
 		}
 	}
 
@@ -619,7 +610,6 @@ func (a *App) ExchangeToken(r *fastglue.Request) error {
 
 	if req.Name == "" {
 		// Try to fetch name from Meta using WhatsApp service
-		a.Log.Info("[FB_SIGNUP] Fetching phone number info from Meta", "phone_id", req.PhoneID)
 		phoneInfo, err := a.WhatsApp.GetPhoneNumberInfo(ctx, req.PhoneID, accessToken, a.Config.WhatsApp.APIVersion)
 		if err == nil && phoneInfo.VerifiedName != "" {
 			a.Log.Info("[FB_SIGNUP] Phone info retrieved",
