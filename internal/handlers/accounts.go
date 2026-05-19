@@ -760,10 +760,7 @@ func (a *App) RegisterPhone(r *fastglue.Request) error {
 	ctx := context.Background()
 	if err := a.WhatsApp.RegisterPhoneNumber(ctx, account.PhoneID, pin, account.AccessToken, account.APIVersion); err != nil {
 		a.Log.Error("Manual registration failed", "error", err)
-		return r.SendEnvelope(map[string]interface{}{
-			"success": false,
-			"error":   err.Error(),
-		})
+		return r.SendErrorEnvelope(fasthttp.StatusBadRequest, err.Error(), nil, "")
 	}
 
 	// Success
