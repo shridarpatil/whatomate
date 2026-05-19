@@ -146,9 +146,25 @@ func TestVerifyWebhookSignature_TimingAttackResistance(t *testing.T) {
 func webhookTestApp(t *testing.T) *App {
 	t.Helper()
 	db := testutil.SetupTestDB(t)
+	redisClient := testutil.SetupTestRedis(t)
+	if redisClient == nil {
+		t.Skip("TEST_REDIS_URL not set, skipping test")
+	}
+	cfg := &config.Config{
+		JWT: config.JWTConfig{
+			Secret:            testutil.TestJWTSecret,
+			AccessExpiryMins:  15,
+			RefreshExpiryDays: 7,
+		},
+		App: config.AppConfig{
+			EncryptionKey: "test-encryption-key-32-bytes-long",
+		},
+	}
 	return &App{
-		DB:  db,
-		Log: testutil.NopLogger(),
+		Config: cfg,
+		DB:     db,
+		Log:    testutil.NopLogger(),
+		Redis:  redisClient,
 	}
 }
 
