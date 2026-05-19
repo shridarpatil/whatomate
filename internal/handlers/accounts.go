@@ -794,13 +794,14 @@ func (a *App) RegisterPhone(r *fastglue.Request) error {
 	})
 }
 
-func generateNumericPIN(length int) string {
+func generateNumericPIN(length int) (string, error) {
 	b := make([]byte, length)
-	if _, err := rand.Read(b); err != nil {
-		return "123456" // Fallback
+	for i := 0; i < length; i++ {
+		num, err := rand.Int(rand.Reader, big.NewInt(10))
+		if err != nil {
+			return "", err
+		}
+		b[i] = byte(num.Int64()) + '0'
 	}
-	for i := range b {
-		b[i] = (b[i] % 10) + '0'
-	}
-	return string(b)
+	return string(b), nil
 }
