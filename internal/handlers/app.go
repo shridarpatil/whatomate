@@ -134,15 +134,15 @@ func (a *App) ReadyCheck(r *fastglue.Request) error {
 	})
 }
 
-// GetClientConfig returns public configuration values for the frontend
-func (a *App) GetClientConfig(r *fastglue.Request) error {
-	type ClientConfig struct {
-		WhatsAppAppID      string `json:"whatsapp_app_id"`
-		WhatsAppConfigID   string `json:"whatsapp_config_id"`
-		WhatsAppAPIVersion string `json:"whatsapp_api_version"`
+// GetEmbeddedSignupConfig returns public configuration values for the embedded signup flow
+func (a *App) GetEmbeddedSignupConfig(r *fastglue.Request) error {
+	type EmbeddedSignupConfig struct {
+		WhatsAppAppID      string `json:"whatsapp_app_id,omitempty"`
+		WhatsAppConfigID   string `json:"whatsapp_config_id,omitempty"`
+		WhatsAppAPIVersion string `json:"whatsapp_api_version,omitempty"`
 	}
 
-	config := ClientConfig{
+	config := EmbeddedSignupConfig{
 		WhatsAppAppID:      a.Config.WhatsApp.AppID,
 		WhatsAppConfigID:   a.Config.WhatsApp.ConfigID,
 		WhatsAppAPIVersion: a.Config.WhatsApp.APIVersion,
