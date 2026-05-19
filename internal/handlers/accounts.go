@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"math/big"
 	"net/http"
 
 	"github.com/google/uuid"
@@ -612,11 +613,11 @@ func (a *App) ExchangeToken(r *fastglue.Request) error {
 		// Try to fetch name from Meta using WhatsApp service
 		phoneInfo, err := a.WhatsApp.GetPhoneNumberInfo(ctx, req.PhoneID, accessToken, a.Config.WhatsApp.APIVersion)
 		if err == nil && phoneInfo.VerifiedName != "" {
-			a.Log.Info("[FB_SIGNUP] Phone info retrieved",
-				"verified_name", phoneInfo.VerifiedName,
-				"display_phone_number", phoneInfo.DisplayPhoneNumber,
-				"quality_rating", phoneInfo.QualityRating)
-			req.Name = fmt.Sprintf("%s %s", phoneInfo.VerifiedName, generateNumericPIN(4))
+			suffixPIN, err := generateNumericPIN(4)
+			if err != nil {
+				return r.SendErrorEnvelope(fasthttp.StatusInternalServerError, "Failed to generate security identifier", nil, "")
+			}
+			req.Name = fmt.Sprintf("%s %s", phoneInfo.VerifiedName, suffixPIN)
 		} else {
 			if err != nil {
 				a.Log.Warn("[FB_SIGNUP] Failed to fetch phone info", "error", err)
