@@ -8,7 +8,8 @@ defineOptions({ inheritAttrs: false })
 const props = defineProps<{ data: any }>()
 
 const summary = computed(() => {
-  return props.data?.config?.cta_text || props.data?.config?.flow_name || 'WhatsApp Flow'
+  const cfg = props.data?.config || {}
+  return cfg.cta || cfg.cta_text || cfg.flow_name || cfg.body || 'WhatsApp Flow'
 })
 </script>
 

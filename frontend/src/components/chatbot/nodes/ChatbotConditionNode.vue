@@ -8,7 +8,8 @@ defineOptions({ inheritAttrs: false })
 const props = defineProps<{ data: any }>()
 
 const summary = computed(() => {
-  const expression = props.data?.config?.input_config?.expression as string | undefined
+  const cfg = props.data?.config || {}
+  const expression = (cfg.expression || cfg.input_config?.expression) as string | undefined
   if (!expression) return 'No expression'
   return expression.length > 60 ? expression.slice(0, 60) + '…' : expression
 })

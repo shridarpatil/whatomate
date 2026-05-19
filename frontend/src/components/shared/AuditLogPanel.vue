@@ -38,7 +38,8 @@ function formatValue(val: any): string {
   if (typeof val === 'object') {
     // For simple objects with a "body" key (like response_content), show the body
     if (val.body) return String(val.body)
-    return JSON.stringify(val)
+    const s = JSON.stringify(val)
+    return s.length > 120 ? s.slice(0, 120) + '…' : s
   }
   return String(val)
 }
@@ -123,10 +124,10 @@ onMounted(() => loadLogs())
               <div
                 v-for="(change, idx) in log.changes"
                 :key="idx"
-                class="text-xs rounded-md bg-muted/50 px-2.5 py-1.5 overflow-hidden"
+                class="text-xs rounded-md bg-muted/50 px-2.5 py-1.5 overflow-hidden min-w-0"
               >
                 <span class="font-medium text-foreground">{{ formatLabel(change.field) }}:</span>
-                <div class="mt-0.5 text-muted-foreground break-words">
+                <div class="mt-0.5 text-muted-foreground break-all">
                   <span>{{ formatValue(change.old_value) }}</span>
                   <span class="mx-1">→</span>
                   <span class="text-foreground">{{ formatValue(change.new_value) }}</span>

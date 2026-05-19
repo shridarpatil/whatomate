@@ -13,6 +13,7 @@ import (
 type ChatNodeType string
 
 const (
+	ChatNodeStart       ChatNodeType = "start"
 	ChatNodeMessage     ChatNodeType = "message"
 	ChatNodeButtons     ChatNodeType = "buttons"
 	ChatNodePrompt      ChatNodeType = "prompt"
