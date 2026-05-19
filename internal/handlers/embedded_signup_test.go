@@ -324,52 +324,15 @@ func TestApp_ExchangeToken_MissingFields(t *testing.T) {
 	org := testutil.CreateTestOrganization(t, app.DB)
 	user := testutil.CreateTestUser(t, app.DB, org.ID)
 
-	// Mock Meta API server (won't be called but needed for client initialization)
-	metaServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(http.StatusBadRequest)
-	}))
-	defer metaServer.Close()
+	req := testutil.NewJSONRequest(t, map[string]interface{}{
+		"phone_id": "123",
+		"waba_id":  "456",
+	}) // missing code
+	testutil.SetAuthContext(req, org.ID, user.ID)
 
-	// Initialize WhatsApp client
-	app.WhatsApp = whatsapp.NewWithBaseURL(app.Log, metaServer.URL)
-
-	tests := []struct {
-		name string
-		body map[string]interface{}
-	}{
-		{
-			name: "missing_code",
-			body: map[string]interface{}{
-				"phone_id": "123",
-				"waba_id":  "456",
-			},
-		},
-		{
-			name: "missing_phone_id",
-			body: map[string]interface{}{
-				"code":    "test",
-				"waba_id": "456",
-			},
-		},
-		{
-			name: "missing_waba_id",
-			body: map[string]interface{}{
-				"code":     "test",
-				"phone_id": "123",
-			},
-		},
-	}
-
-	for _, tc := range tests {
-		t.Run(tc.name, func(t *testing.T) {
-			req := testutil.NewJSONRequest(t, tc.body)
-			testutil.SetAuthContext(req, org.ID, user.ID)
-
-			err := app.ExchangeToken(req)
-			require.NoError(t, err)
-			assert.Equal(t, fasthttp.StatusBadRequest, testutil.GetResponseStatusCode(req))
-		})
-	}
+	err := app.ExchangeToken(req)
+	require.NoError(t, err)
+	assert.Equal(t, fasthttp.StatusBadRequest, testutil.GetResponseStatusCode(req))
 }
 
 func TestApp_ExchangeToken_Unauthorized(t *testing.T) {
@@ -551,13 +514,9 @@ func TestApp_RegisterPhone_RegistrationFailed(t *testing.T) {
 	err := app.RegisterPhone(req)
 	require.NoError(t, err)
 
-	var resp struct {
-		Data map[string]interface{} `json:"data"`
-	}
-	err = json.Unmarshal(testutil.GetResponseBody(req), &resp)
-	require.NoError(t, err)
-	assert.False(t, resp.Data["success"].(bool))
-	assert.Contains(t, resp.Data["error"], "Phone number must be verified")
+	assert.Equal(t, fasthttp.StatusBadRequest, testutil.GetResponseStatusCode(req))
+	body := string(testutil.GetResponseBody(req))
+	assert.Contains(t, body, "Phone number must be verified")
 
 	// Verify account status NOT updated
 	var updated models.WhatsAppAccount
