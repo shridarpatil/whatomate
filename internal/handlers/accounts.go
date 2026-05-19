@@ -620,7 +620,7 @@ func (a *App) ExchangeToken(r *fastglue.Request) error {
 			req.Name = fmt.Sprintf("%s %s", phoneInfo.VerifiedName, suffixPIN)
 		} else {
 			if err != nil {
-				a.Log.Warn("[FB_SIGNUP] Failed to fetch phone info", "error", err)
+				a.Log.Warn("Failed to fetch phone info from Meta", "error", err)
 			}
 			// Safe substring handling
 			suffix := req.PhoneID
@@ -628,7 +628,6 @@ func (a *App) ExchangeToken(r *fastglue.Request) error {
 				suffix = req.PhoneID[len(req.PhoneID)-4:]
 			}
 			req.Name = "WhatsApp Account " + suffix
-			a.Log.Info("[FB_SIGNUP] Using generated account name", "name", req.Name)
 		}
 	}
 
@@ -665,12 +664,11 @@ func (a *App) ExchangeToken(r *fastglue.Request) error {
 	if regErr == nil {
 		account.Status = "active"
 		account.Pin = generatedPin
-		a.Log.Info("[FB_SIGNUP] Auto-registration successful", "phone_id", account.PhoneID)
+		a.Log.Info("Phone number auto-registration successful", "phone_id", account.PhoneID)
 	} else {
-		a.Log.Warn("[FB_SIGNUP] Auto-registration failed (likely existing PIN or permissions)",
+		a.Log.Warn("Phone number auto-registration failed",
 			"error", regErr,
-			"phone_id", account.PhoneID,
-			"error_type", fmt.Sprintf("%T", regErr))
+			"phone_id", account.PhoneID)
 		account.Status = "pending_registration"
 	}
 
@@ -687,16 +685,10 @@ func (a *App) ExchangeToken(r *fastglue.Request) error {
 	// Invalidate cache
 	a.InvalidateWhatsAppAccountCache(account.PhoneID)
 
-	// Log success with full details
-	a.Log.Info("[FB_SIGNUP] Account created/updated via embedded signup",
+	a.Log.Info("WhatsApp account connected via embedded signup successfully",
 		"account_id", account.ID,
 		"phone_id", account.PhoneID,
-		"waba_id", account.BusinessID,
-		"status", account.Status,
-		"name", account.Name,
-		"has_pin", account.Pin != "",
-		"organization_id", orgID,
-		"existing_account", existingAccount)
+		"status", account.Status)
 
 	accResp := accountToResponse(account)
 
