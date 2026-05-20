@@ -9,6 +9,7 @@ import (
 	"io"
 	"math/big"
 	"net/http"
+	"strings"
 
 	"github.com/google/uuid"
 	"github.com/shridarpatil/whatomate/internal/audit"
@@ -609,19 +610,20 @@ func (a *App) ExchangeToken(r *fastglue.Request) error {
 		existingAccount = true
 	}
 
+	// Fetch phone info from Meta using WhatsApp service unconditionally
+	phoneInfo, err := a.WhatsApp.GetPhoneNumberInfo(ctx, req.PhoneID, accessToken, a.Config.WhatsApp.APIVersion)
+	if err != nil {
+		a.Log.Warn("Failed to fetch phone info from Meta", "error", err)
+	}
+
 	if req.Name == "" {
-		// Try to fetch name from Meta using WhatsApp service
-		phoneInfo, err := a.WhatsApp.GetPhoneNumberInfo(ctx, req.PhoneID, accessToken, a.Config.WhatsApp.APIVersion)
-		if err == nil && phoneInfo.VerifiedName != "" {
+		if err == nil && phoneInfo != nil && phoneInfo.VerifiedName != "" {
 			suffixPIN, err := generateNumericPIN(4)
 			if err != nil {
 				return r.SendErrorEnvelope(fasthttp.StatusInternalServerError, "Failed to generate security identifier", nil, "")
 			}
 			req.Name = fmt.Sprintf("%s %s", phoneInfo.VerifiedName, suffixPIN)
 		} else {
-			if err != nil {
-				a.Log.Warn("Failed to fetch phone info from Meta", "error", err)
-			}
 			// Safe substring handling
 			suffix := req.PhoneID
 			if len(req.PhoneID) > 4 {
@@ -656,23 +658,37 @@ func (a *App) ExchangeToken(r *fastglue.Request) error {
 		account.AutoReadReceipt = false
 	}
 
-	// 3. Attempt Auto-Registration with random PIN using WhatsApp service
-	generatedPin, err := generateNumericPIN(6)
-	if err != nil {
-		return r.SendErrorEnvelope(fasthttp.StatusInternalServerError, "Failed to generate secure random PIN", nil, "")
+	// 3. Attempt Auto-Registration
+	var isSMB bool
+	if phoneInfo != nil {
+		if phoneInfo.IsOnBizApp || phoneInfo.PlatformType == "SMB" || phoneInfo.PlatformType == "SMB_CLOUD_API" {
+			isSMB = true
+		}
 	}
-	a.Log.Info("Attempting phone number auto-registration", "phone_id", account.PhoneID)
-	regErr := a.WhatsApp.RegisterPhoneNumber(ctx, account.PhoneID, generatedPin, accessToken, account.APIVersion)
 
-	if regErr == nil {
+	var regErr error
+	if isSMB {
 		account.Status = "active"
-		account.Pin = generatedPin
-		a.Log.Info("Phone number auto-registration successful", "phone_id", account.PhoneID)
+		account.Pin = ""
+		a.Log.Info("SMB account detected via Meta API, skipped registration, setting to active", "phone_id", account.PhoneID)
 	} else {
-		a.Log.Warn("Phone number auto-registration failed",
-			"error", regErr,
-			"phone_id", account.PhoneID)
-		account.Status = "pending_registration"
+		generatedPin, err := generateNumericPIN(6)
+		if err != nil {
+			return r.SendErrorEnvelope(fasthttp.StatusInternalServerError, "Failed to generate secure random PIN", nil, "")
+		}
+		a.Log.Info("Attempting phone number auto-registration", "phone_id", account.PhoneID)
+		regErr = a.WhatsApp.RegisterPhoneNumber(ctx, account.PhoneID, generatedPin, accessToken, account.APIVersion)
+
+		if regErr == nil {
+			account.Status = "active"
+			account.Pin = generatedPin
+			a.Log.Info("Phone number auto-registration successful", "phone_id", account.PhoneID)
+		} else {
+			a.Log.Warn("Phone number auto-registration failed",
+				"error", regErr,
+				"phone_id", account.PhoneID)
+			account.Status = "pending_registration"
+		}
 	}
 
 	// 4. Subscribe app to WABA webhooks
@@ -756,11 +772,25 @@ func (a *App) RegisterPhone(r *fastglue.Request) error {
 		}
 	}
 
-	// Call Meta Register endpoint using WhatsApp service
+	// Call Meta API to check if it's SMB
 	ctx := context.Background()
-	if err := a.WhatsApp.RegisterPhoneNumber(ctx, account.PhoneID, pin, account.AccessToken, account.APIVersion); err != nil {
-		a.Log.Error("Manual registration failed", "error", err)
-		return r.SendErrorEnvelope(fasthttp.StatusBadRequest, err.Error(), nil, "")
+	phoneInfo, err := a.WhatsApp.GetPhoneNumberInfo(ctx, account.PhoneID, account.AccessToken, account.APIVersion)
+	var isSMB bool
+	if err == nil && phoneInfo != nil {
+		if phoneInfo.IsOnBizApp || phoneInfo.PlatformType == "SMB" || phoneInfo.PlatformType == "SMB_CLOUD_API" {
+			isSMB = true
+		}
+	}
+
+	if isSMB {
+		a.Log.Info("Manual registration: SMB account detected via Meta API", "phone_id", account.PhoneID)
+		pin = ""
+	} else {
+		// Call Meta Register endpoint using WhatsApp service
+		if err := a.WhatsApp.RegisterPhoneNumber(ctx, account.PhoneID, pin, account.AccessToken, account.APIVersion); err != nil {
+			a.Log.Error("Manual registration failed", "error", err)
+			return r.SendErrorEnvelope(fasthttp.StatusBadRequest, err.Error(), nil, "")
+		}
 	}
 
 	// Success

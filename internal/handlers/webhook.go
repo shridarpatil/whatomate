@@ -239,6 +239,7 @@ type WebhookPayload struct {
 				MessageEchoes []struct {
 					From       string `json:"from"`
 					FromUserID string `json:"from_user_id,omitempty"` // BSUID
+					To         string `json:"to,omitempty"`
 					ID         string `json:"id"`
 					Timestamp  string `json:"timestamp"`
 					Type       string `json:"type"`
@@ -809,9 +810,16 @@ func (a *App) processMessageEcho(phoneNumberID string, echo any) {
 	}
 
 	// Get or create contact (always do this for all echoed messages)
-	contact, _, err := contactutil.GetOrCreateContact(a.DB, account.OrganizationID, msg.From, "")
+	// For message echoes, the message is sent TO the contact FROM the business.
+	contactPhone := msg.To
+	if contactPhone == "" {
+		a.Log.Warn("Message echo missing 'to' field, falling back to 'from'", "from", msg.From)
+		contactPhone = msg.From
+	}
+
+	contact, _, err := contactutil.GetOrCreateContact(a.DB, account.OrganizationID, contactPhone, "")
 	if err != nil {
-		a.Log.Error("Failed to get or create contact for echo", "from", msg.From, "error", err)
+		a.Log.Error("Failed to get or create contact for echo", "phone", contactPhone, "error", err)
 		return
 	}
 

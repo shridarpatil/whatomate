@@ -616,11 +616,13 @@ type PhoneNumberInfo struct {
 	VerifiedName       string `json:"verified_name"`
 	DisplayPhoneNumber string `json:"display_phone_number"`
 	QualityRating      string `json:"quality_rating"`
+	IsOnBizApp         bool   `json:"is_on_biz_app"`
+	PlatformType       string `json:"platform_type"`
 }
 
 // GetPhoneNumberInfo retrieves information about a phone number
 func (c *Client) GetPhoneNumberInfo(ctx context.Context, phoneID, accessToken, apiVersion string) (*PhoneNumberInfo, error) {
-	url := fmt.Sprintf("%s/%s/%s?fields=verified_name,display_phone_number,quality_rating",
+	url := fmt.Sprintf("%s/%s/%s?fields=verified_name,display_phone_number,quality_rating,is_on_biz_app,platform_type",
 		c.getBaseURL(), apiVersion, phoneID)
 
 	respBody, err := c.doRequest(ctx, http.MethodGet, url, nil, accessToken)

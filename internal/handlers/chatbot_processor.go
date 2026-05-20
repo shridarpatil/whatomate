@@ -43,6 +43,7 @@ func truncateLogValue(value string, maxLen int) string {
 type IncomingTextMessage struct {
 	From       string `json:"from"`
 	FromUserID string `json:"from_user_id,omitempty"` // BSUID
+	To         string `json:"to,omitempty"`
 	ID         string `json:"id"`
 	Timestamp  string `json:"timestamp"`
 	Type       string `json:"type"`
