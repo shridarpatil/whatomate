@@ -9,7 +9,6 @@ import (
 	"io"
 	"math/big"
 	"net/http"
-	"strings"
 
 	"github.com/google/uuid"
 	"github.com/shridarpatil/whatomate/internal/audit"
