@@ -120,7 +120,7 @@ type CredentialsValidationResult struct {
 // that the phone number belongs to the specified business account
 func (c *Client) ValidateCredentials(ctx context.Context, phoneID, businessID, accessToken, apiVersion string) (*CredentialsValidationResult, error) {
 	// 1. Validate PhoneID
-	phoneURL := fmt.Sprintf("%s/%s/%s?fields=display_phone_number,verified_name,code_verification_status,account_mode,quality_rating",
+	phoneURL := fmt.Sprintf("%s/%s/%s?fields=display_phone_number,verified_name,code_verification_status,account_mode,quality_rating,is_on_biz_app,platform_type",
 		c.getBaseURL(), apiVersion, phoneID)
 	phoneBody, err := c.doRequest(ctx, http.MethodGet, phoneURL, nil, accessToken)
 	if err != nil {
@@ -133,15 +133,19 @@ func (c *Client) ValidateCredentials(ctx context.Context, phoneID, businessID, a
 		AccountMode            string `json:"account_mode"`
 		CodeVerificationStatus string `json:"code_verification_status"`
 		QualityRating          string `json:"quality_rating"`
+		IsOnBizApp             bool   `json:"is_on_biz_app"`
+		PlatformType           string `json:"platform_type"`
 	}
 	if err := json.Unmarshal(phoneBody, &phoneResult); err != nil {
 		return nil, fmt.Errorf("failed to parse phone response: %w", err)
 	}
 
-	// Check verification status (skip for sandbox/test numbers)
+	// Check verification status (skip for sandbox/test numbers and SMB accounts)
 	isTestNumber := phoneResult.AccountMode == "SANDBOX" || phoneResult.VerifiedName == "Test Number"
+	isSMB := phoneResult.IsOnBizApp || phoneResult.PlatformType == "SMB" || phoneResult.PlatformType == "SMB_CLOUD_API"
+	
 	var warning string
-	if !isTestNumber {
+	if !isTestNumber && !isSMB {
 		if phoneResult.CodeVerificationStatus == "NOT_VERIFIED" {
 			return nil, fmt.Errorf("phone number is not verified. Please register it at: https://business.facebook.com/wa/manage/phone-numbers/")
 		}
