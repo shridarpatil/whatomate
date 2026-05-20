@@ -18,6 +18,7 @@ import { Textarea } from '@/components/ui/textarea'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import { Badge } from '@/components/ui/badge'
 import { ScrollArea } from '@/components/ui/scroll-area'
+import { Spinner } from '@/components/ui/spinner'
 import { Separator } from '@/components/ui/separator'
 import {
   Tooltip,
@@ -1918,6 +1919,9 @@ async function sendMediaMessage() {
 
         <!-- Messages -->
         <div class="relative flex-1 min-h-0 overflow-hidden">
+          <!-- Loading overlay while switching contacts / loading the first page -->
+          <Spinner v-if="contactsStore.isLoadingMessages" overlay />
+
           <!-- Sticky date header -->
           <Transition name="sticky-date">
             <div
