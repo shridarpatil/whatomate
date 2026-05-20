@@ -375,15 +375,25 @@ func TestApp_RegisterPhone_Success_WithPIN(t *testing.T) {
 
 	// Mock Meta API server
 	metaServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		assert.Equal(t, "/v21.0/123456789/register", r.URL.Path)
-		assert.Equal(t, "Bearer test_token", r.Header.Get("Authorization"))
+		if strings.HasSuffix(r.URL.Path, "/register") {
+			// Registration call
+			assert.Equal(t, "/v21.0/123456789/register", r.URL.Path)
+			assert.Equal(t, "Bearer test_token", r.Header.Get("Authorization"))
 
-		var body map[string]string
-		_ = json.NewDecoder(r.Body).Decode(&body)
-		assert.Equal(t, "654321", body["pin"])
+			var body map[string]string
+			_ = json.NewDecoder(r.Body).Decode(&body)
+			assert.Equal(t, "654321", body["pin"])
 
-		w.WriteHeader(http.StatusOK)
-		_ = json.NewEncoder(w).Encode(map[string]bool{"success": true})
+			w.WriteHeader(http.StatusOK)
+			_ = json.NewEncoder(w).Encode(map[string]bool{"success": true})
+		} else {
+			// GetPhoneNumberInfo call — return non-SMB phone info
+			w.WriteHeader(http.StatusOK)
+			_ = json.NewEncoder(w).Encode(map[string]string{
+				"id":            "123456789",
+				"platform_type": "CLOUD_API",
+			})
+		}
 	}))
 	defer metaServer.Close()
 
@@ -433,12 +443,22 @@ func TestApp_RegisterPhone_Success_GeneratedPIN(t *testing.T) {
 	require.NoError(t, app.DB.Create(account).Error)
 
 	metaServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		var body map[string]string
-		_ = json.NewDecoder(r.Body).Decode(&body)
-		assert.Len(t, body["pin"], 6) // Generated PIN should be 6 digits
+		if strings.HasSuffix(r.URL.Path, "/register") {
+			// Registration call — validate the generated PIN
+			var body map[string]string
+			_ = json.NewDecoder(r.Body).Decode(&body)
+			assert.Len(t, body["pin"], 6) // Generated PIN should be 6 digits
 
-		w.WriteHeader(http.StatusOK)
-		_ = json.NewEncoder(w).Encode(map[string]bool{"success": true})
+			w.WriteHeader(http.StatusOK)
+			_ = json.NewEncoder(w).Encode(map[string]bool{"success": true})
+		} else {
+			// GetPhoneNumberInfo call — return non-SMB phone info
+			w.WriteHeader(http.StatusOK)
+			_ = json.NewEncoder(w).Encode(map[string]string{
+				"id":            "123456789",
+				"platform_type": "CLOUD_API",
+			})
+		}
 	}))
 	defer metaServer.Close()
 

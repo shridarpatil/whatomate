@@ -796,18 +796,13 @@ func (a *App) RegisterPhone(r *fastglue.Request) error {
 		}
 	}
 
-	// Call Meta API to check if it's SMB
 	ctx := context.Background()
-	phoneInfo, err := a.WhatsApp.GetPhoneNumberInfo(ctx, account.PhoneID, account.AccessToken, account.APIVersion)
-	var isSMB bool
-	if err == nil && phoneInfo != nil {
-		if phoneInfo.IsOnBizApp || phoneInfo.PlatformType == "SMB" || phoneInfo.PlatformType == "SMB_CLOUD_API" {
-			isSMB = true
-		}
-	}
 
-	if isSMB {
-		a.Log.Info("Manual registration: SMB account detected via Meta API", "phone_id", account.PhoneID)
+	// Check if this is an SMB phone — SMB numbers are already registered
+	// via the Business App and don't support the two-step registration API.
+	phoneInfo, _ := a.WhatsApp.GetPhoneNumberInfo(ctx, account.PhoneID, account.AccessToken, account.APIVersion)
+	if phoneInfo != nil && (phoneInfo.IsOnBizApp || phoneInfo.PlatformType == "SMB" || phoneInfo.PlatformType == "SMB_CLOUD_API") {
+		a.Log.Info("Manual registration: SMB account detected, skipping registration", "phone_id", account.PhoneID)
 		pin = ""
 	} else {
 		// Call Meta Register endpoint using WhatsApp service
