@@ -51,6 +51,7 @@ type TemplateResponse struct {
 	SampleValues              []any     `json:"sample_values"`
 	AddSecurityRecommendation bool      `json:"add_security_recommendation"`
 	CodeExpirationMinutes     int       `json:"code_expiration_minutes"`
+	QualityRating             string    `json:"quality_rating"`
 	CreatedByName             string    `json:"created_by_name,omitempty"`
 	UpdatedByName             string    `json:"updated_by_name,omitempty"`
 	CreatedAt                 string    `json:"created_at"`
@@ -496,6 +497,7 @@ func (a *App) SyncTemplates(r *fastglue.Request) error {
 			Language:        metaTemplate.Language,
 			Category:        metaTemplate.Category,
 			Status:          metaTemplate.Status,
+			QualityRating:   metaTemplate.QualityRating,
 		}
 
 		// Parse components
@@ -531,6 +533,7 @@ func (a *App) SyncTemplates(r *fastglue.Request) error {
 				"display_name":     template.DisplayName,
 				"category":         template.Category,
 				"status":           template.Status,
+				"quality_rating":   template.QualityRating,
 				"header_type":      template.HeaderType,
 				"header_content":   template.HeaderContent,
 				"body_content":     template.BodyContent,
@@ -579,6 +582,7 @@ func templateToResponse(t models.Template) TemplateResponse {
 		Language:                  t.Language,
 		Category:                  t.Category,
 		Status:                    t.Status,
+		QualityRating:             t.QualityRating,
 		HeaderType:                t.HeaderType,
 		HeaderContent:             t.HeaderContent,
 		BodyContent:               t.BodyContent,
