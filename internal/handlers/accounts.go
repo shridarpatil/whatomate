@@ -356,7 +356,7 @@ func (a *App) TestAccountConnection(r *fastglue.Request) error {
 	}
 
 	// Fetch additional details for display
-	url := fmt.Sprintf("%s/%s/%s?fields=display_phone_number,verified_name,code_verification_status,account_mode,quality_rating,messaging_limit_tier",
+	url := fmt.Sprintf("%s/%s/%s?fields=display_phone_number,verified_name,code_verification_status,account_mode,quality_rating,messaging_limit_tier,whatsapp_business_manager_messaging_limit",
 		a.Config.WhatsApp.BaseURL, account.APIVersion, account.PhoneID)
 
 	req, err := http.NewRequest(http.MethodGet, url, nil)
@@ -395,13 +395,43 @@ func (a *App) TestAccountConnection(r *fastglue.Request) error {
 	accountMode, _ := result["account_mode"].(string)
 	isTestNumber := accountMode == "SANDBOX"
 
+	// Resolve messaging limit tier, falling back to newer portfolio-based field if deprecated field is missing/null
+	messagingLimitTier := result["messaging_limit_tier"]
+	if messagingLimitTier == nil || messagingLimitTier == "" {
+		messagingLimitTier = result["whatsapp_business_manager_messaging_limit"]
+	}
+
+	// If still empty/null, query the WABA ID (BusinessID) as a fallback
+	if (messagingLimitTier == nil || messagingLimitTier == "") && account.BusinessID != "" {
+		wabaURL := fmt.Sprintf("%s/%s/%s?fields=whatsapp_business_manager_messaging_limit",
+			a.Config.WhatsApp.BaseURL, account.APIVersion, account.BusinessID)
+		wabaReq, err := http.NewRequest(http.MethodGet, wabaURL, nil)
+		if err == nil {
+			wabaReq.Header.Set("Authorization", "Bearer "+account.AccessToken)
+			wabaResp, err := a.HTTPClient.Do(wabaReq)
+			if err == nil {
+				defer func() { _ = wabaResp.Body.Close() }()
+				if wabaResp.StatusCode == 200 {
+					wabaBody, _ := io.ReadAll(wabaResp.Body)
+					var wabaResult map[string]any
+					if err := json.Unmarshal(wabaBody, &wabaResult); err == nil {
+						if val, ok := wabaResult["whatsapp_business_manager_messaging_limit"]; ok && val != nil && val != "" {
+							messagingLimitTier = val
+							a.Log.Info("Resolved messaging limit tier from WABA as fallback", "waba_id", account.BusinessID, "limit", val)
+						}
+					}
+				}
+			}
+		}
+	}
+
 	// Prepare response
 	response := map[string]any{
 		"success":                  true,
 		"display_phone_number":     result["display_phone_number"],
 		"verified_name":            result["verified_name"],
 		"quality_rating":           result["quality_rating"],
-		"messaging_limit_tier":     result["messaging_limit_tier"],
+		"messaging_limit_tier":     messagingLimitTier,
 		"code_verification_status": result["code_verification_status"],
 		"account_mode":             result["account_mode"],
 		"is_test_number":           isTestNumber,
