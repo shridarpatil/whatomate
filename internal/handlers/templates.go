@@ -184,6 +184,7 @@ func (a *App) CreateTemplate(r *fastglue.Request) error {
 		CodeExpirationMinutes:     req.CodeExpirationMinutes,
 		CreatedByID:               &userID,
 		UpdatedByID:               &userID,
+		QualityRating:             "UNKNOWN",
 	}
 
 	if err := a.DB.Create(&template).Error; err != nil {
@@ -488,6 +489,14 @@ func (a *App) SyncTemplates(r *fastglue.Request) error {
 	// Sync to database
 	synced := 0
 	for _, metaTemplate := range templates {
+		qualityRating := metaTemplate.QualityRating
+		if metaTemplate.QualityScore != nil && metaTemplate.QualityScore.Score != "" {
+			qualityRating = metaTemplate.QualityScore.Score
+		}
+		if qualityRating == "" {
+			qualityRating = "UNKNOWN"
+		}
+
 		template := models.Template{
 			OrganizationID:  orgID,
 			WhatsAppAccount: account.Name,
@@ -498,6 +507,7 @@ func (a *App) SyncTemplates(r *fastglue.Request) error {
 			Category:        metaTemplate.Category,
 			Status:          metaTemplate.Status,
 			QualityRating:   metaTemplate.QualityRating,
+			QualityRating:   qualityRating,
 		}
 
 		// Parse components
