@@ -820,6 +820,8 @@
     "exportReport": "Export Report"
   },
   "templates": {
+    "quality": "Quality",
+    "qualityRating": "Quality Rating",
     "title": "Message Templates",
     "subtitle": "Create and manage WhatsApp message templates",
     "newTemplate": "New Template",
@@ -1259,6 +1261,19 @@
     "passwordChangeFailed": "Failed to change password"
   },
   "accounts": {
+    "metaConnectionDetails": "Meta Connection Details",
+    "verifiedName": "Verified Name",
+    "qualityRating": "Quality Rating",
+    "messagingLimitTier": "Messaging Limit Tier",
+    "accountMode": "Account Mode",
+    "codeVerificationStatus": "Verification Status",
+    "qualityGreen": "Green (High)",
+    "qualityYellow": "Yellow (Medium)",
+    "qualityRed": "Red (Low)",
+    "qualityUnknown": "Unknown",
+    "statusVerified": "Verified",
+    "statusNotVerified": "Not Verified",
+    "statusExpired": "Expired",
     "title": "WhatsApp Accounts",
     "addAccount": "Add Account",
     "editAccount": "Edit WhatsApp Account",
