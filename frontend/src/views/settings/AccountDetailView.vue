@@ -6,6 +6,7 @@ import { useAuthStore } from '@/stores/auth'
 import { api } from '@/services/api'
 import { toast } from 'vue-sonner'
 import { getErrorMessage } from '@/lib/api-utils'
+import { getQualityBadgeClass, getQualityRatingLabel as sharedGetQualityRatingLabel } from '@/lib/utils'
 import { useUnsavedChangesGuard } from '@/composables/useUnsavedChangesGuard'
 import DetailPageLayout from '@/components/shared/DetailPageLayout.vue'
 import MetadataPanel from '@/components/shared/MetadataPanel.vue'
@@ -134,21 +135,6 @@ const webhookUrl = window.location.origin + basePath + '/api/webhook'
 // Track form changes
 watch(form, () => { hasChanges.value = true }, { deep: true })
 
-function getQualityBadgeClass(rating: string) {
-  switch (rating.toUpperCase()) {
-    case 'GREEN':
-    case 'HIGH':
-      return 'bg-green-950 text-green-400 border border-green-800/40 light:bg-green-100 light:text-green-800'
-    case 'YELLOW':
-    case 'MEDIUM':
-      return 'bg-yellow-950 text-yellow-400 border border-yellow-800/40 light:bg-yellow-100 light:text-yellow-800'
-    case 'RED':
-    case 'LOW':
-      return 'bg-red-950 text-red-400 border border-red-800/40 light:bg-red-100 light:text-red-800'
-    default:
-      return 'bg-gray-800 text-gray-400 light:bg-gray-100 light:text-gray-600'
-  }
-}
 
 function getVerificationBadgeClass(status: string) {
   switch (status.toUpperCase()) {
@@ -164,28 +150,32 @@ function getVerificationBadgeClass(status: string) {
   }
 }
 
-function formatLimitTier(tier: string) {
-  if (!tier) return 'UNKNOWN'
+function formatLimitTier(tier?: string, isSandbox?: boolean) {
+  if (isSandbox) {
+    return t('accounts.limitTierSandbox', 'Sandbox (250 msgs/day)')
+  }
+  if (!tier) {
+    return t('accounts.limitTierDefault', '250 msgs/day (Default)')
+  }
   const clean = tier.toUpperCase().replace('TIER_', '')
-  if (clean === 'UNLIMITED') return 'Unlimited'
-  return `${clean} msgs/day`
+  switch (clean) {
+    case '250':
+      return t('accounts.limitTier250', '250 msgs/day')
+    case '2K':
+      return t('accounts.limitTier2K', '2K msgs/day')
+    case '10K':
+      return t('accounts.limitTier10K', '10K msgs/day')
+    case '100K':
+      return t('accounts.limitTier100K', '100K msgs/day')
+    case 'UNLIMITED':
+      return t('accounts.limitTierUnlimited', 'Unlimited')
+    default:
+      return `${clean} msgs/day`
+  }
 }
 
 function getQualityRatingLabel(rating: string) {
-  if (!rating) return t('accounts.qualityUnknown')
-  switch (rating.toUpperCase()) {
-    case 'GREEN':
-    case 'HIGH':
-      return t('accounts.qualityGreen')
-    case 'YELLOW':
-    case 'MEDIUM':
-      return t('accounts.qualityYellow')
-    case 'RED':
-    case 'LOW':
-      return t('accounts.qualityRed')
-    default:
-      return rating
-  }
+  return sharedGetQualityRatingLabel(rating, t)
 }
 
 function getVerificationStatusLabel(status: string) {
@@ -402,17 +392,19 @@ onMounted(async () => {
                 <span class="text-[10px] text-muted-foreground block font-medium">{{ $t('accounts.verifiedName', 'Verified Name') }}</span>
                 <span class="text-sm font-semibold block text-foreground truncate" :title="testResult.verified_name">{{ testResult.verified_name }}</span>
               </div>
-              <!-- Quality Rating -->
-              <div v-if="testResult.quality_rating" class="space-y-1">
+               <!-- Quality Rating -->
+              <div class="space-y-1">
                 <span class="text-[10px] text-muted-foreground block font-medium">{{ $t('accounts.qualityRating', 'Quality Rating') }}</span>
-                <Badge :class="getQualityBadgeClass(testResult.quality_rating)">
-                  {{ getQualityRatingLabel(testResult.quality_rating) }}
+                <Badge :class="getQualityBadgeClass(testResult.quality_rating || '')">
+                  {{ getQualityRatingLabel(testResult.quality_rating || '') }}
                 </Badge>
               </div>
               <!-- Messaging Limit Tier -->
-              <div v-if="testResult.messaging_limit_tier" class="space-y-1">
+              <div class="space-y-1">
                 <span class="text-[10px] text-muted-foreground block font-medium">{{ $t('accounts.messagingLimitTier', 'Messaging Limit') }}</span>
-                <span class="text-sm font-semibold block text-foreground">{{ formatLimitTier(testResult.messaging_limit_tier) }}</span>
+                <span class="text-sm font-semibold block text-foreground">
+                  {{ formatLimitTier(testResult.messaging_limit_tier, testResult.is_test_number || testResult.account_mode === 'SANDBOX') }}
+                </span>
               </div>
               <!-- Verification Status -->
               <div v-if="testResult.code_verification_status" class="space-y-1">
