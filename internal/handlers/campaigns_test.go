@@ -151,6 +151,7 @@ func TestApp_CreateCampaign_Success(t *testing.T) {
 	assert.Equal(t, "Test Campaign", resp.Data.Name)
 	assert.Equal(t, models.CampaignStatusDraft, resp.Data.Status)
 	assert.Equal(t, template.ID, resp.Data.TemplateID)
+	assert.Equal(t, 0, resp.Data.ReadCount)
 }
 
 func TestApp_CreateCampaign_WithScheduledAt(t *testing.T) {
@@ -268,6 +269,10 @@ func TestApp_GetCampaign_Success(t *testing.T) {
 	template := testutil.CreateTestTemplate(t, app.DB, org.ID, account.Name)
 	campaign := createTestCampaign(t, app, org.ID, template.ID, user.ID, account.Name, models.CampaignStatusDraft)
 
+	// Set a non-zero read count to verify it is returned
+	campaign.ReadCount = 10
+	require.NoError(t, app.DB.Save(campaign).Error)
+
 	req := testutil.NewGETRequest(t)
 	testutil.SetAuthContext(req, org.ID, user.ID)
 	testutil.SetPathParam(req, "id", campaign.ID.String())
@@ -283,6 +288,7 @@ func TestApp_GetCampaign_Success(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, campaign.ID, resp.Data.ID)
 	assert.Equal(t, campaign.Name, resp.Data.Name)
+	assert.Equal(t, 10, resp.Data.ReadCount)
 }
 
 func TestApp_GetCampaign_NotFound(t *testing.T) {
@@ -326,6 +332,10 @@ func TestApp_UpdateCampaign_Success(t *testing.T) {
 	template := testutil.CreateTestTemplate(t, app.DB, org.ID, account.Name)
 	campaign := createTestCampaign(t, app, org.ID, template.ID, user.ID, account.Name, models.CampaignStatusDraft)
 
+	// Set a non-zero read count to verify it is preserved/returned on update
+	campaign.ReadCount = 12
+	require.NoError(t, app.DB.Save(campaign).Error)
+
 	req := testutil.NewJSONRequest(t, map[string]any{
 		"name":             "Updated Campaign Name",
 		"whatsapp_account": account.Name,
@@ -344,6 +354,7 @@ func TestApp_UpdateCampaign_Success(t *testing.T) {
 	err = json.Unmarshal(testutil.GetResponseBody(req), &resp)
 	require.NoError(t, err)
 	assert.Equal(t, "Updated Campaign Name", resp.Data.Name)
+	assert.Equal(t, 12, resp.Data.ReadCount)
 }
 
 func TestApp_UpdateCampaign_NotDraft(t *testing.T) {
