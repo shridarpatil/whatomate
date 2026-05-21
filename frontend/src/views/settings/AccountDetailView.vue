@@ -62,6 +62,7 @@ interface WhatsAppAccount {
   has_app_secret: boolean
   phone_number?: string
   display_name?: string
+  business_calling_enabled?: boolean
   created_by_id?: string
   created_by_name?: string
   updated_by_id?: string
@@ -132,6 +133,75 @@ const webhookUrl = window.location.origin + basePath + '/api/webhook'
 
 // Track form changes
 watch(form, () => { hasChanges.value = true }, { deep: true })
+
+function getQualityBadgeClass(rating: string) {
+  switch (rating.toUpperCase()) {
+    case 'GREEN':
+    case 'HIGH':
+      return 'bg-green-950 text-green-400 border border-green-800/40 light:bg-green-100 light:text-green-800'
+    case 'YELLOW':
+    case 'MEDIUM':
+      return 'bg-yellow-950 text-yellow-400 border border-yellow-800/40 light:bg-yellow-100 light:text-yellow-800'
+    case 'RED':
+    case 'LOW':
+      return 'bg-red-950 text-red-400 border border-red-800/40 light:bg-red-100 light:text-red-800'
+    default:
+      return 'bg-gray-800 text-gray-400 light:bg-gray-100 light:text-gray-600'
+  }
+}
+
+function getVerificationBadgeClass(status: string) {
+  switch (status.toUpperCase()) {
+    case 'VERIFIED':
+    case 'VERIFIED_CODE':
+      return 'bg-green-950 text-green-400 border border-green-800/40 light:bg-green-100 light:text-green-800'
+    case 'NOT_VERIFIED':
+      return 'bg-red-950 text-red-400 border border-red-800/40 light:bg-red-100 light:text-red-800'
+    case 'EXPIRED':
+      return 'bg-amber-950 text-amber-400 border border-amber-800/40 light:bg-amber-100 light:text-amber-800'
+    default:
+      return 'bg-gray-800 text-gray-400 light:bg-gray-100 light:text-gray-600'
+  }
+}
+
+function formatLimitTier(tier: string) {
+  if (!tier) return 'UNKNOWN'
+  const clean = tier.toUpperCase().replace('TIER_', '')
+  if (clean === 'UNLIMITED') return 'Unlimited'
+  return `${clean} msgs/day`
+}
+
+function getQualityRatingLabel(rating: string) {
+  if (!rating) return t('accounts.qualityUnknown')
+  switch (rating.toUpperCase()) {
+    case 'GREEN':
+    case 'HIGH':
+      return t('accounts.qualityGreen')
+    case 'YELLOW':
+    case 'MEDIUM':
+      return t('accounts.qualityYellow')
+    case 'RED':
+    case 'LOW':
+      return t('accounts.qualityRed')
+    default:
+      return rating
+  }
+}
+
+function getVerificationStatusLabel(status: string) {
+  if (!status) return ''
+  switch (status.toUpperCase()) {
+    case 'VERIFIED':
+    case 'VERIFIED_CODE':
+      return t('accounts.statusVerified')
+    case 'NOT_VERIFIED':
+      return t('accounts.statusNotVerified')
+    case 'EXPIRED':
+      return t('accounts.statusExpired')
+    default:
+      return status
+  }
+}
 
 async function loadAccount() {
   isLoading.value = true
@@ -320,6 +390,38 @@ onMounted(async () => {
           <div v-if="testResult.warning" class="flex items-start gap-2 p-2 rounded-lg bg-amber-950/50 light:bg-amber-50 border border-amber-800 light:border-amber-200">
             <AlertCircle class="h-4 w-4 text-amber-400 light:text-amber-600 mt-0.5 shrink-0" />
             <span class="text-sm text-amber-300 light:text-amber-700">{{ testResult.warning }}</span>
+          </div>
+          <!-- Meta Connection Details -->
+          <div class="mt-4 border-t pt-4 border-border/40">
+            <h4 class="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-3">
+              {{ $t('accounts.metaConnectionDetails', 'Meta Connection Details') }}
+            </h4>
+            <div class="grid grid-cols-2 md:grid-cols-4 gap-4 bg-muted/20 p-3 rounded-lg border border-border/30">
+              <!-- Verified Name -->
+              <div v-if="testResult.verified_name" class="space-y-1">
+                <span class="text-[10px] text-muted-foreground block font-medium">{{ $t('accounts.verifiedName', 'Verified Name') }}</span>
+                <span class="text-sm font-semibold block text-foreground truncate" :title="testResult.verified_name">{{ testResult.verified_name }}</span>
+              </div>
+              <!-- Quality Rating -->
+              <div v-if="testResult.quality_rating" class="space-y-1">
+                <span class="text-[10px] text-muted-foreground block font-medium">{{ $t('accounts.qualityRating', 'Quality Rating') }}</span>
+                <Badge :class="getQualityBadgeClass(testResult.quality_rating)">
+                  {{ getQualityRatingLabel(testResult.quality_rating) }}
+                </Badge>
+              </div>
+              <!-- Messaging Limit Tier -->
+              <div v-if="testResult.messaging_limit_tier" class="space-y-1">
+                <span class="text-[10px] text-muted-foreground block font-medium">{{ $t('accounts.messagingLimitTier', 'Messaging Limit') }}</span>
+                <span class="text-sm font-semibold block text-foreground">{{ formatLimitTier(testResult.messaging_limit_tier) }}</span>
+              </div>
+              <!-- Verification Status -->
+              <div v-if="testResult.code_verification_status" class="space-y-1">
+                <span class="text-[10px] text-muted-foreground block font-medium">{{ $t('accounts.codeVerificationStatus', 'Verification Status') }}</span>
+                <Badge :class="getVerificationBadgeClass(testResult.code_verification_status)">
+                  {{ getVerificationStatusLabel(testResult.code_verification_status) }}
+                </Badge>
+              </div>
+            </div>
           </div>
         </div>
         <div v-else class="flex items-center gap-2 text-red-400 light:text-red-600">
