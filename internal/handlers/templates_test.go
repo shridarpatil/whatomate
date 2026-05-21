@@ -107,6 +107,7 @@ func newMockTemplateServer(t *testing.T) *httptest.Server {
 						"language": "en",
 						"category": "MARKETING",
 						"status":   "APPROVED",
+						"quality_rating": "HIGH",
 						"components": []map[string]any{
 							{"type": "BODY", "text": "Synced body content"},
 						},
@@ -117,6 +118,7 @@ func newMockTemplateServer(t *testing.T) *httptest.Server {
 						"language": "en",
 						"category": "UTILITY",
 						"status":   "PENDING",
+						"quality_rating": "UNKNOWN",
 						"components": []map[string]any{
 							{"type": "BODY", "text": "Another synced body"},
 						},
@@ -1054,6 +1056,19 @@ func TestApp_SyncTemplates_Success(t *testing.T) {
 	var templates []models.Template
 	app.DB.Where("organization_id = ?", org.ID).Find(&templates)
 	assert.Len(t, templates, 2)
+
+	var tmpl1, tmpl2 models.Template
+	for _, tmpl := range templates {
+		if tmpl.Name == "synced_template_one" {
+			tmpl1 = tmpl
+		} else if tmpl.Name == "synced_template_two" {
+			tmpl2 = tmpl
+		}
+	}
+	assert.NotEmpty(t, tmpl1.ID)
+	assert.Equal(t, "HIGH", tmpl1.QualityRating)
+	assert.NotEmpty(t, tmpl2.ID)
+	assert.Equal(t, "UNKNOWN", tmpl2.QualityRating)
 }
 
 func TestApp_SyncTemplates_MissingAccount(t *testing.T) {
