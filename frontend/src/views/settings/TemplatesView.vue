@@ -41,6 +41,7 @@ interface Template {
   sample_values: any[]
   created_at: string
   updated_at: string
+  quality_rating?: string
 }
 
 const organizationsStore = useOrganizationsStore()
@@ -65,6 +66,7 @@ const columns = computed<Column<Template>[]>(() => [
   { key: 'name', label: t('templates.name'), sortable: true },
   { key: 'category', label: t('templates.category'), sortable: true },
   { key: 'status', label: t('templates.status'), sortable: true },
+  { key: 'quality_rating', label: t('templates.qualityRating'), sortable: true },
   { key: 'language', label: t('templates.language'), sortable: true },
   { key: 'header_type', label: t('templates.header') },
   { key: 'actions', label: '', align: 'right' },
@@ -289,6 +291,40 @@ function getHeaderIcon(type: string) {
       return MessageSquare
   }
 }
+
+function getQualityBadgeClass(rating: string) {
+  if (!rating) return 'bg-gray-800 text-gray-400 light:bg-gray-100 light:text-gray-600'
+  switch (rating.toUpperCase()) {
+    case 'GREEN':
+    case 'HIGH':
+      return 'bg-green-950 text-green-400 border border-green-800/40 light:bg-green-100 light:text-green-800'
+    case 'YELLOW':
+    case 'MEDIUM':
+      return 'bg-yellow-950 text-yellow-400 border border-yellow-800/40 light:bg-yellow-100 light:text-yellow-800'
+    case 'RED':
+    case 'LOW':
+      return 'bg-red-950 text-red-400 border border-red-800/40 light:bg-red-100 light:text-red-800'
+    default:
+      return 'bg-gray-800 text-gray-400 light:bg-gray-100 light:text-gray-600'
+  }
+}
+
+function getQualityRatingLabel(rating: string) {
+  if (!rating) return t('accounts.qualityUnknown')
+  switch (rating.toUpperCase()) {
+    case 'GREEN':
+    case 'HIGH':
+      return t('accounts.qualityGreen')
+    case 'YELLOW':
+    case 'MEDIUM':
+      return t('accounts.qualityYellow')
+    case 'RED':
+    case 'LOW':
+      return t('accounts.qualityRed')
+    default:
+      return rating
+  }
+}
 </script>
 
 <template>
@@ -377,6 +413,12 @@ function getHeaderIcon(type: string) {
                   <Badge :class="getStatusBadgeClass(template.status)" class="text-xs">
                     {{ template.status }}
                   </Badge>
+                </template>
+                <template #cell-quality_rating="{ item: template }">
+                  <Badge v-if="template.quality_rating" :class="getQualityBadgeClass(template.quality_rating)" class="text-xs">
+                    {{ getQualityRatingLabel(template.quality_rating) }}
+                  </Badge>
+                  <span v-else class="text-muted-foreground text-xs">—</span>
                 </template>
                 <template #cell-language="{ item: template }">
                   <span class="text-muted-foreground">{{ getLanguageName(template.language) }}</span>
