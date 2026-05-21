@@ -1059,9 +1059,10 @@ func TestApp_SyncTemplates_Success(t *testing.T) {
 
 	var tmpl1, tmpl2 models.Template
 	for _, tmpl := range templates {
-		if tmpl.Name == "synced_template_one" {
+		switch tmpl.Name {
+		case "synced_template_one":
 			tmpl1 = tmpl
-		} else if tmpl.Name == "synced_template_two" {
+		case "synced_template_two":
 			tmpl2 = tmpl
 		}
 	}
