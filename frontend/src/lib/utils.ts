@@ -84,3 +84,37 @@ export function formatLabel(key: string): string {
     .replace(/([a-z])([A-Z])/g, '$1 $2')
     .replace(/\b\w/g, c => c.toUpperCase())
 }
+
+export function getQualityBadgeClass(rating: string): string {
+  if (!rating) return 'bg-gray-800 text-gray-400 light:bg-gray-100 light:text-gray-600'
+  switch (rating.toUpperCase()) {
+    case 'GREEN':
+    case 'HIGH':
+      return 'bg-green-950 text-green-400 border border-green-800/40 light:bg-green-100 light:text-green-800'
+    case 'YELLOW':
+    case 'MEDIUM':
+      return 'bg-yellow-950 text-yellow-400 border border-yellow-800/40 light:bg-yellow-100 light:text-yellow-800'
+    case 'RED':
+    case 'LOW':
+      return 'bg-red-950 text-red-400 border border-red-800/40 light:bg-red-100 light:text-red-800'
+    default:
+      return 'bg-gray-800 text-gray-400 light:bg-gray-100 light:text-gray-600'
+  }
+}
+
+export function getQualityRatingLabel(rating: string, t: (key: string) => string): string {
+  if (!rating) return t('accounts.qualityUnknown')
+  switch (rating.toUpperCase()) {
+    case 'GREEN':
+    case 'HIGH':
+      return t('accounts.qualityGreen')
+    case 'YELLOW':
+    case 'MEDIUM':
+      return t('accounts.qualityYellow')
+    case 'RED':
+    case 'LOW':
+      return t('accounts.qualityRed')
+    default:
+      return rating
+  }
+}
