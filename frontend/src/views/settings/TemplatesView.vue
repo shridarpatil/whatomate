@@ -15,6 +15,7 @@ import { toast } from 'vue-sonner'
 import { Plus, RefreshCw, FileText, Pencil, Trash2, Loader2, MessageSquare, Image, FileIcon, Video } from 'lucide-vue-next'
 import { getErrorMessage } from '@/lib/api-utils'
 import { useSearchPagination } from '@/composables/useSearchPagination'
+import { getQualityBadgeClass, getQualityRatingLabel as sharedGetQualityRatingLabel } from '@/lib/utils'
 
 const { t } = useI18n()
 
@@ -292,38 +293,8 @@ function getHeaderIcon(type: string) {
   }
 }
 
-function getQualityBadgeClass(rating: string) {
-  if (!rating) return 'bg-gray-800 text-gray-400 light:bg-gray-100 light:text-gray-600'
-  switch (rating.toUpperCase()) {
-    case 'GREEN':
-    case 'HIGH':
-      return 'bg-green-950 text-green-400 border border-green-800/40 light:bg-green-100 light:text-green-800'
-    case 'YELLOW':
-    case 'MEDIUM':
-      return 'bg-yellow-950 text-yellow-400 border border-yellow-800/40 light:bg-yellow-100 light:text-yellow-800'
-    case 'RED':
-    case 'LOW':
-      return 'bg-red-950 text-red-400 border border-red-800/40 light:bg-red-100 light:text-red-800'
-    default:
-      return 'bg-gray-800 text-gray-400 light:bg-gray-100 light:text-gray-600'
-  }
-}
-
 function getQualityRatingLabel(rating: string) {
-  if (!rating) return t('accounts.qualityUnknown')
-  switch (rating.toUpperCase()) {
-    case 'GREEN':
-    case 'HIGH':
-      return t('accounts.qualityGreen')
-    case 'YELLOW':
-    case 'MEDIUM':
-      return t('accounts.qualityYellow')
-    case 'RED':
-    case 'LOW':
-      return t('accounts.qualityRed')
-    default:
-      return rating
-  }
+  return sharedGetQualityRatingLabel(rating, t)
 }
 </script>
 
