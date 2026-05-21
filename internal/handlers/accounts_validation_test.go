@@ -69,7 +69,7 @@ func newFakeMetaServer(t *testing.T) *fakeMetaServer {
 				f.phoneFn(w, r)
 				return
 			}
-			_, _ = w.Write([]byte(`{"display_phone_number":"+1234567890","verified_name":"Test","account_mode":"LIVE","code_verification_status":"VERIFIED","quality_rating":"GREEN"}`))
+			_, _ = w.Write([]byte(`{"display_phone_number":"+1234567890","verified_name":"Test","account_mode":"LIVE","code_verification_status":"VERIFIED","quality_rating":"GREEN","messaging_limit_tier":"TIER_250"}`))
 		}
 	}))
 	t.Cleanup(f.server.Close)
@@ -139,6 +139,11 @@ func TestApp_TestAccountConnection_Success(t *testing.T) {
 	assert.Equal(t, true, resp.Data["success"])
 	assert.Equal(t, "+1234567890", resp.Data["display_phone_number"])
 	assert.Equal(t, false, resp.Data["is_test_number"])
+	assert.Equal(t, "GREEN", resp.Data["quality_rating"])
+	assert.Equal(t, "TIER_250", resp.Data["messaging_limit_tier"])
+	assert.Equal(t, "VERIFIED", resp.Data["code_verification_status"])
+	assert.Equal(t, "LIVE", resp.Data["account_mode"])
+	assert.Equal(t, "Test", resp.Data["verified_name"])
 }
 
 func TestApp_TestAccountConnection_SandboxFlagged(t *testing.T) {
