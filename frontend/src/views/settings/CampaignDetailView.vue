@@ -1106,9 +1106,18 @@ onUnmounted(() => {
                 <TableCell class="font-mono text-xs">{{ recipient.phone_number }}</TableCell>
                 <TableCell class="text-sm">{{ recipient.recipient_name || '-' }}</TableCell>
                 <TableCell>
-                  <Badge variant="outline" :class="[getRecipientStatusClass(recipient.status), 'text-xs']">
-                    {{ recipient.status }}
-                  </Badge>
+                  <div class="flex flex-col gap-0.5">
+                    <Badge variant="outline" :class="[getRecipientStatusClass(recipient.status), 'text-xs w-fit']">
+                      {{ recipient.status }}
+                    </Badge>
+                    <span
+                      v-if="recipient.status === 'failed' && recipient.error_message"
+                      class="text-[10px] text-destructive max-w-[180px] truncate block"
+                      :title="recipient.error_message"
+                    >
+                      {{ recipient.error_message }}
+                    </span>
+                  </div>
                 </TableCell>
                 <TableCell class="text-xs text-muted-foreground">
                   {{ recipient.sent_at ? formatDateTime(recipient.sent_at) : '-' }}
