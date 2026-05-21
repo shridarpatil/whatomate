@@ -506,7 +506,6 @@ func (a *App) SyncTemplates(r *fastglue.Request) error {
 			Language:        metaTemplate.Language,
 			Category:        metaTemplate.Category,
 			Status:          metaTemplate.Status,
-			QualityRating:   metaTemplate.QualityRating,
 			QualityRating:   qualityRating,
 		}
 
