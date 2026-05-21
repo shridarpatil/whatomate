@@ -421,6 +421,7 @@ type Template struct {
 	Language        string     `gorm:"size:10;not null" json:"language"`
 	Category        string     `gorm:"size:50" json:"category"`                 // MARKETING, UTILITY, AUTHENTICATION
 	Status          string     `gorm:"size:20;default:'PENDING'" json:"status"` // PENDING, APPROVED, REJECTED
+	QualityRating   string     `gorm:"size:50;default:'UNKNOWN'" json:"quality_rating"`
 	HeaderType      string     `gorm:"size:20" json:"header_type"`              // TEXT, IMAGE, DOCUMENT, VIDEO
 	HeaderContent   string     `gorm:"type:text" json:"header_content"`
 	BodyContent     string     `gorm:"type:text;not null" json:"body_content"`
