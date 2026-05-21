@@ -75,6 +75,7 @@ type MetaTemplate struct {
 	Language   string              `json:"language"`
 	Category   string              `json:"category"`
 	Status     string              `json:"status"`
+	QualityRating string           `json:"quality_rating"`
 	Components []TemplateComponent `json:"components"`
 }
 
