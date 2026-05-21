@@ -76,6 +76,7 @@ interface Template {
   updated_by_name: string
   created_at: string
   updated_at: string
+  quality_rating?: string
 }
 
 const route = useRoute()
@@ -357,6 +358,40 @@ const statusVariant = computed(() => {
     default: return 'secondary' as const
   }
 })
+
+function getQualityBadgeClass(rating: string) {
+  if (!rating) return 'bg-gray-800 text-gray-400 light:bg-gray-100 light:text-gray-600'
+  switch (rating.toUpperCase()) {
+    case 'GREEN':
+    case 'HIGH':
+      return 'bg-green-950 text-green-400 border border-green-800/40 light:bg-green-100 light:text-green-800'
+    case 'YELLOW':
+    case 'MEDIUM':
+      return 'bg-yellow-950 text-yellow-400 border border-yellow-800/40 light:bg-yellow-100 light:text-yellow-800'
+    case 'RED':
+    case 'LOW':
+      return 'bg-red-950 text-red-400 border border-red-800/40 light:bg-red-100 light:text-red-800'
+    default:
+      return 'bg-gray-800 text-gray-400 light:bg-gray-100 light:text-gray-600'
+  }
+}
+
+function getQualityRatingLabel(rating: string) {
+  if (!rating) return t('accounts.qualityUnknown')
+  switch (rating.toUpperCase()) {
+    case 'GREEN':
+    case 'HIGH':
+      return t('accounts.qualityGreen')
+    case 'YELLOW':
+    case 'MEDIUM':
+      return t('accounts.qualityYellow')
+    case 'RED':
+    case 'LOW':
+      return t('accounts.qualityRed')
+    default:
+      return rating
+  }
+}
 
 async function loadTemplate() {
   isLoading.value = true
@@ -685,6 +720,9 @@ onMounted(async () => {
             <CardTitle class="text-sm font-medium">{{ $t('templates.details', 'Details') }}</CardTitle>
             <Badge v-if="!isNew && template?.status" :variant="statusVariant">
               {{ template.status }}
+            </Badge>
+            <Badge v-if="!isNew && template?.quality_rating" :class="getQualityBadgeClass(template.quality_rating)">
+              {{ getQualityRatingLabel(template.quality_rating) }}
             </Badge>
           </div>
           <ChevronDown class="h-4 w-4 text-muted-foreground transition-transform" :class="isDetailsOpen && 'rotate-180'" />
@@ -1222,6 +1260,12 @@ onMounted(async () => {
           <div class="flex justify-between">
             <span class="text-muted-foreground">{{ $t('templates.status', 'Status') }}:</span>
             <Badge :variant="statusVariant">{{ template.status }}</Badge>
+          </div>
+          <div v-if="template.quality_rating" class="flex justify-between">
+            <span class="text-muted-foreground">{{ $t('templates.qualityRating', 'Quality Rating') }}:</span>
+            <Badge :class="getQualityBadgeClass(template.quality_rating)">
+              {{ getQualityRatingLabel(template.quality_rating) }}
+            </Badge>
           </div>
           <div class="flex justify-between">
             <span class="text-muted-foreground">{{ $t('templates.category', 'Category') }}:</span>
