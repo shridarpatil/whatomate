@@ -1147,5 +1147,5 @@ func TestApp_SyncTemplates_ViaQueryParam(t *testing.T) {
 		} `json:"data"`
 	}
 	require.NoError(t, json.Unmarshal(testutil.GetResponseBody(req), &resp))
-	assert.Equal(t, 2, resp.Data.Count)
+	assert.Equal(t, 3, resp.Data.Count)
 }
