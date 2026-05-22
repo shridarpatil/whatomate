@@ -15,8 +15,10 @@ var (
 	// {{if condition}}...{{else}}...{{endif}} or {{if condition}}...{{endif}}
 	ifElsePattern = regexp.MustCompile(`\{\{if\s+([^}]+)\}\}([\s\S]*?)\{\{endif\}\}`)
 
-	// {{variable}} or {{object.nested.path}} or {{array[0].field}}
-	variablePattern = regexp.MustCompile(`\{\{([a-zA-Z_][a-zA-Z0-9_]*(?:\.[a-zA-Z_][a-zA-Z0-9_]*|\[\d+\])*)\}\}`)
+	// {{variable}} / {{ variable }} / {{object.nested.path}} / {{array[0].field}}.
+	// Whitespace inside the braces is tolerated to match the rest of the
+	// industry (`{{ name }}` is the common form authors expect).
+	variablePattern = regexp.MustCompile(`\{\{\s*([a-zA-Z_][a-zA-Z0-9_]*(?:\.[a-zA-Z_][a-zA-Z0-9_]*|\[\d+\])*)\s*\}\}`)
 
 	// Condition parsing: variable, variable == 'value', variable > 100, etc.
 	conditionPattern = regexp.MustCompile(`^(\w+(?:\.\w+)*)\s*(==|!=|>=|<=|>|<)?\s*(.*)$`)

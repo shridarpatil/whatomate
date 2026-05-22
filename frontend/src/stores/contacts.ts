@@ -183,6 +183,9 @@ export const useContactsStore = defineStore('contacts', () => {
 
   async function fetchMessages(contactId: string, params?: { page?: number; limit?: number; account?: string }) {
     isLoadingMessages.value = true
+    // Drop the previous contact's messages immediately so the list doesn't show
+    // stale content under the new contact's header while the fetch is in flight.
+    messages.value = []
     try {
       const response = await messagesService.list(contactId, params)
       // API returns { status: "success", data: { messages: [...], has_more: boolean } }

@@ -136,16 +136,30 @@ func stepsToGraph(steps []models.ChatbotFlowStep, canvasLayout models.JSONB) mod
 
 	edges := buildEdges(sorted, stepNames)
 
-	entry := ""
+	// Prepend a fixed `start` sentinel node so the editor always has a
+	// non-deletable entry point. The first ordered step becomes the
+	// target of start's default edge.
+	const startID = "__start__"
 	if len(sorted) > 0 {
-		entry = sorted[0].StepName
+		nodes = append([]map[string]any{{
+			"id":       startID,
+			"type":     "start",
+			"label":    "Start",
+			"position": map[string]any{"x": 100, "y": 100},
+			"config":   map[string]any{},
+		}}, nodes...)
+		edges = append([]map[string]any{{
+			"from":      startID,
+			"to":        sorted[0].StepName,
+			"condition": "default",
+		}}, edges...)
 	}
 
 	return models.JSONB{
 		"version":    2,
 		"nodes":      nodes,
 		"edges":      edges,
-		"entry_node": entry,
+		"entry_node": startID,
 	}
 }
 
