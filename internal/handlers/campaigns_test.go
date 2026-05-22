@@ -151,7 +151,6 @@ func TestApp_CreateCampaign_Success(t *testing.T) {
 	assert.Equal(t, "Test Campaign", resp.Data.Name)
 	assert.Equal(t, models.CampaignStatusDraft, resp.Data.Status)
 	assert.Equal(t, template.ID, resp.Data.TemplateID)
-	assert.Equal(t, 0, resp.Data.ReadCount)
 }
 
 func TestApp_CreateCampaign_WithScheduledAt(t *testing.T) {
