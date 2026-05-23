@@ -719,6 +719,47 @@ func TestApp_ImportRecipients_WithTemplateParams(t *testing.T) {
 	assert.NotNil(t, recipient.TemplateParams)
 }
 
+// header_params must round-trip into the BulkMessageRecipient row so the
+// worker can hand it to BuildTemplateComponents at send time. Without this,
+// a positional {{1}} header collides with a positional {{1}} body parameter
+// in the flat TemplateParams map (per-component indexing on Meta side).
+func TestApp_ImportRecipients_WithHeaderParams(t *testing.T) {
+	mockQueue := testutil.NewMockQueue()
+	app := newTestApp(t, withQueue(mockQueue))
+	org := testutil.CreateTestOrganization(t, app.DB)
+	user := testutil.CreateTestUser(t, app.DB, org.ID, testutil.WithEmail(testutil.UniqueEmail("import-header-params")), testutil.WithPassword("password"))
+	account := testutil.CreateTestWhatsAppAccountWith(t, app.DB, org.ID, testutil.WithAccountName("import-header-account"))
+	template := testutil.CreateTestTemplate(t, app.DB, org.ID, account.Name)
+	campaign := createTestCampaign(t, app, org.ID, template.ID, user.ID, account.Name, models.CampaignStatusDraft)
+
+	req := testutil.NewJSONRequest(t, map[string]any{
+		"recipients": []map[string]any{
+			{
+				"phone_number":    "+1234567890",
+				"recipient_name":  "John Doe",
+				"template_params": map[string]any{"1": "John", "2": "SAVE20"},
+				"header_params":   map[string]any{"1": "Summer"},
+			},
+		},
+	})
+	testutil.SetAuthContext(req, org.ID, user.ID)
+	testutil.SetPathParam(req, "id", campaign.ID.String())
+
+	err := app.ImportRecipients(req)
+	require.NoError(t, err)
+	assert.Equal(t, fasthttp.StatusOK, testutil.GetResponseStatusCode(req))
+
+	var recipient models.BulkMessageRecipient
+	require.NoError(t, app.DB.Where("campaign_id = ?", campaign.ID).First(&recipient).Error)
+	require.NotNil(t, recipient.HeaderParams)
+	assert.Equal(t, "Summer", recipient.HeaderParams["1"])
+	// TemplateParams stays separate from HeaderParams — same positional key
+	// "1" must not collide.
+	require.NotNil(t, recipient.TemplateParams)
+	assert.Equal(t, "John", recipient.TemplateParams["1"])
+	assert.Equal(t, "SAVE20", recipient.TemplateParams["2"])
+}
+
 func TestApp_ImportRecipients_NotDraft(t *testing.T) {
 	mockQueue := testutil.NewMockQueue()
 	app := newTestApp(t, withQueue(mockQueue))

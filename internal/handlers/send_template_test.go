@@ -594,6 +594,158 @@ func TestApp_SendTemplateMessage(t *testing.T) {
 		assert.Equal(t, "button", dbMsg.InteractiveData["type"])
 	})
 
+	// --- TEXT header parameter (header_params field) ---
+
+	// createTestTemplateWithHeader builds an approved template with a TEXT
+	// header that has a {{var}} (named for clarity; positional is exercised
+	// separately by the unit tests on BuildTemplateComponents).
+	createTestTemplateWithHeader := func(t *testing.T, app *handlers.App, orgID uuid.UUID, accountName string) *models.Template {
+		t.Helper()
+		tpl := &models.Template{
+			BaseModel:       models.BaseModel{ID: uuid.New()},
+			OrganizationID:  orgID,
+			WhatsAppAccount: accountName,
+			Name:            "seasonal_" + uuid.New().String()[:8],
+			DisplayName:     "Seasonal Promo",
+			MetaTemplateID:  "meta-" + uuid.New().String()[:8],
+			Category:        "MARKETING",
+			Language:        "en",
+			Status:          string(models.TemplateStatusApproved),
+			HeaderType:      "TEXT",
+			HeaderContent:   "Our {{season}} sale",
+			BodyContent:     "Hi {{name}}, use code {{code}}.",
+		}
+		require.NoError(t, app.DB.Create(tpl).Error)
+		return tpl
+	}
+
+	t.Run("header_params forwards a TEXT header value to Meta", func(t *testing.T) {
+		t.Parallel()
+		mockServer := newMockWhatsAppServer()
+		defer mockServer.close()
+
+		app := newMsgTestApp(t, mockServer)
+		org := testutil.CreateTestOrganization(t, app.DB)
+		adminRole := testutil.CreateAdminRole(t, app.DB, org.ID)
+		user := testutil.CreateTestUser(t, app.DB, org.ID, testutil.WithRoleID(&adminRole.ID))
+		account := createTestAccount(t, app, org.ID)
+		contact := testutil.CreateTestContactWith(t, app.DB, org.ID, testutil.WithContactAccount(account.Name))
+		tpl := createTestTemplateWithHeader(t, app, org.ID, account.Name)
+
+		req := testutil.NewJSONRequest(t, map[string]any{
+			"contact_id":    contact.ID.String(),
+			"template_name": tpl.Name,
+			"header_params": map[string]string{"season": "Summer"},
+			"template_params": map[string]string{
+				"name": "Alice",
+				"code": "SAVE20",
+			},
+		})
+		testutil.SetAuthContext(req, org.ID, user.ID)
+
+		err := app.SendTemplateMessage(req)
+		require.NoError(t, err)
+		assert.Equal(t, fasthttp.StatusOK, testutil.GetResponseStatusCode(req))
+
+		app.WaitForBackgroundTasks()
+
+		require.Len(t, mockServer.sentMessages, 1)
+		tplPayload := mockServer.sentMessages[0]["template"].(map[string]any)
+		components := tplPayload["components"].([]any)
+
+		// Find the header component and assert it carries the supplied value.
+		var headerComp map[string]any
+		for _, c := range components {
+			if m := c.(map[string]any); m["type"] == "header" {
+				headerComp = m
+				break
+			}
+		}
+		require.NotNil(t, headerComp, "expected a header component in the Meta payload")
+		params := headerComp["parameters"].([]any)
+		require.Len(t, params, 1)
+		p0 := params[0].(map[string]any)
+		assert.Equal(t, "text", p0["type"])
+		assert.Equal(t, "Summer", p0["text"])
+		assert.Equal(t, "season", p0["parameter_name"], "named templates include parameter_name")
+	})
+
+	t.Run("header_params falls back to template_params lookup", func(t *testing.T) {
+		t.Parallel()
+		mockServer := newMockWhatsAppServer()
+		defer mockServer.close()
+
+		app := newMsgTestApp(t, mockServer)
+		org := testutil.CreateTestOrganization(t, app.DB)
+		adminRole := testutil.CreateAdminRole(t, app.DB, org.ID)
+		user := testutil.CreateTestUser(t, app.DB, org.ID, testutil.WithRoleID(&adminRole.ID))
+		account := createTestAccount(t, app, org.ID)
+		contact := testutil.CreateTestContactWith(t, app.DB, org.ID, testutil.WithContactAccount(account.Name))
+		tpl := createTestTemplateWithHeader(t, app, org.ID, account.Name)
+
+		// header_params omitted entirely — value supplied in template_params
+		// under the same variable name. Convenient for named templates where
+		// the header variable name is unique.
+		req := testutil.NewJSONRequest(t, map[string]any{
+			"contact_id":    contact.ID.String(),
+			"template_name": tpl.Name,
+			"template_params": map[string]string{
+				"season": "Winter",
+				"name":   "Bob",
+				"code":   "SAVE15",
+			},
+		})
+		testutil.SetAuthContext(req, org.ID, user.ID)
+
+		err := app.SendTemplateMessage(req)
+		require.NoError(t, err)
+		assert.Equal(t, fasthttp.StatusOK, testutil.GetResponseStatusCode(req))
+
+		app.WaitForBackgroundTasks()
+
+		require.Len(t, mockServer.sentMessages, 1)
+		tplPayload := mockServer.sentMessages[0]["template"].(map[string]any)
+		components := tplPayload["components"].([]any)
+
+		var headerComp map[string]any
+		for _, c := range components {
+			if m := c.(map[string]any); m["type"] == "header" {
+				headerComp = m
+				break
+			}
+		}
+		require.NotNil(t, headerComp)
+		params := headerComp["parameters"].([]any)
+		assert.Equal(t, "Winter", params[0].(map[string]any)["text"])
+	})
+
+	t.Run("missing header value 400s before reaching Meta", func(t *testing.T) {
+		t.Parallel()
+		// No mock — request should fail validation before any send.
+		app := newTestApp(t)
+		org := testutil.CreateTestOrganization(t, app.DB)
+		adminRole := testutil.CreateAdminRole(t, app.DB, org.ID)
+		user := testutil.CreateTestUser(t, app.DB, org.ID, testutil.WithRoleID(&adminRole.ID))
+		account := testutil.CreateTestWhatsAppAccount(t, app.DB, org.ID)
+		contact := testutil.CreateTestContactWith(t, app.DB, org.ID, testutil.WithContactAccount(account.Name))
+		tpl := createTestTemplateWithHeader(t, app, org.ID, account.Name)
+
+		req := testutil.NewJSONRequest(t, map[string]any{
+			"contact_id":    contact.ID.String(),
+			"template_name": tpl.Name,
+			// header value missing in both maps
+			"template_params": map[string]string{
+				"name": "Alice",
+				"code": "SAVE20",
+			},
+		})
+		testutil.SetAuthContext(req, org.ID, user.ID)
+
+		err := app.SendTemplateMessage(req)
+		require.NoError(t, err)
+		testutil.AssertErrorResponse(t, req, fasthttp.StatusBadRequest, "header parameter")
+	})
+
 	t.Run("template without buttons has no interactive_data", func(t *testing.T) {
 		t.Parallel()
 		mockServer := newMockWhatsAppServer()
