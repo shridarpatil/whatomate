@@ -48,6 +48,11 @@ type BulkMessageRecipient struct {
 	PhoneNumber       string        `gorm:"size:50;not null" json:"phone_number"`
 	RecipientName     string        `gorm:"size:255" json:"recipient_name"`
 	TemplateParams    JSONB         `gorm:"type:jsonb;default:'{}'" json:"template_params"`
+	// Header parameter values for TEXT-header templates with a {{var}}. Meta
+	// indexes positional vars per component, so header {{1}} and body {{1}}
+	// are separate values — keeping them in a dedicated map avoids that
+	// collision. Empty when the template has no header variable.
+	HeaderParams      JSONB         `gorm:"type:jsonb;default:'{}'" json:"header_params"`
 	Status            MessageStatus `gorm:"size:20;default:'pending'" json:"status"` // pending, sent, delivered, read, failed
 	WhatsAppMessageID string        `gorm:"column:whats_app_message_id;size:100;index" json:"whatsapp_message_id,omitempty"`
 	MessageID         *uuid.UUID    `gorm:"type:uuid" json:"message_id,omitempty"`

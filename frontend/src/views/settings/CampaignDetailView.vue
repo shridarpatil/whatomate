@@ -74,6 +74,7 @@ import {
   Upload,
   FileSpreadsheet,
   ChevronDown,
+  Download,
 } from 'lucide-vue-next'
 
 interface Campaign {
@@ -211,48 +212,75 @@ const {
 } = useHeaderMedia(selectedTemplateHeaderType)
 const isUploadingMedia = ref(false)
 
-// Template parameter helpers
-function getTemplateParamNames(template: Template): string[] {
-  if (!template.body_content) return []
-  const matches = template.body_content.match(/\{\{([^}]+)\}\}/g) || []
+// Template parameter helpers. Header and body are tracked separately so that
+// a positional header {{1}} and body {{1}} (which Meta treats as distinct,
+// component-scoped variables) don't collapse to a single column.
+function extractParamNames(text?: string): string[] {
+  if (!text) return []
   const seen = new Set<string>()
-  const names: string[] = []
+  const out: string[] = []
+  const matches = text.match(/\{\{([^}]+)\}\}/g) || []
   for (const m of matches) {
     const name = m.replace(/[{}]/g, '').trim()
     if (name && !seen.has(name)) {
       seen.add(name)
-      names.push(name)
+      out.push(name)
     }
   }
-  return names
+  return out
 }
 
-const templateParamNames = computed(() => {
-  if (!selectedTemplate.value) return []
-  return getTemplateParamNames(selectedTemplate.value)
+const templateHeaderParamName = computed<string | null>(() => {
+  const tpl = selectedTemplate.value
+  if (!tpl || tpl.header_type !== 'TEXT') return null
+  const names = extractParamNames(tpl.header_content)
+  return names[0] || null
 })
+
+const templateBodyParamNames = computed<string[]>(() => {
+  if (!selectedTemplate.value) return []
+  return extractParamNames(selectedTemplate.value.body_content)
+})
+
+// Concatenated list (header first if present, then body). Used purely to
+// render the input slot count / example placeholders — the actual recipient
+// payload splits header and body back apart.
+const templateParamNames = computed<string[]>(() => {
+  const list: string[] = []
+  if (templateHeaderParamName.value) list.push('header')
+  list.push(...templateBodyParamNames.value)
+  return list
+})
+
+function exampleValue(name: string, index: number): string {
+  if (name === 'header') return 'Summer'
+  if (/^\d+$/.test(name)) return `value${index + 1}`
+  if (name.toLowerCase().includes('name')) return 'John Doe'
+  if (name.toLowerCase().includes('order')) return 'ORD-123'
+  if (name.toLowerCase().includes('date')) return '2024-01-15'
+  if (name.toLowerCase().includes('amount') || name.toLowerCase().includes('price')) return '99.99'
+  return `${name}_value`
+}
 
 const recipientPlaceholder = computed(() => {
   const params = templateParamNames.value
   if (params.length === 0) {
     return `+1234567890, John Doe\n+0987654321, Jane Smith\n+1122334455`
   }
-  const exampleValues = params.map((p, i) => {
-    if (/^\d+$/.test(p)) return `value${i + 1}`
-    if (p.toLowerCase().includes('name')) return 'John Doe'
-    if (p.toLowerCase().includes('order')) return 'ORD-123'
-    if (p.toLowerCase().includes('date')) return '2024-01-15'
-    if (p.toLowerCase().includes('amount') || p.toLowerCase().includes('price')) return '99.99'
-    return `${p}_value`
-  })
+  const exampleValues = params.map(exampleValue)
   return `+1234567890, John Doe, ${exampleValues.join(', ')}\n+0987654321, Jane Smith, ${exampleValues.join(', ')}`
 })
 
 const manualEntryFormat = computed(() => {
-  const params = templateParamNames.value
-  if (params.length === 0) return 'phone_number, name (optional)'
-  const paramLabels = params.map(p => /^\d+$/.test(p) ? `param${p}` : p)
-  return `phone_number, name, ${paramLabels.join(', ')}`
+  const labels: string[] = []
+  if (templateHeaderParamName.value) {
+    labels.push(`header (${templateHeaderParamName.value})`)
+  }
+  for (const p of templateBodyParamNames.value) {
+    labels.push(/^\d+$/.test(p) ? `param${p}` : p)
+  }
+  if (labels.length === 0) return 'phone_number, name (optional)'
+  return `phone_number, name, ${labels.join(', ')}`
 })
 
 // Status helpers
@@ -568,7 +596,7 @@ async function openAddRecipientsDialog() {
 }
 
 const manualInputValidation = computed(() => {
-  const params = templateParamNames.value
+  const expectedCount = templateParamNames.value.length
   const lines = recipientsInput.value.trim().split('\n').filter((line: string) => line.trim())
 
   if (lines.length === 0) {
@@ -576,6 +604,7 @@ const manualInputValidation = computed(() => {
   }
 
   const invalidLines: { lineNumber: number; reason: string }[] = []
+  const seenPhones = new Set<string>()
 
   for (let i = 0; i < lines.length; i++) {
     const parts = lines[i].split(',').map((p: string) => p.trim())
@@ -586,12 +615,29 @@ const manualInputValidation = computed(() => {
       continue
     }
 
-    // Params start from 3rd field (after phone + name)
-    const providedParams = parts.slice(2).filter((p: string) => p.length > 0).length
-    if (params.length > 0 && providedParams < params.length) {
+    if (seenPhones.has(phone)) {
+      invalidLines.push({ lineNumber: i + 1, reason: `Duplicate phone number (${phone})` })
+      continue
+    }
+    seenPhones.add(phone)
+
+    // Layout: phone, name, <header_value if any>, <body_val_1>, ..., <body_val_n>
+    // Name (parts[1]) is optional — accept blank — but the column count must
+    // match the template so values don't shift into the wrong slot.
+    const provided = parts.slice(2).filter((p: string) => p.length > 0).length
+    if (expectedCount > 0 && provided < expectedCount) {
       invalidLines.push({
         lineNumber: i + 1,
-        reason: `Missing template parameters (need ${params.length}, got ${providedParams})`
+        reason: `Need ${expectedCount} parameter value${expectedCount === 1 ? '' : 's'} after the name column, got ${provided}. Format: ${manualEntryFormat.value}`,
+      })
+      continue
+    }
+    if (expectedCount > 0 && parts.length - 2 > expectedCount) {
+      // Extra trailing columns usually mean an unquoted comma in a value —
+      // call it out instead of silently truncating.
+      invalidLines.push({
+        lineNumber: i + 1,
+        reason: `Too many columns: expected ${expectedCount + 2}, got ${parts.length}. If a value contains a comma, remove it.`,
       })
     }
   }
@@ -600,7 +646,7 @@ const manualInputValidation = computed(() => {
     isValid: invalidLines.length === 0 && lines.length > 0,
     totalLines: lines.length,
     validLines: lines.length - invalidLines.length,
-    invalidLines
+    invalidLines,
   }
 })
 
@@ -618,23 +664,39 @@ async function addRecipients() {
     return
   }
 
-  // Format: phone_number, name, param1, param2, ...
-  const paramNames = templateParamNames.value
+  // Layout: phone, name, <header value if any>, <body_val_1>, ..., <body_val_n>
+  // Header and body values are split into separate payload keys so a
+  // positional header {{1}} doesn't collide with body {{1}}.
+  const headerName = templateHeaderParamName.value
+  const bodyNames = templateBodyParamNames.value
   const recipientsList = lines.map(line => {
     const parts = line.split(',').map(p => p.trim())
-    const recipient: { phone_number: string; recipient_name?: string; template_params?: Record<string, any> } = {
+    const recipient: {
+      phone_number: string
+      recipient_name?: string
+      template_params?: Record<string, any>
+      header_params?: Record<string, any>
+    } = {
       phone_number: parts[0].replace(/[^\d+]/g, ''),
     }
-    // Second field is always recipient name
     if (parts[1]?.trim()) {
       recipient.recipient_name = parts[1].trim()
     }
-    // Template params start from third field
-    const params: Record<string, any> = {}
-    for (let i = 0; i < paramNames.length; i++) {
-      const val = parts[i + 2] // offset by 2 (phone + name)
+
+    let cursor = 2
+    if (headerName) {
+      const val = parts[cursor]
       if (val && val.length > 0) {
-        params[paramNames[i]] = val
+        recipient.header_params = { [headerName]: val }
+      }
+      cursor++
+    }
+
+    const params: Record<string, any> = {}
+    for (let i = 0; i < bodyNames.length; i++) {
+      const val = parts[cursor + i]
+      if (val && val.length > 0) {
+        params[bodyNames[i]] = val
       }
     }
     if (Object.keys(params).length > 0) {
@@ -666,6 +728,48 @@ function handleCSVFileSelect(event: Event) {
   }
 }
 
+// Header row of the sample CSV — mirrors what the parser accepts.
+const csvColumns = computed<string[]>(() => {
+  const cols = ['phone_number', 'name']
+  if (templateHeaderParamName.value) cols.push('header')
+  for (const p of templateBodyParamNames.value) cols.push(p)
+  return cols
+})
+
+const csvHeaderRow = computed(() => csvColumns.value.join(','))
+
+function downloadSampleCSV() {
+  const cols = csvColumns.value
+  const exampleRow = cols.map((c, idx) => {
+    if (idx === 0) return '+1234567890'
+    if (c === 'name') return 'John Doe'
+    if (c === 'header') return templateHeaderParamName.value
+      ? exampleValue(templateHeaderParamName.value, 0)
+      : 'Summer'
+    return exampleValue(c, idx)
+  })
+  const secondRow = cols.map((c, idx) => {
+    if (idx === 0) return '+0987654321'
+    if (c === 'name') return 'Jane Smith'
+    if (c === 'header') return templateHeaderParamName.value
+      ? exampleValue(templateHeaderParamName.value, 1)
+      : 'Winter'
+    return exampleValue(c, idx)
+  })
+  const csv = `${csvHeaderRow.value}\n${exampleRow.join(',')}\n${secondRow.join(',')}\n`
+
+  const filename = `recipients-${campaign.value?.name?.toLowerCase().replace(/\s+/g, '-') || 'sample'}.csv`
+  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' })
+  const url = URL.createObjectURL(blob)
+  const link = document.createElement('a')
+  link.href = url
+  link.download = filename
+  document.body.appendChild(link)
+  link.click()
+  document.body.removeChild(link)
+  URL.revokeObjectURL(url)
+}
+
 async function addRecipientsFromCSV() {
   if (!campaign.value || !csvFile.value) return
 
@@ -695,31 +799,55 @@ async function addRecipientsFromCSV() {
       h === 'name' || h === 'recipient_name' || h === 'recipientname' || h === 'customer_name'
     )
 
-    const paramNames = templateParamNames.value
-    const recipientsList: { phone_number: string; recipient_name?: string; template_params?: Record<string, any> }[] = []
+    // Header parameter column — accept the reserved name 'header', or the
+    // variable's name itself when unambiguous (named templates only).
+    const headerName = templateHeaderParamName.value
+    let headerColIdx = -1
+    if (headerName) {
+      headerColIdx = headers.findIndex(h => h === 'header')
+      if (headerColIdx === -1 && !/^\d+$/.test(headerName)) {
+        headerColIdx = headers.findIndex(h => h === headerName.toLowerCase())
+      }
+    }
+
+    const bodyNames = templateBodyParamNames.value
+    const recipientsList: {
+      phone_number: string
+      recipient_name?: string
+      template_params?: Record<string, any>
+      header_params?: Record<string, any>
+    }[] = []
 
     for (let i = 1; i < lines.length; i++) {
       const values = lines[i].split(',').map(v => v.trim())
       const phone = values[phoneIndex]?.replace(/[^\d+]/g, '')
       if (!phone) continue
 
-      const recipient: { phone_number: string; recipient_name?: string; template_params?: Record<string, any> } = {
-        phone_number: phone,
-      }
+      const recipient: {
+        phone_number: string
+        recipient_name?: string
+        template_params?: Record<string, any>
+        header_params?: Record<string, any>
+      } = { phone_number: phone }
 
-      // Extract name if column exists
       if (nameIndex !== -1 && values[nameIndex]?.trim()) {
         recipient.recipient_name = values[nameIndex].trim()
       }
 
-      // Map remaining columns to template params by name match or position
-      if (paramNames.length > 0) {
+      const usedIndices = new Set<number>([phoneIndex])
+      if (nameIndex !== -1) usedIndices.add(nameIndex)
+
+      if (headerName && headerColIdx !== -1) {
+        const v = values[headerColIdx]?.trim()
+        if (v) recipient.header_params = { [headerName]: v }
+        usedIndices.add(headerColIdx)
+      }
+
+      if (bodyNames.length > 0) {
         const params: Record<string, any> = {}
-        const usedIndices = new Set<number>([phoneIndex])
-        if (nameIndex !== -1) usedIndices.add(nameIndex)
 
         // Try name matching first
-        for (const paramName of paramNames) {
+        for (const paramName of bodyNames) {
           const colIdx = headers.findIndex((h, idx) =>
             !usedIndices.has(idx) && h === paramName.toLowerCase()
           )
@@ -730,7 +858,7 @@ async function addRecipientsFromCSV() {
         }
 
         // Positional fallback for unmapped params
-        const unmapped = paramNames.filter(p => !(p in params))
+        const unmapped = bodyNames.filter(p => !(p in params))
         const remainingCols = headers.map((_, idx) => idx).filter(idx => !usedIndices.has(idx))
         for (let j = 0; j < unmapped.length && j < remainingCols.length; j++) {
           params[unmapped[j]] = values[remainingCols[j]]?.trim() || ''
@@ -1270,8 +1398,19 @@ onUnmounted(() => {
         <TabsContent value="csv" class="space-y-3 mt-3">
           <div class="space-y-1.5">
             <Label class="text-xs text-muted-foreground">
-              {{ $t('campaigns.csvFormatHint', 'CSV must include a phone_number (or phone, mobile, number) column. Optionally include a name (or recipient_name) column, followed by template parameter columns.') }}
+              {{ $t('campaigns.csvFormatHint', 'CSV must include a phone_number (or phone, mobile, number) column. Optionally include a name column. For templates with a TEXT header variable, add a "header" column. Then one column per body parameter.') }}
             </Label>
+            <div class="flex items-center justify-between text-xs">
+              <code class="bg-muted px-1.5 py-0.5 rounded">{{ csvHeaderRow }}</code>
+              <button
+                type="button"
+                class="text-primary hover:underline inline-flex items-center gap-1"
+                @click="downloadSampleCSV"
+              >
+                <Download class="h-3.5 w-3.5" />
+                {{ $t('campaigns.downloadSampleCsv', 'Download sample CSV') }}
+              </button>
+            </div>
             <div
               class="border-2 border-dashed rounded-lg p-6 text-center cursor-pointer hover:border-primary/50 transition-colors"
               @click="($refs.csvInput as HTMLInputElement)?.click()"

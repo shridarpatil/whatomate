@@ -182,6 +182,11 @@ const templateDialogOpen = ref(false)
 const selectedTemplate = ref<any>(null)
 const templateParamNames = ref<string[]>([])
 const templateParamValues = ref<Record<string, string>>({})
+// Name of the TEXT-header variable (max 1 per Meta) and its value. Kept in
+// its own ref so a positional {{1}} in the header doesn't collide with a
+// {{1}} body parameter — both can be filled independently.
+const templateHeaderParamName = ref<string | null>(null)
+const templateHeaderParamValue = ref('')
 const templateButtonUrlParams = ref<{ index: number; text: string; value: string; type: string }[]>([])
 const isSendingTemplate = ref(false)
 const templateHeaderType = computed(() => selectedTemplate.value?.header_type)
@@ -995,6 +1000,14 @@ const templatePreview = computed(() => {
   })
 })
 
+// Show the header input only when the user has to fill it. Context-token
+// names (contact_name, phone_number, …) auto-resolve and stay hidden — same
+// rule body params follow via templateParamNames filtering.
+const showHeaderParamInput = computed(() =>
+  !!templateHeaderParamName.value &&
+  !AUTO_RESOLVED_CONTEXT_TOKENS.has(templateHeaderParamName.value)
+)
+
 function extractButtonUrlParams(buttons: any[]): { index: number; text: string; value: string; type: string }[] {
   if (!buttons?.length) return []
   return buttons
@@ -1012,10 +1025,10 @@ function extractButtonUrlParams(buttons: any[]): { index: number; text: string; 
 
 function handleTemplateWithParams(template: any, paramNames: string[]) {
   selectedTemplate.value = template
-  // Pre-fill context tokens from the conversation; keep them in the payload
-  // dict so the backend forwards them to Meta, but hide them from the dialog
-  // so the agent doesn't have to type values we already know — same pattern
-  // as canned responses (see handleCannedSelect).
+  // Pre-fill body context tokens from the conversation; keep them in the
+  // payload dict so the backend forwards them to Meta, but hide them from
+  // the dialog so the agent doesn't have to type values we already know —
+  // same pattern as canned responses (see handleCannedSelect).
   const initial: Record<string, string> = {}
   for (const name of paramNames) {
     const resolved = resolveContextToken(name)
@@ -1023,6 +1036,22 @@ function handleTemplateWithParams(template: any, paramNames: string[]) {
   }
   templateParamValues.value = initial
   templateParamNames.value = paramNames.filter(n => !AUTO_RESOLVED_CONTEXT_TOKENS.has(n))
+
+  // Identify the TEXT-header variable (max 1) and pre-fill from context.
+  // Context-token names (contact_name / phone_number / agent_name / user_name)
+  // resolve automatically and stay hidden from the dialog — same convention
+  // as body params.
+  templateHeaderParamName.value = null
+  templateHeaderParamValue.value = ''
+  if (template.header_type === 'TEXT' && template.header_content) {
+    const m = template.header_content.match(/\{\{([^}]+)\}\}/)
+    if (m) {
+      const name = m[1].trim()
+      templateHeaderParamName.value = name
+      templateHeaderParamValue.value = resolveContextToken(name) ?? ''
+    }
+  }
+
   clearTemplateHeaderMedia()
   templateButtonUrlParams.value = extractButtonUrlParams(template.buttons)
   templateDialogOpen.value = true
@@ -1030,6 +1059,14 @@ function handleTemplateWithParams(template: any, paramNames: string[]) {
 
 async function sendTemplateMessage() {
   if (!contactsStore.currentContact || !selectedTemplate.value) return
+
+  // Validate header param (separate ref so it can hold its own value even
+  // when the body has a {{1}} that would otherwise collide). Auto-resolved
+  // context tokens are exempt — their value comes from the conversation.
+  if (showHeaderParamInput.value && !templateHeaderParamValue.value.trim()) {
+    toast.error(t('chat.parameterRequired'))
+    return
+  }
 
   // Validate all body params are filled
   const missingBody = templateParamNames.value.some(n => !templateParamValues.value[n]?.trim())
@@ -1057,6 +1094,12 @@ async function sendTemplateMessage() {
       ? Object.fromEntries(templateButtonUrlParams.value.map(b => [String(b.index), b.value]))
       : undefined
 
+  // Header value goes in its own payload field so a positional {{1}} header
+  // doesn't overwrite a positional {{1}} body parameter in the flat map.
+  const headerParams: Record<string, string> | undefined =
+    templateHeaderParamName.value && templateHeaderParamValue.value
+      ? { [templateHeaderParamName.value]: templateHeaderParamValue.value }
+      : undefined
 
   isSendingTemplate.value = true
   try {
@@ -1066,13 +1109,16 @@ async function sendTemplateMessage() {
       templateParamValues.value,
       selectedAccount.value || undefined,
       templateHeaderFile.value || undefined,
-      buttonParams
+      buttonParams,
+      headerParams
     )
     toast.success(t('chat.templateSent'))
     templateDialogOpen.value = false
     selectedTemplate.value = null
     templateParamNames.value = []
     templateParamValues.value = {}
+    templateHeaderParamName.value = null
+    templateHeaderParamValue.value = ''
     clearTemplateHeaderMedia()
     templateButtonUrlParams.value = []
   } catch (error: any) {
@@ -2455,6 +2501,19 @@ async function sendMediaMessage() {
             @clear="clearTemplateHeaderMedia"
           />
 
+          <div v-if="showHeaderParamInput" class="space-y-1">
+            <label class="text-sm font-medium flex items-center gap-1.5">
+              <span>{{ templateHeaderParamName }}</span>
+              <span class="text-[10px] uppercase tracking-wider text-muted-foreground bg-muted px-1.5 py-0.5 rounded">
+                {{ $t('chat.headerParamBadge', 'Header') }}
+              </span>
+            </label>
+            <Input
+              v-model="templateHeaderParamValue"
+              :placeholder="templateHeaderParamName ?? ''"
+              class="h-9"
+            />
+          </div>
           <div v-for="param in templateParamNames" :key="param" class="space-y-1">
             <label class="text-sm font-medium">{{ param }}</label>
             <Input
