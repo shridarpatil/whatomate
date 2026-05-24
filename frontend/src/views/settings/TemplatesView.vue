@@ -15,7 +15,7 @@ import { toast } from 'vue-sonner'
 import { Plus, RefreshCw, FileText, Pencil, Trash2, Loader2, MessageSquare, Image, FileIcon, Video } from 'lucide-vue-next'
 import { getErrorMessage } from '@/lib/api-utils'
 import { useSearchPagination } from '@/composables/useSearchPagination'
-import { getQualityBadgeClass, getQualityRatingLabel as sharedGetQualityRatingLabel } from '@/lib/utils'
+import { getQualityBadgeClass, getQualityRatingLabel } from '@/lib/utils'
 
 const { t } = useI18n()
 
@@ -293,9 +293,7 @@ function getHeaderIcon(type: string) {
   }
 }
 
-function getQualityRatingLabel(rating: string) {
-  return sharedGetQualityRatingLabel(rating, t)
-}
+// Shared quality label helper is imported from @/lib/utils
 </script>
 
 <template>
@@ -387,7 +385,7 @@ function getQualityRatingLabel(rating: string) {
                 </template>
                 <template #cell-quality_rating="{ item: template }">
                   <Badge v-if="template.quality_rating" :class="getQualityBadgeClass(template.quality_rating)" class="text-xs">
-                    {{ getQualityRatingLabel(template.quality_rating) }}
+                    {{ getQualityRatingLabel(template.quality_rating, t) }}
                   </Badge>
                   <span v-else class="text-muted-foreground text-xs">—</span>
                 </template>
