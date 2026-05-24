@@ -89,18 +89,20 @@ function getBodyContent(tpl: any): string {
   return tpl.body_content || ''
 }
 
-function extractParamNames(bodyContent: string): string[] {
-  const matches = bodyContent.match(/\{\{([^}]+)\}\}/g)
+function extractParamNames(content: string): string[] {
+  const matches = content.match(/\{\{([^}]+)\}\}/g)
   if (!matches) return []
   return [...new Set(matches.map(m => m.replace(/\{\{|\}\}/g, '').trim()))]
 }
 
 function selectTemplate(tpl: any) {
-  const bodyContent = getBodyContent(tpl)
-  const paramNames = extractParamNames(bodyContent)
+  // Emit body variables only — the header variable is handled separately by
+  // the parent so positional {{1}} in header and body don't collapse into a
+  // single input (Meta indexes positional vars per component).
+  const bodyNames = extractParamNames(getBodyContent(tpl))
 
   // Always show preview dialog before sending
-  emit('select-with-params', tpl, paramNames)
+  emit('select-with-params', tpl, bodyNames)
 
   isOpen.value = false
   searchQuery.value = ''
