@@ -6,7 +6,7 @@ import { useAuthStore } from '@/stores/auth'
 import { api } from '@/services/api'
 import { toast } from 'vue-sonner'
 import { getErrorMessage } from '@/lib/api-utils'
-import { getQualityBadgeClass, getQualityRatingLabel as sharedGetQualityRatingLabel } from '@/lib/utils'
+import { getQualityBadgeClass, getQualityRatingLabel, getVerificationBadgeClass, formatLimitTier } from '@/lib/utils'
 import { useUnsavedChangesGuard } from '@/composables/useUnsavedChangesGuard'
 import DetailPageLayout from '@/components/shared/DetailPageLayout.vue'
 import MetadataPanel from '@/components/shared/MetadataPanel.vue'
@@ -63,7 +63,6 @@ interface WhatsAppAccount {
   has_app_secret: boolean
   phone_number?: string
   display_name?: string
-  business_calling_enabled?: boolean
   created_by_id?: string
   created_by_name?: string
   updated_by_id?: string
@@ -134,49 +133,6 @@ const webhookUrl = window.location.origin + basePath + '/api/webhook'
 
 // Track form changes
 watch(form, () => { hasChanges.value = true }, { deep: true })
-
-
-function getVerificationBadgeClass(status: string) {
-  switch (status.toUpperCase()) {
-    case 'VERIFIED':
-    case 'VERIFIED_CODE':
-      return 'bg-green-950 text-green-400 border border-green-800/40 light:bg-green-100 light:text-green-800'
-    case 'NOT_VERIFIED':
-      return 'bg-red-950 text-red-400 border border-red-800/40 light:bg-red-100 light:text-red-800'
-    case 'EXPIRED':
-      return 'bg-amber-950 text-amber-400 border border-amber-800/40 light:bg-amber-100 light:text-amber-800'
-    default:
-      return 'bg-gray-800 text-gray-400 light:bg-gray-100 light:text-gray-600'
-  }
-}
-
-function formatLimitTier(tier?: string, isSandbox?: boolean) {
-  if (isSandbox) {
-    return t('accounts.limitTierSandbox', 'Sandbox (250 msgs/day)')
-  }
-  if (!tier) {
-    return t('accounts.limitTierDefault', '250 msgs/day (Default)')
-  }
-  const clean = tier.toUpperCase().replace('TIER_', '')
-  switch (clean) {
-    case '250':
-      return t('accounts.limitTier250', '250 msgs/day')
-    case '2K':
-      return t('accounts.limitTier2K', '2K msgs/day')
-    case '10K':
-      return t('accounts.limitTier10K', '10K msgs/day')
-    case '100K':
-      return t('accounts.limitTier100K', '100K msgs/day')
-    case 'UNLIMITED':
-      return t('accounts.limitTierUnlimited', 'Unlimited')
-    default:
-      return `${clean} msgs/day`
-  }
-}
-
-function getQualityRatingLabel(rating: string) {
-  return sharedGetQualityRatingLabel(rating, t)
-}
 
 function getVerificationStatusLabel(status: string) {
   if (!status) return ''
@@ -396,14 +352,14 @@ onMounted(async () => {
               <div class="space-y-1">
                 <span class="text-[10px] text-muted-foreground block font-medium">{{ $t('accounts.qualityRating', 'Quality Rating') }}</span>
                 <Badge :class="getQualityBadgeClass(testResult.quality_rating || '')">
-                  {{ getQualityRatingLabel(testResult.quality_rating || '') }}
+                  {{ getQualityRatingLabel(testResult.quality_rating || '', t) }}
                 </Badge>
               </div>
               <!-- Messaging Limit Tier -->
               <div class="space-y-1">
                 <span class="text-[10px] text-muted-foreground block font-medium">{{ $t('accounts.messagingLimitTier', 'Messaging Limit') }}</span>
                 <span class="text-sm font-semibold block text-foreground">
-                  {{ formatLimitTier(testResult.messaging_limit_tier, testResult.is_test_number || testResult.account_mode === 'SANDBOX') }}
+                  {{ formatLimitTier(testResult.messaging_limit_tier, testResult.is_test_number || testResult.account_mode === 'SANDBOX', t) }}
                 </span>
               </div>
               <!-- Verification Status -->
