@@ -102,9 +102,11 @@ export function getQualityBadgeClass(rating: string): string {
   }
 }
 
-export function getQualityRatingLabel(rating: string, t: (key: string) => string): string {
-  if (!rating) return t('accounts.qualityUnknown')
-  switch (rating.toUpperCase()) {
+export function getQualityRatingLabel(rating: string | undefined, t: (key: string) => string): string {
+  switch ((rating || '').toUpperCase()) {
+    case '':
+    case 'UNKNOWN':
+      return t('accounts.qualityUnknown')
     case 'GREEN':
     case 'HIGH':
       return t('accounts.qualityGreen')
@@ -115,6 +117,50 @@ export function getQualityRatingLabel(rating: string, t: (key: string) => string
     case 'LOW':
       return t('accounts.qualityRed')
     default:
-      return rating
+      return rating || ''
   }
 }
+
+export function getVerificationBadgeClass(status: string): string {
+  if (!status) return 'bg-gray-800 text-gray-400 light:bg-gray-100 light:text-gray-600'
+  switch (status.toUpperCase()) {
+    case 'VERIFIED':
+    case 'VERIFIED_CODE':
+      return 'bg-green-950 text-green-400 border border-green-800/40 light:bg-green-100 light:text-green-800'
+    case 'NOT_VERIFIED':
+      return 'bg-red-950 text-red-400 border border-red-800/40 light:bg-red-100 light:text-red-800'
+    case 'EXPIRED':
+      return 'bg-amber-950 text-amber-400 border border-amber-800/40 light:bg-amber-100 light:text-amber-800'
+    default:
+      return 'bg-gray-800 text-gray-400 light:bg-gray-100 light:text-gray-600'
+  }
+}
+
+export function formatLimitTier(
+  tier: string | undefined,
+  isSandbox: boolean | undefined,
+  t: (key: string, defaultValue?: string) => string
+): string {
+  if (isSandbox) {
+    return t('accounts.limitTierSandbox', 'Sandbox (250 msgs/day)')
+  }
+  if (!tier) {
+    return t('accounts.limitTierDefault', '250 msgs/day (Default)')
+  }
+  const clean = tier.toUpperCase().replace('TIER_', '')
+  switch (clean) {
+    case '250':
+      return t('accounts.limitTier250', '250 msgs/day')
+    case '2K':
+      return t('accounts.limitTier2K', '2K msgs/day')
+    case '10K':
+      return t('accounts.limitTier10K', '10K msgs/day')
+    case '100K':
+      return t('accounts.limitTier100K', '100K msgs/day')
+    case 'UNLIMITED':
+      return t('accounts.limitTierUnlimited', 'Unlimited')
+    default:
+      return `${clean} msgs/day`
+  }
+}
+
