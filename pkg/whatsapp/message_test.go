@@ -754,7 +754,8 @@ func TestBodyParamsToComponents_NamedParamsRetainLexicalOrder(t *testing.T) {
 // Document headers must include filename — Meta returns 132012 "Header
 // Format Mismatch" without it. Issue #351.
 func TestBuildTemplateComponents_DocumentHeaderIncludesFilename(t *testing.T) {
-	components := whatsapp.BuildTemplateComponents(nil, "DOCUMENT", "media-id-123", "invoice.pdf")
+	components, err := whatsapp.BuildTemplateComponents(nil, "DOCUMENT", "", nil, "media-id-123", "invoice.pdf")
+	require.NoError(t, err)
 	require.Len(t, components, 1)
 	assert.Equal(t, "header", components[0]["type"])
 
@@ -768,7 +769,8 @@ func TestBuildTemplateComponents_DocumentHeaderIncludesFilename(t *testing.T) {
 }
 
 func TestBuildTemplateComponents_ImageHeaderOmitsFilename(t *testing.T) {
-	components := whatsapp.BuildTemplateComponents(nil, "IMAGE", "media-id-456", "photo.jpg")
+	components, err := whatsapp.BuildTemplateComponents(nil, "IMAGE", "", nil, "media-id-456", "photo.jpg")
+	require.NoError(t, err)
 	require.Len(t, components, 1)
 	params := components[0]["parameters"].([]map[string]any)
 	img := params[0]["image"].(map[string]any)
@@ -780,11 +782,81 @@ func TestBuildTemplateComponents_ImageHeaderOmitsFilename(t *testing.T) {
 func TestBuildTemplateComponents_DocumentHeaderEmptyFilename(t *testing.T) {
 	// If no filename was supplied, don't include the key — better than sending
 	// an empty string Meta might reject.
-	components := whatsapp.BuildTemplateComponents(nil, "DOCUMENT", "media-id-789", "")
+	components, err := whatsapp.BuildTemplateComponents(nil, "DOCUMENT", "", nil, "media-id-789", "")
+	require.NoError(t, err)
 	require.Len(t, components, 1)
 	params := components[0]["parameters"].([]map[string]any)
 	doc := params[0]["document"].(map[string]any)
 	assert.Equal(t, "media-id-789", doc["id"])
 	_, hasFilename := doc["filename"]
 	assert.False(t, hasFilename, "empty filename should not be set")
+}
+
+// TEXT header with a positional {{1}} variable must emit a header component
+// with a single text parameter (no parameter_name). The value is resolved
+// from headerParams first, then falls back to bodyParams.
+func TestBuildTemplateComponents_TextHeaderPositional(t *testing.T) {
+	bodyParams := map[string]string{"1": "John", "2": "ORD-1"}
+	headerParams := map[string]string{"1": "Summer Sale"}
+	components, err := whatsapp.BuildTemplateComponents(
+		bodyParams,
+		"TEXT", "Our {{1}} is on!",
+		headerParams,
+		"", "",
+	)
+	require.NoError(t, err)
+	require.Len(t, components, 2) // header + body
+	assert.Equal(t, "header", components[0]["type"])
+
+	params := components[0]["parameters"].([]map[string]any)
+	require.Len(t, params, 1)
+	assert.Equal(t, "text", params[0]["type"])
+	assert.Equal(t, "Summer Sale", params[0]["text"])
+	_, hasName := params[0]["parameter_name"]
+	assert.False(t, hasName, "positional params must not include parameter_name")
+}
+
+// TEXT header with a named {{order_id}} variable must include parameter_name.
+// When headerParams is nil, the value comes from bodyParams (single flat map).
+func TestBuildTemplateComponents_TextHeaderNamedFallback(t *testing.T) {
+	bodyParams := map[string]string{"customer_name": "Alex", "order_id": "ORD-9"}
+	components, err := whatsapp.BuildTemplateComponents(
+		bodyParams,
+		"TEXT", "Order {{order_id}}",
+		nil,
+		"", "",
+	)
+	require.NoError(t, err)
+	require.Len(t, components, 2)
+
+	headerParams := components[0]["parameters"].([]map[string]any)
+	require.Len(t, headerParams, 1)
+	assert.Equal(t, "ORD-9", headerParams[0]["text"])
+	assert.Equal(t, "order_id", headerParams[0]["parameter_name"])
+}
+
+// A TEXT header with no {{var}} should not emit a header component.
+func TestBuildTemplateComponents_TextHeaderNoVariable(t *testing.T) {
+	bodyParams := map[string]string{"1": "Hello"}
+	components, err := whatsapp.BuildTemplateComponents(
+		bodyParams,
+		"TEXT", "Welcome",
+		nil,
+		"", "",
+	)
+	require.NoError(t, err)
+	require.Len(t, components, 1)
+	assert.Equal(t, "body", components[0]["type"])
+}
+
+// A TEXT header with >1 variable is invalid (Meta restriction).
+func TestBuildTemplateComponents_TextHeaderTooManyVariables(t *testing.T) {
+	_, err := whatsapp.BuildTemplateComponents(
+		nil,
+		"TEXT", "Order {{1}} for {{2}}",
+		map[string]string{"1": "ORD-1", "2": "John"},
+		"", "",
+	)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "at most one variable")
 }

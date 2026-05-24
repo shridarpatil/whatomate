@@ -87,6 +87,7 @@ const bodyHint = 'Use {{1}}, {{2}} for positional or {{name}}, {{email}} for nam
 const mixedVariablesHint = 'Cannot mix positional ({{1}}, {{2}}) and named ({{name}}) variables. Use one type only.'
 const duplicateVariablesHint = 'Duplicate variables found. Each variable should appear only once in the template.'
 const variablePositionHint = 'Variables cannot be at the very start or end of the template body.'
+const headerTooManyVariablesHint = 'Meta allows at most one variable in a TEXT header.'
 
 const templateId = computed(() => route.params.id as string)
 const isNew = computed(() => templateId.value === 'new')
@@ -230,6 +231,13 @@ const hasVariableAtEdge = computed(() => {
   const body = form.value.body_content.trim()
   if (!body) return false
   return /^\{\{[^}]+\}\}/.test(body) || /\{\{[^}]+\}\}$/.test(body)
+})
+
+// Meta allows at most one variable in a TEXT header. Count unique names so
+// {{name}} … {{name}} (same variable referenced twice) still passes.
+const hasTooManyHeaderVariables = computed(() => {
+  if (form.value.header_type !== 'TEXT') return false
+  return new Set(headerVariables.value).size > 1
 })
 
 // Build sample_values array from form inputs
@@ -465,6 +473,10 @@ async function save() {
     }
     if (hasVariableAtEdge.value) {
       toast.error(t('templates.variableAtEdge', 'Variables cannot be at the very start or end of the template body.'))
+      return
+    }
+    if (hasTooManyHeaderVariables.value) {
+      toast.error(t('templates.headerTooManyVariables', headerTooManyVariablesHint))
       return
     }
   }
@@ -760,6 +772,7 @@ onMounted(async () => {
         <div v-if="form.header_type === 'TEXT'" class="space-y-1.5">
           <Label class="text-xs" for="header-content">{{ $t('templates.headerContent', 'Header Content') }}</Label>
           <Input id="header-content" v-model="form.header_content" :disabled="!canWrite || !isEditable" />
+          <p v-if="hasTooManyHeaderVariables" class="text-xs text-destructive" v-text="headerTooManyVariablesHint" />
         </div>
 
         <!-- Header Media Upload for IMAGE/VIDEO/DOCUMENT -->

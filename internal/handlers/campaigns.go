@@ -60,6 +60,10 @@ type RecipientRequest struct {
 	PhoneNumber    string         `json:"phone_number" validate:"required"`
 	RecipientName  string         `json:"recipient_name"`
 	TemplateParams map[string]any `json:"template_params"`
+	// HeaderParams carries the value for a TEXT-header variable (max 1 per
+	// Meta), keyed by the variable's name. Kept separate from TemplateParams
+	// so a positional header {{1}} doesn't collide with body {{1}}.
+	HeaderParams map[string]any `json:"header_params"`
 }
 
 // ListCampaigns implements campaign listing
@@ -207,6 +211,7 @@ func (a *App) CreateCampaign(r *fastglue.Request) error {
 		TotalRecipients:     campaign.TotalRecipients,
 		SentCount:           campaign.SentCount,
 		DeliveredCount:      campaign.DeliveredCount,
+		ReadCount:           campaign.ReadCount,
 		FailedCount:         campaign.FailedCount,
 		ScheduledAt:         campaign.ScheduledAt,
 		CreatedAt:           campaign.CreatedAt,
@@ -247,6 +252,7 @@ func (a *App) GetCampaign(r *fastglue.Request) error {
 		TotalRecipients:     campaign.TotalRecipients,
 		SentCount:           campaign.SentCount,
 		DeliveredCount:      campaign.DeliveredCount,
+		ReadCount:           campaign.ReadCount,
 		FailedCount:         campaign.FailedCount,
 		ScheduledAt:         campaign.ScheduledAt,
 		StartedAt:           campaign.StartedAt,
@@ -338,6 +344,7 @@ func (a *App) UpdateCampaign(r *fastglue.Request) error {
 		TotalRecipients:     campaign.TotalRecipients,
 		SentCount:           campaign.SentCount,
 		DeliveredCount:      campaign.DeliveredCount,
+		ReadCount:           campaign.ReadCount,
 		FailedCount:         campaign.FailedCount,
 		ScheduledAt:         campaign.ScheduledAt,
 		CreatedAt:           campaign.CreatedAt,
@@ -465,6 +472,7 @@ func (a *App) StartCampaign(r *fastglue.Request) error {
 			PhoneNumber:    recipient.PhoneNumber,
 			RecipientName:  recipient.RecipientName,
 			TemplateParams: recipient.TemplateParams,
+			HeaderParams:   recipient.HeaderParams,
 		}
 	}
 
@@ -626,6 +634,7 @@ func (a *App) RetryFailed(r *fastglue.Request) error {
 			PhoneNumber:    recipient.PhoneNumber,
 			RecipientName:  recipient.RecipientName,
 			TemplateParams: recipient.TemplateParams,
+			HeaderParams:   recipient.HeaderParams,
 		}
 	}
 
@@ -679,6 +688,7 @@ func (a *App) ImportRecipients(r *fastglue.Request) error {
 			PhoneNumber:    rec.PhoneNumber,
 			RecipientName:  rec.RecipientName,
 			TemplateParams: models.JSONB(rec.TemplateParams),
+			HeaderParams:   models.JSONB(rec.HeaderParams),
 			Status:         models.MessageStatusPending,
 		}
 	}

@@ -513,6 +513,72 @@ func TestApp_CreateTemplate_InvalidJSON(t *testing.T) {
 	testutil.AssertErrorResponse(t, req, fasthttp.StatusBadRequest, "Invalid request body")
 }
 
+// Meta restricts TEXT headers to one variable. The handler must 400 before
+// hitting Meta — see internal/templateutil/ValidateHeaderParamCount.
+func TestApp_CreateTemplate_RejectsTooManyHeaderVariables(t *testing.T) {
+	t.Parallel()
+
+	app := newTestApp(t)
+	org := testutil.CreateTestOrganization(t, app.DB)
+	user := testutil.CreateTestUser(t, app.DB, org.ID)
+	account := testutil.CreateTestWhatsAppAccount(t, app.DB, org.ID)
+
+	body := map[string]any{
+		"whatsapp_account": account.Name,
+		"name":             "two_header_vars",
+		"language":         "en",
+		"category":         "MARKETING",
+		"body_content":     "Hi {{1}}",
+		"header_type":      "TEXT",
+		"header_content":   "Order {{1}} for {{2}}",
+	}
+
+	req := testutil.NewJSONRequest(t, body)
+	testutil.SetAuthContext(req, org.ID, user.ID)
+
+	err := app.CreateTemplate(req)
+	require.NoError(t, err)
+	testutil.AssertErrorResponse(t, req, fasthttp.StatusBadRequest, "at most one variable")
+}
+
+func TestApp_UpdateTemplate_RejectsTooManyHeaderVariables(t *testing.T) {
+	t.Parallel()
+
+	app := newTestApp(t)
+	org := testutil.CreateTestOrganization(t, app.DB)
+	user := testutil.CreateTestUser(t, app.DB, org.ID)
+	account := testutil.CreateTestWhatsAppAccount(t, app.DB, org.ID)
+
+	// Seed a valid template, then try to update its header to >1 var.
+	tpl := &models.Template{
+		BaseModel:       models.BaseModel{ID: uuid.New()},
+		OrganizationID:  org.ID,
+		WhatsAppAccount: account.Name,
+		Name:            "single_var_header",
+		DisplayName:     "Single Var Header",
+		Language:        "en",
+		Category:        "MARKETING",
+		Status:          "DRAFT",
+		HeaderType:      "TEXT",
+		HeaderContent:   "Hi {{1}}",
+		BodyContent:     "Hello world",
+	}
+	require.NoError(t, app.DB.Create(tpl).Error)
+
+	body := map[string]any{
+		"header_type":    "TEXT",
+		"header_content": "Hi {{1}} and {{2}}",
+		"body_content":   "Hello world",
+	}
+	req := testutil.NewJSONRequest(t, body)
+	testutil.SetAuthContext(req, org.ID, user.ID)
+	testutil.SetPathParam(req, "id", tpl.ID.String())
+
+	err := app.UpdateTemplate(req)
+	require.NoError(t, err)
+	testutil.AssertErrorResponse(t, req, fasthttp.StatusBadRequest, "at most one variable")
+}
+
 func TestApp_CreateTemplate_NameNormalization(t *testing.T) {
 	t.Parallel()
 

@@ -101,6 +101,7 @@ POST /api/messages/template
 | `template_name` | string | One of template_name or template_id | Name of the template |
 | `template_id` | string | One of template_name or template_id | UUID of the template |
 | `template_params` | object | No | Named or positional body parameters |
+| `header_params` | object | No | Value for a TEXT header with a `{{var}}` (max 1). Keyed by the variable's name for named templates, or `"1"` for positional. Falls back to `template_params` if omitted. |
 | `button_params` | object | No | Dynamic URL button parameters (button index → value) |
 | `account_name` | string | No | Specific WhatsApp account to use |
 
@@ -152,6 +153,26 @@ If your template has placeholders like `Hello {{name}}, your order {{order_id}} 
   }
 }
 ```
+
+**With a TEXT header variable:**
+
+Meta allows at most one variable in a TEXT header. If your template's header is `Our {{season}} sale is on!`, supply the value via `header_params`:
+
+```json
+{
+  "phone_number": "919876543210",
+  "template_name": "seasonal_promotion",
+  "header_params": {
+    "season": "Summer"
+  },
+  "template_params": {
+    "customer_name": "John",
+    "discount": "25%"
+  }
+}
+```
+
+For a positional header (`Our {{1}} sale is on!`), use `"1"` as the key. If you omit `header_params`, the value is looked up in `template_params` by the same name — convenient for named templates where the header variable doesn't collide with a body variable.
 
 **With URL button parameters:**
 
