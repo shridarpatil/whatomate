@@ -63,6 +63,23 @@ For bulk imports, upload a CSV file with your recipient data:
    +0987654321,Jane Smith,Order #456,December 26
    ```
 
+   **TEXT header parameter:** if the template's header has a variable
+   (`{{...}}`), add a column named `header`. Meta indexes positional
+   placeholders per component, so header `{{1}}` and body `{{1}}` are two
+   distinct values — the reserved column name avoids that collision. The
+   header column always comes **before** the body parameter columns. For
+   example, a template with header `Our {{season}} sale` and body
+   `Hi {{customer_name}}, use code {{coupon}}`:
+   ```csv
+   phone,name,header,customer_name,coupon
+   +1234567890,John Doe,Summer,John,SAVE20
+   +0987654321,Jane Smith,Winter,Jane,SAVE15
+   ```
+
+   The recipient dialog also provides a **Download sample CSV** link that
+   generates a template with the correct columns for your campaign's
+   template — no manual setup required.
+
 2. **Upload and Validate**
 
    The system automatically validates your CSV against the selected template:

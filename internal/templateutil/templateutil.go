@@ -19,6 +19,18 @@ func isPositionalParam(name string) bool {
 	return len(name) > 0
 }
 
+// ValidateHeaderParamCount enforces Meta's restriction that a TEXT header may
+// contain at most one variable ({{...}}); duplicate references to the same
+// variable name still count as one. Callers should only invoke this for
+// HeaderType == "TEXT".
+func ValidateHeaderParamCount(content string) error {
+	names := ExtParamNames(content)
+	if len(names) > 1 {
+		return fmt.Errorf("header text may contain at most one variable; found %d", len(names))
+	}
+	return nil
+}
+
 // ValidateNoMixedParams checks that content does not mix positional ({{1}}) and
 // named ({{name}}) parameters. Returns an error if both types are present.
 func ValidateNoMixedParams(content string) error {
