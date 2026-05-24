@@ -292,8 +292,6 @@ function getHeaderIcon(type: string) {
       return MessageSquare
   }
 }
-
-// Shared quality label helper is imported from @/lib/utils
 </script>
 
 <template>
