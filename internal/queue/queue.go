@@ -24,7 +24,11 @@ type RecipientJob struct {
 	PhoneNumber    string       `json:"phone_number"`
 	RecipientName  string       `json:"recipient_name"`
 	TemplateParams models.JSONB `json:"template_params"`
-	EnqueuedAt     time.Time    `json:"enqueued_at"`
+	// HeaderParams holds the TEXT-header variable's value (Meta restricts
+	// these headers to one variable). Sent separately from TemplateParams to
+	// avoid positional-key collisions between header and body.
+	HeaderParams models.JSONB `json:"header_params"`
+	EnqueuedAt   time.Time    `json:"enqueued_at"`
 }
 
 // Queue defines the interface for job queue operations

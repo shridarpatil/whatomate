@@ -109,6 +109,23 @@ Named parameters make templates easier to understand and less error-prone when d
   Named parameters are recommended for templates with 3 or more variables, as they make the template easier to understand and maintain.
 </Aside>
 
+### Header Variables
+
+A TEXT header can contain **at most one** variable — this is a Meta restriction
+that Whatomate enforces at template creation time. Both positional (`{{1}}`)
+and named (`{{season}}`) work; mixing positional and named within the same
+template (header + body) is still not allowed.
+
+When sending:
+- **API**: pass the value via the `header_params` field on
+  [Send Template Message](/api-reference/messages/#send-template-message). It
+  falls back to `template_params` if omitted — convenient for named templates
+  where the header variable name doesn't collide with a body variable.
+- **Campaigns**: add a `header` column (always before the body parameter
+  columns) in your CSV or manual entry. The dialog can generate a sample CSV
+  with the right columns for you. See
+  [Adding Recipients](/features/campaigns/#adding-recipients).
+
 ## Template Categories
 
 <CardGrid>

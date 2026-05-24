@@ -512,6 +512,107 @@ func TestWorker_sendTemplateMessage_BuildsComponents(t *testing.T) {
 	assert.Equal(t, "World", params[1].(map[string]any)["text"])
 }
 
+// When the recipient has explicit HeaderParams, the worker must use them
+// for the TEXT-header component instead of falling back to TemplateParams.
+// This protects positional templates where header {{1}} and body {{1}}
+// would otherwise share the same value.
+func TestWorker_sendTemplateMessage_HeaderParamsTakePrecedence(t *testing.T) {
+	w := testWorker(t)
+
+	var capturedBody map[string]any
+	server := httptest.NewServer(http.HandlerFunc(func(rw http.ResponseWriter, r *http.Request) {
+		_ = json.NewDecoder(r.Body).Decode(&capturedBody)
+		rw.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(rw).Encode(map[string]any{
+			"messages": []map[string]any{{"id": "wamid.hp-explicit"}},
+		})
+	}))
+	defer server.Close()
+	w.WhatsApp = whatsapp.NewWithBaseURL(w.Log, server.URL)
+
+	account := &models.WhatsAppAccount{PhoneID: "123", BusinessID: "456", AccessToken: "token", APIVersion: "v21.0"}
+	template := &models.Template{
+		Name:          "tpl_explicit_hp",
+		Language:      "en",
+		HeaderType:    "TEXT",
+		HeaderContent: "Code {{1}}",
+		BodyContent:   "Use {{1}} to redeem",
+	}
+	recipient := &models.BulkMessageRecipient{
+		PhoneNumber:    "1234567890",
+		HeaderParams:   models.JSONB{"1": "HEADER-VAL"},
+		TemplateParams: models.JSONB{"1": "BODY-VAL"},
+	}
+
+	_, err := w.sendTemplateMessage(context.Background(), account, template, recipient, "", "")
+	require.NoError(t, err)
+
+	components := capturedBody["template"].(map[string]any)["components"].([]any)
+	var headerComp, bodyComp map[string]any
+	for _, c := range components {
+		m := c.(map[string]any)
+		switch m["type"] {
+		case "header":
+			headerComp = m
+		case "body":
+			bodyComp = m
+		}
+	}
+	require.NotNil(t, headerComp)
+	require.NotNil(t, bodyComp)
+	assert.Equal(t, "HEADER-VAL", headerComp["parameters"].([]any)[0].(map[string]any)["text"])
+	assert.Equal(t, "BODY-VAL", bodyComp["parameters"].([]any)[0].(map[string]any)["text"],
+		"body {{1}} must keep its own value when HeaderParams is set")
+}
+
+// Legacy recipient rows persisted before HeaderParams existed only have
+// TemplateParams. For NAMED templates the var name is unique across
+// components, so the worker falls back to TemplateParams[name].
+func TestWorker_sendTemplateMessage_HeaderParamsFallbackToTemplateParams(t *testing.T) {
+	w := testWorker(t)
+
+	var capturedBody map[string]any
+	server := httptest.NewServer(http.HandlerFunc(func(rw http.ResponseWriter, r *http.Request) {
+		_ = json.NewDecoder(r.Body).Decode(&capturedBody)
+		rw.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(rw).Encode(map[string]any{
+			"messages": []map[string]any{{"id": "wamid.hp-fallback"}},
+		})
+	}))
+	defer server.Close()
+	w.WhatsApp = whatsapp.NewWithBaseURL(w.Log, server.URL)
+
+	account := &models.WhatsAppAccount{PhoneID: "123", BusinessID: "456", AccessToken: "token", APIVersion: "v21.0"}
+	template := &models.Template{
+		Name:          "tpl_fallback_hp",
+		Language:      "en",
+		HeaderType:    "TEXT",
+		HeaderContent: "Our {{season}} sale",
+		BodyContent:   "Hi {{name}}",
+	}
+	recipient := &models.BulkMessageRecipient{
+		PhoneNumber: "1234567890",
+		// No HeaderParams — legacy row. season lives in TemplateParams.
+		TemplateParams: models.JSONB{"season": "Summer", "name": "Alex"},
+	}
+
+	_, err := w.sendTemplateMessage(context.Background(), account, template, recipient, "", "")
+	require.NoError(t, err)
+
+	components := capturedBody["template"].(map[string]any)["components"].([]any)
+	var headerComp map[string]any
+	for _, c := range components {
+		if m := c.(map[string]any); m["type"] == "header" {
+			headerComp = m
+			break
+		}
+	}
+	require.NotNil(t, headerComp, "header component must still be emitted via fallback")
+	params := headerComp["parameters"].([]any)[0].(map[string]any)
+	assert.Equal(t, "Summer", params["text"])
+	assert.Equal(t, "season", params["parameter_name"])
+}
+
 func TestWorker_sendTemplateMessage_NoParams(t *testing.T) {
 	w := testWorker(t)
 

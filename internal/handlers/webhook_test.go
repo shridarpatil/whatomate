@@ -354,6 +354,7 @@ func TestUpdateMessageStatus_FailedUpdatesMessage(t *testing.T) {
 	var updatedRecipient models.BulkMessageRecipient
 	require.NoError(t, app.DB.First(&updatedRecipient, recipient.ID).Error)
 	assert.Equal(t, models.MessageStatusFailed, updatedRecipient.Status)
+	assert.Contains(t, updatedRecipient.ErrorMessage, "more than 24 hours")
 
 	// Verify campaign failed counter
 	var updatedCampaign models.BulkMessageCampaign

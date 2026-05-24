@@ -258,12 +258,14 @@ export const useContactsStore = defineStore('contacts', () => {
     templateParams?: Record<string, string>,
     accountName?: string,
     headerFile?: File,
-    buttonParams?: Record<string, string>
+    buttonParams?: Record<string, string>,
+    headerParams?: Record<string, string>
   ) {
     try {
       const response = await messagesService.sendTemplate(contactId, {
         template_name: templateName,
         template_params: templateParams,
+        header_params: headerParams,
         button_params: buttonParams,
         account_name: accountName
       }, headerFile)
