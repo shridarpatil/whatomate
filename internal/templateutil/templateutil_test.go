@@ -176,3 +176,33 @@ func TestValidateNoMixedParams_Empty(t *testing.T) {
 	err := ValidateNoMixedParams("")
 	assert.NoError(t, err)
 }
+
+func TestValidateHeaderParamCount_None(t *testing.T) {
+	assert.NoError(t, ValidateHeaderParamCount("Welcome to Whatomate"))
+}
+
+func TestValidateHeaderParamCount_OnePositional(t *testing.T) {
+	assert.NoError(t, ValidateHeaderParamCount("Order {{1}} update"))
+}
+
+func TestValidateHeaderParamCount_OneNamed(t *testing.T) {
+	assert.NoError(t, ValidateHeaderParamCount("Hi {{customer_name}}!"))
+}
+
+func TestValidateHeaderParamCount_OneNameRepeated(t *testing.T) {
+	// Same variable referenced twice still counts as a single variable.
+	assert.NoError(t, ValidateHeaderParamCount("{{name}}, hi {{name}}"))
+}
+
+func TestValidateHeaderParamCount_Two(t *testing.T) {
+	err := ValidateHeaderParamCount("Order {{1}} for {{2}}")
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "at most one variable")
+	assert.Contains(t, err.Error(), "found 2")
+}
+
+func TestValidateHeaderParamCount_TwoNamed(t *testing.T) {
+	err := ValidateHeaderParamCount("{{a}} and {{b}}")
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "at most one variable")
+}

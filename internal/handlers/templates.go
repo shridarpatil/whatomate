@@ -144,6 +144,9 @@ func (a *App) CreateTemplate(r *fastglue.Request) error {
 			if err := templateutil.ValidateNoMixedParams(req.HeaderContent); err != nil {
 				return r.SendErrorEnvelope(fasthttp.StatusBadRequest, err.Error(), nil, "")
 			}
+			if err := templateutil.ValidateHeaderParamCount(req.HeaderContent); err != nil {
+				return r.SendErrorEnvelope(fasthttp.StatusBadRequest, err.Error(), nil, "")
+			}
 		}
 	}
 
@@ -269,6 +272,9 @@ func (a *App) UpdateTemplate(r *fastglue.Request) error {
 		}
 		if req.HeaderType == "TEXT" && req.HeaderContent != "" {
 			if err := templateutil.ValidateNoMixedParams(req.HeaderContent); err != nil {
+				return r.SendErrorEnvelope(fasthttp.StatusBadRequest, err.Error(), nil, "")
+			}
+			if err := templateutil.ValidateHeaderParamCount(req.HeaderContent); err != nil {
 				return r.SendErrorEnvelope(fasthttp.StatusBadRequest, err.Error(), nil, "")
 			}
 		}

@@ -519,6 +519,10 @@ func (a *App) updateMessageStatus(whatsappMsgID, statusValue string, errors []We
 				recipientUpdates["delivered_at"] = time.Now()
 			case models.MessageStatusRead:
 				recipientUpdates["read_at"] = time.Now()
+			case models.MessageStatusFailed:
+				if errMsg, ok := updates["error_message"].(string); ok && errMsg != "" {
+					recipientUpdates["error_message"] = errMsg
+				}
 			}
 			a.DB.Model(&models.BulkMessageRecipient{}).
 				Where("whats_app_message_id = ?", whatsappMsgID).
