@@ -211,7 +211,7 @@ test.describe('WhatsApp Accounts - Detail Page CRUD', () => {
     await expect(page.getByText('Test Verified Company Name')).toBeVisible()
     await expect(page.getByText('High')).toBeVisible() // GREEN is mapped to High
     await expect(page.getByText('250 msgs/day')).toBeVisible() // TIER_250 mapped to 250 msgs/day
-    await expect(page.getByText('Verified')).toBeVisible() // VERIFIED mapped to Verified
+    await expect(page.getByText('Verified', { exact: true })).toBeVisible() // VERIFIED mapped to Verified
   })
 
   test('should show connection details card with UNKNOWN quality rating translated to Unknown', async ({ page, request }) => {
