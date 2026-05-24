@@ -48,7 +48,7 @@ import {
   Info,
 } from 'lucide-vue-next'
 import { getErrorMessage } from '@/lib/api-utils'
-import { getQualityBadgeClass, getQualityRatingLabel as sharedGetQualityRatingLabel } from '@/lib/utils'
+import { getQualityBadgeClass, getQualityRatingLabel } from '@/lib/utils'
 
 interface WhatsAppAccount {
   id: string
@@ -367,10 +367,6 @@ const statusVariant = computed(() => {
     default: return 'secondary' as const
   }
 })
-
-function getQualityRatingLabel(rating: string) {
-  return sharedGetQualityRatingLabel(rating, t)
-}
 
 async function loadTemplate() {
   isLoading.value = true
@@ -705,7 +701,7 @@ onMounted(async () => {
               {{ template.status }}
             </Badge>
             <Badge v-if="!isNew && template?.quality_rating" :class="getQualityBadgeClass(template.quality_rating)">
-              {{ getQualityRatingLabel(template.quality_rating) }}
+              {{ getQualityRatingLabel(template.quality_rating, t) }}
             </Badge>
           </div>
           <ChevronDown class="h-4 w-4 text-muted-foreground transition-transform" :class="isDetailsOpen && 'rotate-180'" />
@@ -1248,7 +1244,7 @@ onMounted(async () => {
           <div v-if="template.quality_rating" class="flex justify-between">
             <span class="text-muted-foreground">{{ $t('templates.qualityRating', 'Quality Rating') }}:</span>
             <Badge :class="getQualityBadgeClass(template.quality_rating)">
-              {{ getQualityRatingLabel(template.quality_rating) }}
+              {{ getQualityRatingLabel(template.quality_rating, t) }}
             </Badge>
           </div>
           <div class="flex justify-between">
