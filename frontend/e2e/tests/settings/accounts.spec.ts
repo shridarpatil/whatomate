@@ -1,7 +1,7 @@
 import { test, expect } from '@playwright/test'
 import { loginAsAdmin, navigateToFirstItem, expectMetadataVisible, expectActivityLogVisible, expectDeleteFromForm, ApiHelper } from '../../helpers'
 import { AccountsPage } from '../../pages'
-import { createTestScope, SUPER_ADMIN } from '../../framework'
+import { createTestScope, loginAsSuperAdmin, SUPER_ADMIN } from '../../framework'
 
 const scope = createTestScope('accounts')
 
@@ -167,5 +167,96 @@ test.describe('WhatsApp Accounts - Detail Page CRUD', () => {
     await page.waitForLoadState('networkidle')
 
     await expect(page.getByText('Setup Guide')).toBeVisible({ timeout: 15000 })
+  })
+
+  test('should show connection details card upon successful test connection', async ({ page, request }) => {
+    // Browser must share identity with the API session below; otherwise
+    // /settings/accounts/:id 404s for the wrong org. See framework/auth.ts.
+    await loginAsSuperAdmin(page)
+    const api = new ApiHelper(request)
+    await api.login(SUPER_ADMIN.email, SUPER_ADMIN.password)
+    const acc = await api.createWhatsAppAccount({
+      name: scope.name('conn-details').toLowerCase().replace(/\s/g, '-'),
+      phone_id: `phone-conn-${Date.now()}`,
+      business_id: `biz-conn-${Date.now()}`,
+      access_token: 'test-token-e2e',
+    })
+
+    // Stub the connection test response
+    await page.route(`**/api/accounts/${acc.id}/test`, async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          success: true,
+          data: {
+            success: true,
+            display_phone_number: '1234567890',
+            verified_name: 'Test Verified Company Name',
+            quality_rating: 'GREEN',
+            messaging_limit_tier: 'TIER_250',
+            code_verification_status: 'VERIFIED',
+            account_mode: 'LIVE',
+            is_test_number: false
+          }
+        })
+      })
+    })
+
+    await page.goto(`/settings/accounts/${acc.id}`)
+    await page.waitForLoadState('networkidle')
+
+    // Click the Test button
+    await page.getByRole('button', { name: /Test/i }).click()
+
+    // Assert details card is shown and fields are correct
+    await expect(page.getByText('Details', { exact: true })).toBeVisible()
+    await expect(page.getByText('Test Verified Company Name')).toBeVisible()
+    await expect(page.getByText('High')).toBeVisible() // GREEN is mapped to High
+    await expect(page.getByText('250 msgs/day')).toBeVisible() // TIER_250 mapped to 250 msgs/day
+    await expect(page.getByText('Verified', { exact: true })).toBeVisible() // VERIFIED mapped to Verified
+  })
+
+  test('should show connection details card with UNKNOWN quality rating translated to Unknown', async ({ page, request }) => {
+    await loginAsSuperAdmin(page)
+    const api = new ApiHelper(request)
+    await api.login(SUPER_ADMIN.email, SUPER_ADMIN.password)
+    const acc = await api.createWhatsAppAccount({
+      name: scope.name('conn-details-unk').toLowerCase().replace(/\s/g, '-'),
+      phone_id: `phone-conn-unk-${Date.now()}`,
+      business_id: `biz-conn-unk-${Date.now()}`,
+      access_token: 'test-token-e2e',
+    })
+
+    // Stub the connection test response with UNKNOWN quality rating
+    await page.route(`**/api/accounts/${acc.id}/test`, async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          success: true,
+          data: {
+            success: true,
+            display_phone_number: '1234567890',
+            verified_name: 'Test Company',
+            quality_rating: 'UNKNOWN',
+            messaging_limit_tier: 'TIER_250',
+            code_verification_status: 'VERIFIED',
+            account_mode: 'LIVE',
+            is_test_number: false
+          }
+        })
+      })
+    })
+
+    await page.goto(`/settings/accounts/${acc.id}`)
+    await page.waitForLoadState('networkidle')
+
+    // Click the Test button
+    await page.getByRole('button', { name: /Test/i }).click()
+
+    // Assert details card is shown and UNKNOWN is translated to Unknown
+    await expect(page.getByText('Details', { exact: true })).toBeVisible()
+    await expect(page.getByText('Unknown')).toBeVisible()
   })
 })

@@ -51,6 +51,7 @@ type TemplateResponse struct {
 	SampleValues              []any     `json:"sample_values"`
 	AddSecurityRecommendation bool      `json:"add_security_recommendation"`
 	CodeExpirationMinutes     int       `json:"code_expiration_minutes"`
+	QualityRating             string    `json:"quality_rating"`
 	CreatedByName             string    `json:"created_by_name,omitempty"`
 	UpdatedByName             string    `json:"updated_by_name,omitempty"`
 	CreatedAt                 string    `json:"created_at"`
@@ -186,6 +187,7 @@ func (a *App) CreateTemplate(r *fastglue.Request) error {
 		CodeExpirationMinutes:     req.CodeExpirationMinutes,
 		CreatedByID:               &userID,
 		UpdatedByID:               &userID,
+		QualityRating:             "UNKNOWN",
 	}
 
 	if err := a.DB.Create(&template).Error; err != nil {
@@ -493,6 +495,15 @@ func (a *App) SyncTemplates(r *fastglue.Request) error {
 	// Sync to database
 	synced := 0
 	for _, metaTemplate := range templates {
+		// Quality rating: prefer the nested score object (newer field), fall back
+		// to the legacy top-level rating. Empty string means "Meta didn't tell us"
+		// — on INSERT the column default 'UNKNOWN' applies; on UPDATE we skip
+		// the column so we don't clobber a previously-known rating.
+		qualityRating := metaTemplate.QualityRating
+		if metaTemplate.QualityScore != nil && metaTemplate.QualityScore.Score != "" {
+			qualityRating = metaTemplate.QualityScore.Score
+		}
+
 		template := models.Template{
 			OrganizationID:  orgID,
 			WhatsAppAccount: account.Name,
@@ -502,6 +513,7 @@ func (a *App) SyncTemplates(r *fastglue.Request) error {
 			Language:        metaTemplate.Language,
 			Category:        metaTemplate.Category,
 			Status:          metaTemplate.Status,
+			QualityRating:   qualityRating,
 		}
 
 		// Parse components
@@ -532,7 +544,7 @@ func (a *App) SyncTemplates(r *fastglue.Request) error {
 			orgID, account.Name, template.Name, template.Language).First(&existing).Error; err == nil {
 			// Update existing and restore if soft-deleted (explicitly set deleted_at to NULL)
 			template.ID = existing.ID
-			a.DB.Unscoped().Model(&template).Updates(map[string]any{
+			updates := map[string]any{
 				"meta_template_id": template.MetaTemplateID,
 				"display_name":     template.DisplayName,
 				"category":         template.Category,
@@ -543,7 +555,13 @@ func (a *App) SyncTemplates(r *fastglue.Request) error {
 				"footer_content":   template.FooterContent,
 				"buttons":          template.Buttons,
 				"deleted_at":       nil, // Restore soft-deleted template
-			})
+			}
+			// Only update quality_rating when Meta returned a value; otherwise
+			// keep whatever we had previously.
+			if template.QualityRating != "" {
+				updates["quality_rating"] = template.QualityRating
+			}
+			a.DB.Unscoped().Model(&template).Updates(updates)
 		} else {
 			// Create new
 			a.DB.Create(&template)
@@ -585,6 +603,7 @@ func templateToResponse(t models.Template) TemplateResponse {
 		Language:                  t.Language,
 		Category:                  t.Category,
 		Status:                    t.Status,
+		QualityRating:             t.QualityRating,
 		HeaderType:                t.HeaderType,
 		HeaderContent:             t.HeaderContent,
 		BodyContent:               t.BodyContent,

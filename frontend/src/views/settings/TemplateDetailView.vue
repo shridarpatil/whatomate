@@ -48,6 +48,7 @@ import {
   Info,
 } from 'lucide-vue-next'
 import { getErrorMessage } from '@/lib/api-utils'
+import { getQualityBadgeClass, getQualityRatingLabel } from '@/lib/utils'
 
 interface WhatsAppAccount {
   id: string
@@ -76,6 +77,7 @@ interface Template {
   updated_by_name: string
   created_at: string
   updated_at: string
+  quality_rating?: string
 }
 
 const route = useRoute()
@@ -698,6 +700,9 @@ onMounted(async () => {
             <Badge v-if="!isNew && template?.status" :variant="statusVariant">
               {{ template.status }}
             </Badge>
+            <Badge v-if="!isNew && template?.quality_rating" :class="getQualityBadgeClass(template.quality_rating)">
+              {{ getQualityRatingLabel(template.quality_rating, t) }}
+            </Badge>
           </div>
           <ChevronDown class="h-4 w-4 text-muted-foreground transition-transform" :class="isDetailsOpen && 'rotate-180'" />
         </div>
@@ -1235,6 +1240,12 @@ onMounted(async () => {
           <div class="flex justify-between">
             <span class="text-muted-foreground">{{ $t('templates.status', 'Status') }}:</span>
             <Badge :variant="statusVariant">{{ template.status }}</Badge>
+          </div>
+          <div v-if="template.quality_rating" class="flex justify-between">
+            <span class="text-muted-foreground">{{ $t('templates.qualityRating', 'Quality Rating') }}:</span>
+            <Badge :class="getQualityBadgeClass(template.quality_rating)">
+              {{ getQualityRatingLabel(template.quality_rating, t) }}
+            </Badge>
           </div>
           <div class="flex justify-between">
             <span class="text-muted-foreground">{{ $t('templates.category', 'Category') }}:</span>

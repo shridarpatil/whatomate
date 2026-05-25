@@ -6,6 +6,7 @@ import { useAuthStore } from '@/stores/auth'
 import { api } from '@/services/api'
 import { toast } from 'vue-sonner'
 import { getErrorMessage } from '@/lib/api-utils'
+import { getQualityBadgeClass, getQualityRatingLabel, getVerificationBadgeClass, getVerificationStatusLabel, formatLimitTier } from '@/lib/utils'
 import { useUnsavedChangesGuard } from '@/composables/useUnsavedChangesGuard'
 import DetailPageLayout from '@/components/shared/DetailPageLayout.vue'
 import MetadataPanel from '@/components/shared/MetadataPanel.vue'
@@ -320,6 +321,40 @@ onMounted(async () => {
           <div v-if="testResult.warning" class="flex items-start gap-2 p-2 rounded-lg bg-amber-950/50 light:bg-amber-50 border border-amber-800 light:border-amber-200">
             <AlertCircle class="h-4 w-4 text-amber-400 light:text-amber-600 mt-0.5 shrink-0" />
             <span class="text-sm text-amber-300 light:text-amber-700">{{ testResult.warning }}</span>
+          </div>
+          <!-- Meta Connection Details -->
+          <div class="mt-4 border-t pt-4 border-border/40">
+            <h4 class="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-3">
+              {{ $t('accounts.metaConnectionDetails', 'Details') }}
+            </h4>
+            <div class="grid grid-cols-2 md:grid-cols-4 gap-4 bg-muted/20 p-3 rounded-lg border border-border/30">
+              <!-- Verified Name -->
+              <div v-if="testResult.verified_name" class="space-y-1">
+                <span class="text-[10px] text-muted-foreground block font-medium">{{ $t('accounts.verifiedName', 'Verified Name') }}</span>
+                <span class="text-sm font-semibold block text-foreground truncate" :title="testResult.verified_name">{{ testResult.verified_name }}</span>
+              </div>
+               <!-- Quality Rating -->
+              <div class="space-y-1">
+                <span class="text-[10px] text-muted-foreground block font-medium">{{ $t('accounts.qualityRating', 'Quality Rating') }}</span>
+                <Badge :class="getQualityBadgeClass(testResult.quality_rating || '')">
+                  {{ getQualityRatingLabel(testResult.quality_rating || '', t) }}
+                </Badge>
+              </div>
+              <!-- Messaging Limit Tier -->
+              <div class="space-y-1">
+                <span class="text-[10px] text-muted-foreground block font-medium">{{ $t('accounts.messagingLimitTier', 'Messaging Limit') }}</span>
+                <span class="text-sm font-semibold block text-foreground">
+                  {{ formatLimitTier(testResult.messaging_limit_tier, testResult.is_test_number || testResult.account_mode === 'SANDBOX', t) }}
+                </span>
+              </div>
+              <!-- Verification Status -->
+              <div v-if="testResult.code_verification_status" class="space-y-1">
+                <span class="text-[10px] text-muted-foreground block font-medium">{{ $t('accounts.codeVerificationStatus', 'Verification Status') }}</span>
+                <Badge :class="getVerificationBadgeClass(testResult.code_verification_status)">
+                  {{ getVerificationStatusLabel(testResult.code_verification_status, t) }}
+                </Badge>
+              </div>
+            </div>
           </div>
         </div>
         <div v-else class="flex items-center gap-2 text-red-400 light:text-red-600">
