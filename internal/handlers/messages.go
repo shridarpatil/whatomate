@@ -598,6 +598,8 @@ func (a *App) getMessagePreview(req OutgoingMessageRequest) string {
 		return "[Video]"
 	case models.MessageTypeAudio:
 		return "[Audio]"
+	case models.MessageTypeSticker:
+		return "[Sticker]"
 	case models.MessageTypeDocument:
 		if req.MediaFilename != "" {
 			return "[Document: " + req.MediaFilename + "]"
