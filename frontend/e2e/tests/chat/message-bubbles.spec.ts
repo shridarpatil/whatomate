@@ -326,3 +326,68 @@ test.describe('Sending a text message via the UI', () => {
     await expect(composer).toHaveValue('')
   })
 })
+
+test.describe('Chat sticker bubble', () => {
+  test.describe.configure({ mode: 'serial' })
+  test.setTimeout(60_000)
+
+  let contactId: string
+  let orgId: string
+  let accountName: string
+
+  test.beforeAll(async () => {
+    const ctx = await playwrightRequest.newContext()
+    const api = new ApiHelper(ctx)
+    await api.loginAsAdmin()
+
+    const phone = scope.phone()
+    const contact = await api.createContact(phone, scope.name('stk-contact'))
+    contactId = contact.id
+
+    const orgRows = await execSQL(
+      `SELECT organization_id FROM contacts WHERE id = '${contactId}'`,
+    )
+    orgId = orgRows[0]!.organization_id as string
+
+    // Reuse or create a WhatsApp account
+    const accounts = await api.getWhatsAppAccounts().catch(() => [] as { name: string }[])
+    if (accounts.length > 0) {
+      accountName = accounts[0]!.name
+    } else {
+      const acc = await api.createWhatsAppAccount({
+        name: scope.name('acc').toLowerCase().replace(/\s/g, '-'),
+        phone_id: `phone-${Date.now()}`,
+        business_id: `biz-${Date.now()}`,
+        access_token: 'test-token-bubbles',
+      })
+      accountName = acc.name
+    }
+    await execSQL(
+      `UPDATE contacts SET whats_app_account = '${accountName}' WHERE id = '${contactId}'`,
+    )
+
+    await ctx.dispose()
+  })
+
+  test('incoming sticker message renders as an image bubble with sticker attributes', async ({ page }) => {
+    const rows = await execSQL(`
+      INSERT INTO messages (id, organization_id, whats_app_account, contact_id, direction, message_type, content, media_url, media_mime_type, status, created_at, updated_at)
+      VALUES (gen_random_uuid(), '${orgId}', '${accountName}', '${contactId}', 'incoming', 'sticker', '', 'images/test-sticker.webp', 'image/webp', 'received', NOW() - INTERVAL '5 minutes', NOW())
+      RETURNING id::text AS id
+    `)
+    const stickerMessageId = rows[0]!.id as string
+
+    await loginAsAdmin(page)
+    const chatPage = new ChatPage(page)
+    await chatPage.goto(contactId)
+
+    const bubble = page.locator(`#message-${stickerMessageId} .chat-bubble`)
+    await expect(bubble).toBeVisible({ timeout: 10_000 })
+    await expect(bubble).toHaveClass(/chat-bubble-incoming/)
+
+    const img = bubble.locator('img[alt="Sticker"]')
+    await expect(img).toBeVisible()
+    const src = await img.getAttribute('src')
+    expect(src).toContain(`/api/media/${stickerMessageId}`)
+  })
+})
