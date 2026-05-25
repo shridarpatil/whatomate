@@ -25,13 +25,14 @@ import (
 // account validation flows. Each request increments hits[path] so tests can verify
 // which endpoints were called. Override individual endpoint handlers via the maps.
 type fakeMetaServer struct {
-	mu      sync.Mutex
-	hits    map[string]int
-	server  *httptest.Server
-	phoneFn func(w http.ResponseWriter, r *http.Request)
-	bizFn   func(w http.ResponseWriter, r *http.Request)
-	listFn  func(w http.ResponseWriter, r *http.Request)
-	subFn   func(w http.ResponseWriter, r *http.Request)
+	mu          sync.Mutex
+	hits        map[string]int
+	server      *httptest.Server
+	phoneFn     func(w http.ResponseWriter, r *http.Request)
+	bizFn       func(w http.ResponseWriter, r *http.Request)
+	listFn      func(w http.ResponseWriter, r *http.Request)
+	subFn       func(w http.ResponseWriter, r *http.Request)
+	wabaLimitFn func(w http.ResponseWriter, r *http.Request)
 }
 
 func newFakeMetaServer(t *testing.T) *fakeMetaServer {
@@ -43,6 +44,12 @@ func newFakeMetaServer(t *testing.T) *fakeMetaServer {
 		f.mu.Unlock()
 
 		switch {
+		case strings.Contains(r.URL.RawQuery, "whatsapp_business_manager_messaging_limit") && !strings.Contains(r.URL.RawQuery, "display_phone_number"):
+			if f.wabaLimitFn != nil {
+				f.wabaLimitFn(w, r)
+				return
+			}
+			_, _ = w.Write([]byte(`{"whatsapp_business_manager_messaging_limit":"TIER_10K"}`))
 		case strings.HasSuffix(r.URL.Path, "/subscribed_apps") && r.Method == http.MethodPost:
 			if f.subFn != nil {
 				f.subFn(w, r)
@@ -69,7 +76,7 @@ func newFakeMetaServer(t *testing.T) *fakeMetaServer {
 				f.phoneFn(w, r)
 				return
 			}
-			_, _ = w.Write([]byte(`{"display_phone_number":"+1234567890","verified_name":"Test","account_mode":"LIVE","code_verification_status":"VERIFIED","quality_rating":"GREEN"}`))
+			_, _ = w.Write([]byte(`{"display_phone_number":"+1234567890","verified_name":"Test","account_mode":"LIVE","code_verification_status":"VERIFIED","quality_rating":"GREEN","messaging_limit_tier":"TIER_250"}`))
 		}
 	}))
 	t.Cleanup(f.server.Close)
@@ -139,6 +146,44 @@ func TestApp_TestAccountConnection_Success(t *testing.T) {
 	assert.Equal(t, true, resp.Data["success"])
 	assert.Equal(t, "+1234567890", resp.Data["display_phone_number"])
 	assert.Equal(t, false, resp.Data["is_test_number"])
+	assert.Equal(t, "GREEN", resp.Data["quality_rating"])
+	assert.Equal(t, "TIER_250", resp.Data["messaging_limit_tier"])
+	assert.Equal(t, "VERIFIED", resp.Data["code_verification_status"])
+	assert.Equal(t, "LIVE", resp.Data["account_mode"])
+	assert.Equal(t, "Test", resp.Data["verified_name"])
+}
+
+func TestApp_TestAccountConnection_FallbackToWABA(t *testing.T) {
+	meta := newFakeMetaServer(t)
+	app := newAppWithMeta(t, meta)
+	org := testutil.CreateTestOrganization(t, app.DB)
+	acc := createTestAccountForValidation(t, app.DB, org.ID, "phone-1", "biz-1")
+
+	meta.listFn = func(w http.ResponseWriter, r *http.Request) {
+		_, _ = w.Write([]byte(`{"data":[{"id":"phone-1"}]}`))
+	}
+	// Return null/empty for both messaging_limit_tier and whatsapp_business_manager_messaging_limit from phone query
+	meta.phoneFn = func(w http.ResponseWriter, r *http.Request) {
+		_, _ = w.Write([]byte(`{"display_phone_number":"+1234567890","verified_name":"Test","account_mode":"LIVE","code_verification_status":"VERIFIED","quality_rating":"GREEN"}`))
+	}
+	// WABA limit query returns TIER_10K
+	meta.wabaLimitFn = func(w http.ResponseWriter, r *http.Request) {
+		_, _ = w.Write([]byte(`{"whatsapp_business_manager_messaging_limit":"TIER_10K"}`))
+	}
+
+	req := testutil.NewGETRequest(t)
+	testutil.SetAuthContext(req, org.ID, uuid.New())
+	testutil.SetPathParam(req, "id", acc.ID.String())
+
+	require.NoError(t, app.TestAccountConnection(req))
+	require.Equal(t, fasthttp.StatusOK, testutil.GetResponseStatusCode(req))
+
+	var resp struct {
+		Data map[string]any `json:"data"`
+	}
+	require.NoError(t, json.Unmarshal(testutil.GetResponseBody(req), &resp))
+	assert.Equal(t, true, resp.Data["success"])
+	assert.Equal(t, "TIER_10K", resp.Data["messaging_limit_tier"])
 }
 
 func TestApp_TestAccountConnection_SandboxFlagged(t *testing.T) {

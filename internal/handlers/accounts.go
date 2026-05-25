@@ -356,17 +356,10 @@ func (a *App) TestAccountConnection(r *fastglue.Request) error {
 	}
 
 	// Fetch additional details for display
-	url := fmt.Sprintf("%s/%s/%s?fields=display_phone_number,verified_name,code_verification_status,account_mode,quality_rating,messaging_limit_tier",
+	phoneURL := fmt.Sprintf("%s/%s/%s?fields=display_phone_number,verified_name,code_verification_status,account_mode,quality_rating,messaging_limit_tier,whatsapp_business_manager_messaging_limit",
 		a.Config.WhatsApp.BaseURL, account.APIVersion, account.PhoneID)
 
-	req, err := http.NewRequest(http.MethodGet, url, nil)
-	if err != nil {
-		a.Log.Error("Failed to create request", "error", err)
-		return r.SendErrorEnvelope(fasthttp.StatusInternalServerError, "Failed to test account", nil, "")
-	}
-	req.Header.Set("Authorization", "Bearer "+account.AccessToken)
-
-	resp, err := a.HTTPClient.Do(req)
+	result, status, err := a.fetchMetaJSON(phoneURL, account.AccessToken)
 	if err != nil {
 		a.Log.Error("Failed to connect to WhatsApp API", "error", err)
 		return r.SendEnvelope(map[string]any{
@@ -374,26 +367,41 @@ func (a *App) TestAccountConnection(r *fastglue.Request) error {
 			"error":   "Failed to connect to WhatsApp API",
 		})
 	}
-	defer func() { _ = resp.Body.Close() }()
-
-	body, _ := io.ReadAll(resp.Body)
-
-	if resp.StatusCode != 200 {
-		var errorResp map[string]any
-		_ = json.Unmarshal(body, &errorResp)
+	if status != http.StatusOK {
 		return r.SendEnvelope(map[string]any{
 			"success": false,
 			"error":   "API error",
-			"details": errorResp,
+			"details": result,
 		})
 	}
-
-	var result map[string]any
-	_ = json.Unmarshal(body, &result)
 
 	// Check if this is a test/sandbox number
 	accountMode, _ := result["account_mode"].(string)
 	isTestNumber := accountMode == "SANDBOX"
+
+	// Resolve messaging limit tier, falling back to newer portfolio-based field if deprecated field is missing/null
+	messagingLimitTier := result["messaging_limit_tier"]
+	if messagingLimitTier == nil || messagingLimitTier == "" {
+		messagingLimitTier = result["whatsapp_business_manager_messaging_limit"]
+	}
+
+	// If still empty/null, query the WABA ID (BusinessID) as a fallback
+	if (messagingLimitTier == nil || messagingLimitTier == "") && account.BusinessID != "" {
+		wabaURL := fmt.Sprintf("%s/%s/%s?fields=whatsapp_business_manager_messaging_limit",
+			a.Config.WhatsApp.BaseURL, account.APIVersion, account.BusinessID)
+		wabaResult, wabaStatus, wabaErr := a.fetchMetaJSON(wabaURL, account.AccessToken)
+		switch {
+		case wabaErr != nil:
+			a.Log.Warn("WABA fallback request failed", "waba_id", account.BusinessID, "error", wabaErr)
+		case wabaStatus != http.StatusOK:
+			a.Log.Warn("WABA fallback returned non-200", "waba_id", account.BusinessID, "status", wabaStatus)
+		default:
+			if val, ok := wabaResult["whatsapp_business_manager_messaging_limit"]; ok && val != nil && val != "" {
+				messagingLimitTier = val
+				a.Log.Info("Resolved messaging limit tier from WABA as fallback", "waba_id", account.BusinessID, "limit", val)
+			}
+		}
+	}
 
 	// Prepare response
 	response := map[string]any{
@@ -401,7 +409,7 @@ func (a *App) TestAccountConnection(r *fastglue.Request) error {
 		"display_phone_number":     result["display_phone_number"],
 		"verified_name":            result["verified_name"],
 		"quality_rating":           result["quality_rating"],
-		"messaging_limit_tier":     result["messaging_limit_tier"],
+		"messaging_limit_tier":     messagingLimitTier,
 		"code_verification_status": result["code_verification_status"],
 		"account_mode":             result["account_mode"],
 		"is_test_number":           isTestNumber,
@@ -415,6 +423,37 @@ func (a *App) TestAccountConnection(r *fastglue.Request) error {
 	}
 
 	return r.SendEnvelope(response)
+}
+
+// fetchMetaJSON performs a Bearer-authenticated GET against the Meta Graph API
+// and decodes the JSON body into a generic map. The decoded body is returned
+// regardless of HTTP status, so callers can surface error envelopes from Meta.
+// Returns (nil, 0, err) only when the request itself fails (network/decode).
+func (a *App) fetchMetaJSON(url, accessToken string) (map[string]any, int, error) {
+	req, err := http.NewRequest(http.MethodGet, url, nil)
+	if err != nil {
+		return nil, 0, err
+	}
+	req.Header.Set("Authorization", "Bearer "+accessToken)
+
+	resp, err := a.HTTPClient.Do(req)
+	if err != nil {
+		return nil, 0, err
+	}
+	defer func() { _ = resp.Body.Close() }()
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, resp.StatusCode, err
+	}
+
+	var out map[string]any
+	if len(body) > 0 {
+		if err := json.Unmarshal(body, &out); err != nil {
+			return nil, resp.StatusCode, err
+		}
+	}
+	return out, resp.StatusCode, nil
 }
 
 // Helper functions

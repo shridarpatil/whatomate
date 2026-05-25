@@ -185,8 +185,8 @@ func TestClient_FetchTemplates_Success(t *testing.T) {
 		w.WriteHeader(http.StatusOK)
 		_ = json.NewEncoder(w).Encode(map[string]any{
 			"data": []map[string]any{
-				{"id": "1", "name": "hello", "language": "en", "category": "MARKETING", "status": "APPROVED"},
-				{"id": "2", "name": "goodbye", "language": "en", "category": "UTILITY", "status": "PENDING"},
+				{"id": "1", "name": "hello", "language": "en", "category": "MARKETING", "status": "APPROVED", "quality_rating": "HIGH"},
+				{"id": "2", "name": "goodbye", "language": "en", "category": "UTILITY", "status": "PENDING", "quality_rating": "UNKNOWN"},
 			},
 		})
 	}))
@@ -200,7 +200,9 @@ func TestClient_FetchTemplates_Success(t *testing.T) {
 	require.Len(t, templates, 2)
 	assert.Equal(t, "hello", templates[0].Name)
 	assert.Equal(t, "APPROVED", templates[0].Status)
+	assert.Equal(t, "HIGH", templates[0].QualityRating)
 	assert.Equal(t, "goodbye", templates[1].Name)
+	assert.Equal(t, "UNKNOWN", templates[1].QualityRating)
 }
 
 func TestClient_FetchTemplates_Empty(t *testing.T) {
