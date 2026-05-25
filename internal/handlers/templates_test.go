@@ -107,6 +107,7 @@ func newMockTemplateServer(t *testing.T) *httptest.Server {
 						"language": "en",
 						"category": "MARKETING",
 						"status":   "APPROVED",
+						"quality_rating": "HIGH",
 						"components": []map[string]any{
 							{"type": "BODY", "text": "Synced body content"},
 						},
@@ -117,8 +118,22 @@ func newMockTemplateServer(t *testing.T) *httptest.Server {
 						"language": "en",
 						"category": "UTILITY",
 						"status":   "PENDING",
+						"quality_rating": "UNKNOWN",
 						"components": []map[string]any{
 							{"type": "BODY", "text": "Another synced body"},
+						},
+					},
+					{
+						"id":       "meta-synced-3",
+						"name":     "synced_template_three",
+						"language": "en",
+						"category": "AUTHENTICATION",
+						"status":   "APPROVED",
+						"quality_score": map[string]any{
+							"score": "GREEN",
+						},
+						"components": []map[string]any{
+							{"type": "BODY", "text": "Third synced body"},
 						},
 					},
 				},
@@ -372,6 +387,7 @@ func TestApp_CreateTemplate_Success(t *testing.T) {
 	assert.Equal(t, "Reply STOP to unsubscribe", resp.Data.FooterContent)
 	assert.Equal(t, account.Name, resp.Data.WhatsAppAccount)
 	assert.NotEqual(t, uuid.Nil, resp.Data.ID)
+	assert.Equal(t, "UNKNOWN", resp.Data.QualityRating)
 }
 
 func TestApp_CreateTemplate_MissingRequiredFields(t *testing.T) {
@@ -1113,13 +1129,31 @@ func TestApp_SyncTemplates_Success(t *testing.T) {
 		} `json:"data"`
 	}
 	require.NoError(t, json.Unmarshal(testutil.GetResponseBody(req), &resp))
-	assert.Equal(t, 2, resp.Data.Count)
-	assert.Contains(t, resp.Data.Message, "Synced 2 templates")
+	assert.Equal(t, 3, resp.Data.Count)
+	assert.Contains(t, resp.Data.Message, "Synced 3 templates")
 
 	// Verify templates were created in the database
 	var templates []models.Template
 	app.DB.Where("organization_id = ?", org.ID).Find(&templates)
-	assert.Len(t, templates, 2)
+	assert.Len(t, templates, 3)
+
+	var tmpl1, tmpl2, tmpl3 models.Template
+	for _, tmpl := range templates {
+		switch tmpl.Name {
+		case "synced_template_one":
+			tmpl1 = tmpl
+		case "synced_template_two":
+			tmpl2 = tmpl
+		case "synced_template_three":
+			tmpl3 = tmpl
+		}
+	}
+	assert.NotEmpty(t, tmpl1.ID)
+	assert.Equal(t, "HIGH", tmpl1.QualityRating)
+	assert.NotEmpty(t, tmpl2.ID)
+	assert.Equal(t, "UNKNOWN", tmpl2.QualityRating)
+	assert.NotEmpty(t, tmpl3.ID)
+	assert.Equal(t, "GREEN", tmpl3.QualityRating)
 }
 
 func TestApp_SyncTemplates_MissingAccount(t *testing.T) {
@@ -1179,5 +1213,5 @@ func TestApp_SyncTemplates_ViaQueryParam(t *testing.T) {
 		} `json:"data"`
 	}
 	require.NoError(t, json.Unmarshal(testutil.GetResponseBody(req), &resp))
-	assert.Equal(t, 2, resp.Data.Count)
+	assert.Equal(t, 3, resp.Data.Count)
 }

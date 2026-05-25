@@ -388,7 +388,7 @@ func (c *Client) buildStandardComponents(template *TemplateSubmission) ([]map[st
 
 // FetchTemplates fetches all templates from Meta's API
 func (c *Client) FetchTemplates(ctx context.Context, account *Account) ([]MetaTemplate, error) {
-	url := fmt.Sprintf("%s?limit=100", c.buildTemplatesURL(account))
+	url := fmt.Sprintf("%s?fields=id,name,language,category,status,components,quality_score,quality_rating&limit=100", c.buildTemplatesURL(account))
 
 	respBody, err := c.doRequest(ctx, http.MethodGet, url, nil, account.AccessToken)
 	if err != nil {

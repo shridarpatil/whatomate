@@ -68,14 +68,21 @@ type TemplateResponse struct {
 	ID string `json:"id"`
 }
 
+// MetaQualityScore represents quality score information from Meta
+type MetaQualityScore struct {
+	Score string `json:"score"`
+}
+
 // MetaTemplate represents a template fetched from Meta
 type MetaTemplate struct {
-	ID         string              `json:"id"`
-	Name       string              `json:"name"`
-	Language   string              `json:"language"`
-	Category   string              `json:"category"`
-	Status     string              `json:"status"`
-	Components []TemplateComponent `json:"components"`
+	ID            string              `json:"id"`
+	Name          string              `json:"name"`
+	Language      string              `json:"language"`
+	Category      string              `json:"category"`
+	Status        string              `json:"status"`
+	QualityRating string              `json:"quality_rating,omitempty"`
+	QualityScore  *MetaQualityScore   `json:"quality_score,omitempty"`
+	Components    []TemplateComponent `json:"components"`
 }
 
 // TemplateComponent represents a component of a template
