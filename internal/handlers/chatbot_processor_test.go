@@ -606,6 +606,30 @@ func TestSaveIncomingMessage_WithMedia(t *testing.T) {
 	assert.Equal(t, "[image]", dbContact.LastMessagePreview)
 }
 
+func TestSaveIncomingMessage_WithSticker(t *testing.T) {
+	app := newProcessorTestApp(t)
+	org, account := createProcessorTestOrg(t, app)
+	contact := testutil.CreateTestContact(t, app.DB, org.ID)
+
+	waMsgID := "wamid." + uuid.New().String()[:16]
+	media := &MediaInfo{
+		MediaURL:      "/uploads/test-sticker.webp",
+		MediaMimeType: "image/webp",
+	}
+	app.saveIncomingMessage(account, contact, waMsgID, "sticker", "", media, "")
+
+	var msg models.Message
+	require.NoError(t, app.DB.Where("whats_app_message_id = ?", waMsgID).First(&msg).Error)
+	assert.Equal(t, "/uploads/test-sticker.webp", msg.MediaURL)
+	assert.Equal(t, "image/webp", msg.MediaMimeType)
+	assert.Equal(t, models.MessageTypeSticker, msg.MessageType)
+
+	// Non-text messages show type in preview
+	var dbContact models.Contact
+	require.NoError(t, app.DB.First(&dbContact, contact.ID).Error)
+	assert.Equal(t, "[sticker]", dbContact.LastMessagePreview)
+}
+
 func TestSaveIncomingMessage_WithReplyContext(t *testing.T) {
 	app := newProcessorTestApp(t)
 	org, account := createProcessorTestOrg(t, app)
