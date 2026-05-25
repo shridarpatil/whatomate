@@ -5,12 +5,16 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"net/http"
+	"net/http/httptest"
+	"strings"
 	"testing"
 	"time"
 
 	"github.com/google/uuid"
 	"github.com/shridarpatil/whatomate/internal/models"
 	"github.com/shridarpatil/whatomate/internal/websocket"
+	"github.com/shridarpatil/whatomate/pkg/whatsapp"
 	"github.com/shridarpatil/whatomate/test/testutil"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -518,4 +522,103 @@ func TestUpdateMessageStatus_DeliveredBroadcastsViaWebSocket_NoErrorMessage(t *t
 	case <-time.After(2 * time.Second):
 		t.Fatal("timed out waiting for WebSocket broadcast")
 	}
+}
+
+func TestWebhookHandler_IncomingSticker(t *testing.T) {
+	app := webhookTestApp(t)
+
+	// Create test org and account
+	uid := uuid.New().String()[:8]
+	org := models.Organization{
+		BaseModel: models.BaseModel{ID: uuid.New()},
+		Name:      "sticker-org-" + uid,
+		Slug:      "sticker-org-" + uid,
+	}
+	require.NoError(t, app.DB.Create(&org).Error)
+
+	waAccount := models.WhatsAppAccount{
+		BaseModel:      models.BaseModel{ID: uuid.New()},
+		OrganizationID: org.ID,
+		Name:           "sticker-acct-" + uid,
+		PhoneID:        "phone-sticker-" + uid,
+		BusinessID:     "biz-sticker-" + uid,
+		AccessToken:    "token",
+	}
+	require.NoError(t, app.DB.Create(&waAccount).Error)
+
+	// Set up mock server for media endpoints
+	waServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		if r.Method == http.MethodGet && strings.Contains(r.URL.Path, "media-id-123") {
+			_ = json.NewEncoder(w).Encode(map[string]any{
+				"url": "http://" + r.Host + "/download/sticker",
+				"mime_type": "image/webp",
+			})
+		} else {
+			_, _ = w.Write([]byte("fake webp sticker data"))
+		}
+	}))
+	defer waServer.Close()
+	app.WhatsApp = whatsapp.NewWithBaseURL(app.Log, waServer.URL)
+
+	// Construct incoming sticker message payload
+	body := []byte(`{
+		"object": "whatsapp_business_account",
+		"entry": [{
+			"id": "` + waAccount.BusinessID + `",
+			"changes": [{
+				"field": "messages",
+				"value": {
+					"messaging_product": "whatsapp",
+					"metadata": {
+						"display_phone_number": "15551234567",
+						"phone_number_id": "` + waAccount.PhoneID + `"
+					},
+					"messages": [{
+						"from": "9199998888",
+						"id": "wamid.sticker_incoming_test_12345",
+						"timestamp": "1716152000",
+						"type": "sticker",
+						"sticker": {
+							"id": "media-id-123",
+							"mime_type": "image/webp",
+							"sha256": "abcdef"
+						}
+					}],
+					"contacts": [{
+						"profile": {
+							"name": "Sticker Tester"
+						},
+						"wa_id": "9199998888"
+					}]
+				}
+			}]
+		}]
+	}`)
+
+	req := testutil.NewRequest(t)
+	req.RequestCtx.Request.Header.SetMethod("POST")
+	req.RequestCtx.Request.Header.SetContentType("application/json")
+	req.RequestCtx.Request.SetBody(body)
+
+	// Execute WebhookHandler
+	require.NoError(t, app.WebhookHandler(req))
+
+	// Allow goroutine to run
+	time.Sleep(150 * time.Millisecond)
+
+	// Verify contact was created
+	var contact models.Contact
+	err := app.DB.Where("organization_id = ? AND phone_number = ?", org.ID, "9199998888").First(&contact).Error
+	require.NoError(t, err)
+	assert.Equal(t, "Sticker Tester", contact.ProfileName)
+
+	// Verify sticker message was saved in DB
+	var message models.Message
+	err = app.DB.Where("organization_id = ? AND whats_app_message_id = ?", org.ID, "wamid.sticker_incoming_test_12345").First(&message).Error
+	require.NoError(t, err)
+	assert.Equal(t, models.DirectionIncoming, message.Direction)
+	assert.Equal(t, models.MessageTypeSticker, message.MessageType)
+	assert.Equal(t, "image/webp", message.MediaMimeType)
+	assert.NotEmpty(t, message.MediaURL)
 }
