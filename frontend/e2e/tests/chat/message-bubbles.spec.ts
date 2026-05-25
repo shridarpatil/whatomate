@@ -2,9 +2,12 @@ import { test, expect, request as playwrightRequest } from '@playwright/test'
 import { Client } from 'pg'
 import fs from 'node:fs'
 import path from 'node:path'
+import { fileURLToPath } from 'url'
 import { loginAsAdmin, ApiHelper } from '../../helpers'
 import { ChatPage } from '../../pages'
 import { createTestScope } from '../../framework'
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url))
 
 /**
  * Chat bubble rendering — driven through the chat UI.
