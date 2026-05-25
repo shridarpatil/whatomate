@@ -1,5 +1,7 @@
 import { test, expect, request as playwrightRequest } from '@playwright/test'
 import { Client } from 'pg'
+import fs from 'node:fs'
+import path from 'node:path'
 import { loginAsAdmin, ApiHelper } from '../../helpers'
 import { ChatPage } from '../../pages'
 import { createTestScope } from '../../framework'
@@ -336,6 +338,14 @@ test.describe('Chat sticker bubble', () => {
   let accountName: string
 
   test.beforeAll(async () => {
+    // Create the uploads/images directory and a dummy sticker WebP file
+    const uploadsDir = path.resolve(__dirname, '../../../../uploads/images')
+    if (!fs.existsSync(uploadsDir)) {
+      fs.mkdirSync(uploadsDir, { recursive: true })
+    }
+    const webpBase64 = 'UklGRkAAAABXRUJQVlA4WAoAAAAQAAAAAAAAAAAAQUxQSAIAAAAAAFZQOCAYAAAAUA0AnQEqAQABAAFAObwlhAL4APgA/vwAAA=='
+    fs.writeFileSync(path.join(uploadsDir, 'test-sticker.webp'), Buffer.from(webpBase64, 'base64'))
+
     const ctx = await playwrightRequest.newContext()
     const api = new ApiHelper(ctx)
     await api.loginAsAdmin()
@@ -367,6 +377,13 @@ test.describe('Chat sticker bubble', () => {
     )
 
     await ctx.dispose()
+  })
+
+  test.afterAll(async () => {
+    const filePath = path.resolve(__dirname, '../../../../uploads/images/test-sticker.webp')
+    if (fs.existsSync(filePath)) {
+      fs.unlinkSync(filePath)
+    }
   })
 
   test('incoming sticker message renders as an image bubble with sticker attributes', async ({ page }) => {
