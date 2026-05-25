@@ -1261,7 +1261,7 @@
     "passwordChangeFailed": "Failed to change password"
   },
   "accounts": {
-    "metaConnectionDetails": "Meta Connection Details",
+    "metaConnectionDetails": "Details",
     "verifiedName": "Verified Name",
     "qualityRating": "Quality Rating",
     "messagingLimitTier": "Messaging Limit Tier",

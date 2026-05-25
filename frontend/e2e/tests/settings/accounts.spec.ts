@@ -1,7 +1,7 @@
 import { test, expect } from '@playwright/test'
 import { loginAsAdmin, navigateToFirstItem, expectMetadataVisible, expectActivityLogVisible, expectDeleteFromForm, ApiHelper } from '../../helpers'
 import { AccountsPage } from '../../pages'
-import { createTestScope, SUPER_ADMIN } from '../../framework'
+import { createTestScope, loginAsSuperAdmin, SUPER_ADMIN } from '../../framework'
 
 const scope = createTestScope('accounts')
 
@@ -170,6 +170,9 @@ test.describe('WhatsApp Accounts - Detail Page CRUD', () => {
   })
 
   test('should show connection details card upon successful test connection', async ({ page, request }) => {
+    // Browser must share identity with the API session below; otherwise
+    // /settings/accounts/:id 404s for the wrong org. See framework/auth.ts.
+    await loginAsSuperAdmin(page)
     const api = new ApiHelper(request)
     await api.login(SUPER_ADMIN.email, SUPER_ADMIN.password)
     const acc = await api.createWhatsAppAccount({
@@ -207,7 +210,7 @@ test.describe('WhatsApp Accounts - Detail Page CRUD', () => {
     await page.getByRole('button', { name: /Test/i }).click()
 
     // Assert details card is shown and fields are correct
-    await expect(page.getByText('Meta Connection Details')).toBeVisible()
+    await expect(page.getByText('Details', { exact: true })).toBeVisible()
     await expect(page.getByText('Test Verified Company Name')).toBeVisible()
     await expect(page.getByText('High')).toBeVisible() // GREEN is mapped to High
     await expect(page.getByText('250 msgs/day')).toBeVisible() // TIER_250 mapped to 250 msgs/day
@@ -215,6 +218,7 @@ test.describe('WhatsApp Accounts - Detail Page CRUD', () => {
   })
 
   test('should show connection details card with UNKNOWN quality rating translated to Unknown', async ({ page, request }) => {
+    await loginAsSuperAdmin(page)
     const api = new ApiHelper(request)
     await api.login(SUPER_ADMIN.email, SUPER_ADMIN.password)
     const acc = await api.createWhatsAppAccount({
@@ -252,7 +256,7 @@ test.describe('WhatsApp Accounts - Detail Page CRUD', () => {
     await page.getByRole('button', { name: /Test/i }).click()
 
     // Assert details card is shown and UNKNOWN is translated to Unknown
-    await expect(page.getByText('Meta Connection Details')).toBeVisible()
+    await expect(page.getByText('Details', { exact: true })).toBeVisible()
     await expect(page.getByText('Unknown')).toBeVisible()
   })
 })

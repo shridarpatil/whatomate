@@ -495,12 +495,13 @@ func (a *App) SyncTemplates(r *fastglue.Request) error {
 	// Sync to database
 	synced := 0
 	for _, metaTemplate := range templates {
+		// Quality rating: prefer the nested score object (newer field), fall back
+		// to the legacy top-level rating. Empty string means "Meta didn't tell us"
+		// — on INSERT the column default 'UNKNOWN' applies; on UPDATE we skip
+		// the column so we don't clobber a previously-known rating.
 		qualityRating := metaTemplate.QualityRating
 		if metaTemplate.QualityScore != nil && metaTemplate.QualityScore.Score != "" {
 			qualityRating = metaTemplate.QualityScore.Score
-		}
-		if qualityRating == "" {
-			qualityRating = "UNKNOWN"
 		}
 
 		template := models.Template{
@@ -543,19 +544,24 @@ func (a *App) SyncTemplates(r *fastglue.Request) error {
 			orgID, account.Name, template.Name, template.Language).First(&existing).Error; err == nil {
 			// Update existing and restore if soft-deleted (explicitly set deleted_at to NULL)
 			template.ID = existing.ID
-			a.DB.Unscoped().Model(&template).Updates(map[string]any{
+			updates := map[string]any{
 				"meta_template_id": template.MetaTemplateID,
 				"display_name":     template.DisplayName,
 				"category":         template.Category,
 				"status":           template.Status,
-				"quality_rating":   template.QualityRating,
 				"header_type":      template.HeaderType,
 				"header_content":   template.HeaderContent,
 				"body_content":     template.BodyContent,
 				"footer_content":   template.FooterContent,
 				"buttons":          template.Buttons,
 				"deleted_at":       nil, // Restore soft-deleted template
-			})
+			}
+			// Only update quality_rating when Meta returned a value; otherwise
+			// keep whatever we had previously.
+			if template.QualityRating != "" {
+				updates["quality_rating"] = template.QualityRating
+			}
+			a.DB.Unscoped().Model(&template).Updates(updates)
 		} else {
 			// Create new
 			a.DB.Create(&template)

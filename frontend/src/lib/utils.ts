@@ -136,29 +136,43 @@ export function getVerificationBadgeClass(status: string): string {
   }
 }
 
+export function getVerificationStatusLabel(status: string | undefined, t: (key: string) => string): string {
+  switch ((status || '').toUpperCase()) {
+    case 'VERIFIED':
+    case 'VERIFIED_CODE':
+      return t('accounts.statusVerified')
+    case 'NOT_VERIFIED':
+      return t('accounts.statusNotVerified')
+    case 'EXPIRED':
+      return t('accounts.statusExpired')
+    default:
+      return status || ''
+  }
+}
+
 export function formatLimitTier(
   tier: string | undefined,
   isSandbox: boolean | undefined,
-  t: (key: string, defaultValue?: string) => string
+  t: (key: string) => string
 ): string {
   if (isSandbox) {
-    return t('accounts.limitTierSandbox', 'Sandbox (250 msgs/day)')
+    return t('accounts.limitTierSandbox')
   }
   if (!tier) {
-    return t('accounts.limitTierDefault', '250 msgs/day (Default)')
+    return t('accounts.limitTierDefault')
   }
   const clean = tier.toUpperCase().replace('TIER_', '')
   switch (clean) {
     case '250':
-      return t('accounts.limitTier250', '250 msgs/day')
+      return t('accounts.limitTier250')
     case '2K':
-      return t('accounts.limitTier2K', '2K msgs/day')
+      return t('accounts.limitTier2K')
     case '10K':
-      return t('accounts.limitTier10K', '10K msgs/day')
+      return t('accounts.limitTier10K')
     case '100K':
-      return t('accounts.limitTier100K', '100K msgs/day')
+      return t('accounts.limitTier100K')
     case 'UNLIMITED':
-      return t('accounts.limitTierUnlimited', 'Unlimited')
+      return t('accounts.limitTierUnlimited')
     default:
       return `${clean} msgs/day`
   }

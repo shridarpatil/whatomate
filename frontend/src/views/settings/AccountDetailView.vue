@@ -6,7 +6,7 @@ import { useAuthStore } from '@/stores/auth'
 import { api } from '@/services/api'
 import { toast } from 'vue-sonner'
 import { getErrorMessage } from '@/lib/api-utils'
-import { getQualityBadgeClass, getQualityRatingLabel, getVerificationBadgeClass, formatLimitTier } from '@/lib/utils'
+import { getQualityBadgeClass, getQualityRatingLabel, getVerificationBadgeClass, getVerificationStatusLabel, formatLimitTier } from '@/lib/utils'
 import { useUnsavedChangesGuard } from '@/composables/useUnsavedChangesGuard'
 import DetailPageLayout from '@/components/shared/DetailPageLayout.vue'
 import MetadataPanel from '@/components/shared/MetadataPanel.vue'
@@ -133,21 +133,6 @@ const webhookUrl = window.location.origin + basePath + '/api/webhook'
 
 // Track form changes
 watch(form, () => { hasChanges.value = true }, { deep: true })
-
-function getVerificationStatusLabel(status: string) {
-  if (!status) return ''
-  switch (status.toUpperCase()) {
-    case 'VERIFIED':
-    case 'VERIFIED_CODE':
-      return t('accounts.statusVerified')
-    case 'NOT_VERIFIED':
-      return t('accounts.statusNotVerified')
-    case 'EXPIRED':
-      return t('accounts.statusExpired')
-    default:
-      return status
-  }
-}
 
 async function loadAccount() {
   isLoading.value = true
@@ -340,7 +325,7 @@ onMounted(async () => {
           <!-- Meta Connection Details -->
           <div class="mt-4 border-t pt-4 border-border/40">
             <h4 class="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-3">
-              {{ $t('accounts.metaConnectionDetails', 'Meta Connection Details') }}
+              {{ $t('accounts.metaConnectionDetails', 'Details') }}
             </h4>
             <div class="grid grid-cols-2 md:grid-cols-4 gap-4 bg-muted/20 p-3 rounded-lg border border-border/30">
               <!-- Verified Name -->
@@ -366,7 +351,7 @@ onMounted(async () => {
               <div v-if="testResult.code_verification_status" class="space-y-1">
                 <span class="text-[10px] text-muted-foreground block font-medium">{{ $t('accounts.codeVerificationStatus', 'Verification Status') }}</span>
                 <Badge :class="getVerificationBadgeClass(testResult.code_verification_status)">
-                  {{ getVerificationStatusLabel(testResult.code_verification_status) }}
+                  {{ getVerificationStatusLabel(testResult.code_verification_status, t) }}
                 </Badge>
               </div>
             </div>
