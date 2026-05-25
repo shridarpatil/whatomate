@@ -1502,7 +1502,7 @@ function getFlowButtonText(message: Message): string | null {
 }
 
 function isMediaMessage(message: Message): boolean {
-  return ['image', 'video', 'audio', 'document'].includes(message.message_type)
+  return ['image', 'video', 'audio', 'document', 'sticker'].includes(message.message_type)
 }
 
 function getMediaUrl(message: Message): string {
