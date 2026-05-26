@@ -152,9 +152,10 @@ func Load(configPath string) (*Config, error) {
 	}
 
 	// Load from environment variables (WHATOMATE_ prefix)
-	// e.g., WHATOMATE_DATABASE_HOST -> database.host
+	// Uses __ (double underscore) as hierarchy separator so single underscores in
+	// key names are preserved. e.g., WHATOMATE_DATABASE__SSL_MODE -> database.ssl_mode
 	if err := k.Load(env.Provider("WHATOMATE_", ".", func(s string) string {
-		return strings.ReplaceAll(strings.ToLower(strings.TrimPrefix(s, "WHATOMATE_")), "_", ".")
+		return strings.ToLower(strings.ReplaceAll(strings.TrimPrefix(s, "WHATOMATE_"), "__", "."))
 	}), nil); err != nil {
 		return nil, err
 	}

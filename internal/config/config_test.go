@@ -98,8 +98,8 @@ secure = false
 }
 
 func TestLoad_EnvVarsOverrideFile(t *testing.T) {
-	t.Setenv("WHATOMATE_DATABASE_HOST", "from-env")
-	t.Setenv("WHATOMATE_SERVER_PORT", "1234")
+	t.Setenv("WHATOMATE_DATABASE__HOST", "from-env")
+	t.Setenv("WHATOMATE_SERVER__PORT", "1234")
 
 	cfg, err := config.Load(writeConfig(t, `
 [database]
@@ -109,8 +109,20 @@ host = "from-file"
 port = 8080
 `))
 	require.NoError(t, err)
-	assert.Equal(t, "from-env", cfg.Database.Host, "WHATOMATE_DATABASE_HOST must override file")
-	assert.Equal(t, 1234, cfg.Server.Port, "WHATOMATE_SERVER_PORT must override file")
+	assert.Equal(t, "from-env", cfg.Database.Host, "WHATOMATE_DATABASE__HOST must override file")
+	assert.Equal(t, 1234, cfg.Server.Port, "WHATOMATE_SERVER__PORT must override file")
+}
+
+func TestLoad_EnvVarsWithUnderscoreKeys(t *testing.T) {
+	t.Setenv("WHATOMATE_DATABASE__SSL_MODE", "require")
+	t.Setenv("WHATOMATE_JWT__ACCESS_EXPIRY_MINS", "60")
+	t.Setenv("WHATOMATE_RATE_LIMIT__LOGIN_MAX_ATTEMPTS", "5")
+
+	cfg, err := config.Load(writeConfig(t, ""))
+	require.NoError(t, err)
+	assert.Equal(t, "require", cfg.Database.SSLMode)
+	assert.Equal(t, 60, cfg.JWT.AccessExpiryMins)
+	assert.Equal(t, 5, cfg.RateLimit.LoginMaxAttempts)
 }
 
 func TestLoad_EmptyConfigPathStillLoadsDefaults(t *testing.T) {
