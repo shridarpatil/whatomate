@@ -9,6 +9,7 @@ RUN npm ci
 
 # Copy frontend source and build
 COPY frontend/ .
+ENV NODE_OPTIONS=--max-old-space-size=2048
 RUN npm run build
 
 # Go build stage — runs on BUILDPLATFORM, cross-compiles to TARGETOS/TARGETARCH
