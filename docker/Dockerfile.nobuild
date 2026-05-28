@@ -1,0 +1,73 @@
+FROM golang:1.25.3-alpine AS builder
+
+ARG TARGETOS=linux
+ARG TARGETARCH=amd64
+
+WORKDIR /app
+
+# Install build dependencies
+RUN apk add --no-cache git ca-certificates
+
+# Copy go mod files and download modules
+COPY go.mod go.sum ./
+RUN go mod download
+
+# Copy source including a prebuilt frontend/dist
+COPY . .
+
+# If you prebuilt frontend locally, its files should be present at ./frontend/dist
+RUN if [ -d ./frontend/dist ]; then \
+      mkdir -p ./internal/frontend/dist && cp -r ./frontend/dist/* ./internal/frontend/dist/; \
+    fi
+
+# Build the binary
+RUN CGO_ENABLED=0 GOOS=${TARGETOS} GOARCH=${TARGETARCH} go build -a -installsuffix cgo -o ritam-bharat ./cmd/whatomate
+
+# Piper TTS download stage (same as original)
+FROM debian:bookworm-slim AS piper-dl
+ARG TARGETARCH
+RUN apt-get update && apt-get install -y --no-install-recommends wget ca-certificates && rm -rf /var/lib/apt/lists/*
+RUN case "${TARGETARCH}" in \
+      amd64) PIPER_ARCH=x86_64 ;; \
+      arm64) PIPER_ARCH=aarch64 ;; \
+      *) echo "unsupported TARGETARCH: ${TARGETARCH}" >&2; exit 1 ;; \
+    esac \
+    && wget -q "https://github.com/rhasspy/piper/releases/download/2023.11.14-2/piper_linux_${PIPER_ARCH}.tar.gz" -O /tmp/piper.tar.gz \
+    && tar xf /tmp/piper.tar.gz -C /tmp \
+    && rm /tmp/piper.tar.gz
+RUN mkdir -p /tmp/piper-models \
+    && wget -q https://huggingface.co/rhasspy/piper-voices/resolve/main/en/en_US/lessac/medium/en_US-lessac-medium.onnx \
+       -O /tmp/piper-models/en_US-lessac-medium.onnx \
+    && wget -q https://huggingface.co/rhasspy/piper-voices/resolve/main/en/en_US/lessac/medium/en_US-lessac-medium.onnx.json \
+       -O /tmp/piper-models/en_US-lessac-medium.onnx.json
+
+# Final stage (Debian for glibc)
+FROM debian:bookworm-slim
+
+WORKDIR /app
+
+# Install runtime dependencies
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    ca-certificates tzdata espeak-ng opus-tools ffmpeg \
+    && rm -rf /var/lib/apt/lists/*
+
+# Copy binary from builder
+COPY --from=builder /app/ritam-bharat .
+
+# Copy config example
+COPY --from=builder /app/config.example.toml ./config.toml
+
+# Install Piper TTS binary + shared libraries
+COPY --from=piper-dl /tmp/piper/piper /usr/local/bin/piper
+COPY --from=piper-dl /tmp/piper/lib*.so* /usr/local/lib/
+COPY --from=piper-dl /tmp/piper/espeak-ng-data /usr/share/espeak-ng-data
+RUN ldconfig
+
+# Install default voice model
+COPY --from=piper-dl /tmp/piper-models /opt/piper/models
+
+RUN mkdir -p /app/uploads /app/audio
+
+EXPOSE 8080
+
+CMD ["./ritam-bharat", "server", "-config", "config.toml", "-migrate"]
