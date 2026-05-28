@@ -1,0 +1,56 @@
+#! db-deployment.yaml
+# Generated code, do not edit
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+    name: db
+    namespace: whatomate
+    labels:
+        com.docker.compose.project: whatomate
+        com.docker.compose.service: db
+spec:
+    replicas: 1
+    selector:
+        matchLabels:
+            com.docker.compose.project: whatomate
+            com.docker.compose.service: db
+    strategy:
+        type: Recreate
+    template:
+        metadata:
+            labels:
+                com.docker.compose.project: whatomate
+                com.docker.compose.service: db
+                com.docker.compose.network.whatomate: "true"
+        spec:
+            restartPolicy: unless-stopped
+            containers:
+                - name: whatomate-db
+                  image: postgres:17-alpine
+                  imagePullPolicy: IfNotPresent
+                  env:
+                    - name: POSTGRES_DB
+                      value: "whatomate"
+                    - name: POSTGRES_PASSWORD
+                      value: "whatomate"
+                    - name: POSTGRES_USER
+                      value: "whatomate"
+                  livenessProbe:
+                    exec:
+                        command:
+                            - /bin/sh
+                            - -c
+                            - pg_isready -U whatomate -d whatomate
+                    periodSeconds: 10
+                    timeoutSeconds: 5
+                    failureThreshold: 6
+                  ports:
+                    - name: db-5432
+                      containerPort: 5432
+                  volumeMounts:
+                    - name: var-lib-postgresql-data
+                      mountPath: /var/lib/postgresql/data
+            volumes:
+                - name: var-lib-postgresql-data
+                  persistentVolumeClaim:
+                    claimName: db-postgres-data

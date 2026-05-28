@@ -5,7 +5,7 @@
 # For local dev: use "localhost"
 
 [app]
-name = "Whatomate"
+name = "Ritam Bharat"
 environment = "development"  # development, staging, production
 debug = true
 encryption_key = ""  # AES-256 key for encrypting secrets at rest (32+ chars, required in production)
@@ -115,6 +115,6 @@ udp_port_max = 10100          # WebRTC UDP port range end
 
 # Default admin credentials (only used during initial setup when no users exist)
 [default_admin]
-email = "admin@admin.com"
-password = "admin"
+email = "admin@ritambharat.software"
+password = "Mayank@2006!"
 full_name = "Admin"

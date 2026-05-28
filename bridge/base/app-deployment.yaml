@@ -1,0 +1,61 @@
+#! app-deployment.yaml
+# Generated code, do not edit
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+    name: app
+    namespace: whatomate
+    labels:
+        com.docker.compose.project: whatomate
+        com.docker.compose.service: app
+spec:
+    replicas: 1
+    selector:
+        matchLabels:
+            com.docker.compose.project: whatomate
+            com.docker.compose.service: app
+    strategy:
+        type: Recreate
+    template:
+        metadata:
+            labels:
+                com.docker.compose.project: whatomate
+                com.docker.compose.service: app
+                com.docker.compose.network.whatomate: "true"
+        spec:
+            restartPolicy: unless-stopped
+            containers:
+                - name: whatomate-app
+                  image: shridh0r/whatomate:latest
+                  imagePullPolicy: IfNotPresent
+                  args:
+                    - server
+                    - -migrate
+                    - -config
+                    - /app/config.toml
+                  env:
+                    - name: POSTGRES_DB
+                      value: "whatomate"
+                    - name: POSTGRES_PASSWORD
+                      value: "whatomate"
+                    - name: POSTGRES_USER
+                      value: "whatomate"
+                    - name: TZ
+                      value: "UTC"
+                  ports:
+                    - name: app-8080
+                      containerPort: 8080
+                  volumeMounts:
+                    - name: app-uploads
+                      mountPath: /app/uploads
+                    - name: app-config-toml
+                      mountPath: /app/config.toml
+                      readOnly: true
+            volumes:
+                - name: app-uploads
+                  hostPath:
+                    path: /Users/mayankmishra7296/Desktop/whatomate/uploads
+                - name: app-config-toml
+                  hostPath:
+                    path: /Users/mayankmishra7296/Desktop/whatomate/config.toml
+                  readOnly: true

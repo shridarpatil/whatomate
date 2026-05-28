@@ -1,0 +1,18 @@
+#! app-expose.yaml
+# Generated code, do not edit
+apiVersion: v1
+kind: Service
+metadata:
+    name: app
+    namespace: whatomate
+    labels:
+        com.docker.compose.project: whatomate
+        com.docker.compose.service: app
+spec:
+    selector:
+        com.docker.compose.project: whatomate
+        com.docker.compose.service: app
+    ports:
+        - name: app-8080
+          port: 8080
+          targetPort: app-8080

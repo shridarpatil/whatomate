@@ -32,7 +32,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && rm -rf /var/lib/apt/lists/*
 
 # Copy pre-built binary from GoReleaser
-COPY whatomate .
+COPY ritam-bharat .
 
 # Install Piper TTS binary + shared libraries
 COPY --from=piper-dl /tmp/piper/piper /usr/local/bin/piper
@@ -50,5 +50,5 @@ RUN mkdir -p /app/uploads /app/audio
 EXPOSE 8080
 
 # Run the binary
-ENTRYPOINT ["./whatomate"]
+ENTRYPOINT ["./ritam-bharat"]
 CMD ["server", "-migrate"]

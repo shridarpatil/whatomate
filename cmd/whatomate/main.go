@@ -46,7 +46,7 @@ func main() {
 	case "worker":
 		runWorker(os.Args[2:])
 	case "version":
-		fmt.Printf("Whatomate %s (built %s)\n", Version, BuildTime)
+		fmt.Printf("Ritam Bharat %s (built %s)\n", Version, BuildTime)
 	case "help", "-h", "--help":
 		printUsage()
 	default:
@@ -57,7 +57,7 @@ func main() {
 }
 
 func printUsage() {
-	fmt.Println(`Whatomate - WhatsApp Business API Platform
+	fmt.Println(`Ritam Bharat - WhatsApp Business API Platform
 
 Usage:
   whatomate <command> [options]
@@ -107,10 +107,10 @@ func runServer(args []string) {
 		Level:           logf.DebugLevel,
 		EnableCaller:    true,
 		TimestampFormat: "2006-01-02 15:04:05",
-		DefaultFields:   []any{"app", "whatomate"},
+		DefaultFields:   []any{"app", "ritam-bharat"},
 	})
 
-	lo.Info("Starting Whatomate server...", "version", Version)
+	lo.Info("Starting Ritam Bharat server...", "version", Version)
 
 	// Load configuration
 	cfg, err := config.Load(*configPath)
@@ -141,7 +141,7 @@ func runServer(args []string) {
 		lo = logf.New(logf.Opts{
 			Level:           logf.InfoLevel,
 			TimestampFormat: "2006-01-02 15:04:05",
-			DefaultFields:   []any{"app", "whatomate"},
+			DefaultFields:   []any{"app", "ritam-bharat"},
 		})
 	}
 

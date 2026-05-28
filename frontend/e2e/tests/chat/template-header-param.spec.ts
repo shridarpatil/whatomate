@@ -8,7 +8,7 @@ const scope = createTestScope('chat-tpl-header-param')
 
 const DB_URL =
   process.env.TEST_DATABASE_URL ||
-  'postgres://whatomate:whatomate@127.0.0.1:5432/whatomate'
+  'postgres://ritam_bharat:ritam_bharat@127.0.0.1:5432/ritam_bharat'
 
 /**
  * Templates with a TEXT header containing a {{var}} need a dedicated input

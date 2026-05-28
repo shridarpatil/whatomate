@@ -1,0 +1,19 @@
+#! redis-service.yaml
+# Generated code, do not edit
+apiVersion: v1
+kind: Service
+metadata:
+    name: redis-published
+    namespace: whatomate
+    labels:
+        com.docker.compose.project: whatomate
+        com.docker.compose.service: redis
+spec:
+    selector:
+        com.docker.compose.project: whatomate
+        com.docker.compose.service: redis
+    ports:
+        - name: redis-6379
+          port: 6379
+          protocol: TCP
+          targetPort: redis-6379

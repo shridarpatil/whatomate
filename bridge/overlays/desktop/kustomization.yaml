@@ -1,0 +1,12 @@
+#! kustomization.yaml
+# Generated code, do not edit
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+    - ../../base
+patches:
+    - path: app-service.yaml
+    - path: db-postgres-data-persistentVolumeClaim.yaml
+    - path: db-service.yaml
+    - path: redis-redis-data-persistentVolumeClaim.yaml
+    - path: redis-service.yaml

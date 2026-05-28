@@ -1,0 +1,18 @@
+#! db-expose.yaml
+# Generated code, do not edit
+apiVersion: v1
+kind: Service
+metadata:
+    name: db
+    namespace: whatomate
+    labels:
+        com.docker.compose.project: whatomate
+        com.docker.compose.service: db
+spec:
+    selector:
+        com.docker.compose.project: whatomate
+        com.docker.compose.service: db
+    ports:
+        - name: db-5432
+          port: 5432
+          targetPort: db-5432

@@ -1,0 +1,46 @@
+#! redis-deployment.yaml
+# Generated code, do not edit
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+    name: redis
+    namespace: whatomate
+    labels:
+        com.docker.compose.project: whatomate
+        com.docker.compose.service: redis
+spec:
+    replicas: 1
+    selector:
+        matchLabels:
+            com.docker.compose.project: whatomate
+            com.docker.compose.service: redis
+    strategy:
+        type: Recreate
+    template:
+        metadata:
+            labels:
+                com.docker.compose.project: whatomate
+                com.docker.compose.service: redis
+                com.docker.compose.network.whatomate: "true"
+        spec:
+            restartPolicy: unless-stopped
+            containers:
+                - name: whatomate-redis
+                  image: redis:7-alpine
+                  imagePullPolicy: IfNotPresent
+                  livenessProbe:
+                    exec:
+                        command: [redis-cli ping]
+                    periodSeconds: 10
+                    timeoutSeconds: 5
+                    failureThreshold: 5
+                  ports:
+                    - name: redis-6379
+                      containerPort: 6379
+                  volumeMounts:
+                    - name: data
+                      mountPath: /data
+            volumes:
+                - name: data
+                  persistentVolumeClaim:
+                    claimName: redis-redis-data

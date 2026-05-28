@@ -1,13 +1,13 @@
 services:
-  # Whatomate app
+  # Ritam Bharat app
   app:
-    image: shridh0r/whatomate:latest
-    container_name: whatomate_app
+    image: shridh0r/ritam-bharat:latest
+    container_name: ritam_bharat_app
     restart: unless-stopped
     ports:
       - "8080:8080"
     networks:
-      - whatomate
+      - ritam-bharat
     depends_on:
       db:
         condition: service_healthy
@@ -23,18 +23,18 @@ services:
   # PostgreSQL database
   db:
     image: postgres:17-alpine
-    container_name: whatomate_db
+    container_name: ritam_bharat_db
     restart: unless-stopped
     networks:
       - whatomate
     ports:
       - "127.0.0.1:5432:5432"
     environment:
-      POSTGRES_USER: ${POSTGRES_USER:-whatomate}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-whatomate}
-      POSTGRES_DB: ${POSTGRES_DB:-whatomate}
+      POSTGRES_USER: ${POSTGRES_USER:-ritam_bharat}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-ritam_bharat}
+      POSTGRES_DB: ${POSTGRES_DB:-ritam_bharat}
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-whatomate} -d ${POSTGRES_DB:-whatomate}"]
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-ritam_bharat} -d ${POSTGRES_DB:-ritam_bharat}"]
       interval: 10s
       timeout: 5s
       retries: 6
@@ -44,10 +44,10 @@ services:
   # Redis
   redis:
     image: redis:7-alpine
-    container_name: whatomate_redis
+    container_name: ritam_bharat_redis
     restart: unless-stopped
     networks:
-      - whatomate
+      - ritam-bharat
     ports:
       - "127.0.0.1:6379:6379"
     healthcheck:
@@ -59,7 +59,7 @@ services:
       - redis-data:/data
 
 networks:
-  whatomate:
+  ritam-bharat:
 
 volumes:
   postgres-data:

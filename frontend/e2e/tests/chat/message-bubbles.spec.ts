@@ -14,7 +14,7 @@ import { createTestScope } from '../../framework'
  * and affordances.
  */
 
-const DB_URL = process.env.TEST_DATABASE_URL || 'postgres://whatomate:whatomate@127.0.0.1:5432/whatomate'
+const DB_URL = process.env.TEST_DATABASE_URL || 'postgres://ritam_bharat:ritam_bharat@127.0.0.1:5432/ritam_bharat'
 
 async function execSQL(sql: string): Promise<Record<string, unknown>[]> {
   const client = new Client({ connectionString: DB_URL })

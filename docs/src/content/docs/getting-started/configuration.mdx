@@ -1,11 +1,11 @@
 ---
 title: Configuration
-description: Complete configuration reference for Whatomate
+description: Complete configuration reference for Ritam Bharat
 ---
 
 import { Aside } from '@astrojs/starlight/components';
 
-Whatomate uses a TOML configuration file for all settings. By default, it looks for `config.toml` in the current directory; pass `-config /path/to/config.toml` to override.
+Ritam Bharat uses a TOML configuration file for all settings. By default, it looks for `config.toml` in the current directory; pass `-config /path/to/config.toml` to override.
 
 A complete commented example lives in [`config.example.toml`](https://github.com/shridarpatil/whatomate/blob/main/config.example.toml) at the repository root — copy it to `config.toml` and edit. The reference below documents every section.
 
@@ -13,7 +13,7 @@ A complete commented example lives in [`config.example.toml`](https://github.com
 
 ```toml
 [app]
-name = "Whatomate"
+name = "Ritam Bharat"
 environment = "development"   # development, staging, production
 debug = true
 encryption_key = ""           # AES-256 key (32+ chars) for encrypting secrets at rest. Required in production.
@@ -27,18 +27,18 @@ base_path = ""                # Set to "/subpath" if behind nginx proxy_pass at 
 allowed_origins = ""          # Comma-separated CORS origins. Empty = allow all (dev only).
 
 [database]
-host = "localhost"            # Use "db" inside Docker compose
+host = "localhost"            # Use "db" inside Docker Compose; keep localhost for local installs
 port = 5432
-user = "whatomate"
+user = "ritam_bharat"
 password = "your-password"
-name = "whatomate"
+name = "ritam_bharat"
 ssl_mode = "disable"          # disable, require, verify-ca, verify-full
 max_open_conns = 25
 max_idle_conns = 5
 conn_max_lifetime = 300       # seconds
 
 [redis]
-host = "localhost"            # Use "redis" inside Docker compose
+host = "localhost"            # Use "redis" inside Docker Compose; keep localhost for local installs
 port = 6379
 username = ""                 # Redis 6+ ACL username. Empty = default user.
 password = ""
@@ -114,7 +114,7 @@ full_name = "Admin"
 
 | Field | Required | Notes |
 |---|---|---|
-| `name` | no | Display name. Defaults to `"Whatomate"`. |
+| `name` | no | Display name. Defaults to `"Ritam Bharat"`. |
 | `environment` | yes | `development` \| `staging` \| `production`. Sets debug behavior, forces `cookie.secure=true` in production. |
 | `debug` | no | Verbose logging. |
 | `encryption_key` | **production** | AES-256 key used to encrypt access tokens, SSO client secrets, and other secrets at rest in the DB. Must be 32+ chars. Lose it and you lose stored credentials. |
@@ -125,7 +125,7 @@ full_name = "Admin"
 |---|---|
 | `host`, `port` | Default `0.0.0.0:8080`. |
 | `read_timeout`, `write_timeout` | Seconds. |
-| `base_path` | Leave empty unless serving at a sub-path (`https://app.example.com/whatomate`) behind a proxy. |
+| `base_path` | Leave empty unless serving at a sub-path (`https://app.example.com/ritam-bharat`) behind a proxy. |
 | `allowed_origins` | Comma-separated list, e.g. `"https://app.example.com,https://admin.example.com"`. **Empty allows all origins** — only safe in development. |
 
 ### `[database]`
@@ -250,7 +250,7 @@ Env vars take precedence over the config file, so the typical pattern is to comm
 
 ```bash
 # Create database
-createdb whatomate
+createdb ritam_bharat
 
 # Or using psql
 psql -c "CREATE DATABASE whatomate;"
@@ -259,7 +259,7 @@ psql -c "CREATE DATABASE whatomate;"
 ### Run Migrations
 
 ```bash
-./whatomate server -migrate
+./ritam-bharat server -migrate
 ```
 
 Schema is generated from GORM struct tags in `internal/models/`; there are no SQL migration files. Re-running with `-migrate` is safe — it adds new tables/columns and is a no-op for existing ones.
@@ -288,9 +288,9 @@ WhatsApp Cloud API credentials are **not** in `config.toml`. Configure them per 
 make build    # Backend only (no frontend embedded)
 ```
 
-For development, run the backend and frontend separately:
+- For development, run the backend and frontend separately:
 
-- Backend: `make run-migrate` (or `./whatomate server -migrate`)
+- Backend: `make run-migrate` (or `./ritam-bharat server -migrate`)
 - Frontend: `cd frontend && npm run dev`
 
 The Vite dev server proxies `/api` to `:8080`.

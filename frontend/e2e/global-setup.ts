@@ -2,7 +2,7 @@ import { request } from '@playwright/test'
 import { cleanupE2EData } from './global-cleanup'
 
 const BASE_URL = process.env.BASE_URL || 'http://localhost:8080'
-const DB_URL = process.env.TEST_DATABASE_URL || 'postgres://whatomate:whatomate@127.0.0.1:5432/whatomate'
+const DB_URL = process.env.TEST_DATABASE_URL || 'postgres://ritam_bharat:ritam_bharat@127.0.0.1:5432/ritam_bharat'
 
 interface CreateUser {
   email: string
@@ -53,7 +53,7 @@ async function globalSetup() {
       console.log(`  ✅ Logged in as superadmin: ${defaultAdmin.email}`)
     } else {
       console.log(`  ❌ Failed to login as superadmin: ${await loginResponse.text()}`)
-      console.log(`  ℹ️  Make sure migrations have run (./whatomate server -migrate)`)
+      console.log(`  ℹ️  Make sure migrations have run (./ritam-bharat server -migrate)`)
     }
   } catch (error) {
     console.log(`  ❌ Error logging in as superadmin:`, error)

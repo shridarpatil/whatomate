@@ -8,9 +8,9 @@ before:
     - cp -r frontend/dist/. internal/frontend/dist/
 
 builds:
-  - id: whatomate
+  - id: ritam-bharat
     main: ./cmd/whatomate
-    binary: whatomate
+    binary: ritam-bharat
     env:
       - CGO_ENABLED=0
     goos:
@@ -26,9 +26,9 @@ builds:
       - -X main.BuildTime={{.Date}}
 
 archives:
-  - id: whatomate
+  - id: ritam-bharat
     builds:
-      - whatomate
+      - ritam-bharat
     format: tar.gz
     name_template: "{{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
     format_overrides:
@@ -49,14 +49,14 @@ changelog:
       - Merge branch
 
 dockers:
-  - id: whatomate-amd64
+  - id: ritam-bharat-amd64
     goos: linux
     goarch: amd64
     image_templates:
-      - "{{ .Env.DOCKER_ORG }}/whatomate:{{ .Version }}-amd64"
-      - "{{ .Env.DOCKER_ORG }}/whatomate:latest-amd64"
-      - "ghcr.io/{{ .Env.GITHUB_ORG }}/whatomate:{{ .Version }}-amd64"
-      - "ghcr.io/{{ .Env.GITHUB_ORG }}/whatomate:latest-amd64"
+      - "{{ .Env.DOCKER_ORG }}/ritam-bharat:{{ .Version }}-amd64"
+      - "{{ .Env.DOCKER_ORG }}/ritam-bharat:latest-amd64"
+      - "ghcr.io/{{ .Env.GITHUB_ORG }}/ritam-bharat:{{ .Version }}-amd64"
+      - "ghcr.io/{{ .Env.GITHUB_ORG }}/ritam-bharat:latest-amd64"
     dockerfile: docker/Dockerfile.goreleaser
     build_flag_templates:
       - "--platform=linux/amd64"
@@ -65,14 +65,14 @@ dockers:
       - "--label=org.opencontainers.image.source={{ .GitURL }}"
     use: buildx
 
-  - id: whatomate-arm64
+  - id: ritam-bharat-arm64
     goos: linux
     goarch: arm64
     image_templates:
-      - "{{ .Env.DOCKER_ORG }}/whatomate:{{ .Version }}-arm64"
-      - "{{ .Env.DOCKER_ORG }}/whatomate:latest-arm64"
-      - "ghcr.io/{{ .Env.GITHUB_ORG }}/whatomate:{{ .Version }}-arm64"
-      - "ghcr.io/{{ .Env.GITHUB_ORG }}/whatomate:latest-arm64"
+      - "{{ .Env.DOCKER_ORG }}/ritam-bharat:{{ .Version }}-arm64"
+      - "{{ .Env.DOCKER_ORG }}/ritam-bharat:latest-arm64"
+      - "ghcr.io/{{ .Env.GITHUB_ORG }}/ritam-bharat:{{ .Version }}-arm64"
+      - "ghcr.io/{{ .Env.GITHUB_ORG }}/ritam-bharat:latest-arm64"
     dockerfile: docker/Dockerfile.goreleaser
     build_flag_templates:
       - "--platform=linux/arm64"
@@ -82,30 +82,30 @@ dockers:
     use: buildx
 
 docker_manifests:
-  - name_template: "{{ .Env.DOCKER_ORG }}/whatomate:{{ .Version }}"
+  - name_template: "{{ .Env.DOCKER_ORG }}/ritam-bharat:{{ .Version }}"
     image_templates:
-      - "{{ .Env.DOCKER_ORG }}/whatomate:{{ .Version }}-amd64"
-      - "{{ .Env.DOCKER_ORG }}/whatomate:{{ .Version }}-arm64"
+      - "{{ .Env.DOCKER_ORG }}/ritam-bharat:{{ .Version }}-amd64"
+      - "{{ .Env.DOCKER_ORG }}/ritam-bharat:{{ .Version }}-arm64"
 
-  - name_template: "{{ .Env.DOCKER_ORG }}/whatomate:latest"
+  - name_template: "{{ .Env.DOCKER_ORG }}/ritam-bharat:latest"
     image_templates:
-      - "{{ .Env.DOCKER_ORG }}/whatomate:{{ .Version }}-amd64"
-      - "{{ .Env.DOCKER_ORG }}/whatomate:{{ .Version }}-arm64"
+      - "{{ .Env.DOCKER_ORG }}/ritam-bharat:{{ .Version }}-amd64"
+      - "{{ .Env.DOCKER_ORG }}/ritam-bharat:{{ .Version }}-arm64"
 
-  - name_template: "ghcr.io/{{ .Env.GITHUB_ORG }}/whatomate:{{ .Version }}"
+  - name_template: "ghcr.io/{{ .Env.GITHUB_ORG }}/ritam-bharat:{{ .Version }}"
     image_templates:
-      - "ghcr.io/{{ .Env.GITHUB_ORG }}/whatomate:{{ .Version }}-amd64"
-      - "ghcr.io/{{ .Env.GITHUB_ORG }}/whatomate:{{ .Version }}-arm64"
+      - "ghcr.io/{{ .Env.GITHUB_ORG }}/ritam-bharat:{{ .Version }}-amd64"
+      - "ghcr.io/{{ .Env.GITHUB_ORG }}/ritam-bharat:{{ .Version }}-arm64"
 
-  - name_template: "ghcr.io/{{ .Env.GITHUB_ORG }}/whatomate:latest"
+  - name_template: "ghcr.io/{{ .Env.GITHUB_ORG }}/ritam-bharat:latest"
     image_templates:
-      - "ghcr.io/{{ .Env.GITHUB_ORG }}/whatomate:{{ .Version }}-amd64"
-      - "ghcr.io/{{ .Env.GITHUB_ORG }}/whatomate:{{ .Version }}-arm64"
+      - "ghcr.io/{{ .Env.GITHUB_ORG }}/ritam-bharat:{{ .Version }}-amd64"
+      - "ghcr.io/{{ .Env.GITHUB_ORG }}/ritam-bharat:{{ .Version }}-arm64"
 
 release:
   github:
     owner: shridarpatil
-    name: whatomate
+    name: ritam-bharat
   draft: false
   prerelease: auto
   name_template: "v{{ .Version }}"

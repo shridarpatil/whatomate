@@ -1,0 +1,9 @@
+#! redis-redis-data-persistentVolumeClaim.yaml
+# Generated code, do not edit
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+    name: redis-redis-data
+    namespace: whatomate
+spec:
+    storageClassName: "hostpath" # see docker/desktop-storage-provisioner

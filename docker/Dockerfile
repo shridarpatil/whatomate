@@ -34,7 +34,7 @@ COPY . .
 COPY --from=frontend-builder /app/frontend/dist/ ./internal/frontend/dist/
 
 # Build the binary
-RUN CGO_ENABLED=0 GOOS=${TARGETOS} GOARCH=${TARGETARCH} go build -a -installsuffix cgo -o whatomate ./cmd/whatomate
+RUN CGO_ENABLED=0 GOOS=${TARGETOS} GOARCH=${TARGETARCH} go build -a -installsuffix cgo -o ritam-bharat ./cmd/whatomate
 
 # Piper TTS download stage — runs on BUILDPLATFORM (just wget+tar, no native exec),
 # selects the tarball matching TARGETARCH so the final image gets a binary that runs.
@@ -67,7 +67,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && rm -rf /var/lib/apt/lists/*
 
 # Copy binary from builder
-COPY --from=builder /app/whatomate .
+COPY --from=builder /app/ritam-bharat .
 
 # Copy config example (will be overridden by env vars in production)
 COPY --from=builder /app/config.example.toml ./config.toml
@@ -89,4 +89,4 @@ RUN mkdir -p /app/uploads /app/audio
 EXPOSE 8080
 
 # Run the binary
-CMD ["./whatomate", "server", "-config", "config.toml", "-migrate"]
+CMD ["./ritam-bharat", "server", "-config", "config.toml", "-migrate"]

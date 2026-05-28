@@ -1,11 +1,11 @@
 ---
 title: Quickstart
-description: Get Whatomate up and running in minutes
+description: Get Ritam Bharat up and running in minutes
 ---
 
 import { Steps, Aside, Tabs, TabItem } from '@astrojs/starlight/components';
 
-Get Whatomate up and running in minutes using Docker or manual installation.
+Get Ritam Bharat up and running in minutes using Docker or manual installation.
 
 ## Quick Start (Docker)
 
@@ -54,17 +54,37 @@ cp config.example.toml config.toml
 
 ### Step 2: Setup PostgreSQL
 
-```bash
-# Create database
-createdb whatomate
+<Tabs>
+  <TabItem label="macOS">
+    ```bash
+    brew install postgresql@17
+    brew services start postgresql@17
 
-# Or using psql
-psql -c "CREATE DATABASE whatomate;"
+    # Create a database and user for Ritam Bharat
+    createuser ritam_bharat --pwprompt
+    createdb ritam_bharat -O ritam_bharat
+    ```
+  </TabItem>
+  <TabItem label="Ubuntu/Debian">
+    ```bash
+    sudo apt install postgresql
+    sudo systemctl start postgresql
 
-# Or with custom user
-psql -c "CREATE USER whatomate WITH PASSWORD 'whatomate123';"
-psql -c "CREATE DATABASE whatomate OWNER whatomate;"
-```
+    # Create a database and user for Ritam Bharat
+    sudo -u postgres createuser ritam_bharat --pwprompt
+    sudo -u postgres createdb ritam_bharat -O ritam_bharat
+    ```
+  </TabItem>
+  <TabItem label="Docker">
+    ```bash
+    docker run -d --name ritam_bharat-postgres -p 5432:5432 \
+      -e POSTGRES_USER=ritam_bharat \
+      -e POSTGRES_PASSWORD=ritam_bharat123 \
+      -e POSTGRES_DB=ritam_bharat \
+      postgres:17-alpine
+    ```
+  </TabItem>
+</Tabs>
 
 Update `config.toml` with your database credentials:
 
@@ -72,9 +92,9 @@ Update `config.toml` with your database credentials:
 [database]
 host = "localhost"
 port = 5432
-user = "whatomate"
-password = "whatomate123"
-name = "whatomate"
+user = "ritam_bharat"
+password = "ritam_bharat123"
+name = "ritam_bharat"
 ```
 
 ### Step 3: Setup Redis
@@ -85,6 +105,7 @@ name = "whatomate"
     brew install redis
     brew services start redis
     ```
+    On macOS, the service listens on `localhost:6379` by default.
   </TabItem>
   <TabItem label="Ubuntu/Debian">
     ```bash
@@ -132,13 +153,38 @@ npm run dev
   Change the admin password immediately after first login via the Profile page.
 </Aside>
 
+## Optional: Expose Your App with ngrok
+
+Use ngrok when you want to share a local Whatomate instance over the internet during development or demos.
+
+<Tabs>
+  <TabItem label="macOS">
+    ```bash
+    brew install ngrok
+    ngrok config add-authtoken <your-ngrok-authtoken>
+    ngrok http 8080
+    ```
+  </TabItem>
+  <TabItem label="Linux / Windows">
+    ```bash
+    # Install ngrok using the package manager or download from ngrok.com
+    ngrok config add-authtoken <your-ngrok-authtoken>
+    ngrok http 8080
+    ```
+  </TabItem>
+</Tabs>
+
+If you are running the frontend separately on port 3000, use `ngrok http 3000` instead.
+
+Your public ngrok URL will look similar to `https://example.ngrok-free.dev`.
+
 ## Production Build
 
 For production, build a single binary with embedded frontend:
 
 ```bash
 make build-prod
-./whatomate server -migrate
+./ritam-bharat server -migrate
 ```
 
 This creates a self-contained binary—no separate frontend server needed. Access at http://localhost:8080.
@@ -157,7 +203,7 @@ Template to start with a production ready instance!
 |-------|----------|
 | `connection refused` (database) | Ensure PostgreSQL is running: `pg_isready` |
 | `connection refused` (redis) | Ensure Redis is running: `redis-cli ping` |
-| `database does not exist` | Create it: `createdb whatomate` |
+| `database does not exist` | Create it: `createdb ritam_bharat` |
 | `permission denied` | Check database user/password in `config.toml` |
 | `port already in use` | Change port in `config.toml` or stop conflicting service |
 | Frontend can't reach API | Ensure backend is running on port 8080 |
@@ -171,7 +217,7 @@ To connect your WhatsApp Business account:
 1. Create a Meta Business account at [business.facebook.com](https://business.facebook.com)
 2. Set up a WhatsApp Business API account
 3. Generate an access token and note your Phone Number ID
-4. Add these credentials in Whatomate's **Settings** → **Accounts**
+4. Add these credentials in Ritam Bharat's **Settings** → **Accounts**
 
 </Steps>
 
@@ -181,6 +227,6 @@ To connect your WhatsApp Business account:
 
 ## Next Steps
 
-- [Configuration Reference](/whatomate/getting-started/configuration) - Detailed configuration options
-- [Dashboard Overview](/whatomate/features/dashboard) - Explore the dashboard
-- [API Reference](/whatomate/api-reference/overview) - Integrate via REST API
+- [Configuration Reference](/ritam-bharat/getting-started/configuration) - Detailed configuration options
+- [Dashboard Overview](/ritam-bharat/features/dashboard) - Explore the dashboard
+- [API Reference](/ritam-bharat/api-reference/overview) - Integrate via REST API

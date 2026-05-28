@@ -59,7 +59,7 @@ jobs:
         run: |
           cat > config.toml << 'EOF'
           [app]
-          name = "Whatomate"
+          name = "Ritam Bharat"
           environment = "test"
           debug = true
 
@@ -75,7 +75,7 @@ jobs:
           port = 5432
           user = "test"
           password = "test"
-          name = "whatomate_test"
+          name = "ritam_bharat_test"
           ssl_mode = "disable"
           max_open_conns = 25
           max_idle_conns = 5
@@ -112,11 +112,11 @@ jobs:
           cp -r frontend/dist/* internal/frontend/dist/
 
       - name: Build backend
-        run: go build -o whatomate ./cmd/whatomate
+        run: go build -o ritam-bharat ./cmd/whatomate
 
       - name: Start backend with migrations
         run: |
-          ./whatomate server -migrate &
+          ./ritam-bharat server -migrate &
           sleep 10
           # Verify server is running
           curl -f http://localhost:8080/health || exit 1
@@ -130,7 +130,7 @@ jobs:
         run: cd frontend && npm run test:e2e
         env:
           BASE_URL: http://localhost:8080
-          TEST_DATABASE_URL: postgres://test:test@127.0.0.1:5432/whatomate_test
+          TEST_DATABASE_URL: postgres://test:test@127.0.0.1:5432/ritam_bharat_test
           CI: true
 
       - name: Upload Playwright report
