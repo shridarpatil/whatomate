@@ -126,6 +126,24 @@ DigitalOcean quick notes (budget-minded):
 - Use DO managed Postgres for production if you prefer managed backups & HA.
 - Your $200 DO credit covers several months depending on droplet size.
 
+### Auto-deploy on GitHub push
+
+This repository includes [deploy-production workflow](.github/workflows/deploy-production.yml) that deploys automatically to your server when you push to `main` or `deploy/do-app`.
+
+Set these GitHub Actions repository secrets:
+- `PROD_HOST` (example: `142.93.210.66`)
+- `PROD_USER` (example: `root`)
+- `PROD_SSH_KEY` (private key content for SSH auth)
+- `PROD_APP_DIR` (optional, defaults to `/root/whatomate`)
+
+What the workflow does:
+1. Connects to the droplet over SSH.
+2. Checks out the pushed branch and pulls latest changes.
+3. Runs `docker compose up -d --build --remove-orphans`.
+4. Runs a health check on `http://127.0.0.1:8080/health`.
+
+You can also run it manually from GitHub Actions with `workflow_dispatch` and choose the branch.
+
 ## 6. Webhooks and ngrok (Meta verification)
 
 The project exposes the Meta webhook endpoints on:

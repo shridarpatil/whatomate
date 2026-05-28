@@ -1,0 +1,71 @@
+name: Deploy production
+
+on:
+  push:
+    branches:
+      - main
+      - deploy/do-app
+  workflow_dispatch:
+    inputs:
+      branch:
+        description: Branch to deploy
+        required: true
+        default: main
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    concurrency:
+      group: production-deploy
+      cancel-in-progress: false
+    steps:
+      - name: Resolve branch
+        id: branch
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "value=${{ inputs.branch }}" >> "$GITHUB_OUTPUT"
+          else
+            echo "value=${GITHUB_REF_NAME}" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Deploy over SSH
+        uses: appleboy/ssh-action@v1.0.3
+        env:
+          DEPLOY_BRANCH: ${{ steps.branch.outputs.value }}
+          APP_DIR: ${{ secrets.PROD_APP_DIR }}
+        with:
+          host: ${{ secrets.PROD_HOST }}
+          username: ${{ secrets.PROD_USER }}
+          key: ${{ secrets.PROD_SSH_KEY }}
+          port: 22
+          script_stop: true
+          command_timeout: 30m
+          envs: DEPLOY_BRANCH,APP_DIR
+          script: |
+            set -e
+            APP_DIR="${APP_DIR:-/root/whatomate}"
+
+            cd "$APP_DIR"
+            if [ ! -d .git ]; then
+              echo "Git repository not found at $APP_DIR"
+              exit 1
+            fi
+
+            git fetch --prune origin
+            git checkout "$DEPLOY_BRANCH"
+            git pull --ff-only origin "$DEPLOY_BRANCH"
+
+            docker compose up -d --build --remove-orphans
+
+            for i in $(seq 1 30); do
+              if curl -fsS http://127.0.0.1:8080/health >/dev/null; then
+                echo "Health check passed"
+                exit 0
+              fi
+              sleep 2
+            done
+
+            echo "Health check failed"
+            docker compose ps
+            docker compose logs --tail=120 app
+            exit 1
