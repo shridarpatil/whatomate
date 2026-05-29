@@ -213,6 +213,30 @@ const isServiceWindowExpired = computed(() => {
   return contact.service_window_open === false
 })
 
+let conversationSyncInterval: ReturnType<typeof setInterval> | null = null
+
+function stopConversationSync() {
+  if (conversationSyncInterval) {
+    clearInterval(conversationSyncInterval)
+    conversationSyncInterval = null
+  }
+}
+
+function startConversationSync() {
+  stopConversationSync()
+  conversationSyncInterval = setInterval(() => {
+    const currentContact = contactsStore.currentContact
+    if (!currentContact) return
+    if (contactsStore.isLoadingMessages) return
+
+    contactsStore.fetchMessages(currentContact.id, {
+      account: selectedAccount.value || undefined
+    }).catch(() => {
+      // Non-critical fallback; websocket remains the primary realtime path.
+    })
+  }, 8000)
+}
+
 function openTemplatePicker() {
   const btn = templatePickerRef.value?.querySelector('button')
   btn?.click()
@@ -463,6 +487,7 @@ onMounted(async () => {
 
   if (contactId.value) {
     await selectContact(contactId.value)
+    startConversationSync()
   }
 
   // Auto-scroll to the unread divider and mark messages read when the agent
@@ -490,6 +515,7 @@ function onUserActive() {
 }
 
 onUnmounted(() => {
+  stopConversationSync()
   wsService.setCurrentContact(null)
   // Clear current contact when leaving chat view so notifications work on other pages
   contactsStore.setCurrentContact(null)
@@ -540,7 +566,9 @@ watch(contactId, async (newId) => {
     notesStore.notes = []
     notesStore.hasMore = false
     await selectContact(newId)
+    startConversationSync()
   } else {
+    stopConversationSync()
     wsService.setCurrentContact(null)
     contactsStore.setCurrentContact(null)
     contactsStore.clearMessages()
