@@ -1589,6 +1589,21 @@ function getMediaType(mimeType: string): string {
   return 'document'
 }
 
+function normalizeOutgoingMessage(message: Message) {
+  if (message.direction !== 'outgoing') {
+    return message
+  }
+
+  if (message.status === 'sent' || message.status === 'delivered' || message.status === 'read' || message.status === 'failed') {
+    return message
+  }
+
+  return {
+    ...message,
+    status: 'sent'
+  }
+}
+
 async function sendMediaMessage() {
   if (!selectedFile.value || !contactsStore.currentContact) return
 
@@ -1622,7 +1637,7 @@ async function sendMediaMessage() {
 
     // Add the message to the store (addMessage has duplicate checking for WebSocket)
     if (result.data) {
-      contactsStore.addMessage(result.data)
+      contactsStore.addMessage(normalizeOutgoingMessage(result.data))
       scrollToBottom()
     }
 

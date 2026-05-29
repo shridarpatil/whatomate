@@ -82,6 +82,22 @@ export interface Message {
   updated_at: string
 }
 
+function normalizeOutgoingMessage(message: Message): Message {
+  if (message.direction !== 'outgoing') {
+    return message
+  }
+
+  const terminalStatuses = new Set(['sent', 'delivered', 'read', 'failed'])
+  if (message.status && terminalStatuses.has(message.status)) {
+    return message
+  }
+
+  return {
+    ...message,
+    status: 'sent'
+  }
+}
+
 export const useContactsStore = defineStore('contacts', () => {
   const contacts = ref<Contact[]>([])
   const currentContact = ref<Contact | null>(null)
@@ -241,7 +257,7 @@ export const useContactsStore = defineStore('contacts', () => {
         ...(extra?.interactive ? { interactive: extra.interactive } : {}),
       })
       // API returns { status: "success", data: { ... } }
-      const newMessage = response.data.data || response.data
+      const newMessage = normalizeOutgoingMessage(response.data.data || response.data)
       // Use addMessage which has duplicate checking (WebSocket may also broadcast this)
       addMessage(newMessage)
 
@@ -269,7 +285,7 @@ export const useContactsStore = defineStore('contacts', () => {
         button_params: buttonParams,
         account_name: accountName
       }, headerFile)
-      const data = response.data.data || response.data
+      const data = normalizeOutgoingMessage(response.data.data || response.data)
       // Use addMessage which has duplicate checking (WebSocket may also broadcast this)
       addMessage(data)
       return data
