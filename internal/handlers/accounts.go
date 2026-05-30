@@ -700,7 +700,7 @@ func (a *App) ExchangeToken(r *fastglue.Request) error {
 
 	// Audit Logging
 	a.DB.Preload("CreatedBy").Preload("UpdatedBy").First(account, "id = ?", account.ID)
-	var auditAction models.AuditAction = models.AuditActionCreated
+	auditAction := models.AuditActionCreated
 	var auditOld any = nil
 	if existingAccount {
 		auditAction = models.AuditActionUpdated
