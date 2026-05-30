@@ -834,115 +834,11 @@ func (a *App) processMessageEcho(phoneNumberID string, echo any) {
 	}
 
 	// Get message content - handle text and media
-	messageText := ""
-	messageType := msg.Type
-	var mediaInfo *MediaInfo
+	extracted := a.extractMessageContent(context.Background(), msg, account)
+	messageText := extracted.Text
+	messageType := extracted.Type
+	mediaInfo := extracted.Media
 
-	if msg.Type == "text" && msg.Text != nil {
-		messageText = msg.Text.Body
-	} else if msg.Type == "button" && msg.Button != nil {
-		messageText = msg.Button.Text
-		messageType = "button_reply"
-	} else if msg.Type == "interactive" && msg.Interactive != nil {
-		if msg.Interactive.ButtonReply != nil {
-			messageText = msg.Interactive.ButtonReply.Title
-			messageType = "button_reply"
-		}
-		if msg.Interactive.ListReply != nil {
-			messageText = msg.Interactive.ListReply.Title
-			messageType = "button_reply"
-		}
-		if msg.Interactive.NFMReply != nil {
-			messageText = msg.Interactive.NFMReply.Body
-			messageType = "nfm_reply"
-		}
-	} else if msg.Type == "image" && msg.Image != nil {
-		messageText = msg.Image.Caption
-		mediaInfo = &MediaInfo{
-			MediaMimeType: msg.Image.MimeType,
-		}
-		waAccount := a.toWhatsAppAccount(account)
-		if localPath, err := a.DownloadAndSaveMedia(context.Background(), msg.Image.ID, msg.Image.MimeType, waAccount); err != nil {
-			a.Log.Error("Failed to download echo image", "error", err, "media_id", msg.Image.ID)
-		} else {
-			mediaInfo.MediaURL = localPath
-		}
-	} else if msg.Type == "document" && msg.Document != nil {
-		messageText = msg.Document.Caption
-		mediaInfo = &MediaInfo{
-			MediaMimeType: msg.Document.MimeType,
-			MediaFilename: msg.Document.Filename,
-		}
-		waAccount := a.toWhatsAppAccount(account)
-		if localPath, err := a.DownloadAndSaveMedia(context.Background(), msg.Document.ID, msg.Document.MimeType, waAccount); err != nil {
-			a.Log.Error("Failed to download echo document", "error", err, "media_id", msg.Document.ID)
-		} else {
-			mediaInfo.MediaURL = localPath
-		}
-	} else if msg.Type == "video" && msg.Video != nil {
-		messageText = msg.Video.Caption
-		mediaInfo = &MediaInfo{
-			MediaMimeType: msg.Video.MimeType,
-		}
-		waAccount := a.toWhatsAppAccount(account)
-		if localPath, err := a.DownloadAndSaveMedia(context.Background(), msg.Video.ID, msg.Video.MimeType, waAccount); err != nil {
-			a.Log.Error("Failed to download echo video", "error", err, "media_id", msg.Video.ID)
-		} else {
-			mediaInfo.MediaURL = localPath
-		}
-	} else if msg.Type == "audio" && msg.Audio != nil {
-		mediaInfo = &MediaInfo{
-			MediaMimeType: msg.Audio.MimeType,
-		}
-		waAccount := a.toWhatsAppAccount(account)
-		if localPath, err := a.DownloadAndSaveMedia(context.Background(), msg.Audio.ID, msg.Audio.MimeType, waAccount); err != nil {
-			a.Log.Error("Failed to download echo audio", "error", err, "media_id", msg.Audio.ID)
-		} else {
-			mediaInfo.MediaURL = localPath
-		}
-	} else if msg.Type == "sticker" && msg.Sticker != nil {
-		mediaInfo = &MediaInfo{
-			MediaMimeType: msg.Sticker.MimeType,
-		}
-		waAccount := a.toWhatsAppAccount(account)
-		if localPath, err := a.DownloadAndSaveMedia(context.Background(), msg.Sticker.ID, msg.Sticker.MimeType, waAccount); err != nil {
-			a.Log.Error("Failed to download echo sticker", "error", err, "media_id", msg.Sticker.ID)
-		} else {
-			mediaInfo.MediaURL = localPath
-		}
-	} else if msg.Type == "location" && msg.Location != nil {
-		locationData := map[string]any{
-			"latitude":  msg.Location.Latitude,
-			"longitude": msg.Location.Longitude,
-		}
-		if msg.Location.Name != "" {
-			locationData["name"] = msg.Location.Name
-		}
-		if msg.Location.Address != "" {
-			locationData["address"] = msg.Location.Address
-		}
-		if jsonBytes, err := json.Marshal(locationData); err == nil {
-			messageText = string(jsonBytes)
-		}
-	} else if msg.Type == "contacts" && len(msg.Contacts) > 0 {
-		contactsData := make([]map[string]any, 0, len(msg.Contacts))
-		for _, c := range msg.Contacts {
-			contactData := map[string]any{
-				"name": c.Name.FormattedName,
-			}
-			if len(c.Phones) > 0 {
-				phones := make([]string, 0, len(c.Phones))
-				for _, p := range c.Phones {
-					phones = append(phones, p.Phone)
-				}
-				contactData["phones"] = phones
-			}
-			contactsData = append(contactsData, contactData)
-		}
-		if jsonBytes, err := json.Marshal(contactsData); err == nil {
-			messageText = string(jsonBytes)
-		}
-	}
 
 	// Save message as outgoing, status sent
 	now := time.Now()
@@ -1039,16 +935,10 @@ func (a *App) processContactSync(phoneNumberID, contactPhone, contactName, actio
 			})
 		}
 	case "remove":
-		// Normalize contactPhone (strip leading + if present)
-		normalizedPhone := contactPhone
-		if len(normalizedPhone) > 0 && normalizedPhone[0] == '+' {
-			normalizedPhone = normalizedPhone[1:]
-		}
-
-		var contact models.Contact
-		// Try to find the contact first
-		if err := a.DB.Where("organization_id = ? AND (phone_number = ? OR phone_number = ?)", account.OrganizationID, normalizedPhone, "+"+normalizedPhone).First(&contact).Error; err == nil {
-			if err := a.DB.Delete(&contact).Error; err != nil {
+		// Try to find the contact first using the FindContact helper
+		contact, err := contactutil.FindContact(a.DB, account.OrganizationID, contactPhone)
+		if err == nil {
+			if err := a.DB.Delete(contact).Error; err != nil {
 				a.Log.Error("Failed to delete contact on sync remove", "contact_id", contact.ID, "error", err)
 			} else {
 				a.Log.Info("Soft-deleted synced contact (remove) from mobile app", "contact_id", contact.ID, "phone", contactPhone)
