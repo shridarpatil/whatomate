@@ -173,148 +173,13 @@ func (a *App) processIncomingMessageFull(phoneNumberID string, msg IncomingTextM
 	}
 
 	// Get message content - handle text, button replies, list replies, and media
-	messageText := ""
-	messageType := msg.Type
-	buttonID := "" // Track button/list ID for conditional routing
-	var mediaInfo *MediaInfo
+	extracted := a.extractMessageContent(context.Background(), msg, account)
+	messageText := extracted.Text
+	messageType := extracted.Type
+	buttonID := extracted.ButtonID
+	mediaInfo := extracted.Media
+	flowResponseData := extracted.FlowResponseData
 
-	// Track flow response data for WhatsApp Flow forms
-	var flowResponseData map[string]any
-
-	if msg.Type == "text" && msg.Text != nil {
-		messageText = msg.Text.Body
-	} else if msg.Type == "button" && msg.Button != nil {
-		// Template quick_reply button click — WhatsApp sends type "button"
-		messageText = msg.Button.Text
-		buttonID = msg.Button.Payload
-		messageType = "button_reply"
-	} else if msg.Type == "interactive" && msg.Interactive != nil {
-		// Handle button reply
-		if msg.Interactive.ButtonReply != nil {
-			messageText = msg.Interactive.ButtonReply.Title
-			buttonID = msg.Interactive.ButtonReply.ID
-			messageType = "button_reply"
-		}
-		// Handle list reply
-		if msg.Interactive.ListReply != nil {
-			messageText = msg.Interactive.ListReply.Title
-			buttonID = msg.Interactive.ListReply.ID
-			messageType = "button_reply"
-		}
-		// Handle WhatsApp Flow reply (nfm_reply)
-		if msg.Interactive.NFMReply != nil {
-			messageText = msg.Interactive.NFMReply.Body
-			messageType = "nfm_reply"
-			// Parse the response JSON to extract form data
-			if msg.Interactive.NFMReply.ResponseJSON != "" {
-				var responseData map[string]any
-				if err := json.Unmarshal([]byte(msg.Interactive.NFMReply.ResponseJSON), &responseData); err != nil {
-					a.Log.Error("Failed to parse flow response JSON", "error", err, "response_json", msg.Interactive.NFMReply.ResponseJSON)
-				} else {
-					flowResponseData = responseData
-					a.Log.Info("Parsed WhatsApp Flow response", "data", flowResponseData)
-				}
-			}
-		}
-	} else if msg.Type == "image" && msg.Image != nil {
-		// Handle image message
-		messageText = msg.Image.Caption
-		mediaInfo = &MediaInfo{
-			MediaMimeType: msg.Image.MimeType,
-		}
-		// Download and save media locally
-		waAccount := a.toWhatsAppAccount(account)
-		if localPath, err := a.DownloadAndSaveMedia(context.Background(), msg.Image.ID, msg.Image.MimeType, waAccount); err != nil {
-			a.Log.Error("Failed to download image", "error", err, "media_id", msg.Image.ID)
-		} else {
-			mediaInfo.MediaURL = localPath
-		}
-	} else if msg.Type == "document" && msg.Document != nil {
-		// Handle document message
-		messageText = msg.Document.Caption
-		mediaInfo = &MediaInfo{
-			MediaMimeType: msg.Document.MimeType,
-			MediaFilename: msg.Document.Filename,
-		}
-		// Download and save media locally
-		waAccount := a.toWhatsAppAccount(account)
-		if localPath, err := a.DownloadAndSaveMedia(context.Background(), msg.Document.ID, msg.Document.MimeType, waAccount); err != nil {
-			a.Log.Error("Failed to download document", "error", err, "media_id", msg.Document.ID)
-		} else {
-			mediaInfo.MediaURL = localPath
-		}
-	} else if msg.Type == "video" && msg.Video != nil {
-		// Handle video message
-		messageText = msg.Video.Caption
-		mediaInfo = &MediaInfo{
-			MediaMimeType: msg.Video.MimeType,
-		}
-		// Download and save media locally
-		waAccount := a.toWhatsAppAccount(account)
-		if localPath, err := a.DownloadAndSaveMedia(context.Background(), msg.Video.ID, msg.Video.MimeType, waAccount); err != nil {
-			a.Log.Error("Failed to download video", "error", err, "media_id", msg.Video.ID)
-		} else {
-			mediaInfo.MediaURL = localPath
-		}
-	} else if msg.Type == "audio" && msg.Audio != nil {
-		// Handle audio message
-		mediaInfo = &MediaInfo{
-			MediaMimeType: msg.Audio.MimeType,
-		}
-		// Download and save media locally
-		waAccount := a.toWhatsAppAccount(account)
-		if localPath, err := a.DownloadAndSaveMedia(context.Background(), msg.Audio.ID, msg.Audio.MimeType, waAccount); err != nil {
-			a.Log.Error("Failed to download audio", "error", err, "media_id", msg.Audio.ID)
-		} else {
-			mediaInfo.MediaURL = localPath
-		}
-	} else if msg.Type == "sticker" && msg.Sticker != nil {
-		// Handle sticker message (treat like image)
-		mediaInfo = &MediaInfo{
-			MediaMimeType: msg.Sticker.MimeType,
-		}
-		// Download and save media locally
-		waAccount := a.toWhatsAppAccount(account)
-		if localPath, err := a.DownloadAndSaveMedia(context.Background(), msg.Sticker.ID, msg.Sticker.MimeType, waAccount); err != nil {
-			a.Log.Error("Failed to download sticker", "error", err, "media_id", msg.Sticker.ID)
-		} else {
-			mediaInfo.MediaURL = localPath
-		}
-	} else if msg.Type == "location" && msg.Location != nil {
-		// Handle location message - store as JSON in content
-		locationData := map[string]any{
-			"latitude":  msg.Location.Latitude,
-			"longitude": msg.Location.Longitude,
-		}
-		if msg.Location.Name != "" {
-			locationData["name"] = msg.Location.Name
-		}
-		if msg.Location.Address != "" {
-			locationData["address"] = msg.Location.Address
-		}
-		if jsonBytes, err := json.Marshal(locationData); err == nil {
-			messageText = string(jsonBytes)
-		}
-	} else if msg.Type == "contacts" && len(msg.Contacts) > 0 {
-		// Handle contacts message - store as JSON in content
-		contactsData := make([]map[string]any, 0, len(msg.Contacts))
-		for _, c := range msg.Contacts {
-			contact := map[string]any{
-				"name": c.Name.FormattedName,
-			}
-			if len(c.Phones) > 0 {
-				phones := make([]string, 0, len(c.Phones))
-				for _, p := range c.Phones {
-					phones = append(phones, p.Phone)
-				}
-				contact["phones"] = phones
-			}
-			contactsData = append(contactsData, contact)
-		}
-		if jsonBytes, err := json.Marshal(contactsData); err == nil {
-			messageText = string(jsonBytes)
-		}
-	}
 
 	// Save incoming message to messages table (always, even if chatbot is disabled)
 	var replyToWAMID string
@@ -1509,6 +1374,160 @@ func getStringFromMap(m map[string]any, key string) string {
 		}
 	}
 	return ""
+}
+
+// ExtractedMessage holds the derived content fields of a message.
+type ExtractedMessage struct {
+	Text             string
+	Type             string         // may differ from msg.Type, e.g. "button_reply"
+	Media            *MediaInfo
+	ButtonID         string         // used by chatbot routing only
+	FlowResponseData map[string]any // used by chatbot routing only
+}
+
+// extractMessageContent walks an IncomingTextMessage and returns the derived
+// fields. Used by both the inbound and echo paths.
+func (a *App) extractMessageContent(ctx context.Context, msg IncomingTextMessage, account *models.WhatsAppAccount) ExtractedMessage {
+	extracted := ExtractedMessage{
+		Type: msg.Type,
+	}
+
+	if msg.Type == "text" && msg.Text != nil {
+		extracted.Text = msg.Text.Body
+	} else if msg.Type == "button" && msg.Button != nil {
+		// Template quick_reply button click — WhatsApp sends type "button"
+		extracted.Text = msg.Button.Text
+		extracted.ButtonID = msg.Button.Payload
+		extracted.Type = "button_reply"
+	} else if msg.Type == "interactive" && msg.Interactive != nil {
+		// Handle button reply
+		if msg.Interactive.ButtonReply != nil {
+			extracted.Text = msg.Interactive.ButtonReply.Title
+			extracted.ButtonID = msg.Interactive.ButtonReply.ID
+			extracted.Type = "button_reply"
+		}
+		// Handle list reply
+		if msg.Interactive.ListReply != nil {
+			extracted.Text = msg.Interactive.ListReply.Title
+			extracted.ButtonID = msg.Interactive.ListReply.ID
+			extracted.Type = "button_reply"
+		}
+		// Handle WhatsApp Flow reply (nfm_reply)
+		if msg.Interactive.NFMReply != nil {
+			extracted.Text = msg.Interactive.NFMReply.Body
+			extracted.Type = "nfm_reply"
+			// Parse the response JSON to extract form data
+			if msg.Interactive.NFMReply.ResponseJSON != "" {
+				var responseData map[string]any
+				if err := json.Unmarshal([]byte(msg.Interactive.NFMReply.ResponseJSON), &responseData); err != nil {
+					a.Log.Error("Failed to parse flow response JSON", "error", err, "response_json", msg.Interactive.NFMReply.ResponseJSON)
+				} else {
+					extracted.FlowResponseData = responseData
+					a.Log.Info("Parsed WhatsApp Flow response", "data", extracted.FlowResponseData)
+				}
+			}
+		}
+	} else if msg.Type == "image" && msg.Image != nil {
+		// Handle image message
+		extracted.Text = msg.Image.Caption
+		extracted.Media = &MediaInfo{
+			MediaMimeType: msg.Image.MimeType,
+		}
+		// Download and save media locally
+		waAccount := a.toWhatsAppAccount(account)
+		if localPath, err := a.DownloadAndSaveMedia(ctx, msg.Image.ID, msg.Image.MimeType, waAccount); err != nil {
+			a.Log.Error("Failed to download image", "error", err, "media_id", msg.Image.ID)
+		} else {
+			extracted.Media.MediaURL = localPath
+		}
+	} else if msg.Type == "document" && msg.Document != nil {
+		// Handle document message
+		extracted.Text = msg.Document.Caption
+		extracted.Media = &MediaInfo{
+			MediaMimeType: msg.Document.MimeType,
+			MediaFilename: msg.Document.Filename,
+		}
+		// Download and save media locally
+		waAccount := a.toWhatsAppAccount(account)
+		if localPath, err := a.DownloadAndSaveMedia(ctx, msg.Document.ID, msg.Document.MimeType, waAccount); err != nil {
+			a.Log.Error("Failed to download document", "error", err, "media_id", msg.Document.ID)
+		} else {
+			extracted.Media.MediaURL = localPath
+		}
+	} else if msg.Type == "video" && msg.Video != nil {
+		// Handle video message
+		extracted.Text = msg.Video.Caption
+		extracted.Media = &MediaInfo{
+			MediaMimeType: msg.Video.MimeType,
+		}
+		// Download and save media locally
+		waAccount := a.toWhatsAppAccount(account)
+		if localPath, err := a.DownloadAndSaveMedia(ctx, msg.Video.ID, msg.Video.MimeType, waAccount); err != nil {
+			a.Log.Error("Failed to download video", "error", err, "media_id", msg.Video.ID)
+		} else {
+			extracted.Media.MediaURL = localPath
+		}
+	} else if msg.Type == "audio" && msg.Audio != nil {
+		// Handle audio message
+		extracted.Media = &MediaInfo{
+			MediaMimeType: msg.Audio.MimeType,
+		}
+		// Download and save media locally
+		waAccount := a.toWhatsAppAccount(account)
+		if localPath, err := a.DownloadAndSaveMedia(ctx, msg.Audio.ID, msg.Audio.MimeType, waAccount); err != nil {
+			a.Log.Error("Failed to download audio", "error", err, "media_id", msg.Audio.ID)
+		} else {
+			extracted.Media.MediaURL = localPath
+		}
+	} else if msg.Type == "sticker" && msg.Sticker != nil {
+		// Handle sticker message (treat like image)
+		extracted.Media = &MediaInfo{
+			MediaMimeType: msg.Sticker.MimeType,
+		}
+		// Download and save media locally
+		waAccount := a.toWhatsAppAccount(account)
+		if localPath, err := a.DownloadAndSaveMedia(ctx, msg.Sticker.ID, msg.Sticker.MimeType, waAccount); err != nil {
+			a.Log.Error("Failed to download sticker", "error", err, "media_id", msg.Sticker.ID)
+		} else {
+			extracted.Media.MediaURL = localPath
+		}
+	} else if msg.Type == "location" && msg.Location != nil {
+		// Handle location message - store as JSON in content
+		locationData := map[string]any{
+			"latitude":  msg.Location.Latitude,
+			"longitude": msg.Location.Longitude,
+		}
+		if msg.Location.Name != "" {
+			locationData["name"] = msg.Location.Name
+		}
+		if msg.Location.Address != "" {
+			locationData["address"] = msg.Location.Address
+		}
+		if jsonBytes, err := json.Marshal(locationData); err == nil {
+			extracted.Text = string(jsonBytes)
+		}
+	} else if msg.Type == "contacts" && len(msg.Contacts) > 0 {
+		// Handle contacts message - store as JSON in content
+		contactsData := make([]map[string]any, 0, len(msg.Contacts))
+		for _, c := range msg.Contacts {
+			contactVal := map[string]any{
+				"name": c.Name.FormattedName,
+			}
+			if len(c.Phones) > 0 {
+				phones := make([]string, 0, len(c.Phones))
+				for _, p := range c.Phones {
+					phones = append(phones, p.Phone)
+				}
+				contactVal["phones"] = phones
+			}
+			contactsData = append(contactsData, contactVal)
+		}
+		if jsonBytes, err := json.Marshal(contactsData); err == nil {
+			extracted.Text = string(jsonBytes)
+		}
+	}
+
+	return extracted
 }
 
 // MediaInfo holds media-related information for an incoming message
