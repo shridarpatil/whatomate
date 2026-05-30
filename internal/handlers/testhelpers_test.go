@@ -50,6 +50,9 @@ func newTestApp(t *testing.T, opts ...appOption) *handlers.App {
 	}
 
 	cfg := &config.Config{
+		App: config.AppConfig{
+			EncryptionKey: "test-encryption-key-for-handlers-longer-than-32-chars",
+		},
 		JWT: config.JWTConfig{
 			Secret:            testutil.TestJWTSecret,
 			AccessExpiryMins:  15,

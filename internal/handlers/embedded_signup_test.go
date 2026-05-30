@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/shridarpatil/whatomate/internal/crypto"
 	"github.com/shridarpatil/whatomate/internal/models"
 	"github.com/shridarpatil/whatomate/pkg/whatsapp"
 	"github.com/shridarpatil/whatomate/test/testutil"
@@ -25,7 +26,7 @@ func TestApp_ExchangeToken_Success_AutoRegistration(t *testing.T) {
 
 	app := newTestApp(t)
 	org := testutil.CreateTestOrganization(t, app.DB)
-	user := testutil.CreateTestUser(t, app.DB, org.ID)
+	user := createAdminUser(t, app, org.ID)
 
 	// Use unique IDs to prevent conflicts with parallel tests
 	phoneID := fmt.Sprintf("123456789%d", time.Now().UnixNano()%1000000)
@@ -94,7 +95,15 @@ func TestApp_ExchangeToken_Success_AutoRegistration(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, "active", account.Status)
 	assert.NotEmpty(t, account.Pin)
+	assert.True(t, crypto.IsEncrypted(account.AccessToken))
+	assert.True(t, crypto.IsEncrypted(account.Pin))
+	account.DecryptSecrets(app.Config.App.EncryptionKey)
 	assert.Equal(t, "EAABwzLixnjYBO1234567890", account.AccessToken)
+
+	// Verify audit log exists
+	var auditCount int64
+	require.NoError(t, app.DB.Model(&models.AuditLog{}).Where("organization_id = ? AND resource_type = ? AND action = ?", org.ID, "account", models.AuditActionCreated).Count(&auditCount).Error)
+	assert.Greater(t, auditCount, int64(0))
 }
 
 func TestApp_ExchangeToken_Success_PendingRegistration(t *testing.T) {
@@ -102,7 +111,7 @@ func TestApp_ExchangeToken_Success_PendingRegistration(t *testing.T) {
 
 	app := newTestApp(t)
 	org := testutil.CreateTestOrganization(t, app.DB)
-	user := testutil.CreateTestUser(t, app.DB, org.ID)
+	user := createAdminUser(t, app, org.ID)
 
 	// Use unique IDs to prevent conflicts with parallel tests
 	phoneID := fmt.Sprintf("223456789%d", time.Now().UnixNano()%1000000)
@@ -178,7 +187,7 @@ func TestApp_ExchangeToken_InvalidCode(t *testing.T) {
 
 	app := newTestApp(t)
 	org := testutil.CreateTestOrganization(t, app.DB)
-	user := testutil.CreateTestUser(t, app.DB, org.ID)
+	user := createAdminUser(t, app, org.ID)
 
 	// Mock Meta API server - invalid code
 	metaServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -224,7 +233,7 @@ func TestApp_ExchangeToken_Success_CodeOnly_Discovery(t *testing.T) {
 
 	app := newTestApp(t)
 	org := testutil.CreateTestOrganization(t, app.DB)
-	user := testutil.CreateTestUser(t, app.DB, org.ID)
+	user := createAdminUser(t, app, org.ID)
 
 	phoneID := fmt.Sprintf("333456789%d", time.Now().UnixNano()%1000000)
 	wabaID := fmt.Sprintf("777654321%d", time.Now().UnixNano()%1000000)
@@ -322,7 +331,7 @@ func TestApp_ExchangeToken_MissingFields(t *testing.T) {
 
 	app := newTestApp(t)
 	org := testutil.CreateTestOrganization(t, app.DB)
-	user := testutil.CreateTestUser(t, app.DB, org.ID)
+	user := createAdminUser(t, app, org.ID)
 
 	req := testutil.NewJSONRequest(t, map[string]interface{}{
 		"phone_id": "123",
@@ -352,14 +361,14 @@ func TestApp_ExchangeToken_Unauthorized(t *testing.T) {
 	assert.Equal(t, fasthttp.StatusUnauthorized, testutil.GetResponseStatusCode(req))
 }
 
-// --- RegisterPhone Tests ---
+// --- RegisterPhoneNumber Tests ---
 
-func TestApp_RegisterPhone_Success_WithPIN(t *testing.T) {
+func TestApp_RegisterPhoneNumber_Success_WithPIN(t *testing.T) {
 	t.Parallel()
 
 	app := newTestApp(t)
 	org := testutil.CreateTestOrganization(t, app.DB)
-	user := testutil.CreateTestUser(t, app.DB, org.ID)
+	user := createAdminUser(t, app, org.ID)
 
 	// Create account with pending_registration status
 	account := &models.WhatsAppAccount{
@@ -405,7 +414,7 @@ func TestApp_RegisterPhone_Success_WithPIN(t *testing.T) {
 	testutil.SetAuthContext(req, org.ID, user.ID)
 	testutil.SetPathParam(req, "id", account.ID.String())
 
-	err := app.RegisterPhone(req)
+	err := app.RegisterPhoneNumber(req)
 	require.NoError(t, err)
 	assert.Equal(t, fasthttp.StatusOK, testutil.GetResponseStatusCode(req))
 
@@ -421,15 +430,23 @@ func TestApp_RegisterPhone_Success_WithPIN(t *testing.T) {
 	var updated models.WhatsAppAccount
 	require.NoError(t, app.DB.Where("id = ?", account.ID).First(&updated).Error)
 	assert.Equal(t, "active", updated.Status)
+	assert.True(t, crypto.IsEncrypted(updated.Pin))
+	updated.DecryptSecrets(app.Config.App.EncryptionKey)
 	assert.Equal(t, "654321", updated.Pin)
+
+	// Verify audit log exists
+	time.Sleep(50 * time.Millisecond)
+	var auditCount int64
+	require.NoError(t, app.DB.Model(&models.AuditLog{}).Where("organization_id = ? AND resource_type = ? AND action = ?", org.ID, "account", models.AuditActionUpdated).Count(&auditCount).Error)
+	assert.Greater(t, auditCount, int64(0))
 }
 
-func TestApp_RegisterPhone_Success_GeneratedPIN(t *testing.T) {
+func TestApp_RegisterPhoneNumber_Success_GeneratedPIN(t *testing.T) {
 	t.Parallel()
 
 	app := newTestApp(t)
 	org := testutil.CreateTestOrganization(t, app.DB)
-	user := testutil.CreateTestUser(t, app.DB, org.ID)
+	user := createAdminUser(t, app, org.ID)
 
 	account := &models.WhatsAppAccount{
 		OrganizationID: org.ID,
@@ -470,7 +487,7 @@ func TestApp_RegisterPhone_Success_GeneratedPIN(t *testing.T) {
 	testutil.SetAuthContext(req, org.ID, user.ID)
 	testutil.SetPathParam(req, "id", account.ID.String())
 
-	err := app.RegisterPhone(req)
+	err := app.RegisterPhoneNumber(req)
 	require.NoError(t, err)
 
 	var resp struct {
@@ -481,14 +498,28 @@ func TestApp_RegisterPhone_Success_GeneratedPIN(t *testing.T) {
 	assert.True(t, resp.Data["success"].(bool))
 	assert.NotEmpty(t, resp.Data["pin"])
 	assert.Len(t, resp.Data["pin"].(string), 6)
+
+	// Verify account status updated
+	var updated models.WhatsAppAccount
+	require.NoError(t, app.DB.Where("id = ?", account.ID).First(&updated).Error)
+	assert.Equal(t, "active", updated.Status)
+	assert.True(t, crypto.IsEncrypted(updated.Pin))
+	updated.DecryptSecrets(app.Config.App.EncryptionKey)
+	assert.Len(t, updated.Pin, 6)
+
+	// Verify audit log exists
+	time.Sleep(50 * time.Millisecond)
+	var auditCount int64
+	require.NoError(t, app.DB.Model(&models.AuditLog{}).Where("organization_id = ? AND resource_type = ? AND action = ?", org.ID, "account", models.AuditActionUpdated).Count(&auditCount).Error)
+	assert.Greater(t, auditCount, int64(0))
 }
 
-func TestApp_RegisterPhone_RegistrationFailed(t *testing.T) {
+func TestApp_RegisterPhoneNumber_RegistrationFailed(t *testing.T) {
 	t.Parallel()
 
 	app := newTestApp(t)
 	org := testutil.CreateTestOrganization(t, app.DB)
-	user := testutil.CreateTestUser(t, app.DB, org.ID)
+	user := createAdminUser(t, app, org.ID)
 
 	account := &models.WhatsAppAccount{
 		OrganizationID: org.ID,
@@ -531,7 +562,7 @@ func TestApp_RegisterPhone_RegistrationFailed(t *testing.T) {
 	testutil.SetAuthContext(req, org.ID, user.ID)
 	testutil.SetPathParam(req, "id", account.ID.String())
 
-	err := app.RegisterPhone(req)
+	err := app.RegisterPhoneNumber(req)
 	require.NoError(t, err)
 
 	assert.Equal(t, fasthttp.StatusBadRequest, testutil.GetResponseStatusCode(req))
@@ -544,12 +575,12 @@ func TestApp_RegisterPhone_RegistrationFailed(t *testing.T) {
 	assert.Equal(t, "pending_registration", updated.Status)
 }
 
-func TestApp_RegisterPhone_AccountNotFound(t *testing.T) {
+func TestApp_RegisterPhoneNumber_AccountNotFound(t *testing.T) {
 	t.Parallel()
 
 	app := newTestApp(t)
 	org := testutil.CreateTestOrganization(t, app.DB)
-	user := testutil.CreateTestUser(t, app.DB, org.ID)
+	user := createAdminUser(t, app, org.ID)
 
 	req := testutil.NewJSONRequest(t, map[string]interface{}{
 		"pin": "123456",
@@ -557,17 +588,17 @@ func TestApp_RegisterPhone_AccountNotFound(t *testing.T) {
 	testutil.SetAuthContext(req, org.ID, user.ID)
 	testutil.SetPathParam(req, "id", uuid.New().String())
 
-	err := app.RegisterPhone(req)
+	err := app.RegisterPhoneNumber(req)
 	require.NoError(t, err)
 	assert.Equal(t, fasthttp.StatusNotFound, testutil.GetResponseStatusCode(req))
 }
 
-func TestApp_RegisterPhone_InvalidID(t *testing.T) {
+func TestApp_RegisterPhoneNumber_InvalidID(t *testing.T) {
 	t.Parallel()
 
 	app := newTestApp(t)
 	org := testutil.CreateTestOrganization(t, app.DB)
-	user := testutil.CreateTestUser(t, app.DB, org.ID)
+	user := createAdminUser(t, app, org.ID)
 
 	req := testutil.NewJSONRequest(t, map[string]interface{}{
 		"pin": "123456",
@@ -575,18 +606,18 @@ func TestApp_RegisterPhone_InvalidID(t *testing.T) {
 	testutil.SetAuthContext(req, org.ID, user.ID)
 	testutil.SetPathParam(req, "id", "not-a-uuid")
 
-	err := app.RegisterPhone(req)
+	err := app.RegisterPhoneNumber(req)
 	require.NoError(t, err)
 	assert.Equal(t, fasthttp.StatusBadRequest, testutil.GetResponseStatusCode(req))
 }
 
-func TestApp_RegisterPhone_CrossOrgIsolation(t *testing.T) {
+func TestApp_RegisterPhoneNumber_CrossOrgIsolation(t *testing.T) {
 	t.Parallel()
 
 	app := newTestApp(t)
 	org1 := testutil.CreateTestOrganization(t, app.DB)
 	org2 := testutil.CreateTestOrganization(t, app.DB)
-	user2 := testutil.CreateTestUser(t, app.DB, org2.ID)
+	user2 := createAdminUser(t, app, org2.ID)
 
 	// Create account in org1
 	account := &models.WhatsAppAccount{
@@ -607,7 +638,9 @@ func TestApp_RegisterPhone_CrossOrgIsolation(t *testing.T) {
 	testutil.SetAuthContext(req, org2.ID, user2.ID)
 	testutil.SetPathParam(req, "id", account.ID.String())
 
-	err := app.RegisterPhone(req)
+	err := app.RegisterPhoneNumber(req)
 	require.NoError(t, err)
 	assert.Equal(t, fasthttp.StatusNotFound, testutil.GetResponseStatusCode(req))
 }
+
+

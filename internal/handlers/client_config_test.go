@@ -5,8 +5,6 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/shridarpatil/whatomate/internal/config"
-	"github.com/shridarpatil/whatomate/internal/handlers"
 	"github.com/shridarpatil/whatomate/test/testutil"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -16,19 +14,19 @@ import (
 func TestGetEmbeddedSignupConfig(t *testing.T) {
 	t.Parallel()
 
-	// Setup test app with mock config
-	app := &handlers.App{
-		Config: &config.Config{
-			WhatsApp: config.WhatsAppConfig{
-				AppID:      "test-app-id-123",
-				ConfigID:   "test-config-id-456",
-				APIVersion: "v21.0",
-			},
-		},
-	}
+	// Setup test app using the DB/Redis fixture
+	app := newTestApp(t)
+	org := testutil.CreateTestOrganization(t, app.DB)
+	user := createAdminUser(t, app, org.ID)
 
-	// Create test request
+	// Configure global fallback values
+	app.Config.WhatsApp.AppID = "test-app-id-123"
+	app.Config.WhatsApp.ConfigID = "test-config-id-456"
+	app.Config.WhatsApp.APIVersion = "v21.0"
+
+	// Create test request with valid auth context
 	req := testutil.NewGETRequest(t)
+	testutil.SetAuthContext(req, org.ID, user.ID)
 
 	// Call handler
 	err := app.GetEmbeddedSignupConfig(req)
@@ -53,18 +51,19 @@ func TestGetEmbeddedSignupConfig(t *testing.T) {
 func TestGetEmbeddedSignupConfig_EmptyValues(t *testing.T) {
 	t.Parallel()
 
-	// Setup test app with empty config
-	app := &handlers.App{
-		Config: &config.Config{
-			WhatsApp: config.WhatsAppConfig{
-				AppID:    "",
-				ConfigID: "",
-			},
-		},
-	}
+	// Setup test app using the DB/Redis fixture
+	app := newTestApp(t)
+	org := testutil.CreateTestOrganization(t, app.DB)
+	user := createAdminUser(t, app, org.ID)
 
-	// Create test request
+	// Configure global fallback values to empty
+	app.Config.WhatsApp.AppID = ""
+	app.Config.WhatsApp.ConfigID = ""
+	app.Config.WhatsApp.APIVersion = "v21.0"
+
+	// Create test request with valid auth context
 	req := testutil.NewGETRequest(t)
+	testutil.SetAuthContext(req, org.ID, user.ID)
 
 	// Call handler
 	err := app.GetEmbeddedSignupConfig(req)
