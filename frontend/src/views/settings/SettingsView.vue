@@ -339,13 +339,13 @@ function togglePlayAudio(type: 'hold_music' | 'ringback') {
             <!-- Meta App Credentials Card (Gated on canWriteAccounts) -->
             <div v-if="canWriteAccounts" class="mt-6 rounded-xl border border-white/[0.08] bg-white/[0.02] light:bg-white light:border-gray-200">
               <div class="p-6 pb-3">
-                <h3 class="text-lg font-semibold text-white light:text-gray-900">{{ $t('settings.metaAppCredentials', 'Meta App Credentials') }}</h3>
-                <p class="text-sm text-white/40 light:text-gray-500">{{ $t('settings.metaAppCredentialsDesc', 'Set tenant-specific Meta App configurations for WhatsApp Embedded Signup. Leave secret blank to keep existing.') }}</p>
+                <h3 class="text-lg font-semibold text-white light:text-gray-900">{{ $t('settings.metaAppCredentials') }}</h3>
+                <p class="text-sm text-white/40 light:text-gray-500">{{ $t('settings.metaAppCredentialsDesc') }}</p>
               </div>
               <div class="p-6 pt-3 space-y-4">
                 <div class="grid grid-cols-2 gap-4">
                   <div class="space-y-2">
-                    <Label for="meta_app_id" class="text-white/70 light:text-gray-700">{{ $t('settings.metaAppId', 'Meta App ID') }}</Label>
+                    <Label for="meta_app_id" class="text-white/70 light:text-gray-700">{{ $t('settings.metaAppId') }}</Label>
                     <Input
                       id="meta_app_id"
                       v-model="generalSettings.meta_app_id"
@@ -353,7 +353,7 @@ function togglePlayAudio(type: 'hold_music' | 'ringback') {
                     />
                   </div>
                   <div class="space-y-2">
-                    <Label for="meta_config_id" class="text-white/70 light:text-gray-700">{{ $t('settings.metaConfigId', 'Meta Config ID') }}</Label>
+                    <Label for="meta_config_id" class="text-white/70 light:text-gray-700">{{ $t('settings.metaConfigId') }}</Label>
                     <Input
                       id="meta_config_id"
                       v-model="generalSettings.meta_config_id"
@@ -362,7 +362,7 @@ function togglePlayAudio(type: 'hold_music' | 'ringback') {
                   </div>
                 </div>
                 <div class="space-y-2">
-                  <Label for="meta_app_secret" class="text-white/70 light:text-gray-700">{{ $t('settings.metaAppSecret', 'Meta App Secret') }}</Label>
+                  <Label for="meta_app_secret" class="text-white/70 light:text-gray-700">{{ $t('settings.metaAppSecret') }}</Label>
                   <Input
                     id="meta_app_secret"
                     type="password"

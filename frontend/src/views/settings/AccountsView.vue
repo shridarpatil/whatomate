@@ -72,13 +72,13 @@ const sortKey = ref('name')
 const sortDirection = ref<'asc' | 'desc'>('asc')
 
 const columns = computed<Column<WhatsAppAccount>[]>(() => [
-  { key: 'account', label: t('accounts.account', 'Account'), width: 'w-[250px]', sortable: true, sortKey: 'name' },
-  { key: 'app_id', label: t('accounts.appId', 'App ID') },
-  { key: 'phone_id', label: t('accounts.phoneNumberId', 'Phone ID'), sortable: true },
-  { key: 'api_version', label: t('accounts.apiVersion', 'Version') },
-  { key: 'defaults', label: t('accounts.defaults', 'Defaults') },
-  { key: 'status', label: t('accounts.status', 'Status'), sortable: true, sortKey: 'status' },
-  { key: 'created', label: t('common.created', 'Created'), sortable: true, sortKey: 'created_at' },
+  { key: 'account', label: t('accounts.account'), width: 'w-[250px]', sortable: true, sortKey: 'name' },
+  { key: 'app_id', label: t('accounts.appId') },
+  { key: 'phone_id', label: t('accounts.phoneNumberId'), sortable: true },
+  { key: 'api_version', label: t('accounts.apiVersion') },
+  { key: 'defaults', label: t('accounts.defaults') },
+  { key: 'status', label: t('accounts.status'), sortable: true, sortKey: 'status' },
+  { key: 'created', label: t('common.created'), sortable: true, sortKey: 'created_at' },
   { key: 'actions', label: t('common.actions'), align: 'right' },
 ])
 
@@ -298,8 +298,8 @@ async function confirmDelete() {
           <Card>
             <CardHeader>
               <div>
-                <CardTitle>{{ $t('accounts.yourAccounts', 'WhatsApp Accounts') }}</CardTitle>
-                <CardDescription>{{ $t('accounts.yourAccountsDesc', 'Manage your connected WhatsApp Business accounts') }}</CardDescription>
+                <CardTitle>{{ $t('accounts.yourAccounts') }}</CardTitle>
+                <CardDescription>{{ $t('accounts.yourAccountsDesc') }}</CardDescription>
               </div>
             </CardHeader>
             <CardContent>
@@ -356,10 +356,10 @@ async function confirmDelete() {
                 <template #cell-defaults="{ item: account }">
                   <div class="flex items-center gap-1.5 flex-wrap">
                     <Badge v-if="account.is_default_incoming" variant="outline" class="text-[10px]">
-                      <Check class="h-2.5 w-2.5 mr-0.5" /> {{ $t('accounts.incoming', 'In') }}
+                      <Check class="h-2.5 w-2.5 mr-0.5" /> {{ $t('accounts.incoming') }}
                     </Badge>
                     <Badge v-if="account.is_default_outgoing" variant="outline" class="text-[10px]">
-                      <Check class="h-2.5 w-2.5 mr-0.5" /> {{ $t('accounts.outgoing', 'Out') }}
+                      <Check class="h-2.5 w-2.5 mr-0.5" /> {{ $t('accounts.outgoing') }}
                     </Badge>
                   </div>
                 </template>

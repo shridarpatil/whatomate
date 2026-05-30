@@ -70,7 +70,7 @@
     "updatedBy": "Modified by",
     "createdAt": "Created",
     "lastUpdated": "Last updated",
-    "saving": "Saving...",
+    "saving": "Saving",
     "seconds": "seconds",
     "enabled": "Enabled",
     "disabled": "Disabled",
@@ -80,11 +80,10 @@
     "all": "All",
     "none": "None",
     "other": "Other",
-    "required": "Required",
+    "required": "{field} is required",
     "optional": "Optional",
     "default": "Default",
     "selected": "selected",
-    "saving": "Saving",
     "createdSuccess": "{resource} created successfully",
     "updatedSuccess": "{resource} updated successfully",
     "deletedSuccess": "{resource} deleted",
@@ -106,7 +105,6 @@
     "deleteConfirmMessage": "Are you sure you want to delete this {resource}? This action cannot be undone.",
     "searchPlaceholder": "Search {resource}",
     "selectPlaceholder": "Select {resource}",
-    "required": "{field} is required",
     "copiedToClipboard": "Copied to clipboard",
     "clipboardFailed": "Failed to copy to clipboard",
     "loadErrorTitle": "Something went wrong",
@@ -585,7 +583,12 @@
     "currentFile": "Current file",
     "noFileUploaded": "Using default",
     "audioUploaded": "Audio file uploaded successfully",
-    "audioUploadFailed": "Failed to upload audio file"
+    "audioUploadFailed": "Failed to upload audio file",
+    "metaAppCredentials": "Meta App Credentials",
+    "metaAppCredentialsDesc": "Set tenant-specific Meta App configurations for WhatsApp Embedded Signup. Leave secret blank to keep existing.",
+    "metaAppId": "Meta App ID",
+    "metaConfigId": "Meta Config ID",
+    "metaAppSecret": "Meta App Secret"
   },
   "users": {
     "title": "User Management",
@@ -1378,7 +1381,11 @@
     "classicDesc": "Migrate your number entirely to the Cloud API. The mobile app on your phone will be disconnected. Best for high-volume automation.",
     "classicRecommend": "Perfect for large teams & high-volume bots",
     "selectMode": "Select Mode",
-    "connectFacebook": "Connect with Facebook"
+    "connectFacebook": "Connect with Facebook",
+    "account": "Account",
+    "appId": "App ID",
+    "defaults": "Defaults",
+    "status": "Status"
   },
   "dashboard": {
     "title": "Dashboard",
