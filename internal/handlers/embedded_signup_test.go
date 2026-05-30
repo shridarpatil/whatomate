@@ -84,9 +84,12 @@ func TestApp_ExchangeToken_Success_AutoRegistration(t *testing.T) {
 	}
 	err = json.Unmarshal(testutil.GetResponseBody(req), &resp)
 	require.NoError(t, err)
-	assert.Equal(t, "active", resp.Data["status"])
-	assert.Equal(t, phoneID, resp.Data["phone_id"])
-	assert.Equal(t, wabaID, resp.Data["business_id"])
+
+	accountMap, ok := resp.Data["account"].(map[string]interface{})
+	require.True(t, ok)
+	assert.Equal(t, "active", accountMap["status"])
+	assert.Equal(t, phoneID, accountMap["phone_id"])
+	assert.Equal(t, wabaID, accountMap["business_id"])
 	assert.NotEmpty(t, resp.Data["pin"]) // PIN should be returned
 
 	// Verify account was created in database
@@ -101,9 +104,13 @@ func TestApp_ExchangeToken_Success_AutoRegistration(t *testing.T) {
 	assert.Equal(t, "EAABwzLixnjYBO1234567890", account.AccessToken)
 
 	// Verify audit log exists
-	var auditCount int64
-	require.NoError(t, app.DB.Model(&models.AuditLog{}).Where("organization_id = ? AND resource_type = ? AND action = ?", org.ID, "account", models.AuditActionCreated).Count(&auditCount).Error)
-	assert.Greater(t, auditCount, int64(0))
+	assert.Eventually(t, func() bool {
+		var auditCount int64
+		if err := app.DB.Model(&models.AuditLog{}).Where("organization_id = ? AND resource_type = ? AND action = ?", org.ID, "account", models.AuditActionCreated).Count(&auditCount).Error; err != nil {
+			return false
+		}
+		return auditCount > 0
+	}, 1*time.Second, 10*time.Millisecond)
 }
 
 func TestApp_ExchangeToken_Success_PendingRegistration(t *testing.T) {
@@ -178,7 +185,10 @@ func TestApp_ExchangeToken_Success_PendingRegistration(t *testing.T) {
 	}
 	err = json.Unmarshal(testutil.GetResponseBody(req), &resp)
 	require.NoError(t, err)
-	assert.Equal(t, "pending_registration", resp.Data["status"])
+
+	accountMap, ok := resp.Data["account"].(map[string]interface{})
+	require.True(t, ok)
+	assert.Equal(t, "pending_registration", accountMap["status"])
 	assert.Nil(t, resp.Data["pin"]) // No PIN when pending
 }
 
@@ -320,10 +330,12 @@ func TestApp_ExchangeToken_Success_CodeOnly_Discovery(t *testing.T) {
 	err = json.Unmarshal(testutil.GetResponseBody(req), &resp)
 	require.NoError(t, err)
 
-	assert.Equal(t, "active", resp.Data["status"])
-	assert.Equal(t, phoneID, resp.Data["phone_id"])
-	assert.Equal(t, wabaID, resp.Data["business_id"])
-	assert.Equal(t, "v21.0", resp.Data["api_version"])
+	accountMap, ok := resp.Data["account"].(map[string]interface{})
+	require.True(t, ok)
+	assert.Equal(t, "active", accountMap["status"])
+	assert.Equal(t, phoneID, accountMap["phone_id"])
+	assert.Equal(t, wabaID, accountMap["business_id"])
+	assert.Equal(t, "v21.0", accountMap["api_version"])
 }
 
 func TestApp_ExchangeToken_MissingFields(t *testing.T) {
