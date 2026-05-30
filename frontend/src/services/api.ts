@@ -686,6 +686,9 @@ export const organizationService = {
     transfer_timeout_secs?: number
     hold_music_file?: string
     ringback_file?: string
+    meta_app_id?: string
+    meta_config_id?: string
+    meta_app_secret?: string
   }) => api.put('/org/settings', data),
   uploadOrgAudio: (file: File, type: 'hold_music' | 'ringback') => {
     const formData = new FormData()
