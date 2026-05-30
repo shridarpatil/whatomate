@@ -542,11 +542,47 @@ func (a *App) SubscribeApp(r *fastglue.Request) error {
 	})
 }
 
+// resolveMetaAppCreds resolves Meta app ID, App Secret, and Config ID for an organization,
+// preferring organization-specific settings and falling back to global config defaults.
+func (a *App) resolveMetaAppCreds(orgID uuid.UUID) (string, string, string, error) {
+	var org models.Organization
+	if err := a.DB.Where("id = ?", orgID).First(&org).Error; err != nil {
+		return "", "", "", err
+	}
+
+	appID := a.Config.WhatsApp.AppID
+	appSecret := a.Config.WhatsApp.AppSecret
+	configID := a.Config.WhatsApp.ConfigID
+
+	if org.Settings != nil {
+		if v, ok := org.Settings["meta_app_id"].(string); ok && v != "" {
+			appID = v
+		}
+		if v, ok := org.Settings["meta_config_id"].(string); ok && v != "" {
+			configID = v
+		}
+		if v, ok := org.Settings["meta_app_secret_encrypted"].(string); ok && v != "" {
+			decrypted, err := crypto.Decrypt(v, a.Config.App.EncryptionKey)
+			if err == nil && decrypted != "" {
+				appSecret = decrypted
+			} else if err != nil {
+				a.Log.Error("Failed to decrypt meta app secret from organization settings", "error", err)
+			}
+		}
+	}
+
+	return appID, appSecret, configID, nil
+}
+
 // ExchangeToken exchanges the temporary code for a permanent access token and creates the account
 func (a *App) ExchangeToken(r *fastglue.Request) error {
-	orgID, err := a.getOrgID(r)
+	orgID, userID, err := a.getOrgAndUserID(r)
 	if err != nil {
 		return r.SendErrorEnvelope(fasthttp.StatusUnauthorized, "Unauthorized", nil, "")
+	}
+
+	if err := a.requirePermission(r, userID, models.ResourceAccounts, models.ActionWrite); err != nil {
+		return nil
 	}
 
 	var req struct {
@@ -569,35 +605,64 @@ func (a *App) ExchangeToken(r *fastglue.Request) error {
 		return r.SendErrorEnvelope(fasthttp.StatusBadRequest, "Code is required", nil, "")
 	}
 
-	// 1. Exchange code for user access token using WhatsApp service
+	// 1. Resolve Meta credentials for this org
+	appID, appSecret, _, err := a.resolveMetaAppCreds(orgID)
+	if err != nil {
+		return r.SendErrorEnvelope(fasthttp.StatusInternalServerError, "Failed to resolve credentials", nil, "")
+	}
+
+	// 2. Exchange code for user access token using WhatsApp service
 	ctx := context.Background()
 	a.Log.Info("Exchanging code for access token")
 
 	accessToken, err := a.WhatsApp.ExchangeCodeForToken(ctx, req.Code,
-		a.Config.WhatsApp.AppID, a.Config.WhatsApp.AppSecret, a.Config.WhatsApp.APIVersion)
+		appID, appSecret, a.Config.WhatsApp.APIVersion)
 	if err != nil {
 		a.Log.Error("Failed to exchange token", "error", err)
 		return r.SendErrorEnvelope(fasthttp.StatusBadRequest, err.Error(), nil, "")
 	}
 
 	// DISCOVERY: If IDs are missing, try to find them using the token
-	phoneID, wabaID, name, err := a.discoverWABAAndPhone(ctx, accessToken, req.PhoneID, req.WABAID, req.Name)
+	phoneID, wabaID, name, err := a.discoverWABAAndPhone(ctx, orgID, accessToken, req.PhoneID, req.WABAID, req.Name)
 	if err != nil {
 		return r.SendErrorEnvelope(fasthttp.StatusBadRequest, err.Error(), nil, "")
 	}
 
-	// 2. We can now create/update the account
-	account, phoneInfo, err := a.createOrUpdateAccount(ctx, orgID, phoneID, wabaID, name, req.WebhookVerifyToken, accessToken)
+	// 3. We can now create/update the account
+	account, phoneInfo, existingAccount, oldAccount, err := a.createOrUpdateAccount(ctx, orgID, phoneID, wabaID, name, req.WebhookVerifyToken, accessToken, appSecret)
 	if err != nil {
 		return r.SendErrorEnvelope(fasthttp.StatusInternalServerError, err.Error(), nil, "")
 	}
 
-	// 3. Attempt Auto-Registration
+	// 4. Attempt Auto-Registration
 	regErr := a.attemptAutoRegistration(ctx, account, phoneInfo, accessToken)
 
-	// 4. Subscribe app to WABA webhooks
+	// 5. Subscribe app to WABA webhooks
 	if err := a.WhatsApp.SubscribeApp(ctx, a.toWhatsAppAccount(account)); err != nil {
 		a.Log.Error("Failed to subscribe app to WABA", "error", err)
+	}
+
+	// 6. Encrypt credentials at rest
+	encKey := a.Config.App.EncryptionKey
+	var errEnc error
+	if account.AccessToken != "" && !crypto.IsEncrypted(account.AccessToken) {
+		account.AccessToken, errEnc = crypto.Encrypt(account.AccessToken, encKey)
+		if errEnc != nil {
+			return r.SendErrorEnvelope(fasthttp.StatusInternalServerError, "Failed to encrypt access token", nil, "")
+		}
+	}
+	if account.AppSecret != "" && !crypto.IsEncrypted(account.AppSecret) {
+		account.AppSecret, errEnc = crypto.Encrypt(account.AppSecret, encKey)
+		if errEnc != nil {
+			return r.SendErrorEnvelope(fasthttp.StatusInternalServerError, "Failed to encrypt app secret", nil, "")
+		}
+	}
+	plaintextPin := account.Pin
+	if account.Pin != "" && !crypto.IsEncrypted(account.Pin) {
+		account.Pin, errEnc = crypto.Encrypt(account.Pin, encKey)
+		if errEnc != nil {
+			return r.SendErrorEnvelope(fasthttp.StatusInternalServerError, "Failed to encrypt PIN", nil, "")
+		}
 	}
 
 	if err := a.DB.Save(account).Error; err != nil {
@@ -613,46 +678,45 @@ func (a *App) ExchangeToken(r *fastglue.Request) error {
 		"phone_id", account.PhoneID,
 		"status", account.Status)
 
-	accResp := accountToResponse(*account)
-
-	// Return PIN to user if auto-registration succeeded
-	// User needs this for Meta Business Manager
-	response := map[string]interface{}{
-		"id":                   accResp.ID,
-		"name":                 accResp.Name,
-		"app_id":               accResp.AppID,
-		"phone_id":             accResp.PhoneID,
-		"business_id":          accResp.BusinessID,
-		"webhook_verify_token": accResp.WebhookVerifyToken,
-		"api_version":          accResp.APIVersion,
-		"status":               accResp.Status,
-		"has_access_token":     accResp.HasAccessToken,
-		"created_at":           accResp.CreatedAt,
+	// Audit Logging
+	a.DB.Preload("CreatedBy").Preload("UpdatedBy").First(account, "id = ?", account.ID)
+	var auditAction models.AuditAction = models.AuditActionCreated
+	var auditOld any = nil
+	if existingAccount {
+		auditAction = models.AuditActionUpdated
+		auditOld = oldAccount
 	}
+	audit.LogAudit(a.DB, orgID, userID, audit.GetUserName(a.DB, userID),
+		"account", account.ID, auditAction, auditOld, account)
 
-	// Include PIN only if registration succeeded
-	if account.Status == "active" && account.Pin != "" {
-		response["pin"] = account.Pin
+	// Construction of response map (reusing accountToResponse)
+	out := map[string]any{
+		"account": accountToResponse(*account),
 	}
-
-	// Add warning if registration failed so UI can show "Retry Register"
+	if account.Status == "active" && plaintextPin != "" {
+		out["pin"] = plaintextPin
+	}
 	if regErr != nil {
-		response["warning"] = "Registration failed: " + regErr.Error()
-		response["registration_error"] = regErr.Error()
+		out["warning"] = "Registration failed: " + regErr.Error()
 	}
 
-	return r.SendEnvelope(response)
+	return r.SendEnvelope(out)
 }
 
-func (a *App) discoverWABAAndPhone(ctx context.Context, accessToken, phoneID, wabaID, name string) (string, string, string, error) {
+func (a *App) discoverWABAAndPhone(ctx context.Context, orgID uuid.UUID, accessToken, phoneID, wabaID, name string) (string, string, string, error) {
 	if phoneID != "" && wabaID != "" {
 		return phoneID, wabaID, name, nil
 	}
 
 	a.Log.Info("Missing PhoneID/WABAID, attempting discovery via debug_token")
 
-	// 1. Debug the token to find the WABA ID in granular_scopes
-	appAccessToken := fmt.Sprintf("%s|%s", a.Config.WhatsApp.AppID, a.Config.WhatsApp.AppSecret)
+	// 1. Resolve Meta credentials for this org
+	appID, appSecret, _, err := a.resolveMetaAppCreds(orgID)
+	if err != nil {
+		return "", "", "", err
+	}
+
+	appAccessToken := fmt.Sprintf("%s|%s", appID, appSecret)
 
 	debugInfo, err := a.WhatsApp.GetTokenDebugInfo(ctx, accessToken, appAccessToken)
 	if err != nil {
@@ -697,6 +761,10 @@ func (a *App) discoverWABAAndPhone(ctx context.Context, accessToken, phoneID, wa
 			return "", "", "", fmt.Errorf("no phone numbers found in this WhatsApp Business Account")
 		}
 
+		if len(phonesResp.Data) > 1 {
+			a.Log.Warn("Multiple phone numbers discovered in WABA; picking the first one", "count", len(phonesResp.Data))
+		}
+
 		// User selects only ONE account in the flow, so we take the first one found.
 		phone := phonesResp.Data[0]
 		phoneID = phone.ID
@@ -707,12 +775,16 @@ func (a *App) discoverWABAAndPhone(ctx context.Context, accessToken, phoneID, wa
 	return phoneID, wabaID, name, nil
 }
 
-func (a *App) createOrUpdateAccount(ctx context.Context, orgID uuid.UUID, phoneID, wabaID, name, webhookVerifyToken, accessToken string) (*models.WhatsAppAccount, *whatsapp.PhoneNumberInfo, error) {
+func (a *App) createOrUpdateAccount(ctx context.Context, orgID uuid.UUID, phoneID, wabaID, name, webhookVerifyToken, accessToken, appSecret string) (*models.WhatsAppAccount, *whatsapp.PhoneNumberInfo, bool, *models.WhatsAppAccount, error) {
 	var account models.WhatsAppAccount
 	var existingAccount bool
+	var oldAccount *models.WhatsAppAccount
+
 	// Use Unscoped to find even soft-deleted accounts to avoid unique constraint violations
-	if err := a.DB.Where("phone_id = ? AND organization_id = ?", phoneID, orgID).First(&account).Error; err == nil {
+	if err := a.DB.Unscoped().Where("phone_id = ? AND organization_id = ?", phoneID, orgID).First(&account).Error; err == nil {
 		existingAccount = true
+		temp := account
+		oldAccount = &temp
 	}
 
 	// Fetch phone info from Meta using WhatsApp service unconditionally
@@ -725,7 +797,7 @@ func (a *App) createOrUpdateAccount(ctx context.Context, orgID uuid.UUID, phoneI
 		if err == nil && phoneInfo != nil && phoneInfo.VerifiedName != "" {
 			suffixPIN, err := generateNumericPIN(4)
 			if err != nil {
-				return nil, nil, fmt.Errorf("failed to generate security identifier: %w", err)
+				return nil, nil, false, nil, fmt.Errorf("failed to generate security identifier: %w", err)
 			}
 			name = fmt.Sprintf("%s %s", phoneInfo.VerifiedName, suffixPIN)
 		} else {
@@ -747,26 +819,6 @@ func (a *App) createOrUpdateAccount(ctx context.Context, orgID uuid.UUID, phoneI
 		}
 	}
 
-	account.OrganizationID = orgID
-	account.Name = name
-	account.AppID = a.Config.WhatsApp.AppID
-	account.PhoneID = phoneID
-	account.BusinessID = wabaID
-	account.AccessToken = accessToken
-	account.WebhookVerifyToken = webhookVerifyToken
-	account.APIVersion = a.Config.WhatsApp.APIVersion
-	account.Status = "pending_registration"
-
-	if !existingAccount {
-		account.IsDefaultIncoming = false
-		account.IsDefaultOutgoing = false
-		account.AutoReadReceipt = false
-	}
-
-	return &account, phoneInfo, nil
-}
-
-func (a *App) attemptAutoRegistration(ctx context.Context, account *models.WhatsAppAccount, phoneInfo *whatsapp.PhoneNumberInfo, accessToken string) error {
 	var isSMB bool
 	if phoneInfo != nil {
 		if phoneInfo.IsOnBizApp || phoneInfo.PlatformType == "SMB" || phoneInfo.PlatformType == "SMB_CLOUD_API" {
@@ -774,7 +826,36 @@ func (a *App) attemptAutoRegistration(ctx context.Context, account *models.Whats
 		}
 	}
 
-	if isSMB {
+	account.OrganizationID = orgID
+	account.Name = name
+	account.PhoneID = phoneID
+	account.BusinessID = wabaID
+	account.AccessToken = accessToken
+	account.AppSecret = appSecret
+	account.WebhookVerifyToken = webhookVerifyToken
+	account.Status = "pending_registration"
+	account.IsSMB = isSMB
+
+	// Only fill account.AppID / APIVersion if empty
+	if account.AppID == "" {
+		appID, _, _, _ := a.resolveMetaAppCreds(orgID)
+		account.AppID = appID
+	}
+	if account.APIVersion == "" {
+		account.APIVersion = a.Config.WhatsApp.APIVersion
+	}
+
+	if !existingAccount {
+		account.IsDefaultIncoming = false
+		account.IsDefaultOutgoing = false
+		account.AutoReadReceipt = false
+	}
+
+	return &account, phoneInfo, existingAccount, oldAccount, nil
+}
+
+func (a *App) attemptAutoRegistration(ctx context.Context, account *models.WhatsAppAccount, phoneInfo *whatsapp.PhoneNumberInfo, accessToken string) error {
+	if account.IsSMB {
 		account.Status = "active"
 		account.Pin = ""
 		a.Log.Info("SMB account detected via Meta API, skipped registration, setting to active", "phone_id", account.PhoneID)
@@ -803,11 +884,15 @@ func (a *App) attemptAutoRegistration(ctx context.Context, account *models.Whats
 	return regErr
 }
 
-// RegisterPhone registers the phone number with Two-Step Verification
-func (a *App) RegisterPhone(r *fastglue.Request) error {
-	orgID, err := a.getOrgID(r)
+// RegisterPhoneNumber registers the phone number with Two-Step Verification
+func (a *App) RegisterPhoneNumber(r *fastglue.Request) error {
+	orgID, userID, err := a.getOrgAndUserID(r)
 	if err != nil {
 		return r.SendErrorEnvelope(fasthttp.StatusUnauthorized, "Unauthorized", nil, "")
+	}
+
+	if err := a.requirePermission(r, userID, models.ResourceAccounts, models.ActionWrite); err != nil {
+		return nil
 	}
 
 	id, err := parsePathUUID(r, "id", "account")
@@ -820,10 +905,12 @@ func (a *App) RegisterPhone(r *fastglue.Request) error {
 	}
 	_ = r.Decode(&req, "json")
 
-	var account models.WhatsAppAccount
-	if err := a.DB.Where("id = ? AND organization_id = ?", id, orgID).First(&account).Error; err != nil {
-		return r.SendErrorEnvelope(fasthttp.StatusNotFound, "Account not found", nil, "")
+	account, err := a.resolveWhatsAppAccountByID(r, id, orgID)
+	if err != nil {
+		return nil
 	}
+
+	oldAccount := *account
 
 	// If PIN is not provided, generate a random one
 	pin := req.Pin
@@ -839,8 +926,7 @@ func (a *App) RegisterPhone(r *fastglue.Request) error {
 
 	// Check if this is an SMB phone — SMB numbers are already registered
 	// via the Business App and don't support the two-step registration API.
-	phoneInfo, _ := a.WhatsApp.GetPhoneNumberInfo(ctx, account.PhoneID, account.AccessToken, account.APIVersion)
-	if phoneInfo != nil && (phoneInfo.IsOnBizApp || phoneInfo.PlatformType == "SMB" || phoneInfo.PlatformType == "SMB_CLOUD_API") {
+	if account.IsSMB {
 		a.Log.Info("Manual registration: SMB account detected, skipping registration", "phone_id", account.PhoneID)
 		pin = ""
 	} else {
@@ -855,12 +941,39 @@ func (a *App) RegisterPhone(r *fastglue.Request) error {
 	account.Status = "active"
 	account.Pin = pin
 
-	if err := a.DB.Save(&account).Error; err != nil {
+	// Encrypt secrets before saving
+	encKey := a.Config.App.EncryptionKey
+	var errEnc error
+	if account.AccessToken != "" && !crypto.IsEncrypted(account.AccessToken) {
+		account.AccessToken, errEnc = crypto.Encrypt(account.AccessToken, encKey)
+		if errEnc != nil {
+			return r.SendErrorEnvelope(fasthttp.StatusInternalServerError, "Failed to encrypt access token", nil, "")
+		}
+	}
+	if account.AppSecret != "" && !crypto.IsEncrypted(account.AppSecret) {
+		account.AppSecret, errEnc = crypto.Encrypt(account.AppSecret, encKey)
+		if errEnc != nil {
+			return r.SendErrorEnvelope(fasthttp.StatusInternalServerError, "Failed to encrypt app secret", nil, "")
+		}
+	}
+	if account.Pin != "" && !crypto.IsEncrypted(account.Pin) {
+		account.Pin, errEnc = crypto.Encrypt(account.Pin, encKey)
+		if errEnc != nil {
+			return r.SendErrorEnvelope(fasthttp.StatusInternalServerError, "Failed to encrypt PIN", nil, "")
+		}
+	}
+
+	if err := a.DB.Save(account).Error; err != nil {
 		return r.SendErrorEnvelope(fasthttp.StatusInternalServerError, "Failed to update account status", nil, "")
 	}
 
 	// Invalidate cache
 	a.InvalidateWhatsAppAccountCache(account.PhoneID)
+
+	// Log audit!
+	a.DB.Preload("CreatedBy").Preload("UpdatedBy").First(account, "id = ?", account.ID)
+	audit.LogAudit(a.DB, orgID, userID, audit.GetUserName(a.DB, userID),
+		"account", account.ID, models.AuditActionUpdated, &oldAccount, account)
 
 	return r.SendEnvelope(map[string]interface{}{
 		"success": true,
