@@ -26,6 +26,12 @@ import {
   Network
 } from 'lucide-vue-next'
 
+declare global {
+  interface Window {
+    FB: any
+  }
+}
+
 const { t } = useI18n()
 const organizationsStore = useOrganizationsStore()
 const authStore = useAuthStore()
@@ -76,7 +82,10 @@ const columns = computed<Column<WhatsAppAccount>[]>(() => [
   { key: 'actions', label: t('common.actions'), align: 'right' },
 ])
 
-watch(() => organizationsStore.selectedOrgId, () => fetchAccounts())
+watch(() => organizationsStore.selectedOrgId, () => {
+  fetchAccounts()
+  fetchWhatsAppConfig()
+})
 onMounted(async () => {
   await Promise.all([fetchAccounts(), fetchWhatsAppConfig()])
 })
@@ -119,7 +128,7 @@ function loadFacebookSDK() {
   script.async = true
   script.defer = true
   script.onload = () => {
-    ;(window as any).FB.init({
+    window.FB.init({
       appId: whatsappConfig.value!.app_id,
       cookie: true,
       xfbml: true,
@@ -163,7 +172,6 @@ function launchWhatsAppSignup(isCoexistence: boolean = true) {
     }
   }
 
-  // @ts-ignore
   window.FB.login(
     (response: any) => {
       if (response.authResponse) {
@@ -199,14 +207,15 @@ async function exchangeCodeForToken(code: string, phoneNumberId: string, wabaId:
       waba_id: wabaId
     })
 
-    const account = response.data.data
+    const account = response.data.data.account
+    const pin = response.data.data.pin
 
     if (account.status === 'pending_registration') {
       toast.warning('Account created. Phone registration required.')
     } else if (account.status === 'active') {
       toast.success('WhatsApp account connected successfully!')
-      if (account.pin) {
-        toast.info(`Your 2FA PIN: ${account.pin}. Please save it securely.`, { duration: 10000 })
+      if (pin) {
+        toast.info(`Your 2FA PIN: ${pin}. Please save it securely.`, { duration: 10000 })
       }
     }
 
@@ -239,6 +248,7 @@ async function confirmDelete() {
     isDeleting.value = false
   }
 }
+
 </script>
 
 <template>
@@ -257,11 +267,11 @@ async function confirmDelete() {
             size="sm"
             @click="showOnboardingDialog = true"
             :disabled="isConnectingFB"
-            class="bg-gradient-to-br from-[#1877F2] to-[#0C5DC7] hover:from-[#166FE5] hover:to-[#0A4DAD] text-white border-none shadow-none"
+            class="bg-gradient-to-br from-facebook to-facebook-dark hover:from-facebook-hover hover:to-facebook-hoverDark text-white border-none shadow-none"
           >
             <Loader2 v-if="isConnectingFB" class="h-4 w-4 mr-2 animate-spin" />
             <Facebook v-else class="h-4 w-4 mr-2" />
-            {{ $t('accounts.connectFacebook', 'Connect with Facebook') }}
+            {{ $t('accounts.connectFacebook') }}
           </Button>
           <RouterLink to="/settings/accounts/new">
             <Button variant="outline" size="sm">
@@ -311,11 +321,11 @@ async function confirmDelete() {
                       size="lg"
                       @click="showOnboardingDialog = true"
                       :disabled="isConnectingFB || !isFBSDKLoaded"
-                      class="bg-gradient-to-br from-[#1877F2] to-[#0C5DC7] hover:from-[#166FE5] hover:to-[#0A4DAD] text-white border-none shadow-none"
+                      class="bg-gradient-to-br from-facebook to-facebook-dark hover:from-facebook-hover hover:to-facebook-hoverDark text-white border-none shadow-none"
                     >
                       <Facebook v-if="!isConnectingFB" class="mr-2 h-5 w-5" />
                       <Loader2 v-else class="mr-2 h-5 w-5 animate-spin" />
-                      {{ $t('accounts.connectFacebook', 'Connect with Facebook') }}
+                      {{ $t('accounts.connectFacebook') }}
                     </Button>
                     <RouterLink to="/settings/accounts/new">
                       <Button variant="outline" size="lg">
