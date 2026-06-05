@@ -2,11 +2,14 @@ package handlers_test
 
 import (
 	"encoding/json"
+	"net/http"
+	"net/http/httptest"
 	"testing"
 
 	"github.com/google/uuid"
 	"github.com/shridarpatil/whatomate/internal/handlers"
 	"github.com/shridarpatil/whatomate/internal/models"
+	"github.com/shridarpatil/whatomate/pkg/whatsapp"
 	"github.com/shridarpatil/whatomate/test/testutil"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -585,4 +588,110 @@ func TestApp_DeleteAccount_CrossOrgIsolation(t *testing.T) {
 	var count int64
 	app.DB.Model(&models.WhatsAppAccount{}).Where("id = ?", account.ID).Count(&count)
 	assert.Equal(t, int64(1), count)
+}
+
+func TestApp_GetMarketingStatus_Success(t *testing.T) {
+	t.Parallel()
+
+	// Mock Meta server returning ONBOARDED status
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		assert.Equal(t, http.MethodGet, r.Method)
+		assert.Contains(t, r.URL.Path, "/987654321")
+		assert.Equal(t, "marketing_messages_onboarding_status", r.URL.Query().Get("fields"))
+
+		w.WriteHeader(http.StatusOK)
+		_ = json.NewEncoder(w).Encode(map[string]any{
+			"marketing_messages_onboarding_status": "ONBOARDED",
+		})
+	}))
+	defer server.Close()
+
+	log := testutil.NopLogger()
+	waClient := whatsapp.NewWithBaseURL(log, server.URL)
+	app := newTestApp(t, withWhatsApp(waClient))
+
+	org := testutil.CreateTestOrganization(t, app.DB)
+	user := testutil.CreateTestUser(t, app.DB, org.ID)
+	account := testutil.CreateTestWhatsAppAccount(t, app.DB, org.ID)
+	account.BusinessID = "987654321"
+	require.NoError(t, app.DB.Save(account).Error)
+
+	req := testutil.NewGETRequest(t)
+	testutil.SetAuthContext(req, org.ID, user.ID)
+	testutil.SetPathParam(req, "id", account.ID.String())
+
+	err := app.GetMarketingStatus(req)
+	require.NoError(t, err)
+	assert.Equal(t, fasthttp.StatusOK, testutil.GetResponseStatusCode(req))
+
+	var resp struct {
+		Data struct {
+			Status    string `json:"status"`
+			ApiError  bool   `json:"api_error"`
+			ErrorMsg  string `json:"api_error_message"`
+		} `json:"data"`
+	}
+	require.NoError(t, json.Unmarshal(testutil.GetResponseBody(req), &resp))
+	assert.Equal(t, "ONBOARDED", resp.Data.Status)
+	assert.False(t, resp.Data.ApiError)
+	assert.Empty(t, resp.Data.ErrorMsg)
+
+	// Verify that the status was cached/saved in the DB
+	var dbAccount models.WhatsAppAccount
+	require.NoError(t, app.DB.First(&dbAccount, account.ID).Error)
+	assert.Equal(t, "ONBOARDED", dbAccount.MarketingStatus)
+}
+
+func TestApp_GetMarketingStatus_APIError(t *testing.T) {
+	t.Parallel()
+
+	// Mock Meta server returning 400 bad request error
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusBadRequest)
+		_ = json.NewEncoder(w).Encode(whatsapp.MetaAPIError{
+			Error: struct {
+				Message      string `json:"message"`
+				Type         string `json:"type"`
+				Code         int    `json:"code"`
+				ErrorSubcode int    `json:"error_subcode"`
+				ErrorUserMsg string `json:"error_user_msg"`
+				ErrorData    struct {
+					Details string `json:"details"`
+				} `json:"error_data"`
+				FBTraceID string `json:"fbtrace_id"`
+			}{
+				Message: "Oauth error",
+				Code:    190,
+			},
+		})
+	}))
+	defer server.Close()
+
+	log := testutil.NopLogger()
+	waClient := whatsapp.NewWithBaseURL(log, server.URL)
+	app := newTestApp(t, withWhatsApp(waClient))
+
+	org := testutil.CreateTestOrganization(t, app.DB)
+	user := testutil.CreateTestUser(t, app.DB, org.ID)
+	account := testutil.CreateTestWhatsAppAccount(t, app.DB, org.ID)
+
+	req := testutil.NewGETRequest(t)
+	testutil.SetAuthContext(req, org.ID, user.ID)
+	testutil.SetPathParam(req, "id", account.ID.String())
+
+	err := app.GetMarketingStatus(req)
+	require.NoError(t, err)
+	assert.Equal(t, fasthttp.StatusOK, testutil.GetResponseStatusCode(req))
+
+	var resp struct {
+		Data struct {
+			Status    string `json:"status"`
+			ApiError  bool   `json:"api_error"`
+			ErrorMsg  string `json:"api_error_message"`
+		} `json:"data"`
+	}
+	require.NoError(t, json.Unmarshal(testutil.GetResponseBody(req), &resp))
+	assert.True(t, resp.Data.ApiError)
+	assert.Contains(t, resp.Data.ErrorMsg, "Oauth error")
+	assert.Empty(t, resp.Data.Status)
 }
