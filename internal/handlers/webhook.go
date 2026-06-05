@@ -96,8 +96,9 @@ type WebhookPayload struct {
 					DisplayPhoneNumber string `json:"display_phone_number"`
 					PhoneNumberID      string `json:"phone_number_id"`
 				} `json:"metadata"`
-				// Template status update fields (when field == "message_template_status_update")
+				// Template status update and account update fields
 				Event                   string `json:"event,omitempty"`
+				WABAID                  string `json:"waba_id,omitempty"`
 				MessageTemplateID       int64  `json:"message_template_id,omitempty"`
 				MessageTemplateName     string `json:"message_template_name,omitempty"`
 				MessageTemplateLanguage string `json:"message_template_language,omitempty"`
