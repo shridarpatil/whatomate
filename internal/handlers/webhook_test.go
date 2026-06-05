@@ -519,3 +519,63 @@ func TestUpdateMessageStatus_DeliveredBroadcastsViaWebSocket_NoErrorMessage(t *t
 		t.Fatal("timed out waiting for WebSocket broadcast")
 	}
 }
+
+func TestWebhookHandler_MarketingTermsAcceptance(t *testing.T) {
+	app := webhookTestApp(t)
+
+	// Create test org and account
+	uid := uuid.New().String()[:8]
+	org := models.Organization{
+		BaseModel: models.BaseModel{ID: uuid.New()},
+		Name:      "tos-org-" + uid,
+		Slug:      "tos-org-" + uid,
+	}
+	require.NoError(t, app.DB.Create(&org).Error)
+
+	waAccount := models.WhatsAppAccount{
+		BaseModel:      models.BaseModel{ID: uuid.New()},
+		OrganizationID: org.ID,
+		Name:           "tos-acct-" + uid,
+		PhoneID:        "phone-tos-" + uid,
+		BusinessID:     "biz-tos-" + uid,
+		AccessToken:    "token",
+	}
+	require.NoError(t, app.DB.Create(&waAccount).Error)
+
+	// Verify initial state is empty
+	assert.Empty(t, waAccount.MarketingStatus)
+
+	// Construct webhook payload for account_update event with mm_lite_tos_signed
+	body := []byte(`{
+		"object": "whatsapp_business_account",
+		"entry": [{
+			"id": "` + waAccount.BusinessID + `",
+			"changes": [{
+				"field": "account_update",
+				"value": {
+					"event": "mm_lite_tos_signed",
+					"waba_id": "` + waAccount.BusinessID + `"
+				}
+			}]
+		}]
+	}`)
+
+	req := testutil.NewRequest(t)
+	req.RequestCtx.Request.Header.SetMethod("POST")
+	req.RequestCtx.Request.Header.SetContentType("application/json")
+	req.RequestCtx.Request.SetBody(body)
+
+	// Execute WebhookHandler
+	require.NoError(t, app.WebhookHandler(req))
+
+	// Allow goroutine to run
+	time.Sleep(150 * time.Millisecond)
+
+	// Verify WhatsAppAccount was updated
+	var updated models.WhatsAppAccount
+	err := app.DB.First(&updated, waAccount.ID).Error
+	require.NoError(t, err)
+
+	assert.Equal(t, "ONBOARDED", updated.MarketingStatus)
+}
+
