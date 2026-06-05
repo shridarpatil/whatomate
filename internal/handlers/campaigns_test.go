@@ -133,9 +133,10 @@ func TestApp_CreateCampaign_Success(t *testing.T) {
 	template := testutil.CreateTestTemplate(t, app.DB, org.ID, account.Name)
 
 	req := testutil.NewJSONRequest(t, map[string]any{
-		"name":             "Test Campaign",
-		"whatsapp_account": account.Name,
-		"template_id":      template.ID.String(),
+		"name":              "Test Campaign",
+		"whatsapp_account":  account.Name,
+		"template_id":       template.ID.String(),
+		"optimize_delivery": true,
 	})
 	testutil.SetAuthContext(req, org.ID, user.ID)
 
@@ -151,6 +152,12 @@ func TestApp_CreateCampaign_Success(t *testing.T) {
 	assert.Equal(t, "Test Campaign", resp.Data.Name)
 	assert.Equal(t, models.CampaignStatusDraft, resp.Data.Status)
 	assert.Equal(t, template.ID, resp.Data.TemplateID)
+	assert.True(t, resp.Data.OptimizeDelivery)
+
+	// Check DB
+	var dbCampaign models.BulkMessageCampaign
+	require.NoError(t, app.DB.First(&dbCampaign, resp.Data.ID).Error)
+	assert.True(t, dbCampaign.OptimizeDelivery)
 }
 
 func TestApp_CreateCampaign_WithScheduledAt(t *testing.T) {
@@ -336,9 +343,10 @@ func TestApp_UpdateCampaign_Success(t *testing.T) {
 	require.NoError(t, app.DB.Save(campaign).Error)
 
 	req := testutil.NewJSONRequest(t, map[string]any{
-		"name":             "Updated Campaign Name",
-		"whatsapp_account": account.Name,
-		"template_id":      template.ID.String(),
+		"name":              "Updated Campaign Name",
+		"whatsapp_account":  account.Name,
+		"template_id":       template.ID.String(),
+		"optimize_delivery": true,
 	})
 	testutil.SetAuthContext(req, org.ID, user.ID)
 	testutil.SetPathParam(req, "id", campaign.ID.String())
@@ -354,6 +362,12 @@ func TestApp_UpdateCampaign_Success(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, "Updated Campaign Name", resp.Data.Name)
 	assert.Equal(t, 12, resp.Data.ReadCount)
+	assert.True(t, resp.Data.OptimizeDelivery)
+
+	// Check DB
+	var dbCampaign models.BulkMessageCampaign
+	require.NoError(t, app.DB.First(&dbCampaign, campaign.ID).Error)
+	assert.True(t, dbCampaign.OptimizeDelivery)
 }
 
 func TestApp_UpdateCampaign_NotDraft(t *testing.T) {
