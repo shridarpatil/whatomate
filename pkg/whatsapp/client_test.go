@@ -476,3 +476,95 @@ func (t *testServerTransport) RoundTrip(req *http.Request) (*http.Response, erro
 	testReq.URL.Host = t.serverURL[7:] // Remove "http://"
 	return http.DefaultTransport.RoundTrip(testReq)
 }
+
+func TestClient_GetMarketingOnboardingStatus(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name           string
+		serverResponse func(t *testing.T, w http.ResponseWriter, r *http.Request)
+		wantStatus     string
+		wantErr        bool
+	}{
+		{
+			name: "successful check - onboarded",
+			serverResponse: func(t *testing.T, w http.ResponseWriter, r *http.Request) {
+				assert.Equal(t, http.MethodGet, r.Method)
+				assert.Contains(t, r.URL.Path, "/987654321")
+				assert.Equal(t, "marketing_messages_onboarding_status", r.URL.Query().Get("fields"))
+
+				w.WriteHeader(http.StatusOK)
+				_ = json.NewEncoder(w).Encode(map[string]any{
+					"marketing_messages_onboarding_status": "ONBOARDED",
+				})
+			},
+			wantStatus: "ONBOARDED",
+			wantErr:    false,
+		},
+		{
+			name: "successful check - eligible",
+			serverResponse: func(t *testing.T, w http.ResponseWriter, r *http.Request) {
+				w.WriteHeader(http.StatusOK)
+				_ = json.NewEncoder(w).Encode(map[string]any{
+					"marketing_messages_onboarding_status": "ELIGIBLE",
+				})
+			},
+			wantStatus: "ELIGIBLE",
+			wantErr:    false,
+		},
+		{
+			name: "error response from API",
+			serverResponse: func(t *testing.T, w http.ResponseWriter, r *http.Request) {
+				w.WriteHeader(http.StatusBadRequest)
+				_ = json.NewEncoder(w).Encode(whatsapp.MetaAPIError{
+					Error: struct {
+						Message      string `json:"message"`
+						Type         string `json:"type"`
+						Code         int    `json:"code"`
+						ErrorSubcode int    `json:"error_subcode"`
+						ErrorUserMsg string `json:"error_user_msg"`
+						ErrorData    struct {
+							Details string `json:"details"`
+						} `json:"error_data"`
+						FBTraceID string `json:"fbtrace_id"`
+					}{
+						Message: "Unsupported get request on WABA node",
+						Code:    100,
+					},
+				})
+			},
+			wantStatus: "",
+			wantErr:    true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				tt.serverResponse(t, w, r)
+			}))
+			defer server.Close()
+
+			log := testutil.NopLogger()
+			client := whatsapp.NewWithTimeout(log, 5*time.Second)
+			client.HTTPClient = &http.Client{
+				Transport: &testServerTransport{serverURL: server.URL},
+			}
+
+			account := testAccount(server.URL)
+			ctx := testutil.TestContext(t)
+
+			status, err := client.GetMarketingOnboardingStatus(ctx, account)
+			if tt.wantErr {
+				assert.Error(t, err)
+				assert.Empty(t, status)
+			} else {
+				assert.NoError(t, err)
+				assert.Equal(t, tt.wantStatus, status)
+			}
+		})
+	}
+}
+
