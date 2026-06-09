@@ -1,0 +1,854 @@
+---
+title: WebSockets
+description: Real-time WebSocket API reference for Whatomate — connection flow, authentication, heartbeat, and all server-sent events with payload examples.
+---
+
+import { Tabs, TabItem } from '@astrojs/starlight/components';
+
+Whatomate uses a **persistent WebSocket connection** to push real-time updates to connected agents and admins. Instead of polling the REST API, your client opens a single connection and reacts to server-sent events as they happen.
+
+## Connection
+
+Connect to the WebSocket endpoint over the standard HTTP Upgrade mechanism:
+
+```
+wss://<your-domain>/api/ws
+```
+
+| Parameter | Value |
+|-----------|-------|
+| Protocol  | WebSocket (RFC 6455) |
+| Path      | `/api/ws` |
+| Encoding  | JSON (UTF-8) |
+| Max message size | 512 bytes (client → server) |
+
+### JavaScript Example
+
+```js
+const ws = new WebSocket('wss://app.example.com/api/ws');
+
+ws.addEventListener('open', () => {
+  // Step 1 — authenticate immediately
+  ws.send(JSON.stringify({
+    type: 'auth',
+    payload: { token: '<JWT_OR_API_KEY>' }
+  }));
+});
+
+ws.addEventListener('message', (event) => {
+  const msg = JSON.parse(event.data);
+  console.log(msg.type, msg.payload);
+});
+```
+
+---
+
+## Authentication
+
+Every client **must** send an `auth` message within **5 seconds** of opening the connection. If the token is invalid or the deadline is missed, the server closes the connection with WebSocket close code `1008` (Policy Violation).
+
+### Client → Server: `auth`
+
+```json
+{
+  "type": "auth",
+  "payload": {
+    "token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
+  }
+}
+```
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `type` | string | ✅ | Must be `"auth"` |
+| `payload.token` | string | ✅ | JWT session token **or** an API Key |
+
+Once authenticated, the client is registered to receive events scoped to its **organization**.
+
+---
+
+## Heartbeat (Ping / Pong)
+
+The server sends a WebSocket **Ping** frame every **54 seconds** (90% of the 60-second read deadline). The client must respond with a **Pong** frame to keep the connection alive. Standard WebSocket libraries handle this automatically.
+
+| Direction | Frame Type | Period |
+|-----------|-----------|--------|
+| Server → Client | Ping | every 54 s |
+| Client → Server | Pong | upon each Ping |
+
+---
+
+## Setting Active Contact
+
+Clients can tell the server which contact conversation they are currently viewing. This enables `BroadcastToContact` targeting — events such as conversation notes will only reach clients that have declared they are viewing that contact.
+
+### Client → Server: `set_contact`
+
+```json
+{
+  "type": "set_contact",
+  "payload": {
+    "contact_id": "a1b2c3d4-e5f6-7890-abcd-ef1234567890"
+  }
+}
+```
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `type` | string | ✅ | Must be `"set_contact"` |
+| `payload.contact_id` | string (UUID) | ✅ | UUID of the contact whose conversation is open |
+
+To stop watching a contact (e.g., when navigating away), send `set_contact` with an empty string or omit `contact_id`.
+
+---
+
+## Message Envelope
+
+All server-sent events share the same envelope:
+
+```json
+{
+  "type": "<event_type>",
+  "payload": { ... }
+}
+```
+
+---
+
+## Event Reference
+
+### Messaging Events
+
+#### `new_message`
+
+Broadcast to the entire organization when a new WhatsApp message (incoming **or** outgoing) is saved and broadcast is enabled.
+
+**Broadcast scope:** Organization-wide
+
+```json
+{
+  "type": "new_message",
+  "payload": {
+    "id": "550e8400-e29b-41d4-a716-446655440000",
+    "contact_id": "a1b2c3d4-0000-0000-0000-000000000001",
+    "assigned_user_id": "b2c3d4e5-0000-0000-0000-000000000002",
+    "profile_name": "Ahmed Hassan",
+    "direction": "incoming",
+    "message_type": "text",
+    "content": { "body": "Hello, I need help with my order." },
+    "media_url": "",
+    "media_mime_type": "",
+    "media_filename": "",
+    "interactive_data": null,
+    "status": "pending",
+    "wamid": "wamid.HBgNMjAxMTIzNDU2Nzg5FQIAERgSM...",
+    "created_at": "2024-06-09T12:00:00Z",
+    "updated_at": "2024-06-09T12:00:00Z",
+    "is_reply": false
+  }
+}
+```
+
+For **reply** messages, additional fields are included:
+
+```json
+{
+  "type": "new_message",
+  "payload": {
+    "...(all base fields above)...",
+    "is_reply": true,
+    "reply_to_message_id": "449e7300-e29b-41d4-a716-446655440099",
+    "reply_to_message": {
+      "id": "449e7300-e29b-41d4-a716-446655440099",
+      "content": { "body": "Previous message text" },
+      "message_type": "text",
+      "direction": "outgoing"
+    }
+  }
+}
+```
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `id` | UUID | Message ID |
+| `contact_id` | UUID | Contact who sent/received the message |
+| `assigned_user_id` | UUID \| null | Agent currently assigned to this contact |
+| `profile_name` | string | Contact's display name (may be masked) |
+| `direction` | `"incoming"` \| `"outgoing"` | Message direction |
+| `message_type` | string | `text`, `image`, `video`, `audio`, `document`, `interactive`, `template`, `flow` |
+| `content.body` | string | Text content |
+| `media_url` | string | URL for media messages |
+| `status` | string | `pending`, `sent`, `delivered`, `read`, `failed` |
+| `wamid` | string | WhatsApp message ID from Meta |
+| `is_reply` | boolean | Whether this is a reply to another message |
+
+---
+
+#### `status_update`
+
+Broadcast to the organization when a message delivery status changes (sent, delivered, read, or failed).
+
+**Broadcast scope:** Organization-wide
+
+```json
+{
+  "type": "status_update",
+  "payload": {
+    "message_id": "550e8400-e29b-41d4-a716-446655440000",
+    "contact_id": "a1b2c3d4-0000-0000-0000-000000000001",
+    "status": "delivered",
+    "wamid": "wamid.HBgNMjAxMTIzNDU2Nzg5FQIAERgSM..."
+  }
+}
+```
+
+On **failure**, the payload includes an error message:
+
+```json
+{
+  "type": "status_update",
+  "payload": {
+    "message_id": "550e8400-e29b-41d4-a716-446655440000",
+    "contact_id": "a1b2c3d4-0000-0000-0000-000000000001",
+    "status": "failed",
+    "error_message": "Message failed to send: network timeout"
+  }
+}
+```
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `message_id` | UUID | Message whose status changed |
+| `contact_id` | UUID | Owning contact |
+| `status` | string | `sent`, `delivered`, `read`, or `failed` |
+| `wamid` | string | WhatsApp message ID (on success) |
+| `error_message` | string | Error detail (on failure only) |
+
+---
+
+#### `reaction_update`
+
+Broadcast when a contact reacts or un-reacts to a message.
+
+**Broadcast scope:** Organization-wide
+
+```json
+{
+  "type": "reaction_update",
+  "payload": {
+    "message_id": "550e8400-e29b-41d4-a716-446655440000",
+    "contact_id": "a1b2c3d4-0000-0000-0000-000000000001",
+    "reactions": [
+      { "emoji": "👍", "user": "+201234567890" }
+    ]
+  }
+}
+```
+
+---
+
+### Agent Transfer Events
+
+#### `agent_transfer`
+
+Broadcast when a new agent transfer (human handoff) is created. All agents in the organization receive this to update their queue view.
+
+**Broadcast scope:** Organization-wide
+
+```json
+{
+  "type": "agent_transfer",
+  "payload": {
+    "id": "7c9e6679-7425-40de-944b-e07fc1f90ae7",
+    "contact_id": "a1b2c3d4-0000-0000-0000-000000000001",
+    "contact_name": "Ahmed Hassan",
+    "phone_number": "+201234567890",
+    "whatsapp_account": "support",
+    "status": "active",
+    "source": "chatbot",
+    "notes": "Customer needs billing support",
+    "transferred_at": "2024-06-09T12:05:00Z",
+    "agent_id": "b2c3d4e5-0000-0000-0000-000000000002",
+    "team_id": "c3d4e5f6-0000-0000-0000-000000000003"
+  }
+}
+```
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `id` | UUID | Transfer ID |
+| `contact_id` | UUID | Contact being transferred |
+| `contact_name` | string | Contact display name (may be masked) |
+| `phone_number` | string | Contact phone (may be masked) |
+| `whatsapp_account` | string | WhatsApp account name |
+| `status` | string | `active`, `completed`, `resumed` |
+| `source` | string | `chatbot`, `keyword`, `api`, `manual` |
+| `notes` | string | Optional transfer notes |
+| `transferred_at` | ISO 8601 | When the transfer was created |
+| `agent_id` | UUID \| null | Assigned agent (if any) |
+| `team_id` | UUID \| null | Assigned team (if any) |
+
+---
+
+#### `agent_transfer_resume`
+
+Broadcast when an agent resumes a transfer (handing control back to the chatbot).
+
+**Broadcast scope:** Organization-wide
+
+```json
+{
+  "type": "agent_transfer_resume",
+  "payload": {
+    "id": "7c9e6679-7425-40de-944b-e07fc1f90ae7",
+    "contact_id": "a1b2c3d4-0000-0000-0000-000000000001",
+    "status": "resumed",
+    "resumed_at": "2024-06-09T13:10:00Z",
+    "resumed_by": "b2c3d4e5-0000-0000-0000-000000000002"
+  }
+}
+```
+
+---
+
+#### `agent_transfer_assign`
+
+Broadcast when a transfer is assigned to (or unassigned from) an agent.
+
+**Broadcast scope:** Organization-wide
+
+```json
+{
+  "type": "agent_transfer_assign",
+  "payload": {
+    "id": "7c9e6679-7425-40de-944b-e07fc1f90ae7",
+    "contact_id": "a1b2c3d4-0000-0000-0000-000000000001",
+    "status": "active",
+    "agent_id": "b2c3d4e5-0000-0000-0000-000000000002",
+    "team_id": null
+  }
+}
+```
+
+When `agent_id` is `null`, the transfer was returned to the queue.
+
+---
+
+#### `transfer_escalation`
+
+Sent when an SLA deadline is approaching and the transfer needs attention.
+
+**Broadcast scope:** Organization-wide
+
+```json
+{
+  "type": "transfer_escalation",
+  "payload": {
+    "id": "7c9e6679-7425-40de-944b-e07fc1f90ae7",
+    "contact_id": "a1b2c3d4-0000-0000-0000-000000000001",
+    "contact_name": "Ahmed Hassan",
+    "phone_number": "+201234567890",
+    "status": "active",
+    "escalation_level": 1,
+    "sla_breached": false
+  }
+}
+```
+
+---
+
+#### `transfer_expired`
+
+Sent when a transfer has exceeded its SLA resolution deadline.
+
+**Broadcast scope:** Organization-wide
+
+```json
+{
+  "type": "transfer_expired",
+  "payload": {
+    "id": "7c9e6679-7425-40de-944b-e07fc1f90ae7",
+    "contact_id": "a1b2c3d4-0000-0000-0000-000000000001",
+    "contact_name": "Ahmed Hassan",
+    "phone_number": "+201234567890",
+    "status": "active",
+    "escalation_level": 2,
+    "sla_breached": true
+  }
+}
+```
+
+---
+
+#### `transfer_escalated`
+
+Sent after the transfer has been escalated to a higher level.
+
+**Broadcast scope:** Organization-wide
+
+Same payload shape as `transfer_expired`.
+
+---
+
+### Conversation Note Events
+
+These events are targeted — only clients that have called `set_contact` for the relevant contact receive them.
+
+#### `conversation_note_created`
+
+**Broadcast scope:** Clients viewing the contact
+
+```json
+{
+  "type": "conversation_note_created",
+  "payload": {
+    "id": "d4e5f6a7-0000-0000-0000-000000000001",
+    "contact_id": "a1b2c3d4-0000-0000-0000-000000000001",
+    "content": "Customer confirmed order number is #5523",
+    "created_by_id": "b2c3d4e5-0000-0000-0000-000000000002",
+    "created_by_name": "Sara Ahmed",
+    "created_at": "2024-06-09T12:15:00Z",
+    "updated_at": "2024-06-09T12:15:00Z"
+  }
+}
+```
+
+---
+
+#### `conversation_note_updated`
+
+**Broadcast scope:** Clients viewing the contact
+
+Same payload shape as `conversation_note_created`.
+
+---
+
+#### `conversation_note_deleted`
+
+**Broadcast scope:** Clients viewing the contact
+
+```json
+{
+  "type": "conversation_note_deleted",
+  "payload": {
+    "id": "d4e5f6a7-0000-0000-0000-000000000001",
+    "contact_id": "a1b2c3d4-0000-0000-0000-000000000001"
+  }
+}
+```
+
+---
+
+### Campaign Events
+
+#### `campaign_stats_update`
+
+Broadcast in real-time as campaign messages are sent and their statuses are updated.
+
+**Broadcast scope:** Organization-wide
+
+```json
+{
+  "type": "campaign_stats_update",
+  "payload": {
+    "campaign_id": "e5f6a7b8-0000-0000-0000-000000000001",
+    "status": "running",
+    "sent_count": 1042,
+    "delivered_count": 980,
+    "read_count": 650,
+    "failed_count": 12
+  }
+}
+```
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `campaign_id` | UUID | Campaign being updated |
+| `status` | string | `draft`, `scheduled`, `running`, `completed`, `cancelled` |
+| `sent_count` | integer | Messages sent so far |
+| `delivered_count` | integer | Confirmed deliveries |
+| `read_count` | integer | Confirmed reads |
+| `failed_count` | integer | Failed sends |
+
+---
+
+### Permission Events
+
+#### `permissions_updated`
+
+Sent to a **specific user** when their role or permissions are modified.
+
+**Broadcast scope:** Targeted user only
+
+```json
+{
+  "type": "permissions_updated",
+  "payload": {
+    "message": "Your permissions have been updated"
+  }
+}
+```
+
+Upon receiving this event, the client should re-fetch its user profile or reload the application to apply the new permissions.
+
+---
+
+### Calling Events
+
+All calling events carry a `payload` object built from the active call session. The specific fields depend on the call state.
+
+#### `call_incoming`
+
+Sent to the assigned sticky agent (or broadcast org-wide if no sticky agent) when an inbound WhatsApp call arrives.
+
+**Broadcast scope:** Specific agent user **or** organization-wide
+
+```json
+{
+  "type": "call_incoming",
+  "payload": {
+    "id": "f6a7b8c9-0000-0000-0000-000000000001",
+    "whatsapp_call_id": "CALL_ABC123",
+    "contact_id": "a1b2c3d4-0000-0000-0000-000000000001",
+    "contact_phone": "+201234567890",
+    "whatsapp_account": "support",
+    "direction": "incoming",
+    "started_at": "2024-06-09T14:00:00Z"
+  }
+}
+```
+
+---
+
+#### `call_answered`
+
+Sent org-wide when an agent answers a call.
+
+**Broadcast scope:** Organization-wide
+
+```json
+{
+  "type": "call_answered",
+  "payload": {
+    "id": "f6a7b8c9-0000-0000-0000-000000000001",
+    "whatsapp_call_id": "CALL_ABC123",
+    "agent_id": "b2c3d4e5-0000-0000-0000-000000000002",
+    "answered_at": "2024-06-09T14:00:05Z"
+  }
+}
+```
+
+---
+
+#### `call_ended`
+
+Sent when a call is terminated.
+
+**Broadcast scope:** Organization-wide
+
+```json
+{
+  "type": "call_ended",
+  "payload": {
+    "id": "f6a7b8c9-0000-0000-0000-000000000001",
+    "whatsapp_call_id": "CALL_ABC123",
+    "duration_seconds": 125,
+    "ended_at": "2024-06-09T14:02:05Z"
+  }
+}
+```
+
+---
+
+#### `call_hold` / `call_resumed`
+
+Sent when the active call is placed on hold or resumed.
+
+**Broadcast scope:** Organization-wide
+
+```json
+{
+  "type": "call_hold",
+  "payload": {
+    "id": "f6a7b8c9-0000-0000-0000-000000000001",
+    "held_at": "2024-06-09T14:01:00Z"
+  }
+}
+```
+
+---
+
+#### `outgoing_call_initiated`
+
+Sent to the initiating agent when an outbound WhatsApp call is placed.
+
+**Broadcast scope:** Specific agent user
+
+```json
+{
+  "type": "outgoing_call_initiated",
+  "payload": {
+    "id": "f6a7b8c9-0000-0000-0000-000000000001",
+    "contact_id": "a1b2c3d4-0000-0000-0000-000000000001",
+    "contact_phone": "+201234567890",
+    "whatsapp_account": "support",
+    "initiated_at": "2024-06-09T14:30:00Z"
+  }
+}
+```
+
+#### `outgoing_call_ringing`
+
+```json
+{
+  "type": "outgoing_call_ringing",
+  "payload": {
+    "id": "f6a7b8c9-0000-0000-0000-000000000001"
+  }
+}
+```
+
+#### `outgoing_call_answered`
+
+```json
+{
+  "type": "outgoing_call_answered",
+  "payload": {
+    "id": "f6a7b8c9-0000-0000-0000-000000000001",
+    "answered_at": "2024-06-09T14:30:08Z"
+  }
+}
+```
+
+#### `outgoing_call_rejected`
+
+```json
+{
+  "type": "outgoing_call_rejected",
+  "payload": {
+    "id": "f6a7b8c9-0000-0000-0000-000000000001",
+    "reason": "busy"
+  }
+}
+```
+
+#### `outgoing_call_ended`
+
+```json
+{
+  "type": "outgoing_call_ended",
+  "payload": {
+    "id": "f6a7b8c9-0000-0000-0000-000000000001",
+    "duration_seconds": 74,
+    "ended_at": "2024-06-09T14:31:22Z"
+  }
+}
+```
+
+---
+
+### Call Transfer Events
+
+#### `call_transfer_waiting`
+
+Sent to the target agent when an active call is being transferred to them, requesting acceptance.
+
+**Broadcast scope:** Specific agent user
+
+```json
+{
+  "type": "call_transfer_waiting",
+  "payload": {
+    "id": "a9b0c1d2-0000-0000-0000-000000000001",
+    "call_log_id": "f6a7b8c9-0000-0000-0000-000000000001",
+    "whatsapp_call_id": "CALL_ABC123",
+    "from_agent_id": "b2c3d4e5-0000-0000-0000-000000000002",
+    "contact_phone": "+201234567890"
+  }
+}
+```
+
+---
+
+#### `call_transfer_connected`
+
+Sent when the target agent accepts the transfer.
+
+**Broadcast scope:** Specific agent user
+
+```json
+{
+  "type": "call_transfer_connected",
+  "payload": {
+    "id": "a9b0c1d2-0000-0000-0000-000000000001",
+    "connected_at": "2024-06-09T14:32:00Z"
+  }
+}
+```
+
+---
+
+#### `call_transfer_completed`
+
+Broadcast when the transfer finishes successfully.
+
+**Broadcast scope:** Organization-wide
+
+```json
+{
+  "type": "call_transfer_completed",
+  "payload": {
+    "id": "a9b0c1d2-0000-0000-0000-000000000001"
+  }
+}
+```
+
+---
+
+#### `call_transfer_abandoned`
+
+Broadcast when the caller hangs up before the transfer is completed.
+
+**Broadcast scope:** Organization-wide
+
+```json
+{
+  "type": "call_transfer_abandoned",
+  "payload": {
+    "id": "a9b0c1d2-0000-0000-0000-000000000001"
+  }
+}
+```
+
+---
+
+#### `call_transfer_no_answer`
+
+Sent to the target agent when the transfer times out with no answer.
+
+**Broadcast scope:** Specific agent user
+
+```json
+{
+  "type": "call_transfer_no_answer",
+  "payload": {
+    "id": "a9b0c1d2-0000-0000-0000-000000000001"
+  }
+}
+```
+
+---
+
+#### `call_transfer_reassigned`
+
+Sent to the previous agent when a rotating transfer has been reassigned to another agent.
+
+**Broadcast scope:** Specific agent user
+
+```json
+{
+  "type": "call_transfer_reassigned",
+  "payload": {
+    "id": "a9b0c1d2-0000-0000-0000-000000000001",
+    "reason": "timeout"
+  }
+}
+```
+
+| `reason` value | Description |
+|----------------|-------------|
+| `"timeout"` | Per-agent ring timeout expired |
+| `"total_timeout"` | Total transfer timeout expired |
+
+---
+
+#### `call_permission_update`
+
+Sent org-wide when calling permissions change (e.g., a team's calling access is toggled).
+
+**Broadcast scope:** Organization-wide
+
+```json
+{
+  "type": "call_permission_update",
+  "payload": {
+    "message": "Calling permissions updated"
+  }
+}
+```
+
+---
+
+## Complete Event Summary
+
+| Event Type | Broadcast Scope | Trigger |
+|-----------|----------------|---------|
+| `new_message` | Organization | New incoming or outgoing message |
+| `status_update` | Organization | Message delivery status change |
+| `reaction_update` | Organization | Message reaction added/removed |
+| `agent_transfer` | Organization | New human handoff transfer created |
+| `agent_transfer_resume` | Organization | Transfer resumed (chatbot takes over) |
+| `agent_transfer_assign` | Organization | Transfer assigned/unassigned to agent |
+| `transfer_escalation` | Organization | SLA escalation warning |
+| `transfer_expired` | Organization | SLA deadline breached |
+| `transfer_escalated` | Organization | Transfer escalated to higher level |
+| `conversation_note_created` | Contact viewers | New note on a conversation |
+| `conversation_note_updated` | Contact viewers | Note edited |
+| `conversation_note_deleted` | Contact viewers | Note removed |
+| `campaign_stats_update` | Organization | Campaign progress update |
+| `permissions_updated` | Specific user | User's permissions changed |
+| `call_incoming` | Agent or Org | Inbound call arriving |
+| `call_answered` | Organization | Call answered by agent |
+| `call_ended` | Organization | Call ended |
+| `call_hold` | Organization | Call placed on hold |
+| `call_resumed` | Organization | Call taken off hold |
+| `outgoing_call_initiated` | Agent | Outbound call placed |
+| `outgoing_call_ringing` | Agent | Remote phone is ringing |
+| `outgoing_call_answered` | Agent | Remote answered |
+| `outgoing_call_rejected` | Agent | Remote rejected the call |
+| `outgoing_call_ended` | Agent | Outbound call ended |
+| `call_transfer_waiting` | Target agent | Incoming transfer request |
+| `call_transfer_connected` | Target agent | Transfer accepted |
+| `call_transfer_completed` | Organization | Transfer completed successfully |
+| `call_transfer_abandoned` | Organization | Caller hung up during transfer |
+| `call_transfer_no_answer` | Target agent | Transfer timed out |
+| `call_transfer_reassigned` | Previous agent | Transfer moved to next agent |
+| `call_permission_update` | Organization | Calling permissions changed |
+
+---
+
+## Error Handling & Reconnection
+
+The WebSocket connection can be closed by the server in the following scenarios:
+
+| Close Code | Reason |
+|------------|--------|
+| `1008` | Authentication failed or auth timeout |
+| `1001` | Server shutting down |
+| `1006` | Abnormal closure (network error) |
+
+**Recommended reconnection strategy:**
+
+```js
+function connect() {
+  const ws = new WebSocket('wss://app.example.com/api/ws');
+  let retryDelay = 1000;
+
+  ws.addEventListener('close', (event) => {
+    if (event.code === 1008) {
+      console.error('Auth failed — do not retry without a new token');
+      return;
+    }
+    // Exponential backoff
+    setTimeout(connect, retryDelay);
+    retryDelay = Math.min(retryDelay * 2, 30000);
+  });
+
+  ws.addEventListener('open', () => {
+    retryDelay = 1000; // Reset on successful connection
+    ws.send(JSON.stringify({ type: 'auth', payload: { token: getToken() } }));
+  });
+}
+
+connect();
+```

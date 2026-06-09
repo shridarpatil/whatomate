@@ -123,16 +123,27 @@ Triggered when a message status changes.
 
 ## WebSocket Events
 
-For real-time updates in your frontend, connect to the WebSocket endpoint:
+For real-time updates in your frontend, connect to the WebSocket endpoint. Note that authentication must be performed after connection setup by sending an auth message within 5 seconds:
 
 ```javascript
-const ws = new WebSocket('ws://your-server:8080/ws?token=YOUR_JWT_TOKEN');
+const ws = new WebSocket('ws://your-server:8080/ws');
+
+ws.onopen = () => {
+  // Must authenticate within 5 seconds of connection
+  ws.send(JSON.stringify({
+    type: 'auth',
+    payload: {
+      token: 'YOUR_JWT_TOKEN'
+    }
+  }));
+};
 
 ws.onmessage = (event) => {
   const data = JSON.parse(event.data);
   console.log('Event:', data.type, data.payload);
 };
 ```
+
 
 ### Event Types
 

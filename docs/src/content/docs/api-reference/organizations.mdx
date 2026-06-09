@@ -347,6 +347,121 @@ A `multipart/form-data` request containing:
 }
 ```
 
+## Single Sign-On (SSO) Settings
+
+Configure external identity providers for Single Sign-On (SSO) login.
+
+### Get SSO Settings
+
+Retrieve all configured SSO providers for the organization.
+
+```bash
+GET /api/settings/sso
+```
+
+#### Response
+
+```json
+{
+  "status": "success",
+  "data": [
+    {
+      "provider": "google",
+      "client_id": "google-client-id",
+      "has_secret": true,
+      "is_enabled": true,
+      "allow_auto_create": true,
+      "default_role": "agent",
+      "allowed_domains": "example.com"
+    }
+  ]
+}
+```
+
+### Update SSO Provider Config
+
+Create or update the configuration for a specific SSO provider.
+
+```bash
+PUT /api/settings/sso/{provider}
+```
+
+#### Path Parameters
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `provider` | string | Yes | The provider type: `google`, `microsoft`, `github`, `facebook`, or `custom` |
+
+#### Request Body
+
+```json
+{
+  "client_id": "client-id",
+  "client_secret": "client-secret",
+  "is_enabled": true,
+  "allow_auto_create": true,
+  "default_role": "agent",
+  "allowed_domains": "example.com",
+  "auth_url": "https://example.com/oauth/authorize",
+  "token_url": "https://example.com/oauth/token",
+  "user_info_url": "https://example.com/oauth/userinfo"
+}
+```
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `client_id` | string | Yes | The OAuth2 client ID |
+| `client_secret` | string | No | The OAuth2 client secret (omitted if not changing) |
+| `is_enabled` | boolean | Yes | Enable or disable this provider |
+| `allow_auto_create` | boolean | Yes | Auto-create user accounts on successful login if they do not exist |
+| `default_role` | string | No | The default role assigned to auto-created users (defaults to `agent`) |
+| `allowed_domains` | string | No | Comma-separated list of email domains allowed to log in (empty allows all) |
+| `auth_url` | string | No | Authorization URL (required only for `custom` provider) |
+| `token_url` | string | No | Token URL (required only for `custom` provider) |
+| `user_info_url` | string | No | User info endpoint URL (required only for `custom` provider) |
+
+#### Response
+
+```json
+{
+  "status": "success",
+  "data": {
+    "provider": "google",
+    "client_id": "google-client-id",
+    "has_secret": true,
+    "is_enabled": true,
+    "allow_auto_create": true,
+    "default_role": "agent",
+    "allowed_domains": "example.com"
+  }
+}
+```
+
+### Delete SSO Provider
+
+Delete/remove the SSO configuration for a specific provider.
+
+```bash
+DELETE /api/settings/sso/{provider}
+```
+
+#### Path Parameters
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `provider` | string | Yes | The provider type: `google`, `microsoft`, `github`, `facebook`, or `custom` |
+
+#### Response
+
+```json
+{
+  "status": "success",
+  "data": {
+    "message": "SSO provider deleted"
+  }
+}
+```
+
 ## See Also
 
 - [Authentication](/whatomate/api-reference/authentication) - Organization switching via `POST /api/auth/switch-org`

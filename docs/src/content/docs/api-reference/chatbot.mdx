@@ -574,6 +574,12 @@ View active chatbot sessions (primarily for debugging).
 GET /api/chatbot/sessions
 ```
 
+#### Query Parameters
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `status` | string | Filter sessions by status: `active`, `completed`, `cancelled`, `timeout` |
+
 ### Get Session
 
 Get details of a specific session.

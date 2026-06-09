@@ -248,7 +248,94 @@ If cookies are not used, the client can optionally specify the refresh token to 
 }
 ```
 
+## WebSocket Authentication
+
+Get a short-lived single-use JWT token for authenticating WebSocket connections. Since secure HTTP-only cookies cannot be accessed by client-side JavaScript, this endpoint provides a safe way to retrieve a token to pass via query parameters when establishing a WebSocket connection.
+
+```bash
+GET /api/auth/ws-token
+```
+
+### Response
+
+```json
+{
+  "status": "success",
+  "data": {
+    "token": "eyJhbGciOiJIUzI1NiIs..."
+  }
+}
+```
+
+## Single Sign-On (SSO)
+
+Whatomate supports Single Sign-On (SSO) using OAuth2/OIDC. This allows users to authenticate using external identity providers such as Google, Microsoft, GitHub, Facebook, or a custom OIDC provider.
+
+### List Public SSO Providers
+
+Retrieve enabled SSO providers for displaying login buttons on the sign-in page.
+
+```bash
+GET /api/auth/sso/providers
+```
+
+#### Response
+
+```json
+{
+  "status": "success",
+  "data": [
+    {
+      "provider": "google",
+      "name": "Google"
+    },
+    {
+      "provider": "github",
+      "name": "GitHub"
+    }
+  ]
+}
+```
+
+### Initiate SSO Flow
+
+Start the OAuth2 login flow for a specific provider. This endpoint generates a secure state token and redirects the user to the provider's authorization page.
+
+```bash
+GET /api/auth/sso/{provider}/init
+```
+
+#### Path Parameters
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `provider` | string | Yes | The identity provider name: `google`, `microsoft`, `github`, `facebook`, or `custom` |
+
+### SSO Callback
+
+Handle the redirect callback from the identity provider after the user authorizes access.
+
+```bash
+GET /api/auth/sso/{provider}/callback
+```
+
+#### Path Parameters
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `provider` | string | Yes | The identity provider name: `google`, `microsoft`, `github`, `facebook`, or `custom` |
+
+#### Query Parameters
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `code` | string | Yes (on success) | The authorization code returned by the provider |
+| `state` | string | Yes | The state nonce used to verify request integrity and prevent CSRF |
+| `error` | string | No (on failure) | The error code if authorization failed |
+| `error_description` | string | No (on failure) | A description of why the authorization failed |
+
 ## Using Tokens
+
 
 Include the access token in the `Authorization` header for all protected API requests:
 

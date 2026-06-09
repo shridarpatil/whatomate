@@ -178,6 +178,43 @@ Serve IVR audio files from storage.
 GET /api/ivr-flows/audio/{filename}
 ```
 
+### Upload Organization Audio
+
+Upload a pre-recorded audio file to use for organization-level hold music or ringback tones. Audio is automatically transcoded to OGG/Opus format.
+
+```bash
+POST /api/org/audio
+```
+
+#### Query Parameters
+
+| Parameter | Type | Required | Description |
+|---|---|---|---|
+| `type` | string | Yes | The audio destination/type. Must be either `hold_music` or `ringback`. |
+
+#### Request Body
+
+Must be sent as `multipart/form-data`.
+
+| Parameter | Type | Required | Description |
+|---|---|---|---|
+| `file` | file | Yes | Audio file (supported types: MP3, OGG, WAV, AAC, M4A, FLAC. Max 5MB) |
+
+#### Response
+
+```json
+{
+  "status": "success",
+  "data": {
+    "filename": "org_893c5d88-b4b6-4b2a-bf3b-9a8bb698a3e7_hold_music.ogg",
+    "type": "hold_music",
+    "mime_type": "audio/mpeg",
+    "size": 1254320
+  }
+}
+```
+
+
 ---
 
 ## Call Logs
