@@ -1,0 +1,638 @@
+---
+title: Calling
+description: Manage IVR flows, voice call logs, transfers, and outgoing WebRTC calls
+---
+
+import { Aside } from '@astrojs/starlight/components';
+
+## Overview
+
+The Calling API enables real-time voice call functionality over WebRTC, IVR (Interactive Voice Response) setup, call transfers between teams and agents, and call history logs.
+
+---
+
+## IVR Flows
+
+IVR flows represent the multi-level audio response menus configured for your WhatsApp accounts.
+
+### List IVR Flows
+
+Retrieve all IVR flows for your organization.
+
+```bash
+GET /api/ivr-flows
+```
+
+#### Query Parameters
+
+| Parameter | Type | Required | Description |
+|---|---|---|---|
+| `page` | integer | No | Page number (default: 1) |
+| `limit` | integer | No | Items per page (default: 50) |
+| `account` | string | No | Filter by WhatsApp account name |
+
+#### Response
+
+```json
+{
+  "status": "success",
+  "data": {
+    "ivr_flows": [
+      {
+        "id": "e9b728cd-7eb1-4d32-9cb7-7f8a7e02e1c0",
+        "organization_id": "893c5d88-b4b6-4b2a-bf3b-9a8bb698a3e7",
+        "whatsapp_account": "Primary Line",
+        "name": "Main Support Menu",
+        "description": "Greeting menu with team routing options.",
+        "is_active": true,
+        "is_call_start": true,
+        "is_outgoing_end": false,
+        "menu": {
+          "nodes": [
+            {
+              "id": "node_1",
+              "type": "greeting",
+              "label": "Welcome Greeting",
+              "config": {
+                "greeting_text": "Thank you for calling support. Press 1 for Sales, 2 for Technical Support."
+              }
+            }
+          ]
+        },
+        "welcome_audio_url": "https://example.com/audio/welcome.ogg",
+        "created_by_id": "3fa85f64-5717-4562-b3fc-2c963f66afa6",
+        "updated_by_id": "3fa85f64-5717-4562-b3fc-2c963f66afa6",
+        "created_at": "2024-01-01T00:00:00Z",
+        "updated_at": "2024-01-01T00:00:00Z"
+      }
+    ],
+    "total": 1,
+    "page": 1,
+    "limit": 50
+  }
+}
+```
+
+### Get IVR Flow
+
+Retrieve details for a single IVR flow.
+
+```bash
+GET /api/ivr-flows/{id}
+```
+
+### Create IVR Flow
+
+Create a new IVR menu flow.
+
+```bash
+POST /api/ivr-flows
+```
+
+#### Request Body
+
+| Field | Type | Required | Description |
+|---|---|---|---|
+| `whatsapp_account` | string | Yes | WhatsApp account name associated with the flow |
+| `name` | string | Yes | Readable flow name |
+| `description` | string | No | Flow description |
+| `is_active` | boolean | No | Enable/disable the flow (default: `true`) |
+| `is_call_start` | boolean | No | Mark as start flow for incoming calls on this account |
+| `is_outgoing_end` | boolean | No | Mark as end flow for outgoing calls |
+| `menu` | object | No | JSON flow graph configuration |
+| `welcome_audio_url` | string | No | URL of fallback pre-recorded welcoming audio |
+
+```json
+{
+  "whatsapp_account": "Primary Line",
+  "name": "Main Support Menu",
+  "description": "Greeting menu with team routing options.",
+  "is_active": true,
+  "is_call_start": true,
+  "is_outgoing_end": false,
+  "menu": {
+    "nodes": [
+      {
+        "id": "node_1",
+        "type": "greeting",
+        "label": "Welcome",
+        "config": {
+          "greeting_text": "Welcome to our support line."
+        }
+      }
+    ]
+  }
+}
+```
+
+### Update IVR Flow
+
+Update an existing IVR flow. Partial updates are supported.
+
+```bash
+PUT /api/ivr-flows/{id}
+```
+
+### Delete IVR Flow
+
+Soft-delete an IVR flow.
+
+```bash
+DELETE /api/ivr-flows/{id}
+```
+
+### Upload IVR Audio
+
+Upload a pre-recorded audio file to use for IVR menus (transcoded automatically to OGG/Opus format).
+
+```bash
+POST /api/ivr-flows/audio
+```
+
+#### Request Body
+
+Must be sent as `multipart/form-data`.
+
+| Parameter | Type | Required | Description |
+|---|---|---|---|
+| `file` | file | Yes | Audio file (supported types: MP3, OGG, WAV, AAC, M4A, FLAC. Max 5MB) |
+
+#### Response
+
+```json
+{
+  "status": "success",
+  "data": {
+    "filename": "f47ac10b-58cc-4372-a567-0e02b2c3d479.ogg",
+    "mime_type": "audio/mpeg",
+    "size": 1254320
+  }
+}
+```
+
+### Serve IVR Audio
+
+Serve IVR audio files from storage.
+
+```bash
+GET /api/ivr-flows/audio/{filename}
+```
+
+---
+
+## Call Logs
+
+Tracks all incoming and outgoing calls.
+
+### List Call Logs
+
+Retrieve call logs for your organization. Agents only see their own call logs unless they have the `call_logs:read` permission.
+
+```bash
+GET /api/call-logs
+```
+
+#### Query Parameters
+
+| Parameter | Type | Required | Description |
+|---|---|---|---|
+| `page` | integer | No | Page number (default: 1) |
+| `limit` | integer | No | Items per page (default: 50) |
+| `status` | string | No | Filter by status: `ringing`, `answered`, `completed`, `missed`, `rejected`, `failed` |
+| `account` | string | No | Filter by WhatsApp account name |
+| `contact_id` | string | No | Filter by contact UUID |
+| `direction` | string | No | Filter by direction: `incoming`, `outgoing` |
+| `ivr_flow_id` | string | No | Filter by IVR flow UUID |
+| `phone` | string | No | Filter by caller phone number (partial match) |
+| `start_date` | string | No | Start date filter (`YYYY-MM-DD`) |
+| `end_date` | string | No | End date filter (`YYYY-MM-DD`) |
+
+#### Response
+
+```json
+{
+  "status": "success",
+  "data": {
+    "call_logs": [
+      {
+        "id": "e9b728cd-7eb1-4d32-9cb7-7f8a7e02e1c0",
+        "organization_id": "893c5d88-b4b6-4b2a-bf3b-9a8bb698a3e7",
+        "whatsapp_account": "Primary Line",
+        "contact_id": "6df9892c-7eb1-4d32-9cb7-7f8a7e02e1c0",
+        "whatsapp_call_id": "meta-call-id-9988",
+        "caller_phone": "+1234567890",
+        "direction": "incoming",
+        "status": "completed",
+        "duration": 45,
+        "ivr_flow_id": "e9b728cd-7eb1-4d32-9cb7-7f8a7e02e1c0",
+        "agent_id": "3fa85f64-5717-4562-b3fc-2c963f66afa6",
+        "started_at": "2024-01-01T10:00:00Z",
+        "answered_at": "2024-01-01T10:00:05Z",
+        "ended_at": "2024-01-01T10:00:50Z",
+        "disconnected_by": "client",
+        "recording_s3_key": "recordings/2024/01/01/e9b728cd.ogg",
+        "recording_duration": 45
+      }
+    ],
+    "total": 1,
+    "page": 1,
+    "limit": 50
+  }
+}
+```
+
+### Get Call Log
+
+Retrieve details for a single call log, including any agent transfers associated with the call.
+
+```bash
+GET /api/call-logs/{id}
+```
+
+#### Response
+
+```json
+{
+  "status": "success",
+  "data": {
+    "call_log": {
+      "id": "e9b728cd-7eb1-4d32-9cb7-7f8a7e02e1c0",
+      "whatsapp_account": "Primary Line",
+      "caller_phone": "+1234567890",
+      "direction": "incoming",
+      "status": "completed",
+      "duration": 45,
+      "recording_s3_key": "recordings/2024/01/01/e9b728cd.ogg"
+    },
+    "transfers": [
+      {
+        "id": "e9b728cd-7eb1-4d32-9cb7-7f8a7e02e2ef",
+        "status": "completed",
+        "agent_id": "3fa85f64-5717-4562-b3fc-2c963f66afa6",
+        "connected_at": "2024-01-01T10:00:05Z",
+        "completed_at": "2024-01-01T10:00:50Z",
+        "hold_duration": 5,
+        "talk_duration": 40
+      }
+    ]
+  }
+}
+```
+
+### Get Call Recording
+
+Generate a temporary presigned URL for downloading or playing the call recording from S3 storage.
+
+```bash
+GET /api/call-logs/{id}/recording
+```
+
+#### Response
+
+```json
+{
+  "status": "success",
+  "data": {
+    "url": "https://whatomate-recordings.s3.amazonaws.com/recordings/2024/01/01/e9b728cd.ogg?AWSAccessKeyId=...",
+    "duration": 45
+  }
+}
+```
+
+### Hold Call
+
+Place an active call on hold. Plays the configured organizational hold music to the customer.
+
+```bash
+POST /api/call-logs/{id}/hold
+```
+
+#### Response
+
+```json
+{
+  "status": "success",
+  "data": {
+    "status": "on_hold"
+  }
+}
+```
+
+### Resume Call
+
+Resume a call from hold and restore the audio bridge between the agent and customer.
+
+```bash
+POST /api/call-logs/{id}/resume
+```
+
+#### Response
+
+```json
+{
+  "status": "success",
+  "data": {
+    "status": "connected"
+  }
+}
+```
+
+---
+
+## Call Transfers
+
+Manage call transfers from the IVR menu or between active agents and support teams.
+
+### List Call Transfers
+
+Retrieve active and historical call transfers.
+
+```bash
+GET /api/call-transfers
+```
+
+#### Query Parameters
+
+| Parameter | Type | Required | Description |
+|---|---|---|---|
+| `page` | integer | No | Page number (default: 1) |
+| `limit` | integer | No | Items per page (default: 50) |
+| `status` | string | No | Filter by transfer status: `waiting`, `connected`, `completed`, `abandoned`, `no_answer` |
+
+#### Response
+
+```json
+{
+  "status": "success",
+  "data": {
+    "call_transfers": [
+      {
+        "id": "e9b728cd-7eb1-4d32-9cb7-7f8a7e02e2ef",
+        "organization_id": "893c5d88-b4b6-4b2a-bf3b-9a8bb698a3e7",
+        "call_log_id": "e9b728cd-7eb1-4d32-9cb7-7f8a7e02e1c0",
+        "whatsapp_call_id": "meta-call-id-9988",
+        "caller_phone": "+1234567890",
+        "contact_id": "6df9892c-7eb1-4d32-9cb7-7f8a7e02e1c0",
+        "whatsapp_account": "Primary Line",
+        "status": "waiting",
+        "team_id": "5fa85f64-5717-4562-b3fc-2c963f66afa6",
+        "transferred_at": "2024-01-01T10:00:00Z"
+      }
+    ],
+    "total": 1,
+    "page": 1,
+    "limit": 50
+  }
+}
+```
+
+### Get Call Transfer
+
+Retrieve details for a single call transfer by ID.
+
+```bash
+GET /api/call-transfers/{id}
+```
+
+### Connect Call Transfer
+
+Accept a pending call transfer. This requires a WebRTC SDP offer exchange to establish a peer-to-peer audio connection with the agent.
+
+```bash
+POST /api/call-transfers/{id}/connect
+```
+
+#### Request Body
+
+| Field | Type | Required | Description |
+|---|---|---|---|
+| `sdp_offer` | string | Yes | The agent's WebRTC SDP session offer |
+
+```json
+{
+  "sdp_offer": "v=0\r\no=- 8763487 2 IN IP4 127.0.0.1\r\ns=-\r\nt=0 0\r\na=group:BUNDLE 0\r\n..."
+}
+```
+
+#### Response
+
+```json
+{
+  "status": "success",
+  "data": {
+    "sdp_answer": "v=0\r\no=- 8763487 2 IN IP4 127.0.0.1\r\ns=-\r\nt=0 0\r\na=group:BUNDLE 0\r\n..."
+  }
+}
+```
+
+### Hangup Call Transfer
+
+Disconnect a connected transfer session and hang up the call.
+
+```bash
+POST /api/call-transfers/{id}/hangup
+```
+
+#### Response
+
+```json
+{
+  "status": "success",
+  "data": {
+    "status": "completed"
+  }
+}
+```
+
+### Initiate Transfer
+
+Initiate a manual transfer of an active call to another team or to a specific team member.
+
+```bash
+POST /api/call-transfers/initiate
+```
+
+#### Request Body
+
+| Field | Type | Required | Description |
+|---|---|---|---|
+| `call_log_id` | string | Yes | UUID of the call to transfer |
+| `team_id` | string | Yes | UUID of the target team |
+| `agent_id` | string | No | UUID of the specific agent (must be a member of the target team) |
+
+```json
+{
+  "call_log_id": "e9b728cd-7eb1-4d32-9cb7-7f8a7e02e1c0",
+  "team_id": "5fa85f64-5717-4562-b3fc-2c963f66afa6",
+  "agent_id": "3fa85f64-5717-4562-b3fc-2c963f66afa6"
+}
+```
+
+#### Response
+
+```json
+{
+  "status": "success",
+  "data": {
+    "status": "transferring"
+  }
+}
+```
+
+---
+
+## Outgoing Calls & WebRTC
+
+Start voice calls directly to WhatsApp contacts.
+
+### Initiate Outgoing Call
+
+Start an outgoing WebRTC voice call to a WhatsApp contact.
+
+```bash
+POST /api/calls/outgoing
+```
+
+#### Request Body
+
+| Field | Type | Required | Description |
+|---|---|---|---|
+| `contact_id` | string | Yes | UUID of the contact to call |
+| `whatsapp_account` | string | Yes | Account name to call from |
+| `sdp_offer` | string | Yes | WebRTC SDP offer from the agent's browser |
+
+```json
+{
+  "contact_id": "6df9892c-7eb1-4d32-9cb7-7f8a7e02e1c0",
+  "whatsapp_account": "Primary Line",
+  "sdp_offer": "v=0\r\no=- 8763487 2 IN IP4 127.0.0.1\r\ns=-\r\nt=0 0\r\na=group:BUNDLE 0\r\n..."
+}
+```
+
+#### Response
+
+```json
+{
+  "status": "success",
+  "data": {
+    "call_log_id": "e9b728cd-7eb1-4d32-9cb7-7f8a7e02e1c0",
+    "sdp_answer": "v=0\r\no=- 8763487 2 IN IP4 127.0.0.1\r\ns=-\r\nt=0 0\r\na=group:BUNDLE 0\r\n..."
+  }
+}
+```
+
+### Hangup Outgoing Call
+
+End an outgoing call.
+
+```bash
+POST /api/calls/outgoing/{id}/hangup
+```
+
+#### Response
+
+```json
+{
+  "status": "success",
+  "data": {
+    "status": "ok"
+  }
+}
+```
+
+### Send Call Permission Request
+
+Send a template call permission request message to a WhatsApp contact (required by Meta before starting outgoing calls to contacts).
+
+```bash
+POST /api/calls/permission-request
+```
+
+#### Request Body
+
+| Field | Type | Required | Description |
+|---|---|---|---|
+| `contact_id` | string | Yes | UUID of the contact |
+| `whatsapp_account` | string | Yes | Account name to send the request from |
+
+```json
+{
+  "contact_id": "6df9892c-7eb1-4d32-9cb7-7f8a7e02e1c0",
+  "whatsapp_account": "Primary Line"
+}
+```
+
+#### Response
+
+```json
+{
+  "status": "success",
+  "data": {
+    "permission_id": "a9b728cd-7eb1-4d32-9cb7-7f8a7e02e987"
+  }
+}
+```
+
+### Check Call Permission
+
+Check the current call permission status for a contact.
+
+```bash
+GET /api/calls/permission/{contactId}
+```
+
+#### Query Parameters
+
+| Parameter | Type | Required | Description |
+|---|---|---|---|
+| `whatsapp_account` | string | Yes | WhatsApp account name |
+
+#### Response
+
+```json
+{
+  "status": "success",
+  "data": {
+    "status": "accepted"
+  }
+}
+```
+
+#### Call Permission Statuses
+
+* `pending`: Request sent, awaiting user response.
+* `accepted`: User accepted, calling is allowed.
+* `declined`: User declined, calling is blocked.
+* `expired`: Request expired.
+
+### Get ICE Servers
+
+Retrieve STUN/TURN server configurations configured on the backend for frontend WebRTC connection setup.
+
+```bash
+GET /api/calls/ice-servers
+```
+
+#### Response
+
+```json
+{
+  "status": "success",
+  "data": {
+    "ice_servers": [
+      {
+        "urls": [
+          "stun:stun.l.google.com:19302"
+        ]
+      },
+      {
+        "urls": [
+          "turn:turn.example.com:3478"
+        ],
+        "username": "webrtc-user",
+        "credential": "secure-turn-password-123"
+      }
+    ]
+  }
+}
+```

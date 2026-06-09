@@ -23,9 +23,10 @@ GET /api/templates
 |-----------|------|-------------|
 | `page` | integer | Page number (default: 1) |
 | `limit` | integer | Items per page (default: 20) |
-| `status` | string | Filter by status (APPROVED, PENDING, REJECTED) |
+| `account` | string | Filter by WhatsApp account name |
+| `status` | string | Filter by status (APPROVED, PENDING, REJECTED, DRAFT, etc.) |
 | `category` | string | Filter by category (MARKETING, UTILITY, AUTHENTICATION) |
-| `account_id` | string | Filter by WhatsApp account |
+| `search` | string | Search template name or display name (case-insensitive) |
 
 ### Response
 
@@ -33,15 +34,38 @@ GET /api/templates
 {
   "status": "success",
   "data": {
-    "items": [
+    "templates": [
       {
-        "id": "uuid",
+        "id": "550e8400-e29b-41d4-a716-446655440000",
+        "whatsapp_account": "default_account",
+        "meta_template_id": "123456789012345",
         "name": "order_confirmation",
+        "display_name": "Order Confirmation",
         "language": "en",
-        "status": "APPROVED",
         "category": "UTILITY",
-        "components": [...],
-        "created_at": "2024-01-01T00:00:00Z"
+        "status": "APPROVED",
+        "header_type": "IMAGE",
+        "header_content": "440e8400-e29b-41d4-a716-446655440000",
+        "body_content": "Hi {{1}}, your order #{{2}} has been confirmed!",
+        "footer_content": "Thank you for shopping with us",
+        "buttons": [
+          {
+            "type": "URL",
+            "text": "Track Order",
+            "url": "https://example.com/track/{{1}}"
+          }
+        ],
+        "sample_values": [
+          "John",
+          "12345"
+        ],
+        "add_security_recommendation": false,
+        "code_expiration_minutes": 0,
+        "quality_rating": "GREEN",
+        "created_by_name": "Admin User",
+        "updated_by_name": "Admin User",
+        "created_at": "2024-01-01T00:00:00Z",
+        "updated_at": "2024-01-01T00:00:00Z"
       }
     ],
     "total": 50,
@@ -65,42 +89,43 @@ GET /api/templates/{id}
 {
   "status": "success",
   "data": {
-    "id": "uuid",
+    "id": "550e8400-e29b-41d4-a716-446655440000",
+    "whatsapp_account": "default_account",
+    "meta_template_id": "123456789012345",
     "name": "order_confirmation",
+    "display_name": "Order Confirmation",
     "language": "en",
-    "status": "APPROVED",
     "category": "UTILITY",
-    "components": [
+    "status": "APPROVED",
+    "header_type": "IMAGE",
+    "header_content": "440e8400-e29b-41d4-a716-446655440000",
+    "body_content": "Hi {{1}}, your order #{{2}} has been confirmed!",
+    "footer_content": "Thank you for shopping with us",
+    "buttons": [
       {
-        "type": "HEADER",
-        "format": "IMAGE"
-      },
-      {
-        "type": "BODY",
-        "text": "Hi {{1}}, your order #{{2}} has been confirmed!"
-      },
-      {
-        "type": "FOOTER",
-        "text": "Thank you for shopping with us"
-      },
-      {
-        "type": "BUTTONS",
-        "buttons": [
-          {
-            "type": "URL",
-            "text": "Track Order",
-            "url": "https://example.com/track/{{1}}"
-          }
-        ]
+        "type": "URL",
+        "text": "Track Order",
+        "url": "https://example.com/track/{{1}}"
       }
-    ]
+    ],
+    "sample_values": [
+      "John",
+      "12345"
+    ],
+    "add_security_recommendation": false,
+    "code_expiration_minutes": 0,
+    "quality_rating": "GREEN",
+    "created_by_name": "Admin User",
+    "updated_by_name": "Admin User",
+    "created_at": "2024-01-01T00:00:00Z",
+    "updated_at": "2024-01-01T00:00:00Z"
   }
 }
 ```
 
 ## Create Template
 
-Create a new template (submitted to Meta for approval).
+Create a new local draft template. Note that fields are flat rather than nested under components.
 
 ```bash
 POST /api/templates
@@ -108,42 +133,90 @@ POST /api/templates
 
 ### Request Body
 
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `whatsapp_account` | string | Yes | WhatsApp account name |
+| `name` | string | Yes | Template API name (lowercase, alphanumeric, and underscores only) |
+| `display_name` | string | No | User-friendly template name (defaults to `name`) |
+| `language` | string | Yes | Language code (e.g. `en`, `es`) |
+| `category` | string | Yes | MARKETING, UTILITY, or AUTHENTICATION |
+| `header_type` | string | No | TEXT, IMAGE, VIDEO, DOCUMENT, or NONE (default: NONE) |
+| `header_content` | string | No | Header text, or media handle (from the upload-media API) |
+| `body_content` | string | Yes* | Message body. Supports variables (`{{1}}`, `{{2}}`). Required unless AUTHENTICATION. |
+| `footer_content` | string | No | Footer text |
+| `buttons` | array | No | Template buttons array |
+| `sample_values` | array | No | Sample values for body and header variables |
+| `add_security_recommendation` | boolean | No | AUTHENTICATION category only: appends Meta security disclaimer |
+| `code_expiration_minutes` | integer | No | AUTHENTICATION category only: expiration time in minutes (1-90) |
+
 ```json
 {
-  "account_id": "uuid",
+  "whatsapp_account": "default_account",
   "name": "welcome_message",
+  "display_name": "Welcome Message",
   "language": "en",
   "category": "MARKETING",
-  "components": [
+  "header_type": "TEXT",
+  "header_content": "Welcome to {{1}}!",
+  "body_content": "Welcome to our store, {{1}}! Use code {{2}} for 10% off your first order.",
+  "footer_content": "Reply STOP to unsubscribe",
+  "buttons": [
     {
-      "type": "BODY",
-      "text": "Welcome to our store, {{1}}! Use code {{2}} for 10% off your first order."
-    },
-    {
-      "type": "FOOTER",
-      "text": "Reply STOP to unsubscribe"
+      "type": "QUICK_REPLY",
+      "text": "Unsubscribe"
     }
+  ],
+  "sample_values": [
+    "Whatomate",
+    "John",
+    "WELCOME10"
   ]
 }
 ```
 
 ### Response
 
+Returns the fully created `TemplateResponse` object with status `DRAFT`.
+
 ```json
 {
   "status": "success",
   "data": {
-    "id": "uuid",
+    "id": "550e8400-e29b-41d4-a716-446655440000",
+    "whatsapp_account": "default_account",
+    "meta_template_id": "",
     "name": "welcome_message",
-    "status": "PENDING",
-    "created_at": "2024-01-01T00:00:00Z"
+    "display_name": "Welcome Message",
+    "language": "en",
+    "category": "MARKETING",
+    "status": "DRAFT",
+    "header_type": "TEXT",
+    "header_content": "Welcome to {{1}}!",
+    "body_content": "Welcome to our store, {{1}}! Use code {{2}} for 10% off your first order.",
+    "footer_content": "Reply STOP to unsubscribe",
+    "buttons": [
+      {
+        "type": "QUICK_REPLY",
+        "text": "Unsubscribe"
+      }
+    ],
+    "sample_values": [
+      "Whatomate",
+      "John",
+      "WELCOME10"
+    ],
+    "add_security_recommendation": false,
+    "code_expiration_minutes": 0,
+    "quality_rating": "UNKNOWN",
+    "created_at": "2024-01-01T12:00:00Z",
+    "updated_at": "2024-01-01T12:00:00Z"
   }
 }
 ```
 
 ## Update Template
 
-Update an existing template.
+Update an existing draft template.
 
 ```bash
 PUT /api/templates/{id}
@@ -151,39 +224,14 @@ PUT /api/templates/{id}
 
 ### Request Body
 
-```json
-{
-  "components": [
-    {
-      "type": "BODY",
-      "text": "Welcome, {{1}}! Use code {{2}} for 15% off your first order."
-    }
-  ]
-}
-```
+Same structure as template creation.
 
 ## Delete Template
 
-Delete a template.
+Delete a template locally and request deletion from Meta if already published.
 
 ```bash
 DELETE /api/templates/{id}
-```
-
-## Sync Templates
-
-Sync templates from Meta's WhatsApp Business API.
-
-```bash
-POST /api/templates/sync
-```
-
-### Request Body
-
-```json
-{
-  "account_id": "uuid"
-}
 ```
 
 ### Response
@@ -192,16 +240,45 @@ POST /api/templates/sync
 {
   "status": "success",
   "data": {
-    "synced": 25,
-    "new": 3,
-    "updated": 5
+    "message": "Template deleted successfully"
+  }
+}
+```
+
+## Upload Template Media
+
+Upload a media file (image, video, document) for use as a template header sample value. This endpoint returns a handle string that you must pass into `header_content` during template creation.
+
+This endpoint accepts `multipart/form-data`.
+
+```bash
+POST /api/templates/upload-media
+```
+
+### Request Parameters
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `file` | file binary | Yes | The sample media file to upload |
+| `account` | string | Yes | WhatsApp account name (can be passed as a query param or form value) |
+
+### Response
+
+```json
+{
+  "status": "success",
+  "data": {
+    "handle": "440e8400-e29b-41d4-a716-446655440000",
+    "filename": "sample_invoice.pdf",
+    "mime_type": "application/pdf",
+    "size": 12345
   }
 }
 ```
 
 ## Submit Template
 
-Submit a template for Meta approval.
+Submit a local `DRAFT` template to Meta for approval, or publish update revisions to Meta.
 
 ```bash
 POST /api/templates/{id}/publish
@@ -213,106 +290,50 @@ POST /api/templates/{id}/publish
 {
   "status": "success",
   "data": {
-    "id": "uuid",
-    "status": "PENDING"
+    "message": "Template submitted to Meta for approval",
+    "meta_template_id": "123456789012345",
+    "status": "PENDING",
+    "template": {
+      "id": "550e8400-e29b-41d4-a716-446655440000",
+      "whatsapp_account": "default_account",
+      "meta_template_id": "123456789012345",
+      "name": "welcome_message",
+      "status": "PENDING",
+      "created_at": "2024-01-01T12:00:00Z",
+      "updated_at": "2024-01-01T12:05:00Z"
+    }
   }
 }
 ```
 
-## Template Components
+## Sync Templates
 
-| Component | Description |
-|-----------|-------------|
-| `HEADER` | Optional header (text, image, video, or document) |
-| `BODY` | Main message content with variables |
-| `FOOTER` | Optional footer text |
-| `BUTTONS` | Call-to-action or quick reply buttons |
+Sync templates from Meta's API to your local Whatomate database.
 
-## Template Variables
-
-### Positional Parameters
-
-Use `{{1}}`, `{{2}}`, etc. for dynamic content:
-
-```
-Hello {{1}}, your order #{{2}} is ready for pickup at {{3}}.
+```bash
+POST /api/templates/sync
 ```
 
-When creating templates with positional parameters, provide sample values:
+### Request Body
 
 ```json
 {
-  "components": [
-    {
-      "type": "BODY",
-      "text": "Hello {{1}}, your order #{{2}} is ready!"
-    }
-  ],
-  "sample_values": [
-    { "component": "body", "index": 1, "value": "John" },
-    { "component": "body", "index": 2, "value": "12345" }
-  ]
+  "whatsapp_account": "default_account"
 }
 ```
 
-### Named Parameters
-
-Templates also support named parameters for better readability:
-
-```
-Hello {{customer_name}}, your order #{{order_id}} is ready for pickup at {{store_location}}.
-```
-
-When using named parameters, provide sample values with `param_name`:
+### Response
 
 ```json
 {
-  "parameter_format": "named",
-  "components": [
-    {
-      "type": "BODY",
-      "text": "Hello {{customer_name}}, your order #{{order_id}} is ready!"
-    }
-  ],
-  "sample_values": [
-    { "component": "body", "param_name": "customer_name", "value": "John" },
-    { "component": "body", "param_name": "order_id", "value": "12345" }
-  ]
-}
-```
-
-### URL Button Parameters
-
-Templates can include URL buttons with dynamic variables. For example, a "Track Order" button with URL `https://example.com/track/{{1}}`:
-
-```json
-{
-  "type": "BUTTONS",
-  "buttons": [
-    {
-      "type": "URL",
-      "text": "Track Order",
-      "url": "https://example.com/track/{{1}}",
-      "example": "https://example.com/track/12345"
-    }
-  ]
-}
-```
-
-When sending a template with dynamic URL buttons, provide the dynamic values via the `button_params` field in the [Send Template Message](/api-reference/messages/#send-template-message) endpoint. The key is the zero-based button index:
-
-```json
-{
-  "template_name": "order_shipped",
-  "template_params": { "1": "John", "2": "12345" },
-  "button_params": { "0": "12345" }
+  "status": "success",
+  "data": {
+    "message": "Synced 25 templates",
+    "count": 25
+  }
 }
 ```
 
 <Aside type="note">
-  Whatomate automatically detects if your template uses named parameters (non-numeric placeholders) and sets the appropriate format when submitting to Meta.
-</Aside>
-
-<Aside type="caution">
   Template approval can take from a few minutes to 24 hours. Rejected templates must be modified and resubmitted.
 </Aside>

@@ -1,0 +1,326 @@
+---
+title: Catalogs
+description: Manage WhatsApp Product Catalogs and inventory
+---
+
+import { Aside } from '@astrojs/starlight/components';
+
+## Overview
+
+The Catalogs API allows you to manage Meta WhatsApp Product Catalogs, including syncing catalogs from Meta, listing products, and creating/updating products within catalogs.
+
+---
+
+## Catalogs
+
+### List Catalogs
+
+Retrieve all product catalogs for your organization.
+
+```bash
+GET /api/catalogs
+```
+
+#### Query Parameters
+
+| Parameter | Type | Required | Description |
+|---|---|---|---|
+| `whatsapp_account` | string | No | Filter catalogs by WhatsApp account name |
+
+#### Response
+
+```json
+{
+  "status": "success",
+  "data": {
+    "catalogs": [
+      {
+        "id": "e9b728cd-7eb1-4d32-9cb7-7f8a7e02e1c0",
+        "meta_catalog_id": "10987654321098",
+        "whatsapp_account": "Primary Line",
+        "name": "Summer Collection",
+        "is_active": true,
+        "product_count": 12,
+        "created_at": "2024-01-01T00:00:00Z",
+        "updated_at": "2024-01-01T00:00:00Z"
+      }
+    ]
+  }
+}
+```
+
+### Get Catalog
+
+Retrieve details for a single catalog, including its products list.
+
+```bash
+GET /api/catalogs/{id}
+```
+
+#### Response
+
+```json
+{
+  "status": "success",
+  "data": {
+    "id": "e9b728cd-7eb1-4d32-9cb7-7f8a7e02e1c0",
+    "meta_catalog_id": "10987654321098",
+    "whatsapp_account": "Primary Line",
+    "name": "Summer Collection",
+    "is_active": true,
+    "product_count": 1,
+    "products": [
+      {
+        "id": "f47ac10b-58cc-4372-a567-0e02b2c3d479",
+        "meta_product_id": "23456789012345",
+        "name": "Floral Summer Dress",
+        "description": "Lightweight floral summer dress.",
+        "price": 2999,
+        "currency": "USD",
+        "url": "https://example.com/products/dress",
+        "image_url": "https://example.com/images/dress.jpg",
+        "retailer_id": "SKU-DRESS-SUMMER-01",
+        "is_active": true,
+        "created_at": "2024-01-01T01:00:00Z",
+        "updated_at": "2024-01-01T01:00:00Z"
+      }
+    ],
+    "created_at": "2024-01-01T00:00:00Z",
+    "updated_at": "2024-01-01T00:00:00Z"
+  }
+}
+```
+
+### Create Catalog
+
+Create a new product catalog in Meta and store it locally.
+
+```bash
+POST /api/catalogs
+```
+
+#### Request Body
+
+| Field | Type | Required | Description |
+|---|---|---|---|
+| `whatsapp_account` | string | Yes | WhatsApp account name to bind the catalog to |
+| `name` | string | Yes | Display name for the catalog |
+
+```json
+{
+  "whatsapp_account": "Primary Line",
+  "name": "Summer Collection"
+}
+```
+
+#### Response
+
+```json
+{
+  "status": "success",
+  "data": {
+    "id": "e9b728cd-7eb1-4d32-9cb7-7f8a7e02e1c0",
+    "meta_catalog_id": "10987654321098",
+    "whatsapp_account": "Primary Line",
+    "name": "Summer Collection",
+    "is_active": true,
+    "product_count": 0,
+    "created_at": "2024-01-01T00:00:00Z",
+    "updated_at": "2024-01-01T00:00:00Z"
+  }
+}
+```
+
+### Delete Catalog
+
+Delete a catalog from Meta and delete it locally (along with all associated local product entries).
+
+```bash
+DELETE /api/catalogs/{id}
+```
+
+#### Response
+
+```json
+{
+  "status": "success",
+  "data": {
+    "message": "Catalog deleted"
+  }
+}
+```
+
+### Sync Catalogs
+
+Fetch and sync catalog listings directly from the Meta API for the specified WhatsApp Account.
+
+```bash
+POST /api/catalogs/sync
+```
+
+#### Request Body
+
+| Field | Type | Required | Description |
+|---|---|---|---|
+| `whatsapp_account` | string | Yes | WhatsApp account name to sync catalogs for |
+
+```json
+{
+  "whatsapp_account": "Primary Line"
+}
+```
+
+#### Response
+
+```json
+{
+  "status": "success",
+  "data": {
+    "message": "Catalogs synced",
+    "synced": 2,
+    "total": 2
+  }
+}
+```
+
+---
+
+## Products
+
+### List Catalog Products
+
+Retrieve all products stored in a specific catalog.
+
+```bash
+GET /api/catalogs/{id}/products
+```
+
+#### Response
+
+```json
+{
+  "status": "success",
+  "data": {
+    "products": [
+      {
+        "id": "f47ac10b-58cc-4372-a567-0e02b2c3d479",
+        "meta_product_id": "23456789012345",
+        "name": "Floral Summer Dress",
+        "description": "Lightweight floral summer dress.",
+        "price": 2999,
+        "currency": "USD",
+        "url": "https://example.com/products/dress",
+        "image_url": "https://example.com/images/dress.jpg",
+        "retailer_id": "SKU-DRESS-SUMMER-01",
+        "is_active": true,
+        "created_at": "2024-01-01T01:00:00Z",
+        "updated_at": "2024-01-01T01:00:00Z"
+      }
+    ]
+  }
+}
+```
+
+### Get Product
+
+Retrieve a single catalog product by ID.
+
+```bash
+GET /api/products/{id}
+```
+
+### Create Product
+
+Create a new product inside a catalog in Meta and store it locally.
+
+```bash
+POST /api/catalogs/{id}/products
+```
+
+#### Request Body
+
+| Field | Type | Required | Description |
+|---|---|---|---|
+| `name` | string | Yes | Product name |
+| `price` | integer | Yes | Price of the product in cents (e.g. `2999` for $29.99) |
+| `currency` | string | No | Currency ISO code (default: `USD`) |
+| `description` | string | No | Product description |
+| `url` | string | No | URL link to the product details page |
+| `image_url` | string | No | Publicly accessible image URL for the product |
+| `retailer_id` | string | No | Unique Retailer SKU ID for the product |
+
+```json
+{
+  "name": "Floral Summer Dress",
+  "price": 2999,
+  "currency": "USD",
+  "description": "Lightweight floral summer dress.",
+  "url": "https://example.com/products/dress",
+  "image_url": "https://example.com/images/dress.jpg",
+  "retailer_id": "SKU-DRESS-SUMMER-01"
+}
+```
+
+#### Response
+
+```json
+{
+  "status": "success",
+  "data": {
+    "id": "f47ac10b-58cc-4372-a567-0e02b2c3d479",
+    "meta_product_id": "23456789012345",
+    "name": "Floral Summer Dress",
+    "description": "Lightweight floral summer dress.",
+    "price": 2999,
+    "currency": "USD",
+    "url": "https://example.com/products/dress",
+    "image_url": "https://example.com/images/dress.jpg",
+    "retailer_id": "SKU-DRESS-SUMMER-01",
+    "is_active": true,
+    "created_at": "2024-01-01T01:00:00Z",
+    "updated_at": "2024-01-01T01:00:00Z"
+  }
+}
+```
+
+### Update Product
+
+Update an existing product's fields in Meta and locally. Partial updates are supported.
+
+```bash
+PUT /api/products/{id}
+```
+
+#### Request Body
+
+Supports the same fields as **Create Product**.
+
+```json
+{
+  "name": "Floral Summer Dress (Blue)",
+  "price": 3499
+}
+```
+
+#### Response
+
+Returns the updated product object.
+
+### Delete Product
+
+Delete a product from Meta and locally.
+
+```bash
+DELETE /api/products/{id}
+```
+
+#### Response
+
+```json
+{
+  "status": "success",
+  "data": {
+    "message": "Product deleted"
+  }
+}
+```

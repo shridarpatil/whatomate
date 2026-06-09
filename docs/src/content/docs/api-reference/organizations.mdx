@@ -256,7 +256,7 @@ DELETE /api/organizations/members/{member_id}
 ### Get Settings
 
 ```bash
-GET /api/organizations/settings
+GET /api/org/settings
 ```
 
 #### Response
@@ -269,7 +269,12 @@ GET /api/organizations/settings
     "settings": {
       "mask_phone_numbers": false,
       "timezone": "UTC",
-      "date_format": "YYYY-MM-DD"
+      "date_format": "YYYY-MM-DD",
+      "calling_enabled": true,
+      "max_call_duration": 3600,
+      "transfer_timeout_secs": 60,
+      "hold_music_file": "org_uuid_hold_music.ogg",
+      "ringback_file": "org_uuid_ringback.ogg"
     }
   }
 }
@@ -278,7 +283,7 @@ GET /api/organizations/settings
 ### Update Settings
 
 ```bash
-PUT /api/organizations/settings
+PUT /api/org/settings
 ```
 
 #### Request Body
@@ -288,11 +293,59 @@ PUT /api/organizations/settings
   "name": "Updated Name",
   "mask_phone_numbers": true,
   "timezone": "Asia/Kolkata",
-  "date_format": "DD/MM/YYYY"
+  "date_format": "DD/MM/YYYY",
+  "calling_enabled": true,
+  "max_call_duration": 3600,
+  "transfer_timeout_secs": 60
 }
 ```
 
 All fields are optional — only provided fields are updated.
+
+#### Response
+
+```json
+{
+  "status": "success",
+  "data": {
+    "message": "Settings updated successfully"
+  }
+}
+```
+
+### Upload Organization Audio
+
+Upload audio files for organization hold music or ringback tones.
+
+```bash
+POST /api/org/audio?type=hold_music
+```
+
+#### Query Parameters
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `type` | string | Yes | The type of audio: `hold_music` or `ringback` |
+
+#### Request Body
+
+A `multipart/form-data` request containing:
+
+- `file`: The audio file to upload (maximum size is 5MB). Supported formats: OGG, Opus, MP3, WAV, AAC, M4A.
+
+#### Response
+
+```json
+{
+  "status": "success",
+  "data": {
+    "filename": "org_uuid_hold_music.ogg",
+    "type": "hold_music",
+    "mime_type": "audio/mpeg",
+    "size": 1048576
+  }
+}
+```
 
 ## See Also
 

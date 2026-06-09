@@ -61,7 +61,9 @@ GET /api/roles
 
 | Parameter | Type | Description |
 |-----------|------|-------------|
-| `search` | string | Filter by role name |
+| `search` | string | Filter by role name (case-insensitive) |
+| `page` | integer | Page number for pagination (default: 1) |
+| `limit` | integer | Items per page (default: 50) |
 
 ### Response
 
@@ -90,7 +92,10 @@ GET /api/roles
         "created_at": "2024-01-01T00:00:00Z",
         "updated_at": "2024-01-01T00:00:00Z"
       }
-    ]
+    ],
+    "total": 2,
+    "page": 1,
+    "limit": 50
   }
 }
 ```

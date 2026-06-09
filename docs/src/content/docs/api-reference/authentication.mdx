@@ -9,10 +9,16 @@ import { Aside } from '@astrojs/starlight/components';
 
 Whatomate supports two authentication methods:
 
-1. **JWT Tokens** - For user sessions and frontend applications
+1. **JWT Tokens (Cookies or Header)** - For user sessions and frontend applications
 2. **API Keys** - For server-to-server integrations and automation
 
-After logging in, you receive an access token and refresh token. Include the access token in the `Authorization` header for all protected API requests. Alternatively, use an [API key](/whatomate/api-reference/api-keys) in the `X-API-Key` header.
+After logging in or registering, the server sets three secure cookies:
+
+- `whm_access` - Secure, httpOnly cookie containing the short-lived access token.
+- `whm_refresh` - Secure, httpOnly cookie containing the refresh token. Scoped to `/api/auth/refresh` for security.
+- `whm_csrf` - A JavaScript-readable cookie containing a random CSRF token to prevent cross-site request forgery.
+
+Alternatively, for headless clients or API integrations, you can include the access token in the `Authorization: Bearer <token>` header or use an [API key](/whatomate/api-reference/api-keys) in the `X-API-Key` header.
 
 ## Register
 
@@ -40,36 +46,43 @@ POST /api/auth/register
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
 | `email` | string | Yes | User's email address |
-| `password` | string | Yes | Minimum 8 characters |
+| `password` | string | Yes | Minimum 12 characters |
 | `full_name` | string | Yes | Display name |
 | `organization_id` | string | Yes | UUID of the organization to join |
 
 ### Response
 
+The response body contains user information and the token expiration details, while the actual JWT tokens are set as secure HTTP cookies (`whm_access` and `whm_refresh`).
+
 ```json
 {
   "status": "success",
   "data": {
+    "expires_in": 3600,
     "user": {
       "id": "uuid",
+      "organization_id": "uuid",
       "email": "user@example.com",
       "full_name": "John Doe",
-      "organization_id": "uuid",
+      "role_id": "uuid",
+      "is_active": true,
+      "is_available": true,
+      "is_super_admin": false,
+      "created_at": "2024-01-01T00:00:00Z",
+      "updated_at": "2024-01-01T00:00:00Z",
       "role": {
         "id": "uuid",
-        "name": "agent"
+        "name": "agent",
+        "description": "Standard Agent role"
       }
-    },
-    "access_token": "eyJhbGciOiJIUzI1NiIs...",
-    "refresh_token": "eyJhbGciOiJIUzI1NiIs...",
-    "expires_in": 3600
+    }
   }
 }
 ```
 
 ## Login
 
-Authenticate and receive tokens.
+Authenticate and receive tokens via cookies.
 
 ```bash
 POST /api/auth/login
@@ -86,31 +99,40 @@ POST /api/auth/login
 
 ### Response
 
+The response body contains user information and token expiration details. The JWT access and refresh tokens are set via secure, httpOnly cookies.
+
 ```json
 {
   "status": "success",
   "data": {
+    "expires_in": 3600,
     "user": {
       "id": "uuid",
+      "organization_id": "uuid",
       "email": "user@example.com",
-      "name": "John Doe"
-    },
-    "access_token": "eyJhbGciOiJIUzI1NiIs...",
-    "refresh_token": "eyJhbGciOiJIUzI1NiIs...",
-    "expires_in": 3600
+      "full_name": "John Doe",
+      "role_id": "uuid",
+      "is_active": true,
+      "is_available": true,
+      "is_super_admin": false,
+      "created_at": "2024-01-01T00:00:00Z",
+      "updated_at": "2024-01-01T00:00:00Z"
+    }
   }
 }
 ```
 
 ## Refresh Token
 
-Get a new access token using your refresh token.
+Get a new access token using your refresh token. The server rotates the refresh token upon consumption (refresh token rotation).
 
 ```bash
 POST /api/auth/refresh
 ```
 
 ### Request Body
+
+If the client does not send cookies (e.g. headless scripts), the refresh token can optionally be provided in the request body:
 
 ```json
 {
@@ -120,13 +142,25 @@ POST /api/auth/refresh
 
 ### Response
 
+Returns new tokens as secure cookies and the user metadata.
+
 ```json
 {
   "status": "success",
   "data": {
-    "access_token": "eyJhbGciOiJIUzI1NiIs...",
-    "refresh_token": "eyJhbGciOiJIUzI1NiIs...",
-    "expires_in": 3600
+    "expires_in": 3600,
+    "user": {
+      "id": "uuid",
+      "organization_id": "uuid",
+      "email": "user@example.com",
+      "full_name": "John Doe",
+      "role_id": "uuid",
+      "is_active": true,
+      "is_available": true,
+      "is_super_admin": false,
+      "created_at": "2024-01-01T00:00:00Z",
+      "updated_at": "2024-01-01T00:00:00Z"
+    }
   }
 }
 ```
@@ -153,27 +187,63 @@ POST /api/auth/switch-org
 
 ### Response
 
+The response body returns updated details of the user scoped to the new organization, along with new access and refresh cookies.
+
 ```json
 {
   "status": "success",
   "data": {
+    "expires_in": 3600,
     "user": {
       "id": "uuid",
+      "organization_id": "uuid",
       "email": "user@example.com",
       "full_name": "John Doe",
-      "organization_id": "uuid",
+      "role_id": "uuid",
+      "is_active": true,
+      "is_available": true,
+      "is_super_admin": false,
+      "created_at": "2024-01-01T00:00:00Z",
+      "updated_at": "2024-01-01T00:00:00Z",
       "role": {
         "id": "uuid",
         "name": "agent",
+        "description": "Standard Agent role",
         "permissions": [
           { "resource": "contacts", "action": "read" },
           { "resource": "messages", "action": "read" }
         ]
       }
-    },
-    "access_token": "eyJhbGciOiJIUzI1NiIs...",
-    "refresh_token": "eyJhbGciOiJIUzI1NiIs...",
-    "expires_in": 3600
+    }
+  }
+}
+```
+
+## Logout
+
+Log out the current user session. This endpoint invalidates the user's refresh token inside the Redis store and clears all set authentication cookies.
+
+```bash
+POST /api/auth/logout
+```
+
+### Request Body
+
+If cookies are not used, the client can optionally specify the refresh token to invalidate:
+
+```json
+{
+  "refresh_token": "eyJhbGciOiJIUzI1NiIs..."
+}
+```
+
+### Response
+
+```json
+{
+  "status": "success",
+  "data": {
+    "status": "logged_out"
   }
 }
 ```
@@ -197,3 +267,4 @@ curl -X GET "http://your-server:8080/api/contacts" \
 <Aside type="caution">
   Store tokens securely. Never expose tokens in client-side code or version control.
 </Aside>
+

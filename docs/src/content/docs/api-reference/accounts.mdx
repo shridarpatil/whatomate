@@ -23,15 +23,28 @@ GET /api/accounts
 {
   "status": "success",
   "data": {
-    "items": [
+    "accounts": [
       {
-        "id": "uuid",
-        "name": "Main Business",
-        "phone_number": "+1234567890",
-        "phone_number_id": "123456789",
-        "business_account_id": "987654321",
+        "id": "893c5d88-b4b6-4b2a-bf3b-9a8bb698a3e7",
+        "name": "Main Business Support",
+        "app_id": "10987654321",
+        "phone_id": "123456789",
+        "business_id": "987654321",
+        "webhook_verify_token": "a1b2c3d4e5f6g7h8i9j0",
+        "api_version": "v21.0",
+        "is_default_incoming": true,
+        "is_default_outgoing": true,
+        "auto_read_receipt": true,
+        "business_calling_enabled": true,
         "status": "active",
-        "created_at": "2024-01-01T00:00:00Z"
+        "has_access_token": true,
+        "has_app_secret": true,
+        "created_by_id": "3fa85f64-5717-4562-b3fc-2c963f66afa6",
+        "created_by_name": "John Doe",
+        "updated_by_id": "3fa85f64-5717-4562-b3fc-2c963f66afa6",
+        "updated_by_name": "John Doe",
+        "created_at": "2024-01-01T00:00:00Z",
+        "updated_at": "2024-01-01T00:00:00Z"
       }
     ]
   }
@@ -52,17 +65,26 @@ GET /api/accounts/{id}
 {
   "status": "success",
   "data": {
-    "id": "uuid",
-    "name": "Main Business",
-    "phone_number": "+1234567890",
-    "phone_number_id": "123456789",
-    "business_account_id": "987654321",
-    "access_token": "EAAxxxx...",
-    "webhook_verify_token": "your_verify_token",
+    "id": "893c5d88-b4b6-4b2a-bf3b-9a8bb698a3e7",
+    "name": "Main Business Support",
+    "app_id": "10987654321",
+    "phone_id": "123456789",
+    "business_id": "987654321",
+    "webhook_verify_token": "a1b2c3d4e5f6g7h8i9j0",
+    "api_version": "v21.0",
+    "is_default_incoming": true,
+    "is_default_outgoing": true,
+    "auto_read_receipt": true,
+    "business_calling_enabled": true,
     "status": "active",
-    "quality_rating": "GREEN",
-    "messaging_limit": "TIER_1K",
-    "created_at": "2024-01-01T00:00:00Z"
+    "has_access_token": true,
+    "has_app_secret": true,
+    "created_by_id": "3fa85f64-5717-4562-b3fc-2c963f66afa6",
+    "created_by_name": "John Doe",
+    "updated_by_id": "3fa85f64-5717-4562-b3fc-2c963f66afa6",
+    "updated_by_name": "John Doe",
+    "created_at": "2024-01-01T00:00:00Z",
+    "updated_at": "2024-01-01T00:00:00Z"
   }
 }
 ```
@@ -77,13 +99,35 @@ POST /api/accounts
 
 ### Request Body
 
+| Field | Type | Required | Description |
+|---|---|---|---|
+| `name` | string | Yes | Readable name for the account |
+| `phone_id` | string | Yes | Meta's WhatsApp Phone Number ID |
+| `business_id` | string | Yes | Meta's WhatsApp Business Account ID (WABA ID) |
+| `access_token` | string | Yes | Meta Graph API permanent access token |
+| `app_id` | string | No | Meta App ID |
+| `app_secret` | string | No | Meta App Secret for validating webhook signatures |
+| `webhook_verify_token` | string | No | Custom token for webhook verification (auto-generated if omitted) |
+| `api_version` | string | No | Meta API Version (defaults to `v21.0`) |
+| `is_default_incoming` | boolean | No | Mark as the default account for incoming messages |
+| `is_default_outgoing` | boolean | No | Mark as the default account for outgoing messages |
+| `auto_read_receipt` | boolean | No | Automatically send read receipts for incoming messages |
+| `business_calling_enabled` | boolean | No | Enable calling features for this phone number |
+
 ```json
 {
-  "name": "Support Line",
-  "phone_number_id": "123456789",
-  "business_account_id": "987654321",
+  "name": "Customer Support Line",
+  "phone_id": "123456789",
+  "business_id": "987654321",
   "access_token": "EAAxxxx...",
-  "webhook_verify_token": "your_custom_verify_token"
+  "app_id": "10987654321",
+  "app_secret": "meta_app_secret_123",
+  "webhook_verify_token": "your_custom_verify_token",
+  "api_version": "v21.0",
+  "is_default_incoming": true,
+  "is_default_outgoing": true,
+  "auto_read_receipt": true,
+  "business_calling_enabled": true
 }
 ```
 
@@ -93,17 +137,33 @@ POST /api/accounts
 {
   "status": "success",
   "data": {
-    "id": "uuid",
-    "name": "Support Line",
-    "status": "pending",
-    "created_at": "2024-01-01T00:00:00Z"
+    "id": "893c5d88-b4b6-4b2a-bf3b-9a8bb698a3e7",
+    "name": "Customer Support Line",
+    "app_id": "10987654321",
+    "phone_id": "123456789",
+    "business_id": "987654321",
+    "webhook_verify_token": "your_custom_verify_token",
+    "api_version": "v21.0",
+    "is_default_incoming": true,
+    "is_default_outgoing": true,
+    "auto_read_receipt": true,
+    "business_calling_enabled": true,
+    "status": "active",
+    "has_access_token": true,
+    "has_app_secret": true,
+    "created_by_id": "3fa85f64-5717-4562-b3fc-2c963f66afa6",
+    "created_by_name": "John Doe",
+    "updated_by_id": "3fa85f64-5717-4562-b3fc-2c963f66afa6",
+    "updated_by_name": "John Doe",
+    "created_at": "2024-01-01T00:00:00Z",
+    "updated_at": "2024-01-01T00:00:00Z"
   }
 }
 ```
 
 ## Update Account
 
-Update account settings.
+Update account settings. Partial updates are supported.
 
 ```bash
 PUT /api/accounts/{id}
@@ -111,12 +171,19 @@ PUT /api/accounts/{id}
 
 ### Request Body
 
+Supports the same fields as **Create Account**.
+
 ```json
 {
-  "name": "Customer Support",
-  "access_token": "EAAyyyy..."
+  "name": "Customer Support (Primary)",
+  "access_token": "EAAyyyy...",
+  "business_calling_enabled": false
 }
 ```
+
+### Response
+
+Returns the updated account object.
 
 ## Delete Account
 
@@ -127,12 +194,23 @@ DELETE /api/accounts/{id}
 ```
 
 <Aside type="caution">
-  Deleting an account will remove all associated contacts, messages, and settings.
+  Deleting an account will remove the connection configuration. Message and contact history remains subject to standard data retention.
 </Aside>
+
+### Response
+
+```json
+{
+  "status": "success",
+  "data": {
+    "message": "Account deleted successfully"
+  }
+}
+```
 
 ## Test Connection
 
-Verify the account connection with Meta.
+Verify the account credentials with Meta Graph API. This validates both Phone ID and Business ID configurations.
 
 ```bash
 POST /api/accounts/{id}/test
@@ -144,11 +222,129 @@ POST /api/accounts/{id}/test
 {
   "status": "success",
   "data": {
-    "connected": true,
-    "phone_number": "+1234567890",
-    "display_phone_number": "(123) 456-7890",
+    "success": true,
+    "display_phone_number": "+1234567890",
     "verified_name": "Your Business Name",
-    "quality_rating": "GREEN"
+    "quality_rating": "GREEN",
+    "messaging_limit_tier": "TIER_1K",
+    "code_verification_status": "VERIFIED",
+    "account_mode": "LIVE",
+    "is_test_number": false
+  }
+}
+```
+
+## Subscribe Webhooks
+
+Subscribe the WhatsApp Business Account to receive real-time webhooks (messages, status updates) from Meta. Run this after adding or re-verifying a number.
+
+```bash
+POST /api/accounts/{id}/subscribe
+```
+
+### Response
+
+```json
+{
+  "status": "success",
+  "data": {
+    "success": true,
+    "message": "App subscribed to webhooks successfully. You should now receive incoming messages."
+  }
+}
+```
+
+## Get Business Profile
+
+Retrieve the public business profile for this WhatsApp phone number from Meta Graph API.
+
+```bash
+GET /api/accounts/{id}/business_profile
+```
+
+### Response
+
+```json
+{
+  "status": "success",
+  "data": {
+    "messaging_product": "whatsapp",
+    "address": "123 Business Rd, Suite 100, San Francisco, CA 94103",
+    "description": "We offer premium business messaging solutions.",
+    "vertical": "PROF_SERVICES",
+    "email": "support@example.com",
+    "websites": [
+      "https://example.com",
+      "https://support.example.com"
+    ],
+    "profile_picture_url": "https://pps.whatsapp.net/v/t61.24694-24/...",
+    "about": "Helping you automate WhatsApp support."
+  }
+}
+```
+
+## Update Business Profile
+
+Update the public WhatsApp business profile details on Meta's server.
+
+```bash
+PUT /api/accounts/{id}/business_profile
+```
+
+### Request Body
+
+| Field | Type | Description |
+|---|---|---|
+| `messaging_product` | string | Must be `"whatsapp"` |
+| `address` | string | Business street address |
+| `description` | string | Business profile description |
+| `vertical` | string | Industry classification (e.g. `PROF_SERVICES`, `RETAIL`, `HOTEL`, etc.) |
+| `email` | string | Customer support email address |
+| `websites` | array | List of website URLs (max 2) |
+| `about` | string | WhatsApp status text / about section |
+
+```json
+{
+  "messaging_product": "whatsapp",
+  "address": "123 Business Rd, Suite 200, San Francisco, CA 94103",
+  "description": "Premium customer automation platform.",
+  "vertical": "RETAIL",
+  "email": "contact@example.com",
+  "websites": [
+    "https://example.com"
+  ],
+  "about": "Available for support."
+}
+```
+
+### Response
+
+Returns the updated business profile object.
+
+## Update Profile Photo
+
+Upload a new profile picture for the WhatsApp business account. The image will be uploaded to Meta Graph API.
+
+```bash
+POST /api/accounts/{id}/business_profile/photo
+```
+
+### Request Body
+
+Must be sent as `multipart/form-data`.
+
+| Parameter | Type | Required | Description |
+|---|---|---|---|
+| `file` | file | Yes | The image file to upload (JPEG or PNG, recommended 640x640 resolution) |
+
+### Response
+
+```json
+{
+  "status": "success",
+  "data": {
+    "message": "Profile picture updated successfully",
+    "handle": "45678901234567"
   }
 }
 ```
@@ -157,9 +353,7 @@ POST /api/accounts/{id}/test
 
 | Status | Description |
 |--------|-------------|
-| `pending` | Account created, awaiting verification |
 | `active` | Account is connected and working |
-| `disconnected` | Connection lost, needs reconnection |
 | `suspended` | Account suspended by Meta |
 
 ## Quality Rating

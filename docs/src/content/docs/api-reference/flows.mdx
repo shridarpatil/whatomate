@@ -23,8 +23,9 @@ GET /api/flows
 |-----------|------|-------------|
 | `page` | integer | Page number (default: 1) |
 | `limit` | integer | Items per page (default: 20) |
+| `account` | string | Filter by WhatsApp account name |
 | `status` | string | Filter by status (DRAFT, PUBLISHED, DEPRECATED) |
-| `account_id` | string | Filter by WhatsApp account |
+| `search` | string | Search by flow name (case-insensitive) |
 
 ### Response
 
@@ -32,17 +33,38 @@ GET /api/flows
 {
   "status": "success",
   "data": {
-    "items": [
+    "flows": [
       {
-        "id": "uuid",
-        "meta_flow_id": "123456789",
+        "id": "550e8400-e29b-41d4-a716-446655440000",
+        "whatsapp_account": "default_account",
+        "meta_flow_id": "123456789012345",
         "name": "Order Form",
         "status": "PUBLISHED",
-        "account_id": "uuid",
-        "created_at": "2024-01-01T00:00:00Z"
+        "category": "CUSTOMER_SUPPORT",
+        "json_version": "6.0",
+        "flow_json": {},
+        "screens": [
+          {
+            "id": "WELCOME",
+            "title": "Welcome",
+            "layout": {
+              "type": "SingleColumnLayout",
+              "children": [
+                {
+                  "type": "TextHeading",
+                  "text": "Welcome to our store!"
+                }
+              ]
+            }
+          }
+        ],
+        "preview_url": "https://play.google.com/...",
+        "has_local_changes": false,
+        "created_at": "2024-01-01T00:00:00Z",
+        "updated_at": "2024-01-01T00:00:00Z"
       }
     ],
-    "total": 10,
+    "total": 1,
     "page": 1,
     "limit": 20
   }
@@ -51,7 +73,7 @@ GET /api/flows
 
 ## Get Flow
 
-Retrieve a single flow with its JSON definition.
+Retrieve a single flow with its full definition.
 
 ```bash
 GET /api/flows/{id}
@@ -63,28 +85,42 @@ GET /api/flows/{id}
 {
   "status": "success",
   "data": {
-    "id": "uuid",
-    "meta_flow_id": "123456789",
-    "name": "Order Form",
-    "status": "PUBLISHED",
-    "json_definition": {
-      "version": "3.0",
+    "flow": {
+      "id": "550e8400-e29b-41d4-a716-446655440000",
+      "whatsapp_account": "default_account",
+      "meta_flow_id": "123456789012345",
+      "name": "Order Form",
+      "status": "PUBLISHED",
+      "category": "CUSTOMER_SUPPORT",
+      "json_version": "6.0",
+      "flow_json": {},
       "screens": [
         {
           "id": "WELCOME",
           "title": "Welcome",
-          "layout": {...}
+          "layout": {
+            "type": "SingleColumnLayout",
+            "children": [
+              {
+                "type": "TextHeading",
+                "text": "Welcome to our store!"
+              }
+            ]
+          }
         }
-      ]
-    },
-    "created_at": "2024-01-01T00:00:00Z"
+      ],
+      "preview_url": "https://play.google.com/...",
+      "has_local_changes": false,
+      "created_at": "2024-01-01T00:00:00Z",
+      "updated_at": "2024-01-01T00:00:00Z"
+    }
   }
 }
 ```
 
 ## Create Flow
 
-Create a new WhatsApp Flow.
+Create a new WhatsApp Flow locally in `DRAFT` status.
 
 ```bash
 POST /api/flows
@@ -92,49 +128,54 @@ POST /api/flows
 
 ### Request Body
 
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `whatsapp_account` | string | Yes | WhatsApp account name |
+| `name` | string | Yes | Flow name |
+| `category` | string | No | Flow category (e.g. `CUSTOMER_SUPPORT`, `UTILITY`) |
+| `json_version` | string | No | Meta JSON format version (default: `6.0`) |
+| `flow_json` | object | No | Optional raw flow JSON mapping |
+| `screens` | array | No | Array of screen objects conforming to the Meta layout |
+
 ```json
 {
-  "account_id": "uuid",
+  "whatsapp_account": "default_account",
   "name": "Customer Survey",
-  "categories": ["CUSTOMER_SUPPORT"],
-  "json_definition": {
-    "version": "3.0",
-    "screens": [
-      {
-        "id": "SURVEY",
-        "title": "Quick Survey",
-        "layout": {
-          "type": "SingleColumnLayout",
-          "children": [
-            {
-              "type": "TextHeading",
-              "text": "How was your experience?"
-            },
-            {
-              "type": "RadioButtonsGroup",
-              "name": "rating",
-              "label": "Rating",
-              "data-source": [
-                {"id": "5", "title": "Excellent"},
-                {"id": "4", "title": "Good"},
-                {"id": "3", "title": "Average"},
-                {"id": "2", "title": "Poor"},
-                {"id": "1", "title": "Very Poor"}
-              ]
-            },
-            {
-              "type": "Footer",
-              "label": "Submit",
-              "on-click-action": {
-                "name": "complete",
-                "payload": {}
-              }
+  "category": "CUSTOMER_SUPPORT",
+  "json_version": "6.0",
+  "screens": [
+    {
+      "id": "SURVEY",
+      "title": "Quick Survey",
+      "layout": {
+        "type": "SingleColumnLayout",
+        "children": [
+          {
+            "type": "TextHeading",
+            "text": "How was your experience?"
+          },
+          {
+            "type": "RadioButtonsGroup",
+            "name": "rating",
+            "label": "Rating",
+            "data-source": [
+              {"id": "5", "title": "Excellent"},
+              {"id": "4", "title": "Good"},
+              {"id": "3", "title": "Average"}
+            ]
+          },
+          {
+            "type": "Footer",
+            "label": "Submit",
+            "on-click-action": {
+              "name": "complete",
+              "payload": {}
             }
-          ]
-        }
+          }
+        ]
       }
-    ]
-  }
+    }
+  ]
 }
 ```
 
@@ -144,17 +185,27 @@ POST /api/flows
 {
   "status": "success",
   "data": {
-    "id": "uuid",
-    "name": "Customer Survey",
-    "status": "DRAFT",
-    "created_at": "2024-01-01T00:00:00Z"
+    "flow": {
+      "id": "550e8400-e29b-41d4-a716-446655440000",
+      "whatsapp_account": "default_account",
+      "meta_flow_id": "",
+      "name": "Customer Survey",
+      "status": "DRAFT",
+      "category": "CUSTOMER_SUPPORT",
+      "json_version": "6.0",
+      "screens": [],
+      "preview_url": "",
+      "has_local_changes": false,
+      "created_at": "2024-01-01T00:00:00Z",
+      "updated_at": "2024-01-01T00:00:00Z"
+    }
   }
 }
 ```
 
 ## Update Flow
 
-Update a flow's definition.
+Update a flow's local definition.
 
 ```bash
 PUT /api/flows/{id}
@@ -162,28 +213,30 @@ PUT /api/flows/{id}
 
 ### Request Body
 
-```json
-{
-  "name": "Updated Survey",
-  "json_definition": {...}
-}
-```
+Same structure as Create Flow (excluding `whatsapp_account`). Only fields provided will be updated.
 
 ## Delete Flow
 
-Delete a flow.
+Delete a flow (soft delete).
 
 ```bash
 DELETE /api/flows/{id}
 ```
 
-<Aside type="caution">
-  Published flows cannot be deleted. Deprecate them first.
-</Aside>
+### Response
+
+```json
+{
+  "status": "success",
+  "data": {
+    "message": "Flow deleted successfully"
+  }
+}
+```
 
 ## Save to Meta
 
-Push the flow definition to Meta's WhatsApp Business API.
+Push the flow definition and layout schema to Meta's WhatsApp Business API. If the flow doesn't exist on Meta, it will be created first. The status remains `DRAFT` on Meta.
 
 ```bash
 POST /api/flows/{id}/save-to-meta
@@ -195,15 +248,20 @@ POST /api/flows/{id}/save-to-meta
 {
   "status": "success",
   "data": {
-    "meta_flow_id": "123456789",
-    "validation_errors": []
+    "flow": {
+      "id": "550e8400-e29b-41d4-a716-446655440000",
+      "meta_flow_id": "123456789012345",
+      "status": "DRAFT",
+      "has_local_changes": false
+    },
+    "message": "Flow saved to Meta successfully"
   }
 }
 ```
 
 ## Publish Flow
 
-Publish a draft flow to make it available for use.
+Publish the flow to make it live and active for sending to users.
 
 ```bash
 POST /api/flows/{id}/publish
@@ -215,15 +273,18 @@ POST /api/flows/{id}/publish
 {
   "status": "success",
   "data": {
-    "id": "uuid",
-    "status": "PUBLISHED"
+    "flow": {
+      "id": "550e8400-e29b-41d4-a716-446655440000",
+      "status": "PUBLISHED"
+    },
+    "message": "Flow published successfully"
   }
 }
 ```
 
 ## Deprecate Flow
 
-Deprecate a published flow.
+Deprecate a published flow on Meta and locally. Deprecated flows cannot be edited or sent anymore.
 
 ```bash
 POST /api/flows/{id}/deprecate
@@ -235,15 +296,42 @@ POST /api/flows/{id}/deprecate
 {
   "status": "success",
   "data": {
-    "id": "uuid",
-    "status": "DEPRECATED"
+    "flow": {
+      "id": "550e8400-e29b-41d4-a716-446655440000",
+      "status": "DEPRECATED"
+    },
+    "message": "Flow deprecated successfully"
+  }
+}
+```
+
+## Duplicate Flow
+
+Create a copy of an existing flow as a new `DRAFT`. This is useful for editing published flows (since published flows cannot be directly edited, you can duplicate, make changes, and publish the copy).
+
+```bash
+POST /api/flows/{id}/duplicate
+```
+
+### Response
+
+```json
+{
+  "status": "success",
+  "data": {
+    "flow": {
+      "id": "770e8400-e29b-41d4-a716-446655440000",
+      "name": "Customer Survey (Copy)",
+      "status": "DRAFT"
+    },
+    "message": "Flow duplicated successfully. You can now edit and publish the new flow."
   }
 }
 ```
 
 ## Sync Flows
 
-Sync flows from Meta.
+Sync WhatsApp Flows from Meta's API for a specific WhatsApp account.
 
 ```bash
 POST /api/flows/sync
@@ -253,7 +341,7 @@ POST /api/flows/sync
 
 ```json
 {
-  "account_id": "uuid"
+  "whatsapp_account": "default_account"
 }
 ```
 
@@ -263,8 +351,9 @@ POST /api/flows/sync
 {
   "status": "success",
   "data": {
+    "message": "Flows synced successfully",
     "synced": 5,
-    "new": 1,
+    "created": 1,
     "updated": 2
   }
 }
@@ -279,5 +368,5 @@ POST /api/flows/sync
 | `DEPRECATED` | Flow has been retired |
 
 <Aside type="note">
-  Flows must pass Meta's validation before they can be published. Use the Save to Meta endpoint to check for validation errors.
+  Flows must pass Meta's layout schema validation when saving. Whatomate automatically validates that your multi-screen flows only contain terminal `complete` actions on the very last screen.
 </Aside>

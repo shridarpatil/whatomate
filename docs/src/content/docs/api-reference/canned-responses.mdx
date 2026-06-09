@@ -29,6 +29,8 @@ GET /api/canned-responses
 
 | Parameter | Type | Description |
 |-----------|------|-------------|
+| `page` | integer | Page number (default: 1) |
+| `limit` | integer | Items per page (default: 20) |
 | `category` | string | Filter by category (e.g., `greeting`, `support`) |
 | `search` | string | Search in name, content, and shortcut |
 | `active_only` | string | Set to `"true"` to only return active responses |
@@ -48,21 +50,20 @@ GET /api/canned-responses
         "category": "greeting",
         "is_active": true,
         "usage_count": 42,
+        "buttons": [
+          {
+            "id": "track_order",
+            "title": "Track Order",
+            "type": "reply"
+          }
+        ],
         "created_at": "2024-01-15T10:30:00Z",
         "updated_at": "2024-01-15T10:30:00Z"
-      },
-      {
-        "id": "550e8400-e29b-41d4-a716-446655440001",
-        "name": "Business Hours",
-        "shortcut": "hours",
-        "content": "Our business hours are Monday to Friday, 9 AM to 6 PM EST.",
-        "category": "support",
-        "is_active": true,
-        "usage_count": 28,
-        "created_at": "2024-01-15T11:00:00Z",
-        "updated_at": "2024-01-15T11:00:00Z"
       }
-    ]
+    ],
+    "total": 1,
+    "page": 1,
+    "limit": 20
   }
 }
 ```
@@ -88,6 +89,13 @@ GET /api/canned-responses/{id}
     "category": "greeting",
     "is_active": true,
     "usage_count": 42,
+    "buttons": [
+      {
+        "id": "track_order",
+        "title": "Track Order",
+        "type": "reply"
+      }
+    ],
     "created_at": "2024-01-15T10:30:00Z",
     "updated_at": "2024-01-15T10:30:00Z"
   }
@@ -109,7 +117,14 @@ POST /api/canned-responses
   "name": "Welcome Message",
   "shortcut": "welcome",
   "content": "Hello {{contact_name}}! Thank you for reaching out. How can I help you today?",
-  "category": "greeting"
+  "category": "greeting",
+  "buttons": [
+    {
+      "id": "track_order",
+      "title": "Track Order",
+      "type": "reply"
+    }
+  ]
 }
 ```
 
@@ -121,6 +136,18 @@ POST /api/canned-responses
 | `content` | string | Yes | The response text (supports placeholders) |
 | `shortcut` | string | No | Quick-access code for slash commands |
 | `category` | string | No | Category for organization |
+| `buttons` | array | No | Optional interactive buttons to attach to the response |
+
+### Button Fields
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `id` | string | Yes | Unique button identifier |
+| `title` | string | Yes | Button label (max 20 characters for reply buttons) |
+| `type` | string | No | Button type: `reply` (default), `url`, `phone`, `voice_call` |
+| `url` | string | No | Target URL (for `url` buttons) |
+| `phone_number` | string | No | Target phone number (for `phone` buttons) |
+| `ttl_minutes` | integer | No | Button TTL in minutes (for `voice_call` buttons) |
 
 ### Response
 
@@ -135,6 +162,13 @@ POST /api/canned-responses
     "category": "greeting",
     "is_active": true,
     "usage_count": 0,
+    "buttons": [
+      {
+        "id": "track_order",
+        "title": "Track Order",
+        "type": "reply"
+      }
+    ],
     "created_at": "2024-01-15T10:30:00Z",
     "updated_at": "2024-01-15T10:30:00Z"
   }
@@ -157,7 +191,8 @@ PUT /api/canned-responses/{id}
   "shortcut": "hi",
   "content": "Hi {{contact_name}}! Welcome to our support. How may I assist you?",
   "category": "greeting",
-  "is_active": true
+  "is_active": true,
+  "buttons": []
 }
 ```
 
@@ -170,6 +205,7 @@ PUT /api/canned-responses/{id}
 | `shortcut` | string | Quick-access code |
 | `category` | string | Category for organization |
 | `is_active` | boolean | Whether the response is active |
+| `buttons` | array | Interactive buttons configuration |
 
 ## Delete Canned Response
 
@@ -192,7 +228,7 @@ DELETE /api/canned-responses/{id}
 
 ## Track Usage
 
-Increment the usage counter for a canned response. This is typically called automatically when a response is used in chat.
+Increment the usage counter for a canned response.
 
 ```bash
 POST /api/canned-responses/{id}/use
@@ -209,22 +245,6 @@ POST /api/canned-responses/{id}/use
 }
 ```
 
-## Categories
-
-The following categories are supported:
-
-| Value | Label |
-|-------|-------|
-| `greeting` | Greetings |
-| `support` | Support |
-| `sales` | Sales |
-| `closing` | Closing |
-| `general` | General |
-
-<Aside type="tip">
-  You can use any string as a category value. The categories listed above are pre-defined in the UI, but you can create responses with custom categories via the API.
-</Aside>
-
 ## Placeholders
 
 Canned response content can include placeholders that are replaced with actual values when used:
@@ -237,32 +257,3 @@ Canned response content can include placeholders that are replaced with actual v
 <Aside type="note">
   Placeholder replacement is handled client-side when inserting the response into the chat. The API stores and returns the raw content with placeholders intact.
 </Aside>
-
-## Error Responses
-
-### 400 Bad Request
-
-```json
-{
-  "status": "error",
-  "message": "name and content are required"
-}
-```
-
-### 404 Not Found
-
-```json
-{
-  "status": "error",
-  "message": "Canned response not found"
-}
-```
-
-### 409 Conflict
-
-```json
-{
-  "status": "error",
-  "message": "Canned response with this name already exists"
-}
-```

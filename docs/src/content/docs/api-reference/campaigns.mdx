@@ -23,8 +23,11 @@ GET /api/campaigns
 |-----------|------|-------------|
 | `page` | integer | Page number (default: 1) |
 | `limit` | integer | Items per page (default: 20) |
-| `status` | string | Filter by status |
-| `account_id` | string | Filter by WhatsApp account |
+| `status` | string | Filter by status (draft, scheduled, sending, paused, completed, cancelled) |
+| `whatsapp_account` | string | Filter by WhatsApp account name |
+| `search` | string | Search campaign name (case-insensitive) |
+| `from` | string | ISO date string - filter campaigns created on or after this date |
+| `to` | string | ISO date string - filter campaigns created on or before this date |
 
 ### Response
 
@@ -32,11 +35,13 @@ GET /api/campaigns
 {
   "status": "success",
   "data": {
-    "items": [
+    "campaigns": [
       {
-        "id": "uuid",
+        "id": "550e8400-e29b-41d4-a716-446655440000",
         "name": "Holiday Promotion",
-        "template_id": "uuid",
+        "whatsapp_account": "default_account",
+        "template_id": "880e8400-e29b-41d4-a716-446655440000",
+        "template_name": "holiday_offer",
         "status": "completed",
         "total_recipients": 1000,
         "sent_count": 1000,
@@ -45,7 +50,9 @@ GET /api/campaigns
         "failed_count": 50,
         "scheduled_at": "2024-01-01T10:00:00Z",
         "started_at": "2024-01-01T10:00:05Z",
-        "completed_at": "2024-01-01T10:30:00Z"
+        "completed_at": "2024-01-01T10:30:00Z",
+        "created_at": "2024-01-01T09:00:00Z",
+        "updated_at": "2024-01-01T10:30:00Z"
       }
     ],
     "total": 25,
@@ -69,24 +76,21 @@ GET /api/campaigns/{id}
 {
   "status": "success",
   "data": {
-    "id": "uuid",
+    "id": "550e8400-e29b-41d4-a716-446655440000",
     "name": "Holiday Promotion",
-    "template_id": "uuid",
+    "whatsapp_account": "default_account",
+    "template_id": "880e8400-e29b-41d4-a716-446655440000",
     "template_name": "holiday_offer",
-    "account_id": "uuid",
     "status": "sending",
     "total_recipients": 1000,
     "sent_count": 450,
     "delivered_count": 400,
     "read_count": 100,
     "failed_count": 10,
-    "variable_mapping": {
-      "1": "name",
-      "2": "discount_code"
-    },
     "scheduled_at": null,
     "started_at": "2024-01-01T10:00:05Z",
-    "created_at": "2024-01-01T09:00:00Z"
+    "created_at": "2024-01-01T09:00:00Z",
+    "updated_at": "2024-01-01T10:00:00Z"
   }
 }
 ```
@@ -101,16 +105,20 @@ POST /api/campaigns
 
 ### Request Body
 
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `name` | string | Yes | Campaign name |
+| `whatsapp_account` | string | Yes | WhatsApp account name |
+| `template_id` | string | Yes | UUID of template to use |
+| `header_media_id` | string | No | Already-uploaded WhatsApp media ID for header |
+| `scheduled_at` | string | No | Optional ISO date-time string to schedule campaign |
+
 ```json
 {
   "name": "New Year Sale",
-  "account_id": "uuid",
-  "template_id": "uuid",
-  "variable_mapping": {
-    "1": "name",
-    "2": "discount_code"
-  },
-  "scheduled_at": "2024-01-01T00:00:00Z"
+  "whatsapp_account": "default_account",
+  "template_id": "880e8400-e29b-41d4-a716-446655440000",
+  "scheduled_at": "2024-01-01T12:00:00Z"
 }
 ```
 
@@ -120,10 +128,13 @@ POST /api/campaigns
 {
   "status": "success",
   "data": {
-    "id": "uuid",
+    "id": "550e8400-e29b-41d4-a716-446655440000",
     "name": "New Year Sale",
+    "whatsapp_account": "default_account",
+    "template_id": "880e8400-e29b-41d4-a716-446655440000",
     "status": "draft",
-    "created_at": "2024-01-01T00:00:00Z"
+    "created_at": "2024-01-01T00:00:00Z",
+    "updated_at": "2024-01-01T00:00:00Z"
   }
 }
 ```
@@ -135,6 +146,10 @@ Update a draft campaign.
 ```bash
 PUT /api/campaigns/{id}
 ```
+
+### Request Body
+
+Same structure as Create Campaign. Only fields provided will be updated.
 
 <Aside type="note">
   Only draft campaigns can be updated. Started or completed campaigns cannot be modified.
@@ -148,9 +163,40 @@ Delete a campaign.
 DELETE /api/campaigns/{id}
 ```
 
+## Upload Campaign Media
+
+Upload a media file (image, video, document, audio) to WhatsApp to use as the template's media header for the campaign.
+
+This endpoint accepts `multipart/form-data`.
+
+```bash
+POST /api/campaigns/{id}/media
+```
+
+### Request Payload
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `file` | file binary | Yes | The header media file to upload |
+
+### Response
+
+```json
+{
+  "status": "success",
+  "data": {
+    "media_id": "990e8400-e29b-41d4-a716-446655440000",
+    "filename": "banner.png",
+    "mime_type": "image/png",
+    "local_path": "/media/campaigns/550e8400-e29b-41d4-a716-446655440000.png",
+    "message": "Media uploaded successfully"
+  }
+}
+```
+
 ## Import Recipients
 
-Import recipients from a CSV or JSON file.
+Import recipients for a campaign. You should supply parameters on a per-recipient basis here.
 
 ```bash
 POST /api/campaigns/{id}/recipients/import
@@ -203,13 +249,38 @@ Get campaign recipients with their delivery status.
 GET /api/campaigns/{id}/recipients
 ```
 
-### Query Parameters
+### Response
 
-| Parameter | Type | Description |
-|-----------|------|-------------|
-| `page` | integer | Page number |
-| `limit` | integer | Items per page |
-| `status` | string | Filter by status |
+```json
+{
+  "status": "success",
+  "data": {
+    "recipients": [
+      {
+        "id": "770e8400-e29b-41d4-a716-446655440000",
+        "phone_number": "+1234567890",
+        "recipient_name": "John Doe",
+        "status": "delivered",
+        "sent_at": "2024-01-01T10:00:10Z",
+        "delivered_at": "2024-01-01T10:00:15Z"
+      }
+    ],
+    "total": 1
+  }
+}
+```
+
+## Delete Recipient
+
+Delete a single recipient from a campaign.
+
+<Aside type="note">
+  Recipients can only be deleted from draft campaigns.
+</Aside>
+
+```bash
+DELETE /api/campaigns/{id}/recipients/{recipientId}
+```
 
 ### Response
 
@@ -217,26 +288,12 @@ GET /api/campaigns/{id}/recipients
 {
   "status": "success",
   "data": {
-    "items": [
-      {
-        "id": "uuid",
-        "phone_number": "+1234567890",
-        "name": "John Doe",
-        "status": "delivered",
-        "sent_at": "2024-01-01T10:00:10Z",
-        "delivered_at": "2024-01-01T10:00:15Z"
-      }
-    ],
-    "total": 1000,
-    "page": 1,
-    "limit": 50
+    "message": "Recipient deleted successfully"
   }
 }
 ```
 
-## Campaign Actions
-
-### Start Campaign
+## Start Campaign
 
 Begin sending messages.
 
@@ -244,7 +301,7 @@ Begin sending messages.
 POST /api/campaigns/{id}/start
 ```
 
-### Pause Campaign
+## Pause Campaign
 
 Pause a running campaign.
 
@@ -252,12 +309,33 @@ Pause a running campaign.
 POST /api/campaigns/{id}/pause
 ```
 
-### Cancel Campaign
+## Cancel Campaign
 
 Cancel a campaign (cannot be resumed).
 
 ```bash
 POST /api/campaigns/{id}/cancel
+```
+
+## Retry Failed Recipients
+
+Reset all failed recipients to pending and retry sending messages to them.
+
+```bash
+POST /api/campaigns/{id}/retry-failed
+```
+
+### Response
+
+```json
+{
+  "status": "success",
+  "data": {
+    "message": "Retrying failed messages",
+    "retry_count": 5,
+    "status": "processing"
+  }
+}
 ```
 
 ## Campaign Status
@@ -270,6 +348,7 @@ POST /api/campaigns/{id}/cancel
 | `paused` | Campaign is paused |
 | `completed` | All messages have been processed |
 | `cancelled` | Campaign was cancelled |
+| `failed` | Campaign failed |
 
 ## Rate Limiting
 

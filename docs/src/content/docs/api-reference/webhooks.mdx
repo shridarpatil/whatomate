@@ -187,3 +187,265 @@ Meta may send webhooks at high volumes during campaigns. Whatomate:
 <Aside type="tip">
   Use the WebSocket connection for real-time UI updates instead of polling the API.
 </Aside>
+
+## Webhook Management API
+
+Manage webhook subscriptions to receive Whatomate events at your own external endpoints.
+
+### List Webhooks
+
+Get all configured webhooks for your organization.
+
+```bash
+GET /api/webhooks
+```
+
+#### Query Parameters
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `search`  | string | Filter by name or URL (case-insensitive) |
+| `page`    | integer | Page number for pagination (default: 1) |
+| `limit`   | integer | Items per page (default: 50) |
+
+#### Response
+
+```json
+{
+  "status": "success",
+  "data": {
+    "webhooks": [
+      {
+        "id": "uuid",
+        "name": "My Endpoint",
+        "url": "https://api.my-app.com/webhooks/whatsapp",
+        "events": ["message:incoming", "contact:created"],
+        "headers": {
+          "Authorization": "Bearer token123"
+        },
+        "is_active": true,
+        "has_secret": true,
+        "created_at": "2024-01-01T00:00:00Z",
+        "updated_at": "2024-01-01T00:00:00Z"
+      }
+    ],
+    "available_events": [
+      {
+        "value": "message:incoming",
+        "label": "Message Incoming",
+        "description": "When a new message is received from a contact"
+      },
+      {
+        "value": "message:sent",
+        "label": "Message Sent",
+        "description": "When an agent sends a message"
+      },
+      {
+        "value": "contact:created",
+        "label": "Contact Created",
+        "description": "When a new contact is created"
+      },
+      {
+        "value": "transfer:created",
+        "label": "Transfer Created",
+        "description": "When a transfer to human agent is requested"
+      },
+      {
+        "value": "transfer:assigned",
+        "label": "Transfer Assigned",
+        "description": "When a transfer is assigned to an agent"
+      },
+      {
+        "value": "transfer:resumed",
+        "label": "Transfer Resumed",
+        "description": "When chatbot is resumed (transfer closed)"
+      }
+    ],
+    "total": 1,
+    "page": 1,
+    "limit": 50
+  }
+}
+```
+
+### Create Webhook
+
+Register a new webhook subscription.
+
+```bash
+POST /api/webhooks
+```
+
+#### Request Body
+
+```json
+{
+  "name": "My Endpoint",
+  "url": "https://api.my-app.com/webhooks/whatsapp",
+  "events": ["message:incoming", "contact:created"],
+  "headers": {
+    "Authorization": "Bearer token123"
+  },
+  "secret": "my-hmac-secret-key",
+  "is_active": true
+}
+```
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `name` | string | Yes | Friendly name for the webhook |
+| `url` | string | Yes | The URL that will receive the webhook POST payloads |
+| `events` | array | Yes | List of events to subscribe to (e.g. `message:incoming`, `contact:created`) |
+| `headers` | object | No | Custom HTTP headers sent with the webhook request |
+| `secret` | string | No | HMAC-SHA256 verification secret (auto-generated if omitted) |
+| `is_active` | boolean | No | Active status of the webhook subscription |
+
+#### Response
+
+```json
+{
+  "status": "success",
+  "data": {
+    "id": "uuid",
+    "name": "My Endpoint",
+    "url": "https://api.my-app.com/webhooks/whatsapp",
+    "events": ["message:incoming", "contact:created"],
+    "headers": {
+      "Authorization": "Bearer token123"
+    },
+    "is_active": true,
+    "has_secret": true,
+    "created_at": "2024-01-01T00:00:00Z",
+    "updated_at": "2024-01-01T00:00:00Z"
+  }
+}
+```
+
+### Get Webhook
+
+Get details of a webhook subscription.
+
+```bash
+GET /api/webhooks/{id}
+```
+
+#### Path Parameters
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `id` | string | The unique UUID of the webhook |
+
+#### Response
+
+```json
+{
+  "status": "success",
+  "data": {
+    "id": "uuid",
+    "name": "My Endpoint",
+    "url": "https://api.my-app.com/webhooks/whatsapp",
+    "events": ["message:incoming", "contact:created"],
+    "headers": {
+      "Authorization": "Bearer token123"
+    },
+    "is_active": true,
+    "has_secret": true,
+    "created_at": "2024-01-01T00:00:00Z",
+    "updated_at": "2024-01-01T00:00:00Z"
+  }
+}
+```
+
+### Update Webhook
+
+Update an existing webhook subscription.
+
+```bash
+PUT /api/webhooks/{id}
+```
+
+#### Path Parameters
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `id` | string | The unique UUID of the webhook |
+
+#### Request Body
+
+```json
+{
+  "name": "Updated Endpoint Name",
+  "is_active": false
+}
+```
+
+#### Response
+
+```json
+{
+  "status": "success",
+  "data": {
+    "id": "uuid",
+    "name": "Updated Endpoint Name",
+    "url": "https://api.my-app.com/webhooks/whatsapp",
+    "events": ["message:incoming", "contact:created"],
+    "headers": {
+      "Authorization": "Bearer token123"
+    },
+    "is_active": false,
+    "has_secret": true,
+    "created_at": "2024-01-01T00:00:00Z",
+    "updated_at": "2024-01-01T00:00:00Z"
+  }
+}
+```
+
+### Test Webhook
+
+Send a synchronous test event to verify your webhook endpoint is responding correctly.
+
+```bash
+POST /api/webhooks/{id}/test
+```
+
+#### Path Parameters
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `id` | string | The unique UUID of the webhook |
+
+#### Response
+
+```json
+{
+  "status": "success",
+  "data": {
+    "message": "Test webhook sent successfully"
+  }
+}
+```
+
+### Delete Webhook
+
+Remove a webhook subscription.
+
+```bash
+DELETE /api/webhooks/{id}
+```
+
+#### Path Parameters
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `id` | string | The unique UUID of the webhook |
+
+#### Response
+
+```json
+{
+  "status": "success",
+  "data": {
+    "message": "Webhook deleted successfully"
+  }
+}
+```

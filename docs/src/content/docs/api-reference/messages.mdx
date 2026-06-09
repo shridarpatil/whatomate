@@ -21,34 +21,62 @@ GET /api/contacts/{id}/messages
 
 | Parameter | Type | Description |
 |-----------|------|-------------|
-| `page` | integer | Page number (default: 1) |
 | `limit` | integer | Items per page (default: 50, max: 100) |
-| `before` | string | Get messages before this message ID |
-| `after` | string | Get messages after this message ID |
+| `before_id` | string | Load older messages before this message ID (cursor-based pagination) |
+| `account` | string | Filter messages by a specific WhatsApp account |
 
 ### Response
+
+#### Standard List Response (Default / Page 1)
 
 ```json
 {
   "status": "success",
   "data": {
-    "items": [
+    "messages": [
       {
-        "id": "uuid",
-        "wa_message_id": "wamid.xxx",
-        "contact_id": "uuid",
+        "id": "550e8400-e29b-41d4-a716-446655440000",
+        "contact_id": "880e8400-e29b-41d4-a716-446655440000",
         "direction": "incoming",
-        "type": "text",
+        "message_type": "text",
         "content": {
-          "text": "Hello!"
+          "body": "Hello! How can I help you?"
         },
-        "status": "delivered",
-        "timestamp": "2024-01-01T12:00:00Z"
+        "status": "read",
+        "wamid": "wamid.HBgLMTIzNDU2Nzg5MEUCGQYSFDM5...",
+        "whatsapp_account": "default_account",
+        "created_at": "2024-01-01T12:00:00Z",
+        "updated_at": "2024-01-01T12:01:00Z"
       }
     ],
-    "total": 100,
-    "page": 1,
-    "limit": 50
+    "total": 245
+  }
+}
+```
+
+#### Cursor-Based Paginated Response (When using `before_id`)
+
+```json
+{
+  "status": "success",
+  "data": {
+    "messages": [
+      {
+        "id": "550e8400-e29b-41d4-a716-446655440000",
+        "contact_id": "880e8400-e29b-41d4-a716-446655440000",
+        "direction": "incoming",
+        "message_type": "text",
+        "content": {
+          "body": "Older message content"
+        },
+        "status": "read",
+        "wamid": "wamid.HBgLMTIzNDU2Nzg5MEUCGQYSFDM5...",
+        "whatsapp_account": "default_account",
+        "created_at": "2024-01-01T11:00:00Z",
+        "updated_at": "2024-01-01T11:00:00Z"
+      }
+    ],
+    "has_more": true
   }
 }
 ```
@@ -66,7 +94,10 @@ POST /api/contacts/{id}/messages
 ```json
 {
   "type": "text",
-  "text": "Hello! How can I help you today?"
+  "content": {
+    "body": "Hello! How can I help you today?"
+  },
+  "whatsapp_account": "default_account"
 }
 ```
 
@@ -76,125 +107,83 @@ POST /api/contacts/{id}/messages
 {
   "status": "success",
   "data": {
-    "id": "uuid",
-    "wa_message_id": "wamid.xxx",
-    "status": "sent",
-    "timestamp": "2024-01-01T12:00:00Z"
+    "id": "550e8400-e29b-41d4-a716-446655440000",
+    "contact_id": "880e8400-e29b-41d4-a716-446655440000",
+    "direction": "outgoing",
+    "message_type": "text",
+    "content": {
+      "body": "Hello! How can I help you today?"
+    },
+    "status": "pending",
+    "whatsapp_account": "default_account",
+    "created_at": "2024-01-01T12:00:00Z",
+    "updated_at": "2024-01-01T12:00:00Z"
   }
 }
 ```
 
 ## Send Template Message
 
-Send a pre-approved template message.
+Send a pre-approved template message to a contact or phone number. Supports templates with optional header media (image, video, document), TEXT header variables, and dynamic URL buttons.
+
+If including a raw media file for a template header, use `multipart/form-data`. Otherwise, use `application/json`.
 
 ```bash
 POST /api/messages/template
 ```
 
-### Request Body
+### Request Payload Fields
 
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
-| `contact_id` | string | One of contact_id or phone_number | UUID of existing contact |
+| `contact_id` | string | One of contact_id or phone_number | UUID of the recipient contact |
 | `phone_number` | string | One of contact_id or phone_number | Phone number (creates contact if not exists) |
 | `template_name` | string | One of template_name or template_id | Name of the template |
 | `template_id` | string | One of template_name or template_id | UUID of the template |
-| `template_params` | object | No | Named or positional body parameters |
-| `header_params` | object | No | Value for a TEXT header with a `{{var}}` (max 1). Keyed by the variable's name for named templates, or `"1"` for positional. Falls back to `template_params` if omitted. |
-| `button_params` | object | No | Dynamic URL button parameters (button index → value) |
+| `template_params` | object | No | Key-value pairs for body parameters |
+| `header_params` | object | No | Key-value pairs for TEXT header variables |
+| `button_params` | object | No | Key-value pairs for dynamic URL buttons (button index → parameter value) |
 | `account_name` | string | No | Specific WhatsApp account to use |
+| `header_media_id` | string | No | Already-uploaded WhatsApp media ID for header |
+| `header_media_url` | string | No | URL of media to download and upload to WhatsApp |
+| `header_media_filename` | string | No | Filename (required for DOCUMENT headers) |
+| `header_file` | file | No | Raw header media file (only when using `multipart/form-data`) |
 
 ### Examples
 
-**Using phone number (creates contact if needed):**
+**Using JSON:**
 
 ```bash
 curl -X POST "http://your-server:8080/api/messages/template" \
   -H "X-API-Key: whm_your_api_key" \
   -H "Content-Type: application/json" \
   -d '{
-    "phone_number": "919876543210",
-    "template_name": "hello_world"
+    "phone_number": "1234567890",
+    "template_name": "seasonal_promotion",
+    "template_params": {
+      "customer_name": "John",
+      "discount": "20%"
+    },
+    "header_params": {
+      "season": "Summer"
+    },
+    "button_params": {
+      "0": "promo-2024"
+    }
   }'
 ```
 
-```json
-{
-  "phone_number": "919876543210",
-  "template_name": "hello_world"
-}
+**Using multipart/form-data (for raw file upload):**
+
+```bash
+curl -X POST "http://your-server:8080/api/messages/template" \
+  -H "X-API-Key: whm_your_api_key" \
+  -F "phone_number=1234567890" \
+  -F "template_name=order_receipt" \
+  -F "template_params={\"customer_name\":\"John\"}" \
+  -F "header_file=@/path/to/invoice.pdf" \
+  -F "header_media_filename=invoice.pdf"
 ```
-
-**With named parameters:**
-
-If your template has placeholders like `Hello {{name}}, your order {{order_id}} is ready`:
-
-```json
-{
-  "contact_id": "uuid",
-  "template_name": "order_confirmation",
-  "template_params": {
-    "name": "John",
-    "order_id": "12345"
-  }
-}
-```
-
-**With positional parameters:**
-
-```json
-{
-  "phone_number": "919876543210",
-  "template_name": "order_confirmation",
-  "template_params": {
-    "1": "John",
-    "2": "12345"
-  }
-}
-```
-
-**With a TEXT header variable:**
-
-Meta allows at most one variable in a TEXT header. If your template's header is `Our {{season}} sale is on!`, supply the value via `header_params`:
-
-```json
-{
-  "phone_number": "919876543210",
-  "template_name": "seasonal_promotion",
-  "header_params": {
-    "season": "Summer"
-  },
-  "template_params": {
-    "customer_name": "John",
-    "discount": "25%"
-  }
-}
-```
-
-For a positional header (`Our {{1}} sale is on!`), use `"1"` as the key. If you omit `header_params`, the value is looked up in `template_params` by the same name — convenient for named templates where the header variable doesn't collide with a body variable.
-
-**With URL button parameters:**
-
-If your template has a URL button with a dynamic variable (e.g., `https://example.com/track/{{1}}`), provide the dynamic value via `button_params`. The key is the button index (starting from `"0"`):
-
-```json
-{
-  "contact_id": "uuid",
-  "template_name": "order_shipped",
-  "template_params": {
-    "name": "John",
-    "order_id": "12345"
-  },
-  "button_params": {
-    "0": "12345"
-  }
-}
-```
-
-<Aside type="note">
-  The `button_params` key corresponds to the button's position index in the template (zero-based). For example, if the first button is a URL button with `{{1}}`, use `"0"` as the key. The value replaces the dynamic part of the URL.
-</Aside>
 
 ### Response
 
@@ -202,10 +191,17 @@ If your template has a URL button with a dynamic variable (e.g., `https://exampl
 {
   "status": "success",
   "data": {
-    "message_id": "uuid",
-    "phone_number": "919876543210",
+    "id": "550e8400-e29b-41d4-a716-446655440000",
+    "contact_id": "880e8400-e29b-41d4-a716-446655440000",
+    "direction": "outgoing",
+    "message_type": "template",
+    "content": {
+      "body": "Hello John, your Summer promo code is promo-2024!"
+    },
     "status": "pending",
-    "template_name": "order_confirmation"
+    "whatsapp_account": "default_account",
+    "created_at": "2024-01-01T12:00:00Z",
+    "updated_at": "2024-01-01T12:00:00Z"
   }
 }
 ```
@@ -214,28 +210,33 @@ If your template has a URL button with a dynamic variable (e.g., `https://exampl
   When using `phone_number`, a new contact is automatically created if one doesn't exist for that number.
 </Aside>
 
-<Aside type="caution">
-  If required template parameters are missing, you'll receive an error:
-  `"Missing template parameters: name, order_id. Expected parameters: [name, order_id]"`
-</Aside>
-
 ## Send Media Message
 
-Send an image, video, document, or audio message.
+Upload and send a media message (image, video, document, or audio) directly. This endpoint accepts `multipart/form-data` request payloads.
 
 ```bash
 POST /api/messages/media
 ```
 
-### Request Body
+### Multipart Form Fields
 
-```json
-{
-  "contact_id": "uuid",
-  "type": "image",
-  "media_url": "https://example.com/image.jpg",
-  "caption": "Check out this product!"
-}
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `file` | file binary | Yes | The file payload to upload and send |
+| `contact_id` | string | Yes | UUID of the recipient contact |
+| `type` | string | No | Media type: `image`, `video`, `audio`, `document` (default: `image`) |
+| `caption` | string | No | Optional caption for the media (images and videos only) |
+| `whatsapp_account` | string | No | Specific WhatsApp account to use |
+
+### Example
+
+```bash
+curl -X POST "http://your-server:8080/api/messages/media" \
+  -H "X-API-Key: whm_your_api_key" \
+  -F "contact_id=880e8400-e29b-41d4-a716-446655440000" \
+  -F "type=image" \
+  -F "caption=Here is your product image!" \
+  -F "file=@/path/to/product.png"
 ```
 
 ### Supported Media Types
@@ -253,41 +254,35 @@ POST /api/messages/media
 {
   "status": "success",
   "data": {
-    "id": "uuid",
-    "wa_message_id": "wamid.xxx",
-    "status": "sent"
+    "id": "550e8400-e29b-41d4-a716-446655440000",
+    "contact_id": "880e8400-e29b-41d4-a716-446655440000",
+    "direction": "outgoing",
+    "message_type": "image",
+    "media_url": "/media/images/abcdef.png",
+    "media_mime_type": "image/png",
+    "media_filename": "product.png",
+    "content": {
+      "body": "Here is your product image!"
+    },
+    "status": "pending",
+    "whatsapp_account": "default_account",
+    "created_at": "2024-01-01T12:00:00Z",
+    "updated_at": "2024-01-01T12:00:00Z"
   }
 }
 ```
 
 ## Send Interactive Message
 
-Send interactive messages with buttons or CTA URLs.
+Send interactive messages with reply buttons or CTA (Call to Action) URL buttons.
 
 ```bash
 POST /api/contacts/{id}/messages
 ```
 
-### Button Message
+### Request Body (Button Message)
 
 Send a message with up to 3 quick reply buttons:
-
-```bash
-curl -X POST "http://your-server:8080/api/contacts/{contact_id}/messages" \
-  -H "X-API-Key: whm_your_api_key" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "type": "interactive",
-    "interactive": {
-      "type": "button",
-      "body": "How would you like to proceed?",
-      "buttons": [
-        { "id": "yes", "title": "Yes" },
-        { "id": "no", "title": "No" }
-      ]
-    }
-  }'
-```
 
 ```json
 {
@@ -299,28 +294,14 @@ curl -X POST "http://your-server:8080/api/contacts/{contact_id}/messages" \
       { "id": "yes", "title": "Yes" },
       { "id": "no", "title": "No" }
     ]
-  }
+  },
+  "whatsapp_account": "default_account"
 }
 ```
 
-### CTA URL Button
+### Request Body (CTA URL Button Message)
 
-Send a message with a call-to-action URL button:
-
-```bash
-curl -X POST "http://your-server:8080/api/contacts/{contact_id}/messages" \
-  -H "X-API-Key: whm_your_api_key" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "type": "interactive",
-    "interactive": {
-      "type": "cta_url",
-      "body": "Click below to view your order details",
-      "button_text": "View Order",
-      "url": "https://example.com/orders/12345"
-    }
-  }'
-```
+Send a message with a Call to Action URL button:
 
 ```json
 {
@@ -330,7 +311,8 @@ curl -X POST "http://your-server:8080/api/contacts/{contact_id}/messages" \
     "body": "Click below to view your order details",
     "button_text": "View Order",
     "url": "https://example.com/orders/12345"
-  }
+  },
+  "whatsapp_account": "default_account"
 }
 ```
 
@@ -340,20 +322,37 @@ curl -X POST "http://your-server:8080/api/contacts/{contact_id}/messages" \
 {
   "status": "success",
   "data": {
-    "id": "uuid",
-    "wa_message_id": "wamid.xxx",
-    "status": "sent"
+    "id": "550e8400-e29b-41d4-a716-446655440000",
+    "contact_id": "880e8400-e29b-41d4-a716-446655440000",
+    "direction": "outgoing",
+    "message_type": "interactive",
+    "interactive_data": {
+      "type": "button",
+      "body": "How would you like to proceed?",
+      "buttons": [
+        { "id": "yes", "title": "Yes" },
+        { "id": "no", "title": "No" }
+      ]
+    },
+    "status": "pending",
+    "whatsapp_account": "default_account",
+    "created_at": "2024-01-01T12:00:00Z",
+    "updated_at": "2024-01-01T12:00:00Z"
   }
 }
 ```
 
 <Aside type="note">
-  Button titles have a maximum length of 20 characters. Button IDs are returned when the user clicks a button.
+  Button titles have a maximum length of 20 characters. Button IDs are returned in webhooks when the user clicks a button.
 </Aside>
 
 ## Mark Message as Read
 
 Mark a message as read.
+
+<Aside type="note">
+  This endpoint is currently a placeholder and returns `501 Not Implemented`.
+</Aside>
 
 ```bash
 PUT /api/messages/{id}/read
@@ -363,8 +362,8 @@ PUT /api/messages/{id}/read
 
 ```json
 {
-  "status": "success",
-  "data": null
+  "status": "error",
+  "message": "Not implemented yet"
 }
 ```
 

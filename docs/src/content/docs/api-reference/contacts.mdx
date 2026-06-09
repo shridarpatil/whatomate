@@ -27,8 +27,8 @@ GET /api/contacts
 |-----------|------|-------------|
 | `page` | integer | Page number (default: 1) |
 | `limit` | integer | Items per page (default: 20, max: 100) |
-| `search` | string | Search by name or phone number |
-| `account_id` | string | Filter by WhatsApp account |
+| `search` | string | Search by profile name or phone number |
+| `tags` | string | Filter by tags (comma-separated, matches contacts with any of the tags) |
 
 ### Response
 
@@ -36,23 +36,34 @@ GET /api/contacts
 {
   "status": "success",
   "data": {
-    "items": [
+    "contacts": [
       {
-        "id": "uuid",
-        "phone_number": "+1234567890",
+        "id": "550e8400-e29b-41d4-a716-446655440000",
+        "phone_number": "1234567890",
         "name": "John Doe",
-        "profile_name": "John",
+        "profile_name": "John Doe",
         "avatar_url": "https://...",
-        "account_id": "uuid",
-        "assigned_to": "uuid",
+        "status": "active",
+        "tags": ["vip", "support"],
+        "metadata": {
+          "plan": "premium",
+          "company": "Acme Corp"
+        },
         "last_message_at": "2024-01-01T12:00:00Z",
-        "created_at": "2024-01-01T00:00:00Z"
+        "last_message_preview": "Hello there!",
+        "unread_count": 0,
+        "assigned_user_id": "880e8400-e29b-41d4-a716-446655440000",
+        "whatsapp_account": "default_account",
+        "last_inbound_at": "2024-01-01T11:59:00Z",
+        "service_window_open": true,
+        "marketing_opt_out": false,
+        "created_at": "2024-01-01T00:00:00Z",
+        "updated_at": "2024-01-01T12:00:00Z"
       }
     ],
     "total": 100,
     "page": 1,
-    "limit": 20,
-    "total_pages": 5
+    "limit": 20
   }
 }
 ```
@@ -71,18 +82,27 @@ GET /api/contacts/{id}
 {
   "status": "success",
   "data": {
-    "id": "uuid",
-    "phone_number": "+1234567890",
+    "id": "550e8400-e29b-41d4-a716-446655440000",
+    "phone_number": "1234567890",
     "name": "John Doe",
-    "profile_name": "John",
+    "profile_name": "John Doe",
     "avatar_url": "https://...",
-    "account_id": "uuid",
-    "assigned_to": "uuid",
+    "status": "active",
+    "tags": ["vip", "support"],
     "metadata": {
-      "custom_field": "value"
+      "plan": "premium",
+      "company": "Acme Corp"
     },
     "last_message_at": "2024-01-01T12:00:00Z",
-    "created_at": "2024-01-01T00:00:00Z"
+    "last_message_preview": "Hello there!",
+    "unread_count": 0,
+    "assigned_user_id": "880e8400-e29b-41d4-a716-446655440000",
+    "whatsapp_account": "default_account",
+    "last_inbound_at": "2024-01-01T11:59:00Z",
+    "service_window_open": true,
+    "marketing_opt_out": false,
+    "created_at": "2024-01-01T00:00:00Z",
+    "updated_at": "2024-01-01T12:00:00Z"
   }
 }
 ```
@@ -97,13 +117,22 @@ POST /api/contacts
 
 ### Request Body
 
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `phone_number` | string | Yes | Phone number of the contact |
+| `profile_name` | string | No | Profile/display name of the contact |
+| `whatsapp_account` | string | No | Default WhatsApp account name |
+| `tags` | array | No | Array of tags for the contact |
+| `metadata` | object | No | Custom metadata fields |
+
 ```json
 {
-  "phone_number": "+1234567890",
-  "name": "John Doe",
-  "account_id": "uuid",
+  "phone_number": "1234567890",
+  "profile_name": "John Doe",
+  "whatsapp_account": "default_account",
+  "tags": ["vip"],
   "metadata": {
-    "custom_field": "value"
+    "plan": "premium"
   }
 }
 ```
@@ -114,11 +143,26 @@ POST /api/contacts
 {
   "status": "success",
   "data": {
-    "id": "uuid",
-    "phone_number": "+1234567890",
+    "id": "550e8400-e29b-41d4-a716-446655440000",
+    "phone_number": "1234567890",
     "name": "John Doe",
-    "account_id": "uuid",
-    "created_at": "2024-01-01T00:00:00Z"
+    "profile_name": "John Doe",
+    "avatar_url": "",
+    "status": "active",
+    "tags": ["vip"],
+    "metadata": {
+      "plan": "premium"
+    },
+    "last_message_at": null,
+    "last_message_preview": "",
+    "unread_count": 0,
+    "assigned_user_id": null,
+    "whatsapp_account": "default_account",
+    "last_inbound_at": null,
+    "service_window_open": false,
+    "marketing_opt_out": false,
+    "created_at": "2024-01-01T00:00:00Z",
+    "updated_at": "2024-01-01T00:00:00Z"
   }
 }
 ```
@@ -133,10 +177,21 @@ PUT /api/contacts/{id}
 
 ### Request Body
 
+| Field | Type | Description |
+|-------|------|-------------|
+| `profile_name` | string | Updated profile/display name |
+| `whatsapp_account` | string | Updated default WhatsApp account name |
+| `tags` | array | Updated array of tags |
+| `metadata` | object | Updated custom metadata object |
+| `assigned_user_id` | uuid | Assign to a user ID |
+| `clear_assigned_agent` | boolean | Set to true to unassign |
+
 ```json
 {
-  "name": "John Smith",
+  "profile_name": "John Smith",
+  "tags": ["vip", "churn-risk"],
   "metadata": {
+    "plan": "premium",
     "custom_field": "updated_value"
   }
 }
@@ -148,13 +203,27 @@ PUT /api/contacts/{id}
 {
   "status": "success",
   "data": {
-    "id": "uuid",
-    "phone_number": "+1234567890",
+    "id": "550e8400-e29b-41d4-a716-446655440000",
+    "phone_number": "1234567890",
     "name": "John Smith",
+    "profile_name": "John Smith",
+    "avatar_url": "",
+    "status": "active",
+    "tags": ["vip", "churn-risk"],
     "metadata": {
+      "plan": "premium",
       "custom_field": "updated_value"
     },
-    "updated_at": "2024-01-01T12:00:00Z"
+    "last_message_at": "2024-01-01T12:00:00Z",
+    "last_message_preview": "Hello there!",
+    "unread_count": 0,
+    "assigned_user_id": null,
+    "whatsapp_account": "default_account",
+    "last_inbound_at": "2024-01-01T11:59:00Z",
+    "service_window_open": true,
+    "marketing_opt_out": false,
+    "created_at": "2024-01-01T00:00:00Z",
+    "updated_at": "2024-01-01T12:05:00Z"
   }
 }
 ```
@@ -192,7 +261,7 @@ PUT /api/contacts/{id}/assign
 
 ```json
 {
-  "user_id": "uuid"
+  "user_id": "880e8400-e29b-41d4-a716-446655440000"
 }
 ```
 
@@ -210,9 +279,27 @@ To unassign a contact, set `user_id` to `null`:
 {
   "status": "success",
   "data": {
-    "id": "uuid",
-    "assigned_to": "uuid",
-    "updated_at": "2024-01-01T12:00:00Z"
+    "message": "Contact assigned successfully",
+    "assigned_user_id": "880e8400-e29b-41d4-a716-446655440000"
+  }
+}
+```
+
+## Mark Contact as Read
+
+Mark all incoming messages from a contact as read and clear unread count.
+
+```bash
+POST /api/contacts/{id}/mark-read
+```
+
+### Response
+
+```json
+{
+  "status": "success",
+  "data": {
+    "status": "ok"
   }
 }
 ```

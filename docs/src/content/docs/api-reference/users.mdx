@@ -93,7 +93,11 @@ GET /api/users
 
 | Parameter | Type | Description |
 |-----------|------|-------------|
-| `search` | string | Filter by name or email |
+| `search` | string | Filter by name or email (case-insensitive) |
+| `role_id` | string | Filter by role UUID |
+| `online_only` | boolean | Filter to return only online users (`true`/`false`) |
+| `page` | integer | Page number (default: 1) |
+| `limit` | integer | Items per page (default: 50) |
 
 ### Response
 
@@ -110,15 +114,29 @@ GET /api/users
         "role": {
           "id": "uuid",
           "name": "agent",
-          "is_system": true
+          "is_system": true,
+          "permissions": [
+            {
+              "id": "uuid",
+              "resource": "messages",
+              "action": "create",
+              "description": "Send messages"
+            }
+          ]
         },
         "is_active": true,
         "is_available": true,
+        "is_super_admin": false,
         "is_member": false,
+        "organization_id": "uuid",
         "created_at": "2024-01-01T00:00:00Z",
         "updated_at": "2024-01-01T00:00:00Z"
       }
-    ]
+    ],
+    "total": 1,
+    "page": 1,
+    "limit": 50,
+    "online_count": 1
   }
 }
 ```
@@ -152,6 +170,9 @@ GET /api/users/{id}
     },
     "is_active": true,
     "is_available": true,
+    "is_super_admin": false,
+    "is_member": false,
+    "organization_id": "uuid",
     "created_at": "2024-01-01T00:00:00Z",
     "updated_at": "2024-01-01T00:00:00Z"
   }
@@ -184,7 +205,7 @@ POST /api/users
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
 | `email` | string | Yes | Unique email address |
-| `password` | string | Yes | Minimum 8 characters |
+| `password` | string | Yes | Minimum 12 characters |
 | `full_name` | string | Yes | Display name |
 | `role_id` | string | No | UUID of the role to assign. If not provided, uses the organization's default role |
 
@@ -204,7 +225,12 @@ POST /api/users
       "is_system": true
     },
     "is_active": true,
-    "created_at": "2024-01-01T00:00:00Z"
+    "is_available": true,
+    "is_super_admin": false,
+    "is_member": false,
+    "organization_id": "uuid",
+    "created_at": "2024-01-01T00:00:00Z",
+    "updated_at": "2024-01-01T00:00:00Z"
   }
 }
 ```
@@ -234,7 +260,7 @@ PUT /api/users/{id}
 | Field | Type | Description |
 |-------|------|-------------|
 | `email` | string | New email address |
-| `password` | string | New password (min 8 chars) |
+| `password` | string | New password (min 12 chars) |
 | `full_name` | string | Display name |
 | `role_id` | string | UUID of the role to assign |
 | `is_active` | boolean | Enable/disable user |
@@ -284,7 +310,7 @@ Users can set their availability status for chat routing.
 ### Update Availability
 
 ```bash
-PUT /api/users/{id}/availability
+PUT /api/me/availability
 ```
 
 #### Request Body
@@ -292,6 +318,21 @@ PUT /api/users/{id}/availability
 ```json
 {
   "is_available": true
+}
+```
+
+#### Response
+
+```json
+{
+  "status": "success",
+  "data": {
+    "message": "Availability updated successfully",
+    "is_available": true,
+    "status": "available",
+    "break_started_at": null,
+    "transfers_to_queue": 0
+  }
 }
 ```
 
