@@ -21,14 +21,14 @@ import (
 
 // AccountRequest represents the request body for creating/updating an account
 type AccountRequest struct {
-	Name               string `json:"name" validate:"required"`
-	AppID              string `json:"app_id"`
-	PhoneID            string `json:"phone_id" validate:"required"`
-	BusinessID         string `json:"business_id" validate:"required"`
-	AccessToken        string `json:"access_token" validate:"required"`
-	AppSecret          string `json:"app_secret"` // Meta App Secret for webhook signature verification
-	WebhookVerifyToken string `json:"webhook_verify_token"`
-	APIVersion         string `json:"api_version"`
+	Name                   string `json:"name" validate:"required"`
+	AppID                  string `json:"app_id"`
+	PhoneID                string `json:"phone_id" validate:"required"`
+	BusinessID             string `json:"business_id" validate:"required"`
+	AccessToken            string `json:"access_token" validate:"required"`
+	AppSecret              string `json:"app_secret"` // Meta App Secret for webhook signature verification
+	WebhookVerifyToken     string `json:"webhook_verify_token"`
+	APIVersion             string `json:"api_version"`
 	IsDefaultIncoming      bool   `json:"is_default_incoming"`
 	IsDefaultOutgoing      bool   `json:"is_default_outgoing"`
 	AutoReadReceipt        bool   `json:"auto_read_receipt"`
@@ -37,28 +37,28 @@ type AccountRequest struct {
 
 // AccountResponse represents the response for an account (without sensitive data)
 type AccountResponse struct {
-	ID                 uuid.UUID  `json:"id"`
-	Name               string     `json:"name"`
-	AppID              string     `json:"app_id"`
-	PhoneID            string     `json:"phone_id"`
-	BusinessID         string     `json:"business_id"`
-	WebhookVerifyToken string     `json:"webhook_verify_token"`
-	APIVersion         string     `json:"api_version"`
+	ID                     uuid.UUID  `json:"id"`
+	Name                   string     `json:"name"`
+	AppID                  string     `json:"app_id"`
+	PhoneID                string     `json:"phone_id"`
+	BusinessID             string     `json:"business_id"`
+	WebhookVerifyToken     string     `json:"webhook_verify_token"`
+	APIVersion             string     `json:"api_version"`
 	IsDefaultIncoming      bool       `json:"is_default_incoming"`
 	IsDefaultOutgoing      bool       `json:"is_default_outgoing"`
 	AutoReadReceipt        bool       `json:"auto_read_receipt"`
 	BusinessCallingEnabled bool       `json:"business_calling_enabled"`
 	Status                 string     `json:"status"`
-	HasAccessToken     bool       `json:"has_access_token"`
-	HasAppSecret       bool       `json:"has_app_secret"`
-	PhoneNumber        string     `json:"phone_number,omitempty"`
-	DisplayName        string     `json:"display_name,omitempty"`
-	CreatedByID        *uuid.UUID `json:"created_by_id,omitempty"`
-	CreatedByName      string     `json:"created_by_name,omitempty"`
-	UpdatedByID        *uuid.UUID `json:"updated_by_id,omitempty"`
-	UpdatedByName      string     `json:"updated_by_name,omitempty"`
-	CreatedAt          string     `json:"created_at"`
-	UpdatedAt          string     `json:"updated_at"`
+	HasAccessToken         bool       `json:"has_access_token"`
+	HasAppSecret           bool       `json:"has_app_secret"`
+	PhoneNumber            string     `json:"phone_number,omitempty"`
+	DisplayName            string     `json:"display_name,omitempty"`
+	CreatedByID            *uuid.UUID `json:"created_by_id,omitempty"`
+	CreatedByName          string     `json:"created_by_name,omitempty"`
+	UpdatedByID            *uuid.UUID `json:"updated_by_id,omitempty"`
+	UpdatedByName          string     `json:"updated_by_name,omitempty"`
+	CreatedAt              string     `json:"created_at"`
+	UpdatedAt              string     `json:"updated_at"`
 }
 
 // ListAccounts returns all WhatsApp accounts for the organization
@@ -119,38 +119,31 @@ func (a *App) CreateAccount(r *fastglue.Request) error {
 	// Set default API version
 	apiVersion := req.APIVersion
 	if apiVersion == "" {
-		apiVersion = "v21.0"
-	}
-
-	encKey := a.Config.App.EncryptionKey
-	encAccessToken, err := crypto.Encrypt(req.AccessToken, encKey)
-	if err != nil {
-		a.Log.Error("Failed to encrypt access token", "error", err)
-		return r.SendErrorEnvelope(fasthttp.StatusInternalServerError, "Failed to create account", nil, "")
-	}
-	encAppSecret, err := crypto.Encrypt(req.AppSecret, encKey)
-	if err != nil {
-		a.Log.Error("Failed to encrypt app secret", "error", err)
-		return r.SendErrorEnvelope(fasthttp.StatusInternalServerError, "Failed to create account", nil, "")
+		apiVersion = a.defaultAPIVersion()
 	}
 
 	account := models.WhatsAppAccount{
-		OrganizationID:     orgID,
-		Name:               req.Name,
-		AppID:              req.AppID,
-		PhoneID:            req.PhoneID,
-		BusinessID:         req.BusinessID,
-		AccessToken:        encAccessToken,
-		AppSecret:          encAppSecret,
-		WebhookVerifyToken: webhookVerifyToken,
-		APIVersion:         apiVersion,
+		OrganizationID:         orgID,
+		Name:                   req.Name,
+		AppID:                  req.AppID,
+		PhoneID:                req.PhoneID,
+		BusinessID:             req.BusinessID,
+		AccessToken:            req.AccessToken,
+		AppSecret:              req.AppSecret,
+		WebhookVerifyToken:     webhookVerifyToken,
+		APIVersion:             apiVersion,
 		IsDefaultIncoming:      req.IsDefaultIncoming,
 		IsDefaultOutgoing:      req.IsDefaultOutgoing,
 		AutoReadReceipt:        req.AutoReadReceipt,
 		BusinessCallingEnabled: req.BusinessCallingEnabled,
 		Status:                 "active",
-		CreatedByID:        &userID,
-		UpdatedByID:        &userID,
+		CreatedByID:            &userID,
+		UpdatedByID:            &userID,
+	}
+
+	if err := a.encryptAccountSecrets(&account); err != nil {
+		a.Log.Error("Failed to encrypt account secrets", "error", err)
+		return r.SendErrorEnvelope(fasthttp.StatusInternalServerError, "Failed to create account", nil, "")
 	}
 
 	// If this is set as default, unset other defaults
@@ -482,24 +475,24 @@ func (a *App) fetchMetaJSON(url, accessToken string) (map[string]any, int, error
 
 func accountToResponse(acc models.WhatsAppAccount) AccountResponse {
 	resp := AccountResponse{
-		ID:                 acc.ID,
-		Name:               acc.Name,
-		AppID:              acc.AppID,
-		PhoneID:            acc.PhoneID,
-		BusinessID:         acc.BusinessID,
-		WebhookVerifyToken: acc.WebhookVerifyToken,
-		APIVersion:         acc.APIVersion,
+		ID:                     acc.ID,
+		Name:                   acc.Name,
+		AppID:                  acc.AppID,
+		PhoneID:                acc.PhoneID,
+		BusinessID:             acc.BusinessID,
+		WebhookVerifyToken:     acc.WebhookVerifyToken,
+		APIVersion:             acc.APIVersion,
 		IsDefaultIncoming:      acc.IsDefaultIncoming,
 		IsDefaultOutgoing:      acc.IsDefaultOutgoing,
 		AutoReadReceipt:        acc.AutoReadReceipt,
 		BusinessCallingEnabled: acc.BusinessCallingEnabled,
 		Status:                 acc.Status,
-		HasAccessToken:     acc.AccessToken != "",
-		HasAppSecret:       acc.AppSecret != "",
-		CreatedByID:        acc.CreatedByID,
-		UpdatedByID:        acc.UpdatedByID,
-		CreatedAt:          acc.CreatedAt.Format("2006-01-02T15:04:05Z"),
-		UpdatedAt:          acc.UpdatedAt.Format("2006-01-02T15:04:05Z"),
+		HasAccessToken:         acc.AccessToken != "",
+		HasAppSecret:           acc.AppSecret != "",
+		CreatedByID:            acc.CreatedByID,
+		UpdatedByID:            acc.UpdatedByID,
+		CreatedAt:              acc.CreatedAt.Format("2006-01-02T15:04:05Z"),
+		UpdatedAt:              acc.UpdatedAt.Format("2006-01-02T15:04:05Z"),
 	}
 	if acc.CreatedBy != nil {
 		resp.CreatedByName = acc.CreatedBy.FullName
@@ -655,7 +648,11 @@ func (a *App) ExchangeToken(r *fastglue.Request) error {
 	}
 
 	// 4. Attempt Auto-Registration
-	regErr := a.attemptAutoRegistration(ctx, account, phoneInfo, accessToken)
+	var priorStatus string
+	if oldAccount != nil {
+		priorStatus = oldAccount.Status
+	}
+	regErr := a.attemptAutoRegistration(ctx, account, phoneInfo, accessToken, priorStatus)
 
 	// 5. Subscribe app to WABA webhooks
 	if err := a.WhatsApp.SubscribeApp(ctx, a.toWhatsAppAccount(account)); err != nil {
@@ -663,26 +660,10 @@ func (a *App) ExchangeToken(r *fastglue.Request) error {
 	}
 
 	// 6. Encrypt credentials at rest
-	encKey := a.Config.App.EncryptionKey
-	var errEnc error
-	if account.AccessToken != "" && !crypto.IsEncrypted(account.AccessToken) {
-		account.AccessToken, errEnc = crypto.Encrypt(account.AccessToken, encKey)
-		if errEnc != nil {
-			return r.SendErrorEnvelope(fasthttp.StatusInternalServerError, "Failed to encrypt access token", nil, "")
-		}
-	}
-	if account.AppSecret != "" && !crypto.IsEncrypted(account.AppSecret) {
-		account.AppSecret, errEnc = crypto.Encrypt(account.AppSecret, encKey)
-		if errEnc != nil {
-			return r.SendErrorEnvelope(fasthttp.StatusInternalServerError, "Failed to encrypt app secret", nil, "")
-		}
-	}
 	plaintextPin := account.Pin
-	if account.Pin != "" && !crypto.IsEncrypted(account.Pin) {
-		account.Pin, errEnc = crypto.Encrypt(account.Pin, encKey)
-		if errEnc != nil {
-			return r.SendErrorEnvelope(fasthttp.StatusInternalServerError, "Failed to encrypt PIN", nil, "")
-		}
+	if err := a.encryptAccountSecrets(account); err != nil {
+		a.Log.Error("Failed to encrypt account secrets", "error", err)
+		return r.SendErrorEnvelope(fasthttp.StatusInternalServerError, err.Error(), nil, "")
 	}
 
 	if err := a.DB.Save(account).Error; err != nil {
@@ -853,7 +834,9 @@ func (a *App) createOrUpdateAccount(ctx context.Context, orgID uuid.UUID, phoneI
 	account.AccessToken = accessToken
 	account.AppSecret = appSecret
 	account.WebhookVerifyToken = webhookVerifyToken
-	account.Status = "pending_registration"
+	if !existingAccount {
+		account.Status = "pending_registration"
+	}
 	account.IsSMB = isSMB
 
 	// Only fill account.AppID / APIVersion if empty
@@ -862,7 +845,7 @@ func (a *App) createOrUpdateAccount(ctx context.Context, orgID uuid.UUID, phoneI
 		account.AppID = appID
 	}
 	if account.APIVersion == "" {
-		account.APIVersion = a.Config.WhatsApp.APIVersion
+		account.APIVersion = a.defaultAPIVersion()
 	}
 
 	if !existingAccount {
@@ -874,7 +857,7 @@ func (a *App) createOrUpdateAccount(ctx context.Context, orgID uuid.UUID, phoneI
 	return &account, phoneInfo, existingAccount, oldAccount, nil
 }
 
-func (a *App) attemptAutoRegistration(ctx context.Context, account *models.WhatsAppAccount, phoneInfo *whatsapp.PhoneNumberInfo, accessToken string) error {
+func (a *App) attemptAutoRegistration(ctx context.Context, account *models.WhatsAppAccount, phoneInfo *whatsapp.PhoneNumberInfo, accessToken, priorStatus string) error {
 	if account.IsSMB {
 		account.Status = "active"
 		account.Pin = ""
@@ -886,7 +869,7 @@ func (a *App) attemptAutoRegistration(ctx context.Context, account *models.Whats
 	if err != nil {
 		return fmt.Errorf("failed to generate secure random PIN: %w", err)
 	}
-	
+
 	a.Log.Info("Attempting phone number auto-registration", "phone_id", account.PhoneID)
 	regErr := a.WhatsApp.RegisterPhoneNumber(ctx, account.PhoneID, generatedPin, accessToken, account.APIVersion)
 
@@ -898,9 +881,13 @@ func (a *App) attemptAutoRegistration(ctx context.Context, account *models.Whats
 		a.Log.Warn("Phone number auto-registration failed",
 			"error", regErr,
 			"phone_id", account.PhoneID)
-		account.Status = "pending_registration"
+		if priorStatus != "" {
+			account.Status = priorStatus
+		} else {
+			account.Status = "pending_registration"
+		}
 	}
-	
+
 	return regErr
 }
 
@@ -962,25 +949,9 @@ func (a *App) RegisterPhoneNumber(r *fastglue.Request) error {
 	account.Pin = pin
 
 	// Encrypt secrets before saving
-	encKey := a.Config.App.EncryptionKey
-	var errEnc error
-	if account.AccessToken != "" && !crypto.IsEncrypted(account.AccessToken) {
-		account.AccessToken, errEnc = crypto.Encrypt(account.AccessToken, encKey)
-		if errEnc != nil {
-			return r.SendErrorEnvelope(fasthttp.StatusInternalServerError, "Failed to encrypt access token", nil, "")
-		}
-	}
-	if account.AppSecret != "" && !crypto.IsEncrypted(account.AppSecret) {
-		account.AppSecret, errEnc = crypto.Encrypt(account.AppSecret, encKey)
-		if errEnc != nil {
-			return r.SendErrorEnvelope(fasthttp.StatusInternalServerError, "Failed to encrypt app secret", nil, "")
-		}
-	}
-	if account.Pin != "" && !crypto.IsEncrypted(account.Pin) {
-		account.Pin, errEnc = crypto.Encrypt(account.Pin, encKey)
-		if errEnc != nil {
-			return r.SendErrorEnvelope(fasthttp.StatusInternalServerError, "Failed to encrypt PIN", nil, "")
-		}
+	if err := a.encryptAccountSecrets(account); err != nil {
+		a.Log.Error("Failed to encrypt account secrets", "error", err)
+		return r.SendErrorEnvelope(fasthttp.StatusInternalServerError, err.Error(), nil, "")
 	}
 
 	if err := a.DB.Save(account).Error; err != nil {
@@ -1012,4 +983,35 @@ func generateNumericPIN(length int) (string, error) {
 		b[i] = byte(num.Int64()) + '0'
 	}
 	return string(b), nil
+}
+
+func (a *App) defaultAPIVersion() string {
+	if a.Config.WhatsApp.APIVersion != "" {
+		return a.Config.WhatsApp.APIVersion
+	}
+	return "v21.0"
+}
+
+func (a *App) encryptAccountSecrets(account *models.WhatsAppAccount) error {
+	encKey := a.Config.App.EncryptionKey
+	var err error
+	if account.AccessToken != "" && !crypto.IsEncrypted(account.AccessToken) {
+		account.AccessToken, err = crypto.Encrypt(account.AccessToken, encKey)
+		if err != nil {
+			return fmt.Errorf("failed to encrypt access token: %w", err)
+		}
+	}
+	if account.AppSecret != "" && !crypto.IsEncrypted(account.AppSecret) {
+		account.AppSecret, err = crypto.Encrypt(account.AppSecret, encKey)
+		if err != nil {
+			return fmt.Errorf("failed to encrypt app secret: %w", err)
+		}
+	}
+	if account.Pin != "" && !crypto.IsEncrypted(account.Pin) {
+		account.Pin, err = crypto.Encrypt(account.Pin, encKey)
+		if err != nil {
+			return fmt.Errorf("failed to encrypt PIN: %w", err)
+		}
+	}
+	return nil
 }
