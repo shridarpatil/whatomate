@@ -529,4 +529,3 @@ type AuditLog struct {
 func (AuditLog) TableName() string {
 	return "audit_logs"
 }
-

@@ -113,8 +113,8 @@ type WebhookPayload struct {
 					WaID   string `json:"wa_id"`
 					UserID string `json:"user_id,omitempty"` // BSUID
 				} `json:"contacts"`
-				Messages []IncomingTextMessage `json:"messages,omitempty"`
-				Statuses        []WebhookStatus `json:"statuses,omitempty"`
+				Messages        []IncomingTextMessage `json:"messages,omitempty"`
+				Statuses        []WebhookStatus       `json:"statuses,omitempty"`
 				UserPreferences []struct {
 					WaID      string `json:"wa_id"`
 					UserID    string `json:"user_id,omitempty"`

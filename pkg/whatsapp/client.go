@@ -143,7 +143,7 @@ func (c *Client) ValidateCredentials(ctx context.Context, phoneID, businessID, a
 	// Check verification status (skip for sandbox/test numbers and SMB accounts)
 	isTestNumber := phoneResult.AccountMode == "SANDBOX" || phoneResult.VerifiedName == "Test Number"
 	isSMB := phoneResult.IsOnBizApp || phoneResult.PlatformType == "SMB" || phoneResult.PlatformType == "SMB_CLOUD_API"
-	
+
 	var warning string
 	if !isTestNumber && !isSMB {
 		if phoneResult.CodeVerificationStatus == "NOT_VERIFIED" {
