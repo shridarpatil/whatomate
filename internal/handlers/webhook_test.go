@@ -594,18 +594,17 @@ func TestWebhookHandler_smb_message_echoes(t *testing.T) {
 	// Execute WebhookHandler
 	require.NoError(t, app.WebhookHandler(req))
 
-	// Allow goroutine to run
-	time.Sleep(100 * time.Millisecond)
-
 	// Verify contact was created
 	var contact models.Contact
-	err := app.DB.Where("organization_id = ? AND phone_number = ?", org.ID, "9199998888").First(&contact).Error
-	require.NoError(t, err)
+	assert.Eventually(t, func() bool {
+		return app.DB.Where("organization_id = ? AND phone_number = ?", org.ID, "9199998888").First(&contact).Error == nil
+	}, 2*time.Second, 10*time.Millisecond)
 
 	// Verify message was saved as outgoing and status sent
 	var message models.Message
-	err = app.DB.Where("organization_id = ? AND whats_app_message_id = ?", org.ID, "wamid.echo_test_12345").First(&message).Error
-	require.NoError(t, err)
+	assert.Eventually(t, func() bool {
+		return app.DB.Where("organization_id = ? AND whats_app_message_id = ?", org.ID, "wamid.echo_test_12345").First(&message).Error == nil
+	}, 2*time.Second, 10*time.Millisecond)
 	assert.Equal(t, models.DirectionOutgoing, message.Direction)
 	assert.Equal(t, models.MessageStatusSent, message.Status)
 	assert.Equal(t, "Hello from Business App!", message.Content)
@@ -661,13 +660,11 @@ func TestWebhookHandler_smb_app_state_sync(t *testing.T) {
 
 	require.NoError(t, app.WebhookHandler(req))
 
-	// Allow goroutine to run
-	time.Sleep(100 * time.Millisecond)
-
 	// Verify contact was synced (add)
 	var contact models.Contact
-	err := app.DB.Where("organization_id = ? AND phone_number = ?", org.ID, "9199997777").First(&contact).Error
-	require.NoError(t, err)
+	assert.Eventually(t, func() bool {
+		return app.DB.Where("organization_id = ? AND phone_number = ?", org.ID, "9199997777").First(&contact).Error == nil
+	}, 2*time.Second, 10*time.Millisecond)
 	assert.Equal(t, "Synced Contact Name", contact.ProfileName)
 
 	// 2. Sync contact (REMOVE)
@@ -697,17 +694,14 @@ func TestWebhookHandler_smb_app_state_sync(t *testing.T) {
 
 	require.NoError(t, app.WebhookHandler(reqRemove))
 
-	// Allow goroutine to run
-	time.Sleep(100 * time.Millisecond)
-
 	// Verify contact was soft-deleted (remove)
-	var checkDeleted models.Contact
-	err = app.DB.Where("organization_id = ? AND phone_number = ?", org.ID, "9199997777").First(&checkDeleted).Error
-	assert.Error(t, err, "contact should have been soft-deleted and not found by standard query")
-
-	// Verify it still exists in unscoped query
 	var checkUnscoped models.Contact
-	err = app.DB.Unscoped().Where("organization_id = ? AND phone_number = ?", org.ID, "9199997777").First(&checkUnscoped).Error
-	require.NoError(t, err)
+	assert.Eventually(t, func() bool {
+		return app.DB.Unscoped().Where("organization_id = ? AND phone_number = ? AND deleted_at IS NOT NULL", org.ID, "9199997777").First(&checkUnscoped).Error == nil
+	}, 2*time.Second, 10*time.Millisecond)
+
+	var checkDeleted models.Contact
+	err := app.DB.Where("organization_id = ? AND phone_number = ?", org.ID, "9199997777").First(&checkDeleted).Error
+	assert.Error(t, err, "contact should have been soft-deleted and not found by standard query")
 	assert.True(t, checkUnscoped.DeletedAt.Valid, "DeletedAt should be populated")
 }
