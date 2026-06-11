@@ -80,7 +80,7 @@
     "all": "All",
     "none": "None",
     "other": "Other",
-    "required": "{field} is required",
+    "required": "Required",
     "optional": "Optional",
     "default": "Default",
     "selected": "selected",
