@@ -66,6 +66,12 @@ type IncomingTextMessage struct {
 			Body         string `json:"body"`
 			Name         string `json:"name"`
 		} `json:"nfm_reply,omitempty"`
+		CallPermissionReply *struct {
+			Response            string      `json:"response"`
+			IsPermanent         bool        `json:"is_permanent"`
+			ExpirationTimestamp json.Number `json:"expiration_timestamp,omitempty"`
+			ResponseSource      string      `json:"response_source"`
+		} `json:"call_permission_reply,omitempty"`
 	} `json:"interactive,omitempty"`
 	Image *struct {
 		ID       string `json:"id"`
@@ -179,7 +185,6 @@ func (a *App) processIncomingMessageFull(phoneNumberID string, msg IncomingTextM
 	buttonID := extracted.ButtonID
 	mediaInfo := extracted.Media
 	flowResponseData := extracted.FlowResponseData
-
 
 	// Save incoming message to messages table (always, even if chatbot is disabled)
 	var replyToWAMID string
@@ -1379,7 +1384,7 @@ func getStringFromMap(m map[string]any, key string) string {
 // ExtractedMessage holds the derived content fields of a message.
 type ExtractedMessage struct {
 	Text             string
-	Type             string         // may differ from msg.Type, e.g. "button_reply"
+	Type             string // may differ from msg.Type, e.g. "button_reply"
 	Media            *MediaInfo
 	ButtonID         string         // used by chatbot routing only
 	FlowResponseData map[string]any // used by chatbot routing only
@@ -1669,4 +1674,3 @@ func (a *App) isWithinBusinessHours(businessHours models.JSONBArray) bool {
 	// If no matching day found, assume outside business hours
 	return false
 }
-
