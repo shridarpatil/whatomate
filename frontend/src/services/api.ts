@@ -709,6 +709,25 @@ export const organizationsService = {
     api.post('/organizations/members', data),
 }
 
+// Superadmin portal (super admins only)
+export const adminService = {
+  listOrganizations: (params?: { search?: string; page?: number; limit?: number }) =>
+    api.get('/admin/organizations', { params }),
+  createOrganization: (data: { name: string; admin_full_name: string; admin_email: string; admin_password: string }) =>
+    api.post('/admin/organizations', data),
+  updateOrganization: (id: string, data: { name: string }) =>
+    api.put(`/admin/organizations/${id}`, data),
+  listOrgRoles: (orgId: string) => api.get(`/admin/organizations/${orgId}/roles`),
+  listUsers: (params?: { search?: string; page?: number; limit?: number; organization_id?: string; is_active?: string }) =>
+    api.get('/admin/users', { params }),
+  createUser: (data: { organization_id: string; email: string; password: string; full_name: string; role_id?: string }) =>
+    api.post('/admin/users', data),
+  setUserStatus: (id: string, isActive: boolean) =>
+    api.put(`/admin/users/${id}/status`, { is_active: isActive }),
+  resetUserPassword: (id: string, newPassword: string) =>
+    api.put(`/admin/users/${id}/password`, { new_password: newPassword }),
+}
+
 export interface Webhook {
   id: string
   name: string

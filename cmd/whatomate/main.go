@@ -576,12 +576,36 @@ func setupRoutes(g *fastglue.Fastglue, app *handlers.App, lo logf.Logger, basePa
 		return r
 	})
 
+	// Superadmin portal routes: defense-in-depth prefix guard. Handlers also
+	// check via requireSuperAdmin.
+	superAdminGuard := middleware.RequireSuperAdmin(app.IsSuperAdmin)
+	g.Before(func(r *fastglue.Request) *fastglue.Request {
+		if string(r.RequestCtx.Method()) == "OPTIONS" {
+			return r
+		}
+		path := string(r.RequestCtx.Path())
+		if len(path) >= 11 && path[:11] == "/api/admin/" {
+			return superAdminGuard(r)
+		}
+		return r
+	})
+
 	// Current User (all authenticated users)
 	g.GET("/api/me", app.GetCurrentUser)
 	g.PUT("/api/me/settings", app.UpdateCurrentUserSettings)
 	g.PUT("/api/me/password", app.ChangePassword)
 	g.PUT("/api/me/availability", app.UpdateAvailability)
 	g.GET("/api/me/organizations", app.ListMyOrganizations)
+
+	// Superadmin portal (super admin only - enforced by prefix guard + handlers)
+	g.GET("/api/admin/organizations", app.AdminListOrganizations)
+	g.POST("/api/admin/organizations", app.AdminCreateOrganization)
+	g.PUT("/api/admin/organizations/{id}", app.AdminUpdateOrganization)
+	g.GET("/api/admin/organizations/{id}/roles", app.AdminListOrgRoles)
+	g.GET("/api/admin/users", app.AdminListUsers)
+	g.POST("/api/admin/users", app.AdminCreateUser)
+	g.PUT("/api/admin/users/{id}/status", app.AdminSetUserStatus)
+	g.PUT("/api/admin/users/{id}/password", app.AdminResetUserPassword)
 
 	// User Management (admin only - enforced by middleware)
 	g.GET("/api/users", app.ListUsers)

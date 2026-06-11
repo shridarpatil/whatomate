@@ -6,6 +6,7 @@ declare module 'vue-router' {
   interface RouteMeta {
     requiresAuth?: boolean
     permission?: string // Resource permission required (e.g., 'analytics', 'chat')
+    superAdminOnly?: boolean // Route restricted to super admins (superadmin portal)
   }
 }
 
@@ -300,6 +301,18 @@ const router = createRouter({
           meta: { permission: 'audit_logs' }
         },
         {
+          path: 'admin/organizations',
+          name: 'admin-organizations',
+          component: () => import('@/views/admin/AdminOrganizationsView.vue'),
+          meta: { superAdminOnly: true }
+        },
+        {
+          path: 'admin/users',
+          name: 'admin-users',
+          component: () => import('@/views/admin/AdminUsersView.vue'),
+          meta: { superAdminOnly: true }
+        },
+        {
           path: 'calling',
           redirect: '/calling/logs'
         },
@@ -408,6 +421,11 @@ router.beforeEach(async (to, _from, next) => {
       if (!restored) {
         return next({ name: 'login', query: { redirect: to.fullPath } })
       }
+    }
+
+    // Superadmin portal routes are gated by the is_super_admin flag, not permissions
+    if (to.meta.superAdminOnly && !authStore.user?.is_super_admin) {
+      return next({ path: getFirstAccessibleRoute(authStore) })
     }
 
     // Check permission-based access

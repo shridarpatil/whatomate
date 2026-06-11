@@ -440,6 +440,19 @@ func (a *App) getUserPermissionsCached(userID uuid.UUID, orgIDs ...uuid.UUID) (*
 	}
 
 	if roleID == nil {
+		// Super admins implicitly have all permissions and don't need a role.
+		if user.IsSuperAdmin {
+			perms := UserPermissions{
+				IsSuperAdmin: true,
+				Permissions:  []string{},
+			}
+			if a.Redis != nil {
+				if data, err := json.Marshal(perms); err == nil {
+					a.Redis.Set(ctx, cacheKey, data, userPermissionsCacheTTL)
+				}
+			}
+			return &perms, nil
+		}
 		return nil, gorm.ErrRecordNotFound
 	}
 
