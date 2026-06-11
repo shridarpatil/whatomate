@@ -90,4 +90,3 @@ func FindContact(db *gorm.DB, orgID uuid.UUID, phoneNumber string) (*models.Cont
 
 	return nil, gorm.ErrRecordNotFound
 }
-

@@ -654,5 +654,3 @@ func TestApp_RegisterPhoneNumber_CrossOrgIsolation(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, fasthttp.StatusNotFound, testutil.GetResponseStatusCode(req))
 }
-
-
