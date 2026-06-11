@@ -113,91 +113,7 @@ type WebhookPayload struct {
 					WaID   string `json:"wa_id"`
 					UserID string `json:"user_id,omitempty"` // BSUID
 				} `json:"contacts"`
-				Messages []struct {
-					From       string `json:"from"`
-					FromUserID string `json:"from_user_id,omitempty"` // BSUID
-					ID         string `json:"id"`
-					Timestamp  string `json:"timestamp"`
-					Type       string `json:"type"`
-					Text       *struct {
-						Body string `json:"body"`
-					} `json:"text,omitempty"`
-					Image *struct {
-						ID       string `json:"id"`
-						MimeType string `json:"mime_type"`
-						SHA256   string `json:"sha256"`
-						Caption  string `json:"caption,omitempty"`
-					} `json:"image,omitempty"`
-					Document *struct {
-						ID       string `json:"id"`
-						MimeType string `json:"mime_type"`
-						SHA256   string `json:"sha256"`
-						Filename string `json:"filename"`
-						Caption  string `json:"caption,omitempty"`
-					} `json:"document,omitempty"`
-					Audio *struct {
-						ID       string `json:"id"`
-						MimeType string `json:"mime_type"`
-					} `json:"audio,omitempty"`
-					Video *struct {
-						ID       string `json:"id"`
-						MimeType string `json:"mime_type"`
-						SHA256   string `json:"sha256"`
-						Caption  string `json:"caption,omitempty"`
-					} `json:"video,omitempty"`
-					Interactive *struct {
-						Type        string `json:"type"`
-						ButtonReply *struct {
-							ID    string `json:"id"`
-							Title string `json:"title"`
-						} `json:"button_reply,omitempty"`
-						ListReply *struct {
-							ID          string `json:"id"`
-							Title       string `json:"title"`
-							Description string `json:"description"`
-						} `json:"list_reply,omitempty"`
-						NFMReply *struct {
-							ResponseJSON string `json:"response_json"`
-							Body         string `json:"body"`
-							Name         string `json:"name"`
-						} `json:"nfm_reply,omitempty"`
-						CallPermissionReply *struct {
-							Response            string      `json:"response"`
-							IsPermanent         bool        `json:"is_permanent"`
-							ExpirationTimestamp json.Number `json:"expiration_timestamp,omitempty"`
-							ResponseSource      string      `json:"response_source"`
-						} `json:"call_permission_reply,omitempty"`
-					} `json:"interactive,omitempty"`
-					Button *struct {
-						Text    string `json:"text"`
-						Payload string `json:"payload"`
-					} `json:"button,omitempty"`
-					Reaction *struct {
-						MessageID string `json:"message_id"`
-						Emoji     string `json:"emoji"`
-					} `json:"reaction,omitempty"`
-					Location *struct {
-						Latitude  float64 `json:"latitude"`
-						Longitude float64 `json:"longitude"`
-						Name      string  `json:"name,omitempty"`
-						Address   string  `json:"address,omitempty"`
-					} `json:"location,omitempty"`
-					Contacts []struct {
-						Name struct {
-							FormattedName string `json:"formatted_name"`
-							FirstName     string `json:"first_name,omitempty"`
-							LastName      string `json:"last_name,omitempty"`
-						} `json:"name"`
-						Phones []struct {
-							Phone string `json:"phone"`
-							Type  string `json:"type,omitempty"`
-						} `json:"phones,omitempty"`
-					} `json:"contacts,omitempty"`
-					Context *struct {
-						From string `json:"from"`
-						ID   string `json:"id"`
-					} `json:"context,omitempty"`
-				} `json:"messages,omitempty"`
+				Messages []IncomingTextMessage `json:"messages,omitempty"`
 				Statuses        []WebhookStatus `json:"statuses,omitempty"`
 				UserPreferences []struct {
 					WaID      string `json:"wa_id"`
@@ -236,92 +152,7 @@ type WebhookPayload struct {
 				ContactFirstName   string `json:"contact_first_name,omitempty"`
 				ContactPhoneNumber string `json:"contact_phone_number,omitempty"`
 				// Message echoes fields (when field == "smb_message_echoes")
-				MessageEchoes []struct {
-					From       string `json:"from"`
-					FromUserID string `json:"from_user_id,omitempty"` // BSUID
-					To         string `json:"to,omitempty"`
-					ID         string `json:"id"`
-					Timestamp  string `json:"timestamp"`
-					Type       string `json:"type"`
-					Text       *struct {
-						Body string `json:"body"`
-					} `json:"text,omitempty"`
-					Image *struct {
-						ID       string `json:"id"`
-						MimeType string `json:"mime_type"`
-						SHA256   string `json:"sha256"`
-						Caption  string `json:"caption,omitempty"`
-					} `json:"image,omitempty"`
-					Document *struct {
-						ID       string `json:"id"`
-						MimeType string `json:"mime_type"`
-						SHA256   string `json:"sha256"`
-						Filename string `json:"filename"`
-						Caption  string `json:"caption,omitempty"`
-					} `json:"document,omitempty"`
-					Audio *struct {
-						ID       string `json:"id"`
-						MimeType string `json:"mime_type"`
-					} `json:"audio,omitempty"`
-					Video *struct {
-						ID       string `json:"id"`
-						MimeType string `json:"mime_type"`
-						SHA256   string `json:"sha256"`
-						Caption  string `json:"caption,omitempty"`
-					} `json:"video,omitempty"`
-					Interactive *struct {
-						Type        string `json:"type"`
-						ButtonReply *struct {
-							ID    string `json:"id"`
-							Title string `json:"title"`
-						} `json:"button_reply,omitempty"`
-						ListReply *struct {
-							ID          string `json:"id"`
-							Title       string `json:"title"`
-							Description string `json:"description"`
-						} `json:"list_reply,omitempty"`
-						NFMReply *struct {
-							ResponseJSON string `json:"response_json"`
-							Body         string `json:"body"`
-							Name         string `json:"name"`
-						} `json:"nfm_reply,omitempty"`
-						CallPermissionReply *struct {
-							Response            string      `json:"response"`
-							IsPermanent         bool        `json:"is_permanent"`
-							ExpirationTimestamp json.Number `json:"expiration_timestamp,omitempty"`
-							ResponseSource      string      `json:"response_source"`
-						} `json:"call_permission_reply,omitempty"`
-					} `json:"interactive,omitempty"`
-					Button *struct {
-						Text    string `json:"text"`
-						Payload string `json:"payload"`
-					} `json:"button,omitempty"`
-					Reaction *struct {
-						MessageID string `json:"message_id"`
-						Emoji     string `json:"emoji"`
-					} `json:"reaction,omitempty"`
-					Location *struct {
-						Latitude  float64 `json:"latitude"`
-						Longitude float64 `json:"longitude"`
-						Name      string  `json:"name,omitempty"`
-						Address   string  `json:"address,omitempty"`
-					} `json:"location,omitempty"`
-					Contacts []struct {
-						Name struct {
-							FormattedName string `json:"formatted_name"`
-							FirstName     string `json:"first_name,omitempty"`
-							LastName      string `json:"last_name,omitempty"`
-						} `json:"name"`
-						Phones []struct {
-							Phone string `json:"phone"`
-							Type  string `json:"type,omitempty"`
-						} `json:"phones,omitempty"`
-					} `json:"contacts,omitempty"`
-					Context *struct {
-						From string `json:"from"`
-						ID   string `json:"id"`
-					} `json:"context,omitempty"`
-				} `json:"message_echoes,omitempty"`
+				MessageEchoes []IncomingTextMessage `json:"message_echoes,omitempty"`
 			} `json:"value"`
 			Field string `json:"field"`
 		} `json:"changes"`
@@ -514,34 +345,33 @@ func (a *App) WebhookHandler(r *fastglue.Request) error {
 	return r.SendEnvelope(map[string]string{"status": "ok"})
 }
 
-func (a *App) processIncomingMessage(phoneNumberID string, msg any, profileName string) {
-	// Convert msg interface to the message struct
-	msgBytes, err := json.Marshal(msg)
-	if err != nil {
-		a.Log.Error("Failed to marshal message", "error", err)
-		return
-	}
-
-	var textMsg IncomingTextMessage
-	if err := json.Unmarshal(msgBytes, &textMsg); err != nil {
-		a.Log.Error("Failed to unmarshal message", "error", err)
-		return
-	}
+func (a *App) processIncomingMessage(phoneNumberID string, msg IncomingTextMessage, profileName string) {
+	defer func() {
+		if r := recover(); r != nil {
+			a.Log.Error("Panic recovered in processIncomingMessage", "panic", r, "phone_id", phoneNumberID, "message_id", msg.ID)
+		}
+	}()
 
 	// Check for duplicate message - Meta sometimes sends the same message multiple times
-	if textMsg.ID != "" {
+	if msg.ID != "" {
 		var existingMsg models.Message
-		if err := a.DB.Where("whats_app_message_id = ?", textMsg.ID).First(&existingMsg).Error; err == nil {
-			a.Log.Debug("Duplicate message detected, skipping", "message_id", textMsg.ID)
+		if err := a.DB.Where("whats_app_message_id = ?", msg.ID).First(&existingMsg).Error; err == nil {
+			a.Log.Debug("Duplicate message detected, skipping", "message_id", msg.ID)
 			return
 		}
 	}
 
 	// Process the message with chatbot logic
-	a.processIncomingMessageFull(phoneNumberID, textMsg, profileName)
+	a.processIncomingMessageFull(phoneNumberID, msg, profileName)
 }
 
 func (a *App) processStatusUpdate(phoneNumberID string, status WebhookStatus) {
+	defer func() {
+		if r := recover(); r != nil {
+			a.Log.Error("Panic recovered in processStatusUpdate", "panic", r, "phone_id", phoneNumberID, "status_id", status.ID)
+		}
+	}()
+
 	messageID := status.ID
 	statusValue := status.Status
 
@@ -783,19 +613,12 @@ func (a *App) processMarketingPreference(phoneNumberID, userPhone, bsuid, value 
 }
 
 // processMessageEcho handles mirroring of messages sent from the mobile WhatsApp Business App.
-func (a *App) processMessageEcho(phoneNumberID string, echo any) {
-	// Convert echo interface to the message struct
-	echoBytes, err := json.Marshal(echo)
-	if err != nil {
-		a.Log.Error("Failed to marshal message echo", "error", err)
-		return
-	}
-
-	var msg IncomingTextMessage
-	if err := json.Unmarshal(echoBytes, &msg); err != nil {
-		a.Log.Error("Failed to unmarshal message echo", "error", err)
-		return
-	}
+func (a *App) processMessageEcho(phoneNumberID string, msg IncomingTextMessage) {
+	defer func() {
+		if r := recover(); r != nil {
+			a.Log.Error("Panic recovered in processMessageEcho", "panic", r, "phone_id", phoneNumberID, "message_id", msg.ID)
+		}
+	}()
 
 	// Find the WhatsApp account by phone_number_id (use cache)
 	account, err := a.getWhatsAppAccountCached(phoneNumberID)
@@ -838,7 +661,6 @@ func (a *App) processMessageEcho(phoneNumberID string, echo any) {
 	messageText := extracted.Text
 	messageType := extracted.Type
 	mediaInfo := extracted.Media
-
 
 	// Save message as outgoing, status sent
 	now := time.Now()
@@ -909,6 +731,12 @@ func (a *App) processMessageEcho(phoneNumberID string, echo any) {
 
 // processContactSync handles contact additions and deletions from the mobile app address book.
 func (a *App) processContactSync(phoneNumberID, contactPhone, contactName, action string) {
+	defer func() {
+		if r := recover(); r != nil {
+			a.Log.Error("Panic recovered in processContactSync", "panic", r, "phone_id", phoneNumberID, "phone", contactPhone)
+		}
+	}()
+
 	// Find the WhatsApp account by phone_number_id (use cache)
 	account, err := a.getWhatsAppAccountCached(phoneNumberID)
 	if err != nil {
