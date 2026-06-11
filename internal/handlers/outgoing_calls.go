@@ -1,6 +1,8 @@
 package handlers
 
 import (
+	"time"
+
 	"github.com/google/uuid"
 	"github.com/shridarpatil/whatomate/internal/models"
 	"github.com/shridarpatil/whatomate/pkg/whatsapp"
@@ -193,12 +195,14 @@ func (a *App) GetICEServers(r *fastglue.Request) error {
 		Credential string   `json:"credential,omitempty"`
 	}
 
+	now := time.Now()
 	servers := make([]iceServer, 0, len(a.Config.Calling.ICEServers))
 	for _, s := range a.Config.Calling.ICEServers {
+		username, credential := s.ResolveCredentials(now)
 		servers = append(servers, iceServer{
 			URLs:       s.URLs,
-			Username:   s.Username,
-			Credential: s.Credential,
+			Username:   username,
+			Credential: credential,
 		})
 	}
 
