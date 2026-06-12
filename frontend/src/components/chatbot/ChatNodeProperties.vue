@@ -225,6 +225,34 @@ const typeLabel: Record<string, string> = {
   goto_flow: 'Go to Flow',
   whatsapp_flow: 'WhatsApp Flow',
   webhook: 'Webhook',
+  set_variable: 'Set Variable',
+}
+
+// Set variable assignments helpers
+function addAssignment() {
+  const set = { ...(config.value.set || {}) }
+  set[''] = ''
+  updateConfig('set', set)
+}
+
+function removeAssignment(key: string) {
+  const set = { ...(config.value.set || {}) }
+  delete set[key]
+  updateConfig('set', set)
+}
+
+function updateAssignmentKey(oldKey: string, newKey: string) {
+  if (oldKey === newKey) return
+  const set = { ...(config.value.set || {}) }
+  set[newKey] = set[oldKey]
+  delete set[oldKey]
+  updateConfig('set', set)
+}
+
+function updateAssignmentValue(key: string, value: string) {
+  const set = { ...(config.value.set || {}) }
+  set[key] = value
+  updateConfig('set', set)
 }
 </script>
 
@@ -658,6 +686,26 @@ const typeLabel: Record<string, string> = {
           @update:model-value="(v: string) => updateConfig('body', v)"
           class="min-h-[50px] text-xs font-mono"
         />
+      </div>
+    </template>
+
+    <!-- set_variable -->
+    <template v-if="node.type === 'set_variable'">
+      <div class="space-y-1.5">
+        <div class="flex items-center justify-between">
+          <Label class="text-xs">Variable Assignments</Label>
+          <Button variant="outline" size="sm" class="h-6 text-xs" @click="addAssignment">
+            <Plus class="h-3 w-3 mr-1" /> Add
+          </Button>
+        </div>
+        <div v-for="(val, key) in (config.set || {})" :key="String(key)" class="flex items-center gap-1">
+          <Input :model-value="String(key)" @update:model-value="(v: string) => updateAssignmentKey(String(key), v)" placeholder="Variable Name" class="h-7 text-xs flex-1 font-mono" />
+          <Input :model-value="String(val)" @update:model-value="(v: string) => updateAssignmentValue(String(key), v)" placeholder="Value" class="h-7 text-xs flex-1" />
+          <Button variant="ghost" size="icon" class="h-6 w-6" @click="removeAssignment(String(key))">
+            <Trash2 class="h-3 w-3 text-destructive" />
+          </Button>
+        </div>
+        <p class="text-[10px] text-muted-foreground">Assign values to session variables. You can reference other variables using double-brace templates (e.g. <code v-pre>{{hotel_category_0_id}}</code>).</p>
       </div>
     </template>
 
