@@ -1368,3 +1368,77 @@ func TestRunChatGraph_Prompt_NoRegexAcceptsAnything(t *testing.T) {
 	assert.Equal(t, models.SessionStatusCompleted, session.Status)
 	assert.Equal(t, "literally anything", session.SessionData["email"])
 }
+
+func TestRunChatGraph_VariablesCaseInsensitive(t *testing.T) {
+	app, org, account, contact, session := newGraphTestFixtures(t)
+	contact.Metadata = models.JSONB{
+		"Customkey": "val1",
+		"Name":      "John",
+	}
+	require.NoError(t, app.DB.Save(contact).Error)
+
+	flow := &models.ChatbotFlow{
+		BaseModel:       models.BaseModel{ID: uuid.New()},
+		OrganizationID:  org.ID,
+		WhatsAppAccount: account.Name,
+		Name:            "variables-test-flow",
+		IsEnabled:       true,
+		Graph: models.JSONB{
+			"version":    2,
+			"entry_node": "msg",
+			"nodes": []any{
+				map[string]any{"id": "msg", "type": "message", "config": map[string]any{
+					"message": "hello {{customkey}} x {{name}} m {{Name}}",
+				}},
+			},
+			"edges": []any{},
+		},
+	}
+	require.NoError(t, app.DB.Create(flow).Error)
+
+	require.NoError(t, app.runChatGraph(account, contact, session, flow, "start", "", nil))
+	require.NoError(t, app.DB.First(session, session.ID).Error)
+
+	// Verify path log contains resolved message
+	var msgs []models.ChatbotSessionMessage
+	require.NoError(t, app.DB.Where("session_id = ?", session.ID).Find(&msgs).Error)
+	found := false
+	for _, m := range msgs {
+		if m.Direction == models.DirectionOutgoing {
+			assert.Equal(t, "hello val1 x John m John", m.Message)
+			found = true
+		}
+	}
+	assert.True(t, found, "should have found the resolved message")
+}
+
+func TestRunChatGraph_TriggerMessageAndLastMessageStored(t *testing.T) {
+	app, org, account, contact, session := newGraphTestFixtures(t)
+
+	flow := &models.ChatbotFlow{
+		BaseModel:       models.BaseModel{ID: uuid.New()},
+		OrganizationID:  org.ID,
+		WhatsAppAccount: account.Name,
+		Name:            "trigger-msg-test",
+		IsEnabled:       true,
+		Graph: models.JSONB{
+			"version":    2,
+			"entry_node": "m1",
+			"nodes": []any{
+				map[string]any{"id": "m1", "type": "message", "config": map[string]any{"message": "Hello!"}},
+				map[string]any{"id": "end", "type": "end"},
+			},
+			"edges": []any{
+				map[string]any{"from": "m1", "to": "end", "condition": "default"},
+			},
+		},
+	}
+	require.NoError(t, app.DB.Create(flow).Error)
+
+	// First execution (trigger)
+	require.NoError(t, app.runChatGraph(account, contact, session, flow, "OTP:11:1234", "", nil))
+	require.NoError(t, app.DB.First(session, session.ID).Error)
+
+	assert.Equal(t, "OTP:11:1234", session.SessionData["trigger_message"], "should store trigger message on first entry")
+	assert.Equal(t, "OTP:11:1234", session.SessionData["last_message"], "should store last message")
+}
