@@ -96,6 +96,17 @@ func (a *App) runChatGraph(
 	session.SessionData["phone_number"] = session.PhoneNumber
 	if contact != nil {
 		session.SessionData["contact_name"] = contact.ProfileName
+		if contact.Metadata != nil {
+			for k, v := range contact.Metadata {
+				session.SessionData[k] = v
+			}
+		}
+	}
+	if userInput != "" {
+		session.SessionData["last_message"] = userInput
+		if session.CurrentStep == "" {
+			session.SessionData["trigger_message"] = userInput
+		}
 	}
 
 	if session.CurrentStep == "" {
