@@ -1436,9 +1436,9 @@ func TestRunChatGraph_TriggerMessageAndLastMessageStored(t *testing.T) {
 	require.NoError(t, app.DB.Create(flow).Error)
 
 	// First execution (trigger)
-	require.NoError(t, app.runChatGraph(account, contact, session, flow, "OTP:11:1234", "", nil))
+	require.NoError(t, app.runChatGraph(account, contact, session, flow, "Hello Chatbot", "", nil))
 	require.NoError(t, app.DB.First(session, session.ID).Error)
 
-	assert.Equal(t, "OTP:11:1234", session.SessionData["trigger_message"], "should store trigger message on first entry")
-	assert.Equal(t, "OTP:11:1234", session.SessionData["last_message"], "should store last message")
+	assert.Equal(t, "Hello Chatbot", session.SessionData["trigger_message"], "should store trigger message on first entry")
+	assert.Equal(t, "Hello Chatbot", session.SessionData["last_message"], "should store last message")
 }
