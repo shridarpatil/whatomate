@@ -1,9 +1,13 @@
 package config_test
 
 import (
+	"crypto/hmac"
+	"crypto/sha1" //nolint:gosec // matches the coturn TURN REST API derivation under test
+	"encoding/base64"
 	"os"
 	"path/filepath"
 	"testing"
+	"time"
 
 	"github.com/shridarpatil/whatomate/internal/config"
 	"github.com/stretchr/testify/assert"
@@ -132,4 +136,44 @@ func TestLoad_RateLimitDefaults(t *testing.T) {
 	assert.Equal(t, 10, cfg.RateLimit.RegisterMaxAttempts)
 	assert.Equal(t, 30, cfg.RateLimit.RefreshMaxAttempts)
 	assert.Equal(t, 10, cfg.RateLimit.SSOMaxAttempts)
+}
+
+func TestResolveCredentials_StaticWhenNoSecret(t *testing.T) {
+	s := config.ICEServerConfig{Username: "user", Credential: "pass"}
+	username, credential := s.ResolveCredentials(time.Now())
+	assert.Equal(t, "user", username)
+	assert.Equal(t, "pass", credential)
+}
+
+func TestResolveCredentials_GeneratesRESTCredentials(t *testing.T) {
+	now := time.Unix(1_000_000, 0)
+	s := config.ICEServerConfig{Secret: "topsecret", CredentialTTL: 3600}
+
+	username, credential := s.ResolveCredentials(now)
+
+	// Username is the expiry unix timestamp (now + ttl).
+	require.Equal(t, "1003600", username)
+
+	// Credential is base64(HMAC-SHA1(secret, username)) — computed independently.
+	mac := hmac.New(sha1.New, []byte("topsecret"))
+	mac.Write([]byte(username))
+	want := base64.StdEncoding.EncodeToString(mac.Sum(nil))
+	assert.Equal(t, want, credential)
+}
+
+func TestResolveCredentials_SecretTakesPriorityAndPrefixesUsername(t *testing.T) {
+	now := time.Unix(1_000_000, 0)
+	s := config.ICEServerConfig{Username: "alice", Credential: "static", Secret: "topsecret", CredentialTTL: 3600}
+
+	username, credential := s.ResolveCredentials(now)
+
+	require.Equal(t, "1003600:alice", username)
+	assert.NotEqual(t, "static", credential)
+}
+
+func TestResolveCredentials_DefaultsTTLWhenUnset(t *testing.T) {
+	now := time.Unix(1_000_000, 0)
+	s := config.ICEServerConfig{Secret: "topsecret"}
+	username, _ := s.ResolveCredentials(now)
+	assert.Equal(t, "1086400", username) // now + default 86400s
 }
