@@ -1371,11 +1371,11 @@ func TestRunChatGraph_Prompt_NoRegexAcceptsAnything(t *testing.T) {
 
 func TestRunChatGraph_VariablesCaseInsensitive(t *testing.T) {
 	app, org, account, contact, session := newGraphTestFixtures(t)
-	contact.Metadata = models.JSONB{
+	session.SessionData = models.JSONB{
 		"Customkey": "val1",
 		"Name":      "John",
 	}
-	require.NoError(t, app.DB.Save(contact).Error)
+	require.NoError(t, app.DB.Save(session).Error)
 
 	flow := &models.ChatbotFlow{
 		BaseModel:       models.BaseModel{ID: uuid.New()},
