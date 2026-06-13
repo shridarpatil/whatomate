@@ -38,6 +38,16 @@ function updateConfig(key: string, value: any) {
   })
 }
 
+// Set multiple config keys in a single emit. Calling updateConfig twice in a
+// row loses the first change: the prop doesn't update synchronously after
+// emit, so the second call rebuilds from a stale props.node and clobbers it.
+function updateConfigEntries(entries: Record<string, any>) {
+  emit('update:node', {
+    ...props.node,
+    config: { ...props.node.config, ...entries }
+  })
+}
+
 function updateLabel(label: string) {
   emit('update:node', { ...props.node, label })
 }
@@ -66,8 +76,9 @@ async function handleFileSelect(event: Event) {
     const res = await ivrFlowsService.uploadAudio(file)
     const filename = res.data?.data?.filename
     if (filename) {
-      updateConfig('audio_file', filename)
-      updateConfig('greeting_text', undefined)
+      // Uploading a clip and TTS text are mutually exclusive; clear greeting_text
+      // so the backend doesn't TTS-regenerate and overwrite the uploaded audio_file.
+      updateConfigEntries({ audio_file: filename, greeting_text: undefined })
       toast.success('Audio uploaded')
     }
   } catch {
@@ -286,7 +297,7 @@ const greetingTab = computed(() =>
         <TabsContent value="text" class="mt-2">
           <Textarea
             :model-value="config.greeting_text || ''"
-            @update:model-value="(v: string) => updateConfig('greeting_text', v)"
+            @update:model-value="(v: string) => updateConfigEntries(v ? { greeting_text: v, audio_file: undefined } : { greeting_text: v })"
             placeholder="Enter text for TTS..."
             class="min-h-[60px] text-xs resize-none"
             :maxlength="500"

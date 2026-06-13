@@ -113,6 +113,16 @@ udp_port_max = 10100          # WebRTC UDP port range end
 # username = "user"
 # credential = "password"
 
+# Option D: TURN with a shared secret (coturn "use-auth-secret" / TURN REST API).
+# When `secret` is set it takes priority over username/credential: short-lived
+# credentials are generated per request (username = expiry timestamp, credential
+# = base64(HMAC-SHA1(secret, username))). Match `secret` to coturn's
+# `static-auth-secret`. `credential_ttl` (seconds) sets lifetime (default 86400).
+# [[calling.ice_servers]]
+# urls = ["turn:your-turn-server.com:3478"]
+# secret = "your-coturn-static-auth-secret"
+# credential_ttl = 86400
+
 # Default admin credentials (only used during initial setup when no users exist)
 [default_admin]
 email = "admin@admin.com"

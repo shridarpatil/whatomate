@@ -1,7 +1,12 @@
 package config
 
 import (
+	"crypto/hmac"
+	"crypto/sha1" //nolint:gosec // SHA-1 is mandated by the coturn TURN REST API (RFC draft)
+	"encoding/base64"
+	"strconv"
 	"strings"
+	"time"
 
 	"github.com/knadh/koanf/parsers/toml"
 	"github.com/knadh/koanf/providers/env"
@@ -32,10 +37,49 @@ type TTSConfig struct {
 	OpusencBinary string `koanf:"opusenc_binary"` // path to opusenc (defaults to "opusenc")
 }
 
+// defaultTURNCredentialTTLSecs is the lifetime of generated coturn REST
+// credentials when an ICE server has a secret but no explicit credential_ttl.
+const defaultTURNCredentialTTLSecs = 86400 // 24h
+
 type ICEServerConfig struct {
 	URLs       []string `koanf:"urls"`
 	Username   string   `koanf:"username"`
 	Credential string   `koanf:"credential"`
+	// Secret enables coturn's "use-auth-secret" (TURN REST API) mode. When set,
+	// short-lived credentials are generated per request instead of using the
+	// static Username/Credential above.
+	Secret string `koanf:"secret"`
+	// CredentialTTL is the lifetime (seconds) of generated credentials. Defaults
+	// to defaultTURNCredentialTTLSecs when <= 0. Only used when Secret is set.
+	CredentialTTL int `koanf:"credential_ttl"`
+}
+
+// ResolveCredentials returns the username and credential to advertise for this
+// ICE server. When Secret is set it derives short-lived coturn REST credentials
+// (use-auth-secret): the username is "<expiry-unix>" — optionally prefixed onto
+// any configured Username as "<expiry-unix>:<username>" — and the credential is
+// the base64-encoded HMAC-SHA1 of that username keyed by the secret. When Secret
+// is empty, the static Username/Credential are returned unchanged.
+func (s ICEServerConfig) ResolveCredentials(now time.Time) (username, credential string) {
+	if s.Secret == "" {
+		return s.Username, s.Credential
+	}
+
+	ttl := s.CredentialTTL
+	if ttl <= 0 {
+		ttl = defaultTURNCredentialTTLSecs
+	}
+
+	expiry := now.Add(time.Duration(ttl) * time.Second).Unix()
+	username = strconv.FormatInt(expiry, 10)
+	if s.Username != "" {
+		username = username + ":" + s.Username
+	}
+
+	mac := hmac.New(sha1.New, []byte(s.Secret))
+	mac.Write([]byte(username))
+	credential = base64.StdEncoding.EncodeToString(mac.Sum(nil))
+	return username, credential
 }
 
 type CallingConfig struct {
