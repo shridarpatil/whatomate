@@ -309,9 +309,11 @@ type WhatsAppAccount struct {
 	// Calling API. Used by the canned-response editor to disable the Call
 	// button option, and by the send path to refuse voice_call sends.
 	BusinessCallingEnabled bool       `gorm:"default:false" json:"business_calling_enabled"`
-	Status             string     `gorm:"size:20;default:'active'" json:"status"`
-	CreatedByID        *uuid.UUID `gorm:"type:uuid" json:"created_by_id,omitempty"`
-	UpdatedByID        *uuid.UUID `gorm:"type:uuid" json:"updated_by_id,omitempty"`
+	Status                 string     `gorm:"size:20;default:'active'" json:"status"`
+	EncryptionPrivateKey   string     `json:"-" gorm:"column:encryption_private_key"`
+	EncryptionPublicKey    string     `json:"encryption_public_key" gorm:"column:encryption_public_key"`
+	CreatedByID            *uuid.UUID `gorm:"type:uuid" json:"created_by_id,omitempty"`
+	UpdatedByID            *uuid.UUID `gorm:"type:uuid" json:"updated_by_id,omitempty"`
 
 	// Relations
 	Organization *Organization `gorm:"foreignKey:OrganizationID" json:"organization,omitempty"`

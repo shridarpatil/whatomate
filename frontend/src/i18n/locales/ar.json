@@ -1149,7 +1149,14 @@
     "incoming": "وارد",
     "newAccount": "حساب جديد",
     "outgoing": "صادر",
-    "webhookUrl": "رابط الويب هوك"
+    "webhookUrl": "رابط الويب هوك",
+    "keysGeneratedSuccess": "تم إنشاء مفاتيح التشفير بنجاح",
+    "keysGenerateFailed": "فشل إنشاء مفاتيح التشفير",
+    "flowsEncryptionConfig": "تشفير نماذج واتساب (WhatsApp Flows)",
+    "regenerateKeys": "إعادة إنشاء المفاتيح",
+    "generateKeys": "إنشاء المفاتيح",
+    "flowsWebhookUrl": "رابط الويب هوك للنماذج",
+    "encryptionPublicKey": "مفتاح التشفير العام"
   },
   "businessProfile": {
     "title": "ملف النشاط التجاري",

@@ -94,6 +94,16 @@ test.describe('WhatsApp Accounts - Detail Page CRUD', () => {
     }
   })
 
+  test('should show flows encryption config on existing account', async ({ page }) => {
+    await page.goto('/settings/accounts')
+    await page.waitForLoadState('networkidle')
+
+    if (await navigateToFirstItem(page)) {
+      await expect(page.getByText('WhatsApp Flows Encryption')).toBeVisible()
+      await expect(page.getByRole('button', { name: /Generate Keys|Regenerate Keys/i })).toBeVisible()
+    }
+  })
+
   test('should have test connection button', async ({ page }) => {
     await page.goto('/settings/accounts')
     await page.waitForLoadState('networkidle')

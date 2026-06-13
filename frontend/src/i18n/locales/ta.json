@@ -1186,7 +1186,14 @@
     "setupStep6": "செய்திகள் வெப்ஹூக் புலத்திற்குப் பதிவுசெய்க",
     "connectDescription": "Meta Cloud API ஐப் பயன்படுத்தி உங்கள் WhatsApp வணிக கணக்கை இணைக்கவும்.",
     "businessProfile": "வணிக சுயவிவரம்",
-    "contactOptions": "தொடர்பு விருப்பங்கள்"
+    "contactOptions": "தொடர்பு விருப்பங்கள்",
+    "keysGeneratedSuccess": "குறியாக்க விசைகள் வெற்றிகரமாக உருவாக்கப்பட்டன",
+    "keysGenerateFailed": "குறியாக்க விசைகளை உருவாக்க முடியவில்லை",
+    "flowsEncryptionConfig": "WhatsApp Flows குறியாக்கம்",
+    "regenerateKeys": "விசைகளை மீண்டும் உருவாக்கு",
+    "generateKeys": "விசைகளை உருவாக்கு",
+    "flowsWebhookUrl": "Flows வெப்ஹூக் URL",
+    "encryptionPublicKey": "குறியாக்க பொது விசை"
   },
   "dashboard": {
     "title": "டாஷ்போர்டு",
