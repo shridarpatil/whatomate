@@ -259,4 +259,79 @@ test.describe('WhatsApp Accounts - Detail Page CRUD', () => {
     await expect(page.getByText('Details', { exact: true })).toBeVisible()
     await expect(page.getByText('Unknown')).toBeVisible()
   })
+
+  test('should show marketing status card as active when account is onboarded', async ({ page, request }) => {
+    await loginAsSuperAdmin(page)
+    const api = new ApiHelper(request)
+    await api.login(SUPER_ADMIN.email, SUPER_ADMIN.password)
+    const acc = await api.createWhatsAppAccount({
+      name: scope.name('marketing-active').toLowerCase().replace(/\s/g, '-'),
+      phone_id: `phone-mkt-act-${Date.now()}`,
+      business_id: `biz-mkt-act-${Date.now()}`,
+      access_token: 'test-token-e2e',
+    })
+
+    await page.route(`**/api/accounts/${acc.id}`, async (route) => {
+      const response = await route.fetch()
+      const json = await response.json()
+      json.data.marketing_status = 'ONBOARDED'
+      await route.fulfill({ json })
+    })
+
+    await page.route(`**/api/accounts/${acc.id}/marketing-status`, async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          status: 'ONBOARDED'
+        })
+      })
+    })
+
+    await page.goto(`/settings/accounts/${acc.id}`)
+    await page.waitForLoadState('networkidle')
+
+    await expect(page.getByText('Marketing Messages Status')).toBeVisible()
+    await expect(page.getByText('Marketing Messages: Active')).toBeVisible()
+  })
+
+  test('should show marketing status card as not onboarded and handle refresh action', async ({ page, request }) => {
+    await loginAsSuperAdmin(page)
+    const api = new ApiHelper(request)
+    await api.login(SUPER_ADMIN.email, SUPER_ADMIN.password)
+    const acc = await api.createWhatsAppAccount({
+      name: scope.name('marketing-pending').toLowerCase().replace(/\s/g, '-'),
+      phone_id: `phone-mkt-pen-${Date.now()}`,
+      business_id: `biz-mkt-pen-${Date.now()}`,
+      access_token: 'test-token-e2e',
+    })
+
+    await page.route(`**/api/accounts/${acc.id}`, async (route) => {
+      const response = await route.fetch()
+      const json = await response.json()
+      json.data.marketing_status = 'PENDING'
+      await route.fulfill({ json })
+    })
+
+    await page.route(`**/api/accounts/${acc.id}/marketing-status`, async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          status: 'ONBOARDED'
+        })
+      })
+    })
+
+    await page.goto(`/settings/accounts/${acc.id}`)
+    await page.waitForLoadState('networkidle')
+
+    await expect(page.getByText('Marketing Messages Status')).toBeVisible()
+
+    const refreshBtn = page.getByRole('button', { name: /Refresh/i }).first()
+    await expect(refreshBtn).toBeVisible()
+    await refreshBtn.click()
+
+    await expect(page.getByText('Marketing Messages: Active')).toBeVisible()
+  })
 })

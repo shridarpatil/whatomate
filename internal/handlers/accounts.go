@@ -57,6 +57,7 @@ type AccountResponse struct {
 	UpdatedByName      string     `json:"updated_by_name,omitempty"`
 	CreatedAt          string     `json:"created_at"`
 	UpdatedAt          string     `json:"updated_at"`
+	MarketingStatus      string     `json:"marketing_status"`
 }
 
 // ListAccounts returns all WhatsApp accounts for the organization
@@ -478,6 +479,7 @@ func accountToResponse(acc models.WhatsAppAccount) AccountResponse {
 		UpdatedByID:        acc.UpdatedByID,
 		CreatedAt:          acc.CreatedAt.Format("2006-01-02T15:04:05Z"),
 		UpdatedAt:          acc.UpdatedAt.Format("2006-01-02T15:04:05Z"),
+		MarketingStatus:      acc.MarketingStatus,
 	}
 	if acc.CreatedBy != nil {
 		resp.CreatedByName = acc.CreatedBy.FullName
@@ -538,4 +540,44 @@ func (a *App) SubscribeApp(r *fastglue.Request) error {
 		"success": true,
 		"message": "App subscribed to webhooks successfully. You should now receive incoming messages.",
 	})
+}
+
+// GetMarketingStatus returns the Marketing Messages ToS status of the WABA.
+func (a *App) GetMarketingStatus(r *fastglue.Request) error {
+	orgID, err := a.getOrgID(r)
+	if err != nil {
+		return r.SendErrorEnvelope(fasthttp.StatusUnauthorized, "Unauthorized", nil, "")
+	}
+
+	id, err := parsePathUUID(r, "id", "account")
+	if err != nil {
+		return nil
+	}
+
+	account, err := a.resolveWhatsAppAccountByID(r, id, orgID)
+	if err != nil {
+		return nil
+	}
+
+	ctx := context.Background()
+	status, err := a.WhatsApp.GetMarketingOnboardingStatus(ctx, a.toWhatsAppAccount(account))
+
+	resp := map[string]any{
+		"status":            status,
+		"api_error":         false,
+		"api_error_message": "",
+	}
+
+	if err != nil {
+		a.Log.Error("Failed to fetch marketing status from Meta", "error", err, "account", account.Name)
+		resp["api_error"] = true
+		resp["api_error_message"] = err.Error()
+	} else {
+		// Cache/Save status to DB
+		if err := a.DB.Model(account).Update("marketing_status", status).Error; err != nil {
+			a.Log.Error("Failed to cache marketing status in DB", "error", err, "account", account.Name)
+		}
+	}
+
+	return r.SendEnvelope(resp)
 }

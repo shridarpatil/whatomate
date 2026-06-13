@@ -312,6 +312,7 @@ type WhatsAppAccount struct {
 	Status             string     `gorm:"size:20;default:'active'" json:"status"`
 	CreatedByID        *uuid.UUID `gorm:"type:uuid" json:"created_by_id,omitempty"`
 	UpdatedByID        *uuid.UUID `gorm:"type:uuid" json:"updated_by_id,omitempty"`
+	MarketingStatus      string     `gorm:"size:80;default:''" json:"marketing_status"`
 
 	// Relations
 	Organization *Organization `gorm:"foreignKey:OrganizationID" json:"organization,omitempty"`

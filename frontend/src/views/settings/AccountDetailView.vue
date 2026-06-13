@@ -69,6 +69,7 @@ interface WhatsAppAccount {
   updated_by_name?: string
   created_at: string
   updated_at: string
+  marketing_status?: string
 }
 
 interface TestResult {
@@ -257,6 +258,31 @@ async function copyToClipboard(text: string) {
     toast.success(t('common.copiedToClipboard', 'Copied'))
   } catch {
     toast.error(t('common.clipboardFailed', 'Failed to copy'))
+  }
+}
+
+const isRefreshingMarketingStatus = ref(false)
+const marketingStatusError = ref<string | null>(null)
+
+async function refreshMarketingStatus() {
+  if (!account.value) return
+  isRefreshingMarketingStatus.value = true
+  marketingStatusError.value = null
+  try {
+    const response = await api.get(`/accounts/${account.value.id}/marketing-status`)
+    const data = response.data?.data || response.data
+    if (data.api_error) {
+      marketingStatusError.value = data.api_error_message || 'API verification failed'
+      account.value.marketing_status = ''
+    } else {
+      account.value.marketing_status = data.status
+      toast.success(t('common.success', 'Status updated successfully'))
+    }
+  } catch (e: any) {
+    marketingStatusError.value = e.message || 'Failed to refresh status'
+    toast.error(t('accounts.marketingStatusError', 'Unable to verify status'))
+  } finally {
+    isRefreshingMarketingStatus.value = false
   }
 }
 
@@ -450,6 +476,79 @@ onMounted(async () => {
               </p>
             </div>
             <Switch :checked="form.business_calling_enabled" @update:checked="form.business_calling_enabled = $event" :disabled="!canWrite" />
+          </div>
+        </div>
+      </CardContent>
+    </Card>
+
+    <!-- Marketing Messages Status Card -->
+    <Card v-if="!isNew && account">
+      <CardHeader class="pb-3">
+        <div class="flex items-center justify-between">
+          <CardTitle class="text-sm font-medium">{{ $t('accounts.marketingStatus', 'Marketing Messages Status') }}</CardTitle>
+          <Button
+            variant="ghost"
+            size="xs"
+            class="h-8 w-8 p-0"
+            :disabled="isRefreshingMarketingStatus"
+            @click="refreshMarketingStatus"
+          >
+            <RefreshCw class="h-4 w-4" :class="{ 'animate-spin': isRefreshingMarketingStatus }" />
+          </Button>
+        </div>
+      </CardHeader>
+      <CardContent class="space-y-4">
+        <!-- Loading status -->
+        <div v-if="isRefreshingMarketingStatus && !account.marketing_status" class="flex items-center space-x-2 text-sm text-muted-foreground">
+          <Loader2 class="h-4 w-4 animate-spin" />
+          <span>{{ $t('common.loading') }}...</span>
+        </div>
+
+        <div v-else class="space-y-3">
+          <!-- State 🔴: API error / unable to verify -->
+          <div v-if="marketingStatusError || !account.marketing_status" class="space-y-2">
+            <div class="flex items-center gap-2 text-amber-600 dark:text-amber-400 bg-amber-500/10 p-3 rounded-lg border border-amber-500/20">
+              <AlertCircle class="h-5 w-5 shrink-0" />
+              <div>
+                <span class="text-sm font-semibold block">{{ $t('accounts.marketingStatusError', 'Unable to verify status') }}</span>
+                <p class="text-[11px] opacity-90 mt-0.5">{{ marketingStatusError || $t('accounts.marketingStatusErrorHint') }}</p>
+              </div>
+            </div>
+            <div class="flex gap-2">
+              <Button size="sm" variant="outline" :disabled="isRefreshingMarketingStatus" @click="refreshMarketingStatus">
+                <RefreshCw class="h-3 w-3 mr-1" :class="{ 'animate-spin': isRefreshingMarketingStatus }" />
+                {{ $t('common.retry', 'Retry') }}
+              </Button>
+            </div>
+          </div>
+
+          <!-- State 🟢: ONBOARDED -->
+          <div v-else-if="account.marketing_status === 'ONBOARDED'" class="flex items-center gap-3 text-emerald-600 dark:text-emerald-400 bg-emerald-500/10 p-3 rounded-lg border border-emerald-500/20">
+            <CheckCircle2 class="h-5 w-5 shrink-0" />
+            <div>
+              <span class="text-sm font-semibold block">{{ $t('accounts.marketingStatusOnboarded', 'Marketing Messages: Active') }}</span>
+            </div>
+          </div>
+
+          <!-- State 🟡: Non-ONBOARDED Statuses (ELIGIBLE, PENDING_*, INELIGIBLE_*) -->
+          <div v-else class="space-y-2">
+            <div class="flex items-start gap-2 text-destructive bg-destructive/10 p-3 rounded-lg border border-destructive/20">
+              <AlertCircle class="h-5 w-5 shrink-0 mt-0.5" />
+              <div>
+                <span class="text-sm font-semibold block">
+                  {{ $t('accounts.marketingStatusNotOnboarded', 'Terms of Service not accepted') }}
+                </span>
+                <span class="text-[11px] block opacity-95 mt-0.5">
+                  Status: <span class="font-mono bg-destructive/20 px-1 rounded">{{ account.marketing_status }}</span>
+                </span>
+              </div>
+            </div>
+            <div class="flex gap-2">
+              <Button size="sm" variant="outline" :disabled="isRefreshingMarketingStatus" @click="refreshMarketingStatus">
+                <RefreshCw class="h-3 w-3 mr-1" :class="{ 'animate-spin': isRefreshingMarketingStatus }" />
+                {{ $t('common.refresh', 'Refresh') }}
+              </Button>
+            </div>
           </div>
         </div>
       </CardContent>

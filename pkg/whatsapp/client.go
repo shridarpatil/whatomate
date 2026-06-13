@@ -204,6 +204,11 @@ func (c *Client) buildTemplatesURL(account *Account) string {
 	return fmt.Sprintf("%s/%s/%s/message_templates", c.getBaseURL(), account.APIVersion, account.BusinessID)
 }
 
+// buildMarketingMessagesURL builds the marketing messages endpoint URL
+func (c *Client) buildMarketingMessagesURL(account *Account) string {
+	return fmt.Sprintf("%s/%s/%s/marketing_messages", c.getBaseURL(), account.APIVersion, account.PhoneID)
+}
+
 // MediaURLResponse represents the response from Meta's media endpoint
 type MediaURLResponse struct {
 	URL              string `json:"url"`
@@ -560,3 +565,30 @@ func (c *Client) SubscribeApp(ctx context.Context, account *Account) error {
 	c.Log.Info("App subscribed to webhooks", "business_id", account.BusinessID)
 	return nil
 }
+
+// GetMarketingOnboardingStatus fetches marketing_messages_onboarding_status
+// from the WABA node. Returns ("", err) when the API call itself fails
+// (e.g. permission denied, expired token) — distinct from a non-ONBOARDED status.
+func (c *Client) GetMarketingOnboardingStatus(ctx context.Context, account *Account) (string, error) {
+	url := fmt.Sprintf("%s/%s/%s?fields=marketing_messages_onboarding_status",
+		c.getBaseURL(), account.APIVersion, account.BusinessID)
+	respBody, err := c.doRequest(ctx, http.MethodGet, url, nil, account.AccessToken)
+	if err != nil {
+		return "", fmt.Errorf("failed to fetch marketing onboarding status: %w", err)
+	}
+	var resp struct {
+		Status string `json:"marketing_messages_onboarding_status"`
+		Error  *struct {
+			Code    int    `json:"code"`
+			Message string `json:"message"`
+		} `json:"error,omitempty"`
+	}
+	if err := json.Unmarshal(respBody, &resp); err != nil {
+		return "", fmt.Errorf("failed to parse response: %w", err)
+	}
+	if resp.Error != nil {
+		return "", fmt.Errorf("API error %d: %s", resp.Error.Code, resp.Error.Message)
+	}
+	return resp.Status, nil
+}
+

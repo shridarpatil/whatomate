@@ -96,8 +96,9 @@ type WebhookPayload struct {
 					DisplayPhoneNumber string `json:"display_phone_number"`
 					PhoneNumberID      string `json:"phone_number_id"`
 				} `json:"metadata"`
-				// Template status update fields (when field == "message_template_status_update")
+				// Template status update and account update fields
 				Event                   string `json:"event,omitempty"`
+				WABAID                  string `json:"waba_id,omitempty"`
 				MessageTemplateID       int64  `json:"message_template_id,omitempty"`
 				MessageTemplateName     string `json:"message_template_name,omitempty"`
 				MessageTemplateLanguage string `json:"message_template_language,omitempty"`
@@ -270,6 +271,23 @@ func (a *App) WebhookHandler(r *fastglue.Request) error {
 	// Process each entry
 	for _, entry := range payload.Entry {
 		for _, change := range entry.Changes {
+			// Handle account updates (e.g. Marketing Messages Terms of Service accepted)
+			if change.Field == "account_update" {
+				a.Log.Info("Received account update event",
+					"event", change.Value.Event,
+					"waba_id", entry.ID,
+					"change_waba_id", change.Value.WABAID,
+				)
+				if change.Value.Event == "mm_lite_tos_signed" {
+					wabaID := change.Value.WABAID
+					if wabaID == "" {
+						wabaID = entry.ID
+					}
+					go a.processMarketingTermsAcceptance(wabaID)
+				}
+				continue
+			}
+
 			// Handle template status updates
 			if change.Field == "message_template_status_update" {
 				a.Log.Info("Received template status update",
@@ -595,6 +613,23 @@ func (a *App) processTemplateStatusUpdate(wabaID, event, templateName, templateL
 				"reason", reason,
 			)
 		}
+	}
+}
+
+// processMarketingTermsAcceptance processes the mm_lite_tos_signed event from the webhook
+func (a *App) processMarketingTermsAcceptance(wabaID string) {
+	result := a.DB.Model(&models.WhatsAppAccount{}).
+		Where("business_id = ?", wabaID).
+		Updates(map[string]any{
+			"marketing_status":       "ONBOARDED",
+		})
+
+	if result.Error != nil {
+		a.Log.Error("Failed to update WhatsApp account marketing terms status", "error", result.Error, "waba_id", wabaID)
+	} else if result.RowsAffected > 0 {
+		a.Log.Info("Successfully marked WhatsApp account as marketing onboarded from webhook", "waba_id", wabaID)
+	} else {
+		a.Log.Warn("No WhatsApp account found to update marketing terms status for WABA ID", "waba_id", wabaID)
 	}
 }
 

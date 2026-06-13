@@ -17,6 +17,7 @@ type BulkMessageCampaign struct {
 	HeaderMediaFilename  string         `gorm:"type:text" json:"header_media_filename"`   // Original filename
 	HeaderMediaMimeType  string         `gorm:"type:text" json:"header_media_mime_type"`  // MIME type (image/jpeg, video/mp4, etc.)
 	HeaderMediaLocalPath string         `gorm:"type:text" json:"header_media_local_path"` // Local file path for preview
+	OptimizeDelivery     bool           `gorm:"default:false" json:"optimize_delivery"`
 	Status               CampaignStatus `gorm:"size:20;default:'draft'" json:"status"`    // draft, queued, processing, completed, failed
 	TotalRecipients      int            `gorm:"default:0" json:"total_recipients"`
 	SentCount            int            `gorm:"default:0" json:"sent_count"`

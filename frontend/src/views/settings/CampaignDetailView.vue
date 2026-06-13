@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed, onMounted, onUnmounted, watch, nextTick } from 'vue'
+import { ref, computed, onMounted, onUnmounted, watch, nextTick, reactive } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { campaignsService, templatesService, api } from '@/services/api'
@@ -87,6 +87,7 @@ interface Campaign {
   header_media_filename?: string
   header_media_mime_type?: string
   status: string
+  optimize_delivery?: boolean
   total_recipients: number
   sent_count: number
   delivered_count: number
@@ -114,6 +115,7 @@ interface Template {
   body_content?: string
   header_type?: string
   header_content?: string
+  category?: string
 }
 
 interface Recipient {
@@ -150,6 +152,7 @@ const form = ref({
   name: '',
   whatsapp_account: '',
   template_id: '',
+  optimize_delivery: false,
   scheduled_at: '',
 })
 
@@ -198,6 +201,66 @@ const csvFile = ref<File | null>(null)
 
 // --- Selected template for param extraction ---
 const selectedTemplate = ref<Template | null>(null)
+
+// --- Marketing status check logic ---
+interface MarketingStatusResponse {
+  status: string
+  api_error: boolean
+  api_error_message: string
+}
+
+const marketingStatusCache = reactive<Map<string, MarketingStatusResponse>>(new Map())
+const isFetchingMarketingStatus = ref(false)
+
+const currentAccount = computed(() => {
+  if (!form.value.whatsapp_account) return null
+  return accounts.value.find(a => a.name === form.value.whatsapp_account) || null
+})
+
+const marketingStatus = computed(() => {
+  if (!currentAccount.value) return null
+  return marketingStatusCache.get(currentAccount.value.id) || null
+})
+
+async function fetchMarketingStatus(accountId: string) {
+  if (marketingStatusCache.has(accountId)) return
+  isFetchingMarketingStatus.value = true
+  try {
+    const response = await api.get(`/accounts/${accountId}/marketing-status`)
+    const data = response.data?.data || response.data
+    marketingStatusCache.set(accountId, data)
+    
+    // Auto-disable optimize delivery if the account has not onboarded marketing
+    if (selectedTemplate.value?.category === 'MARKETING') {
+      if (data.status !== 'ONBOARDED' && !data.api_error) {
+        form.value.optimize_delivery = false
+      }
+    }
+  } catch (err: any) {
+    marketingStatusCache.set(accountId, {
+      status: '',
+      api_error: true,
+      api_error_message: err.message || 'Unknown error'
+    })
+  } finally {
+    isFetchingMarketingStatus.value = false
+  }
+}
+
+watch(
+  [() => form.value.whatsapp_account, () => selectedTemplate.value],
+  ([newAccountName, newTpl]) => {
+    if (newTpl && newTpl.category === 'MARKETING' && newAccountName) {
+      const acc = accounts.value.find(a => a.name === newAccountName)
+      if (acc && acc.id) {
+        fetchMarketingStatus(acc.id)
+      }
+    }
+  },
+  { immediate: true }
+)
+
+
 
 // --- Header media state ---
 const selectedTemplateHeaderType = computed(() => selectedTemplate.value?.header_type)
@@ -379,6 +442,7 @@ function syncForm() {
     name: campaign.value.name || '',
     whatsapp_account: campaign.value.whatsapp_account || '',
     template_id: campaign.value.template_id || '',
+    optimize_delivery: campaign.value.optimize_delivery || false,
     scheduled_at: campaign.value.scheduled_at ? campaign.value.scheduled_at.slice(0, 16) : '',
   }
 }
@@ -424,6 +488,7 @@ async function save() {
       name: form.value.name,
       whatsapp_account: form.value.whatsapp_account || undefined,
       template_id: form.value.template_id || undefined,
+      optimize_delivery: form.value.optimize_delivery,
       scheduled_at: form.value.scheduled_at || undefined,
     }
     if (isNew.value) {
@@ -1068,6 +1133,69 @@ onUnmounted(() => {
               </SelectItem>
             </SelectContent>
           </Select>
+        </div>
+
+        <!-- Smart Marketing Optimization Toggle -->
+        <div v-if="selectedTemplate && selectedTemplate.category === 'MARKETING'" class="flex flex-col space-y-3 rounded-lg border p-4 shadow-sm bg-muted/20">
+          <div class="flex items-start space-x-2">
+            <input
+              type="checkbox"
+              id="optimize_delivery"
+              v-model="form.optimize_delivery"
+              :disabled="!isDraft || isFetchingMarketingStatus || !marketingStatus || marketingStatus.status !== 'ONBOARDED'"
+              class="mt-1 h-4 w-4 rounded border-gray-300 text-primary focus:ring-primary disabled:opacity-50"
+            />
+            <div class="grid gap-1.5 leading-none">
+              <label for="optimize_delivery" class="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70" :class="{ 'opacity-50': !marketingStatus || marketingStatus.status !== 'ONBOARDED' }">
+                {{ $t('campaigns.optimizeDelivery', 'Smart Marketing Optimization') }}
+              </label>
+              <p class="text-xs text-muted-foreground" :class="{ 'opacity-50': !marketingStatus || marketingStatus.status !== 'ONBOARDED' }">
+                {{ $t('campaigns.optimizeDeliveryDesc', 'Use Meta AI to deliver messages when customers are most active, protecting account quality and improving ROI. Note: WABA must have accepted the Marketing Messages Terms of Service.') }}
+                <a
+                  href="https://business.facebook.com/wa/manage/home/"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  class="text-primary hover:underline font-medium ml-1 inline-block"
+                >
+                  {{ $t('campaigns.acceptTermsLink', 'Accept Terms in WhatsApp Manager') }}
+                </a>
+              </p>
+            </div>
+          </div>
+
+          <!-- Marketing Status / Error Alerts -->
+          <div v-if="isFetchingMarketingStatus" class="flex items-center space-x-2 text-xs text-muted-foreground pt-1">
+            <RefreshCw class="h-3 w-3 animate-spin" />
+            <span>{{ $t('common.loading') }}...</span>
+          </div>
+
+          <div v-else-if="marketingStatus" class="pt-1">
+            <!-- State 🟡: Not Onboarded (including API errors) -->
+            <div v-if="marketingStatus.status !== 'ONBOARDED'" class="text-xs text-destructive bg-destructive/10 p-2.5 rounded border border-destructive/20 flex items-start gap-2">
+              <AlertCircle class="h-4 w-4 shrink-0 mt-0.5" />
+              <div>
+                <span class="font-medium">{{ $t('campaigns.marketingWarningNotOnboarded', 'Smart Optimization requires accepting the WhatsApp Marketing Messages Terms of Service. Please enable it first via the Meta link below.') }}</span>
+                <p class="mt-0.5 text-[11px] opacity-80">
+                  <a
+                    href="https://business.facebook.com/wa/manage/home/"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    class="underline font-semibold hover:text-destructive/80"
+                  >
+                    {{ $t('campaigns.acceptTermsLink', 'Accept Terms in WhatsApp Manager') }}
+                  </a>
+                </p>
+              </div>
+            </div>
+
+            <!-- State 🟢: Onboarded -->
+            <div v-else class="text-xs text-emerald-600 dark:text-emerald-400 bg-emerald-500/10 p-2.5 rounded border border-emerald-500/20 flex items-center gap-2">
+              <CheckCircle class="h-4 w-4 shrink-0" />
+              <span>
+                {{ $t('accounts.marketingStatusOnboarded', 'Marketing Messages: Active') }}
+              </span>
+            </div>
+          </div>
         </div>
 
         <!-- Media Upload Section -->
