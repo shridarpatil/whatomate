@@ -242,6 +242,9 @@ func buildNodeConfig(nodeType string, step *models.ChatbotFlowStep) map[string]a
 	case "buttons":
 		config["body"] = step.Message
 		config["buttons"] = jsonbArrayToSlice(step.Buttons)
+		if step.StoreAs != "" {
+			config["store_as"] = step.StoreAs
+		}
 	case "end":
 		if step.Message != "" {
 			config["message"] = step.Message

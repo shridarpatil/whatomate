@@ -252,6 +252,20 @@ func (a *App) execChatMessage(node *ChatNode, ctx *chatNodeCtx) (nodeOutcome, er
 func (a *App) execChatButtons(node *ChatNode, ctx *chatNodeCtx) (nodeOutcome, error) {
 	if !ctx.consumed && ctx.buttonID != "" {
 		ctx.consumed = true
+		// Persist the selection when the node configures store_as, mirroring
+		// the prompt node so any node that receives a user response can feed
+		// {{var}} interpolation downstream. Store the visible title (what the
+		// user "said"), falling back to the button id if the title is empty.
+		if storeAs := stringFromConfig(node.Config, "store_as"); storeAs != "" {
+			if ctx.session.SessionData == nil {
+				ctx.session.SessionData = models.JSONB{}
+			}
+			value := ctx.userInput
+			if value == "" {
+				value = ctx.buttonID
+			}
+			ctx.session.SessionData[storeAs] = value
+		}
 		return nodeOutcome{outcome: "button:" + ctx.buttonID}, nil
 	}
 
