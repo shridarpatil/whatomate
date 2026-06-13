@@ -88,5 +88,10 @@ RUN mkdir -p /app/uploads /app/audio
 # Expose port
 EXPOSE 8080
 
-# Run the binary
-CMD ["./whatomate", "server", "-config", "config.toml", "-migrate"]
+# Match the GoReleaser image's launch convention so the same orchestrator
+# args work against both tags: the binary is the ENTRYPOINT and CMD holds
+# only the default subcommand/flags. A Nomad job that sets
+# `args = ["server", "-migrate", ...]` (no `command`) then appends to the
+# entrypoint instead of replacing the binary with "server".
+ENTRYPOINT ["./whatomate"]
+CMD ["server", "-config", "config.toml", "-migrate"]

@@ -130,6 +130,52 @@ func TestRunChatGraph_GoldenPath(t *testing.T) {
 	assert.Equal(t, "e1", p2[3]["node"])
 }
 
+// TestRunChatGraph_ButtonsStoreAs verifies a buttons node with store_as
+// configured persists the tapped button's title into SessionData, so later
+// nodes can interpolate it via {{var}} just like a prompt node.
+func TestRunChatGraph_ButtonsStoreAs(t *testing.T) {
+	app, org, account, contact, session := newGraphTestFixtures(t)
+
+	flow := &models.ChatbotFlow{
+		BaseModel:       models.BaseModel{ID: uuid.New()},
+		OrganizationID:  org.ID,
+		WhatsAppAccount: account.Name,
+		Name:            "buttons-store-as",
+		IsEnabled:       true,
+		Graph: models.JSONB{
+			"version":    2,
+			"entry_node": "b1",
+			"nodes": []any{
+				map[string]any{
+					"id": "b1", "type": "buttons", "label": "choose",
+					"config": map[string]any{
+						"body":     "Pick one",
+						"store_as": "topic",
+						"buttons":  []any{map[string]any{"id": "opt_a", "title": "PIS vs Non PIS Account"}},
+					},
+				},
+				map[string]any{"id": "e1", "type": "end", "label": "done"},
+			},
+			"edges": []any{
+				map[string]any{"from": "b1", "to": "e1", "condition": "button:opt_a"},
+			},
+		},
+	}
+	require.NoError(t, app.DB.Create(flow).Error)
+
+	// Trigger → b1 sends buttons and yields.
+	require.NoError(t, app.runChatGraph(account, contact, session, flow, "start", "", nil))
+	require.NoError(t, app.DB.First(session, session.ID).Error)
+	require.Equal(t, "b1", session.CurrentStep)
+
+	// Click: WhatsApp delivers the title as text and the id as buttonID.
+	require.NoError(t, app.runChatGraph(account, contact, session, flow, "PIS vs Non PIS Account", "opt_a", nil))
+	require.NoError(t, app.DB.First(session, session.ID).Error)
+
+	assert.Equal(t, "PIS vs Non PIS Account", session.SessionData["topic"],
+		"buttons store_as should persist the tapped button's title")
+}
+
 // TestRunChatGraph_ButtonsRePromptOnText verifies that a text reply (no
 // buttonID) at a buttons node re-sends the prompt instead of advancing.
 func TestRunChatGraph_ButtonsRePromptOnText(t *testing.T) {
