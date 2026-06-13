@@ -111,10 +111,14 @@ func stepsToGraph(steps []models.ChatbotFlowStep, canvasLayout models.JSONB) mod
 	}
 
 	for i, step := range sorted {
-		// v1 text steps with input_type≠none become v2 prompt nodes
-		// (blocking + validating), matching the editor's UX intent.
+		// v1 text steps that capture a reply become v2 prompt nodes
+		// (blocking + validating + storing), matching the editor's UX
+		// intent. Trigger on an explicit input_type OR on store_as /
+		// validation being configured — a step that only set store_as
+		// (no input_type) still needs to capture its reply rather than
+		// being flattened to a plain message that drops {{var}}.
 		nodeType := messageTypeToNodeTypeGo(string(step.MessageType))
-		if step.MessageType == models.FlowStepTypeText && step.InputType != "" && step.InputType != models.InputTypeNone {
+		if step.MessageType == models.FlowStepTypeText && textStepCapturesInput(&step) {
 			nodeType = "prompt"
 		}
 
@@ -171,6 +175,17 @@ func v2SupportedMessageType(mt models.FlowStepType) bool {
 		return true
 	}
 	return false
+}
+
+// textStepCapturesInput reports whether a legacy text step expected and
+// stored a user reply. Such steps map to a v2 prompt (which blocks + stores)
+// rather than a plain message (which only sends), so {{var}} interpolation
+// keeps working after migration.
+func textStepCapturesInput(step *models.ChatbotFlowStep) bool {
+	if step.InputType != "" && step.InputType != models.InputTypeNone {
+		return true
+	}
+	return step.StoreAs != "" || step.ValidationRegex != ""
 }
 
 func messageTypeToNodeTypeGo(messageType string) string {
@@ -242,6 +257,9 @@ func buildNodeConfig(nodeType string, step *models.ChatbotFlowStep) map[string]a
 	case "buttons":
 		config["body"] = step.Message
 		config["buttons"] = jsonbArrayToSlice(step.Buttons)
+		if step.StoreAs != "" {
+			config["store_as"] = step.StoreAs
+		}
 	case "end":
 		if step.Message != "" {
 			config["message"] = step.Message

@@ -393,6 +393,17 @@ const typeLabel: Record<string, string> = {
         </Select>
       </div>
 
+      <div class="space-y-1.5">
+        <Label class="text-xs">Store response as (optional)</Label>
+        <Input
+          :model-value="config.store_as || ''"
+          @update:model-value="(v: string) => updateConfig('store_as', v)"
+          placeholder="variable_name"
+          class="h-8 text-sm font-mono"
+        />
+        <p class="text-[10px] text-muted-foreground">Saves the tapped button's title into this variable so later nodes can reference it.</p>
+      </div>
+
     </template>
 
     <!-- api_call -->
