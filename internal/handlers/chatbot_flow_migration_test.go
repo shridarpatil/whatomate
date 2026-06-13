@@ -49,6 +49,21 @@ func TestStepsToGraph_TextStepProducesMessageNode(t *testing.T) {
 	assert.Equal(t, "Hi!", cfg["message"])
 }
 
+func TestStepsToGraph_TextStepWithStoreAsBecomesPrompt(t *testing.T) {
+	// A legacy text step that captures a reply via store_as (but with no
+	// explicit input_type) must migrate to a prompt node that carries the
+	// store_as, not a plain message that drops it.
+	steps := []models.ChatbotFlowStep{
+		{StepName: "ask_name", StepOrder: 1, MessageType: "text", Message: "Your name?", StoreAs: "name"},
+	}
+	nodes := graphNodes(t, stepsToGraph(steps, nil))
+	require.Len(t, nodes, 2)
+	assert.Equal(t, "prompt", nodes[1]["type"])
+	cfg, _ := nodes[1]["config"].(map[string]any)
+	assert.Equal(t, "Your name?", cfg["body"])
+	assert.Equal(t, "name", cfg["store_as"])
+}
+
 func TestStepsToGraph_ButtonsStepEmitsPerButtonEdges(t *testing.T) {
 	steps := []models.ChatbotFlowStep{
 		{
