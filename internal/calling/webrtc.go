@@ -212,12 +212,13 @@ func createOpusTrack(pc *webrtc.PeerConnection, streamID string) (*webrtc.TrackL
 
 // createPeerConnection creates a new WebRTC peer connection with Opus codec support
 func (m *Manager) createPeerConnection() (*webrtc.PeerConnection, error) {
+	now := time.Now()
 	iceServers := make([]webrtc.ICEServer, 0, len(m.config.ICEServers))
 	for _, s := range m.config.ICEServers {
 		ice := webrtc.ICEServer{URLs: s.URLs}
-		if s.Username != "" {
-			ice.Username = s.Username
-			ice.Credential = s.Credential
+		if username, credential := s.ResolveCredentials(now); username != "" {
+			ice.Username = username
+			ice.Credential = credential
 			ice.CredentialType = webrtc.ICECredentialTypePassword
 		}
 		iceServers = append(iceServers, ice)
