@@ -468,20 +468,42 @@ function loadGraph(graph: ChatFlowGraph) {
     deletable: n.type !== 'start',
   }))
 
-  const vfEdges = (graph.edges || []).map((e, idx) => ({
-    id: `edge_${idx}`,
-    source: e.from,
-    target: e.to,
-    // BaseNode's plain source handle has no id, so only attach a
-    // sourceHandle for branch conditions (button:*, true/false,
-    // in_hours/out_of_hours). Plain "default" edges leave it
-    // undefined and Vue Flow routes to the node's only target.
-    sourceHandle: e.condition !== 'default' ? e.condition : undefined,
-    type: 'default' as const,
-    animated: true,
-    markerEnd: MarkerType.ArrowClosed,
-    label: e.condition !== 'default' ? e.condition : '',
-  }))
+  // Self-heal legacy button edges saved before the handle carried the
+  // "button:" prefix: any non-default edge leaving a buttons node whose
+  // condition is a bare button id is normalized to "button:<id>" so it
+  // attaches to the prefixed handle and re-saves in canonical form.
+  const buttonNodeIds = new Set(
+    graph.nodes.filter((n) => n.type === 'buttons').map((n) => n.id),
+  )
+  const normalizeCondition = (e: ChatEdge) => {
+    if (
+      e.condition !== 'default' &&
+      e.condition &&
+      !e.condition.startsWith('button:') &&
+      buttonNodeIds.has(e.from)
+    ) {
+      return `button:${e.condition}`
+    }
+    return e.condition
+  }
+
+  const vfEdges = (graph.edges || []).map((e, idx) => {
+    const condition = normalizeCondition(e)
+    return {
+      id: `edge_${idx}`,
+      source: e.from,
+      target: e.to,
+      // BaseNode's plain source handle has no id, so only attach a
+      // sourceHandle for branch conditions (button:*, true/false,
+      // in_hours/out_of_hours). Plain "default" edges leave it
+      // undefined and Vue Flow routes to the node's only target.
+      sourceHandle: condition !== 'default' ? condition : undefined,
+      type: 'default' as const,
+      animated: true,
+      markerEnd: MarkerType.ArrowClosed,
+      label: condition !== 'default' ? condition : '',
+    }
+  })
 
   if (!hasStart) {
     // Place start directly above the original entry so the auto-wired

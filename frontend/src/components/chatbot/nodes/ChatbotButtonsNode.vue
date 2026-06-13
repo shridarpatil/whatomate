@@ -10,8 +10,12 @@ const props = defineProps<{ data: any }>()
 const buttons = computed(() => props.data?.config?.buttons || [])
 
 const outputHandles = computed(() => {
+  // Handle id becomes the edge condition on save. The graph runner routes
+  // button taps via the namespaced "button:<id>" outcome (author-controlled
+  // ids are prefixed so they can't collide with reserved outcomes like
+  // "default" or "true"), so the handle must carry that prefix too.
   return buttons.value.map((b: any) => ({
-    id: b.id,
+    id: `button:${b.id}`,
     label: b.title || '—',
     title: b.title || '—',
   }))
