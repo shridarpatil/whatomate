@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/shridarpatil/whatomate/internal/config"
 	"github.com/shridarpatil/whatomate/internal/models"
 	"github.com/shridarpatil/whatomate/internal/websocket"
 	"github.com/shridarpatil/whatomate/test/testutil"
@@ -146,9 +147,25 @@ func TestVerifyWebhookSignature_TimingAttackResistance(t *testing.T) {
 func webhookTestApp(t *testing.T) *App {
 	t.Helper()
 	db := testutil.SetupTestDB(t)
+	redisClient := testutil.SetupTestRedis(t)
+	if redisClient == nil {
+		t.Skip("TEST_REDIS_URL not set, skipping test")
+	}
+	cfg := &config.Config{
+		JWT: config.JWTConfig{
+			Secret:            testutil.TestJWTSecret,
+			AccessExpiryMins:  15,
+			RefreshExpiryDays: 7,
+		},
+		App: config.AppConfig{
+			EncryptionKey: "test-encryption-key-32-bytes-long",
+		},
+	}
 	return &App{
-		DB:  db,
-		Log: testutil.NopLogger(),
+		Config: cfg,
+		DB:     db,
+		Log:    testutil.NopLogger(),
+		Redis:  redisClient,
 	}
 }
 
@@ -518,4 +535,173 @@ func TestUpdateMessageStatus_DeliveredBroadcastsViaWebSocket_NoErrorMessage(t *t
 	case <-time.After(2 * time.Second):
 		t.Fatal("timed out waiting for WebSocket broadcast")
 	}
+}
+
+func TestWebhookHandler_smb_message_echoes(t *testing.T) {
+	app := webhookTestApp(t)
+
+	// Create test org and account
+	uid := uuid.New().String()[:8]
+	org := models.Organization{
+		BaseModel: models.BaseModel{ID: uuid.New()},
+		Name:      "echo-org-" + uid,
+		Slug:      "echo-org-" + uid,
+	}
+	require.NoError(t, app.DB.Create(&org).Error)
+
+	waAccount := models.WhatsAppAccount{
+		BaseModel:      models.BaseModel{ID: uuid.New()},
+		OrganizationID: org.ID,
+		Name:           "echo-acct-" + uid,
+		PhoneID:        "phone-echo-" + uid,
+		BusinessID:     "biz-echo-" + uid,
+		AccessToken:    "token",
+	}
+	require.NoError(t, app.DB.Create(&waAccount).Error)
+
+	// Construct message echo payload
+	body := []byte(`{
+		"object": "whatsapp_business_account",
+		"entry": [{
+			"id": "` + waAccount.BusinessID + `",
+			"changes": [{
+				"field": "smb_message_echoes",
+				"value": {
+					"messaging_product": "whatsapp",
+					"metadata": {
+						"display_phone_number": "15551234567",
+						"phone_number_id": "` + waAccount.PhoneID + `"
+					},
+					"message_echoes": [{
+						"from": "9199998888",
+						"id": "wamid.echo_test_12345",
+						"timestamp": "1716152000",
+						"type": "text",
+						"text": {
+							"body": "Hello from Business App!"
+						}
+					}]
+				}
+			}]
+		}]
+	}`)
+
+	req := testutil.NewRequest(t)
+	req.RequestCtx.Request.Header.SetMethod("POST")
+	req.RequestCtx.Request.Header.SetContentType("application/json")
+	req.RequestCtx.Request.SetBody(body)
+
+	// Execute WebhookHandler
+	require.NoError(t, app.WebhookHandler(req))
+
+	// Verify contact was created
+	var contact models.Contact
+	assert.Eventually(t, func() bool {
+		return app.DB.Where("organization_id = ? AND phone_number = ?", org.ID, "9199998888").First(&contact).Error == nil
+	}, 2*time.Second, 10*time.Millisecond)
+
+	// Verify message was saved as outgoing and status sent
+	var message models.Message
+	assert.Eventually(t, func() bool {
+		return app.DB.Where("organization_id = ? AND whats_app_message_id = ?", org.ID, "wamid.echo_test_12345").First(&message).Error == nil
+	}, 2*time.Second, 10*time.Millisecond)
+	assert.Equal(t, models.DirectionOutgoing, message.Direction)
+	assert.Equal(t, models.MessageStatusSent, message.Status)
+	assert.Equal(t, "Hello from Business App!", message.Content)
+}
+
+func TestWebhookHandler_smb_app_state_sync(t *testing.T) {
+	app := webhookTestApp(t)
+
+	// Create test org and account
+	uid := uuid.New().String()[:8]
+	org := models.Organization{
+		BaseModel: models.BaseModel{ID: uuid.New()},
+		Name:      "sync-org-" + uid,
+		Slug:      "sync-org-" + uid,
+	}
+	require.NoError(t, app.DB.Create(&org).Error)
+
+	waAccount := models.WhatsAppAccount{
+		BaseModel:      models.BaseModel{ID: uuid.New()},
+		OrganizationID: org.ID,
+		Name:           "sync-acct-" + uid,
+		PhoneID:        "phone-sync-" + uid,
+		BusinessID:     "biz-sync-" + uid,
+		AccessToken:    "token",
+	}
+	require.NoError(t, app.DB.Create(&waAccount).Error)
+
+	// 1. Sync contact (ADD)
+	bodyAdd := []byte(`{
+		"object": "whatsapp_business_account",
+		"entry": [{
+			"id": "` + waAccount.BusinessID + `",
+			"changes": [{
+				"field": "smb_app_state_sync",
+				"value": {
+					"messaging_product": "whatsapp",
+					"metadata": {
+						"display_phone_number": "15551234567",
+						"phone_number_id": "` + waAccount.PhoneID + `"
+					},
+					"contact_phone_number": "9199997777",
+					"contact_name": "Synced Contact Name",
+					"action": "add"
+				}
+			}]
+		}]
+	}`)
+
+	req := testutil.NewRequest(t)
+	req.RequestCtx.Request.Header.SetMethod("POST")
+	req.RequestCtx.Request.Header.SetContentType("application/json")
+	req.RequestCtx.Request.SetBody(bodyAdd)
+
+	require.NoError(t, app.WebhookHandler(req))
+
+	// Verify contact was synced (add)
+	var contact models.Contact
+	assert.Eventually(t, func() bool {
+		return app.DB.Where("organization_id = ? AND phone_number = ?", org.ID, "9199997777").First(&contact).Error == nil
+	}, 2*time.Second, 10*time.Millisecond)
+	assert.Equal(t, "Synced Contact Name", contact.ProfileName)
+
+	// 2. Sync contact (REMOVE)
+	bodyRemove := []byte(`{
+		"object": "whatsapp_business_account",
+		"entry": [{
+			"id": "` + waAccount.BusinessID + `",
+			"changes": [{
+				"field": "smb_app_state_sync",
+				"value": {
+					"messaging_product": "whatsapp",
+					"metadata": {
+						"display_phone_number": "15551234567",
+						"phone_number_id": "` + waAccount.PhoneID + `"
+					},
+					"contact_phone_number": "9199997777",
+					"action": "remove"
+				}
+			}]
+		}]
+	}`)
+
+	reqRemove := testutil.NewRequest(t)
+	reqRemove.RequestCtx.Request.Header.SetMethod("POST")
+	reqRemove.RequestCtx.Request.Header.SetContentType("application/json")
+	reqRemove.RequestCtx.Request.SetBody(bodyRemove)
+
+	require.NoError(t, app.WebhookHandler(reqRemove))
+
+	// Verify contact was soft-deleted (remove)
+	var checkUnscoped models.Contact
+	assert.Eventually(t, func() bool {
+		return app.DB.Unscoped().Where("organization_id = ? AND phone_number = ? AND deleted_at IS NOT NULL", org.ID, "9199997777").First(&checkUnscoped).Error == nil
+	}, 2*time.Second, 10*time.Millisecond)
+
+	var checkDeleted models.Contact
+	err := app.DB.Where("organization_id = ? AND phone_number = ?", org.ID, "9199997777").First(&checkDeleted).Error
+	assert.Error(t, err, "contact should have been soft-deleted and not found by standard query")
+	assert.True(t, checkUnscoped.DeletedAt.Valid, "DeletedAt should be populated")
 }

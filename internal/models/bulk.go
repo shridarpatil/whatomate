@@ -44,10 +44,10 @@ func (BulkMessageCampaign) TableName() string {
 // BulkMessageRecipient represents a recipient in a bulk message campaign
 type BulkMessageRecipient struct {
 	BaseModel
-	CampaignID        uuid.UUID     `gorm:"type:uuid;index;not null" json:"campaign_id"`
-	PhoneNumber       string        `gorm:"size:50;not null" json:"phone_number"`
-	RecipientName     string        `gorm:"size:255" json:"recipient_name"`
-	TemplateParams    JSONB         `gorm:"type:jsonb;default:'{}'" json:"template_params"`
+	CampaignID     uuid.UUID `gorm:"type:uuid;index;not null" json:"campaign_id"`
+	PhoneNumber    string    `gorm:"size:50;not null" json:"phone_number"`
+	RecipientName  string    `gorm:"size:255" json:"recipient_name"`
+	TemplateParams JSONB     `gorm:"type:jsonb;default:'{}'" json:"template_params"`
 	// Header parameter values for TEXT-header templates with a {{var}}. Meta
 	// indexes positional vars per component, so header {{1}} and body {{1}}
 	// are separate values — keeping them in a dedicated map avoids that

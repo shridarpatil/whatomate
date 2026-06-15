@@ -6,6 +6,7 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/shridarpatil/whatomate/internal/audit"
+	"github.com/shridarpatil/whatomate/internal/crypto"
 	"github.com/shridarpatil/whatomate/internal/database"
 	"github.com/shridarpatil/whatomate/internal/models"
 	"github.com/shridarpatil/whatomate/internal/utils"
@@ -17,11 +18,20 @@ import (
 // map suitable for audit diffing. Reading from a nil JSONB map returns the
 // zero value (nil), which is treated as "unset" by the audit comparator.
 func generalSettingsSnapshot(name string, settings models.JSONB) map[string]any {
+	hasSecret := false
+	if settings != nil {
+		if v, ok := settings["meta_app_secret_encrypted"].(string); ok && v != "" {
+			hasSecret = true
+		}
+	}
 	return map[string]any{
-		"name":               name,
-		"timezone":           settings["timezone"],
-		"date_format":        settings["date_format"],
-		"mask_phone_numbers": settings["mask_phone_numbers"],
+		"name":                name,
+		"timezone":            settings["timezone"],
+		"date_format":         settings["date_format"],
+		"mask_phone_numbers":  settings["mask_phone_numbers"],
+		"meta_app_id":         settings["meta_app_id"],
+		"meta_config_id":      settings["meta_config_id"],
+		"has_meta_app_secret": hasSecret,
 	}
 }
 
@@ -47,6 +57,9 @@ type OrganizationSettings struct {
 	TransferTimeoutSecs int    `json:"transfer_timeout_secs"`
 	HoldMusicFile       string `json:"hold_music_file"`
 	RingbackFile        string `json:"ringback_file"`
+	MetaAppID           string `json:"meta_app_id"`
+	MetaConfigID        string `json:"meta_config_id"`
+	HasMetaAppSecret    bool   `json:"has_meta_app_secret"`
 }
 
 // GetOrganizationSettings returns the organization settings
@@ -98,6 +111,15 @@ func (a *App) GetOrganizationSettings(r *fastglue.Request) error {
 		if v, ok := org.Settings["ringback_file"].(string); ok && v != "" {
 			settings.RingbackFile = v
 		}
+		if v, ok := org.Settings["meta_app_id"].(string); ok && v != "" {
+			settings.MetaAppID = v
+		}
+		if v, ok := org.Settings["meta_config_id"].(string); ok && v != "" {
+			settings.MetaConfigID = v
+		}
+		if v, ok := org.Settings["meta_app_secret_encrypted"].(string); ok && v != "" {
+			settings.HasMetaAppSecret = true
+		}
 	}
 
 	return r.SendEnvelope(map[string]any{
@@ -123,6 +145,9 @@ func (a *App) UpdateOrganizationSettings(r *fastglue.Request) error {
 		TransferTimeoutSecs *int    `json:"transfer_timeout_secs"`
 		HoldMusicFile       *string `json:"hold_music_file"`
 		RingbackFile        *string `json:"ringback_file"`
+		MetaAppID           *string `json:"meta_app_id"`
+		MetaConfigID        *string `json:"meta_config_id"`
+		MetaAppSecret       *string `json:"meta_app_secret"`
 	}
 
 	if err := json.Unmarshal(r.RequestCtx.PostBody(), &req); err != nil {
@@ -134,12 +159,20 @@ func (a *App) UpdateOrganizationSettings(r *fastglue.Request) error {
 		return r.SendErrorEnvelope(fasthttp.StatusNotFound, "Organization not found", nil, "")
 	}
 
+	// Gating Meta App credentials update on accounts:write permission
+	metaAppCredsTouched := req.MetaAppID != nil || req.MetaConfigID != nil || req.MetaAppSecret != nil
+	if metaAppCredsTouched {
+		if err := a.requirePermission(r, userID, models.ResourceAccounts, models.ActionWrite); err != nil {
+			return nil
+		}
+	}
+
 	// Snapshot before mutation so we can compute per-tab diffs.
 	oldGeneral := generalSettingsSnapshot(org.Name, org.Settings)
 	oldCalling := callingSettingsSnapshot(org.Settings)
 
 	// Track which tabs received updates so we only audit the relevant ones.
-	generalTouched := req.MaskPhoneNumbers != nil || req.Timezone != nil || req.DateFormat != nil || (req.Name != nil && *req.Name != "")
+	generalTouched := req.MaskPhoneNumbers != nil || req.Timezone != nil || req.DateFormat != nil || (req.Name != nil && *req.Name != "") || metaAppCredsTouched
 	callingTouched := req.CallingEnabled != nil || req.MaxCallDuration != nil || req.TransferTimeoutSecs != nil || req.HoldMusicFile != nil || req.RingbackFile != nil
 
 	// Update settings
@@ -170,6 +203,20 @@ func (a *App) UpdateOrganizationSettings(r *fastglue.Request) error {
 	}
 	if req.RingbackFile != nil {
 		org.Settings["ringback_file"] = *req.RingbackFile
+	}
+	if req.MetaAppID != nil {
+		org.Settings["meta_app_id"] = *req.MetaAppID
+	}
+	if req.MetaConfigID != nil {
+		org.Settings["meta_config_id"] = *req.MetaConfigID
+	}
+	if req.MetaAppSecret != nil && *req.MetaAppSecret != "" {
+		encSecret, errEnc := crypto.Encrypt(*req.MetaAppSecret, a.Config.App.EncryptionKey)
+		if errEnc != nil {
+			a.Log.Error("Failed to encrypt meta app secret", "error", errEnc)
+			return r.SendErrorEnvelope(fasthttp.StatusInternalServerError, "Failed to update settings", nil, "")
+		}
+		org.Settings["meta_app_secret_encrypted"] = encSecret
 	}
 	if req.Name != nil && *req.Name != "" {
 		org.Name = *req.Name

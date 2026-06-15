@@ -144,6 +144,9 @@ type WhatsAppConfig struct {
 	WebhookVerifyToken string `koanf:"webhook_verify_token"`
 	APIVersion         string `koanf:"api_version"`
 	BaseURL            string `koanf:"base_url"` // Meta Graph API base URL
+	AppID              string `koanf:"app_id"`   // WhatsApp App ID for frontend
+	AppSecret          string `koanf:"app_secret"`
+	ConfigID           string `koanf:"config_id"` // WhatsApp Config ID for frontend
 }
 
 type AIConfig struct {

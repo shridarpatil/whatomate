@@ -134,6 +134,33 @@ func (a *App) ReadyCheck(r *fastglue.Request) error {
 	})
 }
 
+// GetEmbeddedSignupConfig returns public configuration values for the embedded signup flow
+func (a *App) GetEmbeddedSignupConfig(r *fastglue.Request) error {
+	orgID, err := a.getOrgID(r)
+	if err != nil {
+		return r.SendErrorEnvelope(fasthttp.StatusUnauthorized, "Unauthorized", nil, "")
+	}
+
+	appID, _, configID, err := a.resolveMetaAppCreds(orgID)
+	if err != nil {
+		return r.SendErrorEnvelope(fasthttp.StatusInternalServerError, "Failed to resolve credentials", nil, "")
+	}
+
+	type EmbeddedSignupConfig struct {
+		WhatsAppAppID      string `json:"whatsapp_app_id,omitempty"`
+		WhatsAppConfigID   string `json:"whatsapp_config_id,omitempty"`
+		WhatsAppAPIVersion string `json:"whatsapp_api_version,omitempty"`
+	}
+
+	config := EmbeddedSignupConfig{
+		WhatsAppAppID:      appID,
+		WhatsAppConfigID:   configID,
+		WhatsAppAPIVersion: a.Config.WhatsApp.APIVersion,
+	}
+
+	return r.SendEnvelope(config)
+}
+
 // StartCampaignStatsSubscriber starts listening for campaign stats updates from Redis pub/sub
 // and broadcasts them via WebSocket
 func (a *App) StartCampaignStatsSubscriber() error {

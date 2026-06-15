@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"bytes"
+	"context"
 	"crypto/hmac"
 	"crypto/sha256"
 	"encoding/hex"
@@ -9,6 +10,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/google/uuid"
+	"github.com/shridarpatil/whatomate/internal/contactutil"
 	"github.com/shridarpatil/whatomate/internal/models"
 	"github.com/shridarpatil/whatomate/internal/websocket"
 	"github.com/valyala/fasthttp"
@@ -110,92 +113,8 @@ type WebhookPayload struct {
 					WaID   string `json:"wa_id"`
 					UserID string `json:"user_id,omitempty"` // BSUID
 				} `json:"contacts"`
-				Messages []struct {
-					From       string `json:"from"`
-					FromUserID string `json:"from_user_id,omitempty"` // BSUID
-					ID         string `json:"id"`
-					Timestamp  string `json:"timestamp"`
-					Type       string `json:"type"`
-					Text       *struct {
-						Body string `json:"body"`
-					} `json:"text,omitempty"`
-					Image *struct {
-						ID       string `json:"id"`
-						MimeType string `json:"mime_type"`
-						SHA256   string `json:"sha256"`
-						Caption  string `json:"caption,omitempty"`
-					} `json:"image,omitempty"`
-					Document *struct {
-						ID       string `json:"id"`
-						MimeType string `json:"mime_type"`
-						SHA256   string `json:"sha256"`
-						Filename string `json:"filename"`
-						Caption  string `json:"caption,omitempty"`
-					} `json:"document,omitempty"`
-					Audio *struct {
-						ID       string `json:"id"`
-						MimeType string `json:"mime_type"`
-					} `json:"audio,omitempty"`
-					Video *struct {
-						ID       string `json:"id"`
-						MimeType string `json:"mime_type"`
-						SHA256   string `json:"sha256"`
-						Caption  string `json:"caption,omitempty"`
-					} `json:"video,omitempty"`
-					Interactive *struct {
-						Type        string `json:"type"`
-						ButtonReply *struct {
-							ID    string `json:"id"`
-							Title string `json:"title"`
-						} `json:"button_reply,omitempty"`
-						ListReply *struct {
-							ID          string `json:"id"`
-							Title       string `json:"title"`
-							Description string `json:"description"`
-						} `json:"list_reply,omitempty"`
-						NFMReply *struct {
-							ResponseJSON string `json:"response_json"`
-							Body         string `json:"body"`
-							Name         string `json:"name"`
-						} `json:"nfm_reply,omitempty"`
-						CallPermissionReply *struct {
-							Response            string      `json:"response"`
-							IsPermanent         bool        `json:"is_permanent"`
-							ExpirationTimestamp json.Number `json:"expiration_timestamp,omitempty"`
-							ResponseSource      string      `json:"response_source"`
-						} `json:"call_permission_reply,omitempty"`
-					} `json:"interactive,omitempty"`
-					Button *struct {
-						Text    string `json:"text"`
-						Payload string `json:"payload"`
-					} `json:"button,omitempty"`
-					Reaction *struct {
-						MessageID string `json:"message_id"`
-						Emoji     string `json:"emoji"`
-					} `json:"reaction,omitempty"`
-					Location *struct {
-						Latitude  float64 `json:"latitude"`
-						Longitude float64 `json:"longitude"`
-						Name      string  `json:"name,omitempty"`
-						Address   string  `json:"address,omitempty"`
-					} `json:"location,omitempty"`
-					Contacts []struct {
-						Name struct {
-							FormattedName string `json:"formatted_name"`
-							FirstName     string `json:"first_name,omitempty"`
-							LastName      string `json:"last_name,omitempty"`
-						} `json:"name"`
-						Phones []struct {
-							Phone string `json:"phone"`
-							Type  string `json:"type,omitempty"`
-						} `json:"phones,omitempty"`
-					} `json:"contacts,omitempty"`
-					Context *struct {
-						From string `json:"from"`
-						ID   string `json:"id"`
-					} `json:"context,omitempty"`
-				} `json:"messages,omitempty"`
-				Statuses        []WebhookStatus `json:"statuses,omitempty"`
+				Messages        []IncomingTextMessage `json:"messages,omitempty"`
+				Statuses        []WebhookStatus       `json:"statuses,omitempty"`
 				UserPreferences []struct {
 					WaID      string `json:"wa_id"`
 					UserID    string `json:"user_id,omitempty"`
@@ -227,6 +146,13 @@ type WebhookPayload struct {
 					EndTime   string          `json:"end_time,omitempty"`
 					Duration  int             `json:"duration,omitempty"`
 				} `json:"calls,omitempty"`
+				// Contact state sync fields (when field == "smb_app_state_sync")
+				Action             string `json:"action,omitempty"`
+				ContactName        string `json:"contact_name,omitempty"`
+				ContactFirstName   string `json:"contact_first_name,omitempty"`
+				ContactPhoneNumber string `json:"contact_phone_number,omitempty"`
+				// Message echoes fields (when field == "smb_message_echoes")
+				MessageEchoes []IncomingTextMessage `json:"message_echoes,omitempty"`
 			} `json:"value"`
 			Field string `json:"field"`
 		} `json:"changes"`
@@ -323,6 +249,33 @@ func (a *App) WebhookHandler(r *fastglue.Request) error {
 				continue
 			}
 
+			// Handle contact state sync (coexistence)
+			if change.Field == "smb_app_state_sync" {
+				phoneNumberID := change.Value.Metadata.PhoneNumberID
+				a.Log.Info("Received smb_app_state_sync event",
+					"phone_number_id", phoneNumberID,
+					"action", change.Value.Action,
+					"contact_phone_number", change.Value.ContactPhoneNumber,
+					"contact_name", change.Value.ContactName,
+				)
+				go a.processContactSync(phoneNumberID, change.Value.ContactPhoneNumber, change.Value.ContactName, change.Value.Action)
+				continue
+			}
+
+			// Handle message echoes (coexistence)
+			if change.Field == "smb_message_echoes" {
+				phoneNumberID := change.Value.Metadata.PhoneNumberID
+				for _, echo := range change.Value.MessageEchoes {
+					a.Log.Info("Received message echo",
+						"from", echo.From,
+						"type", echo.Type,
+						"phone_number_id", phoneNumberID,
+					)
+					go a.processMessageEcho(phoneNumberID, echo)
+				}
+				continue
+			}
+
 			if change.Field != "messages" {
 				continue
 			}
@@ -392,34 +345,33 @@ func (a *App) WebhookHandler(r *fastglue.Request) error {
 	return r.SendEnvelope(map[string]string{"status": "ok"})
 }
 
-func (a *App) processIncomingMessage(phoneNumberID string, msg any, profileName string) {
-	// Convert msg interface to the message struct
-	msgBytes, err := json.Marshal(msg)
-	if err != nil {
-		a.Log.Error("Failed to marshal message", "error", err)
-		return
-	}
-
-	var textMsg IncomingTextMessage
-	if err := json.Unmarshal(msgBytes, &textMsg); err != nil {
-		a.Log.Error("Failed to unmarshal message", "error", err)
-		return
-	}
+func (a *App) processIncomingMessage(phoneNumberID string, msg IncomingTextMessage, profileName string) {
+	defer func() {
+		if r := recover(); r != nil {
+			a.Log.Error("Panic recovered in processIncomingMessage", "panic", r, "phone_id", phoneNumberID, "message_id", msg.ID)
+		}
+	}()
 
 	// Check for duplicate message - Meta sometimes sends the same message multiple times
-	if textMsg.ID != "" {
+	if msg.ID != "" {
 		var existingMsg models.Message
-		if err := a.DB.Where("whats_app_message_id = ?", textMsg.ID).First(&existingMsg).Error; err == nil {
-			a.Log.Debug("Duplicate message detected, skipping", "message_id", textMsg.ID)
+		if err := a.DB.Where("whats_app_message_id = ?", msg.ID).First(&existingMsg).Error; err == nil {
+			a.Log.Debug("Duplicate message detected, skipping", "message_id", msg.ID)
 			return
 		}
 	}
 
 	// Process the message with chatbot logic
-	a.processIncomingMessageFull(phoneNumberID, textMsg, profileName)
+	a.processIncomingMessageFull(phoneNumberID, msg, profileName)
 }
 
 func (a *App) processStatusUpdate(phoneNumberID string, status WebhookStatus) {
+	defer func() {
+		if r := recover(); r != nil {
+			a.Log.Error("Panic recovered in processStatusUpdate", "panic", r, "phone_id", phoneNumberID, "status_id", status.ID)
+		}
+	}()
+
 	messageID := status.ID
 	statusValue := status.Status
 
@@ -658,4 +610,171 @@ func (a *App) processMarketingPreference(phoneNumberID, userPhone, bsuid, value 
 		"bsuid", bsuid,
 		"opt_out", optOut,
 	)
+}
+
+// processMessageEcho handles mirroring of messages sent from the mobile WhatsApp Business App.
+func (a *App) processMessageEcho(phoneNumberID string, msg IncomingTextMessage) {
+	defer func() {
+		if r := recover(); r != nil {
+			a.Log.Error("Panic recovered in processMessageEcho", "panic", r, "phone_id", phoneNumberID, "message_id", msg.ID)
+		}
+	}()
+
+	// Find the WhatsApp account by phone_number_id (use cache)
+	account, err := a.getWhatsAppAccountCached(phoneNumberID)
+	if err != nil {
+		a.Log.Error("WhatsApp account not found for echo", "phone_id", phoneNumberID, "error", err)
+		return
+	}
+
+	// Check for duplicate message - Meta sometimes sends the same message multiple times
+	if msg.ID != "" {
+		var existingMsg models.Message
+		if err := a.DB.Where("whats_app_message_id = ?", msg.ID).First(&existingMsg).Error; err == nil {
+			a.Log.Debug("Duplicate echo message detected, skipping", "message_id", msg.ID)
+			return
+		}
+	}
+
+	// Get or create contact (always do this for all echoed messages)
+	// For message echoes, the message is sent TO the contact FROM the business.
+	contactPhone := msg.To
+	if contactPhone == "" {
+		a.Log.Warn("Message echo missing 'to' field, falling back to 'from'", "from", msg.From)
+		contactPhone = msg.From
+	}
+
+	contact, _, err := contactutil.GetOrCreateContact(a.DB, account.OrganizationID, contactPhone, "")
+	if err != nil {
+		a.Log.Error("Failed to get or create contact for echo", "phone", contactPhone, "error", err)
+		return
+	}
+
+	// Store BSUID if provided and not already set
+	if msg.FromUserID != "" && contact.BSUID != msg.FromUserID {
+		a.DB.Model(contact).Update("bsuid", msg.FromUserID)
+		contact.BSUID = msg.FromUserID
+	}
+
+	// Get message content - handle text and media
+	extracted := a.extractMessageContent(context.Background(), msg, account)
+	messageText := extracted.Text
+	messageType := extracted.Type
+	mediaInfo := extracted.Media
+
+	// Save message as outgoing, status sent
+	now := time.Now()
+	message := models.Message{
+		BaseModel:         models.BaseModel{ID: uuid.New()},
+		OrganizationID:    account.OrganizationID,
+		WhatsAppAccount:   account.Name,
+		ContactID:         contact.ID,
+		WhatsAppMessageID: msg.ID,
+		Direction:         models.DirectionOutgoing,
+		MessageType:       models.MessageType(messageType),
+		Content:           messageText,
+		Status:            models.MessageStatusSent,
+	}
+
+	// Reply context
+	if msg.Context != nil && msg.Context.ID != "" {
+		var replyToMsg models.Message
+		if err := a.DB.Where("whats_app_message_id = ?", msg.Context.ID).First(&replyToMsg).Error; err == nil {
+			message.IsReply = true
+			message.ReplyToMessageID = &replyToMsg.ID
+		}
+	}
+
+	// Add media fields if present
+	if mediaInfo != nil {
+		message.MediaURL = mediaInfo.MediaURL
+		message.MediaMimeType = mediaInfo.MediaMimeType
+		message.MediaFilename = mediaInfo.MediaFilename
+	}
+
+	if err := a.DB.Create(&message).Error; err != nil {
+		a.Log.Error("Failed to save echoed message", "error", err)
+		return
+	}
+
+	// Update contact's last message info
+	preview := messageText
+	if len(preview) > 100 {
+		preview = preview[:97] + "..."
+	}
+	if messageType != "text" && messageType != "button_reply" && messageType != "nfm_reply" {
+		preview = "[" + messageType + "]"
+	}
+
+	a.DB.Model(contact).Updates(map[string]any{
+		"last_message_at":      now,
+		"last_message_preview": preview,
+		"is_read":              true, // Echoes from mobile app are outgoing, so conversation is read
+		"whats_app_account":    account.Name,
+	})
+
+	// Broadcast new message via WebSocket to keep UI updated
+	a.broadcastNewMessage(account.OrganizationID, &message, contact)
+
+	// Dispatch webhook for outgoing message
+	a.DispatchWebhook(account.OrganizationID, models.WebhookEventMessageOutgoing, MessageEventData{
+		MessageID:       message.ID.String(),
+		ContactID:       contact.ID.String(),
+		ContactPhone:    contact.PhoneNumber,
+		ContactName:     contact.ProfileName,
+		MessageType:     models.MessageType(messageType),
+		Content:         messageText,
+		WhatsAppAccount: account.Name,
+		Direction:       models.DirectionOutgoing,
+	})
+}
+
+// processContactSync handles contact additions and deletions from the mobile app address book.
+func (a *App) processContactSync(phoneNumberID, contactPhone, contactName, action string) {
+	defer func() {
+		if r := recover(); r != nil {
+			a.Log.Error("Panic recovered in processContactSync", "panic", r, "phone_id", phoneNumberID, "phone", contactPhone)
+		}
+	}()
+
+	// Find the WhatsApp account by phone_number_id (use cache)
+	account, err := a.getWhatsAppAccountCached(phoneNumberID)
+	if err != nil {
+		a.Log.Error("WhatsApp account not found for contact sync", "phone_id", phoneNumberID, "error", err)
+		return
+	}
+
+	switch action {
+	case "add":
+		contact, isNewContact, err := contactutil.GetOrCreateContact(a.DB, account.OrganizationID, contactPhone, contactName)
+		if err != nil {
+			a.Log.Error("Failed to sync new contact from app state sync", "phone", contactPhone, "error", err)
+			return
+		}
+
+		a.Log.Info("Synced contact (add) from mobile app", "contact_id", contact.ID, "is_new", isNewContact)
+
+		if isNewContact {
+			a.DispatchWebhook(account.OrganizationID, models.WebhookEventContactCreated, ContactEventData{
+				ContactID:       contact.ID.String(),
+				ContactPhone:    contact.PhoneNumber,
+				ContactName:     contact.ProfileName,
+				WhatsAppAccount: account.Name,
+			})
+		}
+	case "remove":
+		// Try to find the contact first using the FindContact helper
+		contact, err := contactutil.FindContact(a.DB, account.OrganizationID, contactPhone)
+		if err == nil {
+			if err := a.DB.Delete(contact).Error; err != nil {
+				a.Log.Error("Failed to delete contact on sync remove", "contact_id", contact.ID, "error", err)
+			} else {
+				a.Log.Info("Soft-deleted synced contact (remove) from mobile app", "contact_id", contact.ID, "phone", contactPhone)
+			}
+		} else {
+			a.Log.Info("Contact not found for sync remove", "phone", contactPhone)
+		}
+	default:
+		a.Log.Warn("Unknown contact sync action", "action", action)
+	}
 }
