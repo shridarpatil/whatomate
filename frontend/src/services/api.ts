@@ -272,13 +272,20 @@ export const messagesService = {
       content: any
       reply_to_message_id?: string
       whatsapp_account?: string
-      // Interactive button / cta_url payload. Mirrors backend InteractiveContent.
+      // Interactive payload. Mirrors backend InteractiveContent.
       interactive?: {
-        type: 'button' | 'cta_url' | 'list'
+        type: 'button' | 'cta_url' | 'list' | 'voice_call' | 'flow'
         body: string
         buttons?: Array<{ id: string; title: string }>
         button_text?: string
         url?: string
+        // voice_call only
+        display_text?: string
+        ttl_minutes?: number
+        // flow only
+        flow_id?: string
+        first_screen?: string
+        header?: string
       }
     },
   ) => api.post(`/contacts/${contactId}/messages`, data),
@@ -419,9 +426,12 @@ export const chatbotService = {
 export interface CannedResponseButton {
   id: string
   title: string
-  type?: 'reply' | 'url' | 'phone'
+  type?: 'reply' | 'url' | 'phone' | 'voice_call' | 'flow'
   url?: string
   phone_number?: string
+  ttl_minutes?: number
+  flow_id?: string
+  screen?: string
 }
 
 export interface CannedResponse {

@@ -563,10 +563,10 @@ type SendMessageRequest struct {
 
 // InteractiveContent holds interactive message data
 type InteractiveContent struct {
-	Type       string          `json:"type"`                  // "button", "list", "cta_url", "voice_call"
+	Type       string          `json:"type"`                  // "button", "list", "cta_url", "voice_call", "flow"
 	Body       string          `json:"body"`                  // Body text
 	Buttons    []ButtonContent `json:"buttons,omitempty"`     // For button type
-	ButtonText string          `json:"button_text,omitempty"` // For cta_url type
+	ButtonText string          `json:"button_text,omitempty"` // CTA label for cta_url and flow
 	URL        string          `json:"url,omitempty"`         // For cta_url type
 	// voice_call only: button face label and clickable TTL.
 	// The payload (round-trip opaque string Meta echoes back on the incoming-
@@ -574,6 +574,11 @@ type InteractiveContent struct {
 	// request body — to prevent agent-id spoofing.
 	DisplayText string `json:"display_text,omitempty"`
 	TTLMinutes  int    `json:"ttl_minutes,omitempty"`
+	// flow only: the Meta flow to launch, an optional first screen, and an
+	// optional header. Body holds the message text, ButtonText the CTA label.
+	FlowID      string `json:"flow_id,omitempty"`
+	FirstScreen string `json:"first_screen,omitempty"`
+	Header      string `json:"header,omitempty"`
 }
 
 // ButtonContent represents a button in interactive messages
@@ -655,6 +660,33 @@ func (a *App) SendMessage(r *fastglue.Request) error {
 					Title: btn.Title,
 				}
 			}
+		}
+
+		if req.Interactive.Type == "flow" {
+			if req.Interactive.FlowID == "" {
+				return r.SendErrorEnvelope(fasthttp.StatusBadRequest, "flow_id is required to send a flow", nil, "")
+			}
+			// Ensure the flow belongs to this org so an agent can't send another
+			// org's flow by supplying its Meta id.
+			var waFlow models.WhatsAppFlow
+			if err := a.DB.Where("meta_flow_id = ? AND organization_id = ?", req.Interactive.FlowID, orgID).First(&waFlow).Error; err != nil {
+				return r.SendErrorEnvelope(fasthttp.StatusBadRequest, "Flow not found for this organization", nil, "")
+			}
+			cta := req.Interactive.ButtonText
+			if cta == "" {
+				cta = "Open"
+			}
+			body := req.Interactive.Body
+			if body == "" {
+				body = req.Content.Body
+			}
+			msgReq.Type = models.MessageTypeFlow
+			msgReq.FlowID = req.Interactive.FlowID
+			msgReq.FlowCTA = cta
+			msgReq.FlowHeader = req.Interactive.Header
+			msgReq.FlowFirstScreen = req.Interactive.FirstScreen
+			msgReq.BodyText = body
+			msgReq.FlowToken = fmt.Sprintf("agent_%s_%d", contact.ID, time.Now().UnixNano())
 		}
 
 		if req.Interactive.Type == "voice_call" {
