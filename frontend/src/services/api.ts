@@ -73,6 +73,27 @@ function onRefreshComplete(success: boolean) {
   refreshSubscribers = []
 }
 
+// refreshAccessToken posts to /auth/refresh. The refresh token is single-use
+// with rotation, so two tabs refreshing at once would have the loser's token
+// rejected as "revoked" and get logged out. The Web Locks API serializes the
+// refresh across all same-origin tabs: each tab refreshes in turn using the
+// cookie rotated by the previous holder, so every refresh succeeds instead of
+// racing. The in-tab `isRefreshing` mutex still dedupes concurrent 401s within
+// a single tab. Falls back to a plain request where Web Locks is unavailable
+// (older browsers / insecure contexts).
+async function refreshAccessToken(): Promise<void> {
+  const doRefresh = () =>
+    axios.post(`${API_BASE_URL}/auth/refresh`, {}, { withCredentials: true })
+
+  if (navigator.locks?.request) {
+    await navigator.locks.request('whm-token-refresh', async () => {
+      await doRefresh()
+    })
+  } else {
+    await doRefresh()
+  }
+}
+
 // Response interceptor for error handling
 api.interceptors.response.use(
   (response) => response,
@@ -102,8 +123,9 @@ api.interceptors.response.use(
       isRefreshing = true
 
       try {
-        // Browser sends whm_refresh cookie automatically via withCredentials
-        await axios.post(`${API_BASE_URL}/auth/refresh`, {}, { withCredentials: true })
+        // Browser sends whm_refresh cookie automatically via withCredentials.
+        // Serialized across tabs via Web Locks to avoid single-use-token races.
+        await refreshAccessToken()
 
         // Cookies are updated by the server response — notify waiting requests
         onRefreshComplete(true)
