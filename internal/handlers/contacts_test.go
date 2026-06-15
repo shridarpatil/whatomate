@@ -1422,6 +1422,63 @@ func TestApp_ListContacts_Page2(t *testing.T) {
 
 // --- GetContact additional tests ---
 
+// TestApp_GetMessages_AssignedViaActiveTransfer verifies the agent-visibility
+// rules for a user without contacts:read:
+//   - an active agent transfer grants access (even when assigned_user_id is unset),
+//   - resuming the chatbot ends that access,
+//   - a persistent assigned_user_id keeps access after the transfer is resumed.
+func TestApp_GetMessages_AssignedViaActiveTransfer(t *testing.T) {
+	t.Parallel()
+
+	app := newTestApp(t)
+	org := testutil.CreateTestOrganization(t, app.DB)
+
+	// Agent role WITHOUT contacts:read — agents only see assigned chats.
+	role := testutil.CreateTestRoleWithKeys(t, app.DB, org.ID, "agent-no-read",
+		[]string{"chat:read", "chat:write", "transfers:read", "transfers:pickup"})
+	agent := testutil.CreateTestUser(t, app.DB, org.ID, testutil.WithRoleID(&role.ID))
+
+	account := testutil.CreateTestWhatsAppAccount(t, app.DB, org.ID)
+	contact := testutil.CreateTestContactWith(t, app.DB, org.ID, testutil.WithContactAccount(account.Name))
+	// assigned_user_id intentionally nil — assignment is via the transfer only.
+
+	msg := &models.Message{
+		BaseModel:       models.BaseModel{ID: uuid.New()},
+		OrganizationID:  org.ID,
+		WhatsAppAccount: account.Name,
+		ContactID:       contact.ID,
+		Direction:       models.DirectionIncoming,
+		MessageType:     models.MessageTypeText,
+		Content:         "Hi",
+		Status:          models.MessageStatusDelivered,
+	}
+	require.NoError(t, app.DB.Create(msg).Error)
+
+	transfer := createTestTransfer(t, app, org.ID, contact.ID, account.Name, models.TransferStatusActive, &agent.ID)
+
+	getMessagesStatus := func() int {
+		req := testutil.NewGETRequest(t)
+		testutil.SetAuthContext(req, org.ID, agent.ID)
+		testutil.SetPathParam(req, "id", contact.ID.String())
+		require.NoError(t, app.GetMessages(req))
+		return testutil.GetResponseStatusCode(req)
+	}
+
+	// Active transfer → agent can load messages despite no contacts:read.
+	assert.Equal(t, fasthttp.StatusOK, getMessagesStatus(),
+		"active transfer should grant the agent access to the assigned contact")
+
+	// Resume the chatbot → transfer no longer active → access ends.
+	require.NoError(t, app.DB.Model(transfer).Update("status", models.TransferStatusResumed).Error)
+	assert.Equal(t, fasthttp.StatusNotFound, getMessagesStatus(),
+		"resuming the chatbot should end transfer-only access")
+
+	// Persistent assignment → agent retains access even after resume.
+	require.NoError(t, app.DB.Model(contact).Update("assigned_user_id", agent.ID).Error)
+	assert.Equal(t, fasthttp.StatusOK, getMessagesStatus(),
+		"a persistent assigned_user_id should keep access after resume")
+}
+
 func TestApp_GetContact_WithAssignedUser(t *testing.T) {
 	t.Parallel()
 

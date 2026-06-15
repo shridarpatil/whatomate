@@ -66,6 +66,12 @@ module.exports = {
   				'teal-dark': '#075E54',
   				light: '#DCF8C6'
   			},
+  			facebook: {
+  				DEFAULT: '#1877F2',
+  				dark: '#0C5DC7',
+  				hover: '#166FE5',
+  				hoverDark: '#0A4DAD'
+  			},
   			// Violet color palette (primary accent)
   			violet: {
   				50: '#f5f3ff',

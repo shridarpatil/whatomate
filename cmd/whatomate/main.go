@@ -455,6 +455,8 @@ func setupRoutes(g *fastglue.Fastglue, app *handlers.App, lo logf.Logger, basePa
 	g.GET("/health", app.HealthCheck)
 	g.GET("/ready", app.ReadyCheck)
 
+	g.GET("/api/embedded-signup/config", app.GetEmbeddedSignupConfig)
+
 	// Auth routes (public, optionally rate-limited)
 	if cfg.RateLimit.Enabled {
 		window := time.Duration(cfg.RateLimit.WindowSeconds) * time.Second
@@ -608,9 +610,11 @@ func setupRoutes(g *fastglue.Fastglue, app *handlers.App, lo logf.Logger, basePa
 	// Accounts
 	g.GET("/api/accounts", app.ListAccounts)
 	g.POST("/api/accounts", app.CreateAccount)
+	g.POST("/api/accounts/exchange-token", app.ExchangeToken) // Embedded signup
 	g.GET("/api/accounts/{id}", app.GetAccount)
 	g.PUT("/api/accounts/{id}", app.UpdateAccount)
 	g.DELETE("/api/accounts/{id}", app.DeleteAccount)
+	g.POST("/api/accounts/{id}/register", app.RegisterPhoneNumber) // Embedded signup manual/2fa registration
 	g.POST("/api/accounts/{id}/test", app.TestAccountConnection)
 	g.POST("/api/accounts/{id}/subscribe", app.SubscribeApp)
 	g.GET("/api/accounts/{id}/business_profile", app.GetBusinessProfile)

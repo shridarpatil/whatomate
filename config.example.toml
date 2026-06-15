@@ -50,6 +50,14 @@ s3_region = ""
 s3_key = ""
 s3_secret = ""
 
+[whatsapp]
+webhook_verify_token = "random-string-change-this"
+api_version = "v24.0"
+base_url = "https://graph.facebook.com"
+app_id = ""      # Meta App ID for Embedded Signup
+app_secret = ""  # Meta App Secret
+config_id = ""  # WhatsApp Config ID for frontend login
+
 # Auth cookie settings (tokens are stored in httpOnly cookies)
 [cookie]
 domain = ""    # Cookie domain (e.g., ".example.com"). Empty = current host only.

@@ -71,3 +71,22 @@ func GetOrCreateContact(db *gorm.DB, orgID uuid.UUID, phoneNumber, profileName s
 	}
 	return &contact, true, nil
 }
+
+// FindContact finds a contact for the given phone number with both forms (normalized and +prefix).
+func FindContact(db *gorm.DB, orgID uuid.UUID, phoneNumber string) (*models.Contact, error) {
+	normalizedPhone := phoneNumber
+	if len(normalizedPhone) > 0 && normalizedPhone[0] == '+' {
+		normalizedPhone = normalizedPhone[1:]
+	}
+
+	var contact models.Contact
+	if err := db.Where("organization_id = ? AND phone_number = ?", orgID, normalizedPhone).First(&contact).Error; err == nil {
+		return &contact, nil
+	}
+
+	if err := db.Where("organization_id = ? AND phone_number = ?", orgID, "+"+normalizedPhone).First(&contact).Error; err == nil {
+		return &contact, nil
+	}
+
+	return nil, gorm.ErrRecordNotFound
+}

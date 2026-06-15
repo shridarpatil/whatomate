@@ -102,22 +102,22 @@ func newMockTemplateServer(t *testing.T) *httptest.Server {
 			_ = json.NewEncoder(w).Encode(map[string]any{
 				"data": []map[string]any{
 					{
-						"id":       "meta-synced-1",
-						"name":     "synced_template_one",
-						"language": "en",
-						"category": "MARKETING",
-						"status":   "APPROVED",
+						"id":             "meta-synced-1",
+						"name":           "synced_template_one",
+						"language":       "en",
+						"category":       "MARKETING",
+						"status":         "APPROVED",
 						"quality_rating": "HIGH",
 						"components": []map[string]any{
 							{"type": "BODY", "text": "Synced body content"},
 						},
 					},
 					{
-						"id":       "meta-synced-2",
-						"name":     "synced_template_two",
-						"language": "en",
-						"category": "UTILITY",
-						"status":   "PENDING",
+						"id":             "meta-synced-2",
+						"name":           "synced_template_two",
+						"language":       "en",
+						"category":       "UTILITY",
+						"status":         "PENDING",
 						"quality_rating": "UNKNOWN",
 						"components": []map[string]any{
 							{"type": "BODY", "text": "Another synced body"},
