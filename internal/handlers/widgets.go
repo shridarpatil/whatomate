@@ -989,19 +989,19 @@ func (a *App) getChartData(orgID uuid.UUID, widget models.Widget, filters []Filt
 // time.
 var allowedFilterFields = map[string]map[string]bool{
 	"messages": {
-		"status":            true,
-		"direction":         true,
-		"message_type":      true,
-		"contact_id":        true,
-		"sent_by_user_id":   true,
-		"whatsapp_account":  true,
-		"conversation_id":   true,
-		"template_name":     true,
+		"status":           true,
+		"direction":        true,
+		"message_type":     true,
+		"contact_id":       true,
+		"sent_by_user_id":  true,
+		"whatsapp_account": true,
+		"conversation_id":  true,
+		"template_name":    true,
 	},
 	"contacts": {
-		"status":             true,
-		"assigned_user_id":   true,
-		"whatsapp_account":   true,
+		"status":           true,
+		"assigned_user_id": true,
+		"whatsapp_account": true,
 	},
 	"campaigns": {
 		"status":           true,
@@ -1010,11 +1010,11 @@ var allowedFilterFields = map[string]map[string]bool{
 		"whatsapp_account": true,
 	},
 	"transfers": {
-		"status":     true,
-		"team_id":    true,
-		"agent_id":   true,
-		"from_team":  true,
-		"to_team":    true,
+		"status":    true,
+		"team_id":   true,
+		"agent_id":  true,
+		"from_team": true,
+		"to_team":   true,
 	},
 	"sessions": {
 		"status":  true,

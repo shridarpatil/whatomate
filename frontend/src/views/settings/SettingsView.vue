@@ -28,6 +28,7 @@ const orgID = computed(
   () => localStorage.getItem('selected_organization_id') || authStore.organizationId,
 )
 const userID = computed(() => authStore.user?.id || '')
+const canWriteAccounts = computed(() => authStore.hasPermission('accounts', 'write'))
 
 const isSubmitting = ref(false)
 const isLoading = ref(true)
@@ -37,7 +38,11 @@ const generalSettings = ref({
   organization_name: 'My Organization',
   default_timezone: 'UTC',
   date_format: 'YYYY-MM-DD',
-  mask_phone_numbers: false
+  mask_phone_numbers: false,
+  meta_app_id: '',
+  meta_config_id: '',
+  meta_app_secret: '',
+  has_meta_app_secret: false
 })
 
 // Notification Settings
@@ -90,7 +95,11 @@ onMounted(async () => {
         organization_name: orgData.name || 'My Organization',
         default_timezone: orgData.settings?.timezone || 'UTC',
         date_format: orgData.settings?.date_format || 'YYYY-MM-DD',
-        mask_phone_numbers: orgData.settings?.mask_phone_numbers || false
+        mask_phone_numbers: orgData.settings?.mask_phone_numbers || false,
+        meta_app_id: orgData.settings?.meta_app_id || '',
+        meta_config_id: orgData.settings?.meta_config_id || '',
+        meta_app_secret: '',
+        has_meta_app_secret: orgData.settings?.has_meta_app_secret || false
       }
       callingSettings.value = {
         calling_enabled: orgData.settings?.calling_enabled || false,
@@ -120,13 +129,29 @@ onMounted(async () => {
 async function saveGeneralSettings() {
   isSubmitting.value = true
   try {
-    await organizationService.updateSettings({
+    const payload: any = {
       name: generalSettings.value.organization_name,
       timezone: generalSettings.value.default_timezone,
       date_format: generalSettings.value.date_format,
       mask_phone_numbers: generalSettings.value.mask_phone_numbers
-    })
+    }
+    if (canWriteAccounts.value) {
+      payload.meta_app_id = generalSettings.value.meta_app_id
+      payload.meta_config_id = generalSettings.value.meta_config_id
+      if (generalSettings.value.meta_app_secret) {
+        payload.meta_app_secret = generalSettings.value.meta_app_secret
+      }
+    }
+    await organizationService.updateSettings(payload)
     toast.success(t('settings.generalSaved'))
+    // Clear secret input after save
+    generalSettings.value.meta_app_secret = ''
+    // Refresh organization settings to update has_meta_app_secret status
+    const orgResponse = await organizationService.getSettings()
+    const orgData = orgResponse.data.data || orgResponse.data
+    if (orgData) {
+      generalSettings.value.has_meta_app_secret = orgData.settings?.has_meta_app_secret || false
+    }
     refreshActivityLog(generalLogKey)
   } catch (error) {
     toast.error(t('common.failedSave', { resource: t('resources.settings') }))
@@ -300,6 +325,49 @@ function togglePlayAudio(type: 'hold_music' | 'ringback') {
                   <Switch
                     :checked="generalSettings.mask_phone_numbers"
                     @update:checked="generalSettings.mask_phone_numbers = $event"
+                  />
+                </div>
+                <div class="flex justify-end">
+                  <Button variant="outline" size="sm" class="bg-white/[0.04] border-white/[0.1] text-white/70 hover:bg-white/[0.08] hover:text-white light:bg-white light:border-gray-200 light:text-gray-700 light:hover:bg-gray-50" @click="saveGeneralSettings" :disabled="isSubmitting">
+                    <Loader2 v-if="isSubmitting" class="mr-2 h-4 w-4 animate-spin" />
+                    {{ $t('settings.save') }}
+                  </Button>
+                </div>
+              </div>
+            </div>
+
+            <!-- Meta App Credentials Card (Gated on canWriteAccounts) -->
+            <div v-if="canWriteAccounts" class="mt-6 rounded-xl border border-white/[0.08] bg-white/[0.02] light:bg-white light:border-gray-200">
+              <div class="p-6 pb-3">
+                <h3 class="text-lg font-semibold text-white light:text-gray-900">{{ $t('settings.metaAppCredentials') }}</h3>
+                <p class="text-sm text-white/40 light:text-gray-500">{{ $t('settings.metaAppCredentialsDesc') }}</p>
+              </div>
+              <div class="p-6 pt-3 space-y-4">
+                <div class="grid grid-cols-2 gap-4">
+                  <div class="space-y-2">
+                    <Label for="meta_app_id" class="text-white/70 light:text-gray-700">{{ $t('settings.metaAppId') }}</Label>
+                    <Input
+                      id="meta_app_id"
+                      v-model="generalSettings.meta_app_id"
+                      placeholder="e.g. 123456789012345"
+                    />
+                  </div>
+                  <div class="space-y-2">
+                    <Label for="meta_config_id" class="text-white/70 light:text-gray-700">{{ $t('settings.metaConfigId') }}</Label>
+                    <Input
+                      id="meta_config_id"
+                      v-model="generalSettings.meta_config_id"
+                      placeholder="e.g. 987654321098765"
+                    />
+                  </div>
+                </div>
+                <div class="space-y-2">
+                  <Label for="meta_app_secret" class="text-white/70 light:text-gray-700">{{ $t('settings.metaAppSecret') }}</Label>
+                  <Input
+                    id="meta_app_secret"
+                    type="password"
+                    v-model="generalSettings.meta_app_secret"
+                    :placeholder="generalSettings.has_meta_app_secret ? '••••••••••••' : 'Enter Meta App Secret'"
                   />
                 </div>
                 <div class="flex justify-end">
