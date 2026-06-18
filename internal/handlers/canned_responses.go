@@ -15,10 +15,11 @@ import (
 )
 
 // CannedResponseButton mirrors the chatbot flow ButtonConfig shape.
-// type is one of "reply", "url", "phone", "voice_call". For voice_call,
+// type is one of "reply", "url", "phone", "voice_call", "flow". For voice_call,
 // Title is the on-button label (Meta's display_text, 20-char cap applied at
 // send time) and TTLMinutes is how long the button stays clickable (0 ⇒
-// Meta default, 15 min).
+// Meta default, 15 min). For flow, Title is the CTA label, FlowID is the Meta
+// flow id to launch and Screen is the first screen to open.
 type CannedResponseButton struct {
 	ID          string `json:"id"`
 	Title       string `json:"title"`
@@ -26,6 +27,10 @@ type CannedResponseButton struct {
 	URL         string `json:"url,omitempty"`
 	PhoneNumber string `json:"phone_number,omitempty"`
 	TTLMinutes  int    `json:"ttl_minutes,omitempty"`
+	// flow only. Like voice_call, a flow button is exclusive — it can't share
+	// a message with other button types.
+	FlowID string `json:"flow_id,omitempty"`
+	Screen string `json:"screen,omitempty"`
 }
 
 // CannedResponseRequest represents the request body for creating/updating a canned response
@@ -426,9 +431,11 @@ func validateCannedResponseButtons(buttons []CannedResponseButton) error {
 		return nil
 	}
 	voiceCalls := 0
+	flows := 0
 	others := 0
 	for _, b := range buttons {
-		if strings.ToLower(b.Type) == "voice_call" {
+		switch strings.ToLower(b.Type) {
+		case "voice_call":
 			voiceCalls++
 			if strings.TrimSpace(b.Title) == "" {
 				return fmt.Errorf("voice_call button needs a title")
@@ -436,15 +443,28 @@ func validateCannedResponseButtons(buttons []CannedResponseButton) error {
 			if b.TTLMinutes < 0 || b.TTLMinutes > 60 {
 				return fmt.Errorf("voice_call ttl_minutes must be between 0 and 60")
 			}
-			continue
+		case "flow":
+			flows++
+			if strings.TrimSpace(b.Title) == "" {
+				return fmt.Errorf("flow button needs a CTA title")
+			}
+			if strings.TrimSpace(b.FlowID) == "" {
+				return fmt.Errorf("flow button needs a flow_id")
+			}
+		default:
+			others++
 		}
-		others++
 	}
 	if voiceCalls > 1 {
 		return fmt.Errorf("only one voice_call button is allowed per message")
 	}
-	if voiceCalls > 0 && others > 0 {
-		return fmt.Errorf("voice_call cannot be combined with other button types")
+	if flows > 1 {
+		return fmt.Errorf("only one flow button is allowed per message")
+	}
+	// voice_call and flow each render as the whole interactive message, so
+	// they can't be combined with each other or with reply/url/phone buttons.
+	if (voiceCalls > 0 || flows > 0) && (others > 0 || (voiceCalls > 0 && flows > 0)) {
+		return fmt.Errorf("voice_call and flow buttons cannot be combined with other button types")
 	}
 	return nil
 }

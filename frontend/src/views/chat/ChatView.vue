@@ -908,18 +908,32 @@ async function sendCannedResponse() {
   // combos aren't representable; the detail-page validator blocks save for
   // those, so the text fallback here is just a safety net.
   const voiceCallButtons = buttons.filter(b => b.type === 'voice_call')
+  const flowButtons = buttons.filter(b => b.type === 'flow')
   let sendType: 'text' | 'interactive' = 'text'
   let interactive: {
-    type: 'button' | 'list' | 'cta_url' | 'voice_call'
+    type: 'button' | 'list' | 'cta_url' | 'voice_call' | 'flow'
     body: string
     buttons?: Array<{ id: string; title: string }>
     button_text?: string
     url?: string
     display_text?: string
     ttl_minutes?: number
+    flow_id?: string
+    first_screen?: string
   } | undefined
 
-  if (buttons.length === 1 && voiceCallButtons.length === 1) {
+  if (buttons.length === 1 && flowButtons.length === 1) {
+    const f = flowButtons[0]
+    sendType = 'interactive'
+    interactive = {
+      type: 'flow',
+      body,
+      // The button title is the CTA label shown to the customer.
+      button_text: resolveCannedTokens(f.title),
+      flow_id: f.flow_id,
+      first_screen: f.screen,
+    }
+  } else if (buttons.length === 1 && voiceCallButtons.length === 1) {
     const vc = voiceCallButtons[0]
     sendType = 'interactive'
     interactive = {

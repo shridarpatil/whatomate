@@ -259,6 +259,61 @@ func TestApp_CreateCannedResponse(t *testing.T) {
 		assert.Equal(t, fasthttp.StatusBadRequest, testutil.GetResponseStatusCode(req))
 	})
 
+	t.Run("flow button without flow_id is rejected", func(t *testing.T) {
+		app := newTestApp(t)
+		org := testutil.CreateTestOrganization(t, app.DB)
+		user := testutil.CreateTestUser(t, app.DB, org.ID)
+
+		req := testutil.NewJSONRequest(t, map[string]any{
+			"name":    "Flow no id",
+			"content": "Open the form",
+			"buttons": []map[string]any{
+				{"id": "b1", "title": "Open", "type": "flow"},
+			},
+		})
+		testutil.SetAuthContext(req, org.ID, user.ID)
+
+		require.NoError(t, app.CreateCannedResponse(req))
+		assert.Equal(t, fasthttp.StatusBadRequest, testutil.GetResponseStatusCode(req))
+	})
+
+	t.Run("flow button cannot be combined with reply buttons", func(t *testing.T) {
+		app := newTestApp(t)
+		org := testutil.CreateTestOrganization(t, app.DB)
+		user := testutil.CreateTestUser(t, app.DB, org.ID)
+
+		req := testutil.NewJSONRequest(t, map[string]any{
+			"name":    "Flow plus reply",
+			"content": "Pick",
+			"buttons": []map[string]any{
+				{"id": "b1", "title": "Open", "type": "flow", "flow_id": "1234567890"},
+				{"id": "b2", "title": "No thanks", "type": "reply"},
+			},
+		})
+		testutil.SetAuthContext(req, org.ID, user.ID)
+
+		require.NoError(t, app.CreateCannedResponse(req))
+		assert.Equal(t, fasthttp.StatusBadRequest, testutil.GetResponseStatusCode(req))
+	})
+
+	t.Run("valid flow button is accepted", func(t *testing.T) {
+		app := newTestApp(t)
+		org := testutil.CreateTestOrganization(t, app.DB)
+		user := testutil.CreateTestUser(t, app.DB, org.ID)
+
+		req := testutil.NewJSONRequest(t, map[string]any{
+			"name":    "Flow ok",
+			"content": "Open the form",
+			"buttons": []map[string]any{
+				{"id": "b1", "title": "Open", "type": "flow", "flow_id": "1234567890"},
+			},
+		})
+		testutil.SetAuthContext(req, org.ID, user.ID)
+
+		require.NoError(t, app.CreateCannedResponse(req))
+		assert.Equal(t, fasthttp.StatusOK, testutil.GetResponseStatusCode(req))
+	})
+
 	t.Run("validation error missing content", func(t *testing.T) {
 		app := newTestApp(t)
 		org := testutil.CreateTestOrganization(t, app.DB)

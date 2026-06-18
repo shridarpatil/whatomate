@@ -228,6 +228,35 @@ func TestApp_ServeMedia_AgentWithoutAssignmentDenied(t *testing.T) {
 	assert.Equal(t, fasthttp.StatusForbidden, testutil.GetResponseStatusCode(req))
 }
 
+// --- ServeMedia: agent reaches via a direct (agent_id) active transfer ---
+
+func TestApp_ServeMedia_AgentViaDirectTransfer(t *testing.T) {
+	app := newTestApp(t)
+	org := testutil.CreateTestOrganization(t, app.DB)
+	role := testutil.CreateTestRoleExact(t, app.DB, org.ID, "direct-transfer", false, false, nil)
+	user := testutil.CreateTestUser(t, app.DB, org.ID, testutil.WithRoleID(&role.ID))
+	contact := testutil.CreateTestContact(t, app.DB, org.ID)
+	// No assigned_user_id — the agent's only claim is an active transfer to them.
+	require.NoError(t, app.DB.Create(&models.AgentTransfer{
+		BaseModel:      models.BaseModel{ID: uuid.New()},
+		OrganizationID: org.ID,
+		ContactID:      contact.ID,
+		AgentID:        &user.ID,
+		Status:         models.TransferStatusActive,
+	}).Error)
+
+	rel := withStorageDir(t, app, "images/direct.png", []byte("direct data"))
+	msg := makeMediaMessage(t, app, org.ID, contact.ID, rel)
+
+	req := testutil.NewGETRequest(t)
+	testutil.SetAuthContext(req, org.ID, user.ID)
+	testutil.SetPathParam(req, "message_id", msg.ID.String())
+
+	require.NoError(t, app.ServeMedia(req))
+	assert.Equal(t, fasthttp.StatusOK, testutil.GetResponseStatusCode(req),
+		"agent with an active direct transfer should access the contact's media")
+}
+
 // --- ServeMedia: agent reaches via team-transfer membership ---
 
 func TestApp_ServeMedia_AgentViaTeamTransfer(t *testing.T) {
