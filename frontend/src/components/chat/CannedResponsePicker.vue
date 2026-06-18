@@ -9,7 +9,10 @@ import {
   PopoverTrigger,
 } from '@/components/ui/popover'
 import { cannedResponsesService, type CannedResponse } from '@/services/api'
-import { MessageSquareText, Search, Loader2 } from 'lucide-vue-next'
+import { MessageSquareText, Search, Loader2, ImageIcon } from 'lucide-vue-next'
+import { useI18n } from 'vue-i18n'
+
+const { t } = useI18n()
 
 const props = defineProps<{
   externalOpen?: boolean
@@ -72,7 +75,7 @@ const filteredResponses = computed(() => {
   const query = searchQuery.value.toLowerCase()
   return responses.value.filter(r =>
     r.name.toLowerCase().includes(query) ||
-    r.content.toLowerCase().includes(query) ||
+    (r.content && r.content.toLowerCase().includes(query)) ||
     (r.shortcut && r.shortcut.toLowerCase().includes(query))
   )
 })
@@ -151,12 +154,22 @@ function selectResponse(response: CannedResponse) {
             >
               <div class="flex items-center justify-between">
                 <span class="font-medium text-sm">{{ response.name }}</span>
-                <span v-if="response.shortcut" class="text-xs font-mono text-muted-foreground">
-                  /{{ response.shortcut }}
-                </span>
+                <div class="flex items-center gap-1.5">
+                  <!-- Image badge -->
+                  <span
+                    v-if="response.image_url"
+                    class="inline-flex items-center gap-0.5 text-[10px] text-muted-foreground bg-muted rounded px-1 py-0.5"
+                    :title="t('cannedResponses.hasImage')"
+                  >
+                    <ImageIcon class="h-3 w-3" />
+                  </span>
+                  <span v-if="response.shortcut" class="text-xs font-mono text-muted-foreground">
+                    /{{ response.shortcut }}
+                  </span>
+                </div>
               </div>
               <p class="text-xs text-muted-foreground mt-0.5 line-clamp-2">
-                {{ response.content }}
+                {{ response.content || t('cannedResponses.hasImage') }}
               </p>
             </button>
           </template>
