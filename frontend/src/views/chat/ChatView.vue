@@ -814,7 +814,8 @@ function extractCannedTokens(content: string): string[] {
 
 // Collect tokens from the message body AND every button field, so the param
 // dialog prompts for custom tokens used anywhere on the response.
-function extractCannedTokensFromResponse(r: CannedResponse): string[] {
+function extractCannedTokens(content: string | null | undefined): string[] {
+  if (!content) return []
   const seen = new Set<string>(extractCannedTokens(r.content))
   for (const btn of r.buttons || []) {
     for (const t of extractCannedTokens(btn.title || '')) seen.add(t)
@@ -2639,7 +2640,7 @@ async function sendMediaMessage() {
           <!-- Image preview in dialog -->
           <div v-if="selectedCannedResponse?.image_url" class="rounded-lg overflow-hidden border border-white/10">
             <img
-              :src="`${((window as any).__BASE_PATH__ ?? '').replace(/\/$/, '')}/api/chatbot/media/${selectedCannedResponse.image_url.replace(/\\/g, '/')}`"
+              :src="`${((window as any).__BASE_PATH__ ?? '').replace(/\/$/, '')}/api/chatbot/media/${selectedCannedResponse?.image_url?.replace(/\\/g, '/') || ''}`"
               class="w-full max-h-48 object-contain bg-black/40"
               alt=""
             />
