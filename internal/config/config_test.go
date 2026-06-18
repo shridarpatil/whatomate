@@ -102,8 +102,8 @@ secure = false
 }
 
 func TestLoad_EnvVarsOverrideFile(t *testing.T) {
-	t.Setenv("WHATOMATE_DATABASE_HOST", "from-env")
-	t.Setenv("WHATOMATE_SERVER_PORT", "1234")
+	t.Setenv("WHATOMATE_DATABASE__HOST", "from-env")
+	t.Setenv("WHATOMATE_SERVER__PORT", "1234")
 
 	cfg, err := config.Load(writeConfig(t, `
 [database]
@@ -113,8 +113,8 @@ host = "from-file"
 port = 8080
 `))
 	require.NoError(t, err)
-	assert.Equal(t, "from-env", cfg.Database.Host, "WHATOMATE_DATABASE_HOST must override file")
-	assert.Equal(t, 1234, cfg.Server.Port, "WHATOMATE_SERVER_PORT must override file")
+	assert.Equal(t, "from-env", cfg.Database.Host, "WHATOMATE_DATABASE__HOST must override file")
+	assert.Equal(t, 1234, cfg.Server.Port, "WHATOMATE_SERVER__PORT must override file")
 }
 
 func TestLoad_EmptyConfigPathStillLoadsDefaults(t *testing.T) {
@@ -176,4 +176,26 @@ func TestResolveCredentials_DefaultsTTLWhenUnset(t *testing.T) {
 	s := config.ICEServerConfig{Secret: "topsecret"}
 	username, _ := s.ResolveCredentials(now)
 	assert.Equal(t, "1086400", username) // now + default 86400s
+}
+
+// TestLoad_EnvMapsMultiWordKeys is the regression for the embedded-signup bug
+// (whatomate#476): env vars for keys whose section OR field name contains an
+// underscore must map correctly. Levels are separated by "__"; single
+// underscores stay part of the key. This exercises config.Load()'s env path,
+// which the handler-level tests bypass by setting the struct directly.
+func TestLoad_EnvMapsMultiWordKeys(t *testing.T) {
+	t.Setenv("WHATOMATE_WHATSAPP__APP_ID", "env-app-id")
+	t.Setenv("WHATOMATE_WHATSAPP__CONFIG_ID", "env-config-id")
+	t.Setenv("WHATOMATE_WHATSAPP__API_VERSION", "v21.0")
+	t.Setenv("WHATOMATE_DEFAULT_ADMIN__EMAIL", "admin@example.com")
+	t.Setenv("WHATOMATE_DATABASE__HOST", "db.internal")
+
+	cfg, err := config.Load("") // no file; env-only
+	require.NoError(t, err)
+
+	assert.Equal(t, "env-app-id", cfg.WhatsApp.AppID)
+	assert.Equal(t, "env-config-id", cfg.WhatsApp.ConfigID)
+	assert.Equal(t, "v21.0", cfg.WhatsApp.APIVersion)
+	assert.Equal(t, "admin@example.com", cfg.DefaultAdmin.Email)
+	assert.Equal(t, "db.internal", cfg.Database.Host)
 }
