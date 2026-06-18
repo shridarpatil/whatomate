@@ -753,7 +753,7 @@ function updateAssignmentValue(index: number, newValue: string) {
             <Trash2 class="h-3 w-3 text-destructive" />
           </Button>
         </div>
-        <p class="text-[10px] text-muted-foreground">Assign values to session variables. You can reference other variables set in earlier nodes using double-brace templates (e.g. <code v-pre>{{hotel_category_0_id}}</code>). References to variables set in the same node are order-dependent and not supported.</p>
+        <p class="text-[10px] text-muted-foreground">Assign values to session variables. You can reference other variables set in earlier nodes using double-brace templates (e.g. <code v-pre>{{customer_name}}</code>). References to variables set in the same node are order-dependent and not supported.</p>
       </div>
     </template>
 
