@@ -163,6 +163,25 @@ const buttonsValidationError = computed<string | null>(() => {
       )
     }
   }
+  const flow = list.filter(b => b.type === 'flow')
+  if (flow.length > 1) {
+    return t('cannedResponses.errorMultiFlow', 'Only one Flow button is allowed per message.')
+  }
+  if (flow.length > 0 && list.length > flow.length) {
+    return t(
+      'cannedResponses.errorFlowExclusive',
+      'A Flow button cannot be combined with other button types — remove the other buttons or the Flow button.',
+    )
+  }
+  if (flow.length === 1) {
+    const f = flow[0]
+    if (!f.title?.trim()) {
+      return t('cannedResponses.errorFlowTitle', 'The Flow button needs a label (shown on the button face).')
+    }
+    if (!f.flow_id) {
+      return t('cannedResponses.errorFlowId', 'Select a published flow for the Flow button.')
+    }
+  }
   if (phone.length > 0) {
     return t(
       'cannedResponses.errorPhoneUnsupported',
@@ -357,7 +376,7 @@ onMounted(() => { loadResponse() })
         <CardContent class="space-y-4">
           <MessageButtonsEditor
             :buttons="form.buttons"
-            :allowed-types="['reply', 'url', 'voice_call']"
+            :allowed-types="['reply', 'url', 'voice_call', 'flow']"
             :disabled="!canWrite"
             @update:buttons="form.buttons = $event"
           />
