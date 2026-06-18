@@ -3,6 +3,7 @@ package handlers
 import (
 	"encoding/json"
 	"fmt"
+	"io"
 	"strconv"
 	"strings"
 
@@ -41,6 +42,7 @@ type CannedResponseRequest struct {
 	Category string                 `json:"category"`
 	IsActive bool                   `json:"is_active"`
 	Buttons  []CannedResponseButton `json:"buttons"`
+	ImageURL string                 `json:"image_url"`
 }
 
 // CannedResponseResponse represents the API response for a canned response
@@ -53,6 +55,7 @@ type CannedResponseResponse struct {
 	IsActive   bool                   `json:"is_active"`
 	UsageCount int                    `json:"usage_count"`
 	Buttons    []CannedResponseButton `json:"buttons"`
+	ImageURL   string                 `json:"image_url"`
 	CreatedAt  string                 `json:"created_at"`
 	UpdatedAt  string                 `json:"updated_at"`
 }
@@ -123,9 +126,13 @@ func (a *App) CreateCannedResponse(r *fastglue.Request) error {
 		return nil
 	}
 
-	if req.Name == "" || req.Content == "" {
+	// name is always required; content is required only when there's no image
+	if req.Name == "" {
+		return r.SendErrorEnvelope(fasthttp.StatusBadRequest, "name is required", nil, "")
+	}
+	if req.Content == "" && req.ImageURL == "" {
 		return r.SendErrorEnvelope(fasthttp.StatusBadRequest,
-			"name and content are required", nil, "")
+			"content is required when no image is attached", nil, "")
 	}
 
 	if err := validateCannedResponseButtons(req.Buttons); err != nil {
@@ -148,6 +155,7 @@ func (a *App) CreateCannedResponse(r *fastglue.Request) error {
 		Category:       req.Category,
 		IsActive:       true,
 		Buttons:        buttonsToJSONBArray(req.Buttons),
+		ImageURL:       req.ImageURL,
 		CreatedByID:    userID,
 	}
 
@@ -226,6 +234,7 @@ func (a *App) UpdateCannedResponse(r *fastglue.Request) error {
 	cannedResponse.Category = req.Category
 	cannedResponse.IsActive = req.IsActive
 	cannedResponse.Buttons = buttonsToJSONBArray(req.Buttons)
+	cannedResponse.ImageURL = req.ImageURL
 
 	if err := a.DB.Save(&cannedResponse).Error; err != nil {
 		a.Log.Error("Failed to update canned response", "error", err)
@@ -311,6 +320,7 @@ func cannedResponseAuditSnapshot(cr *models.CannedResponse) map[string]any {
 		"content":       cr.Content,
 		"category":      cr.Category,
 		"is_active":     cr.IsActive,
+		"image_url":     cr.ImageURL,
 		"button_config": buttonsToAuditString(cr.Buttons),
 	}
 }
@@ -325,9 +335,67 @@ func cannedResponseToResponse(cr models.CannedResponse) CannedResponseResponse {
 		IsActive:   cr.IsActive,
 		UsageCount: cr.UsageCount,
 		Buttons:    jsonbArrayToButtons(cr.Buttons),
+		ImageURL:   cr.ImageURL,
 		CreatedAt:  cr.CreatedAt.Format("2006-01-02T15:04:05Z"),
 		UpdatedAt:  cr.UpdatedAt.Format("2006-01-02T15:04:05Z"),
 	}
+}
+
+// UploadCannedResponseMedia handles image uploads for canned responses.
+// The stored relative path (e.g. "images/uuid.jpg") is returned as image_url
+// and should be saved on the canned response record via the create/update API.
+func (a *App) UploadCannedResponseMedia(r *fastglue.Request) error {
+	_, err := a.getOrgID(r)
+	if err != nil {
+		return r.SendErrorEnvelope(fasthttp.StatusUnauthorized, "Unauthorized", nil, "")
+	}
+
+	form, err := r.RequestCtx.MultipartForm()
+	if err != nil {
+		return r.SendErrorEnvelope(fasthttp.StatusBadRequest, "Invalid multipart form", nil, "")
+	}
+
+	files := form.File["file"]
+	if len(files) == 0 {
+		return r.SendErrorEnvelope(fasthttp.StatusBadRequest, "No file provided", nil, "")
+	}
+
+	fileHeader := files[0]
+
+	// Only allow image files
+	mimeType := fileHeader.Header.Get("Content-Type")
+	if mimeType == "" {
+		mimeType = "application/octet-stream"
+	}
+	if !strings.HasPrefix(mimeType, "image/") {
+		return r.SendErrorEnvelope(fasthttp.StatusBadRequest, "Only image files are allowed", nil, "")
+	}
+
+	file, err := fileHeader.Open()
+	if err != nil {
+		return r.SendErrorEnvelope(fasthttp.StatusBadRequest, "Failed to open file", nil, "")
+	}
+	defer func() { _ = file.Close() }()
+
+	const maxMediaSize = 5 << 20 // 5 MB for images
+	data, err := io.ReadAll(io.LimitReader(file, maxMediaSize+1))
+	if err != nil {
+		a.Log.Error("Failed to read canned response image", "error", err)
+		return r.SendErrorEnvelope(fasthttp.StatusInternalServerError, "Failed to read file", nil, "")
+	}
+	if len(data) > maxMediaSize {
+		return r.SendErrorEnvelope(fasthttp.StatusBadRequest, "Image too large. Maximum size is 5MB", nil, "")
+	}
+
+	relativePath, err := a.saveMediaLocally(data, mimeType, fileHeader.Filename)
+	if err != nil {
+		a.Log.Error("Failed to save canned response image", "error", err)
+		return r.SendErrorEnvelope(fasthttp.StatusInternalServerError, "Failed to save image", nil, "")
+	}
+
+	return r.SendEnvelope(map[string]any{
+		"image_url": relativePath,
+	})
 }
 
 // buttonsToJSONBArray converts the typed request shape into the JSONBArray
