@@ -253,6 +253,10 @@ export function useFlowGraphSimulation(
     }
 
     switch (node.type) {
+      case 'start':
+        // Entry sentinel — no side effect; advance through the default edge,
+        // matching the backend runner's ChatNodeStart handling.
+        return 'default'
       case 'message':
         return execMessage(node)
       case 'buttons':
