@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref } from 'vue'
+import { computed, ref, watch } from 'vue'
 import type { IVRNode, IVRNodeType } from '@/services/api'
 import { ivrFlowsService } from '@/services/api'
 import { useCallingStore } from '@/stores/calling'
@@ -159,31 +159,48 @@ function updateScheduleEntry(idx: number, field: string, value: any) {
   updateConfig('schedule', sched)
 }
 
+const headersList = ref<{ key: string; value: string }[]>([])
+
+// Populate headersList when node changes
+watch(
+  () => props.node.id,
+  () => {
+    const headers = config.value.headers || {}
+    headersList.value = Object.keys(headers).map((k) => ({
+      key: k,
+      value: String(headers[k] ?? ''),
+    }))
+  },
+  { immediate: true },
+)
+
+function commitHeaders() {
+  const headers: Record<string, string> = {}
+  for (const item of headersList.value) {
+    headers[item.key] = item.value
+  }
+  updateConfig('headers', headers)
+}
+
 // HTTP headers helpers
 function addHeader() {
-  const headers = { ...(config.value.headers || {}) }
-  headers[''] = ''
-  updateConfig('headers', headers)
+  headersList.value.push({ key: '', value: '' })
+  commitHeaders()
 }
 
-function removeHeader(key: string) {
-  const headers = { ...(config.value.headers || {}) }
-  delete headers[key]
-  updateConfig('headers', headers)
+function removeHeader(index: number) {
+  headersList.value.splice(index, 1)
+  commitHeaders()
 }
 
-function updateHeaderKey(oldKey: string, newKey: string) {
-  if (oldKey === newKey) return
-  const headers = { ...(config.value.headers || {}) }
-  headers[newKey] = headers[oldKey]
-  delete headers[oldKey]
-  updateConfig('headers', headers)
+function updateHeaderKey(index: number, newKey: string) {
+  headersList.value[index].key = newKey
+  commitHeaders()
 }
 
-function updateHeaderValue(key: string, value: string) {
-  const headers = { ...(config.value.headers || {}) }
-  headers[key] = value
-  updateConfig('headers', headers)
+function updateHeaderValue(index: number, newValue: string) {
+  headersList.value[index].value = newValue
+  commitHeaders()
 }
 
 // Transfer callback helpers
@@ -386,10 +403,10 @@ const greetingTab = computed(() =>
             <Plus class="h-3 w-3 mr-1" /> Add
           </Button>
         </div>
-        <div v-for="(val, key) in (config.headers || {})" :key="String(key)" class="flex items-center gap-1">
-          <Input :model-value="String(key)" @update:model-value="(v: string) => updateHeaderKey(String(key), v)" placeholder="Key" class="h-7 text-xs flex-1" />
-          <Input :model-value="String(val)" @update:model-value="(v: string) => updateHeaderValue(String(key), v)" placeholder="Value" class="h-7 text-xs flex-1" />
-          <Button variant="ghost" size="icon" class="h-6 w-6" @click="removeHeader(String(key))">
+        <div v-for="(item, index) in headersList" :key="index" class="flex items-center gap-1">
+          <Input :model-value="item.key" @update:model-value="(v: string) => updateHeaderKey(index, v)" placeholder="Key" class="h-7 text-xs flex-1" />
+          <Input :model-value="item.value" @update:model-value="(v: string) => updateHeaderValue(index, v)" placeholder="Value" class="h-7 text-xs flex-1" />
+          <Button variant="ghost" size="icon" class="h-6 w-6" @click="removeHeader(index)">
             <Trash2 class="h-3 w-3 text-destructive" />
           </Button>
         </div>
