@@ -115,6 +115,8 @@ const tagsStore = useTagsStore()
 const notesStore = useNotesStore()
 const { isDark } = useColorMode()
 
+const basePath = ((window as any).__BASE_PATH__ ?? '').replace(/\/$/, '')
+
 const canWriteContacts = authStore.hasPermission('contacts', 'write')
 
 const messageInput = ref('')
@@ -2640,7 +2642,7 @@ async function sendMediaMessage() {
           <!-- Image preview in dialog -->
           <div v-if="selectedCannedResponse?.image_url" class="rounded-lg overflow-hidden border border-white/10">
             <img
-              :src="`${((window as any).__BASE_PATH__ ?? '').replace(/\/$/, '')}/api/chatbot/media/${selectedCannedResponse?.image_url?.replace(/\\/g, '/') || ''}`"
+              :src="`${basePath}/api/chatbot/media/${selectedCannedResponse?.image_url?.replace(/\\/g, '/') || ''}`"
               class="w-full max-h-48 object-contain bg-black/40"
               alt=""
             />
