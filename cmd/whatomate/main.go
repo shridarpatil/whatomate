@@ -754,6 +754,7 @@ func setupRoutes(g *fastglue.Fastglue, app *handlers.App, lo logf.Logger, basePa
 	g.PUT("/api/canned-responses/{id}", app.UpdateCannedResponse)
 	g.DELETE("/api/canned-responses/{id}", app.DeleteCannedResponse)
 	g.POST("/api/canned-responses/{id}/use", app.IncrementCannedResponseUsage)
+	g.POST("/api/canned-responses/upload-media", app.UploadCannedResponseMedia)
 
 	// Sessions (admin/debug)
 	g.GET("/api/chatbot/sessions", app.ListChatbotSessions)
