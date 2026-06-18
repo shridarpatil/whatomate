@@ -9,7 +9,7 @@ import {
   PopoverTrigger,
 } from '@/components/ui/popover'
 import { cannedResponsesService, type CannedResponse } from '@/services/api'
-import { MessageSquareText, Search, Loader2, ImageIcon } from 'lucide-vue-next'
+import { MessageSquareText, Search, Loader2, Image as ImageIcon } from 'lucide-vue-next'
 import { useI18n } from 'vue-i18n'
 
 const { t } = useI18n()
