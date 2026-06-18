@@ -805,8 +805,9 @@ function scrollToMessage(messageId: string | undefined) {
   }
 }
 
-function extractCannedTokens(content: string): string[] {
+function extractCannedTokens(content: string | null | undefined): string[] {
   const seen = new Set<string>()
+  if (!content) return []
   const matches = content.matchAll(/\{\{\s*([\w.-]+)\s*\}\}/g)
   for (const m of matches) seen.add(m[1])
   return Array.from(seen)
@@ -814,8 +815,7 @@ function extractCannedTokens(content: string): string[] {
 
 // Collect tokens from the message body AND every button field, so the param
 // dialog prompts for custom tokens used anywhere on the response.
-function extractCannedTokens(content: string | null | undefined): string[] {
-  if (!content) return []
+function extractCannedTokensFromResponse(r: CannedResponse): string[] {
   const seen = new Set<string>(extractCannedTokens(r.content))
   for (const btn of r.buttons || []) {
     for (const t of extractCannedTokens(btn.title || '')) seen.add(t)
