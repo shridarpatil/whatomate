@@ -246,46 +246,7 @@ func (a *App) GetContact(r *fastglue.Request) error {
 		return r.SendErrorEnvelope(fasthttp.StatusNotFound, "Contact not found", nil, "")
 	}
 
-	// Count unread messages
-	var unreadCount int64
-	a.DB.Model(&models.Message{}).
-		Where("contact_id = ? AND direction = ? AND status != ?", contact.ID, models.DirectionIncoming, models.MessageStatusRead).
-		Count(&unreadCount)
-
-	tags := []string{}
-	if contact.Tags != nil {
-		for _, t := range contact.Tags {
-			if s, ok := t.(string); ok {
-				tags = append(tags, s)
-			}
-		}
-	}
-
-	phoneNumber := contact.PhoneNumber
-	profileName := contact.ProfileName
-	shouldMask := a.ShouldMaskPhoneNumbers(orgID)
-	if shouldMask {
-		phoneNumber = utils.MaskPhoneNumber(phoneNumber)
-		profileName = utils.MaskIfPhoneNumber(profileName)
-	}
-
-	response := ContactResponse{
-		ID:                 contact.ID,
-		PhoneNumber:        phoneNumber,
-		Name:               profileName,
-		ProfileName:        profileName,
-		Status:             "active",
-		Tags:               tags,
-		Metadata:           contact.Metadata,
-		LastMessageAt:      contact.LastMessageAt,
-		LastMessagePreview: contact.LastMessagePreview,
-		UnreadCount:        int(unreadCount),
-		AssignedUserID:     contact.AssignedUserID,
-		WhatsAppAccount:    contact.WhatsAppAccount,
-		MarketingOptOut:    contact.MarketingOptOut,
-		CreatedAt:          contact.CreatedAt,
-		UpdatedAt:          contact.UpdatedAt,
-	}
+	response := a.buildContactResponse(&contact, orgID)
 
 	return r.SendEnvelope(response)
 }
