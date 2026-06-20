@@ -306,6 +306,25 @@ func RequirePermission(checker PermissionChecker, resource, action string) fastg
 	}
 }
 
+// RequireSuperAdmin blocks requests from non-superadmin users using the provided checker.
+// The checker should be DB-backed (not JWT claims) so revoked superadmin status takes effect immediately.
+func RequireSuperAdmin(isSuperAdmin func(userID uuid.UUID) bool) fastglue.FastMiddleware {
+	return func(r *fastglue.Request) *fastglue.Request {
+		userID, ok := r.RequestCtx.UserValue(ContextKeyUserID).(uuid.UUID)
+		if !ok {
+			_ = r.SendErrorEnvelope(fasthttp.StatusUnauthorized, "User not authenticated", nil, "")
+			return nil
+		}
+
+		if !isSuperAdmin(userID) {
+			_ = r.SendErrorEnvelope(fasthttp.StatusForbidden, "Super admin access required", nil, "")
+			return nil
+		}
+
+		return r
+	}
+}
+
 // RequireAnyPermission checks if user has any of the required permissions
 func RequireAnyPermission(checker PermissionChecker, permissions ...string) fastglue.FastMiddleware {
 	return func(r *fastglue.Request) *fastglue.Request {

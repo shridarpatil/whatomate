@@ -48,6 +48,9 @@ onMounted(() => {
 function filterItems(items: NavSection['items']) {
   return items
     .filter(item => {
+      if (item.superAdminOnly && !authStore.user?.is_super_admin) {
+        return false
+      }
       if (item.childPermissions) {
         return item.childPermissions.some(p => authStore.hasPermission(p, 'read'))
       }
@@ -82,6 +85,7 @@ function filterItems(items: NavSection['items']) {
 // Filter navigation sections based on user permissions
 const navSections = computed(() => {
   return navigationSections
+    .filter(section => !section.superAdminOnly || authStore.user?.is_super_admin)
     .map(section => ({
       ...section,
       items: filterItems(section.items)

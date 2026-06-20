@@ -113,6 +113,11 @@ func (a *App) ListUsers(r *fastglue.Request) error {
 
 	countQuery := a.DB.Joins(joinClause, orgID).Where("users.deleted_at IS NULL")
 	dataQuery := a.DB.Joins(joinClause, orgID).Where("users.deleted_at IS NULL")
+	// Hide super admins from regular org members; super admins keep full visibility.
+	if !a.IsSuperAdmin(userID) {
+		countQuery = countQuery.Where("users.is_super_admin = ?", false)
+		dataQuery = dataQuery.Where("users.is_super_admin = ?", false)
+	}
 	if search != "" {
 		countQuery = countQuery.Where("users.full_name ILIKE ? OR users.email ILIKE ?", "%"+search+"%", "%"+search+"%")
 		dataQuery = dataQuery.Where("users.full_name ILIKE ? OR users.email ILIKE ?", "%"+search+"%", "%"+search+"%")
@@ -195,7 +200,7 @@ func (a *App) ListUsers(r *fastglue.Request) error {
 
 // GetUser returns a single user
 func (a *App) GetUser(r *fastglue.Request) error {
-	orgID, err := a.getOrgID(r)
+	orgID, currentUserID, err := a.getOrgAndUserID(r)
 	if err != nil {
 		return r.SendErrorEnvelope(fasthttp.StatusUnauthorized, "Unauthorized", nil, "")
 	}
@@ -207,12 +212,16 @@ func (a *App) GetUser(r *fastglue.Request) error {
 
 	// Query via user_organizations to find both native and cross-org members.
 	// Select("users.*") avoids column conflict with user_organizations.organization_id.
-	var user models.User
-	if err := a.DB.
+	query := a.DB.
 		Select("users.*").
 		Joins("JOIN user_organizations ON user_organizations.user_id = users.id AND user_organizations.organization_id = ? AND user_organizations.deleted_at IS NULL", orgID).
-		Where("users.id = ? AND users.deleted_at IS NULL", id).
-		First(&user).Error; err != nil {
+		Where("users.id = ? AND users.deleted_at IS NULL", id)
+	// Hide super admins from regular org members; super admins keep full visibility.
+	if !a.IsSuperAdmin(currentUserID) {
+		query = query.Where("users.is_super_admin = ?", false)
+	}
+	var user models.User
+	if err := query.First(&user).Error; err != nil {
 		return r.SendErrorEnvelope(fasthttp.StatusNotFound, "User not found", nil, "")
 	}
 
@@ -246,14 +255,35 @@ func (a *App) CreateUser(r *fastglue.Request) error {
 		return nil
 	}
 
+	isSuperAdmin := false
+	if saField := parseSuperAdminField(r); saField != nil && *saField {
+		if !a.IsSuperAdmin(userID) {
+			return r.SendErrorEnvelope(fasthttp.StatusForbidden, "Only super admins can create super admins", nil, "")
+		}
+		isSuperAdmin = true
+	}
+
+	user, status, msg := a.createUserInOrg(orgID, userID, req, isSuperAdmin)
+	if user == nil {
+		return r.SendErrorEnvelope(status, msg, nil, "")
+	}
+
+	return r.SendEnvelope(userToResponse(*user))
+}
+
+// createUserInOrg validates the request and creates (or restores a
+// soft-deleted) user with a membership in the given org. The audit entry is
+// attributed to actorID. On failure it returns a nil user with the HTTP
+// status and message to send.
+func (a *App) createUserInOrg(orgID, actorID uuid.UUID, req UserRequest, isSuperAdmin bool) (*models.User, int, string) {
 	// Validate required fields
 	if req.Email == "" || req.Password == "" || req.FullName == "" {
-		return r.SendErrorEnvelope(fasthttp.StatusBadRequest, "Email, password, and full_name are required", nil, "")
+		return nil, fasthttp.StatusBadRequest, "Email, password, and full_name are required"
 	}
 
 	// Validate email format
 	if _, err := mail.ParseAddress(req.Email); err != nil {
-		return r.SendErrorEnvelope(fasthttp.StatusBadRequest, "Invalid email format", nil, "")
+		return nil, fasthttp.StatusBadRequest, "Invalid email format"
 	}
 
 	// Determine role
@@ -262,7 +292,7 @@ func (a *App) CreateUser(r *fastglue.Request) error {
 		// Validate role exists and belongs to org
 		var role models.CustomRole
 		if err := a.DB.Where("id = ? AND organization_id = ?", req.RoleID, orgID).First(&role).Error; err != nil {
-			return r.SendErrorEnvelope(fasthttp.StatusBadRequest, "Invalid role", nil, "")
+			return nil, fasthttp.StatusBadRequest, "Invalid role"
 		}
 		roleID = req.RoleID
 	} else {
@@ -276,22 +306,14 @@ func (a *App) CreateUser(r *fastglue.Request) error {
 	// Check if email already exists (including soft-deleted users)
 	var existingUser models.User
 	if err := a.DB.Where("email = ?", req.Email).First(&existingUser).Error; err == nil {
-		return r.SendErrorEnvelope(fasthttp.StatusConflict, "Email already exists", nil, "")
+		return nil, fasthttp.StatusConflict, "Email already exists"
 	}
 
 	// Hash password
 	hashedPassword, err := bcrypt.GenerateFromPassword([]byte(req.Password), bcrypt.DefaultCost)
 	if err != nil {
 		a.Log.Error("Failed to hash password", "error", err)
-		return r.SendErrorEnvelope(fasthttp.StatusInternalServerError, "Failed to create user", nil, "")
-	}
-
-	isSuperAdmin := false
-	if saField := parseSuperAdminField(r); saField != nil && *saField {
-		if !a.IsSuperAdmin(userID) {
-			return r.SendErrorEnvelope(fasthttp.StatusForbidden, "Only super admins can create super admins", nil, "")
-		}
-		isSuperAdmin = true
+		return nil, fasthttp.StatusInternalServerError, "Failed to create user"
 	}
 
 	// Check for soft-deleted user with same email and restore them
@@ -308,7 +330,7 @@ func (a *App) CreateUser(r *fastglue.Request) error {
 			"is_super_admin":  isSuperAdmin,
 		}).Error; err != nil {
 			a.Log.Error("Failed to restore user", "error", err)
-			return r.SendErrorEnvelope(fasthttp.StatusInternalServerError, "Failed to create user", nil, "")
+			return nil, fasthttp.StatusInternalServerError, "Failed to create user"
 		}
 
 		// Restore or create UserOrganization entry
@@ -342,10 +364,10 @@ func (a *App) CreateUser(r *fastglue.Request) error {
 		softDeleted.IsActive = true
 		softDeleted.IsSuperAdmin = isSuperAdmin
 
-		audit.LogAudit(a.DB, orgID, userID, audit.GetUserName(a.DB, userID),
+		audit.LogAudit(a.DB, orgID, actorID, audit.GetUserName(a.DB, actorID),
 			"user", softDeleted.ID, models.AuditActionCreated, nil, userAuditSnapshot(&softDeleted))
 
-		return r.SendEnvelope(userToResponse(softDeleted))
+		return &softDeleted, fasthttp.StatusOK, ""
 	}
 
 	user := models.User{
@@ -360,7 +382,7 @@ func (a *App) CreateUser(r *fastglue.Request) error {
 
 	if err := a.DB.Create(&user).Error; err != nil {
 		a.Log.Error("Failed to create user", "error", err)
-		return r.SendErrorEnvelope(fasthttp.StatusInternalServerError, "Failed to create user", nil, "")
+		return nil, fasthttp.StatusInternalServerError, "Failed to create user"
 	}
 
 	// Create UserOrganization entry
@@ -378,10 +400,10 @@ func (a *App) CreateUser(r *fastglue.Request) error {
 	// Load role for response
 	a.DB.Preload("Role").First(&user, user.ID)
 
-	audit.LogAudit(a.DB, orgID, userID, audit.GetUserName(a.DB, userID),
+	audit.LogAudit(a.DB, orgID, actorID, audit.GetUserName(a.DB, actorID),
 		"user", user.ID, models.AuditActionCreated, nil, userAuditSnapshot(&user))
 
-	return r.SendEnvelope(userToResponse(user))
+	return &user, fasthttp.StatusOK, ""
 }
 
 // UpdateUser updates a user

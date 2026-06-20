@@ -21,7 +21,8 @@ import {
   Tags,
   PhoneCall,
   PhoneForwarded,
-  ScrollText
+  ScrollText,
+  Building2
 } from 'lucide-vue-next'
 import type { Component } from 'vue'
 
@@ -32,6 +33,8 @@ export interface NavItem {
   permission?: string
   childPermissions?: string[]
   children?: NavItem[]
+  /** Only visible to super admins (superadmin portal) */
+  superAdminOnly?: boolean
 }
 
 export interface NavSection {
@@ -41,6 +44,8 @@ export interface NavSection {
   permissions: string[]
   /** Pin to bottom of sidebar */
   pinBottom?: boolean
+  /** Only visible to super admins (superadmin portal) */
+  superAdminOnly?: boolean
 }
 
 export const navigationSections: NavSection[] = [
@@ -124,6 +129,25 @@ export const navigationSections: NavSection[] = [
         path: '/analytics/meta-insights',
         icon: LineChart,
         permission: 'analytics'
+      },
+    ]
+  },
+  {
+    label: 'nav.sectionAdmin',
+    permissions: [],
+    superAdminOnly: true,
+    items: [
+      {
+        name: 'nav.adminOrganizations',
+        path: '/admin/organizations',
+        icon: Building2,
+        superAdminOnly: true
+      },
+      {
+        name: 'nav.adminUsers',
+        path: '/admin/users',
+        icon: Users,
+        superAdminOnly: true
       },
     ]
   },

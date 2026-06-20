@@ -12,6 +12,7 @@ import (
 	"github.com/shridarpatil/whatomate/internal/utils"
 	"github.com/valyala/fasthttp"
 	"github.com/zerodha/fastglue"
+	"gorm.io/gorm"
 )
 
 // generalSettingsSnapshot extracts the fields shown on the General tab into a
@@ -414,73 +415,9 @@ func (a *App) CreateOrganization(r *fastglue.Request) error {
 		return r.SendErrorEnvelope(fasthttp.StatusBadRequest, "Organization name is required", nil, "")
 	}
 
-	// Start transaction
-	tx := a.DB.Begin()
-	if tx.Error != nil {
-		a.Log.Error("Failed to begin transaction", "error", tx.Error)
-		return r.SendErrorEnvelope(fasthttp.StatusInternalServerError, "Failed to create organization", nil, "")
-	}
-
-	org := models.Organization{
-		Name:     req.Name,
-		Slug:     generateSlug(req.Name),
-		Settings: models.JSONB{},
-	}
-
-	if err := tx.Create(&org).Error; err != nil {
-		tx.Rollback()
+	org, err := a.provisionOrganization(req.Name, userID, true)
+	if err != nil {
 		a.Log.Error("Failed to create organization", "error", err)
-		return r.SendErrorEnvelope(fasthttp.StatusInternalServerError, "Failed to create organization", nil, "")
-	}
-
-	// Seed system roles for the new organization
-	if err := database.SeedSystemRolesForOrg(tx, org.ID); err != nil {
-		tx.Rollback()
-		a.Log.Error("Failed to seed system roles", "error", err, "org_id", org.ID)
-		return r.SendErrorEnvelope(fasthttp.StatusInternalServerError, "Failed to create organization", nil, "")
-	}
-
-	// Create default chatbot settings
-	chatbotSettings := models.ChatbotSettings{
-		OrganizationID:     org.ID,
-		IsEnabled:          false,
-		SessionTimeoutMins: 30,
-	}
-	if err := tx.Create(&chatbotSettings).Error; err != nil {
-		tx.Rollback()
-		a.Log.Error("Failed to create chatbot settings", "error", err, "org_id", org.ID)
-		return r.SendErrorEnvelope(fasthttp.StatusInternalServerError, "Failed to create organization", nil, "")
-	}
-
-	// Get admin role for this org and add the creator as admin
-	var adminRole models.CustomRole
-	if err := tx.Where("organization_id = ? AND name = ? AND is_system = ?", org.ID, "admin", true).First(&adminRole).Error; err != nil {
-		tx.Rollback()
-		a.Log.Error("Failed to find admin role", "error", err, "org_id", org.ID)
-		return r.SendErrorEnvelope(fasthttp.StatusInternalServerError, "Failed to create organization", nil, "")
-	}
-
-	userOrg := models.UserOrganization{
-		UserID:         userID,
-		OrganizationID: org.ID,
-		RoleID:         &adminRole.ID,
-		IsDefault:      false,
-	}
-	if err := tx.Create(&userOrg).Error; err != nil {
-		tx.Rollback()
-		a.Log.Error("Failed to add creator to organization", "error", err)
-		return r.SendErrorEnvelope(fasthttp.StatusInternalServerError, "Failed to create organization", nil, "")
-	}
-
-	// Seed default dashboard widgets for the new organization
-	if err := database.SeedDefaultWidgetsForOrg(tx, org.ID, userID); err != nil {
-		tx.Rollback()
-		a.Log.Error("Failed to seed default widgets", "error", err, "org_id", org.ID)
-		return r.SendErrorEnvelope(fasthttp.StatusInternalServerError, "Failed to create organization", nil, "")
-	}
-
-	if err := tx.Commit().Error; err != nil {
-		a.Log.Error("Failed to commit transaction", "error", err)
 		return r.SendErrorEnvelope(fasthttp.StatusInternalServerError, "Failed to create organization", nil, "")
 	}
 
@@ -492,6 +429,53 @@ func (a *App) CreateOrganization(r *fastglue.Request) error {
 		Slug:      org.Slug,
 		CreatedAt: org.CreatedAt.Format("2006-01-02T15:04:05Z"),
 	})
+}
+
+// provisionOrganization creates an organization with its system roles, default
+// chatbot settings, and dashboard widgets inside a single transaction.
+// When addMember is true the actor is added to the org with the admin role;
+// superadmin provisioning passes false so superadmins never appear in org
+// member lists.
+func (a *App) provisionOrganization(name string, actorID uuid.UUID, addMember bool) (*models.Organization, error) {
+	org := models.Organization{
+		Name:     name,
+		Slug:     generateSlug(name),
+		Settings: models.JSONB{},
+	}
+	err := a.DB.Transaction(func(tx *gorm.DB) error {
+		if err := tx.Create(&org).Error; err != nil {
+			return err
+		}
+		if err := database.SeedSystemRolesForOrg(tx, org.ID); err != nil {
+			return err
+		}
+		if err := tx.Create(&models.ChatbotSettings{
+			OrganizationID:     org.ID,
+			IsEnabled:          false,
+			SessionTimeoutMins: 30,
+		}).Error; err != nil {
+			return err
+		}
+		if addMember {
+			var adminRole models.CustomRole
+			if err := tx.Where("organization_id = ? AND name = ? AND is_system = ?", org.ID, "admin", true).First(&adminRole).Error; err != nil {
+				return err
+			}
+			if err := tx.Create(&models.UserOrganization{
+				UserID:         actorID,
+				OrganizationID: org.ID,
+				RoleID:         &adminRole.ID,
+				IsDefault:      false,
+			}).Error; err != nil {
+				return err
+			}
+		}
+		return database.SeedDefaultWidgetsForOrg(tx, org.ID, actorID)
+	})
+	if err != nil {
+		return nil, err
+	}
+	return &org, nil
 }
 
 // MemberResponse represents an organization member in API responses
@@ -526,6 +510,11 @@ func (a *App) ListOrganizationMembers(r *fastglue.Request) error {
 		Joins("LEFT JOIN users ON users.id = user_organizations.user_id AND users.deleted_at IS NULL").
 		Joins("LEFT JOIN custom_roles ON custom_roles.id = user_organizations.role_id AND custom_roles.deleted_at IS NULL").
 		Where("user_organizations.organization_id = ? AND user_organizations.deleted_at IS NULL", orgID)
+
+	// Hide super admins from regular org members; super admins keep full visibility.
+	if !a.IsSuperAdmin(userID) {
+		baseQuery = baseQuery.Where("users.is_super_admin = ?", false)
+	}
 
 	if search != "" {
 		baseQuery = baseQuery.Where("users.full_name ILIKE ? OR users.email ILIKE ?", "%"+search+"%", "%"+search+"%")
