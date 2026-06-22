@@ -6,7 +6,6 @@ import (
 	"strings"
 
 	"github.com/google/uuid"
-	"github.com/shridarpatil/whatomate/internal/audit"
 	"github.com/shridarpatil/whatomate/internal/models"
 	"github.com/shridarpatil/whatomate/internal/templateutil"
 	"github.com/shridarpatil/whatomate/pkg/whatsapp"
@@ -103,12 +102,7 @@ func (a *App) ListTemplates(r *fastglue.Request) error {
 		response[i] = templateToResponse(t)
 	}
 
-	return r.SendEnvelope(map[string]any{
-		"templates": response,
-		"total":     total,
-		"page":      pg.Page,
-		"limit":     pg.Limit,
-	})
+	return r.SendEnvelope(listEnvelope("templates", response, total, pg))
 }
 
 // CreateTemplate creates a new message template
@@ -195,7 +189,7 @@ func (a *App) CreateTemplate(r *fastglue.Request) error {
 		return r.SendErrorEnvelope(fasthttp.StatusInternalServerError, "Failed to create template", nil, "")
 	}
 
-	audit.LogAudit(a.DB, orgID, userID, audit.GetUserName(a.DB, userID),
+	a.logAudit(orgID, userID,
 		"template", template.ID, models.AuditActionCreated, nil, &template)
 
 	return r.SendEnvelope(templateToResponse(template))
@@ -320,7 +314,7 @@ func (a *App) UpdateTemplate(r *fastglue.Request) error {
 	var extraChanges []map[string]any
 	extraChanges = append(extraChanges, diffButtons(oldTemplate.Buttons, template.Buttons)...)
 
-	audit.LogAudit(a.DB, orgID, userID, audit.GetUserName(a.DB, userID),
+	a.logAudit(orgID, userID,
 		"template", template.ID, models.AuditActionUpdated, &oldTemplate, template, extraChanges...)
 
 	return r.SendEnvelope(templateToResponse(*template))
@@ -356,7 +350,7 @@ func (a *App) DeleteTemplate(r *fastglue.Request) error {
 		return r.SendErrorEnvelope(fasthttp.StatusInternalServerError, "Failed to delete template", nil, "")
 	}
 
-	audit.LogAudit(a.DB, orgID, userID, audit.GetUserName(a.DB, userID),
+	a.logAudit(orgID, userID,
 		"template", id, models.AuditActionDeleted, template, nil)
 
 	return r.SendEnvelope(map[string]string{"message": "Template deleted successfully"})
@@ -423,7 +417,7 @@ func (a *App) SubmitTemplate(r *fastglue.Request) error {
 		return r.SendErrorEnvelope(fasthttp.StatusInternalServerError, "Template submitted but failed to update local record", nil, "")
 	}
 
-	audit.LogAudit(a.DB, orgID, userID, audit.GetUserName(a.DB, userID),
+	a.logAudit(orgID, userID,
 		"template", template.ID, models.AuditActionUpdated, nil, nil,
 		map[string]any{"field": "published", "old_value": oldStatus, "new_value": "PENDING"},
 	)

@@ -9,6 +9,9 @@ import (
 	"github.com/valyala/fasthttp"
 	"github.com/zerodha/fastglue"
 	"gorm.io/gorm"
+
+	"github.com/shridarpatil/whatomate/internal/audit"
+	"github.com/shridarpatil/whatomate/internal/models"
 )
 
 // errEnvelopeSent is a sentinel returned by helpers after they have already
@@ -92,6 +95,24 @@ func findByIDAndOrg[T any](db *gorm.DB, r *fastglue.Request, id, orgID uuid.UUID
 		return nil, errEnvelopeSent
 	}
 	return &model, nil
+}
+
+// logAudit records an audit-log entry for a resource mutation, resolving the
+// actor's display name automatically. It wraps audit.LogAudit to remove the
+// repeated a.DB + GetUserName boilerplate at call sites.
+func (a *App) logAudit(orgID, userID uuid.UUID, resourceType string, resourceID uuid.UUID, action models.AuditAction, oldData, newData any, extraChanges ...map[string]any) {
+	audit.LogAudit(a.DB, orgID, userID, audit.GetUserName(a.DB, userID), resourceType, resourceID, action, oldData, newData, extraChanges...)
+}
+
+// listEnvelope builds the standard paginated list response payload used across
+// list handlers: {<key>: items, total, page, limit}.
+func listEnvelope(key string, items, total any, pg Pagination) map[string]any {
+	return map[string]any{
+		key:     items,
+		"total": total,
+		"page":  pg.Page,
+		"limit": pg.Limit,
+	}
 }
 
 // parseDateRange parses start and end date strings in YYYY-MM-DD format.

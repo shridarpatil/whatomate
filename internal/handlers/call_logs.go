@@ -95,12 +95,7 @@ func (a *App) ListCallLogs(r *fastglue.Request) error {
 		}
 	}
 
-	return r.SendEnvelope(map[string]any{
-		"call_logs": callLogs,
-		"total":     total,
-		"page":      pg.Page,
-		"limit":     pg.Limit,
-	})
+	return r.SendEnvelope(listEnvelope("call_logs", callLogs, total, pg))
 }
 
 // GetCallLog returns a single call log by ID.

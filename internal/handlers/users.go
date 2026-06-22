@@ -5,7 +5,6 @@ import (
 	"time"
 
 	"github.com/google/uuid"
-	"github.com/shridarpatil/whatomate/internal/audit"
 	"github.com/shridarpatil/whatomate/internal/models"
 	"github.com/valyala/fasthttp"
 	"github.com/zerodha/fastglue"
@@ -334,7 +333,7 @@ func (a *App) CreateUser(r *fastglue.Request) error {
 		softDeleted.IsActive = true
 		softDeleted.IsSuperAdmin = isSuperAdmin
 
-		audit.LogAudit(a.DB, orgID, userID, audit.GetUserName(a.DB, userID),
+		a.logAudit(orgID, userID,
 			"user", softDeleted.ID, models.AuditActionCreated, nil, userAuditSnapshot(&softDeleted))
 
 		return r.SendEnvelope(userToResponse(softDeleted))
@@ -370,7 +369,7 @@ func (a *App) CreateUser(r *fastglue.Request) error {
 	// Load role for response
 	a.DB.Preload("Role").First(&user, user.ID)
 
-	audit.LogAudit(a.DB, orgID, userID, audit.GetUserName(a.DB, userID),
+	a.logAudit(orgID, userID,
 		"user", user.ID, models.AuditActionCreated, nil, userAuditSnapshot(&user))
 
 	return r.SendEnvelope(userToResponse(user))
@@ -455,7 +454,7 @@ func (a *App) UpdateUser(r *fastglue.Request) error {
 		user.RoleID = req.RoleID
 		user.Role = &newRole
 
-		audit.LogAudit(a.DB, orgID, currentUserID, audit.GetUserName(a.DB, currentUserID),
+		a.logAudit(orgID, currentUserID,
 			"user", user.ID, models.AuditActionUpdated, oldSnap, userAuditSnapshot(&user))
 
 		resp := userToResponse(user)
@@ -542,7 +541,7 @@ func (a *App) UpdateUser(r *fastglue.Request) error {
 	// Load role for response
 	a.DB.Preload("Role").First(&user, user.ID)
 
-	audit.LogAudit(a.DB, orgID, currentUserID, audit.GetUserName(a.DB, currentUserID),
+	a.logAudit(orgID, currentUserID,
 		"user", user.ID, models.AuditActionUpdated, oldSnap, userAuditSnapshot(&user))
 
 	return r.SendEnvelope(userToResponse(user))
@@ -593,7 +592,7 @@ func (a *App) DeleteUser(r *fastglue.Request) error {
 		}
 		a.InvalidateUserPermissionsCache(id)
 
-		audit.LogAudit(a.DB, orgID, currentUserID, audit.GetUserName(a.DB, currentUserID),
+		a.logAudit(orgID, currentUserID,
 			"user", id, models.AuditActionDeleted, userAuditSnapshot(&user), nil)
 
 		return r.SendEnvelope(map[string]string{"message": "Member removed from organization"})
@@ -628,7 +627,7 @@ func (a *App) DeleteUser(r *fastglue.Request) error {
 	// Delete all UserOrganization entries for this user
 	a.DB.Where("user_id = ?", id).Delete(&models.UserOrganization{})
 
-	audit.LogAudit(a.DB, orgID, currentUserID, audit.GetUserName(a.DB, currentUserID),
+	a.logAudit(orgID, currentUserID,
 		"user", id, models.AuditActionDeleted, userAuditSnapshot(&user), nil)
 
 	return r.SendEnvelope(map[string]string{"message": "User deleted successfully"})
@@ -731,7 +730,7 @@ func (a *App) UpdateCurrentUserSettings(r *fastglue.Request) error {
 	}
 
 	newNotif := notificationSettingsSnapshot(user.Settings)
-	audit.LogAudit(a.DB, orgID, userID, audit.GetUserName(a.DB, userID),
+	a.logAudit(orgID, userID,
 		models.ResourceSettingsNotification, userID, models.AuditActionUpdated, oldNotif, newNotif)
 
 	return r.SendEnvelope(map[string]any{

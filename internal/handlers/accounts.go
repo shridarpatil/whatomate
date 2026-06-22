@@ -11,7 +11,6 @@ import (
 	"net/http"
 
 	"github.com/google/uuid"
-	"github.com/shridarpatil/whatomate/internal/audit"
 	"github.com/shridarpatil/whatomate/internal/crypto"
 	"github.com/shridarpatil/whatomate/internal/models"
 	"github.com/shridarpatil/whatomate/pkg/whatsapp"
@@ -156,7 +155,7 @@ func (a *App) CreateAccount(r *fastglue.Request) error {
 	}
 
 	a.DB.Preload("CreatedBy").Preload("UpdatedBy").First(&account, "id = ?", account.ID)
-	audit.LogAudit(a.DB, orgID, userID, audit.GetUserName(a.DB, userID),
+	a.logAudit(orgID, userID,
 		"account", account.ID, models.AuditActionCreated, nil, &account)
 
 	return r.SendEnvelope(accountToResponse(account))
@@ -285,7 +284,7 @@ func (a *App) UpdateAccount(r *fastglue.Request) error {
 			"field": "app_secret", "old_value": "********", "new_value": "********",
 		})
 	}
-	audit.LogAudit(a.DB, orgID, userID, audit.GetUserName(a.DB, userID),
+	a.logAudit(orgID, userID,
 		"account", account.ID, models.AuditActionUpdated, &oldAccount, account, sensitiveChanges...)
 
 	return r.SendEnvelope(accountToResponse(*account))
@@ -317,7 +316,7 @@ func (a *App) DeleteAccount(r *fastglue.Request) error {
 	// Invalidate cache
 	a.InvalidateWhatsAppAccountCache(account.PhoneID)
 
-	audit.LogAudit(a.DB, orgID, userID, audit.GetUserName(a.DB, userID),
+	a.logAudit(orgID, userID,
 		"account", id, models.AuditActionDeleted, account, nil)
 
 	return r.SendEnvelope(map[string]string{"message": "Account deleted successfully"})
@@ -663,7 +662,7 @@ func (a *App) ExchangeToken(r *fastglue.Request) error {
 		auditAction = models.AuditActionUpdated
 		auditOld = oldAccount
 	}
-	audit.LogAudit(a.DB, orgID, userID, audit.GetUserName(a.DB, userID),
+	a.logAudit(orgID, userID,
 		"account", account.ID, auditAction, auditOld, account)
 
 	// Construction of response map (reusing accountToResponse)
@@ -935,7 +934,7 @@ func (a *App) RegisterPhoneNumber(r *fastglue.Request) error {
 
 	// Log audit!
 	a.DB.Preload("CreatedBy").Preload("UpdatedBy").First(account, "id = ?", account.ID)
-	audit.LogAudit(a.DB, orgID, userID, audit.GetUserName(a.DB, userID),
+	a.logAudit(orgID, userID,
 		"account", account.ID, models.AuditActionUpdated, &oldAccount, account)
 
 	return r.SendEnvelope(map[string]interface{}{

@@ -14,7 +14,6 @@ import (
 	"time"
 
 	"github.com/google/uuid"
-	"github.com/shridarpatil/whatomate/internal/audit"
 	"github.com/shridarpatil/whatomate/internal/models"
 	"github.com/shridarpatil/whatomate/internal/utils"
 	"github.com/shridarpatil/whatomate/pkg/whatsapp"
@@ -196,12 +195,7 @@ func (a *App) ListContacts(r *fastglue.Request) error {
 		}
 	}
 
-	return r.SendEnvelope(map[string]any{
-		"contacts": response,
-		"total":    total,
-		"page":     pg.Page,
-		"limit":    pg.Limit,
-	})
+	return r.SendEnvelope(listEnvelope("contacts", response, total, pg))
 }
 
 // scopeAssignedContact narrows a contact query for users who lack the
@@ -1460,7 +1454,7 @@ func (a *App) CreateContact(r *fastglue.Request) error {
 		return r.SendErrorEnvelope(fasthttp.StatusInternalServerError, "Failed to create contact", nil, "")
 	}
 
-	audit.LogAudit(a.DB, orgID, userID, audit.GetUserName(a.DB, userID),
+	a.logAudit(orgID, userID,
 		"contact", contact.ID, models.AuditActionCreated, nil, &contact)
 
 	return r.SendEnvelope(a.buildContactResponse(&contact, orgID))
@@ -1548,7 +1542,7 @@ func (a *App) UpdateContact(r *fastglue.Request) error {
 	// Reload contact
 	a.DB.First(contact, contactID)
 
-	audit.LogAudit(a.DB, orgID, userID, audit.GetUserName(a.DB, userID),
+	a.logAudit(orgID, userID,
 		"contact", contact.ID, models.AuditActionUpdated, &oldContact, contact)
 
 	return r.SendEnvelope(a.buildContactResponse(contact, orgID))
@@ -1583,7 +1577,7 @@ func (a *App) DeleteContact(r *fastglue.Request) error {
 		return r.SendErrorEnvelope(fasthttp.StatusInternalServerError, "Failed to delete contact", nil, "")
 	}
 
-	audit.LogAudit(a.DB, orgID, userID, audit.GetUserName(a.DB, userID),
+	a.logAudit(orgID, userID,
 		"contact", contactID, models.AuditActionDeleted, contact, nil)
 
 	return r.SendEnvelope(map[string]any{

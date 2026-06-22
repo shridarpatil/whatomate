@@ -10,7 +10,6 @@ import (
 	"time"
 
 	"github.com/google/uuid"
-	"github.com/shridarpatil/whatomate/internal/audit"
 	"github.com/shridarpatil/whatomate/internal/models"
 	"github.com/valyala/fasthttp"
 	"github.com/zerodha/fastglue"
@@ -234,7 +233,7 @@ func (a *App) CreateWebhook(r *fastglue.Request) error {
 	// Invalidate cache
 	a.InvalidateWebhooksCache(orgID)
 
-	audit.LogAudit(a.DB, orgID, userID, audit.GetUserName(a.DB, userID),
+	a.logAudit(orgID, userID,
 		"webhook", webhook.ID, models.AuditActionCreated, nil, webhookAuditSnapshot(&webhook))
 
 	return r.SendEnvelope(webhookToResponse(webhook))
@@ -301,7 +300,7 @@ func (a *App) UpdateWebhook(r *fastglue.Request) error {
 	// Invalidate cache
 	a.InvalidateWebhooksCache(orgID)
 
-	audit.LogAudit(a.DB, orgID, userID, audit.GetUserName(a.DB, userID),
+	a.logAudit(orgID, userID,
 		"webhook", webhook.ID, models.AuditActionUpdated, oldSnap, webhookAuditSnapshot(webhook))
 
 	return r.SendEnvelope(webhookToResponse(*webhook))
@@ -332,7 +331,7 @@ func (a *App) DeleteWebhook(r *fastglue.Request) error {
 	// Invalidate cache
 	a.InvalidateWebhooksCache(orgID)
 
-	audit.LogAudit(a.DB, orgID, userID, audit.GetUserName(a.DB, userID),
+	a.logAudit(orgID, userID,
 		"webhook", webhookID, models.AuditActionDeleted, webhookAuditSnapshot(&webhook), nil)
 
 	return r.SendEnvelope(map[string]string{"message": "Webhook deleted successfully"})

@@ -68,12 +68,7 @@ func (a *App) ListTags(r *fastglue.Request) error {
 		result = append(result, tagToResponse(tags[i]))
 	}
 
-	return r.SendEnvelope(map[string]any{
-		"tags":  result,
-		"total": total,
-		"page":  pg.Page,
-		"limit": pg.Limit,
-	})
+	return r.SendEnvelope(listEnvelope("tags", result, total, pg))
 }
 
 // CreateTag creates a new tag

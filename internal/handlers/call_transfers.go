@@ -53,12 +53,7 @@ func (a *App) ListCallTransfers(r *fastglue.Request) error {
 		}
 	}
 
-	return r.SendEnvelope(map[string]any{
-		"call_transfers": transfers,
-		"total":          total,
-		"page":           pg.Page,
-		"limit":          pg.Limit,
-	})
+	return r.SendEnvelope(listEnvelope("call_transfers", transfers, total, pg))
 }
 
 // GetCallTransfer returns a single call transfer by ID

@@ -11,7 +11,6 @@ import (
 	"strings"
 
 	"github.com/google/uuid"
-	"github.com/shridarpatil/whatomate/internal/audit"
 	"github.com/shridarpatil/whatomate/internal/models"
 	"github.com/valyala/fasthttp"
 	"github.com/zerodha/fastglue"
@@ -54,12 +53,7 @@ func (a *App) ListIVRFlows(r *fastglue.Request) error {
 		return r.SendErrorEnvelope(fasthttp.StatusInternalServerError, "Failed to fetch IVR flows", nil, "")
 	}
 
-	return r.SendEnvelope(map[string]any{
-		"ivr_flows": flows,
-		"total":     total,
-		"page":      pg.Page,
-		"limit":     pg.Limit,
-	})
+	return r.SendEnvelope(listEnvelope("ivr_flows", flows, total, pg))
 }
 
 // GetIVRFlow returns a single IVR flow by ID
@@ -158,7 +152,7 @@ func (a *App) CreateIVRFlow(r *fastglue.Request) error {
 		a.CallManager.InvalidateIVRFlowCache(flow.ID, flow.OrganizationID, flow.WhatsAppAccount)
 	}
 
-	audit.LogAudit(a.DB, orgID, userID, audit.GetUserName(a.DB, userID),
+	a.logAudit(orgID, userID,
 		"ivr_flow", flow.ID, models.AuditActionCreated, nil, &flow)
 
 	return r.SendEnvelope(flow)
@@ -266,7 +260,7 @@ func (a *App) UpdateIVRFlow(r *fastglue.Request) error {
 		extraChanges = diffIVRMenuNodes(a.DB, oldFlow.Menu, req.Menu)
 	}
 
-	audit.LogAudit(a.DB, orgID, userID, audit.GetUserName(a.DB, userID),
+	a.logAudit(orgID, userID,
 		"ivr_flow", flow.ID, models.AuditActionUpdated, &oldFlow, flow, extraChanges...)
 
 	return r.SendEnvelope(flow)
@@ -446,7 +440,7 @@ func (a *App) DeleteIVRFlow(r *fastglue.Request) error {
 		a.CallManager.InvalidateIVRFlowCache(flow.ID, flow.OrganizationID, flow.WhatsAppAccount)
 	}
 
-	audit.LogAudit(a.DB, orgID, userID, audit.GetUserName(a.DB, userID),
+	a.logAudit(orgID, userID,
 		"ivr_flow", flow.ID, models.AuditActionDeleted, flow, nil)
 
 	return r.SendEnvelope(map[string]string{"message": "IVR flow deleted"})

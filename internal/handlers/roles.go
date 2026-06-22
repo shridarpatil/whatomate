@@ -4,7 +4,6 @@ import (
 	"sort"
 
 	"github.com/google/uuid"
-	"github.com/shridarpatil/whatomate/internal/audit"
 	"github.com/shridarpatil/whatomate/internal/models"
 	"github.com/valyala/fasthttp"
 	"github.com/zerodha/fastglue"
@@ -105,12 +104,7 @@ func (a *App) ListRoles(r *fastglue.Request) error {
 		response[i] = roleToResponse(role, userCount)
 	}
 
-	return r.SendEnvelope(map[string]any{
-		"roles": response,
-		"total": total,
-		"page":  pg.Page,
-		"limit": pg.Limit,
-	})
+	return r.SendEnvelope(listEnvelope("roles", response, total, pg))
 }
 
 // GetRole returns a single role
@@ -193,7 +187,7 @@ func (a *App) CreateRole(r *fastglue.Request) error {
 			a.Log.Error("Failed to create role", "error", err)
 			return r.SendErrorEnvelope(fasthttp.StatusInternalServerError, "Failed to create role", nil, "")
 		}
-		audit.LogAudit(a.DB, orgID, userID, audit.GetUserName(a.DB, userID),
+		a.logAudit(orgID, userID,
 			"role", role.ID, models.AuditActionCreated, nil, roleAuditSnapshot(&role))
 		return r.SendEnvelope(roleToResponse(role, 0))
 	}
@@ -203,7 +197,7 @@ func (a *App) CreateRole(r *fastglue.Request) error {
 		return r.SendErrorEnvelope(fasthttp.StatusInternalServerError, "Failed to create role", nil, "")
 	}
 
-	audit.LogAudit(a.DB, orgID, userID, audit.GetUserName(a.DB, userID),
+	a.logAudit(orgID, userID,
 		"role", role.ID, models.AuditActionCreated, nil, roleAuditSnapshot(&role))
 
 	return r.SendEnvelope(roleToResponse(role, 0))
@@ -271,7 +265,7 @@ func (a *App) UpdateRole(r *fastglue.Request) error {
 		// Invalidate permissions cache for all users with this role
 		a.InvalidateRolePermissionsCache(role.ID)
 
-		audit.LogAudit(a.DB, orgID, userID, audit.GetUserName(a.DB, userID),
+		a.logAudit(orgID, userID,
 			"role", role.ID, models.AuditActionUpdated, oldSnap, roleAuditSnapshot(&role))
 
 		var userCount int64
@@ -332,7 +326,7 @@ func (a *App) UpdateRole(r *fastglue.Request) error {
 	// Invalidate permissions cache for all users with this role
 	a.InvalidateRolePermissionsCache(role.ID)
 
-	audit.LogAudit(a.DB, orgID, userID, audit.GetUserName(a.DB, userID),
+	a.logAudit(orgID, userID,
 		"role", role.ID, models.AuditActionUpdated, oldSnap, roleAuditSnapshot(&role))
 
 	var userCount int64
@@ -379,7 +373,7 @@ func (a *App) DeleteRole(r *fastglue.Request) error {
 		return r.SendErrorEnvelope(fasthttp.StatusInternalServerError, "Failed to delete role", nil, "")
 	}
 
-	audit.LogAudit(a.DB, orgID, userID, audit.GetUserName(a.DB, userID),
+	a.logAudit(orgID, userID,
 		"role", id, models.AuditActionDeleted, oldSnap, nil)
 
 	return r.SendEnvelope(map[string]string{"message": "Role deleted successfully"})

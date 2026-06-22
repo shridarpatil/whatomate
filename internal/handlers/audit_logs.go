@@ -98,12 +98,7 @@ func (a *App) ListAuditLogs(r *fastglue.Request) error {
 		}
 	}
 
-	return r.SendEnvelope(map[string]any{
-		"audit_logs": response,
-		"total":      total,
-		"page":       pg.Page,
-		"limit":      pg.Limit,
-	})
+	return r.SendEnvelope(listEnvelope("audit_logs", response, total, pg))
 }
 
 // GetAuditLog returns a single audit log entry by ID

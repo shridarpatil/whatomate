@@ -89,12 +89,7 @@ func (a *App) ListAPIKeys(r *fastglue.Request) error {
 		}
 	}
 
-	return r.SendEnvelope(map[string]any{
-		"api_keys": response,
-		"total":    total,
-		"page":     pg.Page,
-		"limit":    pg.Limit,
-	})
+	return r.SendEnvelope(listEnvelope("api_keys", response, total, pg))
 }
 
 // GetAPIKey returns a single API key by ID

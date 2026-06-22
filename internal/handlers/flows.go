@@ -82,12 +82,7 @@ func (a *App) ListFlows(r *fastglue.Request) error {
 		response[i] = flowToResponse(f)
 	}
 
-	return r.SendEnvelope(map[string]any{
-		"flows": response,
-		"total": total,
-		"page":  pg.Page,
-		"limit": pg.Limit,
-	})
+	return r.SendEnvelope(listEnvelope("flows", response, total, pg))
 }
 
 // CreateFlow creates a new WhatsApp flow

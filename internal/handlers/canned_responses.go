@@ -7,7 +7,6 @@ import (
 	"strings"
 
 	"github.com/google/uuid"
-	"github.com/shridarpatil/whatomate/internal/audit"
 	"github.com/shridarpatil/whatomate/internal/models"
 	"github.com/valyala/fasthttp"
 	"github.com/zerodha/fastglue"
@@ -103,12 +102,7 @@ func (a *App) ListCannedResponses(r *fastglue.Request) error {
 		result[i] = cannedResponseToResponse(cr)
 	}
 
-	return r.SendEnvelope(map[string]any{
-		"canned_responses": result,
-		"total":            total,
-		"page":             pg.Page,
-		"limit":            pg.Limit,
-	})
+	return r.SendEnvelope(listEnvelope("canned_responses", result, total, pg))
 }
 
 // CreateCannedResponse creates a new canned response
@@ -157,7 +151,7 @@ func (a *App) CreateCannedResponse(r *fastglue.Request) error {
 			"Failed to create canned response", nil, "")
 	}
 
-	audit.LogAudit(a.DB, orgID, userID, audit.GetUserName(a.DB, userID),
+	a.logAudit(orgID, userID,
 		"canned_response", cannedResponse.ID, models.AuditActionCreated, nil, cannedResponseAuditSnapshot(&cannedResponse))
 
 	return r.SendEnvelope(cannedResponseToResponse(cannedResponse))
@@ -233,7 +227,7 @@ func (a *App) UpdateCannedResponse(r *fastglue.Request) error {
 			"Failed to update canned response", nil, "")
 	}
 
-	audit.LogAudit(a.DB, orgID, userID, audit.GetUserName(a.DB, userID),
+	a.logAudit(orgID, userID,
 		"canned_response", cannedResponse.ID, models.AuditActionUpdated, oldSnap, cannedResponseAuditSnapshot(&cannedResponse))
 
 	return r.SendEnvelope(cannedResponseToResponse(cannedResponse))
@@ -264,7 +258,7 @@ func (a *App) DeleteCannedResponse(r *fastglue.Request) error {
 			"Failed to delete canned response", nil, "")
 	}
 
-	audit.LogAudit(a.DB, orgID, userID, audit.GetUserName(a.DB, userID),
+	a.logAudit(orgID, userID,
 		"canned_response", cannedResponse.ID, models.AuditActionDeleted, cannedResponseAuditSnapshot(&cannedResponse), nil)
 
 	return r.SendEnvelope(map[string]string{"message": "Canned response deleted"})

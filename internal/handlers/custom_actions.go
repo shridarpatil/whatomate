@@ -109,12 +109,7 @@ func (a *App) ListCustomActions(r *fastglue.Request) error {
 		result[i] = customActionToResponse(action)
 	}
 
-	return r.SendEnvelope(map[string]any{
-		"custom_actions": result,
-		"total":          total,
-		"page":           pg.Page,
-		"limit":          pg.Limit,
-	})
+	return r.SendEnvelope(listEnvelope("custom_actions", result, total, pg))
 }
 
 // GetCustomAction returns a single custom action by ID

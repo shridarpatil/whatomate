@@ -538,12 +538,7 @@ func (a *App) ListOrganizationMembers(r *fastglue.Request) error {
 		return r.SendErrorEnvelope(fasthttp.StatusInternalServerError, "Failed to list members", nil, "")
 	}
 
-	return r.SendEnvelope(map[string]any{
-		"members": response,
-		"total":   total,
-		"page":    pg.Page,
-		"limit":   pg.Limit,
-	})
+	return r.SendEnvelope(listEnvelope("members", response, total, pg))
 }
 
 // AddMemberRequest represents the request body for adding a member to an organization
