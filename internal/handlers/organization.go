@@ -396,12 +396,8 @@ type CreateOrganizationRequest struct {
 
 // CreateOrganization creates a new organization
 func (a *App) CreateOrganization(r *fastglue.Request) error {
-	_, userID, err := a.getOrgAndUserID(r)
+	_, userID, err := a.requireAuth(r, models.ResourceOrganizations, models.ActionWrite)
 	if err != nil {
-		return r.SendErrorEnvelope(fasthttp.StatusUnauthorized, "Unauthorized", nil, "")
-	}
-
-	if err := a.requirePermission(r, userID, models.ResourceOrganizations, models.ActionWrite); err != nil {
 		return nil
 	}
 
@@ -510,12 +506,8 @@ type MemberResponse struct {
 
 // ListOrganizationMembers returns all members of the current organization
 func (a *App) ListOrganizationMembers(r *fastglue.Request) error {
-	orgID, userID, err := a.getOrgAndUserID(r)
+	orgID, _, err := a.requireAuth(r, models.ResourceOrganizations, models.ActionRead)
 	if err != nil {
-		return r.SendErrorEnvelope(fasthttp.StatusUnauthorized, "Unauthorized", nil, "")
-	}
-
-	if err := a.requirePermission(r, userID, models.ResourceOrganizations, models.ActionRead); err != nil {
 		return nil
 	}
 
@@ -563,12 +555,8 @@ type AddMemberRequest struct {
 
 // AddOrganizationMember adds an existing user to the current organization
 func (a *App) AddOrganizationMember(r *fastglue.Request) error {
-	orgID, userID, err := a.getOrgAndUserID(r)
+	orgID, _, err := a.requireAuth(r, models.ResourceOrganizations, models.ActionAssign)
 	if err != nil {
-		return r.SendErrorEnvelope(fasthttp.StatusUnauthorized, "Unauthorized", nil, "")
-	}
-
-	if err := a.requirePermission(r, userID, models.ResourceOrganizations, models.ActionAssign); err != nil {
 		return nil
 	}
 
@@ -634,12 +622,8 @@ func (a *App) AddOrganizationMember(r *fastglue.Request) error {
 
 // RemoveOrganizationMember removes a user from the current organization
 func (a *App) RemoveOrganizationMember(r *fastglue.Request) error {
-	orgID, userID, err := a.getOrgAndUserID(r)
+	orgID, userID, err := a.requireAuth(r, models.ResourceOrganizations, models.ActionAssign)
 	if err != nil {
-		return r.SendErrorEnvelope(fasthttp.StatusUnauthorized, "Unauthorized", nil, "")
-	}
-
-	if err := a.requirePermission(r, userID, models.ResourceOrganizations, models.ActionAssign); err != nil {
 		return nil
 	}
 
@@ -676,12 +660,8 @@ type UpdateMemberRoleRequest struct {
 
 // UpdateOrganizationMemberRole updates a member's role in the current organization
 func (a *App) UpdateOrganizationMemberRole(r *fastglue.Request) error {
-	orgID, userID, err := a.getOrgAndUserID(r)
+	orgID, _, err := a.requireAuth(r, models.ResourceOrganizations, models.ActionAssign)
 	if err != nil {
-		return r.SendErrorEnvelope(fasthttp.StatusUnauthorized, "Unauthorized", nil, "")
-	}
-
-	if err := a.requirePermission(r, userID, models.ResourceOrganizations, models.ActionAssign); err != nil {
 		return nil
 	}
 

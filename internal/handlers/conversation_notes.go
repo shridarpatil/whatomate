@@ -28,12 +28,8 @@ type ConversationNoteResponse struct {
 
 // ListConversationNotes returns paginated notes for a contact (latest at bottom).
 func (a *App) ListConversationNotes(r *fastglue.Request) error {
-	orgID, userID, err := a.getOrgAndUserID(r)
+	orgID, _, err := a.requireAuth(r, models.ResourceChat, models.ActionRead)
 	if err != nil {
-		return r.SendErrorEnvelope(fasthttp.StatusUnauthorized, "Unauthorized", nil, "")
-	}
-
-	if err := a.requirePermission(r, userID, models.ResourceChat, models.ActionRead); err != nil {
 		return nil
 	}
 
@@ -93,12 +89,8 @@ func (a *App) ListConversationNotes(r *fastglue.Request) error {
 
 // CreateConversationNote creates a new note on a contact.
 func (a *App) CreateConversationNote(r *fastglue.Request) error {
-	orgID, userID, err := a.getOrgAndUserID(r)
+	orgID, userID, err := a.requireAuth(r, models.ResourceChat, models.ActionWrite)
 	if err != nil {
-		return r.SendErrorEnvelope(fasthttp.StatusUnauthorized, "Unauthorized", nil, "")
-	}
-
-	if err := a.requirePermission(r, userID, models.ResourceChat, models.ActionWrite); err != nil {
 		return nil
 	}
 
@@ -149,12 +141,8 @@ func (a *App) CreateConversationNote(r *fastglue.Request) error {
 
 // UpdateConversationNote updates an existing note (creator only).
 func (a *App) UpdateConversationNote(r *fastglue.Request) error {
-	orgID, userID, err := a.getOrgAndUserID(r)
+	orgID, userID, err := a.requireAuth(r, models.ResourceChat, models.ActionWrite)
 	if err != nil {
-		return r.SendErrorEnvelope(fasthttp.StatusUnauthorized, "Unauthorized", nil, "")
-	}
-
-	if err := a.requirePermission(r, userID, models.ResourceChat, models.ActionWrite); err != nil {
 		return nil
 	}
 
@@ -214,12 +202,8 @@ func (a *App) UpdateConversationNote(r *fastglue.Request) error {
 
 // DeleteConversationNote deletes a note (creator only).
 func (a *App) DeleteConversationNote(r *fastglue.Request) error {
-	orgID, userID, err := a.getOrgAndUserID(r)
+	orgID, userID, err := a.requireAuth(r, models.ResourceChat, models.ActionWrite)
 	if err != nil {
-		return r.SendErrorEnvelope(fasthttp.StatusUnauthorized, "Unauthorized", nil, "")
-	}
-
-	if err := a.requirePermission(r, userID, models.ResourceChat, models.ActionWrite); err != nil {
 		return nil
 	}
 

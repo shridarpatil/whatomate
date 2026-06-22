@@ -148,12 +148,8 @@ func (a *App) GetTeam(r *fastglue.Request) error {
 
 // CreateTeam creates a new team
 func (a *App) CreateTeam(r *fastglue.Request) error {
-	orgID, userID, err := a.getOrgAndUserID(r)
+	orgID, userID, err := a.requireAuth(r, models.ResourceTeams, models.ActionWrite)
 	if err != nil {
-		return r.SendErrorEnvelope(fasthttp.StatusUnauthorized, "Unauthorized", nil, "")
-	}
-
-	if err := a.requirePermission(r, userID, models.ResourceTeams, models.ActionWrite); err != nil {
 		return nil
 	}
 
@@ -275,12 +271,8 @@ func (a *App) UpdateTeam(r *fastglue.Request) error {
 
 // DeleteTeam deletes a team
 func (a *App) DeleteTeam(r *fastglue.Request) error {
-	orgID, userID, err := a.getOrgAndUserID(r)
+	orgID, userID, err := a.requireAuth(r, models.ResourceTeams, models.ActionDelete)
 	if err != nil {
-		return r.SendErrorEnvelope(fasthttp.StatusUnauthorized, "Unauthorized", nil, "")
-	}
-
-	if err := a.requirePermission(r, userID, models.ResourceTeams, models.ActionDelete); err != nil {
 		return nil
 	}
 

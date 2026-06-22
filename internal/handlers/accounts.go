@@ -63,12 +63,8 @@ type AccountResponse struct {
 
 // ListAccounts returns all WhatsApp accounts for the organization
 func (a *App) ListAccounts(r *fastglue.Request) error {
-	orgID, userID, err := a.getOrgAndUserID(r)
+	orgID, _, err := a.requireAuth(r, models.ResourceAccounts, models.ActionRead)
 	if err != nil {
-		return r.SendErrorEnvelope(fasthttp.StatusUnauthorized, "Unauthorized", nil, "")
-	}
-
-	if err := a.requirePermission(r, userID, models.ResourceAccounts, models.ActionRead); err != nil {
 		return nil
 	}
 
@@ -91,12 +87,8 @@ func (a *App) ListAccounts(r *fastglue.Request) error {
 
 // CreateAccount creates a new WhatsApp account
 func (a *App) CreateAccount(r *fastglue.Request) error {
-	orgID, userID, err := a.getOrgAndUserID(r)
+	orgID, userID, err := a.requireAuth(r, models.ResourceAccounts, models.ActionWrite)
 	if err != nil {
-		return r.SendErrorEnvelope(fasthttp.StatusUnauthorized, "Unauthorized", nil, "")
-	}
-
-	if err := a.requirePermission(r, userID, models.ResourceAccounts, models.ActionWrite); err != nil {
 		return nil
 	}
 
@@ -172,12 +164,8 @@ func (a *App) CreateAccount(r *fastglue.Request) error {
 
 // GetAccount returns a single WhatsApp account
 func (a *App) GetAccount(r *fastglue.Request) error {
-	orgID, userID, err := a.getOrgAndUserID(r)
+	orgID, _, err := a.requireAuth(r, models.ResourceAccounts, models.ActionRead)
 	if err != nil {
-		return r.SendErrorEnvelope(fasthttp.StatusUnauthorized, "Unauthorized", nil, "")
-	}
-
-	if err := a.requirePermission(r, userID, models.ResourceAccounts, models.ActionRead); err != nil {
 		return nil
 	}
 
@@ -197,12 +185,8 @@ func (a *App) GetAccount(r *fastglue.Request) error {
 
 // UpdateAccount updates a WhatsApp account
 func (a *App) UpdateAccount(r *fastglue.Request) error {
-	orgID, userID, err := a.getOrgAndUserID(r)
+	orgID, userID, err := a.requireAuth(r, models.ResourceAccounts, models.ActionWrite)
 	if err != nil {
-		return r.SendErrorEnvelope(fasthttp.StatusUnauthorized, "Unauthorized", nil, "")
-	}
-
-	if err := a.requirePermission(r, userID, models.ResourceAccounts, models.ActionWrite); err != nil {
 		return nil
 	}
 
@@ -309,12 +293,8 @@ func (a *App) UpdateAccount(r *fastglue.Request) error {
 
 // DeleteAccount deletes a WhatsApp account
 func (a *App) DeleteAccount(r *fastglue.Request) error {
-	orgID, userID, err := a.getOrgAndUserID(r)
+	orgID, userID, err := a.requireAuth(r, models.ResourceAccounts, models.ActionDelete)
 	if err != nil {
-		return r.SendErrorEnvelope(fasthttp.StatusUnauthorized, "Unauthorized", nil, "")
-	}
-
-	if err := a.requirePermission(r, userID, models.ResourceAccounts, models.ActionDelete); err != nil {
 		return nil
 	}
 
@@ -589,12 +569,8 @@ func (a *App) resolveMetaAppCreds(orgID uuid.UUID) (string, string, string, erro
 
 // ExchangeToken exchanges the temporary code for a permanent access token and creates the account
 func (a *App) ExchangeToken(r *fastglue.Request) error {
-	orgID, userID, err := a.getOrgAndUserID(r)
+	orgID, userID, err := a.requireAuth(r, models.ResourceAccounts, models.ActionWrite)
 	if err != nil {
-		return r.SendErrorEnvelope(fasthttp.StatusUnauthorized, "Unauthorized", nil, "")
-	}
-
-	if err := a.requirePermission(r, userID, models.ResourceAccounts, models.ActionWrite); err != nil {
 		return nil
 	}
 
@@ -893,12 +869,8 @@ func (a *App) attemptAutoRegistration(ctx context.Context, account *models.Whats
 
 // RegisterPhoneNumber registers the phone number with Two-Step Verification
 func (a *App) RegisterPhoneNumber(r *fastglue.Request) error {
-	orgID, userID, err := a.getOrgAndUserID(r)
+	orgID, userID, err := a.requireAuth(r, models.ResourceAccounts, models.ActionWrite)
 	if err != nil {
-		return r.SendErrorEnvelope(fasthttp.StatusUnauthorized, "Unauthorized", nil, "")
-	}
-
-	if err := a.requirePermission(r, userID, models.ResourceAccounts, models.ActionWrite); err != nil {
 		return nil
 	}
 

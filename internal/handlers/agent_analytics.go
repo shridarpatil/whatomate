@@ -127,12 +127,8 @@ func (a *App) GetAgentAnalytics(r *fastglue.Request) error {
 
 // GetAgentDetails returns detailed analytics for a specific agent
 func (a *App) GetAgentDetails(r *fastglue.Request) error {
-	orgID, userID, err := a.getOrgAndUserID(r)
+	orgID, _, err := a.requireAuth(r, models.ResourceAnalytics, models.ActionRead)
 	if err != nil {
-		return r.SendErrorEnvelope(fasthttp.StatusUnauthorized, "Unauthorized", nil, "")
-	}
-
-	if err := a.requirePermission(r, userID, models.ResourceAnalytics, models.ActionRead); err != nil {
 		return nil
 	}
 

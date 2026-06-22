@@ -255,6 +255,23 @@ func (a *App) requirePermission(r *fastglue.Request, userID uuid.UUID, resource,
 	return nil
 }
 
+// requireAuth extracts the organization ID and user ID from the request and
+// verifies the user holds the given permission. On failure it writes the
+// appropriate error envelope (401 if unauthenticated, 403 if the permission is
+// missing) and returns errEnvelopeSent, so callers should `return nil` early.
+func (a *App) requireAuth(r *fastglue.Request, resource, action string) (orgID, userID uuid.UUID, err error) {
+	orgID, userID, err = a.getOrgAndUserID(r)
+	if err != nil {
+		_ = r.SendErrorEnvelope(fasthttp.StatusUnauthorized, "Unauthorized", nil, "")
+		return uuid.Nil, uuid.Nil, errEnvelopeSent
+	}
+	if !a.HasPermission(userID, resource, action, orgID) {
+		_ = r.SendErrorEnvelope(fasthttp.StatusForbidden, "Insufficient permissions", nil, "")
+		return uuid.Nil, uuid.Nil, errEnvelopeSent
+	}
+	return orgID, userID, nil
+}
+
 // decodeRequest decodes a JSON request body into the provided struct.
 // Returns nil on success, otherwise sends a 400 error envelope and returns errEnvelopeSent.
 func (a *App) decodeRequest(r *fastglue.Request, v any) error {

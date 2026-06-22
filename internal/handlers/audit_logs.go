@@ -25,12 +25,8 @@ type AuditLogResponse struct {
 // ListAuditLogs returns audit logs with optional filters.
 // Supported query params: resource_type, resource_id, user_id, action, from, to, page, limit.
 func (a *App) ListAuditLogs(r *fastglue.Request) error {
-	orgID, userID, err := a.getOrgAndUserID(r)
+	orgID, _, err := a.requireAuth(r, models.ResourceAuditLogs, models.ActionRead)
 	if err != nil {
-		return r.SendErrorEnvelope(fasthttp.StatusUnauthorized, "Unauthorized", nil, "")
-	}
-
-	if err := a.requirePermission(r, userID, models.ResourceAuditLogs, models.ActionRead); err != nil {
 		return nil
 	}
 
@@ -112,12 +108,8 @@ func (a *App) ListAuditLogs(r *fastglue.Request) error {
 
 // GetAuditLog returns a single audit log entry by ID
 func (a *App) GetAuditLog(r *fastglue.Request) error {
-	orgID, userID, err := a.getOrgAndUserID(r)
+	orgID, _, err := a.requireAuth(r, models.ResourceAuditLogs, models.ActionRead)
 	if err != nil {
-		return r.SendErrorEnvelope(fasthttp.StatusUnauthorized, "Unauthorized", nil, "")
-	}
-
-	if err := a.requirePermission(r, userID, models.ResourceAuditLogs, models.ActionRead); err != nil {
 		return nil
 	}
 
