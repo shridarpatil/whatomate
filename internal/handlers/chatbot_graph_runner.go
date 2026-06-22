@@ -107,7 +107,7 @@ func (a *App) runChatGraph(
 	}
 
 	for range maxChatGraphIterations {
-		node := graph.getNode(session.CurrentStep)
+		node := graph.Node(session.CurrentStep)
 		if node == nil {
 			a.Log.Error("chat graph node not found",
 				"session", session.ID, "node_id", session.CurrentStep, "flow", flow.ID)
@@ -124,7 +124,7 @@ func (a *App) runChatGraph(
 					"node", node.ID, "session", session.ID, "expression", expr, "error", err)
 			} else if matched {
 				appendChatPath(session, node, "skipped")
-				next := graph.resolveEdge(node.ID, "default")
+				next := graph.ResolveEdge(node.ID, "default")
 				if next == "" {
 					session.Status = models.SessionStatusCompleted
 					return a.persistChatSession(session)
@@ -172,7 +172,7 @@ func (a *App) runChatGraph(
 			continue
 		}
 
-		next := graph.resolveEdge(node.ID, res.outcome)
+		next := graph.ResolveEdge(node.ID, res.outcome)
 		if next == "" {
 			// No matching edge → terminal.
 			session.Status = models.SessionStatusCompleted

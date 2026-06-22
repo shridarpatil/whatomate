@@ -13,6 +13,7 @@ import (
 	"github.com/redis/go-redis/v9"
 	"github.com/shridarpatil/whatomate/internal/assignment"
 	"github.com/shridarpatil/whatomate/internal/config"
+	"github.com/shridarpatil/whatomate/internal/flowgraph"
 	"github.com/shridarpatil/whatomate/internal/models"
 	"github.com/shridarpatil/whatomate/internal/storage"
 	"github.com/shridarpatil/whatomate/internal/websocket"
@@ -112,72 +113,16 @@ type TransferCallbacks struct {
 	OnConnect *TransferHTTPCallback
 }
 
-// IVRNodePosition stores the (x,y) position for the visual editor.
-type IVRNodePosition struct {
-	X float64 `json:"x"`
-	Y float64 `json:"y"`
-}
-
-// IVRNode represents a single node (applet) in an IVR flow graph.
-type IVRNode struct {
-	ID       string          `json:"id"`
-	Type     IVRNodeType     `json:"type"`
-	Label    string          `json:"label"`
-	Position IVRNodePosition `json:"position"`
-	Config   map[string]any  `json:"config"`
-}
-
-// IVREdge connects two nodes in the flow graph.
-type IVREdge struct {
-	From      string `json:"from"`
-	To        string `json:"to"`
-	Condition string `json:"condition"` // default, digit:N, timeout, max_retries, http:2xx, http:non2xx, in_hours, out_of_hours
-}
-
-// IVRFlowGraph is the top-level structure stored in IVRFlow.Menu (version 2).
-type IVRFlowGraph struct {
-	Version   int       `json:"version"`
-	Nodes     []IVRNode `json:"nodes"`
-	Edges     []IVREdge `json:"edges"`
-	EntryNode string    `json:"entry_node"`
-
-	// Runtime lookup maps — populated by buildMaps()
-	nodeMap map[string]*IVRNode  // id → node
-	edgeMap map[string][]IVREdge // from-node-id → outgoing edges
-}
-
-// buildMaps populates the runtime lookup maps for fast traversal.
-func (g *IVRFlowGraph) buildMaps() {
-	g.nodeMap = make(map[string]*IVRNode, len(g.Nodes))
-	g.edgeMap = make(map[string][]IVREdge, len(g.Edges))
-	for i := range g.Nodes {
-		g.nodeMap[g.Nodes[i].ID] = &g.Nodes[i]
-	}
-	for _, e := range g.Edges {
-		g.edgeMap[e.From] = append(g.edgeMap[e.From], e)
-	}
-}
-
-// getNode returns the node with the given ID, or nil.
-func (g *IVRFlowGraph) getNode(id string) *IVRNode {
-	return g.nodeMap[id]
-}
-
-// resolveEdge finds the next node ID for a given outcome.
-// It tries an exact condition match first, then falls back to "default".
-func (g *IVRFlowGraph) resolveEdge(fromID, outcome string) string {
-	edges := g.edgeMap[fromID]
-	var defaultTarget string
-	for _, e := range edges {
-		if e.Condition == outcome {
-			return e.To
-		}
-		if e.Condition == "default" {
-			defaultTarget = e.To
-		}
-	}
-	return defaultTarget
-}
+// IVRNode, IVREdge and IVRFlowGraph are the IVR domain's views of the shared
+// flow-graph types, specialized to IVRNodeType. Edge conditions for the IVR
+// engine include "default", "digit:N", "timeout", "max_retries", "http:2xx",
+// "http:non2xx", "in_hours", "out_of_hours". Traversal (BuildMaps/Node/
+// ResolveEdge/OutgoingEdges) lives in internal/flowgraph.
+type (
+	IVRNode      = flowgraph.Node[IVRNodeType]
+	IVREdge      = flowgraph.Edge
+	IVRFlowGraph = flowgraph.Graph[IVRNodeType]
+)
 
 // IVRContext holds runtime state during IVR flow execution.
 type IVRContext struct {

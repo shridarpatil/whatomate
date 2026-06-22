@@ -38,7 +38,7 @@ func (m *Manager) runIVRFlow(session *CallSession, waAccount *whatsapp.Account) 
 		return
 	}
 
-	graph.buildMaps()
+	graph.BuildMaps()
 
 	// Initialize IVR context — load existing path for goto_flow continuity
 	ivrCtx := &IVRContext{
@@ -138,7 +138,7 @@ func (m *Manager) executeNodeLoop(session *CallSession, waAccount *whatsapp.Acco
 			break
 		}
 
-		node := graph.getNode(ctx.CurrentNode)
+		node := graph.Node(ctx.CurrentNode)
 		if node == nil {
 			m.log.Error("IVR node not found", "call_id", session.ID, "node_id", ctx.CurrentNode)
 			break
@@ -215,7 +215,7 @@ func (m *Manager) executeNodeLoop(session *CallSession, waAccount *whatsapp.Acco
 		ctx.Path = append(ctx.Path, step)
 
 		// Resolve the next node via edges
-		nextID := graph.resolveEdge(node.ID, outcome)
+		nextID := graph.ResolveEdge(node.ID, outcome)
 		if nextID == "" {
 			m.log.Info("No matching edge, ending IVR flow", "call_id", session.ID, "node", node.ID, "outcome", outcome)
 			break
@@ -449,7 +449,7 @@ func (m *Manager) executeTransfer(session *CallSession, node *IVRNode, ctx *IVRC
 	session.mu.Unlock()
 
 	// Check if this transfer node has any outgoing edges — if not, terminal.
-	edges := graph.edgeMap[node.ID]
+	edges := graph.OutgoingEdges(node.ID)
 	if len(edges) == 0 {
 		m.initiateTransfer(session, session.AccountName, teamID, ctx.Path)
 		return "" // terminal
