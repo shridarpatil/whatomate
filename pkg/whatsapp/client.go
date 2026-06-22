@@ -104,6 +104,34 @@ func (c *Client) doRequest(ctx context.Context, method, url string, body any, ac
 	return respBody, nil
 }
 
+// doJSON performs an HTTP request to the Meta API and unmarshals the JSON
+// response body into a value of type T. It is a thin generic wrapper over
+// doRequest for the common "request then decode" pattern.
+func doJSON[T any](ctx context.Context, c *Client, method, url string, body any, accessToken string) (T, error) {
+	var result T
+	respBody, err := c.doRequest(ctx, method, url, body, accessToken)
+	if err != nil {
+		return result, err
+	}
+	if err := json.Unmarshal(respBody, &result); err != nil {
+		return result, fmt.Errorf("failed to parse response: %w", err)
+	}
+	return result, nil
+}
+
+// parseMessageID extracts the WhatsApp message ID from a successful send
+// response body, returning an error if the body is malformed or carries no ID.
+func parseMessageID(respBody []byte) (string, error) {
+	var resp MetaAPIResponse
+	if err := json.Unmarshal(respBody, &resp); err != nil {
+		return "", fmt.Errorf("failed to parse response: %w", err)
+	}
+	if len(resp.Messages) == 0 {
+		return "", fmt.Errorf("no message ID in response")
+	}
+	return resp.Messages[0].ID, nil
+}
+
 // CredentialsValidationResult contains the result of credentials validation
 type CredentialsValidationResult struct {
 	PhoneNumber            string
@@ -346,16 +374,10 @@ func (c *Client) sendMediaMessage(ctx context.Context, account *Account, rcpt Re
 		return "", fmt.Errorf("failed to send %s message: %w", mediaType, err)
 	}
 
-	var resp MetaAPIResponse
-	if err := json.Unmarshal(respBody, &resp); err != nil {
-		return "", fmt.Errorf("failed to parse response: %w", err)
+	messageID, err := parseMessageID(respBody)
+	if err != nil {
+		return "", err
 	}
-
-	if len(resp.Messages) == 0 {
-		return "", fmt.Errorf("no message ID in response")
-	}
-
-	messageID := resp.Messages[0].ID
 	c.Log.Info("Media message sent", "type", mediaType, "message_id", messageID, "phone", rcpt.Phone)
 	return messageID, nil
 }

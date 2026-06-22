@@ -2,7 +2,6 @@ package whatsapp
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"sort"
 	"strconv"
@@ -41,16 +40,10 @@ func (c *Client) SendTextMessage(ctx context.Context, account *Account, rcpt Rec
 		return "", fmt.Errorf("failed to send text message: %w", err)
 	}
 
-	var resp MetaAPIResponse
-	if err := json.Unmarshal(respBody, &resp); err != nil {
-		return "", fmt.Errorf("failed to parse response: %w", err)
+	messageID, err := parseMessageID(respBody)
+	if err != nil {
+		return "", err
 	}
-
-	if len(resp.Messages) == 0 {
-		return "", fmt.Errorf("no message ID in response")
-	}
-
-	messageID := resp.Messages[0].ID
 	c.Log.Info("Text message sent", "message_id", messageID, "phone", rcpt.Phone)
 	return messageID, nil
 }
@@ -141,16 +134,10 @@ func (c *Client) SendInteractiveButtons(ctx context.Context, account *Account, r
 		return "", fmt.Errorf("failed to send interactive message: %w", err)
 	}
 
-	var resp MetaAPIResponse
-	if err := json.Unmarshal(respBody, &resp); err != nil {
-		return "", fmt.Errorf("failed to parse response: %w", err)
+	messageID, err := parseMessageID(respBody)
+	if err != nil {
+		return "", err
 	}
-
-	if len(resp.Messages) == 0 {
-		return "", fmt.Errorf("no message ID in response")
-	}
-
-	messageID := resp.Messages[0].ID
 	c.Log.Info("Interactive message sent", "message_id", messageID, "phone", rcpt.Phone)
 	return messageID, nil
 }
@@ -198,16 +185,10 @@ func (c *Client) SendCTAURLButton(ctx context.Context, account *Account, rcpt Re
 		return "", fmt.Errorf("failed to send CTA URL button message: %w", err)
 	}
 
-	var resp MetaAPIResponse
-	if err := json.Unmarshal(respBody, &resp); err != nil {
-		return "", fmt.Errorf("failed to parse response: %w", err)
+	messageID, err := parseMessageID(respBody)
+	if err != nil {
+		return "", err
 	}
-
-	if len(resp.Messages) == 0 {
-		return "", fmt.Errorf("no message ID in response")
-	}
-
-	messageID := resp.Messages[0].ID
 	c.Log.Info("CTA URL button message sent", "message_id", messageID, "phone", rcpt.Phone)
 	return messageID, nil
 }
@@ -278,16 +259,10 @@ func (c *Client) SendVoiceCallButton(ctx context.Context, account *Account, rcpt
 		return "", fmt.Errorf("failed to send voice_call button message: %w", err)
 	}
 
-	var resp MetaAPIResponse
-	if err := json.Unmarshal(respBody, &resp); err != nil {
-		return "", fmt.Errorf("failed to parse response: %w", err)
+	messageID, err := parseMessageID(respBody)
+	if err != nil {
+		return "", err
 	}
-
-	if len(resp.Messages) == 0 {
-		return "", fmt.Errorf("no message ID in response")
-	}
-
-	messageID := resp.Messages[0].ID
 	c.Log.Info("voice_call button message sent", "message_id", messageID, "phone", rcpt.Phone)
 	return messageID, nil
 }
@@ -660,16 +635,10 @@ func (c *Client) SendFlowMessage(ctx context.Context, account *Account, rcpt Rec
 		return "", fmt.Errorf("failed to send flow message: %w", err)
 	}
 
-	var resp MetaAPIResponse
-	if err := json.Unmarshal(respBody, &resp); err != nil {
-		return "", fmt.Errorf("failed to parse response: %w", err)
+	messageID, err := parseMessageID(respBody)
+	if err != nil {
+		return "", err
 	}
-
-	if len(resp.Messages) == 0 {
-		return "", fmt.Errorf("no message ID in response")
-	}
-
-	messageID := resp.Messages[0].ID
 	c.Log.Info("Flow message sent", "message_id", messageID, "phone", rcpt.Phone, "flow_id", flowID)
 	return messageID, nil
 }
@@ -703,16 +672,10 @@ func (c *Client) SendTemplateMessage(ctx context.Context, account *Account, rcpt
 		return "", fmt.Errorf("failed to send template message: %w", err)
 	}
 
-	var resp MetaAPIResponse
-	if err := json.Unmarshal(respBody, &resp); err != nil {
-		return "", fmt.Errorf("failed to parse response: %w", err)
+	messageID, err := parseMessageID(respBody)
+	if err != nil {
+		return "", err
 	}
-
-	if len(resp.Messages) == 0 {
-		return "", fmt.Errorf("no message ID in response")
-	}
-
-	messageID := resp.Messages[0].ID
 	c.Log.Info("Template message sent", "message_id", messageID, "phone", rcpt.Phone, "template", templateName)
 	return messageID, nil
 }
