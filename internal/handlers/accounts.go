@@ -964,25 +964,6 @@ func (a *App) defaultAPIVersion() string {
 }
 
 func (a *App) encryptAccountSecrets(account *models.WhatsAppAccount) error {
-	encKey := a.Config.App.EncryptionKey
-	var err error
-	if account.AccessToken != "" && !crypto.IsEncrypted(account.AccessToken) {
-		account.AccessToken, err = crypto.Encrypt(account.AccessToken, encKey)
-		if err != nil {
-			return fmt.Errorf("failed to encrypt access token: %w", err)
-		}
-	}
-	if account.AppSecret != "" && !crypto.IsEncrypted(account.AppSecret) {
-		account.AppSecret, err = crypto.Encrypt(account.AppSecret, encKey)
-		if err != nil {
-			return fmt.Errorf("failed to encrypt app secret: %w", err)
-		}
-	}
-	if account.Pin != "" && !crypto.IsEncrypted(account.Pin) {
-		account.Pin, err = crypto.Encrypt(account.Pin, encKey)
-		if err != nil {
-			return fmt.Errorf("failed to encrypt PIN: %w", err)
-		}
-	}
-	return nil
+	return crypto.EncryptFields(a.Config.App.EncryptionKey,
+		&account.AccessToken, &account.AppSecret, &account.Pin)
 }

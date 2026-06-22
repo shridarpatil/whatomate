@@ -31,42 +31,7 @@ func RateLimit(opts RateLimitOpts) fastglue.FastMiddleware {
 	return func(r *fastglue.Request) *fastglue.Request {
 		ip := extractClientIP(r, opts.TrustProxy)
 		key := fmt.Sprintf("ratelimit:%s:%s", opts.KeyPrefix, ip)
-
-		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
-		defer cancel()
-
-		count, err := opts.Redis.Incr(ctx, key).Result()
-		if err != nil {
-			// Fail open — log and allow request.
-			opts.Log.Error("Rate limit Redis INCR failed", "error", err, "key", key)
-			return r
-		}
-
-		// Set expiry on first increment (new window).
-		if count == 1 {
-			if err := opts.Redis.Expire(ctx, key, opts.Window).Err(); err != nil {
-				opts.Log.Error("Rate limit Redis EXPIRE failed", "error", err, "key", key)
-			}
-		}
-
-		if count > int64(opts.Max) {
-			// Look up remaining TTL for Retry-After header.
-			ttl, err := opts.Redis.TTL(ctx, key).Result()
-			if err != nil || ttl < 0 {
-				ttl = opts.Window
-			}
-			retryAfter := int(ttl.Seconds())
-			if retryAfter < 1 {
-				retryAfter = 1
-			}
-
-			r.RequestCtx.Response.Header.Set("Retry-After", fmt.Sprintf("%d", retryAfter))
-			_ = r.SendErrorEnvelope(fasthttp.StatusTooManyRequests,
-				"Too many requests. Please try again later.", nil, "")
-			return nil
-		}
-
-		return r
+		return enforce(opts, r, key)
 	}
 }
 
@@ -82,39 +47,46 @@ func UserAwareRateLimit(opts RateLimitOpts) fastglue.FastMiddleware {
 			identity = "ip:" + extractClientIP(r, opts.TrustProxy)
 		}
 		key := fmt.Sprintf("ratelimit:%s:%s", opts.KeyPrefix, identity)
+		return enforce(opts, r, key)
+	}
+}
 
-		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
-		defer cancel()
+// enforce applies the fixed-window limit for an already-computed key. It writes
+// a 429 envelope and returns nil when the limit is exceeded, returns the request
+// unchanged otherwise, and fails open (allows the request) if Redis is down.
+func enforce(opts RateLimitOpts, r *fastglue.Request, key string) *fastglue.Request {
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
 
-		count, err := opts.Redis.Incr(ctx, key).Result()
-		if err != nil {
-			opts.Log.Error("Rate limit Redis INCR failed", "error", err, "key", key)
-			return r
-		}
-
-		if count == 1 {
-			if err := opts.Redis.Expire(ctx, key, opts.Window).Err(); err != nil {
-				opts.Log.Error("Rate limit Redis EXPIRE failed", "error", err, "key", key)
-			}
-		}
-
-		if count > int64(opts.Max) {
-			ttl, err := opts.Redis.TTL(ctx, key).Result()
-			if err != nil || ttl < 0 {
-				ttl = opts.Window
-			}
-			retryAfter := int(ttl.Seconds())
-			if retryAfter < 1 {
-				retryAfter = 1
-			}
-			r.RequestCtx.Response.Header.Set("Retry-After", fmt.Sprintf("%d", retryAfter))
-			_ = r.SendErrorEnvelope(fasthttp.StatusTooManyRequests,
-				"Too many requests. Please try again later.", nil, "")
-			return nil
-		}
-
+	count, err := opts.Redis.Incr(ctx, key).Result()
+	if err != nil {
+		// Fail open — log and allow request.
+		opts.Log.Error("Rate limit Redis INCR failed", "error", err, "key", key)
 		return r
 	}
+
+	// Set expiry on first increment (new window).
+	if count == 1 {
+		if err := opts.Redis.Expire(ctx, key, opts.Window).Err(); err != nil {
+			opts.Log.Error("Rate limit Redis EXPIRE failed", "error", err, "key", key)
+		}
+	}
+
+	if count > int64(opts.Max) {
+		// Look up remaining TTL for Retry-After header.
+		ttl, err := opts.Redis.TTL(ctx, key).Result()
+		if err != nil || ttl < 0 {
+			ttl = opts.Window
+		}
+		retryAfter := max(int(ttl.Seconds()), 1)
+
+		r.RequestCtx.Response.Header.Set("Retry-After", fmt.Sprintf("%d", retryAfter))
+		_ = r.SendErrorEnvelope(fasthttp.StatusTooManyRequests,
+			"Too many requests. Please try again later.", nil, "")
+		return nil
+	}
+
+	return r
 }
 
 // extractClientIP returns the client IP address from the request.
