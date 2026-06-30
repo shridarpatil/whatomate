@@ -212,7 +212,10 @@ onMounted(async () => {
       teamsService.list(),
       usersStore.fetchUsers()
     ])
-    teams.value = teamsResponse.data?.teams || []
+    // API responses are wrapped in a SendEnvelope ({ data: { teams } }); fall
+    // back to the unwrapped shape, mirroring how the teams store reads it.
+    const teamsData = (teamsResponse.data as any).data || teamsResponse.data
+    teams.value = teamsData?.teams || []
 
     // Users for escalation notify
     availableUsers.value = usersStore.users
