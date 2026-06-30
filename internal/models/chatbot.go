@@ -19,6 +19,10 @@ type AgentAssignmentConfig struct {
 	AllowQueuePickup        bool `gorm:"column:allow_agent_queue_pickup;default:true" json:"allow_agent_queue_pickup"`                // Allow agents to pick transfers from queue
 	AssignToSameAgent       bool `gorm:"column:assign_to_same_agent;default:true" json:"assign_to_same_agent"`                        // Auto-assign transfers to contact's existing agent
 	CurrentConversationOnly bool `gorm:"column:agent_current_conversation_only;default:false" json:"agent_current_conversation_only"` // Agents see only current session messages
+	// DefaultTeamID, when set, auto-routes every new conversation (including
+	// media-only messages and any text not matched by a flow/keyword) to this
+	// team, which assigns an agent using the team's strategy. nil = disabled.
+	DefaultTeamID *uuid.UUID `gorm:"column:default_assignment_team_id;type:uuid" json:"default_assignment_team_id"`
 }
 
 // SLAConfig holds SLA tracking settings

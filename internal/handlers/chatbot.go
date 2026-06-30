@@ -26,6 +26,7 @@ type ChatbotSettingsResponse struct {
 	AllowAgentQueuePickup        bool              `json:"allow_agent_queue_pickup"`
 	AssignToSameAgent            bool              `json:"assign_to_same_agent"`
 	AgentCurrentConversationOnly bool              `json:"agent_current_conversation_only"`
+	DefaultAssignmentTeamID      *uuid.UUID        `json:"default_assignment_team_id"`
 	AIEnabled                    bool              `json:"ai_enabled"`
 	AIProvider                   models.AIProvider `json:"ai_provider"`
 	AIModel                      string            `json:"ai_model"`
@@ -170,6 +171,7 @@ func (a *App) GetChatbotSettings(r *fastglue.Request) error {
 		AllowAgentQueuePickup:        settings.AgentAssignment.AllowQueuePickup,
 		AssignToSameAgent:            settings.AgentAssignment.AssignToSameAgent,
 		AgentCurrentConversationOnly: settings.AgentAssignment.CurrentConversationOnly,
+		DefaultAssignmentTeamID:      settings.AgentAssignment.DefaultTeamID,
 		// AI
 		AIEnabled:      settings.AI.Enabled,
 		AIProvider:     settings.AI.Provider,
@@ -218,6 +220,7 @@ func chatbotAgentsSnapshot(s *models.ChatbotSettings) map[string]any {
 		"allow_agent_queue_pickup":        s.AgentAssignment.AllowQueuePickup,
 		"assign_to_same_agent":            s.AgentAssignment.AssignToSameAgent,
 		"agent_current_conversation_only": s.AgentAssignment.CurrentConversationOnly,
+		"default_assignment_team_id":      s.AgentAssignment.DefaultTeamID,
 	}
 }
 
@@ -284,6 +287,7 @@ func (a *App) UpdateChatbotSettings(r *fastglue.Request) error {
 		AllowAgentQueuePickup        *bool              `json:"allow_agent_queue_pickup"`
 		AssignToSameAgent            *bool              `json:"assign_to_same_agent"`
 		AgentCurrentConversationOnly *bool              `json:"agent_current_conversation_only"`
+		DefaultAssignmentTeamID      *string            `json:"default_assignment_team_id"` // "" clears, UUID sets
 		AIEnabled                    *bool              `json:"ai_enabled"`
 		AIProvider                   *models.AIProvider `json:"ai_provider"`
 		AIAPIKey                     *string            `json:"ai_api_key"`
@@ -338,7 +342,7 @@ func (a *App) UpdateChatbotSettings(r *fastglue.Request) error {
 		req.GreetingButtons != nil || req.FallbackMessage != nil ||
 		req.FallbackButtons != nil || req.SessionTimeoutMinutes != nil
 	agentsTouched := req.AllowAgentQueuePickup != nil || req.AssignToSameAgent != nil ||
-		req.AgentCurrentConversationOnly != nil
+		req.AgentCurrentConversationOnly != nil || req.DefaultAssignmentTeamID != nil
 	hoursTouched := req.BusinessHoursEnabled != nil || req.BusinessHours != nil ||
 		req.OutOfHoursMessage != nil || req.AllowAutomatedOutsideHours != nil
 	slaTouched := req.SLAEnabled != nil || req.SLAResponseMinutes != nil ||
@@ -405,6 +409,13 @@ func (a *App) UpdateChatbotSettings(r *fastglue.Request) error {
 	}
 	if req.AgentCurrentConversationOnly != nil {
 		settings.AgentAssignment.CurrentConversationOnly = *req.AgentCurrentConversationOnly
+	}
+	if req.DefaultAssignmentTeamID != nil {
+		if *req.DefaultAssignmentTeamID == "" {
+			settings.AgentAssignment.DefaultTeamID = nil
+		} else if tid, err := uuid.Parse(*req.DefaultAssignmentTeamID); err == nil {
+			settings.AgentAssignment.DefaultTeamID = &tid
+		}
 	}
 
 	// AI Settings
