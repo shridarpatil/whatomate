@@ -30,6 +30,11 @@ type AudioBridge struct {
 	firstAgentSeq bool // true until the first agent packet sets the base
 	agentBaseSeq  uint16
 	agentBaseTS   uint32
+
+	// callerAttached guards AttachCaller so the late caller→agent forwarding
+	// goroutine (used when the caller's track arrives after Start) runs once.
+	mu             sync.Mutex
+	callerAttached bool
 }
 
 // NewAudioBridge creates a new audio bridge with optional per-direction recorders.
@@ -70,6 +75,34 @@ func (b *AudioBridge) Start(
 	}
 
 	b.wg.Wait()
+}
+
+// AttachCaller starts caller→agent forwarding after Start() has already begun.
+// On incoming calls the caller's media track frequently arrives only once the
+// agent answers — after the bridge was started with a nil callerRemote — so the
+// caller→agent goroutine was never launched and audio is one-way. The peer's
+// OnTrack handler calls this when the track finally lands. Idempotent and a
+// no-op once the bridge is stopped. Safe to call while Start()'s wg.Wait() is
+// blocking because the agent→caller goroutine keeps the counter positive.
+func (b *AudioBridge) AttachCaller(callerRemote *webrtc.TrackRemote, agentLocal *webrtc.TrackLocalStaticRTP) {
+	if callerRemote == nil || agentLocal == nil {
+		return
+	}
+	select {
+	case <-b.stop:
+		return
+	default:
+	}
+	b.mu.Lock()
+	if b.callerAttached {
+		b.mu.Unlock()
+		return
+	}
+	b.callerAttached = true
+	b.mu.Unlock()
+
+	b.wg.Add(1)
+	go b.forward(callerRemote, agentLocal, b.callerRec, false)
 }
 
 // forward reads RTP packets from src and writes them to dst until stopped.
