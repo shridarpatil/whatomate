@@ -1,8 +1,9 @@
 import { defineStore } from 'pinia'
-import { ref, reactive, computed } from 'vue'
+import { ref, reactive, computed, watch } from 'vue'
 import { callLogsService, ivrFlowsService, callTransfersService, outgoingCallsService, type CallLog, type IVRFlow, type CallTransfer } from '@/services/api'
 import { toast } from 'vue-sonner'
 import { i18n } from '@/i18n'
+import { startRingtone, stopRingtone } from '@/services/ringtone'
 
 export const useCallingStore = defineStore('calling', () => {
   // Call Logs state
@@ -33,6 +34,14 @@ export const useCallingStore = defineStore('calling', () => {
 
   // Call permission state (in-memory only, cleared on refresh)
   const callPermissions = reactive(new Map<string, { status: string, expiresAt?: string }>())
+
+  // Ring the agent's softphone continuously while one or more incoming call
+  // transfers are waiting to be answered; stop as soon as the queue clears
+  // (accepted, taken by another agent, abandoned, no-answer, or completed).
+  watch(() => waitingTransfers.value.length, (count) => {
+    if (count > 0) startRingtone()
+    else stopRingtone()
+  })
 
   // Outgoing call state
   const outgoingCallLogId = ref<string | null>(null)
