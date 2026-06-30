@@ -16,7 +16,7 @@ import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, Command
 import { PageHeader, AuditLogPanel } from '@/components/shared'
 import { toast } from 'vue-sonner'
 import { Bot, Loader2, Brain, Plus, X, Clock, AlertTriangle, UserPlus, MessageSquare, Users } from 'lucide-vue-next'
-import { chatbotService } from '@/services/api'
+import { chatbotService, teamsService } from '@/services/api'
 import { useUsersStore } from '@/stores/users'
 import { useAuthStore } from '@/stores/auth'
 
@@ -93,7 +93,18 @@ const chatbotSettings = ref({
   allow_automated_outside_hours: true,
   allow_agent_queue_pickup: true,
   assign_to_same_agent: true,
-  agent_current_conversation_only: false
+  agent_current_conversation_only: false,
+  default_assignment_team_id: ''
+})
+
+// Teams available for the "default assignment team" dropdown.
+// Empty string = no default team; reka-ui Select needs a non-empty value, so we
+// map "" <-> a sentinel via a computed.
+const teams = ref<{ id: string; name: string }[]>([])
+const NONE_TEAM = '__none__'
+const selectedTeamValue = computed({
+  get: () => chatbotSettings.value.default_assignment_team_id || NONE_TEAM,
+  set: (v: string) => { chatbotSettings.value.default_assignment_team_id = v === NONE_TEAM ? '' : v },
 })
 
 // Button management functions
@@ -196,10 +207,12 @@ watch(isSLAEnabled, (newValue) => {
 
 onMounted(async () => {
   try {
-    const [chatbotResponse] = await Promise.all([
+    const [chatbotResponse, teamsResponse] = await Promise.all([
       chatbotService.getSettings(),
+      teamsService.list(),
       usersStore.fetchUsers()
     ])
+    teams.value = teamsResponse.data?.teams || []
 
     // Users for escalation notify
     availableUsers.value = usersStore.users
@@ -227,7 +240,8 @@ onMounted(async () => {
         allow_automated_outside_hours: chatbotData.settings.allow_automated_outside_hours !== false,
         allow_agent_queue_pickup: chatbotData.settings.allow_agent_queue_pickup !== false,
         assign_to_same_agent: chatbotData.settings.assign_to_same_agent !== false,
-        agent_current_conversation_only: chatbotData.settings.agent_current_conversation_only === true
+        agent_current_conversation_only: chatbotData.settings.agent_current_conversation_only === true,
+        default_assignment_team_id: chatbotData.settings.default_assignment_team_id || ''
       }
 
       const aiEnabledValue = chatbotData.settings.ai_enabled === true
@@ -304,7 +318,8 @@ async function saveAgentSettings() {
     await chatbotService.updateSettings({
       allow_agent_queue_pickup: chatbotSettings.value.allow_agent_queue_pickup,
       assign_to_same_agent: chatbotSettings.value.assign_to_same_agent,
-      agent_current_conversation_only: chatbotSettings.value.agent_current_conversation_only
+      agent_current_conversation_only: chatbotSettings.value.agent_current_conversation_only,
+      default_assignment_team_id: chatbotSettings.value.default_assignment_team_id
     })
     toast.success(t('chatbotSettings.agentSettingsSaved'))
     refreshActivityLog(agentsLogKey)
@@ -558,6 +573,22 @@ function removeEscalationUser(userId: string) {
                 <CardDescription>{{ $t('chatbotSettings.agentSettingsDesc') }}</CardDescription>
               </CardHeader>
               <CardContent class="space-y-4">
+                <div class="py-2">
+                  <Label>{{ $t('chatbotSettings.defaultTeam') }}</Label>
+                  <p class="text-sm text-muted-foreground mb-2">{{ $t('chatbotSettings.defaultTeamDesc') }}</p>
+                  <Select v-model="selectedTeamValue">
+                    <SelectTrigger>
+                      <SelectValue :placeholder="$t('chatbotSettings.defaultTeamNone')" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="__none__">{{ $t('chatbotSettings.defaultTeamNone') }}</SelectItem>
+                      <SelectItem v-for="team in teams" :key="team.id" :value="team.id">{{ team.name }}</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                <Separator />
+
                 <div class="flex items-center justify-between py-2">
                   <div>
                     <p class="font-medium">{{ $t('chatbotSettings.allowQueuePickup') }}</p>
