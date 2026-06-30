@@ -52,6 +52,23 @@ const notificationSettings = ref({
   campaign_updates: true
 })
 
+// Desktop (browser) notification permission — client-side only, no backend field.
+// Provides a guaranteed user-gesture path to grant the OS notification permission
+// (some browsers ignore the auto-request on app load).
+const desktopPerm = ref<NotificationPermission>(
+  typeof Notification !== 'undefined' ? Notification.permission : 'denied'
+)
+async function enableDesktopNotifications() {
+  if (typeof Notification === 'undefined') {
+    toast.error(t('settings.desktopNotificationsUnsupported'))
+    return
+  }
+  desktopPerm.value = await Notification.requestPermission()
+  if (desktopPerm.value === 'granted') {
+    new Notification('Whatomate', { body: t('settings.desktopNotificationsEnabled'), icon: '/favicon.svg' })
+  }
+}
+
 // Calling Settings
 const callingSettings = ref({
   calling_enabled: false,
@@ -411,6 +428,23 @@ function togglePlayAudio(type: 'hold_music' | 'ringback') {
                     :checked="notificationSettings.new_message_alerts"
                     @update:checked="notificationSettings.new_message_alerts = $event"
                   />
+                </div>
+                <Separator class="bg-white/[0.08] light:bg-gray-200" />
+                <div class="flex items-center justify-between">
+                  <div>
+                    <p class="font-medium text-white light:text-gray-900">{{ $t('settings.desktopNotifications') }}</p>
+                    <p class="text-sm text-white/40 light:text-gray-500">{{ $t('settings.desktopNotificationsDesc') }}</p>
+                  </div>
+                  <Button
+                    v-if="desktopPerm !== 'granted'"
+                    variant="outline" size="sm"
+                    class="bg-white/[0.04] border-white/[0.1] text-white/70 hover:bg-white/[0.08] hover:text-white light:bg-white light:border-gray-200 light:text-gray-700 light:hover:bg-gray-50"
+                    :disabled="desktopPerm === 'denied'"
+                    @click="enableDesktopNotifications"
+                  >
+                    {{ desktopPerm === 'denied' ? $t('settings.desktopNotificationsBlocked') : $t('settings.desktopNotificationsEnable') }}
+                  </Button>
+                  <span v-else class="text-sm text-emerald-400">{{ $t('settings.desktopNotificationsOn') }}</span>
                 </div>
                 <Separator class="bg-white/[0.08] light:bg-gray-200" />
                 <div class="flex items-center justify-between">

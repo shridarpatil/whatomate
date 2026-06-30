@@ -42,6 +42,14 @@ onMounted(() => {
         return null
       }
     })
+
+    // Request desktop-notification permission so agents get OS-level alerts for
+    // new messages even when the Whatomate tab is backgrounded. If a browser
+    // blocks the auto-request (needs a user gesture), Settings exposes an
+    // explicit "Enable desktop notifications" button as a guaranteed path.
+    if (typeof Notification !== 'undefined' && Notification.permission === 'default') {
+      Notification.requestPermission().catch(() => {})
+    }
   }
 })
 
