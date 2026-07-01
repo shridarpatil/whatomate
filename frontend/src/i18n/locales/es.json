@@ -326,6 +326,7 @@
     "contactOptions": "Opciones del contacto",
     "sendMedia": "Enviar medio",
     "attachFile": "Adjuntar archivo",
+    "dropToAttach": "Suelta el archivo aquí",
     "emoji": "Emoji",
     "cannedResponses": "Respuestas predefinidas",
     "fileTooLarge": "Archivo demasiado grande",
