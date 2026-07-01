@@ -189,7 +189,7 @@ export const accountsService = {
 }
 
 export const contactsService = {
-  list: (params?: { search?: string; page?: number; limit?: number; tags?: string }) =>
+  list: (params?: { search?: string; page?: number; limit?: number; tags?: string; account?: string; with_conversations?: boolean }) =>
     api.get('/contacts', { params }),
   get: (id: string) => api.get(`/contacts/${id}`),
   create: (data: any) => api.post('/contacts', data),
