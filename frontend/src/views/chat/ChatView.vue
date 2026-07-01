@@ -1243,6 +1243,8 @@ watch(messageInput, (val) => {
     const query = val.slice(1) // Remove the leading /
     cannedSearchQuery.value = query
     cannedPickerOpen.value = true
+    slashPickerIndex.value = 0
+    ensureCannedLoaded() // Load canned responses on first /
   } else if (cannedPickerOpen.value) {
     // Close picker if user removes the /
     cannedPickerOpen.value = false
