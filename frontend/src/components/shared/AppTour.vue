@@ -330,7 +330,7 @@ defineExpose({ open })
                 class="tour-dot"
                 :class="{ 'tour-dot--active': i === step, 'tour-dot--done': i < step }"
                 @click="goTo(i)"
-                :aria-label="\`Ir para passo \${i + 1}\`"
+                :aria-label="'Passo ' + (i + 1)"
               />
             </div>
 
