@@ -322,35 +322,38 @@ defineExpose({ open })
             <!-- Body -->
             <div class="tour-card__body" v-html="current.body" />
 
-            <!-- Progress dots -->
-            <div class="tour-card__dots">
-              <button
-                v-for="(_, i) in STEPS"
-                :key="i"
-                class="tour-dot"
-                :class="{ 'tour-dot--active': i === step, 'tour-dot--done': i < step }"
-                @click="goTo(i)"
-                :aria-label="'Passo ' + (i + 1)"
-              />
-            </div>
+            <!-- Footer: dots + actions + counter -->
+            <div class="tour-card__footer">
+              <!-- Progress dots -->
+              <div class="tour-card__dots">
+                <button
+                  v-for="(_, i) in STEPS"
+                  :key="i"
+                  class="tour-dot"
+                  :class="{ 'tour-dot--active': i === step, 'tour-dot--done': i < step }"
+                  @click="goTo(i)"
+                  :aria-label="'Passo ' + (i + 1)"
+                />
+              </div>
 
-            <!-- Actions -->
-            <div class="tour-card__actions">
-              <button
-                v-if="!isFirst"
-                class="tour-btn tour-btn--ghost"
-                @click="prev"
-              >
-                ← Voltar
-              </button>
-              <span v-else class="tour-card__skip" @click="close()">Pular tour</span>
-              <button class="tour-btn tour-btn--primary" @click="next">
-                {{ current.cta }}
-              </button>
-            </div>
+              <!-- Actions -->
+              <div class="tour-card__actions">
+                <button
+                  v-if="!isFirst"
+                  class="tour-btn tour-btn--ghost"
+                  @click="prev"
+                >
+                  ← Voltar
+                </button>
+                <span v-else class="tour-card__skip" @click="close()">Pular tour</span>
+                <button class="tour-btn tour-btn--primary" @click="next">
+                  {{ current.cta }}
+                </button>
+              </div>
 
-            <!-- Step counter -->
-            <div class="tour-card__counter">{{ step + 1 }} de {{ total }}</div>
+              <!-- Step counter -->
+              <div class="tour-card__counter">{{ step + 1 }} de {{ total }}</div>
+            </div>
           </div>
         </Transition>
 
@@ -360,29 +363,31 @@ defineExpose({ open })
 </template>
 
 <style scoped>
-/* ── FAB trigger ────────────────────────────────────────────── */
+/* ── FAB trigger ─────────────────────────────────────────────── */
 .tour-fab {
   position: fixed;
   bottom: 20px;
   right: 20px;
-  width: 36px;
-  height: 36px;
+  width: 38px;
+  height: 38px;
   border-radius: 50%;
   background: rgba(16, 185, 129, 0.15);
   border: 1.5px solid rgba(16, 185, 129, 0.4);
   color: #10B981;
-  font-size: 16px;
+  font-size: 17px;
   font-weight: 800;
+  font-family: Georgia, serif;          /* consistent ? glyph */
   cursor: pointer;
   z-index: 9000;
   display: flex;
   align-items: center;
   justify-content: center;
-  transition: all 0.2s;
+  line-height: 1;
+  transition: background 0.2s, border-color 0.2s, transform 0.2s;
   backdrop-filter: blur(8px);
 }
 .tour-fab:hover {
-  background: rgba(16, 185, 129, 0.25);
+  background: rgba(16, 185, 129, 0.28);
   border-color: #10B981;
   transform: scale(1.1);
 }
@@ -390,11 +395,11 @@ defineExpose({ open })
   animation: tour-pulse 2.5s ease-in-out infinite;
 }
 @keyframes tour-pulse {
-  0%, 100% { box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.4); }
-  50%       { box-shadow: 0 0 0 10px rgba(16, 185, 129, 0); }
+  0%, 100% { box-shadow: 0 0 0 0   rgba(16, 185, 129, 0.45); }
+  50%       { box-shadow: 0 0 0 11px rgba(16, 185, 129, 0);   }
 }
 
-/* ── Root ───────────────────────────────────────────────────── */
+/* ── Root ────────────────────────────────────────────────────── */
 .tour-root {
   position: fixed;
   inset: 0;
@@ -402,7 +407,7 @@ defineExpose({ open })
   pointer-events: none;
 }
 
-/* ── Overlay ────────────────────────────────────────────────── */
+/* ── Overlay ─────────────────────────────────────────────────── */
 .tour-overlay {
   position: absolute;
   inset: 0;
@@ -420,148 +425,216 @@ defineExpose({ open })
   background: rgba(0, 0, 0, 0.72);
 }
 
-/* ── Card ───────────────────────────────────────────────────── */
+/* ── Card ────────────────────────────────────────────────────── */
 .tour-card {
   position: fixed;
-  width: 340px;
-  background: #1a1a2e;
-  border: 1px solid rgba(16, 185, 129, 0.3);
-  border-radius: 14px;
-  padding: 20px;
+  width: 344px;
+  max-height: calc(100vh - 48px);
+  overflow-y: auto;
+  background: #16162a;
+  border: 1px solid rgba(16, 185, 129, 0.28);
+  border-radius: 16px;
+  padding: 0;                           /* padding via inner sections */
   box-shadow:
-    0 0 0 1px rgba(16, 185, 129, 0.1),
-    0 24px 60px rgba(0, 0, 0, 0.6),
-    0 0 40px rgba(16, 185, 129, 0.08);
+    0 0 0 1px rgba(16, 185, 129, 0.08),
+    0 20px 56px rgba(0, 0, 0, 0.65),
+    0 0 48px rgba(16, 185, 129, 0.07);
   pointer-events: all;
   z-index: 10000;
+  display: flex;
+  flex-direction: column;
 }
 
+/* ── Header ──────────────────────────────────────────────────── */
 .tour-card__header {
   display: flex;
-  align-items: flex-start;
+  align-items: center;                  /* vertically center icon, title, ✕ */
   gap: 10px;
-  margin-bottom: 12px;
+  padding: 18px 18px 0 18px;
 }
 .tour-card__icon {
-  font-size: 22px;
-  flex-shrink: 0;
+  font-size: 24px;
   line-height: 1;
-  margin-top: 1px;
+  flex-shrink: 0;
+  width: 36px;
+  height: 36px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(16, 185, 129, 0.1);
+  border-radius: 9px;
 }
 .tour-card__title {
-  font-size: 15px;
-  font-weight: 700;
-  color: #fff;
-  line-height: 1.3;
   flex: 1;
+  font-size: 14px;
+  font-weight: 700;
+  color: #f1f5f9;
+  line-height: 1.35;
+  min-width: 0;
 }
 .tour-card__close {
-  color: #64748b;
-  background: none;
-  border: none;
-  cursor: pointer;
-  font-size: 14px;
-  padding: 0;
-  line-height: 1;
   flex-shrink: 0;
-  transition: color 0.15s;
+  width: 28px;
+  height: 28px;
+  border-radius: 7px;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  color: #64748b;
+  cursor: pointer;
+  font-size: 13px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 0.15s, color 0.15s;
+  line-height: 1;
+  align-self: flex-start;             /* pin to top when title wraps */
 }
-.tour-card__close:hover { color: #fff; }
+.tour-card__close:hover {
+  background: rgba(239, 68, 68, 0.15);
+  border-color: rgba(239, 68, 68, 0.3);
+  color: #f87171;
+}
 
+/* ── Divider under header ────────────────────────────────────── */
+.tour-card__header + .tour-card__body {
+  margin-top: 12px;
+}
+
+/* ── Body ────────────────────────────────────────────────────── */
 .tour-card__body {
+  flex: 1;
   font-size: 13px;
   color: #94a3b8;
-  line-height: 1.6;
-  margin-bottom: 16px;
+  line-height: 1.65;
+  padding: 12px 18px 14px 18px;
 }
-.tour-card__body :deep(strong) { color: #e2e8f0; font-weight: 600; }
-.tour-card__body :deep(kbd) {
-  display: inline-block;
-  background: #252540;
-  border: 1px solid #3a3a5e;
+.tour-card__body :deep(strong) {
   color: #e2e8f0;
-  font-family: monospace;
+  font-weight: 600;
+}
+.tour-card__body :deep(kbd) {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: #1e2040;
+  border: 1px solid #3a3a5e;
+  color: #cbd5e1;
+  font-family: 'Courier New', monospace;
   font-size: 11px;
-  padding: 1px 6px;
-  border-radius: 4px;
+  padding: 1px 7px;
+  border-radius: 5px;
+  vertical-align: baseline;
+  line-height: 1.6;
+}
+.tour-card__body :deep(br) {
+  display: block;
+  content: '';
+  margin-top: 4px;
+}
+
+/* ── Footer (dots + actions + counter) ───────────────────────── */
+.tour-card__footer {
+  padding: 0 18px 16px 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  border-top: 1px solid rgba(255, 255, 255, 0.05);
+  padding-top: 14px;
 }
 
 /* Progress dots */
 .tour-card__dots {
   display: flex;
+  align-items: center;
   gap: 5px;
-  margin-bottom: 16px;
+  height: 8px;
 }
 .tour-dot {
-  width: 7px;
-  height: 7px;
+  height: 6px;
+  width: 6px;
   border-radius: 50%;
   border: none;
   cursor: pointer;
-  background: #252540;
-  transition: all 0.2s;
+  background: #252545;
+  transition: width 0.22s ease, background 0.22s ease, border-radius 0.22s ease;
   padding: 0;
+  flex-shrink: 0;
 }
 .tour-dot--active {
-  width: 20px;
-  border-radius: 4px;
+  width: 22px;
+  border-radius: 3px;
   background: #10B981;
 }
 .tour-dot--done {
-  background: rgba(16, 185, 129, 0.4);
+  background: rgba(16, 185, 129, 0.38);
+}
+.tour-dot:hover:not(.tour-dot--active) {
+  background: rgba(16, 185, 129, 0.55);
 }
 
-/* Actions */
+/* Action row */
 .tour-card__actions {
   display: flex;
   align-items: center;
-  justify-content: space-between;
   gap: 8px;
 }
 .tour-btn {
-  padding: 8px 16px;
-  border-radius: 8px;
+  height: 36px;
+  padding: 0 16px;
+  border-radius: 9px;
   font-size: 13px;
   font-weight: 600;
   cursor: pointer;
   border: none;
-  transition: all 0.15s;
+  transition: background 0.15s, color 0.15s, opacity 0.15s;
   white-space: nowrap;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  line-height: 1;
 }
 .tour-btn--primary {
+  flex: 1;
   background: #10B981;
   color: #000;
-  flex: 1;
+  letter-spacing: 0.01em;
 }
-.tour-btn--primary:hover { background: #059669; }
+.tour-btn--primary:hover { background: #0ea572; }
 .tour-btn--ghost {
-  background: rgba(255, 255, 255, 0.06);
+  background: rgba(255, 255, 255, 0.05);
   color: #94a3b8;
-  border: 1px solid rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.09);
+  flex-shrink: 0;
 }
-.tour-btn--ghost:hover { color: #fff; }
+.tour-btn--ghost:hover {
+  background: rgba(255, 255, 255, 0.09);
+  color: #e2e8f0;
+}
 .tour-card__skip {
   font-size: 12px;
   color: #475569;
   cursor: pointer;
-  text-decoration: underline;
+  text-decoration-line: underline;
+  text-underline-offset: 2px;
+  flex-shrink: 0;
+  transition: color 0.15s;
 }
 .tour-card__skip:hover { color: #94a3b8; }
 
 /* Step counter */
 .tour-card__counter {
   font-size: 11px;
-  color: #334155;
+  color: #475569;
   text-align: right;
-  margin-top: 10px;
+  line-height: 1;
 }
 
-/* ── Transitions ────────────────────────────────────────────── */
+/* ── Transitions ─────────────────────────────────────────────── */
 .tour-fade-enter-active, .tour-fade-leave-active { transition: opacity 0.25s ease; }
 .tour-fade-enter-from, .tour-fade-leave-to { opacity: 0; }
 
-.tour-slide-enter-active { transition: all 0.2s ease; }
-.tour-slide-leave-active { transition: all 0.15s ease; }
-.tour-slide-enter-from { opacity: 0; transform: translateY(8px); }
-.tour-slide-leave-to  { opacity: 0; transform: translateY(-6px); }
+.tour-slide-enter-active { transition: opacity 0.18s ease, transform 0.18s ease; }
+.tour-slide-leave-active  { transition: opacity 0.14s ease, transform 0.14s ease; }
+.tour-slide-enter-from { opacity: 0; transform: translateY(6px);  }
+.tour-slide-leave-to   { opacity: 0; transform: translateY(-5px); }
 </style>
