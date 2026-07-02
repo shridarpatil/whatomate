@@ -96,8 +96,10 @@ interface WSMessage {
 class WebSocketService {
   private ws: WebSocket | null = null
   private reconnectAttempts = 0
-  private maxReconnectAttempts = 5
   private reconnectDelay = 1000
+  private maxReconnectDelay = 30000
+  private intentionalClose = false
+  private lifecycleListenersInstalled = false
   private pingInterval: number | null = null
   private isConnected = false
   private hasConnectedBefore = false
@@ -108,6 +110,9 @@ class WebSocketService {
     if (this.ws?.readyState === WebSocket.OPEN) {
       return
     }
+
+    this.intentionalClose = false
+    this.installLifecycleListeners()
 
     // Store the token function for reconnects
     if (getToken) {
@@ -164,12 +169,12 @@ class WebSocketService {
 
   disconnect() {
     this.stopPing()
+    this.intentionalClose = true // Prevent reconnect (deliberate close, e.g. logout)
     if (this.ws) {
       this.ws.close()
       this.ws = null
     }
     this.isConnected = false
-    this.reconnectAttempts = this.maxReconnectAttempts // Prevent reconnect
   }
 
   private handleMessage(data: string) {
@@ -534,16 +539,51 @@ class WebSocketService {
   }
 
   private handleReconnect() {
-    if (this.reconnectAttempts >= this.maxReconnectAttempts) {
+    if (this.intentionalClose) {
       return
     }
 
+    // Never give up: mobile browsers freeze background tabs for arbitrarily
+    // long, so a retry cap would leave the app permanently disconnected.
+    // Exponential backoff capped at maxReconnectDelay keeps retries cheap.
     this.reconnectAttempts++
-    const delay = this.reconnectDelay * Math.pow(2, this.reconnectAttempts - 1)
+    const delay = Math.min(
+      this.reconnectDelay * Math.pow(2, Math.min(this.reconnectAttempts - 1, 10)),
+      this.maxReconnectDelay
+    )
 
     setTimeout(() => {
       this.connect()
     }, delay)
+  }
+
+  // Reconnect immediately when the device wakes up: phones freeze background
+  // tabs (killing the socket and throttling timers), so waiting for the next
+  // backoff tick would leave the agent minutes behind after unlocking.
+  private installLifecycleListeners() {
+    if (this.lifecycleListenersInstalled) {
+      return
+    }
+    this.lifecycleListenersInstalled = true
+
+    const reconnectIfDead = () => {
+      if (this.intentionalClose) {
+        return
+      }
+      const state = this.ws?.readyState
+      if (state !== WebSocket.OPEN && state !== WebSocket.CONNECTING) {
+        this.reconnectAttempts = 0
+        this.connect()
+      }
+    }
+
+    document.addEventListener('visibilitychange', () => {
+      if (document.visibilityState === 'visible') {
+        reconnectIfDead()
+      }
+    })
+    window.addEventListener('online', reconnectIfDead)
+    window.addEventListener('pageshow', reconnectIfDead)
   }
 
   setCurrentContact(contactId: string | null) {
