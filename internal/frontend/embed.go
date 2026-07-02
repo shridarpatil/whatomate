@@ -14,21 +14,23 @@ import (
 
 // mimeTypes maps file extensions to MIME types
 var mimeTypes = map[string]string{
-	".js":    "application/javascript",
-	".mjs":   "application/javascript",
-	".css":   "text/css",
-	".html":  "text/html",
-	".json":  "application/json",
-	".png":   "image/png",
-	".jpg":   "image/jpeg",
-	".jpeg":  "image/jpeg",
-	".gif":   "image/gif",
-	".svg":   "image/svg+xml",
-	".ico":   "image/x-icon",
-	".woff":  "font/woff",
-	".woff2": "font/woff2",
-	".ttf":   "font/ttf",
-	".eot":   "application/vnd.ms-fontobject",
+	".js":          "application/javascript",
+	".mjs":         "application/javascript",
+	".css":         "text/css",
+	".html":        "text/html",
+	".json":        "application/json",
+	".png":         "image/png",
+	".jpg":         "image/jpeg",
+	".jpeg":        "image/jpeg",
+	".gif":         "image/gif",
+	".svg":         "image/svg+xml",
+	".ico":         "image/x-icon",
+	".woff":        "font/woff",
+	".woff2":       "font/woff2",
+	".ttf":         "font/ttf",
+	".eot":         "application/vnd.ms-fontobject",
+	".webmanifest": "application/manifest+json",
+	".mp3":         "audio/mpeg",
 }
 
 //go:embed all:dist
