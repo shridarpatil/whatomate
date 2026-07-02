@@ -753,6 +753,7 @@ export interface Webhook {
   url: string
   events: string[]
   headers: Record<string, string>
+  body_template: string
   is_active: boolean
   has_secret: boolean
   created_at: string
@@ -871,6 +872,7 @@ export const webhooksService = {
     events: string[]
     headers?: Record<string, string>
     secret?: string
+    body_template?: string
   }) => api.post<Webhook>('/webhooks', data),
   update: (id: string, data: {
     name?: string
@@ -878,6 +880,7 @@ export const webhooksService = {
     events?: string[]
     headers?: Record<string, string>
     secret?: string
+    body_template?: string
     is_active?: boolean
   }) => api.put<Webhook>(`/webhooks/${id}`, data),
   delete: (id: string) => api.delete(`/webhooks/${id}`),
