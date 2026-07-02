@@ -87,7 +87,8 @@ import {
   Code,
   RotateCw,
   Filter,
-  StickyNote
+  StickyNote,
+  ArrowLeft
 } from 'lucide-vue-next'
 import { getInitials, getAvatarGradient } from '@/lib/utils'
 import { useColorMode } from '@/composables/useColorMode'
@@ -1654,8 +1655,11 @@ async function sendMediaMessage() {
 
 <template>
   <div class="flex h-full bg-[#0a0a0b] light:bg-gray-50">
-    <!-- Contacts List -->
-    <div class="w-80 border-r border-white/[0.08] light:border-gray-200 flex flex-col bg-[#0a0a0b] light:bg-white">
+    <!-- Contacts List (on phones: full width, hidden while a chat is open) -->
+    <div
+      class="w-full md:w-80 border-r border-white/[0.08] light:border-gray-200 flex-col bg-[#0a0a0b] light:bg-white"
+      :class="contactsStore.currentContact ? 'hidden md:flex' : 'flex'"
+    >
       <!-- Search Header -->
       <div class="p-2 border-b border-white/[0.08] light:border-gray-200">
         <div class="flex items-center gap-2">
@@ -1804,8 +1808,11 @@ async function sendMediaMessage() {
       </ScrollArea>
     </div>
 
-    <!-- Chat Area -->
-    <div class="flex-1 flex flex-col bg-[#0f0f10] light:bg-gray-50">
+    <!-- Chat Area (on phones: full screen only while a chat is open) -->
+    <div
+      class="flex-1 flex-col bg-[#0f0f10] light:bg-gray-50"
+      :class="contactsStore.currentContact ? 'flex' : 'hidden md:flex'"
+    >
       <!-- No Contact Selected -->
       <div
         v-if="!contactsStore.currentContact"
@@ -1825,6 +1832,15 @@ async function sendMediaMessage() {
         <!-- Chat Header -->
         <div class="h-14 flex-shrink-0 px-4 border-b border-white/[0.08] light:border-gray-200 flex items-center justify-between bg-[#0f0f10] light:bg-white">
           <div class="flex items-center gap-2">
+            <Button
+              variant="ghost"
+              size="icon"
+              class="h-8 w-8 -ml-1 md:hidden"
+              :title="$t('common.back')"
+              @click="router.push('/chat')"
+            >
+              <ArrowLeft class="h-4 w-4" />
+            </Button>
             <Avatar class="h-8 w-8 ring-2 ring-white/[0.1] light:ring-gray-200">
               <AvatarImage :src="contactsStore.currentContact.avatar_url" />
               <AvatarFallback :class="'text-xs bg-gradient-to-br text-white ' + getAvatarGradient(contactsStore.currentContact.name || contactsStore.currentContact.phone_number)">
@@ -2478,18 +2494,20 @@ async function sendMediaMessage() {
       </template>
     </div>
 
-    <!-- Notes Side Panel -->
+    <!-- Notes Side Panel (on phones: full-screen overlay) -->
     <ConversationNotes
       v-if="contactsStore.currentContact && isNotesPanelOpen"
       :contact-id="contactsStore.currentContact.id"
+      class="max-md:fixed max-md:inset-0 max-md:z-50 max-md:!w-full"
       @close="isNotesPanelOpen = false"
     />
 
-    <!-- Contact Info Panel -->
+    <!-- Contact Info Panel (on phones: full-screen overlay) -->
     <ContactInfoPanel
       v-if="contactsStore.currentContact && isInfoPanelOpen"
       :contact="contactsStore.currentContact"
       :session-data="contactSessionData"
+      class="max-md:fixed max-md:inset-0 max-md:z-50 max-md:!w-full"
       @close="isInfoPanelOpen = false"
       @tags-updated="(tags) => contactsStore.updateContactTags(contactsStore.currentContact!.id, tags)"
     />
