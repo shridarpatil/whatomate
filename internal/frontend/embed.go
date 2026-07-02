@@ -107,6 +107,17 @@ func Handler(basePath string) fasthttp.RequestHandler {
 					w.Header().Set("Content-Type", "application/octet-stream")
 				}
 
+				// Cache policy: hashed bundles under /assets/ never change, so
+				// cache them forever. Everything else (sw.js, manifest, icons)
+				// keeps a stable URL across deploys and must revalidate —
+				// otherwise installed PWA/TWA clients keep running stale code
+				// after an update.
+				if strings.HasPrefix(path, "/assets/") {
+					w.Header().Set("Cache-Control", "public, max-age=31536000, immutable")
+				} else {
+					w.Header().Set("Cache-Control", "no-cache")
+				}
+
 				// Check Accept-Encoding and serve pre-compressed if available
 				acceptEncoding := r.Header.Get("Accept-Encoding")
 				var content []byte
@@ -149,6 +160,9 @@ func Handler(basePath string) fasthttp.RequestHandler {
 		// For root or non-existent files (SPA routes), serve modified index.html
 		if path == "/" || (!strings.HasPrefix(path, "/api") && !strings.Contains(path, ".")) {
 			w.Header().Set("Content-Type", "text/html; charset=utf-8")
+			// The SPA shell references the current hashed bundles; serving a
+			// cached copy strands installed PWA/TWA clients on old code.
+			w.Header().Set("Cache-Control", "no-cache")
 			_, _ = w.Write(cachedIndexHTML)
 			return
 		}
