@@ -428,7 +428,12 @@
     "urlButtonParamPlaceholder": "Enter dynamic URL value",
     "preview": "Preview",
     "serviceWindowExpired": "The 24-hour messaging window has expired. Only template messages can be sent until the customer replies.",
-    "sendTemplateAction": "Send Template"
+    "sendTemplateAction": "Send Template",
+    "forward": "Forward",
+    "forwardTo": "Forward to...",
+    "forwardDesc": "Send this message to another contact",
+    "forwarded": "Message forwarded",
+    "forwardFailed": "Failed to forward message"
   },
   "contacts": {
     "title": "Contacts",

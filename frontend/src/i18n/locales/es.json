@@ -385,7 +385,12 @@
     "urlButtonParamPlaceholder": "Ingrese el valor dinámico de la URL",
     "preview": "Vista previa",
     "serviceWindowExpired": "La ventana de mensajería de 24 horas ha expirado. Solo se pueden enviar mensajes de plantilla hasta que el cliente responda.",
-    "sendTemplateAction": "Enviar plantilla"
+    "sendTemplateAction": "Enviar plantilla",
+    "forward": "Reenviar",
+    "forwardTo": "Reenviar a...",
+    "forwardDesc": "Enviar este mensaje a otro contacto",
+    "forwarded": "Mensaje reenviado",
+    "forwardFailed": "No se pudo reenviar el mensaje"
   },
   "contacts": {
     "title": "Contactos",
