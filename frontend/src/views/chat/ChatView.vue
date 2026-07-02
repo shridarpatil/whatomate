@@ -1808,9 +1808,12 @@ async function sendMediaMessage() {
       </ScrollArea>
     </div>
 
-    <!-- Chat Area (on phones: full screen only while a chat is open) -->
+    <!-- Chat Area (on phones: full screen only while a chat is open).
+         min-w-0 lets this flex child shrink to the viewport: without it the
+         composer's intrinsic width (textarea + buttons) forces the panel wider
+         than a phone screen, pushing bubbles and the send button off-screen. -->
     <div
-      class="flex-1 flex-col bg-[#0f0f10] light:bg-gray-50"
+      class="flex-1 min-w-0 flex-col bg-[#0f0f10] light:bg-gray-50"
       :class="contactsStore.currentContact ? 'flex' : 'hidden md:flex'"
     >
       <!-- No Contact Selected -->
@@ -2482,11 +2485,11 @@ async function sendMediaMessage() {
               v-model="messageInput"
               :placeholder="$t('chat.typeMessage') + '...'"
               rows="1"
-              class="flex-1 bg-transparent text-[14px] text-white light:text-gray-900 placeholder:text-white/30 light:placeholder:text-gray-400 focus:outline-none resize-none min-h-[36px] max-h-[120px] py-2 overflow-y-auto"
+              class="flex-1 min-w-0 bg-transparent text-[14px] text-white light:text-gray-900 placeholder:text-white/30 light:placeholder:text-gray-400 focus:outline-none resize-none min-h-[36px] max-h-[120px] py-2 overflow-y-auto"
               @keydown.enter.exact.prevent="sendMessage"
               @input="autoResizeTextarea"
             />
-            <button type="submit" class="w-9 h-9 rounded-lg bg-emerald-600 hover:bg-emerald-500 light:bg-emerald-500 light:hover:bg-emerald-600 flex items-center justify-center transition-colors disabled:opacity-50" :disabled="!messageInput.trim() || isSending">
+            <button type="submit" class="w-9 h-9 shrink-0 rounded-lg bg-emerald-600 hover:bg-emerald-500 light:bg-emerald-500 light:hover:bg-emerald-600 flex items-center justify-center transition-colors disabled:opacity-50" :disabled="!messageInput.trim() || isSending">
               <Send class="w-4 h-4 text-white" />
             </button>
           </form>
