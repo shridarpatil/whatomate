@@ -103,6 +103,7 @@ const current = computed(() => STEPS[step.value])
 const isFirst = computed(() => step.value === 0)
 const isLast = computed(() => step.value === total - 1)
 const progress = computed(() => Math.round((step.value / (total - 1)) * 100))
+const cardPlacementClass = computed(() => 'tour-card--' + tooltipPos.value.placement)
 
 // ── Spotlight ─────────────────────────────────────────────────
 function getElement(s: typeof STEPS[0]): Element | null {
@@ -304,7 +305,7 @@ defineExpose({ open })
           <div
             :key="step"
             class="tour-card"
-            :class="\`tour-card--\${tooltipPos.placement}\`"
+            :class="cardPlacementClass"
             :style="
               tooltipPos.placement === 'center'
                 ? { top: '50%', left: '50%', transform: 'translate(-50%, -50%)' }
