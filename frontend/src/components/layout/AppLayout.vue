@@ -234,6 +234,7 @@ const handleOpenTour = () => {
                   :data-active="item.active"
                   role="menuitem"
                   :aria-current="item.active ? 'page' : undefined"
+                  :data-tour="item.path === '/chat' ? 'nav-chat' : item.path === '/chatbot/transfers' ? 'nav-transfers' : undefined"
                   @click="isMobileMenuOpen = false"
                 >
                   <component :is="item.icon" class="h-4 w-4 shrink-0" aria-hidden="true" />
