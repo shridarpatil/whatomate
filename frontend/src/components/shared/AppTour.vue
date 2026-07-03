@@ -29,94 +29,123 @@ let positionTimer: ReturnType<typeof setInterval> | null = null
 // selector: CSS selector for the element to highlight (null = center modal)
 // route:    navigate to this route before showing the step (optional)
 const STEPS = [
+  // ── 0. Boas-vindas ─────────────────────────────────────────────
   {
     id: 'welcome',
     selector: null,
     route: null,
     icon: '👋',
     title: 'Bem-vindo à Central WHATC!',
-    body: 'Este guia mostra os <strong>10 pontos essenciais</strong> para você atender com confiança desde o primeiro dia.<br><br>Use <strong>→</strong> para avançar ou clique nos pontos para navegar livremente.',
+    body: 'Este guia mostra os <strong>9 pontos essenciais</strong> para você atender com confiança desde o primeiro dia.<br><br>Use <strong>→</strong> para avançar ou clique nos pontos para navegar livremente.',
     cta: 'Começar →',
   },
+  // ── 1. Chat nav ────────────────────────────────────────────────
+  // Spotlight: link "Chat" no menu lateral (data-tour="nav-chat")
   {
     id: 'chat-nav',
-    selector: null,
+    selector: '[data-tour="nav-chat"]',
     route: '/chat',
     icon: '💬',
     title: '1. Sua área de trabalho',
-    body: 'Clique em <strong>Chat</strong> no menu lateral esquerdo para acessar todas as conversas do seu departamento.<br><br>Você verá apenas as conversas do seu time — outros agentes não veem as suas.',
+    body: 'Clique em <strong>Chat</strong> no menu lateral para acessar todas as conversas do seu departamento.<br><br>Você verá apenas as conversas do seu time.',
     cta: 'Próximo →',
   },
+  // ── 2. Abas de status ──────────────────────────────────────────
+  // Spotlight: barra de abas Todos/Novo/Andamento/Concluído
   {
     id: 'status-tabs',
-    selector: null,
+    selector: '[data-tour="status-tabs"]',
     route: '/chat',
     icon: '📋',
-    title: '2. Filtrando por Status',
-    body: 'No topo da lista de conversas há 4 abas:<br><br>• <strong>Todos</strong> — todas as conversas visíveis<br>• <strong>Novo</strong> — sem atendimento ainda ⚠️ <em>sua prioridade</em><br>• <strong>Andamento</strong> — você está atendendo ativamente<br>• <strong>Concluído</strong> — atendimentos encerrados',
+    title: '2. Abas de Status',
+    body: '• <strong>Todos</strong> — todas as conversas visíveis<br>• <strong>Novo</strong> ⚠️ — sem atendimento, <em>sua prioridade</em><br>• <strong>Andamento</strong> — você está atendendo<br>• <strong>Concluído</strong> — atendimentos encerrados',
     cta: 'Próximo →',
   },
+  // ── 3. Busca e filtro ──────────────────────────────────────────
+  // Spotlight: área de busca + botão funil
   {
     id: 'search-filter',
-    selector: null,
+    selector: '[data-tour="search-area"]',
     route: '/chat',
     icon: '🔍',
     title: '3. Busca e Filtro por Etiqueta',
-    body: 'Acima da lista de conversas:<br><br>• <strong>Campo de busca</strong> — pesquise por nome ou número do cliente<br>• <strong>Ícone de filtro</strong> (funil) — filtra conversas por <strong>etiqueta</strong> (ex: urgente, entrega, orçamento)<br><br>Combine busca + filtro para encontrar qualquer conversa rapidamente.',
+    body: '• <strong>Campo de busca</strong> — pesquise por nome ou número<br>• <strong>Ícone de funil</strong> — filtra por etiqueta (urgente, entrega…)<br><br>Combine os dois para encontrar qualquer conversa.',
     cta: 'Próximo →',
   },
+  // ── 4. Campo de mensagem ───────────────────────────────────────
+  // Spotlight: textarea de digitação
   {
-    id: 'send-message',
-    selector: null,
+    id: 'message-input',
+    selector: '[data-tour="message-input"]',
     route: '/chat',
     icon: '⌨️',
     title: '4. Enviando Mensagens',
-    body: 'Com uma conversa aberta, use a barra inferior:<br><br>• <strong>Campo de texto</strong> → <kbd>Enter</kbd> para enviar, <kbd>Shift+Enter</kbd> nova linha<br>• <strong>/</strong> no campo → abre respostas rápidas (↑↓ navega, Enter insere)<br>• <strong>📎 Clipe</strong> → envia imagens, documentos ou áudio<br>• <strong>😊 Emoji</strong> → adiciona expressões',
+    body: '• <kbd>Enter</kbd> → envia · <kbd>Shift+Enter</kbd> → nova linha<br>• Digite <kbd>/</kbd> → abre respostas rápidas (↑↓ navega, Enter insere)<br>• Ícone 📎 → envia imagens, documentos ou áudio',
     cta: 'Próximo →',
   },
+  // ── 5. Template picker ─────────────────────────────────────────
+  // Spotlight: botão de template na barra de ferramentas
   {
-    id: 'start-conversation',
-    selector: null,
+    id: 'template-picker',
+    selector: '[data-tour="template-picker"]',
     route: '/chat',
     icon: '📨',
-    title: '5. Iniciando Conversa com o Cliente',
-    body: 'Para enviar a <strong>primeira mensagem</strong> a um cliente (ou após 24h sem resposta):<br><br>1. Abra a conversa do cliente<br>2. Clique no ícone de <strong>template</strong> (📋) na barra inferior<br>3. Escolha um modelo aprovado pelo WhatsApp<br>4. Preencha as variáveis (nome, pedido etc.)<br>5. Clique em <strong>Enviar</strong><br><br>⚠️ Mensagens livres só funcionam dentro da janela de 24h após o cliente escrever.',
+    title: '5. Iniciando Conversa com Modelo',
+    body: 'Para contatar um cliente pela <strong>primeira vez</strong> ou após 24h sem resposta:<br><br>1. Clique neste ícone de <strong>modelo</strong> (📋)<br>2. Escolha um template aprovado pelo WhatsApp<br>3. Preencha as variáveis e envie<br><br>⚠️ Mensagens livres só funcionam dentro da janela de 24h.',
     cta: 'Próximo →',
   },
+  // ── 6. Atribuir agente ─────────────────────────────────────────
+  // Spotlight: botão UserPlus na barra superior da conversa
   {
-    id: 'assign-tags',
-    selector: null,
+    id: 'assign-agent',
+    selector: '[data-tour="assign-agent"]',
+    route: '/chat',
+    icon: '👤',
+    title: '6. Atribuindo ao Agente',
+    body: 'Clique neste ícone para <strong>atribuir a conversa</strong> a você ou a outro agente.<br><br>A atribuição define quem é o responsável e aparece no painel direito da conversa.',
+    cta: 'Próximo →',
+  },
+  // ── 7. Etiquetas ──────────────────────────────────────────────
+  // Spotlight: botão filtro de tag (Filter icon)
+  {
+    id: 'tags',
+    selector: '[data-tour="tag-filter"]',
     route: '/chat',
     icon: '🏷️',
-    title: '6. Etiquetas e Atribuição',
-    body: 'No painel direito da conversa (ícone <strong>ⓘ</strong> no topo):<br><br>• <strong>Tags</strong> → clique em <strong>+</strong> ao lado de Tags para adicionar etiquetas (urgente, entrega, troca…)<br>• <strong>Atribuir agente</strong> → clique no ícone de pessoa 👤 na barra superior da conversa para atribuir a conversa a você ou a outro agente<br><br>Etiquetas facilitam filtros e relatórios.',
+    title: '7. Etiquetas (Tags)',
+    body: 'Use etiquetas para <strong>categorizar conversas</strong>.<br><br>• Para <strong>filtrar</strong>: clique neste ícone de funil<br>• Para <strong>adicionar</strong> numa conversa: abra o painel de informações (ⓘ no topo) e clique no <strong>+</strong> ao lado de Tags<br><br>Exemplos: urgente, entrega, troca, orçamento.',
     cta: 'Próximo →',
   },
+  // ── 8. Transferências ─────────────────────────────────────────
+  // Spotlight: link Transferências no menu (data-tour="nav-transfers")
   {
     id: 'transfers',
-    selector: null,
+    selector: '[data-tour="nav-transfers"]',
     route: '/chatbot/transfers',
     icon: '🔄',
-    title: '7. Fila de Transferências',
-    body: 'Acesse <strong>Chatbot → Transferências</strong> no menu lateral.<br><br>Clientes vindos do chatbot aparecem aqui aguardando atendimento humano.<br><br>• <strong>Pegar próximo</strong> → aceita o cliente mais antigo da fila automaticamente<br>• <strong>▶ Iniciar</strong> → aceita um cliente específico<br>• <strong>💬</strong> → abre o chat sem aceitar',
+    title: '8. Fila de Transferências',
+    body: 'Clientes vindos do chatbot aparecem aqui.<br><br>• <strong>Pegar próximo</strong> → aceita o mais antigo da fila<br>• <strong>▶ Iniciar</strong> → aceita um cliente específico<br>• <strong>💬</strong> → abre o chat sem aceitar',
     cta: 'Próximo →',
   },
+  // ── 9. Concluir atendimento ────────────────────────────────────
+  // Spotlight: botão Concluir (CheckCircle) na barra da conversa
   {
     id: 'conclude',
-    selector: null,
+    selector: '[data-tour="conclude-btn"]',
     route: '/chat',
     icon: '✅',
-    title: '8. Concluindo o Atendimento',
-    body: 'Ao finalizar, clique no ícone <strong>✓ Concluir atendimento</strong> no canto superior direito da conversa.<br><br>Isso:<br>• Move a conversa para a aba <strong>Concluído</strong><br>• Libera o chatbot para responder automaticamente ao próximo contato do cliente<br>• Organiza a fila da equipe<br><br>⚠️ <em>Nunca feche sem concluir</em> — o chatbot fica bloqueado.',
+    title: '9. Concluir Atendimento',
+    body: 'Clique neste botão <strong>ao finalizar cada atendimento</strong>.<br><br>Isso:<br>• Move para aba <strong>Concluído</strong><br>• Libera o chatbot para responder automaticamente<br>• Organiza a fila da equipe<br><br>⚠️ <em>Nunca saia sem concluir</em> — o chatbot fica bloqueado.',
     cta: 'Próximo →',
   },
+  // ── 10. Pronto ────────────────────────────────────────────────
   {
     id: 'done',
     selector: null,
     route: null,
     icon: '🚀',
     title: 'Pronto! Você está preparado.',
-    body: '✓ <strong>Chat</strong> → sua área de trabalho<br>✓ <strong>Abas</strong> → comece sempre por Novo<br>✓ <strong>/</strong> → respostas rápidas<br>✓ <strong>📋 Template</strong> → iniciar conversa após 24h<br>✓ <strong>Tags + Atribuir</strong> → organização<br>✓ <strong>Transferências</strong> → pegar fila do chatbot<br>✓ <strong>Concluir atendimento</strong> → sempre ao finalizar<br><br>Para rever este guia: clique no seu <strong>avatar → Guia de Início Rápido</strong>.',
+    body: '✓ <strong>Chat</strong> → sua área de trabalho<br>✓ <strong>Abas</strong> → comece sempre por Novo<br>✓ <kbd>/</kbd> → respostas rápidas<br>✓ <strong>Modelo 📋</strong> → iniciar conversa após 24h<br>✓ <strong>Atribuir</strong> → definir responsável<br>✓ <strong>Etiquetas</strong> → categorizar e filtrar<br>✓ <strong>Transferências</strong> → pegar fila do chatbot<br>✓ <strong>Concluir</strong> → sempre ao finalizar<br><br>Para rever: <strong>avatar → Guia de Início Rápido</strong>',
     cta: 'Começar a atender ✓',
   },
 ]
