@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted , inject } from 'vue'
 import { RouterLink, RouterView, useRoute, useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { useAuthStore } from '@/stores/auth'
@@ -116,8 +116,11 @@ const handleLogout = async () => {
   router.push('/login')
 }
 
+// Injected from App.vue — calls AppTour.open()
+const openTour = inject<() => void>('openTour')
+
 const handleOpenTour = () => {
-  emit('open-tour')
+  openTour?.()
 }
 </script>
 
