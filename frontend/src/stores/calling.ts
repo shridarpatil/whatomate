@@ -198,6 +198,10 @@ export const useCallingStore = defineStore('calling', () => {
 
     // Handle remote audio (caller's voice)
     pc.ontrack = (event) => {
+      // A queued ontrack can still fire after cleanup() tore this call down
+      // (or after a new call replaced the connection); recreating the audio
+      // element here would leak it and play ghost audio from a dead stream.
+      if (peerConnection.value !== pc) return
       if (!remoteAudioEl) remoteAudioEl = new Audio()
       remoteAudioEl.srcObject = event.streams[0]
       remoteAudioEl.play().catch(() => { /* ignore autoplay */ })
@@ -283,6 +287,9 @@ export const useCallingStore = defineStore('calling', () => {
 
     // Handle remote audio (consumer's voice)
     pc.ontrack = (event) => {
+      // Same late-ontrack guard as in acceptTransfer: never re-create
+      // the audio element for a connection that is no longer the active one.
+      if (peerConnection.value !== pc) return
       if (!remoteAudioEl) remoteAudioEl = new Audio()
       remoteAudioEl.srcObject = event.streams[0]
       remoteAudioEl.play().catch(() => { /* ignore autoplay */ })
