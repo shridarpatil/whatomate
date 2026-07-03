@@ -243,17 +243,6 @@ defineExpose({ open })
 </script>
 
 <template>
-  <!-- Trigger button — always visible after tour completion -->
-  <button
-    class="tour-fab"
-    :class="{ 'tour-fab--pulsing': !visible }"
-    @click="open"
-    title="Guia de Início Rápido"
-    aria-label="Abrir guia de início rápido"
-  >
-    ?
-  </button>
-
   <Teleport to="body">
     <Transition name="tour-fade">
       <div v-if="visible" class="tour-root">
@@ -363,42 +352,6 @@ defineExpose({ open })
 </template>
 
 <style scoped>
-/* ── FAB trigger ─────────────────────────────────────────────── */
-.tour-fab {
-  position: fixed;
-  bottom: 20px;
-  right: 20px;
-  width: 38px;
-  height: 38px;
-  border-radius: 50%;
-  background: rgba(16, 185, 129, 0.15);
-  border: 1.5px solid rgba(16, 185, 129, 0.4);
-  color: #10B981;
-  font-size: 17px;
-  font-weight: 800;
-  font-family: Georgia, serif;          /* consistent ? glyph */
-  cursor: pointer;
-  z-index: 9000;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  line-height: 1;
-  transition: background 0.2s, border-color 0.2s, transform 0.2s;
-  backdrop-filter: blur(8px);
-}
-.tour-fab:hover {
-  background: rgba(16, 185, 129, 0.28);
-  border-color: #10B981;
-  transform: scale(1.1);
-}
-.tour-fab--pulsing {
-  animation: tour-pulse 2.5s ease-in-out infinite;
-}
-@keyframes tour-pulse {
-  0%, 100% { box-shadow: 0 0 0 0   rgba(16, 185, 129, 0.45); }
-  50%       { box-shadow: 0 0 0 11px rgba(16, 185, 129, 0);   }
-}
-
 /* ── Root ────────────────────────────────────────────────────── */
 .tour-root {
   position: fixed;
