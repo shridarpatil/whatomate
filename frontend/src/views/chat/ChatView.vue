@@ -1800,7 +1800,7 @@ function onTextareaEscape() {
     <!-- Contacts List -->
     <div class="w-80 border-r border-white/[0.08] light:border-gray-200 flex flex-col bg-[#0a0a0b] light:bg-white">
       <!-- Search Header -->
-      <div class="p-2 border-b border-white/[0.08] light:border-gray-200">
+      <div data-tour="search-area" class="p-2 border-b border-white/[0.08] light:border-gray-200">
         <div class="flex items-center gap-2">
           <div class="relative flex-1">
             <Search class="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-white/40 light:text-gray-400" />
@@ -1829,6 +1829,7 @@ function onTextareaEscape() {
           <Popover v-model:open="isTagFilterOpen">
             <PopoverTrigger as-child>
               <Button
+                data-tour="tag-filter"
                 variant="ghost"
                 size="icon"
                 class="h-8 w-8 shrink-0 relative"
@@ -1879,7 +1880,7 @@ function onTextareaEscape() {
           </Popover>
         </div>
         <!-- Status Tabs -->
-        <div class="flex border-b border-white/[0.06] light:border-gray-200 shrink-0">
+        <div data-tour="status-tabs" class="flex border-b border-white/[0.06] light:border-gray-200 shrink-0">
           <button
             v-for="tab in STATUS_TABS"
             :key="tab.key"
@@ -2105,6 +2106,7 @@ function onTextareaEscape() {
                   variant="ghost"
                   size="icon"
                   class="h-8 w-8 text-white/50 hover:text-white hover:bg-white/[0.08] light:text-gray-500 light:hover:text-gray-900 light:hover:bg-gray-100"
+                  data-tour="assign-agent"
                   @click="isAssignDialogOpen = true"
                 >
                   <UserPlus class="h-4 w-4" />
@@ -2150,6 +2152,7 @@ function onTextareaEscape() {
                   :class="isCurrentContactResolved
                     ? 'text-green-400 bg-green-500/10 hover:bg-green-500/20 light:text-green-600 light:bg-green-50 light:hover:bg-green-100'
                     : 'text-white/50 hover:text-green-400 hover:bg-green-500/10 light:text-gray-500 light:hover:text-green-600 light:hover:bg-green-50'"
+                  data-tour="conclude-btn"
                   :disabled="isResolvingContact"
                   @click="resolveContact"
                 >
@@ -2704,7 +2707,7 @@ function onTextareaEscape() {
             </Tooltip>
             <Tooltip>
               <TooltipTrigger as-child>
-                <span ref="templatePickerRef">
+                <span ref="templatePickerRef" data-tour="template-picker">
                   <TemplatePicker
                     :selected-account="selectedAccount"
                     @select-with-params="handleTemplateWithParams"
@@ -2730,6 +2733,7 @@ function onTextareaEscape() {
             />
             <textarea
               ref="messageInputRef"
+              data-tour="message-input"
               v-model="messageInput"
               :placeholder="$t('chat.typeMessage') + '...'"
               rows="1"
