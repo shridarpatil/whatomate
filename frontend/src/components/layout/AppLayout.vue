@@ -115,6 +115,10 @@ const handleLogout = async () => {
   await authStore.logout()
   router.push('/login')
 }
+
+const handleOpenTour = () => {
+  emit('open-tour')
+}
 </script>
 
 <template>
@@ -305,7 +309,7 @@ const handleLogout = async () => {
       </div>
 
       <!-- User Menu -->
-      <UserMenu :collapsed="isCollapsed" @logout="handleLogout" />
+      <UserMenu :collapsed="isCollapsed" @logout="handleLogout" @open-tour="handleOpenTour" />
     </aside>
 
     <!-- Main content -->
