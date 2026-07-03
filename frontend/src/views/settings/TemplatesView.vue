@@ -169,6 +169,11 @@ async function fetchAccounts() {
   try {
     const response = await api.get('/accounts')
     accounts.value = response.data.data?.accounts || []
+    // Auto-select if only one account and user hasn't chosen yet
+    if (accounts.value.length === 1 && selectedAccount.value === 'all') {
+      selectedAccount.value = accounts.value[0].name
+      localStorage.setItem('templates_selected_account', accounts.value[0].name)
+    }
     // Validate stored account still exists, fallback to 'all' if not
     if (selectedAccount.value !== 'all' && !accounts.value.some(a => a.name === selectedAccount.value)) {
       selectedAccount.value = 'all'
@@ -298,7 +303,7 @@ function getHeaderIcon(type: string) {
   <div class="flex flex-col h-full bg-[#0a0a0b] light:bg-gray-50">
     <PageHeader :title="$t('templates.title')" :subtitle="$t('templates.subtitle')" :icon="FileText" icon-gradient="bg-gradient-to-br from-blue-500 to-cyan-600 shadow-blue-500/20">
       <template #actions>
-        <Button variant="outline" size="sm" @click="syncTemplates" :disabled="isSyncing || !selectedAccount || selectedAccount === 'all'">
+        <Button variant="outline" size="sm" @click="syncTemplates" :disabled="isSyncing" title="Sincronizar templates com a Meta">
           <Loader2 v-if="isSyncing" class="h-4 w-4 mr-2 animate-spin" />
           <RefreshCw v-else class="h-4 w-4 mr-2" />
           {{ $t('templates.syncFromMeta') }}
@@ -415,7 +420,7 @@ function getHeaderIcon(type: string) {
                 </template>
                 <template #empty-action>
                   <div class="flex items-center justify-center gap-2">
-                    <Button variant="outline" size="sm" @click="syncTemplates" :disabled="!selectedAccount || selectedAccount === 'all'">
+                    <Button variant="outline" size="sm" @click="syncTemplates" :disabled="isSyncing">
                       <RefreshCw class="h-4 w-4 mr-2" />
                       {{ $t('templates.syncFromMeta') }}
                     </Button>
