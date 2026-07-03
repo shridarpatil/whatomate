@@ -1191,6 +1191,10 @@ async function sendTemplateMessage() {
     templateHeaderParamValue.value = ''
     clearTemplateHeaderMedia()
     templateButtonUrlParams.value = []
+    // Refresh contact so service_window_open reflects the latest state from server
+    if (contactsStore.currentContact) {
+      await contactsStore.fetchContact(contactsStore.currentContact.id)
+    }
   } catch (error: any) {
     const message = error.response?.data?.message || t('chat.templateSendFailed')
     toast.error(message)
@@ -2585,7 +2589,10 @@ function onTextareaEscape() {
           class="px-4 py-2.5 border-t border-red-500/20 bg-red-500/10 flex items-center gap-2"
         >
           <Clock class="h-4 w-4 text-red-500 shrink-0" />
-          <span class="text-sm text-red-500 flex-1">{{ $t('chat.serviceWindowExpired') }}</span>
+          <div class="flex-1 min-w-0">
+            <span class="text-sm text-red-500">{{ $t('chat.serviceWindowExpired') }}</span>
+            <span class="text-xs text-red-400/70 block mt-0.5">O banner desaparecerá quando o cliente responder ao template.</span>
+          </div>
           <Button variant="outline" size="sm" class="border-red-500/30 text-red-500 hover:bg-red-500/10 shrink-0" @click="openTemplatePicker">
             {{ $t('chat.sendTemplateAction') }}
           </Button>
