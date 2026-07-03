@@ -12,7 +12,7 @@ import { toast } from 'vue-sonner'
 import { MessageSquare, Loader2 } from 'lucide-vue-next'
 
 const orgLogo = ref('')
-const orgDisplayName = ref('')
+const orgDisplayName = ref('CENTRAL WHATC')
 
 const { t } = useI18n()
 
@@ -55,7 +55,8 @@ onMounted(async () => {
     if (res.ok) {
       const json = await res.json()
       orgLogo.value = json.data?.logo_base64 || ''
-      orgDisplayName.value = json.data?.name || ''
+      // Name is fixed — not pulled from org settings
+      orgDisplayName.value = 'CENTRAL WHATC'
     }
   } catch {}
 
