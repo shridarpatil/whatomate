@@ -746,10 +746,30 @@ func (a *App) execChatTransfer(node *ChatNode, ctx *chatNodeCtx) (nodeOutcome, e
 				}
 			}
 		}
+		// Merge tags into contact without duplicates
 		if len(tagNames) > 0 {
-			a.applyTagsToContact(ctx.account.OrganizationID, ctx.contact, tagNames)
-			a.Log.Info("Auto-tags applied from transfer node",
-				"contact_id", ctx.contact.ID, "tags", tagNames, "node", node.ID)
+			existingTags := make(map[string]struct{})
+			for _, t := range ctx.contact.Tags {
+				if s, ok := t.(string); ok {
+					existingTags[s] = struct{}{}
+				}
+			}
+			mergedTags := make(models.JSONBArray, len(ctx.contact.Tags))
+			copy(mergedTags, ctx.contact.Tags)
+			for _, tag := range tagNames {
+				if _, dup := existingTags[tag]; !dup {
+					mergedTags = append(mergedTags, tag)
+					existingTags[tag] = struct{}{}
+				}
+			}
+			if err := a.DB.Model(ctx.contact).Update("tags", mergedTags).Error; err != nil {
+				a.Log.Warn("Auto-tag from transfer node failed",
+					"contact_id", ctx.contact.ID, "error", err)
+			} else {
+				ctx.contact.Tags = mergedTags
+				a.Log.Info("Auto-tags applied from transfer node",
+					"contact_id", ctx.contact.ID, "tags", tagNames, "node", node.ID)
+			}
 		}
 	}
 
