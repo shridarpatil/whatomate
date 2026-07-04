@@ -581,6 +581,39 @@ function removeTransferTag(tag: string) {
           class="min-h-[50px] text-xs"
         />
       </div>
+
+      <!-- Auto-tags -->
+      <div class="space-y-1.5">
+        <Label class="text-xs font-medium">Etiquetas automaticas</Label>
+        <p class="text-[11px] text-muted-foreground leading-tight">
+          Aplicadas ao contato ao passar por este no. Suporta variaveis de sessao.
+        </p>
+        <div class="flex gap-1.5">
+          <Input
+            v-model="transferTagInput"
+            placeholder="ex: logistica, urgente"
+            class="h-7 text-xs flex-1"
+            @keydown.enter.prevent="addTransferTag"
+          />
+          <Button size="sm" variant="outline" class="h-7 px-2 text-xs shrink-0" @click="addTransferTag">
+            +
+          </Button>
+        </div>
+        <div v-if="transferTags.length > 0" class="flex flex-wrap gap-1 mt-1">
+          <span
+            v-for="tag in transferTags"
+            :key="tag"
+            class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 text-[11px] font-medium"
+          >
+            {{ tag }}
+            <button
+              type="button"
+              class="hover:text-white transition-colors leading-none"
+              @click="removeTransferTag(tag)"
+            >x</button>
+          </span>
+        </div>
+      </div>
     </template>
 
     <!-- end -->
