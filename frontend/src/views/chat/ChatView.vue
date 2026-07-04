@@ -2917,11 +2917,11 @@ function onTextareaEscape() {
           <Button
             v-if="contactsStore.currentContact?.assigned_user_id"
             variant="outline"
-            class="w-full justify-start"
+            class="w-full justify-start gap-2 text-destructive hover:text-destructive"
             @click="assignContactToUser(null); isAssignDialogOpen = false"
           >
-            <UserMinus class="mr-2 h-4 w-4" />
-            {{ $t('chat.unassignContact') }}
+            <UserMinus class="h-4 w-4 shrink-0" />
+            <span class="flex-1 text-left text-sm">{{ $t('chat.unassignContact') }}</span>
           </Button>
           <Separator />
           <ScrollArea class="max-h-[280px]">
@@ -2930,17 +2930,21 @@ function onTextareaEscape() {
                 v-for="user in filteredAssignableUsers"
                 :key="user.id"
                 :variant="contactsStore.currentContact?.assigned_user_id === user.id ? 'secondary' : 'ghost'"
-                class="w-full justify-start"
+                class="w-full justify-start gap-2 pr-2"
                 @click="assignContactToUser(user.id); isAssignDialogOpen = false"
               >
-                <User class="mr-2 h-4 w-4" />
-                <span>{{ user.full_name }}</span>
+                <User class="h-4 w-4 shrink-0 text-muted-foreground" />
+                <span class="flex-1 min-w-0 truncate text-left text-sm">{{ user.full_name }}</span>
                 <Check
                   v-if="contactsStore.currentContact?.assigned_user_id === user.id"
-                  class="ml-auto h-4 w-4 text-primary"
+                  class="h-4 w-4 shrink-0 text-primary"
                 />
-                <Badge v-else variant="outline" class="ml-auto text-xs">
-                  {{ user.role?.name }}
+                <Badge
+                  v-else-if="user.role?.name"
+                  variant="outline"
+                  class="shrink-0 text-[10px] px-1.5 py-0 h-5 font-medium whitespace-nowrap"
+                >
+                  {{ user.role.name }}
                 </Badge>
               </Button>
               <p v-if="filteredAssignableUsers.length === 0" class="text-sm text-muted-foreground text-center py-4">
