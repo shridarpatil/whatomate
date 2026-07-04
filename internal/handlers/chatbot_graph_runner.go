@@ -728,6 +728,31 @@ func (a *App) execChatTransfer(node *ChatNode, ctx *chatNodeCtx) (nodeOutcome, e
 		notes = processTemplate(rawNotes, ctx.session.SessionData)
 	}
 
+	// Auto-apply tags defined on this transfer node.
+	// Config: { "tags": ["tag1", "tag2"] }
+	if rawTags, ok := node.Config["tags"]; ok {
+		var tagNames []string
+		switch v := rawTags.(type) {
+		case []interface{}:
+			for _, t := range v {
+				if s, ok := t.(string); ok && s != "" {
+					tagNames = append(tagNames, processTemplate(s, ctx.session.SessionData))
+				}
+			}
+		case []string:
+			for _, s := range v {
+				if s != "" {
+					tagNames = append(tagNames, processTemplate(s, ctx.session.SessionData))
+				}
+			}
+		}
+		if len(tagNames) > 0 {
+			a.applyTagsToContact(ctx.account.OrganizationID, ctx.contact, tagNames)
+			a.Log.Info("Auto-tags applied from transfer node",
+				"contact_id", ctx.contact.ID, "tags", tagNames, "node", node.ID)
+		}
+	}
+
 	teamIDStr := stringFromConfig(node.Config, "team_id")
 	if teamIDStr != "" && teamIDStr != "_general" {
 		if parsed, err := uuid.Parse(teamIDStr); err == nil {
