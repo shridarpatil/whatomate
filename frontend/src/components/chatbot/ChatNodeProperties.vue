@@ -226,6 +226,33 @@ const typeLabel: Record<string, string> = {
   whatsapp_flow: 'WhatsApp Flow',
   webhook: 'Webhook',
 }
+
+// ── Transfer node auto-tags ─────────────────────────────────────────────────
+const transferTagInput = ref('')
+
+const transferTags = computed<string[]>(() => {
+  const raw = config.value?.tags
+  if (!raw) return []
+  if (Array.isArray(raw)) return raw.filter((t: any) => typeof t === 'string' && t)
+  return []
+})
+
+function addTransferTag() {
+  const val = transferTagInput.value.trim().replace(/,+$/, '')
+  if (!val) return
+  const current: string[] = Array.isArray(config.value?.tags) ? [...config.value.tags] : []
+  const toAdd = val.split(',').map((t: string) => t.trim()).filter((t: string) => t && !current.includes(t))
+  if (toAdd.length) {
+    updateConfig('tags', [...current, ...toAdd])
+  }
+  transferTagInput.value = ''
+}
+
+function removeTransferTag(tag: string) {
+  const current: string[] = Array.isArray(config.value?.tags) ? [...config.value.tags] : []
+  updateConfig('tags', current.filter((t: string) => t !== tag))
+}
+
 </script>
 
 <template>
