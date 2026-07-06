@@ -95,6 +95,7 @@ interface WSMessage {
 
 class WebSocketService {
   private ws: WebSocket | null = null
+  private isConnecting = false
   private reconnectAttempts = 0
   private reconnectDelay = 1000
   private maxReconnectDelay = 30000
@@ -107,9 +108,20 @@ class WebSocketService {
   private getTokenFn: (() => Promise<string | null>) | null = null
 
   async connect(getToken?: () => Promise<string | null>) {
-    if (this.ws?.readyState === WebSocket.OPEN) {
+    // isConnecting covers the async token-fetch window below, during which
+    // this.ws still holds the previous (closed) socket: on a device wake,
+    // visibilitychange/online/pageshow and a pending backoff timer can all
+    // call connect() near-simultaneously, and a readyState-only check would
+    // let each of them open its own socket and fork the retry into parallel
+    // backoff chains.
+    if (
+      this.isConnecting ||
+      this.ws?.readyState === WebSocket.OPEN ||
+      this.ws?.readyState === WebSocket.CONNECTING
+    ) {
       return
     }
+    this.isConnecting = true
 
     this.intentionalClose = false
     this.installLifecycleListeners()
@@ -122,6 +134,11 @@ class WebSocketService {
     // Get a fresh short-lived WS token
     const token = this.getTokenFn ? await this.getTokenFn() : null
     if (!token) {
+      // No socket was created, so no onclose will ever fire: schedule the
+      // retry here or the reconnect chain would silently end on a transient
+      // token-fetch failure (backoff keeps this cheap if auth truly expired).
+      this.isConnecting = false
+      this.handleReconnect()
       return
     }
 
@@ -134,6 +151,7 @@ class WebSocketService {
       this.ws = new WebSocket(url)
 
       this.ws.onopen = () => {
+        this.isConnecting = false
         // Send auth message as the first message (token not in URL for security)
         this.send({ type: WS_TYPE_AUTH, payload: { token } })
 
@@ -154,6 +172,7 @@ class WebSocketService {
       }
 
       this.ws.onclose = () => {
+        this.isConnecting = false
         this.isConnected = false
         this.stopPing()
         this.handleReconnect()
@@ -163,6 +182,7 @@ class WebSocketService {
         // Error handled by onclose
       }
     } catch {
+      this.isConnecting = false
       this.handleReconnect()
     }
   }
