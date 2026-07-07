@@ -35,9 +35,10 @@ import {
   ChevronRight,
   Plus,
   Trash2,
-  Play,,
+  Play,
   MapPin,
-  ShoppingBag} from 'lucide-vue-next'
+  ShoppingBag,
+} from 'lucide-vue-next'
 
 import AuditLogPanel from '@/components/shared/AuditLogPanel.vue'
 import MetadataPanel from '@/components/shared/MetadataPanel.vue'
