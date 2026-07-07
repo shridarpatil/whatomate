@@ -28,6 +28,8 @@ const (
 	ChatNodeGotoFlow     ChatNodeType = "goto_flow"
 	ChatNodeWhatsAppFlow ChatNodeType = "whatsapp_flow"
 	ChatNodeEnd          ChatNodeType = "end"
+	ChatNodeLocation      ChatNodeType = "location"
+	ChatNodeProductCatalog ChatNodeType = "product_catalog"
 )
 
 // ChatNode, ChatEdge and ChatGraph are the chatbot domain's views of the shared
