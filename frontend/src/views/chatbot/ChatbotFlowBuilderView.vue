@@ -155,6 +155,7 @@ const {
   removeNodes,
   removeEdges,
   onConnect,
+  onPaneReady,
   project,
   fitView,
 } = useVueFlow({
@@ -562,7 +563,9 @@ function loadGraph(graph: ChatFlowGraph) {
 
 async function loadFlow() {
   if (isNewFlow.value) {
-    ensureStartNode()
+    onPaneReady(() => {
+      ensureStartNode()
+    })
     isLoading.value = false
     return
   }
@@ -596,7 +599,10 @@ async function loadFlow() {
 
     const graph = flow.graph || flow.Graph
     if (graph && graph.version === 2) {
-      loadGraph(graph)
+      // Wait for VueFlow to be ready before adding nodes
+      onPaneReady(() => {
+        loadGraph(graph)
+      })
     }
   } catch {
     loadError.value = true
@@ -766,7 +772,7 @@ onMounted(async () => {
     <!-- Main: canvas + right panel -->
     <div class="flex-1 flex overflow-hidden">
       <!-- Canvas -->
-      <div class="flex-1 relative">
+      <div class="flex-1 relative h-full">
         <div v-if="isLoading" class="absolute inset-0 flex items-center justify-center bg-background/80 z-10">
           <div class="animate-spin rounded-full h-8 w-8 border-b-2 border-primary" />
         </div>
