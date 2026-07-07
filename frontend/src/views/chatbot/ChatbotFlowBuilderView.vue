@@ -164,11 +164,11 @@ const {
 
 const entryNodeId = ref<string>('')
 const selectedNodeId = ref<string | null>(null)
-// Store the full VueFlow node directly from the click event.
-// This avoids cross-scope store lookup issues when FlowCanvas wraps VueFlow.
-const selectedClickedNode = ref<any>(null)
 
-const selectedNode = computed(() => selectedClickedNode.value)
+const selectedNode = computed(() => {
+  if (!selectedNodeId.value) return null
+  return nodes.value.find((n) => n.id === selectedNodeId.value) || null
+})
 
 // Properties panel reads a ChatNode-shaped object derived from the Vue Flow node.
 const selectedChatNode = computed<ChatNode | null>(() => {
@@ -185,19 +185,10 @@ const selectedChatNode = computed<ChatNode | null>(() => {
 
 function onNodeClick(event: NodeMouseEvent) {
   selectedNodeId.value = event.node.id
-  // Store a plain snapshot of the node to avoid Proxy reactivity issues
-  // when the VueFlow node object crosses component boundaries
-  selectedClickedNode.value = {
-    id: event.node.id,
-    type: event.node.type,
-    position: { x: event.node.position.x, y: event.node.position.y },
-    data: { ...event.node.data },
-  }
 }
 
 function onPaneClick() {
   selectedNodeId.value = null
-  selectedClickedNode.value = null
 }
 
 let nodeCounter = 0
@@ -370,15 +361,6 @@ function onEdgeUpdate({ edge, connection }: { edge: Edge; connection: Connection
 
 function onUpdateNode(updated: ChatNode) {
   const node = nodes.value.find((n) => n.id === updated.id)
-  // Refresh the panel data immediately so changes are reflected in real time
-  if (selectedClickedNode.value?.id === updated.id) {
-    selectedClickedNode.value = {
-      id: updated.id,
-      type: updated.type,
-      position: updated.position,
-      data: { label: updated.label, config: { ...updated.config } },
-    }
-  }
   if (!node) return
   if (updated.type !== node.type) {
     // "Text" nodes flip between v2 message / prompt when the author
@@ -803,8 +785,6 @@ onMounted(async () => {
           </template>
         </ErrorState>
         <FlowCanvas
-          :nodes="nodes"
-          :edges="edges"
           :node-types="nodeTypes"
           edge-type="default"
           @node-click="onNodeClick"
@@ -990,6 +970,6 @@ onMounted(async () => {
       variant="destructive"
       @confirm="confirmDeleteSelectedNode"
     />
-    <UnsavedChangesDialog v-model:open="cancelDialogOpen" @stay="cancelDialogOpen = false" @leave="confirmCancel" />
+    <UnsavedChangesDialog v-model:open="cancelDialogOpen" @confirm="confirmCancel" />
   </div>
 </template>
