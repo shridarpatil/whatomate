@@ -185,7 +185,14 @@ const selectedChatNode = computed<ChatNode | null>(() => {
 
 function onNodeClick(event: NodeMouseEvent) {
   selectedNodeId.value = event.node.id
-  selectedClickedNode.value = event.node
+  // Store a plain snapshot of the node to avoid Proxy reactivity issues
+  // when the VueFlow node object crosses component boundaries
+  selectedClickedNode.value = {
+    id: event.node.id,
+    type: event.node.type,
+    position: { x: event.node.position.x, y: event.node.position.y },
+    data: { ...event.node.data },
+  }
 }
 
 function onPaneClick() {
@@ -363,6 +370,15 @@ function onEdgeUpdate({ edge, connection }: { edge: Edge; connection: Connection
 
 function onUpdateNode(updated: ChatNode) {
   const node = nodes.value.find((n) => n.id === updated.id)
+  // Refresh the panel data immediately so changes are reflected in real time
+  if (selectedClickedNode.value?.id === updated.id) {
+    selectedClickedNode.value = {
+      id: updated.id,
+      type: updated.type,
+      position: updated.position,
+      data: { label: updated.label, config: { ...updated.config } },
+    }
+  }
   if (!node) return
   if (updated.type !== node.type) {
     // "Text" nodes flip between v2 message / prompt when the author
@@ -791,8 +807,6 @@ onMounted(async () => {
           :edges="edges"
           :node-types="nodeTypes"
           edge-type="default"
-          @update:nodes="(n) => { nodes.value = n }"
-          @update:edges="(e) => { edges.value = e }"
           @node-click="onNodeClick"
           @pane-click="onPaneClick"
           @edge-click="onEdgeClick"
