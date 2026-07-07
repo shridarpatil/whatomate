@@ -789,8 +789,6 @@ onMounted(async () => {
           :edges="edges"
           :node-types="nodeTypes"
           edge-type="default"
-          @update:nodes="(n) => { nodes.value = n }"
-          @update:edges="(e) => { edges.value = e }"
           @node-click="onNodeClick"
           @pane-click="onPaneClick"
           @edge-click="onEdgeClick"
