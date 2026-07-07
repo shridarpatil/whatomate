@@ -1094,7 +1094,7 @@ func (a *App) execChatLocation(node *ChatNode, ctx *chatNodeCtx) (nodeOutcome, e
 	}
 
 	recipient := whatsapp.Recipient{Phone: ctx.contact.PhoneNumber}
-	_, err := a.WhatsApp.SendLocationRequest(context.Background(), ctx.account, recipient, body)
+	_, err := a.WhatsApp.SendLocationRequest(context.Background(), ctx.account.ToWAAccount(), recipient, body)
 	if err != nil {
 		return nodeOutcome{}, fmt.Errorf("send location request: %w", err)
 	}
@@ -1125,7 +1125,7 @@ func (a *App) execChatProductCatalog(node *ChatNode, ctx *chatNodeCtx) (nodeOutc
 	thumbnailID := stringFromConfig(node.Config, "thumbnail_id")
 
 	recipient := whatsapp.Recipient{Phone: ctx.contact.PhoneNumber}
-	_, err := a.WhatsApp.SendCatalogMessage(context.Background(), ctx.account, recipient, catalogID, body, thumbnailID)
+	_, err := a.WhatsApp.SendCatalogMessage(context.Background(), ctx.account.ToWAAccount(), recipient, catalogID, body, thumbnailID)
 	if err != nil {
 		return nodeOutcome{}, fmt.Errorf("send catalog message: %w", err)
 	}
