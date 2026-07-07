@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -12,6 +13,7 @@ import (
 	"github.com/expr-lang/expr"
 	"github.com/google/uuid"
 	"github.com/shridarpatil/whatomate/internal/models"
+	"github.com/shridarpatil/whatomate/pkg/whatsapp"
 )
 
 // maxChatGraphIterations bounds non-blocking node chains within a single
@@ -1092,7 +1094,7 @@ func (a *App) execChatLocation(node *ChatNode, ctx *chatNodeCtx) (nodeOutcome, e
 	}
 
 	recipient := whatsapp.Recipient{Phone: ctx.contact.PhoneNumber}
-	_, err := a.WA.SendLocationRequest(context.Background(), ctx.account, recipient, body)
+	_, err := a.WhatsApp.SendLocationRequest(context.Background(), ctx.account, recipient, body)
 	if err != nil {
 		return nodeOutcome{}, fmt.Errorf("send location request: %w", err)
 	}
@@ -1123,7 +1125,7 @@ func (a *App) execChatProductCatalog(node *ChatNode, ctx *chatNodeCtx) (nodeOutc
 	thumbnailID := stringFromConfig(node.Config, "thumbnail_id")
 
 	recipient := whatsapp.Recipient{Phone: ctx.contact.PhoneNumber}
-	_, err := a.WA.SendCatalogMessage(context.Background(), ctx.account, recipient, catalogID, body, thumbnailID)
+	_, err := a.WhatsApp.SendCatalogMessage(context.Background(), ctx.account, recipient, catalogID, body, thumbnailID)
 	if err != nil {
 		return nodeOutcome{}, fmt.Errorf("send catalog message: %w", err)
 	}
