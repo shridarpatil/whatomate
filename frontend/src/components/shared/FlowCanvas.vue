@@ -13,11 +13,13 @@ withDefaults(
     edgeType?: string
     fitViewOnInit?: boolean
     controlsPosition?: string
+    id?: string
   }>(),
   {
     edgeType: 'smoothstep',
     fitViewOnInit: false,
     controlsPosition: 'bottom-left',
+    id: 'chatbot-flow',
   },
 )
 
@@ -37,6 +39,7 @@ defineEmits<{
 <template>
   <div class="flow-canvas h-full relative">
     <VueFlow
+      :id="id"
       :nodes="nodes"
       :edges="edges"
       :node-types="nodeTypes"
