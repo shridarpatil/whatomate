@@ -628,7 +628,7 @@ function removeTransferTag(tag: string) {
         />
         <p class="text-[10px] text-muted-foreground leading-tight">
           Exibida acima do botão "Compartilhar localização" no WhatsApp.
-          Suporta variáveis: <code class="bg-muted px-1 rounded">{{ "{{nome}}" }}</code>
+          Suporta variáveis: <code class="bg-muted px-1 rounded">&#123;&#123;nome&#125;&#125;</code>
         </p>
       </div>
       <div class="rounded-lg bg-rose-500/8 border border-rose-500/20 px-3 py-2.5">
