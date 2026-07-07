@@ -35,8 +35,9 @@ import {
   ChevronRight,
   Plus,
   Trash2,
-  Play,
-} from 'lucide-vue-next'
+  Play,,
+  MapPin,
+  ShoppingBag} from 'lucide-vue-next'
 
 import AuditLogPanel from '@/components/shared/AuditLogPanel.vue'
 import MetadataPanel from '@/components/shared/MetadataPanel.vue'
@@ -55,6 +56,8 @@ import ChatbotTransferNode from '@/components/chatbot/nodes/ChatbotTransferNode.
 import ChatbotConditionNode from '@/components/chatbot/nodes/ChatbotConditionNode.vue'
 import ChatbotTimingNode from '@/components/chatbot/nodes/ChatbotTimingNode.vue'
 import ChatbotGotoFlowNode from '@/components/chatbot/nodes/ChatbotGotoFlowNode.vue'
+import ChatbotLocationNode from '@/components/chatbot/nodes/ChatbotLocationNode.vue'
+import ChatbotProductCatalogNode from '@/components/chatbot/nodes/ChatbotProductCatalogNode.vue'
 import ChatbotEndNode from '@/components/chatbot/nodes/ChatbotEndNode.vue'
 import ChatbotStartNode from '@/components/chatbot/nodes/ChatbotStartNode.vue'
 
@@ -120,6 +123,8 @@ const nodeTypes: any = {
   goto_flow: markRaw(ChatbotGotoFlowNode),
   end: markRaw(ChatbotEndNode),
   webhook: markRaw(ChatbotApiNode),
+  location: markRaw(ChatbotLocationNode),
+  product_catalog: markRaw(ChatbotProductCatalogNode),
 }
 
 // Palette: 'prompt' and 'webhook' are internal-only — a Text node
@@ -134,6 +139,8 @@ const palette: { type: ChatNodeType; label: string; icon: any; color: string }[]
   { type: 'timing', label: 'Timing', icon: Clock, color: 'bg-cyan-600' },
   { type: 'goto_flow', label: 'Go to Flow', icon: ExternalLink, color: 'bg-teal-600' },
   { type: 'end', label: 'End', icon: StopCircle, color: 'bg-slate-600' },
+  { type: 'location', label: 'Localização', icon: MapPin, color: 'bg-rose-600' },
+  { type: 'product_catalog', label: 'Catálogo', icon: ShoppingBag, color: 'bg-lime-600' },
 ]
 
 const {
@@ -217,6 +224,10 @@ function defaultConfigFor(type: ChatNodeType): Record<string, any> {
       return { flow_id: '' }
     case 'webhook':
       return { url: '', method: 'POST', headers: {}, body: '' }
+    case 'location':
+      return { body: '' }
+    case 'product_catalog':
+      return { catalog_id: '', body: '', thumbnail_id: '' }
     case 'end':
       return { message: '' }
     default:
@@ -236,6 +247,8 @@ const paletteLabels: Record<string, string> = {
   goto_flow: 'Go to Flow',
   webhook: 'Webhook',
   end: 'End',
+  location: 'Localização',
+  product_catalog: 'Catálogo',
 }
 
 function addNodeFromPalette(type: ChatNodeType) {
