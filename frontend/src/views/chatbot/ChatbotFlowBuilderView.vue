@@ -155,6 +155,7 @@ const {
   project,
   fitView,
 } = useVueFlow({
+  id: 'chatbot-flow',
   defaultEdgeOptions: {
     type: 'default',
     animated: true,
@@ -785,8 +786,7 @@ onMounted(async () => {
           </template>
         </ErrorState>
         <FlowCanvas
-          :nodes="nodes"
-          :edges="edges"
+          id="chatbot-flow"
           :node-types="nodeTypes"
           edge-type="default"
           @node-click="onNodeClick"
