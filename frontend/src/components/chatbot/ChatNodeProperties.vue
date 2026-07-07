@@ -616,6 +616,78 @@ function removeTransferTag(tag: string) {
       </div>
     </template>
 
+    <!-- location -->
+    <template v-if="node.type === 'location'">
+      <div class="space-y-1.5">
+        <Label class="text-xs font-medium">Mensagem de solicitação</Label>
+        <Textarea
+          :model-value="config.body || ''"
+          @update:model-value="(v: string) => updateConfig('body', v)"
+          placeholder="Por favor, compartilhe sua localização para encontrarmos a loja mais próxima."
+          class="min-h-[60px] text-xs"
+        />
+        <p class="text-[10px] text-muted-foreground leading-tight">
+          Exibida acima do botão "Compartilhar localização" no WhatsApp.
+          Suporta variáveis: <code class="bg-muted px-1 rounded">{{ "{{nome}}" }}</code>
+        </p>
+      </div>
+      <div class="rounded-lg bg-rose-500/8 border border-rose-500/20 px-3 py-2.5">
+        <p class="text-[11px] text-rose-300/80 leading-relaxed">
+          📍 O usuário toca em "Compartilhar localização" no WhatsApp. A resposta é salva automaticamente
+          como <code class="bg-muted px-1 rounded text-[10px]">location_latitude</code>,
+          <code class="bg-muted px-1 rounded text-[10px]">location_longitude</code>,
+          <code class="bg-muted px-1 rounded text-[10px]">location_name</code> e
+          <code class="bg-muted px-1 rounded text-[10px]">location_address</code>.
+        </p>
+      </div>
+    </template>
+
+    <!-- product_catalog -->
+    <template v-if="node.type === 'product_catalog'">
+      <div class="space-y-1.5">
+        <Label class="text-xs font-medium">Catalog ID <span class="text-destructive">*</span></Label>
+        <Input
+          :model-value="config.catalog_id || ''"
+          @update:model-value="(v: string) => updateConfig('catalog_id', v)"
+          placeholder="Ex: 1234567890"
+          class="h-8 text-xs font-mono"
+        />
+        <p class="text-[10px] text-muted-foreground">
+          ID do catálogo no Meta Business Manager.
+          Encontre em <strong>Gerenciador de Negócios → Catálogos</strong>.
+        </p>
+      </div>
+      <div class="space-y-1.5">
+        <Label class="text-xs font-medium">Mensagem do catálogo</Label>
+        <Textarea
+          :model-value="config.body || ''"
+          @update:model-value="(v: string) => updateConfig('body', v)"
+          placeholder="Confira nosso catálogo de produtos!"
+          class="min-h-[50px] text-xs"
+        />
+      </div>
+      <div class="space-y-1.5">
+        <Label class="text-xs font-medium">Produto em destaque (opcional)</Label>
+        <Input
+          :model-value="config.thumbnail_id || ''"
+          @update:model-value="(v: string) => updateConfig('thumbnail_id', v)"
+          placeholder="Retailer ID do produto (SKU)"
+          class="h-8 text-xs font-mono"
+        />
+        <p class="text-[10px] text-muted-foreground">
+          ID do produto a exibir como miniatura no cartão do catálogo.
+          Deixe em branco para usar o primeiro produto do catálogo.
+        </p>
+      </div>
+      <div class="rounded-lg bg-lime-500/8 border border-lime-500/20 px-3 py-2.5">
+        <p class="text-[11px] text-lime-300/80 leading-relaxed">
+          🛍 Envia uma mensagem interativa de catálogo. O cliente pode navegar pelos produtos
+          e adicionar ao carrinho diretamente no WhatsApp. O fluxo avança automaticamente
+          após o envio do catálogo.
+        </p>
+      </div>
+    </template>
+
     <!-- end -->
     <template v-if="node.type === 'end'">
       <div class="space-y-1.5">
@@ -741,7 +813,7 @@ function removeTransferTag(tag: string) {
          nodes (end / transfer / goto_flow) where there's nothing to
          skip past. -->
     <div
-      v-if="!['start', 'end', 'transfer', 'goto_flow', 'condition', 'buttons', 'timing'].includes(node.type)"
+      v-if="!['start', 'end', 'transfer', 'goto_flow', 'condition', 'buttons', 'timing', 'location', 'product_catalog'].includes(node.type)"
       class="pt-2 border-t space-y-1.5"
     >
       <Label class="text-xs">Skip condition (optional)</Label>
