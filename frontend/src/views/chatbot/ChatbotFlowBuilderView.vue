@@ -1,11 +1,8 @@
 <script setup lang="ts">
-import { ref, computed, onMounted, markRaw, watch, nextTick } from 'vue'
+import { ref, computed, onMounted, markRaw, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRoute, useRouter } from 'vue-router'
-import { VueFlow, useVueFlow, MarkerType, type NodeMouseEvent, type Edge, type EdgeMouseEvent, type Connection } from '@vue-flow/core'
-import { Background } from '@vue-flow/background'
-import { Controls } from '@vue-flow/controls'
-import { MiniMap } from '@vue-flow/minimap'
+import { useVueFlow, MarkerType, type NodeMouseEvent, type Edge, type EdgeMouseEvent, type Connection } from '@vue-flow/core'
 import { toast } from 'vue-sonner'
 
 import FlowCanvas from '@/components/shared/FlowCanvas.vue'
@@ -60,10 +57,10 @@ import ChatbotTransferNode from '@/components/chatbot/nodes/ChatbotTransferNode.
 import ChatbotConditionNode from '@/components/chatbot/nodes/ChatbotConditionNode.vue'
 import ChatbotTimingNode from '@/components/chatbot/nodes/ChatbotTimingNode.vue'
 import ChatbotGotoFlowNode from '@/components/chatbot/nodes/ChatbotGotoFlowNode.vue'
-import ChatbotLocationNode from '@/components/chatbot/nodes/ChatbotLocationNode.vue'
-import ChatbotProductCatalogNode from '@/components/chatbot/nodes/ChatbotProductCatalogNode.vue'
 import ChatbotEndNode from '@/components/chatbot/nodes/ChatbotEndNode.vue'
 import ChatbotStartNode from '@/components/chatbot/nodes/ChatbotStartNode.vue'
+import ChatbotLocationNode from '@/components/chatbot/nodes/ChatbotLocationNode.vue'
+import ChatbotProductCatalogNode from '@/components/chatbot/nodes/ChatbotProductCatalogNode.vue'
 
 import InteractivePreview from '@/components/chatbot/flow-preview/InteractivePreview.vue'
 import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog'
@@ -167,11 +164,11 @@ const {
 
 const entryNodeId = ref<string>('')
 const selectedNodeId = ref<string | null>(null)
+// Store the full VueFlow node directly from the click event.
+// This avoids cross-scope store lookup issues when FlowCanvas wraps VueFlow.
+const selectedClickedNode = ref<any>(null)
 
-const selectedNode = computed(() => {
-  if (!selectedNodeId.value) return null
-  return nodes.value.find((n) => n.id === selectedNodeId.value) || null
-})
+const selectedNode = computed(() => selectedClickedNode.value)
 
 // Properties panel reads a ChatNode-shaped object derived from the Vue Flow node.
 const selectedChatNode = computed<ChatNode | null>(() => {
@@ -188,10 +185,12 @@ const selectedChatNode = computed<ChatNode | null>(() => {
 
 function onNodeClick(event: NodeMouseEvent) {
   selectedNodeId.value = event.node.id
+  selectedClickedNode.value = event.node
 }
 
 function onPaneClick() {
   selectedNodeId.value = null
+  selectedClickedNode.value = null
 }
 
 let nodeCounter = 0
@@ -562,7 +561,6 @@ function loadGraph(graph: ChatFlowGraph) {
 
 async function loadFlow() {
   if (isNewFlow.value) {
-    await nextTick()
     ensureStartNode()
     isLoading.value = false
     return
@@ -597,8 +595,6 @@ async function loadFlow() {
 
     const graph = flow.graph || flow.Graph
     if (graph && graph.version === 2) {
-      // nextTick ensures the VueFlow DOM is rendered before we add nodes
-      await nextTick()
       loadGraph(graph)
     }
   } catch {
@@ -769,7 +765,7 @@ onMounted(async () => {
     <!-- Main: canvas + right panel -->
     <div class="flex-1 flex overflow-hidden">
       <!-- Canvas -->
-      <div class="flex-1 relative h-full">
+      <div class="flex-1 relative">
         <div v-if="isLoading" class="absolute inset-0 flex items-center justify-center bg-background/80 z-10">
           <div class="animate-spin rounded-full h-8 w-8 border-b-2 border-primary" />
         </div>
@@ -790,38 +786,19 @@ onMounted(async () => {
             </div>
           </template>
         </ErrorState>
-        <VueFlow
+        <FlowCanvas
+          :nodes="nodes"
+          :edges="edges"
           :node-types="nodeTypes"
-          :nodes-draggable="true"
-          :nodes-connectable="true"
-          :edges-updatable="true"
-          :zoom-on-scroll="true"
-          :zoom-on-pinch="true"
-          :pan-on-drag="true"
-          :pan-on-scroll="false"
-          :snap-to-grid="true"
-          :snap-grid="[20, 20]"
-          :min-zoom="0.2"
-          :max-zoom="2"
-          :delete-key-code="['Backspace', 'Delete']"
-          :default-edge-options="{ type: 'default', animated: true, markerEnd: MarkerType.ArrowClosed }"
-          class="h-full"
+          edge-type="default"
+          @update:nodes="(n) => { nodes.value = n }"
+          @update:edges="(e) => { edges.value = e }"
           @node-click="onNodeClick"
           @pane-click="onPaneClick"
           @edge-click="onEdgeClick"
           @edge-update="onEdgeUpdate"
           @node-drag-stop="onNodeDragStop"
-          @connect="onConnect"
-        >
-          <Background
-            pattern-color="hsl(var(--muted-foreground) / 0.15)"
-            :gap="20"
-            :size="1"
-            variant="dots"
-          />
-          <Controls position="bottom-left" />
-          <MiniMap />
-        </VueFlow>
+        />
       </div>
 
       <!-- Right panel -->
