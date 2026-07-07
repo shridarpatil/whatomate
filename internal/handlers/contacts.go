@@ -1406,6 +1406,7 @@ type CreateContactRequest struct {
 	WhatsAppAccount string         `json:"whatsapp_account"`
 	Tags            []string       `json:"tags"`
 	Metadata        map[string]any `json:"metadata"`
+	// AssignedUserID is set automatically to the creating agent; not accepted from the client.
 }
 
 // CreateContact creates a new contact or restores a soft-deleted one
@@ -1464,8 +1465,10 @@ func (a *App) CreateContact(r *fastglue.Request) error {
 			if len(updates) > 0 {
 				a.DB.Model(&existingContact).Updates(updates)
 			}
-			// Reload contact
+			// Reload contact and assign to creating agent
 			a.DB.First(&existingContact, existingContact.ID)
+			a.DB.Model(&existingContact).Update("assigned_user_id", userID)
+			existingContact.AssignedUserID = &userID
 			return r.SendEnvelope(a.buildContactResponse(&existingContact, orgID))
 		}
 		return r.SendErrorEnvelope(fasthttp.StatusConflict, "Contact with this phone number already exists", nil, "")
@@ -1496,6 +1499,11 @@ func (a *App) CreateContact(r *fastglue.Request) error {
 		a.Log.Error("Failed to create contact", "error", err)
 		return r.SendErrorEnvelope(fasthttp.StatusInternalServerError, "Failed to create contact", nil, "")
 	}
+
+	// Auto-assign to the agent who created the contact.
+	// The contact remains visible in the general queue for supervisors.
+	a.DB.Model(&contact).Update("assigned_user_id", userID)
+	contact.AssignedUserID = &userID
 
 	a.logAudit(orgID, userID,
 		"contact", contact.ID, models.AuditActionCreated, nil, &contact)
