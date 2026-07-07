@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed, onMounted, markRaw, watch } from 'vue'
+import { ref, computed, onMounted, markRaw, watch, nextTick } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRoute, useRouter } from 'vue-router'
 import { VueFlow, useVueFlow, MarkerType, type NodeMouseEvent, type Edge, type EdgeMouseEvent, type Connection } from '@vue-flow/core'
@@ -155,7 +155,6 @@ const {
   removeNodes,
   removeEdges,
   onConnect,
-  onPaneReady,
   project,
   fitView,
 } = useVueFlow({
@@ -563,9 +562,8 @@ function loadGraph(graph: ChatFlowGraph) {
 
 async function loadFlow() {
   if (isNewFlow.value) {
-    onPaneReady(() => {
-      ensureStartNode()
-    })
+    await nextTick()
+    ensureStartNode()
     isLoading.value = false
     return
   }
@@ -599,10 +597,9 @@ async function loadFlow() {
 
     const graph = flow.graph || flow.Graph
     if (graph && graph.version === 2) {
-      // Wait for VueFlow to be ready before adding nodes
-      onPaneReady(() => {
-        loadGraph(graph)
-      })
+      // nextTick ensures the VueFlow DOM is rendered before we add nodes
+      await nextTick()
+      loadGraph(graph)
     }
   } catch {
     loadError.value = true
