@@ -679,3 +679,69 @@ func (c *Client) SendTemplateMessage(ctx context.Context, account *Account, rcpt
 	c.Log.Info("Template message sent", "message_id", messageID, "phone", rcpt.Phone, "template", templateName)
 	return messageID, nil
 }
+
+// SendLocationRequest sends an interactive location request message.
+// The user is prompted to share their current location.
+// Config drives the body text shown above the "Send Location" button.
+func (c *Client) SendLocationRequest(ctx context.Context, account *Account, rcpt Recipient, bodyText string) (string, error) {
+	if bodyText == "" {
+		bodyText = "Please share your location."
+	}
+	payload := map[string]any{
+		"messaging_product": "whatsapp",
+		"recipient_type":    "individual",
+		"type":              "interactive",
+		"interactive": map[string]any{
+			"type": "location_request_message",
+			"body": map[string]any{
+				"text": bodyText,
+			},
+			"action": map[string]any{
+				"name": "send_location",
+			},
+		},
+	}
+	rcpt.SetOnPayload(payload)
+	url := c.buildMessagesURL(account)
+	respBody, err := c.doRequest(ctx, "POST", url, payload, account.AccessToken)
+	if err != nil {
+		return "", fmt.Errorf("send location request: %w", err)
+	}
+	return parseMessageID(respBody)
+}
+
+// SendCatalogMessage sends a WhatsApp catalog message.
+// catalogID: the Meta catalog ID linked to the WABA.
+// bodyText: description shown in the message body.
+// thumbnailProductID: optional retailer_id of the product to show as thumbnail.
+func (c *Client) SendCatalogMessage(ctx context.Context, account *Account, rcpt Recipient, catalogID, bodyText, thumbnailProductID string) (string, error) {
+	if bodyText == "" {
+		bodyText = "Browse our catalog"
+	}
+	action := map[string]any{
+		"name": "catalog_message",
+		"parameters": map[string]any{
+			"thumbnail_product_retailer_id": thumbnailProductID,
+		},
+	}
+	payload := map[string]any{
+		"messaging_product": "whatsapp",
+		"recipient_type":    "individual",
+		"type":              "interactive",
+		"interactive": map[string]any{
+			"type": "catalog_message",
+			"body": map[string]any{
+				"text": bodyText,
+			},
+			"action": action,
+		},
+	}
+	rcpt.SetOnPayload(payload)
+	url := c.buildMessagesURL(account)
+	respBody, err := c.doRequest(ctx, "POST", url, payload, account.AccessToken)
+	if err != nil {
+		return "", fmt.Errorf("send catalog message: %w", err)
+	}
+	return parseMessageID(respBody)
+}
+
