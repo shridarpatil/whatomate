@@ -221,6 +221,10 @@ func (a *App) executeChatNode(node *ChatNode, ctx *chatNodeCtx) (nodeOutcome, er
 		return a.execChatWhatsAppFlow(node, ctx)
 	case ChatNodeEnd:
 		return a.execChatEnd(node, ctx)
+	case ChatNodeLocation:
+		return a.execChatLocation(node, ctx)
+	case ChatNodeProductCatalog:
+		return a.execChatProductCatalog(node, ctx)
 	default:
 		return nodeOutcome{outcome: "", yield: true},
 			fmt.Errorf("chat node type %q not implemented in this phase", node.Type)
@@ -1054,4 +1058,75 @@ func buttonsFromConfig(cfg map[string]any) []map[string]any {
 		}
 	}
 	return out
+}
+
+// execChatLocation sends an interactive location-request message.
+// The user is prompted to share their GPS location via the WhatsApp UI.
+// Config: { "body": "Please share your location to find the nearest store." }
+// On reply the contact's location (lat/lng/name/address) is stored in
+// session variables: location_latitude, location_longitude, location_name,
+// location_address.
+func (a *App) execChatLocation(node *ChatNode, ctx *chatNodeCtx) (nodeOutcome, error) {
+	// If the user has already replied with their location, consume it.
+	if !ctx.consumed && ctx.userInput != "" {
+		ctx.consumed = true
+		if ctx.session.SessionData == nil {
+			ctx.session.SessionData = models.JSONB{}
+		}
+		// Location payloads arrive as JSON: {"latitude":...,"longitude":...,"name":...,"address":...}
+		// The processor stores them flat in userInput as JSON when location type is detected.
+		var loc map[string]any
+		if err := json.Unmarshal([]byte(ctx.userInput), &loc); err == nil {
+			for k, v := range loc {
+				ctx.session.SessionData["location_"+k] = v
+			}
+		} else {
+			ctx.session.SessionData["location_raw"] = ctx.userInput
+		}
+		return nodeOutcome{outcome: "default"}, nil
+	}
+
+	body := processTemplate(stringFromConfig(node.Config, "body", "message", "text"), ctx.session.SessionData)
+	if body == "" {
+		body = "Por favor, compartilhe sua localização."
+	}
+
+	recipient := whatsapp.Recipient{Phone: ctx.contact.PhoneNumber}
+	_, err := a.WA.SendLocationRequest(context.Background(), ctx.account, recipient, body)
+	if err != nil {
+		return nodeOutcome{}, fmt.Errorf("send location request: %w", err)
+	}
+	a.logSessionMessage(ctx.session.ID, models.DirectionOutgoing, body, node.ID)
+	return nodeOutcome{yield: true}, nil
+}
+
+// execChatProductCatalog sends a WhatsApp catalog message.
+// Config:
+//
+//	{
+//	  "body":           "Browse our products!",
+//	  "catalog_id":     "1234567890",         // Meta Catalog ID (required)
+//	  "thumbnail_id":   "SKU-ABC-001"          // retailer_id of thumbnail product (optional)
+//	}
+func (a *App) execChatProductCatalog(node *ChatNode, ctx *chatNodeCtx) (nodeOutcome, error) {
+	catalogID := stringFromConfig(node.Config, "catalog_id")
+	if catalogID == "" {
+		a.Log.Warn("product_catalog node missing catalog_id — skipping",
+			"node", node.ID, "session", ctx.session.ID)
+		return nodeOutcome{outcome: "default"}, nil
+	}
+
+	body := processTemplate(stringFromConfig(node.Config, "body", "message", "text"), ctx.session.SessionData)
+	if body == "" {
+		body = "Confira nosso catálogo de produtos!"
+	}
+	thumbnailID := stringFromConfig(node.Config, "thumbnail_id")
+
+	recipient := whatsapp.Recipient{Phone: ctx.contact.PhoneNumber}
+	_, err := a.WA.SendCatalogMessage(context.Background(), ctx.account, recipient, catalogID, body, thumbnailID)
+	if err != nil {
+		return nodeOutcome{}, fmt.Errorf("send catalog message: %w", err)
+	}
+	a.logSessionMessage(ctx.session.ID, models.DirectionOutgoing, body, node.ID)
+	return nodeOutcome{outcome: "default"}, nil
 }
