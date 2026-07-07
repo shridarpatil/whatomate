@@ -2,7 +2,10 @@
 import { ref, computed, onMounted, markRaw, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRoute, useRouter } from 'vue-router'
-import { useVueFlow, MarkerType, type NodeMouseEvent, type Edge, type EdgeMouseEvent, type Connection } from '@vue-flow/core'
+import { VueFlow, useVueFlow, MarkerType, type NodeMouseEvent, type Edge, type EdgeMouseEvent, type Connection } from '@vue-flow/core'
+import { Background } from '@vue-flow/background'
+import { Controls } from '@vue-flow/controls'
+import { MiniMap } from '@vue-flow/minimap'
 import { toast } from 'vue-sonner'
 
 import FlowCanvas from '@/components/shared/FlowCanvas.vue'
@@ -155,7 +158,6 @@ const {
   project,
   fitView,
 } = useVueFlow({
-  id: 'chatbot-flow',
   defaultEdgeOptions: {
     type: 'default',
     animated: true,
@@ -785,16 +787,38 @@ onMounted(async () => {
             </div>
           </template>
         </ErrorState>
-        <FlowCanvas
-          id="chatbot-flow"
+        <VueFlow
           :node-types="nodeTypes"
-          edge-type="default"
+          :nodes-draggable="true"
+          :nodes-connectable="true"
+          :edges-updatable="true"
+          :zoom-on-scroll="true"
+          :zoom-on-pinch="true"
+          :pan-on-drag="true"
+          :pan-on-scroll="false"
+          :snap-to-grid="true"
+          :snap-grid="[20, 20]"
+          :min-zoom="0.2"
+          :max-zoom="2"
+          :delete-key-code="['Backspace', 'Delete']"
+          :default-edge-options="{ type: 'default', animated: true, markerEnd: MarkerType.ArrowClosed }"
+          class="h-full"
           @node-click="onNodeClick"
           @pane-click="onPaneClick"
           @edge-click="onEdgeClick"
           @edge-update="onEdgeUpdate"
           @node-drag-stop="onNodeDragStop"
-        />
+          @connect="onConnect"
+        >
+          <Background
+            pattern-color="hsl(var(--muted-foreground) / 0.15)"
+            :gap="20"
+            :size="1"
+            variant="dots"
+          />
+          <Controls position="bottom-left" />
+          <MiniMap />
+        </VueFlow>
       </div>
 
       <!-- Right panel -->
