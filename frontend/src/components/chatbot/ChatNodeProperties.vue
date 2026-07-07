@@ -225,9 +225,11 @@ const typeLabel: Record<string, string> = {
   goto_flow: 'Go to Flow',
   whatsapp_flow: 'WhatsApp Flow',
   webhook: 'Webhook',
+  location: 'Localização',
+  product_catalog: 'Catálogo',
 }
 
-// ── Transfer node auto-tags ─────────────────────────────────────────────────
+// ── Transfer node auto-tags ──────────────────────────────────────────
 const transferTagInput = ref('')
 
 const transferTags = computed<string[]>(() => {
@@ -252,7 +254,6 @@ function removeTransferTag(tag: string) {
   const current: string[] = Array.isArray(config.value?.tags) ? [...config.value.tags] : []
   updateConfig('tags', current.filter((t: string) => t !== tag))
 }
-
 </script>
 
 <template>
@@ -581,110 +582,30 @@ function removeTransferTag(tag: string) {
           class="min-h-[50px] text-xs"
         />
       </div>
-
       <!-- Auto-tags -->
       <div class="space-y-1.5">
-        <Label class="text-xs font-medium">Etiquetas automaticas</Label>
-        <p class="text-[11px] text-muted-foreground leading-tight">
-          Aplicadas ao contato ao passar por este no. Suporta variaveis de sessao.
-        </p>
+        <Label class="text-xs">Etiquetas automáticas</Label>
         <div class="flex gap-1.5">
           <Input
             v-model="transferTagInput"
-            placeholder="ex: logistica, urgente"
-            class="h-7 text-xs flex-1"
+            placeholder="ex: vip, suporte"
+            class="h-8 text-xs flex-1"
             @keydown.enter.prevent="addTransferTag"
+            @keydown.comma.prevent="addTransferTag"
           />
-          <Button size="sm" variant="outline" class="h-7 px-2 text-xs shrink-0" @click="addTransferTag">
-            +
-          </Button>
+          <Button size="sm" variant="outline" class="h-8 px-2" @click="addTransferTag">+</Button>
         </div>
-        <div v-if="transferTags.length > 0" class="flex flex-wrap gap-1 mt-1">
+        <div v-if="transferTags.length" class="flex flex-wrap gap-1 mt-1">
           <span
             v-for="tag in transferTags"
             :key="tag"
-            class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 text-[11px] font-medium"
+            class="inline-flex items-center gap-1 rounded-full bg-primary/10 px-2 py-0.5 text-[11px] text-primary"
           >
             {{ tag }}
-            <button
-              type="button"
-              class="hover:text-white transition-colors leading-none"
-              @click="removeTransferTag(tag)"
-            >x</button>
+            <button class="hover:text-destructive" @click="removeTransferTag(tag)">×</button>
           </span>
         </div>
-      </div>
-    </template>
-
-    <!-- location -->
-    <template v-if="node.type === 'location'">
-      <div class="space-y-1.5">
-        <Label class="text-xs font-medium">Mensagem de solicitação</Label>
-        <Textarea
-          :model-value="config.body || ''"
-          @update:model-value="(v: string) => updateConfig('body', v)"
-          placeholder="Por favor, compartilhe sua localização para encontrarmos a loja mais próxima."
-          class="min-h-[60px] text-xs"
-        />
-        <p class="text-[10px] text-muted-foreground leading-tight">
-          Exibida acima do botão "Compartilhar localização" no WhatsApp.
-          Suporta variáveis: <code class="bg-muted px-1 rounded">&#123;&#123;nome&#125;&#125;</code>
-        </p>
-      </div>
-      <div class="rounded-lg bg-rose-500/8 border border-rose-500/20 px-3 py-2.5">
-        <p class="text-[11px] text-rose-300/80 leading-relaxed">
-          📍 O usuário toca em "Compartilhar localização" no WhatsApp. A resposta é salva automaticamente
-          como <code class="bg-muted px-1 rounded text-[10px]">location_latitude</code>,
-          <code class="bg-muted px-1 rounded text-[10px]">location_longitude</code>,
-          <code class="bg-muted px-1 rounded text-[10px]">location_name</code> e
-          <code class="bg-muted px-1 rounded text-[10px]">location_address</code>.
-        </p>
-      </div>
-    </template>
-
-    <!-- product_catalog -->
-    <template v-if="node.type === 'product_catalog'">
-      <div class="space-y-1.5">
-        <Label class="text-xs font-medium">Catalog ID <span class="text-destructive">*</span></Label>
-        <Input
-          :model-value="config.catalog_id || ''"
-          @update:model-value="(v: string) => updateConfig('catalog_id', v)"
-          placeholder="Ex: 1234567890"
-          class="h-8 text-xs font-mono"
-        />
-        <p class="text-[10px] text-muted-foreground">
-          ID do catálogo no Meta Business Manager.
-          Encontre em <strong>Gerenciador de Negócios → Catálogos</strong>.
-        </p>
-      </div>
-      <div class="space-y-1.5">
-        <Label class="text-xs font-medium">Mensagem do catálogo</Label>
-        <Textarea
-          :model-value="config.body || ''"
-          @update:model-value="(v: string) => updateConfig('body', v)"
-          placeholder="Confira nosso catálogo de produtos!"
-          class="min-h-[50px] text-xs"
-        />
-      </div>
-      <div class="space-y-1.5">
-        <Label class="text-xs font-medium">Produto em destaque (opcional)</Label>
-        <Input
-          :model-value="config.thumbnail_id || ''"
-          @update:model-value="(v: string) => updateConfig('thumbnail_id', v)"
-          placeholder="Retailer ID do produto (SKU)"
-          class="h-8 text-xs font-mono"
-        />
-        <p class="text-[10px] text-muted-foreground">
-          ID do produto a exibir como miniatura no cartão do catálogo.
-          Deixe em branco para usar o primeiro produto do catálogo.
-        </p>
-      </div>
-      <div class="rounded-lg bg-lime-500/8 border border-lime-500/20 px-3 py-2.5">
-        <p class="text-[11px] text-lime-300/80 leading-relaxed">
-          🛍 Envia uma mensagem interativa de catálogo. O cliente pode navegar pelos produtos
-          e adicionar ao carrinho diretamente no WhatsApp. O fluxo avança automaticamente
-          após o envio do catálogo.
-        </p>
+        <p class="text-[10px] text-muted-foreground">Suporte a variáveis: <code>{{topic}}</code></p>
       </div>
     </template>
 
@@ -804,6 +725,50 @@ function removeTransferTag(tag: string) {
       </div>
     </template>
 
+    <!-- location -->
+    <template v-if="node.type === 'location'">
+      <div class="space-y-1.5">
+        <Label class="text-xs">Mensagem (opcional)</Label>
+        <Textarea
+          :model-value="config.body || ''"
+          @update:model-value="(v: string) => updateConfig('body', v)"
+          placeholder="Aqui está nossa localização!"
+          class="min-h-[60px] text-xs"
+        />
+      </div>
+    </template>
+
+    <!-- product_catalog -->
+    <template v-if="node.type === 'product_catalog'">
+      <div class="space-y-1.5">
+        <Label class="text-xs">Catalog ID</Label>
+        <Input
+          :model-value="config.catalog_id || ''"
+          @update:model-value="(v: string) => updateConfig('catalog_id', v)"
+          placeholder="ID do catálogo no Meta"
+          class="h-8 text-xs"
+        />
+      </div>
+      <div class="space-y-1.5">
+        <Label class="text-xs">Thumbnail Product ID (opcional)</Label>
+        <Input
+          :model-value="config.thumbnail_id || ''"
+          @update:model-value="(v: string) => updateConfig('thumbnail_id', v)"
+          placeholder="ID do produto de capa"
+          class="h-8 text-xs"
+        />
+      </div>
+      <div class="space-y-1.5">
+        <Label class="text-xs">Mensagem (opcional)</Label>
+        <Textarea
+          :model-value="config.body || ''"
+          @update:model-value="(v: string) => updateConfig('body', v)"
+          placeholder="Confira nosso catálogo!"
+          class="min-h-[60px] text-xs"
+        />
+      </div>
+    </template>
+
     <!-- Skip condition. Evaluated by the runner before executing the
          node; truthy → fall through via the default edge without
          sending anything.
@@ -813,7 +778,7 @@ function removeTransferTag(tag: string) {
          nodes (end / transfer / goto_flow) where there's nothing to
          skip past. -->
     <div
-      v-if="!['start', 'end', 'transfer', 'goto_flow', 'condition', 'buttons', 'timing', 'location', 'product_catalog'].includes(node.type)"
+      v-if="!['start', 'end', 'transfer', 'goto_flow', 'condition', 'buttons', 'timing'].includes(node.type)"
       class="pt-2 border-t space-y-1.5"
     >
       <Label class="text-xs">Skip condition (optional)</Label>
