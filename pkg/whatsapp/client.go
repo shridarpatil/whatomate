@@ -303,6 +303,14 @@ type UploadMediaResponse struct {
 func (c *Client) UploadMedia(ctx context.Context, account *Account, data []byte, mimeType, filename string) (string, error) {
 	url := fmt.Sprintf("%s/%s/%s/media", c.getBaseURL(), account.APIVersion, account.PhoneID)
 
+	// An empty multipart filename makes Meta treat the part as a plain field
+	// rather than a file upload, failing with "(#100) The parameter file is
+	// required". Guarantee a non-empty name for any caller (e.g. forwarding
+	// inbound images, which carry no filename).
+	if filename == "" {
+		filename = "file"
+	}
+
 	// Create multipart form body
 	body := &bytes.Buffer{}
 	boundary := "----WebKitFormBoundary7MA4YWxkTrZu0gW"

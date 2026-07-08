@@ -105,7 +105,15 @@ func (a *App) ForwardMessage(r *fastglue.Request) error {
 		msgReq.MediaData = data
 		msgReq.MediaURL = message.MediaURL // reuse the stored file for the new message record
 		msgReq.MediaMimeType = message.MediaMimeType
-		msgReq.MediaFilename = message.MediaFilename
+		// Inbound images/videos/audio/stickers are stored without a filename
+		// (only documents carry one). The Cloud API media upload rejects an
+		// empty multipart filename with "(#100) The parameter file is
+		// required", so synthesize one from the mime type when it's missing.
+		filename := message.MediaFilename
+		if filename == "" {
+			filename = "forwarded" + getExtensionFromMimeType(message.MediaMimeType)
+		}
+		msgReq.MediaFilename = filename
 		msgReq.Caption = message.Content
 		msgReq.Content = message.Content
 
