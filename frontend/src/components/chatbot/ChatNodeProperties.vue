@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, ref } from 'vue'
 import type { ChatNode } from '@/services/api'
 import { useTeamsStore } from '@/stores/teams'
 import { Input } from '@/components/ui/input'
