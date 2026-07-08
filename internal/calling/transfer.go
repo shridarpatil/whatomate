@@ -558,6 +558,20 @@ func (m *Manager) ConnectAgentToTransfer(transferID, agentID uuid.UUID, sdpOffer
 	return localDesc.SDP, nil
 }
 
+// lateCallerTrack re-reads the direction-appropriate remote caller track once
+// session.Bridge has been assigned. It covers the window where the track
+// arrived after a pre-bridge snapshot saw nil but before OnTrack could see
+// the bridge and attach it — without this, nobody would ever drain that
+// track and audio would be one-way again.
+func (m *Manager) lateCallerTrack(session *CallSession) *webrtc.TrackRemote {
+	session.mu.Lock()
+	defer session.mu.Unlock()
+	if session.Direction == models.CallDirectionOutgoing {
+		return session.WARemoteTrack
+	}
+	return session.CallerRemoteTrack
+}
+
 // completeTransferConnection waits for the agent's audio track and starts the audio bridge.
 func (m *Manager) completeTransferConnection(session *CallSession, transferID, agentID uuid.UUID, agentTrackReady chan *webrtc.TrackRemote) {
 	// Wait for agent's mic track (up to 10 seconds)
@@ -629,6 +643,15 @@ func (m *Manager) completeTransferConnection(session *CallSession, transferID, a
 	session.mu.Lock()
 	safeClose(session.BridgeStarted)
 	session.mu.Unlock()
+
+	// The caller's track may have landed between the snapshot above and the
+	// session.Bridge assignment in setupAudioBridge: OnTrack saw a nil bridge
+	// and handed the track to consumeAudioWithDTMF, which stands down once
+	// BridgeStarted closes. Now that the bridge is visible every new track
+	// goes through AttachCaller, so one re-check here closes the gap.
+	if callerRemote == nil {
+		callerRemote = m.lateCallerTrack(session)
+	}
 
 	// Run DB updates and callbacks in background so the bridge starts
 	// forwarding audio immediately without waiting for I/O.
@@ -1390,6 +1413,12 @@ func (m *Manager) ResumeCall(callLogID uuid.UUID) error {
 	session.mu.Lock()
 	safeClose(session.BridgeStarted)
 	session.mu.Unlock()
+
+	// Same snapshot/assignment gap as in completeTransferConnection: pick up
+	// a caller track that landed while session.Bridge was still nil.
+	if callerRemote == nil {
+		callerRemote = m.lateCallerTrack(session)
+	}
 
 	// Broadcast resume event before bridge blocks
 	m.broadcastEvent(session.OrganizationID, websocket.TypeCallResumed, map[string]any{
