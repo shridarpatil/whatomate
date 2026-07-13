@@ -198,6 +198,7 @@ class WebSocketService {
 
   disconnect() {
     this.stopPing()
+    this.removeLifecycleListeners() // Drop wake listeners; connect() reinstalls on next login.
     this.intentionalClose = true // Prevent reconnect (deliberate close, e.g. logout)
     this.isConnecting = false
     // Cancel any pending backoff: otherwise a timer scheduled before disconnect()
@@ -614,6 +615,28 @@ class WebSocketService {
     }, delay)
   }
 
+  private reconnectIfDead() {
+    if (this.intentionalClose || !this.isAuthenticated()) {
+      return
+    }
+    const state = this.ws?.readyState
+    if (state !== WebSocket.OPEN && state !== WebSocket.CONNECTING) {
+      this.reconnectAttempts = 0
+      this.connect()
+    }
+  }
+
+  // Stable handler references so removeLifecycleListeners() can detach them;
+  // an inline arrow would be a new function each call and impossible to remove.
+  private onVisibilityChange = () => {
+    if (document.visibilityState === 'visible') {
+      this.reconnectIfDead()
+    }
+  }
+  private onWake = () => {
+    this.reconnectIfDead()
+  }
+
   // Reconnect immediately when the device wakes up: phones freeze background
   // tabs (killing the socket and throttling timers), so waiting for the next
   // backoff tick would leave the agent minutes behind after unlocking.
@@ -623,24 +646,20 @@ class WebSocketService {
     }
     this.lifecycleListenersInstalled = true
 
-    const reconnectIfDead = () => {
-      if (this.intentionalClose || !this.isAuthenticated()) {
-        return
-      }
-      const state = this.ws?.readyState
-      if (state !== WebSocket.OPEN && state !== WebSocket.CONNECTING) {
-        this.reconnectAttempts = 0
-        this.connect()
-      }
-    }
+    document.addEventListener('visibilitychange', this.onVisibilityChange)
+    window.addEventListener('online', this.onWake)
+    window.addEventListener('pageshow', this.onWake)
+  }
 
-    document.addEventListener('visibilitychange', () => {
-      if (document.visibilityState === 'visible') {
-        reconnectIfDead()
-      }
-    })
-    window.addEventListener('online', reconnectIfDead)
-    window.addEventListener('pageshow', reconnectIfDead)
+  private removeLifecycleListeners() {
+    if (!this.lifecycleListenersInstalled) {
+      return
+    }
+    this.lifecycleListenersInstalled = false
+
+    document.removeEventListener('visibilitychange', this.onVisibilityChange)
+    window.removeEventListener('online', this.onWake)
+    window.removeEventListener('pageshow', this.onWake)
   }
 
   setCurrentContact(contactId: string | null) {
