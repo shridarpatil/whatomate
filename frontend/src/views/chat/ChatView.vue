@@ -2180,7 +2180,7 @@ async function sendMediaMessage() {
                 <div v-else-if="message.message_type === 'unsupported'" class="mb-2">
                   <div class="flex items-center gap-2 px-3 py-2 bg-muted/50 rounded-lg text-muted-foreground">
                     <AlertCircle class="h-4 w-4 shrink-0" />
-                    <span class="text-sm italic">This message type is not supported</span>
+                    <span class="text-sm italic">{{ $t('chat.unsupportedMessage') }}</span>
                   </div>
                 </div>
                 <!-- Button reply - WhatsApp style -->

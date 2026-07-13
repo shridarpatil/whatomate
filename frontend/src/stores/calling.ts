@@ -30,6 +30,9 @@ export const useCallingStore = defineStore('calling', () => {
   const callDuration = ref(0)
   const isMuted = ref(false)
   let durationTimer: number | null = null
+  // Remote (caller/consumer) audio element. Held on a stable ref so the browser
+  // doesn't garbage-collect it mid-call — otherwise the remote voice goes silent.
+  let remoteAudioEl: HTMLAudioElement | null = null
 
   // Call permission state (in-memory only, cleared on refresh)
   const callPermissions = reactive(new Map<string, { status: string, expiresAt?: string }>())
@@ -195,9 +198,13 @@ export const useCallingStore = defineStore('calling', () => {
 
     // Handle remote audio (caller's voice)
     pc.ontrack = (event) => {
-      const audio = new Audio()
-      audio.srcObject = event.streams[0]
-      audio.play().catch(() => { /* ignore autoplay */ })
+      // A queued ontrack can still fire after cleanup() tore this call down
+      // (or after a new call replaced the connection); recreating the audio
+      // element here would leak it and play ghost audio from a dead stream.
+      if (peerConnection.value !== pc) return
+      if (!remoteAudioEl) remoteAudioEl = new Audio()
+      remoteAudioEl.srcObject = event.streams[0]
+      remoteAudioEl.play().catch(() => { /* ignore autoplay */ })
     }
 
     // Clean up when WebRTC connection drops
@@ -280,9 +287,12 @@ export const useCallingStore = defineStore('calling', () => {
 
     // Handle remote audio (consumer's voice)
     pc.ontrack = (event) => {
-      const audio = new Audio()
-      audio.srcObject = event.streams[0]
-      audio.play().catch(() => { /* ignore autoplay */ })
+      // Same late-ontrack guard as in acceptTransfer: never re-create
+      // the audio element for a connection that is no longer the active one.
+      if (peerConnection.value !== pc) return
+      if (!remoteAudioEl) remoteAudioEl = new Audio()
+      remoteAudioEl.srcObject = event.streams[0]
+      remoteAudioEl.play().catch(() => { /* ignore autoplay */ })
     }
 
     // Clean up when WebRTC connection drops
@@ -418,6 +428,11 @@ export const useCallingStore = defineStore('calling', () => {
     if (localStream.value) {
       localStream.value.getTracks().forEach(t => t.stop())
       localStream.value = null
+    }
+    if (remoteAudioEl) {
+      remoteAudioEl.pause()
+      remoteAudioEl.srcObject = null
+      remoteAudioEl = null
     }
     isOnCall.value = false
     isOnHold.value = false
