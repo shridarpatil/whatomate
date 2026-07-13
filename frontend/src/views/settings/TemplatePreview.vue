@@ -20,7 +20,8 @@ interface TemplateButton {
 
 interface SampleValue {
   component: string;
-  param_name: string;
+  index?: number;
+  param_name?: string;
   value: string;
 }
 
@@ -53,18 +54,36 @@ const visibleButtons = computed(() =>
 );
 const hasSeeAll = computed(() => (props.buttons || []).length > 3);
 
-function formatText(text: string): string {
+const HTML_ESCAPES: Record<string, string> = {
+  "&": "&amp;",
+  "<": "&lt;",
+  ">": "&gt;",
+  "'": "&#39;",
+  '"': "&quot;",
+};
+
+function escapeHtml(text: string): string {
+  return text.replace(/[&<>'"]/g, (tag) => HTML_ESCAPES[tag] || tag);
+}
+
+// Samples are scoped per component, so a header sample must not fill a body
+// variable. Positional vars ({{1}}) resolve on index, named vars on param_name.
+function findSample(component: string, token: string) {
+  const name = token.trim();
+  const isPositional = /^\d+$/.test(name);
+  const index = isPositional ? parseInt(name, 10) : 0;
+
+  return (props.sampleValues || []).find((s) => {
+    if (s.component !== component) return false;
+    if (isPositional) return s.index === index || s.param_name === name;
+    return s.param_name === name;
+  });
+}
+
+function formatText(text: string, component: string): string {
   if (!text) return "";
 
-  const htmlMap: Record<string, string> = {
-    "&": "&amp;",
-    "<": "&lt;",
-    ">": "&gt;",
-    "'": "&#39;",
-    '"': "&quot;",
-  };
-
-  let result = text.replace(/[&<>'"]/g, (tag) => htmlMap[tag] || tag);
+  let result = escapeHtml(text);
 
   // WhatsApp formatting
   result = result.replace(/\*([^*\n]+)\*/g, "<strong>$1</strong>");
@@ -72,24 +91,16 @@ function formatText(text: string): string {
   result = result.replace(/~([^~\n]+)~/g, "<del>$1</del>");
   result = result.replace(/```([^`]+)```/g, "<code>$1</code>");
 
-  // Replace sample values safely using split().join() to avoid String.replace token injection
-  (props.sampleValues || []).forEach((sample) => {
-    if (sample?.param_name && sample?.value) {
-      const target = `{{${sample.param_name}}}`;
-
-      const escapedValue = String(sample.value).replace(
-        /[&<>'"]/g,
-        (tag) => htmlMap[tag] || tag,
-      );
-      const pill = `<span class="bg-[#d4f1c7] dark:bg-green-900/50 px-0.5 rounded text-[#1a7a3c] dark:text-green-300">${escapedValue}</span>`;
-      result = result.split(target).join(pill);
+  // Filled variables render as a green pill, unfilled ones stay a yellow
+  // placeholder. A function replacer returns its string verbatim, so sample
+  // values containing $& or $1 cannot inject replacement tokens.
+  result = result.replace(/\{\{([^}]+)\}\}/g, (match, token: string) => {
+    const sample = findSample(component, token);
+    if (sample?.value) {
+      return `<span class="bg-[#d4f1c7] dark:bg-green-900/50 px-0.5 rounded text-[#1a7a3c] dark:text-green-300">${escapeHtml(String(sample.value))}</span>`;
     }
+    return `<span class="bg-yellow-100 dark:bg-yellow-900/40 px-0.5 rounded text-yellow-700 dark:text-yellow-300">${match}</span>`;
   });
-
-  result = result.replace(
-    /\{\{([^}]+)\}\}/g,
-    '<span class="bg-yellow-100 dark:bg-yellow-900/40 px-0.5 rounded text-yellow-700 dark:text-yellow-300">{{$1}}</span>',
-  );
 
   return DOMPurify.sanitize(result, {
     ALLOWED_TAGS: ["strong", "em", "del", "code", "span"],
@@ -97,8 +108,10 @@ function formatText(text: string): string {
   });
 }
 
-const formattedBody = computed(() => formatText(props.bodyContent || ""));
-const formattedHeader = computed(() => formatText(props.headerContent || ""));
+const formattedBody = computed(() => formatText(props.bodyContent || "", "body"));
+const formattedHeader = computed(() =>
+  formatText(props.headerContent || "", "header"),
+);
 const currentTime = computed(() =>
   new Date().toLocaleTimeString("en-US", {
     hour: "numeric",

@@ -32,6 +32,7 @@ import {
 
 import TemplatePreview from "./TemplatePreview.vue";
 import { templatesService } from "@/services/api";
+import { getErrorMessage } from "@/lib/api-utils";
 import { toast } from "vue-sonner";
 
 const { t } = useI18n();
@@ -288,22 +289,52 @@ function insertVariable() {
   insertAtCursor(`{{${nextVarNum}}}`);
 }
 
-function getSampleValue(component: string, paramName: string): string {
-  const sample = (state.value.sample_values || []).find(
-    (s: any) => s.component === component && s.param_name === paramName,
-  );
-  return sample?.value || "";
+function componentVariables(component: string): string[] {
+  if (component === "header") return headerVariables.value;
+  if (component === "body") return bodyVariables.value;
+  return [];
 }
 
+// Meta needs examples ordered positionally. Positional vars ({{1}}) carry their
+// index in the name; named vars ({{email}}) take their 1-based slot in the body.
+function sampleIndexFor(component: string, paramName: string): number {
+  if (/^\d+$/.test(paramName)) return parseInt(paramName, 10);
+  const slot = componentVariables(component).indexOf(paramName);
+  return slot >= 0 ? slot + 1 : 1;
+}
+
+function findSample(component: string, paramName: string) {
+  const samples = state.value.sample_values || [];
+  const index = sampleIndexFor(component, paramName);
+  return samples.find(
+    (s: any) =>
+      s.component === component &&
+      (s.param_name === paramName || s.index === index),
+  );
+}
+
+function getSampleValue(component: string, paramName: string): string {
+  return findSample(component, paramName)?.value || "";
+}
+
+// Writes component + index + param_name so both backend paths resolve it:
+// extractExamplesForComponent() sorts on index, extractNamedExamplesForComponent()
+// looks up param_name. Omitting either silently reorders examples sent to Meta.
 function setSampleValue(component: string, paramName: string, value: string) {
   if (!state.value.sample_values) state.value.sample_values = [];
-  const existingIndex = state.value.sample_values.findIndex(
-    (s: any) => s.component === component && s.param_name === paramName,
-  );
-  if (existingIndex >= 0) {
-    state.value.sample_values[existingIndex].value = value;
+  const index = sampleIndexFor(component, paramName);
+  const existing = findSample(component, paramName);
+  if (existing) {
+    existing.value = value;
+    existing.index = index;
+    existing.param_name = paramName;
   } else {
-    state.value.sample_values.push({ component, param_name: paramName, value });
+    state.value.sample_values.push({
+      component,
+      index,
+      param_name: paramName,
+      value,
+    });
   }
 }
 
@@ -365,8 +396,6 @@ async function handleMediaUpload(event: Event) {
   const input = event.target as HTMLInputElement;
   const file = input.files?.[0];
   if (!file) return;
-  console.log("account:", state.value.whatsapp_account);
-  console.log("file:", file.name, file.type, file.size);
 
   if (!state.value.whatsapp_account) {
     toast.error(t("templates.selectAccountFirst"));
@@ -382,11 +411,9 @@ async function handleMediaUpload(event: Event) {
     );
     state.value.header_content = response.data.data.handle;
     headerMediaFilename.value = response.data.data.filename;
-    console.log("upload response:", response);
     toast.success(t("templates.mediaUploadedSuccess"));
   } catch (error) {
-    console.error("upload error:", error);
-    toast.error(t("templates.uploadFailed"));
+    toast.error(getErrorMessage(error, t("templates.uploadFailed")));
   } finally {
     headerMediaUploading.value = false;
   }
