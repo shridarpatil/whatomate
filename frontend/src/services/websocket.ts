@@ -132,8 +132,16 @@ class WebSocketService {
       this.getTokenFn = getToken
     }
 
-    // Get a fresh short-lived WS token
-    const token = this.getTokenFn ? await this.getTokenFn() : null
+    // Get a fresh short-lived WS token. A rejecting getTokenFn must not escape:
+    // this await is outside the try below, so an uncaught rejection would leave
+    // isConnecting = true forever and the top-of-function guard would then block
+    // every future reconnect — the exact permanent-disconnect state this avoids.
+    let token: string | null = null
+    try {
+      token = this.getTokenFn ? await this.getTokenFn() : null
+    } catch {
+      token = null
+    }
     if (!token) {
       // No socket was created, so no onclose will ever fire: schedule the
       // retry here or the reconnect chain would silently end on a transient
