@@ -201,16 +201,40 @@ const missingSamples = computed(() =>
     .map(v => `{{${v.name}}}`)
 )
 
+// Meta's character limits. The API does not enforce them, so an over-length
+// template would otherwise only be rejected once it reached Meta.
+const LIMITS = { header: 60, body: 1024, footer: 60, buttonText: 25 }
+
+const firstLengthError = computed(() => {
+  const over = (field: string, value: string, max: number) =>
+    (value || '').length > max ? `${field} must be ${max} characters or fewer.` : ''
+
+  if (form.value.header_type === 'TEXT') {
+    const err = over('Header', form.value.header_content, LIMITS.header)
+    if (err) return err
+  }
+  return (
+    over('Body', form.value.body_content, LIMITS.body) ||
+    over('Footer', form.value.footer_content, LIMITS.footer)
+  )
+})
+
 const firstButtonError = computed(() => {
   for (const btn of form.value.buttons as any[]) {
     if (btn.type === 'OTP') continue
-    if (!String(btn.text || '').trim()) return 'Every button needs a label.'
+    const text = String(btn.text || '').trim()
+    if (!text) return 'Every button needs a label.'
+    if (text.length > LIMITS.buttonText) return `Button labels must be ${LIMITS.buttonText} characters or fewer.`
     if (btn.type === 'URL') {
       const url = String(btn.url || '').trim()
       if (!url || url === '{{1}}') return 'Website URL buttons need a URL.'
       if (btn.urlType === 'DYNAMIC' && !url.endsWith('{{1}}')) return 'A dynamic URL must end with {{1}}.'
     }
-    if (btn.type === 'PHONE_NUMBER' && !String(btn.phone_number || '').trim()) return 'Phone buttons need a number.'
+    if (btn.type === 'PHONE_NUMBER') {
+      const phone = String(btn.phone_number || '').trim()
+      if (!phone) return 'Phone buttons need a number.'
+      if (!/^\+?[0-9]{7,15}$/.test(phone)) return 'Enter the phone number in international format, e.g. +14155551234.'
+    }
     if (btn.type === 'FLOW' && !String(btn.flow_id || '').trim()) return 'Flow buttons need a Flow selected.'
   }
   return ''
@@ -321,6 +345,10 @@ async function save() {
   }
   if (!isAuthentication.value && !form.value.body_content.trim()) {
     toast.error(t('templates.bodyRequired', 'Body content is required'))
+    return
+  }
+  if (!isAuthentication.value && firstLengthError.value) {
+    toast.error(firstLengthError.value)
     return
   }
   if (!isAuthentication.value

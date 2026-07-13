@@ -61,6 +61,10 @@ function normalizeName(value: string) {
     .replace(/[^a-z0-9_]/g, "");
 }
 
+function isValidPhone(value: string) {
+  return /^\+?[0-9]{7,15}$/.test(value.trim());
+}
+
 const emit = defineEmits(["update:modelValue", "update:mediaFile"]);
 
 const state = ref(JSON.parse(JSON.stringify(props.modelValue)));
@@ -183,6 +187,18 @@ const headerTypes = [
   { value: "VIDEO", label: "Video" },
   { value: "DOCUMENT", label: "Document" },
 ];
+
+// Meta's per-field character limits. Neither the API nor main's form enforced
+// these, so an over-length template was only rejected once it reached Meta.
+const LIMITS = {
+  name: 512,
+  header: 60,
+  body: 1024,
+  footer: 60,
+  buttonText: 25,
+  url: 2000,
+  copyCode: 15,
+};
 
 const mediaPreviewUrl = ref("");
 const mediaFileName = ref("");
@@ -753,15 +769,22 @@ onMounted(() => {
               <Input
                 id="header-content"
                 v-model="state.header_content"
+                :maxlength="LIMITS.header"
                 class="h-9 bg-background"
                 placeholder="Hello!"
               />
-              <p
-                v-if="hasTooManyHeaderVariables"
-                class="text-[10px] text-red-500"
-              >
-                Meta allows at most one variable in a TEXT header.
-              </p>
+              <div class="flex items-center justify-between">
+                <p
+                  v-if="hasTooManyHeaderVariables"
+                  class="text-[10px] text-red-500"
+                >
+                  Meta allows at most one variable in a TEXT header.
+                </p>
+                <span v-else />
+                <span class="text-[10px] text-muted-foreground">
+                  {{ (state.header_content || "").length }}/{{ LIMITS.header }}
+                </span>
+              </div>
             </div>
           </div>
 
@@ -1065,6 +1088,7 @@ onMounted(() => {
             ref="bodyTextareaRef"
             v-model="state.body_content"
             :rows="6"
+            :maxlength="LIMITS.body"
             @blur="saveCursorPosition"
             @keyup="saveCursorPosition"
             @mouseup="saveCursorPosition"
@@ -1074,10 +1098,7 @@ onMounted(() => {
           <div class="flex justify-between text-[10px] text-muted-foreground">
             <span>Variables must be sequential {{ 1 }}, {{ 2 }}...</span>
             <span
-              :class="{
-                'text-red-500': (state.body_content?.length ?? 0) > 1024,
-              }"
-              >{{ state.body_content?.length ?? 0 }}/1024</span
+              >{{ (state.body_content || "").length }}/{{ LIMITS.body }}</span
             >
           </div>
         </div>
@@ -1169,18 +1190,19 @@ onMounted(() => {
             <Label class="text-xs font-bold uppercase text-muted-foreground"
               >Footer Text</Label
             >
-            <span class="text-[10px] text-muted-foreground"
-              >Optional, max 60 chars</span
-            >
+            <span class="text-[10px] text-muted-foreground">Optional</span>
           </div>
           <Textarea
             id="footer-content"
             v-model="state.footer_content"
             :rows="2"
-            maxlength="60"
+            :maxlength="LIMITS.footer"
             placeholder="E.g. Reply STOP to opt out"
             class="bg-background"
           />
+          <div class="flex justify-end text-[10px] text-muted-foreground">
+            {{ (state.footer_content || "").length }}/{{ LIMITS.footer }}
+          </div>
         </div>
 
         <div v-if="!isAuthentication" class="space-y-4 pt-2 border-t">
@@ -1260,14 +1282,23 @@ onMounted(() => {
 
                 <div class="grid grid-cols-2 gap-3">
                   <div class="space-y-1.5">
-                    <Label
-                      class="text-[10px] font-bold text-muted-foreground uppercase"
-                      >Button Label</Label
-                    >
+                    <div class="flex items-center justify-between">
+                      <Label
+                        class="text-[10px] font-bold text-muted-foreground uppercase"
+                        >Button Label</Label
+                      >
+                      <span class="text-[10px] text-muted-foreground">
+                        {{ (btn.text || "").length }}/{{ LIMITS.buttonText }}
+                      </span>
+                    </div>
                     <Input
                       v-model="btn.text"
+                      :maxlength="LIMITS.buttonText"
                       placeholder="Label"
-                      class="h-8 text-xs bg-background"
+                      :class="[
+                        'h-8 text-xs bg-background',
+                        (btn.text || '').trim() ? '' : 'border-red-500',
+                      ].join(' ')"
                     />
                   </div>
 
@@ -1364,6 +1395,7 @@ onMounted(() => {
                     <div v-else>
                       <Input
                         v-model="btn.url"
+                        :maxlength="LIMITS.url"
                         placeholder="https://example.com"
                         class="h-8 font-mono text-xs bg-background"
                       />
@@ -1380,15 +1412,27 @@ onMounted(() => {
                       placeholder="+1234567890"
                       class="h-8 text-xs bg-background"
                     />
+                    <p
+                      v-if="btn.phone_number && !isValidPhone(btn.phone_number)"
+                      class="text-[10px] text-red-500"
+                    >
+                      Use international format, e.g. +14155551234.
+                    </p>
                   </div>
 
                   <div v-if="btn.type === 'COPY_CODE'" class="space-y-1.5">
-                    <Label
-                      class="text-[10px] font-bold text-muted-foreground uppercase"
-                      >Example Code</Label
-                    >
+                    <div class="flex items-center justify-between">
+                      <Label
+                        class="text-[10px] font-bold text-muted-foreground uppercase"
+                        >Example Code</Label
+                      >
+                      <span class="text-[10px] text-muted-foreground">
+                        {{ (btn.example || "").length }}/{{ LIMITS.copyCode }}
+                      </span>
+                    </div>
                     <Input
                       v-model="btn.example"
+                      :maxlength="LIMITS.copyCode"
                       placeholder="SAVE20"
                       class="h-8 text-xs bg-background"
                     />
