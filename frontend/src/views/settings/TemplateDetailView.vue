@@ -86,8 +86,9 @@ const publishDialogOpen = ref(false)
 const isPublishing = ref(false)
 const isDetailsOpen = ref(true)
 
-// Header media upload state
-// WhatsApp Flows for FLOW button type
+// Picked in the editor, uploaded to Meta only when the template is saved.
+const pendingMediaFile = ref<File | null>(null)
+
 const whatsappFlows = ref<any[]>([])
 
 const { showLeaveDialog, confirmLeave, cancelLeave } = useUnsavedChangesGuard(hasChanges)
@@ -176,6 +177,43 @@ const hasVariableAtEdge = computed(() => {
 const hasTooManyHeaderVariables = computed(() => {
   if (form.value.header_type !== 'TEXT') return false
   return new Set(headerVariables.value).size > 1
+})
+
+// Meta requires positional variables to run 1, 2, 3… with no gaps.
+const firstSequenceGap = computed(() => {
+  const nums = bodyVariables.value
+    .filter(v => /^\d+$/.test(v))
+    .map(Number)
+    .sort((a, b) => a - b)
+  const unique = [...new Set(nums)]
+  for (let i = 0; i < unique.length; i++) {
+    if (unique[i] !== i + 1) return { expected: i + 1, found: unique[i] }
+  }
+  return null
+})
+
+// Meta rejects a template whose variables have no example values.
+const missingSamples = computed(() =>
+  allVariables.value
+    .filter(v => !form.value.sample_values.some(
+      (s: any) => s.component === v.component && s.index === v.index && String(s.value || '').trim()
+    ))
+    .map(v => `{{${v.name}}}`)
+)
+
+const firstButtonError = computed(() => {
+  for (const btn of form.value.buttons as any[]) {
+    if (btn.type === 'OTP') continue
+    if (!String(btn.text || '').trim()) return 'Every button needs a label.'
+    if (btn.type === 'URL') {
+      const url = String(btn.url || '').trim()
+      if (!url || url === '{{1}}') return 'Website URL buttons need a URL.'
+      if (btn.urlType === 'DYNAMIC' && !url.endsWith('{{1}}')) return 'A dynamic URL must end with {{1}}.'
+    }
+    if (btn.type === 'PHONE_NUMBER' && !String(btn.phone_number || '').trim()) return 'Phone buttons need a number.'
+    if (btn.type === 'FLOW' && !String(btn.flow_id || '').trim()) return 'Flow buttons need a Flow selected.'
+  }
+  return ''
 })
 
 // Build sample_values array from form inputs
@@ -287,8 +325,8 @@ async function save() {
   }
   if (!isAuthentication.value
     && ['IMAGE', 'VIDEO', 'DOCUMENT'].includes(form.value.header_type)
-    && !form.value.header_content) {
-    const fallback = `Upload a sample ${form.value.header_type.toLowerCase()} before saving — Meta requires it for template approval.`
+    && !form.value.header_content && !pendingMediaFile.value) {
+    const fallback = `Choose a sample ${form.value.header_type.toLowerCase()} — Meta requires one for approval.`
     toast.error(t('templates.headerMediaRequired', fallback))
     return
   }
@@ -309,6 +347,20 @@ async function save() {
       toast.error(t('templates.headerTooManyVariables', 'Meta allows at most one variable in a TEXT header.'))
       return
     }
+    const gap = firstSequenceGap.value
+    if (gap) {
+      toast.error(t('templates.variablesNotSequential', `Variables must be sequential from {{1}}. Expected {{${gap.expected}}}, found {{${gap.found}}}.`))
+      return
+    }
+    if (missingSamples.value.length) {
+      toast.error(t('templates.samplesRequired', `Add sample values for: ${missingSamples.value.join(', ')}`))
+      return
+    }
+    const badButton = firstButtonError.value
+    if (badButton) {
+      toast.error(badButton)
+      return
+    }
   }
   if (isAuthentication.value && form.value.code_expiration_minutes && (form.value.code_expiration_minutes < 1 || form.value.code_expiration_minutes > 90)) {
     toast.error(t('templates.invalidExpiration', 'Code expiration must be between 1 and 90 minutes'))
@@ -327,6 +379,12 @@ async function save() {
   }
   isSaving.value = true
   try {
+    if (pendingMediaFile.value) {
+      const upload = await templatesService.uploadMedia(form.value.whatsapp_account, pendingMediaFile.value)
+      form.value.header_content = (upload.data as any).data.handle
+      pendingMediaFile.value = null
+    }
+
     const payload: Record<string, any> = {
       whatsapp_account: form.value.whatsapp_account,
       name: form.value.name,
@@ -460,6 +518,7 @@ onMounted(async () => {
 
     <TemplateEditor
       v-model="form"
+      v-model:media-file="pendingMediaFile"
       :is-edit="!isNew"
       :is-published="!!template?.meta_template_id"
       :accounts="accounts"

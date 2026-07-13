@@ -37,6 +37,10 @@ interface SampleValue {
 interface TemplatePreviewProps {
   headerType?: "NONE" | "TEXT" | "IMAGE" | "VIDEO" | "DOCUMENT";
   headerContent?: string;
+  // Local object URL of the picked file. A saved header_content holds a Meta
+  // handle, which is not a URL and cannot be rendered.
+  mediaUrl?: string;
+  mediaName?: string;
   bodyContent?: string;
   footerContent?: string;
   buttons?: TemplateButton[];
@@ -47,6 +51,8 @@ interface TemplatePreviewProps {
 const props = withDefaults(defineProps<TemplatePreviewProps>(), {
   headerType: "NONE",
   headerContent: "",
+  mediaUrl: "",
+  mediaName: "",
   bodyContent: "",
   footerContent: "",
   buttons: () => [],
@@ -149,8 +155,8 @@ const currentTime = computed(() =>
           <!-- Image Header -->
           <div v-else-if="headerType === 'IMAGE'">
             <img
-              v-if="headerContent && !headerContent.startsWith('4')"
-              :src="headerContent"
+              v-if="mediaUrl"
+              :src="mediaUrl"
               class="w-full h-[160px] object-cover"
               alt="Header"
             />
@@ -166,14 +172,23 @@ const currentTime = computed(() =>
           </div>
 
           <!-- Video Header -->
-          <div
-            v-else-if="headerType === 'VIDEO'"
-            class="w-full h-[160px] bg-gray-100 dark:bg-zinc-800 flex flex-col items-center justify-center gap-2"
-          >
-            <Video class="w-8 h-8 text-zinc-400" />
-            <span class="text-[10px] text-zinc-400 font-medium tracking-wider"
-              >VIDEO</span
+          <div v-else-if="headerType === 'VIDEO'">
+            <video
+              v-if="mediaUrl"
+              :src="mediaUrl"
+              class="w-full h-[160px] object-cover bg-black"
+              muted
+              controls
+            />
+            <div
+              v-else
+              class="w-full h-[160px] bg-gray-100 dark:bg-zinc-800 flex flex-col items-center justify-center gap-2"
             >
+              <Video class="w-8 h-8 text-zinc-400" />
+              <span class="text-[10px] text-zinc-400 font-medium tracking-wider"
+                >VIDEO</span
+              >
+            </div>
           </div>
 
           <!-- Document Header -->
@@ -182,11 +197,11 @@ const currentTime = computed(() =>
             class="mx-3 mt-3 mb-1 bg-gray-100 dark:bg-zinc-800 rounded-lg p-3 flex items-center gap-3"
           >
             <FileIcon class="w-8 h-8 text-zinc-400 flex-shrink-0" />
-            <div>
+            <div class="min-w-0">
               <p
                 class="text-[12px] font-medium text-[#111b21] dark:text-gray-200 truncate"
               >
-                Document
+                {{ mediaName || "Document" }}
               </p>
               <p class="text-[10px] text-zinc-400">PDF</p>
             </div>

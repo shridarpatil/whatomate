@@ -1,16 +1,14 @@
 <script setup lang="ts">
-import { ref, computed, watch, onMounted, nextTick } from "vue";
+import { ref, computed, watch, onMounted, onBeforeUnmount, nextTick } from "vue";
 import { useI18n } from "vue-i18n";
 import {
   Trash2,
   Plus,
-  Loader2,
   Check,
   ChevronsUpDown,
   AlertCircle,
 } from "lucide-vue-next";
 
-// UI Components
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
@@ -31,8 +29,6 @@ import {
 } from "@/components/ui/command";
 
 import TemplatePreview from "./TemplatePreview.vue";
-import { templatesService } from "@/services/api";
-import { getErrorMessage } from "@/lib/api-utils";
 import { toast } from "vue-sonner";
 
 const { t } = useI18n();
@@ -40,9 +36,7 @@ const { t } = useI18n();
 const props = defineProps<{
   modelValue: Record<string, any>;
   isEdit?: boolean;
-  // True once Meta has the template (meta_template_id set). Meta refuses changes
-  // to name, language, category and account after that, so those lock — but an
-  // unpublished draft stays fully editable.
+  // Meta freezes name, language, category and account once it has the template.
   isPublished?: boolean;
   accounts: any[];
   // Published WhatsApp Flows, for FLOW buttons. Loaded by the parent.
@@ -52,9 +46,16 @@ const props = defineProps<{
 
 const isLocked = computed(() => !!props.isPublished);
 
-const emit = defineEmits(["update:modelValue"]);
+// Mirrors normalizeTemplateName() in internal/handlers/templates.go.
+function normalizeName(value: string) {
+  return value
+    .toLowerCase()
+    .replace(/[\s-]+/g, "_")
+    .replace(/[^a-z0-9_]/g, "");
+}
 
-// Prevent Prop Mutation via Local State Cloning
+const emit = defineEmits(["update:modelValue", "update:mediaFile"]);
+
 const state = ref(JSON.parse(JSON.stringify(props.modelValue)));
 
 watch(
@@ -75,7 +76,6 @@ watch(
   { deep: true },
 );
 
-// Constants
 const languageSelectorOpen = ref(false);
 const languages = [
   { code: "af", name: "Afrikaans" },
@@ -169,27 +169,21 @@ const categories = [
   },
 ];
 
-// Header & Media State
-const headerMediaUploading = ref(false);
-const headerMediaFilename = ref("");
+const mediaPreviewUrl = ref("");
+const mediaFileName = ref("");
 
-// Reset header content safely when changing types
 watch(
   () => state.value.header_type,
   (newType, oldType) => {
-    if (newType !== oldType) {
-      state.value.header_content = "";
-      if (state.value.sample_values) {
-        state.value.sample_values = state.value.sample_values.filter(
-          (s: any) => s.component !== "header",
-        );
-      }
-      headerMediaFilename.value = "";
-    }
+    if (newType === oldType) return;
+    state.value.header_content = "";
+    state.value.sample_values = (state.value.sample_values || []).filter(
+      (s: any) => s.component !== "header",
+    );
+    clearMediaFile();
   },
 );
 
-// Cursor & Formatting
 const bodyTextareaRef = ref<any>(null);
 const savedSelectionStart = ref(0);
 const savedSelectionEnd = ref(0);
@@ -250,7 +244,6 @@ function insertFormat(format: string) {
   insertAtCursor(insertText, offset);
 }
 
-// Variables & Samples
 function extractParamNames(content: string): string[] {
   const matches = (content || "").match(/\{\{([^}]+)\}\}/g) || [];
   const seen = new Set<string>();
@@ -298,15 +291,13 @@ function insertVariable() {
   insertAtCursor(`{{${nextVarNum}}}`);
 }
 
-// --- Authentication templates ---
 // Meta fixes the body text for AUTHENTICATION templates and models code delivery
 // as a single OTP button, so this category replaces the body/buttons editors.
 const isAuthentication = computed(
   () => state.value.category === "AUTHENTICATION",
 );
 
-// Built here, not inline: a literal {{1}} inside a template interpolation would
-// close the interpolation early and fail to compile.
+// Inline, a literal {{1}} would close the template interpolation early.
 const otpCodeToken = `{{1}}`;
 
 function otpButton() {
@@ -318,8 +309,7 @@ const authOtpType = computed(() => {
   return otpButton()?.otp_type || "COPY_CODE";
 });
 
-// Lives on the form (not a local ref) so the parent's save() can gate on it.
-// Not part of the API payload — the parent builds that field by field.
+// On the form, not a local ref, so the parent's save() can gate on it.
 function setAuthOtpType(type: string) {
   if (!type) return;
   state.value.zero_tap_accepted = false;
@@ -362,8 +352,6 @@ function removeSupportedApp(index: number) {
   }
 }
 
-// Switching into AUTHENTICATION needs an OTP button to exist before the
-// delivery-method selector has anything to bind to.
 watch(isAuthentication, (isAuth) => {
   if (isAuth && !otpButton()) setAuthOtpType("COPY_CODE");
 });
@@ -374,8 +362,7 @@ function componentVariables(component: string): string[] {
   return [];
 }
 
-// Meta needs examples ordered positionally. Positional vars ({{1}}) carry their
-// index in the name; named vars ({{email}}) take their 1-based slot in the body.
+// Positional vars carry their index in the name; named vars take their slot.
 function sampleIndexFor(component: string, paramName: string): number {
   if (/^\d+$/.test(paramName)) return parseInt(paramName, 10);
   const slot = componentVariables(component).indexOf(paramName);
@@ -396,9 +383,8 @@ function getSampleValue(component: string, paramName: string): string {
   return findSample(component, paramName)?.value || "";
 }
 
-// Writes component + index + param_name so both backend paths resolve it:
-// extractExamplesForComponent() sorts on index, extractNamedExamplesForComponent()
-// looks up param_name. Omitting either silently reorders examples sent to Meta.
+// The backend sorts positional examples on index and looks named ones up by
+// param_name, so both must be written.
 function setSampleValue(component: string, paramName: string, value: string) {
   if (!state.value.sample_values) state.value.sample_values = [];
   const index = sampleIndexFor(component, paramName);
@@ -421,7 +407,6 @@ function formatVariableLabel(paramName: string): string {
   return `{{${paramName}}}`;
 }
 
-// Button Handling
 type ButtonType =
   | "QUICK_REPLY"
   | "URL"
@@ -430,8 +415,7 @@ type ButtonType =
   | "FLOW"
   | "VOICE_CALL";
 
-// A FLOW button with no flow_id is dropped by the backend (pkg/whatsapp/template.go),
-// so the screen list comes from the parent's published-flows list.
+// The backend drops a FLOW button that has no flow_id.
 function getFlowScreens(flowId: string): string[] {
   const flow = (props.flows || []).find(
     (f: any) => f.meta_flow_id === flowId || f.id === flowId,
@@ -511,33 +495,56 @@ function addButton(type: ButtonType) {
   state.value.buttons = buttons;
 }
 
-// Media Upload
-async function handleMediaUpload(event: Event) {
+const MEDIA_ACCEPT: Record<string, string> = {
+  IMAGE: "image/jpeg,image/png",
+  VIDEO: "video/mp4",
+  DOCUMENT: "application/pdf",
+};
+
+const MEDIA_MAX_MB: Record<string, number> = {
+  IMAGE: 5,
+  VIDEO: 16,
+  DOCUMENT: 100,
+};
+
+const mediaAccept = computed(
+  () => MEDIA_ACCEPT[state.value.header_type as string] || "",
+);
+
+// Previewed locally, uploaded to Meta only on save, so an abandoned draft
+function onMediaFileChange(event: Event) {
   const input = event.target as HTMLInputElement;
   const file = input.files?.[0];
   if (!file) return;
 
-  if (!state.value.whatsapp_account) {
-    toast.error(t("templates.selectAccountFirst"));
+  const limit = MEDIA_MAX_MB[state.value.header_type as string];
+  if (limit && file.size > limit * 1024 * 1024) {
+    toast.error(`File must be under ${limit} MB`);
+    input.value = "";
     return;
   }
 
-  headerMediaFilename.value = file.name;
-  headerMediaUploading.value = true;
-  try {
-    const response = await templatesService.uploadMedia(
-      state.value.whatsapp_account,
-      file,
-    );
-    state.value.header_content = response.data.data.handle;
-    headerMediaFilename.value = response.data.data.filename;
-    toast.success(t("templates.mediaUploadedSuccess"));
-  } catch (error) {
-    toast.error(getErrorMessage(error, t("templates.uploadFailed")));
-  } finally {
-    headerMediaUploading.value = false;
-  }
+  setMediaFile(file);
+  mediaPreviewUrl.value = URL.createObjectURL(file);
+  mediaFileName.value = file.name;
+  state.value.header_content = "";
 }
+
+function clearMediaFile() {
+  setMediaFile(null);
+  mediaFileName.value = "";
+  state.value.header_content = "";
+}
+
+function setMediaFile(file: File | null) {
+  if (mediaPreviewUrl.value) URL.revokeObjectURL(mediaPreviewUrl.value);
+  mediaPreviewUrl.value = "";
+  emit("update:mediaFile", file);
+}
+
+onBeforeUnmount(() => {
+  if (mediaPreviewUrl.value) URL.revokeObjectURL(mediaPreviewUrl.value);
+});
 
 onMounted(() => {
   if (state.value?.buttons) {
@@ -551,16 +558,6 @@ onMounted(() => {
   }
 });
 
-function resetState() {
-  headerMediaUploading.value = false;
-  headerMediaFilename.value = "";
-  savedSelectionStart.value = 0;
-  savedSelectionEnd.value = 0;
-}
-
-defineExpose({
-  resetState,
-});
 </script>
 
 <template>
@@ -597,11 +594,16 @@ defineExpose({
           <span class="text-destructive">*</span></Label
         >
         <Input
-          v-model="state.name"
+          :model-value="state.name"
+          @update:model-value="state.name = normalizeName(String($event))"
           :disabled="isLocked"
-          :placeholder="t('templates.templateNamePlaceholder')"
-          class="w-full h-10"
+          maxlength="512"
+          placeholder="order_confirmation"
+          class="w-full h-10 font-mono"
         />
+        <p class="text-[10px] text-muted-foreground">
+          Lowercase letters, numbers and underscores only.
+        </p>
       </div>
 
       <div class="space-y-2">
@@ -729,25 +731,35 @@ defineExpose({
             v-if="['IMAGE', 'VIDEO', 'DOCUMENT'].includes(state.header_type)"
             class="space-y-2 pt-2 border-t"
           >
-            <Label class="text-[10px] text-muted-foreground"
-              >Upload Media Sample (Required for Meta)</Label
+            <Label class="text-xs font-bold text-muted-foreground"
+              >Sample {{ state.header_type.toLowerCase() }}</Label
             >
-            <div class="flex items-center gap-3">
-              <Input
-                type="file"
-                @change="handleMediaUpload"
-                class="h-9 text-xs flex-1 bg-background"
-              />
-              <Loader2
-                v-if="headerMediaUploading"
-                class="w-4 h-4 animate-spin text-emerald-500"
-              />
+            <Input
+              type="file"
+              :accept="mediaAccept"
+              @change="onMediaFileChange"
+              class="h-9 text-xs bg-background"
+            />
+
+            <div
+              v-if="mediaFileName"
+              class="flex items-center justify-between rounded-md border bg-muted/30 px-3 py-2"
+            >
+              <span class="truncate text-xs">{{ mediaFileName }}</span>
+              <button
+                type="button"
+                @click="clearMediaFile"
+                class="text-muted-foreground hover:text-red-500"
+              >
+                <Trash2 class="h-3.5 w-3.5" />
+              </button>
             </div>
-            <p
-              v-if="state.header_content"
-              class="text-[9px] font-mono text-emerald-500 truncate"
-            >
-              Handle: {{ state.header_content }}
+            <p v-else-if="state.header_content" class="text-xs text-emerald-600">
+              Sample already uploaded. Choose a file to replace it.
+            </p>
+
+            <p class="text-[10px] text-muted-foreground">
+              Meta requires a sample. It is uploaded when you save, not now.
             </p>
           </div>
         </div>
@@ -1073,7 +1085,10 @@ defineExpose({
                   )
                 "
                 :placeholder="'Example for ' + paramName + '...'"
-                class="flex-1 h-8 text-xs bg-background"
+                :class="[
+                  'flex-1 h-8 text-xs bg-background',
+                  getSampleValue('header', paramName) ? '' : 'border-red-500',
+                ].join(' ')"
               />
             </div>
           </div>
@@ -1102,7 +1117,10 @@ defineExpose({
                   )
                 "
                 :placeholder="'Example for ' + paramName + '...'"
-                class="flex-1 h-8 text-xs bg-background"
+                :class="[
+                  'flex-1 h-8 text-xs bg-background',
+                  getSampleValue('body', paramName) ? '' : 'border-red-500',
+                ].join(' ')"
               />
             </div>
           </div>
@@ -1447,6 +1465,8 @@ defineExpose({
           <TemplatePreview
             :header-type="state.header_type"
             :header-content="state.header_content"
+            :media-url="mediaPreviewUrl"
+            :media-name="mediaFileName"
             :body-content="state.body_content"
             :footer-content="state.footer_content"
             :buttons="state.buttons"
