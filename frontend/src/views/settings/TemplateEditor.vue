@@ -40,9 +40,17 @@ const { t } = useI18n();
 const props = defineProps<{
   modelValue: Record<string, any>;
   isEdit?: boolean;
+  // True once Meta has the template (meta_template_id set). Meta refuses changes
+  // to name, language, category and account after that, so those lock — but an
+  // unpublished draft stays fully editable.
+  isPublished?: boolean;
   accounts: any[];
+  // Published WhatsApp Flows, for FLOW buttons. Loaded by the parent.
+  flows?: any[];
   disabled?: boolean;
 }>();
+
+const isLocked = computed(() => !!props.isPublished);
 
 const emit = defineEmits(["update:modelValue"]);
 
@@ -414,30 +422,62 @@ function formatVariableLabel(paramName: string): string {
 }
 
 // Button Handling
-function addButton(type: "QUICK_REPLY" | "URL" | "PHONE_NUMBER") {
+type ButtonType =
+  | "QUICK_REPLY"
+  | "URL"
+  | "PHONE_NUMBER"
+  | "COPY_CODE"
+  | "FLOW"
+  | "VOICE_CALL";
+
+// A FLOW button with no flow_id is dropped by the backend (pkg/whatsapp/template.go),
+// so the screen list comes from the parent's published-flows list.
+function getFlowScreens(flowId: string): string[] {
+  const flow = (props.flows || []).find(
+    (f: any) => f.meta_flow_id === flowId || f.id === flowId,
+  );
+  if (!flow?.screens) return [];
+  return flow.screens
+    .map((s: any) => (typeof s === "string" ? s : s?.id || s?.name))
+    .filter(Boolean);
+}
+
+function addButton(type: ButtonType) {
   const buttons = [...(state.value.buttons || [])];
   if (buttons.length >= 10) {
-    alert("Maximum 10 buttons allowed.");
+    toast.error(t("templates.maxButtons", "Maximum 10 buttons allowed"));
     return;
   }
 
-  const urlCount = buttons.filter((b: any) => b.type === "URL").length;
-  const phoneCount = buttons.filter(
-    (b: any) => b.type === "PHONE_NUMBER",
-  ).length;
+  const countOf = (t: string) => buttons.filter((b: any) => b.type === t).length;
+  const urlCount = countOf("URL");
+  const phoneCount = countOf("PHONE_NUMBER");
 
   if (type === "URL" || type === "PHONE_NUMBER") {
     if (urlCount + phoneCount >= 2) {
-      alert("Maximum 2 Call to Action (URL/Phone) buttons allowed.");
+      toast.error(
+        t(
+          "templates.maxCtaButtons",
+          "Maximum 2 call-to-action (URL/Phone) buttons allowed",
+        ),
+      );
       return;
     }
   }
-  if (type === "URL" && urlCount >= 2) {
-    alert("Maximum 2 Website URL buttons allowed.");
+  if (type === "PHONE_NUMBER" && phoneCount >= 1) {
+    toast.error(
+      t("templates.maxPhoneButtons", "Maximum 1 phone number button allowed"),
+    );
     return;
   }
-  if (type === "PHONE_NUMBER" && phoneCount >= 1) {
-    alert("Maximum 1 Phone Number button allowed.");
+  // Meta allows a single copy-code, flow or call button per template.
+  if (
+    (type === "COPY_CODE" || type === "FLOW" || type === "VOICE_CALL") &&
+    countOf(type) >= 1
+  ) {
+    toast.error(
+      t("templates.maxOneButton", "Only one button of this type is allowed"),
+    );
     return;
   }
 
@@ -450,14 +490,23 @@ function addButton(type: "QUICK_REPLY" | "URL" | "PHONE_NUMBER") {
     insertIndex = lastSameType.originalIndex + 1;
   }
 
-  const newButton = {
+  const newButton: Record<string, any> = {
     id: crypto.randomUUID(),
     type,
     text: "",
-    url: "",
-    urlType: "STATIC",
-    phone_number: "",
   };
+  if (type === "URL") {
+    newButton.url = "";
+    newButton.urlType = "STATIC";
+  }
+  if (type === "PHONE_NUMBER") newButton.phone_number = "";
+  if (type === "COPY_CODE") newButton.example = "";
+  if (type === "FLOW") {
+    newButton.flow_id = "";
+    newButton.flow_action = "navigate";
+    newButton.navigate_screen = "";
+  }
+
   buttons.splice(insertIndex, 0, newButton);
   state.value.buttons = buttons;
 }
@@ -529,7 +578,7 @@ defineExpose({
         <select
           v-model="state.whatsapp_account"
           class="w-full h-10 rounded-md border bg-background px-3 disabled:cursor-not-allowed disabled:opacity-50"
-          :disabled="!!isEdit"
+          :disabled="isLocked"
         >
           <option value="">{{ t("templates.selectAccount") }}...</option>
           <option
@@ -549,8 +598,18 @@ defineExpose({
         >
         <Input
           v-model="state.name"
-          :disabled="!!isEdit"
+          :disabled="isLocked"
           :placeholder="t('templates.templateNamePlaceholder')"
+          class="w-full h-10"
+        />
+      </div>
+
+      <div class="space-y-2">
+        <!-- Local label only; Meta never sees it, so it stays editable after publish -->
+        <Label>{{ t("templates.displayName", "Display Name") }}</Label>
+        <Input
+          v-model="state.display_name"
+          :placeholder="t('templates.displayNamePlaceholder', 'Friendly name')"
           class="w-full h-10"
         />
       </div>
@@ -566,7 +625,7 @@ defineExpose({
               variant="outline"
               role="combobox"
               class="w-full h-10 justify-between"
-              :disabled="!!isEdit"
+              :disabled="isLocked"
             >
               <span>{{ getLanguageName(state.language) }}</span>
               <ChevronsUpDown class="ml-2 h-4 w-4 shrink-0 opacity-50" />
@@ -609,7 +668,7 @@ defineExpose({
         <select
           v-model="state.category"
           class="w-full h-10 rounded-md border bg-background px-3 disabled:cursor-not-allowed disabled:opacity-50"
-          :disabled="!!isEdit"
+          :disabled="isLocked"
         >
           <option v-for="cat in categories" :key="cat.value" :value="cat.value">
             {{ cat.label }}
@@ -1070,7 +1129,7 @@ defineExpose({
             <Label class="text-xs font-bold uppercase text-muted-foreground"
               >Action Buttons</Label
             >
-            <div class="flex gap-2">
+            <div class="flex flex-wrap gap-1">
               <Button
                 type="button"
                 variant="ghost"
@@ -1094,6 +1153,30 @@ defineExpose({
                 class="text-emerald-500"
                 @click="addButton('PHONE_NUMBER')"
                 >+ Phone</Button
+              >
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                class="text-emerald-500"
+                @click="addButton('COPY_CODE')"
+                >+ Copy Code</Button
+              >
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                class="text-emerald-500"
+                @click="addButton('FLOW')"
+                >+ Flow</Button
+              >
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                class="text-emerald-500"
+                @click="addButton('VOICE_CALL')"
+                >+ Call</Button
               >
             </div>
           </div>
@@ -1239,6 +1322,98 @@ defineExpose({
                       class="h-8 text-xs bg-background"
                     />
                   </div>
+
+                  <div v-if="btn.type === 'COPY_CODE'" class="space-y-1.5">
+                    <Label
+                      class="text-[10px] font-bold text-muted-foreground uppercase"
+                      >Example Code</Label
+                    >
+                    <Input
+                      v-model="btn.example"
+                      placeholder="SAVE20"
+                      class="h-8 text-xs bg-background"
+                    />
+                  </div>
+
+                  <div
+                    v-if="btn.type === 'FLOW'"
+                    class="col-span-2 grid grid-cols-2 gap-3"
+                  >
+                    <div class="space-y-1.5">
+                      <Label
+                        class="text-[10px] font-bold text-muted-foreground uppercase"
+                        >Flow</Label
+                      >
+                      <select
+                        v-model="btn.flow_id"
+                        class="w-full h-8 rounded-md border bg-background px-2 text-xs disabled:cursor-not-allowed disabled:opacity-50"
+                      >
+                        <option value="">Select a Flow...</option>
+                        <option
+                          v-for="flow in flows || []"
+                          :key="flow.id"
+                          :value="flow.meta_flow_id || flow.id"
+                        >
+                          {{ flow.name }}
+                        </option>
+                      </select>
+                      <p
+                        v-if="!(flows || []).length"
+                        class="text-[10px] text-muted-foreground"
+                      >
+                        No published Flows available.
+                      </p>
+                    </div>
+
+                    <div class="space-y-1.5">
+                      <Label
+                        class="text-[10px] font-bold text-muted-foreground uppercase"
+                        >Flow Action</Label
+                      >
+                      <select
+                        v-model="btn.flow_action"
+                        class="w-full h-8 rounded-md border bg-background px-2 text-xs disabled:cursor-not-allowed disabled:opacity-50"
+                      >
+                        <option value="navigate">Navigate</option>
+                        <option value="data_exchange">Data Exchange</option>
+                      </select>
+                    </div>
+
+                    <div
+                      v-if="
+                        btn.flow_action === 'navigate' &&
+                        btn.flow_id &&
+                        getFlowScreens(btn.flow_id).length > 0
+                      "
+                      class="space-y-1.5"
+                    >
+                      <Label
+                        class="text-[10px] font-bold text-muted-foreground uppercase"
+                        >Screen</Label
+                      >
+                      <select
+                        v-model="btn.navigate_screen"
+                        class="w-full h-8 rounded-md border bg-background px-2 text-xs disabled:cursor-not-allowed disabled:opacity-50"
+                      >
+                        <option value="">Select a screen...</option>
+                        <option
+                          v-for="screen in getFlowScreens(btn.flow_id)"
+                          :key="screen"
+                          :value="screen"
+                        >
+                          {{ screen }}
+                        </option>
+                      </select>
+                    </div>
+                  </div>
+
+                  <p
+                    v-if="btn.type === 'VOICE_CALL'"
+                    class="self-end text-[10px] text-muted-foreground"
+                  >
+                    Opens a WhatsApp voice call with your business. No extra
+                    configuration needed.
+                  </p>
                 </div>
               </div>
             </template>

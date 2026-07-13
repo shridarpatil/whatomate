@@ -24,7 +24,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog'
-import { FileText, Trash2, Save, Loader2, Send } from 'lucide-vue-next'
+import { FileText, Trash2, Save, Loader2, Send, Info } from 'lucide-vue-next'
 import { getErrorMessage } from '@/lib/api-utils'
 import { getQualityBadgeClass, getQualityRatingLabel } from '@/lib/utils'
 
@@ -451,10 +451,19 @@ onMounted(async () => {
 
     <!-- Account, name, category, header, body, variables, buttons and the live
          WhatsApp preview all live in TemplateEditor. -->
+    <!-- Approved templates can still be edited; Meta only freezes their identity
+         fields, which is what is-published locks. -->
+    <div v-if="template?.status?.toUpperCase() === 'APPROVED'" class="flex items-start gap-2 rounded-md bg-blue-500/10 border border-blue-500/20 px-3 py-2 mb-4 text-xs text-blue-400 light:text-blue-600">
+      <Info class="h-3.5 w-3.5 shrink-0 mt-0.5" />
+      <span>{{ $t('templates.editLimitsInfo', 'Approved templates can be edited up to 10 times in 30 days (1 edit per 24 hours). Editing triggers a new review which may take up to 24 hours. Name, language, and category cannot be changed.') }}</span>
+    </div>
+
     <TemplateEditor
       v-model="form"
       :is-edit="!isNew"
+      :is-published="!!template?.meta_template_id"
       :accounts="accounts"
+      :flows="whatsappFlows"
       :disabled="!canWrite || !isEditable"
     />
 

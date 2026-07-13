@@ -5,6 +5,8 @@ import {
   Reply,
   ExternalLink,
   Phone,
+  PhoneCall,
+  Copy,
   X,
   Image as ImageIcon,
   Video,
@@ -12,7 +14,14 @@ import {
 } from "lucide-vue-next";
 
 interface TemplateButton {
-  type: "QUICK_REPLY" | "URL" | "PHONE_NUMBER";
+  type:
+    | "QUICK_REPLY"
+    | "URL"
+    | "PHONE_NUMBER"
+    | "COPY_CODE"
+    | "FLOW"
+    | "VOICE_CALL"
+    | "OTP";
   text: string;
   url?: string;
   phone_number?: string;
@@ -223,9 +232,20 @@ const currentTime = computed(() =>
             class="flex items-center justify-center gap-1.5 py-2.5 px-4 text-[#00A884] text-[13px] font-semibold cursor-pointer hover:bg-gray-50 dark:hover:bg-white/5 transition-colors border-b border-gray-100 dark:border-zinc-800"
           >
             <Reply v-if="btn.type === 'QUICK_REPLY'" class="w-3.5 h-3.5" />
-            <ExternalLink v-else-if="btn.type === 'URL'" class="w-3.5 h-3.5" />
+            <ExternalLink
+              v-else-if="btn.type === 'URL' || btn.type === 'FLOW'"
+              class="w-3.5 h-3.5"
+            />
             <Phone
               v-else-if="btn.type === 'PHONE_NUMBER'"
+              class="w-3.5 h-3.5"
+            />
+            <PhoneCall
+              v-else-if="btn.type === 'VOICE_CALL'"
+              class="w-3.5 h-3.5"
+            />
+            <Copy
+              v-else-if="btn.type === 'COPY_CODE' || btn.type === 'OTP'"
               class="w-3.5 h-3.5"
             />
             <span class="truncate">{{ btn.text || "Button" }}</span>
@@ -298,11 +318,19 @@ const currentTime = computed(() =>
                 class="w-4 h-4 text-[#00A884]"
               />
               <ExternalLink
-                v-else-if="btn.type === 'URL'"
+                v-else-if="btn.type === 'URL' || btn.type === 'FLOW'"
                 class="w-4 h-4 text-[#00A884]"
               />
               <Phone
                 v-else-if="btn.type === 'PHONE_NUMBER'"
+                class="w-4 h-4 text-[#00A884]"
+              />
+              <PhoneCall
+                v-else-if="btn.type === 'VOICE_CALL'"
+                class="w-4 h-4 text-[#00A884]"
+              />
+              <Copy
+                v-else-if="btn.type === 'COPY_CODE' || btn.type === 'OTP'"
                 class="w-4 h-4 text-[#00A884]"
               />
               <span class="text-[14px] text-[#111b21] dark:text-gray-200">{{
