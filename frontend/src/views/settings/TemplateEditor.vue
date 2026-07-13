@@ -27,6 +27,13 @@ import {
   CommandItem,
   CommandList,
 } from "@/components/ui/command";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 
 import TemplatePreview from "./TemplatePreview.vue";
 import { toast } from "vue-sonner";
@@ -167,6 +174,14 @@ const categories = [
     label: "Authentication",
     description: "OTP, verification codes",
   },
+];
+
+const headerTypes = [
+  { value: "NONE", label: "None" },
+  { value: "TEXT", label: "Text" },
+  { value: "IMAGE", label: "Image" },
+  { value: "VIDEO", label: "Video" },
+  { value: "DOCUMENT", label: "Document" },
 ];
 
 const mediaPreviewUrl = ref("");
@@ -403,9 +418,15 @@ function setSampleValue(component: string, paramName: string, value: string) {
   }
 }
 
-function formatVariableLabel(paramName: string): string {
-  return `{{${paramName}}}`;
+// Rendered as body:{{name}} / header:{{1}} to match the rest of the app.
+function formatVariableLabel(component: string, paramName: string): string {
+  return `${component}:{{${paramName}}}`;
 }
+
+const hasTooManyHeaderVariables = computed(() => {
+  if (state.value.header_type !== "TEXT") return false;
+  return new Set(headerVariables.value).size > 1;
+});
 
 type ButtonType =
   | "QUICK_REPLY"
@@ -572,20 +593,20 @@ onMounted(() => {
           >{{ t("templates.whatsappAccount") }}
           <span class="text-destructive">*</span></Label
         >
-        <select
-          v-model="state.whatsapp_account"
-          class="w-full h-10 rounded-md border bg-background px-3 disabled:cursor-not-allowed disabled:opacity-50"
-          :disabled="isLocked"
-        >
-          <option value="">{{ t("templates.selectAccount") }}...</option>
-          <option
-            v-for="account in accounts"
-            :key="account.id"
-            :value="account.name"
-          >
-            {{ account.name }}
-          </option>
-        </select>
+        <Select v-model="state.whatsapp_account" :disabled="isLocked">
+          <SelectTrigger class="h-10">
+            <SelectValue :placeholder="t('templates.selectAccount')" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem
+              v-for="account in accounts"
+              :key="account.id"
+              :value="account.name"
+            >
+              {{ account.name }}
+            </SelectItem>
+          </SelectContent>
+        </Select>
       </div>
 
       <div class="space-y-2">
@@ -610,6 +631,7 @@ onMounted(() => {
         <!-- Local label only; Meta never sees it, so it stays editable after publish -->
         <Label>{{ t("templates.displayName", "Display Name") }}</Label>
         <Input
+          id="display-name"
           v-model="state.display_name"
           :placeholder="t('templates.displayNamePlaceholder', 'Friendly name')"
           class="w-full h-10"
@@ -667,15 +689,20 @@ onMounted(() => {
           >{{ t("templates.category") }}
           <span class="text-destructive">*</span></Label
         >
-        <select
-          v-model="state.category"
-          class="w-full h-10 rounded-md border bg-background px-3 disabled:cursor-not-allowed disabled:opacity-50"
-          :disabled="isLocked"
-        >
-          <option v-for="cat in categories" :key="cat.value" :value="cat.value">
-            {{ cat.label }}
-          </option>
-        </select>
+        <Select v-model="state.category" :disabled="isLocked">
+          <SelectTrigger class="h-10">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem
+              v-for="cat in categories"
+              :key="cat.value"
+              :value="cat.value"
+            >
+              {{ cat.label }}
+            </SelectItem>
+          </SelectContent>
+        </Select>
       </div>
     </div>
 
@@ -687,20 +714,24 @@ onMounted(() => {
           class="space-y-4 p-4 border rounded-lg bg-muted/10"
         >
           <div class="grid grid-cols-2 gap-4">
-            <div class="space-y-2">
+            <div class="space-y-1.5">
               <Label class="text-xs font-bold text-muted-foreground"
                 >Header Type</Label
               >
-              <select
-                v-model="state.header_type"
-                class="w-full h-9 bg-background border rounded-md px-2 text-sm"
-              >
-                <option value="NONE">None</option>
-                <option value="TEXT">Text</option>
-                <option value="IMAGE">Image</option>
-                <option value="VIDEO">Video</option>
-                <option value="DOCUMENT">Document</option>
-              </select>
+              <Select v-model="state.header_type">
+                <SelectTrigger class="h-9">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem
+                    v-for="type in headerTypes"
+                    :key="type.value"
+                    :value="type.value"
+                  >
+                    {{ type.label }}
+                  </SelectItem>
+                </SelectContent>
+              </Select>
             </div>
 
             <div v-if="state.header_type === 'TEXT'" class="space-y-2">
@@ -720,10 +751,17 @@ onMounted(() => {
                 </Button>
               </div>
               <Input
+                id="header-content"
                 v-model="state.header_content"
                 class="h-9 bg-background"
                 placeholder="Hello!"
               />
+              <p
+                v-if="hasTooManyHeaderVariables"
+                class="text-[10px] text-red-500"
+              >
+                Meta allows at most one variable in a TEXT header.
+              </p>
             </div>
           </div>
 
@@ -1053,7 +1091,7 @@ onMounted(() => {
         >
           <div>
             <Label class="text-xs font-bold uppercase text-muted-foreground"
-              >Sample Values</Label
+              >Sample Values for Variables</Label
             >
             <p class="text-[10px] text-muted-foreground mt-1">
               Provide sample values for your variables to see how they look in
@@ -1072,7 +1110,7 @@ onMounted(() => {
             >
               <span
                 class="text-[10px] font-mono bg-muted border text-muted-foreground px-2 py-1 rounded min-w-[50px] text-center"
-                >{{ formatVariableLabel(paramName) }}</span
+                >{{ formatVariableLabel('header', paramName) }}</span
               >
               <Input
                 type="text"
@@ -1084,7 +1122,7 @@ onMounted(() => {
                     ($event.target as HTMLInputElement).value,
                   )
                 "
-                :placeholder="'Example for ' + paramName + '...'"
+                :placeholder="'e.g. ' + paramName"
                 :class="[
                   'flex-1 h-8 text-xs bg-background',
                   getSampleValue('header', paramName) ? '' : 'border-red-500',
@@ -1104,7 +1142,7 @@ onMounted(() => {
             >
               <span
                 class="text-[10px] font-mono bg-muted border text-muted-foreground px-2 py-1 rounded min-w-[50px] text-center"
-                >{{ formatVariableLabel(paramName) }}</span
+                >{{ formatVariableLabel('body', paramName) }}</span
               >
               <Input
                 type="text"
@@ -1116,7 +1154,7 @@ onMounted(() => {
                     ($event.target as HTMLInputElement).value,
                   )
                 "
-                :placeholder="'Example for ' + paramName + '...'"
+                :placeholder="'e.g. ' + paramName"
                 :class="[
                   'flex-1 h-8 text-xs bg-background',
                   getSampleValue('body', paramName) ? '' : 'border-red-500',
@@ -1135,10 +1173,13 @@ onMounted(() => {
               >Optional, max 60 chars</span
             >
           </div>
-          <Input
+          <Textarea
+            id="footer-content"
             v-model="state.footer_content"
+            :rows="2"
+            maxlength="60"
             placeholder="E.g. Reply STOP to opt out"
-            class="h-9 bg-background"
+            class="bg-background"
           />
         </div>
 
