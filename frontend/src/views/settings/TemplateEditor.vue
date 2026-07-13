@@ -41,6 +41,7 @@ const props = defineProps<{
   modelValue: Record<string, any>;
   isEdit?: boolean;
   accounts: any[];
+  disabled?: boolean;
 }>();
 
 const emit = defineEmits(["update:modelValue"]);
@@ -289,6 +290,76 @@ function insertVariable() {
   insertAtCursor(`{{${nextVarNum}}}`);
 }
 
+// --- Authentication templates ---
+// Meta fixes the body text for AUTHENTICATION templates and models code delivery
+// as a single OTP button, so this category replaces the body/buttons editors.
+const isAuthentication = computed(
+  () => state.value.category === "AUTHENTICATION",
+);
+
+// Built here, not inline: a literal {{1}} inside a template interpolation would
+// close the interpolation early and fail to compile.
+const otpCodeToken = `{{1}}`;
+
+function otpButton() {
+  return (state.value.buttons || []).find((b: any) => b.type === "OTP");
+}
+
+const authOtpType = computed(() => {
+  if (!isAuthentication.value) return "COPY_CODE";
+  return otpButton()?.otp_type || "COPY_CODE";
+});
+
+// Lives on the form (not a local ref) so the parent's save() can gate on it.
+// Not part of the API payload — the parent builds that field by field.
+function setAuthOtpType(type: string) {
+  if (!type) return;
+  state.value.zero_tap_accepted = false;
+  const needsApps = type === "ONE_TAP" || type === "ZERO_TAP";
+  const existing = otpButton();
+
+  if (existing) {
+    existing.otp_type = type;
+    if (needsApps && !existing.supported_apps?.length) {
+      existing.supported_apps = [{ package_name: "", signature_hash: "" }];
+    }
+    return;
+  }
+
+  const btn: any = {
+    id: crypto.randomUUID(),
+    type: "OTP",
+    text: "Copy code",
+    otp_type: type,
+  };
+  if (needsApps) {
+    btn.supported_apps = [{ package_name: "", signature_hash: "" }];
+  }
+  state.value.buttons = [btn];
+}
+
+function addSupportedApp() {
+  const btn = otpButton();
+  if (!btn) return;
+  if (!btn.supported_apps) btn.supported_apps = [];
+  if (btn.supported_apps.length < 5) {
+    btn.supported_apps.push({ package_name: "", signature_hash: "" });
+  }
+}
+
+function removeSupportedApp(index: number) {
+  const btn = otpButton();
+  if (btn?.supported_apps?.length > 1) {
+    btn.supported_apps.splice(index, 1);
+  }
+}
+
+// Switching into AUTHENTICATION needs an OTP button to exist before the
+// delivery-method selector has anything to bind to.
+watch(isAuthentication, (isAuth) => {
+  if (isAuth && !otpButton()) setAuthOtpType("COPY_CODE");
+});
+
 function componentVariables(component: string): string[] {
   if (component === "header") return headerVariables.value;
   if (component === "body") return bodyVariables.value;
@@ -444,7 +515,9 @@ defineExpose({
 </script>
 
 <template>
-  <div class="space-y-6">
+  <!-- fieldset[disabled] natively disables every control inside, so read-only
+       users and non-editable approved templates need no per-input binding. -->
+  <fieldset :disabled="disabled" class="space-y-6 min-w-0 disabled:opacity-70">
     <div
       class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 py-4 mb-4 border-b border-zinc-200 dark:border-zinc-800 pb-6"
     >
@@ -547,7 +620,11 @@ defineExpose({
 
     <div class="grid grid-cols-12 gap-8">
       <div class="col-span-12 lg:col-span-7 space-y-6">
-        <div class="space-y-4 p-4 border rounded-lg bg-muted/10">
+        <!-- Meta forces header_type NONE on AUTHENTICATION templates -->
+        <div
+          v-if="!isAuthentication"
+          class="space-y-4 p-4 border rounded-lg bg-muted/10"
+        >
           <div class="grid grid-cols-2 gap-4">
             <div class="space-y-2">
               <Label class="text-xs font-bold text-muted-foreground"
@@ -616,7 +693,212 @@ defineExpose({
           </div>
         </div>
 
-        <div class="space-y-2">
+        <!-- AUTHENTICATION: Meta fixes the body text, code delivery is the OTP button -->
+        <div v-if="isAuthentication" class="space-y-4">
+          <div class="space-y-2">
+            <Label class="text-xs font-bold uppercase text-muted-foreground"
+              >Code Delivery Method</Label
+            >
+            <select
+              :value="authOtpType"
+              @change="
+                setAuthOtpType(($event.target as HTMLSelectElement).value)
+              "
+              class="w-full h-10 rounded-md border bg-background px-3 disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              <option value="COPY_CODE">Copy Code</option>
+              <option value="ONE_TAP">One-Tap Autofill (Android only)</option>
+              <option value="ZERO_TAP">Zero-Tap (Android only)</option>
+            </select>
+            <p class="text-[10px] text-muted-foreground">
+              <span v-if="authOtpType === 'COPY_CODE'"
+                >User taps a button to copy the code to their clipboard.</span
+              >
+              <span v-else-if="authOtpType === 'ONE_TAP'"
+                >User taps a button to autofill the code in your app. Requires
+                app configuration.</span
+              >
+              <span v-else
+                >The code is delivered to your app automatically. Requires app
+                configuration.</span
+              >
+            </p>
+          </div>
+
+          <div class="space-y-2">
+            <Label class="text-xs font-bold uppercase text-muted-foreground"
+              >Message Body</Label
+            >
+            <div
+              class="rounded-md border bg-muted/50 p-3 text-sm text-muted-foreground"
+            >
+              <span class="font-mono">{{ otpCodeToken }}</span> is your
+              verification code.
+              <span
+                v-if="state.add_security_recommendation"
+                class="block mt-1"
+                >For your security, do not share this code.</span
+              >
+            </div>
+            <p class="text-[10px] text-muted-foreground">
+              Authentication templates use fixed preset text defined by Meta.
+            </p>
+          </div>
+
+          <div class="flex items-center gap-2">
+            <input
+              id="security-rec"
+              type="checkbox"
+              v-model="state.add_security_recommendation"
+              class="h-4 w-4 rounded border-gray-300"
+            />
+            <Label for="security-rec" class="text-xs cursor-pointer"
+              >Add security recommendation</Label
+            >
+          </div>
+
+          <div class="space-y-2">
+            <div class="flex items-center gap-2">
+              <input
+                id="code-expiration"
+                type="checkbox"
+                :checked="state.code_expiration_minutes > 0"
+                @change="
+                  state.code_expiration_minutes = (
+                    $event.target as HTMLInputElement
+                  ).checked
+                    ? 10
+                    : 0
+                "
+                class="h-4 w-4 rounded border-gray-300"
+              />
+              <Label for="code-expiration" class="text-xs cursor-pointer"
+                >Add an expiration time for the code</Label
+              >
+            </div>
+            <div
+              v-if="state.code_expiration_minutes > 0"
+              class="ml-6 space-y-1"
+            >
+              <div class="flex items-center gap-2">
+                <Input
+                  type="number"
+                  :model-value="state.code_expiration_minutes"
+                  @update:model-value="
+                    (val: string | number) =>
+                      (state.code_expiration_minutes = val
+                        ? parseInt(String(val), 10)
+                        : 0)
+                  "
+                  min="1"
+                  max="90"
+                  class="h-9 w-24 bg-background"
+                />
+                <span class="text-[10px] text-muted-foreground"
+                  >minutes (1-90)</span
+                >
+              </div>
+              <p class="text-[10px] text-muted-foreground">
+                Footer: "This code expires in
+                {{ state.code_expiration_minutes }} minutes."
+              </p>
+            </div>
+          </div>
+
+          <!-- Zero-Tap requires explicit acceptance of the WhatsApp Business Terms -->
+          <div
+            v-if="authOtpType === 'ZERO_TAP'"
+            class="rounded-lg border border-amber-500/30 bg-amber-500/5 p-3"
+          >
+            <div class="flex items-start gap-2">
+              <input
+                id="zero-tap-tos"
+                type="checkbox"
+                v-model="state.zero_tap_accepted"
+                class="mt-0.5 h-4 w-4 rounded border-gray-300"
+              />
+              <Label
+                for="zero-tap-tos"
+                class="text-[11px] cursor-pointer leading-relaxed"
+              >
+                By selecting zero-tap, I understand that my business's use of
+                zero-tap authentication is subject to the
+                <a
+                  href="https://www.whatsapp.com/legal/business-terms/"
+                  target="_blank"
+                  class="underline text-primary"
+                  >WhatsApp Business Terms of Service</a
+                >. It is my business's responsibility to ensure its customers
+                expect that the code will be automatically filled in on their
+                behalf.
+              </Label>
+            </div>
+          </div>
+
+          <!-- ONE_TAP / ZERO_TAP: the app that receives the autofilled code -->
+          <div
+            v-if="authOtpType === 'ONE_TAP' || authOtpType === 'ZERO_TAP'"
+            class="space-y-3 rounded-lg border p-3"
+          >
+            <div v-if="authOtpType === 'ONE_TAP'" class="space-y-1">
+              <Label class="text-xs">Autofill Text</Label>
+              <Input
+                v-model="otpButton().autofill_text"
+                placeholder="Autofill"
+                class="h-9 bg-background"
+              />
+            </div>
+            <div class="space-y-2">
+              <div class="flex items-center justify-between">
+                <Label class="text-xs">Supported Apps *</Label>
+                <Button
+                  v-if="(otpButton()?.supported_apps?.length || 0) < 5"
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  class="h-7 px-2 text-[10px]"
+                  @click="addSupportedApp"
+                >
+                  <Plus class="w-3 h-3 mr-1" /> Add App
+                </Button>
+              </div>
+              <div
+                v-for="(app, i) in otpButton()?.supported_apps || []"
+                :key="i"
+                class="flex items-end gap-2"
+              >
+                <div class="flex-1 space-y-1">
+                  <Label class="text-[10px]">Package Name *</Label>
+                  <Input
+                    v-model="app.package_name"
+                    placeholder="com.example.app"
+                    class="h-9 bg-background"
+                  />
+                </div>
+                <div class="flex-1 space-y-1">
+                  <Label class="text-[10px]">Signature Hash *</Label>
+                  <Input
+                    v-model="app.signature_hash"
+                    placeholder="K8a/AINcGX7"
+                    class="h-9 bg-background"
+                  />
+                </div>
+                <Button
+                  v-if="(otpButton()?.supported_apps?.length || 0) > 1"
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  class="h-9 w-9 shrink-0 p-0"
+                  @click="removeSupportedApp(Number(i))"
+                >
+                  <Trash2 class="w-3.5 h-3.5 text-destructive" />
+                </Button>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div v-if="!isAuthentication" class="space-y-2">
           <Label class="text-xs font-bold uppercase text-muted-foreground"
             >Message Body</Label
           >
@@ -692,7 +974,10 @@ defineExpose({
         </div>
 
         <div
-          v-if="bodyVariables.length > 0 || headerVariables.length > 0"
+          v-if="
+            !isAuthentication &&
+            (bodyVariables.length > 0 || headerVariables.length > 0)
+          "
           class="space-y-4 pt-1"
         >
           <div>
@@ -764,7 +1049,7 @@ defineExpose({
           </div>
         </div>
 
-        <div class="space-y-2">
+        <div v-if="!isAuthentication" class="space-y-2">
           <div class="flex items-center justify-between border-b pb-2">
             <Label class="text-xs font-bold uppercase text-muted-foreground"
               >Footer Text</Label
@@ -780,7 +1065,7 @@ defineExpose({
           />
         </div>
 
-        <div class="space-y-4 pt-2 border-t">
+        <div v-if="!isAuthentication" class="space-y-4 pt-2 border-t">
           <div class="flex items-center justify-between border-b pb-2">
             <Label class="text-xs font-bold uppercase text-muted-foreground"
               >Action Buttons</Label
@@ -977,7 +1262,7 @@ defineExpose({
 
       <div class="col-span-12 lg:col-span-5">
         <div
-          class="sticky top-4 bg-[#e5ddd5] dark:bg-[#111b21] rounded-2xl p-6 min-h-[450px] flex flex-col items-start shadow-sm relative overflow-hidden"
+          class="sticky top-4 bg-[#e5ddd5] dark:bg-[#111b21] rounded-2xl p-6 min-h-[450px] flex flex-col items-start shadow-sm overflow-hidden"
         >
           <p
             class="text-[10px] font-bold text-muted-foreground mb-4 uppercase tracking-wider"
@@ -996,5 +1281,5 @@ defineExpose({
         </div>
       </div>
     </div>
-  </div>
+  </fieldset>
 </template>
