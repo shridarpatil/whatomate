@@ -12,7 +12,7 @@ import { PageHeader, SearchInput, DataTable, IconButton, DeleteConfirmDialog, Er
 import { api, templatesService } from '@/services/api'
 import { useOrganizationsStore } from '@/stores/organizations'
 import { toast } from 'vue-sonner'
-import { Plus, RefreshCw, FileText, Pencil, Trash2, Loader2, MessageSquare, Image, FileIcon, Video } from 'lucide-vue-next'
+import { Plus, RefreshCw, FileText, Pencil, Trash2, Loader2, Send, MessageSquare, Image, FileIcon, Video } from 'lucide-vue-next'
 import { getErrorMessage } from '@/lib/api-utils'
 import { useSearchPagination } from '@/composables/useSearchPagination'
 import { getQualityBadgeClass, getQualityRatingLabel } from '@/lib/utils'
@@ -57,6 +57,7 @@ const selectedAccount = ref<string>(localStorage.getItem('templates_selected_acc
 // Delete dialog state
 const deleteDialogOpen = ref(false)
 const templateToDelete = ref<Template | null>(null)
+const publishingId = ref<string | null>(null)
 const isDeleting = ref(false)
 
 const { searchQuery, currentPage, totalItems, pageSize, handlePageChange } = useSearchPagination({
@@ -251,6 +252,24 @@ async function confirmDeleteTemplate() {
   }
 }
 
+// A DRAFT template lives only in our database until it is submitted to Meta.
+function isDraft(template: Template) {
+  return !template.meta_template_id || template.status?.toUpperCase() === 'DRAFT'
+}
+
+async function publishTemplate(template: Template) {
+  publishingId.value = template.id
+  try {
+    const response = await api.post(`/templates/${template.id}/publish`)
+    toast.success((response.data as any).data?.message || t('templates.publishSuccess', 'Template submitted to Meta'))
+    await fetchTemplates()
+  } catch (error) {
+    toast.error(getErrorMessage(error, t('templates.publishFailed', 'Failed to publish template')), { duration: 8000 })
+  } finally {
+    publishingId.value = null
+  }
+}
+
 // Dark-first: default is dark mode, light: prefix for light mode
 function getStatusBadgeClass(status: string) {
   switch (status) {
@@ -398,6 +417,14 @@ function getHeaderIcon(type: string) {
                 </template>
                 <template #cell-actions="{ item: template }">
                   <div class="flex items-center justify-end gap-1">
+                    <IconButton
+                      v-if="isDraft(template)"
+                      :icon="publishingId === template.id ? Loader2 : Send"
+                      :label="$t('templates.publish', 'Publish to Meta')"
+                      class="h-8 w-8"
+                      :disabled="publishingId === template.id"
+                      @click="publishTemplate(template)"
+                    />
                     <RouterLink :to="`/templates/${template.id}`">
                       <IconButton
                         :icon="Pencil"
