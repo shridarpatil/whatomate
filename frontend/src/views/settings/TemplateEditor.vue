@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed, watch, onMounted, onBeforeUnmount, nextTick } from "vue";
+import { ref, computed, watch, onMounted, nextTick } from "vue";
 import { useI18n } from "vue-i18n";
 import {
   Trash2,
@@ -35,7 +35,6 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 
-import TemplatePreview from "./TemplatePreview.vue";
 import { toast } from "vue-sonner";
 
 const { t } = useI18n();
@@ -200,7 +199,6 @@ const LIMITS = {
   copyCode: 15,
 };
 
-const mediaPreviewUrl = ref("");
 const mediaFileName = ref("");
 
 watch(
@@ -548,7 +546,8 @@ const mediaAccept = computed(
   () => MEDIA_ACCEPT[state.value.header_type as string] || "",
 );
 
-// Previewed locally, uploaded to Meta only on save, so an abandoned draft
+// The file is only handed up to the parent, which previews it and uploads it to
+// Meta on save. Picking a file costs no API call.
 function onMediaFileChange(event: Event) {
   const input = event.target as HTMLInputElement;
   const file = input.files?.[0];
@@ -561,27 +560,16 @@ function onMediaFileChange(event: Event) {
     return;
   }
 
-  setMediaFile(file);
-  mediaPreviewUrl.value = URL.createObjectURL(file);
   mediaFileName.value = file.name;
   state.value.header_content = "";
-}
-
-function clearMediaFile() {
-  setMediaFile(null);
-  mediaFileName.value = "";
-  state.value.header_content = "";
-}
-
-function setMediaFile(file: File | null) {
-  if (mediaPreviewUrl.value) URL.revokeObjectURL(mediaPreviewUrl.value);
-  mediaPreviewUrl.value = "";
   emit("update:mediaFile", file);
 }
 
-onBeforeUnmount(() => {
-  if (mediaPreviewUrl.value) URL.revokeObjectURL(mediaPreviewUrl.value);
-});
+function clearMediaFile() {
+  mediaFileName.value = "";
+  state.value.header_content = "";
+  emit("update:mediaFile", null);
+}
 
 onMounted(() => {
   if (state.value?.buttons) {
@@ -602,7 +590,7 @@ onMounted(() => {
        users and non-editable approved templates need no per-input binding. -->
   <fieldset :disabled="disabled" class="space-y-6 min-w-0 disabled:opacity-70">
     <div
-      class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 py-4 mb-4 border-b border-zinc-200 dark:border-zinc-800 pb-6"
+      class="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-x-4 gap-y-5 pb-6 mb-2 border-b border-zinc-200 dark:border-zinc-800"
     >
       <div class="space-y-2">
         <Label
@@ -722,8 +710,8 @@ onMounted(() => {
       </div>
     </div>
 
-    <div class="grid grid-cols-12 gap-8">
-      <div class="col-span-12 lg:col-span-7 space-y-6">
+    <div>
+      <div class="space-y-6">
         <!-- Meta forces header_type NONE on AUTHENTICATION templates -->
         <div
           v-if="!isAuthentication"
@@ -748,6 +736,9 @@ onMounted(() => {
                   </SelectItem>
                 </SelectContent>
               </Select>
+              <p class="text-[10px] text-muted-foreground">
+                Optional. A header appears above the message body.
+              </p>
             </div>
 
             <div v-if="state.header_type === 'TEXT'" class="space-y-2">
@@ -1096,7 +1087,7 @@ onMounted(() => {
             placeholder="Type your message..."
           />
           <div class="flex justify-between text-[10px] text-muted-foreground">
-            <span>Variables must be sequential {{ 1 }}, {{ 2 }}...</span>
+            <span v-pre>Variables must be sequential: {{1}}, {{2}}, {{3}}…</span>
             <span
               >{{ (state.body_content || "").length }}/{{ LIMITS.body }}</span
             >
@@ -1528,38 +1519,16 @@ onMounted(() => {
         >
           <AlertCircle class="h-5 w-5 text-blue-500 shrink-0" />
           <div class="space-y-1 text-sm text-blue-600 dark:text-blue-400">
-            <p class="font-medium">Template Submission Info</p>
-            <p class="text-xs opacity-80">
-              Variables like {{ 1 }} will be replaced with real data when
-              sending messages. Make sure your samples reflect real customer
-              data.
+            <p class="font-medium">Before you submit</p>
+            <p v-pre class="text-xs opacity-80">
+              Variables like {{1}} are replaced with real data when the message
+              is sent. Meta reviews your sample values, so make them look like
+              real customer data.
             </p>
           </div>
         </div>
       </div>
 
-      <div class="col-span-12 lg:col-span-5">
-        <div
-          class="sticky top-4 bg-[#e5ddd5] dark:bg-[#111b21] rounded-2xl p-6 min-h-[450px] flex flex-col items-start shadow-sm overflow-hidden"
-        >
-          <p
-            class="text-[10px] font-bold text-muted-foreground mb-4 uppercase tracking-wider"
-          >
-            Live Preview
-          </p>
-          <TemplatePreview
-            :header-type="state.header_type"
-            :header-content="state.header_content"
-            :media-url="mediaPreviewUrl"
-            :media-name="mediaFileName"
-            :body-content="state.body_content"
-            :footer-content="state.footer_content"
-            :buttons="state.buttons"
-            :sample-values="state.sample_values"
-            contained
-          />
-        </div>
-      </div>
     </div>
   </fieldset>
 </template>

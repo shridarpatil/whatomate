@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed, onMounted, watch, nextTick } from 'vue'
+import { ref, computed, onMounted, onBeforeUnmount, watch, nextTick } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { useAuthStore } from '@/stores/auth'
@@ -11,6 +11,7 @@ import MetadataPanel from '@/components/shared/MetadataPanel.vue'
 import AuditLogPanel from '@/components/shared/AuditLogPanel.vue'
 import UnsavedChangesDialog from '@/components/shared/UnsavedChangesDialog.vue'
 import TemplateEditor from './TemplateEditor.vue'
+import TemplatePreview from './TemplatePreview.vue'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -87,7 +88,21 @@ const isPublishing = ref(false)
 const isDetailsOpen = ref(true)
 
 // Picked in the editor, uploaded to Meta only when the template is saved.
+// Previewed from a local object URL, so choosing a file costs no API call.
 const pendingMediaFile = ref<File | null>(null)
+const mediaPreviewUrl = ref('')
+
+watch(pendingMediaFile, (file) => {
+  if (mediaPreviewUrl.value) URL.revokeObjectURL(mediaPreviewUrl.value)
+  mediaPreviewUrl.value = file ? URL.createObjectURL(file) : ''
+})
+
+onBeforeUnmount(() => {
+  if (mediaPreviewUrl.value) URL.revokeObjectURL(mediaPreviewUrl.value)
+})
+
+type HeaderType = 'NONE' | 'TEXT' | 'IMAGE' | 'VIDEO' | 'DOCUMENT'
+const previewHeaderType = computed(() => (form.value.header_type || 'NONE') as HeaderType)
 
 const whatsappFlows = ref<any[]>([])
 
@@ -563,8 +578,30 @@ onMounted(async () => {
     />
 
     <!-- Sidebar -->
-    <template v-if="!isNew" #sidebar>
-      <Card v-if="template">
+    <template #sidebar>
+      <!-- Sticky so the preview stays in view while the form scrolls. -->
+      <Card class="sticky top-0 overflow-hidden">
+        <CardHeader class="pb-3">
+          <CardTitle class="text-sm font-medium">{{ $t('templates.livePreview', 'Live Preview') }}</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div class="rounded-xl bg-[#e5ddd5] dark:bg-[#111b21] p-4">
+            <TemplatePreview
+              :header-type="previewHeaderType"
+              :header-content="form.header_content"
+              :media-url="mediaPreviewUrl"
+              :media-name="pendingMediaFile?.name || ''"
+              :body-content="form.body_content"
+              :footer-content="form.footer_content"
+              :buttons="form.buttons"
+              :sample-values="form.sample_values"
+              contained
+            />
+          </div>
+        </CardContent>
+      </Card>
+
+      <Card v-if="!isNew && template">
         <CardHeader class="pb-3">
           <CardTitle class="text-sm font-medium">{{ $t('templates.status', 'Status') }}</CardTitle>
         </CardHeader>
@@ -587,6 +624,7 @@ onMounted(async () => {
       </Card>
 
       <MetadataPanel
+        v-if="!isNew"
         :created-at="template?.created_at"
         :updated-at="template?.updated_at"
         :created-by-name="template?.created_by_name"
