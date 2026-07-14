@@ -66,7 +66,18 @@ func (m *Manager) negotiateWebRTC(session *CallSession, account *models.WhatsApp
 		// Store the caller's remote track for potential audio bridge use
 		session.mu.Lock()
 		session.CallerRemoteTrack = track
+		bridge := session.Bridge
+		agentLocal := session.AgentAudioTrack
 		session.mu.Unlock()
+
+		// On incoming calls the caller's media often starts only after the agent
+		// answers, so the transfer bridge may already be running without the
+		// caller track (one-way audio). Wire the track into the live bridge now
+		// so the agent can hear the caller; the bridge becomes the sole reader.
+		if bridge != nil && agentLocal != nil {
+			bridge.AttachCaller(track, agentLocal)
+			return
+		}
 
 		// Consume audio and detect inline DTMF (telephone-event packets
 		// arrive on the same m-line as audio with a different payload type).

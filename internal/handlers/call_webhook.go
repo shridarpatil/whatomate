@@ -3,6 +3,7 @@ package handlers
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"strings"
 	"time"
 
@@ -10,6 +11,7 @@ import (
 	"github.com/shridarpatil/whatomate/internal/contactutil"
 	"github.com/shridarpatil/whatomate/internal/models"
 	"github.com/shridarpatil/whatomate/internal/websocket"
+	"gorm.io/gorm"
 )
 
 // processCallWebhook handles a call webhook event for both incoming and outgoing calls.
@@ -409,26 +411,40 @@ func (a *App) processCallPermissionReply(phoneNumberID, fromPhone string, reply 
 		return
 	}
 
+	// Load the most recent permission request for this contact. If none exists
+	// (e.g. the permission prompt was sent out-of-band by Meta, or the request
+	// went out while outside business calling hours), create one from the reply
+	// so the grant/decline is captured instead of being dropped.
 	var permission models.CallPermission
+	isNewPermission := false
 	if err := a.DB.Where("organization_id = ? AND contact_id = ?", account.OrganizationID, contact.ID).
 		Order("created_at DESC").
 		First(&permission).Error; err != nil {
-		a.Log.Warn("No permission record found for call permission reply", "contact_id", contact.ID)
-		return
+		if !errors.Is(err, gorm.ErrRecordNotFound) {
+			a.Log.Error("Failed to load call permission for reply", "error", err, "contact_id", contact.ID)
+			return
+		}
+		isNewPermission = true
+		permission = models.CallPermission{
+			BaseModel:       models.BaseModel{ID: uuid.New()},
+			OrganizationID:  account.OrganizationID,
+			ContactID:       contact.ID,
+			WhatsAppAccount: account.Name,
+			Status:          models.CallPermissionPending,
+		}
+		a.Log.Info("No prior permission record for reply; creating one (out-of-band grant)", "contact_id", contact.ID)
 	}
 
 	now := time.Now()
-	updates := map[string]any{
-		"responded_at": now,
-	}
+	permission.RespondedAt = &now
 
 	var expiresAt *time.Time
 	if reply.Response == "accept" {
-		updates["status"] = models.CallPermissionAccepted
+		permission.Status = models.CallPermissionAccepted
 		if reply.ExpirationTimestamp > 0 {
 			t := time.Unix(reply.ExpirationTimestamp, 0)
 			expiresAt = &t
-			updates["expires_at"] = t
+			permission.ExpiresAt = &t
 		}
 		a.Log.Info("Call permission accepted",
 			"contact_id", contact.ID,
@@ -436,18 +452,32 @@ func (a *App) processCallPermissionReply(phoneNumberID, fromPhone string, reply 
 			"expiration", reply.ExpirationTimestamp,
 		)
 	} else {
-		updates["status"] = models.CallPermissionDeclined
+		permission.Status = models.CallPermissionDeclined
 		a.Log.Info("Call permission declined", "contact_id", contact.ID)
 	}
 
-	a.DB.Model(&permission).Updates(updates)
+	if isNewPermission {
+		if err := a.DB.Create(&permission).Error; err != nil {
+			a.Log.Error("Failed to create call permission from reply", "error", err, "contact_id", contact.ID)
+			return
+		}
+	} else {
+		updates := map[string]any{
+			"status":       permission.Status,
+			"responded_at": now,
+		}
+		if expiresAt != nil {
+			updates["expires_at"] = *expiresAt
+		}
+		a.DB.Model(&permission).Updates(updates)
+	}
 
 	// Broadcast permission update to agents via WebSocket
 	wsPayload := map[string]any{
 		"contact_id":    contact.ID,
 		"contact_phone": contact.PhoneNumber,
 		"contact_name":  contact.ProfileName,
-		"status":        updates["status"],
+		"status":        permission.Status,
 	}
 	if expiresAt != nil {
 		wsPayload["expires_at"] = expiresAt.Format(time.RFC3339)
