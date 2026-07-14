@@ -25,7 +25,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog'
-import { FileText, Trash2, Save, Loader2, Send, Info } from 'lucide-vue-next'
+import { FileText, Trash2, Save, Loader2, Send, Info, Code, Copy } from 'lucide-vue-next'
 import { getErrorMessage } from '@/lib/api-utils'
 import { getQualityBadgeClass, getQualityRatingLabel } from '@/lib/utils'
 
@@ -84,6 +84,7 @@ const hasChanges = ref(false)
 const auditRefreshKey = ref(0)
 const deleteDialogOpen = ref(false)
 const publishDialogOpen = ref(false)
+const jsonDialogOpen = ref(false)
 const isPublishing = ref(false)
 const isDetailsOpen = ref(true)
 
@@ -353,6 +354,48 @@ watch(() => form.value.category, (newCat, oldCat) => {
   }
 })
 
+// The exact body sent to POST/PUT /api/templates. The JSON dialog shows this,
+// so what you inspect is what gets sent.
+function buildPayload(): Record<string, any> {
+  return {
+    whatsapp_account: form.value.whatsapp_account,
+    name: form.value.name,
+    display_name: form.value.display_name,
+    language: form.value.language,
+    category: form.value.category,
+    header_type: isAuthentication.value ? 'NONE' : form.value.header_type,
+    header_content: isAuthentication.value ? '' : form.value.header_content,
+    body_content: isAuthentication.value ? '{{1}} is your verification code.' : form.value.body_content,
+    footer_content: isAuthentication.value ? '' : form.value.footer_content,
+    // `id` is a client-side key the editor uses for v-for. Drop it so it does
+    // not get stored in the buttons JSONB.
+    buttons: (form.value.buttons as any[]).map(({ id: _id, ...button }) => button),
+    sample_values: form.value.sample_values,
+    add_security_recommendation: form.value.add_security_recommendation,
+    code_expiration_minutes: form.value.code_expiration_minutes || 0,
+  }
+}
+
+const payloadJson = computed(() => JSON.stringify(buildPayload(), null, 2))
+
+const payloadMethod = computed(() => (isNew.value ? 'POST' : 'PUT'))
+const payloadUrl = computed(() =>
+  isNew.value ? '/api/templates' : `/api/templates/${templateId.value}`
+)
+
+// A media header is uploaded to Meta on save, and header_content only holds the
+// returned handle afterwards. Say so rather than showing a misleading empty value.
+const payloadPendingMedia = computed(() => !!pendingMediaFile.value)
+
+async function copyPayload() {
+  try {
+    await navigator.clipboard.writeText(payloadJson.value)
+    toast.success(t('templates.payloadCopied', 'Payload copied'))
+  } catch {
+    toast.error(t('templates.payloadCopyFailed', 'Could not copy to clipboard'))
+  }
+}
+
 async function save() {
   if (!form.value.name.trim()) {
     toast.error(t('templates.nameRequired', 'Template name is required'))
@@ -428,21 +471,7 @@ async function save() {
       pendingMediaFile.value = null
     }
 
-    const payload: Record<string, any> = {
-      whatsapp_account: form.value.whatsapp_account,
-      name: form.value.name,
-      display_name: form.value.display_name,
-      language: form.value.language,
-      category: form.value.category,
-      header_type: isAuthentication.value ? 'NONE' : form.value.header_type,
-      header_content: isAuthentication.value ? '' : form.value.header_content,
-      body_content: isAuthentication.value ? '{{1}} is your verification code.' : form.value.body_content,
-      footer_content: isAuthentication.value ? '' : form.value.footer_content,
-      buttons: form.value.buttons,
-      sample_values: form.value.sample_values,
-      add_security_recommendation: form.value.add_security_recommendation,
-      code_expiration_minutes: form.value.code_expiration_minutes || 0,
-    }
+    const payload = buildPayload()
 
     if (isNew.value) {
       const response = await api.post('/templates', payload)
@@ -536,6 +565,9 @@ onMounted(async () => {
   >
     <template #actions>
       <div class="flex items-center gap-2">
+        <Button variant="outline" size="sm" @click="jsonDialogOpen = true">
+          <Code class="h-4 w-4 mr-1" /> {{ $t('templates.viewJson', 'JSON') }}
+        </Button>
         <Button v-if="canPublish" variant="outline" size="sm" @click="publishDialogOpen = true" :disabled="isPublishing">
           <Loader2 v-if="isPublishing" class="h-4 w-4 mr-1 animate-spin" />
           <Send v-else class="h-4 w-4 mr-1" />
@@ -650,6 +682,31 @@ onMounted(async () => {
       </Card>
     </template>
   </DetailPageLayout>
+
+  <!-- Request payload, for verifying what gets sent to the API -->
+  <AlertDialog v-model:open="jsonDialogOpen">
+    <AlertDialogContent class="max-w-2xl">
+      <AlertDialogHeader>
+        <AlertDialogTitle>{{ $t('templates.requestPayload', 'Request payload') }}</AlertDialogTitle>
+        <AlertDialogDescription>
+          <span class="font-mono text-xs">{{ payloadMethod }} {{ payloadUrl }}</span>
+        </AlertDialogDescription>
+      </AlertDialogHeader>
+
+      <p v-if="payloadPendingMedia" class="text-xs text-muted-foreground">
+        {{ $t('templates.payloadPendingMedia', 'header_content is empty here. The sample file is uploaded to Meta when you save, and the handle it returns is sent in its place.') }}
+      </p>
+
+      <pre class="max-h-[50vh] overflow-auto rounded-md bg-muted p-3 text-xs font-mono">{{ payloadJson }}</pre>
+
+      <AlertDialogFooter>
+        <Button variant="outline" size="sm" @click="copyPayload">
+          <Copy class="h-4 w-4 mr-1" /> {{ $t('common.copy', 'Copy') }}
+        </Button>
+        <AlertDialogCancel>{{ $t('common.close', 'Close') }}</AlertDialogCancel>
+      </AlertDialogFooter>
+    </AlertDialogContent>
+  </AlertDialog>
 
   <!-- Delete Confirmation -->
   <AlertDialog v-model:open="deleteDialogOpen">
