@@ -1542,15 +1542,16 @@ function handleMediaError(event: Event, mediaType: string) {
 }
 
 // File upload functions
+const isDragging = ref(false)
+let dragDepth = 0 // enter/leave counter so hovering child elements doesn't flicker the overlay
+
 function openFilePicker() {
   fileInputRef.value?.click()
 }
 
-function handleFileSelect(event: Event) {
-  const input = event.target as HTMLInputElement
-  const file = input.files?.[0]
-  if (!file) return
-
+// Shared core: validate + build preview + open the media modal. Used by the file
+// picker, drag-and-drop, and paste so all three reuse the same send pipeline.
+function openFileForPreview(file: File) {
   // Validate file type
   const allowedTypes = ['image/', 'video/', 'audio/', 'application/pdf', 'application/msword', 'application/vnd.openxmlformats-officedocument']
   const isAllowed = allowedTypes.some(type => file.type.startsWith(type))
@@ -1581,9 +1582,55 @@ function handleFileSelect(event: Event) {
   }
 
   isMediaDialogOpen.value = true
+}
 
-  // Reset input so same file can be selected again
+function handleFileSelect(event: Event) {
+  const input = event.target as HTMLInputElement
+  const file = input.files?.[0]
+  if (!file) return
+  openFileForPreview(file)
+  // Reset input so the same file can be selected again
   input.value = ''
+}
+
+// Drag-and-drop a file onto the open conversation pane.
+function onDragEnter(event: DragEvent) {
+  if (!contactsStore.currentContact) return
+  if (!event.dataTransfer?.types?.includes('Files')) return
+  dragDepth++
+  isDragging.value = true
+}
+
+function onDragLeave() {
+  dragDepth--
+  if (dragDepth <= 0) {
+    dragDepth = 0
+    isDragging.value = false
+  }
+}
+
+function onDrop(event: DragEvent) {
+  isDragging.value = false
+  dragDepth = 0
+  if (!contactsStore.currentContact) return
+  const file = event.dataTransfer?.files?.[0]
+  if (file) openFileForPreview(file)
+}
+
+// Paste (Ctrl+V) an image/file into the composer (e.g. a screenshot).
+function handlePaste(event: ClipboardEvent) {
+  const items = event.clipboardData?.items
+  if (!items) return
+  for (let i = 0; i < items.length; i++) {
+    if (items[i].kind === 'file') {
+      const file = items[i].getAsFile()
+      if (file) {
+        event.preventDefault()
+        openFileForPreview(file)
+        return
+      }
+    }
+  }
 }
 
 function closeMediaDialog() {
@@ -1805,7 +1852,23 @@ async function sendMediaMessage() {
     </div>
 
     <!-- Chat Area -->
-    <div class="flex-1 flex flex-col bg-[#0f0f10] light:bg-gray-50">
+    <div
+      class="relative flex-1 flex flex-col bg-[#0f0f10] light:bg-gray-50"
+      @dragenter.prevent="onDragEnter"
+      @dragover.prevent
+      @dragleave="onDragLeave"
+      @drop.prevent="onDrop"
+    >
+      <!-- Drag-and-drop overlay -->
+      <div
+        v-if="isDragging"
+        class="absolute inset-0 z-20 m-2 flex items-center justify-center rounded-lg border-2 border-dashed border-emerald-400/70 bg-black/60 backdrop-blur-sm pointer-events-none"
+      >
+        <div class="flex flex-col items-center gap-2 text-white">
+          <Paperclip class="w-8 h-8" />
+          <p class="text-sm font-medium">{{ $t('chat.dropToAttach') }}</p>
+        </div>
+      </div>
       <!-- No Contact Selected -->
       <div
         v-if="!contactsStore.currentContact"
@@ -2469,6 +2532,7 @@ async function sendMediaMessage() {
               class="flex-1 bg-transparent text-[14px] text-white light:text-gray-900 placeholder:text-white/30 light:placeholder:text-gray-400 focus:outline-none resize-none min-h-[36px] max-h-[120px] py-2 overflow-y-auto"
               @keydown.enter.exact.prevent="sendMessage"
               @input="autoResizeTextarea"
+              @paste="handlePaste"
             />
             <button type="submit" class="w-9 h-9 rounded-lg bg-emerald-600 hover:bg-emerald-500 light:bg-emerald-500 light:hover:bg-emerald-600 flex items-center justify-center transition-colors disabled:opacity-50" :disabled="!messageInput.trim() || isSending">
               <Send class="w-4 h-4 text-white" />

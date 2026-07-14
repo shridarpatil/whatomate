@@ -364,6 +364,7 @@
     "contactOptions": "Contact Options",
     "sendMedia": "Send Media",
     "attachFile": "Attach file",
+    "dropToAttach": "Drop file to attach",
     "emoji": "Emoji",
     "cannedResponses": "Canned Responses",
     "fileTooLarge": "File too large",
