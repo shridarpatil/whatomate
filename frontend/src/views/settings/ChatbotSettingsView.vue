@@ -14,8 +14,10 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '@/components/ui/command'
 import { PageHeader, AuditLogPanel } from '@/components/shared'
+import MessageButtonsEditor from '@/components/shared/MessageButtonsEditor.vue'
+import type { ButtonConfig } from '@/types/flow-preview'
 import { toast } from 'vue-sonner'
-import { Bot, Loader2, Brain, Plus, X, Clock, AlertTriangle, UserPlus, MessageSquare, Users } from 'lucide-vue-next'
+import { Bot, Loader2, Brain, X, Clock, AlertTriangle, UserPlus, MessageSquare, Users } from 'lucide-vue-next'
 import { chatbotService } from '@/services/api'
 import { useUsersStore } from '@/stores/users'
 import { useAuthStore } from '@/stores/auth'
@@ -49,11 +51,6 @@ const isSubmitting = ref(false)
 const isLoading = ref(true)
 
 // Chatbot Settings
-interface MessageButton {
-  id: string
-  title: string
-}
-
 interface BusinessHour {
   day: number
   enabled: boolean
@@ -81,11 +78,16 @@ const defaultBusinessHours: BusinessHour[] = [
   { day: 6, enabled: false, start_time: '09:00', end_time: '17:00' },
 ]
 
+// A button needs a label, and a url button needs its destination too —
+// sending one without a URL would produce a malformed interactive message.
+const isIncompleteButton = (btn: ButtonConfig) =>
+  !btn.title?.trim() || (btn.type === 'url' && !btn.url?.trim())
+
 const chatbotSettings = ref({
   greeting_message: '',
-  greeting_buttons: [] as MessageButton[],
+  greeting_buttons: [] as ButtonConfig[],
   fallback_message: '',
-  fallback_buttons: [] as MessageButton[],
+  fallback_buttons: [] as ButtonConfig[],
   session_timeout_minutes: 30,
   business_hours_enabled: false,
   business_hours: [...defaultBusinessHours] as BusinessHour[],
@@ -95,33 +97,6 @@ const chatbotSettings = ref({
   assign_to_same_agent: true,
   agent_current_conversation_only: false
 })
-
-// Button management functions
-const addGreetingButton = () => {
-  if (chatbotSettings.value.greeting_buttons.length >= 10) {
-    toast.error(t('chatbotSettings.maxButtonsError'))
-    return
-  }
-  const id = `btn_${Date.now()}`
-  chatbotSettings.value.greeting_buttons.push({ id, title: '' })
-}
-
-const removeGreetingButton = (index: number) => {
-  chatbotSettings.value.greeting_buttons.splice(index, 1)
-}
-
-const addFallbackButton = () => {
-  if (chatbotSettings.value.fallback_buttons.length >= 10) {
-    toast.error(t('chatbotSettings.maxButtonsError'))
-    return
-  }
-  const id = `btn_${Date.now()}`
-  chatbotSettings.value.fallback_buttons.push({ id, title: '' })
-}
-
-const removeFallbackButton = (index: number) => {
-  chatbotSettings.value.fallback_buttons.splice(index, 1)
-}
 
 // AI Settings
 const aiSettings = ref({
@@ -269,12 +244,12 @@ onMounted(async () => {
 })
 
 async function saveMessagesSettings() {
-  const invalidGreetingBtn = chatbotSettings.value.greeting_buttons.find(btn => !btn.title.trim())
+  const invalidGreetingBtn = chatbotSettings.value.greeting_buttons.find(isIncompleteButton)
   if (invalidGreetingBtn) {
     toast.error(t('chatbotSettings.greetingButtonsRequired'))
     return
   }
-  const invalidFallbackBtn = chatbotSettings.value.fallback_buttons.find(btn => !btn.title.trim())
+  const invalidFallbackBtn = chatbotSettings.value.fallback_buttons.find(isIncompleteButton)
   if (invalidFallbackBtn) {
     toast.error(t('chatbotSettings.fallbackButtonsRequired'))
     return
@@ -284,9 +259,9 @@ async function saveMessagesSettings() {
   try {
     await chatbotService.updateSettings({
       greeting_message: chatbotSettings.value.greeting_message,
-      greeting_buttons: chatbotSettings.value.greeting_buttons.filter(btn => btn.title.trim()),
+      greeting_buttons: chatbotSettings.value.greeting_buttons.filter(btn => !isIncompleteButton(btn)),
       fallback_message: chatbotSettings.value.fallback_message,
-      fallback_buttons: chatbotSettings.value.fallback_buttons.filter(btn => btn.title.trim()),
+      fallback_buttons: chatbotSettings.value.fallback_buttons.filter(btn => !isIncompleteButton(btn)),
       session_timeout_minutes: chatbotSettings.value.session_timeout_minutes
     })
     toast.success(t('chatbotSettings.messagesSaved'))
@@ -445,36 +420,11 @@ function removeEscalationUser(userId: string) {
                     :rows="2"
                   />
                   <div class="mt-2">
-                    <div class="flex items-center justify-between mb-2">
-                      <Label class="text-sm text-muted-foreground">{{ $t('chatbotSettings.quickReplyButtons') }}</Label>
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        @click="addGreetingButton"
-                        :disabled="chatbotSettings.greeting_buttons.length >= 10"
-                      >
-                        <Plus class="h-4 w-4 mr-1" />
-                        {{ $t('chatbotSettings.addButton') }}
-                      </Button>
-                    </div>
-                    <div v-if="chatbotSettings.greeting_buttons.length > 0" class="space-y-2">
-                      <div
-                        v-for="(button, index) in chatbotSettings.greeting_buttons"
-                        :key="button.id"
-                        class="flex items-center gap-2"
-                      >
-                        <Input
-                          v-model="button.title"
-                          :placeholder="$t('chatbotSettings.buttonPlaceholder') + '...'"
-                          maxlength="20"
-                          class="flex-1"
-                        />
-                        <Button variant="ghost" size="icon" @click="removeGreetingButton(index)">
-                          <X class="h-4 w-4" />
-                        </Button>
-                      </div>
-                      <p class="text-xs text-muted-foreground">{{ $t('chatbotSettings.buttonHint') }}</p>
-                    </div>
+                    <MessageButtonsEditor
+                      :buttons="chatbotSettings.greeting_buttons"
+                      :allowed-types="['reply', 'url']"
+                      @update:buttons="chatbotSettings.greeting_buttons = $event"
+                    />
                   </div>
                 </div>
 
@@ -489,36 +439,11 @@ function removeEscalationUser(userId: string) {
                     :rows="2"
                   />
                   <div class="mt-2">
-                    <div class="flex items-center justify-between mb-2">
-                      <Label class="text-sm text-muted-foreground">{{ $t('chatbotSettings.quickReplyButtons') }}</Label>
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        @click="addFallbackButton"
-                        :disabled="chatbotSettings.fallback_buttons.length >= 10"
-                      >
-                        <Plus class="h-4 w-4 mr-1" />
-                        {{ $t('chatbotSettings.addButton') }}
-                      </Button>
-                    </div>
-                    <div v-if="chatbotSettings.fallback_buttons.length > 0" class="space-y-2">
-                      <div
-                        v-for="(button, index) in chatbotSettings.fallback_buttons"
-                        :key="button.id"
-                        class="flex items-center gap-2"
-                      >
-                        <Input
-                          v-model="button.title"
-                          :placeholder="$t('chatbotSettings.buttonPlaceholder') + '...'"
-                          maxlength="20"
-                          class="flex-1"
-                        />
-                        <Button variant="ghost" size="icon" @click="removeFallbackButton(index)">
-                          <X class="h-4 w-4" />
-                        </Button>
-                      </div>
-                      <p class="text-xs text-muted-foreground">{{ $t('chatbotSettings.buttonHint') }}</p>
-                    </div>
+                    <MessageButtonsEditor
+                      :buttons="chatbotSettings.fallback_buttons"
+                      :allowed-types="['reply', 'url']"
+                      @update:buttons="chatbotSettings.fallback_buttons = $event"
+                    />
                   </div>
                 </div>
 
