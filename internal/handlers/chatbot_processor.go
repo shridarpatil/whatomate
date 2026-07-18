@@ -224,11 +224,7 @@ func (a *App) processIncomingMessageFull(phoneNumberID string, msg IncomingTextM
 			// If automated responses are not allowed outside hours, send out-of-hours message and stop
 			if !settings.BusinessHours.AllowAutomatedOutside {
 				a.Log.Info("Outside business hours, sending out of hours message")
-				if settings.BusinessHours.OutOfHoursMessage != "" {
-					if err := a.sendAndSaveTextMessage(account, contact, settings.BusinessHours.OutOfHoursMessage); err != nil {
-						a.Log.Error("Failed to send out of hours message", "error", err, "contact", contact.PhoneNumber)
-					}
-				}
+				a.sendOutOfHoursMessage(account, contact, settings)
 				return
 			}
 			// AllowAutomatedOutsideHours is true, continue processing flows/keywords/AI
@@ -258,11 +254,7 @@ func (a *App) processIncomingMessageFull(phoneNumberID string, msg IncomingTextM
 		if settings.BusinessHours.Enabled && len(settings.BusinessHours.Hours) > 0 {
 			if !a.isWithinBusinessHours(settings.BusinessHours.Hours) {
 				a.Log.Info("Outside business hours, sending out of hours message instead of transfer")
-				if settings.BusinessHours.OutOfHoursMessage != "" {
-					if err := a.sendAndSaveTextMessage(account, contact, settings.BusinessHours.OutOfHoursMessage); err != nil {
-						a.Log.Error("Failed to send out of hours message", "error", err, "contact", contact.PhoneNumber)
-					}
-				}
+				a.sendOutOfHoursMessage(account, contact, settings)
 				return
 			}
 		}
@@ -1624,6 +1616,44 @@ func (a *App) saveIncomingMessage(account *models.WhatsAppAccount, contact *mode
 		WhatsAppAccount: account.Name,
 		Direction:       models.DirectionIncoming,
 	})
+}
+
+// sendOutOfHoursMessage sends the configured out-of-hours notice, at most once
+// per conversation.
+//
+// It is reached from every path that declines to serve a contact outside
+// business hours, and those paths run per inbound message: without this guard a
+// customer who sends "hi", "are you open?", "I need a quote" back to back gets
+// the same notice three times, which reads as a broken bot rather than an
+// answer. The repeat window mirrors the chatbot session timeout, so a contact
+// coming back after a real gap is notified again.
+func (a *App) sendOutOfHoursMessage(account *models.WhatsAppAccount, contact *models.Contact, settings *models.ChatbotSettings) {
+	if settings == nil || settings.BusinessHours.OutOfHoursMessage == "" {
+		return
+	}
+
+	window := time.Duration(settings.SessionTimeoutMins) * time.Minute
+	if window <= 0 {
+		window = 30 * time.Minute
+	}
+	if contact.OutOfHoursNotifiedAt != nil && time.Since(*contact.OutOfHoursNotifiedAt) < window {
+		a.Log.Debug("Out-of-hours message already sent for this conversation, skipping",
+			"contact_id", contact.ID, "last_sent", contact.OutOfHoursNotifiedAt)
+		return
+	}
+
+	if err := a.sendAndSaveTextMessage(account, contact, settings.BusinessHours.OutOfHoursMessage); err != nil {
+		// Leave the timestamp untouched so the next inbound message retries.
+		a.Log.Error("Failed to send out of hours message", "error", err, "contact", contact.PhoneNumber)
+		return
+	}
+
+	now := time.Now()
+	if err := a.DB.Model(contact).Update("out_of_hours_notified_at", now).Error; err != nil {
+		a.Log.Error("Failed to record out-of-hours notification", "error", err, "contact_id", contact.ID)
+		return
+	}
+	contact.OutOfHoursNotifiedAt = &now
 }
 
 // isWithinBusinessHours checks if current time is within configured business hours
