@@ -1642,7 +1642,18 @@ func (a *App) sendOutOfHoursMessage(account *models.WhatsAppAccount, contact *mo
 		return
 	}
 
-	if err := a.sendAndSaveTextMessage(account, contact, settings.BusinessHours.OutOfHoursMessage); err != nil {
+	// With a CTA button configured the notice becomes something the customer can
+	// act on while the team is away, instead of a dead end.
+	var err error
+	if settings.BusinessHours.OutOfHoursButtonText != "" && settings.BusinessHours.OutOfHoursButtonURL != "" {
+		err = a.sendAndSaveCTAURLButton(account, contact,
+			settings.BusinessHours.OutOfHoursMessage,
+			settings.BusinessHours.OutOfHoursButtonText,
+			settings.BusinessHours.OutOfHoursButtonURL)
+	} else {
+		err = a.sendAndSaveTextMessage(account, contact, settings.BusinessHours.OutOfHoursMessage)
+	}
+	if err != nil {
 		// Leave the timestamp untouched so the next inbound message retries.
 		a.Log.Error("Failed to send out of hours message", "error", err, "contact", contact.PhoneNumber)
 		return

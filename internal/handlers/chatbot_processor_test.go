@@ -741,6 +741,50 @@ func TestSendOutOfHoursMessage_ResendsAfterWindow(t *testing.T) {
 	assert.Equal(t, int64(2), sent, "a contact returning after the session window should be notified again")
 }
 
+// TestSendOutOfHoursMessage_WithCTAButton checks that a configured button turns
+// the notice into a cta_url message instead of plain text.
+func TestSendOutOfHoursMessage_WithCTAButton(t *testing.T) {
+	app := newProcessorTestApp(t)
+	org, account := createProcessorTestOrg(t, app)
+	contact := testutil.CreateTestContact(t, app.DB, org.ID)
+
+	settings := outOfHoursTestSettings("We are closed. Our assistant can help right now.")
+	settings.BusinessHours.OutOfHoursButtonText = "Chat with the bot"
+	settings.BusinessHours.OutOfHoursButtonURL = "https://t.me/example_bot"
+
+	app.sendOutOfHoursMessage(account, contact, settings)
+
+	var msg models.Message
+	require.NoError(t, app.DB.
+		Where("contact_id = ? AND direction = ?", contact.ID, models.DirectionOutgoing).
+		First(&msg).Error)
+	assert.Equal(t, models.MessageTypeInteractive, msg.MessageType)
+	require.NotNil(t, msg.InteractiveData)
+	assert.Equal(t, "cta_url", msg.InteractiveData["type"])
+	assert.Equal(t, "Chat with the bot", msg.InteractiveData["button_text"])
+	assert.Equal(t, "https://t.me/example_bot", msg.InteractiveData["url"])
+}
+
+// TestSendOutOfHoursMessage_ButtonNeedsBothFields keeps a half-configured button
+// from producing a broken interactive message: a label without a URL (or the
+// reverse) falls back to plain text.
+func TestSendOutOfHoursMessage_ButtonNeedsBothFields(t *testing.T) {
+	app := newProcessorTestApp(t)
+	org, account := createProcessorTestOrg(t, app)
+	contact := testutil.CreateTestContact(t, app.DB, org.ID)
+
+	settings := outOfHoursTestSettings("We are closed.")
+	settings.BusinessHours.OutOfHoursButtonText = "Chat with the bot" // URL left empty
+
+	app.sendOutOfHoursMessage(account, contact, settings)
+
+	var msg models.Message
+	require.NoError(t, app.DB.
+		Where("contact_id = ? AND direction = ?", contact.ID, models.DirectionOutgoing).
+		First(&msg).Error)
+	assert.Equal(t, models.MessageTypeText, msg.MessageType)
+}
+
 // TestSendOutOfHoursMessage_NoMessageConfigured guards the no-op path: with no
 // notice configured nothing is sent and nothing is recorded.
 func TestSendOutOfHoursMessage_NoMessageConfigured(t *testing.T) {

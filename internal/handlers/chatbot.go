@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"encoding/json"
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
@@ -22,6 +23,8 @@ type ChatbotSettingsResponse struct {
 	BusinessHoursEnabled         bool              `json:"business_hours_enabled"`
 	BusinessHours                []map[string]any  `json:"business_hours"`
 	OutOfHoursMessage            string            `json:"out_of_hours_message"`
+	OutOfHoursButtonText         string            `json:"out_of_hours_button_text"`
+	OutOfHoursButtonURL          string            `json:"out_of_hours_button_url"`
 	AllowAutomatedOutsideHours   bool              `json:"allow_automated_outside_hours"`
 	AllowAgentQueuePickup        bool              `json:"allow_agent_queue_pickup"`
 	AssignToSameAgent            bool              `json:"assign_to_same_agent"`
@@ -165,6 +168,8 @@ func (a *App) GetChatbotSettings(r *fastglue.Request) error {
 		BusinessHoursEnabled:       settings.BusinessHours.Enabled,
 		BusinessHours:              businessHours,
 		OutOfHoursMessage:          settings.BusinessHours.OutOfHoursMessage,
+		OutOfHoursButtonText:       settings.BusinessHours.OutOfHoursButtonText,
+		OutOfHoursButtonURL:        settings.BusinessHours.OutOfHoursButtonURL,
 		AllowAutomatedOutsideHours: settings.BusinessHours.AllowAutomatedOutside,
 		// Agent Assignment
 		AllowAgentQueuePickup:        settings.AgentAssignment.AllowQueuePickup,
@@ -227,6 +232,8 @@ func chatbotHoursSnapshot(s *models.ChatbotSettings) map[string]any {
 		"business_hours_enabled":        s.BusinessHours.Enabled,
 		"business_hours":                s.BusinessHours.Hours,
 		"out_of_hours_message":          s.BusinessHours.OutOfHoursMessage,
+		"out_of_hours_button_text":      s.BusinessHours.OutOfHoursButtonText,
+		"out_of_hours_button_url":       s.BusinessHours.OutOfHoursButtonURL,
 		"allow_automated_outside_hours": s.BusinessHours.AllowAutomatedOutside,
 	}
 }
@@ -280,6 +287,8 @@ func (a *App) UpdateChatbotSettings(r *fastglue.Request) error {
 		BusinessHoursEnabled         *bool              `json:"business_hours_enabled"`
 		BusinessHours                *[]map[string]any  `json:"business_hours"`
 		OutOfHoursMessage            *string            `json:"out_of_hours_message"`
+		OutOfHoursButtonText         *string            `json:"out_of_hours_button_text"`
+		OutOfHoursButtonURL          *string            `json:"out_of_hours_button_url"`
 		AllowAutomatedOutsideHours   *bool              `json:"allow_automated_outside_hours"`
 		AllowAgentQueuePickup        *bool              `json:"allow_agent_queue_pickup"`
 		AssignToSameAgent            *bool              `json:"assign_to_same_agent"`
@@ -340,7 +349,8 @@ func (a *App) UpdateChatbotSettings(r *fastglue.Request) error {
 	agentsTouched := req.AllowAgentQueuePickup != nil || req.AssignToSameAgent != nil ||
 		req.AgentCurrentConversationOnly != nil
 	hoursTouched := req.BusinessHoursEnabled != nil || req.BusinessHours != nil ||
-		req.OutOfHoursMessage != nil || req.AllowAutomatedOutsideHours != nil
+		req.OutOfHoursMessage != nil || req.AllowAutomatedOutsideHours != nil ||
+		req.OutOfHoursButtonText != nil || req.OutOfHoursButtonURL != nil
 	slaTouched := req.SLAEnabled != nil || req.SLAResponseMinutes != nil ||
 		req.SLAResolutionMinutes != nil || req.SLAEscalationMinutes != nil ||
 		req.SLAAutoCloseHours != nil || req.SLAAutoCloseMessage != nil ||
@@ -391,6 +401,12 @@ func (a *App) UpdateChatbotSettings(r *fastglue.Request) error {
 	}
 	if req.OutOfHoursMessage != nil {
 		settings.BusinessHours.OutOfHoursMessage = *req.OutOfHoursMessage
+	}
+	if req.OutOfHoursButtonText != nil {
+		settings.BusinessHours.OutOfHoursButtonText = strings.TrimSpace(*req.OutOfHoursButtonText)
+	}
+	if req.OutOfHoursButtonURL != nil {
+		settings.BusinessHours.OutOfHoursButtonURL = strings.TrimSpace(*req.OutOfHoursButtonURL)
 	}
 	if req.AllowAutomatedOutsideHours != nil {
 		settings.BusinessHours.AllowAutomatedOutside = *req.AllowAutomatedOutsideHours
