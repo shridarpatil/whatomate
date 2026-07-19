@@ -7,6 +7,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/shridarpatil/whatomate/internal/models"
 	"github.com/shridarpatil/whatomate/internal/websocket"
+	"gorm.io/gorm"
 )
 
 // SLAProcessor handles periodic SLA checks and escalations
@@ -71,9 +72,51 @@ func (p *SLAProcessor) processStaleTransfers() {
 	}
 }
 
+// backfillMissingDeadlines stamps SLA deadlines on active transfers that have
+// none.
+//
+// Deadlines are assigned when a transfer is created, and only while SLA is
+// already enabled. Every SLA task then filters on "deadline IS NOT NULL", so
+// enabling SLA in a deployment that already has open conversations leaves all of
+// them permanently invisible to auto-close, escalation and breach marking — and
+// silently, since nothing reports transfers it never selected. Raising a window
+// from zero later has the same effect.
+//
+// Deriving the deadlines from created_at applies the policy as if it had been
+// configured all along, which is what an operator enabling SLA expects. Already
+// stamped transfers are skipped, so this is idempotent and cannot pull in a
+// deadline that agent activity has extended.
+func (p *SLAProcessor) backfillMissingDeadlines(orgID uuid.UUID, settings models.ChatbotSettings) {
+	backfill := func(column, interval string, window int) {
+		if window <= 0 {
+			return
+		}
+		res := p.app.DB.Model(&models.AgentTransfer{}).
+			Where("organization_id = ? AND status = ? AND "+column+" IS NULL",
+				orgID, models.TransferStatusActive).
+			Update(column, gorm.Expr("created_at + "+interval, window))
+		if res.Error != nil {
+			p.app.Log.Error("Failed to backfill SLA deadline", "error", res.Error, "column", column, "org_id", orgID)
+			return
+		}
+		if res.RowsAffected > 0 {
+			p.app.Log.Info("Backfilled SLA deadline on pre-existing transfers",
+				"column", column, "count", res.RowsAffected, "org_id", orgID)
+		}
+	}
+
+	backfill("expires_at", "make_interval(hours => ?)", settings.SLA.AutoCloseHours)
+	backfill("sla_escalation_at", "make_interval(mins => ?)", settings.SLA.EscalationMinutes)
+	backfill("sla_response_deadline", "make_interval(mins => ?)", settings.SLA.ResponseMinutes)
+}
+
 // processOrganizationSLA processes SLA for a single organization
 func (p *SLAProcessor) processOrganizationSLA(settings models.ChatbotSettings, now time.Time) {
 	orgID := settings.OrganizationID
+
+	// Transfers opened before SLA was configured carry no deadlines, and every
+	// check below skips those. Give them the deadlines they would have had.
+	p.backfillMissingDeadlines(orgID, settings)
 
 	// 1. Auto-close expired transfers
 	if settings.SLA.AutoCloseHours > 0 {
