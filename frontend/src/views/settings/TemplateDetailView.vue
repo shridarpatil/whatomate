@@ -28,6 +28,7 @@ import {
 import { FileText, Trash2, Save, Loader2, Send, Info, Code, Copy } from 'lucide-vue-next'
 import { getErrorMessage } from '@/lib/api-utils'
 import { getQualityBadgeClass, getQualityRatingLabel } from '@/lib/utils'
+import { validateButtonCombination } from '@/lib/templateButtons'
 
 interface WhatsAppAccount {
   id: string
@@ -86,7 +87,6 @@ const deleteDialogOpen = ref(false)
 const publishDialogOpen = ref(false)
 const jsonDialogOpen = ref(false)
 const isPublishing = ref(false)
-const isDetailsOpen = ref(true)
 
 // Picked in the editor, uploaded to Meta only when the template is saved.
 // Previewed from a local object URL, so choosing a file costs no API call.
@@ -244,7 +244,7 @@ const firstButtonError = computed(() => {
     if (btn.type === 'URL') {
       const url = String(btn.url || '').trim()
       if (!url || url === '{{1}}') return 'Website URL buttons need a URL.'
-      if (btn.urlType === 'DYNAMIC' && !url.endsWith('{{1}}')) return 'A dynamic URL must end with {{1}}.'
+      if (url.includes('{{1}}') && !String(btn.example || '').trim()) return 'A dynamic URL button needs an example value.'
     }
     if (btn.type === 'PHONE_NUMBER') {
       const phone = String(btn.phone_number || '').trim()
@@ -286,7 +286,6 @@ async function loadTemplate() {
     const data = (response.data as any).data
     template.value = data
     syncForm()
-    isDetailsOpen.value = false
     nextTick(() => { hasChanges.value = false })
   } catch {
     isNotFound.value = true
@@ -316,10 +315,19 @@ function syncForm() {
     header_content: template.value.header_content || '',
     body_content: template.value.body_content || '',
     footer_content: template.value.footer_content || '',
-    buttons: (template.value.buttons || []).map((b: any) => ({
-      ...b,
-      example: Array.isArray(b.example) ? b.example[0] ?? '' : b.example,
-    })),
+    buttons: (template.value.buttons || []).map((b: any) => {
+      let example = Array.isArray(b.example) ? b.example[0] ?? '' : b.example
+      // Locally saved buttons hold the bare example value, but templates synced
+      // from Meta return the full example URL — strip the base so the editor
+      // always shows just the value. Bare values pass through unchanged.
+      if (b.type === 'URL' && String(b.url || '').includes('{{1}}') && example) {
+        const base = urlExampleBase(b.url)
+        example = String(example).startsWith(base)
+          ? String(example).slice(base.length)
+          : example
+      }
+      return { ...b, example }
+    }),
     sample_values: template.value.sample_values || [],
     add_security_recommendation: template.value.add_security_recommendation || false,
     code_expiration_minutes: template.value.code_expiration_minutes || 0,
@@ -354,26 +362,50 @@ watch(() => form.value.category, (newCat, oldCat) => {
   }
 })
 
-// The exact body sent to POST/PUT /api/templates. The JSON dialog shows this,
-// so what you inspect is what gets sent.
+// A dynamic URL button's base — the url with the {{1}} placeholder removed.
+function urlExampleBase(url: string) {
+  return String(url || '').replace('{{1}}', '')
+}
+
+// `id` is only a v-for key in the editor, so it must not reach the buttons JSONB.
+// A dynamic URL button's example is sent as the bare variable value ("Rose", not
+// "https://…?search=Rose") — Meta's creation examples use the value alone, and the
+// backend wraps it into the example array as-is.
+function cleanButton({ id: _id, ...button }: any) {
+  return button
+}
+
+// The exact body sent to POST/PUT /api/templates. The JSON dialog renders this
+// same function, so what you inspect is what gets sent.
 function buildPayload(): Record<string, any> {
-  return {
+  const payload: Record<string, any> = {
     whatsapp_account: form.value.whatsapp_account,
     name: form.value.name,
     display_name: form.value.display_name,
     language: form.value.language,
     category: form.value.category,
-    header_type: isAuthentication.value ? 'NONE' : form.value.header_type,
-    header_content: isAuthentication.value ? '' : form.value.header_content,
-    body_content: isAuthentication.value ? '{{1}} is your verification code.' : form.value.body_content,
-    footer_content: isAuthentication.value ? '' : form.value.footer_content,
-    // `id` is a client-side key the editor uses for v-for. Drop it so it does
-    // not get stored in the buttons JSONB.
-    buttons: (form.value.buttons as any[]).map(({ id: _id, ...button }) => button),
-    sample_values: form.value.sample_values,
-    add_security_recommendation: form.value.add_security_recommendation,
-    code_expiration_minutes: form.value.code_expiration_minutes || 0,
+    buttons: (form.value.buttons as any[]).map(cleanButton),
   }
+
+  // Meta fixes the body of an authentication template and takes no header,
+  // footer or sample values for it. The OTP options apply only to this category.
+  if (isAuthentication.value) {
+    payload.header_type = 'NONE'
+    payload.header_content = ''
+    payload.body_content = '{{1}} is your verification code.'
+    payload.footer_content = ''
+    payload.sample_values = []
+    payload.add_security_recommendation = form.value.add_security_recommendation
+    payload.code_expiration_minutes = form.value.code_expiration_minutes || 0
+    return payload
+  }
+
+  payload.header_type = form.value.header_type
+  payload.header_content = form.value.header_content
+  payload.body_content = form.value.body_content
+  payload.footer_content = form.value.footer_content
+  payload.sample_values = form.value.sample_values
+  return payload
 }
 
 const payloadJson = computed(() => JSON.stringify(buildPayload(), null, 2))
@@ -387,9 +419,42 @@ const payloadUrl = computed(() =>
 // returned handle afterwards. Say so rather than showing a misleading empty value.
 const payloadPendingMedia = computed(() => !!pendingMediaFile.value)
 
+// The payload Meta receives is built by the backend — the same builder that runs on
+// publish (whatsapp.BuildSubmissionPayload). Asking it rather than rebuilding the
+// components array here keeps the preview honest: a second implementation would drift.
+const payloadTab = ref<'meta' | 'api'>('meta')
+const metaJson = ref('')
+const metaError = ref('')
+const metaLoading = ref(false)
+
+async function openPayloadDialog() {
+  payloadTab.value = 'meta'
+  jsonDialogOpen.value = true
+  metaJson.value = ''
+  metaError.value = ''
+  metaLoading.value = true
+  try {
+    const res = await api.post('/templates/preview', {
+      ...buildPayload(),
+      meta_template_id: template.value?.meta_template_id || '',
+    })
+    metaJson.value = JSON.stringify((res.data as any).data, null, 2)
+  } catch (err: any) {
+    metaError.value =
+      err?.response?.data?.message ||
+      t('templates.metaPayloadFailed', 'Could not build the Meta payload')
+  } finally {
+    metaLoading.value = false
+  }
+}
+
+const shownJson = computed(() =>
+  payloadTab.value === 'meta' ? metaJson.value : payloadJson.value
+)
+
 async function copyPayload() {
   try {
-    await navigator.clipboard.writeText(payloadJson.value)
+    await navigator.clipboard.writeText(shownJson.value)
     toast.success(t('templates.payloadCopied', 'Payload copied'))
   } catch {
     toast.error(t('templates.payloadCopyFailed', 'Could not copy to clipboard'))
@@ -445,6 +510,11 @@ async function save() {
     const badButton = firstButtonError.value
     if (badButton) {
       toast.error(badButton)
+      return
+    }
+    const badCombo = validateButtonCombination(form.value.buttons)
+    if (badCombo) {
+      toast.error(badCombo)
       return
     }
   }
@@ -565,7 +635,7 @@ onMounted(async () => {
   >
     <template #actions>
       <div class="flex items-center gap-2">
-        <Button variant="outline" size="sm" @click="jsonDialogOpen = true">
+        <Button variant="outline" size="sm" @click="openPayloadDialog">
           <Code class="h-4 w-4 mr-1" /> {{ $t('templates.viewJson', 'JSON') }}
         </Button>
         <Button v-if="canPublish" variant="outline" size="sm" @click="publishDialogOpen = true" :disabled="isPublishing">
@@ -611,8 +681,10 @@ onMounted(async () => {
 
     <!-- Sidebar -->
     <template #sidebar>
-      <!-- Sticky so the preview stays in view while the form scrolls. -->
-      <Card class="sticky top-0 overflow-hidden">
+      <!-- Sticky only while creating, when the preview is the lone sidebar card.
+           On the edit page the status/metadata cards below would scroll up over
+           a pinned preview and overlap it. -->
+      <Card class="overflow-hidden" :class="isNew ? 'sticky top-0' : ''">
         <CardHeader class="pb-3">
           <CardTitle class="text-sm font-medium">{{ $t('templates.livePreview', 'Live Preview') }}</CardTitle>
         </CardHeader>
@@ -683,24 +755,52 @@ onMounted(async () => {
     </template>
   </DetailPageLayout>
 
-  <!-- Request payload, for verifying what gets sent to the API -->
+  <!-- Payloads, for verifying what gets sent before anything is published -->
   <AlertDialog v-model:open="jsonDialogOpen">
     <AlertDialogContent class="max-w-2xl">
       <AlertDialogHeader>
-        <AlertDialogTitle>{{ $t('templates.requestPayload', 'Request payload') }}</AlertDialogTitle>
+        <AlertDialogTitle>{{ $t('templates.payload', 'Payload') }}</AlertDialogTitle>
         <AlertDialogDescription>
-          <span class="font-mono text-xs">{{ payloadMethod }} {{ payloadUrl }}</span>
+          <span v-if="payloadTab === 'meta'" class="font-mono text-xs">
+            {{ $t('templates.payloadMetaHint', 'What whatomate sends to Meta on publish') }}
+          </span>
+          <span v-else class="font-mono text-xs">{{ payloadMethod }} {{ payloadUrl }}</span>
         </AlertDialogDescription>
       </AlertDialogHeader>
 
+      <div class="flex gap-1 rounded-md bg-muted p-1 text-xs font-medium">
+        <button
+          type="button"
+          class="flex-1 rounded px-3 py-1"
+          :class="payloadTab === 'meta' ? 'bg-background shadow-sm' : 'text-muted-foreground'"
+          @click="payloadTab = 'meta'"
+        >
+          {{ $t('templates.payloadMeta', 'Meta payload') }}
+        </button>
+        <button
+          type="button"
+          class="flex-1 rounded px-3 py-1"
+          :class="payloadTab === 'api' ? 'bg-background shadow-sm' : 'text-muted-foreground'"
+          @click="payloadTab = 'api'"
+        >
+          {{ $t('templates.payloadApi', 'API request') }}
+        </button>
+      </div>
+
       <p v-if="payloadPendingMedia" class="text-xs text-muted-foreground">
-        {{ $t('templates.payloadPendingMedia', 'header_content is empty here. The sample file is uploaded to Meta when you save, and the handle it returns is sent in its place.') }}
+        {{ $t('templates.payloadPendingMedia', 'The header is missing here. The sample file is uploaded to Meta when you save, and the handle it returns is sent in its place.') }}
       </p>
 
-      <pre class="max-h-[50vh] overflow-auto rounded-md bg-muted p-3 text-xs font-mono">{{ payloadJson }}</pre>
+      <p v-if="payloadTab === 'meta' && metaLoading" class="text-xs text-muted-foreground">
+        {{ $t('common.loading', 'Loading...') }}
+      </p>
+      <p v-else-if="payloadTab === 'meta' && metaError" class="text-xs text-red-500">
+        {{ metaError }}
+      </p>
+      <pre v-else class="max-h-[50vh] overflow-auto rounded-md bg-muted p-3 text-xs font-mono">{{ shownJson }}</pre>
 
       <AlertDialogFooter>
-        <Button variant="outline" size="sm" @click="copyPayload">
+        <Button variant="outline" size="sm" :disabled="!shownJson" @click="copyPayload">
           <Copy class="h-4 w-4 mr-1" /> {{ $t('common.copy', 'Copy') }}
         </Button>
         <AlertDialogCancel>{{ $t('common.close', 'Close') }}</AlertDialogCancel>
