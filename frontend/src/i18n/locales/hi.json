@@ -866,7 +866,7 @@
     "nameBodyRequired": "नाम और बॉडी सामग्री अनिवार्य है",
     "selectAccountRequired": "कृपया एक WhatsApp खाता चुनें",
     "selectAccountFirst": "कृपया पहले खाता चुनें",
-    "maxButtons": "अधिकतम 3 बटन",
+    "maxButtons": "अधिकतम 10 बटन",
     "editDialogTitle": "टेम्पलेट संपादित करें",
     "createDialogTitle": "टेम्पलेट बनाएं",
     "editDialogDesc": "अपना संदेश टेम्पलेट अपडेट करें।",

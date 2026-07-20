@@ -6,8 +6,17 @@ import {
   Plus,
   Check,
   ChevronsUpDown,
+  ChevronUp,
+  ChevronDown,
   AlertCircle,
 } from "lucide-vue-next";
+
+import {
+  validateButtonCombination,
+  BUTTON_LIMITS,
+  MAX_BUTTONS,
+  MAX_CTA,
+} from "@/lib/templateButtons";
 
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -62,6 +71,35 @@ function normalizeName(value: string) {
 
 function isValidPhone(value: string) {
   return /^\+?[0-9]{7,15}$/.test(value.trim());
+}
+
+// Meta treats a URL button as dynamic when the url ends in {{1}}, so the url is
+// the source of truth. The example suffix goes on the button as `example`, which
+// is where the backend reads it from.
+const URL_VAR = "{{1}}";
+
+function isDynamicUrl(btn: any) {
+  return String(btn.url || "").includes(URL_VAR);
+}
+
+function setUrlDynamic(btn: any, dynamic: boolean) {
+  const base = urlPrefix(btn);
+  if (dynamic) {
+    btn.url = base + URL_VAR;
+  } else {
+    btn.url = base;
+    btn.example = "";
+  }
+}
+
+// The part of a dynamic url before {{1}} — what the user types, and the prefix the
+// example is appended to.
+function urlPrefix(btn: any) {
+  return String(btn.url || "").replace(URL_VAR, "");
+}
+
+function setUrlPrefix(btn: any, prefix: string) {
+  btn.url = prefix.replace(/[{}]/g, "") + URL_VAR;
 }
 
 const emit = defineEmits(["update:modelValue", "update:mediaFile"]);
@@ -450,6 +488,16 @@ type ButtonType =
   | "FLOW"
   | "VOICE_CALL";
 
+// Default label a new button starts with, so it reads as its action instead of a blank.
+const DEFAULT_BUTTON_LABEL: Record<ButtonType, string> = {
+  QUICK_REPLY: "Reply",
+  URL: "Visit",
+  PHONE_NUMBER: "Call",
+  COPY_CODE: "Copy code",
+  FLOW: "View",
+  VOICE_CALL: "Call",
+};
+
 // The backend drops a FLOW button that has no flow_id.
 function getFlowScreens(flowId: string): string[] {
   const flow = (props.flows || []).find(
@@ -463,60 +511,64 @@ function getFlowScreens(flowId: string): string[] {
 
 function addButton(type: ButtonType) {
   const buttons = [...(state.value.buttons || [])];
-  if (buttons.length >= 10) {
-    toast.error(t("templates.maxButtons", "Maximum 10 buttons allowed"));
+  if (buttons.length >= MAX_BUTTONS) {
+    toast.error(
+      t("templates.maxButtons", `Maximum ${MAX_BUTTONS} buttons allowed`),
+    );
     return;
   }
 
   const countOf = (t: string) => buttons.filter((b: any) => b.type === t).length;
-  const urlCount = countOf("URL");
-  const phoneCount = countOf("PHONE_NUMBER");
 
+  // URL and phone are call-to-action buttons, capped at 2 combined.
   if (type === "URL" || type === "PHONE_NUMBER") {
-    if (urlCount + phoneCount >= 2) {
+    if (countOf("URL") + countOf("PHONE_NUMBER") >= MAX_CTA) {
       toast.error(
         t(
-          "templates.maxCtaButtons",
-          "Maximum 2 call-to-action (URL/Phone) buttons allowed",
+          "templates.maxCta",
+          `Maximum ${MAX_CTA} call-to-action (URL/Phone) buttons allowed`,
         ),
       );
       return;
     }
   }
-  if (type === "PHONE_NUMBER" && phoneCount >= 1) {
+
+  const limit = BUTTON_LIMITS[type];
+  if (limit && countOf(type) >= limit) {
     toast.error(
-      t("templates.maxPhoneButtons", "Maximum 1 phone number button allowed"),
-    );
-    return;
-  }
-  // Meta allows a single copy-code, flow or call button per template.
-  if (
-    (type === "COPY_CODE" || type === "FLOW" || type === "VOICE_CALL") &&
-    countOf(type) >= 1
-  ) {
-    toast.error(
-      t("templates.maxOneButton", "Only one button of this type is allowed"),
+      t(
+        "templates.maxOfType",
+        limit === 1
+          ? "Only one button of this type is allowed"
+          : `Maximum ${limit} buttons of this type allowed`,
+      ),
     );
     return;
   }
 
-  const sameTypeButtons = buttons
-    .map((b, index) => ({ ...b, originalIndex: index }))
-    .filter((b) => b.type === type);
-  let insertIndex = buttons.length;
-  if (sameTypeButtons.length > 0) {
-    const lastSameType = sameTypeButtons[sameTypeButtons.length - 1];
-    insertIndex = lastSameType.originalIndex + 1;
+  // Keep the set valid as it grows: group same-type buttons together, and keep
+  // quick replies after the other buttons so the two groups never interleave.
+  let insertIndex: number;
+  const lastSameType = buttons.map((b: any) => b.type).lastIndexOf(type);
+  if (lastSameType !== -1) {
+    insertIndex = lastSameType + 1;
+  } else if (type === "QUICK_REPLY") {
+    insertIndex = buttons.length;
+  } else {
+    const firstQuickReply = buttons.findIndex(
+      (b: any) => b.type === "QUICK_REPLY",
+    );
+    insertIndex = firstQuickReply === -1 ? buttons.length : firstQuickReply;
   }
 
   const newButton: Record<string, any> = {
     id: crypto.randomUUID(),
     type,
-    text: "",
+    text: DEFAULT_BUTTON_LABEL[type] || "",
   };
   if (type === "URL") {
     newButton.url = "";
-    newButton.urlType = "STATIC";
+    newButton.example = "";
   }
   if (type === "PHONE_NUMBER") newButton.phone_number = "";
   if (type === "COPY_CODE") newButton.example = "";
@@ -529,6 +581,21 @@ function addButton(type: ButtonType) {
   buttons.splice(insertIndex, 0, newButton);
   state.value.buttons = buttons;
 }
+
+// Buttons are sent to Meta in array order, and order decides whether quick-reply and
+// other buttons stay in valid groups — so let the user move them.
+function moveButton(index: number, delta: number) {
+  const buttons = [...(state.value.buttons || [])];
+  const target = index + delta;
+  if (target < 0 || target >= buttons.length) return;
+  [buttons[index], buttons[target]] = [buttons[target], buttons[index]];
+  state.value.buttons = buttons;
+}
+
+// Meta's grouping and per-type limits, surfaced inline as the user builds the set.
+const buttonComboWarning = computed(() =>
+  validateButtonCombination(state.value.buttons || []),
+);
 
 const MEDIA_ACCEPT: Record<string, string> = {
   IMAGE: "image/jpeg,image/png",
@@ -622,7 +689,7 @@ onMounted(() => {
           :model-value="state.name"
           @update:model-value="state.name = normalizeName(String($event))"
           :disabled="isLocked"
-          maxlength="512"
+          :maxlength="LIMITS.name"
           placeholder="order_confirmation"
           class="w-full h-10 font-mono"
         />
@@ -719,9 +786,11 @@ onMounted(() => {
         >
           <div class="grid grid-cols-2 gap-4">
             <div class="space-y-1.5">
-              <Label class="text-xs font-bold text-muted-foreground"
-                >Header Type</Label
-              >
+              <div class="flex items-center h-7">
+                <Label class="text-xs font-bold text-muted-foreground"
+                  >Header Type</Label
+                >
+              </div>
               <Select v-model="state.header_type">
                 <SelectTrigger class="h-9">
                   <SelectValue />
@@ -741,8 +810,8 @@ onMounted(() => {
               </p>
             </div>
 
-            <div v-if="state.header_type === 'TEXT'" class="space-y-2">
-              <div class="flex items-center justify-between">
+            <div v-if="state.header_type === 'TEXT'" class="space-y-1.5">
+              <div class="flex items-center justify-between h-7">
                 <Label class="text-xs font-bold text-muted-foreground"
                   >Header Text</Label
                 >
@@ -1186,10 +1255,10 @@ onMounted(() => {
           <Textarea
             id="footer-content"
             v-model="state.footer_content"
-            :rows="2"
+            :rows="1"
             :maxlength="LIMITS.footer"
             placeholder="E.g. Reply STOP to opt out"
-            class="bg-background"
+            class="bg-background min-h-9 py-1.5"
           />
           <div class="flex justify-end text-[10px] text-muted-foreground">
             {{ (state.footer_content || "").length }}/{{ LIMITS.footer }}
@@ -1253,264 +1322,273 @@ onMounted(() => {
             </div>
           </div>
 
-          <div
-            class="space-y-0 divide-y divide-slate-100 border-t border-zinc-100 mt-2"
-          >
+          <div class="space-y-3 mt-2">
             <template v-for="(btn, idx) in state.buttons" :key="btn.id">
-              <div class="p-3 bg-muted/10 border rounded-md mb-3">
-                <div class="flex justify-between mb-2">
+              <div class="p-3 bg-muted/10 border rounded-md space-y-3">
+                <div class="flex items-center justify-between">
                   <Badge variant="outline" class="text-[9px] uppercase">{{
                     btn.type
                   }}</Badge>
-                  <button
-                    type="button"
-                    @click="state.buttons.splice(idx, 1)"
-                    class="text-muted-foreground hover:text-red-500"
-                  >
-                    <Trash2 class="w-3.5 h-3.5" />
-                  </button>
+                  <div class="flex items-center gap-1">
+                    <button
+                      type="button"
+                      title="Move up"
+                      :disabled="Number(idx) === 0"
+                      @click="moveButton(Number(idx), -1)"
+                      class="text-muted-foreground hover:text-foreground disabled:opacity-30 disabled:cursor-not-allowed"
+                    >
+                      <ChevronUp class="w-3.5 h-3.5" />
+                    </button>
+                    <button
+                      type="button"
+                      title="Move down"
+                      :disabled="Number(idx) === state.buttons.length - 1"
+                      @click="moveButton(Number(idx), 1)"
+                      class="text-muted-foreground hover:text-foreground disabled:opacity-30 disabled:cursor-not-allowed"
+                    >
+                      <ChevronDown class="w-3.5 h-3.5" />
+                    </button>
+                    <button
+                      type="button"
+                      title="Remove"
+                      @click="state.buttons.splice(idx, 1)"
+                      class="ml-1 text-muted-foreground hover:text-red-500"
+                    >
+                      <Trash2 class="w-3.5 h-3.5" />
+                    </button>
+                  </div>
                 </div>
 
-                <div class="grid grid-cols-2 gap-3">
-                  <div class="space-y-1.5">
-                    <div class="flex items-center justify-between">
-                      <Label
-                        class="text-[10px] font-bold text-muted-foreground uppercase"
-                        >Button Label</Label
-                      >
-                      <span class="text-[10px] text-muted-foreground">
-                        {{ (btn.text || "").length }}/{{ LIMITS.buttonText }}
-                      </span>
-                    </div>
-                    <Input
-                      v-model="btn.text"
-                      :maxlength="LIMITS.buttonText"
-                      placeholder="Label"
-                      :class="[
-                        'h-8 text-xs bg-background',
-                        (btn.text || '').trim() ? '' : 'border-red-500',
-                      ].join(' ')"
-                    />
-                  </div>
-
-                  <div v-if="btn.type === 'URL'" class="space-y-1.5">
-                    <div class="flex items-center justify-between">
-                      <Label
-                        class="text-[10px] font-bold text-muted-foreground uppercase"
-                        >Website URL</Label
-                      >
-                      <div class="flex bg-muted p-0.5 rounded border">
-                        <button
-                          @click="btn.urlType = 'STATIC'"
-                          type="button"
-                          :class="[
-                            'text-[10px] font-bold px-2 py-0.5 rounded transition-all',
-                            btn.urlType !== 'DYNAMIC'
-                              ? 'bg-background text-emerald-600 shadow-sm'
-                              : 'text-muted-foreground hover:text-foreground',
-                          ]"
-                        >
-                          Static
-                        </button>
-                        <button
-                          @click="btn.urlType = 'DYNAMIC'"
-                          type="button"
-                          :class="[
-                            'text-[10px] font-bold px-2 py-0.5 rounded transition-all',
-                            btn.urlType === 'DYNAMIC'
-                              ? 'bg-background text-emerald-600 shadow-sm'
-                              : 'text-muted-foreground hover:text-foreground',
-                          ]"
-                        >
-                          Dynamic
-                        </button>
-                      </div>
-                    </div>
-
-                    <div
-                      v-if="btn.urlType === 'DYNAMIC'"
-                      class="flex flex-col gap-2"
-                    >
-                      <div class="flex items-center">
-                        <Input
-                          :value="(btn.url || '').replace(/\{\{1\}\}/g, '')"
-                          @input="
-                            btn.url =
-                              ($event.target as HTMLInputElement).value.replace(
-                                /\{\{|\}\}/g,
-                                '',
-                              ) + '{{1}}'
-                          "
-                          placeholder="https://example.com/item/"
-                          class="h-8 font-mono text-xs flex-1 rounded-r-none border-r-0 bg-background focus:z-10"
-                        />
-                        <div
-                          v-pre
-                          class="bg-muted text-muted-foreground px-3 h-8 flex items-center rounded-r-md border border-l-0 text-[11px] font-mono font-bold select-none"
-                        >
-                          {{ 1 }}
-                        </div>
-                      </div>
-                      <div
-                        class="flex items-center gap-2 bg-muted/30 p-2 rounded-md border"
-                      >
-                        <Label
-                          class="text-[10px] text-muted-foreground font-bold uppercase whitespace-nowrap"
-                          >Example Suffix:</Label
-                        >
-                        <Input
-                          :value="getSampleValue('button_url', String(idx))"
-                          @input="
-                            setSampleValue(
-                              'button_url',
-                              String(idx),
-                              ($event.target as HTMLInputElement).value,
-                            )
-                          "
-                          placeholder="e.g. 12345"
-                          class="h-7 text-[11px] bg-background flex-1"
-                        />
-                      </div>
-                      <p class="text-[10px] text-muted-foreground mt-1">
-                        <span class="font-mono text-emerald-600 font-medium"
-                          >Full Preview:
-                          {{
-                            (btn.url || "").replace(/\{\{1\}\}/g, "") ||
-                            "https://..."
-                          }}{{
-                            getSampleValue("button_url", String(idx)) || "12345"
-                          }}</span
-                        >
-                      </p>
-                    </div>
-                    <div v-else>
-                      <Input
-                        v-model="btn.url"
-                        :maxlength="LIMITS.url"
-                        placeholder="https://example.com"
-                        class="h-8 font-mono text-xs bg-background"
-                      />
-                    </div>
-                  </div>
-
-                  <div v-if="btn.type === 'PHONE_NUMBER'" class="space-y-1.5">
+                <div class="space-y-1.5">
+                  <div class="flex items-center justify-between">
                     <Label
                       class="text-[10px] font-bold text-muted-foreground uppercase"
-                      >Phone Number</Label
+                      >Button Label</Label
                     >
+                    <span class="text-[10px] text-muted-foreground">
+                      {{ (btn.text || "").length }}/{{ LIMITS.buttonText }}
+                    </span>
+                  </div>
+                  <Input
+                    v-model="btn.text"
+                    :maxlength="LIMITS.buttonText"
+                    placeholder="Label"
+                    :class="[
+                      'h-8 text-xs bg-background',
+                      (btn.text || '').trim() ? '' : 'border-red-500',
+                    ].join(' ')"
+                  />
+                </div>
+
+                <div v-if="btn.type === 'URL'" class="space-y-1.5">
+                  <div class="flex items-center justify-between">
+                    <Label
+                      class="text-[10px] font-bold text-muted-foreground uppercase"
+                      >Website URL</Label
+                    >
+                    <div class="flex bg-muted p-0.5 rounded border">
+                      <button
+                        @click="setUrlDynamic(btn, false)"
+                        type="button"
+                        :class="[
+                          'text-[10px] font-bold px-2 py-0.5 rounded transition-all',
+                          !isDynamicUrl(btn)
+                            ? 'bg-background text-emerald-600 shadow-sm'
+                            : 'text-muted-foreground hover:text-foreground',
+                        ]"
+                      >
+                        Static
+                      </button>
+                      <button
+                        @click="setUrlDynamic(btn, true)"
+                        type="button"
+                        :class="[
+                          'text-[10px] font-bold px-2 py-0.5 rounded transition-all',
+                          isDynamicUrl(btn)
+                            ? 'bg-background text-emerald-600 shadow-sm'
+                            : 'text-muted-foreground hover:text-foreground',
+                        ]"
+                      >
+                        Dynamic
+                      </button>
+                    </div>
+                  </div>
+
+                  <div v-if="isDynamicUrl(btn)" class="flex items-center">
                     <Input
-                      v-model="btn.phone_number"
-                      placeholder="+1234567890"
-                      class="h-8 text-xs bg-background"
+                      :value="urlPrefix(btn)"
+                      @input="
+                        setUrlPrefix(
+                          btn,
+                          ($event.target as HTMLInputElement).value,
+                        )
+                      "
+                      placeholder="https://example.com/item/"
+                      class="h-8 font-mono text-xs flex-1 rounded-r-none border-r-0 bg-background focus:z-10"
                     />
-                    <p
-                      v-if="btn.phone_number && !isValidPhone(btn.phone_number)"
-                      class="text-[10px] text-red-500"
+                    <div
+                      v-pre
+                      class="bg-muted text-muted-foreground px-3 h-8 flex items-center rounded-r-md border text-[11px] font-mono font-bold select-none"
                     >
-                      Use international format, e.g. +14155551234.
+                      {{ 1 }}
+                    </div>
+                  </div>
+                  <Input
+                    v-else
+                    v-model="btn.url"
+                    :maxlength="LIMITS.url"
+                    placeholder="https://example.com"
+                    class="h-8 font-mono text-xs bg-background"
+                  />
+
+                  <div v-if="isDynamicUrl(btn)" class="space-y-1.5 pt-1">
+                    <Label
+                      class="text-[10px] font-bold text-muted-foreground uppercase"
+                      >Example URL</Label
+                    >
+                    <div class="flex items-center">
+                      <span
+                        class="h-8 max-w-[45%] flex items-center px-2.5 rounded-l-md border border-r-0 bg-muted text-[11px] font-mono text-muted-foreground truncate select-none"
+                      >
+                        {{ urlPrefix(btn) || "https://example.com/item/" }}
+                      </span>
+                      <Input
+                        v-model="btn.example"
+                        placeholder="12345"
+                        :class="[
+                          'h-8 flex-1 rounded-l-none font-mono text-xs bg-background',
+                          (btn.example || '').trim() ? '' : 'border-red-500',
+                        ].join(' ')"
+                      />
+                    </div>
+                    <p class="text-[10px] text-muted-foreground">
+                      Meta reviews the template against this full example URL.
+                    </p>
+                  </div>
+                </div>
+
+                <div v-if="btn.type === 'PHONE_NUMBER'" class="space-y-1.5">
+                  <Label
+                    class="text-[10px] font-bold text-muted-foreground uppercase"
+                    >Phone Number</Label
+                  >
+                  <Input
+                    v-model="btn.phone_number"
+                    placeholder="+1234567890"
+                    class="h-8 text-xs bg-background"
+                  />
+                  <p
+                    v-if="btn.phone_number && !isValidPhone(btn.phone_number)"
+                    class="text-[10px] text-red-500"
+                  >
+                    Use international format, e.g. +14155551234.
+                  </p>
+                </div>
+
+                <div v-if="btn.type === 'COPY_CODE'" class="space-y-1.5">
+                  <div class="flex items-center justify-between">
+                    <Label
+                      class="text-[10px] font-bold text-muted-foreground uppercase"
+                      >Example Code</Label
+                    >
+                    <span class="text-[10px] text-muted-foreground">
+                      {{ (btn.example || "").length }}/{{ LIMITS.copyCode }}
+                    </span>
+                  </div>
+                  <Input
+                    v-model="btn.example"
+                    :maxlength="LIMITS.copyCode"
+                    placeholder="SAVE20"
+                    class="h-8 text-xs bg-background"
+                  />
+                </div>
+
+                <div v-if="btn.type === 'FLOW'" class="grid grid-cols-2 gap-3">
+                  <div class="space-y-1.5">
+                    <Label
+                      class="text-[10px] font-bold text-muted-foreground uppercase"
+                      >Flow</Label
+                    >
+                    <select
+                      v-model="btn.flow_id"
+                      class="w-full h-8 rounded-md border bg-background px-2 text-xs disabled:cursor-not-allowed disabled:opacity-50"
+                    >
+                      <option value="">Select a Flow...</option>
+                      <option
+                        v-for="flow in flows || []"
+                        :key="flow.id"
+                        :value="flow.meta_flow_id || flow.id"
+                      >
+                        {{ flow.name }}
+                      </option>
+                    </select>
+                    <p
+                      v-if="!(flows || []).length"
+                      class="text-[10px] text-muted-foreground"
+                    >
+                      No published Flows available.
                     </p>
                   </div>
 
-                  <div v-if="btn.type === 'COPY_CODE'" class="space-y-1.5">
-                    <div class="flex items-center justify-between">
-                      <Label
-                        class="text-[10px] font-bold text-muted-foreground uppercase"
-                        >Example Code</Label
-                      >
-                      <span class="text-[10px] text-muted-foreground">
-                        {{ (btn.example || "").length }}/{{ LIMITS.copyCode }}
-                      </span>
-                    </div>
-                    <Input
-                      v-model="btn.example"
-                      :maxlength="LIMITS.copyCode"
-                      placeholder="SAVE20"
-                      class="h-8 text-xs bg-background"
-                    />
+                  <div class="space-y-1.5">
+                    <Label
+                      class="text-[10px] font-bold text-muted-foreground uppercase"
+                      >Flow Action</Label
+                    >
+                    <select
+                      v-model="btn.flow_action"
+                      class="w-full h-8 rounded-md border bg-background px-2 text-xs disabled:cursor-not-allowed disabled:opacity-50"
+                    >
+                      <option value="navigate">Navigate</option>
+                      <option value="data_exchange">Data Exchange</option>
+                    </select>
                   </div>
 
                   <div
-                    v-if="btn.type === 'FLOW'"
-                    class="col-span-2 grid grid-cols-2 gap-3"
+                    v-if="
+                      btn.flow_action === 'navigate' &&
+                      btn.flow_id &&
+                      getFlowScreens(btn.flow_id).length > 0
+                    "
+                    class="col-span-2 space-y-1.5"
                   >
-                    <div class="space-y-1.5">
-                      <Label
-                        class="text-[10px] font-bold text-muted-foreground uppercase"
-                        >Flow</Label
-                      >
-                      <select
-                        v-model="btn.flow_id"
-                        class="w-full h-8 rounded-md border bg-background px-2 text-xs disabled:cursor-not-allowed disabled:opacity-50"
-                      >
-                        <option value="">Select a Flow...</option>
-                        <option
-                          v-for="flow in flows || []"
-                          :key="flow.id"
-                          :value="flow.meta_flow_id || flow.id"
-                        >
-                          {{ flow.name }}
-                        </option>
-                      </select>
-                      <p
-                        v-if="!(flows || []).length"
-                        class="text-[10px] text-muted-foreground"
-                      >
-                        No published Flows available.
-                      </p>
-                    </div>
-
-                    <div class="space-y-1.5">
-                      <Label
-                        class="text-[10px] font-bold text-muted-foreground uppercase"
-                        >Flow Action</Label
-                      >
-                      <select
-                        v-model="btn.flow_action"
-                        class="w-full h-8 rounded-md border bg-background px-2 text-xs disabled:cursor-not-allowed disabled:opacity-50"
-                      >
-                        <option value="navigate">Navigate</option>
-                        <option value="data_exchange">Data Exchange</option>
-                      </select>
-                    </div>
-
-                    <div
-                      v-if="
-                        btn.flow_action === 'navigate' &&
-                        btn.flow_id &&
-                        getFlowScreens(btn.flow_id).length > 0
-                      "
-                      class="space-y-1.5"
+                    <Label
+                      class="text-[10px] font-bold text-muted-foreground uppercase"
+                      >Screen</Label
                     >
-                      <Label
-                        class="text-[10px] font-bold text-muted-foreground uppercase"
-                        >Screen</Label
+                    <select
+                      v-model="btn.navigate_screen"
+                      class="w-full h-8 rounded-md border bg-background px-2 text-xs disabled:cursor-not-allowed disabled:opacity-50"
+                    >
+                      <option value="">Select a screen...</option>
+                      <option
+                        v-for="screen in getFlowScreens(btn.flow_id)"
+                        :key="screen"
+                        :value="screen"
                       >
-                      <select
-                        v-model="btn.navigate_screen"
-                        class="w-full h-8 rounded-md border bg-background px-2 text-xs disabled:cursor-not-allowed disabled:opacity-50"
-                      >
-                        <option value="">Select a screen...</option>
-                        <option
-                          v-for="screen in getFlowScreens(btn.flow_id)"
-                          :key="screen"
-                          :value="screen"
-                        >
-                          {{ screen }}
-                        </option>
-                      </select>
-                    </div>
+                        {{ screen }}
+                      </option>
+                    </select>
                   </div>
-
-                  <p
-                    v-if="btn.type === 'VOICE_CALL'"
-                    class="self-end text-[10px] text-muted-foreground"
-                  >
-                    Opens a WhatsApp voice call with your business. No extra
-                    configuration needed.
-                  </p>
                 </div>
+
+                <p
+                  v-if="btn.type === 'VOICE_CALL'"
+                  class="text-[10px] text-muted-foreground"
+                >
+                  Opens a WhatsApp voice call with your business. No extra
+                  configuration needed.
+                </p>
               </div>
             </template>
+
+            <div
+              v-if="buttonComboWarning"
+              class="flex gap-2 items-start p-3 rounded-md border border-amber-500/40 bg-amber-500/10 text-[11px] text-amber-700 dark:text-amber-400"
+            >
+              <AlertCircle class="h-4 w-4 shrink-0 mt-px" />
+              <span>{{ buttonComboWarning }}</span>
+            </div>
           </div>
         </div>
 

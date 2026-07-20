@@ -726,7 +726,7 @@
     "nameBodyRequired": "اسم القالب ومحتوى الرسالة مطلوبان",
     "selectAccountRequired": "يرجى اختيار حساب واتساب",
     "selectAccountFirst": "يرجى اختيار حساب واتساب أولاً",
-    "maxButtons": "يسمح بحد أقصى 3 أزرار",
+    "maxButtons": "يسمح بحد أقصى 10 أزرار",
     "editDialogTitle": "تعديل القالب",
     "createDialogTitle": "إنشاء قالب",
     "editDialogDesc": "تحديث قالب الرسالة الخاص بك.",

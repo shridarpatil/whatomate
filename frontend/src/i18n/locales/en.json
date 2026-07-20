@@ -937,7 +937,7 @@
     "nameBodyRequired": "Template name and body content are required",
     "selectAccountRequired": "Please select a WhatsApp account",
     "selectAccountFirst": "Please select a WhatsApp account first",
-    "maxButtons": "Maximum 3 buttons allowed",
+    "maxButtons": "Maximum 10 buttons allowed",
     "editDialogTitle": "Edit Template",
     "createDialogTitle": "Create Template",
     "editDialogDesc": "Update your message template.",
