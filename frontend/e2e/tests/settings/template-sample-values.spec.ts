@@ -136,14 +136,9 @@ test.describe('Template Preview with Sample Values', () => {
     await page.goto(`/templates/${tpl.id}`)
     await page.waitForLoadState('domcontentloaded')
 
-    const previewBtn = page.getByRole('button', { name: /Preview/i })
-    await expect(previewBtn).toBeVisible({ timeout: 10000 })
-    await previewBtn.click()
-
-    const dialog = page.locator('[role="alertdialog"]')
-    await expect(dialog).toBeVisible({ timeout: 5000 })
-    await expect(dialog.getByText('Template Preview')).toBeVisible()
-
-    await dialog.getByRole('button', { name: /Close/i }).click()
+    // The preview renders live in the sidebar; the body's variable substitution
+    // happens inline, so the template text is visible without opening anything.
+    await expect(page.getByText('Live Preview')).toBeVisible({ timeout: 10000 })
+    await expect(page.getByText(/welcome/).first()).toBeVisible()
   })
 })
