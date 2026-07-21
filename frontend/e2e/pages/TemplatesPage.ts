@@ -41,7 +41,8 @@ export class TemplatesPage extends BasePage {
 
   async deleteTemplateFromList(rowIndex = 0) {
     const row = this.page.locator('tbody tr').nth(rowIndex)
-    await row.locator('button').filter({ has: this.page.locator('svg.text-destructive') }).click()
+    await row.getByRole('button', { name: /More actions/i }).click()
+    await this.page.getByRole('menuitem', { name: /Delete/i }).click()
     await this.alertDialog.waitFor({ state: 'visible' })
   }
 

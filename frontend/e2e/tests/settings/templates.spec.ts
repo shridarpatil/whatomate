@@ -61,12 +61,14 @@ test.describe('Message Templates - List View', () => {
       test.skip(true, 'No templates in list')
       return
     }
-    const deleteBtn = firstRow.locator('button.text-destructive, button:has(svg.text-destructive)').first()
-    if (!(await deleteBtn.isVisible({ timeout: 3000 }).catch(() => false))) {
-      test.skip(true, 'No delete button found')
+    // Edit/Delete live in the row's overflow (three-dots) menu
+    const menuTrigger = firstRow.getByRole('button', { name: /More actions/i })
+    if (!(await menuTrigger.isVisible({ timeout: 3000 }).catch(() => false))) {
+      test.skip(true, 'No actions menu found')
       return
     }
-    await deleteBtn.click()
+    await menuTrigger.click()
+    await page.getByRole('menuitem', { name: /Delete/i }).click()
     await expect(templatesPage.alertDialog).toBeVisible({ timeout: 5000 })
     await templatesPage.cancelDelete()
   })

@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { ref, onMounted, watch, computed } from 'vue'
-import { RouterLink } from 'vue-router'
+import { RouterLink, useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -9,17 +9,19 @@ import { Badge } from '@/components/ui/badge'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
 import { PageHeader, SearchInput, DataTable, IconButton, DeleteConfirmDialog, ErrorState, type Column } from '@/components/shared'
 import { api, templatesService } from '@/services/api'
 import { useOrganizationsStore } from '@/stores/organizations'
 import { toast } from 'vue-sonner'
-import { Plus, RefreshCw, FileText, Pencil, Trash2, Loader2, Send, Eye, MessageSquare, Image, FileIcon, Video } from 'lucide-vue-next'
+import { Plus, RefreshCw, FileText, Pencil, Trash2, Loader2, Send, Eye, MoreVertical, MessageSquare, Image, FileIcon, Video } from 'lucide-vue-next'
 import TemplatePreview from './TemplatePreview.vue'
 import { getErrorMessage } from '@/lib/api-utils'
 import { useSearchPagination } from '@/composables/useSearchPagination'
 import { getQualityBadgeClass, getQualityRatingLabel } from '@/lib/utils'
 
 const { t } = useI18n()
+const router = useRouter()
 
 interface WhatsAppAccount {
   id: string
@@ -435,19 +437,23 @@ function getHeaderIcon(type: string) {
                       class="h-8 w-8"
                       @click="previewTemplate = template"
                     />
-                    <RouterLink :to="`/templates/${template.id}`">
-                      <IconButton
-                        :icon="Pencil"
-                        :label="$t('common.edit')"
-                        class="h-8 w-8"
-                      />
-                    </RouterLink>
-                    <IconButton
-                      :icon="Trash2"
-                      :label="$t('common.delete')"
-                      class="h-8 w-8 text-destructive"
-                      @click="openDeleteDialog(template)"
-                    />
+                    <DropdownMenu>
+                      <DropdownMenuTrigger as-child>
+                        <Button variant="ghost" size="icon" class="h-8 w-8" :aria-label="$t('common.moreActions', 'More actions')">
+                          <MoreVertical class="h-4 w-4" />
+                        </Button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="end">
+                        <DropdownMenuItem @click="router.push(`/templates/${template.id}`)">
+                          <Pencil class="mr-2 h-4 w-4" />
+                          <span>{{ $t('common.edit') }}</span>
+                        </DropdownMenuItem>
+                        <DropdownMenuItem class="text-destructive focus:text-destructive" @click="openDeleteDialog(template)">
+                          <Trash2 class="mr-2 h-4 w-4" />
+                          <span>{{ $t('common.delete') }}</span>
+                        </DropdownMenuItem>
+                      </DropdownMenuContent>
+                    </DropdownMenu>
                   </div>
                 </template>
                 <template #empty-action>
