@@ -8,11 +8,13 @@ import { Label } from '@/components/ui/label'
 import { Badge } from '@/components/ui/badge'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { PageHeader, SearchInput, DataTable, IconButton, DeleteConfirmDialog, ErrorState, type Column } from '@/components/shared'
 import { api, templatesService } from '@/services/api'
 import { useOrganizationsStore } from '@/stores/organizations'
 import { toast } from 'vue-sonner'
-import { Plus, RefreshCw, FileText, Pencil, Trash2, Loader2, Send, MessageSquare, Image, FileIcon, Video } from 'lucide-vue-next'
+import { Plus, RefreshCw, FileText, Pencil, Trash2, Loader2, Send, Eye, MessageSquare, Image, FileIcon, Video } from 'lucide-vue-next'
+import TemplatePreview from './TemplatePreview.vue'
 import { getErrorMessage } from '@/lib/api-utils'
 import { useSearchPagination } from '@/composables/useSearchPagination'
 import { getQualityBadgeClass, getQualityRatingLabel } from '@/lib/utils'
@@ -58,6 +60,8 @@ const selectedAccount = ref<string>(localStorage.getItem('templates_selected_acc
 const deleteDialogOpen = ref(false)
 const templateToDelete = ref<Template | null>(null)
 const publishingId = ref<string | null>(null)
+// Row whose WhatsApp-style preview dialog is open.
+const previewTemplate = ref<Template | null>(null)
 const isDeleting = ref(false)
 
 const { searchQuery, currentPage, totalItems, pageSize, handlePageChange } = useSearchPagination({
@@ -425,6 +429,12 @@ function getHeaderIcon(type: string) {
                       :disabled="publishingId === template.id"
                       @click="publishTemplate(template)"
                     />
+                    <IconButton
+                      :icon="Eye"
+                      :label="$t('templates.preview', 'Preview')"
+                      class="h-8 w-8"
+                      @click="previewTemplate = template"
+                    />
                     <RouterLink :to="`/templates/${template.id}`">
                       <IconButton
                         :icon="Pencil"
@@ -469,5 +479,25 @@ function getHeaderIcon(type: string) {
       :is-submitting="isDeleting"
       @confirm="confirmDeleteTemplate"
     />
+
+    <!-- Read-only WhatsApp-style preview of a template, straight from the list -->
+    <Dialog :open="!!previewTemplate" @update:open="(open: boolean) => { if (!open) previewTemplate = null }">
+      <DialogContent class="max-w-md">
+        <DialogHeader>
+          <DialogTitle>{{ previewTemplate?.display_name || previewTemplate?.name }}</DialogTitle>
+        </DialogHeader>
+        <div v-if="previewTemplate" class="rounded-xl bg-[#e5ddd5] dark:bg-[#111b21] p-4">
+          <TemplatePreview
+            :header-type="(previewTemplate.header_type || 'NONE') as any"
+            :header-content="previewTemplate.header_content"
+            :body-content="previewTemplate.body_content"
+            :footer-content="previewTemplate.footer_content"
+            :buttons="previewTemplate.buttons"
+            :sample-values="previewTemplate.sample_values"
+            contained
+          />
+        </div>
+      </DialogContent>
+    </Dialog>
   </div>
 </template>
