@@ -83,8 +83,10 @@ type DatabaseConfig struct {
 type RedisConfig struct {
 	Host     string `koanf:"host"`
 	Port     int    `koanf:"port"`
+	Username string `koanf:"username"`
 	Password string `koanf:"password"`
 	DB       int    `koanf:"db"`
+	TLS      bool   `koanf:"tls"`
 }
 
 type JWTConfig struct {

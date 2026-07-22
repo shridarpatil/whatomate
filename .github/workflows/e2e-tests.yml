@@ -84,8 +84,10 @@ jobs:
           [redis]
           host = "localhost"
           port = 6379
+          username = ""
           password = ""
           db = 0
+          tls = false
 
           [jwt]
           secret = "test-secret-key-for-ci"

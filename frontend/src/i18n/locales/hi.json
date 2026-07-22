@@ -1927,8 +1927,12 @@
     "noTemplateAnalytics": "कोई नहीं",
     "totalCalls": "कुल कॉल",
     "totalDuration": "कुल अवधि",
+    "avgDuration": "औसत अवधि",
     "callsByType": "प्रकार",
     "callsByDirection": "दिशा",
+    "incoming": "इनकमिंग",
+    "outgoing": "आउटगोइंग",
+    "callsOverTime": "समय के अनुसार कॉल",
     "noCallData": "कोई नहीं",
     "noCallAnalytics": "कोई नहीं"
   },

@@ -1928,8 +1928,12 @@
     "noTemplateAnalytics": "No template analytics data available",
     "totalCalls": "Total Calls",
     "totalDuration": "Total Duration",
+    "avgDuration": "Avg. Duration",
     "callsByType": "Calls by Type",
     "callsByDirection": "Calls by Direction",
+    "incoming": "Incoming",
+    "outgoing": "Outgoing",
+    "callsOverTime": "Calls Over Time",
     "noCallData": "No call data available",
     "noCallAnalytics": "No call analytics data available"
   },

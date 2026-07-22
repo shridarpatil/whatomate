@@ -2,6 +2,7 @@ package database
 
 import (
 	"context"
+	"crypto/tls"
 	"fmt"
 
 	"github.com/redis/go-redis/v9"
@@ -10,11 +11,20 @@ import (
 
 // NewRedis creates a new Redis client
 func NewRedis(cfg *config.RedisConfig) (*redis.Client, error) {
-	client := redis.NewClient(&redis.Options{
+	opts := &redis.Options{
 		Addr:     fmt.Sprintf("%s:%d", cfg.Host, cfg.Port),
+		Username: cfg.Username,
 		Password: cfg.Password,
 		DB:       cfg.DB,
-	})
+	}
+	
+	if cfg.TLS {
+		opts.TLSConfig = &tls.Config{
+			MinVersion: tls.VersionTLS12,
+		}
+	}
+
+	client := redis.NewClient(opts)
 
 	// Test connection
 	ctx := context.Background()

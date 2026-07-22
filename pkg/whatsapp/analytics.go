@@ -136,12 +136,12 @@ type TemplateAnalytics struct {
 
 // CallAnalyticsDataPoint represents a single data point for call analytics
 type CallAnalyticsDataPoint struct {
-	Start         int64  `json:"start"`
-	End           int64  `json:"end"`
-	TotalCalls    int64  `json:"total_calls"`
-	CallDuration  int64  `json:"call_duration"`  // Total duration in seconds
-	CallType      string `json:"call_type"`      // "VOICE", "VIDEO"
-	CallDirection string `json:"call_direction"` // "INBOUND", "OUTBOUND"
+	Start           int64   `json:"start"`
+	End             int64   `json:"end"`
+	Count           int64   `json:"count"`
+	Cost            float64 `json:"cost"`
+	AverageDuration int64   `json:"average_duration"` // Average duration in seconds
+	Direction       string  `json:"direction,omitempty"` // USER_INITIATED or BUSINESS_INITIATED (from dimensions)
 }
 
 // CallAnalyticsEntry represents a single phone number's call data
@@ -330,6 +330,12 @@ func (c *Client) buildAnalyticsURL(account *Account, analyticsType AnalyticsType
 	// Add dimensions for pricing_analytics to get detailed breakdown
 	if analyticsType == AnalyticsTypePricing {
 		filters = append(filters, "dimensions(PRICING_CATEGORY,PRICING_TYPE,COUNTRY)")
+	}
+
+	// Add dimensions for call_analytics to get direction breakdown
+	if analyticsType == AnalyticsTypeCall {
+		filters = append(filters, "dimensions(direction)")
+		filters = append(filters, "metric_types(COUNT,COST,AVERAGE_DURATION)")
 	}
 
 	field := fmt.Sprintf("%s.%s", analyticsType, strings.Join(filters, "."))

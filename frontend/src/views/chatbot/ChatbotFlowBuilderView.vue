@@ -394,8 +394,8 @@ onMounted(async () => {
 async function fetchWhatsAppFlows() {
   try {
     const response = await flowsService.list()
-    const data = response.data
-    const allFlows = data.data.flows || []
+    const data = response.data as any
+    const allFlows = data.data?.flows ?? data.flows ?? []
     whatsappFlows.value = allFlows.filter(
       (f: WhatsAppFlow) => f.meta_flow_id && f.status?.toUpperCase() === 'PUBLISHED'
     )

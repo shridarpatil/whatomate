@@ -1927,8 +1927,12 @@
     "noTemplateAnalytics": "வார்ப்புரு பகுப்பாய்வு தரவு இல்லை",
     "totalCalls": "மொத்த அழைப்புகள்",
     "totalDuration": "மொத்த காலம்",
+    "avgDuration": "சராசரி காலம்",
     "callsByType": "வகை வாரியாக அழைப்புகள்",
     "callsByDirection": "திசை வாரியாக அழைப்புகள்",
+    "incoming": "உள்வரும்",
+    "outgoing": "வெளிச்செல்லும்",
+    "callsOverTime": "காலப்போக்கில் அழைப்புகள்",
     "noCallData": "அழைப்பு தரவு இல்லை",
     "noCallAnalytics": "அழைப்பு பகுப்பாய்வு தரவு இல்லை"
   },

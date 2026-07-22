@@ -32,8 +32,10 @@ conn_max_lifetime = 300
 [redis]
 host = "redis"  # Use "localhost" for local development
 port = 6379
+username = ""  # Redis ACL username (Redis 6+). Leave empty to use the default user.
 password = ""
 db = 0
+tls = false    # Set to true for TLS connections (e.g. Upstash, Redis Cloud)
 
 [jwt]
 secret = "your-super-secret-jwt-key-change-in-production"  # Must be 32+ chars in production

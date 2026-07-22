@@ -1927,8 +1927,12 @@
     "noTemplateAnalytics": "No hay analíticas de plantillas disponibles",
     "totalCalls": "Total de llamadas",
     "totalDuration": "Duración total",
+    "avgDuration": "Duración prom.",
     "callsByType": "Llamadas por tipo",
     "callsByDirection": "Llamadas por dirección",
+    "incoming": "Entrantes",
+    "outgoing": "Salientes",
+    "callsOverTime": "Llamadas a lo largo del tiempo",
     "noCallData": "No hay datos de llamadas disponibles",
     "noCallAnalytics": "No hay analíticas de llamadas disponibles"
   },

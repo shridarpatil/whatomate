@@ -398,10 +398,10 @@ export interface MetaTemplateDataPoint {
 export interface MetaCallDataPoint {
   start: number
   end: number
-  total_calls: number
-  call_duration: number
-  call_type: string
-  call_direction: string
+  count: number
+  cost: number
+  average_duration: number
+  direction?: string // USER_INITIATED or BUSINESS_INITIATED
 }
 
 interface MetaAnalyticsData {
