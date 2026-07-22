@@ -4,12 +4,11 @@ import { useI18n } from 'vue-i18n'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import DataTable from '@/components/shared/DataTable.vue'
-import type { Column } from '@/components/shared/DataTable.vue'
+import type { Column } from '@/components/shared/types'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Button } from '@/components/ui/button'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
-import { RangeCalendar } from '@/components/ui/range-calendar'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Badge } from '@/components/ui/badge'
 import {
@@ -30,7 +29,7 @@ import {
   type MetaTemplateDataPoint,
   type MetaCallDataPoint
 } from '@/services/api'
-import { PageHeader } from '@/components/shared'
+import { PageHeader, ErrorState, DateRangePicker } from '@/components/shared'
 import {
   Command,
   CommandEmpty,
@@ -41,7 +40,6 @@ import {
 } from '@/components/ui/command'
 import {
   BarChart3,
-  CalendarIcon,
   ChevronsUpDown,
   Check,
   MessageSquare,
@@ -59,10 +57,9 @@ import {
   MousePointerClick,
   Search
 } from 'lucide-vue-next'
-import type { DateRange } from 'reka-ui'
-import { CalendarDate } from '@internationalized/date'
 import { Line, Bar } from '@/lib/charts'
 import { toast } from 'vue-sonner'
+import { useDateRange } from '@/composables/useDateRange'
 
 
 const { t } = useI18n()
@@ -70,6 +67,7 @@ const { t } = useI18n()
 // State
 const isLoading = ref(true)
 const isRefreshing = ref(false)
+const error = ref<string | null>(null)
 const accounts = ref<MetaAnalyticsAccount[]>([])
 const selectedAccountId = ref<string>('all')
 const accountComboboxOpen = ref(false)
@@ -81,74 +79,34 @@ const isCached = ref(false)
 const selectedGranularity = ref<MetaGranularity>('DAY')
 
 // Time range filter
-type TimeRangePreset = 'today' | '7days' | '30days' | 'this_month' | 'custom'
+const {
+  selectedRange,
+  customDateRange,
+  isDatePickerOpen,
+  dateRange,
+  formatDateRangeDisplay,
+  applyCustomRange: applyCustomRangeBase,
+} = useDateRange({ defaultPreset: '30days', storageKey: 'meta_insights' })
 
-const loadSavedPreferences = () => {
-  const savedRange = localStorage.getItem('meta_insights_time_range') as TimeRangePreset | null
-  const savedCustomRange = localStorage.getItem('meta_insights_custom_range')
-  const savedGranularity = localStorage.getItem('meta_insights_granularity') as MetaGranularity | null
-  const savedAccountId = localStorage.getItem('meta_insights_account_id')
-  const savedActiveTab = localStorage.getItem('meta_insights_active_tab') as MetaAnalyticsType | null
+// Load other saved preferences (non-date-range)
+const savedGranularity = localStorage.getItem('meta_insights_granularity') as MetaGranularity | null
+const savedAccountId = localStorage.getItem('meta_insights_account_id')
+const savedActiveTab = localStorage.getItem('meta_insights_active_tab') as MetaAnalyticsType | null
 
-  let customRange: DateRange = { start: undefined, end: undefined }
-  if (savedCustomRange) {
-    try {
-      const parsed = JSON.parse(savedCustomRange)
-      if (parsed.start && parsed.end) {
-        customRange = {
-          start: new CalendarDate(parsed.start.year, parsed.start.month, parsed.start.day),
-          end: new CalendarDate(parsed.end.year, parsed.end.month, parsed.end.day)
-        }
-      }
-    } catch {
-      // Ignore parse errors
-    }
-  }
-
-  return {
-    range: savedRange || '30days',
-    customRange,
-    granularity: savedGranularity || 'DAY',
-    accountId: savedAccountId || 'all',
-    activeTab: savedActiveTab || 'analytics'
-  }
+if (savedGranularity) {
+  selectedGranularity.value = savedGranularity as MetaGranularity
+}
+if (savedAccountId) {
+  selectedAccountId.value = savedAccountId
+}
+if (savedActiveTab) {
+  activeTab.value = savedActiveTab as MetaAnalyticsType
 }
 
-const savedPrefs = loadSavedPreferences()
-const selectedRange = ref<TimeRangePreset>(savedPrefs.range as TimeRangePreset)
-const customDateRange = ref<any>(savedPrefs.customRange)
-const isDatePickerOpen = ref(false)
-
-// Apply saved preferences
-if (savedPrefs.granularity) {
-  selectedGranularity.value = savedPrefs.granularity as MetaGranularity
-}
-if (savedPrefs.accountId) {
-  selectedAccountId.value = savedPrefs.accountId
-}
-if (savedPrefs.activeTab) {
-  activeTab.value = savedPrefs.activeTab as MetaAnalyticsType
-}
-
-const savePreferences = () => {
-  localStorage.setItem('meta_insights_time_range', selectedRange.value)
+const saveOtherPreferences = () => {
   localStorage.setItem('meta_insights_granularity', selectedGranularity.value)
   localStorage.setItem('meta_insights_account_id', selectedAccountId.value)
   localStorage.setItem('meta_insights_active_tab', activeTab.value)
-  if (selectedRange.value === 'custom' && customDateRange.value.start && customDateRange.value.end) {
-    localStorage.setItem('meta_insights_custom_range', JSON.stringify({
-      start: {
-        year: customDateRange.value.start.year,
-        month: customDateRange.value.start.month,
-        day: customDateRange.value.start.day
-      },
-      end: {
-        year: customDateRange.value.end.year,
-        month: customDateRange.value.end.month,
-        day: customDateRange.value.end.day
-      }
-    }))
-  }
 }
 
 const selectedAccountName = computed(() => {
@@ -157,65 +115,6 @@ const selectedAccountName = computed(() => {
   return account?.name || t('metaInsights.selectAccount')
 })
 
-const formatDateLocal = (date: Date): string => {
-  const year = date.getFullYear()
-  const month = String(date.getMonth() + 1).padStart(2, '0')
-  const day = String(date.getDate()).padStart(2, '0')
-  return `${year}-${month}-${day}`
-}
-
-const getDateRange = computed(() => {
-  const now = new Date()
-  let from: Date
-  let to: Date = now
-
-  switch (selectedRange.value) {
-    case 'today':
-      from = new Date(now.getFullYear(), now.getMonth(), now.getDate())
-      to = new Date(now.getFullYear(), now.getMonth(), now.getDate())
-      break
-    case '7days':
-      from = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 7)
-      to = new Date(now.getFullYear(), now.getMonth(), now.getDate())
-      break
-    case '30days':
-      from = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 30)
-      to = new Date(now.getFullYear(), now.getMonth(), now.getDate())
-      break
-    case 'this_month':
-      from = new Date(now.getFullYear(), now.getMonth(), 1)
-      to = new Date(now.getFullYear(), now.getMonth(), now.getDate())
-      break
-    case 'custom':
-      if (customDateRange.value.start && customDateRange.value.end) {
-        from = new Date(customDateRange.value.start.year, customDateRange.value.start.month - 1, customDateRange.value.start.day)
-        to = new Date(customDateRange.value.end.year, customDateRange.value.end.month - 1, customDateRange.value.end.day)
-      } else {
-        from = new Date(now.getFullYear(), now.getMonth(), 1)
-        to = new Date(now.getFullYear(), now.getMonth(), now.getDate())
-      }
-      break
-    default:
-      from = new Date(now.getFullYear(), now.getMonth(), 1)
-      to = new Date(now.getFullYear(), now.getMonth(), now.getDate())
-  }
-
-  return {
-    from: formatDateLocal(from),
-    to: formatDateLocal(to)
-  }
-})
-
-const formatDateRange = computed(() => {
-  if (selectedRange.value === 'custom' && customDateRange.value.start && customDateRange.value.end) {
-    const start = customDateRange.value.start
-    const end = customDateRange.value.end
-    const startStr = `${start.month}/${start.day}/${start.year}`
-    const endStr = `${end.month}/${end.day}/${end.year}`
-    return `${startStr} - ${endStr}`
-  }
-  return ''
-})
 
 const fetchAccounts = async () => {
   try {
@@ -229,8 +128,9 @@ const fetchAccounts = async () => {
 
 const fetchAnalytics = async () => {
   isLoading.value = true
+  error.value = null
   try {
-    const { from, to } = getDateRange.value
+    const { from, to } = dateRange.value
     const params: {
       analytics_type: MetaAnalyticsType
       start: string
@@ -259,11 +159,12 @@ const fetchAnalytics = async () => {
     const data = envelope?.data || envelope
     analyticsData.value = data.accounts || []
     isCached.value = data.cached || false
-  } catch (error: any) {
-    console.error('Failed to load analytics:', error?.response?.data, error)
-    const errData = error?.response?.data
-    const msg = errData?.data?.message || errData?.message || error?.message || 'Failed to load analytics'
+  } catch (err: any) {
+    console.error('Failed to load analytics:', err?.response?.data, err)
+    const errData = err?.response?.data
+    const msg = errData?.data?.message || errData?.message || err?.message || 'Failed to load analytics'
     toast.error(msg)
+    error.value = t('metaInsights.errorLoadingInsights')
     analyticsData.value = []
   } finally {
     isLoading.value = false
@@ -285,32 +186,28 @@ const refreshCache = async () => {
 }
 
 const applyCustomRange = () => {
-  if (customDateRange.value.start && customDateRange.value.end) {
-    isDatePickerOpen.value = false
-    savePreferences()
-    fetchAnalytics()
-  }
+  applyCustomRangeBase()
+  fetchAnalytics()
 }
 
 watch(selectedRange, (newValue) => {
-  savePreferences()
   if (newValue !== 'custom') {
     fetchAnalytics()
   }
 })
 
 watch(selectedGranularity, () => {
-  savePreferences()
+  saveOtherPreferences()
   fetchAnalytics()
 })
 
 watch(selectedAccountId, () => {
-  savePreferences()
+  saveOtherPreferences()
   fetchAnalytics()
 })
 
 watch(activeTab, () => {
-  savePreferences()
+  saveOtherPreferences()
   fetchAnalytics()
 })
 
@@ -798,38 +695,16 @@ const chartOptions = {
         </Select>
 
         <!-- Time Range Filter -->
-        <Select v-model="selectedRange">
-          <SelectTrigger class="w-[150px]">
-            <SelectValue :placeholder="$t('metaInsights.selectRange')" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="today">{{ $t('metaInsights.today') }}</SelectItem>
-            <SelectItem value="7days">{{ $t('metaInsights.last7Days') }}</SelectItem>
-            <SelectItem value="30days">{{ $t('metaInsights.last30Days') }}</SelectItem>
-            <SelectItem value="this_month">{{ $t('metaInsights.thisMonth') }}</SelectItem>
-            <SelectItem value="custom">{{ $t('metaInsights.customRange') }}</SelectItem>
-          </SelectContent>
-        </Select>
-
-        <Popover v-if="selectedRange === 'custom'" v-model:open="isDatePickerOpen">
-          <PopoverTrigger as-child>
-            <Button variant="outline" class="w-auto">
-              <CalendarIcon class="h-4 w-4 mr-2" />
-              {{ formatDateRange || $t('metaInsights.selectDates') }}
-            </Button>
-          </PopoverTrigger>
-          <PopoverContent class="w-auto p-4" align="end">
-            <div class="space-y-4">
-              <RangeCalendar v-model="customDateRange" :number-of-months="2" />
-              <Button class="w-full" @click="applyCustomRange" :disabled="!customDateRange.start || !customDateRange.end">
-                {{ $t('metaInsights.applyRange') }}
-              </Button>
-            </div>
-          </PopoverContent>
-        </Popover>
+        <DateRangePicker
+          v-model:selected-range="selectedRange"
+          v-model:custom-date-range="customDateRange"
+          v-model:is-date-picker-open="isDatePickerOpen"
+          :format-date-range-display="formatDateRangeDisplay"
+          @apply-custom="applyCustomRange"
+        />
 
         <!-- Refresh Button -->
-        <Button variant="outline" size="icon" @click="refreshCache" :disabled="isRefreshing">
+        <Button variant="outline" size="icon" :aria-label="$t('metaInsights.refreshCache')" @click="refreshCache" :disabled="isRefreshing">
           <RefreshCw :class="['h-4 w-4', isRefreshing && 'animate-spin']" />
         </Button>
 
@@ -843,8 +718,17 @@ const chartOptions = {
     <!-- Content -->
     <ScrollArea class="flex-1">
       <div class="p-6 space-y-6">
+        <!-- Error State -->
+        <ErrorState
+          v-if="error && !isLoading"
+          :title="$t('common.loadErrorTitle')"
+          :description="error"
+          :retry-label="$t('common.retry')"
+          @retry="fetchAnalytics"
+        />
+
         <!-- Analytics Type Tabs -->
-        <Tabs v-model="activeTab" class="w-full">
+        <Tabs v-if="!error" v-model="activeTab" class="w-full">
           <TabsList class="grid w-full grid-cols-4 lg:w-auto lg:inline-flex">
             <TabsTrigger value="analytics">
               <MessageSquare class="h-4 w-4 lg:mr-2" />

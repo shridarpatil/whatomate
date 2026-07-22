@@ -52,7 +52,7 @@ func (q *RedisQueue) EnqueueRecipient(ctx context.Context, job *RecipientJob) er
 
 	_, err = q.client.XAdd(ctx, &redis.XAddArgs{
 		Stream: StreamName,
-		Values: map[string]interface{}{
+		Values: map[string]any{
 			"type":    string(JobTypeRecipient),
 			"payload": string(payload),
 		},
@@ -86,7 +86,7 @@ func (q *RedisQueue) EnqueueRecipients(ctx context.Context, jobs []*RecipientJob
 
 		pipe.XAdd(ctx, &redis.XAddArgs{
 			Stream: StreamName,
-			Values: map[string]interface{}{
+			Values: map[string]any{
 				"type":    string(JobTypeRecipient),
 				"payload": string(payload),
 			},

@@ -8,6 +8,7 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/redis/go-redis/v9"
+	"github.com/shridarpatil/whatomate/internal/assignment"
 	"github.com/shridarpatil/whatomate/internal/calling"
 	"github.com/shridarpatil/whatomate/internal/config"
 	"github.com/shridarpatil/whatomate/internal/queue"
@@ -33,6 +34,8 @@ type App struct {
 	CampaignSubCancel context.CancelFunc
 	// HTTPClient is a shared HTTP client with connection pooling for external API calls
 	HTTPClient *http.Client
+	// Assigner provides shared team-based agent assignment (used by both chat and call transfers)
+	Assigner *assignment.Assigner
 	// CallManager handles WebRTC call sessions (nil when calling is disabled)
 	CallManager *calling.Manager
 	// TTS generates audio from text for IVR greetings (nil when not configured)
@@ -154,7 +157,7 @@ func (a *App) StartCampaignStatsSubscriber() error {
 		// Broadcast to organization via WebSocket
 		a.WSHub.BroadcastToOrg(update.OrganizationID, websocket.WSMessage{
 			Type: websocket.TypeCampaignStatsUpdate,
-			Payload: map[string]interface{}{
+			Payload: map[string]any{
 				"campaign_id":     update.CampaignID,
 				"status":          update.Status,
 				"sent_count":      update.SentCount,
@@ -227,7 +230,7 @@ func (a *App) requirePermission(r *fastglue.Request, userID uuid.UUID, resource,
 
 // decodeRequest decodes a JSON request body into the provided struct.
 // Returns nil on success, otherwise sends a 400 error envelope and returns errEnvelopeSent.
-func (a *App) decodeRequest(r *fastglue.Request, v interface{}) error {
+func (a *App) decodeRequest(r *fastglue.Request, v any) error {
 	if err := r.Decode(v, "json"); err != nil {
 		_ = r.SendErrorEnvelope(fasthttp.StatusBadRequest, "Invalid request body", nil, "")
 		return errEnvelopeSent

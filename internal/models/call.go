@@ -59,6 +59,7 @@ type CallLog struct {
 	ErrorMessage      string        `gorm:"type:text" json:"error_message,omitempty"`
 	RecordingS3Key    string        `gorm:"size:500" json:"recording_s3_key,omitempty"`
 	RecordingDuration int           `gorm:"default:0" json:"recording_duration,omitempty"`
+	RecordingError    string        `gorm:"type:text" json:"recording_error,omitempty"`
 
 	// Relations
 	Contact *Contact `gorm:"foreignKey:ContactID" json:"contact,omitempty"`
@@ -79,12 +80,16 @@ type IVRFlow struct {
 	Description     string    `gorm:"type:text" json:"description"`
 	IsActive        bool      `gorm:"default:true" json:"is_active"`
 	IsCallStart     bool      `gorm:"default:false" json:"is_call_start"`
-	IsOutgoingEnd   bool      `gorm:"default:false" json:"is_outgoing_end"`
-	Menu            JSONB     `gorm:"type:jsonb" json:"menu"`
-	WelcomeAudioURL string    `gorm:"type:text" json:"welcome_audio_url"`
+	IsOutgoingEnd   bool       `gorm:"default:false" json:"is_outgoing_end"`
+	Menu            JSONB      `gorm:"type:jsonb" json:"menu"`
+	WelcomeAudioURL string     `gorm:"type:text" json:"welcome_audio_url"`
+	CreatedByID     *uuid.UUID `gorm:"type:uuid" json:"created_by_id,omitempty"`
+	UpdatedByID     *uuid.UUID `gorm:"type:uuid" json:"updated_by_id,omitempty"`
 
 	// Relations
 	Organization *Organization `gorm:"foreignKey:OrganizationID" json:"organization,omitempty"`
+	CreatedBy    *User         `gorm:"foreignKey:CreatedByID" json:"created_by,omitempty"`
+	UpdatedBy    *User         `gorm:"foreignKey:UpdatedByID" json:"updated_by,omitempty"`
 }
 
 func (IVRFlow) TableName() string {
@@ -121,6 +126,7 @@ type CallTransfer struct {
 	HoldDuration    int                `gorm:"default:0" json:"hold_duration"`
 	TalkDuration    int                `gorm:"default:0" json:"talk_duration"`
 	IVRPath         JSONB              `gorm:"type:jsonb" json:"ivr_path,omitempty"`
+	TriedAgentIDs   JSONBArray         `gorm:"type:jsonb" json:"tried_agent_ids,omitempty"`
 	// Relations
 	CallLog         *CallLog `gorm:"foreignKey:CallLogID" json:"call_log,omitempty"`
 	Contact         *Contact `gorm:"foreignKey:ContactID" json:"contact,omitempty"`

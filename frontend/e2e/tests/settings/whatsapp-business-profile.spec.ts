@@ -32,31 +32,76 @@ test.describe('WhatsApp Business Profile', () => {
             }
         });
 
+        // Mock GET single account (for detail page)
+        await page.route('**/api/accounts/test-acc-id', async route => {
+            if (route.request().method() === 'GET') {
+                await route.fulfill({
+                    status: 200,
+                    contentType: 'application/json',
+                    body: JSON.stringify({
+                        data: {
+                            id: 'test-acc-id',
+                            name: 'Test Account',
+                            phone_id: '123456',
+                            business_id: '789012',
+                            api_version: 'v21.0',
+                            webhook_verify_token: 'abc123',
+                            status: 'active',
+                            has_access_token: true,
+                            has_app_secret: false,
+                            is_default_incoming: false,
+                            is_default_outgoing: false,
+                            auto_read_receipt: false,
+                            created_at: '2026-01-01T00:00:00Z',
+                            updated_at: '2026-01-01T00:00:00Z'
+                        }
+                    })
+                });
+            } else {
+                await route.continue();
+            }
+        });
+
         // Mock GET profile
         await page.route('**/api/accounts/*/business_profile*', async route => {
+            if (route.request().method() === 'GET') {
+                await route.fulfill({
+                    status: 200,
+                    contentType: 'application/json',
+                    body: JSON.stringify({
+                        data: {
+                            about: 'Available',
+                            address: '123 Test St',
+                            description: 'Test Business',
+                            email: 'test@example.com',
+                            vertical: 'PROF_SERVICES',
+                            websites: ['https://example.com'],
+                            profile_picture_url: ''
+                        }
+                    })
+                });
+            } else {
+                await route.continue();
+            }
+        });
+
+        // Mock audit logs
+        await page.route('**/api/audit-logs*', async route => {
             await route.fulfill({
                 status: 200,
                 contentType: 'application/json',
-                body: JSON.stringify({
-                    data: {
-                        about: 'Available',
-                        address: '123 Test St',
-                        description: 'Test Business',
-                        email: 'test@example.com',
-                        vertical: 'PROF_SERVICES',
-                        websites: ['https://example.com'],
-                        profile_picture_url: ''
-                    }
-                })
+                body: JSON.stringify({ data: { audit_logs: [], total: 0 } })
             });
         });
-
-        await accountsPage.goto();
     });
 
-    test('should view business profile dialog', async () => {
-        await accountsPage.expectPageVisible();
-        await accountsPage.openBusinessProfile('Test Account');
+    test('should view business profile dialog', async ({ page }) => {
+        // Navigate to account detail page
+        await page.goto('/settings/accounts/test-acc-id');
+        await page.waitForLoadState('networkidle');
+
+        // Open business profile dialog
+        await accountsPage.openBusinessProfile();
         await accountsPage.expectProfileDialogVisible();
 
         // Verify fields contain mocked data
@@ -65,17 +110,24 @@ test.describe('WhatsApp Business Profile', () => {
     });
 
     test('should update business profile', async ({ page }) => {
-        await accountsPage.openBusinessProfile('Test Account');
+        await page.goto('/settings/accounts/test-acc-id');
+        await page.waitForLoadState('networkidle');
+
+        await accountsPage.openBusinessProfile();
 
         // Mock PUT request
         await page.route('**/api/accounts/*/business_profile', async route => {
-            await route.fulfill({
-                status: 200,
-                contentType: 'application/json',
-                body: JSON.stringify({
-                    data: { success: true }
-                })
-            });
+            if (route.request().method() === 'PUT') {
+                await route.fulfill({
+                    status: 200,
+                    contentType: 'application/json',
+                    body: JSON.stringify({
+                        data: { success: true }
+                    })
+                });
+            } else {
+                await route.continue();
+            }
         });
 
         // Change value

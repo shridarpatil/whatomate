@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, onMounted, watch, computed } from 'vue'
+import { ref, onMounted, computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -9,14 +9,14 @@ import { Label } from '@/components/ui/label'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
-import { PageHeader, DeleteConfirmDialog, DataTable, SearchInput, type Column } from '@/components/shared'
+import { PageHeader, DeleteConfirmDialog, ConfirmDialog, DataTable, SearchInput, IconButton, ErrorState, type Column } from '@/components/shared'
 import FlowBuilder from '@/components/flow-builder/FlowBuilder.vue'
 import { flowsService, accountsService } from '@/services/api'
 import { toast } from 'vue-sonner'
 import { Plus, Pencil, Trash2, Workflow, Play, ExternalLink, Loader2, Archive, RefreshCw, Upload, Copy } from 'lucide-vue-next'
 import { getErrorMessage } from '@/lib/api-utils'
 import { formatDate } from '@/lib/utils'
-import { useDebounceFn } from '@vueuse/core'
+import { useSearchPagination } from '@/composables/useSearchPagination'
 
 const { t } = useI18n()
 
@@ -36,7 +36,7 @@ const flowCategories = [
 const flows = ref<WhatsAppFlow[]>([])
 const accounts = ref<Account[]>([])
 const isLoading = ref(true)
-const searchQuery = ref('')
+const fetchError = ref(false)
 const selectedAccount = ref<string>(localStorage.getItem('flows_selected_account') || 'all')
 
 const showCreateDialog = ref(false)
@@ -48,7 +48,11 @@ const savingToMetaFlowId = ref<string | null>(null)
 const publishingFlowId = ref<string | null>(null)
 const duplicatingFlowId = ref<string | null>(null)
 const deleteDialogOpen = ref(false)
+const publishDialogOpen = ref(false)
+const saveToMetaDialogOpen = ref(false)
 const flowToDelete = ref<WhatsAppFlow | null>(null)
+const flowToPublish = ref<WhatsAppFlow | null>(null)
+const flowToSaveToMeta = ref<WhatsAppFlow | null>(null)
 const flowToEdit = ref<WhatsAppFlow | null>(null)
 
 const formData = ref({ whatsapp_account: '', name: '', category: '', json_version: '6.0' })
@@ -56,10 +60,9 @@ const editFormData = ref({ name: '', category: '', json_version: '6.0' })
 const flowBuilderData = ref<{ screens: any[] }>({ screens: [] })
 const editFlowBuilderData = ref<{ screens: any[] }>({ screens: [] })
 
-// Pagination state
-const currentPage = ref(1)
-const totalItems = ref(0)
-const pageSize = 20
+const { searchQuery, currentPage, totalItems, pageSize, handlePageChange } = useSearchPagination({
+  fetchFn: () => fetchFlows(),
+})
 
 const columns = computed<Column<WhatsAppFlow>[]>(() => [
   { key: 'name', label: t('flows.name'), sortable: true },
@@ -93,6 +96,7 @@ function onAccountChange(value: string | number | bigint | Record<string, any> |
 
 async function fetchFlows() {
   isLoading.value = true
+  fetchError.value = false
   try {
     const response = await flowsService.list({
       account: selectedAccount.value !== 'all' ? selectedAccount.value : undefined,
@@ -103,21 +107,8 @@ async function fetchFlows() {
     const data = (response.data as any).data || response.data
     flows.value = data.flows || []
     totalItems.value = data.total ?? flows.value.length
-  } catch { flows.value = [] }
+  } catch { flows.value = []; fetchError.value = true }
   finally { isLoading.value = false }
-}
-
-// Debounced search
-const debouncedSearch = useDebounceFn(() => {
-  currentPage.value = 1
-  fetchFlows()
-}, 300)
-
-watch(searchQuery, () => debouncedSearch())
-
-function handlePageChange(page: number) {
-  currentPage.value = page
-  fetchFlows()
 }
 
 function openCreateDialog() {
@@ -161,16 +152,28 @@ async function updateFlow() {
   finally { isUpdating.value = false }
 }
 
-async function saveFlowToMeta(flow: WhatsAppFlow) {
-  savingToMetaFlowId.value = flow.id
-  try { await flowsService.saveToMeta(flow.id); toast.success(t('flows.flowSavedToMeta')); await fetchFlows() }
+function openSaveToMetaDialog(flow: WhatsAppFlow) {
+  flowToSaveToMeta.value = flow
+  saveToMetaDialogOpen.value = true
+}
+
+async function confirmSaveToMeta() {
+  if (!flowToSaveToMeta.value) return
+  savingToMetaFlowId.value = flowToSaveToMeta.value.id
+  try { await flowsService.saveToMeta(flowToSaveToMeta.value.id); toast.success(t('flows.flowSavedToMeta')); saveToMetaDialogOpen.value = false; flowToSaveToMeta.value = null; await fetchFlows() }
   catch (e) { toast.error(getErrorMessage(e, t('flows.saveToMetaFailed'))) }
   finally { savingToMetaFlowId.value = null }
 }
 
-async function publishFlow(flow: WhatsAppFlow) {
-  publishingFlowId.value = flow.id
-  try { await flowsService.publish(flow.id); toast.success(t('flows.flowPublished')); await fetchFlows() }
+function openPublishDialog(flow: WhatsAppFlow) {
+  flowToPublish.value = flow
+  publishDialogOpen.value = true
+}
+
+async function confirmPublishFlow() {
+  if (!flowToPublish.value) return
+  publishingFlowId.value = flowToPublish.value.id
+  try { await flowsService.publish(flowToPublish.value.id); toast.success(t('flows.flowPublished')); publishDialogOpen.value = false; flowToPublish.value = null; await fetchFlows() }
   catch (e) { toast.error(getErrorMessage(e, t('flows.publishFailed'))) }
   finally { publishingFlowId.value = null }
 }
@@ -196,6 +199,7 @@ async function syncFlows() {
   finally { isSyncing.value = false }
 }
 
+function openPreviewUrl(url: string) { window.open(url, '_blank') }
 function getStatusClass(status: string): string { return { PUBLISHED: 'border-green-600 text-green-600', DEPRECATED: 'border-destructive text-destructive' }[status] || '' }
 function isFlowDraft(flow: WhatsAppFlow): boolean { return flow.status?.toUpperCase() === 'DRAFT' }
 
@@ -217,7 +221,16 @@ function sanitizeScreensForMeta(screens: any[]): any[] {
       </template>
     </PageHeader>
 
-    <ScrollArea class="flex-1">
+    <ErrorState
+      v-if="fetchError && !isLoading"
+      :title="$t('flows.fetchErrorTitle')"
+      :description="$t('flows.fetchErrorDescription')"
+      :retry-label="$t('common.retry')"
+      class="flex-1"
+      @retry="fetchFlows"
+    />
+
+    <ScrollArea v-else class="flex-1">
       <div class="p-6">
         <div class="max-w-6xl mx-auto">
           <Card>
@@ -275,47 +288,32 @@ function sanitizeScreensForMeta(screens: any[]): any[] {
                 </template>
                 <template #cell-actions="{ item: flow }">
                   <div class="flex items-center justify-end gap-1">
-                    <Button variant="ghost" size="icon" class="h-8 w-8" @click="openEditDialog(flow)" :title="$t('flows.editTooltip')">
-                      <Pencil class="h-4 w-4" />
-                    </Button>
-                    <Button variant="ghost" size="icon" class="h-8 w-8" @click="duplicateFlow(flow)" :disabled="duplicatingFlowId === flow.id" :title="$t('flows.duplicateTooltip')">
-                      <Loader2 v-if="duplicatingFlowId === flow.id" class="h-4 w-4 animate-spin" /><Copy v-else class="h-4 w-4" />
-                    </Button>
-                    <Button v-if="flow.preview_url" variant="ghost" size="icon" class="h-8 w-8" as="a" :href="flow.preview_url" target="_blank" :title="$t('flows.previewTooltip')">
-                      <ExternalLink class="h-4 w-4" />
-                    </Button>
-                    <Button
+                    <IconButton :icon="Pencil" :label="$t('flows.editTooltip')" class="h-8 w-8" @click="openEditDialog(flow)" />
+                    <IconButton :icon="duplicatingFlowId === flow.id ? Loader2 : Copy" :label="$t('flows.duplicateTooltip')" class="h-8 w-8" :disabled="duplicatingFlowId === flow.id" @click="duplicateFlow(flow)" />
+                    <IconButton v-if="flow.preview_url" :icon="ExternalLink" :label="$t('flows.previewTooltip')" class="h-8 w-8" @click="openPreviewUrl(flow.preview_url!)" />
+                    <IconButton
                       v-if="flow.status?.toUpperCase() !== 'DEPRECATED' && (flow.has_local_changes || !flow.meta_flow_id)"
-                      variant="ghost"
-                      size="icon"
+                      :icon="savingToMetaFlowId === flow.id ? Loader2 : Upload"
+                      :label="flow.meta_flow_id ? $t('flows.updateOnMeta') : $t('flows.saveToMeta')"
                       class="h-8 w-8"
-                      @click="saveFlowToMeta(flow)"
                       :disabled="savingToMetaFlowId === flow.id || publishingFlowId === flow.id"
-                      :title="flow.meta_flow_id ? $t('flows.updateOnMeta') : $t('flows.saveToMeta')"
-                    >
-                      <Loader2 v-if="savingToMetaFlowId === flow.id" class="h-4 w-4 animate-spin" /><Upload v-else class="h-4 w-4" />
-                    </Button>
-                    <Button
+                      @click="openSaveToMetaDialog(flow)"
+                    />
+                    <IconButton
                       v-if="isFlowDraft(flow) && flow.meta_flow_id"
-                      variant="ghost"
-                      size="icon"
+                      :icon="publishingFlowId === flow.id ? Loader2 : Play"
+                      :label="$t('flows.publishTooltip')"
                       class="h-8 w-8 text-green-600"
-                      @click="publishFlow(flow)"
                       :disabled="savingToMetaFlowId === flow.id || publishingFlowId === flow.id"
-                      :title="$t('flows.publishTooltip')"
-                    >
-                      <Loader2 v-if="publishingFlowId === flow.id" class="h-4 w-4 animate-spin" /><Play v-else class="h-4 w-4" />
-                    </Button>
-                    <Button
-                      variant="ghost"
-                      size="icon"
+                      @click="openPublishDialog(flow)"
+                    />
+                    <IconButton
+                      :icon="Trash2"
+                      :label="$t('flows.deleteTooltip')"
                       class="h-8 w-8 text-destructive"
-                      @click="flowToDelete = flow; deleteDialogOpen = true"
                       :disabled="flow.status?.toUpperCase() === 'PUBLISHED'"
-                      :title="$t('flows.deleteTooltip')"
-                    >
-                      <Trash2 class="h-4 w-4" />
-                    </Button>
+                      @click="flowToDelete = flow; deleteDialogOpen = true"
+                    />
                   </div>
                 </template>
                 <template #empty-action>
@@ -369,5 +367,24 @@ function sanitizeScreensForMeta(screens: any[]): any[] {
     </Dialog>
 
     <DeleteConfirmDialog v-model:open="deleteDialogOpen" :title="$t('flows.deleteFlow')" :item-name="flowToDelete?.name" @confirm="confirmDeleteFlow" />
+
+    <ConfirmDialog
+      v-model:open="publishDialogOpen"
+      :title="$t('flows.publishConfirmTitle')"
+      :description="$t('flows.publishConfirmDescription', { name: flowToPublish?.name })"
+      :confirm-label="$t('flows.publishTooltip')"
+      variant="destructive"
+      :is-submitting="!!publishingFlowId"
+      @confirm="confirmPublishFlow"
+    />
+
+    <ConfirmDialog
+      v-model:open="saveToMetaDialogOpen"
+      :title="$t('flows.saveToMetaConfirmTitle')"
+      :description="$t('flows.saveToMetaConfirmDescription', { name: flowToSaveToMeta?.name })"
+      :confirm-label="$t('flows.saveToMeta')"
+      :is-submitting="!!savingToMetaFlowId"
+      @confirm="confirmSaveToMeta"
+    />
   </div>
 </template>

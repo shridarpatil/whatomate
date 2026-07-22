@@ -150,3 +150,29 @@ func TestReplaceWithJSONBParams_Empty(t *testing.T) {
 	result := ReplaceWithJSONBParams("Hello {{name}}", "Hello {{name}}", map[string]interface{}{})
 	assert.Equal(t, "Hello {{name}}", result)
 }
+
+func TestValidateNoMixedParams_PositionalOnly(t *testing.T) {
+	err := ValidateNoMixedParams("Hello {{1}}, your order {{2}} is ready!")
+	assert.NoError(t, err)
+}
+
+func TestValidateNoMixedParams_NamedOnly(t *testing.T) {
+	err := ValidateNoMixedParams("Hello {{name}}, your order {{order_id}} is ready!")
+	assert.NoError(t, err)
+}
+
+func TestValidateNoMixedParams_Mixed(t *testing.T) {
+	err := ValidateNoMixedParams("Hello {{1}}, your order {{order_id}} is ready!")
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "cannot mix positional")
+}
+
+func TestValidateNoMixedParams_NoParams(t *testing.T) {
+	err := ValidateNoMixedParams("Hello, your order is ready!")
+	assert.NoError(t, err)
+}
+
+func TestValidateNoMixedParams_Empty(t *testing.T) {
+	err := ValidateNoMixedParams("")
+	assert.NoError(t, err)
+}

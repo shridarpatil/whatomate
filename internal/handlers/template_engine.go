@@ -25,9 +25,9 @@ var (
 const maxLoopIterations = 50
 
 // processTemplate processes a template string with variables, conditionals, and loops
-func processTemplate(template string, data map[string]interface{}) string {
+func processTemplate(template string, data map[string]any) string {
 	if data == nil {
-		data = make(map[string]interface{})
+		data = make(map[string]any)
 	}
 
 	result := template
@@ -45,7 +45,7 @@ func processTemplate(template string, data map[string]interface{}) string {
 }
 
 // processForLoops handles {{for item in items}}...{{endfor}} blocks
-func processForLoops(template string, data map[string]interface{}) string {
+func processForLoops(template string, data map[string]any) string {
 	result := template
 
 	for {
@@ -67,7 +67,7 @@ func processForLoops(template string, data map[string]interface{}) string {
 
 		// Process each item in the array
 		switch arr := arrayValue.(type) {
-		case []interface{}:
+		case []any:
 			iterations := len(arr)
 			if iterations > maxLoopIterations {
 				iterations = maxLoopIterations
@@ -84,7 +84,7 @@ func processForLoops(template string, data map[string]interface{}) string {
 				output.WriteString(processedBody)
 			}
 
-		case []map[string]interface{}:
+		case []map[string]any:
 			iterations := len(arr)
 			if iterations > maxLoopIterations {
 				iterations = maxLoopIterations
@@ -111,7 +111,7 @@ func processForLoops(template string, data map[string]interface{}) string {
 }
 
 // processConditionals handles {{if condition}}...{{else}}...{{endif}} blocks
-func processConditionals(template string, data map[string]interface{}) string {
+func processConditionals(template string, data map[string]any) string {
 	result := template
 
 	for {
@@ -150,7 +150,7 @@ func processConditionals(template string, data map[string]interface{}) string {
 }
 
 // processVariables replaces {{variable}} and {{object.path}} with values
-func processVariables(template string, data map[string]interface{}) string {
+func processVariables(template string, data map[string]any) string {
 	return variablePattern.ReplaceAllStringFunc(template, func(match string) string {
 		// Remove {{ and }}
 		path := match[2 : len(match)-2]
@@ -162,13 +162,13 @@ func processVariables(template string, data map[string]interface{}) string {
 
 // getNestedValue extracts a value from nested maps/arrays using dot notation
 // Supports: "name", "user.profile.name", "items[0].name", "data.items[2].value"
-func getNestedValue(data map[string]interface{}, path string) interface{} {
+func getNestedValue(data map[string]any, path string) any {
 	if data == nil || path == "" {
 		return nil
 	}
 
 	parts := splitPath(path)
-	var current interface{} = data
+	var current any = data
 
 	for _, part := range parts {
 		if current == nil {
@@ -187,7 +187,7 @@ func getNestedValue(data map[string]interface{}, path string) interface{} {
 			// Get the field first
 			if field != "" {
 				switch v := current.(type) {
-				case map[string]interface{}:
+				case map[string]any:
 					current = v[field]
 				default:
 					return nil
@@ -196,13 +196,13 @@ func getNestedValue(data map[string]interface{}, path string) interface{} {
 
 			// Then index into the array
 			switch arr := current.(type) {
-			case []interface{}:
+			case []any:
 				if index >= 0 && index < len(arr) {
 					current = arr[index]
 				} else {
 					return nil
 				}
-			case []map[string]interface{}:
+			case []map[string]any:
 				if index >= 0 && index < len(arr) {
 					current = arr[index]
 				} else {
@@ -214,7 +214,7 @@ func getNestedValue(data map[string]interface{}, path string) interface{} {
 		} else {
 			// Regular field access
 			switch v := current.(type) {
-			case map[string]interface{}:
+			case map[string]any:
 				current = v[part]
 			default:
 				return nil
@@ -266,7 +266,7 @@ func splitPath(path string) []string {
 // evaluateCondition evaluates a condition string against data
 // Supports: "variable" (truthy), "variable == 'value'", "variable != 'value'",
 // "variable > 100", "variable < 100", "variable >= 100", "variable <= 100"
-func evaluateCondition(condition string, data map[string]interface{}) bool {
+func evaluateCondition(condition string, data map[string]any) bool {
 	condition = strings.TrimSpace(condition)
 
 	// Parse the condition
@@ -315,7 +315,7 @@ func evaluateCondition(condition string, data map[string]interface{}) bool {
 }
 
 // isTruthy checks if a value is "truthy"
-func isTruthy(value interface{}) bool {
+func isTruthy(value any) bool {
 	if value == nil {
 		return false
 	}
@@ -331,11 +331,11 @@ func isTruthy(value interface{}) bool {
 		return v != 0
 	case float64:
 		return v != 0
-	case []interface{}:
+	case []any:
 		return len(v) > 0
-	case []map[string]interface{}:
+	case []map[string]any:
 		return len(v) > 0
-	case map[string]interface{}:
+	case map[string]any:
 		return len(v) > 0
 	}
 
@@ -343,7 +343,7 @@ func isTruthy(value interface{}) bool {
 }
 
 // compareEqual compares a value with a string for equality
-func compareEqual(value interface{}, compareValue string) bool {
+func compareEqual(value any, compareValue string) bool {
 	if value == nil {
 		return compareValue == "" || compareValue == "null" || compareValue == "nil"
 	}
@@ -370,7 +370,7 @@ func compareEqual(value interface{}, compareValue string) bool {
 
 // compareNumeric compares a value with a string numerically
 // Returns: -1 if value < compare, 0 if equal, 1 if value > compare
-func compareNumeric(value interface{}, compareValue string) int {
+func compareNumeric(value any, compareValue string) int {
 	// Convert value to float64
 	var numValue float64
 	switch v := value.(type) {
@@ -405,7 +405,7 @@ func compareNumeric(value interface{}, compareValue string) int {
 }
 
 // formatValue converts a value to a string for template output
-func formatValue(value interface{}) string {
+func formatValue(value any) string {
 	if value == nil {
 		return ""
 	}
@@ -434,8 +434,8 @@ func formatValue(value interface{}) string {
 }
 
 // copyMap creates a shallow copy of a map
-func copyMap(m map[string]interface{}) map[string]interface{} {
-	result := make(map[string]interface{}, len(m))
+func copyMap(m map[string]any) map[string]any {
+	result := make(map[string]any, len(m))
 	for k, v := range m {
 		result[k] = v
 	}
@@ -443,8 +443,8 @@ func copyMap(m map[string]interface{}) map[string]interface{} {
 }
 
 // extractResponseMapping extracts values from API response and maps them to session variables
-func extractResponseMapping(responseData map[string]interface{}, mapping map[string]string) map[string]interface{} {
-	result := make(map[string]interface{})
+func extractResponseMapping(responseData map[string]any, mapping map[string]string) map[string]any {
+	result := make(map[string]any)
 
 	for varName, jsonPath := range mapping {
 		value := getNestedValue(responseData, jsonPath)

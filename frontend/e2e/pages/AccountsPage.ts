@@ -2,20 +2,20 @@ import { Page, Locator, expect } from '@playwright/test'
 import { BasePage } from './BasePage'
 
 /**
- * Accounts Page - WhatsApp accounts management
+ * Accounts Page - WhatsApp accounts management (DataTable + Detail Page)
  */
 export class AccountsPage extends BasePage {
   readonly heading: Locator
   readonly addButton: Locator
-  readonly dialog: Locator
   readonly alertDialog: Locator
+  readonly tableBody: Locator
 
   constructor(page: Page) {
     super(page)
     this.heading = page.locator('h1').filter({ hasText: 'WhatsApp Accounts' })
-    this.addButton = page.getByRole('button', { name: /Add Account/i }).first()
-    this.dialog = page.locator('[role="dialog"][data-state="open"]')
+    this.addButton = page.locator('a[href="/settings/accounts/new"] button').first()
     this.alertDialog = page.locator('[role="alertdialog"]')
+    this.tableBody = page.locator('tbody')
   }
 
   get profileDialog() {
@@ -27,82 +27,63 @@ export class AccountsPage extends BasePage {
     await this.page.waitForLoadState('networkidle')
   }
 
-  async openCreateDialog() {
+  async navigateToCreate() {
     await this.addButton.click()
-    await this.dialog.waitFor({ state: 'visible' })
+    await this.page.waitForLoadState('networkidle')
   }
 
-  // Form helpers
+  async navigateToAccount(name: string) {
+    const row = this.page.locator('tr').filter({ hasText: name })
+    await row.locator('a').first().click()
+    await this.page.waitForLoadState('networkidle')
+  }
+
+  // Detail page form helpers
   async fillAccountForm(options: {
     name: string
     phoneId: string
     businessId: string
     accessToken: string
-    verifyToken?: string
   }) {
-    await this.dialog.locator('input#name').fill(options.name)
-    await this.dialog.locator('input#phone_id').fill(options.phoneId)
-    await this.dialog.locator('input#business_id').fill(options.businessId)
-    await this.dialog.locator('input#access_token').fill(options.accessToken)
+    // On detail page, fields are inside Card components
+    const inputs = this.page.locator('input')
+    // Name is the first input
+    await inputs.first().fill(options.name)
 
-    if (options.verifyToken) {
-      await this.dialog.locator('input#verify_token').fill(options.verifyToken)
-    }
+    // Find by label
+    const phoneInput = this.page.locator('input').nth(2) // After name and app_id
+    await phoneInput.fill(options.phoneId)
+
+    const businessInput = this.page.locator('input').nth(3)
+    await businessInput.fill(options.businessId)
+
+    // Access token is a password field
+    const tokenInput = this.page.locator('input[type="password"]').first()
+    await tokenInput.fill(options.accessToken)
   }
 
-  async submitDialog(buttonText = 'Create') {
-    // Button text is "Create Account" or "Update Account"
-    await this.dialog.getByRole('button', { name: new RegExp(`${buttonText}`, 'i') }).click()
-  }
-
-  async cancelDialog() {
-    await this.dialog.getByRole('button', { name: /Cancel/i }).click()
-    await this.dialog.waitFor({ state: 'hidden' })
-  }
-
-  // Card helpers
-  getAccountCard(name: string): Locator {
-    return this.page.locator('.account-card').filter({ hasText: name })
-  }
-
-  async editAccount(name: string) {
-    const card = this.getAccountCard(name)
-    await expect(card).toBeVisible({ timeout: 10000 })
-    // Edit button is the first icon-only button (svg.h-4 without span text)
-    const iconButtons = card.locator('button:has(svg.h-4)').filter({ hasNot: this.page.locator('span') })
-    await iconButtons.first().click()
-    await this.dialog.waitFor({ state: 'visible' })
+  async saveAccount() {
+    await this.page.getByRole('button', { name: /Create|Save/i }).first().click()
+    await this.page.waitForLoadState('networkidle')
   }
 
   async deleteAccount(name: string) {
-    const card = this.getAccountCard(name)
-    await expect(card).toBeVisible({ timeout: 10000 })
-    // Delete button has svg with text-destructive class
-    await card.locator('button').filter({ has: this.page.locator('svg.text-destructive') }).click()
+    const row = this.page.locator('tr').filter({ hasText: name })
+    await row.locator('button').filter({ has: this.page.locator('svg.text-destructive') }).click()
     await this.alertDialog.waitFor({ state: 'visible' })
   }
 
-  async openBusinessProfile(name: string) {
-    const card = this.getAccountCard(name)
-    await expect(card).toBeVisible({ timeout: 10000 })
-    // Profile button has svg with text-emerald-500 class
-    await card.locator('button').filter({ has: this.page.locator('svg.text-emerald-500') }).click()
+  async testConnection() {
+    await this.page.getByRole('button', { name: /Test/i }).click()
+  }
+
+  async subscribeApp() {
+    await this.page.getByRole('button', { name: /Subscribe/i }).click()
+  }
+
+  async openBusinessProfile() {
+    await this.page.getByRole('button', { name: /Profile/i }).click()
     await this.profileDialog.waitFor({ state: 'visible' })
-  }
-
-  async testConnection(name: string) {
-    const card = this.getAccountCard(name)
-    await card.getByRole('button', { name: /Test/i }).click()
-  }
-
-  async subscribeApp(name: string) {
-    const card = this.getAccountCard(name)
-    await card.getByRole('button', { name: /Subscribe/i }).click()
-  }
-
-  async copyWebhookUrl(name: string) {
-    const card = this.getAccountCard(name)
-    await card.locator('button[title*="Copy"]').first().click()
   }
 
   async confirmDelete() {
@@ -122,22 +103,9 @@ export class AccountsPage extends BasePage {
     return toast
   }
 
-  async dismissToast(text?: string | RegExp) {
-    const toast = text
-      ? this.page.locator('[data-sonner-toast]').filter({ hasText: text })
-      : this.page.locator('[data-sonner-toast]').first()
-    if (await toast.isVisible()) {
-      await toast.click()
-    }
-  }
-
   // Assertions
   async expectPageVisible() {
     await expect(this.heading).toBeVisible()
-  }
-
-  async expectDialogVisible() {
-    await expect(this.dialog).toBeVisible()
   }
 
   async expectProfileDialogVisible() {
@@ -146,16 +114,12 @@ export class AccountsPage extends BasePage {
     await expect(this.profileDialog.locator('textarea#description')).toBeVisible()
   }
 
-  async expectDialogHidden() {
-    await expect(this.dialog).not.toBeVisible()
-  }
-
   async expectAccountExists(name: string) {
-    await expect(this.getAccountCard(name)).toBeVisible()
+    await expect(this.page.locator('tr').filter({ hasText: name })).toBeVisible()
   }
 
   async expectAccountNotExists(name: string) {
-    await expect(this.getAccountCard(name)).not.toBeVisible()
+    await expect(this.page.locator('tr').filter({ hasText: name })).not.toBeVisible()
   }
 
   async expectEmptyState() {

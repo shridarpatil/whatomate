@@ -20,7 +20,7 @@ import (
 type OutboundWebhookPayload struct {
 	Event     string      `json:"event"`
 	Timestamp time.Time   `json:"timestamp"`
-	Data      interface{} `json:"data"`
+	Data      any `json:"data"`
 }
 
 // MessageEventData represents data for message events
@@ -61,7 +61,7 @@ type TransferEventData struct {
 const maxConcurrentWebhooks = 10
 
 // DispatchWebhook sends an event to all matching webhooks for the organization
-func (a *App) DispatchWebhook(orgID uuid.UUID, eventType models.WebhookEvent, data interface{}) {
+func (a *App) DispatchWebhook(orgID uuid.UUID, eventType models.WebhookEvent, data any) {
 	a.wg.Add(1)
 	go func() {
 		defer a.wg.Done()
@@ -72,7 +72,7 @@ func (a *App) DispatchWebhook(orgID uuid.UUID, eventType models.WebhookEvent, da
 	}()
 }
 
-func (a *App) dispatchWebhookAsync(ctx context.Context, orgID uuid.UUID, eventType string, data interface{}) {
+func (a *App) dispatchWebhookAsync(ctx context.Context, orgID uuid.UUID, eventType string, data any) {
 	// Find all active webhooks for this org that subscribe to this event (use cache)
 	webhooks, err := a.getWebhooksCached(orgID)
 	if err != nil {
@@ -118,7 +118,7 @@ func containsEvent(events models.StringArray, event string) bool {
 	return false
 }
 
-func (a *App) sendWebhook(ctx context.Context, webhook models.Webhook, eventType string, data interface{}) {
+func (a *App) sendWebhook(ctx context.Context, webhook models.Webhook, eventType string, data any) {
 	payload := OutboundWebhookPayload{
 		Event:     eventType,
 		Timestamp: time.Now().UTC(),

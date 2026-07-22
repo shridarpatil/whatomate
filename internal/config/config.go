@@ -42,7 +42,8 @@ type CallingConfig struct {
 	MaxCallDuration     int              `koanf:"max_call_duration"`
 	AudioDir            string           `koanf:"audio_dir"`
 	HoldMusicFile       string           `koanf:"hold_music_file"`
-	TransferTimeoutSecs int              `koanf:"transfer_timeout_secs"`
+	TransferTimeoutSecs  int              `koanf:"transfer_timeout_secs"`
+	PerAgentTimeoutSecs  int              `koanf:"per_agent_timeout_secs"`
 	RingbackFile        string           `koanf:"ringback_file"`
 	UDPPortMin          uint16           `koanf:"udp_port_min"`  // WebRTC UDP port range start (default: 10000)
 	UDPPortMax          uint16           `koanf:"udp_port_max"`  // WebRTC UDP port range end (default: 10100)

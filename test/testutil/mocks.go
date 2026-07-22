@@ -27,11 +27,11 @@ type MockWhatsAppClient struct {
 	SentMessages []MockSentMessage
 
 	// Configurable behavior
-	SendTextMessageFunc        func(ctx context.Context, account *whatsapp.Account, phone, text string) (string, error)
-	SendInteractiveButtonsFunc func(ctx context.Context, account *whatsapp.Account, phone, body string, buttons []whatsapp.Button) (string, error)
-	SendTemplateMessageFunc    func(ctx context.Context, account *whatsapp.Account, phone, template, lang string, components []map[string]interface{}) (string, error)
-	SendImageMessageFunc       func(ctx context.Context, account *whatsapp.Account, phone, mediaID, caption string) (string, error)
-	SendDocumentMessageFunc    func(ctx context.Context, account *whatsapp.Account, phone, mediaID, filename, caption string) (string, error)
+	SendTextMessageFunc        func(ctx context.Context, account *whatsapp.Account, rcpt whatsapp.Recipient, text string) (string, error)
+	SendInteractiveButtonsFunc func(ctx context.Context, account *whatsapp.Account, rcpt whatsapp.Recipient, body string, buttons []whatsapp.Button) (string, error)
+	SendTemplateMessageFunc    func(ctx context.Context, account *whatsapp.Account, rcpt whatsapp.Recipient, template, lang string, components []map[string]interface{}) (string, error)
+	SendImageMessageFunc       func(ctx context.Context, account *whatsapp.Account, rcpt whatsapp.Recipient, mediaID, caption string) (string, error)
+	SendDocumentMessageFunc    func(ctx context.Context, account *whatsapp.Account, rcpt whatsapp.Recipient, mediaID, filename, caption string) (string, error)
 	MarkMessageReadFunc        func(ctx context.Context, account *whatsapp.Account, messageID string) error
 	GetMediaURLFunc            func(ctx context.Context, mediaID string, account *whatsapp.Account) (string, error)
 	DownloadMediaFunc          func(ctx context.Context, mediaURL, accessToken string) ([]byte, error)
@@ -57,7 +57,7 @@ func (m *MockWhatsAppClient) nextMessageID() string {
 }
 
 // SendTextMessage mocks sending a text message.
-func (m *MockWhatsAppClient) SendTextMessage(ctx context.Context, account *whatsapp.Account, phone, text string) (string, error) {
+func (m *MockWhatsAppClient) SendTextMessage(ctx context.Context, account *whatsapp.Account, rcpt whatsapp.Recipient, text string) (string, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
@@ -68,20 +68,20 @@ func (m *MockWhatsAppClient) SendTextMessage(ctx context.Context, account *whats
 	msgID := m.nextMessageID()
 	m.SentMessages = append(m.SentMessages, MockSentMessage{
 		Type:        "text",
-		PhoneNumber: phone,
+		PhoneNumber: rcpt.Phone,
 		Content:     text,
 		Account:     account,
 		MessageID:   msgID,
 	})
 
 	if m.SendTextMessageFunc != nil {
-		return m.SendTextMessageFunc(ctx, account, phone, text)
+		return m.SendTextMessageFunc(ctx, account, rcpt, text)
 	}
 	return msgID, nil
 }
 
 // SendInteractiveButtons mocks sending an interactive message.
-func (m *MockWhatsAppClient) SendInteractiveButtons(ctx context.Context, account *whatsapp.Account, phone, body string, buttons []whatsapp.Button) (string, error) {
+func (m *MockWhatsAppClient) SendInteractiveButtons(ctx context.Context, account *whatsapp.Account, rcpt whatsapp.Recipient, body string, buttons []whatsapp.Button) (string, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
@@ -92,20 +92,20 @@ func (m *MockWhatsAppClient) SendInteractiveButtons(ctx context.Context, account
 	msgID := m.nextMessageID()
 	m.SentMessages = append(m.SentMessages, MockSentMessage{
 		Type:        "interactive",
-		PhoneNumber: phone,
+		PhoneNumber: rcpt.Phone,
 		Content:     map[string]interface{}{"body": body, "buttons": buttons},
 		Account:     account,
 		MessageID:   msgID,
 	})
 
 	if m.SendInteractiveButtonsFunc != nil {
-		return m.SendInteractiveButtonsFunc(ctx, account, phone, body, buttons)
+		return m.SendInteractiveButtonsFunc(ctx, account, rcpt, body, buttons)
 	}
 	return msgID, nil
 }
 
 // SendTemplateMessage mocks sending a template message.
-func (m *MockWhatsAppClient) SendTemplateMessage(ctx context.Context, account *whatsapp.Account, phone, template, lang string, components []map[string]interface{}) (string, error) {
+func (m *MockWhatsAppClient) SendTemplateMessage(ctx context.Context, account *whatsapp.Account, rcpt whatsapp.Recipient, template, lang string, components []map[string]interface{}) (string, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
@@ -116,7 +116,7 @@ func (m *MockWhatsAppClient) SendTemplateMessage(ctx context.Context, account *w
 	msgID := m.nextMessageID()
 	m.SentMessages = append(m.SentMessages, MockSentMessage{
 		Type:        "template",
-		PhoneNumber: phone,
+		PhoneNumber: rcpt.Phone,
 		Content:     map[string]interface{}{"template": template, "lang": lang, "components": components},
 		Account:     account,
 		TemplateID:  template,
@@ -124,13 +124,13 @@ func (m *MockWhatsAppClient) SendTemplateMessage(ctx context.Context, account *w
 	})
 
 	if m.SendTemplateMessageFunc != nil {
-		return m.SendTemplateMessageFunc(ctx, account, phone, template, lang, components)
+		return m.SendTemplateMessageFunc(ctx, account, rcpt, template, lang, components)
 	}
 	return msgID, nil
 }
 
 // SendImageMessage mocks sending an image message.
-func (m *MockWhatsAppClient) SendImageMessage(ctx context.Context, account *whatsapp.Account, phone, mediaID, caption string) (string, error) {
+func (m *MockWhatsAppClient) SendImageMessage(ctx context.Context, account *whatsapp.Account, rcpt whatsapp.Recipient, mediaID, caption string) (string, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
@@ -141,20 +141,20 @@ func (m *MockWhatsAppClient) SendImageMessage(ctx context.Context, account *what
 	msgID := m.nextMessageID()
 	m.SentMessages = append(m.SentMessages, MockSentMessage{
 		Type:        "image",
-		PhoneNumber: phone,
+		PhoneNumber: rcpt.Phone,
 		Content:     map[string]interface{}{"media_id": mediaID, "caption": caption},
 		Account:     account,
 		MessageID:   msgID,
 	})
 
 	if m.SendImageMessageFunc != nil {
-		return m.SendImageMessageFunc(ctx, account, phone, mediaID, caption)
+		return m.SendImageMessageFunc(ctx, account, rcpt, mediaID, caption)
 	}
 	return msgID, nil
 }
 
 // SendDocumentMessage mocks sending a document message.
-func (m *MockWhatsAppClient) SendDocumentMessage(ctx context.Context, account *whatsapp.Account, phone, mediaID, filename, caption string) (string, error) {
+func (m *MockWhatsAppClient) SendDocumentMessage(ctx context.Context, account *whatsapp.Account, rcpt whatsapp.Recipient, mediaID, filename, caption string) (string, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
@@ -165,14 +165,14 @@ func (m *MockWhatsAppClient) SendDocumentMessage(ctx context.Context, account *w
 	msgID := m.nextMessageID()
 	m.SentMessages = append(m.SentMessages, MockSentMessage{
 		Type:        "document",
-		PhoneNumber: phone,
+		PhoneNumber: rcpt.Phone,
 		Content:     map[string]interface{}{"media_id": mediaID, "filename": filename, "caption": caption},
 		Account:     account,
 		MessageID:   msgID,
 	})
 
 	if m.SendDocumentMessageFunc != nil {
-		return m.SendDocumentMessageFunc(ctx, account, phone, mediaID, filename, caption)
+		return m.SendDocumentMessageFunc(ctx, account, rcpt, mediaID, filename, caption)
 	}
 	return msgID, nil
 }

@@ -69,7 +69,7 @@ func TestNewRedis_ConnectsWithDefaultOptions(t *testing.T) {
 	client, err := database.NewRedis(cfg)
 	require.NoError(t, err, "NewRedis should connect successfully")
 	require.NotNil(t, client)
-	defer client.Close()
+	defer client.Close() //nolint:errcheck
 }
 
 func TestNewRedis_EmptyUsernameUsesDefaultUser(t *testing.T) {
@@ -79,7 +79,7 @@ func TestNewRedis_EmptyUsernameUsesDefaultUser(t *testing.T) {
 	client, err := database.NewRedis(cfg)
 	require.NoError(t, err, "empty username should connect using the default ACL user")
 	require.NotNil(t, client)
-	defer client.Close()
+	defer client.Close() //nolint:errcheck
 }
 
 func TestNewRedis_TLSFalseDoesNotSetTLSConfig(t *testing.T) {
@@ -89,7 +89,7 @@ func TestNewRedis_TLSFalseDoesNotSetTLSConfig(t *testing.T) {
 	client, err := database.NewRedis(cfg)
 	require.NoError(t, err)
 	require.NotNil(t, client)
-	defer client.Close()
+	defer client.Close() //nolint:errcheck
 
 	// Connection must still be usable (PING succeeds)
 	ctx := t.Context()

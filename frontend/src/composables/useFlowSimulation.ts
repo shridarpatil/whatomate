@@ -58,6 +58,7 @@ export function useFlowSimulation(
   const expectedInputType = computed(() => {
     if (!currentStep.value) return null
     if (currentStep.value.message_type === 'buttons') return 'button'
+    if (currentStep.value.message_type === 'whatsapp_flow') return 'whatsapp_flow'
     if (currentStep.value.input_type !== 'none') return currentStep.value.input_type
     return null
   })
@@ -144,15 +145,6 @@ export function useFlowSimulation(
   async function processStep(step: FlowStep): Promise<void> {
     log('step_enter', step.step_name, { messageType: step.message_type, inputType: step.input_type })
 
-    // Save snapshot before processing (for undo)
-    saveSnapshot(
-      state.currentStepIndex!,
-      step.step_name,
-      state.variables,
-      state.messages,
-      state.currentRetryCount
-    )
-
     // Check skip condition
     if (step.skip_condition && step.skip_condition.trim()) {
       const shouldSkip = evaluateCondition(step.skip_condition, state.variables)
@@ -189,6 +181,15 @@ export function useFlowSimulation(
 
     // Handle transfer type
     if (step.message_type === 'transfer') {
+      // Save snapshot before completing so user can undo back
+      saveSnapshot(
+        state.currentStepIndex!,
+        step.step_name,
+        state.variables,
+        state.messages,
+        state.currentRetryCount
+      )
+
       const teamName = step.transfer_config.team_id === '_general'
         ? 'General Queue'
         : step.transfer_config.team_id || 'Team'
@@ -204,9 +205,28 @@ export function useFlowSimulation(
 
     if (needsInput) {
       state.status = 'waiting_input'
+      // Save snapshot after bot message is shown, before user replies (for undo)
+      saveSnapshot(
+        state.currentStepIndex!,
+        step.step_name,
+        state.variables,
+        state.messages,
+        state.currentRetryCount
+      )
     } else {
+      // Save snapshot before auto-advancing (for undo)
+      saveSnapshot(
+        state.currentStepIndex!,
+        step.step_name,
+        state.variables,
+        state.messages,
+        state.currentRetryCount
+      )
+      // Check if paused before auto-advancing
+      if (state.status === 'paused') return
       // Auto-advance after short delay
       await delay(500)
+      if ((state.status as string) === 'paused' || state.status === 'completed') return
       await moveToNextStep(step)
     }
   }
@@ -371,6 +391,15 @@ export function useFlowSimulation(
 
   // Complete flow
   function completeFlow(): void {
+    // Save snapshot before completing so user can undo back
+    saveSnapshot(
+      state.currentStepIndex!,
+      state.currentStepName || '',
+      state.variables,
+      state.messages,
+      state.currentRetryCount
+    )
+
     if (flowData.value.completion_message) {
       addMessage('bot', flowData.value.completion_message)
     }
@@ -439,9 +468,11 @@ export function useFlowSimulation(
 
   // Step forward (for debugging)
   async function stepForward(): Promise<void> {
-    if (state.status === 'paused' && currentStep.value) {
+    if ((state.status === 'paused' || state.status === 'running') && currentStep.value) {
+      const step = currentStep.value
       state.status = 'running'
-      await moveToNextStep(currentStep.value)
+      await moveToNextStep(step)
+      // Pause after advancing one step (unless completed/error)
       if (state.status === 'running') {
         state.status = 'paused'
       }

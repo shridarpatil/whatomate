@@ -15,6 +15,10 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog'
 import { Plus, Pencil, Trash2, Phone, RefreshCw } from 'lucide-vue-next'
 import { toast } from 'vue-sonner'
+import ConfirmDialog from '@/components/shared/ConfirmDialog.vue'
+import DeleteConfirmDialog from '@/components/shared/DeleteConfirmDialog.vue'
+import IconButton from '@/components/shared/IconButton.vue'
+import ErrorState from '@/components/shared/ErrorState.vue'
 
 const { t } = useI18n()
 const router = useRouter()
@@ -24,7 +28,14 @@ const accounts = ref<{ name: string }[]>([])
 const showCreateDialog = ref(false)
 const showDeleteConfirm = ref(false)
 const deletingFlow = ref<IVRFlow | null>(null)
+const deleting = ref(false)
 const saving = ref(false)
+const fetchError = ref(false)
+
+// Toggle confirmation state
+const showToggleActiveConfirm = ref(false)
+const showToggleCallStartConfirm = ref(false)
+const togglingFlow = ref<IVRFlow | null>(null)
 
 // Create form state
 const createForm = ref({
@@ -96,6 +107,7 @@ async function createFlow() {
 
 async function deleteFlow() {
   if (!deletingFlow.value) return
+  deleting.value = true
   try {
     await store.deleteIVRFlow(deletingFlow.value.id)
     toast.success(t('calling.flowDeleted'))
@@ -103,10 +115,19 @@ async function deleteFlow() {
     deletingFlow.value = null
   } catch {
     toast.error(t('calling.flowDeleteFailed'))
+  } finally {
+    deleting.value = false
   }
 }
 
-async function toggleActive(flow: IVRFlow) {
+function confirmToggleActive(flow: IVRFlow) {
+  togglingFlow.value = flow
+  showToggleActiveConfirm.value = true
+}
+
+async function toggleActive() {
+  const flow = togglingFlow.value
+  if (!flow) return
   try {
     await store.updateIVRFlow(flow.id, {
       is_active: !flow.is_active,
@@ -116,10 +137,20 @@ async function toggleActive(flow: IVRFlow) {
     store.fetchIVRFlows()
   } catch {
     toast.error(t('calling.flowSaveFailed'))
+  } finally {
+    showToggleActiveConfirm.value = false
+    togglingFlow.value = null
   }
 }
 
-async function toggleCallStart(flow: IVRFlow) {
+function confirmToggleCallStart(flow: IVRFlow) {
+  togglingFlow.value = flow
+  showToggleCallStartConfirm.value = true
+}
+
+async function toggleCallStart() {
+  const flow = togglingFlow.value
+  if (!flow) return
   try {
     await store.updateIVRFlow(flow.id, {
       is_active: flow.is_active,
@@ -129,11 +160,23 @@ async function toggleCallStart(flow: IVRFlow) {
     store.fetchIVRFlows()
   } catch {
     toast.error(t('calling.flowSaveFailed'))
+  } finally {
+    showToggleCallStartConfirm.value = false
+    togglingFlow.value = null
+  }
+}
+
+async function loadFlows() {
+  fetchError.value = false
+  try {
+    await store.fetchIVRFlows()
+  } catch {
+    fetchError.value = true
   }
 }
 
 onMounted(async () => {
-  store.fetchIVRFlows()
+  loadFlows()
   try {
     const res = await accountsService.list()
     const data = res.data as any
@@ -152,7 +195,7 @@ onMounted(async () => {
         <p class="text-muted-foreground">{{ t('calling.ivrFlowsDesc') }}</p>
       </div>
       <div class="flex gap-2">
-        <Button variant="outline" size="sm" @click="store.fetchIVRFlows()">
+        <Button variant="outline" size="sm" @click="loadFlows()">
           <RefreshCw class="h-4 w-4 mr-2" />
           {{ t('common.refresh') }}
         </Button>
@@ -163,8 +206,17 @@ onMounted(async () => {
       </div>
     </div>
 
+    <!-- Fetch Error -->
+    <ErrorState
+      v-if="fetchError"
+      :title="t('common.error')"
+      :description="t('common.failedLoad', { resource: t('calling.ivrFlows') })"
+      :retry-label="t('common.retry')"
+      @retry="loadFlows"
+    />
+
     <!-- Flows Table -->
-    <Card>
+    <Card v-if="!fetchError">
       <CardContent class="pt-6">
         <Table>
           <TableHeader>
@@ -179,8 +231,8 @@ onMounted(async () => {
           <TableBody>
             <TableRow v-for="flow in store.ivrFlows" :key="flow.id">
               <TableCell>
-                <div>
-                  <p class="font-medium">{{ flow.name }}</p>
+                <div class="cursor-pointer" @click="openEdit(flow)">
+                  <p class="font-medium hover:opacity-80">{{ flow.name }}</p>
                   <p v-if="flow.description" class="text-sm text-muted-foreground">{{ flow.description }}</p>
                 </div>
               </TableCell>
@@ -190,7 +242,11 @@ onMounted(async () => {
                   <Badge
                     :variant="flow.is_active ? 'default' : 'destructive'"
                     class="cursor-pointer"
-                    @click="toggleActive(flow)"
+                    role="button"
+                    tabindex="0"
+                    :aria-label="flow.is_active ? t('calling.toggleActiveAriaDisable', { name: flow.name }) : t('calling.toggleActiveAriaEnable', { name: flow.name })"
+                    @click="confirmToggleActive(flow)"
+                    @keydown.enter="confirmToggleActive(flow)"
                   >
                     {{ flow.is_active ? t('calling.enabled') : t('calling.disabled') }}
                   </Badge>
@@ -198,7 +254,11 @@ onMounted(async () => {
                     v-if="flow.is_active"
                     :variant="flow.is_call_start ? 'default' : 'outline'"
                     class="cursor-pointer"
-                    @click="toggleCallStart(flow)"
+                    role="button"
+                    tabindex="0"
+                    :aria-label="flow.is_call_start ? t('calling.toggleCallStartAriaDisable', { name: flow.name }) : t('calling.toggleCallStartAriaEnable', { name: flow.name })"
+                    @click="confirmToggleCallStart(flow)"
+                    @keydown.enter="confirmToggleCallStart(flow)"
                   >
                     {{ flow.is_call_start ? t('calling.callStart') : t('calling.secondary') }}
                   </Badge>
@@ -215,12 +275,17 @@ onMounted(async () => {
               </TableCell>
               <TableCell class="text-right">
                 <div class="flex justify-end gap-2">
-                  <Button variant="ghost" size="icon" @click="openEdit(flow)">
-                    <Pencil class="h-4 w-4" />
-                  </Button>
-                  <Button variant="ghost" size="icon" @click="confirmDelete(flow)">
-                    <Trash2 class="h-4 w-4 text-destructive" />
-                  </Button>
+                  <IconButton
+                    :icon="Pencil"
+                    :label="t('calling.editFlowAriaLabel', { name: flow.name })"
+                    @click="openEdit(flow)"
+                  />
+                  <IconButton
+                    :icon="Trash2"
+                    :label="t('calling.deleteFlowAriaLabel', { name: flow.name })"
+                    class="text-destructive"
+                    @click="confirmDelete(flow)"
+                  />
                 </div>
               </TableCell>
             </TableRow>
@@ -289,19 +354,31 @@ onMounted(async () => {
     </Dialog>
 
     <!-- Delete Confirmation -->
-    <Dialog v-model:open="showDeleteConfirm">
-      <DialogContent>
-        <DialogHeader>
-          <DialogTitle>{{ t('calling.deleteFlow') }}</DialogTitle>
-          <DialogDescription>
-            {{ t('calling.deleteFlowConfirm', { name: deletingFlow?.name }) }}
-          </DialogDescription>
-        </DialogHeader>
-        <DialogFooter>
-          <Button variant="outline" @click="showDeleteConfirm = false">{{ t('common.cancel') }}</Button>
-          <Button variant="destructive" @click="deleteFlow">{{ t('common.delete') }}</Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
+    <DeleteConfirmDialog
+      v-model:open="showDeleteConfirm"
+      :title="t('calling.deleteFlow')"
+      :item-name="deletingFlow?.name"
+      :description="t('calling.deleteFlowConfirm', { name: deletingFlow?.name })"
+      :is-submitting="deleting"
+      @confirm="deleteFlow"
+    />
+
+    <!-- Toggle Active Confirmation -->
+    <ConfirmDialog
+      v-model:open="showToggleActiveConfirm"
+      :title="t('calling.toggleActiveConfirmTitle')"
+      :description="togglingFlow?.is_active ? t('calling.toggleActiveConfirmDisable', { name: togglingFlow?.name }) : t('calling.toggleActiveConfirmEnable', { name: togglingFlow?.name })"
+      :confirm-label="t('common.confirm')"
+      @confirm="toggleActive"
+    />
+
+    <!-- Toggle Call Start Confirmation -->
+    <ConfirmDialog
+      v-model:open="showToggleCallStartConfirm"
+      :title="t('calling.toggleCallStartConfirmTitle')"
+      :description="togglingFlow?.is_call_start ? t('calling.toggleCallStartConfirmDisable', { name: togglingFlow?.name }) : t('calling.toggleCallStartConfirmEnable', { name: togglingFlow?.name })"
+      :confirm-label="t('common.confirm')"
+      @confirm="toggleCallStart"
+    />
   </div>
 </template>

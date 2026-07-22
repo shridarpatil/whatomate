@@ -36,6 +36,7 @@ type CallRecorder struct {
 	pageSeqNo     uint32
 	packetCount   int
 	stopped       bool
+	writeErr      error // first disk write error (sticky)
 
 	// Buffer packets into OGG pages (flush every N packets)
 	pageBuf       [][]byte
@@ -92,13 +93,14 @@ func (r *CallRecorder) WritePacket(opusData []byte) {
 }
 
 // Stop finalizes the OGG file and returns the path to the recording.
-// After Stop, WritePacket calls are no-ops.
-func (r *CallRecorder) Stop() (string, int) {
+// After Stop, WritePacket calls are no-ops. A non-nil error indicates
+// a disk write failed during recording, so the file may be incomplete.
+func (r *CallRecorder) Stop() (string, int, error) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 
 	if r.stopped {
-		return r.path, r.packetCount
+		return r.path, r.packetCount, r.writeErr
 	}
 	r.stopped = true
 
@@ -108,7 +110,7 @@ func (r *CallRecorder) Stop() (string, int) {
 	}
 
 	_ = r.file.Close()
-	return r.path, r.packetCount
+	return r.path, r.packetCount, r.writeErr
 }
 
 // PacketCount returns the number of packets written so far.
@@ -202,6 +204,9 @@ func (r *CallRecorder) flushPage(lastPage bool) {
 	binary.LittleEndian.PutUint32(page[22:26], checksum)
 
 	if _, err := r.file.Write(page); err != nil {
+		if r.writeErr == nil {
+			r.writeErr = err
+		}
 		return
 	}
 	r.pageSeqNo++

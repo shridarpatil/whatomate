@@ -164,7 +164,7 @@ func AuthWithDB(secret string, db *gorm.DB) fastglue.FastMiddleware {
 		}
 
 		// Parse and validate token
-		token, err := jwt.ParseWithClaims(tokenString, &JWTClaims{}, func(token *jwt.Token) (interface{}, error) {
+		token, err := jwt.ParseWithClaims(tokenString, &JWTClaims{}, func(token *jwt.Token) (any, error) {
 			return []byte(secret), nil
 		})
 

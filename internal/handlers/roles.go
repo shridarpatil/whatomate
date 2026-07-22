@@ -83,7 +83,7 @@ func (a *App) ListRoles(r *fastglue.Request) error {
 		response[i] = roleToResponse(role, userCount)
 	}
 
-	return r.SendEnvelope(map[string]interface{}{
+	return r.SendEnvelope(map[string]any{
 		"roles": response,
 		"total": total,
 		"page":  pg.Page,
@@ -240,9 +240,7 @@ func (a *App) UpdateRole(r *fastglue.Request) error {
 		}
 
 		// Invalidate permissions cache for all users with this role
-		if isSuperAdmin && len(req.Permissions) > 0 {
-			a.InvalidateRolePermissionsCache(role.ID)
-		}
+		a.InvalidateRolePermissionsCache(role.ID)
 
 		var userCount int64
 		a.DB.Model(&models.User{}).Where("role_id = ?", role.ID).Count(&userCount)
@@ -364,7 +362,7 @@ func (a *App) ListPermissions(r *fastglue.Request) error {
 		}
 	}
 
-	return r.SendEnvelope(map[string]interface{}{
+	return r.SendEnvelope(map[string]any{
 		"permissions": response,
 	})
 }

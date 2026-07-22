@@ -16,7 +16,8 @@ const badgeVariants = cva(
         // Status badges with glow effect
         success: 'border-transparent bg-emerald-500/20 text-emerald-400 light:bg-emerald-100 light:text-emerald-700',
         warning: 'border-transparent bg-amber-500/20 text-amber-400 light:bg-amber-100 light:text-amber-700',
-        info: 'border-transparent bg-blue-500/20 text-blue-400 light:bg-blue-100 light:text-blue-700'
+        info: 'border-transparent bg-blue-500/20 text-blue-400 light:bg-blue-100 light:text-blue-700',
+        active: 'border-transparent bg-emerald-500/20 text-emerald-400 badge-pulse light:bg-emerald-100 light:text-emerald-700'
       }
     },
     defaultVariants: {

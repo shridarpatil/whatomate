@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -9,13 +9,25 @@ import { Separator } from '@/components/ui/separator'
 import { Switch } from '@/components/ui/switch'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
-import { PageHeader } from '@/components/shared'
+import { PageHeader, AuditLogPanel } from '@/components/shared'
 import LanguageSwitcher from '@/components/LanguageSwitcher.vue'
 import { toast } from 'vue-sonner'
 import { Settings, Bell, Loader2, Globe, Phone, Upload, Play, Pause, Music } from 'lucide-vue-next'
 import { usersService, organizationService } from '@/services/api'
+import { useAuthStore } from '@/stores/auth'
 
 const { t } = useI18n()
+const authStore = useAuthStore()
+
+// The active org may be overridden by the X-Organization-ID header
+// (localStorage.selected_organization_id) when a super admin switches orgs.
+// That override is what the backend uses for scoping, so we must read it here
+// too — otherwise the activity log panel would query the user's default org
+// instead of the currently-active one.
+const orgID = computed(
+  () => localStorage.getItem('selected_organization_id') || authStore.organizationId,
+)
+const userID = computed(() => authStore.user?.id || '')
 
 const isSubmitting = ref(false)
 const isLoading = ref(true)
@@ -52,6 +64,17 @@ const holdMusicAudio = ref<HTMLAudioElement | null>(null)
 const ringbackAudio = ref<HTMLAudioElement | null>(null)
 const playingHoldMusic = ref(false)
 const playingRingback = ref(false)
+
+// Bump these keys to force the AuditLogPanel to remount and refetch after a save.
+// The backend writes audit entries asynchronously in a goroutine, so we delay
+// the remount slightly to give the write time to hit the DB before refetching.
+const generalLogKey = ref(0)
+const notificationLogKey = ref(0)
+const callingLogKey = ref(0)
+
+function refreshActivityLog(key: typeof generalLogKey) {
+  setTimeout(() => { key.value++ }, 500)
+}
 
 onMounted(async () => {
   try {
@@ -104,6 +127,7 @@ async function saveGeneralSettings() {
       mask_phone_numbers: generalSettings.value.mask_phone_numbers
     })
     toast.success(t('settings.generalSaved'))
+    refreshActivityLog(generalLogKey)
   } catch (error) {
     toast.error(t('common.failedSave', { resource: t('resources.settings') }))
   } finally {
@@ -120,6 +144,7 @@ async function saveNotificationSettings() {
       campaign_updates: notificationSettings.value.campaign_updates
     })
     toast.success(t('settings.notificationsSaved'))
+    refreshActivityLog(notificationLogKey)
   } catch (error) {
     toast.error(t('common.failedSave', { resource: t('resources.notificationSettings') }))
   } finally {
@@ -136,6 +161,7 @@ async function saveCallingSettings() {
       transfer_timeout_secs: callingSettings.value.transfer_timeout_secs
     })
     toast.success(t('settings.callingSaved'))
+    refreshActivityLog(callingLogKey)
   } catch (error) {
     toast.error(t('common.failedSave', { resource: t('resources.settings') }))
   } finally {
@@ -284,6 +310,9 @@ function togglePlayAudio(type: 'hold_music' | 'ringback') {
                 </div>
               </div>
             </div>
+            <div v-if="orgID" class="mt-4">
+              <AuditLogPanel :key="generalLogKey" resource-type="settings.general" :resource-id="orgID" />
+            </div>
           </TabsContent>
 
           <!-- Notification Settings Tab -->
@@ -333,6 +362,9 @@ function togglePlayAudio(type: 'hold_music' | 'ringback') {
                   </Button>
                 </div>
               </div>
+            </div>
+            <div v-if="userID" class="mt-4">
+              <AuditLogPanel :key="notificationLogKey" resource-type="settings.notification" :resource-id="userID" />
             </div>
           </TabsContent>
 
@@ -455,6 +487,9 @@ function togglePlayAudio(type: 'hold_music' | 'ringback') {
                   </Button>
                 </div>
               </div>
+            </div>
+            <div v-if="orgID" class="mt-4">
+              <AuditLogPanel :key="callingLogKey" resource-type="settings.calling" :resource-id="orgID" />
             </div>
           </TabsContent>
         </Tabs>

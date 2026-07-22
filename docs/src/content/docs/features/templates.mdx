@@ -96,6 +96,12 @@ Named parameters make templates easier to understand and less error-prone when d
   Templates must be approved by Meta before they can be used for sending messages. The approval process typically takes a few minutes to 24 hours.
 </Aside>
 
+## URL Button Variables
+
+Templates can include URL buttons with dynamic variables. For example, a "Track Order" button with URL `https://example.com/track/{{1}}` will prompt you to enter the dynamic URL value when sending the template from the chat view.
+
+When sending via the API, provide button values using the `button_params` field. See the [API reference](/api-reference/messages/#send-template-message) for details.
+
 ## Using Templates
 
 Templates can be used in:

@@ -27,11 +27,13 @@ type BulkMessageCampaign struct {
 	StartedAt       *time.Time `json:"started_at,omitempty"`
 	CompletedAt     *time.Time `json:"completed_at,omitempty"`
 	CreatedBy       uuid.UUID  `gorm:"type:uuid;not null" json:"created_by"`
+	UpdatedByID     *uuid.UUID `gorm:"type:uuid" json:"updated_by_id,omitempty"`
 
 	// Relations
 	Organization *Organization          `gorm:"foreignKey:OrganizationID" json:"organization,omitempty"`
 	Template     *Template              `gorm:"foreignKey:TemplateID" json:"template,omitempty"`
 	Creator      *User                  `gorm:"foreignKey:CreatedBy" json:"creator,omitempty"`
+	UpdatedBy    *User                  `gorm:"foreignKey:UpdatedByID" json:"updated_by,omitempty"`
 	Recipients   []BulkMessageRecipient `gorm:"foreignKey:CampaignID" json:"recipients,omitempty"`
 }
 

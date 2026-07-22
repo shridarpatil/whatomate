@@ -116,22 +116,26 @@ func (ChatbotSettings) TableName() string {
 // KeywordRule defines automatic response rules based on keywords
 type KeywordRule struct {
 	BaseModel
-	OrganizationID  uuid.UUID   `gorm:"type:uuid;index;not null" json:"organization_id"`
-	WhatsAppAccount string      `gorm:"size:100;index;not null" json:"whatsapp_account"` // References WhatsAppAccount.Name
-	Name            string      `gorm:"size:255;not null" json:"name"`
-	IsEnabled       bool        `gorm:"default:true" json:"is_enabled"`
-	Priority        int         `gorm:"default:10" json:"priority"`
-	Keywords        StringArray `gorm:"type:jsonb;not null" json:"keywords"`
+	OrganizationID  uuid.UUID    `gorm:"type:uuid;index;not null" json:"organization_id"`
+	WhatsAppAccount string       `gorm:"size:100;index;not null" json:"whatsapp_account"` // References WhatsAppAccount.Name
+	Name            string       `gorm:"size:255;not null" json:"name"`
+	IsEnabled       bool         `gorm:"default:true" json:"is_enabled"`
+	Priority        int          `gorm:"default:10" json:"priority"`
+	Keywords        StringArray  `gorm:"type:jsonb;not null" json:"keywords"`
 	MatchType       MatchType    `gorm:"size:20;default:'contains'" json:"match_type"` // exact, contains, starts_with, regex
 	CaseSensitive   bool         `gorm:"default:false" json:"case_sensitive"`
 	ResponseType    ResponseType `gorm:"size:20;not null" json:"response_type"` // text, template, media, flow, script
-	ResponseContent JSONB       `gorm:"type:jsonb;not null" json:"response_content"`
-	Conditions      string      `gorm:"type:text" json:"conditions"`
-	ActiveFrom      *time.Time  `json:"active_from,omitempty"`
-	ActiveUntil     *time.Time  `json:"active_until,omitempty"`
+	ResponseContent JSONB        `gorm:"type:jsonb;not null" json:"response_content"`
+	Conditions      string       `gorm:"type:text" json:"conditions"`
+	ActiveFrom      *time.Time   `json:"active_from,omitempty"`
+	ActiveUntil     *time.Time   `json:"active_until,omitempty"`
+	CreatedByID     *uuid.UUID   `gorm:"type:uuid" json:"created_by_id,omitempty"`
+	UpdatedByID     *uuid.UUID   `gorm:"type:uuid" json:"updated_by_id,omitempty"`
 
 	// Relations
 	Organization *Organization `gorm:"foreignKey:OrganizationID" json:"organization,omitempty"`
+	CreatedBy    *User         `gorm:"foreignKey:CreatedByID" json:"created_by,omitempty"`
+	UpdatedBy    *User         `gorm:"foreignKey:UpdatedByID" json:"updated_by,omitempty"`
 }
 
 func (KeywordRule) TableName() string {
@@ -156,12 +160,17 @@ type ChatbotFlow struct {
 	CompletionConfig   JSONB       `gorm:"type:jsonb" json:"completion_config"`
 	TimeoutMessage     string      `gorm:"type:text" json:"timeout_message"`
 	CancelKeywords     StringArray `gorm:"type:jsonb" json:"cancel_keywords"`
-	PanelConfig        JSONB       `gorm:"type:jsonb;default:'{}'" json:"panel_config"` // Contact info panel configuration
+	PanelConfig        JSONB       `gorm:"type:jsonb;default:'{}'" json:"panel_config"`  // Contact info panel configuration
+	CanvasLayout       JSONB       `gorm:"type:jsonb;default:'{}'" json:"canvas_layout"` // Node positions for flow diagram
+	CreatedByID        *uuid.UUID  `gorm:"type:uuid" json:"created_by_id,omitempty"`
+	UpdatedByID        *uuid.UUID  `gorm:"type:uuid" json:"updated_by_id,omitempty"`
 
 	// Relations
 	Organization    *Organization     `gorm:"foreignKey:OrganizationID" json:"organization,omitempty"`
 	InitialTemplate *Template         `gorm:"foreignKey:InitialTemplateID" json:"initial_template,omitempty"`
 	Steps           []ChatbotFlowStep `gorm:"foreignKey:FlowID" json:"steps,omitempty"`
+	CreatedBy       *User             `gorm:"foreignKey:CreatedByID" json:"created_by,omitempty"`
+	UpdatedBy       *User             `gorm:"foreignKey:UpdatedByID" json:"updated_by,omitempty"`
 }
 
 func (ChatbotFlow) TableName() string {
@@ -255,9 +264,13 @@ type AIContext struct {
 	TriggerKeywords StringArray `gorm:"type:jsonb" json:"trigger_keywords"`
 	StaticContent   string      `gorm:"type:text" json:"static_content"`
 	ApiConfig       JSONB       `gorm:"type:jsonb" json:"api_config"` // url, method, headers, body
+	CreatedByID     *uuid.UUID  `gorm:"type:uuid" json:"created_by_id,omitempty"`
+	UpdatedByID     *uuid.UUID  `gorm:"type:uuid" json:"updated_by_id,omitempty"`
 
 	// Relations
 	Organization *Organization `gorm:"foreignKey:OrganizationID" json:"organization,omitempty"`
+	CreatedBy    *User         `gorm:"foreignKey:CreatedByID" json:"created_by,omitempty"`
+	UpdatedBy    *User         `gorm:"foreignKey:UpdatedByID" json:"updated_by,omitempty"`
 }
 
 func (AIContext) TableName() string {

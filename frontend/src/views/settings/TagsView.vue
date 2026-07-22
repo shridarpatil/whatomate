@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, onMounted, watch, computed } from 'vue'
+import { ref, onMounted, computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { ScrollArea } from '@/components/ui/scroll-area'
@@ -8,7 +8,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { TagBadge } from '@/components/ui/tag-badge'
-import { PageHeader, SearchInput, DataTable, CrudFormDialog, DeleteConfirmDialog, type Column } from '@/components/shared'
+import { PageHeader, SearchInput, DataTable, CrudFormDialog, DeleteConfirmDialog, IconButton, ErrorState, type Column } from '@/components/shared'
 import type { Tag } from '@/services/api'
 import { useTagsStore } from '@/stores/tags'
 import { useCrudState } from '@/composables/useCrudState'
@@ -17,7 +17,7 @@ import { Plus, Tags, Pencil, Trash2 } from 'lucide-vue-next'
 import { getErrorMessage } from '@/lib/api-utils'
 import { TAG_COLORS } from '@/lib/constants'
 import { formatDate } from '@/lib/utils'
-import { useDebounceFn } from '@vueuse/core'
+import { useSearchPagination } from '@/composables/useSearchPagination'
 
 const { t } = useI18n()
 const tagsStore = useTagsStore()
@@ -31,16 +31,15 @@ const defaultFormData: TagFormData = { name: '', color: 'gray' }
 
 const tags = ref<Tag[]>([])
 const isLoading = ref(false)
+const isDeleting = ref(false)
+const error = ref(false)
 const {
   isSubmitting, isDialogOpen, editingItem: editingTag, deleteDialogOpen, itemToDelete: tagToDelete,
   formData, openCreateDialog, openEditDialog: baseOpenEditDialog, openDeleteDialog, closeDialog, closeDeleteDialog,
 } = useCrudState<Tag, TagFormData>(defaultFormData)
-const searchQuery = ref('')
-
-// Pagination state
-const currentPage = ref(1)
-const totalItems = ref(0)
-const pageSize = 20
+const { searchQuery, currentPage, totalItems, pageSize, handlePageChange } = useSearchPagination({
+  fetchFn: () => fetchTags(),
+})
 
 // Sorting state
 const sortKey = ref('name')
@@ -59,6 +58,7 @@ function openEditDialog(tag: Tag) {
 
 async function fetchTags() {
   isLoading.value = true
+  error.value = false
   try {
     const response = await tagsStore.fetchTags({
       search: searchQuery.value || undefined,
@@ -67,27 +67,12 @@ async function fetchTags() {
     })
     tags.value = response.tags
     totalItems.value = response.total
-  } catch (error) {
-    toast.error(getErrorMessage(error, t('common.failedLoad', { resource: t('resources.tags') })))
+  } catch (e) {
+    toast.error(getErrorMessage(e, t('common.failedLoad', { resource: t('resources.tags') })))
+    error.value = true
   } finally {
     isLoading.value = false
   }
-}
-
-// Debounced search to avoid too many API calls
-const debouncedSearch = useDebounceFn(() => {
-  currentPage.value = 1
-  fetchTags()
-}, 300)
-
-// Watch search query changes
-watch(searchQuery, () => {
-  debouncedSearch()
-})
-
-function handlePageChange(page: number) {
-  currentPage.value = page
-  fetchTags()
 }
 
 onMounted(() => fetchTags())
@@ -118,14 +103,17 @@ async function saveTag() {
 
 async function confirmDelete() {
   if (!tagToDelete.value) return
+  isDeleting.value = true
   try {
     await tagsStore.deleteTag(tagToDelete.value.name)
     toast.success(t('common.deletedSuccess', { resource: t('resources.Tag') }))
     closeDeleteDialog()
     // Refresh from server to keep pagination in sync
     await fetchTags()
-  } catch (error) {
-    toast.error(getErrorMessage(error, t('common.failedDelete', { resource: t('resources.tag') })))
+  } catch (e) {
+    toast.error(getErrorMessage(e, t('common.failedDelete', { resource: t('resources.tag') })))
+  } finally {
+    isDeleting.value = false
   }
 }
 
@@ -143,7 +131,17 @@ function getColorLabel(color: string): string {
       </template>
     </PageHeader>
 
-    <ScrollArea class="flex-1">
+    <!-- Error State -->
+    <ErrorState
+      v-if="error && !isLoading"
+      :title="$t('common.loadErrorTitle')"
+      :description="$t('common.loadErrorDescription')"
+      :retry-label="$t('common.retryLoad')"
+      class="flex-1"
+      @retry="fetchTags"
+    />
+
+    <ScrollArea v-else class="flex-1">
       <div class="p-6">
         <div class="max-w-6xl mx-auto">
           <Card>
@@ -184,12 +182,10 @@ function getColorLabel(color: string): string {
                 </template>
                 <template #cell-actions="{ item: tag }">
                   <div class="flex items-center justify-end gap-1">
-                    <Button variant="ghost" size="icon" class="h-8 w-8" @click="openEditDialog(tag)">
-                      <Pencil class="h-4 w-4" />
-                    </Button>
-                    <Button variant="ghost" size="icon" class="h-8 w-8" @click="openDeleteDialog(tag)">
+                    <IconButton :icon="Pencil" :label="$t('tags.editTag')" class="h-8 w-8" @click="openEditDialog(tag)" />
+                    <IconButton :label="$t('tags.deleteTag')" class="h-8 w-8" @click="openDeleteDialog(tag)">
                       <Trash2 class="h-4 w-4 text-destructive" />
-                    </Button>
+                    </IconButton>
                   </div>
                 </template>
                 <template #empty-action>
@@ -247,7 +243,7 @@ function getColorLabel(color: string): string {
       </div>
     </CrudFormDialog>
 
-    <DeleteConfirmDialog v-model:open="deleteDialogOpen" :title="$t('tags.deleteTag')" :item-name="tagToDelete?.name" @confirm="confirmDelete">
+    <DeleteConfirmDialog v-model:open="deleteDialogOpen" :title="$t('tags.deleteTag')" :item-name="tagToDelete?.name" :is-submitting="isDeleting" @confirm="confirmDelete">
       <p class="text-sm text-muted-foreground">{{ $t('tags.deleteWarning') }}</p>
     </DeleteConfirmDialog>
   </div>

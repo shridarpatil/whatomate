@@ -12,7 +12,7 @@ import { Checkbox } from '@/components/ui/checkbox'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
-import { PageHeader, DataTable, SearchInput, DeleteConfirmDialog, type Column } from '@/components/shared'
+import { PageHeader, DataTable, SearchInput, DeleteConfirmDialog, ConfirmDialog, IconButton, ErrorState, type Column } from '@/components/shared'
 import { toast } from 'vue-sonner'
 import { Plus, Trash2, Pencil, Webhook as WebhookIcon, Play, Loader2 } from 'lucide-vue-next'
 import { getErrorMessage } from '@/lib/api-utils'
@@ -27,7 +27,9 @@ const webhooks = ref<Webhook[]>([])
 const availableEvents = ref<WebhookEvent[]>([])
 const isLoading = ref(false)
 const isSaving = ref(false)
+const isDeleting = ref(false)
 const isTesting = ref<string | null>(null)
+const error = ref(false)
 
 const isDialogOpen = ref(false)
 const isEditing = ref(false)
@@ -39,6 +41,10 @@ const newHeaderValue = ref('')
 
 const isDeleteDialogOpen = ref(false)
 const webhookToDelete = ref<Webhook | null>(null)
+
+const isDisableDialogOpen = ref(false)
+const webhookToToggle = ref<Webhook | null>(null)
+const isToggling = ref(false)
 
 // Pagination state
 const currentPage = ref(1)
@@ -62,6 +68,7 @@ const searchQuery = ref('')
 
 async function fetchWebhooks() {
   isLoading.value = true
+  error.value = false
   try {
     const response = await webhooksService.list({
       search: searchQuery.value || undefined,
@@ -72,7 +79,7 @@ async function fetchWebhooks() {
     webhooks.value = data.webhooks || []
     availableEvents.value = data.available_events || []
     totalItems.value = data.total ?? webhooks.value.length
-  } catch (e) { toast.error(getErrorMessage(e, t('common.failedLoad', { resource: t('resources.webhooks') }))) }
+  } catch (e) { error.value = true; toast.error(getErrorMessage(e, t('common.failedLoad', { resource: t('resources.webhooks') }))) }
   finally { isLoading.value = false }
 }
 
@@ -124,12 +131,29 @@ async function saveWebhook() {
   finally { isSaving.value = false }
 }
 
-async function toggleWebhook(webhook: Webhook) {
+function handleToggleWebhook(webhook: Webhook) {
+  if (webhook.is_active) {
+    webhookToToggle.value = webhook
+    isDisableDialogOpen.value = true
+  } else {
+    performToggleWebhook(webhook)
+  }
+}
+
+async function performToggleWebhook(webhook: Webhook) {
+  isToggling.value = true
   try {
     await webhooksService.update(webhook.id, { is_active: !webhook.is_active })
     await fetchWebhooks()
     toast.success(webhook.is_active ? t('common.disabledSuccess', { resource: t('resources.Webhook') }) : t('common.enabledSuccess', { resource: t('resources.Webhook') }))
+    isDisableDialogOpen.value = false
+    webhookToToggle.value = null
   } catch (e) { toast.error(getErrorMessage(e, t('common.failedToggle', { resource: t('resources.webhook') }))) }
+  finally { isToggling.value = false }
+}
+
+function confirmDisableWebhook() {
+  if (webhookToToggle.value) performToggleWebhook(webhookToToggle.value)
 }
 
 async function testWebhook(webhook: Webhook) {
@@ -141,8 +165,10 @@ async function testWebhook(webhook: Webhook) {
 
 async function deleteWebhook() {
   if (!webhookToDelete.value) return
+  isDeleting.value = true
   try { await webhooksService.delete(webhookToDelete.value.id); await fetchWebhooks(); toast.success(t('common.deletedSuccess', { resource: t('resources.Webhook') })); isDeleteDialogOpen.value = false; webhookToDelete.value = null }
   catch (e) { toast.error(getErrorMessage(e, t('common.failedDelete', { resource: t('resources.webhook') }))) }
+  finally { isDeleting.value = false }
 }
 
 function addHeader() {
@@ -174,7 +200,16 @@ onMounted(() => fetchWebhooks())
       </template>
     </PageHeader>
 
-    <ScrollArea class="flex-1">
+    <ErrorState
+      v-if="error && !isLoading"
+      :title="$t('webhooks.fetchErrorTitle')"
+      :description="$t('webhooks.fetchErrorDescription')"
+      :retry-label="$t('common.retry')"
+      class="flex-1"
+      @retry="fetchWebhooks"
+    />
+
+    <ScrollArea v-else class="flex-1">
       <div class="p-6">
         <div class="max-w-6xl mx-auto">
           <Card>
@@ -199,16 +234,16 @@ onMounted(() => fetchWebhooks())
                 </template>
                 <template #cell-status="{ item: webhook }">
                   <div class="flex items-center gap-2">
-                    <Switch :checked="webhook.is_active" @update:checked="toggleWebhook(webhook)" />
+                    <Switch :checked="webhook.is_active" @update:checked="handleToggleWebhook(webhook)" />
                     <span class="text-sm text-muted-foreground">{{ webhook.is_active ? $t('common.active') : $t('common.inactive') }}</span>
                   </div>
                 </template>
                 <template #cell-created="{ item: webhook }"><span class="text-muted-foreground">{{ formatDate(webhook.created_at) }}</span></template>
                 <template #cell-actions="{ item: webhook }">
                   <div class="flex items-center justify-end gap-1">
-                    <Button variant="ghost" size="icon" class="h-8 w-8" :disabled="isTesting === webhook.id" @click="testWebhook(webhook)"><Loader2 v-if="isTesting === webhook.id" class="h-4 w-4 animate-spin" /><Play v-else class="h-4 w-4" /></Button>
-                    <Button variant="ghost" size="icon" class="h-8 w-8" @click="openEditDialog(webhook)"><Pencil class="h-4 w-4" /></Button>
-                    <Button variant="ghost" size="icon" class="h-8 w-8 text-destructive" @click="webhookToDelete = webhook; isDeleteDialogOpen = true"><Trash2 class="h-4 w-4" /></Button>
+                    <IconButton :icon="Play" :label="$t('webhooks.testWebhook')" class="h-8 w-8" :disabled="isTesting === webhook.id" :loading="isTesting === webhook.id" @click="testWebhook(webhook)" />
+                    <IconButton :icon="Pencil" :label="$t('common.edit')" class="h-8 w-8" @click="openEditDialog(webhook)" />
+                    <IconButton :icon="Trash2" :label="$t('common.delete')" class="h-8 w-8 text-destructive" @click="webhookToDelete = webhook; isDeleteDialogOpen = true" />
                   </div>
                 </template>
                 <template #empty-action>
@@ -268,6 +303,16 @@ onMounted(() => fetchWebhooks())
       </DialogContent>
     </Dialog>
 
-    <DeleteConfirmDialog v-model:open="isDeleteDialogOpen" :title="$t('webhooks.deleteWebhook')" :item-name="webhookToDelete?.name" @confirm="deleteWebhook" />
+    <ConfirmDialog
+      v-model:open="isDisableDialogOpen"
+      :title="$t('webhooks.confirmDisableTitle')"
+      :description="$t('webhooks.confirmDisableDescription')"
+      :confirm-label="$t('common.confirm')"
+      variant="destructive"
+      :is-submitting="isToggling"
+      @confirm="confirmDisableWebhook"
+    />
+
+    <DeleteConfirmDialog v-model:open="isDeleteDialogOpen" :title="$t('webhooks.deleteWebhook')" :item-name="webhookToDelete?.name" :is-submitting="isDeleting" @confirm="deleteWebhook" />
   </div>
 </template>

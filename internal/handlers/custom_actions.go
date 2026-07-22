@@ -26,7 +26,7 @@ type CustomActionRequest struct {
 	Name         string                 `json:"name"`
 	Icon         string                 `json:"icon"`
 	ActionType   models.ActionType      `json:"action_type"` // webhook, url, javascript
-	Config       map[string]interface{} `json:"config"`
+	Config       map[string]any `json:"config"`
 	IsActive     bool                   `json:"is_active"`
 	DisplayOrder int                    `json:"display_order"`
 }
@@ -37,7 +37,7 @@ type CustomActionResponse struct {
 	Name         string                 `json:"name"`
 	Icon         string                 `json:"icon"`
 	ActionType   models.ActionType      `json:"action_type"`
-	Config       map[string]interface{} `json:"config"`
+	Config       map[string]any `json:"config"`
 	IsActive     bool                   `json:"is_active"`
 	DisplayOrder int                    `json:"display_order"`
 	CreatedAt    string                 `json:"created_at"`
@@ -56,7 +56,7 @@ type ActionResult struct {
 	RedirectURL string                 `json:"redirect_url,omitempty"`
 	Clipboard   string                 `json:"clipboard,omitempty"`
 	Toast       *ToastConfig           `json:"toast,omitempty"`
-	Data        map[string]interface{} `json:"data,omitempty"`
+	Data        map[string]any `json:"data,omitempty"`
 }
 
 // ToastConfig represents a toast notification configuration
@@ -207,7 +207,7 @@ func (a *App) UpdateCustomAction(r *fastglue.Request) error {
 	}
 
 	// Build updates
-	updates := map[string]interface{}{}
+	updates := map[string]any{}
 	if req.Name != "" {
 		updates["name"] = req.Name
 	}
@@ -377,7 +377,7 @@ func (a *App) CustomActionRedirect(r *fastglue.Request) error {
 }
 
 // executeWebhookAction executes a webhook action
-func (a *App) executeWebhookAction(action models.CustomAction, context map[string]interface{}) (*ActionResult, error) {
+func (a *App) executeWebhookAction(action models.CustomAction, context map[string]any) (*ActionResult, error) {
 	// Parse config from JSONB (already a map)
 	configBytes, err := json.Marshal(action.Config)
 	if err != nil {
@@ -437,7 +437,7 @@ func (a *App) executeWebhookAction(action models.CustomAction, context map[strin
 	respBody, _ := io.ReadAll(resp.Body)
 
 	// Parse response
-	var responseData map[string]interface{}
+	var responseData map[string]any
 	_ = json.Unmarshal(respBody, &responseData) // Ignore parse errors for optional response data
 
 	success := resp.StatusCode >= 200 && resp.StatusCode < 300
@@ -455,7 +455,7 @@ func (a *App) executeWebhookAction(action models.CustomAction, context map[strin
 }
 
 // executeURLAction executes a URL action by creating a redirect token
-func (a *App) executeURLAction(action models.CustomAction, context map[string]interface{}) (*ActionResult, error) {
+func (a *App) executeURLAction(action models.CustomAction, context map[string]any) (*ActionResult, error) {
 	// Parse config from JSONB (already a map)
 	configBytes, err := json.Marshal(action.Config)
 	if err != nil {
@@ -497,7 +497,7 @@ func (a *App) executeURLAction(action models.CustomAction, context map[string]in
 
 // executeJavaScriptAction executes a JavaScript action server-side using goja.
 // The code runs in a sandboxed VM with no access to filesystem, network, or globals.
-func (a *App) executeJavaScriptAction(action models.CustomAction, context map[string]interface{}) (*ActionResult, error) {
+func (a *App) executeJavaScriptAction(action models.CustomAction, context map[string]any) (*ActionResult, error) {
 	configBytes, err := json.Marshal(action.Config)
 	if err != nil {
 		return nil, err
@@ -546,8 +546,8 @@ func (a *App) executeJavaScriptAction(action models.CustomAction, context map[st
 	// Extract structured result from the JS return value
 	if val != nil && !goja.IsUndefined(val) && !goja.IsNull(val) {
 		exported := val.Export()
-		if jsResult, ok := exported.(map[string]interface{}); ok {
-			if t, ok := jsResult["toast"].(map[string]interface{}); ok {
+		if jsResult, ok := exported.(map[string]any); ok {
+			if t, ok := jsResult["toast"].(map[string]any); ok {
 				result.Toast = &ToastConfig{
 					Message: fmt.Sprintf("%v", t["message"]),
 					Type:    fmt.Sprintf("%v", t["type"]),
@@ -569,9 +569,9 @@ func (a *App) executeJavaScriptAction(action models.CustomAction, context map[st
 }
 
 // buildActionContext builds the context object for variable replacement
-func buildActionContext(contact models.Contact, user models.User, org models.Organization) map[string]interface{} {
-	return map[string]interface{}{
-		"contact": map[string]interface{}{
+func buildActionContext(contact models.Contact, user models.User, org models.Organization) map[string]any {
+	return map[string]any{
+		"contact": map[string]any{
 			"id":           contact.ID.String(),
 			"phone_number": contact.PhoneNumber,
 			"name":         contact.ProfileName,
@@ -579,13 +579,13 @@ func buildActionContext(contact models.Contact, user models.User, org models.Org
 			"tags":         contact.Tags,
 			"metadata":     contact.Metadata,
 		},
-		"user": map[string]interface{}{
+		"user": map[string]any{
 			"id":    user.ID.String(),
 			"name":  user.FullName,
 			"email": user.Email,
 			"role":  user.Role,
 		},
-		"organization": map[string]interface{}{
+		"organization": map[string]any{
 			"id":   org.ID.String(),
 			"name": org.Name,
 		},
@@ -593,7 +593,7 @@ func buildActionContext(contact models.Contact, user models.User, org models.Org
 }
 
 // replaceVariables replaces {{variable}} placeholders with context values
-func replaceVariables(template string, context map[string]interface{}) string {
+func replaceVariables(template string, context map[string]any) string {
 	re := regexp.MustCompile(`\{\{([^}]+)\}\}`)
 	return re.ReplaceAllStringFunc(template, func(match string) string {
 		// Extract variable path (e.g., "contact.phone_number")
@@ -601,10 +601,10 @@ func replaceVariables(template string, context map[string]interface{}) string {
 		path = strings.TrimSpace(path)
 
 		parts := strings.Split(path, ".")
-		var value interface{} = context
+		var value any = context
 
 		for _, part := range parts {
-			if m, ok := value.(map[string]interface{}); ok {
+			if m, ok := value.(map[string]any); ok {
 				value = m[part]
 			} else {
 				return match // Return original if path not found
@@ -628,7 +628,7 @@ func replaceVariables(template string, context map[string]interface{}) string {
 }
 
 // validateActionConfig validates the config based on action type
-func validateActionConfig(actionType models.ActionType, config map[string]interface{}) error {
+func validateActionConfig(actionType models.ActionType, config map[string]any) error {
 	switch actionType {
 	case models.ActionTypeWebhook:
 		urlVal, ok := config["url"]
@@ -654,8 +654,8 @@ func validateActionConfig(actionType models.ActionType, config map[string]interf
 
 // customActionToResponse converts a CustomAction model to response
 func customActionToResponse(action models.CustomAction) CustomActionResponse {
-	// Config is already a map[string]interface{}, just use it directly
-	config := map[string]interface{}(action.Config)
+	// Config is already a map[string]any, just use it directly
+	config := map[string]any(action.Config)
 
 	return CustomActionResponse{
 		ID:           action.ID,

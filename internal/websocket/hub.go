@@ -228,6 +228,38 @@ func (h *Hub) GetClientCount() int {
 	return h.countClients()
 }
 
+// IsUserOnline returns true if the user has at least one active WebSocket connection.
+func (h *Hub) IsUserOnline(orgID, userID uuid.UUID) bool {
+	h.mu.RLock()
+	defer h.mu.RUnlock()
+
+	if orgClients, ok := h.clients[orgID]; ok {
+		if userClients, ok := orgClients[userID]; ok {
+			return len(userClients) > 0
+		}
+	}
+	return false
+}
+
+// FilterOnlineUsers returns only the user IDs that have active WebSocket connections.
+func (h *Hub) FilterOnlineUsers(orgID uuid.UUID, userIDs []uuid.UUID) []uuid.UUID {
+	h.mu.RLock()
+	defer h.mu.RUnlock()
+
+	orgClients, ok := h.clients[orgID]
+	if !ok {
+		return nil
+	}
+
+	online := make([]uuid.UUID, 0, len(userIDs))
+	for _, uid := range userIDs {
+		if userClients, ok := orgClients[uid]; ok && len(userClients) > 0 {
+			online = append(online, uid)
+		}
+	}
+	return online
+}
+
 // Register adds a client to the hub via the register channel
 func (h *Hub) Register(client *Client) {
 	h.register <- client

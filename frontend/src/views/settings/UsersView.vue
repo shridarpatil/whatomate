@@ -9,8 +9,7 @@ import { Label } from '@/components/ui/label'
 import { Badge } from '@/components/ui/badge'
 import { Switch } from '@/components/ui/switch'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
-import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
-import { PageHeader, SearchInput, DataTable, CrudFormDialog, DeleteConfirmDialog, type Column } from '@/components/shared'
+import { PageHeader, SearchInput, DataTable, CrudFormDialog, DeleteConfirmDialog, IconButton, ErrorState, type Column } from '@/components/shared'
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { useUsersStore, type User } from '@/stores/users'
 import { useAuthStore } from '@/stores/auth'
@@ -22,7 +21,7 @@ import { useCrudState } from '@/composables/useCrudState'
 import { getErrorMessage } from '@/lib/api-utils'
 import { formatDate } from '@/lib/utils'
 import { ROLE_BADGE_VARIANTS } from '@/lib/constants'
-import { useDebounceFn } from '@vueuse/core'
+import { useSearchPagination } from '@/composables/useSearchPagination'
 
 const { t } = useI18n()
 
@@ -48,25 +47,12 @@ const {
 } = useCrudState<User, UserFormData>(defaultFormData)
 
 const users = ref<User[]>([])
-const searchQuery = ref('')
+const isDeleting = ref(false)
+const error = ref(false)
 
-// Pagination state
-const currentPage = ref(1)
-const totalItems = ref(0)
-const pageSize = 20
-
-// Debounced search
-const debouncedSearch = useDebounceFn(() => {
-  currentPage.value = 1
-  fetchUsers()
-}, 300)
-
-watch(searchQuery, () => debouncedSearch())
-
-function handlePageChange(page: number) {
-  currentPage.value = page
-  fetchUsers()
-}
+const { searchQuery, currentPage, totalItems, pageSize, handlePageChange } = useSearchPagination({
+  fetchFn: () => fetchUsers(),
+})
 
 const columns = computed<Column<User>[]>(() => [
   { key: 'user', label: t('users.user'), width: 'w-[300px]', sortable: true, sortKey: 'full_name' },
@@ -95,6 +81,7 @@ onMounted(() => { fetchUsers(); rolesStore.fetchRoles() })
 
 async function fetchUsers() {
   isLoading.value = true
+  error.value = false
   try {
     const response = await usersStore.fetchUsers({
       search: searchQuery.value || undefined,
@@ -103,8 +90,10 @@ async function fetchUsers() {
     })
     users.value = response.users
     totalItems.value = response.total
-  } catch { toast.error(t('common.failedLoad', { resource: t('resources.users') })) }
-  finally { isLoading.value = false }
+  } catch {
+    toast.error(t('common.failedLoad', { resource: t('resources.users') }))
+    error.value = true
+  } finally { isLoading.value = false }
 }
 
 async function saveUser() {
@@ -141,6 +130,7 @@ async function saveUser() {
 async function confirmDelete() {
   if (!userToDelete.value) return
   const isMemberRemoval = userToDelete.value.is_member
+  isDeleting.value = true
   try {
     await usersStore.deleteUser(userToDelete.value.id)
     toast.success(isMemberRemoval ? t('users.memberRemoved') : t('common.deletedSuccess', { resource: t('resources.User') }))
@@ -148,6 +138,8 @@ async function confirmDelete() {
     await fetchUsers()
   } catch (e) {
     toast.error(getErrorMessage(e, t('common.failedDelete', { resource: t('resources.user') })))
+  } finally {
+    isDeleting.value = false
   }
 }
 
@@ -215,12 +207,16 @@ async function submitAddExisting() {
   }
 }
 
-function copyInviteLink() {
+async function copyInviteLink() {
   const orgId = organizationsStore.selectedOrgId || authStore.organizationId
   const basePath = ((window as any).__BASE_PATH__ ?? '').replace(/\/$/, '')
   const url = `${window.location.origin}${basePath}/register?org=${orgId}`
-  navigator.clipboard.writeText(url)
-  toast.success(t('users.inviteLinkCopied'))
+  try {
+    await navigator.clipboard.writeText(url)
+    toast.success(t('users.inviteLinkCopied'))
+  } catch {
+    toast.error(t('common.clipboardFailed'))
+  }
 }
 </script>
 
@@ -234,7 +230,17 @@ function copyInviteLink() {
       </template>
     </PageHeader>
 
-    <ScrollArea class="flex-1">
+    <!-- Error State -->
+    <ErrorState
+      v-if="error && !isLoading"
+      :title="$t('common.loadErrorTitle')"
+      :description="$t('common.loadErrorDescription')"
+      :retry-label="$t('common.retryLoad')"
+      class="flex-1"
+      @retry="fetchUsers"
+    />
+
+    <ScrollArea v-else class="flex-1">
       <div class="p-6">
         <div class="max-w-6xl mx-auto">
           <Card>
@@ -278,13 +284,17 @@ function copyInviteLink() {
                   <div class="flex items-center justify-end gap-1">
                     <template v-if="user.is_member">
                       <!-- Member actions: update role + remove -->
-                      <Tooltip><TooltipTrigger as-child><Button variant="ghost" size="icon" class="h-8 w-8" @click="openMemberRoleDialog(user)"><Pencil class="h-4 w-4" /></Button></TooltipTrigger><TooltipContent>{{ $t('users.updateMemberRole') }}</TooltipContent></Tooltip>
-                      <Tooltip><TooltipTrigger as-child><Button variant="ghost" size="icon" class="h-8 w-8" @click="openDeleteDialog(user)" :disabled="user.id === currentUserId"><UserMinus class="h-4 w-4 text-destructive" /></Button></TooltipTrigger><TooltipContent>{{ $t('users.removeMemberTooltip') }}</TooltipContent></Tooltip>
+                      <IconButton :icon="Pencil" :label="$t('users.updateMemberRole')" class="h-8 w-8" @click="openMemberRoleDialog(user)" />
+                      <IconButton :label="$t('users.removeMemberTooltip')" class="h-8 w-8" :disabled="user.id === currentUserId" @click="openDeleteDialog(user)">
+                        <UserMinus class="h-4 w-4 text-destructive" />
+                      </IconButton>
                     </template>
                     <template v-else>
                       <!-- Native user actions: full edit + delete -->
-                      <Tooltip><TooltipTrigger as-child><Button variant="ghost" size="icon" class="h-8 w-8" @click="openEditDialog(user)"><Pencil class="h-4 w-4" /></Button></TooltipTrigger><TooltipContent>{{ $t('users.editUserTooltip') }}</TooltipContent></Tooltip>
-                      <Tooltip><TooltipTrigger as-child><Button variant="ghost" size="icon" class="h-8 w-8" @click="openDeleteDialog(user)" :disabled="user.id === currentUserId"><Trash2 class="h-4 w-4 text-destructive" /></Button></TooltipTrigger><TooltipContent>{{ user.id === currentUserId ? $t('users.cantDeleteYourself') : $t('users.deleteUserTooltip') }}</TooltipContent></Tooltip>
+                      <IconButton :icon="Pencil" :label="$t('users.editUserTooltip')" class="h-8 w-8" @click="openEditDialog(user)" />
+                      <IconButton :label="user.id === currentUserId ? $t('users.cantDeleteYourself') : $t('users.deleteUserTooltip')" class="h-8 w-8" :disabled="user.id === currentUserId" @click="openDeleteDialog(user)">
+                        <Trash2 class="h-4 w-4 text-destructive" />
+                      </IconButton>
                     </template>
                   </div>
                 </template>
@@ -329,7 +339,7 @@ function copyInviteLink() {
       </div>
     </CrudFormDialog>
 
-    <DeleteConfirmDialog v-model:open="deleteDialogOpen" :title="userToDelete?.is_member ? $t('users.removeMember') : $t('users.deleteUser')" :description="userToDelete?.is_member ? $t('users.removeMemberWarning') : undefined" :item-name="userToDelete?.full_name" @confirm="confirmDelete" />
+    <DeleteConfirmDialog v-model:open="deleteDialogOpen" :title="userToDelete?.is_member ? $t('users.removeMember') : $t('users.deleteUser')" :description="userToDelete?.is_member ? $t('users.removeMemberWarning') : undefined" :item-name="userToDelete?.full_name" :is-submitting="isDeleting" @confirm="confirmDelete" />
 
     <!-- Member Role Update Dialog -->
     <Dialog v-model:open="isMemberRoleOpen">

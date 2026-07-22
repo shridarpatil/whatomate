@@ -17,6 +17,9 @@ Whatomate supports WhatsApp voice calling with WebRTC-based audio bridging. Inco
   <Card title="Call Transfers" icon="forward-slash">
     Route callers to agent teams with hold music
   </Card>
+  <Card title="Call Hold" icon="pause">
+    Put calls on hold with instant hold music and resume anytime
+  </Card>
   <Card title="Call Recording" icon="recording">
     Record agent-caller audio as OGG/Opus, stored in S3
   </Card>
@@ -201,6 +204,21 @@ When a caller reaches a Transfer node:
 
 <Aside type="note">
   Transfer timeout is configurable (default: 120 seconds). If no agent accepts, the call is terminated.
+</Aside>
+
+## Call Hold
+
+During an active call, agents can put the caller on hold by clicking the **Hold** button (pause icon) in the call panel. Hold music plays immediately to the caller with seamless audio continuity — no gaps or clicks.
+
+- **Hold**: Stops the audio bridge between agent and caller, starts playing the configured hold music file on loop
+- **Resume**: Stops hold music and restores two-way audio instantly
+
+The hold button toggles between pause (hold) and play (resume) icons, with an amber highlight when the call is on hold. The status text in the call panel shows "On Hold" while held.
+
+Hold music is configurable per organization from **Settings > Organization > Calling**. The default file is set in `config.toml` via `hold_music_file`.
+
+<Aside type="note">
+  RTP sequence numbers are maintained across bridge and hold music transitions, so the caller's audio client never drops packets or experiences glitches during the switch.
 </Aside>
 
 ## Call Recording

@@ -196,7 +196,7 @@ func (m *Manager) InitiateOutgoingCall(
 	callCtx, callCancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer callCancel()
 
-	callID, err := m.whatsapp.InitiateCall(callCtx, waAccount, contactPhone, waLocalDesc.SDP)
+	callID, err := m.whatsapp.InitiateCall(callCtx, waAccount, whatsapp.Recipient{Phone: contactPhone}, waLocalDesc.SDP)
 	if err != nil {
 		_ = agentPC.Close()
 		_ = waPC.Close()
@@ -420,12 +420,13 @@ func (m *Manager) HangupOutgoingCall(callLogID, agentID uuid.UUID) error {
 		return fmt.Errorf("not an outgoing call")
 	}
 
-	// Look up a post-call IVR flow for this account
+	// Look up a post-call IVR flow for this account (cached)
+	ivrFlowPtr := m.getIVRFlowByConfigCached(session.OrganizationID, session.AccountName, "outgoing_end")
+	hasPostCallIVR := ivrFlowPtr != nil
 	var ivrFlow models.IVRFlow
-	hasPostCallIVR := m.db.Where(
-		"organization_id = ? AND whatsapp_account = ? AND is_outgoing_end = ? AND is_active = ?",
-		session.OrganizationID, session.AccountName, true, true,
-	).First(&ivrFlow).Error == nil
+	if hasPostCallIVR {
+		ivrFlow = *ivrFlowPtr
+	}
 
 	if !hasPostCallIVR {
 		// No post-call IVR — original behavior: terminate + cleanup

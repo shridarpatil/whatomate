@@ -104,15 +104,18 @@ type WebhookPayload struct {
 				Reason                  string `json:"reason,omitempty"`
 				Contacts                []struct {
 					Profile struct {
-						Name string `json:"name"`
+						Name     string `json:"name"`
+						Username string `json:"username,omitempty"`
 					} `json:"profile"`
-					WaID string `json:"wa_id"`
+					WaID   string `json:"wa_id"`
+					UserID string `json:"user_id,omitempty"` // BSUID
 				} `json:"contacts"`
 				Messages []struct {
-					From      string `json:"from"`
-					ID        string `json:"id"`
-					Timestamp string `json:"timestamp"`
-					Type      string `json:"type"`
+					From       string `json:"from"`
+					FromUserID string `json:"from_user_id,omitempty"` // BSUID
+					ID         string `json:"id"`
+					Timestamp  string `json:"timestamp"`
+					Type       string `json:"type"`
 					Text      *struct {
 						Body string `json:"body"`
 					} `json:"text,omitempty"`
@@ -162,6 +165,10 @@ type WebhookPayload struct {
 							ResponseSource      string      `json:"response_source"`
 						} `json:"call_permission_reply,omitempty"`
 					} `json:"interactive,omitempty"`
+					Button *struct {
+						Text    string `json:"text"`
+						Payload string `json:"payload"`
+					} `json:"button,omitempty"`
 					Reaction *struct {
 						MessageID string `json:"message_id"`
 						Emoji     string `json:"emoji"`
@@ -188,11 +195,20 @@ type WebhookPayload struct {
 						ID   string `json:"id"`
 					} `json:"context,omitempty"`
 				} `json:"messages,omitempty"`
-				Statuses []WebhookStatus `json:"statuses,omitempty"`
+				Statuses        []WebhookStatus `json:"statuses,omitempty"`
+			UserPreferences []struct {
+				WaID      string `json:"wa_id"`
+				UserID    string `json:"user_id,omitempty"`
+				Category  string `json:"category"`
+				Value     string `json:"value"`
+				Timestamp int64  `json:"timestamp"`
+			} `json:"user_preferences,omitempty"`
 			Calls []struct {
-				ID        string `json:"id"`
-				From      string `json:"from"`
-				To        string `json:"to"`
+				ID         string `json:"id"`
+				From       string `json:"from"`
+				FromUserID string `json:"from_user_id,omitempty"` // BSUID
+				To         string `json:"to"`
+				ToUserID   string `json:"to_user_id,omitempty"` // BSUID
 				Timestamp string `json:"timestamp"`
 				Type      string `json:"type"`
 				Event     string `json:"event"`
@@ -243,6 +259,16 @@ func (a *App) WebhookHandler(r *fastglue.Request) error {
 					"waba_id", entry.ID,
 				)
 				go a.processTemplateStatusUpdate(entry.ID, change.Value.Event, change.Value.MessageTemplateName, change.Value.MessageTemplateLanguage, change.Value.Reason)
+				continue
+			}
+
+			// Handle user preferences (marketing opt-out/in)
+			if change.Field == "user_preferences" {
+				for _, pref := range change.Value.UserPreferences {
+					if pref.Category == "marketing_messages" {
+						go a.processMarketingPreference(change.Value.Metadata.PhoneNumberID, pref.WaID, pref.UserID, pref.Value)
+					}
+				}
 				continue
 			}
 
@@ -323,13 +349,20 @@ func (a *App) WebhookHandler(r *fastglue.Request) error {
 					continue
 				}
 
-				// Get contact profile name
+				// Get contact profile name (match by phone or BSUID)
 				profileName := ""
 				for _, contact := range change.Value.Contacts {
-					if contact.WaID == msg.From {
+					if (msg.From != "" && contact.WaID == msg.From) || (msg.FromUserID != "" && contact.UserID == msg.FromUserID) {
 						profileName = contact.Profile.Name
 						break
 					}
+				}
+
+				// If phone number is missing (username user), skip — BSUID-only messaging not yet supported
+				if msg.From == "" {
+					a.Log.Warn("Incoming message without phone number (username user), skipping",
+						"bsuid", msg.FromUserID, "message_id", msg.ID)
+					continue
 				}
 
 				// Process message asynchronously
@@ -352,7 +385,7 @@ func (a *App) WebhookHandler(r *fastglue.Request) error {
 	return r.SendEnvelope(map[string]string{"status": "ok"})
 }
 
-func (a *App) processIncomingMessage(phoneNumberID string, msg interface{}, profileName string) {
+func (a *App) processIncomingMessage(phoneNumberID string, msg any, profileName string) {
 	// Convert msg interface to the message struct
 	msgBytes, err := json.Marshal(msg)
 	if err != nil {
@@ -430,7 +463,7 @@ func (a *App) updateMessageStatus(whatsappMsgID, statusValue string, errors []We
 		return
 	}
 
-	updates := map[string]interface{}{}
+	updates := map[string]any{}
 
 	switch newStatus {
 	case models.MessageStatusSent:
@@ -471,7 +504,7 @@ func (a *App) updateMessageStatus(whatsappMsgID, statusValue string, errors []We
 			a.incrementCampaignStat(campaignID, statusValue)
 
 			// Update the BulkMessageRecipient status and timestamps
-			recipientUpdates := map[string]interface{}{
+			recipientUpdates := map[string]any{
 				"status": newStatus,
 			}
 			switch newStatus {
@@ -573,4 +606,45 @@ func verifyWebhookSignature(body, signature, appSecret []byte) bool {
 
 	// Constant-time comparison to prevent timing attacks
 	return hmac.Equal(expectedSig, computedSig)
+}
+
+// processMarketingPreference updates a contact's marketing opt-out status
+// based on the user_preferences webhook from Meta.
+func (a *App) processMarketingPreference(phoneNumberID, userPhone, bsuid, value string) {
+	// Find the WhatsApp account by phone_number_id
+	var account models.WhatsAppAccount
+	if err := a.DB.Where("phone_id = ?", phoneNumberID).First(&account).Error; err != nil {
+		a.Log.Error("Failed to find account for marketing preference", "error", err, "phone_id", phoneNumberID)
+		return
+	}
+
+	// Find contact by phone number, or by BSUID if phone is empty
+	var contact models.Contact
+	if userPhone != "" {
+		if err := a.DB.Where("phone_number = ? AND organization_id = ?", userPhone, account.OrganizationID).First(&contact).Error; err != nil {
+			a.Log.Info("Contact not found for marketing preference", "phone", userPhone)
+			return
+		}
+	} else if bsuid != "" {
+		if err := a.DB.Where("bsuid = ? AND organization_id = ?", bsuid, account.OrganizationID).First(&contact).Error; err != nil {
+			a.Log.Info("Contact not found by BSUID for marketing preference", "bsuid", bsuid)
+			return
+		}
+	} else {
+		a.Log.Warn("Marketing preference webhook with no phone or BSUID, skipping")
+		return
+	}
+
+	optOut := value == "stop"
+	if err := a.DB.Model(&contact).Update("marketing_opt_out", optOut).Error; err != nil {
+		a.Log.Error("Failed to update marketing opt-out", "error", err, "contact_id", contact.ID, "opt_out", optOut)
+		return
+	}
+
+	a.Log.Info("Marketing preference updated",
+		"contact_id", contact.ID,
+		"phone", userPhone,
+		"bsuid", bsuid,
+		"opt_out", optOut,
+	)
 }

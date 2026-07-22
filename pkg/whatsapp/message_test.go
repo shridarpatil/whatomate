@@ -129,7 +129,7 @@ func TestClient_SendInteractiveButtons(t *testing.T) {
 			}
 			ctx := testutil.TestContext(t)
 
-			_, err := client.SendInteractiveButtons(ctx, account, tt.phone, tt.bodyText, tt.buttons)
+			_, err := client.SendInteractiveButtons(ctx, account, whatsapp.Recipient{Phone: tt.phone}, tt.bodyText, tt.buttons)
 
 			if tt.wantErr {
 				require.Error(t, err)
@@ -182,7 +182,7 @@ func TestClient_SendInteractiveButtons_ButtonTruncation(t *testing.T) {
 		{ID: "1", Title: longTitle},
 	}
 
-	_, err := client.SendInteractiveButtons(ctx, account, "1234567890", "Choose:", buttons)
+	_, err := client.SendInteractiveButtons(ctx, account, whatsapp.Recipient{Phone: "1234567890"}, "Choose:", buttons)
 	require.NoError(t, err)
 
 	// Verify button title was truncated
@@ -271,7 +271,7 @@ func TestClient_SendTemplateMessage(t *testing.T) {
 			ctx := testutil.TestContext(t)
 
 			components := whatsapp.BodyParamsToComponents(tt.bodyParams)
-			msgID, err := client.SendTemplateMessage(ctx, account, tt.phone, tt.templateName, tt.language, components)
+			msgID, err := client.SendTemplateMessage(ctx, account, whatsapp.Recipient{Phone: tt.phone}, tt.templateName, tt.language, components)
 
 			if tt.wantErr {
 				require.Error(t, err)
@@ -382,7 +382,7 @@ func TestClient_SendCTAURLButton(t *testing.T) {
 			}
 			ctx := testutil.TestContext(t)
 
-			msgID, err := client.SendCTAURLButton(ctx, account, tt.phone, tt.bodyText, tt.buttonText, tt.url)
+			msgID, err := client.SendCTAURLButton(ctx, account, whatsapp.Recipient{Phone: tt.phone}, tt.bodyText, tt.buttonText, tt.url)
 
 			if tt.wantErr {
 				require.Error(t, err)
@@ -451,7 +451,7 @@ func TestClient_SendTemplateMessage_WithComponents(t *testing.T) {
 		},
 	}
 
-	msgID, err := client.SendTemplateMessage(ctx, account, "1234567890", "order_template", "en", components)
+	msgID, err := client.SendTemplateMessage(ctx, account, whatsapp.Recipient{Phone: "1234567890"}, "order_template", "en", components)
 
 	require.NoError(t, err)
 	assert.Equal(t, "wamid.comp123", msgID)
@@ -460,5 +460,101 @@ func TestClient_SendTemplateMessage_WithComponents(t *testing.T) {
 	template := capturedBody["template"].(map[string]interface{})
 	sentComponents := template["components"].([]interface{})
 	assert.Len(t, sentComponents, 2)
+}
+
+func TestButtonURLParamsToComponents(t *testing.T) {
+	t.Parallel()
+
+	t.Run("nil params returns nil", func(t *testing.T) {
+		result := whatsapp.ButtonURLParamsToComponents(nil)
+		assert.Nil(t, result)
+	})
+
+	t.Run("empty params returns nil", func(t *testing.T) {
+		result := whatsapp.ButtonURLParamsToComponents(map[string]string{})
+		assert.Nil(t, result)
+	})
+
+	t.Run("single URL button param", func(t *testing.T) {
+		params := map[string]string{"0": "12345"}
+		result := whatsapp.ButtonURLParamsToComponents(params)
+
+		require.Len(t, result, 1)
+		assert.Equal(t, "button", result[0]["type"])
+		assert.Equal(t, "url", result[0]["sub_type"])
+		assert.Equal(t, "0", result[0]["index"])
+
+		parameters := result[0]["parameters"].([]map[string]interface{})
+		require.Len(t, parameters, 1)
+		assert.Equal(t, "text", parameters[0]["type"])
+		assert.Equal(t, "12345", parameters[0]["text"])
+	})
+
+	t.Run("multiple URL button params sorted by index", func(t *testing.T) {
+		params := map[string]string{"1": "xyz", "0": "abc"}
+		result := whatsapp.ButtonURLParamsToComponents(params)
+
+		require.Len(t, result, 2)
+		assert.Equal(t, "0", result[0]["index"])
+		assert.Equal(t, "1", result[1]["index"])
+	})
+
+	t.Run("COPY_CODE button from template metadata", func(t *testing.T) {
+		params := map[string]string{"0": "WELCOME10"}
+		templateButtons := []interface{}{
+			map[string]interface{}{"type": "COPY_CODE", "text": "Copy Code"},
+		}
+		result := whatsapp.ButtonURLParamsToComponents(params, templateButtons)
+
+		require.Len(t, result, 1)
+		assert.Equal(t, "button", result[0]["type"])
+		assert.Equal(t, "copy_code", result[0]["sub_type"])
+		assert.Equal(t, "0", result[0]["index"])
+
+		parameters := result[0]["parameters"].([]map[string]interface{})
+		require.Len(t, parameters, 1)
+		assert.Equal(t, "coupon_code", parameters[0]["type"])
+		assert.Equal(t, "WELCOME10", parameters[0]["coupon_code"])
+	})
+
+	t.Run("mixed URL and COPY_CODE buttons", func(t *testing.T) {
+		params := map[string]string{"0": "track123", "1": "SAVE20"}
+		templateButtons := []interface{}{
+			map[string]interface{}{"type": "URL", "text": "Track", "url": "https://example.com/{{1}}"},
+			map[string]interface{}{"type": "COPY_CODE", "text": "Copy Code"},
+		}
+		result := whatsapp.ButtonURLParamsToComponents(params, templateButtons)
+
+		require.Len(t, result, 2)
+
+		// First: URL button
+		assert.Equal(t, "url", result[0]["sub_type"])
+		urlParams := result[0]["parameters"].([]map[string]interface{})
+		assert.Equal(t, "track123", urlParams[0]["text"])
+
+		// Second: COPY_CODE button
+		assert.Equal(t, "copy_code", result[1]["sub_type"])
+		codeParams := result[1]["parameters"].([]map[string]interface{})
+		assert.Equal(t, "SAVE20", codeParams[0]["coupon_code"])
+	})
+
+	t.Run("case insensitive button type matching", func(t *testing.T) {
+		params := map[string]string{"0": "CODE1"}
+		templateButtons := []interface{}{
+			map[string]interface{}{"type": "copy_code", "text": "Copy"},
+		}
+		result := whatsapp.ButtonURLParamsToComponents(params, templateButtons)
+
+		require.Len(t, result, 1)
+		assert.Equal(t, "copy_code", result[0]["sub_type"])
+	})
+
+	t.Run("no template buttons defaults to URL", func(t *testing.T) {
+		params := map[string]string{"0": "value"}
+		result := whatsapp.ButtonURLParamsToComponents(params)
+
+		require.Len(t, result, 1)
+		assert.Equal(t, "url", result[0]["sub_type"])
+	})
 }
 

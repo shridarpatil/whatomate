@@ -26,30 +26,32 @@ test.describe('Campaigns Management', () => {
     await expect(campaignsPage.timeRangeFilter).toBeVisible()
   })
 
-  test('should open create campaign dialog', async () => {
-    await campaignsPage.openCreateDialog()
-    await campaignsPage.expectDialogVisible()
-    await campaignsPage.expectDialogTitle(/Campaign/i)
+  test('should load create campaign page', async ({ page }) => {
+    await page.goto('/campaigns/new')
+    await page.waitForLoadState('networkidle')
+    expect(page.url()).toContain('/campaigns/new')
+    await expect(page.locator('input').first()).toBeVisible()
   })
 
-  test('should show required fields in create dialog', async ({ page }) => {
-    await campaignsPage.openCreateDialog()
-    const dialog = campaignsPage.createDialog
-    await expect(dialog.locator('label').filter({ hasText: /Name/i }).first()).toBeVisible()
-    await expect(dialog.locator('label').filter({ hasText: /Account/i }).first()).toBeVisible()
-    await expect(dialog.locator('label').filter({ hasText: /Template/i }).first()).toBeVisible()
+  test('should show required fields on create page', async ({ page }) => {
+    await page.goto('/campaigns/new')
+    await page.waitForLoadState('networkidle')
+    await expect(page.locator('input').first()).toBeVisible()
+    // Account and Template selects
+    const selects = page.locator('button[role="combobox"]')
+    expect(await selects.count()).toBeGreaterThanOrEqual(1)
   })
 
-  test('should show validation error for empty campaign', async ({ page }) => {
-    await campaignsPage.openCreateDialog()
-    await campaignsPage.createDialog.getByRole('button', { name: /Create Campaign/i }).click()
-    await expect(page.locator('[data-sonner-toast]')).toBeVisible({ timeout: 5000 })
-  })
-
-  test('should cancel campaign creation', async () => {
-    await campaignsPage.openCreateDialog()
-    await campaignsPage.createDialog.getByRole('button', { name: /Cancel/i }).click()
-    await campaignsPage.expectDialogHidden()
+  test('should load detail page from list', async ({ page }) => {
+    const firstLink = page.locator('tbody a').first()
+    if (await firstLink.isVisible({ timeout: 3000 }).catch(() => false)) {
+      const href = await firstLink.getAttribute('href')
+      if (href && !href.includes('/new')) {
+        await page.goto(href)
+        await page.waitForLoadState('networkidle')
+        expect(page.url()).toMatch(/\/campaigns\/[a-f0-9-]+/)
+      }
+    }
   })
 
   test('should filter campaigns by status', async ({ page }) => {
@@ -94,52 +96,6 @@ test.describe('Campaign Edit Dialog', () => {
   })
 })
 
-test.describe('Campaign Actions', () => {
-  let campaignsPage: CampaignsPage
-
-  test.beforeEach(async ({ page }) => {
-    await loginAsAdmin(page)
-    campaignsPage = new CampaignsPage(page)
-    await campaignsPage.goto()
-  })
-
-  test('should verify Start button exists for draft campaigns', async () => {
-    await campaignsPage.expectPageVisible()
-    // Start button appears for draft/scheduled campaigns
-  })
-
-  test('should verify Pause button exists for running campaigns', async () => {
-    await campaignsPage.expectPageVisible()
-    // Pause button appears for running/processing campaigns
-  })
-
-  test('should verify Retry Failed button exists for campaigns with failed messages', async () => {
-    await campaignsPage.expectPageVisible()
-    // Retry Failed button appears for campaigns with failed_count > 0
-  })
-})
-
-test.describe('Campaign Cancel Action', () => {
-  let campaignsPage: CampaignsPage
-
-  test.beforeEach(async ({ page }) => {
-    await loginAsAdmin(page)
-    campaignsPage = new CampaignsPage(page)
-    await campaignsPage.goto()
-  })
-
-  test('should show confirmation dialog when canceling campaign', async () => {
-    const cancelBtn = campaignsPage.getCancelButton()
-    if (await cancelBtn.isVisible()) {
-      await cancelBtn.click()
-      await campaignsPage.expectAlertDialogVisible()
-      await campaignsPage.expectAlertDialogTitle(/Cancel Campaign/i)
-      await campaignsPage.keepRunning()
-      await campaignsPage.expectAlertDialogHidden()
-    }
-  })
-})
-
 test.describe('Campaign Delete Confirmation', () => {
   let campaignsPage: CampaignsPage
 
@@ -163,93 +119,6 @@ test.describe('Campaign Delete Confirmation', () => {
       await expect(campaignsPage.alertDialog.getByRole('button', { name: /Delete/i })).toBeVisible()
       await expect(campaignsPage.alertDialog.getByRole('button', { name: /Cancel/i })).toBeVisible()
       await campaignsPage.cancelDelete()
-    }
-  })
-})
-
-test.describe('Campaign View Recipients Dialog', () => {
-  let campaignsPage: CampaignsPage
-
-  test.beforeEach(async ({ page }) => {
-    await loginAsAdmin(page)
-    campaignsPage = new CampaignsPage(page)
-    await campaignsPage.goto()
-  })
-
-  test('should open recipients dialog when clicking view button', async () => {
-    if (await campaignsPage.clickViewRecipientsButton()) {
-      await campaignsPage.expectDialogTitle(/Campaign Recipients/i)
-    }
-  })
-
-  test('should show recipients table or empty state', async ({ page }) => {
-    if (await campaignsPage.clickViewRecipientsButton()) {
-      // Either show table headers or empty state
-      const hasTable = await campaignsPage.createDialog.locator('th').filter({ hasText: /Phone Number/i }).isVisible().catch(() => false)
-      const hasEmptyState = await campaignsPage.createDialog.getByText(/No recipients/i).isVisible().catch(() => false)
-      expect(hasTable || hasEmptyState).toBeTruthy()
-    }
-  })
-
-  test('should have Close button in recipients dialog', async () => {
-    if (await campaignsPage.clickViewRecipientsButton()) {
-      const closeBtn = campaignsPage.createDialog.getByRole('button', { name: /Close/i })
-      await expect(closeBtn).toBeVisible()
-      await closeBtn.click()
-      await campaignsPage.expectDialogHidden()
-    }
-  })
-})
-
-test.describe('Campaign Add Recipients Dialog', () => {
-  let campaignsPage: CampaignsPage
-
-  test.beforeEach(async ({ page }) => {
-    await loginAsAdmin(page)
-    campaignsPage = new CampaignsPage(page)
-    await campaignsPage.goto()
-  })
-
-  test('should open add recipients dialog for draft campaigns', async () => {
-    if (await campaignsPage.clickAddRecipientsButton()) {
-      await campaignsPage.expectDialogTitle(/Add Recipients/i)
-    }
-  })
-
-  test('should have Manual Entry and Upload CSV tabs', async () => {
-    if (await campaignsPage.clickAddRecipientsButton()) {
-      await expect(campaignsPage.getManualEntryTab()).toBeVisible()
-      await expect(campaignsPage.getCsvUploadTab()).toBeVisible()
-    }
-  })
-
-  test('should show format hint in manual entry tab', async () => {
-    if (await campaignsPage.clickAddRecipientsButton()) {
-      await expect(campaignsPage.createDialog).toContainText(/Format/i)
-      await expect(campaignsPage.createDialog).toContainText(/phone_number/i)
-    }
-  })
-
-  test('should switch to CSV upload tab', async () => {
-    if (await campaignsPage.clickAddRecipientsButton()) {
-      await campaignsPage.getCsvUploadTab().click()
-      await expect(campaignsPage.createDialog).toContainText(/CSV/i)
-      await expect(campaignsPage.getCsvFileInput()).toBeVisible()
-    }
-  })
-
-  test('should have Add Recipients button', async () => {
-    if (await campaignsPage.clickAddRecipientsButton()) {
-      await expect(campaignsPage.createDialog.getByRole('button', { name: /Add Recipients/i })).toBeVisible()
-    }
-  })
-
-  test('should have Cancel button in add recipients dialog', async () => {
-    if (await campaignsPage.clickAddRecipientsButton()) {
-      const cancelBtn = campaignsPage.createDialog.getByRole('button', { name: /Cancel/i })
-      await expect(cancelBtn).toBeVisible()
-      await cancelBtn.click()
-      await campaignsPage.expectDialogHidden()
     }
   })
 })
@@ -278,5 +147,189 @@ test.describe('Campaign UI Elements', () => {
   test('should show empty state when no campaigns', async ({ page }) => {
     await campaignsPage.expectPageVisible()
     // Empty state shows when no campaigns exist
+  })
+})
+
+test.describe('Campaign Detail Page CRUD', () => {
+  test.beforeEach(async ({ page }) => {
+    await loginAsAdmin(page)
+  })
+
+  test('should show form fields on create page', async ({ page }) => {
+    await page.goto('/campaigns/new')
+    await page.waitForLoadState('networkidle')
+
+    // Name input
+    await expect(page.locator('input').first()).toBeVisible()
+    // Account and Template selects
+    const selects = page.locator('button[role="combobox"]')
+    expect(await selects.count()).toBeGreaterThanOrEqual(1)
+  })
+
+  test('should load detail page from list', async ({ page }) => {
+    await page.goto('/campaigns')
+    await page.waitForLoadState('networkidle')
+
+    const firstLink = page.locator('tbody a').first()
+    if (await firstLink.isVisible({ timeout: 3000 }).catch(() => false)) {
+      const href = await firstLink.getAttribute('href')
+      if (href && !href.includes('/new')) {
+        await page.goto(href)
+        await page.waitForLoadState('networkidle')
+        expect(page.url()).toMatch(/\/campaigns\/[a-f0-9-]+/)
+      }
+    }
+  })
+
+  test('should show stats on existing campaign', async ({ page }) => {
+    await page.goto('/campaigns')
+    await page.waitForLoadState('networkidle')
+
+    const firstLink = page.locator('tbody a').first()
+    if (await firstLink.isVisible({ timeout: 3000 }).catch(() => false)) {
+      const href = await firstLink.getAttribute('href')
+      if (href && !href.includes('/new')) {
+        await page.goto(href)
+        await page.waitForLoadState('networkidle')
+        await expect(page.getByText('Statistics')).toBeVisible({ timeout: 10000 })
+      }
+    }
+  })
+
+  test('should show recipients section on existing campaign', async ({ page }) => {
+    await page.goto('/campaigns')
+    await page.waitForLoadState('networkidle')
+
+    const firstLink = page.locator('tbody a').first()
+    if (await firstLink.isVisible({ timeout: 3000 }).catch(() => false)) {
+      const href = await firstLink.getAttribute('href')
+      if (href && !href.includes('/new')) {
+        await page.goto(href)
+        await page.waitForLoadState('networkidle')
+        await expect(page.getByText('Recipients')).toBeVisible({ timeout: 10000 })
+      }
+    }
+  })
+
+  test('should show metadata on existing campaign', async ({ page }) => {
+    await page.goto('/campaigns')
+    await page.waitForLoadState('networkidle')
+
+    const firstLink = page.locator('tbody a').first()
+    if (await firstLink.isVisible({ timeout: 3000 }).catch(() => false)) {
+      const href = await firstLink.getAttribute('href')
+      if (href && !href.includes('/new')) {
+        await page.goto(href)
+        await page.waitForLoadState('networkidle')
+        await page.waitForTimeout(2000)
+        await expect(page.getByText('Metadata')).toBeVisible({ timeout: 15000 })
+      }
+    }
+  })
+
+  test('should show activity log on existing campaign', async ({ page }) => {
+    await page.goto('/campaigns')
+    await page.waitForLoadState('networkidle')
+
+    const firstLink = page.locator('tbody a').first()
+    if (await firstLink.isVisible({ timeout: 3000 }).catch(() => false)) {
+      const href = await firstLink.getAttribute('href')
+      if (href && !href.includes('/new')) {
+        await page.goto(href)
+        await page.waitForLoadState('networkidle')
+        await page.waitForTimeout(2000)
+        await expect(page.getByText('Activity Log')).toBeVisible({ timeout: 15000 })
+      }
+    }
+  })
+
+  test('should edit campaign name on detail page', async ({ page }) => {
+    await page.goto('/campaigns')
+    await page.waitForLoadState('networkidle')
+
+    const firstLink = page.locator('tbody a').first()
+    if (!(await firstLink.isVisible({ timeout: 3000 }).catch(() => false))) return
+
+    const href = await firstLink.getAttribute('href')
+    if (!href || href.includes('/new')) return
+
+    await page.goto(href)
+    await page.waitForLoadState('networkidle')
+
+    const nameInput = page.locator('input').first()
+    if (await nameInput.isDisabled()) return
+
+    const original = await nameInput.inputValue()
+    await nameInput.fill(original + ' edited')
+    await page.waitForTimeout(300)
+
+    const saveBtn = page.getByRole('button', { name: /Save/i })
+    if (await saveBtn.isVisible({ timeout: 5000 }).catch(() => false)) {
+      await saveBtn.click({ force: true })
+      await page.waitForTimeout(2000)
+      // Revert
+      await nameInput.fill(original)
+      await page.waitForTimeout(300)
+      const revertBtn = page.getByRole('button', { name: /Save/i })
+      if (await revertBtn.isVisible({ timeout: 3000 }).catch(() => false)) {
+        await revertBtn.click({ force: true })
+      }
+    }
+  })
+
+  test('should show delete confirmation on detail page', async ({ page }) => {
+    await page.goto('/campaigns')
+    await page.waitForLoadState('networkidle')
+
+    const firstLink = page.locator('tbody a').first()
+    if (!(await firstLink.isVisible({ timeout: 3000 }).catch(() => false))) return
+
+    const href = await firstLink.getAttribute('href')
+    if (!href || href.includes('/new')) return
+
+    await page.goto(href)
+    await page.waitForLoadState('networkidle')
+
+    // Dismiss any toast
+    await page.evaluate(() => {
+      document.querySelectorAll('[data-sonner-toast]').forEach(el => el.remove())
+    })
+    await page.waitForTimeout(300)
+
+    const deleteBtn = page.getByRole('button', { name: /Delete/i }).first()
+    if (await deleteBtn.isVisible({ timeout: 3000 }).catch(() => false)) {
+      await deleteBtn.click()
+      const dialog = page.locator('[role="alertdialog"]')
+      await expect(dialog).toBeVisible({ timeout: 5000 })
+      // Cancel — don't actually delete
+      await dialog.getByRole('button', { name: /Cancel/i }).click()
+    }
+  })
+
+  test('should show add recipients dialog on draft campaign', async ({ page }) => {
+    await page.goto('/campaigns')
+    await page.waitForLoadState('networkidle')
+
+    const firstLink = page.locator('tbody a').first()
+    if (!(await firstLink.isVisible({ timeout: 3000 }).catch(() => false))) return
+
+    const href = await firstLink.getAttribute('href')
+    if (!href || href.includes('/new')) return
+
+    await page.goto(href)
+    await page.waitForLoadState('networkidle')
+
+    // Click Add button in recipients section (only for draft)
+    const addBtn = page.getByRole('button', { name: /Add/i }).first()
+    if (await addBtn.isVisible({ timeout: 3000 }).catch(() => false)) {
+      await addBtn.click()
+      const dialog = page.locator('[role="dialog"]')
+      await expect(dialog).toBeVisible({ timeout: 5000 })
+      // Should have Manual Entry and CSV tabs
+      await expect(dialog.getByText('Manual Entry')).toBeVisible()
+      await expect(dialog.getByText('CSV')).toBeVisible()
+      // Close
+      await page.keyboard.press('Escape')
+    }
   })
 })

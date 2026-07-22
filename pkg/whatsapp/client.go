@@ -68,7 +68,7 @@ func (c *Client) getBaseURL() string {
 }
 
 // doRequest performs an HTTP request to the Meta API
-func (c *Client) doRequest(ctx context.Context, method, url string, body interface{}, accessToken string) ([]byte, error) {
+func (c *Client) doRequest(ctx context.Context, method, url string, body any, accessToken string) ([]byte, error) {
 	var reqBody io.Reader
 	if body != nil {
 		jsonBody, err := json.Marshal(body)
@@ -325,17 +325,17 @@ func (c *Client) UploadMedia(ctx context.Context, account *Account, data []byte,
 }
 
 // sendMediaMessage is the shared implementation for all media message types.
-func (c *Client) sendMediaMessage(ctx context.Context, account *Account, phoneNumber, mediaType string, mediaFields map[string]interface{}) (string, error) {
-	payload := map[string]interface{}{
+func (c *Client) sendMediaMessage(ctx context.Context, account *Account, rcpt Recipient, mediaType string, mediaFields map[string]any) (string, error) {
+	payload := map[string]any{
 		"messaging_product": "whatsapp",
 		"recipient_type":    "individual",
-		"to":                phoneNumber,
 		"type":              mediaType,
 		mediaType:           mediaFields,
 	}
+	rcpt.SetOnPayload(payload)
 
 	url := c.buildMessagesURL(account)
-	c.Log.Debug("Sending media message", "type", mediaType, "phone", phoneNumber, "media_id", mediaFields["id"])
+	c.Log.Debug("Sending media message", "type", mediaType, "phone", rcpt.Phone, "media_id", mediaFields["id"])
 
 	respBody, err := c.doRequest(ctx, "POST", url, payload, account.AccessToken)
 	if err != nil {
@@ -352,41 +352,41 @@ func (c *Client) sendMediaMessage(ctx context.Context, account *Account, phoneNu
 	}
 
 	messageID := resp.Messages[0].ID
-	c.Log.Info("Media message sent", "type", mediaType, "message_id", messageID, "phone", phoneNumber)
+	c.Log.Info("Media message sent", "type", mediaType, "message_id", messageID, "phone", rcpt.Phone)
 	return messageID, nil
 }
 
 // SendImageMessage sends an image message using a media ID
-func (c *Client) SendImageMessage(ctx context.Context, account *Account, phoneNumber, mediaID, caption string) (string, error) {
-	return c.sendMediaMessage(ctx, account, phoneNumber, "image", map[string]interface{}{
+func (c *Client) SendImageMessage(ctx context.Context, account *Account, rcpt Recipient, mediaID, caption string) (string, error) {
+	return c.sendMediaMessage(ctx, account, rcpt, "image", map[string]any{
 		"id": mediaID, "caption": caption,
 	})
 }
 
 // SendDocumentMessage sends a document message using a media ID
-func (c *Client) SendDocumentMessage(ctx context.Context, account *Account, phoneNumber, mediaID, filename, caption string) (string, error) {
-	return c.sendMediaMessage(ctx, account, phoneNumber, "document", map[string]interface{}{
+func (c *Client) SendDocumentMessage(ctx context.Context, account *Account, rcpt Recipient, mediaID, filename, caption string) (string, error) {
+	return c.sendMediaMessage(ctx, account, rcpt, "document", map[string]any{
 		"id": mediaID, "filename": filename, "caption": caption,
 	})
 }
 
 // SendVideoMessage sends a video message using a media ID
-func (c *Client) SendVideoMessage(ctx context.Context, account *Account, phoneNumber, mediaID, caption string) (string, error) {
-	return c.sendMediaMessage(ctx, account, phoneNumber, "video", map[string]interface{}{
+func (c *Client) SendVideoMessage(ctx context.Context, account *Account, rcpt Recipient, mediaID, caption string) (string, error) {
+	return c.sendMediaMessage(ctx, account, rcpt, "video", map[string]any{
 		"id": mediaID, "caption": caption,
 	})
 }
 
 // SendAudioMessage sends an audio message using a media ID
-func (c *Client) SendAudioMessage(ctx context.Context, account *Account, phoneNumber, mediaID string) (string, error) {
-	return c.sendMediaMessage(ctx, account, phoneNumber, "audio", map[string]interface{}{
+func (c *Client) SendAudioMessage(ctx context.Context, account *Account, rcpt Recipient, mediaID string) (string, error) {
+	return c.sendMediaMessage(ctx, account, rcpt, "audio", map[string]any{
 		"id": mediaID,
 	})
 }
 
 // MarkMessageRead sends a read receipt for a message
 func (c *Client) MarkMessageRead(ctx context.Context, account *Account, messageID string) error {
-	payload := map[string]interface{}{
+	payload := map[string]any{
 		"messaging_product": "whatsapp",
 		"status":            "read",
 		"message_id":        messageID,
@@ -425,7 +425,7 @@ func (c *Client) ResumableUpload(ctx context.Context, account *Account, data []b
 	// Step 1: Create upload session
 	sessionURL := fmt.Sprintf("%s/%s/%s/uploads", c.getBaseURL(), account.APIVersion, account.AppID)
 
-	sessionPayload := map[string]interface{}{
+	sessionPayload := map[string]any{
 		"file_length": len(data),
 		"file_type":   mimeType,
 		"file_name":   filename,

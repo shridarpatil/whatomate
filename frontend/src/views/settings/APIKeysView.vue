@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, onMounted, watch, computed } from 'vue'
+import { ref, onMounted, computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { apiKeysService } from '@/services/api'
 import { Button } from '@/components/ui/button'
@@ -9,13 +9,13 @@ import { Badge } from '@/components/ui/badge'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
-import { PageHeader, DataTable, SearchInput, CrudFormDialog, DeleteConfirmDialog, type Column } from '@/components/shared'
+import { PageHeader, DataTable, SearchInput, CrudFormDialog, DeleteConfirmDialog, IconButton, ErrorState, type Column } from '@/components/shared'
 import { toast } from 'vue-sonner'
 import { Plus, Trash2, Copy, Key, AlertTriangle } from 'lucide-vue-next'
 import { useCrudState } from '@/composables/useCrudState'
 import { getErrorMessage } from '@/lib/api-utils'
 import { formatDate } from '@/lib/utils'
-import { useDebounceFn } from '@vueuse/core'
+import { useSearchPagination } from '@/composables/useSearchPagination'
 
 const { t } = useI18n()
 
@@ -52,11 +52,11 @@ const {
 
 const isKeyDisplayOpen = ref(false)
 const newlyCreatedKey = ref<NewAPIKeyResponse | null>(null)
+const error = ref<string | null>(null)
 
-// Pagination state
-const currentPage = ref(1)
-const totalItems = ref(0)
-const pageSize = 20
+const { searchQuery, currentPage, totalItems, pageSize, handlePageChange } = useSearchPagination({
+  fetchFn: () => fetchItems(),
+})
 
 const columns = computed<Column<APIKey>[]>(() => [
   { key: 'name', label: t('apiKeys.name'), sortable: true },
@@ -71,10 +71,9 @@ const columns = computed<Column<APIKey>[]>(() => [
 const sortKey = ref('name')
 const sortDirection = ref<'asc' | 'desc'>('asc')
 
-const searchQuery = ref('')
-
 async function fetchItems() {
   isLoading.value = true
+  error.value = null
   try {
     const response = await apiKeysService.list({
       search: searchQuery.value || undefined,
@@ -84,24 +83,12 @@ async function fetchItems() {
     const data = (response.data as any).data || response.data
     apiKeys.value = data.api_keys || []
     totalItems.value = data.total ?? apiKeys.value.length
-  } catch (error) {
-    toast.error(getErrorMessage(error, t('common.failedLoad', { resource: t('resources.apiKeys') })))
+  } catch (err) {
+    toast.error(getErrorMessage(err, t('common.failedLoad', { resource: t('resources.apiKeys') })))
+    error.value = t('apiKeys.errorLoadingApiKeys')
   } finally {
     isLoading.value = false
   }
-}
-
-// Debounced search
-const debouncedSearch = useDebounceFn(() => {
-  currentPage.value = 1
-  fetchItems()
-}, 300)
-
-watch(searchQuery, () => debouncedSearch())
-
-function handlePageChange(page: number) {
-  currentPage.value = page
-  fetchItems()
 }
 
 async function createAPIKey() {
@@ -121,10 +108,14 @@ async function createAPIKey() {
   finally { isSubmitting.value = false }
 }
 
+const isDeleting = ref(false)
+
 async function deleteAPIKey() {
   if (!keyToDelete.value) return
+  isDeleting.value = true
   try { await apiKeysService.delete(keyToDelete.value.id); await fetchItems(); toast.success(t('common.deletedSuccess', { resource: t('resources.APIKey') })); closeDeleteDialog() }
-  catch (error) { toast.error(getErrorMessage(error, t('common.failedDelete', { resource: t('resources.APIKey') }))) }
+  catch (err) { toast.error(getErrorMessage(err, t('common.failedDelete', { resource: t('resources.APIKey') }))) }
+  finally { isDeleting.value = false }
 }
 
 function copyToClipboard(text: string) { navigator.clipboard.writeText(text); toast.success(t('common.copiedToClipboard')) }
@@ -145,7 +136,14 @@ onMounted(() => fetchItems())
     <ScrollArea class="flex-1">
       <div class="p-6">
         <div class="max-w-6xl mx-auto">
-          <Card>
+          <ErrorState
+            v-if="error && !isLoading"
+            :title="$t('common.loadErrorTitle')"
+            :description="error"
+            :retry-label="$t('common.retry')"
+            @retry="fetchItems"
+          />
+          <Card v-else>
             <CardHeader>
               <div class="flex items-center justify-between flex-wrap gap-4">
                 <div>
@@ -167,7 +165,7 @@ onMounted(() => fetchItems())
                   </Badge>
                 </template>
                 <template #cell-actions="{ item: key }">
-                  <Button variant="ghost" size="icon" @click="openDeleteDialog(key)"><Trash2 class="h-4 w-4 text-destructive" /></Button>
+                  <IconButton :icon="Trash2" :label="$t('apiKeys.deleteApiKeyLabel')" variant="ghost" class="text-destructive" @click="openDeleteDialog(key)" />
                 </template>
                 <template #empty-action>
                   <Button variant="outline" size="sm" @click="openCreateDialogBase"><Plus class="h-4 w-4 mr-2" />{{ $t('apiKeys.createApiKey') }}</Button>
@@ -199,7 +197,7 @@ onMounted(() => fetchItems())
         <div class="space-y-4 py-4">
           <div class="space-y-2">
             <Label>{{ $t('apiKeys.yourApiKey') }}</Label>
-            <div class="flex gap-2"><Input :model-value="newlyCreatedKey?.key" readonly class="font-mono text-sm" /><Button variant="outline" size="icon" @click="copyToClipboard(newlyCreatedKey?.key || '')"><Copy class="h-4 w-4" /></Button></div>
+            <div class="flex gap-2"><Input :model-value="newlyCreatedKey?.key" readonly class="font-mono text-sm" /><IconButton :icon="Copy" :label="$t('apiKeys.copyApiKey')" variant="outline" @click="copyToClipboard(newlyCreatedKey?.key || '')" /></div>
           </div>
           <div class="bg-muted p-3 rounded-lg text-sm"><p class="font-medium mb-1">{{ $t('apiKeys.usage') }}:</p><code class="text-xs">curl -H "X-API-Key: {{ newlyCreatedKey?.key }}" https://your-api.com/api/contacts</code></div>
         </div>
@@ -207,6 +205,6 @@ onMounted(() => fetchItems())
       </DialogContent>
     </Dialog>
 
-    <DeleteConfirmDialog v-model:open="isDeleteDialogOpen" :title="$t('apiKeys.deleteApiKey')" :item-name="keyToDelete?.name" :description="$t('apiKeys.deleteWarning')" @confirm="deleteAPIKey" />
+    <DeleteConfirmDialog v-model:open="isDeleteDialogOpen" :title="$t('apiKeys.deleteApiKey')" :item-name="keyToDelete?.name" :description="$t('apiKeys.deleteWarning')" :is-submitting="isDeleting" @confirm="deleteAPIKey" />
   </div>
 </template>

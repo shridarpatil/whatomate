@@ -18,8 +18,8 @@ type FlowRequest struct {
 	Name            string                 `json:"name" validate:"required"`
 	Category        string                 `json:"category"`
 	JSONVersion     string                 `json:"json_version"`
-	FlowJSON        map[string]interface{} `json:"flow_json"`
-	Screens         []interface{}          `json:"screens"`
+	FlowJSON        map[string]any `json:"flow_json"`
+	Screens         []any          `json:"screens"`
 }
 
 // FlowResponse represents the response for a flow
@@ -31,8 +31,8 @@ type FlowResponse struct {
 	Status          string                 `json:"status"`
 	Category        string                 `json:"category"`
 	JSONVersion     string                 `json:"json_version"`
-	FlowJSON        map[string]interface{} `json:"flow_json"`
-	Screens         []interface{}          `json:"screens"`
+	FlowJSON        map[string]any `json:"flow_json"`
+	Screens         []any          `json:"screens"`
 	PreviewURL      string                 `json:"preview_url"`
 	HasLocalChanges bool                   `json:"has_local_changes"`
 	CreatedAt       string                 `json:"created_at"`
@@ -139,7 +139,7 @@ func (a *App) CreateFlow(r *fastglue.Request) error {
 
 	a.Log.Info("Flow created", "flow_id", flow.ID, "name", flow.Name)
 
-	return r.SendEnvelope(map[string]interface{}{
+	return r.SendEnvelope(map[string]any{
 		"flow": flowToResponse(flow),
 	})
 }
@@ -161,7 +161,7 @@ func (a *App) GetFlow(r *fastglue.Request) error {
 		return nil
 	}
 
-	return r.SendEnvelope(map[string]interface{}{
+	return r.SendEnvelope(map[string]any{
 		"flow": flowToResponse(*flow),
 	})
 }
@@ -189,7 +189,7 @@ func (a *App) UpdateFlow(r *fastglue.Request) error {
 	}
 
 	// Update fields
-	updates := map[string]interface{}{}
+	updates := map[string]any{}
 	if req.Name != "" {
 		updates["name"] = req.Name
 	}
@@ -220,7 +220,7 @@ func (a *App) UpdateFlow(r *fastglue.Request) error {
 
 	a.Log.Info("Flow updated", "flow_id", flow.ID)
 
-	return r.SendEnvelope(map[string]interface{}{
+	return r.SendEnvelope(map[string]any{
 		"flow": flowToResponse(*flow),
 	})
 }
@@ -250,7 +250,7 @@ func (a *App) DeleteFlow(r *fastglue.Request) error {
 
 	a.Log.Info("Flow deleted", "flow_id", id)
 
-	return r.SendEnvelope(map[string]interface{}{
+	return r.SendEnvelope(map[string]any{
 		"message": "Flow deleted successfully",
 	})
 }
@@ -318,12 +318,12 @@ func (a *App) SaveFlowToMeta(r *fastglue.Request) error {
 	// Step 2: Upload flow JSON if we have screens
 	if len(flow.Screens) > 0 {
 		// Validate flow structure before sending to Meta
-		if err := validateFlowStructure([]interface{}(flow.Screens)); err != nil {
+		if err := validateFlowStructure([]any(flow.Screens)); err != nil {
 			return r.SendErrorEnvelope(fasthttp.StatusBadRequest, err.Error(), nil, "")
 		}
 
 		// Sanitize screens before sending to Meta
-		sanitizedScreens := sanitizeScreensForMeta([]interface{}(flow.Screens))
+		sanitizedScreens := sanitizeScreensForMeta([]any(flow.Screens))
 
 		flowJSON := &whatsapp.FlowJSON{
 			Version: flow.JSONVersion,
@@ -333,7 +333,7 @@ func (a *App) SaveFlowToMeta(r *fastglue.Request) error {
 		if err := waClient.UpdateFlowJSON(ctx, waAccount, metaFlowID, flowJSON); err != nil {
 			a.Log.Error("Failed to update flow JSON in Meta", "error", err, "flow_id", id, "meta_flow_id", metaFlowID)
 			// Save the meta flow ID even if JSON update fails
-			a.DB.Model(flow).Updates(map[string]interface{}{
+			a.DB.Model(flow).Updates(map[string]any{
 				"meta_flow_id": metaFlowID,
 			})
 			return r.SendErrorEnvelope(fasthttp.StatusInternalServerError, "Failed to update flow JSON", nil, "")
@@ -342,7 +342,7 @@ func (a *App) SaveFlowToMeta(r *fastglue.Request) error {
 
 	// Update local database with meta flow ID and set status to DRAFT
 	// (updating on Meta creates a new draft version that needs to be published)
-	if err := a.DB.Model(flow).Updates(map[string]interface{}{
+	if err := a.DB.Model(flow).Updates(map[string]any{
 		"meta_flow_id":      metaFlowID,
 		"status":            "DRAFT",
 		"has_local_changes": false,
@@ -356,7 +356,7 @@ func (a *App) SaveFlowToMeta(r *fastglue.Request) error {
 
 	a.Log.Info("Flow saved to Meta", "flow_id", flow.ID, "meta_flow_id", metaFlowID)
 
-	return r.SendEnvelope(map[string]interface{}{
+	return r.SendEnvelope(map[string]any{
 		"flow":    flowToResponse(*flow),
 		"message": "Flow saved to Meta successfully",
 	})
@@ -415,7 +415,7 @@ func (a *App) PublishFlow(r *fastglue.Request) error {
 	}
 
 	// Update local database
-	if err := a.DB.Model(flow).Updates(map[string]interface{}{
+	if err := a.DB.Model(flow).Updates(map[string]any{
 		"status":      "PUBLISHED",
 		"preview_url": previewURL,
 	}).Error; err != nil {
@@ -428,7 +428,7 @@ func (a *App) PublishFlow(r *fastglue.Request) error {
 
 	a.Log.Info("Flow published to Meta", "flow_id", flow.ID, "meta_flow_id", flow.MetaFlowID)
 
-	return r.SendEnvelope(map[string]interface{}{
+	return r.SendEnvelope(map[string]any{
 		"flow":    flowToResponse(*flow),
 		"message": "Flow published successfully",
 	})
@@ -474,7 +474,7 @@ func (a *App) DeprecateFlow(r *fastglue.Request) error {
 		}
 	}
 
-	if err := a.DB.Model(flow).Updates(map[string]interface{}{
+	if err := a.DB.Model(flow).Updates(map[string]any{
 		"status": "DEPRECATED",
 	}).Error; err != nil {
 		a.Log.Error("Failed to deprecate flow", "error", err, "flow_id", id)
@@ -486,7 +486,7 @@ func (a *App) DeprecateFlow(r *fastglue.Request) error {
 
 	a.Log.Info("Flow deprecated", "flow_id", flow.ID)
 
-	return r.SendEnvelope(map[string]interface{}{
+	return r.SendEnvelope(map[string]any{
 		"flow":    flowToResponse(*flow),
 		"message": "Flow deprecated successfully",
 	})
@@ -530,7 +530,7 @@ func (a *App) DuplicateFlow(r *fastglue.Request) error {
 
 	a.Log.Info("Flow duplicated", "original_flow_id", id, "new_flow_id", newFlow.ID)
 
-	return r.SendEnvelope(map[string]interface{}{
+	return r.SendEnvelope(map[string]any{
 		"flow":    flowToResponse(newFlow),
 		"message": "Flow duplicated successfully. You can now edit and publish the new flow.",
 	})
@@ -630,7 +630,7 @@ func (a *App) SyncFlows(r *fastglue.Request) error {
 			created++
 		} else {
 			// Flow exists, update it
-			updates := map[string]interface{}{
+			updates := map[string]any{
 				"name":        mf.Name,
 				"status":      mf.Status,
 				"category":    category,
@@ -653,7 +653,7 @@ func (a *App) SyncFlows(r *fastglue.Request) error {
 
 	a.Log.Info("Flows synced from Meta", "total", synced, "created", created, "updated", updated)
 
-	return r.SendEnvelope(map[string]interface{}{
+	return r.SendEnvelope(map[string]any{
 		"message": "Flows synced successfully",
 		"synced":  synced,
 		"created": created,
@@ -664,7 +664,7 @@ func (a *App) SyncFlows(r *fastglue.Request) error {
 // validateFlowStructure validates the flow structure before sending to Meta
 // - Ensures at least one screen has a Footer with "complete" action
 // - If multiple screens, only the last screen should have "complete" action
-func validateFlowStructure(screens []interface{}) error {
+func validateFlowStructure(screens []any) error {
 	if len(screens) == 0 {
 		return fmt.Errorf("flow must have at least one screen")
 	}
@@ -672,17 +672,17 @@ func validateFlowStructure(screens []interface{}) error {
 	// Find which screens have complete action
 	screensWithComplete := []int{}
 	for i, screen := range screens {
-		screenMap, ok := screen.(map[string]interface{})
+		screenMap, ok := screen.(map[string]any)
 		if !ok {
 			continue
 		}
 
-		layout, ok := screenMap["layout"].(map[string]interface{})
+		layout, ok := screenMap["layout"].(map[string]any)
 		if !ok {
 			continue
 		}
 
-		children, ok := layout["children"].([]interface{})
+		children, ok := layout["children"].([]any)
 		if !ok {
 			continue
 		}
@@ -730,25 +730,25 @@ var componentsWithoutID = map[string]bool{
 // - Removes 'id' property from components that don't support it
 // - Marks screens with 'complete' action as terminal screens
 // - Auto-populates the complete action's payload with all form field values
-func sanitizeScreensForMeta(screens []interface{}) []interface{} {
+func sanitizeScreensForMeta(screens []any) []any {
 	// First pass: collect form field names per screen
 	screenFields := collectFormFieldsPerScreen(screens)
 	allFieldNames := collectFormFieldNames(screens)
 
-	result := make([]interface{}, len(screens))
+	result := make([]any, len(screens))
 
 	// Track cumulative fields from previous screens
 	var fieldsFromPreviousScreens []string
 
 	for i, screen := range screens {
-		screenMap, ok := screen.(map[string]interface{})
+		screenMap, ok := screen.(map[string]any)
 		if !ok {
 			result[i] = screen
 			continue
 		}
 
 		// Create a new screen map
-		newScreen := make(map[string]interface{})
+		newScreen := make(map[string]any)
 		for k, v := range screenMap {
 			newScreen[k] = v
 		}
@@ -760,16 +760,16 @@ func sanitizeScreensForMeta(screens []interface{}) []interface{} {
 
 		// Add data model for fields from previous screens (required for multi-screen flows)
 		if i > 0 && len(fieldsFromPreviousScreens) > 0 {
-			dataModel := make(map[string]interface{})
+			dataModel := make(map[string]any)
 			// Copy existing data model if present
-			if existingData, ok := newScreen["data"].(map[string]interface{}); ok {
+			if existingData, ok := newScreen["data"].(map[string]any); ok {
 				for k, v := range existingData {
 					dataModel[k] = v
 				}
 			}
 			// Add entries for fields from previous screens
 			for _, fieldName := range fieldsFromPreviousScreens {
-				dataModel[fieldName] = map[string]interface{}{
+				dataModel[fieldName] = map[string]any{
 					"type":        "string",
 					"__example__": "",
 				}
@@ -779,13 +779,13 @@ func sanitizeScreensForMeta(screens []interface{}) []interface{} {
 
 		// Sanitize layout children and check for terminal action
 		isTerminal := false
-		if layout, ok := newScreen["layout"].(map[string]interface{}); ok {
-			newLayout := make(map[string]interface{})
+		if layout, ok := newScreen["layout"].(map[string]any); ok {
+			newLayout := make(map[string]any)
 			for k, v := range layout {
 				newLayout[k] = v
 			}
 
-			if children, ok := layout["children"].([]interface{}); ok {
+			if children, ok := layout["children"].([]any); ok {
 				// Sanitize and auto-populate action payloads
 				sanitizedChildren := sanitizeComponentsWithPayload(children, allFieldNames, fieldsFromPreviousScreens)
 				newLayout["children"] = sanitizedChildren
@@ -815,27 +815,27 @@ func sanitizeScreensForMeta(screens []interface{}) []interface{} {
 
 // collectFormFieldNames collects all form field names from all screens
 // These are components that have a "name" attribute (TextInput, TextArea, Dropdown, etc.)
-func collectFormFieldNames(screens []interface{}) []string {
+func collectFormFieldNames(screens []any) []string {
 	var fieldNames []string
 
 	for _, screen := range screens {
-		screenMap, ok := screen.(map[string]interface{})
+		screenMap, ok := screen.(map[string]any)
 		if !ok {
 			continue
 		}
 
-		layout, ok := screenMap["layout"].(map[string]interface{})
+		layout, ok := screenMap["layout"].(map[string]any)
 		if !ok {
 			continue
 		}
 
-		children, ok := layout["children"].([]interface{})
+		children, ok := layout["children"].([]any)
 		if !ok {
 			continue
 		}
 
 		for _, child := range children {
-			compMap, ok := child.(map[string]interface{})
+			compMap, ok := child.(map[string]any)
 			if !ok {
 				continue
 			}
@@ -853,28 +853,28 @@ func collectFormFieldNames(screens []interface{}) []string {
 }
 
 // collectFormFieldsPerScreen collects form field names for each screen by index
-func collectFormFieldsPerScreen(screens []interface{}) map[int][]string {
+func collectFormFieldsPerScreen(screens []any) map[int][]string {
 	result := make(map[int][]string)
 
 	for i, screen := range screens {
-		screenMap, ok := screen.(map[string]interface{})
+		screenMap, ok := screen.(map[string]any)
 		if !ok {
 			continue
 		}
 
-		layout, ok := screenMap["layout"].(map[string]interface{})
+		layout, ok := screenMap["layout"].(map[string]any)
 		if !ok {
 			continue
 		}
 
-		children, ok := layout["children"].([]interface{})
+		children, ok := layout["children"].([]any)
 		if !ok {
 			continue
 		}
 
 		var fieldNames []string
 		for _, child := range children {
-			compMap, ok := child.(map[string]interface{})
+			compMap, ok := child.(map[string]any)
 			if !ok {
 				continue
 			}
@@ -896,14 +896,14 @@ func collectFormFieldsPerScreen(screens []interface{}) map[int][]string {
 }
 
 // hasCompleteAction checks if any component has an on-click-action with name "complete"
-func hasCompleteAction(children []interface{}) bool {
+func hasCompleteAction(children []any) bool {
 	for _, child := range children {
-		compMap, ok := child.(map[string]interface{})
+		compMap, ok := child.(map[string]any)
 		if !ok {
 			continue
 		}
 
-		if action, ok := compMap["on-click-action"].(map[string]interface{}); ok {
+		if action, ok := compMap["on-click-action"].(map[string]any); ok {
 			if name, ok := action["name"].(string); ok && name == "complete" {
 				return true
 			}
@@ -945,13 +945,13 @@ func sanitizeID(id string) string {
 // sanitizeComponentsWithPayload sanitizes components and auto-populates action payloads
 // - For navigate actions: passes current screen's form fields using ${form.fieldName}
 // - For complete actions: uses ${data.fieldName} for previous screens, ${form.fieldName} for current
-func sanitizeComponentsWithPayload(children []interface{}, allFieldNames []string, fieldsFromPreviousScreens []string) []interface{} {
-	result := make([]interface{}, len(children))
+func sanitizeComponentsWithPayload(children []any, allFieldNames []string, fieldsFromPreviousScreens []string) []any {
+	result := make([]any, len(children))
 
 	// Collect this screen's field names
 	var thisScreenFields []string
 	for _, child := range children {
-		compMap, ok := child.(map[string]interface{})
+		compMap, ok := child.(map[string]any)
 		if !ok {
 			continue
 		}
@@ -967,14 +967,14 @@ func sanitizeComponentsWithPayload(children []interface{}, allFieldNames []strin
 	}
 
 	for i, child := range children {
-		compMap, ok := child.(map[string]interface{})
+		compMap, ok := child.(map[string]any)
 		if !ok {
 			result[i] = child
 			continue
 		}
 
 		// Create a new component map
-		newComp := make(map[string]interface{})
+		newComp := make(map[string]any)
 		for k, v := range compMap {
 			newComp[k] = v
 		}
@@ -991,11 +991,11 @@ func sanitizeComponentsWithPayload(children []interface{}, allFieldNames []strin
 		}
 
 		// Sanitize data-source option IDs
-		if dataSource, ok := newComp["data-source"].([]interface{}); ok {
-			newDataSource := make([]interface{}, len(dataSource))
+		if dataSource, ok := newComp["data-source"].([]any); ok {
+			newDataSource := make([]any, len(dataSource))
 			for j, opt := range dataSource {
-				if optMap, ok := opt.(map[string]interface{}); ok {
-					newOpt := make(map[string]interface{})
+				if optMap, ok := opt.(map[string]any); ok {
+					newOpt := make(map[string]any)
 					for k, v := range optMap {
 						newOpt[k] = v
 					}
@@ -1011,10 +1011,10 @@ func sanitizeComponentsWithPayload(children []interface{}, allFieldNames []strin
 		}
 
 		// Auto-populate action payloads
-		if action, ok := newComp["on-click-action"].(map[string]interface{}); ok {
+		if action, ok := newComp["on-click-action"].(map[string]any); ok {
 			actionName, _ := action["name"].(string)
 
-			newAction := make(map[string]interface{})
+			newAction := make(map[string]any)
 			for k, v := range action {
 				newAction[k] = v
 			}
@@ -1024,7 +1024,7 @@ func sanitizeComponentsWithPayload(children []interface{}, allFieldNames []strin
 				// Complete action: include all form fields from all screens
 				// - Fields from previous screens: use ${data.fieldName} (passed via data model)
 				// - Fields on current screen: use ${form.fieldName} (form input)
-				payload := make(map[string]interface{})
+				payload := make(map[string]any)
 				for _, fieldName := range allFieldNames {
 					if thisScreenFieldSet[fieldName] {
 						// Current screen's field - use form reference
@@ -1039,7 +1039,7 @@ func sanitizeComponentsWithPayload(children []interface{}, allFieldNames []strin
 				// Navigate action: pass current screen's form fields to next screen
 				// Use ${form.fieldName} for current screen's fields
 				if len(thisScreenFields) > 0 {
-					payload := make(map[string]interface{})
+					payload := make(map[string]any)
 					// Pass previous screen data through
 					for _, fieldName := range fieldsFromPreviousScreens {
 						payload[fieldName] = "${data." + fieldName + "}"
@@ -1071,8 +1071,8 @@ func flowToResponse(f models.WhatsAppFlow) FlowResponse {
 		Status:          f.Status,
 		Category:        f.Category,
 		JSONVersion:     f.JSONVersion,
-		FlowJSON:        map[string]interface{}(f.FlowJSON),
-		Screens:         []interface{}(f.Screens),
+		FlowJSON:        map[string]any(f.FlowJSON),
+		Screens:         []any(f.Screens),
 		PreviewURL:      f.PreviewURL,
 		HasLocalChanges: f.HasLocalChanges,
 		CreatedAt:       f.CreatedAt.Format("2006-01-02T15:04:05Z"),

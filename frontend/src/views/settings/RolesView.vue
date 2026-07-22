@@ -10,8 +10,7 @@ import { Badge } from '@/components/ui/badge'
 import { Switch } from '@/components/ui/switch'
 import { Textarea } from '@/components/ui/textarea'
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
-import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
-import { PageHeader, SearchInput, DataTable, DeleteConfirmDialog, type Column } from '@/components/shared'
+import { PageHeader, SearchInput, DataTable, DeleteConfirmDialog, IconButton, ErrorState, type Column } from '@/components/shared'
 import { useRolesStore, type CreateRoleData, type UpdateRoleData } from '@/stores/roles'
 import { useOrganizationsStore } from '@/stores/organizations'
 import { useAuthStore } from '@/stores/auth'
@@ -22,7 +21,7 @@ import { Plus, Pencil, Trash2, Loader2, Shield, Users, Lock, Star } from 'lucide
 import { useCrudState } from '@/composables/useCrudState'
 import { getErrorMessage } from '@/lib/api-utils'
 import { formatDate } from '@/lib/utils'
-import { useDebounceFn } from '@vueuse/core'
+import { useSearchPagination } from '@/composables/useSearchPagination'
 
 const { t } = useI18n()
 
@@ -45,25 +44,12 @@ const {
 } = useCrudState<Role, RoleFormData>(defaultFormData)
 
 const roles = ref<Role[]>([])
-const searchQuery = ref('')
+const isDeleting = ref(false)
+const error = ref(false)
 
-// Pagination state
-const currentPage = ref(1)
-const totalItems = ref(0)
-const pageSize = 20
-
-// Debounced search
-const debouncedSearch = useDebounceFn(() => {
-  currentPage.value = 1
-  fetchRoles()
-}, 300)
-
-watch(searchQuery, () => debouncedSearch())
-
-function handlePageChange(page: number) {
-  currentPage.value = page
-  fetchRoles()
-}
+const { searchQuery, currentPage, totalItems, pageSize, handlePageChange } = useSearchPagination({
+  fetchFn: () => fetchRoles(),
+})
 
 const isSuperAdmin = computed(() => authStore.user?.is_super_admin ?? false)
 const canEditPermissions = computed(() => {
@@ -94,6 +80,7 @@ onMounted(() => { fetchRoles(); rolesStore.fetchPermissions() })
 
 async function fetchRoles() {
   isLoading.value = true
+  error.value = false
   try {
     const response = await rolesStore.fetchRoles({
       search: searchQuery.value || undefined,
@@ -102,8 +89,10 @@ async function fetchRoles() {
     })
     roles.value = response.roles
     totalItems.value = response.total
-  } catch { toast.error(t('common.failedLoad', { resource: t('resources.roles') })) }
-  finally { isLoading.value = false }
+  } catch {
+    toast.error(t('common.failedLoad', { resource: t('resources.roles') }))
+    error.value = true
+  } finally { isLoading.value = false }
 }
 
 async function saveRole() {
@@ -127,8 +116,10 @@ async function saveRole() {
 
 async function confirmDelete() {
   if (!roleToDelete.value) return
+  isDeleting.value = true
   try { await rolesStore.deleteRole(roleToDelete.value.id); toast.success(t('common.deletedSuccess', { resource: t('resources.Role') })); closeDeleteDialog(); await fetchRoles() }
   catch (e) { toast.error(getErrorMessage(e, t('common.failedDelete', { resource: t('resources.role') }))) }
+  finally { isDeleting.value = false }
 }
 </script>
 
@@ -140,7 +131,17 @@ async function confirmDelete() {
       </template>
     </PageHeader>
 
-    <ScrollArea class="flex-1">
+    <!-- Error State -->
+    <ErrorState
+      v-if="error && !isLoading"
+      :title="$t('common.loadErrorTitle')"
+      :description="$t('common.loadErrorDescription')"
+      :retry-label="$t('common.retryLoad')"
+      class="flex-1"
+      @retry="fetchRoles"
+    />
+
+    <ScrollArea v-else class="flex-1">
       <div class="p-6">
         <div class="max-w-6xl mx-auto">
           <Card>
@@ -176,8 +177,10 @@ async function confirmDelete() {
                 </template>
                 <template #cell-actions="{ item: role }">
                   <div class="flex items-center justify-end gap-1">
-                    <Tooltip><TooltipTrigger as-child><Button variant="ghost" size="icon" class="h-8 w-8" @click="openEditDialog(role)"><Pencil class="h-4 w-4" /></Button></TooltipTrigger><TooltipContent>{{ role.is_system ? (isSuperAdmin ? $t('roles.editPermissions') : $t('roles.viewPermissions')) : $t('roles.editRole') }}</TooltipContent></Tooltip>
-                    <Tooltip v-if="!role.is_system"><TooltipTrigger as-child><Button variant="ghost" size="icon" class="h-8 w-8" :disabled="role.user_count > 0" @click="openDeleteDialog(role)"><Trash2 class="h-4 w-4 text-destructive" /></Button></TooltipTrigger><TooltipContent>{{ role.user_count > 0 ? $t('roles.cannotDeleteUsers') : $t('roles.deleteRole') }}</TooltipContent></Tooltip>
+                    <IconButton :icon="Pencil" :label="role.is_system ? (isSuperAdmin ? $t('roles.editPermissions') : $t('roles.viewPermissions')) : $t('roles.editRole')" class="h-8 w-8" @click="openEditDialog(role)" />
+                    <IconButton v-if="!role.is_system" :label="role.user_count > 0 ? $t('roles.cannotDeleteUsers') : $t('roles.deleteRole')" class="h-8 w-8" :disabled="role.user_count > 0" @click="openDeleteDialog(role)">
+                      <Trash2 class="h-4 w-4 text-destructive" />
+                    </IconButton>
                   </div>
                 </template>
                 <template #empty-action>
@@ -218,6 +221,6 @@ async function confirmDelete() {
       </DialogContent>
     </Dialog>
 
-    <DeleteConfirmDialog v-model:open="deleteDialogOpen" :title="$t('roles.deleteRole')" :item-name="roleToDelete?.name" @confirm="confirmDelete" />
+    <DeleteConfirmDialog v-model:open="deleteDialogOpen" :title="$t('roles.deleteRole')" :item-name="roleToDelete?.name" :is-submitting="isDeleting" @confirm="confirmDelete" />
   </div>
 </template>

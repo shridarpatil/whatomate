@@ -1,7 +1,6 @@
 <script setup lang="ts">
 import {
   AlertDialog,
-  AlertDialogAction,
   AlertDialogCancel,
   AlertDialogContent,
   AlertDialogDescription,
@@ -9,6 +8,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog'
+import { Button } from '@/components/ui/button'
 
 const open = defineModel<boolean>('open', { default: false })
 
@@ -18,10 +18,12 @@ const props = withDefaults(defineProps<{
   description?: string
   confirmLabel?: string
   cancelLabel?: string
+  isSubmitting?: boolean
 }>(), {
   title: 'Delete Item',
   confirmLabel: 'Delete',
   cancelLabel: 'Cancel',
+  isSubmitting: false,
 })
 
 const emit = defineEmits<{
@@ -57,13 +59,14 @@ function handleCancel() {
         </AlertDialogDescription>
       </AlertDialogHeader>
       <AlertDialogFooter>
-        <AlertDialogCancel @click="handleCancel">{{ cancelLabel }}</AlertDialogCancel>
-        <AlertDialogAction
+        <AlertDialogCancel :disabled="isSubmitting" @click="handleCancel">{{ cancelLabel }}</AlertDialogCancel>
+        <Button
+          variant="destructive"
+          :loading="isSubmitting"
           @click="handleConfirm"
-          class="bg-destructive text-destructive-foreground hover:bg-destructive/90"
         >
           {{ confirmLabel }}
-        </AlertDialogAction>
+        </Button>
       </AlertDialogFooter>
     </AlertDialogContent>
   </AlertDialog>

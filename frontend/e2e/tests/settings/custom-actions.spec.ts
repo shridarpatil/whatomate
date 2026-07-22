@@ -120,8 +120,13 @@ test.describe('Custom Actions Management', () => {
     // Wait for action to appear
     await customActionsPage.expectRowExists(actionName)
 
-    // Toggle the switch
+    // Toggle the switch (disabling triggers a confirmation dialog)
     await customActionsPage.toggleRowSwitch(actionName)
+
+    // Wait for the confirm dialog and click confirm
+    await customActionsPage.alertDialog.waitFor({ state: 'visible' })
+    await customActionsPage.alertDialog.getByRole('button', { name: 'Confirm' }).click()
+
     await customActionsPage.expectToast(/(enabled|disabled)/i)
   })
 

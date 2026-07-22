@@ -34,17 +34,22 @@ func NewAudioBridge(callerRec, agentRec *CallRecorder) *AudioBridge {
 }
 
 // Start begins bidirectional RTP forwarding. It blocks until both directions end.
+// Nil tracks are skipped to avoid panics when a PeerConnection never connected.
 func (b *AudioBridge) Start(
 	callerRemote *webrtc.TrackRemote, agentLocal *webrtc.TrackLocalStaticRTP,
 	agentRemote *webrtc.TrackRemote, callerLocal *webrtc.TrackLocalStaticRTP,
 ) {
-	b.wg.Add(2)
-
 	// Caller audio → Agent speaker (record caller's voice)
-	go b.forward(callerRemote, agentLocal, b.callerRec, false)
+	if callerRemote != nil && agentLocal != nil {
+		b.wg.Add(1)
+		go b.forward(callerRemote, agentLocal, b.callerRec, false)
+	}
 
 	// Agent mic → Caller speaker (record agent's voice, track seq/ts)
-	go b.forward(agentRemote, callerLocal, b.agentRec, true)
+	if agentRemote != nil && callerLocal != nil {
+		b.wg.Add(1)
+		go b.forward(agentRemote, callerLocal, b.agentRec, true)
+	}
 
 	b.wg.Wait()
 }
@@ -76,8 +81,8 @@ func (b *AudioBridge) forward(src *webrtc.TrackRemote, dst *webrtc.TrackLocalSta
 			pkt := &rtp.Packet{}
 			if err := pkt.Unmarshal(buf[:n]); err == nil {
 				if trackSeq {
-					b.lastCallerSeq = pkt.Header.SequenceNumber
-					b.lastCallerTS = pkt.Header.Timestamp
+					b.lastCallerSeq = pkt.SequenceNumber
+					b.lastCallerTS = pkt.Timestamp
 				}
 				if rec != nil && len(pkt.Payload) > 0 {
 					rec.WritePacket(pkt.Payload)

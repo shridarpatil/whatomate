@@ -100,7 +100,7 @@ test.describe('Contact Metadata Panel', () => {
 
     // Table data
     await expect(page.getByText('ORD-001')).toBeVisible()
-    await expect(page.getByText('1500')).toBeVisible()
+    await expect(page.getByRole('cell', { name: '1500' })).toBeVisible()
     await expect(page.getByText('delivered')).toBeVisible()
     await expect(page.getByText('ORD-002')).toBeVisible()
   })

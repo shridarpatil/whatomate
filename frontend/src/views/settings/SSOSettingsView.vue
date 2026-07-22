@@ -11,7 +11,7 @@ import { ScrollArea } from '@/components/ui/scroll-area'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
-import { PageHeader } from '@/components/shared'
+import { PageHeader, ConfirmDialog, ErrorState } from '@/components/shared'
 import { toast } from 'vue-sonner'
 import { ShieldCheck, Settings2, ExternalLink, Info, Copy, Check, Loader2 } from 'lucide-vue-next'
 import { getErrorMessage } from '@/lib/api-utils'
@@ -76,6 +76,12 @@ const providerConfigs: Record<string, ProviderConfig> = {
 const providers = ref<SSOProvider[]>([])
 const isLoading = ref(false)
 const isSaving = ref(false)
+const fetchError = ref(false)
+
+// Delete provider confirmation
+const deleteDialogOpen = ref(false)
+const providerToDelete = ref<string>('')
+const isDeleting = ref(false)
 
 // Edit dialog
 const isEditDialogOpen = ref(false)
@@ -113,10 +119,12 @@ function copyRedirectUrl() {
 
 async function fetchProviders() {
   isLoading.value = true
+  fetchError.value = false
   try {
     const response = await api.get('/settings/sso')
     providers.value = response.data.data || []
   } catch (error) {
+    fetchError.value = true
     toast.error(getErrorMessage(error, t('common.failedLoad', { resource: t('resources.ssoProviders') })))
   } finally {
     isLoading.value = false
@@ -196,13 +204,24 @@ async function saveProvider() {
   }
 }
 
-async function deleteProvider(providerKey: string) {
+function openDeleteDialog(providerKey: string) {
+  providerToDelete.value = providerKey
+  deleteDialogOpen.value = true
+}
+
+async function confirmDeleteProvider() {
+  if (!providerToDelete.value) return
+  isDeleting.value = true
   try {
-    await api.delete(`/settings/sso/${providerKey}`)
+    await api.delete(`/settings/sso/${providerToDelete.value}`)
     await fetchProviders()
     toast.success(t('common.deletedSuccess', { resource: t('resources.SSOProvider') }))
+    deleteDialogOpen.value = false
+    providerToDelete.value = ''
   } catch (error) {
     toast.error(getErrorMessage(error, t('common.failedDelete', { resource: t('resources.SSOProvider') })))
+  } finally {
+    isDeleting.value = false
   }
 }
 
@@ -219,7 +238,16 @@ onMounted(() => {
   <div class="flex flex-col h-full bg-[#0a0a0b] light:bg-gray-50">
     <PageHeader :title="$t('sso.title')" :subtitle="$t('sso.subtitle')" :icon="ShieldCheck" icon-gradient="bg-gradient-to-br from-emerald-500 to-teal-600 shadow-emerald-500/20" />
 
-    <ScrollArea class="flex-1">
+    <ErrorState
+      v-if="fetchError && !isLoading"
+      :title="$t('sso.fetchErrorTitle')"
+      :description="$t('sso.fetchErrorDescription')"
+      :retry-label="$t('common.retry')"
+      class="flex-1"
+      @retry="fetchProviders"
+    />
+
+    <ScrollArea v-else class="flex-1">
       <div class="p-6">
         <div class="max-w-6xl mx-auto space-y-6">
         <!-- Info Card -->
@@ -453,7 +481,7 @@ onMounted(() => {
             v-if="getConfiguredProvider(editingProvider)"
             variant="destructive"
             size="sm"
-            @click="deleteProvider(editingProvider); isEditDialogOpen = false"
+            @click="openDeleteDialog(editingProvider); isEditDialogOpen = false"
           >
             {{ $t('sso.remove') }}
           </Button>
@@ -467,5 +495,16 @@ onMounted(() => {
         </DialogFooter>
       </DialogContent>
     </Dialog>
+
+    <!-- Delete SSO Provider Confirmation -->
+    <ConfirmDialog
+      v-model:open="deleteDialogOpen"
+      :title="$t('sso.confirmDeleteTitle')"
+      :description="$t('sso.confirmDeleteDescription', { provider: providerConfigs[providerToDelete]?.name || '' })"
+      :confirm-label="$t('common.remove')"
+      variant="destructive"
+      :is-submitting="isDeleting"
+      @confirm="confirmDeleteProvider"
+    />
   </div>
 </template>

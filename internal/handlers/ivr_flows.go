@@ -11,7 +11,9 @@ import (
 	"strings"
 
 	"github.com/google/uuid"
+	"github.com/shridarpatil/whatomate/internal/audit"
 	"github.com/shridarpatil/whatomate/internal/models"
+	"gorm.io/gorm"
 	"github.com/valyala/fasthttp"
 	"github.com/zerodha/fastglue"
 )
@@ -78,7 +80,7 @@ func (a *App) GetIVRFlow(r *fastglue.Request) error {
 		return nil
 	}
 
-	flow, err := findByIDAndOrg[models.IVRFlow](a.DB, r, flowID, orgID, "IVR Flow")
+	flow, err := findByIDAndOrg[models.IVRFlow](a.DB.Preload("CreatedBy").Preload("UpdatedBy"), r, flowID, orgID, "IVR Flow")
 	if err != nil {
 		return nil
 	}
@@ -152,12 +154,21 @@ func (a *App) CreateIVRFlow(r *fastglue.Request) error {
 		IsOutgoingEnd:   req.IsOutgoingEnd,
 		Menu:            req.Menu,
 		WelcomeAudioURL: req.WelcomeAudioURL,
+		CreatedByID:     &userID,
+		UpdatedByID:     &userID,
 	}
 
 	if err := a.DB.Create(&flow).Error; err != nil {
 		a.Log.Error("Failed to create IVR flow", "error", err)
 		return r.SendErrorEnvelope(fasthttp.StatusInternalServerError, "Failed to create IVR flow", nil, "")
 	}
+
+	if a.CallManager != nil {
+		a.CallManager.InvalidateIVRFlowCache(flow.ID, flow.OrganizationID, flow.WhatsAppAccount)
+	}
+
+	audit.LogAudit(a.DB, orgID, userID, audit.GetUserName(a.DB, userID),
+		"ivr_flow", flow.ID, models.AuditActionCreated, nil, &flow)
 
 	return r.SendEnvelope(flow)
 }
@@ -181,6 +192,8 @@ func (a *App) UpdateIVRFlow(r *fastglue.Request) error {
 	if err != nil {
 		return nil
 	}
+
+	oldFlow := *flow // value copy for audit
 
 	var req IVRFlowRequest
 	if err := a.decodeRequest(r, &req); err != nil {
@@ -228,6 +241,7 @@ func (a *App) UpdateIVRFlow(r *fastglue.Request) error {
 		"is_active":       req.IsActive,
 		"is_call_start":   req.IsCallStart,
 		"is_outgoing_end": req.IsOutgoingEnd,
+		"updated_by_id":   userID,
 	}
 	if req.Name != "" {
 		updates["name"] = req.Name
@@ -252,8 +266,170 @@ func (a *App) UpdateIVRFlow(r *fastglue.Request) error {
 	}
 
 	// Reload for response
-	a.DB.First(flow, flowID)
+	a.DB.Preload("CreatedBy").Preload("UpdatedBy").First(flow, flowID)
+
+	if a.CallManager != nil {
+		a.CallManager.InvalidateIVRFlowCache(flow.ID, flow.OrganizationID, flow.WhatsAppAccount)
+	}
+
+	// Compare IVR menu nodes for audit
+	var extraChanges []map[string]any
+	if req.Menu != nil {
+		extraChanges = diffIVRMenuNodes(a.DB, oldFlow.Menu, req.Menu)
+	}
+
+	audit.LogAudit(a.DB, orgID, userID, audit.GetUserName(a.DB, userID),
+		"ivr_flow", flow.ID, models.AuditActionUpdated, &oldFlow, flow, extraChanges...)
+
 	return r.SendEnvelope(flow)
+}
+
+// diffIVRMenuNodes compares old and new IVR menu JSONB to find node-level changes
+func diffIVRMenuNodes(db *gorm.DB, oldMenu, newMenu models.JSONB) []map[string]any {
+	var changes []map[string]any
+
+	type ivrNode struct {
+		ID     string         `json:"id"`
+		Type   string         `json:"type"`
+		Label  string         `json:"label"`
+		Config map[string]any `json:"config"`
+	}
+
+	extractNodes := func(menu models.JSONB) map[string]ivrNode {
+		result := make(map[string]ivrNode)
+		nodesRaw, ok := menu["nodes"]
+		if !ok {
+			return result
+		}
+		nodesSlice, ok := nodesRaw.([]any)
+		if !ok {
+			return result
+		}
+		for _, raw := range nodesSlice {
+			m, ok := raw.(map[string]any)
+			if !ok {
+				continue
+			}
+			b, err := json.Marshal(m)
+			if err != nil {
+				continue
+			}
+			var n ivrNode
+			_ = json.Unmarshal(b, &n)
+			if n.ID != "" {
+				result[n.ID] = n
+			}
+		}
+		return result
+	}
+
+	oldNodes := extractNodes(oldMenu)
+	newNodes := extractNodes(newMenu)
+
+	// Detect added nodes
+	for id, n := range newNodes {
+		if _, exists := oldNodes[id]; !exists {
+			changes = append(changes, map[string]any{
+				"field": "node_added", "old_value": nil, "new_value": n.Label + " (" + n.Type + ")",
+			})
+		}
+	}
+
+	// Detect removed nodes
+	for id, n := range oldNodes {
+		if _, exists := newNodes[id]; !exists {
+			changes = append(changes, map[string]any{
+				"field": "node_removed", "old_value": n.Label + " (" + n.Type + ")", "new_value": nil,
+			})
+		}
+	}
+
+	// Detect modified nodes
+	for id, newN := range newNodes {
+		oldN, exists := oldNodes[id]
+		if !exists {
+			continue
+		}
+		if oldN.Label != newN.Label {
+			changes = append(changes, map[string]any{
+				"field": newN.Label + " → label", "old_value": oldN.Label, "new_value": newN.Label,
+			})
+		}
+		// Compare config fields — drill into nested maps for readable diffs
+		label := newN.Label
+		if label == "" {
+			label = id
+		}
+		for key, newVal := range newN.Config {
+			oldVal := oldN.Config[key]
+			oldJSON, _ := json.Marshal(oldVal)
+			newJSON, _ := json.Marshal(newVal)
+			if string(oldJSON) == string(newJSON) {
+				continue
+			}
+			// Try to diff nested maps (e.g. options: {"1": {"label": "Sales"}})
+			oldMap, oldIsMap := oldVal.(map[string]any)
+			newMap, newIsMap := newVal.(map[string]any)
+			if oldIsMap && newIsMap {
+				for subKey, subNew := range newMap {
+					subOld := oldMap[subKey]
+					sOldJSON, _ := json.Marshal(subOld)
+					sNewJSON, _ := json.Marshal(subNew)
+					if string(sOldJSON) != string(sNewJSON) {
+						// Extract readable value from nested object
+						oldLabel := extractLabel(subOld)
+						newLabel := extractLabel(subNew)
+						changes = append(changes, map[string]any{
+							"field": label + " → " + key + "[" + subKey + "]", "old_value": oldLabel, "new_value": newLabel,
+						})
+					}
+				}
+				// Check for removed keys
+				for subKey, subOld := range oldMap {
+					if _, exists := newMap[subKey]; !exists {
+						changes = append(changes, map[string]any{
+							"field": label + " → " + key + "[" + subKey + "]", "old_value": extractLabel(subOld), "new_value": nil,
+						})
+					}
+				}
+			} else {
+				displayOld := oldVal
+				displayNew := newVal
+				// Resolve team_id UUIDs to team names
+				if key == "team_id" {
+					displayOld = resolveTeamName(db, fmt.Sprintf("%v", oldVal))
+					displayNew = resolveTeamName(db, fmt.Sprintf("%v", newVal))
+				}
+				changes = append(changes, map[string]any{
+					"field": label + " → " + key, "old_value": displayOld, "new_value": displayNew,
+				})
+			}
+		}
+	}
+
+	return changes
+}
+
+func resolveTeamName(db *gorm.DB, teamID string) string {
+	if teamID == "" || teamID == "<nil>" {
+		return "—"
+	}
+	var name string
+	db.Model(&models.Team{}).Where("id = ?", teamID).Pluck("name", &name)
+	if name == "" {
+		return teamID
+	}
+	return name
+}
+
+// extractLabel returns a readable string from a value — if it's a map with a "label" key, return that
+func extractLabel(val any) any {
+	if m, ok := val.(map[string]any); ok {
+		if label, exists := m["label"]; exists {
+			return label
+		}
+	}
+	return val
 }
 
 // DeleteIVRFlow soft-deletes an IVR flow
@@ -280,6 +456,13 @@ func (a *App) DeleteIVRFlow(r *fastglue.Request) error {
 		a.Log.Error("Failed to delete IVR flow", "error", err)
 		return r.SendErrorEnvelope(fasthttp.StatusInternalServerError, "Failed to delete IVR flow", nil, "")
 	}
+
+	if a.CallManager != nil {
+		a.CallManager.InvalidateIVRFlowCache(flow.ID, flow.OrganizationID, flow.WhatsAppAccount)
+	}
+
+	audit.LogAudit(a.DB, orgID, userID, audit.GetUserName(a.DB, userID),
+		"ivr_flow", flow.ID, models.AuditActionDeleted, flow, nil)
 
 	return r.SendEnvelope(map[string]string{"message": "IVR flow deleted"})
 }
@@ -612,7 +795,7 @@ func (a *App) generateIVRAudio(menu models.JSONB) error {
 	}
 
 	for i, nodeRaw := range nodesSlice {
-		nodeMap, ok := nodeRaw.(map[string]interface{})
+		nodeMap, ok := nodeRaw.(map[string]any)
 		if !ok {
 			continue
 		}
@@ -620,7 +803,7 @@ func (a *App) generateIVRAudio(menu models.JSONB) error {
 		if !ok {
 			continue
 		}
-		config, ok := configRaw.(map[string]interface{})
+		config, ok := configRaw.(map[string]any)
 		if !ok {
 			continue
 		}
@@ -654,7 +837,7 @@ func menuHasGreetingText(menu models.JSONB) bool {
 	}
 
 	for _, nodeRaw := range nodesSlice {
-		nodeMap, ok := nodeRaw.(map[string]interface{})
+		nodeMap, ok := nodeRaw.(map[string]any)
 		if !ok {
 			continue
 		}
@@ -662,7 +845,7 @@ func menuHasGreetingText(menu models.JSONB) bool {
 		if !ok {
 			continue
 		}
-		config, ok := configRaw.(map[string]interface{})
+		config, ok := configRaw.(map[string]any)
 		if !ok {
 			continue
 		}
@@ -673,9 +856,9 @@ func menuHasGreetingText(menu models.JSONB) bool {
 	return false
 }
 
-// toSlice converts an interface{} to []interface{}, handling JSON re-marshal if needed.
-func toSlice(v interface{}) ([]interface{}, bool) {
-	if s, ok := v.([]interface{}); ok {
+// toSlice converts an any to []any, handling JSON re-marshal if needed.
+func toSlice(v any) ([]any, bool) {
+	if s, ok := v.([]any); ok {
 		return s, true
 	}
 	// Handle case where JSONB was deserialized differently
@@ -683,7 +866,7 @@ func toSlice(v interface{}) ([]interface{}, bool) {
 	if err != nil {
 		return nil, false
 	}
-	var s []interface{}
+	var s []any
 	if json.Unmarshal(b, &s) == nil {
 		return s, true
 	}
@@ -729,7 +912,7 @@ func validateFlowGraph(menu models.JSONB) error {
 	terminalTypes := map[string]bool{"goto_flow": true, "hangup": true}
 
 	for _, nodeRaw := range nodesSlice {
-		nodeMap, ok := nodeRaw.(map[string]interface{})
+		nodeMap, ok := nodeRaw.(map[string]any)
 		if !ok {
 			continue
 		}
@@ -760,7 +943,7 @@ func validateFlowGraph(menu models.JSONB) error {
 			return fmt.Errorf("edges must be an array")
 		}
 		for _, edgeRaw := range edgesSlice {
-			edgeMap, ok := edgeRaw.(map[string]interface{})
+			edgeMap, ok := edgeRaw.(map[string]any)
 			if !ok {
 				continue
 			}

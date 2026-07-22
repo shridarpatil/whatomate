@@ -7,7 +7,7 @@ import { ScrollArea } from '@/components/ui/scroll-area'
 import { Skeleton } from '@/components/ui/skeleton'
 import { chatbotService } from '@/services/api'
 import { toast } from 'vue-sonner'
-import { PageHeader } from '@/components/shared'
+import { PageHeader, ConfirmDialog, ErrorState } from '@/components/shared'
 import { getErrorMessage } from '@/lib/api-utils'
 import {
   Bot,
@@ -66,6 +66,8 @@ const stats = ref<Stats>({
 
 const isLoading = ref(true)
 const isToggling = ref(false)
+const error = ref(false)
+const showToggleConfirm = ref(false)
 
 onMounted(async () => {
   try {
@@ -74,9 +76,9 @@ onMounted(async () => {
     const data = response.data.data || response.data
     settings.value = data.settings || settings.value
     stats.value = data.stats || stats.value
-  } catch (error) {
-    console.error('Failed to load chatbot settings:', error)
-    // Keep default values on error
+  } catch (err) {
+    console.error('Failed to load chatbot settings:', err)
+    error.value = true
   } finally {
     isLoading.value = false
   }
@@ -89,10 +91,27 @@ async function toggleChatbot() {
     await chatbotService.updateSettings({ enabled: newState })
     settings.value.enabled = newState
     toast.success(newState ? t('common.enabledSuccess', { resource: t('resources.Chatbot') }) : t('common.disabledSuccess', { resource: t('resources.Chatbot') }))
-  } catch (error: any) {
-    toast.error(getErrorMessage(error, t('common.failedToggle', { resource: t('resources.chatbot') })))
+  } catch (err: any) {
+    toast.error(getErrorMessage(err, t('common.failedToggle', { resource: t('resources.chatbot') })))
   } finally {
     isToggling.value = false
+    showToggleConfirm.value = false
+  }
+}
+
+async function retryFetch() {
+  isLoading.value = true
+  error.value = false
+  try {
+    const response = await chatbotService.getSettings()
+    const data = response.data.data || response.data
+    settings.value = data.settings || settings.value
+    stats.value = data.stats || stats.value
+  } catch (err) {
+    console.error('Failed to load chatbot settings:', err)
+    error.value = true
+  } finally {
+    isLoading.value = false
   }
 }
 
@@ -122,7 +141,7 @@ const statCards = computed(() => [
           <Button
             variant="outline"
             size="sm"
-            @click="toggleChatbot"
+            @click="showToggleConfirm = true"
             :disabled="isToggling"
             :class="settings.enabled ? 'border-red-500/50 text-red-400 hover:bg-red-500/10' : 'border-emerald-500/50 text-emerald-400 hover:bg-emerald-500/10'"
           >
@@ -133,8 +152,29 @@ const statCards = computed(() => [
       </template>
     </PageHeader>
 
+    <!-- Confirm Toggle Dialog -->
+    <ConfirmDialog
+      v-model:open="showToggleConfirm"
+      :title="settings.enabled ? $t('chatbot.confirmDisableTitle') : $t('chatbot.confirmEnableTitle')"
+      :description="settings.enabled ? $t('chatbot.confirmDisableDescription') : $t('chatbot.confirmEnableDescription')"
+      :confirm-label="settings.enabled ? $t('chatbot.disable') : $t('chatbot.enable')"
+      :variant="settings.enabled ? 'destructive' : 'default'"
+      :is-submitting="isToggling"
+      @confirm="toggleChatbot"
+    />
+
+    <!-- Error State -->
+    <ErrorState
+      v-if="error && !isLoading"
+      :title="$t('chatbot.fetchErrorTitle')"
+      :description="$t('chatbot.fetchErrorDescription')"
+      :retry-label="$t('common.retry')"
+      class="flex-1"
+      @retry="retryFetch"
+    />
+
     <!-- Content -->
-    <ScrollArea class="flex-1">
+    <ScrollArea v-else class="flex-1">
       <div class="p-6 space-y-6">
         <!-- Stats -->
         <div class="grid gap-4 md:grid-cols-2 lg:grid-cols-4">

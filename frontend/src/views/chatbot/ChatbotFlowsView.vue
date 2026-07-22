@@ -9,7 +9,7 @@ import { Switch } from '@/components/ui/switch'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { chatbotService } from '@/services/api'
 import { toast } from 'vue-sonner'
-import { PageHeader, DataTable, DeleteConfirmDialog, SearchInput, type Column } from '@/components/shared'
+import { PageHeader, DataTable, DeleteConfirmDialog, SearchInput, IconButton, ErrorState, type Column } from '@/components/shared'
 import { getErrorMessage } from '@/lib/api-utils'
 import { Plus, Pencil, Trash2, Workflow } from 'lucide-vue-next'
 import { useDebounceFn } from '@vueuse/core'
@@ -29,8 +29,10 @@ interface ChatbotFlow {
 const router = useRouter()
 const flows = ref<ChatbotFlow[]>([])
 const isLoading = ref(true)
+const error = ref<string | null>(null)
 const searchQuery = ref('')
 const deleteDialogOpen = ref(false)
+const isDeleting = ref(false)
 const flowToDelete = ref<ChatbotFlow | null>(null)
 
 // Pagination state
@@ -56,6 +58,7 @@ onMounted(async () => {
 
 async function fetchFlows() {
   isLoading.value = true
+  error.value = null
   try {
     const response = await chatbotService.listFlows({
       search: searchQuery.value || undefined,
@@ -65,8 +68,9 @@ async function fetchFlows() {
     const data = (response.data as any).data || response.data
     flows.value = data.flows || []
     totalItems.value = data.total ?? flows.value.length
-  } catch (error) {
-    console.error('Failed to load flows:', error)
+  } catch (err) {
+    console.error('Failed to load flows:', err)
+    error.value = t('chatbotFlows.fetchError')
     flows.value = []
   } finally {
     isLoading.value = false
@@ -112,6 +116,7 @@ function openDeleteDialog(flow: ChatbotFlow) {
 async function confirmDeleteFlow() {
   if (!flowToDelete.value) return
 
+  isDeleting.value = true
   try {
     await chatbotService.deleteFlow(flowToDelete.value.id)
     toast.success(t('common.deletedSuccess', { resource: t('resources.Flow') }))
@@ -120,6 +125,8 @@ async function confirmDeleteFlow() {
     await fetchFlows()
   } catch (error: any) {
     toast.error(getErrorMessage(error, t('common.failedDelete', { resource: t('resources.flow') })))
+  } finally {
+    isDeleting.value = false
   }
 }
 </script>
@@ -143,7 +150,7 @@ async function confirmDeleteFlow() {
 
     <ScrollArea class="flex-1">
       <div class="p-6">
-        <div class="max-w-6xl mx-auto">
+        <div>
           <Card>
             <CardHeader>
               <div class="flex items-center justify-between flex-wrap gap-4">
@@ -155,7 +162,15 @@ async function confirmDeleteFlow() {
               </div>
             </CardHeader>
             <CardContent>
+              <ErrorState
+                v-if="error"
+                :title="$t('common.loadErrorTitle')"
+                :description="error"
+                :retry-label="$t('common.retry')"
+                @retry="fetchFlows"
+              />
               <DataTable
+                v-else
                 :items="flows"
                 :columns="columns"
                 :is-loading="isLoading"
@@ -199,12 +214,8 @@ async function confirmDeleteFlow() {
                 </template>
                 <template #cell-actions="{ item: flow }">
                   <div class="flex items-center justify-end gap-1">
-                    <Button variant="ghost" size="icon" class="h-8 w-8" @click="editFlow(flow)">
-                      <Pencil class="h-4 w-4" />
-                    </Button>
-                    <Button variant="ghost" size="icon" class="h-8 w-8 text-destructive" @click="openDeleteDialog(flow)">
-                      <Trash2 class="h-4 w-4" />
-                    </Button>
+                    <IconButton :icon="Pencil" :label="$t('chatbotFlows.editFlowLabel')" class="h-8 w-8" @click="editFlow(flow)" />
+                    <IconButton :icon="Trash2" :label="$t('chatbotFlows.deleteFlowLabel')" class="h-8 w-8 text-destructive" @click="openDeleteDialog(flow)" />
                   </div>
                 </template>
                 <template #empty-action>
@@ -224,6 +235,7 @@ async function confirmDeleteFlow() {
       v-model:open="deleteDialogOpen"
       :title="$t('chatbotFlows.deleteFlow')"
       :item-name="flowToDelete?.name"
+      :is-submitting="isDeleting"
       @confirm="confirmDeleteFlow"
     />
   </div>

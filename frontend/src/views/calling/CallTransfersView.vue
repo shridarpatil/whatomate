@@ -9,7 +9,9 @@ import { Badge } from '@/components/ui/badge'
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs'
 import { Phone, PhoneOff, PhoneForwarded, RefreshCw, Clock } from 'lucide-vue-next'
 import { toast } from 'vue-sonner'
-import DataTable, { type Column } from '@/components/shared/DataTable.vue'
+import DataTable from '@/components/shared/DataTable.vue'
+import type { Column } from '@/components/shared/types'
+import { ErrorState } from '@/components/shared'
 
 const { t } = useI18n()
 const store = useCallingStore()
@@ -19,6 +21,7 @@ const historyTransfers = ref<CallTransfer[]>([])
 const historyTotal = ref(0)
 const historyPage = ref(1)
 const historyLoading = ref(false)
+const historyError = ref<string | null>(null)
 const pageSize = 20
 
 const waitingColumns = computed<Column<CallTransfer>[]>(() => [
@@ -38,14 +41,15 @@ const historyColumns = computed<Column<CallTransfer>[]>(() => [
 
 async function fetchHistory() {
   historyLoading.value = true
+  historyError.value = null
   try {
     const response = await callTransfersService.list({ page: historyPage.value, limit: pageSize })
     const data = response.data as any
     historyTransfers.value = (data.data?.call_transfers ?? data.call_transfers ?? [])
-      .filter((t: CallTransfer) => t.status !== 'waiting')
+      .filter((ct: CallTransfer) => ct.status !== 'waiting')
     historyTotal.value = data.data?.total ?? data.total ?? 0
   } catch {
-    // Silently handle
+    historyError.value = t('callTransfers.errorLoadingTransfers')
   } finally {
     historyLoading.value = false
   }
@@ -159,7 +163,14 @@ onMounted(() => {
       </TabsContent>
 
       <TabsContent value="history" class="mt-4">
-        <Card>
+        <ErrorState
+          v-if="historyError && !historyLoading"
+          :title="$t('common.loadErrorTitle')"
+          :description="historyError"
+          :retry-label="$t('common.retry')"
+          @retry="fetchHistory"
+        />
+        <Card v-else>
           <CardContent class="pt-6">
             <DataTable
               :items="historyTransfers"

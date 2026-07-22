@@ -7,7 +7,9 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/shridarpatil/whatomate/internal/assignment"
 	"github.com/shridarpatil/whatomate/internal/models"
+	"github.com/shridarpatil/whatomate/internal/utils"
 	"github.com/shridarpatil/whatomate/internal/websocket"
 	"github.com/valyala/fasthttp"
 	"github.com/zerodha/fastglue"
@@ -293,7 +295,7 @@ func (a *App) ListAgentTransfers(r *fastglue.Request) error {
 	for i, t := range transfers {
 		phoneNumber := t.PhoneNumber
 		if shouldMask {
-			phoneNumber = MaskPhoneNumber(phoneNumber)
+			phoneNumber = utils.MaskPhoneNumber(phoneNumber)
 		}
 
 		resp := AgentTransferResponse{
@@ -310,7 +312,7 @@ func (a *App) ListAgentTransfers(r *fastglue.Request) error {
 		if t.ContactName != nil {
 			contactName := *t.ContactName
 			if shouldMask {
-				contactName = MaskIfPhoneNumber(contactName)
+				contactName = utils.MaskIfPhoneNumber(contactName)
 			}
 			resp.ContactName = contactName
 		}
@@ -458,9 +460,9 @@ func (a *App) CreateAgentTransfer(r *fastglue.Request) error {
 			return r.SendErrorEnvelope(fasthttp.StatusBadRequest, "Agent is currently away", nil, "")
 		}
 		agentID = &parsedAgentID
-	} else if teamID != nil {
+	} else if teamID != nil && a.Assigner != nil {
 		// Apply team's assignment strategy
-		agentID = a.assignToTeam(*teamID, orgID)
+		agentID = a.Assigner.AssignToTeam(*teamID, orgID, nil, assignment.ChatLoadCounter)
 	} else if settings != nil && settings.AgentAssignment.AssignToSameAgent && contact.AssignedUserID != nil {
 		// Auto-assign to contact's existing assigned agent (if setting enabled and agent is available)
 		var assignedAgent models.User
@@ -965,7 +967,7 @@ func (a *App) PickNextTransfer(r *fastglue.Request) error {
 	shouldMask := a.ShouldMaskPhoneNumbers(orgID)
 	phoneNumber := transfer.PhoneNumber
 	if shouldMask {
-		phoneNumber = MaskPhoneNumber(phoneNumber)
+		phoneNumber = utils.MaskPhoneNumber(phoneNumber)
 	}
 
 	resp := AgentTransferResponse{
@@ -982,7 +984,7 @@ func (a *App) PickNextTransfer(r *fastglue.Request) error {
 	if transfer.Contact != nil {
 		contactName := transfer.Contact.ProfileName
 		if shouldMask {
-			contactName = MaskIfPhoneNumber(contactName)
+			contactName = utils.MaskIfPhoneNumber(contactName)
 		}
 		resp.ContactName = contactName
 	}
@@ -1256,115 +1258,6 @@ func (a *App) createTransferFromKeyword(account *models.WhatsAppAccount, contact
 	)
 }
 
-// assignToTeam applies the team's assignment strategy to select an agent
-// Returns nil if manual strategy or no available agents
-func (a *App) assignToTeam(teamID uuid.UUID, orgID uuid.UUID) *uuid.UUID {
-	// Get team and its assignment strategy
-	var team models.Team
-	if err := a.DB.Where("id = ? AND organization_id = ? AND is_active = ?", teamID, orgID, true).First(&team).Error; err != nil {
-		a.Log.Error("Failed to get team for assignment", "error", err, "team_id", teamID)
-		return nil
-	}
-
-	switch team.AssignmentStrategy {
-	case models.AssignmentStrategyRoundRobin:
-		return a.assignToTeamRoundRobin(teamID, orgID)
-	case models.AssignmentStrategyLoadBalanced:
-		return a.assignToTeamLoadBalanced(teamID, orgID)
-	case models.AssignmentStrategyManual:
-		// Manual means no auto-assignment
-		return nil
-	default:
-		// Default to round-robin
-		return a.assignToTeamRoundRobin(teamID, orgID)
-	}
-}
-
-// assignToTeamRoundRobin selects the next agent using round-robin
-func (a *App) assignToTeamRoundRobin(teamID uuid.UUID, orgID uuid.UUID) *uuid.UUID {
-	// Get team members who are available agents, ordered by last assigned time
-	var members []models.TeamMember
-	err := a.DB.
-		Joins("JOIN users ON users.id = team_members.user_id").
-		Where("team_members.team_id = ? AND team_members.role = ? AND users.is_available = ? AND users.is_active = ?",
-			teamID, models.TeamRoleAgent, true, true).
-		Order("team_members.last_assigned_at ASC NULLS FIRST").
-		Find(&members).Error
-
-	if err != nil || len(members) == 0 {
-		a.Log.Debug("No available agents in team for round-robin", "team_id", teamID)
-		return nil
-	}
-
-	// Pick the first agent (least recently assigned)
-	selectedMember := members[0]
-
-	// Update last_assigned_at
-	now := time.Now()
-	a.DB.Model(&selectedMember).Update("last_assigned_at", now)
-
-	a.Log.Debug("Round-robin assigned to agent", "team_id", teamID, "user_id", selectedMember.UserID)
-	return &selectedMember.UserID
-}
-
-// assignToTeamLoadBalanced selects the agent with fewest active transfers
-func (a *App) assignToTeamLoadBalanced(teamID uuid.UUID, orgID uuid.UUID) *uuid.UUID {
-	// Get team members who are available agents
-	var members []models.TeamMember
-	err := a.DB.
-		Joins("JOIN users ON users.id = team_members.user_id").
-		Where("team_members.team_id = ? AND team_members.role = ? AND users.is_available = ? AND users.is_active = ?",
-			teamID, models.TeamRoleAgent, true, true).
-		Find(&members).Error
-
-	if err != nil || len(members) == 0 {
-		a.Log.Debug("No available agents in team for load-balanced", "team_id", teamID)
-		return nil
-	}
-
-	// Extract member user IDs
-	memberIDs := make([]uuid.UUID, len(members))
-	for i, m := range members {
-		memberIDs[i] = m.UserID
-	}
-
-	// Count active transfers for all members in a single query (optimized from N+1)
-	type AgentLoad struct {
-		AgentID uuid.UUID `gorm:"column:agent_id"`
-		Count   int64     `gorm:"column:count"`
-	}
-	var loads []AgentLoad
-	a.DB.Model(&models.AgentTransfer{}).
-		Select("agent_id, COUNT(*) as count").
-		Where("organization_id = ? AND agent_id IN ? AND status = ?", orgID, memberIDs, models.TransferStatusActive).
-		Group("agent_id").
-		Scan(&loads)
-
-	// Build a map of agent loads
-	loadMap := make(map[uuid.UUID]int64)
-	for _, l := range loads {
-		loadMap[l.AgentID] = l.Count
-	}
-
-	// Find agent with lowest load (agents with 0 transfers won't be in loadMap)
-	var lowestUserID *uuid.UUID
-	var lowestCount int64 = -1
-	for _, m := range members {
-		count := loadMap[m.UserID] // Will be 0 if not in map (no active transfers)
-		if lowestCount < 0 || count < lowestCount {
-			lowestCount = count
-			userID := m.UserID
-			lowestUserID = &userID
-		}
-	}
-
-	if lowestUserID == nil {
-		return nil
-	}
-
-	a.Log.Debug("Load-balanced assigned to agent", "team_id", teamID, "user_id", *lowestUserID, "current_load", lowestCount)
-	return lowestUserID
-}
 
 // createTransferToTeam creates an agent transfer to a specific team with appropriate assignment
 func (a *App) createTransferToTeam(account *models.WhatsAppAccount, contact *models.Contact, teamID uuid.UUID, notes string, source models.TransferSource) {
@@ -1375,7 +1268,10 @@ func (a *App) createTransferToTeam(account *models.WhatsAppAccount, contact *mod
 
 	settings, _ := a.getChatbotSettingsCached(account.OrganizationID, account.Name)
 
-	agentID := a.assignToTeam(teamID, account.OrganizationID)
+	var agentID *uuid.UUID
+	if a.Assigner != nil {
+		agentID = a.Assigner.AssignToTeam(teamID, account.OrganizationID, nil, assignment.ChatLoadCounter)
+	}
 
 	transfer := models.AgentTransfer{
 		BaseModel:       models.BaseModel{ID: uuid.New()},

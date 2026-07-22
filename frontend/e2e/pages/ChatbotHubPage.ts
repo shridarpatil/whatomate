@@ -33,6 +33,13 @@ export class ChatbotHubPage extends BasePage {
 
   async toggleChatbot() {
     await this.toggleButton.click()
+    // A ConfirmDialog (AlertDialog) appears before the toggle takes effect.
+    const dialog = this.page.getByRole('alertdialog')
+    await expect(dialog).toBeVisible()
+    // The confirm button label matches the toggle action ("Enable" or "Disable").
+    await dialog.getByRole('button', { name: /Enable|Disable/i }).click()
+    // Wait for the dialog to close after the action completes.
+    await expect(dialog).toBeHidden()
   }
 
   async navigateToKeywords() {

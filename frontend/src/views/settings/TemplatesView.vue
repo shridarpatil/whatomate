@@ -1,4 +1,5 @@
 <script setup lang="ts">
+<<<<<<< HEAD
 import { ref, onMounted, watch, computed } from "vue";
 import { useI18n } from "vue-i18n";
 import {
@@ -44,6 +45,24 @@ import {
   DeleteConfirmDialog,
   type Column,
 } from "@/components/shared";
+=======
+import { ref, onMounted, watch, computed } from 'vue'
+import { RouterLink } from 'vue-router'
+import { useI18n } from 'vue-i18n'
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import { Button } from '@/components/ui/button'
+import { Label } from '@/components/ui/label'
+import { Badge } from '@/components/ui/badge'
+import { ScrollArea } from '@/components/ui/scroll-area'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { PageHeader, SearchInput, DataTable, IconButton, DeleteConfirmDialog, ErrorState, type Column } from '@/components/shared'
+import { api, templatesService } from '@/services/api'
+import { useOrganizationsStore } from '@/stores/organizations'
+import { toast } from 'vue-sonner'
+import { Plus, RefreshCw, FileText, Pencil, Trash2, Loader2, MessageSquare, Image, FileIcon, Video } from 'lucide-vue-next'
+import { getErrorMessage } from '@/lib/api-utils'
+import { useSearchPagination } from '@/composables/useSearchPagination'
+>>>>>>> 0c566f76ccc5eb523d89b2cdfe9bbf4100575449
 
 import TemplateEditor from "./TemplateEditor.vue";
 import TemplatePreview from "./TemplatePreview.vue";
@@ -101,6 +120,7 @@ const selectedAccount = ref<string>(
   localStorage.getItem("templates_selected_account") || "all",
 );
 
+<<<<<<< HEAD
 // --- Original Dialog States ---
 const isDialogOpen = ref(false);
 const isSubmitting = ref(false);
@@ -112,6 +132,7 @@ const templateToDelete = ref<Template | null>(null);
 const publishDialogOpen = ref(false);
 const templateToPublish = ref<Template | null>(null);
 const publishingTemplateId = ref<string | null>(null);
+const editorRef = ref<InstanceType<typeof TemplateEditor> | null>(null);
 
 // --- Form Data ---
 const formData = ref({
@@ -143,6 +164,119 @@ const columns = computed<Column<Template>[]>(() => [
   { key: "header_type", label: t("templates.header") },
   { key: "actions", label: t("common.actions"), align: "right" },
 ]);
+=======
+const templates = ref<Template[]>([])
+const accounts = ref<WhatsAppAccount[]>([])
+const isLoading = ref(true)
+const error = ref<string | null>(null)
+const isSyncing = ref(false)
+const selectedAccount = ref<string>(localStorage.getItem('templates_selected_account') || 'all')
+
+// Delete dialog state
+const deleteDialogOpen = ref(false)
+const templateToDelete = ref<Template | null>(null)
+const isDeleting = ref(false)
+
+const { searchQuery, currentPage, totalItems, pageSize, handlePageChange } = useSearchPagination({
+  fetchFn: () => fetchTemplates(),
+})
+
+const columns = computed<Column<Template>[]>(() => [
+  { key: 'name', label: t('templates.name'), sortable: true },
+  { key: 'category', label: t('templates.category'), sortable: true },
+  { key: 'status', label: t('templates.status'), sortable: true },
+  { key: 'language', label: t('templates.language'), sortable: true },
+  { key: 'header_type', label: t('templates.header') },
+  { key: 'actions', label: '', align: 'right' },
+])
+
+const sortKey = ref('name')
+const sortDirection = ref<'asc' | 'desc'>('asc')
+
+const languages = [
+  { code: 'af', name: 'Afrikaans' },
+  { code: 'sq', name: 'Albanian' },
+  { code: 'ar', name: 'Arabic' },
+  { code: 'az', name: 'Azerbaijani' },
+  { code: 'bn', name: 'Bengali' },
+  { code: 'bg', name: 'Bulgarian' },
+  { code: 'ca', name: 'Catalan' },
+  { code: 'zh_CN', name: 'Chinese (CHN)' },
+  { code: 'zh_HK', name: 'Chinese (HKG)' },
+  { code: 'zh_TW', name: 'Chinese (TAI)' },
+  { code: 'hr', name: 'Croatian' },
+  { code: 'cs', name: 'Czech' },
+  { code: 'da', name: 'Danish' },
+  { code: 'nl', name: 'Dutch' },
+  { code: 'en', name: 'English' },
+  { code: 'en_GB', name: 'English (UK)' },
+  { code: 'en_US', name: 'English (US)' },
+  { code: 'et', name: 'Estonian' },
+  { code: 'fil', name: 'Filipino' },
+  { code: 'fi', name: 'Finnish' },
+  { code: 'fr', name: 'French' },
+  { code: 'ka', name: 'Georgian' },
+  { code: 'de', name: 'German' },
+  { code: 'el', name: 'Greek' },
+  { code: 'gu', name: 'Gujarati' },
+  { code: 'ha', name: 'Hausa' },
+  { code: 'he', name: 'Hebrew' },
+  { code: 'hi', name: 'Hindi' },
+  { code: 'hu', name: 'Hungarian' },
+  { code: 'id', name: 'Indonesian' },
+  { code: 'ga', name: 'Irish' },
+  { code: 'it', name: 'Italian' },
+  { code: 'ja', name: 'Japanese' },
+  { code: 'kn', name: 'Kannada' },
+  { code: 'kk', name: 'Kazakh' },
+  { code: 'rw_RW', name: 'Kinyarwanda' },
+  { code: 'ko', name: 'Korean' },
+  { code: 'ky_KG', name: 'Kyrgyz (Kyrgyzstan)' },
+  { code: 'lo', name: 'Lao' },
+  { code: 'lv', name: 'Latvian' },
+  { code: 'lt', name: 'Lithuanian' },
+  { code: 'mk', name: 'Macedonian' },
+  { code: 'ms', name: 'Malay' },
+  { code: 'ml', name: 'Malayalam' },
+  { code: 'mr', name: 'Marathi' },
+  { code: 'nb', name: 'Norwegian (Bokm\u00e5l)' },
+  { code: 'fa', name: 'Persian' },
+  { code: 'pl', name: 'Polish' },
+  { code: 'pt_BR', name: 'Portuguese (BR)' },
+  { code: 'pt_PT', name: 'Portuguese (POR)' },
+  { code: 'pa', name: 'Punjabi' },
+  { code: 'ro', name: 'Romanian' },
+  { code: 'ru', name: 'Russian' },
+  { code: 'sr', name: 'Serbian' },
+  { code: 'sk', name: 'Slovak' },
+  { code: 'sl', name: 'Slovenian' },
+  { code: 'es', name: 'Spanish' },
+  { code: 'es_AR', name: 'Spanish (ARG)' },
+  { code: 'es_MX', name: 'Spanish (MEX)' },
+  { code: 'es_ES', name: 'Spanish (SPA)' },
+  { code: 'sw', name: 'Swahili' },
+  { code: 'sv', name: 'Swedish' },
+  { code: 'ta', name: 'Tamil' },
+  { code: 'te', name: 'Telugu' },
+  { code: 'th', name: 'Thai' },
+  { code: 'tr', name: 'Turkish' },
+  { code: 'uk', name: 'Ukrainian' },
+  { code: 'ur', name: 'Urdu' },
+  { code: 'uz', name: 'Uzbek' },
+  { code: 'vi', name: 'Vietnamese' },
+  { code: 'zu', name: 'Zulu' },
+]
+
+function getLanguageName(code: string): string {
+  return languages.find(l => l.code === code)?.name || code
+}
+
+// Refetch data when organization changes
+watch(() => organizationsStore.selectedOrgId, async () => {
+  await fetchAccounts()
+  await fetchTemplates()
+})
+>>>>>>> 0c566f76ccc5eb523d89b2cdfe9bbf4100575449
 
 // --- API Methods (Exactly as you wrote them) ---
 watch(
@@ -183,13 +317,19 @@ function onAccountChange(
 }
 
 async function fetchTemplates() {
+<<<<<<< HEAD
   isLoading.value = true;
+=======
+  isLoading.value = true
+  error.value = null
+>>>>>>> 0c566f76ccc5eb523d89b2cdfe9bbf4100575449
   try {
     const response = await templatesService.list({
       account:
         selectedAccount.value !== "all" ? selectedAccount.value : undefined,
       search: searchQuery.value || undefined,
       page: currentPage.value,
+<<<<<<< HEAD
       limit: pageSize,
     });
     const data = (response.data as any).data || response.data;
@@ -198,11 +338,24 @@ async function fetchTemplates() {
   } catch (error: any) {
     toast.error(t("common.failedLoad", { resource: t("resources.templates") }));
     templates.value = [];
+=======
+      limit: pageSize
+    })
+    const data = (response.data as any).data || response.data
+    templates.value = data.templates || []
+    totalItems.value = data.total ?? templates.value.length
+  } catch (err: any) {
+    console.error('Failed to fetch templates:', err)
+    error.value = t('templates.errorLoadingTemplates')
+    toast.error(t('common.failedLoad', { resource: t('resources.templates') }))
+    templates.value = []
+>>>>>>> 0c566f76ccc5eb523d89b2cdfe9bbf4100575449
   } finally {
     isLoading.value = false;
   }
 }
 
+<<<<<<< HEAD
 const debouncedSearch = useDebounceFn(() => {
   currentPage.value = 1;
   fetchTemplates();
@@ -213,6 +366,8 @@ function handlePageChange(page: number) {
   fetchTemplates();
 }
 
+=======
+>>>>>>> 0c566f76ccc5eb523d89b2cdfe9bbf4100575449
 async function syncTemplates() {
   if (!selectedAccount.value || selectedAccount.value === "all")
     return toast.error(t("templates.selectAccountFirst"));
@@ -230,8 +385,11 @@ async function syncTemplates() {
   }
 }
 
+<<<<<<< HEAD
 // --- Action Logic ---
 function openCreateDialog() {
+  //Force the editor to wipe its local variables clean
+  editorRef.value?.resetState();
   editingTemplate.value = null;
   formData.value = {
     whatsapp_account:
@@ -240,7 +398,7 @@ function openCreateDialog() {
         : accounts.value[0]?.name || "",
     name: "",
     display_name: "",
-    language: "en_US",
+    language: "en",
     category: "UTILITY",
     header_type: "NONE",
     header_content: "",
@@ -253,7 +411,15 @@ function openCreateDialog() {
 }
 
 function openEditDialog(template: Template) {
+  editorRef.value?.resetState();
   editingTemplate.value = template;
+
+  console.group("📥 API RECEIVE (Edit Mode)");
+  console.log("Raw Template Object:", JSON.parse(JSON.stringify(template)));
+  console.table(template.buttons || []);
+  console.groupEnd();
+  // ------------------------------
+
   formData.value = JSON.parse(JSON.stringify(template));
   isDialogOpen.value = true;
 }
@@ -287,7 +453,12 @@ async function saveTemplate() {
 
     return cleanBtn;
   });
-  console.log("TEMPLATE PAYLOAD:", payload);
+  // _____
+  console.group("📤 API SEND (Save Mode)");
+  console.log("Final Payload:", JSON.parse(JSON.stringify(payload)));
+  console.table(payload.buttons || []);
+  console.groupEnd();
+  // ------
   isSubmitting.value = true;
   try {
     if (editingTemplate.value) {
@@ -315,12 +486,20 @@ async function saveTemplate() {
   }
 }
 
+=======
+>>>>>>> 0c566f76ccc5eb523d89b2cdfe9bbf4100575449
 function openDeleteDialog(template: Template) {
   templateToDelete.value = template;
   deleteDialogOpen.value = true;
 }
 async function confirmDeleteTemplate() {
+<<<<<<< HEAD
   if (!templateToDelete.value) return;
+=======
+  if (!templateToDelete.value) return
+
+  isDeleting.value = true
+>>>>>>> 0c566f76ccc5eb523d89b2cdfe9bbf4100575449
   try {
     await api.delete(`/templates/${templateToDelete.value.id}`);
     toast.success(
@@ -330,6 +509,7 @@ async function confirmDeleteTemplate() {
     templateToDelete.value = null;
     await fetchTemplates();
   } catch (error) {
+<<<<<<< HEAD
     toast.error(
       getErrorMessage(
         error,
@@ -360,6 +540,11 @@ async function confirmPublishTemplate() {
     });
   } finally {
     publishingTemplateId.value = null;
+=======
+    toast.error(getErrorMessage(error, t('common.failedDelete', { resource: t('resources.template') })))
+  } finally {
+    isDeleting.value = false
+>>>>>>> 0c566f76ccc5eb523d89b2cdfe9bbf4100575449
   }
 }
 
@@ -423,16 +608,32 @@ function getHeaderIcon(type: string) {
           <RefreshCw v-else class="h-4 w-4 mr-2" />
           {{ $t("templates.syncFromMeta") }}
         </Button>
+<<<<<<< HEAD
         <Button variant="outline" size="sm" @click="openCreateDialog">
           <Plus class="h-4 w-4 mr-2" /> {{ $t("templates.createTemplate") }}
         </Button>
+=======
+        <RouterLink to="/templates/new">
+          <Button variant="outline" size="sm">
+            <Plus class="h-4 w-4 mr-2" />
+            {{ $t('templates.createTemplate') }}
+          </Button>
+        </RouterLink>
+>>>>>>> 0c566f76ccc5eb523d89b2cdfe9bbf4100575449
       </template>
     </PageHeader>
 
     <ScrollArea class="flex-1">
       <div class="p-6">
-        <div class="max-w-6xl mx-auto">
-          <Card>
+        <div>
+          <ErrorState
+            v-if="error && !isLoading"
+            :title="$t('common.loadErrorTitle')"
+            :description="error"
+            :retry-label="$t('common.retry')"
+            @retry="fetchTemplates"
+          />
+          <Card v-else>
             <CardHeader>
               <div class="flex items-center justify-between flex-wrap gap-4">
                 <div>
@@ -493,6 +694,7 @@ function getHeaderIcon(type: string) {
                 v-model:sort-direction="sortDirection"
               >
                 <template #cell-name="{ item: template }">
+<<<<<<< HEAD
                   <div>
                     <span class="font-medium">{{
                       template.display_name || template.name
@@ -501,6 +703,12 @@ function getHeaderIcon(type: string) {
                       {{ template.name }}
                     </p>
                   </div>
+=======
+                  <RouterLink :to="`/templates/${template.id}`" class="text-inherit no-underline hover:opacity-80">
+                    <span class="font-medium">{{ template.display_name || template.name }}</span>
+                    <p class="text-xs font-mono text-muted-foreground">{{ template.name }}</p>
+                  </RouterLink>
+>>>>>>> 0c566f76ccc5eb523d89b2cdfe9bbf4100575449
                 </template>
                 <template #cell-category="{ item: template }"
                   ><Badge
@@ -534,6 +742,7 @@ function getHeaderIcon(type: string) {
                 </template>
                 <template #cell-actions="{ item: template }">
                   <div class="flex items-center justify-end gap-1">
+<<<<<<< HEAD
                     <Button
                       variant="ghost"
                       size="icon"
@@ -573,6 +782,21 @@ function getHeaderIcon(type: string) {
                       @click="openDeleteDialog(template)"
                       ><Trash2 class="h-4 w-4"
                     /></Button>
+=======
+                    <RouterLink :to="`/templates/${template.id}`">
+                      <IconButton
+                        :icon="Pencil"
+                        :label="$t('common.edit')"
+                        class="h-8 w-8"
+                      />
+                    </RouterLink>
+                    <IconButton
+                      :icon="Trash2"
+                      :label="$t('common.delete')"
+                      class="h-8 w-8 text-destructive"
+                      @click="openDeleteDialog(template)"
+                    />
+>>>>>>> 0c566f76ccc5eb523d89b2cdfe9bbf4100575449
                   </div>
                 </template>
                 <template #empty-action>
@@ -584,6 +808,7 @@ function getHeaderIcon(type: string) {
                       :disabled="!selectedAccount || selectedAccount === 'all'"
                     >
                       <RefreshCw class="h-4 w-4 mr-2" />
+<<<<<<< HEAD
                       {{ $t("templates.syncFromMeta") }}
                     </Button>
                     <Button
@@ -593,6 +818,16 @@ function getHeaderIcon(type: string) {
                       ><Plus class="h-4 w-4 mr-2" />
                       {{ $t("templates.createTemplate") }}</Button
                     >
+=======
+                      {{ $t('templates.syncFromMeta') }}
+                    </Button>
+                    <RouterLink to="/templates/new">
+                      <Button variant="outline" size="sm">
+                        <Plus class="h-4 w-4 mr-2" />
+                        {{ $t('templates.createTemplate') }}
+                      </Button>
+                    </RouterLink>
+>>>>>>> 0c566f76ccc5eb523d89b2cdfe9bbf4100575449
                   </div>
                 </template>
               </DataTable>
@@ -602,6 +837,7 @@ function getHeaderIcon(type: string) {
       </div>
     </ScrollArea>
 
+<<<<<<< HEAD
     <Dialog v-model:open="isDialogOpen">
       <DialogContent class="max-w-6xl max-h-[90vh] overflow-y-auto w-full">
         <DialogHeader>
@@ -618,6 +854,7 @@ function getHeaderIcon(type: string) {
         </DialogHeader>
 
         <TemplateEditor
+          ref="editorRef"
           v-model="formData"
           :is-edit="!!editingTemplate"
           :accounts="accounts"
@@ -695,12 +932,17 @@ function getHeaderIcon(type: string) {
       </DialogContent>
     </Dialog>
 
+=======
+    <!-- Delete Confirmation Dialog -->
+>>>>>>> 0c566f76ccc5eb523d89b2cdfe9bbf4100575449
     <DeleteConfirmDialog
       v-model:open="deleteDialogOpen"
       :title="$t('templates.deleteTemplate')"
       :item-name="templateToDelete?.display_name || templateToDelete?.name"
+      :is-submitting="isDeleting"
       @confirm="confirmDeleteTemplate"
     />
+<<<<<<< HEAD
 
     <AlertDialog v-model:open="publishDialogOpen">
       <AlertDialogContent>
@@ -735,5 +977,7 @@ function getHeaderIcon(type: string) {
         </AlertDialogFooter>
       </AlertDialogContent>
     </AlertDialog>
+=======
+>>>>>>> 0c566f76ccc5eb523d89b2cdfe9bbf4100575449
   </div>
 </template>

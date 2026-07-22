@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/redis/go-redis/v9"
+	"github.com/shridarpatil/whatomate/internal/assignment"
 	"github.com/shridarpatil/whatomate/internal/calling"
 	"github.com/shridarpatil/whatomate/internal/config"
 	"github.com/shridarpatil/whatomate/internal/storage"
@@ -210,8 +211,12 @@ func runServer(args []string) {
 		}
 	}
 
+	// Initialize shared assignment engine (used by both chat and call transfers)
+	assigner := assignment.New(db, rdb, lo)
+	app.Assigner = assigner
+
 	// Initialize CallManager (per-org calling_enabled DB setting controls access)
-	app.CallManager = calling.NewManager(&cfg.Calling, s3Client, db, waClient, wsHub, lo)
+	app.CallManager = calling.NewManager(&cfg.Calling, s3Client, db, rdb, waClient, wsHub, assigner, lo)
 	app.S3Client = s3Client
 	lo.Info("Call manager initialized")
 
@@ -693,6 +698,10 @@ func setupRoutes(g *fastglue.Fastglue, app *handlers.App, lo logf.Logger, basePa
 	g.POST("/api/teams/{id}/members", app.AddTeamMember)
 	g.DELETE("/api/teams/{id}/members/{member_user_id}", app.RemoveTeamMember)
 
+	// Audit Logs
+	g.GET("/api/audit-logs", app.ListAuditLogs)
+	g.GET("/api/audit-logs/{id}", app.GetAuditLog)
+
 	// Canned Responses
 	g.GET("/api/canned-responses", app.ListCannedResponses)
 	g.POST("/api/canned-responses", app.CreateCannedResponse)
@@ -785,6 +794,10 @@ func setupRoutes(g *fastglue.Fastglue, app *handlers.App, lo logf.Logger, basePa
 	g.POST("/api/call-transfers/{id}/connect", app.ConnectCallTransfer)
 	g.POST("/api/call-transfers/{id}/hangup", app.HangupCallTransfer)
 	g.POST("/api/call-transfers/initiate", app.InitiateAgentTransfer)
+
+	// Call Hold
+	g.POST("/api/call-logs/{id}/hold", app.HoldCall)
+	g.POST("/api/call-logs/{id}/resume", app.ResumeCall)
 
 	// Outgoing Calls
 	g.POST("/api/calls/outgoing", app.InitiateOutgoingCall)

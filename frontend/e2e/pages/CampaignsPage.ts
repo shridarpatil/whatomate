@@ -71,7 +71,7 @@ export class CampaignsPage extends BasePage {
 
   getCancelButton(card?: Locator): Locator {
     const container = card || this.page
-    return container.getByRole('button', { name: /^Cancel$/i }).first()
+    return container.getByRole('button', { name: /Cancel/i }).first()
   }
 
   getRetryFailedButton(card?: Locator): Locator {

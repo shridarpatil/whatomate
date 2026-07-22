@@ -263,7 +263,8 @@ func (m *Manager) createPeerConnection() (*webrtc.PeerConnection, error) {
 
 	// On cloud/AWS, map private IP to public IP so ICE candidates
 	// advertise the reachable address instead of the internal one.
-	if m.config.PublicIP != "" {
+	// Skip when relay_only — host candidates are not used in relay mode.
+	if m.config.PublicIP != "" && !m.config.RelayOnly {
 		if err := settingEngine.SetICEAddressRewriteRules(webrtc.ICEAddressRewriteRule{
 			External:        []string{m.config.PublicIP},
 			AsCandidateType: webrtc.ICECandidateTypeHost,
@@ -276,7 +277,31 @@ func (m *Manager) createPeerConnection() (*webrtc.PeerConnection, error) {
 		webrtc.WithMediaEngine(mediaEngine),
 		webrtc.WithSettingEngine(settingEngine),
 	)
-	return api.NewPeerConnection(config)
+
+	pc, err := api.NewPeerConnection(config)
+	if err != nil {
+		return nil, err
+	}
+
+	// Debug: log ICE candidates and connection state to diagnose TURN issues.
+	pc.OnICECandidate(func(c *webrtc.ICECandidate) {
+		if c == nil {
+			m.log.Info("ICE gathering complete (no more candidates)")
+			return
+		}
+		m.log.Info("ICE candidate gathered",
+			"type", c.Typ.String(),
+			"address", c.Address,
+			"port", c.Port,
+			"protocol", c.Protocol.String(),
+			"related", c.RelatedAddress,
+		)
+	})
+	pc.OnICEConnectionStateChange(func(state webrtc.ICEConnectionState) {
+		m.log.Info("ICE connection state changed", "state", state.String())
+	})
+
+	return pc, nil
 }
 
 // consumeAudioTrack reads and discards RTP packets to keep the stream active.

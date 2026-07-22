@@ -64,6 +64,12 @@ export const useAuthStore = defineStore('auth', () => {
     localStorage.removeItem('refresh_token')
   }
 
+  /**
+   * Restore session from localStorage (synchronous, no API calls).
+   * Returns true if a valid user object was found in localStorage.
+   * Does NOT verify the session with the server — the API interceptor
+   * handles 401s and token refresh automatically.
+   */
   function restoreSession(): boolean {
     const storedUser = localStorage.getItem('user')
 
@@ -83,8 +89,6 @@ export const useAuthStore = defineStore('auth', () => {
           return false
         }
         user.value = parsed
-        // Fetch fresh user data in background to verify session + get updated permissions
-        refreshUserData()
         return true
       } catch {
         clearAuth()

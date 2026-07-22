@@ -25,7 +25,7 @@ type FlowCreateResponse struct {
 // FlowUpdateResponse represents the response from updating flow assets
 type FlowUpdateResponse struct {
 	Success          bool        `json:"success"`
-	ValidationErrors interface{} `json:"validation_errors,omitempty"`
+	ValidationErrors any `json:"validation_errors,omitempty"`
 }
 
 // FlowPublishResponse represents the response from publishing a flow
@@ -57,8 +57,8 @@ type FlowListResponse struct {
 type FlowJSON struct {
 	Version       string        `json:"version"`
 	DataAPIVersion string       `json:"data_api_version,omitempty"`
-	RoutingModel  map[string]interface{} `json:"routing_model,omitempty"`
-	Screens       []interface{} `json:"screens"`
+	RoutingModel  map[string]any `json:"routing_model,omitempty"`
+	Screens       []any `json:"screens"`
 }
 
 // CreateFlow creates a new flow in Meta

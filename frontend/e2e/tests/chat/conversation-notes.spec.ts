@@ -225,12 +225,18 @@ test.describe('Conversation Notes - API CRUD', () => {
   test('should support pagination with limit and has_more', async () => {
     await cleanupNotes(api, contactId)
 
+    // Create notes sequentially and wait for each to be confirmed
     for (let i = 1; i <= 5; i++) {
       await api.createNote(contactId, `Paginate note ${i}`)
     }
 
-    // Verify at least 5 exist (other parallel tests may add notes too)
-    const allNotes = await api.listNotes(contactId)
+    // Wait for all notes to be persisted and queryable
+    let allNotes: any[] = []
+    for (let attempt = 0; attempt < 5; attempt++) {
+      allNotes = await api.listNotes(contactId)
+      if (allNotes.length >= 5) break
+      await new Promise(r => setTimeout(r, 500))
+    }
     expect(allNotes.length).toBeGreaterThanOrEqual(5)
 
     // Use a fresh ApiHelper context to test pagination

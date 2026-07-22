@@ -6,6 +6,7 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/shridarpatil/whatomate/internal/models"
+	"github.com/shridarpatil/whatomate/internal/utils"
 	"github.com/shridarpatil/whatomate/test/testutil"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -269,7 +270,7 @@ func TestMaskPhoneNumber(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
-			assert.Equal(t, tt.want, MaskPhoneNumber(tt.phone))
+			assert.Equal(t, tt.want, utils.MaskPhoneNumber(tt.phone))
 		})
 	}
 }
@@ -297,7 +298,7 @@ func TestLooksLikePhoneNumber(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
-			assert.Equal(t, tt.want, LooksLikePhoneNumber(tt.s))
+			assert.Equal(t, tt.want, utils.LooksLikePhoneNumber(tt.s))
 		})
 	}
 }
@@ -320,7 +321,7 @@ func TestMaskIfPhoneNumber(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
-			assert.Equal(t, tt.want, MaskIfPhoneNumber(tt.s))
+			assert.Equal(t, tt.want, utils.MaskIfPhoneNumber(tt.s))
 		})
 	}
 }

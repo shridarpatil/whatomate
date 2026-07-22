@@ -179,11 +179,34 @@ test.describe('Webhook Testing', () => {
     // Find test button for the webhook
     const row = await tablePage.getRow(webhook.name)
 
-    const testButton = row.locator('button').filter({ hasText: /Test/i })
+    const testButton = row.getByRole('button', { name: /test/i })
     if (await testButton.count() > 0) {
       await testButton.click()
       // Wait for test result (toast or inline message)
       await page.waitForTimeout(2000)
+    }
+  })
+})
+
+test.describe('Webhook Toggle Confirmation', () => {
+  test('should show confirmation when disabling webhook', async ({ page }) => {
+    await loginAsAdmin(page)
+    await page.goto('/settings/webhooks')
+    await page.waitForLoadState('networkidle')
+
+    // Find an active webhook's Switch toggle
+    const toggleSwitch = page.getByRole('switch').first()
+    if (await toggleSwitch.isVisible()) {
+      await toggleSwitch.click()
+      // Verify the confirmation alert dialog appears
+      const alertDialog = page.locator('[role="alertdialog"]')
+      const dialogVisible = await alertDialog.isVisible({ timeout: 3000 }).catch(() => false)
+      if (dialogVisible) {
+        // Click cancel to dismiss without changing state
+        const cancelBtn = alertDialog.getByRole('button', { name: /cancel/i })
+        await cancelBtn.click()
+        await alertDialog.waitFor({ state: 'hidden' })
+      }
     }
   })
 })

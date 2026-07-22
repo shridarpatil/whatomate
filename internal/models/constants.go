@@ -1,5 +1,14 @@
 package models
 
+// AuditAction represents the type of audit action
+type AuditAction string
+
+const (
+	AuditActionCreated AuditAction = "created"
+	AuditActionUpdated AuditAction = "updated"
+	AuditActionDeleted AuditAction = "deleted"
+)
+
 // TeamRole represents a user's role within a specific team (not organizational role)
 type TeamRole string
 

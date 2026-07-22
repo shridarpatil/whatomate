@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, ref } from "vue";
+import DOMPurify from "dompurify";
 import {
   Reply,
   ExternalLink,
@@ -30,7 +31,7 @@ interface TemplatePreviewProps {
   footerContent?: string;
   buttons?: TemplateButton[];
   sampleValues?: SampleValue[];
-  contained?: boolean; // true = sheet stays inside container, false = fullscreen
+  contained?: boolean;
 }
 
 const props = withDefaults(defineProps<TemplatePreviewProps>(), {
@@ -45,9 +46,6 @@ const props = withDefaults(defineProps<TemplatePreviewProps>(), {
 
 const showAllOptions = ref(false);
 
-// ─── Button logic (Meta rules) ───────────────────────────────────────────────
-// ≤3 buttons → show all stacked
-// >3 buttons → show first 2 + "See all options"
 const visibleButtons = computed(() =>
   (props.buttons || []).length > 3
     ? props.buttons.slice(0, 2)
@@ -55,24 +53,18 @@ const visibleButtons = computed(() =>
 );
 const hasSeeAll = computed(() => (props.buttons || []).length > 3);
 
-// ─── Text formatting (WhatsApp markdown) ─────────────────────────────────────
-function escapeHtml(str: string): string {
-  return (str || "").replace(
-    /[&<>'"]/g,
-    (tag) =>
-      ({
-        "&": "&amp;",
-        "<": "&lt;",
-        ">": "&gt;",
-        "'": "&#39;",
-        '"': "&quot;",
-      })[tag] || tag,
-  );
-}
-
 function formatText(text: string): string {
   if (!text) return "";
-  let result = escapeHtml(text);
+
+  const htmlMap: Record<string, string> = {
+    "&": "&amp;",
+    "<": "&lt;",
+    ">": "&gt;",
+    "'": "&#39;",
+    '"': "&quot;",
+  };
+
+  let result = text.replace(/[&<>'"]/g, (tag) => htmlMap[tag] || tag);
 
   // WhatsApp formatting
   result = result.replace(/\*([^*\n]+)\*/g, "<strong>$1</strong>");
@@ -80,13 +72,17 @@ function formatText(text: string): string {
   result = result.replace(/~([^~\n]+)~/g, "<del>$1</del>");
   result = result.replace(/```([^`]+)```/g, "<code>$1</code>");
 
-  // Replace sample values
+  // Replace sample values safely using split().join() to avoid String.replace token injection
   (props.sampleValues || []).forEach((sample) => {
     if (sample?.param_name && sample?.value) {
-      result = result.replace(
-        `{{${sample.param_name}}}`,
-        `<span class="bg-[#d4f1c7] dark:bg-green-900/50 px-0.5 rounded text-[#1a7a3c] dark:text-green-300">${escapeHtml(String(sample.value))}</span>`,
+      const target = `{{${sample.param_name}}}`;
+
+      const escapedValue = String(sample.value).replace(
+        /[&<>'"]/g,
+        (tag) => htmlMap[tag] || tag,
       );
+      const pill = `<span class="bg-[#d4f1c7] dark:bg-green-900/50 px-0.5 rounded text-[#1a7a3c] dark:text-green-300">${escapedValue}</span>`;
+      result = result.split(target).join(pill);
     }
   });
 
@@ -95,7 +91,10 @@ function formatText(text: string): string {
     '<span class="bg-yellow-100 dark:bg-yellow-900/40 px-0.5 rounded text-yellow-700 dark:text-yellow-300">{{$1}}</span>',
   );
 
-  return result;
+  return DOMPurify.sanitize(result, {
+    ALLOWED_TAGS: ["strong", "em", "del", "code", "span"],
+    ALLOWED_ATTR: ["class"],
+  });
 }
 
 const formattedBody = computed(() => formatText(props.bodyContent || ""));

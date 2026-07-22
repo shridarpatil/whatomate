@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, onMounted, watch, computed } from 'vue'
+import { ref, onMounted, computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { ScrollArea } from '@/components/ui/scroll-area'
@@ -10,7 +10,7 @@ import { Badge } from '@/components/ui/badge'
 import { TagBadge } from '@/components/ui/tag-badge'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '@/components/ui/command'
-import { PageHeader, SearchInput, DataTable, CrudFormDialog, DeleteConfirmDialog, CreateContactDialog, ImportExportDialog, type Column } from '@/components/shared'
+import { PageHeader, SearchInput, DataTable, CrudFormDialog, DeleteConfirmDialog, CreateContactDialog, ImportExportDialog, IconButton, ErrorState, type Column } from '@/components/shared'
 import { contactsService, accountsService, type Tag, type ImportResult } from '@/services/api'
 import { useTagsStore } from '@/stores/tags'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
@@ -19,7 +19,7 @@ import { Plus, Users, Pencil, Trash2, MessageSquare, Check, ChevronsUpDown, X, D
 import { getErrorMessage } from '@/lib/api-utils'
 import { formatDate } from '@/lib/utils'
 import { getTagColorClass } from '@/lib/constants'
-import { useDebounceFn } from '@vueuse/core'
+import { useSearchPagination } from '@/composables/useSearchPagination'
 import { useRouter } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
 
@@ -65,19 +65,15 @@ const availableTags = ref<Tag[]>([])
 const availableAccounts = ref<{ id: string; name: string; phone_number: string }[]>([])
 const isLoading = ref(false)
 const isSubmitting = ref(false)
+const isDeleting = ref(false)
+const error = ref(false)
 const isCreateDialogOpen = ref(false)
 const isEditDialogOpen = ref(false)
 const editingContact = ref<Contact | null>(null)
 const deleteDialogOpen = ref(false)
 const contactToDelete = ref<Contact | null>(null)
 const formData = ref<ContactFormData>({ ...defaultFormData })
-const searchQuery = ref('')
 const tagSelectorOpen = ref(false)
-
-// Pagination state
-const currentPage = ref(1)
-const totalItems = ref(0)
-const pageSize = 20
 
 // Sorting state
 const sortKey = ref('last_message_at')
@@ -135,6 +131,7 @@ function closeDeleteDialog() {
 
 async function fetchContacts() {
   isLoading.value = true
+  error.value = false
   try {
     const response = await contactsService.list({
       search: searchQuery.value || undefined,
@@ -145,8 +142,9 @@ async function fetchContacts() {
     const responseData = data.data || data
     contacts.value = responseData.contacts || []
     totalItems.value = responseData.total ?? contacts.value.length
-  } catch (error) {
-    toast.error(getErrorMessage(error, t('common.failedLoad', { resource: t('resources.contacts') })))
+  } catch (e) {
+    toast.error(getErrorMessage(e, t('common.failedLoad', { resource: t('resources.contacts') })))
+    error.value = true
   } finally {
     isLoading.value = false
   }
@@ -172,18 +170,9 @@ async function fetchAccounts() {
   }
 }
 
-// Debounced search
-const debouncedSearch = useDebounceFn(() => {
-  currentPage.value = 1
-  fetchContacts()
-}, 300)
-
-watch(searchQuery, () => debouncedSearch())
-
-function handlePageChange(page: number) {
-  currentPage.value = page
-  fetchContacts()
-}
+const { searchQuery, currentPage, totalItems, pageSize, handlePageChange } = useSearchPagination({
+  fetchFn: () => fetchContacts(),
+})
 
 onMounted(() => {
   fetchContacts()
@@ -212,13 +201,16 @@ async function updateContact() {
 
 async function confirmDelete() {
   if (!contactToDelete.value) return
+  isDeleting.value = true
   try {
     await contactsService.delete(contactToDelete.value.id)
     toast.success(t('common.deletedSuccess', { resource: t('resources.Contact') }))
     closeDeleteDialog()
     await fetchContacts()
-  } catch (error) {
-    toast.error(getErrorMessage(error, t('common.failedDelete', { resource: t('resources.contact') })))
+  } catch (e) {
+    toast.error(getErrorMessage(e, t('common.failedDelete', { resource: t('resources.contact') })))
+  } finally {
+    isDeleting.value = false
   }
 }
 
@@ -263,7 +255,17 @@ function getDisplayName(contact: Contact): string {
       </template>
     </PageHeader>
 
-    <ScrollArea class="flex-1">
+    <!-- Error State -->
+    <ErrorState
+      v-if="error && !isLoading"
+      :title="$t('common.loadErrorTitle')"
+      :description="$t('common.loadErrorDescription')"
+      :retry-label="$t('common.retryLoad')"
+      class="flex-1"
+      @retry="fetchContacts"
+    />
+
+    <ScrollArea v-else class="flex-1">
       <div class="p-6">
         <div class="max-w-6xl mx-auto">
           <Card>
@@ -316,15 +318,11 @@ function getDisplayName(contact: Contact): string {
                 </template>
                 <template #cell-actions="{ item: contact }">
                   <div class="flex items-center justify-end gap-1">
-                    <Button variant="ghost" size="icon" class="h-8 w-8" @click="openChat(contact)" :title="$t('contacts.openChat')">
-                      <MessageSquare class="h-4 w-4" />
-                    </Button>
-                    <Button variant="ghost" size="icon" class="h-8 w-8" @click="openEditDialog(contact)" :title="$t('common.edit')">
-                      <Pencil class="h-4 w-4" />
-                    </Button>
-                    <Button variant="ghost" size="icon" class="h-8 w-8" @click="openDeleteDialog(contact)" :title="$t('common.delete')">
+                    <IconButton :icon="MessageSquare" :label="$t('contacts.openChat')" class="h-8 w-8" @click="openChat(contact)" />
+                    <IconButton :icon="Pencil" :label="$t('common.edit')" class="h-8 w-8" @click="openEditDialog(contact)" />
+                    <IconButton :label="$t('common.delete')" class="h-8 w-8" @click="openDeleteDialog(contact)">
                       <Trash2 class="h-4 w-4 text-destructive" />
-                    </Button>
+                    </IconButton>
                   </div>
                 </template>
                 <template v-if="canWriteContacts" #empty-action>
@@ -436,6 +434,7 @@ function getDisplayName(contact: Contact): string {
       :title="$t('contacts.deleteContact')"
       :item-name="contactToDelete ? getDisplayName(contactToDelete) : ''"
       :description="$t('contacts.deleteWarning')"
+      :is-submitting="isDeleting"
       @confirm="confirmDelete"
     />
 

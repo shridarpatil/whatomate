@@ -26,7 +26,7 @@ type WidgetRequest struct {
 	ShowChange   *bool         `json:"show_change"`
 	Color       string        `json:"color"`
 	Size        string        `json:"size"` // small, medium, large
-	Config      map[string]interface{} `json:"config"`
+	Config      map[string]any `json:"config"`
 	IsShared    *bool         `json:"is_shared"`
 	GridX       *int          `json:"grid_x"`
 	GridY       *int          `json:"grid_y"`
@@ -61,7 +61,7 @@ type WidgetResponse struct {
 	GridY        int           `json:"grid_y"`
 	GridW        int           `json:"grid_w"`
 	GridH        int           `json:"grid_h"`
-	Config       map[string]interface{} `json:"config"`
+	Config       map[string]any `json:"config"`
 	IsShared     bool          `json:"is_shared"`
 	IsDefault    bool          `json:"is_default"`
 	IsOwner      bool          `json:"is_owner"` // True if current user created this widget
@@ -165,7 +165,7 @@ func (a *App) ListWidgets(r *fastglue.Request) error {
 		response[i] = widgetToResponse(w, userID)
 	}
 
-	return r.SendEnvelope(map[string]interface{}{
+	return r.SendEnvelope(map[string]any{
 		"widgets": response,
 	})
 }
@@ -262,7 +262,7 @@ func (a *App) CreateWidget(r *fastglue.Request) error {
 	// Convert filters to JSONBArray
 	filters := make(models.JSONBArray, len(req.Filters))
 	for i, f := range req.Filters {
-		filters[i] = map[string]interface{}{
+		filters[i] = map[string]any{
 			"field":    f.Field,
 			"operator": f.Operator,
 			"value":    f.Value,
@@ -414,7 +414,7 @@ func (a *App) UpdateWidget(r *fastglue.Request) error {
 	if req.Filters != nil {
 		filters := make(models.JSONBArray, len(req.Filters))
 		for i, f := range req.Filters {
-			filters[i] = map[string]interface{}{
+			filters[i] = map[string]any{
 				"field":    f.Field,
 				"operator": f.Operator,
 				"value":    f.Value,
@@ -544,7 +544,7 @@ func (a *App) SaveWidgetLayout(r *fastglue.Request) error {
 		for i, item := range req.Layout {
 			result := tx.Model(&models.Widget{}).
 				Where("id = ? AND organization_id = ? AND (user_id = ? OR is_shared = true)", item.ID, orgID, userID).
-				Updates(map[string]interface{}{
+				Updates(map[string]any{
 					"grid_x":        item.GridX,
 					"grid_y":        item.GridY,
 					"grid_w":        item.GridW,
@@ -568,16 +568,16 @@ func (a *App) SaveWidgetLayout(r *fastglue.Request) error {
 
 // GetWidgetDataSources returns available data sources and their filterable fields
 func (a *App) GetWidgetDataSources(r *fastglue.Request) error {
-	sources := make([]map[string]interface{}, 0)
+	sources := make([]map[string]any, 0)
 	for source, fields := range widgetDataSources {
-		sources = append(sources, map[string]interface{}{
+		sources = append(sources, map[string]any{
 			"name":   source,
 			"label":  formatLabel(source),
 			"fields": fields,
 		})
 	}
 
-	return r.SendEnvelope(map[string]interface{}{
+	return r.SendEnvelope(map[string]any{
 		"data_sources":  sources,
 		"metrics":       widgetMetrics,
 		"display_types": widgetDisplayTypes,
@@ -599,7 +599,7 @@ func widgetToResponse(w models.Widget, currentUserID uuid.UUID) WidgetResponse {
 	// Parse filters from JSONBArray
 	filters := make([]FilterInput, 0)
 	for _, f := range w.Filters {
-		if filterMap, ok := f.(map[string]interface{}); ok {
+		if filterMap, ok := f.(map[string]any); ok {
 			filters = append(filters, FilterInput{
 				Field:    widgetGetString(filterMap, "field"),
 				Operator: widgetGetString(filterMap, "operator"),
@@ -608,9 +608,9 @@ func widgetToResponse(w models.Widget, currentUserID uuid.UUID) WidgetResponse {
 		}
 	}
 
-	config := map[string]interface{}(w.Config)
+	config := map[string]any(w.Config)
 	if config == nil {
-		config = map[string]interface{}{}
+		config = map[string]any{}
 	}
 
 	return WidgetResponse{
@@ -641,7 +641,7 @@ func widgetToResponse(w models.Widget, currentUserID uuid.UUID) WidgetResponse {
 	}
 }
 
-func widgetGetString(m map[string]interface{}, key string) string {
+func widgetGetString(m map[string]any, key string) string {
 	if v, ok := m[key]; ok {
 		if s, ok := v.(string); ok {
 			return s
@@ -736,7 +736,7 @@ func (a *App) GetAllWidgetsData(r *fastglue.Request) error {
 		results[widget.ID.String()] = data
 	}
 
-	return r.SendEnvelope(map[string]interface{}{
+	return r.SendEnvelope(map[string]any{
 		"data": results,
 	})
 }
@@ -776,7 +776,7 @@ func (a *App) executeWidgetQuery(orgID uuid.UUID, widget models.Widget, fromStr,
 	// Parse filters
 	filters := make([]FilterInput, 0)
 	for _, f := range widget.Filters {
-		if filterMap, ok := f.(map[string]interface{}); ok {
+		if filterMap, ok := f.(map[string]any); ok {
 			filters = append(filters, FilterInput{
 				Field:    widgetGetString(filterMap, "field"),
 				Operator: widgetGetString(filterMap, "operator"),
@@ -952,7 +952,7 @@ func (a *App) getChartData(orgID uuid.UUID, widget models.Widget, filters []Filt
 		WHERE organization_id = ? AND %s >= ? AND %s <= ?
 	`, dateField, tableName, dateField, dateField)
 
-	args := []interface{}{orgID, start, end}
+	args := []any{orgID, start, end}
 	query, args = appendFilterSQL(query, args, filters)
 
 	query += fmt.Sprintf(" GROUP BY DATE_TRUNC('day', %s) ORDER BY date ASC", dateField)
@@ -994,7 +994,7 @@ func resolveDataSourceTable(dataSource string) (tableName, dateField string, ok 
 }
 
 // appendFilterSQL appends filter conditions to a raw SQL query string and args slice
-func appendFilterSQL(query string, args []interface{}, filters []FilterInput) (string, []interface{}) {
+func appendFilterSQL(query string, args []any, filters []FilterInput) (string, []any) {
 	for _, f := range filters {
 		condition, value := buildFilterSQL(f)
 		query += " AND " + condition
@@ -1035,7 +1035,7 @@ func (a *App) getGroupedData(orgID uuid.UUID, widget models.Widget, filters []Fi
 		WHERE organization_id = ? AND %s >= ? AND %s <= ?
 	`, widget.GroupByField, tableName, dateField, dateField)
 
-	args := []interface{}{orgID, start, end}
+	args := []any{orgID, start, end}
 	query, args = appendFilterSQL(query, args, filters)
 
 	query += fmt.Sprintf(" GROUP BY %s ORDER BY value DESC", widget.GroupByField)
@@ -1074,7 +1074,7 @@ func (a *App) getCampaignMessageStatusData(orgID uuid.UUID, filters []FilterInpu
 		WHERE organization_id = ? AND created_at >= ? AND created_at <= ?
 	`
 
-	args := []interface{}{orgID, start, end}
+	args := []any{orgID, start, end}
 	query, args = appendFilterSQL(query, args, filters)
 
 	type CampaignCounts struct {
@@ -1118,7 +1118,7 @@ func (a *App) getGroupedTimeSeriesData(orgID uuid.UUID, widget models.Widget, fi
 		WHERE organization_id = ? AND %s >= ? AND %s <= ?
 	`, dateField, widget.GroupByField, tableName, dateField, dateField)
 
-	args := []interface{}{orgID, start, end}
+	args := []any{orgID, start, end}
 	query, args = appendFilterSQL(query, args, filters)
 
 	query += fmt.Sprintf(" GROUP BY DATE_TRUNC('day', %s), %s ORDER BY date ASC", dateField, widget.GroupByField)
@@ -1202,7 +1202,7 @@ func (a *App) getCampaignMessageStatusTimeSeries(orgID uuid.UUID, filters []Filt
 		WHERE organization_id = ? AND created_at >= ? AND created_at <= ?
 	`
 
-	args := []interface{}{orgID, start, end}
+	args := []any{orgID, start, end}
 	query, args = appendFilterSQL(query, args, filters)
 
 	query += " GROUP BY DATE_TRUNC('day', created_at) ORDER BY date ASC"
@@ -1248,7 +1248,7 @@ func applyFilter(query *gorm.DB, filter FilterInput) *gorm.DB {
 	return query.Where(condition, value)
 }
 
-func buildFilterSQL(filter FilterInput) (string, interface{}) {
+func buildFilterSQL(filter FilterInput) (string, any) {
 	field := filter.Field
 	value := filter.Value
 
@@ -1320,7 +1320,7 @@ func (a *App) getTableRows(orgID uuid.UUID, widget models.Widget, filters []Filt
 	}
 
 	query := sql.base
-	args := []interface{}{orgID, periodStart, periodEnd}
+	args := []any{orgID, periodStart, periodEnd}
 	query, args = appendFilterSQL(query, args, filters)
 	query += sql.orderBy
 

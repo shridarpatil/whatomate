@@ -403,6 +403,17 @@ onMounted(() => {
     state.value.sample_values = [];
   }
 });
+
+function resetState() {
+  headerMediaUploading.value = false;
+  headerMediaFilename.value = "";
+  savedSelectionStart.value = 0;
+  savedSelectionEnd.value = 0;
+}
+
+defineExpose({
+  resetState,
+});
 </script>
 
 <template>
