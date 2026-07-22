@@ -73,7 +73,9 @@ interface AgentAnalyticsResponse {
 const { t } = useI18n()
 const authStore = useAuthStore()
 const usersStore = useUsersStore()
-const isAdminOrManager = computed(() => ['admin', 'manager'].includes(authStore.user?.role?.name || ''))
+// Permission-driven (analytics.agents:read), not role-name based — custom
+// roles with the right permission should get the same view.
+const isAdminOrManager = computed(() => authStore.hasPermission('analytics.agents', 'read'))
 
 const analytics = ref<AgentAnalyticsResponse | null>(null)
 const isLoading = ref(true)

@@ -1,6 +1,9 @@
 import { test, expect } from '@playwright/test'
 import { TablePage } from '../../pages'
-import { loginAsAdmin, createTeamFixture, navigateToFirstItem, expectMetadataVisible, expectActivityLogVisible, expectDeleteFromForm } from '../../helpers'
+import { loginAsAdmin, createTeamFixture, navigateToFirstItem, expectMetadataVisible, expectActivityLogVisible, expectDeleteFromForm, ApiHelper } from '../../helpers'
+import { createTestScope, SUPER_ADMIN } from '../../framework'
+
+const scope = createTestScope('teams')
 
 test.describe('Teams - List View', () => {
   let tablePage: TablePage
@@ -145,13 +148,25 @@ test.describe('Teams - Detail Page CRUD', () => {
     }
   })
 
-  test('should show activity log', async ({ page }) => {
-    await page.goto('/settings/teams')
+  test('should show activity log', async ({ page, request }) => {
+    // Seed our own team so we don't race with parallel workers that
+    // create-then-delete teams. navigateToFirstItem grabs the first row's
+    // href, but if another worker deletes that team before goto lands, the
+    // detail page renders the "not found" error state and Activity Log
+    // never appears.
+    const api = new ApiHelper(request)
+    await api.login(SUPER_ADMIN.email, SUPER_ADMIN.password)
+    const teamResp = await api.post('/api/teams', {
+      name: scope.name('activity-log'),
+      description: 'seeded for activity-log test',
+    })
+    expect(teamResp.ok(), `seed team: ${await teamResp.text()}`).toBe(true)
+    const team = (await teamResp.json()).data.team
+
+    await page.goto(`/settings/teams/${team.id}`)
     await page.waitForLoadState('networkidle')
 
-    if (await navigateToFirstItem(page)) {
-      await expectActivityLogVisible(page)
-    }
+    await expectActivityLogVisible(page)
   })
 })
 

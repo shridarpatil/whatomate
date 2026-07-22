@@ -26,16 +26,17 @@ func newProcessorTestApp(t *testing.T) *App {
 	// Mock WhatsApp API server that accepts all requests.
 	waServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
-		_ = json.NewEncoder(w).Encode(map[string]interface{}{
+		_ = json.NewEncoder(w).Encode(map[string]any{
 			"messages": []map[string]string{{"id": "wamid.mock_" + uuid.New().String()[:8]}},
 		})
 	}))
 	t.Cleanup(waServer.Close)
 
 	app := &App{
-		DB:       db,
-		Log:      log,
-		WhatsApp: whatsapp.NewWithBaseURL(log, waServer.URL),
+		DB:         db,
+		Log:        log,
+		WhatsApp:   whatsapp.NewWithBaseURL(log, waServer.URL),
+		HTTPClient: &http.Client{Timeout: 5 * time.Second},
 	}
 	if rdb := testutil.SetupTestRedis(t); rdb != nil {
 		app.Redis = rdb
@@ -326,9 +327,9 @@ func TestMatchKeywordRules_WithButtons(t *testing.T) {
 		ResponseType:    models.ResponseTypeText,
 		ResponseContent: models.JSONB{
 			"body": "Choose an option:",
-			"buttons": []interface{}{
-				map[string]interface{}{"id": "opt1", "title": "Option 1"},
-				map[string]interface{}{"id": "opt2", "title": "Option 2"},
+			"buttons": []any{
+				map[string]any{"id": "opt1", "title": "Option 1"},
+				map[string]any{"id": "opt2", "title": "Option 2"},
 			},
 		},
 		Priority:  10,
@@ -426,7 +427,7 @@ func TestIsWithinBusinessHours_WithinHours(t *testing.T) {
 	dayOfWeek := float64(now.Weekday())
 
 	hours := models.JSONBArray{
-		map[string]interface{}{
+		map[string]any{
 			"day":        dayOfWeek,
 			"enabled":    true,
 			"start_time": "00:00",
@@ -446,7 +447,7 @@ func TestIsWithinBusinessHours_OutsideHours(t *testing.T) {
 	// Set hours to a time window that has definitely passed
 	// Use a very narrow window in the past
 	hours := models.JSONBArray{
-		map[string]interface{}{
+		map[string]any{
 			"day":        dayOfWeek,
 			"enabled":    true,
 			"start_time": "00:00",
@@ -468,7 +469,7 @@ func TestIsWithinBusinessHours_DayDisabled(t *testing.T) {
 	dayOfWeek := float64(now.Weekday())
 
 	hours := models.JSONBArray{
-		map[string]interface{}{
+		map[string]any{
 			"day":        dayOfWeek,
 			"enabled":    false,
 			"start_time": "00:00",
@@ -487,7 +488,7 @@ func TestIsWithinBusinessHours_NoMatchingDay(t *testing.T) {
 	otherDay := float64((int(now.Weekday()) + 1) % 7)
 
 	hours := models.JSONBArray{
-		map[string]interface{}{
+		map[string]any{
 			"day":        otherDay,
 			"enabled":    true,
 			"start_time": "00:00",
@@ -508,234 +509,6 @@ func TestIsWithinBusinessHours_EmptyHours(t *testing.T) {
 
 // =============================================================================
 // shouldSkipStep
-// =============================================================================
-
-func TestShouldSkipStep_NoCondition(t *testing.T) {
-	app := newProcessorTestApp(t)
-
-	step := &models.ChatbotFlowStep{
-		StepName:      "test_step",
-		SkipCondition: "",
-	}
-
-	result := app.shouldSkipStep(step, map[string]interface{}{})
-	assert.False(t, result)
-}
-
-func TestShouldSkipStep_ConditionTrue(t *testing.T) {
-	app := newProcessorTestApp(t)
-
-	step := &models.ChatbotFlowStep{
-		StepName:      "test_step",
-		SkipCondition: "status == 'vip'",
-	}
-
-	result := app.shouldSkipStep(step, map[string]interface{}{"status": "vip"})
-	assert.True(t, result)
-}
-
-func TestShouldSkipStep_ConditionFalse(t *testing.T) {
-	app := newProcessorTestApp(t)
-
-	step := &models.ChatbotFlowStep{
-		StepName:      "test_step",
-		SkipCondition: "status == 'vip'",
-	}
-
-	result := app.shouldSkipStep(step, map[string]interface{}{"status": "regular"})
-	assert.False(t, result)
-}
-
-func TestShouldSkipStep_ComplexConditionAND(t *testing.T) {
-	app := newProcessorTestApp(t)
-
-	step := &models.ChatbotFlowStep{
-		StepName:      "test_step",
-		SkipCondition: "status == 'vip' AND country == 'US'",
-	}
-
-	// Both conditions true
-	result := app.shouldSkipStep(step, map[string]interface{}{
-		"status":  "vip",
-		"country": "US",
-	})
-	assert.True(t, result)
-
-	// One condition false
-	result2 := app.shouldSkipStep(step, map[string]interface{}{
-		"status":  "vip",
-		"country": "UK",
-	})
-	assert.False(t, result2)
-}
-
-func TestShouldSkipStep_ComplexConditionOR(t *testing.T) {
-	app := newProcessorTestApp(t)
-
-	step := &models.ChatbotFlowStep{
-		StepName:      "test_step",
-		SkipCondition: "status == 'vip' OR status == 'premium'",
-	}
-
-	result := app.shouldSkipStep(step, map[string]interface{}{"status": "premium"})
-	assert.True(t, result)
-
-	result2 := app.shouldSkipStep(step, map[string]interface{}{"status": "regular"})
-	assert.False(t, result2)
-}
-
-func TestShouldSkipStep_MissingVariable(t *testing.T) {
-	app := newProcessorTestApp(t)
-
-	step := &models.ChatbotFlowStep{
-		StepName:      "test_step",
-		SkipCondition: "nonexistent == 'value'",
-	}
-
-	result := app.shouldSkipStep(step, map[string]interface{}{})
-	assert.False(t, result)
-}
-
-// =============================================================================
-// startFlow
-// =============================================================================
-
-func TestStartFlow_UpdatesSession(t *testing.T) {
-	app := newProcessorTestApp(t)
-	org, account := createProcessorTestOrg(t, app)
-	contact := testutil.CreateTestContact(t, app.DB, org.ID)
-
-	session := &models.ChatbotSession{
-		BaseModel:       models.BaseModel{ID: uuid.New()},
-		OrganizationID:  org.ID,
-		ContactID:       contact.ID,
-		WhatsAppAccount: account.Name,
-		PhoneNumber:     contact.PhoneNumber,
-		Status:          models.SessionStatusActive,
-		SessionData:     models.JSONB{},
-		StartedAt:       time.Now(),
-		LastActivityAt:  time.Now(),
-	}
-	require.NoError(t, app.DB.Create(session).Error)
-
-	flow := &models.ChatbotFlow{
-		BaseModel:       models.BaseModel{ID: uuid.New()},
-		OrganizationID:  org.ID,
-		WhatsAppAccount: account.Name,
-		Name:            "Test Flow",
-		IsEnabled:       true,
-		Steps:           []models.ChatbotFlowStep{},
-	}
-	require.NoError(t, app.DB.Create(flow).Error)
-
-	// startFlow with no steps should call completeFlow
-	app.startFlow(account, session, contact, flow)
-
-	// Verify session was updated: since there are no steps, completeFlow is called
-	var dbSession models.ChatbotSession
-	require.NoError(t, app.DB.First(&dbSession, session.ID).Error)
-	assert.Equal(t, models.SessionStatusCompleted, dbSession.Status)
-}
-
-func TestStartFlow_WithSteps(t *testing.T) {
-	app := newProcessorTestApp(t)
-	org, account := createProcessorTestOrg(t, app)
-	contact := testutil.CreateTestContact(t, app.DB, org.ID)
-
-	session := &models.ChatbotSession{
-		BaseModel:       models.BaseModel{ID: uuid.New()},
-		OrganizationID:  org.ID,
-		ContactID:       contact.ID,
-		WhatsAppAccount: account.Name,
-		PhoneNumber:     contact.PhoneNumber,
-		Status:          models.SessionStatusActive,
-		SessionData:     models.JSONB{},
-		StartedAt:       time.Now(),
-		LastActivityAt:  time.Now(),
-	}
-	require.NoError(t, app.DB.Create(session).Error)
-
-	flowID := uuid.New()
-	flow := &models.ChatbotFlow{
-		BaseModel:       models.BaseModel{ID: flowID},
-		OrganizationID:  org.ID,
-		WhatsAppAccount: account.Name,
-		Name:            "Flow With Steps",
-		InitialMessage:  "Welcome to the flow!",
-		IsEnabled:       true,
-		Steps: []models.ChatbotFlowStep{
-			{
-				BaseModel:   models.BaseModel{ID: uuid.New()},
-				FlowID:      flowID,
-				StepName:    "step1",
-				StepOrder:   1,
-				Message:     "What is your name?",
-				MessageType: models.FlowStepTypeText,
-				InputType:   models.InputTypeText,
-				StoreAs:     "name",
-			},
-		},
-	}
-	// Flow must exist in DB for the session FK constraint on CurrentFlowID.
-	require.NoError(t, app.DB.Create(flow).Error)
-
-	// startFlow sets current_flow_id and current_step on the session
-	app.startFlow(account, session, contact, flow)
-
-	var dbSession models.ChatbotSession
-	require.NoError(t, app.DB.First(&dbSession, session.ID).Error)
-	assert.NotNil(t, dbSession.CurrentFlowID)
-	assert.Equal(t, flowID, *dbSession.CurrentFlowID)
-	assert.Equal(t, "step1", dbSession.CurrentStep)
-	assert.Equal(t, models.SessionStatusActive, dbSession.Status)
-}
-
-// =============================================================================
-// completeFlow
-// =============================================================================
-
-func TestCompleteFlow_UpdatesSession(t *testing.T) {
-	app := newProcessorTestApp(t)
-	org, account := createProcessorTestOrg(t, app)
-	contact := testutil.CreateTestContact(t, app.DB, org.ID)
-
-	flow := &models.ChatbotFlow{
-		BaseModel:         models.BaseModel{ID: uuid.New()},
-		OrganizationID:    org.ID,
-		WhatsAppAccount:   account.Name,
-		Name:              "Test Flow",
-		CompletionMessage: "Thank you {{name}}!",
-		IsEnabled:         true,
-	}
-	require.NoError(t, app.DB.Create(flow).Error)
-
-	session := &models.ChatbotSession{
-		BaseModel:       models.BaseModel{ID: uuid.New()},
-		OrganizationID:  org.ID,
-		ContactID:       contact.ID,
-		WhatsAppAccount: account.Name,
-		PhoneNumber:     contact.PhoneNumber,
-		Status:          models.SessionStatusActive,
-		CurrentFlowID:   &flow.ID,
-		CurrentStep:     "step1",
-		SessionData:     models.JSONB{"name": "John"},
-		StartedAt:       time.Now(),
-		LastActivityAt:  time.Now(),
-	}
-	require.NoError(t, app.DB.Create(session).Error)
-
-	app.completeFlow(account, session, contact, flow)
-
-	// Session should be completed
-	var dbSession models.ChatbotSession
-	require.NoError(t, app.DB.First(&dbSession, session.ID).Error)
-	assert.Equal(t, models.SessionStatusCompleted, dbSession.Status)
-	assert.Equal(t, "", dbSession.CurrentStep)
-	assert.NotNil(t, dbSession.CompletedAt)
-}
-
-// =============================================================================
-// exitFlow
 // =============================================================================
 
 func TestExitFlow_UpdatesSession(t *testing.T) {
@@ -958,48 +731,15 @@ func TestMatchFlowTrigger_Match(t *testing.T) {
 	}
 	require.NoError(t, app.DB.Create(flow).Error)
 
-	result := app.matchFlowTrigger(org.ID, account.Name, "I want to order")
+	result := app.matchFlowTrigger(org.ID, "I want to order")
 	require.NotNil(t, result)
 	assert.Equal(t, flow.ID, result.ID)
 
 	// No match
-	noMatch := app.matchFlowTrigger(org.ID, account.Name, "hello there")
+	noMatch := app.matchFlowTrigger(org.ID, "hello there")
 	assert.Nil(t, noMatch)
 }
 
 // =============================================================================
 // evaluateExpression (package-level, not on App)
 // =============================================================================
-
-func TestEvaluateExpression_SimpleEquality(t *testing.T) {
-	assert.True(t, evaluateExpression("status == 'active'", map[string]interface{}{"status": "active"}))
-	assert.False(t, evaluateExpression("status == 'active'", map[string]interface{}{"status": "inactive"}))
-}
-
-func TestEvaluateExpression_NotEquals(t *testing.T) {
-	assert.True(t, evaluateExpression("status != 'inactive'", map[string]interface{}{"status": "active"}))
-	assert.False(t, evaluateExpression("status != 'active'", map[string]interface{}{"status": "active"}))
-}
-
-func TestEvaluateExpression_ANDOperator(t *testing.T) {
-	data := map[string]interface{}{"a": "1", "b": "2"}
-	assert.True(t, evaluateExpression("a == '1' AND b == '2'", data))
-	assert.False(t, evaluateExpression("a == '1' AND b == '3'", data))
-}
-
-func TestEvaluateExpression_OROperator(t *testing.T) {
-	data := map[string]interface{}{"a": "1", "b": "2"}
-	assert.True(t, evaluateExpression("a == '1' OR b == '3'", data))
-	assert.True(t, evaluateExpression("a == '9' OR b == '2'", data))
-	assert.False(t, evaluateExpression("a == '9' OR b == '9'", data))
-}
-
-func TestEvaluateExpression_Parentheses(t *testing.T) {
-	data := map[string]interface{}{"a": "1", "b": "2", "c": "3"}
-	assert.True(t, evaluateExpression("(a == '1' OR b == '9') AND c == '3'", data))
-	assert.False(t, evaluateExpression("(a == '9' OR b == '9') AND c == '3'", data))
-}
-
-func TestEvaluateExpression_EmptyExpression(t *testing.T) {
-	assert.False(t, evaluateExpression("", map[string]interface{}{}))
-}

@@ -23,17 +23,17 @@ type AgentAnalyticsSummary struct {
 
 // AgentPerformanceStats represents performance metrics for an agent
 type AgentPerformanceStats struct {
-	AgentID              string   `json:"agent_id"`
-	AgentName            string   `json:"agent_name"`
-	AvgFirstResponseMins float64  `json:"avg_first_response_mins"`
-	AvgResolutionMins    float64  `json:"avg_resolution_mins"`
-	TransfersHandled     int64    `json:"transfers_handled"`
-	ActiveTransfers      int64    `json:"active_transfers"`
-	MessagesSent         int64    `json:"messages_sent"`
-	TotalBreakTimeMins   float64  `json:"total_break_time_mins"`
-	BreakCount           int64    `json:"break_count"`
-	IsAvailable          bool     `json:"is_available"`
-	CurrentBreakStart    *string  `json:"current_break_start,omitempty"`
+	AgentID              string  `json:"agent_id"`
+	AgentName            string  `json:"agent_name"`
+	AvgFirstResponseMins float64 `json:"avg_first_response_mins"`
+	AvgResolutionMins    float64 `json:"avg_resolution_mins"`
+	TransfersHandled     int64   `json:"transfers_handled"`
+	ActiveTransfers      int64   `json:"active_transfers"`
+	MessagesSent         int64   `json:"messages_sent"`
+	TotalBreakTimeMins   float64 `json:"total_break_time_mins"`
+	BreakCount           int64   `json:"break_count"`
+	IsAvailable          bool    `json:"is_available"`
+	CurrentBreakStart    *string `json:"current_break_start,omitempty"`
 }
 
 // TrendPoint represents a data point for time-series charts
@@ -127,12 +127,8 @@ func (a *App) GetAgentAnalytics(r *fastglue.Request) error {
 
 // GetAgentDetails returns detailed analytics for a specific agent
 func (a *App) GetAgentDetails(r *fastglue.Request) error {
-	orgID, userID, err := a.getOrgAndUserID(r)
+	orgID, _, err := a.requireAuth(r, models.ResourceAnalytics, models.ActionRead)
 	if err != nil {
-		return r.SendErrorEnvelope(fasthttp.StatusUnauthorized, "Unauthorized", nil, "")
-	}
-
-	if err := a.requirePermission(r, userID, models.ResourceAnalytics, models.ActionRead); err != nil {
 		return nil
 	}
 
@@ -453,7 +449,7 @@ func (a *App) calculateTrendData(orgID uuid.UUID, start, end time.Time, groupBy 
 	}
 
 	query := a.DB.Model(&models.AgentTransfer{}).
-		Select("DATE_TRUNC('" + dateTrunc + "', transferred_at) as date, COUNT(*) as count").
+		Select("DATE_TRUNC('"+dateTrunc+"', transferred_at) as date, COUNT(*) as count").
 		Where("organization_id = ? AND status = ? AND transferred_at >= ? AND transferred_at <= ?",
 			orgID, models.TransferStatusResumed, start, end)
 

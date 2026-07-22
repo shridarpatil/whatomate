@@ -1,10 +1,19 @@
 package handlers
 
 import (
+	"context"
+	"time"
+
 	"github.com/shridarpatil/whatomate/pkg/whatsapp"
 	"github.com/valyala/fasthttp"
 	"github.com/zerodha/fastglue"
 )
+
+// businessProfileHTTPTimeout bounds calls to Meta's profile endpoints. We use a
+// detached context (not r.RequestCtx) so a client disconnect mid-call doesn't
+// cancel an in-flight Meta update — and so that fasthttp.RequestCtx, which has
+// no ctx.Done() implementation outside the server, doesn't crash the http client.
+const businessProfileHTTPTimeout = 30 * time.Second
 
 // GetBusinessProfile returns the business profile for a WhatsApp account
 func (a *App) GetBusinessProfile(r *fastglue.Request) error {
@@ -23,10 +32,9 @@ func (a *App) GetBusinessProfile(r *fastglue.Request) error {
 		return nil
 	}
 
-	// Create a context for the request
-	ctx := r.RequestCtx
+	ctx, cancel := context.WithTimeout(context.Background(), businessProfileHTTPTimeout)
+	defer cancel()
 
-	// Call the WhatsApp client
 	profile, err := a.WhatsApp.GetBusinessProfile(ctx, a.toWhatsAppAccount(account))
 	if err != nil {
 		a.Log.Error("Failed to get business profile", "error", err)
@@ -58,7 +66,8 @@ func (a *App) UpdateBusinessProfile(r *fastglue.Request) error {
 		return nil
 	}
 
-	ctx := r.RequestCtx
+	ctx, cancel := context.WithTimeout(context.Background(), businessProfileHTTPTimeout)
+	defer cancel()
 	waAccount := a.toWhatsAppAccount(account)
 
 	if err := a.WhatsApp.UpdateBusinessProfile(ctx, waAccount, input); err != nil {
@@ -115,7 +124,9 @@ func (a *App) UpdateProfilePicture(r *fastglue.Request) error {
 		return r.SendErrorEnvelope(fasthttp.StatusInternalServerError, "Failed to read file", nil, "")
 	}
 
-	ctx := r.RequestCtx
+	// Use a longer timeout for upload — profile pictures can be a few MB.
+	ctx, cancel := context.WithTimeout(context.Background(), 2*businessProfileHTTPTimeout)
+	defer cancel()
 	waAccount := a.toWhatsAppAccount(account)
 
 	// Upload to Meta to get handle

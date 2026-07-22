@@ -1,0 +1,151 @@
+---
+title: Audit Logs
+description: Append-only record of who changed what, scoped per organization
+---
+
+import { Aside } from '@astrojs/starlight/components';
+
+Whatomate keeps a record-level audit trail of every create / update / delete on the resources that matter for compliance and debugging. Each entry is scoped to an organization and answers the four standard questions: **who** did **what** to **which record**, and **when**.
+
+## Where to find them
+
+Two surfaces, same data:
+
+- **Settings → Audit Logs** — the global activity feed across all resources, with filters (resource type, user, action, date range).
+- **Per-resource activity tab** — every detail view (Account, Team, Campaign, Template, etc.) embeds an activity panel showing only the entries for that one record. The Chatbot Settings page goes further: each tab (Messages, Agents, Hours, SLA, AI) has its own activity feed for just that section.
+
+## What gets logged
+
+Audit logging is hooked into the handlers that mutate user-facing resources. The following resource types are recorded today:
+
+| Resource type | Source |
+|---|---|
+| `account` | WhatsApp account create / update / delete |
+| `campaign` | Campaign lifecycle |
+| `chatbot` | Chatbot flow create / update / delete |
+| `contact` | Contact create / update / delete |
+| `ivr_flow` | IVR flow definitions |
+| `organization` | Org settings changes |
+| `role` | Custom role create / update / delete |
+| `team` | Team membership and config |
+| `template` | Template create / publish / delete |
+| `user` | User create / update / disable |
+| `webhook` | Outbound webhook config |
+| `ai_context` | Chatbot AI context entries |
+| `keyword_rule` | Chatbot keyword auto-reply rules |
+| `settings.chatbot.messages` | Chatbot greeting / fallback / out-of-hours messages |
+| `settings.chatbot.agents` | Chatbot routing config |
+| `settings.chatbot.hours` | Business-hours config |
+| `settings.chatbot.sla` | SLA / escalation config |
+| `settings.chatbot.ai` | AI provider / model config |
+
+<Aside type="note">
+  This list is the source of truth as of the current release. New audited resources are added by calling `audit.LogAudit(...)` in the relevant handler — if you don't see something audited that you expect, it's an open item rather than intentional.
+</Aside>
+
+## What an entry contains
+
+| Field | Description |
+|---|---|
+| `id` | UUID of the audit entry. |
+| `organization_id` | Always set; audit logs never leak across orgs. |
+| `resource_type` | One of the values above. |
+| `resource_id` | UUID of the affected record. |
+| `user_id`, `user_name` | The actor. `user_name` is captured at write time, so renames don't rewrite history. |
+| `action` | One of `created`, `updated`, `deleted`. |
+| `changes` | JSON array of `{ field, old_value, new_value }` triples — the diff. |
+| `created_at` | When the change happened. |
+
+### Diff shape
+
+For a `created` entry, every field has `old_value: null`. For `deleted`, every field has `new_value: null`. For `updated`, only the fields that actually changed are recorded — saves with no diff are silently dropped, so a busy team's audit log doesn't fill up with no-op edits.
+
+```json
+{
+  "action": "updated",
+  "changes": [
+    { "field": "name", "old_value": "Sales Team", "new_value": "Sales Team Asia" },
+    { "field": "is_active", "old_value": true, "new_value": false }
+  ]
+}
+```
+
+### Field redaction
+
+A small set of fields is excluded from diffs to keep the audit log readable and to avoid logging anything sensitive or noisy:
+
+- **Metadata**: `id`, `created_at`, `updated_at`, `deleted_at`, `organization_id`, `created_by`, `updated_by`, `created_by_id`, `updated_by_id`.
+- **Sensitive / opaque values**: `webhook_verify_token`, `header_media_id`, `header_media_local_path`, `meta_template_id`, `api_config`.
+- **Bulk / structural fields** that would dwarf the diff: `members`, `recipients`, `steps`, `buttons`, `sample_values`, `menu`, `panel_config`, `canvas_layout`, `completion_config`, `conditions`, `cancel_keywords`, `welcome_audio_url`.
+
+A few fields are **flattened** instead of dropped — for example, an updated keyword rule logs `response_content` as just its `body` sub-field rather than the entire JSON blob, so you see the human-readable change.
+
+<Aside type="note">
+  Sensitive credentials (WhatsApp access tokens, SSO client secrets) are stored encrypted at rest using `app.encryption_key` and never appear in audit changes — they are never set as plaintext fields on the audited models.
+</Aside>
+
+## Permissions
+
+Reading audit logs requires the `audit_logs:read` permission. There's no `write`, `delete`, or `edit` permission for this resource — **audit logs are append-only**. The system writes them; nobody (including super admins) can amend or delete them through the API.
+
+By default, only the `admin` role has `audit_logs:read`. To let an agent role read audit logs, add the permission under **Settings → Roles → \<role name\>**.
+
+## Async write semantics
+
+`audit.LogAudit` writes the entry in a goroutine, off the request's critical path. Two consequences worth knowing:
+
+1. A successful API mutation returns to the client **before** the audit row hits the DB. In e2e tests, helpers like `verifyAuditLogged()` poll for up to 3 seconds to handle this.
+2. If the audit insert itself fails (DB issue, validation error), the failure is logged via `slog` but **does not propagate to the user** — the original mutation still succeeded. Audit gaps are visible in the application log.
+
+## Filtering via the API
+
+`GET /api/audit-logs` accepts these query parameters:
+
+| Param | Notes |
+|---|---|
+| `resource_type` | Exact match against the strings in the table above. |
+| `resource_id` | UUID of a single record — use this to fetch the entire history of one row. |
+| `user_id` | UUID of the actor. |
+| `action` | `created` / `updated` / `deleted`. |
+| `from`, `to` | `YYYY-MM-DD` (date) or RFC 3339 (`2026-04-01T00:00:00Z`) timestamps. `from` is inclusive at start of day; `to` is inclusive through end of day for date-only inputs. |
+| `page`, `limit` | Standard pagination. Results are ordered `created_at DESC`. |
+
+Examples:
+
+```bash
+# Everything one user did in the last week
+curl --cookie "..." \
+  "$BASE/api/audit-logs?user_id=<uuid>&from=2026-04-26"
+
+# Full history of a specific template
+curl --cookie "..." \
+  "$BASE/api/audit-logs?resource_type=template&resource_id=<uuid>"
+
+# All deletions in March
+curl --cookie "..." \
+  "$BASE/api/audit-logs?action=deleted&from=2026-03-01&to=2026-03-31"
+```
+
+The full schema is documented under [API Reference → Audit Logs](#) — *(coming soon — page not yet authored)*.
+
+## Retention
+
+There's **no automatic retention or rotation** today. Entries accumulate forever. For long-running deployments you can prune via SQL on a schedule:
+
+```sql
+-- Drop audit entries older than 1 year
+DELETE FROM audit_logs WHERE created_at < NOW() - INTERVAL '1 year';
+```
+
+Keep in mind: doing this loses the ability to answer "what was the state of X six months ago" for any field that has changed since.
+
+## What's not audited (yet)
+
+A few classes of state change deliberately or incidentally don't show up in audit logs:
+
+- **Message sends** — sending a WhatsApp message is a routine operation; it shows up in conversation history rather than the audit log.
+- **Authentication events** — logins, refreshes, SSO callbacks, API key uses. These are in the application log (`slog`), not the audit table.
+- **Chat-side operations** — assigning a conversation, transferring to an agent, marking resolved. Tracked in conversation state rather than the audit log.
+- **Background job runs** — campaign worker progress, SLA breach checks, webhook delivery. These are operational signals, logged elsewhere.
+
+If you need any of the above for compliance, treat the application log + the conversation/transfer/job tables as additional sources alongside the audit log.

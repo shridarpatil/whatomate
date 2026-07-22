@@ -2,6 +2,9 @@ import { test, expect, request as playwrightRequest } from '@playwright/test'
 import { loginAsAdmin } from '../../helpers'
 import { ApiHelper } from '../../helpers/api'
 import { ChatPage } from '../../pages'
+import { createTestScope, SUPER_ADMIN } from '../../framework'
+
+const scope = createTestScope('conversation-notes')
 
 // Helper to clean up all notes for a contact using both superadmin and test admin
 // (creator-only delete means we need to try both users)
@@ -18,7 +21,7 @@ async function cleanupAllNotes(contactId: string) {
   // Try with superadmin first (for notes created via manual UI testing)
   const ctx1 = await playwrightRequest.newContext()
   const superApi = new ApiHelper(ctx1)
-  await superApi.login('admin@admin.com', 'admin')
+  await superApi.login(SUPER_ADMIN.email, SUPER_ADMIN.password)
   await cleanupNotes(superApi, contactId)
   await ctx1.dispose()
   // Then with test admin (for notes created by test user)
@@ -41,7 +44,7 @@ test.describe('Conversation Notes - UI', () => {
     await api.loginAsAdmin()
     let contacts = await api.getContacts()
     if (contacts.length === 0) {
-      await api.createContact(`91${Date.now().toString().slice(-10)}`, 'Notes UI Test')
+      await api.createContact(scope.phone(), scope.name('ui-contact'))
       contacts = await api.getContacts()
     }
     contactId = contacts[0].id
@@ -162,93 +165,5 @@ test.describe('Conversation Notes - UI', () => {
     await chatPage.closeNotesPanel()
     await chatPage.openNotesPanel()
     await expect(chatPage.getNoteCard(noteContent)).toBeVisible()
-  })
-})
-
-test.describe('Conversation Notes - API CRUD', () => {
-  let api: ApiHelper
-  let contactId: string
-
-  test.beforeAll(async () => {
-    const reqContext = await playwrightRequest.newContext()
-    api = new ApiHelper(reqContext)
-    await api.loginAsAdmin()
-    let contacts = await api.getContacts()
-    if (contacts.length < 2) {
-      await api.createContact(`91${(Date.now() + 1).toString().slice(-10)}`, 'Notes API Test')
-      contacts = await api.getContacts()
-    }
-    // Use a different contact than UI tests to avoid parallel conflicts
-    contactId = contacts.length > 1 ? contacts[1].id : contacts[0].id
-    await cleanupNotes(api, contactId)
-  })
-
-  test('should create a note via API', async () => {
-    const note = await api.createNote(contactId, 'API test note')
-    expect(note.id).toBeTruthy()
-    expect(note.content).toBe('API test note')
-    expect(note.contact_id).toBe(contactId)
-    expect(note.created_by_name).toBeTruthy()
-    expect(note.created_at).toBeTruthy()
-  })
-
-  test('should list notes in chronological order', async () => {
-    await api.createNote(contactId, 'List test 1')
-    await api.createNote(contactId, 'List test 2')
-
-    const notes = await api.listNotes(contactId)
-    expect(notes.length).toBeGreaterThanOrEqual(2)
-
-    const listTest1 = notes.find((n: any) => n.content === 'List test 1')
-    const listTest2 = notes.find((n: any) => n.content === 'List test 2')
-    expect(listTest1).toBeTruthy()
-    expect(listTest2).toBeTruthy()
-    expect(notes.indexOf(listTest1)).toBeLessThan(notes.indexOf(listTest2))
-  })
-
-  test('should update a note via API', async () => {
-    const note = await api.createNote(contactId, 'Update me via API')
-    const updated = await api.updateNote(contactId, note.id, 'Updated via API')
-    expect(updated.content).toBe('Updated via API')
-    expect(updated.id).toBe(note.id)
-  })
-
-  test('should delete a note via API', async () => {
-    const note = await api.createNote(contactId, 'Delete me via API')
-    await api.deleteNote(contactId, note.id)
-
-    const notes = await api.listNotes(contactId)
-    const found = notes.find((n: any) => n.id === note.id)
-    expect(found).toBeUndefined()
-  })
-
-  test('should support pagination with limit and has_more', async () => {
-    await cleanupNotes(api, contactId)
-
-    // Create notes sequentially and wait for each to be confirmed
-    for (let i = 1; i <= 5; i++) {
-      await api.createNote(contactId, `Paginate note ${i}`)
-    }
-
-    // Wait for all notes to be persisted and queryable
-    let allNotes: any[] = []
-    for (let attempt = 0; attempt < 5; attempt++) {
-      allNotes = await api.listNotes(contactId)
-      if (allNotes.length >= 5) break
-      await new Promise(r => setTimeout(r, 500))
-    }
-    expect(allNotes.length).toBeGreaterThanOrEqual(5)
-
-    // Use a fresh ApiHelper context to test pagination
-    const reqContext = await playwrightRequest.newContext()
-    const paginationApi = new ApiHelper(reqContext)
-    await paginationApi.loginAsAdmin()
-
-    const response = await paginationApi.get(`/api/contacts/${contactId}/notes?limit=3`)
-    const data = await response.json()
-    expect(data.data.notes.length).toBe(3)
-    expect(data.data.has_more).toBe(true)
-
-    await reqContext.dispose()
   })
 })

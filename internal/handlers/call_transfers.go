@@ -2,19 +2,16 @@ package handlers
 
 import (
 	"github.com/google/uuid"
-	"github.com/shridarpatil/whatomate/internal/utils"
 	"github.com/shridarpatil/whatomate/internal/models"
+	"github.com/shridarpatil/whatomate/internal/utils"
 	"github.com/valyala/fasthttp"
 	"github.com/zerodha/fastglue"
 )
 
 // ListCallTransfers returns call transfers for the organization
 func (a *App) ListCallTransfers(r *fastglue.Request) error {
-	orgID, userID, err := a.getOrgAndUserID(r)
+	orgID, _, err := a.requireAuth(r, models.ResourceCallTransfers, models.ActionRead)
 	if err != nil {
-		return r.SendErrorEnvelope(fasthttp.StatusUnauthorized, "Unauthorized", nil, "")
-	}
-	if err := a.requirePermission(r, userID, models.ResourceCallTransfers, models.ActionRead); err != nil {
 		return nil
 	}
 
@@ -56,21 +53,13 @@ func (a *App) ListCallTransfers(r *fastglue.Request) error {
 		}
 	}
 
-	return r.SendEnvelope(map[string]any{
-		"call_transfers": transfers,
-		"total":          total,
-		"page":           pg.Page,
-		"limit":          pg.Limit,
-	})
+	return r.SendEnvelope(listEnvelope("call_transfers", transfers, total, pg))
 }
 
 // GetCallTransfer returns a single call transfer by ID
 func (a *App) GetCallTransfer(r *fastglue.Request) error {
-	orgID, userID, err := a.getOrgAndUserID(r)
+	orgID, _, err := a.requireAuth(r, models.ResourceCallTransfers, models.ActionRead)
 	if err != nil {
-		return r.SendErrorEnvelope(fasthttp.StatusUnauthorized, "Unauthorized", nil, "")
-	}
-	if err := a.requirePermission(r, userID, models.ResourceCallTransfers, models.ActionRead); err != nil {
 		return nil
 	}
 
@@ -103,11 +92,8 @@ func (a *App) GetCallTransfer(r *fastglue.Request) error {
 
 // ConnectCallTransfer handles an agent accepting a call transfer via WebRTC SDP exchange
 func (a *App) ConnectCallTransfer(r *fastglue.Request) error {
-	orgID, userID, err := a.getOrgAndUserID(r)
+	orgID, userID, err := a.requireAuth(r, models.ResourceCallTransfers, models.ActionWrite)
 	if err != nil {
-		return r.SendErrorEnvelope(fasthttp.StatusUnauthorized, "Unauthorized", nil, "")
-	}
-	if err := a.requirePermission(r, userID, models.ResourceCallTransfers, models.ActionWrite); err != nil {
 		return nil
 	}
 
@@ -190,11 +176,8 @@ func (a *App) ConnectCallTransfer(r *fastglue.Request) error {
 
 // HangupCallTransfer ends a connected call transfer
 func (a *App) HangupCallTransfer(r *fastglue.Request) error {
-	orgID, userID, err := a.getOrgAndUserID(r)
+	orgID, _, err := a.requireAuth(r, models.ResourceCallTransfers, models.ActionWrite)
 	if err != nil {
-		return r.SendErrorEnvelope(fasthttp.StatusUnauthorized, "Unauthorized", nil, "")
-	}
-	if err := a.requirePermission(r, userID, models.ResourceCallTransfers, models.ActionWrite); err != nil {
 		return nil
 	}
 
@@ -228,11 +211,8 @@ func (a *App) HangupCallTransfer(r *fastglue.Request) error {
 
 // HoldCall puts an active call on hold and plays hold music to the caller.
 func (a *App) HoldCall(r *fastglue.Request) error {
-	_, userID, err := a.getOrgAndUserID(r)
+	_, _, err := a.requireAuth(r, models.ResourceCallTransfers, models.ActionWrite)
 	if err != nil {
-		return r.SendErrorEnvelope(fasthttp.StatusUnauthorized, "Unauthorized", nil, "")
-	}
-	if err := a.requirePermission(r, userID, models.ResourceCallTransfers, models.ActionWrite); err != nil {
 		return nil
 	}
 
@@ -254,11 +234,8 @@ func (a *App) HoldCall(r *fastglue.Request) error {
 
 // ResumeCall takes an active call off hold and restores the audio bridge.
 func (a *App) ResumeCall(r *fastglue.Request) error {
-	_, userID, err := a.getOrgAndUserID(r)
+	_, _, err := a.requireAuth(r, models.ResourceCallTransfers, models.ActionWrite)
 	if err != nil {
-		return r.SendErrorEnvelope(fasthttp.StatusUnauthorized, "Unauthorized", nil, "")
-	}
-	if err := a.requirePermission(r, userID, models.ResourceCallTransfers, models.ActionWrite); err != nil {
 		return nil
 	}
 
@@ -280,11 +257,8 @@ func (a *App) ResumeCall(r *fastglue.Request) error {
 
 // InitiateAgentTransfer allows a connected agent to transfer their active call to another team/agent
 func (a *App) InitiateAgentTransfer(r *fastglue.Request) error {
-	orgID, userID, err := a.getOrgAndUserID(r)
+	orgID, userID, err := a.requireAuth(r, models.ResourceCallTransfers, models.ActionWrite)
 	if err != nil {
-		return r.SendErrorEnvelope(fasthttp.StatusUnauthorized, "Unauthorized", nil, "")
-	}
-	if err := a.requirePermission(r, userID, models.ResourceCallTransfers, models.ActionWrite); err != nil {
 		return nil
 	}
 	if err := a.requireCallingEnabled(r, orgID); err != nil {

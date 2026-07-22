@@ -4,7 +4,6 @@ import (
 	"time"
 
 	"github.com/google/uuid"
-	"github.com/shridarpatil/whatomate/internal/audit"
 	"github.com/shridarpatil/whatomate/internal/models"
 	"github.com/valyala/fasthttp"
 	"github.com/zerodha/fastglue"
@@ -12,11 +11,11 @@ import (
 
 // TeamRequest represents create/update team request
 type TeamRequest struct {
-	Name               string                   `json:"name" validate:"required"`
-	Description        string                   `json:"description"`
+	Name                string                    `json:"name" validate:"required"`
+	Description         string                    `json:"description"`
 	AssignmentStrategy  models.AssignmentStrategy `json:"assignment_strategy"` // round_robin, load_balanced, manual
-	PerAgentTimeoutSecs int                      `json:"per_agent_timeout_secs"`
-	IsActive            bool                     `json:"is_active"`
+	PerAgentTimeoutSecs int                       `json:"per_agent_timeout_secs"`
+	IsActive            bool                      `json:"is_active"`
 }
 
 // TeamMemberRequest represents add member request
@@ -101,12 +100,7 @@ func (a *App) ListTeams(r *fastglue.Request) error {
 		response[i] = buildTeamResponse(&t, false)
 	}
 
-	return r.SendEnvelope(map[string]any{
-		"teams": response,
-		"total": total,
-		"page":  pg.Page,
-		"limit": pg.Limit,
-	})
+	return r.SendEnvelope(listEnvelope("teams", response, total, pg))
 }
 
 // GetTeam returns a single team with members
@@ -148,12 +142,8 @@ func (a *App) GetTeam(r *fastglue.Request) error {
 
 // CreateTeam creates a new team
 func (a *App) CreateTeam(r *fastglue.Request) error {
-	orgID, userID, err := a.getOrgAndUserID(r)
+	orgID, userID, err := a.requireAuth(r, models.ResourceTeams, models.ActionWrite)
 	if err != nil {
-		return r.SendErrorEnvelope(fasthttp.StatusUnauthorized, "Unauthorized", nil, "")
-	}
-
-	if err := a.requirePermission(r, userID, models.ResourceTeams, models.ActionWrite); err != nil {
 		return nil
 	}
 
@@ -194,7 +184,7 @@ func (a *App) CreateTeam(r *fastglue.Request) error {
 	// Preload relations for response
 	a.DB.Preload("CreatedBy").Preload("UpdatedBy").First(&team, "id = ?", team.ID)
 
-	audit.LogAudit(a.DB, orgID, userID, audit.GetUserName(a.DB, userID),
+	a.logAudit(orgID, userID,
 		"team", team.ID, models.AuditActionCreated, nil, &team)
 
 	return r.SendEnvelope(map[string]any{"team": buildTeamResponse(&team, false)})
@@ -267,7 +257,7 @@ func (a *App) UpdateTeam(r *fastglue.Request) error {
 	// Preload relations for response
 	a.DB.Preload("CreatedBy").Preload("UpdatedBy").Preload("Members").Preload("Members.User").First(&team, "id = ?", team.ID)
 
-	audit.LogAudit(a.DB, orgID, userID, audit.GetUserName(a.DB, userID),
+	a.logAudit(orgID, userID,
 		"team", team.ID, models.AuditActionUpdated, &oldTeam, &team)
 
 	return r.SendEnvelope(map[string]any{"team": buildTeamResponse(&team, false)})
@@ -275,12 +265,8 @@ func (a *App) UpdateTeam(r *fastglue.Request) error {
 
 // DeleteTeam deletes a team
 func (a *App) DeleteTeam(r *fastglue.Request) error {
-	orgID, userID, err := a.getOrgAndUserID(r)
+	orgID, userID, err := a.requireAuth(r, models.ResourceTeams, models.ActionDelete)
 	if err != nil {
-		return r.SendErrorEnvelope(fasthttp.StatusUnauthorized, "Unauthorized", nil, "")
-	}
-
-	if err := a.requirePermission(r, userID, models.ResourceTeams, models.ActionDelete); err != nil {
 		return nil
 	}
 
@@ -314,7 +300,7 @@ func (a *App) DeleteTeam(r *fastglue.Request) error {
 		a.Assigner.InvalidateTeamCache(teamID)
 	}
 
-	audit.LogAudit(a.DB, orgID, userID, audit.GetUserName(a.DB, userID),
+	a.logAudit(orgID, userID,
 		"team", teamID, models.AuditActionDeleted, &teamForAudit, nil)
 
 	return r.SendEnvelope(map[string]string{"message": "Team deleted"})

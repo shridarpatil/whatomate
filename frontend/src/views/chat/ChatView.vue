@@ -7,16 +7,18 @@ import { useAuthStore } from '@/stores/auth'
 import { useUsersStore } from '@/stores/users'
 import { useTransfersStore } from '@/stores/transfers'
 import { wsService } from '@/services/websocket'
-import { contactsService, chatbotService, messagesService, customActionsService, accountsService, getRequestHeaders, type CustomAction, type ActionResult } from '@/services/api'
+import { contactsService, chatbotService, messagesService, customActionsService, accountsService, cannedResponsesService, getRequestHeaders, type CustomAction, type ActionResult, type CannedResponse } from '@/services/api'
 import { useTagsStore } from '@/stores/tags'
 import { TagBadge } from '@/components/ui/tag-badge'
 import { getTagColorClass } from '@/lib/constants'
+import { getErrorMessage } from '@/lib/api-utils'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import { Badge } from '@/components/ui/badge'
 import { ScrollArea } from '@/components/ui/scroll-area'
+import { Spinner } from '@/components/ui/spinner'
 import { Separator } from '@/components/ui/separator'
 import {
   Tooltip,
@@ -60,6 +62,7 @@ import {
   Smile,
   MoreVertical,
   Phone,
+  PhoneCall,
   Check,
   CheckCheck,
   Clock,
@@ -90,6 +93,7 @@ import { getInitials, getAvatarGradient } from '@/lib/utils'
 import { useColorMode } from '@/composables/useColorMode'
 import { useInfiniteScroll } from '@/composables/useInfiniteScroll'
 import CannedResponsePicker from '@/components/chat/CannedResponsePicker.vue'
+import PreviewButtonGroup from '@/components/chatbot/flow-preview/PreviewButtonGroup.vue'
 import TemplatePicker from '@/components/chat/TemplatePicker.vue'
 import ContactInfoPanel from '@/components/chat/ContactInfoPanel.vue'
 import ConversationNotes from '@/components/chat/ConversationNotes.vue'
@@ -120,6 +124,14 @@ const isSending = ref(false)
 const isAssignDialogOpen = ref(false)
 const isTransferring = ref(false)
 const isResuming = ref(false)
+// Tracks incoming messages that arrived while the chat is open.
+// Surfaced as a "N unread messages" pill at the top of the chat panel
+// (WhatsApp-style). Click the pill to jump up to the first message of
+// the unread batch; cleared on click or contact switch. See issue #280.
+const newMessagesCount = ref(0)
+const firstUnreadId = ref<string | null>(null)
+const isAtBottom = ref(true)
+const SCROLL_BOTTOM_THRESHOLD = 80
 const isInfoPanelOpen = ref(false)
 const isNotesPanelOpen = ref(false)
 const contactSessionData = ref<any>(null)
@@ -138,12 +150,23 @@ const mediaCaption = ref('')
 const isUploadingMedia = ref(false)
 
 // Cache for media blob URLs (message_id -> blob URL)
-const mediaBlobUrls = ref<Record<string, string>>({})
-const mediaLoadingStates = ref<Record<string, boolean>>({})
+
 
 // Canned responses slash command state
 const cannedPickerOpen = ref(false)
 const cannedSearchQuery = ref('')
+
+// Canned response preview dialog state
+const cannedDialogOpen = ref(false)
+const selectedCannedResponse = ref<CannedResponse | null>(null)
+const cannedParamNames = ref<string[]>([])
+const cannedParamValues = ref<Record<string, string>>({})
+const isSendingCanned = ref(false)
+// Tokens that the chat already knows how to fill from the current contact /
+// signed-in agent. Shared by canned responses (resolved client-side into the
+// outgoing message) and templates (pre-filled into the param payload so the
+// backend forwards the resolved value to Meta).
+const AUTO_RESOLVED_CONTEXT_TOKENS = new Set(['contact_name', 'phone_number', 'user_name', 'agent_name'])
 
 // Sticky date header state
 const stickyDate = ref('')
@@ -159,6 +182,11 @@ const templateDialogOpen = ref(false)
 const selectedTemplate = ref<any>(null)
 const templateParamNames = ref<string[]>([])
 const templateParamValues = ref<Record<string, string>>({})
+// Name of the TEXT-header variable (max 1 per Meta) and its value. Kept in
+// its own ref so a positional {{1}} in the header doesn't collide with a
+// {{1}} body parameter — both can be filled independently.
+const templateHeaderParamName = ref<string | null>(null)
+const templateHeaderParamValue = ref('')
 const templateButtonUrlParams = ref<{ index: number; text: string; value: string; type: string }[]>([])
 const isSendingTemplate = ref(false)
 const templateHeaderType = computed(() => selectedTemplate.value?.header_type)
@@ -223,7 +251,6 @@ const messagesScroll = useInfiniteScroll({
       await nextTick()
       // Load media for any new messages
       try {
-        loadMediaForMessages()
       } catch (e) {
         console.error('Error loading media:', e)
       }
@@ -231,8 +258,17 @@ const messagesScroll = useInfiniteScroll({
   },
   hasMore: computed(() => contactsStore.hasMoreMessages),
   isLoading: computed(() => contactsStore.isLoadingOlderMessages),
-  onScroll: (event) => updateStickyDate(event.target as HTMLElement)
+  onScroll: (event) => {
+    const el = event.target as HTMLElement
+    updateStickyDate(el)
+    updateAtBottom(el)
+  }
 })
+
+function updateAtBottom(el: HTMLElement) {
+  const distanceFromBottom = el.scrollHeight - el.clientHeight - el.scrollTop
+  isAtBottom.value = distanceFromBottom < SCROLL_BOTTOM_THRESHOLD
+}
 
 const contactId = computed(() => route.params.contactId as string | undefined)
 
@@ -428,20 +464,40 @@ onMounted(async () => {
   if (contactId.value) {
     await selectContact(contactId.value)
   }
+
+  // Auto-scroll to the unread divider and mark messages read when the agent
+  // returns — covers both tab-switch (visibilitychange) and OS window focus
+  // (focus event), since "tab visible but window unfocused" is a real state
+  // and we don't want to send blue-tick receipts when no one is looking.
+  // See issue #280.
+  document.addEventListener('visibilitychange', onUserActive)
+  window.addEventListener('focus', onUserActive)
 })
+
+function onUserActive() {
+  if (document.visibilityState !== 'visible' || !document.hasFocus()) return
+  if (!firstUnreadId.value) return
+  if (contactsStore.currentContact) {
+    contactsService.markRead(contactsStore.currentContact.id)
+      .catch(() => { /* non-critical */ })
+  }
+  nextTick(() => {
+    const el = document.getElementById(`message-${firstUnreadId.value}`)
+    if (el) {
+      el.scrollIntoView({ behavior: 'smooth', block: 'start' })
+    }
+  })
+}
 
 onUnmounted(() => {
   wsService.setCurrentContact(null)
   // Clear current contact when leaving chat view so notifications work on other pages
   contactsStore.setCurrentContact(null)
   notesStore.clearNotes()
-  // Clean up blob URLs to prevent memory leaks
-  Object.values(mediaBlobUrls.value).forEach(url => {
-    URL.revokeObjectURL(url)
-  })
-  mediaBlobUrls.value = {}
   // Clear sticky date timeout
   if (stickyDateTimeout) clearTimeout(stickyDateTimeout)
+  document.removeEventListener('visibilitychange', onUserActive)
+  window.removeEventListener('focus', onUserActive)
 })
 
 function updateStickyDate(scrollContainer: HTMLElement) {
@@ -493,8 +549,18 @@ watch(contactId, async (newId) => {
 })
 
 async function selectContact(id: string) {
-  const contact = contactsStore.contacts.find(c => c.id === id)
+  // Direct deep links to /chat/:id may target a contact that isn't in the
+  // currently-loaded (paginated) list — fall back to fetching it directly.
+  let contact = contactsStore.contacts.find(c => c.id === id)
+  if (!contact) {
+    contact = await contactsStore.fetchContact(id)
+  }
   if (contact) {
+    // Reset unread pill — fetchMessages will mark everything read on the server
+    newMessagesCount.value = 0
+    firstUnreadId.value = null
+    isAtBottom.value = true
+
     // Remove old scroll listener before switching contacts
     messagesScroll.cleanup()
 
@@ -546,7 +612,6 @@ async function selectContact(id: string) {
     await nextTick()
     // Load media for messages after messages are fetched
     try {
-      loadMediaForMessages()
     } catch (e) {
       console.error('Error loading media:', e)
     }
@@ -573,20 +638,40 @@ async function selectContact(id: string) {
   }
 }
 
-// Watch for new messages to auto-scroll and load media
-watch(() => contactsStore.messages.length, () => {
-  scrollToBottom()
-  try {
-    loadMediaForMessages()
-  } catch (e) {
-    console.error('Error loading media:', e)
+// Watch for new messages. WhatsApp Web style: while the browser tab is
+// focused on this chat the user is "watching", so auto-scroll if they're
+// at the bottom. When they're on another tab, pile up unread and surface
+// a divider above the first message that arrived while away (issue #280).
+// The two branches are mutually exclusive — auto-scrolling while the tab
+// is hidden races with the divider state.
+watch(() => contactsStore.messages.length, (newLen, oldLen) => {
+  if (newLen <= oldLen) return
+  const latest = contactsStore.messages[newLen - 1]
+  const isIncoming = latest?.direction === 'incoming'
+  // "Not actively looking" covers both other-tab (hidden) and other-window
+  // (visible but unfocused). The divider should pile in either case.
+  const userAway = typeof document !== 'undefined'
+    && (document.visibilityState === 'hidden' || !document.hasFocus())
+  if (isIncoming && userAway) {
+    if (newMessagesCount.value === 0) {
+      firstUnreadId.value = latest.id
+    }
+    newMessagesCount.value += 1
+    return
+  }
+  // Outgoing (the agent replied) — they've seen the unread, drop the divider.
+  if (!isIncoming && newMessagesCount.value > 0) {
+    newMessagesCount.value = 0
+    firstUnreadId.value = null
+  }
+  if (isAtBottom.value || !isIncoming) {
+    scrollToBottom()
   }
 })
 
 // Watch for messages changes to load media
 watch(() => contactsStore.messages, () => {
   try {
-    loadMediaForMessages()
   } catch (e) {
     console.error('Error loading media:', e)
   }
@@ -599,7 +684,6 @@ async function switchAccount(accountName: string) {
   await contactsStore.fetchMessages(contactsStore.currentContact.id, { account: accountName })
   await nextTick()
   try {
-    loadMediaForMessages()
   } catch (e) {
     console.error('Error loading media:', e)
   }
@@ -628,7 +712,7 @@ async function sendMessage() {
     await nextTick()
     scrollToBottom()
   } catch (error) {
-    toast.error(t('chat.sendMessageFailed'))
+    toast.error(getErrorMessage(error, t('chat.sendMessageFailed')))
   } finally {
     isSending.value = false
   }
@@ -663,7 +747,7 @@ async function retryMessage(message: Message) {
 
     toast.success(t('chat.messageSent'))
   } catch (error) {
-    toast.error(t('chat.sendMessageFailed'))
+    toast.error(getErrorMessage(error, t('chat.sendMessageFailed')))
   } finally {
     retryingMessageId.value = null
   }
@@ -721,10 +805,186 @@ function scrollToMessage(messageId: string | undefined) {
   }
 }
 
-function insertCannedResponse(content: string) {
-  messageInput.value = content
+function extractCannedTokens(content: string): string[] {
+  const seen = new Set<string>()
+  const matches = content.matchAll(/\{\{\s*([\w.-]+)\s*\}\}/g)
+  for (const m of matches) seen.add(m[1])
+  return Array.from(seen)
+}
+
+// Collect tokens from the message body AND every button field, so the param
+// dialog prompts for custom tokens used anywhere on the response.
+function extractCannedTokensFromResponse(r: CannedResponse): string[] {
+  const seen = new Set<string>(extractCannedTokens(r.content))
+  for (const btn of r.buttons || []) {
+    for (const t of extractCannedTokens(btn.title || '')) seen.add(t)
+    for (const t of extractCannedTokens(btn.url || '')) seen.add(t)
+    for (const t of extractCannedTokens(btn.phone_number || '')) seen.add(t)
+  }
+  return Array.from(seen)
+}
+
+// Resolve a single context token (contact_name / phone_number / user_name /
+// agent_name) against the current chat. Returns null for any key that isn't
+// in AUTO_RESOLVED_CONTEXT_TOKENS so callers can fall back to their own param
+// dict.
+function resolveContextToken(key: string): string | null {
+  const contact = contactsStore.currentContact
+  if (key === 'contact_name') return contact?.profile_name || contact?.name || 'there'
+  if (key === 'phone_number') return contact?.phone_number || ''
+  if (key === 'user_name' || key === 'agent_name') return authStore.user?.full_name || ''
+  return null
+}
+
+// Shared {{...}} resolver used by the body preview and the button fields, so
+// `{{phone_number}}` works inside a button URL the same way it does in content.
+function resolveCannedTokens(text: string): string {
+  if (!text) return text
+  return text.replace(/\{\{\s*([\w.-]+)\s*\}\}/g, (_match, key: string) => {
+    const ctx = resolveContextToken(key)
+    if (ctx !== null) return ctx
+    const value = cannedParamValues.value[key]
+    return value ? value : `{{${key}}}`
+  })
+}
+
+const cannedPreview = computed(() =>
+  selectedCannedResponse.value ? resolveCannedTokens(selectedCannedResponse.value.content) : '',
+)
+
+// Resolved buttons (with {{...}} substitution applied) for the dialog preview.
+// Empty array when no response is selected or it has no buttons.
+const cannedPreviewButtons = computed(() => {
+  const raw = selectedCannedResponse.value?.buttons || []
+  return raw.map(b => ({
+    ...b,
+    title: resolveCannedTokens(b.title),
+    ...(b.url !== undefined ? { url: resolveCannedTokens(b.url) } : {}),
+    ...(b.phone_number !== undefined ? { phone_number: resolveCannedTokens(b.phone_number) } : {}),
+  }))
+})
+
+function handleCannedSelect(response: CannedResponse) {
+  selectedCannedResponse.value = response
+  const tokens = extractCannedTokensFromResponse(response).filter(
+    t => !AUTO_RESOLVED_CONTEXT_TOKENS.has(t)
+  )
+  cannedParamNames.value = tokens
+  cannedParamValues.value = Object.fromEntries(tokens.map(t => [t, '']))
+  // Drop the slash command (or any stray text) so the textarea starts clean.
+  messageInput.value = ''
+  resetTextareaHeight()
   cannedPickerOpen.value = false
   cannedSearchQuery.value = ''
+  cannedDialogOpen.value = true
+}
+
+async function sendCannedResponse() {
+  if (!contactsStore.currentContact || !selectedCannedResponse.value) return
+
+  const missing = cannedParamNames.value.some(n => !cannedParamValues.value[n]?.trim())
+  if (missing) {
+    toast.error(t('chat.parameterRequired'))
+    return
+  }
+
+  const body = cannedPreview.value
+  const responseId = selectedCannedResponse.value.id
+  // Substitute {{...}} tokens in every button field — same rules as the body —
+  // so URLs like https://x.com/u/{{phone_number}} resolve at send time.
+  const buttons = (selectedCannedResponse.value.buttons || []).map(b => ({
+    ...b,
+    title: resolveCannedTokens(b.title),
+    ...(b.url !== undefined ? { url: resolveCannedTokens(b.url) } : {}),
+    ...(b.phone_number !== undefined ? { phone_number: resolveCannedTokens(b.phone_number) } : {}),
+  }))
+  const replyButtons = buttons.filter(b => !b.type || b.type === 'reply')
+  const urlButtons = buttons.filter(b => b.type === 'url')
+
+  // WhatsApp Cloud API supports: 1-3 reply buttons (interactive.button),
+  // 4-10 reply rows (interactive.list — backend's SendInteractiveButtons
+  // auto-picks the right shape), a single cta_url, or a single voice_call
+  // (Business Calling click-to-call). Phone buttons and multi-URL / mixed
+  // combos aren't representable; the detail-page validator blocks save for
+  // those, so the text fallback here is just a safety net.
+  const voiceCallButtons = buttons.filter(b => b.type === 'voice_call')
+  const flowButtons = buttons.filter(b => b.type === 'flow')
+  let sendType: 'text' | 'interactive' = 'text'
+  let interactive: {
+    type: 'button' | 'list' | 'cta_url' | 'voice_call' | 'flow'
+    body: string
+    buttons?: Array<{ id: string; title: string }>
+    button_text?: string
+    url?: string
+    display_text?: string
+    ttl_minutes?: number
+    flow_id?: string
+    first_screen?: string
+  } | undefined
+
+  if (buttons.length === 1 && flowButtons.length === 1) {
+    const f = flowButtons[0]
+    sendType = 'interactive'
+    interactive = {
+      type: 'flow',
+      body,
+      // The button title is the CTA label shown to the customer.
+      button_text: resolveCannedTokens(f.title),
+      flow_id: f.flow_id,
+      first_screen: f.screen,
+    }
+  } else if (buttons.length === 1 && voiceCallButtons.length === 1) {
+    const vc = voiceCallButtons[0]
+    sendType = 'interactive'
+    interactive = {
+      type: 'voice_call',
+      body,
+      // {{...}} tokens already resolved in the canned-preview path; the
+      // button title is what becomes Meta's display_text. Backend
+      // truncates to 20 chars and stamps the agent-id payload.
+      display_text: resolveCannedTokens(vc.title),
+      ttl_minutes: vc.ttl_minutes ?? 15,
+    }
+  } else if (buttons.length > 0 && replyButtons.length === buttons.length && replyButtons.length <= 10) {
+    sendType = 'interactive'
+    interactive = {
+      type: replyButtons.length <= 3 ? 'button' : 'list',
+      body,
+      buttons: replyButtons.map(b => ({ id: b.id, title: b.title })),
+    }
+  } else if (buttons.length === 1 && urlButtons.length === 1) {
+    sendType = 'interactive'
+    interactive = {
+      type: 'cta_url',
+      body,
+      button_text: urlButtons[0].title,
+      url: urlButtons[0].url || '',
+    }
+  }
+
+  isSendingCanned.value = true
+  try {
+    await contactsStore.sendMessage(
+      contactsStore.currentContact.id,
+      sendType,
+      sendType === 'interactive' ? { body } : { body },
+      contactsStore.replyingTo?.id,
+      selectedAccount.value || undefined,
+      interactive ? { interactive } : undefined,
+    )
+    cannedResponsesService.use(responseId).catch(() => {})
+    contactsStore.clearReplyingTo()
+    cannedDialogOpen.value = false
+    selectedCannedResponse.value = null
+    cannedParamNames.value = []
+    cannedParamValues.value = {}
+    await nextTick()
+    scrollToBottom()
+  } catch (error) {
+    toast.error(getErrorMessage(error, t('chat.sendMessageFailed')))
+  } finally {
+    isSendingCanned.value = false
+  }
 }
 
 function closeCannedPicker() {
@@ -744,12 +1004,23 @@ function getTemplateBodyContent(tpl: any): string {
 
 const templatePreview = computed(() => {
   if (!selectedTemplate.value) return ''
-  let body = getTemplateBodyContent(selectedTemplate.value)
-  for (const [key, value] of Object.entries(templateParamValues.value)) {
-    body = body.replace(new RegExp(`\\{\\{${key}\\}\\}`, 'g'), value || `{{${key}}}`)
-  }
-  return body
+  const body = getTemplateBodyContent(selectedTemplate.value)
+  return body.replace(/\{\{\s*([\w.-]+)\s*\}\}/g, (_match, key: string) => {
+    const supplied = templateParamValues.value[key]
+    if (supplied) return supplied
+    const ctx = resolveContextToken(key)
+    if (ctx !== null) return ctx
+    return `{{${key}}}`
+  })
 })
+
+// Show the header input only when the user has to fill it. Context-token
+// names (contact_name, phone_number, …) auto-resolve and stay hidden — same
+// rule body params follow via templateParamNames filtering.
+const showHeaderParamInput = computed(() =>
+  !!templateHeaderParamName.value &&
+  !AUTO_RESOLVED_CONTEXT_TOKENS.has(templateHeaderParamName.value)
+)
 
 function extractButtonUrlParams(buttons: any[]): { index: number; text: string; value: string; type: string }[] {
   if (!buttons?.length) return []
@@ -768,8 +1039,33 @@ function extractButtonUrlParams(buttons: any[]): { index: number; text: string; 
 
 function handleTemplateWithParams(template: any, paramNames: string[]) {
   selectedTemplate.value = template
-  templateParamNames.value = paramNames
-  templateParamValues.value = Object.fromEntries(paramNames.map(n => [n, '']))
+  // Pre-fill body context tokens from the conversation; keep them in the
+  // payload dict so the backend forwards them to Meta, but hide them from
+  // the dialog so the agent doesn't have to type values we already know —
+  // same pattern as canned responses (see handleCannedSelect).
+  const initial: Record<string, string> = {}
+  for (const name of paramNames) {
+    const resolved = resolveContextToken(name)
+    initial[name] = resolved ?? ''
+  }
+  templateParamValues.value = initial
+  templateParamNames.value = paramNames.filter(n => !AUTO_RESOLVED_CONTEXT_TOKENS.has(n))
+
+  // Identify the TEXT-header variable (max 1) and pre-fill from context.
+  // Context-token names (contact_name / phone_number / agent_name / user_name)
+  // resolve automatically and stay hidden from the dialog — same convention
+  // as body params.
+  templateHeaderParamName.value = null
+  templateHeaderParamValue.value = ''
+  if (template.header_type === 'TEXT' && template.header_content) {
+    const m = template.header_content.match(/\{\{([^}]+)\}\}/)
+    if (m) {
+      const name = m[1].trim()
+      templateHeaderParamName.value = name
+      templateHeaderParamValue.value = resolveContextToken(name) ?? ''
+    }
+  }
+
   clearTemplateHeaderMedia()
   templateButtonUrlParams.value = extractButtonUrlParams(template.buttons)
   templateDialogOpen.value = true
@@ -777,6 +1073,14 @@ function handleTemplateWithParams(template: any, paramNames: string[]) {
 
 async function sendTemplateMessage() {
   if (!contactsStore.currentContact || !selectedTemplate.value) return
+
+  // Validate header param (separate ref so it can hold its own value even
+  // when the body has a {{1}} that would otherwise collide). Auto-resolved
+  // context tokens are exempt — their value comes from the conversation.
+  if (showHeaderParamInput.value && !templateHeaderParamValue.value.trim()) {
+    toast.error(t('chat.parameterRequired'))
+    return
+  }
 
   // Validate all body params are filled
   const missingBody = templateParamNames.value.some(n => !templateParamValues.value[n]?.trim())
@@ -804,6 +1108,12 @@ async function sendTemplateMessage() {
       ? Object.fromEntries(templateButtonUrlParams.value.map(b => [String(b.index), b.value]))
       : undefined
 
+  // Header value goes in its own payload field so a positional {{1}} header
+  // doesn't overwrite a positional {{1}} body parameter in the flat map.
+  const headerParams: Record<string, string> | undefined =
+    templateHeaderParamName.value && templateHeaderParamValue.value
+      ? { [templateHeaderParamName.value]: templateHeaderParamValue.value }
+      : undefined
 
   isSendingTemplate.value = true
   try {
@@ -813,13 +1123,16 @@ async function sendTemplateMessage() {
       templateParamValues.value,
       selectedAccount.value || undefined,
       templateHeaderFile.value || undefined,
-      buttonParams
+      buttonParams,
+      headerParams
     )
     toast.success(t('chat.templateSent'))
     templateDialogOpen.value = false
     selectedTemplate.value = null
     templateParamNames.value = []
     templateParamValues.value = {}
+    templateHeaderParamName.value = null
+    templateHeaderParamValue.value = ''
     clearTemplateHeaderMedia()
     templateButtonUrlParams.value = []
   } catch (error: any) {
@@ -966,6 +1279,7 @@ function scrollToBottom(instant = false) {
     }
   })
 }
+
 
 function getMessageStatusIcon(status: string) {
   switch (status) {
@@ -1173,6 +1487,24 @@ function getCTAUrlData(message: Message): CTAUrlData | null {
   }
 }
 
+interface VoiceCallData {
+  display_text: string
+  ttl_minutes?: number
+}
+
+function getVoiceCallData(message: Message): VoiceCallData | null {
+  if (message.message_type !== 'interactive' || !message.interactive_data) {
+    return null
+  }
+  if (message.interactive_data.type !== 'voice_call') {
+    return null
+  }
+  return {
+    display_text: (message.interactive_data as any).display_text || 'Call',
+    ttl_minutes: (message.interactive_data as any).ttl_minutes,
+  }
+}
+
 function getFlowButtonText(message: Message): string | null {
   if (message.message_type !== 'flow') {
     return null
@@ -1187,58 +1519,14 @@ function isMediaMessage(message: Message): boolean {
   return ['image', 'video', 'audio', 'document'].includes(message.message_type)
 }
 
-function getMediaBlobUrl(message: Message): string {
-  return mediaBlobUrls.value[message.id] || ''
-}
-
-function isMediaLoading(message: Message): boolean {
-  return mediaLoadingStates.value[message.id] || false
-}
-
-async function loadMediaForMessage(message: Message) {
-  if (!message.media_url || mediaBlobUrls.value[message.id] || mediaLoadingStates.value[message.id]) {
-    return
-  }
-
-  mediaLoadingStates.value[message.id] = true
-
-  try {
-    const basePath = ((window as any).__BASE_PATH__ ?? '').replace(/\/$/, '')
-    const response = await fetch(`${basePath}/api/media/${message.id}`, {
-      credentials: 'include',
-      headers: getRequestHeaders()
-    })
-
-    if (!response.ok) {
-      throw new Error(`Failed to load media: ${response.status}`)
-    }
-
-    const blob = await response.blob()
-    const blobUrl = URL.createObjectURL(blob)
-    mediaBlobUrls.value[message.id] = blobUrl
-  } catch (error) {
-    console.error('Failed to load media:', error, 'message_id:', message.id)
-  } finally {
-    mediaLoadingStates.value[message.id] = false
-  }
-}
-
-// Load media for all messages that have media_url
-function loadMediaForMessages() {
-  try {
-    for (const message of contactsStore.messages) {
-      if (message.media_url && !mediaBlobUrls.value[message.id]) {
-        // Fire and forget - errors are handled inside loadMediaForMessage
-        loadMediaForMessage(message).catch(() => {})
-      }
-    }
-  } catch (e) {
-    console.error('Error in loadMediaForMessages:', e)
-  }
+function getMediaUrl(message: Message): string {
+  if (!message.media_url) return ''
+  const basePath = ((window as any).__BASE_PATH__ ?? '').replace(/\/$/, '')
+  return `${basePath}/api/media/${message.id}`
 }
 
 function openMediaPreview(message: Message) {
-  const url = getMediaBlobUrl(message)
+  const url = getMediaUrl(message)
   if (url) {
     window.open(url, '_blank')
   }
@@ -1350,11 +1638,6 @@ async function sendMediaMessage() {
     if (result.data) {
       contactsStore.addMessage(result.data)
       scrollToBottom()
-      // Load media for the new message
-      await nextTick()
-      if (result.data.media_url) {
-        loadMediaForMessage(result.data)
-      }
     }
 
     toast.success(t('chat.mediaSent'))
@@ -1390,6 +1673,7 @@ async function sendMediaMessage() {
               <Button
                 variant="ghost"
                 size="icon"
+                :aria-label="$t('chat.addContact')"
                 class="h-8 w-8 shrink-0 text-white/40 hover:text-white hover:bg-white/[0.08] light:text-gray-500 light:hover:text-gray-900 light:hover:bg-gray-100"
                 @click="openAddContactDialog"
               >
@@ -1467,8 +1751,8 @@ async function sendMediaMessage() {
       </div>
 
       <!-- Contacts -->
-      <ScrollArea :ref="(el: any) => contactsScroll.scrollAreaRef.value = el" class="flex-1">
-        <div class="py-1">
+      <ScrollArea :ref="(el: any) => contactsScroll.scrollAreaRef.value = el" orientation="vertical" class="flex-1">
+        <div class="py-1 w-full">
           <div
             v-for="contact in contactsStore.sortedContacts"
             :key="contact.id"
@@ -1485,19 +1769,22 @@ async function sendMediaMessage() {
               </AvatarFallback>
             </Avatar>
             <div class="flex-1 min-w-0">
-              <div class="flex items-center justify-between">
-                <p class="text-sm font-medium truncate text-white light:text-gray-900">
+              <div class="flex items-center justify-between gap-2">
+                <p
+                  class="flex-1 min-w-0 text-sm font-medium truncate text-white light:text-gray-900"
+                  :title="contact.name || contact.phone_number"
+                >
                   {{ contact.name || contact.phone_number }}
                 </p>
-                <span class="text-[11px] text-white/40 light:text-gray-500">
+                <span class="flex-shrink-0 text-[11px] text-white/40 light:text-gray-500">
                   {{ formatContactTime(contact.last_message_at) }}
                 </span>
               </div>
-              <div class="flex items-center justify-between">
-                <p class="text-xs text-white/50 light:text-gray-500 truncate">
+              <div class="flex items-center justify-between gap-2">
+                <p class="flex-1 min-w-0 text-xs text-white/50 light:text-gray-500 truncate">
                   {{ contact.phone_number }}
                 </p>
-                <Badge v-if="contact.unread_count > 0" class="ml-2 h-5 text-[10px] bg-emerald-500/20 text-emerald-400 light:bg-emerald-100 light:text-emerald-700">
+                <Badge v-if="contact.unread_count > 0" class="flex-shrink-0 h-5 text-[10px] bg-emerald-500/20 text-emerald-400 light:bg-emerald-100 light:text-emerald-700">
                   {{ contact.unread_count }}
                 </Badge>
               </div>
@@ -1692,6 +1979,9 @@ async function sendMediaMessage() {
 
         <!-- Messages -->
         <div class="relative flex-1 min-h-0 overflow-hidden">
+          <!-- Loading overlay while switching contacts / loading the first page -->
+          <Spinner v-if="contactsStore.isLoadingMessages" overlay />
+
           <!-- Sticky date header -->
           <Transition name="sticky-date">
             <div
@@ -1726,6 +2016,17 @@ async function sendMediaMessage() {
                   </div>
                 </div>
 
+                <!-- Unread divider (WhatsApp-style; appears above the first
+                     message that arrived while the tab was hidden) -->
+                <div
+                  v-if="newMessagesCount > 0 && message.id === firstUnreadId"
+                  class="flex items-center justify-center my-4"
+                >
+                  <div class="px-3 py-1 bg-white/[0.06] light:bg-gray-200 rounded-full text-[11px] text-white/40 light:text-gray-600 font-medium">
+                    {{ newMessagesCount }} {{ newMessagesCount === 1 ? $t('chat.unreadMessage', 'unread message') : $t('chat.unreadMessages', 'unread messages') }}
+                  </div>
+                </div>
+
               <!-- Message bubble -->
               <div
                 :id="`message-${message.id}`"
@@ -1755,26 +2056,23 @@ async function sendMediaMessage() {
                 </div>
                 <!-- Template header media (image/video/document shown above template text) -->
                 <div v-if="message.message_type === 'template' && message.media_url" class="mb-2">
-                  <div v-if="isMediaLoading(message)" class="w-[200px] h-[150px] bg-muted rounded-lg animate-pulse flex items-center justify-center">
-                    <span class="text-muted-foreground text-sm">{{ $t('common.loading') }}...</span>
-                  </div>
                   <img
-                    v-else-if="message.media_mime_type?.startsWith('image/') && getMediaBlobUrl(message)"
-                    :src="getMediaBlobUrl(message)"
+                    v-if="message.media_mime_type?.startsWith('image/')"
+                    :src="getMediaUrl(message)"
                     alt="Template header"
                     class="max-w-[280px] max-h-[300px] rounded-lg cursor-pointer object-cover"
                     @click="openMediaPreview(message)"
                     @error="handleImageError($event)"
                   />
                   <video
-                    v-else-if="message.media_mime_type?.startsWith('video/') && getMediaBlobUrl(message)"
-                    :src="getMediaBlobUrl(message)"
+                    v-else-if="message.media_mime_type?.startsWith('video/')"
+                    :src="getMediaUrl(message)"
                     controls
                     class="max-w-[280px] max-h-[300px] rounded-lg"
                   />
                   <a
-                    v-else-if="getMediaBlobUrl(message)"
-                    :href="getMediaBlobUrl(message)"
+                    v-else
+                    :href="getMediaUrl(message)"
                     :download="message.media_filename || 'document'"
                     class="flex items-center gap-2 px-3 py-2 bg-background/50 rounded-lg hover:bg-background/80 transition-colors"
                   >
@@ -1784,71 +2082,46 @@ async function sendMediaMessage() {
                 </div>
                 <!-- Image message -->
                 <div v-else-if="message.message_type === 'image' && message.media_url" class="mb-2">
-                  <div v-if="isMediaLoading(message)" class="w-[200px] h-[150px] bg-muted rounded-lg animate-pulse flex items-center justify-center">
-                    <span class="text-muted-foreground text-sm">{{ $t('common.loading') }}...</span>
-                  </div>
                   <img
-                    v-else-if="getMediaBlobUrl(message)"
-                    :src="getMediaBlobUrl(message)"
+                    :src="getMediaUrl(message)"
                     :alt="message.content?.body || 'Image'"
                     class="max-w-[280px] max-h-[300px] rounded-lg cursor-pointer object-cover"
                     @click="openMediaPreview(message)"
                     @error="handleImageError($event)"
                   />
-                  <div v-else class="w-[200px] h-[150px] bg-muted rounded-lg flex items-center justify-center">
-                    <span class="text-muted-foreground text-sm">[Image]</span>
-                  </div>
                 </div>
                 <!-- Sticker message -->
                 <div v-else-if="message.message_type === 'sticker' && message.media_url" class="mb-2">
-                  <div v-if="isMediaLoading(message)" class="w-[128px] h-[128px] bg-muted rounded-lg animate-pulse flex items-center justify-center">
-                    <span class="text-muted-foreground text-sm">{{ $t('common.loading') }}...</span>
-                  </div>
                   <img
-                    v-else-if="getMediaBlobUrl(message)"
-                    :src="getMediaBlobUrl(message)"
+                    :src="getMediaUrl(message)"
                     alt="Sticker"
                     class="max-w-[128px] max-h-[128px] cursor-pointer"
                     @click="openMediaPreview(message)"
                     @error="handleImageError($event)"
                   />
-                  <div v-else class="w-[128px] h-[128px] bg-muted rounded-lg flex items-center justify-center">
-                    <span class="text-muted-foreground text-sm">[Sticker]</span>
-                  </div>
                 </div>
                 <!-- Video message -->
                 <div v-else-if="message.message_type === 'video' && message.media_url" class="mb-2">
-                  <div v-if="isMediaLoading(message)" class="w-[200px] h-[150px] bg-muted rounded-lg animate-pulse flex items-center justify-center">
-                    <span class="text-muted-foreground text-sm">{{ $t('common.loading') }}...</span>
-                  </div>
                   <video
-                    v-else-if="getMediaBlobUrl(message)"
-                    :src="getMediaBlobUrl(message)"
+                    :src="getMediaUrl(message)"
                     controls
                     class="max-w-[280px] max-h-[300px] rounded-lg"
                     @error="handleMediaError($event, 'video')"
                   />
-                  <div v-else class="w-[200px] h-[150px] bg-muted rounded-lg flex items-center justify-center">
-                    <span class="text-muted-foreground text-sm">[Video]</span>
-                  </div>
                 </div>
                 <!-- Audio message -->
                 <div v-else-if="message.message_type === 'audio' && message.media_url" class="mb-2">
-                  <div v-if="isMediaLoading(message)" class="w-[200px] h-[40px] bg-muted rounded-lg animate-pulse"></div>
                   <audio
-                    v-else-if="getMediaBlobUrl(message)"
-                    :src="getMediaBlobUrl(message)"
+                    :src="getMediaUrl(message)"
                     controls
                     class="max-w-[280px]"
                     @error="handleMediaError($event, 'audio')"
                   />
-                  <div v-else class="text-muted-foreground text-sm">[Audio]</div>
                 </div>
                 <!-- Document message -->
                 <div v-else-if="message.message_type === 'document' && message.media_url" class="mb-2">
                   <a
-                    v-if="getMediaBlobUrl(message)"
-                    :href="getMediaBlobUrl(message)"
+                    :href="getMediaUrl(message)"
                     :download="message.media_filename || 'document'"
                     class="flex items-center gap-2 px-3 py-2 bg-background/50 rounded-lg hover:bg-background/80 transition-colors"
                   >
@@ -1857,14 +2130,6 @@ async function sendMediaMessage() {
                       {{ message.media_filename || 'Document' }}
                     </span>
                   </a>
-                  <div v-else-if="isMediaLoading(message)" class="flex items-center gap-2 px-3 py-2 bg-background/50 rounded-lg">
-                    <FileText class="h-5 w-5 text-muted-foreground" />
-                    <span class="text-sm text-muted-foreground">{{ $t('common.loading') }}...</span>
-                  </div>
-                  <div v-else class="flex items-center gap-2 px-3 py-2 bg-background/50 rounded-lg">
-                    <FileText class="h-5 w-5 text-muted-foreground" />
-                    <span class="text-sm text-muted-foreground">[Document]</span>
-                  </div>
                 </div>
                 <!-- Location message -->
                 <div v-else-if="message.message_type === 'location' && getLocationData(message)" class="mb-2">
@@ -1915,7 +2180,7 @@ async function sendMediaMessage() {
                 <div v-else-if="message.message_type === 'unsupported'" class="mb-2">
                   <div class="flex items-center gap-2 px-3 py-2 bg-muted/50 rounded-lg text-muted-foreground">
                     <AlertCircle class="h-4 w-4 shrink-0" />
-                    <span class="text-sm italic">This message type is not supported</span>
+                    <span class="text-sm italic">{{ $t('chat.unsupportedMessage') }}</span>
                   </div>
                 </div>
                 <!-- Button reply - WhatsApp style -->
@@ -1964,6 +2229,16 @@ async function sendMediaMessage() {
                     {{ getCTAUrlData(message)?.button_text }}
                   </div>
                 </a>
+                <!-- Voice call button - WhatsApp style, non-clickable in our chat -->
+                <div
+                  v-if="getVoiceCallData(message)"
+                  class="interactive-buttons mt-2 -mx-2 -mb-1.5 border-t"
+                >
+                  <div class="py-2 text-sm text-center font-medium flex items-center justify-center gap-1.5">
+                    <PhoneCall class="h-3.5 w-3.5" />
+                    {{ getVoiceCallData(message)?.display_text }}
+                  </div>
+                </div>
                 <!-- Flow button - WhatsApp style -->
                 <div
                   v-if="getFlowButtonText(message)"
@@ -2151,10 +2426,9 @@ async function sendMediaMessage() {
               <TooltipTrigger as-child>
                 <span>
                   <CannedResponsePicker
-                    :contact="contactsStore.currentContact"
                     :external-open="cannedPickerOpen"
                     :external-search="cannedSearchQuery"
-                    @select="insertCannedResponse"
+                    @select="handleCannedSelect"
                     @close="closeCannedPicker"
                   />
                 </span>
@@ -2241,6 +2515,19 @@ async function sendMediaMessage() {
             @clear="clearTemplateHeaderMedia"
           />
 
+          <div v-if="showHeaderParamInput" class="space-y-1">
+            <label class="text-sm font-medium flex items-center gap-1.5">
+              <span>{{ templateHeaderParamName }}</span>
+              <span class="text-[10px] uppercase tracking-wider text-muted-foreground bg-muted px-1.5 py-0.5 rounded">
+                {{ $t('chat.headerParamBadge', 'Header') }}
+              </span>
+            </label>
+            <Input
+              v-model="templateHeaderParamValue"
+              :placeholder="templateHeaderParamName ?? ''"
+              class="h-9"
+            />
+          </div>
           <div v-for="param in templateParamNames" :key="param" class="space-y-1">
             <label class="text-sm font-medium">{{ param }}</label>
             <Input
@@ -2285,6 +2572,51 @@ async function sendMediaMessage() {
             <Loader2 v-if="isSendingTemplate" class="h-4 w-4 mr-2 animate-spin" />
             {{ $t('chat.send') }}
           </Button>
+        </div>
+      </DialogContent>
+    </Dialog>
+
+    <!-- Canned Response Preview Dialog -->
+    <Dialog v-model:open="cannedDialogOpen">
+      <DialogContent class="max-w-sm">
+        <!-- DialogContent doesn't forward $attrs (multi-root via DialogPortal),
+             so wrap the body in a div carrying the stable id used by e2e. -->
+        <div id="canned-response-dialog">
+        <DialogHeader>
+          <DialogTitle>{{ cannedParamNames.length > 0 ? $t('chat.fillParameters') : $t('chat.preview') }}</DialogTitle>
+          <DialogDescription>
+            {{ selectedCannedResponse?.name }}
+          </DialogDescription>
+        </DialogHeader>
+        <div class="py-4 space-y-3">
+          <div v-for="param in cannedParamNames" :key="param" class="space-y-1">
+            <label class="text-sm font-medium" :for="`canned-response-param-${param}`">{{ param }}</label>
+            <Input
+              :id="`canned-response-param-${param}`"
+              v-model="cannedParamValues[param]"
+              :placeholder="param"
+              class="h-9 canned-response-param"
+            />
+          </div>
+          <div v-if="cannedPreview || cannedPreviewButtons.length" class="space-y-1">
+            <label class="text-xs font-medium text-muted-foreground">{{ $t('chat.preview') }}</label>
+            <div id="canned-response-preview" class="chat-bubble chat-bubble-outgoing ml-auto" style="max-width: 100%;">
+              <span v-if="cannedPreview" class="whitespace-pre-wrap break-words text-sm">{{ cannedPreview }}</span>
+              <PreviewButtonGroup
+                v-if="cannedPreviewButtons.length"
+                :buttons="cannedPreviewButtons"
+                disabled
+              />
+            </div>
+          </div>
+        </div>
+        <div class="flex justify-end gap-2">
+          <Button id="canned-response-cancel" variant="outline" @click="cannedDialogOpen = false">{{ $t('common.cancel') }}</Button>
+          <Button id="canned-response-send" :disabled="isSendingCanned" @click="sendCannedResponse">
+            <Loader2 v-if="isSendingCanned" class="h-4 w-4 mr-2 animate-spin" />
+            {{ $t('chat.send') }}
+          </Button>
+        </div>
         </div>
       </DialogContent>
     </Dialog>

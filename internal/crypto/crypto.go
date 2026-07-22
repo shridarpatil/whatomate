@@ -91,6 +91,23 @@ func DecryptFields(key string, fields ...*string) {
 	}
 }
 
+// EncryptFields encrypts multiple string fields in place using the given key.
+// Fields already carrying the encryption prefix are skipped, so it is safe to
+// call repeatedly or on partially-encrypted structs. Returns the first error.
+func EncryptFields(key string, fields ...*string) error {
+	for _, f := range fields {
+		if f == nil || IsEncrypted(*f) {
+			continue
+		}
+		enc, err := Encrypt(*f, key)
+		if err != nil {
+			return err
+		}
+		*f = enc
+	}
+	return nil
+}
+
 // IsEncrypted checks if a value has the encryption prefix.
 func IsEncrypted(value string) bool {
 	return len(value) >= len(prefix) && value[:len(prefix)] == prefix

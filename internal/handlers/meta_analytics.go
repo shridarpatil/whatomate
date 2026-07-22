@@ -25,19 +25,19 @@ const (
 
 // MetaAnalyticsRequest represents the request parameters for Meta analytics
 type MetaAnalyticsRequest struct {
-	AccountID     string `json:"account_id"`      // Optional: specific account ID or empty for all
-	AnalyticsType string `json:"analytics_type"`  // Required: analytics, pricing_analytics, template_analytics, call_analytics
-	Start         string `json:"start"`           // Required: YYYY-MM-DD format
-	End           string `json:"end"`             // Required: YYYY-MM-DD format
-	Granularity   string `json:"granularity"`     // Optional: HALF_HOUR, DAY, MONTH (default: DAY)
+	AccountID     string `json:"account_id"`     // Optional: specific account ID or empty for all
+	AnalyticsType string `json:"analytics_type"` // Required: analytics, pricing_analytics, template_analytics, call_analytics
+	Start         string `json:"start"`          // Required: YYYY-MM-DD format
+	End           string `json:"end"`            // Required: YYYY-MM-DD format
+	Granularity   string `json:"granularity"`    // Optional: HALF_HOUR, DAY, MONTH (default: DAY)
 }
 
 // MetaAnalyticsResponse represents the response for Meta analytics
 type MetaAnalyticsResponse struct {
-	AccountID    string                          `json:"account_id"`
-	AccountName  string                          `json:"account_name"`
-	Data         *whatsapp.MetaAnalyticsResponse `json:"data"`
-	TemplateNames map[string]string              `json:"template_names,omitempty"` // meta_template_id -> template name
+	AccountID     string                          `json:"account_id"`
+	AccountName   string                          `json:"account_name"`
+	Data          *whatsapp.MetaAnalyticsResponse `json:"data"`
+	TemplateNames map[string]string               `json:"template_names,omitempty"` // meta_template_id -> template name
 }
 
 // GetMetaAnalytics fetches Meta WhatsApp analytics with Redis caching

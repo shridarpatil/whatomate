@@ -6,6 +6,11 @@ function escapeCssSelector(id: string): string {
   return id.replace(/\\/g, '\\\\').replace(/\./g, '\\.')
 }
 
+// Escape a string for safe use inside a RegExp.
+function escapeRegex(s: string): string {
+  return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+}
+
 export class DialogPage extends BasePage {
   readonly dialog: Locator
   readonly cancelButton: Locator
@@ -92,8 +97,12 @@ export class DialogPage extends BasePage {
       await container.locator('button').first().click()
     }
 
-    // Click the option
-    await this.page.locator('[role="option"]').filter({ hasText: value }).click()
+    // Anchor on the option's accessible name, not on a substring match — a
+    // hasText filter would also match custom roles whose names embed the
+    // value (e.g. selecting 'Agent' matched any role with 'agent' in its
+    // name when leftover test roles were present).
+    const opts = this.page.getByRole('option', { name: new RegExp(`^\\s*${escapeRegex(value)}\\b`, 'i') })
+    await opts.first().click()
   }
 
   async checkCheckbox(label: string) {

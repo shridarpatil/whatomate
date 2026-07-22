@@ -52,7 +52,6 @@ func New(cfg *config.Config, db *gorm.DB, rdb *redis.Client, log logf.Logger) (*
 	}, nil
 }
 
-
 // Run starts the worker and processes jobs until context is cancelled
 func (w *Worker) Run(ctx context.Context) error {
 	w.Log.Info("Worker starting")
@@ -113,10 +112,11 @@ func (w *Worker) HandleRecipientJob(ctx context.Context, job *queue.RecipientJob
 		PhoneNumber:    job.PhoneNumber,
 		RecipientName:  job.RecipientName,
 		TemplateParams: job.TemplateParams,
+		HeaderParams:   job.HeaderParams,
 	}
 
 	// Send template message
-	waMessageID, err := w.sendTemplateMessage(ctx, &account, campaign.Template, recipient, campaign.HeaderMediaID)
+	waMessageID, err := w.sendTemplateMessage(ctx, &account, campaign.Template, recipient, campaign.HeaderMediaID, campaign.HeaderMediaFilename)
 
 	// Create Message record
 	message := models.Message{
@@ -252,7 +252,7 @@ func (w *Worker) checkCampaignCompletion(ctx context.Context, campaignID, organi
 }
 
 // sendTemplateMessage sends a template message via WhatsApp Cloud API
-func (w *Worker) sendTemplateMessage(ctx context.Context, account *models.WhatsAppAccount, template *models.Template, recipient *models.BulkMessageRecipient, campaignHeaderMediaID string) (string, error) {
+func (w *Worker) sendTemplateMessage(ctx context.Context, account *models.WhatsAppAccount, template *models.Template, recipient *models.BulkMessageRecipient, campaignHeaderMediaID, campaignHeaderMediaFilename string) (string, error) {
 	waAccount := account.ToWAAccount()
 
 	// Resolve body parameters into a map for BuildTemplateComponents
@@ -267,8 +267,32 @@ func (w *Worker) sendTemplateMessage(ctx context.Context, account *models.WhatsA
 		}
 	}
 
-	// Use the shared component builder (same as chat template sending)
-	components := whatsapp.BuildTemplateComponents(bodyParams, template.HeaderType, campaignHeaderMediaID)
+	// Resolve the header text parameter (if any) into its own map. Prefer
+	// recipient.HeaderParams (new path, populated by AddRecipients) and fall
+	// back to a TemplateParams lookup for legacy recipient rows persisted
+	// before HeaderParams existed.
+	var headerParams map[string]string
+	if template.HeaderType == "TEXT" {
+		if hNames := templateutil.ExtParamNames(template.HeaderContent); len(hNames) == 1 {
+			name := hNames[0]
+			if raw, ok := recipient.HeaderParams[name]; ok {
+				headerParams = map[string]string{name: fmt.Sprintf("%v", raw)}
+			} else if raw, ok := recipient.TemplateParams[name]; ok {
+				headerParams = map[string]string{name: fmt.Sprintf("%v", raw)}
+			}
+		}
+	}
+
+	// Use the shared component builder (same as chat template sending).
+	components, err := whatsapp.BuildTemplateComponents(
+		bodyParams,
+		template.HeaderType, template.HeaderContent,
+		headerParams,
+		campaignHeaderMediaID, campaignHeaderMediaFilename,
+	)
+	if err != nil {
+		return "", fmt.Errorf("failed to build template components: %w", err)
+	}
 	// Add auto-generated button components (Flow needs flow_token)
 	flowComponents := whatsapp.AutoButtonComponents(template.Buttons)
 	components = append(components, flowComponents...)
@@ -293,4 +317,3 @@ func (w *Worker) Close() error {
 	}
 	return nil
 }
-

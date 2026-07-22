@@ -49,19 +49,19 @@ func TestClient_SendTextMessage(t *testing.T) {
 				assert.Equal(t, "Bearer test-access-token", r.Header.Get("Authorization"))
 
 				// Verify body
-				var body map[string]interface{}
+				var body map[string]any
 				err := json.NewDecoder(r.Body).Decode(&body)
 				require.NoError(t, err)
 				assert.Equal(t, "whatsapp", body["messaging_product"])
 				assert.Equal(t, "1234567890", body["to"])
 				assert.Equal(t, "text", body["type"])
 
-				textContent := body["text"].(map[string]interface{})
+				textContent := body["text"].(map[string]any)
 				assert.Equal(t, "Hello, World!", textContent["body"])
 
 				// Return success
 				w.WriteHeader(http.StatusOK)
-				_ = json.NewEncoder(w).Encode(map[string]interface{}{
+				_ = json.NewEncoder(w).Encode(map[string]any{
 					"messages": []map[string]string{{"id": "wamid.test123"}},
 				})
 			},
@@ -126,7 +126,7 @@ func TestClient_SendTextMessage(t *testing.T) {
 			text:  "Hello",
 			serverResponse: func(t *testing.T, w http.ResponseWriter, r *http.Request) {
 				w.WriteHeader(http.StatusOK)
-				_ = json.NewEncoder(w).Encode(map[string]interface{}{
+				_ = json.NewEncoder(w).Encode(map[string]any{
 					"messages": []map[string]string{}, // Empty
 				})
 			},
@@ -345,7 +345,7 @@ func TestClient_MarkMessageRead(t *testing.T) {
 			serverResponse: func(t *testing.T, w http.ResponseWriter, r *http.Request) {
 				assert.Equal(t, http.MethodPost, r.Method)
 
-				var body map[string]interface{}
+				var body map[string]any
 				_ = json.NewDecoder(r.Body).Decode(&body)
 				assert.Equal(t, "read", body["status"])
 				assert.Equal(t, "wamid.test123", body["message_id"])
@@ -399,16 +399,16 @@ func TestClient_SendImageMessage(t *testing.T) {
 	t.Parallel()
 
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		var body map[string]interface{}
+		var body map[string]any
 		_ = json.NewDecoder(r.Body).Decode(&body)
 
 		assert.Equal(t, "image", body["type"])
-		image := body["image"].(map[string]interface{})
+		image := body["image"].(map[string]any)
 		assert.Equal(t, "media123", image["id"])
 		assert.Equal(t, "Test caption", image["caption"])
 
 		w.WriteHeader(http.StatusOK)
-		_ = json.NewEncoder(w).Encode(map[string]interface{}{
+		_ = json.NewEncoder(w).Encode(map[string]any{
 			"messages": []map[string]string{{"id": "wamid.img123"}},
 		})
 	}))
@@ -433,17 +433,17 @@ func TestClient_SendDocumentMessage(t *testing.T) {
 	t.Parallel()
 
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		var body map[string]interface{}
+		var body map[string]any
 		_ = json.NewDecoder(r.Body).Decode(&body)
 
 		assert.Equal(t, "document", body["type"])
-		doc := body["document"].(map[string]interface{})
+		doc := body["document"].(map[string]any)
 		assert.Equal(t, "media456", doc["id"])
 		assert.Equal(t, "report.pdf", doc["filename"])
 		assert.Equal(t, "Monthly report", doc["caption"])
 
 		w.WriteHeader(http.StatusOK)
-		_ = json.NewEncoder(w).Encode(map[string]interface{}{
+		_ = json.NewEncoder(w).Encode(map[string]any{
 			"messages": []map[string]string{{"id": "wamid.doc123"}},
 		})
 	}))

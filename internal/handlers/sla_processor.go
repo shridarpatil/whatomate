@@ -87,7 +87,7 @@ func (p *SLAProcessor) processOrganizationSLA(settings models.ChatbotSettings, n
 
 	// 3. Mark SLA breached for transfers past response deadline
 	if settings.SLA.ResponseMinutes > 0 {
-		p.markSLABreached(orgID, settings, now)
+		p.markSLABreached(orgID, now)
 	}
 
 	// 4. Handle client inactivity (reminders and auto-close)
@@ -174,15 +174,22 @@ func (p *SLAProcessor) escalateTransfers(orgID uuid.UUID, settings models.Chatbo
 
 	escalatedCount := 0
 	for _, transfer := range transfers {
-		// Check if the assigned agent has been actively responding.
-		// If so, push the escalation deadline forward instead of escalating.
-		escalationAt := transfer.SLA.EscalationAt
-		if escalationAt != nil && p.agentRespondedSince(transfer, escalationAt.Add(-time.Duration(settings.SLA.EscalationMinutes)*time.Minute)) {
+		// Anchor the escalation window at the customer's last incoming message
+		// (or the transfer's start when the customer hasn't spoken since). The
+		// agent is "responsive" only if they've replied *after* the customer's
+		// latest message — so a conversation where both sides have wound down
+		// stays in steady state instead of repeatedly warning the customer that
+		// "we'll respond shortly" when there's nothing pending. Previous
+		// behavior keyed off the escalation deadline minus EscalationMinutes,
+		// which meant agent silence alone triggered the warning regardless of
+		// whether the customer was actually waiting.
+		since := p.customerLastSpokeAt(transfer)
+		if p.agentRespondedSince(transfer, since) {
 			newEscalation := now.Add(time.Duration(settings.SLA.EscalationMinutes) * time.Minute)
 			if err := p.app.DB.Model(&transfer).Update("sla_escalation_at", newEscalation).Error; err != nil {
 				p.app.Log.Error("Failed to extend transfer escalation", "error", err, "transfer_id", transfer.ID)
 			} else {
-				p.app.Log.Info("Extended transfer escalation due to agent activity",
+				p.app.Log.Info("Extended transfer escalation — agent has replied since customer's last message",
 					"transfer_id", transfer.ID,
 					"new_escalation_at", newEscalation,
 				)
@@ -240,7 +247,7 @@ func (p *SLAProcessor) escalateTransfers(orgID uuid.UUID, settings models.Chatbo
 }
 
 // markSLABreached marks transfers as SLA breached when past response deadline
-func (p *SLAProcessor) markSLABreached(orgID uuid.UUID, settings models.ChatbotSettings, now time.Time) {
+func (p *SLAProcessor) markSLABreached(orgID uuid.UUID, now time.Time) {
 	result := p.app.DB.Model(&models.AgentTransfer{}).Where(
 		"organization_id = ? AND status = ? AND sla_breached = ? AND sla_response_deadline IS NOT NULL AND sla_response_deadline < ? AND agent_id IS NULL",
 		orgID, models.TransferStatusActive, false, now,
@@ -357,6 +364,23 @@ func (p *SLAProcessor) broadcastTransferUpdate(transfer models.AgentTransfer, ws
 			"sla_breached":     transfer.SLA.Breached,
 		},
 	})
+}
+
+// customerLastSpokeAt returns when the contact most recently sent an
+// incoming message, falling back to the transfer's start when they
+// haven't messaged since. Anchors the escalation window at the customer's
+// latest activity so escalation only fires when there's an outstanding
+// question.
+func (p *SLAProcessor) customerLastSpokeAt(transfer models.AgentTransfer) time.Time {
+	var t time.Time
+	p.app.DB.Model(&models.Message{}).
+		Where("contact_id = ? AND direction = ?", transfer.ContactID, models.DirectionIncoming).
+		Select("MAX(created_at)").
+		Scan(&t)
+	if t.Before(transfer.TransferredAt) {
+		return transfer.TransferredAt
+	}
+	return t
 }
 
 // agentRespondedSince checks if the assigned agent sent an outgoing message
@@ -565,12 +589,7 @@ func (p *SLAProcessor) autoCloseChatbotSession(contact models.Contact, settings 
 // UpdateContactChatbotMessage updates the chatbot last message timestamp for a contact
 func (a *App) UpdateContactChatbotMessage(contactID uuid.UUID) {
 	now := time.Now()
-	a.DB.Model(&models.Contact{}).
-		Where("id = ?", contactID).
-		Updates(map[string]any{
-			"chatbot_last_message_at": now,
-			"chatbot_reminder_sent":   false, // Reset reminder when chatbot sends a new message
-		})
+	a.DB.Exec("UPDATE contacts SET chatbot_last_message_at = ?, chatbot_reminder_sent = false WHERE id = ?", now, contactID)
 }
 
 // ClearContactChatbotTracking clears chatbot tracking when client replies or is transferred

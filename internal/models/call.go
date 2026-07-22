@@ -33,33 +33,33 @@ const (
 type DisconnectedBy string
 
 const (
-	DisconnectedByClient  DisconnectedBy = "client"
-	DisconnectedByAgent   DisconnectedBy = "agent"
-	DisconnectedBySystem  DisconnectedBy = "system"  // timeout, error, etc.
+	DisconnectedByClient DisconnectedBy = "client"
+	DisconnectedByAgent  DisconnectedBy = "agent"
+	DisconnectedBySystem DisconnectedBy = "system" // timeout, error, etc.
 )
 
 // CallLog represents a voice call record
 type CallLog struct {
 	BaseModel
-	OrganizationID  uuid.UUID     `gorm:"type:uuid;not null;index" json:"organization_id"`
-	WhatsAppAccount string        `gorm:"column:whatsapp_account;size:100;not null" json:"whatsapp_account"`
-	ContactID       uuid.UUID     `gorm:"type:uuid;index" json:"contact_id"`
-	WhatsAppCallID  string        `gorm:"column:whatsapp_call_id;size:255;index" json:"whatsapp_call_id"`
-	CallerPhone     string        `gorm:"size:50;not null" json:"caller_phone"`
-	Direction       CallDirection `gorm:"size:20;not null;default:'incoming'" json:"direction"`
-	Status          CallStatus    `gorm:"size:20;not null;default:'ringing'" json:"status"`
-	Duration        int           `gorm:"default:0" json:"duration"`
-	IVRFlowID       *uuid.UUID    `gorm:"type:uuid" json:"ivr_flow_id,omitempty"`
-	IVRPath         JSONB         `gorm:"type:jsonb" json:"ivr_path,omitempty"`
-	AgentID         *uuid.UUID    `gorm:"type:uuid" json:"agent_id,omitempty"`
-	StartedAt       *time.Time    `json:"started_at,omitempty"`
-	AnsweredAt      *time.Time    `json:"answered_at,omitempty"`
-	EndedAt         *time.Time    `json:"ended_at,omitempty"`
-	DisconnectedBy  DisconnectedBy `gorm:"size:20" json:"disconnected_by,omitempty"`
-	ErrorMessage      string        `gorm:"type:text" json:"error_message,omitempty"`
-	RecordingS3Key    string        `gorm:"size:500" json:"recording_s3_key,omitempty"`
-	RecordingDuration int           `gorm:"default:0" json:"recording_duration,omitempty"`
-	RecordingError    string        `gorm:"type:text" json:"recording_error,omitempty"`
+	OrganizationID    uuid.UUID      `gorm:"type:uuid;not null;index" json:"organization_id"`
+	WhatsAppAccount   string         `gorm:"column:whatsapp_account;size:100;not null" json:"whatsapp_account"`
+	ContactID         uuid.UUID      `gorm:"type:uuid;index" json:"contact_id"`
+	WhatsAppCallID    string         `gorm:"column:whatsapp_call_id;size:255;index" json:"whatsapp_call_id"`
+	CallerPhone       string         `gorm:"size:50;not null" json:"caller_phone"`
+	Direction         CallDirection  `gorm:"size:20;not null;default:'incoming'" json:"direction"`
+	Status            CallStatus     `gorm:"size:20;not null;default:'ringing'" json:"status"`
+	Duration          int            `gorm:"default:0" json:"duration"`
+	IVRFlowID         *uuid.UUID     `gorm:"type:uuid" json:"ivr_flow_id,omitempty"`
+	IVRPath           JSONB          `gorm:"type:jsonb" json:"ivr_path,omitempty"`
+	AgentID           *uuid.UUID     `gorm:"type:uuid" json:"agent_id,omitempty"`
+	StartedAt         *time.Time     `json:"started_at,omitempty"`
+	AnsweredAt        *time.Time     `json:"answered_at,omitempty"`
+	EndedAt           *time.Time     `json:"ended_at,omitempty"`
+	DisconnectedBy    DisconnectedBy `gorm:"size:20" json:"disconnected_by,omitempty"`
+	ErrorMessage      string         `gorm:"type:text" json:"error_message,omitempty"`
+	RecordingS3Key    string         `gorm:"size:500" json:"recording_s3_key,omitempty"`
+	RecordingDuration int            `gorm:"default:0" json:"recording_duration,omitempty"`
+	RecordingError    string         `gorm:"type:text" json:"recording_error,omitempty"`
 
 	// Relations
 	Contact *Contact `gorm:"foreignKey:ContactID" json:"contact,omitempty"`
@@ -74,12 +74,12 @@ func (CallLog) TableName() string {
 // IVRFlow represents an IVR (Interactive Voice Response) menu flow
 type IVRFlow struct {
 	BaseModel
-	OrganizationID  uuid.UUID `gorm:"type:uuid;not null;index" json:"organization_id"`
-	WhatsAppAccount string    `gorm:"column:whatsapp_account;size:100;not null" json:"whatsapp_account"`
-	Name            string    `gorm:"size:255;not null" json:"name"`
-	Description     string    `gorm:"type:text" json:"description"`
-	IsActive        bool      `gorm:"default:true" json:"is_active"`
-	IsCallStart     bool      `gorm:"default:false" json:"is_call_start"`
+	OrganizationID  uuid.UUID  `gorm:"type:uuid;not null;index" json:"organization_id"`
+	WhatsAppAccount string     `gorm:"column:whatsapp_account;size:100;not null" json:"whatsapp_account"`
+	Name            string     `gorm:"size:255;not null" json:"name"`
+	Description     string     `gorm:"type:text" json:"description"`
+	IsActive        bool       `gorm:"default:true" json:"is_active"`
+	IsCallStart     bool       `gorm:"default:false" json:"is_call_start"`
 	IsOutgoingEnd   bool       `gorm:"default:false" json:"is_outgoing_end"`
 	Menu            JSONB      `gorm:"type:jsonb" json:"menu"`
 	WelcomeAudioURL string     `gorm:"type:text" json:"welcome_audio_url"`
@@ -110,23 +110,23 @@ const (
 // CallTransfer represents a call being transferred from IVR to an agent
 type CallTransfer struct {
 	BaseModel
-	OrganizationID  uuid.UUID          `gorm:"type:uuid;not null;index" json:"organization_id"`
-	CallLogID       uuid.UUID          `gorm:"type:uuid;not null;index" json:"call_log_id"`
-	WhatsAppCallID  string             `gorm:"size:255;not null;index" json:"whatsapp_call_id"`
-	CallerPhone     string             `gorm:"size:50;not null" json:"caller_phone"`
-	ContactID       uuid.UUID          `gorm:"type:uuid;index" json:"contact_id"`
-	WhatsAppAccount string             `gorm:"size:100;not null" json:"whatsapp_account"`
-	Status          CallTransferStatus `gorm:"size:20;not null;default:'waiting'" json:"status"`
-	TeamID          *uuid.UUID         `gorm:"type:uuid;index" json:"team_id,omitempty"`
+	OrganizationID    uuid.UUID          `gorm:"type:uuid;not null;index" json:"organization_id"`
+	CallLogID         uuid.UUID          `gorm:"type:uuid;not null;index" json:"call_log_id"`
+	WhatsAppCallID    string             `gorm:"size:255;not null;index" json:"whatsapp_call_id"`
+	CallerPhone       string             `gorm:"size:50;not null" json:"caller_phone"`
+	ContactID         uuid.UUID          `gorm:"type:uuid;index" json:"contact_id"`
+	WhatsAppAccount   string             `gorm:"size:100;not null" json:"whatsapp_account"`
+	Status            CallTransferStatus `gorm:"size:20;not null;default:'waiting'" json:"status"`
+	TeamID            *uuid.UUID         `gorm:"type:uuid;index" json:"team_id,omitempty"`
 	AgentID           *uuid.UUID         `gorm:"type:uuid" json:"agent_id,omitempty"`
 	InitiatingAgentID *uuid.UUID         `gorm:"type:uuid" json:"initiating_agent_id,omitempty"`
-	TransferredAt   time.Time          `gorm:"autoCreateTime" json:"transferred_at"`
-	ConnectedAt     *time.Time         `json:"connected_at,omitempty"`
-	CompletedAt     *time.Time         `json:"completed_at,omitempty"`
-	HoldDuration    int                `gorm:"default:0" json:"hold_duration"`
-	TalkDuration    int                `gorm:"default:0" json:"talk_duration"`
-	IVRPath         JSONB              `gorm:"type:jsonb" json:"ivr_path,omitempty"`
-	TriedAgentIDs   JSONBArray         `gorm:"type:jsonb" json:"tried_agent_ids,omitempty"`
+	TransferredAt     time.Time          `gorm:"autoCreateTime" json:"transferred_at"`
+	ConnectedAt       *time.Time         `json:"connected_at,omitempty"`
+	CompletedAt       *time.Time         `json:"completed_at,omitempty"`
+	HoldDuration      int                `gorm:"default:0" json:"hold_duration"`
+	TalkDuration      int                `gorm:"default:0" json:"talk_duration"`
+	IVRPath           JSONB              `gorm:"type:jsonb" json:"ivr_path,omitempty"`
+	TriedAgentIDs     JSONBArray         `gorm:"type:jsonb" json:"tried_agent_ids,omitempty"`
 	// Relations
 	CallLog         *CallLog `gorm:"foreignKey:CallLogID" json:"call_log,omitempty"`
 	Contact         *Contact `gorm:"foreignKey:ContactID" json:"contact,omitempty"`
@@ -152,15 +152,15 @@ const (
 // CallPermission tracks call permission requests sent to contacts
 type CallPermission struct {
 	BaseModel
-	OrganizationID uuid.UUID            `gorm:"type:uuid;not null;index" json:"organization_id"`
-	ContactID      uuid.UUID            `gorm:"type:uuid;not null;index" json:"contact_id"`
-	WhatsAppAccount string              `gorm:"size:100;not null" json:"whatsapp_account"`
-	Status         CallPermissionStatus `gorm:"size:20;not null;default:'pending'" json:"status"`
-	MessageID      string               `gorm:"size:255" json:"message_id"`
-	RequestedAt    time.Time            `gorm:"autoCreateTime" json:"requested_at"`
-	RespondedAt    *time.Time           `json:"responded_at,omitempty"`
-	ExpiresAt      *time.Time           `json:"expires_at,omitempty"`
-	RequestedByID  *uuid.UUID           `gorm:"type:uuid" json:"requested_by_id,omitempty"`
+	OrganizationID  uuid.UUID            `gorm:"type:uuid;not null;index" json:"organization_id"`
+	ContactID       uuid.UUID            `gorm:"type:uuid;not null;index" json:"contact_id"`
+	WhatsAppAccount string               `gorm:"size:100;not null" json:"whatsapp_account"`
+	Status          CallPermissionStatus `gorm:"size:20;not null;default:'pending'" json:"status"`
+	MessageID       string               `gorm:"size:255" json:"message_id"`
+	RequestedAt     time.Time            `gorm:"autoCreateTime" json:"requested_at"`
+	RespondedAt     *time.Time           `json:"responded_at,omitempty"`
+	ExpiresAt       *time.Time           `json:"expires_at,omitempty"`
+	RequestedByID   *uuid.UUID           `gorm:"type:uuid" json:"requested_by_id,omitempty"`
 
 	// Relations
 	Contact     *Contact `gorm:"foreignKey:ContactID" json:"contact,omitempty"`

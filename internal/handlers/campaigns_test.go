@@ -132,7 +132,7 @@ func TestApp_CreateCampaign_Success(t *testing.T) {
 	account := testutil.CreateTestWhatsAppAccountWith(t, app.DB, org.ID, testutil.WithAccountName("create-account"))
 	template := testutil.CreateTestTemplate(t, app.DB, org.ID, account.Name)
 
-	req := testutil.NewJSONRequest(t, map[string]interface{}{
+	req := testutil.NewJSONRequest(t, map[string]any{
 		"name":             "Test Campaign",
 		"whatsapp_account": account.Name,
 		"template_id":      template.ID.String(),
@@ -163,7 +163,7 @@ func TestApp_CreateCampaign_WithScheduledAt(t *testing.T) {
 
 	scheduledAt := time.Now().Add(24 * time.Hour).Format(time.RFC3339)
 
-	req := testutil.NewJSONRequest(t, map[string]interface{}{
+	req := testutil.NewJSONRequest(t, map[string]any{
 		"name":             "Scheduled Campaign",
 		"whatsapp_account": account.Name,
 		"template_id":      template.ID.String(),
@@ -190,7 +190,7 @@ func TestApp_CreateCampaign_InvalidTemplateID(t *testing.T) {
 	user := testutil.CreateTestUser(t, app.DB, org.ID, testutil.WithEmail(testutil.UniqueEmail("invalid-template")), testutil.WithPassword("password"))
 	account := testutil.CreateTestWhatsAppAccountWith(t, app.DB, org.ID, testutil.WithAccountName("invalid-template-account"))
 
-	req := testutil.NewJSONRequest(t, map[string]interface{}{
+	req := testutil.NewJSONRequest(t, map[string]any{
 		"name":             "Test Campaign",
 		"whatsapp_account": account.Name,
 		"template_id":      "not-a-valid-uuid",
@@ -209,7 +209,7 @@ func TestApp_CreateCampaign_TemplateNotFound(t *testing.T) {
 	user := testutil.CreateTestUser(t, app.DB, org.ID, testutil.WithEmail(testutil.UniqueEmail("template-not-found")), testutil.WithPassword("password"))
 	account := testutil.CreateTestWhatsAppAccountWith(t, app.DB, org.ID, testutil.WithAccountName("no-template-account"))
 
-	req := testutil.NewJSONRequest(t, map[string]interface{}{
+	req := testutil.NewJSONRequest(t, map[string]any{
 		"name":             "Test Campaign",
 		"whatsapp_account": account.Name,
 		"template_id":      uuid.New().String(),
@@ -229,7 +229,7 @@ func TestApp_CreateCampaign_AccountNotFound(t *testing.T) {
 	account := testutil.CreateTestWhatsAppAccountWith(t, app.DB, org.ID, testutil.WithAccountName("temp-account-for-template"))
 	template := testutil.CreateTestTemplate(t, app.DB, org.ID, account.Name)
 
-	req := testutil.NewJSONRequest(t, map[string]interface{}{
+	req := testutil.NewJSONRequest(t, map[string]any{
 		"name":             "Test Campaign",
 		"whatsapp_account": "nonexistent-account",
 		"template_id":      template.ID.String(),
@@ -268,6 +268,10 @@ func TestApp_GetCampaign_Success(t *testing.T) {
 	template := testutil.CreateTestTemplate(t, app.DB, org.ID, account.Name)
 	campaign := createTestCampaign(t, app, org.ID, template.ID, user.ID, account.Name, models.CampaignStatusDraft)
 
+	// Set a non-zero read count to verify it is returned
+	campaign.ReadCount = 10
+	require.NoError(t, app.DB.Save(campaign).Error)
+
 	req := testutil.NewGETRequest(t)
 	testutil.SetAuthContext(req, org.ID, user.ID)
 	testutil.SetPathParam(req, "id", campaign.ID.String())
@@ -283,6 +287,7 @@ func TestApp_GetCampaign_Success(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, campaign.ID, resp.Data.ID)
 	assert.Equal(t, campaign.Name, resp.Data.Name)
+	assert.Equal(t, 10, resp.Data.ReadCount)
 }
 
 func TestApp_GetCampaign_NotFound(t *testing.T) {
@@ -326,7 +331,11 @@ func TestApp_UpdateCampaign_Success(t *testing.T) {
 	template := testutil.CreateTestTemplate(t, app.DB, org.ID, account.Name)
 	campaign := createTestCampaign(t, app, org.ID, template.ID, user.ID, account.Name, models.CampaignStatusDraft)
 
-	req := testutil.NewJSONRequest(t, map[string]interface{}{
+	// Set a non-zero read count to verify it is preserved/returned on update
+	campaign.ReadCount = 12
+	require.NoError(t, app.DB.Save(campaign).Error)
+
+	req := testutil.NewJSONRequest(t, map[string]any{
 		"name":             "Updated Campaign Name",
 		"whatsapp_account": account.Name,
 		"template_id":      template.ID.String(),
@@ -344,6 +353,7 @@ func TestApp_UpdateCampaign_Success(t *testing.T) {
 	err = json.Unmarshal(testutil.GetResponseBody(req), &resp)
 	require.NoError(t, err)
 	assert.Equal(t, "Updated Campaign Name", resp.Data.Name)
+	assert.Equal(t, 12, resp.Data.ReadCount)
 }
 
 func TestApp_UpdateCampaign_NotDraft(t *testing.T) {
@@ -355,7 +365,7 @@ func TestApp_UpdateCampaign_NotDraft(t *testing.T) {
 	template := testutil.CreateTestTemplate(t, app.DB, org.ID, account.Name)
 	campaign := createTestCampaign(t, app, org.ID, template.ID, user.ID, account.Name, models.CampaignStatusProcessing)
 
-	req := testutil.NewJSONRequest(t, map[string]interface{}{
+	req := testutil.NewJSONRequest(t, map[string]any{
 		"name": "Updated Name",
 	})
 	testutil.SetAuthContext(req, org.ID, user.ID)
@@ -372,7 +382,7 @@ func TestApp_UpdateCampaign_NotFound(t *testing.T) {
 	org := testutil.CreateTestOrganization(t, app.DB)
 	user := testutil.CreateTestUser(t, app.DB, org.ID, testutil.WithEmail(testutil.UniqueEmail("update-not-found")), testutil.WithPassword("password"))
 
-	req := testutil.NewJSONRequest(t, map[string]interface{}{
+	req := testutil.NewJSONRequest(t, map[string]any{
 		"name": "Updated Name",
 	})
 	testutil.SetAuthContext(req, org.ID, user.ID)
@@ -662,8 +672,8 @@ func TestApp_ImportRecipients_Success(t *testing.T) {
 	template := testutil.CreateTestTemplate(t, app.DB, org.ID, account.Name)
 	campaign := createTestCampaign(t, app, org.ID, template.ID, user.ID, account.Name, models.CampaignStatusDraft)
 
-	req := testutil.NewJSONRequest(t, map[string]interface{}{
-		"recipients": []map[string]interface{}{
+	req := testutil.NewJSONRequest(t, map[string]any{
+		"recipients": []map[string]any{
 			{"phone_number": "+1234567890", "recipient_name": "John Doe"},
 			{"phone_number": "+0987654321", "recipient_name": "Jane Doe"},
 		},
@@ -697,12 +707,12 @@ func TestApp_ImportRecipients_WithTemplateParams(t *testing.T) {
 	template := testutil.CreateTestTemplate(t, app.DB, org.ID, account.Name)
 	campaign := createTestCampaign(t, app, org.ID, template.ID, user.ID, account.Name, models.CampaignStatusDraft)
 
-	req := testutil.NewJSONRequest(t, map[string]interface{}{
-		"recipients": []map[string]interface{}{
+	req := testutil.NewJSONRequest(t, map[string]any{
+		"recipients": []map[string]any{
 			{
 				"phone_number":    "+1234567890",
 				"recipient_name":  "John Doe",
-				"template_params": map[string]interface{}{"1": "John", "2": "Welcome"},
+				"template_params": map[string]any{"1": "John", "2": "Welcome"},
 			},
 		},
 	})
@@ -719,6 +729,47 @@ func TestApp_ImportRecipients_WithTemplateParams(t *testing.T) {
 	assert.NotNil(t, recipient.TemplateParams)
 }
 
+// header_params must round-trip into the BulkMessageRecipient row so the
+// worker can hand it to BuildTemplateComponents at send time. Without this,
+// a positional {{1}} header collides with a positional {{1}} body parameter
+// in the flat TemplateParams map (per-component indexing on Meta side).
+func TestApp_ImportRecipients_WithHeaderParams(t *testing.T) {
+	mockQueue := testutil.NewMockQueue()
+	app := newTestApp(t, withQueue(mockQueue))
+	org := testutil.CreateTestOrganization(t, app.DB)
+	user := testutil.CreateTestUser(t, app.DB, org.ID, testutil.WithEmail(testutil.UniqueEmail("import-header-params")), testutil.WithPassword("password"))
+	account := testutil.CreateTestWhatsAppAccountWith(t, app.DB, org.ID, testutil.WithAccountName("import-header-account"))
+	template := testutil.CreateTestTemplate(t, app.DB, org.ID, account.Name)
+	campaign := createTestCampaign(t, app, org.ID, template.ID, user.ID, account.Name, models.CampaignStatusDraft)
+
+	req := testutil.NewJSONRequest(t, map[string]any{
+		"recipients": []map[string]any{
+			{
+				"phone_number":    "+1234567890",
+				"recipient_name":  "John Doe",
+				"template_params": map[string]any{"1": "John", "2": "SAVE20"},
+				"header_params":   map[string]any{"1": "Summer"},
+			},
+		},
+	})
+	testutil.SetAuthContext(req, org.ID, user.ID)
+	testutil.SetPathParam(req, "id", campaign.ID.String())
+
+	err := app.ImportRecipients(req)
+	require.NoError(t, err)
+	assert.Equal(t, fasthttp.StatusOK, testutil.GetResponseStatusCode(req))
+
+	var recipient models.BulkMessageRecipient
+	require.NoError(t, app.DB.Where("campaign_id = ?", campaign.ID).First(&recipient).Error)
+	require.NotNil(t, recipient.HeaderParams)
+	assert.Equal(t, "Summer", recipient.HeaderParams["1"])
+	// TemplateParams stays separate from HeaderParams — same positional key
+	// "1" must not collide.
+	require.NotNil(t, recipient.TemplateParams)
+	assert.Equal(t, "John", recipient.TemplateParams["1"])
+	assert.Equal(t, "SAVE20", recipient.TemplateParams["2"])
+}
+
 func TestApp_ImportRecipients_NotDraft(t *testing.T) {
 	mockQueue := testutil.NewMockQueue()
 	app := newTestApp(t, withQueue(mockQueue))
@@ -728,8 +779,8 @@ func TestApp_ImportRecipients_NotDraft(t *testing.T) {
 	template := testutil.CreateTestTemplate(t, app.DB, org.ID, account.Name)
 	campaign := createTestCampaign(t, app, org.ID, template.ID, user.ID, account.Name, models.CampaignStatusProcessing)
 
-	req := testutil.NewJSONRequest(t, map[string]interface{}{
-		"recipients": []map[string]interface{}{
+	req := testutil.NewJSONRequest(t, map[string]any{
+		"recipients": []map[string]any{
 			{"phone_number": "+1234567890"},
 		},
 	})

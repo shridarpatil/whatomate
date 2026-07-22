@@ -291,7 +291,7 @@ const handleLogout = async () => {
     <main id="main-content" class="flex-1 overflow-hidden pt-12 md:pt-0 bg-[#0a0a0b] light:bg-gray-50" role="main">
       <RouterView v-slot="{ Component, route: viewRoute }">
         <Transition name="page" mode="out-in">
-          <component :is="Component" :key="viewRoute.path" />
+          <component :is="Component" :key="viewRoute.meta.stableKey ? String(viewRoute.name) : viewRoute.path" />
         </Transition>
       </RouterView>
       <ActiveCallPanel />

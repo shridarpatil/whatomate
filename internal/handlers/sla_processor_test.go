@@ -193,8 +193,8 @@ func TestUpdateContactChatbotMessage_SetsTimestampAndResetsReminder(t *testing.T
 	org := testutil.CreateTestOrganization(t, app.DB)
 	contact := testutil.CreateTestContact(t, app.DB, org.ID)
 
-	// Set reminder_sent to true first so we can verify it gets reset
-	require.NoError(t, app.DB.Model(contact).Update("chatbot_reminder_sent", true).Error)
+	// Set reminder_sent to true using raw SQL to avoid GORM caching
+	require.NoError(t, app.DB.Exec("UPDATE contacts SET chatbot_reminder_sent = true WHERE id = ?", contact.ID).Error)
 
 	before := time.Now()
 	app.UpdateContactChatbotMessage(contact.ID)
@@ -217,7 +217,7 @@ func TestClearContactChatbotTracking_ClearsFields(t *testing.T) {
 
 	// Set chatbot tracking fields first
 	now := time.Now()
-	require.NoError(t, app.DB.Model(contact).Updates(map[string]interface{}{
+	require.NoError(t, app.DB.Model(contact).Updates(map[string]any{
 		"chatbot_last_message_at": now,
 		"chatbot_reminder_sent":   true,
 	}).Error)

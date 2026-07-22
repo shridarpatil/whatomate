@@ -45,17 +45,24 @@ type OutgoingMessageRequest struct {
 	Caption       string
 
 	// Interactive messages
-	InteractiveType string            // "button", "list", "cta_url"
+	InteractiveType string            // "button", "list", "cta_url", "voice_call"
 	BodyText        string            // Body text for interactive messages
 	Buttons         []whatsapp.Button // For button/list messages
 	ButtonText      string            // For CTA URL button
 	URL             string            // For CTA URL button
 
+	// voice_call interactive (WhatsApp Business Calling)
+	DisplayText      string // Button face label
+	TTLMinutes       int    // How long the button stays clickable; 0 ⇒ Meta default
+	VoiceCallPayload string // Opaque round-trip string; server-set, e.g. "agent:<uuid>" for sticky routing
+
 	// Template messages
-	Template        *models.Template
-	BodyParams      map[string]string // Parameter name -> value (supports both named and positional)
-	HeaderMediaID   string            // WhatsApp media ID for template header (IMAGE/VIDEO/DOCUMENT)
-	ButtonURLParams map[string]string // Button index (as string) -> dynamic URL param value
+	Template            *models.Template
+	BodyParams          map[string]string // Parameter name -> value (supports both named and positional)
+	HeaderParams        map[string]string // Header-only param values; falls back to BodyParams if empty (used for TEXT headers with a {{var}})
+	HeaderMediaID       string            // WhatsApp media ID for template header (IMAGE/VIDEO/DOCUMENT)
+	HeaderMediaFilename string            // Filename — required by Meta for DOCUMENT headers
+	ButtonURLParams     map[string]string // Button index (as string) -> dynamic URL param value
 
 	// WhatsApp Flow messages
 	FlowID          string // Meta Flow ID
@@ -85,6 +92,11 @@ type MessageSendOptions struct {
 	// Async if true, sends in background goroutine and returns immediately
 	// Message is persisted before send, status updated after
 	Async bool
+
+	// MarkIncomingRead marks the contact's incoming messages as read after a
+	// successful send. Used for chatbot replies so a bot-handled exchange
+	// doesn't leave an "unread" badge in the agent's contact list.
+	MarkIncomingRead bool
 }
 
 // DefaultSendOptions returns options suitable for agent UI sends
@@ -104,6 +116,7 @@ func ChatbotSendOptions() MessageSendOptions {
 		DispatchWebhook:    false,
 		TrackSLA:           true,
 		Async:              false,
+		MarkIncomingRead:   true,
 	}
 }
 
@@ -180,6 +193,8 @@ func (a *App) SendOutgoingMessage(ctx context.Context, req OutgoingMessageReques
 			switch req.InteractiveType {
 			case "cta_url":
 				return a.WhatsApp.SendCTAURLButton(sendCtx, waAccount, rcpt, req.BodyText, req.ButtonText, req.URL)
+			case "voice_call":
+				return a.WhatsApp.SendVoiceCallButton(sendCtx, waAccount, rcpt, req.BodyText, req.DisplayText, req.TTLMinutes, req.VoiceCallPayload)
 			default: // "button" or "list"
 				return a.WhatsApp.SendInteractiveButtons(sendCtx, waAccount, rcpt, req.BodyText, req.Buttons)
 			}
@@ -188,7 +203,15 @@ func (a *App) SendOutgoingMessage(ctx context.Context, req OutgoingMessageReques
 			if req.Template == nil {
 				return "", fmt.Errorf("template is required for template messages")
 			}
-			components := whatsapp.BuildTemplateComponents(req.BodyParams, req.Template.HeaderType, req.HeaderMediaID)
+			components, err := whatsapp.BuildTemplateComponents(
+				req.BodyParams,
+				req.Template.HeaderType, req.Template.HeaderContent,
+				req.HeaderParams,
+				req.HeaderMediaID, req.HeaderMediaFilename,
+			)
+			if err != nil {
+				return "", fmt.Errorf("failed to build template components: %w", err)
+			}
 			// Add auto-generated button components (Flow needs flow_token)
 			flowComponents := whatsapp.AutoButtonComponents(req.Template.Buttons)
 			components = append(components, flowComponents...)
@@ -359,6 +382,18 @@ func (a *App) buildInteractiveData(req OutgoingMessageRequest) models.JSONB {
 			"button_text": req.ButtonText,
 			"url":         req.URL,
 		}
+	case "voice_call":
+		// Don't store the payload — it carries server-only context (the
+		// originating agent id) and the chat history doesn't need it.
+		out := models.JSONB{
+			"type":         "voice_call",
+			"body":         req.BodyText,
+			"display_text": req.DisplayText,
+		}
+		if req.TTLMinutes > 0 {
+			out["ttl_minutes"] = req.TTLMinutes
+		}
+		return out
 	case "list":
 		rows := make([]any, len(req.Buttons))
 		for i, btn := range req.Buttons {
@@ -432,6 +467,13 @@ func (a *App) finalizeMessageSend(msg *models.Message, req OutgoingMessageReques
 				"wamid":      wamid,
 			},
 		})
+	}
+
+	// Mark the contact's incoming messages as read once a chatbot reply has
+	// gone out. Keeps the agent's contact-list unread count clean for
+	// conversations the bot is auto-handling. See issue #280.
+	if opts.MarkIncomingRead {
+		a.markMessagesAsRead(req.Account.OrganizationID, req.Contact.ID, req.Contact)
 	}
 }
 
@@ -594,8 +636,15 @@ type SendTemplateMessageRequest struct {
 	//   1. header_media_id  — pre-uploaded WhatsApp media ID (skip upload)
 	//   2. header_media_url — URL to fetch the media from (server downloads & uploads to WhatsApp)
 	//   3. multipart header_file — raw file upload via multipart/form-data
-	HeaderMediaID  string `json:"header_media_id"`  // Already-uploaded WhatsApp media ID
-	HeaderMediaURL string `json:"header_media_url"` // URL to download media from
+	HeaderMediaID       string `json:"header_media_id"`       // Already-uploaded WhatsApp media ID
+	HeaderMediaURL      string `json:"header_media_url"`      // URL to download media from
+	HeaderMediaFilename string `json:"header_media_filename"` // Filename — required by Meta for DOCUMENT headers (#351)
+
+	// Header text parameter values for TEXT headers that contain a {{var}}.
+	// Meta only permits one variable in a TEXT header. Keyed by the variable's
+	// name (named templates) or by "1" (positional). Optional — if absent, the
+	// value is looked up in TemplateParams as a fallback.
+	HeaderParams map[string]string `json:"header_params"`
 }
 
 // SendTemplateMessage sends a template message to a contact or phone number.
@@ -609,6 +658,7 @@ func (a *App) SendTemplateMessage(r *fastglue.Request) error {
 	var req SendTemplateMessageRequest
 	var headerFileData []byte
 	var headerFileMimeType string
+	var headerFileFilename string
 
 	contentType := string(r.RequestCtx.Request.Header.ContentType())
 	if strings.HasPrefix(contentType, "multipart/form-data") {
@@ -644,6 +694,12 @@ func (a *App) SendTemplateMessage(r *fastglue.Request) error {
 				return r.SendErrorEnvelope(fasthttp.StatusBadRequest, "Invalid button_params JSON", nil, "")
 			}
 		}
+		// Parse header_params from JSON string
+		if v := form.Value["header_params"]; len(v) > 0 && v[0] != "" {
+			if err := json.Unmarshal([]byte(v[0]), &req.HeaderParams); err != nil {
+				return r.SendErrorEnvelope(fasthttp.StatusBadRequest, "Invalid header_params JSON", nil, "")
+			}
+		}
 		// Read header media file
 		if files := form.File["header_file"]; len(files) > 0 {
 			fh := files[0]
@@ -661,6 +717,10 @@ func (a *App) SendTemplateMessage(r *fastglue.Request) error {
 			if headerFileMimeType == "" {
 				headerFileMimeType = "application/octet-stream"
 			}
+			headerFileFilename = fh.Filename
+		}
+		if v := form.Value["header_media_filename"]; len(v) > 0 {
+			req.HeaderMediaFilename = v[0]
 		}
 	} else {
 		if err := a.decodeRequest(r, &req); err != nil {
@@ -768,6 +828,25 @@ func (a *App) SendTemplateMessage(r *fastglue.Request) error {
 		}
 	}
 
+	// Validate the header variable (TEXT headers only). Meta allows at most one
+	// variable in a TEXT header — surface a clean 400 if it's missing.
+	if template.HeaderType == "TEXT" {
+		headerNames := templateutil.ExtParamNames(template.HeaderContent)
+		if len(headerNames) > 1 {
+			return r.SendErrorEnvelope(fasthttp.StatusBadRequest,
+				fmt.Sprintf("Template header text contains %d variables; Meta allows at most 1", len(headerNames)),
+				nil, "")
+		}
+		if len(headerNames) == 1 {
+			name := headerNames[0]
+			if req.HeaderParams[name] == "" && req.TemplateParams[name] == "" {
+				return r.SendErrorEnvelope(fasthttp.StatusBadRequest,
+					fmt.Sprintf("Missing header parameter %q. Pass it in header_params or template_params.", name),
+					nil, "")
+			}
+		}
+	}
+
 	// Resolve header media for templates with IMAGE/VIDEO/DOCUMENT headers.
 	// Priority: header_media_id > header_media_url > multipart header_file
 	var headerMediaID string
@@ -852,17 +931,26 @@ func (a *App) SendTemplateMessage(r *fastglue.Request) error {
 		}
 	}
 
+	// Resolve filename for DOCUMENT headers — required by Meta (#351).
+	// Caller-supplied wins, then the multipart filename.
+	headerMediaFilename := req.HeaderMediaFilename
+	if headerMediaFilename == "" {
+		headerMediaFilename = headerFileFilename
+	}
+
 	// Send using unified message sender
 	msgReq := OutgoingMessageRequest{
-		Account:         account,
-		Contact:         contact,
-		Type:            models.MessageTypeTemplate,
-		Template:        &template,
-		BodyParams:      req.TemplateParams,
-		HeaderMediaID:   headerMediaID,
-		MediaURL:        headerLocalPath,
-		MediaMimeType:   headerMimeType,
-		ButtonURLParams: buttonParams,
+		Account:             account,
+		Contact:             contact,
+		Type:                models.MessageTypeTemplate,
+		Template:            &template,
+		BodyParams:          req.TemplateParams,
+		HeaderParams:        req.HeaderParams,
+		HeaderMediaID:       headerMediaID,
+		HeaderMediaFilename: headerMediaFilename,
+		MediaURL:            headerLocalPath,
+		MediaMimeType:       headerMimeType,
+		ButtonURLParams:     buttonParams,
 	}
 
 	opts := DefaultSendOptions()
@@ -891,4 +979,3 @@ func (a *App) SendTemplateMessage(r *fastglue.Request) error {
 	}
 	return r.SendEnvelope(response)
 }
-

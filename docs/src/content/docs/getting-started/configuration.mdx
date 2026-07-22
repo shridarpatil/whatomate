@@ -5,75 +5,244 @@ description: Complete configuration reference for Whatomate
 
 import { Aside } from '@astrojs/starlight/components';
 
-Whatomate uses a TOML configuration file for all settings. By default, it looks for `config.toml` in the current directory.
+Whatomate uses a TOML configuration file for all settings. By default, it looks for `config.toml` in the current directory; pass `-config /path/to/config.toml` to override.
+
+A complete commented example lives in [`config.example.toml`](https://github.com/shridarpatil/whatomate/blob/main/config.example.toml) at the repository root — copy it to `config.toml` and edit. The reference below documents every section.
 
 ## Configuration File
 
 ```toml
-# Application settings
 [app]
-environment = "development"  # development, production
+name = "Whatomate"
+environment = "development"   # development, staging, production
 debug = true
+encryption_key = ""           # AES-256 key (32+ chars) for encrypting secrets at rest. Required in production.
 
-# Server settings
 [server]
 host = "0.0.0.0"
 port = 8080
 read_timeout = 30
 write_timeout = 30
+base_path = ""                # Set to "/subpath" if behind nginx proxy_pass at a sub-path
+allowed_origins = ""          # Comma-separated CORS origins. Empty = allow all (dev only).
 
-# Database settings
 [database]
-host = "localhost"
+host = "localhost"            # Use "db" inside Docker compose
 port = 5432
 user = "whatomate"
 password = "your-password"
 name = "whatomate"
-sslmode = "disable"
+ssl_mode = "disable"          # disable, require, verify-ca, verify-full
+max_open_conns = 25
+max_idle_conns = 5
+conn_max_lifetime = 300       # seconds
 
-# Redis settings
 [redis]
-host = "localhost"
+host = "localhost"            # Use "redis" inside Docker compose
 port = 6379
-username = ""  # Redis ACL username (Redis 6+). Leave empty to use the default user.
+username = ""                 # Redis 6+ ACL username. Empty = default user.
 password = ""
 db = 0
-tls = false    # Set to true for TLS connections (e.g. Upstash, Redis Cloud)
+tls = false                   # true for managed Redis (Upstash, Redis Cloud)
 
-# JWT settings
 [jwt]
-secret = "your-jwt-secret-key"
+secret = "change-me-in-production"   # 32+ chars in production
 access_expiry_mins = 15
-refresh_expiry_days = 7
+refresh_expiry_days = 1
 
-# Storage settings
 [storage]
-type = "local"       # local or s3
+type = "local"                # local | s3
 local_path = "./uploads"
+s3_bucket = ""
+s3_region = ""
+s3_key = ""
+s3_secret = ""
+
+[cookie]
+domain = ""                   # e.g. ".example.com" to share across subdomains. Empty = current host only.
+secure = false                # Sets the Secure flag. Auto-forced to true when environment=production.
+
+[rate_limit]
+enabled = false               # Master switch
+login_max_attempts = 10
+register_max_attempts = 10
+refresh_max_attempts = 30
+sso_max_attempts = 10
+window_seconds = 60
+trust_proxy = false           # true if behind a reverse proxy (uses X-Forwarded-For / X-Real-IP)
+api_max_requests = 200        # Per-IP cap across all /api routes
+api_window_seconds = 60
+
+[tts]
+# piper_binary = "/usr/local/bin/piper"
+# piper_model = "/opt/piper/models/en_US-lessac-medium.onnx"
+# opusenc_binary = "opusenc"
+
+[calling]
+max_call_duration = 300       # seconds
+audio_dir = "./audio"
+# hold_music_file = "hold_music.opus"
+# ringback_file = "ringback.opus"
+transfer_timeout_secs = 120
+recording_enabled = true
+udp_port_min = 10000
+udp_port_max = 10100
+# public_ip = "1.2.3.4"        # Required on AWS / cloud where the host doesn't see its public IP
+# relay_only = true             # Force all media through TURN
+
+# Configure STUN, TURN, or both. Repeat the [[calling.ice_servers]] block for each.
+# [[calling.ice_servers]]
+# urls = ["stun:stun.l.google.com:19302"]
+# [[calling.ice_servers]]
+# urls = ["turn:your-turn.example.com:3478"]
+# username = "user"
+# credential = "password"
+
+[default_admin]
+email = "admin@admin.com"
+password = "admin"
+full_name = "Admin"
 ```
 
 <Aside type="note">
-  WhatsApp credentials and AI API keys are configured via the UI (Settings → Accounts) and stored in the database.
+  WhatsApp Cloud API credentials and AI provider API keys (OpenAI, Anthropic, Google) are configured **per organization** through the UI under **Settings → Accounts** — they are not in `config.toml`.
 </Aside>
 
-## Environment Variables
+## Sections in detail
 
-Configuration values can be overridden using environment variables:
+### `[app]`
 
-| Variable | Description |
-|----------|-------------|
-| `WHATOMATE_ENV` | Environment (development/production) |
-| `WHATOMATE_DATABASE_HOST` | Database host |
-| `WHATOMATE_DATABASE_PORT` | Database port |
-| `WHATOMATE_DATABASE_USER` | Database user |
-| `WHATOMATE_DATABASE_PASSWORD` | Database password |
-| `WHATOMATE_DATABASE_NAME` | Database name |
-| `WHATOMATE_REDIS_HOST` | Redis host |
-| `WHATOMATE_REDIS_PORT` | Redis port |
-| `WHATOMATE_REDIS_USERNAME` | Redis ACL username (leave empty for default user) |
-| `WHATOMATE_REDIS_PASSWORD` | Redis password |
-| `WHATOMATE_REDIS_TLS` | Enable TLS (`true`/`false`) |
-| `WHATOMATE_JWT_SECRET` | JWT signing secret |
+| Field | Required | Notes |
+|---|---|---|
+| `name` | no | Display name. Defaults to `"Whatomate"`. |
+| `environment` | yes | `development` \| `staging` \| `production`. Sets debug behavior, forces `cookie.secure=true` in production. |
+| `debug` | no | Verbose logging. |
+| `encryption_key` | **production** | AES-256 key used to encrypt access tokens, SSO client secrets, and other secrets at rest in the DB. Must be 32+ chars. Lose it and you lose stored credentials. |
+
+### `[server]`
+
+| Field | Notes |
+|---|---|
+| `host`, `port` | Default `0.0.0.0:8080`. |
+| `read_timeout`, `write_timeout` | Seconds. |
+| `base_path` | Leave empty unless serving at a sub-path (`https://app.example.com/whatomate`) behind a proxy. |
+| `allowed_origins` | Comma-separated list, e.g. `"https://app.example.com,https://admin.example.com"`. **Empty allows all origins** — only safe in development. |
+
+### `[database]`
+
+PostgreSQL only. The `max_open_conns` / `max_idle_conns` / `conn_max_lifetime` knobs map directly to `database/sql` pool settings — defaults are tuned for a single API process; raise `max_open_conns` if you run many workers against the same DB.
+
+`ssl_mode` accepts standard `libpq` values: `disable`, `require`, `verify-ca`, `verify-full`. Use `require` or stricter in production.
+
+### `[redis]`
+
+Required. Used for:
+- Session/CSRF storage
+- Job queue (Redis Streams) for campaign sends
+- Pub/Sub for campaign-stats fan-out
+- Rate-limit counters
+- Cache for chatbot flows / keyword rules
+
+Set `tls = true` and provide `username` + `password` for managed services like Upstash or AWS ElastiCache Serverless.
+
+### `[jwt]`
+
+| Field | Notes |
+|---|---|
+| `secret` | HMAC signing key. **Must be 32+ chars in production.** Rotating invalidates all sessions. |
+| `access_expiry_mins` | Default 15. |
+| `refresh_expiry_days` | Default 1. |
+
+JWTs are stored in httpOnly cookies — the frontend never sees them.
+
+### `[storage]`
+
+Controls media storage (template samples, uploaded files, optional call recordings).
+
+- `type = "local"` — files under `local_path` (default `./uploads`). Suitable for single-host deployments. The directory must be writable by the process and persisted (Docker volume).
+- `type = "s3"` — fill in `s3_bucket`, `s3_region`, `s3_key`, `s3_secret`. Required if you set `calling.recording_enabled = true` and want recordings retained off-host.
+
+### `[cookie]`
+
+| Field | Notes |
+|---|---|
+| `domain` | Set to `.example.com` to share auth cookies across subdomains. Leave empty for single-host. |
+| `secure` | The `Secure` cookie flag (HTTPS-only). Automatically forced to `true` when `app.environment = "production"`, regardless of this setting. |
+
+### `[rate_limit]`
+
+Off by default. Turn on with `enabled = true` for any internet-facing deployment.
+
+| Field | Notes |
+|---|---|
+| `login_max_attempts` | Per IP, per `window_seconds`. |
+| `register_max_attempts` | Per IP, per window. Throttles sign-up attempts. |
+| `refresh_max_attempts` | Per IP, per window. Higher because legitimate clients refresh often. |
+| `sso_max_attempts` | Per IP, per window for `/api/auth/sso/*`. |
+| `api_max_requests` | Global per-user cap across all `/api` routes once authenticated. |
+| `trust_proxy` | Set to `true` only if you run behind a trusted reverse proxy (nginx, Cloudflare, ALB) — otherwise clients can spoof their IP via `X-Forwarded-For`. |
+
+Implemented as Redis fixed-window counters; failures hit Redis, so leaving rate limits enabled with Redis down will block all auth.
+
+### `[tts]`
+
+Optional, only used when an IVR step needs to synthesize speech (welcome prompt, menu read-out). All three keys are paths to external binaries / models:
+
+- `piper_binary` — [piper](https://github.com/rhasspy/piper) standalone TTS executable.
+- `piper_model` — `.onnx` voice model from [piper-voices](https://huggingface.co/rhasspy/piper-voices).
+- `opusenc_binary` — `opusenc` from `opus-tools` (`apt install opus-tools` / `dnf install opus-tools`). Defaults to looking up `opusenc` in `PATH`.
+
+If unset, IVR flows still work but cannot synthesize new audio prompts on the fly — only pre-rendered Opus files in `calling.audio_dir` will play.
+
+### `[calling]`
+
+Required only if you use WhatsApp voice calling / IVR.
+
+| Field | Notes |
+|---|---|
+| `max_call_duration` | Hard cap in seconds; calls beyond this are forcibly terminated. |
+| `audio_dir` | Where prompt audio files (`hold_music.opus`, `ringback.opus`, IVR prompts) live. |
+| `hold_music_file`, `ringback_file` | Filenames inside `audio_dir`. |
+| `transfer_timeout_secs` | How long to wait for an agent to accept a transferred call before falling through. |
+| `recording_enabled` | Records both directions per call. **Requires `[storage] type = "s3"` and credentials** for off-host retention; without S3, recordings are local under `local_path`. |
+| `udp_port_min`, `udp_port_max` | RTP/SRTP UDP port range. Whatever range you set must be open in your firewall / security group. Default `10000–10100` gives 100 concurrent streams. |
+| `public_ip` | **Required on AWS / GCP / Azure**, where the host's network interface does not have its public IP attached. Pion uses this for ICE candidate generation. |
+| `relay_only` | If `true`, advertises only TURN candidates (no host/srflx). Useful when the network is too restricted for direct UDP. |
+| `[[calling.ice_servers]]` | One block per STUN/TURN server. STUN-only works in permissive networks; configure TURN for guaranteed connectivity behind strict NAT or corporate firewalls. |
+
+### `[default_admin]`
+
+The credentials seeded the first time `whatomate server -migrate` runs against an empty user table. Subsequent runs are no-ops. Always change these on first login.
+
+## Environment variables
+
+Any key in `config.toml` can be overridden by an environment variable. The mapping is:
+
+```
+WHATOMATE_<SECTION>_<KEY>
+```
+
+with underscores in `<KEY>` preserved. Examples:
+
+| Variable | TOML field |
+|---|---|
+| `WHATOMATE_APP_ENVIRONMENT` | `app.environment` |
+| `WHATOMATE_APP_ENCRYPTION_KEY` | `app.encryption_key` |
+| `WHATOMATE_DATABASE_HOST` | `database.host` |
+| `WHATOMATE_DATABASE_SSL_MODE` | `database.ssl_mode` |
+| `WHATOMATE_REDIS_HOST` | `redis.host` |
+| `WHATOMATE_REDIS_TLS` | `redis.tls` |
+| `WHATOMATE_JWT_SECRET` | `jwt.secret` |
+| `WHATOMATE_STORAGE_S3_BUCKET` | `storage.s3_bucket` |
+| `WHATOMATE_RATE_LIMIT_ENABLED` | `rate_limit.enabled` |
+| `WHATOMATE_CALLING_PUBLIC_IP` | `calling.public_ip` |
+| `WHATOMATE_DEFAULT_ADMIN_PASSWORD` | `default_admin.password` |
+
+Env vars take precedence over the config file, so the typical pattern is to commit a non-secret `config.toml` and inject secrets (`*_PASSWORD`, `*_KEY`, `*_SECRET`, `JWT_SECRET`) via the deployment environment.
+
+<Aside type="caution">
+  Array entries (`[[calling.ice_servers]]`) cannot be set via env vars — define them in `config.toml`.
+</Aside>
 
 ## Database Setup
 
@@ -93,65 +262,64 @@ psql -c "CREATE DATABASE whatomate;"
 ./whatomate server -migrate
 ```
 
+Schema is generated from GORM struct tags in `internal/models/`; there are no SQL migration files. Re-running with `-migrate` is safe — it adds new tables/columns and is a no-op for existing ones.
+
 ## WhatsApp API Configuration
 
-Configure your WhatsApp Business API credentials in the application settings after logging in:
+WhatsApp Cloud API credentials are **not** in `config.toml`. Configure them per organization in the UI:
 
-1. Navigate to **Settings** → **Accounts**
+1. Navigate to **Settings → Accounts**
 2. Click **Add Account**
-3. Enter your credentials:
-   - **Phone Number ID** - From Meta Business Suite
-   - **Business Account ID** - From Meta Business Suite
-   - **Access Token** - Generated in Meta for Developers
-   - **Webhook Verify Token** - Your custom verification token
+3. Enter:
+   - **Phone Number ID** — from Meta Business Suite
+   - **Business Account ID** — from Meta Business Suite
+   - **Access Token** — generated in Meta for Developers
+   - **Webhook Verify Token** — your custom verification token
 
 <Aside type="caution">
-  Keep your access token secure. Never commit it to version control or expose it in client-side code.
+  Access tokens are encrypted at rest using `app.encryption_key`. If you haven't set that, tokens are stored in plaintext.
 </Aside>
 
 ## Building
 
-### Development Build
+### Development
 
 ```bash
 make build    # Backend only (no frontend embedded)
 ```
 
-For development, run backend and frontend separately:
-- Backend: `make run` or `./whatomate server`
+For development, run the backend and frontend separately:
+
+- Backend: `make run-migrate` (or `./whatomate server -migrate`)
 - Frontend: `cd frontend && npm run dev`
 
-### Production Build
+The Vite dev server proxies `/api` to `:8080`.
+
+### Production
 
 ```bash
 make build-prod    # Single binary with embedded frontend
 ```
 
-This creates a self-contained binary that serves both API and frontend.
-
 | Command | Frontend | Use Case |
-|---------|----------|----------|
-| `make build` | Not embedded | Development |
-| `make build-prod` | Embedded | Production |
+|---|---|---|
+| `make build` | not embedded | Development |
+| `make build-prod` | embedded | Production |
 
 ## CLI Reference
-
-Whatomate uses a single binary with subcommands:
 
 ```bash
 ./whatomate <command> [options]
 ```
 
-### Commands
-
 | Command | Description |
-|---------|-------------|
+|---|---|
 | `server` | Start the API server (with optional embedded workers) |
 | `worker` | Start background workers only (no API server) |
 | `version` | Show version information |
 | `help` | Show help message |
 
-### Server Options
+### `server` options
 
 ```bash
 ./whatomate server [options]
@@ -161,7 +329,7 @@ Whatomate uses a single binary with subcommands:
   -workers int      Number of embedded workers, 0 to disable (default 1)
 ```
 
-### Worker Options
+### `worker` options
 
 ```bash
 ./whatomate worker [options]
@@ -172,17 +340,17 @@ Whatomate uses a single binary with subcommands:
 
 ## Deployment Scenarios
 
-### All-in-One (Simple)
+### All-in-One
 
-Run API and workers in a single process:
+API and workers in a single process — simplest, fine up to moderate campaign volume:
 
 ```bash
 ./whatomate server
 ```
 
-### Separate API and Workers (Scalable)
+### Separate API and Workers
 
-Run API server without embedded workers:
+Disable embedded workers on the API host:
 
 ```bash
 ./whatomate server -workers=0
@@ -194,25 +362,27 @@ Run workers on separate machines:
 ./whatomate worker -workers=4
 ```
 
+Both API and worker processes need access to the same Postgres and Redis.
+
 ### Docker Compose
 
 ```bash
 # Start all services
-docker-compose up -d
+docker compose up -d
 
 # Scale workers
-docker-compose up -d --scale worker=3
+docker compose up -d --scale worker=3
 ```
 
 ## Production Recommendations
 
-For production deployments:
-
-- Set `environment = "production"` and `debug = false`
-- Use strong, unique values for `jwt.secret`
-- Enable SSL for database connections (`sslmode = "require"`)
-- Use Redis authentication in production (`password`, and `username` for Redis 6+ ACL)
-- Enable `tls = true` for managed Redis services (Upstash, Redis Cloud, etc.)
-- Configure proper firewall rules
-- Set up SSL/TLS termination (nginx, Caddy, or cloud load balancer)
-- Consider running API and workers separately for better scaling
+- Set `app.environment = "production"` and `app.debug = false`.
+- Set `app.encryption_key` to a 32+ char random string. Back it up — losing it means losing all stored credentials.
+- Use strong, unique values for `jwt.secret` (32+ chars).
+- Set `database.ssl_mode = "require"` (or stricter).
+- Configure `redis.password` (and `redis.username` for ACL) and enable `redis.tls = true` for managed Redis.
+- Enable `rate_limit.enabled = true` and set `rate_limit.trust_proxy` to match your reverse proxy.
+- Restrict `server.allowed_origins` to your actual frontend hostnames.
+- For voice calling: set `calling.public_ip` on cloud hosts, ensure UDP `udp_port_min`–`udp_port_max` is open in your security group, configure at least one `[[calling.ice_servers]]` (TURN strongly recommended for traversal across strict NATs).
+- Terminate TLS at a reverse proxy (nginx, Caddy, or a cloud load balancer) — the binary serves HTTP only.
+- Run API and workers as separate processes so a stuck campaign send doesn't block API responses.

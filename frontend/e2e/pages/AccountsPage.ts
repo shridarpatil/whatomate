@@ -13,7 +13,8 @@ export class AccountsPage extends BasePage {
   constructor(page: Page) {
     super(page)
     this.heading = page.locator('h1').filter({ hasText: 'WhatsApp Accounts' })
-    this.addButton = page.locator('a[href="/settings/accounts/new"] button').first()
+    this.addButton = page.getByRole('button', { name: /Add Account/i }).first()
+    this.dialog = page.locator('[role="dialog"][data-state="open"]')
     this.alertDialog = page.locator('[role="alertdialog"]')
     this.tableBody = page.locator('tbody')
   }

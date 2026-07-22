@@ -51,14 +51,9 @@ func (c *Client) CreateCatalog(ctx context.Context, account *Account, name strin
 func (c *Client) ListCatalogs(ctx context.Context, account *Account) ([]CatalogInfo, error) {
 	apiURL := c.buildCatalogsURL(account)
 
-	respBody, err := c.doRequest(ctx, http.MethodGet, apiURL, nil, account.AccessToken)
+	resp, err := doJSON[CatalogListResponse](ctx, c, http.MethodGet, apiURL, nil, account.AccessToken)
 	if err != nil {
 		return nil, err
-	}
-
-	var resp CatalogListResponse
-	if err := json.Unmarshal(respBody, &resp); err != nil {
-		return nil, fmt.Errorf("failed to parse response: %w", err)
 	}
 
 	return resp.Data, nil
@@ -81,14 +76,9 @@ func (c *Client) ListCatalogProducts(ctx context.Context, account *Account, cata
 	params.Add("fields", "id,name,price,currency,url,image_url,retailer_id,description")
 	apiURL = apiURL + "?" + params.Encode()
 
-	respBody, err := c.doRequest(ctx, http.MethodGet, apiURL, nil, account.AccessToken)
+	resp, err := doJSON[ProductListResponse](ctx, c, http.MethodGet, apiURL, nil, account.AccessToken)
 	if err != nil {
 		return nil, err
-	}
-
-	var resp ProductListResponse
-	if err := json.Unmarshal(respBody, &resp); err != nil {
-		return nil, fmt.Errorf("failed to parse response: %w", err)
 	}
 
 	return resp.Data, nil
@@ -114,14 +104,9 @@ func (c *Client) CreateProduct(ctx context.Context, account *Account, catalogID 
 		body["description"] = product.Description
 	}
 
-	respBody, err := c.doRequest(ctx, http.MethodPost, apiURL, body, account.AccessToken)
+	resp, err := doJSON[ProductCreateResponse](ctx, c, http.MethodPost, apiURL, body, account.AccessToken)
 	if err != nil {
 		return "", err
-	}
-
-	var resp ProductCreateResponse
-	if err := json.Unmarshal(respBody, &resp); err != nil {
-		return "", fmt.Errorf("failed to parse response: %w", err)
 	}
 
 	return resp.ID, nil

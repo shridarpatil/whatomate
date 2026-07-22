@@ -163,17 +163,24 @@ POST /api/campaigns/{id}/recipients/import
   "recipients": [
     {
       "phone_number": "+1234567890",
-      "name": "John Doe",
-      "discount_code": "SAVE20"
+      "recipient_name": "John Doe",
+      "template_params": { "customer_name": "John", "coupon": "SAVE20" },
+      "header_params": { "season": "Summer" }
     },
     {
       "phone_number": "+0987654321",
-      "name": "Jane Smith",
-      "discount_code": "SAVE15"
+      "recipient_name": "Jane Smith",
+      "template_params": { "customer_name": "Jane", "coupon": "SAVE15" },
+      "header_params": { "season": "Winter" }
     }
   ]
 }
 ```
+
+`header_params` is only needed for templates with a TEXT header variable
+(Meta allows at most one). It's kept separate from `template_params` so a
+positional header `{{1}}` doesn't collide with body `{{1}}`. Omit the field
+entirely for templates without a header variable.
 
 ### Response
 

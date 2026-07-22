@@ -640,11 +640,9 @@ func TestApp_CreateChatbotFlow(t *testing.T) {
 		require.NoError(t, err)
 
 		var flow models.ChatbotFlow
-		require.NoError(t, app.DB.Preload("Steps").First(&flow, "id = ?", parsedID).Error)
+		require.NoError(t, app.DB.First(&flow, "id = ?", parsedID).Error)
 		assert.Equal(t, "Onboarding Flow", flow.Name)
 		assert.True(t, flow.IsEnabled)
-		assert.Len(t, flow.Steps, 2)
-		assert.Equal(t, "ask_name", flow.Steps[0].StepName)
 	})
 }
 
@@ -1032,11 +1030,11 @@ func TestApp_GetChatbotSettings_ExistingSettings(t *testing.T) {
 
 		// Create settings directly in the DB
 		settings := &models.ChatbotSettings{
-			BaseModel:      models.BaseModel{ID: uuid.New()},
-			OrganizationID: org.ID,
-			IsEnabled:      true,
-			DefaultResponse: "Custom greeting!",
-			FallbackMessage: "I do not understand.",
+			BaseModel:          models.BaseModel{ID: uuid.New()},
+			OrganizationID:     org.ID,
+			IsEnabled:          true,
+			DefaultResponse:    "Custom greeting!",
+			FallbackMessage:    "I do not understand.",
 			SessionTimeoutMins: 45,
 			AI: models.AIConfig{
 				Enabled:  true,
@@ -1265,13 +1263,13 @@ func TestApp_UpdateChatbotSettings_PartialUpdate(t *testing.T) {
 		user := testutil.CreateTestUser(t, app.DB, org.ID)
 
 		req := testutil.NewJSONRequest(t, map[string]any{
-			"sla_enabled":           true,
-			"sla_response_minutes":  5,
+			"sla_enabled":            true,
+			"sla_response_minutes":   5,
 			"sla_resolution_minutes": 120,
 			"sla_escalation_minutes": 45,
-			"sla_auto_close_hours":  48,
+			"sla_auto_close_hours":   48,
 			"sla_auto_close_message": "Conversation auto-closed.",
-			"sla_warning_message":   "SLA warning: response time exceeded.",
+			"sla_warning_message":    "SLA warning: response time exceeded.",
 		})
 		testutil.SetAuthContext(req, org.ID, user.ID)
 
@@ -1707,9 +1705,8 @@ func TestApp_CreateChatbotFlow_Additional(t *testing.T) {
 		require.NoError(t, err)
 
 		var flow models.ChatbotFlow
-		require.NoError(t, app.DB.Preload("Steps").First(&flow, "id = ?", parsedID).Error)
+		require.NoError(t, app.DB.First(&flow, "id = ?", parsedID).Error)
 		assert.Equal(t, "No Steps Flow", flow.Name)
-		assert.Len(t, flow.Steps, 0)
 	})
 
 	t.Run("create flow with completion config", func(t *testing.T) {
@@ -1860,22 +1857,9 @@ func TestApp_UpdateChatbotFlow_Additional(t *testing.T) {
 		require.NoError(t, err)
 		assert.Equal(t, fasthttp.StatusOK, testutil.GetResponseStatusCode(updateReq))
 
-		// Verify old step is gone and new steps exist
-		parsedID, err := uuid.Parse(createResp.Data.ID)
-		require.NoError(t, err)
-
-		var flow models.ChatbotFlow
-		require.NoError(t, app.DB.Preload("Steps").First(&flow, "id = ?", parsedID).Error)
-		assert.Len(t, flow.Steps, 2)
-
-		// Steps should be ordered
-		stepNames := make([]string, len(flow.Steps))
-		for i, s := range flow.Steps {
-			stepNames[i] = s.StepName
-		}
-		assert.Contains(t, stepNames, "new_step_1")
-		assert.Contains(t, stepNames, "new_step_2")
-		assert.NotContains(t, stepNames, "old_step")
+		// Flow no longer persists Steps[] — v2 graph is the only wire
+		// format. We just verify the update call succeeded above.
+		_ = createResp
 	})
 
 	t.Run("update trigger keywords", func(t *testing.T) {
@@ -2058,6 +2042,50 @@ func TestApp_CreateAIContext_Additional(t *testing.T) {
 		assert.Equal(t, models.ContextTypeAPI, ctx.ContextType)
 		assert.Equal(t, 50, ctx.Priority)
 	})
+
+	t.Run("persist api_config for API context", func(t *testing.T) {
+		app := newTestApp(t)
+		org := testutil.CreateTestOrganization(t, app.DB)
+		user := testutil.CreateTestUser(t, app.DB, org.ID)
+
+		req := testutil.NewJSONRequest(t, map[string]any{
+			"name":         "API Context With Config",
+			"context_type": "api",
+			"api_config": map[string]any{
+				"url":           "https://example.com/context?message={{user_message}}",
+				"method":        "GET",
+				"headers":       map[string]any{"Authorization": "Bearer token"},
+				"response_path": "data.context",
+			},
+			"enabled": true,
+		})
+		testutil.SetAuthContext(req, org.ID, user.ID)
+
+		err := app.CreateAIContext(req)
+		require.NoError(t, err)
+		assert.Equal(t, fasthttp.StatusOK, testutil.GetResponseStatusCode(req))
+
+		var resp struct {
+			Data struct {
+				ID string `json:"id"`
+			} `json:"data"`
+		}
+		err = json.Unmarshal(testutil.GetResponseBody(req), &resp)
+		require.NoError(t, err)
+
+		parsedID, err := uuid.Parse(resp.Data.ID)
+		require.NoError(t, err)
+
+		var ctx models.AIContext
+		require.NoError(t, app.DB.First(&ctx, "id = ?", parsedID).Error)
+		require.NotNil(t, ctx.ApiConfig)
+		assert.Equal(t, "https://example.com/context?message={{user_message}}", ctx.ApiConfig["url"])
+		assert.Equal(t, "GET", ctx.ApiConfig["method"])
+		assert.Equal(t, "data.context", ctx.ApiConfig["response_path"])
+		headers, ok := ctx.ApiConfig["headers"].(map[string]any)
+		require.True(t, ok)
+		assert.Equal(t, "Bearer token", headers["Authorization"])
+	})
 }
 
 // =============================================================================
@@ -2169,6 +2197,37 @@ func TestApp_UpdateAIContext(t *testing.T) {
 		require.NoError(t, app.DB.First(&updated, "id = ?", aiCtx.ID).Error)
 		assert.Equal(t, models.ContextTypeAPI, updated.ContextType)
 	})
+
+	t.Run("update api_config for API context", func(t *testing.T) {
+		app := newTestApp(t)
+		org := testutil.CreateTestOrganization(t, app.DB)
+		user := testutil.CreateTestUser(t, app.DB, org.ID)
+		aiCtx := createTestAIContext(t, app, org.ID, "API Config Update Ctx")
+
+		req := testutil.NewJSONRequest(t, map[string]any{
+			"context_type": "api",
+			"api_config": map[string]any{
+				"url":           "https://example.com/lookup?phone={{phone_number}}&message={{user_message}}",
+				"method":        "GET",
+				"headers":       map[string]any{},
+				"response_path": "",
+			},
+		})
+		testutil.SetAuthContext(req, org.ID, user.ID)
+		testutil.SetPathParam(req, "id", aiCtx.ID.String())
+
+		err := app.UpdateAIContext(req)
+		require.NoError(t, err)
+		assert.Equal(t, fasthttp.StatusOK, testutil.GetResponseStatusCode(req))
+
+		var updated models.AIContext
+		require.NoError(t, app.DB.First(&updated, "id = ?", aiCtx.ID).Error)
+		assert.Equal(t, models.ContextTypeAPI, updated.ContextType)
+		require.NotNil(t, updated.ApiConfig)
+		assert.Equal(t, "https://example.com/lookup?phone={{phone_number}}&message={{user_message}}", updated.ApiConfig["url"])
+		assert.Equal(t, "GET", updated.ApiConfig["method"])
+		assert.Equal(t, "", updated.ApiConfig["response_path"])
+	})
 }
 
 // =============================================================================
@@ -2235,14 +2294,14 @@ func createSessionForChatbotTest(t *testing.T, app *handlers.App, orgID, contact
 
 	now := time.Now()
 	session := &models.ChatbotSession{
-		BaseModel:       models.BaseModel{ID: uuid.New()},
-		OrganizationID:  orgID,
-		ContactID:       contactID,
-		PhoneNumber:     phone,
-		Status:          status,
-		SessionData:     models.JSONB{},
-		StartedAt:       now,
-		LastActivityAt:  now,
+		BaseModel:      models.BaseModel{ID: uuid.New()},
+		OrganizationID: orgID,
+		ContactID:      contactID,
+		PhoneNumber:    phone,
+		Status:         status,
+		SessionData:    models.JSONB{},
+		StartedAt:      now,
+		LastActivityAt: now,
 	}
 	require.NoError(t, app.DB.Create(session).Error)
 	return session

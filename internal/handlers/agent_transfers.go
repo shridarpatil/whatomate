@@ -26,21 +26,21 @@ type agentTransferRow struct {
 	PhoneNumber           string                `gorm:"column:phone_number"`
 	Status                models.TransferStatus `gorm:"column:status"`
 	Source                models.TransferSource `gorm:"column:source"`
-	AgentID               *uuid.UUID `gorm:"column:agent_id"`
-	TeamID                *uuid.UUID `gorm:"column:team_id"`
-	TransferredByUserID   *uuid.UUID `gorm:"column:transferred_by_user_id"`
-	Notes                 string     `gorm:"column:notes"`
-	TransferredAt         time.Time  `gorm:"column:transferred_at"`
-	ResumedAt             *time.Time `gorm:"column:resumed_at"`
-	ResumedBy             *uuid.UUID `gorm:"column:resumed_by"`
-	SLAResponseDeadline   *time.Time `gorm:"column:sla_response_deadline"`
-	SLAResolutionDeadline *time.Time `gorm:"column:sla_resolution_deadline"`
-	SLABreached           bool       `gorm:"column:sla_breached"`
-	SLABreachedAt         *time.Time `gorm:"column:sla_breached_at"`
-	EscalationLevel       int        `gorm:"column:escalation_level"`
-	EscalatedAt           *time.Time `gorm:"column:escalated_at"`
-	PickedUpAt            *time.Time `gorm:"column:picked_up_at"`
-	ExpiresAt             *time.Time `gorm:"column:expires_at"`
+	AgentID               *uuid.UUID            `gorm:"column:agent_id"`
+	TeamID                *uuid.UUID            `gorm:"column:team_id"`
+	TransferredByUserID   *uuid.UUID            `gorm:"column:transferred_by_user_id"`
+	Notes                 string                `gorm:"column:notes"`
+	TransferredAt         time.Time             `gorm:"column:transferred_at"`
+	ResumedAt             *time.Time            `gorm:"column:resumed_at"`
+	ResumedBy             *uuid.UUID            `gorm:"column:resumed_by"`
+	SLAResponseDeadline   *time.Time            `gorm:"column:sla_response_deadline"`
+	SLAResolutionDeadline *time.Time            `gorm:"column:sla_resolution_deadline"`
+	SLABreached           bool                  `gorm:"column:sla_breached"`
+	SLABreachedAt         *time.Time            `gorm:"column:sla_breached_at"`
+	EscalationLevel       int                   `gorm:"column:escalation_level"`
+	EscalatedAt           *time.Time            `gorm:"column:escalated_at"`
+	PickedUpAt            *time.Time            `gorm:"column:picked_up_at"`
+	ExpiresAt             *time.Time            `gorm:"column:expires_at"`
 
 	// Joined fields
 	ContactName       *string `gorm:"column:contact_name"`
@@ -52,11 +52,11 @@ type agentTransferRow struct {
 
 // CreateAgentTransferRequest represents the request to create an agent transfer
 type CreateAgentTransferRequest struct {
-	ContactID       string               `json:"contact_id"`
-	WhatsAppAccount string               `json:"whatsapp_account"`
-	AgentID         *string              `json:"agent_id"`
-	TeamID          *string              `json:"team_id"` // Optional team queue
-	Notes           string               `json:"notes"`
+	ContactID       string                `json:"contact_id"`
+	WhatsAppAccount string                `json:"whatsapp_account"`
+	AgentID         *string               `json:"agent_id"`
+	TeamID          *string               `json:"team_id"` // Optional team queue
+	Notes           string                `json:"notes"`
 	Source          models.TransferSource `json:"source"` // manual, flow, keyword
 }
 
@@ -68,24 +68,24 @@ type AssignTransferRequest struct {
 
 // AgentTransferResponse represents an agent transfer in API responses
 type AgentTransferResponse struct {
-	ID                string               `json:"id"`
-	ContactID         string               `json:"contact_id"`
-	ContactName       string               `json:"contact_name"`
-	PhoneNumber       string               `json:"phone_number"`
-	WhatsAppAccount   string               `json:"whatsapp_account"`
+	ID                string                `json:"id"`
+	ContactID         string                `json:"contact_id"`
+	ContactName       string                `json:"contact_name"`
+	PhoneNumber       string                `json:"phone_number"`
+	WhatsAppAccount   string                `json:"whatsapp_account"`
 	Status            models.TransferStatus `json:"status"`
 	Source            models.TransferSource `json:"source"`
-	AgentID           *string              `json:"agent_id,omitempty"`
-	AgentName         *string              `json:"agent_name,omitempty"`
-	TeamID            *string              `json:"team_id,omitempty"`
-	TeamName          *string              `json:"team_name,omitempty"`
-	TransferredBy     *string              `json:"transferred_by,omitempty"`
-	TransferredByName *string              `json:"transferred_by_name,omitempty"`
-	Notes             string               `json:"notes"`
-	TransferredAt     string               `json:"transferred_at"`
-	ResumedAt         *string              `json:"resumed_at,omitempty"`
-	ResumedBy         *string              `json:"resumed_by,omitempty"`
-	ResumedByName     *string              `json:"resumed_by_name,omitempty"`
+	AgentID           *string               `json:"agent_id,omitempty"`
+	AgentName         *string               `json:"agent_name,omitempty"`
+	TeamID            *string               `json:"team_id,omitempty"`
+	TeamName          *string               `json:"team_name,omitempty"`
+	TransferredBy     *string               `json:"transferred_by,omitempty"`
+	TransferredByName *string               `json:"transferred_by_name,omitempty"`
+	Notes             string                `json:"notes"`
+	TransferredAt     string                `json:"transferred_at"`
+	ResumedAt         *string               `json:"resumed_at,omitempty"`
+	ResumedBy         *string               `json:"resumed_by,omitempty"`
+	ResumedByName     *string               `json:"resumed_by_name,omitempty"`
 
 	// SLA fields
 	SLAResponseDeadline   *string `json:"sla_response_deadline,omitempty"`
@@ -156,11 +156,18 @@ func (a *App) ListAgentTransfers(r *fastglue.Request) error {
 		selectCols = append(selectCols, "resumed_by.full_name AS resumed_by_name")
 	}
 
+	// Active queue uses FIFO (oldest first) so agents pick the longest-waiting
+	// transfer; history is browsed by recency, so newest-resumed first.
+	orderBy := "agent_transfers.transferred_at ASC" // FIFO for queue
+	if status == string(models.TransferStatusResumed) {
+		orderBy = "agent_transfers.resumed_at DESC NULLS LAST, agent_transfers.transferred_at DESC"
+	}
+
 	// Build query with conditional JOINs for better performance
 	query := a.DB.Table("agent_transfers").
 		Select(strings.Join(selectCols, ", ")).
 		Where("agent_transfers.organization_id = ?", orgID).
-		Order("agent_transfers.transferred_at ASC") // FIFO
+		Order(orderBy)
 
 	// Only add JOINs for requested relations (lazy loading)
 	if includeAll || includeSet["contact"] {
@@ -510,8 +517,10 @@ func (a *App) CreateAgentTransfer(r *fastglue.Request) error {
 		return r.SendErrorEnvelope(fasthttp.StatusInternalServerError, "Failed to create transfer", nil, "")
 	}
 
-	// Update contact assignment if agent assigned
-	if agentID != nil {
+	// When AssignToSameAgent is enabled and no agent is already assigned,
+	// set the contact's assigned agent for future chat routing.
+	// Skip if already assigned to preserve a manually set relationship manager.
+	if agentID != nil && settings != nil && settings.AgentAssignment.AssignToSameAgent && contact.AssignedUserID == nil {
 		a.DB.Model(contact).Update("assigned_user_id", agentID)
 	}
 
@@ -648,16 +657,6 @@ func (a *App) ResumeFromTransfer(r *fastglue.Request) error {
 	// Clear chatbot tracking so client inactivity SLA doesn't trigger after transfer is closed
 	a.ClearContactChatbotTracking(transfer.ContactID)
 
-	// Get chatbot settings to check AssignToSameAgent (use cache)
-	settings, _ := a.getChatbotSettingsCached(orgID, transfer.WhatsAppAccount)
-
-	// If AssignToSameAgent is disabled, unassign the contact
-	if settings != nil && !settings.AgentAssignment.AssignToSameAgent {
-		a.DB.Model(&models.Contact{}).
-			Where("id = ?", transfer.ContactID).
-			Update("assigned_user_id", nil)
-	}
-
 	// Broadcast WebSocket notification
 	a.broadcastTransferResumed(transfer)
 
@@ -762,6 +761,11 @@ func (a *App) AssignAgentTransfer(r *fastglue.Request) error {
 		}
 	}
 
+	// Capture the previous agent before we overwrite — the unassign branch
+	// below needs it to decide whether the contact's relationship-manager
+	// pointer was pointing at the agent we're removing.
+	previousAgentID := transfer.AgentID
+
 	// Update transfer
 	transfer.AgentID = targetAgentID
 
@@ -775,12 +779,22 @@ func (a *App) AssignAgentTransfer(r *fastglue.Request) error {
 		return r.SendErrorEnvelope(fasthttp.StatusInternalServerError, "Failed to assign transfer", nil, "")
 	}
 
-	// Update contact assignment
+	// Update contact assignment using the same rule as pickup / auto-assign:
+	// only pin the relationship manager when AssignToSameAgent is enabled and
+	// the contact has no existing manager. Active transfers already grant the
+	// assigned agent visibility, so we don't need to over-write contact.AssignedUserID.
 	if targetAgentID != nil && transfer.Contact != nil {
-		a.DB.Model(transfer.Contact).Update("assigned_user_id", targetAgentID)
+		settings, _ := a.getChatbotSettingsCached(orgID, "")
+		if settings != nil && settings.AgentAssignment.AssignToSameAgent && transfer.Contact.AssignedUserID == nil {
+			a.DB.Model(transfer.Contact).Update("assigned_user_id", targetAgentID)
+		}
 	} else if targetAgentID == nil && transfer.Contact != nil {
-		// Clear assignment when unassigning
-		a.DB.Model(transfer.Contact).Update("assigned_user_id", nil)
+		// Unassigning (returning to queue) — clear the relationship-manager
+		// pointer iff it was pointing at the agent we just removed. Don't
+		// blow away a manually set manager that wasn't this transfer's agent.
+		if previousAgentID != nil && transfer.Contact.AssignedUserID != nil && *transfer.Contact.AssignedUserID == *previousAgentID {
+			a.DB.Model(transfer.Contact).Update("assigned_user_id", nil)
+		}
 	}
 
 	// Broadcast WebSocket notification
@@ -937,11 +951,22 @@ func (a *App) PickNextTransfer(r *fastglue.Request) error {
 		return r.SendErrorEnvelope(fasthttp.StatusInternalServerError, "Failed to pick transfer", nil, "")
 	}
 
-	// Update contact assignment within transaction
-	if err := tx.Model(&models.Contact{}).Where("id = ?", transfer.ContactID).Update("assigned_user_id", userID).Error; err != nil {
-		tx.Rollback()
-		a.Log.Error("Failed to update contact assignment", "error", err, "transfer_id", transfer.ID)
-		return r.SendErrorEnvelope(fasthttp.StatusInternalServerError, "Failed to update contact assignment", nil, "")
+	// Pin the agent as the contact's relationship manager only when the org
+	// has opted into AssignToSameAgent and no manager is already set. The
+	// active transfer itself grants this agent visibility into the chat (see
+	// ListContacts query in contacts.go), so we don't need contact.AssignedUserID
+	// for visibility. Setting it unconditionally would leak this conversation
+	// into the agent's chat list permanently after resume.
+	if settings != nil && settings.AgentAssignment.AssignToSameAgent {
+		// Re-fetch contact for the up-to-date assigned_user_id under the tx.
+		var contact models.Contact
+		if err := tx.Where("id = ?", transfer.ContactID).First(&contact).Error; err == nil && contact.AssignedUserID == nil {
+			if err := tx.Model(&models.Contact{}).Where("id = ?", transfer.ContactID).Update("assigned_user_id", userID).Error; err != nil {
+				tx.Rollback()
+				a.Log.Error("Failed to update contact assignment", "error", err, "transfer_id", transfer.ID)
+				return r.SendErrorEnvelope(fasthttp.StatusInternalServerError, "Failed to update contact assignment", nil, "")
+			}
+		}
 	}
 
 	// Commit the transaction
@@ -1045,6 +1070,22 @@ func (a *App) hasActiveAgentTransfer(orgID, contactID uuid.UUID) bool {
 		Where("organization_id = ? AND contact_id = ? AND status = ?", orgID, contactID, models.TransferStatusActive).
 		Count(&count)
 	return count > 0
+}
+
+// willChatbotHandle returns true when an incoming message is expected to be
+// handled by the chatbot — i.e. chatbot is enabled for the account and the
+// contact has no active agent transfer. Used to pre-mark messages as read
+// so the agent's contact-list unread count doesn't flash for bot-handled
+// conversations.
+func (a *App) willChatbotHandle(account *models.WhatsAppAccount, contact *models.Contact) bool {
+	if a.hasActiveAgentTransfer(account.OrganizationID, contact.ID) {
+		return false
+	}
+	settings, err := a.getChatbotSettingsCached(account.OrganizationID, account.Name)
+	if err != nil || !settings.IsEnabled {
+		return false
+	}
+	return true
 }
 
 // WebSocket broadcast helpers
@@ -1152,8 +1193,10 @@ func (a *App) saveAndFinalizeTransfer(transfer *models.AgentTransfer, account *m
 		return err
 	}
 
-	// Update contact assignment if agent assigned
-	if transfer.AgentID != nil {
+	// Update contact assignment if agent assigned, but only when AssignToSameAgent
+	// is enabled and no relationship manager is already set. Active transfers
+	// already grant the assigned agent visibility into the chat.
+	if transfer.AgentID != nil && settings != nil && settings.AgentAssignment.AssignToSameAgent && contact.AssignedUserID == nil {
 		a.DB.Model(contact).Update("assigned_user_id", transfer.AgentID)
 	}
 
@@ -1181,6 +1224,19 @@ func (a *App) createTransferToQueue(account *models.WhatsAppAccount, contact *mo
 	}
 
 	settings, _ := a.getChatbotSettingsCached(account.OrganizationID, account.Name)
+
+	// Suppress transfers outside business hours — flow steps and the
+	// chatbot-disabled fallback would otherwise hand off to a human at
+	// 11pm. createTransferFromKeyword already does this; mirror it here.
+	if settings != nil && settings.BusinessHours.Enabled && len(settings.BusinessHours.Hours) > 0 {
+		if !a.isWithinBusinessHours(settings.BusinessHours.Hours) {
+			a.Log.Info("Outside business hours, sending out-of-hours message instead of queue transfer", "contact_id", contact.ID, "source", source)
+			if settings.BusinessHours.OutOfHoursMessage != "" {
+				_ = a.sendAndSaveTextMessage(account, contact, settings.BusinessHours.OutOfHoursMessage)
+			}
+			return
+		}
+	}
 
 	transfer := models.AgentTransfer{
 		BaseModel:       models.BaseModel{ID: uuid.New()},
@@ -1258,7 +1314,6 @@ func (a *App) createTransferFromKeyword(account *models.WhatsAppAccount, contact
 	)
 }
 
-
 // createTransferToTeam creates an agent transfer to a specific team with appropriate assignment
 func (a *App) createTransferToTeam(account *models.WhatsAppAccount, contact *models.Contact, teamID uuid.UUID, notes string, source models.TransferSource) {
 	if a.hasActiveAgentTransfer(account.OrganizationID, contact.ID) {
@@ -1267,6 +1322,18 @@ func (a *App) createTransferToTeam(account *models.WhatsAppAccount, contact *mod
 	}
 
 	settings, _ := a.getChatbotSettingsCached(account.OrganizationID, account.Name)
+
+	// Suppress transfers outside business hours (same reason as
+	// createTransferToQueue / createTransferFromKeyword).
+	if settings != nil && settings.BusinessHours.Enabled && len(settings.BusinessHours.Hours) > 0 {
+		if !a.isWithinBusinessHours(settings.BusinessHours.Hours) {
+			a.Log.Info("Outside business hours, sending out-of-hours message instead of team transfer", "contact_id", contact.ID, "team_id", teamID, "source", source)
+			if settings.BusinessHours.OutOfHoursMessage != "" {
+				_ = a.sendAndSaveTextMessage(account, contact, settings.BusinessHours.OutOfHoursMessage)
+			}
+			return
+		}
+	}
 
 	var agentID *uuid.UUID
 	if a.Assigner != nil {
@@ -1305,7 +1372,6 @@ func (a *App) createTransferToTeam(account *models.WhatsAppAccount, contact *mod
 	)
 }
 
-
 // ReturnAgentTransfersToQueue returns all active transfers assigned to an agent back to their team queues
 // Called when an agent goes offline/unavailable
 func (a *App) ReturnAgentTransfersToQueue(userID, orgID uuid.UUID) int {
@@ -1323,6 +1389,7 @@ func (a *App) ReturnAgentTransfersToQueue(userID, orgID uuid.UUID) int {
 	// Return each transfer to its team queue (or general queue)
 	for i := range transfers {
 		transfer := &transfers[i]
+		previousAgentID := transfer.AgentID
 		transfer.AgentID = nil
 
 		if err := a.DB.Save(transfer).Error; err != nil {
@@ -1330,8 +1397,11 @@ func (a *App) ReturnAgentTransfersToQueue(userID, orgID uuid.UUID) int {
 			continue
 		}
 
-		// Clear contact assignment
-		if transfer.ContactID != uuid.Nil {
+		// Clear the contact's relationship-manager pointer only if it was
+		// pointing at the agent we just removed. Don't blow away a manually
+		// set manager assigned via /api/contacts/<id>/assign.
+		if transfer.ContactID != uuid.Nil && previousAgentID != nil && transfer.Contact != nil &&
+			transfer.Contact.AssignedUserID != nil && *transfer.Contact.AssignedUserID == *previousAgentID {
 			a.DB.Model(&models.Contact{}).Where("id = ?", transfer.ContactID).Update("assigned_user_id", nil)
 		}
 

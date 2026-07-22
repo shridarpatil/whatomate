@@ -28,7 +28,7 @@ type CatalogProduct struct {
 	MetaProductID  string    `gorm:"size:100;uniqueIndex" json:"meta_product_id"`
 	Name           string    `gorm:"size:255;not null" json:"name"`
 	Description    string    `gorm:"type:text" json:"description"`
-	Price          int64     `gorm:"not null" json:"price"`            // Price in cents
+	Price          int64     `gorm:"not null" json:"price"` // Price in cents
 	Currency       string    `gorm:"size:3;default:'USD'" json:"currency"`
 	URL            string    `gorm:"size:500" json:"url"`
 	ImageURL       string    `gorm:"size:500" json:"image_url"`

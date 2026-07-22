@@ -73,6 +73,27 @@ function onRefreshComplete(success: boolean) {
   refreshSubscribers = []
 }
 
+// refreshAccessToken posts to /auth/refresh. The refresh token is single-use
+// with rotation, so two tabs refreshing at once would have the loser's token
+// rejected as "revoked" and get logged out. The Web Locks API serializes the
+// refresh across all same-origin tabs: each tab refreshes in turn using the
+// cookie rotated by the previous holder, so every refresh succeeds instead of
+// racing. The in-tab `isRefreshing` mutex still dedupes concurrent 401s within
+// a single tab. Falls back to a plain request where Web Locks is unavailable
+// (older browsers / insecure contexts).
+async function refreshAccessToken(): Promise<void> {
+  const doRefresh = () =>
+    axios.post(`${API_BASE_URL}/auth/refresh`, {}, { withCredentials: true })
+
+  if (navigator.locks?.request) {
+    await navigator.locks.request('whm-token-refresh', async () => {
+      await doRefresh()
+    })
+  } else {
+    await doRefresh()
+  }
+}
+
 // Response interceptor for error handling
 api.interceptors.response.use(
   (response) => response,
@@ -102,8 +123,9 @@ api.interceptors.response.use(
       isRefreshing = true
 
       try {
-        // Browser sends whm_refresh cookie automatically via withCredentials
-        await axios.post(`${API_BASE_URL}/auth/refresh`, {}, { withCredentials: true })
+        // Browser sends whm_refresh cookie automatically via withCredentials.
+        // Serialized across tabs via Web Locks to avoid single-use-token races.
+        await refreshAccessToken()
 
         // Cookies are updated by the server response — notify waiting requests
         onRefreshComplete(true)
@@ -133,8 +155,9 @@ export const authService = {
 }
 
 export const usersService = {
-  list: (params?: { search?: string; page?: number; limit?: number }) =>
+  list: (params?: { search?: string; page?: number; limit?: number; role_id?: string; online_only?: boolean }) =>
     api.get('/users', { params }),
+  get: (id: string) => api.get(`/users/${id}`),
   create: (data: { email: string; password: string; full_name: string; role_id?: string }) =>
     api.post('/users', data),
   update: (id: string, data: { email?: string; password?: string; full_name?: string; role_id?: string; is_active?: boolean }) =>
@@ -153,8 +176,11 @@ export const usersService = {
 export const apiKeysService = {
   list: (params?: { search?: string; page?: number; limit?: number }) =>
     api.get<{ api_keys: any[]; total?: number }>('/api-keys', { params }),
+  get: (id: string) => api.get(`/api-keys/${id}`),
   create: (data: { name: string; expires_at?: string }) =>
     api.post('/api-keys', data),
+  update: (id: string, data: { is_active?: boolean }) =>
+    api.put(`/api-keys/${id}`, data),
   delete: (id: string) => api.delete(`/api-keys/${id}`)
 }
 
@@ -173,7 +199,8 @@ export const contactsService = {
     api.put(`/contacts/${id}/assign`, { user_id: userId }),
   updateTags: (id: string, tags: string[]) =>
     api.put(`/contacts/${id}/tags`, { tags }),
-  getSessionData: (id: string) => api.get(`/contacts/${id}/session-data`)
+  getSessionData: (id: string) => api.get(`/contacts/${id}/session-data`),
+  markRead: (id: string) => api.post(`/contacts/${encodeURIComponent(id)}/mark-read`)
 }
 
 // Generic Import/Export Service
@@ -238,15 +265,40 @@ export const dataService = {
 export const messagesService = {
   list: (contactId: string, params?: { page?: number; limit?: number; before_id?: string; account?: string }) =>
     api.get(`/contacts/${contactId}/messages`, { params }),
-  send: (contactId: string, data: { type: string; content: any; reply_to_message_id?: string; whatsapp_account?: string }) =>
-    api.post(`/contacts/${contactId}/messages`, data),
-  sendTemplate: (contactId: string, data: { template_name: string; template_params?: Record<string, string>; button_params?: Record<string, string>; account_name?: string }, headerFile?: File) => {
+  send: (
+    contactId: string,
+    data: {
+      type: string
+      content: any
+      reply_to_message_id?: string
+      whatsapp_account?: string
+      // Interactive payload. Mirrors backend InteractiveContent.
+      interactive?: {
+        type: 'button' | 'cta_url' | 'list' | 'voice_call' | 'flow'
+        body: string
+        buttons?: Array<{ id: string; title: string }>
+        button_text?: string
+        url?: string
+        // voice_call only
+        display_text?: string
+        ttl_minutes?: number
+        // flow only
+        flow_id?: string
+        first_screen?: string
+        header?: string
+      }
+    },
+  ) => api.post(`/contacts/${contactId}/messages`, data),
+  sendTemplate: (contactId: string, data: { template_name: string; template_params?: Record<string, string>; header_params?: Record<string, string>; button_params?: Record<string, string>; account_name?: string }, headerFile?: File) => {
     if (headerFile) {
       const formData = new FormData()
       formData.append('contact_id', contactId)
       formData.append('template_name', data.template_name)
       if (data.template_params) {
         formData.append('template_params', JSON.stringify(data.template_params))
+      }
+      if (data.header_params) {
+        formData.append('header_params', JSON.stringify(data.header_params))
       }
       if (data.button_params) {
         formData.append('button_params', JSON.stringify(data.button_params))
@@ -371,6 +423,17 @@ export const chatbotService = {
     api.put(`/chatbot/transfers/${id}/assign`, { agent_id: agentId, team_id: teamId })
 }
 
+export interface CannedResponseButton {
+  id: string
+  title: string
+  type?: 'reply' | 'url' | 'phone' | 'voice_call' | 'flow'
+  url?: string
+  phone_number?: string
+  ttl_minutes?: number
+  flow_id?: string
+  screen?: string
+}
+
 export interface CannedResponse {
   id: string
   name: string
@@ -379,16 +442,27 @@ export interface CannedResponse {
   category: string
   is_active: boolean
   usage_count: number
+  buttons?: CannedResponseButton[]
   created_at: string
   updated_at: string
+}
+
+interface CannedResponseUpsertPayload {
+  name?: string
+  shortcut?: string
+  content?: string
+  category?: string
+  is_active?: boolean
+  buttons?: CannedResponseButton[]
 }
 
 export const cannedResponsesService = {
   list: (params?: { category?: string; search?: string; active_only?: string; page?: number; limit?: number }) =>
     api.get<{ canned_responses: CannedResponse[]; total?: number }>('/canned-responses', { params }),
-  create: (data: { name: string; shortcut?: string; content: string; category?: string }) =>
+  get: (id: string) => api.get<CannedResponse>(`/canned-responses/${id}`),
+  create: (data: CannedResponseUpsertPayload & { name: string; content: string }) =>
     api.post('/canned-responses', data),
-  update: (id: string, data: { name?: string; shortcut?: string; content?: string; category?: string; is_active?: boolean }) =>
+  update: (id: string, data: CannedResponseUpsertPayload) =>
     api.put(`/canned-responses/${id}`, data),
   delete: (id: string) => api.delete(`/canned-responses/${id}`),
   use: (id: string) => api.post(`/canned-responses/${id}/use`)
@@ -644,6 +718,9 @@ export const organizationService = {
     transfer_timeout_secs?: number
     hold_music_file?: string
     ringback_file?: string
+    meta_app_id?: string
+    meta_config_id?: string
+    meta_app_secret?: string
   }) => api.put('/org/settings', data),
   uploadOrgAudio: (file: File, type: 'hold_music' | 'ringback') => {
     const formData = new FormData()
@@ -1001,6 +1078,46 @@ export interface IVRFlowData {
   version: 2
   nodes: IVRNode[]
   edges: IVREdge[]
+  entry_node: string
+}
+
+// v2 Node-based Chatbot Flow types. Mirrors IVR's graph shape with a
+// chat-specific node-type union. Only types listed in the union are
+// implemented today; others land in Phase 3.
+export type ChatNodeType =
+  | 'start'
+  | 'message'
+  | 'buttons'
+  | 'end'
+  | 'prompt'
+  | 'api_call'
+  | 'condition'
+  | 'timing'
+  | 'set_variable'
+  | 'ai_response'
+  | 'transfer'
+  | 'webhook'
+  | 'goto_flow'
+  | 'whatsapp_flow'
+
+export interface ChatNode {
+  id: string
+  type: ChatNodeType
+  label: string
+  position: IVRNodePosition
+  config: Record<string, any>
+}
+
+export interface ChatEdge {
+  from: string
+  to: string
+  condition: string
+}
+
+export interface ChatFlowGraph {
+  version: 2
+  nodes: ChatNode[]
+  edges: ChatEdge[]
   entry_node: string
 }
 

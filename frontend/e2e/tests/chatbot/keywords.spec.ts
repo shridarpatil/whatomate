@@ -1,35 +1,27 @@
 import { test, expect } from '@playwright/test'
-import { loginAsAdmin, navigateToFirstItem, expectMetadataVisible, expectActivityLogVisible, expectDeleteFromForm } from '../../helpers'
+import { loginAsAdmin, navigateToFirstItem, expectMetadataVisible, expectActivityLogVisible, expectDeleteFromForm, ApiHelper } from '../../helpers'
 import { KeywordsPage } from '../../pages'
+import { createTestScope, SUPER_ADMIN } from '../../framework'
 
-// Seed a keyword rule via the UI before tests that need data
-async function seedKeywordRule(page: import('@playwright/test').Page): Promise<boolean> {
-  await page.goto('/chatbot/keywords/new')
-  await page.waitForLoadState('networkidle')
-  await page.waitForTimeout(1000) // Wait for auth/permissions to load
+const scope = createTestScope('keywords')
 
-  const input = page.locator('input').first()
-  // Wait for input to be enabled (permissions may load async)
-  try {
-    await input.waitFor({ state: 'attached', timeout: 5000 })
-    if (await input.isDisabled({ timeout: 3000 })) return false
-  } catch {
-    return false
-  }
-
-  await input.fill(`e2e-seed-${Date.now()}`)
-  const textarea = page.locator('textarea')
-  if (await textarea.isVisible()) {
-    await textarea.fill('E2E seeded response')
-  }
-  await page.waitForTimeout(500)
-
-  const createBtn = page.getByRole('button', { name: /Create/i })
-  if (!(await createBtn.isVisible({ timeout: 5000 }).catch(() => false))) return false
-
-  await createBtn.click({ force: true })
-  await page.waitForTimeout(3000)
-  return !page.url().includes('/new')
+// Seed a keyword rule via the API. Returns the new resource's ID, or null on
+// failure. Replaces the old UI-based seed which silently skipped when
+// permissions or click-timing didn't cooperate.
+async function seedKeywordRuleViaAPI(request: import('@playwright/test').APIRequestContext): Promise<string | null> {
+  const api = new ApiHelper(request)
+  await api.login(SUPER_ADMIN.email, SUPER_ADMIN.password)
+  const resp = await api.post('/api/chatbot/keywords', {
+    name: scope.name('seed'),
+    keywords: [`seedkw-${Date.now()}`],
+    match_type: 'contains',
+    response_type: 'text',
+    response_content: { body: 'E2E seeded response' },
+    enabled: true,
+  })
+  if (!resp.ok()) return null
+  const body = await resp.json()
+  return body.data?.id ?? null
 }
 
 test.describe('Keyword Rules - List View', () => {
@@ -56,18 +48,17 @@ test.describe('Keyword Rules - List View', () => {
     await expect(page.locator('input').first()).toBeVisible()
   })
 
-  test('should load detail page from list', async ({ page }) => {
-    // Seed if empty
+  test('should load detail page from list', async ({ page, request }) => {
     let href = await navigateToFirstItem(page)
     if (!href) {
-      if (!(await seedKeywordRule(page))) { test.skip(true, 'Cannot seed data'); return }
+      const id = await seedKeywordRuleViaAPI(request)
+      expect(id, 'API seed must succeed').toBeTruthy()
       await page.goto('/chatbot/keywords')
       await page.waitForLoadState('networkidle')
       href = await navigateToFirstItem(page)
     }
-    if (href) {
-      expect(page.url()).toMatch(/\/chatbot\/keywords\/[a-f0-9-]+/)
-    }
+    expect(href).toBeTruthy()
+    expect(page.url()).toMatch(/\/chatbot\/keywords\/[a-f0-9-]+/)
   })
 
   test('should search and filter', async ({ page }) => {
@@ -77,20 +68,15 @@ test.describe('Keyword Rules - List View', () => {
     expect(filteredRows).toBeLessThanOrEqual(50)
   })
 
-  test('should show delete confirmation from list', async ({ page }) => {
-    // Seed if no data
-    let hasRows = await page.locator('tbody tr a').first().isVisible({ timeout: 3000 }).catch(() => false)
-    if (!hasRows) {
-      if (!(await seedKeywordRule(page))) { test.skip(true, 'Cannot seed data'); return }
-      await keywordsPage.goto()
-      hasRows = true
-    }
+  test('should show delete confirmation from list', async ({ page, request }) => {
+    // Always seed via API — under parallel workers, relying on pre-existing
+    // rows is racy because another worker may delete them mid-test.
+    const id = await seedKeywordRuleViaAPI(request)
+    expect(id, 'API seed must succeed').toBeTruthy()
+    await keywordsPage.goto()
 
-    const deleteBtn = page.locator('tbody tr').first().getByRole('button', { name: /delete/i })
-    if (!(await deleteBtn.isVisible({ timeout: 5000 }).catch(() => false))) {
-      test.skip(true, 'No delete button found')
-      return
-    }
+    const deleteBtn = page.locator('tbody').getByRole('button', { name: /delete/i }).first()
+    await expect(deleteBtn).toBeVisible({ timeout: 10000 })
     await deleteBtn.click()
     await expect(keywordsPage.alertDialog).toBeVisible({ timeout: 5000 })
     await keywordsPage.alertDialog.getByRole('button', { name: /Cancel/i }).click()
@@ -113,27 +99,22 @@ test.describe('Keyword Rules - Detail Page CRUD', () => {
     await expect(page.locator('button[role="switch"]').first()).toBeVisible()
   })
 
-  test('should create keyword rule', async ({ page }) => {
-    const created = await seedKeywordRule(page)
-    if (!created) { test.skip(true, 'Cannot create (no permission or CSRF)'); return }
+  test('should create keyword rule', async ({ page, request }) => {
+    const id = await seedKeywordRuleViaAPI(request)
+    expect(id, 'API seed must succeed').toBeTruthy()
+    await page.goto(`/chatbot/keywords/${id}`)
+    await page.waitForLoadState('networkidle')
     expect(page.url()).toMatch(/\/chatbot\/keywords\/[a-f0-9-]+/)
   })
 
-  test('should edit existing rule', async ({ page }) => {
-    await page.goto('/chatbot/keywords')
+  test('should edit existing rule', async ({ page, request }) => {
+    const id = await seedKeywordRuleViaAPI(request)
+    expect(id, 'API seed must succeed').toBeTruthy()
+    await page.goto(`/chatbot/keywords/${id}`)
     await page.waitForLoadState('networkidle')
 
-    let href = await navigateToFirstItem(page)
-    if (!href) {
-      if (!(await seedKeywordRule(page))) { test.skip(true, 'Cannot seed'); return }
-      await page.goto('/chatbot/keywords')
-      await page.waitForLoadState('networkidle')
-      href = await navigateToFirstItem(page)
-      if (!href) { test.skip(true, 'No data after seed'); return }
-    }
-
     const input = page.locator('input').first()
-    if (await input.isDisabled()) { test.skip(true, 'No write permission'); return }
+    expect(await input.isDisabled()).toBe(false)
 
     const original = await input.inputValue()
     await input.fill(original + ', e2e-edit')
@@ -153,21 +134,27 @@ test.describe('Keyword Rules - Detail Page CRUD', () => {
     }
   })
 
-  test('should delete from detail page', async ({ page }) => {
-    // Create one to delete
-    const created = await seedKeywordRule(page)
-    if (!created) { test.skip(true, 'Cannot create'); return }
+  test('should delete from detail page', async ({ page, request }) => {
+    const id = await seedKeywordRuleViaAPI(request)
+    expect(id, 'API seed must succeed').toBeTruthy()
+    await page.goto(`/chatbot/keywords/${id}`)
+    await page.waitForLoadState('networkidle')
     await expectDeleteFromForm(page, '/chatbot/keywords')
   })
 
-  test('should show metadata', async ({ page }) => {
-    if (!(await seedKeywordRule(page))) { test.skip(true, 'Cannot seed'); return }
+  test('should show metadata', async ({ page, request }) => {
+    const id = await seedKeywordRuleViaAPI(request)
+    expect(id, 'API seed must succeed').toBeTruthy()
+    await page.goto(`/chatbot/keywords/${id}`)
+    await page.waitForLoadState('networkidle')
     await expectMetadataVisible(page)
   })
 
-  test('should show activity log', async ({ page }) => {
-    // Always seed fresh to avoid stale data from other tests
-    if (!(await seedKeywordRule(page))) { test.skip(true, 'Cannot seed'); return }
+  test('should show activity log', async ({ page, request }) => {
+    const id = await seedKeywordRuleViaAPI(request)
+    expect(id, 'API seed must succeed').toBeTruthy()
+    await page.goto(`/chatbot/keywords/${id}`)
+    await page.waitForLoadState('networkidle')
     await expectActivityLogVisible(page)
   })
 })

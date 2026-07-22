@@ -864,3 +864,158 @@ func TestApp_ReturnAgentTransfersToQueue(t *testing.T) {
 	assert.Nil(t, updatedTransfer1.AgentID)
 	assert.Nil(t, updatedTransfer2.AgentID)
 }
+
+// --- Pickup / assign respect AssignToSameAgent setting ---
+//
+// These tests pin down the rule shared by PickNextTransfer,
+// AssignAgentTransfer and saveAndFinalizeTransfer: contact.assigned_user_id
+// is only written when AssignToSameAgent is enabled and no relationship
+// manager is already set. That rule was introduced to stop pickup from
+// silently making the agent the contact's permanent owner.
+
+// upsertChatbotSettings creates / updates default chatbot settings for an
+// org with the AssignToSameAgent toggle.
+//
+// gorm gotcha: AgentAssignmentConfig columns carry `default:true` tags, so
+// passing AssignToSameAgent=false through a struct INSERT silently falls
+// back to the column DEFAULT (Go zero value === missing in the SQL). We
+// raw-update both flags explicitly so the test sees the value we asked for.
+func upsertChatbotSettings(t *testing.T, app *handlers.App, orgID uuid.UUID, assignToSameAgent bool) {
+	t.Helper()
+	require.NoError(t, app.DB.Where("organization_id = ? AND whats_app_account = ?", orgID, "").
+		Delete(&models.ChatbotSettings{}).Error)
+	settings := &models.ChatbotSettings{OrganizationID: orgID}
+	require.NoError(t, app.DB.Create(settings).Error)
+	require.NoError(t, app.DB.Model(&models.ChatbotSettings{}).
+		Where("id = ?", settings.ID).
+		Updates(map[string]any{
+			"assign_to_same_agent":     assignToSameAgent,
+			"allow_agent_queue_pickup": true,
+		}).Error)
+	app.InvalidateChatbotSettingsCache(orgID)
+}
+
+// readContactAssignedUser returns the current assigned_user_id for a contact.
+func readContactAssignedUser(t *testing.T, app *handlers.App, contactID uuid.UUID) *uuid.UUID {
+	t.Helper()
+	var contact models.Contact
+	require.NoError(t, app.DB.Where("id = ?", contactID).First(&contact).Error)
+	return contact.AssignedUserID
+}
+
+func TestApp_PickNextTransfer_AssignToSameAgentTrue_PinsRelationshipManager(t *testing.T) {
+	app := newTestApp(t)
+	org := testutil.CreateTestOrganization(t, app.DB)
+	account := testutil.CreateTestWhatsAppAccount(t, app.DB, org.ID)
+	upsertChatbotSettings(t, app, org.ID, true)
+
+	contact := testutil.CreateTestContact(t, app.DB, org.ID)
+	agent := createTestAgent(t, app, org.ID)
+	createTestTransfer(t, app, org.ID, contact.ID, account.Name, models.TransferStatusActive, nil)
+
+	req := testutil.NewJSONRequest(t, nil)
+	testutil.SetAuthContext(req, org.ID, agent.ID)
+	require.NoError(t, app.PickNextTransfer(req))
+	require.Equal(t, fasthttp.StatusOK, testutil.GetResponseStatusCode(req))
+
+	got := readContactAssignedUser(t, app, contact.ID)
+	require.NotNil(t, got, "expected contact to be pinned to the agent under AssignToSameAgent=true")
+	assert.Equal(t, agent.ID, *got)
+}
+
+func TestApp_PickNextTransfer_AssignToSameAgentFalse_LeavesContactUnassigned(t *testing.T) {
+	app := newTestApp(t)
+	org := testutil.CreateTestOrganization(t, app.DB)
+	account := testutil.CreateTestWhatsAppAccount(t, app.DB, org.ID)
+	upsertChatbotSettings(t, app, org.ID, false)
+
+	contact := testutil.CreateTestContact(t, app.DB, org.ID)
+	agent := createTestAgent(t, app, org.ID)
+	createTestTransfer(t, app, org.ID, contact.ID, account.Name, models.TransferStatusActive, nil)
+
+	req := testutil.NewJSONRequest(t, nil)
+	testutil.SetAuthContext(req, org.ID, agent.ID)
+	require.NoError(t, app.PickNextTransfer(req))
+	require.Equal(t, fasthttp.StatusOK, testutil.GetResponseStatusCode(req))
+
+	// The contact must NOT be pinned. Visibility during the active transfer
+	// comes from agent_transfers; once the transfer resumes the agent should
+	// lose access cleanly.
+	assert.Nil(t, readContactAssignedUser(t, app, contact.ID),
+		"AssignToSameAgent=false: pickup must not write contact.assigned_user_id")
+}
+
+func TestApp_PickNextTransfer_DoesNotOverwriteExistingRelationshipManager(t *testing.T) {
+	app := newTestApp(t)
+	org := testutil.CreateTestOrganization(t, app.DB)
+	account := testutil.CreateTestWhatsAppAccount(t, app.DB, org.ID)
+	upsertChatbotSettings(t, app, org.ID, true)
+
+	contact := testutil.CreateTestContact(t, app.DB, org.ID)
+	managerRole := testutil.CreateAdminRole(t, app.DB, org.ID)
+	manager := testutil.CreateTestUser(t, app.DB, org.ID, testutil.WithRoleID(&managerRole.ID))
+
+	// Pin the contact to a manager up-front (e.g. via /api/contacts/.../assign).
+	require.NoError(t, app.DB.Model(&models.Contact{}).Where("id = ?", contact.ID).
+		Update("assigned_user_id", manager.ID).Error)
+
+	agent := createTestAgent(t, app, org.ID)
+	createTestTransfer(t, app, org.ID, contact.ID, account.Name, models.TransferStatusActive, nil)
+
+	req := testutil.NewJSONRequest(t, nil)
+	testutil.SetAuthContext(req, org.ID, agent.ID)
+	require.NoError(t, app.PickNextTransfer(req))
+	require.Equal(t, fasthttp.StatusOK, testutil.GetResponseStatusCode(req))
+
+	got := readContactAssignedUser(t, app, contact.ID)
+	require.NotNil(t, got)
+	assert.Equal(t, manager.ID, *got, "pickup must not overwrite a manually set relationship manager")
+}
+
+func TestApp_ReturnAgentTransfersToQueue_DoesNotClearManualAssignment(t *testing.T) {
+	app := newTestApp(t)
+	org := testutil.CreateTestOrganization(t, app.DB)
+	account := testutil.CreateTestWhatsAppAccount(t, app.DB, org.ID)
+
+	contact := testutil.CreateTestContact(t, app.DB, org.ID)
+	agent := createTestAgent(t, app, org.ID)
+	managerRole := testutil.CreateAdminRole(t, app.DB, org.ID)
+	manager := testutil.CreateTestUser(t, app.DB, org.ID, testutil.WithRoleID(&managerRole.ID))
+
+	// Manager is the relationship manager. Agent is currently handling a
+	// transfer (different person). When the agent goes offline the manager
+	// pointer must survive.
+	require.NoError(t, app.DB.Model(&models.Contact{}).Where("id = ?", contact.ID).
+		Update("assigned_user_id", manager.ID).Error)
+	createTestTransfer(t, app, org.ID, contact.ID, account.Name, models.TransferStatusActive, &agent.ID)
+
+	count := app.ReturnAgentTransfersToQueue(agent.ID, org.ID)
+	assert.Equal(t, 1, count)
+
+	got := readContactAssignedUser(t, app, contact.ID)
+	require.NotNil(t, got, "manual relationship manager must not be cleared")
+	assert.Equal(t, manager.ID, *got)
+}
+
+func TestApp_ReturnAgentTransfersToQueue_ClearsAssignmentWhenItPointsAtAgent(t *testing.T) {
+	app := newTestApp(t)
+	org := testutil.CreateTestOrganization(t, app.DB)
+	account := testutil.CreateTestWhatsAppAccount(t, app.DB, org.ID)
+
+	contact := testutil.CreateTestContact(t, app.DB, org.ID)
+	agent := createTestAgent(t, app, org.ID)
+
+	// Agent is both the transfer's owner and the contact's stale RM (e.g.
+	// from an earlier pickup with AssignToSameAgent=true). When they go
+	// offline the contact must return to "no manager" so the queue is the
+	// authoritative routing path.
+	require.NoError(t, app.DB.Model(&models.Contact{}).Where("id = ?", contact.ID).
+		Update("assigned_user_id", agent.ID).Error)
+	createTestTransfer(t, app, org.ID, contact.ID, account.Name, models.TransferStatusActive, &agent.ID)
+
+	count := app.ReturnAgentTransfersToQueue(agent.ID, org.ID)
+	assert.Equal(t, 1, count)
+
+	assert.Nil(t, readContactAssignedUser(t, app, contact.ID),
+		"assignment pointing at the offline agent must be cleared")
+}

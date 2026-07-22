@@ -94,7 +94,7 @@ func TestResolveParamsFromMap_EmptyInputs(t *testing.T) {
 
 func TestResolveParams(t *testing.T) {
 	bodyContent := "Hello {{name}}, order {{order_id}}"
-	params := map[string]interface{}{
+	params := map[string]any{
 		"name":     "John",
 		"order_id": "ORD-123",
 	}
@@ -104,7 +104,7 @@ func TestResolveParams(t *testing.T) {
 
 func TestResolveParams_Positional(t *testing.T) {
 	bodyContent := "Hello {{name}}, order {{order_id}}"
-	params := map[string]interface{}{
+	params := map[string]any{
 		"1": "John",
 		"2": "ORD-123",
 	}
@@ -113,10 +113,10 @@ func TestResolveParams_Positional(t *testing.T) {
 }
 
 func TestResolveParams_Empty(t *testing.T) {
-	result := ResolveParams("Hello {{name}}", map[string]interface{}{})
+	result := ResolveParams("Hello {{name}}", map[string]any{})
 	assert.Nil(t, result)
 
-	result = ResolveParams("Hello world", map[string]interface{}{"a": "b"})
+	result = ResolveParams("Hello world", map[string]any{"a": "b"})
 	assert.Nil(t, result)
 }
 
@@ -138,7 +138,7 @@ func TestReplaceWithStringParams_Empty(t *testing.T) {
 func TestReplaceWithJSONBParams(t *testing.T) {
 	bodyContent := "Hello {{name}}, order {{order_id}}"
 	content := "Hello {{name}}, order {{order_id}}"
-	params := map[string]interface{}{
+	params := map[string]any{
 		"name":     "John",
 		"order_id": "ORD-123",
 	}
@@ -147,7 +147,7 @@ func TestReplaceWithJSONBParams(t *testing.T) {
 }
 
 func TestReplaceWithJSONBParams_Empty(t *testing.T) {
-	result := ReplaceWithJSONBParams("Hello {{name}}", "Hello {{name}}", map[string]interface{}{})
+	result := ReplaceWithJSONBParams("Hello {{name}}", "Hello {{name}}", map[string]any{})
 	assert.Equal(t, "Hello {{name}}", result)
 }
 
@@ -175,4 +175,34 @@ func TestValidateNoMixedParams_NoParams(t *testing.T) {
 func TestValidateNoMixedParams_Empty(t *testing.T) {
 	err := ValidateNoMixedParams("")
 	assert.NoError(t, err)
+}
+
+func TestValidateHeaderParamCount_None(t *testing.T) {
+	assert.NoError(t, ValidateHeaderParamCount("Welcome to Whatomate"))
+}
+
+func TestValidateHeaderParamCount_OnePositional(t *testing.T) {
+	assert.NoError(t, ValidateHeaderParamCount("Order {{1}} update"))
+}
+
+func TestValidateHeaderParamCount_OneNamed(t *testing.T) {
+	assert.NoError(t, ValidateHeaderParamCount("Hi {{customer_name}}!"))
+}
+
+func TestValidateHeaderParamCount_OneNameRepeated(t *testing.T) {
+	// Same variable referenced twice still counts as a single variable.
+	assert.NoError(t, ValidateHeaderParamCount("{{name}}, hi {{name}}"))
+}
+
+func TestValidateHeaderParamCount_Two(t *testing.T) {
+	err := ValidateHeaderParamCount("Order {{1}} for {{2}}")
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "at most one variable")
+	assert.Contains(t, err.Error(), "found 2")
+}
+
+func TestValidateHeaderParamCount_TwoNamed(t *testing.T) {
+	err := ValidateHeaderParamCount("{{a}} and {{b}}")
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "at most one variable")
 }

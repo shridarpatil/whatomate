@@ -11,11 +11,10 @@ import (
 	"strings"
 
 	"github.com/google/uuid"
-	"github.com/shridarpatil/whatomate/internal/audit"
 	"github.com/shridarpatil/whatomate/internal/models"
-	"gorm.io/gorm"
 	"github.com/valyala/fasthttp"
 	"github.com/zerodha/fastglue"
+	"gorm.io/gorm"
 )
 
 // IVRFlowRequest represents the request body for creating/updating an IVR flow
@@ -32,11 +31,8 @@ type IVRFlowRequest struct {
 
 // ListIVRFlows returns all IVR flows for the organization
 func (a *App) ListIVRFlows(r *fastglue.Request) error {
-	orgID, userID, err := a.getOrgAndUserID(r)
+	orgID, _, err := a.requireAuth(r, models.ResourceIVRFlows, models.ActionRead)
 	if err != nil {
-		return r.SendErrorEnvelope(fasthttp.StatusUnauthorized, "Unauthorized", nil, "")
-	}
-	if err := a.requirePermission(r, userID, models.ResourceIVRFlows, models.ActionRead); err != nil {
 		return nil
 	}
 
@@ -57,21 +53,13 @@ func (a *App) ListIVRFlows(r *fastglue.Request) error {
 		return r.SendErrorEnvelope(fasthttp.StatusInternalServerError, "Failed to fetch IVR flows", nil, "")
 	}
 
-	return r.SendEnvelope(map[string]any{
-		"ivr_flows": flows,
-		"total":     total,
-		"page":      pg.Page,
-		"limit":     pg.Limit,
-	})
+	return r.SendEnvelope(listEnvelope("ivr_flows", flows, total, pg))
 }
 
 // GetIVRFlow returns a single IVR flow by ID
 func (a *App) GetIVRFlow(r *fastglue.Request) error {
-	orgID, userID, err := a.getOrgAndUserID(r)
+	orgID, _, err := a.requireAuth(r, models.ResourceIVRFlows, models.ActionRead)
 	if err != nil {
-		return r.SendErrorEnvelope(fasthttp.StatusUnauthorized, "Unauthorized", nil, "")
-	}
-	if err := a.requirePermission(r, userID, models.ResourceIVRFlows, models.ActionRead); err != nil {
 		return nil
 	}
 
@@ -90,11 +78,8 @@ func (a *App) GetIVRFlow(r *fastglue.Request) error {
 
 // CreateIVRFlow creates a new IVR flow
 func (a *App) CreateIVRFlow(r *fastglue.Request) error {
-	orgID, userID, err := a.getOrgAndUserID(r)
+	orgID, userID, err := a.requireAuth(r, models.ResourceIVRFlows, models.ActionWrite)
 	if err != nil {
-		return r.SendErrorEnvelope(fasthttp.StatusUnauthorized, "Unauthorized", nil, "")
-	}
-	if err := a.requirePermission(r, userID, models.ResourceIVRFlows, models.ActionWrite); err != nil {
 		return nil
 	}
 
@@ -167,7 +152,7 @@ func (a *App) CreateIVRFlow(r *fastglue.Request) error {
 		a.CallManager.InvalidateIVRFlowCache(flow.ID, flow.OrganizationID, flow.WhatsAppAccount)
 	}
 
-	audit.LogAudit(a.DB, orgID, userID, audit.GetUserName(a.DB, userID),
+	a.logAudit(orgID, userID,
 		"ivr_flow", flow.ID, models.AuditActionCreated, nil, &flow)
 
 	return r.SendEnvelope(flow)
@@ -175,11 +160,8 @@ func (a *App) CreateIVRFlow(r *fastglue.Request) error {
 
 // UpdateIVRFlow updates an existing IVR flow
 func (a *App) UpdateIVRFlow(r *fastglue.Request) error {
-	orgID, userID, err := a.getOrgAndUserID(r)
+	orgID, userID, err := a.requireAuth(r, models.ResourceIVRFlows, models.ActionWrite)
 	if err != nil {
-		return r.SendErrorEnvelope(fasthttp.StatusUnauthorized, "Unauthorized", nil, "")
-	}
-	if err := a.requirePermission(r, userID, models.ResourceIVRFlows, models.ActionWrite); err != nil {
 		return nil
 	}
 
@@ -278,7 +260,7 @@ func (a *App) UpdateIVRFlow(r *fastglue.Request) error {
 		extraChanges = diffIVRMenuNodes(a.DB, oldFlow.Menu, req.Menu)
 	}
 
-	audit.LogAudit(a.DB, orgID, userID, audit.GetUserName(a.DB, userID),
+	a.logAudit(orgID, userID,
 		"ivr_flow", flow.ID, models.AuditActionUpdated, &oldFlow, flow, extraChanges...)
 
 	return r.SendEnvelope(flow)
@@ -434,11 +416,8 @@ func extractLabel(val any) any {
 
 // DeleteIVRFlow soft-deletes an IVR flow
 func (a *App) DeleteIVRFlow(r *fastglue.Request) error {
-	orgID, userID, err := a.getOrgAndUserID(r)
+	orgID, userID, err := a.requireAuth(r, models.ResourceIVRFlows, models.ActionDelete)
 	if err != nil {
-		return r.SendErrorEnvelope(fasthttp.StatusUnauthorized, "Unauthorized", nil, "")
-	}
-	if err := a.requirePermission(r, userID, models.ResourceIVRFlows, models.ActionDelete); err != nil {
 		return nil
 	}
 
@@ -461,7 +440,7 @@ func (a *App) DeleteIVRFlow(r *fastglue.Request) error {
 		a.CallManager.InvalidateIVRFlowCache(flow.ID, flow.OrganizationID, flow.WhatsAppAccount)
 	}
 
-	audit.LogAudit(a.DB, orgID, userID, audit.GetUserName(a.DB, userID),
+	a.logAudit(orgID, userID,
 		"ivr_flow", flow.ID, models.AuditActionDeleted, flow, nil)
 
 	return r.SendEnvelope(map[string]string{"message": "IVR flow deleted"})
@@ -478,11 +457,8 @@ func (a *App) getAudioDir() string {
 
 // UploadIVRAudio handles multipart audio file uploads for IVR greetings.
 func (a *App) UploadIVRAudio(r *fastglue.Request) error {
-	_, userID, err := a.getOrgAndUserID(r)
+	_, _, err := a.requireAuth(r, models.ResourceIVRFlows, models.ActionWrite)
 	if err != nil {
-		return r.SendErrorEnvelope(fasthttp.StatusUnauthorized, "Unauthorized", nil, "")
-	}
-	if err := a.requirePermission(r, userID, models.ResourceIVRFlows, models.ActionWrite); err != nil {
 		return nil
 	}
 
@@ -588,11 +564,8 @@ func (a *App) UploadIVRAudio(r *fastglue.Request) error {
 
 // ServeIVRAudio serves audio files from the IVR audio directory.
 func (a *App) ServeIVRAudio(r *fastglue.Request) error {
-	_, userID, err := a.getOrgAndUserID(r)
+	_, _, err := a.requireAuth(r, models.ResourceIVRFlows, models.ActionRead)
 	if err != nil {
-		return r.SendErrorEnvelope(fasthttp.StatusUnauthorized, "Unauthorized", nil, "")
-	}
-	if err := a.requirePermission(r, userID, models.ResourceIVRFlows, models.ActionRead); err != nil {
 		return nil
 	}
 
@@ -641,11 +614,8 @@ func (a *App) ServeIVRAudio(r *fastglue.Request) error {
 // UploadOrgAudio handles multipart audio file uploads for org-level hold music and ringback tones.
 // The "type" query parameter must be "hold_music" or "ringback".
 func (a *App) UploadOrgAudio(r *fastglue.Request) error {
-	orgID, userID, err := a.getOrgAndUserID(r)
+	orgID, _, err := a.requireAuth(r, models.ResourceOrganizations, models.ActionWrite)
 	if err != nil {
-		return r.SendErrorEnvelope(fasthttp.StatusUnauthorized, "Unauthorized", nil, "")
-	}
-	if err := a.requirePermission(r, userID, models.ResourceOrganizations, models.ActionWrite); err != nil {
 		return nil
 	}
 

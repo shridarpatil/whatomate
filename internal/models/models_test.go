@@ -18,9 +18,9 @@ func TestJSONB_Value(t *testing.T) {
 		wantNil  bool
 	}{
 		{
-			name:     "nil JSONB returns nil",
-			input:    nil,
-			wantNil:  true,
+			name:    "nil JSONB returns nil",
+			input:   nil,
+			wantNil: true,
 		},
 		{
 			name:     "empty JSONB returns empty object",
@@ -39,7 +39,7 @@ func TestJSONB_Value(t *testing.T) {
 		{
 			name: "nested JSONB",
 			input: models.JSONB{
-				"outer": map[string]interface{}{
+				"outer": map[string]any{
 					"inner": "value",
 				},
 			},
@@ -72,7 +72,7 @@ func TestJSONB_Scan(t *testing.T) {
 
 	tests := []struct {
 		name    string
-		input   interface{}
+		input   any
 		want    models.JSONB
 		wantErr bool
 	}{
@@ -174,7 +174,7 @@ func TestStringArray_Scan(t *testing.T) {
 
 	tests := []struct {
 		name    string
-		input   interface{}
+		input   any
 		want    models.StringArray
 		wantErr bool
 	}{
@@ -240,8 +240,8 @@ func TestJSONBArray_Value(t *testing.T) {
 		{
 			name: "JSONBArray with values",
 			input: models.JSONBArray{
-				map[string]interface{}{"id": "1", "title": "Button 1"},
-				map[string]interface{}{"id": "2", "title": "Button 2"},
+				map[string]any{"id": "1", "title": "Button 1"},
+				map[string]any{"id": "2", "title": "Button 2"},
 			},
 			wantJSON: `[{"id":"1","title":"Button 1"},{"id":"2","title":"Button 2"}]`,
 		},
@@ -271,7 +271,7 @@ func TestJSONBArray_Scan(t *testing.T) {
 
 	tests := []struct {
 		name    string
-		input   interface{}
+		input   any
 		wantLen int
 		wantErr bool
 	}{

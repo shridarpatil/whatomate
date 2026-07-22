@@ -59,18 +59,18 @@ func MustParseUUID(t *testing.T, s string) uuid.UUID {
 // NopLogger returns a no-op logger for tests that don't need log output.
 func NopLogger() logf.Logger {
 	return logf.New(logf.Opts{
-		Level:           logf.ErrorLevel, // Only log errors
-		EnableCaller:   false,
-		EnableColor:    false,
+		Level:        logf.ErrorLevel, // Only log errors
+		EnableCaller: false,
+		EnableColor:  false,
 	})
 }
 
 // TestLogger returns a logger suitable for test output.
 func TestLogger() logf.Logger {
 	return logf.New(logf.Opts{
-		Level:         logf.DebugLevel,
-		EnableCaller:  true,
-		EnableColor:   false,
+		Level:        logf.DebugLevel,
+		EnableCaller: true,
+		EnableColor:  false,
 	})
 }
 

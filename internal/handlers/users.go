@@ -5,7 +5,6 @@ import (
 	"time"
 
 	"github.com/google/uuid"
-	"github.com/shridarpatil/whatomate/internal/audit"
 	"github.com/shridarpatil/whatomate/internal/models"
 	"github.com/valyala/fasthttp"
 	"github.com/zerodha/fastglue"
@@ -87,17 +86,22 @@ type ChangePasswordRequest struct {
 
 // ListUsers returns all users for the organization
 func (a *App) ListUsers(r *fastglue.Request) error {
-	orgID, userID, err := a.getOrgAndUserID(r)
+	orgID, _, err := a.requireAuth(r, models.ResourceUsers, models.ActionRead)
 	if err != nil {
-		return r.SendErrorEnvelope(fasthttp.StatusUnauthorized, "Unauthorized", nil, "")
-	}
-
-	if err := a.requirePermission(r, userID, models.ResourceUsers, models.ActionRead); err != nil {
 		return nil
 	}
 
 	pg := parsePagination(r)
 	search := string(r.RequestCtx.QueryArgs().Peek("search"))
+	roleIDParam := string(r.RequestCtx.QueryArgs().Peek("role_id"))
+	onlineOnly := string(r.RequestCtx.QueryArgs().Peek("online_only")) == "true"
+
+	// Online user IDs for this org — fetched once and reused for both the
+	// online_only filter and the online_count badge in the response.
+	var onlineIDs []uuid.UUID
+	if a.WSHub != nil {
+		onlineIDs = a.WSHub.OnlineUserIDs(orgID)
+	}
 
 	// Query users via user_organizations to include cross-org members.
 	joinClause := "JOIN user_organizations ON user_organizations.user_id = users.id AND user_organizations.organization_id = ? AND user_organizations.deleted_at IS NULL"
@@ -107,6 +111,25 @@ func (a *App) ListUsers(r *fastglue.Request) error {
 	if search != "" {
 		countQuery = countQuery.Where("users.full_name ILIKE ? OR users.email ILIKE ?", "%"+search+"%", "%"+search+"%")
 		dataQuery = dataQuery.Where("users.full_name ILIKE ? OR users.email ILIKE ?", "%"+search+"%", "%"+search+"%")
+	}
+	if roleIDParam != "" {
+		if roleUUID, err := uuid.Parse(roleIDParam); err == nil {
+			countQuery = countQuery.Where("user_organizations.role_id = ?", roleUUID)
+			dataQuery = dataQuery.Where("user_organizations.role_id = ?", roleUUID)
+		}
+	}
+	if onlineOnly {
+		if len(onlineIDs) == 0 {
+			return r.SendEnvelope(map[string]any{
+				"users":        []UserResponse{},
+				"total":        0,
+				"page":         pg.Page,
+				"limit":        pg.Limit,
+				"online_count": 0,
+			})
+		}
+		countQuery = countQuery.Where("users.id IN ?", onlineIDs)
+		dataQuery = dataQuery.Where("users.id IN ?", onlineIDs)
 	}
 
 	var total int64
@@ -157,10 +180,11 @@ func (a *App) ListUsers(r *fastglue.Request) error {
 	}
 
 	return r.SendEnvelope(map[string]any{
-		"users": response,
-		"total": total,
-		"page":  pg.Page,
-		"limit": pg.Limit,
+		"users":        response,
+		"total":        total,
+		"page":         pg.Page,
+		"limit":        pg.Limit,
+		"online_count": len(onlineIDs),
 	})
 }
 
@@ -203,12 +227,8 @@ func (a *App) GetUser(r *fastglue.Request) error {
 
 // CreateUser creates a new user (admin only)
 func (a *App) CreateUser(r *fastglue.Request) error {
-	orgID, userID, err := a.getOrgAndUserID(r)
+	orgID, userID, err := a.requireAuth(r, models.ResourceUsers, models.ActionWrite)
 	if err != nil {
-		return r.SendErrorEnvelope(fasthttp.StatusUnauthorized, "Unauthorized", nil, "")
-	}
-
-	if err := a.requirePermission(r, userID, models.ResourceUsers, models.ActionWrite); err != nil {
 		return nil
 	}
 
@@ -313,6 +333,9 @@ func (a *App) CreateUser(r *fastglue.Request) error {
 		softDeleted.IsActive = true
 		softDeleted.IsSuperAdmin = isSuperAdmin
 
+		a.logAudit(orgID, userID,
+			"user", softDeleted.ID, models.AuditActionCreated, nil, userAuditSnapshot(&softDeleted))
+
 		return r.SendEnvelope(userToResponse(softDeleted))
 	}
 
@@ -345,6 +368,9 @@ func (a *App) CreateUser(r *fastglue.Request) error {
 
 	// Load role for response
 	a.DB.Preload("Role").First(&user, user.ID)
+
+	a.logAudit(orgID, userID,
+		"user", user.ID, models.AuditActionCreated, nil, userAuditSnapshot(&user))
 
 	return r.SendEnvelope(userToResponse(user))
 }
@@ -391,6 +417,9 @@ func (a *App) UpdateUser(r *fastglue.Request) error {
 		}
 	}
 
+	// Snapshot before changes for audit log diff.
+	oldSnap := userAuditSnapshot(&user)
+
 	var req UserRequest
 	if err := r.Decode(&req, "json"); err != nil {
 		a.Log.Error("UpdateUser: Failed to decode request", "error", err, "body", string(r.RequestCtx.PostBody()))
@@ -424,6 +453,10 @@ func (a *App) UpdateUser(r *fastglue.Request) error {
 		// Return updated response
 		user.RoleID = req.RoleID
 		user.Role = &newRole
+
+		a.logAudit(orgID, currentUserID,
+			"user", user.ID, models.AuditActionUpdated, oldSnap, userAuditSnapshot(&user))
+
 		resp := userToResponse(user)
 		resp.IsMember = true
 		return r.SendEnvelope(resp)
@@ -508,6 +541,9 @@ func (a *App) UpdateUser(r *fastglue.Request) error {
 	// Load role for response
 	a.DB.Preload("Role").First(&user, user.ID)
 
+	a.logAudit(orgID, currentUserID,
+		"user", user.ID, models.AuditActionUpdated, oldSnap, userAuditSnapshot(&user))
+
 	return r.SendEnvelope(userToResponse(user))
 }
 
@@ -555,6 +591,10 @@ func (a *App) DeleteUser(r *fastglue.Request) error {
 			return r.SendErrorEnvelope(fasthttp.StatusInternalServerError, "Failed to remove member", nil, "")
 		}
 		a.InvalidateUserPermissionsCache(id)
+
+		a.logAudit(orgID, currentUserID,
+			"user", id, models.AuditActionDeleted, userAuditSnapshot(&user), nil)
+
 		return r.SendEnvelope(map[string]string{"message": "Member removed from organization"})
 	}
 
@@ -586,6 +626,9 @@ func (a *App) DeleteUser(r *fastglue.Request) error {
 
 	// Delete all UserOrganization entries for this user
 	a.DB.Where("user_id = ?", id).Delete(&models.UserOrganization{})
+
+	a.logAudit(orgID, currentUserID,
+		"user", id, models.AuditActionDeleted, userAuditSnapshot(&user), nil)
 
 	return r.SendEnvelope(map[string]string{"message": "User deleted successfully"})
 }
@@ -687,7 +730,7 @@ func (a *App) UpdateCurrentUserSettings(r *fastglue.Request) error {
 	}
 
 	newNotif := notificationSettingsSnapshot(user.Settings)
-	audit.LogAudit(a.DB, orgID, userID, audit.GetUserName(a.DB, userID),
+	a.logAudit(orgID, userID,
 		models.ResourceSettingsNotification, userID, models.AuditActionUpdated, oldNotif, newNotif)
 
 	return r.SendEnvelope(map[string]any{
@@ -755,6 +798,27 @@ func (a *App) ChangePassword(r *fastglue.Request) error {
 }
 
 // Helper function to convert User to UserResponse
+// userAuditSnapshot returns a minimal, diff-friendly representation of a user
+// for audit logging. Sensitive fields (password hash) and noisy fields (settings,
+// availability, timestamps) are intentionally excluded.
+func userAuditSnapshot(user *models.User) map[string]any {
+	if user == nil {
+		return nil
+	}
+	snap := map[string]any{
+		"full_name":      user.FullName,
+		"email":          user.Email,
+		"is_active":      user.IsActive,
+		"is_super_admin": user.IsSuperAdmin,
+	}
+	if user.Role != nil {
+		snap["role"] = user.Role.Name
+	} else {
+		snap["role"] = ""
+	}
+	return snap
+}
+
 func userToResponse(user models.User) UserResponse {
 	resp := UserResponse{
 		ID:             user.ID,
@@ -798,12 +862,12 @@ func userToResponse(user models.User) UserResponse {
 
 // MyOrganizationResponse represents an organization in the user's org list
 type MyOrganizationResponse struct {
-	OrganizationID uuid.UUID `json:"organization_id"`
-	Name           string    `json:"name"`
-	Slug           string    `json:"slug"`
+	OrganizationID uuid.UUID  `json:"organization_id"`
+	Name           string     `json:"name"`
+	Slug           string     `json:"slug"`
 	RoleID         *uuid.UUID `json:"role_id,omitempty"`
-	RoleName       string    `json:"role_name,omitempty"`
-	IsDefault      bool      `json:"is_default"`
+	RoleName       string     `json:"role_name,omitempty"`
+	IsDefault      bool       `json:"is_default"`
 }
 
 // ListMyOrganizations returns all organizations the current user belongs to
@@ -914,10 +978,10 @@ func (a *App) UpdateAvailability(r *fastglue.Request) error {
 	}
 
 	return r.SendEnvelope(map[string]any{
-		"message":             "Availability updated successfully",
-		"is_available":        user.IsAvailable,
-		"status":              status,
-		"break_started_at":    breakStartedAt,
-		"transfers_to_queue":  transfersReturned,
+		"message":            "Availability updated successfully",
+		"is_available":       user.IsAvailable,
+		"status":             status,
+		"break_started_at":   breakStartedAt,
+		"transfers_to_queue": transfersReturned,
 	})
 }

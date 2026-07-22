@@ -1,9 +1,12 @@
 import { test, expect } from '@playwright/test'
 import { loginAsAdmin } from '../../helpers'
 import { ContactsPage } from '../../pages'
+import { createTestScope } from '../../framework'
 import * as path from 'path'
 import * as fs from 'fs'
 import * as os from 'os'
+
+const scope = createTestScope('contacts')
 
 test.describe('Contacts Management', () => {
   let contactsPage: ContactsPage
@@ -32,8 +35,8 @@ test.describe('Contacts Management', () => {
   })
 
   test('should create a new contact', async () => {
-    const phoneNumber = `91${Date.now().toString().slice(-10)}`
-    const contactName = `Test Contact ${Date.now()}`
+    const phoneNumber = scope.phone()
+    const contactName = scope.name('test')
 
     await contactsPage.openCreateDialog()
     await contactsPage.fillContactForm(phoneNumber, contactName)
@@ -44,7 +47,7 @@ test.describe('Contacts Management', () => {
   })
 
   test('should create contact with just phone number', async () => {
-    const phoneNumber = `91${Date.now().toString().slice(-10)}`
+    const phoneNumber = scope.phone()
 
     await contactsPage.openCreateDialog()
     await contactsPage.fillContactForm(phoneNumber)
@@ -56,8 +59,8 @@ test.describe('Contacts Management', () => {
 
   test('should edit existing contact', async ({ page }) => {
     // First create a contact
-    const phoneNumber = `91${Date.now().toString().slice(-10)}`
-    const originalName = `Original Name ${Date.now()}`
+    const phoneNumber = scope.phone()
+    const originalName = scope.name('original')
 
     await contactsPage.openCreateDialog()
     await contactsPage.fillContactForm(phoneNumber, originalName)
@@ -69,20 +72,31 @@ test.describe('Contacts Management', () => {
     // Wait for contact to appear
     await contactsPage.expectContactExists(phoneNumber)
 
-    // Edit the contact
-    const newName = `Updated Name ${Date.now()}`
+    // Edit the contact via detail page
+    const newName = scope.name('updated')
     await contactsPage.editContact(phoneNumber)
-    await contactsPage.fillEditForm(newName)
-    await contactsPage.submitDialog('Update')
 
-    await contactsPage.expectToast(/updated/i)
+    // Update profile name on the detail page
+    const nameInput = page.locator('div.space-y-1\\.5:has(> label:has-text("Profile Name")) input').first()
+    await nameInput.fill(newName)
+    await page.waitForTimeout(300)
+
+    // Save
+    const saveBtn = page.getByRole('button', { name: /^Save$/i })
+    await expect(saveBtn).toBeVisible({ timeout: 5000 })
+    await saveBtn.click()
+    await page.waitForLoadState('networkidle')
+
+    // Verify in list
+    await page.goto('/settings/contacts')
+    await page.waitForLoadState('networkidle')
     await contactsPage.expectContactExists(newName)
   })
 
   test('should delete contact', async ({ page }) => {
     // First create a contact
-    const phoneNumber = `91${Date.now().toString().slice(-10)}`
-    const contactName = `Delete Contact ${Date.now()}`
+    const phoneNumber = scope.phone()
+    const contactName = scope.name('delete')
 
     await contactsPage.openCreateDialog()
     await contactsPage.fillContactForm(phoneNumber, contactName)
@@ -103,8 +117,8 @@ test.describe('Contacts Management', () => {
 
   test('should search contacts', async ({ page }) => {
     // First create a contact with unique name
-    const phoneNumber = `91${Date.now().toString().slice(-10)}`
-    const uniqueName = `UniqueSearch${Date.now()}`
+    const phoneNumber = scope.phone()
+    const uniqueName = scope.name('search')
 
     await contactsPage.openCreateDialog()
     await contactsPage.fillContactForm(phoneNumber, uniqueName)
@@ -123,7 +137,7 @@ test.describe('Contacts Management', () => {
   })
 
   test('should prevent duplicate phone numbers', async ({ page }) => {
-    const phoneNumber = `91${Date.now().toString().slice(-10)}`
+    const phoneNumber = scope.phone()
 
     // Create first contact
     await contactsPage.openCreateDialog()
@@ -230,8 +244,8 @@ test.describe('Contacts Import/Export', () => {
 
   test('should update existing contacts on import with flag', async ({ page }) => {
     // First create a contact
-    const phoneNumber = `91${Date.now().toString().slice(-10)}`
-    const originalName = `Original Import ${Date.now()}`
+    const phoneNumber = scope.phone()
+    const originalName = scope.name('original-import')
 
     await contactsPage.openCreateDialog()
     await contactsPage.fillContactForm(phoneNumber, originalName)
@@ -242,7 +256,7 @@ test.describe('Contacts Import/Export', () => {
     await page.locator('[data-sonner-toast]').waitFor({ state: 'hidden', timeout: 10000 })
 
     // Create CSV with same phone number but different name
-    const newName = `Updated Via Import ${Date.now()}`
+    const newName = scope.name('updated-via-import')
     const csvContent = `Phone Number,Name
 ${phoneNumber},${newName}`
 
@@ -267,124 +281,46 @@ ${phoneNumber},${newName}`
 })
 
 test.describe('Contacts in Chat View', () => {
-  // These tests require contacts:write permission which may not be enabled for the test user
-  // The add contact button is only visible when the user has this permission
+  // Admin always has contacts:write permission, so the add-contact button must be visible.
+  // The button has aria-label="Add Contact" (via $t('chat.addContact')) for stable selection.
 
-  test('should show add contact button in chat view if user has permission', async ({ page }) => {
+  test('should show add contact button in chat view', async ({ page }) => {
     await loginAsAdmin(page)
     await page.goto('/chat')
     await page.waitForLoadState('networkidle')
 
-    // Wait a bit for the UI to fully render
-    await page.waitForTimeout(1000)
-
-    // The add contact button should be visible near the search area
-    // It's inside a Tooltip wrapper, look for the button with UserPlus icon
-    const addContactButton = page.locator('[data-slot="tooltip-trigger"] button, button').filter({
-      has: page.locator('svg')
-    }).filter({
-      hasNot: page.locator('svg.lucide-search, svg.lucide-filter')
-    }).first()
-
-    // Skip if button not visible (user might not have permission)
-    const isVisible = await addContactButton.isVisible().catch(() => false)
-    if (!isVisible) {
-      test.skip()
-      return
-    }
-
-    await expect(addContactButton).toBeVisible()
+    const addContactButton = page.getByRole('button', { name: /add contact/i }).first()
+    await expect(addContactButton).toBeVisible({ timeout: 10000 })
   })
 
   test('should open create contact dialog from chat view', async ({ page }) => {
     await loginAsAdmin(page)
     await page.goto('/chat')
     await page.waitForLoadState('networkidle')
-    await page.waitForTimeout(1000)
 
-    // Find any small icon button that could be the add contact button
-    // Look for buttons in the header area near search
-    const headerButtons = page.locator('.flex button').filter({ has: page.locator('svg') })
-    const buttonCount = await headerButtons.count()
-
-    // Skip if no buttons found (likely no permission)
-    if (buttonCount === 0) {
-      test.skip()
-      return
-    }
-
-    // Try clicking each button to find the one that opens the create contact dialog
-    for (let i = 0; i < Math.min(buttonCount, 5); i++) {
-      const btn = headerButtons.nth(i)
-      if (await btn.isVisible()) {
-        await btn.click()
-        const dialog = page.locator('[role="dialog"][data-state="open"]')
-        if (await dialog.isVisible().catch(() => false)) {
-          const hasCreateContact = await dialog.locator('text=Create Contact').isVisible().catch(() => false)
-          if (hasCreateContact) {
-            await expect(dialog).toContainText('Create Contact')
-            return
-          }
-          // Close dialog and try next button
-          await page.keyboard.press('Escape')
-          await page.waitForTimeout(300)
-        }
-      }
-    }
-
-    // If we get here, skip the test
-    test.skip()
+    await page.getByRole('button', { name: /add contact/i }).first().click()
+    const dialog = page.locator('[role="dialog"][data-state="open"]')
+    await expect(dialog).toBeVisible({ timeout: 5000 })
+    await expect(dialog).toContainText(/Create Contact/i)
   })
 
   test('should create contact from chat view and navigate to chat', async ({ page }) => {
     await loginAsAdmin(page)
     await page.goto('/chat')
     await page.waitForLoadState('networkidle')
-    await page.waitForTimeout(1000)
 
-    const phoneNumber = `91${Date.now().toString().slice(-10)}`
-    const contactName = `Chat Create ${Date.now()}`
+    const phoneNumber = scope.phone()
+    const contactName = scope.name('chat-create')
 
-    // Find the add contact button by trying header buttons
-    const headerButtons = page.locator('.flex button').filter({ has: page.locator('svg') })
-    const buttonCount = await headerButtons.count()
+    await page.getByRole('button', { name: /add contact/i }).first().click()
+    const dialog = page.locator('[role="dialog"][data-state="open"]')
+    await expect(dialog).toBeVisible({ timeout: 5000 })
 
-    if (buttonCount === 0) {
-      test.skip()
-      return
-    }
+    await dialog.locator('input').first().fill(phoneNumber)
+    await dialog.locator('input').nth(1).fill(contactName)
+    await dialog.getByRole('button', { name: /Create/i }).click()
 
-    // Find and click the add contact button
-    let foundDialog = false
-    for (let i = 0; i < Math.min(buttonCount, 5); i++) {
-      const btn = headerButtons.nth(i)
-      if (await btn.isVisible()) {
-        await btn.click()
-        const dialog = page.locator('[role="dialog"][data-state="open"]')
-        if (await dialog.isVisible().catch(() => false)) {
-          const hasCreateContact = await dialog.locator('text=Create Contact').isVisible().catch(() => false)
-          if (hasCreateContact) {
-            foundDialog = true
-            // Fill form
-            await dialog.locator('input').first().fill(phoneNumber)
-            await dialog.locator('input').nth(1).fill(contactName)
-            await dialog.getByRole('button', { name: /Create/i }).click()
-
-            // Should show success toast
-            await expect(page.locator('[data-sonner-toast]').filter({ hasText: /created/i })).toBeVisible()
-
-            // Should navigate to the new contact's chat
-            await page.waitForURL(/\/chat\/.*/, { timeout: 10000 })
-            return
-          }
-          await page.keyboard.press('Escape')
-          await page.waitForTimeout(300)
-        }
-      }
-    }
-
-    if (!foundDialog) {
-      test.skip()
-    }
+    await expect(page.locator('[data-sonner-toast]').filter({ hasText: /created/i })).toBeVisible({ timeout: 10000 })
+    await page.waitForURL(/\/chat\/.*/, { timeout: 10000 })
   })
 })

@@ -1,33 +1,25 @@
 import { test, expect } from '@playwright/test'
-import { loginAsAdmin, navigateToFirstItem, expectMetadataVisible, expectActivityLogVisible, expectDeleteFromForm } from '../../helpers'
+import { loginAsAdmin, navigateToFirstItem, expectMetadataVisible, expectActivityLogVisible, expectDeleteFromForm, ApiHelper } from '../../helpers'
 import { AIContextsPage } from '../../pages'
+import { createTestScope, SUPER_ADMIN } from '../../framework'
 
-async function seedAIContext(page: import('@playwright/test').Page): Promise<boolean> {
-  await page.goto('/chatbot/ai/new')
-  await page.waitForLoadState('networkidle')
-  await page.waitForTimeout(1000) // Wait for auth/permissions to load
+const scope = createTestScope('ai-contexts')
 
-  const input = page.locator('input').first()
-  try {
-    await input.waitFor({ state: 'attached', timeout: 5000 })
-    if (await input.isDisabled({ timeout: 3000 })) return false
-  } catch {
-    return false
-  }
-
-  await input.fill(`e2e-ctx-${Date.now()}`)
-  const textarea = page.locator('textarea').first()
-  if (await textarea.isVisible()) {
-    await textarea.fill('E2E seeded AI context content')
-  }
-  await page.waitForTimeout(500)
-
-  const createBtn = page.getByRole('button', { name: /Create/i })
-  if (!(await createBtn.isVisible({ timeout: 5000 }).catch(() => false))) return false
-
-  await createBtn.click({ force: true })
-  await page.waitForTimeout(3000)
-  return !page.url().includes('/new')
+// Seed an AI context via the API. Returns the new resource's ID, or null on
+// failure. Replaces the old UI-based seed which was flaky (async permission
+// loading, dialog/click race conditions, silently skipped on any failure).
+async function seedAIContextViaAPI(request: import('@playwright/test').APIRequestContext): Promise<string | null> {
+  const api = new ApiHelper(request)
+  await api.login(SUPER_ADMIN.email, SUPER_ADMIN.password)
+  const resp = await api.post('/api/chatbot/ai-contexts', {
+    name: scope.name('ctx'),
+    context_type: 'static',
+    static_content: 'E2E seeded AI context content',
+    enabled: true,
+  })
+  if (!resp.ok()) return null
+  const body = await resp.json()
+  return body.data?.id ?? null
 }
 
 test.describe('AI Contexts - List View', () => {
@@ -53,17 +45,17 @@ test.describe('AI Contexts - List View', () => {
     expect(page.url()).toContain('/chatbot/ai/new')
   })
 
-  test('should load detail page from list', async ({ page }) => {
+  test('should load detail page from list', async ({ page, request }) => {
     let href = await navigateToFirstItem(page)
     if (!href) {
-      if (!(await seedAIContext(page))) { test.skip(true, 'Cannot seed data'); return }
+      const id = await seedAIContextViaAPI(request)
+      expect(id, 'API seed must succeed').toBeTruthy()
       await page.goto('/chatbot/ai')
       await page.waitForLoadState('networkidle')
       href = await navigateToFirstItem(page)
     }
-    if (href) {
-      expect(page.url()).toMatch(/\/chatbot\/ai\/[a-f0-9-]+/)
-    }
+    expect(href).toBeTruthy()
+    expect(page.url()).toMatch(/\/chatbot\/ai\/[a-f0-9-]+/)
   })
 
   test('should search and filter', async ({ page }) => {
@@ -72,19 +64,15 @@ test.describe('AI Contexts - List View', () => {
     expect(filteredRows).toBeLessThanOrEqual(50)
   })
 
-  test('should show delete confirmation from list', async ({ page }) => {
-    let hasRows = await page.locator('tbody tr a').first().isVisible({ timeout: 3000 }).catch(() => false)
-    if (!hasRows) {
-      if (!(await seedAIContext(page))) { test.skip(true, 'Cannot seed data'); return }
-      await aiPage.goto()
-      hasRows = true
-    }
+  test('should show delete confirmation from list', async ({ page, request }) => {
+    // Always seed via API — under parallel workers, relying on pre-existing
+    // rows is racy because another worker may delete them mid-test.
+    const id = await seedAIContextViaAPI(request)
+    expect(id, 'API seed must succeed').toBeTruthy()
+    await aiPage.goto()
 
-    const deleteBtn = page.locator('tbody tr').first().getByRole('button', { name: /delete/i })
-    if (!(await deleteBtn.isVisible({ timeout: 5000 }).catch(() => false))) {
-      test.skip(true, 'No delete button found')
-      return
-    }
+    const deleteBtn = page.locator('tbody').getByRole('button', { name: /delete/i }).first()
+    await expect(deleteBtn).toBeVisible({ timeout: 10000 })
     await deleteBtn.click()
     await expect(aiPage.alertDialog).toBeVisible({ timeout: 5000 })
     await aiPage.alertDialog.getByRole('button', { name: /Cancel/i }).click()
@@ -106,9 +94,13 @@ test.describe('AI Contexts - Detail Page CRUD', () => {
     await expect(page.locator('button[role="switch"]').first()).toBeVisible()
   })
 
-  test('should create static AI context', async ({ page }) => {
-    const created = await seedAIContext(page)
-    if (!created) { test.skip(true, 'Cannot create (no permission or CSRF)'); return }
+  test('should create static AI context', async ({ page, request }) => {
+    const id = await seedAIContextViaAPI(request)
+    expect(id, 'API seed must succeed').toBeTruthy()
+    // The test originally created via UI and expected to land on the detail
+    // page. Mirror that by navigating to it explicitly.
+    await page.goto(`/chatbot/ai/${id}`)
+    await page.waitForLoadState('networkidle')
     expect(page.url()).toMatch(/\/chatbot\/ai\/[a-f0-9-]+/)
   })
 
@@ -126,21 +118,22 @@ test.describe('AI Contexts - Detail Page CRUD', () => {
     }
   })
 
-  test('should edit existing context', async ({ page }) => {
+  test('should edit existing context', async ({ page, request }) => {
     await page.goto('/chatbot/ai')
     await page.waitForLoadState('networkidle')
 
     let href = await navigateToFirstItem(page)
     if (!href) {
-      if (!(await seedAIContext(page))) { test.skip(true, 'Cannot seed'); return }
+      const id = await seedAIContextViaAPI(request)
+      expect(id, 'API seed must succeed').toBeTruthy()
       await page.goto('/chatbot/ai')
       await page.waitForLoadState('networkidle')
       href = await navigateToFirstItem(page)
-      if (!href) { test.skip(true, 'No data after seed'); return }
+      expect(href, 'detail link must be present after API seed').toBeTruthy()
     }
 
     const nameInput = page.locator('input').first()
-    if (await nameInput.isDisabled()) { test.skip(true, 'No write permission'); return }
+    expect(await nameInput.isDisabled(), 'admin should have write permission').toBe(false)
 
     const original = await nameInput.inputValue()
     await nameInput.fill(original + ' edited')
@@ -160,19 +153,27 @@ test.describe('AI Contexts - Detail Page CRUD', () => {
     }
   })
 
-  test('should delete from detail page', async ({ page }) => {
-    const created = await seedAIContext(page)
-    if (!created) { test.skip(true, 'Cannot create'); return }
+  test('should delete from detail page', async ({ page, request }) => {
+    const id = await seedAIContextViaAPI(request)
+    expect(id, 'API seed must succeed').toBeTruthy()
+    await page.goto(`/chatbot/ai/${id}`)
+    await page.waitForLoadState('networkidle')
     await expectDeleteFromForm(page, '/chatbot/ai')
   })
 
-  test('should show metadata', async ({ page }) => {
-    if (!(await seedAIContext(page))) { test.skip(true, 'Cannot seed'); return }
+  test('should show metadata', async ({ page, request }) => {
+    const id = await seedAIContextViaAPI(request)
+    expect(id, 'API seed must succeed').toBeTruthy()
+    await page.goto(`/chatbot/ai/${id}`)
+    await page.waitForLoadState('networkidle')
     await expectMetadataVisible(page)
   })
 
-  test('should show activity log', async ({ page }) => {
-    if (!(await seedAIContext(page))) { test.skip(true, 'Cannot seed'); return }
+  test('should show activity log', async ({ page, request }) => {
+    const id = await seedAIContextViaAPI(request)
+    expect(id, 'API seed must succeed').toBeTruthy()
+    await page.goto(`/chatbot/ai/${id}`)
+    await page.waitForLoadState('networkidle')
     await expectActivityLogVisible(page)
   })
 

@@ -43,13 +43,26 @@ run:
 run-migrate:
 	$(GOCMD) run $(BINARY_PATH)/main.go server -config config.toml -migrate
 
-# Run tests
+# Run tests. Uses gotestsum when available for live progress + a clear
+# failure summary at the end. Falls back to the built-in `go test -v` so
+# nothing breaks for devs who haven't installed it.
+# Install:  go install gotest.tools/gotestsum@latest
 test:
-	$(GOTEST) -v ./...
+	@if command -v gotestsum >/dev/null 2>&1; then \
+		gotestsum --format testname --hide-summary=skipped -- ./...; \
+	else \
+		echo "(install gotestsum for nicer output: go install gotest.tools/gotestsum@latest)"; \
+		$(GOTEST) -v ./...; \
+	fi
 
-# Run tests with coverage
+# Run tests with coverage. Same gotestsum fallback as `make test`.
 test-coverage:
-	$(GOTEST) -v -coverprofile=coverage.out ./...
+	@if command -v gotestsum >/dev/null 2>&1; then \
+		gotestsum --format testname --hide-summary=skipped -- -coverprofile=coverage.out ./...; \
+	else \
+		echo "(install gotestsum for nicer output: go install gotest.tools/gotestsum@latest)"; \
+		$(GOTEST) -v -coverprofile=coverage.out ./...; \
+	fi
 	$(GOCMD) tool cover -html=coverage.out -o coverage.html
 
 # Clean build artifacts

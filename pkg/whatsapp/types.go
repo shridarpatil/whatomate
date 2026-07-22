@@ -68,14 +68,21 @@ type TemplateResponse struct {
 	ID string `json:"id"`
 }
 
+// MetaQualityScore represents quality score information from Meta
+type MetaQualityScore struct {
+	Score string `json:"score"`
+}
+
 // MetaTemplate represents a template fetched from Meta
 type MetaTemplate struct {
-	ID         string              `json:"id"`
-	Name       string              `json:"name"`
-	Language   string              `json:"language"`
-	Category   string              `json:"category"`
-	Status     string              `json:"status"`
-	Components []TemplateComponent `json:"components"`
+	ID            string              `json:"id"`
+	Name          string              `json:"name"`
+	Language      string              `json:"language"`
+	Category      string              `json:"category"`
+	Status        string              `json:"status"`
+	QualityRating string              `json:"quality_rating,omitempty"`
+	QualityScore  *MetaQualityScore   `json:"quality_score,omitempty"`
+	Components    []TemplateComponent `json:"components"`
 }
 
 // TemplateComponent represents a component of a template
@@ -98,10 +105,10 @@ type TemplateButton struct {
 	FlowID         json.Number `json:"flow_id,omitempty"`
 	FlowAction     string      `json:"flow_action,omitempty"`
 	NavigateScreen string      `json:"navigate_screen,omitempty"`
-	OTPType        string      `json:"otp_type,omitempty"`        // "COPY_CODE", "ONE_TAP", "ZERO_TAP"
-	AutofillText   string      `json:"autofill_text,omitempty"`   // For ONE_TAP OTP
-	PackageName    string      `json:"package_name,omitempty"`    // For ONE_TAP/ZERO_TAP OTP
-	SignatureHash  string      `json:"signature_hash,omitempty"`  // For ONE_TAP/ZERO_TAP OTP
+	OTPType        string      `json:"otp_type,omitempty"`       // "COPY_CODE", "ONE_TAP", "ZERO_TAP"
+	AutofillText   string      `json:"autofill_text,omitempty"`  // For ONE_TAP OTP
+	PackageName    string      `json:"package_name,omitempty"`   // For ONE_TAP/ZERO_TAP OTP
+	SignatureHash  string      `json:"signature_hash,omitempty"` // For ONE_TAP/ZERO_TAP OTP
 }
 
 // TemplateExample represents example values for template variables
@@ -159,17 +166,17 @@ type WebhookContact struct {
 
 // WebhookMessage represents an incoming message
 type WebhookMessage struct {
-	From        string                  `json:"from"`
-	ID          string                  `json:"id"`
-	Timestamp   string                  `json:"timestamp"`
-	Type        string                  `json:"type"`
-	Text        *WebhookText            `json:"text,omitempty"`
-	Interactive *WebhookInteractive     `json:"interactive,omitempty"`
-	Image       *WebhookMedia           `json:"image,omitempty"`
-	Document    *WebhookMedia           `json:"document,omitempty"`
-	Audio       *WebhookMedia           `json:"audio,omitempty"`
-	Video       *WebhookMedia           `json:"video,omitempty"`
-	Context     *WebhookMessageContext  `json:"context,omitempty"`
+	From        string                 `json:"from"`
+	ID          string                 `json:"id"`
+	Timestamp   string                 `json:"timestamp"`
+	Type        string                 `json:"type"`
+	Text        *WebhookText           `json:"text,omitempty"`
+	Interactive *WebhookInteractive    `json:"interactive,omitempty"`
+	Image       *WebhookMedia          `json:"image,omitempty"`
+	Document    *WebhookMedia          `json:"document,omitempty"`
+	Audio       *WebhookMedia          `json:"audio,omitempty"`
+	Video       *WebhookMedia          `json:"video,omitempty"`
+	Context     *WebhookMessageContext `json:"context,omitempty"`
 }
 
 // WebhookText represents text content in a message
@@ -278,7 +285,7 @@ type CatalogListResponse struct {
 // ProductInput represents input for creating/updating a product
 type ProductInput struct {
 	Name        string `json:"name"`
-	Price       int64  `json:"price"`    // Price in cents
+	Price       int64  `json:"price"` // Price in cents
 	Currency    string `json:"currency"`
 	URL         string `json:"url"`
 	ImageURL    string `json:"image_url"`

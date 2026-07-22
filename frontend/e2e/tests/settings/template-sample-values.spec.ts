@@ -1,5 +1,8 @@
 import { test, expect, Page } from '@playwright/test'
-import { loginAsAdmin } from '../../helpers'
+import { loginAsAdmin, ApiHelper } from '../../helpers'
+import { createTestScope, SUPER_ADMIN } from '../../framework'
+
+const scope = createTestScope('tpl-sample-values')
 
 async function gotoNewTemplate(page: Page) {
   await page.goto('/templates/new')
@@ -107,18 +110,30 @@ test.describe('Template Sample Values', () => {
 })
 
 test.describe('Template Preview with Sample Values', () => {
-  test('should show preview with sample values replacing variables', async ({ page }) => {
-    await loginAsAdmin(page)
-    await page.goto('/templates')
-    await page.waitForLoadState('domcontentloaded')
-
-    // Navigate to first template
-    const firstLink = page.locator('tbody tr a, tbody tr td').first()
-    if (!(await firstLink.isVisible({ timeout: 5000 }).catch(() => false))) {
-      test.skip(true, 'No templates exist')
-      return
+  test('should show preview with sample values replacing variables', async ({ page, request }) => {
+    // Seed a template via API so the test doesn't depend on prior runs leaving
+    // data behind. Need a WhatsApp account first since templates link to one.
+    const api = new ApiHelper(request)
+    await api.login(SUPER_ADMIN.email, SUPER_ADMIN.password)
+    const accounts = await api.getWhatsAppAccounts()
+    let accountName = accounts[0]?.name
+    if (!accountName) {
+      const acc = await api.createWhatsAppAccount({
+        name: scope.name('acct').toLowerCase().replace(/\s/g, '-'),
+        phone_id: `phone-tpl-sample-${Date.now()}`,
+        business_id: `biz-tpl-sample-${Date.now()}`,
+        access_token: 'test-token-e2e',
+      })
+      accountName = acc.name
     }
-    await firstLink.click()
+    const tpl = await api.createTemplate({
+      name: `tpl_sample_${Date.now()}`,
+      body_content: 'Hello {{1}}, welcome',
+      whatsapp_account: accountName,
+    })
+
+    await loginAsAdmin(page)
+    await page.goto(`/templates/${tpl.id}`)
     await page.waitForLoadState('domcontentloaded')
 
     const previewBtn = page.getByRole('button', { name: /Preview/i })

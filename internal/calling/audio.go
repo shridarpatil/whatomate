@@ -257,4 +257,3 @@ func readOpusPackets(r io.Reader) ([][]byte, error) {
 
 	return packets, nil
 }
-

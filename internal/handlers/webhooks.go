@@ -110,6 +110,7 @@ type WebhookResponse struct {
 var AvailableWebhookEvents = []map[string]string{
 	{"value": string(models.WebhookEventMessageIncoming), "label": "Message Incoming", "description": "When a new message is received from a contact"},
 	{"value": string(models.WebhookEventMessageSent), "label": "Message Sent", "description": "When an agent sends a message"},
+	{"value": string(models.WebhookEventMessageOutgoing), "label": "Message Outgoing", "description": "When a message is sent to a contact (includes echoes)"},
 	{"value": string(models.WebhookEventContactCreated), "label": "Contact Created", "description": "When a new contact is created"},
 	{"value": string(models.WebhookEventTransferCreated), "label": "Transfer Created", "description": "When a transfer to human agent is requested"},
 	{"value": string(models.WebhookEventTransferAssigned), "label": "Transfer Assigned", "description": "When a transfer is assigned to an agent"},
@@ -180,7 +181,7 @@ func (a *App) GetWebhook(r *fastglue.Request) error {
 
 // CreateWebhook creates a new webhook
 func (a *App) CreateWebhook(r *fastglue.Request) error {
-	orgID, err := a.getOrgID(r)
+	orgID, userID, err := a.getOrgAndUserID(r)
 	if err != nil {
 		return r.SendErrorEnvelope(fasthttp.StatusUnauthorized, "Unauthorized", nil, "")
 	}
@@ -232,12 +233,15 @@ func (a *App) CreateWebhook(r *fastglue.Request) error {
 	// Invalidate cache
 	a.InvalidateWebhooksCache(orgID)
 
+	a.logAudit(orgID, userID,
+		"webhook", webhook.ID, models.AuditActionCreated, nil, webhookAuditSnapshot(&webhook))
+
 	return r.SendEnvelope(webhookToResponse(webhook))
 }
 
 // UpdateWebhook updates an existing webhook
 func (a *App) UpdateWebhook(r *fastglue.Request) error {
-	orgID, err := a.getOrgID(r)
+	orgID, userID, err := a.getOrgAndUserID(r)
 	if err != nil {
 		return r.SendErrorEnvelope(fasthttp.StatusUnauthorized, "Unauthorized", nil, "")
 	}
@@ -251,6 +255,8 @@ func (a *App) UpdateWebhook(r *fastglue.Request) error {
 	if err != nil {
 		return nil
 	}
+
+	oldSnap := webhookAuditSnapshot(webhook)
 
 	var req WebhookRequest
 	if err := a.decodeRequest(r, &req); err != nil {
@@ -294,12 +300,15 @@ func (a *App) UpdateWebhook(r *fastglue.Request) error {
 	// Invalidate cache
 	a.InvalidateWebhooksCache(orgID)
 
+	a.logAudit(orgID, userID,
+		"webhook", webhook.ID, models.AuditActionUpdated, oldSnap, webhookAuditSnapshot(webhook))
+
 	return r.SendEnvelope(webhookToResponse(*webhook))
 }
 
 // DeleteWebhook deletes a webhook
 func (a *App) DeleteWebhook(r *fastglue.Request) error {
-	orgID, err := a.getOrgID(r)
+	orgID, userID, err := a.getOrgAndUserID(r)
 	if err != nil {
 		return r.SendErrorEnvelope(fasthttp.StatusUnauthorized, "Unauthorized", nil, "")
 	}
@@ -309,17 +318,21 @@ func (a *App) DeleteWebhook(r *fastglue.Request) error {
 		return nil
 	}
 
-	result := a.DB.Where("id = ? AND organization_id = ?", webhookID, orgID).Delete(&models.Webhook{})
-	if result.Error != nil {
-		a.Log.Error("Failed to delete webhook", "error", result.Error)
-		return r.SendErrorEnvelope(fasthttp.StatusInternalServerError, "Failed to delete webhook", nil, "")
-	}
-	if result.RowsAffected == 0 {
+	var webhook models.Webhook
+	if err := a.DB.Where("id = ? AND organization_id = ?", webhookID, orgID).First(&webhook).Error; err != nil {
 		return r.SendErrorEnvelope(fasthttp.StatusNotFound, "Webhook not found", nil, "")
+	}
+
+	if err := a.DB.Delete(&webhook).Error; err != nil {
+		a.Log.Error("Failed to delete webhook", "error", err)
+		return r.SendErrorEnvelope(fasthttp.StatusInternalServerError, "Failed to delete webhook", nil, "")
 	}
 
 	// Invalidate cache
 	a.InvalidateWebhooksCache(orgID)
+
+	a.logAudit(orgID, userID,
+		"webhook", webhookID, models.AuditActionDeleted, webhookAuditSnapshot(&webhook), nil)
 
 	return r.SendEnvelope(map[string]string{"message": "Webhook deleted successfully"})
 }
@@ -370,6 +383,20 @@ func (a *App) TestWebhook(r *fastglue.Request) error {
 	}
 
 	return r.SendEnvelope(map[string]string{"message": "Test webhook sent successfully"})
+}
+
+func webhookAuditSnapshot(wh *models.Webhook) map[string]any {
+	if wh == nil {
+		return nil
+	}
+	events := make([]string, len(wh.Events))
+	copy(events, wh.Events)
+	return map[string]any{
+		"name":      wh.Name,
+		"url":       wh.URL,
+		"events":    events,
+		"is_active": wh.IsActive,
+	}
 }
 
 func webhookToResponse(wh models.Webhook) WebhookResponse {

@@ -47,20 +47,34 @@ jobs:
       - name: Set up Go
         uses: actions/setup-go@v5
         with:
-          go-version: "1.23"
+          go-version: "1.25"
           cache: true
 
       - name: Download dependencies
         run: go mod download
+
+      - name: Install gotestsum
+        run: go install gotest.tools/gotestsum@latest
 
       - name: Run tests
         env:
           TEST_DATABASE_URL: postgres://postgres:postgres@localhost:5432/whatomate_test?sslmode=disable
           TEST_REDIS_URL: redis://localhost:6379
         run: |
-          # Run tests with coverage, excluding test utility packages from coverage calculation
-          # -p 1 runs packages sequentially to avoid database conflicts (all packages share the test DB)
-          go test -v -race -p 1 -coverprofile=coverage.out $(go list ./... | grep -v /test/)
+          # gotestsum gives live "Running N/M tests" output, names failed
+          # tests prominently at the end, and re-prints failure logs in a
+          # final summary so we don't have to scroll.
+          # -p 1 runs packages sequentially to avoid database conflicts
+          # (all packages share the test DB).
+          # --format testname streams a PASS/FAIL line per test as it
+          # completes, so a hanging test is easy to spot — the last
+          # printed test is the one before the hang.
+          # -timeout 10m caps the whole run so a hung test fails the job
+          # in a reasonable window instead of waiting for go's default.
+          gotestsum \
+            --format testname \
+            --hide-summary=skipped \
+            -- -race -p 1 -timeout 10m -coverprofile=coverage.out $(go list ./... | grep -v /test/)
 
       - name: Display coverage
         run: go tool cover -func=coverage.out | grep "total:"
@@ -81,13 +95,13 @@ jobs:
       - name: Set up Go
         uses: actions/setup-go@v5
         with:
-          go-version: "1.23"
+          go-version: "1.25"
           cache: true
 
       - name: Run golangci-lint
-        uses: golangci/golangci-lint-action@v6
+        uses: golangci/golangci-lint-action@v7
         with:
-          version: latest
+          version: v2.11.4
 
   build:
     runs-on: ubuntu-latest
@@ -98,7 +112,7 @@ jobs:
       - name: Set up Go
         uses: actions/setup-go@v5
         with:
-          go-version: "1.23"
+          go-version: "1.25"
           cache: true
 
       - name: Build

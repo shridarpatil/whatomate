@@ -25,12 +25,8 @@ type TagResponse struct {
 
 // ListTags returns all tags for the organization
 func (a *App) ListTags(r *fastglue.Request) error {
-	orgID, userID, err := a.getOrgAndUserID(r)
+	orgID, _, err := a.requireAuth(r, models.ResourceTags, models.ActionRead)
 	if err != nil {
-		return r.SendErrorEnvelope(fasthttp.StatusUnauthorized, "Unauthorized", nil, "")
-	}
-
-	if err := a.requirePermission(r, userID, models.ResourceTags, models.ActionRead); err != nil {
 		return nil
 	}
 
@@ -72,22 +68,13 @@ func (a *App) ListTags(r *fastglue.Request) error {
 		result = append(result, tagToResponse(tags[i]))
 	}
 
-	return r.SendEnvelope(map[string]any{
-		"tags":  result,
-		"total": total,
-		"page":  pg.Page,
-		"limit": pg.Limit,
-	})
+	return r.SendEnvelope(listEnvelope("tags", result, total, pg))
 }
 
 // CreateTag creates a new tag
 func (a *App) CreateTag(r *fastglue.Request) error {
-	orgID, userID, err := a.getOrgAndUserID(r)
+	orgID, _, err := a.requireAuth(r, models.ResourceTags, models.ActionWrite)
 	if err != nil {
-		return r.SendErrorEnvelope(fasthttp.StatusUnauthorized, "Unauthorized", nil, "")
-	}
-
-	if err := a.requirePermission(r, userID, models.ResourceTags, models.ActionWrite); err != nil {
 		return nil
 	}
 
@@ -133,12 +120,8 @@ func (a *App) CreateTag(r *fastglue.Request) error {
 
 // UpdateTag updates an existing tag
 func (a *App) UpdateTag(r *fastglue.Request) error {
-	orgID, userID, err := a.getOrgAndUserID(r)
+	orgID, _, err := a.requireAuth(r, models.ResourceTags, models.ActionWrite)
 	if err != nil {
-		return r.SendErrorEnvelope(fasthttp.StatusUnauthorized, "Unauthorized", nil, "")
-	}
-
-	if err := a.requirePermission(r, userID, models.ResourceTags, models.ActionWrite); err != nil {
 		return nil
 	}
 
@@ -246,12 +229,8 @@ func (a *App) UpdateTag(r *fastglue.Request) error {
 
 // DeleteTag deletes a tag
 func (a *App) DeleteTag(r *fastglue.Request) error {
-	orgID, userID, err := a.getOrgAndUserID(r)
+	orgID, _, err := a.requireAuth(r, models.ResourceTags, models.ActionDelete)
 	if err != nil {
-		return r.SendErrorEnvelope(fasthttp.StatusUnauthorized, "Unauthorized", nil, "")
-	}
-
-	if err := a.requirePermission(r, userID, models.ResourceTags, models.ActionDelete); err != nil {
 		return nil
 	}
 

@@ -23,25 +23,25 @@ import (
 
 // CustomActionRequest represents the request body for creating/updating a custom action
 type CustomActionRequest struct {
-	Name         string                 `json:"name"`
-	Icon         string                 `json:"icon"`
-	ActionType   models.ActionType      `json:"action_type"` // webhook, url, javascript
-	Config       map[string]any `json:"config"`
-	IsActive     bool                   `json:"is_active"`
-	DisplayOrder int                    `json:"display_order"`
+	Name         string            `json:"name"`
+	Icon         string            `json:"icon"`
+	ActionType   models.ActionType `json:"action_type"` // webhook, url, javascript
+	Config       map[string]any    `json:"config"`
+	IsActive     bool              `json:"is_active"`
+	DisplayOrder int               `json:"display_order"`
 }
 
 // CustomActionResponse represents the API response for a custom action
 type CustomActionResponse struct {
-	ID           uuid.UUID              `json:"id"`
-	Name         string                 `json:"name"`
-	Icon         string                 `json:"icon"`
-	ActionType   models.ActionType      `json:"action_type"`
-	Config       map[string]any `json:"config"`
-	IsActive     bool                   `json:"is_active"`
-	DisplayOrder int                    `json:"display_order"`
-	CreatedAt    string                 `json:"created_at"`
-	UpdatedAt    string                 `json:"updated_at"`
+	ID           uuid.UUID         `json:"id"`
+	Name         string            `json:"name"`
+	Icon         string            `json:"icon"`
+	ActionType   models.ActionType `json:"action_type"`
+	Config       map[string]any    `json:"config"`
+	IsActive     bool              `json:"is_active"`
+	DisplayOrder int               `json:"display_order"`
+	CreatedAt    string            `json:"created_at"`
+	UpdatedAt    string            `json:"updated_at"`
 }
 
 // ExecuteActionRequest represents the request to execute a custom action
@@ -51,11 +51,11 @@ type ExecuteActionRequest struct {
 
 // ActionResult represents the result of executing a custom action
 type ActionResult struct {
-	Success     bool                   `json:"success"`
-	Message     string                 `json:"message,omitempty"`
-	RedirectURL string                 `json:"redirect_url,omitempty"`
-	Clipboard   string                 `json:"clipboard,omitempty"`
-	Toast       *ToastConfig           `json:"toast,omitempty"`
+	Success     bool           `json:"success"`
+	Message     string         `json:"message,omitempty"`
+	RedirectURL string         `json:"redirect_url,omitempty"`
+	Clipboard   string         `json:"clipboard,omitempty"`
+	Toast       *ToastConfig   `json:"toast,omitempty"`
 	Data        map[string]any `json:"data,omitempty"`
 }
 
@@ -109,12 +109,7 @@ func (a *App) ListCustomActions(r *fastglue.Request) error {
 		result[i] = customActionToResponse(action)
 	}
 
-	return r.SendEnvelope(map[string]any{
-		"custom_actions": result,
-		"total":          total,
-		"page":           pg.Page,
-		"limit":          pg.Limit,
-	})
+	return r.SendEnvelope(listEnvelope("custom_actions", result, total, pg))
 }
 
 // GetCustomAction returns a single custom action by ID
@@ -557,7 +552,16 @@ func (a *App) executeJavaScriptAction(action models.CustomAction, context map[st
 				result.Clipboard = clip
 			}
 			if url, ok := jsResult["url"].(string); ok {
-				result.RedirectURL = url
+				tokenBytes := make([]byte, 16)
+				_, _ = rand.Read(tokenBytes)
+				token := hex.EncodeToString(tokenBytes)
+				redirectTokenMutex.Lock()
+				redirectTokens[token] = redirectToken{
+					URL:       url,
+					ExpiresAt: time.Now().Add(30 * time.Second),
+				}
+				redirectTokenMutex.Unlock()
+				result.RedirectURL = "/api/custom-actions/redirect/" + token
 			}
 			if msg, ok := jsResult["message"].(string); ok {
 				result.Message = msg

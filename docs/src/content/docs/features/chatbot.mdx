@@ -183,26 +183,59 @@ Design multi-step conversation flows with branching logic to guide customers thr
 <img src="/whatomate/images/conversation-flow-light.png" alt="Conversation Flow Builder" class="light-only" />
 <img src="/whatomate/images/conversation-flow-dark.png" alt="Conversation Flow Builder" class="dark-only" />
 
-The visual flow builder allows you to:
-- Create multiple conversation steps
-- Define user input types (text, buttons, lists)
-- Store responses in variables
-- Add conditional branching
-- Configure completion actions
+The visual flow builder is a node-and-edge graph editor. Drop nodes
+onto the canvas, wire them together, and the runtime walks the graph
+edge-by-edge for each inbound message. Each node has a `type` (what
+it does), a `config` blob (its parameters), and outgoing edges
+labelled with the outcome they handle (`default`, `button:<id>`,
+`true`/`false`, `in_hours`/`out_of_hours`, ...).
+
+### Node Types
+
+| Type | Purpose | Outgoing edges |
+|------|---------|----------------|
+| `message` | Send a templated text message and move on. | `default` |
+| `prompt` | Send a question, wait for the user's reply, optionally validate against a regex, and store the response. | `default`, `max_retries` |
+| `buttons` | Send interactive reply buttons and branch on which one the user taps. | `button:<id>` per button |
+| `api_call` | Fire an HTTP request, capture mapped fields into session data, optionally send a templated message. | `http:2xx`, `http:non2xx` |
+| `condition` | Evaluate an expression against session data and route on the result. | `true`, `false` |
+| `timing` | Route based on a per-day business-hours schedule. | `in_hours`, `out_of_hours` |
+| `whatsapp_flow` | Send a native WhatsApp Flow form and merge the submission into session data. | `default` |
+| `transfer` | Hand off to a team / queue and end the flow. | (terminal) |
+| `goto_flow` | Jump execution into another flow (variables carry over). | (handled internally) |
+| `webhook` | Fire-and-forget HTTP call; result is ignored. | `default` |
+| `end` | Optionally send a final message and terminate the session. | (terminal) |
+
+### Condition Expressions
+
+`condition` nodes use a small expression language
+([expr-lang](https://expr-lang.org/)) evaluated against session
+variables. Top-level identifiers refer to keys stored via
+`prompt.store_as`, `api_call.response_mapping`, or earlier inputs.
+
+```text
+tier == "premium" and amount > 100
+status in ["active", "trialing"]
+phone_number startsWith "+91"
+```
+
+Unknown identifiers resolve to `nil`, so missing data evaluates as
+"false" rather than throwing. Compile/runtime errors also resolve to
+the `false` edge — the webhook always succeeds, even on a typo.
 
 ### Flow Features
 
 | Feature | Description |
 |---------|-------------|
-| **Input Validation** | Validate user responses with regex patterns |
-| **Variable Storage** | Store user inputs for later use in the conversation |
-| **Conditional Logic** | Branch based on user responses |
+| **Input Validation** | Validate user responses on `prompt` nodes with regex patterns |
+| **Variable Storage** | Store user inputs and API response fields for later use |
+| **Conditional Logic** | Branch on expressions, button clicks, business hours, or HTTP status |
 | **API Integration** | Fetch data from external APIs with response mapping |
 | **Template Engine** | Format messages with variables, conditionals, and loops |
 | **Webhook Headers** | Configure custom headers for API calls and completion webhooks |
 | **Agent Transfer** | Transfer to human agent when needed |
 | **WhatsApp Flows** | Integrate native WhatsApp Flows |
-| **Drag & Drop Ordering** | Reorder steps by dragging them to new positions |
+| **Sub-flows** | `goto_flow` jumps into another flow, carrying variables forward |
 
 ### API Integration
 
@@ -215,15 +248,31 @@ The "Fetch from API" step type allows you to call external APIs and use the resp
 1. **Set API URL and Method**
 
    Enter the API endpoint URL and select the HTTP method (GET, POST, PUT, PATCH).
-   Use `{{variable}}` syntax to include session data in the URL.
+   Use `{{variable}}` syntax to include session data, including built-in
+   variables like `{{phone_number}}` (see [Built-in variables](#built-in-variables)
+   below).
+
+   ```
+   https://api.example.com/users/{{phone_number}}
+   ```
 
 2. **Add Headers (Optional)**
 
    Configure custom headers like Authorization tokens or API keys.
+   Variables are substituted in header values too:
+
+   ```
+   X-User-Phone: {{phone_number}}
+   Authorization: Bearer {{api_token}}
+   ```
 
 3. **Configure Request Body (POST/PUT/PATCH)**
 
-   Enter JSON body with variables: `{"phone": "{{phone_number}}", "name": "{{name}}"}`
+   Enter JSON body with variables. The same substitution rules apply:
+
+   ```json
+   {"phone": "{{phone_number}}", "name": "{{name}}"}
+   ```
 
 4. **Set Response Mapping**
 
@@ -237,6 +286,35 @@ The "Fetch from API" step type allows you to call external APIs and use the resp
    Use the template syntax to format the API response data.
 
 </Steps>
+
+#### Built-in variables
+
+The following variables are always available inside a flow-step API
+config (URL, headers, body) — no capture step required:
+
+| Variable | Value |
+|---|---|
+| `{{phone_number}}` | The contact's WhatsApp number in E.164 format (e.g. `+919876543210`). |
+| `{{_flow_id}}` | UUID of the running flow. |
+| `{{_flow_name}}` | Human-readable name of the flow. |
+
+Anything else has to come from somewhere — typically:
+- An earlier flow step with a `Store As` configured (user input gets saved
+  under that key for later steps).
+- A previous API step's `response_mapping` (mapped fields are persisted
+  into the session for the rest of the flow).
+
+The same built-ins are also substituted in **flow-completion webhook**
+URLs, custom bodies, and custom headers, so you can fire any of these
+at downstream systems when a flow finishes.
+
+<Aside type="note">
+  Substitution is verbatim — there's no URL-encoding pass. For
+  `{{phone_number}}` (which always starts with `+`), this is fine inside
+  URL paths but not inside query strings, where some servers parse `+`
+  as a space. Prefer `https://api.example.com/users/{{phone_number}}`
+  over `?phone={{phone_number}}` when possible.
+</Aside>
 
 ### Template Syntax
 

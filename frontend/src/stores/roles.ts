@@ -84,6 +84,21 @@ export const useRolesStore = defineStore('roles', () => {
     }
   }
 
+  async function fetchRole(id: string): Promise<Role> {
+    loading.value = true
+    error.value = null
+    try {
+      const response = await rolesService.get(id)
+      const data = (response.data as any).data || response.data
+      return data
+    } catch (err: any) {
+      error.value = err.response?.data?.message || 'Failed to fetch role'
+      throw err
+    } finally {
+      loading.value = false
+    }
+  }
+
   async function fetchPermissions(): Promise<void> {
     try {
       const response = await permissionsService.list()
@@ -150,6 +165,7 @@ export const useRolesStore = defineStore('roles', () => {
     loading,
     error,
     fetchRoles,
+    fetchRole,
     fetchPermissions,
     createRole,
     updateRole,

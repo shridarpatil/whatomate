@@ -14,13 +14,13 @@ import (
 	"github.com/shridarpatil/whatomate/internal/assignment"
 	"github.com/shridarpatil/whatomate/internal/calling"
 	"github.com/shridarpatil/whatomate/internal/config"
-	"github.com/shridarpatil/whatomate/internal/storage"
-	"github.com/shridarpatil/whatomate/internal/tts"
 	"github.com/shridarpatil/whatomate/internal/database"
 	"github.com/shridarpatil/whatomate/internal/frontend"
 	"github.com/shridarpatil/whatomate/internal/handlers"
 	"github.com/shridarpatil/whatomate/internal/middleware"
 	"github.com/shridarpatil/whatomate/internal/queue"
+	"github.com/shridarpatil/whatomate/internal/storage"
+	"github.com/shridarpatil/whatomate/internal/tts"
 	"github.com/shridarpatil/whatomate/internal/websocket"
 	"github.com/shridarpatil/whatomate/internal/worker"
 	"github.com/shridarpatil/whatomate/pkg/whatsapp"
@@ -131,6 +131,11 @@ func runServer(args []string) {
 		lo.Warn("Debug mode is enabled in production! This may expose sensitive information.")
 	}
 
+	// Require explicit CORS origins in production
+	if cfg.App.Environment == "production" && cfg.Server.AllowedOrigins == "" {
+		lo.Fatal("server.allowed_origins must be set in production (e.g. \"https://app.example.com\")")
+	}
+
 	// Set log level based on environment
 	if cfg.App.Environment == "production" {
 		lo = logf.New(logf.Opts{
@@ -151,6 +156,11 @@ func runServer(args []string) {
 	if *migrate {
 		if err := database.RunMigrationWithProgress(db, &cfg.DefaultAdmin); err != nil {
 			lo.Fatal("Migration failed", "error", err)
+		}
+		// Backfill v2 graph for any legacy chatbot flow still on Steps[].
+		// Idempotent — re-running is a no-op once every row is converted.
+		if err := handlers.BackfillChatbotFlowGraph(db, lo); err != nil {
+			lo.Fatal("Chatbot flow graph backfill failed", "error", err)
 		}
 	}
 
@@ -250,11 +260,11 @@ func runServer(args []string) {
 
 	// Create server with CORS wrapper
 	server := &fasthttp.Server{
-		Handler:      corsWrapper(g.Handler(), allowedOrigins),
-		ReadTimeout:  time.Duration(cfg.Server.ReadTimeout) * time.Second,
-		WriteTimeout: time.Duration(cfg.Server.WriteTimeout) * time.Second,
+		Handler:            corsWrapper(g.Handler(), allowedOrigins),
+		ReadTimeout:        time.Duration(cfg.Server.ReadTimeout) * time.Second,
+		WriteTimeout:       time.Duration(cfg.Server.WriteTimeout) * time.Second,
 		MaxRequestBodySize: 15 * 1024 * 1024,
-		Name:         "Whatomate",
+		Name:               "Whatomate",
 	}
 
 	// Start server in goroutine
@@ -445,6 +455,8 @@ func setupRoutes(g *fastglue.Fastglue, app *handlers.App, lo logf.Logger, basePa
 	g.GET("/health", app.HealthCheck)
 	g.GET("/ready", app.ReadyCheck)
 
+	g.GET("/api/embedded-signup/config", app.GetEmbeddedSignupConfig)
+
 	// Auth routes (public, optionally rate-limited)
 	if cfg.RateLimit.Enabled {
 		window := time.Duration(cfg.RateLimit.WindowSeconds) * time.Second
@@ -524,6 +536,34 @@ func setupRoutes(g *fastglue.Fastglue, app *handlers.App, lo logf.Logger, basePa
 		return r
 	})
 
+	// Global rate limit on all /api/ routes, keyed by user ID (or IP if unauthenticated).
+	// Runs after auth so the user identity is available.
+	if cfg.RateLimit.Enabled {
+		apiMax := cfg.RateLimit.APIMaxRequests
+		if apiMax == 0 {
+			apiMax = 200
+		}
+		apiWindow := cfg.RateLimit.APIWindowSeconds
+		if apiWindow == 0 {
+			apiWindow = 60
+		}
+		apiRL := middleware.UserAwareRateLimit(middleware.RateLimitOpts{
+			Redis:      rdb,
+			Log:        lo,
+			Max:        apiMax,
+			Window:     time.Duration(apiWindow) * time.Second,
+			KeyPrefix:  "api_global",
+			TrustProxy: cfg.RateLimit.TrustProxy,
+		})
+		g.Before(func(r *fastglue.Request) *fastglue.Request {
+			path := string(r.RequestCtx.Path())
+			if len(path) > 4 && path[:4] == "/api" {
+				return apiRL(r)
+			}
+			return r
+		})
+	}
+
 	// Role-based access control middleware
 	g.Before(func(r *fastglue.Request) *fastglue.Request {
 		method := string(r.RequestCtx.Method())
@@ -562,15 +602,19 @@ func setupRoutes(g *fastglue.Fastglue, app *handlers.App, lo logf.Logger, basePa
 
 	// API Keys (admin only - enforced by middleware)
 	g.GET("/api/api-keys", app.ListAPIKeys)
+	g.GET("/api/api-keys/{id}", app.GetAPIKey)
 	g.POST("/api/api-keys", app.CreateAPIKey)
+	g.PUT("/api/api-keys/{id}", app.UpdateAPIKey)
 	g.DELETE("/api/api-keys/{id}", app.DeleteAPIKey)
 
 	// Accounts
 	g.GET("/api/accounts", app.ListAccounts)
 	g.POST("/api/accounts", app.CreateAccount)
+	g.POST("/api/accounts/exchange-token", app.ExchangeToken) // Embedded signup
 	g.GET("/api/accounts/{id}", app.GetAccount)
 	g.PUT("/api/accounts/{id}", app.UpdateAccount)
 	g.DELETE("/api/accounts/{id}", app.DeleteAccount)
+	g.POST("/api/accounts/{id}/register", app.RegisterPhoneNumber) // Embedded signup manual/2fa registration
 	g.POST("/api/accounts/{id}/test", app.TestAccountConnection)
 	g.POST("/api/accounts/{id}/subscribe", app.SubscribeApp)
 	g.GET("/api/accounts/{id}/business_profile", app.GetBusinessProfile)
@@ -602,6 +646,7 @@ func setupRoutes(g *fastglue.Fastglue, app *handlers.App, lo logf.Logger, basePa
 	// Messages
 	g.GET("/api/contacts/{id}/messages", app.GetMessages)
 	g.POST("/api/contacts/{id}/messages", app.SendMessage)
+	g.POST("/api/contacts/{id}/mark-read", app.MarkContactRead)
 	g.POST("/api/contacts/{id}/messages/{message_id}/reaction", app.SendReaction)
 	g.POST("/api/messages", app.SendMessage) // Legacy route
 	g.POST("/api/messages/template", app.SendTemplateMessage)

@@ -13,6 +13,7 @@ import (
 	"github.com/redis/go-redis/v9"
 	"github.com/shridarpatil/whatomate/internal/assignment"
 	"github.com/shridarpatil/whatomate/internal/config"
+	"github.com/shridarpatil/whatomate/internal/flowgraph"
 	"github.com/shridarpatil/whatomate/internal/models"
 	"github.com/shridarpatil/whatomate/internal/storage"
 	"github.com/shridarpatil/whatomate/internal/websocket"
@@ -23,21 +24,21 @@ import (
 
 // CallSession represents an active call with its WebRTC state
 type CallSession struct {
-	ID              string // WhatsApp call_id
-	OrganizationID  uuid.UUID
-	AccountName     string
-	CallerPhone     string
-	ContactID       uuid.UUID
-	CallLogID       uuid.UUID
-	Status          models.CallStatus
-	PeerConnection  *webrtc.PeerConnection
-	AudioTrack      *webrtc.TrackLocalStaticRTP
-	IVRGraph        *IVRFlowGraph
-	IVRCtx          *IVRContext
-	IVRFlow         *models.IVRFlow
-	IVRPlayer       *AudioPlayer // persists across goto_flow for RTP continuity
-	DTMFBuffer      chan byte
-	StartedAt       time.Time
+	ID             string // WhatsApp call_id
+	OrganizationID uuid.UUID
+	AccountName    string
+	CallerPhone    string
+	ContactID      uuid.UUID
+	CallLogID      uuid.UUID
+	Status         models.CallStatus
+	PeerConnection *webrtc.PeerConnection
+	AudioTrack     *webrtc.TrackLocalStaticRTP
+	IVRGraph       *IVRFlowGraph
+	IVRCtx         *IVRContext
+	IVRFlow        *models.IVRFlow
+	IVRPlayer      *AudioPlayer // persists across goto_flow for RTP continuity
+	DTMFBuffer     chan byte
+	StartedAt      time.Time
 
 	// Recording (one per direction for correct OGG/Opus playback)
 	CallerRecorder *CallRecorder // caller's audio stream
@@ -59,20 +60,27 @@ type CallSession struct {
 	BridgeStarted     chan struct{} // closed when bridge takes over caller track
 	TransferAccepted  chan struct{} // closed when an agent accepts the transfer (rotation signal)
 	TransferDone      chan string   // outcome sent when transfer ends; nil = terminal
-	LastRTPSeq        uint16       // last RTP seq from bridge, for post-transfer player
-	LastRTPTimestamp   uint32       // last RTP timestamp from bridge
+	LastRTPSeq        uint16        // last RTP seq from bridge, for post-transfer player
+	LastRTPTimestamp  uint32        // last RTP timestamp from bridge
 
 	// Ringback (outgoing calls)
 	RingbackPlayer *AudioPlayer
+
+	// Sticky agent for voice_call-button incoming calls. When set,
+	// HandleIncomingCall skips the IVR load and the post-media branch in
+	// webrtc.go kicks off a transfer to this agent directly (see
+	// initiateTransfer, which prefers this over the contact's
+	// assigned_user_id).
+	StickyAgentID *uuid.UUID
 
 	// Outgoing call fields
 	Direction      models.CallDirection
 	AgentID        uuid.UUID
 	TargetPhone    string
-	WAPeerConn     *webrtc.PeerConnection           // WhatsApp-side PC (outgoing only)
-	WAAudioTrack   *webrtc.TrackLocalStaticRTP       // server→WhatsApp audio track
-	WARemoteTrack  *webrtc.TrackRemote               // WhatsApp's remote audio track
-	SDPAnswerReady chan string                        // webhook delivers SDP answer here
+	WAPeerConn     *webrtc.PeerConnection      // WhatsApp-side PC (outgoing only)
+	WAAudioTrack   *webrtc.TrackLocalStaticRTP // server→WhatsApp audio track
+	WARemoteTrack  *webrtc.TrackRemote         // WhatsApp's remote audio track
+	SDPAnswerReady chan string                 // webhook delivers SDP answer here
 
 	mu sync.Mutex
 }
@@ -105,72 +113,16 @@ type TransferCallbacks struct {
 	OnConnect *TransferHTTPCallback
 }
 
-// IVRNodePosition stores the (x,y) position for the visual editor.
-type IVRNodePosition struct {
-	X float64 `json:"x"`
-	Y float64 `json:"y"`
-}
-
-// IVRNode represents a single node (applet) in an IVR flow graph.
-type IVRNode struct {
-	ID       string                 `json:"id"`
-	Type     IVRNodeType            `json:"type"`
-	Label    string                 `json:"label"`
-	Position IVRNodePosition        `json:"position"`
-	Config   map[string]any `json:"config"`
-}
-
-// IVREdge connects two nodes in the flow graph.
-type IVREdge struct {
-	From      string `json:"from"`
-	To        string `json:"to"`
-	Condition string `json:"condition"` // default, digit:N, timeout, max_retries, http:2xx, http:non2xx, in_hours, out_of_hours
-}
-
-// IVRFlowGraph is the top-level structure stored in IVRFlow.Menu (version 2).
-type IVRFlowGraph struct {
-	Version   int       `json:"version"`
-	Nodes     []IVRNode `json:"nodes"`
-	Edges     []IVREdge `json:"edges"`
-	EntryNode string    `json:"entry_node"`
-
-	// Runtime lookup maps — populated by buildMaps()
-	nodeMap map[string]*IVRNode  // id → node
-	edgeMap map[string][]IVREdge // from-node-id → outgoing edges
-}
-
-// buildMaps populates the runtime lookup maps for fast traversal.
-func (g *IVRFlowGraph) buildMaps() {
-	g.nodeMap = make(map[string]*IVRNode, len(g.Nodes))
-	g.edgeMap = make(map[string][]IVREdge, len(g.Edges))
-	for i := range g.Nodes {
-		g.nodeMap[g.Nodes[i].ID] = &g.Nodes[i]
-	}
-	for _, e := range g.Edges {
-		g.edgeMap[e.From] = append(g.edgeMap[e.From], e)
-	}
-}
-
-// getNode returns the node with the given ID, or nil.
-func (g *IVRFlowGraph) getNode(id string) *IVRNode {
-	return g.nodeMap[id]
-}
-
-// resolveEdge finds the next node ID for a given outcome.
-// It tries an exact condition match first, then falls back to "default".
-func (g *IVRFlowGraph) resolveEdge(fromID, outcome string) string {
-	edges := g.edgeMap[fromID]
-	var defaultTarget string
-	for _, e := range edges {
-		if e.Condition == outcome {
-			return e.To
-		}
-		if e.Condition == "default" {
-			defaultTarget = e.To
-		}
-	}
-	return defaultTarget
-}
+// IVRNode, IVREdge and IVRFlowGraph are the IVR domain's views of the shared
+// flow-graph types, specialized to IVRNodeType. Edge conditions for the IVR
+// engine include "default", "digit:N", "timeout", "max_retries", "http:2xx",
+// "http:non2xx", "in_hours", "out_of_hours". Traversal (BuildMaps/Node/
+// ResolveEdge/OutgoingEdges) lives in internal/flowgraph.
+type (
+	IVRNode      = flowgraph.Node[IVRNodeType]
+	IVREdge      = flowgraph.Edge
+	IVRFlowGraph = flowgraph.Graph[IVRNodeType]
+)
 
 // IVRContext holds runtime state during IVR flow execution.
 type IVRContext struct {
@@ -231,7 +183,12 @@ func NewManager(cfg *config.CallingConfig, s3Client *storage.S3Client, db *gorm.
 // HandleIncomingCall processes a new incoming call and starts WebRTC negotiation.
 // The sdpOffer parameter is the consumer's SDP offer received from the webhook's
 // session.sdp field in the "connect" event.
-func (m *Manager) HandleIncomingCall(account *models.WhatsAppAccount, contact *models.Contact, callLog *models.CallLog, sdpOffer string) {
+//
+// stickyAgentID, if non-nil, comes from the voice_call button payload — the
+// caller pre-validated the agent's eligibility. We bypass the IVR for these
+// calls; after WebRTC media connects, webrtc.go kicks off a transfer to this
+// agent directly instead of running runIVRFlow.
+func (m *Manager) HandleIncomingCall(account *models.WhatsAppAccount, contact *models.Contact, callLog *models.CallLog, sdpOffer string, stickyAgentID *uuid.UUID) {
 	session := &CallSession{
 		ID:             callLog.WhatsAppCallID,
 		OrganizationID: account.OrganizationID,
@@ -243,10 +200,12 @@ func (m *Manager) HandleIncomingCall(account *models.WhatsAppAccount, contact *m
 		DTMFBuffer:     make(chan byte, 32),
 		StartedAt:      time.Now(),
 		BridgeStarted:  make(chan struct{}),
+		StickyAgentID:  stickyAgentID,
 	}
 
-	// Load IVR flow if assigned (cached)
-	if callLog.IVRFlowID != nil {
+	// Load IVR flow if assigned (cached). Skipped for sticky-routed calls —
+	// those bypass IVR entirely and go straight to a transfer.
+	if stickyAgentID == nil && callLog.IVRFlowID != nil {
 		session.IVRFlow = m.getIVRFlowCached(*callLog.IVRFlowID)
 	}
 
@@ -335,6 +294,18 @@ type orgCallingSettings struct {
 	MaskPhoneNumbers    bool
 	HoldMusicFile       string
 	RingbackFile        string
+}
+
+// transferRingFile returns the audio file the caller should hear while a
+// transfer is pending an agent's acceptance. Prefers RingbackFile (sounds
+// like "we're connecting you", closer to what a customer expects) and
+// falls back to HoldMusicFile when no ringback asset is configured for
+// the org. Empty string ⇒ silence.
+func (s orgCallingSettings) transferRingFile() string {
+	if s.RingbackFile != "" {
+		return s.RingbackFile
+	}
+	return s.HoldMusicFile
 }
 
 // getOrgCallingSettings returns cached org-level calling overrides,
@@ -604,6 +575,14 @@ func (m *Manager) finalizeRecording(orgID, callLogID uuid.UUID, callerRec, agent
 		}
 	}
 
+	m.log.Info("Recording finalized",
+		"call_log_id", callLogID,
+		"caller_packets", callerCount,
+		"agent_packets", agentCount,
+		"caller_path", callerPath,
+		"agent_path", agentPath,
+	)
+
 	maxCount := callerCount
 	if agentCount > maxCount {
 		maxCount = agentCount
@@ -663,7 +642,7 @@ func (m *Manager) finalizeRecording(orgID, callLogID uuid.UUID, callerRec, agent
 	if err := m.db.Model(&models.CallLog{}).
 		Where("id = ?", callLogID).
 		Updates(map[string]any{
-			"recording_s3_key":    s3Key,
+			"recording_s3_key":   s3Key,
 			"recording_duration": durationSecs,
 		}).Error; err != nil {
 		m.log.Error("Failed to update call log with recording metadata", "error", err, "s3_key", s3Key, "call_log_id", callLogID)
@@ -690,10 +669,14 @@ func mergeRecordings(file1, file2 string) (string, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 90*time.Second)
 	defer cancel()
 
+	// file1 = caller, file2 = agent. Agent browser mic is typically quieter
+	// than WhatsApp's caller audio. Boost agent volume and use loudnorm to
+	// level both streams before mixing.
 	cmd := exec.CommandContext(ctx, "ffmpeg",
 		"-i", file1,
 		"-i", file2,
-		"-filter_complex", "amix=inputs=2:duration=longest",
+		"-filter_complex",
+		"[0:a]loudnorm=I=-16:TP=-1.5:LRA=11[a1];[1:a]volume=3,loudnorm=I=-16:TP=-1.5:LRA=11[a2];[a1][a2]amix=inputs=2:duration=longest:normalize=0",
 		"-c:a", "libopus",
 		"-y", outPath,
 	)

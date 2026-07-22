@@ -1,0 +1,160 @@
+---
+title: SSO (Single Sign-On)
+description: Configure OAuth-based single sign-on with Google, Microsoft, GitHub, Facebook, or any OIDC provider
+---
+
+import { Aside, Steps, Card, CardGrid } from '@astrojs/starlight/components';
+
+Whatomate supports SSO via OAuth 2.0 / OIDC, configured **per organization**. Each organization can enable any combination of providers, and SSO can either be restricted to existing users or set to auto-create accounts on first login.
+
+## Supported Providers
+
+<CardGrid>
+  <Card title="Google" icon="seti:google">
+    Google Workspace and personal accounts.
+  </Card>
+  <Card title="Microsoft" icon="seti:microsoft">
+    Azure AD / Entra ID — works with both work and personal Microsoft accounts via the `common` endpoint.
+  </Card>
+  <Card title="GitHub" icon="github">
+    GitHub.com accounts. Pulls primary verified email if private.
+  </Card>
+  <Card title="Facebook" icon="facebook">
+    Facebook accounts with email permission.
+  </Card>
+  <Card title="Custom (OIDC)" icon="setting">
+    Any OIDC-compatible provider — Okta, Auth0, Keycloak, Authentik, etc. Requires you to supply the auth/token/userinfo URLs.
+  </Card>
+</CardGrid>
+
+## How It Works
+
+<Steps>
+
+1. **User clicks "Sign in with \<provider\>"** on the login page. The list of buttons is driven by which providers are enabled in any org via `GET /api/auth/sso/providers` (public endpoint, no secrets exposed).
+
+2. **Frontend hits `/api/auth/sso/{provider}/init`.** The server generates a random state nonce, stores `{org_id, provider, nonce, expires_at}` in Redis with a 5-minute TTL, and returns the provider's authorization URL.
+
+3. **User authenticates with the provider** and grants consent.
+
+4. **Provider redirects to `/api/auth/sso/{provider}/callback?code=...&state=...`.** The server:
+   - Validates and **immediately deletes** the state from Redis (one-shot, prevents replay).
+   - Exchanges the authorization code for an access token.
+   - Calls the provider's userinfo endpoint to get `id`, `email`, `name`.
+   - Checks the email domain against `allowed_domains` if configured.
+   - Looks up the user by email and either logs them in, auto-creates an account, or rejects them (see [Auto-create vs. invite-only](#auto-create-vs-invite-only)).
+   - Sets httpOnly JWT cookies and redirects to `/auth/sso/callback` in the SPA.
+
+</Steps>
+
+<Aside type="note">
+  Tokens are stored in httpOnly cookies, never in the URL or localStorage — same as password login.
+</Aside>
+
+## Configuration
+
+Settings live under **Settings → SSO** (admin-only). All providers share the same core fields; **Custom** adds three more.
+
+| Field | Required | Notes |
+|---|---|---|
+| `client_id` | yes | OAuth client ID from the provider's developer console. |
+| `client_secret` | yes | Stored encrypted at rest using `app.encryption_key`. Cannot be retrieved after save — only re-set. |
+| `is_enabled` | — | Master switch. Disabled providers don't appear on the login page. |
+| `allow_auto_create` | — | If on, unknown users get an account on first SSO login. See below. |
+| `default_role` | — | Role **name** assigned to auto-created users. Defaults to `agent`. Must be a real role for the org (look it up under **Settings → Roles**). |
+| `allowed_domains` | — | Comma-separated email domains, e.g. `acme.com,acme.co.in`. Empty = any domain accepted. |
+| `auth_url` | custom only | OAuth 2.0 authorization endpoint. |
+| `token_url` | custom only | OAuth 2.0 token endpoint. |
+| `user_info_url` | custom only | OIDC userinfo endpoint. Must return `sub` (or `id`), `email`, and `name` (or `preferred_username`). |
+
+### Provider redirect URI
+
+When you create the OAuth app at the provider, set the **redirect URI** (a.k.a. callback URL) to:
+
+```
+https://<your-host>/api/auth/sso/{provider}/callback
+```
+
+Replace `{provider}` with `google`, `microsoft`, `github`, `facebook`, or `custom`. If you serve Whatomate at a sub-path (`server.base_path = "/whatomate"`), include it: `https://example.com/whatomate/api/auth/sso/google/callback`.
+
+<Aside type="caution">
+  The provider must use HTTPS for redirect URIs in production. HTTP is only allowed when `app.environment = "development"`.
+</Aside>
+
+## Auto-create vs. Invite-only
+
+Two operating modes, controlled by `allow_auto_create`:
+
+### Invite-only (`allow_auto_create = false`, default)
+
+Only users whose email already exists in the system can sign in via SSO. Unknown emails are rejected with "User not found. Contact your administrator." This is the recommended mode for production — it pairs SSO convenience with explicit user provisioning.
+
+Workflow:
+1. Admin creates the user under **Settings → Members** (or invites via the UI).
+2. User signs in with their SSO provider for the first time. The user record is matched by email and the SSO provider/ID are stored on the user for future logins.
+
+### Auto-create (`allow_auto_create = true`)
+
+Any user who completes SSO is automatically given an account in this organization with the role specified by `default_role`, **provided** their email domain matches `allowed_domains` (if set).
+
+This is convenient for closed environments — e.g. a Google Workspace tenant where every `@acme.com` email is a trusted employee. **Always pair with `allowed_domains` when enabling**, otherwise anyone with a valid Google/GitHub/etc. account can self-provision into your org.
+
+## Per-organization, not global
+
+Every SSO config is scoped to an organization. A few consequences worth understanding:
+
+- Different orgs can use different OAuth apps for the same provider (different `client_id` per tenant).
+- A single user's email belongs to exactly one user record across the system. If that user is a member of multiple orgs, SSO logs them into whichever org's config matched the callback. They can then switch organizations via the UI if they have access.
+- Disabling a provider in one org doesn't affect any other org.
+
+## Security
+
+| Concern | Mitigation |
+|---|---|
+| **Client secret leak** | Stored AES-256 encrypted using `app.encryption_key`. Set this in production — without it, secrets are stored in plaintext. |
+| **CSRF / replay on callback** | State nonce stored in Redis (5-min TTL) and deleted on first use. Replays fail. |
+| **Brute force on callback** | `rate_limit.sso_max_attempts` (default 10/min/IP) caps both `init` and `callback`. Set `rate_limit.trust_proxy = true` if behind a reverse proxy. |
+| **Domain spoofing** | Use `allowed_domains` when `allow_auto_create` is on. |
+| **Disabled accounts** | Users with `is_active = false` are rejected at the end of the SSO flow. |
+
+## Custom OIDC Providers
+
+For Okta, Auth0, Keycloak, Authentik, etc., choose **Custom** and supply:
+
+| Field | Example (Keycloak) |
+|---|---|
+| `auth_url` | `https://kc.example.com/realms/main/protocol/openid-connect/auth` |
+| `token_url` | `https://kc.example.com/realms/main/protocol/openid-connect/token` |
+| `user_info_url` | `https://kc.example.com/realms/main/protocol/openid-connect/userinfo` |
+
+Whatomate requests the `openid email profile` scopes and expects the userinfo response to contain at least one of: `sub` or `id`, plus `email`, plus `name` or `preferred_username`. Most OIDC providers return this out of the box.
+
+## Provider-specific notes
+
+### Google
+
+Configure the OAuth 2.0 client at [console.cloud.google.com/apis/credentials](https://console.cloud.google.com/apis/credentials). Set the **Authorized redirect URI** to your Whatomate callback. Standard Google sign-in flow — no extra setup.
+
+### Microsoft
+
+Uses Azure AD's `common` endpoint, so both work and personal Microsoft accounts can sign in. Register the app at [entra.microsoft.com](https://entra.microsoft.com) → App registrations. Email is read from `mail`, falling back to `userPrincipalName` if the user has no primary email set.
+
+### GitHub
+
+Register an OAuth App at [github.com/settings/developers](https://github.com/settings/developers). Whatomate requests the `user:email` scope and will fetch the user's primary verified email via `/user/emails` if the public profile email is empty.
+
+### Facebook
+
+Register the app at [developers.facebook.com/apps](https://developers.facebook.com/apps). Add the **Facebook Login** product. Note that Facebook may not return an email if the user has no verified email on file — the SSO will fail with "email not provided" in that case.
+
+## Common Issues
+
+| Symptom | Likely cause |
+|---|---|
+| `User not found. Contact your administrator.` | `allow_auto_create = false` and the user isn't in the system yet. Add them under Members, or enable auto-create. |
+| `Email domain not allowed for this organization` | The user's email domain isn't in `allowed_domains`. Either add their domain or remove the restriction. |
+| `Invalid or expired state` | The state nonce expired (>5 min between init and callback) or was already used. Have the user start the login again. |
+| `Failed to authenticate with provider` | The OAuth code exchange failed — usually a redirect URI mismatch or an invalid client secret. Re-check both at the provider. |
+| `email not provided by SSO provider` | Provider returned no email. For GitHub, ensure the user has a verified email; for Facebook, ensure email permission was granted. |
+| `Account is disabled` | User exists but `is_active = false`. Re-enable under Settings → Members. |
+| Provider button missing on login page | Provider isn't enabled in any organization, or the SSO config is missing `client_id` / `client_secret`. |

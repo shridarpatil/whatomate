@@ -21,7 +21,7 @@ func TestClient_CreateFlow_Success(t *testing.T) {
 		assert.Equal(t, http.MethodPost, r.Method)
 		assert.Contains(t, r.URL.Path, "/flows")
 
-		var body map[string]interface{}
+		var body map[string]any
 		_ = json.NewDecoder(r.Body).Decode(&body)
 		assert.Equal(t, "Test Flow", body["name"])
 
@@ -204,7 +204,7 @@ func TestClient_GetFlow_Success(t *testing.T) {
 		assert.Equal(t, http.MethodGet, r.Method)
 
 		w.WriteHeader(http.StatusOK)
-		_ = json.NewEncoder(w).Encode(map[string]interface{}{
+		_ = json.NewEncoder(w).Encode(map[string]any{
 			"id":         "flow-123",
 			"name":       "Test Flow",
 			"status":     "DRAFT",
@@ -233,8 +233,8 @@ func TestClient_ListFlows_Success(t *testing.T) {
 		assert.Contains(t, r.URL.Path, "/flows")
 
 		w.WriteHeader(http.StatusOK)
-		_ = json.NewEncoder(w).Encode(map[string]interface{}{
-			"data": []map[string]interface{}{
+		_ = json.NewEncoder(w).Encode(map[string]any{
+			"data": []map[string]any{
 				{"id": "f1", "name": "Flow 1", "status": "DRAFT"},
 				{"id": "f2", "name": "Flow 2", "status": "PUBLISHED"},
 			},
@@ -257,7 +257,7 @@ func TestClient_ListFlows_Empty(t *testing.T) {
 
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
-		_ = json.NewEncoder(w).Encode(map[string]interface{}{"data": []interface{}{}})
+		_ = json.NewEncoder(w).Encode(map[string]any{"data": []any{}})
 	}))
 	defer server.Close()
 
@@ -289,8 +289,8 @@ func TestClient_UpdateFlowJSON_Success(t *testing.T) {
 
 	flowJSON := &whatsapp.FlowJSON{
 		Version: "3.0",
-		Screens: []interface{}{
-			map[string]interface{}{
+		Screens: []any{
+			map[string]any{
 				"id":    "WELCOME",
 				"title": "Welcome",
 			},
@@ -306,7 +306,7 @@ func TestClient_UpdateFlowJSON_ValidationError(t *testing.T) {
 
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
-		_ = json.NewEncoder(w).Encode(map[string]interface{}{
+		_ = json.NewEncoder(w).Encode(map[string]any{
 			"success":           false,
 			"validation_errors": "Invalid screen layout",
 		})
@@ -316,7 +316,7 @@ func TestClient_UpdateFlowJSON_ValidationError(t *testing.T) {
 	client := newTestClient(t, server)
 	account := testAccount(server.URL)
 
-	flowJSON := &whatsapp.FlowJSON{Version: "3.0", Screens: []interface{}{}}
+	flowJSON := &whatsapp.FlowJSON{Version: "3.0", Screens: []any{}}
 
 	err := client.UpdateFlowJSON(context.Background(), account, "flow-123", flowJSON)
 	require.Error(t, err)

@@ -121,7 +121,7 @@ func TestApp_GetUser(t *testing.T) {
 		assert.Equal(t, fasthttp.StatusOK, testutil.GetResponseStatusCode(req))
 
 		var resp struct {
-			Status string                 `json:"status"`
+			Status string                `json:"status"`
 			Data   handlers.UserResponse `json:"data"`
 		}
 		err = json.Unmarshal(testutil.GetResponseBody(req), &resp)
@@ -177,7 +177,7 @@ func TestApp_CreateUser(t *testing.T) {
 		)
 
 		newEmail := testutil.UniqueEmail("create-new")
-		reqBody := map[string]interface{}{
+		reqBody := map[string]any{
 			"email":     newEmail,
 			"password":  "securePass123",
 			"full_name": "New User",
@@ -191,7 +191,7 @@ func TestApp_CreateUser(t *testing.T) {
 		assert.Equal(t, fasthttp.StatusOK, testutil.GetResponseStatusCode(req))
 
 		var resp struct {
-			Status string                 `json:"status"`
+			Status string                `json:"status"`
 			Data   handlers.UserResponse `json:"data"`
 		}
 		err = json.Unmarshal(testutil.GetResponseBody(req), &resp)
@@ -215,7 +215,7 @@ func TestApp_CreateUser(t *testing.T) {
 		agentRole := testutil.CreateAgentRole(t, app.DB, org.ID)
 
 		newEmail := testutil.UniqueEmail("create-withrole")
-		reqBody := map[string]interface{}{
+		reqBody := map[string]any{
 			"email":     newEmail,
 			"password":  "securePass123",
 			"full_name": "Agent User",
@@ -250,7 +250,7 @@ func TestApp_CreateUser(t *testing.T) {
 			testutil.WithRoleID(&adminRole.ID),
 		)
 
-		reqBody := map[string]interface{}{
+		reqBody := map[string]any{
 			"email":     existingEmail,
 			"password":  "securePass123",
 			"full_name": "Duplicate User",
@@ -274,7 +274,7 @@ func TestApp_CreateUser(t *testing.T) {
 		)
 
 		// Missing password and full_name
-		reqBody := map[string]interface{}{
+		reqBody := map[string]any{
 			"email": testutil.UniqueEmail("create-missing"),
 		}
 
@@ -295,7 +295,7 @@ func TestApp_CreateUser(t *testing.T) {
 			testutil.WithRoleID(&adminRole.ID),
 		)
 
-		reqBody := map[string]interface{}{
+		reqBody := map[string]any{
 			"password":  "securePass123",
 			"full_name": "No Email User",
 		}
@@ -316,7 +316,7 @@ func TestApp_CreateUser(t *testing.T) {
 			testutil.WithEmail(testutil.UniqueEmail("create-noperm")),
 		)
 
-		reqBody := map[string]interface{}{
+		reqBody := map[string]any{
 			"email":     testutil.UniqueEmail("create-noperm-new"),
 			"password":  "securePass123",
 			"full_name": "No Perm User",
@@ -351,7 +351,7 @@ func TestApp_UpdateUser(t *testing.T) {
 		)
 
 		updatedName := "Updated Name"
-		reqBody := map[string]interface{}{
+		reqBody := map[string]any{
 			"full_name": updatedName,
 		}
 
@@ -364,7 +364,7 @@ func TestApp_UpdateUser(t *testing.T) {
 		assert.Equal(t, fasthttp.StatusOK, testutil.GetResponseStatusCode(req))
 
 		var resp struct {
-			Status string                 `json:"status"`
+			Status string                `json:"status"`
 			Data   handlers.UserResponse `json:"data"`
 		}
 		err = json.Unmarshal(testutil.GetResponseBody(req), &resp)
@@ -383,7 +383,7 @@ func TestApp_UpdateUser(t *testing.T) {
 			testutil.WithFullName("Old Name"),
 		)
 
-		reqBody := map[string]interface{}{
+		reqBody := map[string]any{
 			"full_name": "Self Updated Name",
 		}
 
@@ -413,7 +413,7 @@ func TestApp_UpdateUser(t *testing.T) {
 			testutil.WithRoleID(&adminRole.ID),
 		)
 
-		reqBody := map[string]interface{}{
+		reqBody := map[string]any{
 			"full_name": "Ghost",
 		}
 
@@ -434,7 +434,7 @@ func TestApp_UpdateUser(t *testing.T) {
 		)
 
 		newEmail := testutil.UniqueEmail("update-email-new")
-		reqBody := map[string]interface{}{
+		reqBody := map[string]any{
 			"email": newEmail,
 		}
 
@@ -467,7 +467,7 @@ func TestApp_UpdateUser(t *testing.T) {
 			testutil.WithEmail(testutil.UniqueEmail("update-dup-user")),
 		)
 
-		reqBody := map[string]interface{}{
+		reqBody := map[string]any{
 			"email": existingEmail,
 		}
 
@@ -601,7 +601,7 @@ func TestApp_GetCurrentUser(t *testing.T) {
 		assert.Equal(t, fasthttp.StatusOK, testutil.GetResponseStatusCode(req))
 
 		var resp struct {
-			Status string                 `json:"status"`
+			Status string                `json:"status"`
 			Data   handlers.UserResponse `json:"data"`
 		}
 		err = json.Unmarshal(testutil.GetResponseBody(req), &resp)
@@ -669,7 +669,7 @@ func TestApp_UpdateAvailability(t *testing.T) {
 		// User starts as available (default from CreateTestUser)
 		assert.True(t, user.IsAvailable)
 
-		reqBody := map[string]interface{}{
+		reqBody := map[string]any{
 			"is_available": false,
 		}
 
@@ -682,9 +682,9 @@ func TestApp_UpdateAvailability(t *testing.T) {
 
 		var resp struct {
 			Data struct {
-				Message        string `json:"message"`
-				IsAvailable    bool   `json:"is_available"`
-				Status         string `json:"status"`
+				Message     string `json:"message"`
+				IsAvailable bool   `json:"is_available"`
+				Status      string `json:"status"`
 			} `json:"data"`
 		}
 		err = json.Unmarshal(testutil.GetResponseBody(req), &resp)
@@ -710,7 +710,7 @@ func TestApp_UpdateAvailability(t *testing.T) {
 		// First set to unavailable
 		require.NoError(t, app.DB.Model(user).Update("is_available", false).Error)
 
-		reqBody := map[string]interface{}{
+		reqBody := map[string]any{
 			"is_available": true,
 		}
 
@@ -748,7 +748,7 @@ func TestApp_UpdateAvailability(t *testing.T) {
 			testutil.WithEmail(testutil.UniqueEmail("avail-log")),
 		)
 
-		reqBody := map[string]interface{}{
+		reqBody := map[string]any{
 			"is_available": false,
 		}
 
@@ -770,7 +770,7 @@ func TestApp_UpdateAvailability(t *testing.T) {
 	t.Run("unauthorized without user_id", func(t *testing.T) {
 		app := newTestApp(t)
 
-		reqBody := map[string]interface{}{
+		reqBody := map[string]any{
 			"is_available": false,
 		}
 
@@ -797,7 +797,7 @@ func TestApp_ChangePassword(t *testing.T) {
 			testutil.WithPassword("oldPassword1"),
 		)
 
-		reqBody := map[string]interface{}{
+		reqBody := map[string]any{
 			"current_password": "oldPassword1",
 			"new_password":     "newPassword2",
 		}
@@ -833,7 +833,7 @@ func TestApp_ChangePassword(t *testing.T) {
 			testutil.WithPassword("correctPassword"),
 		)
 
-		reqBody := map[string]interface{}{
+		reqBody := map[string]any{
 			"current_password": "wrongPassword",
 			"new_password":     "newPassword2",
 		}
@@ -854,7 +854,7 @@ func TestApp_ChangePassword(t *testing.T) {
 			testutil.WithEmail(testutil.UniqueEmail("chpwd-nocur")),
 		)
 
-		reqBody := map[string]interface{}{
+		reqBody := map[string]any{
 			"new_password": "newPassword2",
 		}
 
@@ -875,7 +875,7 @@ func TestApp_ChangePassword(t *testing.T) {
 			testutil.WithPassword("oldPassword1"),
 		)
 
-		reqBody := map[string]interface{}{
+		reqBody := map[string]any{
 			"current_password": "oldPassword1",
 		}
 
@@ -896,7 +896,7 @@ func TestApp_ChangePassword(t *testing.T) {
 			testutil.WithPassword("oldPassword1"),
 		)
 
-		reqBody := map[string]interface{}{
+		reqBody := map[string]any{
 			"current_password": "oldPassword1",
 			"new_password":     "abc",
 		}
@@ -913,7 +913,7 @@ func TestApp_ChangePassword(t *testing.T) {
 		t.Parallel()
 		app := newTestApp(t)
 
-		reqBody := map[string]interface{}{
+		reqBody := map[string]any{
 			"current_password": "oldPassword1",
 			"new_password":     "newPassword2",
 		}
@@ -940,7 +940,7 @@ func TestApp_UpdateCurrentUserSettings(t *testing.T) {
 			testutil.WithEmail(testutil.UniqueEmail("settings-all")),
 		)
 
-		reqBody := map[string]interface{}{
+		reqBody := map[string]any{
 			"email_notifications": true,
 			"new_message_alerts":  true,
 			"campaign_updates":    false,
@@ -955,8 +955,8 @@ func TestApp_UpdateCurrentUserSettings(t *testing.T) {
 
 		var resp struct {
 			Data struct {
-				Message  string                 `json:"message"`
-				Settings map[string]interface{} `json:"settings"`
+				Message  string         `json:"message"`
+				Settings map[string]any `json:"settings"`
 			} `json:"data"`
 		}
 		err = json.Unmarshal(testutil.GetResponseBody(req), &resp)
@@ -976,7 +976,7 @@ func TestApp_UpdateCurrentUserSettings(t *testing.T) {
 			testutil.WithEmail(testutil.UniqueEmail("settings-persist")),
 		)
 
-		reqBody := map[string]interface{}{
+		reqBody := map[string]any{
 			"email_notifications": false,
 			"new_message_alerts":  true,
 			"campaign_updates":    true,
@@ -1006,7 +1006,7 @@ func TestApp_UpdateCurrentUserSettings(t *testing.T) {
 		)
 
 		// First update
-		reqBody1 := map[string]interface{}{
+		reqBody1 := map[string]any{
 			"email_notifications": true,
 			"new_message_alerts":  true,
 			"campaign_updates":    true,
@@ -1018,7 +1018,7 @@ func TestApp_UpdateCurrentUserSettings(t *testing.T) {
 		assert.Equal(t, fasthttp.StatusOK, testutil.GetResponseStatusCode(req1))
 
 		// Second update with different values
-		reqBody2 := map[string]interface{}{
+		reqBody2 := map[string]any{
 			"email_notifications": false,
 			"new_message_alerts":  false,
 			"campaign_updates":    false,
@@ -1031,7 +1031,7 @@ func TestApp_UpdateCurrentUserSettings(t *testing.T) {
 
 		var resp struct {
 			Data struct {
-				Settings map[string]interface{} `json:"settings"`
+				Settings map[string]any `json:"settings"`
 			} `json:"data"`
 		}
 		err = json.Unmarshal(testutil.GetResponseBody(req2), &resp)
@@ -1046,7 +1046,7 @@ func TestApp_UpdateCurrentUserSettings(t *testing.T) {
 		t.Parallel()
 		app := newTestApp(t)
 
-		reqBody := map[string]interface{}{
+		reqBody := map[string]any{
 			"email_notifications": true,
 			"new_message_alerts":  true,
 			"campaign_updates":    true,
@@ -1149,7 +1149,7 @@ func TestApp_CrossOrgIsolation(t *testing.T) {
 			testutil.WithEmail(testutil.UniqueEmail("iso-upd-org2")),
 		)
 
-		reqBody := map[string]interface{}{
+		reqBody := map[string]any{
 			"full_name": "Hacked Name",
 		}
 
@@ -1274,7 +1274,7 @@ func TestApp_UpdateUser_InvalidUUID(t *testing.T) {
 		testutil.WithRoleID(&adminRole.ID),
 	)
 
-	reqBody := map[string]interface{}{
+	reqBody := map[string]any{
 		"full_name": "Updated",
 	}
 
@@ -1300,7 +1300,7 @@ func TestApp_UpdateUser_ForbiddenWithoutPermission(t *testing.T) {
 		testutil.WithEmail(testutil.UniqueEmail("upd-noperm-target")),
 	)
 
-	reqBody := map[string]interface{}{
+	reqBody := map[string]any{
 		"full_name": "Hacked",
 	}
 
@@ -1323,7 +1323,7 @@ func TestApp_UpdateUser_CannotDeactivateSelf(t *testing.T) {
 	)
 
 	isActive := false
-	reqBody := map[string]interface{}{
+	reqBody := map[string]any{
 		"is_active": isActive,
 	}
 
@@ -1351,7 +1351,7 @@ func TestApp_UpdateUser_DeactivateOtherUser(t *testing.T) {
 	)
 
 	isActive := false
-	reqBody := map[string]interface{}{
+	reqBody := map[string]any{
 		"is_active": isActive,
 	}
 
@@ -1387,7 +1387,7 @@ func TestApp_UpdateUser_ChangeRole(t *testing.T) {
 		testutil.WithEmail(testutil.UniqueEmail("upd-role-target")),
 	)
 
-	reqBody := map[string]interface{}{
+	reqBody := map[string]any{
 		"role_id": agentRole.ID.String(),
 	}
 
@@ -1421,7 +1421,7 @@ func TestApp_UpdateUser_RoleChangeWithoutPermission(t *testing.T) {
 		testutil.WithEmail(testutil.UniqueEmail("upd-rolenoprm-user")),
 	)
 
-	reqBody := map[string]interface{}{
+	reqBody := map[string]any{
 		"role_id": agentRole.ID.String(),
 	}
 
@@ -1446,7 +1446,7 @@ func TestApp_CreateUser_InvalidRoleID(t *testing.T) {
 	)
 
 	nonExistentRole := uuid.New()
-	reqBody := map[string]interface{}{
+	reqBody := map[string]any{
 		"email":     testutil.UniqueEmail("create-badrole"),
 		"password":  "securePass123",
 		"full_name": "Bad Role User",
@@ -1476,7 +1476,7 @@ func TestApp_CreateUser_RoleFromDifferentOrg(t *testing.T) {
 	org2 := testutil.CreateTestOrganization(t, app.DB)
 	roleOrg2 := testutil.CreateAgentRole(t, app.DB, org2.ID)
 
-	reqBody := map[string]interface{}{
+	reqBody := map[string]any{
 		"email":     testutil.UniqueEmail("create-crossrole"),
 		"password":  "securePass123",
 		"full_name": "Cross Org Role User",
@@ -1515,7 +1515,7 @@ func TestApp_UpdateAvailability_NoChangeNoNewLog(t *testing.T) {
 	)
 
 	// User starts available; set available again (no change)
-	reqBody := map[string]interface{}{
+	reqBody := map[string]any{
 		"is_available": true,
 	}
 
@@ -1584,7 +1584,7 @@ func TestApp_ChangePassword_OldPasswordStopsWorking(t *testing.T) {
 	)
 
 	// Change the password
-	reqBody := map[string]interface{}{
+	reqBody := map[string]any{
 		"current_password": "originalPass1",
 		"new_password":     "brandNewPass2",
 	}
@@ -1597,7 +1597,7 @@ func TestApp_ChangePassword_OldPasswordStopsWorking(t *testing.T) {
 	assert.Equal(t, fasthttp.StatusOK, testutil.GetResponseStatusCode(req))
 
 	// Now try to change password again using the old password -- should fail
-	reqBody2 := map[string]interface{}{
+	reqBody2 := map[string]any{
 		"current_password": "originalPass1",
 		"new_password":     "anotherPass3",
 	}
@@ -1661,7 +1661,7 @@ func TestApp_CreateUser_CreatedUserIsActive(t *testing.T) {
 	)
 
 	newEmail := testutil.UniqueEmail("create-active-user")
-	reqBody := map[string]interface{}{
+	reqBody := map[string]any{
 		"email":     newEmail,
 		"password":  "securePass123",
 		"full_name": "Active By Default",

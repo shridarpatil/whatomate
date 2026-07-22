@@ -21,7 +21,7 @@ func TestClient_CreateCatalog_Success(t *testing.T) {
 		assert.Equal(t, http.MethodPost, r.Method)
 		assert.Contains(t, r.URL.Path, "/owned_product_catalogs")
 
-		var body map[string]interface{}
+		var body map[string]any
 		_ = json.NewDecoder(r.Body).Decode(&body)
 		assert.Equal(t, "My Catalog", body["name"])
 
@@ -78,7 +78,7 @@ func TestClient_ListCatalogs_Success(t *testing.T) {
 		assert.Equal(t, http.MethodGet, r.Method)
 
 		w.WriteHeader(http.StatusOK)
-		_ = json.NewEncoder(w).Encode(map[string]interface{}{
+		_ = json.NewEncoder(w).Encode(map[string]any{
 			"data": []map[string]string{
 				{"id": "cat-1", "name": "Catalog 1"},
 				{"id": "cat-2", "name": "Catalog 2"},
@@ -102,7 +102,7 @@ func TestClient_ListCatalogs_Empty(t *testing.T) {
 
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
-		_ = json.NewEncoder(w).Encode(map[string]interface{}{"data": []interface{}{}})
+		_ = json.NewEncoder(w).Encode(map[string]any{"data": []any{}})
 	}))
 	defer server.Close()
 
@@ -143,8 +143,8 @@ func TestClient_ListCatalogProducts_Success(t *testing.T) {
 		assert.Contains(t, r.URL.Path, "/products")
 
 		w.WriteHeader(http.StatusOK)
-		_ = json.NewEncoder(w).Encode(map[string]interface{}{
-			"data": []map[string]interface{}{
+		_ = json.NewEncoder(w).Encode(map[string]any{
+			"data": []map[string]any{
 				{"id": "prod-1", "name": "Product 1", "price": "1000", "currency": "USD"},
 				{"id": "prod-2", "name": "Product 2", "price": "2000", "currency": "USD"},
 			},
@@ -167,7 +167,7 @@ func TestClient_ListCatalogProducts_Empty(t *testing.T) {
 
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
-		_ = json.NewEncoder(w).Encode(map[string]interface{}{"data": []interface{}{}})
+		_ = json.NewEncoder(w).Encode(map[string]any{"data": []any{}})
 	}))
 	defer server.Close()
 
@@ -188,7 +188,7 @@ func TestClient_CreateProduct_Success(t *testing.T) {
 		assert.Equal(t, http.MethodPost, r.Method)
 		assert.Contains(t, r.URL.Path, "/products")
 
-		var body map[string]interface{}
+		var body map[string]any
 		_ = json.NewDecoder(r.Body).Decode(&body)
 		assert.Equal(t, "Test Product", body["name"])
 		assert.Equal(t, "USD", body["currency"])
@@ -224,7 +224,7 @@ func TestClient_UpdateProduct_Success(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		assert.Equal(t, http.MethodPost, r.Method)
 
-		var body map[string]interface{}
+		var body map[string]any
 		_ = json.NewDecoder(r.Body).Decode(&body)
 		assert.Equal(t, "Updated Product", body["name"])
 

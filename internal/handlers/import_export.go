@@ -29,13 +29,13 @@ type ExportConfig struct {
 
 // ImportConfig defines allowed tables and their importable columns
 type ImportConfig struct {
-	Model            any
-	Resource         string // For permission check
-	RequiredColumns  []string
-	OptionalColumns  []string
-	ColumnTransform  map[string]func(string) (any, error)
-	UniqueColumn     string // Column to check for duplicates (e.g., "phone_number")
-	BeforeCreate     func(db *gorm.DB, orgID uuid.UUID, record map[string]any) error
+	Model           any
+	Resource        string // For permission check
+	RequiredColumns []string
+	OptionalColumns []string
+	ColumnTransform map[string]func(string) (any, error)
+	UniqueColumn    string // Column to check for duplicates (e.g., "phone_number")
+	BeforeCreate    func(db *gorm.DB, orgID uuid.UUID, record map[string]any) error
 }
 
 // Supported export/import configurations
@@ -125,7 +125,7 @@ var importConfigs = map[string]ImportConfig{
 		Model:           &models.Contact{},
 		Resource:        "contacts",
 		RequiredColumns: []string{"phone_number"},
-		OptionalColumns: []string{"profile_name", "whats_app_account", "tags"},
+		OptionalColumns: []string{"profile_name", "whats_app_account", "tags", "assigned_user_id"},
 		UniqueColumn:    "phone_number",
 		ColumnTransform: map[string]func(string) (any, error){
 			"phone_number": func(s string) (any, error) {
@@ -138,6 +138,17 @@ var importConfigs = map[string]ImportConfig{
 					return nil, fmt.Errorf("phone number is required")
 				}
 				return phone, nil
+			},
+			"assigned_user_id": func(s string) (any, error) {
+				s = strings.TrimSpace(s)
+				if s == "" {
+					return nil, nil
+				}
+				parsed, err := uuid.Parse(s)
+				if err != nil {
+					return nil, fmt.Errorf("invalid user ID: %s", s)
+				}
+				return &parsed, nil
 			},
 			"tags": func(s string) (any, error) {
 				if s == "" {
@@ -267,13 +278,6 @@ func (a *App) ExportData(r *fastglue.Request) error {
 	}
 	defer rows.Close() //nolint:errcheck
 
-	// Get column types
-	colTypes, err := rows.ColumnTypes()
-	if err != nil {
-		a.Log.Error("Failed to get column types", "error", err)
-		return r.SendErrorEnvelope(fasthttp.StatusInternalServerError, "Failed to export data", nil, "")
-	}
-
 	// Build CSV
 	var buf strings.Builder
 	writer := csv.NewWriter(&buf)
@@ -311,7 +315,7 @@ func (a *App) ExportData(r *fastglue.Request) error {
 			if transform, ok := config.ColumnTransform[col]; ok {
 				csvRow[i] = transform(val)
 			} else {
-				csvRow[i] = formatExportValue(val, colTypes[i+1])
+				csvRow[i] = formatExportValue(val)
 			}
 		}
 		// Apply phone masking for contacts export
@@ -757,7 +761,7 @@ func snakeToPascal(s string) string {
 }
 
 // Helper function to format values for CSV export
-func formatExportValue(v any, colType any) string {
+func formatExportValue(v any) string {
 	if v == nil {
 		return ""
 	}
