@@ -64,12 +64,16 @@ Corolários:
 
 Para um usuário **sem** `view_team`, a consulta e a função executam **exatamente** o caminho de hoje — sem ramos adicionais emitidos. A mudança é estritamente aditiva, não uma reescrita do algoritmo.
 
+**Precedência de `view_all` (inalterada).** A presença de `conversations:view_all` continua **encerrando** a avaliação com acesso global, **antes** de qualquer consideração de `view_team`. Ou seja: quem tem `view_all` não passa pela lógica de time — não há verificação redundante a implementar. `view_team` só é consultado para quem **não** tem `view_all`.
+
 ## 5. Fonte de verdade e primitiva reutilizável
 
-"Pertence a um time meu / o dono compartilha um time comigo" é definido **em um único lugar de cada lado**, para que a evolução futura da modelagem de times altere **um** ponto:
+**Definição formal (associação ativa).** Dois usuários estão no mesmo escopo de time quando existe pelo menos um `team_id` para o qual **ambos** possuem uma **associação ativa** em `team_members`. "Associação ativa" = uma linha de `team_members` **não removida** (o `team_members` usa soft-delete via `BaseModel`; o escopo padrão do GORM já exclui as removidas). Se no futuro surgirem membro inativo, convite pendente ou outro estado, **somente associações ativas** contam para autorização.
 
-- **Go:** `func (a *App) userSharesTeamWith(userID, ownerID uuid.UUID) bool` — verdadeiro se existe ao menos um time do qual **ambos** são membros. (Inclui o caso `userID == ownerID`.)
-- **SQL:** uma subquery reutilizável **`teamMates(userID)`** = o conjunto de `user_id` que compartilham ao menos um time com `userID`:
+A relação é definida **em um único lugar de cada lado**, para que a evolução da modelagem de times altere **um** ponto:
+
+- **Go:** `func (a *App) canViewTeamMember(viewerID, ownerID uuid.UUID) bool` — verdadeiro se `viewerID` e `ownerID` têm associação ativa a um time em comum. (Inclui o caso `viewerID == ownerID`.)
+- **SQL:** uma subquery reutilizável **`viewTeamScope(userID)`** = o conjunto de `user_id` (donos) visíveis a `userID` pelo escopo de time — isto é, os que compartilham um time ativo com ele. Forma ilustrativa (o implementador pode usar `JOIN`/`EXISTS`/`CTE` se for melhor — ver §6.2):
 
   ```sql
   SELECT tm.user_id
@@ -79,7 +83,9 @@ Para um usuário **sem** `view_team`, a consulta e a função executam **exatame
   )
   ```
 
-Ambas expressam o **mesmo conjunto**. Nenhuma lógica de "compartilha time" é repetida em outro lugar.
+**Invariante obrigatória (Go ↔ SQL):** `viewTeamScope(userID)` representa **exatamente** o conjunto de `ownerID` para os quais `canViewTeamMember(userID, ownerID)` retornaria verdadeiro. Alterar uma implementação **obriga** alterar a outra; o teste-oráculo (§8.1) as mantém em acordo. Nenhuma lógica de "escopo de time" é repetida fora dessas duas definições.
+
+**Nota de nomenclatura.** O nome `canViewTeamMember` expressa a *intenção de autorização* ("o viewer pode ver conversas deste dono pelo escopo de time"), não o mecanismo atual ("compartilha um time"). Assim, se a regra evoluir para hierarquia/regiões/grupos de supervisão, o nome permanece válido e a mudança fica contida nessa única primitiva. (O modelo já tem `TeamMember.Role` — manager/agent por time — que poderia servir de base a uma futura noção de liderança, mas **não** é usado aqui: nesta feature o escopo vem da associação ao time, não do papel dentro dele.)
 
 ## 6. A mudança na regra
 
@@ -94,24 +100,32 @@ hasViewTeam := a.HasPermission(userID, models.ResourceConversations, models.Acti
 E **somente os ramos A e D** ganham uma condição `OU`, atrás de `hasViewTeam`:
 
 - **A** (transferência ativa para agente):
-  `*transfer.AgentID == userID` **OU** `(hasViewTeam && a.userSharesTeamWith(userID, *transfer.AgentID))`
+  `*transfer.AgentID == userID` **OU** `(hasViewTeam && a.canViewTeamMember(userID, *transfer.AgentID))`
 - **D** (carteira):
-  `*contact.AssignedUserID == userID` **OU** `(hasViewTeam && a.userSharesTeamWith(userID, *contact.AssignedUserID))`
+  `*contact.AssignedUserID == userID` **OU** `(hasViewTeam && a.canViewTeamMember(userID, *contact.AssignedUserID))`
 
-Os ramos B, C, E, F ficam **idênticos** — o supervisor já os enxerga por ser membro dos times. `canView` e `canInteract` continuam iguais entre si (ver **e** agir).
+Os ramos B, C, E, F ficam **idênticos** — o supervisor já os enxerga por ser membro dos times. `canView` e `canInteract` continuam iguais entre si (ver **e** agir). `hasViewTeam` só é avaliado no caminho sem `view_all` (§4).
 
 ### 6.2 SQL — `scopeVisibleConversations` (gêmeo)
 
-Os seis ramos atuais (A–F) são emitidos **sem alteração**. Quando `hasViewTeam` é verdadeiro, **dois ramos `OR` adicionais** (os análogos por time de A e D) são anexados:
+Os seis ramos atuais (A–F) são emitidos **sem alteração**. Quando `hasViewTeam` é verdadeiro, o escopo é ampliado com os **equivalentes por time dos ramos A e D**, expressos via `viewTeamScope(userID)`:
 
-- **G** (análogo de A): `id IN (SELECT contact_id FROM agent_transfers WHERE organization_id = ? AND status = 'active' AND agent_id IN (teamMates(userID)))`
-- **H** (análogo de D): `id NOT IN (activeSub) AND assigned_user_id IN (teamMates(userID))`
+- **G** (equivalente de A): contatos com **transferência ativa** cujo `agent_id` está em `viewTeamScope(userID)`.
+- **H** (equivalente de D): contatos **sem transferência ativa** cujo `assigned_user_id` está em `viewTeamScope(userID)`.
+
+**Requisito (não prescritivo quanto à forma):** o escopo SQL deve incluir G e H usando `viewTeamScope(userID)`; a montagem (`IN (subquery)`, `EXISTS`, `JOIN` ou `CTE`) fica a critério do implementador, desde que preserve a invariante da §5 e o resultado do oráculo (§8.1).
 
 Para usuários sem `view_team`, **G e H não são emitidos** → consulta byte-a-byte igual à de hoje.
 
-> **Nota de equivalência:** G e H são a forma "consulta de conjunto" do mesmo `OU` que a função adiciona aos ramos A e D. A diferença é só de estilo (a função é imperativa, por contato; o SQL é declarativo, por conjunto). A igualdade dos dois é garantida pelo teste-oráculo (§8.1) — nenhuma das formas amplia o escopo além dos times do usuário.
+> **Nota de equivalência:** G e H são a forma "consulta de conjunto" do mesmo `OU` que a função adiciona aos ramos A e D. A diferença é só de estilo (a função é imperativa, por contato; o SQL é declarativo, por conjunto). A igualdade é garantida pelo teste-oráculo (§8.1) — nenhuma das formas amplia o escopo além dos times do usuário.
 
-### 6.3 Espelhamento obrigatório
+### 6.3 Casos-limite (comportamento especificado)
+
+- **Dono sem time.** Se o dono de uma conversa (`assigned_user_id` ou `agent_transfer.agent_id`) **não pertence a nenhum time**, ele não está em `viewTeamScope` de ninguém → a conversa **não** fica visível a nenhum supervisor por `view_team` (só ao próprio dono e a quem tem `view_all`). Ex.: `assigned_user_id = João`, João sem time → o supervisor **não** vê.
+- **Supervisor sem time.** Um usuário **com** `view_team` mas **sem nenhum time** tem `viewTeamScope` vazio → **não ganha acesso algum** além do padrão; enxerga **exatamente** o comportamento antigo.
+- **Escopo segue o dono (regra esperada).** `view_team` escopa pelo **dono atual** da conversa (agente atribuído ou agente da transferência ativa), não pelo `contact.team_id` original. Como assumir/atribuir passa por `canInteractWithConversation` (mesma regra de `canViewConversation`), **um agente só assume conversa que já enxerga** — ou seja, do seu próprio time; cross-team pickup por agente **não ocorre** no modo estrito. A exceção é deliberada: um usuário com `view_all` (admin/manager) pode atribuir uma conversa a um agente de outro time — e então a visibilidade **segue o novo dono** (o supervisor do time desse agente passa a vê-la). Este é o comportamento **desejado**: quem detém a conversa define o escopo de supervisão.
+
+### 6.4 Espelhamento obrigatório
 
 Função e SQL devem devolver **exatamente** o mesmo conjunto. Isso é garantido pelo teste-oráculo existente (§8.1), estendido para cobrir `view_team`.
 
@@ -171,6 +185,9 @@ Espelhando `conversation_visibility_test.go`:
 4. **Multi-time:** supervisor de duas lojas vê as duas; não vê uma terceira.
 5. `view_team` **não** concede visão global: conversa sem relação de time (nenhum time do supervisor) → não vê.
 6. **Regressão:** agente **sem** `view_team` vê exatamente o de hoje — asserção explícita de que nada mudou (mesmos resultados dos testes atuais).
+7. **Supervisor sem time:** usuário com `view_team` e **zero times** não ganha acesso adicional (comportamento antigo).
+8. **Dono sem time:** conversa na carteira de um agente sem nenhum time → supervisor `view_team` **não** vê.
+9. **`view_team` + `view_all`:** usuário com ambos vê tudo (globalmente), provando que `view_all` continua vencendo mesmo quando `view_team` está presente.
 
 ### 8.3 Suíte e validação
 
@@ -181,13 +198,16 @@ Espelhando `conversation_visibility_test.go`:
 
 - **Catálogo:** adicionar `conversations:view_team` a `DefaultPermissions()` (aparece no editor de Funções). Descrição: *"Ver e agir em todas as conversas dos times de que o usuário é membro."* Constante `ActionViewTeam = "view_team"`.
 - **Padrões de papel:** **não** adicionar a nenhum papel de sistema em `SystemRolePermissions()`. (O `admin` recebe todas as permissões automaticamente, mas já tem `view_all` → o ramo novo é inócuo para ele. `manager`/`agent` **não** recebem.) A feature fica **inerte** até um admin criar o papel Loja-Supervisor e conceder a permissão.
+- **Garantia operacional:** a simples **existência** da nova permissão no catálogo **não altera qualquer decisão de autorização** enquanto ela não for **atribuída a um usuário**. Nenhum comportamento muda no deploy; muda apenas quando um admin concede `view_team` a alguém.
 - **Seeding:** garantir que a nova permissão seja semeada nas organizações existentes pelo mesmo mecanismo que já semeia `DefaultPermissions`, para aparecer no editor sem intervenção manual.
 - **Auditoria de `view_all`:** mapear **todos** os usos de `conversations:view_all` (listagem, leitura, ações, exportação) e decidir, caso a caso, se `view_team` precisa de tratamento paralelo. A maioria passa por `scopeVisibleConversations` (coberto); os demais são confirmados individualmente para não deixar brecha nem vazamento.
 - **Checklist de segurança:** grep confirmando que nenhum papel de sistema recebe `view_team` por padrão · diff confirmando que os seis ramos atuais ficaram intactos · teste-oráculo verde · testes de regressão verdes.
 
 ### Evolução futura (fora de escopo agora)
 
-Como "compartilha um time comigo" está numa única primitiva (Go) e numa única subquery (SQL), evoluir para **times hierárquicos** ou **grupos de supervisão** significa alterar **apenas** a definição de `teamMates`/`userSharesTeamWith` — sem tocar nos ramos de autorização.
+Como o escopo está numa única primitiva (`canViewTeamMember` em Go) e numa única subquery (`viewTeamScope` em SQL), evoluir para **times hierárquicos**, **regiões** ou **grupos de supervisão** significa alterar **apenas** essas duas definições — sem tocar nos ramos de autorização.
+
+**Tipos de time (aviso para a evolução).** Caso o sistema passe a distinguir tipos de time (organizacional, operacional, temporário — ex.: um time efêmero de campanha), `canViewTeamMember`/`viewTeamScope` deverão considerar **apenas os tipos destinados à autorização de visibilidade**. Isso evita que um time temporário amplie inadvertidamente a visibilidade de um supervisor. Enquanto houver um único tipo de time, essa distinção não é necessária.
 
 ## 10. Resumo das garantias
 
