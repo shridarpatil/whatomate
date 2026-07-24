@@ -719,6 +719,29 @@ func TestSendMessage_MultiTenantIsolation(t *testing.T) {
 		"view_all in org X must never reach a contact in org Y, got %d", code)
 }
 
+func TestCanViewTeamMember(t *testing.T) {
+	app := newTestApp(t)
+	org := testutil.CreateTestOrganization(t, app.DB)
+	role := testutil.CreateAgentRole(t, app.DB, org.ID)
+	viewer := testutil.CreateTestUser(t, app.DB, org.ID, testutil.WithRoleID(&role.ID))
+	mate := testutil.CreateTestUser(t, app.DB, org.ID, testutil.WithRoleID(&role.ID))
+	stranger := testutil.CreateTestUser(t, app.DB, org.ID, testutil.WithRoleID(&role.ID))
+	teamless := testutil.CreateTestUser(t, app.DB, org.ID, testutil.WithRoleID(&role.ID))
+
+	team := createTeamWithMember(t, app, org.ID, viewer.ID)
+	require.NoError(t, app.DB.Create(&models.TeamMember{
+		BaseModel: models.BaseModel{ID: uuid.New()}, TeamID: team.ID, UserID: mate.ID,
+	}).Error)
+	// stranger is in a different team
+	_ = createTeamWithMember(t, app, org.ID, stranger.ID)
+
+	assert.True(t, app.CanViewTeamMemberForTest(viewer.ID, mate.ID), "shares a team")
+	assert.True(t, app.CanViewTeamMemberForTest(viewer.ID, viewer.ID), "self (has a team)")
+	assert.False(t, app.CanViewTeamMemberForTest(viewer.ID, stranger.ID), "different team")
+	assert.False(t, app.CanViewTeamMemberForTest(viewer.ID, teamless.ID), "owner has no team")
+	assert.False(t, app.CanViewTeamMemberForTest(teamless.ID, mate.ID), "viewer has no team")
+}
+
 func TestContactAndAccountTeamColumns(t *testing.T) {
 	app := newTestApp(t)
 	org := testutil.CreateTestOrganization(t, app.DB)

@@ -119,6 +119,20 @@ func (a *App) userInTeam(userID, teamID uuid.UUID) bool {
 	return count > 0
 }
 
+// canViewTeamMember reports whether viewerID may see conversations owned by
+// ownerID by virtue of team scope: there is at least one team in which BOTH
+// have an active membership. It is the single Go definition of "owner is in my
+// team scope" — its SQL twin is the viewTeamScope subquery in
+// scopeVisibleConversations. Keep the two in sync (TestVisibilityScopeMatchesFunction).
+func (a *App) canViewTeamMember(viewerID, ownerID uuid.UUID) bool {
+	var count int64
+	a.DB.Model(&models.TeamMember{}).
+		Where("user_id = ? AND team_id IN (?)", ownerID,
+			a.DB.Model(&models.TeamMember{}).Select("team_id").Where("user_id = ?", viewerID)).
+		Count(&count)
+	return count > 0
+}
+
 // accountDefaultTeamID returns the default team configured on the contact's
 // WhatsApp account, or nil. Used only in strict mode as the last team signal
 // before falling back to view_all-only.
