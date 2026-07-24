@@ -100,6 +100,7 @@ const (
 	ActionPickup  = "pickup"
 	ActionAssign  = "assign"
 	ActionViewAll = "view_all"
+	ActionViewTeam = "view_team"
 )
 
 // DefaultPermissions returns the list of all available permissions to seed
@@ -172,6 +173,7 @@ func DefaultPermissions() []Permission {
 
 		// Conversations
 		{Resource: ResourceConversations, Action: ActionViewAll, Description: "View and act on all conversations, including those assigned to other agents"},
+		{Resource: ResourceConversations, Action: ActionViewTeam, Description: "View and act on all conversations of the teams the user belongs to"},
 
 		// Contacts
 		{Resource: ResourceContacts, Action: ActionRead, Description: "View contacts"},

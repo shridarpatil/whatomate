@@ -285,6 +285,22 @@ func TestConversationsViewAllPermission(t *testing.T) {
 	assert.NotContains(t, roles["agent"], "conversations:view_all")
 }
 
+func TestViewTeamPermissionInCatalogButNotDefaultRoles(t *testing.T) {
+	// It must exist in the catalog so admins can assign it.
+	found := false
+	for _, p := range models.DefaultPermissions() {
+		if p.Resource == models.ResourceConversations && p.Action == models.ActionViewTeam {
+			found = true
+		}
+	}
+	assert.True(t, found, "conversations:view_team must be in DefaultPermissions")
+
+	// It must NOT be granted to manager or agent by default.
+	roles := models.SystemRolePermissions()
+	assert.NotContains(t, roles["manager"], "conversations:view_team")
+	assert.NotContains(t, roles["agent"], "conversations:view_team")
+}
+
 func TestJSONBArray_Scan(t *testing.T) {
 	t.Parallel()
 
