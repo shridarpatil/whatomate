@@ -789,30 +789,41 @@ func TestTeamScopedVisibility(t *testing.T) {
 	activeTransfer(t, app, org.ID, transferA.ID, &agentA.ID, nil)
 	assert.True(t, app.CanViewConversationForTest(supID, org.ID, load(transferA)))
 
-	// 3. carteira of agentB (other team) -> supervisor does NOT see
+	// 3. active transfer to agentB (other team) -> supervisor does NOT see (branch G negative)
+	transferB := testutil.CreateTestContact(t, app.DB, org.ID)
+	activeTransfer(t, app, org.ID, transferB.ID, &agentB.ID, nil)
+	assert.False(t, app.CanViewConversationForTest(supID, org.ID, load(transferB)))
+
+	// 4. active transfer to a teamless agent -> supervisor does NOT see (branch G negative)
+	agentTeamless := testutil.CreateTestUser(t, app.DB, org.ID, testutil.WithRoleID(&agentRole.ID))
+	transferTeamless := testutil.CreateTestContact(t, app.DB, org.ID)
+	activeTransfer(t, app, org.ID, transferTeamless.ID, &agentTeamless.ID, nil)
+	assert.False(t, app.CanViewConversationForTest(supID, org.ID, load(transferTeamless)))
+
+	// 5. carteira of agentB (other team) -> supervisor does NOT see
 	carteiraB := testutil.CreateTestContact(t, app.DB, org.ID)
 	require.NoError(t, app.DB.Model(carteiraB).Update("assigned_user_id", agentB.ID).Error)
 	assert.False(t, app.CanViewConversationForTest(supID, org.ID, load(carteiraB)))
 
-	// 4. multi-team supervisor (both stores) sees both agents' carteiras
+	// 6. multi-team supervisor (both stores) sees both agents' carteiras
 	multiSupID := makeViewTeamSupervisor(t, app, org.ID, teamStore.ID, teamOther.ID)
 	assert.True(t, app.CanViewConversationForTest(multiSupID, org.ID, load(carteiraA)))
 	assert.True(t, app.CanViewConversationForTest(multiSupID, org.ID, load(carteiraB)))
 
-	// 5. owner with no team -> not visible to the supervisor
+	// 7. owner with no team -> not visible to the supervisor
 	teamless := testutil.CreateTestUser(t, app.DB, org.ID, testutil.WithRoleID(&agentRole.ID))
 	orphan := testutil.CreateTestContact(t, app.DB, org.ID)
 	require.NoError(t, app.DB.Model(orphan).Update("assigned_user_id", teamless.ID).Error)
 	assert.False(t, app.CanViewConversationForTest(supID, org.ID, load(orphan)))
 
-	// 6. supervisor with view_team but NO team -> no extra access (cannot see agentA's carteira)
+	// 8. supervisor with view_team but NO team -> no extra access (cannot see agentA's carteira)
 	teamlessSupID := makeViewTeamSupervisor(t, app, org.ID) // no teams
 	assert.False(t, app.CanViewConversationForTest(teamlessSupID, org.ID, load(carteiraA)))
 
-	// 7. regression: a plain agent (no view_team) does NOT see a co-member's carteira
+	// 9. regression: a plain agent (no view_team) does NOT see a co-member's carteira
 	assert.False(t, app.CanViewConversationForTest(agentA.ID, org.ID, load(carteiraB)))
 
-	// 8. view_all + view_team together: view_all wins (sees a foreign-team conversation).
+	// 10. view_all + view_team together: view_all wins (sees a foreign-team conversation).
 	bothRole := testutil.CreateTestRoleWithKeys(t, app.DB, org.ID, "both",
 		[]string{"conversations:view_all", "conversations:view_team", "chat:read"})
 	both := testutil.CreateTestUser(t, app.DB, org.ID, testutil.WithRoleID(&bothRole.ID))
