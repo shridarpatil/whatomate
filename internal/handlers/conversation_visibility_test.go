@@ -719,6 +719,175 @@ func TestSendMessage_MultiTenantIsolation(t *testing.T) {
 		"view_all in org X must never reach a contact in org Y, got %d", code)
 }
 
+func TestCanViewTeamMember(t *testing.T) {
+	app := newTestApp(t)
+	org := testutil.CreateTestOrganization(t, app.DB)
+	role := testutil.CreateAgentRole(t, app.DB, org.ID)
+	viewer := testutil.CreateTestUser(t, app.DB, org.ID, testutil.WithRoleID(&role.ID))
+	mate := testutil.CreateTestUser(t, app.DB, org.ID, testutil.WithRoleID(&role.ID))
+	stranger := testutil.CreateTestUser(t, app.DB, org.ID, testutil.WithRoleID(&role.ID))
+	teamless := testutil.CreateTestUser(t, app.DB, org.ID, testutil.WithRoleID(&role.ID))
+
+	team := createTeamWithMember(t, app, org.ID, viewer.ID)
+	require.NoError(t, app.DB.Create(&models.TeamMember{
+		BaseModel: models.BaseModel{ID: uuid.New()}, TeamID: team.ID, UserID: mate.ID,
+	}).Error)
+	// stranger is in a different team
+	_ = createTeamWithMember(t, app, org.ID, stranger.ID)
+
+	assert.True(t, app.CanViewTeamMemberForTest(viewer.ID, mate.ID), "shares a team")
+	assert.True(t, app.CanViewTeamMemberForTest(viewer.ID, viewer.ID), "self (has a team)")
+	assert.False(t, app.CanViewTeamMemberForTest(viewer.ID, stranger.ID), "different team")
+	assert.False(t, app.CanViewTeamMemberForTest(viewer.ID, teamless.ID), "owner has no team")
+	assert.False(t, app.CanViewTeamMemberForTest(teamless.ID, mate.ID), "viewer has no team")
+}
+
+// makeViewTeamSupervisor creates a supervisor role (view_team) + user, added as
+// a member of each given team.
+func makeViewTeamSupervisor(t *testing.T, app *handlers.App, orgID uuid.UUID, teamIDs ...uuid.UUID) uuid.UUID {
+	t.Helper()
+	role := testutil.CreateTestRoleWithKeys(t, app.DB, orgID, "loja-sup",
+		[]string{"chat:read", "chat:write", "chat.assign:write",
+			"conversations:view_team", "transfers:read", "transfers:write"})
+	sup := testutil.CreateTestUser(t, app.DB, orgID, testutil.WithRoleID(&role.ID))
+	for _, tid := range teamIDs {
+		require.NoError(t, app.DB.Create(&models.TeamMember{
+			BaseModel: models.BaseModel{ID: uuid.New()}, TeamID: tid, UserID: sup.ID,
+		}).Error)
+	}
+	return sup.ID
+}
+
+func TestTeamScopedVisibility(t *testing.T) {
+	app := newTestApp(t)
+	org := testutil.CreateTestOrganization(t, app.DB)
+	agentRole := testutil.CreateAgentRole(t, app.DB, org.ID)
+	agentA := testutil.CreateTestUser(t, app.DB, org.ID, testutil.WithRoleID(&agentRole.ID))
+	agentB := testutil.CreateTestUser(t, app.DB, org.ID, testutil.WithRoleID(&agentRole.ID))
+
+	teamStore := createTeamWithMember(t, app, org.ID, agentA.ID) // store team, agentA in it
+	teamOther := createTeamWithMember(t, app, org.ID, agentB.ID) // other store team, agentB in it
+	enableStrictVisibility(t, app, org.ID)
+
+	// supervisor of the store: view_team + member of teamStore (shares team with agentA, not agentB)
+	supID := makeViewTeamSupervisor(t, app, org.ID, teamStore.ID)
+
+	load := func(c *models.Contact) *models.Contact {
+		var fresh models.Contact
+		require.NoError(t, app.DB.First(&fresh, "id = ?", c.ID).Error)
+		return &fresh
+	}
+
+	// 1. carteira of agentA (same team) -> supervisor sees AND interacts
+	carteiraA := testutil.CreateTestContact(t, app.DB, org.ID)
+	require.NoError(t, app.DB.Model(carteiraA).Update("assigned_user_id", agentA.ID).Error)
+	assert.True(t, app.CanViewConversationForTest(supID, org.ID, load(carteiraA)))
+	assert.True(t, app.CanInteractWithConversationForTest(supID, org.ID, load(carteiraA)))
+
+	// 2. active transfer to agentA (same team) -> supervisor sees
+	transferA := testutil.CreateTestContact(t, app.DB, org.ID)
+	activeTransfer(t, app, org.ID, transferA.ID, &agentA.ID, nil)
+	assert.True(t, app.CanViewConversationForTest(supID, org.ID, load(transferA)))
+
+	// 3. active transfer to agentB (other team) -> supervisor does NOT see (branch G negative)
+	transferB := testutil.CreateTestContact(t, app.DB, org.ID)
+	activeTransfer(t, app, org.ID, transferB.ID, &agentB.ID, nil)
+	assert.False(t, app.CanViewConversationForTest(supID, org.ID, load(transferB)))
+
+	// 4. active transfer to a teamless agent -> supervisor does NOT see (branch G negative)
+	agentTeamless := testutil.CreateTestUser(t, app.DB, org.ID, testutil.WithRoleID(&agentRole.ID))
+	transferTeamless := testutil.CreateTestContact(t, app.DB, org.ID)
+	activeTransfer(t, app, org.ID, transferTeamless.ID, &agentTeamless.ID, nil)
+	assert.False(t, app.CanViewConversationForTest(supID, org.ID, load(transferTeamless)))
+
+	// 5. carteira of agentB (other team) -> supervisor does NOT see
+	carteiraB := testutil.CreateTestContact(t, app.DB, org.ID)
+	require.NoError(t, app.DB.Model(carteiraB).Update("assigned_user_id", agentB.ID).Error)
+	assert.False(t, app.CanViewConversationForTest(supID, org.ID, load(carteiraB)))
+
+	// 6. multi-team supervisor (both stores) sees both agents' carteiras
+	multiSupID := makeViewTeamSupervisor(t, app, org.ID, teamStore.ID, teamOther.ID)
+	assert.True(t, app.CanViewConversationForTest(multiSupID, org.ID, load(carteiraA)))
+	assert.True(t, app.CanViewConversationForTest(multiSupID, org.ID, load(carteiraB)))
+
+	// 7. owner with no team -> not visible to the supervisor
+	teamless := testutil.CreateTestUser(t, app.DB, org.ID, testutil.WithRoleID(&agentRole.ID))
+	orphan := testutil.CreateTestContact(t, app.DB, org.ID)
+	require.NoError(t, app.DB.Model(orphan).Update("assigned_user_id", teamless.ID).Error)
+	assert.False(t, app.CanViewConversationForTest(supID, org.ID, load(orphan)))
+
+	// 8. supervisor with view_team but NO team -> no extra access (cannot see agentA's carteira)
+	teamlessSupID := makeViewTeamSupervisor(t, app, org.ID) // no teams
+	assert.False(t, app.CanViewConversationForTest(teamlessSupID, org.ID, load(carteiraA)))
+
+	// 9. regression: a plain agent (no view_team) does NOT see a co-member's carteira
+	assert.False(t, app.CanViewConversationForTest(agentA.ID, org.ID, load(carteiraB)))
+
+	// 10. view_all + view_team together: view_all wins (sees a foreign-team conversation).
+	bothRole := testutil.CreateTestRoleWithKeys(t, app.DB, org.ID, "both",
+		[]string{"conversations:view_all", "conversations:view_team", "chat:read"})
+	both := testutil.CreateTestUser(t, app.DB, org.ID, testutil.WithRoleID(&bothRole.ID))
+	assert.True(t, app.CanViewConversationForTest(both.ID, org.ID, load(carteiraB)),
+		"view_all still grants global access when view_team is also present")
+}
+
+// TestVisibilityScopeMatchesFunction_ViewTeam is the oracle guard for the
+// view_team disjuncts (G, H): the SQL scope must match the function exactly
+// for a viewer who holds view_team and shares a team with another agent.
+func TestVisibilityScopeMatchesFunction_ViewTeam(t *testing.T) {
+	app := newTestApp(t)
+	org := testutil.CreateTestOrganization(t, app.DB)
+	agentRole := testutil.CreateAgentRole(t, app.DB, org.ID)
+	otherAgent := testutil.CreateTestUser(t, app.DB, org.ID, testutil.WithRoleID(&agentRole.ID))
+	team := createTeamWithMember(t, app, org.ID, otherAgent.ID)
+
+	// supervisor shares `team` with otherAgent and holds view_team.
+	supID := makeViewTeamSupervisor(t, app, org.ID, team.ID)
+
+	// Contacts across the branches, several owned by otherAgent (a team-mate).
+	transferToMate := testutil.CreateTestContact(t, app.DB, org.ID)
+	activeTransfer(t, app, org.ID, transferToMate.ID, &otherAgent.ID, nil) // G
+	carteiraMate := testutil.CreateTestContact(t, app.DB, org.ID)
+	require.NoError(t, app.DB.Model(carteiraMate).Update("assigned_user_id", otherAgent.ID).Error) // H
+	teamQueue := testutil.CreateTestContact(t, app.DB, org.ID)
+	activeTransfer(t, app, org.ID, teamQueue.ID, nil, &team.ID) // B
+	idle := testutil.CreateTestContact(t, app.DB, org.ID)       // none
+
+	// A contact owned by a stranger in another team (must NOT be visible).
+	stranger := testutil.CreateTestUser(t, app.DB, org.ID, testutil.WithRoleID(&agentRole.ID))
+	_ = createTeamWithMember(t, app, org.ID, stranger.ID)
+	carteiraStranger := testutil.CreateTestContact(t, app.DB, org.ID)
+	require.NoError(t, app.DB.Model(carteiraStranger).Update("assigned_user_id", stranger.ID).Error)
+
+	enableStrictVisibility(t, app, org.ID)
+
+	all := []*models.Contact{transferToMate, carteiraMate, teamQueue, idle, carteiraStranger}
+	expected := map[uuid.UUID]bool{}
+	for _, c := range all {
+		var fresh models.Contact
+		require.NoError(t, app.DB.First(&fresh, "id = ?", c.ID).Error)
+		if app.CanViewConversationForTest(supID, org.ID, &fresh) {
+			expected[c.ID] = true
+		}
+	}
+
+	var visible []models.Contact
+	q := app.ScopeVisibleConversationsForTest(
+		app.DB.Where("organization_id = ?", org.ID), supID, org.ID)
+	require.NoError(t, q.Find(&visible).Error)
+	got := map[uuid.UUID]bool{}
+	for i := range visible {
+		got[visible[i].ID] = true
+	}
+
+	assert.Equal(t, expected, got,
+		"view_team: SQL scope must equal the function for a team supervisor")
+	// Sanity: the supervisor sees the team-mate's owned conversations, not the stranger's.
+	assert.True(t, got[transferToMate.ID])
+	assert.True(t, got[carteiraMate.ID])
+	assert.False(t, got[carteiraStranger.ID])
+}
+
 func TestContactAndAccountTeamColumns(t *testing.T) {
 	app := newTestApp(t)
 	org := testutil.CreateTestOrganization(t, app.DB)

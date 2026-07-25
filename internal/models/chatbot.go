@@ -21,8 +21,9 @@ type AgentAssignmentConfig struct {
 	CurrentConversationOnly bool `gorm:"column:agent_current_conversation_only;default:false" json:"agent_current_conversation_only"` // Agents see only current session messages
 	// StrictConversationVisibility gates per-agent conversation visibility.
 	// Default false: behaviour is unchanged from before this feature. When true,
-	// an assigned conversation is visible/actionable only by the assigned agent
-	// plus users with conversations:view_all.
+	// an assigned conversation is visible/actionable only by the assigned agent,
+	// team-scoped supervisors with conversations:view_team sharing a team with
+	// the assigned agent, plus users with conversations:view_all.
 	StrictConversationVisibility bool `gorm:"column:strict_conversation_visibility;default:false" json:"strict_conversation_visibility"`
 }
 

@@ -53,3 +53,9 @@ func (a *App) CanInteractWithConversationForTest(userID, orgID uuid.UUID, contac
 func (a *App) ScopeVisibleConversationsForTest(q *gorm.DB, userID, orgID uuid.UUID) *gorm.DB {
 	return a.scopeVisibleConversations(q, userID, orgID)
 }
+
+// CanViewTeamMemberForTest exposes canViewTeamMember to the external
+// handlers_test package.
+func (a *App) CanViewTeamMemberForTest(viewerID, ownerID uuid.UUID) bool {
+	return a.canViewTeamMember(viewerID, ownerID)
+}

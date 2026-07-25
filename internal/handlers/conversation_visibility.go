@@ -39,12 +39,17 @@ func (a *App) authorizeConversation(userID, orgID uuid.UUID, contact *models.Con
 		return conversationAccess{canView: true, canInteract: true}
 	}
 
+	// view_team widens exactly two branches (A: transfer-to-agent, D: carteira)
+	// to "owner shares a team with me". Only consulted for non-view_all users.
+	hasViewTeam := a.HasPermission(userID, models.ResourceConversations, models.ActionViewTeam, orgID)
+
 	// Active transfer is the primary authority.
 	transfer, hasActive := a.activeTransferFor(orgID, contact.ID)
 	if hasActive {
 		switch {
 		case transfer.AgentID != nil:
-			ok := *transfer.AgentID == userID
+			ok := *transfer.AgentID == userID ||
+				(hasViewTeam && a.canViewTeamMember(userID, *transfer.AgentID))
 			return conversationAccess{canView: ok, canInteract: ok}
 		case transfer.TeamID != nil:
 			ok := a.userInTeam(userID, *transfer.TeamID)
@@ -62,7 +67,8 @@ func (a *App) authorizeConversation(userID, orgID uuid.UUID, contact *models.Con
 
 	// No active transfer: carteira governs (more specific than any team).
 	if contact.AssignedUserID != nil {
-		ok := *contact.AssignedUserID == userID
+		ok := *contact.AssignedUserID == userID ||
+			(hasViewTeam && a.canViewTeamMember(userID, *contact.AssignedUserID))
 		return conversationAccess{canView: ok, canInteract: ok}
 	}
 
@@ -115,6 +121,20 @@ func (a *App) userInTeam(userID, teamID uuid.UUID) bool {
 	var count int64
 	a.DB.Model(&models.TeamMember{}).
 		Where("team_id = ? AND user_id = ?", teamID, userID).
+		Count(&count)
+	return count > 0
+}
+
+// canViewTeamMember reports whether viewerID may see conversations owned by
+// ownerID by virtue of team scope: there is at least one team in which BOTH
+// have an active membership. It is the single Go definition of "owner is in my
+// team scope" — its SQL twin is the viewTeamScope subquery in
+// scopeVisibleConversations. Keep the two in sync (TestVisibilityScopeMatchesFunction).
+func (a *App) canViewTeamMember(viewerID, ownerID uuid.UUID) bool {
+	var count int64
+	a.DB.Model(&models.TeamMember{}).
+		Where("user_id = ? AND team_id IN (?)", ownerID,
+			a.DB.Model(&models.TeamMember{}).Select("team_id").Where("user_id = ?", viewerID)).
 		Count(&count)
 	return count > 0
 }
@@ -172,17 +192,32 @@ func (a *App) scopeVisibleConversations(query *gorm.DB, userID, orgID uuid.UUID)
 		  AND wa.organization_id = contacts.organization_id
 		  AND wa.default_team_id IN (?))`
 
-	return query.Where(
-		a.DB.
-			Where("id IN (?)", activeAgentMine). // A: active transfer to me
-			Or("id IN (?)", activeTeamMine).      // B: active team queue, my team
-			Or(a.DB.Where("id IN (?)", activeGeneral).Where(acctDefault, myTeams)). // C: general queue + account default mine
-			Or(a.DB.Where("id NOT IN (?)", activeSub).Where("assigned_user_id = ?", userID)). // D: carteira mine
+	cond := a.DB.
+		Where("id IN (?)", activeAgentMine).                                              // A: active transfer to me
+		Or("id IN (?)", activeTeamMine).                                                  // B: active team queue, my team
+		Or(a.DB.Where("id IN (?)", activeGeneral).Where(acctDefault, myTeams)).           // C: general queue + account default mine
+		Or(a.DB.Where("id NOT IN (?)", activeSub).Where("assigned_user_id = ?", userID)). // D: carteira mine
+		Or(a.DB.Where("id NOT IN (?)", activeSub).
+			Where("assigned_user_id IS NULL AND team_id IN (?)", myTeams)). // E: flow team mine
+		Or(a.DB.Where("id NOT IN (?)", activeSub).
+			Where("assigned_user_id IS NULL AND team_id IS NULL").Where(acctDefault, myTeams)) // F: account default mine
+
+	// view_team: the team-scoped analogues of A and D, gated by the permission.
+	// viewTeamScope = users who share a team with me (the SQL twin of
+	// canViewTeamMember). Emitted only when the user holds view_team.
+	if a.HasPermission(userID, models.ResourceConversations, models.ActionViewTeam, orgID) {
+		viewTeamScope := a.DB.Model(&models.TeamMember{}).Select("user_id").
+			Where("team_id IN (?)", myTeams)
+		activeAgentTeam := a.DB.Model(&models.AgentTransfer{}).Select("contact_id").
+			Where("organization_id = ? AND status = ? AND agent_id IN (?)",
+				orgID, models.TransferStatusActive, viewTeamScope)
+		cond = cond.
+			Or("id IN (?)", activeAgentTeam). // G: active transfer to a team-mate agent
 			Or(a.DB.Where("id NOT IN (?)", activeSub).
-				Where("assigned_user_id IS NULL AND team_id IN (?)", myTeams)). // E: flow team mine
-			Or(a.DB.Where("id NOT IN (?)", activeSub).
-				Where("assigned_user_id IS NULL AND team_id IS NULL").Where(acctDefault, myTeams)), // F: account default mine
-	)
+				Where("assigned_user_id IN (?)", viewTeamScope)) // H: carteira of a team-mate agent
+	}
+
+	return query.Where(cond)
 }
 
 // userOwnsContact mirrors the old assigned-contact "mine" condition, for
