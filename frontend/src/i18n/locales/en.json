@@ -363,6 +363,15 @@
     "hideContactDetails": "Hide contact details",
     "contactOptions": "Contact Options",
     "sendMedia": "Send Media",
+    "mediaViewer": {
+      "download": "Download",
+      "openInTab": "Open in new tab",
+      "zoomIn": "Zoom in",
+      "zoomOut": "Zoom out",
+      "previous": "Previous",
+      "next": "Next",
+      "pdfError": "Couldn't display the PDF. Download it or open it in a new tab."
+    },
     "attachFile": "Attach file",
     "emoji": "Emoji",
     "cannedResponses": "Canned Responses",
