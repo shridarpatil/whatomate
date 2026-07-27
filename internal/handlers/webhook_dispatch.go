@@ -30,6 +30,9 @@ type MessageEventData struct {
 	ContactName     string             `json:"contact_name"`
 	MessageType     models.MessageType `json:"message_type"`
 	Content         string             `json:"content"`
+	MediaURL        string             `json:"media_url,omitempty"`
+	MediaMimeType   string             `json:"media_mime_type,omitempty"`
+	MediaFilename   string             `json:"media_filename,omitempty"`
 	WhatsAppAccount string             `json:"whatsapp_account"`
 	Direction       models.Direction   `json:"direction,omitempty"`
 	SentByUserID    string             `json:"sent_by_user_id,omitempty"`

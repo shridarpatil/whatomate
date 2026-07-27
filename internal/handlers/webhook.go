@@ -724,6 +724,9 @@ func (a *App) processMessageEcho(phoneNumberID string, msg IncomingTextMessage) 
 		ContactName:     contact.ProfileName,
 		MessageType:     models.MessageType(messageType),
 		Content:         messageText,
+		MediaURL:        message.MediaURL,
+		MediaMimeType:   message.MediaMimeType,
+		MediaFilename:   message.MediaFilename,
 		WhatsAppAccount: account.Name,
 		Direction:       models.DirectionOutgoing,
 	})
