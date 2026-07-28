@@ -1408,6 +1408,12 @@ func (a *App) CreateContact(r *fastglue.Request) error {
 			if req.Metadata != nil {
 				updates["metadata"] = models.JSONB(req.Metadata)
 			}
+			// Same visibility reasoning as a fresh create: an unowned restored
+			// contact goes to whoever restored it, so they can see it under
+			// strict conversation visibility.
+			if existingContact.AssignedUserID == nil {
+				updates["assigned_user_id"] = userID
+			}
 			if len(updates) > 0 {
 				a.DB.Model(&existingContact).Updates(updates)
 			}
@@ -1418,13 +1424,18 @@ func (a *App) CreateContact(r *fastglue.Request) error {
 		return r.SendErrorEnvelope(fasthttp.StatusConflict, "Contact with this phone number already exists", nil, "")
 	}
 
-	// Create new contact
+	// Create new contact, owned by whoever created it. Without this the contact
+	// has no assignee, no team and (unless the account has a default team) falls
+	// into the "view_all only" bucket under strict conversation visibility — so
+	// the agent who just created it could not see it. Assigning to the creator
+	// makes it visible to them via the carteira rule.
 	contact := models.Contact{
 		BaseModel:       models.BaseModel{ID: uuid.New()},
 		OrganizationID:  orgID,
 		PhoneNumber:     normalizedPhone,
 		ProfileName:     req.ProfileName,
 		WhatsAppAccount: req.WhatsAppAccount,
+		AssignedUserID:  &userID,
 	}
 
 	if req.Tags != nil {

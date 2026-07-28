@@ -1740,3 +1740,44 @@ func TestApp_AssignContact_AssignUserFromDifferentOrg(t *testing.T) {
 	// User from a different org should not be found
 	assert.Equal(t, fasthttp.StatusBadRequest, testutil.GetResponseStatusCode(req))
 }
+
+// A custom "logistics agent" role has contacts:write but not
+// conversations:view_all. Under strict conversation visibility, a contact this
+// agent creates must stay visible to them — so CreateContact assigns the new
+// contact to whoever created it. Regression test for contacts created by such
+// an agent vanishing from their own list.
+func TestApp_CreateContact_AssignsCreatorForVisibility(t *testing.T) {
+	app := newTestApp(t)
+	org := testutil.CreateTestOrganization(t, app.DB)
+	role := testutil.CreateTestRoleWithKeys(t, app.DB, org.ID, "logistics-agent",
+		[]string{"contacts:read", "contacts:write", "chat:read", "chat:write", "tags:read", "tags:write"})
+	agent := testutil.CreateTestUser(t, app.DB, org.ID, testutil.WithRoleID(&role.ID))
+
+	// Strict visibility on, no account default team — the exact reported setup.
+	enableStrictVisibility(t, app, org.ID)
+
+	req := testutil.NewJSONRequest(t, map[string]any{
+		"phone_number": "5511990001234",
+		"profile_name": "Cliente Logística",
+		"tags":         []string{"Loja Central"},
+	})
+	testutil.SetAuthContext(req, org.ID, agent.ID)
+
+	require.NoError(t, app.CreateContact(req))
+	require.Equal(t, fasthttp.StatusOK, testutil.GetResponseStatusCode(req))
+
+	// The created contact is owned by the agent who created it...
+	var contact models.Contact
+	require.NoError(t, app.DB.Where("organization_id = ? AND phone_number = ?", org.ID, "5511990001234").First(&contact).Error)
+	require.NotNil(t, contact.AssignedUserID, "created contact must have an assignee")
+	assert.Equal(t, agent.ID, *contact.AssignedUserID)
+
+	// ...and is therefore visible to them under strict visibility.
+	assert.True(t, app.CanViewConversationForTest(agent.ID, org.ID, &contact),
+		"agent must see the contact they just created")
+
+	// A different agent (also without view_all) must NOT see it.
+	other := testutil.CreateTestUser(t, app.DB, org.ID, testutil.WithRoleID(&role.ID))
+	assert.False(t, app.CanViewConversationForTest(other.ID, org.ID, &contact),
+		"an unrelated agent must not see someone else's private contact")
+}
