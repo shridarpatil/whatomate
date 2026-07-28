@@ -368,6 +368,8 @@
     "cannedResponses": "Canned Responses",
     "fileTooLarge": "File too large",
     "fileTooLargeDesc": "Maximum file size is 16MB",
+    "fileTooLargeImage": "Images must be 5 MB or smaller",
+    "fileTooLargeMedia": "The file exceeds the 15 MB limit",
     "unsupportedFileType": "Unsupported file type",
     "unsupportedFileTypeDesc": "Please select an image, video, audio, or document file",
     "audioFile": "Audio file",
