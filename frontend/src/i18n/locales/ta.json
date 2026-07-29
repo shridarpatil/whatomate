@@ -363,6 +363,17 @@
     "hideContactDetails": "தொடர்பு விவரங்களை மறை",
     "contactOptions": "தொடர்பு விருப்பங்கள்",
     "sendMedia": "ஊடகத்தை அனுப்பு",
+    "mediaViewer": {
+      "title": "Attachment",
+      "description": "Attachment viewer. Use the arrow keys to navigate and Escape to close.",
+      "download": "Download",
+      "openInTab": "Open in new tab",
+      "zoomIn": "Zoom in",
+      "zoomOut": "Zoom out",
+      "previous": "Previous",
+      "next": "Next",
+      "pdfError": "Couldn't display the PDF. Download it or open it in a new tab."
+    },
     "attachFile": "கோப்பை இணை",
     "emoji": "ஈமோஜி",
     "cannedResponses": "முன்பதிவு பதில்கள்",
