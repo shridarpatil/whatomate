@@ -368,6 +368,8 @@
     "cannedResponses": "डिब्बाबंद प्रतिक्रियाएं",
     "fileTooLarge": "फ़ाइल बहुत बड़ी है",
     "fileTooLargeDesc": "अधिकतम फ़ाइल आकार 16MB है",
+    "fileTooLargeImage": "Images must be 5 MB or smaller",
+    "fileTooLargeMedia": "The file exceeds the 15 MB limit",
     "unsupportedFileType": "असमर्थित फ़ाइल प्रकार",
     "unsupportedFileTypeDesc": "कृपया एक छवि, वीडियो, ऑडियो या दस्तावेज़ फ़ाइल चुनें",
     "audioFile": "ऑडियो फ़ाइल",
