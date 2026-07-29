@@ -400,8 +400,8 @@ function getFirstAccessibleRoute(authStore: ReturnType<typeof useAuthStore>): st
 router.beforeEach(async (to, _from, next) => {
   const authStore = useAuthStore()
 
-  if (!authStore.isAuthenticated) {
-    // Always try to restore session from localStorage on initial load
+  // Hydrate the store from localStorage before any route decision — an authenticated user hitting /login must be redirected away.
+  if (!authStore.isAuthenticated && (to.meta.requiresAuth !== false || to.name === 'login' || to.name === 'register')) {
     authStore.restoreSession()
   }
 
