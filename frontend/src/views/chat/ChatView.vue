@@ -1542,6 +1542,16 @@ const viewableMedia = computed(() =>
   ),
 )
 
+// Only PDFs gain anything from the lightbox — docx/xlsx/zip have no inline
+// viewer, so routing them through the modal would just add a click before the
+// same download. Those bubbles keep their one-click download link; the viewer
+// still shows them (with a download card) when paging through the gallery.
+function isPreviewableDocument(message: Message): boolean {
+  const mime = message.media_mime_type || ''
+  const name = (message.media_filename || '').toLowerCase()
+  return mime.includes('pdf') || name.endsWith('.pdf')
+}
+
 // Open the in-app viewer at the clicked attachment instead of a new browser tab.
 function openMediaPreview(message: Message) {
   const idx = viewableMedia.value.findIndex(m => m.id === message.id)
@@ -2089,7 +2099,7 @@ async function sendMediaMessage() {
                     class="max-w-[280px] max-h-[300px] rounded-lg"
                   />
                   <button
-                    v-else
+                    v-else-if="isPreviewableDocument(message)"
                     type="button"
                     class="flex items-center gap-2 px-3 py-2 bg-background/50 rounded-lg hover:bg-background/80 transition-colors cursor-pointer text-left w-full"
                     @click="openMediaPreview(message)"
@@ -2097,6 +2107,15 @@ async function sendMediaMessage() {
                     <FileText class="h-5 w-5 text-muted-foreground" />
                     <span class="text-sm truncate max-w-[200px]">{{ message.media_filename || 'Document' }}</span>
                   </button>
+                  <a
+                    v-else
+                    :href="getMediaUrl(message)"
+                    :download="message.media_filename || 'document'"
+                    class="flex items-center gap-2 px-3 py-2 bg-background/50 rounded-lg hover:bg-background/80 transition-colors"
+                  >
+                    <FileText class="h-5 w-5 text-muted-foreground" />
+                    <span class="text-sm truncate max-w-[200px]">{{ message.media_filename || 'Document' }}</span>
+                  </a>
                 </div>
                 <!-- Image message -->
                 <div v-else-if="message.message_type === 'image' && message.media_url" class="mb-2">
@@ -2139,6 +2158,7 @@ async function sendMediaMessage() {
                 <!-- Document message -->
                 <div v-else-if="message.message_type === 'document' && message.media_url" class="mb-2">
                   <button
+                    v-if="isPreviewableDocument(message)"
                     type="button"
                     class="flex items-center gap-2 px-3 py-2 bg-background/50 rounded-lg hover:bg-background/80 transition-colors cursor-pointer text-left w-full"
                     @click="openMediaPreview(message)"
@@ -2148,6 +2168,17 @@ async function sendMediaMessage() {
                       {{ message.media_filename || 'Document' }}
                     </span>
                   </button>
+                  <a
+                    v-else
+                    :href="getMediaUrl(message)"
+                    :download="message.media_filename || 'document'"
+                    class="flex items-center gap-2 px-3 py-2 bg-background/50 rounded-lg hover:bg-background/80 transition-colors"
+                  >
+                    <FileText class="h-5 w-5 text-muted-foreground" />
+                    <span class="text-sm truncate max-w-[200px]">
+                      {{ message.media_filename || 'Document' }}
+                    </span>
+                  </a>
                 </div>
                 <!-- Location message -->
                 <div v-else-if="message.message_type === 'location' && getLocationData(message)" class="mb-2">

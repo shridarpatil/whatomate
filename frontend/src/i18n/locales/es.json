@@ -326,6 +326,8 @@
     "contactOptions": "Opciones del contacto",
     "sendMedia": "Enviar medio",
     "mediaViewer": {
+      "title": "Archivo adjunto",
+      "description": "Visor de archivos adjuntos. Use las flechas para navegar y Escape para cerrar.",
       "download": "Descargar",
       "openInTab": "Abrir en una pestaña nueva",
       "zoomIn": "Acercar",

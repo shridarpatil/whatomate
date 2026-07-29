@@ -11,7 +11,7 @@
 // rides along) and framing an object-URL blob, which carries no such header.
 import { ref, computed, watch, onBeforeUnmount } from 'vue'
 import { onKeyStroke } from '@vueuse/core'
-import { Dialog, DialogContent } from '@/components/ui/dialog'
+import { Dialog, DialogContent, DialogTitle, DialogDescription } from '@/components/ui/dialog'
 import IconButton from '@/components/shared/IconButton.vue'
 import { Button } from '@/components/ui/button'
 import {
@@ -111,6 +111,13 @@ function clearPdf() {
   pdfLoading.value = false
   pdfError.value = false
 }
+// SECURITY (load-bearing, do not relax): a blob: URL inherits the origin of the
+// document that created it, and this app ships no CSP, so framing a blob whose
+// bytes are HTML would be a same-origin XSS sink. What makes this safe is the
+// backend: ServeMedia maps the on-disk extension to a whitelisted Content-Type
+// and falls back to application/octet-stream — it never echoes the DB's
+// media_mime_type. The blob.type check below keeps us on that whitelist: only
+// something the server itself vouched for as a PDF is ever framed.
 async function loadPdf(m: Message) {
   const my = ++pdfReqId
   clearPdf()
@@ -120,6 +127,10 @@ async function loadPdf(m: Message) {
     if (!res.ok) throw new Error(`HTTP ${res.status}`)
     const blob = await res.blob()
     if (my !== pdfReqId) return // superseded by a newer navigation
+    // A file named *.pdf whose MIME the server didn't recognise comes back as
+    // octet-stream: framing it would just show a blank page, so fall through to
+    // the download card instead.
+    if (!blob.type.includes('pdf')) return
     pdfBlobUrl.value = URL.createObjectURL(blob)
   } catch {
     if (my === pdfReqId) pdfError.value = true
@@ -129,8 +140,15 @@ async function loadPdf(m: Message) {
 }
 
 // React to open / navigation: reset zoom and (re)load PDFs on demand.
+//
+// Watch the current item's IDENTITY, not the items array: `items` is a computed
+// .filter() that allocates a new array on every recompute, and the messages it
+// filters are mutated by inbound WS messages and delivery-status updates. A
+// sent → delivered → read receipt would otherwise reset zoom/pan and re-fetch
+// the whole PDF while the viewer is open. Keying on the id also absorbs the
+// index shift when loadOlderMessages() prepends history.
 watch(
-  [open, index, () => props.items],
+  [open, () => current.value?.id],
   () => {
     resetZoom()
     const m = current.value
@@ -146,12 +164,23 @@ function closeOnBackdrop() { open.value = false }
 
 <template>
   <Dialog v-model:open="open">
+    <!-- text-white on the content itself, not just the toolbar: DialogContent's
+         built-in close X is a sibling of the toolbar and inherits its colour
+         from here, so without it the X renders near-black on this dark backdrop
+         in light theme. -->
     <DialogContent
-      class="max-w-none w-screen h-screen p-0 gap-0 border-0 rounded-none sm:rounded-none bg-black/95 shadow-none ring-0 flex flex-col"
+      class="max-w-none w-screen h-screen p-0 gap-0 border-0 rounded-none sm:rounded-none bg-black/95 text-white shadow-none ring-0 flex flex-col"
     >
+      <!-- Screen-reader only: satisfies aria-describedby without visible chrome. -->
+      <DialogDescription class="sr-only">{{ $t('chat.mediaViewer.description') }}</DialogDescription>
+
       <!-- Toolbar (pr-14 leaves room for DialogContent's built-in close X) -->
       <div class="flex items-center gap-1 shrink-0 px-3 py-2 pr-14 text-white">
-        <span class="text-sm truncate max-w-[40vw]" :title="filename">{{ filename }}</span>
+        <!-- The filename doubles as the dialog's accessible name (inbound images
+             carry no filename, hence the generic fallback). -->
+        <DialogTitle class="text-sm font-normal truncate max-w-[40vw]" :title="filename">
+          {{ filename || $t('chat.mediaViewer.title') }}
+        </DialogTitle>
         <span v-if="total > 1" class="text-xs text-white/60 ml-1">{{ index + 1 }} / {{ total }}</span>
         <div class="ml-auto flex items-center gap-1">
           <template v-if="currentKind === 'image'">

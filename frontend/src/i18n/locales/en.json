@@ -364,6 +364,8 @@
     "contactOptions": "Contact Options",
     "sendMedia": "Send Media",
     "mediaViewer": {
+      "title": "Attachment",
+      "description": "Attachment viewer. Use the arrow keys to navigate and Escape to close.",
       "download": "Download",
       "openInTab": "Open in new tab",
       "zoomIn": "Zoom in",
