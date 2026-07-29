@@ -368,6 +368,8 @@
     "cannedResponses": "முன்பதிவு பதில்கள்",
     "fileTooLarge": "கோப்பு மிகப் பெரியது",
     "fileTooLargeDesc": "அதிகபட்ச கோப்பு அளவு 16MB",
+    "fileTooLargeImage": "Images must be 5 MB or smaller",
+    "fileTooLargeMedia": "The file exceeds the 15 MB limit",
     "unsupportedFileType": "ஆதரிக்கப்படாத கோப்பு வகை",
     "unsupportedFileTypeDesc": "படம், காணொளி, ஒலி அல்லது ஆவணக் கோப்பைத் தேர்வுசெய்க",
     "audioFile": "ஒலிக் கோப்பு",
