@@ -363,6 +363,17 @@
     "hideContactDetails": "संपर्क विवरण छुपाएं",
     "contactOptions": "संपर्क विकल्प",
     "sendMedia": "मीडिया भेजें",
+    "mediaViewer": {
+      "title": "Attachment",
+      "description": "Attachment viewer. Use the arrow keys to navigate and Escape to close.",
+      "download": "Download",
+      "openInTab": "Open in new tab",
+      "zoomIn": "Zoom in",
+      "zoomOut": "Zoom out",
+      "previous": "Previous",
+      "next": "Next",
+      "pdfError": "Couldn't display the PDF. Download it or open it in a new tab."
+    },
     "attachFile": "फ़ाइल अटैच करें",
     "emoji": "इमोजी",
     "cannedResponses": "डिब्बाबंद प्रतिक्रियाएं",
