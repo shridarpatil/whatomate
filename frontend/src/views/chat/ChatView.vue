@@ -12,6 +12,7 @@ import { useTagsStore } from '@/stores/tags'
 import { TagBadge } from '@/components/ui/tag-badge'
 import { getTagColorClass } from '@/lib/constants'
 import { getErrorMessage } from '@/lib/api-utils'
+import { compressImage } from '@/lib/imageCompression'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
@@ -1574,9 +1575,10 @@ function openFilePicker() {
   fileInputRef.value?.click()
 }
 
-function handleFileSelect(event: Event) {
+async function handleFileSelect(event: Event) {
   const input = event.target as HTMLInputElement
   const file = input.files?.[0]
+  input.value = '' // reset so the same file can be selected again
   if (!file) return
 
   // Validate file type
@@ -1589,29 +1591,39 @@ function handleFileSelect(event: Event) {
     return
   }
 
-  // Validate file size (16MB limit for WhatsApp)
-  const maxSize = 16 * 1024 * 1024
-  if (file.size > maxSize) {
+  // Compress images client-side so they fit the Cloud API's 5 MB image limit
+  // (Meta accepts only jpeg/png for `image` messages). No-op for non-images.
+  let outFile = file
+  if (file.type.startsWith('image/')) {
+    try {
+      outFile = await compressImage(file)
+    } catch {
+      outFile = file
+    }
+  }
+
+  // Per-type size validation: images 5 MB (Meta's limit), other media 14.5 MB
+  // (under the 15 MB fasthttp request body cap).
+  const type = getMediaType(outFile.type)
+  const maxSize = type === 'image' ? 5 * 1024 * 1024 : 14.5 * 1024 * 1024
+  if (outFile.size > maxSize) {
     toast.error(t('chat.fileTooLarge'), {
-      description: t('chat.fileTooLargeDesc')
+      description: type === 'image' ? t('chat.fileTooLargeImage') : t('chat.fileTooLargeMedia')
     })
     return
   }
 
-  selectedFile.value = file
+  selectedFile.value = outFile
   mediaCaption.value = ''
 
   // Create preview URL for images and videos
-  if (file.type.startsWith('image/') || file.type.startsWith('video/')) {
-    filePreviewUrl.value = URL.createObjectURL(file)
+  if (outFile.type.startsWith('image/') || outFile.type.startsWith('video/')) {
+    filePreviewUrl.value = URL.createObjectURL(outFile)
   } else {
     filePreviewUrl.value = null
   }
 
   isMediaDialogOpen.value = true
-
-  // Reset input so same file can be selected again
-  input.value = ''
 }
 
 function closeMediaDialog() {
