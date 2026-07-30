@@ -956,6 +956,6 @@ onMounted(async () => {
       variant="destructive"
       @confirm="confirmDeleteSelectedNode"
     />
-    <UnsavedChangesDialog v-model:open="cancelDialogOpen" @confirm="confirmCancel" />
+    <UnsavedChangesDialog :open="cancelDialogOpen" @stay="cancelDialogOpen = false" @leave="confirmCancel" />
   </div>
 </template>
