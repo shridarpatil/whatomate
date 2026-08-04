@@ -362,6 +362,31 @@ export class ChatbotFlowBuilderPage extends BasePage {
     return this.unsavedDialog.getByRole('button', { name: /^Leave$/ })
   }
 
+  /** Collapse toggle inside the right panel. */
+  get collapsePanelButton() {
+    return this.page.getByRole('button', { name: 'Collapse panel' })
+  }
+
+  /** Expand toggle on the collapsed rail. */
+  get expandPanelButton() {
+    return this.page.getByRole('button', { name: 'Expand panel' })
+  }
+
+  /** Drag handle on the panel's left edge. */
+  get panelResizeHandle() {
+    return this.page.getByRole('separator', { name: 'Resize panel' })
+  }
+
+  /** "Flow Settings" heading — only rendered while the panel is open. */
+  get flowSettingsHeading() {
+    return this.page.getByText('Flow Settings', { exact: true })
+  }
+
+  /** The right panel element itself (used for width assertions). */
+  get rightPanel() {
+    return this.page.getByTestId('flow-builder-panel')
+  }
+
   /** "Button Options ({n}/{max})" label inside the right-panel buttons section. */
   get buttonOptionsLabel() {
     return this.page.getByText(/Button Options/i)

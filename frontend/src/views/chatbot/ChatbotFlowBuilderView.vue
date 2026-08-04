@@ -32,6 +32,7 @@ import {
   ExternalLink,
   StopCircle,
   ChevronDown,
+  ChevronLeft,
   ChevronRight,
   Plus,
   Trash2,
@@ -46,6 +47,7 @@ import ErrorState from '@/components/shared/ErrorState.vue'
 import ChatNodeProperties from '@/components/chatbot/ChatNodeProperties.vue'
 import PanelConfigEditor from '@/components/chatbot/PanelConfigEditor.vue'
 import type { PanelConfig, AvailableVariable } from '@/components/chatbot/PanelConfigEditor.vue'
+import { useResizablePanel } from '@/composables/useResizablePanel'
 
 import ChatbotTextNode from '@/components/chatbot/nodes/ChatbotTextNode.vue'
 import ChatbotButtonsNode from '@/components/chatbot/nodes/ChatbotButtonsNode.vue'
@@ -95,6 +97,22 @@ const auditRefreshKey = ref(0)
 const completionConfigOpen = ref(false)
 const panelConfigOpen = ref(false)
 const activityOpen = ref(false)
+
+// Right panel geometry (collapse + drag-resize), persisted across sessions.
+const {
+  width: panelWidth,
+  collapsed: panelCollapsed,
+  isDragging: panelDragging,
+  toggle: togglePanel,
+  expand: expandPanel,
+  onHandlePointerDown: onPanelHandlePointerDown,
+  onHandleKeydown: onPanelHandleKeydown,
+} = useResizablePanel({
+  storageKey: 'flow-builder-panel',
+  defaultWidth: 420,
+  minWidth: 320,
+  maxWidth: 720,
+})
 
 const createdAt = ref('')
 const updatedAt = ref('')
@@ -173,6 +191,11 @@ const selectedChatNode = computed<ChatNode | null>(() => {
     position: node.position,
     config: node.data?.config || {},
   }
+})
+
+// Selecting a node must never leave the author staring at a hidden panel.
+watch(selectedNodeId, (id) => {
+  if (id) expandPanel()
 })
 
 function onNodeClick(event: NodeMouseEvent) {
@@ -747,7 +770,7 @@ onMounted(async () => {
     </div>
 
     <!-- Main: canvas + right panel -->
-    <div class="flex-1 flex overflow-hidden">
+    <div class="flex-1 flex overflow-hidden" :class="panelDragging && 'select-none'">
       <!-- Canvas -->
       <div class="flex-1 relative">
         <div v-if="isLoading" class="absolute inset-0 flex items-center justify-center bg-background/80 z-10">
@@ -781,8 +804,55 @@ onMounted(async () => {
         />
       </div>
 
+      <!-- Collapsed rail: the only way back once the panel is hidden -->
+      <div
+        v-if="panelCollapsed"
+        class="w-7 shrink-0 border-l bg-background flex justify-center pt-2"
+      >
+        <Button
+          variant="ghost"
+          size="icon"
+          class="h-7 w-7"
+          :title="$t('flowBuilder.expandPanel')"
+          :aria-label="$t('flowBuilder.expandPanel')"
+          @click="expandPanel()"
+        >
+          <ChevronLeft class="h-4 w-4" />
+        </Button>
+      </div>
+
       <!-- Right panel -->
-      <Card class="w-[420px] min-w-0 border-y-0 border-r-0 rounded-none shrink-0 flex flex-col">
+      <Card
+        v-else
+        data-testid="flow-builder-panel"
+        class="min-w-0 border-y-0 border-r-0 rounded-none shrink-0 flex flex-col relative"
+        :style="{ width: panelWidth + 'px' }"
+      >
+        <div
+          role="separator"
+          aria-orientation="vertical"
+          tabindex="0"
+          :aria-label="$t('flowBuilder.resizePanel')"
+          :class="[
+            'absolute left-0 top-0 z-10 h-full w-1.5 -ml-0.5 cursor-col-resize transition-colors',
+            'hover:bg-primary/40 focus-visible:bg-primary/40 focus-visible:outline-none',
+            panelDragging && 'bg-primary/60',
+          ]"
+          @pointerdown="onPanelHandlePointerDown"
+          @keydown="onPanelHandleKeydown"
+        />
+        <div class="flex justify-end px-2 pt-2 shrink-0">
+          <Button
+            variant="ghost"
+            size="icon"
+            class="h-7 w-7"
+            :title="$t('flowBuilder.collapsePanel')"
+            :aria-label="$t('flowBuilder.collapsePanel')"
+            @click="togglePanel()"
+          >
+            <ChevronRight class="h-4 w-4" />
+          </Button>
+        </div>
         <!-- Node properties when a node is selected -->
         <div v-if="selectedChatNode && selectedChatNode.type !== 'start'" class="flex-1 overflow-y-auto">
           <ChatNodeProperties

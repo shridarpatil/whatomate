@@ -193,3 +193,57 @@ test.describe('Chatbot Flow Builder - unsaved changes dialog', () => {
     await expect(page).toHaveURL(/\/chatbot\/flows$/)
   })
 })
+
+test.describe('Chatbot Flow Builder - right panel', () => {
+  let builder: ChatbotFlowBuilderPage
+
+  test.beforeEach(async ({ page }) => {
+    await loginAsAdmin(page)
+    builder = new ChatbotFlowBuilderPage(page)
+    await builder.gotoNew()
+  })
+
+  test('collapses and expands the right panel', async () => {
+    await expect(builder.flowSettingsHeading).toBeVisible()
+
+    await builder.collapsePanelButton.click()
+    await expect(builder.flowSettingsHeading).toBeHidden()
+    await expect(builder.expandPanelButton).toBeVisible()
+
+    await builder.expandPanelButton.click()
+    await expect(builder.flowSettingsHeading).toBeVisible()
+  })
+
+  test('selecting a node reopens a collapsed panel', async () => {
+    await builder.collapsePanelButton.click()
+    await expect(builder.expandPanelButton).toBeVisible()
+
+    // Adding a node auto-selects it; the properties must not stay hidden.
+    await builder.addNode('Text')
+    await expect(builder.messageTextarea).toBeVisible()
+  })
+
+  test('remembers the collapsed state across reloads', async ({ page }) => {
+    await builder.collapsePanelButton.click()
+    await expect(builder.expandPanelButton).toBeVisible()
+
+    await page.reload()
+    await page.waitForLoadState('networkidle')
+
+    await expect(builder.expandPanelButton).toBeVisible()
+  })
+
+  test('arrow keys on the resize handle widen and narrow the panel', async () => {
+    const before = await builder.rightPanel.boundingBox()
+    expect(before).not.toBeNull()
+
+    await builder.panelResizeHandle.focus()
+    // Panel is on the right edge, so ArrowLeft widens it. 3 x 20px.
+    await builder.panelResizeHandle.press('ArrowLeft')
+    await builder.panelResizeHandle.press('ArrowLeft')
+    await builder.panelResizeHandle.press('ArrowLeft')
+
+    const after = await builder.rightPanel.boundingBox()
+    expect(after!.width).toBeGreaterThan(before!.width)
+  })
+})
