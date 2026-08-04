@@ -98,6 +98,10 @@ const completionConfigOpen = ref(false)
 const panelConfigOpen = ref(false)
 const activityOpen = ref(false)
 
+// Panel resize bounds
+const PANEL_MIN_WIDTH = 320
+const PANEL_MAX_WIDTH = 720
+
 // Right panel geometry (collapse + drag-resize), persisted across sessions.
 const {
   width: panelWidth,
@@ -110,8 +114,8 @@ const {
 } = useResizablePanel({
   storageKey: 'flow-builder-panel',
   defaultWidth: 420,
-  minWidth: 320,
-  maxWidth: 720,
+  minWidth: PANEL_MIN_WIDTH,
+  maxWidth: PANEL_MAX_WIDTH,
 })
 
 const createdAt = ref('')
@@ -833,6 +837,9 @@ onMounted(async () => {
           aria-orientation="vertical"
           tabindex="0"
           :aria-label="$t('flowBuilder.resizePanel')"
+          :aria-valuenow="panelWidth"
+          :aria-valuemin="PANEL_MIN_WIDTH"
+          :aria-valuemax="PANEL_MAX_WIDTH"
           :class="[
             'absolute left-0 top-0 z-10 h-full w-1.5 -ml-0.5 cursor-col-resize transition-colors',
             'hover:bg-primary/40 focus-visible:bg-primary/40 focus-visible:outline-none',
