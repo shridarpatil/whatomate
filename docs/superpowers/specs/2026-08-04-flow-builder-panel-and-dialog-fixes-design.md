@@ -103,7 +103,13 @@ Compatível com quem sobrescreve o display: `cn()` usa `tailwind-merge`, então 
 - `ScrollArea`: `max-h-[280px]` → `flex-1 min-h-0`. Com altura definida vinda do flex, o `h-full` do viewport resolve e a rolagem passa a funcionar de fato.
 - `<span class="truncate">` → `class="truncate min-w-0 flex-1 text-left"`. É o `min-w-0` que permite ao item flex encolher; sem ele o `truncate` nunca trunca, só empurra.
 
-**c) Diálogo irmão de transferência** (`ChatView.vue:2911`): mesmo padrão, mesmas classes. Tem a mesma estrutura e o mesmo defeito.
+**c) Diálogos irmãos de transferência**: ao escrever o plano confirmei que são **dois**, não um — "Transferir para agente" (`ChatView.vue:2911`) e "Transferir para time" (`ChatView.vue:2953`). Os três compartilham estrutura idêntica e os dois mesmos defeitos; recebem as mesmas classes. Deixar um deles quebrado seria arbitrário.
+
+| Linha | Diálogo | Tem badge de papel? |
+|---|---|---|
+| 2846 | Definir responsável | sim |
+| 2911 | Transferir para agente | sim |
+| 2953 | Transferir para time | não (mas tem o mesmo `truncate` sem `min-w-0` e o mesmo `ScrollArea` que não rola) |
 
 ## 5. Problema 3 — Painel direito recolhível e redimensionável
 
@@ -160,7 +166,9 @@ Usadas como `aria-label`/`title` do botão de toggle e do separador. O repo tem 
   - alterar algo, clicar em Voltar, clicar em **Sair** → navega para a lista de fluxos;
   - recolher o painel → a faixa de reabrir fica visível e o conteúdo do painel some;
   - expandir de volta → o conteúdo do painel reaparece.
-- **Visual** (correção de CSS, precisa de olho): rodar o app e abrir "Definir responsável" com nomes longos, conferindo que nada vaza do cartão, que os badges aparecem inteiros e que a lista rola quando há muitos usuários.
+- **Visual** (correção de CSS, precisa de olho): rodar o app e abrir "Definir responsável" com nomes longos, conferindo que nada vaza do cartão, que os badges aparecem inteiros e que a lista rola quando há muitos usuários. Repetir para os dois diálogos de transferência.
+
+Os E2E exigem a stack completa no ar (Postgres + backend Go em `http://localhost:8080`), porque `e2e/global-setup.ts` cria usuários de teste direto no banco. Sem a stack, `typecheck`/`lint`/`i18n:keys` continuam obrigatórios e o que não rodou deve ser declarado como não rodado.
 
 ## 7. Dívida registrada (fora deste escopo)
 
