@@ -58,7 +58,13 @@ export function useResizablePanel(options: ResizablePanelOptions): ResizablePane
     }
   }
 
-  watch([width, collapsed], persist)
+  watch([width, collapsed], () => {
+    // Skip persisting mid-drag: width changes on every native pointermove,
+    // and localStorage.setItem is synchronous — onEnd persists the final
+    // value once the drag settles instead.
+    if (isDragging.value) return
+    persist()
+  })
 
   function toggle() {
     collapsed.value = !collapsed.value
@@ -69,7 +75,12 @@ export function useResizablePanel(options: ResizablePanelOptions): ResizablePane
   }
 
   function onHandlePointerDown(event: PointerEvent) {
-    if (collapsed.value) return
+    // Also guard on isDragging: a second pointerdown on the handle while a
+    // drag is live would register a second onMove/onEnd pair, and since
+    // addEventListener('pointermove', ...) isn't filtered by pointerId, one
+    // pointer's moves would fire both closures against their own stale
+    // startX/startWidth — the later listener wins and width jumps.
+    if (collapsed.value || isDragging.value) return
 
     const handle = event.currentTarget as HTMLElement
     const startX = event.clientX
@@ -91,6 +102,8 @@ export function useResizablePanel(options: ResizablePanelOptions): ResizablePane
       handle.removeEventListener('pointermove', onMove)
       handle.removeEventListener('pointerup', onEnd)
       handle.removeEventListener('pointercancel', onEnd)
+      // The watcher skipped every mid-drag change; write the final width now.
+      persist()
     }
 
     handle.addEventListener('pointermove', onMove)
