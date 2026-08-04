@@ -1,4 +1,4 @@
-import { ref, watch, type Ref } from 'vue'
+import { ref, watch, onScopeDispose, type Ref } from 'vue'
 
 export interface ResizablePanelOptions {
   /** localStorage key holding `{ width, collapsed }`. */
@@ -66,7 +66,14 @@ export function useResizablePanel(options: ResizablePanelOptions): ResizablePane
     persist()
   })
 
+  // A drag cut short by unmount never reaches onEnd, so commit the width here.
+  onScopeDispose(() => {
+    if (isDragging.value) persist()
+  })
+
   function toggle() {
+    // Collapsing unmounts the handle, so a drag in flight can never reach onEnd.
+    isDragging.value = false
     collapsed.value = !collapsed.value
   }
 
@@ -88,6 +95,7 @@ export function useResizablePanel(options: ResizablePanelOptions): ResizablePane
 
     isDragging.value = true
     handle.setPointerCapture(event.pointerId)
+    handle.focus()
 
     // The panel sits on the right edge, so dragging left widens it.
     function onMove(moveEvent: PointerEvent) {

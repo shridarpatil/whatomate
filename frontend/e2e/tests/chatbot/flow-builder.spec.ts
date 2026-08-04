@@ -243,7 +243,19 @@ test.describe('Chatbot Flow Builder - right panel', () => {
     await builder.panelResizeHandle.press('ArrowLeft')
     await builder.panelResizeHandle.press('ArrowLeft')
 
+    const widened = await builder.rightPanel.boundingBox()
+    expect(widened!.width).toBeGreaterThan(before!.width)
+
+    // ArrowRight is the narrow direction — same step size, so 3 presses
+    // should undo the 3 ArrowLeft presses above exactly. The composable's
+    // clamp() rounds, but every value here (420 default +/- multiples of
+    // the 20px KEYBOARD_STEP) is already an integer, so no rounding drift
+    // is possible and exact equality is safe.
+    await builder.panelResizeHandle.press('ArrowRight')
+    await builder.panelResizeHandle.press('ArrowRight')
+    await builder.panelResizeHandle.press('ArrowRight')
+
     const after = await builder.rightPanel.boundingBox()
-    expect(after!.width).toBeGreaterThan(before!.width)
+    expect(after!.width).toBe(before!.width)
   })
 })

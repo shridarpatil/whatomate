@@ -204,6 +204,9 @@ watch(selectedNodeId, (id) => {
 
 function onNodeClick(event: NodeMouseEvent) {
   selectedNodeId.value = event.node.id
+  // Also expand here, not just in the watcher: re-clicking the already
+  // selected node doesn't change selectedNodeId, so the watcher wouldn't fire.
+  expandPanel()
 }
 
 function onPaneClick() {
