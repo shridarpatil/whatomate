@@ -363,23 +363,11 @@ const activeTransfer = computed(() => {
 
 const activeTransferId = computed(() => activeTransfer.value?.id || null)
 
-// Check if current user can assign contacts (admin or manager only)
-const canAssignContacts = computed(() => {
-  // Try store first, then fallback to localStorage
-  let role = authStore.userRole
-  if (!role || role === 'agent') {
-    try {
-      const storedUser = localStorage.getItem('user')
-      if (storedUser) {
-        const user = JSON.parse(storedUser)
-        role = user.role?.name || user.role // Support both old and new format
-      }
-    } catch {
-      // ignore
-    }
-  }
-  return role === 'admin' || role === 'manager'
-})
+// Mirror the server's gate on PUT /api/contacts/{id}/assign, which requires
+// contacts:write (plus a visibility check it makes itself). This used to compare
+// the role *name* against 'admin'/'manager', so a custom role could hold
+// contacts:write and still never be offered the button.
+const canAssignContacts = computed(() => authStore.hasPermission('contacts', 'write'))
 
 // Get list of users for assignment
 const assignableUsers = computed(() => {
