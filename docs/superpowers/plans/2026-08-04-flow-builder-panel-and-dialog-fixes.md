@@ -10,6 +10,14 @@
 
 **Spec:** [`docs/superpowers/specs/2026-08-04-flow-builder-panel-and-dialog-fixes-design.md`](../specs/2026-08-04-flow-builder-panel-and-dialog-fixes-design.md)
 
+> **Corrigido durante a execução — este plano não descreve mais o código final.** As revisões acharam defeitos reais no código de exemplo abaixo, e o dono do produto aprovou divergir do plano. O que mudou:
+>
+> - **Task 4** — `watch([width, collapsed], persist)` gravava no `localStorage` a cada `pointermove`. Agora o watcher pula enquanto `isDragging` e o `onEnd` persiste uma vez. `onHandlePointerDown` também ganhou guarda de re-entrância (`|| isDragging.value`), sem a qual um segundo ponteiro registrava um par de listeners duplicado com base defasada. Depois, `onScopeDispose` passou a persistir um arraste interrompido por desmontagem, `toggle()` limpa `isDragging`, e o handle recebe `focus()` no `pointerdown`.
+> - **Task 5** — o separador ganhou `aria-valuenow`/`aria-valuemin`/`aria-valuemax` (padrão *window splitter* do WAI-ARIA), com `320`/`720` extraídos para as constantes `PANEL_MIN_WIDTH`/`PANEL_MAX_WIDTH`. E o mais importante: `onNodeClick` agora chama `expandPanel()` diretamente — o `watch(selectedNodeId)` sozinho só dispara na *mudança* de id, então reclicar o nó já selecionado com o painel recolhido não fazia nada.
+> - **Task 2** — `DialogScrollContent.vue` tinha a mesma trilha de grid não blindada e também foi corrigido; o plano só citava dois primitivos.
+>
+> A fonte da verdade do comportamento é o código, não este arquivo.
+
 ## Global Constraints
 
 - **Branch:** `feature/flow-builder-panel-and-dialog-fixes` (já criada a partir de `development`). Nunca commitar em `main` nem em `development`.
