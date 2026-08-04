@@ -161,3 +161,35 @@ test.describe('Chatbot Flow Builder - Other node types', () => {
     await expect(builder.page.getByText(/^Expression$/i).first()).toBeVisible()
   })
 })
+
+test.describe('Chatbot Flow Builder - unsaved changes dialog', () => {
+  let builder: ChatbotFlowBuilderPage
+
+  test.beforeEach(async ({ page }) => {
+    await loginAsAdmin(page)
+    builder = new ChatbotFlowBuilderPage(page)
+    await builder.gotoNew()
+    // Adding a node is what marks the flow dirty.
+    await builder.addNode('Text')
+  })
+
+  test('"Stay" keeps the author in the builder', async ({ page }) => {
+    await builder.cancelButton.click()
+    await expect(builder.unsavedDialog).toBeVisible()
+
+    await builder.stayButton.click()
+
+    await expect(builder.unsavedDialog).toBeHidden()
+    await expect(page).toHaveURL(/\/chatbot\/flows\/new/)
+    await expect(builder.paletteToolbar).toBeVisible()
+  })
+
+  test('"Leave" navigates back to the flow list', async ({ page }) => {
+    await builder.cancelButton.click()
+    await expect(builder.unsavedDialog).toBeVisible()
+
+    await builder.leaveButton.click()
+
+    await expect(page).toHaveURL(/\/chatbot\/flows$/)
+  })
+})

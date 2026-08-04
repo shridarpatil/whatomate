@@ -342,6 +342,26 @@ export class ChatbotFlowBuilderPage extends BasePage {
     await this.paletteToolbar.getByRole('button', { name: type, exact: true }).click()
   }
 
+  /** Header "Cancel" button — opens the unsaved-changes dialog when the flow is dirty. */
+  get cancelButton() {
+    return this.page.getByRole('button', { name: /^Cancel$/ })
+  }
+
+  /** The unsaved-changes alert dialog (reka-ui sets role="alertdialog"). */
+  get unsavedDialog() {
+    return this.page.getByRole('alertdialog')
+  }
+
+  /** "Stay" button inside the unsaved-changes dialog. */
+  get stayButton() {
+    return this.unsavedDialog.getByRole('button', { name: /^Stay$/ })
+  }
+
+  /** "Leave" button inside the unsaved-changes dialog. */
+  get leaveButton() {
+    return this.unsavedDialog.getByRole('button', { name: /^Leave$/ })
+  }
+
   /** "Button Options ({n}/{max})" label inside the right-panel buttons section. */
   get buttonOptionsLabel() {
     return this.page.getByText(/Button Options/i)
