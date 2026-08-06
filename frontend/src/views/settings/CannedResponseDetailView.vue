@@ -38,7 +38,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog'
-import { MessageSquareText, Trash2, Save } from 'lucide-vue-next'
+import { MessageSquareText, Trash2, Save, ImagePlus, X as XIcon } from 'lucide-vue-next'
 import { CANNED_RESPONSE_CATEGORIES } from '@/lib/constants'
 
 const route = useRoute()
@@ -67,7 +67,24 @@ const form = ref({
   category: '',
   is_active: true,
   buttons: [] as ButtonConfig[],
+  image_url: '',
 })
+
+// Image upload state
+const imageInputRef = ref<HTMLInputElement | null>(null)
+const pendingImageFile = ref<File | null>(null)
+const imagePreviewUrl = ref<string | null>(null)
+const isUploadingImage = ref(false)
+
+// Build a displayable URL for the saved image_url path
+const basePath = ((window as any).__BASE_PATH__ ?? '').replace(/\/$/, '')
+const savedImageDisplayUrl = computed(() => {
+  if (!form.value.image_url) return null
+  return `${basePath}/api/chatbot/media/${form.value.image_url.replace(/\\/g, '/')}`
+})
+
+// The preview shown in the card: pending file takes priority over the saved URL
+const displayImageUrl = computed(() => imagePreviewUrl.value ?? savedImageDisplayUrl.value)
 
 const breadcrumbs = computed(() => [
   { label: t('nav.settings'), href: '/settings' },
@@ -109,6 +126,13 @@ function syncForm() {
     category: response.value.category || '',
     is_active: response.value.is_active,
     buttons: (response.value.buttons || []).map(b => ({ ...b })),
+    image_url: response.value.image_url || '',
+  }
+  // Clear any pending (unsaved) image selection when reloading
+  pendingImageFile.value = null
+  if (imagePreviewUrl.value) {
+    URL.revokeObjectURL(imagePreviewUrl.value)
+    imagePreviewUrl.value = null
   }
 }
 
@@ -211,8 +235,54 @@ const buttonsValidationError = computed<string | null>(() => {
 
 const canSave = computed(() => !buttonsValidationError.value)
 
+// ---- Image helpers ----
+function openImagePicker() {
+  imageInputRef.value?.click()
+}
+
+function handleImageSelect(event: Event) {
+  const input = event.target as HTMLInputElement
+  const file = input.files?.[0]
+  if (!file) return
+
+  if (!file.type.startsWith('image/')) {
+    toast.error(t('cannedResponses.imageOnly'))
+    input.value = ''
+    return
+  }
+  const maxSize = 5 * 1024 * 1024
+  if (file.size > maxSize) {
+    toast.error(t('cannedResponses.imageTooLarge'))
+    input.value = ''
+    return
+  }
+
+  // Revoke previous preview
+  if (imagePreviewUrl.value) URL.revokeObjectURL(imagePreviewUrl.value)
+  pendingImageFile.value = file
+  imagePreviewUrl.value = URL.createObjectURL(file)
+  // Mark form dirty so the unsaved-changes guard fires
+  hasChanges.value = true
+  input.value = ''
+}
+
+function removeImage() {
+  if (imagePreviewUrl.value) {
+    URL.revokeObjectURL(imagePreviewUrl.value)
+    imagePreviewUrl.value = null
+  }
+  pendingImageFile.value = null
+  form.value.image_url = ''
+  hasChanges.value = true
+}
+
 async function save() {
-  if (!form.value.name.trim() || !form.value.content.trim()) {
+  if (!form.value.name.trim()) {
+    toast.error(t('cannedResponses.nameContentRequired'))
+    return
+  }
+  // Content is required only when no image is set (including pending upload)
+  if (!form.value.content.trim() && !form.value.image_url && !pendingImageFile.value) {
     toast.error(t('cannedResponses.nameContentRequired'))
     return
   }
@@ -222,6 +292,22 @@ async function save() {
   }
   isSaving.value = true
   try {
+    // Upload the image first if a new one was selected
+    let finalImageUrl = form.value.image_url
+    if (pendingImageFile.value) {
+      isUploadingImage.value = true
+      try {
+        const uploadRes = await cannedResponsesService.uploadMedia(pendingImageFile.value)
+        const uploadData = (uploadRes.data as any).data || uploadRes.data
+        finalImageUrl = uploadData.image_url
+      } catch (uploadErr) {
+        toast.error(t('cannedResponses.imageUploadFailed'))
+        return
+      } finally {
+        isUploadingImage.value = false
+      }
+    }
+
     if (isNew.value) {
       const res = await cannedResponsesService.create({
         name: form.value.name,
@@ -229,12 +315,10 @@ async function save() {
         content: form.value.content,
         category: form.value.category || undefined,
         buttons: form.value.buttons,
+        image_url: finalImageUrl || undefined,
       })
       toast.success(t('common.createdSuccess', { resource: t('resources.CannedResponse') }))
       const created = (res.data as any).data || res.data
-      // Set the response locally so the (reused) component switches to edit
-      // mode without re-fetching. responseId watcher below guards against a
-      // duplicate load when the route param flips from "new" to the new UUID.
       response.value = created
       await nextTick()
       hasChanges.value = false
@@ -247,6 +331,7 @@ async function save() {
         category: form.value.category,
         is_active: form.value.is_active,
         buttons: form.value.buttons,
+        image_url: finalImageUrl,
       })
       toast.success(t('common.updatedSuccess', { resource: t('resources.CannedResponse') }))
       await loadResponse()
@@ -353,7 +438,11 @@ onMounted(() => { loadResponse() })
             </div>
           </div>
           <div class="space-y-1.5">
-            <Label class="text-xs">{{ $t('cannedResponses.content') }} <span class="text-destructive">*</span></Label>
+            <Label class="text-xs">
+              {{ $t('cannedResponses.content') }}
+              <span v-if="!displayImageUrl" class="text-destructive">*</span>
+              <span v-else class="text-muted-foreground">({{ $t('chat.mediaCaption') }})</span>
+            </Label>
             <Textarea v-model="form.content" :placeholder="$t('cannedResponses.contentPlaceholder')" :rows="6" :disabled="!canWrite" />
             <p class="text-[11px] text-muted-foreground">{{ $t('cannedResponses.placeholderHint') }}</p>
           </div>
@@ -365,6 +454,56 @@ onMounted(() => { loadResponse() })
               :disabled="!canWrite"
             />
           </div>
+        </CardContent>
+      </Card>
+
+      <!-- Image Upload -->
+      <Card>
+        <CardHeader class="pb-3">
+          <CardTitle class="text-sm font-medium">{{ $t('cannedResponses.image') }}</CardTitle>
+        </CardHeader>
+        <CardContent class="space-y-3">
+          <!-- Hidden file input -->
+          <input
+            ref="imageInputRef"
+            type="file"
+            accept="image/*"
+            class="hidden"
+            @change="handleImageSelect"
+          />
+
+          <!-- Image preview -->
+          <div v-if="displayImageUrl" class="relative inline-block">
+            <img
+              :src="displayImageUrl"
+              class="max-h-48 rounded-lg object-contain border border-border"
+              alt=""
+            />
+            <button
+              v-if="canWrite"
+              type="button"
+              class="absolute top-1 right-1 h-6 w-6 rounded-full bg-destructive text-destructive-foreground flex items-center justify-center shadow-sm hover:bg-destructive/80 transition-colors"
+              @click="removeImage"
+              :title="$t('cannedResponses.removeImage')"
+            >
+              <XIcon class="h-3.5 w-3.5" />
+            </button>
+          </div>
+
+          <!-- Upload / change button -->
+          <Button
+            v-if="canWrite"
+            type="button"
+            variant="outline"
+            size="sm"
+            :disabled="isUploadingImage"
+            @click="openImagePicker"
+          >
+            <ImagePlus class="h-4 w-4 mr-1.5" />
+            {{ displayImageUrl ? $t('cannedResponses.changeImage') : $t('cannedResponses.uploadImage') }}
+          </Button>
+
+          <p class="text-[11px] text-muted-foreground">{{ $t('cannedResponses.imageHint') }}</p>
         </CardContent>
       </Card>
 

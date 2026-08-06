@@ -443,6 +443,7 @@ export interface CannedResponse {
   is_active: boolean
   usage_count: number
   buttons?: CannedResponseButton[]
+  image_url?: string
   created_at: string
   updated_at: string
 }
@@ -454,18 +455,26 @@ interface CannedResponseUpsertPayload {
   category?: string
   is_active?: boolean
   buttons?: CannedResponseButton[]
+  image_url?: string
 }
 
 export const cannedResponsesService = {
   list: (params?: { category?: string; search?: string; active_only?: string; page?: number; limit?: number }) =>
     api.get<{ canned_responses: CannedResponse[]; total?: number }>('/canned-responses', { params }),
   get: (id: string) => api.get<CannedResponse>(`/canned-responses/${id}`),
-  create: (data: CannedResponseUpsertPayload & { name: string; content: string }) =>
+  create: (data: CannedResponseUpsertPayload & { name: string }) =>
     api.post('/canned-responses', data),
   update: (id: string, data: CannedResponseUpsertPayload) =>
     api.put(`/canned-responses/${id}`, data),
   delete: (id: string) => api.delete(`/canned-responses/${id}`),
-  use: (id: string) => api.post(`/canned-responses/${id}/use`)
+  use: (id: string) => api.post(`/canned-responses/${id}/use`),
+  uploadMedia: (file: File) => {
+    const formData = new FormData()
+    formData.append('file', file)
+    return api.post<{ image_url: string }>('/canned-responses/upload-media', formData, {
+      headers: { 'Content-Type': 'multipart/form-data' }
+    })
+  }
 }
 
 export const agentAnalyticsService = {

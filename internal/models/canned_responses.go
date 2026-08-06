@@ -18,7 +18,11 @@ type CannedResponse struct {
 	// [{id, title, type:'reply'|'url'|'phone'|'voice_call', url?, phone_number?, ttl_minutes?}]
 	// 'voice_call' is canned-response-only (chatbot flows don't support it) and
 	// is exclusive — it can't coexist with other button types in the same row.
-	Buttons     JSONBArray `gorm:"type:jsonb;default:'[]'" json:"buttons"`
+	Buttons  JSONBArray `gorm:"type:jsonb;default:'[]'" json:"buttons"`
+	// ImageURL stores the local relative media path (e.g. "images/uuid.jpg") of an
+	// optional image that is sent together with this canned response. Empty string
+	// means no image. The content/body field acts as caption when an image is set.
+	ImageURL    string    `gorm:"size:500" json:"image_url"`
 	CreatedByID uuid.UUID  `gorm:"type:uuid" json:"created_by_id"`
 
 	// Relations

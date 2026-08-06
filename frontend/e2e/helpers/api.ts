@@ -391,7 +391,8 @@ export class ApiHelper {
     content: string
     shortcut?: string
     category?: string
-  }): Promise<{ id: string; name: string; shortcut: string; content: string; category: string }> {
+    image_url?: string
+  }): Promise<{ id: string; name: string; shortcut: string; content: string; category: string; image_url?: string }> {
     const response = await this.request.post(`${BASE_URL}/api/canned-responses`, {
       headers: this.csrfHeaders,
       data: { category: 'general', ...data }

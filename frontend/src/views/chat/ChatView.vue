@@ -117,6 +117,8 @@ const tagsStore = useTagsStore()
 const notesStore = useNotesStore()
 const { isDark } = useColorMode()
 
+const basePath = ((window as any).__BASE_PATH__ ?? '').replace(/\/$/, '')
+
 const canWriteContacts = authStore.hasPermission('contacts', 'write')
 
 const messageInput = ref('')
@@ -811,8 +813,9 @@ function scrollToMessage(messageId: string | undefined) {
   }
 }
 
-function extractCannedTokens(content: string): string[] {
+function extractCannedTokens(content: string | null | undefined): string[] {
   const seen = new Set<string>()
+  if (!content) return []
   const matches = content.matchAll(/\{\{\s*([\w.-]+)\s*\}\}/g)
   for (const m of matches) seen.add(m[1])
   return Array.from(seen)
@@ -896,80 +899,118 @@ async function sendCannedResponse() {
 
   const body = cannedPreview.value
   const responseId = selectedCannedResponse.value.id
-  // Substitute {{...}} tokens in every button field — same rules as the body —
-  // so URLs like https://x.com/u/{{phone_number}} resolve at send time.
-  const buttons = (selectedCannedResponse.value.buttons || []).map(b => ({
-    ...b,
-    title: resolveCannedTokens(b.title),
-    ...(b.url !== undefined ? { url: resolveCannedTokens(b.url) } : {}),
-    ...(b.phone_number !== undefined ? { phone_number: resolveCannedTokens(b.phone_number) } : {}),
-  }))
-  const replyButtons = buttons.filter(b => !b.type || b.type === 'reply')
-  const urlButtons = buttons.filter(b => b.type === 'url')
-
-  // WhatsApp Cloud API supports: 1-3 reply buttons (interactive.button),
-  // 4-10 reply rows (interactive.list — backend's SendInteractiveButtons
-  // auto-picks the right shape), a single cta_url, or a single voice_call
-  // (Business Calling click-to-call). Phone buttons and multi-URL / mixed
-  // combos aren't representable; the detail-page validator blocks save for
-  // those, so the text fallback here is just a safety net.
-  const voiceCallButtons = buttons.filter(b => b.type === 'voice_call')
-  const flowButtons = buttons.filter(b => b.type === 'flow')
-  let sendType: 'text' | 'interactive' = 'text'
-  let interactive: {
-    type: 'button' | 'list' | 'cta_url' | 'voice_call' | 'flow'
-    body: string
-    buttons?: Array<{ id: string; title: string }>
-    button_text?: string
-    url?: string
-    display_text?: string
-    ttl_minutes?: number
-    flow_id?: string
-    first_screen?: string
-  } | undefined
-
-  if (buttons.length === 1 && flowButtons.length === 1) {
-    const f = flowButtons[0]
-    sendType = 'interactive'
-    interactive = {
-      type: 'flow',
-      body,
-      // The button title is the CTA label shown to the customer.
-      button_text: resolveCannedTokens(f.title),
-      flow_id: f.flow_id,
-      first_screen: f.screen,
-    }
-  } else if (buttons.length === 1 && voiceCallButtons.length === 1) {
-    const vc = voiceCallButtons[0]
-    sendType = 'interactive'
-    interactive = {
-      type: 'voice_call',
-      body,
-      // {{...}} tokens already resolved in the canned-preview path; the
-      // button title is what becomes Meta's display_text. Backend
-      // truncates to 20 chars and stamps the agent-id payload.
-      display_text: resolveCannedTokens(vc.title),
-      ttl_minutes: vc.ttl_minutes ?? 15,
-    }
-  } else if (buttons.length > 0 && replyButtons.length === buttons.length && replyButtons.length <= 10) {
-    sendType = 'interactive'
-    interactive = {
-      type: replyButtons.length <= 3 ? 'button' : 'list',
-      body,
-      buttons: replyButtons.map(b => ({ id: b.id, title: b.title })),
-    }
-  } else if (buttons.length === 1 && urlButtons.length === 1) {
-    sendType = 'interactive'
-    interactive = {
-      type: 'cta_url',
-      body,
-      button_text: urlButtons[0].title,
-      url: urlButtons[0].url || '',
-    }
-  }
+  const imageUrl = selectedCannedResponse.value.image_url
 
   isSendingCanned.value = true
   try {
+    // ---- Image path: fetch stored image and send as media message ----
+    if (imageUrl) {
+      const mediaSrcUrl = `${((window as any).__BASE_PATH__ ?? '').replace(/\/$/, '')}/api/chatbot/media/${imageUrl.replace(/\\/g, '/')}`
+      const imgRes = await fetch(mediaSrcUrl, { credentials: 'include' })
+      if (!imgRes.ok) throw new Error('Failed to fetch canned response image')
+      const blob = await imgRes.blob()
+      const filename = imageUrl.split('/').pop() || 'image.jpg'
+      const file = new File([blob], filename, { type: blob.type || 'image/jpeg' })
+
+      const formData = new FormData()
+      formData.append('file', file)
+      formData.append('contact_id', contactsStore.currentContact.id)
+      formData.append('type', 'image')
+      if (body.trim()) {
+        formData.append('caption', body.trim())
+      }
+      if (selectedAccount.value) {
+        formData.append('whatsapp_account', selectedAccount.value)
+      }
+
+      const mediaRes = await fetch(`${((window as any).__BASE_PATH__ ?? '').replace(/\/$/, '')}/api/messages/media`, {
+        method: 'POST',
+        credentials: 'include',
+        headers: getRequestHeaders({ csrf: true }),
+        body: formData,
+      })
+      if (!mediaRes.ok) {
+        const err = await mediaRes.json().catch(() => ({}))
+        throw new Error(err.message || 'Failed to send image')
+      }
+      const mediaResult = await mediaRes.json()
+      if (mediaResult.data) {
+        contactsStore.addMessage(mediaResult.data)
+        scrollToBottom()
+      }
+      cannedResponsesService.use(responseId).catch(() => {})
+      contactsStore.clearReplyingTo()
+      cannedDialogOpen.value = false
+      selectedCannedResponse.value = null
+      cannedParamNames.value = []
+      cannedParamValues.value = {}
+      await nextTick()
+      scrollToBottom()
+      return
+    }
+
+    // ---- Text / interactive path (no image) ----
+    // Substitute {{...}} tokens in every button field — same rules as the body —
+    // so URLs like https://x.com/u/{{phone_number}} resolve at send time.
+    const buttons = (selectedCannedResponse.value.buttons || []).map(b => ({
+      ...b,
+      title: resolveCannedTokens(b.title),
+      ...(b.url !== undefined ? { url: resolveCannedTokens(b.url) } : {}),
+      ...(b.phone_number !== undefined ? { phone_number: resolveCannedTokens(b.phone_number) } : {}),
+    }))
+    const replyButtons = buttons.filter(b => !b.type || b.type === 'reply')
+    const urlButtons = buttons.filter(b => b.type === 'url')
+    const voiceCallButtons = buttons.filter(b => b.type === 'voice_call')
+    const flowButtons = buttons.filter(b => b.type === 'flow')
+    let sendType: 'text' | 'interactive' = 'text'
+    let interactive: {
+      type: 'button' | 'list' | 'cta_url' | 'voice_call' | 'flow'
+      body: string
+      buttons?: Array<{ id: string; title: string }>
+      button_text?: string
+      url?: string
+      display_text?: string
+      ttl_minutes?: number
+      flow_id?: string
+      first_screen?: string
+    } | undefined
+
+    if (buttons.length === 1 && flowButtons.length === 1) {
+      const f = flowButtons[0]
+      sendType = 'interactive'
+      interactive = {
+        type: 'flow',
+        body,
+        button_text: resolveCannedTokens(f.title),
+        flow_id: f.flow_id,
+        first_screen: f.screen,
+      }
+    } else if (buttons.length === 1 && voiceCallButtons.length === 1) {
+      const vc = voiceCallButtons[0]
+      sendType = 'interactive'
+      interactive = {
+        type: 'voice_call',
+        body,
+        display_text: resolveCannedTokens(vc.title),
+        ttl_minutes: vc.ttl_minutes ?? 15,
+      }
+    } else if (buttons.length > 0 && replyButtons.length === buttons.length && replyButtons.length <= 10) {
+      sendType = 'interactive'
+      interactive = {
+        type: replyButtons.length <= 3 ? 'button' : 'list',
+        body,
+        buttons: replyButtons.map(b => ({ id: b.id, title: b.title })),
+      }
+    } else if (buttons.length === 1 && urlButtons.length === 1) {
+      sendType = 'interactive'
+      interactive = {
+        type: 'cta_url',
+        body,
+        button_text: urlButtons[0].title,
+        url: urlButtons[0].url || '',
+      }
+    }
+
     await contactsStore.sendMessage(
       contactsStore.currentContact.id,
       sendType,
@@ -2657,6 +2698,14 @@ async function sendMediaMessage() {
               v-model="cannedParamValues[param]"
               :placeholder="param"
               class="h-9 canned-response-param"
+            />
+          </div>
+          <!-- Image preview in dialog -->
+          <div v-if="selectedCannedResponse?.image_url" class="rounded-lg overflow-hidden border border-white/10">
+            <img
+              :src="`${basePath}/api/chatbot/media/${selectedCannedResponse?.image_url?.replace(/\\/g, '/') || ''}`"
+              class="w-full max-h-48 object-contain bg-black/40"
+              alt=""
             />
           </div>
           <div v-if="cannedPreview || cannedPreviewButtons.length" class="space-y-1">

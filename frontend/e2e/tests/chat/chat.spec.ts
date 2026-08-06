@@ -347,6 +347,7 @@ test.describe('Canned Response Preview', () => {
   let plain: { id: string; name: string; shortcut: string }
   let withParam: { id: string; name: string; shortcut: string }
   let withContactName: { id: string; name: string; shortcut: string }
+  let withImage: { id: string; name: string; shortcut: string }
 
   test.beforeEach(async ({ page, request }) => {
     api = new ApiHelper(request)
@@ -374,6 +375,13 @@ test.describe('Canned Response Preview', () => {
       shortcut: greetName.toLowerCase(),
       content: 'Hi {{contact_name}}, how can I help?',
     })
+    const imageName = cannedScope.name()
+    withImage = await api.createCannedResponse({
+      name: imageName,
+      shortcut: imageName.toLowerCase(),
+      content: 'Canned response caption',
+      image_url: 'images/test-canned-response.png',
+    })
 
     await login(page, ADMIN_USER)
     chatPage = new ChatPage(page)
@@ -381,7 +389,7 @@ test.describe('Canned Response Preview', () => {
   })
 
   test.afterEach(async () => {
-    for (const id of [plain?.id, withParam?.id, withContactName?.id]) {
+    for (const id of [plain?.id, withParam?.id, withContactName?.id, withImage?.id]) {
       if (id) await api.deleteCannedResponse(id).catch(() => {})
     }
   })
@@ -452,5 +460,55 @@ test.describe('Canned Response Preview', () => {
 
     await chatPage.cancelCannedDialog()
     await expect(chatPage.messageInput).toHaveValue('')
+  })
+
+  test('renders image preview and posts to media send endpoint', async ({ page }) => {
+    // Intercept media fetch
+    await page.route('**/api/chatbot/media/images/test-canned-response.png', async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: 'image/png',
+        body: Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==', 'base64'),
+      })
+    })
+    let postedBody: any = null
+    // Intercept messages media POST
+    await page.route(`**/api/messages/media`, async (route) => {
+      postedBody = route.request().postData()
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          status: 'success',
+          data: {
+            id: 'msg-media-123',
+            direction: 'outgoing',
+            type: 'image',
+            content: {
+              media_url: 'images/test-canned-response.png',
+              caption: 'Canned response caption',
+            },
+            timestamp: new Date().toISOString(),
+          },
+        }),
+      })
+    })
+    await chatPage.openCannedResponses()
+    await chatPage.selectCannedPickerItem(withImage.name)
+    await chatPage.cannedDialog.waitFor({ state: 'visible' })
+    // Check preview image is visible
+    const previewImg = chatPage.cannedDialog.locator('img')
+    await expect(previewImg).toBeVisible()
+    const imgSrc = await previewImg.getAttribute('src')
+    expect(imgSrc).toContain('/api/chatbot/media/images/test-canned-response.png')
+    // Click send
+    await chatPage.sendCannedDialog()
+    // Verify media POST was triggered
+    await expect.poll(() => postedBody, { timeout: 5000 }).not.toBeNull()
+    expect(postedBody).toContain('name="contact_id"')
+    expect(postedBody).toContain('name="type"')
+    expect(postedBody).toContain('image')
+    expect(postedBody).toContain('name="caption"')
+    expect(postedBody).toContain('Canned response caption')
   })
 })

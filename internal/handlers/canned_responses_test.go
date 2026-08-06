@@ -1435,3 +1435,77 @@ func TestApp_IncrementCannedResponseUsage(t *testing.T) {
 		assert.Equal(t, fasthttp.StatusUnauthorized, testutil.GetResponseStatusCode(req))
 	})
 }
+
+func TestApp_CannedResponse_WithImage(t *testing.T) {
+	t.Parallel()
+
+	t.Run("create success with image only", func(t *testing.T) {
+		app := newTestApp(t)
+		org := testutil.CreateTestOrganization(t, app.DB)
+		user := testutil.CreateTestUser(t, app.DB, org.ID)
+
+		req := testutil.NewJSONRequest(t, map[string]any{
+			"name":      "Image Only Response",
+			"image_url": "images/test-image.jpg",
+		})
+		testutil.SetAuthContext(req, org.ID, user.ID)
+
+		err := app.CreateCannedResponse(req)
+		require.NoError(t, err)
+		assert.Equal(t, fasthttp.StatusOK, testutil.GetResponseStatusCode(req))
+
+		var resp struct {
+			Data handlers.CannedResponseResponse `json:"data"`
+		}
+		err = json.Unmarshal(testutil.GetResponseBody(req), &resp)
+		require.NoError(t, err)
+		assert.Equal(t, "Image Only Response", resp.Data.Name)
+		assert.Equal(t, "images/test-image.jpg", resp.Data.ImageURL)
+		assert.Equal(t, "", resp.Data.Content)
+	})
+
+	t.Run("create fails when both content and image_url are empty", func(t *testing.T) {
+		app := newTestApp(t)
+		org := testutil.CreateTestOrganization(t, app.DB)
+		user := testutil.CreateTestUser(t, app.DB, org.ID)
+
+		req := testutil.NewJSONRequest(t, map[string]any{
+			"name": "Empty Response",
+		})
+		testutil.SetAuthContext(req, org.ID, user.ID)
+
+		err := app.CreateCannedResponse(req)
+		require.NoError(t, err)
+		assert.Equal(t, fasthttp.StatusBadRequest, testutil.GetResponseStatusCode(req))
+	})
+
+	t.Run("update success with image", func(t *testing.T) {
+		app := newTestApp(t)
+		org := testutil.CreateTestOrganization(t, app.DB)
+		user := testutil.CreateTestUser(t, app.DB, org.ID)
+
+		cr := createTestCannedResponse(t, app, org.ID, user.ID, "Original Text", "/orig", "Original content", "general")
+
+		req := testutil.NewJSONRequest(t, map[string]any{
+			"name":      "Original Text",
+			"content":   "Caption for image",
+			"image_url": "images/updated-image.jpg",
+			"is_active": true,
+		})
+		testutil.SetAuthContext(req, org.ID, user.ID)
+		testutil.SetPathParam(req, "id", cr.ID.String())
+
+		err := app.UpdateCannedResponse(req)
+		require.NoError(t, err)
+		assert.Equal(t, fasthttp.StatusOK, testutil.GetResponseStatusCode(req))
+
+		var resp struct {
+			Data handlers.CannedResponseResponse `json:"data"`
+		}
+		err = json.Unmarshal(testutil.GetResponseBody(req), &resp)
+		require.NoError(t, err)
+		assert.Equal(t, "Caption for image", resp.Data.Content)
+		assert.Equal(t, "images/updated-image.jpg", resp.Data.ImageURL)
+	})
+}
+
