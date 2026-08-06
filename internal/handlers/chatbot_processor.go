@@ -211,9 +211,11 @@ func (a *App) processIncomingMessageFull(phoneNumberID string, msg IncomingTextM
 		return
 	}
 	if !settings.IsEnabled {
-		a.Log.Debug("Chatbot not enabled for this account, creating transfer for agent queue", "account", account.Name, "settings_id", settings.ID)
-		// Create transfer to agent queue when chatbot is disabled
-		a.createTransferToQueue(account, contact, models.TransferSourceChatbotDisabled)
+		a.Log.Debug("Chatbot not enabled for this account, routing new conversation", "account", account.Name, "settings_id", settings.ID)
+		// Auto-assign to the default team if configured; otherwise queue.
+		if !a.routeNewConversationToDefaultTeam(account, contact, settings) {
+			a.createTransferToQueue(account, contact, models.TransferSourceChatbotDisabled)
+		}
 		return
 	}
 	a.Log.Info("Chatbot settings loaded", "settings_id", settings.ID, "is_enabled", settings.IsEnabled, "ai_enabled", settings.AI.Enabled, "ai_provider", settings.AI.Provider, "default_response", settings.DefaultResponse)
@@ -236,9 +238,15 @@ func (a *App) processIncomingMessageFull(phoneNumberID string, msg IncomingTextM
 		}
 	}
 
-	// Only process text and interactive messages for chatbot
+	// Media-only messages (voice notes, captionless images, stickers, location)
+	// carry no text, so flows/keywords can never match them. Auto-route them to
+	// the default team if configured, instead of dropping them silently.
 	if messageText == "" {
-		a.Log.Debug("Skipping message with no text content for chatbot", "type", msg.Type)
+		if a.routeNewConversationToDefaultTeam(account, contact, settings) {
+			a.Log.Info("Routed media-only message to default team", "type", msg.Type, "contact_id", contact.ID)
+		} else {
+			a.Log.Debug("Skipping message with no text content for chatbot", "type", msg.Type)
+		}
 		return
 	}
 
@@ -341,6 +349,9 @@ func (a *App) processIncomingMessageFull(phoneNumberID string, msg IncomingTextM
 			}
 		}
 		a.logSessionMessage(session.ID, models.DirectionOutgoing, settings.DefaultResponse, "greeting")
+		// If a default assignment team is configured, hand the (unmatched) new
+		// conversation off to it after greeting so it reaches an agent.
+		a.routeNewConversationToDefaultTeam(account, contact, settings)
 		return // After greeting, don't process further for new sessions
 	}
 
@@ -699,6 +710,22 @@ func (a *App) logSessionMessage(sessionID uuid.UUID, direction models.Direction,
 	if err := a.DB.Create(&msg).Error; err != nil {
 		a.Log.Error("Failed to log session message", "error", err)
 	}
+}
+
+// routeNewConversationToDefaultTeam auto-assigns a new conversation to the
+// configured default assignment team (AgentAssignment.DefaultTeamID), using the
+// team's strategy. It is the catch-all so that media-only messages (voice notes,
+// captionless images, stickers, location), chatbot-disabled accounts, and text
+// not matched by any flow/keyword still reach an agent. Returns true when a
+// default team is configured (transfer attempted); false (no-op) when nil.
+// createTransferToTeam is idempotent (re-checks active transfers) and honors
+// business hours, so this is safe to call from multiple fallback points.
+func (a *App) routeNewConversationToDefaultTeam(account *models.WhatsAppAccount, contact *models.Contact, settings *models.ChatbotSettings) bool {
+	if settings == nil || settings.AgentAssignment.DefaultTeamID == nil {
+		return false
+	}
+	a.createTransferToTeam(account, contact, *settings.AgentAssignment.DefaultTeamID, "Nuevo chat de WhatsApp", models.TransferSourceDefaultTeam)
+	return true
 }
 
 // matchFlowTrigger checks if the message triggers any flow
