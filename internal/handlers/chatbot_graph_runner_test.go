@@ -956,6 +956,38 @@ func TestRunChatGraph_SetVariable_NonStringStoredVerbatim(t *testing.T) {
 	assert.Equal(t, true, session.SessionData["is_active"])
 }
 
+func TestRunChatGraph_SetVariable_SequentialMultipleNodes(t *testing.T) {
+	app, org, account, contact, session := newGraphTestFixtures(t)
+
+	flow := &models.ChatbotFlow{
+		BaseModel:       models.BaseModel{ID: uuid.New()},
+		OrganizationID:  org.ID,
+		WhatsAppAccount: account.Name,
+		Name:            "seq-set-var-flow",
+		IsEnabled:       true,
+		Graph: models.JSONB{
+			"version":    2,
+			"entry_node": "s1",
+			"nodes": []any{
+				map[string]any{"id": "s1", "type": "set_variable", "label": "set1", "config": map[string]any{"set": map[string]any{"first_name": "Shri"}}},
+				map[string]any{"id": "s2", "type": "set_variable", "label": "set2", "config": map[string]any{"set": map[string]any{"full_name": "{{first_name}} Patil"}}},
+				map[string]any{"id": "end", "type": "end"},
+			},
+			"edges": []any{
+				map[string]any{"from": "s1", "to": "s2", "condition": "default"},
+				map[string]any{"from": "s2", "to": "end", "condition": "default"},
+			},
+		},
+	}
+	require.NoError(t, app.DB.Create(flow).Error)
+
+	require.NoError(t, app.runChatGraph(account, contact, session, flow, "start", "", nil))
+	require.NoError(t, app.DB.First(session, session.ID).Error)
+	assert.Equal(t, "Shri", session.SessionData["first_name"])
+	assert.Equal(t, "Shri Patil", session.SessionData["full_name"])
+}
+
+
 // newAIResponseFlow builds a two-node graph (ai_response → end).
 func newAIResponseFlow(t *testing.T, app *App, org *models.Organization, account *models.WhatsAppAccount, promptTemplate string) *models.ChatbotFlow {
 	t.Helper()
@@ -1414,3 +1446,24 @@ func TestRunChatGraph_Prompt_NoRegexAcceptsAnything(t *testing.T) {
 	assert.Equal(t, models.SessionStatusCompleted, session.Status)
 	assert.Equal(t, "literally anything", session.SessionData["email"])
 }
+
+func TestRunChatGraph_TriggerMessageAndLastMessageStored(t *testing.T) {
+	app, org, account, contact, session := newGraphTestFixtures(t)
+
+	flow := newPromptFlow(t, app, org, account, "", 3)
+
+	// First execution (trigger)
+	require.NoError(t, app.runChatGraph(account, contact, session, flow, "Hello Chatbot", "", nil))
+	require.NoError(t, app.DB.First(session, session.ID).Error)
+
+	assert.Equal(t, "Hello Chatbot", session.SessionData["trigger_message"], "should store trigger message on first entry")
+	assert.Equal(t, "Hello Chatbot", session.SessionData["last_message"], "should store last message")
+
+	// Second execution (reply to prompt)
+	require.NoError(t, app.runChatGraph(account, contact, session, flow, "my reply", "", nil))
+	require.NoError(t, app.DB.First(session, session.ID).Error)
+
+	assert.Equal(t, "Hello Chatbot", session.SessionData["trigger_message"], "trigger_message should remain the original trigger message")
+	assert.Equal(t, "my reply", session.SessionData["last_message"], "last_message should be updated to the latest user input")
+}
+

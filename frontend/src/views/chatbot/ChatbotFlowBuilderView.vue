@@ -36,6 +36,7 @@ import {
   Plus,
   Trash2,
   Play,
+  Sliders,
 } from 'lucide-vue-next'
 
 import AuditLogPanel from '@/components/shared/AuditLogPanel.vue'
@@ -57,6 +58,7 @@ import ChatbotTimingNode from '@/components/chatbot/nodes/ChatbotTimingNode.vue'
 import ChatbotGotoFlowNode from '@/components/chatbot/nodes/ChatbotGotoFlowNode.vue'
 import ChatbotEndNode from '@/components/chatbot/nodes/ChatbotEndNode.vue'
 import ChatbotStartNode from '@/components/chatbot/nodes/ChatbotStartNode.vue'
+import ChatbotSetVariableNode from '@/components/chatbot/nodes/ChatbotSetVariableNode.vue'
 
 import InteractivePreview from '@/components/chatbot/flow-preview/InteractivePreview.vue'
 import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog'
@@ -120,6 +122,7 @@ const nodeTypes: any = {
   goto_flow: markRaw(ChatbotGotoFlowNode),
   end: markRaw(ChatbotEndNode),
   webhook: markRaw(ChatbotApiNode),
+  set_variable: markRaw(ChatbotSetVariableNode),
 }
 
 // Palette: 'prompt' and 'webhook' are internal-only — a Text node
@@ -133,6 +136,7 @@ const palette: { type: ChatNodeType; label: string; icon: any; color: string }[]
   { type: 'condition', label: 'Condition', icon: GitBranch, color: 'bg-indigo-600' },
   { type: 'timing', label: 'Timing', icon: Clock, color: 'bg-cyan-600' },
   { type: 'goto_flow', label: 'Go to Flow', icon: ExternalLink, color: 'bg-teal-600' },
+  { type: 'set_variable', label: 'Set Variable', icon: Sliders, color: 'bg-pink-600' },
   { type: 'end', label: 'End', icon: StopCircle, color: 'bg-slate-600' },
 ]
 
@@ -217,6 +221,8 @@ function defaultConfigFor(type: ChatNodeType): Record<string, any> {
       return { flow_id: '' }
     case 'webhook':
       return { url: '', method: 'POST', headers: {}, body: '' }
+    case 'set_variable':
+      return { set: {} }
     case 'end':
       return { message: '' }
     default:
@@ -235,6 +241,7 @@ const paletteLabels: Record<string, string> = {
   timing: 'Timing',
   goto_flow: 'Go to Flow',
   webhook: 'Webhook',
+  set_variable: 'Set Variable',
   end: 'End',
 }
 

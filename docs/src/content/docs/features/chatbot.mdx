@@ -297,6 +297,8 @@ config (URL, headers, body) — no capture step required:
 | `{{phone_number}}` | The contact's WhatsApp number in E.164 format (e.g. `+919876543210`). |
 | `{{_flow_id}}` | UUID of the running flow. |
 | `{{_flow_name}}` | Human-readable name of the flow. |
+| `{{trigger_message}}` | The incoming user message that triggered the chatbot flow (available as a session variable). |
+| `{{last_message}}` | The last incoming user message received, updated each turn where user input is not empty (available as a session variable). |
 
 Anything else has to come from somewhere — typically:
 - An earlier flow step with a `Store As` configured (user input gets saved
@@ -307,6 +309,10 @@ Anything else has to come from somewhere — typically:
 The same built-ins are also substituted in **flow-completion webhook**
 URLs, custom bodies, and custom headers, so you can fire any of these
 at downstream systems when a flow finishes.
+
+<Aside type="caution">
+  `trigger_message` and `last_message` are reserved keys. If you configure a prompt or API response mapping to store a value under these keys, it will be silently overwritten by the runner during execution.
+</Aside>
 
 <Aside type="note">
   Substitution is verbatim — there's no URL-encoding pass. For

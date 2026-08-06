@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, ref, watch } from 'vue'
 import type { ChatNode } from '@/services/api'
 import { useTeamsStore } from '@/stores/teams'
 import { Input } from '@/components/ui/input'
@@ -136,58 +136,100 @@ const ctaCount = computed(() =>
   (config.value.buttons || []).filter((b: any) => b.type === 'url' || b.type === 'phone').length,
 )
 
+const assignmentsList = ref<{ key: string; value: string }[]>([])
+const headersList = ref<{ key: string; value: string }[]>([])
+const responseMappingList = ref<{ key: string; value: string }[]>([])
+
+// Populate lists when node changes
+watch(
+  () => props.node.id,
+  () => {
+    const set = config.value.set || {}
+    assignmentsList.value = Object.keys(set).map((k) => ({
+      key: k,
+      value: String(set[k] ?? ''),
+    }))
+
+    const headers = config.value.headers || {}
+    headersList.value = Object.keys(headers).map((k) => ({
+      key: k,
+      value: String(headers[k] ?? ''),
+    }))
+
+    const mapping = config.value.response_mapping || {}
+    responseMappingList.value = Object.keys(mapping).map((k) => ({
+      key: k,
+      value: String(mapping[k] ?? ''),
+    }))
+  },
+  { immediate: true },
+)
+
+function commitAssignments() {
+  const set: Record<string, string> = {}
+  for (const item of assignmentsList.value) {
+    set[item.key] = item.value
+  }
+  updateConfig('set', set)
+}
+
+function commitHeaders() {
+  const headers: Record<string, string> = {}
+  for (const item of headersList.value) {
+    headers[item.key] = item.value
+  }
+  updateConfig('headers', headers)
+}
+
+function commitResponseMapping() {
+  const mapping: Record<string, string> = {}
+  for (const item of responseMappingList.value) {
+    mapping[item.key] = item.value
+  }
+  updateConfig('response_mapping', mapping)
+}
+
 // HTTP headers helpers (api_call / webhook)
 function addHeader() {
-  const headers = { ...(config.value.headers || {}) }
-  headers[''] = ''
-  updateConfig('headers', headers)
+  headersList.value.push({ key: '', value: '' })
+  commitHeaders()
 }
 
-function removeHeader(key: string) {
-  const headers = { ...(config.value.headers || {}) }
-  delete headers[key]
-  updateConfig('headers', headers)
+// HTTP headers helpers (api_call / webhook)
+function removeHeader(index: number) {
+  headersList.value.splice(index, 1)
+  commitHeaders()
 }
 
-function updateHeaderKey(oldKey: string, newKey: string) {
-  if (oldKey === newKey) return
-  const headers = { ...(config.value.headers || {}) }
-  headers[newKey] = headers[oldKey]
-  delete headers[oldKey]
-  updateConfig('headers', headers)
+function updateHeaderKey(index: number, newKey: string) {
+  headersList.value[index].key = newKey
+  commitHeaders()
 }
 
-function updateHeaderValue(key: string, value: string) {
-  const headers = { ...(config.value.headers || {}) }
-  headers[key] = value
-  updateConfig('headers', headers)
+function updateHeaderValue(index: number, newValue: string) {
+  headersList.value[index].value = newValue
+  commitHeaders()
 }
 
 // Response mapping helpers (api_call)
 function addResponseMapping() {
-  const m = { ...(config.value.response_mapping || {}) }
-  m[''] = ''
-  updateConfig('response_mapping', m)
+  responseMappingList.value.push({ key: '', value: '' })
+  commitResponseMapping()
 }
 
-function removeResponseMapping(key: string) {
-  const m = { ...(config.value.response_mapping || {}) }
-  delete m[key]
-  updateConfig('response_mapping', m)
+function removeResponseMapping(index: number) {
+  responseMappingList.value.splice(index, 1)
+  commitResponseMapping()
 }
 
-function updateResponseMappingKey(oldKey: string, newKey: string) {
-  if (oldKey === newKey) return
-  const m = { ...(config.value.response_mapping || {}) }
-  m[newKey] = m[oldKey]
-  delete m[oldKey]
-  updateConfig('response_mapping', m)
+function updateResponseMappingKey(index: number, newKey: string) {
+  responseMappingList.value[index].key = newKey
+  commitResponseMapping()
 }
 
-function updateResponseMappingValue(key: string, value: string) {
-  const m = { ...(config.value.response_mapping || {}) }
-  m[key] = value
-  updateConfig('response_mapping', m)
+function updateResponseMappingValue(index: number, newValue: string) {
+  responseMappingList.value[index].value = newValue
+  commitResponseMapping()
 }
 
 // Timing schedule
@@ -225,6 +267,28 @@ const typeLabel: Record<string, string> = {
   goto_flow: 'Go to Flow',
   whatsapp_flow: 'WhatsApp Flow',
   webhook: 'Webhook',
+  set_variable: 'Set Variable',
+}
+
+// Set variable assignments helpers
+function addAssignment() {
+  assignmentsList.value.push({ key: '', value: '' })
+  commitAssignments()
+}
+
+function removeAssignment(index: number) {
+  assignmentsList.value.splice(index, 1)
+  commitAssignments()
+}
+
+function updateAssignmentKey(index: number, newKey: string) {
+  assignmentsList.value[index].key = newKey
+  commitAssignments()
+}
+
+function updateAssignmentValue(index: number, newValue: string) {
+  assignmentsList.value[index].value = newValue
+  commitAssignments()
 }
 </script>
 
@@ -285,6 +349,7 @@ const typeLabel: Record<string, string> = {
             placeholder="variable_name"
             class="h-8 text-sm font-mono"
           />
+          <p class="text-[10px] text-muted-foreground">Note: <code>trigger_message</code> and <code>last_message</code> are reserved keys and will be overwritten each turn.</p>
         </div>
         <div class="space-y-1.5">
           <Label class="text-xs">Validation regex (optional)</Label>
@@ -436,10 +501,10 @@ const typeLabel: Record<string, string> = {
             <Plus class="h-3 w-3 mr-1" /> Add
           </Button>
         </div>
-        <div v-for="(val, key) in (config.headers || {})" :key="String(key)" class="flex items-center gap-1">
-          <Input :model-value="String(key)" @update:model-value="(v: string) => updateHeaderKey(String(key), v)" placeholder="Key" class="h-7 text-xs flex-1" />
-          <Input :model-value="String(val)" @update:model-value="(v: string) => updateHeaderValue(String(key), v)" placeholder="Value" class="h-7 text-xs flex-1" />
-          <Button variant="ghost" size="icon" class="h-6 w-6" @click="removeHeader(String(key))">
+        <div v-for="(item, index) in headersList" :key="index" class="flex items-center gap-1">
+          <Input :model-value="item.key" @update:model-value="(v: string) => updateHeaderKey(index, v)" placeholder="Key" class="h-7 text-xs flex-1" />
+          <Input :model-value="item.value" @update:model-value="(v: string) => updateHeaderValue(index, v)" placeholder="Value" class="h-7 text-xs flex-1" />
+          <Button variant="ghost" size="icon" class="h-6 w-6" @click="removeHeader(index)">
             <Trash2 class="h-3 w-3 text-destructive" />
           </Button>
         </div>
@@ -461,10 +526,10 @@ const typeLabel: Record<string, string> = {
           </Button>
         </div>
         <p class="text-[10px] text-muted-foreground">Map JSON paths into session variables (e.g. <code>data.user.name</code>).</p>
-        <div v-for="(val, key) in (config.response_mapping || {})" :key="String(key)" class="flex items-center gap-1">
-          <Input :model-value="String(key)" @update:model-value="(v: string) => updateResponseMappingKey(String(key), v)" placeholder="var_name" class="h-7 text-xs flex-1 font-mono" />
-          <Input :model-value="String(val)" @update:model-value="(v: string) => updateResponseMappingValue(String(key), v)" placeholder="path.to.field" class="h-7 text-xs flex-1 font-mono" />
-          <Button variant="ghost" size="icon" class="h-6 w-6" @click="removeResponseMapping(String(key))">
+        <div v-for="(item, index) in responseMappingList" :key="index" class="flex items-center gap-1">
+          <Input :model-value="item.key" @update:model-value="(v: string) => updateResponseMappingKey(index, v)" placeholder="var_name" class="h-7 text-xs flex-1 font-mono" />
+          <Input :model-value="item.value" @update:model-value="(v: string) => updateResponseMappingValue(index, v)" placeholder="path.to.field" class="h-7 text-xs flex-1 font-mono" />
+          <Button variant="ghost" size="icon" class="h-6 w-6" @click="removeResponseMapping(index)">
             <Trash2 class="h-3 w-3 text-destructive" />
           </Button>
         </div>
@@ -654,10 +719,10 @@ const typeLabel: Record<string, string> = {
             <Plus class="h-3 w-3 mr-1" /> Add
           </Button>
         </div>
-        <div v-for="(val, key) in (config.headers || {})" :key="String(key)" class="flex items-center gap-1">
-          <Input :model-value="String(key)" @update:model-value="(v: string) => updateHeaderKey(String(key), v)" placeholder="Key" class="h-7 text-xs flex-1" />
-          <Input :model-value="String(val)" @update:model-value="(v: string) => updateHeaderValue(String(key), v)" placeholder="Value" class="h-7 text-xs flex-1" />
-          <Button variant="ghost" size="icon" class="h-6 w-6" @click="removeHeader(String(key))">
+        <div v-for="(item, index) in headersList" :key="index" class="flex items-center gap-1">
+          <Input :model-value="item.key" @update:model-value="(v: string) => updateHeaderKey(index, v)" placeholder="Key" class="h-7 text-xs flex-1" />
+          <Input :model-value="item.value" @update:model-value="(v: string) => updateHeaderValue(index, v)" placeholder="Value" class="h-7 text-xs flex-1" />
+          <Button variant="ghost" size="icon" class="h-6 w-6" @click="removeHeader(index)">
             <Trash2 class="h-3 w-3 text-destructive" />
           </Button>
         </div>
@@ -669,6 +734,26 @@ const typeLabel: Record<string, string> = {
           @update:model-value="(v: string) => updateConfig('body', v)"
           class="min-h-[50px] text-xs font-mono"
         />
+      </div>
+    </template>
+
+    <!-- set_variable -->
+    <template v-if="node.type === 'set_variable'">
+      <div class="space-y-1.5">
+        <div class="flex items-center justify-between">
+          <Label class="text-xs">Variable Assignments</Label>
+          <Button variant="outline" size="sm" class="h-6 text-xs" @click="addAssignment">
+            <Plus class="h-3 w-3 mr-1" /> Add
+          </Button>
+        </div>
+        <div v-for="(item, index) in assignmentsList" :key="index" class="flex items-center gap-1">
+          <Input :model-value="item.key" @update:model-value="(v: string) => updateAssignmentKey(index, v)" placeholder="Variable Name" class="h-7 text-xs flex-1 font-mono" />
+          <Input :model-value="item.value" @update:model-value="(v: string) => updateAssignmentValue(index, v)" placeholder="Value" class="h-7 text-xs flex-1" />
+          <Button variant="ghost" size="icon" class="h-6 w-6" @click="removeAssignment(index)">
+            <Trash2 class="h-3 w-3 text-destructive" />
+          </Button>
+        </div>
+        <p class="text-[10px] text-muted-foreground">Assign values to session variables. You can reference other variables set in earlier nodes using double-brace templates (e.g. <code v-pre>{{customer_name}}</code>). References to variables set in the same node are order-dependent and not supported.</p>
       </div>
     </template>
 

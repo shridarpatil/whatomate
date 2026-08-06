@@ -97,6 +97,12 @@ func (a *App) runChatGraph(
 	if contact != nil {
 		session.SessionData["contact_name"] = contact.ProfileName
 	}
+	if userInput != "" {
+		session.SessionData["last_message"] = userInput
+		if session.CurrentStep == "" {
+			session.SessionData["trigger_message"] = userInput
+		}
+	}
 
 	if session.CurrentStep == "" {
 		session.CurrentStep = graph.EntryNode
