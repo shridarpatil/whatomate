@@ -4,25 +4,86 @@ import { useCallingStore } from '@/stores/calling'
 import { useAuthStore } from '@/stores/auth'
 import { useNotesStore } from '@/stores/notes'
 import { contactsService } from '@/services/api'
+import { shouldNotifyIncoming } from '@/services/notifications'
 import { toast } from 'vue-sonner'
 import router from '@/router'
 
 // Notification sound
 let notificationSound: HTMLAudioElement | null = null
+let audioUnlocked = false
 
-function playNotificationSound() {
+function getSound(): HTMLAudioElement {
   if (!notificationSound) {
     notificationSound = new Audio('/notification.mp3')
     notificationSound.volume = 0.5
   }
-  notificationSound.currentTime = 0
-  notificationSound.play().catch(() => {
+  return notificationSound
+}
+
+// Browsers block Audio.play() until the user interacts with the page, so the
+// first incoming-message sound is silently rejected. Prime the element inside
+// the first user gesture (play muted, then reset) so later alerts are audible.
+// Also request OS notification permission here — same gesture requirement.
+function unlockNotifications() {
+  if (audioUnlocked) return
+  audioUnlocked = true
+
+  const el = getSound()
+  el.muted = true
+  el.play().then(() => {
+    el.pause()
+    el.currentTime = 0
+    el.muted = false
+  }).catch(() => {
+    el.muted = false
+  })
+
+  if (typeof window !== 'undefined' && 'Notification' in window
+      && Notification.permission === 'default') {
+    Notification.requestPermission().catch(() => { /* denied/unsupported */ })
+  }
+}
+
+if (typeof window !== 'undefined') {
+  window.addEventListener('pointerdown', unlockNotifications, { once: true })
+  window.addEventListener('keydown', unlockNotifications, { once: true })
+}
+
+function playNotificationSound() {
+  const el = getSound()
+  el.currentTime = 0
+  el.play().catch(() => {
     // Ignore autoplay errors (browser may block until user interaction)
   })
 }
 
-// Show toast notification with click handler
+// Show a notification for an incoming message. When the tab is backgrounded or
+// unfocused and the user granted permission, fire an OS-level browser
+// notification (visible outside the app); otherwise fall back to an in-app toast.
 function showNotification(title: string, body: string, contactId: string) {
+  const pageActive = typeof document !== 'undefined'
+    && document.visibilityState === 'visible'
+    && document.hasFocus()
+
+  if (!pageActive && typeof window !== 'undefined' && 'Notification' in window
+      && Notification.permission === 'granted') {
+    try {
+      const notification = new Notification(title, {
+        body,
+        icon: '/favicon.svg',
+        tag: `contact-${contactId}`
+      })
+      notification.onclick = () => {
+        window.focus()
+        router.push(`/chat/${contactId}`)
+        notification.close()
+      }
+      return
+    } catch {
+      // Notification construction can throw on some platforms — fall back to toast
+    }
+  }
+
   toast.info(title, {
     description: body,
     duration: 5000,
@@ -320,23 +381,14 @@ class WebSocketService {
       })
     }
 
-    // Show toast notification for incoming messages if:
-    // 1. Message is incoming (from customer, not chatbot/agent)
-    // 2. Current user is assigned to this contact
-    // 3. User has new_message_alerts enabled
-    // 4. User is not currently viewing this contact
-    if (payload.direction === 'incoming' && !isViewingThisContact) {
+    // Alert for incoming messages assigned to me or unassigned (see
+    // shouldNotifyIncoming), unless I'm already viewing the chat.
+    {
       const authStore = useAuthStore()
       const currentUserId = authStore.user?.id
       const settings = authStore.userSettings
 
-      // Check if user is assigned to this contact
-      const isAssignedToUser = payload.assigned_user_id === currentUserId
-
-      // Check if new message alerts are enabled (default to true if not set)
-      const alertsEnabled = settings.new_message_alerts !== false
-
-      if (isAssignedToUser && alertsEnabled) {
+      if (shouldNotifyIncoming(payload, currentUserId, settings, isViewingThisContact)) {
         const senderName = payload.profile_name || 'Unknown'
         const messagePreview = payload.content?.body || 'New message'
         const preview = messagePreview.length > 50

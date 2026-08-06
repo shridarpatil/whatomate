@@ -14,7 +14,8 @@
     "test:e2e": "playwright test",
     "test:ui": "BASE_URL=http://localhost:8080 playwright test --ui",
     "test:debug": "BASE_URL=http://localhost:8080 playwright test --debug",
-    "test:report": "playwright show-report"
+    "test:report": "playwright show-report",
+    "test:unit": "vitest run"
   },
   "dependencies": {
     "@radix-icons/vue": "^1.0.0",
