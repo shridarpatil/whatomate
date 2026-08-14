@@ -267,8 +267,10 @@ watch(
 );
 
 const bodyTextareaRef = ref<any>(null);
-const savedSelectionStart = ref(0);
-const savedSelectionEnd = ref(0);
+// -1 until the textarea has been focused, so the first insert goes to the end
+// of the body instead of in front of it.
+const savedSelectionStart = ref(-1);
+const savedSelectionEnd = ref(-1);
 
 function saveCursorPosition(event: Event) {
   const el = event.target as HTMLTextAreaElement;
@@ -279,9 +281,11 @@ function saveCursorPosition(event: Event) {
 }
 
 function insertAtCursor(textToInsert: string, cursorOffset: number = 0) {
-  const startPos = savedSelectionStart.value;
-  const endPos = savedSelectionEnd.value;
   const content = state.value.body_content || "";
+  const startPos =
+    savedSelectionStart.value < 0 ? content.length : savedSelectionStart.value;
+  const endPos =
+    savedSelectionEnd.value < 0 ? content.length : savedSelectionEnd.value;
 
   state.value.body_content =
     content.substring(0, startPos) + textToInsert + content.substring(endPos);
