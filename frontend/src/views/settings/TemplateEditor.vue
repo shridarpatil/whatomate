@@ -57,6 +57,8 @@ const props = defineProps<{
   // Published WhatsApp Flows, for FLOW buttons. Loaded by the parent.
   flows?: any[];
   disabled?: boolean;
+  // Picked here, uploaded by the parent on save, then set back to null.
+  mediaFile?: File | null;
 }>();
 
 const isLocked = computed(() => !!props.isPublished);
@@ -252,7 +254,7 @@ const LIMITS = {
   copyCode: 15,
 };
 
-const mediaFileName = ref("");
+const mediaFileName = computed(() => props.mediaFile?.name || "");
 
 watch(
   () => state.value.header_type,
@@ -648,13 +650,11 @@ function onMediaFileChange(event: Event) {
     return;
   }
 
-  mediaFileName.value = file.name;
   state.value.header_content = "";
   emit("update:mediaFile", file);
 }
 
 function clearMediaFile() {
-  mediaFileName.value = "";
   state.value.header_content = "";
   emit("update:mediaFile", null);
 }
