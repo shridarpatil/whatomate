@@ -709,7 +709,7 @@ onMounted(() => {
           class="w-full h-10 font-mono"
         />
         <p class="text-[10px] text-muted-foreground">
-          Lowercase letters, numbers and underscores only.
+          {{ t("templates.nameHint") }}
         </p>
       </div>
 
@@ -743,9 +743,9 @@ onMounted(() => {
           </PopoverTrigger>
           <PopoverContent class="w-[300px] p-0">
             <Command>
-              <CommandInput placeholder="Search language..." />
+              <CommandInput :placeholder="t('templates.searchLanguagePlaceholder')" />
               <CommandList>
-                <CommandEmpty>No language found.</CommandEmpty>
+                <CommandEmpty>{{ t("templates.noLanguageFound") }}</CommandEmpty>
                 <CommandGroup>
                   <CommandItem
                     v-for="lang in languages"
@@ -803,7 +803,7 @@ onMounted(() => {
             <div class="space-y-1.5">
               <div class="flex items-center h-7">
                 <Label class="text-xs font-bold text-muted-foreground"
-                  >Header Type</Label
+                  >{{ t("templates.headerType") }}</Label
                 >
               </div>
               <Select v-model="state.header_type">
@@ -821,14 +821,14 @@ onMounted(() => {
                 </SelectContent>
               </Select>
               <p class="text-[10px] text-muted-foreground">
-                Optional. A header appears above the message body.
+                {{ t("templates.headerHint") }}
               </p>
             </div>
 
             <div v-if="state.header_type === 'TEXT'" class="space-y-1.5">
               <div class="flex items-center justify-between h-7">
                 <Label class="text-xs font-bold text-muted-foreground"
-                  >Header Text</Label
+                  >{{ t("templates.headerText") }}</Label
                 >
                 <Button
                   type="button"
@@ -838,7 +838,7 @@ onMounted(() => {
                   :disabled="headerVariables.length >= 1"
                   class="h-7 px-3 text-[10px] bg-emerald-50 text-emerald-600 hover:bg-emerald-100 border-emerald-200 disabled:opacity-50"
                 >
-                  <Plus class="w-3 h-3 mr-1" /> Add Variable
+                  <Plus class="w-3 h-3 mr-1" /> {{ t("templates.addVariable") }}
                 </Button>
               </div>
               <Input
@@ -853,7 +853,7 @@ onMounted(() => {
                   v-if="hasTooManyHeaderVariables"
                   class="text-[10px] text-red-500"
                 >
-                  Meta allows at most one variable in a TEXT header.
+                  {{ t("templates.headerOneVariable") }}
                 </p>
                 <span v-else />
                 <span class="text-[10px] text-muted-foreground">
@@ -891,7 +891,7 @@ onMounted(() => {
               </button>
             </div>
             <p v-else-if="state.header_content" class="text-xs text-emerald-600">
-              Sample already uploaded. Choose a file to replace it.
+              {{ t("templates.sampleAlreadyUploaded") }}
             </p>
 
             <p class="text-[10px] text-muted-foreground">
@@ -904,7 +904,7 @@ onMounted(() => {
         <div v-if="isAuthentication" class="space-y-4">
           <div class="space-y-2">
             <Label class="text-xs font-bold uppercase text-muted-foreground"
-              >Code Delivery Method</Label
+              >{{ t("templates.codeDelivery") }}</Label
             >
             <select
               :value="authOtpType"
@@ -913,13 +913,13 @@ onMounted(() => {
               "
               class="w-full h-10 rounded-md border bg-background px-3 disabled:cursor-not-allowed disabled:opacity-50"
             >
-              <option value="COPY_CODE">Copy Code</option>
-              <option value="ONE_TAP">One-Tap Autofill (Android only)</option>
-              <option value="ZERO_TAP">Zero-Tap (Android only)</option>
+              <option value="COPY_CODE">{{ t("templates.otpCopyCode") }}</option>
+              <option value="ONE_TAP">{{ t("templates.otpOneTap") }}</option>
+              <option value="ZERO_TAP">{{ t("templates.otpZeroTap") }}</option>
             </select>
             <p class="text-[10px] text-muted-foreground">
               <span v-if="authOtpType === 'COPY_CODE'"
-                >User taps a button to copy the code to their clipboard.</span
+                >{{ t("templates.otpCopyCodeHint") }}</span
               >
               <span v-else-if="authOtpType === 'ONE_TAP'"
                 >User taps a button to autofill the code in your app. Requires
@@ -934,7 +934,7 @@ onMounted(() => {
 
           <div class="space-y-2">
             <Label class="text-xs font-bold uppercase text-muted-foreground"
-              >Message Body</Label
+              >{{ t("templates.messageBody") }}</Label
             >
             <div
               class="rounded-md border bg-muted/50 p-3 text-sm text-muted-foreground"
@@ -944,7 +944,7 @@ onMounted(() => {
               <span
                 v-if="state.add_security_recommendation"
                 class="block mt-1"
-                >For your security, do not share this code.</span
+                >{{ t("templates.authSecurityLine") }}</span
               >
             </div>
             <p class="text-[10px] text-muted-foreground">
@@ -960,7 +960,7 @@ onMounted(() => {
               class="h-4 w-4 rounded border-gray-300"
             />
             <Label for="security-rec" class="text-xs cursor-pointer"
-              >Add security recommendation</Label
+              >{{ t("templates.addSecurityRecommendation") }}</Label
             >
           </div>
 
@@ -980,7 +980,7 @@ onMounted(() => {
                 class="h-4 w-4 rounded border-gray-300"
               />
               <Label for="code-expiration" class="text-xs cursor-pointer"
-                >Add an expiration time for the code</Label
+                >{{ t("templates.addCodeExpiration") }}</Label
               >
             </div>
             <div
@@ -1034,7 +1034,7 @@ onMounted(() => {
                   href="https://www.whatsapp.com/legal/business-terms/"
                   target="_blank"
                   class="underline text-primary"
-                  >WhatsApp Business Terms of Service</a
+                  >{{ t("templates.whatsappBusinessTerms") }}</a
                 >. It is my business's responsibility to ensure its customers
                 expect that the code will be automatically filled in on their
                 behalf.
@@ -1048,16 +1048,16 @@ onMounted(() => {
             class="space-y-3 rounded-lg border p-3"
           >
             <div v-if="authOtpType === 'ONE_TAP' && otpButton()" class="space-y-1">
-              <Label class="text-xs">Autofill Text</Label>
+              <Label class="text-xs">{{ t("templates.autofillText") }}</Label>
               <Input
                 v-model="otpButton().autofill_text"
-                placeholder="Autofill"
+                :placeholder="t('templates.autofillTextPlaceholder')"
                 class="h-9 bg-background"
               />
             </div>
             <div class="space-y-2">
               <div class="flex items-center justify-between">
-                <Label class="text-xs">Supported Apps *</Label>
+                <Label class="text-xs">{{ t("templates.supportedApps") }} *</Label>
                 <Button
                   v-if="(otpButton()?.supported_apps?.length || 0) < 5"
                   type="button"
@@ -1066,7 +1066,7 @@ onMounted(() => {
                   class="h-7 px-2 text-[10px]"
                   @click="addSupportedApp"
                 >
-                  <Plus class="w-3 h-3 mr-1" /> Add App
+                  <Plus class="w-3 h-3 mr-1" /> {{ t("templates.addApp") }}
                 </Button>
               </div>
               <div
@@ -1075,7 +1075,7 @@ onMounted(() => {
                 class="flex items-end gap-2"
               >
                 <div class="flex-1 space-y-1">
-                  <Label class="text-[10px]">Package Name *</Label>
+                  <Label class="text-[10px]">{{ t("templates.packageName") }} *</Label>
                   <Input
                     v-model="app.package_name"
                     placeholder="com.example.app"
@@ -1083,7 +1083,7 @@ onMounted(() => {
                   />
                 </div>
                 <div class="flex-1 space-y-1">
-                  <Label class="text-[10px]">Signature Hash *</Label>
+                  <Label class="text-[10px]">{{ t("templates.signatureHash") }} *</Label>
                   <Input
                     v-model="app.signature_hash"
                     placeholder="K8a/AINcGX7"
@@ -1107,7 +1107,7 @@ onMounted(() => {
 
         <div v-if="!isAuthentication" class="space-y-2">
           <Label class="text-xs font-bold uppercase text-muted-foreground"
-            >Message Body</Label
+            >{{ t("templates.messageBody") }}</Label
           >
           <div class="flex items-center justify-between mb-2">
             <div class="flex items-center gap-2">
@@ -1117,7 +1117,7 @@ onMounted(() => {
                 size="sm"
                 class="h-7 px-2 text-xs font-bold bg-background hover:bg-muted"
                 @click="insertFormat('bold')"
-                title="Bold"
+                :title="t('templates.formatBold')"
                 >B</Button
               >
               <Button
@@ -1126,7 +1126,7 @@ onMounted(() => {
                 size="sm"
                 class="h-7 px-2 text-xs italic bg-background hover:bg-muted"
                 @click="insertFormat('italic')"
-                title="Italic"
+                :title="t('templates.formatItalic')"
                 >I</Button
               >
               <Button
@@ -1135,7 +1135,7 @@ onMounted(() => {
                 size="sm"
                 class="h-7 px-2 text-xs line-through bg-background hover:bg-muted"
                 @click="insertFormat('strikethrough')"
-                title="Strikethrough"
+                :title="t('templates.formatStrikethrough')"
                 >S</Button
               >
               <Button
@@ -1144,7 +1144,7 @@ onMounted(() => {
                 size="sm"
                 class="h-7 px-2 text-xs font-mono bg-background hover:bg-muted"
                 @click="insertFormat('monospace')"
-                title="Monospace"
+                :title="t('templates.formatMonospace')"
                 >&lt;/&gt;</Button
               >
             </div>
@@ -1156,7 +1156,7 @@ onMounted(() => {
               :disabled="bodyVariables.length >= 20"
               class="h-7 px-3 text-[10px] bg-emerald-50 text-emerald-600 hover:bg-emerald-100 border-emerald-200 disabled:opacity-50"
             >
-              <Plus class="w-3 h-3 mr-1" /> Add Variable
+              <Plus class="w-3 h-3 mr-1" /> {{ t("templates.addVariable") }}
             </Button>
           </div>
           <Textarea
@@ -1168,7 +1168,7 @@ onMounted(() => {
             @keyup="saveCursorPosition"
             @mouseup="saveCursorPosition"
             class="bg-background focus:ring-emerald-500"
-            placeholder="Type your message..."
+            :placeholder="t('templates.messageBodyPlaceholder')"
           />
           <div class="flex justify-between text-[10px] text-muted-foreground">
             <span v-pre>Variables must be sequential: {{1}}, {{2}}, {{3}}…</span>
@@ -1187,7 +1187,7 @@ onMounted(() => {
         >
           <div>
             <Label class="text-xs font-bold uppercase text-muted-foreground"
-              >Sample Values for Variables</Label
+              >{{ t("templates.sampleValues") }}</Label
             >
             <p class="text-[10px] text-muted-foreground mt-1">
               Provide sample values for your variables to see how they look in
@@ -1197,7 +1197,7 @@ onMounted(() => {
 
           <div v-if="headerVariables.length > 0" class="space-y-2">
             <p class="text-[10px] font-medium text-muted-foreground">
-              Header Variables
+              {{ t("templates.headerVariables") }}
             </p>
             <div
               v-for="paramName in headerVariables"
@@ -1229,7 +1229,7 @@ onMounted(() => {
 
           <div v-if="bodyVariables.length > 0" class="space-y-2">
             <p class="text-[10px] font-medium text-muted-foreground">
-              Body Variables
+              {{ t("templates.bodyVariables") }}
             </p>
             <div
               v-for="paramName in bodyVariables"
@@ -1263,16 +1263,16 @@ onMounted(() => {
         <div v-if="!isAuthentication" class="space-y-2">
           <div class="flex items-center justify-between border-b pb-2">
             <Label class="text-xs font-bold uppercase text-muted-foreground"
-              >Footer Text</Label
+              >{{ t("templates.footerText") }}</Label
             >
-            <span class="text-[10px] text-muted-foreground">Optional</span>
+            <span class="text-[10px] text-muted-foreground">{{ t("templates.optional") }}</span>
           </div>
           <Textarea
             id="footer-content"
             v-model="state.footer_content"
             :rows="1"
             :maxlength="LIMITS.footer"
-            placeholder="E.g. Reply STOP to opt out"
+            :placeholder="t('templates.footerHintPlaceholder')"
             class="bg-background min-h-9 py-1.5"
           />
           <div class="flex justify-end text-[10px] text-muted-foreground">
@@ -1283,7 +1283,7 @@ onMounted(() => {
         <div v-if="!isAuthentication" class="space-y-4 pt-2 border-t">
           <div class="flex items-center justify-between border-b pb-2">
             <Label class="text-xs font-bold uppercase text-muted-foreground"
-              >Action Buttons</Label
+              >{{ t("templates.actionButtons") }}</Label
             >
             <div class="flex flex-wrap gap-1">
               <Button
@@ -1347,7 +1347,7 @@ onMounted(() => {
                   <div class="flex items-center gap-1">
                     <button
                       type="button"
-                      title="Move up"
+                      :title="t('templates.moveUp')"
                       :disabled="Number(idx) === 0"
                       @click="moveButton(Number(idx), -1)"
                       class="text-muted-foreground hover:text-foreground disabled:opacity-30 disabled:cursor-not-allowed"
@@ -1356,7 +1356,7 @@ onMounted(() => {
                     </button>
                     <button
                       type="button"
-                      title="Move down"
+                      :title="t('templates.moveDown')"
                       :disabled="Number(idx) === state.buttons.length - 1"
                       @click="moveButton(Number(idx), 1)"
                       class="text-muted-foreground hover:text-foreground disabled:opacity-30 disabled:cursor-not-allowed"
@@ -1365,7 +1365,7 @@ onMounted(() => {
                     </button>
                     <button
                       type="button"
-                      title="Remove"
+                      :title="t('templates.removeButton')"
                       @click="state.buttons.splice(idx, 1)"
                       class="ml-1 text-muted-foreground hover:text-red-500"
                     >
@@ -1378,7 +1378,7 @@ onMounted(() => {
                   <div class="flex items-center justify-between">
                     <Label
                       class="text-[10px] font-bold text-muted-foreground uppercase"
-                      >Button Label</Label
+                      >{{ t("templates.buttonLabelField") }}</Label
                     >
                     <span class="text-[10px] text-muted-foreground">
                       {{ (btn.text || "").length }}/{{ LIMITS.buttonText }}
@@ -1387,7 +1387,7 @@ onMounted(() => {
                   <Input
                     v-model="btn.text"
                     :maxlength="LIMITS.buttonText"
-                    placeholder="Label"
+                    :placeholder="t('templates.buttonLabelPlaceholder')"
                     :class="[
                       'h-8 text-xs bg-background',
                       (btn.text || '').trim() ? '' : 'border-red-500',
@@ -1399,7 +1399,7 @@ onMounted(() => {
                   <div class="flex items-center justify-between">
                     <Label
                       class="text-[10px] font-bold text-muted-foreground uppercase"
-                      >Website URL</Label
+                      >{{ t("templates.websiteUrl") }}</Label
                     >
                     <div class="flex bg-muted p-0.5 rounded border">
                       <button
@@ -1412,7 +1412,7 @@ onMounted(() => {
                             : 'text-muted-foreground hover:text-foreground',
                         ]"
                       >
-                        Static
+                        {{ t("templates.urlStatic") }}
                       </button>
                       <button
                         @click="setUrlDynamic(btn, true)"
@@ -1424,7 +1424,7 @@ onMounted(() => {
                             : 'text-muted-foreground hover:text-foreground',
                         ]"
                       >
-                        Dynamic
+                        {{ t("templates.urlDynamic") }}
                       </button>
                     </div>
                   </div>
@@ -1459,7 +1459,7 @@ onMounted(() => {
                   <div v-if="isDynamicUrl(btn)" class="space-y-1.5 pt-1">
                     <Label
                       class="text-[10px] font-bold text-muted-foreground uppercase"
-                      >Example URL</Label
+                      >{{ t("templates.exampleUrl") }}</Label
                     >
                     <div class="flex items-center">
                       <span
@@ -1477,7 +1477,7 @@ onMounted(() => {
                       />
                     </div>
                     <p class="text-[10px] text-muted-foreground">
-                      Meta reviews the template against this full example URL.
+                      {{ t("templates.exampleUrlHint") }}
                     </p>
                   </div>
                 </div>
@@ -1485,7 +1485,7 @@ onMounted(() => {
                 <div v-if="btn.type === 'PHONE_NUMBER'" class="space-y-1.5">
                   <Label
                     class="text-[10px] font-bold text-muted-foreground uppercase"
-                    >Phone Number</Label
+                    >{{ t("templates.buttonPhoneNumber") }}</Label
                   >
                   <Input
                     v-model="btn.phone_number"
@@ -1496,7 +1496,7 @@ onMounted(() => {
                     v-if="btn.phone_number && !isValidPhone(btn.phone_number)"
                     class="text-[10px] text-red-500"
                   >
-                    Use international format, e.g. +14155551234.
+                    {{ t("templates.phoneFormatHint") }}
                   </p>
                 </div>
 
@@ -1504,7 +1504,7 @@ onMounted(() => {
                   <div class="flex items-center justify-between">
                     <Label
                       class="text-[10px] font-bold text-muted-foreground uppercase"
-                      >Example Code</Label
+                      >{{ t("templates.exampleCode") }}</Label
                     >
                     <span class="text-[10px] text-muted-foreground">
                       {{ (btn.example || "").length }}/{{ LIMITS.copyCode }}
@@ -1522,13 +1522,13 @@ onMounted(() => {
                   <div class="space-y-1.5">
                     <Label
                       class="text-[10px] font-bold text-muted-foreground uppercase"
-                      >Flow</Label
+                      >{{ t("templates.flow") }}</Label
                     >
                     <select
                       v-model="btn.flow_id"
                       class="w-full h-8 rounded-md border bg-background px-2 text-xs disabled:cursor-not-allowed disabled:opacity-50"
                     >
-                      <option value="">Select a Flow...</option>
+                      <option value="">{{ t("templates.selectFlowOption") }}</option>
                       <option
                         v-for="flow in flows || []"
                         :key="flow.id"
@@ -1541,21 +1541,21 @@ onMounted(() => {
                       v-if="!(flows || []).length"
                       class="text-[10px] text-muted-foreground"
                     >
-                      No published Flows available.
+                      {{ t("templates.noPublishedFlows") }}
                     </p>
                   </div>
 
                   <div class="space-y-1.5">
                     <Label
                       class="text-[10px] font-bold text-muted-foreground uppercase"
-                      >Flow Action</Label
+                      >{{ t("templates.flowAction") }}</Label
                     >
                     <select
                       v-model="btn.flow_action"
                       class="w-full h-8 rounded-md border bg-background px-2 text-xs disabled:cursor-not-allowed disabled:opacity-50"
                     >
-                      <option value="navigate">Navigate</option>
-                      <option value="data_exchange">Data Exchange</option>
+                      <option value="navigate">{{ t("templates.flowActionNavigate") }}</option>
+                      <option value="data_exchange">{{ t("templates.flowActionDataExchange") }}</option>
                     </select>
                   </div>
 
@@ -1569,13 +1569,13 @@ onMounted(() => {
                   >
                     <Label
                       class="text-[10px] font-bold text-muted-foreground uppercase"
-                      >Screen</Label
+                      >{{ t("templates.navigateScreen") }}</Label
                     >
                     <select
                       v-model="btn.navigate_screen"
                       class="w-full h-8 rounded-md border bg-background px-2 text-xs disabled:cursor-not-allowed disabled:opacity-50"
                     >
-                      <option value="">Select a screen...</option>
+                      <option value="">{{ t("templates.selectScreenOption") }}</option>
                       <option
                         v-for="screen in getFlowScreens(btn.flow_id)"
                         :key="screen"
@@ -1612,7 +1612,7 @@ onMounted(() => {
         >
           <AlertCircle class="h-5 w-5 text-blue-500 shrink-0" />
           <div class="space-y-1 text-sm text-blue-600 dark:text-blue-400">
-            <p class="font-medium">Before you submit</p>
+            <p class="font-medium">{{ t("templates.beforeYouSubmit") }}</p>
             <p v-pre class="text-xs opacity-80">
               Variables like {{1}} are replaced with real data when the message
               is sent. Meta reviews your sample values, so make them look like
