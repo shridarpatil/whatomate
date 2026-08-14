@@ -1047,7 +1047,7 @@ onMounted(() => {
             v-if="authOtpType === 'ONE_TAP' || authOtpType === 'ZERO_TAP'"
             class="space-y-3 rounded-lg border p-3"
           >
-            <div v-if="authOtpType === 'ONE_TAP'" class="space-y-1">
+            <div v-if="authOtpType === 'ONE_TAP' && otpButton()" class="space-y-1">
               <Label class="text-xs">Autofill Text</Label>
               <Input
                 v-model="otpButton().autofill_text"
