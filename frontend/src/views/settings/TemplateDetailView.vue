@@ -267,9 +267,11 @@ const firstButtonError = computed(() => {
 // Build sample_values array from form inputs
 // Sync sample_values when variables change — remove stale entries
 watch(allVariables, (vars) => {
-  form.value.sample_values = form.value.sample_values.filter((sv: any) =>
-    vars.some(v => v.component === sv.component && v.index === sv.index)
-  )
+  form.value.sample_values = form.value.sample_values.flatMap((sv: any) => {
+    const match = vars.find(v => v.component === sv.component
+      && (sv.param_name ? v.name === sv.param_name : v.index === sv.index))
+    return match ? [{ ...sv, index: match.index }] : []
+  })
 })
 
 const statusVariant = computed(() => {

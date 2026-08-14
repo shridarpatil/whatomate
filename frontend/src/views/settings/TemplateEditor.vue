@@ -439,11 +439,13 @@ function sampleIndexFor(component: string, paramName: string): number {
 function findSample(component: string, paramName: string) {
   const samples = state.value.sample_values || [];
   const index = sampleIndexFor(component, paramName);
-  return samples.find(
-    (s: any) =>
-      s.component === component &&
-      (s.param_name === paramName || s.index === index),
-  );
+  return samples.find((s: any) => {
+    if (s.component !== component) return false;
+    if (/^\d+$/.test(paramName)) {
+      return s.index === index || s.param_name === paramName;
+    }
+    return s.param_name ? s.param_name === paramName : s.index === index;
+  });
 }
 
 function getSampleValue(component: string, paramName: string): string {
