@@ -130,15 +130,18 @@ test.describe('Template Preview with Sample Values', () => {
       name: `tpl_sample_${Date.now()}`,
       body_content: 'Hello {{1}}, welcome',
       whatsapp_account: accountName,
+      sample_values: [{ component: 'body', index: 1, param_name: '1', value: 'Ada' }],
     })
 
     await loginAsAdmin(page)
     await page.goto(`/templates/${tpl.id}`)
     await page.waitForLoadState('domcontentloaded')
 
-    // The preview renders live in the sidebar; the body's variable substitution
-    // happens inline, so the template text is visible without opening anything.
+    // The preview renders live in the sidebar and substitutes the sample value
+    // into the variable, so {{1}} is replaced by Ada rather than shown raw.
     await expect(page.getByText('Live Preview')).toBeVisible({ timeout: 10000 })
-    await expect(page.getByText(/welcome/).first()).toBeVisible()
+    const preview = page.getByText(/Hello Ada, welcome/).first()
+    await expect(preview).toBeVisible()
+    await expect(page.getByText('{{1}}')).toHaveCount(0)
   })
 })
