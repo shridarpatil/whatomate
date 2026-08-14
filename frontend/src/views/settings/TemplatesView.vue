@@ -258,9 +258,11 @@ async function confirmDeleteTemplate() {
   }
 }
 
-// A DRAFT template lives only in our database until it is submitted to Meta.
+// Matches canPublish on the detail page: a draft has never reached Meta, and a
+// rejected template can be corrected and sent again.
 function isDraft(template: Template) {
-  return !template.meta_template_id || template.status?.toUpperCase() === 'DRAFT'
+  const status = template.status?.toUpperCase()
+  return !template.meta_template_id || status === 'DRAFT' || status === 'REJECTED'
 }
 
 async function publishTemplate(template: Template) {
