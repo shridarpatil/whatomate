@@ -77,9 +77,12 @@ function isValidPhone(value: string) {
 // the source of truth. The example suffix goes on the button as `example`, which
 // is where the backend reads it from.
 const URL_VAR = "{{1}}";
+// New dynamic urls always use {{1}}, but one synced from Meta may carry a named
+// variable, so detecting and stripping has to accept any of them.
+const URL_VAR_PATTERN = /\{\{[^}]+\}\}/;
 
 function isDynamicUrl(btn: any) {
-  return String(btn.url || "").includes(URL_VAR);
+  return URL_VAR_PATTERN.test(String(btn.url || ""));
 }
 
 function setUrlDynamic(btn: any, dynamic: boolean) {
@@ -92,10 +95,10 @@ function setUrlDynamic(btn: any, dynamic: boolean) {
   }
 }
 
-// The part of a dynamic url before {{1}} — what the user types, and the prefix the
-// example is appended to.
+// The part of a dynamic url before the variable — what the user types, and the
+// prefix the example is appended to.
 function urlPrefix(btn: any) {
-  return String(btn.url || "").replace(URL_VAR, "");
+  return String(btn.url || "").replace(URL_VAR_PATTERN, "");
 }
 
 function setUrlPrefix(btn: any, prefix: string) {
