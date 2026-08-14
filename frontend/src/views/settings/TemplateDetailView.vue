@@ -158,8 +158,16 @@ const varIndex = (name: string, slot: number) =>
 
 const allVariables = computed(() => {
   const vars: { component: string; name: string; index: number }[] = []
-  headerVariables.value.forEach((v, i) => vars.push({ component: 'header', name: v, index: varIndex(v, i) }))
-  bodyVariables.value.forEach((v, i) => vars.push({ component: 'body', name: v, index: varIndex(v, i) }))
+  const collect = (component: string, names: string[]) => {
+    const seen = new Set<string>()
+    names.forEach(name => {
+      if (seen.has(name)) return
+      seen.add(name)
+      vars.push({ component, name, index: varIndex(name, seen.size - 1) })
+    })
+  }
+  collect('header', headerVariables.value)
+  collect('body', bodyVariables.value)
   return vars
 })
 
