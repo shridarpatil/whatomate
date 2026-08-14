@@ -104,7 +104,19 @@ function setUrlPrefix(btn: any, prefix: string) {
 
 const emit = defineEmits(["update:modelValue", "update:mediaFile"]);
 
-const state = ref(JSON.parse(JSON.stringify(props.modelValue)));
+// Buttons are keyed on id in the template. The server never returns one, so
+// every copy coming from the parent needs its ids restored.
+function withButtonIds(value: any) {
+  if (Array.isArray(value?.buttons)) {
+    value.buttons = value.buttons.map((b: any) => ({
+      ...b,
+      id: b.id || crypto.randomUUID(),
+    }));
+  }
+  return value;
+}
+
+const state = ref(withButtonIds(JSON.parse(JSON.stringify(props.modelValue))));
 
 watch(
   state,
@@ -118,7 +130,7 @@ watch(
   () => props.modelValue,
   (newVal) => {
     if (JSON.stringify(newVal) !== JSON.stringify(state.value)) {
-      state.value = JSON.parse(JSON.stringify(newVal));
+      state.value = withButtonIds(JSON.parse(JSON.stringify(newVal)));
     }
   },
   { deep: true },
@@ -641,12 +653,6 @@ function clearMediaFile() {
 }
 
 onMounted(() => {
-  if (state.value?.buttons) {
-    state.value.buttons = state.value.buttons.map((b: any) => ({
-      ...b,
-      id: b.id || crypto.randomUUID(),
-    }));
-  }
   if (!state.value.sample_values) {
     state.value.sample_values = [];
   }
