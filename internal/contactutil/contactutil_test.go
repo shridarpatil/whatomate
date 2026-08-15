@@ -169,3 +169,92 @@ func TestGetOrCreateContact_UpdatesProfileName(t *testing.T) {
 	require.NoError(t, db.First(&reloaded, contact.ID).Error)
 	assert.Equal(t, "New Name", reloaded.ProfileName)
 }
+
+// A Brazilian mobile has two valid digit strings for the same subscriber: the
+// current 9-digit form and the legacy 8-digit form the carrier issued before
+// the 9th digit was added. WhatsApp still reports the legacy form for older
+// accounts, so an agent who registers "+55 71 99123-4567" must be matched when
+// the reply arrives as "5571 9123-4567" — otherwise the reply lands as a brand
+// new contact with no owner and falls into the general queue.
+func TestPhoneIdentities_BrazilianNinthDigit(t *testing.T) {
+	tests := []struct {
+		name  string
+		phone string
+		want  []string
+	}{
+		{"mobile with 9th digit yields the legacy form", "5571991234567", []string{"5571991234567", "557191234567"}},
+		{"legacy mobile yields the 9th-digit form", "557191234567", []string{"557191234567", "5571991234567"}},
+		{"landline is never given a 9th digit", "557131234567", []string{"557131234567"}},
+		{"formatting is stripped before the rule is applied", "+55 (11) 99999-9999", []string{"5511999999999", "551199999999"}},
+		{"a US number is never expanded", "12125551234", []string{"12125551234"}},
+		{"a 55-prefixed number of the wrong length is left alone", "5571991234", []string{"5571991234"}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			assert.ElementsMatch(t, tt.want, PhoneIdentities(tt.phone))
+		})
+	}
+}
+
+// The end-to-end symptom: contact registered with the 9, reply arrives without
+// it. Must resolve to the SAME row, keeping its owner.
+func TestGetOrCreateContact_MatchesBrazilianLegacyForm(t *testing.T) {
+	db := testutil.SetupTestDB(t)
+	uid := uuid.New().String()[:8]
+	org := models.Organization{BaseModel: models.BaseModel{ID: uuid.New()}, Name: "test-" + uid, Slug: "test-" + uid}
+	require.NoError(t, db.Create(&org).Error)
+
+	// A real user row: assigned_user_id carries a foreign key.
+	owner := models.User{
+		BaseModel:      models.BaseModel{ID: uuid.New()},
+		OrganizationID: org.ID,
+		Email:          "agent-" + uid + "@test.com",
+		FullName:       "Agente Dono",
+		IsActive:       true,
+	}
+	require.NoError(t, db.Create(&owner).Error)
+
+	existing := models.Contact{
+		BaseModel:      models.BaseModel{ID: uuid.New()},
+		OrganizationID: org.ID,
+		PhoneNumber:    "5571991234567",
+		AssignedUserID: &owner.ID,
+	}
+	require.NoError(t, db.Create(&existing).Error)
+
+	contact, isNew, err := GetOrCreateContact(db, org.ID, "557191234567", "Cliente")
+	require.NoError(t, err)
+	assert.False(t, isNew, "the legacy 8-digit form must not create a second contact")
+	assert.Equal(t, existing.ID, contact.ID)
+	require.NotNil(t, contact.AssignedUserID, "the reply must keep the owning agent, not fall to the general queue")
+	assert.Equal(t, owner.ID, *contact.AssignedUserID)
+}
+
+// And the inverse: registered without the 9, reply arrives with it.
+func TestGetOrCreateContact_MatchesBrazilianNinthDigitForm(t *testing.T) {
+	db := testutil.SetupTestDB(t)
+	uid := uuid.New().String()[:8]
+	org := models.Organization{BaseModel: models.BaseModel{ID: uuid.New()}, Name: "test-" + uid, Slug: "test-" + uid}
+	require.NoError(t, db.Create(&org).Error)
+
+	existing := models.Contact{BaseModel: models.BaseModel{ID: uuid.New()}, OrganizationID: org.ID, PhoneNumber: "557188887777"}
+	require.NoError(t, db.Create(&existing).Error)
+
+	contact, isNew, err := GetOrCreateContact(db, org.ID, "+55 71 98888-7777", "Cliente")
+	require.NoError(t, err)
+	assert.False(t, isNew)
+	assert.Equal(t, existing.ID, contact.ID)
+}
+
+func TestFindContactUnscoped_MatchesBrazilianLegacyForm(t *testing.T) {
+	db := testutil.SetupTestDB(t)
+	uid := uuid.New().String()[:8]
+	org := models.Organization{BaseModel: models.BaseModel{ID: uuid.New()}, Name: "test-" + uid, Slug: "test-" + uid}
+	require.NoError(t, db.Create(&org).Error)
+	existing := models.Contact{BaseModel: models.BaseModel{ID: uuid.New()}, OrganizationID: org.ID, PhoneNumber: "5571993334444"}
+	require.NoError(t, db.Create(&existing).Error)
+
+	got, err := FindContactUnscoped(db, org.ID, "557193334444")
+	require.NoError(t, err)
+	assert.Equal(t, existing.ID, got.ID)
+}

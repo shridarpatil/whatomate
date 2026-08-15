@@ -403,13 +403,15 @@ func (a *App) processCallPermissionReply(phoneNumberID, fromPhone string, reply 
 		return
 	}
 
-	// Find the most recent pending permission for this contact
-	var contact models.Contact
-	if err := a.DB.Where("organization_id = ? AND phone_number = ?", account.OrganizationID, fromPhone).
-		First(&contact).Error; err != nil {
+	// Find the most recent pending permission for this contact. Shared resolver,
+	// not a raw match, so a differently-spelled number (formatting, "+" prefix,
+	// or Brazil's legacy 8-digit mobile form) still finds its contact.
+	found, err := contactutil.FindContact(a.DB, account.OrganizationID, fromPhone)
+	if err != nil {
 		a.Log.Warn("No contact found for call permission reply", "phone", fromPhone)
 		return
 	}
+	contact := *found
 
 	// Load the most recent permission request for this contact. If none exists
 	// (e.g. the permission prompt was sent out-of-band by Meta, or the request
