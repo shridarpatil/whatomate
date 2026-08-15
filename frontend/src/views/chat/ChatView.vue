@@ -2879,7 +2879,7 @@ async function sendMediaMessage() {
             {{ $t('chat.unassignContact') }}
           </Button>
           <Separator />
-          <ScrollArea class="flex-1 min-h-0">
+          <ScrollArea orientation="vertical" class="flex-1 min-h-0">
             <div class="space-y-1">
               <Button
                 v-for="user in filteredAssignableUsers"
@@ -2926,7 +2926,7 @@ async function sendMediaMessage() {
             <Search class="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
             <Input v-model="assignSearchQuery" :placeholder="$t('chat.searchUsers') + '...'" class="pl-9 h-9" />
           </div>
-          <ScrollArea class="flex-1 min-h-0">
+          <ScrollArea orientation="vertical" class="flex-1 min-h-0">
             <div class="space-y-1">
               <Button
                 v-for="user in filteredAssignableUsers"
@@ -2961,7 +2961,7 @@ async function sendMediaMessage() {
             <Search class="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
             <Input v-model="teamSearchQuery" :placeholder="$t('chat.searchTeams') + '...'" class="pl-9 h-9" />
           </div>
-          <ScrollArea class="flex-1 min-h-0">
+          <ScrollArea orientation="vertical" class="flex-1 min-h-0">
             <div class="space-y-1">
               <Button
                 v-for="team in filteredTeams"
