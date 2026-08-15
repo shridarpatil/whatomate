@@ -1377,14 +1377,16 @@ func (a *App) CreateContact(r *fastglue.Request) error {
 		return r.SendErrorEnvelope(fasthttp.StatusBadRequest, "phone_number is required", nil, "")
 	}
 
-	// Canonical digits-only identity (see contactutil.NormalizePhone), matched
-	// against the legacy "+"-prefixed form too so a formatted input cannot create
-	// a duplicate of an existing contact.
+	// Canonical digits-only identity (see contactutil.NormalizePhone).
 	normalizedPhone := contactutil.NormalizePhone(req.PhoneNumber)
 
-	// Check if contact exists (including soft-deleted)
-	var existingContact models.Contact
-	if err := a.DB.Unscoped().Where("organization_id = ? AND phone_number IN (?, ?)", orgID, normalizedPhone, "+"+normalizedPhone).First(&existingContact).Error; err == nil {
+	// Check if contact exists (including soft-deleted). Goes through the shared
+	// resolver so every spelling of the same subscriber counts as a duplicate --
+	// notably Brazil's legacy 8-digit mobile form, which an inbound message may
+	// already have created before an agent types the number in with the 9.
+	found, findErr := contactutil.FindContactUnscoped(a.DB, orgID, req.PhoneNumber)
+	if findErr == nil {
+		existingContact := *found
 		// Contact exists
 		if existingContact.DeletedAt.Valid {
 			// Restore soft-deleted contact
