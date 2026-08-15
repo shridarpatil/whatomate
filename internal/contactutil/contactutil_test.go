@@ -204,12 +204,21 @@ func TestGetOrCreateContact_MatchesBrazilianLegacyForm(t *testing.T) {
 	org := models.Organization{BaseModel: models.BaseModel{ID: uuid.New()}, Name: "test-" + uid, Slug: "test-" + uid}
 	require.NoError(t, db.Create(&org).Error)
 
-	owner := uuid.New()
+	// A real user row: assigned_user_id carries a foreign key.
+	owner := models.User{
+		BaseModel:      models.BaseModel{ID: uuid.New()},
+		OrganizationID: org.ID,
+		Email:          "agent-" + uid + "@test.com",
+		FullName:       "Agente Dono",
+		IsActive:       true,
+	}
+	require.NoError(t, db.Create(&owner).Error)
+
 	existing := models.Contact{
 		BaseModel:      models.BaseModel{ID: uuid.New()},
 		OrganizationID: org.ID,
 		PhoneNumber:    "5571991234567",
-		AssignedUserID: &owner,
+		AssignedUserID: &owner.ID,
 	}
 	require.NoError(t, db.Create(&existing).Error)
 
@@ -218,7 +227,7 @@ func TestGetOrCreateContact_MatchesBrazilianLegacyForm(t *testing.T) {
 	assert.False(t, isNew, "the legacy 8-digit form must not create a second contact")
 	assert.Equal(t, existing.ID, contact.ID)
 	require.NotNil(t, contact.AssignedUserID, "the reply must keep the owning agent, not fall to the general queue")
-	assert.Equal(t, owner, *contact.AssignedUserID)
+	assert.Equal(t, owner.ID, *contact.AssignedUserID)
 }
 
 // And the inverse: registered without the 9, reply arrives with it.
