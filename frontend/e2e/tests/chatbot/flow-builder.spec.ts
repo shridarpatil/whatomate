@@ -161,3 +161,111 @@ test.describe('Chatbot Flow Builder - Other node types', () => {
     await expect(builder.page.getByText(/^Expression$/i).first()).toBeVisible()
   })
 })
+
+test.describe('Chatbot Flow Builder - unsaved changes dialog', () => {
+  let builder: ChatbotFlowBuilderPage
+
+  test.beforeEach(async ({ page }) => {
+    await loginAsAdmin(page)
+    builder = new ChatbotFlowBuilderPage(page)
+    await builder.gotoNew()
+    // Adding a node is what marks the flow dirty.
+    await builder.addNode('Text')
+  })
+
+  test('"Stay" keeps the author in the builder', async ({ page }) => {
+    await builder.cancelButton.click()
+    await expect(builder.unsavedDialog).toBeVisible()
+
+    await builder.stayButton.click()
+
+    await expect(builder.unsavedDialog).toBeHidden()
+    await expect(page).toHaveURL(/\/chatbot\/flows\/new/)
+    await expect(builder.paletteToolbar).toBeVisible()
+  })
+
+  test('"Leave" navigates back to the flow list', async ({ page }) => {
+    await builder.cancelButton.click()
+    await expect(builder.unsavedDialog).toBeVisible()
+
+    await builder.leaveButton.click()
+
+    await expect(page).toHaveURL(/\/chatbot\/flows$/)
+  })
+})
+
+test.describe('Chatbot Flow Builder - right panel', () => {
+  let builder: ChatbotFlowBuilderPage
+
+  test.beforeEach(async ({ page }) => {
+    await loginAsAdmin(page)
+    builder = new ChatbotFlowBuilderPage(page)
+    await builder.gotoNew()
+  })
+
+  test('collapses and expands the right panel', async () => {
+    await expect(builder.flowSettingsHeading).toBeVisible()
+
+    await builder.collapsePanelButton.click()
+    await expect(builder.flowSettingsHeading).toBeHidden()
+    await expect(builder.expandPanelButton).toBeVisible()
+
+    await builder.expandPanelButton.click()
+    await expect(builder.flowSettingsHeading).toBeVisible()
+  })
+
+  test('selecting a node reopens a collapsed panel', async () => {
+    await builder.collapsePanelButton.click()
+    await expect(builder.expandPanelButton).toBeVisible()
+
+    // Adding a node auto-selects it; the properties must not stay hidden.
+    await builder.addNode('Text')
+    await expect(builder.messageTextarea).toBeVisible()
+  })
+
+  test('remembers the collapsed state across reloads', async ({ page }) => {
+    await builder.collapsePanelButton.click()
+    await expect(builder.expandPanelButton).toBeVisible()
+
+    await page.reload()
+    await page.waitForLoadState('networkidle')
+
+    await expect(builder.expandPanelButton).toBeVisible()
+  })
+
+  test('arrow keys on the resize handle widen and narrow the panel', async () => {
+    // Assert on the inline width the composable actually sets, not on
+    // boundingBox(): the rendered box carries sub-pixel flex-layout noise
+    // (Chromium lays out in 1/64px), so the same 420px style measured before
+    // and after a round trip can differ by ~1px and say nothing about resizing.
+    const styleWidth = () => builder.rightPanel.evaluate((el) => (el as HTMLElement).style.width)
+
+    expect(await styleWidth()).toBe('420px')
+
+    await builder.panelResizeHandle.focus()
+    // Panel is on the right edge, so ArrowLeft widens it. 3 x KEYBOARD_STEP.
+    await builder.panelResizeHandle.press('ArrowLeft')
+    await builder.panelResizeHandle.press('ArrowLeft')
+    await builder.panelResizeHandle.press('ArrowLeft')
+    expect(await styleWidth()).toBe('480px')
+
+    // ArrowRight narrows by the same step, so three presses undo the three above.
+    await builder.panelResizeHandle.press('ArrowRight')
+    await builder.panelResizeHandle.press('ArrowRight')
+    await builder.panelResizeHandle.press('ArrowRight')
+    expect(await styleWidth()).toBe('420px')
+  })
+
+  test('the resize handle stops at the configured bounds', async () => {
+    const styleWidth = () => builder.rightPanel.evaluate((el) => (el as HTMLElement).style.width)
+
+    await builder.panelResizeHandle.focus()
+    // 420 + 20 x 20 would be 820; the max is 720.
+    for (let i = 0; i < 20; i++) await builder.panelResizeHandle.press('ArrowLeft')
+    expect(await styleWidth()).toBe('720px')
+
+    // And back down past the 320 minimum.
+    for (let i = 0; i < 30; i++) await builder.panelResizeHandle.press('ArrowRight')
+    expect(await styleWidth()).toBe('320px')
+  })
+})

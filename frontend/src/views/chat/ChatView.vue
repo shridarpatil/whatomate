@@ -2832,14 +2832,14 @@ async function sendMediaMessage() {
 
     <!-- Assign Contact Dialog -->
     <Dialog v-model:open="isAssignDialogOpen" @update:open="(open) => !open && resetAgentPickerFilters()">
-      <DialogContent class="max-w-sm">
-        <DialogHeader>
+      <DialogContent class="max-w-md max-h-[85vh] flex flex-col">
+        <DialogHeader class="shrink-0">
           <DialogTitle>{{ $t('chat.assignContact') }}</DialogTitle>
           <DialogDescription>
             {{ $t('chat.assignContactDesc') }}
           </DialogDescription>
         </DialogHeader>
-        <div class="py-4 space-y-3">
+        <div class="py-4 space-y-3 flex-1 min-h-0 flex flex-col">
           <!-- Filter by role (type) — only when there is more than one to pick -->
           <Select v-if="assignableRoles.length > 1" v-model="assignRoleFilter">
             <SelectTrigger class="h-9"><SelectValue :placeholder="$t('chat.filterByRole')" /></SelectTrigger>
@@ -2867,7 +2867,7 @@ async function sendMediaMessage() {
             {{ $t('chat.unassignContact') }}
           </Button>
           <Separator />
-          <ScrollArea class="max-h-[280px]">
+          <ScrollArea orientation="vertical" class="flex-1 min-h-0">
             <div class="space-y-1">
               <Button
                 v-for="user in filteredAssignableUsers"
@@ -2877,7 +2877,7 @@ async function sendMediaMessage() {
                 @click="assignContactToUser(user.id); isAssignDialogOpen = false"
               >
                 <User class="mr-2 h-4 w-4 shrink-0" />
-                <span class="truncate">{{ user.full_name }}</span>
+                <span class="truncate min-w-0 flex-1 text-left">{{ user.full_name }}</span>
                 <Check
                   v-if="contactsStore.currentContact?.assigned_user_id === user.id"
                   class="ml-auto h-4 w-4 text-primary shrink-0"
@@ -2897,12 +2897,12 @@ async function sendMediaMessage() {
 
     <!-- Transfer to agent (pick a specific agent) -->
     <Dialog v-model:open="isTransferAgentDialogOpen" @update:open="(open) => !open && resetAgentPickerFilters()">
-      <DialogContent class="max-w-sm">
-        <DialogHeader>
+      <DialogContent class="max-w-md max-h-[85vh] flex flex-col">
+        <DialogHeader class="shrink-0">
           <DialogTitle>{{ $t('chat.transferToAgentTitle') }}</DialogTitle>
           <DialogDescription>{{ $t('chat.transferToAgentDesc') }}</DialogDescription>
         </DialogHeader>
-        <div class="py-4 space-y-3">
+        <div class="py-4 space-y-3 flex-1 min-h-0 flex flex-col">
           <Select v-if="assignableRoles.length > 1" v-model="assignRoleFilter">
             <SelectTrigger class="h-9"><SelectValue :placeholder="$t('chat.filterByRole')" /></SelectTrigger>
             <SelectContent>
@@ -2914,7 +2914,7 @@ async function sendMediaMessage() {
             <Search class="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
             <Input v-model="assignSearchQuery" :placeholder="$t('chat.searchUsers') + '...'" class="pl-9 h-9" />
           </div>
-          <ScrollArea class="max-h-[280px]">
+          <ScrollArea orientation="vertical" class="flex-1 min-h-0">
             <div class="space-y-1">
               <Button
                 v-for="user in filteredAssignableUsers"
@@ -2925,7 +2925,7 @@ async function sendMediaMessage() {
                 @click="transferToAgent(user.id)"
               >
                 <User class="mr-2 h-4 w-4 shrink-0" />
-                <span class="truncate">{{ user.full_name }}</span>
+                <span class="truncate min-w-0 flex-1 text-left">{{ user.full_name }}</span>
                 <Badge variant="outline" class="ml-auto shrink-0 text-xs">{{ user.role?.name }}</Badge>
               </Button>
               <p v-if="filteredAssignableUsers.length === 0" class="text-sm text-muted-foreground text-center py-4">
@@ -2939,17 +2939,17 @@ async function sendMediaMessage() {
 
     <!-- Transfer to team -->
     <Dialog v-model:open="isTransferTeamDialogOpen" @update:open="(open) => !open && (teamSearchQuery = '')">
-      <DialogContent class="max-w-sm">
-        <DialogHeader>
+      <DialogContent class="max-w-md max-h-[85vh] flex flex-col">
+        <DialogHeader class="shrink-0">
           <DialogTitle>{{ $t('chat.transferToTeamTitle') }}</DialogTitle>
           <DialogDescription>{{ $t('chat.transferToTeamDesc') }}</DialogDescription>
         </DialogHeader>
-        <div class="py-4 space-y-3">
+        <div class="py-4 space-y-3 flex-1 min-h-0 flex flex-col">
           <div class="relative">
             <Search class="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
             <Input v-model="teamSearchQuery" :placeholder="$t('chat.searchTeams') + '...'" class="pl-9 h-9" />
           </div>
-          <ScrollArea class="max-h-[280px]">
+          <ScrollArea orientation="vertical" class="flex-1 min-h-0">
             <div class="space-y-1">
               <Button
                 v-for="team in filteredTeams"
@@ -2960,7 +2960,7 @@ async function sendMediaMessage() {
                 @click="transferToTeam(team.id)"
               >
                 <Users class="mr-2 h-4 w-4 shrink-0" />
-                <span class="truncate">{{ team.name }}</span>
+                <span class="truncate min-w-0 flex-1 text-left">{{ team.name }}</span>
               </Button>
               <p v-if="filteredTeams.length === 0" class="text-sm text-muted-foreground text-center py-4">
                 {{ $t('chat.noTeamsFound') }}
