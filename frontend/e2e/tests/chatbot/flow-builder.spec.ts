@@ -234,28 +234,38 @@ test.describe('Chatbot Flow Builder - right panel', () => {
   })
 
   test('arrow keys on the resize handle widen and narrow the panel', async () => {
-    const before = await builder.rightPanel.boundingBox()
-    expect(before).not.toBeNull()
+    // Assert on the inline width the composable actually sets, not on
+    // boundingBox(): the rendered box carries sub-pixel flex-layout noise
+    // (Chromium lays out in 1/64px), so the same 420px style measured before
+    // and after a round trip can differ by ~1px and say nothing about resizing.
+    const styleWidth = () => builder.rightPanel.evaluate((el) => (el as HTMLElement).style.width)
+
+    expect(await styleWidth()).toBe('420px')
 
     await builder.panelResizeHandle.focus()
-    // Panel is on the right edge, so ArrowLeft widens it. 3 x 20px.
+    // Panel is on the right edge, so ArrowLeft widens it. 3 x KEYBOARD_STEP.
     await builder.panelResizeHandle.press('ArrowLeft')
     await builder.panelResizeHandle.press('ArrowLeft')
     await builder.panelResizeHandle.press('ArrowLeft')
+    expect(await styleWidth()).toBe('480px')
 
-    const widened = await builder.rightPanel.boundingBox()
-    expect(widened!.width).toBeGreaterThan(before!.width)
-
-    // ArrowRight is the narrow direction — same step size, so 3 presses
-    // should undo the 3 ArrowLeft presses above exactly. The composable's
-    // clamp() rounds, but every value here (420 default +/- multiples of
-    // the 20px KEYBOARD_STEP) is already an integer, so no rounding drift
-    // is possible and exact equality is safe.
+    // ArrowRight narrows by the same step, so three presses undo the three above.
     await builder.panelResizeHandle.press('ArrowRight')
     await builder.panelResizeHandle.press('ArrowRight')
     await builder.panelResizeHandle.press('ArrowRight')
+    expect(await styleWidth()).toBe('420px')
+  })
 
-    const after = await builder.rightPanel.boundingBox()
-    expect(after!.width).toBe(before!.width)
+  test('the resize handle stops at the configured bounds', async () => {
+    const styleWidth = () => builder.rightPanel.evaluate((el) => (el as HTMLElement).style.width)
+
+    await builder.panelResizeHandle.focus()
+    // 420 + 20 x 20 would be 820; the max is 720.
+    for (let i = 0; i < 20; i++) await builder.panelResizeHandle.press('ArrowLeft')
+    expect(await styleWidth()).toBe('720px')
+
+    // And back down past the 320 minimum.
+    for (let i = 0; i < 30; i++) await builder.panelResizeHandle.press('ArrowRight')
+    expect(await styleWidth()).toBe('320px')
   })
 })
