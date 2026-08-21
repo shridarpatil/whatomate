@@ -187,12 +187,18 @@ func (a *App) SendOutgoingMessage(ctx context.Context, req OutgoingMessageReques
 				}
 			}
 
+			// If sending as document, always use application/octet-stream for video/audio files so Meta's
+			// media upload endpoint does not run strict container/codec validations on document payloads.
+			if actualType == models.MessageTypeDocument && (strings.HasPrefix(uploadMime, "video/") || strings.HasPrefix(uploadMime, "audio/")) {
+				uploadMime = "application/octet-stream"
+			}
+
 			if mediaID == "" && len(req.MediaData) > 0 {
 				var err error
 				mediaID, err = a.WhatsApp.UploadMedia(sendCtx, waAccount, req.MediaData, uploadMime, filename)
-				if err != nil && actualType == models.MessageTypeVideo && strings.Contains(err.Error(), "File Too Large") {
-					// Fallback: If Meta rejected with File Too Large on a near-limit video, retry upload as document
-					a.Log.Warn("Video upload exceeded Meta limit, falling back to document", "error", err)
+				if err != nil && actualType == models.MessageTypeVideo && (strings.Contains(err.Error(), "File Too Large") || strings.Contains(err.Error(), "No video stream") || strings.Contains(err.Error(), "(#100)")) {
+					// Fallback: If Meta rejected with File Too Large or codec error on video upload, retry as document
+					a.Log.Warn("Video upload rejected by Meta, falling back to document", "error", err)
 					actualType = models.MessageTypeDocument
 					if filename == "" {
 						filename = "video.mp4"

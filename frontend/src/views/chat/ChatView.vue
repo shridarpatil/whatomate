@@ -13,7 +13,6 @@ import { TagBadge } from '@/components/ui/tag-badge'
 import { getTagColorClass } from '@/lib/constants'
 import { getErrorMessage } from '@/lib/api-utils'
 import { compressImage } from '@/lib/imageCompression'
-import { canOptimizeVideo, compressVideo } from '@/lib/videoCompression'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
@@ -91,8 +90,7 @@ import {
   Filter,
   StickyNote,
   Info,
-  Film,
-  Sparkles
+  Film
 } from 'lucide-vue-next'
 import { getInitials, getAvatarGradient } from '@/lib/utils'
 import { useColorMode } from '@/composables/useColorMode'
@@ -150,7 +148,6 @@ const orgAccounts = ref<any[]>([])
 const fileInputRef = ref<HTMLInputElement | null>(null)
 const selectedFile = ref<File | null>(null)
 const selectedMediaType = ref<'image' | 'video' | 'audio' | 'document'>('image')
-const isOptimizingVideo = ref(false)
 const filePreviewUrl = ref<string | null>(null)
 const isMediaDialogOpen = ref(false)
 const mediaCaption = ref('')
@@ -1645,31 +1642,6 @@ async function handleFileSelect(event: Event) {
   isMediaDialogOpen.value = true
 }
 
-async function handleOptimizeVideo() {
-  if (!selectedFile.value || isOptimizingVideo.value) return
-  isOptimizingVideo.value = true
-  try {
-    const compressed = await compressVideo(selectedFile.value)
-    if (compressed.size < selectedFile.value.size) {
-      if (filePreviewUrl.value) URL.revokeObjectURL(filePreviewUrl.value)
-      selectedFile.value = compressed
-      filePreviewUrl.value = URL.createObjectURL(compressed)
-      if (compressed.size <= 15.5 * 1024 * 1024) {
-        selectedMediaType.value = 'video'
-        toast.success(t('chat.videoOptimizedSuccess'))
-      } else {
-        toast.info(t('chat.videoOptimizedAsDocument'))
-      }
-    } else {
-      toast.info(t('chat.videoCannotCompressFurther'))
-    }
-  } catch {
-    toast.error(t('chat.videoOptimizeFailed'))
-  } finally {
-    isOptimizingVideo.value = false
-  }
-}
-
 function closeMediaDialog() {
   isMediaDialogOpen.value = false
   if (filePreviewUrl.value) {
@@ -2876,21 +2848,6 @@ async function sendMediaMessage() {
               <Info class="h-4 w-4 shrink-0 mt-0.5" />
               <span>{{ $t('chat.videoTooLargeForChat') }}</span>
             </div>
-
-            <!-- Optional client-side video optimizer -->
-            <Button
-              v-if="canOptimizeVideo(selectedFile) && selectedFile.size > 15.5 * 1024 * 1024"
-              type="button"
-              variant="outline"
-              size="sm"
-              class="w-full text-xs h-8 border-dashed"
-              :disabled="isOptimizingVideo"
-              @click="handleOptimizeVideo"
-            >
-              <Loader2 v-if="isOptimizingVideo" class="mr-1.5 h-3.5 w-3.5 animate-spin" />
-              <Sparkles v-else class="mr-1.5 h-3.5 w-3.5 text-primary" />
-              {{ isOptimizingVideo ? $t('chat.optimizingVideo') : $t('chat.optimizeVideo') }}
-            </Button>
           </div>
 
           <!-- Caption input (not for audio) -->
