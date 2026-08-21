@@ -13,6 +13,7 @@ import { TagBadge } from '@/components/ui/tag-badge'
 import { getTagColorClass } from '@/lib/constants'
 import { getErrorMessage } from '@/lib/api-utils'
 import { compressImage } from '@/lib/imageCompression'
+import { canOptimizeVideo, compressVideo } from '@/lib/videoCompression'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
@@ -88,7 +89,10 @@ import {
   Code,
   RotateCw,
   Filter,
-  StickyNote
+  StickyNote,
+  Info,
+  Film,
+  Sparkles
 } from 'lucide-vue-next'
 import { getInitials, getAvatarGradient } from '@/lib/utils'
 import { useColorMode } from '@/composables/useColorMode'
@@ -104,7 +108,6 @@ import { useNotesStore } from '@/stores/notes'
 import { useHeaderMedia } from '@/composables/useHeaderMedia'
 import { CreateContactDialog } from '@/components/shared'
 import HeaderMediaUpload from '@/components/shared/HeaderMediaUpload.vue'
-import { Info } from 'lucide-vue-next'
 
 const { t } = useI18n()
 const route = useRoute()
@@ -146,6 +149,8 @@ const orgAccounts = ref<any[]>([])
 // File upload state
 const fileInputRef = ref<HTMLInputElement | null>(null)
 const selectedFile = ref<File | null>(null)
+const selectedMediaType = ref<'image' | 'video' | 'audio' | 'document'>('image')
+const isOptimizingVideo = ref(false)
 const filePreviewUrl = ref<string | null>(null)
 const isMediaDialogOpen = ref(false)
 const mediaCaption = ref('')
@@ -1602,18 +1607,32 @@ async function handleFileSelect(event: Event) {
     }
   }
 
-  // Per-type size validation: images 5 MB (Meta's limit), other media 14.5 MB
-  // (under the 15 MB fasthttp request body cap).
-  const type = getMediaType(outFile.type)
-  const maxSize = type === 'image' ? 5 * 1024 * 1024 : 14.5 * 1024 * 1024
+  let type = getMediaType(outFile.type)
+
+  // Meta's WhatsApp Cloud API strictly limits native inline videos to 16 MB.
+  // If a video is > 15.5 MB (up to 100 MB), automatically set type to 'document'.
+  if (type === 'video' && outFile.size > 15.5 * 1024 * 1024) {
+    if (outFile.size <= 100 * 1024 * 1024) {
+      type = 'document'
+    }
+  }
+
+  // Per-type size validation:
+  // - Images: 5 MB (Meta limit)
+  // - Audio / Inline Video: 15.5 MB (Meta 16 MB limit)
+  // - Documents (including large videos): 100 MB (Meta limit)
+  const maxSize = type === 'image' ? 5 * 1024 * 1024 : (type === 'document' ? 100 * 1024 * 1024 : 15.5 * 1024 * 1024)
   if (outFile.size > maxSize) {
     toast.error(t('chat.fileTooLarge'), {
-      description: type === 'image' ? t('chat.fileTooLargeImage') : t('chat.fileTooLargeMedia')
+      description: outFile.size > 100 * 1024 * 1024
+        ? t('chat.fileTooLarge100MB')
+        : (type === 'image' ? t('chat.fileTooLargeImage') : t('chat.fileTooLargeMedia'))
     })
     return
   }
 
   selectedFile.value = outFile
+  selectedMediaType.value = type as any
   mediaCaption.value = ''
 
   // Create preview URL for images and videos
@@ -1624,6 +1643,31 @@ async function handleFileSelect(event: Event) {
   }
 
   isMediaDialogOpen.value = true
+}
+
+async function handleOptimizeVideo() {
+  if (!selectedFile.value || isOptimizingVideo.value) return
+  isOptimizingVideo.value = true
+  try {
+    const compressed = await compressVideo(selectedFile.value)
+    if (compressed.size < selectedFile.value.size) {
+      if (filePreviewUrl.value) URL.revokeObjectURL(filePreviewUrl.value)
+      selectedFile.value = compressed
+      filePreviewUrl.value = URL.createObjectURL(compressed)
+      if (compressed.size <= 15.5 * 1024 * 1024) {
+        selectedMediaType.value = 'video'
+        toast.success(t('chat.videoOptimizedSuccess'))
+      } else {
+        toast.info(t('chat.videoOptimizedAsDocument'))
+      }
+    } else {
+      toast.info(t('chat.videoCannotCompressFurther'))
+    }
+  } catch {
+    toast.error(t('chat.videoOptimizeFailed'))
+  } finally {
+    isOptimizingVideo.value = false
+  }
 }
 
 function closeMediaDialog() {
@@ -1651,7 +1695,7 @@ async function sendMediaMessage() {
     const formData = new FormData()
     formData.append('file', selectedFile.value)
     formData.append('contact_id', contactsStore.currentContact.id)
-    formData.append('type', getMediaType(selectedFile.value.type))
+    formData.append('type', selectedMediaType.value || getMediaType(selectedFile.value.type))
     if (mediaCaption.value.trim()) {
       formData.append('caption', mediaCaption.value.trim())
     }
@@ -2786,10 +2830,67 @@ async function sendMediaMessage() {
               <div>
                 <p class="font-medium text-sm truncate max-w-[200px]">{{ selectedFile.name }}</p>
                 <p class="text-xs text-muted-foreground">
-                  {{ (selectedFile.size / 1024).toFixed(1) }} KB
+                  {{ selectedFile.size >= 1024 * 1024 ? (selectedFile.size / (1024 * 1024)).toFixed(1) + ' MB' : (selectedFile.size / 1024).toFixed(1) + ' KB' }}
                 </p>
               </div>
             </div>
+          </div>
+
+          <!-- Video Mode Selector & Controls (when selected file is a video) -->
+          <div v-if="selectedFile?.type.startsWith('video/')" class="space-y-2">
+            <div class="flex items-center justify-between gap-2 p-2 bg-muted/60 rounded-lg text-xs">
+              <span class="text-muted-foreground font-medium">{{ $t('chat.videoMode') }}:</span>
+              <div class="flex items-center gap-1.5">
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="ghost"
+                  class="h-7 px-2.5 text-xs rounded-md"
+                  :class="selectedMediaType === 'video' ? 'bg-primary/20 text-primary font-medium' : 'text-muted-foreground'"
+                  :disabled="selectedFile.size > 15.5 * 1024 * 1024"
+                  :title="selectedFile.size > 15.5 * 1024 * 1024 ? $t('chat.videoTooLargeForChat') : ''"
+                  @click="selectedMediaType = 'video'"
+                >
+                  <Film class="h-3.5 w-3.5 mr-1" />
+                  {{ $t('chat.videoAsVideo') }}
+                </Button>
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="ghost"
+                  class="h-7 px-2.5 text-xs rounded-md"
+                  :class="selectedMediaType === 'document' ? 'bg-primary/20 text-primary font-medium' : 'text-muted-foreground'"
+                  @click="selectedMediaType = 'document'"
+                >
+                  <FileText class="h-3.5 w-3.5 mr-1" />
+                  {{ $t('chat.videoAsDocument') }}
+                </Button>
+              </div>
+            </div>
+
+            <!-- Notice when video > 16 MB is routed to document -->
+            <div
+              v-if="selectedFile.size > 15.5 * 1024 * 1024 && selectedMediaType === 'document'"
+              class="text-xs text-amber-400/90 bg-amber-500/10 border border-amber-500/20 rounded-md p-2 flex items-start gap-2"
+            >
+              <Info class="h-4 w-4 shrink-0 mt-0.5" />
+              <span>{{ $t('chat.videoTooLargeForChat') }}</span>
+            </div>
+
+            <!-- Optional client-side video optimizer -->
+            <Button
+              v-if="canOptimizeVideo(selectedFile) && selectedFile.size > 15.5 * 1024 * 1024"
+              type="button"
+              variant="outline"
+              size="sm"
+              class="w-full text-xs h-8 border-dashed"
+              :disabled="isOptimizingVideo"
+              @click="handleOptimizeVideo"
+            >
+              <Loader2 v-if="isOptimizingVideo" class="mr-1.5 h-3.5 w-3.5 animate-spin" />
+              <Sparkles v-else class="mr-1.5 h-3.5 w-3.5 text-primary" />
+              {{ isOptimizingVideo ? $t('chat.optimizingVideo') : $t('chat.optimizeVideo') }}
+            </Button>
           </div>
 
           <!-- Caption input (not for audio) -->

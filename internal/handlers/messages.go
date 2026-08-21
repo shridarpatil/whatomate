@@ -172,15 +172,39 @@ func (a *App) SendOutgoingMessage(ctx context.Context, req OutgoingMessageReques
 		case models.MessageTypeImage, models.MessageTypeVideo, models.MessageTypeAudio, models.MessageTypeDocument:
 			// Upload media if MediaData is provided and MediaID is not set
 			mediaID := req.MediaID
+			actualType := req.Type
+			uploadMime := req.MediaMimeType
+			filename := req.MediaFilename
+
+			// Meta's WhatsApp Cloud API strictly caps native inline `video` messages to 16 MB.
+			// If a video exceeds 16 MB (or is sent as document), upload with document MIME
+			// and deliver via SendDocumentMessage (supported up to 100 MB).
+			if actualType == models.MessageTypeVideo && len(req.MediaData) > 16*1024*1024 {
+				actualType = models.MessageTypeDocument
+				uploadMime = "application/octet-stream"
+				if filename == "" {
+					filename = "video.mp4"
+				}
+			}
+
 			if mediaID == "" && len(req.MediaData) > 0 {
 				var err error
-				mediaID, err = a.WhatsApp.UploadMedia(sendCtx, waAccount, req.MediaData, req.MediaMimeType, req.MediaFilename)
+				mediaID, err = a.WhatsApp.UploadMedia(sendCtx, waAccount, req.MediaData, uploadMime, filename)
+				if err != nil && actualType == models.MessageTypeVideo && strings.Contains(err.Error(), "File Too Large") {
+					// Fallback: If Meta rejected with File Too Large on a near-limit video, retry upload as document
+					a.Log.Warn("Video upload exceeded Meta limit, falling back to document", "error", err)
+					actualType = models.MessageTypeDocument
+					if filename == "" {
+						filename = "video.mp4"
+					}
+					mediaID, err = a.WhatsApp.UploadMedia(sendCtx, waAccount, req.MediaData, "application/octet-stream", filename)
+				}
 				if err != nil {
 					return "", fmt.Errorf("failed to upload media: %w", err)
 				}
 			}
 			// Send the appropriate media type
-			switch req.Type {
+			switch actualType {
 			case models.MessageTypeImage:
 				return a.WhatsApp.SendImageMessage(sendCtx, waAccount, rcpt, mediaID, req.Caption)
 			case models.MessageTypeVideo:
@@ -188,7 +212,10 @@ func (a *App) SendOutgoingMessage(ctx context.Context, req OutgoingMessageReques
 			case models.MessageTypeAudio:
 				return a.WhatsApp.SendAudioMessage(sendCtx, waAccount, rcpt, mediaID)
 			default: // document
-				return a.WhatsApp.SendDocumentMessage(sendCtx, waAccount, rcpt, mediaID, req.MediaFilename, req.Caption)
+				if filename == "" {
+					filename = "file"
+				}
+				return a.WhatsApp.SendDocumentMessage(sendCtx, waAccount, rcpt, mediaID, filename, req.Caption)
 			}
 
 		case models.MessageTypeInteractive:
