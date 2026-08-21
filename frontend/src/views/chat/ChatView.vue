@@ -1577,69 +1577,131 @@ function openFilePicker() {
   fileInputRef.value?.click()
 }
 
-async function handleFileSelect(event: Event) {
-  const input = event.target as HTMLInputElement
-  const file = input.files?.[0]
-  input.value = '' // reset so the same file can be selected again
-  if (!file) return
-
-  // Validate file type
-  const allowedTypes = ['image/', 'video/', 'audio/', 'application/pdf', 'application/msword', 'application/vnd.openxmlformats-officedocument']
-  const isAllowed = allowedTypes.some(type => file.type.startsWith(type))
-  if (!isAllowed) {
-    toast.error(t('chat.unsupportedFileType'), {
-      description: t('chat.unsupportedFileTypeDesc')
-    })
-    return
+// Per-type client size cap, applied AFTER compression:
+// - Images: Meta's hard 5 MB limit (downscaled/recompressed to <4.5 MB by imageCompression.ts).
+// - Audio: Meta's hard 16 MB limit (15.5 MB safety threshold).
+// - Videos: Up to 100 MB (server automatically transcodes/compresses with FFmpeg to fit WhatsApp's 16 MB video limit).
+// - Documents: Meta's official 100 MB limit.
+function mediaSizeLimit(type: string): number {
+  switch (type) {
+    case 'image':
+      return 5 * 1024 * 1024
+    case 'audio':
+      return 15.5 * 1024 * 1024
+    case 'video':
+      return 100 * 1024 * 1024
+    default:
+      return 100 * 1024 * 1024
   }
+}
 
-  // Compress images client-side so they fit the Cloud API's 5 MB image limit
-  // (Meta accepts only jpeg/png for `image` messages). No-op for non-images.
-  let outFile = file
-  if (file.type.startsWith('image/')) {
-    try {
-      outFile = await compressImage(file)
-    } catch {
-      outFile = file
-    }
-  }
-
-  let type = getMediaType(outFile.type)
-
-  // Meta's WhatsApp Cloud API strictly limits native inline videos to 16 MB.
-  // If a video is > 15.5 MB (up to 100 MB), automatically set type to 'document'.
-  if (type === 'video' && outFile.size > 15.5 * 1024 * 1024) {
-    if (outFile.size <= 100 * 1024 * 1024) {
-      type = 'document'
-    }
-  }
-
-  // Per-type size validation:
-  // - Images: 5 MB (Meta limit)
-  // - Audio / Inline Video: 15.5 MB (Meta 16 MB limit)
-  // - Documents (including large videos): 100 MB (Meta limit)
-  const maxSize = type === 'image' ? 5 * 1024 * 1024 : (type === 'document' ? 100 * 1024 * 1024 : 15.5 * 1024 * 1024)
-  if (outFile.size > maxSize) {
-    toast.error(t('chat.fileTooLarge'), {
-      description: outFile.size > 100 * 1024 * 1024
-        ? t('chat.fileTooLarge100MB')
-        : (type === 'image' ? t('chat.fileTooLargeImage') : t('chat.fileTooLargeMedia'))
-    })
-    return
-  }
-
-  selectedFile.value = outFile
-  selectedMediaType.value = type as any
-  mediaCaption.value = ''
-
-  // Create preview URL for images and videos
-  if (outFile.type.startsWith('image/') || outFile.type.startsWith('video/')) {
-    filePreviewUrl.value = URL.createObjectURL(outFile)
-  } else {
-    filePreviewUrl.value = null
-  }
+// Shared core: validate, compress images, and add files to the send queue. Used
+// by the file picker, drag-and-drop and paste so all three batch the same way.
+async function enqueueFiles(files: File[]) {
+  if (isUploadingMedia.value) return // don't mutate the queue mid-send
+  const accepted = files.filter(f => {
+    if (isAllowedMediaType(f)) return true
+    toast.error(t('chat.unsupportedFileType'), { description: t('chat.unsupportedFileTypeDesc') })
+    return false
+  })
+  if (!accepted.length) return
 
   isMediaDialogOpen.value = true
+  isCompressing.value = true
+  try {
+    for (const raw of accepted) {
+      // Sequential (not parallel) to bound peak memory when decoding big images.
+      let file = raw
+      if (raw.type.startsWith('image/')) {
+        try {
+          file = await compressImage(raw)
+        } catch {
+          file = raw
+        }
+      }
+      const type = getMediaType(file.type) as QueuedMedia['type']
+
+      const limit = mediaSizeLimit(type)
+      if (file.size > limit) {
+        toast.error(t('chat.fileTooLarge'), {
+          description: file.size > 100 * 1024 * 1024
+            ? t('chat.fileTooLarge100MB')
+            : (type === 'image' ? t('chat.fileTooLargeImage') : t('chat.fileTooLargeMedia')),
+        })
+        continue
+      }
+      const previewable = file.type.startsWith('image/') || file.type.startsWith('video/')
+      mediaQueue.value.push({
+        id: crypto.randomUUID(),
+        file,
+        previewUrl: previewable ? URL.createObjectURL(file) : null,
+        caption: '',
+        type,
+      })
+    }
+  } finally {
+    isCompressing.value = false
+    if (!mediaQueue.value.length) {
+      isMediaDialogOpen.value = false // everything got rejected
+    } else if (!activeMediaId.value || !mediaQueue.value.some(m => m.id === activeMediaId.value)) {
+      activeMediaId.value = mediaQueue.value[0].id
+    }
+  }
+}
+
+function handleFileSelect(event: Event) {
+  const input = event.target as HTMLInputElement
+  const files = Array.from(input.files ?? [])
+  input.value = '' // reset so the same file(s) can be selected again
+  if (files.length) enqueueFiles(files)
+}
+
+// Drag-and-drop a file onto the open conversation pane.
+function onDragEnter(event: DragEvent) {
+  if (!contactsStore.currentContact) return
+  if (!event.dataTransfer?.types?.includes('Files')) return
+  dragDepth++
+  isDragging.value = true
+}
+
+function onDragLeave() {
+  dragDepth--
+  if (dragDepth <= 0) {
+    dragDepth = 0
+    isDragging.value = false
+  }
+}
+
+function onDrop(event: DragEvent) {
+  isDragging.value = false
+  dragDepth = 0
+  if (!contactsStore.currentContact) return
+  const files = Array.from(event.dataTransfer?.files ?? [])
+  if (files.length) enqueueFiles(files)
+}
+
+// Paste (Ctrl+V) image(s)/file(s) into the composer (e.g. a screenshot).
+function handlePaste(event: ClipboardEvent) {
+  const items = event.clipboardData?.items
+  if (!items) return
+  const files: File[] = []
+  for (let i = 0; i < items.length; i++) {
+    if (items[i].kind === 'file') {
+      const f = items[i].getAsFile()
+      if (f) files.push(f)
+    }
+  }
+  if (files.length) {
+    event.preventDefault()
+    enqueueFiles(files)
+  }
+}
+
+function revokeMediaPreviews() {
+  for (const m of mediaQueue.value) {
+    if (m.previewUrl) URL.revokeObjectURL(m.previewUrl)
+  }
+>>>>>>> cdc391a (feat(media): automatic server-side FFmpeg compression for WhatsApp videos up to 100MB)
 }
 
 function closeMediaDialog() {
@@ -2819,8 +2881,6 @@ async function sendMediaMessage() {
                   variant="ghost"
                   class="h-7 px-2.5 text-xs rounded-md"
                   :class="selectedMediaType === 'video' ? 'bg-primary/20 text-primary font-medium' : 'text-muted-foreground'"
-                  :disabled="selectedFile.size > 15.5 * 1024 * 1024"
-                  :title="selectedFile.size > 15.5 * 1024 * 1024 ? $t('chat.videoTooLargeForChat') : ''"
                   @click="selectedMediaType = 'video'"
                 >
                   <Film class="h-3.5 w-3.5 mr-1" />
@@ -2840,13 +2900,13 @@ async function sendMediaMessage() {
               </div>
             </div>
 
-            <!-- Notice when video > 16 MB is routed to document -->
+            <!-- Notice when video is large -->
             <div
-              v-if="selectedFile.size > 15.5 * 1024 * 1024 && selectedMediaType === 'document'"
-              class="text-xs text-amber-400/90 bg-amber-500/10 border border-amber-500/20 rounded-md p-2 flex items-start gap-2"
+              v-if="selectedFile && selectedFile.size > 15.5 * 1024 * 1024 && selectedMediaType === 'video'"
+              class="text-xs text-blue-400/90 bg-blue-500/10 border border-blue-500/20 rounded-md p-2 flex items-start gap-2"
             >
               <Info class="h-4 w-4 shrink-0 mt-0.5" />
-              <span>{{ $t('chat.videoTooLargeForChat') }}</span>
+              <span>{{ $t('chat.videoAutoOptimized') }}</span>
             </div>
           </div>
 

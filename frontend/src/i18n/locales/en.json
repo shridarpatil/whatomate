@@ -386,6 +386,7 @@
     "videoAsVideo": "Video in chat",
     "videoAsDocument": "Document (up to 100 MB)",
     "videoTooLargeForChat": "Videos over 16 MB are sent as documents per official WhatsApp limits.",
+    "videoAutoOptimized": "Large videos are automatically optimized by the server to meet WhatsApp's 16 MB limit.",
     "optimizeVideo": "⚡ Optimize for chat (<16 MB)",
     "optimizingVideo": "Optimizing video…",
     "videoOptimizedSuccess": "Video optimized successfully for in-chat playback",

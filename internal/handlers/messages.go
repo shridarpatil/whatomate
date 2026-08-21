@@ -260,12 +260,20 @@ func (a *App) SendOutgoingMessage(ctx context.Context, req OutgoingMessageReques
 			filename := req.MediaFilename
 			uploadMime := sanitizeMetaMimeType(req.MediaMimeType, filename, req.MediaData)
 
-			// Meta's WhatsApp Cloud API strictly caps native inline `video` messages to 16 MB.
-			// If a video exceeds 16 MB, route delivery to SendDocumentMessage (supported up to 100 MB).
-			if actualType == models.MessageTypeVideo && len(req.MediaData) > 16*1024*1024 {
-				actualType = models.MessageTypeDocument
-				if filename == "" {
-					filename = "video.mp4"
+			// If video exceeds Meta's 16 MB limit or if client uploaded a raw smartphone video (>15MB),
+			// automatically transcode/compress with FFmpeg to standard WhatsApp H.264/AAC MP4 (<15.5 MB).
+			if actualType == models.MessageTypeVideo && len(req.MediaData) > 15*1024*1024 {
+				a.Log.Info("Video payload exceeds Meta 16MB limit, compressing with FFmpeg",
+					"original_size_bytes", len(req.MediaData))
+				compressed, err := compressVideoForWhatsApp(req.MediaData)
+				if err == nil && len(compressed) > 0 {
+					a.Log.Info("Video compressed successfully with FFmpeg",
+						"original_size_bytes", len(req.MediaData),
+						"compressed_size_bytes", len(compressed))
+					req.MediaData = compressed
+					uploadMime = "video/mp4"
+				} else {
+					a.Log.Warn("Failed to compress video with FFmpeg, attempting upload as is", "error", err)
 				}
 			}
 
@@ -273,13 +281,13 @@ func (a *App) SendOutgoingMessage(ctx context.Context, req OutgoingMessageReques
 				var err error
 				mediaID, err = a.WhatsApp.UploadMedia(sendCtx, waAccount, req.MediaData, uploadMime, filename)
 				if err != nil && actualType == models.MessageTypeVideo && (strings.Contains(err.Error(), "File Too Large") || strings.Contains(err.Error(), "No video stream")) {
-					// Fallback: If Meta rejected with File Too Large on video upload, retry as document
-					a.Log.Warn("Video upload rejected by Meta, falling back to document", "error", err)
-					actualType = models.MessageTypeDocument
-					if filename == "" {
-						filename = "video.mp4"
+					// Fallback: If Meta rejected with File Too Large or codec error, try compressing with FFmpeg
+					a.Log.Warn("Video upload rejected by Meta, retrying after FFmpeg compression", "error", err)
+					compressed, compErr := compressVideoForWhatsApp(req.MediaData)
+					if compErr == nil && len(compressed) > 0 {
+						req.MediaData = compressed
+						mediaID, err = a.WhatsApp.UploadMedia(sendCtx, waAccount, req.MediaData, "video/mp4", filename)
 					}
-					mediaID, err = a.WhatsApp.UploadMedia(sendCtx, waAccount, req.MediaData, uploadMime, filename)
 				}
 				if err != nil {
 					return "", fmt.Errorf("failed to upload media: %w", err)

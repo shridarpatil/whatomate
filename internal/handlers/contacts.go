@@ -829,6 +829,20 @@ func (a *App) SendMediaMessage(r *fastglue.Request) error {
 		return r.SendErrorEnvelope(fasthttp.StatusBadRequest, err.Error(), nil, "")
 	}
 
+	// Compress video with FFmpeg if size exceeds WhatsApp 15MB threshold
+	if strings.HasPrefix(mimeType, "video/") || mediaType == string(models.MessageTypeVideo) {
+		if len(fileData) > 15*1024*1024 {
+			a.Log.Info("Compressing uploaded video with FFmpeg for WhatsApp compliance", "original_size", len(fileData))
+			if compressed, err := compressVideoForWhatsApp(fileData); err == nil && len(compressed) > 0 {
+				a.Log.Info("Video compressed successfully", "original_size", len(fileData), "compressed_size", len(compressed))
+				fileData = compressed
+				mimeType = "video/mp4"
+			} else {
+				a.Log.Warn("FFmpeg video compression failed or unavailable, proceeding with original", "error", err)
+			}
+		}
+	}
+
 	// Save file locally first
 	localPath, err := a.saveMediaLocally(fileData, mimeType, fileHeader.Filename)
 	if err != nil {
