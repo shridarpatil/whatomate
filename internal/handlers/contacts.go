@@ -807,11 +807,9 @@ func (a *App) SendMediaMessage(r *fastglue.Request) error {
 		return r.SendErrorEnvelope(fasthttp.StatusInternalServerError, "Failed to read file data", nil, "")
 	}
 
-	// Get MIME type
-	mimeType := fileHeader.Header.Get("Content-Type")
-	if mimeType == "" {
-		mimeType = "application/octet-stream"
-	}
+	// Get and sanitize MIME type for WhatsApp Cloud API compatibility
+	rawMime := fileHeader.Header.Get("Content-Type")
+	mimeType := sanitizeMetaMimeType(rawMime, fileHeader.Filename, fileData)
 
 	// Get contact (users without full read permission can only message their assigned contacts)
 	var contact models.Contact

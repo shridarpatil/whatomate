@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"net/url"
 	"path"
+	"path/filepath"
 	"strings"
 	"time"
 
@@ -142,6 +143,89 @@ func SLASendOptions() MessageSendOptions {
 	}
 }
 
+// sanitizeMetaMimeType ensures the MIME type provided to Meta Cloud API /media upload
+// is strictly one of Meta's accepted MIME types, inferring from file extension or magic bytes
+// when generic (e.g. application/octet-stream) or empty.
+func sanitizeMetaMimeType(mimeType, filename string, data []byte) string {
+	mimeType = strings.ToLower(strings.TrimSpace(mimeType))
+	ext := strings.ToLower(filepath.Ext(filename))
+
+	// If mimeType is already one of Meta's supported MIME types (and not generic octet-stream), use it
+	switch mimeType {
+	case "audio/aac", "audio/mp4", "audio/mpeg", "audio/amr", "audio/ogg", "audio/opus",
+		"application/vnd.ms-powerpoint", "application/msword",
+		"application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+		"application/vnd.openxmlformats-officedocument.presentationml.presentation",
+		"application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+		"application/pdf", "text/plain", "application/vnd.ms-excel",
+		"image/jpeg", "image/png", "image/webp", "video/mp4", "video/3gpp":
+		return mimeType
+	}
+
+	// Infer from file extension
+	switch ext {
+	case ".mp4", ".m4v", ".mov":
+		return "video/mp4"
+	case ".3gp", ".3gpp":
+		return "video/3gpp"
+	case ".pdf":
+		return "application/pdf"
+	case ".jpg", ".jpeg":
+		return "image/jpeg"
+	case ".png":
+		return "image/png"
+	case ".webp":
+		return "image/webp"
+	case ".mp3":
+		return "audio/mpeg"
+	case ".m4a":
+		return "audio/mp4"
+	case ".aac":
+		return "audio/aac"
+	case ".ogg", ".opus":
+		return "audio/ogg"
+	case ".amr":
+		return "audio/amr"
+	case ".txt":
+		return "text/plain"
+	case ".doc":
+		return "application/msword"
+	case ".docx":
+		return "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+	case ".xls":
+		return "application/vnd.ms-excel"
+	case ".xlsx":
+		return "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+	case ".ppt":
+		return "application/vnd.ms-powerpoint"
+	case ".pptx":
+		return "application/vnd.openxmlformats-officedocument.presentationml.presentation"
+	}
+
+	// Fallback to http.DetectContentType if available
+	if len(data) > 0 {
+		detected := http.DetectContentType(data)
+		switch {
+		case strings.HasPrefix(detected, "image/jpeg"):
+			return "image/jpeg"
+		case strings.HasPrefix(detected, "image/png"):
+			return "image/png"
+		case strings.HasPrefix(detected, "image/webp"):
+			return "image/webp"
+		case strings.HasPrefix(detected, "application/pdf"):
+			return "application/pdf"
+		case strings.HasPrefix(detected, "video/"):
+			return "video/mp4"
+		case strings.HasPrefix(detected, "audio/"):
+			return "audio/mpeg"
+		case strings.HasPrefix(detected, "text/"):
+			return "text/plain"
+		}
+	}
+
+	return "application/pdf"
+}
+
 // SendOutgoingMessage is the unified method for sending all types of WhatsApp messages.
 // It handles: text, media (image/video/audio/document), interactive (buttons/list/cta_url), and template messages.
 func (a *App) SendOutgoingMessage(ctx context.Context, req OutgoingMessageRequest, opts MessageSendOptions) (*models.Message, error) {
@@ -173,37 +257,29 @@ func (a *App) SendOutgoingMessage(ctx context.Context, req OutgoingMessageReques
 			// Upload media if MediaData is provided and MediaID is not set
 			mediaID := req.MediaID
 			actualType := req.Type
-			uploadMime := req.MediaMimeType
 			filename := req.MediaFilename
+			uploadMime := sanitizeMetaMimeType(req.MediaMimeType, filename, req.MediaData)
 
 			// Meta's WhatsApp Cloud API strictly caps native inline `video` messages to 16 MB.
-			// If a video exceeds 16 MB (or is sent as document), upload with document MIME
-			// and deliver via SendDocumentMessage (supported up to 100 MB).
+			// If a video exceeds 16 MB, route delivery to SendDocumentMessage (supported up to 100 MB).
 			if actualType == models.MessageTypeVideo && len(req.MediaData) > 16*1024*1024 {
 				actualType = models.MessageTypeDocument
-				uploadMime = "application/octet-stream"
 				if filename == "" {
 					filename = "video.mp4"
 				}
 			}
 
-			// If sending as document, always use application/octet-stream for video/audio files so Meta's
-			// media upload endpoint does not run strict container/codec validations on document payloads.
-			if actualType == models.MessageTypeDocument && (strings.HasPrefix(uploadMime, "video/") || strings.HasPrefix(uploadMime, "audio/")) {
-				uploadMime = "application/octet-stream"
-			}
-
 			if mediaID == "" && len(req.MediaData) > 0 {
 				var err error
 				mediaID, err = a.WhatsApp.UploadMedia(sendCtx, waAccount, req.MediaData, uploadMime, filename)
-				if err != nil && actualType == models.MessageTypeVideo && (strings.Contains(err.Error(), "File Too Large") || strings.Contains(err.Error(), "No video stream") || strings.Contains(err.Error(), "(#100)")) {
-					// Fallback: If Meta rejected with File Too Large or codec error on video upload, retry as document
+				if err != nil && actualType == models.MessageTypeVideo && (strings.Contains(err.Error(), "File Too Large") || strings.Contains(err.Error(), "No video stream")) {
+					// Fallback: If Meta rejected with File Too Large on video upload, retry as document
 					a.Log.Warn("Video upload rejected by Meta, falling back to document", "error", err)
 					actualType = models.MessageTypeDocument
 					if filename == "" {
 						filename = "video.mp4"
 					}
-					mediaID, err = a.WhatsApp.UploadMedia(sendCtx, waAccount, req.MediaData, "application/octet-stream", filename)
+					mediaID, err = a.WhatsApp.UploadMedia(sendCtx, waAccount, req.MediaData, uploadMime, filename)
 				}
 				if err != nil {
 					return "", fmt.Errorf("failed to upload media: %w", err)
