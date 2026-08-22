@@ -1832,8 +1832,6 @@
     "systemPrompt": "प्रॉम्प्ट",
     "systemPromptPlaceholder": "सहायक",
     "maxButtonsError": "10 बटन",
-    "greetingButtonsRequired": "शीर्षक चाहिए",
-    "fallbackButtonsRequired": "शीर्षक चाहिए",
     "messagesSaved": "सहेजे गए",
     "agentSettingsSaved": "सहेजे गए",
     "businessHoursSaved": "सहेजे गए",
