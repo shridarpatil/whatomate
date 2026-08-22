@@ -1621,6 +1621,9 @@ func (a *App) saveIncomingMessage(account *models.WhatsAppAccount, contact *mode
 		ContactName:     contact.ProfileName,
 		MessageType:     models.MessageType(msgType),
 		Content:         content,
+		MediaURL:        message.MediaURL,
+		MediaMimeType:   message.MediaMimeType,
+		MediaFilename:   message.MediaFilename,
 		WhatsAppAccount: account.Name,
 		Direction:       models.DirectionIncoming,
 	})

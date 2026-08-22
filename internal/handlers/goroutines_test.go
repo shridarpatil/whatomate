@@ -2,6 +2,7 @@ package handlers_test
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
@@ -468,4 +469,70 @@ func TestApp_DispatchWebhook_MultipleEvents(t *testing.T) {
 	// Verify each webhook was called for its event
 	assert.Equal(t, int32(1), incomingCount.Load(), "incoming webhook should be called once")
 	assert.Equal(t, int32(1), outgoingCount.Load(), "outgoing webhook should be called once")
+}
+
+func TestApp_DispatchWebhook_MessageEventWithMedia(t *testing.T) {
+	t.Parallel()
+
+	app := newTestApp(t)
+
+	org := &models.Organization{
+		BaseModel: models.BaseModel{ID: uuid.New()},
+		Name:      "test-org-media-webhook",
+		Slug:      "test-org-media-webhook-" + uuid.New().String()[:8],
+	}
+	require.NoError(t, app.DB.Create(org).Error)
+
+	clearWebhookCache(t, app.Redis, org.ID)
+	t.Cleanup(func() { clearWebhookCache(t, app.Redis, org.ID) })
+
+	var receivedPayload struct {
+		Event string `json:"event"`
+		Data  struct {
+			MessageID     string `json:"message_id"`
+			MediaURL      string `json:"media_url"`
+			MediaMimeType string `json:"media_mime_type"`
+			MediaFilename string `json:"media_filename"`
+		} `json:"data"`
+	}
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		err := json.NewDecoder(r.Body).Decode(&receivedPayload)
+		if err != nil {
+			t.Errorf("failed to decode webhook body: %v", err)
+		}
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer server.Close()
+
+	webhook := &models.Webhook{
+		BaseModel:      models.BaseModel{ID: uuid.New()},
+		OrganizationID: org.ID,
+		Name:           "test-media-webhook",
+		URL:            server.URL,
+		Events:         models.StringArray{"message.incoming"},
+		IsActive:       true,
+	}
+	require.NoError(t, app.DB.Create(webhook).Error)
+
+	eventData := handlers.MessageEventData{
+		MessageID:     "msg-123",
+		ContactID:     "contact-123",
+		ContactPhone:  "1234567890",
+		ContactName:   "Test Contact",
+		MessageType:   "image",
+		Content:       "",
+		MediaURL:      "images/test-image.jpg",
+		MediaMimeType: "image/jpeg",
+		MediaFilename: "test-image.jpg",
+	}
+
+	app.DispatchWebhook(org.ID, models.WebhookEventMessageIncoming, eventData)
+	app.WaitForBackgroundTasks()
+
+	assert.Equal(t, "message.incoming", receivedPayload.Event)
+	assert.Equal(t, "msg-123", receivedPayload.Data.MessageID)
+	assert.Equal(t, "images/test-image.jpg", receivedPayload.Data.MediaURL)
+	assert.Equal(t, "image/jpeg", receivedPayload.Data.MediaMimeType)
+	assert.Equal(t, "test-image.jpg", receivedPayload.Data.MediaFilename)
 }
