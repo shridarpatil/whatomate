@@ -637,6 +637,50 @@ func TestSaveIncomingMessage_WithReplyContext(t *testing.T) {
 	assert.Equal(t, originalMsg.ID, *replyMsg.ReplyToMessageID)
 }
 
+// TestSaveIncomingMessage_ReplyToBusinessSentMessage exercises the
+// cross-perspective WAMID fallback: when a customer replies to a message the
+// business SENT, Meta's inbound context.id carries the recipient-perspective
+// WAMID, which differs (in the phone-encoded prefix + type indicator) from the
+// sender-perspective WAMID stored on the outbound row. Only the unique suffix
+// after "FQIA" + 4 chars is stable, so the reply must still resolve via the
+// LIKE-suffix fallback rather than the exact match.
+func TestSaveIncomingMessage_ReplyToBusinessSentMessage(t *testing.T) {
+	app := newProcessorTestApp(t)
+	org, account := createProcessorTestOrg(t, app)
+	contact := testutil.CreateTestContact(t, app.DB, org.ID)
+
+	// The unique message-id suffix is identical from both perspectives.
+	suffix := "gBBy" + uuid.New().String()[:12]
+	// Outbound (business-sent) message stores the sender-perspective WAMID.
+	sentWAMID := "wamid.HBgLc2VuZGVyUGhvbmU" + "FQIA" + "EhgS" + suffix
+	// The inbound reply's context.id is the recipient-perspective WAMID:
+	// different prefix + type indicator, same suffix. Exact match must miss.
+	replyContextWAMID := "wamid.HBgLcmVjaXBpZW50Tm8" + "FQIA" + "ERgU" + suffix
+	require.NotEqual(t, sentWAMID, replyContextWAMID)
+
+	sentMsg := models.Message{
+		BaseModel:         models.BaseModel{ID: uuid.New()},
+		OrganizationID:    org.ID,
+		WhatsAppAccount:   account.Name,
+		ContactID:         contact.ID,
+		WhatsAppMessageID: sentWAMID,
+		Direction:         models.DirectionOutgoing,
+		MessageType:       models.MessageTypeText,
+		Content:           "Message the business sent",
+		Status:            models.MessageStatusSent,
+	}
+	require.NoError(t, app.DB.Create(&sentMsg).Error)
+
+	replyWAMID := "wamid.reply_" + uuid.New().String()[:8]
+	app.saveIncomingMessage(account, contact, replyWAMID, "text", "Replying to your message", nil, replyContextWAMID)
+
+	var replyMsg models.Message
+	require.NoError(t, app.DB.Where("whats_app_message_id = ?", replyWAMID).First(&replyMsg).Error)
+	assert.True(t, replyMsg.IsReply, "reply to a business-sent message should resolve via the WAMID suffix fallback")
+	require.NotNil(t, replyMsg.ReplyToMessageID)
+	assert.Equal(t, sentMsg.ID, *replyMsg.ReplyToMessageID)
+}
+
 func TestSaveIncomingMessage_LongContent(t *testing.T) {
 	app := newProcessorTestApp(t)
 	org, account := createProcessorTestOrg(t, app)

@@ -1278,6 +1278,28 @@ type Reaction struct {
 	FromUser  string `json:"from_user,omitempty"`  // User ID if from agent
 }
 
+// resolveMessageByWAMID looks up a stored message by its WhatsApp message ID.
+// WhatsApp encodes the peer's phone number into the WAMID prefix, so the same
+// message carries a different WAMID from the sender's vs the recipient's
+// perspective. When the exact match fails (e.g. a customer replies to or
+// reacts to a message the business sent, whose stored WAMID is the sender-side
+// value), fall back to matching on the unique suffix after "FQIA" + a 4-char
+// type indicator (e.g. "ERgS", "EhgU"), which is stable across perspectives.
+func (a *App) resolveMessageByWAMID(wamid string) (*models.Message, bool) {
+	var m models.Message
+	if err := a.DB.Where("whats_app_message_id = ?", wamid).First(&m).Error; err == nil {
+		return &m, true
+	}
+	if idx := strings.Index(wamid, "FQIA"); idx != -1 {
+		if start := idx + 8; start < len(wamid) {
+			if err := a.DB.Where("whats_app_message_id LIKE ?", "%"+wamid[start:]).First(&m).Error; err == nil {
+				return &m, true
+			}
+		}
+	}
+	return nil, false
+}
+
 // handleIncomingReaction handles incoming reaction messages from WhatsApp
 func (a *App) handleIncomingReaction(account *models.WhatsAppAccount, fromPhone, messageWAMID, emoji, profileName string) {
 	a.Log.Info("Handling incoming reaction",
@@ -1286,30 +1308,12 @@ func (a *App) handleIncomingReaction(account *models.WhatsAppAccount, fromPhone,
 		"emoji", emoji,
 	)
 
-	// Find the message being reacted to
-	// WhatsApp encodes phone numbers in the WAMID prefix, so the same message
-	// has different WAMIDs from sender vs recipient perspective.
-	// We match on the suffix after "FQIA" + 4 chars (type indicator like "ERgS" or "EhgU")
-	var message models.Message
-	if err := a.DB.Where("whats_app_message_id = ?", messageWAMID).First(&message).Error; err != nil {
-		// Try matching on WAMID suffix (the unique message ID part)
-		if idx := strings.Index(messageWAMID, "FQIA"); idx != -1 {
-			// Extract suffix after "FQIA" + 4 char type indicator (e.g., "ERgS", "EhgU")
-			suffixStart := idx + 8
-			if suffixStart < len(messageWAMID) {
-				suffix := messageWAMID[suffixStart:]
-				if err := a.DB.Where("whats_app_message_id LIKE ?", "%"+suffix).First(&message).Error; err != nil {
-					a.Log.Warn("Message not found for reaction", "wamid", messageWAMID, "suffix", suffix)
-					return
-				}
-			} else {
-				a.Log.Warn("Message not found for reaction - invalid WAMID format", "wamid", messageWAMID)
-				return
-			}
-		} else {
-			a.Log.Warn("Message not found for reaction - no FQIA pattern", "wamid", messageWAMID)
-			return
-		}
+	// Find the message being reacted to (exact match, with the cross-perspective
+	// WAMID fallback — see resolveMessageByWAMID).
+	message, ok := a.resolveMessageByWAMID(messageWAMID)
+	if !ok {
+		a.Log.Warn("Message not found for reaction", "wamid", messageWAMID)
+		return
 	}
 
 	// Get or create contact
@@ -1360,7 +1364,7 @@ func (a *App) handleIncomingReaction(account *models.WhatsAppAccount, fromPhone,
 	metadata["reactions"] = newReactions
 
 	// Save to database
-	if err := a.DB.Model(&message).Update("metadata", metadata).Error; err != nil {
+	if err := a.DB.Model(message).Update("metadata", metadata).Error; err != nil {
 		a.Log.Error("Failed to update message reactions", "error", err)
 		return
 	}
@@ -1558,10 +1562,12 @@ func (a *App) saveIncomingMessage(account *models.WhatsAppAccount, contact *mode
 		Status:            models.MessageStatusReceived,
 	}
 
-	// Handle reply context - look up the original message by WhatsApp message ID
+	// Handle reply context - look up the original message by WhatsApp message ID.
+	// Uses the cross-perspective WAMID fallback so replies to messages the
+	// business sent (whose stored WAMID differs from the context.id Meta sends
+	// on the inbound reply) still resolve. See resolveMessageByWAMID.
 	if replyToWAMID != "" {
-		var replyToMsg models.Message
-		if err := a.DB.Where("whats_app_message_id = ?", replyToWAMID).First(&replyToMsg).Error; err == nil {
+		if replyToMsg, ok := a.resolveMessageByWAMID(replyToWAMID); ok {
 			message.IsReply = true
 			message.ReplyToMessageID = &replyToMsg.ID
 		} else {
