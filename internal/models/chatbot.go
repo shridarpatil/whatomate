@@ -89,10 +89,14 @@ type ChatbotSettings struct {
 	IsEnabled       bool      `gorm:"default:false" json:"is_enabled"`
 
 	// Response settings
-	DefaultResponse string     `gorm:"type:text" json:"default_response"`
-	GreetingButtons JSONBArray `gorm:"type:jsonb;default:'[]'" json:"greeting_buttons"` // [{id, title}] - max 10 buttons
+	DefaultResponse string `gorm:"type:text" json:"default_response"`
+	// Buttons are [{id, title, type}] where type is "reply" (default) or "url"
+	// (which also carries a url field). Up to 10 reply buttons, or 2 CTA URL
+	// buttons; sendAndSaveInteractiveButtons enforces WhatsApp's rule that the
+	// two kinds cannot be mixed in one message.
+	GreetingButtons JSONBArray `gorm:"type:jsonb;default:'[]'" json:"greeting_buttons"`
 	FallbackMessage string     `gorm:"type:text" json:"fallback_message"`
-	FallbackButtons JSONBArray `gorm:"type:jsonb;default:'[]'" json:"fallback_buttons"` // [{id, title}] - max 10 buttons
+	FallbackButtons JSONBArray `gorm:"type:jsonb;default:'[]'" json:"fallback_buttons"`
 
 	// Embedded configs (all fields stored in same table)
 	BusinessHours    BusinessHoursConfig    `gorm:"embedded"`

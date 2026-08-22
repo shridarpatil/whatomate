@@ -311,6 +311,24 @@ func (a *App) UpdateChatbotSettings(r *fastglue.Request) error {
 		return r.SendErrorEnvelope(fasthttp.StatusBadRequest, "Invalid request body", nil, "")
 	}
 
+	// The greeting and fallback buttons go out as free-form interactive
+	// messages, which silently fail to send if the combination is not one Meta
+	// accepts. Reject at save time so the user sees why.
+	for _, field := range []struct {
+		label   string
+		buttons *[]map[string]any
+	}{
+		{"greeting_buttons", req.GreetingButtons},
+		{"fallback_buttons", req.FallbackButtons},
+	} {
+		if field.buttons == nil {
+			continue
+		}
+		if err := validateInteractiveButtons(interactiveButtonsFromMaps(*field.buttons)); err != nil {
+			return r.SendErrorEnvelope(fasthttp.StatusBadRequest, field.label+": "+err.Error(), nil, "")
+		}
+	}
+
 	// Get or create settings
 	var settings models.ChatbotSettings
 	isNew := false

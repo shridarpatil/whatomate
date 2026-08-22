@@ -2815,3 +2815,96 @@ func TestApp_GetKeywordRule_ResponseFields(t *testing.T) {
 		assert.NotEmpty(t, resp.Data.CreatedAt)
 	})
 }
+
+// Greeting and fallback buttons are sent as free-form interactive messages.
+// A combination Meta rejects produces no message at all — only a log line —
+// so the save has to fail loudly instead.
+func TestApp_UpdateChatbotSettings_RejectsUnsendableButtons(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name    string
+		field   string
+		buttons []map[string]any
+		wantMsg string
+	}{
+		{
+			name:    "greeting url button without a scheme",
+			field:   "greeting_buttons",
+			buttons: []map[string]any{{"id": "btn_1", "title": "Docs", "type": "url", "url": "example.com"}},
+			wantMsg: "greeting_buttons: button \"Docs\" needs an absolute http(s) URL",
+		},
+		{
+			name:  "greeting with two url buttons",
+			field: "greeting_buttons",
+			buttons: []map[string]any{
+				{"id": "btn_1", "title": "Docs", "type": "url", "url": "https://example.com"},
+				{"id": "btn_2", "title": "Blog", "type": "url", "url": "https://example.org"},
+			},
+			wantMsg: "greeting_buttons: only one URL button is allowed per message",
+		},
+		{
+			name:  "greeting with duplicate button ids",
+			field: "greeting_buttons",
+			buttons: []map[string]any{
+				{"id": "btn_2", "title": "Yes", "type": "reply"},
+				{"id": "btn_2", "title": "No", "type": "reply"},
+			},
+			wantMsg: "greeting_buttons: button ids must be unique, \"btn_2\" is used more than once",
+		},
+		{
+			name:    "fallback button title over the character cap",
+			field:   "fallback_buttons",
+			buttons: []map[string]any{{"id": "btn_1", "title": "This label is far too long for WhatsApp", "type": "reply"}},
+			wantMsg: `fallback_buttons: button title "This label is far too long for WhatsApp" exceeds 20 characters`,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			app := newTestApp(t)
+			org := testutil.CreateTestOrganization(t, app.DB)
+			user := testutil.CreateTestUser(t, app.DB, org.ID)
+
+			req := testutil.NewJSONRequest(t, map[string]any{tt.field: tt.buttons})
+			testutil.SetAuthContext(req, org.ID, user.ID)
+
+			err := app.UpdateChatbotSettings(req)
+			require.NoError(t, err)
+			assert.Equal(t, fasthttp.StatusBadRequest, testutil.GetResponseStatusCode(req))
+
+			var resp struct {
+				Status  string `json:"status"`
+				Message string `json:"message"`
+			}
+			require.NoError(t, json.Unmarshal(testutil.GetResponseBody(req), &resp))
+			assert.Equal(t, "error", resp.Status)
+			assert.Equal(t, tt.wantMsg, resp.Message)
+
+			// Nothing may be persisted when validation rejects the payload.
+			var count int64
+			require.NoError(t, app.DB.Model(&models.ChatbotSettings{}).
+				Where("organization_id = ?", org.ID).Count(&count).Error)
+			assert.Zero(t, count, "rejected settings must not be written")
+		})
+	}
+}
+
+func TestApp_UpdateChatbotSettings_AcceptsSingleURLButton(t *testing.T) {
+	t.Parallel()
+
+	app := newTestApp(t)
+	org := testutil.CreateTestOrganization(t, app.DB)
+	user := testutil.CreateTestUser(t, app.DB, org.ID)
+
+	req := testutil.NewJSONRequest(t, map[string]any{
+		"greeting_message": "Hi!",
+		"greeting_buttons": []map[string]any{
+			{"id": "btn_1", "title": "Visit docs", "type": "url", "url": "https://example.com/docs"},
+		},
+	})
+	testutil.SetAuthContext(req, org.ID, user.ID)
+
+	require.NoError(t, app.UpdateChatbotSettings(req))
+	assert.Equal(t, fasthttp.StatusOK, testutil.GetResponseStatusCode(req))
+}
