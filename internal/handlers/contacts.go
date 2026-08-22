@@ -1365,6 +1365,7 @@ func (a *App) CreateContact(r *fastglue.Request) error {
 			updates := map[string]any{}
 			if req.ProfileName != "" {
 				updates["profile_name"] = req.ProfileName
+				updates["name_manually_set"] = true
 			}
 			if req.WhatsAppAccount != "" {
 				updates["whats_app_account"] = req.WhatsAppAccount
@@ -1395,6 +1396,7 @@ func (a *App) CreateContact(r *fastglue.Request) error {
 		OrganizationID:  orgID,
 		PhoneNumber:     normalizedPhone,
 		ProfileName:     req.ProfileName,
+		NameManuallySet: req.ProfileName != "",
 		WhatsAppAccount: req.WhatsAppAccount,
 	}
 
@@ -1467,6 +1469,10 @@ func (a *App) UpdateContact(r *fastglue.Request) error {
 
 	if req.ProfileName != nil {
 		updates["profile_name"] = *req.ProfileName
+		// Flag the name as user-owned so incoming webhooks stop overwriting it
+		// with the WhatsApp profile name. Clearing the name hands control back
+		// to WhatsApp.
+		updates["name_manually_set"] = *req.ProfileName != ""
 	}
 	if req.WhatsAppAccount != nil {
 		updates["whats_app_account"] = *req.WhatsAppAccount
