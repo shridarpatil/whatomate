@@ -41,6 +41,29 @@ function showNotification(title: string, body: string, contactId: string) {
   })
 }
 
+// Show a real OS-level desktop notification (Web Notification API). Fires only
+// when permission is granted and the Whatomate tab/window is NOT focused, so an
+// agent working in another app/window still gets alerted. No service worker is
+// registered, so we use the Notification constructor directly. Falls back
+// silently when unsupported, denied, or the tab is already focused.
+let activeNotification: Notification | null = null
+function showDesktopNotification(title: string, body: string, contactId: string) {
+  if (typeof Notification === 'undefined' || Notification.permission !== 'granted') return
+  if (document.visibilityState === 'visible' && document.hasFocus()) return
+  try {
+    activeNotification?.close()
+    const n = new Notification(title, { body, icon: '/favicon.svg', tag: `chat-${contactId}` })
+    n.onclick = () => {
+      window.focus()
+      router.push(`/chat/${contactId}`)
+      n.close()
+    }
+    activeNotification = n
+  } catch {
+    // Some browsers throw when constructing Notification without a service worker; ignore.
+  }
+}
+
 // WebSocket message types
 const WS_TYPE_AUTH = 'auth'
 const WS_TYPE_NEW_MESSAGE = 'new_message'
@@ -320,23 +343,25 @@ class WebSocketService {
       })
     }
 
-    // Show toast notification for incoming messages if:
-    // 1. Message is incoming (from customer, not chatbot/agent)
-    // 2. Current user is assigned to this contact
-    // 3. User has new_message_alerts enabled
-    // 4. User is not currently viewing this contact
+    // Alert (sound + in-app toast + OS desktop notification) for incoming
+    // messages when the agent isn't already viewing this chat. Alerts fire for
+    // messages assigned to THIS agent OR unassigned/queue messages — so nothing
+    // is missed when vendors aren't watching the chat (incl. media-only first
+    // messages). Messages assigned to a DIFFERENT agent stay silent. Respects
+    // the user's new_message_alerts setting.
     if (payload.direction === 'incoming' && !isViewingThisContact) {
       const authStore = useAuthStore()
       const currentUserId = authStore.user?.id
       const settings = authStore.userSettings
 
-      // Check if user is assigned to this contact
       const isAssignedToUser = payload.assigned_user_id === currentUserId
+      const isUnassigned = !payload.assigned_user_id // "" or undefined => queue
+      const shouldAlert = isAssignedToUser || isUnassigned
 
       // Check if new message alerts are enabled (default to true if not set)
       const alertsEnabled = settings.new_message_alerts !== false
 
-      if (isAssignedToUser && alertsEnabled) {
+      if (shouldAlert && alertsEnabled) {
         const senderName = payload.profile_name || 'Unknown'
         const messagePreview = payload.content?.body || 'New message'
         const preview = messagePreview.length > 50
@@ -344,9 +369,10 @@ class WebSocketService {
           : messagePreview
         const contactId = payload.contact_id
 
-        // Play notification sound and show browser notification
+        // In-tab audio + in-app toast + OS-level desktop notification (backgrounded)
         playNotificationSound()
         showNotification(senderName, preview, contactId)
+        showDesktopNotification(senderName, preview, contactId)
       }
     }
 
