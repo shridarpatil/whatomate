@@ -1832,8 +1832,6 @@
     "systemPrompt": "System Prompt (optional)",
     "systemPromptPlaceholder": "You are a helpful customer service assistant",
     "maxButtonsError": "Maximum 10 buttons allowed",
-    "greetingButtonsRequired": "All greeting buttons must have a title",
-    "fallbackButtonsRequired": "All fallback buttons must have a title",
     "messagesSaved": "Messages settings saved",
     "agentSettingsSaved": "Agent settings saved",
     "businessHoursSaved": "Business hours saved",

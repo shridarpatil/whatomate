@@ -16,6 +16,7 @@ import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, Command
 import { PageHeader, AuditLogPanel } from '@/components/shared'
 import MessageButtonsEditor from '@/components/shared/MessageButtonsEditor.vue'
 import type { ButtonConfig } from '@/types/flow-preview'
+import { validateWhatsAppButtons } from '@/lib/whatsappButtons'
 import { toast } from 'vue-sonner'
 import { Bot, Loader2, Brain, X, Clock, AlertTriangle, UserPlus, MessageSquare, Users } from 'lucide-vue-next'
 import { chatbotService } from '@/services/api'
@@ -77,11 +78,6 @@ const defaultBusinessHours: BusinessHour[] = [
   { day: 5, enabled: true, start_time: '09:00', end_time: '17:00' },
   { day: 6, enabled: false, start_time: '09:00', end_time: '17:00' },
 ]
-
-// A button needs a label, and a url button needs its destination too —
-// sending one without a URL would produce a malformed interactive message.
-const isIncompleteButton = (btn: ButtonConfig) =>
-  !btn.title?.trim() || (btn.type === 'url' && !btn.url?.trim())
 
 const chatbotSettings = ref({
   greeting_message: '',
@@ -244,14 +240,15 @@ onMounted(async () => {
 })
 
 async function saveMessagesSettings() {
-  const invalidGreetingBtn = chatbotSettings.value.greeting_buttons.find(isIncompleteButton)
-  if (invalidGreetingBtn) {
-    toast.error(t('chatbotSettings.greetingButtonsRequired'))
-    return
-  }
-  const invalidFallbackBtn = chatbotSettings.value.fallback_buttons.find(isIncompleteButton)
-  if (invalidFallbackBtn) {
-    toast.error(t('chatbotSettings.fallbackButtonsRequired'))
+  // An unsendable combination produces no WhatsApp message at all — the send
+  // fails server-side with only a log line — so block the save and say why.
+  // Previously incomplete buttons were filtered out of the payload instead,
+  // which hid the mistake rather than reporting it.
+  const buttonError =
+    validateWhatsAppButtons(chatbotSettings.value.greeting_buttons, t) ??
+    validateWhatsAppButtons(chatbotSettings.value.fallback_buttons, t)
+  if (buttonError) {
+    toast.error(buttonError)
     return
   }
 
@@ -259,9 +256,9 @@ async function saveMessagesSettings() {
   try {
     await chatbotService.updateSettings({
       greeting_message: chatbotSettings.value.greeting_message,
-      greeting_buttons: chatbotSettings.value.greeting_buttons.filter(btn => !isIncompleteButton(btn)),
+      greeting_buttons: chatbotSettings.value.greeting_buttons,
       fallback_message: chatbotSettings.value.fallback_message,
-      fallback_buttons: chatbotSettings.value.fallback_buttons.filter(btn => !isIncompleteButton(btn)),
+      fallback_buttons: chatbotSettings.value.fallback_buttons,
       session_timeout_minutes: chatbotSettings.value.session_timeout_minutes
     })
     toast.success(t('chatbotSettings.messagesSaved'))
