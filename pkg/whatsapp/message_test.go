@@ -4,8 +4,10 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 	"time"
+	"unicode/utf8"
 
 	"github.com/shridarpatil/whatomate/pkg/whatsapp"
 	"github.com/shridarpatil/whatomate/test/testutil"
@@ -194,6 +196,122 @@ func TestClient_SendInteractiveButtons_ButtonTruncation(t *testing.T) {
 
 	// Should be truncated to 20 chars
 	assert.Len(t, reply["title"], 20)
+}
+
+// Button titles are capped at 20 characters, but the locales this app ships
+// (hi/ta/ar) are multi-byte — cutting on a byte boundary splits a rune and
+// the label reaches the customer garbled rather than merely shortened.
+func TestClient_SendInteractiveButtons_TruncatesOnRuneBoundary(t *testing.T) {
+	t.Parallel()
+
+	var capturedBody map[string]any
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_ = json.NewDecoder(r.Body).Decode(&capturedBody)
+		w.WriteHeader(http.StatusOK)
+		_ = json.NewEncoder(w).Encode(map[string]any{
+			"messages": []map[string]string{{"id": "wamid.test"}},
+		})
+	}))
+	defer server.Close()
+
+	client := whatsapp.NewWithTimeout(testutil.NopLogger(), 5*time.Second)
+	client.HTTPClient = &http.Client{
+		Transport: &testServerTransport{serverURL: server.URL},
+	}
+
+	account := &whatsapp.Account{
+		PhoneID:     "123456789",
+		BusinessID:  "987654321",
+		APIVersion:  "v21.0",
+		AccessToken: "test-token",
+	}
+	ctx := testutil.TestContext(t)
+
+	// 30 Devanagari runes, 3 bytes each.
+	longTitle := strings.Repeat("न", 30)
+
+	tests := []struct {
+		name      string
+		buttons   []whatsapp.Button
+		wantRunes int
+		extract   func(map[string]any) string
+	}{
+		{
+			name:      "reply buttons cap at 20 runes",
+			buttons:   []whatsapp.Button{{ID: "1", Title: longTitle}},
+			wantRunes: 20,
+			extract: func(body map[string]any) string {
+				action := body["interactive"].(map[string]any)["action"].(map[string]any)
+				first := action["buttons"].([]any)[0].(map[string]any)
+				return first["reply"].(map[string]any)["title"].(string)
+			},
+		},
+		{
+			name: "list rows cap at 24 runes",
+			buttons: []whatsapp.Button{
+				{ID: "1", Title: longTitle}, {ID: "2", Title: longTitle},
+				{ID: "3", Title: longTitle}, {ID: "4", Title: longTitle},
+			},
+			wantRunes: 24,
+			extract: func(body map[string]any) string {
+				action := body["interactive"].(map[string]any)["action"].(map[string]any)
+				section := action["sections"].([]any)[0].(map[string]any)
+				return section["rows"].([]any)[0].(map[string]any)["title"].(string)
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			_, err := client.SendInteractiveButtons(ctx, account, whatsapp.Recipient{Phone: "1234567890"}, "Choose:", tt.buttons)
+			require.NoError(t, err)
+
+			title := tt.extract(capturedBody)
+			assert.True(t, utf8.ValidString(title), "truncated title must stay valid UTF-8, got bytes %q", title)
+			assert.Equal(t, tt.wantRunes, utf8.RuneCountInString(title))
+		})
+	}
+}
+
+// The cta_url path carries the greeting/fallback URL buttons, so its label is
+// subject to the same 20-character cap and the same rune-boundary hazard.
+func TestClient_SendCTAURLButton_TruncatesOnRuneBoundary(t *testing.T) {
+	t.Parallel()
+
+	var capturedBody map[string]any
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_ = json.NewDecoder(r.Body).Decode(&capturedBody)
+		w.WriteHeader(http.StatusOK)
+		_ = json.NewEncoder(w).Encode(map[string]any{
+			"messages": []map[string]string{{"id": "wamid.test"}},
+		})
+	}))
+	defer server.Close()
+
+	client := whatsapp.NewWithTimeout(testutil.NopLogger(), 5*time.Second)
+	client.HTTPClient = &http.Client{
+		Transport: &testServerTransport{serverURL: server.URL},
+	}
+
+	account := &whatsapp.Account{
+		PhoneID:     "123456789",
+		BusinessID:  "987654321",
+		APIVersion:  "v21.0",
+		AccessToken: "test-token",
+	}
+
+	_, err := client.SendCTAURLButton(
+		testutil.TestContext(t), account, whatsapp.Recipient{Phone: "1234567890"},
+		"Body", strings.Repeat("न", 30), "https://example.com",
+	)
+	require.NoError(t, err)
+
+	params := capturedBody["interactive"].(map[string]any)["action"].(map[string]any)["parameters"].(map[string]any)
+	displayText := params["display_text"].(string)
+	assert.True(t, utf8.ValidString(displayText), "truncated label must stay valid UTF-8, got bytes %q", displayText)
+	assert.Equal(t, 20, utf8.RuneCountInString(displayText))
 }
 
 func TestClient_SendTemplateMessage(t *testing.T) {
