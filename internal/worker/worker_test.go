@@ -673,6 +673,12 @@ func TestWorker_HandleRecipientJob_Success(t *testing.T) {
 	w := testWorker(t)
 	org, account, template, campaign, recipient := createTestCampaignData(t, w)
 
+	campaign.HeaderMediaID = "media-123"
+	campaign.HeaderMediaLocalPath = "/media/documents/invoice.pdf"
+	campaign.HeaderMediaMimeType = "application/pdf"
+	campaign.HeaderMediaFilename = "invoice.pdf"
+	require.NoError(t, w.DB.Save(campaign).Error)
+
 	// Create mock server
 	server := httptest.NewServer(http.HandlerFunc(func(rw http.ResponseWriter, r *http.Request) {
 		rw.Header().Set("Content-Type", "application/json")
@@ -718,6 +724,9 @@ func TestWorker_HandleRecipientJob_Success(t *testing.T) {
 	assert.Equal(t, models.MessageStatusSent, message.Status)
 	assert.Equal(t, models.DirectionOutgoing, message.Direction)
 	assert.Equal(t, models.MessageTypeTemplate, message.MessageType)
+	assert.Equal(t, "/media/documents/invoice.pdf", message.MediaURL)
+	assert.Equal(t, "application/pdf", message.MediaMimeType)
+	assert.Equal(t, "invoice.pdf", message.MediaFilename)
 }
 
 func TestWorker_HandleRecipientJob_WhatsAppError(t *testing.T) {
