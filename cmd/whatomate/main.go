@@ -258,12 +258,18 @@ func runServer(args []string) {
 	// Setup routes
 	setupRoutes(g, app, lo, cfg.Server.BasePath, rdb, cfg)
 
+	// Max request body size: default 105 MB to support WhatsApp 100 MB documents + multipart headers
+	maxBodySize := 105 * 1024 * 1024
+	if cfg.Server.MaxRequestBodyMB > 0 {
+		maxBodySize = cfg.Server.MaxRequestBodyMB * 1024 * 1024
+	}
+
 	// Create server with CORS wrapper
 	server := &fasthttp.Server{
 		Handler:            corsWrapper(g.Handler(), allowedOrigins),
 		ReadTimeout:        time.Duration(cfg.Server.ReadTimeout) * time.Second,
 		WriteTimeout:       time.Duration(cfg.Server.WriteTimeout) * time.Second,
-		MaxRequestBodySize: 15 * 1024 * 1024,
+		MaxRequestBodySize: maxBodySize,
 		Name:               "Whatomate",
 	}
 
