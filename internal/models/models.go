@@ -293,7 +293,7 @@ func (CustomAction) TableName() string {
 type WhatsAppAccount struct {
 	BaseModel
 	OrganizationID     uuid.UUID `gorm:"type:uuid;index;not null" json:"organization_id"`
-	Name               string    `gorm:"size:100;uniqueIndex:idx_wa_org_name;not null" json:"name"` // Unique per org, used as reference
+	Name               string    `gorm:"size:100;not null" json:"name"` // Unique per org via partial index idx_wa_org_name_active (see database.getIndexes)
 	AppID              string    `gorm:"size:100" json:"app_id"`                                    // Meta App ID
 	PhoneID            string    `gorm:"size:100;not null" json:"phone_id"`
 	BusinessID         string    `gorm:"size:100;not null" json:"business_id"`

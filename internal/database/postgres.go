@@ -240,7 +240,10 @@ func getIndexes() []string {
 		// Indexes
 		`CREATE INDEX IF NOT EXISTS idx_messages_contact_created ON messages(contact_id, created_at DESC)`,
 		`CREATE INDEX IF NOT EXISTS idx_messages_conversation ON messages(conversation_id)`,
-		`CREATE UNIQUE INDEX IF NOT EXISTS idx_contacts_org_phone ON contacts(organization_id, phone_number)`,
+		// Unique per org, but only among non-soft-deleted rows — otherwise a
+		// deleted record permanently blocks recreating one with the same key.
+		`DROP INDEX IF EXISTS idx_contacts_org_phone`,
+		`CREATE UNIQUE INDEX IF NOT EXISTS idx_contacts_org_phone_active ON contacts(organization_id, phone_number) WHERE deleted_at IS NULL`,
 		`CREATE INDEX IF NOT EXISTS idx_contacts_assigned_read ON contacts(assigned_user_id, is_read)`,
 		`CREATE INDEX IF NOT EXISTS idx_sessions_phone_status ON chatbot_sessions(organization_id, phone_number, status)`,
 		`CREATE INDEX IF NOT EXISTS idx_keyword_rules_priority ON keyword_rules(organization_id, is_enabled, priority DESC)`,
@@ -248,8 +251,15 @@ func getIndexes() []string {
 		`CREATE INDEX IF NOT EXISTS idx_agent_transfers_org_contact ON agent_transfers(organization_id, contact_id, status)`,
 		`CREATE INDEX IF NOT EXISTS idx_agent_transfers_agent_active ON agent_transfers(agent_id, status) WHERE status = 'active'`,
 		`CREATE INDEX IF NOT EXISTS idx_agent_transfers_team ON agent_transfers(team_id, status) WHERE team_id IS NOT NULL`,
-		`CREATE UNIQUE INDEX IF NOT EXISTS idx_whatsapp_accounts_org_phone ON whatsapp_accounts(organization_id, phone_id)`,
-		`CREATE UNIQUE INDEX IF NOT EXISTS idx_templates_account_name_lang ON templates(whats_app_account, name, language)`,
+		// Partial unique indexes: soft-deleted accounts/templates must not block
+		// recreating a record with the same key. Also replaces the GORM-tag index
+		// idx_wa_org_name (see models.WhatsAppAccount) with a partial equivalent.
+		`DROP INDEX IF EXISTS idx_whatsapp_accounts_org_phone`,
+		`CREATE UNIQUE INDEX IF NOT EXISTS idx_whatsapp_accounts_org_phone_active ON whatsapp_accounts(organization_id, phone_id) WHERE deleted_at IS NULL`,
+		`DROP INDEX IF EXISTS idx_wa_org_name`,
+		`CREATE UNIQUE INDEX IF NOT EXISTS idx_wa_org_name_active ON whatsapp_accounts(organization_id, name) WHERE deleted_at IS NULL`,
+		`DROP INDEX IF EXISTS idx_templates_account_name_lang`,
+		`CREATE UNIQUE INDEX IF NOT EXISTS idx_templates_account_name_lang_active ON templates(whats_app_account, name, language) WHERE deleted_at IS NULL`,
 		`CREATE INDEX IF NOT EXISTS idx_keyword_rules_account ON keyword_rules(whats_app_account, is_enabled, priority DESC)`,
 		`CREATE INDEX IF NOT EXISTS idx_chatbot_flows_account ON chatbot_flows(whats_app_account, is_enabled)`,
 		`CREATE INDEX IF NOT EXISTS idx_ai_contexts_account ON ai_contexts(whats_app_account, is_enabled, priority DESC)`,
@@ -262,7 +272,8 @@ func getIndexes() []string {
 		`CREATE INDEX IF NOT EXISTS idx_webhooks_org_active ON webhooks(organization_id, is_active)`,
 		`CREATE INDEX IF NOT EXISTS idx_availability_logs_user_time ON user_availability_logs(user_id, started_at DESC)`,
 		`CREATE INDEX IF NOT EXISTS idx_availability_logs_org_time ON user_availability_logs(organization_id, started_at DESC)`,
-		`CREATE UNIQUE INDEX IF NOT EXISTS idx_sso_providers_org_provider ON sso_providers(organization_id, provider)`,
+		`DROP INDEX IF EXISTS idx_sso_providers_org_provider`,
+		`CREATE UNIQUE INDEX IF NOT EXISTS idx_sso_providers_org_provider_active ON sso_providers(organization_id, provider) WHERE deleted_at IS NULL`,
 		// Teams indexes
 		`CREATE INDEX IF NOT EXISTS idx_teams_org_active ON teams(organization_id, is_active)`,
 		// Create partial unique index (soft-deleted members)
