@@ -1,7 +1,9 @@
 package frontend
 
 import (
+	"crypto/sha256"
 	"embed"
+	"encoding/hex"
 	"fmt"
 	"io/fs"
 	"net/http"
@@ -37,6 +39,12 @@ var distFS embed.FS
 // cachedIndexHTML stores the modified index.html with injected base path
 var cachedIndexHTML []byte
 
+// buildID identifies the embedded frontend build. index.html lists the
+// content-hashed asset filenames, so hashing it yields a value that changes on
+// every frontend rebuild and stays stable across restarts of the same binary.
+// Served at /build.json so a long-lived tab can tell it is running old code.
+var buildID string
+
 // Handler returns a fasthttp handler that serves the embedded frontend files
 // basePath should be empty string for root deployment or "/subpath" for subdirectory
 // If frontend is not embedded, returns a handler that shows a helpful message
@@ -69,12 +77,31 @@ func Handler(basePath string) fasthttp.RequestHandler {
 	basePathScript := fmt.Sprintf(`<script>window.__BASE_PATH__ = "%s";</script></head>`, basePath)
 	cachedIndexHTML = []byte(strings.Replace(modifiedHTML, "</head>", basePathScript, 1))
 
+	sum := sha256.Sum256(cachedIndexHTML)
+	buildID = hex.EncodeToString(sum[:])[:12]
+
 	// Create file server
 	fileServer := http.FileServer(http.FS(distSubFS))
 
 	// Wrap with SPA fallback and proper MIME types
 	spaHandler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		path := r.URL.Path
+
+		// Identity of the build this server is serving. A single-page app
+		// downloads its JavaScript once, when the tab loads, and then keeps
+		// running it: an upgrade never reaches tabs that stay open, so anyone
+		// whose browser restores sessions can keep using the previous build for
+		// days without noticing. The client compares this against the value it
+		// booted with and offers a reload when they diverge. Deliberately
+		// public (no auth) — it reveals nothing but a hash of index.html, and
+		// the login screen runs stale code too. Never cached: a cached answer
+		// would defeat the entire purpose.
+		if path == "/build.json" {
+			w.Header().Set("Content-Type", "application/json")
+			w.Header().Set("Cache-Control", "no-store")
+			_, _ = fmt.Fprintf(w, "{\"build\":%q}", buildID)
+			return
+		}
 
 		// Try to serve the file
 		if path != "/" && !strings.HasPrefix(path, "/api") {
