@@ -8,7 +8,9 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"net/http"
+	"strings"
 	"sync"
+	"text/template"
 	"time"
 
 	"github.com/google/uuid"
@@ -58,6 +60,85 @@ type TransferEventData struct {
 
 // maxConcurrentWebhooks limits the number of concurrent webhook deliveries per dispatch
 const maxConcurrentWebhooks = 10
+
+// WebhookTemplateContext is the data exposed to a webhook body template. Data is
+// the event payload flattened to a map keyed by JSON field names, so templates
+// reference fields as {{ .Data.contact_name }} rather than by Go field name.
+type WebhookTemplateContext struct {
+	Event     string         `json:"event"`
+	Timestamp string         `json:"timestamp"`
+	Data      map[string]any `json:"data"`
+}
+
+// webhookTemplateFuncs are the helpers available inside a webhook body template.
+var webhookTemplateFuncs = template.FuncMap{
+	// json marshals a value to a JSON literal (with surrounding quotes for
+	// strings and proper escaping), making it safe to embed inside a JSON body.
+	// e.g. {"text": {{ json .Data.content }}} handles quotes/newlines correctly.
+	"json":  func(v any) (string, error) { b, err := json.Marshal(v); return string(b), err },
+	"upper": strings.ToUpper,
+	"lower": strings.ToLower,
+}
+
+// parseWebhookTemplate compiles a webhook body template with the shared helpers.
+// Create/update validation and delivery both use this so a template that
+// validates on save renders identically at delivery time.
+func parseWebhookTemplate(body string) (*template.Template, error) {
+	return template.New("webhook_body").Funcs(webhookTemplateFuncs).Parse(body)
+}
+
+// dataToMap converts a typed event payload to a map keyed by JSON field names so
+// templates can reference .Data.contact_name rather than the Go field name.
+func dataToMap(data any) (map[string]any, error) {
+	if data == nil {
+		return map[string]any{}, nil
+	}
+	if m, ok := data.(map[string]any); ok {
+		return m, nil
+	}
+	b, err := json.Marshal(data)
+	if err != nil {
+		return nil, err
+	}
+	m := map[string]any{}
+	if err := json.Unmarshal(b, &m); err != nil {
+		return nil, err
+	}
+	return m, nil
+}
+
+// renderWebhookBody builds the HTTP body for a webhook delivery. With no
+// BodyTemplate it returns the default JSON envelope ({event,timestamp,data}).
+// With a template it renders that instead, exposing WebhookTemplateContext.
+func renderWebhookBody(webhook models.Webhook, eventType string, data any, now time.Time) ([]byte, error) {
+	if strings.TrimSpace(webhook.BodyTemplate) == "" {
+		return json.Marshal(OutboundWebhookPayload{
+			Event:     eventType,
+			Timestamp: now,
+			Data:      data,
+		})
+	}
+
+	tmpl, err := parseWebhookTemplate(webhook.BodyTemplate)
+	if err != nil {
+		return nil, err
+	}
+
+	dataMap, err := dataToMap(data)
+	if err != nil {
+		return nil, err
+	}
+
+	var buf bytes.Buffer
+	if err := tmpl.Execute(&buf, WebhookTemplateContext{
+		Event:     eventType,
+		Timestamp: now.Format(time.RFC3339),
+		Data:      dataMap,
+	}); err != nil {
+		return nil, err
+	}
+	return buf.Bytes(), nil
+}
 
 // DispatchWebhook sends an event to all matching webhooks for the organization
 func (a *App) DispatchWebhook(orgID uuid.UUID, eventType models.WebhookEvent, data any) {
@@ -118,15 +199,9 @@ func containsEvent(events models.StringArray, event string) bool {
 }
 
 func (a *App) sendWebhook(ctx context.Context, webhook models.Webhook, eventType string, data any) {
-	payload := OutboundWebhookPayload{
-		Event:     eventType,
-		Timestamp: time.Now().UTC(),
-		Data:      data,
-	}
-
-	jsonData, err := json.Marshal(payload)
+	jsonData, err := renderWebhookBody(webhook, eventType, data, time.Now().UTC())
 	if err != nil {
-		a.Log.Error("failed to marshal webhook payload", "error", err, "webhook_id", webhook.ID)
+		a.Log.Error("failed to render webhook body", "error", err, "webhook_id", webhook.ID)
 		return
 	}
 

@@ -161,6 +161,61 @@ ws.onmessage = (event) => {
 }
 ```
 
+## Outbound Webhooks
+
+Beyond receiving Meta events, Whatomate can POST your own events (incoming message, message sent, contact created, transfer created/assigned/resumed) to any HTTPS endpoint you configure under **Settings → Webhooks**.
+
+### Default Payload
+
+By default each delivery is a JSON envelope:
+
+```json
+{
+  "event": "message.incoming",
+  "timestamp": "2026-07-02T12:00:00Z",
+  "data": {
+    "message_id": "uuid",
+    "contact_id": "uuid",
+    "contact_phone": "+15551234567",
+    "contact_name": "Jane",
+    "message_type": "text",
+    "content": "Hello!",
+    "whatsapp_account": "my-account",
+    "direction": "incoming"
+  }
+}
+```
+
+### Custom Payload Templates
+
+To deliver to a service that expects a different shape (Slack, Discord, Teams, …), set a **Body template** on the webhook. It is a [Go `text/template`](https://pkg.go.dev/text/template) whose rendered output replaces the default envelope. Leave it empty to keep the envelope.
+
+The template receives:
+
+| Field | Description |
+|-------|-------------|
+| `.Event` | Event name, e.g. `message.incoming` |
+| `.Timestamp` | RFC3339 timestamp |
+| `.Data.*` | Event data, keyed by the JSON field names above (`.Data.contact_name`, `.Data.content`, …) |
+
+A `json` helper marshals any value to a JSON literal (with quoting and escaping) so interpolated content stays valid JSON. Helpers `upper` and `lower` are also available.
+
+**Slack Incoming Webhook example:**
+
+```go
+{"text": {{ json (printf "*%s* from %s:\n%s" .Event .Data.contact_name .Data.content) }}}
+```
+
+Renders to:
+
+```json
+{"text": "*message.incoming* from Jane:\nHello!"}
+```
+
+<Aside type="tip">
+  Use the **Test** button after saving — it renders your template against a sample message so you can confirm the target accepts it. Invalid templates are rejected when you save.
+</Aside>
+
 ## Security
 
 ### Webhook Verification
