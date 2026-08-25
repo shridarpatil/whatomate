@@ -355,6 +355,24 @@ function clearTagFilter() {
   contactsStore.fetchContacts()
 }
 
+// Optional sidebar filters (opt-in). Default off → list behaves as before.
+function toggleOnlyConversations() {
+  contactsStore.onlyConversations = !contactsStore.onlyConversations
+  contactsStore.fetchContacts()
+}
+
+function setListAccountFilter(name: string | null) {
+  contactsStore.listAccountFilter = name
+  contactsStore.fetchContacts()
+}
+
+// Count of all active sidebar filters (tags + number + only-conversations) for the badge.
+const activeFilterCount = computed(() =>
+  contactsStore.selectedTags.length +
+  (contactsStore.listAccountFilter ? 1 : 0) +
+  (contactsStore.onlyConversations ? 1 : 0)
+)
+
 async function executeCustomAction(action: CustomAction) {
   if (!contactsStore.currentContact || executingActionId.value) return
 
@@ -1729,16 +1747,51 @@ async function sendMediaMessage() {
                 variant="ghost"
                 size="icon"
                 class="h-8 w-8 shrink-0 relative"
-                :class="contactsStore.selectedTags.length > 0 ? 'text-emerald-400 bg-emerald-500/10' : 'text-white/40 hover:text-white hover:bg-white/[0.08] light:text-gray-500 light:hover:text-gray-900 light:hover:bg-gray-100'"
+                :class="activeFilterCount > 0 ? 'text-emerald-400 bg-emerald-500/10' : 'text-white/40 hover:text-white hover:bg-white/[0.08] light:text-gray-500 light:hover:text-gray-900 light:hover:bg-gray-100'"
               >
                 <Filter class="h-4 w-4" />
-                <span v-if="contactsStore.selectedTags.length > 0" class="absolute -top-1 -right-1 h-4 w-4 rounded-full bg-emerald-500 text-[10px] text-white flex items-center justify-center">
-                  {{ contactsStore.selectedTags.length }}
+                <span v-if="activeFilterCount > 0" class="absolute -top-1 -right-1 h-4 w-4 rounded-full bg-emerald-500 text-[10px] text-white flex items-center justify-center">
+                  {{ activeFilterCount }}
                 </span>
               </Button>
             </PopoverTrigger>
             <PopoverContent align="end" class="w-56 p-2">
               <div class="space-y-2">
+                <!-- Only conversations (opt-in): hides imported contacts with no messages -->
+                <button
+                  class="w-full flex items-center justify-between px-2 py-1.5 rounded-md text-sm hover:bg-white/[0.08] light:hover:bg-gray-100 transition-colors"
+                  :class="contactsStore.onlyConversations && 'bg-white/[0.08] light:bg-gray-100'"
+                  @click="toggleOnlyConversations"
+                >
+                  <span>{{ $t('chat.onlyConversations') }}</span>
+                  <Check v-if="contactsStore.onlyConversations" class="h-4 w-4 text-emerald-400 shrink-0" />
+                </button>
+                <!-- Filter by number (only when there is more than one account) -->
+                <template v-if="orgAccounts.length > 1">
+                  <Separator />
+                  <span class="text-sm font-medium px-1">{{ $t('chat.filterByNumber') }}</span>
+                  <div class="space-y-1">
+                    <button
+                      class="w-full flex items-center gap-2 px-2 py-1.5 rounded-md text-sm hover:bg-white/[0.08] light:hover:bg-gray-100 transition-colors"
+                      :class="!contactsStore.listAccountFilter && 'bg-white/[0.08] light:bg-gray-100'"
+                      @click="setListAccountFilter(null)"
+                    >
+                      <span class="flex-1 text-left truncate">{{ $t('chat.allNumbers') }}</span>
+                      <Check v-if="!contactsStore.listAccountFilter" class="h-4 w-4 text-emerald-400 shrink-0" />
+                    </button>
+                    <button
+                      v-for="acc in orgAccounts"
+                      :key="acc.id"
+                      class="w-full flex items-center gap-2 px-2 py-1.5 rounded-md text-sm hover:bg-white/[0.08] light:hover:bg-gray-100 transition-colors"
+                      :class="contactsStore.listAccountFilter === acc.name && 'bg-white/[0.08] light:bg-gray-100'"
+                      @click="setListAccountFilter(acc.name)"
+                    >
+                      <span class="flex-1 text-left truncate">{{ acc.name }}</span>
+                      <Check v-if="contactsStore.listAccountFilter === acc.name" class="h-4 w-4 text-emerald-400 shrink-0" />
+                    </button>
+                  </div>
+                </template>
+                <Separator />
                 <div class="flex items-center justify-between px-1">
                   <span class="text-sm font-medium">{{ $t('chat.filterByTags') }}</span>
                   <Button

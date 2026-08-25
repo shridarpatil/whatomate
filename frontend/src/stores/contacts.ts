@@ -94,6 +94,9 @@ export const useContactsStore = defineStore('contacts', () => {
   const selectedTags = ref<string[]>([])
   const replyingTo = ref<Message | null>(null)
   const accountFilter = ref<string | null>(null)
+  // Optional chat-sidebar filters (opt-in; null/false = unchanged default behavior)
+  const listAccountFilter = ref<string | null>(null) // filter contact list by WhatsApp account (number) Name
+  const onlyConversations = ref(false)                // hide contacts without messages
 
   // Contacts pagination
   const contactsPage = ref(1)
@@ -122,6 +125,8 @@ export const useContactsStore = defineStore('contacts', () => {
         page: 1,
         limit: contactsLimit.value,
         tags: tagsParam,
+        account: listAccountFilter.value || undefined,
+        with_conversations: onlyConversations.value || undefined,
         ...params
       })
       // API returns { status: "success", data: { contacts: [...], total: number } }
@@ -148,6 +153,8 @@ export const useContactsStore = defineStore('contacts', () => {
         page: nextPage,
         limit: contactsLimit.value,
         tags: tagsParam,
+        account: listAccountFilter.value || undefined,
+        with_conversations: onlyConversations.value || undefined,
         search
       })
       const data = response.data.data || response.data
@@ -384,6 +391,8 @@ export const useContactsStore = defineStore('contacts', () => {
     hasMoreMessages,
     searchQuery,
     selectedTags,
+    listAccountFilter,
+    onlyConversations,
     replyingTo,
     filteredContacts,
     sortedContacts,
