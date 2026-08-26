@@ -62,6 +62,16 @@ O padrão consolidado (Zendesk, Freshdesk, HubSpot Service; no Brasil Blip e Zen
 | Etapas | Um conjunto configurável por organização | Atende o pedido sem a tela de configuração maior de múltiplos pipelines |
 | Visibilidade | Herda de `authorizeConversation` + responsável sempre vê | Regra própria viraria caminho alternativo para ver conversas escondidas |
 | Envio do protocolo | Botão explícito | Nenhuma mensagem paga sai sozinha; fora da janela de 24h só template é aceito |
+| Janela de 24h (D2) | Validada **apenas** no `/send-protocol` | Hoje ela não bloqueia envio em lugar nenhum; estender ao `SendMessage` mudaria comportamento em produção |
+| Permissões (D3) | **Nenhuma permissão nova** — herda o acesso à conversa | Segue o precedente de `ConversationNote`; papel customizado não recebe permissão nova no seeding, então criar uma deixaria todos os supervisores sem CRM |
+
+### Divergências encontradas na auditoria contra o commit `2ee9df5`
+
+| # | Divergência | Resolução |
+|---|---|---|
+| D1 | A spec dizia "join com `contacts`". `scopeVisibleConversations` escreve `id`, `assigned_user_id` e `contacts.whats_app_account` sem qualificar — assume consulta sobre `contacts`. Num join com `occurrences` resolveria `id` como `occurrences.id`: dados errados, sem erro | Usar o padrão de **subconsulta** já estabelecido em `ListAgentTransfers` e nas sessões do chatbot (ver §6). Nenhuma decisão de produto; nenhuma alteração no autorizador |
+| D2 | A janela de 24h é calculada e reportada, mas nunca bloqueia envio | Decisão do dono do produto: validar só no endpoint novo |
+| D3 | `ConversationNote` não usa permissão dedicada; seeding não alcança papéis customizados | Decisão do dono do produto: herdar acesso |
 
 ## 4. Modelo de dados
 
@@ -122,11 +132,21 @@ A separação fica explícita nos rótulos da interface:
 
 ## 6. Visibilidade
 
-Todo handler passa por `canViewConversation` / `canInteractWithConversation` ([conversation_visibility.go](../../../internal/handlers/conversation_visibility.go)) usando o contato da ocorrência. A listagem aplica `scopeVisibleConversations` num join com `contacts`, unido por `OR` com `assigned_user_id = <usuário atual>`.
+Todo handler passa por `canViewConversation` / `canInteractWithConversation` ([conversation_visibility.go](../../../internal/handlers/conversation_visibility.go)) usando o contato da ocorrência — **inclusive os de detalhe, evento, mudança de etapa e envio de protocolo**, não só a listagem.
 
-Essa exceção é deliberada: sem ela, atribuir uma ocorrência a alguém que não enxerga aquele contato produz um caso invisível para o próprio responsável. O alcance é estreito — a pessoa vê a ocorrência que lhe foi atribuída, não a lista de conversas do contato.
+A listagem usa **subconsulta**, não join (ver D1):
 
-Permissões novas: `occurrences:read`, `occurrences:write`, `occurrence_stages:write`.
+```go
+query.Where("occurrences.contact_id IN (?) OR occurrences.assigned_user_id = ?",
+    a.scopeVisibleConversations(
+        a.DB.Model(&models.Contact{}).Where("organization_id = ?", orgID).Select("id"),
+        userID, orgID),
+    userID)
+```
+
+É o mesmo padrão de `ListAgentTransfers` ([agent_transfers.go:226](../../../internal/handlers/agent_transfers.go)) e da listagem de sessões do chatbot ([chatbot.go:1395](../../../internal/handlers/chatbot.go)). O `OR assigned_user_id` é a exceção do responsável: sem ela, atribuir uma ocorrência a quem não enxerga aquele contato produz um caso invisível para o próprio responsável. O alcance é estreito — a pessoa vê a ocorrência atribuída a ela, não a lista de conversas do contato.
+
+**Nenhuma permissão nova** (D3). Quem enxerga a conversa lê e escreve na ocorrência, exatamente como em `ConversationNote`. A configuração de etapas fica sob `settings.general:write`, que já governa configuração da organização; **listar** etapas não exige permissão, porque todo agente precisa ver os nomes das etapas.
 
 ## 7. Por que nada em produção muda
 
@@ -139,8 +159,14 @@ Permissões novas: `occurrences:read`, `occurrences:write`, `occurrence_stages:w
 | Painel de notas | Idêntico |
 | Envio de mensagem | Reusa `SendOutgoingMessage` ([messages.go:148](../../../internal/handlers/messages.go)) sem modificá-lo |
 | Visibilidade | Nenhuma regra nova; reusa o autorizador existente |
+| Permissões | Nenhuma criada; nenhum papel precisa ser editado |
+| Janela de 24h | Validada **só** no endpoint novo; `SendMessage` segue permissivo como hoje |
 
 Tudo é aditivo: tabelas novas, endpoints novos, telas novas.
+
+**Dívida consciente:** o `/send-protocol` recusa fora da janela de 24h e o `SendMessage` não. É uma inconsistência aceita para não mexer em produção — registrada aqui para que a próxima pessoa não a leia como descuido.
+
+**Desvio deliberado de convenção:** o índice único de `protocol_number` é total, não parcial por soft delete. Protocolo apagado **não** pode ser reemitido — o cliente ainda tem o número anotado.
 
 ## 8. Compatibilidade com as fases seguintes
 
@@ -157,7 +183,7 @@ GET    /api/occurrences/{id}
 PUT    /api/occurrences/{id}                  título, descrição, prioridade, responsável
 PUT    /api/occurrences/{id}/stage            move de etapa; grava evento stage_change
 POST   /api/occurrences/{id}/events           adiciona nota à timeline
-POST   /api/occurrences/{id}/send-protocol    envia o número ao cliente
+POST   /api/occurrences/{id}/send-protocol    envia o número; 422 fora da janela de 24h
 GET    /api/contacts/{id}/occurrences         alimenta o painel do chat
 
 GET    /api/occurrence-stages
@@ -190,8 +216,11 @@ O botão "enviar protocolo" fica **desabilitado, com aviso**, quando `last_inbou
 - Numeração de protocolo **sob concorrência** — o teste que mais importa. Goroutines paralelas criando ocorrências na mesma organização e ano, asserindo unicidade. Sem ele, a atomicidade do `UPDATE ... RETURNING` é só uma afirmação.
 - Virada de ano: primeira ocorrência de um ano novo começa em `000001`.
 - Transições de etapa: entrar em `is_closing` preenche `closed_at`; sair limpa.
-- Gates de visibilidade com casos **positivos e negativos**. Este código já teve quatro rodadas de correção de vazamento de visibilidade — teste negativo é obrigatório, não opcional.
+- Gates de visibilidade com casos **positivos e negativos**, em **todos** os endpoints — listagem, detalhe, evento, mudança de etapa e envio de protocolo. Este código já teve quatro rodadas de correção de vazamento de visibilidade, e todas as vezes o buraco estava num endpoint que ninguém lembrou de proteger.
 - A exceção do responsável: quem tem a ocorrência atribuída a enxerga mesmo sem ver o contato.
+- Recusa com 422 fora da janela de 24h, e envio bem-sucedido dentro dela.
+- Fechamento e reabertura: entrar em `is_closing` preenche `closed_at`; voltar para etapa aberta limpa e grava evento.
+- Integridade das etapas: recusar excluir etapa em uso, recusar remover a última `is_closing`, recusar deixar a organização sem `is_initial`.
 
 **Playwright**
 
