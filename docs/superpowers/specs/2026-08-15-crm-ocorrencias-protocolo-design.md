@@ -63,7 +63,7 @@ O padrão consolidado (Zendesk, Freshdesk, HubSpot Service; no Brasil Blip e Zen
 | Visibilidade | Herda de `authorizeConversation` + responsável sempre vê | Regra própria viraria caminho alternativo para ver conversas escondidas |
 | Envio do protocolo | Botão explícito | Nenhuma mensagem paga sai sozinha; fora da janela de 24h só template é aceito |
 | Janela de 24h (D2) | Validada **apenas** no `/send-protocol` | Hoje ela não bloqueia envio em lugar nenhum; estender ao `SendMessage` mudaria comportamento em produção |
-| Permissões (D3) | **Nenhuma permissão nova** — herda o acesso à conversa | Segue o precedente de `ConversationNote`; papel customizado não recebe permissão nova no seeding, então criar uma deixaria todos os supervisores sem CRM |
+| Permissões (D3) | **Nenhuma permissão nova** — reusa `chat:read` / `chat:write` | Segue o precedente de `ConversationNote`; papel customizado não recebe permissão nova no seeding, então criar uma deixaria todos os supervisores sem CRM |
 
 ### Divergências encontradas na auditoria contra o commit `2ee9df5`
 
@@ -71,7 +71,8 @@ O padrão consolidado (Zendesk, Freshdesk, HubSpot Service; no Brasil Blip e Zen
 |---|---|---|
 | D1 | A spec dizia "join com `contacts`". `scopeVisibleConversations` escreve `id`, `assigned_user_id` e `contacts.whats_app_account` sem qualificar — assume consulta sobre `contacts`. Num join com `occurrences` resolveria `id` como `occurrences.id`: dados errados, sem erro | Usar o padrão de **subconsulta** já estabelecido em `ListAgentTransfers` e nas sessões do chatbot (ver §6). Nenhuma decisão de produto; nenhuma alteração no autorizador |
 | D2 | A janela de 24h é calculada e reportada, mas nunca bloqueia envio | Decisão do dono do produto: validar só no endpoint novo |
-| D3 | `ConversationNote` não usa permissão dedicada; seeding não alcança papéis customizados | Decisão do dono do produto: herdar acesso |
+| D3 | Não existe permissão *dedicada* a notas; seeding não alcança papéis customizados | Decisão do dono do produto: herdar acesso |
+| D3-bis | Correção da própria auditoria: `ConversationNote` **usa sim** permissão — `chat:read` / `chat:write` via `requireAuth` ([app.go:262](../../../internal/handlers/app.go)). O primeiro grep procurou `HasPermission` e não viu, porque o helper a encapsula | Ocorrências reusam exatamente `chat:read` / `chat:write`. Ambas já são padrão de manager e de agente ([roles.go:275,305](../../../internal/models/roles.go)) |
 
 ## 4. Modelo de dados
 
@@ -146,7 +147,11 @@ query.Where("occurrences.contact_id IN (?) OR occurrences.assigned_user_id = ?",
 
 É o mesmo padrão de `ListAgentTransfers` ([agent_transfers.go:226](../../../internal/handlers/agent_transfers.go)) e da listagem de sessões do chatbot ([chatbot.go:1395](../../../internal/handlers/chatbot.go)). O `OR assigned_user_id` é a exceção do responsável: sem ela, atribuir uma ocorrência a quem não enxerga aquele contato produz um caso invisível para o próprio responsável. O alcance é estreito — a pessoa vê a ocorrência atribuída a ela, não a lista de conversas do contato.
 
-**Nenhuma permissão nova** (D3). Quem enxerga a conversa lê e escreve na ocorrência, exatamente como em `ConversationNote`. A configuração de etapas fica sob `settings.general:write`, que já governa configuração da organização; **listar** etapas não exige permissão, porque todo agente precisa ver os nomes das etapas.
+**Nenhuma permissão nova** (D3). Os handlers de ocorrência abrem com `requireAuth(r, models.ResourceChat, models.ActionRead|ActionWrite)` e em seguida aplicam o gate de conversa — o mesmo par que `ConversationNote` usa. `chat:read` e `chat:write` já são padrão de manager e de agente, então o CRM funciona no dia seguinte ao deploy sem editar papel nenhum.
+
+A configuração de etapas fica sob `settings.general:write`, que já governa configuração da organização. **Listar** etapas exige apenas `chat:read`, porque todo agente precisa ver os nomes das etapas para trabalhar.
+
+**Sem WebSocket na Fase 1.** As notas fazem broadcast (`BroadcastToContact`), mas cada evento em tempo real é uma superfície nova que precisa de autorização por cliente — e este código já teve vazamentos exatamente aí. O painel busca sob demanda; tempo real entra na Fase 2, junto com o Kanban, que é onde ele realmente importa.
 
 ## 7. Por que nada em produção muda
 

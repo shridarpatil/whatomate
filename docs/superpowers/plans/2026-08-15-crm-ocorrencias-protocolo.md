@@ -29,14 +29,14 @@ cd "C:/Users/Ivan Coelho/Documents/GitHub/whatc" && go build ./... && go vet ./.
 ```
 
 ```bash
-cd "C:/Users/Ivan Coelho/Documents/GitHub/whatc" && TEST_DATABASE_URL='postgres://postgres:postgres@127.0.0.1:5432/whatomate_test?sslmode=disable' go test ./internal/handlers/ -run Occurrence -v
+cd "C:/Users/Ivan Coelho/Documents/GitHub/whatc" && TEST_DATABASE_URL='postgres://postgres:postgres@127.0.0.1:5432/whatomate_test?sslmode=disable' TEST_REDIS_URL='redis://127.0.0.1:6379/1' go test ./internal/handlers/ -run Occurrence -v
 ```
 
 ```bash
 cd "C:/Users/Ivan Coelho/Documents/GitHub/whatc/frontend" && npm run typecheck && npm run i18n:keys
 ```
 
-**Atenção sobre os testes Go:** sem `TEST_DATABASE_URL` os testes de banco **pulam em silêncio** e a suíte reporta `ok`. Um `ok` sem a variável não prova nada. Postgres roda em Docker (`whatc-pg`), usuário `postgres`, senha `postgres`.
+**Atenção sobre os testes Go:** sem `TEST_DATABASE_URL` **e** `TEST_REDIS_URL` os testes de banco **pulam em silêncio** e a suíte reporta `ok`. Um `ok` sem a variável não prova nada. Postgres roda em Docker (`whatc-pg`), usuário `postgres`, senha `postgres`.
 
 **Atenção sobre `npm run lint`:** está configurado com `--fix` e reescreve arquivos do repositório inteiro. Use `npx eslint <arquivos>` sem `--fix`.
 
@@ -352,7 +352,7 @@ func TestOccurrenceProtocol_Format(t *testing.T) {
 - [ ] **Step 4: Rodar o teste e confirmar que falha**
 
 ```bash
-cd "C:/Users/Ivan Coelho/Documents/GitHub/whatc" && TEST_DATABASE_URL='postgres://postgres:postgres@127.0.0.1:5432/whatomate_test?sslmode=disable' go test ./internal/handlers/ -run TestOccurrenceProtocol -v
+cd "C:/Users/Ivan Coelho/Documents/GitHub/whatc" && TEST_DATABASE_URL='postgres://postgres:postgres@127.0.0.1:5432/whatomate_test?sslmode=disable' TEST_REDIS_URL='redis://127.0.0.1:6379/1' go test ./internal/handlers/ -run TestOccurrenceProtocol -v
 ```
 
 Esperado: **falha de compilação** — `app.EnsureDefaultStagesForTest`, `app.InitialStageForTest`, `app.CreateOccurrenceForTest` e `app.NextProtocolNumberForTest` não existem.
@@ -510,7 +510,7 @@ Se `testutil.SetupTestApp`, `testutil.CreateTestOrganization` ou `testutil.Creat
 - [ ] **Step 7: Rodar o teste e confirmar que passa**
 
 ```bash
-cd "C:/Users/Ivan Coelho/Documents/GitHub/whatc" && TEST_DATABASE_URL='postgres://postgres:postgres@127.0.0.1:5432/whatomate_test?sslmode=disable' go test ./internal/handlers/ -run TestOccurrenceProtocol -v
+cd "C:/Users/Ivan Coelho/Documents/GitHub/whatc" && TEST_DATABASE_URL='postgres://postgres:postgres@127.0.0.1:5432/whatomate_test?sslmode=disable' TEST_REDIS_URL='redis://127.0.0.1:6379/1' go test ./internal/handlers/ -run TestOccurrenceProtocol -v
 ```
 
 Esperado: 3 testes passando.
@@ -660,7 +660,7 @@ Se os helpers `testutil.NewAuthedRequest`, `NewAuthedRequestWithBody` ou `SetPat
 - [ ] **Step 2: Rodar e confirmar falha**
 
 ```bash
-cd "C:/Users/Ivan Coelho/Documents/GitHub/whatc" && TEST_DATABASE_URL='postgres://postgres:postgres@127.0.0.1:5432/whatomate_test?sslmode=disable' go test ./internal/handlers/ -run TestOccurrenceStages -v
+cd "C:/Users/Ivan Coelho/Documents/GitHub/whatc" && TEST_DATABASE_URL='postgres://postgres:postgres@127.0.0.1:5432/whatomate_test?sslmode=disable' TEST_REDIS_URL='redis://127.0.0.1:6379/1' go test ./internal/handlers/ -run TestOccurrenceStages -v
 ```
 
 Esperado: falha de compilação — os handlers não existem.
@@ -889,7 +889,7 @@ Em `cmd/whatomate/main.go`, logo depois do bloco de Conversation Notes (as quatr
 - [ ] **Step 5: Rodar os testes e confirmar que passam**
 
 ```bash
-cd "C:/Users/Ivan Coelho/Documents/GitHub/whatc" && TEST_DATABASE_URL='postgres://postgres:postgres@127.0.0.1:5432/whatomate_test?sslmode=disable' go test ./internal/handlers/ -run TestOccurrenceStages -v
+cd "C:/Users/Ivan Coelho/Documents/GitHub/whatc" && TEST_DATABASE_URL='postgres://postgres:postgres@127.0.0.1:5432/whatomate_test?sslmode=disable' TEST_REDIS_URL='redis://127.0.0.1:6379/1' go test ./internal/handlers/ -run TestOccurrenceStages -v
 ```
 
 Esperado: 3 testes passando.
@@ -1042,7 +1042,7 @@ Os helpers `CreateTestAgentWithoutContactsRead`, `EnableStrictVisibility` e `Wit
 - [ ] **Step 2: Rodar e confirmar falha**
 
 ```bash
-cd "C:/Users/Ivan Coelho/Documents/GitHub/whatc" && TEST_DATABASE_URL='postgres://postgres:postgres@127.0.0.1:5432/whatomate_test?sslmode=disable' go test ./internal/handlers/ -run TestOccurrences -v
+cd "C:/Users/Ivan Coelho/Documents/GitHub/whatc" && TEST_DATABASE_URL='postgres://postgres:postgres@127.0.0.1:5432/whatomate_test?sslmode=disable' TEST_REDIS_URL='redis://127.0.0.1:6379/1' go test ./internal/handlers/ -run TestOccurrences -v
 ```
 
 Esperado: falha de compilação.
@@ -1316,7 +1316,7 @@ Em `cmd/whatomate/main.go`, junto ao bloco criado na Task 2:
 - [ ] **Step 5: Rodar os testes e confirmar que passam**
 
 ```bash
-cd "C:/Users/Ivan Coelho/Documents/GitHub/whatc" && TEST_DATABASE_URL='postgres://postgres:postgres@127.0.0.1:5432/whatomate_test?sslmode=disable' go test ./internal/handlers/ -run TestOccurrences -v
+cd "C:/Users/Ivan Coelho/Documents/GitHub/whatc" && TEST_DATABASE_URL='postgres://postgres:postgres@127.0.0.1:5432/whatomate_test?sslmode=disable' TEST_REDIS_URL='redis://127.0.0.1:6379/1' go test ./internal/handlers/ -run TestOccurrences -v
 ```
 
 Esperado: 4 testes passando.
@@ -1509,7 +1509,7 @@ Acrescentar `"github.com/zerodha/fastglue"` aos imports.
 - [ ] **Step 2: Rodar e confirmar falha**
 
 ```bash
-cd "C:/Users/Ivan Coelho/Documents/GitHub/whatc" && TEST_DATABASE_URL='postgres://postgres:postgres@127.0.0.1:5432/whatomate_test?sslmode=disable' go test ./internal/handlers/ -run "TestOccurrences_(CloseAndReopen|EveryEndpoint|NoteAppears)" -v
+cd "C:/Users/Ivan Coelho/Documents/GitHub/whatc" && TEST_DATABASE_URL='postgres://postgres:postgres@127.0.0.1:5432/whatomate_test?sslmode=disable' TEST_REDIS_URL='redis://127.0.0.1:6379/1' go test ./internal/handlers/ -run "TestOccurrences_(CloseAndReopen|EveryEndpoint|NoteAppears)" -v
 ```
 
 Esperado: falha de compilação.
@@ -1820,7 +1820,7 @@ func (a *App) CreateOccurrenceEvent(r *fastglue.Request) error {
 - [ ] **Step 5: Rodar os testes e confirmar que passam**
 
 ```bash
-cd "C:/Users/Ivan Coelho/Documents/GitHub/whatc" && TEST_DATABASE_URL='postgres://postgres:postgres@127.0.0.1:5432/whatomate_test?sslmode=disable' go test ./internal/handlers/ -run TestOccurrences -v
+cd "C:/Users/Ivan Coelho/Documents/GitHub/whatc" && TEST_DATABASE_URL='postgres://postgres:postgres@127.0.0.1:5432/whatomate_test?sslmode=disable' TEST_REDIS_URL='redis://127.0.0.1:6379/1' go test ./internal/handlers/ -run TestOccurrences -v
 ```
 
 Esperado: todos os testes de ocorrência passando, incluindo os 5 subtestes de autorização.
@@ -1959,7 +1959,7 @@ func TestOccurrenceSendProtocol_DeniedForInvisibleContact(t *testing.T) {
 - [ ] **Step 2: Rodar e confirmar falha**
 
 ```bash
-cd "C:/Users/Ivan Coelho/Documents/GitHub/whatc" && TEST_DATABASE_URL='postgres://postgres:postgres@127.0.0.1:5432/whatomate_test?sslmode=disable' go test ./internal/handlers/ -run TestOccurrenceSendProtocol -v
+cd "C:/Users/Ivan Coelho/Documents/GitHub/whatc" && TEST_DATABASE_URL='postgres://postgres:postgres@127.0.0.1:5432/whatomate_test?sslmode=disable' TEST_REDIS_URL='redis://127.0.0.1:6379/1' go test ./internal/handlers/ -run TestOccurrenceSendProtocol -v
 ```
 
 Esperado: falha de compilação.
@@ -2059,7 +2059,7 @@ Se `DefaultSendOptions()` ou `models.MessageTypeText` tiverem nomes diferentes, 
 - [ ] **Step 5: Rodar os testes e confirmar que passam**
 
 ```bash
-cd "C:/Users/Ivan Coelho/Documents/GitHub/whatc" && TEST_DATABASE_URL='postgres://postgres:postgres@127.0.0.1:5432/whatomate_test?sslmode=disable' go test ./internal/handlers/ -run TestOccurrenceSendProtocol -v
+cd "C:/Users/Ivan Coelho/Documents/GitHub/whatc" && TEST_DATABASE_URL='postgres://postgres:postgres@127.0.0.1:5432/whatomate_test?sslmode=disable' TEST_REDIS_URL='redis://127.0.0.1:6379/1' go test ./internal/handlers/ -run TestOccurrenceSendProtocol -v
 ```
 
 Esperado: 3 testes passando.
@@ -2558,7 +2558,7 @@ cd "C:/Users/Ivan Coelho/Documents/GitHub/whatc/frontend" && npm run typecheck &
 - [ ] **Step 2: Suíte Go completa, com banco**
 
 ```bash
-cd "C:/Users/Ivan Coelho/Documents/GitHub/whatc" && TEST_DATABASE_URL='postgres://postgres:postgres@127.0.0.1:5432/whatomate_test?sslmode=disable' go test ./internal/... 2>&1 | grep -E "^(ok|FAIL|---)"
+cd "C:/Users/Ivan Coelho/Documents/GitHub/whatc" && TEST_DATABASE_URL='postgres://postgres:postgres@127.0.0.1:5432/whatomate_test?sslmode=disable' TEST_REDIS_URL='redis://127.0.0.1:6379/1' go test ./internal/... 2>&1 | grep -E "^(ok|FAIL|---)"
 ```
 
 Falhas pré-existentes conhecidas, que **não** são regressão: `internal/handlers` e `internal/worker` estouram por nil pointer em goroutines assíncronas sem Redis conectado. Se aparecer qualquer outra, investigue.
