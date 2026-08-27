@@ -147,6 +147,34 @@ func TestOccurrenceStages_UnsetLastClosingIsRejected(t *testing.T) {
 	assert.True(t, reloaded.IsClosing, "a etapa deve continuar de fechamento")
 }
 
+// Desmarcar is_initial da única etapa inicial deixaria a organização sem
+// porta de entrada — initialStage() passaria a falhar para toda ocorrência
+// nova.
+func TestOccurrenceStages_UnsetSoleInitialIsRejected(t *testing.T) {
+	app := newTestApp(t)
+	org := testutil.CreateTestOrganization(t, app.DB)
+	role := testutil.CreateTestRoleWithKeys(t, app.DB, org.ID, "stages-rw", []string{"settings.general:write", "chat:read"})
+	user := testutil.CreateTestUser(t, app.DB, org.ID, testutil.WithRoleID(&role.ID))
+
+	require.NoError(t, app.EnsureDefaultStagesForTest(org.ID))
+	stage, err := app.InitialStageForTest(org.ID)
+	require.NoError(t, err)
+
+	req := testutil.NewJSONRequest(t, map[string]any{
+		"name": stage.Name, "color": stage.Color, "position": stage.Position,
+		"is_initial": false, "is_closing": stage.IsClosing,
+	})
+	testutil.SetAuthContext(req, org.ID, user.ID)
+	testutil.SetPathParam(req, "id", stage.ID.String())
+
+	require.NoError(t, app.UpdateOccurrenceStage(req))
+	assert.Equal(t, fasthttp.StatusConflict, testutil.GetResponseStatusCode(req))
+
+	var reloaded models.OccurrenceStage
+	require.NoError(t, app.DB.First(&reloaded, "id = ?", stage.ID).Error)
+	assert.True(t, reloaded.IsInitial, "a etapa deve continuar sendo a inicial")
+}
+
 // Criar uma etapa com nome já usado na organização viola o índice único
 // (organization_id, name) — o handler precisa devolver 409, não um 500 cru.
 func TestOccurrenceStages_CreateDuplicateNameIsRejected(t *testing.T) {

@@ -116,14 +116,24 @@ func (a *App) UpdateOccurrenceStage(r *fastglue.Request) error {
 		return r.SendErrorEnvelope(fasthttp.StatusBadRequest, "name is required", nil, "")
 	}
 
+	// Unsetting the sole initial stage without designating a replacement would
+	// leave the org with none — initialStage() would then fail every new
+	// occurrence.
+	if stage.IsInitial && !req.IsInitial {
+		return r.SendErrorEnvelope(fasthttp.StatusConflict,
+			"An initial stage is required; mark another stage as initial instead", nil, "")
+	}
+
 	// Clearing the last closing stage would make it impossible to close any
 	// occurrence at all.
 	if stage.IsClosing && !req.IsClosing {
-		var closing int64
-		a.DB.Model(&models.OccurrenceStage{}).
-			Where("organization_id = ? AND is_closing = ? AND id <> ?", orgID, true, stageID).
-			Count(&closing)
-		if closing == 0 {
+		hasOther, err := hasOtherClosingStage(a.DB, orgID, stageID)
+		if err != nil {
+			a.Log.Error("Failed to check closing stages", "error", err)
+			return r.SendErrorEnvelope(fasthttp.StatusInternalServerError,
+				"Failed to update stage", nil, "")
+		}
+		if !hasOther {
 			return r.SendErrorEnvelope(fasthttp.StatusConflict,
 				"At least one closing stage is required", nil, "")
 		}
@@ -174,8 +184,12 @@ func (a *App) DeleteOccurrenceStage(r *fastglue.Request) error {
 	}
 
 	var inUse int64
-	a.DB.Model(&models.Occurrence{}).
-		Where("organization_id = ? AND stage_id = ?", orgID, stageID).Count(&inUse)
+	if err := a.DB.Model(&models.Occurrence{}).
+		Where("organization_id = ? AND stage_id = ?", orgID, stageID).Count(&inUse).Error; err != nil {
+		a.Log.Error("Failed to check stage usage", "error", err)
+		return r.SendErrorEnvelope(fasthttp.StatusInternalServerError,
+			"Failed to delete stage", nil, "")
+	}
 	if inUse > 0 {
 		return r.SendErrorEnvelope(fasthttp.StatusConflict,
 			"Stage is in use by existing occurrences", nil, "")
@@ -187,11 +201,13 @@ func (a *App) DeleteOccurrenceStage(r *fastglue.Request) error {
 	}
 
 	if stage.IsClosing {
-		var closing int64
-		a.DB.Model(&models.OccurrenceStage{}).
-			Where("organization_id = ? AND is_closing = ? AND id <> ?", orgID, true, stageID).
-			Count(&closing)
-		if closing == 0 {
+		hasOther, err := hasOtherClosingStage(a.DB, orgID, stageID)
+		if err != nil {
+			a.Log.Error("Failed to check closing stages", "error", err)
+			return r.SendErrorEnvelope(fasthttp.StatusInternalServerError,
+				"Failed to delete stage", nil, "")
+		}
+		if !hasOther {
 			return r.SendErrorEnvelope(fasthttp.StatusConflict,
 				"At least one closing stage is required", nil, "")
 		}
@@ -210,6 +226,17 @@ func unsetOtherInitial(tx *gorm.DB, orgID, keepID uuid.UUID) error {
 	return tx.Model(&models.OccurrenceStage{}).
 		Where("organization_id = ? AND id <> ?", orgID, keepID).
 		Update("is_initial", false).Error
+}
+
+// hasOtherClosingStage reports whether the org keeps at least one closing stage
+// besides excludeID. An occurrence can only be concluded by entering a closing
+// stage, so the last one must never be removable.
+func hasOtherClosingStage(db *gorm.DB, orgID, excludeID uuid.UUID) (bool, error) {
+	var closing int64
+	err := db.Model(&models.OccurrenceStage{}).
+		Where("organization_id = ? AND is_closing = ? AND id <> ?", orgID, true, excludeID).
+		Count(&closing).Error
+	return closing > 0, err
 }
 
 // isUniqueNameViolation reports whether err is a Postgres unique-constraint
