@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"errors"
 	"time"
 
 	"github.com/google/uuid"
@@ -82,6 +83,25 @@ func (a *App) visibleOccurrences(query *gorm.DB, userID, orgID uuid.UUID) *gorm.
 		visibleContacts, userID)
 }
 
+// resolveAssignee validates that a user id from a request body names a real
+// user in this organisation. Returns nil when the caller sent no assignee.
+// Without this check an arbitrary UUID lands in assigned_user_id and the
+// occurrence points at nobody, with no error surfaced to the caller.
+func (a *App) resolveAssignee(orgID uuid.UUID, raw *string) (*uuid.UUID, error) {
+	if raw == nil || *raw == "" {
+		return nil, nil
+	}
+	id, err := uuid.Parse(*raw)
+	if err != nil {
+		return nil, errors.New("invalid assigned_user_id")
+	}
+	var user models.User
+	if err := a.DB.Where("id = ? AND organization_id = ?", id, orgID).First(&user).Error; err != nil {
+		return nil, errors.New("assigned_user_id does not belong to this organization")
+	}
+	return &id, nil
+}
+
 // CreateOccurrence opens a case and issues its protocol.
 func (a *App) CreateOccurrence(r *fastglue.Request) error {
 	orgID, userID, err := a.requireAuth(r, models.ResourceChat, models.ActionWrite)
@@ -134,11 +154,11 @@ func (a *App) CreateOccurrence(r *fastglue.Request) error {
 		Priority:       priority,
 		OpenedByUserID: userID,
 	}
-	if req.AssignedUserID != nil && *req.AssignedUserID != "" {
-		if id, err := uuid.Parse(*req.AssignedUserID); err == nil {
-			occ.AssignedUserID = &id
-		}
+	assigneeID, err := a.resolveAssignee(orgID, req.AssignedUserID)
+	if err != nil {
+		return r.SendErrorEnvelope(fasthttp.StatusBadRequest, err.Error(), nil, "")
 	}
+	occ.AssignedUserID = assigneeID
 	if req.SourceTransferID != nil && *req.SourceTransferID != "" {
 		if id, err := uuid.Parse(*req.SourceTransferID); err == nil {
 			occ.SourceTransferID = &id

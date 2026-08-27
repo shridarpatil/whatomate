@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"testing"
 
+	"github.com/google/uuid"
 	"github.com/shridarpatil/whatomate/internal/models"
 	"github.com/shridarpatil/whatomate/test/testutil"
 	"github.com/stretchr/testify/assert"
@@ -123,6 +124,58 @@ func TestOccurrences_AssigneeSeesOwnEvenWhenContactInvisible(t *testing.T) {
 	body := string(testutil.GetResponseBody(req))
 	assert.Contains(t, body, occ.ProtocolNumber,
 		"o responsável precisa enxergar a própria ocorrência")
+}
+
+// assigned_user_id is client input: a UUID that names nobody must not become
+// an orphan reference on the row. 400, and no occurrence created.
+func TestOccurrences_CreateWithUnknownAssigneeIsRejected(t *testing.T) {
+	app := newTestApp(t)
+	org := testutil.CreateTestOrganization(t, app.DB)
+	adminRole := testutil.CreateAdminRole(t, app.DB, org.ID)
+	user := testutil.CreateTestUser(t, app.DB, org.ID, testutil.WithRoleID(&adminRole.ID))
+	contact := testutil.CreateTestContact(t, app.DB, org.ID)
+
+	unknownUserID := uuid.New().String()
+	req := testutil.NewJSONRequest(t, map[string]any{
+		"contact_id": contact.ID.String(), "title": "Atribuir a ninguém",
+		"assigned_user_id": unknownUserID,
+	})
+	testutil.SetAuthContext(req, org.ID, user.ID)
+
+	require.NoError(t, app.CreateOccurrence(req))
+	assert.Equal(t, fasthttp.StatusBadRequest, testutil.GetResponseStatusCode(req))
+
+	var count int64
+	app.DB.Model(&models.Occurrence{}).Where("contact_id = ?", contact.ID).Count(&count)
+	assert.EqualValues(t, 0, count, "nenhuma ocorrência pode ter sido criada")
+}
+
+// assigned_user_id de um usuário de OUTRA organização não pode ser aceito —
+// não é uma questão de permissão do chamador, é dado inválido. 400, e
+// nenhuma ocorrência criada.
+func TestOccurrences_CreateWithForeignOrgAssigneeIsRejected(t *testing.T) {
+	app := newTestApp(t)
+	org := testutil.CreateTestOrganization(t, app.DB)
+	adminRole := testutil.CreateAdminRole(t, app.DB, org.ID)
+	user := testutil.CreateTestUser(t, app.DB, org.ID, testutil.WithRoleID(&adminRole.ID))
+	contact := testutil.CreateTestContact(t, app.DB, org.ID)
+
+	otherOrg := testutil.CreateTestOrganization(t, app.DB)
+	otherAdminRole := testutil.CreateAdminRole(t, app.DB, otherOrg.ID)
+	foreignUser := testutil.CreateTestUser(t, app.DB, otherOrg.ID, testutil.WithRoleID(&otherAdminRole.ID))
+
+	req := testutil.NewJSONRequest(t, map[string]any{
+		"contact_id": contact.ID.String(), "title": "Atribuir a usuário de outra org",
+		"assigned_user_id": foreignUser.ID.String(),
+	})
+	testutil.SetAuthContext(req, org.ID, user.ID)
+
+	require.NoError(t, app.CreateOccurrence(req))
+	assert.Equal(t, fasthttp.StatusBadRequest, testutil.GetResponseStatusCode(req))
+
+	var count int64
+	app.DB.Model(&models.Occurrence{}).Where("contact_id = ?", contact.ID).Count(&count)
+	assert.EqualValues(t, 0, count, "nenhuma ocorrência pode ter sido criada")
 }
 
 // Sanity: the envelope actually round-trips a valid JSON body (guards against
