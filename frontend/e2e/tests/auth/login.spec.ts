@@ -69,4 +69,24 @@ test.describe('Authentication Redirect', () => {
     // Should be on dashboard or chat
     await expect(page).toHaveURL(/\/(dashboard|chat)?/)
   })
+
+  test('should redirect authenticated user away from login page', async ({ page }) => {
+    const loginPage = new LoginPage(page)
+    await loginPage.goto()
+    await loginPage.login(TEST_USERS.admin.email, TEST_USERS.admin.password)
+    await loginPage.expectLoginSuccess()
+    
+    await page.goto('/login')
+    await expect(page).not.toHaveURL(/\/login/)
+  })
+
+  test('should redirect authenticated user away from register page', async ({ page }) => {
+    const loginPage = new LoginPage(page)
+    await loginPage.goto()
+    await loginPage.login(TEST_USERS.admin.email, TEST_USERS.admin.password)
+    await loginPage.expectLoginSuccess()
+    
+    await page.goto('/register')
+    await expect(page).not.toHaveURL(/\/register/)
+  })
 })

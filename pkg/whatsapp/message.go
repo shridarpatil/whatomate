@@ -11,6 +11,18 @@ import (
 	"github.com/shridarpatil/whatomate/internal/templateutil"
 )
 
+// truncateLabel caps a customer-visible button label at max characters.
+// Meta counts characters, not bytes, and the locales this app ships (hi/ta/ar)
+// are multi-byte — slicing on a byte boundary splits a rune and the label
+// arrives garbled instead of merely shortened.
+func truncateLabel(s string, max int) string {
+	runes := []rune(s)
+	if len(runes) <= max {
+		return s
+	}
+	return string(runes[:max])
+}
+
 // SendTextMessage sends a text message to a recipient with optional reply context
 func (c *Client) SendTextMessage(ctx context.Context, account *Account, rcpt Recipient, text string, replyToMsgID ...string) (string, error) {
 	payload := map[string]any{
@@ -64,10 +76,7 @@ func (c *Client) SendInteractiveButtons(ctx context.Context, account *Account, r
 		// Use button format
 		buttonsList := make([]map[string]any, 0, len(buttons))
 		for _, btn := range buttons {
-			title := btn.Title
-			if len(title) > 20 {
-				title = title[:20]
-			}
+			title := truncateLabel(btn.Title, 20)
 			buttonsList = append(buttonsList, map[string]any{
 				"type": "reply",
 				"reply": map[string]any{
@@ -90,10 +99,7 @@ func (c *Client) SendInteractiveButtons(ctx context.Context, account *Account, r
 		// Use list format for 4-10 items
 		rows := make([]map[string]any, 0, len(buttons))
 		for _, btn := range buttons {
-			title := btn.Title
-			if len(title) > 24 {
-				title = title[:24]
-			}
+			title := truncateLabel(btn.Title, 24)
 			rows = append(rows, map[string]any{
 				"id":    btn.ID,
 				"title": title,
@@ -150,9 +156,7 @@ func (c *Client) SendCTAURLButton(ctx context.Context, account *Account, rcpt Re
 	}
 
 	// Truncate button text to 20 chars (WhatsApp limit)
-	if len(buttonText) > 20 {
-		buttonText = buttonText[:20]
-	}
+	buttonText = truncateLabel(buttonText, 20)
 
 	interactive := map[string]any{
 		"type": "cta_url",
@@ -210,9 +214,7 @@ func (c *Client) SendVoiceCallButton(ctx context.Context, account *Account, rcpt
 	if displayText == "" {
 		return "", fmt.Errorf("display text is required")
 	}
-	if len(displayText) > 20 {
-		displayText = displayText[:20]
-	}
+	displayText = truncateLabel(displayText, 20)
 
 	parameters := map[string]any{
 		"display_text": displayText,
@@ -586,9 +588,7 @@ func (c *Client) SendFlowMessage(ctx context.Context, account *Account, rcpt Rec
 	}
 
 	// Truncate CTA text to 20 chars (WhatsApp limit)
-	if len(ctaText) > 20 {
-		ctaText = ctaText[:20]
-	}
+	ctaText = truncateLabel(ctaText, 20)
 
 	interactive := map[string]any{
 		"type": "flow",
