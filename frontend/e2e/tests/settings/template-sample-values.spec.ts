@@ -142,6 +142,8 @@ test.describe('Template Preview with Sample Values', () => {
     await expect(page.getByText('Live Preview')).toBeVisible({ timeout: 10000 })
     const preview = page.getByText(/Hello Ada, welcome/).first()
     await expect(preview).toBeVisible()
-    await expect(page.getByText('{{1}}')).toHaveCount(0)
+    // Scoped to the preview node: the editor's body textarea sits alongside the
+    // preview now, so {{1}} legitimately appears elsewhere on the page.
+    await expect(preview).not.toContainText('{{1}}')
   })
 })
