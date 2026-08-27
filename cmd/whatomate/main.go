@@ -668,6 +668,12 @@ func setupRoutes(g *fastglue.Fastglue, app *handlers.App, lo logf.Logger, basePa
 	g.PUT("/api/contacts/{id}/notes/{note_id}", app.UpdateConversationNote)
 	g.DELETE("/api/contacts/{id}/notes/{note_id}", app.DeleteConversationNote)
 
+	// CRM — etapas de ocorrência
+	g.GET("/api/occurrence-stages", app.ListOccurrenceStages)
+	g.POST("/api/occurrence-stages", app.CreateOccurrenceStage)
+	g.PUT("/api/occurrence-stages/{id}", app.UpdateOccurrenceStage)
+	g.DELETE("/api/occurrence-stages/{id}", app.DeleteOccurrenceStage)
+
 	// Media (serves media files for messages, auth-protected)
 	g.GET("/api/media/{message_id}", app.ServeMedia)
 
