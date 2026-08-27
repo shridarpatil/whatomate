@@ -546,12 +546,7 @@ function addButton(type: ButtonType) {
   // URL and phone are call-to-action buttons, capped at 2 combined.
   if (type === "URL" || type === "PHONE_NUMBER") {
     if (countOf("URL") + countOf("PHONE_NUMBER") >= MAX_CTA) {
-      toast.error(
-        t(
-          "templates.maxCta",
-          `Maximum ${MAX_CTA} call-to-action (URL/Phone) buttons allowed`,
-        ),
-      );
+      toast.error(t("templates.maxCta", { count: MAX_CTA }));
       return;
     }
   }
@@ -559,12 +554,9 @@ function addButton(type: ButtonType) {
   const limit = BUTTON_LIMITS[type];
   if (limit && countOf(type) >= limit) {
     toast.error(
-      t(
-        "templates.maxOfType",
-        limit === 1
-          ? "Only one button of this type is allowed"
-          : `Maximum ${limit} buttons of this type allowed`,
-      ),
+      limit === 1
+        ? t("templates.maxOfTypeOne")
+        : t("templates.maxOfTypeMany", { count: limit }),
     );
     return;
   }

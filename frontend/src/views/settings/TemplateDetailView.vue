@@ -510,11 +510,11 @@ async function save() {
     }
     const gap = firstSequenceGap.value
     if (gap) {
-      toast.error(t('templates.variablesNotSequential', `Variables must be sequential from {{1}}. Expected {{${gap.expected}}}, found {{${gap.found}}}.`))
+      toast.error(t('templates.variablesNotSequential', { expected: gap.expected, found: gap.found }))
       return
     }
     if (missingSamples.value.length) {
-      toast.error(t('templates.samplesRequired', `Add sample values for: ${missingSamples.value.join(', ')}`))
+      toast.error(t('templates.samplesRequired', { names: missingSamples.value.join(', ') }))
       return
     }
     const badButton = firstButtonError.value
