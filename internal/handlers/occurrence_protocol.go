@@ -36,8 +36,10 @@ func (a *App) ensureDefaultStages(orgID uuid.UUID) error {
 		s.OrganizationID = orgID
 		stages[i] = s
 	}
-	// Another request may have seeded between the count and here; ignoring the
-	// conflict is correct, the pipeline just already exists.
+	// Another request may have seeded between the count and here. The
+	// (organization_id, name) unique index on OccurrenceStage is what makes
+	// this a real conflict: the losing insert's rows hit that constraint and
+	// are silently dropped, leaving the winner's single seeded pipeline.
 	return a.DB.Clauses(clause.OnConflict{DoNothing: true}).Create(&stages).Error
 }
 

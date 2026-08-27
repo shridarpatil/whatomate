@@ -31,8 +31,8 @@ const (
 // OccurrenceStage is one configurable column of the org's pipeline.
 type OccurrenceStage struct {
 	BaseModel
-	OrganizationID uuid.UUID `gorm:"type:uuid;index;not null" json:"organization_id"`
-	Name           string    `gorm:"size:100;not null" json:"name"`
+	OrganizationID uuid.UUID `gorm:"type:uuid;index;not null;uniqueIndex:idx_occ_stage_org_name" json:"organization_id"`
+	Name           string    `gorm:"size:100;not null;uniqueIndex:idx_occ_stage_org_name" json:"name"`
 	Color          string    `gorm:"size:20;default:'#6b7280'" json:"color"`
 	Position       int       `gorm:"not null;default:0" json:"position"`
 	IsInitial      bool      `gorm:"default:false" json:"is_initial"`

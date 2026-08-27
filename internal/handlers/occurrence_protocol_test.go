@@ -62,6 +62,51 @@ func TestOccurrenceProtocol_UniqueUnderConcurrency(t *testing.T) {
 	}
 }
 
+// GATE 2. ensureDefaultStages precisa de uma constraint real para o
+// OnConflict conflitar. Sem ela, duas primeiras chamadas concorrentes para
+// uma organização nova passam ambas pelo count==0 e ambas inserem, deixando
+// duplicatas de is_initial/is_closing.
+func TestOccurrenceProtocol_EnsureDefaultStages_ConcurrentSeedIsIdempotent(t *testing.T) {
+	app := newTestApp(t)
+	org := testutil.CreateTestOrganization(t, app.DB)
+
+	const n = 100
+	var wg sync.WaitGroup
+	start := make(chan struct{})
+	errs := make([]error, n)
+
+	for i := 0; i < n; i++ {
+		wg.Add(1)
+		go func(idx int) {
+			defer wg.Done()
+			<-start
+			errs[idx] = app.EnsureDefaultStagesForTest(org.ID)
+		}(i)
+	}
+	close(start)
+	wg.Wait()
+
+	for i, err := range errs {
+		require.NoError(t, err, "seed %d falhou", i)
+	}
+
+	var stages []models.OccurrenceStage
+	require.NoError(t, app.DB.Where("organization_id = ?", org.ID).Find(&stages).Error)
+	require.Len(t, stages, 4, "pipeline deveria ter exatamente 4 etapas")
+
+	initial, closing := 0, 0
+	for _, s := range stages {
+		if s.IsInitial {
+			initial++
+		}
+		if s.IsClosing {
+			closing++
+		}
+	}
+	assert.Equal(t, 1, initial, "deveria haver exatamente 1 etapa inicial")
+	assert.Equal(t, 1, closing, "deveria haver exatamente 1 etapa de fechamento")
+}
+
 // A virada de ano começa em 000001, não continua a sequência do ano anterior.
 func TestOccurrenceProtocol_ResetsOnNewYear(t *testing.T) {
 	app := newTestApp(t)
