@@ -2,6 +2,7 @@ package handlers_test
 
 import (
 	"testing"
+	"time"
 
 	"github.com/google/uuid"
 	"github.com/shridarpatil/whatomate/internal/handlers"
@@ -81,6 +82,74 @@ func TestOccurrences_CloseAndReopen(t *testing.T) {
 		Where("occurrence_id = ? AND type = ?", occ.ID, models.OccurrenceEventStageChange).
 		Count(&changes)
 	assert.EqualValues(t, 2, changes, "cada mudança de etapa vira um evento")
+}
+
+// Reenviar a etapa em que a ocorrência já está deve ser um no-op: nada de
+// evento "X → X" espúrio, nada de re-carimbar closed_at, nada de evento
+// "closed" duplicado.
+func TestOccurrences_SameStageIsNoOp(t *testing.T) {
+	app := newTestApp(t)
+	org := testutil.CreateTestOrganization(t, app.DB)
+	adminRole := testutil.CreateAdminRole(t, app.DB, org.ID)
+	user := testutil.CreateTestUser(t, app.DB, org.ID, testutil.WithRoleID(&adminRole.ID))
+	contact := testutil.CreateTestContact(t, app.DB, org.ID)
+	require.NoError(t, app.DB.Model(contact).Update("assigned_user_id", user.ID).Error)
+
+	initial, err := app.InitialStageForTest(org.ID)
+	require.NoError(t, err)
+
+	var closing models.OccurrenceStage
+	require.NoError(t, app.DB.Where("organization_id = ? AND is_closing = ?", org.ID, true).
+		First(&closing).Error)
+
+	occ := models.Occurrence{
+		OrganizationID: org.ID, ContactID: contact.ID, Title: "Reenvio da mesma etapa",
+		StageID: initial.ID, OpenedByUserID: user.ID,
+	}
+	require.NoError(t, app.CreateOccurrenceForTest(&occ))
+
+	// Fecha.
+	req := authedJSON(t, app, org.ID, user.ID, "PUT", occ.ID, map[string]any{"stage_id": closing.ID.String()})
+	require.NoError(t, app.ChangeOccurrenceStage(req))
+	require.Equal(t, fasthttp.StatusOK, testutil.GetResponseStatusCode(req))
+
+	var closed models.Occurrence
+	require.NoError(t, app.DB.First(&closed, "id = ?", occ.ID).Error)
+	require.NotNil(t, closed.ClosedAt)
+
+	var changesBefore, closedEventsBefore int64
+	app.DB.Model(&models.OccurrenceEvent{}).
+		Where("occurrence_id = ? AND type = ?", occ.ID, models.OccurrenceEventStageChange).
+		Count(&changesBefore)
+	app.DB.Model(&models.OccurrenceEvent{}).
+		Where("occurrence_id = ? AND type = ?", occ.ID, models.OccurrenceEventClosed).
+		Count(&closedEventsBefore)
+
+	// Garante que um novo time.Now() seria distinguível do primeiro closed_at.
+	time.Sleep(10 * time.Millisecond)
+
+	// Reenvia a mesma etapa de fechamento.
+	req2 := authedJSON(t, app, org.ID, user.ID, "PUT", occ.ID, map[string]any{"stage_id": closing.ID.String()})
+	require.NoError(t, app.ChangeOccurrenceStage(req2))
+	assert.Equal(t, fasthttp.StatusOK, testutil.GetResponseStatusCode(req2))
+
+	var afterNoop models.Occurrence
+	require.NoError(t, app.DB.First(&afterNoop, "id = ?", occ.ID).Error)
+	require.NotNil(t, afterNoop.ClosedAt)
+	assert.True(t, closed.ClosedAt.Equal(*afterNoop.ClosedAt),
+		"reenviar a mesma etapa não deve re-carimbar closed_at: antes=%v depois=%v",
+		closed.ClosedAt, afterNoop.ClosedAt)
+
+	var changesAfter, closedEventsAfter int64
+	app.DB.Model(&models.OccurrenceEvent{}).
+		Where("occurrence_id = ? AND type = ?", occ.ID, models.OccurrenceEventStageChange).
+		Count(&changesAfter)
+	app.DB.Model(&models.OccurrenceEvent{}).
+		Where("occurrence_id = ? AND type = ?", occ.ID, models.OccurrenceEventClosed).
+		Count(&closedEventsAfter)
+
+	assert.Equal(t, changesBefore, changesAfter, "reenviar a mesma etapa não deve gravar stage_change")
+	assert.Equal(t, closedEventsBefore, closedEventsAfter, "reenviar a mesma etapa não deve duplicar o evento closed")
 }
 
 // GATE 4. Cada endpoint carrega o próprio gate. Um só desprotegido já vaza.

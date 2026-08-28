@@ -448,6 +448,17 @@ func (a *App) ChangeOccurrenceStage(r *fastglue.Request) error {
 		return nil
 	}
 
+	// Resending the stage the occurrence is already in is a no-op, not a
+	// transition: without this guard it would log a spurious "X → X"
+	// stage_change event, and if the current stage closes cases, it would
+	// restamp closed_at with now() even though the case was never reopened
+	// (plus a duplicate "closed" event). A stage picker that resubmits on
+	// blur can trigger this by itself.
+	if target.ID == occ.StageID {
+		occ.Stage = target
+		return r.SendEnvelope(occurrenceToResponse(*occ))
+	}
+
 	var from models.OccurrenceStage
 	a.DB.Where("id = ?", occ.StageID).First(&from)
 
