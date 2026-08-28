@@ -678,6 +678,11 @@ func setupRoutes(g *fastglue.Fastglue, app *handlers.App, lo logf.Logger, basePa
 	g.GET("/api/occurrences", app.ListOccurrences)
 	g.POST("/api/occurrences", app.CreateOccurrence)
 	g.GET("/api/contacts/{id}/occurrences", app.ListContactOccurrences)
+	g.GET("/api/occurrences/{id}", app.GetOccurrence)
+	g.PUT("/api/occurrences/{id}", app.UpdateOccurrence)
+	g.PUT("/api/occurrences/{id}/stage", app.ChangeOccurrenceStage)
+	g.GET("/api/occurrences/{id}/events", app.ListOccurrenceEvents)
+	g.POST("/api/occurrences/{id}/events", app.CreateOccurrenceEvent)
 
 	// Media (serves media files for messages, auth-protected)
 	g.GET("/api/media/{message_id}", app.ServeMedia)
