@@ -1271,4 +1271,88 @@ export const ivrFlowsService = {
   getAudioUrl: (filename: string) => `${api.defaults.baseURL}/ivr-flows/audio/${encodeURIComponent(filename)}`
 }
 
+// Occurrences (CRM cases)
+//
+// Every occurrence endpoint replies through fastglue's SendEnvelope, which
+// always wraps the payload as { status, data }. Typing the axios generic as
+// ApiEnvelope<T> keeps that wrapper visible to the compiler so callers read
+// res.data.data.<field> with no `as any` cast and no defensive
+// `res.data.data ?? res.data` fallback.
+interface ApiEnvelope<T> {
+  status: string
+  data: T
+}
+
+export interface OccurrenceStage {
+  id: string
+  name: string
+  color: string
+  position: number
+  is_initial: boolean
+  is_closing: boolean
+}
+
+export interface Occurrence {
+  id: string
+  protocol_number: string
+  contact_id: string
+  contact_name: string
+  title: string
+  description: string
+  stage_id: string
+  stage_name: string
+  priority: 'low' | 'normal' | 'high' | 'urgent'
+  assigned_user_id?: string
+  assigned_user_name?: string
+  opened_at: string
+  closed_at?: string
+  source_transfer_id?: string
+}
+
+export interface OccurrenceEvent {
+  id: string
+  type: 'opened' | 'note' | 'stage_change' | 'assignment' | 'protocol_sent' | 'closed'
+  content: string
+  metadata: Record<string, unknown> | null
+  created_by_id?: string
+  created_by_name?: string
+  created_at: string
+}
+
+export const occurrencesService = {
+  list: (params?: Record<string, string>) =>
+    api.get<ApiEnvelope<{ occurrences: Occurrence[]; total: number; has_more: boolean }>>('/occurrences', { params }),
+  get: (id: string) => api.get<ApiEnvelope<Occurrence>>(`/occurrences/${id}`),
+  create: (data: {
+    contact_id: string
+    title: string
+    description?: string
+    priority?: 'low' | 'normal' | 'high' | 'urgent'
+    assigned_user_id?: string
+    source_transfer_id?: string
+  }) => api.post<ApiEnvelope<Occurrence>>('/occurrences', data),
+  update: (id: string, data: {
+    title: string
+    description?: string
+    priority?: 'low' | 'normal' | 'high' | 'urgent'
+    assigned_user_id?: string | null
+  }) => api.put<ApiEnvelope<Occurrence>>(`/occurrences/${id}`, data),
+  changeStage: (id: string, stageId: string) =>
+    api.put<ApiEnvelope<Occurrence>>(`/occurrences/${id}/stage`, { stage_id: stageId }),
+  listEvents: (id: string) =>
+    api.get<ApiEnvelope<{ events: OccurrenceEvent[] }>>(`/occurrences/${id}/events`),
+  addNote: (id: string, content: string) =>
+    api.post<ApiEnvelope<OccurrenceEvent>>(`/occurrences/${id}/events`, { content }),
+  sendProtocol: (id: string) =>
+    api.post<ApiEnvelope<{ sent: boolean; protocol_number: string }>>(`/occurrences/${id}/send-protocol`),
+  listForContact: (contactId: string) =>
+    api.get<ApiEnvelope<{ occurrences: Occurrence[] }>>(`/contacts/${contactId}/occurrences`),
+
+  listStages: () => api.get<ApiEnvelope<{ stages: OccurrenceStage[] }>>('/occurrence-stages'),
+  createStage: (data: Partial<OccurrenceStage>) => api.post<ApiEnvelope<OccurrenceStage>>('/occurrence-stages', data),
+  updateStage: (id: string, data: Partial<OccurrenceStage>) =>
+    api.put<ApiEnvelope<OccurrenceStage>>(`/occurrence-stages/${id}`, data),
+  deleteStage: (id: string) => api.delete<ApiEnvelope<{ deleted: boolean }>>(`/occurrence-stages/${id}`),
+}
+
 export default api
