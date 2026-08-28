@@ -40,14 +40,14 @@ async function fetchOccurrences() {
       page: String(currentPage.value),
       limit: String(pageSize),
     } as Record<string, string>)
-    totalItems.value = store.occurrences.length
+    totalItems.value = store.total
   } catch (e) {
     error.value = true
     toast.error(getErrorMessage(e, t('common.failedLoad', { resource: t('resources.occurrences') })))
   }
 }
 
-const { searchQuery, currentPage, totalItems, pageSize } = useSearchPagination({
+const { searchQuery, currentPage, totalItems, pageSize, handlePageChange } = useSearchPagination({
   fetchFn: fetchOccurrences,
 })
 
@@ -114,6 +114,7 @@ onMounted(async () => {
               :total-items="totalItems"
               :page-size="pageSize"
               item-name="occurrences"
+              @page-change="handlePageChange"
             >
               <template #cell-protocol_number="{ item: occ }">
                 <div class="cursor-pointer font-mono text-sm" @click="goToDetail(occ)">

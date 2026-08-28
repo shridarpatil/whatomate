@@ -4,6 +4,7 @@ import { occurrencesService, type Occurrence, type OccurrenceStage, type Occurre
 
 export const useOccurrencesStore = defineStore('occurrences', () => {
   const occurrences = ref<Occurrence[]>([])
+  const total = ref(0)
   const contactOccurrences = ref<Occurrence[]>([])
   const stages = ref<OccurrenceStage[]>([])
   const events = ref<OccurrenceEvent[]>([])
@@ -19,6 +20,7 @@ export const useOccurrencesStore = defineStore('occurrences', () => {
     try {
       const res = await occurrencesService.list(params)
       occurrences.value = res.data.data.occurrences
+      total.value = res.data.data.total
     } finally {
       isLoading.value = false
     }
@@ -63,12 +65,13 @@ export const useOccurrencesStore = defineStore('occurrences', () => {
 
   function clear() {
     occurrences.value = []
+    total.value = 0
     contactOccurrences.value = []
     events.value = []
   }
 
   return {
-    occurrences, contactOccurrences, stages, events, isLoading,
+    occurrences, total, contactOccurrences, stages, events, isLoading,
     fetchStages, fetchOccurrences, fetchContactOccurrences, fetchEvents,
     createOccurrence, changeStage, addNote, sendProtocol, clear,
   }
