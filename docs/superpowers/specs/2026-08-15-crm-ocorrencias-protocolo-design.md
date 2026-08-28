@@ -243,3 +243,46 @@ Criar ocorrência pela conversa, mover etapa, anotar na timeline, enviar protoco
 | CRM virar caminho alternativo para ver conversas escondidas | Reuso obrigatório de `authorizeConversation`; testes negativos |
 | Evoluir para múltiplos pipelines depois | Custo aceito e registrado: exigirá migração das ocorrências existentes |
 | Dois lugares para escrever anotação confundir o agente | Rótulos explícitos na interface separando pessoa e caso |
+
+---
+
+## 13. Adendo pós-implementação (2026-08-28)
+
+Levantado pelo dono do produto ao ver a Fase 1 rodando, e decidido durante a execução.
+
+### 13.1 Responsável — lacuna fechada na Fase 1
+
+A validação expôs que o campo `assigned_user_id` era **inalcançável pela interface**: o painel do chat não o enviava na criação e a tela de detalhe não o expunha. O backend estava inteiro — `UpdateOccurrence` aceita o campo, `resolveAssignee` valida a organização, e a listagem tem a exceção de visibilidade do responsável. Faltava só a interface, o que tornava a própria exceção do GATE 3 inalcançável na prática.
+
+Não é funcionalidade nova; é completude. Decisões:
+
+| Questão | Decisão |
+|---|---|
+| Responsável por padrão | **Quem abriu.** `assigned_user_id` recebe o criador na criação, então nenhuma ocorrência nasce órfã |
+| Tela de detalhe | Seletor para trocar o responsável, gravando pelo endpoint existente e registrando o evento `assignment` na timeline |
+
+O padrão "quem abriu" também torna a exceção de visibilidade do responsável exercitável de verdade — antes ela existia e era testada, mas nenhum caminho de produto chegava nela.
+
+### 13.2 Protocolo em destaque
+
+O número do protocolo passa a ter tratamento visual de destaque na tela de detalhe. É a funcionalidade que dá nome ao trabalho e o dado que o cliente cita ao telefone; estava exibido como um campo qualquer.
+
+### 13.3 Itens encaminhados para fases seguintes
+
+| Item | Fase | Motivo |
+|---|---|---|
+| Abrir ocorrência a partir de uma mensagem do cliente | 2 | Exige vínculo com `message_id` e ação no balão da mensagem |
+| Kanban como **modo de exibição escolhido pelo usuário** | 2 | Já era o escopo da Fase 2; a escolha entre lista e quadro refina o desenho |
+| Widget de ocorrências no dashboard | 3 | Reusa o sistema de widgets existente |
+| Anexar documentos e imagens | Fase própria | Mexe em armazenamento, upload e **regras de acesso a arquivo** — num sistema com histórico de vazamento de visibilidade, merece spec própria |
+| Exportar ocorrência em PDF | Fase própria | Provavelmente traz dependência nova de geração de PDF |
+
+### 13.4 Risco de deploy registrado
+
+`AutoMigrate` **não recria índice já existente**, mesmo com a definição alterada. O índice `idx_occ_stage_org_name` mudou de total para parcial durante a execução (ver §13.5). Produção não é afetada — a tabela nunca existiu lá, então o primeiro deploy cria já na forma correta. Mas qualquer ambiente que tenha rodado um build intermediário desta branch fica com o índice **total** em silêncio e exige `DROP INDEX` manual antes de subir.
+
+### 13.5 Correção de desenho: índice de nome de etapa
+
+`idx_occ_stage_org_name` foi originalmente especificado como índice **total**, copiando a semântica do índice de `protocol_number`. Estava errado. Para protocolo, total é correto — protocolo apagado nunca se reemite, porque o cliente tem o número anotado. Para **nome de etapa** é o oposto: apagar deve liberar o nome.
+
+Com soft delete, o índice total fazia a etapa apagada seguir ocupando o nome. A consequência real, observada, foi pior que "não dá para recriar homônima": o `AutoMigrate` falha com `SQLSTATE 23505` e **o servidor não sobe**. Corrigido para índice parcial (`WHERE deleted_at IS NULL`) — o primeiro índice parcial do repositório.
