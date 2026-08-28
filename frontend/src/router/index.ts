@@ -300,6 +300,12 @@ const router = createRouter({
           meta: { permission: 'custom_actions' }
         },
         {
+          path: 'settings/occurrence-stages',
+          name: 'occurrence-stages',
+          component: () => import('@/views/settings/OccurrenceStagesView.vue'),
+          meta: { permission: 'settings.general' }
+        },
+        {
           path: 'settings/audit-logs',
           name: 'audit-logs',
           component: () => import('@/views/settings/AuditLogsView.vue'),
@@ -384,6 +390,7 @@ const navigationOrder = [
     { path: '/settings/api-keys', permission: 'api_keys' },
     { path: '/settings/webhooks', permission: 'webhooks' },
     { path: '/settings/custom-actions', permission: 'custom_actions' },
+    { path: '/settings/occurrence-stages', permission: 'settings.general' },
     { path: '/settings/sso', permission: 'settings.sso' }
   ]}
 ]
