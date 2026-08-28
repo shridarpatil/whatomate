@@ -178,6 +178,55 @@ func TestOccurrences_CreateWithForeignOrgAssigneeIsRejected(t *testing.T) {
 	assert.EqualValues(t, 0, count, "nenhuma ocorrência pode ter sido criada")
 }
 
+// Task 9B, requirement 1: an occurrence must never be born orphaned. When the
+// body doesn't bring assigned_user_id, the creator becomes the assignee.
+func TestOccurrences_CreateDefaultsAssigneeToCreator(t *testing.T) {
+	app := newTestApp(t)
+	org := testutil.CreateTestOrganization(t, app.DB)
+	adminRole := testutil.CreateAdminRole(t, app.DB, org.ID)
+	user := testutil.CreateTestUser(t, app.DB, org.ID, testutil.WithRoleID(&adminRole.ID))
+	contact := testutil.CreateTestContact(t, app.DB, org.ID)
+
+	req := testutil.NewJSONRequest(t, map[string]any{
+		"contact_id": contact.ID.String(), "title": "Sem responsável informado",
+	})
+	testutil.SetAuthContext(req, org.ID, user.ID)
+
+	require.NoError(t, app.CreateOccurrence(req))
+	assert.Equal(t, fasthttp.StatusOK, testutil.GetResponseStatusCode(req))
+
+	var occ models.Occurrence
+	require.NoError(t, app.DB.Where("contact_id = ?", contact.ID).First(&occ).Error)
+	require.NotNil(t, occ.AssignedUserID, "a ocorrência não pode nascer órfã")
+	assert.Equal(t, user.ID, *occ.AssignedUserID, "quem abriu deve ser o responsável padrão")
+}
+
+// Task 9B, requirement 1: an explicit assigned_user_id in the body still wins
+// over the creator default.
+func TestOccurrences_CreateWithExplicitAssigneeOverridesDefault(t *testing.T) {
+	app := newTestApp(t)
+	org := testutil.CreateTestOrganization(t, app.DB)
+	adminRole := testutil.CreateAdminRole(t, app.DB, org.ID)
+	creator := testutil.CreateTestUser(t, app.DB, org.ID, testutil.WithRoleID(&adminRole.ID))
+	otherAgentRole := testutil.CreateAgentRole(t, app.DB, org.ID)
+	assignee := testutil.CreateTestUser(t, app.DB, org.ID, testutil.WithRoleID(&otherAgentRole.ID))
+	contact := testutil.CreateTestContact(t, app.DB, org.ID)
+
+	req := testutil.NewJSONRequest(t, map[string]any{
+		"contact_id": contact.ID.String(), "title": "Responsável explícito",
+		"assigned_user_id": assignee.ID.String(),
+	})
+	testutil.SetAuthContext(req, org.ID, creator.ID)
+
+	require.NoError(t, app.CreateOccurrence(req))
+	assert.Equal(t, fasthttp.StatusOK, testutil.GetResponseStatusCode(req))
+
+	var occ models.Occurrence
+	require.NoError(t, app.DB.Where("contact_id = ?", contact.ID).First(&occ).Error)
+	require.NotNil(t, occ.AssignedUserID)
+	assert.Equal(t, assignee.ID, *occ.AssignedUserID, "o responsável enviado deve prevalecer sobre o padrão")
+}
+
 // Sanity: the envelope actually round-trips a valid JSON body (guards against
 // a handler that returns 200 with an empty/broken payload).
 func TestOccurrences_ListEnvelopeShape(t *testing.T) {

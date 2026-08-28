@@ -154,11 +154,20 @@ func (a *App) CreateOccurrence(r *fastglue.Request) error {
 		Priority:       priority,
 		OpenedByUserID: userID,
 	}
-	assigneeID, err := a.resolveAssignee(orgID, req.AssignedUserID)
-	if err != nil {
-		return r.SendErrorEnvelope(fasthttp.StatusBadRequest, err.Error(), nil, "")
+	// req.AssignedUserID != nil is what says the field participated in the
+	// request at all; resolveAssignee alone can't tell "absent" from "sent
+	// empty" apart, since both come back (nil, nil). A body that omits the
+	// field defaults the case to its creator — no occurrence is born orphaned.
+	// A body that explicitly sends "" still clears it, same as UpdateOccurrence.
+	if req.AssignedUserID == nil {
+		occ.AssignedUserID = &userID
+	} else {
+		assigneeID, err := a.resolveAssignee(orgID, req.AssignedUserID)
+		if err != nil {
+			return r.SendErrorEnvelope(fasthttp.StatusBadRequest, err.Error(), nil, "")
+		}
+		occ.AssignedUserID = assigneeID
 	}
-	occ.AssignedUserID = assigneeID
 	if req.SourceTransferID != nil && *req.SourceTransferID != "" {
 		if id, err := uuid.Parse(*req.SourceTransferID); err == nil {
 			occ.SourceTransferID = &id

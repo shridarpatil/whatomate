@@ -4,6 +4,7 @@ import { useRoute } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { toast } from 'vue-sonner'
 import DetailPageLayout from '@/components/shared/DetailPageLayout.vue'
+import { IconButton } from '@/components/shared'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -11,6 +12,7 @@ import { Textarea } from '@/components/ui/textarea'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { occurrencesService, type Occurrence } from '@/services/api'
 import { useOccurrencesStore } from '@/stores/occurrences'
+import { useUsersStore } from '@/stores/users'
 import { formatDateTime } from '@/lib/utils'
 import { getErrorMessage } from '@/lib/api-utils'
 import {
@@ -22,11 +24,18 @@ import {
   ArrowRightLeft,
   UserPlus,
   CheckCircle2,
+  Copy,
 } from 'lucide-vue-next'
 
 const route = useRoute()
 const { t } = useI18n()
 const store = useOccurrencesStore()
+const usersStore = useUsersStore()
+
+// Sentinel for "no assignee" — the Select component can't carry an empty
+// string as an item value, but that's exactly what the backend needs to see
+// to clear assigned_user_id (see occurrences.go's resolveAssignee).
+const UNASSIGNED = '__unassigned__'
 
 const occurrenceId = computed(() => route.params.id as string)
 const occurrence = ref<Occurrence | null>(null)
@@ -35,6 +44,7 @@ const isNotFound = ref(false)
 const isSendingProtocol = ref(false)
 const isAddingNote = ref(false)
 const newNoteContent = ref('')
+const isUpdatingAssignee = ref(false)
 
 const eventIcons: Record<string, any> = {
   opened: PlusCircle,
@@ -67,6 +77,8 @@ const breadcrumbs = computed(() => [
 ])
 
 const currentStage = computed(() => store.stages.find(s => s.id === occurrence.value?.stage_id))
+const activeUsers = computed(() => usersStore.users.filter(u => u.is_active))
+const assigneeSelectValue = computed(() => occurrence.value?.assigned_user_id || UNASSIGNED)
 
 async function loadOccurrence() {
   isLoading.value = true
@@ -90,6 +102,33 @@ async function handleStageChange(stageId: string) {
   } catch (e) {
     toast.error(getErrorMessage(e, t('occurrences.stageChangeFailed')))
   }
+}
+
+async function handleAssigneeChange(value: string) {
+  if (!occurrence.value) return
+  const newAssigneeId = value === UNASSIGNED ? '' : value
+  if ((occurrence.value.assigned_user_id || '') === newAssigneeId) return
+  isUpdatingAssignee.value = true
+  try {
+    await occurrencesService.update(occurrence.value.id, {
+      title: occurrence.value.title,
+      description: occurrence.value.description,
+      priority: occurrence.value.priority,
+      assigned_user_id: newAssigneeId,
+    })
+    await Promise.all([loadOccurrence(), store.fetchEvents(occurrenceId.value)])
+    toast.success(t('occurrences.assigneeUpdated'))
+  } catch (e) {
+    toast.error(getErrorMessage(e, t('occurrences.assigneeUpdateFailed')))
+  } finally {
+    isUpdatingAssignee.value = false
+  }
+}
+
+function copyProtocol() {
+  if (!occurrence.value) return
+  navigator.clipboard.writeText(occurrence.value.protocol_number)
+  toast.success(t('common.copiedToClipboard'))
 }
 
 async function sendProtocol() {
@@ -128,6 +167,7 @@ onMounted(async () => {
     store.fetchStages(),
     loadOccurrence(),
     store.fetchEvents(occurrenceId.value),
+    usersStore.users.length === 0 ? usersStore.fetchUsers().catch(() => {}) : Promise.resolve(),
   ])
 })
 </script>
@@ -168,8 +208,16 @@ onMounted(async () => {
         <!-- Details -->
         <Card>
           <CardHeader class="pb-3">
-            <div class="flex items-center justify-between">
-              <CardTitle class="text-sm font-medium font-mono">{{ occurrence.protocol_number }}</CardTitle>
+            <div class="flex items-center justify-between gap-2">
+              <div class="flex items-center gap-1.5">
+                <CardTitle class="text-lg font-semibold font-mono tracking-wide">{{ occurrence.protocol_number }}</CardTitle>
+                <IconButton
+                  :icon="Copy"
+                  :label="$t('occurrences.copyProtocol')"
+                  class="h-7 w-7"
+                  @click="copyProtocol"
+                />
+              </div>
               <Badge variant="outline" :style="{ borderColor: currentStage?.color, color: currentStage?.color }">
                 {{ occurrence.stage_name }}
               </Badge>
@@ -191,7 +239,21 @@ onMounted(async () => {
               </div>
               <div>
                 <span class="text-muted-foreground text-xs">{{ $t('occurrences.assigneeLabel') }}</span>
-                <p>{{ occurrence.assigned_user_name || $t('occurrences.unassigned') }}</p>
+                <Select
+                  :model-value="assigneeSelectValue"
+                  :disabled="isUpdatingAssignee"
+                  @update:model-value="handleAssigneeChange($event as string)"
+                >
+                  <SelectTrigger class="h-8 mt-1 -ml-2.5 border-none shadow-none px-2.5">
+                    <SelectValue :placeholder="$t('occurrences.unassigned')" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem :value="UNASSIGNED">{{ $t('occurrences.unassigned') }}</SelectItem>
+                    <SelectItem v-for="u in activeUsers" :key="u.id" :value="u.id">
+                      {{ u.full_name }}
+                    </SelectItem>
+                  </SelectContent>
+                </Select>
               </div>
               <div>
                 <span class="text-muted-foreground text-xs">{{ $t('occurrences.openedAtLabel') }}</span>
