@@ -147,6 +147,18 @@ const router = createRouter({
           meta: { permission: 'transfers' }
         },
         {
+          path: 'crm/occurrences',
+          name: 'occurrences',
+          component: () => import('@/views/crm/OccurrencesView.vue'),
+          meta: { permission: 'chat' }
+        },
+        {
+          path: 'crm/occurrences/:id',
+          name: 'occurrence-detail',
+          component: () => import('@/views/crm/OccurrenceDetailView.vue'),
+          meta: { permission: 'chat' }
+        },
+        {
           path: 'analytics/agents',
           name: 'agent-analytics',
           component: () => import('@/views/analytics/AgentAnalyticsView.vue'),

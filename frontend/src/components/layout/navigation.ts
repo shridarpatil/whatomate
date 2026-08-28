@@ -21,7 +21,8 @@ import {
   Tags,
   PhoneCall,
   PhoneForwarded,
-  ScrollText
+  ScrollText,
+  ClipboardList
 } from 'lucide-vue-next'
 import type { Component } from 'vue'
 
@@ -58,6 +59,12 @@ export const navigationSections: NavSection[] = [
         name: 'nav.chat',
         path: '/chat',
         icon: MessageSquare,
+        permission: 'chat'
+      },
+      {
+        name: 'nav.crm',
+        path: '/crm/occurrences',
+        icon: ClipboardList,
         permission: 'chat'
       },
     ]
