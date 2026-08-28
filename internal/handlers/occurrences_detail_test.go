@@ -188,12 +188,13 @@ func TestOccurrences_EveryEndpointIsAuthorized(t *testing.T) {
 		{"mudar etapa", app.ChangeOccurrenceStage, "PUT", map[string]any{"stage_id": stage.ID.String()}},
 		{"listar eventos", app.ListOccurrenceEvents, "GET", nil},
 		{"criar evento", app.CreateOccurrenceEvent, "POST", map[string]any{"content": "nota"}},
+		{"enviar protocolo", app.SendOccurrenceProtocol, "POST", nil},
 	}
 
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			var req *fastglue.Request
-			if tc.body == nil {
+			if tc.method == "GET" {
 				req = authedGET(t, app, org.ID, outsider.ID, occ.ID)
 			} else {
 				req = authedJSON(t, app, org.ID, outsider.ID, tc.method, occ.ID, tc.body)
