@@ -427,6 +427,7 @@ func (a *App) UpdateOccurrence(r *fastglue.Request) error {
 		})
 	}
 
+	a.DB.Preload("Stage").Preload("AssignedUser").First(occ, occ.ID)
 	return r.SendEnvelope(occurrenceToResponse(*occ))
 }
 

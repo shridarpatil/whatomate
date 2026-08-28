@@ -455,6 +455,7 @@
     "occurrenceTitle": "Title",
     "occurrenceDescription": "Description",
     "noOccurrences": "No occurrences for this contact",
+    "occurrenceCreateFailed": "Failed to create occurrence",
     "protocol": "Protocol",
     "sendProtocol": "Send protocol",
     "sendProtocolWindowClosed": "Outside the 24h window — only templates can be sent",

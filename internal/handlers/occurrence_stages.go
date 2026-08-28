@@ -59,6 +59,13 @@ func (a *App) CreateOccurrenceStage(r *fastglue.Request) error {
 	if req.Name == "" {
 		return r.SendErrorEnvelope(fasthttp.StatusBadRequest, "name is required", nil, "")
 	}
+	// A stage that is both initial and closing would birth every new
+	// occurrence already closed with closed_at unset — CreateOccurrence never
+	// stamps it — so the open filter and the UI badge would disagree forever.
+	if req.IsInitial && req.IsClosing {
+		return r.SendErrorEnvelope(fasthttp.StatusBadRequest,
+			"A stage cannot be both initial and closing", nil, "")
+	}
 
 	stage := models.OccurrenceStage{
 		OrganizationID: orgID,
@@ -114,6 +121,13 @@ func (a *App) UpdateOccurrenceStage(r *fastglue.Request) error {
 	}
 	if req.Name == "" {
 		return r.SendErrorEnvelope(fasthttp.StatusBadRequest, "name is required", nil, "")
+	}
+	// Same as CreateOccurrenceStage: initial + closing at once births cases
+	// that are closed on arrival without a closed_at, so open filter and badge
+	// disagree.
+	if req.IsInitial && req.IsClosing {
+		return r.SendErrorEnvelope(fasthttp.StatusBadRequest,
+			"A stage cannot be both initial and closing", nil, "")
 	}
 
 	// Unsetting the sole initial stage without designating a replacement would

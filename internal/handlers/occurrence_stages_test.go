@@ -223,6 +223,59 @@ func TestOccurrenceStages_RenameToDuplicateNameIsRejected(t *testing.T) {
 	assert.NotEqual(t, "Aberto", reloaded.Name, "o rename não pode ter sido aplicado")
 }
 
+// Uma etapa não pode ser inicial e de fechamento ao mesmo tempo: a ocorrência
+// nasceria numa etapa que fecha o caso sem que CreateOccurrence jamais
+// preencha closed_at, e o filtro de "abertas" e o selo na tela discordariam
+// para sempre.
+func TestOccurrenceStages_CreateInitialAndClosingIsRejected(t *testing.T) {
+	app := newTestApp(t)
+	org := testutil.CreateTestOrganization(t, app.DB)
+	role := testutil.CreateTestRoleWithKeys(t, app.DB, org.ID, "stages-rw", []string{"settings.general:write", "chat:read"})
+	user := testutil.CreateTestUser(t, app.DB, org.ID, testutil.WithRoleID(&role.ID))
+
+	req := testutil.NewJSONRequest(t, map[string]any{
+		"name": "Inválida", "color": "#000000", "position": 9,
+		"is_initial": true, "is_closing": true,
+	})
+	testutil.SetAuthContext(req, org.ID, user.ID)
+
+	require.NoError(t, app.CreateOccurrenceStage(req))
+	assert.Equal(t, fasthttp.StatusBadRequest, testutil.GetResponseStatusCode(req))
+
+	var count int64
+	app.DB.Model(&models.OccurrenceStage{}).Where("organization_id = ? AND name = ?", org.ID, "Inválida").Count(&count)
+	assert.EqualValues(t, 0, count, "a etapa inválida não pode ter sido criada")
+}
+
+// Mesma regra na atualização.
+func TestOccurrenceStages_UpdateInitialAndClosingIsRejected(t *testing.T) {
+	app := newTestApp(t)
+	org := testutil.CreateTestOrganization(t, app.DB)
+	role := testutil.CreateTestRoleWithKeys(t, app.DB, org.ID, "stages-rw", []string{"settings.general:write", "chat:read"})
+	user := testutil.CreateTestUser(t, app.DB, org.ID, testutil.WithRoleID(&role.ID))
+
+	require.NoError(t, app.EnsureDefaultStagesForTest(org.ID))
+
+	var other models.OccurrenceStage
+	require.NoError(t, app.DB.Where("organization_id = ? AND is_initial = ? AND is_closing = ?", org.ID, false, false).
+		Order("position ASC").First(&other).Error)
+
+	req := testutil.NewJSONRequest(t, map[string]any{
+		"name": other.Name, "color": other.Color, "position": other.Position,
+		"is_initial": true, "is_closing": true,
+	})
+	testutil.SetAuthContext(req, org.ID, user.ID)
+	testutil.SetPathParam(req, "id", other.ID.String())
+
+	require.NoError(t, app.UpdateOccurrenceStage(req))
+	assert.Equal(t, fasthttp.StatusBadRequest, testutil.GetResponseStatusCode(req))
+
+	var reloaded models.OccurrenceStage
+	require.NoError(t, app.DB.First(&reloaded, "id = ?", other.ID).Error)
+	assert.False(t, reloaded.IsInitial, "a etapa não pode ter virado inicial")
+	assert.False(t, reloaded.IsClosing, "a etapa não pode ter virado de fechamento")
+}
+
 // Apagar uma etapa deve liberar o nome para reuso — diferente do protocolo,
 // ninguém tem o nome de uma etapa anotado. O índice único precisa ser
 // parcial (ignorar linhas soft-deleted), senão criar outra etapa com o

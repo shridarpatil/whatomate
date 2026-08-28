@@ -1,10 +1,13 @@
 <script setup lang="ts">
 import { ref, onMounted, watch } from 'vue'
+import { useI18n } from 'vue-i18n'
+import { toast } from 'vue-sonner'
 import { useOccurrencesStore } from '@/stores/occurrences'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Badge } from '@/components/ui/badge'
 import { ScrollArea } from '@/components/ui/scroll-area'
+import { getErrorMessage } from '@/lib/api-utils'
 import { Plus } from 'lucide-vue-next'
 
 const props = defineProps<{
@@ -12,6 +15,7 @@ const props = defineProps<{
   sourceTransferId?: string
 }>()
 
+const { t } = useI18n()
 const store = useOccurrencesStore()
 const isCreating = ref(false)
 const newTitle = ref('')
@@ -23,13 +27,17 @@ async function load() {
 
 async function create() {
   if (!newTitle.value.trim()) return
-  await store.createOccurrence({
-    contact_id: props.contactId,
-    title: newTitle.value.trim(),
-    source_transfer_id: props.sourceTransferId,
-  })
-  newTitle.value = ''
-  isCreating.value = false
+  try {
+    await store.createOccurrence({
+      contact_id: props.contactId,
+      title: newTitle.value.trim(),
+      source_transfer_id: props.sourceTransferId,
+    })
+    newTitle.value = ''
+    isCreating.value = false
+  } catch (e) {
+    toast.error(getErrorMessage(e, t('chat.occurrenceCreateFailed')))
+  }
 }
 
 onMounted(load)

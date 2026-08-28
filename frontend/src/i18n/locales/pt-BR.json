@@ -455,6 +455,7 @@
     "occurrenceTitle": "Título",
     "occurrenceDescription": "Descrição",
     "noOccurrences": "Nenhuma ocorrência para este contato",
+    "occurrenceCreateFailed": "Falha ao criar ocorrência",
     "protocol": "Protocolo",
     "sendProtocol": "Enviar protocolo",
     "sendProtocolWindowClosed": "Fora da janela de 24h — só é possível enviar template",

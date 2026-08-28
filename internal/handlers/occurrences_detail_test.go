@@ -182,22 +182,26 @@ func TestOccurrences_EveryEndpointIsAuthorized(t *testing.T) {
 		handler func(*fastglue.Request) error
 		method  string
 		body    map[string]any
+		pathID  uuid.UUID // most handlers take the occurrence id; ListContactOccurrences takes the contact id
 	}{
-		{"detalhe", app.GetOccurrence, "GET", nil},
-		{"atualizar", app.UpdateOccurrence, "PUT", map[string]any{"title": "x"}},
-		{"mudar etapa", app.ChangeOccurrenceStage, "PUT", map[string]any{"stage_id": stage.ID.String()}},
-		{"listar eventos", app.ListOccurrenceEvents, "GET", nil},
-		{"criar evento", app.CreateOccurrenceEvent, "POST", map[string]any{"content": "nota"}},
-		{"enviar protocolo", app.SendOccurrenceProtocol, "POST", nil},
+		{"detalhe", app.GetOccurrence, "GET", nil, occ.ID},
+		{"atualizar", app.UpdateOccurrence, "PUT", map[string]any{"title": "x"}, occ.ID},
+		{"mudar etapa", app.ChangeOccurrenceStage, "PUT", map[string]any{"stage_id": stage.ID.String()}, occ.ID},
+		{"listar eventos", app.ListOccurrenceEvents, "GET", nil, occ.ID},
+		{"criar evento", app.CreateOccurrenceEvent, "POST", map[string]any{"content": "nota"}, occ.ID},
+		{"enviar protocolo", app.SendOccurrenceProtocol, "POST", nil, occ.ID},
+		// Not scoped by visibleOccurrences like ListOccurrences — relies entirely
+		// on canViewConversation, so it deserves the same authorization check.
+		{"listar ocorrências do contato", app.ListContactOccurrences, "GET", nil, contact.ID},
 	}
 
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			var req *fastglue.Request
 			if tc.method == "GET" {
-				req = authedGET(t, app, org.ID, outsider.ID, occ.ID)
+				req = authedGET(t, app, org.ID, outsider.ID, tc.pathID)
 			} else {
-				req = authedJSON(t, app, org.ID, outsider.ID, tc.method, occ.ID, tc.body)
+				req = authedJSON(t, app, org.ID, outsider.ID, tc.method, tc.pathID, tc.body)
 			}
 
 			require.NoError(t, tc.handler(req))
