@@ -108,6 +108,16 @@ const CLEANUP_STATEMENTS: Array<{ label: string; sql: string }> = [
     label: 'E2E custom roles',
     sql: `DELETE FROM custom_roles WHERE ${E2E_NAME_PREDICATE}`,
   },
+  // occurrence_events reference occurrences, which reference contacts — must
+  // delete events before occurrences, and occurrences before contacts.
+  {
+    label: 'occurrence_events of E2E contacts',
+    sql: `DELETE FROM occurrence_events WHERE occurrence_id IN (SELECT id FROM occurrences WHERE contact_id IN (SELECT id FROM contacts WHERE profile_name LIKE 'E2E-%' OR profile_name LIKE 'E2E %'))`,
+  },
+  {
+    label: 'occurrences of E2E contacts',
+    sql: `DELETE FROM occurrences WHERE contact_id IN (SELECT id FROM contacts WHERE profile_name LIKE 'E2E-%' OR profile_name LIKE 'E2E %')`,
+  },
   {
     label: 'E2E contacts',
     sql: `DELETE FROM contacts WHERE profile_name LIKE 'E2E-%' OR profile_name LIKE 'E2E %'`,
