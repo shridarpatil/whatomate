@@ -31,12 +31,16 @@ const (
 // OccurrenceStage is one configurable column of the org's pipeline.
 type OccurrenceStage struct {
 	BaseModel
-	OrganizationID uuid.UUID `gorm:"type:uuid;index;not null;uniqueIndex:idx_occ_stage_org_name" json:"organization_id"`
-	Name           string    `gorm:"size:100;not null;uniqueIndex:idx_occ_stage_org_name" json:"name"`
-	Color          string    `gorm:"size:20;default:'#6b7280'" json:"color"`
-	Position       int       `gorm:"not null;default:0" json:"position"`
-	IsInitial      bool      `gorm:"default:false" json:"is_initial"`
-	IsClosing      bool      `gorm:"default:false" json:"is_closing"`
+	OrganizationID uuid.UUID `gorm:"type:uuid;index;not null;uniqueIndex:idx_occ_stage_org_name,where:deleted_at IS NULL" json:"organization_id"`
+
+	// Partial unique index, deliberately NOT total: this is config, not a
+	// customer-facing number. Deleting a stage must free its name for reuse —
+	// unlike ProtocolNumber below, nobody has a stage name written down.
+	Name      string `gorm:"size:100;not null;uniqueIndex:idx_occ_stage_org_name,where:deleted_at IS NULL" json:"name"`
+	Color     string `gorm:"size:20;default:'#6b7280'" json:"color"`
+	Position  int    `gorm:"not null;default:0" json:"position"`
+	IsInitial bool   `gorm:"default:false" json:"is_initial"`
+	IsClosing bool   `gorm:"default:false" json:"is_closing"`
 }
 
 func (OccurrenceStage) TableName() string { return "occurrence_stages" }

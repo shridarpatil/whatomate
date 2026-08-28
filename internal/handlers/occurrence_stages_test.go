@@ -222,3 +222,41 @@ func TestOccurrenceStages_RenameToDuplicateNameIsRejected(t *testing.T) {
 	require.NoError(t, app.DB.First(&reloaded, "id = ?", other.ID).Error)
 	assert.NotEqual(t, "Aberto", reloaded.Name, "o rename não pode ter sido aplicado")
 }
+
+// Apagar uma etapa deve liberar o nome para reuso — diferente do protocolo,
+// ninguém tem o nome de uma etapa anotado. O índice único precisa ser
+// parcial (ignorar linhas soft-deleted), senão criar outra etapa com o
+// mesmo nome depois de apagar a antiga devolve 409 para sempre.
+func TestOccurrenceStages_DeletedNameCanBeReused(t *testing.T) {
+	app := newTestApp(t)
+	org := testutil.CreateTestOrganization(t, app.DB)
+	role := testutil.CreateTestRoleWithKeys(t, app.DB, org.ID, "stages-rw", []string{"settings.general:write", "chat:read"})
+	user := testutil.CreateTestUser(t, app.DB, org.ID, testutil.WithRoleID(&role.ID))
+
+	require.NoError(t, app.EnsureDefaultStagesForTest(org.ID))
+
+	createReq := testutil.NewJSONRequest(t, map[string]any{
+		"name": "Aguardando peça", "color": "#000000", "position": 9,
+	})
+	testutil.SetAuthContext(createReq, org.ID, user.ID)
+	require.NoError(t, app.CreateOccurrenceStage(createReq))
+	require.Equal(t, fasthttp.StatusOK, testutil.GetResponseStatusCode(createReq))
+
+	var stage models.OccurrenceStage
+	require.NoError(t, app.DB.Where("organization_id = ? AND name = ?", org.ID, "Aguardando peça").
+		First(&stage).Error)
+
+	delReq := testutil.NewRequest(t)
+	testutil.SetAuthContext(delReq, org.ID, user.ID)
+	testutil.SetPathParam(delReq, "id", stage.ID.String())
+	require.NoError(t, app.DeleteOccurrenceStage(delReq))
+	require.Equal(t, fasthttp.StatusOK, testutil.GetResponseStatusCode(delReq))
+
+	recreateReq := testutil.NewJSONRequest(t, map[string]any{
+		"name": "Aguardando peça", "color": "#111111", "position": 9,
+	})
+	testutil.SetAuthContext(recreateReq, org.ID, user.ID)
+	require.NoError(t, app.CreateOccurrenceStage(recreateReq))
+	assert.Equal(t, fasthttp.StatusOK, testutil.GetResponseStatusCode(recreateReq),
+		"apagar a etapa deve liberar o nome para uma nova etapa")
+}
