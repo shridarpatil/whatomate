@@ -38,4 +38,32 @@ test.describe('CRM occurrence board', () => {
     await page.waitForLoadState('networkidle')
     await expect(occurrencesPage.listView).toBeVisible()
   })
+
+  test('clicking the already-active mode button is a no-op', async ({ page }) => {
+    await occurrencesPage.gotoList()
+    await expect(occurrencesPage.listView).toBeVisible()
+
+    // Switch away and back so a concrete "list" preference is actually
+    // persisted, not just the unwritten default — otherwise the assertion
+    // below can't tell a corrupted store from a preference that was never
+    // written in the first place.
+    await occurrencesPage.switchToBoard()
+    await occurrencesPage.switchToList()
+    await expect(occurrencesPage.listView).toBeVisible()
+
+    // reka-ui's single-select ToggleGroup deselects (emits undefined) when
+    // the active item is clicked again. Clicking "List" while already in
+    // list mode must not fall through to the board placeholder or corrupt
+    // the stored preference.
+    await occurrencesPage.switchToList()
+    await expect(occurrencesPage.listView).toBeVisible()
+    await expect(occurrencesPage.boardView).not.toBeVisible()
+
+    const stored = await page.evaluate(() => localStorage.getItem('occurrences:view-mode'))
+    expect(stored).toBe('list')
+
+    await page.reload()
+    await page.waitForLoadState('networkidle')
+    await expect(occurrencesPage.listView).toBeVisible()
+  })
 })

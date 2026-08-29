@@ -1,4 +1,4 @@
-import { ref, watch, type Ref } from 'vue'
+import { computed, ref, watch, type WritableComputedRef } from 'vue'
 
 export type OccurrenceViewMode = 'list' | 'board'
 
@@ -13,19 +13,34 @@ const STORAGE_KEY = 'occurrences:view-mode'
  * quadro. Leitura e escrita ficam dentro de try/catch porque em janela privada
  * o próprio acessador lança, em vez de devolver vazio.
  */
-export function useOccurrenceViewMode(): { mode: Ref<OccurrenceViewMode> } {
-  const mode = ref<OccurrenceViewMode>('list')
+export function useOccurrenceViewMode(): { mode: WritableComputedRef<OccurrenceViewMode> } {
+  const state = ref<OccurrenceViewMode>('list')
 
   try {
     const saved = localStorage.getItem(STORAGE_KEY)
     if (saved === 'list' || saved === 'board') {
-      mode.value = saved
+      state.value = saved
     }
   } catch {
     // Entrada ausente ou bloqueada — o padrão acima já vale.
   }
 
-  watch(mode, value => {
+  // reka-ui's single-select ToggleGroupRoot deselects the active item on a
+  // repeat click, emitting `undefined` through update:modelValue. A plain
+  // ref bound with v-model would take that undefined as-is, blanking the
+  // toggle and falling through to the board placeholder. The setter here
+  // ignores anything that isn't a real mode, leaving `state` — and whatever
+  // was last persisted — untouched, so a repeat click is a no-op.
+  const mode = computed<OccurrenceViewMode>({
+    get: () => state.value,
+    set: value => {
+      if (value === 'list' || value === 'board') {
+        state.value = value
+      }
+    },
+  })
+
+  watch(state, value => {
     try {
       localStorage.setItem(STORAGE_KEY, value)
     } catch {
