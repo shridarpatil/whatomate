@@ -56,6 +56,13 @@ export default defineConfig({
   server: {
     port: 3000,
     allowedHosts: [],
+    watch: {
+      // Playwright rewrites these while the dev server is running. On Windows
+      // the file is still locked when chokidar tries to watch it, which throws
+      // EBUSY on the FSWatcher and kills the whole vite process — so every E2E
+      // run would take the dev server down with it.
+      ignored: ['**/playwright-report/**', '**/test-results/**']
+    },
     proxy: {
       '/api': {
         target: 'http://localhost:8080',

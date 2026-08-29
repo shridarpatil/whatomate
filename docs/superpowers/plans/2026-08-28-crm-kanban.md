@@ -723,12 +723,9 @@ e acrescente `fetchColumn` ao objeto devolvido, junto de `fetchOccurrences`.
 ```vue
 <script setup lang="ts">
 import { Badge } from '@/components/ui/badge'
-import { useOccurrencesStore } from '@/stores/occurrences'
 import type { Occurrence } from '@/services/api'
 
 defineProps<{ occurrence: Occurrence; disabled?: boolean }>()
-
-const store = useOccurrencesStore()
 
 // As chaves do i18n são camelCase; não existe `priority_low`.
 const PRIORITY_KEY = {
@@ -749,11 +746,11 @@ const PRIORITY_KEY = {
       <span class="font-mono text-xs text-white/50 light:text-muted-foreground">
         {{ occurrence.protocol_number }}
       </span>
-      <Badge
-        variant="outline"
-        class="shrink-0 text-xs"
-        :style="{ borderColor: store.stageColor(occurrence.stage_id), color: store.stageColor(occurrence.stage_id) }"
-      >
+      <!-- Sem cor de etapa aqui: o cabeçalho da coluna já carrega a cor, e
+           todos os cartões de uma coluna estão na mesma etapa. Colorir um
+           rótulo de prioridade pela etapa não diria nada e ainda sugeriria
+           que a cor significa urgência. `normal` é o padrão e fica implícito. -->
+      <Badge v-if="occurrence.priority !== 'normal'" variant="outline" class="shrink-0 text-xs">
         {{ $t(PRIORITY_KEY[occurrence.priority]) }}
       </Badge>
     </div>
@@ -924,13 +921,14 @@ watch(() => props.protocol, loadAll)
 
 - [ ] **Step 6: Acrescente as strings nos dois locales**
 
-**`occurrences.loadMore` já existe** (`en.json:2032`, "Load More") e o quadro a reaproveita. Não crie de novo.
+**Correção registrada durante a execução:** este passo afirmava que `occurrences.loadMore` já existia em `en.json:2032`. Estava errado — aquela linha é do bloco `agentTransfers`, e a chave **não existia** em `occurrences`. São **três** chaves novas, não duas.
 
-Só duas chaves são novas. Em `en.json`, no bloco `"occurrences"`:
+Em `en.json`, no bloco `"occurrences"`:
 
 ```json
     "columnLoadFailed": "Could not load this column",
     "columnEmpty": "Nothing here",
+    "loadMore": "Load More",
 ```
 
 Em `pt-BR.json`:
@@ -938,6 +936,7 @@ Em `pt-BR.json`:
 ```json
     "columnLoadFailed": "Não foi possível carregar esta coluna",
     "columnEmpty": "Nada aqui",
+    "loadMore": "Carregar mais",
 ```
 
 - [ ] **Step 7: Troque o marcador pelo quadro**
@@ -1243,15 +1242,9 @@ No template, troque o bloco dos cartões pelo `draggable`:
 
 O `v-if="col.loading"`, o vazio e o "carregar mais" ficam **fora** do `draggable`, logo depois dele — só os cartões vão dentro.
 
-Se o TypeScript reclamar de tipos do `vuedraggable`, que não traz definições próprias, crie `frontend/src/types/vuedraggable.d.ts`:
+**Não crie shim de tipos.** O `vuedraggable` **traz** definições próprias (`node_modules/vuedraggable/src/vuedraggable.d.ts`, declaradas em `"types"` no `package.json` dele). Um `declare module 'vuedraggable'` escrito à mão sombrearia as reais e pioraria a checagem.
 
-```ts
-declare module 'vuedraggable' {
-  import type { DefineComponent } from 'vue'
-  const draggable: DefineComponent<Record<string, unknown>>
-  export default draggable
-}
-```
+O `@change` não vem tipado, e é por isso que os handlers acima declaram a forma do evento à mão. Já `v-model` e `:move` são cobertos pelos tipos que vêm no pacote.
 
 - [ ] **Step 5: Nenhuma string nova**
 

@@ -211,6 +211,19 @@ func (a *App) ListOccurrences(r *fastglue.Request) error {
 		query = query.Where("occurrences.closed_at IS NULL")
 	}
 
+	// O quadro pede os casos fechados a partir de um corte que o cliente
+	// calcula e envia absoluto. Ao contrário dos filtros de audit_logs, um
+	// valor ilegível é recusado em vez de ignorado: descartá-lo em silêncio
+	// transformaria a coluna "fechadas recentemente" na lista inteira.
+	if v := string(r.RequestCtx.QueryArgs().Peek("closed_since")); v != "" {
+		since, err := time.Parse(time.RFC3339, v)
+		if err != nil {
+			return r.SendErrorEnvelope(fasthttp.StatusBadRequest,
+				"closed_since must be an RFC3339 timestamp", nil, "")
+		}
+		query = query.Where("occurrences.closed_at IS NOT NULL AND occurrences.closed_at >= ?", since)
+	}
+
 	var total int64
 	query.Count(&total)
 
