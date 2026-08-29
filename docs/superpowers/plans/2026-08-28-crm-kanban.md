@@ -723,12 +723,9 @@ e acrescente `fetchColumn` ao objeto devolvido, junto de `fetchOccurrences`.
 ```vue
 <script setup lang="ts">
 import { Badge } from '@/components/ui/badge'
-import { useOccurrencesStore } from '@/stores/occurrences'
 import type { Occurrence } from '@/services/api'
 
 defineProps<{ occurrence: Occurrence; disabled?: boolean }>()
-
-const store = useOccurrencesStore()
 
 // As chaves do i18n são camelCase; não existe `priority_low`.
 const PRIORITY_KEY = {
@@ -749,11 +746,11 @@ const PRIORITY_KEY = {
       <span class="font-mono text-xs text-white/50 light:text-muted-foreground">
         {{ occurrence.protocol_number }}
       </span>
-      <Badge
-        variant="outline"
-        class="shrink-0 text-xs"
-        :style="{ borderColor: store.stageColor(occurrence.stage_id), color: store.stageColor(occurrence.stage_id) }"
-      >
+      <!-- Sem cor de etapa aqui: o cabeçalho da coluna já carrega a cor, e
+           todos os cartões de uma coluna estão na mesma etapa. Colorir um
+           rótulo de prioridade pela etapa não diria nada e ainda sugeriria
+           que a cor significa urgência. `normal` é o padrão e fica implícito. -->
+      <Badge v-if="occurrence.priority !== 'normal'" variant="outline" class="shrink-0 text-xs">
         {{ $t(PRIORITY_KEY[occurrence.priority]) }}
       </Badge>
     </div>
@@ -1243,15 +1240,9 @@ No template, troque o bloco dos cartões pelo `draggable`:
 
 O `v-if="col.loading"`, o vazio e o "carregar mais" ficam **fora** do `draggable`, logo depois dele — só os cartões vão dentro.
 
-Se o TypeScript reclamar de tipos do `vuedraggable`, que não traz definições próprias, crie `frontend/src/types/vuedraggable.d.ts`:
+**Não crie shim de tipos.** O `vuedraggable` **traz** definições próprias (`node_modules/vuedraggable/src/vuedraggable.d.ts`, declaradas em `"types"` no `package.json` dele). Um `declare module 'vuedraggable'` escrito à mão sombrearia as reais e pioraria a checagem.
 
-```ts
-declare module 'vuedraggable' {
-  import type { DefineComponent } from 'vue'
-  const draggable: DefineComponent<Record<string, unknown>>
-  export default draggable
-}
-```
+O `@change` não vem tipado, e é por isso que os handlers acima declaram a forma do evento à mão. Já `v-model` e `:move` são cobertos pelos tipos que vêm no pacote.
 
 - [ ] **Step 5: Nenhuma string nova**
 
