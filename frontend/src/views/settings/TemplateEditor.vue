@@ -869,7 +869,7 @@ onMounted(() => {
               type="file"
               :accept="mediaAccept"
               @change="onMediaFileChange"
-              class="h-9 text-xs bg-background"
+              class="h-9 py-1.5 text-xs bg-background cursor-pointer file:mr-3 file:cursor-pointer file:rounded file:border-0 file:bg-muted file:px-2.5 file:py-1 file:text-xs file:font-medium file:text-foreground hover:file:bg-accent"
             />
 
             <div
