@@ -152,10 +152,16 @@ async function onColumnChange(toCol: ColumnState, evt: { added?: { element: Occu
 
   const fromCol = columns.value.find(c => c.stage.id === origin.fromStageId)
 
+  // Ordena já no drop, não depois do PUT resolver: senão o cartão fica na
+  // posição bruta do drop pela ida-e-volta inteira e só pula pro lugar certo
+  // quando a requisição termina — sob o cursor, logo depois de soltar. O
+  // caminho na mesma coluna (acima) já ordena de forma síncrona; deferir só
+  // o caso entre colunas faria um gesto encaixar e o outro pular.
+  sortByOpenedAtDesc(toCol.items)
+
   pending.value.add(occ.id)
   try {
     await store.moveStage(occ.id, toCol.stage.id)
-    sortByOpenedAtDesc(toCol.items)
     // Só ajusta as contagens em caso de sucesso. Durante a requisição, o
     // destino mostra N cartões sob um cabeçalho com N-1 — deliberado: é o
     // que permite a reversão do catch abaixo dispensar desfazer contagem.
@@ -217,6 +223,7 @@ watchDebounced(() => props.protocol, loadAll, { debounce: 300 })
             :group="{ name: 'occurrences' }"
             :move="canMove"
             item-key="id"
+            data-board-dropzone
             class="flex flex-1 flex-col gap-2 min-h-16"
             @start="onDragStart(col, $event)"
             @change="onColumnChange(col, $event)"

@@ -104,9 +104,20 @@ export class OccurrencesPage extends BasePage {
       const existing = column.locator('[data-board-card]')
       const lastBox = (await existing.count()) > 0 ? await existing.last().boundingBox() : null
       if (lastBox) {
-        await card.dragTo(column, {
-          targetPosition: { x: box.width / 2, y: lastBox.y - box.y + lastBox.height + 10 },
-        })
+        // O ponto bruto (logo abaixo do último cartão) ainda mira a coluna,
+        // nunca um cartão específico: um alvo fora da própria caixa do
+        // cartão falha no teste de "recebe eventos de ponteiro" do
+        // Playwright e trava em retry infinito. Mas o deslocamento é
+        // grampeado à fatia da coluna hoje visível na viewport — numa coluna
+        // esticada pelas dezenas de cartões de uma irmã (align-items:
+        // stretch) ou que ela mesma acumule com o tempo, a posição bruta
+        // pode cair a milhares de pixels dali, e dragTo não rola até um
+        // ponto arbitrário fora da tela.
+        const viewport = this.page.viewportSize()
+        const rawY = lastBox.y - box.y + lastBox.height + 10
+        const visibleMaxY = viewport ? viewport.height - box.y - 10 : rawY
+        const y = Math.max(0, Math.min(rawY, visibleMaxY, box.height - 10))
+        await card.dragTo(column, { targetPosition: { x: box.width / 2, y } })
         return
       }
     }

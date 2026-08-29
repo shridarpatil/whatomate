@@ -215,20 +215,104 @@ test.describe('CRM occurrence board', () => {
     // dragCardToColumn) e coincidiria com o resultado esperado mesmo sem
     // ordenação nenhuma — por isso o rodapé explícito aqui, não o centro.
     await occurrencesPage.dragCardToColumn(olderProtocol, 'Em análise')
+    // Espera o primeiro PUT assentar antes do segundo arrasto: se ele resolve
+    // (e o cartão perde `pending`) enquanto o segundo drag ainda está em
+    // curso sobre a mesma coluna, o patch do Vue no meio do gesto derruba o
+    // rastreamento do Sortable e o drop é silenciosamente ignorado — sem essa
+    // espera o teste fica intermitente por essa corrida, não pela ordenação.
+    await expect(occurrencesPage.boardCard(olderProtocol)).not.toHaveClass(/cursor-wait/)
     await occurrencesPage.dragCardToColumn(newerProtocol, 'Em análise', { atBottom: true })
 
-    // sortByOpenedAtDesc só roda depois que o PUT de mudança de etapa
-    // resolve (onColumnChange reordena dentro do `try`, após o `await`), não
-    // no instante em que o gesto de arrastar termina. `expect.poll` espera a
-    // ordenação assentar em vez de ler o DOM na posição bruta do drop.
+    // sortByOpenedAtDesc roda no drop, de forma síncrona, antes do PUT de
+    // mudança de etapa sair (onColumnChange ordena antes de marcar o cartão
+    // como pendente) — então a ordem já está correta assim que o gesto de
+    // arrastar termina, sem precisar esperar a rede. Uma leitura direta do
+    // DOM é preferível a `expect.poll` quando o resultado já é determinístico.
     // A comparação é relativa (não por índice absoluto): a coluna pode ter
     // outros cartões residuais de testes anteriores na mesma suíte.
-    await expect.poll(async () => {
-      const texts = await occurrencesPage.boardColumn('Em análise')
-        .locator('[data-board-card]').allInnerTexts()
-      const olderIndex = texts.findIndex(t => t.includes(olderProtocol))
-      const newerIndex = texts.findIndex(t => t.includes(newerProtocol))
-      return newerIndex >= 0 && olderIndex > newerIndex
-    }).toBe(true)
+    const texts = await occurrencesPage.boardColumn('Em análise')
+      .locator('[data-board-card]').allInnerTexts()
+    const olderIndex = texts.findIndex(t => t.includes(olderProtocol))
+    const newerIndex = texts.findIndex(t => t.includes(newerProtocol))
+    expect(newerIndex).toBeGreaterThanOrEqual(0)
+    expect(olderIndex).toBeGreaterThan(newerIndex)
+  })
+
+  test('a card locked by an in-flight stage change ignores clicks until it releases', async ({ page, request }) => {
+    const api = new ApiHelper(request)
+    const contactId = await createContact(api)
+    await chatPage.goto(contactId)
+
+    const title = scope.name('locked-click')
+    await occurrencesPage.createOccurrence(title)
+    const protocol = await occurrencesPage.getProtocolNumber(title)
+
+    await occurrencesPage.gotoList()
+    await occurrencesPage.switchToBoard()
+
+    // Segura o PUT de mudança de etapa até o teste liberar explicitamente,
+    // para poder clicar no cartão enquanto ele ainda está travado (pending).
+    let release: () => void = () => {}
+    const held = new Promise<void>(resolve => { release = resolve })
+    await page.route('**/api/occurrences/*/stage', async route => {
+      await held
+      await route.continue()
+    })
+
+    const boardUrl = page.url()
+    await occurrencesPage.dragCardToColumn(protocol, 'Em análise')
+
+    // A requisição está retida: o cartão mostra cursor-wait (I-1) e um clique
+    // aqui não deve navegar para o detalhe — é a guarda `pending.value.has`
+    // em goToDetail que barra isso, não deixada por conta de nenhum outro
+    // mecanismo.
+    await expect(occurrencesPage.boardCard(protocol)).toHaveClass(/cursor-wait/)
+    await occurrencesPage.boardCard(protocol).click()
+    await page.waitForTimeout(300) // dá tempo de uma navegação indevida acontecer
+    expect(page.url()).toBe(boardUrl)
+
+    // Libera a resposta: o cartão destrava e o mesmo clique agora navega —
+    // prova que a guarda não é um cadeado que nunca abre.
+    release()
+    await expect(occurrencesPage.boardCard(protocol)).not.toHaveClass(/cursor-wait/)
+    await occurrencesPage.boardCard(protocol).click()
+    await page.waitForURL(/\/crm\/occurrences\/[0-9a-f-]+$/)
+  })
+
+  test('an empty column drop zone spans most of the column, not a thin strip', async ({ request }) => {
+    const api = new ApiHelper(request)
+    const contactId = await createContact(api)
+
+    // Enche "Aberto" para esticar o quadro: colunas ficam lado a lado num
+    // flex container sem `items-start`, então align-items: stretch (padrão)
+    // faz toda coluna herdar a altura da mais alta. É essa altura que a
+    // coluna vazia ao lado precisa preencher em sua maior parte.
+    for (let i = 0; i < 8; i++) {
+      const res = await api.post('/api/occurrences', {
+        contact_id: contactId,
+        title: scope.name(`fill-${i}`),
+      })
+      if (!res.ok()) throw new Error(`Failed to create occurrence: ${await res.text()}`)
+    }
+
+    await occurrencesPage.gotoList()
+    await occurrencesPage.switchToBoard()
+
+    // "Aguardando cliente" nunca é destino de arrasto nesta suíte, então
+    // segue vazia — é a coluna vazia medida aqui.
+    const emptyColumn = occurrencesPage.boardColumn('Aguardando cliente')
+    const dropZone = emptyColumn.locator('[data-board-dropzone]')
+    await expect(dropZone).toBeVisible()
+
+    const columnBox = await emptyColumn.boundingBox()
+    const dropZoneBox = await dropZone.boundingBox()
+    if (!columnBox || !dropZoneBox) throw new Error('missing bounding box')
+
+    // Antes do fix I-2 o alvo de drop era `min-h-16` (64px) dentro de uma
+    // coluna de centenas de pixels — uma fração ínfima. Depois, medido: 442px
+    // de zona de drop numa coluna de 540px (~82%). 50% falha no comportamento
+    // antigo e passa folgado no novo, sem depender de um valor exato de
+    // pixels.
+    expect(dropZoneBox.height / columnBox.height).toBeGreaterThan(0.5)
   })
 })
