@@ -5,6 +5,7 @@ import (
 
 	"github.com/shridarpatil/whatomate/internal/models"
 	"github.com/shridarpatil/whatomate/test/testutil"
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"github.com/valyala/fasthttp"
 )
@@ -37,6 +38,11 @@ func TestOccurrencePermissions_ReadOnlyCannotCreate(t *testing.T) {
 	testutil.SetAuthContext(req, org.ID, user.ID)
 	require.NoError(t, app.CreateOccurrence(req))
 	require.Equal(t, fasthttp.StatusForbidden, testutil.GetResponseStatusCode(req))
+	// A role "leitura" também não tem contacts:read nem conversations:view_all,
+	// então um 403 sozinho não prova nada: podia vir do gate de visibilidade de
+	// conversa em vez do requireAuth(ActionWrite). Fixa a origem pela mensagem.
+	body := string(testutil.GetResponseBody(req))
+	assert.Contains(t, body, "Insufficient permissions")
 }
 
 // Listar etapas é parte de USAR o CRM: o quadro não renderiza sem elas.
@@ -126,4 +132,8 @@ func TestOccurrencePermissions_SendProtocolRequiresOccurrencesWrite(t *testing.T
 	testutil.SetAuthContext(req, org.ID, user.ID)
 	require.NoError(t, app.SendOccurrenceProtocol(req))
 	require.Equal(t, fasthttp.StatusForbidden, testutil.GetResponseStatusCode(req))
+	// Same shape as ReadOnlyCannotCreate above: pin the denial to requireAuth,
+	// not the conversation-visibility gate this role would also fail.
+	body := string(testutil.GetResponseBody(req))
+	assert.Contains(t, body, "Insufficient permissions")
 }
