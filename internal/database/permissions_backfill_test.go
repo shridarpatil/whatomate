@@ -165,6 +165,32 @@ func TestBackfill_SkipsOrganisationAlreadyMigrated(t *testing.T) {
 		"organizacao pendente deveria ser migrada")
 }
 
+// O papel fantasma: um papel soft-deleted com occurrences:read não pode
+// fazer a organização parecer já migrada. A guarda "organização ainda não
+// migrada" tem `r2.deleted_at IS NULL` correlacionado dentro do NOT EXISTS
+// exatamente para isso — sem essa cláusula, este teste falha (ver prova da
+// mutação no relatório).
+func TestBackfill_IgnoresSoftDeletedRoleWithOccurrencePermission(t *testing.T) {
+	db := testutil.SetupTestDB(t)
+	cleanAll(t, db)
+	require.NoError(t, database.SeedPermissionsAndRoles(db))
+
+	org := testutil.CreateTestOrganization(t, db)
+	fantasma := testutil.CreateTestRoleWithKeys(t, db, org.ID, "fantasma",
+		[]string{"occurrences:read"})
+	require.NoError(t, db.Delete(fantasma).Error)
+
+	vivo := testutil.CreateTestRoleWithKeys(t, db, org.ID, "vivo",
+		[]string{"chat:read", "chat:write"})
+
+	require.NoError(t, database.BackfillOccurrencePermissions(db, testLog()))
+
+	keys := roleKeys(t, db, vivo.ID)
+	assert.Contains(t, keys, "occurrences:read",
+		"papel soft-deleted com occurrences:read nao deveria esconder a organizacao do backfill")
+	assert.Contains(t, keys, "occurrences:write")
+}
+
 func TestBackfill_NoOpWhenPermissionsNotSeeded(t *testing.T) {
 	db := testutil.SetupTestDB(t)
 	cleanAll(t, db)

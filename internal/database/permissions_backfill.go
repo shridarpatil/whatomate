@@ -77,28 +77,43 @@ func BackfillOccurrencePermissions(db *gorm.DB, lo logf.Logger) error {
 	// silencioso por padrão — sem este Warn, um boot que rodou antes do seed
 	// fica indistinguível no log de um boot que migrou tudo, e o primeiro
 	// sintoma vira 403 para todo mundo no CRM.
-	var seeded int64
+	//
+	// A checagem compara contra occurrencePermissionKeys chave por chave (não
+	// só a contagem): um sexto permission sob "occurrences" somado a um dos
+	// cinco renomeado ainda bateria len()==5 e passaria a guarda com o
+	// conjunto errado.
+	var seededRows []string
 	if err := db.Model(&models.Permission{}).
 		Where("resource IN ?", []string{models.ResourceOccurrences, models.ResourceOccurrenceStages}).
-		Count(&seeded).Error; err != nil {
+		Pluck("resource || ':' || action", &seededRows).Error; err != nil {
 		return fmt.Errorf("failed to count occurrence permissions: %w", err)
 	}
-	if seeded < int64(len(occurrencePermissionKeys)) {
-		lo.Warn("Occurrence permissions backfill: occurrence permissions not seeded yet, did nothing",
-			"resources", []string{models.ResourceOccurrences, models.ResourceOccurrenceStages})
-		return nil
+	seeded := make(map[string]bool, len(seededRows))
+	for _, k := range seededRows {
+		seeded[k] = true
+	}
+	for _, key := range occurrencePermissionKeys {
+		if !seeded[key] {
+			lo.Warn("Occurrence permissions backfill: occurrence permissions not seeded yet, did nothing",
+				"resources", []string{models.ResourceOccurrences, models.ResourceOccurrenceStages})
+			return nil
+		}
 	}
 
 	// Só para o log: quantas organizações ainda não têm nenhum papel com
 	// permissão occurrences%. A checagem que realmente decide o que grava é
 	// a NOT EXISTS correlacionada dentro do INSERT logo abaixo — esta conta
 	// não precisa (e não deve) ser reusada como lista de parâmetros.
+	//
+	// Sem filtro de o.deleted_at aqui de propósito: o INSERT abaixo também
+	// não junta organizations, então processa papéis vivos dentro de
+	// organizações soft-deleted. Contar só as vivas aqui faria esta conta
+	// divergir do que o INSERT realmente decide gravar.
 	var pendingOrgs int64
 	if err := db.Raw(`
 		SELECT COUNT(*)
 		FROM organizations o
-		WHERE o.deleted_at IS NULL
-		  AND NOT EXISTS (
+		WHERE NOT EXISTS (
 			SELECT 1
 			FROM custom_roles r
 			JOIN role_permissions rp ON rp.custom_role_id = r.id
