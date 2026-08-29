@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRouter } from 'vue-router'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
@@ -36,6 +36,13 @@ const columns = computed<Column<Occurrence>[]>(() => [
 ])
 
 async function fetchOccurrences() {
+  // O quadro reusa `searchQuery` (useSearchPagination não sabe de modo), mas
+  // a requisição da lista não deve rodar enquanto o quadro está visível: cada
+  // tecla dispararia um fetch que ninguém renderiza, e se ele falhar, o
+  // quadro — que carrega sozinho, por coluna — seria escondido atrás de um
+  // erro que não é dele. `useSearchPagination` não é tocado (outras telas o
+  // usam); a guarda fica aqui, no ponto de chamada.
+  if (mode.value !== 'list') return
   error.value = false
   try {
     await store.fetchOccurrences({
@@ -55,6 +62,12 @@ const { searchQuery, currentPage, totalItems, pageSize, handlePageChange } = use
   fetchFn: fetchOccurrences,
 })
 
+// Cobre o caminho inverso da guarda acima: sair do quadro não deixa a lista
+// com dado velho (ou com a paginação da última vez que ela rodou).
+watch(mode, newMode => {
+  if (newMode === 'list') fetchOccurrences()
+})
+
 function onStageFilterChange() {
   currentPage.value = 1
   fetchOccurrences()
@@ -65,7 +78,10 @@ function goToDetail(occurrence: Occurrence) {
 }
 
 onMounted(async () => {
-  await store.fetchStages()
+  // Em modo quadro, OccurrenceBoard busca as etapas sozinho (é self-sufficient
+  // de propósito); chamar aqui também duplicaria a requisição, já que os dois
+  // `onMounted` veem `stages` vazio ao mesmo tempo.
+  if (mode.value === 'list') await store.fetchStages()
   await fetchOccurrences()
 })
 </script>

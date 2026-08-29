@@ -206,7 +206,7 @@ watchDebounced(() => props.protocol, loadAll, { debounce: 300 })
           <span class="h-2.5 w-2.5 rounded-full" :style="{ backgroundColor: col.stage.color }" />
           {{ col.stage.name }}
         </span>
-        <span class="text-xs text-muted-foreground">{{ col.total }}</span>
+        <span class="text-xs text-muted-foreground" data-board-column-count>{{ col.total }}</span>
       </div>
 
       <div class="flex flex-1 flex-col gap-2 p-2 min-h-24">

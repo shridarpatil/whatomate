@@ -77,6 +77,12 @@ export class OccurrencesPage extends BasePage {
     return this.page.locator(`[data-board-column="${stageName}"]`)
   }
 
+  /** O número no cabeçalho da coluna (col.total), não a contagem de cartões
+   * renderizados — as duas só coincidem quando a coluna não está paginada. */
+  boardColumnCount(stageName: string): Locator {
+    return this.boardColumn(stageName).locator('[data-board-column-count]')
+  }
+
   boardCard(protocol: string): Locator {
     return this.page.locator('[data-board-card]').filter({ hasText: protocol })
   }

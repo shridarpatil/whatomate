@@ -86,14 +86,28 @@ test.describe('CRM occurrence board', () => {
     expect(stored).toBe('board')
   })
 
-  test('the board shows one column per stage with its own count', async () => {
+  test('the board shows one column per stage with its own count', async ({ request }) => {
     await occurrencesPage.gotoList()
     await occurrencesPage.switchToBoard()
 
     await expect(occurrencesPage.boardView).toBeVisible()
-    // ensureDefaultStages semeia quatro etapas, com nomes em português
-    // independentemente do idioma da interface.
-    await expect(occurrencesPage.boardColumns).toHaveCount(4)
+
+    // Antes: `toHaveCount(4)` fixo, assumindo o pipeline semeado por
+    // ensureDefaultStages. Nenhum teste desta suíte cria etapa, então isso
+    // se sustenta hoje — mas uma etapa criada por um teste futuro, ou por
+    // alguém clicando na org compartilhada de E2E, deixaria uma etapa ativa
+    // que a limpeza (global-cleanup.ts, de propósito, não mexe em
+    // occurrence_stages) nunca remove, e esta asserção ficaria vermelha pra
+    // sempre. O que o quadro promete é uma coluna por etapa que a API
+    // devolve — é isso que fica provado aqui, contra o pipeline que a org
+    // realmente tem, seja lá qual for.
+    const api = new ApiHelper(request)
+    await api.loginAsAdmin()
+    const stagesRes = await api.get('/api/occurrence-stages')
+    if (!stagesRes.ok()) throw new Error(`Failed to fetch stages: ${await stagesRes.text()}`)
+    const { stages } = (await stagesRes.json()).data as { stages: Array<{ name: string }> }
+
+    await expect(occurrencesPage.boardColumns).toHaveCount(stages.length)
     await expect(occurrencesPage.boardColumn('Aberto')).toBeVisible()
     await expect(occurrencesPage.boardColumn('Resolvido')).toBeVisible()
   })
@@ -186,6 +200,64 @@ test.describe('CRM occurrence board', () => {
     await occurrencesPage.expectToast(/Stage change refused by test/)
     await expect(occurrencesPage.cardInColumn('Aberto', protocol)).toBeVisible()
     await expect(occurrencesPage.cardInColumn('Em análise', protocol)).toBeHidden()
+  })
+
+  // `onColumnChange` faz `toCol.total += 1` e
+  // `fromCol.total = Math.max(0, fromCol.total - 1)` — a única aritmética do
+  // quadro — e nada testava essa conta antes: o teste "one column per stage"
+  // só olhava nome e quantidade de colunas, nunca um número de cabeçalho.
+  test('a drag moves both column header counts by exactly one, and a rollback leaves them unchanged', async ({ page, request }) => {
+    const api = new ApiHelper(request)
+    const contactId = await createContact(api)
+    await chatPage.goto(contactId)
+
+    const title = scope.name('counts')
+    await occurrencesPage.createOccurrence(title)
+    const protocol = await occurrencesPage.getProtocolNumber(title)
+
+    await occurrencesPage.gotoList()
+    await occurrencesPage.switchToBoard()
+    await expect(occurrencesPage.boardCard(protocol)).toBeVisible()
+
+    const abertoBefore = Number(await occurrencesPage.boardColumnCount('Aberto').innerText())
+    const emAnaliseBefore = Number(await occurrencesPage.boardColumnCount('Em análise').innerText())
+
+    await occurrencesPage.dragCardToColumn(protocol, 'Em análise')
+    await expect(occurrencesPage.cardInColumn('Em análise', protocol)).toBeVisible()
+    // As contagens só mudam depois do PUT resolver com sucesso (ver
+    // comentário em onColumnChange) — espera o cartão destravar antes de ler.
+    await expect(occurrencesPage.boardCard(protocol)).not.toHaveClass(/cursor-wait/)
+
+    // As duas cabeças se movem por exatamente um, na direção certa — não só
+    // "mudaram", o que passaria com `+= 2` na origem ou sem decremento nela.
+    await expect(occurrencesPage.boardColumnCount('Em análise')).toHaveText(String(emAnaliseBefore + 1))
+    await expect(occurrencesPage.boardColumnCount('Aberto')).toHaveText(String(abertoBefore - 1))
+
+    // "Em análise" nunca passa de uma página (25) nesta suíte, então o número
+    // do cabeçalho tem que bater com o que está de fato renderizado — não só
+    // um contador incrementado que ninguém confere contra o DOM.
+    await expect(occurrencesPage.boardColumn('Em análise').locator('[data-board-card]')).toHaveCount(emAnaliseBefore + 1)
+
+    // Reversão: arrasta de volta com o PUT de mudança de etapa falhando.
+    // `onColumnChange` só toca os totais no caminho de sucesso — o catch
+    // reverte os itens, não as contagens — então elas devem ficar exatamente
+    // onde estavam antes deste segundo arrasto.
+    const abertoBeforeRollback = Number(await occurrencesPage.boardColumnCount('Aberto').innerText())
+    const emAnaliseBeforeRollback = Number(await occurrencesPage.boardColumnCount('Em análise').innerText())
+
+    await page.route('**/api/occurrences/*/stage', route =>
+      route.fulfill({
+        status: 500,
+        contentType: 'application/json',
+        body: JSON.stringify({ message: 'Rollback count check' }),
+      }),
+    )
+
+    await occurrencesPage.dragCardToColumn(protocol, 'Aberto')
+    await occurrencesPage.expectToast(/Rollback count check/)
+
+    await expect(occurrencesPage.boardColumnCount('Aberto')).toHaveText(String(abertoBeforeRollback))
+    await expect(occurrencesPage.boardColumnCount('Em análise')).toHaveText(String(emAnaliseBeforeRollback))
   })
 
   // Protege a decisão de §7 da spec: se alguém introduzir ordenação manual
@@ -314,5 +386,38 @@ test.describe('CRM occurrence board', () => {
     // antigo e passa folgado no novo, sem depender de um valor exato de
     // pixels.
     expect(dropZoneBox.height / columnBox.height).toBeGreaterThan(0.5)
+  })
+
+  // Regressão do Important 1: OccurrenceBoard carrega suas colunas sozinho,
+  // mas `searchQuery` é compartilhado com a lista via useSearchPagination, e
+  // o fetch de lista disparava mesmo em modo quadro — sem estar gated pelo
+  // modo. Se esse fetch falhasse, `error` virava true e o ErrorState de tela
+  // cheia (que envolve tudo, quadro incluso) escondia um quadro cujas quatro
+  // colunas tinham carregado com sucesso.
+  test('a failing list request does not hide a working board', async ({ page }) => {
+    await occurrencesPage.gotoList()
+    await occurrencesPage.switchToBoard()
+    await expect(occurrencesPage.boardView).toBeVisible()
+
+    // Só a requisição de LISTA falha (sem `stage_id` na query); as quatro
+    // requisições de coluna (sempre com `stage_id`) seguem passando.
+    await page.route('**/api/occurrences*', route => {
+      const url = new URL(route.request().url())
+      if (url.searchParams.has('stage_id')) return route.continue()
+      return route.fulfill({
+        status: 500,
+        contentType: 'application/json',
+        body: JSON.stringify({ message: 'List fetch refused by test' }),
+      })
+    })
+
+    // Recarrega para reexecutar o mount inicial em modo quadro — é nele que
+    // o fetch de lista, não gated, disparava antes do fix.
+    await page.reload()
+    await page.waitForLoadState('networkidle')
+
+    await expect(occurrencesPage.boardView).toBeVisible()
+    await expect(occurrencesPage.boardColumn('Aberto')).toBeVisible()
+    await expect(occurrencesPage.boardColumn('Resolvido')).toBeVisible()
   })
 })
