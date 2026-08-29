@@ -52,7 +52,13 @@ O limite é **inclusivo** (`>=`). Uma ocorrência fechada exatamente no instante
 
 ### Filtros do usuário
 
-Os filtros que a tela oferece (responsável, prioridade, busca por protocolo) **se aplicam a todas as colunas, inclusive a de fechamento**, combinados com a regra da coluna. Filtrar por responsável e ver a coluna "Resolvido" ignorando o filtro seria incoerente.
+A tela oferece hoje **busca por protocolo** e **filtro de etapa** — não há filtro de responsável nem de prioridade, nem na tela nem no handler. Uma versão anterior desta spec afirmava que havia; a correção veio de conferir `ListOccurrences`, que aceita apenas `stage_id`, `contact_id`, `protocol` e `open`.
+
+A busca por protocolo **se aplica a todas as colunas, inclusive a de fechamento**, combinada com a regra da coluna. Buscar um protocolo e ver a coluna "Resolvido" ignorando a busca seria incoerente.
+
+O **filtro de etapa desaparece no modo quadro**: cada coluna já é uma etapa, e um seletor de etapa sobre um quadro de etapas não significa nada. Ele continua na lista.
+
+Filtrar por responsável ou prioridade é funcionalidade que não existe. Se for desejada, é fase própria — construí-la aqui acrescentaria dois filtros ao handler e quebraria a promessa de §1 de que `closed_since` é a única alteração de backend desta fase.
 
 ## 4. Carregamento das colunas
 
@@ -71,7 +77,7 @@ Escrito de forma explícita, porque é onde uma interpretação errada do endpoi
 | Etapas normais (`is_closing = false`) | `stage_id=<etapa>` + `open=true` — ocorrências **abertas** daquela etapa |
 | Etapas de fechamento (`is_closing = true`) | `stage_id=<etapa>` + `closed_since=<agora − 7 dias>` — fechadas nos últimos 7 dias |
 
-Mais os filtros do usuário, em ambos os casos (§3).
+Mais a busca por protocolo, quando preenchida, em ambos os casos (§3).
 
 **Pode haver mais de uma etapa de fechamento.** As regras de integridade da Fase 1 exigem *pelo menos uma*, não exatamente uma — uma organização pode ter "Resolvido" e "Cancelado". A regra vale para **cada** etapa com `is_closing = true`, não para uma coluna especial. O quadro não trata nenhuma coluna como singular.
 
