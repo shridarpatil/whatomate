@@ -373,6 +373,10 @@ func CreateAgentRole(t *testing.T, db *gorm.DB, orgID uuid.UUID) *models.CustomR
 		"analytics.agents:read",
 		"transfers:read", "transfers:pickup",
 		"canned_responses:read",
+		// CRM: mirrors the production agent role (roles.go) so occurrence
+		// handlers, now gated on occurrences:* instead of chat:*, still work
+		// for tests built on this fixture.
+		"occurrences:read", "occurrences:write",
 	}
 	return CreateTestRoleWithKeys(t, db, orgID, "agent", agentPerms)
 }

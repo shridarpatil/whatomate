@@ -104,7 +104,7 @@ func (a *App) resolveAssignee(orgID uuid.UUID, raw *string) (*uuid.UUID, error) 
 
 // CreateOccurrence opens a case and issues its protocol.
 func (a *App) CreateOccurrence(r *fastglue.Request) error {
-	orgID, userID, err := a.requireAuth(r, models.ResourceChat, models.ActionWrite)
+	orgID, userID, err := a.requireAuth(r, models.ResourceOccurrences, models.ActionWrite)
 	if err != nil {
 		return nil
 	}
@@ -187,7 +187,7 @@ func (a *App) CreateOccurrence(r *fastglue.Request) error {
 
 // ListOccurrences returns the cases the user may see, newest first.
 func (a *App) ListOccurrences(r *fastglue.Request) error {
-	orgID, userID, err := a.requireAuth(r, models.ResourceChat, models.ActionRead)
+	orgID, userID, err := a.requireAuth(r, models.ResourceOccurrences, models.ActionRead)
 	if err != nil {
 		return nil
 	}
@@ -252,7 +252,7 @@ func (a *App) ListOccurrences(r *fastglue.Request) error {
 
 // ListContactOccurrences feeds the chat panel with one contact's cases.
 func (a *App) ListContactOccurrences(r *fastglue.Request) error {
-	orgID, userID, err := a.requireAuth(r, models.ResourceChat, models.ActionRead)
+	orgID, userID, err := a.requireAuth(r, models.ResourceOccurrences, models.ActionRead)
 	if err != nil {
 		return nil
 	}
@@ -364,7 +364,7 @@ func (a *App) loadAuthorizedOccurrence(r *fastglue.Request, orgID, userID uuid.U
 
 // GetOccurrence returns one case.
 func (a *App) GetOccurrence(r *fastglue.Request) error {
-	orgID, userID, err := a.requireAuth(r, models.ResourceChat, models.ActionRead)
+	orgID, userID, err := a.requireAuth(r, models.ResourceOccurrences, models.ActionRead)
 	if err != nil {
 		return nil
 	}
@@ -378,7 +378,7 @@ func (a *App) GetOccurrence(r *fastglue.Request) error {
 
 // UpdateOccurrence edits title, description, priority and assignee.
 func (a *App) UpdateOccurrence(r *fastglue.Request) error {
-	orgID, userID, err := a.requireAuth(r, models.ResourceChat, models.ActionWrite)
+	orgID, userID, err := a.requireAuth(r, models.ResourceOccurrences, models.ActionWrite)
 	if err != nil {
 		return nil
 	}
@@ -448,7 +448,7 @@ func (a *App) UpdateOccurrence(r *fastglue.Request) error {
 // closing stage stamps closed_at; leaving one clears it — that is how reopening
 // works, without a separate endpoint.
 func (a *App) ChangeOccurrenceStage(r *fastglue.Request) error {
-	orgID, userID, err := a.requireAuth(r, models.ResourceChat, models.ActionWrite)
+	orgID, userID, err := a.requireAuth(r, models.ResourceOccurrences, models.ActionWrite)
 	if err != nil {
 		return nil
 	}
@@ -524,7 +524,7 @@ func (a *App) ChangeOccurrenceStage(r *fastglue.Request) error {
 
 // ListOccurrenceEvents returns the timeline, oldest first.
 func (a *App) ListOccurrenceEvents(r *fastglue.Request) error {
-	orgID, userID, err := a.requireAuth(r, models.ResourceChat, models.ActionRead)
+	orgID, userID, err := a.requireAuth(r, models.ResourceOccurrences, models.ActionRead)
 	if err != nil {
 		return nil
 	}
@@ -560,7 +560,7 @@ func (a *App) ListOccurrenceEvents(r *fastglue.Request) error {
 
 // CreateOccurrenceEvent adds a manual note to the timeline.
 func (a *App) CreateOccurrenceEvent(r *fastglue.Request) error {
-	orgID, userID, err := a.requireAuth(r, models.ResourceChat, models.ActionWrite)
+	orgID, userID, err := a.requireAuth(r, models.ResourceOccurrences, models.ActionWrite)
 	if err != nil {
 		return nil
 	}

@@ -86,6 +86,8 @@ const (
 	ResourceCallTransfers           = "call_transfers"
 	ResourceOutgoingCalls           = "outgoing_calls"
 	ResourceAuditLogs               = "audit_logs"
+	ResourceOccurrences             = "occurrences"
+	ResourceOccurrenceStages        = "occurrences.stages"
 )
 
 // PermissionAction constants for available actions
@@ -242,6 +244,25 @@ func DefaultPermissions() []Permission {
 
 		// Audit Logs
 		{Resource: ResourceAuditLogs, Action: ActionRead, Description: "View audit logs"},
+
+		// CRM — ocorrências. Não há permissão de exclusão porque não existe
+		// endpoint de exclusão de ocorrência. `occurrences:read` também cobre
+		// a LEITURA das etapas: o quadro não renderiza sem elas, então isso é
+		// usar o CRM, não administrá-lo.
+		{Resource: ResourceOccurrences, Action: ActionRead, Description: "View occurrences and pipeline stages"},
+		{Resource: ResourceOccurrences, Action: ActionWrite, Description: "Create and edit occurrences"},
+
+		// CRM — administração do funil, separada de settings.general para que
+		// configurar etapas não exija as configurações gerais da organização.
+		//
+		// `read` aqui governa VER A TELA de configuração, não ler as etapas:
+		// a leitura das etapas pela API fica sob occurrences:read, porque o
+		// quadro não renderiza sem elas. A chave existe porque a guarda de
+		// rota do frontend chama hasPermission(recurso, 'read') com a ação
+		// fixa — sem ela a tela fica inalcançável até para o admin.
+		{Resource: ResourceOccurrenceStages, Action: ActionRead, Description: "View the occurrence pipeline configuration"},
+		{Resource: ResourceOccurrenceStages, Action: ActionWrite, Description: "Create and edit occurrence stages"},
+		{Resource: ResourceOccurrenceStages, Action: ActionDelete, Description: "Delete occurrence stages"},
 	}
 }
 
@@ -273,6 +294,9 @@ func SystemRolePermissions() map[string][]string {
 		"chatbot.ai:read", "chatbot.ai:write", "chatbot.ai:delete",
 		// Chat
 		"chat:read", "chat:write", "chat.assign:write",
+		// CRM: o gestor usa e administra o funil, coerente com ter settings.general:write
+		"occurrences:read", "occurrences:write",
+		"occurrences.stages:read", "occurrences.stages:write", "occurrences.stages:delete",
 		// Conversations
 		"conversations:view_all",
 		// Contacts
@@ -303,6 +327,8 @@ func SystemRolePermissions() map[string][]string {
 		"accounts:read",
 		// Chat
 		"chat:read", "chat:write",
+		// CRM: o atendente usa; administrar o funil não é papel dele
+		"occurrences:read", "occurrences:write",
 		// Contacts (read only)
 		"contacts:read",
 		// Tags (read only - agents can see tags on contacts)

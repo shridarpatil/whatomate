@@ -103,7 +103,7 @@ func TestOccurrences_AssigneeSeesOwnEvenWhenContactInvisible(t *testing.T) {
 	agentRole := testutil.CreateAgentRole(t, app.DB, org.ID)
 	owner := testutil.CreateTestUser(t, app.DB, org.ID, testutil.WithRoleID(&agentRole.ID))
 	assigneeRole := testutil.CreateTestRoleWithKeys(t, app.DB, org.ID, "occ-assignee",
-		[]string{"chat:read", "chat:write"})
+		[]string{"chat:read", "chat:write", "occurrences:read"})
 	assignee := testutil.CreateTestUser(t, app.DB, org.ID, testutil.WithRoleID(&assigneeRole.ID))
 	enableStrictVisibility(t, app, org.ID)
 
