@@ -24,6 +24,11 @@ export class OccurrencesPage extends BasePage {
   readonly stagesHeading: Locator
   readonly alertDialog: Locator
 
+  // --- Lista e quadro ---
+
+  readonly listView: Locator
+  readonly boardView: Locator
+
   constructor(page: Page) {
     super(page)
     this.openPanelButton = page.locator('#occurrences-button')
@@ -41,6 +46,27 @@ export class OccurrencesPage extends BasePage {
 
     this.stagesHeading = page.locator('h1').filter({ hasText: 'Occurrence Stages' })
     this.alertDialog = page.locator('[role="alertdialog"]')
+
+    this.listView = page.locator('#occurrences-list')
+    this.boardView = page.locator('#occurrences-board')
+  }
+
+  // --- Lista e quadro ---
+
+  async gotoList() {
+    await this.page.goto('/crm/occurrences')
+    await this.page.waitForLoadState('networkidle')
+  }
+
+  async switchToBoard() {
+    // The ToggleGroup renders plain buttons (role="group" on the wrapper,
+    // not role="radiogroup"), not ARIA radios — reka-ui's ToggleGroupItem
+    // does not set role="radio" on its items.
+    await this.page.getByRole('button', { name: 'Board' }).click()
+  }
+
+  async switchToList() {
+    await this.page.getByRole('button', { name: 'List' }).click()
   }
 
   // --- Chat panel ---
