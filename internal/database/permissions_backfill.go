@@ -2,9 +2,10 @@ package database
 
 import (
 	"fmt"
+	"strings"
 
-	"github.com/google/uuid"
 	"github.com/shridarpatil/whatomate/internal/models"
+	"github.com/zerodha/logf"
 	"gorm.io/gorm"
 )
 
@@ -26,6 +27,15 @@ var occurrenceGrants = []grantRule{
 	{models.ResourceChat, models.ActionWrite, models.ResourceOccurrences, models.ActionWrite},
 	// As três de etapa, incluindo read: sem ela a guarda de rota do frontend
 	// esconde a tela de configuração até de quem pode editar.
+	//
+	// NÃO CORRIGIR sem decidir antes: um papel com settings.general:write e
+	// SEM nenhuma permissão de chat recebe estas três mas não
+	// occurrences:read, então ele abre a tela de configuração de etapas e a
+	// chamada que lista etapas devolve 403. É proposital — o backfill
+	// concede por equivalência com a capacidade de hoje, e esse papel não
+	// tinha nenhum acesso ao CRM no dia anterior; conceder-lhe
+	// occurrences:read alargaria acesso numa migração que promete não
+	// alterar o de ninguém.
 	{models.ResourceSettingsGeneral, models.ActionWrite, models.ResourceOccurrenceStages, models.ActionRead},
 	{models.ResourceSettingsGeneral, models.ActionWrite, models.ResourceOccurrenceStages, models.ActionWrite},
 	{models.ResourceSettingsGeneral, models.ActionWrite, models.ResourceOccurrenceStages, models.ActionDelete},
@@ -55,10 +65,18 @@ var occurrencePermissionKeys = []string{
 //
 // Idempotência é pela forma do dado, como BackfillChatbotFlowGraph: uma
 // organização que já tenha qualquer papel com qualquer permissão occurrences%
-// é pulada inteira, então isto roda uma vez por organização.
-func BackfillOccurrencePermissions(db *gorm.DB) error {
+// é pulada inteira, então isto roda uma vez por organização. Essa guarda de
+// "já migrada" vive inteira dentro do INSERT (ver nota no SQL abaixo), não
+// como uma lista de ids calculada à parte — isso evita tanto a divergência
+// entre a checagem e a gravação quanto o limite de 65535 parâmetros do
+// Postgres por statement, que uma lista de ids materializada esbarraria
+// perto de ~65 mil organizações.
+func BackfillOccurrencePermissions(db *gorm.DB, lo logf.Logger) error {
 	// As linhas de permissão são criadas por SeedPermissionsAndRoles. Se ainda
-	// não existem, não há o que ligar e este boot não faz nada.
+	// não existem, não há o que ligar e este boot não faz nada. Isso é
+	// silencioso por padrão — sem este Warn, um boot que rodou antes do seed
+	// fica indistinguível no log de um boot que migrou tudo, e o primeiro
+	// sintoma vira 403 para todo mundo no CRM.
 	var seeded int64
 	if err := db.Model(&models.Permission{}).
 		Where("resource IN ?", []string{models.ResourceOccurrences, models.ResourceOccurrenceStages}).
@@ -66,49 +84,95 @@ func BackfillOccurrencePermissions(db *gorm.DB) error {
 		return fmt.Errorf("failed to count occurrence permissions: %w", err)
 	}
 	if seeded < int64(len(occurrencePermissionKeys)) {
+		lo.Warn("Occurrence permissions backfill: occurrence permissions not seeded yet, did nothing",
+			"resources", []string{models.ResourceOccurrences, models.ResourceOccurrenceStages})
 		return nil
 	}
 
-	var pending []uuid.UUID
+	// Só para o log: quantas organizações ainda não têm nenhum papel com
+	// permissão occurrences%. A checagem que realmente decide o que grava é
+	// a NOT EXISTS correlacionada dentro do INSERT logo abaixo — esta conta
+	// não precisa (e não deve) ser reusada como lista de parâmetros.
+	var pendingOrgs int64
 	if err := db.Raw(`
-		SELECT o.id
+		SELECT COUNT(*)
 		FROM organizations o
-		WHERE NOT EXISTS (
+		WHERE o.deleted_at IS NULL
+		  AND NOT EXISTS (
 			SELECT 1
 			FROM custom_roles r
 			JOIN role_permissions rp ON rp.custom_role_id = r.id
 			JOIN permissions p ON p.id = rp.permission_id
 			WHERE r.organization_id = o.id
+			  AND r.deleted_at IS NULL
 			  AND p.resource LIKE 'occurrences%'
-		)`).Scan(&pending).Error; err != nil {
-		return fmt.Errorf("failed to list organisations pending the occurrence backfill: %w", err)
+		  )`).Scan(&pendingOrgs).Error; err != nil {
+		return fmt.Errorf("failed to count organisations pending the occurrence backfill: %w", err)
 	}
-	if len(pending) == 0 {
+	if pendingOrgs == 0 {
+		lo.Info("Occurrence permissions backfill: nothing pending, all organisations already migrated")
 		return nil
 	}
 
-	for _, g := range occurrenceGrants {
-		if err := db.Exec(`
-			INSERT INTO role_permissions (custom_role_id, permission_id)
-			SELECT r.id, target.id
-			FROM custom_roles r
-			JOIN role_permissions rp ON rp.custom_role_id = r.id
-			JOIN permissions src ON src.id = rp.permission_id
-			CROSS JOIN permissions target
-			WHERE r.organization_id IN ?
-			  AND src.resource = ? AND src.action = ?
-			  AND target.resource = ? AND target.action = ?
-			  AND NOT EXISTS (
-				SELECT 1 FROM role_permissions existing
-				WHERE existing.custom_role_id = r.id
-				  AND existing.permission_id = target.id
-			  )`,
-			pending, g.fromResource, g.fromAction, g.toResource, g.toAction,
-		).Error; err != nil {
-			return fmt.Errorf("failed to grant %s:%s from %s:%s: %w",
-				g.toResource, g.toAction, g.fromResource, g.fromAction, err)
-		}
+	// Todas as regras de concessão viram UM único INSERT (a tabela g abaixo
+	// é o occurrenceGrants em forma de VALUES), não um loop com um INSERT
+	// por regra. Isso importa: dentro de um único statement o Postgres lê
+	// role_permissions a partir de um snapshot tirado no início do
+	// statement, então a guarda "organização ainda não migrada" não vê as
+	// próprias linhas que este mesmo INSERT está gravando. Um loop de N
+	// statements não teria essa propriedade — o primeiro INSERT (chat:read
+	// -> occurrences:read) gravaria a permissão que o segundo INSERT
+	// (chat:write -> occurrences:write) usa como sinal de "já migrada", e a
+	// organização pareceria migrada a partir do segundo statement em
+	// diante, perdendo as concessões seguintes no mesmo boot.
+	placeholders := make([]string, len(occurrenceGrants))
+	args := make([]any, 0, len(occurrenceGrants)*4)
+	for i, g := range occurrenceGrants {
+		placeholders[i] = "(?,?,?,?)"
+		args = append(args, g.fromResource, g.fromAction, g.toResource, g.toAction)
 	}
 
+	query := fmt.Sprintf(`
+		INSERT INTO role_permissions (custom_role_id, permission_id)
+		SELECT r.id, target.id
+		FROM custom_roles r
+		JOIN role_permissions rp ON rp.custom_role_id = r.id
+		JOIN permissions src ON src.id = rp.permission_id
+		JOIN (VALUES %s) AS g(from_resource, from_action, to_resource, to_action)
+		  ON src.resource = g.from_resource AND src.action = g.from_action
+		JOIN permissions target
+		  ON target.resource = g.to_resource AND target.action = g.to_action
+		WHERE r.deleted_at IS NULL
+		  AND NOT EXISTS (
+			SELECT 1 FROM role_permissions existing
+			WHERE existing.custom_role_id = r.id
+			  AND existing.permission_id = target.id
+		  )
+		  -- A guarda "organização ainda não migrada", correlacionada
+		  -- diretamente em r.organization_id em vez de uma lista de ids
+		  -- vinda de fora: um só lugar decide isso, não um SELECT separado
+		  -- reexpandido como parâmetros do INSERT (o que esbarraria no
+		  -- limite de 65535 parâmetros do Postgres por statement perto de
+		  -- ~65 mil organizações).
+		  AND NOT EXISTS (
+			SELECT 1
+			FROM custom_roles r2
+			JOIN role_permissions rp2 ON rp2.custom_role_id = r2.id
+			JOIN permissions p2 ON p2.id = rp2.permission_id
+			WHERE r2.organization_id = r.organization_id
+			  AND r2.deleted_at IS NULL
+			  AND p2.resource LIKE 'occurrences%%'
+		  )
+		ON CONFLICT (custom_role_id, permission_id) DO NOTHING`,
+		strings.Join(placeholders, ","),
+	)
+
+	res := db.Exec(query, args...)
+	if res.Error != nil {
+		return fmt.Errorf("failed to grant occurrence permissions: %w", res.Error)
+	}
+
+	lo.Info("Occurrence permissions backfill complete",
+		"organisations_processed", pendingOrgs, "links_granted", res.RowsAffected)
 	return nil
 }

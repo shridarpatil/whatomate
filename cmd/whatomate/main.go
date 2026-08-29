@@ -166,7 +166,7 @@ func runServer(args []string) {
 		// Precisa rodar aqui, no bloco de migração: o ListenAndServe só
 		// acontece depois, então nenhuma requisição chega antes de os papéis
 		// estarem corrigidos e não existe janela de 403.
-		if err := database.BackfillOccurrencePermissions(db); err != nil {
+		if err := database.BackfillOccurrencePermissions(db, lo); err != nil {
 			lo.Fatal("Occurrence permissions backfill failed", "error", err)
 		}
 	}

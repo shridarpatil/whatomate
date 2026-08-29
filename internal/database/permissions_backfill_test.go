@@ -7,8 +7,15 @@ import (
 	"github.com/shridarpatil/whatomate/test/testutil"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"github.com/zerodha/logf"
 	"gorm.io/gorm"
 )
+
+// testLog é um logger silencioso (só Error+) para não poluir a saída dos
+// testes com os Info/Warn que o backfill agora emite.
+func testLog() logf.Logger {
+	return logf.New(logf.Opts{Level: logf.ErrorLevel})
+}
 
 // roleKeys devolve as chaves "recurso:acao" ligadas a um papel.
 func roleKeys(t *testing.T, db *gorm.DB, roleID any) []string {
@@ -31,7 +38,7 @@ func TestBackfill_GrantsOccurrencesFromChat(t *testing.T) {
 	role := testutil.CreateTestRoleWithKeys(t, db, org.ID, "atendente",
 		[]string{"chat:read", "chat:write"})
 
-	require.NoError(t, database.BackfillOccurrencePermissions(db))
+	require.NoError(t, database.BackfillOccurrencePermissions(db, testLog()))
 
 	keys := roleKeys(t, db, role.ID)
 	assert.Contains(t, keys, "occurrences:read")
@@ -50,7 +57,7 @@ func TestBackfill_GrantsStagesFromSettingsGeneral(t *testing.T) {
 	role := testutil.CreateTestRoleWithKeys(t, db, org.ID, "gestor",
 		[]string{"chat:read", "chat:write", "settings.general:write"})
 
-	require.NoError(t, database.BackfillOccurrencePermissions(db))
+	require.NoError(t, database.BackfillOccurrencePermissions(db, testLog()))
 
 	keys := roleKeys(t, db, role.ID)
 	// As tres: sem o read a tela de configuracao fica inalcancavel mesmo
@@ -71,7 +78,7 @@ func TestBackfill_RolesWriteDoesNotGrantStages(t *testing.T) {
 	role := testutil.CreateTestRoleWithKeys(t, db, org.ID, "admin-de-papeis",
 		[]string{"roles:read", "roles:write"})
 
-	require.NoError(t, database.BackfillOccurrencePermissions(db))
+	require.NoError(t, database.BackfillOccurrencePermissions(db, testLog()))
 
 	keys := roleKeys(t, db, role.ID)
 	assert.NotContains(t, keys, "occurrences.stages:read")
@@ -90,7 +97,7 @@ func TestBackfill_NeverRemovesChatPermissions(t *testing.T) {
 	role := testutil.CreateTestRoleWithKeys(t, db, org.ID, "atendente",
 		[]string{"chat:read", "chat:write"})
 
-	require.NoError(t, database.BackfillOccurrencePermissions(db))
+	require.NoError(t, database.BackfillOccurrencePermissions(db, testLog()))
 
 	keys := roleKeys(t, db, role.ID)
 	assert.Contains(t, keys, "chat:read")
@@ -106,31 +113,56 @@ func TestBackfill_IsIdempotent(t *testing.T) {
 	role := testutil.CreateTestRoleWithKeys(t, db, org.ID, "atendente",
 		[]string{"chat:read", "chat:write"})
 
-	require.NoError(t, database.BackfillOccurrencePermissions(db))
+	require.NoError(t, database.BackfillOccurrencePermissions(db, testLog()))
 	first := len(roleKeys(t, db, role.ID))
 
-	require.NoError(t, database.BackfillOccurrencePermissions(db))
+	require.NoError(t, database.BackfillOccurrencePermissions(db, testLog()))
 	assert.Equal(t, first, len(roleKeys(t, db, role.ID)), "rodar duas vezes duplicou vinculos")
 }
 
 // A guarda por organizacao: uma org ja migrada e pulada inteira, mesmo que
-// algum papel dela tenha sido criado depois sem as permissoes.
+// algum papel dela tenha sido criado depois sem as permissoes. Precisa de
+// uma SEGUNDA organizacao ainda pendente: com uma unica org ja migrada,
+// `pending` fica vazio e a funcao retorna antes do INSERT rodar, entao o
+// teste passaria mesmo que a clausula de organizacao sumisse do INSERT (foi
+// exatamente isso que a auditoria provou). Ver Fix: achados da revisao do
+// backfill no relatorio para a prova da mutacao.
 func TestBackfill_SkipsOrganisationAlreadyMigrated(t *testing.T) {
 	db := testutil.SetupTestDB(t)
 	cleanAll(t, db)
 	require.NoError(t, database.SeedPermissionsAndRoles(db))
 
-	org := testutil.CreateTestOrganization(t, db)
-	testutil.CreateTestRoleWithKeys(t, db, org.ID, "ja-migrado",
+	migrada := testutil.CreateTestOrganization(t, db)
+	jaMigrado := testutil.CreateTestRoleWithKeys(t, db, migrada.ID, "ja-migrado",
 		[]string{"chat:read", "occurrences:read"})
-	novo := testutil.CreateTestRoleWithKeys(t, db, org.ID, "criado-depois",
+	criadoDepois := testutil.CreateTestRoleWithKeys(t, db, migrada.ID, "criado-depois",
 		[]string{"chat:read", "chat:write"})
 
-	require.NoError(t, database.BackfillOccurrencePermissions(db))
+	pendente := testutil.CreateTestOrganization(t, db)
+	pendenteRole := testutil.CreateTestRoleWithKeys(t, db, pendente.ID, "pendente",
+		[]string{"chat:read", "chat:write"})
 
-	keys := roleKeys(t, db, novo.ID)
-	assert.NotContains(t, keys, "occurrences:read",
+	require.NoError(t, database.BackfillOccurrencePermissions(db, testLog()))
+
+	// A org ja migrada e pulada inteira: o papel criado depois dela nao
+	// ganha nada, mesmo tendo a capacidade equivalente.
+	novoKeys := roleKeys(t, db, criadoDepois.ID)
+	assert.NotContains(t, novoKeys, "occurrences:read",
 		"organizacao ja migrada deveria ser pulada inteira")
+
+	// O papel ja-migrado tambem nao ganha occurrences:write: ele so tinha
+	// occurrences:read antes do backfill, e a org inteira foi pulada.
+	jaMigradoKeys := roleKeys(t, db, jaMigrado.ID)
+	assert.NotContains(t, jaMigradoKeys, "occurrences:write",
+		"organizacao ja migrada nao deveria ganhar nada a mais")
+
+	// A org pendente, por outro lado, e processada normalmente: prova que o
+	// INSERT realmente rodou neste teste.
+	pendenteKeys := roleKeys(t, db, pendenteRole.ID)
+	assert.Contains(t, pendenteKeys, "occurrences:read",
+		"organizacao pendente deveria ser migrada")
+	assert.Contains(t, pendenteKeys, "occurrences:write",
+		"organizacao pendente deveria ser migrada")
 }
 
 func TestBackfill_NoOpWhenPermissionsNotSeeded(t *testing.T) {
@@ -140,6 +172,6 @@ func TestBackfill_NoOpWhenPermissionsNotSeeded(t *testing.T) {
 	org := testutil.CreateTestOrganization(t, db)
 	_ = org
 
-	require.NoError(t, database.BackfillOccurrencePermissions(db),
+	require.NoError(t, database.BackfillOccurrencePermissions(db, testLog()),
 		"sem as permissoes semeadas o backfill deve nao fazer nada, sem erro")
 }
