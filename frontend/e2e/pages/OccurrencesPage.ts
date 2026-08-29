@@ -28,6 +28,8 @@ export class OccurrencesPage extends BasePage {
 
   readonly listView: Locator
   readonly boardView: Locator
+  readonly boardColumns: Locator
+  readonly stageFilterSelect: Locator
 
   constructor(page: Page) {
     super(page)
@@ -49,6 +51,8 @@ export class OccurrencesPage extends BasePage {
 
     this.listView = page.locator('#occurrences-list')
     this.boardView = page.locator('#occurrences-board')
+    this.boardColumns = page.locator('[data-board-column]')
+    this.stageFilterSelect = page.locator('#occurrences-stage-filter')
   }
 
   // --- Lista e quadro ---
@@ -67,6 +71,14 @@ export class OccurrencesPage extends BasePage {
 
   async switchToList() {
     await this.page.getByRole('button', { name: 'List' }).click()
+  }
+
+  boardColumn(stageName: string): Locator {
+    return this.page.locator(`[data-board-column="${stageName}"]`)
+  }
+
+  boardCard(protocol: string): Locator {
+    return this.page.locator('[data-board-card]').filter({ hasText: protocol })
   }
 
   // --- Chat panel ---

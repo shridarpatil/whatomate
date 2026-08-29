@@ -32,6 +32,15 @@ export const useOccurrencesStore = defineStore('occurrences', () => {
     }
   }
 
+  // O quadro carrega cada coluna de forma independente e em paralelo, então
+  // isto devolve a página em vez de escrever o array `occurrences`, que a
+  // lista possui. Se as colunas escrevessem lá, a última resposta a chegar
+  // apagaria as outras.
+  async function fetchColumn(params: Record<string, string>) {
+    const res = await occurrencesService.list(params)
+    return { occurrences: res.data.data.occurrences, total: res.data.data.total }
+  }
+
   async function fetchContactOccurrences(contactId: string) {
     const res = await occurrencesService.listForContact(contactId)
     contactOccurrences.value = res.data.data.occurrences
@@ -78,7 +87,7 @@ export const useOccurrencesStore = defineStore('occurrences', () => {
 
   return {
     occurrences, total, contactOccurrences, stages, events, isLoading,
-    fetchStages, stageColor, fetchOccurrences, fetchContactOccurrences, fetchEvents,
+    fetchStages, stageColor, fetchOccurrences, fetchColumn, fetchContactOccurrences, fetchEvents,
     createOccurrence, changeStage, addNote, sendProtocol, clear,
   }
 })

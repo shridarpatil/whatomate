@@ -16,6 +16,7 @@ import { useSearchPagination } from '@/composables/useSearchPagination'
 import { ClipboardList, List, LayoutGrid } from 'lucide-vue-next'
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
 import { useOccurrenceViewMode } from '@/composables/useOccurrenceViewMode'
+import OccurrenceBoard from '@/components/crm/OccurrenceBoard.vue'
 
 const { t } = useI18n()
 const router = useRouter()
@@ -165,9 +166,7 @@ onMounted(async () => {
                 </template>
               </DataTable>
             </div>
-            <div v-else id="occurrences-board" class="p-4 text-sm text-muted-foreground">
-              {{ $t('occurrences.viewBoard') }}
-            </div>
+            <OccurrenceBoard v-else :protocol="searchQuery || undefined" />
           </CardContent>
         </Card>
       </div>
