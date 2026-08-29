@@ -401,16 +401,32 @@ func TestOccurrences_ClosedSinceCombinesWithStageFilter(t *testing.T) {
 	wanted, other := stages[0], stages[1]
 
 	cut := time.Date(2026, 3, 10, 12, 0, 0, 0, time.UTC)
-	closedAt := cut.Add(time.Hour)
 
-	for _, s := range []models.OccurrenceStage{wanted, other} {
+	// Duas ocorrências na etapa "wanted": uma dentro da janela (deve aparecer)
+	// e uma fora dela (deve ser excluída por closed_since). Uma terceira, na
+	// etapa "other", fica dentro da janela mas deve ser excluída por stage_id.
+	// Só assim o teste falha se qualquer uma das duas metades do filtro sumir.
+	type seed struct {
+		stage    models.OccurrenceStage
+		closedAt time.Time
+		title    string
+	}
+	inWindow := models.Occurrence{}
+	for _, s := range []seed{
+		{wanted, cut.Add(time.Hour), "Dentro da janela, etapa certa"},
+		{wanted, cut.Add(-time.Hour), "Fora da janela, etapa certa"},
+		{other, cut.Add(time.Hour), "Dentro da janela, etapa errada"},
+	} {
 		occ := models.Occurrence{
-			OrganizationID: org.ID, ContactID: contact.ID, Title: "Fechada em " + s.Name,
-			StageID: s.ID, OpenedByUserID: user.ID,
+			OrganizationID: org.ID, ContactID: contact.ID, Title: s.title,
+			StageID: s.stage.ID, OpenedByUserID: user.ID,
 		}
 		require.NoError(t, app.CreateOccurrenceForTest(&occ))
 		require.NoError(t, app.DB.Model(&models.Occurrence{}).
-			Where("id = ?", occ.ID).Update("closed_at", closedAt).Error)
+			Where("id = ?", occ.ID).Update("closed_at", s.closedAt).Error)
+		if s.stage.ID == wanted.ID && s.closedAt.Equal(cut.Add(time.Hour)) {
+			inWindow = occ
+		}
 	}
 
 	req := testutil.NewGETRequest(t)
@@ -422,11 +438,14 @@ func TestOccurrences_ClosedSinceCombinesWithStageFilter(t *testing.T) {
 	var resp struct {
 		Data struct {
 			Occurrences []struct {
+				ID      string `json:"id"`
 				StageID string `json:"stage_id"`
 			} `json:"occurrences"`
 		} `json:"data"`
 	}
 	require.NoError(t, json.Unmarshal(testutil.GetResponseBody(req), &resp))
 	require.Len(t, resp.Data.Occurrences, 1)
+	assert.Equal(t, inWindow.ID.String(), resp.Data.Occurrences[0].ID,
+		"deve ser a ocorrência fechada dentro da janela, na etapa certa")
 	assert.Equal(t, wanted.ID.String(), resp.Data.Occurrences[0].StageID)
 }
