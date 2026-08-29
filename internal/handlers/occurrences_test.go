@@ -3,6 +3,7 @@ package handlers_test
 import (
 	"encoding/json"
 	"testing"
+	"time"
 
 	"github.com/google/uuid"
 	"github.com/shridarpatil/whatomate/internal/models"
@@ -260,4 +261,172 @@ func TestOccurrences_ListEnvelopeShape(t *testing.T) {
 	require.NoError(t, json.Unmarshal(testutil.GetResponseBody(req), &resp))
 	require.Len(t, resp.Data.Occurrences, 1)
 	assert.Equal(t, occ.ProtocolNumber, resp.Data.Occurrences[0].ProtocolNumber)
+}
+
+// A borda é inclusiva: fechada exatamente no instante do corte entra.
+// O relógio é fixo no teste para o caso de borda não ficar intermitente.
+func TestOccurrences_ClosedSinceIncludesBoundary(t *testing.T) {
+	app := newTestApp(t)
+	org := testutil.CreateTestOrganization(t, app.DB)
+	adminRole := testutil.CreateAdminRole(t, app.DB, org.ID)
+	user := testutil.CreateTestUser(t, app.DB, org.ID, testutil.WithRoleID(&adminRole.ID))
+	contact := testutil.CreateTestContact(t, app.DB, org.ID)
+	stage, err := app.InitialStageForTest(org.ID)
+	require.NoError(t, err)
+
+	cut := time.Date(2026, 3, 10, 12, 0, 0, 0, time.UTC)
+
+	occ := models.Occurrence{
+		OrganizationID: org.ID, ContactID: contact.ID, Title: "Na borda",
+		StageID: stage.ID, OpenedByUserID: user.ID,
+	}
+	require.NoError(t, app.CreateOccurrenceForTest(&occ))
+	require.NoError(t, app.DB.Model(&models.Occurrence{}).
+		Where("id = ?", occ.ID).Update("closed_at", cut).Error)
+
+	req := testutil.NewGETRequest(t)
+	testutil.SetAuthContext(req, org.ID, user.ID)
+	testutil.SetQueryParam(req, "closed_since", cut.Format(time.RFC3339))
+	require.NoError(t, app.ListOccurrences(req))
+	require.Equal(t, fasthttp.StatusOK, testutil.GetResponseStatusCode(req))
+
+	var resp struct {
+		Data struct {
+			Occurrences []struct {
+				ID string `json:"id"`
+			} `json:"occurrences"`
+		} `json:"data"`
+	}
+	require.NoError(t, json.Unmarshal(testutil.GetResponseBody(req), &resp))
+	require.Len(t, resp.Data.Occurrences, 1)
+	assert.Equal(t, occ.ID.String(), resp.Data.Occurrences[0].ID)
+}
+
+// Fechada antes do corte fica de fora.
+func TestOccurrences_ClosedSinceExcludesOlder(t *testing.T) {
+	app := newTestApp(t)
+	org := testutil.CreateTestOrganization(t, app.DB)
+	adminRole := testutil.CreateAdminRole(t, app.DB, org.ID)
+	user := testutil.CreateTestUser(t, app.DB, org.ID, testutil.WithRoleID(&adminRole.ID))
+	contact := testutil.CreateTestContact(t, app.DB, org.ID)
+	stage, err := app.InitialStageForTest(org.ID)
+	require.NoError(t, err)
+
+	cut := time.Date(2026, 3, 10, 12, 0, 0, 0, time.UTC)
+
+	occ := models.Occurrence{
+		OrganizationID: org.ID, ContactID: contact.ID, Title: "Velha",
+		StageID: stage.ID, OpenedByUserID: user.ID,
+	}
+	require.NoError(t, app.CreateOccurrenceForTest(&occ))
+	require.NoError(t, app.DB.Model(&models.Occurrence{}).
+		Where("id = ?", occ.ID).Update("closed_at", cut.Add(-time.Second)).Error)
+
+	req := testutil.NewGETRequest(t)
+	testutil.SetAuthContext(req, org.ID, user.ID)
+	testutil.SetQueryParam(req, "closed_since", cut.Format(time.RFC3339))
+	require.NoError(t, app.ListOccurrences(req))
+
+	var resp struct {
+		Data struct {
+			Occurrences []struct {
+				ID string `json:"id"`
+			} `json:"occurrences"`
+		} `json:"data"`
+	}
+	require.NoError(t, json.Unmarshal(testutil.GetResponseBody(req), &resp))
+	assert.Empty(t, resp.Data.Occurrences)
+}
+
+// Aberta (closed_at NULL) nunca entra, por mais antigo que seja o corte.
+func TestOccurrences_ClosedSinceExcludesOpen(t *testing.T) {
+	app := newTestApp(t)
+	org := testutil.CreateTestOrganization(t, app.DB)
+	adminRole := testutil.CreateAdminRole(t, app.DB, org.ID)
+	user := testutil.CreateTestUser(t, app.DB, org.ID, testutil.WithRoleID(&adminRole.ID))
+	contact := testutil.CreateTestContact(t, app.DB, org.ID)
+	stage, err := app.InitialStageForTest(org.ID)
+	require.NoError(t, err)
+
+	occ := models.Occurrence{
+		OrganizationID: org.ID, ContactID: contact.ID, Title: "Aberta",
+		StageID: stage.ID, OpenedByUserID: user.ID,
+	}
+	require.NoError(t, app.CreateOccurrenceForTest(&occ))
+
+	req := testutil.NewGETRequest(t)
+	testutil.SetAuthContext(req, org.ID, user.ID)
+	testutil.SetQueryParam(req, "closed_since", "2000-01-01T00:00:00Z")
+	require.NoError(t, app.ListOccurrences(req))
+
+	var resp struct {
+		Data struct {
+			Occurrences []struct {
+				ID string `json:"id"`
+			} `json:"occurrences"`
+		} `json:"data"`
+	}
+	require.NoError(t, json.Unmarshal(testutil.GetResponseBody(req), &resp))
+	assert.Empty(t, resp.Data.Occurrences)
+}
+
+// Valor impossível de interpretar é recusado, não ignorado: ignorar
+// transformaria a coluna de fechadas na lista inteira.
+func TestOccurrences_ClosedSinceRejectsInvalidValue(t *testing.T) {
+	app := newTestApp(t)
+	org := testutil.CreateTestOrganization(t, app.DB)
+	adminRole := testutil.CreateAdminRole(t, app.DB, org.ID)
+	user := testutil.CreateTestUser(t, app.DB, org.ID, testutil.WithRoleID(&adminRole.ID))
+
+	req := testutil.NewGETRequest(t)
+	testutil.SetAuthContext(req, org.ID, user.ID)
+	testutil.SetQueryParam(req, "closed_since", "ontem")
+	require.NoError(t, app.ListOccurrences(req))
+	assert.Equal(t, fasthttp.StatusBadRequest, testutil.GetResponseStatusCode(req))
+}
+
+// closed_since combina com stage_id: cada coluna do quadro é uma etapa.
+func TestOccurrences_ClosedSinceCombinesWithStageFilter(t *testing.T) {
+	app := newTestApp(t)
+	org := testutil.CreateTestOrganization(t, app.DB)
+	adminRole := testutil.CreateAdminRole(t, app.DB, org.ID)
+	user := testutil.CreateTestUser(t, app.DB, org.ID, testutil.WithRoleID(&adminRole.ID))
+	contact := testutil.CreateTestContact(t, app.DB, org.ID)
+	require.NoError(t, app.EnsureDefaultStagesForTest(org.ID))
+
+	var stages []models.OccurrenceStage
+	require.NoError(t, app.DB.Where("organization_id = ?", org.ID).
+		Order("position ASC").Find(&stages).Error)
+	require.GreaterOrEqual(t, len(stages), 2)
+	wanted, other := stages[0], stages[1]
+
+	cut := time.Date(2026, 3, 10, 12, 0, 0, 0, time.UTC)
+	closedAt := cut.Add(time.Hour)
+
+	for _, s := range []models.OccurrenceStage{wanted, other} {
+		occ := models.Occurrence{
+			OrganizationID: org.ID, ContactID: contact.ID, Title: "Fechada em " + s.Name,
+			StageID: s.ID, OpenedByUserID: user.ID,
+		}
+		require.NoError(t, app.CreateOccurrenceForTest(&occ))
+		require.NoError(t, app.DB.Model(&models.Occurrence{}).
+			Where("id = ?", occ.ID).Update("closed_at", closedAt).Error)
+	}
+
+	req := testutil.NewGETRequest(t)
+	testutil.SetAuthContext(req, org.ID, user.ID)
+	testutil.SetQueryParam(req, "closed_since", cut.Format(time.RFC3339))
+	testutil.SetQueryParam(req, "stage_id", wanted.ID.String())
+	require.NoError(t, app.ListOccurrences(req))
+
+	var resp struct {
+		Data struct {
+			Occurrences []struct {
+				StageID string `json:"stage_id"`
+			} `json:"occurrences"`
+		} `json:"data"`
+	}
+	require.NoError(t, json.Unmarshal(testutil.GetResponseBody(req), &resp))
+	require.Len(t, resp.Data.Occurrences, 1)
+	assert.Equal(t, wanted.ID.String(), resp.Data.Occurrences[0].StageID)
 }
