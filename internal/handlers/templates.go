@@ -430,6 +430,46 @@ func (a *App) SubmitTemplate(r *fastglue.Request) error {
 	})
 }
 
+// PreviewTemplateRequest is a template request plus the Meta template ID, so a preview
+// of an already-published template shows the update payload rather than the create one.
+type PreviewTemplateRequest struct {
+	TemplateRequest
+	MetaTemplateID string `json:"meta_template_id"`
+}
+
+// PreviewTemplate returns the exact payload that would be sent to Meta for this template.
+// It saves nothing and calls nothing — it runs the same builder SubmitTemplate uses.
+func (a *App) PreviewTemplate(r *fastglue.Request) error {
+	if _, err := a.getOrgID(r); err != nil {
+		return r.SendErrorEnvelope(fasthttp.StatusUnauthorized, "Unauthorized", nil, "")
+	}
+
+	var req PreviewTemplateRequest
+	if err := a.decodeRequest(r, &req); err != nil {
+		return nil
+	}
+
+	payload, err := a.WhatsApp.BuildSubmissionPayload(&whatsapp.TemplateSubmission{
+		MetaTemplateID:            req.MetaTemplateID,
+		Name:                      normalizeTemplateName(req.Name),
+		Language:                  req.Language,
+		Category:                  strings.ToUpper(req.Category),
+		HeaderType:                strings.ToUpper(req.HeaderType),
+		HeaderContent:             req.HeaderContent,
+		BodyContent:               req.BodyContent,
+		FooterContent:             req.FooterContent,
+		Buttons:                   req.Buttons,
+		SampleValues:              req.SampleValues,
+		AddSecurityRecommendation: req.AddSecurityRecommendation,
+		CodeExpirationMinutes:     req.CodeExpirationMinutes,
+	})
+	if err != nil {
+		return r.SendErrorEnvelope(fasthttp.StatusBadRequest, err.Error(), nil, "")
+	}
+
+	return r.SendEnvelope(payload)
+}
+
 // submitTemplateToMeta submits a template to Meta's API (creates new or updates existing)
 func (a *App) submitTemplateToMeta(account *models.WhatsAppAccount, template *models.Template) (string, error) {
 	waAccount := a.toWhatsAppAccount(account)

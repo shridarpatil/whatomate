@@ -39,7 +39,7 @@ test.describe('Message Templates - List View', () => {
     const href = await navigateToFirstItem(page)
     if (href) {
       expect(page.url()).toMatch(/\/templates\/[a-f0-9-]+/)
-      await expect(page.getByText('Details')).toBeVisible()
+      await expect(page.getByText('Live Preview')).toBeVisible()
     }
   })
 
@@ -61,12 +61,14 @@ test.describe('Message Templates - List View', () => {
       test.skip(true, 'No templates in list')
       return
     }
-    const deleteBtn = firstRow.locator('button.text-destructive, button:has(svg.text-destructive)').first()
-    if (!(await deleteBtn.isVisible({ timeout: 3000 }).catch(() => false))) {
-      test.skip(true, 'No delete button found')
+    // Edit/Delete live in the row's overflow (three-dots) menu
+    const menuTrigger = firstRow.getByRole('button', { name: /More actions/i })
+    if (!(await menuTrigger.isVisible({ timeout: 3000 }).catch(() => false))) {
+      test.skip(true, 'No actions menu found')
       return
     }
-    await deleteBtn.click()
+    await menuTrigger.click()
+    await page.getByRole('menuitem', { name: /Delete/i }).click()
     await expect(templatesPage.alertDialog).toBeVisible({ timeout: 5000 })
     await templatesPage.cancelDelete()
   })
@@ -183,13 +185,8 @@ test.describe('Message Templates - Detail Page', () => {
     await page.goto(`/templates/${tpl.id}`)
     await page.waitForLoadState('networkidle')
 
-    // Expand the collapsible details card by clicking its header
-    const detailsCard = page.locator('text=Details').first()
-    await detailsCard.click()
-    await page.waitForTimeout(500)
-
-    // Wait for the input to be visible after expanding
-    const input = page.locator('input:visible').first()
+    // The editor form is always visible on the detail page.
+    const input = page.locator('#display-name')
     await input.waitFor({ state: 'visible', timeout: 5000 })
     if (await input.isDisabled()) { test.skip(true, 'No write permission'); return }
 
@@ -202,12 +199,8 @@ test.describe('Message Templates - Detail Page', () => {
       await saveBtn.click({ force: true })
       await page.waitForTimeout(2000)
 
-      // Re-expand after save (card collapses on reload)
-      await detailsCard.click()
-      await page.waitForTimeout(500)
-
       // Revert
-      const inputAfterSave = page.locator('input:visible').first()
+      const inputAfterSave = page.locator('#display-name')
       await inputAfterSave.waitFor({ state: 'visible', timeout: 5000 })
       await inputAfterSave.fill(original)
       await page.waitForTimeout(300)
@@ -218,13 +211,23 @@ test.describe('Message Templates - Detail Page', () => {
     }
   })
 
-  test('should show preview button on existing template', async ({ page }) => {
-    await page.goto('/templates')
-    await page.waitForLoadState('networkidle')
+  test('should show live preview on existing template', async ({ page, request }) => {
+    // Seed our own template so a parallel worker deleting the first row
+    // can't land us on a not-found page.
+    const api = new ApiHelper(request)
+    await api.login(SUPER_ADMIN.email, SUPER_ADMIN.password)
+    const accounts = await api.getWhatsAppAccounts()
+    const accountName = accounts[0]?.name
+    if (!accountName) { test.skip(true, 'No WhatsApp account available'); return }
+    const tpl = await api.createTemplate({
+      name: `tpl_preview_${Date.now()}`,
+      body_content: 'Hello preview-test',
+      whatsapp_account: accountName,
+    })
 
-    if (await navigateToFirstItem(page)) {
-      await expect(page.getByRole('button', { name: /Preview/i })).toBeVisible()
-    }
+    await page.goto(`/templates/${tpl.id}`)
+    await page.waitForLoadState('networkidle')
+    await expect(page.getByText('Live Preview')).toBeVisible()
   })
 
   test('should show publish button on draft template', async ({ page }) => {
