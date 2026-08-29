@@ -81,6 +81,19 @@ export class OccurrencesPage extends BasePage {
     return this.page.locator('[data-board-card]').filter({ hasText: protocol })
   }
 
+  /** Arrasta um cartão do quadro para a coluna da etapa indicada. */
+  async dragCardToColumn(protocol: string, stageName: string) {
+    const card = this.boardCard(protocol)
+    await expect(card).toBeVisible({ timeout: 10000 })
+    await card.dragTo(this.boardColumn(stageName))
+  }
+
+  /** O cartão de um protocolo dentro de uma coluna específica. Vazio — logo,
+   * `toBeHidden()` — quando o cartão não está naquela coluna. */
+  cardInColumn(stageName: string, protocol: string): Locator {
+    return this.boardColumn(stageName).locator('[data-board-card]').filter({ hasText: protocol })
+  }
+
   // --- Chat panel ---
 
   async openPanel() {
@@ -98,6 +111,10 @@ export class OccurrencesPage extends BasePage {
     await this.panel.getByRole('button', { name: 'New occurrence' }).first().click()
     await this.titleInput.fill(title)
     await this.panel.getByRole('button', { name: 'New occurrence' }).last().click()
+    // The form closes only after the create request resolves. Wait for that
+    // here so a second call right after this one finds a clean, closed form
+    // instead of racing the toggle button against the still-open one.
+    await this.titleInput.waitFor({ state: 'hidden' })
   }
 
   getOccurrenceCard(text: string | RegExp): Locator {

@@ -1,6 +1,11 @@
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
 import { watchDebounced } from '@vueuse/core'
+import { useRouter } from 'vue-router'
+import draggable from 'vuedraggable'
+import { useI18n } from 'vue-i18n'
+import { toast } from 'vue-sonner'
+import { getErrorMessage } from '@/lib/api-utils'
 import { Button } from '@/components/ui/button'
 import { Spinner } from '@/components/ui/spinner'
 import { useOccurrencesStore } from '@/stores/occurrences'
@@ -10,6 +15,23 @@ import OccurrenceCard from './OccurrenceCard.vue'
 const props = defineProps<{ protocol?: string }>()
 
 const store = useOccurrencesStore()
+const router = useRouter()
+const { t } = useI18n()
+
+// A lista já navega ao clicar numa linha (OccurrencesView.vue); o quadro
+// precisa do mesmo caminho para o cartão abrir o detalhe.
+function goToDetail(occurrence: Occurrence) {
+  router.push({ name: 'occurrence-detail', params: { id: occurrence.id } })
+}
+
+/** Ocorrências com requisição em voo. Um cartão travado não aceita novo arrasto. */
+const pending = ref(new Set<string>())
+
+/**
+ * A origem do arrasto, capturada no início e usada na reversão. Guardar isto
+ * explicitamente é o que permite desfazer sem depender do estado visual.
+ */
+let dragOrigin: { occurrenceId: string; fromStageId: string } | null = null
 
 /** Cartões por página, em cada coluna. */
 const PAGE_SIZE = 25
@@ -91,6 +113,58 @@ function hasMore(col: ColumnState): boolean {
   return col.items.length < col.total
 }
 
+function onDragStart(col: ColumnState, evt: { oldIndex: number }) {
+  const item = col.items[evt.oldIndex]
+  dragOrigin = item ? { occurrenceId: item.id, fromStageId: col.stage.id } : null
+}
+
+/** Recusa arrastar um cartão cuja própria requisição ainda está em voo. */
+function canMove(evt: { draggedContext: { element: Occurrence } }): boolean {
+  return !pending.value.has(evt.draggedContext.element.id)
+}
+
+function sortByOpenedAtDesc(items: Occurrence[]) {
+  items.sort((a, b) => Date.parse(b.opened_at) - Date.parse(a.opened_at))
+}
+
+async function onColumnChange(toCol: ColumnState, evt: { added?: { element: Occurrence } }) {
+  // Mover dentro da mesma coluna emite `moved`, não `added`: nenhuma
+  // requisição sai e nenhum evento de timeline é criado.
+  if (!evt.added) return
+
+  const origin = dragOrigin
+  dragOrigin = null
+  if (!origin) return
+
+  const occ = evt.added.element
+
+  // Guarda explícita do no-op, exigida pela spec e não deixada por conta do
+  // comportamento da biblioteca.
+  if (origin.fromStageId === toCol.stage.id) return
+
+  const fromCol = columns.value.find(c => c.stage.id === origin.fromStageId)
+
+  pending.value.add(occ.id)
+  try {
+    await store.moveStage(occ.id, toCol.stage.id)
+    sortByOpenedAtDesc(toCol.items)
+    toCol.total += 1
+    if (fromCol) fromCol.total = Math.max(0, fromCol.total - 1)
+  } catch (e) {
+    // Reversão pela origem guardada, não pelo que está na tela.
+    const idx = toCol.items.findIndex(i => i.id === occ.id)
+    if (idx !== -1) toCol.items.splice(idx, 1)
+    if (fromCol) {
+      fromCol.items.push(occ)
+      sortByOpenedAtDesc(fromCol.items)
+    }
+    // A mensagem é a que o servidor devolveu, não um erro genérico.
+    toast.error(getErrorMessage(e, t('occurrences.stageChangeFailed')))
+  } finally {
+    pending.value.delete(occ.id)
+  }
+}
+
 onMounted(async () => {
   if (store.stages.length === 0) await store.fetchStages()
   await loadAll()
@@ -103,7 +177,7 @@ watchDebounced(() => props.protocol, loadAll, { debounce: 300 })
 </script>
 
 <template>
-  <div id="occurrences-board" class="flex gap-4 overflow-x-auto p-4">
+  <div id="occurrences-board" class="flex items-start gap-4 overflow-x-auto p-4">
     <div
       v-for="col in columns"
       :key="col.stage.id"
@@ -127,7 +201,19 @@ watchDebounced(() => props.protocol, loadAll, { debounce: 300 })
         </div>
 
         <template v-else>
-          <OccurrenceCard v-for="occ in col.items" :key="occ.id" :occurrence="occ" />
+          <draggable
+            v-model="col.items"
+            :group="{ name: 'occurrences' }"
+            :move="canMove"
+            item-key="id"
+            class="flex flex-col gap-2 min-h-16"
+            @start="onDragStart(col, $event)"
+            @change="onColumnChange(col, $event)"
+          >
+            <template #item="{ element }">
+              <OccurrenceCard :occurrence="element" :disabled="pending.has(element.id)" @click="goToDetail(element)" />
+            </template>
+          </draggable>
 
           <div v-if="col.loading" class="flex justify-center p-3">
             <Spinner class="h-4 w-4" />

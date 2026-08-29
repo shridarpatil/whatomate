@@ -68,6 +68,14 @@ export const useOccurrencesStore = defineStore('occurrences', () => {
     await fetchEvents(occurrenceId)
   }
 
+  // O quadro grava a etapa e para por aí. O `changeStage` acima recarrega a
+  // timeline porque a tela de detalhe precisa dela; aqui isso seria uma
+  // requisição desperdiçada por arrasto e ainda sobrescreveria `events`, que
+  // pertence ao detalhe.
+  async function moveStage(occurrenceId: string, stageId: string) {
+    await occurrencesService.changeStage(occurrenceId, stageId)
+  }
+
   async function addNote(occurrenceId: string, content: string) {
     await occurrencesService.addNote(occurrenceId, content)
     await fetchEvents(occurrenceId)
@@ -88,6 +96,6 @@ export const useOccurrencesStore = defineStore('occurrences', () => {
   return {
     occurrences, total, contactOccurrences, stages, events, isLoading,
     fetchStages, stageColor, fetchOccurrences, fetchColumn, fetchContactOccurrences, fetchEvents,
-    createOccurrence, changeStage, addNote, sendProtocol, clear,
+    createOccurrence, changeStage, moveStage, addNote, sendProtocol, clear,
   }
 })
