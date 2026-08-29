@@ -21,7 +21,8 @@ type OccurrenceStageRequest struct {
 }
 
 // ListOccurrenceStages returns the org's pipeline, seeding defaults on first use.
-// Read needs only chat:read — every agent must see stage names to work.
+// Gated on occurrences:read: reading stage names is part of using the CRM, not
+// the administrative permission that governs editing the pipeline.
 func (a *App) ListOccurrenceStages(r *fastglue.Request) error {
 	orgID, _, err := a.requireAuth(r, models.ResourceOccurrences, models.ActionRead)
 	if err != nil {

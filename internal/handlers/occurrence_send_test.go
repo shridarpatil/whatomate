@@ -79,7 +79,7 @@ func TestOccurrenceSendProtocol_DeniedForInvisibleContact(t *testing.T) {
 	agentRole := testutil.CreateAgentRole(t, app.DB, org.ID)
 	owner := testutil.CreateTestUser(t, app.DB, org.ID, testutil.WithRoleID(&agentRole.ID))
 	outsiderRole := testutil.CreateTestRoleWithKeys(t, app.DB, org.ID, "occ-send-outsider",
-		[]string{"chat:read", "chat:write"})
+		[]string{"chat:read", "chat:write", "occurrences:read", "occurrences:write"})
 	outsider := testutil.CreateTestUser(t, app.DB, org.ID, testutil.WithRoleID(&outsiderRole.ID))
 	enableStrictVisibility(t, app, org.ID)
 

@@ -153,16 +153,17 @@ func TestOccurrences_SameStageIsNoOp(t *testing.T) {
 }
 
 // GATE 4. Cada endpoint carrega o próprio gate. Um só desprotegido já vaza.
-// "outsider" mirrors occ-outsider in occurrences_test.go: chat:read + chat:write
-// only, no contacts:read and no conversations:view_all/view_team — so requireAuth
-// lets them in, and only loadAuthorizedOccurrence's conversation gate can stop them.
+// "outsider" mirrors occ-outsider in occurrences_test.go: occurrences:read +
+// occurrences:write only, no contacts:read and no conversations:view_all/
+// view_team — so requireAuth lets them in, and only loadAuthorizedOccurrence's
+// conversation gate can stop them.
 func TestOccurrences_EveryEndpointIsAuthorized(t *testing.T) {
 	app := newTestApp(t)
 	org := testutil.CreateTestOrganization(t, app.DB)
 	agentRole := testutil.CreateAgentRole(t, app.DB, org.ID)
 	owner := testutil.CreateTestUser(t, app.DB, org.ID, testutil.WithRoleID(&agentRole.ID))
 	outsiderRole := testutil.CreateTestRoleWithKeys(t, app.DB, org.ID, "occ-outsider",
-		[]string{"chat:read", "chat:write"})
+		[]string{"chat:read", "chat:write", "occurrences:read", "occurrences:write"})
 	outsider := testutil.CreateTestUser(t, app.DB, org.ID, testutil.WithRoleID(&outsiderRole.ID))
 	enableStrictVisibility(t, app, org.ID)
 
