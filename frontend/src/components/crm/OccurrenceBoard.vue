@@ -21,6 +21,9 @@ const { t } = useI18n()
 // A lista já navega ao clicar numa linha (OccurrencesView.vue); o quadro
 // precisa do mesmo caminho para o cartão abrir o detalhe.
 function goToDetail(occurrence: Occurrence) {
+  // Um cartão travado (requisição em voo) não navega: o detalhe renderizaria
+  // a etapa antiga enquanto o PUT ainda está mudando ela por baixo.
+  if (pending.value.has(occurrence.id)) return
   router.push({ name: 'occurrence-detail', params: { id: occurrence.id } })
 }
 
@@ -129,8 +132,13 @@ function sortByOpenedAtDesc(items: Occurrence[]) {
 
 async function onColumnChange(toCol: ColumnState, evt: { added?: { element: Occurrence } }) {
   // Mover dentro da mesma coluna emite `moved`, não `added`: nenhuma
-  // requisição sai e nenhum evento de timeline é criado.
-  if (!evt.added) return
+  // requisição sai e nenhum evento de timeline é criado. A ordem, porém,
+  // nunca é manual — nem no código nem no estado — então a coluna volta a
+  // ficar por opened_at DESC mesmo sem chamada ao servidor.
+  if (!evt.added) {
+    sortByOpenedAtDesc(toCol.items)
+    return
+  }
 
   const origin = dragOrigin
   dragOrigin = null
@@ -148,6 +156,9 @@ async function onColumnChange(toCol: ColumnState, evt: { added?: { element: Occu
   try {
     await store.moveStage(occ.id, toCol.stage.id)
     sortByOpenedAtDesc(toCol.items)
+    // Só ajusta as contagens em caso de sucesso. Durante a requisição, o
+    // destino mostra N cartões sob um cabeçalho com N-1 — deliberado: é o
+    // que permite a reversão do catch abaixo dispensar desfazer contagem.
     toCol.total += 1
     if (fromCol) fromCol.total = Math.max(0, fromCol.total - 1)
   } catch (e) {
@@ -177,7 +188,7 @@ watchDebounced(() => props.protocol, loadAll, { debounce: 300 })
 </script>
 
 <template>
-  <div id="occurrences-board" class="flex items-start gap-4 overflow-x-auto p-4">
+  <div id="occurrences-board" class="flex gap-4 overflow-x-auto p-4">
     <div
       v-for="col in columns"
       :key="col.stage.id"
@@ -192,7 +203,7 @@ watchDebounced(() => props.protocol, loadAll, { debounce: 300 })
         <span class="text-xs text-muted-foreground">{{ col.total }}</span>
       </div>
 
-      <div class="flex flex-col gap-2 p-2 min-h-24">
+      <div class="flex flex-1 flex-col gap-2 p-2 min-h-24">
         <div v-if="col.failed" class="p-3 text-center">
           <p class="text-xs text-muted-foreground">{{ $t('occurrences.columnLoadFailed') }}</p>
           <Button variant="outline" size="sm" class="mt-2" @click="loadColumn(col, 1)">
@@ -206,9 +217,10 @@ watchDebounced(() => props.protocol, loadAll, { debounce: 300 })
             :group="{ name: 'occurrences' }"
             :move="canMove"
             item-key="id"
-            class="flex flex-col gap-2 min-h-16"
+            class="flex flex-1 flex-col gap-2 min-h-16"
             @start="onDragStart(col, $event)"
             @change="onColumnChange(col, $event)"
+            @end="dragOrigin = null"
           >
             <template #item="{ element }">
               <OccurrenceCard :occurrence="element" :disabled="pending.has(element.id)" @click="goToDetail(element)" />

@@ -81,11 +81,37 @@ export class OccurrencesPage extends BasePage {
     return this.page.locator('[data-board-card]').filter({ hasText: protocol })
   }
 
-  /** Arrasta um cartão do quadro para a coluna da etapa indicada. */
-  async dragCardToColumn(protocol: string, stageName: string) {
+  /** Arrasta um cartão do quadro para a coluna da etapa indicada.
+   *
+   * Nunca mira o centro geométrico da caixa da coluna: colunas esticam para
+   * a altura da mais alta do quadro (align-items: stretch), então uma coluna
+   * vazia ao lado de uma com dezenas de cartões residuais de outro teste
+   * pode ter uma caixa de milhares de pixels cujo centro cai bem fora da
+   * viewport — o próprio `dragTo` não rola até lá, e o drop nunca acontece.
+   *
+   * Por padrão solta perto do topo (sempre visível). `atBottom` solta logo
+   * abaixo do último cartão já existente na coluna — usado quando o teste
+   * precisa que a posição bruta do drop discorde da ordem esperada por
+   * `opened_at`, em vez de coincidir com ela por acaso (ver I-3). */
+  async dragCardToColumn(protocol: string, stageName: string, opts: { atBottom?: boolean } = {}) {
     const card = this.boardCard(protocol)
     await expect(card).toBeVisible({ timeout: 10000 })
-    await card.dragTo(this.boardColumn(stageName))
+    const column = this.boardColumn(stageName)
+    const box = await column.boundingBox()
+    if (!box) throw new Error(`board column "${stageName}" has no bounding box`)
+
+    if (opts.atBottom) {
+      const existing = column.locator('[data-board-card]')
+      const lastBox = (await existing.count()) > 0 ? await existing.last().boundingBox() : null
+      if (lastBox) {
+        await card.dragTo(column, {
+          targetPosition: { x: box.width / 2, y: lastBox.y - box.y + lastBox.height + 10 },
+        })
+        return
+      }
+    }
+
+    await card.dragTo(column, { targetPosition: { x: box.width / 2, y: Math.min(box.height / 2, 100) } })
   }
 
   /** O cartão de um protocolo dentro de uma coluna específica. Vazio — logo,

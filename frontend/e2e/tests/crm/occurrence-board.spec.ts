@@ -151,6 +151,11 @@ test.describe('CRM occurrence board', () => {
     await occurrencesPage.dragCardToColumn(protocol, 'Em análise')
     await expect(occurrencesPage.cardInColumn('Em análise', protocol)).toBeVisible()
 
+    // O cartão fica travado (cursor-wait) enquanto o PUT de mudança de etapa
+    // está em voo — um clique nesse intervalo é ignorado de propósito (I-1),
+    // então espera a requisição resolver antes de clicar.
+    await expect(occurrencesPage.boardCard(protocol)).not.toHaveClass(/cursor-wait/)
+
     await occurrencesPage.boardCard(protocol).click()
     await expect(occurrencesPage.timelineEntry('Stage change')).toBeVisible()
   })
@@ -201,17 +206,29 @@ test.describe('CRM occurrence board', () => {
     await occurrencesPage.gotoList()
     await occurrencesPage.switchToBoard()
 
-    // Arrasta as duas para a mesma coluna, a mais velha por último. Se a
-    // ordem fosse a de chegada, ela ficaria no fim; por opened_at DESC, a
-    // mais nova vem primeiro.
-    await occurrencesPage.dragCardToColumn(newerProtocol, 'Em análise')
+    // A mais velha entra primeiro (sozinha na coluna); a mais nova entra por
+    // último, soltada explicitamente no rodapé — ou seja, a posição bruta do
+    // drop a insere DEPOIS da mais velha. Isso é o oposto da ordem esperada
+    // (opened_at DESC bota a mais nova primeiro), então a asserção abaixo só
+    // passa se sortByOpenedAtDesc de fato reordenar a coluna. Um drop "no
+    // meio" da coluna já cai depois de tudo que existe (ver comentário em
+    // dragCardToColumn) e coincidiria com o resultado esperado mesmo sem
+    // ordenação nenhuma — por isso o rodapé explícito aqui, não o centro.
     await occurrencesPage.dragCardToColumn(olderProtocol, 'Em análise')
+    await occurrencesPage.dragCardToColumn(newerProtocol, 'Em análise', { atBottom: true })
 
-    const texts = await occurrencesPage.boardColumn('Em análise')
-      .locator('[data-board-card]').allInnerTexts()
-    const olderIndex = texts.findIndex(t => t.includes(olderProtocol))
-    const newerIndex = texts.findIndex(t => t.includes(newerProtocol))
-    expect(newerIndex).toBeGreaterThanOrEqual(0)
-    expect(olderIndex).toBeGreaterThan(newerIndex)
+    // sortByOpenedAtDesc só roda depois que o PUT de mudança de etapa
+    // resolve (onColumnChange reordena dentro do `try`, após o `await`), não
+    // no instante em que o gesto de arrastar termina. `expect.poll` espera a
+    // ordenação assentar em vez de ler o DOM na posição bruta do drop.
+    // A comparação é relativa (não por índice absoluto): a coluna pode ter
+    // outros cartões residuais de testes anteriores na mesma suíte.
+    await expect.poll(async () => {
+      const texts = await occurrencesPage.boardColumn('Em análise')
+        .locator('[data-board-card]').allInnerTexts()
+      const olderIndex = texts.findIndex(t => t.includes(olderProtocol))
+      const newerIndex = texts.findIndex(t => t.includes(newerProtocol))
+      return newerIndex >= 0 && olderIndex > newerIndex
+    }).toBe(true)
   })
 })
