@@ -13,9 +13,11 @@ Duas consequências, ambas em produção hoje:
 
 **Não há como separar CRM de atendimento.** Quem enxerga conversa enxerga ocorrência, e não existe papel que tenha um sem o outro. Isso impede vender ou conceder o módulo separadamente.
 
-**Configurar o funil não é ato administrativo.** Criar, renomear e apagar etapas exige apenas `chat:write`, e o papel `agent` tem `chat:write` ([roles.go:305](../../../internal/models/roles.go)). Qualquer atendente pode apagar uma etapa do funil da organização inteira.
+**Administrar o funil está sob a permissão de configurações gerais.** Criar, editar e apagar etapas exige `settings.general:write` ([occurrence_stages.go:50](../../../internal/handlers/occurrence_stages.go), [:103](../../../internal/handlers/occurrence_stages.go), [:185](../../../internal/handlers/occurrence_stages.go)) — decisão explícita da Fase 1, que preferiu não criar permissão nova naquele momento. Não há falha de autorização aqui: o agente não tem `settings.general:write` e portanto já não administra etapas, e a tela também já exige a mesma permissão no frontend ([router/index.ts:306](../../../frontend/src/router/index.ts)).
 
-O segundo ponto é uma incoerência já existente, não algo que esta mudança cria: a **tela** de configuração de etapas já exige `settings.general` no frontend ([router/index.ts:306](../../../frontend/src/router/index.ts)), mas a **API** atrás dela não exige nada além de `chat:write`. O agente não vê a tela e mesmo assim pode chamar a API. Esta spec faz o backend concordar com o que a interface já promete.
+O problema é de **granularidade**: não dá para deixar alguém administrar o funil sem também entregar as configurações gerais da organização. São coisas de escopo bem diferente sob a mesma chave.
+
+> **Correção registrada.** Uma versão anterior desta spec afirmava que as mutações de etapa exigiam apenas `chat:write` e que qualquer agente podia apagar etapas do funil. Era falso — a afirmação foi feita sem ler os três handlers. Isso importa porque muda a natureza da mudança: mexer nas etapas aqui é **refinamento de granularidade**, não correção de falha de segurança, e nenhum agente perde capacidade que hoje exerça.
 
 ## 2. Objetivos e não-objetivos
 
@@ -77,9 +79,11 @@ Para cada papel de cada organização:
 |---|---|
 | `chat:read` | `occurrences:read` |
 | `chat:write` | `occurrences:write` |
-| `roles:write` **ou** `settings.general:write` | `occurrences.stages:write` e `occurrences.stages:delete` |
+| `settings.general:write` | `occurrences.stages:write` e `occurrences.stages:delete` |
 
-O efeito prático: atendentes continuam usando o CRM exatamente como hoje e **perdem** a capacidade de administrar etapas — que é a correção pretendida, e que já era o comportamento visível, porque a tela sempre esteve fora do alcance deles.
+A regra é **equivalência exata com a capacidade de hoje**: quem administra etapas neste momento é precisamente quem tem `settings.general:write`, então são precisamente esses que recebem as permissões novas. Ninguém ganha nem perde capacidade no deploy.
+
+`roles:write` **não** entra na regra. Administrar papéis e administrar o funil são coisas distintas, e quem tem só o primeiro não configura etapas hoje — incluí-lo concederia acesso novo numa migração cujo propósito declarado é não alterar o acesso de ninguém.
 
 ### Idempotência
 
@@ -149,13 +153,15 @@ O editor de funções monta os grupos sozinho a partir da API (`permissionGroups
 
 - Cada endpoint da tabela de §3 devolve **403** para um usuário sem a permissão correspondente.
 - Um usuário com `occurrences:read` mas sem `occurrences:write` lê a lista e recebe 403 ao criar.
-- **O caso de regressão mais importante:** um papel com `chat:write` mas **sem** `roles:write` nem `settings.general:write` usa ocorrências normalmente e recebe **403** ao criar, editar ou apagar etapa. É o comportamento que a mudança inteira existe para produzir, e o único que um erro de mapeamento silenciaria.
+- **O caso central:** um papel com `chat:write` mas **sem** `settings.general:write` usa ocorrências normalmente e recebe **403** ao criar, editar ou apagar etapa. Este é um teste de **caracterização**, não de regressão: já passa hoje, porque as mutações de etapa já exigem `settings.general:write`. Ele existe para travar a separação depois da troca de permissão — é o que um erro de mapeamento silenciaria, ligando administração de funil a `occurrences:write`.
+- **A regressão de verdade:** um papel com `settings.general:write` continua administrando etapas depois do backfill. É a capacidade que a migração precisa preservar, e a única cuja perda seria invisível até um gestor reclamar.
 - `ListOccurrenceStages` responde 200 para quem tem apenas `occurrences:read` — o quadro não pode depender de permissão administrativa.
 
 **Go — backfill**
 
 - Papel com `chat:read` e `chat:write` recebe `occurrences:read` e `occurrences:write`, e **não** recebe as de etapa.
-- Papel com `settings.general:write` recebe as duas de etapa; idem para `roles:write`.
+- Papel com `settings.general:write` recebe as duas de etapa.
+- Papel com `roles:write` mas **sem** `settings.general:write` **não** recebe as de etapa — a regra é equivalência, não generosidade.
 - Papel sem nenhuma permissão de chat não recebe nada.
 - **Nenhuma permissão `chat:*` é removida de papel algum** — asserção explícita, porque é o que garante o rollback.
 - Rodar o backfill duas vezes não duplica vínculos.
@@ -173,7 +179,7 @@ O editor de funções monta os grupos sozinho a partir da API (`permissionGroups
 | Risco | Mitigação |
 |---|---|
 | Produção sem `-migrate`: CRM inacessível para todos, permanentemente | Pré-condição verificável de §5; sem ela confirmada, o rollout não começa |
-| Cliente que dependia de agente configurando funil | Visível e reversível na tela de funções; a tela já era inacessível a agentes |
+| Gestor perder a administração do funil no deploy | O backfill mapeia `settings.general:write` um-para-um; teste de regressão dedicado em §7 |
 | Backfill re-conceder permissão removida de propósito | Aceito e registrado em §4; estreito e reversível |
 | Rollback deixar usuários sem acesso | Impossível por construção: o backfill nunca revoga `chat:*` |
 | Erro de mapeamento passar despercebido | O teste de regressão de §7 e o teste de mutação |
