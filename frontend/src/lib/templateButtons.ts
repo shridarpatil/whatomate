@@ -8,6 +8,30 @@
 
 export const MAX_BUTTONS = 10
 
+// A URL button is dynamic when its url carries a variable. The editor only ever
+// creates {{1}}, but a template synced from Meta can arrive with a named parameter,
+// and the backend already treats any {{…}} as dynamic (pkg/whatsapp/template.go:
+// `strings.Contains(btnURL, "{{")`). Keeping the test here stops the editor and the
+// save guard drifting apart, which is how a url could look dynamic on screen and
+// still reach Meta with no example.
+export const URL_VAR = '{{1}}'
+const URL_VAR_PATTERN = /\{\{[^}]+\}\}/
+
+export function isDynamicUrl(url: string): boolean {
+  return URL_VAR_PATTERN.test(String(url || ''))
+}
+
+// The variable itself — '{{1}}' or '{{order}}'. Empty when the url is static.
+export function urlVariable(url: string): string {
+  return String(url || '').match(URL_VAR_PATTERN)?.[0] || ''
+}
+
+// The url without its variable: the part the user types, and the base that a
+// synced full-url example is stripped back to.
+export function urlBase(url: string): string {
+  return String(url || '').replace(URL_VAR_PATTERN, '')
+}
+
 // URL and phone buttons are "call to action" buttons, capped at 2 combined.
 export const MAX_CTA = 2
 

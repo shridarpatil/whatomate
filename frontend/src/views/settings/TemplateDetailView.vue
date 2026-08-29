@@ -28,7 +28,7 @@ import {
 import { FileText, Trash2, Save, Loader2, Send, Info, Code, Copy } from 'lucide-vue-next'
 import { getErrorMessage } from '@/lib/api-utils'
 import { getQualityBadgeClass, getQualityRatingLabel } from '@/lib/utils'
-import { validateButtonCombination } from '@/lib/templateButtons'
+import { validateButtonCombination, isDynamicUrl, urlBase } from '@/lib/templateButtons'
 
 interface WhatsAppAccount {
   id: string
@@ -251,8 +251,8 @@ const firstButtonError = computed(() => {
     if (text.length > LIMITS.buttonText) return `Button labels must be ${LIMITS.buttonText} characters or fewer.`
     if (btn.type === 'URL') {
       const url = String(btn.url || '').trim()
-      if (!url || url === '{{1}}') return 'Website URL buttons need a URL.'
-      if (url.includes('{{1}}') && !String(btn.example || '').trim()) return 'A dynamic URL button needs an example value.'
+      if (!url || !urlBase(url)) return 'Website URL buttons need a URL.'
+      if (isDynamicUrl(url) && !String(btn.example || '').trim()) return 'A dynamic URL button needs an example value.'
     }
     if (btn.type === 'PHONE_NUMBER') {
       const phone = String(btn.phone_number || '').trim()
@@ -330,8 +330,8 @@ function syncForm() {
       // Locally saved buttons hold the bare example value, but templates synced
       // from Meta return the full example URL — strip the base so the editor
       // always shows just the value. Bare values pass through unchanged.
-      if (b.type === 'URL' && String(b.url || '').includes('{{1}}') && example) {
-        const base = urlExampleBase(b.url)
+      if (b.type === 'URL' && isDynamicUrl(b.url) && example) {
+        const base = urlBase(b.url)
         example = String(example).startsWith(base)
           ? String(example).slice(base.length)
           : example
@@ -371,11 +371,6 @@ watch(() => form.value.category, (newCat, oldCat) => {
     form.value.code_expiration_minutes = 0
   }
 })
-
-// A dynamic URL button's base — the url with the {{1}} placeholder removed.
-function urlExampleBase(url: string) {
-  return String(url || '').replace('{{1}}', '')
-}
 
 // `id` is only a v-for key in the editor, so it must not reach the buttons JSONB.
 // A dynamic URL button's example is sent as the bare variable value ("Rose", not

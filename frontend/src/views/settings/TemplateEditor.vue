@@ -16,6 +16,10 @@ import {
   BUTTON_LIMITS,
   MAX_BUTTONS,
   MAX_CTA,
+  URL_VAR,
+  isDynamicUrl as urlIsDynamic,
+  urlVariable,
+  urlBase,
 } from "@/lib/templateButtons";
 
 import { Input } from "@/components/ui/input";
@@ -75,16 +79,13 @@ function isValidPhone(value: string) {
   return /^\+?[0-9]{7,15}$/.test(value.trim());
 }
 
-// Meta treats a URL button as dynamic when the url ends in {{1}}, so the url is
-// the source of truth. The example suffix goes on the button as `example`, which
-// is where the backend reads it from.
-const URL_VAR = "{{1}}";
-// New dynamic urls always use {{1}}, but one synced from Meta may carry a named
-// variable, so detecting and stripping has to accept any of them.
-const URL_VAR_PATTERN = /\{\{[^}]+\}\}/;
-
+// A URL button is dynamic when its url carries a variable, so the url is the source
+// of truth; the example value goes on the button as `example`, which is where the
+// backend reads it from. New dynamic urls always use {{1}} (URL_VAR), but one synced
+// from Meta may carry a named variable — the test lives in @/lib/templateButtons so
+// the parent's save guard applies exactly the same rule.
 function isDynamicUrl(btn: any) {
-  return URL_VAR_PATTERN.test(String(btn.url || ""));
+  return urlIsDynamic(btn.url);
 }
 
 function setUrlDynamic(btn: any, dynamic: boolean) {
@@ -100,11 +101,13 @@ function setUrlDynamic(btn: any, dynamic: boolean) {
 // The part of a dynamic url before the variable — what the user types, and the
 // prefix the example is appended to.
 function urlPrefix(btn: any) {
-  return String(btn.url || "").replace(URL_VAR_PATTERN, "");
+  return urlBase(btn.url);
 }
 
+// Keep whichever variable the url already carries. Rewriting a synced {{order}} to
+// {{1}} as soon as the user edits the prefix would silently change the template.
 function setUrlPrefix(btn: any, prefix: string) {
-  btn.url = prefix.replace(/[{}]/g, "") + URL_VAR;
+  btn.url = prefix.replace(/[{}]/g, "") + (urlVariable(btn.url) || URL_VAR);
 }
 
 const emit = defineEmits(["update:modelValue", "update:mediaFile"]);
@@ -1434,10 +1437,9 @@ onMounted(() => {
                       class="h-8 font-mono text-xs flex-1 rounded-r-none border-r-0 bg-background focus:z-10"
                     />
                     <div
-                      v-pre
                       class="bg-muted text-muted-foreground px-3 h-8 flex items-center rounded-r-md border text-[11px] font-mono font-bold select-none"
                     >
-                      {{ 1 }}
+                      {{ urlVariable(btn.url) }}
                     </div>
                   </div>
                   <Input

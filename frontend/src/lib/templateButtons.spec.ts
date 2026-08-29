@@ -3,7 +3,11 @@ import {
   validateButtonCombination,
   MAX_BUTTONS,
   MAX_CTA,
-  BUTTON_LIMITS
+  BUTTON_LIMITS,
+  URL_VAR,
+  isDynamicUrl,
+  urlVariable,
+  urlBase
 } from './templateButtons'
 
 // These rules govern message *templates* (submitted to Meta for approval), not
@@ -118,5 +122,76 @@ describe('validateButtonCombination', () => {
     // alongside other buttons in a template (unlike a free-form message).
     const buttons = [btn('QUICK_REPLY'), btn('FLOW')]
     expect(validateButtonCombination(buttons)).toBe('')
+  })
+})
+
+// The editor only ever creates {{1}} urls, so every {{1}} case below must behave
+// exactly as the old literal checks did — these are the equivalence tests. The
+// named cases only arrive by syncing a template authored outside whatomate, where
+// the backend already treats any {{…}} as dynamic.
+describe('dynamic url helpers', () => {
+  describe('isDynamicUrl', () => {
+    it.each([
+      ['', false],
+      ['https://example.com', false],
+      ['https://example.com/o/', false],
+      ['https://example.com/o/{{1}}', true],
+      ['{{1}}', true],
+      ['https://example.com/o/{{order}}', true],
+      ['{{order}}', true]
+    ])('%s -> %s', (url, expected) => {
+      expect(isDynamicUrl(url)).toBe(expected)
+    })
+
+    it('matches the old includes({{1}}) check on every positional url', () => {
+      for (const url of ['', 'https://x', 'https://x/{{1}}', '{{1}}', 'https://x/{{1}}/y']) {
+        expect(isDynamicUrl(url)).toBe(url.includes(URL_VAR))
+      }
+    })
+
+    it('tolerates a null or undefined url', () => {
+      expect(isDynamicUrl(undefined as never)).toBe(false)
+      expect(isDynamicUrl(null as never)).toBe(false)
+    })
+  })
+
+  describe('urlBase', () => {
+    it('matches the old replace({{1}}, "") on every positional url', () => {
+      for (const url of ['', 'https://x', 'https://x/{{1}}', '{{1}}', 'https://x/{{1}}/y']) {
+        expect(urlBase(url)).toBe(url.replace(URL_VAR, ''))
+      }
+    })
+
+    it('strips a named variable too', () => {
+      expect(urlBase('https://x/o/{{order}}')).toBe('https://x/o/')
+    })
+
+    it('is empty when the url is only a variable — what the save guard rejects', () => {
+      expect(urlBase('{{1}}')).toBe('')
+      expect(urlBase('{{order}}')).toBe('')
+    })
+
+    it('leaves a static url untouched', () => {
+      expect(urlBase('https://example.com')).toBe('https://example.com')
+    })
+  })
+
+  describe('urlVariable', () => {
+    it('returns the variable the url actually carries, not an assumed {{1}}', () => {
+      expect(urlVariable('https://x/{{1}}')).toBe('{{1}}')
+      expect(urlVariable('https://x/{{order}}')).toBe('{{order}}')
+    })
+
+    it('is empty for a static url, so the chip never renders a phantom variable', () => {
+      expect(urlVariable('https://example.com')).toBe('')
+      expect(urlVariable('')).toBe('')
+    })
+
+    // setUrlPrefix appends `urlVariable(url) || URL_VAR`, so a freshly created
+    // dynamic url and an edited one must both come back as {{1}}.
+    it('falls back to {{1}} for a url that has no variable yet', () => {
+      expect(urlVariable('https://x/') || URL_VAR).toBe(URL_VAR)
+      expect(urlVariable('https://x/{{1}}') || URL_VAR).toBe(URL_VAR)
+    })
   })
 })
