@@ -1,5 +1,6 @@
 <script setup lang="ts">
-import { ref, watch, onMounted } from 'vue'
+import { ref, onMounted } from 'vue'
+import { watchDebounced } from '@vueuse/core'
 import { Button } from '@/components/ui/button'
 import { Spinner } from '@/components/ui/spinner'
 import { useOccurrencesStore } from '@/stores/occurrences'
@@ -53,6 +54,7 @@ function columnParams(stage: OccurrenceStage, page: number): Record<string, stri
 }
 
 async function loadColumn(col: ColumnState, page: number) {
+  if (col.loading) return // reentrancy guard: blocks a double-click from double-appending the same page
   col.loading = true
   col.failed = false
   try {
@@ -79,7 +81,7 @@ async function loadAll() {
     items: [],
     total: 0,
     page: 1,
-    loading: true,
+    loading: false, // loadColumn sets this synchronously below, before Vue paints
     failed: false,
   }))
   await Promise.all(columns.value.map(col => loadColumn(col, 1)))
@@ -94,7 +96,10 @@ onMounted(async () => {
   await loadAll()
 })
 
-watch(() => props.protocol, loadAll)
+// O quadro espalha uma única busca em N requisições (uma por coluna), então um
+// watch sem debounce multiplica cada tecla digitada pelo número de etapas.
+// 300ms para bater com o debounce que useSearchPagination já usa na lista.
+watchDebounced(() => props.protocol, loadAll, { debounce: 300 })
 </script>
 
 <template>
