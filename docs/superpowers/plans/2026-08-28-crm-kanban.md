@@ -921,13 +921,14 @@ watch(() => props.protocol, loadAll)
 
 - [ ] **Step 6: Acrescente as strings nos dois locales**
 
-**`occurrences.loadMore` já existe** (`en.json:2032`, "Load More") e o quadro a reaproveita. Não crie de novo.
+**Correção registrada durante a execução:** este passo afirmava que `occurrences.loadMore` já existia em `en.json:2032`. Estava errado — aquela linha é do bloco `agentTransfers`, e a chave **não existia** em `occurrences`. São **três** chaves novas, não duas.
 
-Só duas chaves são novas. Em `en.json`, no bloco `"occurrences"`:
+Em `en.json`, no bloco `"occurrences"`:
 
 ```json
     "columnLoadFailed": "Could not load this column",
     "columnEmpty": "Nothing here",
+    "loadMore": "Load More",
 ```
 
 Em `pt-BR.json`:
@@ -935,6 +936,7 @@ Em `pt-BR.json`:
 ```json
     "columnLoadFailed": "Não foi possível carregar esta coluna",
     "columnEmpty": "Nada aqui",
+    "loadMore": "Carregar mais",
 ```
 
 - [ ] **Step 7: Troque o marcador pelo quadro**
