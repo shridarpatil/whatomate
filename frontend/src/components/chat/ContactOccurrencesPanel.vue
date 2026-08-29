@@ -22,6 +22,9 @@ const newTitle = ref('')
 
 async function load() {
   if (!props.contactId) return
+  // Stages drive the badge colour and rarely change, so fetch them once per
+  // session rather than on every contact switch.
+  if (store.stages.length === 0) await store.fetchStages()
   await store.fetchContactOccurrences(props.contactId)
 }
 
@@ -75,7 +78,11 @@ watch(() => props.contactId, load)
         >
           <div class="flex items-center justify-between gap-2">
             <span class="font-mono text-xs text-white/50 light:text-muted-foreground">{{ occ.protocol_number }}</span>
-            <Badge variant="outline" class="shrink-0 text-xs">{{ occ.stage_name }}</Badge>
+            <Badge
+              variant="outline"
+              class="shrink-0 text-xs"
+              :style="{ borderColor: store.stageColor(occ.stage_id), color: store.stageColor(occ.stage_id) }"
+            >{{ occ.stage_name }}</Badge>
           </div>
           <p class="text-sm mt-1 truncate min-w-0 text-white light:text-gray-900">{{ occ.title }}</p>
         </RouterLink>

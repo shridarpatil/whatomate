@@ -76,7 +76,6 @@ const breadcrumbs = computed(() => [
   { label: occurrence.value?.protocol_number || '' },
 ])
 
-const currentStage = computed(() => store.stages.find(s => s.id === occurrence.value?.stage_id))
 const activeUsers = computed(() => usersStore.users.filter(u => u.is_active))
 const assigneeSelectValue = computed(() => occurrence.value?.assigned_user_id || UNASSIGNED)
 
@@ -218,7 +217,7 @@ onMounted(async () => {
                   @click="copyProtocol"
                 />
               </div>
-              <Badge variant="outline" :style="{ borderColor: currentStage?.color, color: currentStage?.color }">
+              <Badge variant="outline" :style="{ borderColor: store.stageColor(occurrence.stage_id), color: store.stageColor(occurrence.stage_id) }">
                 {{ occurrence.stage_name }}
               </Badge>
             </div>

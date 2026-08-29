@@ -133,7 +133,10 @@ onMounted(async () => {
               </template>
               <template #cell-stage_name="{ item: occ }">
                 <div class="cursor-pointer" @click="goToDetail(occ)">
-                  <Badge variant="outline">{{ occ.stage_name }}</Badge>
+                  <Badge
+                    variant="outline"
+                    :style="{ borderColor: store.stageColor(occ.stage_id), color: store.stageColor(occ.stage_id) }"
+                  >{{ occ.stage_name }}</Badge>
                 </div>
               </template>
               <template #cell-assigned_user_name="{ item: occ }">

@@ -15,6 +15,12 @@ export const useOccurrencesStore = defineStore('occurrences', () => {
     stages.value = res.data.data.stages
   }
 
+  // Returns undefined for a stage that is no longer listed (removed after the
+  // occurrence was created), so the badge falls back to its default outline.
+  function stageColor(stageID: string): string | undefined {
+    return stages.value.find(s => s.id === stageID)?.color
+  }
+
   async function fetchOccurrences(params?: Record<string, string>) {
     isLoading.value = true
     try {
@@ -72,7 +78,7 @@ export const useOccurrencesStore = defineStore('occurrences', () => {
 
   return {
     occurrences, total, contactOccurrences, stages, events, isLoading,
-    fetchStages, fetchOccurrences, fetchContactOccurrences, fetchEvents,
+    fetchStages, stageColor, fetchOccurrences, fetchContactOccurrences, fetchEvents,
     createOccurrence, changeStage, addNote, sendProtocol, clear,
   }
 })
