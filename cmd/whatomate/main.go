@@ -668,6 +668,23 @@ func setupRoutes(g *fastglue.Fastglue, app *handlers.App, lo logf.Logger, basePa
 	g.PUT("/api/contacts/{id}/notes/{note_id}", app.UpdateConversationNote)
 	g.DELETE("/api/contacts/{id}/notes/{note_id}", app.DeleteConversationNote)
 
+	// CRM — etapas de ocorrência
+	g.GET("/api/occurrence-stages", app.ListOccurrenceStages)
+	g.POST("/api/occurrence-stages", app.CreateOccurrenceStage)
+	g.PUT("/api/occurrence-stages/{id}", app.UpdateOccurrenceStage)
+	g.DELETE("/api/occurrence-stages/{id}", app.DeleteOccurrenceStage)
+
+	// CRM — ocorrências
+	g.GET("/api/occurrences", app.ListOccurrences)
+	g.POST("/api/occurrences", app.CreateOccurrence)
+	g.GET("/api/contacts/{id}/occurrences", app.ListContactOccurrences)
+	g.GET("/api/occurrences/{id}", app.GetOccurrence)
+	g.PUT("/api/occurrences/{id}", app.UpdateOccurrence)
+	g.PUT("/api/occurrences/{id}/stage", app.ChangeOccurrenceStage)
+	g.GET("/api/occurrences/{id}/events", app.ListOccurrenceEvents)
+	g.POST("/api/occurrences/{id}/events", app.CreateOccurrenceEvent)
+	g.POST("/api/occurrences/{id}/send-protocol", app.SendOccurrenceProtocol)
+
 	// Media (serves media files for messages, auth-protected)
 	g.GET("/api/media/{message_id}", app.ServeMedia)
 

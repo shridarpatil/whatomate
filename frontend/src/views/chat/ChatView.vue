@@ -104,6 +104,7 @@ import PreviewButtonGroup from '@/components/chatbot/flow-preview/PreviewButtonG
 import TemplatePicker from '@/components/chat/TemplatePicker.vue'
 import ContactInfoPanel from '@/components/chat/ContactInfoPanel.vue'
 import ConversationNotes from '@/components/chat/ConversationNotes.vue'
+import ContactOccurrencesPanel from '@/components/chat/ContactOccurrencesPanel.vue'
 import CallButton from '@/components/calling/CallButton.vue'
 import { useNotesStore } from '@/stores/notes'
 import { useHeaderMedia } from '@/composables/useHeaderMedia'
@@ -145,6 +146,7 @@ const isAtBottom = ref(true)
 const SCROLL_BOTTOM_THRESHOLD = 80
 const isInfoPanelOpen = ref(false)
 const isNotesPanelOpen = ref(false)
+const isOccurrencesPanelOpen = ref(false)
 const contactSessionData = ref<any>(null)
 
 // Resizable contacts column — drag the right edge; width persists across
@@ -2100,6 +2102,21 @@ async function sendMediaMessage() {
                 <Button
                   variant="ghost"
                   size="icon"
+                  id="occurrences-button"
+                  class="h-8 w-8 text-white/50 hover:text-white hover:bg-white/[0.08] light:text-gray-500 light:hover:text-gray-900 light:hover:bg-gray-100"
+                  :class="isOccurrencesPanelOpen && 'bg-blue-500/10 text-blue-400 light:bg-blue-50 light:text-blue-600'"
+                  @click="isOccurrencesPanelOpen = !isOccurrencesPanelOpen"
+                >
+                  <Ticket class="h-4 w-4" />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>{{ $t('chat.occurrences') }}</TooltipContent>
+            </Tooltip>
+            <Tooltip>
+              <TooltipTrigger as-child>
+                <Button
+                  variant="ghost"
+                  size="icon"
                   id="info-button"
                   class="h-8 w-8 text-white/50 hover:text-white hover:bg-white/[0.08] light:text-gray-500 light:hover:text-gray-900 light:hover:bg-gray-100"
                   :class="isInfoPanelOpen && 'bg-white/[0.08] text-white light:bg-gray-100 light:text-gray-900'"
@@ -2692,6 +2709,13 @@ async function sendMediaMessage() {
       v-if="contactsStore.currentContact && isNotesPanelOpen"
       :contact-id="contactsStore.currentContact.id"
       @close="isNotesPanelOpen = false"
+    />
+
+    <!-- Occurrences Side Panel -->
+    <ContactOccurrencesPanel
+      v-if="contactsStore.currentContact && isOccurrencesPanelOpen"
+      :contact-id="contactsStore.currentContact.id"
+      :source-transfer-id="activeTransferId ?? undefined"
     />
 
     <!-- Contact Info Panel -->

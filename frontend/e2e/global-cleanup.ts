@@ -88,6 +88,30 @@ const CLEANUP_STATEMENTS: Array<{ label: string; sql: string }> = [
     label: 'canned_responses authored by users in E2E orgs',
     sql: `DELETE FROM canned_responses WHERE created_by_id IN (SELECT id FROM users WHERE role_id IN (SELECT id FROM custom_roles WHERE organization_id IN (SELECT id FROM organizations WHERE ${E2E_NAME_PREDICATE})))`,
   },
+  // occurrences and occurrence_events reference users (assigned_user_id /
+  // created_by_id) with no ON DELETE, and occurrences are born assigned to
+  // their creator — so a case opened or assigned to an E2E user pins that
+  // user's row, which then blocks custom_roles and organizations below from
+  // cascading. Must run before both user deletes.
+  // occurrence_events has NO FK on occurrence_id (only on created_by_id), so
+  // it never needs to precede occurrences for FK reasons — the ordering that
+  // actually matters here is against users and contacts.
+  {
+    label: 'occurrence_events of E2E contacts',
+    sql: `DELETE FROM occurrence_events WHERE occurrence_id IN (SELECT id FROM occurrences WHERE contact_id IN (SELECT id FROM contacts WHERE profile_name LIKE 'E2E-%' OR profile_name LIKE 'E2E %'))`,
+  },
+  {
+    label: 'occurrence_events created by E2E users',
+    sql: `DELETE FROM occurrence_events WHERE created_by_id IN (SELECT id FROM users WHERE ${E2E_USER_EMAIL_PREDICATE})`,
+  },
+  {
+    label: 'occurrences of E2E contacts',
+    sql: `DELETE FROM occurrences WHERE contact_id IN (SELECT id FROM contacts WHERE profile_name LIKE 'E2E-%' OR profile_name LIKE 'E2E %')`,
+  },
+  {
+    label: 'occurrences assigned to E2E users',
+    sql: `DELETE FROM occurrences WHERE assigned_user_id IN (SELECT id FROM users WHERE ${E2E_USER_EMAIL_PREDICATE})`,
+  },
   // Now the entity tables.
   {
     label: 'E2E users (by email pattern)',

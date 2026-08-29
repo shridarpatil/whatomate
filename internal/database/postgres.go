@@ -114,6 +114,13 @@ func GetMigrationModels() []MigrationModel {
 		{"IVRFlow", &models.IVRFlow{}},
 		{"CallTransfer", &models.CallTransfer{}},
 		{"CallPermission", &models.CallPermission{}},
+
+		// CRM de ocorrências
+		{"OccurrenceStage", &models.OccurrenceStage{}},
+		{"Occurrence", &models.Occurrence{}},
+		{"OccurrenceEvent", &models.OccurrenceEvent{}},
+		{"OccurrenceCounter", &models.OccurrenceCounter{}},
+
 		{"AuditLog", &models.AuditLog{}},
 	}
 }

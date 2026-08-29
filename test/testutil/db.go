@@ -126,6 +126,11 @@ func runMigrations(db *gorm.DB) error {
 		&models.IVRFlow{},
 		&models.CallTransfer{},
 		&models.CallPermission{},
+		// CRM de ocorrências
+		&models.OccurrenceStage{},
+		&models.Occurrence{},
+		&models.OccurrenceEvent{},
+		&models.OccurrenceCounter{},
 		// Audit
 		&models.AuditLog{},
 	)
