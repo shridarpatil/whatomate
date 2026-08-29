@@ -240,6 +240,13 @@ Ainda em `roles.go`, ao final da lista de `DefaultPermissions()`, antes do fecha
 
 		// CRM — administração do funil, separada de settings.general para que
 		// configurar etapas não exija as configurações gerais da organização.
+		//
+		// `read` aqui governa VER A TELA de configuração, não ler as etapas:
+		// a leitura das etapas pela API fica sob occurrences:read, porque o
+		// quadro não renderiza sem elas. A chave existe porque a guarda de
+		// rota do frontend chama hasPermission(recurso, 'read') com a ação
+		// fixa — sem ela a tela fica inalcançável até para o admin.
+		{Resource: ResourceOccurrenceStages, Action: ActionRead, Description: "View the occurrence pipeline configuration"},
 		{Resource: ResourceOccurrenceStages, Action: ActionWrite, Description: "Create and edit occurrence stages"},
 		{Resource: ResourceOccurrenceStages, Action: ActionDelete, Description: "Delete occurrence stages"},
 ```
@@ -254,7 +261,7 @@ Em `managerPermissions`, junto das entradas de chat:
 		"chat:read", "chat:write", "chat.assign:write",
 		// CRM: o gestor usa e administra o funil, coerente com ter settings.general:write
 		"occurrences:read", "occurrences:write",
-		"occurrences.stages:write", "occurrences.stages:delete",
+		"occurrences.stages:read", "occurrences.stages:write", "occurrences.stages:delete",
 ```
 
 Em `agentPermissions`, junto das entradas de chat:
@@ -395,6 +402,7 @@ func TestBackfill_GrantsOccurrencesFromChat(t *testing.T) {
 	keys := roleKeys(t, db, role.ID)
 	assert.Contains(t, keys, "occurrences:read")
 	assert.Contains(t, keys, "occurrences:write")
+	assert.NotContains(t, keys, "occurrences.stages:read")
 	assert.NotContains(t, keys, "occurrences.stages:write")
 	assert.NotContains(t, keys, "occurrences.stages:delete")
 }
@@ -411,6 +419,9 @@ func TestBackfill_GrantsStagesFromSettingsGeneral(t *testing.T) {
 	require.NoError(t, database.BackfillOccurrencePermissions(db))
 
 	keys := roleKeys(t, db, role.ID)
+	// As tres: sem o read a tela de configuracao fica inalcancavel mesmo
+	// para quem pode editar, porque a guarda de rota checa a acao read.
+	assert.Contains(t, keys, "occurrences.stages:read")
 	assert.Contains(t, keys, "occurrences.stages:write")
 	assert.Contains(t, keys, "occurrences.stages:delete")
 }
@@ -429,6 +440,7 @@ func TestBackfill_RolesWriteDoesNotGrantStages(t *testing.T) {
 	require.NoError(t, database.BackfillOccurrencePermissions(db))
 
 	keys := roleKeys(t, db, role.ID)
+	assert.NotContains(t, keys, "occurrences.stages:read")
 	assert.NotContains(t, keys, "occurrences.stages:write")
 	assert.NotContains(t, keys, "occurrences.stages:delete")
 	assert.NotContains(t, keys, "occurrences:read")
@@ -540,8 +552,22 @@ type grantRule struct {
 var occurrenceGrants = []grantRule{
 	{models.ResourceChat, models.ActionRead, models.ResourceOccurrences, models.ActionRead},
 	{models.ResourceChat, models.ActionWrite, models.ResourceOccurrences, models.ActionWrite},
+	// As três de etapa, incluindo read: sem ela a guarda de rota do frontend
+	// esconde a tela de configuração até de quem pode editar.
+	{models.ResourceSettingsGeneral, models.ActionWrite, models.ResourceOccurrenceStages, models.ActionRead},
 	{models.ResourceSettingsGeneral, models.ActionWrite, models.ResourceOccurrenceStages, models.ActionWrite},
 	{models.ResourceSettingsGeneral, models.ActionWrite, models.ResourceOccurrenceStages, models.ActionDelete},
+}
+
+// occurrencePermissionKeys são as permissões que este backfill distribui. A
+// guarda de "já foi semeado" compara contra esta lista em vez do tamanho de
+// occurrenceGrants, que tem entradas repetidas por origem.
+var occurrencePermissionKeys = []string{
+	models.ResourceOccurrences + ":" + models.ActionRead,
+	models.ResourceOccurrences + ":" + models.ActionWrite,
+	models.ResourceOccurrenceStages + ":" + models.ActionRead,
+	models.ResourceOccurrenceStages + ":" + models.ActionWrite,
+	models.ResourceOccurrenceStages + ":" + models.ActionDelete,
 }
 
 // BackfillOccurrencePermissions concede as permissões do CRM aos papéis que já
@@ -567,7 +593,7 @@ func BackfillOccurrencePermissions(db *gorm.DB) error {
 		Count(&seeded).Error; err != nil {
 		return fmt.Errorf("failed to count occurrence permissions: %w", err)
 	}
-	if seeded < int64(len(occurrenceGrants)) {
+	if seeded < int64(len(occurrencePermissionKeys)) {
 		return nil
 	}
 
@@ -810,6 +836,26 @@ test.describe('CRM permissions', () => {
     await page.goto('/settings/occurrence-stages')
     await page.waitForLoadState('networkidle')
     expect(page.url()).not.toContain('/settings/occurrence-stages')
+  })
+
+  // O caso positivo, e o que teria pego o bug que quase foi para o plano:
+  // a guarda de rota checa a ação `read` com a ação FIXA, então um papel que
+  // pode editar etapas mas não tem occurrences.stages:read seria barrado da
+  // própria tela que administra.
+  test('a stage-admin role reaches the stage settings', async ({ page, request }) => {
+    const api = new ApiHelper(request)
+    const user = await userWithPermissions(api, 'gestor-funil', [
+      'chat:read', 'chat:write',
+      'occurrences:read', 'occurrences:write',
+      'occurrences.stages:read', 'occurrences.stages:write', 'occurrences.stages:delete',
+    ])
+
+    await login(page, user)
+    await page.goto('/settings/occurrence-stages')
+    await page.waitForLoadState('networkidle')
+
+    expect(page.url()).toContain('/settings/occurrence-stages')
+    await expect(page.locator('h1').filter({ hasText: 'Occurrence Stages' })).toBeVisible()
   })
 })
 ```
