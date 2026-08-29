@@ -890,7 +890,7 @@ onMounted(() => {
             </p>
 
             <p class="text-[10px] text-muted-foreground">
-              Meta requires a sample. It is uploaded when you save, not now.
+              {{ t("templates.mediaSampleHint") }}
             </p>
           </div>
         </div>
@@ -916,14 +916,10 @@ onMounted(() => {
               <span v-if="authOtpType === 'COPY_CODE'"
                 >{{ t("templates.otpCopyCodeHint") }}</span
               >
-              <span v-else-if="authOtpType === 'ONE_TAP'"
-                >User taps a button to autofill the code in your app. Requires
-                app configuration.</span
-              >
-              <span v-else
-                >The code is delivered to your app automatically. Requires app
-                configuration.</span
-              >
+              <span v-else-if="authOtpType === 'ONE_TAP'">{{
+                t("templates.otpOneTapHint")
+              }}</span>
+              <span v-else>{{ t("templates.otpZeroTapHint") }}</span>
             </p>
           </div>
 
@@ -1185,8 +1181,7 @@ onMounted(() => {
               >{{ t("templates.sampleValues") }}</Label
             >
             <p class="text-[10px] text-muted-foreground mt-1">
-              Provide sample values for your variables to see how they look in
-              the preview. Required for Meta submission.
+              {{ t("templates.sampleValuesPreviewHint") }}
             </p>
           </div>
 
@@ -1287,7 +1282,7 @@ onMounted(() => {
                 size="sm"
                 class="text-emerald-500"
                 @click="addButton('QUICK_REPLY')"
-                >+ Reply</Button
+                >+ {{ t("templates.addQuickReply") }}</Button
               >
               <Button
                 type="button"
@@ -1295,7 +1290,7 @@ onMounted(() => {
                 size="sm"
                 class="text-emerald-500"
                 @click="addButton('URL')"
-                >+ URL</Button
+                >+ {{ t("templates.addUrl") }}</Button
               >
               <Button
                 type="button"
@@ -1303,7 +1298,7 @@ onMounted(() => {
                 size="sm"
                 class="text-emerald-500"
                 @click="addButton('PHONE_NUMBER')"
-                >+ Phone</Button
+                >+ {{ t("templates.addPhone") }}</Button
               >
               <Button
                 type="button"
@@ -1311,7 +1306,7 @@ onMounted(() => {
                 size="sm"
                 class="text-emerald-500"
                 @click="addButton('COPY_CODE')"
-                >+ Copy Code</Button
+                >+ {{ t("templates.addCopyCode") }}</Button
               >
               <Button
                 type="button"
@@ -1319,7 +1314,7 @@ onMounted(() => {
                 size="sm"
                 class="text-emerald-500"
                 @click="addButton('FLOW')"
-                >+ Flow</Button
+                >+ {{ t("templates.addFlow") }}</Button
               >
               <Button
                 type="button"
@@ -1327,7 +1322,7 @@ onMounted(() => {
                 size="sm"
                 class="text-emerald-500"
                 @click="addButton('VOICE_CALL')"
-                >+ Call</Button
+                >+ {{ t("templates.addCall") }}</Button
               >
             </div>
           </div>
@@ -1585,8 +1580,7 @@ onMounted(() => {
                   v-if="btn.type === 'VOICE_CALL'"
                   class="text-[10px] text-muted-foreground"
                 >
-                  Opens a WhatsApp voice call with your business. No extra
-                  configuration needed.
+                  {{ t("templates.voiceCallHint") }}
                 </p>
               </div>
             </template>
