@@ -128,6 +128,11 @@ const { isDark } = useColorMode()
 
 const canWriteContacts = authStore.hasPermission('contacts', 'write')
 
+// Mirror the server's gate on GET /api/contacts/{id}/occurrences, which requires
+// occurrences:read. The CRM route used to be gated on 'chat' so the ticket icon
+// was implicitly consistent with it; now the module has its own permission.
+const canReadOccurrences = computed(() => authStore.hasPermission('occurrences', 'read'))
+
 const messageInput = ref('')
 const messagesEndRef = ref<HTMLElement | null>(null)
 const messageInputRef = ref<HTMLTextAreaElement | null>(null)
@@ -2097,7 +2102,7 @@ async function sendMediaMessage() {
               </TooltipTrigger>
               <TooltipContent>{{ $t('chat.internalNotes') }}</TooltipContent>
             </Tooltip>
-            <Tooltip>
+            <Tooltip v-if="canReadOccurrences">
               <TooltipTrigger as-child>
                 <Button
                   variant="ghost"
@@ -2713,7 +2718,7 @@ async function sendMediaMessage() {
 
     <!-- Occurrences Side Panel -->
     <ContactOccurrencesPanel
-      v-if="contactsStore.currentContact && isOccurrencesPanelOpen"
+      v-if="contactsStore.currentContact && isOccurrencesPanelOpen && canReadOccurrences"
       :contact-id="contactsStore.currentContact.id"
       :source-transfer-id="activeTransferId ?? undefined"
     />
