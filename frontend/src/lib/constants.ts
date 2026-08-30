@@ -42,6 +42,8 @@ export const RESOURCE_LABELS: Record<string, string> = {
   apikeys: 'API Keys',
   roles: 'Roles',
   tags: 'Tags',
+  occurrences: 'Occurrences',
+  'occurrences.stages': 'Occurrence Stages',
 } as const
 
 // Default pagination settings
