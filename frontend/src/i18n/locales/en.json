@@ -249,6 +249,7 @@
     "overview": "Overview",
     "keywords": "Keywords",
     "flows": "Flows",
+    "flowResponses": "Flow Responses",
     "aiContexts": "AI Contexts",
     "transfers": "Transfers",
     "agentAnalytics": "Agent Analytics",
@@ -1550,7 +1551,23 @@
     "saveToMetaConfirmTitle": "Save Flow to Meta",
     "saveToMetaConfirmDescription": "This will push the current version of \"{name}\" to Meta. Are you sure you want to continue?",
     "fetchErrorTitle": "Failed to load flows",
-    "fetchErrorDescription": "Something went wrong while loading flows. Please try again."
+    "fetchErrorDescription": "Something went wrong while loading flows. Please try again.",
+    "responses": "Responses"
+  },
+  "flowResponses": {
+    "title": "{name} Responses",
+    "submissionsCollected": "{count} submissions collected",
+    "responsesCollected": "{count} responses collected",
+    "backToFlows": "Back to Flows",
+    "refresh": "Refresh",
+    "liveUpdating": "Live Updating",
+    "live": "Live",
+    "loading": "Loading...",
+    "exportCsv": "Export CSV",
+    "phoneNumber": "Phone Number",
+    "submittedAt": "Submitted At",
+    "noResponsesYet": "No responses yet",
+    "noResponsesDesc": "When users complete this flow on WhatsApp, their responses will appear here in real-time."
   },
   "businessProfile": {
     "title": "Business Profile",
