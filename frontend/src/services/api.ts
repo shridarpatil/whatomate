@@ -343,6 +343,11 @@ export const flowsService = {
   sync: (whatsappAccount: string) => api.post('/flows/sync', { whatsapp_account: whatsappAccount })
 }
 
+export const flowSubmissionsService = {
+  getSubmissions: (flowId: string) =>
+    api.get<{ flow: any; submissions: any[]; total: number }>(`/flow-submissions/${flowId}`),
+}
+
 export const campaignsService = {
   list: (params?: { status?: string; from?: string; to?: string; search?: string; page?: number; limit?: number }) =>
     api.get('/campaigns', { params }),
