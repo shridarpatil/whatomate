@@ -497,6 +497,7 @@ onUnmounted(() => {
   notesStore.clearNotes()
   // Clear sticky date timeout
   if (stickyDateTimeout) clearTimeout(stickyDateTimeout)
+  window.clearTimeout(forwardSearchTimer)
   document.removeEventListener('visibilitychange', onUserActive)
   window.removeEventListener('focus', onUserActive)
 })
@@ -1191,6 +1192,7 @@ const forwardResults = ref<any[]>([])
 const isSearchingForward = ref(false)
 const forwardSendingId = ref<string | null>(null)
 let forwardSearchTimer: number | undefined
+let forwardSearchSeq = 0
 
 const forwardableTypes = ['text', 'image', 'video', 'audio', 'document']
 function canForward(message: Message): boolean {
@@ -1200,25 +1202,30 @@ function canForward(message: Message): boolean {
 function openForwardDialog(message: Message) {
   forwardingMessage.value = message
   forwardSearchQuery.value = ''
+  forwardResults.value = []
   isForwardDialogOpen.value = true
   searchForwardContacts()
 }
 
 async function searchForwardContacts() {
+  const seq = ++forwardSearchSeq
   isSearchingForward.value = true
   try {
     const response = await contactsService.list({
       search: forwardSearchQuery.value.trim() || undefined,
       limit: 20
     })
+    // Drop stale responses: a slow fetch for "a" must not overwrite "ab".
+    if (seq !== forwardSearchSeq) return
     const data = response.data.data || response.data
     forwardResults.value = (data.contacts || []).filter(
       (c: any) => c.id !== contactsStore.currentContact?.id
     )
   } catch {
+    if (seq !== forwardSearchSeq) return
     forwardResults.value = []
   } finally {
-    isSearchingForward.value = false
+    if (seq === forwardSearchSeq) isSearchingForward.value = false
   }
 }
 
@@ -1226,6 +1233,15 @@ watch(forwardSearchQuery, () => {
   if (!isForwardDialogOpen.value) return
   window.clearTimeout(forwardSearchTimer)
   forwardSearchTimer = window.setTimeout(searchForwardContacts, 300)
+})
+
+watch(isForwardDialogOpen, (open) => {
+  if (!open) {
+    window.clearTimeout(forwardSearchTimer)
+    forwardSearchQuery.value = ''
+    forwardResults.value = []
+    forwardingMessage.value = null
+  }
 })
 
 async function forwardToContact(contact: any) {
@@ -2761,7 +2777,7 @@ async function sendMediaMessage() {
     </Dialog>
 
     <!-- Forward Message Dialog -->
-    <Dialog v-model:open="isForwardDialogOpen" @update:open="(open) => !open && (forwardSearchQuery = '', forwardingMessage = null)">
+    <Dialog v-model:open="isForwardDialogOpen">
       <DialogContent class="max-w-sm">
         <DialogHeader>
           <DialogTitle>{{ $t('chat.forwardTo') }}</DialogTitle>
@@ -2778,7 +2794,7 @@ async function sendMediaMessage() {
               class="pl-9 h-9"
             />
           </div>
-          <ScrollArea class="max-h-[280px]">
+          <ScrollArea class="h-[280px]">
             <div class="space-y-1">
               <Button
                 v-for="contact in forwardResults"

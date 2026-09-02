@@ -101,6 +101,9 @@ func (a *App) ForwardMessage(r *fastglue.Request) error {
 		if data == nil {
 			return errResp
 		}
+		if len(data) == 0 {
+			return r.SendErrorEnvelope(fasthttp.StatusNotFound, "Media file is empty", nil, "")
+		}
 		msgReq.Type = message.MessageType
 		msgReq.MediaData = data
 		msgReq.MediaURL = message.MediaURL // reuse the stored file for the new message record
