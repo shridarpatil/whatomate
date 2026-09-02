@@ -88,7 +88,8 @@ import {
   Code,
   RotateCw,
   Filter,
-  StickyNote
+  StickyNote,
+  Forward
 } from 'lucide-vue-next'
 import { getInitials, getAvatarGradient } from '@/lib/utils'
 import { useColorMode } from '@/composables/useColorMode'
@@ -502,6 +503,7 @@ onUnmounted(() => {
   notesStore.clearNotes()
   // Clear sticky date timeout
   if (stickyDateTimeout) clearTimeout(stickyDateTimeout)
+  window.clearTimeout(forwardSearchTimer)
   document.removeEventListener('visibilitychange', onUserActive)
   window.removeEventListener('focus', onUserActive)
 })
@@ -1185,6 +1187,82 @@ function replyToMessage(message: Message) {
   nextTick(() => {
     messageInputRef.value?.focus()
   })
+}
+
+// Forward message: the Cloud API has no native forward, so the backend
+// re-sends the content to the chosen contact as a new message.
+const isForwardDialogOpen = ref(false)
+const forwardingMessage = ref<Message | null>(null)
+const forwardSearchQuery = ref('')
+const forwardResults = ref<any[]>([])
+const isSearchingForward = ref(false)
+const forwardSendingId = ref<string | null>(null)
+let forwardSearchTimer: number | undefined
+let forwardSearchSeq = 0
+
+const forwardableTypes = ['text', 'image', 'video', 'audio', 'document']
+function canForward(message: Message): boolean {
+  return forwardableTypes.includes(message.message_type)
+}
+
+function openForwardDialog(message: Message) {
+  forwardingMessage.value = message
+  forwardSearchQuery.value = ''
+  forwardResults.value = []
+  isForwardDialogOpen.value = true
+  searchForwardContacts()
+}
+
+async function searchForwardContacts() {
+  const seq = ++forwardSearchSeq
+  isSearchingForward.value = true
+  try {
+    const response = await contactsService.list({
+      search: forwardSearchQuery.value.trim() || undefined,
+      limit: 20
+    })
+    // Drop stale responses: a slow fetch for "a" must not overwrite "ab".
+    if (seq !== forwardSearchSeq) return
+    const data = response.data.data || response.data
+    forwardResults.value = (data.contacts || []).filter(
+      (c: any) => c.id !== contactsStore.currentContact?.id
+    )
+  } catch {
+    if (seq !== forwardSearchSeq) return
+    forwardResults.value = []
+  } finally {
+    if (seq === forwardSearchSeq) isSearchingForward.value = false
+  }
+}
+
+watch(forwardSearchQuery, () => {
+  if (!isForwardDialogOpen.value) return
+  window.clearTimeout(forwardSearchTimer)
+  forwardSearchTimer = window.setTimeout(searchForwardContacts, 300)
+})
+
+watch(isForwardDialogOpen, (open) => {
+  if (!open) {
+    window.clearTimeout(forwardSearchTimer)
+    forwardSearchQuery.value = ''
+    forwardResults.value = []
+    forwardingMessage.value = null
+  }
+})
+
+async function forwardToContact(contact: any) {
+  if (!forwardingMessage.value || forwardSendingId.value) return
+  forwardSendingId.value = contact.id
+  try {
+    await messagesService.forward(forwardingMessage.value.id, contact.id)
+    toast.success(t('chat.forwarded'))
+    isForwardDialogOpen.value = false
+    forwardingMessage.value = null
+  } catch (error: any) {
+    toast.error(error?.response?.data?.message || t('chat.forwardFailed'))
+  } finally {
+    forwardSendingId.value = null
+  }
 }
 
 // Watch for slash commands in message input
@@ -2378,6 +2456,16 @@ async function sendMediaMessage() {
                 >
                   <Reply class="h-3 w-3" />
                 </Button>
+                <Button
+                  v-if="canForward(message)"
+                  variant="ghost"
+                  size="icon"
+                  class="h-6 w-6"
+                  :title="$t('chat.forward')"
+                  @click="openForwardDialog(message)"
+                >
+                  <Forward class="h-3 w-3" />
+                </Button>
               </div>
               <!-- Reply button for outgoing messages (shown on hover) -->
               <div v-if="message.direction === 'outgoing'" class="flex flex-col gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity self-center ml-1">
@@ -2407,6 +2495,16 @@ async function sendMediaMessage() {
                   @click="replyToMessage(message)"
                 >
                   <Reply class="h-3 w-3" />
+                </Button>
+                <Button
+                  v-if="canForward(message)"
+                  variant="ghost"
+                  size="icon"
+                  class="h-6 w-6"
+                  :title="$t('chat.forward')"
+                  @click="openForwardDialog(message)"
+                >
+                  <Forward class="h-3 w-3" />
                 </Button>
                 <Button
                   v-if="message.status === 'failed' && message.message_type !== 'template'"
@@ -2732,6 +2830,51 @@ async function sendMediaMessage() {
               </Button>
               <p v-if="filteredAssignableUsers.length === 0" class="text-sm text-muted-foreground text-center py-4">
                 {{ $t('chat.noUsersFound') }}
+              </p>
+            </div>
+          </ScrollArea>
+        </div>
+      </DialogContent>
+    </Dialog>
+
+    <!-- Forward Message Dialog -->
+    <Dialog v-model:open="isForwardDialogOpen">
+      <DialogContent class="max-w-sm">
+        <DialogHeader>
+          <DialogTitle>{{ $t('chat.forwardTo') }}</DialogTitle>
+          <DialogDescription>
+            {{ $t('chat.forwardDesc') }}
+          </DialogDescription>
+        </DialogHeader>
+        <div class="py-4 space-y-3">
+          <div class="relative">
+            <Search class="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+            <Input
+              v-model="forwardSearchQuery"
+              :placeholder="$t('chat.searchContacts') + '...'"
+              class="pl-9 h-9"
+            />
+          </div>
+          <ScrollArea class="h-[280px]">
+            <div class="space-y-1">
+              <Button
+                v-for="contact in forwardResults"
+                :key="contact.id"
+                variant="ghost"
+                class="w-full justify-start"
+                :disabled="forwardSendingId !== null"
+                @click="forwardToContact(contact)"
+              >
+                <Loader2 v-if="forwardSendingId === contact.id" class="mr-2 h-4 w-4 animate-spin" />
+                <User v-else class="mr-2 h-4 w-4" />
+                <span class="truncate">{{ contact.profile_name || contact.name || contact.phone_number }}</span>
+                <span class="ml-auto text-xs text-muted-foreground">{{ contact.phone_number }}</span>
+              </Button>
+              <div v-if="isSearchingForward && forwardResults.length === 0" class="text-center py-4">
+                <Loader2 class="h-4 w-4 mx-auto animate-spin text-muted-foreground" />
+              </div>
+              <p v-else-if="forwardResults.length === 0" class="text-sm text-muted-foreground text-center py-4">
+                {{ $t('chat.noContacts') }}
               </p>
             </div>
           </ScrollArea>

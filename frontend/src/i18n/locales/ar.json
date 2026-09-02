@@ -428,7 +428,12 @@
     "urlButtonParamPlaceholder": "أدخل قيمة الرابط المتغيرة",
     "preview": "معاينة",
     "serviceWindowExpired": "انتهت نافذة المراسلة لمدة 24 ساعة. لا يمكن إرسال سوى رسائل القوالب حتى يرد العميل.",
-    "sendTemplateAction": "إرسال قالب"
+    "sendTemplateAction": "إرسال قالب",
+    "forward": "Forward",
+    "forwardTo": "Forward to...",
+    "forwardDesc": "Send this message to another contact",
+    "forwarded": "Message forwarded",
+    "forwardFailed": "Failed to forward message"
   },
   "contacts": {
     "title": "جهات الاتصال",
