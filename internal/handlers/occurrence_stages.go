@@ -21,9 +21,10 @@ type OccurrenceStageRequest struct {
 }
 
 // ListOccurrenceStages returns the org's pipeline, seeding defaults on first use.
-// Read needs only chat:read — every agent must see stage names to work.
+// Gated on occurrences:read: reading stage names is part of using the CRM, not
+// the administrative permission that governs editing the pipeline.
 func (a *App) ListOccurrenceStages(r *fastglue.Request) error {
-	orgID, _, err := a.requireAuth(r, models.ResourceChat, models.ActionRead)
+	orgID, _, err := a.requireAuth(r, models.ResourceOccurrences, models.ActionRead)
 	if err != nil {
 		return nil
 	}
@@ -44,10 +45,11 @@ func (a *App) ListOccurrenceStages(r *fastglue.Request) error {
 	return r.SendEnvelope(map[string]any{"stages": stages})
 }
 
-// CreateOccurrenceStage adds a stage. Configuration lives under the existing
-// settings.general permission — no new permission is introduced by the CRM.
+// CreateOccurrenceStage adds a stage. Administering the pipeline lives under
+// occurrences.stages, separate from settings.general so that configuring the
+// funnel does not require the organisation's general settings.
 func (a *App) CreateOccurrenceStage(r *fastglue.Request) error {
-	orgID, _, err := a.requireAuth(r, models.ResourceSettingsGeneral, models.ActionWrite)
+	orgID, _, err := a.requireAuth(r, models.ResourceOccurrenceStages, models.ActionWrite)
 	if err != nil {
 		return nil
 	}
@@ -100,7 +102,7 @@ func (a *App) CreateOccurrenceStage(r *fastglue.Request) error {
 // UpdateOccurrenceStage edits a stage, keeping exactly one initial stage and
 // refusing to leave the org without a closing stage.
 func (a *App) UpdateOccurrenceStage(r *fastglue.Request) error {
-	orgID, _, err := a.requireAuth(r, models.ResourceSettingsGeneral, models.ActionWrite)
+	orgID, _, err := a.requireAuth(r, models.ResourceOccurrenceStages, models.ActionWrite)
 	if err != nil {
 		return nil
 	}
@@ -182,7 +184,7 @@ func (a *App) UpdateOccurrenceStage(r *fastglue.Request) error {
 
 // DeleteOccurrenceStage removes a stage only when nothing depends on it.
 func (a *App) DeleteOccurrenceStage(r *fastglue.Request) error {
-	orgID, _, err := a.requireAuth(r, models.ResourceSettingsGeneral, models.ActionWrite)
+	orgID, _, err := a.requireAuth(r, models.ResourceOccurrenceStages, models.ActionDelete)
 	if err != nil {
 		return nil
 	}

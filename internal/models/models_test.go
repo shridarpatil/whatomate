@@ -285,6 +285,21 @@ func TestConversationsViewAllPermission(t *testing.T) {
 	assert.NotContains(t, roles["agent"], "conversations:view_all")
 }
 
+// TestOccurrenceStagesPermissionNotForAgent guards the pipeline-admin
+// permissions: managing stages is a manager/admin concern, not something
+// every agent gets alongside occurrences:read/write.
+func TestOccurrenceStagesPermissionNotForAgent(t *testing.T) {
+	roles := models.SystemRolePermissions()
+	// manager administers the pipeline and must have all three.
+	assert.Contains(t, roles["manager"], "occurrences.stages:read")
+	assert.Contains(t, roles["manager"], "occurrences.stages:write")
+	assert.Contains(t, roles["manager"], "occurrences.stages:delete")
+	// agent must NOT — that is the whole point.
+	assert.NotContains(t, roles["agent"], "occurrences.stages:read")
+	assert.NotContains(t, roles["agent"], "occurrences.stages:write")
+	assert.NotContains(t, roles["agent"], "occurrences.stages:delete")
+}
+
 func TestViewTeamPermissionInCatalogButNotDefaultRoles(t *testing.T) {
 	// It must exist in the catalog so admins can assign it.
 	found := false

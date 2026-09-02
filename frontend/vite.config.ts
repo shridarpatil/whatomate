@@ -61,7 +61,12 @@ export default defineConfig({
       // the file is still locked when chokidar tries to watch it, which throws
       // EBUSY on the FSWatcher and kills the whole vite process — so every E2E
       // run would take the dev server down with it.
-      ignored: ['**/playwright-report/**', '**/test-results/**']
+      //
+      // Must be a predicate, not a glob: vite 7 bundles chokidar 4, which
+      // dropped glob support in `ignored` and treats a string as a literal
+      // path. A glob here looks correct and silently matches nothing.
+      ignored: (path: string) =>
+        path.includes('playwright-report') || path.includes('test-results')
     },
     proxy: {
       '/api': {

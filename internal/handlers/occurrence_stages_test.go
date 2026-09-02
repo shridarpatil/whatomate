@@ -15,7 +15,7 @@ import (
 func TestOccurrenceStages_DeleteInUseIsRejected(t *testing.T) {
 	app := newTestApp(t)
 	org := testutil.CreateTestOrganization(t, app.DB)
-	role := testutil.CreateTestRoleWithKeys(t, app.DB, org.ID, "stages-rw", []string{"settings.general:write", "chat:read"})
+	role := testutil.CreateTestRoleWithKeys(t, app.DB, org.ID, "stages-rw", []string{"occurrences.stages:write", "occurrences.stages:delete"})
 	contact := testutil.CreateTestContact(t, app.DB, org.ID)
 	user := testutil.CreateTestUser(t, app.DB, org.ID, testutil.WithRoleID(&role.ID))
 
@@ -45,7 +45,7 @@ func TestOccurrenceStages_DeleteInUseIsRejected(t *testing.T) {
 func TestOccurrenceStages_DeleteLastClosingIsRejected(t *testing.T) {
 	app := newTestApp(t)
 	org := testutil.CreateTestOrganization(t, app.DB)
-	role := testutil.CreateTestRoleWithKeys(t, app.DB, org.ID, "stages-rw", []string{"settings.general:write", "chat:read"})
+	role := testutil.CreateTestRoleWithKeys(t, app.DB, org.ID, "stages-rw", []string{"occurrences.stages:write", "occurrences.stages:delete"})
 	user := testutil.CreateTestUser(t, app.DB, org.ID, testutil.WithRoleID(&role.ID))
 
 	require.NoError(t, app.EnsureDefaultStagesForTest(org.ID))
@@ -66,7 +66,7 @@ func TestOccurrenceStages_DeleteLastClosingIsRejected(t *testing.T) {
 func TestOccurrenceStages_DeleteInitialIsRejected(t *testing.T) {
 	app := newTestApp(t)
 	org := testutil.CreateTestOrganization(t, app.DB)
-	role := testutil.CreateTestRoleWithKeys(t, app.DB, org.ID, "stages-rw", []string{"settings.general:write", "chat:read"})
+	role := testutil.CreateTestRoleWithKeys(t, app.DB, org.ID, "stages-rw", []string{"occurrences.stages:write", "occurrences.stages:delete"})
 	user := testutil.CreateTestUser(t, app.DB, org.ID, testutil.WithRoleID(&role.ID))
 
 	require.NoError(t, app.EnsureDefaultStagesForTest(org.ID))
@@ -89,7 +89,7 @@ func TestOccurrenceStages_DeleteInitialIsRejected(t *testing.T) {
 func TestOccurrenceStages_SettingInitialUnsetsPrevious(t *testing.T) {
 	app := newTestApp(t)
 	org := testutil.CreateTestOrganization(t, app.DB)
-	role := testutil.CreateTestRoleWithKeys(t, app.DB, org.ID, "stages-rw", []string{"settings.general:write", "chat:read"})
+	role := testutil.CreateTestRoleWithKeys(t, app.DB, org.ID, "stages-rw", []string{"occurrences.stages:write", "occurrences.stages:delete"})
 	user := testutil.CreateTestUser(t, app.DB, org.ID, testutil.WithRoleID(&role.ID))
 
 	require.NoError(t, app.EnsureDefaultStagesForTest(org.ID))
@@ -123,7 +123,7 @@ func TestOccurrenceStages_SettingInitialUnsetsPrevious(t *testing.T) {
 func TestOccurrenceStages_UnsetLastClosingIsRejected(t *testing.T) {
 	app := newTestApp(t)
 	org := testutil.CreateTestOrganization(t, app.DB)
-	role := testutil.CreateTestRoleWithKeys(t, app.DB, org.ID, "stages-rw", []string{"settings.general:write", "chat:read"})
+	role := testutil.CreateTestRoleWithKeys(t, app.DB, org.ID, "stages-rw", []string{"occurrences.stages:write", "occurrences.stages:delete"})
 	user := testutil.CreateTestUser(t, app.DB, org.ID, testutil.WithRoleID(&role.ID))
 
 	require.NoError(t, app.EnsureDefaultStagesForTest(org.ID))
@@ -153,7 +153,7 @@ func TestOccurrenceStages_UnsetLastClosingIsRejected(t *testing.T) {
 func TestOccurrenceStages_UnsetSoleInitialIsRejected(t *testing.T) {
 	app := newTestApp(t)
 	org := testutil.CreateTestOrganization(t, app.DB)
-	role := testutil.CreateTestRoleWithKeys(t, app.DB, org.ID, "stages-rw", []string{"settings.general:write", "chat:read"})
+	role := testutil.CreateTestRoleWithKeys(t, app.DB, org.ID, "stages-rw", []string{"occurrences.stages:write", "occurrences.stages:delete"})
 	user := testutil.CreateTestUser(t, app.DB, org.ID, testutil.WithRoleID(&role.ID))
 
 	require.NoError(t, app.EnsureDefaultStagesForTest(org.ID))
@@ -180,7 +180,7 @@ func TestOccurrenceStages_UnsetSoleInitialIsRejected(t *testing.T) {
 func TestOccurrenceStages_CreateDuplicateNameIsRejected(t *testing.T) {
 	app := newTestApp(t)
 	org := testutil.CreateTestOrganization(t, app.DB)
-	role := testutil.CreateTestRoleWithKeys(t, app.DB, org.ID, "stages-rw", []string{"settings.general:write", "chat:read"})
+	role := testutil.CreateTestRoleWithKeys(t, app.DB, org.ID, "stages-rw", []string{"occurrences.stages:write", "occurrences.stages:delete"})
 	user := testutil.CreateTestUser(t, app.DB, org.ID, testutil.WithRoleID(&role.ID))
 
 	require.NoError(t, app.EnsureDefaultStagesForTest(org.ID))
@@ -199,7 +199,7 @@ func TestOccurrenceStages_CreateDuplicateNameIsRejected(t *testing.T) {
 func TestOccurrenceStages_RenameToDuplicateNameIsRejected(t *testing.T) {
 	app := newTestApp(t)
 	org := testutil.CreateTestOrganization(t, app.DB)
-	role := testutil.CreateTestRoleWithKeys(t, app.DB, org.ID, "stages-rw", []string{"settings.general:write", "chat:read"})
+	role := testutil.CreateTestRoleWithKeys(t, app.DB, org.ID, "stages-rw", []string{"occurrences.stages:write", "occurrences.stages:delete"})
 	user := testutil.CreateTestUser(t, app.DB, org.ID, testutil.WithRoleID(&role.ID))
 
 	require.NoError(t, app.EnsureDefaultStagesForTest(org.ID))
@@ -230,7 +230,7 @@ func TestOccurrenceStages_RenameToDuplicateNameIsRejected(t *testing.T) {
 func TestOccurrenceStages_CreateInitialAndClosingIsRejected(t *testing.T) {
 	app := newTestApp(t)
 	org := testutil.CreateTestOrganization(t, app.DB)
-	role := testutil.CreateTestRoleWithKeys(t, app.DB, org.ID, "stages-rw", []string{"settings.general:write", "chat:read"})
+	role := testutil.CreateTestRoleWithKeys(t, app.DB, org.ID, "stages-rw", []string{"occurrences.stages:write", "occurrences.stages:delete"})
 	user := testutil.CreateTestUser(t, app.DB, org.ID, testutil.WithRoleID(&role.ID))
 
 	req := testutil.NewJSONRequest(t, map[string]any{
@@ -251,7 +251,7 @@ func TestOccurrenceStages_CreateInitialAndClosingIsRejected(t *testing.T) {
 func TestOccurrenceStages_UpdateInitialAndClosingIsRejected(t *testing.T) {
 	app := newTestApp(t)
 	org := testutil.CreateTestOrganization(t, app.DB)
-	role := testutil.CreateTestRoleWithKeys(t, app.DB, org.ID, "stages-rw", []string{"settings.general:write", "chat:read"})
+	role := testutil.CreateTestRoleWithKeys(t, app.DB, org.ID, "stages-rw", []string{"occurrences.stages:write", "occurrences.stages:delete"})
 	user := testutil.CreateTestUser(t, app.DB, org.ID, testutil.WithRoleID(&role.ID))
 
 	require.NoError(t, app.EnsureDefaultStagesForTest(org.ID))
@@ -283,7 +283,7 @@ func TestOccurrenceStages_UpdateInitialAndClosingIsRejected(t *testing.T) {
 func TestOccurrenceStages_DeletedNameCanBeReused(t *testing.T) {
 	app := newTestApp(t)
 	org := testutil.CreateTestOrganization(t, app.DB)
-	role := testutil.CreateTestRoleWithKeys(t, app.DB, org.ID, "stages-rw", []string{"settings.general:write", "chat:read"})
+	role := testutil.CreateTestRoleWithKeys(t, app.DB, org.ID, "stages-rw", []string{"occurrences.stages:write", "occurrences.stages:delete"})
 	user := testutil.CreateTestUser(t, app.DB, org.ID, testutil.WithRoleID(&role.ID))
 
 	require.NoError(t, app.EnsureDefaultStagesForTest(org.ID))

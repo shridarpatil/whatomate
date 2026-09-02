@@ -162,6 +162,13 @@ func runServer(args []string) {
 		if err := handlers.BackfillChatbotFlowGraph(db, lo); err != nil {
 			lo.Fatal("Chatbot flow graph backfill failed", "error", err)
 		}
+		// Concede as permissões do CRM a quem já tem a capacidade equivalente.
+		// Precisa rodar aqui, no bloco de migração: o ListenAndServe só
+		// acontece depois, então nenhuma requisição chega antes de os papéis
+		// estarem corrigidos e não existe janela de 403.
+		if err := database.BackfillOccurrencePermissions(db, lo); err != nil {
+			lo.Fatal("Occurrence permissions backfill failed", "error", err)
+		}
 	}
 
 	// Connect to Redis

@@ -43,7 +43,7 @@ func TestOccurrences_CreateDeniedForInvisibleContact(t *testing.T) {
 	agentRole := testutil.CreateAgentRole(t, app.DB, org.ID)
 	owner := testutil.CreateTestUser(t, app.DB, org.ID, testutil.WithRoleID(&agentRole.ID))
 	outsiderRole := testutil.CreateTestRoleWithKeys(t, app.DB, org.ID, "occ-outsider",
-		[]string{"chat:read", "chat:write"})
+		[]string{"chat:read", "chat:write", "occurrences:read", "occurrences:write"})
 	outsider := testutil.CreateTestUser(t, app.DB, org.ID, testutil.WithRoleID(&outsiderRole.ID))
 	enableStrictVisibility(t, app, org.ID)
 
@@ -70,7 +70,7 @@ func TestOccurrences_ListHidesInvisibleContacts(t *testing.T) {
 	agentRole := testutil.CreateAgentRole(t, app.DB, org.ID)
 	owner := testutil.CreateTestUser(t, app.DB, org.ID, testutil.WithRoleID(&agentRole.ID))
 	outsiderRole := testutil.CreateTestRoleWithKeys(t, app.DB, org.ID, "occ-outsider",
-		[]string{"chat:read", "chat:write"})
+		[]string{"chat:read", "chat:write", "occurrences:read", "occurrences:write"})
 	outsider := testutil.CreateTestUser(t, app.DB, org.ID, testutil.WithRoleID(&outsiderRole.ID))
 	enableStrictVisibility(t, app, org.ID)
 
@@ -103,7 +103,7 @@ func TestOccurrences_AssigneeSeesOwnEvenWhenContactInvisible(t *testing.T) {
 	agentRole := testutil.CreateAgentRole(t, app.DB, org.ID)
 	owner := testutil.CreateTestUser(t, app.DB, org.ID, testutil.WithRoleID(&agentRole.ID))
 	assigneeRole := testutil.CreateTestRoleWithKeys(t, app.DB, org.ID, "occ-assignee",
-		[]string{"chat:read", "chat:write"})
+		[]string{"chat:read", "chat:write", "occurrences:read"})
 	assignee := testutil.CreateTestUser(t, app.DB, org.ID, testutil.WithRoleID(&assigneeRole.ID))
 	enableStrictVisibility(t, app, org.ID)
 

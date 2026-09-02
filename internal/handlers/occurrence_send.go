@@ -28,7 +28,7 @@ func serviceWindowOpen(contact *models.Contact) bool {
 // The inconsistency is deliberate and recorded in the spec: enforcing it
 // globally would change production behaviour.
 func (a *App) SendOccurrenceProtocol(r *fastglue.Request) error {
-	orgID, userID, err := a.requireAuth(r, models.ResourceChat, models.ActionWrite)
+	orgID, userID, err := a.requireAuth(r, models.ResourceOccurrences, models.ActionWrite)
 	if err != nil {
 		return nil
 	}

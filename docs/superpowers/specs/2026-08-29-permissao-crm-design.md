@@ -41,13 +41,15 @@ Dois recursos, com o mínimo de ações que têm endpoint por trás:
 | Recurso | Ações | Cobre |
 |---|---|---|
 | `occurrences` | `read`, `write` | ocorrências, timeline, envio de protocolo **e a leitura das etapas** |
-| `occurrences.stages` | `write`, `delete` | criar, editar e apagar etapas |
+| `occurrences.stages` | `read`, `write`, `delete` | ver a tela de configuração do funil, e criar, editar e apagar etapas |
 
-### Por que `occurrences.stages` não tem `read`
+### As duas leituras, que são coisas diferentes
 
-Listar etapas é parte de **usar** o CRM, não de administrá-lo: o quadro não renderiza sem elas, o seletor de etapa do detalhe não existe sem elas, e o painel do chat as consome. Portanto `ListOccurrenceStages` fica sob `occurrences:read`.
+**Ler as etapas pela API fica sob `occurrences:read`.** Listar etapas é parte de *usar* o CRM, não de administrá-lo: o quadro não renderiza sem elas, o seletor do detalhe não existe sem elas, e o painel do chat as consome. `ListOccurrenceStages` portanto **não** exige permissão administrativa.
 
-Uma permissão de leitura separada não protegeria nada distinto e criaria uma caixa a mais para alguém desmarcar e quebrar o quadro sem entender por quê.
+**`occurrences.stages:read` governa ver a tela de configuração**, que é outro direito: enxergar como o funil está montado. Não é a mesma coisa que consumir a lista de etapas para desenhar um quadro.
+
+> **Correção registrada.** Uma versão anterior desta spec omitia `occurrences.stages:read`, argumentando que não protegeria nada distinto. Isso quebraria a tela: a guarda de rota do frontend chama `hasPermission(recurso, 'read')` com a ação **fixa em `read`** ([router/index.ts:435](../../../frontend/src/router/index.ts)) e o `hasPermission` casa recurso e ação exatos ([auth.ts:191](../../../frontend/src/stores/auth.ts)). Sem a chave de leitura, a tela de etapas ficaria inalcançável para todos, inclusive para o papel admin — só o super admin passaria, pelo bypass. A distinção acima é o que faz as duas coisas conviverem.
 
 ### Mapeamento dos handlers
 
@@ -79,7 +81,7 @@ Para cada papel de cada organização:
 |---|---|
 | `chat:read` | `occurrences:read` |
 | `chat:write` | `occurrences:write` |
-| `settings.general:write` | `occurrences.stages:write` e `occurrences.stages:delete` |
+| `settings.general:write` | `occurrences.stages:read`, `occurrences.stages:write` e `occurrences.stages:delete` |
 
 A regra é **equivalência exata com a capacidade de hoje**: quem administra etapas neste momento é precisamente quem tem `settings.general:write`, então são precisamente esses que recebem as permissões novas. Ninguém ganha nem perde capacidade no deploy.
 
@@ -160,7 +162,7 @@ O editor de funções monta os grupos sozinho a partir da API (`permissionGroups
 **Go — backfill**
 
 - Papel com `chat:read` e `chat:write` recebe `occurrences:read` e `occurrences:write`, e **não** recebe as de etapa.
-- Papel com `settings.general:write` recebe as duas de etapa.
+- Papel com `settings.general:write` recebe as **três** de etapa, incluindo `read` — sem ela a tela de configuração fica inalcançável mesmo para quem pode editar.
 - Papel com `roles:write` mas **sem** `settings.general:write` **não** recebe as de etapa — a regra é equivalência, não generosidade.
 - Papel sem nenhuma permissão de chat não recebe nada.
 - **Nenhuma permissão `chat:*` é removida de papel algum** — asserção explícita, porque é o que garante o rollback.
