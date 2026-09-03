@@ -830,6 +830,7 @@ Em `ChatView.vue:2727-2732`, acrescente o ouvinte ao lado do que já existe, seg
 
 ```vue
       @name-updated="(name) => contactsStore.updateContactName(contactsStore.currentContact!.id, name)"
+```
 
 - [ ] **Step 7: Rode e confirme que passa**
 
