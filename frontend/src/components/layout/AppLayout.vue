@@ -26,7 +26,7 @@ useI18n() // Enable $t() in template
 const route = useRoute()
 const router = useRouter()
 const authStore = useAuthStore()
-const isCollapsed = ref(false)
+const isCollapsed = ref(true)
 const isMobileMenuOpen = ref(false)
 
 // Refresh user data and connect WebSocket on mount

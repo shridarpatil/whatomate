@@ -30,9 +30,12 @@
     --destructive: 0 72% 51%;
     --destructive-foreground: 0 0% 100%;
 
-    /* Subtle borders - key for Linear look */
-    --border: 0 0% 12%;
-    --input: 0 0% 12%;
+    /* Subtle borders - key for Linear look.
+       18% not 12%: near-black backgrounds compress perceived contrast, so a
+       delta that reads fine in light mode (90% border on 98% background)
+       goes invisible here unless the raw lightness jump is bigger. */
+    --border: 0 0% 18%;
+    --input: 0 0% 18%;
     --ring: 160 84% 39%;
     --radius: 0.75rem;
 
@@ -88,8 +91,8 @@
     --accent-foreground: 0 0% 98%;
     --destructive: 0 72% 51%;
     --destructive-foreground: 0 0% 100%;
-    --border: 0 0% 12%;
-    --input: 0 0% 12%;
+    --border: 0 0% 18%;
+    --input: 0 0% 18%;
     --ring: 160 84% 39%;
 
     /* Glass effect utilities */
