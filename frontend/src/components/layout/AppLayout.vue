@@ -195,7 +195,10 @@ const handleLogout = async () => {
             <!-- Section items -->
             <div class="space-y-0.5">
               <template v-for="item in section.items" :key="item.path">
-                <Tooltip v-if="isCollapsed" :delay-duration="150">
+                <!-- ponytail: tooltip still mounts once isCollapsed flips true even on
+                     sub-md viewports where the label stays visible; needs viewport-width
+                     tracking to fix, out of scope for this pass -->
+                <Tooltip :disabled="!isCollapsed" :delay-duration="150">
                   <TooltipTrigger as-child>
                     <RouterLink
                       :to="item.path"
@@ -204,7 +207,7 @@ const handleLogout = async () => {
                         item.active
                           ? 'bg-white/[0.08] text-white light:bg-gray-100 light:text-gray-900'
                           : 'text-white/50 hover:text-white hover:bg-white/[0.06] light:text-gray-500 light:hover:text-gray-900 light:hover:bg-gray-50',
-                        'md:justify-center md:px-2'
+                        isCollapsed && 'md:justify-center md:px-2'
                       ]"
                       :data-active="item.active"
                       role="menuitem"
@@ -212,28 +215,11 @@ const handleLogout = async () => {
                       @click="isMobileMenuOpen = false"
                     >
                       <component :is="item.icon" class="h-4 w-4 shrink-0" aria-hidden="true" />
-                      <span class="md:sr-only">{{ $t(item.name) }}</span>
+                      <span :class="isCollapsed && 'md:sr-only'">{{ $t(item.name) }}</span>
                     </RouterLink>
                   </TooltipTrigger>
                   <TooltipContent side="right">{{ $t(item.name) }}</TooltipContent>
                 </Tooltip>
-                <RouterLink
-                  v-else
-                  :to="item.path"
-                  :class="[
-                    'nav-active-indicator btn-press flex items-center gap-2.5 rounded-lg px-2.5 py-2 text-[13px] font-medium transition-all duration-200',
-                    item.active
-                      ? 'bg-white/[0.08] text-white light:bg-gray-100 light:text-gray-900'
-                      : 'text-white/50 hover:text-white hover:bg-white/[0.06] light:text-gray-500 light:hover:text-gray-900 light:hover:bg-gray-50'
-                  ]"
-                  :data-active="item.active"
-                  role="menuitem"
-                  :aria-current="item.active ? 'page' : undefined"
-                  @click="isMobileMenuOpen = false"
-                >
-                  <component :is="item.icon" class="h-4 w-4 shrink-0" aria-hidden="true" />
-                  <span>{{ $t(item.name) }}</span>
-                </RouterLink>
 
                 <!-- Submenu items -->
                 <template v-if="item.children && item.active && !isCollapsed">
@@ -265,7 +251,10 @@ const handleLogout = async () => {
       <div v-if="bottomSections.length > 0" class="border-t border-white/[0.06] light:border-gray-200 px-2 py-2">
         <template v-for="section in bottomSections" :key="section.label">
           <template v-for="item in section.items" :key="item.path">
-            <Tooltip v-if="isCollapsed" :delay-duration="150">
+            <!-- ponytail: tooltip still mounts once isCollapsed flips true even on
+                 sub-md viewports where the label stays visible; needs viewport-width
+                 tracking to fix, out of scope for this pass -->
+            <Tooltip :disabled="!isCollapsed" :delay-duration="150">
               <TooltipTrigger as-child>
                 <RouterLink
                   :to="item.path"
@@ -274,7 +263,7 @@ const handleLogout = async () => {
                     item.active
                       ? 'bg-white/[0.08] text-white light:bg-gray-100 light:text-gray-900'
                       : 'text-white/50 hover:text-white hover:bg-white/[0.06] light:text-gray-500 light:hover:text-gray-900 light:hover:bg-gray-50',
-                    'md:justify-center md:px-2'
+                    isCollapsed && 'md:justify-center md:px-2'
                   ]"
                   :data-active="item.active"
                   role="menuitem"
@@ -282,28 +271,11 @@ const handleLogout = async () => {
                   @click="isMobileMenuOpen = false"
                 >
                   <component :is="item.icon" class="h-4 w-4 shrink-0" aria-hidden="true" />
-                  <span class="md:sr-only">{{ $t(item.name) }}</span>
+                  <span :class="isCollapsed && 'md:sr-only'">{{ $t(item.name) }}</span>
                 </RouterLink>
               </TooltipTrigger>
               <TooltipContent side="right">{{ $t(item.name) }}</TooltipContent>
             </Tooltip>
-            <RouterLink
-              v-else
-              :to="item.path"
-              :class="[
-                'nav-active-indicator btn-press flex items-center gap-2.5 rounded-lg px-2.5 py-2 text-[13px] font-medium transition-all duration-200',
-                item.active
-                  ? 'bg-white/[0.08] text-white light:bg-gray-100 light:text-gray-900'
-                  : 'text-white/50 hover:text-white hover:bg-white/[0.06] light:text-gray-500 light:hover:text-gray-900 light:hover:bg-gray-50'
-              ]"
-              :data-active="item.active"
-              role="menuitem"
-              :aria-current="item.active ? 'page' : undefined"
-              @click="isMobileMenuOpen = false"
-            >
-              <component :is="item.icon" class="h-4 w-4 shrink-0" aria-hidden="true" />
-              <span>{{ $t(item.name) }}</span>
-            </RouterLink>
 
             <template v-if="item.children && item.active && !isCollapsed">
               <RouterLink

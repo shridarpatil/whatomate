@@ -2090,8 +2090,6 @@
     "columnLoadFailed": "Could not load this column",
     "columnEmpty": "Nothing here",
     "loadMore": "Load More",
-    "cardContact": "Contact",
-    "cardAssignee": "Assignee",
     "unassigned": "Unassigned",
     "noOccurrencesYet": "No occurrences yet",
     "noOccurrencesYetDesc": "Occurrences opened by agents will appear here",

@@ -30,7 +30,27 @@ test.describe('Collapsed sidebar', () => {
 
     const chatLink = page.getByRole('menuitem').first()
     await chatLink.hover()
+    // A tooltip usa :delay-duration="150"; espera passar do delay para que a
+    // asserção prove que o guard v-if="isCollapsed" funciona, em vez de
+    // passar trivialmente porque o poll rodou antes do popper poder montar.
+    await page.waitForTimeout(600)
 
     await expect(page.locator('[data-reka-popper-content-wrapper]')).toHaveCount(0)
+  })
+
+  test('shows the Settings tooltip on hover when collapsed', async ({ page }) => {
+    await loginAsAdmin(page)
+
+    await page.getByRole('button', { name: /collapse sidebar|recolher/i }).click()
+
+    const settingsLink = page.locator('a[role="menuitem"][href="/settings"]')
+    const label = ((await settingsLink.textContent()) ?? '').trim()
+
+    await settingsLink.hover()
+    await page.waitForTimeout(600)
+
+    const tooltip = page.locator('[data-reka-popper-content-wrapper]')
+    await expect(tooltip).toBeVisible()
+    await expect(tooltip).toContainText(label)
   })
 })
