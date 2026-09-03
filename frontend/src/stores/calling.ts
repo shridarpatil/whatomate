@@ -152,10 +152,15 @@ export const useCallingStore = defineStore('calling', () => {
         urls: s.urls,
         ...(s.username && { username: s.username, credential: s.credential }),
       }))
-    } catch {
-      cachedICEServers = []
+      return cachedICEServers!
+    } catch (err) {
+      // Do NOT cache a failure (a bare `[]` is truthy, so caching it here
+      // used to strand every call for the rest of the tab's session without
+      // STUN/TURN after one transient 401/network error). Leave the cache
+      // untouched so the next call attempt retries the fetch.
+      console.warn('Failed to fetch ICE servers; this call will proceed without STUN/TURN', err)
+      return []
     }
-    return cachedICEServers!
   }
 
   // Call Transfer actions
