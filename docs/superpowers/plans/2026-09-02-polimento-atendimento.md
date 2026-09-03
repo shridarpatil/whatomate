@@ -36,6 +36,10 @@ Valem para **todas** as tarefas.
 | `cmd/whatomate/main.go` | modificar: rota nova e chamada do backfill | T1 |
 | `frontend/src/services/api.ts` | modificar: `contactsService.updateName` | T2 |
 | `frontend/src/components/chat/ContactInfoPanel.vue` | modificar: copiar e renomear | T2 |
+| `frontend/src/stores/contacts.ts` | modificar: `updateContactName` | T2 |
+| `frontend/src/views/chat/ChatView.vue` | modificar: ouvinte de `name-updated` | T2 |
+| `frontend/e2e/tests/chat/contact-info.spec.ts` | criar: copiar e renomear | T2 |
+| `frontend/e2e/tests/layout/sidebar-tooltips.spec.ts` | criar: tooltips quando recolhido | T3 |
 | `frontend/src/components/layout/AppLayout.vue` | modificar: tooltips quando recolhido | T3 |
 | `frontend/src/components/crm/OccurrenceCard.vue` | modificar: rótulos | T3 |
 | `frontend/src/i18n/locales/{en,pt-BR}.json` | modificar: chaves novas | T2, T3 |
@@ -801,7 +805,31 @@ Se `Input` ainda não estiver importado no arquivo, importe de `@/components/ui/
 
 - [ ] **Step 6: Faça o pai reagir ao nome novo**
 
-`ContactInfoPanel` recebe o contato como prop e não pode alterá-lo. Em `ChatView.vue`, no ponto em que `<ContactInfoPanel>` é usado, trate o evento novo recarregando o contato, do mesmo jeito que `tagsUpdated` já é tratado — leia como `@tags-updated` está ligado e siga a mesma forma, para que o cabeçalho do chat e a lista de conversas mostrem o nome novo sem recarregar a página.
+`ContactInfoPanel` recebe o contato como prop e não pode alterá-lo. A chamada à API já aconteceu no painel; falta a store refletir localmente, exatamente como faz com as tags.
+
+Em `frontend/src/stores/contacts.ts`, ao lado de `updateContactTags` (`:404-414`), acrescente a gêmea:
+
+```ts
+  function updateContactName(contactId: string, name: string) {
+    const contact = contacts.value.find(c => c.id === contactId)
+    if (contact) {
+      contact.name = name
+      contact.profile_name = name
+    }
+    if (currentContact.value?.id === contactId) {
+      currentContact.value = { ...currentContact.value, name, profile_name: name }
+    }
+  }
+```
+
+Os **dois** campos são atualizados porque a API devolve o mesmo valor em `name` e `profile_name`, e partes diferentes da interface leem um ou outro — deixar só um sincronizado produz um nome que muda no painel e não muda na lista.
+
+Exponha `updateContactName` no retorno da store, junto de `updateContactTags`.
+
+Em `ChatView.vue:2727-2732`, acrescente o ouvinte ao lado do que já existe, seguindo a mesma forma inline:
+
+```vue
+      @name-updated="(name) => contactsStore.updateContactName(contactsStore.currentContact!.id, name)"
 
 - [ ] **Step 7: Rode e confirme que passa**
 
