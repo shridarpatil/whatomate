@@ -304,6 +304,12 @@ export class ApiHelper {
     return result.data
   }
 
+  async deleteContact(contactId: string): Promise<void> {
+    await this.request.delete(`${BASE_URL}/api/contacts/${contactId}`, {
+      headers: this.csrfHeaders
+    })
+  }
+
   // Conversation Notes
   async listNotes(contactId: string): Promise<any[]> {
     const response = await this.request.get(`${BASE_URL}/api/contacts/${contactId}/notes`)

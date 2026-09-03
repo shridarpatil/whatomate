@@ -3,14 +3,13 @@ import type { Component, HTMLAttributes } from 'vue'
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 
-defineOptions({ inheritAttrs: false })
-
 withDefaults(defineProps<{
   icon?: Component
   label: string
   variant?: 'default' | 'destructive' | 'outline' | 'secondary' | 'ghost' | 'link'
   size?: 'default' | 'sm' | 'lg' | 'icon'
   class?: HTMLAttributes['class']
+  id?: string
   disabled?: boolean
   loading?: boolean
 }>(), {
@@ -29,7 +28,7 @@ defineEmits<{
   <Tooltip>
     <TooltipTrigger as-child>
       <Button
-        v-bind="$attrs"
+        :id="id"
         :variant="variant"
         :size="size"
         :class="$props.class"

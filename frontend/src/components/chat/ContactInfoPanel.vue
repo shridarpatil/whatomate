@@ -110,9 +110,17 @@ function startEditName() {
   isEditingName.value = true
 }
 
-function copyText(value: string) {
-  navigator.clipboard.writeText(value)
-  toast.success(t('common.copiedToClipboard'))
+// Switching contacts while the rename box is open must not leave it open:
+// otherwise saveName() below posts the stale draft to the NEW contact's id.
+watch(() => props.contact.id, () => { isEditingName.value = false })
+
+async function copyText(value: string) {
+  try {
+    await navigator.clipboard.writeText(value)
+    toast.success(t('common.copiedToClipboard'))
+  } catch {
+    toast.error(t('common.clipboardFailed'))
+  }
 }
 
 async function saveName() {
@@ -349,7 +357,7 @@ async function updateContactTags(tags: string[]) {
             />
             <IconButton
               :icon="X"
-              :label="$t('contacts.cancelEdit')"
+              :label="$t('common.cancel')"
               class="h-6 w-6"
               @click="isEditingName = false"
             />
