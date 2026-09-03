@@ -102,11 +102,17 @@ const isSavingName = ref(false)
 
 const displayName = computed(() => props.contact.name || props.contact.phone_number)
 
+function looksLikeMaskedPhone(value: string): boolean {
+  return /^\*+\d{0,4}$/.test(value)
+}
+
 function startEditName() {
-  // Pre-fill from contact.name, never from displayName: displayName falls
-  // back to the phone number (masked, when the org masks it) when there's
-  // no name, and that shouldn't be offered as a name to save.
-  nameDraft.value = props.contact.name || ''
+  const current = props.contact.name ?? ''
+  // contact.name is MaskIfPhoneNumber(profile_name) on the backend — for a
+  // contact with no real name, in an org with masking on, that IS the
+  // masked string. Pre-filling it would show the agent something like
+  // **********1234 with nothing sensible to do with it.
+  nameDraft.value = looksLikeMaskedPhone(current) ? '' : current
   isEditingName.value = true
 }
 
@@ -352,7 +358,7 @@ async function updateContactTags(tags: string[]) {
               :icon="Check"
               :label="$t('contacts.saveName')"
               class="h-6 w-6"
-              :disabled="isSavingName"
+              :disabled="isSavingName || !nameDraft.trim()"
               @click="saveName"
             />
             <IconButton
