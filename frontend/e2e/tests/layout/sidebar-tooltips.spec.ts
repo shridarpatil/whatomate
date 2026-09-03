@@ -46,7 +46,16 @@ test.describe('Collapsed sidebar', () => {
     const settingsLink = page.locator('a[role="menuitem"][href="/settings"]')
     const label = ((await settingsLink.textContent()) ?? '').trim()
 
+    // hover() espera a animação de largura (transition-all duration-300)
+    // terminar antes de considerar o elemento acionável. Mas o próprio hover
+    // é um salto longo (topo -> ícone fixo no rodapé), e às vezes não gera um
+    // pointermove que o reka-ui reconheça depois que a animação assenta, então
+    // a grace area do tooltip não abre (~1-em-8 flake). Ler o boundingBox só
+    // DEPOIS do hover, e mover 1px, força um pointermove novo sobre a
+    // coordenada final já estável.
     await settingsLink.hover()
+    const box = (await settingsLink.boundingBox())!
+    await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2 + 1)
     await page.waitForTimeout(600)
 
     const tooltip = page.locator('[data-reka-popper-content-wrapper]')
