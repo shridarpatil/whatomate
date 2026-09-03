@@ -214,10 +214,12 @@ func BackfillContactNamePermission(db *gorm.DB, lo logf.Logger) error {
 		return nil
 	}
 
-	// SELECT DISTINCT importa: um papel que tenha as duas origens (contacts:write
-	// e chat:write) casaria duas vezes contra o CROSS JOIN e tentaria inserir o
-	// mesmo vínculo em duplicidade dentro da mesma sentença, que o ON CONFLICT
-	// não cobre.
+	// SELECT DISTINCT é cinto e suspensório, não necessidade: ON CONFLICT DO
+	// NOTHING já deduplica linhas repetidas dentro da mesma sentença, então um
+	// papel com as duas origens (contacts:write e chat:write) já backfillaria
+	// limpo mesmo sem o DISTINCT. O que exigiria o DISTINCT de verdade é uma
+	// troca futura para ON CONFLICT DO UPDATE — essa forma sim levanta "cannot
+	// affect row a second time" diante de duplicidade na mesma sentença.
 	res := db.Exec(`
 		INSERT INTO role_permissions (custom_role_id, permission_id)
 		SELECT DISTINCT r.id, target.id

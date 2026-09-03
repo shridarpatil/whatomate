@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strconv"
 	"strings"
 	"time"
@@ -1279,6 +1280,11 @@ type UpdateContactNameRequest struct {
 	Name string `json:"name"`
 }
 
+// maskedValuePattern reconhece o formato de uma máscara de telefone
+// parcialmente editada: asteriscos seguidos (opcionalmente) de dígitos, e
+// nada mais. Não casa nomes reais com asterisco, como "M*A*S*H" ou "Hotel 4*".
+var maskedValuePattern = regexp.MustCompile(`^\*+\d*$`)
+
 // UpdateContactName renomeia o contato e nada mais.
 //
 // Endpoint próprio em vez de um caminho dentro de UpdateContact: um endpoint,
@@ -1317,12 +1323,30 @@ func (a *App) UpdateContactName(r *fastglue.Request) error {
 		return r.SendErrorEnvelope(fasthttp.StatusBadRequest, "name is required", nil, "")
 	}
 
-	// Com mask_phone_numbers ligado, um nome que parece telefone é exibido
-	// como ****1234. Salvar esse valor gravaria a máscara por cima do número
-	// real, sem volta. Nome de gente não tem asterisco.
-	if strings.Contains(name, "*") {
+	// profile_name is varchar(255); catch an over-long name here so the
+	// client gets a 400 instead of a 500 from the DB, and the error log
+	// stays clean of ordinary client mistakes.
+	if len(name) > 255 {
 		return r.SendErrorEnvelope(fasthttp.StatusBadRequest,
-			"name cannot contain masked characters", nil, "")
+			"name is too long (max 255 characters)", nil, "")
+	}
+
+	// Com mask_phone_numbers ligado, um nome que parece telefone é exibido
+	// como ****1234. Salvar esse valor de volta gravaria a máscara por cima
+	// do número real, sem volta. Duas formas de isso acontecer:
+	//   1) a tela pré-preencheu o campo com o valor mascarado e o usuário
+	//      salvou sem editar (bate exatamente com o que a tela mostraria);
+	//   2) o usuário editou só uma parte, sobrando um resto no formato de
+	//      máscara (asteriscos seguidos de dígitos, e nada mais).
+	// Nome de gente com asterisco de verdade ("M*A*S*H", "Hotel 4*") não cai
+	// em nenhum dos dois casos e passa.
+	//
+	// O que isto NÃO cobre, de propósito: um usuário que digita "1234" por
+	// cima do valor mascarado. É um rename comum, e nada nessa entrada
+	// distingue essa intenção de uma troca de nome legítima.
+	if name == utils.MaskIfPhoneNumber(contact.ProfileName) || maskedValuePattern.MatchString(name) {
+		return r.SendErrorEnvelope(fasthttp.StatusBadRequest,
+			"name looks like a masked phone number", nil, "")
 	}
 
 	if err := a.DB.Model(contact).Update("profile_name", name).Error; err != nil {

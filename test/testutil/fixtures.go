@@ -370,6 +370,10 @@ func CreateAgentRole(t *testing.T, db *gorm.DB, orgID uuid.UUID) *models.CustomR
 	agentPerms := []string{
 		"chat:read", "chat:write",
 		"contacts:read",
+		// Renomear: mirrors production's contacts.name:write on the agent
+		// role (roles.go) — keep this in sync or tests built on this fixture
+		// will 403 on rename and look like a visibility bug.
+		"contacts.name:write",
 		"analytics.agents:read",
 		"transfers:read", "transfers:pickup",
 		"canned_responses:read",
