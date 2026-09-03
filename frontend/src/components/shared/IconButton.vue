@@ -3,6 +3,8 @@ import type { Component, HTMLAttributes } from 'vue'
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 
+defineOptions({ inheritAttrs: false })
+
 withDefaults(defineProps<{
   icon?: Component
   label: string
@@ -27,6 +29,7 @@ defineEmits<{
   <Tooltip>
     <TooltipTrigger as-child>
       <Button
+        v-bind="$attrs"
         :variant="variant"
         :size="size"
         :class="$props.class"
