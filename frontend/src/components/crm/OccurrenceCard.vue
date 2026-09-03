@@ -32,8 +32,12 @@ const PRIORITY_KEY = {
       </Badge>
     </div>
     <p class="text-sm mt-1 truncate text-white light:text-gray-900">{{ occurrence.title }}</p>
-    <p class="text-xs mt-1 truncate text-white/50 light:text-muted-foreground">{{ occurrence.contact_name }}</p>
+    <p class="text-xs mt-1 truncate text-white/50 light:text-muted-foreground">
+      <span class="text-white/30 light:text-gray-400">{{ $t('occurrences.cardContact') }}:</span>
+      {{ occurrence.contact_name }}
+    </p>
     <p class="text-xs mt-0.5 truncate text-white/40 light:text-muted-foreground">
+      <span class="text-white/30 light:text-gray-400">{{ $t('occurrences.cardAssignee') }}:</span>
       {{ occurrence.assigned_user_name || $t('occurrences.unassigned') }}
     </p>
   </div>
