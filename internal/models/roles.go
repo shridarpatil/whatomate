@@ -71,6 +71,7 @@ const (
 	ResourceChat                    = "chat"
 	ResourceChatAssign              = "chat.assign"
 	ResourceContacts                = "contacts"
+	ResourceContactName             = "contacts.name"
 	ResourceTags                    = "tags"
 	ResourceAnalytics               = "analytics"
 	ResourceAnalyticsAgents         = "analytics.agents"
@@ -183,6 +184,9 @@ func DefaultPermissions() []Permission {
 		{Resource: ResourceContacts, Action: ActionDelete, Description: "Delete contacts"},
 		{Resource: ResourceContacts, Action: ActionImport, Description: "Import contacts"},
 		{Resource: ResourceContacts, Action: ActionExport, Description: "Export contacts"},
+		// Renomear o contato, separado de contacts:write para que o atendente
+		// possa corrigir o nome sem ganhar o contato inteiro.
+		{Resource: ResourceContactName, Action: ActionWrite, Description: "Rename contacts"},
 
 		// Tags
 		{Resource: ResourceTags, Action: ActionRead, Description: "View tags"},
@@ -331,6 +335,8 @@ func SystemRolePermissions() map[string][]string {
 		"occurrences:read", "occurrences:write",
 		// Contacts (read only)
 		"contacts:read",
+		// Renomear: agilidade no atendimento, sem abrir o resto do contato
+		"contacts.name:write",
 		// Tags (read only - agents can see tags on contacts)
 		"tags:read",
 		// Analytics (own)

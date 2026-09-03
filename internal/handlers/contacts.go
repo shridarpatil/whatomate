@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strconv"
 	"strings"
 	"time"
@@ -1272,6 +1273,93 @@ func (a *App) GetContactSessionData(r *fastglue.Request) error {
 	}
 
 	return r.SendEnvelope(response)
+}
+
+// UpdateContactNameRequest carrega o único campo que este endpoint aceita.
+type UpdateContactNameRequest struct {
+	Name string `json:"name"`
+}
+
+// maskedValuePattern reconhece o formato de uma máscara de telefone
+// parcialmente editada: asteriscos seguidos (opcionalmente) de dígitos, e
+// nada mais. Não casa nomes reais com asterisco, como "M*A*S*H" ou "Hotel 4*".
+var maskedValuePattern = regexp.MustCompile(`^\*+\d*$`)
+
+// UpdateContactName renomeia o contato e nada mais.
+//
+// Endpoint próprio em vez de um caminho dentro de UpdateContact: um endpoint,
+// um portão. Um condicional dentro do update largo teria de acertar quais
+// campos ignorar, e erraria em silêncio no dia em que alguém acrescentasse um.
+func (a *App) UpdateContactName(r *fastglue.Request) error {
+	orgID, userID, err := a.requireAuth(r, models.ResourceContactName, models.ActionWrite)
+	if err != nil {
+		return nil
+	}
+
+	contactID, err := parsePathUUID(r, "id", "contact")
+	if err != nil {
+		return nil
+	}
+
+	contact, err := findByIDAndOrg[models.Contact](a.DB, r, contactID, orgID, "Contact")
+	if err != nil {
+		return nil
+	}
+
+	// A permissão não pode furar a visibilidade: renomear contato que o
+	// usuário não enxerga seria acesso lateral ao escopo de conversa.
+	if !a.canInteractWithConversation(userID, orgID, contact) {
+		return r.SendErrorEnvelope(fasthttp.StatusForbidden,
+			"You do not have access to this conversation", nil, "")
+	}
+
+	var req UpdateContactNameRequest
+	if err := a.decodeRequest(r, &req); err != nil {
+		return nil
+	}
+
+	name := strings.TrimSpace(req.Name)
+	if name == "" {
+		return r.SendErrorEnvelope(fasthttp.StatusBadRequest, "name is required", nil, "")
+	}
+
+	// profile_name is varchar(255); catch an over-long name here so the
+	// client gets a 400 instead of a 500 from the DB, and the error log
+	// stays clean of ordinary client mistakes.
+	if len(name) > 255 {
+		return r.SendErrorEnvelope(fasthttp.StatusBadRequest,
+			"name is too long (max 255 characters)", nil, "")
+	}
+
+	// Com mask_phone_numbers ligado, um nome que parece telefone é exibido
+	// como ****1234. Salvar esse valor de volta gravaria a máscara por cima
+	// do número real, sem volta. Duas formas de isso acontecer:
+	//   1) a tela pré-preencheu o campo com o valor mascarado e o usuário
+	//      salvou sem editar (bate exatamente com o que a tela mostraria);
+	//   2) o usuário editou só uma parte, sobrando um resto no formato de
+	//      máscara (asteriscos seguidos de dígitos, e nada mais).
+	// Nome de gente com asterisco de verdade ("M*A*S*H", "Hotel 4*") não cai
+	// em nenhum dos dois casos e passa.
+	//
+	// O que isto NÃO cobre, de propósito: um usuário que digita "1234" por
+	// cima do valor mascarado. É um rename comum, e nada nessa entrada
+	// distingue essa intenção de uma troca de nome legítima.
+	if name == utils.MaskIfPhoneNumber(contact.ProfileName) || maskedValuePattern.MatchString(name) {
+		return r.SendErrorEnvelope(fasthttp.StatusBadRequest,
+			"name looks like a masked phone number", nil, "")
+	}
+
+	if err := a.DB.Model(contact).Update("profile_name", name).Error; err != nil {
+		a.Log.Error("Failed to rename contact", "error", err, "contact_id", contactID)
+		return r.SendErrorEnvelope(fasthttp.StatusInternalServerError,
+			"Failed to rename contact", nil, "")
+	}
+
+	return r.SendEnvelope(map[string]any{
+		"id":           contactID,
+		"name":         name,
+		"profile_name": name,
+	})
 }
 
 // UpdateContactTagsRequest represents the request body for updating contact tags

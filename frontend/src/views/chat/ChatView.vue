@@ -2730,6 +2730,7 @@ async function sendMediaMessage() {
       :session-data="contactSessionData"
       @close="isInfoPanelOpen = false"
       @tags-updated="(tags) => contactsStore.updateContactTags(contactsStore.currentContact!.id, tags)"
+      @name-updated="(name) => contactsStore.updateContactName(contactsStore.currentContact!.id, name)"
     />
 
     <!-- Template Params Dialog -->

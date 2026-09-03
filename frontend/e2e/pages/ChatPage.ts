@@ -152,8 +152,16 @@ export class ChatPage extends BasePage {
   }
 
   // Contact actions
+  /**
+   * Toggles the contact info panel — #info-button flips `isInfoPanelOpen`
+   * in ChatView.vue, it doesn't just open it. Calling this twice closes
+   * the panel again.
+   */
   async openContactInfo() {
-    await this.page.getByRole('button').filter({ has: this.page.locator('.lucide-info') }).click()
+    // Note: not `.lucide-info` — this lucide-vue-next version suffixes icon
+    // classes with `-icon` (renders `lucide-info-icon`), so that selector
+    // matched nothing. #info-button is the stable id ChatView.vue already sets.
+    await this.page.locator('#info-button').click()
   }
 
   async assignContact() {

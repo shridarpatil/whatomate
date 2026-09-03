@@ -22,15 +22,19 @@ import {
   CommandItem,
   CommandList
 } from '@/components/ui/command'
-import { X, ChevronDown, Phone, User, Plus, Check, Tags, Loader2 } from 'lucide-vue-next'
+import { X, ChevronDown, Phone, User, Plus, Check, Tags, Loader2, Copy, Pencil } from 'lucide-vue-next'
 import { TagBadge } from '@/components/ui/tag-badge'
+import { IconButton } from '@/components/shared'
+import { Input } from '@/components/ui/input'
 import MetadataSection from '@/components/chat/MetadataSection.vue'
 import { getInitials, getAvatarGradient, formatLabel } from '@/lib/utils'
 import { getTagColorClass } from '@/lib/constants'
 import { useTagsStore } from '@/stores/tags'
 import { useAuthStore } from '@/stores/auth'
+import { useI18n } from 'vue-i18n'
 import { contactsService, type Tag } from '@/services/api'
 import { toast } from 'vue-sonner'
+import { getErrorMessage } from '@/lib/api-utils'
 import type { Contact } from '@/stores/contacts'
 
 interface PanelFieldConfig {
@@ -71,8 +75,10 @@ const props = defineProps<{
 const emit = defineEmits<{
   close: []
   tagsUpdated: [tags: string[]]
+  nameUpdated: [name: string]
 }>()
 
+const { t } = useI18n()
 const tagsStore = useTagsStore()
 const authStore = useAuthStore()
 const collapsedSections = ref<Record<string, boolean>>({})
@@ -87,6 +93,57 @@ const isResizing = ref(false)
 
 // Check if user can edit tags
 const canEditTags = computed(() => authStore.hasPermission('contacts', 'write'))
+
+const canRenameContact = computed(() => authStore.hasPermission('contacts.name', 'write'))
+
+const isEditingName = ref(false)
+const nameDraft = ref('')
+const isSavingName = ref(false)
+
+const displayName = computed(() => props.contact.name || props.contact.phone_number)
+
+function looksLikeMaskedPhone(value: string): boolean {
+  return /^\*+\d{0,4}$/.test(value)
+}
+
+function startEditName() {
+  const current = props.contact.name ?? ''
+  // contact.name is MaskIfPhoneNumber(profile_name) on the backend — for a
+  // contact with no real name, in an org with masking on, that IS the
+  // masked string. Pre-filling it would show the agent something like
+  // **********1234 with nothing sensible to do with it.
+  nameDraft.value = looksLikeMaskedPhone(current) ? '' : current
+  isEditingName.value = true
+}
+
+// Switching contacts while the rename box is open must not leave it open:
+// otherwise saveName() below posts the stale draft to the NEW contact's id.
+watch(() => props.contact.id, () => { isEditingName.value = false })
+
+async function copyText(value: string) {
+  try {
+    await navigator.clipboard.writeText(value)
+    toast.success(t('common.copiedToClipboard'))
+  } catch {
+    toast.error(t('common.clipboardFailed'))
+  }
+}
+
+async function saveName() {
+  const novo = nameDraft.value.trim()
+  if (!novo) return
+  isSavingName.value = true
+  try {
+    await contactsService.updateName(props.contact.id, novo)
+    emit('nameUpdated', novo)
+    isEditingName.value = false
+    toast.success(t('contacts.nameUpdated'))
+  } catch (e) {
+    toast.error(getErrorMessage(e, t('common.failedSave', { resource: t('resources.contact') })))
+  } finally {
+    isSavingName.value = false
+  }
+}
 
 // Fetch tags on mount
 onMounted(async () => {
@@ -270,12 +327,57 @@ async function updateContactTags(tags: string[]) {
               {{ getInitials(contact.name || contact.phone_number) }}
             </AvatarFallback>
           </Avatar>
-          <h4 class="font-medium">
-            {{ contact.name || contact.phone_number }}
-          </h4>
+          <div v-if="!isEditingName" class="flex items-center gap-1">
+            <h4 id="contact-info-name" class="font-medium">{{ displayName }}</h4>
+            <IconButton
+              id="contact-info-copy-name"
+              :icon="Copy"
+              :label="$t('contacts.copyName')"
+              class="h-6 w-6"
+              @click="copyText(displayName)"
+            />
+            <IconButton
+              v-if="canRenameContact"
+              id="contact-info-edit-name"
+              :icon="Pencil"
+              :label="$t('contacts.editName')"
+              class="h-6 w-6"
+              @click="startEditName"
+            />
+          </div>
+          <div v-else class="flex items-center gap-1">
+            <Input
+              id="contact-info-name-input"
+              v-model="nameDraft"
+              class="h-8 w-44"
+              :disabled="isSavingName"
+              @keyup.enter="saveName"
+            />
+            <IconButton
+              id="contact-info-save-name"
+              :icon="Check"
+              :label="$t('contacts.saveName')"
+              class="h-6 w-6"
+              :disabled="isSavingName || !nameDraft.trim()"
+              @click="saveName"
+            />
+            <IconButton
+              :icon="X"
+              :label="$t('common.cancel')"
+              class="h-6 w-6"
+              @click="isEditingName = false"
+            />
+          </div>
           <div class="flex items-center gap-1 text-sm text-muted-foreground mt-1">
             <Phone class="h-3 w-3" />
-            <span>{{ contact.phone_number }}</span>
+            <span id="contact-info-phone">{{ contact.phone_number }}</span>
+            <IconButton
+              id="contact-info-copy-phone"
+              :icon="Copy"
+              :label="$t('contacts.copyPhone')"
+              class="h-6 w-6"
+              @click="copyText(contact.phone_number)"
+            />
           </div>
         </div>
 

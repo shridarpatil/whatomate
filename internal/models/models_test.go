@@ -300,6 +300,22 @@ func TestOccurrenceStagesPermissionNotForAgent(t *testing.T) {
 	assert.NotContains(t, roles["agent"], "occurrences.stages:delete")
 }
 
+// TestAgentHasContactNamePermission guards the seed data behind the
+// contact-rename feature: SeedSystemRolesForOrg and FixSystemRolePermissions
+// grant from this list, and the backfill's organisation guard skips any org
+// that already holds the permission — so a fresh organisation only ever gets
+// contacts.name:write through this entry. Drop it and every new org's agents
+// get 403 on rename, silently, with the rest of the suite still green.
+func TestAgentHasContactNamePermission(t *testing.T) {
+	roles := models.SystemRolePermissions()
+	assert.Contains(t, roles["agent"], "contacts.name:write")
+	// The permission's whole point is narrower than contacts:write — an
+	// agent who can rename must still not be able to edit the rest of the
+	// contact. Without this, "fixing" the feature by widening the agent to
+	// contacts:write would still pass.
+	assert.NotContains(t, roles["agent"], "contacts:write")
+}
+
 func TestViewTeamPermissionInCatalogButNotDefaultRoles(t *testing.T) {
 	// It must exist in the catalog so admins can assign it.
 	found := false

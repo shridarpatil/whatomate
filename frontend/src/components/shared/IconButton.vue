@@ -9,6 +9,7 @@ withDefaults(defineProps<{
   variant?: 'default' | 'destructive' | 'outline' | 'secondary' | 'ghost' | 'link'
   size?: 'default' | 'sm' | 'lg' | 'icon'
   class?: HTMLAttributes['class']
+  id?: string
   disabled?: boolean
   loading?: boolean
 }>(), {
@@ -27,6 +28,7 @@ defineEmits<{
   <Tooltip>
     <TooltipTrigger as-child>
       <Button
+        :id="id"
         :variant="variant"
         :size="size"
         :class="$props.class"

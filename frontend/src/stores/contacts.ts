@@ -413,6 +413,20 @@ export const useContactsStore = defineStore('contacts', () => {
     }
   }
 
+  function updateContactName(contactId: string, name: string) {
+    // The API returns the same value in both `name` and `profile_name`, and
+    // different parts of the UI read one or the other — sync both or the
+    // name changes in the panel but not in the conversation list.
+    const contact = contacts.value.find(c => c.id === contactId)
+    if (contact) {
+      contact.name = name
+      contact.profile_name = name
+    }
+    if (currentContact.value?.id === contactId) {
+      currentContact.value = { ...currentContact.value, name, profile_name: name }
+    }
+  }
+
   // Debounce server-side search so each keystroke doesn't fire a request.
   let searchDebounceHandle: ReturnType<typeof setTimeout> | null = null
   watch(searchQuery, (query) => {
@@ -555,6 +569,7 @@ export const useContactsStore = defineStore('contacts', () => {
     clearReplyingTo,
     updateMessageReactions,
     updateContactTags,
+    updateContactName,
     typingByContact,
     applyAgentTyping,
     clearTyping
