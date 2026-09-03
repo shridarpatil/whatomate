@@ -191,3 +191,69 @@ func BackfillOccurrencePermissions(db *gorm.DB, lo logf.Logger) error {
 		"organisations_processed", pendingOrgs, "links_granted", res.RowsAffected)
 	return nil
 }
+
+// BackfillContactNamePermission concede contacts.name:write aos papéis que
+// já renomeiam contatos hoje e aos que atendem conversas.
+//
+// ATENÇÃO — esta regra difere DE PROPÓSITO da de BackfillOccurrencePermissions.
+// Lá a regra era equivalência exata: ninguém ganhava capacidade nova. Aqui a
+// segunda origem, chat:write, é uma AMPLIAÇÃO deliberada — o produto pediu que
+// quem atende possa corrigir o nome do contato sem depender de um gestor.
+//
+// Puramente aditivo, como o outro: nunca revoga nada, então um rollback
+// continua funcionando com as permissões antigas intactas.
+func BackfillContactNamePermission(db *gorm.DB, lo logf.Logger) error {
+	var seeded int64
+	if err := db.Model(&models.Permission{}).
+		Where("resource = ? AND action = ?", models.ResourceContactName, models.ActionWrite).
+		Count(&seeded).Error; err != nil {
+		return fmt.Errorf("failed to count the contact name permission: %w", err)
+	}
+	if seeded == 0 {
+		lo.Warn("contacts.name permission not seeded yet, did nothing")
+		return nil
+	}
+
+	// SELECT DISTINCT importa: um papel que tenha as duas origens (contacts:write
+	// e chat:write) casaria duas vezes contra o CROSS JOIN e tentaria inserir o
+	// mesmo vínculo em duplicidade dentro da mesma sentença, que o ON CONFLICT
+	// não cobre.
+	res := db.Exec(`
+		INSERT INTO role_permissions (custom_role_id, permission_id)
+		SELECT DISTINCT r.id, target.id
+		FROM custom_roles r
+		JOIN role_permissions rp ON rp.custom_role_id = r.id
+		JOIN permissions src ON src.id = rp.permission_id
+		CROSS JOIN permissions target
+		WHERE r.deleted_at IS NULL
+		  AND target.resource = ? AND target.action = ?
+		  AND (
+		    (src.resource = ? AND src.action = ?)
+		    OR (src.resource = ? AND src.action = ?)
+		  )
+		  AND NOT EXISTS (
+		    SELECT 1
+		    FROM custom_roles r2
+		    JOIN role_permissions rp2 ON rp2.custom_role_id = r2.id
+		    JOIN permissions p2 ON p2.id = rp2.permission_id
+		    WHERE r2.organization_id = r.organization_id
+		      AND r2.deleted_at IS NULL
+		      AND p2.resource = ?
+		  )
+		ON CONFLICT DO NOTHING`,
+		models.ResourceContactName, models.ActionWrite,
+		models.ResourceContacts, models.ActionWrite,
+		models.ResourceChat, models.ActionWrite,
+		models.ResourceContactName,
+	)
+	if res.Error != nil {
+		return fmt.Errorf("failed to grant the contact name permission: %w", res.Error)
+	}
+
+	if res.RowsAffected == 0 {
+		lo.Info("contact name backfill: nothing pending")
+		return nil
+	}
+	lo.Info("contact name backfill complete", "links_granted", res.RowsAffected)
+	return nil
+}

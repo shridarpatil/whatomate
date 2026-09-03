@@ -1274,6 +1274,70 @@ func (a *App) GetContactSessionData(r *fastglue.Request) error {
 	return r.SendEnvelope(response)
 }
 
+// UpdateContactNameRequest carrega o único campo que este endpoint aceita.
+type UpdateContactNameRequest struct {
+	Name string `json:"name"`
+}
+
+// UpdateContactName renomeia o contato e nada mais.
+//
+// Endpoint próprio em vez de um caminho dentro de UpdateContact: um endpoint,
+// um portão. Um condicional dentro do update largo teria de acertar quais
+// campos ignorar, e erraria em silêncio no dia em que alguém acrescentasse um.
+func (a *App) UpdateContactName(r *fastglue.Request) error {
+	orgID, userID, err := a.requireAuth(r, models.ResourceContactName, models.ActionWrite)
+	if err != nil {
+		return nil
+	}
+
+	contactID, err := parsePathUUID(r, "id", "contact")
+	if err != nil {
+		return nil
+	}
+
+	contact, err := findByIDAndOrg[models.Contact](a.DB, r, contactID, orgID, "Contact")
+	if err != nil {
+		return nil
+	}
+
+	// A permissão não pode furar a visibilidade: renomear contato que o
+	// usuário não enxerga seria acesso lateral ao escopo de conversa.
+	if !a.canInteractWithConversation(userID, orgID, contact) {
+		return r.SendErrorEnvelope(fasthttp.StatusForbidden,
+			"You do not have access to this conversation", nil, "")
+	}
+
+	var req UpdateContactNameRequest
+	if err := a.decodeRequest(r, &req); err != nil {
+		return nil
+	}
+
+	name := strings.TrimSpace(req.Name)
+	if name == "" {
+		return r.SendErrorEnvelope(fasthttp.StatusBadRequest, "name is required", nil, "")
+	}
+
+	// Com mask_phone_numbers ligado, um nome que parece telefone é exibido
+	// como ****1234. Salvar esse valor gravaria a máscara por cima do número
+	// real, sem volta. Nome de gente não tem asterisco.
+	if strings.Contains(name, "*") {
+		return r.SendErrorEnvelope(fasthttp.StatusBadRequest,
+			"name cannot contain masked characters", nil, "")
+	}
+
+	if err := a.DB.Model(contact).Update("profile_name", name).Error; err != nil {
+		a.Log.Error("Failed to rename contact", "error", err, "contact_id", contactID)
+		return r.SendErrorEnvelope(fasthttp.StatusInternalServerError,
+			"Failed to rename contact", nil, "")
+	}
+
+	return r.SendEnvelope(map[string]any{
+		"id":           contactID,
+		"name":         name,
+		"profile_name": name,
+	})
+}
+
 // UpdateContactTagsRequest represents the request body for updating contact tags
 type UpdateContactTagsRequest struct {
 	Tags []string `json:"tags"`

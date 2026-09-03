@@ -201,3 +201,104 @@ func TestBackfill_NoOpWhenPermissionsNotSeeded(t *testing.T) {
 	require.NoError(t, database.BackfillOccurrencePermissions(db, testLog()),
 		"sem as permissoes semeadas o backfill deve nao fazer nada, sem erro")
 }
+
+func TestBackfillContactName_GrantsFromContactsWrite(t *testing.T) {
+	db := testutil.SetupTestDB(t)
+	cleanAll(t, db)
+	require.NoError(t, database.SeedPermissionsAndRoles(db))
+
+	org := testutil.CreateTestOrganization(t, db)
+	role := testutil.CreateTestRoleWithKeys(t, db, org.ID, "gestor",
+		[]string{"contacts:read", "contacts:write"})
+
+	require.NoError(t, database.BackfillContactNamePermission(db, testLog()))
+
+	assert.Contains(t, roleKeys(t, db, role.ID), "contacts.name:write")
+}
+
+// A AMPLIACAO deliberada: quem atende passa a poder renomear, mesmo sem
+// contacts:write. Difere de proposito da regra de equivalencia do CRM.
+func TestBackfillContactName_GrantsFromChatWrite(t *testing.T) {
+	db := testutil.SetupTestDB(t)
+	cleanAll(t, db)
+	require.NoError(t, database.SeedPermissionsAndRoles(db))
+
+	org := testutil.CreateTestOrganization(t, db)
+	role := testutil.CreateTestRoleWithKeys(t, db, org.ID, "atendente",
+		[]string{"chat:read", "chat:write", "contacts:read"})
+
+	require.NoError(t, database.BackfillContactNamePermission(db, testLog()))
+
+	assert.Contains(t, roleKeys(t, db, role.ID), "contacts.name:write")
+}
+
+func TestBackfillContactName_SkipsRoleWithNeither(t *testing.T) {
+	db := testutil.SetupTestDB(t)
+	cleanAll(t, db)
+	require.NoError(t, database.SeedPermissionsAndRoles(db))
+
+	org := testutil.CreateTestOrganization(t, db)
+	role := testutil.CreateTestRoleWithKeys(t, db, org.ID, "so-relatorios",
+		[]string{"analytics:read"})
+
+	require.NoError(t, database.BackfillContactNamePermission(db, testLog()))
+
+	keys := roleKeys(t, db, role.ID)
+	assert.NotContains(t, keys, "contacts.name:write")
+	assert.Equal(t, []string{"analytics:read"}, keys)
+}
+
+func TestBackfillContactName_IsIdempotent(t *testing.T) {
+	db := testutil.SetupTestDB(t)
+	cleanAll(t, db)
+	require.NoError(t, database.SeedPermissionsAndRoles(db))
+
+	org := testutil.CreateTestOrganization(t, db)
+	role := testutil.CreateTestRoleWithKeys(t, db, org.ID, "atendente",
+		[]string{"chat:read", "chat:write"})
+
+	require.NoError(t, database.BackfillContactNamePermission(db, testLog()))
+	first := len(roleKeys(t, db, role.ID))
+	require.NoError(t, database.BackfillContactNamePermission(db, testLog()))
+	assert.Equal(t, first, len(roleKeys(t, db, role.ID)), "rodar duas vezes duplicou vinculos")
+}
+
+func TestBackfillContactName_NeverRemovesAnything(t *testing.T) {
+	db := testutil.SetupTestDB(t)
+	cleanAll(t, db)
+	require.NoError(t, database.SeedPermissionsAndRoles(db))
+
+	org := testutil.CreateTestOrganization(t, db)
+	role := testutil.CreateTestRoleWithKeys(t, db, org.ID, "atendente",
+		[]string{"chat:read", "chat:write", "contacts:read"})
+
+	require.NoError(t, database.BackfillContactNamePermission(db, testLog()))
+
+	keys := roleKeys(t, db, role.ID)
+	assert.Contains(t, keys, "chat:read")
+	assert.Contains(t, keys, "chat:write")
+	assert.Contains(t, keys, "contacts:read")
+}
+
+func TestBackfillContactName_SkipsOrganisationAlreadyMigrated(t *testing.T) {
+	db := testutil.SetupTestDB(t)
+	cleanAll(t, db)
+	require.NoError(t, database.SeedPermissionsAndRoles(db))
+
+	migrada := testutil.CreateTestOrganization(t, db)
+	testutil.CreateTestRoleWithKeys(t, db, migrada.ID, "ja-tem",
+		[]string{"chat:read", "contacts.name:write"})
+	depois := testutil.CreateTestRoleWithKeys(t, db, migrada.ID, "criado-depois",
+		[]string{"chat:read", "chat:write"})
+
+	pendente := testutil.CreateTestOrganization(t, db)
+	pendenteRole := testutil.CreateTestRoleWithKeys(t, db, pendente.ID, "atendente",
+		[]string{"chat:read", "chat:write"})
+
+	require.NoError(t, database.BackfillContactNamePermission(db, testLog()))
+
+	assert.NotContains(t, roleKeys(t, db, depois.ID), "contacts.name:write",
+		"organizacao ja migrada deveria ser pulada inteira")
+	assert.Contains(t, roleKeys(t, db, pendenteRole.ID), "contacts.name:write",
+		"organizacao pendente deveria ser processada")
+}
