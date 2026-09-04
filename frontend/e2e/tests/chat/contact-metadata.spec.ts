@@ -56,9 +56,13 @@ test.describe('Contact Metadata Panel', () => {
   async function openInfoPanel(page: import('@playwright/test').Page) {
     await chatPage.goto(contactId)
 
-    // Open contact info panel
-    const infoBtn = page.locator('#info-button')
-    await infoBtn.click()
+    // The panel now opens by default when a contact is selected, so this
+    // must be idempotent — #info-button TOGGLES, and clicking unconditionally
+    // would close an already-open panel instead of opening it.
+    const alreadyOpen = await page.getByText('Contact Info').isVisible()
+    if (!alreadyOpen) {
+      await page.locator('#info-button').click()
+    }
 
     // Wait for the panel header to appear
     await expect(page.getByText('Contact Info')).toBeVisible({ timeout: 10000 })

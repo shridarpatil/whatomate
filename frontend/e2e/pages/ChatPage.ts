@@ -158,6 +158,11 @@ export class ChatPage extends BasePage {
    * the panel again.
    */
   async openContactInfo() {
+    // The panel now opens by default when a contact is selected, so this
+    // must be idempotent — #info-button TOGGLES, and calling it unconditionally
+    // would close an already-open panel instead of opening it.
+    const alreadyOpen = await this.page.locator('#contact-info-name').isVisible()
+    if (alreadyOpen) return
     // Note: not `.lucide-info` — this lucide-vue-next version suffixes icon
     // classes with `-icon` (renders `lucide-info-icon`), so that selector
     // matched nothing. #info-button is the stable id ChatView.vue already sets.

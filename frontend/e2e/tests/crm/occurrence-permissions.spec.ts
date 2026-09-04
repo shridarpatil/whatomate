@@ -146,6 +146,12 @@ test.describe('CRM permissions', () => {
     // item pai "Settings" resolve direto para o unico filho que ele pode
     // abrir (AppLayout.vue calcula esse effectivePath), e a linha "Occurrence
     // Stages" aparece expandida por baixo dele.
+    //
+    // A barra nasce recolhida por padrao agora, e os itens de submenu so
+    // renderizam com `item.active && !isCollapsed` — expande primeiro, senao
+    // "Occurrence Stages" nunca chega a montar.
+    await page.getByRole('button', { name: /expand sidebar|expandir/i }).click()
+
     const settingsLink = page.getByRole('menuitem', { name: 'Settings', exact: true })
     await expect(settingsLink).toBeVisible()
     await expect(settingsLink).toHaveAttribute('href', '/settings/occurrence-stages')
