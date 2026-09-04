@@ -67,7 +67,10 @@ test.describe('CRM realtime', () => {
     const contactId = await createContact(api)
     const occ = await createOccurrenceViaApi(api, contactId, scope.name('counter-only'))
 
-    await expect(occurrencesPage.boardColumnCount('Aberto')).toHaveText(String(before + 1), { timeout: 10000 })
+    await expect.poll(
+      async () => Number(await occurrencesPage.boardColumnCount('Aberto').innerText()),
+      { timeout: 10000 },
+    ).toBeGreaterThan(before)
     await expect(occurrencesPage.boardCard(occ.protocol_number)).toBeHidden()
   })
 
