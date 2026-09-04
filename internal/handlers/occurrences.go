@@ -6,6 +6,7 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/shridarpatil/whatomate/internal/models"
+	"github.com/shridarpatil/whatomate/internal/websocket"
 	"github.com/valyala/fasthttp"
 	"github.com/zerodha/fastglue"
 	"gorm.io/gorm"
@@ -182,7 +183,16 @@ func (a *App) CreateOccurrence(r *fastglue.Request) error {
 
 	occ.Stage = stage
 	occ.Contact = contact
-	return r.SendEnvelope(occurrenceToResponse(occ))
+	resp := occurrenceToResponse(occ)
+
+	if a.WSHub != nil {
+		a.WSHub.BroadcastToOrg(orgID, websocket.WSMessage{
+			Type:    websocket.TypeOccurrenceChanged,
+			Payload: resp,
+		})
+	}
+
+	return r.SendEnvelope(resp)
 }
 
 // ListOccurrences returns the cases the user may see, newest first.

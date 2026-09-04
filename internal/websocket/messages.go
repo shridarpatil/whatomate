@@ -41,6 +41,10 @@ const (
 	// Permission types
 	TypePermissionsUpdated = "permissions_updated"
 
+	// Occurrence types
+	TypeOccurrenceChanged      = "occurrence_changed"
+	TypeOccurrenceEventCreated = "occurrence_event_created"
+
 	// Conversation note types
 	TypeConversationNoteCreated = "conversation_note_created"
 	TypeConversationNoteUpdated = "conversation_note_updated"
