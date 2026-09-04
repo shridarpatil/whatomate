@@ -140,6 +140,7 @@ func (w *Worker) HandleRecipientJob(ctx context.Context, job *queue.RecipientJob
 		if campaign.HeaderMediaLocalPath != "" {
 			message.MediaURL = campaign.HeaderMediaLocalPath
 			message.MediaMimeType = campaign.HeaderMediaMimeType
+			message.MediaFilename = campaign.HeaderMediaFilename
 		}
 	}
 

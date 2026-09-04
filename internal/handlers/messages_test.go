@@ -550,11 +550,14 @@ func TestApp_SendOutgoingMessage_TemplateMessage(t *testing.T) {
 	ctx := testutil.TestContext(t)
 
 	req := handlers.OutgoingMessageRequest{
-		Account:    account,
-		Contact:    contact,
-		Type:       models.MessageTypeTemplate,
-		Template:   template,
-		BodyParams: map[string]string{"1": "John", "2": "ORD-123"},
+		Account:             account,
+		Contact:             contact,
+		Type:                models.MessageTypeTemplate,
+		Template:            template,
+		BodyParams:          map[string]string{"1": "John", "2": "ORD-123"},
+		MediaURL:            "/media/documents/invoice.pdf",
+		MediaMimeType:       "application/pdf",
+		HeaderMediaFilename: "invoice.pdf",
 	}
 
 	opts := handlers.ChatbotSendOptions()
@@ -567,6 +570,9 @@ func TestApp_SendOutgoingMessage_TemplateMessage(t *testing.T) {
 	// Verify template message was saved with rendered content
 	assert.Equal(t, models.MessageTypeTemplate, msg.MessageType)
 	assert.Equal(t, "Hello John! Your order ORD-123 is ready.", msg.Content)
+	assert.Equal(t, "/media/documents/invoice.pdf", msg.MediaURL)
+	assert.Equal(t, "application/pdf", msg.MediaMimeType)
+	assert.Equal(t, "invoice.pdf", msg.MediaFilename)
 
 	// Verify template metadata
 	assert.NotNil(t, msg.Metadata)
