@@ -113,10 +113,24 @@ func (a *App) broadcastOccurrenceMessage(orgID, contactID uuid.UUID, assignedUse
 	if a.WSHub == nil {
 		return
 	}
-	a.WSHub.BroadcastToAuthorizedViewers(orgID, contactID, msg)
+	var alsoUserID uuid.UUID
 	if assignedUserID != nil {
-		a.WSHub.BroadcastToUser(orgID, *assignedUserID, msg)
+		alsoUserID = *assignedUserID
 	}
+	// One broadcast pass, not two: BroadcastToAuthorizedViewers followed by a
+	// separate BroadcastToUser would deliver twice to a client that is both
+	// authorized AND the assignee (the common case — CreateOccurrence
+	// defaults the assignee to the creator, who can almost always see their
+	// own conversation). occurrence_changed's board handler isn't idempotent
+	// for an unseen occurrence (it increments a counter), so a duplicate
+	// isn't harmless the way it is for occurrence_event_created.
+	a.WSHub.Broadcast(websocket.BroadcastMessage{
+		OrgID:               orgID,
+		ContactID:           contactID,
+		IgnoreContactFilter: true,
+		AlsoUserID:          alsoUserID,
+		Message:             msg,
+	})
 }
 
 // CreateOccurrence opens a case and issues its protocol.

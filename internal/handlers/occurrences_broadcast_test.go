@@ -467,3 +467,44 @@ func TestOccurrences_CreateBroadcastReachesAssigneeDespiteNoGeneralAuthorization
 
 	readBroadcast(t, assigneeClient, websocket.TypeOccurrenceChanged)
 }
+
+// The prior fix (authorization gate + assignee fan-out) must not deliver the
+// SAME broadcast twice to a client that is both an authorized viewer AND the
+// assignee — occurrence_changed's board handler increments a counter for an
+// unseen occurrence, so a duplicate is a real, visible bug (double-counting),
+// not a cosmetic one.
+func TestOccurrences_CreateBroadcastDeliversExactlyOnceWhenAssigneeIsAlsoAuthorized(t *testing.T) {
+	app := newTestApp(t)
+	org := testutil.CreateTestOrganization(t, app.DB)
+	adminRole := testutil.CreateAdminRole(t, app.DB, org.ID)
+	creator := testutil.CreateTestUser(t, app.DB, org.ID, testutil.WithRoleID(&adminRole.ID))
+	contact := testutil.CreateTestContact(t, app.DB, org.ID)
+
+	hub := websocket.NewHub(testutil.NopLogger())
+	go hub.Run()
+	// The creator (who becomes the default assignee) is ALSO generally
+	// authorized -- this is the case that used to double-deliver.
+	hub.SetConversationAuthorizer(func(userID, orgID, contactID uuid.UUID) bool {
+		return userID == creator.ID
+	})
+	client := websocket.NewClient(hub, nil, creator.ID, org.ID)
+	hub.Register(client)
+	deadline := time.Now().Add(2 * time.Second)
+	for time.Now().Before(deadline) && hub.GetClientCount() != 1 {
+		time.Sleep(5 * time.Millisecond)
+	}
+	require.Equal(t, 1, hub.GetClientCount())
+	app.WSHub = hub
+
+	req := testutil.NewJSONRequest(t, map[string]any{
+		"contact_id": contact.ID.String(), "title": "Autorizado e responsável ao mesmo tempo",
+	})
+	testutil.SetAuthContext(req, org.ID, creator.ID)
+	require.NoError(t, app.CreateOccurrence(req))
+	require.Equal(t, fasthttp.StatusOK, testutil.GetResponseStatusCode(req))
+
+	readBroadcast(t, client, websocket.TypeOccurrenceChanged)
+	// If delivery happened twice, this second message is exactly what would
+	// arrive -- assertNoBroadcast fails the test if it does.
+	assertNoBroadcast(t, client)
+}

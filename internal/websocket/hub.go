@@ -174,7 +174,9 @@ func (h *Hub) broadcastMessage(msg BroadcastMessage) {
 				// Authorization gate: a client must be authorized to view this
 				// conversation before it can receive ANY contact-targeted event.
 				// Nil authorizer preserves legacy behaviour (tests / pre-wiring).
-				if h.authorize != nil && !h.authorize(client.userID, msg.OrgID, msg.ContactID) {
+				// AlsoUserID bypasses the gate for exactly one user (e.g. an
+				// occurrence's assignee) without a second delivery pass.
+				if h.authorize != nil && client.userID != msg.AlsoUserID && !h.authorize(client.userID, msg.OrgID, msg.ContactID) {
 					continue
 				}
 

@@ -94,6 +94,14 @@ type BroadcastMessage struct {
 	// authorized client receives the event even while viewing a different
 	// conversation. The authorization gate still applies. Used for new_message.
 	IgnoreContactFilter bool
+
+	// AlsoUserID bypasses the ContactID authorization gate for exactly this
+	// user, without a second delivery pass — used when a specific user (e.g.
+	// an occurrence's assignee) must receive a ContactID-gated broadcast even
+	// when their general conversation authorization wouldn't otherwise cover
+	// it. Zero value (uuid.Nil) is inert: no client ever has a Nil userID, so
+	// existing callers that don't set this field are unaffected.
+	AlsoUserID uuid.UUID
 }
 
 // ContactStatusChangedPayload is the payload for contact_status_changed events.
