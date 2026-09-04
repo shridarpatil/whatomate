@@ -456,7 +456,16 @@ func (a *App) UpdateOccurrence(r *fastglue.Request) error {
 	}
 
 	a.DB.Preload("Stage").Preload("AssignedUser").First(occ, occ.ID)
-	return r.SendEnvelope(occurrenceToResponse(*occ))
+	resp := occurrenceToResponse(*occ)
+
+	if a.WSHub != nil {
+		a.WSHub.BroadcastToOrg(orgID, websocket.WSMessage{
+			Type:    websocket.TypeOccurrenceChanged,
+			Payload: resp,
+		})
+	}
+
+	return r.SendEnvelope(resp)
 }
 
 // ChangeOccurrenceStage moves a case and records the transition. Entering a

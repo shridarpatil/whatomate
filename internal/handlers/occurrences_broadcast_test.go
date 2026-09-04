@@ -121,3 +121,60 @@ func TestOccurrences_CreateFailureBroadcastsNothing(t *testing.T) {
 
 	assertNoBroadcast(t, client)
 }
+
+func TestOccurrences_UpdateBroadcastsOccurrenceChanged(t *testing.T) {
+	app := newTestApp(t)
+	org := testutil.CreateTestOrganization(t, app.DB)
+	adminRole := testutil.CreateAdminRole(t, app.DB, org.ID)
+	user := testutil.CreateTestUser(t, app.DB, org.ID, testutil.WithRoleID(&adminRole.ID))
+	contact := testutil.CreateTestContact(t, app.DB, org.ID)
+	stage, err := app.InitialStageForTest(org.ID)
+	require.NoError(t, err)
+
+	occ := models.Occurrence{
+		OrganizationID: org.ID, ContactID: contact.ID, Title: "Original",
+		StageID: stage.ID, OpenedByUserID: user.ID,
+	}
+	require.NoError(t, app.CreateOccurrenceForTest(&occ))
+
+	hub, client := newTestHubWithClient(t, org.ID)
+	app.WSHub = hub
+
+	req := authedJSON(t, app, org.ID, user.ID, "PUT", occ.ID, map[string]any{"title": "Atualizado"})
+	require.NoError(t, app.UpdateOccurrence(req))
+	require.Equal(t, fasthttp.StatusOK, testutil.GetResponseStatusCode(req))
+
+	msg := readBroadcast(t, client, websocket.TypeOccurrenceChanged)
+	payload, ok := msg.Payload.(map[string]any)
+	require.True(t, ok)
+	assert.Equal(t, occ.ID.String(), payload["id"])
+	assert.Equal(t, "Atualizado", payload["title"])
+}
+
+// assigned_user_id inexistente barra o UPDATE antes de qualquer escrita.
+func TestOccurrences_UpdateFailureBroadcastsNothing(t *testing.T) {
+	app := newTestApp(t)
+	org := testutil.CreateTestOrganization(t, app.DB)
+	adminRole := testutil.CreateAdminRole(t, app.DB, org.ID)
+	user := testutil.CreateTestUser(t, app.DB, org.ID, testutil.WithRoleID(&adminRole.ID))
+	contact := testutil.CreateTestContact(t, app.DB, org.ID)
+	stage, err := app.InitialStageForTest(org.ID)
+	require.NoError(t, err)
+
+	occ := models.Occurrence{
+		OrganizationID: org.ID, ContactID: contact.ID, Title: "Original",
+		StageID: stage.ID, OpenedByUserID: user.ID,
+	}
+	require.NoError(t, app.CreateOccurrenceForTest(&occ))
+
+	hub, client := newTestHubWithClient(t, org.ID)
+	app.WSHub = hub
+
+	req := authedJSON(t, app, org.ID, user.ID, "PUT", occ.ID, map[string]any{
+		"title": "Não deve emitir nada", "assigned_user_id": uuid.New().String(),
+	})
+	require.NoError(t, app.UpdateOccurrence(req))
+	require.Equal(t, fasthttp.StatusBadRequest, testutil.GetResponseStatusCode(req))
+
+	assertNoBroadcast(t, client)
+}
