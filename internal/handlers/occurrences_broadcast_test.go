@@ -178,3 +178,104 @@ func TestOccurrences_UpdateFailureBroadcastsNothing(t *testing.T) {
 
 	assertNoBroadcast(t, client)
 }
+
+// ChangeOccurrenceStage dispara os dois eventos, de tipos diferentes — não
+// um "evento de WebSocket" contado uma vez. A mudança de etapa grava a
+// ocorrência e o evento automático de timeline como duas escritas distintas,
+// e cada uma tem seu próprio broadcast (spec §2, correção registrada).
+func TestOccurrences_ChangeStageBroadcastsBothEventTypes(t *testing.T) {
+	app := newTestApp(t)
+	org := testutil.CreateTestOrganization(t, app.DB)
+	adminRole := testutil.CreateAdminRole(t, app.DB, org.ID)
+	user := testutil.CreateTestUser(t, app.DB, org.ID, testutil.WithRoleID(&adminRole.ID))
+	contact := testutil.CreateTestContact(t, app.DB, org.ID)
+	require.NoError(t, app.EnsureDefaultStagesForTest(org.ID))
+
+	var stages []models.OccurrenceStage
+	require.NoError(t, app.DB.Where("organization_id = ? AND is_closing = ?", org.ID, false).
+		Order("position ASC").Find(&stages).Error)
+	require.GreaterOrEqual(t, len(stages), 2,
+		"precisa de duas etapas nao-fechadas para o teste nao se misturar com o evento closed")
+	from, to := stages[0], stages[1]
+
+	occ := models.Occurrence{
+		OrganizationID: org.ID, ContactID: contact.ID, Title: "Muda de etapa",
+		StageID: from.ID, OpenedByUserID: user.ID,
+	}
+	require.NoError(t, app.CreateOccurrenceForTest(&occ))
+
+	hub, client := newTestHubWithClient(t, org.ID)
+	app.WSHub = hub
+
+	req := authedJSON(t, app, org.ID, user.ID, "PUT", occ.ID, map[string]any{"stage_id": to.ID.String()})
+	require.NoError(t, app.ChangeOccurrenceStage(req))
+	require.Equal(t, fasthttp.StatusOK, testutil.GetResponseStatusCode(req))
+
+	changedMsg := readBroadcast(t, client, websocket.TypeOccurrenceChanged)
+	changedPayload, ok := changedMsg.Payload.(map[string]any)
+	require.True(t, ok)
+	assert.Equal(t, occ.ID.String(), changedPayload["id"])
+	assert.Equal(t, to.ID.String(), changedPayload["stage_id"])
+
+	eventMsg := readBroadcast(t, client, websocket.TypeOccurrenceEventCreated)
+	eventPayload, ok := eventMsg.Payload.(map[string]any)
+	require.True(t, ok)
+	assert.Equal(t, occ.ID.String(), eventPayload["occurrence_id"])
+	assert.Equal(t, string(models.OccurrenceEventStageChange), eventPayload["type"])
+
+	// Só os dois — a etapa de destino não é de fechamento, então nenhum
+	// evento "closed" (e portanto nenhum terceiro broadcast) entra em jogo.
+	assertNoBroadcast(t, client)
+}
+
+// Reenviar a etapa atual é no-op: nenhum broadcast de nenhum tipo.
+func TestOccurrences_ChangeStageSameStageBroadcastsNothing(t *testing.T) {
+	app := newTestApp(t)
+	org := testutil.CreateTestOrganization(t, app.DB)
+	adminRole := testutil.CreateAdminRole(t, app.DB, org.ID)
+	user := testutil.CreateTestUser(t, app.DB, org.ID, testutil.WithRoleID(&adminRole.ID))
+	contact := testutil.CreateTestContact(t, app.DB, org.ID)
+	stage, err := app.InitialStageForTest(org.ID)
+	require.NoError(t, err)
+
+	occ := models.Occurrence{
+		OrganizationID: org.ID, ContactID: contact.ID, Title: "Mesma etapa",
+		StageID: stage.ID, OpenedByUserID: user.ID,
+	}
+	require.NoError(t, app.CreateOccurrenceForTest(&occ))
+
+	hub, client := newTestHubWithClient(t, org.ID)
+	app.WSHub = hub
+
+	req := authedJSON(t, app, org.ID, user.ID, "PUT", occ.ID, map[string]any{"stage_id": stage.ID.String()})
+	require.NoError(t, app.ChangeOccurrenceStage(req))
+	require.Equal(t, fasthttp.StatusOK, testutil.GetResponseStatusCode(req))
+
+	assertNoBroadcast(t, client)
+}
+
+// stage_id inexistente barra a operação antes de qualquer escrita.
+func TestOccurrences_ChangeStageFailureBroadcastsNothing(t *testing.T) {
+	app := newTestApp(t)
+	org := testutil.CreateTestOrganization(t, app.DB)
+	adminRole := testutil.CreateAdminRole(t, app.DB, org.ID)
+	user := testutil.CreateTestUser(t, app.DB, org.ID, testutil.WithRoleID(&adminRole.ID))
+	contact := testutil.CreateTestContact(t, app.DB, org.ID)
+	stage, err := app.InitialStageForTest(org.ID)
+	require.NoError(t, err)
+
+	occ := models.Occurrence{
+		OrganizationID: org.ID, ContactID: contact.ID, Title: "Falha",
+		StageID: stage.ID, OpenedByUserID: user.ID,
+	}
+	require.NoError(t, app.CreateOccurrenceForTest(&occ))
+
+	hub, client := newTestHubWithClient(t, org.ID)
+	app.WSHub = hub
+
+	req := authedJSON(t, app, org.ID, user.ID, "PUT", occ.ID, map[string]any{"stage_id": uuid.New().String()})
+	require.NoError(t, app.ChangeOccurrenceStage(req))
+	require.Equal(t, fasthttp.StatusNotFound, testutil.GetResponseStatusCode(req))
+
+	assertNoBroadcast(t, client)
+}

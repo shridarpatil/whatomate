@@ -317,8 +317,15 @@ type OccurrenceEventRequest struct {
 }
 
 // OccurrenceEventResponse is the API shape of a timeline entry.
+//
+// OccurrenceID is redundant for both REST endpoints that return this struct
+// (both are already scoped to one occurrence by the URL) but is required by
+// occurrence_event_created WebSocket broadcasts, which fan out to the whole
+// organization via BroadcastToOrg and need a way to say which occurrence's
+// timeline they belong to.
 type OccurrenceEventResponse struct {
 	ID            uuid.UUID  `json:"id"`
+	OccurrenceID  uuid.UUID  `json:"occurrence_id"`
 	Type          string     `json:"type"`
 	Content       string     `json:"content"`
 	Metadata      any        `json:"metadata"`
@@ -522,18 +529,46 @@ func (a *App) ChangeOccurrenceStage(r *fastglue.Request) error {
 		return r.SendErrorEnvelope(fasthttp.StatusInternalServerError,
 			"Failed to change stage", nil, "")
 	}
+	occ.Stage = target
 
-	eventType := models.OccurrenceEventStageChange
-	a.DB.Create(&models.OccurrenceEvent{
+	resp := occurrenceToResponse(*occ)
+	if a.WSHub != nil {
+		a.WSHub.BroadcastToOrg(orgID, websocket.WSMessage{
+			Type:    websocket.TypeOccurrenceChanged,
+			Payload: resp,
+		})
+	}
+
+	stageChangeEvent := models.OccurrenceEvent{
 		OrganizationID: orgID,
 		OccurrenceID:   occ.ID,
-		Type:           eventType,
+		Type:           models.OccurrenceEventStageChange,
 		Content:        from.Name + " → " + target.Name,
 		Metadata:       models.JSONB{"from_stage_id": from.ID.String(), "to_stage_id": target.ID.String()},
 		CreatedByID:    &userID,
-	})
+	}
+	a.DB.Create(&stageChangeEvent)
+	if a.WSHub != nil {
+		a.WSHub.BroadcastToOrg(orgID, websocket.WSMessage{
+			Type: websocket.TypeOccurrenceEventCreated,
+			Payload: OccurrenceEventResponse{
+				ID:           stageChangeEvent.ID,
+				OccurrenceID: stageChangeEvent.OccurrenceID,
+				Type:         string(stageChangeEvent.Type),
+				Content:      stageChangeEvent.Content,
+				Metadata:     stageChangeEvent.Metadata,
+				CreatedByID:  stageChangeEvent.CreatedByID,
+				CreatedAt:    stageChangeEvent.CreatedAt,
+			},
+		})
+	}
 
 	if target.IsClosing {
+		// Sem broadcast aqui: a spec fixa "exatamente um
+		// occurrence_event_created" por mudança de etapa (§4, revisado duas
+		// vezes). O evento automático "closed" continua sendo gravado — só
+		// não tem eco em tempo real; a tela de detalhe volta a mostrá-lo no
+		// próximo fetchEvents.
 		a.DB.Create(&models.OccurrenceEvent{
 			OrganizationID: orgID,
 			OccurrenceID:   occ.ID,
@@ -542,8 +577,7 @@ func (a *App) ChangeOccurrenceStage(r *fastglue.Request) error {
 		})
 	}
 
-	occ.Stage = target
-	return r.SendEnvelope(occurrenceToResponse(*occ))
+	return r.SendEnvelope(resp)
 }
 
 // ListOccurrenceEvents returns the timeline, oldest first.
@@ -567,12 +601,13 @@ func (a *App) ListOccurrenceEvents(r *fastglue.Request) error {
 	result := make([]OccurrenceEventResponse, len(events))
 	for i, e := range events {
 		result[i] = OccurrenceEventResponse{
-			ID:          e.ID,
-			Type:        string(e.Type),
-			Content:     e.Content,
-			Metadata:    e.Metadata,
-			CreatedByID: e.CreatedByID,
-			CreatedAt:   e.CreatedAt,
+			ID:           e.ID,
+			OccurrenceID: e.OccurrenceID,
+			Type:         string(e.Type),
+			Content:      e.Content,
+			Metadata:     e.Metadata,
+			CreatedByID:  e.CreatedByID,
+			CreatedAt:    e.CreatedAt,
 		}
 		if e.CreatedBy != nil {
 			result[i].CreatedByName = e.CreatedBy.FullName
