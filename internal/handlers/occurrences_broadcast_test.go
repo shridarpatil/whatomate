@@ -96,6 +96,10 @@ func TestOccurrences_CreateBroadcastsOccurrenceChanged(t *testing.T) {
 	require.True(t, ok, "payload deve ser um objeto")
 	assert.Equal(t, occ.ID.String(), payload["id"], "occurrence_id do broadcast deve bater com o persistido")
 	assert.Equal(t, occ.StageID.String(), payload["stage_id"], "stage_id do broadcast deve bater com o persistido")
+	// CreateOccurrence defaults the assignee to its creator, so this must not
+	// be silently empty (Finding 2: the broadcast used to skip the
+	// AssignedUser preload that occurrenceToResponse needs).
+	assert.NotEmpty(t, payload["assigned_user_name"], "assigned_user_name nao deve vir vazio no broadcast")
 }
 
 // A falha de validação (assignee inexistente) barra a criação antes de
@@ -222,6 +226,9 @@ func TestOccurrences_ChangeStageBroadcastsBothEventTypes(t *testing.T) {
 	require.True(t, ok)
 	assert.Equal(t, occ.ID.String(), eventPayload["occurrence_id"])
 	assert.Equal(t, string(models.OccurrenceEventStageChange), eventPayload["type"])
+	// Finding 3: the stage-change event broadcast used to leave
+	// created_by_name empty.
+	assert.NotEmpty(t, eventPayload["created_by_name"], "created_by_name nao deve vir vazio no broadcast")
 
 	// Só os dois — a etapa de destino não é de fechamento, então nenhum
 	// evento "closed" (e portanto nenhum terceiro broadcast) entra em jogo.
@@ -357,6 +364,9 @@ func TestOccurrences_CreateEventBroadcastsOccurrenceEventCreated(t *testing.T) {
 	assert.Equal(t, occ.ID.String(), payload["occurrence_id"])
 	assert.Equal(t, string(models.OccurrenceEventNote), payload["type"])
 	assert.Equal(t, "Cliente ligou de volta", payload["content"])
+	// Finding 3: CreateOccurrenceEvent's broadcast used to leave
+	// created_by_name empty.
+	assert.NotEmpty(t, payload["created_by_name"], "created_by_name nao deve vir vazio no broadcast")
 }
 
 // content vazio barra a criação antes de qualquer escrita.
@@ -383,4 +393,77 @@ func TestOccurrences_CreateEventFailureBroadcastsNothing(t *testing.T) {
 	require.Equal(t, fasthttp.StatusBadRequest, testutil.GetResponseStatusCode(req))
 
 	assertNoBroadcast(t, client)
+}
+
+// The whole point of switching off BroadcastToOrg: a client with no
+// relationship to the contact must not receive the occurrence's data.
+func TestOccurrences_CreateBroadcastDeniesUnauthorizedViewer(t *testing.T) {
+	app := newTestApp(t)
+	org := testutil.CreateTestOrganization(t, app.DB)
+	adminRole := testutil.CreateAdminRole(t, app.DB, org.ID)
+	creator := testutil.CreateTestUser(t, app.DB, org.ID, testutil.WithRoleID(&adminRole.ID))
+	contact := testutil.CreateTestContact(t, app.DB, org.ID)
+
+	hub := websocket.NewHub(testutil.NopLogger())
+	go hub.Run()
+	// Only the creator (who becomes the default assignee) is "authorized".
+	hub.SetConversationAuthorizer(func(userID, orgID, contactID uuid.UUID) bool {
+		return userID == creator.ID
+	})
+	authorized := websocket.NewClient(hub, nil, creator.ID, org.ID)
+	stranger := websocket.NewClient(hub, nil, uuid.New(), org.ID)
+	hub.Register(authorized)
+	hub.Register(stranger)
+	deadline := time.Now().Add(2 * time.Second)
+	for time.Now().Before(deadline) && hub.GetClientCount() != 2 {
+		time.Sleep(5 * time.Millisecond)
+	}
+	require.Equal(t, 2, hub.GetClientCount())
+	app.WSHub = hub
+
+	req := testutil.NewJSONRequest(t, map[string]any{
+		"contact_id": contact.ID.String(), "title": "Só autorizado recebe",
+	})
+	testutil.SetAuthContext(req, org.ID, creator.ID)
+	require.NoError(t, app.CreateOccurrence(req))
+	require.Equal(t, fasthttp.StatusOK, testutil.GetResponseStatusCode(req))
+
+	readBroadcast(t, authorized, websocket.TypeOccurrenceChanged)
+	assertNoBroadcast(t, stranger)
+}
+
+// The assignee exception: a case assigned to you is yours to see even when
+// your general visibility doesn't cover the contact — loadAuthorizedOccurrence
+// already grants this on the REST path; the broadcast must grant it too.
+func TestOccurrences_CreateBroadcastReachesAssigneeDespiteNoGeneralAuthorization(t *testing.T) {
+	app := newTestApp(t)
+	org := testutil.CreateTestOrganization(t, app.DB)
+	adminRole := testutil.CreateAdminRole(t, app.DB, org.ID)
+	creator := testutil.CreateTestUser(t, app.DB, org.ID, testutil.WithRoleID(&adminRole.ID))
+	assignee := testutil.CreateTestUser(t, app.DB, org.ID, testutil.WithRoleID(&adminRole.ID))
+	contact := testutil.CreateTestContact(t, app.DB, org.ID)
+
+	hub := websocket.NewHub(testutil.NopLogger())
+	go hub.Run()
+	// Nobody passes the general check -- the assignee fan-out is the only
+	// thing that can deliver this broadcast.
+	hub.SetConversationAuthorizer(func(userID, orgID, contactID uuid.UUID) bool { return false })
+	assigneeClient := websocket.NewClient(hub, nil, assignee.ID, org.ID)
+	hub.Register(assigneeClient)
+	deadline := time.Now().Add(2 * time.Second)
+	for time.Now().Before(deadline) && hub.GetClientCount() != 1 {
+		time.Sleep(5 * time.Millisecond)
+	}
+	require.Equal(t, 1, hub.GetClientCount())
+	app.WSHub = hub
+
+	req := testutil.NewJSONRequest(t, map[string]any{
+		"contact_id": contact.ID.String(), "title": "Responsável recebe mesmo sem autorização geral",
+		"assigned_user_id": assignee.ID.String(),
+	})
+	testutil.SetAuthContext(req, org.ID, creator.ID)
+	require.NoError(t, app.CreateOccurrence(req))
+	require.Equal(t, fasthttp.StatusOK, testutil.GetResponseStatusCode(req))
+
+	readBroadcast(t, assigneeClient, websocket.TypeOccurrenceChanged)
 }

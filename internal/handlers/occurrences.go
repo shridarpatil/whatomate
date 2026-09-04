@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/shridarpatil/whatomate/internal/audit"
 	"github.com/shridarpatil/whatomate/internal/models"
 	"github.com/shridarpatil/whatomate/internal/websocket"
 	"github.com/valyala/fasthttp"
@@ -103,6 +104,21 @@ func (a *App) resolveAssignee(orgID uuid.UUID, raw *string) (*uuid.UUID, error) 
 	return &id, nil
 }
 
+// broadcastOccurrenceMessage delivers a WebSocket message about an occurrence
+// to everyone authorized to view its conversation, plus its assignee even
+// when the assignee's own visibility scope doesn't otherwise cover the
+// contact — mirroring the exception loadAuthorizedOccurrence already grants
+// on the REST path (see the isAssignee comment there).
+func (a *App) broadcastOccurrenceMessage(orgID, contactID uuid.UUID, assignedUserID *uuid.UUID, msg websocket.WSMessage) {
+	if a.WSHub == nil {
+		return
+	}
+	a.WSHub.BroadcastToAuthorizedViewers(orgID, contactID, msg)
+	if assignedUserID != nil {
+		a.WSHub.BroadcastToUser(orgID, *assignedUserID, msg)
+	}
+}
+
 // CreateOccurrence opens a case and issues its protocol.
 func (a *App) CreateOccurrence(r *fastglue.Request) error {
 	orgID, userID, err := a.requireAuth(r, models.ResourceOccurrences, models.ActionWrite)
@@ -183,14 +199,23 @@ func (a *App) CreateOccurrence(r *fastglue.Request) error {
 
 	occ.Stage = stage
 	occ.Contact = contact
+	// Reload the assignee relation so the broadcast payload's
+	// assigned_user_name isn't silently empty for the common case (an
+	// occurrence defaults its assignee to its creator) — the REST response
+	// below has always had this gap too, harmless only because nothing
+	// rendered it; now something does (the live board/detail views).
+	if occ.AssignedUserID != nil {
+		var assignee models.User
+		if err := a.DB.First(&assignee, "id = ?", *occ.AssignedUserID).Error; err == nil {
+			occ.AssignedUser = &assignee
+		}
+	}
 	resp := occurrenceToResponse(occ)
 
-	if a.WSHub != nil {
-		a.WSHub.BroadcastToOrg(orgID, websocket.WSMessage{
-			Type:    websocket.TypeOccurrenceChanged,
-			Payload: resp,
-		})
-	}
+	a.broadcastOccurrenceMessage(orgID, occ.ContactID, occ.AssignedUserID, websocket.WSMessage{
+		Type:    websocket.TypeOccurrenceChanged,
+		Payload: resp,
+	})
 
 	return r.SendEnvelope(resp)
 }
@@ -465,12 +490,10 @@ func (a *App) UpdateOccurrence(r *fastglue.Request) error {
 	a.DB.Preload("Stage").Preload("AssignedUser").First(occ, occ.ID)
 	resp := occurrenceToResponse(*occ)
 
-	if a.WSHub != nil {
-		a.WSHub.BroadcastToOrg(orgID, websocket.WSMessage{
-			Type:    websocket.TypeOccurrenceChanged,
-			Payload: resp,
-		})
-	}
+	a.broadcastOccurrenceMessage(orgID, occ.ContactID, occ.AssignedUserID, websocket.WSMessage{
+		Type:    websocket.TypeOccurrenceChanged,
+		Payload: resp,
+	})
 
 	return r.SendEnvelope(resp)
 }
@@ -529,15 +552,15 @@ func (a *App) ChangeOccurrenceStage(r *fastglue.Request) error {
 		return r.SendErrorEnvelope(fasthttp.StatusInternalServerError,
 			"Failed to change stage", nil, "")
 	}
-	occ.Stage = target
+	// Preload (not just occ.Stage = target) so the broadcast payload's
+	// assigned_user_name isn't silently empty — mirrors UpdateOccurrence.
+	a.DB.Preload("Stage").Preload("AssignedUser").First(occ, occ.ID)
 
 	resp := occurrenceToResponse(*occ)
-	if a.WSHub != nil {
-		a.WSHub.BroadcastToOrg(orgID, websocket.WSMessage{
-			Type:    websocket.TypeOccurrenceChanged,
-			Payload: resp,
-		})
-	}
+	a.broadcastOccurrenceMessage(orgID, occ.ContactID, occ.AssignedUserID, websocket.WSMessage{
+		Type:    websocket.TypeOccurrenceChanged,
+		Payload: resp,
+	})
 
 	stageChangeEvent := models.OccurrenceEvent{
 		OrganizationID: orgID,
@@ -547,20 +570,21 @@ func (a *App) ChangeOccurrenceStage(r *fastglue.Request) error {
 		Metadata:       models.JSONB{"from_stage_id": from.ID.String(), "to_stage_id": target.ID.String()},
 		CreatedByID:    &userID,
 	}
-	if err := a.DB.Create(&stageChangeEvent).Error; err == nil && a.WSHub != nil {
-		a.WSHub.BroadcastToOrg(orgID, websocket.WSMessage{
+	if err := a.DB.Create(&stageChangeEvent).Error; err == nil {
+		a.broadcastOccurrenceMessage(orgID, occ.ContactID, occ.AssignedUserID, websocket.WSMessage{
 			Type: websocket.TypeOccurrenceEventCreated,
 			Payload: OccurrenceEventResponse{
-				ID:           stageChangeEvent.ID,
-				OccurrenceID: stageChangeEvent.OccurrenceID,
-				Type:         string(stageChangeEvent.Type),
-				Content:      stageChangeEvent.Content,
-				Metadata:     stageChangeEvent.Metadata,
-				CreatedByID:  stageChangeEvent.CreatedByID,
-				CreatedAt:    stageChangeEvent.CreatedAt,
+				ID:            stageChangeEvent.ID,
+				OccurrenceID:  stageChangeEvent.OccurrenceID,
+				Type:          string(stageChangeEvent.Type),
+				Content:       stageChangeEvent.Content,
+				Metadata:      stageChangeEvent.Metadata,
+				CreatedByID:   stageChangeEvent.CreatedByID,
+				CreatedByName: audit.GetUserName(a.DB, userID),
+				CreatedAt:     stageChangeEvent.CreatedAt,
 			},
 		})
-	} else if err != nil {
+	} else {
 		a.Log.Error("Failed to create stage-change event", "error", err)
 	}
 
@@ -650,20 +674,19 @@ func (a *App) CreateOccurrenceEvent(r *fastglue.Request) error {
 	}
 
 	resp := OccurrenceEventResponse{
-		ID:           event.ID,
-		OccurrenceID: event.OccurrenceID,
-		Type:         string(event.Type),
-		Content:      event.Content,
-		CreatedByID:  event.CreatedByID,
-		CreatedAt:    event.CreatedAt,
+		ID:            event.ID,
+		OccurrenceID:  event.OccurrenceID,
+		Type:          string(event.Type),
+		Content:       event.Content,
+		CreatedByID:   event.CreatedByID,
+		CreatedByName: audit.GetUserName(a.DB, userID),
+		CreatedAt:     event.CreatedAt,
 	}
 
-	if a.WSHub != nil {
-		a.WSHub.BroadcastToOrg(orgID, websocket.WSMessage{
-			Type:    websocket.TypeOccurrenceEventCreated,
-			Payload: resp,
-		})
-	}
+	a.broadcastOccurrenceMessage(orgID, occ.ContactID, occ.AssignedUserID, websocket.WSMessage{
+		Type:    websocket.TypeOccurrenceEventCreated,
+		Payload: resp,
+	})
 
 	return r.SendEnvelope(resp)
 }
