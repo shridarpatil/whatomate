@@ -291,7 +291,7 @@ func (a *App) ListContactOccurrences(r *fastglue.Request) error {
 // UpdateOccurrenceRequest is the body for editing a case's editable fields.
 type UpdateOccurrenceRequest struct {
 	Title          string  `json:"title"`
-	Description    string  `json:"description"`
+	Description    *string `json:"description"`
 	Priority       string  `json:"priority"`
 	AssignedUserID *string `json:"assigned_user_id"`
 }
@@ -396,8 +396,13 @@ func (a *App) UpdateOccurrence(r *fastglue.Request) error {
 	}
 
 	updates := map[string]any{
-		"title":       req.Title,
-		"description": req.Description,
+		"title": req.Title,
+	}
+	// req.Description != nil is what says the field participated in the
+	// request at all, mirroring req.AssignedUserID below. A PUT that omits
+	// description leaves it untouched; only an explicit "" clears it.
+	if req.Description != nil {
+		updates["description"] = *req.Description
 	}
 	if req.Priority != "" {
 		updates["priority"] = req.Priority

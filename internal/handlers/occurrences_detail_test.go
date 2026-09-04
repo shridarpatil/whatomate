@@ -276,3 +276,56 @@ func TestOccurrences_UpdateAssigneeAbsentVsEmpty(t *testing.T) {
 	require.NoError(t, app.DB.First(&afterEmpty, "id = ?", occ.ID).Error)
 	assert.Nil(t, afterEmpty.AssignedUserID, `PUT com assigned_user_id:"" deve remover o responsável`)
 }
+
+// PUT sem description preserva o valor existente; PUT com description:""
+// apaga; PUT com description preenchido grava o novo valor. Mesmo padrão de
+// TestOccurrences_UpdateAssigneeAbsentVsEmpty.
+func TestOccurrences_UpdateDescriptionAbsentVsEmpty(t *testing.T) {
+	app := newTestApp(t)
+	org := testutil.CreateTestOrganization(t, app.DB)
+	adminRole := testutil.CreateAdminRole(t, app.DB, org.ID)
+	user := testutil.CreateTestUser(t, app.DB, org.ID, testutil.WithRoleID(&adminRole.ID))
+	contact := testutil.CreateTestContact(t, app.DB, org.ID)
+	stage, err := app.InitialStageForTest(org.ID)
+	require.NoError(t, err)
+
+	occ := models.Occurrence{
+		OrganizationID: org.ID, ContactID: contact.ID, Title: "Original",
+		Description: "Descrição original", StageID: stage.ID, OpenedByUserID: user.ID,
+	}
+	require.NoError(t, app.CreateOccurrenceForTest(&occ))
+
+	// PUT without description: it must be preserved.
+	req := authedJSON(t, app, org.ID, user.ID, "PUT", occ.ID, map[string]any{"title": "Atualizado"})
+	require.NoError(t, app.UpdateOccurrence(req))
+	require.Equal(t, fasthttp.StatusOK, testutil.GetResponseStatusCode(req))
+
+	var afterAbsent models.Occurrence
+	require.NoError(t, app.DB.First(&afterAbsent, "id = ?", occ.ID).Error)
+	assert.Equal(t, "Descrição original", afterAbsent.Description,
+		"PUT sem description não deve apagar a descrição existente")
+
+	// PUT with description: "": it must be cleared.
+	req2 := authedJSON(t, app, org.ID, user.ID, "PUT", occ.ID, map[string]any{
+		"title": "Atualizado", "description": "",
+	})
+	require.NoError(t, app.UpdateOccurrence(req2))
+	require.Equal(t, fasthttp.StatusOK, testutil.GetResponseStatusCode(req2))
+
+	var afterEmpty models.Occurrence
+	require.NoError(t, app.DB.First(&afterEmpty, "id = ?", occ.ID).Error)
+	assert.Empty(t, afterEmpty.Description, `PUT com description:"" deve apagar a descrição`)
+
+	// PUT with description filled: regression check — a client that always
+	// sends the field (any form that loads the record before editing) must
+	// see no change in behavior.
+	req3 := authedJSON(t, app, org.ID, user.ID, "PUT", occ.ID, map[string]any{
+		"title": "Atualizado", "description": "Nova descrição",
+	})
+	require.NoError(t, app.UpdateOccurrence(req3))
+	require.Equal(t, fasthttp.StatusOK, testutil.GetResponseStatusCode(req3))
+
+	var afterFilled models.Occurrence
+	require.NoError(t, app.DB.First(&afterFilled, "id = ?", occ.ID).Error)
+	assert.Equal(t, "Nova descrição", afterFilled.Description)
+}
