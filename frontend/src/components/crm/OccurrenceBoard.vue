@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
+import { ref, onMounted, onUnmounted } from 'vue'
 import { watchDebounced } from '@vueuse/core'
 import { useRouter } from 'vue-router'
 import draggable from 'vuedraggable'
@@ -9,6 +9,7 @@ import { getErrorMessage } from '@/lib/api-utils'
 import { Button } from '@/components/ui/button'
 import { Spinner } from '@/components/ui/spinner'
 import { useOccurrencesStore } from '@/stores/occurrences'
+import { wsService } from '@/services/websocket'
 import type { Occurrence, OccurrenceStage } from '@/services/api'
 import OccurrenceCard from './OccurrenceCard.vue'
 
@@ -116,6 +117,60 @@ function hasMore(col: ColumnState): boolean {
   return col.items.length < col.total
 }
 
+/**
+ * Aplica um occurrence_changed vindo de qualquer origem (criação, edição ou
+ * mudança de etapa, por este cliente ou por outro) contra as colunas já
+ * carregadas.
+ *
+ * Uma ocorrência já conhecida é atualizada no lugar, ou movida de coluna se a
+ * etapa mudou — mantendo a ordenação por opened_at, o mesmo invariante que o
+ * arrastar-e-soltar garante depois de um movimento bem-sucedido. Uma
+ * ocorrência desconhecida só soma no total do cabeçalho, sem inserir cartão
+ * fora da ordem de paginação (spec §2, regra da criação).
+ *
+ * ponytail: o payload não diz se a origem foi CreateOccurrence ou
+ * UpdateOccurrence/ChangeOccurrenceStage — as três emitem o mesmo tipo de
+ * mensagem. Uma ocorrência desconhecida por estar apenas fora da página
+ * carregada (não por ser nova) também cai no ramo "soma o total", o que pode
+ * super-contar por um até o próximo "Load More" ou recarregamento da coluna,
+ * que sempre resincroniza `total` pela resposta do servidor. Sem esse sinal
+ * extra no payload não há como distinguir os dois casos no cliente.
+ */
+function handleOccurrenceChanged(payload: Occurrence) {
+  const targetCol = columns.value.find(c => c.stage.id === payload.stage_id)
+  if (!targetCol) return // etapa sem coluna carregada ainda
+
+  let sourceCol: ColumnState | null = null
+  let sourceIdx = -1
+  for (const col of columns.value) {
+    const idx = col.items.findIndex(i => i.id === payload.id)
+    if (idx !== -1) {
+      sourceCol = col
+      sourceIdx = idx
+      break
+    }
+  }
+
+  if (!sourceCol) {
+    targetCol.total += 1
+    return
+  }
+
+  if (sourceCol.stage.id === targetCol.stage.id) {
+    sourceCol.items.splice(sourceIdx, 1, payload)
+    sortByOpenedAtDesc(sourceCol.items)
+    return
+  }
+
+  sourceCol.items.splice(sourceIdx, 1)
+  sourceCol.total = Math.max(0, sourceCol.total - 1)
+  targetCol.items.push(payload)
+  targetCol.total += 1
+  sortByOpenedAtDesc(targetCol.items)
+}
+
+let unsubscribeOccurrenceChanged: (() => void) | null = null
+
 function onDragStart(col: ColumnState, evt: { oldIndex: number }) {
   const item = col.items[evt.oldIndex]
   dragOrigin = item ? { occurrenceId: item.id, fromStageId: col.stage.id } : null
@@ -185,6 +240,11 @@ async function onColumnChange(toCol: ColumnState, evt: { added?: { element: Occu
 onMounted(async () => {
   if (store.stages.length === 0) await store.fetchStages()
   await loadAll()
+  unsubscribeOccurrenceChanged = wsService.onOccurrenceChanged(handleOccurrenceChanged)
+})
+
+onUnmounted(() => {
+  unsubscribeOccurrenceChanged?.()
 })
 
 // O quadro espalha uma única busca em N requisições (uma por coluna), então um
