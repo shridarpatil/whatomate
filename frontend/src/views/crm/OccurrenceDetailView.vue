@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { useRoute } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { toast } from 'vue-sonner'
@@ -10,9 +10,10 @@ import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Textarea } from '@/components/ui/textarea'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
-import { occurrencesService, type Occurrence } from '@/services/api'
+import { occurrencesService, type Occurrence, type OccurrenceEvent } from '@/services/api'
 import { useOccurrencesStore } from '@/stores/occurrences'
 import { useUsersStore } from '@/stores/users'
+import { wsService } from '@/services/websocket'
 import { formatDateTime } from '@/lib/utils'
 import { getErrorMessage } from '@/lib/api-utils'
 import {
@@ -92,6 +93,24 @@ async function loadOccurrence() {
   }
 }
 
+/** Só reage a eventos da própria ocorrência aberta — o resto é ignorado. */
+function handleOccurrenceChanged(payload: Occurrence) {
+  if (occurrence.value && payload.id === occurrence.value.id) {
+    occurrence.value = payload
+  }
+}
+
+function handleOccurrenceEventCreated(payload: OccurrenceEvent) {
+  if (!occurrence.value || payload.occurrence_id !== occurrence.value.id) return
+  // Evita um flash de item duplicado quando esta própria aba é a origem: o
+  // submit de nota já recarrega store.events do REST logo em seguida.
+  if (store.events.some(e => e.id === payload.id)) return
+  store.events.push(payload)
+}
+
+let unsubscribeOccurrenceChanged: (() => void) | null = null
+let unsubscribeOccurrenceEventCreated: (() => void) | null = null
+
 async function handleStageChange(stageId: string) {
   if (!occurrence.value || stageId === occurrence.value.stage_id) return
   try {
@@ -168,6 +187,14 @@ onMounted(async () => {
     store.fetchEvents(occurrenceId.value),
     usersStore.users.length === 0 ? usersStore.fetchUsers().catch(() => {}) : Promise.resolve(),
   ])
+
+  unsubscribeOccurrenceChanged = wsService.onOccurrenceChanged(handleOccurrenceChanged)
+  unsubscribeOccurrenceEventCreated = wsService.onOccurrenceEventCreated(handleOccurrenceEventCreated)
+})
+
+onUnmounted(() => {
+  unsubscribeOccurrenceChanged?.()
+  unsubscribeOccurrenceEventCreated?.()
 })
 </script>
 
