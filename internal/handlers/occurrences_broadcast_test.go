@@ -228,6 +228,55 @@ func TestOccurrences_ChangeStageBroadcastsBothEventTypes(t *testing.T) {
 	assertNoBroadcast(t, client)
 }
 
+// Entrar numa etapa de fechamento também dispara exatamente os dois
+// broadcasts (occurrence_changed + stage_change) — o evento "closed" que a
+// própria etapa grava não ganha eco em tempo real (spec §4, revisado duas
+// vezes), então nenhum terceiro broadcast pode aparecer aqui.
+func TestOccurrences_ChangeStageToClosingBroadcastsStageChangeOnly(t *testing.T) {
+	app := newTestApp(t)
+	org := testutil.CreateTestOrganization(t, app.DB)
+	adminRole := testutil.CreateAdminRole(t, app.DB, org.ID)
+	user := testutil.CreateTestUser(t, app.DB, org.ID, testutil.WithRoleID(&adminRole.ID))
+	contact := testutil.CreateTestContact(t, app.DB, org.ID)
+	require.NoError(t, app.EnsureDefaultStagesForTest(org.ID))
+
+	initial, err := app.InitialStageForTest(org.ID)
+	require.NoError(t, err)
+
+	var closing models.OccurrenceStage
+	require.NoError(t, app.DB.Where("organization_id = ? AND is_closing = ?", org.ID, true).
+		First(&closing).Error)
+
+	occ := models.Occurrence{
+		OrganizationID: org.ID, ContactID: contact.ID, Title: "Fecha com broadcast",
+		StageID: initial.ID, OpenedByUserID: user.ID,
+	}
+	require.NoError(t, app.CreateOccurrenceForTest(&occ))
+
+	hub, client := newTestHubWithClient(t, org.ID)
+	app.WSHub = hub
+
+	req := authedJSON(t, app, org.ID, user.ID, "PUT", occ.ID, map[string]any{"stage_id": closing.ID.String()})
+	require.NoError(t, app.ChangeOccurrenceStage(req))
+	require.Equal(t, fasthttp.StatusOK, testutil.GetResponseStatusCode(req))
+
+	changedMsg := readBroadcast(t, client, websocket.TypeOccurrenceChanged)
+	changedPayload, ok := changedMsg.Payload.(map[string]any)
+	require.True(t, ok)
+	assert.Equal(t, occ.ID.String(), changedPayload["id"])
+	assert.Equal(t, closing.ID.String(), changedPayload["stage_id"])
+
+	eventMsg := readBroadcast(t, client, websocket.TypeOccurrenceEventCreated)
+	eventPayload, ok := eventMsg.Payload.(map[string]any)
+	require.True(t, ok)
+	assert.Equal(t, occ.ID.String(), eventPayload["occurrence_id"])
+	assert.Equal(t, string(models.OccurrenceEventStageChange), eventPayload["type"])
+
+	// O evento "closed" é gravado (ver TestOccurrences_CloseAndReopen) mas não
+	// tem broadcast próprio — nenhum terceiro broadcast pode chegar aqui.
+	assertNoBroadcast(t, client)
+}
+
 // Reenviar a etapa atual é no-op: nenhum broadcast de nenhum tipo.
 func TestOccurrences_ChangeStageSameStageBroadcastsNothing(t *testing.T) {
 	app := newTestApp(t)

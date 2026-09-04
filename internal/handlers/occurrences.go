@@ -547,8 +547,7 @@ func (a *App) ChangeOccurrenceStage(r *fastglue.Request) error {
 		Metadata:       models.JSONB{"from_stage_id": from.ID.String(), "to_stage_id": target.ID.String()},
 		CreatedByID:    &userID,
 	}
-	a.DB.Create(&stageChangeEvent)
-	if a.WSHub != nil {
+	if err := a.DB.Create(&stageChangeEvent).Error; err == nil && a.WSHub != nil {
 		a.WSHub.BroadcastToOrg(orgID, websocket.WSMessage{
 			Type: websocket.TypeOccurrenceEventCreated,
 			Payload: OccurrenceEventResponse{
@@ -561,6 +560,8 @@ func (a *App) ChangeOccurrenceStage(r *fastglue.Request) error {
 				CreatedAt:    stageChangeEvent.CreatedAt,
 			},
 		})
+	} else if err != nil {
+		a.Log.Error("Failed to create stage-change event", "error", err)
 	}
 
 	if target.IsClosing {
