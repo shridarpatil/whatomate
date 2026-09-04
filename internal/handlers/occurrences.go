@@ -359,9 +359,9 @@ type OccurrenceEventRequest struct {
 //
 // OccurrenceID is redundant for both REST endpoints that return this struct
 // (both are already scoped to one occurrence by the URL) but is required by
-// occurrence_event_created WebSocket broadcasts, which fan out to the whole
-// organization via BroadcastToOrg and need a way to say which occurrence's
-// timeline they belong to.
+// occurrence_event_created WebSocket broadcasts, which fan out to every
+// authorized viewer of the occurrence's conversation (broadcastOccurrenceMessage)
+// and need a way to say which occurrence's timeline they belong to.
 type OccurrenceEventResponse struct {
 	ID            uuid.UUID  `json:"id"`
 	OccurrenceID  uuid.UUID  `json:"occurrence_id"`

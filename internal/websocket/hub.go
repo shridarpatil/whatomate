@@ -176,7 +176,10 @@ func (h *Hub) broadcastMessage(msg BroadcastMessage) {
 				// Nil authorizer preserves legacy behaviour (tests / pre-wiring).
 				// AlsoUserID bypasses the gate for exactly one user (e.g. an
 				// occurrence's assignee) without a second delivery pass.
-				if h.authorize != nil && client.userID != msg.AlsoUserID && !h.authorize(client.userID, msg.OrgID, msg.ContactID) {
+				// AlsoUserID == uuid.Nil (unset) must never match: nothing else
+				// guarantees a client's userID can't also be uuid.Nil, so the
+				// explicit check is what keeps an unset AlsoUserID inert.
+				if h.authorize != nil && (msg.AlsoUserID == uuid.Nil || client.userID != msg.AlsoUserID) && !h.authorize(client.userID, msg.OrgID, msg.ContactID) {
 					continue
 				}
 
