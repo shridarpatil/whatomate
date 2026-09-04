@@ -328,3 +328,59 @@ func TestOccurrences_ChangeStageFailureBroadcastsNothing(t *testing.T) {
 
 	assertNoBroadcast(t, client)
 }
+
+func TestOccurrences_CreateEventBroadcastsOccurrenceEventCreated(t *testing.T) {
+	app := newTestApp(t)
+	org := testutil.CreateTestOrganization(t, app.DB)
+	adminRole := testutil.CreateAdminRole(t, app.DB, org.ID)
+	user := testutil.CreateTestUser(t, app.DB, org.ID, testutil.WithRoleID(&adminRole.ID))
+	contact := testutil.CreateTestContact(t, app.DB, org.ID)
+	stage, err := app.InitialStageForTest(org.ID)
+	require.NoError(t, err)
+
+	occ := models.Occurrence{
+		OrganizationID: org.ID, ContactID: contact.ID, Title: "Nota manual",
+		StageID: stage.ID, OpenedByUserID: user.ID,
+	}
+	require.NoError(t, app.CreateOccurrenceForTest(&occ))
+
+	hub, client := newTestHubWithClient(t, org.ID)
+	app.WSHub = hub
+
+	req := authedJSON(t, app, org.ID, user.ID, "POST", occ.ID, map[string]any{"content": "Cliente ligou de volta"})
+	require.NoError(t, app.CreateOccurrenceEvent(req))
+	require.Equal(t, fasthttp.StatusOK, testutil.GetResponseStatusCode(req))
+
+	msg := readBroadcast(t, client, websocket.TypeOccurrenceEventCreated)
+	payload, ok := msg.Payload.(map[string]any)
+	require.True(t, ok)
+	assert.Equal(t, occ.ID.String(), payload["occurrence_id"])
+	assert.Equal(t, string(models.OccurrenceEventNote), payload["type"])
+	assert.Equal(t, "Cliente ligou de volta", payload["content"])
+}
+
+// content vazio barra a criação antes de qualquer escrita.
+func TestOccurrences_CreateEventFailureBroadcastsNothing(t *testing.T) {
+	app := newTestApp(t)
+	org := testutil.CreateTestOrganization(t, app.DB)
+	adminRole := testutil.CreateAdminRole(t, app.DB, org.ID)
+	user := testutil.CreateTestUser(t, app.DB, org.ID, testutil.WithRoleID(&adminRole.ID))
+	contact := testutil.CreateTestContact(t, app.DB, org.ID)
+	stage, err := app.InitialStageForTest(org.ID)
+	require.NoError(t, err)
+
+	occ := models.Occurrence{
+		OrganizationID: org.ID, ContactID: contact.ID, Title: "Conteúdo vazio",
+		StageID: stage.ID, OpenedByUserID: user.ID,
+	}
+	require.NoError(t, app.CreateOccurrenceForTest(&occ))
+
+	hub, client := newTestHubWithClient(t, org.ID)
+	app.WSHub = hub
+
+	req := authedJSON(t, app, org.ID, user.ID, "POST", occ.ID, map[string]any{"content": ""})
+	require.NoError(t, app.CreateOccurrenceEvent(req))
+	require.Equal(t, fasthttp.StatusBadRequest, testutil.GetResponseStatusCode(req))
+
+	assertNoBroadcast(t, client)
+}

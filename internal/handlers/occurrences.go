@@ -649,11 +649,21 @@ func (a *App) CreateOccurrenceEvent(r *fastglue.Request) error {
 			"Failed to create event", nil, "")
 	}
 
-	return r.SendEnvelope(OccurrenceEventResponse{
-		ID:          event.ID,
-		Type:        string(event.Type),
-		Content:     event.Content,
-		CreatedByID: event.CreatedByID,
-		CreatedAt:   event.CreatedAt,
-	})
+	resp := OccurrenceEventResponse{
+		ID:           event.ID,
+		OccurrenceID: event.OccurrenceID,
+		Type:         string(event.Type),
+		Content:      event.Content,
+		CreatedByID:  event.CreatedByID,
+		CreatedAt:    event.CreatedAt,
+	}
+
+	if a.WSHub != nil {
+		a.WSHub.BroadcastToOrg(orgID, websocket.WSMessage{
+			Type:    websocket.TypeOccurrenceEventCreated,
+			Payload: resp,
+		})
+	}
+
+	return r.SendEnvelope(resp)
 }
