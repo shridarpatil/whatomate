@@ -90,6 +90,10 @@ const WS_TYPE_CONVERSATION_NOTE_CREATED = 'conversation_note_created'
 const WS_TYPE_CONVERSATION_NOTE_UPDATED = 'conversation_note_updated'
 const WS_TYPE_CONVERSATION_NOTE_DELETED = 'conversation_note_deleted'
 
+// Occurrence types
+const WS_TYPE_OCCURRENCE_CHANGED = 'occurrence_changed'
+const WS_TYPE_OCCURRENCE_EVENT_CREATED = 'occurrence_event_created'
+
 interface WSMessage {
   type: string
   payload: any
@@ -108,6 +112,8 @@ class WebSocketService {
   private isConnected = false
   private hasConnectedBefore = false
   private campaignStatsCallbacks: ((payload: any) => void)[] = []
+  private occurrenceChangedCallbacks: ((payload: any) => void)[] = []
+  private occurrenceEventCreatedCallbacks: ((payload: any) => void)[] = []
   private getTokenFn: (() => Promise<string | null>) | null = null
   // Contact the user is currently viewing. Held here (not just on the server)
   // because set_contact is per-connection state the server loses on every
@@ -315,6 +321,12 @@ class WebSocketService {
           break
         case WS_TYPE_CONVERSATION_NOTE_DELETED:
           useNotesStore().onNoteDeleted(message.payload.id)
+          break
+        case WS_TYPE_OCCURRENCE_CHANGED:
+          this.handleOccurrenceChanged(message.payload)
+          break
+        case WS_TYPE_OCCURRENCE_EVENT_CREATED:
+          this.handleOccurrenceEventCreated(message.payload)
           break
         default:
           // Unknown message type, ignore
@@ -584,6 +596,14 @@ class WebSocketService {
     this.campaignStatsCallbacks.forEach(callback => callback(payload))
   }
 
+  private handleOccurrenceChanged(payload: any) {
+    this.occurrenceChangedCallbacks.forEach(callback => callback(payload))
+  }
+
+  private handleOccurrenceEventCreated(payload: any) {
+    this.occurrenceEventCreatedCallbacks.forEach(callback => callback(payload))
+  }
+
   private async handlePermissionsUpdated() {
     const authStore = useAuthStore()
 
@@ -610,6 +630,26 @@ class WebSocketService {
       const index = this.campaignStatsCallbacks.indexOf(callback)
       if (index > -1) {
         this.campaignStatsCallbacks.splice(index, 1)
+      }
+    }
+  }
+
+  onOccurrenceChanged(callback: (payload: any) => void) {
+    this.occurrenceChangedCallbacks.push(callback)
+    return () => {
+      const index = this.occurrenceChangedCallbacks.indexOf(callback)
+      if (index > -1) {
+        this.occurrenceChangedCallbacks.splice(index, 1)
+      }
+    }
+  }
+
+  onOccurrenceEventCreated(callback: (payload: any) => void) {
+    this.occurrenceEventCreatedCallbacks.push(callback)
+    return () => {
+      const index = this.occurrenceEventCreatedCallbacks.indexOf(callback)
+      if (index > -1) {
+        this.occurrenceEventCreatedCallbacks.splice(index, 1)
       }
     }
   }

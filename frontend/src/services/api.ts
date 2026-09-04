@@ -1313,6 +1313,7 @@ export interface Occurrence {
 
 export interface OccurrenceEvent {
   id: string
+  occurrence_id: string
   type: 'opened' | 'note' | 'stage_change' | 'assignment' | 'protocol_sent' | 'closed'
   content: string
   metadata: Record<string, unknown> | null
