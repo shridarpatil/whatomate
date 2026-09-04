@@ -45,7 +45,7 @@ O quadro Kanban, por desenho, é uma visão da organização inteira, não de um
 
 **Payload:** a ocorrência inteira, no mesmo formato que a API REST já devolve (`occurrenceToResponse`) — sem payload novo para manter, sem risco de os dois formatos divergirem com o tempo.
 
-**Emitido em:** `CreateOccurrence`, `UpdateOccurrence`, `ChangeOccurrenceStage`.
+**Emitido em:** `CreateOccurrence`, `UpdateOccurrence`, `ChangeOccurrenceStage` — **depois** de a persistência ter sido confirmada com sucesso, nunca antes. Um cliente jamais recebe um estado que acabou não sendo commitado; se o `Create`/`Update` falhar, não há broadcast.
 
 **Entrega:** `BroadcastToOrg`, sempre.
 
@@ -67,6 +67,10 @@ O quadro Kanban, por desenho, é uma visão da organização inteira, não de um
 
 > **Correção registrada.** Uma versão anterior desta spec afirmava que `CreateOccurrenceEvent` sozinho cobria os dois casos. Falso — conferido lendo `ChangeOccurrenceStage` linha a linha antes de escrever o plano.
 
+**Sem DTO próprio de WebSocket.** O payload reaproveita a mesma struct de resposta que `conversation_note_created` já usa para evento de timeline — não se cria uma forma nova só para ocorrências. Isso vale tanto para o evento manual quanto para o automático de mudança de etapa: os dois usam exatamente o mesmo formato de payload, porque os dois são a mesma tabela (`OccurrenceEvent`) representada da mesma forma.
+
+**`ChangeOccurrenceStage` emite dois eventos distintos, não um.** Quando uma mudança de etapa é bem-sucedida, o handler grava duas coisas — a ocorrência atualizada (`stage_id`, `closed_at` se aplicável) e o evento automático de timeline — e cada gravação tem seu próprio broadcast: um `occurrence_changed` e um `occurrence_event_created`. O teste de "exatamente um" em §4 é por tipo de evento, não "exatamente um evento de WebSocket no total" — `ChangeOccurrenceStage` sozinho produz dois.
+
 **Entrega:** `BroadcastToOrg`.
 
 **No detalhe:** processa apenas quando `occurrence_id` do evento corresponde à ocorrência aberta na tela; caso contrário, ignora. O quadro não faz nada com este evento — a timeline não aparece no card.
@@ -85,8 +89,11 @@ O quadro Kanban, por desenho, é uma visão da organização inteira, não de um
 - `PUT` sem `description` no corpo preserva o valor existente.
 - `PUT` com `"description": ""` apaga.
 - `PUT` com `description` preenchido grava o novo valor (regressão do comportamento atual).
-- `CreateOccurrence`, `UpdateOccurrence` e `ChangeOccurrenceStage` cada um dispara exatamente um `occurrence_changed` via `BroadcastToOrg`, com o payload no formato de `occurrenceToResponse`.
-- `CreateOccurrenceEvent` dispara `occurrence_event_created`; uma mudança de etapa (que cria evento automático) dispara o mesmo tipo de evento, não um tipo diferente.
+- `CreateOccurrence` dispara exatamente um `occurrence_changed` via `BroadcastToOrg`; o payload é conferido campo a campo contra o estado persistido — em particular `occurrence_id` e `stage_id`, porque são os dois campos que o quadro usa para decidir entre atualizar, mover de coluna ou só incrementar o contador. Não basta o evento existir; o teste falha se `occurrence_id` ou `stage_id` não baterem com a linha gravada.
+- `UpdateOccurrence` dispara exatamente um `occurrence_changed`.
+- `ChangeOccurrenceStage` dispara **exatamente um `occurrence_changed` e exatamente um `occurrence_event_created`** — dois eventos, de dois tipos diferentes, não um evento genérico contado uma vez. O teste verifica os dois tipos separadamente; contar "quantidade total de mensagens de WebSocket" não seria a asserção certa aqui.
+- Nenhum dos três broadcasts acontece se a operação falhar antes da persistência (erro de validação, conflito, etc.) — testado forçando uma falha e confirmando zero mensagens no canal.
+- `CreateOccurrenceEvent` (nota manual) dispara `occurrence_event_created` com o mesmo formato de payload que `conversation_note_created` usa.
 
 **Playwright**
 
