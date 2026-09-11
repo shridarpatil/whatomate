@@ -8,6 +8,7 @@ import { Badge } from '@/components/ui/badge'
 import { Reply, ExternalLink, Phone, PhoneCall, Workflow, Trash2 } from 'lucide-vue-next'
 import type { ButtonConfig } from '@/types/flow-preview'
 import { flowsService } from '@/services/api'
+import { MAX_BUTTON_TITLE_LENGTH, nextButtonId } from '@/lib/whatsappButtons'
 
 type ButtonType = 'reply' | 'url' | 'phone' | 'voice_call' | 'flow'
 
@@ -80,7 +81,7 @@ function emitButtons(next: ButtonConfig[]) {
 function addButton(type: ButtonType) {
   if (props.buttons.length >= effectiveMax.value) return
   const newButton: ButtonConfig = {
-    id: `btn_${props.buttons.length + 1}`,
+    id: nextButtonId(props.buttons),
     title: '',
     type,
   }
@@ -212,6 +213,7 @@ function typeIcon(type?: string) {
           <Input
             :model-value="btn.title"
             :placeholder="$t('flowBuilder.buttonTitle', 'Button title')"
+            :maxlength="MAX_BUTTON_TITLE_LENGTH"
             class="h-7 flex-1 text-xs"
             :disabled="disabled"
             @update:model-value="updateButton(idx, { title: String($event) })"

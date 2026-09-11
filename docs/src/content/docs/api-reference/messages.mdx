@@ -21,10 +21,16 @@ GET /api/contacts/{id}/messages
 
 | Parameter | Type | Description |
 |-----------|------|-------------|
-| `page` | integer | Page number (default: 1) |
-| `limit` | integer | Items per page (default: 50, max: 100) |
-| `before` | string | Get messages before this message ID |
-| `after` | string | Get messages after this message ID |
+| `page` | integer | Page number (default: 1). Page 1 is the **most recent** messages. |
+| `limit` | integer | Page size, 1–100. Default 50. |
+| `before_id` | string | Cursor — return the `limit` messages immediately older than this message UUID. Mutually exclusive with `page`. |
+| `account` | string | Restrict to one WhatsApp account. |
+
+Messages are always returned in chronological order (oldest first) within the page.
+
+<Aside type="caution">
+  The cursor parameter is `before_id`, not `before`. There is no `after` parameter.
+</Aside>
 
 ### Response
 
@@ -32,26 +38,47 @@ GET /api/contacts/{id}/messages
 {
   "status": "success",
   "data": {
-    "items": [
+    "messages": [
       {
         "id": "uuid",
-        "wa_message_id": "wamid.xxx",
         "contact_id": "uuid",
         "direction": "incoming",
-        "type": "text",
-        "content": {
-          "text": "Hello!"
-        },
+        "message_type": "text",
+        "content": { "body": "Hello!" },
+        "media_url": "",
+        "media_mime_type": "",
+        "media_filename": "",
+        "interactive_data": null,
         "status": "delivered",
-        "timestamp": "2024-01-01T12:00:00Z"
+        "wamid": "wamid.xxx",
+        "error_message": "",
+        "is_reply": false,
+        "reply_to_message_id": null,
+        "reply_to_message": null,
+        "reactions": [],
+        "whatsapp_account": "Main Account",
+        "created_at": "2024-01-01T12:00:00Z",
+        "updated_at": "2024-01-01T12:00:00Z"
       }
     ],
     "total": 100,
     "page": 1,
-    "limit": 50
+    "limit": 50,
+    "has_more": true
   }
 }
 ```
+
+The field is `message_type` (not `type`), the WhatsApp ID is `wamid` (not `wa_message_id`), and
+timestamps are `created_at` / `updated_at` (there is no `timestamp`). A `before_id` request returns
+`messages`, `total` and `has_more` only — no `page`/`limit`.
+
+<Aside type="note">
+  Fetching a contact's messages also marks that contact's incoming messages as read as a side
+  effect. Callers without `contacts:read` are restricted to contacts assigned to them, and — when
+  the org enables `agent_current_conversation_only` — to messages from the contact's most recent
+  chatbot session onwards.
+</Aside>
 
 ## Send Text Message
 
@@ -66,23 +93,47 @@ POST /api/contacts/{id}/messages
 ```json
 {
   "type": "text",
-  "text": "Hello! How can I help you today?"
+  "content": {
+    "body": "Hello! How can I help you today?"
+  }
 }
 ```
 
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `type` | string | Yes | `text` or `interactive` on this endpoint. Media is sent via `POST /api/messages/media`. |
+| `content.body` | string | Yes (for text) | The message text |
+| `interactive` | object | Yes (for `interactive`) | See [Send Interactive Message](#send-interactive-message) |
+| `reply_to_message_id` | string | No | UUID of a message to quote-reply to. Must belong to the same contact, otherwise it is silently ignored. |
+| `whatsapp_account` | string | No | Name of the WhatsApp account to send from; defaults to the contact's account |
+
 ### Response
+
+Returns the created message object (same shape as in the list response above):
 
 ```json
 {
   "status": "success",
   "data": {
     "id": "uuid",
-    "wa_message_id": "wamid.xxx",
+    "contact_id": "uuid",
+    "direction": "outgoing",
+    "message_type": "text",
+    "content": { "body": "Hello! How can I help you today?" },
     "status": "sent",
-    "timestamp": "2024-01-01T12:00:00Z"
+    "wamid": "wamid.xxx",
+    "whatsapp_account": "Main Account",
+    "created_at": "2024-01-01T12:00:00Z",
+    "updated_at": "2024-01-01T12:00:00Z"
   }
 }
 ```
+
+<Aside type="note">
+  A legacy `POST /api/messages` route is kept for backwards compatibility. It
+  maps to the same handler as `POST /api/contacts/{id}/messages` and expects the
+  same request body. Prefer the contact-scoped endpoint for new integrations.
+</Aside>
 
 ## Send Template Message
 
@@ -221,52 +272,80 @@ If your template has a URL button with a dynamic variable (e.g., `https://exampl
 
 ## Send Media Message
 
-Send an image, video, document, or audio message.
+Upload and send an image, video, document, or audio message.
 
 ```bash
 POST /api/messages/media
 ```
 
-### Request Body
+<Aside type="caution">
+  This endpoint takes **`multipart/form-data` with a file upload**, not JSON. There is no
+  `media_url` field — the file is uploaded to Whatomate, which then sends it to Meta.
+</Aside>
 
-```json
-{
-  "contact_id": "uuid",
-  "type": "image",
-  "media_url": "https://example.com/image.jpg",
-  "caption": "Check out this product!"
-}
+### Form Fields
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `contact_id` | text | Yes | UUID of the recipient contact |
+| `file` | file | Yes | The media file |
+| `type` | text | No | `image` (default), `video`, `audio`, or `document` |
+| `caption` | text | No | Caption text |
+| `whatsapp_account` | text | No | Account to send from; defaults to the contact's account |
+
+```bash
+curl -X POST "http://your-server:8080/api/messages/media" \
+  -H "X-API-Key: whm_your_api_key" \
+  -F "contact_id=<uuid>" \
+  -F "type=image" \
+  -F "caption=Check out this product!" \
+  -F "file=@./product.jpg"
 ```
 
-### Supported Media Types
-
-| Type | Formats | Max Size |
-|------|---------|----------|
-| `image` | JPEG, PNG | 5 MB |
-| `video` | MP4, 3GPP | 16 MB |
-| `audio` | AAC, MP3, OGG | 16 MB |
-| `document` | PDF, DOC, XLS, PPT | 100 MB |
+Meta's own size limits apply (roughly 5 MB images, 16 MB audio/video, 100 MB documents); Whatomate
+does not enforce its own cap.
 
 ### Response
+
+Returns the same message object shape as the other send endpoints:
 
 ```json
 {
   "status": "success",
   "data": {
     "id": "uuid",
-    "wa_message_id": "wamid.xxx",
-    "status": "sent"
+    "contact_id": "uuid",
+    "direction": "outgoing",
+    "message_type": "image",
+    "content": { "body": "Check out this product!" },
+    "media_url": "images/…",
+    "media_mime_type": "image/jpeg",
+    "media_filename": "product.jpg",
+    "status": "sent",
+    "whatsapp_account": "Main Account",
+    "created_at": "2024-01-01T12:00:00Z",
+    "updated_at": "2024-01-01T12:00:00Z"
   }
 }
 ```
 
 ## Send Interactive Message
 
-Send interactive messages with buttons or CTA URLs.
+Send interactive messages with buttons, CTA URLs, WhatsApp Flows, or a Call button.
 
 ```bash
 POST /api/contacts/{id}/messages
 ```
+
+The `interactive.type` selects the variant:
+
+| `interactive.type` | Fields used |
+|---|---|
+| `button` | `body`, `buttons: [{id, title}]` |
+| `list` | `body`, `button_text` |
+| `cta_url` | `body`, `button_text`, `url` |
+| `flow` | `flow_id` (required), `body`, `button_text` (CTA label, default `"Open"`), `header`, `first_screen` |
+| `voice_call` | `body`, `display_text`, `ttl_minutes` |
 
 ### Button Message
 
@@ -334,15 +413,63 @@ curl -X POST "http://your-server:8080/api/contacts/{contact_id}/messages" \
 }
 ```
 
+### WhatsApp Flow
+
+```json
+{
+  "type": "interactive",
+  "interactive": {
+    "type": "flow",
+    "flow_id": "<meta_flow_id>",
+    "header": "Order form",
+    "body": "Tap below to place your order",
+    "button_text": "Open form",
+    "first_screen": "WELCOME"
+  }
+}
+```
+
+The flow must belong to your organization, otherwise `400 Flow not found for this organization`.
+Omitting `flow_id` returns `400 flow_id is required to send a flow`.
+
+### Voice Call Button
+
+```json
+{
+  "type": "interactive",
+  "interactive": {
+    "type": "voice_call",
+    "body": "Need help? Call us.",
+    "display_text": "Call support",
+    "ttl_minutes": 60
+  }
+}
+```
+
+Requires the sending account to have Business Calling enabled, otherwise the request is rejected
+with `400`. When the recipient taps the button, the resulting inbound call is sticky-routed back to
+the agent who sent it — the routing payload is stamped server-side from the authenticated user and
+is never read from the request body.
+
 ### Response
+
+Returns the created message object. `interactive_data` carries the rendered interactive payload.
 
 ```json
 {
   "status": "success",
   "data": {
     "id": "uuid",
-    "wa_message_id": "wamid.xxx",
-    "status": "sent"
+    "contact_id": "uuid",
+    "direction": "outgoing",
+    "message_type": "interactive",
+    "content": { "body": "How would you like to proceed?" },
+    "interactive_data": { },
+    "status": "sent",
+    "is_reply": false,
+    "whatsapp_account": "Main Account",
+    "created_at": "2024-01-01T12:00:00Z",
+    "updated_at": "2024-01-01T12:00:00Z"
   }
 }
 ```
@@ -351,12 +478,53 @@ curl -X POST "http://your-server:8080/api/contacts/{contact_id}/messages" \
   Button titles have a maximum length of 20 characters. Button IDs are returned when the user clicks a button.
 </Aside>
 
-## Mark Message as Read
+## Send Reaction
 
-Mark a message as read.
+Add or remove an emoji reaction on a specific message.
 
 ```bash
-PUT /api/messages/{id}/read
+POST /api/contacts/{id}/messages/{message_id}/reaction
+```
+
+### Request Body
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `emoji` | string | Yes | The emoji to react with. Send an empty string (`""`) to remove your existing reaction. |
+
+```json
+{
+  "emoji": "👍"
+}
+```
+
+Each user may have only one reaction per message; sending a new emoji replaces
+the previous one from the same user.
+
+### Response
+
+```json
+{
+  "status": "success",
+  "data": {
+    "message_id": "uuid",
+    "reactions": [
+      {
+        "emoji": "👍",
+        "from_user": "user-uuid"
+      }
+    ]
+  }
+}
+```
+
+## Mark Conversation as Read
+
+Mark all incoming messages from a contact as read. When the account has
+auto read receipts enabled, read receipts are also sent to WhatsApp.
+
+```bash
+POST /api/contacts/{id}/mark-read
 ```
 
 ### Response
@@ -364,9 +532,36 @@ PUT /api/messages/{id}/read
 ```json
 {
   "status": "success",
-  "data": null
+  "data": {
+    "status": "ok"
+  }
 }
 ```
+
+## Mark Message as Read
+
+```bash
+PUT /api/messages/{id}/read
+```
+
+<Aside type="caution">
+  **Not implemented.** This route is registered but currently returns
+  `501 Not implemented yet`. Use [Mark Conversation as Read](#mark-conversation-as-read)
+  (`POST /api/contacts/{id}/mark-read`) instead.
+</Aside>
+
+## Download Media
+
+Stream the media attached to a message. Returns the raw file bytes with the stored MIME type — not
+a JSON envelope.
+
+```bash
+GET /api/media/{message_id}
+```
+
+Returns `404 No media found` when the message has no attachment. Callers without `contacts:read`
+may only fetch media for contacts assigned to them, or for contacts with an active transfer to a
+team they belong to — otherwise `403 Access denied`.
 
 ## Message Status
 
@@ -379,6 +574,10 @@ Messages go through the following status flow:
 | `delivered` | Message delivered to recipient's device |
 | `read` | Message read by recipient |
 | `failed` | Message failed to send |
+| `received` | Set on inbound messages |
+
+Valid `message_type` values are `text`, `image`, `video`, `audio`, `document`, `template`,
+`interactive`, `flow`, `reaction`, `location`, and `contact`.
 
 <Aside type="note">
   Status updates are delivered via webhooks in real-time. Configure your webhook endpoint to receive these updates.

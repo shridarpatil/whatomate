@@ -256,7 +256,7 @@ DELETE /api/organizations/members/{member_id}
 ### Get Settings
 
 ```bash
-GET /api/organizations/settings
+GET /api/org/settings
 ```
 
 #### Response
@@ -278,7 +278,7 @@ GET /api/organizations/settings
 ### Update Settings
 
 ```bash
-PUT /api/organizations/settings
+PUT /api/org/settings
 ```
 
 #### Request Body
@@ -293,6 +293,40 @@ PUT /api/organizations/settings
 ```
 
 All fields are optional — only provided fields are updated.
+
+### Upload Audio
+
+Upload a hold-music or ringback audio file for the organization's calling features. The file is transcoded to OGG/Opus and the resulting filename is stored on the organization's settings (`hold_music_file` / `ringback_file`).
+
+```bash
+POST /api/org/audio?type=hold_music
+```
+
+<Aside type="note">
+  Requires `organizations:write` permission. Send the file as `multipart/form-data` with a `file` field.
+</Aside>
+
+#### Query Parameters
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `type` | string | Yes | Either `hold_music` or `ringback` |
+
+Accepted formats include OGG/Opus, MP3, and WAV. Maximum file size is 5 MB.
+
+#### Response
+
+```json
+{
+  "status": "success",
+  "data": {
+    "filename": "org_<uuid>_hold_music.ogg",
+    "type": "hold_music",
+    "mime_type": "audio/mpeg",
+    "size": 204800
+  }
+}
+```
 
 ## See Also
 

@@ -24,7 +24,7 @@ Whatomate supports WhatsApp voice calling with WebRTC-based audio bridging. Inco
     Record agent-caller audio as OGG/Opus, stored in S3
   </Card>
   <Card title="Outgoing Calls" icon="external">
-    Agents can place outbound calls to contacts from the chat view
+    Agents place outbound calls to contacts from the chat view, once the contact grants call permission
   </Card>
 </CardGrid>
 
@@ -67,9 +67,15 @@ Plays an audio message to the caller. The audio can be uploaded as a file or gen
 |----------|-------------|
 | **Audio** | Upload an audio file (OGG, MP3, WAV, etc.) — automatically transcoded to Opus |
 | **TTS Text** | Type text to generate audio using Piper TTS |
-| **Interruptible** | If enabled, the caller can press a digit to skip the greeting |
+| **Interruptible** | Config key `interruptible` — if enabled, the caller can press a digit to skip the greeting |
 
 The greeting node has one output (`default`) that connects to the next node.
+
+<Aside type="note">
+  At playback time the player reads **Ogg/Opus** packets only, so every file under `audio_dir`
+  (including `hold_music_file` and `ringback_file`) must already be Opus. Uploads through the UI
+  are transcoded for you; files you drop in by hand are not.
+</Aside>
 
 #### Menu
 
@@ -77,18 +83,26 @@ Plays an audio prompt and waits for the caller to press a DTMF digit. Routes the
 
 | Property | Description |
 |----------|-------------|
-| **Audio / TTS** | The prompt audio (e.g., "Press 1 for sales, press 2 for support") |
-| **Timeout** | Seconds to wait for input (default: 10) |
-| **Max Retries** | Number of retries on invalid/no input before following the `max_retries` edge (default: 3) |
+| **Audio / TTS** | The prompt audio (e.g., "Press 1 for sales, press 2 for support") — config key `audio_file` |
+| **Timeout** | Seconds to wait for input, config key `timeout_seconds` (default: 10) |
+| **Max Retries** | Attempts on invalid/no input before following the `max_retries` edge (default: 3) |
 | **Options** | Digit-to-label mappings (e.g., `1` → "Sales", `2` → "Support") |
 
 **Output handles:**
 - `digit:1`, `digit:2`, etc. — one per configured option
-- `timeout` — triggered when the caller doesn't press anything
-- `max_retries` — triggered after exhausting all retries
-- `default` — fallback for unconfigured digits
+- `max_retries` — followed once every attempt has been used up
+- `default` — the fallback edge, used whenever no exact-match edge exists for the outcome
 
 Connect each output handle to the appropriate next node.
+
+<Aside type="note">
+  A timeout or an invalid digit does **not** produce its own edge — it simply consumes one attempt
+  and replays the prompt. Only after `max_retries` attempts does the flow follow `max_retries`. If
+  no options are configured, **any** digit is accepted.
+</Aside>
+
+The chosen digit is stored in the call context as `last_menu_digit` and as `menu_<node id>`, so
+later HTTP callback nodes can interpolate it.
 
 #### Gather
 
@@ -96,14 +110,15 @@ Collects multi-digit input from the caller (e.g., account number, PIN). The coll
 
 | Property | Description |
 |----------|-------------|
-| **Audio / TTS** | Prompt audio (e.g., "Please enter your account number") |
-| **Max Digits** | Maximum number of digits to collect (default: 10) |
-| **Terminator** | Character that ends input (default: `#`) |
-| **Store As** | Variable name to store the input (e.g., `account_number`) |
-| **Timeout** | Seconds to wait for input (default: 10) |
-| **Max Retries** | Retries before following `max_retries` edge (default: 3) |
+| **Audio / TTS** | Prompt audio (e.g., "Please enter your account number") — config key `audio_file` |
+| **Max Digits** | Maximum digits to collect, config key `max_digits` (default: 10) |
+| **Terminator** | Character that ends input, config key `terminator` (default: `#`) |
+| **Store As** | Variable name to store the input, config key `store_as` (e.g., `account_number`) |
+| **Timeout** | Seconds to wait for input, config key `timeout_seconds` (default: 10) |
+| **Max Retries** | Attempts before following the `max_retries` edge (default: 3) |
 
-**Output handles:** `default`, `timeout`, `max_retries`
+**Output handles:** `default` (digits collected) and `max_retries`. As with Menu, a timeout just
+consumes an attempt — there is no `timeout` edge. The gather prompt is **not** interruptible.
 
 Stored variables can be used in HTTP callback URL and body templates as `{{variable_name}}`.
 
@@ -113,23 +128,26 @@ Makes an HTTP request to an external API during the call flow. Useful for lookin
 
 | Property | Description |
 |----------|-------------|
-| **URL** | The endpoint URL (supports `{{variable}}` interpolation) |
-| **Method** | `GET` or `POST` |
-| **Headers** | Custom HTTP headers (key-value pairs) |
-| **Body Template** | Request body with variable interpolation (e.g., `{"phone": "{{caller_phone}}"}`) |
-| **Timeout** | Request timeout in seconds (default: 10) |
-| **Store Response As** | Variable name to store the response body |
+| **URL** | The endpoint URL, config key `url` (supports `{{variable}}` interpolation) |
+| **Method** | `method` — `GET` (default) or `POST` |
+| **Headers** | Custom HTTP headers, config key `headers`. Values are interpolated too. |
+| **Body Template** | `body_template` — request body with variable interpolation (e.g., `{"phone": "{{caller_phone}}"}`) |
+| **Timeout** | `timeout_seconds` — request timeout (default: 10) |
+| **Store Response As** | `response_store_as` — variable that receives the raw response body |
 
 **Built-in variables** available for interpolation:
 - `{{caller_phone}}` — the caller's phone number
 - `{{call_id}}` — the WhatsApp call ID
+- `{{last_menu_digit}}` and `{{menu_<node id>}}` — the last Menu selection
 - Any variable set by a previous Gather node
 
-**Output handles:** `default` (continues regardless of response status)
+**Output handles:** `http:2xx` and `http:non2xx`. Network/transport errors also follow
+`http:non2xx`. Wire up a `default` edge as a catch-all if you don't want to branch.
 
 #### Transfer
 
-Routes the caller to an agent team. This is a **terminal node** — it cannot have outgoing edges. Once the transfer starts, hold music plays while agents are notified.
+Routes the caller to an agent team. Once the transfer starts, hold music plays while agents are
+notified.
 
 | Property | Description |
 |----------|-------------|
@@ -141,6 +159,11 @@ When a transfer executes:
 3. The first agent to accept connects to the caller via WebRTC audio bridge
 4. If no agent accepts within the transfer timeout, the call is terminated
 
+**Output handles:** if the node has **no** outgoing edges it is terminal — the call ends when the
+transfer does. If you *do* connect outgoing edges, the node blocks until the transfer resolves and
+then branches on `completed`, `no_answer`, or `abandoned`, letting the flow continue (e.g. offer a
+voicemail prompt when nobody answers).
+
 #### Goto Flow
 
 Jumps to a different IVR flow. This is a **terminal node**. Use this to split complex IVR trees into reusable modules (e.g., a shared "Account Verification" flow).
@@ -149,10 +172,13 @@ Jumps to a different IVR flow. This is a **terminal node**. Use this to split co
 |----------|-------------|
 | **Target Flow** | The IVR flow to jump to |
 
-The target flow starts from its entry node. The caller's context variables carry over.
+The target flow starts from its entry node. The caller's context variables carry over, and the jump
+is recorded on the call's IVR path for audit.
 
 <Aside type="note">
-  The target flow must be saved in the v2 node-based format. If it uses the old format, the IVR will log an error and end the call.
+  A missing or invalid `flow_id`, a target that cannot be loaded, or a target whose **Active**
+  toggle is off all log an error and end the call. There is no return stack — when the target flow
+  finishes, the call finishes.
 </Aside>
 
 #### Timing
@@ -161,12 +187,20 @@ Branches the call based on business hours. Configure a weekly schedule with per-
 
 | Property | Description |
 |----------|-------------|
-| **Timezone** | IANA timezone (e.g., `Asia/Kolkata`, `America/New_York`) |
-| **Schedule** | Per-day enabled/disabled with start and end times |
+| **Schedule** | `schedule` — an array of `{ "day": "monday", "enabled": true, "start_time": "09:00", "end_time": "18:00" }` entries |
 
 **Output handles:**
 - `in_hours` — current time is within the configured schedule
 - `out_of_hours` — current time is outside the schedule
+
+<Aside type="caution">
+  The timing node has **no timezone property** — it evaluates against the **server's local time**.
+  Set the process timezone (the `TZ` environment variable; `docker/.env.example` ships `TZ=UTC`) to
+  match your business hours.
+
+  A day missing from `schedule`, a disabled day, or an unparseable `start_time`/`end_time`
+  (which must be `HH:MM`) all route to `out_of_hours`. The end time is exclusive.
+</Aside>
 
 #### Hangup
 
@@ -232,17 +266,92 @@ To enable, add to your `config.toml`:
 recording_enabled = true
 
 [storage]
+type = "s3"
 s3_bucket = "your-bucket"
 s3_region = "us-east-1"
 s3_key = "AKIA..."
 s3_secret = "..."
 ```
 
+<Aside type="caution">
+  Recording is **S3-only**. With `recording_enabled = true` but no S3 client configured, recording
+  is silently skipped — nothing is written to local storage.
+</Aside>
+
 Recordings are accessible from the call log detail view, which generates time-limited presigned URLs for playback.
 
 <Aside type="note">
   Only the agent-caller conversation is recorded. The IVR portion (automated prompts before an agent connects) is not recorded.
 </Aside>
+
+## Outgoing Calls
+
+Agents can place outbound WhatsApp voice calls to a contact directly from the chat view. WhatsApp requires the consumer to **grant call permission** before an agent can dial them — so the flow is: request permission → wait for the consumer to accept → place the call.
+
+### Call Permission Flow
+
+<Steps>
+1. The agent sends a call permission request to the contact
+2. The contact receives an interactive WhatsApp prompt and taps **Accept** (or **Decline**)
+3. Once accepted, the agent can initiate the WebRTC call
+</Steps>
+
+Permission records track one of four states: `pending`, `accepted`, `declined`, or `expired`. Calling must be enabled for the organization (see [Enabling Calling per Organization](#enabling-calling-per-organization)).
+
+### Endpoints
+
+Both endpoints require the `outgoing_calls` permission (`write` to request, `read` to check).
+
+#### Request permission
+
+```
+POST /api/calls/permission-request
+```
+
+```json
+{
+  "contact_id": "uuid-of-contact",
+  "whatsapp_account": "account-name"
+}
+```
+
+Sends the permission prompt to the contact via the WhatsApp Messages API and stores a `pending` permission record. Response:
+
+```json
+{ "status": "success", "data": { "permission_id": "uuid" } }
+```
+
+#### Check permission
+
+```
+GET /api/calls/permission/{contactId}?whatsapp_account=account-name
+```
+
+Queries the current permission status directly from the WhatsApp API. Response:
+
+```json
+{ "status": "success", "data": { "status": "accepted" } }
+```
+
+<Aside type="note">
+  Permission grants can also arrive **out of band** — for example when Meta shows the consumer a call prompt on its own, or when a request was sent outside your configured calling hours. When the consumer replies to accept or decline and no prior request record exists, Whatomate creates the permission record from the reply so the grant is captured rather than dropped.
+</Aside>
+
+### Placing the Call
+
+```
+POST /api/calls/outgoing
+```
+
+```json
+{
+  "contact_id": "uuid-of-contact",
+  "whatsapp_account": "account-name",
+  "sdp_offer": "<browser WebRTC SDP offer>"
+}
+```
+
+The browser generates a WebRTC offer; the server answers with an SDP answer and bridges the audio. Hang up with `POST /api/calls/outgoing/{id}/hangup`.
 
 ## Call Logs
 
@@ -263,10 +372,11 @@ Add to your `config.toml`:
 ```toml
 [calling]
 audio_dir = "./audio"                  # Directory for IVR audio files
-hold_music_file = "hold-music.ogg"     # Hold music file (relative to audio_dir)
-ringback_file = "ringback.ogg"         # Ringback tone for outgoing calls
-max_call_duration = 3600               # Max call duration in seconds
-transfer_timeout_secs = 120            # Seconds to wait for agent to accept
+hold_music_file = "hold_music.opus"    # Hold music file (relative to audio_dir); this is the default
+ringback_file = "ringback.opus"        # Ringback tone for outgoing calls (no default — falls back to hold music)
+max_call_duration = 300                # Max call duration in seconds (default 300)
+transfer_timeout_secs = 120            # Seconds to wait for a team to accept a transfer
+per_agent_timeout_secs = 0             # Global default: seconds to ring each agent before rotating (0 → falls back to 15; a team's own setting overrides this)
 recording_enabled = false              # Enable call recording to S3
 udp_port_min = 10000                   # WebRTC UDP port range start
 udp_port_max = 10100                   # WebRTC UDP port range end
@@ -282,6 +392,30 @@ urls = ["turn:your-turn-server:3478"]
 username = "user"
 credential = "pass"
 ```
+
+#### TURN with HMAC shared-secret credentials
+
+Instead of a static `username`/`credential`, you can point Whatomate at a coturn server running in `use-auth-secret` mode (the TURN REST API). Whatomate then generates a fresh, short-lived credential for every client — no long-lived password is ever handed out.
+
+```toml
+[[calling.ice_servers]]
+urls = ["turn:your-turn-server:3478"]
+secret = "your-coturn-static-auth-secret"   # matches coturn's `static-auth-secret`
+credential_ttl = 86400                        # credential lifetime in seconds (default: 86400 = 24h)
+```
+
+When `secret` is set, Whatomate derives credentials on each request following the coturn REST convention: the username is the credential's Unix expiry timestamp (`<expiry>`, or `<expiry>:<username>` if you also set `username`), and the credential is the base64-encoded HMAC-SHA1 of that username keyed by `secret`. The generated pair is returned by `GET /api/calls/ice-servers` for browser peer connections and is also used server-side when the IVR bridge builds its own peer connection.
+
+On the coturn side, enable:
+
+```
+use-auth-secret
+static-auth-secret=your-coturn-static-auth-secret
+```
+
+<Aside type="note">
+  `credential_ttl` only applies when `secret` is set. If omitted or `<= 0`, it defaults to 86400 seconds (24 hours). Static `username`/`credential` servers ignore it.
+</Aside>
 
 <Aside type="caution">
   On cloud providers (AWS, GCP, etc.), you must set `public_ip` to your server's public IP address. Without it, WebRTC candidates will advertise the private IP and calls will fail to connect. If running in Docker, use `--network=host` or map the UDP port range.

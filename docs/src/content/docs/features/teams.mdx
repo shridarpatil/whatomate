@@ -1,0 +1,103 @@
+---
+title: Teams
+description: Org-scoped agent teams that drive chat, chatbot, and call routing
+---
+
+import { Aside, Card, CardGrid } from '@astrojs/starlight/components';
+
+Teams group agents together so that Whatomate can route conversations and calls to the right people automatically. A team carries an **assignment strategy** that decides *which* member gets the next chat transfer, chatbot handoff, or incoming call. Every team is scoped to a single organization.
+
+## Overview
+
+<CardGrid>
+  <Card title="Agent grouping" icon="group">
+    Bundle agents (e.g. Sales, Support, Billing) into named teams with per-team members.
+  </Card>
+  <Card title="Assignment strategies" icon="random">
+    Pick how work is distributed: round-robin, load-balanced, or manual pickup.
+  </Card>
+  <Card title="Shared routing" icon="forward-slash">
+    One team target drives chat transfers, chatbot agent handoff, and IVR/call transfers.
+  </Card>
+  <Card title="Team managers" icon="seti:default">
+    Members with the `manager` role can manage their own team's roster without org-wide permissions.
+  </Card>
+</CardGrid>
+
+## Managing teams
+
+Navigate to **Settings → Teams** to create and manage teams. Each team has:
+
+| Field | Description |
+|---|---|
+| `name` | Display name (required). |
+| `description` | Optional free-text description. |
+| `assignment_strategy` | `round_robin`, `load_balanced`, or `manual`. Defaults to `round_robin`. |
+| `per_agent_timeout_secs` | For call rotation: how long each agent is rung before moving on. `0` means "use the global default". |
+| `is_active` | Whether the team is available for routing. |
+
+### Membership
+
+Members are users added to the team with a role of **`manager`** or **`agent`** (defaults to `agent`). Each membership tracks a `last_assigned_at` timestamp used by the round-robin strategy.
+
+- `GET /api/teams/{id}/members` — list members
+- `POST /api/teams/{id}/members` — add a member (`{ "user_id": "<uuid>", "role": "agent" }`)
+- `DELETE /api/teams/{id}/members/{member_user_id}` — remove a member
+
+<Aside type="note">
+  A user can only be added to a team once — a second add returns `409 Conflict`.
+</Aside>
+
+## Assignment strategies
+
+When a conversation or call is routed to a team, Whatomate's assigner first filters the roster down to members who are **both `is_active` and `is_available`**, then applies the team's strategy:
+
+| Strategy | Behaviour |
+|---|---|
+| **`round_robin`** | Picks the available member with the oldest `last_assigned_at`, then stamps their timestamp so the rotation moves on. The default. |
+| **`load_balanced`** | Picks the available member with the fewest *active* items. "Active" is domain-specific: open chat transfers for chat handoffs, live call transfers for calls. |
+| **`manual`** | No auto-assignment — the item lands in the team's queue for an agent to pick up. |
+
+<Aside type="note">
+  Availability is evaluated live at assignment time (it changes minute-to-minute), so an agent who is off-shift or has toggled themselves unavailable is skipped even if they're on the team.
+</Aside>
+
+## How teams drive routing
+
+The same team is a routing target across three subsystems.
+
+### Chat transfers & chatbot handoff
+
+A chatbot **transfer node** hands the conversation off to a human. Its `team_id` config decides the destination:
+
+- A valid team UUID → the conversation is transferred to that team and assigned per the team's strategy.
+- Empty or `_general` → the conversation goes to the shared **general queue** for any agent to pick up.
+
+See the [Chatbot docs → transfer node](/whatomate/features/chatbot/) for how to wire this into a flow. Agents pick up queued transfers from the chat inbox.
+
+### IVR & call transfers
+
+An IVR **transfer node** (or an agent-initiated call transfer) routes an in-progress call to a team. Calls use **per-agent rotation**: the assigner rings one member at a time using the team's strategy, waiting `per_agent_timeout_secs` (falling back to the global default, ultimately 15 seconds) before moving to the next. If every individual agent is exhausted, the call **broadcasts** to all remaining available and online team members. When a specific agent was pre-assigned, they ring first and the team is the fallback.
+
+See the [Calling docs](/whatomate/features/calling/) for the full incoming-call and transfer flow.
+
+## Permissions & access
+
+| Permission | Grants |
+|---|---|
+| `teams:read` | View all teams in the org. |
+| `teams:write` | Create/edit teams, manage any team's roster (including managers). |
+| `teams:delete` | Delete teams. |
+
+Two nuances beyond the raw permissions:
+
+- **Non-privileged users see only their own teams.** `GET /api/teams` returns every team to a user with `teams:read`; everyone else sees only teams they belong to.
+- **Team managers get scoped write access.** A member whose role is `manager` can edit their team and add/remove **agents** without holding `teams:write` — but adding or removing **managers** still requires `teams:write`.
+
+<Aside type="caution">
+  Deleting a team removes all of its memberships. Any active routing that targeted the team falls back to the general queue.
+</Aside>
+
+## API
+
+All team endpoints live under `/api/teams`. Full request/response schemas are in the [API Reference → Teams](/whatomate/api-reference/teams). List responses use the standard envelope with a `teams` array plus `total`, `page`, and `limit`.

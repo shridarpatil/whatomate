@@ -22,10 +22,13 @@ Audit logging is hooked into the handlers that mutate user-facing resources. The
 |---|---|
 | `account` | WhatsApp account create / update / delete |
 | `campaign` | Campaign lifecycle |
-| `chatbot` | Chatbot flow create / update / delete |
+| `chatbot_flow` | Chatbot flow create / update / delete |
 | `contact` | Contact create / update / delete |
+| `canned_response` | Saved reply create / update / delete |
 | `ivr_flow` | IVR flow definitions |
-| `organization` | Org settings changes |
+| `settings.general` | General org settings changes |
+| `settings.calling` | Voice calling settings changes |
+| `settings.notification` | Notification preference changes |
 | `role` | Custom role create / update / delete |
 | `team` | Team membership and config |
 | `template` | Template create / publish / delete |
@@ -72,7 +75,7 @@ For a `created` entry, every field has `old_value: null`. For `deleted`, every f
 
 ### Field redaction
 
-A small set of fields is excluded from diffs to keep the audit log readable and to avoid logging anything sensitive or noisy:
+A set of fields is excluded from diffs to keep the audit log readable and to avoid logging anything sensitive or noisy. The lists below are **illustrative** — a subset of the full skip list (`skipFields` in `internal/audit/audit.go`), not an exhaustive enumeration:
 
 - **Metadata**: `id`, `created_at`, `updated_at`, `deleted_at`, `organization_id`, `created_by`, `updated_by`, `created_by_id`, `updated_by_id`.
 - **Sensitive / opaque values**: `webhook_verify_token`, `header_media_id`, `header_media_local_path`, `meta_template_id`, `api_config`.

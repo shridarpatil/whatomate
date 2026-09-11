@@ -61,13 +61,16 @@ test.describe('Messages Tab', () => {
     await expect(page.locator('input#timeout')).toBeVisible()
   })
 
-  test('should have add greeting button option', async ({ page }) => {
-    await expect(page.getByRole('button', { name: /Add Button/i }).first()).toBeVisible()
+  // The greeting and fallback editors now offer one control per allowed button
+  // type (reply and url) instead of a single generic "Add Button".
+  test('should have add greeting button options', async ({ page }) => {
+    await expect(page.getByRole('button', { name: /^Reply$/i }).first()).toBeVisible()
+    await expect(page.getByRole('button', { name: /^URL$/i }).first()).toBeVisible()
   })
 
-  test('should have add fallback button option', async ({ page }) => {
-    const addButtons = page.getByRole('button', { name: /Add Button/i })
-    await expect(addButtons.last()).toBeVisible()
+  test('should have add fallback button options', async ({ page }) => {
+    await expect(page.getByRole('button', { name: /^Reply$/i }).last()).toBeVisible()
+    await expect(page.getByRole('button', { name: /^URL$/i }).last()).toBeVisible()
   })
 
   test('should fill greeting message', async ({ page }) => {

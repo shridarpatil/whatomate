@@ -6,6 +6,7 @@ import { useAuthStore } from '@/stores/auth'
 import { cannedResponsesService, type CannedResponse } from '@/services/api'
 import { toast } from 'vue-sonner'
 import { getErrorMessage } from '@/lib/api-utils'
+import { validateWhatsAppButtons } from '@/lib/whatsappButtons'
 import { useUnsavedChangesGuard } from '@/composables/useUnsavedChangesGuard'
 import DetailPageLayout from '@/components/shared/DetailPageLayout.vue'
 import MetadataPanel from '@/components/shared/MetadataPanel.vue'
@@ -116,98 +117,9 @@ watch(form, () => {
   hasChanges.value = true
 }, { deep: true })
 
-// Validate the button combination against WhatsApp Cloud API's free-form
-// interactive-message rules. Sendable shapes:
-//   - 0 buttons
-//   - 1–10 reply buttons (1–3 send as reply buttons; 4–10 send as a list)
-//   - exactly 1 URL button (cta_url)
-//   - exactly 1 voice_call button (interactive.type:"voice_call", standalone)
-// Phone buttons and multi-URL / mixed combos can't be carried by any
-// free-form interactive message and would otherwise silently fall back to
-// plain text on send, so we block save instead of confusing the agent.
-// Keep the rules in sync with validateCannedResponseButtons in the Go
-// handler — it duplicates these checks for non-UI callers.
-const buttonsValidationError = computed<string | null>(() => {
-  const list = form.value.buttons
-  if (!list.length) return null
-  const reply = list.filter(b => !b.type || b.type === 'reply')
-  const url = list.filter(b => b.type === 'url')
-  const phone = list.filter(b => b.type === 'phone')
-  const voiceCall = list.filter(b => b.type === 'voice_call')
-
-  if (voiceCall.length > 1) {
-    return t(
-      'cannedResponses.errorMultiVoiceCall',
-      'Only one Call button is allowed per message.',
-    )
-  }
-  if (voiceCall.length > 0 && list.length > voiceCall.length) {
-    return t(
-      'cannedResponses.errorVoiceCallExclusive',
-      'A Call button cannot be combined with other button types — remove the other buttons or the Call button.',
-    )
-  }
-  if (voiceCall.length === 1) {
-    const v = voiceCall[0]
-    if (!v.title?.trim()) {
-      return t(
-        'cannedResponses.errorVoiceCallTitle',
-        'The Call button needs a label (shown on the button face).',
-      )
-    }
-    const ttl = v.ttl_minutes ?? 0
-    if (ttl < 0 || ttl > 60) {
-      return t(
-        'cannedResponses.errorVoiceCallTtl',
-        'Call button expiry must be between 1 and 60 minutes.',
-      )
-    }
-  }
-  const flow = list.filter(b => b.type === 'flow')
-  if (flow.length > 1) {
-    return t('cannedResponses.errorMultiFlow', 'Only one Flow button is allowed per message.')
-  }
-  if (flow.length > 0 && list.length > flow.length) {
-    return t(
-      'cannedResponses.errorFlowExclusive',
-      'A Flow button cannot be combined with other button types — remove the other buttons or the Flow button.',
-    )
-  }
-  if (flow.length === 1) {
-    const f = flow[0]
-    if (!f.title?.trim()) {
-      return t('cannedResponses.errorFlowTitle', 'The Flow button needs a label (shown on the button face).')
-    }
-    if (!f.flow_id) {
-      return t('cannedResponses.errorFlowId', 'Select a published flow for the Flow button.')
-    }
-  }
-  if (phone.length > 0) {
-    return t(
-      'cannedResponses.errorPhoneUnsupported',
-      'Phone buttons cannot be sent in free-form WhatsApp messages — only in approved templates. Remove the phone button or convert it to a URL.',
-    )
-  }
-  if (url.length > 1) {
-    return t(
-      'cannedResponses.errorMultiUrl',
-      'WhatsApp allows only one URL button per message. Remove the extra URL button.',
-    )
-  }
-  if (reply.length > 0 && url.length > 0) {
-    return t(
-      'cannedResponses.errorMixedButtons',
-      'Reply and URL buttons cannot be mixed in a single WhatsApp message.',
-    )
-  }
-  if (reply.length > 10) {
-    return t(
-      'cannedResponses.errorTooManyReply',
-      'WhatsApp allows at most 10 reply buttons.',
-    )
-  }
-  return null
-})
+// The button combination rules live in @/lib/whatsappButtons so the chatbot
+// greeting/fallback editor enforces exactly the same set.
+const buttonsValidationError = computed(() => validateWhatsAppButtons(form.value.buttons, t))
 
 const canSave = computed(() => !buttonsValidationError.value)
 

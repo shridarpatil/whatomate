@@ -1,0 +1,156 @@
+---
+title: Tags
+description: Contact tag management API
+---
+
+import { Aside } from '@astrojs/starlight/components';
+
+<Aside type="caution">
+  Tag endpoints require the `tags:read`, `tags:write`, or `tags:delete` permissions respectively.
+</Aside>
+
+## Overview
+
+Tags are organization-scoped labels used to categorize contacts. Each tag has a unique `name` and a predefined `color`. Tags are identified by their **name** in the URL path (not a UUID), so renaming or deleting a tag is done via `/api/tags/{name}`.
+
+<Aside type="note">
+  A tag's identity is its name. Path parameters must be URL-encoded (e.g. a tag named `VIP customer` becomes `/api/tags/VIP%20customer`).
+</Aside>
+
+Valid colors are: `blue`, `red`, `green`, `yellow`, `purple`, `gray`. An empty color defaults to `gray`.
+
+## List Tags
+
+Get all tags in your organization.
+
+```bash
+GET /api/tags
+```
+
+### Query Parameters
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `search` | string | Case-insensitive filter by tag name or color |
+| `page` | integer | Page number (default `1`) |
+| `limit` | integer | Results per page |
+
+### Response
+
+```json
+{
+  "status": "success",
+  "data": {
+    "tags": [
+      {
+        "name": "VIP",
+        "color": "purple",
+        "created_at": "2024-01-01T00:00:00Z",
+        "updated_at": "2024-01-01T00:00:00Z"
+      }
+    ],
+    "total": 1,
+    "page": 1,
+    "limit": 20
+  }
+}
+```
+
+## Create Tag
+
+Create a new tag.
+
+```bash
+POST /api/tags
+```
+
+### Request Body
+
+```json
+{
+  "name": "VIP",
+  "color": "purple"
+}
+```
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `name` | string | Yes | Unique tag name (max 50 characters) |
+| `color` | string | No | One of `blue`, `red`, `green`, `yellow`, `purple`, `gray` (defaults to `gray`) |
+
+### Response
+
+```json
+{
+  "status": "success",
+  "data": {
+    "name": "VIP",
+    "color": "purple",
+    "created_at": "2024-01-01T00:00:00Z",
+    "updated_at": "2024-01-01T00:00:00Z"
+  }
+}
+```
+
+<Aside type="caution">
+  Creating a tag with a name that already exists returns `409 Conflict`.
+</Aside>
+
+## Update Tag
+
+Update a tag's name and/or color. If the name changes, every contact using the old tag is updated to reference the new name.
+
+```bash
+PUT /api/tags/{name}
+```
+
+### Request Body
+
+```json
+{
+  "name": "VIP Customer",
+  "color": "blue"
+}
+```
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `name` | string | No | New tag name (max 50 characters). Omit to keep the current name |
+| `color` | string | No | New color. Omit to keep the current color |
+
+### Response
+
+```json
+{
+  "status": "success",
+  "data": {
+    "name": "VIP Customer",
+    "color": "blue",
+    "created_at": "2024-01-01T00:00:00Z",
+    "updated_at": "2024-01-02T00:00:00Z"
+  }
+}
+```
+
+## Delete Tag
+
+Delete a tag. The tag is also removed from every contact that references it.
+
+```bash
+DELETE /api/tags/{name}
+```
+
+### Response
+
+```json
+{
+  "status": "success",
+  "data": {
+    "message": "Tag deleted"
+  }
+}
+```
+
+## See Also
+
+- [Contacts API](/whatomate/api-reference/contacts) - Assign tags to contacts via `PUT /api/contacts/{id}/tags`

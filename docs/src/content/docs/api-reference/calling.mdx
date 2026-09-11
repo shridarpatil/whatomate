@@ -1,0 +1,503 @@
+---
+title: Calling
+description: Voice calling API — call logs, transfers, and outgoing calls
+---
+
+import { Aside } from '@astrojs/starlight/components';
+
+## Overview
+
+Whatomate provides WebRTC-based voice calling over WhatsApp. This page documents the **HTTP/REST** control-plane endpoints: browsing call logs and recordings, managing agent transfers, placing outgoing calls, and requesting call permission.
+
+<Aside type="note">
+  The real-time media negotiation (WebRTC SDP/ICE signalling, call ringing, and DTMF) happens over the WebSocket channel at `/ws`, not over REST. The endpoints below either return the SDP answer synchronously (outgoing calls and transfer connect) or read/mutate call state. See [Calling](/whatomate/features/calling) for the end-to-end architecture.
+</Aside>
+
+<Aside type="caution">
+  Calling must be enabled for the organization. When it is not, mutating endpoints return `503 Service Unavailable`.
+</Aside>
+
+Permissions used on this page: `call_logs:read`, `call_transfers:read`, `call_transfers:write`, `outgoing_calls:read`, `outgoing_calls:write`.
+
+---
+
+## Call Logs
+
+### List Call Logs
+
+Get call logs for the organization.
+
+```bash
+GET /api/call-logs
+```
+
+<Aside type="note">
+  Users with `call_logs:read` see all logs. Users without it see only calls where they were the agent.
+</Aside>
+
+#### Query Parameters
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `status` | string | Filter by status (`ringing`, `answered`, `completed`, `missed`, `rejected`, `failed`, `transferring`, `initiating`, `accepted`) |
+| `account` | string | Filter by WhatsApp account name |
+| `contact_id` | string | Filter by contact UUID |
+| `direction` | string | `incoming` or `outgoing` |
+| `ivr_flow_id` | string | Filter by IVR flow UUID |
+| `phone` | string | Partial match on the caller phone number |
+| `start_date` | string | Include calls created on or after this date |
+| `end_date` | string | Include calls created on or before this date |
+| `page` | integer | Page number (default `1`) |
+| `limit` | integer | Results per page |
+
+#### Response
+
+```json
+{
+  "status": "success",
+  "data": {
+    "call_logs": [
+      {
+        "id": "uuid",
+        "organization_id": "uuid",
+        "whatsapp_account": "Main",
+        "contact_id": "uuid",
+        "whatsapp_call_id": "wacid.HBg...",
+        "caller_phone": "+15551234567",
+        "direction": "incoming",
+        "status": "completed",
+        "duration": 92,
+        "ivr_flow_id": "uuid",
+        "agent_id": "uuid",
+        "started_at": "2024-01-01T00:00:00Z",
+        "answered_at": "2024-01-01T00:00:05Z",
+        "ended_at": "2024-01-01T00:01:37Z",
+        "disconnected_by": "agent",
+        "recording_duration": 92,
+        "contact": { "id": "uuid", "phone_number": "+15551234567" },
+        "agent": { "id": "uuid", "full_name": "Jane Agent" }
+      }
+    ],
+    "total": 1,
+    "page": 1,
+    "limit": 20
+  }
+}
+```
+
+### Get Call Log
+
+Get a single call log with its associated transfers.
+
+```bash
+GET /api/call-logs/{id}
+```
+
+#### Response
+
+```json
+{
+  "status": "success",
+  "data": {
+    "call_log": {
+      "id": "uuid",
+      "whatsapp_account": "Main",
+      "caller_phone": "+15551234567",
+      "direction": "incoming",
+      "status": "completed",
+      "duration": 92,
+      "ivr_path": ["1", "3"],
+      "agent_id": "uuid"
+    },
+    "transfers": [
+      {
+        "id": "uuid",
+        "status": "completed",
+        "team_id": "uuid",
+        "agent_id": "uuid",
+        "talk_duration": 80
+      }
+    ]
+  }
+}
+```
+
+### Get Call Recording
+
+Get a short-lived presigned URL for a call's audio recording. Requires S3 storage to be configured and the call to have a recording.
+
+```bash
+GET /api/call-logs/{id}/recording
+```
+
+#### Response
+
+```json
+{
+  "status": "success",
+  "data": {
+    "url": "https://s3.example.com/recordings/...?X-Amz-Expires=900",
+    "duration": 92
+  }
+}
+```
+
+<Aside type="note">
+  The presigned URL expires after 15 minutes. Returns `404` if no recording exists or storage is not configured.
+</Aside>
+
+### Hold Call
+
+Put an active call on hold and play hold music to the caller. The `{id}` is the **call log** ID.
+
+```bash
+POST /api/call-logs/{id}/hold
+```
+
+#### Response
+
+```json
+{
+  "status": "success",
+  "data": {
+    "status": "on_hold"
+  }
+}
+```
+
+### Resume Call
+
+Take an active call off hold and restore the audio bridge.
+
+```bash
+POST /api/call-logs/{id}/resume
+```
+
+#### Response
+
+```json
+{
+  "status": "success",
+  "data": {
+    "status": "connected"
+  }
+}
+```
+
+---
+
+## Call Transfers
+
+Call transfers move a live call from the IVR (or from another agent) to an agent or team. See [IVR Flows](/whatomate/api-reference/ivr-flows) for how transfers are triggered from a flow.
+
+### List Call Transfers
+
+```bash
+GET /api/call-transfers
+```
+
+#### Query Parameters
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `status` | string | Filter by status (`waiting`, `connected`, `completed`, `abandoned`, `no_answer`) |
+| `page` | integer | Page number (default `1`) |
+| `limit` | integer | Results per page |
+
+#### Response
+
+```json
+{
+  "status": "success",
+  "data": {
+    "call_transfers": [
+      {
+        "id": "uuid",
+        "organization_id": "uuid",
+        "call_log_id": "uuid",
+        "whatsapp_call_id": "wacid.HBg...",
+        "caller_phone": "+15551234567",
+        "contact_id": "uuid",
+        "whatsapp_account": "Main",
+        "status": "waiting",
+        "team_id": "uuid",
+        "agent_id": null,
+        "initiating_agent_id": null,
+        "transferred_at": "2024-01-01T00:00:00Z",
+        "hold_duration": 0,
+        "talk_duration": 0
+      }
+    ],
+    "total": 1,
+    "page": 1,
+    "limit": 20
+  }
+}
+```
+
+### Get Call Transfer
+
+```bash
+GET /api/call-transfers/{id}
+```
+
+#### Response
+
+```json
+{
+  "status": "success",
+  "data": {
+    "id": "uuid",
+    "call_log_id": "uuid",
+    "caller_phone": "+15551234567",
+    "status": "connected",
+    "team_id": "uuid",
+    "agent_id": "uuid",
+    "connected_at": "2024-01-01T00:00:10Z",
+    "talk_duration": 0
+  }
+}
+```
+
+### Connect Call Transfer
+
+An agent accepts a waiting transfer and completes the WebRTC handshake. The agent sends an SDP offer and receives the SDP answer. Concurrent accepts are rejected atomically.
+
+```bash
+POST /api/call-transfers/{id}/connect
+```
+
+#### Request Body
+
+```json
+{
+  "sdp_offer": "v=0\r\no=- ... (WebRTC SDP offer)"
+}
+```
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `sdp_offer` | string | Yes | The agent's WebRTC SDP offer |
+
+#### Response
+
+```json
+{
+  "status": "success",
+  "data": {
+    "sdp_answer": "v=0\r\no=- ... (WebRTC SDP answer)"
+  }
+}
+```
+
+<Aside type="caution">
+  Returns `409 Conflict` if the transfer is no longer waiting or was accepted by another agent, and `403 Forbidden` if the transfer is directed to a different agent or a team you are not a member of.
+</Aside>
+
+### Hangup Call Transfer
+
+End a connected transfer.
+
+```bash
+POST /api/call-transfers/{id}/hangup
+```
+
+#### Response
+
+```json
+{
+  "status": "success",
+  "data": {
+    "status": "completed"
+  }
+}
+```
+
+### Initiate Agent Transfer
+
+A connected agent transfers their active call to another team (optionally targeting a specific agent within that team).
+
+```bash
+POST /api/call-transfers/initiate
+```
+
+#### Request Body
+
+```json
+{
+  "call_log_id": "uuid",
+  "team_id": "uuid",
+  "agent_id": "uuid"
+}
+```
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `call_log_id` | string | Yes | The active call's log UUID |
+| `team_id` | string | Yes | Target team UUID |
+| `agent_id` | string | No | Target a specific agent (must be a member of `team_id`) |
+
+#### Response
+
+```json
+{
+  "status": "success",
+  "data": {
+    "status": "transferring"
+  }
+}
+```
+
+---
+
+## Outgoing Calls & Permissions
+
+### Initiate Outgoing Call
+
+Start a voice call from an agent to a WhatsApp contact. The agent provides an SDP offer and receives the SDP answer plus the new call log ID.
+
+```bash
+POST /api/calls/outgoing
+```
+
+#### Request Body
+
+```json
+{
+  "contact_id": "uuid",
+  "whatsapp_account": "Main",
+  "sdp_offer": "v=0\r\no=- ... (WebRTC SDP offer)"
+}
+```
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `contact_id` | string | Yes | Contact UUID to call |
+| `whatsapp_account` | string | Yes | WhatsApp account name to place the call from |
+| `sdp_offer` | string | Yes | The agent's WebRTC SDP offer |
+
+#### Response
+
+```json
+{
+  "status": "success",
+  "data": {
+    "call_log_id": "uuid",
+    "sdp_answer": "v=0\r\no=- ... (WebRTC SDP answer)"
+  }
+}
+```
+
+### Hangup Outgoing Call
+
+End an outgoing call. The `{id}` is the **call log** ID returned by the initiate call.
+
+```bash
+POST /api/calls/outgoing/{id}/hangup
+```
+
+#### Response
+
+```json
+{
+  "status": "success",
+  "data": {
+    "status": "ok"
+  }
+}
+```
+
+### Send Call Permission Request
+
+WhatsApp requires the consumer to grant call permission before a business can call them. This sends the permission-request message and records it.
+
+```bash
+POST /api/calls/permission-request
+```
+
+#### Request Body
+
+```json
+{
+  "contact_id": "uuid",
+  "whatsapp_account": "Main"
+}
+```
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `contact_id` | string | Yes | Contact UUID to request permission from |
+| `whatsapp_account` | string | Yes | WhatsApp account name |
+
+#### Response
+
+```json
+{
+  "status": "success",
+  "data": {
+    "permission_id": "uuid"
+  }
+}
+```
+
+### Get Call Permission
+
+Check the live call-permission state for a contact directly via the WhatsApp API. The path parameter is the contact UUID.
+
+```bash
+GET /api/calls/permission/{contactId}?whatsapp_account=Main
+```
+
+#### Query Parameters
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `whatsapp_account` | string | Yes | WhatsApp account name |
+
+#### Response
+
+```json
+{
+  "status": "success",
+  "data": {
+    "status": "approved"
+  }
+}
+```
+
+### Get ICE Servers
+
+Return the configured ICE (STUN/TURN) servers the frontend should use when building WebRTC peer connections. TURN entries may carry short-lived, HMAC-derived credentials that are generated per request.
+
+```bash
+GET /api/calls/ice-servers
+```
+
+#### Response
+
+```json
+{
+  "status": "success",
+  "data": {
+    "ice_servers": [
+      {
+        "urls": ["stun:stun.example.com:3478"]
+      },
+      {
+        "urls": ["turn:turn.example.com:3478?transport=udp"],
+        "username": "1735689600",
+        "credential": "hmac-derived-credential"
+      }
+    ]
+  }
+}
+```
+
+<Aside type="note">
+  `username` and `credential` are omitted for STUN-only entries. When present they may be time-limited TURN credentials, so fetch them fresh rather than caching.
+</Aside>
+
+## See Also
+
+- [Calling](/whatomate/features/calling) - Voice calling architecture and configuration
+- [IVR Flows](/whatomate/api-reference/ivr-flows) - Build the IVR menus that route callers to agents

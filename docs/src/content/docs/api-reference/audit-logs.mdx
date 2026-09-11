@@ -1,0 +1,130 @@
+---
+title: Audit Logs
+description: Read the organization's record-level audit trail
+---
+
+import { Aside } from '@astrojs/starlight/components';
+
+<Aside type="caution">
+  Audit-log endpoints require the `audit_logs:read` permission (granted to the `admin` role by default).
+</Aside>
+
+## Overview
+
+Every CRUD mutation on an org-scoped resource writes an audit-log entry recording who changed what and when. These endpoints are read-only — entries are created automatically by the handlers, never through the API. All results are scoped to the caller's organization.
+
+## List Audit Logs
+
+Return audit-log entries for the organization, newest first.
+
+```bash
+GET /api/audit-logs
+```
+
+### Query Parameters
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `resource_type` | string | Filter by resource type (e.g. `contacts`, `settings.general`, `settings.calling`, `roles`). |
+| `resource_id` | uuid | Filter by the affected record's ID. |
+| `user_id` | uuid | Filter by the actor who made the change. |
+| `action` | string | Filter by action: `created`, `updated`, or `deleted`. |
+| `from` | string | Only entries at/after this time. Accepts `YYYY-MM-DD` or RFC 3339. |
+| `to` | string | Only entries at/before this time. A `YYYY-MM-DD` value is treated as end-of-day. |
+| `page` | integer | Page number (default `1`). |
+| `limit` | integer | Page size. |
+
+### Response
+
+The list is wrapped under the `audit_logs` key, with `total`, `page`, and `limit`:
+
+```json
+{
+  "status": "success",
+  "data": {
+    "audit_logs": [
+      {
+        "id": "uuid",
+        "resource_type": "contacts",
+        "resource_id": "uuid",
+        "user_id": "uuid",
+        "user_name": "Jane Admin",
+        "action": "updated",
+        "changes": [
+          {
+            "field": "profile_name",
+            "old_value": "John",
+            "new_value": "John Doe"
+          }
+        ],
+        "created_at": "2024-01-01T12:00:00Z"
+      }
+    ],
+    "total": 128,
+    "page": 1,
+    "limit": 20
+  }
+}
+```
+
+## Get Audit Log
+
+Return a single audit-log entry by ID.
+
+```bash
+GET /api/audit-logs/{id}
+```
+
+### Response
+
+```json
+{
+  "status": "success",
+  "data": {
+    "id": "uuid",
+    "resource_type": "settings.calling",
+    "resource_id": "uuid",
+    "user_id": "uuid",
+    "user_name": "Jane Admin",
+    "action": "updated",
+    "changes": [
+      {
+        "field": "hold_music_file",
+        "old_value": "",
+        "new_value": "org_<id>_hold_music.ogg"
+      }
+    ],
+    "created_at": "2024-01-01T12:00:00Z"
+  }
+}
+```
+
+Requesting an ID that isn't in the caller's organization returns `404`.
+
+## Entry Fields
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `id` | uuid | Audit-log entry ID. |
+| `resource_type` | string | The kind of resource that changed. |
+| `resource_id` | uuid | ID of the affected record. |
+| `user_id` | uuid | Actor who performed the action. |
+| `user_name` | string | Actor's display name, captured at write time. |
+| `action` | string | `created`, `updated`, or `deleted`. |
+| `changes` | array | Field-level diff (see below). |
+| `created_at` | string | When the change occurred (RFC 3339). |
+
+### The `changes` diff
+
+`changes` is an array of `{ field, old_value, new_value }` objects:
+
+- **created** — one entry per field, with `old_value` `null`.
+- **deleted** — one entry per field, with `new_value` `null`.
+- **updated** — only the fields that actually changed.
+
+Metadata fields (`id`, timestamps, `organization_id`, and similar) are never diffed. Certain JSONB columns are flattened to a single readable sub-field — for example a chatbot response's `response_content` is diffed on its `body` text rather than the whole object.
+
+## See Also
+
+- [Audit Logs (feature guide)](/whatomate/features/audit-logs) - How the audit trail works and what it captures
+- [Roles](/whatomate/api-reference/roles) - Grant the `audit_logs:read` permission

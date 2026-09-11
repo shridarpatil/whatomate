@@ -21,115 +21,87 @@ GET /api/analytics/dashboard
 
 | Parameter | Type | Description |
 |-----------|------|-------------|
-| `account_id` | string | Filter by WhatsApp account |
-| `period` | string | Time period: `today`, `week`, `month`, `year` |
+| `from` | string | Start date, `YYYY-MM-DD`. Must be sent together with `to`. |
+| `to` | string | End date, `YYYY-MM-DD` (inclusive of the whole day). |
+
+If `from`/`to` are omitted, the range defaults to the **current calendar month to now**. A
+malformed date returns `400 Invalid start date format. Use YYYY-MM-DD`.
 
 ### Response
+
+Each `*_change` value is the percentage change against the immediately preceding window of the
+same length (`100.0` when the previous window was zero and the current one is not).
 
 ```json
 {
   "status": "success",
   "data": {
-    "contacts": {
-      "total": 5000,
-      "new_today": 25,
-      "new_this_week": 150,
-      "growth_percent": 12.5
+    "stats": {
+      "total_messages": 50000,
+      "messages_change": 12.5,
+      "total_contacts": 5000,
+      "contacts_change": 4.2,
+      "chatbot_sessions": 320,
+      "chatbot_change": -3.1,
+      "campaigns_sent": 20,
+      "campaigns_change": 0.0
     },
-    "messages": {
-      "total": 50000,
-      "sent": 25000,
-      "received": 25000,
-      "today": 500
-    },
-    "campaigns": {
-      "total": 20,
-      "active": 2,
-      "completed_this_month": 5
-    },
-    "chatbot": {
-      "conversations_today": 100,
-      "auto_resolved": 75,
-      "transferred_to_agent": 25,
-      "resolution_rate": 75.0
-    }
-  }
-}
-```
-
-## Message Analytics
-
-Get detailed messaging statistics.
-
-```bash
-GET /api/analytics/messages
-```
-
-### Query Parameters
-
-| Parameter | Type | Description |
-|-----------|------|-------------|
-| `account_id` | string | Filter by WhatsApp account |
-| `start_date` | string | Start date (ISO 8601) |
-| `end_date` | string | End date (ISO 8601) |
-| `granularity` | string | `hour`, `day`, `week`, `month` |
-
-### Response
-
-```json
-{
-  "status": "success",
-  "data": {
-    "summary": {
-      "total_sent": 10000,
-      "total_received": 8000,
-      "total_delivered": 9800,
-      "total_read": 7500,
-      "total_failed": 200,
-      "delivery_rate": 98.0,
-      "read_rate": 76.5
-    },
-    "by_type": {
-      "text": 12000,
-      "image": 3000,
-      "template": 2500,
-      "document": 500
-    },
-    "timeline": [
+    "recent_messages": [
       {
-        "date": "2024-01-01",
-        "sent": 500,
-        "received": 400,
-        "delivered": 490,
-        "read": 350
-      },
-      {
-        "date": "2024-01-02",
-        "sent": 600,
-        "received": 450,
-        "delivered": 590,
-        "read": 400
+        "id": "uuid",
+        "contact_name": "John Doe",
+        "content": "Hello!",
+        "direction": "incoming",
+        "status": "received",
+        "created_at": "2024-01-01T12:00:00Z"
       }
     ]
   }
 }
 ```
 
-## Chatbot Analytics
+## Message Analytics
 
-Get chatbot performance metrics.
+```bash
+GET /api/analytics/messages
+```
+
+<Aside type="caution">
+  **Not implemented.** This route is registered but currently returns
+  `501 Not implemented yet`. Use [Dashboard Stats](#dashboard-stats) and the
+  [Meta Insights](#meta-insights) endpoints for messaging metrics.
+</Aside>
+
+## Chatbot Analytics
 
 ```bash
 GET /api/analytics/chatbot
+```
+
+<Aside type="caution">
+  **Not implemented.** This route is registered but currently returns
+  `501 Not implemented yet`. Chatbot counters are available from
+  `GET /api/chatbot/settings`, which returns a `stats` object alongside the settings.
+</Aside>
+
+## Agent Analytics
+
+Performance metrics for human agents handling transfers. Users **without** the
+`analytics.agents:read` / `analytics:read` permission see only their own stats
+(`my_stats`); users with the permission see every agent.
+
+```bash
+GET /api/analytics/agents
 ```
 
 ### Query Parameters
 
 | Parameter | Type | Description |
 |-----------|------|-------------|
-| `account_id` | string | Filter by WhatsApp account |
-| `start_date` | string | Start date (ISO 8601) |
-| `end_date` | string | End date (ISO 8601) |
+| `from` | string | Start date (`YYYY-MM-DD`). Defaults to the start of the current month |
+| `to` | string | End date (`YYYY-MM-DD`). Defaults to now |
+| `group_by` | string | Trend granularity: `day` (default) or `week` |
+| `agent_id` | string | Restrict to a single agent (requires analytics permission) |
 
 ### Response
 
@@ -138,47 +110,186 @@ GET /api/analytics/chatbot
   "status": "success",
   "data": {
     "summary": {
-      "total_conversations": 1000,
-      "auto_resolved": 750,
-      "transferred_to_agent": 200,
-      "abandoned": 50,
-      "resolution_rate": 75.0,
-      "avg_messages_per_conversation": 5.2,
-      "avg_resolution_time_seconds": 120
+      "total_transfers_handled": 120,
+      "active_transfers": 5,
+      "avg_queue_time_mins": 3.2,
+      "avg_first_response_mins": 1.8,
+      "avg_resolution_mins": 12.5,
+      "transfers_by_source": { "chatbot": 80, "manual": 40 },
+      "total_break_time_mins": 45.0,
+      "break_count": 3
     },
-    "by_flow": [
+    "agent_stats": [
       {
-        "flow_name": "Order Status",
-        "conversations": 300,
-        "completion_rate": 85.0
-      },
-      {
-        "flow_name": "FAQ",
-        "conversations": 200,
-        "completion_rate": 92.0
+        "agent_id": "uuid",
+        "agent_name": "Jane Agent",
+        "avg_first_response_mins": 1.5,
+        "avg_resolution_mins": 10.2,
+        "transfers_handled": 40,
+        "active_transfers": 2,
+        "messages_sent": 320,
+        "total_break_time_mins": 15.0,
+        "break_count": 1,
+        "is_available": true,
+        "current_break_start": null
       }
     ],
-    "top_keywords": [
-      {
-        "keyword": "order",
-        "count": 450
-      },
-      {
-        "keyword": "shipping",
-        "count": 230
-      },
-      {
-        "keyword": "return",
-        "count": 180
-      }
+    "trend_data": [
+      { "date": "2024-01-01", "transfers_handled": 12, "avg_response_mins": 0 }
     ],
-    "ai_usage": {
-      "total_requests": 500,
-      "avg_tokens_per_request": 250,
-      "total_tokens": 125000,
-      "estimated_cost": 2.50
+    "my_stats": {
+      "agent_id": "uuid",
+      "agent_name": "Jane Agent",
+      "transfers_handled": 40
     }
   }
+}
+```
+
+## Agent Details
+
+Detailed analytics for a single agent (requires analytics permission).
+
+```bash
+GET /api/analytics/agents/{id}
+```
+
+Accepts the same `from`, `to`, and `group_by` query parameters as Agent Analytics.
+
+### Response
+
+```json
+{
+  "status": "success",
+  "data": {
+    "agent": {
+      "agent_id": "uuid",
+      "agent_name": "Jane Agent",
+      "transfers_handled": 40,
+      "avg_resolution_mins": 10.2,
+      "messages_sent": 320,
+      "is_available": true
+    },
+    "trend_data": [
+      { "date": "2024-01-01", "transfers_handled": 12, "avg_response_mins": 0 }
+    ]
+  }
+}
+```
+
+## Agent Comparison
+
+Side-by-side stats for all agents in the organization (requires analytics
+permission). Accepts `from` and `to` query parameters.
+
+```bash
+GET /api/analytics/agents/comparison
+```
+
+### Response
+
+```json
+{
+  "status": "success",
+  "data": {
+    "agents": [
+      {
+        "agent_id": "uuid",
+        "agent_name": "Jane Agent",
+        "transfers_handled": 40,
+        "avg_resolution_mins": 10.2,
+        "messages_sent": 320
+      }
+    ]
+  }
+}
+```
+
+## Meta Analytics
+
+Fetch native WhatsApp Business analytics straight from Meta's Graph API, cached
+in Redis. See the [Meta Insights feature guide](/whatomate/features/meta-insights) for the
+dashboards these power.
+
+```bash
+GET /api/analytics/meta
+```
+
+### Query Parameters
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `analytics_type` | string | Yes | One of `analytics` (messaging), `pricing_analytics`, `template_analytics`, `call_analytics` |
+| `start` | string | Yes | Start date (`YYYY-MM-DD`) |
+| `end` | string | Yes | End date (`YYYY-MM-DD`) |
+| `granularity` | string | No | `HALF_HOUR`, `DAY` (default), or `MONTH`. Auto-adjusted to fit the range |
+| `account_id` | string | No | Limit to one WhatsApp account; omit for all accounts in the org |
+| `template_ids` | string | No | JSON array of Meta template IDs (template analytics only; auto-detected if omitted) |
+
+<Aside type="note">
+  Granularity is auto-adjusted to avoid Meta API errors: `MONTH` falls back to
+  `DAY` for ranges under 30 days, and `HALF_HOUR` falls back to `DAY` for ranges
+  over 7 days. Template analytics have a 90-day lookback limit.
+</Aside>
+
+### Response
+
+Results are grouped per account. `cached` indicates whether the response came
+from the Redis cache.
+
+```json
+{
+  "status": "success",
+  "data": {
+    "accounts": [
+      {
+        "account_id": "uuid",
+        "account_name": "main",
+        "data": { },
+        "template_names": { "meta-template-id": "order_confirmation" }
+      }
+    ],
+    "cached": false
+  }
+}
+```
+
+## Meta Analytics Accounts
+
+List the WhatsApp accounts available for Meta analytics.
+
+```bash
+GET /api/analytics/meta/accounts
+```
+
+### Response
+
+```json
+{
+  "status": "success",
+  "data": {
+    "accounts": [
+      { "id": "uuid", "name": "main", "phone_id": "123456789" }
+    ]
+  }
+}
+```
+
+## Refresh Meta Analytics Cache
+
+Clear the cached Meta analytics for the organization so the next request fetches
+fresh data from Meta. Requires the `analytics:write` permission.
+
+```bash
+POST /api/analytics/meta/refresh
+```
+
+### Response
+
+```json
+{
+  "status": "success",
+  "data": { "message": "Analytics cache cleared successfully" }
 }
 ```
 

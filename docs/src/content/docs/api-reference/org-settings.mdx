@@ -1,0 +1,163 @@
+---
+title: Organization Settings
+description: Read and update organization settings and upload calling audio
+---
+
+import { Aside } from '@astrojs/starlight/components';
+
+## Overview
+
+These endpoints manage the current organization's settings — general preferences, calling behaviour, and the audio files used for hold music and ringback. Settings are stored per-organization and always scoped to the caller's org. For org CRUD and membership, see the [Organizations API](/whatomate/api-reference/organizations).
+
+## Get Settings
+
+Return the current organization's settings and name. Values fall back to server defaults (and the global `[calling]` config) when unset.
+
+```bash
+GET /api/org/settings
+```
+
+### Response
+
+```json
+{
+  "status": "success",
+  "data": {
+    "settings": {
+      "mask_phone_numbers": false,
+      "timezone": "UTC",
+      "date_format": "YYYY-MM-DD",
+      "calling_enabled": false,
+      "max_call_duration": 3600,
+      "transfer_timeout_secs": 60,
+      "hold_music_file": "",
+      "ringback_file": "",
+      "meta_app_id": "",
+      "meta_config_id": "",
+      "has_meta_app_secret": false
+    },
+    "name": "Acme Inc"
+  }
+}
+```
+
+### Settings Fields
+
+**General**
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `mask_phone_numbers` | boolean | Mask contact phone numbers (and phone-like names) across the app and exports. |
+| `timezone` | string | Display timezone (default `UTC`). |
+| `date_format` | string | Date display format (default `YYYY-MM-DD`). |
+| `meta_app_id` | string | Meta App ID for embedded signup. |
+| `meta_config_id` | string | Meta configuration ID for embedded signup. |
+| `has_meta_app_secret` | boolean | Read-only flag; `true` when a Meta app secret is stored. The secret itself is encrypted at rest and never returned. |
+
+**Calling**
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `calling_enabled` | boolean | Enable WebRTC voice calling for the organization. |
+| `max_call_duration` | integer | Maximum call length in seconds. |
+| `transfer_timeout_secs` | integer | Seconds to wait for an agent to accept a transfer. |
+| `hold_music_file` | string | Filename of the uploaded hold-music track. |
+| `ringback_file` | string | Filename of the uploaded ringback tone. |
+
+## Update Settings
+
+Update one or more settings. All fields are optional — only the fields present in the body are changed.
+
+```bash
+PUT /api/org/settings
+```
+
+### Request Body
+
+```json
+{
+  "name": "Acme Inc",
+  "mask_phone_numbers": true,
+  "timezone": "America/New_York",
+  "date_format": "MM/DD/YYYY",
+  "calling_enabled": true,
+  "max_call_duration": 1800,
+  "transfer_timeout_secs": 45,
+  "hold_music_file": "org_<id>_hold_music.ogg",
+  "ringback_file": "org_<id>_ringback.ogg",
+  "meta_app_id": "123456789",
+  "meta_config_id": "987654321",
+  "meta_app_secret": "your-app-secret"
+}
+```
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `name` | string | Organization name (ignored if empty). |
+| `mask_phone_numbers` | boolean | Toggle phone masking. |
+| `timezone` | string | Display timezone. |
+| `date_format` | string | Date display format. |
+| `calling_enabled` | boolean | Enable/disable calling. |
+| `max_call_duration` | integer | Max call seconds (applied only when > 0). |
+| `transfer_timeout_secs` | integer | Transfer accept timeout (applied only when > 0). |
+| `hold_music_file` | string | Hold-music filename (usually set via the audio upload below). |
+| `ringback_file` | string | Ringback filename (usually set via the audio upload below). |
+| `meta_app_id` | string | Meta App ID. |
+| `meta_config_id` | string | Meta configuration ID. |
+| `meta_app_secret` | string | Meta app secret; encrypted at rest. Ignored if empty. |
+
+<Aside type="note">
+  Setting any of `meta_app_id`, `meta_config_id`, or `meta_app_secret` additionally requires the `accounts:write` permission. Changes are recorded to the audit trail as `settings.general` and `settings.calling` entries.
+</Aside>
+
+### Response
+
+```json
+{
+  "status": "success",
+  "data": {
+    "message": "Settings updated successfully"
+  }
+}
+```
+
+## Upload Calling Audio
+
+Upload an audio file for hold music or ringback. The file is transcoded to OGG/Opus (48 kHz mono) for WebRTC playback, stored, and the matching `hold_music_file` / `ringback_file` setting is updated automatically.
+
+```bash
+POST /api/org/audio
+```
+
+Requires the `organizations:write` permission.
+
+### Query Parameters
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `type` | string | Yes | `hold_music` or `ringback`. |
+
+### Form Fields
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `file` | file | Yes | Audio file, max 5 MB. Accepts OGG, Opus, MP3, and WAV. |
+
+### Response
+
+```json
+{
+  "status": "success",
+  "data": {
+    "filename": "org_<id>_hold_music.ogg",
+    "type": "hold_music",
+    "mime_type": "audio/mpeg",
+    "size": 204800
+  }
+}
+```
+
+## See Also
+
+- [Organizations API](/whatomate/api-reference/organizations) - Organization CRUD and members
+- [Calling](/whatomate/features/calling) - WebRTC voice calling, hold music, and transfers
