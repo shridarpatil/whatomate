@@ -6,7 +6,7 @@ description: Role and permission management API
 import { Aside } from '@astrojs/starlight/components';
 
 <Aside type="caution">
-  Role management endpoints require the `roles:read`, `roles:create`, `roles:update`, or `roles:delete` permissions respectively.
+  Role management endpoints require the `roles:read`, `roles:write`, or `roles:delete` permission. There is no separate create/update action — creating and editing both use `roles:write`.
 </Aside>
 
 ## Overview
@@ -37,8 +37,8 @@ GET /api/permissions
       {
         "id": "uuid",
         "resource": "users",
-        "action": "create",
-        "description": "Create users"
+        "action": "write",
+        "description": "Create and edit users"
       }
     ]
   }
@@ -76,7 +76,8 @@ GET /api/roles
         "description": "Full access to all features",
         "is_system": true,
         "is_default": false,
-        "permission_count": 45,
+        "permissions": ["users:read", "users:write", "users:delete"],
+        "user_count": 3,
         "created_at": "2024-01-01T00:00:00Z",
         "updated_at": "2024-01-01T00:00:00Z"
       },
@@ -86,14 +87,21 @@ GET /api/roles
         "description": "Custom role with specific permissions",
         "is_system": false,
         "is_default": false,
-        "permission_count": 12,
+        "permissions": ["chat:read", "chat:write"],
+        "user_count": 8,
         "created_at": "2024-01-01T00:00:00Z",
         "updated_at": "2024-01-01T00:00:00Z"
       }
-    ]
+    ],
+    "total": 4,
+    "page": 1,
+    "limit": 50
   }
 }
 ```
+
+`permissions` is a flat array of `resource:action` strings, and `user_count` is how many users hold
+the role. There is no `permission_count` field.
 
 ## Get Role
 
@@ -124,8 +132,8 @@ GET /api/roles/{id}
       {
         "id": "uuid",
         "resource": "contacts",
-        "action": "create",
-        "description": "Create contacts"
+        "action": "write",
+        "description": "Create and edit contacts"
       }
     ],
     "created_at": "2024-01-01T00:00:00Z",
@@ -143,7 +151,7 @@ POST /api/roles
 ```
 
 <Aside type="note">
-  Requires `roles:create` permission.
+  Requires `roles:write` permission.
 </Aside>
 
 ### Request Body
@@ -152,7 +160,7 @@ POST /api/roles
 {
   "name": "Support Agent",
   "description": "Can view and respond to chats",
-  "permissions": ["contacts:read", "messages:read", "messages:create"]
+  "permissions": ["contacts:read", "chat:read", "chat:write"]
 }
 ```
 
@@ -196,7 +204,7 @@ PUT /api/roles/{id}
 ```
 
 <Aside type="note">
-  Requires `roles:update` permission.
+  Requires `roles:write` permission.
 </Aside>
 
 <Aside type="caution">
@@ -209,7 +217,7 @@ PUT /api/roles/{id}
 {
   "name": "Senior Support Agent",
   "description": "Can view, respond to chats, and access analytics",
-  "permissions": ["contacts:read", "messages:read", "messages:create", "analytics:read"]
+  "permissions": ["contacts:read", "chat:read", "chat:write", "analytics:read"]
 }
 ```
 
@@ -267,75 +275,64 @@ DELETE /api/roles/{id}
 
 ## Permission Keys
 
-Permissions use the format `resource:action`. Here are all available permissions:
+Permissions use the format `resource:action`. The only valid actions are:
+`read`, `write`, `delete`, `sync`, `execute`, `import`, `export`, `pickup`, and `assign`.
 
-### User Management
-- `users:read` - View users
-- `users:create` - Create users
-- `users:update` - Update users
-- `users:delete` - Delete users
+<Aside type="caution">
+  There is **no** `create` or `update` action. Creating and editing both map to `write`.
+</Aside>
 
-### Role Management
-- `roles:read` - View roles
-- `roles:create` - Create roles
-- `roles:update` - Update roles
-- `roles:delete` - Delete roles
+The full catalog below matches the permissions seeded on every organization.
 
-### Team Management
-- `teams:read` - View teams
-- `teams:create` - Create teams
-- `teams:update` - Update teams
-- `teams:delete` - Delete teams
-
-### Contacts
-- `contacts:read` - View contacts
-- `contacts:create` - Create contacts
-- `contacts:update` - Update contacts
-- `contacts:delete` - Delete contacts
-
-### Messages
-- `messages:read` - View messages
-- `messages:create` - Send messages
-
-### Templates
-- `templates:read` - View templates
-- `templates:create` - Create templates
-- `templates:update` - Update templates
-- `templates:delete` - Delete templates
-
-### Campaigns
-- `campaigns:read` - View campaigns
-- `campaigns:create` - Create campaigns
-- `campaigns:update` - Update campaigns
-- `campaigns:delete` - Delete campaigns
-
-### Chatbot
-- `chatbot:read` - View chatbot settings
-- `chatbot:update` - Update chatbot settings
-- `flows:read` - View flows
-- `flows:create` - Create flows
-- `flows:update` - Update flows
-- `flows:delete` - Delete flows
+### Users, Roles & Teams
+- `users:read`, `users:write`, `users:delete`
+- `roles:read`, `roles:write`, `roles:delete`
+- `teams:read`, `teams:write`, `teams:delete`
 
 ### Settings
-- `settings:read` - View organization settings
-- `settings:update` - Update organization settings
-- `accounts:read` - View WhatsApp accounts
-- `accounts:create` - Create WhatsApp accounts
-- `accounts:update` - Update WhatsApp accounts
-- `accounts:delete` - Delete WhatsApp accounts
-- `webhooks:read` - View webhooks
-- `webhooks:create` - Create webhooks
-- `webhooks:update` - Update webhooks
-- `webhooks:delete` - Delete webhooks
-- `api_keys:read` - View API keys
-- `api_keys:create` - Create API keys
-- `api_keys:delete` - Delete API keys
+- `settings.general:read`, `settings.general:write`
+- `settings.chatbot:read`, `settings.chatbot:write`
+- `settings.sso:read`, `settings.sso:write`
 
-### Analytics
-- `analytics:read` - View analytics
+### WhatsApp Accounts, Templates & Flows
+- `accounts:read`, `accounts:write`, `accounts:delete`
+- `templates:read`, `templates:write`, `templates:delete`, `templates:sync`
+- `flows.whatsapp:read`, `flows.whatsapp:write`, `flows.whatsapp:delete`
+- `flows.chatbot:read`, `flows.chatbot:write`, `flows.chatbot:delete`
+
+### Chatbot
+- `chatbot.keywords:read`, `chatbot.keywords:write`, `chatbot.keywords:delete`
+- `chatbot.ai:read`, `chatbot.ai:write`, `chatbot.ai:delete`
+
+### Chat & Contacts
+- `chat:read`, `chat:write`, `chat.assign:write`
+- `contacts:read`, `contacts:write`, `contacts:delete`, `contacts:import`, `contacts:export`
+- `tags:read`, `tags:write`, `tags:delete`
+- `transfers:read`, `transfers:write`, `transfers:pickup`
+- `canned_responses:read`, `canned_responses:write`, `canned_responses:delete`
+
+### Campaigns
+- `campaigns:read`, `campaigns:write`, `campaigns:delete`, `campaigns:execute`
+
+### Analytics & Audit
+- `analytics:read`, `analytics:write`, `analytics:delete`, `analytics.agents:read`
+- `audit_logs:read`
+
+### Integrations
+- `webhooks:read`, `webhooks:write`, `webhooks:delete`
+- `api_keys:read`, `api_keys:write`, `api_keys:delete`
+- `custom_actions:read`, `custom_actions:write`, `custom_actions:delete`
+
+### Organizations
+- `organizations:read`, `organizations:write`, `organizations:delete`, `organizations:assign`
+
+### Calling
+- `call_logs:read`
+- `ivr_flows:read`, `ivr_flows:write`, `ivr_flows:delete`
+- `call_transfers:read`, `call_transfers:write`
+- `outgoing_calls:read`, `outgoing_calls:write`
 
 ## See Also
 
-- [Roles & Permissions](/features/roles-permissions) - Learn about the permission system
-- [Users API](/api-reference/users) - User management
+- [Roles & Permissions](/whatomate/features/roles-permissions) - Learn about the permission system
+- [Users API](/whatomate/api-reference/users) - User management

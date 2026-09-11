@@ -7,6 +7,8 @@ import (
 	"io"
 	"maps"
 	"net/http"
+	"net/url"
+	"path"
 	"strings"
 	"time"
 
@@ -942,6 +944,14 @@ func (a *App) SendTemplateMessage(r *fastglue.Request) error {
 	if headerMediaFilename == "" {
 		headerMediaFilename = headerFileFilename
 	}
+	if headerMediaFilename == "" && req.HeaderMediaURL != "" {
+		if mediaURL, err := url.Parse(req.HeaderMediaURL); err == nil {
+			headerMediaFilename = path.Base(mediaURL.Path)
+			if headerMediaFilename == "." || headerMediaFilename == "/" {
+				headerMediaFilename = ""
+			}
+		}
+	}
 
 	// Send using unified message sender
 	msgReq := OutgoingMessageRequest{
@@ -976,6 +986,9 @@ func (a *App) SendTemplateMessage(r *fastglue.Request) error {
 		MessageType:     message.MessageType,
 		Content:         map[string]string{"body": message.Content},
 		InteractiveData: message.InteractiveData,
+		MediaURL:        message.MediaURL,
+		MediaMimeType:   message.MediaMimeType,
+		MediaFilename:   message.MediaFilename,
 		Status:          message.Status,
 		IsReply:         message.IsReply,
 		WhatsAppAccount: message.WhatsAppAccount,

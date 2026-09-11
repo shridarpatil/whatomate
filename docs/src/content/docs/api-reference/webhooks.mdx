@@ -7,7 +7,210 @@ import { Aside } from '@astrojs/starlight/components';
 
 ## Overview
 
-Whatomate receives webhooks from Meta's WhatsApp Business API and processes them automatically. You can also configure your own webhook endpoints to receive notifications about message events.
+There are two distinct webhook systems in Whatomate:
+
+1. **Outbound webhook subscriptions** (`/api/webhooks`) — endpoints **you** own
+   that Whatomate calls when events happen (new message, contact created,
+   transfer requested, etc.). Managed via the REST API below.
+2. **Inbound Meta webhook** (`/api/webhook`, singular) — the endpoint you
+   configure in your Meta App so WhatsApp delivers incoming messages and status
+   updates to Whatomate.
+
+See the [Webhooks feature guide](/whatomate/features/webhooks) for a walkthrough.
+
+## Outbound Webhook Subscriptions
+
+Register your own HTTPS endpoints to receive event notifications from Whatomate.
+Whatomate signs each delivery, retries failures, and enforces SSRF protection on
+the target URL.
+
+### List Webhooks
+
+```bash
+GET /api/webhooks
+```
+
+#### Query Parameters
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `page` | integer | Page number (default: 1) |
+| `limit` | integer | Page size, 1–100. Default `50`. |
+| `search` | string | Filter by name or URL (case-insensitive) |
+
+#### Response
+
+```json
+{
+  "status": "success",
+  "data": {
+    "webhooks": [
+      {
+        "id": "uuid",
+        "name": "Order events",
+        "url": "https://example.com/hooks/whatomate",
+        "events": ["message.incoming", "transfer.created"],
+        "headers": { "X-Team": "support" },
+        "is_active": true,
+        "has_secret": true,
+        "created_at": "2024-01-01T00:00:00Z",
+        "updated_at": "2024-01-01T00:00:00Z"
+      }
+    ],
+    "available_events": [
+      { "value": "message.incoming", "label": "Message Incoming", "description": "When a new message is received from a contact" }
+    ],
+    "total": 1,
+    "page": 1,
+    "limit": 50
+  }
+}
+```
+
+The `has_secret` flag indicates whether a signing secret is configured; the
+secret itself is never returned.
+
+### Create Webhook
+
+```bash
+POST /api/webhooks
+```
+
+#### Request Body
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `name` | string | Yes | Human-readable label |
+| `url` | string | Yes | Target URL (http or https; must not resolve to an internal/private address) |
+| `events` | string[] | Yes | At least one event type (see below) |
+| `headers` | object | No | Custom headers sent with every delivery |
+| `secret` | string | No | HMAC signing secret. If omitted, one is auto-generated |
+| `is_active` | boolean | No | Whether the webhook is enabled |
+
+```json
+{
+  "name": "Order events",
+  "url": "https://example.com/hooks/whatomate",
+  "events": ["message.incoming", "transfer.created"],
+  "headers": { "X-Team": "support" },
+  "secret": "my-signing-secret"
+}
+```
+
+#### Response
+
+Returns the created webhook in the same shape as a List item.
+
+### Get Webhook
+
+```bash
+GET /api/webhooks/{id}
+```
+
+### Update Webhook
+
+```bash
+PUT /api/webhooks/{id}
+```
+
+Accepts the same body as Create. Sending an empty `secret` leaves the existing
+secret unchanged; `is_active` is always applied.
+
+### Delete Webhook
+
+```bash
+DELETE /api/webhooks/{id}
+```
+
+```json
+{
+  "status": "success",
+  "data": { "message": "Webhook deleted successfully" }
+}
+```
+
+### Test Webhook
+
+Send a synchronous test event to the webhook's URL to verify connectivity and
+signing.
+
+```bash
+POST /api/webhooks/{id}/test
+```
+
+The endpoint receives a payload with `"event": "test"`. On a non-2xx response the
+API returns `502 Bad Gateway`.
+
+```json
+{
+  "status": "success",
+  "data": { "message": "Test webhook sent successfully" }
+}
+```
+
+### Event Types
+
+| Event | Description |
+|-------|-------------|
+| `message.incoming` | A new message is received from a contact |
+| `message.sent` | An agent sends a message |
+| `message.outgoing` | A message is sent to a contact (includes echoes) |
+| `contact.created` | A new contact is created |
+| `transfer.created` | A transfer to a human agent is requested |
+| `transfer.assigned` | A transfer is assigned to an agent |
+| `transfer.resumed` | The chatbot is resumed (transfer closed) |
+
+### Delivery Payload
+
+Every delivery is a POST with this envelope:
+
+```json
+{
+  "event": "message.incoming",
+  "timestamp": "2024-01-01T12:00:00Z",
+  "data": { }
+}
+```
+
+The `data` object varies by event (message, contact, or transfer details).
+
+### Signing
+
+When a secret is configured, Whatomate signs the raw request body and sends the
+signature in the `X-Webhook-Signature` header:
+
+```
+X-Webhook-Signature: sha256=<hex HMAC-SHA256 of the body>
+```
+
+Verify it by computing `HMAC-SHA256(body, secret)` and comparing (constant-time)
+against the value after the `sha256=` prefix.
+
+### Retries
+
+A delivery is attempted at most **3 times** total (the initial attempt plus 2 retries), with a 2s
+and then 4s pause before each retry. A network error or any non-2xx response counts as a failure;
+after the third failure the delivery is dropped and logged.
+
+Each dispatch sends to at most **10 webhooks concurrently**. Retries mean your endpoint can receive
+the same event more than once — make it idempotent.
+
+Every request carries `Content-Type: application/json` and `User-Agent: Whatomate-Webhook/1.0`,
+plus any custom `headers` you configured.
+
+### SSRF Protection
+
+Webhook URLs are validated on save and again at delivery time:
+
+- The scheme must be `http` or `https`.
+- Hostnames like `localhost`, `*.local`, and `*.internal` are rejected.
+- IP literals and DNS results that resolve to loopback, private, link-local, or
+  unspecified ranges are refused (guards against DNS-rebinding).
+
+<Aside type="caution">
+  Because private/internal targets are blocked, point webhooks at
+  publicly-reachable HTTPS endpoints.
+</Aside>
 
 ## Meta Webhook Configuration
 
@@ -123,40 +326,52 @@ Triggered when a message status changes.
 
 ## WebSocket Events
 
-For real-time updates in your frontend, connect to the WebSocket endpoint:
+For real-time updates in your frontend, connect to `/ws`. The socket upgrades **unauthenticated** —
+the token is never passed in the query string. Fetch a short-lived token from
+`GET /api/auth/ws-token` and send it as the first message:
 
 ```javascript
-const ws = new WebSocket('ws://your-server:8080/ws?token=YOUR_JWT_TOKEN');
+const { data } = await (await fetch('/api/auth/ws-token')).json();
 
+const ws = new WebSocket('ws://your-server:8080/ws');
+ws.onopen = () => ws.send(JSON.stringify({ type: 'auth', payload: { token: data.token } }));
 ws.onmessage = (event) => {
-  const data = JSON.parse(event.data);
-  console.log('Event:', data.type, data.payload);
+  const msg = JSON.parse(event.data);
+  console.log('Event:', msg.type, msg.payload);
 };
 ```
 
+The token expires after 30 seconds, so fetch a fresh one on every (re)connect.
+
 ### Event Types
 
-| Event | Description |
-|-------|-------------|
-| `message:new` | New message received |
-| `message:status` | Message status updated |
-| `contact:new` | New contact created |
-| `contact:updated` | Contact information updated |
+Every frame is `{ "type": ..., "payload": ... }`. Types use `snake_case`:
+
+| Group | Types |
+|---|---|
+| Session | `auth`, `set_contact`, `ping`, `pong` |
+| Messaging | `new_message`, `status_update`, `reaction_update`, `contact_update` |
+| Notes | `conversation_note_created`, `conversation_note_updated`, `conversation_note_deleted` |
+| Agent transfers | `agent_transfer`, `agent_transfer_assign`, `agent_transfer_resume`, `transfer_escalation`, `transfer_escalated`, `transfer_expired` |
+| Campaigns | `campaign_stats_update` |
+| Permissions | `permissions_updated` |
+| Calls | `call_incoming`, `call_answered`, `call_ended`, `call_hold`, `call_resumed`, `call_permission_update` |
+| Call transfers | `call_transfer_waiting`, `call_transfer_connected`, `call_transfer_completed`, `call_transfer_abandoned`, `call_transfer_no_answer`, `call_transfer_reassigned` |
+| Outgoing calls | `outgoing_call_initiated`, `outgoing_call_ringing`, `outgoing_call_answered`, `outgoing_call_rejected`, `outgoing_call_ended` |
 
 ### Message Event Payload
 
 ```json
 {
-  "type": "message:new",
+  "type": "new_message",
   "payload": {
     "id": "uuid",
     "contact_id": "uuid",
     "direction": "incoming",
-    "type": "text",
-    "content": {
-      "text": "Hello!"
-    },
-    "timestamp": "2024-01-01T12:00:00Z"
+    "message_type": "text",
+    "content": { "body": "Hello!" },
+    "status": "received",
+    "created_at": "2024-01-01T12:00:00Z"
   }
 }
 ```
@@ -171,7 +386,10 @@ Always verify webhook requests are from Meta:
 2. Compute HMAC-SHA256 of the request body using your app secret
 3. Compare with the signature in the header
 
-Whatomate handles this verification automatically.
+Whatomate does this automatically — but **only when both** the `X-Hub-Signature-256` header is
+present **and** the WhatsApp account matching the payload's `phone_number_id` has an App Secret
+stored (Settings → Accounts). If either is missing, the payload is accepted without verification.
+Set the App Secret on every account you expose to Meta.
 
 <Aside type="caution">
   Keep your webhook verify token and app secret secure. Never expose them in client-side code.
@@ -179,10 +397,12 @@ Whatomate handles this verification automatically.
 
 ### Rate Limiting
 
-Meta may send webhooks at high volumes during campaigns. Whatomate:
-- Processes webhooks asynchronously
-- Queues events in Redis for processing
-- Handles duplicate events gracefully
+Inbound Meta webhooks are processed **synchronously** in the request handler — there is no Redis
+queue in front of `/api/webhook`. The Redis job queue is used for outbound campaign sends, not for
+inbound webhook intake. Chatbot settings, flows, keyword rules and account lookups are Redis-cached
+to keep per-webhook work small.
+
+`/api/webhook` is exempt from authentication and from the global API rate limit.
 
 <Aside type="tip">
   Use the WebSocket connection for real-time UI updates instead of polling the API.

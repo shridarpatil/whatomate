@@ -39,7 +39,7 @@ GET /api/api-keys
     {
       "id": "uuid",
       "name": "Production Integration",
-      "key_prefix": "a1b2c3d4",
+      "key_prefix": "a1b2c3d4e5f6g7h8",
       "last_used_at": "2024-01-15T10:30:00Z",
       "expires_at": "2025-12-31T23:59:59Z",
       "is_active": true,
@@ -91,6 +91,67 @@ POST /api/api-keys
   The full API key is only shown once when created. Store it securely - you won't be able to retrieve it again.
 </Aside>
 
+## Get API Key
+
+Retrieve a single API key's metadata. The full key is never returned.
+
+```bash
+GET /api/api-keys/{id}
+```
+
+### Response
+
+```json
+{
+  "status": "success",
+  "data": {
+    "id": "uuid",
+    "name": "Production Integration",
+    "key_prefix": "a1b2c3d4e5f6g7h8",
+    "last_used_at": "2024-01-15T10:30:00Z",
+    "expires_at": "2025-12-31T23:59:59Z",
+    "is_active": true,
+    "created_at": "2024-01-01T00:00:00Z"
+  }
+}
+```
+
+## Update API Key
+
+Enable or disable an existing API key. Currently only the `is_active` flag can be changed.
+
+```bash
+PUT /api/api-keys/{id}
+```
+
+### Request Body
+
+```json
+{
+  "is_active": false
+}
+```
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| is_active | boolean | No | Set `false` to disable the key without deleting it |
+
+### Response
+
+```json
+{
+  "status": "success",
+  "data": {
+    "id": "uuid",
+    "name": "Production Integration",
+    "key_prefix": "a1b2c3d4e5f6g7h8",
+    "expires_at": "2025-12-31T23:59:59Z",
+    "is_active": false,
+    "created_at": "2024-01-01T00:00:00Z"
+  }
+}
+```
+
 ## Delete API Key
 
 Revoke an API key. This action is immediate and cannot be undone.
@@ -123,6 +184,8 @@ DELETE /api/api-keys/{id}
 API keys follow the format: `whm_` followed by 32 hexadecimal characters.
 
 Example: `whm_a1b2c3d4e5f6g7h8i9j0k1l2m3n4o5p6`
+
+The `key_prefix` stored and returned by the API is the **first 16 characters after the `whm_` prefix** — enough to identify a key in the UI without exposing the secret.
 
 ## Permissions
 

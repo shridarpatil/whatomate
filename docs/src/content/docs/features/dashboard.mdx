@@ -38,7 +38,7 @@ Each widget is configured with:
 - **Name** — a label displayed on the dashboard
 - **Data Source** — choose from messages, contacts, campaigns, transfers, or sessions
 - **Metric** — count, sum, or average
-- **Display Type** — number card or chart
+- **Display Type** — one of `number` (single value card), `percentage` (value shown as a percentage), `chart`, `table` (tabular breakdown), or `shortcuts` (a static quick-actions tile that needs no data source)
 - **Chart Type** — line, bar, or pie (when display type is chart)
 - **Group By** — break down chart data by a field value (when display type is chart)
 - **Filters** — narrow results by field conditions (e.g., status equals "failed")
@@ -46,6 +46,9 @@ Each widget is configured with:
 - **Share with team** — make the widget visible to other users in your organization
 
 Widgets can be edited or deleted by their owner using the icons that appear on hover.
+
+### Grid Layout
+The dashboard is a resizable grid. Each widget stores its own grid position and size (`grid_x`, `grid_y`, `grid_w`, `grid_h`). Drag a widget to reposition it or drag its edge to resize; the new arrangement is persisted in one bulk save so your layout is restored on the next visit.
 
 ### Group By Charts
 When creating a chart widget, select a **Group By** field to split the data by distinct values of that field.

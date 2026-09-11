@@ -9,10 +9,32 @@ import { Aside } from '@astrojs/starlight/components';
 
 Whatomate supports two authentication methods:
 
-1. **JWT Tokens** - For user sessions and frontend applications
+1. **Session cookies** - For user sessions and frontend applications
 2. **API Keys** - For server-to-server integrations and automation
 
-After logging in, you receive an access token and refresh token. Include the access token in the `Authorization` header for all protected API requests. Alternatively, use an [API key](/whatomate/api-reference/api-keys) in the `X-API-Key` header.
+Logging in (or registering, refreshing, or switching org) sets three cookies and returns only
+`{ expires_in, user }` in the body. **No token is ever returned in the response body.**
+
+| Cookie | httpOnly | Path | Max-Age | Purpose |
+|---|---|---|---|---|
+| `whm_access` | yes | `<base_path>/api` | `jwt.access_expiry_mins` | The access JWT |
+| `whm_refresh` | yes | `<base_path>/api/auth/refresh` | `jwt.refresh_expiry_days` | The refresh JWT |
+| `whm_csrf` | **no** | `<base_path>/` | `jwt.refresh_expiry_days` | Read by JS and echoed back in `X-CSRF-Token` |
+
+All three are `SameSite=Lax`, and `Secure` when `cookie.secure` is set (forced on in production).
+Because the two auth cookies are httpOnly, JavaScript cannot read them; the browser attaches them
+automatically.
+
+Cookie-authenticated **mutating** requests must also send the `whm_csrf` value in an
+`X-CSRF-Token` header — see [CSRF](/whatomate/api-reference/overview#csrf).
+
+For non-browser clients, use an [API key](/whatomate/api-reference/api-keys) in the `X-API-Key`
+header — those requests skip the CSRF check. An `Authorization: Bearer <token>` header is accepted
+only as a fallback.
+
+<Aside type="note">
+  All authentication responses use the standard success envelope: `{ "status": "success", "data": { ... } }`. The examples below show the contents of `data`.
+</Aside>
 
 ## Register
 
@@ -40,16 +62,25 @@ POST /api/auth/register
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
 | `email` | string | Yes | User's email address |
-| `password` | string | Yes | Minimum 8 characters |
+| `password` | string | Yes | Must be non-empty. The API enforces no minimum length here — see the note below |
 | `full_name` | string | Yes | Display name |
 | `organization_id` | string | Yes | UUID of the organization to join |
 
+<Aside type="caution">
+  Registration and `POST /api/users` only require a non-empty password — no length or complexity
+  rule is applied. `PUT /api/me/password` is the one endpoint that enforces a minimum (6
+  characters). Set your own policy in whatever provisions accounts.
+</Aside>
+
 ### Response
+
+Sets the `whm_access` and `whm_refresh` httpOnly cookies. The body contains the expiry hint and the full user object — no tokens.
 
 ```json
 {
   "status": "success",
   "data": {
+    "expires_in": 900,
     "user": {
       "id": "uuid",
       "email": "user@example.com",
@@ -59,17 +90,14 @@ POST /api/auth/register
         "id": "uuid",
         "name": "agent"
       }
-    },
-    "access_token": "eyJhbGciOiJIUzI1NiIs...",
-    "refresh_token": "eyJhbGciOiJIUzI1NiIs...",
-    "expires_in": 3600
+    }
   }
 }
 ```
 
 ## Login
 
-Authenticate and receive tokens.
+Authenticate and start a session. On success, the `whm_access` and `whm_refresh` httpOnly cookies are set and the body returns the full user object (note the field is `full_name`, not `name`).
 
 ```bash
 POST /api/auth/login
@@ -80,7 +108,7 @@ POST /api/auth/login
 ```json
 {
   "email": "user@example.com",
-  "password": "securepassword123"
+  "password": "securepassword12"
 }
 ```
 
@@ -90,27 +118,32 @@ POST /api/auth/login
 {
   "status": "success",
   "data": {
+    "expires_in": 900,
     "user": {
       "id": "uuid",
       "email": "user@example.com",
-      "name": "John Doe"
-    },
-    "access_token": "eyJhbGciOiJIUzI1NiIs...",
-    "refresh_token": "eyJhbGciOiJIUzI1NiIs...",
-    "expires_in": 3600
+      "full_name": "John Doe",
+      "organization_id": "uuid",
+      "role": {
+        "id": "uuid",
+        "name": "agent"
+      }
+    }
   }
 }
 ```
 
 ## Refresh Token
 
-Get a new access token using your refresh token.
+Rotate the access token. The endpoint reads the refresh token from the `whm_refresh` **cookie** first, falling back to a `refresh_token` field in the JSON body. On success, both cookies are re-issued.
 
 ```bash
 POST /api/auth/refresh
 ```
 
 ### Request Body
+
+The body is optional when the `whm_refresh` cookie is present. Provide it only for non-browser clients:
 
 ```json
 {
@@ -124,16 +157,19 @@ POST /api/auth/refresh
 {
   "status": "success",
   "data": {
-    "access_token": "eyJhbGciOiJIUzI1NiIs...",
-    "refresh_token": "eyJhbGciOiJIUzI1NiIs...",
-    "expires_in": 3600
+    "expires_in": 900,
+    "user": {
+      "id": "uuid",
+      "email": "user@example.com",
+      "full_name": "John Doe"
+    }
   }
 }
 ```
 
 ## Switch Organization
 
-Switch the current user's active organization. Returns new tokens scoped to the target organization with the user's org-specific role and permissions.
+Switch the current user's active organization. Re-issues the auth cookies scoped to the target organization with the user's org-specific role and permissions.
 
 <Aside type="note">
   Non-super-admin users must be a member of the target organization. Super admins can switch to any organization.
@@ -157,6 +193,7 @@ POST /api/auth/switch-org
 {
   "status": "success",
   "data": {
+    "expires_in": 900,
     "user": {
       "id": "uuid",
       "email": "user@example.com",
@@ -167,33 +204,124 @@ POST /api/auth/switch-org
         "name": "agent",
         "permissions": [
           { "resource": "contacts", "action": "read" },
-          { "resource": "messages", "action": "read" }
+          { "resource": "chat", "action": "read" }
         ]
       }
-    },
-    "access_token": "eyJhbGciOiJIUzI1NiIs...",
-    "refresh_token": "eyJhbGciOiJIUzI1NiIs...",
-    "expires_in": 3600
+    }
   }
 }
 ```
 
-## Using Tokens
+## Logout
 
-Include the access token in the `Authorization` header for all protected API requests:
+Clear the session. Revokes the refresh token (read from the `whm_refresh` cookie, or the body as a fallback) and clears both auth cookies.
+
+```bash
+POST /api/auth/logout
+```
+
+### Response
+
+```json
+{
+  "status": "success",
+  "data": {
+    "status": "logged_out"
+  }
+}
+```
+
+## WebSocket Token
+
+Because httpOnly cookies cannot be read by JavaScript, the real-time WebSocket connection is
+authenticated with a short-lived token obtained here.
+
+```bash
+GET /api/auth/ws-token
+```
+
+### Response
+
+```json
+{
+  "status": "success",
+  "data": {
+    "token": "eyJhbGciOiJIUzI1NiIs..."
+  }
+}
+```
+
+The token is a JWT with subject `ws` and a **30-second** lifetime — fetch a fresh one for every
+connection attempt, including reconnects.
+
+### Connecting
+
+`/ws` upgrades **without** authentication. The token is never put in the URL; instead the client
+sends it as the first message on the open socket, and the server registers the connection only
+after validating it:
+
+```json
+{ "type": "auth", "payload": { "token": "eyJhbGciOiJIUzI1NiIs..." } }
+```
+
+## SSO (Single Sign-On)
+
+### List Public SSO Providers
+
+Returns the enabled SSO providers (deduplicated by type) so a login page can render the available buttons. Public — no authentication required.
+
+```bash
+GET /api/auth/sso/providers
+```
+
+#### Response
+
+```json
+{
+  "status": "success",
+  "data": [
+    { "provider": "google", "name": "Google" },
+    { "provider": "custom", "name": "Custom" }
+  ]
+}
+```
+
+### Initiate SSO
+
+Redirects the browser to the identity provider's OAuth authorization page. Open this URL directly in the browser (not via XHR).
+
+```bash
+GET /api/auth/sso/{provider}/init
+```
+
+### SSO Callback
+
+The provider redirects back here after the user authenticates. On success the endpoint sets the auth cookies and redirects into the app.
+
+```bash
+GET /api/auth/sso/{provider}/callback
+```
+
+## Using the Session
+
+Browser clients need no extra headers — the httpOnly cookies are sent automatically. For programmatic access, send an API key instead:
 
 ```bash
 curl -X GET "http://your-server:8080/api/contacts" \
-  -H "Authorization: Bearer eyJhbGciOiJIUzI1NiIs..."
+  -H "X-API-Key: whm_a1b2c3d4e5f6g7h8i9j0k1l2m3n4o5p6"
 ```
 
 ## Token Expiration
 
-| Token Type | Default Expiration |
-|------------|-------------------|
-| Access Token | 1 hour |
-| Refresh Token | 7 days |
+| Token Type | Config key | Default |
+|------------|-----------|---------|
+| Access token | `jwt.access_expiry_mins` | **15 minutes** |
+| Refresh token | `jwt.refresh_expiry_days` | **1 day** |
+
+`expires_in` in the response body is `access_expiry_mins × 60` — `900` with the defaults.
+
+When the access token expires, call `POST /api/auth/refresh` to rotate it. Both durations are configurable in `config.toml`.
 
 <Aside type="caution">
-  Store tokens securely. Never expose tokens in client-side code or version control.
+  Never expose API keys in client-side code or version control. Session tokens are held in httpOnly cookies and are not accessible to JavaScript.
 </Aside>
