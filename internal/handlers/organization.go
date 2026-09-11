@@ -577,9 +577,23 @@ func (a *App) AddOrganizationMember(r *fastglue.Request) error {
 		return r.SendErrorEnvelope(fasthttp.StatusBadRequest, "user_id or email is required", nil, "")
 	}
 
+	// Look up the membership including soft-deleted rows: idx_user_org carries no
+	// deleted_at predicate, so a previously removed member's row blocks Create and
+	// has to be revived instead.
+	var existing models.UserOrganization
+	revive := false
+	if err := a.DB.Unscoped().
+		Where("user_id = ? AND organization_id = ?", targetUser.ID, orgID).
+		First(&existing).Error; err == nil {
+		if !existing.DeletedAt.Valid {
+			return r.SendErrorEnvelope(fasthttp.StatusConflict, "User is already a member of this organization", nil, "")
+		}
+		revive = true
+	}
+
 	// Determine role. A membership row with a NULL role must never be created:
-	// the org-scoped permission lookup finds no role for it, and the member is
-	// left with no permissions in this org at all — so fail loudly instead.
+	// the org-scoped permission lookup finds no role for it, so the member would
+	// land in the org with no permissions at all — fail loudly instead.
 	var roleID uuid.UUID
 	if req.RoleID != nil {
 		// Validate role exists and belongs to org
@@ -597,15 +611,7 @@ func (a *App) AddOrganizationMember(r *fastglue.Request) error {
 		roleID = defaultRole.ID
 	}
 
-	// idx_user_org carries no deleted_at predicate, so a previously removed
-	// member's soft-deleted row blocks Create — revive it instead.
-	var existing models.UserOrganization
-	if err := a.DB.Unscoped().
-		Where("user_id = ? AND organization_id = ?", targetUser.ID, orgID).
-		First(&existing).Error; err == nil {
-		if !existing.DeletedAt.Valid {
-			return r.SendErrorEnvelope(fasthttp.StatusConflict, "User is already a member of this organization", nil, "")
-		}
+	if revive {
 		if err := a.DB.Unscoped().Model(&existing).Updates(map[string]any{
 			"deleted_at": nil,
 			"role_id":    roleID,
