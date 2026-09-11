@@ -55,17 +55,17 @@ func TestApp_ListUsers(t *testing.T) {
 	t.Run("empty list for new org", func(t *testing.T) {
 		app := newTestApp(t)
 		org := testutil.CreateTestOrganization(t, app.DB)
-		// Create a user in a different org so the admin has permissions
+		// ListUsers joins user_organizations, so viewing an org with no members
+		// while not being one requires a super admin — the org-switch case.
 		otherOrg := testutil.CreateTestOrganization(t, app.DB)
-		adminRole := testutil.CreateAdminRole(t, app.DB, otherOrg.ID)
-		admin := testutil.CreateTestUser(t, app.DB, otherOrg.ID,
+		superAdmin := testutil.CreateTestUser(t, app.DB, otherOrg.ID,
 			testutil.WithEmail(testutil.UniqueEmail("list-empty-admin")),
-			testutil.WithRoleID(&adminRole.ID),
+			testutil.WithSuperAdmin(),
 		)
 
 		req := testutil.NewGETRequest(t)
-		// Query for org that has no users, but auth as the admin from otherOrg
-		testutil.SetAuthContext(req, org.ID, admin.ID)
+		// Query for org that has no members, authed as a super admin from otherOrg
+		testutil.SetAuthContext(req, org.ID, superAdmin.ID)
 
 		err := app.ListUsers(req)
 		require.NoError(t, err)
@@ -79,6 +79,25 @@ func TestApp_ListUsers(t *testing.T) {
 		err = json.Unmarshal(testutil.GetResponseBody(req), &resp)
 		require.NoError(t, err)
 		assert.Empty(t, resp.Data.Users)
+	})
+
+	t.Run("forbidden for admin of another org", func(t *testing.T) {
+		app := newTestApp(t)
+		org := testutil.CreateTestOrganization(t, app.DB)
+		// Admin in otherOrg only — the role must not carry into org.
+		otherOrg := testutil.CreateTestOrganization(t, app.DB)
+		adminRole := testutil.CreateAdminRole(t, app.DB, otherOrg.ID)
+		admin := testutil.CreateTestUser(t, app.DB, otherOrg.ID,
+			testutil.WithEmail(testutil.UniqueEmail("list-foreign-admin")),
+			testutil.WithRoleID(&adminRole.ID),
+		)
+
+		req := testutil.NewGETRequest(t)
+		testutil.SetAuthContext(req, org.ID, admin.ID)
+
+		err := app.ListUsers(req)
+		require.NoError(t, err)
+		assert.Equal(t, fasthttp.StatusForbidden, testutil.GetResponseStatusCode(req))
 	})
 
 	t.Run("forbidden without users:read permission", func(t *testing.T) {
