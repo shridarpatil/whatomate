@@ -482,6 +482,9 @@ func (a *App) CreateOrganization(r *fastglue.Request) error {
 
 	a.Log.Info("Created organization", "org_id", org.ID, "org_name", org.Name, "created_by", userID)
 
+	a.logAudit(org.ID, userID, "organization", org.ID, models.AuditActionCreated, nil,
+		map[string]any{"name": org.Name, "slug": org.Slug})
+
 	return r.SendEnvelope(OrganizationResponse{
 		ID:        org.ID,
 		Name:      org.Name,
@@ -550,7 +553,7 @@ type AddMemberRequest struct {
 
 // AddOrganizationMember adds an existing user to the current organization
 func (a *App) AddOrganizationMember(r *fastglue.Request) error {
-	orgID, _, err := a.requireAuth(r, models.ResourceOrganizations, models.ActionAssign)
+	orgID, actorID, err := a.requireAuth(r, models.ResourceOrganizations, models.ActionAssign)
 	if err != nil {
 		return nil
 	}
@@ -574,43 +577,60 @@ func (a *App) AddOrganizationMember(r *fastglue.Request) error {
 		return r.SendErrorEnvelope(fasthttp.StatusBadRequest, "user_id or email is required", nil, "")
 	}
 
-	// Check if already a member
-	var existingCount int64
-	a.DB.Model(&models.UserOrganization{}).
-		Where("user_id = ? AND organization_id = ?", targetUser.ID, orgID).
-		Count(&existingCount)
-	if existingCount > 0 {
-		return r.SendErrorEnvelope(fasthttp.StatusConflict, "User is already a member of this organization", nil, "")
-	}
-
-	// Determine role
-	var roleID *uuid.UUID
+	// Determine role. A membership row with a NULL role must never be created:
+	// the org-scoped permission lookup finds no role for it, and the member is
+	// left with no permissions in this org at all — so fail loudly instead.
+	var roleID uuid.UUID
 	if req.RoleID != nil {
 		// Validate role exists and belongs to org
 		var role models.CustomRole
 		if err := a.DB.Where("id = ? AND organization_id = ?", req.RoleID, orgID).First(&role).Error; err != nil {
 			return r.SendErrorEnvelope(fasthttp.StatusBadRequest, "Invalid role", nil, "")
 		}
-		roleID = req.RoleID
+		roleID = role.ID
 	} else {
 		// Use org's default role
 		var defaultRole models.CustomRole
-		if err := a.DB.Where("organization_id = ? AND is_default = ?", orgID, true).First(&defaultRole).Error; err == nil {
-			roleID = &defaultRole.ID
+		if err := a.DB.Where("organization_id = ? AND is_default = ?", orgID, true).First(&defaultRole).Error; err != nil {
+			return r.SendErrorEnvelope(fasthttp.StatusBadRequest, "role_id is required: this organization has no default role", nil, "")
+		}
+		roleID = defaultRole.ID
+	}
+
+	// idx_user_org carries no deleted_at predicate, so a previously removed
+	// member's soft-deleted row blocks Create — revive it instead.
+	var existing models.UserOrganization
+	if err := a.DB.Unscoped().
+		Where("user_id = ? AND organization_id = ?", targetUser.ID, orgID).
+		First(&existing).Error; err == nil {
+		if !existing.DeletedAt.Valid {
+			return r.SendErrorEnvelope(fasthttp.StatusConflict, "User is already a member of this organization", nil, "")
+		}
+		if err := a.DB.Unscoped().Model(&existing).Updates(map[string]any{
+			"deleted_at": nil,
+			"role_id":    roleID,
+		}).Error; err != nil {
+			a.Log.Error("Failed to restore organization member", "error", err)
+			return r.SendErrorEnvelope(fasthttp.StatusInternalServerError, "Failed to add member", nil, "")
+		}
+	} else {
+		userOrg := models.UserOrganization{
+			UserID:         targetUser.ID,
+			OrganizationID: orgID,
+			RoleID:         &roleID,
+			IsDefault:      false,
+		}
+		if err := a.DB.Create(&userOrg).Error; err != nil {
+			a.Log.Error("Failed to add organization member", "error", err)
+			return r.SendErrorEnvelope(fasthttp.StatusInternalServerError, "Failed to add member", nil, "")
 		}
 	}
 
-	userOrg := models.UserOrganization{
-		UserID:         targetUser.ID,
-		OrganizationID: orgID,
-		RoleID:         roleID,
-		IsDefault:      false,
-	}
+	// The member may have had a cached (empty or stale) permission set for this org.
+	a.InvalidateUserPermissionsCache(targetUser.ID)
 
-	if err := a.DB.Create(&userOrg).Error; err != nil {
-		a.Log.Error("Failed to add organization member", "error", err)
-		return r.SendErrorEnvelope(fasthttp.StatusInternalServerError, "Failed to add member", nil, "")
-	}
+	a.logAudit(orgID, actorID, "organization_member", targetUser.ID, models.AuditActionCreated, nil,
+		map[string]any{"user_id": targetUser.ID, "email": targetUser.Email, "role_id": roleID})
 
 	return r.SendEnvelope(map[string]string{"message": "Member added successfully"})
 }
@@ -645,6 +665,9 @@ func (a *App) RemoveOrganizationMember(r *fastglue.Request) error {
 	// Invalidate removed user's permission cache
 	a.InvalidateUserPermissionsCache(targetUserID)
 
+	a.logAudit(orgID, userID, "organization_member", targetUserID, models.AuditActionDeleted,
+		map[string]any{"user_id": targetUserID}, nil)
+
 	return r.SendEnvelope(map[string]string{"message": "Member removed successfully"})
 }
 
@@ -655,7 +678,7 @@ type UpdateMemberRoleRequest struct {
 
 // UpdateOrganizationMemberRole updates a member's role in the current organization
 func (a *App) UpdateOrganizationMemberRole(r *fastglue.Request) error {
-	orgID, _, err := a.requireAuth(r, models.ResourceOrganizations, models.ActionAssign)
+	orgID, actorID, err := a.requireAuth(r, models.ResourceOrganizations, models.ActionAssign)
 	if err != nil {
 		return nil
 	}
@@ -680,6 +703,12 @@ func (a *App) UpdateOrganizationMemberRole(r *fastglue.Request) error {
 		return r.SendErrorEnvelope(fasthttp.StatusBadRequest, "Invalid role", nil, "")
 	}
 
+	var previousRoleID *uuid.UUID
+	var currentMembership models.UserOrganization
+	if err := a.DB.Where("user_id = ? AND organization_id = ?", targetUserID, orgID).First(&currentMembership).Error; err == nil {
+		previousRoleID = currentMembership.RoleID
+	}
+
 	// Update the user's role in this org
 	result := a.DB.Model(&models.UserOrganization{}).
 		Where("user_id = ? AND organization_id = ?", targetUserID, orgID).
@@ -694,6 +723,9 @@ func (a *App) UpdateOrganizationMemberRole(r *fastglue.Request) error {
 
 	// Invalidate permission cache
 	a.InvalidateUserPermissionsCache(targetUserID)
+
+	a.logAudit(orgID, actorID, "organization_member", targetUserID, models.AuditActionUpdated,
+		map[string]any{"role_id": previousRoleID}, map[string]any{"role_id": req.RoleID})
 
 	return r.SendEnvelope(map[string]string{"message": "Member role updated successfully"})
 }
