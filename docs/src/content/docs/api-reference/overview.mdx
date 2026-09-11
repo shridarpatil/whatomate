@@ -3,7 +3,7 @@ title: API Overview
 description: Introduction to the Whatomate REST API
 ---
 
-import { Card, CardGrid } from '@astrojs/starlight/components';
+import { Aside, Card, CardGrid } from '@astrojs/starlight/components';
 
 ## Base URL
 
@@ -15,13 +15,17 @@ http://your-server:8080/api
 
 ## Authentication
 
-The Whatomate API uses JWT (JSON Web Tokens) for authentication. Include the access token in the Authorization header:
+The primary authentication mechanism is **httpOnly session cookies**. Logging in (`POST /api/auth/login`) sets `whm_access` and `whm_refresh` cookies — the login response does **not** contain a token in its body. Browser clients are authenticated automatically by these cookies on every subsequent request.
+
+For server-to-server integrations, send an **API key** in the `X-API-Key` header instead:
 
 ```bash
-Authorization: Bearer <access_token>
+X-API-Key: whm_<your-api-key>
 ```
 
-See [Authentication](/whatomate/api-reference/authentication) for details on obtaining tokens.
+A `Authorization: Bearer <token>` header is also accepted as a fallback, but cookies and API keys are the recommended methods.
+
+See [Authentication](/whatomate/api-reference/authentication) for details on the cookie flow, and [API Keys](/whatomate/api-reference/api-keys) for programmatic access.
 
 ## Response Format
 
@@ -52,51 +56,105 @@ All responses are returned in JSON format with the following structure:
 
 | Code | Description |
 |------|-------------|
-| 200 | Success |
-| 201 | Created |
-| 400 | Bad Request - Invalid parameters |
-| 401 | Unauthorized - Invalid or missing token |
-| 403 | Forbidden - Insufficient permissions |
+| 200 | Success — including successful creates. The API does not return `201`. |
+| 400 | Bad Request — invalid parameters or body |
+| 401 | Unauthorized — missing/invalid cookie or API key |
+| 403 | Forbidden — `Insufficient permissions`, or a CSRF token mismatch |
 | 404 | Not Found |
+| 409 | Conflict — e.g. a duplicate name, or a contact that already has an active transfer |
+| 429 | Too Many Requests — rate limited |
 | 500 | Internal Server Error |
+| 501 | Not Implemented — feature not configured on this deployment |
+| 503 | Service Unavailable — a required subsystem (e.g. calling) is disabled or unreachable |
 
 ## Rate Limiting
 
-API requests are subject to rate limiting to ensure fair usage:
+Rate limiting is **off by default**. It is enabled with `rate_limit.enabled = true` in
+`config.toml`, which turns on two independent layers:
 
-- **Standard**: 100 requests per minute
-- **Bulk operations**: 10 requests per minute
+| Layer | Default | Keyed by |
+|---|---|---|
+| Auth endpoints (`login`, `register`, `refresh`, SSO) | 10 / 10 / 30 / 10 per 60s | Client IP |
+| All `/api` routes | `api_max_requests` = 200 per `api_window_seconds` = 60 | Authenticated user ID, falling back to IP |
 
-Rate limit headers are included in responses:
+Both are Redis fixed-window counters and **fail open** — if Redis is unreachable, requests are
+allowed through.
+
+When a limit is exceeded the response is `429` with a `Retry-After` header holding the seconds
+until the window resets:
 
 ```
-X-RateLimit-Limit: 100
-X-RateLimit-Remaining: 95
-X-RateLimit-Reset: 1640000000
+Retry-After: 42
 ```
+
+<Aside type="caution">
+  There are no `X-RateLimit-Limit` / `X-RateLimit-Remaining` / `X-RateLimit-Reset` headers.
+</Aside>
+
+## CSRF
+
+Mutating requests (`POST`, `PUT`, `DELETE`, `PATCH`) authenticated by the `whm_access` **cookie**
+must also send the value of the `whm_csrf` cookie back in an `X-CSRF-Token` header — a mismatch
+returns `403 CSRF token mismatch`. Requests authenticated with an `X-API-Key` or
+`Authorization` header skip this check entirely, so server-to-server clients need no CSRF token.
 
 ## Pagination
 
 List endpoints support pagination using `page` and `limit` query parameters:
 
 ```bash
-GET /api/contacts?page=1&limit=20
+GET /api/contacts?page=1&limit=50
 ```
 
-Paginated responses include:
+`page` defaults to `1`. `limit` defaults to **50** and is capped at **100** — a value outside
+`1–100` silently falls back to 50. (Conversation notes are the one exception: default 30, max 100.)
+
+Paginated responses use the resource name (plural) as the data key and include the total count, current page, and page size:
 
 ```json
 {
   "status": "success",
   "data": {
-    "items": [...],
+    "contacts": [...],
     "total": 100,
     "page": 1,
-    "limit": 20,
-    "total_pages": 5
+    "limit": 50
   }
 }
 ```
+
+The list key matches the resource being queried. The exact keys are:
+
+| Endpoint | Key |
+|---|---|
+| `/api/contacts` | `contacts` |
+| `/api/templates` | `templates` |
+| `/api/campaigns` | `campaigns` |
+| `/api/flows` | `flows` |
+| `/api/chatbot/flows` | `flows` |
+| `/api/chatbot/keywords` | `rules` |
+| `/api/chatbot/ai-contexts` | `contexts` |
+| `/api/canned-responses` | `canned_responses` |
+| `/api/custom-actions` | `custom_actions` |
+| `/api/roles` | `roles` |
+| `/api/teams` | `teams` |
+| `/api/tags` | `tags` |
+| `/api/api-keys` | `api_keys` |
+| `/api/audit-logs` | `audit_logs` |
+| `/api/call-logs` | `call_logs` |
+| `/api/call-transfers` | `call_transfers` |
+| `/api/ivr-flows` | `ivr_flows` |
+| `/api/organizations/members` | `members` |
+
+There is no `total_pages` field — derive page count from `total` and `limit`.
+
+<Aside type="note">
+  Not every list endpoint is page-based. `GET /api/chatbot/transfers` uses `limit`/`offset`
+  (default and max `limit` are both `100`) and returns `total_count`. `GET /api/contacts/{id}/messages`
+  is page-based but also accepts a `before_id` cursor, and returns `has_more` alongside `total` —
+  a cursor request omits `page`/`limit`. Conversation notes (`GET /api/contacts/{id}/notes`) use a
+  `before` cursor. See their own pages.
+</Aside>
 
 ## API Endpoints
 
@@ -130,5 +188,20 @@ Paginated responses include:
   </Card>
   <Card title="Analytics" icon="graph">
     Dashboard and message analytics. [View →](/whatomate/api-reference/analytics)
+  </Card>
+  <Card title="Roles" icon="approve-check">
+    Roles and permission management. [View →](/whatomate/api-reference/roles)
+  </Card>
+  <Card title="Teams" icon="star">
+    Organize agents into teams. [View →](/whatomate/api-reference/teams)
+  </Card>
+  <Card title="Canned Responses" icon="comment">
+    Reusable quick replies. [View →](/whatomate/api-reference/canned-responses)
+  </Card>
+  <Card title="Custom Actions" icon="puzzle">
+    Configure external integrations. [View →](/whatomate/api-reference/custom-actions)
+  </Card>
+  <Card title="Calling" icon="rocket">
+    Call logs, IVR flows, and transfers. [View →](/whatomate/api-reference/calling)
   </Card>
 </CardGrid>

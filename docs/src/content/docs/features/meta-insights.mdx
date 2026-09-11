@@ -1,0 +1,95 @@
+---
+title: Meta Insights & Analytics
+description: Proxied WhatsApp Business analytics from the Meta Graph API, cached in Redis
+---
+
+import { Aside } from '@astrojs/starlight/components';
+
+Meta Insights surfaces the analytics that Meta computes for your WhatsApp Business account — messaging volume, conversation pricing, template performance, and calling stats. Whatomate proxies these live from the Meta Graph API and caches the results in Redis so repeated dashboard loads don't re-hit Meta on every view.
+
+<Aside type="note">
+  These are Meta's own aggregate analytics, distinct from Whatomate's internal dashboards (message counts, agent performance, chatbot sessions). See [API Reference → Analytics](/whatomate/api-reference/analytics) for the internal analytics endpoints.
+</Aside>
+
+## Analytics types
+
+`GET /api/analytics/meta` proxies four different Graph API insight sets, selected with the `analytics_type` query parameter:
+
+| `analytics_type` | What it reports |
+|---|---|
+| `analytics` | **Messaging analytics** — sent/delivered message volume over the range. |
+| `pricing_analytics` | **Pricing analytics** — conversation counts and cost broken down by pricing category. |
+| `template_analytics` | **Template analytics** — per-template sent/delivered/read/clicked. Limited to a **90-day lookback**. |
+| `call_analytics` | **Call analytics** — WhatsApp Business Calling volume and outcomes. |
+
+<Aside type="caution">
+  **Template analytics have a 90-day lookback limit.** A `start` date older than 90 days is rejected with `400`. For template analytics you can optionally pass `template_ids` (a JSON array); if omitted, Whatomate auto-selects the account's synced templates. The response includes a `template_names` map so raw Meta template IDs render as human-readable names.
+</Aside>
+
+## Query parameters
+
+| Param | Notes |
+|---|---|
+| `analytics_type` | **Required.** One of the four values above. |
+| `start`, `end` | **Required.** `YYYY-MM-DD`. `end` must not be before `start`. |
+| `account_id` | Optional. A specific WhatsApp account UUID, or omit to query **all** accounts in the org. |
+| `granularity` | Optional. `HALF_HOUR`, `DAY`, or `MONTH`. Defaults to `DAY`. |
+| `template_ids` | Optional, template analytics only. JSON array of Meta template IDs. |
+
+Use `GET /api/analytics/meta/accounts` to list the accounts available for analytics (`id`, `name`, `phone_id`).
+
+## Auto-adjusted granularity
+
+Whatomate normalizes granularity to what the Graph API will actually accept for the given range, avoiding Meta-side errors:
+
+- **`MONTH`** requires at least 30 days — a shorter range is downgraded to `DAY`.
+- **`HALF_HOUR`** only makes sense for short ranges — anything over 7 days is downgraded to `DAY`.
+
+When an adjustment happens, the response echoes both `adjusted_granularity` and `original_granularity` so the UI can explain why the resolution changed.
+
+## Caching & manual refresh
+
+Results are cached in Redis under the **`meta:analytics:`** key prefix. The cache key is scoped per organization, account (or `all`), analytics type, date range, and granularity — so different views don't collide.
+
+The TTL scales with granularity, since coarser data changes more slowly:
+
+| Granularity | Cache TTL |
+|---|---|
+| `HALF_HOUR` | 1 hour |
+| `DAY` | 3 hours |
+| `MONTH` | 6 hours |
+
+Each response carries a `cached` boolean so you can tell a fresh Graph API fetch from a cache hit. To force fresh data, call:
+
+```
+POST /api/analytics/meta/refresh
+```
+
+This clears every cached analytics entry for the current organization (all accounts, types, and ranges). Reading analytics requires `analytics:read`; the refresh endpoint requires `analytics:write`.
+
+## Response shape
+
+```json
+{
+  "status": "success",
+  "data": {
+    "accounts": [
+      {
+        "account_id": "<uuid>",
+        "account_name": "Support Line",
+        "data": { /* Meta Graph API analytics payload */ },
+        "template_names": { "<meta_template_id>": "order_update" }
+      }
+    ],
+    "cached": false
+  }
+}
+```
+
+When an account has no data (e.g. no templates for template analytics, or a Graph API error on that one account), its `data` is `null` and the other accounts still return — one failing account never sinks the whole request.
+
+## What these insights do NOT include
+
+<Aside type="caution">
+  **Per-phone quality rating and messaging-limit tier are not part of Meta Insights.** They are not returned by these analytics endpoints. Those values live on the **account detail** — Whatomate reads a phone number's `quality_rating` (and verification status) when validating account credentials against Meta, and surfaces them under **Settings → Accounts → [account]**. Look there, not here, for a number's current quality rating or tier.
+</Aside>

@@ -19,7 +19,7 @@ Custom Actions allow you to create action buttons that appear in the chat header
     Open external URLs in a new tab with contact data embedded in the URL parameters.
   </Card>
   <Card title="JavaScript" icon="seti:javascript">
-    Run custom JavaScript code in the browser for clipboard operations, toast notifications, or complex logic.
+    Run custom JavaScript code server-side in a sandboxed VM to compute clipboard values, toast notifications, or a redirect URL from contact data.
   </Card>
 </CardGrid>
 
@@ -59,7 +59,7 @@ Options:
 
 ### JavaScript Actions
 
-JavaScript actions run custom code in the browser. The code has access to contact, user, and organization data.
+JavaScript actions run custom code **server-side** in a sandboxed [goja](https://github.com/dop251/goja) VM — the code has no access to the filesystem, network, or any host globals. The VM is seeded with the `contact`, `user`, and `organization` data objects, and your code returns a structured result (`clipboard`, `toast`, and/or `url`). Only that returned result is sent back to the browser, which applies it (copies to clipboard, shows the toast, or opens the redirect).
 
 Example - Copy phone to clipboard:
 ```javascript
@@ -95,6 +95,8 @@ Use these variables in webhook URLs, bodies, and JavaScript code:
 | `{{contact.phone_number}}` | Contact's phone number |
 | `{{contact.name}}` | Contact's display name |
 | `{{contact.profile_name}}` | Contact's WhatsApp profile name |
+| `{{contact.tags}}` | Contact's tags |
+| `{{contact.metadata}}` | Contact's custom metadata object |
 
 ### User Variables
 
