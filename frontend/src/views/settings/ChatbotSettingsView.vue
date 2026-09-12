@@ -88,6 +88,8 @@ const chatbotSettings = ref({
   business_hours_enabled: false,
   business_hours: [...defaultBusinessHours] as BusinessHour[],
   out_of_hours_message: '',
+  out_of_hours_button_text: '',
+  out_of_hours_button_url: '',
   allow_automated_outside_hours: true,
   allow_agent_queue_pickup: true,
   assign_to_same_agent: true,
@@ -195,6 +197,8 @@ onMounted(async () => {
         business_hours_enabled: chatbotData.settings.business_hours_enabled || false,
         business_hours: mergedHours,
         out_of_hours_message: chatbotData.settings.out_of_hours_message || '',
+        out_of_hours_button_text: chatbotData.settings.out_of_hours_button_text || '',
+        out_of_hours_button_url: chatbotData.settings.out_of_hours_button_url || '',
         allow_automated_outside_hours: chatbotData.settings.allow_automated_outside_hours !== false,
         allow_agent_queue_pickup: chatbotData.settings.allow_agent_queue_pickup !== false,
         assign_to_same_agent: chatbotData.settings.assign_to_same_agent !== false,
@@ -294,6 +298,8 @@ async function saveBusinessHoursSettings() {
       business_hours_enabled: chatbotSettings.value.business_hours_enabled,
       business_hours: chatbotSettings.value.business_hours,
       out_of_hours_message: chatbotSettings.value.out_of_hours_message,
+      out_of_hours_button_text: chatbotSettings.value.out_of_hours_button_text,
+      out_of_hours_button_url: chatbotSettings.value.out_of_hours_button_url,
       allow_automated_outside_hours: chatbotSettings.value.allow_automated_outside_hours
     })
     toast.success(t('chatbotSettings.businessHoursSaved'))
@@ -594,6 +600,23 @@ function removeEscalationUser(userId: string) {
                       :placeholder="$t('chatbotSettings.outOfHoursPlaceholder') + '...'"
                       :rows="2"
                     />
+                  </div>
+
+                  <div class="space-y-2">
+                    <Label>{{ $t('chatbotSettings.outOfHoursButton') }}</Label>
+                    <p class="text-sm text-muted-foreground">{{ $t('chatbotSettings.outOfHoursButtonDesc') }}</p>
+                    <div class="grid gap-2 sm:grid-cols-[minmax(0,1fr)_minmax(0,2fr)]">
+                      <Input
+                        v-model="chatbotSettings.out_of_hours_button_text"
+                        :placeholder="$t('chatbotSettings.outOfHoursButtonTextPlaceholder')"
+                        :maxlength="20"
+                      />
+                      <Input
+                        v-model="chatbotSettings.out_of_hours_button_url"
+                        placeholder="https://..."
+                        type="url"
+                      />
+                    </div>
                   </div>
 
                   <div class="flex items-center justify-between py-2">
