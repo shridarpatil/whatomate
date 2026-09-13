@@ -352,6 +352,19 @@ export const useContactsStore = defineStore('contacts', () => {
     }
   }
 
+  // Drop a contact whose chat was deleted, from the list and from the open conversation.
+  function removeContact(contactId: string) {
+    const index = contacts.value.findIndex(c => c.id === contactId)
+    if (index !== -1) {
+      contacts.value.splice(index, 1)
+      contactsTotal.value = Math.max(0, contactsTotal.value - 1)
+    }
+    if (currentContact.value?.id === contactId) {
+      setCurrentContact(null)
+      clearMessages()
+    }
+  }
+
   function updateContactTags(contactId: string, tags: string[]) {
     // Update in contacts list
     const contact = contacts.value.find(c => c.id === contactId)
@@ -407,6 +420,7 @@ export const useContactsStore = defineStore('contacts', () => {
     setReplyingTo,
     clearReplyingTo,
     updateMessageReactions,
-    updateContactTags
+    updateContactTags,
+    removeContact
   }
 })

@@ -219,6 +219,40 @@ DELETE /api/contacts/{id}
 }
 ```
 
+## Delete Chat
+
+Permanently delete a contact's chat history and remove the chat from the inbox.
+
+<Aside type="caution">
+  Requires the `contacts:delete` permission, otherwise `403 You do not have permission to delete
+  chats`. This cannot be undone.
+</Aside>
+
+```bash
+DELETE /api/contacts/{id}/conversation
+```
+
+What gets removed:
+
+- **Messages** are hard-deleted, along with their locally stored media files. A file is kept if another message or a campaign still references it (for example a shared campaign header).
+- **Internal notes** and **chatbot sessions** for the contact are hard-deleted.
+- **Active agent transfers** are closed, so the chat leaves the agent queues.
+- **The contact** is soft-deleted. If the customer messages again, the contact is restored with an empty history.
+
+Call logs and campaign delivery stats are kept. A `conversation_deleted` WebSocket event with the `contact_id` is broadcast to the organization.
+
+### Response
+
+```json
+{
+  "status": "success",
+  "data": {
+    "message": "Chat deleted successfully",
+    "deleted_messages": 42
+  }
+}
+```
+
 ## Assign Contact
 
 Assign a contact to a team member.
