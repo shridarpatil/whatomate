@@ -38,42 +38,9 @@ func (c *Client) SubmitTemplate(ctx context.Context, account *Account, template 
 		url = c.buildTemplatesURL(account)
 	}
 
-	// Build components array
-	var components []map[string]any
-	var compErr error
-
-	// Authentication templates have a different component structure per Meta API
-	if strings.ToUpper(template.Category) == "AUTHENTICATION" {
-		components = c.buildAuthComponents(template)
-	} else {
-		components, compErr = c.buildStandardComponents(template)
-		if compErr != nil {
-			return "", compErr
-		}
-	}
-
-	// Build request payload
-	var payload map[string]any
-	if isUpdate {
-		// Update only sends components (name, language, category are immutable)
-		payload = map[string]any{
-			"components": components,
-		}
-	} else {
-		// Create sends full template
-		payload = map[string]any{
-			"name":       template.Name,
-			"language":   template.Language,
-			"category":   template.Category,
-			"components": components,
-		}
-		// Add parameter_format for named parameters (only for create, not auth)
-		if strings.ToUpper(template.Category) != "AUTHENTICATION" {
-			isNamedParams := template.ParameterFormat == "named" || hasNamedParams(template.BodyContent)
-			if isNamedParams {
-				payload["parameter_format"] = "NAMED"
-			}
-		}
+	payload, err := c.BuildSubmissionPayload(template)
+	if err != nil {
+		return "", err
 	}
 
 	// Log payload for debugging
@@ -103,6 +70,45 @@ func (c *Client) SubmitTemplate(ctx context.Context, account *Account, template 
 
 	c.Log.Info("Template submitted", "template_id", result.ID, "name", template.Name)
 	return result.ID, nil
+}
+
+// BuildSubmissionPayload builds the JSON body Meta's template API expects.
+// SubmitTemplate posts it; PreviewTemplate returns it unsent so the payload can be
+// checked before it reaches Meta.
+func (c *Client) BuildSubmissionPayload(template *TemplateSubmission) (map[string]any, error) {
+	// Authentication templates have a different component structure per Meta API
+	var components []map[string]any
+	var err error
+	if strings.ToUpper(template.Category) == "AUTHENTICATION" {
+		components = c.buildAuthComponents(template)
+	} else {
+		components, err = c.buildStandardComponents(template)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	// Update only sends components (name, language, category are immutable)
+	if template.MetaTemplateID != "" {
+		return map[string]any{"components": components}, nil
+	}
+
+	payload := map[string]any{
+		"name":       template.Name,
+		"language":   template.Language,
+		"category":   template.Category,
+		"components": components,
+	}
+
+	// Add parameter_format for named parameters (only for create, not auth)
+	if strings.ToUpper(template.Category) != "AUTHENTICATION" {
+		isNamedParams := template.ParameterFormat == "named" || hasNamedParams(template.BodyContent)
+		if isNamedParams {
+			payload["parameter_format"] = "NAMED"
+		}
+	}
+
+	return payload, nil
 }
 
 // buildAuthComponents builds Meta API components for AUTHENTICATION templates.
