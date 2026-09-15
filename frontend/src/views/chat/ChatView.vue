@@ -88,7 +88,8 @@ import {
   Code,
   RotateCw,
   Filter,
-  StickyNote
+  StickyNote,
+  Trash2
 } from 'lucide-vue-next'
 import { getInitials, getAvatarGradient } from '@/lib/utils'
 import { useColorMode } from '@/composables/useColorMode'
@@ -102,7 +103,7 @@ import ConversationNotes from '@/components/chat/ConversationNotes.vue'
 import CallButton from '@/components/calling/CallButton.vue'
 import { useNotesStore } from '@/stores/notes'
 import { useHeaderMedia } from '@/composables/useHeaderMedia'
-import { CreateContactDialog } from '@/components/shared'
+import { CreateContactDialog, DeleteConfirmDialog } from '@/components/shared'
 import HeaderMediaUpload from '@/components/shared/HeaderMediaUpload.vue'
 import { Info } from 'lucide-vue-next'
 
@@ -118,12 +119,15 @@ const notesStore = useNotesStore()
 const { isDark } = useColorMode()
 
 const canWriteContacts = authStore.hasPermission('contacts', 'write')
+const canDeleteChats = authStore.hasPermission('contacts', 'delete')
 
 const messageInput = ref('')
 const messagesEndRef = ref<HTMLElement | null>(null)
 const messageInputRef = ref<HTMLTextAreaElement | null>(null)
 const isSending = ref(false)
 const isAssignDialogOpen = ref(false)
+const isDeleteChatDialogOpen = ref(false)
+const isDeletingChat = ref(false)
 const isTransferring = ref(false)
 const isResuming = ref(false)
 // Tracks incoming messages that arrived while the chat is open.
@@ -1242,6 +1246,24 @@ async function transferToAgent() {
   }
 }
 
+async function deleteChat() {
+  const contact = contactsStore.currentContact
+  if (!contact) return
+
+  isDeletingChat.value = true
+  try {
+    await contactsService.deleteConversation(contact.id)
+    isDeleteChatDialogOpen.value = false
+    contactsStore.removeContact(contact.id)
+    router.push('/chat')
+    toast.success(t('chat.chatDeleted'))
+  } catch (error) {
+    toast.error(getErrorMessage(error, t('chat.chatDeleteFailed')))
+  } finally {
+    isDeletingChat.value = false
+  }
+}
+
 async function resumeChatbot() {
   if (!activeTransferId.value) return
 
@@ -1967,7 +1989,7 @@ async function sendMediaMessage() {
             </Tooltip>
             <DropdownMenu>
               <DropdownMenuTrigger as-child>
-                <Button variant="ghost" size="icon" class="h-8 w-8 text-white/50 hover:text-white hover:bg-white/[0.08] light:text-gray-500 light:hover:text-gray-900 light:hover:bg-gray-100">
+                <Button id="contact-options-button" variant="ghost" size="icon" class="h-8 w-8 text-white/50 hover:text-white hover:bg-white/[0.08] light:text-gray-500 light:hover:text-gray-900 light:hover:bg-gray-100">
                   <MoreVertical class="h-4 w-4" />
                 </Button>
               </DropdownMenuTrigger>
@@ -1990,6 +2012,13 @@ async function sendMediaMessage() {
                   <Info class="mr-2 h-4 w-4" />
                   <span>{{ isInfoPanelOpen ? $t('chat.hideContactDetails') : $t('chat.viewContactDetails') }}</span>
                 </DropdownMenuItem>
+                <template v-if="canDeleteChats">
+                  <DropdownMenuSeparator />
+                  <DropdownMenuItem class="text-destructive focus:text-destructive" @click="isDeleteChatDialogOpen = true">
+                    <Trash2 class="mr-2 h-4 w-4" />
+                    <span>{{ $t('chat.deleteChat') }}</span>
+                  </DropdownMenuItem>
+                </template>
               </DropdownMenuContent>
             </DropdownMenu>
           </div>
@@ -2681,6 +2710,16 @@ async function sendMediaMessage() {
         </div>
       </DialogContent>
     </Dialog>
+
+    <DeleteConfirmDialog
+      v-model:open="isDeleteChatDialogOpen"
+      :title="$t('chat.deleteChat')"
+      :description="$t('chat.deleteChatConfirm', { name: contactsStore.currentContact?.name || contactsStore.currentContact?.phone_number })"
+      :confirm-label="$t('common.delete')"
+      :cancel-label="$t('common.cancel')"
+      :is-submitting="isDeletingChat"
+      @confirm="deleteChat"
+    />
 
     <!-- Assign Contact Dialog -->
     <Dialog v-model:open="isAssignDialogOpen" @update:open="(open) => !open && (assignSearchQuery = '')">
