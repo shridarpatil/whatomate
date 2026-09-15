@@ -588,8 +588,11 @@ func (p *SLAProcessor) autoCloseChatbotSession(contact models.Contact, settings 
 
 // UpdateContactChatbotMessage updates the chatbot last message timestamp for a contact
 func (a *App) UpdateContactChatbotMessage(contactID uuid.UUID) {
-	now := time.Now()
-	a.DB.Exec("UPDATE contacts SET chatbot_last_message_at = ?, chatbot_reminder_sent = false WHERE id = ?", now, contactID)
+	now := time.Now().UTC()
+	a.DB.Model(&models.Contact{}).Where("id = ?", contactID).Updates(map[string]any{
+		"chatbot_last_message_at": now,
+		"chatbot_reminder_sent":   false,
+	})
 }
 
 // ClearContactChatbotTracking clears chatbot tracking when client replies or is transferred

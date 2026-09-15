@@ -73,18 +73,16 @@ watch(() => authStore.user?.is_super_admin, async (superAdmin) => {
 const handleOrgChange = async (value: string | number | bigint | Record<string, any> | null) => {
   if (!value || typeof value !== 'string') return
 
-  if (isSuperAdmin.value) {
-    // Super admins: set localStorage header and reload
+  // Everyone goes through switch-org, super admins included: the X-Organization-ID
+  // header alone only scopes axios calls. The WebSocket token, <img src> media and
+  // window.open previews carry no headers, so the JWT itself has to name the target
+  // org or those keep talking to the previous one.
+  try {
+    await authStore.switchOrg(value)
     organizationsStore.selectOrganization(value)
     window.location.reload()
-  } else {
-    // Multi-org users: call switchOrg API for new JWT tokens, then reload
-    try {
-      await authStore.switchOrg(value)
-      window.location.reload()
-    } catch {
-      // If switch fails, don't reload
-    }
+  } catch {
+    // If switch fails, don't reload
   }
 }
 

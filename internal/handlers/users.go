@@ -647,8 +647,9 @@ func (a *App) GetCurrentUser(r *fastglue.Request) error {
 		return r.SendErrorEnvelope(fasthttp.StatusNotFound, "User not found", nil, "")
 	}
 
-	// Use org from JWT context (may differ from DB after org switch)
-	orgID, _ := r.RequestCtx.UserValue("organization_id").(uuid.UUID)
+	// Resolve the active org (honours X-Organization-ID); it may differ from the
+	// home org stored on the user row.
+	orgID, _ := a.getOrgID(r)
 	if orgID != uuid.Nil {
 		user.OrganizationID = orgID
 
