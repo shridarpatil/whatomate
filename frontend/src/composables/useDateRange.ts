@@ -49,10 +49,15 @@ export function useDateRange(options: UseDateRangeOptions = {}) {
   const customDateRange = ref<any>(saved.customRange)
   const isDatePickerOpen = ref(false)
 
+  // Formats a date as YYYY-MM-DD using its UTC calendar fields, so the
+  // resulting date always matches the server's (and Meta's) notion of
+  // "today" regardless of the browser's local timezone. Using local
+  // getters here let users in timezones ahead of UTC pick/compute a date
+  // that is still in the future in UTC, which the backend then rejects.
   function formatDateLocal(date: Date): string {
-    const year = date.getFullYear()
-    const month = String(date.getMonth() + 1).padStart(2, '0')
-    const day = String(date.getDate()).padStart(2, '0')
+    const year = date.getUTCFullYear()
+    const month = String(date.getUTCMonth() + 1).padStart(2, '0')
+    const day = String(date.getUTCDate()).padStart(2, '0')
     return `${year}-${month}-${day}`
   }
 
@@ -63,33 +68,33 @@ export function useDateRange(options: UseDateRangeOptions = {}) {
 
     switch (selectedRange.value) {
       case 'today':
-        from = new Date(now.getFullYear(), now.getMonth(), now.getDate())
-        to = new Date(now.getFullYear(), now.getMonth(), now.getDate())
+        from = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()))
+        to = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()))
         break
       case '7days':
-        from = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 7)
-        to = new Date(now.getFullYear(), now.getMonth(), now.getDate())
+        from = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() - 7))
+        to = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()))
         break
       case '30days':
-        from = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 30)
-        to = new Date(now.getFullYear(), now.getMonth(), now.getDate())
+        from = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() - 30))
+        to = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()))
         break
       case 'this_month':
-        from = new Date(now.getFullYear(), now.getMonth(), 1)
-        to = new Date(now.getFullYear(), now.getMonth(), now.getDate())
+        from = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1))
+        to = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()))
         break
       case 'custom':
         if (customDateRange.value.start && customDateRange.value.end) {
-          from = new Date(customDateRange.value.start.year, customDateRange.value.start.month - 1, customDateRange.value.start.day)
-          to = new Date(customDateRange.value.end.year, customDateRange.value.end.month - 1, customDateRange.value.end.day)
+          from = new Date(Date.UTC(customDateRange.value.start.year, customDateRange.value.start.month - 1, customDateRange.value.start.day))
+          to = new Date(Date.UTC(customDateRange.value.end.year, customDateRange.value.end.month - 1, customDateRange.value.end.day))
         } else {
-          from = new Date(now.getFullYear(), now.getMonth(), 1)
-          to = new Date(now.getFullYear(), now.getMonth(), now.getDate())
+          from = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1))
+          to = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()))
         }
         break
       default:
-        from = new Date(now.getFullYear(), now.getMonth(), 1)
-        to = new Date(now.getFullYear(), now.getMonth(), now.getDate())
+        from = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1))
+        to = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()))
     }
 
     return { from: formatDateLocal(from), to: formatDateLocal(to) }
