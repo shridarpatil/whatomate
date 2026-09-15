@@ -2185,6 +2185,7 @@
     "noMessagingData": "No messaging analytics data available",
     "totalMessages": "Total Messages",
     "totalCost": "Total Cost",
+    "billedIn": "Billed in this currency",
     "messagesCostByCategory": "Messages & Cost by Category",
     "breakdownByCategory": "Breakdown by pricing category",
     "freeMessages": "Free Messages",
