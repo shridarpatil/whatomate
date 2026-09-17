@@ -304,7 +304,7 @@ func (a *App) SaveFlowToMeta(r *fastglue.Request) error {
 		metaFlowID, err = waClient.CreateFlow(ctx, waAccount, flow.Name, categories)
 		if err != nil {
 			a.Log.Error("Failed to create flow in Meta", "error", err, "flow_id", id, "business_id", account.BusinessID)
-			return r.SendErrorEnvelope(fasthttp.StatusInternalServerError, "Failed to create flow in Meta", nil, "")
+			return r.SendErrorEnvelope(fasthttp.StatusInternalServerError, fmt.Sprintf("Failed to create flow in Meta: %s", err.Error()), nil, "")
 		}
 	} else {
 		metaFlowID = flow.MetaFlowID
@@ -331,7 +331,7 @@ func (a *App) SaveFlowToMeta(r *fastglue.Request) error {
 			a.DB.Model(flow).Updates(map[string]any{
 				"meta_flow_id": metaFlowID,
 			})
-			return r.SendErrorEnvelope(fasthttp.StatusInternalServerError, "Failed to update flow JSON", nil, "")
+			return r.SendErrorEnvelope(fasthttp.StatusInternalServerError, fmt.Sprintf("Failed to update flow JSON: %s", err.Error()), nil, "")
 		}
 	}
 
@@ -399,7 +399,7 @@ func (a *App) PublishFlow(r *fastglue.Request) error {
 	// Publish the flow
 	if err := waClient.PublishFlow(ctx, waAccount, flow.MetaFlowID); err != nil {
 		a.Log.Error("Failed to publish flow in Meta", "error", err, "flow_id", id, "meta_flow_id", flow.MetaFlowID)
-		return r.SendErrorEnvelope(fasthttp.StatusInternalServerError, "Failed to publish flow", nil, "")
+		return r.SendErrorEnvelope(fasthttp.StatusInternalServerError, fmt.Sprintf("Failed to publish flow: %s", err.Error()), nil, "")
 	}
 
 	// Get the flow details including preview URL
@@ -656,17 +656,16 @@ func (a *App) SyncFlows(r *fastglue.Request) error {
 	})
 }
 
-// validateFlowStructure validates the flow structure before sending to Meta
-// - Ensures at least one screen has a Footer with "complete" action
-// - If multiple screens, only the last screen should have "complete" action
+// validateFlowStructure validates the flow structure before sending to Meta.
+// If no screen has a Footer with "complete" action, one is auto-injected on
+// the last screen so the user doesn't have to manually add it.
 func validateFlowStructure(screens []any) error {
 	if len(screens) == 0 {
 		return fmt.Errorf("flow must have at least one screen")
 	}
 
-	// Find which screens have complete action
-	screensWithComplete := []int{}
-	for i, screen := range screens {
+	// Check if any screen already has a complete action
+	for _, screen := range screens {
 		screenMap, ok := screen.(map[string]any)
 		if !ok {
 			continue
@@ -683,24 +682,37 @@ func validateFlowStructure(screens []any) error {
 		}
 
 		if hasCompleteAction(children) {
-			screensWithComplete = append(screensWithComplete, i)
+			return nil // Already has a complete action — nothing to do
 		}
 	}
 
-	// Check if any screen has a complete action
-	if len(screensWithComplete) == 0 {
-		return fmt.Errorf("flow must have a Footer button with 'Complete Flow' action: add a Footer component to your last screen and set its action to 'Complete Flow'")
+	// No screen has a complete action — auto-inject a Footer on the last screen
+	lastScreen, ok := screens[len(screens)-1].(map[string]any)
+	if !ok {
+		return fmt.Errorf("last screen has invalid structure")
 	}
 
-	// If multiple screens, complete action should only be on the last screen
-	if len(screens) > 1 {
-		lastScreenIndex := len(screens) - 1
-		for _, idx := range screensWithComplete {
-			if idx != lastScreenIndex {
-				return fmt.Errorf("'Complete Flow' action should only be on the last screen. Screen %d has a complete action but it's not the last screen. Use 'Navigate to Screen' action for intermediate screens", idx+1)
-			}
-		}
+	layout, ok := lastScreen["layout"].(map[string]any)
+	if !ok {
+		layout = map[string]any{"type": "SingleColumnLayout", "children": []any{}}
+		lastScreen["layout"] = layout
 	}
+
+	children, ok := layout["children"].([]any)
+	if !ok {
+		children = []any{}
+	}
+
+	footer := map[string]any{
+		"type":  "Footer",
+		"label": "Complete",
+		"on-click-action": map[string]any{
+			"name":    "complete",
+			"payload": map[string]any{},
+		},
+	}
+
+	layout["children"] = append(children, footer)
 
 	return nil
 }
@@ -725,15 +737,134 @@ var componentsWithoutID = map[string]bool{
 // - Removes 'id' property from components that don't support it
 // - Marks screens with 'complete' action as terminal screens
 // - Auto-populates the complete action's payload with all form field values
+// - Correctly handles branching flows (If/Else navigation) by tracing the navigation graph
 func sanitizeScreensForMeta(screens []any) []any {
-	// First pass: collect form field names per screen
-	screenFields := collectFormFieldsPerScreen(screens)
-	allFieldNames := collectFormFieldNames(screens)
+	// First pass: collect form field names per screen (by sanitized screen ID)
+	screenFieldsByID := make(map[string][]string) // screenID -> field names on that screen
+	screenIDOrder := make([]string, 0, len(screens))
+	screenByID := make(map[string]int) // screenID -> index
 
+	for i, screen := range screens {
+		screenMap, ok := screen.(map[string]any)
+		if !ok {
+			continue
+		}
+		screenID := ""
+		if id, ok := screenMap["id"].(string); ok {
+			screenID = sanitizeID(id)
+		}
+		screenIDOrder = append(screenIDOrder, screenID)
+		screenByID[screenID] = i
+
+		layout, ok := screenMap["layout"].(map[string]any)
+		if !ok {
+			continue
+		}
+		children, ok := layout["children"].([]any)
+		if !ok {
+			continue
+		}
+		fields := collectFormFieldNamesFromChildren(children)
+		// Sanitize the field names
+		for j, f := range fields {
+			fields[j] = sanitizeID(f)
+		}
+		screenFieldsByID[screenID] = fields
+	}
+
+	// Second pass: build navigation graph (which screens navigate TO which screens)
+	// incomingFields[screenID] = fields that should be in its data model (from screens that navigate to it)
+	incomingFields := make(map[string]map[string]bool) // screenID -> set of field names
+
+	for _, screen := range screens {
+		screenMap, ok := screen.(map[string]any)
+		if !ok {
+			continue
+		}
+		sourceID := ""
+		if id, ok := screenMap["id"].(string); ok {
+			sourceID = sanitizeID(id)
+		}
+
+		layout, ok := screenMap["layout"].(map[string]any)
+		if !ok {
+			continue
+		}
+		children, ok := layout["children"].([]any)
+		if !ok {
+			continue
+		}
+
+		// Find all navigate targets from this screen (including inside If/Else)
+		targets := collectNavigateTargets(children)
+		sourceFields := screenFieldsByID[sourceID]
+
+		for _, targetID := range targets {
+			targetID = sanitizeID(targetID)
+			if _, exists := incomingFields[targetID]; !exists {
+				incomingFields[targetID] = make(map[string]bool)
+			}
+			// The target screen needs all fields from the source screen in its data model
+			for _, f := range sourceFields {
+				incomingFields[targetID][f] = true
+			}
+		}
+	}
+
+	// Propagate: if screen A navigates to screen B, and screen B navigates to screen C,
+	// then C needs fields from both A and B. We already have B's own fields.
+	// But also need to propagate A's fields through B to C.
+	// Do a simple BFS/propagation pass
+	changed := true
+	for changed {
+		changed = false
+		for _, screen := range screens {
+			screenMap, ok := screen.(map[string]any)
+			if !ok {
+				continue
+			}
+			sourceID := ""
+			if id, ok := screenMap["id"].(string); ok {
+				sourceID = sanitizeID(id)
+			}
+			layout, ok := screenMap["layout"].(map[string]any)
+			if !ok {
+				continue
+			}
+			children, ok := layout["children"].([]any)
+			if !ok {
+				continue
+			}
+			targets := collectNavigateTargets(children)
+
+			// Fields available at this screen = its own fields + fields in its data model (from incoming)
+			allAvailable := make(map[string]bool)
+			for _, f := range screenFieldsByID[sourceID] {
+				allAvailable[f] = true
+			}
+			if incoming, ok := incomingFields[sourceID]; ok {
+				for f := range incoming {
+					allAvailable[f] = true
+				}
+			}
+
+			for _, targetID := range targets {
+				targetID = sanitizeID(targetID)
+				if _, exists := incomingFields[targetID]; !exists {
+					incomingFields[targetID] = make(map[string]bool)
+				}
+				for f := range allAvailable {
+					if !incomingFields[targetID][f] {
+						incomingFields[targetID][f] = true
+						changed = true
+					}
+				}
+			}
+		}
+	}
+
+	// Third pass: build the result
 	result := make([]any, len(screens))
-
-	// Track cumulative fields from previous screens
-	var fieldsFromPreviousScreens []string
 
 	for i, screen := range screens {
 		screenMap, ok := screen.(map[string]any)
@@ -749,12 +880,14 @@ func sanitizeScreensForMeta(screens []any) []any {
 		}
 
 		// Fix screen ID if it contains numbers
+		screenID := ""
 		if id, ok := newScreen["id"].(string); ok {
-			newScreen["id"] = sanitizeID(id)
+			screenID = sanitizeID(id)
+			newScreen["id"] = screenID
 		}
 
-		// Add data model for fields from previous screens (required for multi-screen flows)
-		if i > 0 && len(fieldsFromPreviousScreens) > 0 {
+		// Set data model based on navigation graph (not sequential order)
+		if i > 0 {
 			dataModel := make(map[string]any)
 			// Copy existing data model if present
 			if existingData, ok := newScreen["data"].(map[string]any); ok {
@@ -762,15 +895,32 @@ func sanitizeScreensForMeta(screens []any) []any {
 					dataModel[k] = v
 				}
 			}
-			// Add entries for fields from previous screens
-			for _, fieldName := range fieldsFromPreviousScreens {
-				dataModel[fieldName] = map[string]any{
-					"type":        "string",
-					"__example__": "",
+			// Add entries for fields coming from navigating screens
+			if incoming, ok := incomingFields[screenID]; ok {
+				for fieldName := range incoming {
+					if _, exists := dataModel[fieldName]; !exists {
+						dataModel[fieldName] = map[string]any{
+							"type":        "string",
+							"__example__": "",
+						}
+					}
 				}
 			}
-			newScreen["data"] = dataModel
+			if len(dataModel) > 0 {
+				newScreen["data"] = dataModel
+			}
 		}
+
+		// Get the fields that are actually in this screen's data model
+		dataModelFields := make(map[string]bool)
+		if dm, ok := newScreen["data"].(map[string]any); ok {
+			for k := range dm {
+				dataModelFields[k] = true
+			}
+		}
+
+		// Get this screen's own form fields
+		thisScreenFields := screenFieldsByID[screenID]
 
 		// Sanitize layout children and check for terminal action
 		isTerminal := false
@@ -781,8 +931,8 @@ func sanitizeScreensForMeta(screens []any) []any {
 			}
 
 			if children, ok := layout["children"].([]any); ok {
-				// Sanitize and auto-populate action payloads
-				sanitizedChildren := sanitizeComponentsWithPayload(children, allFieldNames, fieldsFromPreviousScreens)
+				// Sanitize and auto-populate action payloads using ONLY known fields
+				sanitizedChildren := sanitizeComponentsWithPayloadV2(children, thisScreenFields, dataModelFields)
 				newLayout["children"] = sanitizedChildren
 
 				// Check if any child has on-click-action with name "complete"
@@ -798,100 +948,14 @@ func sanitizeScreensForMeta(screens []any) []any {
 		}
 
 		result[i] = newScreen
-
-		// Add this screen's fields to cumulative list for next screens
-		if fields, ok := screenFields[i]; ok {
-			fieldsFromPreviousScreens = append(fieldsFromPreviousScreens, fields...)
-		}
 	}
 
 	return result
 }
 
-// collectFormFieldNames collects all form field names from all screens
-// These are components that have a "name" attribute (TextInput, TextArea, Dropdown, etc.)
-func collectFormFieldNames(screens []any) []string {
-	var fieldNames []string
-
-	for _, screen := range screens {
-		screenMap, ok := screen.(map[string]any)
-		if !ok {
-			continue
-		}
-
-		layout, ok := screenMap["layout"].(map[string]any)
-		if !ok {
-			continue
-		}
-
-		children, ok := layout["children"].([]any)
-		if !ok {
-			continue
-		}
-
-		for _, child := range children {
-			compMap, ok := child.(map[string]any)
-			if !ok {
-				continue
-			}
-
-			// Check if component has a "name" attribute (form field)
-			if name, ok := compMap["name"].(string); ok && name != "" {
-				// Sanitize the name to match what will be sent to Meta
-				sanitizedName := sanitizeID(name)
-				fieldNames = append(fieldNames, sanitizedName)
-			}
-		}
-	}
-
-	return fieldNames
-}
-
-// collectFormFieldsPerScreen collects form field names for each screen by index
-func collectFormFieldsPerScreen(screens []any) map[int][]string {
-	result := make(map[int][]string)
-
-	for i, screen := range screens {
-		screenMap, ok := screen.(map[string]any)
-		if !ok {
-			continue
-		}
-
-		layout, ok := screenMap["layout"].(map[string]any)
-		if !ok {
-			continue
-		}
-
-		children, ok := layout["children"].([]any)
-		if !ok {
-			continue
-		}
-
-		var fieldNames []string
-		for _, child := range children {
-			compMap, ok := child.(map[string]any)
-			if !ok {
-				continue
-			}
-
-			// Check if component has a "name" attribute (form field)
-			if name, ok := compMap["name"].(string); ok && name != "" {
-				// Sanitize the name to match what will be sent to Meta
-				sanitizedName := sanitizeID(name)
-				fieldNames = append(fieldNames, sanitizedName)
-			}
-		}
-
-		if len(fieldNames) > 0 {
-			result[i] = fieldNames
-		}
-	}
-
-	return result
-}
-
-// hasCompleteAction checks if any component has an on-click-action with name "complete"
-func hasCompleteAction(children []any) bool {
+// collectNavigateTargets extracts all screen IDs that are navigation targets in children (including If/Else)
+func collectNavigateTargets(children []any) []string {
+	var targets []string
 	for _, child := range children {
 		compMap, ok := child.(map[string]any)
 		if !ok {
@@ -899,67 +963,41 @@ func hasCompleteAction(children []any) bool {
 		}
 
 		if action, ok := compMap["on-click-action"].(map[string]any); ok {
-			if name, ok := action["name"].(string); ok && name == "complete" {
-				return true
+			if name, ok := action["name"].(string); ok && name == "navigate" {
+				if next, ok := action["next"].(map[string]any); ok {
+					if screenName, ok := next["name"].(string); ok {
+						targets = append(targets, screenName)
+					}
+				}
+			}
+		}
+
+		if compMap["type"] == "If" {
+			if thenBlock, ok := compMap["then"].([]any); ok {
+				targets = append(targets, collectNavigateTargets(thenBlock)...)
+			}
+			if elseBlock, ok := compMap["else"].([]any); ok {
+				targets = append(targets, collectNavigateTargets(elseBlock)...)
 			}
 		}
 	}
-	return false
+	return targets
 }
 
-// sanitizeID converts an ID to use only alphabets and underscores
-// e.g., "SCREEN_1" -> "SCREEN_A", "id_1234_abc" -> "id_abcd_abc"
-func sanitizeID(id string) string {
-	// Check if ID already only contains valid characters
-	valid := true
-	for _, c := range id {
-		if !((c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || c == '_') { //nolint:staticcheck // More readable than De Morgan's law
-			valid = false
-			break
-		}
-	}
-	if valid {
-		return id
-	}
-
-	// Replace numbers with letters
-	result := make([]byte, 0, len(id))
-	for _, c := range id {
-		if c >= '0' && c <= '9' {
-			// Convert 0-9 to A-J
-			result = append(result, byte('A'+c-'0'))
-		} else if (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || c == '_' {
-			result = append(result, byte(c))
-		}
-		// Skip other characters
-	}
-
-	return string(result)
-}
-
-// sanitizeComponentsWithPayload sanitizes components and auto-populates action payloads
-// - For navigate actions: passes current screen's form fields using ${form.fieldName}
-// - For complete actions: uses ${data.fieldName} for previous screens, ${form.fieldName} for current
-func sanitizeComponentsWithPayload(children []any, allFieldNames []string, fieldsFromPreviousScreens []string) []any {
-	result := make([]any, len(children))
-
-	// Collect this screen's field names
-	var thisScreenFields []string
-	for _, child := range children {
-		compMap, ok := child.(map[string]any)
-		if !ok {
-			continue
-		}
-		if name, ok := compMap["name"].(string); ok && name != "" {
-			thisScreenFields = append(thisScreenFields, sanitizeID(name))
-		}
-	}
-
-	// Create a set for quick lookup of this screen's fields
+// sanitizeComponentsWithPayloadV2 sanitizes components using only the known fields
+// - For navigate actions: passes current screen's form fields and data model fields
+// - For complete actions: uses ${data.fieldName} for data model fields, ${form.fieldName} for current screen
+func sanitizeComponentsWithPayloadV2(children []any, thisScreenFields []string, dataModelFields map[string]bool) []any {
 	thisScreenFieldSet := make(map[string]bool)
 	for _, f := range thisScreenFields {
 		thisScreenFieldSet[f] = true
 	}
+
+	return sanitizeComponentsRecursiveV2(children, thisScreenFields, dataModelFields, thisScreenFieldSet)
+}
+
+func sanitizeComponentsRecursiveV2(children []any, thisScreenFields []string, dataModelFields map[string]bool, thisScreenFieldSet map[string]bool) []any {
+	result := make([]any, len(children))
 
 	for i, child := range children {
 		compMap, ok := child.(map[string]any)
@@ -1016,38 +1054,348 @@ func sanitizeComponentsWithPayload(children []any, allFieldNames []string, field
 
 			switch actionName {
 			case "complete":
-				// Complete action: include all form fields from all screens
-				// - Fields from previous screens: use ${data.fieldName} (passed via data model)
-				// - Fields on current screen: use ${form.fieldName} (form input)
 				payload := make(map[string]any)
-				for _, fieldName := range allFieldNames {
-					if thisScreenFieldSet[fieldName] {
-						// Current screen's field - use form reference
-						payload[fieldName] = "${form." + fieldName + "}"
-					} else {
-						// Previous screen's field - use data reference
+
+				// Preserve existing payload
+				if existingPayload, ok := newAction["payload"].(map[string]any); ok {
+					for k, v := range existingPayload {
+						payload[k] = v
+					}
+				}
+
+				// Add data model fields (from previous screens) using ${data.xxx}
+				for fieldName := range dataModelFields {
+					if _, exists := payload[fieldName]; !exists {
 						payload[fieldName] = "${data." + fieldName + "}"
 					}
 				}
-				newAction["payload"] = payload
-			case "navigate":
-				// Navigate action: pass current screen's form fields to next screen
-				// Use ${form.fieldName} for current screen's fields
-				if len(thisScreenFields) > 0 {
-					payload := make(map[string]any)
-					// Pass previous screen data through
-					for _, fieldName := range fieldsFromPreviousScreens {
-						payload[fieldName] = "${data." + fieldName + "}"
-					}
-					// Add current screen's form fields
-					for _, fieldName := range thisScreenFields {
+				// Add this screen's own fields using ${form.xxx}
+				for _, fieldName := range thisScreenFields {
+					if _, exists := payload[fieldName]; !exists {
 						payload[fieldName] = "${form." + fieldName + "}"
 					}
+				}
+
+				newAction["payload"] = payload
+			case "navigate":
+				if len(thisScreenFields) > 0 || len(dataModelFields) > 0 {
+					payload := make(map[string]any)
+
+					// Preserve existing payload
+					if existingPayload, ok := newAction["payload"].(map[string]any); ok {
+						for k, v := range existingPayload {
+							payload[k] = v
+						}
+					}
+
+					// Pass data model fields forward
+					for fieldName := range dataModelFields {
+						if _, exists := payload[fieldName]; !exists {
+							payload[fieldName] = "${data." + fieldName + "}"
+						}
+					}
+					// Pass this screen's form fields
+					for _, fieldName := range thisScreenFields {
+						if _, exists := payload[fieldName]; !exists {
+							payload[fieldName] = "${form." + fieldName + "}"
+						}
+					}
+
 					newAction["payload"] = payload
 				}
 			}
 
 			newComp["on-click-action"] = newAction
+		}
+
+		if compType == "If" {
+			if thenBlock, ok := newComp["then"].([]any); ok {
+				newComp["then"] = sanitizeComponentsRecursiveV2(thenBlock, thisScreenFields, dataModelFields, thisScreenFieldSet)
+			}
+			if elseBlock, ok := newComp["else"].([]any); ok {
+				newComp["else"] = sanitizeComponentsRecursiveV2(elseBlock, thisScreenFields, dataModelFields, thisScreenFieldSet)
+			}
+		}
+
+		result[i] = newComp
+	}
+
+	return result
+}
+
+func collectFormFieldNamesFromChildren(children []any) []string {
+	var fieldNames []string
+	for _, child := range children {
+		compMap, ok := child.(map[string]any)
+		if !ok {
+			continue
+		}
+
+		if name, ok := compMap["name"].(string); ok && name != "" {
+			sanitizedName := sanitizeID(name)
+			fieldNames = append(fieldNames, sanitizedName)
+		}
+
+		if compMap["type"] == "If" {
+			if thenBlock, ok := compMap["then"].([]any); ok {
+				fieldNames = append(fieldNames, collectFormFieldNamesFromChildren(thenBlock)...)
+			}
+			if elseBlock, ok := compMap["else"].([]any); ok {
+				fieldNames = append(fieldNames, collectFormFieldNamesFromChildren(elseBlock)...)
+			}
+		}
+	}
+	return fieldNames
+}
+
+// collectFormFieldNames collects all form field names from all screens
+// These are components that have a "name" attribute (TextInput, TextArea, Dropdown, etc.)
+func collectFormFieldNames(screens []any) []string {
+	var fieldNames []string
+
+	for _, screen := range screens {
+		screenMap, ok := screen.(map[string]any)
+		if !ok {
+			continue
+		}
+
+		layout, ok := screenMap["layout"].(map[string]any)
+		if !ok {
+			continue
+		}
+
+		children, ok := layout["children"].([]any)
+		if !ok {
+			continue
+		}
+
+		fieldNames = append(fieldNames, collectFormFieldNamesFromChildren(children)...)
+	}
+
+	return fieldNames
+}
+
+// collectFormFieldsPerScreen collects form field names for each screen by index
+func collectFormFieldsPerScreen(screens []any) map[int][]string {
+	result := make(map[int][]string)
+
+	for i, screen := range screens {
+		screenMap, ok := screen.(map[string]any)
+		if !ok {
+			continue
+		}
+
+		layout, ok := screenMap["layout"].(map[string]any)
+		if !ok {
+			continue
+		}
+
+		children, ok := layout["children"].([]any)
+		if !ok {
+			continue
+		}
+
+		fieldNames := collectFormFieldNamesFromChildren(children)
+
+		if len(fieldNames) > 0 {
+			result[i] = fieldNames
+		}
+	}
+
+	return result
+}
+
+// hasCompleteAction checks if any component has an on-click-action with name "complete"
+func hasCompleteAction(children []any) bool {
+	for _, child := range children {
+		compMap, ok := child.(map[string]any)
+		if !ok {
+			continue
+		}
+
+		if action, ok := compMap["on-click-action"].(map[string]any); ok {
+			if name, ok := action["name"].(string); ok && name == "complete" {
+				return true
+			}
+		}
+
+		if compMap["type"] == "If" {
+			if thenBlock, ok := compMap["then"].([]any); ok {
+				if hasCompleteAction(thenBlock) {
+					return true
+				}
+			}
+			if elseBlock, ok := compMap["else"].([]any); ok {
+				if hasCompleteAction(elseBlock) {
+					return true
+				}
+			}
+		}
+	}
+	return false
+}
+
+// sanitizeID converts an ID to use only alphabets and underscores
+// e.g., "SCREEN_1" -> "SCREEN_A", "id_1234_abc" -> "id_abcd_abc"
+func sanitizeID(id string) string {
+	// Check if ID already only contains valid characters
+	valid := true
+	for _, c := range id {
+		if !((c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || c == '_') { //nolint:staticcheck // More readable than De Morgan's law
+			valid = false
+			break
+		}
+	}
+	if valid {
+		return id
+	}
+
+	// Replace numbers with letters
+	result := make([]byte, 0, len(id))
+	for _, c := range id {
+		if c >= '0' && c <= '9' {
+			// Convert 0-9 to A-J
+			result = append(result, byte('A'+c-'0'))
+		} else if (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || c == '_' {
+			result = append(result, byte(c))
+		}
+		// Skip other characters
+	}
+
+	return string(result)
+}
+
+// sanitizeComponentsWithPayload sanitizes components and auto-populates action payloads
+// - For navigate actions: passes current screen's form fields using ${form.fieldName}
+// - For complete actions: uses ${data.fieldName} for previous screens, ${form.fieldName} for current
+func sanitizeComponentsWithPayload(children []any, allFieldNames []string, fieldsFromPreviousScreens []string) []any {
+	// Collect this screen's field names
+	thisScreenFields := collectFormFieldNamesFromChildren(children)
+
+	// Create a set for quick lookup of this screen's fields
+	thisScreenFieldSet := make(map[string]bool)
+	for _, f := range thisScreenFields {
+		thisScreenFieldSet[f] = true
+	}
+
+	return sanitizeComponentsRecursive(children, allFieldNames, fieldsFromPreviousScreens, thisScreenFieldSet, thisScreenFields)
+}
+
+func sanitizeComponentsRecursive(children []any, allFieldNames []string, fieldsFromPreviousScreens []string, thisScreenFieldSet map[string]bool, thisScreenFields []string) []any {
+	result := make([]any, len(children))
+
+	for i, child := range children {
+		compMap, ok := child.(map[string]any)
+		if !ok {
+			result[i] = child
+			continue
+		}
+
+		// Create a new component map
+		newComp := make(map[string]any)
+		for k, v := range compMap {
+			newComp[k] = v
+		}
+
+		// Check if this component type should not have an id
+		compType, _ := newComp["type"].(string)
+		if componentsWithoutID[compType] {
+			delete(newComp, "id")
+		}
+
+		// Sanitize name field if it contains numbers
+		if name, ok := newComp["name"].(string); ok {
+			newComp["name"] = sanitizeID(name)
+		}
+
+		// Sanitize data-source option IDs
+		if dataSource, ok := newComp["data-source"].([]any); ok {
+			newDataSource := make([]any, len(dataSource))
+			for j, opt := range dataSource {
+				if optMap, ok := opt.(map[string]any); ok {
+					newOpt := make(map[string]any)
+					for k, v := range optMap {
+						newOpt[k] = v
+					}
+					if optID, ok := newOpt["id"].(string); ok {
+						newOpt["id"] = sanitizeID(optID)
+					}
+					newDataSource[j] = newOpt
+				} else {
+					newDataSource[j] = opt
+				}
+			}
+			newComp["data-source"] = newDataSource
+		}
+
+		// Auto-populate action payloads
+		if action, ok := newComp["on-click-action"].(map[string]any); ok {
+			actionName, _ := action["name"].(string)
+
+			newAction := make(map[string]any)
+			for k, v := range action {
+				newAction[k] = v
+			}
+
+			switch actionName {
+			case "complete":
+				payload := make(map[string]any)
+				
+				// Preserve existing payload
+				if existingPayload, ok := newAction["payload"].(map[string]any); ok {
+					for k, v := range existingPayload {
+						payload[k] = v
+					}
+				}
+
+				for _, fieldName := range fieldsFromPreviousScreens {
+					if _, exists := payload[fieldName]; !exists {
+						payload[fieldName] = "${data." + fieldName + "}"
+					}
+				}
+				for _, fieldName := range thisScreenFields {
+					if _, exists := payload[fieldName]; !exists {
+						payload[fieldName] = "${form." + fieldName + "}"
+					}
+				}
+				
+				newAction["payload"] = payload
+			case "navigate":
+				if len(thisScreenFields) > 0 || len(fieldsFromPreviousScreens) > 0 {
+					payload := make(map[string]any)
+					
+					// Preserve existing payload
+					if existingPayload, ok := newAction["payload"].(map[string]any); ok {
+						for k, v := range existingPayload {
+							payload[k] = v
+						}
+					}
+					
+					for _, fieldName := range fieldsFromPreviousScreens {
+						if _, exists := payload[fieldName]; !exists {
+							payload[fieldName] = "${data." + fieldName + "}"
+						}
+					}
+					for _, fieldName := range thisScreenFields {
+						if _, exists := payload[fieldName]; !exists {
+							payload[fieldName] = "${form." + fieldName + "}"
+						}
+					}
+					
+					newAction["payload"] = payload
+				}
+			}
+
+			newComp["on-click-action"] = newAction
+		}
+
+		if compType == "If" {
+			if thenBlock, ok := newComp["then"].([]any); ok {
+				newComp["then"] = sanitizeComponentsRecursive(thenBlock, allFieldNames, fieldsFromPreviousScreens, thisScreenFieldSet, thisScreenFields)
+			}
+			if elseBlock, ok := newComp["else"].([]any); ok {
+				newComp["else"] = sanitizeComponentsRecursive(elseBlock, allFieldNames, fieldsFromPreviousScreens, thisScreenFieldSet, thisScreenFields)
+			}
 		}
 
 		result[i] = newComp
