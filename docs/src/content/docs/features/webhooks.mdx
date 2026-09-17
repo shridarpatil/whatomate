@@ -1,0 +1,106 @@
+---
+title: Outbound Webhooks
+description: Subscribe external systems to Whatomate events with signed, retried HTTP callbacks
+---
+
+import { Aside } from '@astrojs/starlight/components';
+
+Outbound Webhooks push Whatomate events to your own HTTP endpoints in real time. When a subscribed event fires — a message arrives, a contact is created, a chat is transferred to a human — Whatomate `POST`s a signed JSON payload to every webhook that subscribed to it.
+
+<Aside type="note">
+  **Outbound vs. inbound.** This page is about *outbound* webhooks: **Whatomate → your server**. It is separate from the *inbound* Meta webhook at `/api/webhook` (**Meta → Whatomate**), which receives WhatsApp message and status callbacks and is verified against Meta's signature. Configuring outbound webhooks here has no effect on the Meta integration.
+</Aside>
+
+## Subscribing to events
+
+Manage webhooks under **Settings → Webhooks**, or via the API:
+
+- `GET /api/webhooks` — list webhooks (also returns the `available_events` catalog).
+- `POST /api/webhooks` — create a webhook.
+- `GET /api/webhooks/{id}` / `PUT /api/webhooks/{id}` / `DELETE /api/webhooks/{id}`
+- `POST /api/webhooks/{id}/test` — send a synchronous test event.
+
+A webhook has a `name`, a target `url`, a list of `events`, optional custom `headers`, a signing `secret`, and an `is_active` flag. At least one event must be selected. The secret is never returned in API responses — the payload exposes only a `has_secret` boolean.
+
+<Aside type="tip">
+  If you create a webhook without a `secret`, Whatomate auto-generates a 32-byte hex secret for you. Retrieve it once at creation, or set your own so both sides share it.
+</Aside>
+
+## Event catalog
+
+Seven event types can be subscribed to:
+
+| Event | Fires when |
+|---|---|
+| `message.incoming` | A new message is received from a contact. |
+| `message.sent` | An agent sends a message. |
+| `message.outgoing` | A message is sent to a contact (includes echoes). |
+| `contact.created` | A new contact is created. |
+| `transfer.created` | A transfer to a human agent is requested. |
+| `transfer.assigned` | A transfer is assigned to an agent. |
+| `transfer.resumed` | The chatbot is resumed (transfer closed). |
+
+## Payload
+
+Every delivery is a `POST` with `Content-Type: application/json` and a `User-Agent: Whatomate-Webhook/1.0` header. The body is:
+
+```json
+{
+  "event": "message.incoming",
+  "timestamp": "2026-07-16T10:30:00Z",
+  "data": { /* event-specific object */ }
+}
+```
+
+The `data` object depends on the event — message events carry `message_id`, `contact_id`, `contact_phone`, `contact_name`, `message_type`, `content`, and `whatsapp_account`; transfer events carry `transfer_id`, the contact fields, `source`, and (once assigned) `agent_id` / `agent_name`. Any custom headers you configured on the webhook are added to the request.
+
+## Verifying the signature
+
+When a webhook has a secret, Whatomate signs each delivery and sends the signature in the **`X-Webhook-Signature`** header:
+
+```
+X-Webhook-Signature: sha256=<hex>
+```
+
+The signature is `HMAC-SHA256` of the **raw request body** keyed with your secret, hex-encoded and prefixed with `sha256=`. Compute the same value on your side and compare in constant time:
+
+```javascript
+import crypto from 'node:crypto';
+
+function verify(rawBody, header, secret) {
+  const expected =
+    'sha256=' + crypto.createHmac('sha256', secret).update(rawBody).digest('hex');
+  // constant-time compare
+  return crypto.timingSafeEqual(Buffer.from(header), Buffer.from(expected));
+}
+```
+
+<Aside type="caution">
+  Sign the **exact bytes** you received, before any JSON re-serialization. Re-encoding the parsed object can reorder keys or change whitespace and break the comparison.
+</Aside>
+
+## Delivery, retries & concurrency
+
+Delivery is **asynchronous** — the API call that triggered the event returns immediately; webhook dispatch runs in the background on a detached context. For a given event, Whatomate:
+
+- Sends only to **active** webhooks that subscribe to that event.
+- Delivers to up to **10 webhooks concurrently** per dispatch.
+- Treats any **2xx** response as success. A non-2xx status or a network error is a failure.
+- **Retries up to 3 times** with exponential backoff between attempts (delays double: ~2s then ~4s). After the final attempt the failure is logged and the delivery is dropped — there is no persistent dead-letter queue.
+
+Use `POST /api/webhooks/{id}/test` to send a one-off `{"event":"test", ...}` payload synchronously and confirm your endpoint accepts and verifies it.
+
+## SSRF protection
+
+Because webhook URLs are user-supplied, Whatomate guards against server-side request forgery on two levels:
+
+1. **At save time** (`validateWebhookURL`): the URL scheme must be `http` or `https`, and obvious internal targets are rejected — `localhost`, `0.0.0.0`, `*.local`, `*.internal`, and IP literals in loopback, private, link-local, or unspecified ranges.
+2. **At delivery time** (`SSRFSafeDialer`): after DNS resolution, connections to loopback/private/link-local IPs are blocked — defending against DNS-rebinding attacks where a public hostname resolves to an internal address.
+
+<Aside type="note">
+  Point webhooks at publicly reachable HTTPS endpoints. A URL that resolves to a private or internal address will be rejected either when you save it or when a delivery is attempted.
+</Aside>
+
+## API
+
+Full request/response schemas are in the [API Reference → Webhooks](/whatomate/api-reference/webhooks).

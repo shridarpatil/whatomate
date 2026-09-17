@@ -7,11 +7,15 @@ import { Aside } from '@astrojs/starlight/components';
 
 ## Overview
 
-Accounts represent your WhatsApp Business API connections. Each account is linked to a phone number registered with Meta's WhatsApp Business Platform.
+Accounts represent your WhatsApp Business API connections. Each account is linked to a phone number (`phone_id`) registered under a WhatsApp Business Account (`business_id`) on Meta's WhatsApp Business Platform.
+
+<Aside type="note">
+  For security, account responses **never** return the raw `access_token` or `app_secret`. They expose boolean presence flags (`has_access_token`, `has_app_secret`) instead. Secrets are AES-encrypted at rest.
+</Aside>
 
 ## List Accounts
 
-Retrieve all connected WhatsApp accounts.
+Retrieve all connected WhatsApp accounts for the organization.
 
 ```bash
 GET /api/accounts
@@ -23,20 +27,35 @@ GET /api/accounts
 {
   "status": "success",
   "data": {
-    "items": [
+    "accounts": [
       {
         "id": "uuid",
         "name": "Main Business",
-        "phone_number": "+1234567890",
-        "phone_number_id": "123456789",
-        "business_account_id": "987654321",
+        "app_id": "1234567890",
+        "phone_id": "123456789",
+        "business_id": "987654321",
+        "api_version": "v21.0",
+        "is_default_incoming": true,
+        "is_default_outgoing": true,
+        "auto_read_receipt": false,
+        "business_calling_enabled": false,
         "status": "active",
-        "created_at": "2024-01-01T00:00:00Z"
+        "has_access_token": true,
+        "has_app_secret": true,
+        "phone_number": "+1234567890",
+        "display_name": "Main Business",
+        "created_by_name": "Admin User",
+        "created_at": "2024-01-01T00:00:00Z",
+        "updated_at": "2024-01-01T00:00:00Z"
       }
     ]
   }
 }
 ```
+
+<Aside type="note">
+  The list response is a bare `{ "accounts": [...] }` object — it does not include `total`, `page`, or `limit` pagination fields.
+</Aside>
 
 ## Get Account
 
@@ -54,22 +73,46 @@ GET /api/accounts/{id}
   "data": {
     "id": "uuid",
     "name": "Main Business",
-    "phone_number": "+1234567890",
-    "phone_number_id": "123456789",
-    "business_account_id": "987654321",
-    "access_token": "EAAxxxx...",
+    "app_id": "1234567890",
+    "phone_id": "123456789",
+    "business_id": "987654321",
     "webhook_verify_token": "your_verify_token",
+    "api_version": "v21.0",
+    "is_default_incoming": true,
+    "is_default_outgoing": true,
+    "auto_read_receipt": false,
+    "business_calling_enabled": false,
     "status": "active",
-    "quality_rating": "GREEN",
-    "messaging_limit": "TIER_1K",
-    "created_at": "2024-01-01T00:00:00Z"
+    "has_access_token": true,
+    "has_app_secret": true,
+    "phone_number": "+1234567890",
+    "display_name": "Main Business",
+    "created_by_id": "uuid",
+    "created_by_name": "Admin User",
+    "updated_by_id": "uuid",
+    "updated_by_name": "Admin User",
+    "created_at": "2024-01-01T00:00:00Z",
+    "updated_at": "2024-01-01T00:00:00Z"
   }
 }
 ```
 
+### Response Fields
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `phone_id` | string | Meta phone number ID |
+| `business_id` | string | WhatsApp Business Account (WABA) ID |
+| `has_access_token` | boolean | Whether an access token is stored (the token itself is never returned) |
+| `has_app_secret` | boolean | Whether a Meta App Secret is stored |
+| `phone_number` | string | The display phone number, when available |
+| `display_name` | string | Verified display name, when available |
+| `status` | string | Account status (see table below) |
+| `created_by_name` / `updated_by_name` | string | Names of the users who created/last updated the account |
+
 ## Create Account
 
-Connect a new WhatsApp Business account.
+Connect a new WhatsApp Business account manually.
 
 ```bash
 POST /api/accounts
@@ -80,30 +123,44 @@ POST /api/accounts
 ```json
 {
   "name": "Support Line",
-  "phone_number_id": "123456789",
-  "business_account_id": "987654321",
+  "phone_id": "123456789",
+  "business_id": "987654321",
   "access_token": "EAAxxxx...",
-  "webhook_verify_token": "your_custom_verify_token"
+  "app_id": "1234567890",
+  "app_secret": "your_meta_app_secret",
+  "api_version": "v21.0",
+  "webhook_verify_token": "your_custom_verify_token",
+  "is_default_incoming": false,
+  "is_default_outgoing": false,
+  "auto_read_receipt": false,
+  "business_calling_enabled": false
 }
 ```
+
+### Request Fields
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `name` | string | Yes | Human-readable account name |
+| `phone_id` | string | Yes | Meta phone number ID |
+| `business_id` | string | Yes | WhatsApp Business Account (WABA) ID |
+| `access_token` | string | Yes | Meta access token (stored encrypted) |
+| `app_id` | string | No | Meta App ID |
+| `app_secret` | string | No | Meta App Secret for webhook signature verification (stored encrypted) |
+| `webhook_verify_token` | string | No | Verify token; auto-generated if omitted |
+| `api_version` | string | No | Graph API version; defaults to the server default (e.g. `v21.0`) |
+| `is_default_incoming` | boolean | No | Use this account as the default for incoming messages |
+| `is_default_outgoing` | boolean | No | Use this account as the default for outgoing messages |
+| `auto_read_receipt` | boolean | No | Automatically send read receipts for incoming messages |
+| `business_calling_enabled` | boolean | No | Enrolled in the Business Calling API (required to send Call buttons) |
 
 ### Response
 
-```json
-{
-  "status": "success",
-  "data": {
-    "id": "uuid",
-    "name": "Support Line",
-    "status": "pending",
-    "created_at": "2024-01-01T00:00:00Z"
-  }
-}
-```
+Returns the created account in the same shape as [Get Account](#get-account).
 
 ## Update Account
 
-Update account settings.
+Update account settings. Send only the fields you want to change; omitted string fields are left unchanged.
 
 ```bash
 PUT /api/accounts/{id}
@@ -114,7 +171,8 @@ PUT /api/accounts/{id}
 ```json
 {
   "name": "Customer Support",
-  "access_token": "EAAyyyy..."
+  "access_token": "EAAyyyy...",
+  "auto_read_receipt": true
 }
 ```
 
@@ -126,13 +184,24 @@ Remove a WhatsApp account connection.
 DELETE /api/accounts/{id}
 ```
 
+### Response
+
+```json
+{
+  "status": "success",
+  "data": {
+    "message": "Account deleted successfully"
+  }
+}
+```
+
 <Aside type="caution">
   Deleting an account will remove all associated contacts, messages, and settings.
 </Aside>
 
 ## Test Connection
 
-Verify the account connection with Meta.
+Verify the account credentials against Meta and fetch live phone details.
 
 ```bash
 POST /api/accounts/{id}/test
@@ -144,27 +213,220 @@ POST /api/accounts/{id}/test
 {
   "status": "success",
   "data": {
-    "connected": true,
-    "phone_number": "+1234567890",
+    "success": true,
     "display_phone_number": "(123) 456-7890",
     "verified_name": "Your Business Name",
-    "quality_rating": "GREEN"
+    "quality_rating": "GREEN",
+    "messaging_limit_tier": "TIER_1K",
+    "code_verification_status": "VERIFIED",
+    "account_mode": "LIVE",
+    "is_test_number": false
   }
 }
 ```
+
+<Aside type="note">
+  `quality_rating` and `messaging_limit_tier` are live values fetched from Meta by the test endpoint — they are **not** persisted fields on the account record.
+</Aside>
+
+## Register Phone Number
+
+Register the phone number with Meta and set a two-step verification PIN. Used to complete manual or embedded-signup setup. A random 6-digit PIN is generated if none is supplied. SMB (Business App) numbers are already registered and skip this step.
+
+```bash
+POST /api/accounts/{id}/register
+```
+
+### Request Body
+
+```json
+{
+  "pin": "123456"
+}
+```
+
+### Response
+
+```json
+{
+  "status": "success",
+  "data": {
+    "success": true,
+    "message": "Phone number registered successfully",
+    "pin": "123456"
+  }
+}
+```
+
+## Subscribe App to Webhooks
+
+Subscribe the app to webhooks for the account's WhatsApp Business Account. Required after registration to start receiving incoming messages.
+
+```bash
+POST /api/accounts/{id}/subscribe
+```
+
+### Response
+
+```json
+{
+  "status": "success",
+  "data": {
+    "success": true,
+    "message": "App subscribed to webhooks successfully. You should now receive incoming messages."
+  }
+}
+```
+
+## Business Profile
+
+The business profile is fetched from and pushed to Meta live; it is not stored locally.
+
+### Get Business Profile
+
+```bash
+GET /api/accounts/{id}/business_profile
+```
+
+### Response
+
+```json
+{
+  "status": "success",
+  "data": {
+    "messaging_product": "whatsapp",
+    "address": "123 Main St",
+    "description": "We sell great things",
+    "vertical": "RETAIL",
+    "email": "hello@example.com",
+    "websites": ["https://example.com"],
+    "profile_picture_url": "https://...",
+    "about": "Open 9-5"
+  }
+}
+```
+
+### Update Business Profile
+
+```bash
+PUT /api/accounts/{id}/business_profile
+```
+
+### Request Body
+
+```json
+{
+  "messaging_product": "whatsapp",
+  "address": "123 Main St",
+  "description": "We sell great things",
+  "vertical": "RETAIL",
+  "email": "hello@example.com",
+  "websites": ["https://example.com"],
+  "about": "Open 9-5"
+}
+```
+
+Returns the refreshed profile (or `{ "message": "Profile updated successfully" }` if the re-fetch fails).
+
+### Update Profile Picture
+
+Upload a new profile picture. Send the image as `multipart/form-data` with a `file` field.
+
+```bash
+POST /api/accounts/{id}/business_profile/photo
+```
+
+### Response
+
+```json
+{
+  "status": "success",
+  "data": {
+    "message": "Profile picture updated successfully",
+    "handle": "meta-upload-handle"
+  }
+}
+```
+
+## Embedded Signup
+
+Whatomate supports Meta's Embedded Signup flow, letting users connect a WhatsApp Business account without manually copying credentials. See the [Embedded Signup](/whatomate/features/embedded-signup) feature guide for the end-to-end flow.
+
+### Get Embedded Signup Config
+
+Public helper the frontend uses to bootstrap the Meta JS SDK with the org's app credentials.
+
+```bash
+GET /api/embedded-signup/config
+```
+
+### Response
+
+```json
+{
+  "status": "success",
+  "data": {
+    "whatsapp_app_id": "1234567890",
+    "whatsapp_config_id": "9876543210",
+    "whatsapp_api_version": "v21.0"
+  }
+}
+```
+
+### Exchange Token
+
+Exchange the temporary authorization code returned by the Embedded Signup dialog for a permanent access token, then create (or update) the account. Phone and WABA IDs are auto-discovered from the token if omitted, and the flow attempts auto-registration and webhook subscription.
+
+```bash
+POST /api/accounts/exchange-token
+```
+
+### Request Body
+
+```json
+{
+  "code": "AQD...",
+  "phone_id": "123456789",
+  "waba_id": "987654321",
+  "name": "Support Line",
+  "webhook_verify_token": "your_custom_verify_token"
+}
+```
+
+Only `code` is required — `phone_id`, `waba_id`, `name`, and `webhook_verify_token` are optional.
+
+### Response
+
+```json
+{
+  "status": "success",
+  "data": {
+    "account": {
+      "id": "uuid",
+      "name": "Support Line",
+      "phone_id": "123456789",
+      "business_id": "987654321",
+      "status": "active",
+      "has_access_token": true
+    },
+    "pin": "123456",
+    "warning": "Registration failed: ..."
+  }
+}
+```
+
+`pin` is present only when auto-registration succeeded; `warning` is present only when registration failed. See the [Embedded Signup](/whatomate/features/embedded-signup) guide for details.
 
 ## Account Status
 
 | Status | Description |
 |--------|-------------|
-| `pending` | Account created, awaiting verification |
+| `pending_registration` | Account created via embedded signup, phone number not yet registered |
 | `active` | Account is connected and working |
-| `disconnected` | Connection lost, needs reconnection |
-| `suspended` | Account suspended by Meta |
 
 ## Quality Rating
 
-Meta assigns quality ratings based on message performance:
+The [Test Connection](#test-connection) endpoint surfaces Meta's live quality rating for the phone number:
 
 | Rating | Description |
 |--------|-------------|

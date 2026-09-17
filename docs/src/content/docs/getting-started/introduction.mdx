@@ -18,8 +18,8 @@ Whatomate is a modern WhatsApp Business Platform built with Go (Fastglue) and Vu
   <Card title="Multi-tenant Architecture" icon="building">
     Support multiple organizations with isolated data and configurations.
   </Card>
-  <Card title="Role-Based Access" icon="approve-check">
-    Three roles (Admin, Manager, Agent) with granular permissions.
+  <Card title="Granular Roles & Permissions" icon="approve-check">
+    Customizable roles with fine-grained, per-resource permissions. Assign specific permissions per resource (users, contacts, templates, etc.) and control access at the action level (read, write, delete, and more).
   </Card>
   <Card title="WhatsApp Cloud API" icon="rocket">
     Seamless integration with Meta's WhatsApp Business API.
@@ -36,12 +36,36 @@ Whatomate is a modern WhatsApp Business Platform built with Go (Fastglue) and Vu
   <Card title="Chatbot Automation" icon="setting">
     Keyword-based auto-replies, conversation flows, and AI-powered responses.
   </Card>
+  <Card title="Voice Calling & IVR" icon="phone">
+    Incoming and outgoing WhatsApp calls with IVR menus, DTMF routing, transfers to agent teams, hold music, and call recording.
+  </Card>
+  <Card title="Canned Responses" icon="pencil">
+    Pre-defined quick replies with slash commands (`/shortcut`) and dynamic placeholders.
+  </Card>
+  <Card title="WhatsApp Flows" icon="puzzle">
+    Build, publish, and send Meta's native interactive form flows.
+  </Card>
+  <Card title="Product Catalogs" icon="list-format">
+    Sync catalogs and products from your Meta commerce account.
+  </Card>
+  <Card title="Teams & SSO" icon="approve-check">
+    Route conversations and calls to agent teams; sign in via OAuth/OIDC providers.
+  </Card>
+  <Card title="Custom Actions" icon="external">
+    Per-contact buttons that call your own webhooks or open external URLs.
+  </Card>
+  <Card title="Outbound Webhooks" icon="rocket">
+    HMAC-signed event deliveries for messages, contacts, and transfers.
+  </Card>
+  <Card title="Audit Logs" icon="document">
+    A per-organization trail of every create, update, and delete.
+  </Card>
 </CardGrid>
 
 ## Tech Stack
 
 ### Backend
-- **Go 1.21+** with [Fastglue](https://github.com/zerodha/fastglue) (fasthttp-based HTTP framework)
+- **Go 1.25+** with [Fastglue](https://github.com/zerodha/fastglue) (fasthttp-based HTTP framework)
 - **PostgreSQL** for data storage with GORM v2
 - **Redis** for caching and pub/sub
 - **JWT** for authentication

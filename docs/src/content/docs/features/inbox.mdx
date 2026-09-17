@@ -1,0 +1,211 @@
+---
+title: Inbox & Chat
+description: The shared team inbox for two-way WhatsApp conversations — assignment, tags, notes, and message sending
+---
+
+import { Card, CardGrid, Steps, Aside } from '@astrojs/starlight/components';
+
+The Inbox is where your team has day-to-day conversations with customers over WhatsApp. It's a shared, real-time view: incoming messages arrive live over WebSocket, agents reply with text, media, buttons, or approved templates, and each conversation carries its own assignment, tags, and private notes.
+
+## Overview
+
+<CardGrid>
+  <Card title="Shared team inbox" icon="comment">
+    Every WhatsApp conversation for the organization in one list, ordered by most recent activity.
+  </Card>
+  <Card title="Assignment" icon="person">
+    Route a conversation to a specific agent so ownership is clear.
+  </Card>
+  <Card title="Tags" icon="seti:pipeline">
+    Colour-coded labels for filtering and triage (e.g. `vip`, `billing`, `lead`).
+  </Card>
+  <Card title="Private notes" icon="pencil">
+    Internal-only annotations on a conversation — never sent to the customer.
+  </Card>
+</CardGrid>
+
+## The conversation list
+
+The left-hand list is the set of contacts the signed-in user is allowed to see, ordered by `last_message_at` (most recent first, contacts with no messages last). Each row surfaces:
+
+| Field | Meaning |
+|---|---|
+| **Profile name / phone** | The contact's WhatsApp profile name, falling back to the phone number. Both can be [masked](#phone-masking) org-wide. |
+| **Last message preview** | A short preview of the most recent message (`[Image]`, `[Document: …]`, or truncated text). |
+| **Unread count** | Number of **incoming** messages that haven't been marked read. |
+| **Assigned agent** | The agent the conversation is routed to, if any. |
+| **Tags** | The contact's tags. |
+| **Service window** | Whether the 24-hour free-form messaging window is open (see below). |
+
+### Search and tag filtering
+
+The list supports server-side search and tag filtering:
+
+- **Search** matches the contact's phone number or profile name (case-insensitive on the profile name).
+- **Tag filter** accepts a comma-separated list of tag names and returns contacts that have **any** of them (`?tags=vip,billing`).
+
+These map to the `search` and `tags` query parameters on `GET /api/contacts` — see the [Contacts API](/whatomate/api-reference/contacts).
+
+### Unread counts
+
+A conversation's unread count is the number of incoming messages whose status is not yet `read`. Opening the conversation and calling **mark-as-read** clears it (see [Marking messages as read](#marking-messages-as-read)). When the chatbot auto-handles an exchange, it marks the incoming messages read for you so bot-handled chats don't leave a stale unread badge.
+
+## The 24-hour service window
+
+WhatsApp enforces a **24-hour customer service window**. It opens each time the customer sends you a message and lasts 24 hours from that last inbound message. Whatomate tracks this per contact as `service_window_open` (true when the last inbound message was less than 24 hours ago).
+
+What the window controls:
+
+| Window state | What you can send |
+|---|---|
+| **Open** (customer messaged within 24h) | Free-form messages — text, media, interactive buttons, reactions. |
+| **Closed** (no inbound in 24h) | **Only pre-approved [message templates](/whatomate/features/templates).** Free-form messages will be rejected by Meta. |
+
+<Aside type="note">
+  This is a WhatsApp Platform rule, not a Whatomate limitation. To re-open a conversation after the window closes, send an approved template; once the customer replies, the free-form window opens again.
+</Aside>
+
+## Permission-scoped visibility
+
+What a user sees in the inbox depends on their [role's permissions](/whatomate/features/roles-permissions):
+
+- **With `chat:read`** — the user can open conversations. Combined with **`contacts:read`**, they see **every** conversation in the organization.
+- **Without `contacts:read`** — visibility is narrowed to conversations the user *owns*: contacts **assigned to them** (`assigned_user_id`), plus contacts with an **active agent transfer** to them. This scoping is applied uniformly to listing, reading, messaging, reactions, and notes — an agent cannot read or reply to a conversation they don't own.
+
+Assignment is controlled separately:
+
+- **`chat.assign:write`** and **`contacts:write`** let a user assign or reassign conversations to agents.
+
+<Aside type="tip">
+  The default **agent** role typically has `chat:read` / `chat:write` but not `contacts:read`, so agents see only their own conversations. Managers and admins have `contacts:read` and see the whole inbox.
+</Aside>
+
+## Sending messages
+
+All outbound sends target a contact and resolve a WhatsApp account (the one specified on the request, else the contact's account, else the org's default outgoing account).
+
+### Text
+
+Send a plain text message. Supports replying to an earlier message for threaded context.
+
+```json
+POST /api/contacts/{id}/messages
+{
+  "type": "text",
+  "content": { "body": "Hi Sarah, how can we help?" },
+  "reply_to_message_id": "…optional…"
+}
+```
+
+### Media
+
+Images, video, audio, and documents are sent as `multipart/form-data` with the file, a `type` (`image` / `video` / `audio` / `document`), an optional `caption`, and an optional `whatsapp_account` override.
+
+```
+POST /api/messages/media   (multipart/form-data)
+file=<binary>  type=image  caption="Your receipt"  contact_id=<uuid>
+```
+
+### Interactive messages
+
+The chat send endpoint also sends interactive messages via the `interactive` field:
+
+| Interactive type | What it sends |
+|---|---|
+| **button** | Up to a few tappable quick-reply buttons under a body text. |
+| **list** | A list-style picker of options. |
+| **cta_url** | A single call-to-action button that opens a URL. |
+| **voice_call** | A WhatsApp [Business Calling](/whatomate/features/calling) button that lets the customer call you. Requires the account to have Business Calling enabled. |
+| **flow** | Launches a [WhatsApp Flow](/whatomate/features/whatsapp-flows) form. The `flow_id` must belong to your organization. |
+
+### Templates
+
+When the service window is closed — or for any structured, pre-approved outreach — send an approved [template](/whatomate/features/templates) via `POST /api/messages/template`. You supply the template name or ID plus its body/header/button parameters. The send is rejected if the template isn't `APPROVED`, if required parameters are missing, or if the contact has opted out of marketing and the template is a `MARKETING` template. See the [Messages API](/whatomate/api-reference/messages) for the full parameter list.
+
+### Reactions
+
+React to any message with an emoji. Each user can have **one** reaction per message; sending an empty emoji removes your reaction.
+
+```json
+POST /api/contacts/{id}/messages/{message_id}/reaction
+{ "emoji": "👍" }
+```
+
+### Marking messages as read
+
+Opening a conversation should mark its incoming messages read to clear the unread badge:
+
+```
+POST /api/contacts/{id}/mark-read
+```
+
+This flips the contact's incoming messages to `read`. If the sending account has **auto read receipts** enabled, Whatomate also sends read receipts (the blue ticks) back to the customer over the WhatsApp API.
+
+<Aside type="tip">
+  Canned responses speed up repetitive replies — type `/shortcut` in the chat input to insert a pre-written message. See [Canned Responses](/whatomate/features/canned-responses).
+</Aside>
+
+## Private conversation notes
+
+Notes are **internal annotations** on a conversation. They are stored against the contact, visible to your team in the chat view, and **never sent to the customer**.
+
+- Any user with **`chat:read`** can view notes; **`chat:write`** is required to create them.
+- A note records its author and timestamps, and displays the author's name.
+- **Only the note's author can edit or delete their own note.**
+- Note changes broadcast in real time over WebSocket, so teammates viewing the same conversation see them appear live.
+
+Endpoints (see the route table): `GET` / `POST /api/contacts/{id}/notes`, and `PUT` / `DELETE /api/contacts/{id}/notes/{note_id}`.
+
+<Aside type="note">
+  Notes are the right place for internal context ("customer is escalated, waiting on refund approval"). Anything the customer should see must be sent as a message.
+</Aside>
+
+## Contact management
+
+Each conversation is backed by a contact record you can manage from the inbox.
+
+### Assignment
+
+Assign a conversation to an agent to make ownership explicit and — for agents without `contacts:read` — grant them access to it. Assignment requires **`contacts:write`**.
+
+```json
+PUT /api/contacts/{id}/assign
+{ "user_id": "…agent uuid…" }   // null to unassign
+```
+
+The assignee must be a user in the same organization. Unassign by sending `null`.
+
+### Tags
+
+Tags are organization-scoped, colour-coded labels. Manage the tag catalog under **`tags:read` / `tags:write` / `tags:delete`**; valid colours are `blue`, `red`, `green`, `yellow`, `purple`, `gray`. Apply tags to a contact (requires **`contacts:write`**):
+
+```json
+PUT /api/contacts/{id}/tags
+{ "tags": ["vip", "billing"] }
+```
+
+Renaming or deleting a tag in the catalog propagates the change to every contact that carries it. Filter the inbox by tag as described in [Search and tag filtering](#search-and-tag-filtering).
+
+### Contact fields
+
+A contact carries a phone number, profile name, WhatsApp account, tags, and a free-form `metadata` object. Creating and editing contacts requires **`contacts:write`**; both are audit-logged. Re-creating a previously deleted contact restores the soft-deleted record rather than erroring.
+
+### Marketing opt-out
+
+Contacts flagged `marketing_opt_out` cannot be sent `MARKETING`-category templates — such sends are rejected. This keeps bulk and promotional messaging compliant with the customer's stated preference.
+
+## Phone masking
+
+When phone masking is enabled for the organization, phone numbers (and profile names that are themselves phone numbers) are masked in list and detail responses. This is an org-level privacy control applied server-side, so agents never see the raw number.
+
+## Real-time updates
+
+The inbox is driven by the WebSocket hub: new inbound and outbound messages, status changes (sent / delivered / read / failed), reaction updates, and note changes are all broadcast to connected clients for the organization, so the list and open conversation update without a refresh.
+
+## Related
+
+- [Canned Responses](/whatomate/features/canned-responses) — quick replies and slash commands
+- [Templates](/whatomate/features/templates) — pre-approved messages for the closed service window
+- [Roles & Permissions](/whatomate/features/roles-permissions) — the `chat`, `chat.assign`, `contacts`, and `tags` permissions
+- [Contacts API](/whatomate/api-reference/contacts) — contact, assignment, tags, and notes endpoints
+- [Messages API](/whatomate/api-reference/messages) — send text, media, templates, and reactions

@@ -26,9 +26,11 @@ GET /api/contacts
 | Parameter | Type | Description |
 |-----------|------|-------------|
 | `page` | integer | Page number (default: 1) |
-| `limit` | integer | Items per page (default: 20, max: 100) |
-| `search` | string | Search by name or phone number |
-| `account_id` | string | Filter by WhatsApp account |
+| `limit` | integer | Page size, 1–100. Default `50`. |
+| `search` | string | Search by profile name (case-insensitive) or phone number. Truncated at 1000 characters. |
+| `tags` | string | Comma-separated tags; matches contacts having ANY of them |
+
+Contacts are ordered by `last_message_at DESC` (nulls last), then `created_at DESC`.
 
 ### Response
 
@@ -36,26 +38,56 @@ GET /api/contacts
 {
   "status": "success",
   "data": {
-    "items": [
+    "contacts": [
       {
         "id": "uuid",
-        "phone_number": "+1234567890",
-        "name": "John Doe",
+        "phone_number": "1234567890",
+        "name": "John",
         "profile_name": "John",
         "avatar_url": "https://...",
-        "account_id": "uuid",
-        "assigned_to": "uuid",
+        "status": "active",
+        "tags": ["vip", "billing"],
+        "metadata": { "custom_field": "value" },
         "last_message_at": "2024-01-01T12:00:00Z",
-        "created_at": "2024-01-01T00:00:00Z"
+        "last_message_preview": "See you tomorrow!",
+        "unread_count": 2,
+        "assigned_user_id": "uuid",
+        "whatsapp_account": "Main Business",
+        "last_inbound_at": "2024-01-01T11:00:00Z",
+        "service_window_open": true,
+        "marketing_opt_out": false,
+        "created_at": "2024-01-01T00:00:00Z",
+        "updated_at": "2024-01-01T12:00:00Z"
       }
     ],
     "total": 100,
     "page": 1,
-    "limit": 20,
-    "total_pages": 5
+    "limit": 50
   }
 }
 ```
+
+### Response Fields
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `whatsapp_account` | string | The **name** of the WhatsApp account the contact belongs to (not a UUID) |
+| `assigned_user_id` | uuid | The agent the contact is assigned to, if any |
+| `unread_count` | integer | Number of unread incoming messages |
+| `last_message_preview` | string | Preview text of the most recent message |
+| `service_window_open` | boolean | True if the customer messaged within the last 24 hours (`last_inbound_at`) |
+| `marketing_opt_out` | boolean | Whether the contact has opted out of marketing messages |
+| `status` | string | Always the literal `"active"` — contacts have no status column. |
+| `name` | string | Mirrors `profile_name`; both hold the same value. |
+
+<Aside type="note">
+  There is no `account_id` or `assigned_to` field — the account is referenced by name via `whatsapp_account`, and the assigned agent is `assigned_user_id`.
+</Aside>
+
+<Aside type="caution">
+  When the organization enables **Mask phone numbers** (Settings → General), `phone_number` is
+  returned masked, and `profile_name` / `name` are masked too if they look like a phone number.
+</Aside>
 
 ## Get Contact
 
@@ -72,24 +104,31 @@ GET /api/contacts/{id}
   "status": "success",
   "data": {
     "id": "uuid",
-    "phone_number": "+1234567890",
-    "name": "John Doe",
+    "phone_number": "1234567890",
+    "name": "John",
     "profile_name": "John",
     "avatar_url": "https://...",
-    "account_id": "uuid",
-    "assigned_to": "uuid",
+    "status": "active",
+    "tags": ["vip"],
+    "assigned_user_id": "uuid",
+    "whatsapp_account": "Main Business",
     "metadata": {
       "custom_field": "value"
     },
+    "unread_count": 0,
     "last_message_at": "2024-01-01T12:00:00Z",
-    "created_at": "2024-01-01T00:00:00Z"
+    "last_message_preview": "Thanks!",
+    "service_window_open": true,
+    "marketing_opt_out": false,
+    "created_at": "2024-01-01T00:00:00Z",
+    "updated_at": "2024-01-01T12:00:00Z"
   }
 }
 ```
 
 ## Create Contact
 
-Create a new contact.
+Create a new contact (or restore a soft-deleted one with the same phone number). Requires `contacts:write`.
 
 ```bash
 POST /api/contacts
@@ -100,28 +139,30 @@ POST /api/contacts
 ```json
 {
   "phone_number": "+1234567890",
-  "name": "John Doe",
-  "account_id": "uuid",
+  "profile_name": "John Doe",
+  "whatsapp_account": "Main Business",
+  "tags": ["vip"],
   "metadata": {
     "custom_field": "value"
   }
 }
 ```
 
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `phone_number` | string | Yes | Contact phone number (a leading `+` is stripped) |
+| `profile_name` | string | No | Display name for the contact |
+| `whatsapp_account` | string | No | **Name** of the WhatsApp account to associate (not a UUID) |
+| `tags` | string[] | No | Tags to attach to the contact |
+| `metadata` | object | No | Freeform custom data |
+
+<Aside type="note">
+  There is no `account_id` field — associate the account by its name via `whatsapp_account`.
+</Aside>
+
 ### Response
 
-```json
-{
-  "status": "success",
-  "data": {
-    "id": "uuid",
-    "phone_number": "+1234567890",
-    "name": "John Doe",
-    "account_id": "uuid",
-    "created_at": "2024-01-01T00:00:00Z"
-  }
-}
-```
+Returns the created contact in the same shape as [Get Contact](#get-contact).
 
 ## Update Contact
 
@@ -133,31 +174,33 @@ PUT /api/contacts/{id}
 
 ### Request Body
 
+Only the fields you send are updated.
+
 ```json
 {
-  "name": "John Smith",
+  "profile_name": "John Smith",
+  "whatsapp_account": "Main Business",
+  "tags": ["vip", "billing"],
   "metadata": {
     "custom_field": "updated_value"
-  }
+  },
+  "assigned_user_id": "uuid",
+  "clear_assigned_agent": false
 }
 ```
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `profile_name` | string | Display name |
+| `whatsapp_account` | string | Name of the associated WhatsApp account |
+| `tags` | string[] | Replaces the contact's tags |
+| `metadata` | object | Replaces the metadata object |
+| `assigned_user_id` | uuid | Assign the contact to an agent |
+| `clear_assigned_agent` | boolean | Set `true` to unassign the contact (takes precedence over `assigned_user_id`) |
 
 ### Response
 
-```json
-{
-  "status": "success",
-  "data": {
-    "id": "uuid",
-    "phone_number": "+1234567890",
-    "name": "John Smith",
-    "metadata": {
-      "custom_field": "updated_value"
-    },
-    "updated_at": "2024-01-01T12:00:00Z"
-  }
-}
-```
+Returns the full updated contact (same shape as [Get Contact](#get-contact)).
 
 ## Delete Contact
 
@@ -181,7 +224,8 @@ DELETE /api/contacts/{id}
 Assign a contact to a team member.
 
 <Aside type="caution">
-  This endpoint requires **Admin** or **Manager** role.
+  Requires the `contacts:write` permission, otherwise `403 You do not have permission to assign
+  contacts`. The target user must belong to the same organization, otherwise `400 User not found`.
 </Aside>
 
 ```bash
@@ -210,10 +254,54 @@ To unassign a contact, set `user_id` to `null`:
 {
   "status": "success",
   "data": {
-    "id": "uuid",
-    "assigned_to": "uuid",
-    "updated_at": "2024-01-01T12:00:00Z"
+    "message": "Contact assigned successfully",
+    "assigned_user_id": "uuid"
   }
+}
+```
+
+## Update Contact Tags
+
+Replace the full set of tags on a contact. Requires `contacts:write`.
+
+```bash
+PUT /api/contacts/{id}/tags
+```
+
+### Request Body
+
+```json
+{
+  "tags": ["vip", "billing"]
+}
+```
+
+### Response
+
+```json
+{
+  "status": "success",
+  "data": {
+    "message": "Contact tags updated",
+    "tags": ["vip", "billing"]
+  }
+}
+```
+
+## Mark Contact Read
+
+Mark all incoming messages from a contact as read (clears the unread badge). Used by the chat view when the conversation is open.
+
+```bash
+POST /api/contacts/{id}/mark-read
+```
+
+### Response
+
+```json
+{
+  "status": "success",
+  "data": { "status": "ok" }
 }
 ```
 
@@ -368,3 +456,55 @@ GET /api/contacts/{id}/session-data
 <Aside type="note">
   This endpoint returns data from the contact's most recent chatbot session. The `panel_config` comes from the flow that was active during that session.
 </Aside>
+
+## Messaging & Notes
+
+Contacts are the scope for conversation messages and internal notes.
+
+### Messages
+
+Messages are sent and retrieved under the contact resource. See the [Messages API](/whatomate/api-reference/messages) for full request/response details.
+
+| Method | Path | Description |
+|--------|------|-------------|
+| `GET` | `/api/contacts/{id}/messages` | List messages for a contact (paginated) |
+| `POST` | `/api/contacts/{id}/messages` | Send a message to the contact |
+| `POST` | `/api/contacts/{id}/messages/{message_id}/reaction` | Add or remove an emoji reaction on a message |
+
+### Conversation Notes
+
+Internal, contact-scoped notes visible to agents (never sent to the customer). Requires `chat:read` to list and `chat:write` to modify.
+
+| Method | Path | Description |
+|--------|------|-------------|
+| `GET` | `/api/contacts/{id}/notes` | List notes for a contact (cursor-paginated, oldest first) |
+| `POST` | `/api/contacts/{id}/notes` | Create a note |
+| `PUT` | `/api/contacts/{id}/notes/{note_id}` | Update a note |
+| `DELETE` | `/api/contacts/{id}/notes/{note_id}` | Delete a note |
+
+#### Create Note Request Body
+
+```json
+{
+  "content": "Customer prefers email follow-up."
+}
+```
+
+#### Note Response
+
+```json
+{
+  "status": "success",
+  "data": {
+    "id": "uuid",
+    "contact_id": "uuid",
+    "created_by_id": "uuid",
+    "created_by_name": "Admin User",
+    "content": "Customer prefers email follow-up.",
+    "created_at": "2024-01-01T12:00:00Z",
+    "updated_at": "2024-01-01T12:00:00Z"
+  }
+}
+```
+
+The list endpoint returns `{ "notes": [...], "total": <n>, "has_more": <bool> }`.

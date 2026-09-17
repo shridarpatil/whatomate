@@ -74,14 +74,24 @@ Organize your responses into categories for easier navigation:
 ## Interactive Buttons
 
 A canned response can include buttons that appear under the message in the
-customer's WhatsApp. Three types are supported, and the editor enforces
+customer's WhatsApp. Several types are supported, and the editor enforces
 which can be combined.
 
 | Type | What it does | How many |
 |------|--------------|----------|
 | **Reply** | Sends a tappable text reply back into the chat. | 1–10 per message. List format kicks in automatically above 3. |
 | **URL** | Opens a link in the customer's browser. | 1 per message. Can't be combined with reply buttons. |
-| **Call** | Lets the customer place a WhatsApp voice call to you with one tap. | 1 per message. Can't be combined with reply or URL buttons. |
+| **Phone** | Click-to-dial a PSTN phone number from the customer's dialer. | Combines with reply/URL buttons. Distinct from **Call** (WhatsApp voice) below. |
+| **Call** | Lets the customer place a WhatsApp voice call to you with one tap. | 1 per message. Exclusive — can't be combined with any other button type. |
+| **Flow** | Launches a WhatsApp Flow (see [WhatsApp Flows](/whatomate/features/whatsapp-flows/)) when tapped. | 1 per message. Exclusive — can't be combined with any other button type. |
+
+### Flow buttons
+
+A **Flow** button opens a native WhatsApp Flow form. In the editor supply a
+**CTA title** (the button label) and the **Flow ID** of a published flow; an
+optional **screen** picks which flow screen to open first. Like the WhatsApp
+**Call** button, a Flow button renders as the entire interactive message, so
+it can't share a message with reply, URL, phone, or Call buttons.
 
 ### Call buttons (click-to-call)
 
@@ -112,7 +122,7 @@ normal incoming-call routing (IVR / team broadcast).
   minutes, default 15). After this window Meta drops the button from
   the customer's chat and they can't initiate a call from it.
 
-See the [Calling docs](/features/calling/) for the broader incoming-call
+See the [Calling docs](/whatomate/features/calling/) for the broader incoming-call
 flow (IVR, transfers, recording).
 
 ## Using Canned Responses in Chat

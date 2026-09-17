@@ -22,10 +22,20 @@ GET /api/templates
 | Parameter | Type | Description |
 |-----------|------|-------------|
 | `page` | integer | Page number (default: 1) |
-| `limit` | integer | Items per page (default: 20) |
+| `limit` | integer | Page size, 1–100. Default `50`. |
 | `status` | string | Filter by status (APPROVED, PENDING, REJECTED) |
 | `category` | string | Filter by category (MARKETING, UTILITY, AUTHENTICATION) |
-| `account_id` | string | Filter by WhatsApp account |
+| `account` | string | Filter by WhatsApp account **name** |
+| `search` | string | Case-insensitive match on `name` or `display_name` |
+
+Ordered by `created_at DESC`.
+
+<Aside type="caution">
+  Whatomate stores templates as **flat fields** (`header_type`, `header_content`, `body_content`,
+  `footer_content`, `buttons`, `sample_values`) — not as Meta's nested `components` array. The
+  account is referenced by name via `whatsapp_account`; there is no `account_id`, and the filter
+  parameter is `account`.
+</Aside>
 
 ### Response
 
@@ -33,74 +43,52 @@ GET /api/templates
 {
   "status": "success",
   "data": {
-    "items": [
+    "templates": [
       {
         "id": "uuid",
+        "whatsapp_account": "Main Business",
+        "meta_template_id": "123456789",
         "name": "order_confirmation",
+        "display_name": "Order Confirmation",
         "language": "en",
-        "status": "APPROVED",
         "category": "UTILITY",
-        "components": [...],
-        "created_at": "2024-01-01T00:00:00Z"
+        "status": "APPROVED",
+        "header_type": "IMAGE",
+        "header_content": "",
+        "body_content": "Hi {{1}}, your order #{{2}} has been confirmed!",
+        "footer_content": "Thank you for shopping with us",
+        "buttons": [
+          { "type": "URL", "text": "Track Order", "url": "https://example.com/track/{{1}}" }
+        ],
+        "sample_values": [],
+        "add_security_recommendation": false,
+        "code_expiration_minutes": 0,
+        "quality_rating": "UNKNOWN",
+        "created_by_name": "Jane Admin",
+        "updated_by_name": "Jane Admin",
+        "created_at": "2024-01-01T00:00:00Z",
+        "updated_at": "2024-01-01T00:00:00Z"
       }
     ],
     "total": 50,
     "page": 1,
-    "limit": 20
+    "limit": 50
   }
 }
 ```
 
 ## Get Template
 
-Retrieve a single template by ID.
+Retrieve a single template by ID. Returns the same object shape as a list item.
 
 ```bash
 GET /api/templates/{id}
 ```
 
-### Response
-
-```json
-{
-  "status": "success",
-  "data": {
-    "id": "uuid",
-    "name": "order_confirmation",
-    "language": "en",
-    "status": "APPROVED",
-    "category": "UTILITY",
-    "components": [
-      {
-        "type": "HEADER",
-        "format": "IMAGE"
-      },
-      {
-        "type": "BODY",
-        "text": "Hi {{1}}, your order #{{2}} has been confirmed!"
-      },
-      {
-        "type": "FOOTER",
-        "text": "Thank you for shopping with us"
-      },
-      {
-        "type": "BUTTONS",
-        "buttons": [
-          {
-            "type": "URL",
-            "text": "Track Order",
-            "url": "https://example.com/track/{{1}}"
-          }
-        ]
-      }
-    ]
-  }
-}
-```
-
 ## Create Template
 
-Create a new template (submitted to Meta for approval).
+Create a new template locally. Creating does **not** submit it to Meta — call
+[Submit Template](#submit-template) for that.
 
 ```bash
 POST /api/templates
@@ -110,56 +98,42 @@ POST /api/templates
 
 ```json
 {
-  "account_id": "uuid",
+  "whatsapp_account": "Main Business",
   "name": "welcome_message",
+  "display_name": "Welcome Message",
   "language": "en",
   "category": "MARKETING",
-  "components": [
-    {
-      "type": "BODY",
-      "text": "Welcome to our store, {{1}}! Use code {{2}} for 10% off your first order."
-    },
-    {
-      "type": "FOOTER",
-      "text": "Reply STOP to unsubscribe"
-    }
-  ]
+  "header_type": "TEXT",
+  "header_content": "Welcome!",
+  "body_content": "Welcome to our store, {{1}}! Use code {{2}} for 10% off your first order.",
+  "footer_content": "Reply STOP to unsubscribe",
+  "buttons": [],
+  "sample_values": ["John", "SAVE10"]
 }
 ```
 
-### Response
-
-```json
-{
-  "status": "success",
-  "data": {
-    "id": "uuid",
-    "name": "welcome_message",
-    "status": "PENDING",
-    "created_at": "2024-01-01T00:00:00Z"
-  }
-}
-```
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `whatsapp_account` | string | Yes | Account **name** |
+| `name` | string | Yes | Meta template name (lowercase, underscores) |
+| `language` | string | Yes | Language code, e.g. `en` |
+| `category` | string | Yes | `MARKETING`, `UTILITY`, or `AUTHENTICATION` |
+| `display_name` | string | No | Friendly label shown in the UI |
+| `header_type` | string | No | `TEXT`, `IMAGE`, `DOCUMENT`, `VIDEO`, or `NONE` |
+| `header_content` | string | No | Header text when `header_type` is `TEXT` |
+| `body_content` | string | No | Body text with `{{1}}`-style or named placeholders |
+| `footer_content` | string | No | Footer text |
+| `buttons` | array | No | Button definitions |
+| `sample_values` | array | No | Example values Meta uses during review |
+| `add_security_recommendation` | boolean | No | AUTHENTICATION templates — appends Meta's security line |
+| `code_expiration_minutes` | integer | No | AUTHENTICATION templates — 1–90; `0` omits the expiry footer |
 
 ## Update Template
 
-Update an existing template.
+Update an existing template. Accepts the same body as Create.
 
 ```bash
 PUT /api/templates/{id}
-```
-
-### Request Body
-
-```json
-{
-  "components": [
-    {
-      "type": "BODY",
-      "text": "Welcome, {{1}}! Use code {{2}} for 15% off your first order."
-    }
-  ]
-}
 ```
 
 ## Delete Template
@@ -172,32 +146,23 @@ DELETE /api/templates/{id}
 
 ## Sync Templates
 
-Sync templates from Meta's WhatsApp Business API.
+Pull templates from Meta for one account and upsert them locally (matching on account + name +
+language, restoring soft-deleted rows). Requires `templates:sync`.
 
 ```bash
 POST /api/templates/sync
 ```
 
-### Request Body
+The account name can be given either as an `?account=` query parameter or in the body:
 
 ```json
 {
-  "account_id": "uuid"
+  "whatsapp_account": "Main Business"
 }
 ```
 
-### Response
-
-```json
-{
-  "status": "success",
-  "data": {
-    "synced": 25,
-    "new": 3,
-    "updated": 5
-  }
-}
-```
+Omitting it returns `400 whatsapp_account is required`; an unknown name returns `404`. If Meta
+cannot be reached, the endpoint returns `502`.
 
 ## Submit Template
 
@@ -219,14 +184,71 @@ POST /api/templates/{id}/publish
 }
 ```
 
-## Template Components
+## Upload Template Media
 
-| Component | Description |
+Upload a media asset (image, video, or PDF) for a template's media header. This
+performs a resumable upload to Meta and returns a **handle** that you embed in
+the `HEADER` component's example when creating the template.
+
+```bash
+POST /api/templates/upload-media
+```
+
+Send the request as `multipart/form-data`:
+
+| Field | Location | Required | Description |
+|-------|----------|----------|-------------|
+| `account` | form field or `?account=` query | Yes | Name of the WhatsApp account. The account must have an `app_id` configured. |
+| `file` | form file | Yes | The media file to upload (image/jpeg, image/png, video/mp4, or application/pdf). |
+
+```bash
+curl -X POST "http://your-server:8080/api/templates/upload-media?account=main" \
+  -H "X-API-Key: whm_your_api_key" \
+  -F "file=@header.jpg"
+```
+
+### Response
+
+```json
+{
+  "status": "success",
+  "data": {
+    "handle": "4::aW1hZ2UvanBlZw==:...",
+    "filename": "header.jpg",
+    "mime_type": "image/jpeg",
+    "size": 24576
+  }
+}
+```
+
+Set the returned `handle` as `header_content` when creating a template whose `header_type` is
+`IMAGE`, `VIDEO` or `DOCUMENT` — Whatomate wraps it into Meta's
+`example.header_handle` on submission:
+
+```json
+{
+  "header_type": "IMAGE",
+  "header_content": "4::aW1hZ2UvanBlZw==:..."
+}
+```
+
+<Aside type="caution">
+  The WhatsApp account must have `app_id` set in its settings; otherwise the
+  upload is rejected.
+</Aside>
+
+## Template Parts
+
+Meta's four components map onto flat fields in the Whatomate API:
+
+| Meta component | Whatomate fields |
 |-----------|-------------|
-| `HEADER` | Optional header (text, image, video, or document) |
-| `BODY` | Main message content with variables |
-| `FOOTER` | Optional footer text |
-| `BUTTONS` | Call-to-action or quick reply buttons |
+| `HEADER` | `header_type` (`TEXT` \| `IMAGE` \| `DOCUMENT` \| `VIDEO` \| `NONE`) + `header_content` |
+| `BODY` | `body_content` |
+| `FOOTER` | `footer_content` |
+| `BUTTONS` | `buttons` |
+
+Whatomate assembles the Meta `components` payload itself when you submit the template.
 
 ## Template Variables
 
@@ -238,16 +260,11 @@ Use `{{1}}`, `{{2}}`, etc. for dynamic content:
 Hello {{1}}, your order #{{2}} is ready for pickup at {{3}}.
 ```
 
-When creating templates with positional parameters, provide sample values:
+Provide sample values as objects keyed by `component` + `index`:
 
 ```json
 {
-  "components": [
-    {
-      "type": "BODY",
-      "text": "Hello {{1}}, your order #{{2}} is ready!"
-    }
-  ],
+  "body_content": "Hello {{1}}, your order #{{2}} is ready!",
   "sample_values": [
     { "component": "body", "index": 1, "value": "John" },
     { "component": "body", "index": 2, "value": "12345" }
@@ -267,19 +284,16 @@ When using named parameters, provide sample values with `param_name`:
 
 ```json
 {
-  "parameter_format": "named",
-  "components": [
-    {
-      "type": "BODY",
-      "text": "Hello {{customer_name}}, your order #{{order_id}} is ready!"
-    }
-  ],
+  "body_content": "Hello {{customer_name}}, your order #{{order_id}} is ready!",
   "sample_values": [
     { "component": "body", "param_name": "customer_name", "value": "John" },
     { "component": "body", "param_name": "order_id", "value": "12345" }
   ]
 }
 ```
+
+You do not set `parameter_format` yourself — Whatomate detects non-numeric placeholders and sends
+`parameter_format: "NAMED"` to Meta on submission.
 
 ### URL Button Parameters
 
@@ -299,7 +313,7 @@ Templates can include URL buttons with dynamic variables. For example, a "Track 
 }
 ```
 
-When sending a template with dynamic URL buttons, provide the dynamic values via the `button_params` field in the [Send Template Message](/api-reference/messages/#send-template-message) endpoint. The key is the zero-based button index:
+When sending a template with dynamic URL buttons, provide the dynamic values via the `button_params` field in the [Send Template Message](/whatomate/api-reference/messages/#send-template-message) endpoint. The key is the zero-based button index:
 
 ```json
 {

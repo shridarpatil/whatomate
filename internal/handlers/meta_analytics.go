@@ -21,6 +21,15 @@ const (
 
 	// Cache key prefix
 	metaAnalyticsCachePrefix = "meta:analytics:"
+
+	// A WABA's billing currency effectively never changes, so it is cached
+	// well beyond the analytics TTLs and keyed by WABA id rather than org.
+	metaWABACurrencyCachePrefix = "meta:waba:currency:"
+	metaWABACurrencyCacheTTL    = 24 * time.Hour
+
+	// defaultAnalyticsCurrency is what cost is reported in when the WABA's own
+	// currency cannot be determined. It matches the pre-existing behaviour.
+	defaultAnalyticsCurrency = "USD"
 )
 
 // MetaAnalyticsRequest represents the request parameters for Meta analytics
@@ -38,6 +47,7 @@ type MetaAnalyticsResponse struct {
 	AccountName   string                          `json:"account_name"`
 	Data          *whatsapp.MetaAnalyticsResponse `json:"data"`
 	TemplateNames map[string]string               `json:"template_names,omitempty"` // meta_template_id -> template name
+	Currency      string                          `json:"currency,omitempty"`       // ISO 4217 code the WABA is billed in
 }
 
 // GetMetaAnalytics fetches Meta WhatsApp analytics with Redis caching
@@ -167,11 +177,20 @@ func (a *App) GetMetaAnalytics(r *fastglue.Request) error {
 	// Cache miss - fetch from Meta API
 	a.Log.Debug("Meta analytics cache miss", "cache_key", cacheKey)
 
+	// Every analytics type except plain messaging reports cost, and each needs
+	// to know which currency Meta denominated it in.
+	needsCurrency := analyticsType != string(whatsapp.AnalyticsTypeMessaging)
+
 	var results []MetaAnalyticsResponse
 	for i := range accounts {
 		a.decryptAccountSecrets(&accounts[i])
 		account := accounts[i]
 		waAccount := a.toWhatsAppAccount(&account)
+
+		var currency string
+		if needsCurrency {
+			currency = a.getWABACurrency(ctx, waAccount)
+		}
 
 		req := &whatsapp.AnalyticsRequest{
 			Start:       startUnix,
@@ -220,6 +239,7 @@ func (a *App) GetMetaAnalytics(r *fastglue.Request) error {
 					AccountID:   account.ID.String(),
 					AccountName: account.Name,
 					Data:        nil,
+					Currency:    currency,
 				})
 				continue
 			}
@@ -241,6 +261,7 @@ func (a *App) GetMetaAnalytics(r *fastglue.Request) error {
 				AccountID:   account.ID.String(),
 				AccountName: account.Name,
 				Data:        nil,
+				Currency:    currency,
 			})
 			continue
 		}
@@ -317,6 +338,7 @@ func (a *App) GetMetaAnalytics(r *fastglue.Request) error {
 			AccountName:   account.Name,
 			Data:          data,
 			TemplateNames: templateNames,
+			Currency:      currency,
 		})
 	}
 
@@ -414,6 +436,35 @@ func (a *App) buildMetaAnalyticsCacheKey(orgID uuid.UUID, accountID, analyticsTy
 		end,
 		granularity,
 	)
+}
+
+// getWABACurrency returns the ISO 4217 currency the WhatsApp Business Account
+// is billed in, which is the currency Meta denominates analytics costs in.
+// The value is cached in Redis for a day.
+//
+// A lookup failure degrades to USD rather than failing the whole analytics
+// request, and the fallback is deliberately not cached so a transient Graph
+// error does not pin the wrong currency for the full TTL.
+func (a *App) getWABACurrency(ctx context.Context, account *whatsapp.Account) string {
+	cacheKey := metaWABACurrencyCachePrefix + account.BusinessID
+
+	if cached, err := a.Redis.Get(ctx, cacheKey).Result(); err == nil && cached != "" {
+		return cached
+	}
+
+	info, err := a.WhatsApp.GetBusinessAccountInfo(ctx, account)
+	if err != nil || info.Currency == "" {
+		a.Log.Warn("Failed to resolve WABA currency, falling back to default",
+			"error", err,
+			"business_id", account.BusinessID,
+			"currency", defaultAnalyticsCurrency,
+		)
+		return defaultAnalyticsCurrency
+	}
+
+	a.Redis.Set(ctx, cacheKey, info.Currency, metaWABACurrencyCacheTTL)
+
+	return info.Currency
 }
 
 // getMetaAnalyticsCacheTTL returns the appropriate cache TTL based on granularity

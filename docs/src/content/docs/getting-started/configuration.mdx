@@ -58,6 +58,14 @@ s3_region = ""
 s3_key = ""
 s3_secret = ""
 
+[whatsapp]
+webhook_verify_token = "random-string-change-this"
+api_version = "v24.0"
+base_url = "https://graph.facebook.com"
+app_id = ""                   # Meta App ID for Embedded Signup
+app_secret = ""               # Meta App Secret
+config_id = ""                # WhatsApp Config ID for frontend login
+
 [cookie]
 domain = ""                   # e.g. ".example.com" to share across subdomains. Empty = current host only.
 secure = false                # Sets the Secure flag. Auto-forced to true when environment=production.
@@ -70,7 +78,7 @@ refresh_max_attempts = 30
 sso_max_attempts = 10
 window_seconds = 60
 trust_proxy = false           # true if behind a reverse proxy (uses X-Forwarded-For / X-Real-IP)
-api_max_requests = 200        # Per-IP cap across all /api routes
+api_max_requests = 200        # Cap across all /api routes, keyed by user (IP when unauthenticated)
 api_window_seconds = 60
 
 [tts]
@@ -84,6 +92,7 @@ audio_dir = "./audio"
 # hold_music_file = "hold_music.opus"
 # ringback_file = "ringback.opus"
 transfer_timeout_secs = 120
+# per_agent_timeout_secs = 20   # Per-agent ring time before trying the next agent
 recording_enabled = true
 udp_port_min = 10000
 udp_port_max = 10100
@@ -98,6 +107,14 @@ udp_port_max = 10100
 # username = "user"
 # credential = "password"
 
+# TURN with a shared secret (coturn "use-auth-secret" / TURN REST mode). When
+# `secret` is set, short-lived credentials are generated per request instead of
+# using a static username/credential.
+# [[calling.ice_servers]]
+# urls = ["turn:your-turn.example.com:3478"]
+# secret = "your-coturn-static-auth-secret"
+# credential_ttl = 86400        # Generated-credential lifetime in seconds (default 86400 = 24h)
+
 [default_admin]
 email = "admin@admin.com"
 password = "admin"
@@ -105,7 +122,7 @@ full_name = "Admin"
 ```
 
 <Aside type="note">
-  WhatsApp Cloud API credentials and AI provider API keys (OpenAI, Anthropic, Google) are configured **per organization** through the UI under **Settings → Accounts** — they are not in `config.toml`.
+  App-level WhatsApp keys used for Embedded Signup (`app_id`, `app_secret`, `config_id`, `webhook_verify_token`) live in the `[whatsapp]` section of `config.toml`. **Per-organization** settings are not in `config.toml`: WhatsApp account access tokens are configured under **Settings → Accounts**, and AI provider API keys (OpenAI, Anthropic, Google) under **Settings → Chatbot → AI**.
 </Aside>
 
 ## Sections in detail
@@ -137,11 +154,13 @@ PostgreSQL only. The `max_open_conns` / `max_idle_conns` / `conn_max_lifetime` k
 ### `[redis]`
 
 Required. Used for:
-- Session/CSRF storage
 - Job queue (Redis Streams) for campaign sends
-- Pub/Sub for campaign-stats fan-out
-- Rate-limit counters
-- Cache for chatbot flows / keyword rules
+- Pub/Sub for campaign-stats fan-out between workers and the API process
+- Rate-limit counters (fixed window)
+- OAuth state during the SSO login round-trip (5-minute TTL)
+- Caches: chatbot settings, flows, keyword rules, AI contexts, WhatsApp accounts, outbound webhooks, user/role permissions, and tags
+
+CSRF protection does **not** use Redis — it is a stateless double-submit cookie check (`whm_csrf` cookie vs. `X-CSRF-Token` header).
 
 Set `tls = true` and provide `username` + `password` for managed services like Upstash or AWS ElastiCache Serverless.
 
@@ -157,10 +176,27 @@ JWTs are stored in httpOnly cookies — the frontend never sees them.
 
 ### `[storage]`
 
-Controls media storage (template samples, uploaded files, optional call recordings).
+Controls media storage (template samples, uploaded files, call recordings).
 
 - `type = "local"` — files under `local_path` (default `./uploads`). Suitable for single-host deployments. The directory must be writable by the process and persisted (Docker volume).
-- `type = "s3"` — fill in `s3_bucket`, `s3_region`, `s3_key`, `s3_secret`. Required if you set `calling.recording_enabled = true` and want recordings retained off-host.
+- `type = "s3"` — fill in `s3_bucket`, `s3_region`, `s3_key`, `s3_secret`.
+
+<Aside type="caution">
+  Call recording is **S3-only**. If `calling.recording_enabled = true` but no S3 client is configured, recording is silently skipped — recordings are never written to `local_path`.
+</Aside>
+
+### `[whatsapp]`
+
+App-level keys used for **Embedded Signup** and Meta Cloud API calls. These are global (not per-org) and **do live in `config.toml`**. Per-organization account access tokens are stored separately via **Settings → Accounts**, not here.
+
+| Field | Notes |
+|---|---|
+| `webhook_verify_token` | Token Meta echoes back when verifying the `/api/webhook` subscription. Set it to a random string and enter the same value in the Meta App webhook config. |
+| `api_version` | Meta Graph API version, e.g. `v24.0`. Defaults to `v18.0` if unset — set it explicitly. |
+| `base_url` | Graph API base URL. Defaults to `https://graph.facebook.com`. |
+| `app_id` | Meta App ID, used by the frontend Embedded Signup flow. |
+| `app_secret` | Meta App Secret. |
+| `config_id` | WhatsApp Embedded Signup configuration ID used by the frontend login. |
 
 ### `[cookie]`
 
@@ -179,10 +215,11 @@ Off by default. Turn on with `enabled = true` for any internet-facing deployment
 | `register_max_attempts` | Per IP, per window. Throttles sign-up attempts. |
 | `refresh_max_attempts` | Per IP, per window. Higher because legitimate clients refresh often. |
 | `sso_max_attempts` | Per IP, per window for `/api/auth/sso/*`. |
-| `api_max_requests` | Global per-user cap across all `/api` routes once authenticated. |
+| `api_max_requests` | Cap across all `/api` routes, keyed by authenticated user ID (falling back to IP for unauthenticated requests). Defaults to `200` when unset or `0`. |
+| `api_window_seconds` | Window for `api_max_requests`. Defaults to `60` when unset or `0`. |
 | `trust_proxy` | Set to `true` only if you run behind a trusted reverse proxy (nginx, Cloudflare, ALB) — otherwise clients can spoof their IP via `X-Forwarded-For`. |
 
-Implemented as Redis fixed-window counters; failures hit Redis, so leaving rate limits enabled with Redis down will block all auth.
+Implemented as Redis fixed-window counters. The limiter **fails open**: if Redis is unreachable the error is logged and the request is allowed through.
 
 ### `[tts]`
 
@@ -200,15 +237,18 @@ Required only if you use WhatsApp voice calling / IVR.
 
 | Field | Notes |
 |---|---|
-| `max_call_duration` | Hard cap in seconds; calls beyond this are forcibly terminated. |
-| `audio_dir` | Where prompt audio files (`hold_music.opus`, `ringback.opus`, IVR prompts) live. |
-| `hold_music_file`, `ringback_file` | Filenames inside `audio_dir`. |
-| `transfer_timeout_secs` | How long to wait for an agent to accept a transferred call before falling through. |
-| `recording_enabled` | Records both directions per call. **Requires `[storage] type = "s3"` and credentials** for off-host retention; without S3, recordings are local under `local_path`. |
+| `max_call_duration` | Hard cap in seconds; calls beyond this are forcibly terminated. Default `300`. |
+| `audio_dir` | Where prompt audio files (`hold_music.opus`, `ringback.opus`, IVR prompts) live. Default `./audio`. |
+| `hold_music_file`, `ringback_file` | Filenames inside `audio_dir`. `hold_music_file` defaults to `hold_music.opus`; `ringback_file` has no default (hold music is used instead). Both can be overridden per organization under **Settings → Calling**. |
+| `transfer_timeout_secs` | How long to wait for an agent to accept a transferred call before falling through. Default `120`. |
+| `per_agent_timeout_secs` | Per-agent ring time when routing to a team; if an agent doesn't answer within this window, the next agent is tried. A team's own `per_agent_timeout_secs` wins when set; otherwise this value; otherwise `15`. |
+| `recording_enabled` | Records both directions per call and uploads the OGG/Opus file to S3. **Requires a configured `[storage]` S3 bucket** — with no S3 client, recording is skipped entirely. |
 | `udp_port_min`, `udp_port_max` | RTP/SRTP UDP port range. Whatever range you set must be open in your firewall / security group. Default `10000–10100` gives 100 concurrent streams. |
 | `public_ip` | **Required on AWS / GCP / Azure**, where the host's network interface does not have its public IP attached. Pion uses this for ICE candidate generation. |
 | `relay_only` | If `true`, advertises only TURN candidates (no host/srflx). Useful when the network is too restricted for direct UDP. |
-| `[[calling.ice_servers]]` | One block per STUN/TURN server. STUN-only works in permissive networks; configure TURN for guaranteed connectivity behind strict NAT or corporate firewalls. |
+| `[[calling.ice_servers]]` | One block per STUN/TURN server. STUN-only works in permissive networks; configure TURN for guaranteed connectivity behind strict NAT or corporate firewalls. Each block takes `urls` plus either a static `username`/`credential`, or a `secret` (+ optional `credential_ttl`) for coturn `use-auth-secret` / TURN REST mode — see below. |
+
+For a TURN server running coturn's `use-auth-secret` (TURN REST API) mode, set `secret` to coturn's `static-auth-secret` instead of a static `username`/`credential`. Whatomate then generates short-lived credentials per request (username = expiry timestamp, credential = base64 HMAC-SHA1 of the username keyed by the secret). `credential_ttl` (seconds) sets their lifetime and defaults to `86400` (24h). If both `secret` and a static `username`/`credential` are set, `secret` takes priority.
 
 ### `[default_admin]`
 
@@ -219,24 +259,24 @@ The credentials seeded the first time `whatomate server -migrate` runs against a
 Any key in `config.toml` can be overridden by an environment variable. The mapping is:
 
 ```
-WHATOMATE_<SECTION>_<KEY>
+WHATOMATE_<SECTION>__<KEY>
 ```
 
-with underscores in `<KEY>` preserved. Examples:
+The separator between the section and the key is a **double underscore (`__`)**; single underscores are preserved as part of a name. This matters because both section names and field names contain single underscores (`default_admin`, `rate_limit`, `ssl_mode`, `s3_bucket`, `app_id`), so collapsing every `_` into a level separator would mangle them (e.g. `rate_limit.enabled` would become `rate.limit.enabled`). The `__` disambiguates the section boundary from underscores inside a name. Examples:
 
 | Variable | TOML field |
 |---|---|
-| `WHATOMATE_APP_ENVIRONMENT` | `app.environment` |
-| `WHATOMATE_APP_ENCRYPTION_KEY` | `app.encryption_key` |
-| `WHATOMATE_DATABASE_HOST` | `database.host` |
-| `WHATOMATE_DATABASE_SSL_MODE` | `database.ssl_mode` |
-| `WHATOMATE_REDIS_HOST` | `redis.host` |
-| `WHATOMATE_REDIS_TLS` | `redis.tls` |
-| `WHATOMATE_JWT_SECRET` | `jwt.secret` |
-| `WHATOMATE_STORAGE_S3_BUCKET` | `storage.s3_bucket` |
-| `WHATOMATE_RATE_LIMIT_ENABLED` | `rate_limit.enabled` |
-| `WHATOMATE_CALLING_PUBLIC_IP` | `calling.public_ip` |
-| `WHATOMATE_DEFAULT_ADMIN_PASSWORD` | `default_admin.password` |
+| `WHATOMATE_APP__ENVIRONMENT` | `app.environment` |
+| `WHATOMATE_APP__ENCRYPTION_KEY` | `app.encryption_key` |
+| `WHATOMATE_DATABASE__HOST` | `database.host` |
+| `WHATOMATE_DATABASE__SSL_MODE` | `database.ssl_mode` |
+| `WHATOMATE_REDIS__HOST` | `redis.host` |
+| `WHATOMATE_REDIS__TLS` | `redis.tls` |
+| `WHATOMATE_JWT__SECRET` | `jwt.secret` |
+| `WHATOMATE_STORAGE__S3_BUCKET` | `storage.s3_bucket` |
+| `WHATOMATE_RATE_LIMIT__ENABLED` | `rate_limit.enabled` |
+| `WHATOMATE_CALLING__PUBLIC_IP` | `calling.public_ip` |
+| `WHATOMATE_DEFAULT_ADMIN__PASSWORD` | `default_admin.password` |
 
 Env vars take precedence over the config file, so the typical pattern is to commit a non-secret `config.toml` and inject secrets (`*_PASSWORD`, `*_KEY`, `*_SECRET`, `JWT_SECRET`) via the deployment environment.
 
@@ -266,15 +306,24 @@ Schema is generated from GORM struct tags in `internal/models/`; there are no SQ
 
 ## WhatsApp API Configuration
 
-WhatsApp Cloud API credentials are **not** in `config.toml`. Configure them per organization in the UI:
+App-level Embedded Signup keys (`app_id`, `app_secret`, `config_id`, `webhook_verify_token`) live in the `[whatsapp]` section of `config.toml`. Each organization's WhatsApp **account** credentials are **not** in `config.toml` — configure them per organization in the UI:
 
 1. Navigate to **Settings → Accounts**
 2. Click **Add Account**
 3. Enter:
-   - **Phone Number ID** — from Meta Business Suite
-   - **Business Account ID** — from Meta Business Suite
-   - **Access Token** — generated in Meta for Developers
-   - **Webhook Verify Token** — your custom verification token
+
+   | Field | Required | Notes |
+   |---|---|---|
+   | Name | yes | Label for the account inside Whatomate. |
+   | Phone Number ID (`phone_id`) | yes | From Meta Business Suite. |
+   | Business Account ID (`business_id`) | yes | WABA ID from Meta Business Suite. |
+   | Access Token | yes | Generated in Meta for Developers. Encrypted at rest. |
+   | App ID | no | Meta App ID for this account. |
+   | App Secret | no | Used to verify `X-Hub-Signature-256` on inbound webhooks. Encrypted at rest. Verification only runs when both the header is present **and** the matching account has an App Secret — set it, or inbound webhooks are accepted unverified. |
+   | Webhook Verify Token | no | An additional accepted verify token. `GET /api/webhook` checks the global `whatsapp.webhook_verify_token` first, then any account's token. |
+   | API Version | no | Per-account override of `whatsapp.api_version`. |
+
+   Accounts also carry the toggles `is_default_incoming`, `is_default_outgoing`, `auto_read_receipt` and `business_calling_enabled`.
 
 <Aside type="caution">
   Access tokens are encrypted at rest using `app.encryption_key`. If you haven't set that, tokens are stored in plaintext.
@@ -366,13 +415,15 @@ Both API and worker processes need access to the same Postgres and Redis.
 
 ### Docker Compose
 
-```bash
-# Start all services
-docker compose up -d
+The bundled [`docker/docker-compose.yml`](https://github.com/shridarpatil/whatomate/blob/main/docker/docker-compose.yml) runs three services — `app`, `db` (postgres:17-alpine) and `redis` (redis:7-alpine). The `app` service runs `server -migrate -config /app/config.toml`, i.e. API plus one embedded worker.
 
-# Scale workers
-docker compose up -d --scale worker=3
+```bash
+docker compose up -d
 ```
+
+It mounts `./config.toml` read-only into the container and `./uploads` read-write, and reads `.env` for `TZ` and the `POSTGRES_*` credentials (see [`docker/.env.example`](https://github.com/shridarpatil/whatomate/blob/main/docker/.env.example)). `TZ` matters — IVR timing nodes evaluate business hours in the container's local time.
+
+There is no separate `worker` service in the bundled file. To scale workers, either raise `-workers` on the `app` command, or add your own service running `worker -workers=N` against the same `db` and `redis`.
 
 ## Production Recommendations
 

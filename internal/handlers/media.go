@@ -14,6 +14,19 @@ import (
 	"github.com/zerodha/fastglue"
 )
 
+// messageMediaURL returns the URL a client can fetch the message's media from, or an
+// empty string when the message carries no media. Message.MediaURL is a storage-relative
+// path and is not fetchable on its own, so the authenticated /api/media/{message_id}
+// endpoint is published instead. The result is relative to the deployment's base path
+// (see internal/frontend.Handler), which the server does not know here — browser clients
+// must prefix window.__BASE_PATH__ rather than using this value verbatim.
+func messageMediaURL(msg *models.Message) string {
+	if msg.MediaURL == "" {
+		return ""
+	}
+	return "/api/media/" + msg.ID.String()
+}
+
 // getMediaStoragePath returns the base path for media storage
 func (a *App) getMediaStoragePath() string {
 	basePath := a.Config.Storage.LocalPath

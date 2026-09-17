@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"context"
 	"time"
 
 	"github.com/google/uuid"
@@ -232,17 +233,21 @@ func (a *App) GetCallPermission(r *fastglue.Request) error {
 		return r.SendErrorEnvelope(fasthttp.StatusNotFound, "WhatsApp account not found", nil, "")
 	}
 
-	waAccount := account.ToWAAccount()
+	status := "unknown"
+	// Calling is opt-in; do not query Meta for permissions on disabled accounts.
+	if account.BusinessCallingEnabled {
+		waAccount := account.ToWAAccount()
+		ctx, cancel := context.WithTimeout(context.Background(), whatsapp.DefaultTimeout)
+		defer cancel()
 
-	// Check permission via WhatsApp API
-	ctx := r.RequestCtx
-	status, err := a.WhatsApp.GetCallPermission(ctx, waAccount, contact.PhoneNumber)
-	if err != nil {
-		a.Log.Error("Failed to check call permission via API", "error", err, "phone", contact.PhoneNumber)
-		return r.SendErrorEnvelope(fasthttp.StatusInternalServerError, "Failed to check permission", nil, "")
+		permissionStatus, err := a.WhatsApp.GetCallPermission(ctx, waAccount, contact.PhoneNumber)
+		if err != nil {
+			a.Log.Debug("Call permission unavailable via API", "error", err, "phone", contact.PhoneNumber)
+		} else {
+			status = permissionStatus
+			a.Log.Info("Call permission check result", "contact_id", contactID, "phone", contact.PhoneNumber, "status", status)
+		}
 	}
-
-	a.Log.Info("Call permission check result", "contact_id", contactID, "phone", contact.PhoneNumber, "status", status)
 
 	return r.SendEnvelope(map[string]string{
 		"status": status,

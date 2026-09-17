@@ -51,7 +51,7 @@ type MessageResponse struct {
 	Direction        models.Direction     `json:"direction"`
 	MessageType      models.MessageType   `json:"message_type"`
 	Content          any                  `json:"content"`
-	MediaURL         string               `json:"media_url,omitempty"`
+	MediaURL         string               `json:"media_url,omitempty"` // base-path-relative path to the media endpoint, not the storage path
 	MediaMimeType    string               `json:"media_mime_type,omitempty"`
 	MediaFilename    string               `json:"media_filename,omitempty"`
 	InteractiveData  models.JSONB         `json:"interactive_data,omitempty"`
@@ -388,7 +388,7 @@ func (a *App) buildMessagesResponse(messages []models.Message) []MessageResponse
 			Direction:       m.Direction,
 			MessageType:     m.MessageType,
 			Content:         content,
-			MediaURL:        m.MediaURL,
+			MediaURL:        messageMediaURL(&m),
 			MediaMimeType:   m.MediaMimeType,
 			MediaFilename:   m.MediaFilename,
 			InteractiveData: m.InteractiveData,
@@ -866,7 +866,7 @@ func (a *App) SendMediaMessage(r *fastglue.Request) error {
 		Direction:       message.Direction,
 		MessageType:     message.MessageType,
 		Content:         map[string]string{"body": message.Content},
-		MediaURL:        message.MediaURL,
+		MediaURL:        messageMediaURL(message),
 		MediaMimeType:   message.MediaMimeType,
 		MediaFilename:   message.MediaFilename,
 		Status:          message.Status,
