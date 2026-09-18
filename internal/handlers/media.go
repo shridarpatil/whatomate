@@ -193,14 +193,8 @@ func (a *App) ServeMedia(r *fastglue.Request) error {
 	}
 
 	// Security: prevent directory traversal and symlink attacks
-	filePath := filepath.Clean(message.MediaURL)
-	baseDir, err := filepath.Abs(a.getMediaStoragePath())
+	fullPath, err := a.resolveMediaPath(message.MediaURL)
 	if err != nil {
-		a.Log.Error("Storage configuration error", "error", err)
-		return r.SendErrorEnvelope(fasthttp.StatusInternalServerError, "Storage configuration error", nil, "")
-	}
-	fullPath, err := filepath.Abs(filepath.Join(baseDir, filePath))
-	if err != nil || !strings.HasPrefix(fullPath, baseDir+string(os.PathSeparator)) {
 		return r.SendErrorEnvelope(fasthttp.StatusBadRequest, "Invalid file path", nil, "")
 	}
 
@@ -221,7 +215,7 @@ func (a *App) ServeMedia(r *fastglue.Request) error {
 	}
 
 	// Determine content type from extension
-	ext := strings.ToLower(filepath.Ext(filePath))
+	ext := strings.ToLower(filepath.Ext(fullPath))
 	contentType := "application/octet-stream"
 	switch ext {
 	case ".jpg", ".jpeg":

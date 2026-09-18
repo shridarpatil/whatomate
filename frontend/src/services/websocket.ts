@@ -88,6 +88,9 @@ const WS_TYPE_CONVERSATION_NOTE_CREATED = 'conversation_note_created'
 const WS_TYPE_CONVERSATION_NOTE_UPDATED = 'conversation_note_updated'
 const WS_TYPE_CONVERSATION_NOTE_DELETED = 'conversation_note_deleted'
 
+// Conversation types
+const WS_TYPE_CONVERSATION_DELETED = 'conversation_deleted'
+
 interface WSMessage {
   type: string
   payload: any
@@ -241,6 +244,9 @@ class WebSocketService {
         case WS_TYPE_REACTION_UPDATE:
           this.handleReactionUpdate(store, message.payload)
           break
+        case WS_TYPE_CONVERSATION_DELETED:
+          this.handleConversationDeleted(store, message.payload)
+          break
         case WS_TYPE_PONG:
           // Pong received, connection is alive
           break
@@ -387,6 +393,14 @@ class WebSocketService {
     const currentContact = store.currentContact
     if (currentContact && payload.contact_id === currentContact.id) {
       store.updateMessageReactions(payload.message_id, payload.reactions)
+    }
+  }
+
+  private handleConversationDeleted(store: ReturnType<typeof useContactsStore>, payload: any) {
+    const wasViewing = store.currentContact?.id === payload.contact_id
+    store.removeContact(payload.contact_id)
+    if (wasViewing) {
+      router.push('/chat')
     }
   }
 
