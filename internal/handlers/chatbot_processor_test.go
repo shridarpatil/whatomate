@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"encoding/json"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -635,6 +636,110 @@ func TestSaveIncomingMessage_WithReplyContext(t *testing.T) {
 	assert.True(t, replyMsg.IsReply)
 	require.NotNil(t, replyMsg.ReplyToMessageID)
 	assert.Equal(t, originalMsg.ID, *replyMsg.ReplyToMessageID)
+}
+
+func TestSaveIncomingMessage_WebhookIncludesReplyToMessageID(t *testing.T) {
+	app := newProcessorTestApp(t)
+	if app.Redis == nil {
+		t.Skip("TEST_REDIS_URL not set, skipping webhook dispatch test")
+	}
+	org, account := createProcessorTestOrg(t, app)
+	contact := testutil.CreateTestContact(t, app.DB, org.ID)
+
+	var rawBody []byte
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		body, err := io.ReadAll(r.Body)
+		if err != nil {
+			t.Errorf("failed to read webhook body: %v", err)
+		}
+		rawBody = body
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer server.Close()
+
+	webhook := &models.Webhook{
+		BaseModel:      models.BaseModel{ID: uuid.New()},
+		OrganizationID: org.ID,
+		Name:           "test-reply-context-webhook",
+		URL:            server.URL,
+		Events:         models.StringArray{"message.incoming"},
+		IsActive:       true,
+	}
+	require.NoError(t, app.DB.Create(webhook).Error)
+
+	// Create original message to reply to
+	originalWAMID := "wamid.original_" + uuid.New().String()[:8]
+	originalMsg := models.Message{
+		BaseModel:         models.BaseModel{ID: uuid.New()},
+		OrganizationID:    org.ID,
+		WhatsAppAccount:   account.Name,
+		ContactID:         contact.ID,
+		WhatsAppMessageID: originalWAMID,
+		Direction:         models.DirectionOutgoing,
+		MessageType:       models.MessageTypeText,
+		Content:           "Original message",
+		Status:            models.MessageStatusReceived,
+	}
+	require.NoError(t, app.DB.Create(&originalMsg).Error)
+
+	replyWAMID := "wamid.reply_" + uuid.New().String()[:8]
+	app.saveIncomingMessage(account, contact, replyWAMID, "text", "Reply to your message", nil, originalWAMID)
+	app.WaitForBackgroundTasks()
+
+	require.NotEmpty(t, rawBody, "webhook should have been called")
+
+	var payload struct {
+		Event string `json:"event"`
+		Data  struct {
+			ReplyToMessageID string `json:"reply_to_message_id"`
+		} `json:"data"`
+	}
+	require.NoError(t, json.Unmarshal(rawBody, &payload))
+	assert.Equal(t, "message.incoming", payload.Event)
+	assert.Equal(t, originalMsg.ID.String(), payload.Data.ReplyToMessageID)
+}
+
+func TestSaveIncomingMessage_WebhookOmitsReplyToMessageIDWhenNotReply(t *testing.T) {
+	app := newProcessorTestApp(t)
+	if app.Redis == nil {
+		t.Skip("TEST_REDIS_URL not set, skipping webhook dispatch test")
+	}
+	org, account := createProcessorTestOrg(t, app)
+	contact := testutil.CreateTestContact(t, app.DB, org.ID)
+
+	var rawBody []byte
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		body, err := io.ReadAll(r.Body)
+		if err != nil {
+			t.Errorf("failed to read webhook body: %v", err)
+		}
+		rawBody = body
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer server.Close()
+
+	webhook := &models.Webhook{
+		BaseModel:      models.BaseModel{ID: uuid.New()},
+		OrganizationID: org.ID,
+		Name:           "test-non-reply-webhook",
+		URL:            server.URL,
+		Events:         models.StringArray{"message.incoming"},
+		IsActive:       true,
+	}
+	require.NoError(t, app.DB.Create(webhook).Error)
+
+	waMsgID := "wamid." + uuid.New().String()[:16]
+	app.saveIncomingMessage(account, contact, waMsgID, "text", "Not a reply", nil, "")
+	app.WaitForBackgroundTasks()
+
+	require.NotEmpty(t, rawBody, "webhook should have been called")
+
+	var payload map[string]any
+	require.NoError(t, json.Unmarshal(rawBody, &payload))
+	data, ok := payload["data"].(map[string]any)
+	require.True(t, ok)
+	_, present := data["reply_to_message_id"]
+	assert.False(t, present, "reply_to_message_id should be omitted for non-reply messages")
 }
 
 func TestSaveIncomingMessage_LongContent(t *testing.T) {
