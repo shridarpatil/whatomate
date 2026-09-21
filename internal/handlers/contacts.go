@@ -807,11 +807,9 @@ func (a *App) SendMediaMessage(r *fastglue.Request) error {
 		return r.SendErrorEnvelope(fasthttp.StatusInternalServerError, "Failed to read file data", nil, "")
 	}
 
-	// Get MIME type
-	mimeType := fileHeader.Header.Get("Content-Type")
-	if mimeType == "" {
-		mimeType = "application/octet-stream"
-	}
+	// Get and sanitize MIME type for WhatsApp Cloud API compatibility
+	rawMime := fileHeader.Header.Get("Content-Type")
+	mimeType := sanitizeMetaMimeType(rawMime, fileHeader.Filename, fileData)
 
 	// Get contact (users without full read permission can only message their assigned contacts)
 	var contact models.Contact
@@ -829,6 +827,20 @@ func (a *App) SendMediaMessage(r *fastglue.Request) error {
 	account, err := a.resolveWhatsAppAccount(orgID, mediaAccountName)
 	if err != nil {
 		return r.SendErrorEnvelope(fasthttp.StatusBadRequest, err.Error(), nil, "")
+	}
+
+	// Compress video with FFmpeg if size exceeds WhatsApp 15MB threshold
+	if strings.HasPrefix(mimeType, "video/") || mediaType == string(models.MessageTypeVideo) {
+		if len(fileData) > 15*1024*1024 {
+			a.Log.Info("Compressing uploaded video with FFmpeg for WhatsApp compliance", "original_size", len(fileData))
+			if compressed, err := compressVideoForWhatsApp(fileData); err == nil && len(compressed) > 0 {
+				a.Log.Info("Video compressed successfully", "original_size", len(fileData), "compressed_size", len(compressed))
+				fileData = compressed
+				mimeType = "video/mp4"
+			} else {
+				a.Log.Warn("FFmpeg video compression failed or unavailable, proceeding with original", "error", err)
+			}
+		}
 	}
 
 	// Save file locally first
