@@ -52,7 +52,7 @@ Every delivery is a `POST` with `Content-Type: application/json` and a `User-Age
 }
 ```
 
-The `data` object depends on the event — message events carry `message_id`, `contact_id`, `contact_phone`, `contact_name`, `message_type`, `content`, `reply_to_message_id` (when the message is a reply), and `whatsapp_account`; transfer events carry `transfer_id`, the contact fields, `source`, and (once assigned) `agent_id` / `agent_name`. Any custom headers you configured on the webhook are added to the request.
+The `data` object depends on the event — message events carry `message_id`, `contact_id`, `contact_phone`, `contact_name`, `message_type`, `content`, and `whatsapp_account`, and `message.incoming` additionally carries `reply_to_message_id` when the incoming message is a reply; transfer events carry `transfer_id`, the contact fields, `source`, and (once assigned) `agent_id` / `agent_name`. Any custom headers you configured on the webhook are added to the request.
 
 ## Verifying the signature
 
