@@ -11,6 +11,7 @@ import {
   SelectValue,
 } from '@/components/ui/select'
 import { CalendarIcon } from 'lucide-vue-next'
+import { today, getLocalTimeZone } from '@internationalized/date'
 import type { TimeRangePreset } from '@/composables/useDateRange'
 
 const props = defineProps<{
@@ -28,6 +29,9 @@ const emit = defineEmits<{
 }>()
 
 const { t } = useI18n()
+
+// Analytics only exist up to today; a future range is always empty.
+const maxDate = today(getLocalTimeZone())
 </script>
 
 <template>
@@ -63,6 +67,7 @@ const { t } = useI18n()
           :model-value="customDateRange"
           @update:model-value="emit('update:customDateRange', $event)"
           :number-of-months="2"
+          :max-value="maxDate"
         />
         <Button
           class="w-full"

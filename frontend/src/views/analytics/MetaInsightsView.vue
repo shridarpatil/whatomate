@@ -86,7 +86,7 @@ const {
   dateRange,
   formatDateRangeDisplay,
   applyCustomRange: applyCustomRangeBase,
-} = useDateRange({ defaultPreset: '30days', storageKey: 'meta_insights' })
+} = useDateRange({ defaultPreset: '30days', storageKey: 'meta_insights', utc: true })
 
 // Load other saved preferences (non-date-range)
 const savedGranularity = localStorage.getItem('meta_insights_granularity') as MetaGranularity | null
