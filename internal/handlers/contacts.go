@@ -133,6 +133,17 @@ func (a *App) ListContacts(r *fastglue.Request) error {
 		}
 	}
 
+	// Filter by WhatsApp account/number (optional) — matches Contact.WhatsAppAccount (the account Name).
+	// Lets the chat sidebar show only contacts tied to one number.
+	if account := string(r.RequestCtx.QueryArgs().Peek("account")); account != "" {
+		query = query.Where("whatsapp_account = ?", account)
+	}
+
+	// Only contacts with an actual conversation (optional) — hides imported contacts that never messaged.
+	if string(r.RequestCtx.QueryArgs().Peek("with_conversations")) == "true" {
+		query = query.Where("last_message_at IS NOT NULL")
+	}
+
 	// Order by last message time (most recent first)
 	query = query.Order("last_message_at DESC NULLS LAST, created_at DESC")
 
