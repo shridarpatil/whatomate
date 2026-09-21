@@ -102,11 +102,11 @@ func TestApp_Logout_ClearsCookiesAndReturnsOK(t *testing.T) {
 
 	for _, name := range []string{"whm_access", "whm_refresh", "whm_csrf"} {
 		var seen bool
-		req.RequestCtx.Response.Header.VisitAllCookie(func(key, _ []byte) {
+		for key := range req.RequestCtx.Response.Header.Cookies() {
 			if string(key) == name {
 				seen = true
 			}
-		})
+		}
 		assert.True(t, seen, "expected logout to set Set-Cookie for %s", name)
 	}
 }

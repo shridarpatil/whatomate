@@ -40,7 +40,7 @@ export default defineConfig({
           // Emoji picker (heavy)
           'emoji-picker': ['vue3-emoji-picker'],
           // Form validation
-          'validation': ['vee-validate', '@vee-validate/zod', 'zod'],
+          'validation': ['vee-validate'],
           // Utilities
           'utils': ['@vueuse/core', 'axios', 'clsx', 'tailwind-merge', 'class-variance-authority']
         }

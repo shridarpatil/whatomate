@@ -4,12 +4,6 @@ import starlight from '@astrojs/starlight';
 export default defineConfig({
   site: 'https://shridarpatil.github.io',
   base: '/whatomate',
-  // astro 6 leaves markdown.gfm undefined and lets its own processor default it
-  // to on, but @astrojs/mdx still reads the raw value — undefined disables
-  // remark-gfm for .mdx, silently rendering every table as literal text.
-  // All our content is .mdx, so set it explicitly. Remove once @astrojs/mdx
-  // stops reading markdown.gfm.
-  markdown: { gfm: true },
   integrations: [
     starlight({
       title: 'Whatomate',
