@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { ref, onMounted, computed } from 'vue'
+import { useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -13,12 +14,13 @@ import { PageHeader, DeleteConfirmDialog, ConfirmDialog, DataTable, SearchInput,
 import FlowBuilder from '@/components/flow-builder/FlowBuilder.vue'
 import { flowsService, accountsService } from '@/services/api'
 import { toast } from 'vue-sonner'
-import { Plus, Pencil, Trash2, Workflow, Play, ExternalLink, Loader2, Archive, RefreshCw, Upload, Copy } from 'lucide-vue-next'
+import { Plus, Pencil, Trash2, Workflow, Play, ExternalLink, Loader2, Archive, RefreshCw, Upload, Copy, ClipboardList } from 'lucide-vue-next'
 import { getErrorMessage } from '@/lib/api-utils'
 import { formatDate } from '@/lib/utils'
 import { useSearchPagination } from '@/composables/useSearchPagination'
 
 const { t } = useI18n()
+const router = useRouter()
 
 interface WhatsAppFlow {
   id: string; whatsapp_account: string; meta_flow_id: string; name: string; status: 'DRAFT' | 'PUBLISHED' | 'DEPRECATED'
@@ -192,9 +194,24 @@ async function duplicateFlow(flow: WhatsAppFlow) {
 }
 
 async function syncFlows() {
-  if (!selectedAccount.value || selectedAccount.value === 'all') { toast.error(t('flows.selectAccountToSync')); return }
   isSyncing.value = true
-  try { const response = await flowsService.sync(selectedAccount.value); const data = response.data.data; toast.success(t('flows.syncSuccess', { synced: data.synced, created: data.created, updated: data.updated })); await fetchFlows() }
+  try {
+    // When "All Accounts" is selected, sync every account one-by-one
+    const accountsToSync = selectedAccount.value === 'all'
+      ? accounts.value.map(a => a.name)
+      : [selectedAccount.value]
+
+    let totalSynced = 0, totalCreated = 0, totalUpdated = 0
+    for (const name of accountsToSync) {
+      const response = await flowsService.sync(name)
+      const data = response.data.data
+      totalSynced += data.synced ?? 0
+      totalCreated += data.created ?? 0
+      totalUpdated += data.updated ?? 0
+    }
+    toast.success(t('flows.syncSuccess', { synced: totalSynced, created: totalCreated, updated: totalUpdated }))
+    await fetchFlows()
+  }
   catch (e) { toast.error(getErrorMessage(e, t('flows.syncFailed'))) }
   finally { isSyncing.value = false }
 }
@@ -216,7 +233,7 @@ function sanitizeScreensForMeta(screens: any[]): any[] {
   <div class="flex flex-col h-full bg-[#0a0a0b] light:bg-gray-50">
     <PageHeader :title="$t('flows.title')" :subtitle="$t('flows.subtitle')" :icon="Workflow" icon-gradient="bg-gradient-to-br from-violet-500 to-purple-600 shadow-violet-500/20">
       <template #actions>
-        <Button variant="outline" size="sm" @click="syncFlows" :disabled="isSyncing || !selectedAccount || selectedAccount === 'all'"><RefreshCw :class="['h-4 w-4 mr-2', isSyncing && 'animate-spin']" />{{ $t('flows.syncFromMeta') }}</Button>
+        <Button variant="outline" size="sm" @click="syncFlows" :disabled="isSyncing"><RefreshCw :class="['h-4 w-4 mr-2', isSyncing && 'animate-spin']" />{{ $t('flows.syncFromMeta') }}</Button>
         <Button variant="outline" size="sm" @click="openCreateDialog"><Plus class="h-4 w-4 mr-2" />{{ $t('flows.createFlow') }}</Button>
       </template>
     </PageHeader>
@@ -288,6 +305,10 @@ function sanitizeScreensForMeta(screens: any[]): any[] {
                 </template>
                 <template #cell-actions="{ item: flow }">
                   <div class="flex items-center justify-end gap-1">
+                    <Button v-if="flow.status?.toUpperCase() === 'PUBLISHED'" variant="outline" size="sm" class="mr-2" @click="router.push(`/flow-responses/${flow.id}`)">
+                      <ClipboardList class="h-4 w-4 mr-2" />
+                      {{ $t('flows.responses') }}
+                    </Button>
                     <IconButton :icon="Pencil" :label="$t('flows.editTooltip')" class="h-8 w-8" @click="openEditDialog(flow)" />
                     <IconButton :icon="duplicatingFlowId === flow.id ? Loader2 : Copy" :label="$t('flows.duplicateTooltip')" class="h-8 w-8" :disabled="duplicatingFlowId === flow.id" @click="duplicateFlow(flow)" />
                     <IconButton v-if="flow.preview_url" :icon="ExternalLink" :label="$t('flows.previewTooltip')" class="h-8 w-8" @click="openPreviewUrl(flow.preview_url!)" />
