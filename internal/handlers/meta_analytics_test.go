@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -430,4 +431,148 @@ func TestApp_RefreshMetaAnalyticsCache_ClearsOnlyOrgScopedKeys(t *testing.T) {
 		require.NoError(t, err)
 		assert.Equal(t, int64(1), exists, "orgB key must NOT be deleted: %s", k)
 	}
+}
+
+// --- WABA currency ---
+
+// fakeWABAServer serves both the analytics endpoints and the WABA info endpoint
+// (fields=currency,...), counting hits on each separately.
+type fakeWABAServer struct {
+	server        *httptest.Server
+	analyticsHits int64
+	currencyHits  int64
+	currencyCode  int
+	currencyBody  string
+}
+
+func newFakeWABAServer(t *testing.T, analyticsResp, currencyBody string, currencyCode int) *fakeWABAServer {
+	t.Helper()
+	f := &fakeWABAServer{currencyCode: currencyCode, currencyBody: currencyBody}
+	f.server = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if strings.HasPrefix(r.URL.Query().Get("fields"), "currency") {
+			atomic.AddInt64(&f.currencyHits, 1)
+			w.WriteHeader(f.currencyCode)
+			_, _ = w.Write([]byte(f.currencyBody))
+			return
+		}
+		atomic.AddInt64(&f.analyticsHits, 1)
+		_, _ = w.Write([]byte(analyticsResp))
+	}))
+	t.Cleanup(f.server.Close)
+	return f
+}
+
+func (f *fakeWABAServer) CurrencyHits() int64 { return atomic.LoadInt64(&f.currencyHits) }
+
+const pricingAnalyticsResp = `{"id":"WABA","pricing_analytics":{"granularity":"DAILY","data_points":[{"start":1,"end":2,"volume":10,"cost":5.5}]}}`
+
+// fetchPricingAccounts runs a pricing_analytics request and returns the per-account results.
+func fetchPricingAccounts(t *testing.T, app *handlers.App, orgID, userID uuid.UUID, from, to string) []struct {
+	AccountID string `json:"account_id"`
+	Currency  string `json:"currency"`
+} {
+	t.Helper()
+	req := testutil.NewGETRequest(t)
+	testutil.SetAuthContext(req, orgID, userID)
+	testutil.SetQueryParam(req, "analytics_type", "pricing_analytics")
+	testutil.SetQueryParam(req, "start", from)
+	testutil.SetQueryParam(req, "end", to)
+	require.NoError(t, app.GetMetaAnalytics(req))
+	require.Equal(t, fasthttp.StatusOK, testutil.GetResponseStatusCode(req))
+
+	var resp struct {
+		Data struct {
+			Accounts []struct {
+				AccountID string `json:"account_id"`
+				Currency  string `json:"currency"`
+			} `json:"accounts"`
+		} `json:"data"`
+	}
+	require.NoError(t, json.Unmarshal(testutil.GetResponseBody(req), &resp))
+	return resp.Data.Accounts
+}
+
+func TestApp_GetMetaAnalytics_PricingIncludesWABACurrency(t *testing.T) {
+	srv := newFakeWABAServer(t, pricingAnalyticsResp,
+		`{"id":"107455662167439","name":"Test WABA","currency":"INR","timezone_id":"71"}`, http.StatusOK)
+	app := newAppForMetaAnalytics(t, srv.server.URL)
+	org := testutil.CreateTestOrganization(t, app.DB)
+	role := metaAnalyticsRole(t, app.DB, org.ID)
+	user := testutil.CreateTestUser(t, app.DB, org.ID, testutil.WithRoleID(&role.ID))
+	acc := mkAnalyticsAccount(t, app.DB, org.ID)
+
+	from, to := dateRange()
+	accounts := fetchPricingAccounts(t, app, org.ID, user.ID, from, to)
+	require.Len(t, accounts, 1)
+	assert.Equal(t, "INR", accounts[0].Currency)
+
+	// The currency was cached under the WABA id, not the internal account id.
+	cached, err := app.Redis.Get(context.Background(), "meta:waba:currency:"+acc.BusinessID).Result()
+	require.NoError(t, err)
+	assert.Equal(t, "INR", cached)
+}
+
+func TestApp_GetMetaAnalytics_CurrencyLookupCached(t *testing.T) {
+	srv := newFakeWABAServer(t, pricingAnalyticsResp,
+		`{"id":"WABA","name":"Test WABA","currency":"EUR","timezone_id":"1"}`, http.StatusOK)
+	app := newAppForMetaAnalytics(t, srv.server.URL)
+	org := testutil.CreateTestOrganization(t, app.DB)
+	role := metaAnalyticsRole(t, app.DB, org.ID)
+	user := testutil.CreateTestUser(t, app.DB, org.ID, testutil.WithRoleID(&role.ID))
+	mkAnalyticsAccount(t, app.DB, org.ID)
+
+	now := time.Now()
+	first := fetchPricingAccounts(t, app, org.ID, user.ID,
+		now.AddDate(0, 0, -7).Format("2006-01-02"), now.Format("2006-01-02"))
+	require.Len(t, first, 1)
+	assert.Equal(t, "EUR", first[0].Currency)
+	require.Equal(t, int64(1), srv.CurrencyHits())
+
+	// A different date range misses the analytics cache but must reuse the cached currency.
+	second := fetchPricingAccounts(t, app, org.ID, user.ID,
+		now.AddDate(0, 0, -14).Format("2006-01-02"), now.AddDate(0, 0, -1).Format("2006-01-02"))
+	require.Len(t, second, 1)
+	assert.Equal(t, "EUR", second[0].Currency)
+	assert.Equal(t, int64(1), srv.CurrencyHits(), "currency must be served from Redis on the second call")
+}
+
+func TestApp_GetMetaAnalytics_CurrencyFallsBackToUSDWithoutCaching(t *testing.T) {
+	srv := newFakeWABAServer(t, pricingAnalyticsResp,
+		`{"error":{"message":"Invalid OAuth access token","code":190}}`, http.StatusBadRequest)
+	app := newAppForMetaAnalytics(t, srv.server.URL)
+	org := testutil.CreateTestOrganization(t, app.DB)
+	role := metaAnalyticsRole(t, app.DB, org.ID)
+	user := testutil.CreateTestUser(t, app.DB, org.ID, testutil.WithRoleID(&role.ID))
+	acc := mkAnalyticsAccount(t, app.DB, org.ID)
+
+	from, to := dateRange()
+	accounts := fetchPricingAccounts(t, app, org.ID, user.ID, from, to)
+	require.Len(t, accounts, 1)
+	assert.Equal(t, "USD", accounts[0].Currency, "a Graph failure must fall back to USD")
+
+	// A transient failure must not pin the fallback in Redis for the full TTL.
+	_, err := app.Redis.Get(context.Background(), "meta:waba:currency:"+acc.BusinessID).Result()
+	assert.Error(t, err, "the USD fallback must not be cached")
+}
+
+func TestApp_GetMetaAnalytics_MessagingSkipsCurrencyLookup(t *testing.T) {
+	srv := newFakeWABAServer(t, `{"id":"WABA","analytics":{"granularity":"DAY","data_points":[]}}`,
+		`{"id":"WABA","currency":"INR"}`, http.StatusOK)
+	app := newAppForMetaAnalytics(t, srv.server.URL)
+	org := testutil.CreateTestOrganization(t, app.DB)
+	role := metaAnalyticsRole(t, app.DB, org.ID)
+	user := testutil.CreateTestUser(t, app.DB, org.ID, testutil.WithRoleID(&role.ID))
+	mkAnalyticsAccount(t, app.DB, org.ID)
+
+	from, to := dateRange()
+	req := testutil.NewGETRequest(t)
+	testutil.SetAuthContext(req, org.ID, user.ID)
+	testutil.SetQueryParam(req, "analytics_type", "analytics")
+	testutil.SetQueryParam(req, "start", from)
+	testutil.SetQueryParam(req, "end", to)
+	require.NoError(t, app.GetMetaAnalytics(req))
+	require.Equal(t, fasthttp.StatusOK, testutil.GetResponseStatusCode(req))
+
+	assert.Equal(t, int64(0), srv.CurrencyHits(),
+		"tabs that render no cost must not pay for a WABA currency lookup")
 }

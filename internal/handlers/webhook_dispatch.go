@@ -24,15 +24,19 @@ type OutboundWebhookPayload struct {
 
 // MessageEventData represents data for message events
 type MessageEventData struct {
-	MessageID       string             `json:"message_id"`
-	ContactID       string             `json:"contact_id"`
-	ContactPhone    string             `json:"contact_phone"`
-	ContactName     string             `json:"contact_name"`
-	MessageType     models.MessageType `json:"message_type"`
-	Content         string             `json:"content"`
-	WhatsAppAccount string             `json:"whatsapp_account"`
-	Direction       models.Direction   `json:"direction,omitempty"`
-	SentByUserID    string             `json:"sent_by_user_id,omitempty"`
+	MessageID        string             `json:"message_id"`
+	ContactID        string             `json:"contact_id"`
+	ContactPhone     string             `json:"contact_phone"`
+	ContactName      string             `json:"contact_name"`
+	MessageType      models.MessageType `json:"message_type"`
+	Content          string             `json:"content"`
+	MediaURL         string             `json:"media_url,omitempty"` // base-path-relative path to the media endpoint, not the storage path
+	MediaMimeType    string             `json:"media_mime_type,omitempty"`
+	MediaFilename    string             `json:"media_filename,omitempty"`
+	ReplyToMessageID string             `json:"reply_to_message_id,omitempty"`
+	WhatsAppAccount  string             `json:"whatsapp_account"`
+	Direction        models.Direction   `json:"direction,omitempty"`
+	SentByUserID     string             `json:"sent_by_user_id,omitempty"`
 }
 
 // ContactEventData represents data for contact events

@@ -11,7 +11,7 @@ Whatomate provides a flexible role-based access control (RBAC) system that allow
 
 The permission system is built around:
 
-- **Permissions**: Fine-grained access controls for specific actions on resources (e.g., `users:create`, `contacts:read`)
+- **Permissions**: Fine-grained access controls for specific actions on resources (e.g., `users:write`, `contacts:read`)
 - **Roles**: Collections of permissions that can be assigned to users
 - **System Roles**: Pre-defined roles (Admin, Manager, Agent) that cannot be deleted
 
@@ -19,14 +19,16 @@ The permission system is built around:
 
 Three system roles are created automatically for each organization:
 
-| Role | Description |
+| Role | Permissions granted |
 |------|-------------|
-| **Admin** | Full access to all features including user and role management |
-| **Manager** | Full access except user/role management and organization settings |
-| **Agent** | Limited access - can only view/respond to assigned chats |
+| **Admin** | Every permission in the catalogue below. |
+| **Manager** | Everything except: users, roles, SSO settings, API keys, audit logs, organization write/delete/assign (`organizations:read` only), and `teams` write/delete (`teams:read` only). |
+| **Agent** | `accounts:read`, `chat:read`, `chat:write`, `contacts:read`, `tags:read`, `analytics.agents:read`, `transfers:read/write/pickup`, `canned_responses:read`, `call_transfers:read/write`, `outgoing_calls:read/write`. Note agents deliberately have **no** `call_logs:read` — they see only their own calls. |
 
 <Aside type="note">
-  System roles cannot be deleted, but their permissions can be viewed (read-only).
+  System roles cannot be **deleted**, but they are not frozen. Super admins can edit the
+  permissions of a system role, and anyone with `roles:write` can edit its description. Only
+  deletion of the three system roles is blocked.
 </Aside>
 
 ## Custom Roles
@@ -52,29 +54,68 @@ Permissions follow the format `resource:action`. Available actions are:
 | Action | Description |
 |--------|-------------|
 | `read` | View the resource |
-| `create` | Create new items |
-| `update` | Modify existing items |
+| `write` | Create **or** modify items (there is no separate `create`/`update` — both are `write`) |
 | `delete` | Remove items |
+| `sync` | Sync from an external source (templates) |
+| `execute` | Run the resource (campaigns) |
+| `import` | Bulk-import records (contacts) |
+| `export` | Bulk-export records (contacts) |
+| `pickup` | Claim a queued item (transfers) |
+| `assign` | Manage organization members (`organizations:assign`) |
+
+<Aside type="note">
+  There is **no** `create` or `update` action. Creating a new item and editing an existing one
+  both require the `write` action on that resource.
+</Aside>
 
 ### Available Resources
 
-| Resource | Description |
-|----------|-------------|
-| `users` | User management |
-| `roles` | Role management |
-| `teams` | Team management |
-| `contacts` | Contact management |
-| `messages` | Message sending/viewing |
-| `templates` | Message template management |
-| `campaigns` | Campaign management |
-| `flows` | Chatbot flow management |
-| `chatbot` | Chatbot settings |
-| `webhooks` | Webhook configuration |
-| `api_keys` | API key management |
-| `organizations` | Organization and member management |
-| `accounts` | WhatsApp account settings |
-| `settings` | Organization settings |
-| `analytics` | Analytics and reporting |
+This is the complete seeded catalogue — exactly the permissions returned by `GET /api/permissions`.
+
+| Resource | Actions | Description |
+|----------|---------|-------------|
+| `users` | read, write, delete | User management |
+| `teams` | read, write, delete | Team management |
+| `roles` | read, write, delete | Role management |
+| `settings.general` | read, write | General organization settings |
+| `settings.chatbot` | read, write | Chatbot settings |
+| `settings.sso` | read, write | Single sign-on configuration |
+| `accounts` | read, write, delete | WhatsApp account settings |
+| `templates` | read, write, delete, sync | Message template management; `sync` pulls templates from Meta |
+| `flows.whatsapp` | read, write, delete | WhatsApp Flows (interactive forms) |
+| `flows.chatbot` | read, write, delete | Chatbot flow management |
+| `campaigns` | read, write, delete, execute | Campaign management; `execute` starts/retries a send |
+| `chatbot.keywords` | read, write, delete | Chatbot keyword auto-reply rules |
+| `chatbot.ai` | read, write, delete | Chatbot AI contexts |
+| `chat` | read, write | View conversations (`read`) and send messages (`write`) |
+| `chat.assign` | write | Assign conversations to agents |
+| `contacts` | read, write, delete, import, export | Contact management and bulk import/export |
+| `tags` | read, write, delete | Contact tag management |
+| `analytics` | read, write, delete | View the analytics dashboard (`read`); `write`/`delete` govern dashboard widgets |
+| `analytics.agents` | read | Agent performance analytics |
+| `transfers` | read, write, pickup | Chatbot-to-agent transfer queue |
+| `webhooks` | read, write, delete | Outbound webhook configuration |
+| `api_keys` | read, write, delete | API key management |
+| `canned_responses` | read, write, delete | Saved reply templates |
+| `custom_actions` | read, write, delete | Custom action buttons |
+| `organizations` | read, write, delete, assign | Organizations; `assign` manages members |
+| `call_logs` | read | Voice call history |
+| `ivr_flows` | read, write, delete | IVR call flow definitions |
+| `call_transfers` | read, write | Voice call transfers |
+| `outgoing_calls` | read, write | Outbound calling |
+| `audit_logs` | read | Audit trail (read-only) |
+
+<Aside type="note">
+  `settings.calling`, `settings.notification` and the `settings.chatbot.*` sub-resources
+  (`.messages`, `.agents`, `.hours`, `.sla`, `.ai`) appear in **audit log entries** as resource
+  labels, but they are not grantable permissions and are never seeded.
+</Aside>
+
+<Aside type="caution">
+  `GET`/`PUT /api/org/settings` (the General and Calling settings tabs) currently require
+  authentication only — no permission is checked. The one exception is the Meta App credential
+  fields (`meta_app_id`, `meta_config_id`, `meta_app_secret`), which require `accounts:write`.
+</Aside>
 
 ### Permission Matrix
 
@@ -82,16 +123,16 @@ When creating or editing a role, you'll see a permission matrix organized by res
 
 ```
 Users
-  ☑ Read users
-  ☑ Create users
-  ☐ Update users
-  ☐ Delete users
+  ☑ Read users     (users:read)
+  ☑ Write users    (users:write — create or edit)
+  ☐ Delete users   (users:delete)
 
 Contacts
-  ☑ Read contacts
-  ☑ Create contacts
-  ☑ Update contacts
-  ☐ Delete contacts
+  ☑ Read contacts     (contacts:read)
+  ☑ Write contacts    (contacts:write)
+  ☐ Delete contacts   (contacts:delete)
+  ☐ Import contacts   (contacts:import)
+  ☐ Export contacts   (contacts:export)
 ```
 
 ## Assigning Roles to Users
@@ -102,7 +143,9 @@ Contacts
 4. Save changes
 
 <Aside type="tip">
-  Changes to permissions take effect immediately. Users will see updated menu items and access controls without needing to log out.
+  Effective permissions are cached in Redis for 6 hours, but editing a role or changing a user's
+  role explicitly invalidates the cache for every affected user, so changes take effect on the next
+  request without waiting for the TTL or logging out.
 </Aside>
 
 ## Multi-Organization Access
@@ -135,7 +178,12 @@ Super admins have additional privileges:
 - Can create new organizations
 
 <Aside type="caution">
-  The `X-Organization-ID` header for direct API access is only respected for super admin users. Regular multi-org users must use the `POST /api/auth/switch-org` endpoint.
+  The `X-Organization-ID` header switches the org for a single request. A super admin may name any
+  existing organization; anyone else may only name an org they hold a `user_organizations`
+  membership in. An unusable value is ignored silently — the request falls back to the org in the
+  caller's JWT rather than failing. `POST /api/auth/switch-org` is the durable alternative: it
+  re-issues the auth cookies scoped to the new org, so every later request follows without the
+  header.
 </Aside>
 
 ## UI Behavior
@@ -144,15 +192,38 @@ The frontend dynamically adapts based on user permissions:
 
 ### Sidebar Menu
 
-Menu items are shown/hidden based on permissions:
+Each route declares the resource it needs in its `meta.permission`, and the router hides the menu
+item and blocks navigation when the user lacks `<resource>:read`:
 
-- **Chat** - Requires `messages:read`
-- **Contacts** - Requires `contacts:read`
-- **Campaigns** - Requires `campaigns:read`
-- **Templates** - Requires `templates:read`
-- **Chatbot** - Requires `chatbot:read`
-- **Analytics** - Requires `analytics:read`
-- **Settings** - Requires any settings-related permission
+| Area | Resource |
+|---|---|
+| Dashboard / Analytics | `analytics` |
+| Agent Analytics | `analytics.agents` |
+| Chat | `chat` |
+| Contacts | `contacts` |
+| Tags | `tags` |
+| Templates | `templates` |
+| WhatsApp Flows | `flows.whatsapp` |
+| Campaigns | `campaigns` |
+| Chatbot settings & builder | `settings.chatbot` |
+| Keyword rules | `chatbot.keywords` |
+| Chatbot flows | `flows.chatbot` |
+| AI contexts | `chatbot.ai` |
+| Transfer queue | `transfers` |
+| General settings | `settings.general` |
+| Accounts | `accounts` |
+| Canned Responses | `canned_responses` |
+| Users | `users` |
+| Roles | `roles` |
+| Teams | `teams` |
+| API Keys | `api_keys` |
+| Webhooks | `webhooks` |
+| SSO | `settings.sso` |
+| Custom Actions | `custom_actions` |
+| Audit Logs | `audit_logs` |
+| Call Logs | `call_logs` |
+| IVR Flows | `ivr_flows` |
+| Call Transfers | `call_transfers` |
 
 ### Page Access
 
@@ -160,7 +231,7 @@ If a user tries to access a page they don't have permission for, they are redire
 
 ### Action Buttons
 
-Create, edit, and delete buttons are shown only if the user has the corresponding permission. For example, the "Add User" button only appears if the user has `users:create` permission.
+Create, edit, and delete buttons are shown only if the user has the corresponding permission. For example, the "Add User" button only appears if the user has `users:write` permission.
 
 ## API Authorization
 
@@ -170,16 +241,20 @@ All API endpoints check permissions before processing requests:
 # Returns 403 if user lacks users:read permission
 GET /api/users
 
-# Returns 403 if user lacks campaigns:create permission
+# Returns 403 if user lacks campaigns:write permission
 POST /api/campaigns
 ```
 
 ### Response for Unauthorized Access
 
+A missing permission returns `403` with a generic message — the specific `resource:action` is not
+disclosed. An unauthenticated request returns `401 Unauthorized` instead.
+
 ```json
 {
   "status": "error",
-  "message": "Permission denied: users:create"
+  "message": "Insufficient permissions",
+  "data": null
 }
 ```
 

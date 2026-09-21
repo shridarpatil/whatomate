@@ -1,0 +1,326 @@
+---
+title: Dashboard Widgets
+description: Build and manage custom analytics dashboard widgets
+---
+
+import { Aside } from '@astrojs/starlight/components';
+
+## Overview
+
+Widgets are configurable dashboard tiles that compute a metric over one of a fixed set of data sources and render it as a number, percentage, chart, table, or a static shortcuts panel. Each widget belongs to a user; a widget can be marked shared to make it visible to the whole organization. Widgets are positioned on a grid (`grid_x`, `grid_y`, `grid_w`, `grid_h`).
+
+<Aside type="note">
+  Widget endpoints require the `analytics` permissions: `analytics:read` to view widgets and their data, `analytics:write` to create or edit, and `analytics:delete` to delete. Only the widget owner can edit or delete a widget.
+</Aside>
+
+### Data sources and fields
+
+Each data source exposes a fixed set of filterable and group-by fields:
+
+| Data source | Fields |
+|-------------|--------|
+| `messages` | `status`, `direction`, `message_type`, `whatsapp_account` |
+| `contacts` | `whatsapp_account`, `is_read` |
+| `campaigns` | `status`, `message_status` |
+| `transfers` | `status`, `source` |
+| `sessions` | `status` |
+
+- **Metrics**: `count`, `sum`, `avg`. (`sum`/`avg` require a numeric `field`; the set of aggregatable fields is restricted server-side.)
+- **Display types**: `number`, `percentage`, `chart`, `table`, `shortcuts`. `shortcuts` is a static type that needs no data source or metric.
+- **Chart types** (when `display_type` is `chart`): `line`, `bar`, `pie`. Combined with a `group_by_field`, a `line` chart renders grouped time-series and `bar`/`pie` render grouped totals.
+
+## List Widgets
+
+Retrieve the current user's widgets plus any shared widgets in the organization, ordered by display order.
+
+```bash
+GET /api/widgets
+```
+
+### Response
+
+```json
+{
+  "status": "success",
+  "data": {
+    "widgets": [
+      {
+        "id": "uuid",
+        "name": "Messages Sent",
+        "description": "",
+        "data_source": "messages",
+        "metric": "count",
+        "field": "",
+        "filters": [
+          { "field": "direction", "operator": "equals", "value": "outbound" }
+        ],
+        "display_type": "number",
+        "chart_type": "",
+        "group_by_field": "",
+        "show_change": true,
+        "color": "#2563eb",
+        "size": "small",
+        "display_order": 1,
+        "grid_x": 0,
+        "grid_y": 0,
+        "grid_w": 3,
+        "grid_h": 3,
+        "config": {},
+        "is_shared": false,
+        "is_default": false,
+        "is_owner": true,
+        "created_by": "",
+        "created_at": "2024-01-01T00:00:00Z",
+        "updated_at": "2024-01-01T00:00:00Z"
+      }
+    ]
+  }
+}
+```
+
+## Get Widget
+
+Retrieve a single widget you own or that is shared with your organization.
+
+```bash
+GET /api/widgets/{id}
+```
+
+### Response
+
+Returns a single widget object (same shape as the list items above).
+
+## Get Data Sources
+
+List the available data sources, metrics, display types, and filter operators for building widgets.
+
+```bash
+GET /api/widgets/data-sources
+```
+
+### Response
+
+```json
+{
+  "status": "success",
+  "data": {
+    "data_sources": [
+      { "name": "messages", "label": "Messages", "fields": ["status", "direction", "message_type", "whatsapp_account"] },
+      { "name": "contacts", "label": "Contacts", "fields": ["whatsapp_account", "is_read"] }
+    ],
+    "metrics": ["count", "sum", "avg"],
+    "display_types": ["number", "percentage", "chart", "table", "shortcuts"],
+    "operators": [
+      { "value": "equals", "label": "Equals" },
+      { "value": "not_equals", "label": "Not Equals" },
+      { "value": "contains", "label": "Contains" },
+      { "value": "gt", "label": "Greater Than" },
+      { "value": "lt", "label": "Less Than" },
+      { "value": "gte", "label": "Greater Than or Equal" },
+      { "value": "lte", "label": "Less Than or Equal" }
+    ]
+  }
+}
+```
+
+## Create Widget
+
+Create a new widget owned by the current user.
+
+```bash
+POST /api/widgets
+```
+
+### Request Body
+
+```json
+{
+  "name": "Messages Sent",
+  "data_source": "messages",
+  "metric": "count",
+  "display_type": "number",
+  "filters": [
+    { "field": "direction", "operator": "equals", "value": "outbound" }
+  ],
+  "show_change": true,
+  "color": "#2563eb",
+  "size": "small"
+}
+```
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `name` | string | Yes | Widget name |
+| `data_source` | string | Yes* | One of `messages`, `contacts`, `campaigns`, `transfers`, `sessions`. Not required for the `shortcuts` display type |
+| `metric` | string | Yes* | One of `count`, `sum`, `avg`. Not required for the `shortcuts` display type |
+| `display_type` | string | No | One of `number`, `percentage`, `chart`, `table`, `shortcuts`. Defaults to `number` |
+| `field` | string | No | Field to aggregate for `sum`/`avg` metrics |
+| `filters` | array | No | Filter conditions, each `{ field, operator, value }` |
+| `chart_type` | string | No | `line`, `bar`, or `pie` (for `chart` display type) |
+| `group_by_field` | string | No | Field to group by; must be a valid field for the data source |
+| `show_change` | boolean | No | Show period-over-period change. Defaults to `true` |
+| `color` | string | No | Display color |
+| `size` | string | No | `small`, `medium`, or `large`. Defaults to `small` |
+| `config` | object | No | Free-form display config |
+| `is_shared` | boolean | No | Share with the whole organization. Defaults to `false` |
+| `grid_x`, `grid_y`, `grid_w`, `grid_h` | integer | No | Grid position and size. Sensible defaults are chosen per display type |
+
+<Aside type="note">
+  For the `shortcuts` display type, `data_source` and `metric` are set automatically; you only need `name` and `display_type`.
+</Aside>
+
+### Response
+
+Returns the created widget object.
+
+## Update Widget
+
+Update a widget. Only the owner may update it. Only fields present in the request body are changed (except `group_by_field`, which is always applied — send an empty string to clear it).
+
+```bash
+PUT /api/widgets/{id}
+```
+
+### Request Body
+
+Accepts the same fields as [Create Widget](#create-widget). All fields are optional.
+
+### Response
+
+Returns the updated widget object.
+
+## Delete Widget
+
+Delete a widget. Only the owner may delete it.
+
+```bash
+DELETE /api/widgets/{id}
+```
+
+### Response
+
+```json
+{
+  "status": "success",
+  "data": {
+    "message": "Widget deleted successfully"
+  }
+}
+```
+
+## Get Widget Data
+
+Compute and return the data for a single widget. Defaults to the current month; pass a date range to override.
+
+```bash
+GET /api/widgets/{id}/data
+```
+
+### Query Parameters
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `from` | string | Start of the period (date) |
+| `to` | string | End of the period (date) |
+
+### Response
+
+```json
+{
+  "status": "success",
+  "data": {
+    "widget_id": "uuid",
+    "value": 1250,
+    "change": 12.5,
+    "prev_value": 1111,
+    "chart_data": [
+      { "label": "Jan 01", "value": 40 }
+    ],
+    "data_points": [],
+    "grouped_series": null,
+    "table_rows": []
+  }
+}
+```
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `value` | number | The metric value for the current period |
+| `change` | number | Percentage change from the previous period |
+| `prev_value` | number | The metric value for the previous period |
+| `chart_data` | array | Daily points for a `chart` widget with no group-by |
+| `data_points` | array | Grouped totals (`{ label, value }`) for grouped bar/pie or grouped table |
+| `grouped_series` | object | Grouped time-series (`{ labels, datasets }`) for a grouped line chart |
+| `table_rows` | array | Last records for a `table` widget with no group-by |
+
+## Get All Widgets Data
+
+Compute data for all of the current user's widgets in a single request. Returns a map keyed by widget ID.
+
+```bash
+GET /api/widgets/data
+```
+
+### Query Parameters
+
+Same `from` / `to` parameters as [Get Widget Data](#get-widget-data).
+
+### Response
+
+```json
+{
+  "status": "success",
+  "data": {
+    "data": {
+      "widget-uuid-1": {
+        "widget_id": "widget-uuid-1",
+        "value": 1250,
+        "change": 12.5,
+        "prev_value": 1111,
+        "chart_data": [],
+        "data_points": [],
+        "grouped_series": null,
+        "table_rows": []
+      }
+    }
+  }
+}
+```
+
+## Save Layout
+
+Bulk-save grid positions for widgets in a single transaction. Each entry updates the widget's grid position; the order of the array sets each widget's display order.
+
+```bash
+POST /api/widgets/layout
+```
+
+### Request Body
+
+```json
+{
+  "layout": [
+    { "id": "widget-uuid-1", "grid_x": 0, "grid_y": 0, "grid_w": 3, "grid_h": 3 },
+    { "id": "widget-uuid-2", "grid_x": 3, "grid_y": 0, "grid_w": 6, "grid_h": 5 }
+  ]
+}
+```
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `layout` | array | Yes | Non-empty list of `{ id, grid_x, grid_y, grid_w, grid_h }` entries |
+
+### Response
+
+```json
+{
+  "status": "success",
+  "data": {
+    "message": "Layout saved successfully"
+  }
+}
+```
+
+## See Also
+
+- [Analytics API](/whatomate/api-reference/analytics) - Prebuilt dashboard and analytics endpoints

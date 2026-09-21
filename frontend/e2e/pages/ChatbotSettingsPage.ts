@@ -63,16 +63,32 @@ export class ChatbotSettingsPage extends BasePage {
     await this.page.locator('input#timeout').fill(String(minutes))
   }
 
-  async addGreetingButton(title: string) {
-    await this.page.getByRole('button', { name: /Add Button/i }).first().click()
-    const inputs = this.page.locator('.flex.items-center.gap-2 input')
-    await inputs.last().fill(title)
+  // MessageButtonsEditor replaced the single "Add Button" control with one
+  // control per button type. The greeting editor is the first on the page and
+  // the fallback editor the second, matching the order of the Messages tab.
+  private async addButton(
+    editor: 'first' | 'last',
+    title: string,
+    type: 'reply' | 'url',
+    url?: string
+  ) {
+    const control = this.page.getByRole('button', { name: type === 'url' ? /^URL$/ : /^Reply$/ })
+    await (editor === 'first' ? control.first() : control.last()).click()
+
+    const rows = this.page.locator('.flex.items-center.gap-2:has(input)')
+    await rows.last().locator('input').fill(title)
+
+    if (type === 'url') {
+      await this.page.getByPlaceholder('https://example.com').last().fill(url ?? '')
+    }
   }
 
-  async addFallbackButton(title: string) {
-    await this.page.getByRole('button', { name: /Add Button/i }).last().click()
-    const inputs = this.page.locator('.flex.items-center.gap-2 input')
-    await inputs.last().fill(title)
+  async addGreetingButton(title: string, type: 'reply' | 'url' = 'reply', url?: string) {
+    await this.addButton('first', title, type, url)
+  }
+
+  async addFallbackButton(title: string, type: 'reply' | 'url' = 'reply', url?: string) {
+    await this.addButton('last', title, type, url)
   }
 
   // Agents tab helpers

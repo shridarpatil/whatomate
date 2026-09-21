@@ -80,6 +80,14 @@ WhatsApp Flows support various UI components:
 | **Published** | Flow is live and can be sent to users |
 | **Deprecated** | Flow has been retired |
 
+### Editing a Published Flow
+
+Publishing requires a **Draft** flow, so a flow that is already **Published**
+or **Deprecated** can't be edited in place. To change one, use **Duplicate**:
+it clones the flow into a fresh **Draft** copy (named "… (Copy)") with a new,
+empty Meta flow ID. Edit the copy, save it to Meta, and publish it — leaving
+the original untouched. This is the intended path for revising a live flow.
+
 ## Using Flows
 
 ### In Chatbot

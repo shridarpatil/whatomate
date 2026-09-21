@@ -118,13 +118,13 @@ template (header + body) is still not allowed.
 
 When sending:
 - **API**: pass the value via the `header_params` field on
-  [Send Template Message](/api-reference/messages/#send-template-message). It
+  [Send Template Message](/whatomate/api-reference/messages/#send-template-message). It
   falls back to `template_params` if omitted — convenient for named templates
   where the header variable name doesn't collide with a body variable.
 - **Campaigns**: add a `header` column (always before the body parameter
   columns) in your CSV or manual entry. The dialog can generate a sample CSV
   with the right columns for you. See
-  [Adding Recipients](/features/campaigns/#adding-recipients).
+  [Adding Recipients](/whatomate/features/campaigns/#adding-recipients).
 
 ## Template Categories
 
@@ -144,6 +144,7 @@ When sending:
 
 | Status | Description |
 |--------|-------------|
+| **Draft** | Local-only draft; not yet submitted to Meta and can't be used to send |
 | **Approved** | Template is ready to use |
 | **Pending** | Awaiting Meta approval |
 | **Rejected** | Template was rejected by Meta |
@@ -153,11 +154,25 @@ When sending:
   Templates must be approved by Meta before they can be used for sending messages. The approval process typically takes a few minutes to 24 hours.
 </Aside>
 
+### Quality Rating
+
+Approved templates carry a **quality rating** reflecting how recipients have
+engaged with them — Meta lowers it as customers block or report the template.
+Whatomate stores this on each template and refreshes it on every **Sync from
+Meta**. New templates start at `UNKNOWN` until Meta reports a score.
+
+| Rating | Meaning |
+|--------|---------|
+| **GREEN** | High quality — low negative feedback |
+| **YELLOW** | Medium quality — some negative feedback |
+| **RED** | Low quality — high negative feedback; at risk of being paused by Meta |
+| **UNKNOWN** | Meta hasn't reported a quality score yet |
+
 ## URL Button Variables
 
 Templates can include URL buttons with dynamic variables. For example, a "Track Order" button with URL `https://example.com/track/{{1}}` will prompt you to enter the dynamic URL value when sending the template from the chat view.
 
-When sending via the API, provide button values using the `button_params` field. See the [API reference](/api-reference/messages/#send-template-message) for details.
+When sending via the API, provide button values using the `button_params` field. See the [API reference](/whatomate/api-reference/messages/#send-template-message) for details.
 
 ## Using Templates
 

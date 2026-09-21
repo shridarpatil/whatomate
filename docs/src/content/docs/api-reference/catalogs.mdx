@@ -1,0 +1,354 @@
+---
+title: Catalogs
+description: Manage WhatsApp product catalogs and products
+---
+
+import { Aside } from '@astrojs/starlight/components';
+
+## Overview
+
+Catalogs are WhatsApp product catalogs backed by Meta's Commerce Manager. Whatomate proxies catalog and product operations to the Meta Graph API and keeps a local mirror in your organization, so every create/update/delete both calls Meta and updates the local record. Each catalog is linked to a WhatsApp account by name.
+
+<Aside type="note">
+  Prices are stored and returned in the smallest currency unit (cents). A `price` of `1999` with currency `USD` means $19.99.
+</Aside>
+
+## List Catalogs
+
+Retrieve all catalogs in your organization, ordered by name.
+
+```bash
+GET /api/catalogs
+```
+
+### Query Parameters
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `whatsapp_account` | string | Filter by WhatsApp account name |
+
+### Response
+
+```json
+{
+  "status": "success",
+  "data": {
+    "catalogs": [
+      {
+        "id": "uuid",
+        "meta_catalog_id": "123456789",
+        "whatsapp_account": "Main Business",
+        "name": "Summer Collection",
+        "is_active": true,
+        "product_count": 12,
+        "created_at": "2024-01-01T00:00:00Z",
+        "updated_at": "2024-01-01T00:00:00Z"
+      }
+    ]
+  }
+}
+```
+
+## Get Catalog
+
+Retrieve a single catalog with its products.
+
+```bash
+GET /api/catalogs/{id}
+```
+
+### Response
+
+```json
+{
+  "status": "success",
+  "data": {
+    "id": "uuid",
+    "meta_catalog_id": "123456789",
+    "whatsapp_account": "Main Business",
+    "name": "Summer Collection",
+    "is_active": true,
+    "product_count": 1,
+    "products": [
+      {
+        "id": "uuid",
+        "meta_product_id": "987654321",
+        "name": "T-Shirt",
+        "description": "Cotton t-shirt",
+        "price": 1999,
+        "currency": "USD",
+        "url": "https://example.com/tshirt",
+        "image_url": "https://example.com/tshirt.jpg",
+        "retailer_id": "SKU-001",
+        "is_active": true,
+        "created_at": "2024-01-01T00:00:00Z",
+        "updated_at": "2024-01-01T00:00:00Z"
+      }
+    ],
+    "created_at": "2024-01-01T00:00:00Z",
+    "updated_at": "2024-01-01T00:00:00Z"
+  }
+}
+```
+
+## Create Catalog
+
+Create a catalog in Meta Commerce Manager and store it locally.
+
+```bash
+POST /api/catalogs
+```
+
+### Request Body
+
+```json
+{
+  "whatsapp_account": "Main Business",
+  "name": "Summer Collection"
+}
+```
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `whatsapp_account` | string | Yes | Name of the WhatsApp account that owns the catalog |
+| `name` | string | Yes | Catalog name |
+
+### Response
+
+Returns the created catalog (with `product_count` of `0`).
+
+```json
+{
+  "status": "success",
+  "data": {
+    "id": "uuid",
+    "meta_catalog_id": "123456789",
+    "whatsapp_account": "Main Business",
+    "name": "Summer Collection",
+    "is_active": true,
+    "product_count": 0,
+    "created_at": "2024-01-01T00:00:00Z",
+    "updated_at": "2024-01-01T00:00:00Z"
+  }
+}
+```
+
+## Delete Catalog
+
+Delete a catalog from Meta and locally. All products in the catalog are removed as well.
+
+```bash
+DELETE /api/catalogs/{id}
+```
+
+<Aside type="caution">
+  If the Meta deletion fails, the local catalog and its products are still removed.
+</Aside>
+
+### Response
+
+```json
+{
+  "status": "success",
+  "data": {
+    "message": "Catalog deleted"
+  }
+}
+```
+
+## Sync Catalogs
+
+Fetch catalogs from the Meta Graph API for a WhatsApp account and create or update the local mirror.
+
+```bash
+POST /api/catalogs/sync
+```
+
+### Request Body
+
+```json
+{
+  "whatsapp_account": "Main Business"
+}
+```
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `whatsapp_account` | string | Yes | Name of the WhatsApp account to sync catalogs for |
+
+### Response
+
+```json
+{
+  "status": "success",
+  "data": {
+    "message": "Catalogs synced",
+    "synced": 3,
+    "total": 3
+  }
+}
+```
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `synced` | integer | Number of catalogs created or updated locally |
+| `total` | integer | Number of catalogs returned by Meta |
+
+## List Catalog Products
+
+Retrieve all products in a catalog, ordered by name.
+
+```bash
+GET /api/catalogs/{id}/products
+```
+
+### Response
+
+```json
+{
+  "status": "success",
+  "data": {
+    "products": [
+      {
+        "id": "uuid",
+        "meta_product_id": "987654321",
+        "name": "T-Shirt",
+        "description": "Cotton t-shirt",
+        "price": 1999,
+        "currency": "USD",
+        "url": "https://example.com/tshirt",
+        "image_url": "https://example.com/tshirt.jpg",
+        "retailer_id": "SKU-001",
+        "is_active": true,
+        "created_at": "2024-01-01T00:00:00Z",
+        "updated_at": "2024-01-01T00:00:00Z"
+      }
+    ]
+  }
+}
+```
+
+## Create Product
+
+Create a product in the catalog's Meta catalog and store it locally.
+
+```bash
+POST /api/catalogs/{id}/products
+```
+
+### Request Body
+
+```json
+{
+  "name": "T-Shirt",
+  "description": "Cotton t-shirt",
+  "price": 1999,
+  "currency": "USD",
+  "url": "https://example.com/tshirt",
+  "image_url": "https://example.com/tshirt.jpg",
+  "retailer_id": "SKU-001"
+}
+```
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `name` | string | Yes | Product name |
+| `price` | integer | Yes | Price in the smallest currency unit (cents). Must be greater than 0 |
+| `description` | string | No | Product description |
+| `currency` | string | No | ISO 4217 currency code. Defaults to `USD` |
+| `url` | string | No | Product landing page URL |
+| `image_url` | string | No | Product image URL |
+| `retailer_id` | string | No | Retailer SKU / external identifier |
+
+### Response
+
+Returns the created product (same shape as the product object above).
+
+## Get Product
+
+Retrieve a single product.
+
+```bash
+GET /api/products/{id}
+```
+
+### Response
+
+```json
+{
+  "status": "success",
+  "data": {
+    "id": "uuid",
+    "meta_product_id": "987654321",
+    "name": "T-Shirt",
+    "description": "Cotton t-shirt",
+    "price": 1999,
+    "currency": "USD",
+    "url": "https://example.com/tshirt",
+    "image_url": "https://example.com/tshirt.jpg",
+    "retailer_id": "SKU-001",
+    "is_active": true,
+    "created_at": "2024-01-01T00:00:00Z",
+    "updated_at": "2024-01-01T00:00:00Z"
+  }
+}
+```
+
+## Update Product
+
+Update a product in Meta and locally. Only non-empty fields in the request body are applied to the local record.
+
+```bash
+PUT /api/products/{id}
+```
+
+### Request Body
+
+```json
+{
+  "name": "Premium T-Shirt",
+  "price": 2499,
+  "currency": "USD"
+}
+```
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `name` | string | Product name |
+| `description` | string | Product description |
+| `price` | integer | Price in cents (applied only when greater than 0) |
+| `currency` | string | ISO 4217 currency code |
+| `url` | string | Product landing page URL |
+| `image_url` | string | Product image URL |
+| `retailer_id` | string | Retailer SKU / external identifier |
+
+### Response
+
+Returns the updated product object.
+
+## Delete Product
+
+Delete a product from Meta and locally.
+
+```bash
+DELETE /api/products/{id}
+```
+
+<Aside type="caution">
+  If the Meta deletion fails, the local product is still removed.
+</Aside>
+
+### Response
+
+```json
+{
+  "status": "success",
+  "data": {
+    "message": "Product deleted"
+  }
+}
+```
+
+## See Also
+
+- [Accounts API](/whatomate/api-reference/accounts) - Manage the WhatsApp accounts that own catalogs

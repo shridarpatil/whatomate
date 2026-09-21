@@ -1,0 +1,83 @@
+---
+title: Product Catalogs
+description: Manage WhatsApp Product Catalogs by proxying Meta Commerce Manager
+---
+
+import { Aside } from '@astrojs/starlight/components';
+
+Product Catalogs let you create and maintain WhatsApp Product Catalogs from inside Whatomate. Every catalog and product operation is a **live round-trip to the Meta Graph API** (Commerce Manager), with a local mirror kept in Whatomate's database for fast listing and display.
+
+<Aside type="caution">
+  **Scope: this feature is catalog *management* only.** It creates, syncs, and edits catalogs and products in Meta Commerce Manager. It does **not** currently let you send products inside WhatsApp messages — see [Sending products](#sending-products-not-yet-supported) below.
+</Aside>
+
+## How it works
+
+Whatomate keeps a thin local mirror of your Meta catalogs and products:
+
+- **Catalogs** store `meta_catalog_id`, `name`, the owning `whatsapp_account`, and `is_active`.
+- **Products** store `meta_product_id`, `name`, `description`, `price` (in **cents**, an integer), `currency` (default `USD`), `url`, `image_url`, and `retailer_id` (your SKU).
+
+Because the source of truth is Meta, mutating operations call Meta first and persist locally on success:
+
+| Operation | Meta call, then local |
+|---|---|
+| Create catalog | Creates the catalog in Meta, stores the returned `meta_catalog_id`. |
+| Delete catalog | Deletes from Meta, then removes the catalog and its products locally. |
+| Create / update / delete product | Round-trips to Meta, then mirrors the change locally. |
+
+<Aside type="note">
+  On delete, if the Meta call fails the local record is still removed so the mirror doesn't get stuck with orphaned rows. Create fails hard if Meta rejects it — nothing is stored locally in that case.
+</Aside>
+
+## Managing catalogs
+
+Catalogs are tied to a WhatsApp account by the account's **name** (the `whatsapp_account` field).
+
+- `GET /api/catalogs` — list catalogs (optionally filtered by `whatsapp_account`). Each entry includes a live `product_count`.
+- `POST /api/catalogs` — create a catalog (`{ "name": "...", "whatsapp_account": "..." }`).
+- `GET /api/catalogs/{id}` — fetch one catalog with its products preloaded.
+- `DELETE /api/catalogs/{id}` — delete the catalog (and its products).
+
+### Syncing from Meta
+
+If catalogs already exist in Commerce Manager, pull them in instead of recreating:
+
+```
+POST /api/catalogs/sync
+{ "whatsapp_account": "Support Line" }
+```
+
+Whatomate lists the account's catalogs from Meta and **upserts by `meta_catalog_id`** — new catalogs are created, existing ones have their name refreshed. The response reports how many were synced:
+
+```json
+{ "status": "success", "data": { "message": "Catalogs synced", "synced": 3, "total": 3 } }
+```
+
+## Managing products
+
+Products live under a catalog:
+
+- `GET /api/catalogs/{id}/products` — list products in a catalog.
+- `POST /api/catalogs/{id}/products` — create a product. `name` and a positive `price` (in cents) are required; `currency` defaults to `USD`.
+- `GET /api/products/{id}` — fetch one product.
+- `PUT /api/products/{id}` — update a product.
+- `DELETE /api/products/{id}` — delete a product.
+
+<Aside type="note">
+  Prices are integers in the currency's minor unit — e.g. `1999` is `$19.99`. The `retailer_id` is your own SKU/identifier and is optional.
+</Aside>
+
+## Sending products (not yet supported)
+
+<Aside type="caution">
+  **Products created here cannot currently be sent in WhatsApp messages.** Whatomate's message sender supports interactive message types — reply buttons, list, call-to-action URL, click-to-call, and templates — but there is **no `product` or `product_list` message type**. Catalog and product data is managed and mirrored, but there is no message flow that attaches a product to an outgoing message. Treat this feature as catalog sync/management, not commerce messaging.
+</Aside>
+
+## Access
+
+Catalog endpoints are org-scoped and require an authenticated session or API key; every query is filtered to the caller's organization. There is no separate `catalogs` permission resource — access is governed by authentication and org membership rather than a dedicated `resource:action` grant.
+
+## API
+
+Full request/response schemas are in the [API Reference → Catalogs](/whatomate/api-reference/catalogs).

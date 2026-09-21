@@ -1,0 +1,129 @@
+---
+title: Embedded Signup & Coexistence
+description: Self-serve Meta onboarding — connect a WhatsApp Business Account via Facebook OAuth without copying tokens by hand
+---
+
+import { Card, CardGrid, Steps, Aside } from '@astrojs/starlight/components';
+
+Embedded Signup is the self-serve way to connect a WhatsApp Business Account (WABA) to Whatomate. Instead of manually copying a permanent access token, phone ID, and WABA ID out of the Meta dashboard, the user clicks a button, authenticates with Facebook in a popup, and Whatomate does the token exchange, discovery, subscription, and registration for them.
+
+## What it is
+
+Embedded Signup wraps Meta's official onboarding flow (the **Facebook JS SDK** launching Meta's Embedded Signup dialog). The user grants your Meta app access to their WhatsApp Business Account and phone number; the SDK hands back a short-lived authorization **code**; Whatomate exchanges it for a **permanent access token**, discovers the WABA and phone number behind it, subscribes your app to the account's webhooks, and (for most numbers) registers the phone — all in one round trip.
+
+<CardGrid>
+  <Card title="No manual tokens" icon="approve-check">
+    Users never see or paste access tokens — the exchange happens server-side.
+  </Card>
+  <Card title="Auto-discovery" icon="magnifier">
+    WABA ID and phone number are discovered from the token if the SDK didn't supply them.
+  </Card>
+  <Card title="Encrypted at rest" icon="setting">
+    The permanent token, app secret, and PIN are AES-encrypted before being saved.
+  </Card>
+  <Card title="Coexistence" icon="random">
+    SMB numbers still running on the WhatsApp Business mobile app connect without registration.
+  </Card>
+</CardGrid>
+
+## Prerequisites
+
+Embedded Signup needs Meta app credentials configured in the `[whatsapp]` section of `config.toml`:
+
+```toml
+[whatsapp]
+webhook_verify_token = "random-string-change-this"
+app_id = ""      # Meta App ID for Embedded Signup
+app_secret = ""  # Meta App Secret
+config_id = ""   # WhatsApp Config ID for frontend login
+```
+
+| Setting | Purpose |
+|---|---|
+| `app_id` | Your Meta App ID. Sent to the frontend so the Facebook JS SDK can launch the dialog. |
+| `config_id` | The Embedded Signup configuration ID from your Meta app. Selects which onboarding flow the SDK shows. |
+| `app_secret` | Your Meta App Secret. Used server-side to exchange the code for a token and to debug the token during discovery. Never sent to the frontend. |
+| `webhook_verify_token` | Default verify token for the `/api/webhook` endpoint; a per-account token is generated if you don't pass one. |
+
+See [Configuration](/whatomate/getting-started/configuration) for the full `[whatsapp]` block and environment-variable overrides.
+
+<Aside type="note">
+  These can also be set **per organization** — if an org's settings carry `meta_app_id`, `meta_config_id`, and an encrypted `meta_app_secret_encrypted`, those override the global `config.toml` values for that org. This lets different tenants onboard against different Meta apps.
+</Aside>
+
+The frontend fetches the resolved (non-secret) values before launching the dialog:
+
+```
+GET /api/embedded-signup/config
+→ { "whatsapp_app_id": "…", "whatsapp_config_id": "…", "whatsapp_api_version": "v21.0" }
+```
+
+The app secret is deliberately **not** included in this response.
+
+## The flow
+
+<Steps>
+
+1. **Launch the dialog.** The frontend loads the Facebook JS SDK with the `app_id` and `config_id` from `/api/embedded-signup/config` and opens Meta's Embedded Signup dialog. The user selects (or creates) their WhatsApp Business Account and phone number and grants your app permission.
+
+2. **SDK returns a code.** On success the SDK returns a short-lived authorization `code` (and, usually, the `phone_id` and `waba_id`).
+
+3. **Exchange the code.** The frontend posts it to the backend:
+
+   ```json
+   POST /api/accounts/exchange-token
+   {
+     "code": "…",
+     "phone_id": "…optional…",
+     "waba_id": "…optional…",
+     "name": "…optional…",
+     "webhook_verify_token": "…optional…"
+   }
+   ```
+
+   The server then:
+   - Resolves the Meta credentials for the org and **exchanges the code for a permanent access token**.
+   - **Discovers** the WABA and phone number if they weren't supplied: it debugs the token to read `whatsapp_business_management` granular scopes for the WABA ID (falling back to shared-WABA lookup), then lists the WABA's phone numbers and picks the first one.
+   - **Creates or updates** the WhatsApp account row (matching on phone ID + org, restoring a soft-deleted one if present).
+   - Attempts **auto-registration** of the phone (see below).
+   - **Subscribes** your app to the WABA's webhooks so inbound messages start flowing.
+   - **Encrypts** the access token, app secret, and PIN at rest, then saves the account and audit-logs the change.
+
+4. **Response.** On success the account is returned; if it went `active` via registration the generated `pin` is included, and if registration failed a `warning` is returned so the user can register manually.
+
+</Steps>
+
+Both `GET /api/embedded-signup/config` and `POST /api/accounts/exchange-token` require an authenticated session; the exchange additionally requires **`accounts:write`**.
+
+## Manual / 2FA phone registration
+
+Cloud API phone numbers must be **registered** with a 6-digit two-step-verification PIN before they can send. Exchange-token attempts this automatically, but if it failed (the account comes back with a warning and a `pending_registration` status) you can register it explicitly:
+
+```json
+POST /api/accounts/{id}/register
+{ "pin": "…optional 6-digit PIN…" }
+```
+
+If you omit the PIN, the server generates a secure random one. On success the account status flips to `active` and the PIN is returned so you can store it. This endpoint also requires **`accounts:write`**.
+
+<Aside type="caution">
+  Keep the registration PIN safe. It's the two-step-verification PIN for the phone number on the WhatsApp Cloud API and is required for future re-registration. Whatomate stores it encrypted.
+</Aside>
+
+## Coexistence (SMB / Business App mode)
+
+**Coexistence** lets a number that's still being used in the **WhatsApp Business mobile app** connect to the Cloud API at the same time — the small-business owner keeps chatting from their phone while Whatomate mirrors those conversations.
+
+During exchange-token, Whatomate inspects the phone number info from Meta and flags the account **`IsSMB`** when the number is on the Business App (`is_on_biz_app`) or its platform type is `SMB` / `SMB_CLOUD_API`. For these numbers:
+
+- **Registration is skipped.** SMB numbers are already registered through the Business App and don't support the two-step registration API — so both auto-registration and the manual `POST /api/accounts/{id}/register` set the account straight to `active` with **no PIN**.
+- **Messages mirror from the mobile app.** Conversations the owner has in the WhatsApp Business app appear in Whatomate, and vice versa.
+
+<Aside type="note">
+  Coexistence applies only when the connected number is on the WhatsApp Business app. A number provisioned directly on the Cloud API (not SMB) goes through normal registration with a PIN.
+</Aside>
+
+## Related
+
+- [Configuration](/whatomate/getting-started/configuration) — the `[whatsapp]` config block and env overrides
+- [Accounts API](/whatomate/api-reference/accounts) — account, exchange-token, and register endpoints

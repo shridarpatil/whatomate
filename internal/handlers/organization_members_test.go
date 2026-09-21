@@ -141,6 +141,9 @@ func TestApp_AddOrganizationMember_Success(t *testing.T) {
 	org := testutil.CreateTestOrganization(t, app.DB)
 	allPerms := testutil.GetOrCreateTestPermissions(t, app.DB)
 	role := testutil.CreateTestRole(t, app.DB, org.ID, "admin", allPerms)
+	// Real orgs are seeded with a default role ("agent" via SeedSystemRolesForOrg);
+	// AddOrganizationMember falls back to it when the request omits role_id.
+	defaultRole := testutil.CreateTestRoleExact(t, app.DB, org.ID, "agent", true, true, nil)
 	admin := testutil.CreateTestUser(t, app.DB, org.ID, testutil.WithEmail(testutil.UniqueEmail("add-member-admin")), testutil.WithRoleID(&role.ID))
 
 	// Create a second user in a different org to add
@@ -156,10 +159,83 @@ func TestApp_AddOrganizationMember_Success(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, fasthttp.StatusOK, testutil.GetResponseStatusCode(req))
 
-	// Verify membership was created
+	// Verify membership was created, carrying the org's default role
+	var userOrg models.UserOrganization
+	require.NoError(t, app.DB.Where("user_id = ? AND organization_id = ?", targetUser.ID, org.ID).First(&userOrg).Error)
+	require.NotNil(t, userOrg.RoleID, "membership must never be created with a NULL role")
+	assert.Equal(t, defaultRole.ID, *userOrg.RoleID)
+}
+
+// A NULL-role membership resolves to no org-scoped role at permission-check time,
+// so the member would land in the org with nothing. Reject it at add time.
+func TestApp_AddOrganizationMember_NoDefaultRoleRejected(t *testing.T) {
+	t.Parallel()
+
+	app := newTestApp(t)
+	org := testutil.CreateTestOrganization(t, app.DB)
+	allPerms := testutil.GetOrCreateTestPermissions(t, app.DB)
+	role := testutil.CreateTestRole(t, app.DB, org.ID, "admin", allPerms)
+	admin := testutil.CreateTestUser(t, app.DB, org.ID, testutil.WithEmail(testutil.UniqueEmail("add-nodefault-admin")), testutil.WithRoleID(&role.ID))
+
+	org2 := testutil.CreateTestOrganization(t, app.DB)
+	targetUser := testutil.CreateTestUser(t, app.DB, org2.ID, testutil.WithEmail(testutil.UniqueEmail("add-nodefault-target")))
+
+	// No role_id in the request and no default role in the org.
+	req := testutil.NewJSONRequest(t, map[string]any{
+		"user_id": targetUser.ID.String(),
+	})
+	testutil.SetAuthContext(req, org.ID, admin.ID)
+
+	require.NoError(t, app.AddOrganizationMember(req))
+	assert.Equal(t, fasthttp.StatusBadRequest, testutil.GetResponseStatusCode(req))
+
 	var count int64
 	app.DB.Model(&models.UserOrganization{}).Where("user_id = ? AND organization_id = ?", targetUser.ID, org.ID).Count(&count)
-	assert.Equal(t, int64(1), count)
+	assert.Equal(t, int64(0), count, "no membership row should be created")
+}
+
+// idx_user_org has no deleted_at predicate, so the soft-deleted row left by
+// RemoveOrganizationMember would collide on re-add unless it is revived.
+func TestApp_AddOrganizationMember_RevivesRemovedMembership(t *testing.T) {
+	t.Parallel()
+
+	app := newTestApp(t)
+	org := testutil.CreateTestOrganization(t, app.DB)
+	allPerms := testutil.GetOrCreateTestPermissions(t, app.DB)
+	adminRole := testutil.CreateTestRole(t, app.DB, org.ID, "admin", allPerms)
+	agentRole := testutil.CreateTestRole(t, app.DB, org.ID, "agent", nil)
+	admin := testutil.CreateTestUser(t, app.DB, org.ID, testutil.WithEmail(testutil.UniqueEmail("revive-admin")), testutil.WithRoleID(&adminRole.ID))
+
+	org2 := testutil.CreateTestOrganization(t, app.DB)
+	targetUser := testutil.CreateTestUser(t, app.DB, org2.ID, testutil.WithEmail(testutil.UniqueEmail("revive-target")))
+
+	addReq := testutil.NewJSONRequest(t, map[string]any{
+		"user_id": targetUser.ID.String(),
+		"role_id": agentRole.ID.String(),
+	})
+	testutil.SetAuthContext(addReq, org.ID, admin.ID)
+	require.NoError(t, app.AddOrganizationMember(addReq))
+	require.Equal(t, fasthttp.StatusOK, testutil.GetResponseStatusCode(addReq))
+
+	removeReq := testutil.NewGETRequest(t)
+	removeReq.RequestCtx.Request.Header.SetMethod("DELETE")
+	testutil.SetAuthContext(removeReq, org.ID, admin.ID)
+	testutil.SetPathParam(removeReq, "member_id", targetUser.ID.String())
+	require.NoError(t, app.RemoveOrganizationMember(removeReq))
+	require.Equal(t, fasthttp.StatusOK, testutil.GetResponseStatusCode(removeReq))
+
+	// Re-adding must succeed rather than hit the unique index on the soft-deleted row.
+	readdReq := testutil.NewJSONRequest(t, map[string]any{
+		"user_id": targetUser.ID.String(),
+		"role_id": agentRole.ID.String(),
+	})
+	testutil.SetAuthContext(readdReq, org.ID, admin.ID)
+	require.NoError(t, app.AddOrganizationMember(readdReq))
+	assert.Equal(t, fasthttp.StatusOK, testutil.GetResponseStatusCode(readdReq))
+
+	var count int64
+	app.DB.Model(&models.UserOrganization{}).Where("user_id = ? AND organization_id = ?", targetUser.ID, org.ID).Count(&count)
+	assert.Equal(t, int64(1), count, "re-add should revive the row, not duplicate it")
 }
 
 func TestApp_AddOrganizationMember_WithRole(t *testing.T) {
@@ -670,4 +746,83 @@ func TestApp_SwitchOrg_Unauthorized(t *testing.T) {
 	err := app.SwitchOrg(req)
 	require.NoError(t, err)
 	assert.Equal(t, fasthttp.StatusUnauthorized, testutil.GetResponseStatusCode(req))
+}
+
+// --- Cross-org permission scoping ---
+
+// A user's home-org role must not leak into an org they only belong to as a
+// plain member: the permission lookup has to resolve the role from that org's
+// membership row rather than falling back to users.role_id.
+func TestApp_HasPermission_DoesNotInheritHomeOrgRoleInForeignOrg(t *testing.T) {
+	t.Parallel()
+
+	app := newTestApp(t)
+	homeOrg := testutil.CreateTestOrganization(t, app.DB)
+	foreignOrg := testutil.CreateTestOrganization(t, app.DB)
+
+	allPerms := testutil.GetOrCreateTestPermissions(t, app.DB)
+	homeAdminRole := testutil.CreateTestRole(t, app.DB, homeOrg.ID, "admin", allPerms)
+	user := testutil.CreateTestUser(t, app.DB, homeOrg.ID,
+		testutil.WithEmail(testutil.UniqueEmail("role-leak")), testutil.WithRoleID(&homeAdminRole.ID))
+
+	assert.True(t, app.HasPermission(user.ID, models.ResourceTags, models.ActionWrite, homeOrg.ID),
+		"admin in their home org")
+
+	// Membership in the foreign org carrying no role — the shape an org with no
+	// default role used to produce.
+	require.NoError(t, app.DB.Create(&models.UserOrganization{
+		BaseModel:      models.BaseModel{ID: uuid.New()},
+		UserID:         user.ID,
+		OrganizationID: foreignOrg.ID,
+	}).Error)
+
+	assert.False(t, app.HasPermission(user.ID, models.ResourceTags, models.ActionWrite, foreignOrg.ID),
+		"home-org admin role must not carry into a foreign org")
+}
+
+// Super admins hold no membership rows, so dropping the home-role fallback must
+// not lock them out of other orgs — the flag alone grants access.
+func TestApp_HasPermission_SuperAdminWithoutMembershipInForeignOrg(t *testing.T) {
+	t.Parallel()
+
+	app := newTestApp(t)
+	homeOrg := testutil.CreateTestOrganization(t, app.DB)
+	foreignOrg := testutil.CreateTestOrganization(t, app.DB)
+
+	superAdmin := testutil.CreateTestUser(t, app.DB, homeOrg.ID,
+		testutil.WithEmail(testutil.UniqueEmail("sa-foreign")), testutil.WithSuperAdmin())
+
+	assert.True(t, app.HasPermission(superAdmin.ID, models.ResourceTags, models.ActionWrite, foreignOrg.ID),
+		"super admin retains access to an org they hold no membership in")
+}
+
+// A member removed from an org must lose their permissions there even though
+// their access token still names it.
+func TestApp_HasPermission_RemovedMemberLosesForeignOrgAccess(t *testing.T) {
+	t.Parallel()
+
+	app := newTestApp(t)
+	homeOrg := testutil.CreateTestOrganization(t, app.DB)
+	foreignOrg := testutil.CreateTestOrganization(t, app.DB)
+
+	allPerms := testutil.GetOrCreateTestPermissions(t, app.DB)
+	homeAdminRole := testutil.CreateTestRole(t, app.DB, homeOrg.ID, "admin", allPerms)
+	foreignRole := testutil.CreateTestRole(t, app.DB, foreignOrg.ID, "agent", allPerms)
+	user := testutil.CreateTestUser(t, app.DB, homeOrg.ID,
+		testutil.WithEmail(testutil.UniqueEmail("removed-member")), testutil.WithRoleID(&homeAdminRole.ID))
+
+	membership := models.UserOrganization{
+		BaseModel:      models.BaseModel{ID: uuid.New()},
+		UserID:         user.ID,
+		OrganizationID: foreignOrg.ID,
+		RoleID:         &foreignRole.ID,
+	}
+	require.NoError(t, app.DB.Create(&membership).Error)
+	assert.True(t, app.HasPermission(user.ID, models.ResourceTags, models.ActionWrite, foreignOrg.ID))
+
+	require.NoError(t, app.DB.Delete(&membership).Error)
+	app.InvalidateUserPermissionsCache(user.ID)
+
+	assert.False(t, app.HasPermission(user.ID, models.ResourceTags, models.ActionWrite, foreignOrg.ID),
+		"removed member must not fall back to their home-org role")
 }

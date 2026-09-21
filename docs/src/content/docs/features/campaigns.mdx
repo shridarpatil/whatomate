@@ -124,6 +124,21 @@ Track your campaign performance with detailed analytics:
 | **Read** | Messages opened by recipients |
 | **Failed** | Messages that failed to send |
 
+### Campaign Status
+
+The campaign itself moves through a lifecycle, shown on the campaign card and detail page:
+
+| Status | Meaning |
+|--------|---------|
+| **Draft** | Created but not yet queued for sending |
+| **Scheduled** | Set to start at a future date/time |
+| **Queued** | Handed off to the send queue, waiting for a worker |
+| **Processing** | Workers are actively sending messages |
+| **Paused** | Sending temporarily halted; can be resumed or retried |
+| **Completed** | All recipients processed |
+| **Cancelled** | Stopped by a user; no further sends |
+| **Failed** | Campaign could not complete |
+
 ### Status Tracking
 
 Each recipient's message status is tracked individually:
@@ -132,6 +147,25 @@ Each recipient's message status is tracked individually:
 - **Delivered** - Delivered to recipient's device
 - **Read** - Opened by recipient
 - **Failed** - Failed to deliver
+
+Each **failed** recipient also records a **failure reason** — the error
+message returned by WhatsApp (e.g. an invalid number or a template mismatch) —
+so you can see exactly why a message didn't go out and fix the data before
+retrying.
+
+## Managing a Running Campaign
+
+While a campaign is queued or processing you can **pause** it to halt sending,
+then resume it later. A campaign can also be **cancelled**, which stops it for
+good.
+
+### Retry Failed
+
+On a **completed**, **paused**, or **failed** campaign, use **Retry Failed** to
+re-queue every recipient whose message failed. Whatomate resets those
+recipients back to pending, clears their previous error, and puts the campaign
+back into **processing** — recipients that already succeeded are left
+untouched, so no one is messaged twice.
 
 ## Campaign Features
 

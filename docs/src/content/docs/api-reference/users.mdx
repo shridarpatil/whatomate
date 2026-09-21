@@ -6,7 +6,7 @@ description: User management API
 import { Aside } from '@astrojs/starlight/components';
 
 <Aside type="caution">
-  User management endpoints require the `users:read`, `users:create`, `users:update`, or `users:delete` permissions respectively.
+  User management endpoints require the `users:read`, `users:write`, or `users:delete` permission. There is no separate create/update action — creating and editing both use `users:write`.
 </Aside>
 
 ## Overview
@@ -39,7 +39,7 @@ GET /api/me
       "name": "admin",
       "description": "Full access to all features"
     },
-    "permissions": ["users:read", "users:create", "contacts:read", "..."],
+    "permissions": ["users:read", "users:write", "contacts:read", "..."],
     "is_super_admin": false,
     "created_at": "2024-01-01T00:00:00Z"
   }
@@ -64,7 +64,7 @@ PUT /api/me/password
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
 | `current_password` | string | Yes | Current password for verification |
-| `new_password` | string | Yes | New password (minimum 8 characters) |
+| `new_password` | string | Yes | New password (minimum 6 characters) |
 
 #### Response
 
@@ -73,6 +73,46 @@ PUT /api/me/password
   "status": "success",
   "data": {
     "message": "Password changed successfully"
+  }
+}
+```
+
+### Update Settings
+
+Update the current user's notification preferences.
+
+```bash
+PUT /api/me/settings
+```
+
+#### Request Body
+
+```json
+{
+  "email_notifications": true,
+  "new_message_alerts": true,
+  "campaign_updates": false
+}
+```
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `email_notifications` | boolean | Receive email notifications |
+| `new_message_alerts` | boolean | Alert on new inbound messages |
+| `campaign_updates` | boolean | Notify on campaign status changes |
+
+#### Response
+
+```json
+{
+  "status": "success",
+  "data": {
+    "message": "Settings updated successfully",
+    "settings": {
+      "email_notifications": true,
+      "new_message_alerts": true,
+      "campaign_updates": false
+    }
   }
 }
 ```
@@ -167,7 +207,7 @@ POST /api/users
 ```
 
 <Aside type="note">
-  Requires `users:create` permission.
+  Requires `users:write` permission.
 </Aside>
 
 ### Request Body
@@ -184,7 +224,7 @@ POST /api/users
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
 | `email` | string | Yes | Unique email address |
-| `password` | string | Yes | Minimum 8 characters |
+| `password` | string | Yes | Must be non-empty. No minimum length is enforced (unlike `PUT /api/me/password`, which requires 6+) |
 | `full_name` | string | Yes | Display name |
 | `role_id` | string | No | UUID of the role to assign. If not provided, uses the organization's default role |
 
@@ -218,7 +258,7 @@ PUT /api/users/{id}
 ```
 
 <Aside type="note">
-  Requires `users:update` permission.
+  Requires `users:write` permission.
 </Aside>
 
 ### Request Body
@@ -234,7 +274,7 @@ PUT /api/users/{id}
 | Field | Type | Description |
 |-------|------|-------------|
 | `email` | string | New email address |
-| `password` | string | New password (min 8 chars) |
+| `password` | string | New password |
 | `full_name` | string | Display name |
 | `role_id` | string | UUID of the role to assign |
 | `is_active` | boolean | Enable/disable user |
@@ -279,12 +319,12 @@ DELETE /api/users/{id}
 
 ## User Availability
 
-Users can set their availability status for chat routing.
+Users set their **own** availability status for chat routing. This always acts on the authenticated user — there is no per-user-ID availability route.
 
 ### Update Availability
 
 ```bash
-PUT /api/users/{id}/availability
+PUT /api/me/availability
 ```
 
 #### Request Body
@@ -333,5 +373,5 @@ GET /api/me/organizations
 
 ## See Also
 
-- [Roles & Permissions](/features/roles-permissions) - Learn about the permission system
-- [Roles API](/api-reference/roles) - Manage roles programmatically
+- [Roles & Permissions](/whatomate/features/roles-permissions) - Learn about the permission system
+- [Roles API](/whatomate/api-reference/roles) - Manage roles programmatically

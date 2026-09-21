@@ -7,6 +7,8 @@ import (
 	"io"
 	"maps"
 	"net/http"
+	"net/url"
+	"path"
 	"strings"
 	"time"
 
@@ -505,7 +507,7 @@ func (a *App) broadcastNewMessage(orgID uuid.UUID, msg *models.Message, contact 
 		"direction":        msg.Direction,
 		"message_type":     msg.MessageType,
 		"content":          map[string]string{"body": msg.Content},
-		"media_url":        msg.MediaURL,
+		"media_url":        messageMediaURL(msg),
 		"media_mime_type":  msg.MediaMimeType,
 		"media_filename":   msg.MediaFilename,
 		"interactive_data": msg.InteractiveData,
@@ -572,6 +574,9 @@ func (a *App) dispatchMessageSentWebhook(account *models.WhatsAppAccount, contac
 		ContactName:     contact.ProfileName,
 		MessageType:     msg.MessageType,
 		Content:         msg.Content,
+		MediaURL:        messageMediaURL(msg),
+		MediaMimeType:   msg.MediaMimeType,
+		MediaFilename:   msg.MediaFilename,
 		WhatsAppAccount: account.Name,
 		Direction:       models.DirectionOutgoing,
 		SentByUserID:    sentByUserID,
@@ -942,6 +947,14 @@ func (a *App) SendTemplateMessage(r *fastglue.Request) error {
 	if headerMediaFilename == "" {
 		headerMediaFilename = headerFileFilename
 	}
+	if headerMediaFilename == "" && req.HeaderMediaURL != "" {
+		if mediaURL, err := url.Parse(req.HeaderMediaURL); err == nil {
+			headerMediaFilename = path.Base(mediaURL.Path)
+			if headerMediaFilename == "." || headerMediaFilename == "/" {
+				headerMediaFilename = ""
+			}
+		}
+	}
 
 	// Send using unified message sender
 	msgReq := OutgoingMessageRequest{
@@ -976,6 +989,9 @@ func (a *App) SendTemplateMessage(r *fastglue.Request) error {
 		MessageType:     message.MessageType,
 		Content:         map[string]string{"body": message.Content},
 		InteractiveData: message.InteractiveData,
+		MediaURL:        message.MediaURL,
+		MediaMimeType:   message.MediaMimeType,
+		MediaFilename:   message.MediaFilename,
 		Status:          message.Status,
 		IsReply:         message.IsReply,
 		WhatsAppAccount: message.WhatsAppAccount,

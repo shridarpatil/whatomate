@@ -108,6 +108,7 @@ Create automated responses triggered by specific keywords or phrases.
    - **Template** - Send a pre-approved template message
    - **Media** - Send image, video, or document
    - **Flow** - Trigger a conversation flow
+   - **Script** - Run a script to build the reply dynamically
    - **Transfer to Agent** - Transfer the conversation to a human agent
 
 4. **Set Priority**
@@ -146,13 +147,14 @@ Configure AI-powered responses to handle queries that don't match keywords or fl
 
 <CardGrid>
   <Card title="OpenAI" icon="setting">
-    GPT-4o, GPT-4o-mini, GPT-4-turbo
+    GPT-4o, GPT-4o-mini, GPT-4-turbo, GPT-3.5-turbo
   </Card>
   <Card title="Anthropic" icon="setting">
-    Claude 3.5 Sonnet, Claude 3.5 Haiku
+    Claude 3.5 Sonnet, Claude 3.5 Haiku, Claude 3 Opus. Models use
+    `-latest` aliases (e.g. `claude-3-5-sonnet-latest`).
   </Card>
   <Card title="Google AI" icon="setting">
-    Gemini 2.0 Flash, Gemini 1.5 Flash
+    Gemini 2.0 Flash, Gemini 2.0 Flash-Lite, Gemini 1.5 Flash, Gemini 1.5 Flash-8B
   </Card>
 </CardGrid>
 
@@ -188,18 +190,23 @@ onto the canvas, wire them together, and the runtime walks the graph
 edge-by-edge for each inbound message. Each node has a `type` (what
 it does), a `config` blob (its parameters), and outgoing edges
 labelled with the outcome they handle (`default`, `button:<id>`,
-`true`/`false`, `in_hours`/`out_of_hours`, ...).
+`input:<val>`, `true`/`false`, `in_hours`/`out_of_hours`, ...). An
+`input:<val>` edge matches when the user's free-text reply equals
+`<val>`, falling back to `default` when nothing matches.
 
 ### Node Types
 
 | Type | Purpose | Outgoing edges |
 |------|---------|----------------|
+| `start` | The flow's entry node — a no-op marker the runtime starts from. | `default` |
 | `message` | Send a templated text message and move on. | `default` |
 | `prompt` | Send a question, wait for the user's reply, optionally validate against a regex, and store the response. | `default`, `max_retries` |
 | `buttons` | Send interactive reply buttons and branch on which one the user taps. | `button:<id>` per button |
 | `api_call` | Fire an HTTP request, capture mapped fields into session data, optionally send a templated message. | `http:2xx`, `http:non2xx` |
 | `condition` | Evaluate an expression against session data and route on the result. | `true`, `false` |
 | `timing` | Route based on a per-day business-hours schedule. | `in_hours`, `out_of_hours` |
+| `set_variable` | Assign one or more templated values into session data (no message sent). | `default` |
+| `ai_response` | Call the configured LLM provider inline and send its reply. | `default` |
 | `whatsapp_flow` | Send a native WhatsApp Flow form and merge the submission into session data. | `default` |
 | `transfer` | Hand off to a team / queue and end the flow. | (terminal) |
 | `goto_flow` | Jump execution into another flow (variables carry over). | (handled internally) |
@@ -216,7 +223,7 @@ variables. Top-level identifiers refer to keys stored via
 ```text
 tier == "premium" and amount > 100
 status in ["active", "trialing"]
-phone_number startsWith "+91"
+phone_number startsWith "91"
 ```
 
 Unknown identifiers resolve to `nil`, so missing data evaluates as
@@ -239,9 +246,11 @@ the `false` edge — the webhook always succeeds, even on a typo.
 
 ### API Integration
 
-The "Fetch from API" step type allows you to call external APIs and use the response data in your messages.
+The `api_call` node lets you call external APIs and use the response data in your messages. (Use
+`webhook` instead when you don't need the response — it fires and forgets, always taking the
+`default` edge.)
 
-#### Configuring an API Step
+#### Configuring an api_call node
 
 <Steps>
 
@@ -294,26 +303,31 @@ config (URL, headers, body) — no capture step required:
 
 | Variable | Value |
 |---|---|
-| `{{phone_number}}` | The contact's WhatsApp number in E.164 format (e.g. `+919876543210`). |
-| `{{_flow_id}}` | UUID of the running flow. |
-| `{{_flow_name}}` | Human-readable name of the flow. |
+| `{{phone_number}}` | The contact's WhatsApp number, digits only with **no leading `+`** (e.g. `919876543210`). Set on every `api_call` and `webhook` node. |
+| `{{_flow_id}}` | UUID of the running flow. Seeded when a **trigger keyword** starts the flow. |
+| `{{_flow_name}}` | Human-readable name of the flow. Seeded the same way. |
+
+<Aside type="caution">
+  `_flow_id` / `_flow_name` are written into session data when a flow is started by a matched
+  trigger keyword. A flow reached another way (for example via `goto_flow`) does not re-seed them,
+  so don't rely on them identifying the *currently executing* flow after a jump.
+</Aside>
 
 Anything else has to come from somewhere — typically:
-- An earlier flow step with a `Store As` configured (user input gets saved
-  under that key for later steps).
-- A previous API step's `response_mapping` (mapped fields are persisted
+- An earlier `prompt` or `buttons` node with `store_as` configured (the user's input is saved
+  under that key for later nodes).
+- A previous `api_call` node's `response_mapping` (mapped fields are persisted
   into the session for the rest of the flow).
+- A `set_variable` node.
 
 The same built-ins are also substituted in **flow-completion webhook**
 URLs, custom bodies, and custom headers, so you can fire any of these
 at downstream systems when a flow finishes.
 
 <Aside type="note">
-  Substitution is verbatim — there's no URL-encoding pass. For
-  `{{phone_number}}` (which always starts with `+`), this is fine inside
-  URL paths but not inside query strings, where some servers parse `+`
-  as a space. Prefer `https://api.example.com/users/{{phone_number}}`
-  over `?phone={{phone_number}}` when possible.
+  Substitution is verbatim — there's no URL-encoding pass. Since phone numbers are stored without
+  a leading `+`, `{{phone_number}}` is safe in both URL paths and query strings, but any value you
+  captured from user input still needs escaping if it can contain `&`, `#`, or spaces.
 </Aside>
 
 ### Template Syntax

@@ -24,6 +24,15 @@ export interface Credentials {
 }
 
 export async function loginAs(page: Page, creds: Credentials): Promise<void> {
+  // Clear any existing session to ensure the router doesn't intercept the /login
+  // navigation and redirect us away if the browser already has an active session.
+  await page.context().clearCookies()
+  try {
+    await page.evaluate(() => window.localStorage.clear())
+  } catch {
+    // Ignore if on about:blank
+  }
+
   await page.goto('/login')
   await page.locator('input[type="email"], input[name="email"]').fill(creds.email)
   await page.locator('input[type="password"], input[name="password"]').fill(creds.password)

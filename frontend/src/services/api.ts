@@ -578,6 +578,7 @@ export interface MetaAnalyticsResponse {
   account_name: string
   data: MetaAnalyticsData | null
   template_names?: Record<string, string> // meta_template_id -> template name
+  currency?: string // ISO 4217 code the WABA is billed in, from Meta
 }
 
 export const metaAnalyticsService = {

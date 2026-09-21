@@ -1,0 +1,252 @@
+---
+title: IVR Flows
+description: Manage Interactive Voice Response flows for WhatsApp calling
+---
+
+import { Aside } from '@astrojs/starlight/components';
+
+## Overview
+
+IVR (Interactive Voice Response) flows drive incoming WhatsApp voice calls. A flow is stored per WhatsApp account as a **v2 flow graph** in the `menu` field: `{ version: 2, nodes, edges, entry_node }`. When a call connects, the calling engine walks the graph starting from `entry_node`, playing greetings, collecting DTMF digits, making HTTP callbacks, and routing callers to agent teams.
+
+<Aside type="note">
+  IVR flow endpoints require the `ivr_flows` permissions: `ivr_flows:read` to view, `ivr_flows:write` to create/update and upload audio, and `ivr_flows:delete` to delete.
+</Aside>
+
+### Flow graph structure
+
+The `menu` object is a directed graph:
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `version` | integer | Must be `2` |
+| `nodes` | array | Flow nodes (see below) |
+| `edges` | array | Connections between nodes, each `{ from, to, condition }` |
+| `entry_node` | string | ID of the node where execution begins (required when `nodes` is non-empty) |
+
+Each **node** has the shape:
+
+```json
+{
+  "id": "node-1",
+  "type": "greeting",
+  "label": "Welcome",
+  "position": { "x": 100, "y": 100 },
+  "config": { "greeting_text": "Welcome to Acme support" }
+}
+```
+
+**Node types**:
+
+| Type | Purpose |
+|------|---------|
+| `greeting` | Play an audio prompt or text-to-speech greeting |
+| `menu` | Play a prompt and collect a single DTMF digit to branch on |
+| `gather` | Collect a sequence of DTMF digits (e.g. an account number) |
+| `http_callback` | Make an HTTP request and branch on the response |
+| `transfer` | Route the call to an agent team |
+| `goto_flow` | Jump to another IVR flow (terminal) |
+| `timing` | Branch on business hours |
+| `hangup` | End the call (terminal) |
+
+**Edge conditions** select which outgoing edge is followed: `default`, `digit:N` (e.g. `digit:1`), `timeout`, `max_retries`, `http:2xx`, `http:non2xx`, `in_hours`, `out_of_hours`. Terminal nodes (`goto_flow`, `hangup`) must not have outgoing edges.
+
+<Aside type="tip">
+  If text-to-speech is configured on the server, any node with a non-empty `greeting_text` in its `config` has audio generated automatically on save, and the resulting filename is stored back in the node's `config.audio_file`. Without TTS, upload audio files and reference them instead.
+</Aside>
+
+## List IVR Flows
+
+Retrieve IVR flows for your organization, most recent first. Paginated.
+
+```bash
+GET /api/ivr-flows
+```
+
+### Query Parameters
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `account` | string | Filter by WhatsApp account name |
+| `page` | integer | Page number |
+| `limit` | integer | Results per page |
+
+### Response
+
+```json
+{
+  "status": "success",
+  "data": {
+    "ivr_flows": [
+      {
+        "id": "uuid",
+        "organization_id": "uuid",
+        "whatsapp_account": "Main Business",
+        "name": "Support IVR",
+        "description": "Main support menu",
+        "is_active": true,
+        "is_call_start": true,
+        "is_outgoing_end": false,
+        "menu": {
+          "version": 2,
+          "entry_node": "node-1",
+          "nodes": [],
+          "edges": []
+        },
+        "welcome_audio_url": "",
+        "created_by_id": "uuid",
+        "updated_by_id": "uuid",
+        "created_at": "2024-01-01T00:00:00Z",
+        "updated_at": "2024-01-01T00:00:00Z"
+      }
+    ],
+    "total": 3,
+    "page": 1,
+    "limit": 20
+  }
+}
+```
+
+## Get IVR Flow
+
+Retrieve a single IVR flow with its full graph.
+
+```bash
+GET /api/ivr-flows/{id}
+```
+
+### Response
+
+Returns a single IVR flow object (same shape as the list items above), with `created_by` and `updated_by` user objects preloaded.
+
+## Create IVR Flow
+
+Create a new IVR flow. The graph is validated and, if TTS is available, greeting audio is generated.
+
+```bash
+POST /api/ivr-flows
+```
+
+### Request Body
+
+```json
+{
+  "whatsapp_account": "Main Business",
+  "name": "Support IVR",
+  "description": "Main support menu",
+  "is_active": true,
+  "is_call_start": true,
+  "is_outgoing_end": false,
+  "welcome_audio_url": "",
+  "menu": {
+    "version": 2,
+    "entry_node": "node-1",
+    "nodes": [
+      {
+        "id": "node-1",
+        "type": "greeting",
+        "label": "Welcome",
+        "config": { "greeting_text": "Welcome to Acme support" }
+      }
+    ],
+    "edges": []
+  }
+}
+```
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `name` | string | Yes | Flow name |
+| `whatsapp_account` | string | Yes | Name of the WhatsApp account the flow belongs to |
+| `description` | string | No | Flow description |
+| `is_active` | boolean | No | Whether the flow is enabled |
+| `is_call_start` | boolean | No | Use this flow as the entry point for incoming calls on the account. Setting it unsets any other call-start flow for the same account |
+| `is_outgoing_end` | boolean | No | Run this flow at the end of outgoing calls on the account. Setting it unsets any other on the same account |
+| `menu` | object | No | The v2 flow graph. Validated for structural correctness |
+| `welcome_audio_url` | string | No | Optional welcome audio URL |
+
+<Aside type="caution">
+  If the server has no text-to-speech configured and the graph contains a node with `greeting_text`, the request is rejected — upload audio files instead.
+</Aside>
+
+### Response
+
+Returns the created IVR flow object.
+
+## Update IVR Flow
+
+Update an existing IVR flow. Supports partial updates — empty fields are not applied, so you can toggle `is_active` without resending the whole `menu`.
+
+```bash
+PUT /api/ivr-flows/{id}
+```
+
+### Request Body
+
+Accepts the same fields as [Create IVR Flow](#create-ivr-flow). The boolean toggles (`is_active`, `is_call_start`, `is_outgoing_end`) are always applied; `name`, `description`, `menu`, `welcome_audio_url`, and `whatsapp_account` are applied only when non-empty.
+
+### Response
+
+Returns the updated IVR flow object.
+
+## Delete IVR Flow
+
+Soft-delete an IVR flow.
+
+```bash
+DELETE /api/ivr-flows/{id}
+```
+
+### Response
+
+```json
+{
+  "status": "success",
+  "data": {
+    "message": "IVR flow deleted"
+  }
+}
+```
+
+## Upload IVR Audio
+
+Upload an audio file for use as an IVR greeting or prompt. The file is transcoded to OGG/Opus (48kHz mono) for WebRTC compatibility. Send as `multipart/form-data` with the file under the `file` field.
+
+```bash
+POST /api/ivr-flows/audio
+```
+
+<Aside type="note">
+  Maximum file size is 5MB. Accepted formats include OGG/Opus, MP3, AAC, M4A, WAV, WebM, and FLAC.
+</Aside>
+
+### Response
+
+```json
+{
+  "status": "success",
+  "data": {
+    "filename": "a1b2c3d4-....ogg",
+    "mime_type": "audio/mpeg",
+    "size": 204800
+  }
+}
+```
+
+Use the returned `filename` as the `audio_file` value in a node's `config`.
+
+## Serve IVR Audio
+
+Serve a previously uploaded IVR audio file. Returns the raw audio bytes with the appropriate `Content-Type`.
+
+```bash
+GET /api/ivr-flows/audio/{filename}
+```
+
+### Response
+
+The audio file body (not a JSON envelope).
+
+## See Also
+
+- [Calling](/whatomate/features/calling) - WhatsApp voice calling, the IVR flow builder, transfers, and recording

@@ -1615,14 +1615,18 @@ func (a *App) saveIncomingMessage(account *models.WhatsAppAccount, contact *mode
 
 	// Dispatch webhook for incoming message
 	a.DispatchWebhook(account.OrganizationID, models.WebhookEventMessageIncoming, MessageEventData{
-		MessageID:       message.ID.String(),
-		ContactID:       contact.ID.String(),
-		ContactPhone:    contact.PhoneNumber,
-		ContactName:     contact.ProfileName,
-		MessageType:     models.MessageType(msgType),
-		Content:         content,
-		WhatsAppAccount: account.Name,
-		Direction:       models.DirectionIncoming,
+		MessageID:        message.ID.String(),
+		ContactID:        contact.ID.String(),
+		ContactPhone:     contact.PhoneNumber,
+		ContactName:      contact.ProfileName,
+		MessageType:      models.MessageType(msgType),
+		Content:          content,
+		MediaURL:         messageMediaURL(&message),
+		MediaMimeType:    message.MediaMimeType,
+		MediaFilename:    message.MediaFilename,
+		ReplyToMessageID: replyToMessageIDString(&message),
+		WhatsAppAccount:  account.Name,
+		Direction:        models.DirectionIncoming,
 	})
 }
 
@@ -1673,4 +1677,12 @@ func (a *App) isWithinBusinessHours(businessHours models.JSONBArray) bool {
 
 	// If no matching day found, assume outside business hours
 	return false
+}
+
+// replyToMessageIDString renders a message's reply target for webhook payloads.
+func replyToMessageIDString(m *models.Message) string {
+	if m == nil || m.ReplyToMessageID == nil {
+		return ""
+	}
+	return m.ReplyToMessageID.String()
 }

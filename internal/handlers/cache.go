@@ -427,15 +427,18 @@ func (a *App) getUserPermissionsCached(userID uuid.UUID, orgIDs ...uuid.UUID) (*
 		return nil, err
 	}
 
-	// Determine which role to use
+	// Determine which role to use. For a specific org the role has to come from
+	// that org's membership row — falling back to users.role_id would carry the
+	// user's home-org role (possibly admin) into a tenant they only belong to as
+	// a plain member. The fallback survives only for the user's own org, where
+	// legacy rows may predate user_organizations.
 	var roleID *uuid.UUID
 	if orgID != uuid.Nil {
-		// Look up role from user_organizations for this specific org
 		var userOrg models.UserOrganization
-		if err := a.DB.Where("user_id = ? AND organization_id = ?", userID, orgID).First(&userOrg).Error; err == nil && userOrg.RoleID != nil {
+		if err := a.DB.Where("user_id = ? AND organization_id = ?", userID, orgID).First(&userOrg).Error; err == nil {
 			roleID = userOrg.RoleID
-		} else {
-			// Fall back to user's default role
+		}
+		if roleID == nil && orgID == user.OrganizationID {
 			roleID = user.RoleID
 		}
 	} else {
@@ -443,7 +446,18 @@ func (a *App) getUserPermissionsCached(userID uuid.UUID, orgIDs ...uuid.UUID) (*
 	}
 
 	if roleID == nil {
-		return nil, gorm.ErrRecordNotFound
+		if !user.IsSuperAdmin {
+			return nil, gorm.ErrRecordNotFound
+		}
+		// Super admin in an org they hold no membership in: the flag alone grants
+		// access (HasPermission short-circuits on it), with no role-derived perms.
+		perms := UserPermissions{IsSuperAdmin: true, Permissions: []string{}}
+		if a.Redis != nil {
+			if data, err := json.Marshal(perms); err == nil {
+				a.Redis.Set(ctx, cacheKey, data, userPermissionsCacheTTL)
+			}
+		}
+		return &perms, nil
 	}
 
 	// Fetch role and load permissions via JOIN

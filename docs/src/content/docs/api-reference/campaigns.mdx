@@ -22,9 +22,13 @@ GET /api/campaigns
 | Parameter | Type | Description |
 |-----------|------|-------------|
 | `page` | integer | Page number (default: 1) |
-| `limit` | integer | Items per page (default: 20) |
+| `limit` | integer | Page size, 1–100. Default `50`. |
 | `status` | string | Filter by status |
-| `account_id` | string | Filter by WhatsApp account |
+| `whatsapp_account` | string | Filter by WhatsApp account **name** |
+| `search` | string | Case-insensitive match on the campaign name |
+| `from` / `to` | string | `YYYY-MM-DD` range filter on `created_at` (`to` is inclusive of the whole day) |
+
+Ordered by `created_at DESC`.
 
 ### Response
 
@@ -32,11 +36,13 @@ GET /api/campaigns
 {
   "status": "success",
   "data": {
-    "items": [
+    "campaigns": [
       {
         "id": "uuid",
         "name": "Holiday Promotion",
+        "whatsapp_account": "Main Business",
         "template_id": "uuid",
+        "template_name": "holiday_offer",
         "status": "completed",
         "total_recipients": 1000,
         "sent_count": 1000,
@@ -45,15 +51,25 @@ GET /api/campaigns
         "failed_count": 50,
         "scheduled_at": "2024-01-01T10:00:00Z",
         "started_at": "2024-01-01T10:00:05Z",
-        "completed_at": "2024-01-01T10:30:00Z"
+        "completed_at": "2024-01-01T10:30:00Z",
+        "created_by_name": "Jane Admin",
+        "updated_by_name": "Jane Admin",
+        "created_at": "2024-01-01T09:00:00Z",
+        "updated_at": "2024-01-01T10:30:00Z"
       }
     ],
     "total": 25,
     "page": 1,
-    "limit": 20
+    "limit": 50
   }
 }
 ```
+
+<Aside type="note">
+  The account is referenced by **name** via `whatsapp_account` — there is no `account_id` field.
+  Campaigns that use a media header also return `header_media_id`, `header_media_filename` and
+  `header_media_mime_type`.
+</Aside>
 
 ## Get Campaign
 
@@ -73,27 +89,25 @@ GET /api/campaigns/{id}
     "name": "Holiday Promotion",
     "template_id": "uuid",
     "template_name": "holiday_offer",
-    "account_id": "uuid",
-    "status": "sending",
+    "whatsapp_account": "Main Business",
+    "status": "processing",
     "total_recipients": 1000,
     "sent_count": 450,
     "delivered_count": 400,
     "read_count": 100,
     "failed_count": 10,
-    "variable_mapping": {
-      "1": "name",
-      "2": "discount_code"
-    },
     "scheduled_at": null,
     "started_at": "2024-01-01T10:00:05Z",
-    "created_at": "2024-01-01T09:00:00Z"
+    "created_at": "2024-01-01T09:00:00Z",
+    "updated_at": "2024-01-01T10:05:00Z"
   }
 }
 ```
 
 ## Create Campaign
 
-Create a new campaign.
+Create a new campaign. Per-recipient template values are supplied when you import recipients, not
+on the campaign itself — there is no `variable_mapping` field.
 
 ```bash
 POST /api/campaigns
@@ -104,15 +118,20 @@ POST /api/campaigns
 ```json
 {
   "name": "New Year Sale",
-  "account_id": "uuid",
+  "whatsapp_account": "Main Business",
   "template_id": "uuid",
-  "variable_mapping": {
-    "1": "name",
-    "2": "discount_code"
-  },
+  "header_media_id": "",
   "scheduled_at": "2024-01-01T00:00:00Z"
 }
 ```
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `name` | string | Yes | Campaign name |
+| `whatsapp_account` | string | Yes | **Name** of the sending WhatsApp account |
+| `template_id` | uuid | Yes | Template to send |
+| `header_media_id` | string | No | Meta media ID for a media-header template — upload it first with `POST /api/campaigns/{id}/media` |
+| `scheduled_at` | string | No | ISO-8601 time to start the campaign |
 
 ### Response
 
@@ -188,28 +207,79 @@ entirely for templates without a header variable.
 {
   "status": "success",
   "data": {
-    "imported": 2,
-    "duplicates": 0,
-    "invalid": 0
+    "message": "Recipients added successfully",
+    "added_count": 2,
+    "total_recipients": 1002
   }
 }
 ```
 
+`added_count` is the number of recipients in this request; `total_recipients` is the campaign's new
+total.
+
 ## Get Recipients
 
-Get campaign recipients with their delivery status.
+Get all recipients of a campaign with their per-recipient delivery status. This
+endpoint returns the **full** recipient list for the campaign — it is not
+paginated.
 
 ```bash
 GET /api/campaigns/{id}/recipients
 ```
 
-### Query Parameters
+### Response
 
-| Parameter | Type | Description |
-|-----------|------|-------------|
-| `page` | integer | Page number |
-| `limit` | integer | Items per page |
-| `status` | string | Filter by status |
+The `recipients` array holds every recipient; `total` is the count.
+
+```json
+{
+  "status": "success",
+  "data": {
+    "recipients": [
+      {
+        "id": "uuid",
+        "campaign_id": "uuid",
+        "phone_number": "1234567890",
+        "recipient_name": "John Doe",
+        "status": "delivered",
+        "template_params": { "customer_name": "John", "coupon": "SAVE20" },
+        "header_params": { "season": "Summer" },
+        "whatsapp_message_id": "wamid.xxx",
+        "error_message": "",
+        "sent_at": "2024-01-01T10:00:10Z",
+        "delivered_at": "2024-01-01T10:00:15Z",
+        "read_at": "2024-01-01T10:05:00Z"
+      }
+    ],
+    "total": 1000
+  }
+}
+```
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `phone_number` | string | Recipient phone number |
+| `recipient_name` | string | Recipient display name |
+| `status` | string | `pending`, `sent`, `delivered`, `read`, or `failed` |
+| `template_params` | object | Body parameter values used for this recipient |
+| `header_params` | object | TEXT-header parameter values (if any) |
+| `whatsapp_message_id` | string | Meta message ID once sent |
+| `error_message` | string | Failure reason when `status` is `failed` |
+| `sent_at` / `delivered_at` / `read_at` | string | Delivery timestamps (null until reached) |
+
+<Aside type="note">
+  When phone-number masking is enabled for the organization, `phone_number` and
+  any phone-like `recipient_name` values are masked in the response.
+</Aside>
+
+## Delete Recipient
+
+Remove a single recipient from a campaign. Only allowed while the campaign is in
+`draft` status.
+
+```bash
+DELETE /api/campaigns/{id}/recipients/{recipientId}
+```
 
 ### Response
 
@@ -217,21 +287,51 @@ GET /api/campaigns/{id}/recipients
 {
   "status": "success",
   "data": {
-    "items": [
-      {
-        "id": "uuid",
-        "phone_number": "+1234567890",
-        "name": "John Doe",
-        "status": "delivered",
-        "sent_at": "2024-01-01T10:00:10Z",
-        "delivered_at": "2024-01-01T10:00:15Z"
-      }
-    ],
-    "total": 1000,
-    "page": 1,
-    "limit": 50
+    "message": "Recipient deleted successfully"
   }
 }
+```
+
+## Upload Campaign Media
+
+Upload the media asset for a campaign whose template has a media header (image,
+video, or document). Allowed only for `draft` campaigns whose template has a
+non-TEXT header. The file is uploaded to WhatsApp and stored locally for preview.
+
+```bash
+POST /api/campaigns/{id}/media
+```
+
+Send the request as `multipart/form-data` with a `file` field (max 16 MB).
+
+```bash
+curl -X POST "http://your-server:8080/api/campaigns/{id}/media" \
+  -H "X-API-Key: whm_your_api_key" \
+  -F "file=@banner.jpg"
+```
+
+### Response
+
+```json
+{
+  "status": "success",
+  "data": {
+    "media_id": "meta-media-id",
+    "filename": "banner.jpg",
+    "mime_type": "image/jpeg",
+    "local_path": "campaigns/uuid.jpg",
+    "message": "Media uploaded successfully"
+  }
+}
+```
+
+## Get Campaign Media
+
+Serve the previously uploaded campaign media file (used for previews). Returns
+the raw media bytes, not a JSON envelope.
+
+```bash
+GET /api/campaigns/{id}/media
 ```
 
 ## Campaign Actions
@@ -260,27 +360,59 @@ Cancel a campaign (cannot be resumed).
 POST /api/campaigns/{id}/cancel
 ```
 
+### Retry Failed
+
+Re-queue every recipient whose delivery `failed`. Allowed only on `completed`,
+`paused`, or `failed` campaigns. Failed recipients are reset to `pending`, the
+campaign moves back to `processing`, and the messages are re-enqueued.
+
+```bash
+POST /api/campaigns/{id}/retry-failed
+```
+
+#### Response
+
+```json
+{
+  "status": "success",
+  "data": {
+    "message": "Retrying failed messages",
+    "retry_count": 12,
+    "status": "processing"
+  }
+}
+```
+
+### Get Progress
+
+Fetch live progress for a campaign. This returns the same payload as
+[Get Campaign](#get-campaign) (status plus sent/delivered/read/failed counts) and
+is convenient for polling while a campaign is sending.
+
+```bash
+GET /api/campaigns/{id}/progress
+```
+
 ## Campaign Status
 
 | Status | Description |
 |--------|-------------|
 | `draft` | Campaign created, not yet started |
 | `scheduled` | Campaign scheduled for future sending |
-| `sending` | Campaign is actively sending messages |
+| `queued` | Recipients have been pushed onto the Redis job queue |
+| `processing` | Workers are actively sending messages |
 | `paused` | Campaign is paused |
 | `completed` | All messages have been processed |
 | `cancelled` | Campaign was cancelled |
+| `failed` | The campaign could not be processed |
 
-## Rate Limiting
+## Throughput
 
-Campaigns automatically respect WhatsApp's rate limits:
-
-| Tier | Messages per second |
-|------|---------------------|
-| TIER_1K | ~10 msg/sec |
-| TIER_10K | ~30 msg/sec |
-| TIER_100K | ~80 msg/sec |
-| TIER_UNLIMITED | No limit |
+Sends are dispatched through a Redis Streams job queue and consumed by worker processes. Throughput
+is governed by how many workers you run (`-workers=N` on `server` or `worker`), not by a built-in
+per-second throttle — Whatomate does **not** shape traffic to your Meta messaging tier. If you
+exceed your tier, Meta rejects the sends and the affected recipients are marked `failed`; use
+[Retry Failed](#retry-failed) once your limits allow.
 
 <Aside type="tip">
   Start with smaller campaigns to warm up your account and improve your messaging tier.
