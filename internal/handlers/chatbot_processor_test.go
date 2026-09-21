@@ -682,6 +682,86 @@ func TestProcessTemplateSessionData_MissingVariable(t *testing.T) {
 }
 
 // =============================================================================
+// sendOutOfHoursMessage
+// =============================================================================
+
+func outOfHoursTestSettings(notice string) *models.ChatbotSettings {
+	settings := &models.ChatbotSettings{SessionTimeoutMins: 30}
+	settings.BusinessHours.Enabled = true
+	settings.BusinessHours.OutOfHoursMessage = notice
+	return settings
+}
+
+// TestSendOutOfHoursMessage_OncePerConversation covers an impatient customer
+// sending several messages after closing time: they should be told once, not
+// once per message.
+func TestSendOutOfHoursMessage_OncePerConversation(t *testing.T) {
+	app := newProcessorTestApp(t)
+	org, account := createProcessorTestOrg(t, app)
+	contact := testutil.CreateTestContact(t, app.DB, org.ID)
+	settings := outOfHoursTestSettings("We are closed. Try our assistant meanwhile.")
+
+	app.sendOutOfHoursMessage(account, contact, settings)
+	app.sendOutOfHoursMessage(account, contact, settings)
+	app.sendOutOfHoursMessage(account, contact, settings)
+
+	var sent int64
+	require.NoError(t, app.DB.Model(&models.Message{}).
+		Where("contact_id = ? AND direction = ?", contact.ID, models.DirectionOutgoing).
+		Count(&sent).Error)
+	assert.Equal(t, int64(1), sent, "out-of-hours notice must not repeat on every inbound message")
+
+	var reloaded models.Contact
+	require.NoError(t, app.DB.First(&reloaded, contact.ID).Error)
+	require.NotNil(t, reloaded.OutOfHoursNotifiedAt, "sending must record when the notice went out")
+}
+
+// TestSendOutOfHoursMessage_ResendsAfterWindow checks the other side of the
+// guard: a contact coming back after a real gap is notified again rather than
+// being silenced forever.
+func TestSendOutOfHoursMessage_ResendsAfterWindow(t *testing.T) {
+	app := newProcessorTestApp(t)
+	org, account := createProcessorTestOrg(t, app)
+	contact := testutil.CreateTestContact(t, app.DB, org.ID)
+	settings := outOfHoursTestSettings("We are closed. Try our assistant meanwhile.")
+
+	app.sendOutOfHoursMessage(account, contact, settings)
+
+	// Backdate the notification well beyond SessionTimeoutMins.
+	past := time.Now().Add(-2 * time.Hour)
+	require.NoError(t, app.DB.Model(contact).Update("out_of_hours_notified_at", past).Error)
+	contact.OutOfHoursNotifiedAt = &past
+
+	app.sendOutOfHoursMessage(account, contact, settings)
+
+	var sent int64
+	require.NoError(t, app.DB.Model(&models.Message{}).
+		Where("contact_id = ? AND direction = ?", contact.ID, models.DirectionOutgoing).
+		Count(&sent).Error)
+	assert.Equal(t, int64(2), sent, "a contact returning after the session window should be notified again")
+}
+
+// TestSendOutOfHoursMessage_NoMessageConfigured guards the no-op path: with no
+// notice configured nothing is sent and nothing is recorded.
+func TestSendOutOfHoursMessage_NoMessageConfigured(t *testing.T) {
+	app := newProcessorTestApp(t)
+	org, account := createProcessorTestOrg(t, app)
+	contact := testutil.CreateTestContact(t, app.DB, org.ID)
+
+	app.sendOutOfHoursMessage(account, contact, outOfHoursTestSettings(""))
+
+	var sent int64
+	require.NoError(t, app.DB.Model(&models.Message{}).
+		Where("contact_id = ? AND direction = ?", contact.ID, models.DirectionOutgoing).
+		Count(&sent).Error)
+	assert.Zero(t, sent)
+
+	var reloaded models.Contact
+	require.NoError(t, app.DB.First(&reloaded, contact.ID).Error)
+	assert.Nil(t, reloaded.OutOfHoursNotifiedAt)
+}
+
+// =============================================================================
 // logSessionMessage
 // =============================================================================
 
