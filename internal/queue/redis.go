@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"strings"
 	"time"
 
 	"github.com/redis/go-redis/v9"
@@ -126,15 +127,21 @@ func NewRedisConsumer(client *redis.Client, log logf.Logger) (*RedisConsumer, er
 		consumerID: consumerID,
 	}
 
-	// Create consumer group if it doesn't exist
-	ctx := context.Background()
-	err := client.XGroupCreateMkStream(ctx, StreamName, ConsumerGroup, "0").Err()
-	if err != nil && err.Error() != "BUSYGROUP Consumer Group name already exists" {
+	if err := ensureGroup(context.Background(), client); err != nil {
 		return nil, fmt.Errorf("failed to create consumer group: %w", err)
 	}
 
 	log.Info("Redis consumer initialized", "consumer_id", consumerID)
 	return consumer, nil
+}
+
+// ensureGroup creates the stream and consumer group if missing; a no-op if they exist.
+func ensureGroup(ctx context.Context, client *redis.Client) error {
+	err := client.XGroupCreateMkStream(ctx, StreamName, ConsumerGroup, "0").Err()
+	if err != nil && !strings.HasPrefix(err.Error(), "BUSYGROUP") {
+		return err
+	}
+	return nil
 }
 
 // Consume starts consuming jobs from the queue
@@ -170,6 +177,15 @@ func (c *RedisConsumer) Consume(ctx context.Context, handler JobHandler) error {
 			}
 			if ctx.Err() != nil {
 				return ctx.Err()
+			}
+			// Redis lost the group (restart without persistence, FLUSHALL, eviction): recreate it.
+			if strings.HasPrefix(err.Error(), "NOGROUP") {
+				c.log.Warn("Consumer group missing, recreating", "stream", StreamName, "group", ConsumerGroup)
+				gerr := ensureGroup(ctx, c.client)
+				if gerr == nil {
+					continue
+				}
+				err = gerr
 			}
 			c.log.Error("Failed to read from stream", "error", err)
 			time.Sleep(time.Second) // Back off on error
