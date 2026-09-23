@@ -2521,6 +2521,7 @@
     "mute": "Mute",
     "unmute": "Unmute",
     "callConnected": "Call connected",
+    "connecting": "Connecting",
     "callEnded": "Call ended",
     "incomingTransfer": "Incoming call transfer",
     "acceptFailed": "Failed to accept transfer",

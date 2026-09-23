@@ -2219,6 +2219,7 @@
     "mute": "Silenciar",
     "unmute": "Activar sonido",
     "callConnected": "Llamada conectada",
+    "connecting": "Conectando",
     "callEnded": "Llamada finalizada",
     "incomingTransfer": "Transferencia de llamada entrante",
     "acceptFailed": "Error al aceptar la transferencia",

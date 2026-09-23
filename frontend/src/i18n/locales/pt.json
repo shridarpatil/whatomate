@@ -2520,6 +2520,7 @@
     "mute": "Silenciar",
     "unmute": "Ativar som",
     "callConnected": "Chamada conectada",
+    "connecting": "Conectando",
     "callEnded": "Chamada encerrada",
     "incomingTransfer": "Transferência de chamada recebida",
     "acceptFailed": "Falha ao aceitar a transferência",

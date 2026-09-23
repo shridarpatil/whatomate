@@ -2215,6 +2215,7 @@
     "mute": "Mute",
     "unmute": "Unmute",
     "callConnected": "जुड़ा",
+    "connecting": "कनेक्ट हो रहा है",
     "callEnded": "समाप्त",
     "incomingTransfer": "स्थानांतरण",
     "acceptFailed": "विफल",

@@ -2250,6 +2250,7 @@
     "mute": "كتم",
     "unmute": "إلغاء الكتم",
     "callConnected": "تم اتصال المكالمة",
+    "connecting": "جارٍ الاتصال",
     "callEnded": "انتهت المكالمة",
     "incomingTransfer": "تحويل مكالمة واردة",
     "acceptFailed": "فشل قبول التحويل",
