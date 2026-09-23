@@ -200,6 +200,28 @@ export class ChatPage extends BasePage {
     await this.sendMessage(replyText)
   }
 
+  // Contact options (three-dot) menu helpers
+  get contactOptionsButton(): Locator {
+    return this.page.locator('#contact-options-button')
+  }
+
+  get contactOptionsMenu(): Locator {
+    return this.page.getByRole('menu')
+  }
+
+  async openContactOptions() {
+    await this.contactOptionsButton.click()
+    await this.contactOptionsMenu.waitFor({ state: 'visible' })
+  }
+
+  get deleteChatMenuItem(): Locator {
+    return this.contactOptionsMenu.getByRole('menuitem', { name: 'Delete chat' })
+  }
+
+  get deleteChatDialog(): Locator {
+    return this.page.getByRole('alertdialog')
+  }
+
   // Notes panel helpers
   get notesButton(): Locator {
     return this.page.locator('#notes-button')
