@@ -32,7 +32,7 @@ build-prod: frontend-build embed-frontend
 embed-frontend:
 	@echo "Copying frontend build to embed directory..."
 	@rm -rf internal/frontend/dist/*
-	@cp -r frontend/dist/* internal/frontend/dist/
+	@cp -a frontend/dist/. internal/frontend/dist/
 	@echo "Frontend embedded successfully"
 
 # Run the backend locally
