@@ -703,12 +703,16 @@ func (m *Manager) completeTransferConnection(session *CallSession, transferID, a
 func (m *Manager) EndTransfer(transferID uuid.UUID) {
 	session := m.findSessionByTransferID(transferID)
 	if session == nil {
+		m.log.Warn("EndTransfer: no live session for transfer, nothing to tear down",
+			"transfer_id", transferID)
 		return
 	}
 
 	session.mu.Lock()
 	if session.TransferStatus == models.CallTransferStatusCompleted {
 		session.mu.Unlock()
+		m.log.Info("EndTransfer: transfer already completed, skipping",
+			"transfer_id", transferID, "call_id", session.ID)
 		return
 	}
 	session.TransferStatus = models.CallTransferStatusCompleted

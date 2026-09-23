@@ -57,6 +57,7 @@ func (m *Manager) InitiateOutgoingCall(
 	session := &CallSession{
 		OrganizationID: orgID,
 		AccountName:    accountName,
+		WAAccount:      waAccount,
 		CallerPhone:    contactPhone,
 		ContactID:      contactID,
 		CallLogID:      callLog.ID,
