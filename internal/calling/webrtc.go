@@ -189,6 +189,16 @@ func (m *Manager) negotiateWebRTC(session *CallSession, account *models.WhatsApp
 	}
 }
 
+// peerGone reports whether a peer connection state means the far end is no
+// longer on the call. Closed belongs here: a browser hanging up sends a DTLS
+// CloseNotify and Pion closes the PeerConnection itself, so a clean hangup
+// surfaces as Closed rather than Disconnected or Failed.
+func peerGone(state webrtc.PeerConnectionState) bool {
+	return state == webrtc.PeerConnectionStateFailed ||
+		state == webrtc.PeerConnectionStateDisconnected ||
+		state == webrtc.PeerConnectionStateClosed
+}
+
 // waitForICEGathering waits for ICE gathering to complete on a PeerConnection
 // and returns the local description, or an error on timeout.
 func waitForICEGathering(pc *webrtc.PeerConnection, timeout time.Duration) (*webrtc.SessionDescription, error) {
