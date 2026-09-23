@@ -47,6 +47,8 @@ type = "local"  # local, s3
 local_path = "./uploads"
 s3_bucket = ""
 s3_region = ""
+# Leave s3_key/s3_secret empty to use the AWS default credential chain
+# (env vars, shared config, EKS IRSA, ECS task role, EC2 instance profile).
 s3_key = ""
 s3_secret = ""
 
