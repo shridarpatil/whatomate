@@ -385,7 +385,12 @@
     "urlButtonParamPlaceholder": "गतिशील URL मान दर्ज करें",
     "preview": "पूर्वावलोकन",
     "serviceWindowExpired": "24-घंटे की संदेश सेवा विंडो समाप्त हो गई है। ग्राहक के जवाब देने तक केवल टेम्पलेट संदेश भेजे जा सकते हैं।",
-    "sendTemplateAction": "टेम्पलेट भेजें"
+    "sendTemplateAction": "टेम्पलेट भेजें",
+    "forward": "Forward",
+    "forwardTo": "Forward to...",
+    "forwardDesc": "Send this message to another contact",
+    "forwarded": "Message forwarded",
+    "forwardFailed": "Failed to forward message"
   },
   "contacts": {
     "title": "संपर्क",
