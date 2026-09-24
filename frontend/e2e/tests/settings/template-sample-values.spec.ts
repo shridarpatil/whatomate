@@ -130,20 +130,20 @@ test.describe('Template Preview with Sample Values', () => {
       name: `tpl_sample_${Date.now()}`,
       body_content: 'Hello {{1}}, welcome',
       whatsapp_account: accountName,
+      sample_values: [{ component: 'body', index: 1, param_name: '1', value: 'Ada' }],
     })
 
     await loginAsAdmin(page)
     await page.goto(`/templates/${tpl.id}`)
     await page.waitForLoadState('domcontentloaded')
 
-    const previewBtn = page.getByRole('button', { name: /Preview/i })
-    await expect(previewBtn).toBeVisible({ timeout: 10000 })
-    await previewBtn.click()
-
-    const dialog = page.locator('[role="alertdialog"]')
-    await expect(dialog).toBeVisible({ timeout: 5000 })
-    await expect(dialog.getByText('Template Preview')).toBeVisible()
-
-    await dialog.getByRole('button', { name: /Close/i }).click()
+    // The preview renders live in the sidebar and substitutes the sample value
+    // into the variable, so {{1}} is replaced by Ada rather than shown raw.
+    await expect(page.getByText('Live Preview')).toBeVisible({ timeout: 10000 })
+    const preview = page.getByText(/Hello Ada, welcome/).first()
+    await expect(preview).toBeVisible()
+    // Scoped to the preview node: the editor's body textarea sits alongside the
+    // preview now, so {{1}} legitimately appears elsewhere on the page.
+    await expect(preview).not.toContainText('{{1}}')
   })
 })

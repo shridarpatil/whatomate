@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed, onMounted, watch, nextTick } from 'vue'
+import { ref, computed, onMounted, onBeforeUnmount, watch, nextTick } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { useAuthStore } from '@/stores/auth'
@@ -10,19 +10,11 @@ import DetailPageLayout from '@/components/shared/DetailPageLayout.vue'
 import MetadataPanel from '@/components/shared/MetadataPanel.vue'
 import AuditLogPanel from '@/components/shared/AuditLogPanel.vue'
 import UnsavedChangesDialog from '@/components/shared/UnsavedChangesDialog.vue'
+import TemplateEditor from './TemplateEditor.vue'
+import TemplatePreview from './TemplatePreview.vue'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
-import { Label } from '@/components/ui/label'
-import { Textarea } from '@/components/ui/textarea'
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select'
 import {
   AlertDialog,
   AlertDialogAction,
@@ -33,22 +25,10 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog'
-import {
-  FileText,
-  Trash2,
-  Save,
-  Upload,
-  Loader2,
-  Check,
-  Eye,
-  Send,
-  Plus,
-  X,
-  ChevronDown,
-  Info,
-} from 'lucide-vue-next'
+import { FileText, Trash2, Save, Loader2, Send, Info, Code, Copy } from 'lucide-vue-next'
 import { getErrorMessage } from '@/lib/api-utils'
 import { getQualityBadgeClass, getQualityRatingLabel } from '@/lib/utils'
+import { validateButtonCombination, isDynamicUrl, urlBase } from '@/lib/templateButtons'
 
 interface WhatsAppAccount {
   id: string
@@ -85,12 +65,6 @@ const router = useRouter()
 const { t } = useI18n()
 const authStore = useAuthStore()
 
-const bodyHint = 'Use {{1}}, {{2}} for positional or {{name}}, {{email}} for named parameters.'
-const mixedVariablesHint = 'Cannot mix positional ({{1}}, {{2}}) and named ({{name}}) variables. Use one type only.'
-const duplicateVariablesHint = 'Duplicate variables found. Each variable should appear only once in the template.'
-const variablePositionHint = 'Variables cannot be at the very start or end of the template body.'
-const headerTooManyVariablesHint = 'Meta allows at most one variable in a TEXT header.'
-
 const templateId = computed(() => route.params.id as string)
 const isNew = computed(() => templateId.value === 'new')
 const isAuthentication = computed(() => form.value.category === 'AUTHENTICATION')
@@ -102,43 +76,6 @@ const authOtpType = computed(() => {
   return otpBtn?.otp_type || 'COPY_CODE'
 })
 
-const zeroTapAccepted = ref(false)
-
-function setAuthOtpType(type: string | number | bigint | Record<string, any> | null) {
-  if (!type || typeof type !== 'string') return
-  zeroTapAccepted.value = false
-  const existing = form.value.buttons.find((b: any) => b.type === 'OTP')
-  if (existing) {
-    existing.otp_type = type
-    if (type === 'ONE_TAP' || type === 'ZERO_TAP') {
-      if (!existing.supported_apps?.length) {
-        existing.supported_apps = [{ package_name: '', signature_hash: '' }]
-      }
-    }
-  } else {
-    const btn: any = { type: 'OTP', text: 'Copy code', otp_type: type }
-    if (type === 'ONE_TAP' || type === 'ZERO_TAP') {
-      btn.supported_apps = [{ package_name: '', signature_hash: '' }]
-    }
-    form.value.buttons = [btn]
-  }
-}
-
-function addSupportedApp() {
-  const otpBtn = form.value.buttons.find((b: any) => b.type === 'OTP')
-  if (otpBtn && (!otpBtn.supported_apps || otpBtn.supported_apps.length < 5)) {
-    if (!otpBtn.supported_apps) otpBtn.supported_apps = []
-    otpBtn.supported_apps.push({ package_name: '', signature_hash: '' })
-  }
-}
-
-function removeSupportedApp(index: number) {
-  const otpBtn = form.value.buttons.find((b: any) => b.type === 'OTP')
-  if (otpBtn?.supported_apps?.length > 1) {
-    otpBtn.supported_apps.splice(index, 1)
-  }
-}
-
 const template = ref<Template | null>(null)
 const accounts = ref<WhatsAppAccount[]>([])
 const isLoading = ref(true)
@@ -148,17 +85,26 @@ const hasChanges = ref(false)
 const auditRefreshKey = ref(0)
 const deleteDialogOpen = ref(false)
 const publishDialogOpen = ref(false)
+const jsonDialogOpen = ref(false)
 const isPublishing = ref(false)
-const isPreviewOpen = ref(false)
-const isDetailsOpen = ref(true)
 
-// Header media upload state
-const headerMediaFile = ref<File | null>(null)
-const headerMediaUploading = ref(false)
-const headerMediaHandle = ref('')
-const headerMediaFilename = ref('')
+// Picked in the editor, uploaded to Meta only when the template is saved.
+// Previewed from a local object URL, so choosing a file costs no API call.
+const pendingMediaFile = ref<File | null>(null)
+const mediaPreviewUrl = ref('')
 
-// WhatsApp Flows for FLOW button type
+watch(pendingMediaFile, (file) => {
+  if (mediaPreviewUrl.value) URL.revokeObjectURL(mediaPreviewUrl.value)
+  mediaPreviewUrl.value = file ? URL.createObjectURL(file) : ''
+})
+
+onBeforeUnmount(() => {
+  if (mediaPreviewUrl.value) URL.revokeObjectURL(mediaPreviewUrl.value)
+})
+
+type HeaderType = 'NONE' | 'TEXT' | 'IMAGE' | 'VIDEO' | 'DOCUMENT'
+const previewHeaderType = computed(() => (form.value.header_type || 'NONE') as HeaderType)
+
 const whatsappFlows = ref<any[]>([])
 
 const { showLeaveDialog, confirmLeave, cancelLeave } = useUnsavedChangesGuard(hasChanges)
@@ -188,6 +134,8 @@ const form = ref({
   sample_values: [] as any[],
   add_security_recommendation: false,
   code_expiration_minutes: 0,
+  // UI-only: gates saving a ZERO_TAP template. Not sent to the API.
+  zero_tap_accepted: false,
 })
 
 // Detect variables in body and header content
@@ -202,11 +150,24 @@ const headerVariables = computed(() => {
   return matches.map(m => m.replace(/\{\{|\}\}/g, '').trim())
 })
 
+// index must match TemplateEditor.sampleIndexFor(): positional vars carry their
+// index in the name, named vars take their slot. Diverging here would make the
+// prune below delete samples the editor has just written.
+const varIndex = (name: string, slot: number) =>
+  /^\d+$/.test(name) ? parseInt(name, 10) : slot + 1
+
 const allVariables = computed(() => {
-  const vars: { component: string; name: string; label: string; index: number }[] = []
-  const wrap = (v: string) => '\u007B\u007B' + v + '\u007D\u007D'
-  headerVariables.value.forEach((v, i) => vars.push({ component: 'header', name: v, label: wrap(v), index: i + 1 }))
-  bodyVariables.value.forEach((v, i) => vars.push({ component: 'body', name: v, label: wrap(v), index: i + 1 }))
+  const vars: { component: string; name: string; index: number }[] = []
+  const collect = (component: string, names: string[]) => {
+    const seen = new Set<string>()
+    names.forEach(name => {
+      if (seen.has(name)) return
+      seen.add(name)
+      vars.push({ component, name, index: varIndex(name, seen.size - 1) })
+    })
+  }
+  collect('header', headerVariables.value)
+  collect('body', bodyVariables.value)
   return vars
 })
 
@@ -242,131 +203,90 @@ const hasTooManyHeaderVariables = computed(() => {
   return new Set(headerVariables.value).size > 1
 })
 
-// Build sample_values array from form inputs
-function getSampleValueForVar(component: string, index: number): string {
-  const sv = form.value.sample_values.find(
-    (s: any) => s.component === component && s.index === index
-  )
-  return sv?.value || ''
-}
-
-function setSampleValueForVar(component: string, index: number, value: string) {
-  const existing = form.value.sample_values.findIndex(
-    (s: any) => s.component === component && s.index === index
-  )
-  if (existing >= 0) {
-    form.value.sample_values[existing].value = value
-  } else {
-    form.value.sample_values.push({ component, index, value })
+// Meta requires positional variables to run 1, 2, 3… with no gaps.
+const firstSequenceGap = computed(() => {
+  const nums = bodyVariables.value
+    .filter(v => /^\d+$/.test(v))
+    .map(Number)
+    .sort((a, b) => a - b)
+  const unique = [...new Set(nums)]
+  for (let i = 0; i < unique.length; i++) {
+    if (unique[i] !== i + 1) return { expected: i + 1, found: unique[i] }
   }
-}
+  return null
+})
 
-// Sync sample_values when variables change — remove stale entries
-watch(allVariables, (vars) => {
-  form.value.sample_values = form.value.sample_values.filter((sv: any) =>
-    vars.some(v => v.component === sv.component && v.index === sv.index)
+// Meta rejects a template whose variables have no example values.
+const missingSamples = computed(() =>
+  allVariables.value
+    .filter(v => !form.value.sample_values.some(
+      (s: any) => s.component === v.component && s.index === v.index && String(s.value || '').trim()
+    ))
+    .map(v => `{{${v.name}}}`)
+)
+
+// Meta's character limits. The API does not enforce them, so an over-length
+// template would otherwise only be rejected once it reached Meta.
+const LIMITS = { header: 60, body: 1024, footer: 60, buttonText: 25 }
+
+const firstLengthError = computed(() => {
+  const over = (field: string, value: string, max: number) =>
+    (value || '').length > max ? `${field} must be ${max} characters or fewer.` : ''
+
+  if (form.value.header_type === 'TEXT') {
+    const err = over('Header', form.value.header_content, LIMITS.header)
+    if (err) return err
+  }
+  return (
+    over('Body', form.value.body_content, LIMITS.body) ||
+    over('Footer', form.value.footer_content, LIMITS.footer)
   )
 })
 
-const buttonTypes = [
-  { value: 'QUICK_REPLY', label: 'Quick Reply' },
-  { value: 'URL', label: 'URL' },
-  { value: 'PHONE_NUMBER', label: 'Phone Number' },
-  { value: 'COPY_CODE', label: 'Copy Code' },
-  { value: 'FLOW', label: 'Flow' },
-  { value: 'VOICE_CALL', label: 'Call on WhatsApp' },
-  { value: 'OTP', label: 'OTP' },
-]
-
-function addButton() {
-  if (form.value.buttons.length >= 3) {
-    toast.error(t('templates.maxButtons', 'Maximum 3 buttons allowed'))
-    return
+const firstButtonError = computed(() => {
+  for (const btn of form.value.buttons as any[]) {
+    if (btn.type === 'OTP') continue
+    const text = String(btn.text || '').trim()
+    if (!text) return 'Every button needs a label.'
+    if (text.length > LIMITS.buttonText) return `Button labels must be ${LIMITS.buttonText} characters or fewer.`
+    if (btn.type === 'URL') {
+      const url = String(btn.url || '').trim()
+      if (!url || !urlBase(url)) return 'Website URL buttons need a URL.'
+      if (isDynamicUrl(url) && !String(btn.example || '').trim()) return 'A dynamic URL button needs an example value.'
+    }
+    if (btn.type === 'PHONE_NUMBER') {
+      const phone = String(btn.phone_number || '').trim()
+      if (!phone) return 'Phone buttons need a number.'
+      if (!/^\+?[0-9]{7,15}$/.test(phone)) return 'Enter the phone number in international format, e.g. +14155551234.'
+    }
+    if (btn.type === 'FLOW' && !String(btn.flow_id || '').trim()) return 'Flow buttons need a Flow selected.'
   }
-  form.value.buttons.push({ type: 'QUICK_REPLY', text: '' })
-}
+  return ''
+})
 
-function removeButton(index: number) {
-  form.value.buttons.splice(index, 1)
-}
+// Build sample_values array from form inputs
+// Sync sample_values when variables change — remove stale entries
+watch(allVariables, (vars) => {
+  form.value.sample_values = form.value.sample_values.flatMap((sv: any) => {
+    const match = vars.find(v => v.component === sv.component
+      && (sv.param_name ? v.name === sv.param_name : v.index === sv.index))
+    return match ? [{ ...sv, index: match.index }] : []
+  })
+})
+
+const statusVariant = computed(() => {
+  switch (template.value?.status?.toUpperCase()) {
+    case 'APPROVED': return 'default' as const
+    case 'REJECTED': return 'destructive' as const
+    case 'PAUSED': return 'outline' as const
+    default: return 'secondary' as const
+  }
+})
 
 const breadcrumbs = computed(() => [
   { label: t('nav.templates', 'Templates'), href: '/templates' },
   { label: isNew.value ? t('templates.newTemplate', 'New Template') : (template.value?.display_name || template.value?.name || '') },
 ])
-
-const languages = [
-  { code: 'en', name: 'English' },
-  { code: 'en_GB', name: 'English (UK)' },
-  { code: 'en_US', name: 'English (US)' },
-  { code: 'es', name: 'Spanish' },
-  { code: 'es_AR', name: 'Spanish (ARG)' },
-  { code: 'es_MX', name: 'Spanish (MEX)' },
-  { code: 'pt_BR', name: 'Portuguese (BR)' },
-  { code: 'pt_PT', name: 'Portuguese (POR)' },
-  { code: 'hi', name: 'Hindi' },
-  { code: 'ta', name: 'Tamil' },
-  { code: 'te', name: 'Telugu' },
-  { code: 'kn', name: 'Kannada' },
-  { code: 'ml', name: 'Malayalam' },
-  { code: 'mr', name: 'Marathi' },
-  { code: 'gu', name: 'Gujarati' },
-  { code: 'bn', name: 'Bengali' },
-  { code: 'pa', name: 'Punjabi' },
-  { code: 'ur', name: 'Urdu' },
-  { code: 'ar', name: 'Arabic' },
-  { code: 'fr', name: 'French' },
-  { code: 'de', name: 'German' },
-  { code: 'it', name: 'Italian' },
-  { code: 'nl', name: 'Dutch' },
-  { code: 'ja', name: 'Japanese' },
-  { code: 'ko', name: 'Korean' },
-  { code: 'zh_CN', name: 'Chinese (CHN)' },
-  { code: 'zh_HK', name: 'Chinese (HKG)' },
-  { code: 'zh_TW', name: 'Chinese (TAI)' },
-  { code: 'ru', name: 'Russian' },
-  { code: 'tr', name: 'Turkish' },
-  { code: 'id', name: 'Indonesian' },
-  { code: 'ms', name: 'Malay' },
-  { code: 'th', name: 'Thai' },
-  { code: 'vi', name: 'Vietnamese' },
-  { code: 'sw', name: 'Swahili' },
-  { code: 'fil', name: 'Filipino' },
-  { code: 'pl', name: 'Polish' },
-  { code: 'uk', name: 'Ukrainian' },
-  { code: 'ro', name: 'Romanian' },
-  { code: 'sv', name: 'Swedish' },
-  { code: 'da', name: 'Danish' },
-  { code: 'fi', name: 'Finnish' },
-  { code: 'he', name: 'Hebrew' },
-  { code: 'fa', name: 'Persian' },
-  { code: 'af', name: 'Afrikaans' },
-  { code: 'zu', name: 'Zulu' },
-]
-
-const categories = [
-  { value: 'MARKETING', label: 'Marketing' },
-  { value: 'UTILITY', label: 'Utility' },
-  { value: 'AUTHENTICATION', label: 'Authentication' },
-]
-
-const headerTypes = [
-  { value: 'NONE', label: 'None' },
-  { value: 'TEXT', label: 'Text' },
-  { value: 'IMAGE', label: 'Image' },
-  { value: 'VIDEO', label: 'Video' },
-  { value: 'DOCUMENT', label: 'Document' },
-]
-
-const statusVariant = computed(() => {
-  if (!template.value) return 'secondary' as const
-  switch (template.value.status?.toUpperCase()) {
-    case 'APPROVED': return 'default' as const
-    case 'REJECTED': return 'destructive' as const
-    case 'PENDING': return 'outline' as const
-    default: return 'secondary' as const
-  }
-})
 
 async function loadTemplate() {
   isLoading.value = true
@@ -376,7 +296,6 @@ async function loadTemplate() {
     const data = (response.data as any).data
     template.value = data
     syncForm()
-    isDetailsOpen.value = false
     nextTick(() => { hasChanges.value = false })
   } catch {
     isNotFound.value = true
@@ -406,21 +325,26 @@ function syncForm() {
     header_content: template.value.header_content || '',
     body_content: template.value.body_content || '',
     footer_content: template.value.footer_content || '',
-    buttons: (template.value.buttons || []).map((b: any) => ({
-      ...b,
-      example: Array.isArray(b.example) ? b.example[0] ?? '' : b.example,
-    })),
+    buttons: (template.value.buttons || []).map((b: any) => {
+      let example = Array.isArray(b.example) ? b.example[0] ?? '' : b.example
+      // Locally saved buttons hold the bare example value, but templates synced
+      // from Meta return the full example URL — strip the base so the editor
+      // always shows just the value. Bare values pass through unchanged.
+      if (b.type === 'URL' && isDynamicUrl(b.url) && example) {
+        const base = urlBase(b.url)
+        example = String(example).startsWith(base)
+          ? String(example).slice(base.length)
+          : example
+      }
+      return { ...b, example }
+    }),
     sample_values: template.value.sample_values || [],
     add_security_recommendation: template.value.add_security_recommendation || false,
     code_expiration_minutes: template.value.code_expiration_minutes || 0,
-  }
-  // Restore media handle for existing media headers
-  headerMediaFile.value = null
-  headerMediaFilename.value = ''
-  if (['IMAGE', 'VIDEO', 'DOCUMENT'].includes(template.value.header_type || '')) {
-    headerMediaHandle.value = template.value.header_content || ''
-  } else {
-    headerMediaHandle.value = ''
+    // An already-saved ZERO_TAP template was accepted when it was created.
+    zero_tap_accepted: (template.value.buttons || []).some(
+      (b: any) => b.type === 'OTP' && b.otp_type === 'ZERO_TAP'
+    ),
   }
 }
 
@@ -448,6 +372,100 @@ watch(() => form.value.category, (newCat, oldCat) => {
   }
 })
 
+// `id` is only a v-for key in the editor, so it must not reach the buttons JSONB.
+// A dynamic URL button's example is sent as the bare variable value ("Rose", not
+// "https://…?search=Rose") — Meta's creation examples use the value alone, and the
+// backend wraps it into the example array as-is.
+function cleanButton({ id: _id, ...button }: any) {
+  return button
+}
+
+// The exact body sent to POST/PUT /api/templates. The JSON dialog renders this
+// same function, so what you inspect is what gets sent.
+function buildPayload(): Record<string, any> {
+  const payload: Record<string, any> = {
+    whatsapp_account: form.value.whatsapp_account,
+    name: form.value.name,
+    display_name: form.value.display_name,
+    language: form.value.language,
+    category: form.value.category,
+    buttons: (form.value.buttons as any[]).map(cleanButton),
+  }
+
+  // Meta fixes the body of an authentication template and takes no header,
+  // footer or sample values for it. The OTP options apply only to this category.
+  if (isAuthentication.value) {
+    payload.header_type = 'NONE'
+    payload.header_content = ''
+    payload.body_content = '{{1}} is your verification code.'
+    payload.footer_content = ''
+    payload.sample_values = []
+    payload.add_security_recommendation = form.value.add_security_recommendation
+    payload.code_expiration_minutes = form.value.code_expiration_minutes || 0
+    return payload
+  }
+
+  payload.header_type = form.value.header_type
+  payload.header_content = form.value.header_content
+  payload.body_content = form.value.body_content
+  payload.footer_content = form.value.footer_content
+  payload.sample_values = form.value.sample_values
+  return payload
+}
+
+const payloadJson = computed(() => JSON.stringify(buildPayload(), null, 2))
+
+const payloadMethod = computed(() => (isNew.value ? 'POST' : 'PUT'))
+const payloadUrl = computed(() =>
+  isNew.value ? '/api/templates' : `/api/templates/${templateId.value}`
+)
+
+// A media header is uploaded to Meta on save, and header_content only holds the
+// returned handle afterwards. Say so rather than showing a misleading empty value.
+const payloadPendingMedia = computed(() => !!pendingMediaFile.value)
+
+// The payload Meta receives is built by the backend — the same builder that runs on
+// publish (whatsapp.BuildSubmissionPayload). Asking it rather than rebuilding the
+// components array here keeps the preview honest: a second implementation would drift.
+const payloadTab = ref<'meta' | 'api'>('meta')
+const metaJson = ref('')
+const metaError = ref('')
+const metaLoading = ref(false)
+
+async function openPayloadDialog() {
+  payloadTab.value = 'meta'
+  jsonDialogOpen.value = true
+  metaJson.value = ''
+  metaError.value = ''
+  metaLoading.value = true
+  try {
+    const res = await api.post('/templates/preview', {
+      ...buildPayload(),
+      meta_template_id: template.value?.meta_template_id || '',
+    })
+    metaJson.value = JSON.stringify((res.data as any).data, null, 2)
+  } catch (err: any) {
+    metaError.value =
+      err?.response?.data?.message ||
+      t('templates.metaPayloadFailed', 'Could not build the Meta payload')
+  } finally {
+    metaLoading.value = false
+  }
+}
+
+const shownJson = computed(() =>
+  payloadTab.value === 'meta' ? metaJson.value : payloadJson.value
+)
+
+async function copyPayload() {
+  try {
+    await navigator.clipboard.writeText(shownJson.value)
+    toast.success(t('templates.payloadCopied', 'Payload copied'))
+  } catch {
+    toast.error(t('templates.payloadCopyFailed', 'Could not copy to clipboard'))
+  }
+}
+
 async function save() {
   if (!form.value.name.trim()) {
     toast.error(t('templates.nameRequired', 'Template name is required'))
@@ -457,10 +475,14 @@ async function save() {
     toast.error(t('templates.bodyRequired', 'Body content is required'))
     return
   }
+  if (!isAuthentication.value && firstLengthError.value) {
+    toast.error(firstLengthError.value)
+    return
+  }
   if (!isAuthentication.value
     && ['IMAGE', 'VIDEO', 'DOCUMENT'].includes(form.value.header_type)
-    && !form.value.header_content) {
-    const fallback = `Upload a sample ${form.value.header_type.toLowerCase()} before saving — Meta requires it for template approval.`
+    && !form.value.header_content && !pendingMediaFile.value) {
+    const fallback = `Choose a sample ${form.value.header_type.toLowerCase()} — Meta requires one for approval.`
     toast.error(t('templates.headerMediaRequired', fallback))
     return
   }
@@ -478,7 +500,26 @@ async function save() {
       return
     }
     if (hasTooManyHeaderVariables.value) {
-      toast.error(t('templates.headerTooManyVariables', headerTooManyVariablesHint))
+      toast.error(t('templates.headerTooManyVariables', 'Meta allows at most one variable in a TEXT header.'))
+      return
+    }
+    const gap = firstSequenceGap.value
+    if (gap) {
+      toast.error(t('templates.variablesNotSequential', { expected: gap.expected, found: gap.found }))
+      return
+    }
+    if (missingSamples.value.length) {
+      toast.error(t('templates.samplesRequired', { names: missingSamples.value.join(', ') }))
+      return
+    }
+    const badButton = firstButtonError.value
+    if (badButton) {
+      toast.error(badButton)
+      return
+    }
+    const badCombo = validateButtonCombination(form.value.buttons)
+    if (badCombo) {
+      toast.error(badCombo)
       return
     }
   }
@@ -486,7 +527,7 @@ async function save() {
     toast.error(t('templates.invalidExpiration', 'Code expiration must be between 1 and 90 minutes'))
     return
   }
-  if (isAuthentication.value && authOtpType.value === 'ZERO_TAP' && !zeroTapAccepted.value) {
+  if (isAuthentication.value && authOtpType.value === 'ZERO_TAP' && !form.value.zero_tap_accepted) {
     toast.error(t('templates.zeroTapTosRequired', 'You must accept the Terms of Service to use zero-tap authentication'))
     return
   }
@@ -499,21 +540,13 @@ async function save() {
   }
   isSaving.value = true
   try {
-    const payload: Record<string, any> = {
-      whatsapp_account: form.value.whatsapp_account,
-      name: form.value.name,
-      display_name: form.value.display_name,
-      language: form.value.language,
-      category: form.value.category,
-      header_type: isAuthentication.value ? 'NONE' : form.value.header_type,
-      header_content: isAuthentication.value ? '' : form.value.header_content,
-      body_content: isAuthentication.value ? '{{1}} is your verification code.' : form.value.body_content,
-      footer_content: isAuthentication.value ? '' : form.value.footer_content,
-      buttons: form.value.buttons,
-      sample_values: form.value.sample_values,
-      add_security_recommendation: form.value.add_security_recommendation,
-      code_expiration_minutes: form.value.code_expiration_minutes || 0,
+    if (pendingMediaFile.value) {
+      const upload = await templatesService.uploadMedia(form.value.whatsapp_account, pendingMediaFile.value)
+      form.value.header_content = (upload.data as any).data.handle
+      pendingMediaFile.value = null
     }
+
+    const payload = buildPayload()
 
     if (isNew.value) {
       const response = await api.post('/templates', payload)
@@ -536,45 +569,6 @@ async function save() {
     )
   } finally {
     isSaving.value = false
-  }
-}
-
-function getAcceptedFileTypes(): string {
-  switch (form.value.header_type) {
-    case 'IMAGE': return 'image/jpeg,image/png'
-    case 'VIDEO': return 'video/mp4'
-    case 'DOCUMENT': return 'application/pdf'
-    default: return '*/*'
-  }
-}
-
-function onHeaderMediaFileChange(event: Event) {
-  const input = event.target as HTMLInputElement
-  if (input.files && input.files.length > 0) {
-    headerMediaFile.value = input.files[0]
-    headerMediaFilename.value = input.files[0].name
-    headerMediaHandle.value = ''
-    form.value.header_content = ''
-  }
-}
-
-async function uploadHeaderMedia() {
-  if (!headerMediaFile.value) return
-  if (!form.value.whatsapp_account) {
-    toast.error(t('templates.selectAccountFirst', 'Select an account first'))
-    return
-  }
-  headerMediaUploading.value = true
-  try {
-    const response = await templatesService.uploadMedia(form.value.whatsapp_account, headerMediaFile.value)
-    const data = (response.data as any).data
-    headerMediaHandle.value = data.handle
-    form.value.header_content = data.handle
-    toast.success(t('templates.mediaUploadedSuccess', 'Media uploaded successfully'))
-  } catch (err) {
-    toast.error(getErrorMessage(err, t('templates.uploadFailed', 'Upload failed')))
-  } finally {
-    headerMediaUploading.value = false
   }
 }
 
@@ -611,26 +605,6 @@ async function confirmPublish() {
   }
 }
 
-// Replace template variables with sample values for preview
-function replaceVariablesWithSamples(text: string, component: string): string {
-  if (!text) return text
-  const samples = form.value.sample_values || []
-  return text.replace(/\{\{([^}]+)\}\}/g, (_match, varName: string) => {
-    const trimmed = varName.trim()
-    const isPositional = /^\d+$/.test(trimmed)
-    const index = isPositional ? parseInt(trimmed) : 0
-    const sv = samples.find((s: any) => {
-      if (s.component !== component) return false
-      if (isPositional) return s.index === index
-      return s.param_name === trimmed || s.index === index
-    })
-    return sv?.value || `[${trimmed}]`
-  })
-}
-
-const previewBody = computed(() => replaceVariablesWithSamples(form.value.body_content, 'body'))
-const previewHeader = computed(() => replaceVariablesWithSamples(form.value.header_content, 'header'))
-
 async function loadFlows() {
   try {
     const response = await flowsService.list({ limit: 100 })
@@ -639,14 +613,6 @@ async function loadFlows() {
   } catch {
     // non-critical
   }
-}
-
-function getFlowScreens(flowId: string): string[] {
-  const flow = whatsappFlows.value.find((f: any) => f.meta_flow_id === flowId || f.id === flowId)
-  if (!flow?.screens) return []
-  return flow.screens
-    .map((s: any) => (typeof s === 'string' ? s : s?.id || s?.name))
-    .filter(Boolean)
 }
 
 onMounted(async () => {
@@ -674,8 +640,8 @@ onMounted(async () => {
   >
     <template #actions>
       <div class="flex items-center gap-2">
-        <Button v-if="!isNew" variant="outline" size="sm" @click="isPreviewOpen = true">
-          <Eye class="h-4 w-4 mr-1" /> {{ $t('templates.preview', 'Preview') }}
+        <Button variant="outline" size="sm" @click="openPayloadDialog">
+          <Code class="h-4 w-4 mr-1" /> {{ $t('templates.viewJson', 'JSON') }}
         </Button>
         <Button v-if="canPublish" variant="outline" size="sm" @click="publishDialogOpen = true" :disabled="isPublishing">
           <Loader2 v-if="isPublishing" class="h-4 w-4 mr-1 animate-spin" />
@@ -691,466 +657,24 @@ onMounted(async () => {
       </div>
     </template>
 
-    <!-- Details Card -->
-    <Card>
-      <CardHeader class="pb-3 cursor-pointer" @click="isDetailsOpen = !isDetailsOpen">
-        <div class="flex items-center justify-between">
-          <div class="flex items-center gap-2">
-            <CardTitle class="text-sm font-medium">{{ $t('templates.details', 'Details') }}</CardTitle>
-            <Badge v-if="!isNew && template?.status" :variant="statusVariant">
-              {{ template.status }}
-            </Badge>
-            <Badge v-if="!isNew && template?.quality_rating" :class="getQualityBadgeClass(template.quality_rating)">
-              {{ getQualityRatingLabel(template.quality_rating, t) }}
-            </Badge>
-          </div>
-          <ChevronDown class="h-4 w-4 text-muted-foreground transition-transform" :class="isDetailsOpen && 'rotate-180'" />
-        </div>
-      </CardHeader>
-      <CardContent v-show="isDetailsOpen" class="space-y-4">
-        <!-- Edit limits info for approved templates -->
-        <div v-if="template?.status?.toUpperCase() === 'APPROVED'" class="flex items-start gap-2 rounded-md bg-blue-500/10 border border-blue-500/20 px-3 py-2 text-xs text-blue-400 light:text-blue-600">
-          <Info class="h-3.5 w-3.5 shrink-0 mt-0.5" />
-          <span>{{ $t('templates.editLimitsInfo', 'Approved templates can be edited up to 10 times in 30 days (1 edit per 24 hours). Editing triggers a new review which may take up to 24 hours. Name, language, and category cannot be changed.') }}</span>
-        </div>
-        <div class="space-y-1.5">
-          <Label class="text-xs">{{ $t('templates.whatsappAccount', 'WhatsApp Account') }}</Label>
-          <Select v-model="form.whatsapp_account" :disabled="!canWrite || !!template?.meta_template_id">
-            <SelectTrigger><SelectValue :placeholder="$t('templates.selectAccount', 'Select account')" /></SelectTrigger>
-            <SelectContent>
-              <SelectItem v-for="account in accounts" :key="account.id" :value="account.name">
-                {{ account.name }}
-              </SelectItem>
-            </SelectContent>
-          </Select>
-        </div>
-        <div class="space-y-1.5">
-          <Label class="text-xs">{{ $t('templates.name', 'Name') }} *</Label>
-          <Input v-model="form.name" :disabled="!canWrite || !!template?.meta_template_id" />
-        </div>
-        <div class="space-y-1.5">
-          <Label class="text-xs">{{ $t('templates.displayName', 'Display Name') }}</Label>
-          <Input v-model="form.display_name" :disabled="!canWrite || !isEditable" />
-        </div>
-        <div class="space-y-1.5">
-          <Label class="text-xs">{{ $t('templates.language', 'Language') }}</Label>
-          <Select v-model="form.language" :disabled="!canWrite || !!template?.meta_template_id">
-            <SelectTrigger><SelectValue /></SelectTrigger>
-            <SelectContent>
-              <SelectItem v-for="lang in languages" :key="lang.code" :value="lang.code">
-                {{ lang.name }}
-              </SelectItem>
-            </SelectContent>
-          </Select>
-        </div>
-        <div class="space-y-1.5">
-          <Label class="text-xs">{{ $t('templates.category', 'Category') }}</Label>
-          <Select v-model="form.category" :disabled="!canWrite || !isEditable || (!!template?.meta_template_id && template?.status?.toUpperCase() === 'APPROVED')">
-            <SelectTrigger><SelectValue /></SelectTrigger>
-            <SelectContent>
-              <SelectItem v-for="cat in categories" :key="cat.value" :value="cat.value">
-                {{ cat.label }}
-              </SelectItem>
-            </SelectContent>
-          </Select>
-        </div>
-      </CardContent>
-    </Card>
+    <!-- Account, name, category, header, body, variables, buttons and the live
+         WhatsApp preview all live in TemplateEditor. -->
+    <!-- Approved templates can still be edited; Meta only freezes their identity
+         fields, which is what is-published locks. -->
+    <div v-if="template?.status?.toUpperCase() === 'APPROVED'" class="flex items-start gap-2 rounded-md bg-blue-500/10 border border-blue-500/20 px-3 py-2 mb-4 text-xs text-blue-400 light:text-blue-600">
+      <Info class="h-3.5 w-3.5 shrink-0 mt-0.5" />
+      <span>{{ $t('templates.editLimitsInfo', 'Approved templates can be edited up to 10 times in 30 days (1 edit per 24 hours). Editing triggers a new review which may take up to 24 hours. Name, language, and category cannot be changed.') }}</span>
+    </div>
 
-    <!-- Content Card -->
-    <Card>
-      <CardHeader class="pb-3">
-        <CardTitle class="text-sm font-medium">{{ $t('templates.content', 'Content') }}</CardTitle>
-      </CardHeader>
-      <CardContent class="space-y-4">
-        <div v-if="!isAuthentication" class="space-y-1.5">
-          <Label class="text-xs">{{ $t('templates.headerType', 'Header Type') }}</Label>
-          <Select v-model="form.header_type" :disabled="!canWrite || !isEditable">
-            <SelectTrigger><SelectValue /></SelectTrigger>
-            <SelectContent>
-              <SelectItem v-for="ht in headerTypes" :key="ht.value" :value="ht.value">
-                {{ ht.label }}
-              </SelectItem>
-            </SelectContent>
-          </Select>
-        </div>
-        <div v-if="form.header_type === 'TEXT'" class="space-y-1.5">
-          <Label class="text-xs" for="header-content">{{ $t('templates.headerContent', 'Header Content') }}</Label>
-          <Input id="header-content" v-model="form.header_content" :disabled="!canWrite || !isEditable" />
-          <p v-if="hasTooManyHeaderVariables" class="text-xs text-destructive" v-text="headerTooManyVariablesHint" />
-        </div>
-
-        <!-- Header Media Upload for IMAGE/VIDEO/DOCUMENT -->
-        <div v-else-if="['IMAGE', 'VIDEO', 'DOCUMENT'].includes(form.header_type)" class="space-y-3">
-          <Label class="text-xs">{{ $t('templates.headerSample', 'Header') }} {{ form.header_type.toLowerCase() }}</Label>
-          <div class="flex items-center gap-2">
-            <div class="flex-1">
-              <input
-                type="file"
-                :accept="getAcceptedFileTypes()"
-                :disabled="!canWrite || !isEditable"
-                @change="onHeaderMediaFileChange"
-                class="w-full text-sm file:mr-4 file:py-1.5 file:px-3 file:rounded-md file:border-0 file:text-xs file:font-medium file:bg-primary file:text-primary-foreground hover:file:bg-primary/90 cursor-pointer"
-              />
-            </div>
-            <Button
-              type="button"
-              size="sm"
-              @click="uploadHeaderMedia"
-              :disabled="!headerMediaFile || headerMediaUploading"
-            >
-              <Loader2 v-if="headerMediaUploading" class="h-3.5 w-3.5 mr-1 animate-spin" />
-              <Upload v-else class="h-3.5 w-3.5 mr-1" />
-              {{ $t('templates.uploadMedia', 'Upload') }}
-            </Button>
-          </div>
-          <div v-if="headerMediaFilename && !headerMediaHandle" class="text-xs text-muted-foreground">
-            {{ headerMediaFilename }}
-          </div>
-          <div v-if="headerMediaHandle" class="bg-green-950 light:bg-green-50 border border-green-800 light:border-green-200 rounded-lg p-2.5">
-            <div class="flex items-center gap-2">
-              <Check class="h-3.5 w-3.5 text-green-600" />
-              <span class="text-xs text-green-200 light:text-green-800">{{ $t('templates.mediaUploadedSuccess', 'Media uploaded') }}</span>
-            </div>
-            <p class="text-xs text-muted-foreground mt-1 font-mono truncate">
-              Handle: {{ headerMediaHandle.substring(0, 40) }}...
-            </p>
-          </div>
-          <p class="text-xs text-muted-foreground">
-            <span v-if="form.header_type === 'IMAGE'">JPEG or PNG, max 5MB</span>
-            <span v-else-if="form.header_type === 'VIDEO'">MP4, max 16MB</span>
-            <span v-else-if="form.header_type === 'DOCUMENT'">PDF, max 100MB</span>
-          </p>
-        </div>
-
-        <!-- Authentication template: fixed body & options -->
-        <div v-if="isAuthentication" class="space-y-4">
-          <!-- OTP Code Delivery Method -->
-          <div class="space-y-2">
-            <Label class="text-xs">{{ $t('templates.codeDelivery', 'Code Delivery Method') }}</Label>
-            <Select :model-value="authOtpType" @update:model-value="setAuthOtpType" :disabled="!canWrite || !isEditable">
-              <SelectTrigger class="h-8 text-xs">
-                <SelectValue placeholder="Select delivery method" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="COPY_CODE">Copy Code</SelectItem>
-                <SelectItem value="ONE_TAP">One-Tap Autofill (Android only)</SelectItem>
-                <SelectItem value="ZERO_TAP">Zero-Tap (Android only)</SelectItem>
-              </SelectContent>
-            </Select>
-            <p class="text-xs text-muted-foreground">
-              <span v-if="authOtpType === 'COPY_CODE'">User taps a button to copy the code to clipboard.</span>
-              <span v-else-if="authOtpType === 'ONE_TAP'">User taps a button to autofill the code in your app. Requires app configuration.</span>
-              <span v-else-if="authOtpType === 'ZERO_TAP'">Code is delivered to your app automatically. Requires app configuration.</span>
-            </p>
-          </div>
-
-          <div class="space-y-1.5">
-            <Label class="text-xs">{{ $t('templates.bodyContent', 'Body Content') }}</Label>
-            <div class="rounded-md border bg-muted/50 p-3 text-sm text-muted-foreground">
-              <span class="font-mono">{'{{1}}'}</span> is your verification code.
-              <span v-if="form.add_security_recommendation" class="block mt-1">For your security, do not share this code.</span>
-            </div>
-            <p class="text-xs text-muted-foreground">Authentication templates use fixed preset text defined by Meta.</p>
-          </div>
-          <div class="flex items-center gap-2">
-            <input
-              id="security-rec"
-              type="checkbox"
-              v-model="form.add_security_recommendation"
-              :disabled="!canWrite || !isEditable"
-              class="h-4 w-4 rounded border-gray-300"
-            />
-            <Label for="security-rec" class="text-xs cursor-pointer">{{ $t('templates.addSecurityRecommendation', 'Add security recommendation') }}</Label>
-          </div>
-          <div class="space-y-2">
-            <div class="flex items-center gap-2">
-              <input
-                id="code-expiration"
-                type="checkbox"
-                :checked="form.code_expiration_minutes > 0"
-                @change="form.code_expiration_minutes = ($event.target as HTMLInputElement).checked ? 10 : 0"
-                :disabled="!canWrite || !isEditable"
-                class="h-4 w-4 rounded border-gray-300"
-              />
-              <Label for="code-expiration" class="text-xs cursor-pointer">{{ $t('templates.addCodeExpiration', 'Add expiration time for the code') }}</Label>
-            </div>
-            <div v-if="form.code_expiration_minutes > 0" class="flex items-center gap-2 ml-6">
-              <Input
-                type="number"
-                :model-value="form.code_expiration_minutes"
-                @update:model-value="(val: string) => form.code_expiration_minutes = val ? parseInt(val) : 0"
-                min="1"
-                max="90"
-                class="h-8 text-xs w-24"
-                :disabled="!canWrite || !isEditable"
-              />
-              <span class="text-xs text-muted-foreground">minutes (1-90)</span>
-            </div>
-            <p v-if="form.code_expiration_minutes > 0" class="text-xs text-muted-foreground ml-6">
-              Footer: "This code expires in {{ form.code_expiration_minutes }} minutes."
-            </p>
-          </div>
-          <!-- Zero-Tap Terms of Service -->
-          <div v-if="authOtpType === 'ZERO_TAP'" class="border border-amber-500/30 bg-amber-500/5 rounded-lg p-3">
-            <div class="flex items-start gap-2">
-              <input
-                id="zero-tap-tos"
-                type="checkbox"
-                v-model="zeroTapAccepted"
-                :disabled="!canWrite || !isEditable"
-                class="h-4 w-4 mt-0.5 rounded border-gray-300"
-              />
-              <Label for="zero-tap-tos" class="text-xs cursor-pointer leading-relaxed">
-                By selecting zero-tap, I understand that my business's use of zero-tap authentication is subject to the
-                <a href="https://www.whatsapp.com/legal/business-terms/" target="_blank" class="underline text-primary">WhatsApp Business Terms of Service</a>.
-                It is my business's responsibility to ensure its customers expect that the code will be automatically filled in on their behalf when they choose to receive the zero-tap code through WhatsApp.
-              </Label>
-            </div>
-          </div>
-
-          <!-- ONE_TAP: autofill text + supported apps -->
-          <div v-if="authOtpType === 'ONE_TAP'" class="space-y-3 border rounded-lg p-3">
-            <div class="space-y-1">
-              <Label class="text-xs">{{ $t('templates.autofillText', 'Autofill Text') }}</Label>
-              <Input v-model="form.buttons[0].autofill_text" placeholder="Autofill" class="h-8 text-xs" :disabled="!canWrite || !isEditable" />
-            </div>
-            <div class="space-y-2">
-              <div class="flex items-center justify-between">
-                <Label class="text-xs">{{ $t('templates.supportedApps', 'Supported Apps') }} *</Label>
-                <Button
-                  v-if="canWrite && isEditable && (form.buttons[0]?.supported_apps?.length || 0) < 5"
-                  type="button" variant="outline" size="xs" class="h-6 text-xs"
-                  @click="addSupportedApp"
-                >
-                  <Plus class="h-3 w-3 mr-1" /> Add App
-                </Button>
-              </div>
-              <div v-for="(app, i) in form.buttons[0]?.supported_apps || []" :key="i" class="flex items-end gap-2">
-                <div class="flex-1 space-y-1">
-                  <Label class="text-xs">Package Name *</Label>
-                  <Input v-model="app.package_name" placeholder="com.example.app" class="h-8 text-xs" :disabled="!canWrite || !isEditable" />
-                </div>
-                <div class="flex-1 space-y-1">
-                  <Label class="text-xs">Signature Hash *</Label>
-                  <Input v-model="app.signature_hash" placeholder="K8a/AINcGX7" class="h-8 text-xs" :disabled="!canWrite || !isEditable" />
-                </div>
-                <Button
-                  v-if="canWrite && isEditable && (form.buttons[0]?.supported_apps?.length || 0) > 1"
-                  type="button" variant="ghost" size="sm" class="h-8 w-8 p-0 shrink-0"
-                  @click="removeSupportedApp(Number(i))"
-                >
-                  <X class="h-3.5 w-3.5 text-destructive" />
-                </Button>
-              </div>
-            </div>
-          </div>
-
-          <!-- ZERO_TAP: supported apps -->
-          <div v-if="authOtpType === 'ZERO_TAP'" class="space-y-3 border rounded-lg p-3">
-            <div class="space-y-2">
-              <div class="flex items-center justify-between">
-                <Label class="text-xs">{{ $t('templates.supportedApps', 'Supported Apps') }} *</Label>
-                <Button
-                  v-if="canWrite && isEditable && (form.buttons[0]?.supported_apps?.length || 0) < 5"
-                  type="button" variant="outline" size="xs" class="h-6 text-xs"
-                  @click="addSupportedApp"
-                >
-                  <Plus class="h-3 w-3 mr-1" /> Add App
-                </Button>
-              </div>
-              <div v-for="(app, i) in form.buttons[0]?.supported_apps || []" :key="i" class="flex items-end gap-2">
-                <div class="flex-1 space-y-1">
-                  <Label class="text-xs">Package Name *</Label>
-                  <Input v-model="app.package_name" placeholder="com.example.app" class="h-8 text-xs" :disabled="!canWrite || !isEditable" />
-                </div>
-                <div class="flex-1 space-y-1">
-                  <Label class="text-xs">Signature Hash *</Label>
-                  <Input v-model="app.signature_hash" placeholder="K8a/AINcGX7" class="h-8 text-xs" :disabled="!canWrite || !isEditable" />
-                </div>
-                <Button
-                  v-if="canWrite && isEditable && (form.buttons[0]?.supported_apps?.length || 0) > 1"
-                  type="button" variant="ghost" size="sm" class="h-8 w-8 p-0 shrink-0"
-                  @click="removeSupportedApp(Number(i))"
-                >
-                  <X class="h-3.5 w-3.5 text-destructive" />
-                </Button>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        <!-- Standard template: editable body -->
-        <div v-else class="space-y-1.5">
-          <Label class="text-xs">{{ $t('templates.bodyContent', 'Body Content') }} *</Label>
-          <Textarea
-            v-model="form.body_content"
-            :rows="6"
-            :disabled="!canWrite || !isEditable"
-          />
-          <p v-if="hasMixedVariables" class="text-xs text-destructive" v-text="mixedVariablesHint" />
-          <p v-else-if="hasDuplicateVariables" class="text-xs text-destructive" v-text="duplicateVariablesHint" />
-          <p v-else-if="hasVariableAtEdge" class="text-xs text-destructive" v-text="variablePositionHint" />
-          <p v-else class="text-xs text-muted-foreground" v-text="bodyHint" />
-        </div>
-
-        <!-- Sample Values for Variables -->
-        <div v-if="!isAuthentication && allVariables.length > 0" class="space-y-3">
-          <div>
-            <Label class="text-xs">{{ $t('templates.sampleValues', 'Sample Values for Variables') }}</Label>
-            <p class="text-xs text-muted-foreground mt-0.5">{{ $t('templates.sampleValuesHint', 'Provide example values for your variables. This helps Meta review and approve your template faster.') }}</p>
-          </div>
-          <div v-for="v in allVariables" :key="`${v.component}-${v.index}`" class="flex items-center gap-3">
-            <span class="text-xs text-muted-foreground w-28 shrink-0 font-mono">{{ v.component }}:{{ v.label }}</span>
-            <Input
-              :model-value="getSampleValueForVar(v.component, v.index)"
-              @update:model-value="(val: string) => setSampleValueForVar(v.component, v.index, val)"
-              :placeholder="$t('templates.sampleValuePlaceholder', 'e.g. John Doe')"
-              class="h-8 text-xs"
-              :disabled="!canWrite || !isEditable"
-            />
-          </div>
-        </div>
-
-        <!-- Buttons (hidden for auth templates — OTP managed via selector above) -->
-        <div v-if="!isAuthentication" class="space-y-3">
-          <div class="flex items-center justify-between">
-            <Label class="text-xs">{{ $t('templates.buttons', 'Buttons') }} <span class="text-muted-foreground font-normal">({{ $t('templates.maxButtonsHint', 'up to 3, optional') }})</span></Label>
-            <Button
-              v-if="canWrite && isEditable"
-              type="button"
-              variant="outline"
-              size="xs"
-              class="h-7 text-xs"
-              @click="addButton"
-              :disabled="form.buttons.length >= 3"
-            >
-              <Plus class="h-3 w-3 mr-1" />
-              {{ $t('templates.addButton', 'Add') }}
-            </Button>
-          </div>
-          <div v-for="(button, index) in form.buttons" :key="index" class="border rounded-lg p-3 space-y-3">
-            <div class="flex items-center justify-between">
-              <span class="text-xs font-medium">{{ $t('templates.button', 'Button') }} {{ index + 1 }}</span>
-              <Button v-if="canWrite && isEditable" type="button" variant="ghost" size="sm" class="h-7 w-7 p-0" @click="removeButton(index)">
-                <X class="h-3.5 w-3.5 text-destructive" />
-              </Button>
-            </div>
-            <div class="grid grid-cols-2 gap-3">
-              <div class="space-y-1">
-                <Label class="text-xs">{{ $t('templates.buttonType', 'Type') }}</Label>
-                <Select v-model="button.type" :disabled="!canWrite || !isEditable">
-                  <SelectTrigger class="h-8 text-xs"><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem v-for="bt in buttonTypes" :key="bt.value" :value="bt.value">
-                      {{ bt.label }}
-                    </SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-              <div class="space-y-1">
-                <Label class="text-xs">{{ $t('templates.buttonText', 'Text') }}</Label>
-                <Input v-model="button.text" class="h-8 text-xs" :disabled="!canWrite || !isEditable" />
-              </div>
-            </div>
-            <div v-if="button.type === 'URL'" class="space-y-1">
-              <Label class="text-xs">{{ $t('templates.buttonUrl', 'URL') }}</Label>
-              <Input v-model="button.url" placeholder="https://example.com" class="h-8 text-xs" :disabled="!canWrite || !isEditable" />
-              <div v-if="button.url && button.url.includes('{')" class="space-y-1 mt-1">
-                <Label class="text-xs">{{ $t('templates.buttonUrlExample', 'URL Example') }}</Label>
-                <Input v-model="button.example" placeholder="https://example.com/order/123" class="h-8 text-xs" :disabled="!canWrite || !isEditable" />
-              </div>
-            </div>
-            <div v-if="button.type === 'PHONE_NUMBER'" class="space-y-1">
-              <Label class="text-xs">{{ $t('templates.buttonPhoneNumber', 'Phone Number') }}</Label>
-              <Input v-model="button.phone_number" placeholder="+1234567890" class="h-8 text-xs" :disabled="!canWrite || !isEditable" />
-            </div>
-            <div v-if="button.type === 'COPY_CODE'" class="space-y-1">
-              <Label class="text-xs">{{ $t('templates.copyCodeExample', 'Example Code') }}</Label>
-              <Input v-model="button.example" placeholder="SAVE20" class="h-8 text-xs" :disabled="!canWrite || !isEditable" />
-            </div>
-            <div v-if="button.type === 'FLOW'" class="space-y-2">
-              <div class="space-y-1">
-                <Label class="text-xs">{{ $t('templates.flow', 'Flow') }}</Label>
-                <Select v-model="button.flow_id" :disabled="!canWrite || !isEditable">
-                  <SelectTrigger class="h-8 text-xs">
-                    <SelectValue :placeholder="$t('templates.selectFlow', 'Select a Flow')" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem v-for="flow in whatsappFlows" :key="flow.id" :value="flow.meta_flow_id || flow.id">
-                      {{ flow.name }}
-                    </SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-              <div class="space-y-1">
-                <Label class="text-xs">{{ $t('templates.flowAction', 'Flow Action') }}</Label>
-                <Select v-model="button.flow_action" :disabled="!canWrite || !isEditable">
-                  <SelectTrigger class="h-8 text-xs">
-                    <SelectValue placeholder="navigate" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="navigate">Navigate</SelectItem>
-                    <SelectItem value="data_exchange">Data Exchange</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-              <div v-if="button.flow_action === 'navigate' && button.flow_id && getFlowScreens(button.flow_id).length > 0" class="space-y-1">
-                <Label class="text-xs">{{ $t('templates.navigateScreen', 'Screen') }}</Label>
-                <Select v-model="button.navigate_screen" :disabled="!canWrite || !isEditable">
-                  <SelectTrigger class="h-8 text-xs">
-                    <SelectValue :placeholder="$t('templates.selectScreen', 'Select Screen')" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem v-for="screen in getFlowScreens(button.flow_id)" :key="screen" :value="screen">
-                      {{ screen }}
-                    </SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-              <div v-else-if="button.flow_action === 'navigate'" class="space-y-1">
-                <Label class="text-xs">{{ $t('templates.navigateScreen', 'Screen') }}</Label>
-                <Input v-model="button.navigate_screen" placeholder="SCREEN_ID" class="h-8 text-xs" :disabled="!canWrite || !isEditable" />
-              </div>
-            </div>
-            <div v-if="button.type === 'OTP'" class="space-y-2">
-              <div class="space-y-1">
-                <Label class="text-xs">{{ $t('templates.otpType', 'OTP Type') }}</Label>
-                <Select v-model="button.otp_type" :disabled="!canWrite || !isEditable">
-                  <SelectTrigger class="h-8 text-xs">
-                    <SelectValue placeholder="Copy Code" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="COPY_CODE">Copy Code</SelectItem>
-                    <SelectItem value="ONE_TAP">One Tap</SelectItem>
-                    <SelectItem value="ZERO_TAP">Zero Tap</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-              <div v-if="button.otp_type === 'ONE_TAP'" class="space-y-1">
-                <Label class="text-xs">{{ $t('templates.autofillText', 'Autofill Text') }}</Label>
-                <Input v-model="button.autofill_text" placeholder="Autofill" class="h-8 text-xs" :disabled="!canWrite || !isEditable" />
-              </div>
-              <div v-if="button.otp_type === 'ONE_TAP' || button.otp_type === 'ZERO_TAP'" class="space-y-1">
-                <Label class="text-xs">{{ $t('templates.packageName', 'Package Name') }}</Label>
-                <Input v-model="button.package_name" placeholder="com.example.app" class="h-8 text-xs" :disabled="!canWrite || !isEditable" />
-                <Label class="text-xs">{{ $t('templates.signatureHash', 'Signature Hash') }}</Label>
-                <Input v-model="button.signature_hash" placeholder="App signature hash" class="h-8 text-xs" :disabled="!canWrite || !isEditable" />
-              </div>
-            </div>
-          </div>
-        </div>
-
-        <div v-if="!isAuthentication" class="space-y-1.5">
-          <Label class="text-xs">{{ $t('templates.footerContent', 'Footer Content') }}</Label>
-          <Textarea
-            v-model="form.footer_content"
-            :rows="2"
-            :disabled="!canWrite || !isEditable"
-          />
-        </div>
-        </CardContent>
-    </Card>
+    <TemplateEditor
+      v-model="form"
+      v-model:media-file="pendingMediaFile"
+      :is-edit="!isNew"
+      :is-published="!!template?.meta_template_id"
+      :accounts="accounts"
+      :flows="whatsappFlows"
+      :disabled="!canWrite || !isEditable"
+    />
 
     <!-- Activity Log -->
     <AuditLogPanel
@@ -1161,8 +685,55 @@ onMounted(async () => {
     />
 
     <!-- Sidebar -->
-    <template v-if="!isNew" #sidebar>
+    <template #sidebar>
+      <!-- Sticky only while creating, when the preview is the lone sidebar card.
+           On the edit page the status/metadata cards below would scroll up over
+           a pinned preview and overlap it. -->
+      <Card class="overflow-hidden" :class="isNew ? 'sticky top-0' : ''">
+        <CardHeader class="pb-3">
+          <CardTitle class="text-sm font-medium">{{ $t('templates.livePreview', 'Live Preview') }}</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div class="rounded-xl bg-[#e5ddd5] dark:bg-[#111b21] p-4">
+            <TemplatePreview
+              :header-type="previewHeaderType"
+              :header-content="form.header_content"
+              :media-url="mediaPreviewUrl"
+              :media-name="pendingMediaFile?.name || ''"
+              :body-content="form.body_content"
+              :footer-content="form.footer_content"
+              :buttons="form.buttons"
+              :sample-values="form.sample_values"
+              contained
+            />
+          </div>
+        </CardContent>
+      </Card>
+
+      <Card v-if="!isNew && template">
+        <CardHeader class="pb-3">
+          <CardTitle class="text-sm font-medium">{{ $t('templates.status', 'Status') }}</CardTitle>
+        </CardHeader>
+        <CardContent class="space-y-2 text-sm">
+          <div class="flex items-center justify-between">
+            <span class="text-muted-foreground">{{ $t('templates.status', 'Status') }}</span>
+            <Badge :variant="statusVariant">{{ template.status }}</Badge>
+          </div>
+          <div v-if="template.quality_rating" class="flex items-center justify-between">
+            <span class="text-muted-foreground">{{ $t('templates.qualityRating', 'Quality Rating') }}</span>
+            <Badge :class="getQualityBadgeClass(template.quality_rating)">
+              {{ getQualityRatingLabel(template.quality_rating, t) }}
+            </Badge>
+          </div>
+          <div v-if="template.meta_template_id" class="flex items-center justify-between">
+            <span class="text-muted-foreground">Meta ID</span>
+            <span class="font-mono text-xs">{{ template.meta_template_id }}</span>
+          </div>
+        </CardContent>
+      </Card>
+
       <MetadataPanel
+        v-if="!isNew"
         :created-at="template?.created_at"
         :updated-at="template?.updated_at"
         :created-by-name="template?.created_by_name"
@@ -1189,6 +760,59 @@ onMounted(async () => {
     </template>
   </DetailPageLayout>
 
+  <!-- Payloads, for verifying what gets sent before anything is published -->
+  <AlertDialog v-model:open="jsonDialogOpen">
+    <AlertDialogContent class="max-w-2xl">
+      <AlertDialogHeader>
+        <AlertDialogTitle>{{ $t('templates.payload', 'Payload') }}</AlertDialogTitle>
+        <AlertDialogDescription>
+          <span v-if="payloadTab === 'meta'" class="font-mono text-xs">
+            {{ $t('templates.payloadMetaHint', 'What whatomate sends to Meta on publish') }}
+          </span>
+          <span v-else class="font-mono text-xs">{{ payloadMethod }} {{ payloadUrl }}</span>
+        </AlertDialogDescription>
+      </AlertDialogHeader>
+
+      <div class="flex gap-1 rounded-md bg-muted p-1 text-xs font-medium">
+        <button
+          type="button"
+          class="flex-1 rounded px-3 py-1"
+          :class="payloadTab === 'meta' ? 'bg-background shadow-sm' : 'text-muted-foreground'"
+          @click="payloadTab = 'meta'"
+        >
+          {{ $t('templates.payloadMeta', 'Meta payload') }}
+        </button>
+        <button
+          type="button"
+          class="flex-1 rounded px-3 py-1"
+          :class="payloadTab === 'api' ? 'bg-background shadow-sm' : 'text-muted-foreground'"
+          @click="payloadTab = 'api'"
+        >
+          {{ $t('templates.payloadApi', 'API request') }}
+        </button>
+      </div>
+
+      <p v-if="payloadPendingMedia" class="text-xs text-muted-foreground">
+        {{ $t('templates.payloadPendingMedia', 'The header is missing here. The sample file is uploaded to Meta when you save, and the handle it returns is sent in its place.') }}
+      </p>
+
+      <p v-if="payloadTab === 'meta' && metaLoading" class="text-xs text-muted-foreground">
+        {{ $t('common.loading', 'Loading...') }}
+      </p>
+      <p v-else-if="payloadTab === 'meta' && metaError" class="text-xs text-red-500">
+        {{ metaError }}
+      </p>
+      <pre v-else class="max-h-[50vh] overflow-auto rounded-md bg-muted p-3 text-xs font-mono">{{ shownJson }}</pre>
+
+      <AlertDialogFooter>
+        <Button variant="outline" size="sm" :disabled="!shownJson" @click="copyPayload">
+          <Copy class="h-4 w-4 mr-1" /> {{ $t('common.copy', 'Copy') }}
+        </Button>
+        <AlertDialogCancel>{{ $t('common.close', 'Close') }}</AlertDialogCancel>
+      </AlertDialogFooter>
+    </AlertDialogContent>
+  </AlertDialog>
+
   <!-- Delete Confirmation -->
   <AlertDialog v-model:open="deleteDialogOpen">
     <AlertDialogContent>
@@ -1201,68 +825,6 @@ onMounted(async () => {
       <AlertDialogFooter>
         <AlertDialogCancel>{{ $t('common.cancel') }}</AlertDialogCancel>
         <AlertDialogAction @click="deleteTemplate">{{ $t('common.delete') }}</AlertDialogAction>
-      </AlertDialogFooter>
-    </AlertDialogContent>
-  </AlertDialog>
-
-  <!-- Preview Dialog -->
-  <AlertDialog v-model:open="isPreviewOpen">
-    <AlertDialogContent class="max-w-md">
-      <AlertDialogHeader>
-        <AlertDialogTitle>{{ $t('templates.templatePreview', 'Template Preview') }}</AlertDialogTitle>
-        <AlertDialogDescription>{{ template?.display_name || template?.name }}</AlertDialogDescription>
-      </AlertDialogHeader>
-      <div v-if="template" class="py-2">
-        <div class="bg-gray-800 light:bg-[#e5ddd5] rounded-lg p-4">
-          <div class="bg-gray-700 light:bg-white rounded-lg shadow max-w-[280px] overflow-hidden">
-            <div v-if="template.header_type && template.header_type !== 'NONE'" class="p-3 border-b">
-              <div v-if="template.header_type === 'TEXT'" class="font-semibold">{{ previewHeader }}</div>
-              <div v-else class="h-32 bg-gray-600 light:bg-gray-200 rounded flex items-center justify-center">
-                <span class="text-sm text-gray-400">{{ template.header_type }}</span>
-              </div>
-            </div>
-            <div class="p-3">
-              <p class="text-sm whitespace-pre-wrap">{{ previewBody }}</p>
-            </div>
-            <div v-if="template.footer_content" class="px-3 pb-3">
-              <p class="text-xs text-gray-500">{{ template.footer_content }}</p>
-            </div>
-            <div v-if="template.buttons && template.buttons.length > 0" class="border-t">
-              <div v-for="(btn, idx) in template.buttons" :key="idx" class="border-b last:border-b-0">
-                <button class="w-full py-2 text-sm text-blue-500 hover:bg-gray-600 light:hover:bg-gray-50">
-                  {{ btn.text || btn.title || 'Button' }}
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-        <div class="mt-4 space-y-2 text-sm">
-          <div class="flex justify-between">
-            <span class="text-muted-foreground">{{ $t('templates.status', 'Status') }}:</span>
-            <Badge :variant="statusVariant">{{ template.status }}</Badge>
-          </div>
-          <div v-if="template.quality_rating" class="flex justify-between">
-            <span class="text-muted-foreground">{{ $t('templates.qualityRating', 'Quality Rating') }}:</span>
-            <Badge :class="getQualityBadgeClass(template.quality_rating)">
-              {{ getQualityRatingLabel(template.quality_rating, t) }}
-            </Badge>
-          </div>
-          <div class="flex justify-between">
-            <span class="text-muted-foreground">{{ $t('templates.category', 'Category') }}:</span>
-            <span>{{ template.category }}</span>
-          </div>
-          <div class="flex justify-between">
-            <span class="text-muted-foreground">{{ $t('templates.language', 'Language') }}:</span>
-            <span>{{ languages.find(l => l.code === template!.language)?.name || template.language }}</span>
-          </div>
-          <div v-if="template.meta_template_id" class="flex justify-between">
-            <span class="text-muted-foreground">Meta ID:</span>
-            <span class="font-mono text-xs">{{ template.meta_template_id }}</span>
-          </div>
-        </div>
-      </div>
-      <AlertDialogFooter>
-        <AlertDialogCancel>{{ $t('common.close', 'Close') }}</AlertDialogCancel>
       </AlertDialogFooter>
     </AlertDialogContent>
   </AlertDialog>
