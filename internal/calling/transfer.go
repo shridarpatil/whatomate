@@ -104,17 +104,27 @@ func (m *Manager) initiateTransfer(session *CallSession, waAccount string, teamT
 	var assignedAgentID *uuid.UUID
 	switch {
 	case session.StickyAgentID != nil:
-		assignedAgentID = session.StickyAgentID
-		m.log.Info("Routing call to sticky agent (voice_call payload)",
-			"call_id", session.ID, "agent_id", assignedAgentID)
+		if !assignment.IsAgentOnActiveCall(m.db, *session.StickyAgentID) {
+			assignedAgentID = session.StickyAgentID
+			m.log.Info("Routing call to sticky agent (voice_call payload)",
+				"call_id", session.ID, "agent_id", assignedAgentID)
+		} else {
+			m.log.Info("Sticky agent is currently on another call, falling back to team/broadcast",
+				"call_id", session.ID, "agent_id", session.StickyAgentID)
+		}
 	case session.ContactID != uuid.Nil:
 		var contact models.Contact
 		if m.db.Select("assigned_user_id").Where("id = ?", session.ContactID).First(&contact).Error == nil && contact.AssignedUserID != nil {
 			var agent models.User
 			if m.db.Where("id = ? AND is_available = ?", contact.AssignedUserID, true).First(&agent).Error == nil {
-				assignedAgentID = contact.AssignedUserID
-				m.log.Info("Routing call to assigned agent (relationship manager)",
-					"call_id", session.ID, "agent_id", assignedAgentID, "contact_id", session.ContactID)
+				if !assignment.IsAgentOnActiveCall(m.db, agent.ID) {
+					assignedAgentID = contact.AssignedUserID
+					m.log.Info("Routing call to assigned agent (relationship manager)",
+						"call_id", session.ID, "agent_id", assignedAgentID, "contact_id", session.ContactID)
+				} else {
+					m.log.Info("Assigned agent is currently on another call, falling back to team/broadcast",
+						"call_id", session.ID, "agent_id", agent.ID)
+				}
 			}
 		}
 	}
@@ -245,6 +255,10 @@ func (m *Manager) InitiateAgentTransfer(callLogID, initiatingAgentID uuid.UUID, 
 
 	// Load org settings outside lock (DB query)
 	orgSettings := m.getOrgCallingSettings(session.OrganizationID)
+
+	if targetAgentID != nil && assignment.IsAgentOnActiveCall(m.db, *targetAgentID) {
+		return fmt.Errorf("target agent is currently on another call")
+	}
 
 	session.mu.Lock()
 	if session.TransferStatus == models.CallTransferStatusWaiting {
@@ -471,6 +485,10 @@ func (m *Manager) ConnectAgentToTransfer(transferID, agentID uuid.UUID, sdpOffer
 	// Signal rotation goroutine to stop (no-op if not using rotation)
 	if session.TransferAccepted != nil {
 		safeClose(session.TransferAccepted)
+	}
+	if session.TransferCancel != nil {
+		session.TransferCancel()
+		session.TransferCancel = nil
 	}
 	session.mu.Unlock()
 
@@ -896,6 +914,15 @@ func (m *Manager) runTransferRotation(session *CallSession, transfer models.Call
 			continue
 		}
 
+		// Skip agents who are currently on an active call
+		if assignment.IsAgentOnActiveCall(m.db, *agentID) {
+			m.log.Debug("Rotation: skipping agent currently on active call",
+				"transfer_id", transfer.ID,
+				"agent_id", *agentID,
+			)
+			continue
+		}
+
 		// Update DB: set agent_id and tried_agent_ids
 		triedIDs := make(models.JSONBArray, len(triedAgents))
 		for i, id := range triedAgents {
@@ -973,16 +1000,36 @@ func (m *Manager) runTransferRotation(session *CallSession, transfer models.Call
 		return
 	}
 
+	if totalCtx.Err() != nil {
+		m.handleTransferNoAnswer(session, transfer.ID)
+		return
+	}
+
 	// Fallback: broadcast to all remaining available AND online team members
 	remaining := m.assigner.GetAvailableAgents(teamID, triedAgents)
 	remaining = m.wsHub.FilterOnlineUsers(orgID, remaining)
+
+	// Exclude agents who are currently on an active call
+	availableRemaining := make([]uuid.UUID, 0, len(remaining))
+	for _, id := range remaining {
+		if !assignment.IsAgentOnActiveCall(m.db, id) {
+			availableRemaining = append(availableRemaining, id)
+		}
+	}
+	remaining = availableRemaining
+
 	if len(remaining) == 0 {
-		// No agents online — go straight to no_answer instead of
+		// No agents online or available — go straight to no_answer instead of
 		// holding the caller on hold music for the full timeout.
-		m.log.Info("No agents online for transfer, ending immediately",
+		m.log.Info("No agents online/available for transfer, ending immediately",
 			"transfer_id", transfer.ID,
 		)
-		m.handleTransferNoAnswer(session, transfer.ID)
+		session.mu.Lock()
+		status := session.TransferStatus
+		session.mu.Unlock()
+		if status == models.CallTransferStatusWaiting {
+			m.handleTransferNoAnswer(session, transfer.ID)
+		}
 		return
 	}
 
@@ -1013,7 +1060,12 @@ func (m *Manager) runTransferRotation(session *CallSession, transfer models.Call
 		return // Someone accepted during fallback
 	case <-totalCtx.Done():
 		if totalCtx.Err() == context.DeadlineExceeded {
-			m.handleTransferNoAnswer(session, transfer.ID)
+			session.mu.Lock()
+			status := session.TransferStatus
+			session.mu.Unlock()
+			if status == models.CallTransferStatusWaiting {
+				m.handleTransferNoAnswer(session, transfer.ID)
+			}
 		}
 	}
 }

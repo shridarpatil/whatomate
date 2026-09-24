@@ -33,9 +33,76 @@ export const useCallingStore = defineStore('calling', () => {
   const callDuration = ref(0)
   const isMuted = ref(false)
   let durationTimer: number | null = null
-  // Remote (caller/consumer) audio element. Held on a stable ref so the browser
+
+  // Web Audio API context and source for guaranteed playback on all browsers (immune to 5s autoplay timeout)
+  let audioContext: AudioContext | null = null
+  let audioSourceNode: MediaStreamAudioSourceNode | null = null
+
+  // Remote (caller/consumer) audio element fallback. Held on a stable ref so the browser
   // doesn't garbage-collect it mid-call — otherwise the remote voice goes silent.
   let remoteAudioEl: HTMLAudioElement | null = null
+
+  function getAudioContext(): AudioContext {
+    if (!audioContext || audioContext.state === 'closed') {
+      const AudioCtx = window.AudioContext || (window as any).webkitAudioContext
+      audioContext = new AudioCtx()
+    }
+    return audioContext
+  }
+
+  // Prime AudioContext synchronously during user gesture (click to answer or call)
+  function primeAudio() {
+    try {
+      const ctx = getAudioContext()
+      if (ctx.state === 'suspended') {
+        ctx.resume().catch(() => {})
+      }
+    } catch (e) {
+      console.warn('[Calling] AudioContext prime error:', e)
+    }
+    ensureRemoteAudio()
+  }
+
+  function ensureRemoteAudio(): HTMLAudioElement {
+    if (!remoteAudioEl) {
+      remoteAudioEl = new Audio()
+      remoteAudioEl.autoplay = true
+      ;(remoteAudioEl as any).playsInline = true
+    }
+    return remoteAudioEl
+  }
+
+  function playRemoteAudio(pc: RTCPeerConnection, stream: MediaStream) {
+    if (peerConnection.value !== pc) return
+
+    // 1. Pipe audio through Web Audio API (immune to 5s user gesture timeout)
+    try {
+      const ctx = getAudioContext()
+      if (ctx.state === 'suspended') {
+        ctx.resume().catch(() => {})
+      }
+      if (audioSourceNode) {
+        try { audioSourceNode.disconnect() } catch {}
+        audioSourceNode = null
+      }
+      audioSourceNode = ctx.createMediaStreamSource(stream)
+      audioSourceNode.connect(ctx.destination)
+    } catch (err) {
+      console.warn('[Calling] Web Audio API routing warning:', err)
+    }
+
+    // 2. Also attach to HTMLAudioElement (standard fallback)
+    const el = ensureRemoteAudio()
+    if (el.srcObject !== stream) {
+      el.srcObject = stream
+    }
+    const playPromise = el.play()
+    if (playPromise !== undefined) {
+      playPromise.catch((err) => {
+        console.warn('[Calling] Remote audio element play blocked (handled by Web Audio):', err)
+      })
+    }
+  }
 
   // Call permission state (in-memory only, cleared on refresh)
   const callPermissions = reactive(new Map<string, { status: string, expiresAt?: string }>())
@@ -173,6 +240,9 @@ export const useCallingStore = defineStore('calling', () => {
   }
 
   async function acceptTransfer(id: string) {
+    // Prime audio synchronously during user gesture
+    primeAudio()
+
     // Snapshot the transfer before the API call — the server broadcasts
     // call_transfer_connected immediately which removes it from waitingTransfers
     // via the WebSocket handler before this function completes.
@@ -218,15 +288,10 @@ export const useCallingStore = defineStore('calling', () => {
       pc.addTrack(track, stream)
     })
 
-    // Handle remote audio (caller's voice)
+    // Handle remote audio (caller's voice) with track-to-stream fallback
     pc.ontrack = (event) => {
-      // A queued ontrack can still fire after cleanup() tore this call down
-      // (or after a new call replaced the connection); recreating the audio
-      // element here would leak it and play ghost audio from a dead stream.
-      if (peerConnection.value !== pc) return
-      if (!remoteAudioEl) remoteAudioEl = new Audio()
-      remoteAudioEl.srcObject = event.streams[0]
-      remoteAudioEl.play().catch(() => { /* ignore autoplay */ })
+      const remoteStream = (event.streams && event.streams[0]) ? event.streams[0] : new MediaStream([event.track])
+      playRemoteAudio(pc, remoteStream)
     }
 
     // Clean up when WebRTC connection drops
@@ -240,13 +305,13 @@ export const useCallingStore = defineStore('calling', () => {
     const offer = await pc.createOffer()
     await pc.setLocalDescription(offer)
 
-    // Wait for ICE gathering (with 3s timeout to avoid long TURN delays)
+    // Wait for ICE gathering (with 1s timeout for fast connection)
     await new Promise<void>((resolve) => {
       if (pc.iceGatheringState === 'complete') {
         resolve()
         return
       }
-      const timeout = setTimeout(resolve, 3000)
+      const timeout = setTimeout(resolve, 1000)
       pc.onicegatheringstatechange = () => {
         if (pc.iceGatheringState === 'complete') {
           clearTimeout(timeout)
@@ -287,6 +352,9 @@ export const useCallingStore = defineStore('calling', () => {
 
   // Outgoing call actions
   async function makeOutgoingCall(contactId: string, contactName: string, whatsappAccount: string) {
+    // Prime audio synchronously during user gesture
+    primeAudio()
+
     // Get microphone access
     let stream: MediaStream
     try {
@@ -307,14 +375,10 @@ export const useCallingStore = defineStore('calling', () => {
       pc.addTrack(track, stream)
     })
 
-    // Handle remote audio (consumer's voice)
+    // Handle remote audio (consumer's voice) with track-to-stream fallback
     pc.ontrack = (event) => {
-      // Same late-ontrack guard as in acceptTransfer: never re-create
-      // the audio element for a connection that is no longer the active one.
-      if (peerConnection.value !== pc) return
-      if (!remoteAudioEl) remoteAudioEl = new Audio()
-      remoteAudioEl.srcObject = event.streams[0]
-      remoteAudioEl.play().catch(() => { /* ignore autoplay */ })
+      const remoteStream = (event.streams && event.streams[0]) ? event.streams[0] : new MediaStream([event.track])
+      playRemoteAudio(pc, remoteStream)
     }
 
     // Clean up when WebRTC connection drops
@@ -328,13 +392,13 @@ export const useCallingStore = defineStore('calling', () => {
     const offer = await pc.createOffer()
     await pc.setLocalDescription(offer)
 
-    // Wait for ICE gathering (with 3s timeout to avoid long TURN delays)
+    // Wait for ICE gathering (with 1s timeout for fast connection)
     await new Promise<void>((resolve) => {
       if (pc.iceGatheringState === 'complete') {
         resolve()
         return
       }
-      const timeout = setTimeout(resolve, 3000)
+      const timeout = setTimeout(resolve, 1000)
       pc.onicegatheringstatechange = () => {
         if (pc.iceGatheringState === 'complete') {
           clearTimeout(timeout)
@@ -443,6 +507,10 @@ export const useCallingStore = defineStore('calling', () => {
       clearInterval(durationTimer)
       durationTimer = null
     }
+    if (audioSourceNode) {
+      try { audioSourceNode.disconnect() } catch {}
+      audioSourceNode = null
+    }
     if (peerConnection.value) {
       peerConnection.value.close()
       peerConnection.value = null
@@ -481,10 +549,14 @@ export const useCallingStore = defineStore('calling', () => {
   function handleCallEvent(type: string, payload: any) {
     switch (type) {
       case 'call_transfer_waiting':
+        // If this agent already accepted this transfer, ignore
+        if (activeTransfer.value?.id === payload.id) break
         // Deduplicate: only add if this transfer ID isn't already in the list
         if (!waitingTransfers.value.some(t => t.id === payload.id)) {
           waitingTransfers.value.push(payload as CallTransfer)
         }
+        // Pre-fetch ICE servers in background so acceptTransfer connects instantly
+        getICEServers().catch(() => {})
         break
       case 'call_transfer_connected':
         // Another agent accepted this transfer — remove from our waiting list
@@ -509,24 +581,32 @@ export const useCallingStore = defineStore('calling', () => {
         }
         break
       case 'call_ended':
-        // If the agent is on a call that just ended, clean up
-        if (isOnCall.value) {
+        // Only clean up if THIS agent is on the call that ended
+        if (isOnCall.value && activeTransfer.value?.whatsapp_call_id === payload.call_id) {
           cleanup()
         }
         fetchCallLogs()
         break
       // Outgoing call events
       case 'outgoing_call_ringing':
-        outgoingCallStatus.value = 'ringing'
+        if (outgoingCallLogId.value === payload.call_log_id || outgoingCallLogId.value === payload.call_id) {
+          outgoingCallStatus.value = 'ringing'
+        }
         break
       case 'outgoing_call_answered':
-        outgoingCallStatus.value = 'answered'
+        if (outgoingCallLogId.value === payload.call_log_id || outgoingCallLogId.value === payload.call_id) {
+          outgoingCallStatus.value = 'answered'
+        }
         break
       case 'outgoing_call_rejected':
-        cleanup()
+        if (outgoingCallLogId.value === payload.call_log_id || outgoingCallLogId.value === payload.call_id) {
+          cleanup()
+        }
         break
       case 'outgoing_call_ended':
-        cleanup()
+        if (outgoingCallLogId.value === payload.call_log_id || outgoingCallLogId.value === payload.call_id) {
+          cleanup()
+        }
         break
       case 'call_permission_update': {
         const t = i18n.global.t

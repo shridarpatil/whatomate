@@ -272,6 +272,21 @@ func (m *Manager) HandleCallEvent(callID, event string) {
 
 // EndCall terminates a call session and cleans up resources
 func (m *Manager) EndCall(callID string) {
+	m.mu.RLock()
+	session := m.sessions[callID]
+	m.mu.RUnlock()
+
+	if session != nil {
+		session.mu.Lock()
+		status := session.TransferStatus
+		session.mu.Unlock()
+
+		if status == models.CallTransferStatusWaiting {
+			m.HandleCallerHangupDuringTransfer(session)
+			return
+		}
+	}
+
 	m.cleanupSession(callID)
 }
 
@@ -334,14 +349,13 @@ func (m *Manager) cleanupSession(callID string) {
 		return
 	}
 
-	// If a transfer is in the "waiting" state the agent's PC is being torn
-	// down intentionally. Don't destroy the whole session — the caller-side
-	// (or WA-side) PeerConnection must stay alive for hold music.
+	// If a transfer is in the "waiting" state, the caller hung up or disconnected.
+	// Clean up the transfer as abandoned cleanly rather than orphaning it in memory.
 	session.mu.Lock()
 	if session.TransferStatus == models.CallTransferStatusWaiting {
 		session.mu.Unlock()
 		m.mu.Unlock()
-		m.log.Info("Skipping cleanup — transfer in waiting state", "call_id", callID)
+		m.HandleCallerHangupDuringTransfer(session)
 		return
 	}
 	session.mu.Unlock()
