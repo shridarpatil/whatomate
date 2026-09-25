@@ -133,6 +133,18 @@ type IncomingTextMessage struct {
 	} `json:"contacts,omitempty"`
 }
 
+// storeContactBSUID saves the contact's BSUID when it is provided and changed.
+func (a *App) storeContactBSUID(contact *models.Contact, bsuid string) {
+	if bsuid == "" || contact.BSUID == bsuid {
+		return
+	}
+	if err := a.DB.Model(contact).Update("bs_uid", bsuid).Error; err != nil {
+		a.Log.Error("Failed to store contact BSUID", "error", err, "contact_id", contact.ID)
+		return
+	}
+	contact.BSUID = bsuid
+}
+
 // processIncomingMessageFull processes incoming WhatsApp messages with chatbot logic
 func (a *App) processIncomingMessageFull(phoneNumberID string, msg IncomingTextMessage, profileName string) {
 	a.Log.Info("Processing incoming message",
@@ -162,11 +174,7 @@ func (a *App) processIncomingMessageFull(phoneNumberID string, msg IncomingTextM
 		return
 	}
 
-	// Store BSUID if provided and not already set
-	if msg.FromUserID != "" && contact.BSUID != msg.FromUserID {
-		a.DB.Model(contact).Update("bsuid", msg.FromUserID)
-		contact.BSUID = msg.FromUserID
-	}
+	a.storeContactBSUID(contact, msg.FromUserID)
 
 	// Dispatch webhook if new contact was created
 	if isNewContact {
