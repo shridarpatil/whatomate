@@ -392,6 +392,7 @@ export const chatbotService = {
   createFlow: (data: any) => api.post('/chatbot/flows', data),
   updateFlow: (id: string, data: any) => api.put(`/chatbot/flows/${id}`, data),
   deleteFlow: (id: string) => api.delete(`/chatbot/flows/${id}`),
+  duplicateFlow: (id: string) => api.post(`/chatbot/flows/${id}/duplicate`),
 
   // AI Contexts
   listAIContexts: (params?: { search?: string; page?: number; limit?: number }) =>

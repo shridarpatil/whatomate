@@ -1104,6 +1104,90 @@ func (a *App) DeleteChatbotFlow(r *fastglue.Request) error {
 	})
 }
 
+// DuplicateChatbotFlow creates a copy of an existing chatbot flow.
+//
+// The copy is created DISABLED so it cannot compete with the source flow for
+// the same trigger keywords until the user has reviewed it. This mirrors
+// DuplicateFlow, which creates WhatsApp flow copies in DRAFT status.
+func (a *App) DuplicateChatbotFlow(r *fastglue.Request) error {
+	orgID, userID, err := a.getOrgAndUserID(r)
+	if err != nil {
+		return r.SendErrorEnvelope(fasthttp.StatusUnauthorized, "Unauthorized", nil, "")
+	}
+
+	if !a.HasPermission(userID, models.ResourceFlowsChatbot, models.ActionWrite, orgID) {
+		return r.SendErrorEnvelope(fasthttp.StatusForbidden, "Permission denied", nil, "")
+	}
+
+	id, err := parsePathUUID(r, "id", "flow")
+	if err != nil {
+		return nil
+	}
+
+	src, err := findByIDAndOrg[models.ChatbotFlow](a.DB, r, id, orgID, "Flow")
+	if err != nil {
+		return nil
+	}
+
+	newFlow := models.ChatbotFlow{
+		BaseModel:      models.BaseModel{ID: uuid.New()},
+		OrganizationID: orgID,
+		Name:           src.Name + " (Copy)",
+		// Disabled on purpose: an enabled copy would share the source's
+		// trigger keywords and make keyword routing ambiguous.
+		IsEnabled:          false,
+		WhatsAppAccount:    src.WhatsAppAccount,
+		Description:        src.Description,
+		TriggerKeywords:    src.TriggerKeywords,
+		TriggerButtonID:    src.TriggerButtonID,
+		InitialMessage:     src.InitialMessage,
+		InitialMessageType: src.InitialMessageType,
+		InitialTemplateID:  src.InitialTemplateID,
+		CompletionMessage:  src.CompletionMessage,
+		OnCompleteAction:   src.OnCompleteAction,
+		CompletionConfig:   src.CompletionConfig,
+		TimeoutMessage:     src.TimeoutMessage,
+		CancelKeywords:     src.CancelKeywords,
+		PanelConfig:        src.PanelConfig,
+		Graph:              src.Graph,
+		CreatedByID:        &userID,
+		UpdatedByID:        &userID,
+	}
+
+	tx := a.DB.Begin()
+	if err := tx.Create(&newFlow).Error; err != nil {
+		tx.Rollback()
+		a.Log.Error("Failed to duplicate chatbot flow", "error", err, "source_flow_id", id)
+		return r.SendErrorEnvelope(fasthttp.StatusInternalServerError, "Failed to duplicate flow", nil, "")
+	}
+
+	// IsEnabled is tagged `gorm:"default:true"`, and GORM omits zero-value
+	// fields that carry a default - so the false set above is written as the
+	// column default (true). Force it within the same transaction so the copy
+	// is never briefly visible as an enabled flow.
+	if err := tx.Model(&newFlow).Update("is_enabled", false).Error; err != nil {
+		tx.Rollback()
+		a.Log.Error("Failed to disable duplicated flow", "error", err, "new_flow_id", newFlow.ID)
+		return r.SendErrorEnvelope(fasthttp.StatusInternalServerError, "Failed to duplicate flow", nil, "")
+	}
+
+	tx.Commit()
+	newFlow.IsEnabled = false
+
+	// Invalidate cache
+	a.InvalidateChatbotFlowsCache(orgID)
+
+	a.logAudit(orgID, userID,
+		"chatbot_flow", newFlow.ID, models.AuditActionCreated, nil, &newFlow)
+
+	a.Log.Info("Chatbot flow duplicated", "source_flow_id", id, "new_flow_id", newFlow.ID)
+
+	return r.SendEnvelope(map[string]any{
+		"id":      newFlow.ID.String(),
+		"message": "Flow duplicated successfully",
+	})
+}
+
 // ListAIContexts lists all AI contexts
 func (a *App) ListAIContexts(r *fastglue.Request) error {
 	orgID, err := a.getOrgID(r)
