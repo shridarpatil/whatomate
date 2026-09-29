@@ -487,7 +487,9 @@ function onUserActive() {
   if (document.visibilityState !== 'visible' || !document.hasFocus()) return
   if (!firstUnreadId.value) return
   if (contactsStore.currentContact) {
-    contactsService.markRead(contactsStore.currentContact.id)
+    const contactId = contactsStore.currentContact.id
+    contactsService.markRead(contactId)
+      .then(() => contactsStore.markContactRead(contactId))
       .catch(() => { /* non-critical */ })
   }
   nextTick(() => {
