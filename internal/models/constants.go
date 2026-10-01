@@ -40,6 +40,10 @@ const (
 	MessageTypeReaction    MessageType = "reaction"
 	MessageTypeLocation    MessageType = "location"
 	MessageTypeContact     MessageType = "contact"
+	// MessageTypeCall is a locally generated chat entry for a voice call —
+	// not a WhatsApp message type. Used to surface missed click-to-call calls
+	// in the conversation.
+	MessageTypeCall MessageType = "call"
 )
 
 // MessageStatus represents the delivery status of a message

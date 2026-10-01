@@ -93,6 +93,9 @@ audio_dir = "./audio"         # Directory for IVR audio files
 # hold_music_file = "hold_music.opus"
 # ringback_file = "ringback.opus"
 transfer_timeout_secs = 120   # How long to wait for agent to accept transfer
+per_agent_timeout_secs = 15   # How long each agent in a team rotation is rung
+sticky_ring_secs = 30         # How long a click-to-call button rings the agent who sent it
+                              # (those calls never fall back to the team)
 recording_enabled = true      # Record calls to S3 (requires [storage] s3 config)
 udp_port_min = 10000          # WebRTC UDP port range start
 udp_port_max = 10100          # WebRTC UDP port range end

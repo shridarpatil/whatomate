@@ -1016,6 +1016,68 @@ func TestApp_UpdateCurrentUserSettings(t *testing.T) {
 		assert.Equal(t, true, dbUser.Settings["campaign_updates"])
 	})
 
+	t.Run("call ringtone persists", func(t *testing.T) {
+		t.Parallel()
+		app := newTestApp(t)
+		org := testutil.CreateTestOrganization(t, app.DB)
+		user := testutil.CreateTestUser(t, app.DB, org.ID,
+			testutil.WithEmail(testutil.UniqueEmail("settings-ringtone")),
+		)
+
+		req := testutil.NewJSONRequest(t, map[string]any{
+			"email_notifications": true,
+			"new_message_alerts":  true,
+			"campaign_updates":    true,
+			"call_ringtone":       "none",
+		})
+		testutil.SetAuthContext(req, org.ID, user.ID)
+
+		require.NoError(t, app.UpdateCurrentUserSettings(req))
+		assert.Equal(t, fasthttp.StatusOK, testutil.GetResponseStatusCode(req))
+
+		var dbUser models.User
+		require.NoError(t, app.DB.Where("id = ?", user.ID).First(&dbUser).Error)
+		assert.Equal(t, "none", dbUser.Settings["call_ringtone"])
+	})
+
+	// Saving the notification toggles from a client that doesn't know about
+	// ringtones must not silently reset the agent's choice.
+	t.Run("omitted call ringtone keeps the current choice", func(t *testing.T) {
+		t.Parallel()
+		app := newTestApp(t)
+		org := testutil.CreateTestOrganization(t, app.DB)
+		user := testutil.CreateTestUser(t, app.DB, org.ID,
+			testutil.WithEmail(testutil.UniqueEmail("settings-ringtone-keep")),
+		)
+
+		first := testutil.NewJSONRequest(t, map[string]any{"call_ringtone": "beep"})
+		testutil.SetAuthContext(first, org.ID, user.ID)
+		require.NoError(t, app.UpdateCurrentUserSettings(first))
+
+		second := testutil.NewJSONRequest(t, map[string]any{"campaign_updates": true})
+		testutil.SetAuthContext(second, org.ID, user.ID)
+		require.NoError(t, app.UpdateCurrentUserSettings(second))
+
+		var dbUser models.User
+		require.NoError(t, app.DB.Where("id = ?", user.ID).First(&dbUser).Error)
+		assert.Equal(t, "beep", dbUser.Settings["call_ringtone"])
+	})
+
+	t.Run("unknown call ringtone is rejected", func(t *testing.T) {
+		t.Parallel()
+		app := newTestApp(t)
+		org := testutil.CreateTestOrganization(t, app.DB)
+		user := testutil.CreateTestUser(t, app.DB, org.ID,
+			testutil.WithEmail(testutil.UniqueEmail("settings-ringtone-bad")),
+		)
+
+		req := testutil.NewJSONRequest(t, map[string]any{"call_ringtone": "airhorn"})
+		testutil.SetAuthContext(req, org.ID, user.ID)
+
+		require.NoError(t, app.UpdateCurrentUserSettings(req))
+		assert.Equal(t, fasthttp.StatusBadRequest, testutil.GetResponseStatusCode(req))
+	})
+
 	t.Run("update overwrites previous settings", func(t *testing.T) {
 		t.Parallel()
 		app := newTestApp(t)

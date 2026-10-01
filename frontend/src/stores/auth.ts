@@ -6,7 +6,10 @@ export interface UserSettings {
   email_notifications?: boolean
   new_message_alerts?: boolean
   campaign_updates?: boolean
+  call_ringtone?: CallRingtone
 }
+
+export type CallRingtone = 'ring' | 'beep' | 'none'
 
 export interface Permission {
   id: string

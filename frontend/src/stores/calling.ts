@@ -1,5 +1,6 @@
 import { defineStore } from 'pinia'
-import { ref, reactive, computed } from 'vue'
+import { ref, reactive, computed, watch } from 'vue'
+import { startRinging, stopRinging } from '@/lib/ringtone'
 import { callLogsService, ivrFlowsService, callTransfersService, outgoingCallsService, type CallLog, type IVRFlow, type CallTransfer } from '@/services/api'
 import { toast } from 'vue-sonner'
 import { i18n } from '@/i18n'
@@ -438,7 +439,16 @@ export const useCallingStore = defineStore('calling', () => {
     isOnHold.value = false
   }
 
+  // One rule for the ringtone: it rings while a call is waiting to be answered
+  // and stops the moment nothing is. Covers accepting, rejecting, another agent
+  // taking it, no-answer and termination without a stop call on each path.
+  watch(
+    () => waitingTransfers.value.length,
+    waiting => (waiting > 0 ? startRinging() : stopRinging()),
+  )
+
   function cleanup() {
+    stopRinging()
     if (durationTimer) {
       clearInterval(durationTimer)
       durationTimer = null

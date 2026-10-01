@@ -532,8 +532,9 @@ class WebSocketService {
     const callingStore = useCallingStore()
     callingStore.handleCallEvent('call_transfer_waiting', payload)
 
+    // No one-shot beep here — the calling store rings a looping tone for as
+    // long as the transfer is waiting.
     const contactName = payload.caller_phone || 'Unknown'
-    playNotificationSound()
     toast.info('Incoming Call Transfer', {
       description: `Call from ${contactName} waiting for an agent`,
       duration: 10000,

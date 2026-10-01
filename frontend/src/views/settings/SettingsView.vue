@@ -14,7 +14,8 @@ import LanguageSwitcher from '@/components/LanguageSwitcher.vue'
 import { toast } from 'vue-sonner'
 import { Settings, Bell, Loader2, Globe, Phone, Upload, Play, Pause, Music } from 'lucide-vue-next'
 import { usersService, organizationService } from '@/services/api'
-import { useAuthStore } from '@/stores/auth'
+import { useAuthStore, type CallRingtone } from '@/stores/auth'
+import { previewRingtone } from '@/lib/ringtone'
 
 const { t } = useI18n()
 const authStore = useAuthStore()
@@ -49,7 +50,8 @@ const generalSettings = ref({
 const notificationSettings = ref({
   email_notifications: true,
   new_message_alerts: true,
-  campaign_updates: true
+  campaign_updates: true,
+  call_ringtone: 'ring' as CallRingtone
 })
 
 // Calling Settings
@@ -116,7 +118,8 @@ onMounted(async () => {
       notificationSettings.value = {
         email_notifications: user.settings.email_notifications ?? true,
         new_message_alerts: user.settings.new_message_alerts ?? true,
-        campaign_updates: user.settings.campaign_updates ?? true
+        campaign_updates: user.settings.campaign_updates ?? true,
+        call_ringtone: user.settings.call_ringtone ?? 'ring'
       }
     }
   } catch (error) {
@@ -166,8 +169,12 @@ async function saveNotificationSettings() {
     await usersService.updateSettings({
       email_notifications: notificationSettings.value.email_notifications,
       new_message_alerts: notificationSettings.value.new_message_alerts,
-      campaign_updates: notificationSettings.value.campaign_updates
+      campaign_updates: notificationSettings.value.campaign_updates,
+      call_ringtone: notificationSettings.value.call_ringtone
     })
+    // Pull the saved settings back into the auth store so the ringtone picker
+    // takes effect on the next call without a reload.
+    await authStore.refreshUserData()
     toast.success(t('settings.notificationsSaved'))
     refreshActivityLog(notificationLogKey)
   } catch (error) {
@@ -422,6 +429,34 @@ function togglePlayAudio(type: 'hold_music' | 'ringback') {
                     :checked="notificationSettings.campaign_updates"
                     @update:checked="notificationSettings.campaign_updates = $event"
                   />
+                </div>
+                <Separator class="bg-white/[0.08] light:bg-gray-200" />
+                <div class="flex items-center justify-between gap-4">
+                  <div>
+                    <p class="font-medium text-white light:text-gray-900">{{ $t('settings.callRingtone') }}</p>
+                    <p class="text-sm text-white/40 light:text-gray-500">{{ $t('settings.callRingtoneDesc') }}</p>
+                  </div>
+                  <div class="flex items-center gap-2">
+                    <Select v-model="notificationSettings.call_ringtone">
+                      <SelectTrigger class="w-44 bg-white/[0.04] border-white/[0.1] text-white/70 light:bg-white light:border-gray-200 light:text-gray-700">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent class="bg-[#141416] border-white/[0.08] light:bg-white light:border-gray-200">
+                        <SelectItem value="ring" class="text-white/70 focus:bg-white/[0.08] focus:text-white light:text-gray-700 light:focus:bg-gray-100">{{ $t('settings.ringtoneRing') }}</SelectItem>
+                        <SelectItem value="beep" class="text-white/70 focus:bg-white/[0.08] focus:text-white light:text-gray-700 light:focus:bg-gray-100">{{ $t('settings.ringtoneBeep') }}</SelectItem>
+                        <SelectItem value="none" class="text-white/70 focus:bg-white/[0.08] focus:text-white light:text-gray-700 light:focus:bg-gray-100">{{ $t('settings.ringtoneNone') }}</SelectItem>
+                      </SelectContent>
+                    </Select>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      class="bg-white/[0.04] border-white/[0.1] text-white/70 hover:bg-white/[0.08] hover:text-white light:bg-white light:border-gray-200 light:text-gray-700 light:hover:bg-gray-50"
+                      :disabled="notificationSettings.call_ringtone === 'none'"
+                      @click="previewRingtone(notificationSettings.call_ringtone)"
+                    >
+                      <Play class="h-4 w-4" />
+                    </Button>
+                  </div>
                 </div>
                 <div class="flex justify-end pt-4">
                   <Button variant="outline" size="sm" class="bg-white/[0.04] border-white/[0.1] text-white/70 hover:bg-white/[0.08] hover:text-white light:bg-white light:border-gray-200 light:text-gray-700 light:hover:bg-gray-50" @click="saveNotificationSettings" :disabled="isSubmitting">
