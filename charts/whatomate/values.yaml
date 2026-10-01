@@ -1,0 +1,117 @@
+image:
+  repository: shridh0r/whatomate
+  # Defaults to the chart appVersion. Pin a version rather than "latest" so restarts are reproducible.
+  tag: ""
+  pullPolicy: IfNotPresent
+
+imagePullSecrets: []
+nameOverride: ""
+fullnameOverride: ""
+
+# Run database migrations on startup (passes -migrate). Back up the database before upgrading.
+migrate: true
+
+# Non-secret settings, rendered as WHATOMATE_<SECTION>__<KEY> environment variables.
+# Any key from config.example.toml works, e.g. database.host -> WHATOMATE_DATABASE__HOST.
+config:
+  app:
+    environment: production
+  server:
+    port: 8080
+    # Required in production; derived from ingress.hosts when left empty.
+    allowed_origins: ""
+  database:
+    host: ""
+    port: 5432
+    user: whatomate
+    name: whatomate
+    ssl_mode: disable
+  redis:
+    host: ""
+    port: 6379
+  storage:
+    type: local
+    local_path: /app/uploads
+
+# config.toml content, always mounted at /etc/whatomate/config.toml. Environment variables override it.
+configToml: ""
+
+secrets:
+  # Use an existing Secret. Map each config path to a key inside that Secret.
+  existingSecret: ""
+  keys: {}
+  #  database.password: db-password
+  #  redis.password: redis-password
+  #  jwt.secret: jwt-secret
+  #  app.encryption_key: encryption-key
+  #  whatsapp.webhook_verify_token: webhook-verify-token
+  #  default_admin.password: admin-password
+  # Or let the chart create the Secret from these values (config path -> value). Prefer existingSecret in production.
+  values: {}
+  #  database.password: change-me
+  #  jwt.secret: change-me
+
+extraEnv: []
+extraEnvFrom: []
+extraVolumes: []
+extraVolumeMounts: []
+
+serviceAccount:
+  create: true
+  name: ""
+  annotations: {}
+
+persistence:
+  enabled: true
+  existingClaim: ""
+  storageClass: ""
+  accessModes:
+    - ReadWriteOnce
+  size: 10Gi
+  mountPath: /app/uploads
+  # Keep the uploads volume when the release is uninstalled.
+  keep: true
+
+# With a ReadWriteOnce volume, use Recreate if the new pod can land on a different node.
+strategy: {}
+
+service:
+  type: ClusterIP
+  port: 8080
+
+ingress:
+  enabled: false
+  className: ""
+  annotations: {}
+  hosts: []
+  #  - host: whatomate.example.com
+  tls: []
+  #  - secretName: whatomate-tls
+  #    hosts:
+  #      - whatomate.example.com
+
+resources: {}
+podAnnotations: {}
+podLabels: {}
+podSecurityContext: {}
+securityContext: {}
+nodeSelector: {}
+tolerations: []
+affinity: {}
+
+livenessProbe:
+  httpGet:
+    path: /health
+    port: http
+  initialDelaySeconds: 30
+  periodSeconds: 10
+  timeoutSeconds: 5
+  failureThreshold: 3
+readinessProbe:
+  httpGet:
+    path: /health
+    port: http
+  initialDelaySeconds: 10
+  periodSeconds: 5
+  timeoutSeconds: 3
+  failureThreshold: 3

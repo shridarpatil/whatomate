@@ -1,0 +1,10 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "whatomate.fullname" . }}-toml
+  labels:
+    {{- include "whatomate.labels" . | nindent 4 }}
+data:
+  # The server requires a config file; an empty one means every setting comes from the environment.
+  config.toml: |
+    {{- .Values.configToml | default "# Settings come from WHATOMATE_* environment variables.\n" | nindent 4 }}

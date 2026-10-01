@@ -1,0 +1,121 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "whatomate.fullname" . }}
+  labels:
+    {{- include "whatomate.labels" . | nindent 4 }}
+spec:
+  # Uploads live on a ReadWriteOnce volume, so a single replica.
+  replicas: 1
+  {{- with .Values.strategy }}
+  strategy:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+  selector:
+    matchLabels:
+      {{- include "whatomate.selectorLabels" . | nindent 6 }}
+  template:
+    metadata:
+      annotations:
+        checksum/config: {{ include (print $.Template.BasePath "/configmap.yaml") . | sha256sum }}
+        checksum/config-toml: {{ include (print $.Template.BasePath "/configmap-toml.yaml") . | sha256sum }}
+        checksum/secret: {{ include (print $.Template.BasePath "/secret.yaml") . | sha256sum }}
+        {{- with .Values.podAnnotations }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+      labels:
+        {{- include "whatomate.labels" . | nindent 8 }}
+        {{- with .Values.podLabels }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+    spec:
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      serviceAccountName: {{ include "whatomate.serviceAccountName" . }}
+      securityContext:
+        {{- toYaml .Values.podSecurityContext | nindent 8 }}
+      containers:
+        - name: whatomate
+          securityContext:
+            {{- toYaml .Values.securityContext | nindent 12 }}
+          image: "{{ .Values.image.repository }}:{{ include "whatomate.tag" . }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          args:
+            - server
+            - -config
+            - /etc/whatomate/config.toml
+            {{- if .Values.migrate }}
+            - -migrate
+            {{- end }}
+          ports:
+            - name: http
+              containerPort: {{ dig "server" "port" 8080 .Values.config }}
+              protocol: TCP
+          envFrom:
+            - configMapRef:
+                name: {{ include "whatomate.fullname" . }}
+            {{- if and .Values.secrets.values (not .Values.secrets.existingSecret) }}
+            - secretRef:
+                name: {{ include "whatomate.secretName" . }}
+            {{- end }}
+            {{- with .Values.extraEnvFrom }}
+            {{- toYaml . | nindent 12 }}
+            {{- end }}
+          {{- if or .Values.secrets.keys .Values.extraEnv }}
+          env:
+            {{- if .Values.secrets.existingSecret }}
+            {{- range $path, $key := .Values.secrets.keys }}
+            - name: {{ include "whatomate.envName" $path }}
+              valueFrom:
+                secretKeyRef:
+                  name: {{ $.Values.secrets.existingSecret }}
+                  key: {{ $key }}
+            {{- end }}
+            {{- end }}
+            {{- with .Values.extraEnv }}
+            {{- toYaml . | nindent 12 }}
+            {{- end }}
+          {{- end }}
+          livenessProbe:
+            {{- toYaml .Values.livenessProbe | nindent 12 }}
+          readinessProbe:
+            {{- toYaml .Values.readinessProbe | nindent 12 }}
+          resources:
+            {{- toYaml .Values.resources | nindent 12 }}
+          volumeMounts:
+            - name: config-toml
+              mountPath: /etc/whatomate
+              readOnly: true
+            {{- if .Values.persistence.enabled }}
+            - name: uploads
+              mountPath: {{ .Values.persistence.mountPath }}
+            {{- end }}
+            {{- with .Values.extraVolumeMounts }}
+            {{- toYaml . | nindent 12 }}
+            {{- end }}
+      volumes:
+        - name: config-toml
+          configMap:
+            name: {{ include "whatomate.fullname" . }}-toml
+        {{- if .Values.persistence.enabled }}
+        - name: uploads
+          persistentVolumeClaim:
+            claimName: {{ .Values.persistence.existingClaim | default (include "whatomate.fullname" .) }}
+        {{- end }}
+        {{- with .Values.extraVolumes }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+      {{- with .Values.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}

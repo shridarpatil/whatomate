@@ -1,0 +1,19 @@
+Whatomate {{ include "whatomate.tag" . }} is deployed as {{ include "whatomate.fullname" . }} in {{ .Release.Namespace }}.
+{{- if not (or (dig "database" "host" "" .Values.config) .Values.configToml) }}
+
+WARNING: config.database.host is empty and no configToml is set, so the app cannot reach PostgreSQL.
+{{- end }}
+{{- if not (or .Values.secrets.existingSecret .Values.secrets.values) }}
+
+WARNING: no secrets are configured. Set secrets.existingSecret (or secrets.values) for at least
+database.password, jwt.secret and app.encryption_key.
+{{- end }}
+
+{{- if .Values.ingress.enabled }}
+
+Open: {{ range .Values.ingress.hosts }}http{{ if $.Values.ingress.tls }}s{{ end }}://{{ .host }} {{ end }}
+{{- else }}
+
+Port-forward to try it locally:
+  kubectl -n {{ .Release.Namespace }} port-forward svc/{{ include "whatomate.fullname" . }} 8080:{{ .Values.service.port }}
+{{- end }}

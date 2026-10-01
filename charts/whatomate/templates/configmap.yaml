@@ -1,0 +1,28 @@
+{{- $config := deepCopy .Values.config }}
+{{- $server := get $config "server" | default dict }}
+{{- if not (get $server "allowed_origins") }}
+{{- $origins := list }}
+{{- range .Values.ingress.hosts }}
+{{- $origins = append $origins (printf "%s://%s" (ternary "https" "http" (not (empty $.Values.ingress.tls))) .host) }}
+{{- end }}
+{{- if $origins }}
+{{- $_ := set $server "allowed_origins" (join "," $origins) }}
+{{- $_ := set $config "server" $server }}
+{{- else if and (eq (dig "app" "environment" "" $config) "production") (not .Values.configToml) }}
+{{- fail "config.server.allowed_origins is required when config.app.environment is production (or set ingress.hosts to derive it)" }}
+{{- end }}
+{{- end }}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "whatomate.fullname" . }}
+  labels:
+    {{- include "whatomate.labels" . | nindent 4 }}
+data:
+  {{- range $section, $fields := $config }}
+  {{- range $key, $value := $fields }}
+  {{- if ne (toString $value) "" }}
+  {{ include "whatomate.envName" (printf "%s.%s" $section $key) }}: {{ $value | toString | quote }}
+  {{- end }}
+  {{- end }}
+  {{- end }}

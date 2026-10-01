@@ -1,0 +1,12 @@
+apiVersion: v2
+name: whatomate
+description: Self-hosted WhatsApp Business platform
+type: application
+version: 0.1.0
+appVersion: "0.1.1-beta-0.17"
+home: https://github.com/shridarpatil/whatomate
+sources:
+  - https://github.com/shridarpatil/whatomate
+keywords:
+  - whatsapp
+  - whatsapp-business
