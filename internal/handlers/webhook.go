@@ -589,7 +589,7 @@ func (a *App) processMarketingPreference(phoneNumberID, userPhone, bsuid, value 
 			return
 		}
 	} else if bsuid != "" {
-		if err := a.DB.Where("bsuid = ? AND organization_id = ?", bsuid, account.OrganizationID).First(&contact).Error; err != nil {
+		if err := a.DB.Where("bs_uid = ? AND organization_id = ?", bsuid, account.OrganizationID).First(&contact).Error; err != nil {
 			a.Log.Info("Contact not found by BSUID for marketing preference", "bsuid", bsuid)
 			return
 		}
@@ -650,11 +650,7 @@ func (a *App) processMessageEcho(phoneNumberID string, msg IncomingTextMessage) 
 		return
 	}
 
-	// Store BSUID if provided and not already set
-	if msg.FromUserID != "" && contact.BSUID != msg.FromUserID {
-		a.DB.Model(contact).Update("bsuid", msg.FromUserID)
-		contact.BSUID = msg.FromUserID
-	}
+	a.storeContactBSUID(contact, msg.FromUserID)
 
 	// Get message content - handle text and media
 	extracted := a.extractMessageContent(context.Background(), msg, account)
