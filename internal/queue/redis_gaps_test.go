@@ -166,3 +166,29 @@ func TestConsume_SuccessfulJobIsAckedAndCleared(t *testing.T) {
 	assert.Equal(t, int64(0), pendingCount(t, client),
 		"successful jobs must be ACKed and cleared from pending")
 }
+
+func TestConsume_RecreatesGroupAfterRedisDataLoss(t *testing.T) {
+	client := skipIfNoRedis(t)
+	cleanStream(t, client)
+	log := testutil.NopLogger()
+	ctx := testutil.TestContextWithTimeout(t, 15*time.Second)
+
+	consumer, err := queue.NewRedisConsumer(client, log)
+	require.NoError(t, err)
+	defer func() { _ = consumer.Close() }()
+
+	handler := &mockHandler{}
+	consumeCtx, cancel := context.WithCancel(ctx)
+	defer cancel()
+	go func() { _ = consumer.Consume(consumeCtx, handler) }()
+
+	// Simulate a Redis restart without persistence: stream and group vanish.
+	require.NoError(t, client.Del(ctx, queue.StreamName).Err())
+
+	q := queue.NewRedisQueue(client, log)
+	require.NoError(t, q.EnqueueRecipient(ctx, makeRecipientJob()))
+
+	testutil.AssertEventually(t, func() bool {
+		return len(handler.getJobs()) >= 1
+	}, 12*time.Second, "consumer should recreate the group and process the job")
+}
