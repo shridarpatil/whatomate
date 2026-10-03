@@ -362,6 +362,10 @@
     "viewContactDetails": "View contact details",
     "hideContactDetails": "Hide contact details",
     "contactOptions": "Contact Options",
+    "deleteChat": "Delete chat",
+    "deleteChatConfirm": "Delete the chat with {name}? All messages, media and notes in this conversation will be permanently deleted. This cannot be undone.",
+    "chatDeleted": "Chat deleted",
+    "chatDeleteFailed": "Failed to delete chat",
     "sendMedia": "Send Media",
     "mediaViewer": {
       "title": "Attachment",
