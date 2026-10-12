@@ -2,7 +2,6 @@ package handlers
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"net"
 	"net/url"
@@ -51,6 +50,19 @@ func validateWebhookURL(rawURL string) error {
 	return nil
 }
 
+// validateWebhookBodyTemplate compiles a non-empty body template so a syntax
+// error is reported at save time rather than silently dropping deliveries. An
+// empty template is valid — it means "use the default JSON envelope".
+func validateWebhookBodyTemplate(body string) error {
+	if strings.TrimSpace(body) == "" {
+		return nil
+	}
+	if _, err := parseWebhookTemplate(body); err != nil {
+		return fmt.Errorf("invalid body template: %w", err)
+	}
+	return nil
+}
+
 // SSRFSafeDialer returns a DialContext function that blocks connections to
 // private/loopback IPs after DNS resolution. Use this in http.Transport
 // for webhook and custom action HTTP calls.
@@ -85,25 +97,27 @@ func SSRFSafeDialer() func(ctx context.Context, network, addr string) (net.Conn,
 
 // WebhookRequest represents the request body for creating/updating a webhook
 type WebhookRequest struct {
-	Name     string            `json:"name"`
-	URL      string            `json:"url"`
-	Events   []string          `json:"events"`
-	Headers  map[string]string `json:"headers"`
-	Secret   string            `json:"secret"`
-	IsActive bool              `json:"is_active"`
+	Name         string            `json:"name"`
+	URL          string            `json:"url"`
+	Events       []string          `json:"events"`
+	Headers      map[string]string `json:"headers"`
+	Secret       string            `json:"secret"`
+	BodyTemplate string            `json:"body_template"`
+	IsActive     bool              `json:"is_active"`
 }
 
 // WebhookResponse represents the API response for a webhook
 type WebhookResponse struct {
-	ID        uuid.UUID         `json:"id"`
-	Name      string            `json:"name"`
-	URL       string            `json:"url"`
-	Events    []string          `json:"events"`
-	Headers   map[string]string `json:"headers"`
-	IsActive  bool              `json:"is_active"`
-	HasSecret bool              `json:"has_secret"`
-	CreatedAt string            `json:"created_at"`
-	UpdatedAt string            `json:"updated_at"`
+	ID           uuid.UUID         `json:"id"`
+	Name         string            `json:"name"`
+	URL          string            `json:"url"`
+	Events       []string          `json:"events"`
+	Headers      map[string]string `json:"headers"`
+	BodyTemplate string            `json:"body_template"`
+	IsActive     bool              `json:"is_active"`
+	HasSecret    bool              `json:"has_secret"`
+	CreatedAt    string            `json:"created_at"`
+	UpdatedAt    string            `json:"updated_at"`
 }
 
 // AvailableWebhookEvents returns the list of available webhook event types
@@ -203,6 +217,10 @@ func (a *App) CreateWebhook(r *fastglue.Request) error {
 		return r.SendErrorEnvelope(fasthttp.StatusBadRequest, "at least one event must be selected", nil, "")
 	}
 
+	if err := validateWebhookBodyTemplate(req.BodyTemplate); err != nil {
+		return r.SendErrorEnvelope(fasthttp.StatusBadRequest, err.Error(), nil, "")
+	}
+
 	// Convert headers to JSONB
 	headers := models.JSONB{}
 	for k, v := range req.Headers {
@@ -222,6 +240,7 @@ func (a *App) CreateWebhook(r *fastglue.Request) error {
 		Events:         req.Events,
 		Headers:        headers,
 		Secret:         secret,
+		BodyTemplate:   req.BodyTemplate,
 		IsActive:       true,
 	}
 
@@ -290,6 +309,14 @@ func (a *App) UpdateWebhook(r *fastglue.Request) error {
 		webhook.Secret = req.Secret
 	}
 
+	// Body template is sent as a full value (empty string clears it back to the
+	// default envelope). Validate before persisting so a broken template is
+	// rejected at save time rather than silently failing on delivery.
+	if err := validateWebhookBodyTemplate(req.BodyTemplate); err != nil {
+		return r.SendErrorEnvelope(fasthttp.StatusBadRequest, err.Error(), nil, "")
+	}
+	webhook.BodyTemplate = req.BodyTemplate
+
 	webhook.IsActive = req.IsActive
 
 	if err := a.DB.Save(webhook).Error; err != nil {
@@ -354,23 +381,23 @@ func (a *App) TestWebhook(r *fastglue.Request) error {
 		return nil
 	}
 
-	// Send a test event synchronously
-	testData := map[string]any{
-		"test":      true,
-		"message":   "This is a test webhook from Whatomate",
-		"timestamp": time.Now().UTC().Format(time.RFC3339),
+	// Send a representative message event so a configured body template renders
+	// against realistic fields (contact_name, content, ...) during the test.
+	testData := MessageEventData{
+		MessageID:       "test-message-id",
+		ContactID:       "test-contact-id",
+		ContactPhone:    "+15551234567",
+		ContactName:     "Test Contact",
+		MessageType:     models.MessageTypeText,
+		Content:         "This is a test webhook from Whatomate",
+		WhatsAppAccount: "test-account",
+		Direction:       models.DirectionIncoming,
 	}
 
-	payload := OutboundWebhookPayload{
-		Event:     "test",
-		Timestamp: time.Now().UTC(),
-		Data:      testData,
-	}
-
-	jsonData, err := json.Marshal(payload)
+	jsonData, err := renderWebhookBody(*webhook, "test", testData, time.Now().UTC())
 	if err != nil {
-		a.Log.Error("Failed to create test payload", "error", err)
-		return r.SendErrorEnvelope(fasthttp.StatusInternalServerError, "Failed to create test payload", nil, "")
+		a.Log.Error("Failed to render test payload", "error", err)
+		return r.SendErrorEnvelope(fasthttp.StatusBadRequest, "Failed to render body template: "+err.Error(), nil, "")
 	}
 
 	// Use timeout context for test webhook request
@@ -392,10 +419,11 @@ func webhookAuditSnapshot(wh *models.Webhook) map[string]any {
 	events := make([]string, len(wh.Events))
 	copy(events, wh.Events)
 	return map[string]any{
-		"name":      wh.Name,
-		"url":       wh.URL,
-		"events":    events,
-		"is_active": wh.IsActive,
+		"name":              wh.Name,
+		"url":               wh.URL,
+		"events":            events,
+		"has_body_template": wh.BodyTemplate != "",
+		"is_active":         wh.IsActive,
 	}
 }
 
@@ -413,14 +441,15 @@ func webhookToResponse(wh models.Webhook) WebhookResponse {
 	}
 
 	return WebhookResponse{
-		ID:        wh.ID,
-		Name:      wh.Name,
-		URL:       wh.URL,
-		Events:    events,
-		Headers:   headers,
-		IsActive:  wh.IsActive,
-		HasSecret: wh.Secret != "",
-		CreatedAt: wh.CreatedAt.Format(time.RFC3339),
-		UpdatedAt: wh.UpdatedAt.Format(time.RFC3339),
+		ID:           wh.ID,
+		Name:         wh.Name,
+		URL:          wh.URL,
+		Events:       events,
+		Headers:      headers,
+		BodyTemplate: wh.BodyTemplate,
+		IsActive:     wh.IsActive,
+		HasSecret:    wh.Secret != "",
+		CreatedAt:    wh.CreatedAt.Format(time.RFC3339),
+		UpdatedAt:    wh.UpdatedAt.Format(time.RFC3339),
 	}
 }

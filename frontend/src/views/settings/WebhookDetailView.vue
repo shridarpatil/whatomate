@@ -15,6 +15,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
+import { Textarea } from '@/components/ui/textarea'
 import { Label } from '@/components/ui/label'
 import { Switch } from '@/components/ui/switch'
 import { Checkbox } from '@/components/ui/checkbox'
@@ -66,8 +67,17 @@ const form = ref({
   events: [] as string[],
   secret: '',
   headers: {} as Record<string, string>,
+  body_template: '',
   is_active: true,
 })
+
+// Prefills the body-template field with a ready-to-use Slack Incoming Webhook shape.
+const SLACK_TEMPLATE_EXAMPLE =
+  '{"text": {{ json (printf "*%s* from %s:\\n%s" .Event .Data.contact_name .Data.content) }}}'
+
+function useSlackTemplate() {
+  form.value.body_template = SLACK_TEMPLATE_EXAMPLE
+}
 
 const breadcrumbs = computed(() => [
   { label: t('nav.settings'), href: '/settings' },
@@ -109,6 +119,7 @@ function syncForm() {
     events: [...webhook.value.events],
     secret: '',
     headers: { ...webhook.value.headers },
+    body_template: webhook.value.body_template || '',
     is_active: webhook.value.is_active,
   }
 }
@@ -160,6 +171,7 @@ async function save() {
       events: form.value.events,
       headers: form.value.headers,
       secret: form.value.secret || undefined,
+      body_template: form.value.body_template,
     }
 
     if (isNew.value) {
@@ -303,6 +315,24 @@ onMounted(async () => {
                 </Button>
               </div>
             </div>
+          </div>
+          <div class="space-y-1.5">
+            <div class="flex items-center justify-between">
+              <Label class="text-xs">{{ $t('webhooks.bodyTemplate', 'Body template') }}</Label>
+              <Button v-if="canWrite" variant="ghost" size="sm" class="h-6 text-xs" @click="useSlackTemplate">
+                {{ $t('webhooks.useSlackExample', 'Use Slack example') }}
+              </Button>
+            </div>
+            <Textarea
+              v-model="form.body_template"
+              :placeholder="$t('webhooks.bodyTemplatePlaceholder', 'Leave empty for the default JSON payload')"
+              :disabled="!canWrite"
+              :rows="4"
+              class="font-mono text-xs"
+            />
+            <p class="text-xs text-muted-foreground">
+              {{ $t('webhooks.bodyTemplateHint', 'Optional Go text/template that replaces the default JSON payload — use it to match Slack, Discord, Teams, etc. Available fields: .Event, .Timestamp, .Data.contact_name, .Data.content. Wrap values in the json helper (json .Data.content) to stay valid JSON.') }}
+            </p>
           </div>
           <div v-if="!isNew" class="flex items-center justify-between">
             <Label class="text-xs font-normal cursor-pointer">{{ $t('common.active') }}</Label>

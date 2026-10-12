@@ -260,7 +260,12 @@ type Webhook struct {
 	Events         StringArray `gorm:"type:jsonb;default:'[]'" json:"events"` // ["message.incoming", "transfer.created"]
 	Headers        JSONB       `gorm:"type:jsonb;default:'{}'" json:"headers"`
 	Secret         string      `gorm:"size:255" json:"-"` // For HMAC signature
-	IsActive       bool        `gorm:"default:true" json:"is_active"`
+	// BodyTemplate is an optional Go text/template. When set, its rendered output
+	// replaces the default {event,timestamp,data} JSON envelope, letting a webhook
+	// target any payload shape (Slack, Discord, Teams, etc.). Empty preserves the
+	// default envelope.
+	BodyTemplate string `gorm:"type:text" json:"body_template"`
+	IsActive     bool   `gorm:"default:true" json:"is_active"`
 
 	// Relations
 	Organization *Organization `gorm:"foreignKey:OrganizationID" json:"organization,omitempty"`
