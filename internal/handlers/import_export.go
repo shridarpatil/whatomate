@@ -36,6 +36,9 @@ type ImportConfig struct {
 	ColumnTransform map[string]func(string) (any, error)
 	UniqueColumn    string // Column to check for duplicates (e.g., "phone_number")
 	BeforeCreate    func(db *gorm.DB, orgID uuid.UUID, record map[string]any) error
+	// NormalizeRecord may add or adjust columns after a row is parsed, for both
+	// newly created and updated records.
+	NormalizeRecord func(record map[string]any)
 }
 
 // Supported export/import configurations
@@ -127,6 +130,13 @@ var importConfigs = map[string]ImportConfig{
 		RequiredColumns: []string{"phone_number"},
 		OptionalColumns: []string{"profile_name", "whats_app_account", "tags", "assigned_user_id"},
 		UniqueColumn:    "phone_number",
+		NormalizeRecord: func(record map[string]any) {
+			// An imported name is a deliberate choice by the user; protect it
+			// from being overwritten by the contact's WhatsApp profile name.
+			if name, ok := record["profile_name"].(string); ok && name != "" {
+				record["name_manually_set"] = true
+			}
+		},
 		ColumnTransform: map[string]func(string) (any, error){
 			"phone_number": func(s string) (any, error) {
 				// Normalize phone number - remove + prefix
@@ -542,6 +552,12 @@ func (a *App) ImportData(r *fastglue.Request) error {
 		if hasError {
 			errors++
 			continue
+		}
+
+		// Let the resource derive extra columns from the parsed row. Runs for
+		// both the create and the update-on-duplicate paths.
+		if config.NormalizeRecord != nil {
+			config.NormalizeRecord(recordMap)
 		}
 
 		// Check for duplicate based on unique column
