@@ -891,7 +891,7 @@ func (a *App) CreateChatbotFlow(r *fastglue.Request) error {
 		CompletionConfig  map[string]any `json:"completion_config"`
 		PanelConfig       map[string]any `json:"panel_config"`
 		Graph             map[string]any `json:"graph"`
-		Enabled           bool           `json:"enabled"`
+		Enabled           *bool          `json:"enabled"`
 	}
 
 	if err := json.Unmarshal(r.RequestCtx.PostBody(), &req); err != nil {
@@ -900,6 +900,13 @@ func (a *App) CreateChatbotFlow(r *fastglue.Request) error {
 
 	if req.Name == "" {
 		return r.SendErrorEnvelope(fasthttp.StatusBadRequest, "Name is required", nil, "")
+	}
+
+	// Pointer so an omitted "enabled" keeps the model default of true, the
+	// same way UpdateChatbotFlow distinguishes absent from false.
+	isEnabled := true
+	if req.Enabled != nil {
+		isEnabled = *req.Enabled
 	}
 
 	flow := models.ChatbotFlow{
@@ -914,12 +921,33 @@ func (a *App) CreateChatbotFlow(r *fastglue.Request) error {
 		CompletionConfig:  models.JSONB(req.CompletionConfig),
 		PanelConfig:       models.JSONB(req.PanelConfig),
 		Graph:             models.JSONB(req.Graph),
-		IsEnabled:         req.Enabled,
+		IsEnabled:         isEnabled,
 		CreatedByID:       &userID,
 		UpdatedByID:       &userID,
 	}
 
-	if err := a.DB.Create(&flow).Error; err != nil {
+	tx := a.DB.Begin()
+	if err := tx.Create(&flow).Error; err != nil {
+		tx.Rollback()
+		a.Log.Error("Failed to create flow", "error", err)
+		return r.SendErrorEnvelope(fasthttp.StatusInternalServerError, "Failed to create flow", nil, "")
+	}
+
+	// IsEnabled is tagged `gorm:"default:true"`, and GORM leaves zero-value
+	// fields carrying a default out of the INSERT, so the false set above is
+	// written as the column default. Force it inside the same transaction:
+	// getChatbotFlowsCached selects on is_enabled, so a flow that is briefly
+	// enabled can start matching trigger keywords on live messages.
+	if !isEnabled {
+		if err := tx.Model(&flow).Update("is_enabled", false).Error; err != nil {
+			tx.Rollback()
+			a.Log.Error("Failed to disable flow", "error", err)
+			return r.SendErrorEnvelope(fasthttp.StatusInternalServerError, "Failed to create flow", nil, "")
+		}
+		flow.IsEnabled = false
+	}
+
+	if err := tx.Commit().Error; err != nil {
 		a.Log.Error("Failed to create flow", "error", err)
 		return r.SendErrorEnvelope(fasthttp.StatusInternalServerError, "Failed to create flow", nil, "")
 	}
