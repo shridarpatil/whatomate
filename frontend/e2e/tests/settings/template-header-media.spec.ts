@@ -58,10 +58,7 @@ test.describe('Template media header — issue #355', () => {
     await page.goto(`/templates/${tpl.id}`)
     await page.waitForLoadState('networkidle')
 
-    // Expand the Details card and tweak display_name to dirty the form.
-    await page.locator('text=Details').first().click()
-    await page.waitForTimeout(300)
-
+    // Tweak display_name to dirty the form — the editor is always visible.
     const displayInput = page.locator('input#display-name, input[id*="display"]').first()
     if (await displayInput.isVisible({ timeout: 2000 }).catch(() => false)) {
       await displayInput.fill(`Edited ${Date.now()}`)
@@ -107,8 +104,10 @@ test.describe('Template media header — issue #355', () => {
     // Body content.
     await page.locator('textarea').first().fill('Hello no-media')
 
-    // Switch header type to IMAGE.
-    const headerCombo = page.locator('button[role="combobox"]').filter({ hasText: /Header|TEXT|None|Type/i }).first()
+    // Switch header type to IMAGE. Match the trigger's exact "None" value —
+    // a broader pattern can collide with the account combobox when the seeded
+    // account name contains the word "header".
+    const headerCombo = page.locator('button[role="combobox"]').filter({ hasText: /^None$/ }).first()
     await headerCombo.click()
     await page.getByRole('option', { name: /^Image$/i }).first().click()
     await page.waitForTimeout(200)

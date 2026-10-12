@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { ref, onMounted, watch, computed } from 'vue'
-import { RouterLink } from 'vue-router'
+import { RouterLink, useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -8,16 +8,20 @@ import { Label } from '@/components/ui/label'
 import { Badge } from '@/components/ui/badge'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
 import { PageHeader, SearchInput, DataTable, IconButton, DeleteConfirmDialog, ErrorState, type Column } from '@/components/shared'
 import { api, templatesService } from '@/services/api'
 import { useOrganizationsStore } from '@/stores/organizations'
 import { toast } from 'vue-sonner'
-import { Plus, RefreshCw, FileText, Pencil, Trash2, Loader2, MessageSquare, Image, FileIcon, Video } from 'lucide-vue-next'
+import { Plus, RefreshCw, FileText, Pencil, Trash2, Loader2, Send, Eye, MoreVertical, MessageSquare, Image, FileIcon, Video } from 'lucide-vue-next'
+import TemplatePreview from './TemplatePreview.vue'
 import { getErrorMessage } from '@/lib/api-utils'
 import { useSearchPagination } from '@/composables/useSearchPagination'
 import { getQualityBadgeClass, getQualityRatingLabel } from '@/lib/utils'
 
 const { t } = useI18n()
+const router = useRouter()
 
 interface WhatsAppAccount {
   id: string
@@ -57,6 +61,9 @@ const selectedAccount = ref<string>(localStorage.getItem('templates_selected_acc
 // Delete dialog state
 const deleteDialogOpen = ref(false)
 const templateToDelete = ref<Template | null>(null)
+const publishingId = ref<string | null>(null)
+// Row whose WhatsApp-style preview dialog is open.
+const previewTemplate = ref<Template | null>(null)
 const isDeleting = ref(false)
 
 const { searchQuery, currentPage, totalItems, pageSize, handlePageChange } = useSearchPagination({
@@ -251,6 +258,26 @@ async function confirmDeleteTemplate() {
   }
 }
 
+// Matches canPublish on the detail page: a draft has never reached Meta, and a
+// rejected template can be corrected and sent again.
+function isDraft(template: Template) {
+  const status = template.status?.toUpperCase()
+  return !template.meta_template_id || status === 'DRAFT' || status === 'REJECTED'
+}
+
+async function publishTemplate(template: Template) {
+  publishingId.value = template.id
+  try {
+    const response = await api.post(`/templates/${template.id}/publish`)
+    toast.success((response.data as any).data?.message || t('templates.publishSuccess', 'Template submitted to Meta'))
+    await fetchTemplates()
+  } catch (error) {
+    toast.error(getErrorMessage(error, t('templates.publishFailed', 'Failed to publish template')), { duration: 8000 })
+  } finally {
+    publishingId.value = null
+  }
+}
+
 // Dark-first: default is dark mode, light: prefix for light mode
 function getStatusBadgeClass(status: string) {
   switch (status) {
@@ -398,19 +425,37 @@ function getHeaderIcon(type: string) {
                 </template>
                 <template #cell-actions="{ item: template }">
                   <div class="flex items-center justify-end gap-1">
-                    <RouterLink :to="`/templates/${template.id}`">
-                      <IconButton
-                        :icon="Pencil"
-                        :label="$t('common.edit')"
-                        class="h-8 w-8"
-                      />
-                    </RouterLink>
                     <IconButton
-                      :icon="Trash2"
-                      :label="$t('common.delete')"
-                      class="h-8 w-8 text-destructive"
-                      @click="openDeleteDialog(template)"
+                      v-if="isDraft(template)"
+                      :icon="publishingId === template.id ? Loader2 : Send"
+                      :label="$t('templates.publish', 'Publish to Meta')"
+                      class="h-8 w-8"
+                      :disabled="publishingId === template.id"
+                      @click="publishTemplate(template)"
                     />
+                    <IconButton
+                      :icon="Eye"
+                      :label="$t('templates.preview', 'Preview')"
+                      class="h-8 w-8"
+                      @click="previewTemplate = template"
+                    />
+                    <DropdownMenu>
+                      <DropdownMenuTrigger as-child>
+                        <Button variant="ghost" size="icon" class="h-8 w-8" :aria-label="$t('common.moreActions', 'More actions')">
+                          <MoreVertical class="h-4 w-4" />
+                        </Button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="end">
+                        <DropdownMenuItem @click="router.push(`/templates/${template.id}`)">
+                          <Pencil class="mr-2 h-4 w-4" />
+                          <span>{{ $t('common.edit') }}</span>
+                        </DropdownMenuItem>
+                        <DropdownMenuItem class="text-destructive focus:text-destructive" @click="openDeleteDialog(template)">
+                          <Trash2 class="mr-2 h-4 w-4" />
+                          <span>{{ $t('common.delete') }}</span>
+                        </DropdownMenuItem>
+                      </DropdownMenuContent>
+                    </DropdownMenu>
                   </div>
                 </template>
                 <template #empty-action>
@@ -442,5 +487,25 @@ function getHeaderIcon(type: string) {
       :is-submitting="isDeleting"
       @confirm="confirmDeleteTemplate"
     />
+
+    <!-- Read-only WhatsApp-style preview of a template, straight from the list -->
+    <Dialog :open="!!previewTemplate" @update:open="(open: boolean) => { if (!open) previewTemplate = null }">
+      <DialogContent class="max-w-md">
+        <DialogHeader>
+          <DialogTitle>{{ previewTemplate?.display_name || previewTemplate?.name }}</DialogTitle>
+        </DialogHeader>
+        <div v-if="previewTemplate" class="rounded-xl bg-[#e5ddd5] dark:bg-[#111b21] p-4">
+          <TemplatePreview
+            :header-type="(previewTemplate.header_type || 'NONE') as any"
+            :header-content="previewTemplate.header_content"
+            :body-content="previewTemplate.body_content"
+            :footer-content="previewTemplate.footer_content"
+            :buttons="previewTemplate.buttons"
+            :sample-values="previewTemplate.sample_values"
+            contained
+          />
+        </div>
+      </DialogContent>
+    </Dialog>
   </div>
 </template>
