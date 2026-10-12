@@ -12,6 +12,14 @@ type BusinessHoursConfig struct {
 	Hours                 JSONBArray `gorm:"column:business_hours;type:jsonb;default:'[]'" json:"business_hours"` // [{day, enabled, start_time, end_time}]
 	OutOfHoursMessage     string     `gorm:"column:out_of_hours_message;type:text" json:"out_of_hours_message"`
 	AllowAutomatedOutside bool       `gorm:"column:allow_automated_outside_hours;default:true" json:"allow_automated_outside_hours"` // Allow flows/keywords/AI outside business hours
+
+	// Optional call-to-action button on the out-of-hours notice, for pointing
+	// customers at whatever stays available while the team is offline: a self
+	// service bot, a help centre, an order form. Both fields are required for
+	// the button to be sent. WhatsApp allows a single CTA URL button per
+	// message, hence one pair rather than a list.
+	OutOfHoursButtonText string `gorm:"column:out_of_hours_button_text;size:20" json:"out_of_hours_button_text"`
+	OutOfHoursButtonURL  string `gorm:"column:out_of_hours_button_url;size:2048" json:"out_of_hours_button_url"`
 }
 
 // AgentAssignmentConfig holds agent assignment and queue settings
