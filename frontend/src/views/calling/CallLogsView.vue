@@ -1,6 +1,8 @@
 <script setup lang="ts">
 import { ref, computed, onMounted, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
+import { useRoute, useRouter } from 'vue-router'
+import { toast } from 'vue-sonner'
 import { useCallingStore } from '@/stores/calling'
 import { accountsService, callLogsService, ivrFlowsService, type CallLog, type CallTransfer, type IVRFlow } from '@/services/api'
 import { Card, CardContent } from '@/components/ui/card'
@@ -8,7 +10,7 @@ import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog'
-import { Phone, PhoneIncoming, PhoneOutgoing, PhoneOff, PhoneMissed, Clock, RefreshCw, Mic, User, Monitor, Headphones, ArrowRightLeft } from 'lucide-vue-next'
+import { Phone, PhoneIncoming, PhoneOutgoing, PhoneOff, PhoneMissed, Clock, RefreshCw, Mic, User, Monitor, Headphones, ArrowRightLeft, Link } from 'lucide-vue-next'
 import DataTable from '@/components/shared/DataTable.vue'
 import type { Column } from '@/components/shared/types'
 import SearchInput from '@/components/shared/SearchInput.vue'
@@ -17,6 +19,8 @@ import IVRPathTree from '@/components/calling/IVRPathTree.vue'
 
 const { t } = useI18n()
 const store = useCallingStore()
+const route = useRoute()
+const router = useRouter()
 
 // Filters
 const phoneSearch = ref('')
@@ -84,15 +88,20 @@ function handlePageChange(page: number) {
   fetchLogs()
 }
 
-async function viewDetail(log: CallLog) {
-  selectedLog.value = log
+// The open call log is kept in the URL (?id=) so the detail can be shared as a link.
+function viewDetail(log: CallLog) {
+  router.push({ query: { ...route.query, id: log.id } })
+}
+
+async function openDetail(id: string) {
+  selectedLog.value = store.callLogs.find(l => l.id === id) ?? null
   selectedTransfers.value = []
   showDetail.value = true
   recordingURL.value = null
 
   // Fetch full call log detail (includes transfers)
   try {
-    const res = await callLogsService.get(log.id)
+    const res = await callLogsService.get(id)
     const data = (res.data as any).data ?? res.data
     if (data.call_log) {
       selectedLog.value = data.call_log
@@ -101,13 +110,17 @@ async function viewDetail(log: CallLog) {
       selectedTransfers.value = data.transfers
     }
   } catch {
-    // Fall back to list data
+    if (!selectedLog.value) {
+      showDetail.value = false
+      toast.error(t('calling.callLogNotFound'))
+      return
+    }
   }
 
   // Fetch recording URL if recording exists
-  if (log.recording_s3_key) {
+  if (selectedLog.value?.recording_s3_key) {
     recordingLoading.value = true
-    callLogsService.getRecordingURL(log.id)
+    callLogsService.getRecordingURL(id)
       .then(res => {
         const data = (res.data as any).data ?? res.data
         recordingURL.value = data.url
@@ -120,6 +133,29 @@ async function viewDetail(log: CallLog) {
       })
   }
 }
+
+async function copyDetailLink() {
+  try {
+    await navigator.clipboard.writeText(window.location.href)
+    toast.success(t('common.copiedToClipboard'))
+  } catch {
+    toast.error(t('common.clipboardFailed'))
+  }
+}
+
+watch(() => route.query.id, (id) => {
+  if (typeof id === 'string' && id) {
+    openDetail(id)
+  } else {
+    showDetail.value = false
+  }
+}, { immediate: true })
+
+watch(showDetail, (open) => {
+  if (!open && route.query.id) {
+    router.replace({ query: { ...route.query, id: undefined } })
+  }
+})
 
 function formatDuration(seconds: number): string {
   if (!seconds) return '-'
@@ -363,8 +399,12 @@ watch(phoneSearch, () => {
       <DialogContent class="max-w-lg">
         <DialogHeader>
           <DialogTitle>{{ t('calling.callDetail') }}</DialogTitle>
-          <DialogDescription>
-            {{ selectedLog?.contact?.profile_name || selectedLog?.caller_phone }}
+          <DialogDescription class="flex items-center justify-between gap-2">
+            <span>{{ selectedLog?.contact?.profile_name || selectedLog?.caller_phone }}</span>
+            <Button variant="outline" size="sm" @click="copyDetailLink">
+              <Link class="h-3.5 w-3.5 mr-1.5" />
+              {{ t('calling.copyLink') }}
+            </Button>
           </DialogDescription>
         </DialogHeader>
         <div v-if="selectedLog" class="space-y-4">

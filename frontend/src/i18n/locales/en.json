@@ -2410,6 +2410,8 @@
     "resume": "Resume",
     "onHold": "On Hold",
     "recording": "Recording",
+    "copyLink": "Copy link",
+    "callLogNotFound": "Call log not found",
     "error": "Error",
     "agent": "Agent",
     "pickedBy": "Picked by",
