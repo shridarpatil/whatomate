@@ -103,7 +103,10 @@ const handleLogout = async () => {
 </script>
 
 <template>
-  <div class="flex h-screen bg-[#0a0a0b] light:bg-gray-50">
+  <!-- h-dvh (dynamic viewport height): on Android, 100vh includes the area
+       behind the system bars, cutting off the bottom row (composer/send).
+       dvh tracks the real visible height; h-screen stays as the fallback. -->
+  <div class="flex h-screen supports-[height:100dvh]:h-dvh bg-[#0a0a0b] light:bg-gray-50">
     <!-- Skip link for accessibility -->
     <a href="#main-content" class="skip-link">{{ $t('nav.skipToMain') }}</a>
 
