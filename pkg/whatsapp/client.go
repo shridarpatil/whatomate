@@ -6,7 +6,10 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"mime/multipart"
 	"net/http"
+	"net/textproto"
+	"strings"
 	"time"
 
 	"github.com/zerodha/logf"
@@ -303,22 +306,53 @@ type UploadMediaResponse struct {
 func (c *Client) UploadMedia(ctx context.Context, account *Account, data []byte, mimeType, filename string) (string, error) {
 	url := fmt.Sprintf("%s/%s/%s/media", c.getBaseURL(), account.APIVersion, account.PhoneID)
 
-	// Create multipart form body
+	// An empty multipart filename makes Meta treat the part as a plain field
+	// rather than a file upload, failing with "(#100) The parameter file is
+	// required". Guarantee a non-empty name for any caller (e.g. forwarding
+	// inbound images, which carry no filename).
+	if filename == "" {
+		filename = "file"
+	}
+
+	// Sanitize filename for the multipart header — forwarding is the first
+	// path that routes a remote-contact-controlled filename (stored from
+	// msg.Document.Filename) into this body. Use mime/multipart.Writer so
+	// quoting/escaping is handled, and strip CR/LF which would corrupt the
+	// header. mimeType is also stripped of CR/LF as defense-in-depth.
+	filename = strings.ReplaceAll(filename, "\r", "")
+	filename = strings.ReplaceAll(filename, "\n", "")
+	mimeType = strings.ReplaceAll(mimeType, "\r", "")
+	mimeType = strings.ReplaceAll(mimeType, "\n", "")
+	if mimeType == "" {
+		mimeType = "application/octet-stream"
+	}
+
 	body := &bytes.Buffer{}
-	boundary := "----WebKitFormBoundary7MA4YWxkTrZu0gW"
+	writer := multipart.NewWriter(body)
 
-	// Build multipart body manually
-	fmt.Fprintf(body, "--%s\r\n", boundary)
-	body.WriteString("Content-Disposition: form-data; name=\"messaging_product\"\r\n\r\n")
-	body.WriteString("whatsapp\r\n")
+	if err := writer.WriteField("messaging_product", "whatsapp"); err != nil {
+		return "", fmt.Errorf("failed to write multipart field: %w", err)
+	}
 
-	fmt.Fprintf(body, "--%s\r\n", boundary)
-	fmt.Fprintf(body, "Content-Disposition: form-data; name=\"file\"; filename=\"%s\"\r\n", filename)
-	fmt.Fprintf(body, "Content-Type: %s\r\n\r\n", mimeType)
-	body.Write(data)
-	body.WriteString("\r\n")
-
-	fmt.Fprintf(body, "--%s--\r\n", boundary)
+	// Use CreatePart with an explicit header so we can set the real MIME
+	// type while still getting the escaping that multipart.Writer provides
+	// via escapeQuotes (backslash and double-quote). The header values are
+	// already stripped of CR/LF above.
+	h := make(textproto.MIMEHeader)
+	// Escape backslash and quote the same way mime/multipart does.
+	escapedFilename := strings.ReplaceAll(strings.ReplaceAll(filename, "\\", "\\\\"), `"`, `\"`)
+	h.Set("Content-Disposition", fmt.Sprintf(`form-data; name="%s"; filename="%s"`, "file", escapedFilename))
+	h.Set("Content-Type", mimeType)
+	part, err := writer.CreatePart(h)
+	if err != nil {
+		return "", fmt.Errorf("failed to create multipart file part: %w", err)
+	}
+	if _, err := part.Write(data); err != nil {
+		return "", fmt.Errorf("failed to write media data: %w", err)
+	}
+	if err := writer.Close(); err != nil {
+		return "", fmt.Errorf("failed to close multipart writer: %w", err)
+	}
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, url, body)
 	if err != nil {
@@ -326,7 +360,7 @@ func (c *Client) UploadMedia(ctx context.Context, account *Account, data []byte,
 	}
 
 	req.Header.Set("Authorization", "Bearer "+account.AccessToken)
-	req.Header.Set("Content-Type", fmt.Sprintf("multipart/form-data; boundary=%s", boundary))
+	req.Header.Set("Content-Type", writer.FormDataContentType())
 
 	resp, err := c.HTTPClient.Do(req)
 	if err != nil {
