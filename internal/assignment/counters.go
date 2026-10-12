@@ -44,3 +44,22 @@ func CallLoadCounter(db *gorm.DB, orgID uuid.UUID, agentIDs []uuid.UUID) map[uui
 	}
 	return loadMap
 }
+
+// IsAgentOnActiveCall checks whether an agent is currently on an active telephone call
+// (either an answered incoming transfer or an active outgoing call).
+func IsAgentOnActiveCall(db *gorm.DB, agentID uuid.UUID) bool {
+	var transferCount int64
+	db.Model(&models.CallTransfer{}).
+		Where("agent_id = ? AND status = ?", agentID, models.CallTransferStatusConnected).
+		Count(&transferCount)
+	if transferCount > 0 {
+		return true
+	}
+
+	var callLogCount int64
+	db.Model(&models.CallLog{}).
+		Where("agent_id = ? AND status IN (?, ?, ?)",
+			agentID, models.CallStatusInitiating, models.CallStatusRinging, models.CallStatusAnswered).
+		Count(&callLogCount)
+	return callLogCount > 0
+}
