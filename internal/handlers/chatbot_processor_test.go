@@ -848,3 +848,33 @@ func TestMatchFlowTrigger_Match(t *testing.T) {
 // =============================================================================
 // evaluateExpression (package-level, not on App)
 // =============================================================================
+
+// =============================================================================
+// BSUID persistence
+// =============================================================================
+
+func TestStoreContactBSUID_PersistsColumn(t *testing.T) {
+	app := newProcessorTestApp(t)
+	org, _ := createProcessorTestOrg(t, app)
+	contact := testutil.CreateTestContact(t, app.DB, org.ID)
+
+	app.storeContactBSUID(contact, "IN.bsuid123")
+	assert.Equal(t, "IN.bsuid123", contact.BSUID)
+
+	var reloaded models.Contact
+	require.NoError(t, app.DB.First(&reloaded, "id = ?", contact.ID).Error)
+	assert.Equal(t, "IN.bsuid123", reloaded.BSUID)
+}
+
+func TestProcessMarketingPreference_ByBSUID(t *testing.T) {
+	app := newProcessorTestApp(t)
+	org, account := createProcessorTestOrg(t, app)
+	contact := testutil.CreateTestContact(t, app.DB, org.ID)
+	require.NoError(t, app.DB.Model(contact).Update("bs_uid", "IN.bsuid456").Error)
+
+	app.processMarketingPreference(account.PhoneID, "", "IN.bsuid456", "stop")
+
+	var reloaded models.Contact
+	require.NoError(t, app.DB.First(&reloaded, "id = ?", contact.ID).Error)
+	assert.True(t, reloaded.MarketingOptOut)
+}
