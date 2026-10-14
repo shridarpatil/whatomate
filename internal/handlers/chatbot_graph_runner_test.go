@@ -268,6 +268,107 @@ func TestRunChatGraph_UnknownButtonEndsFlow(t *testing.T) {
 	assert.Equal(t, models.SessionStatusCompleted, session.Status)
 }
 
+// TestRunChatGraph_CTAButtonsFallThrough verifies that a buttons node made
+// only of CTA buttons (url / voice_call) does not park the session. Tapping
+// a CTA never sends a button_reply, so yielding there would trap the contact
+// in the flow and re-send the CTA on every later message.
+func TestRunChatGraph_CTAButtonsFallThrough(t *testing.T) {
+	ctaButtons := map[string]map[string]any{
+		"url":        {"id": "btn_1", "title": "Open", "type": "url", "url": "https://example.com"},
+		"voice_call": {"id": "btn_1", "title": "Call us", "type": "voice_call"},
+	}
+	for name, button := range ctaButtons {
+		t.Run(name+"/default edge", func(t *testing.T) {
+			app, org, account, contact, session := newGraphTestFixtures(t)
+
+			flow := &models.ChatbotFlow{
+				BaseModel:       models.BaseModel{ID: uuid.New()},
+				OrganizationID:  org.ID,
+				WhatsAppAccount: account.Name,
+				Name:            "cta-" + name,
+				IsEnabled:       true,
+				Graph: models.JSONB{
+					"version":    2,
+					"entry_node": "b1",
+					"nodes": []any{
+						map[string]any{
+							"id": "b1", "type": "buttons", "label": "cta",
+							"config": map[string]any{"body": "Take a look", "buttons": []any{button}},
+						},
+						map[string]any{"id": "e1", "type": "end", "label": "done"},
+					},
+					"edges": []any{
+						map[string]any{"from": "b1", "to": "e1", "condition": "default"},
+					},
+				},
+			}
+			require.NoError(t, app.DB.Create(flow).Error)
+
+			require.NoError(t, app.runChatGraph(account, contact, session, flow, "start", "", nil))
+			require.NoError(t, app.DB.First(session, session.ID).Error)
+			assert.Equal(t, models.SessionStatusCompleted, session.Status)
+
+			path := chatGraphPath(t, session)
+			require.Len(t, path, 2)
+			assert.Equal(t, "b1", path[0]["node"])
+			assert.Equal(t, "default", path[0]["outcome"])
+			assert.Equal(t, "e1", path[1]["node"])
+		})
+
+		t.Run(name+"/no edge", func(t *testing.T) {
+			app, org, account, contact, session := newGraphTestFixtures(t)
+
+			flow := &models.ChatbotFlow{
+				BaseModel:       models.BaseModel{ID: uuid.New()},
+				OrganizationID:  org.ID,
+				WhatsAppAccount: account.Name,
+				Name:            "cta-" + name + "-terminal",
+				IsEnabled:       true,
+				Graph: models.JSONB{
+					"version":    2,
+					"entry_node": "b1",
+					"nodes": []any{
+						map[string]any{
+							"id": "b1", "type": "buttons", "label": "cta",
+							"config": map[string]any{"body": "Take a look", "buttons": []any{button}},
+						},
+					},
+					"edges": []any{},
+				},
+			}
+			require.NoError(t, app.DB.Create(flow).Error)
+
+			// A CTA as the last node ends the flow instead of waiting.
+			require.NoError(t, app.runChatGraph(account, contact, session, flow, "start", "", nil))
+			require.NoError(t, app.DB.First(session, session.ID).Error)
+			assert.Equal(t, models.SessionStatusCompleted, session.Status)
+		})
+	}
+}
+
+// TestButtonsExpectReply pins which button sets park the session waiting
+// for a tap.
+func TestButtonsExpectReply(t *testing.T) {
+	cases := []struct {
+		name    string
+		buttons []map[string]any
+		want    bool
+	}{
+		{"untyped reply", []map[string]any{{"id": "a", "title": "A"}}, true},
+		{"explicit reply", []map[string]any{{"id": "a", "title": "A", "type": "reply"}}, true},
+		{"flow", []map[string]any{{"id": "a", "title": "A", "type": "flow"}}, true},
+		{"url", []map[string]any{{"id": "a", "title": "A", "type": "url"}}, false},
+		{"url uppercase", []map[string]any{{"id": "a", "title": "A", "type": "URL"}}, false},
+		{"voice_call", []map[string]any{{"id": "a", "title": "A", "type": "voice_call"}}, false},
+		{"empty", nil, false},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			assert.Equal(t, tc.want, buttonsExpectReply(tc.buttons))
+		})
+	}
+}
+
 // TestParseChatGraph_InvalidGraph rejects malformed graphs at parse time
 // so the runner never has to defend against them.
 func TestParseChatGraph_InvalidGraph(t *testing.T) {

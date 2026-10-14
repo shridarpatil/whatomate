@@ -248,6 +248,12 @@ func (a *App) execChatMessage(node *ChatNode, ctx *chatNodeCtx) (nodeOutcome, er
 // wait for a click); on a later inbound that carries a buttonID, consumes
 // the selection and returns "button:<id>" so the runner can resolve the
 // next edge and advance.
+//
+// A node made only of CTA buttons (url / voice_call) can never be answered:
+// tapping one opens a browser or starts a call and WhatsApp delivers no
+// button_reply. Such a node sends and falls through via "default" instead of
+// yielding, otherwise the session would sit on it and re-send the same CTA
+// on every inbound until it timed out.
 // Config: { "body": "...", "buttons": [{ "id": "...", "title": "..." }, ...] }
 func (a *App) execChatButtons(node *ChatNode, ctx *chatNodeCtx) (nodeOutcome, error) {
 	if !ctx.consumed && ctx.buttonID != "" {
@@ -291,6 +297,9 @@ func (a *App) execChatButtons(node *ChatNode, ctx *chatNodeCtx) (nodeOutcome, er
 		return nodeOutcome{}, fmt.Errorf("send buttons: %w", err)
 	}
 	a.logSessionMessage(ctx.session.ID, models.DirectionOutgoing, body, node.ID)
+	if !buttonsExpectReply(buttons) {
+		return nodeOutcome{outcome: "default"}, nil
+	}
 	return nodeOutcome{yield: true}, nil
 }
 
@@ -1003,4 +1012,19 @@ func buttonsFromConfig(cfg map[string]any) []map[string]any {
 		}
 	}
 	return out
+}
+
+// buttonsExpectReply reports whether tapping any of the buttons sends a
+// reply back to us. URL and voice_call buttons are CTAs handled entirely on
+// the user's device, so a set made only of those never produces one.
+func buttonsExpectReply(buttons []map[string]any) bool {
+	for _, b := range buttons {
+		btnType, _ := b["type"].(string)
+		switch strings.ToLower(btnType) {
+		case "url", "voice_call":
+		default:
+			return true
+		}
+	}
+	return false
 }

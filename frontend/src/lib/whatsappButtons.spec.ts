@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { nextButtonId, validateWhatsAppButtons } from './whatsappButtons'
+import { buttonsExpectReply, nextButtonId, validateWhatsAppButtons } from './whatsappButtons'
 import type { ButtonConfig } from '@/types/flow-preview'
 
 // The real callers pass vue-i18n's `t`, which falls back to the second
@@ -130,5 +130,27 @@ describe('validateWhatsAppButtons', () => {
   it('rejects a flow button without a flow id', () => {
     const flow: ButtonConfig = { id: 'btn_1', title: 'Open', type: 'flow' }
     expect(validateWhatsAppButtons([flow], t)).toMatch(/flow/i)
+  })
+})
+
+describe('buttonsExpectReply', () => {
+  it('waits for reply buttons, typed or not', () => {
+    expect(buttonsExpectReply([reply('btn_1')])).toBe(true)
+    expect(buttonsExpectReply([{ id: 'btn_1', title: 'Option' }])).toBe(true)
+  })
+
+  it('waits for a flow button', () => {
+    expect(buttonsExpectReply([{ id: 'btn_1', title: 'Open', type: 'flow' }])).toBe(true)
+  })
+
+  // Tapping a CTA opens a browser or starts a call; WhatsApp sends nothing
+  // back, so a node made only of these has nothing to wait for.
+  it('does not wait for URL or Call buttons', () => {
+    expect(buttonsExpectReply([url('btn_1')])).toBe(false)
+    expect(buttonsExpectReply([{ id: 'btn_1', title: 'Call', type: 'voice_call' }])).toBe(false)
+  })
+
+  it('does not wait when there are no buttons', () => {
+    expect(buttonsExpectReply([])).toBe(false)
   })
 })
