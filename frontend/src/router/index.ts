@@ -77,6 +77,12 @@ const router = createRouter({
           meta: { permission: 'flows.whatsapp' }
         },
         {
+          path: 'flow-responses/:flowId',
+          name: 'flow-responses-detail',
+          component: () => import('@/views/settings/FlowResponsesView.vue'),
+          meta: { permission: 'flows.whatsapp' }
+        },
+        {
           path: 'campaigns',
           name: 'campaigns',
           component: () => import('@/views/settings/CampaignsView.vue'),

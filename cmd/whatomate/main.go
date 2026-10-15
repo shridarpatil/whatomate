@@ -684,6 +684,9 @@ func setupRoutes(g *fastglue.Fastglue, app *handlers.App, lo logf.Logger, basePa
 	g.POST("/api/flows/{id}/duplicate", app.DuplicateFlow)
 	g.POST("/api/flows/sync", app.SyncFlows)
 
+	// WhatsApp Flow Submissions
+	g.GET("/api/flow-submissions/{id}", app.GetFlowSubmissions)
+
 	// Bulk Campaigns
 	g.GET("/api/campaigns", app.ListCampaigns)
 	g.POST("/api/campaigns", app.CreateCampaign)
