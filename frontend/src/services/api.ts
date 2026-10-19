@@ -289,6 +289,8 @@ export const messagesService = {
       }
     },
   ) => api.post(`/contacts/${contactId}/messages`, data),
+  forward: (messageId: string, contactId: string, whatsappAccount?: string) =>
+    api.post(`/messages/${messageId}/forward`, { contact_id: contactId, whatsapp_account: whatsappAccount }),
   sendTemplate: (contactId: string, data: { template_name: string; template_params?: Record<string, string>; header_params?: Record<string, string>; button_params?: Record<string, string>; account_name?: string }, headerFile?: File) => {
     if (headerFile) {
       const formData = new FormData()
