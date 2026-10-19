@@ -1145,7 +1145,7 @@ export interface CallTransfer {
   caller_phone: string
   contact_id: string
   whatsapp_account: string
-  status: 'waiting' | 'connected' | 'completed' | 'abandoned' | 'no_answer'
+  status: 'waiting' | 'connecting' | 'connected' | 'completed' | 'abandoned' | 'no_answer'
   team_id?: string
   agent_id?: string
   initiating_agent_id?: string
