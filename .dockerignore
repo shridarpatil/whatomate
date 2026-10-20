@@ -1,0 +1,15 @@
+.git
+pluszap-web
+**/node_modules
+**/.env
+**/.env.*
+config.toml
+docker/uploads
+docker/payment-certs
+**/*.pem
+**/*.p12
+**/*.pfx
+**/*.key
+*.exe
+tmp
+temp

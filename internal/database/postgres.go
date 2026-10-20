@@ -57,6 +57,9 @@ func GetMigrationModels() []MigrationModel {
 	return []MigrationModel{
 		// Core models
 		{"Organization", &models.Organization{}},
+		{"SaaSPlan", &models.SaaSPlan{}},
+		{"SaaSSubscription", &models.SaaSSubscription{}},
+		{"SaaSInvoice", &models.SaaSInvoice{}},
 		{"Permission", &models.Permission{}},
 		{"CustomRole", &models.CustomRole{}},
 		{"User", &models.User{}},

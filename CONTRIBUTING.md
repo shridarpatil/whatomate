@@ -20,3 +20,6 @@ Thanks for your interest in contributing.
   Bundling multiple features into a single PR is discouraged.
 
 Thanks for helping keep Whatomate focused and maintainable.
+
+###### FUTURAS CORREÇÕES
+  Corrigir Oauth -> redirecionando para domínio http

@@ -57,7 +57,7 @@ const handleRegister = async () => {
     router.push('/')
   } catch (error: any) {
     const message = error.response?.data?.message || t('auth.registrationFailed')
-    toast.error(message)
+    toast.error(typeof message === 'string' && message.startsWith('saas.') ? t(message) : message)
   } finally {
     isLoading.value = false
   }

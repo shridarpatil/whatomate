@@ -60,3 +60,5 @@ test-results/
 
 # Docker 
 docker/.env
+docker/payment-certs/*
+!docker/payment-certs/.gitkeep

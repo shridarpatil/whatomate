@@ -14,8 +14,9 @@ import (
 
 // S3Client provides upload and presigned URL operations for call recordings.
 type S3Client struct {
-	client *s3.Client
-	bucket string
+	client    *s3.Client
+	presigner *s3.PresignClient
+	bucket    string
 }
 
 // NewS3Client creates a new S3 client from the application's StorageConfig.
@@ -25,7 +26,11 @@ func NewS3Client(cfg *config.StorageConfig) (*S3Client, error) {
 	}
 
 	opts := s3.Options{
-		Region: cfg.S3Region,
+		Region:       cfg.S3Region,
+		UsePathStyle: cfg.S3UsePathStyle,
+	}
+	if cfg.S3Endpoint != "" {
+		opts.BaseEndpoint = aws.String(cfg.S3Endpoint)
 	}
 
 	if cfg.S3Key != "" && cfg.S3Secret != "" {
@@ -33,7 +38,12 @@ func NewS3Client(cfg *config.StorageConfig) (*S3Client, error) {
 	}
 
 	client := s3.New(opts)
-	return &S3Client{client: client, bucket: cfg.S3Bucket}, nil
+	downloadClient := client
+	if cfg.S3PublicEndpoint != "" {
+		opts.BaseEndpoint = aws.String(cfg.S3PublicEndpoint)
+		downloadClient = s3.New(opts)
+	}
+	return &S3Client{client: client, presigner: s3.NewPresignClient(downloadClient), bucket: cfg.S3Bucket}, nil
 }
 
 // Upload uploads a file to S3 at the given key.
@@ -49,8 +59,7 @@ func (s *S3Client) Upload(ctx context.Context, key string, body io.Reader, conte
 
 // GetPresignedURL returns a time-limited download URL for the given S3 key.
 func (s *S3Client) GetPresignedURL(ctx context.Context, key string, expiry time.Duration) (string, error) {
-	presigner := s3.NewPresignClient(s.client)
-	req, err := presigner.PresignGetObject(ctx, &s3.GetObjectInput{
+	req, err := s.presigner.PresignGetObject(ctx, &s3.GetObjectInput{
 		Bucket: aws.String(s.bucket),
 		Key:    aws.String(key),
 	}, s3.WithPresignExpires(expiry))

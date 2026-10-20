@@ -1,0 +1,23 @@
+# Build the local frontend, including all src/i18n/locales/*.json files.
+FROM node:22-alpine AS frontend-builder
+WORKDIR /app/frontend
+COPY frontend/package.json frontend/package-lock.json ./
+RUN npm ci
+COPY frontend/ .
+RUN npm run build
+
+FROM golang:1.25.3-alpine AS builder
+WORKDIR /app
+RUN apk add --no-cache git ca-certificates
+COPY go.mod go.sum ./
+RUN go mod download
+COPY cmd/ ./cmd/
+COPY internal/ ./internal/
+COPY pkg/ ./pkg/
+COPY --from=frontend-builder /app/frontend/dist/ ./internal/frontend/dist/
+RUN CGO_ENABLED=0 go build -o /whatomate ./cmd/whatomate
+
+# Keep the upstream runtime dependencies (including speech tools and models).
+# docker-compose.yml mounts the local config.toml at runtime.
+FROM shridh0r/whatomate:latest
+COPY --from=builder /whatomate /app/whatomate

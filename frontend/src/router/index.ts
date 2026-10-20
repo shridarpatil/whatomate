@@ -40,6 +40,12 @@ const router = createRouter({
       meta: { requiresAuth: true },
       children: [
         {
+          path: 'settings/billing',
+          name: 'billing',
+          component: () => import('@/views/settings/BillingView.vue'),
+          meta: { permission: 'settings.general' }
+        },
+        {
           path: '',
           name: 'dashboard',
           component: () => import('@/views/dashboard/DashboardView.vue'),

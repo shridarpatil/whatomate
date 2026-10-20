@@ -1,11 +1,15 @@
 services:
   # Whatomate app
   app:
-    image: shridh0r/whatomate:latest
+    image: whatomate:local
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.local
     container_name: whatomate_app
     restart: unless-stopped
     ports:
-      - "8080:8080"
+      - "8050:8081"
+      - "8081:8081"
     networks:
       - whatomate
     depends_on:
@@ -13,11 +17,14 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
+      s3-init:
+        condition: service_completed_successfully
     env_file:
       - .env
     volumes:
       - ./uploads:/app/uploads:rw
-      - ./config.toml:/app/config.toml:ro
+      - ../config.toml:/app/config.toml:ro
+      - ./payment-certs:/run/payment-certs:ro
     command: ["server", "-migrate", "-config", "/app/config.toml"]
 
   # PostgreSQL database
@@ -28,7 +35,7 @@ services:
     networks:
       - whatomate
     ports:
-      - "127.0.0.1:5432:5432"
+      - "127.0.0.1:5433:5433"
     environment:
       POSTGRES_USER: ${POSTGRES_USER:-whatomate}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-whatomate}
@@ -49,7 +56,7 @@ services:
     networks:
       - whatomate
     ports:
-      - "127.0.0.1:6379:6379"
+      - "127.0.0.1:6373:6379"
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
       interval: 10s
@@ -58,9 +65,50 @@ services:
     volumes:
       - redis-data:/data
 
+  # Local S3-compatible storage for call recordings.
+  rustfs:
+    image: rustfs/rustfs@sha256:8cc9801755448b71a786705ce76692c77e14936cccd87cf2fc31842e58f4d1ff
+    restart: unless-stopped
+    user: "0:0" # Local development volume permissions
+    networks:
+      - whatomate
+    ports:
+      - "127.0.0.1:9000:9000"
+      - "127.0.0.1:9001:9001"
+    environment:
+      RUSTFS_ACCESS_KEY: whatomate-local
+      RUSTFS_SECRET_KEY: whatomate-local-dev-secret
+      RUSTFS_VOLUMES: /data
+      RUSTFS_CONSOLE_ENABLE: "true"
+    volumes:
+      - s3-data:/data
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9000/health"]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+
+  s3-init:
+    image: amazon/aws-cli:2.34.0
+    networks:
+      - whatomate
+    depends_on:
+      rustfs:
+        condition: service_healthy
+    environment:
+      AWS_ACCESS_KEY_ID: whatomate-local
+      AWS_SECRET_ACCESS_KEY: whatomate-local-dev-secret
+      AWS_DEFAULT_REGION: us-east-1
+    entrypoint: ["/bin/sh", "-ec"]
+    command:
+      - |
+        aws --endpoint-url http://rustfs:9000 s3api head-bucket --bucket whatomate-recordings 2>/dev/null ||
+          aws --endpoint-url http://rustfs:9000 s3api create-bucket --bucket whatomate-recordings
+
 networks:
   whatomate:
 
 volumes:
   postgres-data:
   redis-data:
+  s3-data:

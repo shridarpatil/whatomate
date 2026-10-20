@@ -280,6 +280,7 @@ func runServer(args []string) {
 	slaProcessor := handlers.NewSLAProcessor(app, time.Minute)
 	slaCtx, slaCancel := context.WithCancel(context.Background())
 	go slaProcessor.Start(slaCtx)
+	go app.RunPaymentReconciliation(slaCtx)
 	lo.Info("SLA processor started")
 
 	// Start embedded workers
@@ -518,7 +519,7 @@ func setupRoutes(g *fastglue.Fastglue, app *handlers.App, lo logf.Logger, basePa
 		// Skip auth for public routes
 		if path == "/health" || path == "/ready" ||
 			path == "/api/auth/login" || path == "/api/auth/register" || path == "/api/auth/refresh" ||
-			path == "/api/auth/logout" || path == "/api/webhook" || path == "/ws" {
+			path == "/api/auth/logout" || path == "/api/webhook" || path == "/ws" || path == "/api/billing/webhooks/mercadopago" {
 			return r
 		}
 		// Skip auth for SSO routes (they handle their own auth via state tokens)
@@ -790,6 +791,21 @@ func setupRoutes(g *fastglue.Fastglue, app *handlers.App, lo logf.Logger, basePa
 
 	// Organizations
 	g.GET("/api/organizations", app.ListOrganizations)
+	g.GET("/api/saas/plans", app.ListSaaSPlans)
+	g.POST("/api/saas/organizations", app.CreateSaaSTrial)
+	g.POST("/api/saas/plans", app.SaveSaaSPlan)
+	g.PUT("/api/saas/plans/{id}", app.SaveSaaSPlan)
+	g.GET("/api/saas/subscriptions", app.ListSaaSSubscriptions)
+	g.PUT("/api/saas/subscriptions", app.AssignSaaSSubscription)
+	g.GET("/api/billing", app.GetSaaSBilling)
+	g.POST("/api/billing/webhooks/mercadopago", app.MercadoPagoWebhook)
+	// Compatibility with the callback URL already used by the PlusZap tunnel.
+	g.POST("/subscription/mercadopagowebhook", app.MercadoPagoWebhook)
+	g.GET("/api/billing/invoices", app.ListSaaSInvoices)
+	g.POST("/api/billing/invoices", app.CreateSaaSInvoice)
+	g.POST("/api/billing/invoices/{id}/refresh", app.RefreshSaaSInvoice)
+	g.POST("/api/billing/invoices/{id}/cancel", app.CancelSaaSInvoice)
+	g.POST("/api/billing/invoices/{id}/reissue", app.ReissueSaaSInvoice)
 	g.POST("/api/organizations", app.CreateOrganization)
 	g.GET("/api/organizations/current", app.GetCurrentOrganization)
 	g.GET("/api/organizations/members", app.ListOrganizationMembers)

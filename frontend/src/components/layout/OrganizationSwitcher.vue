@@ -100,8 +100,9 @@ async function submitCreateOrg() {
     isCreateDialogOpen.value = false
     newOrgName.value = ''
     await refreshOrgs()
-  } catch {
-    toast.error(t('organizations.createFailed'))
+  } catch (e: any) {
+    const message = e.response?.data?.message
+    toast.error(typeof message === 'string' && message.startsWith('saas.') ? t(message) : t('organizations.createFailed'))
   } finally {
     isCreating.value = false
   }

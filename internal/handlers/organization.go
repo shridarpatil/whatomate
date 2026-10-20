@@ -349,7 +349,11 @@ func (a *App) ListOrganizations(r *fastglue.Request) error {
 	}
 
 	var orgs []models.Organization
-	if err := a.DB.Order("name ASC").Find(&orgs).Error; err != nil {
+	query := a.DB.Model(&models.Organization{})
+	if !a.IsSuperAdmin(userID) {
+		query = query.Where("id IN (?)", a.DB.Model(&models.UserOrganization{}).Select("organization_id").Where("user_id = ?", userID))
+	}
+	if err := query.Order("name ASC").Find(&orgs).Error; err != nil {
 		a.Log.Error("Failed to list organizations", "error", err)
 		return r.SendErrorEnvelope(fasthttp.StatusInternalServerError, "Failed to list organizations", nil, "")
 	}
@@ -399,6 +403,15 @@ func (a *App) CreateOrganization(r *fastglue.Request) error {
 	_, userID, err := a.requireAuth(r, models.ResourceOrganizations, models.ActionWrite)
 	if err != nil {
 		return nil
+	}
+	if !a.IsSuperAdmin(userID) {
+		var managed int64
+		if err := a.DB.Model(&models.SaaSSubscription{}).Where("organization_id IN (?)", a.DB.Model(&models.UserOrganization{}).Select("organization_id").Where("user_id = ?", userID)).Count(&managed).Error; err != nil {
+			return r.SendErrorEnvelope(500, "saas.load_failed", nil, "")
+		}
+		if managed > 0 {
+			return r.SendErrorEnvelope(403, "saas.company_creation_managed", nil, "")
+		}
 	}
 
 	var req CreateOrganizationRequest

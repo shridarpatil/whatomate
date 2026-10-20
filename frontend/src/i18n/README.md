@@ -11,6 +11,20 @@ Languages are **auto-discovered** from the `locales/` folder. To add a new langu
 3. Translate all strings
 4. The language will automatically appear in the language switcher
 
+### Applying translations in Docker
+
+Locale files are included at build time and embedded into the Go binary. An
+upstream prebuilt image does not include changes from your local checkout.
+The local Docker Compose setup builds the application using
+`docker/Dockerfile.local`. After adding or updating translations, run from the
+repository root:
+
+```bash
+docker compose -f docker/docker-compose.yml up -d --build --no-deps app
+```
+
+Reload the browser after the application restarts to load the updated frontend.
+
 ## Using Translations in Components
 
 ```vue

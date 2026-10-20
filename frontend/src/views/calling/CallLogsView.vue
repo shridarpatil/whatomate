@@ -89,11 +89,13 @@ async function viewDetail(log: CallLog) {
   selectedTransfers.value = []
   showDetail.value = true
   recordingURL.value = null
+  recordingLoading.value = false
 
   // Fetch full call log detail (includes transfers)
   try {
     const res = await callLogsService.get(log.id)
     const data = (res.data as any).data ?? res.data
+    if (selectedLog.value?.id !== log.id) return
     if (data.call_log) {
       selectedLog.value = data.call_log
     }
@@ -104,18 +106,22 @@ async function viewDetail(log: CallLog) {
     // Fall back to list data
   }
 
-  // Fetch recording URL if recording exists
-  if (log.recording_s3_key) {
+  // Recording uploads finish asynchronously; use the refreshed detail, not the list snapshot.
+  if (selectedLog.value?.id !== log.id) return
+  if (selectedLog.value.recording_s3_key) {
     recordingLoading.value = true
     callLogsService.getRecordingURL(log.id)
       .then(res => {
+        if (selectedLog.value?.id !== log.id) return
         const data = (res.data as any).data ?? res.data
         recordingURL.value = data.url
       })
       .catch(() => {
+        if (selectedLog.value?.id !== log.id) return
         recordingURL.value = null
       })
       .finally(() => {
+        if (selectedLog.value?.id !== log.id) return
         recordingLoading.value = false
       })
   }

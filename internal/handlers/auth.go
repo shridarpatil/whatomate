@@ -116,6 +116,15 @@ func (a *App) Register(r *fastglue.Request) error {
 	if req.OrganizationID == uuid.Nil {
 		return r.SendErrorEnvelope(fasthttp.StatusBadRequest, "organization_id is required", nil, "")
 	}
+	// SaaS membership is managed by an authenticated administrator. Knowing an
+	// organization UUID is not an invitation to join a commercial tenant.
+	var managed int64
+	if err := a.DB.Model(&models.SaaSSubscription{}).Where("organization_id = ?", req.OrganizationID).Count(&managed).Error; err != nil {
+		return r.SendErrorEnvelope(500, "saas.load_failed", nil, "")
+	}
+	if managed > 0 {
+		return r.SendErrorEnvelope(403, "saas.managed_registration", nil, "")
+	}
 
 	// Validate the organization exists
 	var org models.Organization

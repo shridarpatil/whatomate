@@ -2,6 +2,9 @@ package handlers_test
 
 import (
 	"encoding/json"
+	"io"
+	"net/http"
+	"strings"
 	"testing"
 	"time"
 
@@ -133,6 +136,7 @@ func TestApp_UpdateChatbotSettings(t *testing.T) {
 
 	t.Run("success", func(t *testing.T) {
 		app := newTestApp(t)
+		app.HTTPClient = &http.Client{Transport: aiSettingsTestTransport(200)}
 		org := testutil.CreateTestOrganization(t, app.DB)
 		user := testutil.CreateTestUser(t, app.DB, org.ID)
 
@@ -147,6 +151,7 @@ func TestApp_UpdateChatbotSettings(t *testing.T) {
 			"fallback_message":        "Sorry, I did not understand that.",
 			"ai_enabled":              true,
 			"ai_provider":             "openai",
+			"ai_api_key":              "test-key",
 			"ai_model":                "gpt-4",
 			"ai_max_tokens":           1000,
 			"ai_system_prompt":        "You are a helpful assistant.",
@@ -2907,4 +2912,34 @@ func TestApp_UpdateChatbotSettings_AcceptsSingleURLButton(t *testing.T) {
 
 	require.NoError(t, app.UpdateChatbotSettings(req))
 	assert.Equal(t, fasthttp.StatusOK, testutil.GetResponseStatusCode(req))
+}
+
+// Fake provider responses keep settings tests independent of external services.
+type aiSettingsTestTransport int
+
+func (status aiSettingsTestTransport) RoundTrip(r *http.Request) (*http.Response, error) {
+	return &http.Response{StatusCode: int(status), Body: io.NopCloser(strings.NewReader(`{}`)), Header: make(http.Header)}, nil
+}
+
+func TestApp_UpdateChatbotSettings_InvalidKeyPreservesSettings(t *testing.T) {
+	app := newTestApp(t)
+	app.HTTPClient = &http.Client{Transport: aiSettingsTestTransport(401)}
+	org := testutil.CreateTestOrganization(t, app.DB)
+	user := testutil.CreateTestUser(t, app.DB, org.ID)
+	settings := models.ChatbotSettings{BaseModel: models.BaseModel{ID: uuid.New()}, OrganizationID: org.ID,
+		AI: models.AIConfig{Enabled: true, Provider: models.AIProviderGoogle, APIKey: "working-key", Model: "working-model"}}
+	require.NoError(t, app.DB.Create(&settings).Error)
+	req := testutil.NewJSONRequest(t, map[string]any{"ai_enabled": true, "ai_api_key": "bad-key", "ai_model": "new-model"})
+	testutil.SetAuthContext(req, org.ID, user.ID)
+	require.NoError(t, app.UpdateChatbotSettings(req))
+	testutil.AssertErrorResponse(t, req, 422, "ai_key_invalid")
+	var saved models.ChatbotSettings
+	require.NoError(t, app.DB.First(&saved, "id = ?", settings.ID).Error)
+	assert.Equal(t, "working-key", saved.AI.APIKey)
+	assert.Equal(t, "working-model", saved.AI.Model)
+	// An unavailable provider must not prevent disabling AI.
+	req = testutil.NewJSONRequest(t, map[string]any{"ai_enabled": false})
+	testutil.SetAuthContext(req, org.ID, user.ID)
+	require.NoError(t, app.UpdateChatbotSettings(req))
+	assert.Equal(t, 200, testutil.GetResponseStatusCode(req))
 }

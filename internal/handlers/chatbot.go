@@ -1,10 +1,13 @@
 package handlers
 
 import (
+	"context"
 	"encoding/json"
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/shridarpatil/whatomate/internal/aivalidation"
 	"github.com/shridarpatil/whatomate/internal/audit"
 	"github.com/shridarpatil/whatomate/internal/models"
 	"github.com/valyala/fasthttp"
@@ -433,7 +436,7 @@ func (a *App) UpdateChatbotSettings(r *fastglue.Request) error {
 		settings.AI.Provider = *req.AIProvider
 	}
 	if req.AIAPIKey != nil && *req.AIAPIKey != "" {
-		settings.AI.APIKey = *req.AIAPIKey
+		settings.AI.APIKey = strings.TrimSpace(*req.AIAPIKey)
 	}
 	if req.AIModel != nil {
 		settings.AI.Model = *req.AIModel
@@ -488,6 +491,13 @@ func (a *App) UpdateChatbotSettings(r *fastglue.Request) error {
 		settings.ClientInactivity.AutoCloseMessage = *req.ClientAutoCloseMessage
 	}
 
+	// Validate before persisting so a rejected key cannot replace working settings.
+	// Disabling AI and updates to unrelated tabs must remain possible offline.
+	if aiTouched && settings.AI.Enabled {
+		if code := aivalidation.Validate(context.Background(), a.HTTPClient, string(settings.AI.Provider), settings.AI.Model, settings.AI.APIKey); code != "" {
+			return r.SendErrorEnvelope(fasthttp.StatusUnprocessableEntity, code, nil, "")
+		}
+	}
 	if err := a.DB.Save(&settings).Error; err != nil {
 		a.Log.Error("Failed to save settings", "error", err)
 		return r.SendErrorEnvelope(fasthttp.StatusInternalServerError, "Failed to save settings", nil, "")

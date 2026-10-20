@@ -105,11 +105,17 @@ const aiSettings = ref({
 })
 
 const isAIEnabled = ref(false)
+const aiFeedback = ref('')
+const aiValidationSucceeded = ref(false)
+watch(aiSettings, () => {
+  aiFeedback.value = ''
+  aiValidationSucceeded.value = false
+}, { deep: true, flush: 'sync' })
 
 const aiProviders = [
   { value: 'openai', label: 'OpenAI', models: ['gpt-4o', 'gpt-4o-mini', 'gpt-4-turbo', 'gpt-3.5-turbo'] },
   { value: 'anthropic', label: 'Anthropic', models: ['claude-3-5-sonnet-latest', 'claude-3-5-haiku-latest', 'claude-3-opus-latest'] },
-  { value: 'google', label: 'Google AI', models: ['gemini-2.0-flash', 'gemini-2.0-flash-lite', 'gemini-1.5-flash', 'gemini-1.5-flash-8b'] }
+  { value: 'google', label: 'Google AI', models: ['gemini-3.5-flash-lite', 'gemini-3.8-flash', 'gemini-2.5-flash', 'gemini-2.5-flash-lite'] }
 ]
 
 const availableModels = computed(() => {
@@ -307,6 +313,8 @@ async function saveBusinessHoursSettings() {
 
 async function saveAISettings() {
   isSubmitting.value = true
+  aiFeedback.value = ''
+  aiValidationSucceeded.value = false
   try {
     const payload: any = {
       ai_enabled: aiSettings.value.ai_enabled,
@@ -319,11 +327,20 @@ async function saveAISettings() {
       payload.ai_api_key = aiSettings.value.ai_api_key
     }
     await chatbotService.updateSettings(payload)
-    toast.success(t('chatbotSettings.aiSettingsSaved'))
     aiSettings.value.ai_api_key = ''
+    aiValidationSucceeded.value = true
+    aiFeedback.value = aiSettings.value.ai_enabled ? 'aiValidatedSaved' : 'aiSettingsSaved'
+    toast.success(t(`chatbotSettings.${aiFeedback.value}`))
     refreshActivityLog(aiLogKey)
-  } catch (error) {
-    toast.error(t('chatbotSettings.aiSaveFailed'))
+  } catch (error: any) {
+    const code = error.response?.data?.message
+    const validationErrors = [
+      'ai_key_required', 'ai_model_required', 'ai_provider_invalid', 'ai_key_invalid',
+      'ai_access_denied', 'ai_model_unavailable', 'ai_quota_exceeded',
+      'ai_unreachable', 'ai_request_failed', 'ai_provider_unavailable'
+    ]
+    aiFeedback.value = validationErrors.includes(code) ? code : 'aiSaveFailed'
+    toast.error(t(`chatbotSettings.${aiFeedback.value}`))
   } finally {
     isSubmitting.value = false
   }
@@ -810,12 +827,14 @@ function removeEscalationUser(userId: string) {
                 <CardDescription>{{ $t('chatbotSettings.aiSettingsDesc') }}</CardDescription>
               </CardHeader>
               <CardContent class="space-y-4">
+                <fieldset :disabled="isSubmitting" class="space-y-4">
                 <div class="flex items-center justify-between">
                   <div>
                     <p class="font-medium">{{ $t('chatbotSettings.enableAiResponses') }}</p>
                     <p class="text-sm text-muted-foreground">{{ $t('chatbotSettings.enableAiResponsesDesc') }}</p>
                   </div>
                   <Switch
+                    :disabled="isSubmitting"
                     :checked="isAIEnabled"
                     @update:checked="(val: boolean) => isAIEnabled = val"
                   />
@@ -827,7 +846,7 @@ function removeEscalationUser(userId: string) {
                   <div class="grid grid-cols-2 gap-4">
                     <div class="space-y-2">
                       <Label>{{ $t('chatbotSettings.aiProvider') }}</Label>
-                      <Select v-model="aiSettings.ai_provider">
+                      <Select v-model="aiSettings.ai_provider" :disabled="isSubmitting">
                         <SelectTrigger>
                           <SelectValue :placeholder="$t('chatbotSettings.selectProvider') + '...'" />
                         </SelectTrigger>
@@ -840,7 +859,7 @@ function removeEscalationUser(userId: string) {
                     </div>
                     <div class="space-y-2">
                       <Label>{{ $t('chatbotSettings.model') }}</Label>
-                      <Select v-model="aiSettings.ai_model" :disabled="!aiSettings.ai_provider">
+                      <Select v-model="aiSettings.ai_model" :disabled="isSubmitting || !aiSettings.ai_provider">
                         <SelectTrigger>
                           <SelectValue :placeholder="$t('chatbotSettings.selectModel') + '...'" />
                         </SelectTrigger>
@@ -878,10 +897,17 @@ function removeEscalationUser(userId: string) {
                   </div>
                 </div>
 
+                </fieldset>
+                <p v-if="isAIEnabled" class="text-xs text-muted-foreground">{{ t('chatbotSettings.aiValidationHint') }}</p>
+                <div v-if="aiFeedback" :role="aiValidationSucceeded ? 'status' : 'alert'"
+                  class="rounded-md border p-3 text-sm"
+                  :class="aiValidationSucceeded ? 'border-green-600 text-green-700 dark:text-green-400' : 'border-destructive text-destructive'">
+                  {{ t(`chatbotSettings.${aiFeedback}`) }}
+                </div>
                 <div class="flex justify-end pt-2">
                   <Button @click="saveAISettings" :disabled="isSubmitting">
                     <Loader2 v-if="isSubmitting" class="mr-2 h-4 w-4 animate-spin" />
-                    {{ $t('chatbotSettings.saveChanges') }}
+                    {{ t(isSubmitting && isAIEnabled ? 'chatbotSettings.aiValidating' : isAIEnabled ? 'chatbotSettings.aiValidateAndSave' : 'chatbotSettings.saveChanges') }}
                   </Button>
                 </div>
               </CardContent>
