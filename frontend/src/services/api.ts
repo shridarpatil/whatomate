@@ -195,6 +195,7 @@ export const contactsService = {
   create: (data: any) => api.post('/contacts', data),
   update: (id: string, data: any) => api.put(`/contacts/${id}`, data),
   delete: (id: string) => api.delete(`/contacts/${id}`),
+  deleteConversation: (id: string) => api.delete(`/contacts/${id}/conversation`),
   assign: (id: string, userId: string | null) =>
     api.put(`/contacts/${id}/assign`, { user_id: userId }),
   updateTags: (id: string, tags: string[]) =>

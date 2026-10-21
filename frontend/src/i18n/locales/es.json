@@ -324,6 +324,10 @@
     "viewContactDetails": "Ver detalles del contacto",
     "hideContactDetails": "Ocultar detalles del contacto",
     "contactOptions": "Opciones del contacto",
+    "deleteChat": "Eliminar chat",
+    "deleteChatConfirm": "¿Eliminar el chat con {name}? Todos los mensajes, archivos y notas de esta conversación se eliminarán de forma permanente. Esta acción no se puede deshacer.",
+    "chatDeleted": "Chat eliminado",
+    "chatDeleteFailed": "No se pudo eliminar el chat",
     "sendMedia": "Enviar medio",
     "mediaViewer": {
       "title": "Archivo adjunto",
