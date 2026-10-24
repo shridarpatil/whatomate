@@ -11,7 +11,7 @@ import { chatbotService } from '@/services/api'
 import { toast } from 'vue-sonner'
 import { PageHeader, DataTable, DeleteConfirmDialog, SearchInput, IconButton, ErrorState, type Column } from '@/components/shared'
 import { getErrorMessage } from '@/lib/api-utils'
-import { Plus, Pencil, Trash2, Workflow } from 'lucide-vue-next'
+import { Plus, Pencil, Trash2, Workflow, Copy, Loader2 } from 'lucide-vue-next'
 import { useDebounceFn } from '@vueuse/core'
 
 const { t } = useI18n()
@@ -34,6 +34,7 @@ const searchQuery = ref('')
 const deleteDialogOpen = ref(false)
 const isDeleting = ref(false)
 const flowToDelete = ref<ChatbotFlow | null>(null)
+const duplicatingFlowId = ref<string | null>(null)
 
 // Pagination state
 const currentPage = ref(1)
@@ -96,6 +97,19 @@ function createFlow() {
 
 function editFlow(flow: ChatbotFlow) {
   router.push(`/chatbot/flows/${flow.id}/edit`)
+}
+
+async function duplicateFlow(flow: ChatbotFlow) {
+  duplicatingFlowId.value = flow.id
+  try {
+    await chatbotService.duplicateFlow(flow.id)
+    toast.success(t('flows.flowDuplicated'))
+    await fetchFlows()
+  } catch (error: any) {
+    toast.error(getErrorMessage(error, t('flows.duplicateFailed')))
+  } finally {
+    duplicatingFlowId.value = null
+  }
 }
 
 async function toggleFlow(flow: ChatbotFlow) {
@@ -215,6 +229,7 @@ async function confirmDeleteFlow() {
                 <template #cell-actions="{ item: flow }">
                   <div class="flex items-center justify-end gap-1">
                     <IconButton :icon="Pencil" :label="$t('chatbotFlows.editFlowLabel')" class="h-8 w-8" @click="editFlow(flow)" />
+                    <IconButton :icon="duplicatingFlowId === flow.id ? Loader2 : Copy" :label="$t('flows.duplicateTooltip')" class="h-8 w-8" :disabled="duplicatingFlowId === flow.id" @click="duplicateFlow(flow)" />
                     <IconButton :icon="Trash2" :label="$t('chatbotFlows.deleteFlowLabel')" class="h-8 w-8 text-destructive" @click="openDeleteDialog(flow)" />
                   </div>
                 </template>
