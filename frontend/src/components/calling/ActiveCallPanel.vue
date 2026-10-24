@@ -146,9 +146,9 @@ async function handleAccept(id: string) {
           <ArrowRightLeft class="h-4 w-4" />
         </Button>
 
-        <!-- Accept incoming transfer (green) -->
+        <!-- Accept incoming transfer (green, only if not already on call) -->
         <Button
-          v-if="firstWaiting"
+          v-if="!store.isOnCall && firstWaiting"
           variant="ghost"
           size="sm"
           class="h-10 w-10 rounded-full p-0 !bg-green-600 !text-white hover:!bg-green-500"
