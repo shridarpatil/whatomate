@@ -644,6 +644,78 @@ func TestApp_CreateChatbotFlow(t *testing.T) {
 		assert.Equal(t, "Onboarding Flow", flow.Name)
 		assert.True(t, flow.IsEnabled)
 	})
+
+	t.Run("enabled false creates a disabled flow", func(t *testing.T) {
+		app := newTestApp(t)
+		org := testutil.CreateTestOrganization(t, app.DB)
+		perms := getChatbotFlowPermissions(t, app)
+		role := testutil.CreateTestRole(t, app.DB, org.ID, "flow-admin", perms)
+		user := testutil.CreateTestUser(t, app.DB, org.ID,
+			testutil.WithEmail(testutil.UniqueEmail("create-flow-disabled")),
+			testutil.WithRoleID(&role.ID),
+		)
+
+		disabled := false
+		req := testutil.NewJSONRequest(t, map[string]any{
+			"name":    "Draft Flow",
+			"enabled": disabled,
+		})
+		testutil.SetAuthContext(req, org.ID, user.ID)
+
+		err := app.CreateChatbotFlow(req)
+		require.NoError(t, err)
+		assert.Equal(t, fasthttp.StatusOK, testutil.GetResponseStatusCode(req))
+
+		var resp struct {
+			Data struct {
+				ID string `json:"id"`
+			} `json:"data"`
+		}
+		err = json.Unmarshal(testutil.GetResponseBody(req), &resp)
+		require.NoError(t, err)
+
+		parsedID, err := uuid.Parse(resp.Data.ID)
+		require.NoError(t, err)
+
+		var flow models.ChatbotFlow
+		require.NoError(t, app.DB.First(&flow, "id = ?", parsedID).Error)
+		assert.False(t, flow.IsEnabled)
+	})
+
+	t.Run("enabled omitted defaults to enabled", func(t *testing.T) {
+		app := newTestApp(t)
+		org := testutil.CreateTestOrganization(t, app.DB)
+		perms := getChatbotFlowPermissions(t, app)
+		role := testutil.CreateTestRole(t, app.DB, org.ID, "flow-admin", perms)
+		user := testutil.CreateTestUser(t, app.DB, org.ID,
+			testutil.WithEmail(testutil.UniqueEmail("create-flow-default")),
+			testutil.WithRoleID(&role.ID),
+		)
+
+		req := testutil.NewJSONRequest(t, map[string]any{
+			"name": "Defaulted Flow",
+		})
+		testutil.SetAuthContext(req, org.ID, user.ID)
+
+		err := app.CreateChatbotFlow(req)
+		require.NoError(t, err)
+		assert.Equal(t, fasthttp.StatusOK, testutil.GetResponseStatusCode(req))
+
+		var resp struct {
+			Data struct {
+				ID string `json:"id"`
+			} `json:"data"`
+		}
+		err = json.Unmarshal(testutil.GetResponseBody(req), &resp)
+		require.NoError(t, err)
+
+		parsedID, err := uuid.Parse(resp.Data.ID)
+		require.NoError(t, err)
+
+		var flow models.ChatbotFlow
+		require.NoError(t, app.DB.First(&flow, "id = ?", parsedID).Error)
+		assert.True(t, flow.IsEnabled)
+	})
 }
 
 // =============================================================================
