@@ -112,8 +112,8 @@ func (a *App) ListContacts(r *fastglue.Request) error {
 			search = search[:1000]
 		}
 		searchPattern := "%" + search + "%"
-		// Use ILIKE for case-insensitive search on profile_name
-		query = query.Where("phone_number LIKE ? OR profile_name ILIKE ?", searchPattern, searchPattern)
+		// Use ILIKE for case-insensitive search on profile_name and last_message_preview
+		query = query.Where("phone_number LIKE ? OR profile_name ILIKE ? OR last_message_preview ILIKE ?", searchPattern, searchPattern, searchPattern)
 	}
 	if whatsAppAccount != "" {
 		query = query.Where("whats_app_account = ?", whatsAppAccount)
@@ -384,6 +384,48 @@ func (a *App) GetMessages(r *fastglue.Request) error {
 	// Count total messages (with session filter if applied)
 	var total int64
 	msgQuery.Model(&models.Message{}).Count(&total)
+
+	// Focus-based pagination: load messages surrounding a specific message ID (e.g. from global search)
+	focusIDStr := string(r.RequestCtx.QueryArgs().Peek("focus_id"))
+	if focusIDStr != "" {
+		focusID, err := uuid.Parse(focusIDStr)
+		if err == nil {
+			var focusMsg models.Message
+			if err := a.DB.Where("id = ? AND contact_id = ?", focusID, contactID).First(&focusMsg).Error; err == nil {
+				var olderMsgs, newerMsgs []models.Message
+				newerQuery := a.DB.Where("contact_id = ?", contactID)
+				if accountFilter != "" {
+					newerQuery = newerQuery.Where("whats_app_account = ?", accountFilter)
+				}
+				_ = newerQuery.Where("created_at >= ?", focusMsg.CreatedAt).
+					Preload("ReplyToMessage").
+					Order("created_at ASC").
+					Limit(25).
+					Find(&newerMsgs).Error
+
+				olderQuery := a.DB.Where("contact_id = ?", contactID)
+				if accountFilter != "" {
+					olderQuery = olderQuery.Where("whats_app_account = ?", accountFilter)
+				}
+				_ = olderQuery.Where("created_at < ?", focusMsg.CreatedAt).
+					Preload("ReplyToMessage").
+					Order("created_at DESC").
+					Limit(25).
+					Find(&olderMsgs).Error
+
+				for i, j := 0, len(olderMsgs)-1; i < j; i, j = i+1, j-1 {
+					olderMsgs[i], olderMsgs[j] = olderMsgs[j], olderMsgs[i]
+				}
+				combined := append(olderMsgs, newerMsgs...)
+				response := a.buildMessagesResponse(combined)
+				return r.SendEnvelope(map[string]any{
+					"messages": response,
+					"total":    total,
+					"has_more": len(olderMsgs) == 25,
+				})
+			}
+		}
+	}
 
 	// Cursor-based pagination: load messages before a specific ID
 	if beforeIDStr != "" {
