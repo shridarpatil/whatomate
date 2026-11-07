@@ -310,6 +310,12 @@
   },
   "chat": {
     "marketingOptOut": "Marketing Opt-out",
+    "renameContact": "Rename contact",
+    "renameDescription": "This name is shown in chats and contacts. WhatsApp profile name changes will no longer replace it.",
+    "renameSaved": "Contact name updated",
+    "renameFailed": "Could not update the name",
+    "renameTooLong": "Name is too long",
+    "contactName": "Name",
     "conversations": "Conversations",
     "messages": "Messages",
     "noContacts": "No contacts found",

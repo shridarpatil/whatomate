@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/nikyjain/whatomate/internal/contactutil"
 	"github.com/nikyjain/whatomate/internal/models"
 	"github.com/nikyjain/whatomate/internal/utils"
 	"github.com/nikyjain/whatomate/pkg/whatsapp"
@@ -1469,15 +1470,12 @@ func (a *App) CreateContact(r *fastglue.Request) error {
 		return r.SendErrorEnvelope(fasthttp.StatusBadRequest, "phone_number is required", nil, "")
 	}
 
-	// Normalize phone number
-	normalizedPhone := req.PhoneNumber
-	if len(normalizedPhone) > 0 && normalizedPhone[0] == '+' {
-		normalizedPhone = normalizedPhone[1:]
-	}
+	// Canonical form (91XXXXXXXXXX) so +91…, 91… and bare numbers are one contact
+	normalizedPhone := contactutil.CanonicalPhone(req.PhoneNumber)
 
-	// Check if contact exists (including soft-deleted)
-	var existingContact models.Contact
-	if err := a.DB.Unscoped().Where("organization_id = ? AND phone_number = ?", orgID, normalizedPhone).First(&existingContact).Error; err == nil {
+	// Check if contact exists in any stored phone form (including soft-deleted)
+	if found, err := contactutil.FindContactUnscoped(a.DB, orgID, req.PhoneNumber); err == nil {
+		existingContact := *found
 		// Contact exists
 		if existingContact.DeletedAt.Valid {
 			// Restore soft-deleted contact
@@ -1590,7 +1588,14 @@ func (a *App) UpdateContact(r *fastglue.Request) error {
 	updates := map[string]any{}
 
 	if req.ProfileName != nil {
-		updates["profile_name"] = *req.ProfileName
+		name := strings.TrimSpace(*req.ProfileName)
+		if len([]rune(name)) > 255 {
+			return r.SendErrorEnvelope(fasthttp.StatusBadRequest, "Name must be 255 characters or fewer", nil, "")
+		}
+		updates["profile_name"] = name
+		// An agent-chosen name sticks: incoming WhatsApp profile names no
+		// longer overwrite it. Clearing the name hands control back.
+		updates["profile_name_locked"] = name != ""
 	}
 	if req.WhatsAppAccount != nil {
 		updates["whats_app_account"] = *req.WhatsAppAccount

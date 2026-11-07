@@ -98,7 +98,8 @@ import {
   Bell,
   StickyNote,
   Info,
-  Trash2
+  Trash2,
+  Pencil
 } from 'lucide-vue-next'
 import { getInitials, getAvatarGradient, formatDate } from '@/lib/utils'
 import { useColorMode } from '@/composables/useColorMode'
@@ -108,6 +109,7 @@ import PreviewButtonGroup from '@/components/chatbot/flow-preview/PreviewButtonG
 import TemplatePicker from '@/components/chat/TemplatePicker.vue'
 import MediaViewerDialog from '@/components/chat/MediaViewerDialog.vue'
 import ContactInfoPanel from '@/components/chat/ContactInfoPanel.vue'
+import RenameContactDialog from '@/components/chat/RenameContactDialog.vue'
 import ConversationNotes from '@/components/chat/ConversationNotes.vue'
 import CallButton from '@/components/calling/CallButton.vue'
 import { useNotesStore } from '@/stores/notes'
@@ -135,6 +137,7 @@ const messagesEndRef = ref<HTMLElement | null>(null)
 const messageInputRef = ref<HTMLTextAreaElement | null>(null)
 const isSending = ref(false)
 const isAssignDialogOpen = ref(false)
+const isRenameDialogOpen = ref(false)
 const isTransferring = ref(false)
 const isResuming = ref(false)
 const isRefreshingView = ref(false)
@@ -2454,6 +2457,17 @@ async function sendMediaMessage() {
                 <p class="truncate text-sm font-medium text-white light:text-gray-900">
                   {{ contactsStore.currentContact.name || contactsStore.currentContact.phone_number }}
                 </p>
+                <Button
+                  v-if="canWriteContacts"
+                  variant="ghost"
+                  size="icon"
+                  class="h-6 w-6 shrink-0 text-white/40 hover:text-white hover:bg-white/[0.08] light:text-gray-400 light:hover:text-gray-900 light:hover:bg-gray-100"
+                  :title="$t('chat.renameContact', 'Rename contact')"
+                  :aria-label="$t('chat.renameContact', 'Rename contact')"
+                  @click="isRenameDialogOpen = true"
+                >
+                  <Pencil class="h-3.5 w-3.5" />
+                </Button>
                 <Badge v-if="activeTransferId" class="text-[10px] h-5 bg-orange-500/20 text-orange-400 light:bg-orange-100 light:text-orange-700">
                   Paused
                 </Badge>
@@ -3285,7 +3299,9 @@ async function sendMediaMessage() {
       v-if="showDesktopInfoPanel"
       :contact="contactsStore.currentContact!"
       :session-data="contactSessionData"
+      :can-rename="canWriteContacts"
       @close="isInfoPanelOpen = false"
+      @rename="isRenameDialogOpen = true"
       @tags-updated="(tags) => contactsStore.updateContactTags(contactsStore.currentContact!.id, tags)"
     />
 
@@ -3315,11 +3331,18 @@ async function sendMediaMessage() {
           :contact="contactsStore.currentContact!"
           :session-data="contactSessionData"
           mobile
+          :can-rename="canWriteContacts"
           @close="isInfoPanelOpen = false"
+          @rename="isRenameDialogOpen = true"
           @tags-updated="(tags) => contactsStore.updateContactTags(contactsStore.currentContact!.id, tags)"
         />
       </SheetContent>
     </Sheet>
+
+    <RenameContactDialog
+      v-model:open="isRenameDialogOpen"
+      :contact="contactsStore.currentContact"
+    />
 
     <!-- Template Params Dialog -->
     <Dialog v-model:open="templateDialogOpen">

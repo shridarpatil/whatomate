@@ -22,7 +22,7 @@ import {
   CommandItem,
   CommandList
 } from '@/components/ui/command'
-import { X, ChevronDown, Phone, User, Plus, Check, Tags, Loader2 } from 'lucide-vue-next'
+import { X, ChevronDown, Phone, User, Plus, Check, Tags, Loader2, Pencil } from 'lucide-vue-next'
 import { TagBadge } from '@/components/ui/tag-badge'
 import MetadataSection from '@/components/chat/MetadataSection.vue'
 import { getInitials, getAvatarGradient, formatLabel } from '@/lib/utils'
@@ -67,12 +67,15 @@ const props = withDefaults(defineProps<{
   contact: Contact
   sessionData?: SessionData | null
   mobile?: boolean
+  canRename?: boolean
 }>(), {
-  mobile: false
+  mobile: false,
+  canRename: false
 })
 
 const emit = defineEmits<{
   close: []
+  rename: []
   tagsUpdated: [tags: string[]]
 }>()
 
@@ -284,9 +287,22 @@ async function updateContactTags(tags: string[]) {
               {{ getInitials(contact.name || contact.phone_number) }}
             </AvatarFallback>
           </Avatar>
-          <h4 class="font-medium">
-            {{ contact.name || contact.phone_number }}
-          </h4>
+          <div class="flex items-center gap-1">
+            <h4 class="font-medium">
+              {{ contact.name || contact.phone_number }}
+            </h4>
+            <Button
+              v-if="canRename"
+              variant="ghost"
+              size="icon"
+              class="h-6 w-6 text-muted-foreground"
+              :title="$t('chat.renameContact', 'Rename contact')"
+              :aria-label="$t('chat.renameContact', 'Rename contact')"
+              @click="emit('rename')"
+            >
+              <Pencil class="h-3.5 w-3.5" />
+            </Button>
+          </div>
           <div class="flex items-center gap-1 text-sm text-muted-foreground mt-1">
             <Phone class="h-3 w-3" />
             <span>{{ contact.phone_number }}</span>

@@ -7,6 +7,7 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/nikyjain/whatomate/internal/config"
+	"github.com/nikyjain/whatomate/internal/contactutil"
 	"github.com/nikyjain/whatomate/internal/models"
 	"golang.org/x/crypto/bcrypt"
 	"gorm.io/driver/postgres"
@@ -225,6 +226,15 @@ func RunMigrationWithProgress(db *gorm.DB, adminCfg *config.DefaultAdminConfig) 
 	if err := BackfillLastMessageAt(silentDB); err != nil {
 		fmt.Printf("\n  \033[31m✗ Failed to backfill last_message_at\033[0m\n\n")
 		return err
+	}
+
+	// Fold contacts stored as +91…, 91… and bare 10-digit forms of the same
+	// number into one. Idempotent; a failure is reported but never blocks boot.
+	if report, err := contactutil.MergeDuplicateContacts(silentDB); err != nil {
+		fmt.Printf("\n  \033[33m! Duplicate contact merge stopped: %v\033[0m\n", err)
+	} else if report.Groups > 0 || report.Renamed > 0 {
+		fmt.Printf("\n  Merged duplicate contacts: %d numbers, %d merged, %d kept as tombstones, %d normalised\n",
+			report.Groups, report.Merged, report.Tombstoned, report.Renamed)
 	}
 
 	printProgress(currentStep, totalSteps)

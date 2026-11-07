@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/nikyjain/whatomate/internal/contactutil"
 	"github.com/nikyjain/whatomate/internal/models"
 	"github.com/valyala/fasthttp"
 	"github.com/xuri/excelize/v2"
@@ -350,7 +351,12 @@ func (a *App) ImportRSVPGuests(r *fastglue.Request) error {
 			name = strings.TrimSpace(row[nameCol])
 		}
 		var contact models.Contact
-		if err := a.DB.Unscoped().Where("organization_id = ? AND phone_number = ?", orgID, phone).First(&contact).Error; err != nil {
+		if found, err := contactutil.FindContactUnscoped(a.DB, orgID, phone); err == nil {
+			contact = *found
+			if contact.DeletedAt.Valid {
+				a.DB.Unscoped().Model(&contact).Updates(map[string]interface{}{"deleted_at": nil, "is_active": true})
+			}
+		} else {
 			contact = models.Contact{BaseModel: models.BaseModel{ID: uuid.New()}, OrganizationID: orgID, PhoneNumber: phone, ProfileName: name, WhatsAppAccount: event.WhatsAppAccount, IsActive: true, Tags: models.JSONBArray{}, Metadata: models.JSONB{}}
 			if createErr := a.DB.Create(&contact).Error; createErr != nil {
 				result.Skipped++
@@ -358,8 +364,6 @@ func (a *App) ImportRSVPGuests(r *fastglue.Request) error {
 				continue
 			}
 			result.ContactsCreated++
-		} else if contact.DeletedAt.Valid {
-			a.DB.Unscoped().Model(&contact).Updates(map[string]interface{}{"deleted_at": nil, "is_active": true})
 		}
 		if a.rsvpGuestListed(eventID, contact.ID) {
 			result.AlreadyAdded++

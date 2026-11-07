@@ -938,23 +938,15 @@ func (a *App) SendTemplateMessage(r *fastglue.Request) error {
 	} else {
 		// Find or create contact from phone number
 		phoneNumber := req.PhoneNumber
-		var c models.Contact
-		err := a.DB.Where("phone_number = ? AND organization_id = ?", phoneNumber, orgID).First(&c).Error
+		c, created, err := contactutil.GetOrCreateContact(a.DB, orgID, phoneNumber, "")
 		if err != nil {
-			// Contact not found, create new one
-			c = models.Contact{
-				BaseModel:      models.BaseModel{ID: uuid.New()},
-				OrganizationID: orgID,
-				PhoneNumber:    phoneNumber,
-				IsActive:       true,
-			}
-			if err := a.DB.Create(&c).Error; err != nil {
-				a.Log.Error("Failed to create contact", "error", err, "phone", phoneNumber)
-				return r.SendErrorEnvelope(fasthttp.StatusInternalServerError, "Failed to create contact", nil, "")
-			}
-			a.Log.Info("Contact created from API", "contact_id", c.ID, "phone", phoneNumber)
+			a.Log.Error("Failed to create contact", "error", err, "phone", phoneNumber)
+			return r.SendErrorEnvelope(fasthttp.StatusInternalServerError, "Failed to create contact", nil, "")
 		}
-		contact = &c
+		if created {
+			a.Log.Info("Contact created from API", "contact_id", c.ID, "phone", c.PhoneNumber)
+		}
+		contact = c
 	}
 
 	// Determine which WhatsApp account to use.

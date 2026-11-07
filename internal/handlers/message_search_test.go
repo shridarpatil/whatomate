@@ -41,17 +41,17 @@ func TestApp_SearchMessages(t *testing.T) {
 	t.Parallel()
 	app := newTestApp(t)
 	org := testutil.CreateTestOrganization(t, app.DB)
-	user := testutil.CreateTestUser(t, app.DB, org.ID)
-	testutil.AssignRole(t, app.DB, user.ID, org.ID, "admin")
+	adminRole := testutil.CreateAdminRole(t, app.DB, org.ID)
+	user := testutil.CreateTestUser(t, app.DB, org.ID, testutil.WithRoleID(&adminRole.ID))
 
 	// Create 2 contacts with unique phones
-	c1 := testutil.CreateTestContact(t, app.DB, org.ID, "919999000101")
+	c1 := testutil.CreateTestContactWith(t, app.DB, org.ID, testutil.WithPhoneNumber("919999000101"))
 	c1.ProfileName = "Alice Wonderland"
-	require.NoError(t, app.DB.Save(&c1).Error)
+	require.NoError(t, app.DB.Save(c1).Error)
 
-	c2 := testutil.CreateTestContact(t, app.DB, org.ID, "919999000102")
+	c2 := testutil.CreateTestContactWith(t, app.DB, org.ID, testutil.WithPhoneNumber("919999000102"))
 	c2.ProfileName = "Bob Builder"
-	require.NoError(t, app.DB.Save(&c2).Error)
+	require.NoError(t, app.DB.Save(c2).Error)
 
 	now := time.Now()
 
@@ -131,7 +131,7 @@ func TestApp_SearchMessages(t *testing.T) {
 
 		// Assign c1 to agent
 		c1.AssignedUserID = &agent.ID
-		require.NoError(t, app.DB.Save(&c1).Error)
+		require.NoError(t, app.DB.Save(c1).Error)
 
 		// Now agent should only see msg1 from c1
 		status, resp = searchMessagesHelper(t, app, org.ID, agent.ID, map[string]string{"q": "invoice"})
