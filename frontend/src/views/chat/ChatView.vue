@@ -9,7 +9,7 @@ import { useAuthStore } from '@/stores/auth'
 import { useUsersStore } from '@/stores/users'
 import { useTransfersStore } from '@/stores/transfers'
 import { wsService } from '@/services/websocket'
-import { contactsService, chatbotService, messagesService, customActionsService, accountsService, cannedResponsesService, getRequestHeaders, type CustomAction, type ActionResult, type CannedResponse } from '@/services/api'
+import { contactsService, chatbotService, messagesService, customActionsService, accountsService, cannedResponsesService, getRequestHeaders, type CustomAction, type ActionResult, type CannedResponse, type MessageSearchResult } from '@/services/api'
 import { useTagsStore } from '@/stores/tags'
 import { TagBadge } from '@/components/ui/tag-badge'
 import { getTagColorClass } from '@/lib/constants'
@@ -77,6 +77,8 @@ import {
   UserMinus,
   UserX,
   ChevronLeft,
+  ChevronUp,
+  ChevronDown,
   Play,
   Reply,
   X,
@@ -96,7 +98,8 @@ import {
   Bell,
   StickyNote,
   Info,
-  Trash2
+  Trash2,
+  Pencil
 } from 'lucide-vue-next'
 import { getInitials, getAvatarGradient, formatDate } from '@/lib/utils'
 import { useColorMode } from '@/composables/useColorMode'
@@ -106,6 +109,7 @@ import PreviewButtonGroup from '@/components/chatbot/flow-preview/PreviewButtonG
 import TemplatePicker from '@/components/chat/TemplatePicker.vue'
 import MediaViewerDialog from '@/components/chat/MediaViewerDialog.vue'
 import ContactInfoPanel from '@/components/chat/ContactInfoPanel.vue'
+import RenameContactDialog from '@/components/chat/RenameContactDialog.vue'
 import ConversationNotes from '@/components/chat/ConversationNotes.vue'
 import CallButton from '@/components/calling/CallButton.vue'
 import { useNotesStore } from '@/stores/notes'
@@ -133,6 +137,7 @@ const messagesEndRef = ref<HTMLElement | null>(null)
 const messageInputRef = ref<HTMLTextAreaElement | null>(null)
 const isSending = ref(false)
 const isAssignDialogOpen = ref(false)
+const isRenameDialogOpen = ref(false)
 const isTransferring = ref(false)
 const isResuming = ref(false)
 const isRefreshingView = ref(false)
@@ -172,6 +177,126 @@ const mediaViewerIndex = ref(0)
 
 // Cache for media blob URLs (message_id -> blob URL)
 
+
+// Global message search state (across all chats)
+const messageSearchResults = ref<MessageSearchResult[]>([])
+const isSearchingMessages = ref(false)
+const searchFilterTab = ref<'all' | 'chats' | 'messages'>('all')
+const pendingFocusMessageId = ref<string | null>(null)
+
+// In-chat search state (within active conversation)
+const isInChatSearchOpen = ref(false)
+const inChatSearchQuery = ref('')
+const currentInChatMatchIndex = ref(0)
+const inChatSearchInputRef = ref<any>(null)
+
+let globalSearchDebounce: ReturnType<typeof setTimeout> | null = null
+watch(() => contactsStore.searchQuery, (newVal) => {
+  if (globalSearchDebounce) clearTimeout(globalSearchDebounce)
+  const q = (newVal || '').trim()
+  if (!q) {
+    messageSearchResults.value = []
+    isSearchingMessages.value = false
+    searchFilterTab.value = 'all'
+    return
+  }
+  globalSearchDebounce = setTimeout(async () => {
+    isSearchingMessages.value = true
+    try {
+      const res = await messagesService.search({
+        q,
+        account: selectedAccount.value || undefined
+      })
+      const data = (res.data as any).data || res.data
+      messageSearchResults.value = data.messages || []
+    } catch (err) {
+      console.error('Failed to search messages:', err)
+      messageSearchResults.value = []
+    } finally {
+      isSearchingMessages.value = false
+    }
+  }, 300)
+})
+
+async function handleMessageSearchClick(result: MessageSearchResult) {
+  pendingFocusMessageId.value = result.id
+  if (route.params.contactId !== result.contact_id) {
+    await router.push(`/chat/${result.contact_id}`)
+  } else {
+    const exists = contactsStore.messages.some(m => m.id === result.id)
+    if (!exists) {
+      await contactsStore.fetchMessages(result.contact_id, { focus_id: result.id })
+    }
+    await nextTick()
+    setTimeout(() => {
+      scrollToMessage(result.id)
+      pendingFocusMessageId.value = null
+    }, 150)
+  }
+}
+
+function highlightSearchMatch(text: string, query: string): string {
+  if (!text) return ''
+  if (!query || !query.trim()) return DOMPurify.sanitize(text)
+  const escaped = query.trim().replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+  const regex = new RegExp(`(${escaped})`, 'gi')
+  const matchIndex = text.search(regex)
+  let snippet = text
+  if (matchIndex > 30 && text.length > 70) {
+    const start = Math.max(0, matchIndex - 20)
+    snippet = (start > 0 ? '...' : '') + text.slice(start)
+  }
+  const highlighted = snippet.replace(regex, '<mark class="bg-emerald-500/30 text-emerald-300 light:bg-emerald-200 light:text-emerald-900 px-0.5 rounded font-semibold">$1</mark>')
+  return DOMPurify.sanitize(highlighted)
+}
+
+const inChatMatches = computed(() => {
+  if (!inChatSearchQuery.value.trim()) return []
+  const q = inChatSearchQuery.value.toLowerCase().trim()
+  return contactsStore.messages.filter(m => {
+    const content = (typeof m.content === 'string' ? m.content : JSON.stringify(m.content || '')).toLowerCase()
+    return content.includes(q)
+  })
+})
+
+watch(inChatMatches, (matches) => {
+  if (matches.length > 0) {
+    currentInChatMatchIndex.value = 0
+    scrollToMessage(matches[0].id)
+  } else {
+    currentInChatMatchIndex.value = 0
+  }
+})
+
+function toggleInChatSearch() {
+  isInChatSearchOpen.value = !isInChatSearchOpen.value
+  if (isInChatSearchOpen.value) {
+    nextTick(() => {
+      inChatSearchInputRef.value?.$el?.focus?.() || inChatSearchInputRef.value?.focus?.()
+    })
+  } else {
+    inChatSearchQuery.value = ''
+  }
+}
+
+function closeInChatSearch() {
+  isInChatSearchOpen.value = false
+  inChatSearchQuery.value = ''
+}
+
+function nextInChatMatch() {
+  if (inChatMatches.value.length === 0) return
+  currentInChatMatchIndex.value = (currentInChatMatchIndex.value + 1) % inChatMatches.value.length
+  const match = inChatMatches.value[currentInChatMatchIndex.value]
+  if (match) scrollToMessage(match.id)
+}
+
+function prevInChatMatch() {
+  if (inChatMatches.value.length === 0) return
+  currentInChatMatchIndex.value = (currentInChatMatchIndex.value - 1 + inChatMatches.value.length) % inChatMatches.value.length
+  const match = inChatMatches.value[currentInChatMatchIndex.value]
+  if (match) scrollToMessage(match.id)
+}
 
 // Canned responses slash command state
 const cannedPickerOpen = ref(false)
@@ -677,7 +802,17 @@ async function selectContact(id: string) {
     contactsStore.setAccountFilter(null)
 
     contactsStore.setCurrentContact(contact)
-    await contactsStore.fetchMessages(id)
+    if (pendingFocusMessageId.value) {
+      const focusId = pendingFocusMessageId.value
+      await contactsStore.fetchMessages(id, { focus_id: focusId })
+      await nextTick()
+      setTimeout(() => {
+        scrollToMessage(focusId)
+        pendingFocusMessageId.value = null
+      }, 150)
+    } else {
+      await contactsStore.fetchMessages(id)
+    }
 
     // Discover distinct accounts from the unfiltered message set
     const accounts = new Set<string>()
@@ -2041,81 +2176,237 @@ async function sendMediaMessage() {
             <X class="h-3 w-3 ml-1" />
           </TagBadge>
         </div>
+
+        <!-- Global Search Filter Tabs -->
+        <div v-if="contactsStore.searchQuery.trim()" class="flex items-center gap-1.5 pt-2 pb-0.5 text-xs border-t border-white/[0.06] light:border-gray-200 mt-2">
+          <button
+            type="button"
+            :class="[
+              'px-2.5 py-0.5 rounded-full text-[11px] font-medium transition-colors',
+              searchFilterTab === 'all'
+                ? 'bg-emerald-500/20 text-emerald-400 light:bg-emerald-100 light:text-emerald-700 font-semibold'
+                : 'text-white/60 hover:text-white hover:bg-white/[0.06] light:text-gray-600 light:hover:bg-gray-100'
+            ]"
+            @click="searchFilterTab = 'all'"
+          >
+            {{ $t('chat.all', 'All') }}
+          </button>
+          <button
+            type="button"
+            :class="[
+              'px-2.5 py-0.5 rounded-full text-[11px] font-medium transition-colors',
+              searchFilterTab === 'chats'
+                ? 'bg-emerald-500/20 text-emerald-400 light:bg-emerald-100 light:text-emerald-700 font-semibold'
+                : 'text-white/60 hover:text-white hover:bg-white/[0.06] light:text-gray-600 light:hover:bg-gray-100'
+            ]"
+            @click="searchFilterTab = 'chats'"
+          >
+            {{ $t('chat.searchChats', 'Chats') }} ({{ contactsStore.sortedContacts.length }})
+          </button>
+          <button
+            type="button"
+            :class="[
+              'px-2.5 py-0.5 rounded-full text-[11px] font-medium transition-colors flex items-center gap-1',
+              searchFilterTab === 'messages'
+                ? 'bg-emerald-500/20 text-emerald-400 light:bg-emerald-100 light:text-emerald-700 font-semibold'
+                : 'text-white/60 hover:text-white hover:bg-white/[0.06] light:text-gray-600 light:hover:bg-gray-100'
+            ]"
+            @click="searchFilterTab = 'messages'"
+          >
+            <span>{{ $t('chat.searchMessages', 'Messages') }}</span>
+            <Loader2 v-if="isSearchingMessages" class="h-3 w-3 animate-spin" />
+            <span v-else>({{ messageSearchResults.length }})</span>
+          </button>
+        </div>
       </div>
 
       <!-- Contacts -->
       <ScrollArea :ref="(el: any) => contactsScroll.scrollAreaRef.value = el" orientation="vertical" class="flex-1">
         <div class="py-1 w-full">
-          <div
-            v-for="contact in contactsStore.sortedContacts"
-            :key="contact.id"
-            :class="[
-              'flex items-center gap-2 px-3 py-2 cursor-pointer hover:bg-white/[0.04] light:hover:bg-gray-50 transition-colors',
-              contactsStore.currentContact?.id === contact.id && 'bg-white/[0.08] light:bg-gray-100'
-            ]"
-            @click="handleContactClick(contact)"
-          >
-            <Avatar class="h-9 w-9 ring-2 ring-white/[0.1] light:ring-gray-200">
-              <AvatarImage :src="contact.avatar_url" />
-              <AvatarFallback :class="'text-xs bg-gradient-to-br text-white ' + getAvatarGradient(contact.name || contact.phone_number)">
-                {{ getInitials(contact.name || contact.phone_number) }}
-              </AvatarFallback>
-            </Avatar>
-            <div class="flex-1 min-w-0">
-              <div class="flex items-center justify-between gap-2">
-                <p
-                  class="flex-1 min-w-0 text-sm font-medium truncate text-white light:text-gray-900"
-                  :title="contact.name || contact.phone_number"
-                >
-                  {{ contact.name || contact.phone_number }}
-                </p>
-                <span class="flex-shrink-0 text-[11px] text-white/40 light:text-gray-500">
-                  {{ formatContactTime(contact.last_message_at) }}
-                </span>
+          <!-- SEARCH MODE -->
+          <template v-if="contactsStore.searchQuery.trim()">
+            <!-- Matching Chats Section -->
+            <div v-if="searchFilterTab === 'all' || searchFilterTab === 'chats'">
+              <div
+                v-if="contactsStore.sortedContacts.length > 0"
+                class="px-3 py-1.5 text-[11px] font-semibold text-white/40 light:text-gray-500 uppercase tracking-wider flex items-center justify-between"
+              >
+                <span>{{ $t('chat.searchChats', 'Chats') }}</span>
+                <span>{{ contactsStore.sortedContacts.length }}</span>
               </div>
-              <div class="flex items-center justify-between gap-2">
-                <p class="flex-1 min-w-0 text-xs text-white/50 light:text-gray-500 truncate">
-                  {{ contact.phone_number }}
-                </p>
-                <Badge v-if="contact.unread_count > 0" class="flex-shrink-0 h-5 text-[10px] bg-emerald-500/20 text-emerald-400 light:bg-emerald-100 light:text-emerald-700">
-                  {{ contact.unread_count }}
-                </Badge>
+              <div
+                v-for="contact in contactsStore.sortedContacts"
+                :key="'search-contact-' + contact.id"
+                :class="[
+                  'flex items-center gap-2 px-3 py-2 cursor-pointer hover:bg-white/[0.04] light:hover:bg-gray-50 transition-colors',
+                  contactsStore.currentContact?.id === contact.id && 'bg-white/[0.08] light:bg-gray-100'
+                ]"
+                @click="handleContactClick(contact)"
+              >
+                <Avatar class="h-9 w-9 ring-2 ring-white/[0.1] light:ring-gray-200">
+                  <AvatarImage :src="contact.avatar_url" />
+                  <AvatarFallback :class="'text-xs bg-gradient-to-br text-white ' + getAvatarGradient(contact.name || contact.phone_number)">
+                    {{ getInitials(contact.name || contact.phone_number) }}
+                  </AvatarFallback>
+                </Avatar>
+                <div class="flex-1 min-w-0">
+                  <div class="flex items-center justify-between gap-2">
+                    <p
+                      class="flex-1 min-w-0 text-sm font-medium truncate text-white light:text-gray-900"
+                      :title="contact.name || contact.phone_number"
+                      v-html="highlightSearchMatch(contact.name || contact.phone_number, contactsStore.searchQuery)"
+                    />
+                    <span class="flex-shrink-0 text-[11px] text-white/40 light:text-gray-500">
+                      {{ formatContactTime(contact.last_message_at) }}
+                    </span>
+                  </div>
+                  <div class="flex items-center justify-between gap-2">
+                    <p
+                      class="flex-1 min-w-0 text-xs text-white/50 light:text-gray-500 truncate"
+                      v-html="highlightSearchMatch(contact.last_message_preview || contact.phone_number, contactsStore.searchQuery)"
+                    />
+                    <Badge v-if="contact.unread_count > 0" class="flex-shrink-0 h-5 text-[10px] bg-emerald-500/20 text-emerald-400 light:bg-emerald-100 light:text-emerald-700">
+                      {{ contact.unread_count }}
+                    </Badge>
+                  </div>
+                </div>
               </div>
             </div>
-            <DropdownMenu v-if="canDeleteContacts">
-              <DropdownMenuTrigger as-child>
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  class="h-8 w-8 shrink-0 text-white/40 hover:text-white hover:bg-white/[0.08] light:text-gray-400 light:hover:text-gray-900 light:hover:bg-gray-100"
-                  @click.stop
-                >
-                  <MoreVertical class="h-4 w-4" />
-                </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end" @click.stop>
-                <DropdownMenuItem
-                  class="text-destructive focus:text-destructive"
-                  :disabled="deletingConversationId === contact.id"
-                  @click.stop="deleteConversation(contact)"
-                >
-                  <Loader2 v-if="deletingConversationId === contact.id" class="mr-2 h-4 w-4 animate-spin" />
-                  <Trash2 v-else class="mr-2 h-4 w-4" />
-                  <span>{{ $t('chat.deleteConversation') }}</span>
-                </DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
-          </div>
 
-          <!-- Loading indicator for infinite scroll -->
-          <div v-if="contactsStore.isLoadingMoreContacts" class="p-3 text-center">
-            <Loader2 class="h-5 w-5 mx-auto animate-spin text-white/40 light:text-gray-400" />
-          </div>
+            <!-- Matching Messages Section -->
+            <div v-if="searchFilterTab === 'all' || searchFilterTab === 'messages'" :class="(searchFilterTab === 'all' && contactsStore.sortedContacts.length > 0) ? 'mt-3 border-t border-white/[0.06] light:border-gray-200 pt-2' : ''">
+              <div class="px-3 py-1.5 text-[11px] font-semibold text-white/40 light:text-gray-500 uppercase tracking-wider flex items-center justify-between">
+                <span>{{ $t('chat.searchMessages', 'Messages') }}</span>
+                <Loader2 v-if="isSearchingMessages" class="h-3 w-3 animate-spin text-white/40" />
+                <span v-else>{{ messageSearchResults.length }}</span>
+              </div>
 
-          <div v-if="contactsStore.sortedContacts.length === 0" class="p-3 text-center text-white/40 light:text-gray-500">
-            <User class="h-6 w-6 mx-auto mb-1.5 opacity-50" />
-            <p class="text-sm">{{ $t('chat.noContacts') }}</p>
-          </div>
+              <!-- Messages List -->
+              <div
+                v-for="msg in messageSearchResults"
+                :key="'search-msg-' + msg.id"
+                class="flex items-start gap-2.5 px-3 py-2 cursor-pointer hover:bg-white/[0.04] light:hover:bg-gray-50 transition-colors border-b border-white/[0.04] light:border-gray-100"
+                @click="handleMessageSearchClick(msg)"
+              >
+                <Avatar class="h-8 w-8 ring-1 ring-white/[0.1] light:ring-gray-200 mt-0.5 shrink-0">
+                  <AvatarFallback :class="'text-[10px] bg-gradient-to-br text-white ' + getAvatarGradient(msg.contact_name || msg.phone_number)">
+                    {{ getInitials(msg.contact_name || msg.phone_number) }}
+                  </AvatarFallback>
+                </Avatar>
+                <div class="flex-1 min-w-0">
+                  <div class="flex items-center justify-between gap-1.5">
+                    <p class="text-xs font-medium text-white light:text-gray-900 truncate" :title="msg.contact_name || msg.phone_number">
+                      {{ msg.contact_name || msg.phone_number }}
+                    </p>
+                    <span class="text-[10px] text-white/40 light:text-gray-500 shrink-0">
+                      {{ formatContactTime(msg.created_at) }}
+                    </span>
+                  </div>
+                  <p v-if="msg.contact_name && msg.contact_name !== msg.phone_number" class="text-[10px] text-white/40 light:text-gray-500 truncate">
+                    {{ msg.phone_number }}
+                  </p>
+                  <div class="mt-0.5 flex items-center gap-1 text-xs text-white/70 light:text-gray-600">
+                    <CheckCheck v-if="msg.direction === 'outgoing'" class="h-3 w-3 text-white/40 light:text-gray-400 shrink-0" />
+                    <span class="truncate" v-html="highlightSearchMatch(msg.content || msg.media_filename || '', contactsStore.searchQuery)"></span>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Loading Indicator -->
+              <div v-if="isSearchingMessages && messageSearchResults.length === 0" class="p-4 text-center text-xs text-white/40 light:text-gray-500 flex items-center justify-center gap-2">
+                <Loader2 class="h-3.5 w-3.5 animate-spin" />
+                <span>{{ $t('chat.searchingAllMessages', 'Searching all messages...') }}</span>
+              </div>
+            </div>
+
+            <!-- Empty Search Results -->
+            <div
+              v-if="!isSearchingMessages && (
+                (searchFilterTab === 'all' && contactsStore.sortedContacts.length === 0 && messageSearchResults.length === 0) ||
+                (searchFilterTab === 'chats' && contactsStore.sortedContacts.length === 0) ||
+                (searchFilterTab === 'messages' && messageSearchResults.length === 0)
+              )"
+              class="p-6 text-center text-white/40 light:text-gray-500"
+            >
+              <Search class="h-6 w-6 mx-auto mb-2 opacity-40" />
+              <p class="text-xs font-medium">{{ $t('chat.noMatchingChatsOrMessages', 'No chats or messages found') }}</p>
+              <p class="text-[11px] text-white/30 light:text-gray-400 mt-0.5">"{{ contactsStore.searchQuery }}"</p>
+            </div>
+          </template>
+
+          <!-- DEFAULT NON-SEARCH MODE -->
+          <template v-else>
+            <div
+              v-for="contact in contactsStore.sortedContacts"
+              :key="contact.id"
+              :class="[
+                'flex items-center gap-2 px-3 py-2 cursor-pointer hover:bg-white/[0.04] light:hover:bg-gray-50 transition-colors',
+                contactsStore.currentContact?.id === contact.id && 'bg-white/[0.08] light:bg-gray-100'
+              ]"
+              @click="handleContactClick(contact)"
+            >
+              <Avatar class="h-9 w-9 ring-2 ring-white/[0.1] light:ring-gray-200">
+                <AvatarImage :src="contact.avatar_url" />
+                <AvatarFallback :class="'text-xs bg-gradient-to-br text-white ' + getAvatarGradient(contact.name || contact.phone_number)">
+                  {{ getInitials(contact.name || contact.phone_number) }}
+                </AvatarFallback>
+              </Avatar>
+              <div class="flex-1 min-w-0">
+                <div class="flex items-center justify-between gap-2">
+                  <p
+                    class="flex-1 min-w-0 text-sm font-medium truncate text-white light:text-gray-900"
+                    :title="contact.name || contact.phone_number"
+                  >
+                    {{ contact.name || contact.phone_number }}
+                  </p>
+                  <span class="flex-shrink-0 text-[11px] text-white/40 light:text-gray-500">
+                    {{ formatContactTime(contact.last_message_at) }}
+                  </span>
+                </div>
+                <div class="flex items-center justify-between gap-2">
+                  <p class="flex-1 min-w-0 text-xs text-white/50 light:text-gray-500 truncate">
+                    {{ contact.phone_number }}
+                  </p>
+                  <Badge v-if="contact.unread_count > 0" class="flex-shrink-0 h-5 text-[10px] bg-emerald-500/20 text-emerald-400 light:bg-emerald-100 light:text-emerald-700">
+                    {{ contact.unread_count }}
+                  </Badge>
+                </div>
+              </div>
+              <DropdownMenu v-if="canDeleteContacts">
+                <DropdownMenuTrigger as-child>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    class="h-8 w-8 shrink-0 text-white/40 hover:text-white hover:bg-white/[0.08] light:text-gray-400 light:hover:text-gray-900 light:hover:bg-gray-100"
+                    @click.stop
+                  >
+                    <MoreVertical class="h-4 w-4" />
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end" @click.stop>
+                  <DropdownMenuItem
+                    class="text-destructive focus:text-destructive"
+                    :disabled="deletingConversationId === contact.id"
+                    @click.stop="deleteConversation(contact)"
+                  >
+                    <Loader2 v-if="deletingConversationId === contact.id" class="mr-2 h-4 w-4 animate-spin" />
+                    <Trash2 v-else class="mr-2 h-4 w-4" />
+                    <span>{{ $t('chat.deleteConversation') }}</span>
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
+            </div>
+
+            <!-- Loading indicator for infinite scroll -->
+            <div v-if="contactsStore.isLoadingMoreContacts" class="p-3 text-center">
+              <Loader2 class="h-5 w-5 mx-auto animate-spin text-white/40 light:text-gray-400" />
+            </div>
+
+            <div v-if="contactsStore.sortedContacts.length === 0" class="p-3 text-center text-white/40 light:text-gray-500">
+              <User class="h-6 w-6 mx-auto mb-1.5 opacity-50" />
+              <p class="text-sm">{{ $t('chat.noContacts') }}</p>
+            </div>
+          </template>
         </div>
       </ScrollArea>
     </div>
@@ -2166,6 +2457,17 @@ async function sendMediaMessage() {
                 <p class="truncate text-sm font-medium text-white light:text-gray-900">
                   {{ contactsStore.currentContact.name || contactsStore.currentContact.phone_number }}
                 </p>
+                <Button
+                  v-if="canWriteContacts"
+                  variant="ghost"
+                  size="icon"
+                  class="h-6 w-6 shrink-0 text-white/40 hover:text-white hover:bg-white/[0.08] light:text-gray-400 light:hover:text-gray-900 light:hover:bg-gray-100"
+                  :title="$t('chat.renameContact', 'Rename contact')"
+                  :aria-label="$t('chat.renameContact', 'Rename contact')"
+                  @click="isRenameDialogOpen = true"
+                >
+                  <Pencil class="h-3.5 w-3.5" />
+                </Button>
                 <Badge v-if="activeTransferId" class="text-[10px] h-5 bg-orange-500/20 text-orange-400 light:bg-orange-100 light:text-orange-700">
                   Paused
                 </Badge>
@@ -2201,6 +2503,24 @@ async function sendMediaMessage() {
                 </Button>
               </TooltipTrigger>
               <TooltipContent>{{ $t('chat.resumeChatbot') }}</TooltipContent>
+            </Tooltip>
+            <Tooltip>
+              <TooltipTrigger as-child>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  :class="[
+                    'h-8 w-8 transition-colors',
+                    isInChatSearchOpen
+                      ? 'bg-emerald-500/20 text-emerald-400 light:bg-emerald-100 light:text-emerald-700'
+                      : 'text-white/50 hover:text-white hover:bg-white/[0.08] light:text-gray-500 light:hover:text-gray-900 light:hover:bg-gray-100'
+                  ]"
+                  @click="toggleInChatSearch"
+                >
+                  <Search class="h-4 w-4" />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>{{ $t('chat.searchInChat', 'Search in conversation') }}</TooltipContent>
             </Tooltip>
             <Tooltip>
               <TooltipTrigger as-child>
@@ -2355,6 +2675,50 @@ async function sendMediaMessage() {
             </button>
             </div>
           </div>
+        </div>
+
+        <!-- In-Chat Search Bar -->
+        <div
+          v-if="isInChatSearchOpen"
+          class="flex items-center gap-2 px-3 py-2 bg-[#141416] light:bg-gray-100 border-b border-white/[0.08] light:border-gray-200 text-xs shrink-0"
+        >
+          <Search class="h-3.5 w-3.5 text-white/40 light:text-gray-400 shrink-0" />
+          <Input
+            ref="inChatSearchInputRef"
+            v-model="inChatSearchQuery"
+            :placeholder="$t('chat.searchInChat', 'Search in conversation') + '...'"
+            class="h-7 text-xs flex-1 bg-white/[0.04] border-white/[0.1] text-white placeholder:text-white/40 light:bg-white light:border-gray-200 light:text-gray-900"
+            @keydown.enter.prevent="nextInChatMatch"
+          />
+          <span class="text-[11px] text-white/50 light:text-gray-500 shrink-0 min-w-[55px] text-center">
+            {{ inChatMatches.length > 0 ? `${currentInChatMatchIndex + 1} of ${inChatMatches.length}` : (inChatSearchQuery ? '0 matches' : '') }}
+          </span>
+          <Button
+            variant="ghost"
+            size="icon"
+            class="h-7 w-7 text-white/60 hover:text-white hover:bg-white/[0.08] light:text-gray-600 light:hover:text-gray-900 light:hover:bg-gray-200"
+            :disabled="inChatMatches.length === 0"
+            @click="prevInChatMatch"
+          >
+            <ChevronUp class="h-3.5 w-3.5" />
+          </Button>
+          <Button
+            variant="ghost"
+            size="icon"
+            class="h-7 w-7 text-white/60 hover:text-white hover:bg-white/[0.08] light:text-gray-600 light:hover:text-gray-900 light:hover:bg-gray-200"
+            :disabled="inChatMatches.length === 0"
+            @click="nextInChatMatch"
+          >
+            <ChevronDown class="h-3.5 w-3.5" />
+          </Button>
+          <Button
+            variant="ghost"
+            size="icon"
+            class="h-7 w-7 text-white/60 hover:text-white hover:bg-white/[0.08] light:text-gray-600 light:hover:text-gray-900 light:hover:bg-gray-200"
+            @click="closeInChatSearch"
+          >
+            <X class="h-3.5 w-3.5" />
+          </Button>
         </div>
 
         <!-- Messages -->
@@ -2935,7 +3299,9 @@ async function sendMediaMessage() {
       v-if="showDesktopInfoPanel"
       :contact="contactsStore.currentContact!"
       :session-data="contactSessionData"
+      :can-rename="canWriteContacts"
       @close="isInfoPanelOpen = false"
+      @rename="isRenameDialogOpen = true"
       @tags-updated="(tags) => contactsStore.updateContactTags(contactsStore.currentContact!.id, tags)"
     />
 
@@ -2965,11 +3331,18 @@ async function sendMediaMessage() {
           :contact="contactsStore.currentContact!"
           :session-data="contactSessionData"
           mobile
+          :can-rename="canWriteContacts"
           @close="isInfoPanelOpen = false"
+          @rename="isRenameDialogOpen = true"
           @tags-updated="(tags) => contactsStore.updateContactTags(contactsStore.currentContact!.id, tags)"
         />
       </SheetContent>
     </Sheet>
+
+    <RenameContactDialog
+      v-model:open="isRenameDialogOpen"
+      :contact="contactsStore.currentContact"
+    />
 
     <!-- Template Params Dialog -->
     <Dialog v-model:open="templateDialogOpen">
@@ -3279,5 +3652,24 @@ async function sendMediaMessage() {
 .wa-formatted-message :deep(pre code) {
   background: transparent;
   padding: 0;
+}
+
+.highlight-message {
+  animation: pulse-highlight 2.5s ease-in-out;
+}
+
+@keyframes pulse-highlight {
+  0% {
+    box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.7);
+    filter: brightness(1.25);
+  }
+  50% {
+    box-shadow: 0 0 0 6px rgba(16, 185, 129, 0.4);
+    filter: brightness(1.35);
+  }
+  100% {
+    box-shadow: 0 0 0 0 rgba(16, 185, 129, 0);
+    filter: brightness(1);
+  }
 }
 </style>

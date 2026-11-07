@@ -11,6 +11,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/nikyjain/whatomate/internal/config"
 	"github.com/nikyjain/whatomate/internal/crypto"
+	"github.com/nikyjain/whatomate/internal/contactutil"
 	"github.com/nikyjain/whatomate/internal/models"
 	"github.com/nikyjain/whatomate/internal/queue"
 	"github.com/nikyjain/whatomate/internal/templateutil"
@@ -962,6 +963,12 @@ func TestWorker_HandleRecipientJob_Success(t *testing.T) {
 	assert.Equal(t, "/media/documents/invoice.pdf", message.MediaURL)
 	assert.Equal(t, "application/pdf", message.MediaMimeType)
 	assert.Equal(t, "invoice.pdf", message.MediaFilename)
+
+	// Verify contact last_message_at and preview updated
+	var updatedContact models.Contact
+	require.NoError(t, w.DB.Where("organization_id = ? AND phone_number = ?", org.ID, contactutil.CanonicalPhone(recipient.PhoneNumber)).First(&updatedContact).Error)
+	assert.NotNil(t, updatedContact.LastMessageAt)
+	assert.NotEmpty(t, updatedContact.LastMessagePreview)
 }
 
 func TestWorker_HandleRecipientJob_WhatsAppError(t *testing.T) {
@@ -1040,7 +1047,7 @@ func TestWorker_HandleRecipientJob_UndeliverableMarksContactInactive(t *testing.
 	require.NoError(t, err)
 
 	var contact models.Contact
-	require.NoError(t, w.DB.Where("organization_id = ? AND phone_number = ?", org.ID, recipient.PhoneNumber).First(&contact).Error)
+	require.NoError(t, w.DB.Where("organization_id = ? AND phone_number = ?", org.ID, contactutil.CanonicalPhone(recipient.PhoneNumber)).First(&contact).Error)
 	assert.False(t, contact.IsActive)
 }
 
@@ -1091,7 +1098,7 @@ func TestWorker_HandleRecipientJob_SkipsInactiveContact(t *testing.T) {
 	assert.Equal(t, "Contact is inactive", updatedRecipient.ErrorMessage)
 
 	var messageCount int64
-	require.NoError(t, w.DB.Model(&models.Message{}).Where("contact_id IN (SELECT id FROM contacts WHERE organization_id = ? AND phone_number = ?)", org.ID, recipient.PhoneNumber).Count(&messageCount).Error)
+	require.NoError(t, w.DB.Model(&models.Message{}).Where("contact_id IN (SELECT id FROM contacts WHERE organization_id = ? AND phone_number = ?)", org.ID, contactutil.CanonicalPhone(recipient.PhoneNumber)).Count(&messageCount).Error)
 	assert.EqualValues(t, 0, messageCount)
 }
 
@@ -1129,7 +1136,7 @@ func TestWorker_HandleRecipientJob_CreatesContact(t *testing.T) {
 
 	// Verify contact was created
 	var contact models.Contact
-	require.NoError(t, w.DB.Where("organization_id = ? AND phone_number = ?", org.ID, newPhone).First(&contact).Error)
+	require.NoError(t, w.DB.Where("organization_id = ? AND phone_number = ?", org.ID, contactutil.CanonicalPhone(newPhone)).First(&contact).Error)
 	assert.Equal(t, "New Contact", contact.ProfileName)
 }
 

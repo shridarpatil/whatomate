@@ -394,6 +394,9 @@ type Contact struct {
 	OrganizationID     uuid.UUID  `gorm:"type:uuid;index;not null" json:"organization_id"`
 	PhoneNumber        string     `gorm:"size:50;not null" json:"phone_number"`
 	ProfileName        string     `gorm:"size:255" json:"profile_name"`
+	// ProfileNameLocked is set when an agent renames the contact; incoming
+	// WhatsApp profile names and campaign recipient names then stop overwriting it.
+	ProfileNameLocked  bool       `gorm:"default:false" json:"profile_name_locked"`
 	WhatsAppAccount    string     `gorm:"size:100;index" json:"whatsapp_account"` // References WhatsAppAccount.Name
 	AssignedUserID     *uuid.UUID `gorm:"type:uuid;index" json:"assigned_user_id,omitempty"`
 	LastMessageAt      *time.Time `json:"last_message_at,omitempty"`

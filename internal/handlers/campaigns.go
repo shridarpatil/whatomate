@@ -18,6 +18,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/nikyjain/whatomate/internal/contactutil"
 	"github.com/nikyjain/whatomate/internal/models"
 	"github.com/nikyjain/whatomate/internal/queue"
 	"github.com/nikyjain/whatomate/internal/utils"
@@ -1301,10 +1302,10 @@ func (a *App) GetCampaignRecipients(r *fastglue.Request) error {
 	})
 }
 
+// normalizeCampaignRecipientPhone uses the contact canonical form, so
+// 9876543210, +919876543210 and 919876543210 are one recipient.
 func normalizeCampaignRecipientPhone(phone string) string {
-	phone = strings.TrimSpace(phone)
-	phone = strings.TrimPrefix(phone, "+")
-	return phone
+	return contactutil.CanonicalPhone(phone)
 }
 
 func campaignRecipientPhones(recipients []models.BulkMessageRecipient) []string {

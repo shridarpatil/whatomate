@@ -4,90 +4,100 @@ import (
 	"github.com/google/uuid"
 	"github.com/nikyjain/whatomate/internal/models"
 	"gorm.io/gorm"
+	"gorm.io/gorm/clause"
 )
 
 // GetOrCreateContact finds or creates a contact for the given phone number.
-// Merges behaviors from both handler and worker implementations:
-//   - Normalizes phone (strips leading "+")
-//   - Tries both normalized and +prefix forms
-//   - Updates profile name if changed
+//   - Canonicalises the phone (see CanonicalPhone), so +91…, 91… and bare
+//     10-digit forms resolve to one contact
+//   - Finds legacy rows stored in any of those forms and upgrades the row to
+//     the canonical form when nothing else holds it
+//   - Updates the profile name if changed, unless an agent renamed the
+//     contact (ProfileNameLocked)
 //   - Handles race conditions on create by re-fetching
 //   - Restores soft-deleted contacts if found
 //
 // Returns the contact, whether it was newly created, and any error.
 func GetOrCreateContact(db *gorm.DB, orgID uuid.UUID, phoneNumber, profileName string) (*models.Contact, bool, error) {
-	// Normalize phone number (remove + prefix if present)
-	normalizedPhone := phoneNumber
-	if len(normalizedPhone) > 0 && normalizedPhone[0] == '+' {
-		normalizedPhone = normalizedPhone[1:]
-	}
+	canonical := CanonicalPhone(phoneNumber)
 
-	// Try to find existing contact with normalized phone (including soft-deleted)
-	var contact models.Contact
-	if err := db.Unscoped().Where("organization_id = ? AND phone_number = ?", orgID, normalizedPhone).First(&contact).Error; err == nil {
-		// Restore if soft-deleted
+	if contact, err := findAnyVariant(db.Unscoped(), orgID, phoneNumber); err == nil {
 		if contact.DeletedAt.Valid {
-			db.Unscoped().Model(&contact).Update("deleted_at", nil)
+			db.Unscoped().Model(contact).Update("deleted_at", nil)
 			contact.DeletedAt.Valid = false
 		}
-		// Update profile name if changed
-		if profileName != "" && contact.ProfileName != profileName {
-			db.Model(&contact).Update("profile_name", profileName)
+		if profileName != "" && contact.ProfileName != profileName && !contact.ProfileNameLocked {
+			db.Model(contact).Update("profile_name", profileName)
+			contact.ProfileName = profileName
 		}
-		return &contact, false, nil
+		upgradeToCanonical(db, contact, canonical)
+		return contact, false, nil
 	}
 
-	// Also try with + prefix (contacts may have been stored with it)
-	if err := db.Unscoped().Where("organization_id = ? AND phone_number = ?", orgID, "+"+normalizedPhone).First(&contact).Error; err == nil {
-		// Restore if soft-deleted
-		if contact.DeletedAt.Valid {
-			db.Unscoped().Model(&contact).Update("deleted_at", nil)
-			contact.DeletedAt.Valid = false
-		}
-		if profileName != "" && contact.ProfileName != profileName {
-			db.Model(&contact).Update("profile_name", profileName)
-		}
-		return &contact, false, nil
-	}
-
-	// Create new contact
-	contact = models.Contact{
+	contact := models.Contact{
 		BaseModel:      models.BaseModel{ID: uuid.New()},
 		OrganizationID: orgID,
-		PhoneNumber:    normalizedPhone,
+		PhoneNumber:    canonical,
 		ProfileName:    profileName,
 		IsActive:       true,
 	}
 	if err := db.Create(&contact).Error; err != nil {
 		// Race condition: another goroutine may have created the contact
-		if err2 := db.Unscoped().Where("organization_id = ? AND phone_number = ?", orgID, normalizedPhone).First(&contact).Error; err2 == nil {
-			// Restore if soft-deleted
-			if contact.DeletedAt.Valid {
-				db.Unscoped().Model(&contact).Update("deleted_at", nil)
-				contact.DeletedAt.Valid = false
+		if existing, err2 := findAnyVariant(db.Unscoped(), orgID, phoneNumber); err2 == nil {
+			if existing.DeletedAt.Valid {
+				db.Unscoped().Model(existing).Update("deleted_at", nil)
+				existing.DeletedAt.Valid = false
 			}
-			return &contact, false, nil
+			return existing, false, nil
 		}
 		return nil, false, err
 	}
 	return &contact, true, nil
 }
 
-// FindContact finds a contact for the given phone number with both forms (normalized and +prefix).
+// FindContact finds a live contact for the given phone number in any stored form.
 func FindContact(db *gorm.DB, orgID uuid.UUID, phoneNumber string) (*models.Contact, error) {
-	normalizedPhone := phoneNumber
-	if len(normalizedPhone) > 0 && normalizedPhone[0] == '+' {
-		normalizedPhone = normalizedPhone[1:]
-	}
+	return findAnyVariant(db, orgID, phoneNumber)
+}
 
+// FindContactUnscoped is FindContact including soft-deleted contacts.
+func FindContactUnscoped(db *gorm.DB, orgID uuid.UUID, phoneNumber string) (*models.Contact, error) {
+	return findAnyVariant(db.Unscoped(), orgID, phoneNumber)
+}
+
+// findAnyVariant prefers a live row, then the canonical form, then the most
+// recently active row.
+func findAnyVariant(db *gorm.DB, orgID uuid.UUID, phoneNumber string) (*models.Contact, error) {
+	variants := PhoneVariants(phoneNumber)
+	if len(variants) == 0 {
+		return nil, gorm.ErrRecordNotFound
+	}
 	var contact models.Contact
-	if err := db.Where("organization_id = ? AND phone_number = ?", orgID, normalizedPhone).First(&contact).Error; err == nil {
-		return &contact, nil
+	err := db.Where("organization_id = ? AND phone_number IN ?", orgID, variants).
+		Clauses(clause.OrderBy{Expression: clause.Expr{
+			SQL:                "(deleted_at IS NULL) DESC, (phone_number = ?) DESC, last_message_at DESC NULLS LAST, created_at ASC",
+			Vars:               []any{variants[0]},
+			WithoutParentheses: true,
+		}}).
+		Take(&contact).Error // Take, not First: First's implicit ORDER BY id would drop this expression
+	if err != nil {
+		return nil, err
 	}
+	return &contact, nil
+}
 
-	if err := db.Where("organization_id = ? AND phone_number = ?", orgID, "+"+normalizedPhone).First(&contact).Error; err == nil {
-		return &contact, nil
+// upgradeToCanonical rewrites a legacy phone form to the canonical one. It is
+// best effort: if another row already holds the canonical form the unique
+// index rejects the update and the duplicate merge handles it instead.
+func upgradeToCanonical(db *gorm.DB, contact *models.Contact, canonical string) {
+	if contact.PhoneNumber == canonical || !IsMergeablePhone(canonical) {
+		return
 	}
-
-	return nil, gorm.ErrRecordNotFound
+	res := db.Unscoped().Model(&models.Contact{}).
+		Where("id = ? AND NOT EXISTS (SELECT 1 FROM contacts c2 WHERE c2.organization_id = ? AND c2.phone_number = ?)",
+			contact.ID, contact.OrganizationID, canonical).
+		Update("phone_number", canonical)
+	if res.Error == nil && res.RowsAffected == 1 {
+		contact.PhoneNumber = canonical
+	}
 }

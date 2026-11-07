@@ -177,6 +177,24 @@ func (w *Worker) HandleRecipientJob(ctx context.Context, job *queue.RecipientJob
 		w.Log.Error("Failed to save message", "error", err, "recipient", job.PhoneNumber)
 	}
 
+	// Update contact's last message time and preview so conversation sorts to top in /chat
+	if err == nil {
+		now := time.Now()
+		preview := message.Content
+		if len(preview) > 100 {
+			preview = preview[:100]
+		}
+		if preview == "" && campaign.Template != nil {
+			preview = campaign.Template.DisplayName
+		}
+		if dbErr := w.DB.Model(contact).Updates(map[string]any{
+			"last_message_at":      now,
+			"last_message_preview": preview,
+		}).Error; dbErr != nil {
+			w.Log.Error("Failed to update contact last message", "error", dbErr, "contact_id", contact.ID)
+		}
+	}
+
 	// Check if campaign is complete (all recipients processed)
 	w.checkCampaignCompletion(ctx, job.CampaignID, job.OrganizationID)
 

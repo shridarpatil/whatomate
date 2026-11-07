@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/nikyjain/whatomate/internal/contactutil"
 	"github.com/nikyjain/whatomate/internal/models"
 	"github.com/nikyjain/whatomate/internal/utils"
 	"github.com/nikyjain/whatomate/pkg/whatsapp"
@@ -112,8 +113,8 @@ func (a *App) ListContacts(r *fastglue.Request) error {
 			search = search[:1000]
 		}
 		searchPattern := "%" + search + "%"
-		// Use ILIKE for case-insensitive search on profile_name
-		query = query.Where("phone_number LIKE ? OR profile_name ILIKE ?", searchPattern, searchPattern)
+		// Use ILIKE for case-insensitive search on profile_name and last_message_preview
+		query = query.Where("phone_number LIKE ? OR profile_name ILIKE ? OR last_message_preview ILIKE ?", searchPattern, searchPattern, searchPattern)
 	}
 	if whatsAppAccount != "" {
 		query = query.Where("whats_app_account = ?", whatsAppAccount)
@@ -384,6 +385,48 @@ func (a *App) GetMessages(r *fastglue.Request) error {
 	// Count total messages (with session filter if applied)
 	var total int64
 	msgQuery.Model(&models.Message{}).Count(&total)
+
+	// Focus-based pagination: load messages surrounding a specific message ID (e.g. from global search)
+	focusIDStr := string(r.RequestCtx.QueryArgs().Peek("focus_id"))
+	if focusIDStr != "" {
+		focusID, err := uuid.Parse(focusIDStr)
+		if err == nil {
+			var focusMsg models.Message
+			if err := a.DB.Where("id = ? AND contact_id = ?", focusID, contactID).First(&focusMsg).Error; err == nil {
+				var olderMsgs, newerMsgs []models.Message
+				newerQuery := a.DB.Where("contact_id = ?", contactID)
+				if accountFilter != "" {
+					newerQuery = newerQuery.Where("whats_app_account = ?", accountFilter)
+				}
+				_ = newerQuery.Where("created_at >= ?", focusMsg.CreatedAt).
+					Preload("ReplyToMessage").
+					Order("created_at ASC").
+					Limit(25).
+					Find(&newerMsgs).Error
+
+				olderQuery := a.DB.Where("contact_id = ?", contactID)
+				if accountFilter != "" {
+					olderQuery = olderQuery.Where("whats_app_account = ?", accountFilter)
+				}
+				_ = olderQuery.Where("created_at < ?", focusMsg.CreatedAt).
+					Preload("ReplyToMessage").
+					Order("created_at DESC").
+					Limit(25).
+					Find(&olderMsgs).Error
+
+				for i, j := 0, len(olderMsgs)-1; i < j; i, j = i+1, j-1 {
+					olderMsgs[i], olderMsgs[j] = olderMsgs[j], olderMsgs[i]
+				}
+				combined := append(olderMsgs, newerMsgs...)
+				response := a.buildMessagesResponse(combined)
+				return r.SendEnvelope(map[string]any{
+					"messages": response,
+					"total":    total,
+					"has_more": len(olderMsgs) == 25,
+				})
+			}
+		}
+	}
 
 	// Cursor-based pagination: load messages before a specific ID
 	if beforeIDStr != "" {
@@ -1427,15 +1470,12 @@ func (a *App) CreateContact(r *fastglue.Request) error {
 		return r.SendErrorEnvelope(fasthttp.StatusBadRequest, "phone_number is required", nil, "")
 	}
 
-	// Normalize phone number
-	normalizedPhone := req.PhoneNumber
-	if len(normalizedPhone) > 0 && normalizedPhone[0] == '+' {
-		normalizedPhone = normalizedPhone[1:]
-	}
+	// Canonical form (91XXXXXXXXXX) so +91…, 91… and bare numbers are one contact
+	normalizedPhone := contactutil.CanonicalPhone(req.PhoneNumber)
 
-	// Check if contact exists (including soft-deleted)
-	var existingContact models.Contact
-	if err := a.DB.Unscoped().Where("organization_id = ? AND phone_number = ?", orgID, normalizedPhone).First(&existingContact).Error; err == nil {
+	// Check if contact exists in any stored phone form (including soft-deleted)
+	if found, err := contactutil.FindContactUnscoped(a.DB, orgID, req.PhoneNumber); err == nil {
+		existingContact := *found
 		// Contact exists
 		if existingContact.DeletedAt.Valid {
 			// Restore soft-deleted contact
@@ -1548,7 +1588,14 @@ func (a *App) UpdateContact(r *fastglue.Request) error {
 	updates := map[string]any{}
 
 	if req.ProfileName != nil {
-		updates["profile_name"] = *req.ProfileName
+		name := strings.TrimSpace(*req.ProfileName)
+		if len([]rune(name)) > 255 {
+			return r.SendErrorEnvelope(fasthttp.StatusBadRequest, "Name must be 255 characters or fewer", nil, "")
+		}
+		updates["profile_name"] = name
+		// An agent-chosen name sticks: incoming WhatsApp profile names no
+		// longer overwrite it. Clearing the name hands control back.
+		updates["profile_name_locked"] = name != ""
 	}
 	if req.WhatsAppAccount != nil {
 		updates["whats_app_account"] = *req.WhatsAppAccount

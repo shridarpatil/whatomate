@@ -589,68 +589,83 @@ export const dataService = {
   },
 };
 
+export interface MessageSearchResult {
+  id: string
+  contact_id: string
+  contact_name: string
+  phone_number: string
+  direction: 'incoming' | 'outgoing'
+  message_type: string
+  content: string
+  media_filename?: string
+  whatsapp_account: string
+  created_at: string
+}
+
 export const messagesService = {
-  list: (contactId: string, params?: { page?: number; limit?: number; before_id?: string; account?: string }) =>
+    search: (params: { q: string; limit?: number; account?: string }) =>
+api.get<{ status: string; data: { messages: MessageSearchResult[]; total: number } }>('/messages/search', { params }),
+  list: (contactId: string, params?: { page?: number; limit?: number; before_id?: string; focus_id?: string; account?: string }) =>
     api.get(`/contacts/${contactId}/messages`, { params }),
-  reprocess: (messageId: string) =>
-    api.post(`/chat/messages/${messageId}/reprocess`),
-  send: (
-    contactId: string,
-    data: {
-      type: string
-      content: any
-      reply_to_message_id?: string
-      whatsapp_account?: string
-      // Interactive payload. Mirrors backend InteractiveContent.
-      interactive?: {
-        type: 'button' | 'cta_url' | 'list' | 'voice_call' | 'flow'
-        body: string
-        buttons?: Array<{ id: string; title: string }>
-        button_text?: string
-        url?: string
-        // voice_call only
-        display_text?: string
-        ttl_minutes?: number
-        // flow only
-        flow_id?: string
-        first_screen?: string
-        header?: string
-      }
-    },
-  ) => api.post(`/contacts/${contactId}/messages`, data),
-  sendTemplate: (contactId: string, data: { template_name: string; template_params?: Record<string, string>; header_params?: Record<string, string>; button_params?: Record<string, string>; account_name?: string }, headerFile?: File) => {
-    if (headerFile) {
-      const formData = new FormData();
-      formData.append("contact_id", contactId);
-      formData.append("template_name", data.template_name);
-      if (data.template_params) {
-        formData.append(
-          "template_params",
-          JSON.stringify(data.template_params),
-        );
-      }
-      if (data.header_params) {
-        formData.append('header_params', JSON.stringify(data.header_params))
-      }
-      if (data.button_params) {
-        formData.append('button_params', JSON.stringify(data.button_params))
-      }
-      if (data.account_name) {
-        formData.append("account_name", data.account_name);
-      }
-      formData.append("header_file", headerFile);
-      return api.post("/messages/template", formData, {
-        headers: { "Content-Type": "multipart/form-data" },
-      });
-    }
-    return api.post("/messages/template", { contact_id: contactId, ...data });
-  },
-  sendReaction: (contactId: string, messageId: string, emoji: string) =>
-    api.post(`/contacts/${contactId}/messages/${messageId}/reaction`, {
-      emoji,
-    }),
-  delete: (contactId: string, messageId: string) =>
-    api.delete(`/contacts/${contactId}/messages/${messageId}`),
+    reprocess: (messageId: string) =>
+      api.post(`/chat/messages/${messageId}/reprocess`),
+      send: (
+        contactId: string,
+        data: {
+          type: string
+          content: any
+          reply_to_message_id?: string
+          whatsapp_account?: string
+          // Interactive payload. Mirrors backend InteractiveContent.
+          interactive?: {
+            type: 'button' | 'cta_url' | 'list' | 'voice_call' | 'flow'
+            body: string
+            buttons?: Array<{ id: string; title: string }>
+            button_text?: string
+            url?: string
+            // voice_call only
+            display_text?: string
+            ttl_minutes?: number
+            // flow only
+            flow_id?: string
+            first_screen?: string
+            header?: string
+          }
+        },
+      ) => api.post(`/contacts/${contactId}/messages`, data),
+        sendTemplate: (contactId: string, data: { template_name: string; template_params?: Record<string, string>; header_params?: Record<string, string>; button_params?: Record<string, string>; account_name?: string }, headerFile?: File) => {
+          if (headerFile) {
+            const formData = new FormData();
+            formData.append("contact_id", contactId);
+            formData.append("template_name", data.template_name);
+            if (data.template_params) {
+              formData.append(
+                "template_params",
+                JSON.stringify(data.template_params),
+              );
+            }
+            if (data.header_params) {
+              formData.append('header_params', JSON.stringify(data.header_params))
+            }
+            if (data.button_params) {
+              formData.append('button_params', JSON.stringify(data.button_params))
+            }
+            if (data.account_name) {
+              formData.append("account_name", data.account_name);
+            }
+            formData.append("header_file", headerFile);
+            return api.post("/messages/template", formData, {
+              headers: { "Content-Type": "multipart/form-data" },
+            });
+          }
+          return api.post("/messages/template", { contact_id: contactId, ...data });
+        },
+          sendReaction: (contactId: string, messageId: string, emoji: string) =>
+            api.post(`/contacts/${contactId}/messages/${messageId}/reaction`, {
+              emoji,
+            }),
+            delete: (contactId: string, messageId: string) =>
+              api.delete(`/contacts/${contactId}/messages/${messageId}`),
 };
 
 export const templatesService = {
@@ -1587,15 +1602,15 @@ export interface CallLog {
   caller_phone: string;
   direction: "incoming" | "outgoing";
   status:
-    | "ringing"
-    | "answered"
-    | "completed"
-    | "missed"
-    | "rejected"
-    | "failed"
-    | "initiating"
-    | "accepted"
-    | "transferring";
+  | "ringing"
+  | "answered"
+  | "completed"
+  | "missed"
+  | "rejected"
+  | "failed"
+  | "initiating"
+  | "accepted"
+  | "transferring";
   duration: number;
   ivr_flow_id?: string;
   ivr_path?: Record<string, any>;

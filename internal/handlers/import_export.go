@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/nikyjain/whatomate/internal/contactutil"
 	"github.com/nikyjain/whatomate/internal/models"
 	"github.com/nikyjain/whatomate/internal/utils"
 	"github.com/valyala/fasthttp"
@@ -165,11 +166,8 @@ var importConfigs = map[string]ImportConfig{
 		UniqueColumn:    "phone_number",
 		ColumnTransform: map[string]func(string) (any, error){
 			"phone_number": func(s string) (any, error) {
-				// Normalize phone number - remove + prefix
-				phone := strings.TrimSpace(s)
-				if len(phone) > 0 && phone[0] == '+' {
-					phone = phone[1:]
-				}
+				// Canonical form (91XXXXXXXXXX) so imports match chats and each other
+				phone := contactutil.CanonicalPhone(s)
 				if phone == "" {
 					return nil, fmt.Errorf("phone number is required")
 				}
