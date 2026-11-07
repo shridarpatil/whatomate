@@ -24,6 +24,7 @@ export interface Contact {
   tags: string[]
   metadata: Record<string, any>
   last_message_at?: string
+  last_message_preview?: string
   last_inbound_at?: string
   service_window_open?: boolean
   is_active: boolean
@@ -194,7 +195,7 @@ export const useContactsStore = defineStore('contacts', () => {
     }
   }
 
-  async function fetchMessages(contactId: string, params?: { page?: number; limit?: number; account?: string }) {
+  async function fetchMessages(contactId: string, params?: { page?: number; limit?: number; focus_id?: string; account?: string }) {
     isLoadingMessages.value = true
     // Drop the previous contact's messages immediately so the list doesn't show
     // stale content under the new contact's header while the fetch is in flight.
