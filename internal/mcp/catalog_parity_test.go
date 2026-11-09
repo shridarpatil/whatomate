@@ -48,7 +48,9 @@ func parityProblems(routes map[string]bool, es []Entry) []string {
 	for _, e := range es {
 		key := e.Method + " " + e.Path
 		catalogued[key]++
-		if catalogued[key] == 2 {
+		// A route may be listed twice only to expose it as a second featured
+		// tool (GET /api/contacts is both the contact search and the inbox list).
+		if catalogued[key] == 2 && e.Tool == "" {
 			problems = append(problems, "duplicate catalog entry: "+key)
 		}
 		if !routes[key] {

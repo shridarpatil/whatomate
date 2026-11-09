@@ -16,12 +16,11 @@ import (
 // entries (restored on cleanup). Tests using it must not run in parallel.
 func withTestEntries(t *testing.T, as []Area, es ...Entry) {
 	t.Helper()
+	// The test catalog replaces the real one so unit tests stay independent of
+	// the production catalog files.
 	savedAreas, savedEntries := areas, entries
 	areas = map[string]Area{}
-	for k, v := range savedAreas {
-		areas[k] = v
-	}
-	entries = append(append([]Entry(nil), savedEntries...), es...)
+	entries = append([]Entry(nil), es...)
 	for _, a := range as {
 		registerArea(a)
 	}
