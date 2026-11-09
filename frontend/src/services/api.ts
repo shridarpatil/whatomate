@@ -1986,4 +1986,40 @@ export const leadsService = {
   stats: () => api.get('/leads/stats'),
 };
 
+// MCP (AI connector): OAuth consent for Claude and the user's connected apps.
+export interface OAuthClientInfo {
+  client_name: string;
+  redirect_uri_valid: boolean;
+}
+
+export interface OAuthConsentRequest {
+  client_id: string;
+  redirect_uri: string;
+  state: string;
+  code_challenge: string;
+  code_challenge_method: string;
+  scope?: string;
+  resource?: string;
+  organization_id: string;
+  approve: boolean;
+}
+
+export interface MCPGrant {
+  id: string;
+  client_name: string;
+  organization_id: string;
+  organization_name: string;
+  created_at: string;
+  last_used_at: string | null;
+}
+
+export const mcpService = {
+  getOAuthClient: (params: { client_id: string; redirect_uri: string }) =>
+    api.get('/oauth/client', { params }),
+  submitConsent: (data: OAuthConsentRequest) => api.post('/oauth/consent', data),
+  info: () => api.get('/mcp/info'),
+  listGrants: () => api.get('/mcp/grants'),
+  revokeGrant: (id: string) => api.delete(`/mcp/grants/${encodeURIComponent(id)}`),
+};
+
 export default api;

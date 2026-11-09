@@ -35,6 +35,15 @@ const router = createRouter({
       meta: { requiresAuth: false }
     },
     {
+      // OAuth consent for AI connectors (Claude). Outside AppLayout so it renders
+      // as a standalone card; requires login, and the guard's ?redirect= keeps
+      // every OAuth query param intact across the login round trip.
+      path: '/oauth/consent',
+      name: 'oauth-consent',
+      component: () => import('@/views/oauth/OAuthConsentView.vue'),
+      meta: { requiresAuth: true }
+    },
+    {
       path: '/',
       component: () => import('@/components/layout/AppLayout.vue'),
       meta: { requiresAuth: true },
@@ -370,6 +379,12 @@ const router = createRouter({
           name: 'audit-log-detail',
           component: () => import('@/views/settings/AuditLogDetailView.vue'),
           meta: { permission: 'audit_logs' }
+        },
+        {
+          path: 'settings/ai-connector',
+          name: 'ai-connector',
+          component: () => import('@/views/settings/AIConnectorView.vue')
+          // Every logged-in user can connect an AI app to their own account.
         },
         {
           path: 'calling',
