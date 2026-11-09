@@ -31,6 +31,13 @@ type Config struct {
 	Cookie       CookieConfig       `koanf:"cookie"`
 	Calling      CallingConfig      `koanf:"calling"`
 	TTS          TTSConfig          `koanf:"tts"`
+	MCP          MCPConfig          `koanf:"mcp"`
+}
+
+// MCPConfig controls the built-in remote MCP connector (/mcp, /oauth/*,
+// /.well-known/oauth-*). Enabled defaults to true when not set.
+type MCPConfig struct {
+	Enabled bool `koanf:"enabled"`
 }
 
 type TTSConfig struct {
@@ -242,6 +249,14 @@ func Load(configPath string) (*Config, error) {
 		return strings.ReplaceAll(strings.ToLower(strings.TrimPrefix(s, "WHATOMATE_")), "__", ".")
 	}), nil); err != nil {
 		return nil, err
+	}
+
+	// mcp.enabled defaults to true; a bool cannot tell "unset" from false
+	// after unmarshalling, so the default is applied on the raw keys.
+	if !k.Exists("mcp.enabled") {
+		if err := k.Set("mcp.enabled", true); err != nil {
+			return nil, err
+		}
 	}
 
 	var cfg Config

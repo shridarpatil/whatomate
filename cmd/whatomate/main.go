@@ -17,6 +17,7 @@ import (
 	"github.com/nikyjain/whatomate/internal/database"
 	"github.com/nikyjain/whatomate/internal/frontend"
 	"github.com/nikyjain/whatomate/internal/handlers"
+	"github.com/nikyjain/whatomate/internal/mcp"
 	"github.com/nikyjain/whatomate/internal/middleware"
 	"github.com/nikyjain/whatomate/internal/observability"
 	"github.com/nikyjain/whatomate/internal/queue"
@@ -281,11 +282,21 @@ func runServer(args []string) {
 	g.Before(middleware.CSRFProtection())
 
 	// Setup routes
-	setupRoutes(g, app, lo, cfg.Server.BasePath, rdb, cfg)
+	mcpServer := mcp.New(app)
+	mcp.ServerVersion = Version
+	if msg := mcp.PublicURLWarning(cfg); msg != "" {
+		lo.Warn(msg)
+	}
+	setupRoutes(g, app, lo, cfg.Server.BasePath, rdb, cfg, mcpServer)
+
+	// The MCP connector dispatches tool calls in-process through this exact
+	// handler, so they get the same middleware, routes and checks as browsers.
+	rootHandler := middleware.ReportAPIErrors(corsWrapper(g.Handler(), allowedOrigins), cfg.Server.BasePath)
+	mcpServer.SetHandler(rootHandler)
 
 	// Create server with CORS wrapper
 	server := &fasthttp.Server{
-		Handler:            middleware.ReportAPIErrors(corsWrapper(g.Handler(), allowedOrigins), cfg.Server.BasePath),
+		Handler:            rootHandler,
 		ReadTimeout:        time.Duration(cfg.Server.ReadTimeout) * time.Second,
 		WriteTimeout:       time.Duration(cfg.Server.WriteTimeout) * time.Second,
 		MaxRequestBodySize: 15 * 1024 * 1024,
@@ -517,10 +528,14 @@ func runWorker(args []string) {
 // ROUTES
 // ============================================================================
 
-func setupRoutes(g *fastglue.Fastglue, app *handlers.App, lo logf.Logger, basePath string, rdb *redis.Client, cfg *config.Config) {
+func setupRoutes(g *fastglue.Fastglue, app *handlers.App, lo logf.Logger, basePath string, rdb *redis.Client, cfg *config.Config, mcpServer *mcp.Server) {
 	// Health check
 	g.GET("/health", app.HealthCheck)
 	g.GET("/ready", app.ReadyCheck)
+
+	// MCP connector + its OAuth 2.1 authorization server (outside /api, so the
+	// global /api auth hook below does not apply; they authenticate themselves).
+	setupMCPPublicRoutes(g, mcpServer)
 
 	g.GET("/api/embedded-signup/config", app.GetEmbeddedSignupConfig)
 
@@ -1003,6 +1018,13 @@ func setupRoutes(g *fastglue.Fastglue, app *handlers.App, lo logf.Logger, basePa
 	g.PUT("/api/products/{id}", app.UpdateCatalogProduct)
 	g.DELETE("/api/products/{id}", app.DeleteCatalogProduct)
 
+	// MCP connector: consent (browser session only) and connected-app management
+	g.POST("/api/oauth/consent", mcpServer.Consent)
+	g.GET("/api/oauth/client", mcpServer.ClientInfo)
+	g.GET("/api/mcp/info", mcpServer.Info)
+	g.GET("/api/mcp/grants", mcpServer.ListGrants)
+	g.DELETE("/api/mcp/grants/{id}", mcpServer.RevokeGrant)
+
 	// Lead Ads & Sources
 	g.GET("/api/lead-sources", app.ListLeadSources)
 	g.POST("/api/lead-sources", app.CreateLeadSource)
@@ -1052,6 +1074,24 @@ func setupRoutes(g *fastglue.Fastglue, app *handlers.App, lo logf.Logger, basePa
 	}
 }
 
+// setupMCPPublicRoutes registers /mcp, /oauth/* and the OAuth discovery
+// documents. They return 404 when mcp.enabled is false.
+func setupMCPPublicRoutes(g *fastglue.Fastglue, s *mcp.Server) {
+	g.POST("/mcp", s.HandleMCP)
+	g.GET("/mcp", s.MethodNotAllowed)
+	g.DELETE("/mcp", s.MethodNotAllowed)
+
+	g.GET("/.well-known/oauth-protected-resource", s.ProtectedResourceMetadata)
+	g.GET("/.well-known/oauth-protected-resource/{path:*}", s.ProtectedResourceMetadata)
+	g.GET("/.well-known/oauth-authorization-server", s.AuthorizationServerMetadata)
+	g.GET("/.well-known/oauth-authorization-server/{path:*}", s.AuthorizationServerMetadata)
+	g.GET("/.well-known/openid-configuration", s.AuthorizationServerMetadata)
+
+	g.POST("/oauth/register", s.Register)
+	g.GET("/oauth/authorize", s.Authorize)
+	g.POST("/oauth/token", s.Token)
+}
+
 // withRateLimit wraps a handler with the rate limit middleware.
 func withRateLimit(handler fastglue.FastRequestHandler, opts middleware.RateLimitOpts) fastglue.FastRequestHandler {
 	rl := middleware.RateLimit(opts)
@@ -1068,6 +1108,22 @@ func withRateLimit(handler fastglue.FastRequestHandler, opts middleware.RateLimi
 func corsWrapper(next fasthttp.RequestHandler, allowedOrigins map[string]bool) fasthttp.RequestHandler {
 	return func(ctx *fasthttp.RequestCtx) {
 		origin := string(ctx.Request.Header.Peek("Origin"))
+
+		// MCP discovery, OAuth token/registration and /mcp itself use bearer
+		// tokens, never cookies, so any origin may call them (no credentials).
+		if mcp.IsPublicCORSPath(string(ctx.Path())) {
+			ctx.Response.Header.Set("Access-Control-Allow-Origin", "*")
+			ctx.Response.Header.Set("Access-Control-Allow-Methods", "GET, POST, DELETE, OPTIONS")
+			ctx.Response.Header.Set("Access-Control-Allow-Headers", "Content-Type, Authorization, X-API-Key, Mcp-Protocol-Version, Mcp-Session-Id")
+			ctx.Response.Header.Set("Access-Control-Expose-Headers", "WWW-Authenticate, Mcp-Session-Id")
+			ctx.Response.Header.Set("Access-Control-Max-Age", "86400")
+			if string(ctx.Method()) == "OPTIONS" {
+				ctx.SetStatusCode(fasthttp.StatusNoContent)
+				return
+			}
+			next(ctx)
+			return
+		}
 
 		if origin != "" && middleware.IsOriginAllowed(origin, allowedOrigins) {
 			ctx.Response.Header.Set("Access-Control-Allow-Origin", origin)

@@ -123,6 +123,11 @@ func GetMigrationModels() []MigrationModel {
 		{"LeadFormMapping", &models.LeadFormMapping{}},
 		{"Lead", &models.Lead{}},
 		{"AuditLog", &models.AuditLog{}},
+
+		// MCP connector (OAuth clients, grants, tokens)
+		{"MCPOAuthClient", &models.MCPOAuthClient{}},
+		{"MCPGrant", &models.MCPGrant{}},
+		{"MCPToken", &models.MCPToken{}},
 	}
 }
 

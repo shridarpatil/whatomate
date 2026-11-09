@@ -138,6 +138,10 @@ func runMigrations(db *gorm.DB) error {
 		&models.CallPermission{},
 		// Audit
 		&models.AuditLog{},
+		// MCP connector
+		&models.MCPOAuthClient{},
+		&models.MCPGrant{},
+		&models.MCPToken{},
 	)
 }
 

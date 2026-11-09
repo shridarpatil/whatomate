@@ -1,0 +1,155 @@
+package mcp
+
+func init() {
+	noteBody := mxObj([]string{"content"}, map[string]any{"content": mxStr("Note text (visible to the team only)")})
+
+	register(
+		Entry{
+			Area:   "messages",
+			Method: "POST",
+			Path:   "/api/messages/template",
+			Summary: "Send an approved WhatsApp template to a contact (by contact_id) or to any phone number. " +
+				"Unknown phone numbers become contacts. For a media header pass header_media_id or header_media_url " +
+				"(a raw file upload also works as multipart field header_file).",
+			Body: mxObj(nil, map[string]any{
+				"contact_id":                     mxStr("Contact UUID (or give phone_number)"),
+				"phone_number":                   mxStr("Phone number with country code (or give contact_id)"),
+				"phone_number_id":                mxStr("Meta phone number ID to choose the sending WhatsApp account"),
+				"account_name":                   mxStr("WhatsApp account name to send from"),
+				"template_name":                  mxStr("Template name (or give template_id)"),
+				"template_id":                    mxStr("Template UUID (or give template_name)"),
+				"template_params":                mxStrMap("Body placeholder values keyed by name or position (\"1\", \"2\")"),
+				"header_params":                  mxStrMap("TEXT header placeholder value keyed by name or \"1\""),
+				"button_params":                  mxStrMap("Dynamic URL / copy-code button values keyed by button index"),
+				"button_payloads":                mxStrMap("Quick-reply button payloads keyed by index (\"0\") or button text"),
+				"header_media_id":                mxStr("Already-uploaded WhatsApp media ID for an image/video/document header"),
+				"header_media_url":               mxStr("Public URL of the header media; the server downloads it"),
+				"header_media_filename":          mxStr("File name shown for DOCUMENT headers"),
+				"status_callback_url":            mxStr("Optional URL that receives sent/delivered/read/failed updates"),
+				"status_callback_bearer_token":   mxStr("Bearer token for status_callback_url"),
+				"response_callback_url":          mxStr("Optional URL that receives the contact's reply"),
+				"response_callback_bearer_token": mxStr("Bearer token for response_callback_url"),
+			}),
+			SideEffects: "sends a WhatsApp template message (billed by Meta); may create a contact",
+			Tool:        "whatomate_send_template",
+		},
+		Entry{
+			Area:    "messages",
+			Method:  "POST",
+			Path:    "/api/messages/media",
+			Summary: "Send an image, video, audio file or document to a contact.",
+			Multipart: &MultipartSpec{
+				FileField: "file",
+				Accept:    "image/*,video/*,audio/*,application/pdf,application/*",
+				ExtraFields: []Param{
+					{Name: "contact_id", Type: "string", Description: "Contact UUID", Required: true},
+					{Name: "type", Type: "string", Description: "Media type (default image)", Enum: []string{"image", "video", "audio", "document"}},
+					mxQ("caption", "string", "Optional caption"),
+					mxQ("whatsapp_account", "string", "Send from this WhatsApp account"),
+				},
+			},
+			SideEffects: "sends a WhatsApp message",
+		},
+		Entry{
+			Area:   "messages",
+			Method: "POST",
+			Path:   "/api/messages",
+			Summary: "Legacy send route. It needs a contact ID in the path, so it always fails here; " +
+				"use POST /api/contacts/{id}/messages instead.",
+			Body: mxObj(nil, map[string]any{
+				"type":    mxEnum("Message type", "text", "interactive"),
+				"content": mxObj(nil, map[string]any{"body": mxStr("Message text")}),
+			}),
+		},
+		Entry{
+			Area:   "messages",
+			Method: "POST",
+			Path:   "/api/messages/external",
+			Summary: "Record a message that was sent outside Whatomate (e.g. by another system) in the chat " +
+				"history. Nothing is sent to WhatsApp. Creating a new contact needs contacts:write.",
+			Permission: "chat:write",
+			Body: mxObj([]string{"type"}, map[string]any{
+				"contact_id":             mxStr("Contact UUID (or give phone_number)"),
+				"phone_number":           mxStr("Phone number with country code"),
+				"phone_number_id":        mxStr("Meta phone number ID (routes to the right organisation/account)"),
+				"profile_name":           mxStr("Name for a newly created contact"),
+				"whatsapp_account":       mxStr("WhatsApp account name"),
+				"type":                   mxEnum("Message type", "text", "image", "video", "audio", "document", "template", "interactive", "flow", "location", "contact"),
+				"content":                mxObj(nil, map[string]any{"body": mxStr("Message text")}),
+				"media_url":              mxStr("Media URL"),
+				"media_mime_type":        mxStr("Media MIME type"),
+				"media_filename":         mxStr("Media file name"),
+				"header_media_url":       mxStr("Template header media URL"),
+				"header_media_mime_type": mxStr("Template header media MIME type"),
+				"header_media_filename":  mxStr("Template header media file name"),
+				"interactive_data":       mxFreeObj("Interactive message data"),
+				"template_name":          mxStr("Template name"),
+				"template_params":        mxFreeObj("Template parameters"),
+				"flow_response":          mxFreeObj("Flow response data"),
+				"metadata":               mxFreeObj("Free-form metadata"),
+				"whatsapp_message_id":    mxStr("WhatsApp message ID (wamid…)"),
+				"external_message_id":    mxStr("Your own ID for this message"),
+				"reply_to_message_id":    mxStr("Message UUID this replies to"),
+				"sent_at":                mxStr("When it was sent (ISO 8601)"),
+			}),
+		},
+		Entry{
+			Area:    "messages",
+			Method:  "POST",
+			Path:    "/api/messages/status",
+			Summary: "Look up the delivery status (sent, delivered, read, failed) of many messages at once.",
+			Body: mxObj(nil, map[string]any{
+				"message_ids":          mxStrArr("Whatomate message UUIDs"),
+				"whatsapp_message_ids": mxStrArr("WhatsApp message IDs (wamid…)"),
+			}),
+		},
+		Entry{
+			Area:    "messages",
+			Method:  "GET",
+			Path:    "/api/messages/{id}/status",
+			Summary: "Delivery status of one message; {id} is the Whatomate message UUID or the WhatsApp wamid.",
+		},
+		Entry{
+			Area:    "messages",
+			Method:  "PUT",
+			Path:    "/api/messages/{id}/read",
+			Summary: "Not implemented yet (always answers 501). Use POST /api/contacts/{id}/mark-read.",
+		},
+		Entry{
+			Area:       "messages",
+			Method:     "GET",
+			Path:       "/api/contacts/{id}/notes",
+			Summary:    "Internal team notes on a conversation, newest first.",
+			Permission: "chat:read",
+			Query: []Param{
+				mxQ("limit", "integer", "Notes per page (default 30, max 100)"),
+				mxQ("page", "integer", "Page number"),
+				mxQ("before", "string", "Note UUID; return notes older than it"),
+			},
+		},
+		Entry{
+			Area:       "messages",
+			Method:     "POST",
+			Path:       "/api/contacts/{id}/notes",
+			Summary:    "Add an internal note to a conversation. The contact never sees it.",
+			Permission: "chat:write",
+			Body:       noteBody,
+		},
+		Entry{
+			Area:       "messages",
+			Method:     "PUT",
+			Path:       "/api/contacts/{id}/notes/{note_id}",
+			Summary:    "Edit one of your own notes.",
+			Permission: "chat:write",
+			Body:       noteBody,
+		},
+		Entry{
+			Area:        "messages",
+			Method:      "DELETE",
+			Path:        "/api/contacts/{id}/notes/{note_id}",
+			Summary:     "Delete one of your own notes.",
+			Permission:  "chat:write",
+			SideEffects: "deletes data",
+		},
+	)
+}

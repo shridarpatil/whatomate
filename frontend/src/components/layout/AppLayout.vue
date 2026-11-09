@@ -67,7 +67,9 @@ function filterItems(items: NavSection['items']) {
   return items
     .filter(item => {
       if (item.childPermissions) {
-        return item.childPermissions.some(p => authStore.hasPermission(p, 'read'))
+        // A child without a permission (e.g. AI Connector) keeps the group visible to everyone.
+        return item.childPermissions.some(p => authStore.hasPermission(p, 'read')) ||
+          !!item.children?.some(child => !child.permission)
       }
       return !item.permission || authStore.hasPermission(item.permission, 'read')
     })
