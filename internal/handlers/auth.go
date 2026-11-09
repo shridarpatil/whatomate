@@ -352,6 +352,13 @@ func (a *App) RefreshToken(r *fastglue.Request) error {
 }
 
 func (a *App) generateAccessToken(user *models.User) (string, error) {
+	return a.signAccessToken(user, time.Duration(a.Config.JWT.AccessExpiryMins)*time.Minute)
+}
+
+// signAccessToken signs a browser-session-equivalent access JWT for user that
+// expires after ttl. user.OrganizationID and user.RoleID must already reflect
+// the active organisation (see ResolveOrgUser).
+func (a *App) signAccessToken(user *models.User, ttl time.Duration) (string, error) {
 	claims := middleware.JWTClaims{
 		UserID:         user.ID,
 		OrganizationID: user.OrganizationID,
@@ -359,7 +366,7 @@ func (a *App) generateAccessToken(user *models.User) (string, error) {
 		RoleID:         user.RoleID,
 		IsSuperAdmin:   user.IsSuperAdmin,
 		RegisteredClaims: jwt.RegisteredClaims{
-			ExpiresAt: jwt.NewNumericDate(time.Now().Add(time.Duration(a.Config.JWT.AccessExpiryMins) * time.Minute)),
+			ExpiresAt: jwt.NewNumericDate(time.Now().Add(ttl)),
 			IssuedAt:  jwt.NewNumericDate(time.Now()),
 			Issuer:    "whatomate",
 		},

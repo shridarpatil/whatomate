@@ -207,9 +207,42 @@ func AuthWithDB(secret string, db *gorm.DB) fastglue.FastMiddleware {
 
 // validateAPIKey validates an API key and sets context values
 func validateAPIKey(r *fastglue.Request, key string, db *gorm.DB) bool {
+	id, ok := ValidateAPIKey(db, key)
+	if !ok {
+		return false
+	}
+	r.RequestCtx.SetUserValue(ContextKeyUserID, id.UserID)
+	if id.OrganizationID != nil {
+		r.RequestCtx.SetUserValue(ContextKeyOrganizationID, *id.OrganizationID)
+	}
+	r.RequestCtx.SetUserValue(ContextKeyEmail, id.Email)
+	if id.RoleID != nil {
+		r.RequestCtx.SetUserValue(ContextKeyRoleID, *id.RoleID)
+	}
+	r.RequestCtx.SetUserValue(ContextKeyIsSuperAdmin, id.IsSuperAdmin)
+	return true
+}
+
+// APIKeyIdentity is the caller identity an API key resolves to.
+type APIKeyIdentity struct {
+	KeyID          uuid.UUID
+	UserID         uuid.UUID
+	OrganizationID *uuid.UUID
+	Email          string
+	RoleID         *uuid.UUID
+	IsSuperAdmin   bool
+}
+
+// ValidateAPIKey checks a whm_ API key (active, not expired, bcrypt match,
+// creator still loadable) and returns the identity it acts as. It is the same
+// check the /api auth middleware performs; the MCP server reuses it.
+func ValidateAPIKey(db *gorm.DB, key string) (*APIKeyIdentity, bool) {
+	if db == nil {
+		return nil, false
+	}
 	// API key format: whm_<32 hex chars>
 	if len(key) != 36 || key[:4] != "whm_" {
-		return false
+		return nil, false
 	}
 
 	// Extract both new (16-char) and old (8-char) prefixes for backward compatibility.
@@ -220,7 +253,7 @@ func validateAPIKey(r *fastglue.Request, key string, db *gorm.DB) bool {
 	// Find API keys with matching prefix (supports both old and new prefix lengths)
 	var apiKeys []models.APIKey
 	if err := db.Preload("User").Where("(key_prefix = ? OR key_prefix = ?) AND is_active = ?", newPrefix, oldPrefix, true).Find(&apiKeys).Error; err != nil {
-		return false
+		return nil, false
 	}
 
 	// Check each key with bcrypt
@@ -228,7 +261,7 @@ func validateAPIKey(r *fastglue.Request, key string, db *gorm.DB) bool {
 		if err := bcrypt.CompareHashAndPassword([]byte(apiKey.KeyHash), []byte(key)); err == nil {
 			// Key matches - check expiration
 			if apiKey.ExpiresAt != nil && time.Now().After(*apiKey.ExpiresAt) {
-				return false // Key expired
+				return nil, false // Key expired
 			}
 
 			// Update last used timestamp (async to not block request)
@@ -239,23 +272,21 @@ func validateAPIKey(r *fastglue.Request, key string, db *gorm.DB) bool {
 				db.WithContext(ctx).Model(&models.APIKey{}).Where("id = ?", id).Update("last_used_at", now)
 			}(apiKey.ID)
 
-			// Set context values from the user who created the key
+			// Act as the user who created the key
 			if apiKey.User != nil {
-				r.RequestCtx.SetUserValue(ContextKeyUserID, apiKey.UserID)
-				if apiKey.OrganizationID != nil {
-					r.RequestCtx.SetUserValue(ContextKeyOrganizationID, *apiKey.OrganizationID)
-				}
-				r.RequestCtx.SetUserValue(ContextKeyEmail, apiKey.User.Email)
-				if apiKey.User.RoleID != nil {
-					r.RequestCtx.SetUserValue(ContextKeyRoleID, *apiKey.User.RoleID)
-				}
-				r.RequestCtx.SetUserValue(ContextKeyIsSuperAdmin, apiKey.User.IsSuperAdmin)
-				return true
+				return &APIKeyIdentity{
+					KeyID:          apiKey.ID,
+					UserID:         apiKey.UserID,
+					OrganizationID: apiKey.OrganizationID,
+					Email:          apiKey.User.Email,
+					RoleID:         apiKey.User.RoleID,
+					IsSuperAdmin:   apiKey.User.IsSuperAdmin,
+				}, true
 			}
 		}
 	}
 
-	return false
+	return nil, false
 }
 
 // OrganizationContext loads organization and user from database
