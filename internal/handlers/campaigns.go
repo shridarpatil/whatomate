@@ -643,6 +643,10 @@ func (a *App) StartCampaign(r *fastglue.Request) error {
 		})
 	}
 
+	if reason := a.campaignDeliveryBlockReason(r.RequestCtx, &campaign); reason != "" {
+		return r.SendErrorEnvelope(fasthttp.StatusConflict, reason, nil, "")
+	}
+
 	if err := a.enqueueCampaignRecipients(r.RequestCtx, &campaign, recipients, now, campaign.Status); err != nil {
 		a.Log.Error("Failed to start campaign", "error", err)
 		return r.SendErrorEnvelope(fasthttp.StatusInternalServerError, "Failed to queue recipients", nil, "")
@@ -706,6 +710,7 @@ func (a *App) enqueueCampaignRecipients(ctx context.Context, campaign *models.Bu
 		"status":       models.CampaignStatusProcessing,
 		"started_at":   startedAt,
 		"completed_at": nil,
+		"pause_reason": "",
 	}
 	if err := a.DB.Model(campaign).Updates(updates).Error; err != nil {
 		return err
@@ -766,7 +771,10 @@ func (a *App) PauseCampaign(r *fastglue.Request) error {
 		return r.SendErrorEnvelope(fasthttp.StatusBadRequest, "Campaign is not running", nil, "")
 	}
 
-	if err := a.DB.Model(campaign).Update("status", models.CampaignStatusPaused).Error; err != nil {
+	if err := a.DB.Model(campaign).Updates(map[string]any{
+		"status":       models.CampaignStatusPaused,
+		"pause_reason": "",
+	}).Error; err != nil {
 		a.Log.Error("Failed to pause campaign", "error", err)
 		return r.SendErrorEnvelope(fasthttp.StatusInternalServerError, "Failed to pause campaign", nil, "")
 	}

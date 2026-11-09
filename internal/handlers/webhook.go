@@ -181,14 +181,17 @@ func (a *App) WebhookHandler(r *fastglue.Request) error {
 	case appSecret != "":
 		if len(signature) == 0 || !verifyWebhookSignature(body, signature, []byte(appSecret)) {
 			a.Log.Warn("Rejected webhook: missing or invalid signature", "phone_id", verifyPhoneID)
+			a.recordWebhookHealth(&payload, false)
 			return r.SendErrorEnvelope(fasthttp.StatusForbidden, "Invalid signature", nil, "")
 		}
 	case a.Config.WhatsApp.RequireWebhookSignature:
 		a.Log.Warn("Rejected webhook: no app secret configured to verify signature", "phone_id", verifyPhoneID)
+		a.recordWebhookHealth(&payload, false)
 		return r.SendErrorEnvelope(fasthttp.StatusForbidden, "Signature verification required", nil, "")
 	default:
 		a.Log.Warn("Processing webhook without signature verification; configure the Meta app secret to enable it", "phone_id", verifyPhoneID)
 	}
+	a.recordWebhookHealth(&payload, true)
 
 	// Process each entry
 	for _, entry := range payload.Entry {
@@ -643,7 +646,7 @@ func (a *App) processMarketingPreference(phoneNumberID, userPhone, bsuid, value 
 		}
 		contact = *found
 	} else if bsuid != "" {
-		if err := a.DB.Where("bsuid = ? AND organization_id = ?", bsuid, account.OrganizationID).First(&contact).Error; err != nil {
+		if err := a.DB.Where("bs_uid = ? AND organization_id = ?", bsuid, account.OrganizationID).First(&contact).Error; err != nil {
 			a.Log.Info("Contact not found by BSUID for marketing preference", "bsuid", bsuid)
 			return
 		}
@@ -706,7 +709,7 @@ func (a *App) processMessageEcho(phoneNumberID string, msg IncomingTextMessage) 
 
 	// Store BSUID if provided and not already set
 	if msg.FromUserID != "" && contact.BSUID != msg.FromUserID {
-		a.DB.Model(contact).Update("bsuid", msg.FromUserID)
+		a.DB.Model(contact).Update("bs_uid", msg.FromUserID)
 		contact.BSUID = msg.FromUserID
 	}
 

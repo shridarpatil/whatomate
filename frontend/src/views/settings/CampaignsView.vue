@@ -108,6 +108,7 @@ interface Campaign {
   started_at?: string
   completed_at?: string
   created_at: string
+  pause_reason?: string
 }
 
 interface Template {
@@ -2153,10 +2154,20 @@ async function addRecipientListToCampaign(
                   </div>
                 </template>
                 <template #cell-status="{ item: campaign }">
-                  <Badge variant="outline" :class="[getStatusClass(campaign.status), 'text-xs']">
+                  <Badge
+                    variant="outline"
+                    :class="[getStatusClass(campaign.status), 'text-xs']"
+                    :title="campaign.status === 'paused' ? campaign.pause_reason : undefined"
+                  >
                     <component :is="getStatusIcon(campaign.status)" class="h-3 w-3 mr-1" />
                     {{ formatStatusLabel(campaign.status) }}
                   </Badge>
+                  <p
+                    v-if="campaign.status === 'paused' && campaign.pause_reason"
+                    class="mt-1 max-w-[16rem] text-[11px] leading-snug text-amber-600"
+                  >
+                    {{ $t('campaigns.autoPausedShort', 'Auto-paused: WhatsApp delivery reports not reaching the app') }}
+                  </p>
                 </template>
                 <template #cell-stats="{ item: campaign }">
                   <div class="space-y-1">
@@ -2334,6 +2345,12 @@ async function addRecipientListToCampaign(
                 <span class="text-sm text-muted-foreground">
                   Created {{ formatDate(selectedCampaign.created_at) }}
                 </span>
+              </div>
+              <div
+                v-if="selectedCampaign.status === 'paused' && selectedCampaign.pause_reason"
+                class="order-last w-full rounded-md border border-amber-500/40 bg-amber-500/10 p-3 text-sm text-amber-700 light:text-amber-800"
+              >
+                {{ selectedCampaign.pause_reason }}
               </div>
               <div class="flex flex-wrap gap-2">
                 <Button variant="outline" size="sm" @click="refreshSelectedCampaignData" :disabled="isLoading || isLoadingRecipients">

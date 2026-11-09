@@ -22,6 +22,9 @@ type BulkMessageCampaign struct {
 	HeaderMediaMimeType  string         `gorm:"type:text" json:"header_media_mime_type"`  // MIME type (image/jpeg, video/mp4, etc.)
 	HeaderMediaLocalPath string         `gorm:"type:text" json:"header_media_local_path"` // Local file path for preview
 	Status               CampaignStatus `gorm:"size:20;default:'draft'" json:"status"`    // draft, queued, processing, completed, failed
+	// PauseReason explains an automatic pause (e.g. WhatsApp delivery reports
+	// not reaching the app). Empty for manual pauses; cleared on start/resume.
+	PauseReason string `gorm:"type:text" json:"pause_reason,omitempty"`
 	TotalRecipients      int            `gorm:"default:0" json:"total_recipients"`
 	SentCount            int            `gorm:"default:0" json:"sent_count"`
 	DeliveredCount       int            `gorm:"default:0" json:"delivered_count"`

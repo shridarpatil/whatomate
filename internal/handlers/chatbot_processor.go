@@ -166,7 +166,7 @@ func (a *App) processIncomingMessageFull(phoneNumberID string, msg IncomingTextM
 
 	// Store BSUID if provided and not already set
 	if msg.FromUserID != "" && contact.BSUID != msg.FromUserID {
-		a.DB.Model(contact).Update("bsuid", msg.FromUserID)
+		a.DB.Model(contact).Update("bs_uid", msg.FromUserID)
 		contact.BSUID = msg.FromUserID
 	}
 
