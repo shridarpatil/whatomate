@@ -58,7 +58,7 @@ func mergedFields(survivor models.Contact, dups []models.Contact) map[string]any
 	if survivor.BSUID == "" {
 		for _, c := range others {
 			if c.BSUID != "" {
-				u["bsuid"] = c.BSUID
+				u["bs_uid"] = c.BSUID // gorm names the BSUID field bs_uid
 				break
 			}
 		}

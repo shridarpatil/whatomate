@@ -2138,6 +2138,7 @@
     "startConfirmTitle": "Start Campaign",
     "startConfirmDesc": "Are you sure you want to start \"{name}\"? Messages will be sent to all recipients.",
     "campaignPaused": "Campaign paused",
+    "autoPausedShort": "Auto-paused: WhatsApp delivery reports not reaching the app",
     "pauseFailed": "Failed to pause campaign",
     "pauseConfirmTitle": "Pause Campaign",
     "pauseConfirmDesc": "Are you sure you want to pause \"{name}\"? No further messages will be sent until resumed.",

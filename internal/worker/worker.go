@@ -12,6 +12,7 @@ import (
 	"github.com/nikyjain/whatomate/internal/models"
 	"github.com/nikyjain/whatomate/internal/queue"
 	"github.com/nikyjain/whatomate/internal/templateutil"
+	"github.com/nikyjain/whatomate/internal/webhookhealth"
 	"github.com/nikyjain/whatomate/pkg/whatsapp"
 	"github.com/redis/go-redis/v9"
 	"github.com/zerodha/logf"
@@ -94,6 +95,13 @@ func (w *Worker) HandleRecipientJob(ctx context.Context, job *queue.RecipientJob
 	}
 	w.decryptAccountSecrets(&account)
 
+	// Never send while this number's delivery reports are not reaching the
+	// app: pause the campaign and leave the recipient pending for a resume.
+	if reason := webhookhealth.BlockReason(ctx, w.Redis, account.PhoneID, time.Now()); reason != "" {
+		w.pauseCampaignForDelivery(job.CampaignID, reason)
+		return nil
+	}
+
 	// Get or create contact for this recipient
 	contact, _, err := contactutil.GetOrCreateContact(w.DB, job.OrganizationID, job.PhoneNumber, job.RecipientName)
 	if err != nil || contact == nil {
@@ -167,6 +175,7 @@ func (w *Worker) HandleRecipientJob(ctx context.Context, job *queue.RecipientJob
 		w.incrementCampaignCount(job.CampaignID, "failed_count")
 	} else {
 		w.Log.Info("Message sent", "recipient", job.PhoneNumber, "message_id", waMessageID)
+		webhookhealth.RecordCampaignSend(ctx, w.Redis, account.PhoneID, time.Now())
 		message.Status = models.MessageStatusSent
 		w.updateRecipientStatus(job.RecipientID, models.MessageStatusSent, waMessageID, "")
 		w.incrementCampaignCount(job.CampaignID, "sent_count")
@@ -199,6 +208,27 @@ func (w *Worker) HandleRecipientJob(ctx context.Context, job *queue.RecipientJob
 	w.checkCampaignCompletion(ctx, job.CampaignID, job.OrganizationID)
 
 	return nil
+}
+
+// pauseCampaignForDelivery pauses a running campaign because its WhatsApp
+// number's delivery reports are not reaching the app. Only running campaigns
+// are touched, so a cancelled or completed campaign keeps its status.
+func (w *Worker) pauseCampaignForDelivery(campaignID uuid.UUID, reason string) {
+	res := w.DB.Model(&models.BulkMessageCampaign{}).
+		Where("id = ? AND status IN ?", campaignID, []models.CampaignStatus{
+			models.CampaignStatusProcessing, models.CampaignStatusQueued,
+		}).
+		Updates(map[string]interface{}{
+			"status":       models.CampaignStatusPaused,
+			"pause_reason": reason,
+		})
+	if res.Error != nil {
+		w.Log.Error("Failed to pause campaign for broken delivery reports", "error", res.Error, "campaign_id", campaignID)
+		return
+	}
+	if res.RowsAffected > 0 {
+		w.Log.Warn("Campaign paused: delivery reports not reaching the app", "campaign_id", campaignID, "reason", reason)
+	}
 }
 
 // updateRecipientStatus updates the recipient's status in the database

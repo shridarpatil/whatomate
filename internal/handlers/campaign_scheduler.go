@@ -75,6 +75,11 @@ func (a *App) ProcessDueCampaigns(ctx context.Context) {
 			continue
 		}
 
+		if reason := a.campaignDeliveryBlockReason(ctx, campaign); reason != "" {
+			a.pauseCampaignForDelivery(campaign, reason)
+			continue
+		}
+
 		if err := a.enqueueCampaignRecipients(ctx, campaign, recipients, time.Now(), models.CampaignStatusScheduled); err != nil {
 			a.Log.Error("Failed to enqueue scheduled campaign", "campaign_id", campaign.ID, "error", err)
 			continue

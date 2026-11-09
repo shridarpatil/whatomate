@@ -103,6 +103,7 @@ interface Campaign {
   scheduled_at?: string
   started_at?: string
   completed_at?: string
+  pause_reason?: string
   created_by_name?: string
   updated_by_name?: string
   created_at: string
@@ -1259,6 +1260,12 @@ onUnmounted(() => {
               {{ campaign.status }}
             </Badge>
           </div>
+          <p
+            v-if="campaign.status === 'paused' && campaign.pause_reason"
+            class="rounded-md border border-amber-500/40 bg-amber-500/10 p-3 text-sm text-amber-700 light:text-amber-800"
+          >
+            {{ campaign.pause_reason }}
+          </p>
         </div>
       </CardContent>
     </Card>
