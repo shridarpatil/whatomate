@@ -284,6 +284,9 @@ func runServer(args []string) {
 	// Setup routes
 	mcpServer := mcp.New(app)
 	mcp.ServerVersion = Version
+	if msg := mcp.PublicURLWarning(cfg); msg != "" {
+		lo.Warn(msg)
+	}
 	setupRoutes(g, app, lo, cfg.Server.BasePath, rdb, cfg, mcpServer)
 
 	// The MCP connector dispatches tool calls in-process through this exact

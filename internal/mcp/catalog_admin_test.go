@@ -25,7 +25,9 @@ var adminCatalogPrefixes = []string{
 
 // adminCatalogExcluded are routes under those prefixes deliberately left out.
 var adminCatalogExcluded = map[string]bool{
-	"PUT /api/me/password": true,
+	"PUT /api/me/password":   true,
+	"POST /api/api-keys":     true, // keys outlive the AI connection
+	"PUT /api/api-keys/{id}": true,
 }
 
 func adminEntries() []Entry {

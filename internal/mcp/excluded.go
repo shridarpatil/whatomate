@@ -14,6 +14,8 @@ type ExcludedRoute struct {
 	Reason string
 }
 
+const apiKeysOutliveReason = "API keys outlive the AI connection; create or re-enable keys in Whatomate"
+
 // ExcludedRoutes is the explicit exclusion list checked by the catalog parity
 // test: every /api route registered in cmd/whatomate/main.go must be either
 // catalogued or listed here.
@@ -25,6 +27,8 @@ var ExcludedRoutes = []ExcludedRoute{
 	{"*", "/api/me/password", "an AI app must never change the user's password"},
 	{"*", "/api/embedded-signup/config", "public Embedded Signup bootstrap, no data"},
 	{"*", "/api/oauth/*", "MCP OAuth consent stays human-only"},
+	{"POST", "/api/api-keys", apiKeysOutliveReason},
+	{"PUT", "/api/api-keys/{id}", apiKeysOutliveReason},
 	{"*", "/public/*", "public media links, not API"},
 	{"*", "/ws", "WebSocket"},
 	{"*", "/health", "infrastructure probe"},

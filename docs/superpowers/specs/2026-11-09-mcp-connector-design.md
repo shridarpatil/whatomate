@@ -115,8 +115,11 @@ Adding a route without cataloguing it fails CI.
 **Excluded routes** (session/infra plumbing, or unsafe for an agent):
 `/api/auth/*` (login, register, refresh, logout, switch-org, ws-token, SSO), `/api/webhook*` (Meta
 callbacks), `/api/custom-actions/redirect*`, `/api/me/password`, `/public/*`, `/ws`, `/health`, `/ready`,
-`/api/embedded-signup/config`, and the MCP OAuth consent endpoints themselves. Everything else is included,
-including super-admin areas (they still require super-admin server-side).
+`/api/embedded-signup/config`, the MCP OAuth consent endpoints themselves, and `POST /api/api-keys` /
+`PUT /api/api-keys/{id}` (keys outlive the AI connection). Everything else is included, including
+super-admin areas (they still require super-admin server-side). Exclusions are checked on the raw and the
+percent-decoded path; percent-encoding is only accepted inside `{param}` values. A PUT/PATCH of
+`/api/users/{id}` for the caller's own ID that sets `password` or `email` is refused in the MCP layer.
 
 ### OAuth 2.1 authorization server
 
@@ -130,7 +133,10 @@ skip list only if needed):
   `response_types_supported [code]`, `grant_types_supported [authorization_code, refresh_token]`,
   `code_challenge_methods_supported [S256]`, `token_endpoint_auth_methods_supported [none]`.
 - `POST /oauth/register` — RFC 7591 dynamic client registration (public clients). Accept `client_name`,
-  `redirect_uris` (https anywhere, or `http://localhost|127.0.0.1:*`). Store client. Rate limited by IP.
+  `redirect_uris` (https anywhere, or `http://localhost|127.0.0.1:*`). Store client. Rate limited by IP
+  and globally (200/hour, Redis; fails closed with 503 without Redis). Each registration prunes clients
+  older than 24h that never received a grant. The consent page shows the redirect host and warns (with a
+  required acknowledgement) unless the redirect URI is a known Claude callback or loopback.
 - `GET /oauth/authorize` — validate client, redirect_uri (exact match), `response_type=code`,
   `code_challenge` S256 required, `state`, optional `resource`. Then redirect the browser to the
   frontend consent page `{base}{base_path}/oauth/consent?<original params>`.

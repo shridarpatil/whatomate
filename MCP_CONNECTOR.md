@@ -8,12 +8,16 @@ Connector URL: `https://<your-whatomate-host>/mcp` (shown in **Settings → AI C
 
 ## What Claude can do
 
-Claude acts **as the person who connected it, inside one organisation, with that person's role**.
-It can do exactly what that person can do in the web app — nothing more. Every request goes through
+Claude acts **as the person who connected it, with that person's role in each organisation**.
+Claude starts in the organisation you choose on the approval page and can switch to any other
+organisation you belong to (`whatomate_switch_organization`), with your role there. It can do exactly what that person can do in the web app — nothing more. Every request goes through
 the same permission checks, organisation scoping, validation, campaign delivery guard and audit log as
 the browser.
 
-Not available to Claude: logging in, approving its own connection, changing your password, Meta webhooks.
+Not available to Claude: logging in, approving its own connection, changing your own password or email
+(including through *Edit user* on yourself; editing other users stays allowed with `users:write`),
+creating or re-enabling API keys (keys outlive the AI connection; listing, viewing and deleting keys is
+allowed), Meta webhooks.
 
 Claude apps ask you before running tools that change data or send messages.
 
@@ -21,7 +25,10 @@ Claude apps ask you before running tools that change data or send messages.
 
 1. In Whatomate open **Settings → AI Connector** and copy the connector URL.
 2. In Claude: **Settings → Connectors → Add custom connector**, paste the URL, save, then **Connect**.
-3. A Whatomate page opens. Log in if asked, pick the organisation, press **Approve**.
+3. A Whatomate page opens. Log in if asked, pick the organisation Claude starts in, press **Approve**.
+   The page shows where access will be sent (e.g. `https://claude.ai`). If the app is not a recognised
+   Claude app (claude.ai / claude.com, or Claude Code / Desktop on `localhost`), it shows a warning and
+   **Approve** stays disabled until you tick that you started the connection yourself and trust that address.
 4. Done. To disconnect, press **Revoke** under *Connected AI apps* in Settings → AI Connector.
 
 ## Connect from Claude Code
@@ -53,7 +60,21 @@ An API key is tied to one organisation; `whatomate_switch_organization` only wor
   token revokes the connection. Tokens are stored only as SHA-256 hashes.
 - A connection stops working immediately when it is revoked, the user is disabled, or the user is removed
   from the organisation.
+- Dynamic client registration is limited per IP (20/hour) and globally (200/hour across all IPs) using
+  Redis; without a working Redis, registration is refused (503). Registered apps that never got a grant
+  are deleted after 24 hours.
+- Calls are checked against the catalog on both the raw and the percent-decoded path; percent-encoding is
+  only accepted inside parameter values. API responses larger than 2 MB are cut off with a note, and
+  uploads are size-checked before decoding.
 - Turn the whole connector off with `mcp.enabled = false` (env `WHATOMATE_MCP__ENABLED=false`).
+
+## Deployment notes
+
+- Set `server.public_url` (env `WHATOMATE_SERVER__PUBLIC_URL`) to the public `https://` address. Without it
+  the OAuth metadata is derived from the request's `Host` / `X-Forwarded-*` headers, and Whatomate logs a
+  warning at startup when the connector is enabled in production.
+- Behind a reverse proxy, set `rate_limit.trust_proxy = true` (env `WHATOMATE_RATE_LIMIT__TRUST_PROXY=true`)
+  so the per-IP registration limit sees the real client IP instead of the proxy's address.
 
 ## For developers: adding a route
 

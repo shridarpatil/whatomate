@@ -61,10 +61,15 @@ func (s *Server) Register(r *fastglue.Request) error {
 	if !s.Enabled() {
 		return notFound(r)
 	}
+	ctx := r.RequestCtx
+	// The global cap runs first and fails closed, so the per-IP limiter below
+	// (which fails open) only ever runs while Redis is answering.
+	if status, desc := s.checkGlobalRegisterLimit(); status != 0 {
+		return oauthError(ctx, status, "temporarily_unavailable", desc)
+	}
 	if s.registerLimit != nil && s.registerLimit(r) == nil {
 		return nil // rate limited; 429 already written
 	}
-	ctx := r.RequestCtx
 	var req registerRequest
 	if err := json.Unmarshal(ctx.PostBody(), &req); err != nil {
 		return oauthError(ctx, fasthttp.StatusBadRequest, "invalid_client_metadata", "body must be a JSON client metadata document")
@@ -99,6 +104,7 @@ func (s *Server) Register(r *fastglue.Request) error {
 		s.app.Log.Error("Failed to register MCP OAuth client", "error", err)
 		return oauthError(ctx, fasthttp.StatusInternalServerError, "server_error", "failed to create client")
 	}
+	s.pruneUnusedClients()
 	return writeJSON(ctx, fasthttp.StatusCreated, map[string]any{
 		"client_id":                  client.ClientID,
 		"client_name":                client.ClientName,

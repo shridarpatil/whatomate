@@ -46,6 +46,7 @@ func newDBServer(t *testing.T) *Server {
 	// The shared Redis keeps rate-limit counters across runs; tests that need
 	// the registration limiter install their own (see TestRegister_RateLimited).
 	s.registerLimit = nil
+	s.globalRegisterKey = "mcp_register_global_test_" + uuid.NewString()
 	g := fastglue.NewGlue()
 	g.Before(func(r *fastglue.Request) *fastglue.Request {
 		if strings.HasPrefix(string(r.RequestCtx.Path()), "/api") {

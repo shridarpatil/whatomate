@@ -1990,6 +1990,10 @@ export const leadsService = {
 export interface OAuthClientInfo {
   client_name: string;
   redirect_uri_valid: boolean;
+  /** scheme://host[:port] the authorization code will be sent to. */
+  redirect_host: string;
+  /** true for the hosted Claude callbacks and loopback URIs (Claude Code / Desktop). */
+  verified: boolean;
 }
 
 export interface OAuthConsentRequest {

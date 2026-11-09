@@ -22,7 +22,8 @@ type apiRequest struct {
 type apiResponse struct {
 	Status      int
 	ContentType string
-	Body        []byte
+	Body        []byte // at most maxResponseBytes
+	Truncated   bool   // the handler wrote more than maxResponseBytes
 }
 
 var loopbackAddr = &net.TCPAddr{IP: net.IPv4(127, 0, 0, 1), Port: 0}
@@ -102,7 +103,10 @@ func (s *Server) dispatch(origin *fasthttp.RequestCtx, c *Caller, req apiRequest
 	out := &apiResponse{
 		Status:      fctx.Response.StatusCode(),
 		ContentType: string(fctx.Response.Header.ContentType()),
-		Body:        append([]byte(nil), body...),
 	}
+	if len(body) > maxResponseBytes {
+		body, out.Truncated = body[:maxResponseBytes], true
+	}
+	out.Body = append([]byte(nil), body...)
 	return out, nil
 }

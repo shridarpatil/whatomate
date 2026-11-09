@@ -48,7 +48,9 @@ describe('OAuthConsentView', () => {
     vi.clearAllMocks()
     localStorage.clear()
     mocks.query = { ...baseQuery }
-    mocks.getOAuthClient.mockResolvedValue({ data: { status: 'success', data: { client_name: 'Claude', redirect_uri_valid: true } } })
+    mocks.getOAuthClient.mockResolvedValue({ data: { status: 'success', data: {
+      client_name: 'Claude', redirect_uri_valid: true, redirect_host: 'https://claude.ai', verified: true,
+    } } })
     mocks.listMyOrganizations.mockResolvedValue({ data: { status: 'success', data: { organizations: [
       { organization_id: 'org-1', name: 'Acme', is_default: true },
     ] } } })
@@ -65,6 +67,50 @@ describe('OAuthConsentView', () => {
     expect(wrapper.text()).toContain('Acme')
     expect(wrapper.find('select').exists()).toBe(false) // one org: picker hidden
     expect(wrapper.find('[data-testid="consent-approve"]').exists()).toBe(true)
+  })
+
+  it('always names where access is sent and says Claude can switch organisations', async () => {
+    const wrapper = mountView()
+    await flushPromises()
+
+    expect(wrapper.find('[data-testid="consent-destination"]').text()).toContain('oauthConsent.sendsTo {"host":"https://claude.ai"}')
+    expect(wrapper.text()).toContain('oauthConsent.bulletOrgSwitch')
+    expect(wrapper.find('[data-testid="consent-unverified"]').exists()).toBe(false)
+    expect(wrapper.find('[data-testid="consent-approve"]').attributes('disabled')).toBeUndefined()
+  })
+
+  it('warns about an unrecognised app and requires the checkbox before approving', async () => {
+    mocks.getOAuthClient.mockResolvedValue({ data: { data: {
+      client_name: 'Claude', redirect_uri_valid: true, redirect_host: 'https://evil.example', verified: false,
+    } } })
+    const wrapper = mountView()
+    await flushPromises()
+
+    const warning = wrapper.find('[data-testid="consent-unverified"]')
+    expect(warning.exists()).toBe(true)
+    expect(warning.text()).toContain('oauthConsent.unverifiedWarning {"host":"https://evil.example"}')
+    const approve = wrapper.find('[data-testid="consent-approve"]')
+    expect(approve.attributes('disabled')).toBeDefined()
+    await approve.trigger('click')
+    await flushPromises()
+    expect(mocks.submitConsent).not.toHaveBeenCalled()
+
+    await wrapper.find('[data-testid="consent-acknowledge"]').setValue(true)
+    expect(wrapper.find('[data-testid="consent-approve"]').attributes('disabled')).toBeUndefined()
+    await wrapper.find('[data-testid="consent-approve"]').trigger('click')
+    await flushPromises()
+    expect(mocks.submitConsent).toHaveBeenCalledWith(expect.objectContaining({ approve: true }))
+  })
+
+  it('lets an unrecognised app be denied without the checkbox', async () => {
+    mocks.getOAuthClient.mockResolvedValue({ data: { data: {
+      client_name: 'X', redirect_uri_valid: true, redirect_host: 'https://evil.example', verified: false,
+    } } })
+    const wrapper = mountView()
+    await flushPromises()
+    await wrapper.find('[data-testid="consent-deny"]').trigger('click')
+    await flushPromises()
+    expect(mocks.submitConsent).toHaveBeenCalledWith(expect.objectContaining({ approve: false }))
   })
 
   it('approve posts the original params with the organisation and navigates back', async () => {

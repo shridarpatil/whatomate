@@ -122,24 +122,3 @@ func (s *Server) consumeAuthCode(code string) (*authCode, bool) {
 	}
 	return &ac, true
 }
-
-// ClientInfo serves GET /api/oauth/client?client_id=&redirect_uri= for the
-// consent page: the registered app name and whether the redirect URI matches.
-func (s *Server) ClientInfo(r *fastglue.Request) error {
-	if !s.Enabled() {
-		return notFound(r)
-	}
-	if _, ok := sessionUser(r); !ok {
-		return r.SendErrorEnvelope(fasthttp.StatusForbidden, "Browser session required", nil, "")
-	}
-	args := r.RequestCtx.QueryArgs()
-	client, ok := s.findClient(string(args.Peek("client_id")))
-	if !ok {
-		return r.SendErrorEnvelope(fasthttp.StatusNotFound, "Unknown app. Remove the connector and add it again.", nil, "")
-	}
-	return r.SendEnvelope(map[string]any{
-		"client_id":          client.ClientID,
-		"client_name":        client.ClientName,
-		"redirect_uri_valid": client.HasRedirectURI(string(args.Peek("redirect_uri"))),
-	})
-}

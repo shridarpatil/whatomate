@@ -1,9 +1,11 @@
 package mcp
 
 import (
+	"strings"
 	"sync"
 	"time"
 
+	"github.com/nikyjain/whatomate/internal/config"
 	"github.com/nikyjain/whatomate/internal/handlers"
 	"github.com/nikyjain/whatomate/internal/middleware"
 	"github.com/valyala/fasthttp"
@@ -19,6 +21,8 @@ const (
 	maxResultChars = 60000
 	// maxUploadBytes caps a decoded whatomate_upload file.
 	maxUploadBytes = 16 << 20
+	// maxResponseBytes caps the API response body copied per dispatched call.
+	maxResponseBytes = 2 << 20
 	// internalTokenTTL is the lifetime of the app JWT minted per dispatched call.
 	internalTokenTTL = 5 * time.Minute
 	accessTokenTTL   = time.Hour
@@ -33,13 +37,15 @@ type Server struct {
 	mu      sync.RWMutex
 	handler fasthttp.RequestHandler
 
-	registerLimit fastglue.FastMiddleware
+	registerLimit     fastglue.FastMiddleware
+	globalRegisterKey string // Redis key prefix of the cross-IP registration cap
+	globalRegisterMax int
 }
 
 // New creates the MCP server. Call SetHandler with the final server handler
 // once routes are set up, before serving traffic.
 func New(app *handlers.App) *Server {
-	s := &Server{app: app}
+	s := &Server{app: app, globalRegisterKey: defaultGlobalRegisterKey, globalRegisterMax: defaultGlobalRegisterMax}
 	if app.Redis != nil {
 		s.registerLimit = middleware.RateLimit(middleware.RateLimitOpts{
 			Redis:      app.Redis,
@@ -65,6 +71,15 @@ func (s *Server) rootHandler() fasthttp.RequestHandler {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 	return s.handler
+}
+
+// PublicURLWarning returns a startup warning when the connector runs in
+// production without server.public_url, or "" when nothing is wrong.
+func PublicURLWarning(cfg *config.Config) string {
+	if cfg == nil || !cfg.MCP.Enabled || cfg.App.Environment != "production" || strings.TrimSpace(cfg.Server.PublicURL) != "" {
+		return ""
+	}
+	return "mcp.enabled is on in production but server.public_url is empty; OAuth metadata will be derived from request headers (Host / X-Forwarded-*). Set server.public_url to the public https URL"
 }
 
 // Enabled reports whether the connector is switched on (mcp.enabled).

@@ -74,6 +74,9 @@ func (s *Server) callJSON(ctx *fasthttp.RequestCtx, c *Caller, method, path stri
 		}
 		req.Body, req.ContentType = b, "application/json"
 	}
+	if err := guardSelfCredentialChange(c, entry.Method, entry, internalPath, jsonObjectKeys(req.Body)); err != nil {
+		return errorResult("%v", err)
+	}
 	resp, err := s.dispatch(ctx, c, req)
 	if err != nil {
 		return errorResult("%v", err)

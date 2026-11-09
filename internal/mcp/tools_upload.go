@@ -49,6 +49,25 @@ func decodeBase64(s string) ([]byte, error) {
 	return nil, fmt.Errorf("file_base64 is not valid base64")
 }
 
+// maxUploadBase64Len is the padded base64 length of a maxUploadBytes file.
+var maxUploadBase64Len = base64.StdEncoding.EncodedLen(maxUploadBytes)
+
+// base64PayloadLen counts the base64 characters of s (ignoring an optional
+// data: URL prefix and whitespace) without copying or decoding it.
+func base64PayloadLen(s string) int {
+	s = strings.TrimSpace(s)
+	if strings.HasPrefix(s, "data:") {
+		if i := strings.Index(s, ","); i >= 0 {
+			s = s[i+1:]
+		}
+	}
+	n := len(s)
+	for _, ws := range []string{"\n", "\r", " ", "\t"} {
+		n -= strings.Count(s, ws)
+	}
+	return n
+}
+
 // toolUploadFile implements whatomate_upload.
 func (s *Server) toolUploadFile(ctx *fasthttp.RequestCtx, c *Caller, args map[string]any) *toolResult {
 	method := strings.ToUpper(scalarString(args["method"]))
@@ -66,9 +85,14 @@ func (s *Server) toolUploadFile(ctx *fasthttp.RequestCtx, c *Caller, args map[st
 		return errorResult("%s %s is not a file-upload endpoint; use whatomate_call", entry.Method, entry.Path)
 	}
 
+	fields, _ := args["fields"].(map[string]any)
+	if err := guardSelfCredentialChange(c, entry.Method, entry, internalPath, mapKeys(fields)); err != nil {
+		return errorResult("%v", err)
+	}
+
 	raw, _ := args["file_base64"].(string)
-	// Reject oversized input before decoding (base64 is ~4/3 of the bytes).
-	if len(raw) > maxUploadBytes/3*4+1024 {
+	// Reject oversized input before decoding anything.
+	if base64PayloadLen(raw) > maxUploadBase64Len {
 		return errorResult("file is larger than 16 MB")
 	}
 	data, err := decodeBase64(raw)
@@ -107,11 +131,9 @@ func (s *Server) toolUploadFile(ctx *fasthttp.RequestCtx, c *Caller, args map[st
 
 	var buf bytes.Buffer
 	w := multipart.NewWriter(&buf)
-	if fields, ok := args["fields"].(map[string]any); ok {
-		for k, v := range fields {
-			if err := w.WriteField(k, scalarString(v)); err != nil {
-				return errorResult("failed to build form: %v", err)
-			}
+	for k, v := range fields {
+		if err := w.WriteField(k, scalarString(v)); err != nil {
+			return errorResult("failed to build form: %v", err)
 		}
 	}
 	h := make(textproto.MIMEHeader)

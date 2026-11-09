@@ -9,6 +9,7 @@ import { Label } from '@/components/ui/label'
 import { mcpService, usersService, type OAuthClientInfo } from '@/services/api'
 import { useAuthStore } from '@/stores/auth'
 import { getErrorMessage, unwrapResponse } from '@/lib/api-utils'
+import ConsentDestination from './ConsentDestination.vue'
 import {
   buildConsentBody,
   navigateTo,
@@ -25,11 +26,16 @@ const params = readConsentParams(route.query)
 const isLoading = ref(true)
 const errorMessage = ref('')
 const clientName = ref('')
+const redirectHost = ref('')
+const verified = ref(false)
+const acknowledged = ref(false)
 const organizations = ref<ConsentOrganization[]>([])
 const organizationId = ref('')
 const submitting = ref<'approve' | 'deny' | null>(null)
 
 const appName = computed(() => clientName.value || t('oauthConsent.unknownApp'))
+// An unrecognised app may only be approved after the person ticks the warning.
+const canApprove = computed(() => verified.value || acknowledged.value)
 const userEmail = computed(() => authStore.user?.email || '')
 const selectedOrgName = computed(
   () => organizations.value.find(o => o.organization_id === organizationId.value)?.name || '',
@@ -64,6 +70,8 @@ async function load() {
     ])
     const client = unwrapResponse<OAuthClientInfo>(clientRes)
     clientName.value = client?.client_name || ''
+    redirectHost.value = client?.redirect_host || ''
+    verified.value = client?.verified === true
     if (!client?.redirect_uri_valid) errorMessage.value = t('oauthConsent.invalidClient')
     else if (!organizationId.value) errorMessage.value = t('oauthConsent.noOrganization')
   } catch (err: any) {
@@ -75,7 +83,7 @@ async function load() {
 }
 
 async function submit(approve: boolean) {
-  if (!params || submitting.value) return
+  if (!params || submitting.value || (approve && !canApprove.value)) return
   submitting.value = approve ? 'approve' : 'deny'
   try {
     const res = await mcpService.submitConsent(buildConsentBody(params, organizationId.value, approve))
@@ -119,6 +127,7 @@ onMounted(load)
           <p class="text-white/60 light:text-gray-600">
             {{ $t('oauthConsent.wantsAccess', { app: appName, email: userEmail }) }}
           </p>
+          <ConsentDestination v-model:acknowledged="acknowledged" :host="redirectHost" :verified="verified" :disabled="!!submitting" />
         </div>
 
         <div class="px-8 pb-4 space-y-4">
@@ -140,7 +149,7 @@ onMounted(load)
           <div class="rounded-lg border border-white/[0.08] bg-white/[0.02] p-4 light:border-gray-200 light:bg-gray-50">
             <p class="text-sm font-medium text-white/80 light:text-gray-800 mb-2">{{ $t('oauthConsent.canDo') }}</p>
             <ul class="space-y-2 text-sm text-white/60 light:text-gray-600">
-              <li v-for="key in ['bulletRole', 'bulletManage', 'bulletSend', 'bulletDisconnect']" :key="key" class="flex gap-2">
+              <li v-for="key in ['bulletRole', 'bulletOrgSwitch', 'bulletManage', 'bulletSend', 'bulletDisconnect']" :key="key" class="flex gap-2">
                 <Check class="h-4 w-4 mt-0.5 shrink-0 text-emerald-400 light:text-emerald-600" />
                 <span>{{ $t(`oauthConsent.${key}`) }}</span>
               </li>
@@ -155,7 +164,7 @@ onMounted(load)
           </Button>
           <Button
             class="flex-1 bg-gradient-to-r from-emerald-500 to-green-600 hover:from-emerald-600 hover:to-green-700 text-white"
-            :disabled="!!submitting"
+            :disabled="!!submitting || !canApprove"
             data-testid="consent-approve"
             @click="submit(true)"
           >

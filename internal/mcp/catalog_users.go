@@ -9,7 +9,7 @@ func init() {
 	userProps := func() map[string]any {
 		return map[string]any{
 			"email":           admStr("Login email address (must be a valid, unused address)."),
-			"password":        admStr("Login password."),
+			"password":        admStr("Login password (another user's only; AI apps cannot change your own)."),
 			"full_name":       admStr("Person's full name."),
 			"role_id":         admStr("ID of the role to give the user in this organisation (see GET /api/roles)."),
 			"is_active":       admBool("false blocks the user from signing in."),
@@ -49,7 +49,7 @@ func init() {
 			Area:        "users",
 			Method:      "PUT",
 			Path:        "/api/users/{id}",
-			Summary:     "Edit a user: name, email, password, role or active status. You may always edit yourself; editing others or changing a role needs users:write.",
+			Summary:     "Edit a user: name, email, password, role or active status. You may always edit yourself; editing others or changing a role needs users:write. Changing your own password or email is not available to AI apps; the person does it in Whatomate under their profile.",
 			Permission:  "users:write",
 			Body:        admObj(userProps()),
 			SideEffects: "Changes the user's details; a new password or is_active=false affects their ability to sign in.",

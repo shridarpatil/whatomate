@@ -67,12 +67,48 @@ func resolveCallPath(method, rawPath, basePath string) (*Entry, string, error) {
 		}
 	}
 	p = strings.TrimSuffix(p, "/")
-	if IsExcluded(method, p) {
+	// The router decodes the path before routing, so exclusions are checked on
+	// both the raw and the decoded form (/api/%61uth/login is /api/auth/login).
+	dec := decodedPath(p)
+	if IsExcluded(method, p) || IsExcluded(method, dec) {
 		return nil, "", fmt.Errorf("%s %s is not available to AI apps (session plumbing or human-only)", method, p)
 	}
-	e, _, ok := Match(method, p)
+	e, _, ok := Match(method, dec)
 	if !ok {
 		return nil, "", fmt.Errorf("%s %s is not a known Whatomate API endpoint; use whatomate_list_areas and whatomate_describe_area to find the right path", method, p)
 	}
+	if err := checkLiteralSegments(e.Path, p); err != nil {
+		return nil, "", err
+	}
 	return e, p, nil
+}
+
+// decodedPath returns p with every segment percent-decoded. Callers have
+// already rejected segments that fail to decode or decode to a slash.
+func decodedPath(p string) string {
+	segs := splitPath(p)
+	for i, seg := range segs {
+		if d, err := url.PathUnescape(seg); err == nil {
+			segs[i] = d
+		}
+	}
+	return "/" + strings.Join(segs, "/")
+}
+
+// checkLiteralSegments allows percent-encoding only inside {param} values:
+// every literal segment of the matched template must appear unencoded.
+func checkLiteralSegments(tpl, raw string) error {
+	tsegs, rsegs := splitPath(tpl), splitPath(raw)
+	if len(tsegs) != len(rsegs) {
+		return fmt.Errorf("path %s does not match %s", raw, tpl)
+	}
+	for i, t := range tsegs {
+		if strings.HasPrefix(t, "{") && strings.HasSuffix(t, "}") {
+			continue
+		}
+		if rsegs[i] != t {
+			return fmt.Errorf("path segment %q must be written as %q; percent-encoding is only allowed inside parameter values", rsegs[i], t)
+		}
+	}
+	return nil
 }

@@ -8,7 +8,10 @@ import (
 	"unicode/utf8"
 )
 
-const truncationNote = "\n\n[truncated - result exceeded 60000 characters; use page/limit/search filters to narrow it]"
+const (
+	truncationNote        = "\n\n[truncated - result exceeded 60000 characters; use page/limit/search filters to narrow it]"
+	responseTruncatedNote = "\n\n[response truncated at 2 MB]"
+)
 
 // toolResult is an MCP tools/call result.
 type toolResult struct {
@@ -58,6 +61,14 @@ func truncate(s string) string {
 // compact JSON (a {"status":"success","data":X} envelope is unwrapped to X);
 // text/CSV -> as text; anything else -> a short description of the binary.
 func shapeResponse(resp *apiResponse) *toolResult {
+	res := shapeResponseBody(resp)
+	if resp.Truncated && len(res.Content) > 0 {
+		res.Content[0].Text += responseTruncatedNote
+	}
+	return res
+}
+
+func shapeResponseBody(resp *apiResponse) *toolResult {
 	ct := strings.ToLower(resp.ContentType)
 	isJSON := strings.Contains(ct, "json") || (ct == "" && json.Valid(resp.Body))
 
