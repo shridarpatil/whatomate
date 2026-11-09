@@ -25,7 +25,8 @@ import {
   CalendarCheck,
   Building2,
   ShoppingBag,
-  History
+  History,
+  BrainCircuit
 } from 'lucide-vue-next'
 import type { Component } from 'vue'
 
@@ -182,7 +183,9 @@ export const navigationSections: NavSection[] = [
           { name: 'nav.webhooks', path: '/settings/webhooks', icon: Webhook, permission: 'webhooks' },
           { name: 'nav.customActions', path: '/settings/custom-actions', icon: Zap, permission: 'custom_actions' },
           { name: 'nav.sso', path: '/settings/sso', icon: ShieldCheck, permission: 'settings.sso' },
-          { name: 'nav.auditLogs', path: '/settings/audit-logs', icon: ScrollText, permission: 'audit_logs' }
+          { name: 'nav.auditLogs', path: '/settings/audit-logs', icon: ScrollText, permission: 'audit_logs' },
+          // No permission: every logged-in user can connect an AI app to their own account.
+          { name: 'nav.aiConnector', path: '/settings/ai-connector', icon: BrainCircuit }
         ]
       }
     ]
