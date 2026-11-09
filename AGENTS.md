@@ -14,6 +14,7 @@ Read this file before starting any complex task in this repository.
 - API client layer: [frontend/src/services/api.ts](/e:/xampp/htdocs/bu-so/whatomate/frontend/src/services/api.ts)
 - Docker assets: [docker](/e:/xampp/htdocs/bu-so/whatomate/docker)
 - External API docs: [EXTERNAL_MESSAGE_API.md](/e:/xampp/htdocs/bu-so/whatomate/EXTERNAL_MESSAGE_API.md), [EXTERNAL_TEMPLATE_SEND_API.md](/e:/xampp/htdocs/bu-so/whatomate/EXTERNAL_TEMPLATE_SEND_API.md)
+- MCP (Claude) connector: [internal/mcp](/e:/xampp/htdocs/bu-so/whatomate/internal/mcp), docs [MCP_CONNECTOR.md](/e:/xampp/htdocs/bu-so/whatomate/MCP_CONNECTOR.md)
 
 ## Working Rules
 
@@ -64,6 +65,7 @@ If the local shell does not have Go installed, note that explicitly instead of c
 - Renaming a contact (chat header pencil, Contact Info panel, `PUT /api/contacts/{id}` with `profile_name`) sets `Contact.ProfileNameLocked`; `GetOrCreateContact` then stops overwriting the name with WhatsApp profile or campaign recipient names. Saving an empty name unlocks it.
 - Campaign delivery guard (`internal/webhookhealth`): the WhatsApp webhook records, per phone number ID in Redis, the last accepted and last signature-rejected callback; the campaign worker records the first send not yet followed by an accepted callback. While a number's latest callback was rejected, or a campaign send has gone 10 minutes without any accepted callback, `StartCampaign` answers 409 with the reason, due scheduled campaigns are paused, and the worker pauses running campaigns (recipients stay pending). The reason is stored in `BulkMessageCampaign.PauseReason` and shown in the campaign UI; start/resume and manual pause clear it. Any accepted callback for the number (e.g. an incoming message) lifts the block. Unknown state or no Redis never blocks. The `Contact.BSUID` column is named `bs_uid` by gorm; raw SQL must use `bs_uid`.
 - Chatbot conversation history lives at `/chatbot/sessions` (list + detail) over `GET /api/chatbot/sessions[/{id}]`. Both endpoints require `flows.chatbot:read`; the list supports `status`, `flow_id`, `search` (contact name/phone), `from`/`to` (started date) and `page`/`limit`, and responses add `flow_name` and `message_count` to the session model. Keys in `session_data` starting with `_` are engine bookkeeping and are hidden from the Collected Answers view.
+- MCP connector (`internal/mcp`, `/mcp`, docs `MCP_CONNECTOR.md`): Claude acts as the connecting user in one organisation. Tool calls are dispatched in-process through the normal fastglue handler chain (same auth, permissions, org scoping, audit), never by calling handlers directly. claude.ai connects via our OAuth 2.1 server (`/.well-known/*`, `/oauth/register|authorize|token`, frontend consent page `/oauth/consent`, models `MCPOAuthClient` / `MCPGrant` / `MCPToken`, tokens stored as SHA-256 only); Claude Code uses `X-API-Key`. Every `/api` route must be catalogued in `internal/mcp/catalog_<area>.go` or listed in `internal/mcp/excluded.go` — `catalog_parity_test.go` fails otherwise. Users see and revoke connections in Settings → AI Connector (`/settings/ai-connector`).
 
 ## Docker Publishing Rule
 

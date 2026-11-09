@@ -180,6 +180,7 @@ The backend is written in Go ([Fastglue](https://github.com/zerodha/fastglue)) a
 - If you are interested in contributing, please read [CONTRIBUTING.md](./CONTRIBUTING.md) first.
 - External integration docs:
   [External Message Persistence API](./EXTERNAL_MESSAGE_API.md) and [External Template Send API](./EXTERNAL_TEMPLATE_SEND_API.md)
+- Claude / MCP connector (set up and use Whatomate from Claude): [MCP_CONNECTOR.md](./MCP_CONNECTOR.md)
 
 ```bash
 # Development setup
