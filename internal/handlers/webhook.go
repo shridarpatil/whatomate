@@ -146,17 +146,36 @@ type WebhookPayload struct {
 					EndTime   string          `json:"end_time,omitempty"`
 					Duration  int             `json:"duration,omitempty"`
 				} `json:"calls,omitempty"`
-				// Contact state sync fields (when field == "smb_app_state_sync")
-				Action             string `json:"action,omitempty"`
-				ContactName        string `json:"contact_name,omitempty"`
-				ContactFirstName   string `json:"contact_first_name,omitempty"`
-				ContactPhoneNumber string `json:"contact_phone_number,omitempty"`
+				// Contact state sync (when field == "smb_app_state_sync").
+				// Meta sends a state_sync array; the flat fields below are
+				// kept for payloads from older integrations.
+				StateSync          []SMBStateSyncItem `json:"state_sync,omitempty"`
+				Action             string             `json:"action,omitempty"`
+				ContactName        string             `json:"contact_name,omitempty"`
+				ContactFirstName   string             `json:"contact_first_name,omitempty"`
+				ContactPhoneNumber string             `json:"contact_phone_number,omitempty"`
 				// Message echoes fields (when field == "smb_message_echoes")
 				MessageEchoes []IncomingTextMessage `json:"message_echoes,omitempty"`
 			} `json:"value"`
 			Field string `json:"field"`
 		} `json:"changes"`
 	} `json:"entry"`
+}
+
+// SMBStateSyncItem is one entry of an smb_app_state_sync webhook: a contact
+// added, edited or removed in the WhatsApp Business app address book.
+type SMBStateSyncItem struct {
+	Type    string `json:"type"`
+	Contact struct {
+		FullName    string `json:"full_name"`
+		FirstName   string `json:"first_name"`
+		PhoneNumber string `json:"phone_number"`
+		UserID      string `json:"user_id,omitempty"`
+	} `json:"contact"`
+	Action   string `json:"action"`
+	Metadata struct {
+		Timestamp string `json:"timestamp"`
+	} `json:"metadata"`
 }
 
 // WebhookHandler processes incoming webhook events from Meta
@@ -252,13 +271,29 @@ func (a *App) WebhookHandler(r *fastglue.Request) error {
 			// Handle contact state sync (coexistence)
 			if change.Field == "smb_app_state_sync" {
 				phoneNumberID := change.Value.Metadata.PhoneNumberID
-				a.Log.Info("Received smb_app_state_sync event",
-					"phone_number_id", phoneNumberID,
-					"action", change.Value.Action,
-					"contact_phone_number", change.Value.ContactPhoneNumber,
-					"contact_name", change.Value.ContactName,
-				)
-				go a.processContactSync(phoneNumberID, change.Value.ContactPhoneNumber, change.Value.ContactName, change.Value.Action)
+				for _, item := range change.Value.StateSync {
+					if item.Type != "" && item.Type != "contact" {
+						continue
+					}
+					name := item.Contact.FullName
+					if name == "" {
+						name = item.Contact.FirstName
+					}
+					a.Log.Info("Received smb_app_state_sync event",
+						"phone_number_id", phoneNumberID,
+						"action", item.Action,
+						"contact_phone_number", item.Contact.PhoneNumber,
+					)
+					go a.processContactSync(phoneNumberID, item.Contact.PhoneNumber, name, item.Action)
+				}
+				if len(change.Value.StateSync) == 0 && change.Value.ContactPhoneNumber != "" {
+					a.Log.Info("Received smb_app_state_sync event (flat payload)",
+						"phone_number_id", phoneNumberID,
+						"action", change.Value.Action,
+						"contact_phone_number", change.Value.ContactPhoneNumber,
+					)
+					go a.processContactSync(phoneNumberID, change.Value.ContactPhoneNumber, change.Value.ContactName, change.Value.Action)
+				}
 				continue
 			}
 
