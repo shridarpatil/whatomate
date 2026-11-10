@@ -258,6 +258,30 @@ POST /api/accounts/{id}/register
 }
 ```
 
+## Sync Coexistence Data
+
+Request the one-time contacts and chat history sync for a coexistence number (a number that stays on the WhatsApp Business app). Meta accepts this once, within 24 hours of onboarding. Embedded Signup calls it automatically; use this endpoint to retry. Returns `400` if the account is not a coexistence number. Requires **`accounts:write`**.
+
+```bash
+POST /api/accounts/{id}/coexistence-sync
+```
+
+### Response
+
+```json
+{
+  "status": "success",
+  "data": {
+    "sync": {
+      "smb_app_state_sync": { "success": true, "request_id": "…" },
+      "history": { "success": true, "request_id": "…" }
+    }
+  }
+}
+```
+
+Contacts then arrive as `smb_app_state_sync` webhooks and chat history as `history` webhooks.
+
 ## Subscribe App to Webhooks
 
 Subscribe the app to webhooks for the account's WhatsApp Business Account. Required after registration to start receiving incoming messages.

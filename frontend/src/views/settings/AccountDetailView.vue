@@ -41,6 +41,7 @@ import {
   AlertCircle,
   CheckCircle2,
   Bell,
+  History,
   Store,
   TestTube2,
   Check,
@@ -60,6 +61,7 @@ interface WhatsAppAccount {
   auto_read_receipt: boolean
   business_calling_enabled: boolean
   status: string
+  is_smb?: boolean
   has_access_token: boolean
   has_app_secret: boolean
   phone_number?: string
@@ -101,6 +103,7 @@ const deleteDialogOpen = ref(false)
 const testResult = ref<TestResult | null>(null)
 const testingConnection = ref(false)
 const subscribing = ref(false)
+const syncingHistory = ref(false)
 const isProfileDialogOpen = ref(false)
 
 const { showLeaveDialog, confirmLeave, cancelLeave } = useUnsavedChangesGuard(hasChanges)
@@ -252,6 +255,27 @@ async function subscribeApp() {
   }
 }
 
+// Coexistence: ask Meta to send the WhatsApp Business app contacts and chat
+// history. Meta allows this once, within 24 hours of onboarding.
+async function syncCoexistence() {
+  if (!account.value) return
+  syncingHistory.value = true
+  try {
+    const response = await api.post(`/accounts/${account.value.id}/coexistence-sync`)
+    const sync = response.data.data?.sync || {}
+    const failed = Object.values(sync).filter((r: any) => !r?.success) as any[]
+    if (failed.length === 0) {
+      toast.success(t('accounts.coexistenceSyncStarted'))
+    } else {
+      toast.error(failed.map((r) => r.error).join('; '))
+    }
+  } catch (e) {
+    toast.error(getErrorMessage(e, t('accounts.coexistenceSyncFailed')))
+  } finally {
+    syncingHistory.value = false
+  }
+}
+
 async function copyToClipboard(text: string) {
   try {
     await navigator.clipboard.writeText(text)
@@ -293,6 +317,11 @@ onMounted(async () => {
           <Loader2 v-if="subscribing" class="h-4 w-4 animate-spin mr-1" />
           <Bell v-else class="h-4 w-4 mr-1" />
           {{ $t('accounts.subscribe', 'Subscribe') }}
+        </Button>
+        <Button v-if="!isNew && account?.is_smb && canWrite" variant="outline" size="sm" :disabled="syncingHistory" @click="syncCoexistence">
+          <Loader2 v-if="syncingHistory" class="h-4 w-4 animate-spin mr-1" />
+          <History v-else class="h-4 w-4 mr-1" />
+          {{ $t('accounts.coexistenceSync') }}
         </Button>
         <Button v-if="!isNew && account" variant="outline" size="sm" @click="isProfileDialogOpen = true">
           <Store class="h-4 w-4 mr-1" />

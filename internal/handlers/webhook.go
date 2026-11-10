@@ -151,6 +151,9 @@ type WebhookPayload struct {
 				ContactName        string `json:"contact_name,omitempty"`
 				ContactFirstName   string `json:"contact_first_name,omitempty"`
 				ContactPhoneNumber string `json:"contact_phone_number,omitempty"`
+				// Chat history (when field == "history"), sent after a
+				// coexistence history sync request.
+				History []SMBHistoryItem `json:"history,omitempty"`
 				// Message echoes fields (when field == "smb_message_echoes")
 				MessageEchoes []IncomingTextMessage `json:"message_echoes,omitempty"`
 			} `json:"value"`
@@ -259,6 +262,17 @@ func (a *App) WebhookHandler(r *fastglue.Request) error {
 					"contact_name", change.Value.ContactName,
 				)
 				go a.processContactSync(phoneNumberID, change.Value.ContactPhoneNumber, change.Value.ContactName, change.Value.Action)
+				continue
+			}
+
+			// Handle chat history sync (coexistence)
+			if change.Field == "history" {
+				phoneNumberID := change.Value.Metadata.PhoneNumberID
+				a.Log.Info("Received history event",
+					"phone_number_id", phoneNumberID,
+					"chunks", len(change.Value.History),
+				)
+				go a.processHistorySync(phoneNumberID, change.Value.History)
 				continue
 			}
 

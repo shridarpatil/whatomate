@@ -119,6 +119,19 @@ During exchange-token, Whatomate inspects the phone number info from Meta and fl
 - **Registration is skipped.** SMB numbers are already registered through the Business App and don't support the two-step registration API — so both auto-registration and the manual `POST /api/accounts/{id}/register` set the account straight to `active` with **no PIN**.
 - **Messages mirror from the mobile app.** Conversations the owner has in the WhatsApp Business app appear in Whatomate, and vice versa.
 
+### Contacts and chat history sync
+
+After a coexistence number connects, Whatomate asks Meta for a one-time sync (`POST /{phone_number_id}/smb_app_data`):
+
+1. **Contacts** (`sync_type: smb_app_state_sync`). The Business app address book arrives as `smb_app_state_sync` webhooks. Later adds, edits and removals in the app also arrive this way.
+2. **Chat history** (`sync_type: history`). Up to 180 days of 1:1 chats arrive as `history` webhooks, in chunks. Whatomate sorts them by `chunk_order`, skips duplicates, keeps the original timestamps and does not trigger chatbots or outgoing webhooks for them. Media is first stored as a `[media]` placeholder; Meta sends the file later for media from the last 14 days, and the message is updated. If the business declines history sharing, Meta sends error `2593109` and nothing is imported.
+
+Meta accepts these requests only **within 24 hours of onboarding**. If the automatic request failed, use **Sync app history** on the account page, or call `POST /api/accounts/{id}/coexistence-sync`. After 24 hours the business must disconnect and onboard again.
+
+<Aside type="caution">
+  Subscribe your Meta app to the `account_update`, `history`, `smb_app_state_sync` and `smb_message_echoes` webhook fields (in addition to `messages`). Coexistence numbers support up to 20 messages per second, and group chats, calls, view-once and disappearing messages are not available through the Cloud API.
+</Aside>
+
 <Aside type="note">
   Coexistence applies only when the connected number is on the WhatsApp Business app. A number provisioned directly on the Cloud API (not SMB) goes through normal registration with a PIN.
 </Aside>
