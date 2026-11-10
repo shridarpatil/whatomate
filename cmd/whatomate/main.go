@@ -614,7 +614,8 @@ func setupRoutes(g *fastglue.Fastglue, app *handlers.App, lo logf.Logger, basePa
 	g.GET("/api/accounts/{id}", app.GetAccount)
 	g.PUT("/api/accounts/{id}", app.UpdateAccount)
 	g.DELETE("/api/accounts/{id}", app.DeleteAccount)
-	g.POST("/api/accounts/{id}/register", app.RegisterPhoneNumber) // Embedded signup manual/2fa registration
+	g.POST("/api/accounts/{id}/register", app.RegisterPhoneNumber)         // Embedded signup manual/2fa registration
+	g.POST("/api/accounts/{id}/coexistence-sync", app.SyncCoexistenceData) // Coexistence contacts + history sync
 	g.POST("/api/accounts/{id}/test", app.TestAccountConnection)
 	g.POST("/api/accounts/{id}/subscribe", app.SubscribeApp)
 	g.GET("/api/accounts/{id}/business_profile", app.GetBusinessProfile)

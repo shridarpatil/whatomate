@@ -48,6 +48,7 @@ type AccountResponse struct {
 	AutoReadReceipt        bool       `json:"auto_read_receipt"`
 	BusinessCallingEnabled bool       `json:"business_calling_enabled"`
 	Status                 string     `json:"status"`
+	IsSMB                  bool       `json:"is_smb"`
 	HasAccessToken         bool       `json:"has_access_token"`
 	HasAppSecret           bool       `json:"has_app_secret"`
 	PhoneNumber            string     `json:"phone_number,omitempty"`
@@ -466,6 +467,7 @@ func accountToResponse(acc models.WhatsAppAccount) AccountResponse {
 		AutoReadReceipt:        acc.AutoReadReceipt,
 		BusinessCallingEnabled: acc.BusinessCallingEnabled,
 		Status:                 acc.Status,
+		IsSMB:                  acc.IsSMB,
 		HasAccessToken:         acc.AccessToken != "",
 		HasAppSecret:           acc.AppSecret != "",
 		CreatedByID:            acc.CreatedByID,
@@ -634,6 +636,13 @@ func (a *App) ExchangeToken(r *fastglue.Request) error {
 		a.Log.Error("Failed to subscribe app to WABA", "error", err)
 	}
 
+	// 5b. Coexistence: request the one-time contacts and chat history sync.
+	// Meta only allows this within 24 hours of onboarding.
+	var coexistenceSync map[string]any
+	if account.IsSMB {
+		coexistenceSync = a.requestCoexistenceSync(ctx, account)
+	}
+
 	// 6. Encrypt credentials at rest
 	plaintextPin := account.Pin
 	if err := a.encryptAccountSecrets(account); err != nil {
@@ -674,6 +683,9 @@ func (a *App) ExchangeToken(r *fastglue.Request) error {
 	}
 	if regErr != nil {
 		out["warning"] = "Registration failed: " + regErr.Error()
+	}
+	if coexistenceSync != nil {
+		out["coexistence_sync"] = coexistenceSync
 	}
 
 	return r.SendEnvelope(out)
