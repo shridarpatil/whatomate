@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed, onMounted, watch } from 'vue'
+import { ref, computed, onMounted, onBeforeUnmount, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { ScrollArea } from '@/components/ui/scroll-area'
@@ -64,6 +64,69 @@ const isFBSDKLoaded = ref(false)
 const isConnectingFB = ref(false)
 const showOnboardingDialog = ref(false)
 
+// Session info posted by Meta's Embedded Signup popup via window.postMessage
+// (type WA_EMBEDDED_SIGNUP). FB.login's authResponse only carries the code,
+// so the phone number ID and WABA ID must come from this event.
+interface EmbeddedSignupSession {
+  event: string
+  phone_number_id?: string
+  waba_id?: string
+  business_id?: string
+}
+let embeddedSignupSession: EmbeddedSignupSession | null = null
+
+function handleEmbeddedSignupMessage(event: MessageEvent) {
+  let origin: string
+  try {
+    origin = new URL(event.origin).hostname
+  } catch {
+    return
+  }
+  if (origin !== 'facebook.com' && !origin.endsWith('.facebook.com')) return
+
+  let data: any
+  try {
+    data = typeof event.data === 'string' ? JSON.parse(event.data) : event.data
+  } catch {
+    return
+  }
+  if (!data || data.type !== 'WA_EMBEDDED_SIGNUP') return
+
+  const evt: string = data.event || ''
+  if (evt.startsWith('FINISH')) {
+    embeddedSignupSession = {
+      event: evt,
+      phone_number_id: data.data?.phone_number_id,
+      waba_id: data.data?.waba_id,
+      business_id: data.data?.business_id,
+    }
+  } else if (evt === 'CANCEL') {
+    embeddedSignupSession = null
+    const step = data.data?.current_step
+    console.warn('Embedded Signup cancelled', step ? `at step ${step}` : '')
+  } else if (evt === 'ERROR') {
+    embeddedSignupSession = null
+    const msg = data.data?.error_message || 'Unknown error'
+    toast.error(t('accounts.embeddedSignupError', { message: msg }))
+  }
+}
+
+// The popup's postMessage usually arrives before FB.login's callback, but the
+// order isn't guaranteed. Wait briefly for it (the code is valid for ~30s).
+function waitForSessionInfo(timeoutMs = 2000): Promise<EmbeddedSignupSession | null> {
+  return new Promise((resolve) => {
+    const start = Date.now()
+    const tick = () => {
+      if (embeddedSignupSession || Date.now() - start >= timeoutMs) {
+        resolve(embeddedSignupSession)
+        return
+      }
+      setTimeout(tick, 100)
+    }
+    tick()
+  })
+}
+
 const canWrite = computed(() => authStore.hasPermission('accounts', 'write'))
 const canDelete = computed(() => authStore.hasPermission('accounts', 'delete'))
 const breadcrumbs = computed(() => [{ label: t('nav.settings'), href: '/settings' }, { label: t('settings.accounts') }])
@@ -87,7 +150,11 @@ watch(() => organizationsStore.selectedOrgId, () => {
   fetchWhatsAppConfig()
 })
 onMounted(async () => {
+  window.addEventListener('message', handleEmbeddedSignupMessage)
   await Promise.all([fetchAccounts(), fetchWhatsAppConfig()])
+})
+onBeforeUnmount(() => {
+  window.removeEventListener('message', handleEmbeddedSignupMessage)
 })
 
 async function fetchAccounts() {
@@ -159,25 +226,20 @@ function launchWhatsAppSignup(isCoexistence: boolean = true) {
     override_default_response_type: true
   }
 
-  if (isCoexistence) {
-    loginOptions.extras = {
-      setup: {},
-      featureType: 'whatsapp_business_app_onboarding',
-      sessionInfoVersion: '3',
-      version: 'v3'
-    }
-  } else {
-    loginOptions.extras = {
-      setup: {}
-    }
-  }
+  // Embedded Signup v4: products come from the Login for Business
+  // configuration, so no version/sessionInfoVersion keys are needed
+  // (v2/v3 were retired on 2026-10-15). featureType opts into onboarding
+  // numbers that stay on the WhatsApp Business app (coexistence).
+  loginOptions.extras = isCoexistence
+    ? { setup: {}, featureType: 'whatsapp_business_app_onboarding' }
+    : { setup: {} }
+
+  embeddedSignupSession = null
 
   window.FB.login(
     (response: any) => {
       if (response.authResponse) {
         const code = response.authResponse.code
-        const phoneNumberId = response.authResponse.phone_number_id
-        const wabaId = response.authResponse.waba_id
 
         if (!code) {
           toast.error('Incomplete data from Facebook: missing authorization code')
@@ -185,7 +247,9 @@ function launchWhatsAppSignup(isCoexistence: boolean = true) {
           return
         }
 
-        exchangeCodeForToken(code, phoneNumberId, wabaId)
+        waitForSessionInfo().then((session) => {
+          exchangeCodeForToken(code, session?.phone_number_id, session?.waba_id)
+        })
       } else if (response.error) {
         console.error('Facebook SDK error:', response.error)
         toast.error(`Facebook error: ${response.error.message || 'Unknown error'}`)
@@ -199,7 +263,7 @@ function launchWhatsAppSignup(isCoexistence: boolean = true) {
   )
 }
 
-async function exchangeCodeForToken(code: string, phoneNumberId: string, wabaId: string) {
+async function exchangeCodeForToken(code: string, phoneNumberId?: string, wabaId?: string) {
   try {
     const response = await api.post('/accounts/exchange-token', {
       code,

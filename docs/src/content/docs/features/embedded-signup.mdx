@@ -9,7 +9,7 @@ Embedded Signup is the self-serve way to connect a WhatsApp Business Account (WA
 
 ## What it is
 
-Embedded Signup wraps Meta's official onboarding flow (the **Facebook JS SDK** launching Meta's Embedded Signup dialog). The user grants your Meta app access to their WhatsApp Business Account and phone number; the SDK hands back a short-lived authorization **code**; Whatomate exchanges it for a **permanent access token**, discovers the WABA and phone number behind it, subscribes your app to the account's webhooks, and (for most numbers) registers the phone — all in one round trip.
+Embedded Signup wraps Meta's official onboarding flow (the **Facebook JS SDK** launching Meta's Embedded Signup dialog, version 4). Products and permissions come from your Facebook Login for Business configuration. The user grants your Meta app access to their WhatsApp Business Account and phone number; the SDK hands back a short-lived authorization **code**; Whatomate exchanges it for a **permanent access token**, discovers the WABA and phone number behind it, subscribes your app to the account's webhooks, and (for most numbers) registers the phone — all in one round trip.
 
 <CardGrid>
   <Card title="No manual tokens" icon="approve-check">
@@ -66,7 +66,7 @@ The app secret is deliberately **not** included in this response.
 
 1. **Launch the dialog.** The frontend loads the Facebook JS SDK with the `app_id` and `config_id` from `/api/embedded-signup/config` and opens Meta's Embedded Signup dialog. The user selects (or creates) their WhatsApp Business Account and phone number and grants your app permission.
 
-2. **SDK returns a code.** On success the SDK returns a short-lived authorization `code` (and, usually, the `phone_id` and `waba_id`).
+2. **SDK returns a code and session info.** On success, `FB.login` returns a short-lived authorization `code` (valid for about 30 seconds). The Meta popup also posts a `WA_EMBEDDED_SIGNUP` message to the page with the selected `phone_number_id`, `waba_id` and `business_id`. Whatomate listens for this message (`FINISH`, `FINISH_ONLY_WABA`, `FINISH_WHATSAPP_BUSINESS_APP_ONBOARDING`, `CANCEL`, `ERROR`) and forwards the IDs with the code, so the correct number is connected even when the WABA has several numbers.
 
 3. **Exchange the code.** The frontend posts it to the backend:
 

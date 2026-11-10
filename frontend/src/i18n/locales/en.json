@@ -1401,6 +1401,7 @@
     "classicRecommend": "Perfect for large teams & high-volume bots",
     "selectMode": "Select Mode",
     "connectFacebook": "Connect with Facebook",
+    "embeddedSignupError": "Embedded Signup error: {message}",
     "account": "Account",
     "appId": "App ID",
     "defaults": "Defaults",
