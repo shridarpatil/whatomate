@@ -1054,6 +1054,7 @@
     "goHome": "الرئيسية"
   },
   "profile": {
+    "togglePasswordVisibility": "Toggle password visibility",
     "title": "الملف الشخصي",
     "description": "إدارة إعدادات حسابك",
     "accountInfo": "معلومات الحساب",

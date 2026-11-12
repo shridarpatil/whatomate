@@ -1131,6 +1131,7 @@
     "goHome": "முகப்புக்குச் செல்க"
   },
   "profile": {
+    "togglePasswordVisibility": "Toggle password visibility",
     "title": "சுயவிவரம்",
     "description": "உங்கள் கணக்கு அமைப்புகளை நிர்வகிக்கவும்",
     "accountInfo": "கணக்குத் தகவல்",

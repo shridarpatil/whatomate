@@ -3,12 +3,8 @@ import { ref, computed } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { useAuthStore } from '@/stores/auth'
-import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
-import { Label } from '@/components/ui/label'
-import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card'
 import { toast } from '@/lib/toast'
-import { MessageSquare, Loader2 } from '@/lib/icons'
+import { MessageSquare } from '@/lib/icons'
 
 const { t } = useI18n()
 const router = useRouter()
@@ -65,99 +61,80 @@ const handleRegister = async () => {
 </script>
 
 <template>
-  <div class="min-h-screen flex items-center justify-center bg-gradient-to-br from-gray-900 to-gray-800 light:from-violet-50 light:to-violet-100 p-4">
-    <Card class="w-full max-w-md">
-      <CardHeader class="space-y-1 text-center">
-        <div class="flex justify-center mb-4">
-          <div class="h-12 w-12 rounded-xl bg-primary flex items-center justify-center">
-            <MessageSquare class="h-7 w-7 text-primary-foreground" />
-          </div>
-        </div>
-        <CardTitle class="text-2xl font-bold">{{ $t('auth.createAccount') }}</CardTitle>
-        <CardDescription>
-          {{ $t('auth.createAccountDesc') }}
-        </CardDescription>
-      </CardHeader>
+  <main class="flex items-center justify-center h-screen scroll-y p-4">
+    <div class="row">
+      <div class="col-4 offset-4">
+        <article class="card">
+          <header class="vstack items-center align-center">
+            <MessageSquare :size="32" />
+            <h2>{{ $t('auth.createAccount') }}</h2>
+            <p class="text-light">{{ $t('auth.createAccountDesc') }}</p>
+          </header>
 
-      <!-- No org ID in URL — show invitation required message -->
-      <template v-if="!organizationId">
-        <CardContent>
-          <div class="text-center py-4">
-            <p class="text-sm text-muted-foreground">
-              {{ $t('auth.invitationRequired') }}
+          <!-- No org ID in URL — show invitation required message -->
+          <template v-if="!organizationId">
+            <p class="text-light align-center">{{ $t('auth.invitationRequired') }}</p>
+            <footer>
+              <RouterLink to="/login" class="button outline w-100">{{ $t('auth.signIn') }}</RouterLink>
+            </footer>
+          </template>
+
+          <!-- Has org ID — show registration form -->
+          <form v-else @submit.prevent="handleRegister">
+            <label data-field>
+              {{ $t('auth.fullName') }}
+              <input
+                id="fullName"
+                v-model="fullName"
+                type="text"
+                :placeholder="$t('auth.fullNamePlaceholder')"
+                :disabled="isLoading"
+                autocomplete="name"
+              />
+            </label>
+            <label data-field>
+              {{ $t('common.email') }}
+              <input
+                id="email"
+                v-model="email"
+                type="email"
+                :placeholder="$t('auth.emailPlaceholder')"
+                :disabled="isLoading"
+                autocomplete="email"
+              />
+            </label>
+            <label data-field>
+              {{ $t('auth.password') }}
+              <input
+                id="password"
+                v-model="password"
+                type="password"
+                :placeholder="$t('auth.passwordMinLength')"
+                :disabled="isLoading"
+                autocomplete="new-password"
+              />
+            </label>
+            <label data-field>
+              {{ $t('auth.confirmPassword') }}
+              <input
+                id="confirmPassword"
+                v-model="confirmPassword"
+                type="password"
+                :placeholder="$t('auth.confirmPasswordPlaceholder')"
+                :disabled="isLoading"
+                autocomplete="new-password"
+              />
+            </label>
+            <button type="submit" class="w-100" :disabled="isLoading" :aria-busy="isLoading">
+              {{ $t('auth.createAccountBtn') }}
+            </button>
+            <p class="text-light align-center mt-4">
+              {{ $t('auth.alreadyHaveAccount') }}
+              <RouterLink to="/login">{{ $t('auth.signIn') }}</RouterLink>
             </p>
-          </div>
-        </CardContent>
-        <CardFooter class="flex flex-col space-y-4">
-          <RouterLink to="/login" class="w-full">
-            <Button variant="outline" class="w-full">
-              {{ $t('auth.signIn') }}
-            </Button>
-          </RouterLink>
-        </CardFooter>
-      </template>
-
-      <!-- Has org ID — show registration form -->
-      <form v-else @submit.prevent="handleRegister">
-        <CardContent class="space-y-4">
-          <div class="space-y-2">
-            <Label for="fullName">{{ $t('auth.fullName') }}</Label>
-            <Input
-              id="fullName"
-              v-model="fullName"
-              type="text"
-              :placeholder="$t('auth.fullNamePlaceholder')"
-              :disabled="isLoading"
-              autocomplete="name"
-            />
-          </div>
-          <div class="space-y-2">
-            <Label for="email">{{ $t('common.email') }}</Label>
-            <Input
-              id="email"
-              v-model="email"
-              type="email"
-              :placeholder="$t('auth.emailPlaceholder')"
-              :disabled="isLoading"
-              autocomplete="email"
-            />
-          </div>
-          <div class="space-y-2">
-            <Label for="password">{{ $t('auth.password') }}</Label>
-            <Input
-              id="password"
-              v-model="password"
-              type="password"
-              :placeholder="$t('auth.passwordMinLength')"
-              :disabled="isLoading"
-              autocomplete="new-password"
-            />
-          </div>
-          <div class="space-y-2">
-            <Label for="confirmPassword">{{ $t('auth.confirmPassword') }}</Label>
-            <Input
-              id="confirmPassword"
-              v-model="confirmPassword"
-              type="password"
-              :placeholder="$t('auth.confirmPasswordPlaceholder')"
-              :disabled="isLoading"
-              autocomplete="new-password"
-            />
-          </div>
-        </CardContent>
-        <CardFooter class="flex flex-col space-y-4">
-          <Button type="submit" class="w-full" :disabled="isLoading">
-            <Loader2 v-if="isLoading" class="mr-2 h-4 w-4 animate-spin" />
-            {{ $t('auth.createAccountBtn') }}
-          </Button>
-          <p class="text-sm text-center text-muted-foreground">
-            {{ $t('auth.alreadyHaveAccount') }}
-            <RouterLink to="/login" class="text-primary hover:underline">
-              {{ $t('auth.signIn') }}
-            </RouterLink>
-          </p>
-        </CardFooter>
-      </form>
-    </Card>
-  </div>
+          </form>
+        </article>
+      </div>
+    </div>
+  </main>
 </template>

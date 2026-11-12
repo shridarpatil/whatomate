@@ -1131,6 +1131,7 @@
     "goHome": "होम"
   },
   "profile": {
+    "togglePasswordVisibility": "Toggle password visibility",
     "title": "प्रोफ़ाइल",
     "description": "सेटिंग्स प्रबंधित करें",
     "accountInfo": "खाता जानकारी",

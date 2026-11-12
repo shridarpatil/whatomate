@@ -1144,6 +1144,7 @@
     "goHome": "Ir al inicio"
   },
   "profile": {
+    "togglePasswordVisibility": "Toggle password visibility",
     "title": "Profile",
     "description": "Gestionar la configuración de su cuenta",
     "accountInfo": "Información de la cuenta",

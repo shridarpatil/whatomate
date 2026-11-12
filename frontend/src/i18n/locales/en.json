@@ -1282,6 +1282,7 @@
     "goHome": "Go Home"
   },
   "profile": {
+    "togglePasswordVisibility": "Toggle password visibility",
     "title": "Profile",
     "description": "Manage your account settings",
     "accountInfo": "Account Information",

@@ -1282,6 +1282,7 @@
     "goHome": "Voltar ao Início"
   },
   "profile": {
+    "togglePasswordVisibility": "Toggle password visibility",
     "title": "Perfil",
     "description": "Gerenciar as configurações da sua conta",
     "accountInfo": "Informações da conta",
