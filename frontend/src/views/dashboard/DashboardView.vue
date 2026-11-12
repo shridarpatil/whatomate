@@ -597,13 +597,17 @@ onMounted(() => {
     </PageHeader>
 
     <!-- Content -->
-    <div class="flex-1 scroll-y p-4">
+    <div class="flex-1 scroll-y" data-page-body>
       <!-- Loading Skeleton -->
       <div v-if="isLoading" class="row">
         <div v-for="i in 4" :key="i" class="col-3">
-          <article class="card" aria-busy="true">
-            <div role="status" class="skeleton line"></div>
-            <div role="status" class="skeleton box"></div>
+          <article class="card vstack gap-2" data-widget aria-busy="true">
+            <header class="hstack items-center justify-between gap-2">
+              <div role="status" class="skeleton line" data-size="label"></div>
+              <div role="status" class="skeleton box" data-size="tile"></div>
+            </header>
+            <div role="status" class="skeleton line" data-size="value"></div>
+            <div role="status" class="skeleton line" data-size="hint"></div>
           </article>
         </div>
       </div>
@@ -617,7 +621,12 @@ onMounted(() => {
           :style="{ minHeight: minHeight(p.h) }"
           data-testid="dashboard-widget"
         >
-          <article class="card h-full vstack gap-2">
+          <article
+            class="card h-full vstack gap-2"
+            :data-widget="isNumberWidget(widget) ? 'number' : widget.display_type"
+            :data-widget-color="widget.color"
+            data-hover-group
+          >
             <header class="hstack items-center gap-2">
               <div class="flex-1 min-w-0">
                 <h4 class="truncate">{{ widget.name }}</h4>
@@ -646,46 +655,44 @@ onMounted(() => {
                   <ChevronRight :size="16" />
                 </button>
               </div>
-              <div v-else-if="canEditWidget || canDeleteWidget" class="hstack gap-1">
+              <div v-else-if="canEditWidget || canDeleteWidget" class="hstack gap-1" data-hover-reveal>
                 <button
                   v-if="canEditWidget"
                   type="button"
                   class="ghost icon small"
+                  data-widget-action="edit"
                   :aria-label="$t('dashboard.editWidgetTooltip')"
                   :title="$t('dashboard.editWidgetTooltip')"
                   @click="openEditWidgetDialog(widget)"
                 >
-                  <Pencil :size="14" />
+                  <Pencil :size="12" />
                 </button>
                 <button
                   v-if="canDeleteWidget"
                   type="button"
                   class="ghost icon small"
+                  data-widget-action="delete"
                   :aria-label="$t('dashboard.deleteWidgetTooltip')"
                   :title="$t('dashboard.deleteWidgetTooltip')"
                   @click="openDeleteDialog(widget)"
                 >
-                  <Trash2 :size="14" />
+                  <Trash2 :size="12" />
                 </button>
               </div>
 
-              <component
-                :is="getWidgetIcon(widget.data_source)"
-                v-if="isNumberWidget(widget) || isChartWidget(widget)"
-                :size="20"
-                :color="widgetColor(widget.color)"
-                aria-hidden="true"
-              />
+              <span v-if="isNumberWidget(widget) || isChartWidget(widget)" data-widget-icon aria-hidden="true">
+                <component :is="getWidgetIcon(widget.data_source)" :size="20" />
+              </span>
             </header>
 
             <!-- Number -->
             <template v-if="isNumberWidget(widget)">
               <div v-if="isWidgetDataLoading" role="status" class="skeleton line" aria-busy="true"></div>
-              <h2 v-else>{{ formatNumber(widgetData[widget.id]?.value || 0) }}</h2>
-              <div v-if="widget.show_change && widgetData[widget.id]" class="hstack items-center gap-2">
+              <h2 v-else data-widget-value>{{ formatNumber(widgetData[widget.id]?.value || 0) }}</h2>
+              <small v-if="widget.show_change && widgetData[widget.id]" class="hstack items-center gap-1" data-widget-change>
                 <span
-                  class="badge"
-                  :data-variant="widgetData[widget.id].change > 0 ? 'success' : widgetData[widget.id].change < 0 ? 'danger' : 'secondary'"
+                  class="hstack items-center gap-1"
+                  :data-trend="widgetData[widget.id].change > 0 ? 'up' : widgetData[widget.id].change < 0 ? 'down' : 'flat'"
                 >
                   <component
                     :is="widgetData[widget.id].change > 0 ? TrendingUp : widgetData[widget.id].change < 0 ? TrendingDown : Minus"
@@ -693,8 +700,8 @@ onMounted(() => {
                   />
                   {{ Math.abs(widgetData[widget.id].change || 0).toFixed(1) }}%
                 </span>
-                <small class="text-light">{{ comparisonPeriodLabel }}</small>
-              </div>
+                {{ comparisonPeriodLabel }}
+              </small>
             </template>
 
             <!-- Chart -->
@@ -757,8 +764,8 @@ onMounted(() => {
                 class="unstyled vstack gap-2 scroll-y"
                 :style="{ maxHeight: bodyMaxHeight(p.h) }"
               >
-                <li v-for="row in widgetData[widget.id]?.table_rows" :key="row.id" class="hstack gap-2">
-                  <figure data-variant="avatar" :aria-label="row.label">
+                <li v-for="row in widgetData[widget.id]?.table_rows" :key="row.id" class="hstack gap-2" data-widget-row>
+                  <figure data-variant="avatar" :data-direction="row.direction" :aria-label="row.label">
                     <abbr :title="row.label">{{ row.label.split(' ').map((n: string) => n[0]).join('').slice(0, 2).toUpperCase() }}</abbr>
                   </figure>
                   <div class="flex-1 min-w-0">
@@ -797,9 +804,12 @@ onMounted(() => {
                 >
                   <RouterLink
                     :to="SHORTCUT_REGISTRY[key as keyof typeof SHORTCUT_REGISTRY].to"
-                    class="button outline w-100"
+                    class="vstack items-center justify-center gap-2 w-100"
+                    :data-shortcut="key"
                   >
-                    <component :is="SHORTCUT_REGISTRY[key as keyof typeof SHORTCUT_REGISTRY].icon" :size="16" />
+                    <span data-shortcut-icon aria-hidden="true">
+                      <component :is="SHORTCUT_REGISTRY[key as keyof typeof SHORTCUT_REGISTRY].icon" :size="24" />
+                    </span>
                     {{ SHORTCUT_REGISTRY[key as keyof typeof SHORTCUT_REGISTRY].label }}
                   </RouterLink>
                 </div>
@@ -813,6 +823,7 @@ onMounted(() => {
     <!-- Widget Dialog -->
     <Modal
       v-model:open="isWidgetDialogOpen"
+      data-classic-dialog
       :title="isEditMode ? $t('dashboard.editWidget') : $t('dashboard.createWidget')"
       :description="$t('dashboard.widgetDialogDesc')"
     >
@@ -951,6 +962,7 @@ onMounted(() => {
     <!-- Delete Confirmation Dialog -->
     <Modal
       v-model:open="deleteDialogOpen"
+      data-classic-dialog
       alert
       :title="$t('dashboard.deleteWidgetTitle')"
       :description="$t('dashboard.deleteWidgetConfirm', { name: widgetToDelete?.name })"

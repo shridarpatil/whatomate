@@ -186,4 +186,163 @@
     border-color: transparent;
     border-start-end-radius: 0.375rem;
   }
+
+  /* Page header: the old bar (bottom rule, translucent fill) and the emerald
+     gradient icon tile. Shared by every screen via PageHeader. */
+  [data-page-header] {
+    min-height: 4rem;
+    padding: var(--space-3) var(--space-8);
+    background-color: light-dark(rgb(255 255 255 / 0.95), rgb(10 10 11 / 0.95));
+    border-block-end: 1px solid light-dark(#e5e7eb, rgb(255 255 255 / 0.08));
+    backdrop-filter: blur(8px);
+    h1 { margin: 0; font-size: var(--text-2); font-weight: var(--font-semibold); }
+  }
+  [data-page-icon] {
+    display: inline-flex; align-items: center; justify-content: center; flex-shrink: 0;
+    width: 2rem; height: 2rem; border-radius: 0.5rem; color: #fff;
+    background-image: linear-gradient(to bottom right, #10b981, #16a34a);
+    box-shadow: 0 10px 15px -3px rgb(16 185 129 / 0.2), 0 4px 6px -4px rgb(16 185 129 / 0.2);
+  }
+  [data-page-body] { padding: var(--space-8); }
+
+  /* Dashboard widget cards (old "card-depth" glass card). Colour per widget:
+     --widget-accent (top bar), --widget-tint (icon tile fill), --widget-ink (icon). */
+  .card[data-widget] {
+    --widget-accent: #3b82f6; --widget-tint: #3b82f6; --widget-ink: #60a5fa;
+    --_shadow: light-dark(rgb(0 0 0 / 0.08), rgb(0 0 0 / 0.3));
+    --_shadow-2: light-dark(rgb(0 0 0 / 0.05), rgb(0 0 0 / 0.2));
+    --_inset: light-dark(transparent, rgb(255 255 255 / 0.05));
+    position: relative;
+    overflow: hidden;
+    padding: var(--space-8);
+    border-radius: 0.75rem;
+    background-color: light-dark(#fff, rgb(255 255 255 / 0.04));
+    border-color: light-dark(#e5e7eb, rgb(255 255 255 / 0.08));
+    box-shadow: 0 4px 6px -1px var(--_shadow), 0 2px 4px -2px var(--_shadow-2), inset 0 1px 0 0 var(--_inset);
+    transition: background-color 0.3s, border-color 0.3s, box-shadow 0.3s;
+
+    &:hover {
+      --_shadow: light-dark(rgb(0 0 0 / 0.1), rgb(0 0 0 / 0.4));
+      --_shadow-2: light-dark(rgb(0 0 0 / 0.08), rgb(0 0 0 / 0.3));
+      --_inset: light-dark(transparent, rgb(255 255 255 / 0.08));
+      background-color: light-dark(#f9fafb, rgb(255 255 255 / 0.06));
+      border-color: light-dark(#d1d5db, rgb(255 255 255 / 0.12));
+      box-shadow: 0 10px 15px -3px var(--_shadow), 0 4px 6px -4px var(--_shadow-2), inset 0 1px 0 0 var(--_inset);
+    }
+    /* Green line that sweeps in along the bottom edge on hover. */
+    &::after {
+      content: ""; position: absolute; inset-inline: 0; bottom: 0; height: 2px;
+      background-image: linear-gradient(90deg, #22c55e, #10b981, #059669);
+      transform: scaleX(0); transform-origin: left; transition: transform 0.3s ease;
+    }
+    &:hover::after { transform: scaleX(1); }
+
+    > header h4 { margin: 0; font-size: var(--text-6); font-weight: var(--font-medium); color: light-dark(#6b7280, rgb(255 255 255 / 0.5)); }
+    > header small { color: light-dark(#9ca3af, rgb(255 255 255 / 0.3)); font-size: var(--text-8); }
+  }
+  .card[data-widget="number"] > header { align-items: flex-start; }
+  .card[data-widget="number"]::before {
+    content: ""; position: absolute; inset-inline: 0; top: 0; height: 2px;
+    background-image: linear-gradient(to right, color-mix(in srgb, var(--widget-accent) 60%, transparent), transparent);
+  }
+  [data-widget-color="green"] { --widget-accent: #10b981; --widget-tint: #10b981; --widget-ink: #34d399; }
+  [data-widget-color="purple"] { --widget-accent: #8b5cf6; --widget-tint: #a855f7; --widget-ink: #c084fc; }
+  [data-widget-color="orange"] { --widget-accent: #f59e0b; --widget-tint: #f97316; --widget-ink: #fb923c; }
+  [data-widget-color="red"] { --widget-accent: #f43f5e; --widget-tint: #ef4444; --widget-ink: #f87171; }
+  [data-widget-color="cyan"] { --widget-accent: #06b6d4; --widget-tint: #06b6d4; --widget-ink: #22d3ee; }
+
+  [data-widget-icon] {
+    display: inline-flex; align-items: center; justify-content: center; flex-shrink: 0;
+    width: 2.5rem; height: 2.5rem; border-radius: 0.5rem;
+    color: var(--widget-ink);
+    background-color: color-mix(in srgb, var(--widget-tint) 20%, transparent);
+  }
+  [data-widget-value] { margin: 0; font-size: 1.875rem; line-height: 2.25rem; font-weight: 700; }
+  [data-widget-change] {
+    font-size: var(--text-8); color: light-dark(#6b7280, rgb(255 255 255 / 0.4));
+    [data-trend="up"] { color: #34d399; }
+    [data-trend="down"] { color: #f87171; }
+    [data-trend="flat"] { color: light-dark(#9ca3af, rgb(255 255 255 / 0.3)); }
+  }
+
+  /* Small muted edit/delete icons; delete turns red on hover. */
+  button[data-widget-action].icon.small {
+    width: 1.5rem; height: 1.5rem;
+    color: light-dark(#d1d5db, rgb(255 255 255 / 0.2));
+    --_hov: light-dark(#f3f4f6, rgb(255 255 255 / 0.1));
+    &:hover { color: light-dark(#374151, #fff); }
+  }
+  button[data-widget-action="delete"].icon.small {
+    --_hov: light-dark(#fef2f2, rgb(239 68 68 / 0.1));
+    &:hover { color: light-dark(#dc2626, #f87171); }
+  }
+
+  /* Skeleton card: label, icon tile, value, hint (old sizes). */
+  [data-widget] .skeleton {
+    background-color: light-dark(#e5e7eb, rgb(255 255 255 / 0.08)); margin: 0;
+    &[data-size="label"] { width: 6rem; }
+    &[data-size="tile"] { width: 2.5rem; height: 2.5rem; border-radius: 0.5rem; }
+    &[data-size="value"] { width: 5rem; height: 2rem; }
+    &[data-size="hint"] { width: 8rem; height: 0.75rem; }
+  }
+
+  /* Table widget rows: rounded hover rows with gradient initials tiles. */
+  [data-widget-row] {
+    padding: var(--space-4); border-radius: 0.5rem; transition: background-color 0.2s;
+    &:hover { background-color: light-dark(#f9fafb, rgb(255 255 255 / 0.04)); }
+  }
+  figure[data-variant="avatar"][data-direction] {
+    border-radius: 0.5rem; color: #fff; font-size: var(--text-6); font-weight: var(--font-medium);
+    background-image: linear-gradient(to bottom right, #3b82f6, #0891b2);
+  }
+  figure[data-variant="avatar"][data-direction="incoming"] { background-image: linear-gradient(to bottom right, #10b981, #16a34a); }
+
+  /* Shortcut tiles (old "card-interactive") with a gradient icon square each. */
+  a[data-shortcut] {
+    --from: #10b981; --to: #16a34a;
+    height: 100%; padding: var(--space-6); border-radius: 0.75rem;
+    border: 1px solid light-dark(#e5e7eb, rgb(255 255 255 / 0.08));
+    background-color: light-dark(#f9fafb, rgb(255 255 255 / 0.02));
+    color: var(--foreground); font-size: var(--text-6); font-weight: var(--font-medium); text-align: center; text-decoration: none;
+    transition: transform 0.3s, background-color 0.3s, border-color 0.3s, box-shadow 0.3s;
+    &:hover {
+      transform: translateY(-2px); color: var(--foreground);
+      border-color: light-dark(#d1d5db, rgb(255 255 255 / 0.2));
+      background-color: light-dark(#f9fafb, rgb(255 255 255 / 0.06));
+      box-shadow: 0 25px 50px -12px light-dark(rgb(0 0 0 / 0.1), rgb(0 0 0 / 0.5)),
+        0 0 0 1px light-dark(rgb(0 0 0 / 0.05), rgb(255 255 255 / 0.1)),
+        0 0 30px -5px light-dark(rgb(16 185 129 / 0.1), rgb(16 185 129 / 0.15));
+    }
+  }
+  [data-shortcut-icon] {
+    display: inline-flex; align-items: center; justify-content: center;
+    width: 3rem; height: 3rem; border-radius: 0.5rem; color: #fff;
+    background-image: linear-gradient(to bottom right, var(--from), var(--to));
+    box-shadow: 0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -4px rgb(0 0 0 / 0.1);
+  }
+  [data-shortcut="campaigns"] { --from: #f97316; --to: #d97706; }
+  [data-shortcut="templates"] { --from: #3b82f6; --to: #0891b2; }
+  [data-shortcut="chatbot"] { --from: #a855f7; --to: #db2777; }
+  [data-shortcut="contacts"] { --from: #06b6d4; --to: #2563eb; }
+  [data-shortcut="flows"] { --from: #6366f1; --to: #7c3aed; }
+  [data-shortcut="transfers"] { --from: #f43f5e; --to: #dc2626; }
+  [data-shortcut="agentAnalytics"] { --from: #14b8a6; --to: #0891b2; }
+  [data-shortcut="metaInsights"] { --from: #0ea5e9; --to: #2563eb; }
+  [data-shortcut="settings"] { --from: #6b7280; --to: #52525b; }
+  [data-shortcut="accounts"] { --from: #8b5cf6; --to: #9333ea; }
+  [data-shortcut="cannedResponses"] { --from: #f59e0b; --to: #ca8a04; }
+  [data-shortcut="tags"] { --from: #ec4899; --to: #e11d48; }
+  [data-shortcut="teams"] { --from: #84cc16; --to: #16a34a; }
+  [data-shortcut="users"] { --from: #d946ef; --to: #db2777; }
+  [data-shortcut="roles"] { --from: #64748b; --to: #4b5563; }
+  [data-shortcut="apiKeys"] { --from: #eab308; --to: #ea580c; }
+  [data-shortcut="webhooks"] { --from: #ef4444; --to: #e11d48; }
+  [data-shortcut="customActions"] { --from: #f59e0b; --to: #ea580c; }
+  [data-shortcut="sso"] { --from: #10b981; --to: #0d9488; }
+
+  /* Dashboard dialogs: the old raised surface. */
+  dialog[data-classic-dialog] {
+    background-color: light-dark(#fff, #141414);
+    border-color: light-dark(#e5e7eb, rgb(255 255 255 / 0.08));
+  }
 }
