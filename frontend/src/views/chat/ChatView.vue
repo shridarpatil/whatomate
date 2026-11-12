@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, watch, onMounted, onUnmounted, nextTick, computed, useId } from 'vue'
+import { ref, reactive, watch, onMounted, onUnmounted, nextTick, computed, useId } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { useContactsStore, type Message } from '@/stores/contacts'
@@ -82,6 +82,9 @@ const emojiMenu = ref<HTMLElement | null>(null)
 // Phones show one column at a time: the conversation list, the thread or a side panel.
 const narrowQuery = window.matchMedia('(max-width: 47.99rem)')
 const isNarrow = ref(narrowQuery.matches)
+// Avatar URLs that failed to load; those contacts show initials instead.
+const failedAvatars = reactive(new Set<string>())
+
 function onNarrowChange(e: MediaQueryListEvent) {
   isNarrow.value = e.matches
 }
@@ -509,6 +512,11 @@ function updateStickyDate(scrollContainer: HTMLElement) {
 
 // Watch for route changes
 watch(contactId, async (newId) => {
+  // On phones a side panel replaces the thread; start the next contact on the thread.
+  if (isNarrow.value) {
+    isInfoPanelOpen.value = false
+    isNotesPanelOpen.value = false
+  }
   if (newId) {
     notesStore.notes = []
     notesStore.hasMore = false
@@ -1734,7 +1742,7 @@ async function sendMediaMessage() {
               :aria-current="contactsStore.currentContact?.id === contact.id ? 'true' : undefined"
             >
               <figure data-variant="avatar" class="small shrink-0">
-                <img v-if="contact.avatar_url" :src="contact.avatar_url" alt="" />
+                <img v-if="contact.avatar_url && !failedAvatars.has(contact.avatar_url)" :src="contact.avatar_url" alt="" @error="failedAvatars.add(contact.avatar_url)" />
                 <abbr v-else>{{ getInitials(contact.name || contact.phone_number) }}</abbr>
               </figure>
               <span class="flex flex-col flex-1 min-w-0 align-left">
@@ -1794,7 +1802,12 @@ async function sendMediaMessage() {
               <ArrowLeft />
             </RouterLink>
             <figure data-variant="avatar" class="small shrink-0">
-              <img v-if="contactsStore.currentContact.avatar_url" :src="contactsStore.currentContact.avatar_url" alt="" />
+              <img
+                v-if="contactsStore.currentContact.avatar_url && !failedAvatars.has(contactsStore.currentContact.avatar_url)"
+                :src="contactsStore.currentContact.avatar_url"
+                alt=""
+                @error="failedAvatars.add(contactsStore.currentContact.avatar_url)"
+              />
               <abbr v-else>{{ getInitials(contactsStore.currentContact.name || contactsStore.currentContact.phone_number) }}</abbr>
             </figure>
             <div class="min-w-0">
@@ -2342,7 +2355,9 @@ async function sendMediaMessage() {
           </div>
 
           <!-- Message Input -->
-          <form class="flex items-center gap-1" @submit.prevent="sendMessage">
+          <!-- Only the textarea and Send live in the <form>: picker search boxes
+               must not trigger implicit submission (Enter would send the draft). -->
+          <div class="flex items-center gap-1">
             <ot-dropdown>
               <button
                 type="button"
@@ -2394,26 +2409,28 @@ async function sendMediaMessage() {
               hidden
               @change="handleFileSelect"
             />
-            <textarea
-              ref="messageInputRef"
-              v-model="messageInput"
-              class="flex-1 min-w-0 min-h-0"
-              :placeholder="$t('chat.typeMessage') + '...'"
-              :aria-label="$t('chat.typeMessage')"
-              rows="1"
-              @keydown.enter.exact.prevent="sendMessage"
-              @input="autoResizeTextarea"
-            />
-            <button
-              type="submit"
-              class="icon shrink-0"
-              :title="$t('chat.send')"
-              :aria-label="$t('chat.send')"
-              :disabled="!messageInput.trim() || isSending"
-            >
-              <Send />
-            </button>
-          </form>
+            <form class="flex-1 min-w-0 flex items-center gap-1" @submit.prevent="sendMessage">
+              <textarea
+                ref="messageInputRef"
+                v-model="messageInput"
+                class="flex-1 min-w-0 min-h-0"
+                :placeholder="$t('chat.typeMessage') + '...'"
+                :aria-label="$t('chat.typeMessage')"
+                rows="1"
+                @keydown.enter.exact.prevent="sendMessage"
+                @input="autoResizeTextarea"
+              />
+              <button
+                type="submit"
+                class="icon shrink-0"
+                :title="$t('chat.send')"
+                :aria-label="$t('chat.send')"
+                :disabled="!messageInput.trim() || isSending"
+              >
+                <Send />
+              </button>
+            </form>
+          </div>
         </footer>
       </template>
     </section>
@@ -2430,6 +2447,7 @@ async function sendMediaMessage() {
       v-if="contactsStore.currentContact && isInfoPanelOpen"
       :contact="contactsStore.currentContact"
       :session-data="contactSessionData"
+      :narrow="isNarrow"
       @close="isInfoPanelOpen = false"
       @tags-updated="(tags) => contactsStore.updateContactTags(contactsStore.currentContact!.id, tags)"
     />

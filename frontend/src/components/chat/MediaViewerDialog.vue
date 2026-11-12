@@ -205,7 +205,8 @@ function closeOnBackdrop() { open.value = false }
           <ChevronLeft :size="24" />
         </button>
 
-        <!-- Stage: click empty space to close -->
+        <!-- Stage: click empty space to close. Media renders only while open, so a
+             closed viewer neither keeps a video playing nor preloads items. -->
         <div
           class="flex-1 min-w-0 flex items-center justify-center overflow-hidden h-builder"
           :aria-busy="currentKind === 'pdf' && pdfLoading ? 'true' : undefined"
@@ -214,7 +215,7 @@ function closeOnBackdrop() { open.value = false }
         >
           <!-- Image / sticker -->
           <img
-            v-if="current && currentKind === 'image'"
+            v-if="open && current && currentKind === 'image'"
             :src="currentUrl"
             :alt="filename || 'Image'"
             class="media-fit"
@@ -230,14 +231,14 @@ function closeOnBackdrop() { open.value = false }
 
           <!-- Video -->
           <video
-            v-else-if="current && currentKind === 'video'"
+            v-else-if="open && current && currentKind === 'video'"
             :src="currentUrl"
             controls
             class="media-fit"
           />
 
           <!-- PDF -->
-          <template v-else-if="current && currentKind === 'pdf'">
+          <template v-else-if="open && current && currentKind === 'pdf'">
             <iframe
               v-if="pdfBlobUrl"
               :src="pdfBlobUrl"
@@ -259,7 +260,7 @@ function closeOnBackdrop() { open.value = false }
           </template>
 
           <!-- Other documents (docx, xlsx, …): no inline viewer -->
-          <div v-else-if="current" class="vstack items-center align-center min-w-0">
+          <div v-else-if="open && current" class="vstack items-center align-center min-w-0">
             <FileText :size="48" />
             <p class="truncate w-100">{{ filename }}</p>
             <div class="hstack gap-2 justify-center">

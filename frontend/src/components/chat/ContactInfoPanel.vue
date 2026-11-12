@@ -44,6 +44,8 @@ interface SessionData {
 const props = defineProps<{
   contact: Contact
   sessionData?: SessionData | null
+  /** Phone layout: the panel fills the screen and is not resizable. */
+  narrow?: boolean
 }>()
 
 const emit = defineEmits<{
@@ -61,6 +63,8 @@ const isUpdatingTags = ref(false)
 const MIN_WIDTH = 280
 const MAX_WIDTH = 480
 const panelWidth = ref(MAX_WIDTH) // Default to max width
+const avatarFailed = ref(false)
+watch(() => props.contact.avatar_url, () => { avatarFailed.value = false })
 
 // Check if user can edit tags
 const canEditTags = computed(() => authStore.hasPermission('contacts', 'write'))
@@ -216,9 +220,9 @@ async function updateContactTags(tags: string[]) {
 </script>
 
 <template>
-  <div class="flex h-full min-h-0 chat-col" :style="{ width: `${panelWidth}px` }">
+  <div class="flex h-full min-h-0 chat-col" :style="narrow ? undefined : { width: `${panelWidth}px` }">
     <!-- Resize handle: drag left to widen -->
-    <div class="resize-handle" role="separator" aria-orientation="vertical" @mousedown="startResize" />
+    <div v-if="!narrow" class="resize-handle" role="separator" aria-orientation="vertical" @mousedown="startResize" />
 
     <article data-testid="contact-info" class="card p-4 flex-1 min-w-0 flex flex-col min-h-0 gap-4">
       <header class="hstack justify-between shrink-0">
@@ -232,7 +236,7 @@ async function updateContactTags(tags: string[]) {
         <!-- Contact Header -->
         <div class="vstack gap-1 items-center align-center">
           <figure data-variant="avatar" class="large">
-            <img v-if="contact.avatar_url" :src="contact.avatar_url" alt="" />
+            <img v-if="contact.avatar_url && !avatarFailed" :src="contact.avatar_url" alt="" @error="avatarFailed = true" />
             <abbr v-else>{{ getInitials(contact.name || contact.phone_number) }}</abbr>
           </figure>
           <strong>{{ contact.name || contact.phone_number }}</strong>
