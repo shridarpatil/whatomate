@@ -1,0 +1,31 @@
+@layer components {
+  [role="alert"] {
+    position: relative;
+    display: flex;
+    gap: var(--space-3);
+    padding: var(--space-4) var(--space-6);
+    background-color: var(--background);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-medium);
+    font-size: var(--text-7);
+    border-left-width: var(--space-2);
+    border-left-color: var(--border);
+
+    &[data-variant] {
+      border-width: 0 0 0 var(--space-2);
+    }
+
+    &:is([data-variant="error"], [data-variant="danger"], [data-variant="success"], [data-variant="warning"]) {
+      color: var(--_variant-color);
+      border-left-color: var(--_variant-color);
+      background-color: light-dark(
+        color-mix(in srgb, var(--_variant-color) 8%, transparent),
+        color-mix(in srgb, var(--_variant-color) 20%, transparent)
+      );
+
+      & a {
+        color: var(--_variant-color);
+      }
+    }
+  }
+}

@@ -1,0 +1,39 @@
+@layer components {
+  [role="status"].skeleton {
+    --_c: light-dark(
+      color-mix(in srgb, var(--muted) 15%, white),
+      color-mix(in srgb, var(--muted) 90%, var(--foreground))
+    );
+
+    margin-block-end: var(--space-3);
+    background: var(--muted);
+    border-radius: var(--radius-medium);
+    animation: anim 2s infinite;
+    background-size: 200% 100%;
+    background-image: linear-gradient(
+      90deg,
+      var(--muted) 0%,
+      var(--_c) 50%,
+      var(--muted) 100%
+    );
+
+    &.box {
+      width: 4rem;
+      height: 4rem;
+    }
+
+    &.line {
+      height: 1rem;
+      width: 100%;
+    }
+  }
+
+  [role="status"].skeleton:last-child {
+    margin-block-end: 0;
+  }
+
+  @keyframes anim {
+    from { background-position: 200% 0; }
+    to { background-position: -200% 0; }
+  }
+}

@@ -6,7 +6,7 @@ import compression from 'vite-plugin-compression'
 export default defineConfig({
   base: './',
   plugins: [
-    vue(),
+    vue({ template: { compilerOptions: { isCustomElement: tag => tag.startsWith('ot-') } } }),
     // Gzip compression
     compression({
       algorithm: 'gzip',
@@ -26,6 +26,7 @@ export default defineConfig({
     }
   },
   build: {
+    target: ['chrome123', 'edge123', 'firefox120', 'safari17.5'],
     rollupOptions: {
       output: {
         manualChunks: {

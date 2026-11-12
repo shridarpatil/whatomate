@@ -4,6 +4,10 @@ import type { Node, Edge, NodeMouseEvent, Connection, EdgeMouseEvent } from '@vu
 import { Background } from '@vue-flow/background'
 import { Controls } from '@vue-flow/controls'
 import { MiniMap } from '@vue-flow/minimap'
+import '@vue-flow/core/dist/style.css'
+import '@vue-flow/core/dist/theme-default.css'
+import '@vue-flow/controls/dist/style.css'
+import '@vue-flow/minimap/dist/style.css'
 
 withDefaults(
   defineProps<{
@@ -66,7 +70,7 @@ defineEmits<{
       @edges-change="$emit('edges-change', $event)"
     >
       <Background
-        pattern-color="hsl(var(--muted-foreground) / 0.15)"
+        pattern-color="hsl(var(--sh-muted-foreground) / 0.15)"
         :gap="20"
         :size="1"
         variant="dots"
@@ -77,27 +81,3 @@ defineEmits<{
     </VueFlow>
   </div>
 </template>
-
-<style>
-@import '@vue-flow/core/dist/style.css';
-@import '@vue-flow/core/dist/theme-default.css';
-@import '@vue-flow/controls/dist/style.css';
-@import '@vue-flow/minimap/dist/style.css';
-
-.vue-flow__edge-textbg {
-  fill: transparent;
-}
-
-.selected-node {
-  outline: none;
-  border-radius: 0.5rem;
-  box-shadow:
-    0 0 0 2px hsl(var(--background)),
-    0 0 0 4px hsl(var(--primary)),
-    0 0 16px hsl(var(--primary) / 0.35);
-}
-
-.selected-node .base-node {
-  border-color: hsl(var(--primary));
-}
-</style>

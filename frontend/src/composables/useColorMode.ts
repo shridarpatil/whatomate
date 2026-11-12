@@ -5,16 +5,19 @@ export type ColorMode = 'light' | 'dark' | 'system'
 const colorMode = ref<ColorMode>('dark')
 const isDark = ref(true)
 
+export function resolveScheme(mode: ColorMode, systemDark: boolean): 'light' | 'dark' {
+  if (mode === 'system') return systemDark ? 'dark' : 'light'
+  return mode
+}
+
 function getSystemTheme(): boolean {
   return window.matchMedia('(prefers-color-scheme: dark)').matches
 }
 
 function updateTheme() {
-  if (colorMode.value === 'system') {
-    isDark.value = getSystemTheme()
-  } else {
-    isDark.value = colorMode.value === 'dark'
-  }
+  const scheme = resolveScheme(colorMode.value, getSystemTheme())
+  isDark.value = scheme === 'dark'
+  document.documentElement.style.colorScheme = scheme
 
   // Dark-first: we use .light class for light mode, .dark class for dark mode
   if (isDark.value) {

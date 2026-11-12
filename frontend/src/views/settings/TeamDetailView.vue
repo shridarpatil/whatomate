@@ -8,7 +8,7 @@ import { useAuthStore } from '@/stores/auth'
 import { teamsService, type Team, type TeamMember } from '@/services/api'
 import { toast } from 'vue-sonner'
 import { ASSIGNMENT_STRATEGIES } from '@/lib/constants'
-import { useDebounceFn } from '@vueuse/core'
+import { debounce } from '@/lib/utils'
 import { useUnsavedChangesGuard } from '@/composables/useUnsavedChangesGuard'
 import DetailPageLayout from '@/components/shared/DetailPageLayout.vue'
 import MetadataPanel from '@/components/shared/MetadataPanel.vue'
@@ -215,7 +215,7 @@ async function searchUsers() {
   await usersStore.fetchUsers({ search: memberSearch.value || undefined, limit: 20 })
 }
 
-const debouncedSearchUsers = useDebounceFn(searchUsers, 300)
+const debouncedSearchUsers = debounce(searchUsers, 300)
 
 watch(memberSearch, () => debouncedSearchUsers())
 

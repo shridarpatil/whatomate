@@ -11,7 +11,7 @@ import { toast } from 'vue-sonner'
 import { PageHeader, DataTable, DeleteConfirmDialog, SearchInput, IconButton, ErrorState, type Column } from '@/components/shared'
 import { getErrorMessage } from '@/lib/api-utils'
 import { Plus, Pencil, Trash2, Sparkles } from 'lucide-vue-next'
-import { useDebounceFn } from '@vueuse/core'
+import { debounce } from '@/lib/utils'
 
 const { t } = useI18n()
 
@@ -95,7 +95,7 @@ async function fetchContexts() {
 }
 
 // Debounced search to avoid too many API calls
-const debouncedSearch = useDebounceFn(() => {
+const debouncedSearch = debounce(() => {
   currentPage.value = 1
   fetchContexts()
 }, 300)

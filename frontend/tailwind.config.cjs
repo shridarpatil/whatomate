@@ -3,6 +3,7 @@ const defaultTheme = require('tailwindcss/defaultTheme')
 
 module.exports = {
   darkMode: ["class"],
+  corePlugins: { preflight: false },
   // Add light mode variant for dark-first design
   plugins: [
     require("tailwindcss-animate"),
@@ -27,38 +28,38 @@ module.exports = {
   			sans: ['Inter', ...defaultTheme.fontFamily.sans],
   		},
   		colors: {
-  			border: 'hsl(var(--border))',
-  			input: 'hsl(var(--input))',
-  			ring: 'hsl(var(--ring))',
-  			background: 'hsl(var(--background))',
-  			foreground: 'hsl(var(--foreground))',
+  			border: 'hsl(var(--sh-border))',
+  			input: 'hsl(var(--sh-input))',
+  			ring: 'hsl(var(--sh-ring))',
+  			background: 'hsl(var(--sh-background))',
+  			foreground: 'hsl(var(--sh-foreground))',
   			primary: {
-  				DEFAULT: 'hsl(var(--primary))',
-  				foreground: 'hsl(var(--primary-foreground))'
+  				DEFAULT: 'hsl(var(--sh-primary))',
+  				foreground: 'hsl(var(--sh-primary-foreground))'
   			},
   			secondary: {
-  				DEFAULT: 'hsl(var(--secondary))',
-  				foreground: 'hsl(var(--secondary-foreground))'
+  				DEFAULT: 'hsl(var(--sh-secondary))',
+  				foreground: 'hsl(var(--sh-secondary-foreground))'
   			},
   			destructive: {
-  				DEFAULT: 'hsl(var(--destructive))',
-  				foreground: 'hsl(var(--destructive-foreground))'
+  				DEFAULT: 'hsl(var(--sh-destructive))',
+  				foreground: 'hsl(var(--sh-destructive-foreground))'
   			},
   			muted: {
-  				DEFAULT: 'hsl(var(--muted))',
-  				foreground: 'hsl(var(--muted-foreground))'
+  				DEFAULT: 'hsl(var(--sh-muted))',
+  				foreground: 'hsl(var(--sh-muted-foreground))'
   			},
   			accent: {
-  				DEFAULT: 'hsl(var(--accent))',
-  				foreground: 'hsl(var(--accent-foreground))'
+  				DEFAULT: 'hsl(var(--sh-accent))',
+  				foreground: 'hsl(var(--sh-accent-foreground))'
   			},
   			popover: {
-  				DEFAULT: 'hsl(var(--popover))',
-  				foreground: 'hsl(var(--popover-foreground))'
+  				DEFAULT: 'hsl(var(--sh-popover))',
+  				foreground: 'hsl(var(--sh-popover-foreground))'
   			},
   			card: {
-  				DEFAULT: 'hsl(var(--card))',
-  				foreground: 'hsl(var(--card-foreground))'
+  				DEFAULT: 'hsl(var(--sh-card))',
+  				foreground: 'hsl(var(--sh-card-foreground))'
   			},
   			whatsapp: {
   				green: '#25D366',
@@ -94,9 +95,9 @@ module.exports = {
   			}
   		},
   		borderRadius: {
-  			lg: 'var(--radius)',
-  			md: 'calc(var(--radius) - 2px)',
-  			sm: 'calc(var(--radius) - 4px)'
+  			lg: 'var(--sh-radius)',
+  			md: 'calc(var(--sh-radius) - 2px)',
+  			sm: 'calc(var(--sh-radius) - 4px)'
   		},
   		keyframes: {
   			'accordion-down': {

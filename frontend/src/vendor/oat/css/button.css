@@ -1,0 +1,146 @@
+@layer base {
+  :is(button, [type=submit], [type=reset], [type=button], a.button), ::file-selector-button {
+    --_hov: color-mix(in srgb, var(--primary), var(--background) 20%);
+
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: var(--space-2);
+    padding: var(--space-2) var(--space-4);
+    font-family: inherit;
+    font-size: var(--text-7);
+    font-weight: var(--font-medium);
+    line-height: var(--leading-normal);
+    white-space: nowrap;
+    text-decoration: none;
+    background-color: var(--primary);
+    color: var(--primary-foreground);
+    border-radius: var(--radius-medium);
+    border: 1px solid;
+    border-color: rgb(255 255 255 / 0.12) rgb(0 0 0 / 0.08) rgb(0 0 0 / 0.16);
+    transition: background-color var(--transition-fast), border-color var(--transition-fast), color var(--transition-fast), opacity var(--transition-fast), transform var(--transition-fast);
+
+    &:not(:disabled) {
+      cursor: pointer;
+    }
+
+    &:hover:not(:disabled) {
+      background-color: var(--_hov);
+    }
+
+    &:active:not(:disabled) {
+      transform: translate(1px, 1px);
+    }
+
+    &[data-variant="secondary"] {
+      --_hov: color-mix(in srgb, var(--secondary), var(--secondary-foreground) 6%);
+      background-color: var(--secondary);
+      color: var(--secondary-foreground);
+      border-color: color-mix(in srgb, var(--secondary), var(--secondary-foreground) 7%);
+      border-right-color: rgb(0 0 0 / 0.1);
+      border-bottom-color: rgb(0 0 0 / 0.1);
+    }
+
+    &[data-variant="danger"] {
+      --_hov: color-mix(in srgb, var(--danger), black 15%);
+      background-color: var(--danger);
+      color: var(--danger-foreground);
+    }
+
+    &:is(.outline, .ghost) {
+      --_hov: var(--accent);
+      background-color: transparent;
+      color: var(--foreground);
+
+      &[data-variant="danger"] {
+        --_hov: color-mix(in srgb, var(--danger), transparent 90%);
+        color: var(--danger);
+      }
+
+      &[data-variant="secondary"] {
+        --_hov: color-mix(in srgb, var(--secondary), transparent 80%);
+        color: var(--secondary-foreground);
+      }
+    }
+
+    &.outline {
+      border-color: var(--border);
+
+      &[data-variant="danger"] {
+        border-color: var(--danger);
+      }
+
+      &[data-variant="secondary"] {
+        border-color: var(--secondary);
+      }
+    }
+
+    &.ghost {
+      /* Same as .outline but no border. */
+      border-color: transparent;
+    }
+
+    &.small {
+      padding: var(--space-1) var(--space-3);
+      font-size: var(--text-8);
+    }
+
+    &.large {
+      height: 3rem;
+      padding: 0 var(--space-6);
+      font-size: var(--text-regular);
+    }
+
+    &.icon {
+      width: 2.5rem;
+      padding: 0;
+
+      &.small {
+        width: 2rem;
+      }
+
+      &.large {
+        width: 3rem;
+      }
+    }
+  }
+
+  ::file-selector-button {
+    background-color: transparent;
+    color: var(--foreground);
+    border: 1px solid var(--border);
+  }
+  ::file-selector-button:hover {
+    /* pseudoelement:hover can't be nested and has to be a separate block. */
+    background-color: var(--accent);
+  }
+}
+
+@layer components {
+  menu.buttons {
+    list-style-type: none;
+    padding-inline-start: 0;
+    display: inline-flex;
+
+    /* In menu.buttons, <li> children are expected to have just one child, which is a button/or a.button */
+    & > li {
+      &:first-child > * {
+        border-start-start-radius: var(--radius-medium);
+        border-end-start-radius: var(--radius-medium);
+      }
+
+      &:last-child > * {
+        border-start-end-radius: var(--radius-medium);
+        border-end-end-radius: var(--radius-medium);
+      }
+
+      & > * {
+        border-radius: 0;
+      }
+
+      &:not(:last-child) > * {
+        border-inline-end: 1px solid rgb(from var(--primary-foreground) r g b / 0.2);
+      }
+    }
+  }
+}

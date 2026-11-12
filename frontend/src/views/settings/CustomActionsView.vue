@@ -17,8 +17,7 @@ import { PageHeader, DataTable, SearchInput, DeleteConfirmDialog, ConfirmDialog,
 import { toast } from 'vue-sonner'
 import { Plus, Trash2, Pencil, Zap, Loader2, Globe, Webhook, Code, Ticket, User, BarChart, Link, Phone, Mail, FileText, ExternalLink } from 'lucide-vue-next'
 import { getErrorMessage } from '@/lib/api-utils'
-import { formatDate } from '@/lib/utils'
-import { useDebounceFn } from '@vueuse/core'
+import { debounce, formatDate } from '@/lib/utils'
 
 const { t } = useI18n()
 
@@ -93,7 +92,7 @@ async function fetchActions() {
 }
 
 // Debounced search
-const debouncedSearch = useDebounceFn(() => {
+const debouncedSearch = debounce(() => {
   currentPage.value = 1
   fetchActions()
 }, 300)

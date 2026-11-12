@@ -1,0 +1,16 @@
+@layer layout {
+  .scroll-y { overflow-y: auto; min-height: 0; }
+  .scroll-x { overflow-x: auto; }
+  .overflow-hidden { overflow: hidden; }
+  .h-full { height: 100%; }
+  .h-screen { height: 100dvh; }
+  .min-h-0 { min-height: 0; }
+  .min-w-0 { min-width: 0; }
+  .flex-1 { flex: 1 1 0%; }
+  .shrink-0 { flex-shrink: 0; }
+  .flex-wrap { flex-wrap: wrap; }
+  .sticky-top { position: sticky; top: 0; z-index: 1; }
+  .relative { position: relative; }
+  .absolute-fill { position: absolute; inset: 0; }
+  .truncate { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+}

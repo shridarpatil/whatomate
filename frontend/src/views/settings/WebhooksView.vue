@@ -13,8 +13,7 @@ import { PageHeader, DataTable, SearchInput, DeleteConfirmDialog, ConfirmDialog,
 import { toast } from 'vue-sonner'
 import { Plus, Trash2, Pencil, Webhook as WebhookIcon, Play } from 'lucide-vue-next'
 import { getErrorMessage } from '@/lib/api-utils'
-import { formatDate } from '@/lib/utils'
-import { useDebounceFn } from '@vueuse/core'
+import { debounce, formatDate } from '@/lib/utils'
 
 const { t } = useI18n()
 
@@ -73,7 +72,7 @@ async function fetchWebhooks() {
   finally { isLoading.value = false }
 }
 
-const debouncedSearch = useDebounceFn(() => {
+const debouncedSearch = debounce(() => {
   currentPage.value = 1
   fetchWebhooks()
 }, 300)

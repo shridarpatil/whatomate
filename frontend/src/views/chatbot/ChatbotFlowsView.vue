@@ -12,7 +12,7 @@ import { toast } from 'vue-sonner'
 import { PageHeader, DataTable, DeleteConfirmDialog, SearchInput, IconButton, ErrorState, type Column } from '@/components/shared'
 import { getErrorMessage } from '@/lib/api-utils'
 import { Plus, Pencil, Trash2, Workflow } from 'lucide-vue-next'
-import { useDebounceFn } from '@vueuse/core'
+import { debounce } from '@/lib/utils'
 
 const { t } = useI18n()
 
@@ -78,7 +78,7 @@ async function fetchFlows() {
 }
 
 // Debounced search
-const debouncedSearch = useDebounceFn(() => {
+const debouncedSearch = debounce(() => {
   currentPage.value = 1
   fetchFlows()
 }, 300)

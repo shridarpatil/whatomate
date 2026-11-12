@@ -14,9 +14,8 @@ import { type Team } from '@/services/api'
 import { toast } from 'vue-sonner'
 import { Plus, Pencil, Trash2, Users, RotateCcw, Scale, Hand } from 'lucide-vue-next'
 import { getErrorMessage } from '@/lib/api-utils'
-import { formatDate } from '@/lib/utils'
+import { debounce, formatDate } from '@/lib/utils'
 import { ASSIGNMENT_STRATEGIES, getLabelFromValue } from '@/lib/constants'
-import { useDebounceFn } from '@vueuse/core'
 
 const { t } = useI18n()
 
@@ -47,7 +46,7 @@ const canWriteTeams = computed(() => authStore.hasPermission('teams', 'write'))
 const canDeleteTeams = computed(() => authStore.hasPermission('teams', 'delete'))
 const breadcrumbs = computed(() => [{ label: t('nav.settings'), href: '/settings' }, { label: t('nav.teams') }])
 
-const debouncedSearch = useDebounceFn(() => {
+const debouncedSearch = debounce(() => {
   currentPage.value = 1
   fetchTeams()
 }, 300)

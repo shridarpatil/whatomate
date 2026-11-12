@@ -6,35 +6,35 @@
   /* Dark-first: Linear/Vercel inspired dark mode */
   :root {
     /* True black background like Linear/Vercel */
-    --background: 0 0% 2.5%;
-    --foreground: 0 0% 98%;
+    --sh-background: 0 0% 2.5%;
+    --sh-foreground: 0 0% 98%;
 
     /* Glass morphism cards - slightly transparent */
-    --card: 0 0% 5%;
-    --card-foreground: 0 0% 98%;
-    --popover: 0 0% 7%;
-    --popover-foreground: 0 0% 98%;
+    --sh-card: 0 0% 5%;
+    --sh-card-foreground: 0 0% 98%;
+    --sh-popover: 0 0% 7%;
+    --sh-popover-foreground: 0 0% 98%;
 
     /* Emerald green primary (WhatsApp style) */
-    --primary: 160 84% 39%;
-    --primary-foreground: 0 0% 100%;
+    --sh-primary: 160 84% 39%;
+    --sh-primary-foreground: 0 0% 100%;
 
     /* Subtle secondary/muted for glass effect */
-    --secondary: 0 0% 8%;
-    --secondary-foreground: 0 0% 90%;
-    --muted: 0 0% 10%;
-    --muted-foreground: 0 0% 55%;
-    --accent: 0 0% 10%;
-    --accent-foreground: 0 0% 98%;
+    --sh-secondary: 0 0% 8%;
+    --sh-secondary-foreground: 0 0% 90%;
+    --sh-muted: 0 0% 10%;
+    --sh-muted-foreground: 0 0% 55%;
+    --sh-accent: 0 0% 10%;
+    --sh-accent-foreground: 0 0% 98%;
 
-    --destructive: 0 72% 51%;
-    --destructive-foreground: 0 0% 100%;
+    --sh-destructive: 0 72% 51%;
+    --sh-destructive-foreground: 0 0% 100%;
 
     /* Subtle borders - key for Linear look */
-    --border: 0 0% 12%;
-    --input: 0 0% 12%;
-    --ring: 160 84% 39%;
-    --radius: 0.75rem;
+    --sh-border: 0 0% 12%;
+    --sh-input: 0 0% 12%;
+    --sh-ring: 160 84% 39%;
+    --sh-radius: 0.75rem;
 
     /* Glass effect utilities */
     --glass-bg: rgba(255, 255, 255, 0.03);
@@ -44,25 +44,25 @@
 
   /* Light mode - clean white like Vercel */
   .light {
-    --background: 0 0% 98%;
-    --foreground: 0 0% 9%;
-    --card: 0 0% 100%;
-    --card-foreground: 0 0% 9%;
-    --popover: 0 0% 100%;
-    --popover-foreground: 0 0% 9%;
-    --primary: 160 84% 39%;
-    --primary-foreground: 0 0% 100%;
-    --secondary: 0 0% 96%;
-    --secondary-foreground: 0 0% 9%;
-    --muted: 0 0% 96%;
-    --muted-foreground: 0 0% 45%;
-    --accent: 0 0% 96%;
-    --accent-foreground: 0 0% 9%;
-    --destructive: 0 72% 51%;
-    --destructive-foreground: 0 0% 100%;
-    --border: 0 0% 90%;
-    --input: 0 0% 90%;
-    --ring: 160 84% 39%;
+    --sh-background: 0 0% 98%;
+    --sh-foreground: 0 0% 9%;
+    --sh-card: 0 0% 100%;
+    --sh-card-foreground: 0 0% 9%;
+    --sh-popover: 0 0% 100%;
+    --sh-popover-foreground: 0 0% 9%;
+    --sh-primary: 160 84% 39%;
+    --sh-primary-foreground: 0 0% 100%;
+    --sh-secondary: 0 0% 96%;
+    --sh-secondary-foreground: 0 0% 9%;
+    --sh-muted: 0 0% 96%;
+    --sh-muted-foreground: 0 0% 45%;
+    --sh-accent: 0 0% 96%;
+    --sh-accent-foreground: 0 0% 9%;
+    --sh-destructive: 0 72% 51%;
+    --sh-destructive-foreground: 0 0% 100%;
+    --sh-border: 0 0% 90%;
+    --sh-input: 0 0% 90%;
+    --sh-ring: 160 84% 39%;
 
     /* Glass effect utilities for light mode */
     --glass-bg: rgba(0, 0, 0, 0.02);
@@ -72,25 +72,25 @@
 
   /* Legacy dark class support */
   .dark {
-    --background: 0 0% 2.5%;
-    --foreground: 0 0% 98%;
-    --card: 0 0% 5%;
-    --card-foreground: 0 0% 98%;
-    --popover: 0 0% 7%;
-    --popover-foreground: 0 0% 98%;
-    --primary: 160 84% 39%;
-    --primary-foreground: 0 0% 100%;
-    --secondary: 0 0% 8%;
-    --secondary-foreground: 0 0% 90%;
-    --muted: 0 0% 10%;
-    --muted-foreground: 0 0% 55%;
-    --accent: 0 0% 10%;
-    --accent-foreground: 0 0% 98%;
-    --destructive: 0 72% 51%;
-    --destructive-foreground: 0 0% 100%;
-    --border: 0 0% 12%;
-    --input: 0 0% 12%;
-    --ring: 160 84% 39%;
+    --sh-background: 0 0% 2.5%;
+    --sh-foreground: 0 0% 98%;
+    --sh-card: 0 0% 5%;
+    --sh-card-foreground: 0 0% 98%;
+    --sh-popover: 0 0% 7%;
+    --sh-popover-foreground: 0 0% 98%;
+    --sh-primary: 160 84% 39%;
+    --sh-primary-foreground: 0 0% 100%;
+    --sh-secondary: 0 0% 8%;
+    --sh-secondary-foreground: 0 0% 90%;
+    --sh-muted: 0 0% 10%;
+    --sh-muted-foreground: 0 0% 55%;
+    --sh-accent: 0 0% 10%;
+    --sh-accent-foreground: 0 0% 98%;
+    --sh-destructive: 0 72% 51%;
+    --sh-destructive-foreground: 0 0% 100%;
+    --sh-border: 0 0% 12%;
+    --sh-input: 0 0% 12%;
+    --sh-ring: 160 84% 39%;
 
     /* Glass effect utilities */
     --glass-bg: rgba(255, 255, 255, 0.03);
@@ -164,12 +164,12 @@
 }
 
 ::-webkit-scrollbar-thumb {
-  background: hsl(var(--muted-foreground) / 0.3);
+  background: hsl(var(--sh-muted-foreground) / 0.3);
   border-radius: 3px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: hsl(var(--muted-foreground) / 0.5);
+  background: hsl(var(--sh-muted-foreground) / 0.5);
 }
 
 /* Glass effect utility classes */
@@ -514,7 +514,7 @@
 /* Message highlight animation for scroll-to */
 @keyframes highlight-pulse {
   0%, 100% { background-color: transparent; }
-  50% { background-color: hsl(var(--primary) / 0.15); }
+  50% { background-color: hsl(var(--sh-primary) / 0.15); }
 }
 
 .highlight-message {
@@ -624,7 +624,7 @@
   height: 50%;
   width: 3px;
   border-radius: 0 3px 3px 0;
-  background: hsl(var(--primary));
+  background: hsl(var(--sh-primary));
   opacity: 0;
   transform: scaleY(0);
   transition: opacity 0.2s ease, transform 0.2s ease;
@@ -702,7 +702,7 @@
   position: absolute;
   inset: -2px;
   border-radius: 9999px;
-  background: linear-gradient(135deg, hsl(var(--primary)), hsl(160 84% 55%));
+  background: linear-gradient(135deg, hsl(var(--sh-primary)), hsl(160 84% 55%));
   z-index: -1;
 }
 
@@ -720,7 +720,7 @@
   height: 10px;
   border-radius: 50%;
   background: #22c55e;
-  border: 2px solid hsl(var(--background));
+  border: 2px solid hsl(var(--sh-background));
   z-index: 1;
 }
 
