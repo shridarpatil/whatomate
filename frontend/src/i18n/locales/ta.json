@@ -218,6 +218,10 @@
     "Widget": "விட்ஜெட்"
   },
   "nav": {
+    "toggleMenu": "Toggle menu",
+    "sidebar": "Sidebar",
+    "mainNavigation": "Main navigation",
+    "secondaryNavigation": "Secondary navigation",
     "dashboard": "டாஷ்போர்டு",
     "chat": "அரட்டை",
     "contacts": "தொடர்புகள்",
@@ -256,6 +260,10 @@
     "toggleMenu": "மெனுவை மாற்று"
   },
   "userMenu": {
+    "colorTheme": "Color theme",
+    "themeLight": "Light theme",
+    "themeDark": "Dark theme",
+    "themeSystem": "System theme",
     "myAccount": "எனது கணக்கு",
     "status": "நிலை",
     "available": "கிடைக்கும்",

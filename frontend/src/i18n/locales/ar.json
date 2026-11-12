@@ -240,6 +240,10 @@
     "Widget": "ويدجت"
   },
   "nav": {
+    "toggleMenu": "Toggle menu",
+    "sidebar": "Sidebar",
+    "mainNavigation": "Main navigation",
+    "secondaryNavigation": "Secondary navigation",
     "dashboard": "لوحة القيادة",
     "chat": "الدردشة",
     "contacts": "جهات الاتصال",
@@ -283,6 +287,10 @@
     "toggleMenu": "تبديل القائمة"
   },
   "userMenu": {
+    "colorTheme": "Color theme",
+    "themeLight": "Light theme",
+    "themeDark": "Dark theme",
+    "themeSystem": "System theme",
     "myAccount": "حسابي",
     "status": "الحالة",
     "available": "متاح",

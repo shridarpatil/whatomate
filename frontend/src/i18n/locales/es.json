@@ -218,6 +218,10 @@
     "Widget": "Widget"
   },
   "nav": {
+    "toggleMenu": "Toggle menu",
+    "sidebar": "Sidebar",
+    "mainNavigation": "Main navigation",
+    "secondaryNavigation": "Secondary navigation",
     "dashboard": "Panel",
     "chat": "Chat",
     "contacts": "Contactos",
@@ -256,6 +260,10 @@
     "toggleMenu": "Alternar menú"
   },
   "userMenu": {
+    "colorTheme": "Color theme",
+    "themeLight": "Light theme",
+    "themeDark": "Dark theme",
+    "themeSystem": "System theme",
     "myAccount": "Mi cuenta",
     "status": "Estado",
     "available": "Disponible",

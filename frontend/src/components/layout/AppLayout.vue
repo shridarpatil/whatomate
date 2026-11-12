@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { RouterLink, RouterView, useRoute, useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { useAuthStore } from '@/stores/auth'
@@ -12,7 +12,7 @@ import ActiveCallPanel from '@/components/calling/ActiveCallPanel.vue'
 import { ScrollToTop } from '@/components/shared'
 import { navigationSections, type NavSection } from './navigation'
 
-useI18n() // Enable $t() in template
+const { t } = useI18n()
 
 const route = useRoute()
 const router = useRouter()
@@ -84,6 +84,28 @@ const mainSections = computed(() => navSections.value.filter(s => !s.pinBottom))
 const bottomSections = computed(() => navSections.value.filter(s => s.pinBottom))
 
 // On narrow screens the sidebar is an overlay: close it after navigating.
+const mobileQuery = window.matchMedia('(max-width: 768px)')
+const isMobile = ref(mobileQuery.matches)
+const sidebarFlag = ref(false)
+// Oat sets data-sidebar-open: it means "overlay shown" on mobile but "collapsed" on desktop.
+const sidebarExpanded = computed(() => (isMobile.value ? sidebarFlag.value : !sidebarFlag.value))
+const onMediaChange = (e: MediaQueryListEvent) => { isMobile.value = e.matches }
+let observer: MutationObserver | null = null
+onMounted(() => {
+  mobileQuery.addEventListener('change', onMediaChange)
+  if (layout.value) {
+    sidebarFlag.value = layout.value.hasAttribute('data-sidebar-open')
+    observer = new MutationObserver(() => {
+      sidebarFlag.value = layout.value?.hasAttribute('data-sidebar-open') ?? false
+    })
+    observer.observe(layout.value, { attributes: true, attributeFilter: ['data-sidebar-open'] })
+  }
+})
+onUnmounted(() => {
+  mobileQuery.removeEventListener('change', onMediaChange)
+  observer?.disconnect()
+})
+
 const closeMobileSidebar = () => {
   if (window.matchMedia('(max-width: 768px)').matches) {
     layout.value?.removeAttribute('data-sidebar-open')
@@ -101,7 +123,7 @@ const handleLogout = async () => {
     <header data-topnav>
       <!-- Skip link for accessibility -->
       <a href="#main-content" class="skip-link">{{ $t('nav.skipToMain') }}</a>
-      <button type="button" data-sidebar-toggle aria-label="Toggle menu">
+      <button type="button" data-sidebar-toggle :aria-label="t('nav.toggleMenu')" :aria-expanded="sidebarExpanded">
         <Menu :size="16" aria-hidden="true" />
       </button>
       <RouterLink to="/" class="hstack gap-2">
@@ -110,11 +132,11 @@ const handleLogout = async () => {
       </RouterLink>
     </header>
 
-    <aside data-sidebar aria-label="Main navigation">
+    <aside data-sidebar :aria-label="t('nav.sidebar')">
       <!-- Organization Switcher (Super Admin / multi-org only) -->
       <OrganizationSwitcher />
 
-      <nav aria-label="Main navigation">
+      <nav :aria-label="t('nav.mainNavigation')">
         <ul>
           <template v-for="section in mainSections" :key="section.label">
             <li v-if="section.label" role="presentation">
@@ -148,14 +170,13 @@ const handleLogout = async () => {
         </ul>
       </nav>
 
-      <footer>
-        <!-- Bottom-pinned navigation (Settings) -->
-        <nav v-if="bottomSections.length > 0" aria-label="Secondary navigation">
+      <!-- Bottom-pinned navigation (Settings) -->
+      <nav v-if="bottomSections.length > 0" data-pinned :aria-label="t('nav.secondaryNavigation')">
+        <ul>
           <template v-for="section in bottomSections" :key="section.label">
-            <template v-for="item in section.items" :key="item.path">
+            <li v-for="item in section.items" :key="item.path">
               <RouterLink
                 :to="item.path"
-                class="button ghost w-100"
                 :aria-current="item.active ? 'page' : undefined"
                 @click="closeMobileSidebar"
               >
@@ -163,23 +184,24 @@ const handleLogout = async () => {
                 <span>{{ $t(item.name) }}</span>
               </RouterLink>
 
-              <template v-if="item.children && item.active">
-                <RouterLink
-                  v-for="child in item.children"
-                  :key="child.path"
-                  :to="child.path"
-                  class="button ghost small w-100"
-                  :aria-current="route.path === child.path ? 'page' : undefined"
-                  @click="closeMobileSidebar"
-                >
-                  <component :is="child.icon" :size="14" aria-hidden="true" />
-                  <span>{{ $t(child.name) }}</span>
-                </RouterLink>
-              </template>
-            </template>
+              <ul v-if="item.children && item.active">
+                <li v-for="child in item.children" :key="child.path">
+                  <RouterLink
+                    :to="child.path"
+                    :aria-current="route.path === child.path ? 'page' : undefined"
+                    @click="closeMobileSidebar"
+                  >
+                    <component :is="child.icon" :size="14" aria-hidden="true" />
+                    <span>{{ $t(child.name) }}</span>
+                  </RouterLink>
+                </li>
+              </ul>
+            </li>
           </template>
-        </nav>
+        </ul>
+      </nav>
 
+      <footer>
         <UserMenu @logout="handleLogout" />
       </footer>
     </aside>

@@ -218,6 +218,10 @@
     "Widget": "विजेट"
   },
   "nav": {
+    "toggleMenu": "Toggle menu",
+    "sidebar": "Sidebar",
+    "mainNavigation": "Main navigation",
+    "secondaryNavigation": "Secondary navigation",
     "dashboard": "डैशबोर्ड",
     "chat": "चैट",
     "contacts": "संपर्क",
@@ -256,6 +260,10 @@
     "toggleMenu": "मेन्यू टॉगल करें"
   },
   "userMenu": {
+    "colorTheme": "Color theme",
+    "themeLight": "Light theme",
+    "themeDark": "Dark theme",
+    "themeSystem": "System theme",
     "myAccount": "मेरा खाता",
     "status": "स्थिति",
     "available": "उपलब्ध",

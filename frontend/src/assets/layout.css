@@ -20,6 +20,9 @@
   /* Nested sidebar nav items sit indented under their parent. */
   [data-sidebar] nav li > ul { margin-inline-start: var(--space-4); }
 
+  /* The pinned secondary nav sizes to its content instead of sharing space with the main nav. */
+  [data-sidebar] > nav[data-pinned] { flex: none; }
+
   /* Keep top-placed toasts clear of the app header (Oat's default is --space-4). */
   .toast-container[data-placement^="top"] { top: var(--space-18); }
 }
