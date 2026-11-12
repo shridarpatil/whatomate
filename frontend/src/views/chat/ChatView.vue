@@ -2198,7 +2198,7 @@ async function sendMediaMessage() {
                     </p>
 
                     <!-- Interactive buttons - WhatsApp style -->
-                    <div v-if="getInteractiveButtons(message).length > 0" class="vstack gap-1 mt-2" data-interactive-buttons>
+                    <div v-if="getInteractiveButtons(message).length > 0" class="vstack gap-1 mt-4" data-interactive-buttons>
                       <template v-for="btn in getInteractiveButtons(message)" :key="btn.id">
                         <a
                           v-if="btn.type === 'URL' && btn.url"
@@ -2220,14 +2220,14 @@ async function sendMediaMessage() {
                       :href="getCTAUrlData(message)?.url"
                       target="_blank"
                       rel="noopener noreferrer"
-                      class="button small w-100 mt-2"
+                      class="button small w-100 mt-4"
                       data-variant="secondary"
                     >
                       <ExternalLink :size="14" />
                       {{ getCTAUrlData(message)?.button_text }}
                     </a>
                     <!-- Voice call button - WhatsApp style, non-clickable in our chat -->
-                    <div v-if="getVoiceCallData(message)" class="mt-2">
+                    <div v-if="getVoiceCallData(message)" class="mt-4">
                       <span class="badge w-100" data-variant="secondary">
                         <PhoneCall :size="14" />
                         {{ getVoiceCallData(message)?.display_text }}
@@ -2499,7 +2499,7 @@ async function sendMediaMessage() {
           <article class="card" data-bubble="outgoing">
             <img v-if="templateHeaderPreview" :src="templateHeaderPreview" alt="" class="media-preview mb-2" />
             <p class="pre-wrap">{{ templatePreview }}</p>
-            <div v-if="selectedTemplate?.buttons?.length" class="vstack gap-1 mt-2" data-interactive-buttons>
+            <div v-if="selectedTemplate?.buttons?.length" class="vstack gap-1 mt-4" data-interactive-buttons>
               <span v-for="(btn, index) in selectedTemplate.buttons" :key="index" class="badge outline w-100">
                 {{ btn.text }}
               </span>
