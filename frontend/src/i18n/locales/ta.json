@@ -1292,6 +1292,8 @@
     "layoutSaved": "அமைப்பு சேமிக்கப்பட்டது",
     "saveLayoutFailed": "அமைப்பைச் சேமிக்க முடியவில்லை",
     "editLayout": "அமைப்பைத் திருத்து",
+    "moveEarlier": "Move earlier",
+    "moveLater": "Move later",
     "editWidgetTooltip": "விட்ஜெட்டைத் திருத்து",
     "deleteWidgetTooltip": "விட்ஜெட்டை நீக்கு",
     "noChange": "மாற்றம் இல்லை",

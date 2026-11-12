@@ -1495,6 +1495,8 @@
     "layoutSaved": "Layout saved",
     "saveLayoutFailed": "Failed to save layout",
     "editLayout": "Edit Layout",
+    "moveEarlier": "Move earlier",
+    "moveLater": "Move later",
     "editWidgetTooltip": "Edit widget",
     "deleteWidgetTooltip": "Delete widget",
     "noChange": "No change",

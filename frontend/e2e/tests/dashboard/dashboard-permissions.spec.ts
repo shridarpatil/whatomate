@@ -22,12 +22,12 @@ test.describe('Dashboard Widget Permissions', () => {
     })
 
     test('admin can see edit and delete buttons on widget hover', async ({ page }) => {
-      await page.waitForSelector('.card-depth', { timeout: 10000 })
-      const firstWidget = page.locator('.card-depth').first()
+      await page.waitForSelector('[data-testid="dashboard-widget"]', { timeout: 10000 })
+      const firstWidget = page.locator('[data-testid="dashboard-widget"]').first()
       await firstWidget.hover()
 
-      await expect(firstWidget.locator('button[title="Edit widget"]')).toBeVisible()
-      await expect(firstWidget.locator('button[title="Delete widget"]')).toBeVisible()
+      await expect(firstWidget.locator('button[aria-label="Edit widget"]')).toBeVisible()
+      await expect(firstWidget.locator('button[aria-label="Delete widget"]')).toBeVisible()
     })
   })
 
@@ -65,11 +65,11 @@ test.describe('Dashboard Widget Permissions', () => {
       await loginAs(page, user)
       await page.goto('/')
       await page.waitForLoadState('networkidle')
-      await page.waitForSelector('.card-depth', { timeout: 10000 })
+      await page.waitForSelector('[data-testid="dashboard-widget"]', { timeout: 10000 })
 
-      const firstWidget = page.locator('.card-depth').first()
+      const firstWidget = page.locator('[data-testid="dashboard-widget"]').first()
       await firstWidget.hover()
-      await expect(firstWidget.locator('button[title="Edit widget"]')).toBeVisible()
+      await expect(firstWidget.locator('button[aria-label="Edit widget"]')).toBeVisible()
     })
   })
 
@@ -98,11 +98,11 @@ test.describe('Dashboard Widget Permissions', () => {
       await loginAs(page, user)
       await page.goto('/')
       await page.waitForLoadState('networkidle')
-      await page.waitForSelector('.card-depth', { timeout: 10000 })
+      await page.waitForSelector('[data-testid="dashboard-widget"]', { timeout: 10000 })
 
-      const firstWidget = page.locator('.card-depth').first()
+      const firstWidget = page.locator('[data-testid="dashboard-widget"]').first()
       await firstWidget.hover()
-      await expect(firstWidget.locator('button[title="Delete widget"]')).toBeVisible()
+      await expect(firstWidget.locator('button[aria-label="Delete widget"]')).toBeVisible()
     })
 
     test('user with analytics:delete but NOT analytics:write cannot see Add Widget button', async ({ page }) => {
@@ -118,11 +118,11 @@ test.describe('Dashboard Widget Permissions', () => {
       await loginAs(page, user)
       await page.goto('/')
       await page.waitForLoadState('networkidle')
-      await page.waitForSelector('.card-depth', { timeout: 10000 })
+      await page.waitForSelector('[data-testid="dashboard-widget"]', { timeout: 10000 })
 
-      const firstWidget = page.locator('.card-depth').first()
+      const firstWidget = page.locator('[data-testid="dashboard-widget"]').first()
       await firstWidget.hover()
-      await expect(firstWidget.locator('button[title="Edit widget"]')).not.toBeVisible()
+      await expect(firstWidget.locator('button[aria-label="Edit widget"]')).not.toBeVisible()
     })
   })
 
@@ -157,22 +157,22 @@ test.describe('Dashboard Widget Permissions', () => {
       await loginAs(page, user)
       await page.goto('/')
       await page.waitForLoadState('networkidle')
-      await page.waitForSelector('.card-depth', { timeout: 10000 })
+      await page.waitForSelector('[data-testid="dashboard-widget"]', { timeout: 10000 })
 
-      const firstWidget = page.locator('.card-depth').first()
+      const firstWidget = page.locator('[data-testid="dashboard-widget"]').first()
       await firstWidget.hover()
-      await expect(firstWidget.locator('button[title="Edit widget"]')).not.toBeVisible()
+      await expect(firstWidget.locator('button[aria-label="Edit widget"]')).not.toBeVisible()
     })
 
     test('user with only analytics:read cannot see delete button on widget hover', async ({ page }) => {
       await loginAs(page, user)
       await page.goto('/')
       await page.waitForLoadState('networkidle')
-      await page.waitForSelector('.card-depth', { timeout: 10000 })
+      await page.waitForSelector('[data-testid="dashboard-widget"]', { timeout: 10000 })
 
-      const firstWidget = page.locator('.card-depth').first()
+      const firstWidget = page.locator('[data-testid="dashboard-widget"]').first()
       await firstWidget.hover()
-      await expect(firstWidget.locator('button[title="Delete widget"]')).not.toBeVisible()
+      await expect(firstWidget.locator('button[aria-label="Delete widget"]')).not.toBeVisible()
     })
 
     test('user with only analytics:read can still view dashboard and widgets', async ({ page }) => {
@@ -181,8 +181,8 @@ test.describe('Dashboard Widget Permissions', () => {
       await page.waitForLoadState('networkidle')
 
       await expect(page.locator('h1')).toContainText('Dashboard')
-      await page.waitForSelector('.card-depth', { timeout: 10000 })
-      const widgets = page.locator('.card-depth')
+      await page.waitForSelector('[data-testid="dashboard-widget"]', { timeout: 10000 })
+      const widgets = page.locator('[data-testid="dashboard-widget"]')
       expect(await widgets.count()).toBeGreaterThan(0)
     })
   })
@@ -217,12 +217,12 @@ test.describe('Dashboard Widget Permissions', () => {
       const addButton = page.locator('button').filter({ hasText: /Add Widget/i })
       await expect(addButton).toBeVisible({ timeout: 10000 })
 
-      await page.waitForSelector('.card-depth', { timeout: 10000 })
-      const firstWidget = page.locator('.card-depth').first()
+      await page.waitForSelector('[data-testid="dashboard-widget"]', { timeout: 10000 })
+      const firstWidget = page.locator('[data-testid="dashboard-widget"]').first()
       await firstWidget.hover()
 
-      await expect(firstWidget.locator('button[title="Edit widget"]')).toBeVisible()
-      await expect(firstWidget.locator('button[title="Delete widget"]')).toBeVisible()
+      await expect(firstWidget.locator('button[aria-label="Edit widget"]')).toBeVisible()
+      await expect(firstWidget.locator('button[aria-label="Delete widget"]')).toBeVisible()
     })
   })
 })

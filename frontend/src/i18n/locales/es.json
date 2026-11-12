@@ -1305,6 +1305,8 @@
     "layoutSaved": "Diseño guardado",
     "saveLayoutFailed": "Error al guardar el diseño",
     "editLayout": "Editar diseño",
+    "moveEarlier": "Move earlier",
+    "moveLater": "Move later",
     "editWidgetTooltip": "Editar widget",
     "deleteWidgetTooltip": "Eliminar widget",
     "noChange": "Sin cambios",

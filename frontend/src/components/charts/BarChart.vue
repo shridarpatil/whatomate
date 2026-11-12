@@ -44,16 +44,19 @@ const pos = (s: ChartSeries, i: number) => Math.max(0, value(s, i))
 
 const ticks = computed(() => {
   const idx = props.labels.map((_, i) => i)
+  const all = folded.value.flatMap(s => idx.map(i => value(s, i)))
   let lo = 0
   let hi = 0
+  let integer = all.every(Number.isInteger)
   if (props.stacked) {
-    hi = Math.max(0, ...idx.map(i => folded.value.reduce((a, s) => a + pos(s, i), 0)))
+    const sums = idx.map(i => folded.value.reduce((a, s) => a + pos(s, i), 0))
+    hi = Math.max(0, ...sums)
+    integer = integer && sums.every(Number.isInteger)
   } else {
-    const all = folded.value.flatMap(s => idx.map(i => value(s, i)))
     lo = Math.min(0, ...all)
     hi = Math.max(0, ...all)
   }
-  return niceTicks(lo, hi, 5, { integer: Number.isInteger(lo) && Number.isInteger(hi) })
+  return niceTicks(lo, hi, 5, { integer })
 })
 const tickLabels = computed(() => ticks.value.map(fmt))
 

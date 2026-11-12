@@ -146,4 +146,9 @@ describe('integer ticks', () => {
     expect(texts).toContain('1')
     expect(texts.filter(t => /^\d+\.\d+$/.test(t))).toEqual([])
   })
+  it('bar chart with fractional values does not use integer-only ticks', () => {
+    const root = mount(BarChart, { labels: ['a', 'b'], series: [{ label: 'A', data: [0.35, 1] }, { label: 'B', data: [0.2, 0.5] }] })
+    const texts = Array.from(root.querySelectorAll('svg text')).map(t => t.textContent?.trim() ?? '')
+    expect(texts.some(t => /^0\.\d+$/.test(t))).toBe(true)
+  })
 })
