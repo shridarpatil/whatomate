@@ -83,10 +83,8 @@ test.describe('Roles Management', () => {
     await descriptionInput(page).fill('A custom test role for E2E testing')
 
     // Select a permission (first checkbox in the matrix)
-    const permissionCheckbox = page.locator('button[role="checkbox"]').first()
-    if (await permissionCheckbox.isVisible()) {
-      await permissionCheckbox.click()
-    }
+    const permissionCheckbox = page.locator('summary input[type="checkbox"]').first()
+    await permissionCheckbox.check()
 
     await saveButton(page).click()
     await page.waitForLoadState('networkidle')
@@ -342,7 +340,7 @@ test.describe('Roles - Permissions Selection', () => {
 
     // Click the group checkbox to select all
     const groupCheckbox = page.locator('[data-testid="group-users-checkbox"]').or(
-      page.locator('button[role="checkbox"]').first()
+      page.locator('summary input[type="checkbox"]').first()
     )
     await groupCheckbox.click()
 

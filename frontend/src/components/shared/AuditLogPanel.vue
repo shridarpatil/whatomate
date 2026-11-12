@@ -83,7 +83,7 @@ onMounted(() => loadLogs())
     </header>
 
     <!-- Loading state -->
-    <div v-if="isLoading && logs.length === 0" class="flex items-center justify-center p-4" role="status" aria-busy="true" />
+    <div v-if="isLoading && logs.length === 0" class="flex items-center justify-center p-4" role="status" aria-busy="true" data-spinner="large" />
 
     <!-- Empty state -->
     <p v-else-if="logs.length === 0" class="text-light align-center p-4">

@@ -231,7 +231,8 @@ function downloadSampleCsv() {
       </div>
 
       <!-- Export Tab -->
-      <div v-if="canExport" role="tabpanel" :hidden="activeTab !== 'export'" class="vstack gap-4">
+      <div v-if="canExport" role="tabpanel" :hidden="activeTab !== 'export'">
+       <div class="vstack gap-4">
         <div v-if="isLoadingExportConfig" class="flex items-center justify-center p-4" role="status" aria-busy="true" data-spinner="large" />
         <template v-else>
           <fieldset class="scroll-y">
@@ -261,10 +262,12 @@ function downloadSampleCsv() {
             </button>
           </div>
         </template>
+       </div>
       </div>
 
       <!-- Import Tab -->
-      <div v-if="canImport" role="tabpanel" :hidden="activeTab !== 'import'" class="vstack gap-4">
+      <div v-if="canImport" role="tabpanel" :hidden="activeTab !== 'import'">
+       <div class="vstack gap-4">
         <div v-if="isLoadingImportConfig" class="flex items-center justify-center p-4" role="status" aria-busy="true" data-spinner="large" />
         <template v-else>
           <!-- Column Info -->
@@ -338,6 +341,7 @@ function downloadSampleCsv() {
             </button>
           </div>
         </template>
+       </div>
       </div>
     </div>
   </Modal>

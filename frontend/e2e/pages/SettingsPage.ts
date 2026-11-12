@@ -579,7 +579,7 @@ export class ContactsPage extends TableSettingsPage {
   }
 
   async toggleUpdateOnDuplicate() {
-    await this.importExportDialog.locator('button[role="checkbox"]').click()
+    await this.importExportDialog.locator('#update-dup').click()
   }
 
   async clickImportButton() {
