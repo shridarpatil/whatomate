@@ -2333,7 +2333,7 @@ async function sendMediaMessage() {
           <div v-if="isServiceWindowExpired" role="alert" data-variant="danger" class="items-center">
             <Clock class="shrink-0" />
             <span class="flex-1">{{ $t('chat.serviceWindowExpired') }}</span>
-            <button type="button" class="outline small shrink-0" @click="openTemplatePicker">
+            <button type="button" class="small shrink-0" @click="openTemplatePicker">
               {{ $t('chat.sendTemplateAction') }}
             </button>
           </div>
