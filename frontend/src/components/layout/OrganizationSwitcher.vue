@@ -1,12 +1,13 @@
 <script setup lang="ts">
-import { ref, computed, onMounted, watch } from 'vue'
+import { ref, computed, nextTick, onMounted, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useOrganizationsStore } from '@/stores/organizations'
 import { useAuthStore } from '@/stores/auth'
 import Modal from '@/components/oat/Modal.vue'
 import { organizationsService } from '@/services/api'
 import { toast } from '@/lib/toast'
-import { Plus } from '@/lib/icons'
+import { filterOptions } from '@/components/oat/combobox'
+import { Plus, Check, ChevronsUpDown } from '@/lib/icons'
 
 const { t } = useI18n()
 const organizationsStore = useOrganizationsStore()
@@ -57,10 +58,65 @@ watch(() => authStore.user?.is_super_admin, async (superAdmin) => {
   }
 })
 
-const handleOrgChange = async (e: Event) => {
-  const select = e.target as HTMLSelectElement
-  const value = select.value
-  if (!value) return
+const SEARCH_THRESHOLD = 8
+const menuId = 'org-switcher-menu'
+const menu = ref<HTMLElement | null>(null)
+const searchInput = ref<HTMLInputElement | null>(null)
+const query = ref('')
+
+const showSearch = computed(() => orgList.value.length > SEARCH_THRESHOLD)
+const currentOrgName = computed(() => orgList.value.find(o => o.id === currentOrgId.value)?.name || '')
+const triggerLabel = computed(() => {
+  if (currentOrgName.value) return currentOrgName.value
+  if (organizationsStore.loading) return t('organizations.loading')
+  return t('organizations.selectPlaceholder')
+})
+const filteredOrgs = computed(() =>
+  filterOptions(orgList.value.map(o => ({ value: o.id, label: o.name })), query.value),
+)
+
+function onToggle(e: Event) {
+  if ((e as ToggleEvent).newState === 'closed') query.value = ''
+}
+
+// Oat's dropdown snapshots its menu items when it opens, so after the search filter
+// changes the list its arrow-key handling is stale. Handle arrows here instead.
+function menuItems(): HTMLElement[] {
+  return Array.from(menu.value?.querySelectorAll<HTMLElement>('[role="menuitem"]') ?? [])
+}
+
+function onListKeydown(e: KeyboardEvent) {
+  const items = menuItems()
+  const idx = items.indexOf(e.target as HTMLElement)
+  let next = -1
+  if (e.key === 'ArrowDown') next = idx < 0 ? 0 : (idx + 1) % items.length
+  else if (e.key === 'ArrowUp') {
+    if (idx === 0 && showSearch.value) {
+      e.preventDefault()
+      e.stopPropagation()
+      searchInput.value?.focus()
+      return
+    }
+    next = idx <= 0 ? items.length - 1 : idx - 1
+  } else if (e.key === 'Home') next = 0
+  else if (e.key === 'End') next = items.length - 1
+  if (next < 0 || !items.length) return
+  e.preventDefault()
+  e.stopPropagation()
+  items[next].focus()
+}
+
+async function onSearchKeydown(e: KeyboardEvent) {
+  if (e.key === 'ArrowDown') {
+    e.preventDefault()
+    await nextTick()
+    menuItems()[0]?.focus()
+  }
+}
+
+async function selectOrg(value: string) {
+  menu.value?.hidePopover()
+  if (!value || value === currentOrgId.value) return
 
   // Everyone goes through switch-org, super admins included: the X-Organization-ID
   // header alone only scopes API client calls. The WebSocket token, <img src> media and
@@ -71,9 +127,13 @@ const handleOrgChange = async (e: Event) => {
     organizationsStore.selectOrganization(value)
     window.location.reload()
   } catch {
-    // If switch fails, don't reload; put the native select back on the active org
-    select.value = currentOrgId.value
+    // If switch fails, don't reload; the current org stays selected.
   }
+}
+
+function openCreateDialog() {
+  menu.value?.hidePopover()
+  isCreateDialogOpen.value = true
 }
 
 // Create org dialog
@@ -107,31 +167,57 @@ const refreshOrgs = async () => {
 </script>
 
 <template>
-  <div v-if="shouldShowSwitcher" class="vstack gap-2 p-4">
-    <div class="hstack justify-between">
-      <small class="text-light">{{ t('organizations.label') }}</small>
+  <div v-if="shouldShowSwitcher" class="vstack gap-2 p-4" data-testid="org-switcher">
+    <ot-dropdown>
       <button
-        v-if="canCreateOrg"
         type="button"
-        class="ghost small icon"
-        :aria-label="t('organizations.createNew')"
-        :title="t('organizations.createNew')"
-        @click="isCreateDialogOpen = true"
+        class="outline small w-100 justify-between"
+        :popovertarget="menuId"
+        aria-haspopup="menu"
+        :aria-label="t('organizations.label') + ': ' + triggerLabel"
+        :title="triggerLabel"
       >
-        <Plus :size="14" />
+        <span class="truncate">{{ triggerLabel }}</span>
+        <ChevronsUpDown :size="14" aria-hidden="true" />
       </button>
-    </div>
-    <select
-      v-if="orgList.length > 0"
-      :value="currentOrgId"
-      :aria-label="t('organizations.selectPlaceholder')"
-      @change="handleOrgChange"
-    >
-      <option v-for="org in orgList" :key="org.id" :value="org.id">{{ org.name }}</option>
-    </select>
-    <small v-else-if="organizationsStore.loading" class="text-light">{{ t('organizations.loading') }}</small>
-    <div v-else-if="organizationsStore.error" role="alert" data-variant="danger">{{ organizationsStore.error }}</div>
-    <small v-else class="text-light">{{ t('organizations.none') }}</small>
+      <div :id="menuId" ref="menu" popover class="picker" @toggle="onToggle">
+        <input
+          v-if="showSearch"
+          ref="searchInput"
+          v-model="query"
+          type="search"
+          :placeholder="t('common.search')"
+          :aria-label="t('common.search')"
+          @keydown="onSearchKeydown"
+        >
+        <div class="scroll-y picker-list" role="group" :aria-label="t('organizations.selectPlaceholder')" @keydown="onListKeydown">
+          <button
+            v-for="org in filteredOrgs"
+            :key="org.value"
+            type="button"
+            role="menuitem"
+            class="ghost"
+            :aria-current="org.value === currentOrgId ? 'true' : undefined"
+            :title="org.label"
+            @click="selectOrg(org.value)"
+          >
+            <Check v-if="org.value === currentOrgId" :size="14" aria-hidden="true" />
+            <span class="truncate">{{ org.label }}</span>
+          </button>
+          <p v-if="!filteredOrgs.length" role="status" class="text-light p-4">
+            {{ organizationsStore.loading ? t('organizations.loading') : orgList.length ? t('common.noResults') : t('organizations.none') }}
+          </p>
+        </div>
+        <template v-if="canCreateOrg">
+          <hr>
+          <button type="button" role="menuitem" class="ghost" @click="openCreateDialog">
+            <Plus :size="14" aria-hidden="true" />
+            <span>{{ t('organizations.createNew') }}</span>
+          </button>
+        </template>
+      </div>
+    </ot-dropdown>
+    <div v-if="organizationsStore.error && !orgList.length" role="alert" data-variant="danger">{{ organizationsStore.error }}</div>
   </div>
 
   <!-- Create Org Dialog -->
