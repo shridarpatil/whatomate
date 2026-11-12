@@ -89,6 +89,30 @@
     color: var(--muted-foreground);
     font-weight: var(--font-normal);
   }
+  /* In-bubble buttons / list options / CTA & call pills: solid card pills with
+     a brand-coloured label, so they read as tappable options on any bubble. */
+  .card[data-bubble] :is([data-interactive-buttons] > :is(.badge, .button), a.button.outline, .badge.outline) {
+    display: flex;
+    justify-content: center;
+    padding: var(--space-2) var(--space-3);
+    background-color: var(--card);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-medium);
+    color: var(--primary);
+    font-weight: var(--font-medium);
+    white-space: normal;
+  }
+  /* Quoted message inside a reply: tinted block with a brand bar, not a box. */
+  .card[data-bubble] [data-reply-preview] {
+    justify-content: flex-start;
+    background-color: color-mix(in oklab, var(--foreground) 6%, transparent);
+    border: 0;
+    border-inline-start: 3px solid var(--primary);
+    border-radius: var(--radius-small);
+    font-weight: var(--font-normal);
+    color: var(--muted-foreground);
+  }
+  .card[data-bubble] [data-reply-preview] strong { color: var(--primary); }
 
   /* Flow node colours (approved exception, flow editors only): one accent per
      node type, shown as a coloured inline-start edge + tinted icon chip.
