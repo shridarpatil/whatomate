@@ -118,7 +118,12 @@
     "loadMore": "Carregar mais",
     "stay": "Continuar",
     "unsavedChangesDesc": "Você tem alterações não salvas. Deseja mesmo sair?",
-    "unsavedChangesTitle": "Alterações não salvas"
+    "unsavedChangesTitle": "Alterações não salvas",
+    "firstPage": "First page",
+    "lastPage": "Last page",
+    "pagination": "Pagination",
+    "scrollToTop": "Scroll to top",
+    "clickToUpload": "Click to upload file"
   },
   "auth": {
     "login": "Login",

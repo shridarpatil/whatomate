@@ -11,6 +11,7 @@
   .flex-wrap { flex-wrap: wrap; }
   .sticky-top { position: sticky; top: 0; z-index: 1; }
   .relative { position: relative; }
+  .fixed-bottom-end { position: fixed; inset-block-end: var(--space-6); inset-inline-end: var(--space-6); z-index: 40; }
   .absolute-fill { position: absolute; inset: 0; }
   .truncate { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 

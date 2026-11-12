@@ -2,10 +2,7 @@
 import { ref, onMounted } from 'vue'
 import { auditLogsService, type AuditLogEntry } from '@/services/api'
 import { formatDateTime, formatLabel } from '@/lib/utils'
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { Badge } from '@/components/ui/badge'
-import { Button } from '@/components/ui/button'
-import { History, Plus, Pencil, Trash2, Loader2, ChevronDown } from '@/lib/icons'
+import { History, ChevronDown } from '@/lib/icons'
 
 const props = defineProps<{
   resourceType: string
@@ -18,10 +15,10 @@ const total = ref(0)
 const page = ref(1)
 const limit = 10
 
-const actionConfig: Record<string, { icon: any; color: string; label: string }> = {
-  created: { icon: Plus, color: 'bg-green-500', label: 'Created' },
-  updated: { icon: Pencil, color: 'bg-blue-500', label: 'Updated' },
-  deleted: { icon: Trash2, color: 'bg-red-500', label: 'Deleted' },
+const actionConfig: Record<string, { variant: string; label: string }> = {
+  created: { variant: 'success', label: 'Created' },
+  updated: { variant: 'secondary', label: 'Updated' },
+  deleted: { variant: 'danger', label: 'Deleted' },
 }
 
 function formatValue(val: any): string {
@@ -77,81 +74,69 @@ onMounted(() => loadLogs())
 </script>
 
 <template>
-  <Card class="overflow-hidden">
-    <CardHeader class="pb-3">
-      <div class="flex items-center gap-2">
-        <History class="h-4 w-4 text-muted-foreground" />
-        <CardTitle class="text-sm font-medium">{{ $t('common.activityLog', 'Activity Log') }}</CardTitle>
+  <article class="card">
+    <header>
+      <div class="hstack gap-2">
+        <History :size="16" />
+        <h3>{{ $t('common.activityLog', 'Activity Log') }}</h3>
       </div>
-    </CardHeader>
-    <CardContent>
-      <!-- Loading state -->
-      <div v-if="isLoading && logs.length === 0" class="flex items-center justify-center py-8">
-        <Loader2 class="h-5 w-5 animate-spin text-muted-foreground" />
-      </div>
+    </header>
 
-      <!-- Empty state -->
-      <p v-else-if="logs.length === 0" class="text-sm text-muted-foreground text-center py-6">
-        {{ $t('common.noActivity', 'No activity recorded yet') }}
-      </p>
+    <!-- Loading state -->
+    <div v-if="isLoading && logs.length === 0" class="flex items-center justify-center p-4" role="status" aria-busy="true" />
 
-      <!-- Timeline -->
-      <div v-else class="relative">
-        <!-- Vertical line -->
-        <div class="absolute left-3 top-3 bottom-3 w-px bg-border" />
+    <!-- Empty state -->
+    <p v-else-if="logs.length === 0" class="text-light align-center p-4">
+      {{ $t('common.noActivity', 'No activity recorded yet') }}
+    </p>
 
-        <div v-for="log in logs" :key="log.id" class="relative pl-9 pb-6 last:pb-0">
-          <!-- Dot -->
+    <!-- Timeline -->
+    <ul v-else class="unstyled vstack gap-4">
+      <li v-for="log in logs" :key="log.id" class="vstack gap-2">
+        <div class="hstack gap-2 flex-wrap">
+          <strong>{{ log.user_name }}</strong>
+          <span class="badge" :data-variant="actionConfig[log.action]?.variant || 'secondary'">
+            {{ actionConfig[log.action]?.label || log.action }}
+          </span>
+          <small class="text-light">{{ formatDateTime(log.created_at) }}</small>
+        </div>
+
+        <!-- Changes -->
+        <div v-if="log.action === 'updated' && log.changes?.length > 0" class="vstack gap-1">
           <div
-            :class="[
-              'absolute left-1.5 top-1 w-3 h-3 rounded-full border-2 border-background',
-              actionConfig[log.action]?.color || 'bg-muted-foreground'
-            ]"
-          />
-
-          <!-- Content -->
-          <div>
-            <div class="flex items-center gap-2 flex-wrap">
-              <span class="text-sm font-medium">{{ log.user_name }}</span>
-              <Badge variant="outline" class="text-[10px] px-1.5 py-0">
-                {{ actionConfig[log.action]?.label || log.action }}
-              </Badge>
-              <span class="text-xs text-muted-foreground">{{ formatDateTime(log.created_at) }}</span>
-            </div>
-
-            <!-- Changes -->
-            <div v-if="log.action === 'updated' && log.changes?.length > 0" class="mt-2 space-y-1">
-              <div
-                v-for="(change, idx) in log.changes"
-                :key="idx"
-                class="text-xs rounded-md bg-muted/50 px-2.5 py-1.5 overflow-hidden min-w-0"
-              >
-                <span class="font-medium text-foreground">{{ formatLabel(change.field) }}:</span>
-                <div class="mt-0.5 text-muted-foreground break-all">
-                  <span>{{ formatValue(change.old_value) }}</span>
-                  <span class="mx-1">→</span>
-                  <span class="text-foreground">{{ formatValue(change.new_value) }}</span>
-                </div>
-              </div>
-            </div>
-
-            <!-- Created fields summary -->
-            <div v-else-if="log.action === 'created' && log.changes?.length > 0" class="mt-1">
-              <span class="text-xs text-muted-foreground">
-                {{ log.changes.length }} field{{ log.changes.length !== 1 ? 's' : '' }} set
-              </span>
+            v-for="(change, idx) in log.changes"
+            :key="idx"
+            class="min-w-0"
+          >
+            <small><strong>{{ formatLabel(change.field) }}:</strong></small>
+            <div>
+              <small class="text-light">{{ formatValue(change.old_value) }}</small>
+              <small> → </small>
+              <small>{{ formatValue(change.new_value) }}</small>
             </div>
           </div>
         </div>
-      </div>
 
-      <!-- Load more -->
-      <div v-if="logs.length < total" class="mt-4 flex justify-center">
-        <Button variant="ghost" size="sm" class="text-xs" :disabled="isLoading" @click="loadMore">
-          <ChevronDown class="h-3.5 w-3.5 mr-1" />
-          {{ isLoading ? $t('common.loading') + '...' : $t('common.loadMore', 'Load more') }}
-        </Button>
-      </div>
-    </CardContent>
-  </Card>
+        <!-- Created fields summary -->
+        <small v-else-if="log.action === 'created' && log.changes?.length > 0" class="text-light">
+          {{ log.changes.length }} field{{ log.changes.length !== 1 ? 's' : '' }} set
+        </small>
+      </li>
+    </ul>
+
+    <!-- Load more -->
+    <footer v-if="logs.length < total" class="flex justify-center">
+      <button
+        type="button"
+        class="ghost small"
+        :disabled="isLoading"
+        :aria-busy="isLoading ? 'true' : undefined"
+        data-spinner="small"
+        @click="loadMore"
+      >
+        <ChevronDown :size="14" />
+        {{ isLoading ? $t('common.loading') + '...' : $t('common.loadMore', 'Load more') }}
+      </button>
+    </footer>
+  </article>
 </template>

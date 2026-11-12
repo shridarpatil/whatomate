@@ -96,7 +96,12 @@
     "deleteConfirmMessage": "இந்த {resource} -ஐ நீக்க விரும்புகிறீர்களா? இதை மீட்க முடியாது.",
     "searchPlaceholder": "{resource} -ஐ தேடுக",
     "selectPlaceholder": "{resource} -ஐ தேர்வுசெய்க",
-    "copiedToClipboard": "கிளிப்போர்டுக்கு நகலெடுக்கப்பட்டது"
+    "copiedToClipboard": "கிளிப்போர்டுக்கு நகலெடுக்கப்பட்டது",
+    "firstPage": "First page",
+    "lastPage": "Last page",
+    "pagination": "Pagination",
+    "scrollToTop": "Scroll to top",
+    "clickToUpload": "Click to upload file"
   },
   "auth": {
     "login": "உள்நுழைய",

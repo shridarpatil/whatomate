@@ -47,6 +47,13 @@ export class DialogPage extends BasePage {
     // Try multiple strategies to find the input
     const labelLocator = this.dialog.locator(`label`).filter({ hasText: label })
 
+    // Strategy 0: Oat markup - the input is nested in <label data-field>
+    const nestedInput = labelLocator.locator('input:not([type="checkbox"]):not([type="radio"]), textarea')
+    if (await nestedInput.count() > 0) {
+      await nestedInput.first().fill(value)
+      return
+    }
+
     // Strategy 1: Input is sibling of label
     const siblingInput = labelLocator.locator('~ input, ~ textarea')
     if (await siblingInput.count() > 0) {
@@ -133,45 +140,31 @@ export class DialogPage extends BasePage {
     await opts.first().click()
   }
 
-  async checkCheckbox(label: string) {
-    // Find label, get its 'for' attribute, then find checkbox by id
-    const labelLocator = this.dialog.locator('label').filter({ hasText: label })
-    const labelFor = await labelLocator.getAttribute('for')
-
-    let checkbox: Locator
-    if (labelFor) {
-      // Checkbox has id matching label's for attribute
-      // Need to escape dots in ID for CSS selector
-      const escapedId = escapeCssSelector(labelFor)
-      checkbox = this.dialog.locator(`#${escapedId}`)
-    } else {
-      // Checkbox is sibling of label in same container
-      checkbox = labelLocator.locator('..').locator('button[role="checkbox"], input[type="checkbox"]')
+  /** Native <input type="checkbox"> (Oat) is checked by label; legacy button[role="checkbox"] by data-state. */
+  private async setChecked(label: string, checked: boolean) {
+    const native = this.dialog.getByLabel(label).and(this.page.locator('input[type="checkbox"]'))
+    if (await native.count() > 0) {
+      await native.first().setChecked(checked)
+      return
     }
 
-    // Check if already checked
-    const dataState = await checkbox.getAttribute('data-state')
-    if (dataState !== 'checked') {
+    const labelLocator = this.dialog.locator('label').filter({ hasText: label })
+    const labelFor = await labelLocator.getAttribute('for')
+    const checkbox = labelFor
+      ? this.dialog.locator(`#${escapeCssSelector(labelFor)}`)
+      : labelLocator.locator('..').locator('button[role="checkbox"]')
+    const isChecked = (await checkbox.getAttribute('data-state')) === 'checked'
+    if (isChecked !== checked) {
       await checkbox.click()
     }
   }
 
+  async checkCheckbox(label: string) {
+    await this.setChecked(label, true)
+  }
+
   async uncheckCheckbox(label: string) {
-    const labelLocator = this.dialog.locator('label').filter({ hasText: label })
-    const labelFor = await labelLocator.getAttribute('for')
-
-    let checkbox: Locator
-    if (labelFor) {
-      const escapedId = escapeCssSelector(labelFor)
-      checkbox = this.dialog.locator(`#${escapedId}`)
-    } else {
-      checkbox = labelLocator.locator('..').locator('button[role="checkbox"], input[type="checkbox"]')
-    }
-
-    const dataState = await checkbox.getAttribute('data-state')
-    if (dataState === 'checked') {
-      await checkbox.click()
-    }
+    await this.setChecked(label, false)
   }
 
   async submit() {
@@ -188,7 +181,7 @@ export class DialogPage extends BasePage {
 
   async expectFieldError(label: string, message: string) {
     const labelLocator = this.dialog.locator(`label`).filter({ hasText: label })
-    const errorMessage = labelLocator.locator('..').locator('p, span').filter({ hasText: message })
+    const errorMessage = labelLocator.locator('..').locator('p, span, .error').filter({ hasText: message })
     await expect(errorMessage).toBeVisible()
   }
 }

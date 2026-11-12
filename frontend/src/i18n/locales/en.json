@@ -118,7 +118,12 @@
     "loadMore": "Load more",
     "stay": "Stay",
     "unsavedChangesDesc": "You have unsaved changes. Are you sure you want to leave?",
-    "unsavedChangesTitle": "Unsaved Changes"
+    "unsavedChangesTitle": "Unsaved Changes",
+    "firstPage": "First page",
+    "lastPage": "Last page",
+    "pagination": "Pagination",
+    "scrollToTop": "Scroll to top",
+    "clickToUpload": "Click to upload file"
   },
   "auth": {
     "login": "Login",

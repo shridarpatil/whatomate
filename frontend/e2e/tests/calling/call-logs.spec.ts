@@ -72,7 +72,7 @@ test.describe('Call Logs - Pagination', () => {
     const rowCount = await page.locator('tbody tr').count()
     if (rowCount >= 20) {
       // Should have pagination controls
-      const pagination = page.locator('[class*="pagination"], button:has-text("Next"), button:has-text(">")')
+      const pagination = page.locator('nav[aria-label="Pagination"], button[aria-label="Next"], button:has-text("Next")')
       await expect(pagination.first()).toBeVisible()
     }
   })

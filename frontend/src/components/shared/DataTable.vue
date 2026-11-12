@@ -1,15 +1,6 @@
 <script setup lang="ts" generic="T extends Record<string, any>">
 import { computed } from 'vue'
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from '@/components/ui/table'
 import { ArrowUpDown, ArrowUp, ArrowDown } from '@/lib/icons'
-import { Skeleton } from '@/components/ui/skeleton'
 import PaginationControls from './PaginationControls.vue'
 import type { Component } from 'vue'
 import type { Column } from './types'
@@ -140,102 +131,98 @@ function handlePageChange(page: number) {
   emit('page-change', page)
 }
 
+function sortState(col: Column<T>): 'ascending' | 'descending' | 'none' | undefined {
+  if (!col.sortable) return undefined
+  if (props.sortKey !== (col.sortKey || col.key)) return 'none'
+  return props.sortDirection === 'asc' ? 'ascending' : 'descending'
+}
+
+function alignClass(col: Column<T>) {
+  return col.align === 'right' ? 'align-right' : col.align === 'center' ? 'align-center' : undefined
+}
+
+function justifyClass(col: Column<T>) {
+  return col.align === 'right' ? 'justify-end' : col.align === 'center' ? 'justify-center' : undefined
+}
+
 function getRowKey(item: T, index: number): string {
   return item[props.rowKey] ?? `row-${index}`
 }
 </script>
 
 <template>
-  <div :class="maxHeight ? 'overflow-auto' : ''" :style="maxHeight ? { maxHeight } : {}">
-  <Table>
-    <TableHeader>
-      <TableRow>
-        <TableHead
-          v-for="col in columns"
-          :key="col.key"
-          :class="[
-            col.width,
-            col.align === 'right' && 'text-right',
-            col.align === 'center' && 'text-center',
-            col.sortable && 'cursor-pointer select-none hover:text-foreground transition-colors',
-          ]"
-          @click="handleSort(col)"
-        >
-          <div
-            :class="[
-              'flex items-center gap-1',
-              col.align === 'right' && 'justify-end',
-              col.align === 'center' && 'justify-center',
-            ]"
+  <div
+    class="table"
+    :class="{ 'scroll-y': maxHeight }"
+    :style="maxHeight ? { maxHeight } : undefined"
+  >
+    <table>
+      <thead>
+        <tr>
+          <th
+            v-for="col in columns"
+            :key="col.key"
+            :class="[alignClass(col), maxHeight && 'sticky-top']"
+            :aria-sort="sortState(col)"
+            :tabindex="col.sortable ? 0 : undefined"
+            @click="handleSort(col)"
+            @keydown.enter="handleSort(col)"
           >
-            {{ col.label }}
-            <template v-if="col.sortable">
-              <ArrowUp
-                v-if="sortKey === (col.sortKey || col.key) && sortDirection === 'asc'"
-                class="h-3 w-3"
-              />
-              <ArrowDown
-                v-else-if="sortKey === (col.sortKey || col.key) && sortDirection === 'desc'"
-                class="h-3 w-3"
-              />
-              <ArrowUpDown v-else class="h-3 w-3 opacity-30" />
-            </template>
-          </div>
-        </TableHead>
-      </TableRow>
-    </TableHeader>
-    <TableBody>
-      <!-- Loading State - Skeleton Rows -->
-      <template v-if="isLoading">
-        <TableRow v-for="row in 5" :key="`skeleton-${row}`">
-          <TableCell v-for="col in columns" :key="`skeleton-${row}-${col.key}`">
-            <Skeleton
-              :class="[
-                'h-4 skeleton-shimmer',
-                col.key === 'actions' ? 'w-16' : row % 3 === 0 ? 'w-3/4' : row % 3 === 1 ? 'w-1/2' : 'w-2/3',
-              ]"
-            />
-          </TableCell>
-        </TableRow>
-      </template>
+            <span class="hstack gap-1" :class="justifyClass(col)">
+              {{ col.label }}
+              <template v-if="col.sortable">
+                <ArrowUp
+                  v-if="sortKey === (col.sortKey || col.key) && sortDirection === 'asc'"
+                  :size="12"
+                />
+                <ArrowDown
+                  v-else-if="sortKey === (col.sortKey || col.key) && sortDirection === 'desc'"
+                  :size="12"
+                />
+                <ArrowUpDown v-else :size="12" />
+              </template>
+            </span>
+          </th>
+        </tr>
+      </thead>
+      <tbody>
+        <!-- Loading State - Skeleton Rows -->
+        <template v-if="isLoading">
+          <tr v-for="row in 5" :key="`skeleton-${row}`">
+            <td v-for="col in columns" :key="`skeleton-${row}-${col.key}`">
+              <div role="status" class="skeleton line"></div>
+            </td>
+          </tr>
+        </template>
 
-      <!-- Empty State -->
-      <TableRow v-else-if="sortedItems.length === 0">
-        <TableCell :colspan="columns.length" class="h-24 text-center text-muted-foreground">
-          <slot name="empty">
-            <div v-if="emptyIcon" class="mb-3 mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-gradient-to-br from-primary/10 to-primary/5 ring-1 ring-primary/10">
-              <component :is="emptyIcon" class="h-7 w-7 text-primary/60" />
-            </div>
-            <p v-if="emptyTitle">{{ emptyTitle }}</p>
-            <p v-if="emptyDescription" class="text-sm">{{ emptyDescription }}</p>
-            <div class="mt-3">
-              <slot name="empty-action" />
-            </div>
-          </slot>
-        </TableCell>
-      </TableRow>
+        <!-- Empty State -->
+        <tr v-else-if="sortedItems.length === 0">
+          <td :colspan="columns.length" class="align-center text-light">
+            <slot name="empty">
+              <component :is="emptyIcon" v-if="emptyIcon" :size="32" />
+              <p v-if="emptyTitle">{{ emptyTitle }}</p>
+              <p v-if="emptyDescription"><small>{{ emptyDescription }}</small></p>
+              <div class="mt-4">
+                <slot name="empty-action" />
+              </div>
+            </slot>
+          </td>
+        </tr>
 
-      <!-- Data Rows -->
-      <TableRow v-else v-for="(item, index) in displayItems" :key="getRowKey(item, index)">
-        <TableCell
-          v-for="col in columns"
-          :key="col.key"
-          :class="[
-            col.align === 'right' && 'text-right',
-            col.align === 'center' && 'text-center',
-          ]"
-        >
-          <slot :name="`cell-${col.key}`" :item="item" :index="index">
-            {{ (item as any)[col.key] }}
-          </slot>
-        </TableCell>
-      </TableRow>
-    </TableBody>
-  </Table>
+        <!-- Data Rows -->
+        <tr v-else v-for="(item, index) in displayItems" :key="getRowKey(item, index)">
+          <td v-for="col in columns" :key="col.key" :class="alignClass(col)">
+            <slot :name="`cell-${col.key}`" :item="item" :index="index">
+              {{ (item as any)[col.key] }}
+            </slot>
+          </td>
+        </tr>
+      </tbody>
+    </table>
   </div>
 
   <!-- Server-side Pagination -->
-  <div v-if="needsPagination && !isLoading" class="border-t px-4 py-3">
+  <div v-if="needsPagination && !isLoading" class="p-4">
     <PaginationControls
       :current-page="currentPage"
       :total-pages="totalPages"

@@ -1,14 +1,5 @@
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue'
-import { Checkbox } from '@/components/ui/checkbox'
-import { Label } from '@/components/ui/label'
-import { Badge } from '@/components/ui/badge'
-import {
-  Accordion,
-  AccordionContent,
-  AccordionItem,
-  AccordionTrigger
-} from '@/components/ui/accordion'
 import type { PermissionGroup } from '@/stores/roles'
 
 const props = defineProps<{
@@ -84,6 +75,14 @@ function getSelectedCountForGroup(group: PermissionGroup): number {
   return group.permissions.filter(p => props.selectedPermissions.includes(p.key)).length
 }
 
+// Keep openGroups in sync with the native <details> open state.
+function onToggle(resource: string, e: Event) {
+  const isOpen = (e.target as HTMLDetailsElement).open
+  const has = openGroups.value.includes(resource)
+  if (isOpen && !has) openGroups.value = [...openGroups.value, resource]
+  else if (!isOpen && has) openGroups.value = openGroups.value.filter(g => g !== resource)
+}
+
 // Use a reactive value for the accordion - only expand groups with selections
 const openGroups = ref<string[]>([])
 
@@ -140,64 +139,57 @@ watch(() => props.selectedPermissions, (newPerms, oldPerms) => {
 </script>
 
 <template>
-  <div class="space-y-2">
+  <div class="vstack gap-2">
     <!-- Empty state -->
-    <div v-if="permissionGroups.length === 0" class="text-center py-8 text-muted-foreground border rounded-lg">
+    <div v-if="permissionGroups.length === 0" class="align-center text-light p-4">
       <p>No permissions available. Please check if permissions are seeded in the database.</p>
     </div>
 
     <!-- Permission groups -->
-    <Accordion v-else type="multiple" v-model="openGroups" class="w-full">
-      <AccordionItem
+    <template v-else>
+      <details
         v-for="group in sortedPermissionGroups"
         :key="group.resource"
-        :value="group.resource"
-        class="border rounded-lg px-4"
+        :open="openGroups.includes(group.resource)"
+        @toggle="onToggle(group.resource, $event)"
       >
-        <AccordionTrigger class="hover:no-underline py-3">
-          <div class="flex items-center gap-3">
-            <Checkbox
+        <summary>
+          <span class="hstack gap-2">
+            <input
+              type="checkbox"
+              :aria-label="group.label"
               :checked="isGroupFullySelected(group)"
               :indeterminate="isGroupPartiallySelected(group)"
               :disabled="disabled"
               @click.stop
-              @update:checked="toggleGroup(group)"
-            />
-            <span class="font-medium">{{ group.label }}</span>
-            <Badge variant="secondary" class="ml-2">
-              {{ getSelectedCountForGroup(group) }}/{{ group.permissions.length }}
-            </Badge>
-          </div>
-        </AccordionTrigger>
-        <AccordionContent>
-          <div class="grid grid-cols-2 md:grid-cols-3 gap-3 pb-4 pt-2">
-            <div
-              v-for="permission in group.permissions"
-              :key="permission.key"
-              class="flex items-start space-x-2"
+              @change="toggleGroup(group)"
             >
-              <Checkbox
+            <strong>{{ group.label }}</strong>
+            <span class="badge" data-variant="secondary">
+              {{ getSelectedCountForGroup(group) }}/{{ group.permissions.length }}
+            </span>
+          </span>
+        </summary>
+        <div class="row p-4">
+          <div
+            v-for="permission in group.permissions"
+            :key="permission.key"
+            class="col-4"
+          >
+            <label :for="permission.key" :class="{ 'text-light': disabled }">
+              <input
                 :id="permission.key"
+                type="checkbox"
                 :checked="isSelected(permission.key)"
                 :disabled="disabled"
-                @update:checked="togglePermission(permission.key)"
-              />
-              <div class="grid gap-0.5 leading-none">
-                <Label
-                  :for="permission.key"
-                  class="text-sm font-medium cursor-pointer"
-                  :class="{ 'text-muted-foreground': disabled }"
-                >
-                  {{ getActionLabel(permission.action) }}
-                </Label>
-                <p v-if="permission.description" class="text-xs text-muted-foreground">
-                  {{ permission.description }}
-                </p>
-              </div>
-            </div>
+                @change="togglePermission(permission.key)"
+              >
+              {{ getActionLabel(permission.action) }}
+              <small v-if="permission.description" data-hint>{{ permission.description }}</small>
+            </label>
           </div>
-        </AccordionContent>
-      </AccordionItem>
-    </Accordion>
+        </div>
+      </details>
+    </template>
   </div>
 </template>

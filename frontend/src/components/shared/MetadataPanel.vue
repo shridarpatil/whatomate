@@ -1,6 +1,4 @@
 <script setup lang="ts">
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { Separator } from '@/components/ui/separator'
 import { formatDateTime } from '@/lib/utils'
 import { Clock, UserCircle } from '@/lib/icons'
 
@@ -13,42 +11,42 @@ defineProps<{
 </script>
 
 <template>
-  <Card class="overflow-hidden">
-    <CardHeader class="pb-3">
-      <CardTitle class="text-sm font-medium">{{ $t('common.metadata', 'Metadata') }}</CardTitle>
-    </CardHeader>
-    <CardContent class="space-y-2.5 text-sm">
-      <div v-if="createdByName" class="flex items-start gap-2">
-        <UserCircle class="h-3.5 w-3.5 text-muted-foreground shrink-0 mt-0.5" />
+  <article class="card">
+    <header>
+      <h3>{{ $t('common.metadata', 'Metadata') }}</h3>
+    </header>
+    <div class="vstack gap-2">
+      <div v-if="createdByName" class="hstack gap-2">
+        <UserCircle :size="14" />
         <div class="min-w-0">
-          <span class="text-muted-foreground text-xs">{{ $t('common.createdBy', 'Created by') }}</span>
-          <p class="font-medium truncate">{{ createdByName }}</p>
+          <small class="text-light">{{ $t('common.createdBy', 'Created by') }}</small>
+          <p class="truncate"><strong>{{ createdByName }}</strong></p>
         </div>
       </div>
-      <div v-if="createdAt" class="flex items-start gap-2">
-        <Clock class="h-3.5 w-3.5 text-muted-foreground shrink-0 mt-0.5" />
+      <div v-if="createdAt" class="hstack gap-2">
+        <Clock :size="14" />
         <div class="min-w-0">
-          <span class="text-muted-foreground text-xs">{{ $t('common.createdAt', 'Created') }}</span>
+          <small class="text-light">{{ $t('common.createdAt', 'Created') }}</small>
           <p class="truncate">{{ formatDateTime(createdAt) }}</p>
         </div>
       </div>
 
-      <Separator v-if="(createdByName || createdAt) && (updatedByName || updatedAt)" />
+      <hr v-if="(createdByName || createdAt) && (updatedByName || updatedAt)">
 
-      <div v-if="updatedByName" class="flex items-start gap-2">
-        <UserCircle class="h-3.5 w-3.5 text-muted-foreground shrink-0 mt-0.5" />
+      <div v-if="updatedByName" class="hstack gap-2">
+        <UserCircle :size="14" />
         <div class="min-w-0">
-          <span class="text-muted-foreground text-xs">{{ $t('common.updatedBy', 'Modified by') }}</span>
-          <p class="font-medium truncate">{{ updatedByName }}</p>
+          <small class="text-light">{{ $t('common.updatedBy', 'Modified by') }}</small>
+          <p class="truncate"><strong>{{ updatedByName }}</strong></p>
         </div>
       </div>
-      <div v-if="updatedAt" class="flex items-start gap-2">
-        <Clock class="h-3.5 w-3.5 text-muted-foreground shrink-0 mt-0.5" />
+      <div v-if="updatedAt" class="hstack gap-2">
+        <Clock :size="14" />
         <div class="min-w-0">
-          <span class="text-muted-foreground text-xs">{{ $t('common.lastUpdated', 'Last updated') }}</span>
+          <small class="text-light">{{ $t('common.lastUpdated', 'Last updated') }}</small>
           <p class="truncate">{{ formatDateTime(updatedAt) }}</p>
         </div>
       </div>
-    </CardContent>
-  </Card>
+    </div>
+  </article>
 </template>

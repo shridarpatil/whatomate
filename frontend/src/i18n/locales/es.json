@@ -96,7 +96,12 @@
     "deleteConfirmMessage": "¿Está seguro de que desea eliminar este {resource}? Esta acción no se puede deshacer.",
     "searchPlaceholder": "Buscar {resource}",
     "selectPlaceholder": "Seleccionar {resource}",
-    "copiedToClipboard": "Copiado al portapapeles"
+    "copiedToClipboard": "Copiado al portapapeles",
+    "firstPage": "First page",
+    "lastPage": "Last page",
+    "pagination": "Pagination",
+    "scrollToTop": "Scroll to top",
+    "clickToUpload": "Click to upload file"
   },
   "auth": {
     "login": "Iniciar sesión",

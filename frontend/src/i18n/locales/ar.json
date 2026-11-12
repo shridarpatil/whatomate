@@ -118,7 +118,12 @@
     "loadMore": "تحميل المزيد",
     "stay": "البقاء",
     "unsavedChangesDesc": "لديك تغييرات غير محفوظة. هل أنت متأكد أنك تريد المغادرة؟",
-    "unsavedChangesTitle": "تغييرات غير محفوظة"
+    "unsavedChangesTitle": "تغييرات غير محفوظة",
+    "firstPage": "First page",
+    "lastPage": "Last page",
+    "pagination": "Pagination",
+    "scrollToTop": "Scroll to top",
+    "clickToUpload": "Click to upload file"
   },
   "auth": {
     "login": "تسجيل الدخول",

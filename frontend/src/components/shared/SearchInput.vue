@@ -1,11 +1,11 @@
 <script setup lang="ts">
-import { Input } from '@/components/ui/input'
 import { Search, X } from '@/lib/icons'
 
 const model = defineModel<string>({ default: '' })
 
 withDefaults(defineProps<{
   placeholder?: string
+  // Kept for call-site compatibility (Tailwind width classes no longer apply).
   class?: string
 }>(), {
   placeholder: 'Search...',
@@ -17,20 +17,24 @@ function clear() {
 </script>
 
 <template>
-  <div class="relative" :class="$props.class">
-    <Search class="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-    <Input
+  <div class="hstack gap-1">
+    <Search />
+    <input
       v-model="model"
+      type="text"
+      role="searchbox"
       :placeholder="placeholder"
-      class="pl-9 pr-8"
-    />
+      :aria-label="placeholder"
+    >
     <button
       v-if="model"
       type="button"
-      class="absolute right-2 top-1/2 -translate-y-1/2 h-5 w-5 rounded-full hover:bg-muted flex items-center justify-center"
+      class="ghost small icon"
+      :title="$t('common.clear')"
+      :aria-label="$t('common.clear')"
       @click="clear"
     >
-      <X class="h-3 w-3 text-muted-foreground" />
+      <X />
     </button>
   </div>
 </template>

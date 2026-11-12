@@ -96,7 +96,12 @@
     "deleteConfirmMessage": "क्या आप वाकई इस {resource} को हटाना चाहते हैं? यह कार्रवाई वापस नहीं ली जा सकती।",
     "searchPlaceholder": "{resource} खोजें",
     "selectPlaceholder": "{resource} चुनें",
-    "copiedToClipboard": "क्लिपबोर्ड पर कॉपी किया गया"
+    "copiedToClipboard": "क्लिपबोर्ड पर कॉपी किया गया",
+    "firstPage": "First page",
+    "lastPage": "Last page",
+    "pagination": "Pagination",
+    "scrollToTop": "Scroll to top",
+    "clickToUpload": "Click to upload file"
   },
   "auth": {
     "login": "लॉगिन",

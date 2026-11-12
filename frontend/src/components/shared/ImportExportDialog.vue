@@ -1,16 +1,10 @@
 <script setup lang="ts">
 import { ref, watch, computed } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { Button } from '@/components/ui/button'
-import { Checkbox } from '@/components/ui/checkbox'
-import { Label } from '@/components/ui/label'
-import { Input } from '@/components/ui/input'
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog'
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
-import { ScrollArea } from '@/components/ui/scroll-area'
 import { dataService, type ExportColumn, type ImportResult } from '@/services/api'
 import { toast } from '@/lib/toast'
-import { Loader2, Upload, Download, FileSpreadsheet, Check, AlertCircle } from '@/lib/icons'
+import { Upload, Download, FileSpreadsheet, Check, AlertCircle } from '@/lib/icons'
+import Modal from '@/components/oat/Modal.vue'
 import { getErrorMessage } from '@/lib/api-utils'
 
 const { t, te } = useI18n()
@@ -111,6 +105,10 @@ function toggleColumn(key: string) {
   }
 }
 
+function setUpdateOnDuplicate(e: Event) {
+  updateOnDuplicate.value = (e.target as HTMLInputElement).checked
+}
+
 function isColumnSelected(key: string): boolean {
   return selectedColumns.value.includes(key)
 }
@@ -202,135 +200,145 @@ function downloadSampleCsv() {
 </script>
 
 <template>
-  <Dialog :open="open" @update:open="emit('update:open', $event)">
-    <DialogContent class="sm:max-w-lg">
-      <DialogHeader>
-        <DialogTitle>{{ $t('importExport.title', { resource: tableLabel }) }}</DialogTitle>
-        <DialogDescription>{{ $t('importExport.description', { resource: tableLabel.toLowerCase() }) }}</DialogDescription>
-      </DialogHeader>
+  <Modal
+    :open="open"
+    size="large"
+    :title="$t('importExport.title', { resource: tableLabel })"
+    :description="$t('importExport.description', { resource: tableLabel.toLowerCase() })"
+    @update:open="emit('update:open', $event)"
+  >
+    <div class="vstack gap-4">
+      <!-- State-driven tabs: same roles as ot-tabs, bound to activeTab -->
+      <div v-if="canExport && canImport" role="tablist">
+        <button
+          type="button"
+          role="tab"
+          :aria-selected="activeTab === 'export'"
+          @click="activeTab = 'export'"
+        >
+          <Download :size="16" />
+          {{ $t('importExport.export') }}
+        </button>
+        <button
+          type="button"
+          role="tab"
+          :aria-selected="activeTab === 'import'"
+          @click="activeTab = 'import'"
+        >
+          <Upload :size="16" />
+          {{ $t('importExport.import') }}
+        </button>
+      </div>
 
-      <Tabs v-model="activeTab" class="w-full">
-        <TabsList v-if="canExport && canImport" class="grid w-full grid-cols-2">
-          <TabsTrigger value="export">
-            <Download class="h-4 w-4 mr-2" />
-            {{ $t('importExport.export') }}
-          </TabsTrigger>
-          <TabsTrigger value="import">
-            <Upload class="h-4 w-4 mr-2" />
-            {{ $t('importExport.import') }}
-          </TabsTrigger>
-        </TabsList>
+      <!-- Export Tab -->
+      <div v-if="canExport" role="tabpanel" :hidden="activeTab !== 'export'" class="vstack gap-4">
+        <div v-if="isLoadingExportConfig" class="flex items-center justify-center p-4" role="status" aria-busy="true" data-spinner="large" />
+        <template v-else>
+          <fieldset class="scroll-y">
+            <legend>{{ $t('importExport.selectColumns') }}</legend>
+            <label v-for="col in exportColumns" :key="col.key" :for="'col-' + col.key">
+              <input
+                :id="'col-' + col.key"
+                type="checkbox"
+                :checked="isColumnSelected(col.key)"
+                @change="toggleColumn(col.key)"
+              >
+              {{ translateColumnLabel(col) }}
+            </label>
+          </fieldset>
 
-        <!-- Export Tab -->
-        <TabsContent v-if="canExport" value="export" class="space-y-4 mt-4">
-          <div v-if="isLoadingExportConfig" class="flex items-center justify-center py-8">
-            <Loader2 class="h-6 w-6 animate-spin text-muted-foreground" />
+          <div class="hstack justify-end gap-2">
+            <button type="button" class="outline" @click="closeDialog">{{ $t('common.cancel') }}</button>
+            <button
+              type="button"
+              :disabled="isExporting || selectedColumns.length === 0"
+              :aria-busy="isExporting ? 'true' : undefined"
+              data-spinner="small"
+              @click="handleExport"
+            >
+              <Download v-if="!isExporting" :size="16" />
+              {{ $t('importExport.exportCsv') }}
+            </button>
           </div>
-          <template v-else>
-            <div class="space-y-2">
-              <Label>{{ $t('importExport.selectColumns') }}</Label>
-              <ScrollArea class="h-48 border rounded-md p-3">
-                <div class="space-y-2">
-                  <div v-for="col in exportColumns" :key="col.key" class="flex items-center space-x-2">
-                    <Checkbox
-                      :id="'col-' + col.key"
-                      :checked="isColumnSelected(col.key)"
-                      @update:checked="toggleColumn(col.key)"
-                    />
-                    <Label :for="'col-' + col.key" class="cursor-pointer font-normal">{{ translateColumnLabel(col) }}</Label>
-                  </div>
-                </div>
-              </ScrollArea>
-            </div>
+        </template>
+      </div>
 
-            <div class="flex justify-end gap-2 pt-2">
-              <Button variant="outline" @click="closeDialog">{{ $t('common.cancel') }}</Button>
-              <Button @click="handleExport" :disabled="isExporting || selectedColumns.length === 0">
-                <Loader2 v-if="isExporting" class="h-4 w-4 mr-2 animate-spin" />
-                <Download v-else class="h-4 w-4 mr-2" />
-                {{ $t('importExport.exportCsv') }}
-              </Button>
+      <!-- Import Tab -->
+      <div v-if="canImport" role="tabpanel" :hidden="activeTab !== 'import'" class="vstack gap-4">
+        <div v-if="isLoadingImportConfig" class="flex items-center justify-center p-4" role="status" aria-busy="true" data-spinner="large" />
+        <template v-else>
+          <!-- Column Info -->
+          <div class="vstack gap-2">
+            <div>
+              <strong>{{ $t('importExport.requiredColumns') }}:</strong>
+              <span class="text-light">
+                {{ importRequiredColumns.map(c => translateColumnLabel(c)).join(', ') }}
+              </span>
             </div>
-          </template>
-        </TabsContent>
-
-        <!-- Import Tab -->
-        <TabsContent v-if="canImport" value="import" class="space-y-4 mt-4">
-          <div v-if="isLoadingImportConfig" class="flex items-center justify-center py-8">
-            <Loader2 class="h-6 w-6 animate-spin text-muted-foreground" />
-          </div>
-          <template v-else>
-            <!-- Column Info -->
-            <div class="space-y-2">
-              <div class="text-sm">
-                <span class="font-medium">{{ $t('importExport.requiredColumns') }}:</span>
-                <span class="text-muted-foreground ml-1">
-                  {{ importRequiredColumns.map(c => translateColumnLabel(c)).join(', ') }}
-                </span>
-              </div>
-              <div v-if="importOptionalColumns.length > 0" class="text-sm">
-                <span class="font-medium">{{ $t('importExport.optionalColumns') }}:</span>
-                <span class="text-muted-foreground ml-1">
-                  {{ importOptionalColumns.map(c => translateColumnLabel(c)).join(', ') }}
-                </span>
-              </div>
-              <Button variant="link" size="sm" class="h-auto p-0 text-xs" @click="downloadSampleCsv">
-                <FileSpreadsheet class="h-3 w-3 mr-1" />
+            <div v-if="importOptionalColumns.length > 0">
+              <strong>{{ $t('importExport.optionalColumns') }}:</strong>
+              <span class="text-light">
+                {{ importOptionalColumns.map(c => translateColumnLabel(c)).join(', ') }}
+              </span>
+            </div>
+            <div>
+              <button type="button" class="ghost small" @click="downloadSampleCsv">
+                <FileSpreadsheet :size="12" />
                 {{ $t('importExport.downloadSample') }}
-              </Button>
+              </button>
             </div>
+          </div>
 
-            <!-- File Upload -->
-            <div class="space-y-2">
-              <Label>{{ $t('importExport.selectCsvFile') }}</Label>
-              <Input
-                type="file"
-                accept=".csv"
-                @change="handleFileSelect"
-              />
-            </div>
+          <!-- File Upload -->
+          <label data-field>
+            {{ $t('importExport.selectCsvFile') }}
+            <input type="file" accept=".csv" @change="handleFileSelect">
+          </label>
 
-            <!-- Update on duplicate -->
-            <div v-if="uniqueColumn" class="flex items-center space-x-2">
-              <Checkbox
-                id="update-dup"
-                :checked="updateOnDuplicate"
-                @update:checked="updateOnDuplicate = !!$event"
-              />
-              <Label for="update-dup" class="cursor-pointer font-normal text-sm">
-                {{ $t('importExport.updateExisting') }}
-              </Label>
-            </div>
+          <!-- Update on duplicate -->
+          <label v-if="uniqueColumn" for="update-dup">
+            <input
+              id="update-dup"
+              type="checkbox"
+              :checked="updateOnDuplicate"
+              @change="setUpdateOnDuplicate"
+            >
+            {{ $t('importExport.updateExisting') }}
+          </label>
 
-            <!-- Import Result -->
-            <div v-if="importResult" class="rounded-md p-3 space-y-2" :class="importResult.errors > 0 ? 'bg-amber-500/10 border border-amber-500/20' : 'bg-green-500/10 border border-green-500/20'">
-              <div class="flex items-center gap-2">
-                <Check v-if="importResult.errors === 0" class="h-4 w-4 text-green-500" />
-                <AlertCircle v-else class="h-4 w-4 text-amber-500" />
-                <span class="font-medium">{{ $t('importExport.importComplete') }}</span>
-              </div>
-              <div class="text-sm text-muted-foreground space-y-1">
-                <p>{{ $t('importExport.created') }}: {{ importResult.created }}</p>
-                <p>{{ $t('importExport.updated') }}: {{ importResult.updated }}</p>
-                <p v-if="importResult.skipped > 0">{{ $t('importExport.skipped') }}: {{ importResult.skipped }}</p>
-                <p v-if="importResult.errors > 0" class="text-amber-500">{{ $t('importExport.errors') }}: {{ importResult.errors }}</p>
-              </div>
-              <ScrollArea v-if="importResult.messages && importResult.messages.length > 0" class="h-24 text-xs">
-                <div v-for="(msg, i) in importResult.messages" :key="i" class="text-amber-500">{{ msg }}</div>
-              </ScrollArea>
+          <!-- Import Result -->
+          <div v-if="importResult" role="alert" :data-variant="importResult.errors > 0 ? 'warning' : 'success'" class="vstack gap-2">
+            <div class="hstack gap-2">
+              <Check v-if="importResult.errors === 0" :size="16" />
+              <AlertCircle v-else :size="16" />
+              <strong>{{ $t('importExport.importComplete') }}</strong>
             </div>
+            <div class="vstack gap-1">
+              <p>{{ $t('importExport.created') }}: {{ importResult.created }}</p>
+              <p>{{ $t('importExport.updated') }}: {{ importResult.updated }}</p>
+              <p v-if="importResult.skipped > 0">{{ $t('importExport.skipped') }}: {{ importResult.skipped }}</p>
+              <p v-if="importResult.errors > 0">{{ $t('importExport.errors') }}: {{ importResult.errors }}</p>
+            </div>
+            <div v-if="importResult.messages && importResult.messages.length > 0" class="scroll-y">
+              <small v-for="(msg, i) in importResult.messages" :key="i" class="vstack">{{ msg }}</small>
+            </div>
+          </div>
 
-            <div class="flex justify-end gap-2 pt-2">
-              <Button variant="outline" @click="closeDialog">{{ $t('common.cancel') }}</Button>
-              <Button @click="handleImport" :disabled="isImporting || !importFile">
-                <Loader2 v-if="isImporting" class="h-4 w-4 mr-2 animate-spin" />
-                <Upload v-else class="h-4 w-4 mr-2" />
-                {{ $t('importExport.importCsv') }}
-              </Button>
-            </div>
-          </template>
-        </TabsContent>
-      </Tabs>
-    </DialogContent>
-  </Dialog>
+          <div class="hstack justify-end gap-2">
+            <button type="button" class="outline" @click="closeDialog">{{ $t('common.cancel') }}</button>
+            <button
+              type="button"
+              :disabled="isImporting || !importFile"
+              :aria-busy="isImporting ? 'true' : undefined"
+              data-spinner="small"
+              @click="handleImport"
+            >
+              <Upload v-if="!isImporting" :size="16" />
+              {{ $t('importExport.importCsv') }}
+            </button>
+          </div>
+        </template>
+      </div>
+    </div>
+  </Modal>
 </template>
