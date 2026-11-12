@@ -83,28 +83,19 @@ const navSections = computed(() => {
 const mainSections = computed(() => navSections.value.filter(s => !s.pinBottom))
 const bottomSections = computed(() => navSections.value.filter(s => s.pinBottom))
 
-// On narrow screens the sidebar is an overlay: close it after navigating.
-const mobileQuery = window.matchMedia('(max-width: 768px)')
-const isMobile = ref(mobileQuery.matches)
-const sidebarFlag = ref(false)
-// Oat sets data-sidebar-open: it means "overlay shown" on mobile but "collapsed" on desktop.
-const sidebarExpanded = computed(() => (isMobile.value ? sidebarFlag.value : !sidebarFlag.value))
-const onMediaChange = (e: MediaQueryListEvent) => { isMobile.value = e.matches }
+// On phones the sidebar is an overlay: data-sidebar-open means it is shown. Close it after navigating.
+const sidebarOpen = ref(false)
 let observer: MutationObserver | null = null
 onMounted(() => {
-  mobileQuery.addEventListener('change', onMediaChange)
   if (layout.value) {
-    sidebarFlag.value = layout.value.hasAttribute('data-sidebar-open')
+    sidebarOpen.value = layout.value.hasAttribute('data-sidebar-open')
     observer = new MutationObserver(() => {
-      sidebarFlag.value = layout.value?.hasAttribute('data-sidebar-open') ?? false
+      sidebarOpen.value = layout.value?.hasAttribute('data-sidebar-open') ?? false
     })
     observer.observe(layout.value, { attributes: true, attributeFilter: ['data-sidebar-open'] })
   }
 })
-onUnmounted(() => {
-  mobileQuery.removeEventListener('change', onMediaChange)
-  observer?.disconnect()
-})
+onUnmounted(() => observer?.disconnect())
 
 const closeMobileSidebar = () => {
   if (window.matchMedia('(max-width: 768px)').matches) {
@@ -119,11 +110,13 @@ const handleLogout = async () => {
 </script>
 
 <template>
-  <div ref="layout" data-sidebar-layout="always">
-    <header data-topnav>
-      <!-- Skip link for accessibility -->
-      <a href="#main-content" class="skip-link">{{ $t('nav.skipToMain') }}</a>
-      <button type="button" data-sidebar-toggle :aria-label="t('nav.toggleMenu')" :aria-expanded="sidebarExpanded">
+  <div ref="layout" data-sidebar-layout>
+    <!-- Skip link for accessibility -->
+    <a href="#main-content" class="skip-link">{{ $t('nav.skipToMain') }}</a>
+
+    <!-- Phones only: slim top bar with the menu toggle -->
+    <header data-sidebar-header>
+      <button type="button" data-sidebar-toggle :aria-label="t('nav.toggleMenu')" :aria-expanded="sidebarOpen">
         <Menu :size="16" aria-hidden="true" />
       </button>
       <RouterLink to="/" class="hstack gap-2">
@@ -133,6 +126,13 @@ const handleLogout = async () => {
     </header>
 
     <aside data-sidebar :aria-label="t('nav.sidebar')">
+      <header>
+        <RouterLink to="/" class="hstack gap-2">
+          <MessageSquare :size="16" aria-hidden="true" />
+          <strong>Whatomate</strong>
+        </RouterLink>
+      </header>
+
       <!-- Organization Switcher (Super Admin / multi-org only) -->
       <OrganizationSwitcher />
 
