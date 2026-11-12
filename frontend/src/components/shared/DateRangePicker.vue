@@ -79,7 +79,7 @@ function setEnd(e: Event) {
     <button
       type="button"
       class="small"
-      :disabled="!customDateRange?.start || !customDateRange?.end"
+      :disabled="!from || !to || from > to"
       @click="emit('apply-custom')"
     >
       {{ t('dateRange.apply', 'Apply') }}

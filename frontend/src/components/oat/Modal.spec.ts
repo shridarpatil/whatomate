@@ -1,7 +1,10 @@
 // @vitest-environment happy-dom
 import { describe, it, expect, beforeAll, afterEach } from 'vitest'
 import { createApp, h, nextTick } from 'vue'
+import { createI18n } from 'vue-i18n'
 import Modal from './Modal.vue'
+
+const i18n = createI18n({ legacy: false, locale: 'en', messages: { en: { common: { close: 'Close' } } } })
 
 beforeAll(() => {
   const proto = HTMLDialogElement.prototype as any
@@ -18,7 +21,7 @@ function mount(props: Record<string, unknown>) {
   document.body.appendChild(el)
   createApp({
     render: () => h(Modal, { open: false, ...props, 'onUpdate:open': (v: boolean) => emitted.push([v]) }, { default: () => 'body' }),
-  }).mount(el)
+  }).use(i18n).mount(el)
   return { dialog: el.querySelector('dialog') as HTMLDialogElement, emitted }
 }
 
@@ -52,5 +55,20 @@ describe('Modal', () => {
     expect(emitted).toEqual([])
     dialog.dispatchEvent(new MouseEvent('click', { bubbles: true }))
     expect(emitted).toEqual([[false]])
+  })
+
+  it('renders a close button that emits update:open(false)', async () => {
+    const { dialog, emitted } = mount({ open: true, title: 'T' })
+    await nextTick()
+    const btn = dialog.querySelector('header button') as HTMLButtonElement
+    expect(btn.getAttribute('aria-label')).toBe('Close')
+    btn.click()
+    expect(emitted).toEqual([[false]])
+  })
+
+  it('alert modals have no close button', async () => {
+    const { dialog } = mount({ open: true, title: 'T', alert: true })
+    await nextTick()
+    expect(dialog.querySelector('header button')).toBeNull()
   })
 })

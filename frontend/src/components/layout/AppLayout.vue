@@ -3,15 +3,7 @@ import { ref, computed, onMounted } from 'vue'
 import { RouterLink, RouterView, useRoute, useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { useAuthStore } from '@/stores/auth'
-import { Button } from '@/components/ui/button'
-import { ScrollArea } from '@/components/ui/scroll-area'
-import {
-  MessageSquare,
-  ChevronLeft,
-  ChevronRight,
-  Menu,
-  X
-} from '@/lib/icons'
+import { MessageSquare, Menu } from '@/lib/icons'
 import { wsService } from '@/services/websocket'
 import { authService } from '@/services/api'
 import OrganizationSwitcher from './OrganizationSwitcher.vue'
@@ -25,8 +17,7 @@ useI18n() // Enable $t() in template
 const route = useRoute()
 const router = useRouter()
 const authStore = useAuthStore()
-const isCollapsed = ref(false)
-const isMobileMenuOpen = ref(false)
+const layout = ref<HTMLElement | null>(null)
 
 // Refresh user data and connect WebSocket on mount
 onMounted(() => {
@@ -92,8 +83,11 @@ const navSections = computed(() => {
 const mainSections = computed(() => navSections.value.filter(s => !s.pinBottom))
 const bottomSections = computed(() => navSections.value.filter(s => s.pinBottom))
 
-const toggleSidebar = () => {
-  isCollapsed.value = !isCollapsed.value
+// On narrow screens the sidebar is an overlay: close it after navigating.
+const closeMobileSidebar = () => {
+  if (window.matchMedia('(max-width: 768px)').matches) {
+    layout.value?.removeAttribute('data-sidebar-open')
+  }
 }
 
 const handleLogout = async () => {
@@ -103,192 +97,95 @@ const handleLogout = async () => {
 </script>
 
 <template>
-  <div class="flex h-screen bg-[#0a0a0b] light:bg-gray-50">
-    <!-- Skip link for accessibility -->
-    <a href="#main-content" class="skip-link">{{ $t('nav.skipToMain') }}</a>
-
-    <!-- Mobile header -->
-    <header class="fixed top-0 left-0 right-0 z-50 flex h-12 items-center justify-between border-b border-white/[0.08] light:border-gray-200 bg-[#0a0a0b]/95 light:bg-white/95 backdrop-blur-sm px-3 md:hidden">
-      <RouterLink to="/" class="flex items-center gap-2">
-        <div class="h-7 w-7 rounded-lg bg-gradient-to-br from-emerald-500 to-green-600 flex items-center justify-center shadow-lg shadow-emerald-500/20">
-          <MessageSquare class="h-4 w-4 text-white" />
-        </div>
-        <span class="font-semibold text-sm text-white light:text-gray-900">Whatomate</span>
+  <div ref="layout" data-sidebar-layout="always">
+    <header data-topnav>
+      <!-- Skip link for accessibility -->
+      <a href="#main-content" class="skip-link">{{ $t('nav.skipToMain') }}</a>
+      <button type="button" data-sidebar-toggle aria-label="Toggle menu">
+        <Menu :size="16" aria-hidden="true" />
+      </button>
+      <RouterLink to="/" class="hstack gap-2">
+        <MessageSquare :size="16" aria-hidden="true" />
+        <strong>Whatomate</strong>
       </RouterLink>
-      <Button
-        variant="ghost"
-        size="icon"
-        class="h-8 w-8 text-white/70 hover:text-white hover:bg-white/[0.08] light:text-gray-600 light:hover:text-gray-900 light:hover:bg-gray-100"
-        aria-label="Toggle menu"
-        :aria-expanded="isMobileMenuOpen"
-        @click="isMobileMenuOpen = !isMobileMenuOpen"
-      >
-        <X v-if="isMobileMenuOpen" class="h-5 w-5" />
-        <Menu v-else class="h-5 w-5" />
-      </Button>
     </header>
 
-    <!-- Mobile menu overlay -->
-    <div
-      v-if="isMobileMenuOpen"
-      class="fixed inset-0 z-40 bg-black/60 light:bg-black/30 backdrop-blur-sm md:hidden"
-      @click="isMobileMenuOpen = false"
-    />
+    <aside data-sidebar aria-label="Main navigation">
+      <!-- Organization Switcher (Super Admin / multi-org only) -->
+      <OrganizationSwitcher />
 
-    <!-- Sidebar -->
-    <aside
-      :class="[
-        'flex flex-col border-r border-white/[0.08] light:border-gray-200 bg-[#0a0a0b] light:bg-white transition-all duration-300',
-        'fixed inset-y-0 left-0 z-40 md:relative',
-        'transform md:transform-none',
-        isMobileMenuOpen ? 'translate-x-0' : '-translate-x-full md:translate-x-0',
-        isCollapsed ? 'w-64 md:w-16' : 'w-64'
-      ]"
-      role="navigation"
-      aria-label="Main navigation"
-    >
-      <!-- Logo (hidden on mobile, shown in header instead) -->
-      <div class="hidden md:flex h-12 items-center justify-between px-3 border-b border-white/[0.08] light:border-gray-200">
-        <RouterLink to="/" class="flex items-center gap-2">
-          <div class="h-7 w-7 rounded-lg bg-gradient-to-br from-emerald-500 to-green-600 flex items-center justify-center shadow-lg shadow-emerald-500/20">
-            <MessageSquare class="h-4 w-4 text-white" />
-          </div>
-          <span
-            v-if="!isCollapsed"
-            class="font-semibold text-sm text-white light:text-gray-900"
-          >
-            Whatomate
-          </span>
-        </RouterLink>
-        <Button
-          variant="ghost"
-          size="icon"
-          class="h-7 w-7 text-white/50 hover:text-white hover:bg-white/[0.08] light:text-gray-400 light:hover:text-gray-900 light:hover:bg-gray-100"
-          :aria-label="isCollapsed ? $t('nav.expandSidebar') : $t('nav.collapseSidebar')"
-          :aria-expanded="!isCollapsed"
-          @click="toggleSidebar"
-        >
-          <ChevronLeft v-if="!isCollapsed" class="h-3.5 w-3.5" />
-          <ChevronRight v-else class="h-3.5 w-3.5" />
-        </Button>
-      </div>
-      <!-- Mobile logo spacer -->
-      <div class="h-12 md:hidden" />
+      <nav aria-label="Main navigation">
+        <ul>
+          <template v-for="section in mainSections" :key="section.label">
+            <li v-if="section.label" role="presentation">
+              <small class="text-lighter">{{ $t(section.label) }}</small>
+            </li>
+            <li v-for="item in section.items" :key="item.path">
+              <RouterLink
+                :to="item.path"
+                :aria-current="item.active ? 'page' : undefined"
+                @click="closeMobileSidebar"
+              >
+                <component :is="item.icon" :size="16" aria-hidden="true" />
+                <span>{{ $t(item.name) }}</span>
+              </RouterLink>
 
-      <!-- Organization Switcher (Super Admin only) -->
-      <OrganizationSwitcher :collapsed="isCollapsed" />
-
-      <!-- Navigation -->
-      <ScrollArea class="flex-1 py-2">
-        <nav class="px-2" role="menubar">
-          <template v-for="(section, sIdx) in mainSections" :key="section.label">
-            <!-- Section header -->
-            <div
-              v-if="section.label && !isCollapsed"
-              :class="['px-2.5 pt-4 pb-1 text-[10px] font-semibold uppercase tracking-wider text-white/30 light:text-gray-400', sIdx === 0 && 'pt-1']"
-            >
-              {{ $t(section.label) }}
-            </div>
-            <div v-else-if="sIdx > 0" :class="['my-2 mx-2.5 border-t border-white/[0.06] light:border-gray-200', isCollapsed && 'mx-1']" />
-
-            <!-- Section items -->
-            <div class="space-y-0.5">
-              <template v-for="item in section.items" :key="item.path">
-                <RouterLink
-                  :to="item.path"
-                  :class="[
-                    'nav-active-indicator btn-press flex items-center gap-2.5 rounded-lg px-2.5 py-2 text-[13px] font-medium transition-all duration-200',
-                    item.active
-                      ? 'bg-white/[0.08] text-white light:bg-gray-100 light:text-gray-900'
-                      : 'text-white/50 hover:text-white hover:bg-white/[0.06] light:text-gray-500 light:hover:text-gray-900 light:hover:bg-gray-50',
-                    isCollapsed && 'md:justify-center md:px-2'
-                  ]"
-                  :data-active="item.active"
-                  role="menuitem"
-                  :aria-current="item.active ? 'page' : undefined"
-                  @click="isMobileMenuOpen = false"
-                >
-                  <component :is="item.icon" class="h-4 w-4 shrink-0" aria-hidden="true" />
-                  <span :class="isCollapsed && 'md:sr-only'">{{ $t(item.name) }}</span>
-                </RouterLink>
-
-                <!-- Submenu items -->
-                <template v-if="item.children && item.active && !isCollapsed">
+              <!-- Submenu items -->
+              <ul v-if="item.children && item.active">
+                <li v-for="child in item.children" :key="child.path">
                   <RouterLink
-                    v-for="child in item.children"
-                    :key="child.path"
                     :to="child.path"
-                    :class="[
-                      'flex items-center gap-2.5 rounded-lg px-2.5 py-1.5 text-[13px] font-medium transition-all duration-200 ml-4',
-                      route.path === child.path
-                        ? 'bg-white/[0.06] text-white light:bg-gray-100 light:text-gray-900'
-                        : 'text-white/40 hover:text-white/70 hover:bg-white/[0.04] light:text-gray-400 light:hover:text-gray-700 light:hover:bg-gray-50'
-                    ]"
-                    role="menuitem"
                     :aria-current="route.path === child.path ? 'page' : undefined"
-                    @click="isMobileMenuOpen = false"
+                    @click="closeMobileSidebar"
                   >
-                    <component :is="child.icon" class="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
+                    <component :is="child.icon" :size="14" aria-hidden="true" />
                     <span>{{ $t(child.name) }}</span>
                   </RouterLink>
-                </template>
-              </template>
-            </div>
+                </li>
+              </ul>
+            </li>
           </template>
-        </nav>
-      </ScrollArea>
+        </ul>
+      </nav>
 
-      <!-- Bottom-pinned navigation (Settings) -->
-      <div v-if="bottomSections.length > 0" class="border-t border-white/[0.06] light:border-gray-200 px-2 py-2">
-        <template v-for="section in bottomSections" :key="section.label">
-          <template v-for="item in section.items" :key="item.path">
-            <RouterLink
-              :to="item.path"
-              :class="[
-                'nav-active-indicator btn-press flex items-center gap-2.5 rounded-lg px-2.5 py-2 text-[13px] font-medium transition-all duration-200',
-                item.active
-                  ? 'bg-white/[0.08] text-white light:bg-gray-100 light:text-gray-900'
-                  : 'text-white/50 hover:text-white hover:bg-white/[0.06] light:text-gray-500 light:hover:text-gray-900 light:hover:bg-gray-50',
-                isCollapsed && 'md:justify-center md:px-2'
-              ]"
-              :data-active="item.active"
-              role="menuitem"
-              :aria-current="item.active ? 'page' : undefined"
-              @click="isMobileMenuOpen = false"
-            >
-              <component :is="item.icon" class="h-4 w-4 shrink-0" aria-hidden="true" />
-              <span :class="isCollapsed && 'md:sr-only'">{{ $t(item.name) }}</span>
-            </RouterLink>
-
-            <template v-if="item.children && item.active && !isCollapsed">
+      <footer>
+        <!-- Bottom-pinned navigation (Settings) -->
+        <nav v-if="bottomSections.length > 0" aria-label="Secondary navigation">
+          <template v-for="section in bottomSections" :key="section.label">
+            <template v-for="item in section.items" :key="item.path">
               <RouterLink
-                v-for="child in item.children"
-                :key="child.path"
-                :to="child.path"
-                :class="[
-                  'flex items-center gap-2.5 rounded-lg px-2.5 py-1.5 text-[13px] font-medium transition-all duration-200 ml-4',
-                  route.path === child.path
-                    ? 'bg-white/[0.06] text-white light:bg-gray-100 light:text-gray-900'
-                    : 'text-white/40 hover:text-white/70 hover:bg-white/[0.04] light:text-gray-400 light:hover:text-gray-700 light:hover:bg-gray-50'
-                ]"
-                role="menuitem"
-                :aria-current="route.path === child.path ? 'page' : undefined"
-                @click="isMobileMenuOpen = false"
+                :to="item.path"
+                class="button ghost w-100"
+                :aria-current="item.active ? 'page' : undefined"
+                @click="closeMobileSidebar"
               >
-                <component :is="child.icon" class="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
-                <span>{{ $t(child.name) }}</span>
+                <component :is="item.icon" :size="16" aria-hidden="true" />
+                <span>{{ $t(item.name) }}</span>
               </RouterLink>
+
+              <template v-if="item.children && item.active">
+                <RouterLink
+                  v-for="child in item.children"
+                  :key="child.path"
+                  :to="child.path"
+                  class="button ghost small w-100"
+                  :aria-current="route.path === child.path ? 'page' : undefined"
+                  @click="closeMobileSidebar"
+                >
+                  <component :is="child.icon" :size="14" aria-hidden="true" />
+                  <span>{{ $t(child.name) }}</span>
+                </RouterLink>
+              </template>
             </template>
           </template>
-        </template>
-      </div>
+        </nav>
 
-      <!-- User Menu -->
-      <UserMenu :collapsed="isCollapsed" @logout="handleLogout" />
+        <UserMenu @logout="handleLogout" />
+      </footer>
     </aside>
 
     <!-- Main content -->
-    <main id="main-content" class="flex-1 overflow-hidden pt-12 md:pt-0 bg-[#0a0a0b] light:bg-gray-50" role="main">
+    <main id="main-content" class="scroll-y min-h-0">
       <RouterView v-slot="{ Component, route: viewRoute }">
         <Transition name="page" mode="out-in">
           <component :is="Component" :key="viewRoute.meta.stableKey ? String(viewRoute.name) : viewRoute.path" />

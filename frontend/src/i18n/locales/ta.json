@@ -1,4 +1,15 @@
 {
+  "dateRange": {
+    "from": "From",
+    "to": "To",
+    "selectRange": "Date Range",
+    "today": "Today",
+    "last7Days": "Last 7 Days",
+    "last30Days": "Last 30 Days",
+    "thisMonth": "This Month",
+    "customRange": "Custom Range",
+    "apply": "Apply"
+  },
   "common": {
     "save": "சேமி",
     "cancel": "ரத்துசெய்",
@@ -701,6 +712,10 @@
     "memberRemoved": "உறுப்பினர் குழுவிலிருந்து அகற்றப்பட்டார்"
   },
   "organizations": {
+    "label": "Organization",
+    "selectPlaceholder": "Select organization",
+    "loading": "Loading...",
+    "none": "No organizations found",
     "createNew": "நிறுவனத்தை உருவாக்கு",
     "createTitle": "நிறுவனத்தை உருவாக்கு",
     "createDesc": "தனி பணியிடத்தை நிர்வகிக்க புதிய நிறுவனத்தை உருவாக்கவும்.",

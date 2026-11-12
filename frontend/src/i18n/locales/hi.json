@@ -1,4 +1,15 @@
 {
+  "dateRange": {
+    "from": "From",
+    "to": "To",
+    "selectRange": "Date Range",
+    "today": "Today",
+    "last7Days": "Last 7 Days",
+    "last30Days": "Last 30 Days",
+    "thisMonth": "This Month",
+    "customRange": "Custom Range",
+    "apply": "Apply"
+  },
   "common": {
     "save": "सहेजें",
     "cancel": "रद्द करें",
@@ -701,6 +712,10 @@
     "memberRemoved": "सदस्य को टीम से हटा दिया गया"
   },
   "organizations": {
+    "label": "Organization",
+    "selectPlaceholder": "Select organization",
+    "loading": "Loading...",
+    "none": "No organizations found",
     "createNew": "संगठन बनाएं",
     "createTitle": "संगठन बनाएं",
     "createDesc": "एक नया वर्कस्पेस प्रबंधित करने के लिए संगठन बनाएं।",

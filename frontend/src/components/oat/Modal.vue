@@ -1,5 +1,7 @@
 <script setup lang="ts">
 import { ref, watch, onMounted } from 'vue'
+import { useI18n } from 'vue-i18n'
+import { X } from '@/lib/icons'
 
 const props = defineProps<{
   open: boolean
@@ -10,6 +12,8 @@ const props = defineProps<{
 }>()
 
 const emit = defineEmits<{ 'update:open': [value: boolean] }>()
+
+const { t } = useI18n()
 
 const dialog = ref<HTMLDialogElement | null>(null)
 
@@ -47,8 +51,20 @@ function onClick(e: MouseEvent) {
     @close="onNativeClose"
     @click="onClick"
   >
-    <header v-if="title || description">
-      <h3 v-if="title">{{ title }}</h3>
+    <header v-if="title || description || !alert">
+      <div class="hstack justify-between">
+        <h3 v-if="title">{{ title }}</h3>
+        <span v-else />
+        <button
+          v-if="!alert"
+          type="button"
+          class="ghost small icon"
+          :aria-label="t('common.close')"
+          @click="emit('update:open', false)"
+        >
+          <X :size="16" />
+        </button>
+      </div>
       <p v-if="description">{{ description }}</p>
     </header>
     <div>

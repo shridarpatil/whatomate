@@ -14,6 +14,12 @@
   .absolute-fill { position: absolute; inset: 0; }
   .truncate { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
+  /* Visually hidden until focused. */
+  .skip-link:not(:focus) { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+
+  /* Nested sidebar nav items sit indented under their parent. */
+  [data-sidebar] nav li > ul { margin-inline-start: var(--space-4); }
+
   /* Keep top-placed toasts clear of the app header (Oat's default is --space-4). */
   .toast-container[data-placement^="top"] { top: var(--space-18); }
 }

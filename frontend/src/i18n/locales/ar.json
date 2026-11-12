@@ -2553,6 +2553,10 @@
     "publishFailed": "فشل نشر التدفق"
   },
   "organizations": {
+    "label": "Organization",
+    "selectPlaceholder": "Select organization",
+    "loading": "Loading...",
+    "none": "No organizations found",
     "title": "المؤسسات",
     "createNew": "إنشاء مؤسسة جديدة",
     "createTitle": "إنشاء مؤسسة",

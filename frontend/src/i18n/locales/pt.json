@@ -784,6 +784,10 @@
     "searchUsers": "Pesquisar usuários"
   },
   "organizations": {
+    "label": "Organization",
+    "selectPlaceholder": "Select organization",
+    "loading": "Loading...",
+    "none": "No organizations found",
     "createNew": "Criar Organização",
     "createTitle": "Criar Organização",
     "createDesc": "Criar uma nova organização para gerenciar um espaço de trabalho separado.",

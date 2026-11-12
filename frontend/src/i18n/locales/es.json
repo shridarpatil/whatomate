@@ -1,4 +1,15 @@
 {
+  "dateRange": {
+    "from": "From",
+    "to": "To",
+    "selectRange": "Date Range",
+    "today": "Today",
+    "last7Days": "Last 7 Days",
+    "last30Days": "Last 30 Days",
+    "thisMonth": "This Month",
+    "customRange": "Custom Range",
+    "apply": "Apply"
+  },
   "common": {
     "save": "Guardar",
     "cancel": "Cancelar",
@@ -714,6 +725,10 @@
     "memberRemoved": "Miembro eliminado del equipo"
   },
   "organizations": {
+    "label": "Organization",
+    "selectPlaceholder": "Select organization",
+    "loading": "Loading...",
+    "none": "No organizations found",
     "createNew": "Crear organización",
     "createTitle": "Crear organización",
     "createDesc": "Crear una nueva organización para gestionar un espacio de trabajo separado.",

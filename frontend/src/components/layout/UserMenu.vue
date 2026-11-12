@@ -1,28 +1,11 @@
 <script setup lang="ts">
-import { ref, watch, onMounted, onUnmounted } from 'vue'
+import { ref, watch, onMounted, onUnmounted, useId } from 'vue'
 import { RouterLink } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { useAuthStore } from '@/stores/auth'
 import { useContactsStore } from '@/stores/contacts'
 import { usersService, chatbotService } from '@/services/api'
-import { Button } from '@/components/ui/button'
-import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
-import { Separator } from '@/components/ui/separator'
-import { Switch } from '@/components/ui/switch'
-import { Badge } from '@/components/ui/badge'
-import {
-  Popover,
-  PopoverContent,
-  PopoverTrigger
-} from '@/components/ui/popover'
-import {
-  AlertDialog,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle
-} from '@/components/ui/alert-dialog'
+import Modal from '@/components/oat/Modal.vue'
 import { LogOut, User } from '@/lib/icons'
 import { toast } from '@/lib/toast'
 import { getInitials } from '@/lib/utils'
@@ -31,23 +14,27 @@ import LanguageSwitcher from '@/components/LanguageSwitcher.vue'
 
 const { t } = useI18n()
 
-defineProps<{
-  collapsed?: boolean
-}>()
-
 const emit = defineEmits<{
   logout: []
 }>()
 
 const authStore = useAuthStore()
 const contactsStore = useContactsStore()
-const isUserMenuOpen = ref(false)
+const menuId = useId()
+const menu = ref<HTMLElement | null>(null)
 const isUpdatingAvailability = ref(false)
 const isCheckingTransfers = ref(false)
 const showAwayWarning = ref(false)
 const awayWarningTransferCount = ref(0)
 
-const handleAvailabilityChange = async (checked: boolean) => {
+const handleAvailabilityChange = async (e: Event) => {
+  const input = e.target as HTMLInputElement
+  await changeAvailability(input.checked)
+  // The switch is DOM-controlled; snap it back if the change was cancelled or failed.
+  input.checked = authStore.isAvailable
+}
+
+const changeAvailability = async (checked: boolean) => {
   if (!checked) {
     isCheckingTransfers.value = true
     try {
@@ -158,108 +145,76 @@ onUnmounted(() => {
 })
 
 const handleLogout = () => {
+  menu.value?.hidePopover()
   emit('logout')
 }
+
+const closeMenu = () => menu.value?.hidePopover()
 </script>
 
 <template>
-  <div class="border-t border-white/[0.08] light:border-gray-200 p-2">
-    <Popover v-model:open="isUserMenuOpen">
-      <PopoverTrigger as-child>
-        <Button
-          variant="ghost"
-          :class="[
-            'flex items-center justify-start w-full h-auto px-2 py-1.5 gap-2 hover:bg-white/[0.04] light:hover:bg-gray-100',
-            collapsed && 'md:justify-center'
-          ]"
-          aria-label="User menu"
-        >
-          <Avatar class="h-7 w-7 ring-2 ring-white/[0.1] light:ring-gray-200">
-            <AvatarImage :src="undefined" />
-            <AvatarFallback class="text-xs bg-gradient-to-br from-emerald-500 to-green-600 text-white">
-              {{ getInitials(authStore.user?.full_name || 'U') }}
-            </AvatarFallback>
-          </Avatar>
-          <div v-if="!collapsed" class="flex flex-col items-start text-left">
-            <span class="text-[13px] font-medium truncate max-w-[140px] text-white light:text-gray-900">
-              {{ authStore.user?.full_name }}
-            </span>
-            <span class="text-[11px] text-white/40 light:text-gray-500 truncate max-w-[140px]">
-              {{ authStore.user?.email }}
-            </span>
-          </div>
-        </Button>
-      </PopoverTrigger>
-      <PopoverContent side="top" align="start" class="w-52 p-1.5 bg-[#141414] light:bg-white border-white/[0.08] light:border-gray-200">
-        <div class="text-xs font-medium px-2 py-1 text-white/40 light:text-gray-500">{{ $t('userMenu.myAccount') }}</div>
-        <Separator class="my-1 bg-white/[0.08] light:bg-gray-200" />
-        <!-- Availability Toggle -->
-        <div class="flex items-center justify-between px-2 py-1.5">
-          <div class="flex items-center gap-2">
-            <span class="text-[13px] text-white/70 light:text-gray-700">{{ $t('userMenu.status') }}</span>
-            <Badge
-              :class="'text-[10px] px-1.5 py-0 ' + (authStore.isAvailable
-                  ? 'bg-emerald-500/20 text-emerald-400 light:bg-emerald-100 light:text-emerald-700'
-                  : 'bg-white/[0.08] text-white/50 light:bg-gray-100 light:text-gray-500')"
-            >
+  <ot-dropdown>
+    <button type="button" class="ghost w-100" :popovertarget="menuId" aria-label="User menu">
+      <figure data-variant="avatar" class="small">
+        <abbr>{{ getInitials(authStore.user?.full_name || 'U') }}</abbr>
+      </figure>
+      <span class="vstack min-w-0">
+        <span class="truncate">{{ authStore.user?.full_name }}</span>
+        <small class="truncate text-light">{{ authStore.user?.email }}</small>
+      </span>
+    </button>
+    <div :id="menuId" ref="menu" popover>
+      <div class="vstack gap-2 p-4">
+        <small class="text-light">{{ $t('userMenu.myAccount') }}</small>
+        <div class="hstack justify-between gap-4">
+          <span class="hstack gap-2">
+            <span>{{ $t('userMenu.status') }}</span>
+            <span class="badge" :data-variant="authStore.isAvailable ? 'success' : 'secondary'">
               {{ authStore.isAvailable ? $t('userMenu.available') : $t('userMenu.away') }}
-            </Badge>
-            <span v-if="!authStore.isAvailable && breakDuration" class="text-[10px] text-white/40 light:text-gray-400">
-              {{ breakDuration }}
             </span>
-          </div>
-          <Switch
+            <small v-if="!authStore.isAvailable && breakDuration" class="text-light">{{ breakDuration }}</small>
+          </span>
+          <input
+            type="checkbox"
+            role="switch"
             :checked="authStore.isAvailable"
             :disabled="isUpdatingAvailability || isCheckingTransfers"
             aria-label="Toggle availability status"
-            @update:checked="handleAvailabilityChange"
+            @change="handleAvailabilityChange"
           />
         </div>
-        <Separator class="my-1 bg-white/[0.08] light:bg-gray-200" />
-        <RouterLink to="/profile">
-          <Button
-            variant="ghost"
-            class="w-full justify-start px-2 py-1 h-auto text-[13px] font-normal text-white/70 hover:text-white hover:bg-white/[0.04] light:text-gray-600 light:hover:text-gray-900 light:hover:bg-gray-100"
-            @click="isUserMenuOpen = false"
-          >
-            <User class="mr-2 h-3.5 w-3.5" aria-hidden="true" />
-            <span>{{ $t('userMenu.profile') }}</span>
-          </Button>
-        </RouterLink>
-        <Separator class="my-1 bg-white/[0.08] light:bg-gray-200" />
-        <div class="text-xs font-medium px-2 py-1 text-white/40 light:text-gray-500">{{ $t('userMenu.theme') }}</div>
+      </div>
+      <hr>
+      <RouterLink to="/profile" role="menuitem" class="unstyled" @click="closeMenu">
+        <User :size="14" aria-hidden="true" />
+        <span>{{ $t('userMenu.profile') }}</span>
+      </RouterLink>
+      <hr>
+      <div class="vstack gap-2 p-4">
+        <small class="text-light">{{ $t('userMenu.theme') }}</small>
         <ThemeSwitcher />
-        <Separator class="my-1 bg-white/[0.08] light:bg-gray-200" />
-        <div class="text-xs font-medium px-2 py-1 text-white/40 light:text-gray-500">{{ $t('userMenu.language') }}</div>
-        <div class="px-1.5 py-1">
-          <LanguageSwitcher />
-        </div>
-        <Separator class="my-1 bg-white/[0.08] light:bg-gray-200" />
-        <Button
-          variant="ghost"
-          class="w-full justify-start px-2 py-1 h-auto text-[13px] font-normal text-white/70 hover:text-white hover:bg-white/[0.04] light:text-gray-600 light:hover:text-gray-900 light:hover:bg-gray-100"
-          @click="handleLogout"
-        >
-          <LogOut class="mr-2 h-3.5 w-3.5" aria-hidden="true" />
-          <span>{{ $t('userMenu.logOut') }}</span>
-        </Button>
-      </PopoverContent>
-    </Popover>
-  </div>
+        <small class="text-light">{{ $t('userMenu.language') }}</small>
+        <LanguageSwitcher />
+      </div>
+      <hr>
+      <button type="button" role="menuitem" class="ghost" @click="handleLogout">
+        <LogOut :size="14" aria-hidden="true" />
+        <span>{{ $t('userMenu.logOut') }}</span>
+      </button>
+    </div>
+  </ot-dropdown>
 
   <!-- Away Warning Dialog -->
-  <AlertDialog :open="showAwayWarning">
-    <AlertDialogContent>
-      <AlertDialogHeader>
-        <AlertDialogTitle>{{ $t('userMenu.awayWarningTitle') }}</AlertDialogTitle>
-        <AlertDialogDescription>
-          {{ $t('userMenu.awayWarningDesc', { count: awayWarningTransferCount }) }}
-        </AlertDialogDescription>
-      </AlertDialogHeader>
-      <AlertDialogFooter>
-        <Button variant="outline" @click="showAwayWarning = false">{{ $t('common.cancel') }}</Button>
-        <Button @click="confirmGoAway" :disabled="isUpdatingAvailability">{{ $t('userMenu.goAway') }}</Button>
-      </AlertDialogFooter>
-    </AlertDialogContent>
-  </AlertDialog>
+  <Modal
+    alert
+    :open="showAwayWarning"
+    :title="$t('userMenu.awayWarningTitle')"
+    :description="$t('userMenu.awayWarningDesc', { count: awayWarningTransferCount })"
+    @update:open="showAwayWarning = $event"
+  >
+    <template #footer>
+      <button type="button" class="outline" @click="showAwayWarning = false">{{ $t('common.cancel') }}</button>
+      <button type="button" :disabled="isUpdatingAvailability" @click="confirmGoAway">{{ $t('userMenu.goAway') }}</button>
+    </template>
+  </Modal>
 </template>

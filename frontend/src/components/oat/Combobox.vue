@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed, nextTick } from 'vue'
+import { ref, computed, nextTick, useId } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { ChevronDown, Check } from '@/lib/icons'
 import { filterOptions, type ComboOption } from './combobox'
@@ -20,8 +20,7 @@ const emit = defineEmits<{ 'update:modelValue': [value: string] }>()
 
 const { t } = useI18n()
 
-let counter = 0
-const uid = `combobox-${Date.now().toString(36)}-${counter++}-${Math.random().toString(36).slice(2, 7)}`
+const uid = useId()
 const popoverId = `${uid}-popover`
 const listId = `${uid}-list`
 

@@ -3,23 +3,10 @@ import { ref, computed, onMounted, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useOrganizationsStore } from '@/stores/organizations'
 import { useAuthStore } from '@/stores/auth'
-import { Button } from '@/components/ui/button'
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select'
-import { Input } from '@/components/ui/input'
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
+import Modal from '@/components/oat/Modal.vue'
 import { organizationsService } from '@/services/api'
 import { toast } from '@/lib/toast'
-import { Building2, Plus, Loader2 } from '@/lib/icons'
-
-const props = defineProps<{
-  collapsed?: boolean
-}>()
+import { Plus } from '@/lib/icons'
 
 const { t } = useI18n()
 const organizationsStore = useOrganizationsStore()
@@ -70,8 +57,10 @@ watch(() => authStore.user?.is_super_admin, async (superAdmin) => {
   }
 })
 
-const handleOrgChange = async (value: string | number | bigint | Record<string, any> | null) => {
-  if (!value || typeof value !== 'string') return
+const handleOrgChange = async (e: Event) => {
+  const select = e.target as HTMLSelectElement
+  const value = select.value
+  if (!value) return
 
   // Everyone goes through switch-org, super admins included: the X-Organization-ID
   // header alone only scopes API client calls. The WebSocket token, <img src> media and
@@ -82,7 +71,8 @@ const handleOrgChange = async (value: string | number | bigint | Record<string, 
     organizationsStore.selectOrganization(value)
     window.location.reload()
   } catch {
-    // If switch fails, don't reload
+    // If switch fails, don't reload; put the native select back on the active org
+    select.value = currentOrgId.value
   }
 }
 
@@ -117,88 +107,51 @@ const refreshOrgs = async () => {
 </script>
 
 <template>
-  <div v-if="shouldShowSwitcher" class="px-2 py-2 border-b">
-    <div v-if="!collapsed" class="space-y-1">
-      <div class="flex items-center justify-between">
-        <span class="text-[11px] font-medium text-muted-foreground uppercase tracking-wide px-1">
-          Organization
-        </span>
-        <Button
-          v-if="canCreateOrg"
-          variant="ghost"
-          size="icon"
-          class="h-5 w-5"
-          @click="isCreateDialogOpen = true"
-        >
-          <Plus class="h-3 w-3" />
-        </Button>
-      </div>
-      <Select
-        v-if="orgList.length > 0"
-        :model-value="currentOrgId"
-        @update:model-value="handleOrgChange"
+  <div v-if="shouldShowSwitcher" class="vstack gap-2 p-4">
+    <div class="hstack justify-between">
+      <small class="text-light">{{ t('organizations.label') }}</small>
+      <button
+        v-if="canCreateOrg"
+        type="button"
+        class="ghost small icon"
+        :aria-label="t('organizations.createNew')"
+        :title="t('organizations.createNew')"
+        @click="isCreateDialogOpen = true"
       >
-        <SelectTrigger class="h-8 text-[13px]">
-          <SelectValue placeholder="Select organization" />
-        </SelectTrigger>
-        <SelectContent>
-          <SelectItem
-            v-for="org in orgList"
-            :key="org.id"
-            :value="org.id"
-          >
-            <div class="flex items-center gap-2">
-              <Building2 class="h-3.5 w-3.5 text-muted-foreground" />
-              <span>{{ org.name }}</span>
-            </div>
-          </SelectItem>
-        </SelectContent>
-      </Select>
-      <div v-else-if="organizationsStore.loading" class="text-[12px] text-muted-foreground px-1">
-        Loading...
-      </div>
-      <div v-else-if="organizationsStore.error" class="text-[12px] text-destructive px-1">
-        {{ organizationsStore.error }}
-      </div>
-      <div v-else class="text-[12px] text-muted-foreground px-1">
-        No organizations found
-      </div>
+        <Plus :size="14" />
+      </button>
     </div>
-
-    <!-- Collapsed view - just show icon with selected org initial -->
-    <div v-else class="flex justify-center">
-      <Button
-        variant="ghost"
-        size="icon"
-        class="h-8 w-8"
-        :title="organizationsStore.selectedOrganization?.name || 'All Organizations'"
-      >
-        <Building2 class="h-4 w-4" />
-      </Button>
-    </div>
+    <select
+      v-if="orgList.length > 0"
+      :value="currentOrgId"
+      :aria-label="t('organizations.selectPlaceholder')"
+      @change="handleOrgChange"
+    >
+      <option v-for="org in orgList" :key="org.id" :value="org.id">{{ org.name }}</option>
+    </select>
+    <small v-else-if="organizationsStore.loading" class="text-light">{{ t('organizations.loading') }}</small>
+    <div v-else-if="organizationsStore.error" role="alert" data-variant="danger">{{ organizationsStore.error }}</div>
+    <small v-else class="text-light">{{ t('organizations.none') }}</small>
   </div>
 
   <!-- Create Org Dialog -->
-  <Dialog v-model:open="isCreateDialogOpen">
-    <DialogContent class="max-w-sm">
-      <DialogHeader>
-        <DialogTitle>{{ t('organizations.createTitle') }}</DialogTitle>
-        <DialogDescription>{{ t('organizations.createDesc') }}</DialogDescription>
-      </DialogHeader>
-      <div class="py-4">
-        <Input
-          v-model="newOrgName"
-          :placeholder="t('organizations.namePlaceholder')"
-          @keydown.enter="submitCreateOrg"
-        />
-      </div>
-      <DialogFooter>
-        <Button variant="outline" @click="isCreateDialogOpen = false">{{ t('common.cancel') }}</Button>
-        <Button @click="submitCreateOrg" :disabled="isCreating || !newOrgName.trim()">
-          <Loader2 v-if="isCreating" class="h-4 w-4 mr-2 animate-spin" />
-          {{ t('common.create') }}
-        </Button>
-      </DialogFooter>
-    </DialogContent>
-  </Dialog>
+  <Modal
+    v-model:open="isCreateDialogOpen"
+    size="small"
+    :title="t('organizations.createTitle')"
+    :description="t('organizations.createDesc')"
+  >
+    <input
+      v-model="newOrgName"
+      :placeholder="t('organizations.namePlaceholder')"
+      :aria-label="t('organizations.namePlaceholder')"
+      @keydown.enter="submitCreateOrg"
+    />
+    <template #footer>
+      <button type="button" class="outline" @click="isCreateDialogOpen = false">{{ t('common.cancel') }}</button>
+      <button type="button" :aria-busy="isCreating" :disabled="isCreating || !newOrgName.trim()" @click="submitCreateOrg">
+        {{ t('common.create') }}
+      </button>
+    </template>
+  </Modal>
 </template>

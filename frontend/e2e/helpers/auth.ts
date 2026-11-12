@@ -61,8 +61,8 @@ export async function logout(page: Page) {
   // Click user menu in sidebar - it's in the aside element (not nav), button contains user's email
   const userMenuButton = page.locator('aside').getByRole('button').filter({ hasText: /@/ }).first()
   await userMenuButton.click()
-  // Click logout in popover
-  await page.getByRole('button', { name: /Log out/i }).click()
+  // Click logout in the user menu
+  await page.getByRole('menuitem', { name: /Log out/i }).click()
   // Wait for redirect to login
   await page.waitForURL(/\/login/)
 }
