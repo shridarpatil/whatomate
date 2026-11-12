@@ -2031,7 +2031,7 @@ async function sendMediaMessage() {
                   class="flex items-center gap-1"
                   :class="{ 'justify-end': isOutgoing(message) }"
                 >
-                  <article class="card p-4 min-w-0" :data-bubble="message.direction">
+                  <article class="card min-w-0" :data-bubble="message.direction">
                     <!-- Reply preview (if this message is replying to another) -->
                     <button
                       v-if="message.is_reply && message.reply_to_message"
@@ -2234,7 +2234,7 @@ async function sendMediaMessage() {
                     </div>
 
                     <!-- Time and delivery status -->
-                    <div class="flex items-center justify-end gap-1 mt-2" data-bubble-time>
+                    <div class="flex items-center justify-end gap-1" data-bubble-time>
                       <small class="text-light">{{ formatMessageTime(message.created_at) }}</small>
                       <component
                         :is="getMessageStatusIcon(message.status)"
@@ -2491,7 +2491,7 @@ async function sendMediaMessage() {
         </label>
         <div v-if="templatePreview" class="vstack gap-1">
           <small class="text-light">{{ $t('chat.preview') }}</small>
-          <article class="card p-4" data-bubble="outgoing">
+          <article class="card" data-bubble="outgoing">
             <img v-if="templateHeaderPreview" :src="templateHeaderPreview" alt="" class="media-preview mb-2" />
             <p class="pre-wrap">{{ templatePreview }}</p>
             <div v-if="selectedTemplate?.buttons?.length" class="vstack gap-1 mt-2" data-interactive-buttons>
@@ -2536,7 +2536,7 @@ async function sendMediaMessage() {
         </label>
         <div v-if="cannedPreview || cannedPreviewButtons.length" class="vstack gap-1">
           <small class="text-light">{{ $t('chat.preview') }}</small>
-          <article id="canned-response-preview" class="card p-4" data-bubble="outgoing">
+          <article id="canned-response-preview" class="card" data-bubble="outgoing">
             <p v-if="cannedPreview" class="pre-wrap">{{ cannedPreview }}</p>
             <PreviewButtonGroup
               v-if="cannedPreviewButtons.length"

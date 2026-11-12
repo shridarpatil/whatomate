@@ -29,7 +29,10 @@
   /* Chat: side columns are 18rem; on phones the one visible column fills the screen. */
   .chat-col { width: 18rem; max-width: 100%; }
   @media (max-width: 47.99rem) { .chat-col { width: 100%; } }
-  [data-bubble] { max-width: min(75%, 40rem); }
+  [data-bubble] { max-width: min(75%, 40rem); padding: var(--space-2) var(--space-3); }
+  /* Chat bubbles are compact: no paragraph gap, small gap before the time row. */
+  [data-bubble] p { margin-block-end: 0; }
+  [data-bubble-time] { margin-block-start: var(--space-1); }
   .resize-handle { width: var(--space-1); flex-shrink: 0; cursor: col-resize; }
   /* Popover pickers (emoji, templates, canned responses): fixed width, bounded list. */
   .picker { width: min(20rem, 100vw - 2rem); }
