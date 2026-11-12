@@ -728,9 +728,10 @@ onMounted(async () => {
         :key="p.type"
         type="button"
         class="outline small shrink-0"
+        :data-node-type="p.type"
         @click="addNodeFromPalette(p.type)"
       >
-        <component :is="p.icon" />
+        <span data-node-icon><component :is="p.icon" /></span>
         {{ p.label }}
       </button>
     </div>
