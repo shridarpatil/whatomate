@@ -5,11 +5,9 @@ import App from './App.vue'
 import router from './router'
 import { i18n } from './i18n'
 
-import './assets/fonts.css'
 import './vendor/oat/oat.css'
 import './vendor/oat/js/index.js'
 import './assets/layout.css'
-import './assets/index.css'
 
 const app = createApp(App)
 
