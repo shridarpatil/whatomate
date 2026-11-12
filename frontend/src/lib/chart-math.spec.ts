@@ -9,6 +9,12 @@ const noNaN = (v: unknown) => {
 }
 
 describe('niceTicks', () => {
+  it('integer option keeps whole-number steps', () => {
+    expect(niceTicks(0, 1, 5, { integer: true })).toEqual([0, 1])
+    expect(niceTicks(0, 2, 5, { integer: true })).toEqual([0, 1, 2])
+    expect(niceTicks(0, 87)).toEqual([0, 20, 40, 60, 80, 100])
+  })
+
   it('rounds to 1/2/5 steps', () => {
     expect(niceTicks(0, 87)).toEqual([0, 20, 40, 60, 80, 100])
   })

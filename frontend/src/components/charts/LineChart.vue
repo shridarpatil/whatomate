@@ -44,7 +44,7 @@ const items = computed(() => folded.value.map((s, i) => ({
 
 const ticks = computed(() => {
   const all = folded.value.flatMap(s => props.labels.map((_, i) => value(s, i)))
-  return niceTicks(Math.min(0, ...all, 0), Math.max(0, ...all, 0))
+  return niceTicks(Math.min(0, ...all, 0), Math.max(0, ...all, 0), 5, { integer: all.every(Number.isInteger) })
 })
 const tickLabels = computed(() => ticks.value.map(fmt))
 

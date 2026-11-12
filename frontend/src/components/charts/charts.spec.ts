@@ -138,3 +138,12 @@ describe('MeterRow', () => {
     expect(root.textContent).toContain('42%')
   })
 })
+
+describe('integer ticks', () => {
+  it('line chart with integer data renders no fractional tick label', () => {
+    const root = mount(LineChart, { labels, series: [{ label: 'A', data: [0, 1, 2] }, { label: 'B', data: [2, 1, 0] }] })
+    const texts = Array.from(root.querySelectorAll('svg text')).map(t => t.textContent?.trim() ?? '')
+    expect(texts).toContain('1')
+    expect(texts.filter(t => /^\d+\.\d+$/.test(t))).toEqual([])
+  })
+})

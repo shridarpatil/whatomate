@@ -53,7 +53,7 @@ const ticks = computed(() => {
     lo = Math.min(0, ...all)
     hi = Math.max(0, ...all)
   }
-  return niceTicks(lo, hi)
+  return niceTicks(lo, hi, 5, { integer: Number.isInteger(lo) && Number.isInteger(hi) })
 })
 const tickLabels = computed(() => ticks.value.map(fmt))
 

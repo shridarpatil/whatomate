@@ -1,7 +1,7 @@
 const num = (n: number) => (Number.isFinite(n) ? Math.round(n * 100) / 100 : 0)
 
-/** Ascending ticks in steps of 1/2/5 x 10^n covering [min, max]. */
-export function niceTicks(min: number, max: number, count = 5): number[] {
+/** Ascending ticks in steps of 1/2/5 x 10^n covering [min, max]; `integer` forces whole-number steps. */
+export function niceTicks(min: number, max: number, count = 5, opts?: { integer?: boolean }): number[] {
   if (!Number.isFinite(min)) min = 0
   if (!Number.isFinite(max)) max = 0
   if (min > max) [min, max] = [max, min]
@@ -11,7 +11,8 @@ export function niceTicks(min: number, max: number, count = 5): number[] {
   const rough = (max - min) / Math.max(1, count)
   const pow = Math.pow(10, Math.floor(Math.log10(rough)))
   const f = rough / pow
-  const step = (f <= 1 ? 1 : f <= 2 ? 2 : f <= 5 ? 5 : 10) * pow
+  let step = (f <= 1 ? 1 : f <= 2 ? 2 : f <= 5 ? 5 : 10) * pow
+  if (opts?.integer) step = Math.max(1, Math.round(step))
   const start = Math.floor(min / step + 1e-9)
   const end = Math.ceil(max / step - 1e-9)
   const ticks: number[] = []

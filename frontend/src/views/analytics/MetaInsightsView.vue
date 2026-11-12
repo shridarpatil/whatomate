@@ -694,8 +694,10 @@ function callTiles(group: { currency: string; agg: ReturnType<typeof aggregateCa
             <button
               v-for="tab in tabs"
               :key="tab.value"
+              :id="`meta-tab-${tab.value}`"
               type="button"
               role="tab"
+              aria-controls="meta-tabpanel"
               :aria-selected="activeTab === tab.value"
               :title="tab.label"
               @click="activeTab = tab.value"
@@ -705,7 +707,7 @@ function callTiles(group: { currency: string; agg: ReturnType<typeof aggregateCa
             </button>
           </div>
 
-          <div role="tabpanel" class="vstack gap-4">
+          <div id="meta-tabpanel" role="tabpanel" :aria-labelledby="`meta-tab-${activeTab}`" class="vstack gap-4">
             <!-- Messaging Analytics -->
             <template v-if="activeTab === 'analytics'">
               <template v-if="isLoading">
