@@ -634,45 +634,47 @@ function callTiles(group: { currency: string; agg: ReturnType<typeof aggregateCa
       :icon="BarChart3"
     >
       <template #actions>
-        <!-- Account Filter -->
-        <Combobox
-          v-model="selectedAccountId"
-          :options="accountOptions"
-          :placeholder="$t('metaInsights.selectAccount')"
-          :search-placeholder="$t('metaInsights.searchAccount')"
-          :empty-text="$t('metaInsights.noAccountFound')"
-          :aria-label="$t('metaInsights.selectAccount')"
-        />
+        <div class="hstack gap-2 items-center flex-wrap justify-end">
+          <!-- Account Filter -->
+          <Combobox
+            v-model="selectedAccountId"
+            :options="accountOptions"
+            :placeholder="$t('metaInsights.selectAccount')"
+            :search-placeholder="$t('metaInsights.searchAccount')"
+            :empty-text="$t('metaInsights.noAccountFound')"
+            :aria-label="$t('metaInsights.selectAccount')"
+          />
 
-        <!-- Granularity Filter -->
-        <select v-model="selectedGranularity" :aria-label="$t('metaInsights.granularity')">
-          <option v-for="opt in granularityOptions" :key="opt.value" :value="opt.value">{{ opt.label }}</option>
-        </select>
+          <!-- Granularity Filter -->
+          <select v-model="selectedGranularity" class="w-auto" :aria-label="$t('metaInsights.granularity')">
+            <option v-for="opt in granularityOptions" :key="opt.value" :value="opt.value">{{ opt.label }}</option>
+          </select>
 
-        <!-- Time Range Filter -->
-        <DateRangePicker
-          v-model:selected-range="selectedRange"
-          v-model:custom-date-range="customDateRange"
-          v-model:is-date-picker-open="isDatePickerOpen"
-          :format-date-range-display="formatDateRangeDisplay"
-          @apply-custom="applyCustomRange"
-        />
+          <!-- Time Range Filter -->
+          <DateRangePicker
+            v-model:selected-range="selectedRange"
+            v-model:custom-date-range="customDateRange"
+            v-model:is-date-picker-open="isDatePickerOpen"
+            :format-date-range-display="formatDateRangeDisplay"
+            @apply-custom="applyCustomRange"
+          />
 
-        <!-- Refresh Button -->
-        <button
-          type="button"
-          class="outline icon"
-          :aria-label="$t('metaInsights.refreshCache')"
-          :title="$t('metaInsights.refreshCache')"
-          :disabled="isRefreshing"
-          :aria-busy="isRefreshing"
-          @click="refreshCache"
-        >
-          <RefreshCw :size="16" />
-        </button>
+          <!-- Refresh Button -->
+          <button
+            type="button"
+            class="outline icon"
+            :aria-label="$t('metaInsights.refreshCache')"
+            :title="$t('metaInsights.refreshCache')"
+            :disabled="isRefreshing"
+            :aria-busy="isRefreshing"
+            @click="refreshCache"
+          >
+            <RefreshCw :size="16" />
+          </button>
 
-        <!-- Cache indicator -->
-        <span v-if="isCached" class="badge" data-variant="secondary">{{ $t('metaInsights.cached') }}</span>
+          <!-- Cache indicator -->
+          <span v-if="isCached" class="badge" data-variant="secondary">{{ $t('metaInsights.cached') }}</span>
+        </div>
       </template>
     </PageHeader>
 

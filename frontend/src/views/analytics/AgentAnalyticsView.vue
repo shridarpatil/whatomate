@@ -254,25 +254,27 @@ void _displayStats.value // Suppress unused warning
       :icon="BarChart3"
     >
       <template #actions>
-        <!-- Agent Filter (Admin/Manager only) -->
-        <Combobox
-          v-if="isAdminOrManager"
-          v-model="selectedAgentId"
-          :options="agentOptions"
-          :placeholder="$t('agentAnalytics.selectAgent')"
-          :search-placeholder="$t('agentAnalytics.searchAgent')"
-          :empty-text="$t('agentAnalytics.noAgentFound')"
-          :aria-label="$t('agentAnalytics.selectAgent')"
-        />
+        <div class="hstack gap-2 items-center flex-wrap justify-end">
+          <!-- Agent Filter (Admin/Manager only) -->
+          <Combobox
+            v-if="isAdminOrManager"
+            v-model="selectedAgentId"
+            :options="agentOptions"
+            :placeholder="$t('agentAnalytics.selectAgent')"
+            :search-placeholder="$t('agentAnalytics.searchAgent')"
+            :empty-text="$t('agentAnalytics.noAgentFound')"
+            :aria-label="$t('agentAnalytics.selectAgent')"
+          />
 
-        <!-- Time Range Filter -->
-        <DateRangePicker
-          v-model:selected-range="selectedRange"
-          v-model:custom-date-range="customDateRange"
-          v-model:is-date-picker-open="isDatePickerOpen"
-          :format-date-range-display="formatDateRangeDisplay"
-          @apply-custom="applyCustomRange"
-        />
+          <!-- Time Range Filter -->
+          <DateRangePicker
+            v-model:selected-range="selectedRange"
+            v-model:custom-date-range="customDateRange"
+            v-model:is-date-picker-open="isDatePickerOpen"
+            :format-date-range-display="formatDateRangeDisplay"
+            @apply-custom="applyCustomRange"
+          />
+        </div>
       </template>
     </PageHeader>
 
