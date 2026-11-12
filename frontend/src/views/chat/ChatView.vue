@@ -29,7 +29,6 @@ import {
   AlertCircle,
   User,
   UserPlus,
-  UserMinus,
   UserX,
   Play,
   Reply,
@@ -2579,16 +2578,6 @@ async function sendMediaMessage() {
           :placeholder="$t('chat.searchUsers') + '...'"
           :aria-label="$t('chat.searchUsers')"
         />
-        <button
-          v-if="contactsStore.currentContact?.assigned_user_id"
-          type="button"
-          class="outline w-100"
-          @click="assignContactToUser(null); isAssignDialogOpen = false"
-        >
-          <UserMinus />
-          {{ $t('chat.unassignContact') }}
-        </button>
-        <hr />
         <div class="scroll-y picker-list">
           <div class="table">
             <table>
@@ -2614,14 +2603,23 @@ async function sendMediaMessage() {
                   </td>
                   <td><span class="badge outline">{{ user.role?.name }}</span></td>
                   <td class="align-right">
-                    <span
+                    <div
                       v-if="contactsStore.currentContact?.assigned_user_id === user.id"
-                      class="badge"
-                      data-variant="success"
+                      class="hstack gap-2 items-center justify-end"
                     >
-                      <Check :size="12" />
-                      {{ $t('chat.assigned') }}
-                    </span>
+                      <span class="badge" data-variant="success">
+                        <Check :size="12" />
+                        {{ $t('chat.assigned') }}
+                      </span>
+                      <button
+                        type="button"
+                        class="outline small"
+                        data-variant="danger"
+                        @click="assignContactToUser(null); isAssignDialogOpen = false"
+                      >
+                        {{ $t('chat.unassignContact') }}
+                      </button>
+                    </div>
                     <button
                       v-else
                       type="button"
