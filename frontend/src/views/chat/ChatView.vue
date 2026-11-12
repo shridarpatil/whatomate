@@ -2039,16 +2039,16 @@ async function sendMediaMessage() {
                     <button
                       v-if="message.is_reply && message.reply_to_message"
                       type="button"
-                      class="ghost small w-100 mb-2 hstack"
+                      class="outline small w-100 mb-2"
                       data-reply-preview
                       @click="scrollToMessage(message.reply_to_message_id)"
                     >
-                      <blockquote class="flex flex-col w-100 min-w-0 align-left">
+                      <span class="flex flex-col w-100 min-w-0 align-left">
                         <strong>
                           {{ message.reply_to_message.direction === 'incoming' ? (contactsStore.currentContact?.profile_name || contactsStore.currentContact?.name || $t('chat.customer')) : $t('chat.you') }}
                         </strong>
                         <span class="truncate">{{ getReplyPreviewContent(message) }}</span>
-                      </blockquote>
+                      </span>
                     </button>
 
                     <!-- Template header media (image/video/document shown above template text) -->
@@ -2205,13 +2205,12 @@ async function sendMediaMessage() {
                           :href="btn.url"
                           target="_blank"
                           rel="noopener noreferrer"
-                          class="button small w-100"
-                          data-variant="secondary"
+                          class="button outline small w-100"
                         >
                           <ExternalLink :size="14" />
                           {{ btn.title }}
                         </a>
-                        <span v-else class="badge w-100" data-variant="secondary">{{ btn.title }}</span>
+                        <span v-else class="badge outline w-100">{{ btn.title }}</span>
                       </template>
                     </div>
                     <!-- CTA URL button - WhatsApp style -->
@@ -2220,15 +2219,14 @@ async function sendMediaMessage() {
                       :href="getCTAUrlData(message)?.url"
                       target="_blank"
                       rel="noopener noreferrer"
-                      class="button small w-100 mt-2"
-                      data-variant="secondary"
+                      class="button outline small w-100 mt-2"
                     >
                       <ExternalLink :size="14" />
                       {{ getCTAUrlData(message)?.button_text }}
                     </a>
                     <!-- Voice call button - WhatsApp style, non-clickable in our chat -->
                     <div v-if="getVoiceCallData(message)" class="mt-2">
-                      <span class="badge w-100" data-variant="secondary">
+                      <span class="badge outline w-100">
                         <PhoneCall :size="14" />
                         {{ getVoiceCallData(message)?.display_text }}
                       </span>
