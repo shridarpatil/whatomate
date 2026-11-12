@@ -3,10 +3,6 @@ import { ref, onMounted, computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { apiKeysService } from '@/services/api'
 import { useAuthStore } from '@/stores/auth'
-import { Button } from '@/components/ui/button'
-import { Switch } from '@/components/ui/switch'
-import { ScrollArea } from '@/components/ui/scroll-area'
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { PageHeader, DataTable, SearchInput, DeleteConfirmDialog, IconButton, ErrorState, type Column } from '@/components/shared'
 import { toast } from '@/lib/toast'
 import { Plus, Trash2, Pencil, Key } from '@/lib/icons'
@@ -105,70 +101,63 @@ onMounted(() => fetchItems())
 </script>
 
 <template>
-  <div class="flex flex-col h-full bg-[#0a0a0b] light:bg-gray-50">
-    <PageHeader :title="$t('apiKeys.title')" :subtitle="$t('apiKeys.subtitle')" :icon="Key" icon-gradient="bg-gradient-to-br from-amber-500 to-orange-600 shadow-amber-500/20" back-link="/settings">
+  <div class="flex flex-col h-full">
+    <PageHeader :title="$t('apiKeys.title')" :description="$t('apiKeys.subtitle')" :icon="Key" back-link="/settings">
       <template #actions>
-        <RouterLink v-if="canWrite" to="/settings/api-keys/new">
-          <Button variant="outline" size="sm"><Plus class="h-4 w-4 mr-2" />{{ $t('apiKeys.createApiKey') }}</Button>
-        </RouterLink>
+        <RouterLink v-if="canWrite" to="/settings/api-keys/new" class="button outline small"><Plus :size="16" />{{ $t('apiKeys.createApiKey') }}</RouterLink>
       </template>
     </PageHeader>
 
-    <ScrollArea class="flex-1">
-      <div class="p-6">
-        <div>
-          <ErrorState
-            v-if="error && !isLoading"
-            :title="$t('common.loadErrorTitle')"
-            :description="error"
-            :retry-label="$t('common.retry')"
-            @retry="fetchItems"
-          />
-          <Card v-else>
-            <CardHeader>
-              <div class="flex items-center justify-between flex-wrap gap-4">
-                <div>
-                  <CardTitle>{{ $t('apiKeys.yourApiKeys') }}</CardTitle>
-                  <CardDescription>{{ $t('apiKeys.yourApiKeysDesc') }}</CardDescription>
-                </div>
-                <SearchInput v-model="searchQuery" :placeholder="$t('apiKeys.searchApiKeys') + '...'" class="w-64" />
-              </div>
-            </CardHeader>
-            <CardContent>
-              <DataTable :items="apiKeys" :columns="columns" :is-loading="isLoading" :empty-icon="Key" :empty-title="searchQuery ? $t('apiKeys.noMatchingApiKeys') : $t('apiKeys.noApiKeysYet')" :empty-description="searchQuery ? $t('apiKeys.noMatchingApiKeysDesc') : $t('apiKeys.noApiKeysYetDesc')" v-model:sort-key="sortKey" v-model:sort-direction="sortDirection" server-pagination :current-page="currentPage" :total-items="totalItems" :page-size="pageSize" item-name="API keys" @page-change="handlePageChange">
-                <template #cell-name="{ item: key }">
-                  <RouterLink :to="`/settings/api-keys/${key.id}`" class="font-medium text-inherit no-underline hover:opacity-80">{{ key.name }}</RouterLink>
-                </template>
-                <template #cell-key="{ item: key }"><code class="bg-muted px-2 py-1 rounded text-sm">whm_{{ key.key_prefix }}...</code></template>
-                <template #cell-last_used="{ item: key }">{{ formatDateTime(key.last_used_at) }}</template>
-                <template #cell-expires="{ item: key }">{{ formatDateTime(key.expires_at) }}</template>
-                <template #cell-status="{ item: key }">
-                  <div class="flex items-center gap-2">
-                    <Switch :checked="key.is_active && !isExpired(key.expires_at)" :disabled="isExpired(key.expires_at)" @update:checked="toggleActive(key)" />
-                    <span class="text-sm text-muted-foreground">
-                      {{ isExpired(key.expires_at) ? $t('apiKeys.expired') : key.is_active ? $t('common.active') : $t('common.inactive') }}
-                    </span>
-                  </div>
-                </template>
-                <template #cell-actions="{ item: key }">
-                  <div class="flex items-center justify-end gap-1">
-                    <RouterLink :to="`/settings/api-keys/${key.id}`">
-                      <IconButton :icon="Pencil" :label="$t('common.edit')" class="h-8 w-8" />
-                    </RouterLink>
-                    <IconButton v-if="canDelete" :icon="Trash2" :label="$t('apiKeys.deleteApiKeyLabel')" variant="ghost" class="h-8 w-8 text-destructive" @click="keyToDelete = key; isDeleteDialogOpen = true" />
-                  </div>
-                </template>
-                <template #empty-action>
-                  <RouterLink v-if="canWrite" to="/settings/api-keys/new">
-                    <Button variant="outline" size="sm"><Plus class="h-4 w-4 mr-2" />{{ $t('apiKeys.createApiKey') }}</Button>
-                  </RouterLink>
-                </template>
-              </DataTable>
-            </CardContent>
-          </Card>
-        </div>
-      </div>
-    </ScrollArea>
+    <div class="flex-1 scroll-y p-4">
+      <ErrorState
+        v-if="error && !isLoading"
+        :title="$t('common.loadErrorTitle')"
+        :description="error"
+        :retry-label="$t('common.retry')"
+        @retry="fetchItems"
+      />
+      <article v-else class="card">
+        <header class="hstack justify-between flex-wrap gap-4">
+          <div>
+            <h3>{{ $t('apiKeys.yourApiKeys') }}</h3>
+            <p class="text-light">{{ $t('apiKeys.yourApiKeysDesc') }}</p>
+          </div>
+          <SearchInput v-model="searchQuery" :placeholder="$t('apiKeys.searchApiKeys') + '...'" />
+        </header>
+        <DataTable :items="apiKeys" :columns="columns" :is-loading="isLoading" :empty-icon="Key" :empty-title="searchQuery ? $t('apiKeys.noMatchingApiKeys') : $t('apiKeys.noApiKeysYet')" :empty-description="searchQuery ? $t('apiKeys.noMatchingApiKeysDesc') : $t('apiKeys.noApiKeysYetDesc')" v-model:sort-key="sortKey" v-model:sort-direction="sortDirection" server-pagination :current-page="currentPage" :total-items="totalItems" :page-size="pageSize" item-name="API keys" @page-change="handlePageChange">
+          <template #cell-name="{ item: key }">
+            <RouterLink :to="`/settings/api-keys/${key.id}`"><strong>{{ key.name }}</strong></RouterLink>
+          </template>
+          <template #cell-key="{ item: key }"><code>whm_{{ key.key_prefix }}...</code></template>
+          <template #cell-last_used="{ item: key }">{{ formatDateTime(key.last_used_at) }}</template>
+          <template #cell-expires="{ item: key }">{{ formatDateTime(key.expires_at) }}</template>
+          <template #cell-status="{ item: key }">
+            <label class="hstack gap-2">
+              <input
+                type="checkbox"
+                role="switch"
+                :checked="key.is_active && !isExpired(key.expires_at)"
+                :disabled="isExpired(key.expires_at)"
+                :aria-label="`${key.name}: ${isExpired(key.expires_at) ? $t('apiKeys.expired') : key.is_active ? $t('common.active') : $t('common.inactive')}`"
+                @click.prevent="toggleActive(key)"
+              />
+              <small class="text-light">
+                {{ isExpired(key.expires_at) ? $t('apiKeys.expired') : key.is_active ? $t('common.active') : $t('common.inactive') }}
+              </small>
+            </label>
+          </template>
+          <template #cell-actions="{ item: key }">
+            <div class="hstack gap-1 justify-end">
+              <RouterLink :to="`/settings/api-keys/${key.id}`" class="button ghost icon" :title="$t('common.edit')" :aria-label="$t('common.edit')"><Pencil :size="16" /></RouterLink>
+              <IconButton v-if="canDelete" :icon="Trash2" :label="$t('apiKeys.deleteApiKeyLabel')" @click="keyToDelete = key; isDeleteDialogOpen = true" />
+            </div>
+          </template>
+          <template #empty-action>
+            <RouterLink v-if="canWrite" to="/settings/api-keys/new" class="button outline small"><Plus :size="16" />{{ $t('apiKeys.createApiKey') }}</RouterLink>
+          </template>
+        </DataTable>
+      </article>
+    </div>
 
     <DeleteConfirmDialog v-model:open="isDeleteDialogOpen" :title="$t('apiKeys.deleteApiKey')" :item-name="keyToDelete?.name" :description="$t('apiKeys.deleteWarning')" :is-submitting="isDeleting" @confirm="deleteAPIKey" />
   </div>

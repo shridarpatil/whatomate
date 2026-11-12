@@ -18,14 +18,14 @@ function saveButton(page: Page): Locator {
 }
 
 async function gotoCreateWebhook(page: Page) {
-  await page.getByRole('button', { name: /^Add Webhook$/i }).first().click()
+  await page.getByRole('link', { name: /^Add Webhook$/i }).first().click()
   await page.waitForURL(/\/settings\/webhooks\/new$/)
   await page.waitForLoadState('networkidle')
 }
 
 async function openWebhookDetail(tablePage: TablePage, page: Page, rowText: string) {
   await tablePage.search(rowText)
-  await page.locator('tbody tr .font-medium').getByText(rowText, { exact: true }).first().click()
+  await page.locator('tbody tr strong').getByText(rowText, { exact: true }).first().click()
   await page.waitForURL(/\/settings\/webhooks\/[a-f0-9-]+$/)
   await page.waitForLoadState('networkidle')
 }
@@ -60,8 +60,7 @@ test.describe('Webhooks Management', () => {
     await urlInput(page).fill(webhook.url)
 
     // Select at least one event
-    const checkbox = page.locator('button[role="checkbox"]').first()
-    if (await checkbox.isVisible()) await checkbox.click()
+    await page.getByRole('checkbox').first().check()
 
     await saveButton(page).click()
     await page.waitForURL(/\/settings\/webhooks\/[a-f0-9-]+$/, { timeout: 10000 })
@@ -80,8 +79,7 @@ test.describe('Webhooks Management', () => {
     await gotoCreateWebhook(page)
     await nameInput(page).fill(webhook.name)
     await urlInput(page).fill(webhook.url)
-    const checkbox = page.locator('button[role="checkbox"]').first()
-    if (await checkbox.isVisible()) await checkbox.click()
+    await page.getByRole('checkbox').first().check()
     await saveButton(page).click()
     await page.waitForURL(/\/settings\/webhooks\/[a-f0-9-]+$/, { timeout: 10000 })
     await page.waitForLoadState('networkidle')
@@ -110,8 +108,7 @@ test.describe('Webhooks Management', () => {
     await gotoCreateWebhook(page)
     await nameInput(page).fill(webhook.name)
     await urlInput(page).fill(webhook.url)
-    const checkbox = page.locator('button[role="checkbox"]').first()
-    if (await checkbox.isVisible()) await checkbox.click()
+    await page.getByRole('checkbox').first().check()
     await saveButton(page).click()
     await page.waitForURL(/\/settings\/webhooks\/[a-f0-9-]+$/, { timeout: 10000 })
     await page.waitForLoadState('networkidle')

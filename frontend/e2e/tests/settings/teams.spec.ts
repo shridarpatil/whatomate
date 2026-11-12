@@ -48,7 +48,7 @@ test.describe('Teams - List View', () => {
     const row = page.locator('tbody tr').first()
     if (await row.isVisible({ timeout: 3000 }).catch(() => false)) {
       // Click delete button
-      await row.locator('button').filter({ has: page.locator('svg.text-destructive') }).click()
+      await row.getByRole('button', { name: /delete team/i }).click()
       const dialog = page.locator('[role="alertdialog"]')
       await expect(dialog).toBeVisible({ timeout: 3000 })
       // Cancel to not actually delete
@@ -68,8 +68,8 @@ test.describe('Teams - Detail Page CRUD', () => {
 
     await expect(page.locator('input').first()).toBeVisible()
     await expect(page.locator('textarea').first()).toBeVisible()
-    await expect(page.locator('button[role="combobox"]').first()).toBeVisible()
-    await expect(page.locator('button[role="switch"]').first()).toBeVisible()
+    await expect(page.locator('select').first()).toBeVisible()
+    await expect(page.getByRole('switch').first()).toBeVisible()
   })
 
   test('should create a new team', async ({ page }) => {

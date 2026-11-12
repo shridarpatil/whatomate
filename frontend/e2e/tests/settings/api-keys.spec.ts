@@ -14,7 +14,7 @@ function saveButton(page: Page): Locator {
 }
 
 async function gotoCreateApiKey(page: Page) {
-  await page.getByRole('button', { name: /Create API Key/i }).first().click()
+  await page.getByRole('link', { name: /Create API Key/i }).first().click()
   await page.waitForURL(/\/settings\/api-keys\/new$/)
   await page.waitForLoadState('networkidle')
 }
@@ -93,7 +93,7 @@ test.describe('API Keys Management', () => {
     await page.waitForLoadState('networkidle')
 
     // Click the name to go to detail
-    await page.locator('tbody tr .font-medium').getByText(keyName, { exact: true }).first().click()
+    await page.locator('tbody tr strong').getByText(keyName, { exact: true }).first().click()
     await page.waitForURL(/\/settings\/api-keys\/[a-f0-9-]+$/)
     await page.waitForLoadState('networkidle')
 

@@ -10,17 +10,7 @@ import { formatDateTime } from '@/lib/utils'
 import DetailPageLayout from '@/components/shared/DetailPageLayout.vue'
 import MetadataPanel from '@/components/shared/MetadataPanel.vue'
 import AuditLogPanel from '@/components/shared/AuditLogPanel.vue'
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { Badge } from '@/components/ui/badge'
-import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
-import { Label } from '@/components/ui/label'
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
-import {
-  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
-  AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
-} from '@/components/ui/alert-dialog'
-import { Switch } from '@/components/ui/switch'
+import Modal from '@/components/oat/Modal.vue'
 import { Key, Trash2, Save, Copy, AlertTriangle } from '@/lib/icons'
 import { IconButton } from '@/components/shared'
 
@@ -65,8 +55,8 @@ const isExpired = computed(() => {
 const statusVariant = computed(() => {
   if (!apiKey.value) return 'secondary'
   if (!apiKey.value.is_active) return 'secondary'
-  if (isExpired.value) return 'destructive'
-  return 'default'
+  if (isExpired.value) return 'danger'
+  return 'success'
 })
 
 const statusLabel = computed(() => {
@@ -156,7 +146,6 @@ onMounted(async () => {
     <DetailPageLayout
       :title="isNew ? $t('apiKeys.newApiKey', 'New API Key') : (apiKey?.name || '')"
       :icon="Key"
-      icon-gradient="bg-gradient-to-br from-amber-500 to-orange-600 shadow-amber-500/20"
       back-link="/settings/api-keys"
       :breadcrumbs="breadcrumbs"
       :is-loading="isLoading"
@@ -164,80 +153,81 @@ onMounted(async () => {
       :not-found-title="$t('apiKeys.notFound', 'API Key not found')"
     >
       <template #actions>
-        <div class="flex items-center gap-2">
-          <Button v-if="isNew && canWrite" size="sm" @click="create" :disabled="isSaving">
-            <Save class="h-4 w-4 mr-1" /> {{ isSaving ? $t('common.saving', 'Saving...') : $t('common.create') }}
-          </Button>
-          <Button v-if="!isNew && canDelete" variant="destructive" size="sm" @click="deleteDialogOpen = true">
-            <Trash2 class="h-4 w-4 mr-1" /> {{ $t('common.delete') }}
-          </Button>
+        <div class="hstack gap-2">
+          <button v-if="isNew && canWrite" type="button" class="small" :disabled="isSaving" :aria-busy="isSaving ? 'true' : undefined" data-spinner="small" @click="create">
+            <Save v-if="!isSaving" :size="16" /> {{ isSaving ? $t('common.saving', 'Saving...') : $t('common.create') }}
+          </button>
+          <button v-if="!isNew && canDelete" type="button" class="small" data-variant="danger" @click="deleteDialogOpen = true">
+            <Trash2 :size="16" /> {{ $t('common.delete') }}
+          </button>
         </div>
       </template>
 
       <!-- Create form -->
-      <Card v-if="isNew">
-        <CardHeader class="pb-3">
-          <CardTitle class="text-sm font-medium">{{ $t('teams.details', 'Details') }}</CardTitle>
-        </CardHeader>
-        <CardContent class="space-y-4">
-          <div class="space-y-1.5">
-            <Label class="text-xs">{{ $t('apiKeys.name') }} <span class="text-destructive">*</span></Label>
-            <Input v-model="form.name" :placeholder="$t('apiKeys.namePlaceholder')" />
-          </div>
-          <div class="space-y-1.5">
-            <Label class="text-xs">{{ $t('apiKeys.expiration') }}</Label>
-            <Input v-model="form.expires_at" type="datetime-local" />
-            <p class="text-xs text-muted-foreground">{{ $t('apiKeys.expirationHint') }}</p>
-          </div>
-        </CardContent>
-      </Card>
+      <article v-if="isNew" class="card">
+        <header>
+          <h3>{{ $t('teams.details', 'Details') }}</h3>
+        </header>
+        <div class="vstack gap-4">
+          <label data-field>
+            {{ $t('apiKeys.name') }} *
+            <input v-model="form.name" :placeholder="$t('apiKeys.namePlaceholder')" />
+          </label>
+          <label data-field>
+            {{ $t('apiKeys.expiration') }}
+            <input v-model="form.expires_at" type="datetime-local" />
+            <small data-hint>{{ $t('apiKeys.expirationHint') }}</small>
+          </label>
+        </div>
+      </article>
 
       <!-- View existing key -->
-      <Card v-else>
-        <CardHeader class="pb-3">
-          <div class="flex items-center justify-between">
-            <CardTitle class="text-sm font-medium">{{ $t('teams.details', 'Details') }}</CardTitle>
-            <Badge :variant="statusVariant">{{ statusLabel }}</Badge>
-          </div>
-        </CardHeader>
-        <CardContent class="space-y-4">
-          <div class="flex items-center gap-3 p-3 rounded-lg bg-muted/50">
-            <div class="h-10 w-10 rounded-full bg-gradient-to-br from-amber-500 to-orange-600 flex items-center justify-center shrink-0">
-              <Key class="h-5 w-5 text-white" />
-            </div>
+      <article v-else class="card">
+        <header class="hstack justify-between">
+          <h3>{{ $t('teams.details', 'Details') }}</h3>
+          <span class="badge" :data-variant="statusVariant">{{ statusLabel }}</span>
+        </header>
+        <div class="vstack gap-4">
+          <div class="hstack gap-2">
+            <Key :size="24" />
             <div class="min-w-0">
-              <p class="font-medium truncate">{{ apiKey?.name }}</p>
-              <code class="text-xs text-muted-foreground font-mono bg-muted px-1.5 py-0.5 rounded">whm_{{ apiKey?.key_prefix }}...</code>
+              <p class="truncate"><strong>{{ apiKey?.name }}</strong></p>
+              <code>whm_{{ apiKey?.key_prefix }}...</code>
             </div>
           </div>
 
-          <div class="grid gap-4">
-            <div class="space-y-1">
-              <p class="text-xs text-muted-foreground">{{ $t('common.createdAt', 'Created') }}</p>
-              <p class="text-sm">{{ apiKey?.created_at ? formatDateTime(apiKey.created_at) : '—' }}</p>
+          <div class="vstack gap-4">
+            <div>
+              <small class="text-light">{{ $t('common.createdAt', 'Created') }}</small>
+              <p>{{ apiKey?.created_at ? formatDateTime(apiKey.created_at) : '—' }}</p>
             </div>
-            <div class="space-y-1">
-              <p class="text-xs text-muted-foreground">{{ $t('apiKeys.lastUsedAt', 'Last Used') }}</p>
-              <p class="text-sm">{{ apiKey?.last_used_at ? formatDateTime(apiKey.last_used_at) : '—' }}</p>
+            <div>
+              <small class="text-light">{{ $t('apiKeys.lastUsedAt', 'Last Used') }}</small>
+              <p>{{ apiKey?.last_used_at ? formatDateTime(apiKey.last_used_at) : '—' }}</p>
             </div>
-            <div class="space-y-1">
-              <p class="text-xs text-muted-foreground">{{ $t('apiKeys.expiresAt', 'Expires') }}</p>
-              <div class="flex items-center gap-2">
-                <p class="text-sm">{{ apiKey?.expires_at ? formatDateTime(apiKey.expires_at) : $t('apiKeys.never', 'Never') }}</p>
-                <Badge v-if="isExpired" variant="destructive" class="text-xs">{{ $t('apiKeys.expired', 'Expired') }}</Badge>
+            <div>
+              <small class="text-light">{{ $t('apiKeys.expiresAt', 'Expires') }}</small>
+              <div class="hstack gap-2">
+                <p>{{ apiKey?.expires_at ? formatDateTime(apiKey.expires_at) : $t('apiKeys.never', 'Never') }}</p>
+                <span v-if="isExpired" class="badge" data-variant="danger">{{ $t('apiKeys.expired', 'Expired') }}</span>
               </div>
             </div>
           </div>
-          <div v-if="canWrite" class="flex items-center justify-between border-t pt-4">
-            <Label class="text-xs font-normal cursor-pointer">{{ $t('common.active') }}</Label>
-            <Switch
-              :checked="apiKey?.is_active ?? false"
-              :disabled="isExpired"
-              @update:checked="toggleActive"
-            />
-          </div>
-        </CardContent>
-      </Card>
+          <template v-if="canWrite">
+            <hr>
+            <label class="hstack justify-between">
+              <span>{{ $t('common.active') }}</span>
+              <input
+                type="checkbox"
+                role="switch"
+                :checked="apiKey?.is_active ?? false"
+                :disabled="isExpired"
+                @click.prevent="toggleActive"
+              />
+            </label>
+          </template>
+        </div>
+      </article>
 
       <AuditLogPanel v-if="apiKey && !isNew" resource-type="api_key" :resource-id="apiKey.id" />
 
@@ -247,49 +237,35 @@ onMounted(async () => {
     </DetailPageLayout>
 
     <!-- Key created dialog (shown once after create) -->
-    <Dialog v-model:open="isKeyDisplayOpen">
-      <DialogContent>
-        <DialogHeader>
-          <DialogTitle>{{ $t('apiKeys.apiKeyCreated') }}</DialogTitle>
-          <DialogDescription>
-            <div class="flex items-center gap-2 text-amber-600 mt-2">
-              <AlertTriangle class="h-4 w-4" />
-              <span>{{ $t('apiKeys.apiKeyCreatedWarning') }}</span>
-            </div>
-          </DialogDescription>
-        </DialogHeader>
-        <div class="space-y-4 py-4">
-          <div class="space-y-2">
-            <Label>{{ $t('apiKeys.yourApiKey') }}</Label>
-            <div class="flex gap-2">
-              <Input :model-value="newlyCreatedKey?.key" readonly class="font-mono text-sm" />
-              <IconButton :icon="Copy" :label="$t('apiKeys.copyApiKey')" variant="outline" @click="copyToClipboard(newlyCreatedKey?.key || '')" />
-            </div>
-          </div>
-          <div class="bg-muted p-3 rounded-lg text-sm">
-            <p class="font-medium mb-1">{{ $t('apiKeys.usage') }}:</p>
-            <code class="text-xs">curl -H "X-API-Key: {{ newlyCreatedKey?.key }}" https://your-api.com/api/contacts</code>
-          </div>
+    <Modal v-model:open="isKeyDisplayOpen" :title="$t('apiKeys.apiKeyCreated')">
+      <div class="vstack gap-4">
+        <div role="alert" data-variant="warning">
+          <AlertTriangle :size="16" />
+          {{ $t('apiKeys.apiKeyCreatedWarning') }}
         </div>
-        <DialogFooter>
-          <Button size="sm" @click="isKeyDisplayOpen = false; if (createdKeyId) router.replace(`/settings/api-keys/${createdKeyId}`)">{{ $t('common.done') }}</Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
+        <label data-field>
+          {{ $t('apiKeys.yourApiKey') }}
+          <span class="hstack gap-2">
+            <input :value="newlyCreatedKey?.key" readonly />
+            <IconButton :icon="Copy" :label="$t('apiKeys.copyApiKey')" variant="outline" @click="copyToClipboard(newlyCreatedKey?.key || '')" />
+          </span>
+        </label>
+        <div>
+          <p><strong>{{ $t('apiKeys.usage') }}:</strong></p>
+          <code>curl -H "X-API-Key: {{ newlyCreatedKey?.key }}" https://your-api.com/api/contacts</code>
+        </div>
+      </div>
+      <template #footer>
+        <button type="button" class="small" @click="isKeyDisplayOpen = false; if (createdKeyId) router.replace(`/settings/api-keys/${createdKeyId}`)">{{ $t('common.done') }}</button>
+      </template>
+    </Modal>
 
-    <AlertDialog v-model:open="deleteDialogOpen">
-      <AlertDialogContent>
-        <AlertDialogHeader>
-          <AlertDialogTitle>{{ $t('apiKeys.deleteKey', 'Delete API Key') }}</AlertDialogTitle>
-          <AlertDialogDescription>
-            {{ $t('apiKeys.deleteWarning', 'Are you sure you want to delete this API key? Any applications using this key will immediately lose access. This action cannot be undone.') }}
-          </AlertDialogDescription>
-        </AlertDialogHeader>
-        <AlertDialogFooter>
-          <AlertDialogCancel>{{ $t('common.cancel') }}</AlertDialogCancel>
-          <AlertDialogAction @click="deleteApiKey">{{ $t('common.delete') }}</AlertDialogAction>
-        </AlertDialogFooter>
-      </AlertDialogContent>
-    </AlertDialog>
+    <Modal v-model:open="deleteDialogOpen" alert :title="$t('apiKeys.deleteKey', 'Delete API Key')">
+      <p>{{ $t('apiKeys.deleteWarning', 'Are you sure you want to delete this API key? Any applications using this key will immediately lose access. This action cannot be undone.') }}</p>
+      <template #footer>
+        <button type="button" class="outline" @click="deleteDialogOpen = false">{{ $t('common.cancel') }}</button>
+        <button type="button" data-variant="danger" @click="deleteApiKey">{{ $t('common.delete') }}</button>
+      </template>
+    </Modal>
   </div>
 </template>

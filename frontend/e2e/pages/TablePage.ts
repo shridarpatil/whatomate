@@ -15,7 +15,9 @@ export class TablePage extends BasePage {
 
   get addButton(): Locator {
     // Look for Add/Create button - prefer the header one (first)
-    return this.page.getByRole('button', { name: /^(Add|Create|New)\s/i }).first()
+    // Header actions are buttons or, for detail-page flows, router links styled as buttons
+    const name = /^(Add|Create|New)\s/i
+    return this.page.getByRole('button', { name }).or(this.page.getByRole('link', { name })).first()
   }
 
   async search(query: string) {
@@ -50,6 +52,15 @@ export class TablePage extends BasePage {
     const row = await this.getRow(rowText)
 
     // Try multiple strategies to find the action button
+    // Strategy 0: Edit is an icon link to the detail page (button-styled router link)
+    if (action.toLowerCase() === 'edit') {
+      const editLink = row.locator('td:last-child').getByRole('link', { name: /edit/i })
+      if (await editLink.count() > 0) {
+        await editLink.first().click()
+        return
+      }
+    }
+
     // Strategy 1: Dropdown menu
     const dropdownTrigger = row.locator('button[aria-haspopup="menu"]')
     if (await dropdownTrigger.count() > 0) {

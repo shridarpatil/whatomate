@@ -72,7 +72,7 @@ test.describe('Canned Responses Management', () => {
     const id = page.url().split('/').pop()!
 
     // Update content on the same detail page
-    const textarea = page.locator('div.space-y-1\\.5:has(> label:has-text("Content")) textarea').first()
+    const textarea = page.getByLabel(/^Content/)
     await textarea.fill(updatedContent)
     await page.waitForTimeout(300)
     await cannedResponsesPage.saveDetail()

@@ -259,8 +259,8 @@ export class CannedResponsesPage extends TableSettingsPage {
 
   constructor(page: Page) {
     super(page, { headingText: 'Canned Responses', addButtonText: 'Add Response' })
-    // Category filter is the first combobox in the card header (search is an input)
-    this.categoryFilter = page.locator('button[role="combobox"]').first()
+    // Category filter is the first native select in the card header (search is an input)
+    this.categoryFilter = page.locator('select').first()
   }
 
   async goto() {
@@ -274,8 +274,7 @@ export class CannedResponsesPage extends TableSettingsPage {
   }
 
   async filterByCategory(category: string) {
-    await this.categoryFilter.click()
-    await this.page.locator('[role="option"]').filter({ hasText: category }).click()
+    await this.categoryFilter.selectOption({ label: category })
     await this.page.waitForTimeout(300)
   }
 
@@ -290,9 +289,9 @@ export class CannedResponsesPage extends TableSettingsPage {
 
   /** Fill the detail-page form (works for both create and edit). */
   async fillResponseForm(name: string, content: string, shortcut?: string, category?: string) {
-    const nameInput = this.page.locator('div.space-y-1\\.5:has(> label:has-text("Name")) input').first()
-    const shortcutInput = this.page.locator('div.space-y-1\\.5:has(> label:has-text("Shortcut")) input').first()
-    const textarea = this.page.locator('div.space-y-1\\.5:has(> label:has-text("Content")) textarea').first()
+    const nameInput = this.page.getByLabel(/^Name/)
+    const shortcutInput = this.page.getByLabel(/^Shortcut/)
+    const textarea = this.page.getByLabel(/^Content/)
 
     await nameInput.fill(name)
     if (shortcut !== undefined) {
@@ -300,11 +299,7 @@ export class CannedResponsesPage extends TableSettingsPage {
     }
     await textarea.fill(content)
     if (category) {
-      await this.page
-        .locator('div.space-y-1\\.5:has(> label:has-text("Category")) button[role="combobox"]')
-        .first()
-        .click()
-      await this.page.locator('[role="option"]').filter({ hasText: category }).click()
+      await this.page.getByLabel(/^Category/).selectOption({ label: category })
     }
     // Let the watcher mark the form dirty and reveal the Save button.
     await this.page.waitForTimeout(300)
@@ -440,7 +435,7 @@ export class TagsPage extends TableSettingsPage {
 
   constructor(page: Page) {
     super(page, { headingText: 'Tags', addButtonText: 'Add Tag' })
-    this.colorSelect = page.locator('button[role="combobox"]')
+    this.colorSelect = page.locator('dialog[open] select')
   }
 
   async goto() {
@@ -451,18 +446,16 @@ export class TagsPage extends TableSettingsPage {
   async fillTagForm(name: string, color?: string) {
     await this.dialog.locator('input').first().fill(name)
     if (color) {
-      await this.dialog.locator('button[role="combobox"]').click()
-      await this.page.locator('[role="option"]').filter({ hasText: color }).click()
+      await this.dialog.locator('select').selectOption({ label: color })
     }
   }
 
   async selectColor(color: string) {
-    await this.dialog.locator('button[role="combobox"]').click()
-    await this.page.locator('[role="option"]').filter({ hasText: color }).click()
+    await this.dialog.locator('select').selectOption({ label: color })
   }
 
   async expectTagBadgeVisible(name: string) {
-    await expect(this.page.locator('span').filter({ hasText: name })).toBeVisible()
+    await expect(this.page.locator('tbody .badge').filter({ hasText: name })).toBeVisible()
   }
 }
 

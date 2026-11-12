@@ -19,7 +19,7 @@ function saveButton(page: Page): Locator {
 }
 
 async function gotoCreateRole(page: Page) {
-  await page.getByRole('button', { name: /^Add Role$/i }).first().click()
+  await page.getByRole('link', { name: /^Add Role$/i }).first().click()
   await page.waitForURL(/\/settings\/roles\/new$/)
   await page.waitForLoadState('networkidle')
 }
@@ -28,7 +28,7 @@ async function openRoleDetail(tablePage: TablePage, page: Page, rowText: string)
   await tablePage.search(rowText)
   // Click the exact-name link to avoid colliding with rows whose names share the prefix
   // (e.g. "admin" vs "admin_fe9fb00b" left over from earlier runs).
-  await page.locator('tbody tr .font-medium').getByText(rowText, { exact: true }).first().click()
+  await page.locator('tbody tr strong').getByText(rowText, { exact: true }).first().click()
   await page.waitForURL(/\/settings\/roles\/[a-f0-9-]+$/)
   await page.waitForLoadState('networkidle')
 }
@@ -63,7 +63,7 @@ test.describe('Roles Management', () => {
     // The system "admin" role must be present; match the name span exactly so we
     // don't collide with custom roles whose names contain "admin".
     await expect(
-      page.locator('tbody tr .font-medium').getByText('admin', { exact: true }).first()
+      page.locator('tbody tr strong').getByText('admin', { exact: true }).first()
     ).toBeVisible()
   })
 
@@ -197,7 +197,7 @@ test.describe('Roles Management', () => {
     await tablePage.expectRowExists(roleName)
 
     // Click delete and verify confirmation dialog appears
-    const deleteButton = page.locator(`tr:has-text("${roleName}") button:has(svg.text-destructive)`)
+    const deleteButton = page.locator('tr').filter({ hasText: roleName }).getByRole('button', { name: /delete role/i })
     await deleteButton.click()
 
     // Should show confirmation dialog
@@ -217,7 +217,7 @@ test.describe('Roles Management', () => {
     await nameInput(page).fill(roleName)
 
     // Toggle the default switch (only one switch on the create page)
-    const defaultSwitch = page.locator('button[role="switch"]').first()
+    const defaultSwitch = page.getByRole('switch').first()
     await defaultSwitch.click()
 
     await saveButton(page).click()
@@ -227,7 +227,7 @@ test.describe('Roles Management', () => {
     await page.goto('/settings/roles')
     await page.waitForLoadState('networkidle')
     await tablePage.search(roleName)
-    const defaultBadge = page.locator(`tr:has-text("${roleName}") .rounded-full`).filter({ hasText: 'Default' })
+    const defaultBadge = page.locator('tr').filter({ hasText: roleName }).locator('.badge').filter({ hasText: 'Default' })
     await expect(defaultBadge).toBeVisible()
   })
 

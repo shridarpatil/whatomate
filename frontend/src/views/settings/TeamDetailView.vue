@@ -7,6 +7,7 @@ import { useUsersStore } from '@/stores/users'
 import { useAuthStore } from '@/stores/auth'
 import { teamsService, type Team, type TeamMember } from '@/services/api'
 import { toast } from '@/lib/toast'
+import { IconButton } from '@/components/shared'
 import { ASSIGNMENT_STRATEGIES } from '@/lib/constants'
 import { debounce } from '@/lib/utils'
 import { useUnsavedChangesGuard } from '@/composables/useUnsavedChangesGuard'
@@ -14,31 +15,7 @@ import DetailPageLayout from '@/components/shared/DetailPageLayout.vue'
 import MetadataPanel from '@/components/shared/MetadataPanel.vue'
 import AuditLogPanel from '@/components/shared/AuditLogPanel.vue'
 import UnsavedChangesDialog from '@/components/shared/UnsavedChangesDialog.vue'
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { Badge } from '@/components/ui/badge'
-import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
-import { Label } from '@/components/ui/label'
-import { Textarea } from '@/components/ui/textarea'
-import { Switch } from '@/components/ui/switch'
-import { Separator } from '@/components/ui/separator'
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select'
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from '@/components/ui/alert-dialog'
+import Modal from '@/components/oat/Modal.vue'
 import {
   Users,
   Trash2,
@@ -236,7 +213,6 @@ onMounted(async () => {
   <DetailPageLayout
     :title="isNew ? $t('teams.newTeam', 'New Team') : (team?.name || '')"
     :icon="Users"
-    icon-gradient="bg-gradient-to-br from-cyan-500 to-blue-600 shadow-cyan-500/20"
     back-link="/settings/teams"
     :breadcrumbs="breadcrumbs"
     :is-loading="isLoading"
@@ -244,133 +220,121 @@ onMounted(async () => {
     :not-found-title="$t('teams.notFound', 'Team not found')"
   >
     <template #actions>
-      <div class="flex items-center gap-2">
-        <Button v-if="canWrite && (hasChanges || isNew)" size="sm" @click="save" :disabled="isSaving">
-          <Save class="h-4 w-4 mr-1" /> {{ isSaving ? $t('common.saving', 'Saving...') : isNew ? $t('common.create') : $t('common.save') }}
-        </Button>
-        <Button v-if="canDelete && !isNew" variant="destructive" size="sm" @click="deleteDialogOpen = true">
-          <Trash2 class="h-4 w-4 mr-1" /> {{ $t('common.delete') }}
-        </Button>
+      <div class="hstack gap-2">
+        <button v-if="canWrite && (hasChanges || isNew)" type="button" class="small" :disabled="isSaving" :aria-busy="isSaving ? 'true' : undefined" data-spinner="small" @click="save">
+          <Save v-if="!isSaving" :size="16" /> {{ isSaving ? $t('common.saving', 'Saving...') : isNew ? $t('common.create') : $t('common.save') }}
+        </button>
+        <button v-if="canDelete && !isNew" type="button" class="small" data-variant="danger" @click="deleteDialogOpen = true">
+          <Trash2 :size="16" /> {{ $t('common.delete') }}
+        </button>
       </div>
     </template>
 
     <!-- Team Details Card -->
-    <Card>
-      <CardHeader class="pb-3">
-        <div class="flex items-center justify-between">
-          <CardTitle class="text-sm font-medium">{{ $t('teams.details', 'Details') }}</CardTitle>
-          <Badge :variant="(team?.is_active ?? true) ? 'default' : 'secondary'">
-            {{ (team?.is_active ?? true) ? $t('common.active', 'Active') : $t('common.inactive', 'Inactive') }}
-          </Badge>
-        </div>
-      </CardHeader>
-      <CardContent class="space-y-4">
-        <div class="space-y-1.5">
-          <Label class="text-xs">{{ $t('teams.name', 'Name') }} *</Label>
-          <Input v-model="form.name" :disabled="!canWrite" />
-        </div>
-        <div class="space-y-1.5">
-          <Label class="text-xs">{{ $t('common.description', 'Description') }}</Label>
-          <Textarea v-model="form.description" :rows="2" :disabled="!canWrite" />
-        </div>
-        <div class="space-y-1.5">
-          <Label class="text-xs">{{ $t('teams.assignmentStrategy', 'Assignment Strategy') }}</Label>
-          <Select v-model="form.assignment_strategy" :disabled="!canWrite">
-            <SelectTrigger><SelectValue /></SelectTrigger>
-            <SelectContent>
-              <SelectItem v-for="s in ASSIGNMENT_STRATEGIES" :key="s.value" :value="s.value">
-                {{ s.label }}
-              </SelectItem>
-            </SelectContent>
-          </Select>
-        </div>
-        <div v-if="form.assignment_strategy !== 'manual'" class="space-y-1.5">
-          <Label class="text-xs">{{ $t('teams.perAgentTimeout', 'Per-Agent Timeout') }} ({{ $t('common.seconds', 'seconds') }})</Label>
-          <Input v-model.number="form.per_agent_timeout_secs" type="number" min="0" max="300" :disabled="!canWrite" />
-        </div>
-        <div class="flex items-center gap-2">
-          <Switch :checked="form.is_active" @update:checked="form.is_active = $event" :disabled="!canWrite" />
-          <Label class="text-xs">{{ $t('common.active', 'Active') }}</Label>
-        </div>
-      </CardContent>
-    </Card>
+    <article class="card">
+      <header class="hstack justify-between">
+        <h3>{{ $t('teams.details', 'Details') }}</h3>
+        <span class="badge" :data-variant="(team?.is_active ?? true) ? 'success' : 'secondary'">
+          {{ (team?.is_active ?? true) ? $t('common.active', 'Active') : $t('common.inactive', 'Inactive') }}
+        </span>
+      </header>
+      <div class="vstack gap-4">
+        <label data-field>
+          {{ $t('teams.name', 'Name') }} *
+          <input v-model="form.name" :disabled="!canWrite" />
+        </label>
+        <label data-field>
+          {{ $t('common.description', 'Description') }}
+          <textarea v-model="form.description" rows="2" :disabled="!canWrite" />
+        </label>
+        <label data-field>
+          {{ $t('teams.assignmentStrategy', 'Assignment Strategy') }}
+          <select v-model="form.assignment_strategy" :disabled="!canWrite">
+            <option v-for="s in ASSIGNMENT_STRATEGIES" :key="s.value" :value="s.value">{{ s.label }}</option>
+          </select>
+        </label>
+        <label v-if="form.assignment_strategy !== 'manual'" data-field>
+          {{ $t('teams.perAgentTimeout', 'Per-Agent Timeout') }} ({{ $t('common.seconds', 'seconds') }})
+          <input v-model.number="form.per_agent_timeout_secs" type="number" min="0" max="300" :disabled="!canWrite" />
+        </label>
+        <label class="hstack gap-2">
+          <input v-model="form.is_active" type="checkbox" role="switch" :disabled="!canWrite" />
+          {{ $t('common.active', 'Active') }}
+        </label>
+      </div>
+    </article>
 
     <!-- Members Card -->
-    <Card>
-      <CardHeader class="pb-3">
-        <div class="flex items-center justify-between">
-          <CardTitle class="text-sm font-medium">{{ $t('teams.members', 'Members') }} ({{ members.length }})</CardTitle>
-        </div>
-      </CardHeader>
-      <CardContent class="space-y-4">
+    <article class="card">
+      <header>
+        <h3>{{ $t('teams.members', 'Members') }} ({{ members.length }})</h3>
+      </header>
+      <div class="vstack gap-4">
         <!-- Current Members -->
-        <div v-if="members.length > 0" class="space-y-2">
+        <div v-if="members.length > 0" class="vstack gap-2">
           <div
             v-for="member in members"
             :key="member.user_id"
-            class="flex items-center gap-3 p-2 rounded-lg hover:bg-muted/50 transition-colors"
+            class="hstack gap-2"
           >
-            <div class="h-8 w-8 rounded-full bg-primary/10 flex items-center justify-center shrink-0">
-              <span class="text-xs font-medium text-primary">{{ (member.full_name || '?')[0].toUpperCase() }}</span>
-            </div>
+            <figure data-variant="avatar" class="small" :aria-label="member.full_name">
+              <abbr :title="member.full_name">{{ (member.full_name || '?')[0].toUpperCase() }}</abbr>
+            </figure>
             <div class="flex-1 min-w-0">
-              <p class="text-sm font-medium truncate">{{ member.full_name }}</p>
-              <p class="text-xs text-muted-foreground truncate">{{ member.email }}</p>
+              <p class="truncate"><strong>{{ member.full_name }}</strong></p>
+              <small class="truncate text-light">{{ member.email }}</small>
             </div>
-            <Badge variant="outline" class="text-xs shrink-0">
-              <Shield v-if="member.role === 'manager'" class="h-3 w-3 mr-1" />
+            <span class="badge outline shrink-0">
+              <Shield v-if="member.role === 'manager'" :size="12" />
               {{ member.role }}
-            </Badge>
-            <Button
+            </span>
+            <IconButton
               v-if="canWrite"
-              variant="ghost"
-              size="icon"
-              class="h-7 w-7 shrink-0 text-destructive"
+              :icon="UserMinus"
+              :label="$t('teams.removeMember', 'Remove Member')"
               @click="openRemoveMemberDialog(member)"
-            >
-              <UserMinus class="h-3.5 w-3.5" />
-            </Button>
+            />
           </div>
         </div>
-        <p v-else class="text-sm text-muted-foreground text-center py-4">{{ $t('teams.noMembers', 'No members yet') }}</p>
+        <p v-else class="text-light align-center">{{ $t('teams.noMembers', 'No members yet') }}</p>
 
         <!-- Add Members -->
         <template v-if="canWrite">
-          <Separator />
-          <div>
-            <div class="flex items-center justify-between mb-2">
-              <Label class="text-xs text-muted-foreground">{{ $t('teams.addMembers', 'Add Members') }}</Label>
-              <Input v-model="memberSearch" :placeholder="$t('teams.searchUsers', 'Search...')" class="h-6 text-[10px] w-40" />
+          <hr>
+          <div class="vstack gap-2">
+            <div class="hstack justify-between gap-2">
+              <strong>{{ $t('teams.addMembers', 'Add Members') }}</strong>
+              <input v-model="memberSearch" type="search" :placeholder="$t('teams.searchUsers', 'Search...')" :aria-label="$t('teams.searchUsers', 'Search...')" />
             </div>
-            <div v-if="availableUsers.length > 0" class="space-y-1 max-h-48 overflow-y-auto">
+            <div v-if="availableUsers.length > 0" class="vstack gap-2 scroll-y">
               <div
                 v-for="user in availableUsers"
                 :key="user.id"
-                class="flex items-center gap-3 p-2 rounded-lg hover:bg-muted/50 transition-colors"
+                class="hstack gap-2"
               >
-                <div class="h-8 w-8 rounded-full bg-muted flex items-center justify-center shrink-0">
-                  <span class="text-xs font-medium">{{ (user.full_name || '?')[0].toUpperCase() }}</span>
-                </div>
+                <figure data-variant="avatar" class="small" :aria-label="user.full_name">
+                  <abbr :title="user.full_name">{{ (user.full_name || '?')[0].toUpperCase() }}</abbr>
+                </figure>
                 <div class="flex-1 min-w-0">
-                  <p class="text-sm font-medium truncate">{{ user.full_name }}</p>
-                  <p class="text-xs text-muted-foreground truncate">{{ user.email }}</p>
+                  <p class="truncate"><strong>{{ user.full_name }}</strong></p>
+                  <small class="truncate text-light">{{ user.email }}</small>
                 </div>
-                <div class="flex gap-1 shrink-0">
-                  <Button variant="outline" size="sm" class="h-7 text-xs" @click="addMember(user.id, 'agent')">
-                    <UserPlus class="h-3 w-3 mr-1" /> {{ $t('teams.agent', 'Agent') }}
-                  </Button>
-                  <Button variant="outline" size="sm" class="h-7 text-xs" @click="addMember(user.id, 'manager')">
-                    <Shield class="h-3 w-3 mr-1" /> {{ $t('teams.manager', 'Manager') }}
-                  </Button>
+                <div class="hstack gap-1 shrink-0">
+                  <button type="button" class="outline small" @click="addMember(user.id, 'agent')">
+                    <UserPlus :size="12" /> {{ $t('teams.agent', 'Agent') }}
+                  </button>
+                  <button type="button" class="outline small" @click="addMember(user.id, 'manager')">
+                    <Shield :size="12" /> {{ $t('teams.manager', 'Manager') }}
+                  </button>
                 </div>
               </div>
             </div>
-            <p v-else-if="memberSearch" class="text-xs text-muted-foreground text-center py-2">{{ $t('teams.noMatchingUsers', 'No matching users') }}</p>
-            <p v-else class="text-xs text-muted-foreground text-center py-2">{{ $t('teams.allUsersInTeam', 'All users are already in this team') }}</p>
+            <small v-else-if="memberSearch" class="text-light align-center">{{ $t('teams.noMatchingUsers', 'No matching users') }}</small>
+            <small v-else class="text-light align-center">{{ $t('teams.allUsersInTeam', 'All users are already in this team') }}</small>
           </div>
         </template>
-      </CardContent>
-    </Card>
+      </div>
+    </article>
 
     <!-- Activity Log -->
     <AuditLogPanel
@@ -391,36 +355,22 @@ onMounted(async () => {
   </DetailPageLayout>
 
   <!-- Delete Confirmation -->
-  <AlertDialog v-model:open="deleteDialogOpen">
-    <AlertDialogContent>
-      <AlertDialogHeader>
-        <AlertDialogTitle>{{ $t('teams.deleteTeam', 'Delete Team') }}</AlertDialogTitle>
-        <AlertDialogDescription>
-          {{ $t('teams.deleteConfirm', 'Are you sure? This will remove all team members and cannot be undone.') }}
-        </AlertDialogDescription>
-      </AlertDialogHeader>
-      <AlertDialogFooter>
-        <AlertDialogCancel>{{ $t('common.cancel') }}</AlertDialogCancel>
-        <AlertDialogAction @click="deleteTeam">{{ $t('common.delete') }}</AlertDialogAction>
-      </AlertDialogFooter>
-    </AlertDialogContent>
-  </AlertDialog>
+  <Modal v-model:open="deleteDialogOpen" alert :title="$t('teams.deleteTeam', 'Delete Team')">
+    <p>{{ $t('teams.deleteConfirm', 'Are you sure? This will remove all team members and cannot be undone.') }}</p>
+    <template #footer>
+      <button type="button" class="outline" @click="deleteDialogOpen = false">{{ $t('common.cancel') }}</button>
+      <button type="button" data-variant="danger" @click="deleteTeam">{{ $t('common.delete') }}</button>
+    </template>
+  </Modal>
 
   <!-- Remove Member Confirmation -->
-  <AlertDialog v-model:open="removeMemberDialogOpen">
-    <AlertDialogContent>
-      <AlertDialogHeader>
-        <AlertDialogTitle>{{ $t('teams.removeMember', 'Remove Member') }}</AlertDialogTitle>
-        <AlertDialogDescription>
-          {{ $t('teams.removeMemberConfirm', { name: memberToRemove?.full_name || '' }) }}
-        </AlertDialogDescription>
-      </AlertDialogHeader>
-      <AlertDialogFooter>
-        <AlertDialogCancel>{{ $t('common.cancel') }}</AlertDialogCancel>
-        <AlertDialogAction @click="confirmRemoveMember">{{ $t('common.remove', 'Remove') }}</AlertDialogAction>
-      </AlertDialogFooter>
-    </AlertDialogContent>
-  </AlertDialog>
+  <Modal v-model:open="removeMemberDialogOpen" alert :title="$t('teams.removeMember', 'Remove Member')">
+    <p>{{ $t('teams.removeMemberConfirm', { name: memberToRemove?.full_name || '' }) }}</p>
+    <template #footer>
+      <button type="button" class="outline" @click="removeMemberDialogOpen = false">{{ $t('common.cancel') }}</button>
+      <button type="button" data-variant="danger" @click="confirmRemoveMember">{{ $t('common.remove', 'Remove') }}</button>
+    </template>
+  </Modal>
 
   <UnsavedChangesDialog :open="showLeaveDialog" @stay="cancelLeave" @leave="confirmLeave" />
   </div>
