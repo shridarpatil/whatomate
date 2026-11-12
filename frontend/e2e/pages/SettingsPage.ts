@@ -90,15 +90,6 @@ export class CardGridPage extends BasePage {
     return toast
   }
 
-  async dismissToast(text?: string | RegExp) {
-    const toast = text
-      ? this.page.locator('.toast-container output').filter({ hasText: text })
-      : this.page.locator('.toast-container output').first()
-    if (await toast.isVisible()) {
-      await toast.click()
-    }
-  }
-
   // Assertions
   async expectPageVisible() {
     await expect(this.heading).toBeVisible()
@@ -208,15 +199,6 @@ export class TableSettingsPage extends BasePage {
     const toast = this.page.locator('.toast-container output').filter({ hasText: text })
     await expect(toast).toBeVisible({ timeout: 5000 })
     return toast
-  }
-
-  async dismissToast(text?: string | RegExp) {
-    const toast = text
-      ? this.page.locator('.toast-container output').filter({ hasText: text })
-      : this.page.locator('.toast-container output').first()
-    if (await toast.isVisible()) {
-      await toast.click()
-    }
   }
 
   // Assertions

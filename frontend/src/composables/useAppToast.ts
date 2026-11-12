@@ -1,9 +1,9 @@
 import { toast } from '@/lib/toast'
 
 /**
- * Shared toast utility wrapping @/lib/toast.
- * Use this instead of importing `toast` from '@/lib/toast' directly
- * or `useToast` from the shadcn toast component.
+ * Shared toast helper taking (message, description?) positional args, for
+ * components that prefer it over the `toast(message, opts)` API in '@/lib/toast'.
+ * Use this instead of `useToast` from the shadcn toast component.
  *
  * Usage:
  *   import { useAppToast } from '@/composables/useAppToast'

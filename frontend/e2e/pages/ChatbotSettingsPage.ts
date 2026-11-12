@@ -203,15 +203,6 @@ export class ChatbotSettingsPage extends BasePage {
     return toast
   }
 
-  async dismissToast(text?: string | RegExp) {
-    const toast = text
-      ? this.page.locator('.toast-container output').filter({ hasText: text })
-      : this.page.locator('.toast-container output').first()
-    if (await toast.isVisible()) {
-      await toast.click()
-    }
-  }
-
   // Assertions
   async expectPageVisible() {
     await expect(this.heading).toBeVisible()
