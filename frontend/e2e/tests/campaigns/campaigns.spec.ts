@@ -294,7 +294,7 @@ test.describe('Campaign Detail Page CRUD', () => {
     const deleteBtn = page.getByRole('button', { name: /Delete/i }).first()
     if (await deleteBtn.isVisible({ timeout: 3000 }).catch(() => false)) {
       await deleteBtn.click()
-      const dialog = page.locator('[role="alertdialog"]')
+      const dialog = page.getByRole('alertdialog')
       await expect(dialog).toBeVisible({ timeout: 5000 })
       // Cancel — don't actually delete
       await dialog.getByRole('button', { name: /Cancel/i }).click()

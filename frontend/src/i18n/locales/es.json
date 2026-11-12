@@ -284,7 +284,9 @@
     "failedUpdateAvailability": "Error al actualizar disponibilidad",
     "awayWarningTitle": "Las transferencias activas serán devueltas a la cola",
     "awayWarningDesc": "Tiene {count} transferencia(s) activa(s) asignada(s). Cambiar su estado a \"Ausente\" las devolverá a la cola para que otros agentes las atiendan.",
-    "goAway": "Ausentarse"
+    "goAway": "Ausentarse",
+    "userMenu": "Menú de usuario",
+    "toggleAvailability": "Cambiar estado de disponibilidad"
   },
   "chat": {
     "lastActive": "Last active {time}",
@@ -2165,7 +2167,10 @@
     "previewPause": "Pause",
     "previewRestart": "Restart",
     "previewStepForward": "Step forward",
-    "previewStepBack": "Step back"
+    "previewStepBack": "Step back",
+    "dataPath": "Ruta de datos",
+    "configureApiMock": "Configurar simulación de API",
+    "selectOption": "Selecciona una opción"
   },
   "calling": {
     "callLogs": "Registro de llamadas",
@@ -2258,7 +2263,8 @@
     "selectTargetFlow": "Seleccionar flujo IVR",
     "uploadAudioTab": "Subir audio",
     "textToSpeechTab": "Texto a voz",
-    "greetingTextPlaceholder": "Escriba su mensaje de saludo IVR..."
+    "greetingTextPlaceholder": "Escriba su mensaje de saludo IVR...",
+    "ttsText": "Texto a leer"
   },
   "callTransfers": {
     "title": "Transferencias de llamadas",

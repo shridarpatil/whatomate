@@ -49,7 +49,7 @@ test.describe('Teams - List View', () => {
     if (await row.isVisible({ timeout: 3000 }).catch(() => false)) {
       // Click delete button
       await row.getByRole('button', { name: /delete team/i }).click()
-      const dialog = page.locator('[role="alertdialog"]')
+      const dialog = page.getByRole('alertdialog')
       await expect(dialog).toBeVisible({ timeout: 3000 })
       // Cancel to not actually delete
       await dialog.getByRole('button', { name: /Cancel/i }).click()

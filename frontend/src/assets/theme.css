@@ -63,6 +63,9 @@
   /* Chat skin (approved exception to "no custom colours", chat screen only).
      Uses only Oat colour tokens and color-mix() of them, so light and dark
      mode follow Oat's light-dark() values. Keyed on data attributes. */
+  /* Sticky header cells must hide rows scrolling beneath them. */
+  th.sticky-top { background-color: var(--card); }
+
   [data-chat-header] {
     background-color: var(--faint);
     border-block-end: 1px solid var(--border);

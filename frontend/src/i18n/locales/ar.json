@@ -311,7 +311,9 @@
     "failedUpdateAvailability": "فشل تحديث الحالة",
     "awayWarningTitle": "ستتم إعادة التحويلات النشطة إلى قائمة الانتظار",
     "awayWarningDesc": "لديك {count} تحويل(ات) نشطة معينة لك. سيؤدي تعيين حالتك إلى \"بعيد\" إلى إعادتها إلى قائمة الانتظار ليقوم وكلاء آخرون باستلامها.",
-    "goAway": "تغيير الحالة لبعيد"
+    "goAway": "تغيير الحالة لبعيد",
+    "userMenu": "قائمة المستخدم",
+    "toggleAvailability": "تبديل حالة التوفر"
   },
   "chat": {
     "lastActive": "Last active {time}",
@@ -2150,7 +2152,10 @@
     "previewPause": "Pause",
     "previewRestart": "Restart",
     "previewStepForward": "Step forward",
-    "previewStepBack": "Step back"
+    "previewStepBack": "Step back",
+    "dataPath": "مسار البيانات",
+    "configureApiMock": "إعداد محاكاة واجهة API",
+    "selectOption": "اختر خيارًا"
   },
   "calling": {
     "callLogs": "سجلات المكالمات",
@@ -2276,7 +2281,8 @@
     "deleteNodeConfirmTitle": "حذف العقدة",
     "deleteNodeConfirmDesc": "هل أنت متأكد أنك تريد حذف هذه العقدة؟ سيتم أيضاً إزالة جميع الروابط المتصلة بها.",
     "flowSaving": "جاري الحفظ...",
-    "flowSave": "حفظ"
+    "flowSave": "حفظ",
+    "ttsText": "النص المراد نطقه"
   },
   "callTransfers": {
     "title": "تحويلات المكالمات",

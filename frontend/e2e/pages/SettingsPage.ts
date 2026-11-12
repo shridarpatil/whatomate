@@ -21,7 +21,7 @@ export class CardGridPage extends BasePage {
     this.searchInput = page.locator('input[placeholder*="Search"]')
     this.categoryFilter = page.locator('main').locator('select').first()
     this.dialog = page.locator('dialog[open]')
-    this.alertDialog = page.locator('[role="alertdialog"]')
+    this.alertDialog = page.getByRole('alertdialog')
   }
 
   async openCreateDialog() {
@@ -123,7 +123,7 @@ export class TableSettingsPage extends BasePage {
     this.searchInput = page.locator('input[placeholder*="Search"]')
     this.table = page.locator('table')
     this.dialog = page.locator('dialog[open]')
-    this.alertDialog = page.locator('[role="alertdialog"]')
+    this.alertDialog = page.getByRole('alertdialog')
   }
 
   async openCreateDialog() {

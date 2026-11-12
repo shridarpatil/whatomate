@@ -132,7 +132,7 @@ test.describe('Webhook Toggle Confirmation', () => {
     const toggleSwitch = page.getByRole('switch').first()
     if (await toggleSwitch.isVisible()) {
       await toggleSwitch.click()
-      const alertDialog = page.locator('[role="alertdialog"]')
+      const alertDialog = page.getByRole('alertdialog')
       const dialogVisible = await alertDialog.isVisible({ timeout: 3000 }).catch(() => false)
       if (dialogVisible) {
         const cancelBtn = alertDialog.getByRole('button', { name: /cancel/i })

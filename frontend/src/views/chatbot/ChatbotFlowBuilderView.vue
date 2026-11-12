@@ -854,14 +854,14 @@ onMounted(async () => {
                       class="flex-1 min-w-0"
                       :value="String(key)"
                       placeholder="Key"
-                      aria-label="Key"
+                      :aria-label="$t('flowBuilder.keyPlaceholder')"
                       @input="updateCompletionHeaderKey(String(key), val($event))"
                     >
                     <input
                       class="flex-1 min-w-0"
                       :value="String(v)"
                       placeholder="Value"
-                      aria-label="Value"
+                      :aria-label="$t('flowBuilder.valuePlaceholder')"
                       @input="updateCompletionHeaderValue(String(key), val($event))"
                     >
                     <button

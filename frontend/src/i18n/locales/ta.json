@@ -284,7 +284,9 @@
     "failedUpdateAvailability": "கிடைக்கும் நிலையைப் புதுப்பிக்க முடியவில்லை",
     "awayWarningTitle": "செயலில் உள்ள மாற்றுகைகள் வரிசைக்குத் திருப்பியனுப்பப்படும்",
     "awayWarningDesc": "உங்களிடம் {count} செயலில் உள்ள மாற்றுகை(கள்) உள்ளன. உங்கள் நிலையை \"விலகி\" ஆக மாற்றினால், அவை மற்ற முகவர்களுக்காக வரிசைக்குத் திருப்பியனுப்பப்படும்.",
-    "goAway": "விலகிச் செல்"
+    "goAway": "விலகிச் செல்",
+    "userMenu": "பயனர் மெனு",
+    "toggleAvailability": "கிடைக்கும் நிலையை மாற்று"
   },
   "chat": {
     "lastActive": "Last active {time}",
@@ -2152,7 +2154,10 @@
     "previewPause": "Pause",
     "previewRestart": "Restart",
     "previewStepForward": "Step forward",
-    "previewStepBack": "Step back"
+    "previewStepBack": "Step back",
+    "dataPath": "தரவு பாதை",
+    "configureApiMock": "API மாக் அமைக்கவும்",
+    "selectOption": "ஒரு விருப்பத்தைத் தேர்ந்தெடுக்கவும்"
   },
   "calling": {
     "callLogs": "அழைப்புப் பதிவுகள்",
@@ -2254,7 +2259,8 @@
     "selectTargetFlow": "IVR பாய்வைத் தேர்வுசெய்க",
     "uploadAudioTab": "ஆடியோ பதிவேற்று",
     "textToSpeechTab": "உரையிலிருந்து பேச்சு",
-    "greetingTextPlaceholder": "உங்கள் IVR வரவேற்பு செய்தியைத் தட்டச்சுக..."
+    "greetingTextPlaceholder": "உங்கள் IVR வரவேற்பு செய்தியைத் தட்டச்சுக...",
+    "ttsText": "பேச வேண்டிய உரை"
   },
   "callTransfers": {
     "title": "அழைப்பு மாற்றுகைகள்",

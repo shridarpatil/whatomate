@@ -138,7 +138,7 @@ test.describe('Template Preview with Sample Values', () => {
     await expect(previewBtn).toBeVisible({ timeout: 10000 })
     await previewBtn.click()
 
-    const dialog = page.locator('[role="alertdialog"]')
+    const dialog = page.getByRole('alertdialog')
     await expect(dialog).toBeVisible({ timeout: 5000 })
     await expect(dialog.getByText('Template Preview')).toBeVisible()
 

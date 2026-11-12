@@ -100,7 +100,7 @@ export class TablePage extends BasePage {
   async deleteRow(rowText: string) {
     await this.clickRowAction(rowText, 'Delete')
     // Confirm deletion in alert dialog
-    await this.page.locator('[role="alertdialog"] button').filter({ hasText: /Delete|Confirm|Yes/ }).click()
+    await this.page.getByRole('alertdialog').locator('button').filter({ hasText: /Delete|Confirm|Yes/ }).click()
   }
 
   async editRow(rowText: string) {

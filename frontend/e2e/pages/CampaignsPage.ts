@@ -17,7 +17,7 @@ export class CampaignsPage extends BasePage {
     this.statusFilter = page.locator('main select').first()
     this.timeRangeFilter = page.locator('main').getByLabel(/Date Range/i).first()
     this.createDialog = page.locator('dialog[open]')
-    this.alertDialog = page.locator('[role="alertdialog"]')
+    this.alertDialog = page.getByRole('alertdialog')
   }
 
   async goto() {

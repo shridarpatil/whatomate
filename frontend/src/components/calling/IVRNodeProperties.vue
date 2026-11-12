@@ -353,7 +353,7 @@ const transferVariables = ['caller_phone', 'contact_id', 'call_log_id', 'transfe
         <textarea
           :value="config.greeting_text || ''"
           placeholder="Enter text for TTS..."
-          aria-label="TTS"
+          :aria-label="$t('calling.ttsText')"
           rows="3"
           maxlength="500"
           @input="updateConfigEntries(val($event) ? { greeting_text: val($event), audio_file: undefined } : { greeting_text: val($event) })"
@@ -452,8 +452,8 @@ const transferVariables = ['caller_phone', 'contact_id', 'call_log_id', 'transfe
           </button>
         </div>
         <div v-for="(v, key) in (config.headers || {})" :key="String(key)" class="hstack gap-1">
-          <input class="flex-1 min-w-0" :value="String(key)" placeholder="Key" aria-label="Key" @input="updateHeaderKey(String(key), val($event))">
-          <input class="flex-1 min-w-0" :value="String(v)" placeholder="Value" aria-label="Value" @input="updateHeaderValue(String(key), val($event))">
+          <input class="flex-1 min-w-0" :value="String(key)" placeholder="Key" :aria-label="$t('flowBuilder.keyPlaceholder')" @input="updateHeaderKey(String(key), val($event))">
+          <input class="flex-1 min-w-0" :value="String(v)" placeholder="Value" :aria-label="$t('flowBuilder.valuePlaceholder')" @input="updateHeaderValue(String(key), val($event))">
           <button
             type="button"
             class="ghost small icon"
@@ -541,14 +541,14 @@ const transferVariables = ['caller_phone', 'contact_id', 'call_log_id', 'transfe
                   class="flex-1 min-w-0"
                   :value="String(key)"
                   placeholder="Key"
-                  aria-label="Key"
+                  :aria-label="$t('flowBuilder.keyPlaceholder')"
                   @input="updateCallbackHeaderKey(event, String(key), val($event))"
                 >
                 <input
                   class="flex-1 min-w-0"
                   :value="String(v)"
                   placeholder="Value"
-                  aria-label="Value"
+                  :aria-label="$t('flowBuilder.valuePlaceholder')"
                   @input="updateCallbackHeaderValue(event, String(key), val($event))"
                 >
                 <button

@@ -211,7 +211,7 @@ async function handleFileChange(event: Event) {
       <!-- Profile Picture Preview -->
       <div class="hstack gap-4">
         <figure data-variant="avatar" class="large">
-          <img v-if="profile.profile_picture_url" :src="profile.profile_picture_url" alt="Profile" />
+          <img v-if="profile.profile_picture_url" :src="profile.profile_picture_url" :alt="$t('userMenu.profile')" />
           <ImageIcon v-else :size="24" />
         </figure>
         <div class="flex-1">

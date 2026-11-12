@@ -119,30 +119,34 @@ const updateBreakDuration = () => {
   }
 }
 
-watch(() => authStore.isAvailable, (available) => {
-  if (!available && authStore.breakStartedAt) {
-    updateBreakDuration()
-    breakTimerInterval = setInterval(updateBreakDuration, 60000)
-  } else if (breakTimerInterval) {
+const stopBreakTimer = () => {
+  if (breakTimerInterval) {
     clearInterval(breakTimerInterval)
     breakTimerInterval = null
+  }
+}
+
+const startBreakTimer = () => {
+  stopBreakTimer()
+  updateBreakDuration()
+  breakTimerInterval = setInterval(updateBreakDuration, 60000)
+}
+
+watch(() => authStore.isAvailable, (available) => {
+  if (!available && authStore.breakStartedAt) {
+    startBreakTimer()
+  } else if (breakTimerInterval) {
+    stopBreakTimer()
     breakDuration.value = ''
   }
 }, { immediate: true })
 
 onMounted(() => {
   authStore.restoreBreakTime()
-  if (!authStore.isAvailable && authStore.breakStartedAt) {
-    updateBreakDuration()
-    breakTimerInterval = setInterval(updateBreakDuration, 60000)
-  }
+  if (!authStore.isAvailable && authStore.breakStartedAt) startBreakTimer()
 })
 
-onUnmounted(() => {
-  if (breakTimerInterval) {
-    clearInterval(breakTimerInterval)
-  }
-})
+onUnmounted(stopBreakTimer)
 
 const handleLogout = () => {
   menu.value?.hidePopover()
@@ -154,7 +158,7 @@ const closeMenu = () => menu.value?.hidePopover()
 
 <template>
   <ot-dropdown>
-    <button type="button" class="ghost w-100" :popovertarget="menuId" aria-label="User menu">
+    <button type="button" class="ghost w-100" :popovertarget="menuId" :aria-label="$t('userMenu.userMenu')">
       <figure data-variant="avatar" class="small">
         <abbr>{{ getInitials(authStore.user?.full_name || 'U') }}</abbr>
       </figure>
@@ -179,7 +183,7 @@ const closeMenu = () => menu.value?.hidePopover()
             role="switch"
             :checked="authStore.isAvailable"
             :disabled="isUpdatingAvailability || isCheckingTransfers"
-            aria-label="Toggle availability status"
+            :aria-label="$t('userMenu.toggleAvailability')"
             @change="handleAvailabilityChange"
           />
         </div>

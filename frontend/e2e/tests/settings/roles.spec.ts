@@ -201,7 +201,7 @@ test.describe('Roles Management', () => {
     await deleteButton.click()
 
     // Should show confirmation dialog
-    const alertDialog = page.locator('[role="alertdialog"]')
+    const alertDialog = page.getByRole('alertdialog')
     await expect(alertDialog).toBeVisible()
     await expect(alertDialog).toContainText('delete')
 
@@ -239,7 +239,7 @@ test.describe('Roles Management', () => {
     // Clicking the back link triggers the unsaved-changes guard
     await page.goto('/settings/roles')
 
-    const leaveDialog = page.locator('[role="alertdialog"]')
+    const leaveDialog = page.getByRole('alertdialog')
     if (await leaveDialog.isVisible({ timeout: 2000 }).catch(() => false)) {
       await leaveDialog.getByRole('button', { name: /Leave/i }).click()
     }

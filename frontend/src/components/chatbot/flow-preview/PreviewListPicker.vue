@@ -29,7 +29,7 @@ function handleSelect(button: ButtonConfig) {
       Select an option
     </button>
 
-    <Modal v-model:open="isOpen" size="small" title="Select an option">
+    <Modal v-model:open="isOpen" size="small" :title="$t('flowBuilder.selectOption')">
       <ul class="unstyled vstack gap-2">
         <li v-for="(btn, idx) in buttons" :key="btn.id">
           <button type="button" class="outline w-100 justify-between" @click="handleSelect(btn)">

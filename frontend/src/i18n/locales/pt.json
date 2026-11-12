@@ -311,7 +311,9 @@
     "failedUpdateAvailability": "Falha ao atualizar disponibilidade",
     "awayWarningTitle": "Transferências Ativas serão retornadas para a Fila",
     "awayWarningDesc": "Você tem {count} transferência(s) ativa(s) atribuída(s) a você. Definir seu status para \"Ausente\" irá devolvê-las para a fila para que outros agentes possam pegar.",
-    "goAway": "Sair"
+    "goAway": "Sair",
+    "userMenu": "Menu do usuário",
+    "toggleAvailability": "Alternar status de disponibilidade"
   },
   "chat": {
     "lastActive": "Last active {time}",
@@ -2424,7 +2426,10 @@
     "previewPause": "Pause",
     "previewRestart": "Restart",
     "previewStepForward": "Step forward",
-    "previewStepBack": "Step back"
+    "previewStepBack": "Step back",
+    "dataPath": "Caminho dos dados",
+    "configureApiMock": "Configurar simulação de API",
+    "selectOption": "Selecione uma opção"
   },
   "calling": {
     "callLogs": "Registros de chamadas",
@@ -2550,7 +2555,8 @@
     "deleteNodeConfirmTitle": "Excluir Nó",
     "deleteNodeConfirmDesc": "Tem certeza que deseja excluir este nó? Todas as arestas conectadas também serão removidas.",
     "flowSaving": "Salvando...",
-    "flowSave": "Salvar"
+    "flowSave": "Salvar",
+    "ttsText": "Texto para falar"
   },
   "callTransfers": {
     "title": "Transferências de chamadas",

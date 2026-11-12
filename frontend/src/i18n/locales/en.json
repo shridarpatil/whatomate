@@ -311,7 +311,9 @@
     "failedUpdateAvailability": "Failed to update availability",
     "awayWarningTitle": "Active Transfers Will Be Returned to Queue",
     "awayWarningDesc": "You have {count} active transfer(s) assigned to you. Setting your status to \"Away\" will return them to the queue for other agents to pick up.",
-    "goAway": "Go Away"
+    "goAway": "Go Away",
+    "userMenu": "User menu",
+    "toggleAvailability": "Toggle availability status"
   },
   "chat": {
     "lastActive": "Last active {time}",
@@ -2425,7 +2427,10 @@
     "previewPause": "Pause",
     "previewRestart": "Restart",
     "previewStepForward": "Step forward",
-    "previewStepBack": "Step back"
+    "previewStepBack": "Step back",
+    "dataPath": "Data path",
+    "configureApiMock": "Configure API Mock",
+    "selectOption": "Select an option"
   },
   "calling": {
     "callLogs": "Call Logs",
@@ -2553,7 +2558,8 @@
     "deleteNodeConfirmTitle": "Delete Node",
     "deleteNodeConfirmDesc": "Are you sure you want to delete this node? All connected edges will also be removed.",
     "flowSaving": "Saving...",
-    "flowSave": "Save"
+    "flowSave": "Save",
+    "ttsText": "Text to speak"
   },
   "callTransfers": {
     "title": "Call Transfers",

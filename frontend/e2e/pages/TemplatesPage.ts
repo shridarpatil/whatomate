@@ -21,7 +21,7 @@ export class TemplatesPage extends BasePage {
     this.searchInput = page.locator('input[placeholder*="Search templates"], input[placeholder*="search templates"]')
     // Native select inside <main> (the app shell aside has its own selects)
     this.accountSelect = page.locator('main select').first()
-    this.alertDialog = page.locator('[role="alertdialog"]')
+    this.alertDialog = page.getByRole('alertdialog')
     this.tableBody = page.locator('tbody')
   }
 

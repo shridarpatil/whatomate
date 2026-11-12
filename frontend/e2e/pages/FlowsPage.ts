@@ -20,7 +20,7 @@ export class FlowsPage extends BasePage {
     // Distinguish dialogs by their title content
     this.createDialog = page.locator('dialog[open]').filter({ hasText: 'Create WhatsApp Flow' })
     this.editDialog = page.locator('dialog[open]').filter({ hasText: 'Edit WhatsApp Flow' })
-    this.alertDialog = page.locator('[role="alertdialog"]')
+    this.alertDialog = page.getByRole('alertdialog')
   }
 
   async goto() {
@@ -196,7 +196,7 @@ export class ChatbotFlowsPage extends BasePage {
     this.heading = page.getByRole('heading', { name: /Conversation Flows/i }).first()
     this.createButton = page.getByRole('button', { name: /Create Flow/i }).first()
     this.backButton = page.locator('button').filter({ has: page.locator('[data-icon="arrow-left"]') }).first()
-    this.alertDialog = page.locator('[role="alertdialog"]')
+    this.alertDialog = page.getByRole('alertdialog')
   }
 
   async goto() {

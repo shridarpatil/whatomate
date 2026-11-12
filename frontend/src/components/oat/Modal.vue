@@ -51,7 +51,7 @@ function onClick(e: MouseEvent) {
     @close="onNativeClose"
     @click="onClick"
   >
-    <header v-if="title || description || !alert">
+    <header v-if="open && (title || description || !alert)">
       <div class="hstack justify-between">
         <h3 v-if="title">{{ title }}</h3>
         <span v-else />
@@ -67,10 +67,10 @@ function onClick(e: MouseEvent) {
       </div>
       <p v-if="description">{{ description }}</p>
     </header>
-    <div>
+    <div v-if="open">
       <slot />
     </div>
-    <footer v-if="$slots.footer">
+    <footer v-if="open && $slots.footer">
       <slot name="footer" />
     </footer>
   </dialog>

@@ -54,7 +54,7 @@ test.describe('IVR Flow Toggle Status', () => {
     if (await statusBadge.isVisible({ timeout: 3000 }).catch(() => false)) {
       await statusBadge.click()
       // Verify the confirmation alert dialog appears
-      const alertDialog = page.locator('[role="alertdialog"]')
+      const alertDialog = page.getByRole('alertdialog')
       const dialogVisible = await alertDialog.isVisible({ timeout: 3000 }).catch(() => false)
       if (dialogVisible) {
         // Click cancel to dismiss without changing state

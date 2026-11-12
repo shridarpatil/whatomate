@@ -408,7 +408,7 @@ onMounted(() => {
         >
           <ArrowLeft />
         </button>
-        <input v-model="flowName" class="flex-1 min-w-0" placeholder="Flow Name" aria-label="Flow Name">
+        <input v-model="flowName" class="flex-1 min-w-0" placeholder="Flow Name" :aria-label="$t('calling.name')">
         <label class="hstack gap-2">
           <input v-model="isActive" type="checkbox" role="switch">
           <small>Active</small>

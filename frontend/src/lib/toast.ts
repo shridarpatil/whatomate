@@ -17,6 +17,15 @@ function show(variant: Variant, message: string, opts?: ToastOptions) {
   const el = opts?.description
     ? window.ot.toast(opts.description, message, options)
     : window.ot.toast(message, undefined, options)
+  // Oat shows the container as a popover; a popover opened earlier than a modal
+  // <dialog> sits beneath its backdrop, so re-raise it to the top layer.
+  const container = el?.parentElement
+  if (container && typeof container.hidePopover === 'function') {
+    try {
+      container.hidePopover()
+      container.showPopover()
+    } catch { /* not a popover: nothing to raise */ }
+  }
   if (opts?.action && el) {
     const { label, onClick } = opts.action
     const btn = document.createElement('button')

@@ -13,7 +13,7 @@ export class KeywordsPage extends BasePage {
     super(page)
     this.heading = page.getByRole('heading', { name: 'Keyword Rules' }).first()
     this.searchInput = page.locator('input[placeholder*="Search"]')
-    this.alertDialog = page.locator('[role="alertdialog"]')
+    this.alertDialog = page.getByRole('alertdialog')
   }
 
   async goto() {
@@ -48,7 +48,7 @@ export class AIContextsPage extends BasePage {
     super(page)
     this.heading = page.getByRole('heading', { name: 'AI Contexts' }).first()
     this.searchInput = page.locator('input[placeholder*="Search"]')
-    this.alertDialog = page.locator('[role="alertdialog"]')
+    this.alertDialog = page.getByRole('alertdialog')
   }
 
   async goto() {

@@ -117,7 +117,7 @@ test.describe('SSO Settings', () => {
     await card.getByRole('button', { name: /Configure/i }).click()
     await expect(dialog).toBeVisible()
     await dialog.getByRole('button', { name: /Remove/i }).click()
-    const confirm = page.locator('[role="alertdialog"]')
+    const confirm = page.getByRole('alertdialog')
     await expect(confirm).toBeVisible({ timeout: 5000 })
     await confirm.getByRole('button', { name: /Remove|Delete|Confirm/i }).click()
 

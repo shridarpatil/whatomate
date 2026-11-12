@@ -284,7 +284,9 @@
     "failedUpdateAvailability": "उपलब्धता अपडेट करने में विफल",
     "awayWarningTitle": "सक्रिय ट्रांसफर कतार में वापस आ जाएंगे",
     "awayWarningDesc": "आपके पास {count} सक्रिय ट्रांसफर हैं। अपनी स्थिति 'Away' सेट करने से वे कतार में वापस आ जाएंगे।",
-    "goAway": "Away सेट करें"
+    "goAway": "Away सेट करें",
+    "userMenu": "उपयोगकर्ता मेनू",
+    "toggleAvailability": "उपलब्धता स्थिति बदलें"
   },
   "chat": {
     "lastActive": "Last active {time}",
@@ -2152,7 +2154,10 @@
     "previewPause": "Pause",
     "previewRestart": "Restart",
     "previewStepForward": "Step forward",
-    "previewStepBack": "Step back"
+    "previewStepBack": "Step back",
+    "dataPath": "डेटा पथ",
+    "configureApiMock": "API मॉक कॉन्फ़िगर करें",
+    "selectOption": "एक विकल्प चुनें"
   },
   "calling": {
     "callLogs": "कॉल लॉग्स",
@@ -2254,7 +2259,8 @@
     "selectTargetFlow": "फ्लो",
     "uploadAudioTab": "अपलोड",
     "textToSpeechTab": "TTS",
-    "greetingTextPlaceholder": "संदेश"
+    "greetingTextPlaceholder": "संदेश",
+    "ttsText": "बोलने के लिए पाठ"
   },
   "callTransfers": {
     "title": "कॉल ट्रांसफर",

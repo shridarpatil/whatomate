@@ -10,6 +10,18 @@ beforeEach(() => {
 })
 
 describe('toast', () => {
+  it('re-raises the toast container popover above open dialogs', () => {
+    const container = document.createElement('div')
+    const el = document.createElement('div')
+    container.appendChild(el)
+    const calls: string[] = []
+    ;(container as any).hidePopover = () => calls.push('hide')
+    ;(container as any).showPopover = () => calls.push('show')
+    otToast.mockReturnValue(el)
+    toast.info('Hi')
+    expect(calls).toEqual(['hide', 'show'])
+  })
+
   it('error maps to danger', () => {
     toast.error('Failed')
     expect(otToast).toHaveBeenCalledWith('Failed', undefined, { variant: 'danger', placement: 'top-right' })

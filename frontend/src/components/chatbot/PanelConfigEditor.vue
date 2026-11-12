@@ -172,7 +172,7 @@ function setField(sectionIndex: number, fieldIndex: number, patch: Partial<Panel
             class="flex-1 min-w-0"
             :value="section.label"
             placeholder="Section label"
-            aria-label="Section label"
+            :aria-label="$t('flowBuilder.sectionLabelPlaceholder')"
             @input="setSection(sectionIdx, { label: val($event) })"
           >
           <button
@@ -221,7 +221,7 @@ function setField(sectionIndex: number, fieldIndex: number, patch: Partial<Panel
         <div class="vstack gap-2">
           <div class="hstack justify-between gap-2">
             <small class="text-light">Fields:</small>
-            <select value="" aria-label="Add field…" @change="onAddFieldChange(sectionIdx, $event)">
+            <select value="" :aria-label="$t('flowBuilder.addFieldPlaceholder')" @change="onAddFieldChange(sectionIdx, $event)">
               <option value="" disabled>Add field…</option>
               <option v-for="v in unassignedVariables" :key="v.key" :value="v.key">
                 {{ v.key }}
@@ -246,7 +246,7 @@ function setField(sectionIndex: number, fieldIndex: number, patch: Partial<Panel
                 class="flex-1 min-w-0"
                 :value="field.label"
                 placeholder="Display label"
-                aria-label="Display label"
+                :aria-label="$t('flowBuilder.displayLabel')"
                 @input="setField(sectionIdx, fieldIdx, { label: val($event) })"
               >
               <button

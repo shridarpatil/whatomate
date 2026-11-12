@@ -74,7 +74,7 @@ export class AgentTransfersPage extends BasePage {
     const row = this.getTransferRow(contactName)
     await row.locator('button').filter({ has: this.page.locator('[data-icon="play"]') }).click()
     // Handle the ConfirmDialog that appears after clicking resume
-    const alertDialog = this.page.locator('[role="alertdialog"]')
+    const alertDialog = this.page.getByRole('alertdialog')
     await alertDialog.waitFor({ state: 'visible' })
     await alertDialog.getByRole('button', { name: /confirm|resume|yes/i }).click()
     await alertDialog.waitFor({ state: 'hidden' })

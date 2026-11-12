@@ -2607,7 +2607,7 @@ async function sendMediaMessage() {
                       type="checkbox"
                       role="switch"
                       :checked="contactsStore.currentContact?.assigned_user_id === user.id"
-                      :aria-label="`${$t('chat.assign')} ${user.full_name}`"
+                      :aria-label="user.full_name"
                       @change="assignContactToUser(($event.target as HTMLInputElement).checked ? user.id : null); isAssignDialogOpen = false"
                     />
                   </td>

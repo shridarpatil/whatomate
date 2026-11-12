@@ -26,6 +26,12 @@ function mount(props: Record<string, unknown>) {
 }
 
 describe('Modal', () => {
+  it('does not render content while closed', () => {
+    const { dialog } = mount({ open: false, title: 'T' })
+    expect(dialog).toBeTruthy()
+    expect(dialog.textContent).toBe('')
+  })
+
   it('opens when open=true', async () => {
     const { dialog } = mount({ open: true, title: 'T' })
     await nextTick()

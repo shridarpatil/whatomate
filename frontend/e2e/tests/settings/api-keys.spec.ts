@@ -120,8 +120,8 @@ test.describe('API Keys Management', () => {
     // Click the delete (last) button on the row
     const row = await tablePage.getRow(keyName)
     await row.locator('td:last-child button').last().click()
-    await expect(page.locator('[role="alertdialog"]')).toBeVisible()
-    await page.locator('[role="alertdialog"]').getByRole('button', { name: /delete|confirm/i }).click()
+    await expect(page.getByRole('alertdialog')).toBeVisible()
+    await page.getByRole('alertdialog').getByRole('button', { name: /delete|confirm/i }).click()
 
     await page.waitForTimeout(1000)
   })

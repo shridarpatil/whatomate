@@ -346,7 +346,7 @@ const typeLabel: Record<string, string> = {
               class="flex-1 min-w-0"
               :value="btn.title || ''"
               placeholder="Button Title"
-              aria-label="Button Title"
+              :aria-label="$t('flowBuilder.buttonTitle')"
               @input="updateButton(Number(idx), 'title', val($event))"
             >
             <button
@@ -363,7 +363,7 @@ const typeLabel: Record<string, string> = {
           <input
             :value="btn.id || ''"
             placeholder="button_id"
-            aria-label="button_id"
+            :aria-label="$t('flowBuilder.buttonIdPlaceholder')"
             @input="updateButton(Number(idx), 'id', val($event))"
           >
           <input
@@ -371,7 +371,7 @@ const typeLabel: Record<string, string> = {
             type="url"
             :value="btn.url || ''"
             placeholder="https://example.com"
-            aria-label="URL"
+            :aria-label="$t('flowBuilder.url')"
             @input="updateButton(Number(idx), 'url', val($event))"
           >
           <input
@@ -379,7 +379,7 @@ const typeLabel: Record<string, string> = {
             type="tel"
             :value="btn.phone_number || ''"
             placeholder="+1234567890"
-            aria-label="Phone"
+            :aria-label="$t('common.phone')"
             @input="updateButton(Number(idx), 'phone_number', val($event))"
           >
         </article>
@@ -427,8 +427,8 @@ const typeLabel: Record<string, string> = {
           </button>
         </div>
         <div v-for="(v, key) in (config.headers || {})" :key="String(key)" class="hstack gap-1">
-          <input class="flex-1 min-w-0" :value="String(key)" placeholder="Key" aria-label="Key" @input="updateHeaderKey(String(key), val($event))">
-          <input class="flex-1 min-w-0" :value="String(v)" placeholder="Value" aria-label="Value" @input="updateHeaderValue(String(key), val($event))">
+          <input class="flex-1 min-w-0" :value="String(key)" placeholder="Key" :aria-label="$t('flowBuilder.keyPlaceholder')" @input="updateHeaderKey(String(key), val($event))">
+          <input class="flex-1 min-w-0" :value="String(v)" placeholder="Value" :aria-label="$t('flowBuilder.valuePlaceholder')" @input="updateHeaderValue(String(key), val($event))">
           <button
             type="button"
             class="ghost small icon"
@@ -459,8 +459,8 @@ const typeLabel: Record<string, string> = {
         </div>
         <small class="text-light">Map JSON paths into session variables (e.g. <code>data.user.name</code>).</small>
         <div v-for="(v, key) in (config.response_mapping || {})" :key="String(key)" class="hstack gap-1">
-          <input class="flex-1 min-w-0" :value="String(key)" placeholder="var_name" aria-label="var_name" @input="updateResponseMappingKey(String(key), val($event))">
-          <input class="flex-1 min-w-0" :value="String(v)" placeholder="path.to.field" aria-label="path.to.field" @input="updateResponseMappingValue(String(key), val($event))">
+          <input class="flex-1 min-w-0" :value="String(key)" placeholder="var_name" :aria-label="$t('flowBuilder.variable')" @input="updateResponseMappingKey(String(key), val($event))">
+          <input class="flex-1 min-w-0" :value="String(v)" placeholder="path.to.field" :aria-label="$t('flowBuilder.dataPath')" @input="updateResponseMappingValue(String(key), val($event))">
           <button
             type="button"
             class="ghost small icon"
@@ -636,8 +636,8 @@ const typeLabel: Record<string, string> = {
           </button>
         </div>
         <div v-for="(v, key) in (config.headers || {})" :key="String(key)" class="hstack gap-1">
-          <input class="flex-1 min-w-0" :value="String(key)" placeholder="Key" aria-label="Key" @input="updateHeaderKey(String(key), val($event))">
-          <input class="flex-1 min-w-0" :value="String(v)" placeholder="Value" aria-label="Value" @input="updateHeaderValue(String(key), val($event))">
+          <input class="flex-1 min-w-0" :value="String(key)" placeholder="Key" :aria-label="$t('flowBuilder.keyPlaceholder')" @input="updateHeaderKey(String(key), val($event))">
+          <input class="flex-1 min-w-0" :value="String(v)" placeholder="Value" :aria-label="$t('flowBuilder.valuePlaceholder')" @input="updateHeaderValue(String(key), val($event))">
           <button
             type="button"
             class="ghost small icon"

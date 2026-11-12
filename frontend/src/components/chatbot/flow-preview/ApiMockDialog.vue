@@ -101,7 +101,7 @@ function handleSubmit() {
 <template>
   <Modal
     :open="open"
-    title="Configure API Mock"
+    :title="$t('flowBuilder.configureApiMock')"
     description="Configure the mock response for this API step. The response will be used to simulate the API call."
     @update:open="(v) => { if (!v) handleClose() }"
   >
