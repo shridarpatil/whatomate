@@ -7,8 +7,8 @@ const { t } = useI18n()
 
 <template>
   <details>
-    <summary>{{ t('common.showData') }}</summary>
-    <div class="table">
+    <summary><small>{{ t('common.showData') }}</small></summary>
+    <small class="table">
       <table>
         <thead>
           <tr>
@@ -23,6 +23,6 @@ const { t } = useI18n()
           </tr>
         </tbody>
       </table>
-    </div>
+    </small>
   </details>
 </template>

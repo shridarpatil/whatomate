@@ -22,19 +22,16 @@ const props = defineProps<{
   rows: TooltipRow[]
 }>()
 
+// Offset 12px sideways so the box never covers the hovered mark.
 const pos = computed(() => ({
-  position: 'absolute' as const,
   left: `${props.left}%`,
   top: `${props.top}%`,
-  transform: props.flip ? 'translateX(-100%)' : 'none',
-  pointerEvents: 'none' as const,
-  whiteSpace: 'nowrap' as const,
-  zIndex: 1,
+  transform: props.flip ? 'translateX(calc(-100% - 12px))' : 'translateX(12px)',
 }))
 </script>
 
 <template>
-  <article v-if="visible" class="card" aria-hidden="true" :style="pos">
+  <article v-if="visible" class="card chart-tooltip" aria-hidden="true" :style="pos">
     <strong v-if="title">{{ title }}</strong>
     <div v-for="(row, i) in rows" :key="i" class="hstack gap-2">
       <ChartSwatch v-if="row.color" :color="row.color" :kind="row.kind ?? 'box'" :dash="row.dash" :marker="row.marker" />

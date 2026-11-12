@@ -18,6 +18,7 @@ export const SERIES_COLORS = [
 export const SERIES_DASHES = ['', '8 4', '2 3', '10 3 2 3', '4 2 1 2']
 export const SERIES_MARKERS: MarkerShape[] = ['circle', 'square', 'triangle', 'diamond', 'cross']
 
+/** Fallback chart width (px) before the wrapper is measured. */
 export const VIEW_WIDTH = 600
 export const MARKER_SIZE = 10
 export const BAR_GAP = 2
@@ -40,7 +41,7 @@ export function foldSeries(series: ChartSeries[], otherLabel: string): ChartSeri
 
 export function foldSlices(labels: string[], values: number[], otherLabel: string) {
   const n = Math.max(labels.length, values.length)
-  const all = Array.from({ length: n }, (_, i) => ({ label: labels[i] ?? '', value: finite(values[i]) }))
+  const all = Array.from({ length: n }, (_, i) => ({ label: labels[i] ?? '', value: Math.max(0, finite(values[i])) }))
   if (all.length <= SERIES_COLORS.length) return all
   const keep = all.slice(0, SERIES_COLORS.length - 1)
   const other = all.slice(SERIES_COLORS.length - 1).reduce((a, s) => a + s.value, 0)

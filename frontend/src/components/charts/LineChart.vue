@@ -6,8 +6,9 @@ import ChartMarker from './ChartMarker.vue'
 import ChartLegend from './ChartLegend.vue'
 import ChartTooltip from './ChartTooltip.vue'
 import ChartDataTable from './ChartDataTable.vue'
+import { useChartWidth } from './useChartWidth'
 import {
-  type ChartSeries, MARKER_SIZE, SERIES_DASHES, SERIES_MARKERS, VIEW_WIDTH,
+  type ChartSeries, MARKER_SIZE, SERIES_DASHES, SERIES_MARKERS,
   foldSeries, seriesColor, textWidth, value,
 } from './chart-utils'
 
@@ -15,7 +16,7 @@ const props = withDefaults(defineProps<{
   labels: string[]
   series: ChartSeries[]
   height?: number
-  fill?: boolean
+  fill?: boolean // area fill; always on for a single series
   formatValue?: (v: number) => string
   caption?: string
 }>(), { height: 240 })
@@ -23,12 +24,15 @@ const props = withDefaults(defineProps<{
 const { t } = useI18n()
 const fmt = (v: number) => (props.formatValue ? props.formatValue(v) : v.toLocaleString())
 
-const W = VIEW_WIDTH
+const wrap = ref<HTMLElement | null>(null)
+const W = useChartWidth(wrap)
 const active = ref<number | null>(null)
 
 const folded = computed(() => foldSeries(props.series, t('common.other')))
 const n = computed(() => props.labels.length)
 const empty = computed(() => n.value === 0 || folded.value.length === 0)
+// Single series: minimal look (no y tick labels).
+const single = computed(() => folded.value.length === 1)
 
 const items = computed(() => folded.value.map((s, i) => ({
   label: s.label,
@@ -48,11 +52,11 @@ const margin = computed(() => ({
   top: 12,
   right: 16,
   bottom: 28,
-  left: Math.max(40, Math.max(...tickLabels.value.map(textWidth)) + 14),
+  left: single.value ? 8 : Math.max(40, Math.max(...tickLabels.value.map(textWidth)) + 14),
 }))
 const plot = computed(() => ({
   x0: margin.value.left,
-  x1: W - margin.value.right,
+  x1: W.value - margin.value.right,
   y0: margin.value.top,
   y1: props.height - margin.value.bottom,
 }))
@@ -87,9 +91,9 @@ const tooltip = computed(() => {
   if (i === null || i >= n.value) return null
   const top = Math.min(...folded.value.map(s => y.value(value(s, i))))
   return {
-    left: (xs.value[i] / W) * 100,
+    left: (xs.value[i] / W.value) * 100,
     top: Math.min(Math.max((top / props.height) * 100, 5), 60),
-    flip: xs.value[i] > W * 0.6,
+    flip: xs.value[i] > W.value * 0.6,
     title: props.labels[i],
     rows: folded.value.map((s, si) => ({ ...items.value[si], label: s.label, value: fmt(value(s, i)) })),
   }
@@ -99,17 +103,17 @@ const tableCells = computed(() => props.labels.map((_, i) => folded.value.map(s 
 </script>
 
 <template>
-  <figure>
+  <figure role="group" :aria-label="caption || undefined">
     <figcaption v-if="caption || $slots.caption"><slot name="caption">{{ caption }}</slot></figcaption>
     <p v-if="empty" class="text-light">{{ t('common.noData') }}</p>
     <template v-else>
       <ChartLegend :items="items" />
-      <div class="relative">
+      <div ref="wrap" class="relative">
         <svg :viewBox="`0 0 ${W} ${height}`" width="100%" font-size="11" @mouseleave="active = null">
           <g>
             <template v-for="(tk, i) in ticks" :key="i">
               <line :x1="plot.x0" :x2="plot.x1" :y1="y(tk)" :y2="y(tk)" stroke="var(--border)" stroke-width="1" />
-              <text :x="plot.x0 - 6" :y="y(tk)" text-anchor="end" dominant-baseline="middle" fill="var(--muted-foreground)">{{ tickLabels[i] }}</text>
+              <text v-if="!single" :x="plot.x0 - 6" :y="y(tk)" text-anchor="end" dominant-baseline="middle" fill="var(--muted-foreground)">{{ tickLabels[i] }}</text>
             </template>
           </g>
           <g>
@@ -119,10 +123,10 @@ const tableCells = computed(() => props.labels.map((_, i) => folded.value.map(s 
           </g>
           <line v-if="active !== null" :x1="xs[active]" :x2="xs[active]" :y1="plot.y0" :y2="plot.y1" stroke="var(--muted-foreground)" stroke-width="1" />
           <g v-for="(l, si) in lines" :key="si">
-            <path v-if="fill && l.area" :d="l.area" :fill="l.color" fill-opacity="0.12" stroke="none" />
-            <path :d="l.d" fill="none" :stroke="l.color" stroke-width="2" stroke-linejoin="round" :stroke-dasharray="l.dash || undefined" />
+            <path v-if="(fill || single) && l.area" :d="l.area" :fill="l.color" fill-opacity="0.12" stroke="none" />
+            <path :d="l.d" fill="none" :stroke="l.color" stroke-width="2" stroke-linejoin="round" stroke-linecap="round" :stroke-dasharray="l.dash || undefined" />
             <template v-for="(p, i) in l.pts" :key="i">
-              <ChartMarker v-if="i % markerStep === 0 || i === active" :shape="l.marker" :x="p[0]" :y="p[1]" :size="MARKER_SIZE" :color="l.color" />
+              <ChartMarker v-if="!single && (i % markerStep === 0 || i === active)" :shape="l.marker" :x="p[0]" :y="p[1]" :size="MARKER_SIZE" :color="l.color" />
             </template>
           </g>
           <g>

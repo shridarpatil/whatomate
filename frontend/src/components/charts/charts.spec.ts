@@ -5,7 +5,8 @@ import { createI18n } from 'vue-i18n'
 import LineChart from './LineChart.vue'
 import BarChart from './BarChart.vue'
 import PieChart from './PieChart.vue'
-import { foldSeries } from './chart-utils'
+import MeterRow from './MeterRow.vue'
+import { foldSeries, foldSlices } from './chart-utils'
 
 const i18n = createI18n({
   legacy: false,
@@ -41,6 +42,16 @@ describe('LineChart', () => {
   it('has no legend for one series', () => {
     const root = mount(LineChart, { labels, series: [two[0]] })
     expect(root.querySelector('ul')).toBeNull()
+    // minimal single-series look: no markers, soft area fill, no y tick labels
+    expect(root.querySelectorAll('path[stroke="var(--background)"]').length).toBe(0)
+    expect(root.querySelector('path[fill-opacity="0.12"]')).toBeTruthy()
+    expect(root.querySelectorAll('text[text-anchor="end"]').length).toBe(0)
+  })
+  it('draws markers, no area and y tick labels for multiple series', () => {
+    const root = mount(LineChart, { labels, series: two })
+    expect(root.querySelectorAll('path[stroke="var(--background)"]').length).toBeGreaterThanOrEqual(6)
+    expect(root.querySelector('path[fill-opacity="0.12"]')).toBeNull()
+    expect(root.querySelectorAll('text[text-anchor="end"]').length).toBeGreaterThan(0)
   })
   it('shows a tooltip on focus', async () => {
     const root = mount(LineChart, { labels, series: two })
@@ -62,10 +73,10 @@ describe('LineChart', () => {
 
 describe('BarChart', () => {
   it('draws series x labels bars grouped and one per series stacked', () => {
-    expect(mount(BarChart, { labels, series: two }).querySelectorAll('rect[data-bar]').length).toBe(6)
+    expect(mount(BarChart, { labels, series: two }).querySelectorAll('path[data-bar]').length).toBe(6)
     el!.remove()
     const root = mount(BarChart, { labels, series: two, stacked: true })
-    expect(root.querySelectorAll('rect[data-bar]').length).toBe(6)
+    expect(root.querySelectorAll('path[data-bar]').length).toBe(6)
     expect(root.querySelectorAll('ul li').length).toBe(2)
   })
   it('has no legend for one series', () => {
@@ -110,5 +121,20 @@ describe('foldSeries', () => {
     expect(out).toHaveLength(5)
     expect(out[4]).toEqual({ label: 'Other', data: [3, 3] })
     expect(out[0].label).toBe('s0')
+  })
+})
+
+describe('foldSlices', () => {
+  it('clamps negatives so percentages match arcs', () => {
+    expect(foldSlices(['a', 'b'], [-3, 2], 'Other').map(s => s.value)).toEqual([0, 2])
+  })
+})
+
+describe('MeterRow', () => {
+  it('renders label, meter and formatted value', () => {
+    const root = mount(MeterRow, { label: 'Equity', value: 42, high: 85, format: (v: number) => `${v}%` })
+    expect(root.querySelector('meter')?.getAttribute('value')).toBe('42')
+    expect(root.textContent).toContain('Equity')
+    expect(root.textContent).toContain('42%')
   })
 })

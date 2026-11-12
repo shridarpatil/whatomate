@@ -18,8 +18,7 @@ const props = defineProps<{
 const { t } = useI18n()
 const fmt = (v: number) => (props.formatValue ? props.formatValue(v) : v.toLocaleString())
 
-const SIZE = 240
-const R = 100
+const R = 120 // viewBox is 2R wide; max rendered width is 15rem (240px) so 1 unit ~ 1px
 const active = ref<number | null>(null)
 
 const slices = computed(() => foldSlices(props.labels, props.values, t('common.other')))
@@ -58,11 +57,11 @@ const tableColumns = computed(() => [t('common.value'), '%'])
 </script>
 
 <template>
-  <figure>
+  <figure role="group" :aria-label="caption || undefined">
     <figcaption v-if="caption || $slots.caption"><slot name="caption">{{ caption }}</slot></figcaption>
     <p v-if="empty" class="text-light">{{ t('common.noData') }}</p>
     <template v-else>
-      <div class="relative" :style="{ maxWidth: `${SIZE}px` }">
+      <div class="relative chart-pie">
         <svg :viewBox="`${-R} ${-R} ${R * 2} ${R * 2}`" width="100%" @mouseleave="active = null">
           <template v-for="(a, i) in arcs" :key="i">
             <path
