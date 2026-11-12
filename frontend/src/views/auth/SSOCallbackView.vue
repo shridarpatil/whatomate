@@ -43,8 +43,7 @@ onMounted(async () => {
 
 <template>
   <main class="flex items-center justify-center h-screen scroll-y p-4">
-    <div class="row">
-      <div class="col-6 offset-3">
+    <div class="auth-panel">
         <article class="card">
           <header class="vstack items-center align-center">
             <div v-if="status === 'loading'" role="status" aria-busy="true" data-spinner="large" :aria-label="$t('auth.ssoLoading')"></div>
@@ -65,7 +64,6 @@ onMounted(async () => {
             <RouterLink to="/login">{{ $t('auth.returnToLogin') }}</RouterLink>
           </footer>
         </article>
-      </div>
     </div>
   </main>
 </template>

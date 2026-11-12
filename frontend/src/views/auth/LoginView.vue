@@ -80,8 +80,7 @@ const initiateSSO = (provider: string) => {
 
 <template>
   <main class="flex items-center justify-center h-screen scroll-y p-4">
-    <div class="row">
-      <div class="col-6 offset-3">
+    <div class="auth-panel">
         <article class="card">
           <header class="vstack items-center align-center">
             <MessageSquare :size="32" />
@@ -142,7 +141,6 @@ const initiateSSO = (provider: string) => {
             </p>
           </footer>
         </article>
-      </div>
     </div>
   </main>
 </template>

@@ -22,6 +22,8 @@
   .meter-row { display: grid; grid-template-columns: 7rem 1fr 3rem; align-items: center; gap: var(--space-2); }
   /* Oat pads every <main> for document pages; app pages set their own spacing. */
   [data-sidebar-layout] > main { padding-block-start: 0; }
+  /* Sign-in / register / SSO card: a narrow centred panel. */
+  .auth-panel { width: min(100%, 24rem); }
   /* Oat makes form controls full width; opt out for inline toolbar controls. */
   .w-auto { width: auto; }
   .truncate { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
