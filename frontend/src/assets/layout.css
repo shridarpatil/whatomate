@@ -20,6 +20,8 @@
   .chart-tooltip { position: absolute; pointer-events: none; white-space: nowrap; z-index: 1; }
   .chart-pie { max-width: 15rem; }
   .meter-row { display: grid; grid-template-columns: 7rem 1fr 3rem; align-items: center; gap: var(--space-2); }
+  /* Oat makes form controls full width; opt out for inline toolbar controls. */
+  .w-auto { width: auto; }
   .truncate { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
   /* Chat: side columns are 18rem; on phones the one visible column fills the screen. */

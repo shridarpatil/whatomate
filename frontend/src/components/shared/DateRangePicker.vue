@@ -50,6 +50,7 @@ function setEnd(e: Event) {
 
 <template>
   <select
+    class="w-auto"
     :value="selectedRange"
     :aria-label="t('dateRange.selectRange', 'Date Range')"
     @change="emit('update:selectedRange', ($event.target as HTMLSelectElement).value as TimeRangePreset)"
@@ -62,6 +63,7 @@ function setEnd(e: Event) {
   </select>
   <template v-if="selectedRange === 'custom'">
     <input
+      class="w-auto"
       type="date"
       :value="from"
       :max="to && to < maxDate ? to : maxDate"
@@ -69,6 +71,7 @@ function setEnd(e: Event) {
       @change="setStart"
     />
     <input
+      class="w-auto"
       type="date"
       :value="to"
       :min="from || undefined"
