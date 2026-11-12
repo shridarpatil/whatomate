@@ -617,7 +617,7 @@ onMounted(() => {
           :style="{ minHeight: minHeight(p.h) }"
           data-testid="dashboard-widget"
         >
-          <article class="card h-full vstack gap-2">
+          <article class="card h-full vstack gap-2" data-hover-group>
             <header class="hstack items-center gap-2">
               <div class="flex-1 min-w-0">
                 <h4 class="truncate">{{ widget.name }}</h4>
@@ -646,7 +646,8 @@ onMounted(() => {
                   <ChevronRight :size="16" />
                 </button>
               </div>
-              <div v-else-if="canEditWidget || canDeleteWidget" class="hstack gap-1">
+              <!-- Edit/delete appear on card hover or keyboard focus (always shown on touch screens). -->
+              <div v-else-if="canEditWidget || canDeleteWidget" class="hstack gap-1" data-hover-reveal>
                 <button
                   v-if="canEditWidget"
                   type="button"

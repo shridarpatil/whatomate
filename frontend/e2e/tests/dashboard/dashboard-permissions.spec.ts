@@ -29,6 +29,22 @@ test.describe('Dashboard Widget Permissions', () => {
       await expect(firstWidget.locator('button[aria-label="Edit widget"]')).toBeVisible()
       await expect(firstWidget.locator('button[aria-label="Delete widget"]')).toBeVisible()
     })
+
+    // Playwright treats opacity:0 as visible, so check the hover-reveal explicitly.
+    test('edit and delete stay hidden until the widget is hovered', async ({ page }) => {
+      await page.waitForSelector('[data-testid="dashboard-widget"]', { timeout: 10000 })
+      const firstWidget = page.locator('[data-testid="dashboard-widget"]').first()
+      // The opacity is applied to the wrapper that holds both buttons.
+      const actions = firstWidget.locator('[data-hover-reveal]')
+      await expect(actions.locator('button[aria-label="Edit widget"]')).toHaveCount(1)
+      await expect(actions.locator('button[aria-label="Delete widget"]')).toHaveCount(1)
+
+      await page.mouse.move(0, 0)
+      await expect(actions).toHaveCSS('opacity', '0')
+
+      await firstWidget.hover()
+      await expect(actions).toHaveCSS('opacity', '1')
+    })
   })
 
   test.describe('User with Analytics Write Permission', () => {
