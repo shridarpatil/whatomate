@@ -1,63 +1,140 @@
 /*
- * App theme: compact density + brand primary on top of vendored Oat.
- * Oat's defaults suit content sites (16px text, fluid headings, roomy spacing);
- * this is an all-day admin app, so only size tokens are tightened. The one
- * colour change is the brand primary (emerald). Nothing else (borders, radii,
- * shadows, fonts, other colours) is overridden, except the approved chat
- * skin at the end of this layer.
+ * App theme on top of vendored Oat: brand primary, the classic palette and
+ * sizes matching the pre-Oat (Tailwind v3 + shadcn-vue) UI.
+ *
+ * Sizing: the old app set html { font-size: 14px }, so 1rem = 14px here too
+ * and every Tailwind rem value below is copied verbatim (h-9 = 2.25rem,
+ * text-sm = 0.875rem, --radius 0.75rem ...). Oat's space scale already equals
+ * Tailwind's spacing scale, so it is left at Oat's defaults.
  *
  * This layer is declared after Oat's layers (theme, base, components,
  * animations, utilities), so it wins over Oat's token definitions without
  * !important. It is loaded before layout.css, so `layout` stays last.
  */
 @layer theme-overrides {
+  html {
+    font-size: 14px;
+    -moz-osx-font-smoothing: grayscale;
+  }
+
   :root {
     /* Brand colour (contrast vs foreground: 5.48:1 light, 5.97:1 dark). */
     --primary: light-dark(#047857, #10b981);
     --primary-foreground: light-dark(#ffffff, #022c22);
     --ring: light-dark(#047857, #10b981);
 
-    /* Spacing: same steps, tighter values (4, 6, 8, 12, 14, 16, 24, 32 ...px). */
-    --space-2: 0.375rem;
-    --space-3: 0.5rem;
-    --space-4: 0.75rem;
-    --space-5: 0.875rem;
-    --space-6: 1rem;
-    --space-8: 1.5rem;
-    --space-10: 2rem;
-    --space-12: 2.5rem;
-    --space-14: 2.75rem;
-    --space-16: 3rem;
-    --space-18: 3.5rem;
+    /* Old font stack: Inter + Tailwind v3's default sans / mono. */
+    --font-sans: Inter, ui-sans-serif, system-ui, sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol", "Noto Color Emoji";
+    --font-mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
 
-    /* Type: 14px body, 13px controls/tables, fixed (non-fluid) app heading scale. */
-    --text-1: 1.5rem;
-    --text-2: 1.25rem;
-    --text-3: 1.125rem;
-    --text-4: 1rem;
-    --text-5: 0.875rem;
-    --text-6: 0.875rem;
-    --text-7: 0.8125rem;
+    /* Type (fixed, non-fluid): body 1rem (old text-base), controls/tables
+       0.875rem (text-sm), small/badges 0.75rem (text-xs). Headings follow the
+       old usage: h1 text-3xl, h2 text-2xl (auth), h3 CardTitle text-2xl,
+       h4 text-sm semibold (panel titles), h5 text-lg. */
+    --text-1: 1.875rem;
+    --text-2: 1.5rem;
+    --text-3: 1.5rem;
+    --text-4: 0.875rem;
+    --text-5: 1.125rem;
+    --text-6: 1rem;
+    --text-7: 0.875rem;
     --text-8: 0.75rem;
 
-    /* Layout tokens (defined by Oat in @layer components). */
-    --sidebar-width: 14rem;
+    /* Layout tokens (defined by Oat in @layer components). Old sidebar w-64. */
+    --sidebar-width: 16rem;
     --grid-gap: 1rem;
   }
 
-  /* Oat hardcodes button sizes in rem. Regular buttons are now ~2.1rem tall
-     (6px + 19.5px line + 6px + border), so match icon buttons to that and keep
-     them square: >=32px hit target, no wide-and-flat icon buttons. */
-  :is(button, [type=submit], [type=reset], [type=button], a.button) {
-    &.icon {
-      width: 2.125rem;
-      height: 2.125rem;
+  /* Old CardTitle: leading-none tracking-tight; detail pages used text-sm font-medium. */
+  .card > header :is(h3, div > h3) { line-height: 1; letter-spacing: -0.025em; }
+  [data-detail-page] .card h3 { font-size: 0.875rem; font-weight: 500; line-height: 1; letter-spacing: normal; }
 
-      &.small {
-        width: 1.75rem;
-        height: 1.75rem;
-      }
+  /* Buttons (old cva): h-9 px-4 text-sm rounded-lg gap-2; sm h-8 px-3 text-xs;
+     lg h-11 px-8; icon h-9 w-9 (small h-8 w-8, large h-11 w-11). min-height +
+     border-compensated padding keeps the exact height but lets wrapped content grow.
+     Buttons Oat styles as something else (tabs, menu items, badge 'x') keep theirs;
+     zero specificity so app rules below still win. */
+  :where(:is(button, [type=submit], [type=reset], [type=button], a.button):not([role=tab], [role=menuitem], .badge button, [data-sidebar-toggle])) {
+    min-height: 2.25rem;
+    padding: calc(0.5rem - 1px) 1rem;
+    gap: 0.5rem;
+    font-size: 0.875rem;
+    line-height: 1.25rem;
+
+    &.small {
+      min-height: 2rem;
+      padding: calc(0.5rem - 1px) 0.75rem;
+      font-size: 0.75rem;
+      line-height: 1rem;
     }
+    &.large {
+      height: auto;
+      min-height: 2.75rem;
+      padding: calc(0.75rem - 1px) 2rem;
+      font-size: 0.875rem;
+    }
+    &.icon {
+      width: 2.25rem;
+      height: 2.25rem;
+      min-height: 0;
+      padding: 0;
+
+      &.small { width: 2rem; height: 2rem; }
+      &.large { width: 2.75rem; height: 2.75rem; }
+    }
+  }
+
+  /* Form controls: Input h-10 px-3 py-2 text-sm rounded-lg; SelectTrigger h-9
+     rounded-md; Textarea min-h-[80px] px-3 py-2 rounded-md. */
+  :where(input:not([type=checkbox], [type=radio], [type=range], [type=file], [type=color], [type=submit], [type=reset], [type=button])) {
+    height: 2.5rem;
+    line-height: 1.25rem;
+  }
+  select:not([multiple], [size]) {
+    height: 2.25rem;
+    padding-block: 0;
+    border-radius: calc(0.75rem - 2px);
+  }
+  textarea {
+    min-height: 80px;
+    padding: 0.5rem 0.75rem;
+    line-height: 1.25rem;
+    border-radius: calc(0.75rem - 2px);
+  }
+
+  /* Switch: h-5 w-9, border-2 transparent, h-4 w-4 thumb moving 1rem. */
+  input[type=checkbox][role=switch] {
+    --switch-inset: 0px;
+    --switch-thumb: 1rem;
+    width: 2.25rem;
+    height: 1.25rem;
+    border: 2px solid transparent;
+    &:checked::before { transform: translateY(-50%) translateX(1rem); }
+  }
+
+  /* Badge: px-2.5 py-0.5 text-xs (1rem line), 1px border. */
+  .badge { padding: 0.125rem 0.625rem; line-height: 1rem; }
+  .badge:not(.outline) { border: 1px solid transparent; }
+
+  /* Table: TableHead h-10 px-2, TableCell p-2. */
+  th { height: 2.5rem; padding: 0 0.5rem; }
+  td { padding: 0.5rem; }
+
+  /* Tabs: list p-1 rounded-lg (no gap); trigger px-3 py-1 text-sm rounded-md. */
+  [role="tablist"] { gap: 0; }
+  [role="tab"] { padding: 0.25rem 0.75rem; line-height: 1.25rem; }
+
+  /* rounded-md surfaces (Oat uses --radius-medium = rounded-lg for these). */
+  [role="status"].skeleton,
+  ot-dropdown [popover]:not(.ot-tooltip) { border-radius: calc(0.75rem - 2px); }
+
+  /* Dialog: p-6 with gap-4 between header / body / footer, header gap-1.5,
+     title text-lg leading-none. */
+  dialog {
+    > header, > form > header { gap: 0.375rem; }
+    :is(&, & > form) > :is(p, div, section) { padding-block: 1rem; }
+    :is(&, & > form) > :is(p, div, section):last-child { padding-block-end: 1.5rem; }
+    > header :is(h2, h3) { font-size: 1.125rem; line-height: 1; letter-spacing: -0.025em; }
   }
 
   /* Chat skin (approved exception to "no custom colours", chat screen only).
@@ -126,16 +203,9 @@
     background-color: color-mix(in oklab, var(--node-accent) 15%, transparent);
   }
 
-  /* Auth pages (login / register / SSO): restore Oat's default, roomier
-     spacing inside the auth card only; the rest of the app stays compact. */
-  .auth-panel {
-    --space-2: 0.5rem;
-    --space-3: 0.75rem;
-    --space-4: 1rem;
-    --space-5: 1.25rem;
-    --space-6: 1.5rem;
-    --space-8: 2rem;
-  }
+  /* Auth card (old login/register): rounded-2xl, p-8, text-2xl bold title. */
+  .auth-panel > .card { padding: 2rem; border-radius: 1rem; }
+  .auth-panel h2 { font-weight: 700; }
 
   /* ------------------------------------------------------------------------
      Classic palette: the pre-Oat look (Linear/Vercel-style dark-first UI,
@@ -156,9 +226,10 @@
     --border: light-dark(hsl(0 0% 90%), hsl(0 0% 12%));
     --input: light-dark(hsl(0 0% 90%), hsl(0 0% 12%));
 
-    /* Rounder corners (old --radius: 0.75rem). */
-    --radius-small: 0.375rem;
-    --radius-medium: 0.625rem;
+    /* Old --radius 0.75rem: small = rounded-sm (checkbox), medium = rounded-lg
+       (button, input, card's rounded-xl, tab list), large = dialog rounded-lg. */
+    --radius-small: calc(0.75rem - 4px);
+    --radius-medium: 0.75rem;
     --radius-large: 0.75rem;
   }
 
@@ -178,13 +249,13 @@
     background-color: light-dark(#ffffff, rgb(255 255 255 / 0.08));
     color: light-dark(#111b21, #e9edef);
     border-color: transparent;
-    border-start-start-radius: 0.375rem;
+    border-end-start-radius: 0.375rem;
   }
   .card[data-bubble="outgoing"] {
     background-color: light-dark(#d9fdd3, #38674a);
     color: light-dark(#111b21, #e9edef);
     border-color: transparent;
-    border-start-end-radius: 0.375rem;
+    border-end-end-radius: 0.375rem;
   }
 
   /* Page header (old PageHeader): h-16 bar, px-6, bottom rule, translucent
