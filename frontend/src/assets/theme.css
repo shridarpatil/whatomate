@@ -87,17 +87,23 @@
     font-weight: var(--font-normal);
   }
 
-  /* Flow node categories (approved exception, flow editors only). Oat colour
-     tokens only: a coloured inline-start edge + tinted icon chip per category.
-     Category → types (IVR + chatbot share BaseNode, which sets data-node-type). */
+  /* Flow node colours (approved exception, flow editors only): one accent per
+     node type, shown as a coloured inline-start edge + tinted icon chip.
+     Darker shade for light mode, lighter for dark mode. IVR + chatbot share
+     BaseNode, which sets data-node-type. */
   [data-node-type] { --node-accent: var(--muted-foreground); border-inline-start: 4px solid var(--node-accent); }
-  /* Start / speak */
-  :is([data-node-type="greeting"], [data-node-type="start"], [data-node-type="message"]) { --node-accent: var(--primary); }
-  /* Asks for input */
-  :is([data-node-type="menu"], [data-node-type="gather"], [data-node-type="prompt"], [data-node-type="buttons"], [data-node-type="whatsapp_flow"]) { --node-accent: var(--warning); }
-  /* Logic / integration (default grey): condition, timing, goto_flow, http_callback, api_call, webhook */
-  /* Handoff / end */
-  :is([data-node-type="transfer"], [data-node-type="hangup"], [data-node-type="end"]) { --node-accent: var(--danger); }
+  :is([data-node-type="greeting"], [data-node-type="start"]) { --node-accent: light-dark(#059669, #34d399); }
+  [data-node-type="message"] { --node-accent: light-dark(#0d9488, #2dd4bf); }
+  :is([data-node-type="gather"], [data-node-type="prompt"]) { --node-accent: light-dark(#ea580c, #fb923c); }
+  :is([data-node-type="menu"], [data-node-type="buttons"]) { --node-accent: light-dark(#d97706, #fbbf24); }
+  :is([data-node-type="http_callback"], [data-node-type="api_call"]) { --node-accent: light-dark(#2563eb, #60a5fa); }
+  [data-node-type="webhook"] { --node-accent: light-dark(#0284c7, #38bdf8); }
+  [data-node-type="whatsapp_flow"] { --node-accent: light-dark(#65a30d, #a3e635); }
+  [data-node-type="transfer"] { --node-accent: light-dark(#7c3aed, #a78bfa); }
+  [data-node-type="condition"] { --node-accent: light-dark(#db2777, #f472b6); }
+  [data-node-type="goto_flow"] { --node-accent: light-dark(#4f46e5, #818cf8); }
+  [data-node-type="timing"] { --node-accent: light-dark(#0891b2, #22d3ee); }
+  :is([data-node-type="hangup"], [data-node-type="end"]) { --node-accent: light-dark(#dc2626, #f87171); }
   [data-node-icon] {
     display: inline-flex;
     padding: var(--space-1);
