@@ -4,6 +4,7 @@ import type { Component } from 'vue'
 
 defineProps<{
   title: string
+  // Kept for call-site compatibility; page subtitles are intentionally not shown (compact headers).
   description?: string
   icon?: Component
   // Kept for call-site compatibility; Oat's default look has no per-page gradient.
@@ -32,7 +33,6 @@ defineProps<{
           </template>
         </ol>
       </nav>
-      <p v-else-if="description" class="text-light">{{ description }}</p>
     </div>
     <slot name="actions" />
   </header>
