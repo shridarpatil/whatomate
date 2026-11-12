@@ -72,12 +72,16 @@ import { setLocale, getLocale, SUPPORTED_LOCALES } from '@/i18n'
 // Get current locale
 const current = getLocale()
 
-// Change locale
-setLocale('es')
+// Change locale (async: non-English locales are lazy-loaded on first use)
+await setLocale('es')
 
 // List available locales
 console.log(SUPPORTED_LOCALES)
 ```
+
+English is bundled with the app and is the fallback. Every other locale file is
+split into its own chunk and fetched only when a user selects it (or at startup,
+via `initLocale()` in `main.ts`, if it was their saved/browser language).
 
 ## File Structure
 
