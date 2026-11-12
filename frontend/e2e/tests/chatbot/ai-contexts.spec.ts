@@ -108,7 +108,7 @@ test.describe('AI Contexts - Detail Page CRUD', () => {
     await page.goto('/chatbot/ai/new')
     await page.waitForLoadState('networkidle')
 
-    await page.locator('main').getByLabel('Context Type').selectOption('api')
+    await page.locator('main').getByLabel('Type', { exact: true }).selectOption('api')
     await expect(page.getByText('API URL')).toBeVisible({ timeout: 3000 })
   })
 

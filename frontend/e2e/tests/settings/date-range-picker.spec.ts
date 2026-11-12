@@ -45,7 +45,9 @@ test.describe('DateRangePicker — re-open after Apply', () => {
     expect(storageState.custom).toBeTruthy()
 
     // A custom range renders native From/To date inputs seeded from storage.
-    await expect(page.getByLabel('From')).toHaveValue('2026-04-01', { timeout: 10000 })
-    await expect(page.getByLabel('To')).toHaveValue('2026-04-30')
+    // Exact + scoped to main: a substring "To" also matches "Toggle menu" etc.
+    const main = page.locator('main')
+    await expect(main.getByLabel('From', { exact: true })).toHaveValue('2026-04-01', { timeout: 10000 })
+    await expect(main.getByLabel('To', { exact: true })).toHaveValue('2026-04-30')
   })
 })

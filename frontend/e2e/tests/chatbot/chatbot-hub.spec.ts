@@ -133,18 +133,17 @@ test.describe('Chatbot Hub Card Content', () => {
     await expect(chatbotHubPage.aiContextsCard.locator('h3')).toContainText('AI Contexts')
   })
 
-  test('should show keywords card description', async () => {
-    // Description is the second p element (first is count)
-    await expect(chatbotHubPage.keywordsCard.locator('p').last()).toContainText('automated responses')
+  // The hub cards no longer carry a long description (removed in the Oat redesign);
+  // the line under the title is the item count.
+  test('should show keywords card count summary', async () => {
+    await expect(chatbotHubPage.keywordsCard.locator('small')).toContainText(/\d+ rules configured/)
   })
 
-  test('should show flows card description', async () => {
-    // Description is the second p element (first is count)
-    await expect(chatbotHubPage.flowsCard.locator('p').last()).toContainText('multi-step conversation')
+  test('should show flows card count summary', async () => {
+    await expect(chatbotHubPage.flowsCard.locator('small')).toContainText(/\d+ flows created/)
   })
 
-  test('should show AI contexts card description', async () => {
-    // Description is the second p element (first is count)
-    await expect(chatbotHubPage.aiContextsCard.locator('p').last()).toContainText('AI-powered responses')
+  test('should show AI contexts card count summary', async () => {
+    await expect(chatbotHubPage.aiContextsCard.locator('small')).toContainText(/\d+ contexts active/)
   })
 })

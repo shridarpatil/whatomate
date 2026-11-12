@@ -39,7 +39,8 @@ test.describe('Message Templates - List View', () => {
     const href = await navigateToFirstItem(page)
     if (href) {
       expect(page.url()).toMatch(/\/templates\/[a-f0-9-]+/)
-      await expect(page.getByText('Details')).toBeVisible()
+      // "Details" is the collapsible section's <summary> (account names may also contain "details")
+      await expect(page.locator('main summary').filter({ hasText: 'Details' })).toBeVisible()
     }
   })
 

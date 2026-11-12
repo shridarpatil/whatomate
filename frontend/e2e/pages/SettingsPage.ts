@@ -526,8 +526,8 @@ export class ContactsPage extends TableSettingsPage {
   async deleteContact(identifier: string) {
     const row = this.getContactRow(identifier)
     await expect(row).toBeVisible({ timeout: 10000 })
-    // Delete is third button in actions column
-    await row.locator('td:last-child button').nth(2).click()
+    // Actions column: Open chat (button), Edit (link), Delete (button)
+    await row.locator('td:last-child').getByRole('button', { name: 'Delete', exact: true }).click()
     await this.alertDialog.waitFor({ state: 'visible' })
   }
 

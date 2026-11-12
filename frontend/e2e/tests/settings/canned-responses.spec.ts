@@ -71,6 +71,9 @@ test.describe('Canned Responses Management', () => {
     await page.waitForURL(/\/settings\/canned-responses\/[a-f0-9-]+$/)
     const id = page.url().split('/').pop()!
 
+    // Dismiss the created toast: it sits over the header Save button and pauses on hover.
+    await cannedResponsesPage.dismissToast('created')
+
     // Update content on the same detail page
     const textarea = page.getByLabel(/^Content/)
     await textarea.fill(updatedContent)

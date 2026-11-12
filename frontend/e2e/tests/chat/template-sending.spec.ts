@@ -84,7 +84,9 @@ test.describe('Template Sending', () => {
     const orgId = await execSQL(`SELECT organization_id FROM users WHERE email = 'admin@test.com' LIMIT 1`)
 
     // Clean up leftover e2e templates from previous runs
-    await execSQL(`DELETE FROM templates WHERE name LIKE 'e2e_%' AND organization_id = '${orgId}'`)
+    // Only this spec's prefixes: a blanket 'e2e_%' also deletes templates that
+    // parallel specs (e.g. template-header-param's e2e_hdr_*) just seeded.
+    await execSQL(`DELETE FROM templates WHERE (name LIKE 'e2e_simple_%' OR name LIKE 'e2e_params_%' OR name LIKE 'e2e_buttons_%') AND organization_id = '${orgId}'`)
 
     // Seed APPROVED templates directly via SQL (API only creates DRAFT)
     const uid = Date.now().toString().slice(-6)

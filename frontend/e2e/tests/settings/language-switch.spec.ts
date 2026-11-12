@@ -19,7 +19,8 @@ test.describe('Language Switching', () => {
     test('should display language selector on settings page', async ({ page }) => {
       await page.goto('/settings')
       await page.waitForLoadState('networkidle')
-      await expect(page.getByText('Language', { exact: true })).toBeVisible()
+      // Scope to main: the sidebar user menu also has a "Language" label.
+      await expect(page.locator('main').getByText('Language', { exact: true })).toBeVisible()
     })
 
     test('should show available languages in dropdown', async ({ page }) => {

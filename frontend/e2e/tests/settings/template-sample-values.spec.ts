@@ -138,10 +138,15 @@ test.describe('Template Preview with Sample Values', () => {
     await expect(previewBtn).toBeVisible({ timeout: 10000 })
     await previewBtn.click()
 
-    const dialog = page.getByRole('alertdialog')
+    // The preview is a regular (non-alert) Modal dialog labelled by its title.
+    const dialog = page.getByRole('dialog', { name: 'Template Preview' })
     await expect(dialog).toBeVisible({ timeout: 5000 })
-    await expect(dialog.getByText('Template Preview')).toBeVisible()
+    await expect(dialog.getByRole('heading', { name: 'Template Preview' })).toBeVisible()
+    // {{1}} is replaced by its sample value (or a "[1]" placeholder), never shown raw
+    await expect(dialog.getByText(/^Hello (?!\{\{).+, welcome$/)).toBeVisible()
 
-    await dialog.getByRole('button', { name: /Close/i }).click()
+    // Footer "Close" (the header X shares the same accessible name)
+    await dialog.locator('footer').getByRole('button', { name: /Close/i }).click()
+    await expect(dialog).toBeHidden()
   })
 })

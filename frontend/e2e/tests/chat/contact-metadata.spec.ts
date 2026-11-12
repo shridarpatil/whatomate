@@ -123,11 +123,14 @@ test.describe('Contact Metadata Panel', () => {
   test('should display boolean metadata as Yes/No badges', async ({ page }) => {
     await openInfoPanel(page)
 
+    // Scope to the info panel: the chat header also shows "Last active <time>".
+    const panel = page.getByTestId('contact-info')
+
     // The "Active" label should appear in the General section
-    await expect(page.getByText('Active')).toBeVisible()
+    await expect(panel.getByText('Active', { exact: true })).toBeVisible()
 
     // Boolean true should show as "Yes" badge
-    await expect(page.getByText('Yes')).toBeVisible()
+    await expect(panel.getByText('Yes', { exact: true })).toBeVisible()
   })
 
   test('should collapse and expand metadata sections', async ({ page }) => {

@@ -94,7 +94,15 @@ export class DialogPage extends BasePage {
   async fillSelect(label: string, option: string) {
     const native = this.dialog.getByLabel(label, { exact: false }).and(this.page.locator('select'))
     if (await native.count() > 0) {
-      await native.first().selectOption({ label: option })
+      const select = native.first()
+      // Native options show raw text (e.g. role "agent (System)"), so fall back to a
+      // case-insensitive match ignoring a trailing "(…)" suffix when there is no exact label.
+      const labels = (await select.locator('option').allTextContents()).map(l => l.trim())
+      const base = (l: string) => l.replace(/\s*\([^)]*\)\s*$/, '').toLowerCase()
+      const label = labels.find(l => l === option)
+        ?? labels.find(l => base(l) === option.toLowerCase())
+        ?? option
+      await select.selectOption({ label })
       return
     }
 

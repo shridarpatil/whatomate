@@ -35,12 +35,17 @@ export class CallLogsPage {
     await expect(this.page.locator('[class*="card"], table, [class*="empty"]').first()).toBeVisible()
   }
 
+  // Data rows only: the empty state is also rendered as a tbody row, but has no caller link.
+  private get dataRows(): Locator {
+    return this.page.locator('tbody tr').filter({ has: this.page.getByRole('link') })
+  }
+
   async getRowCount(): Promise<number> {
-    return this.page.locator('tbody tr').count()
+    return this.dataRows.count()
   }
 
   async clickRow(index: number) {
-    await this.page.locator('tbody tr').nth(index).getByRole('link').first().click()
+    await this.dataRows.nth(index).getByRole('link').first().click()
   }
 
   async search(query: string) {

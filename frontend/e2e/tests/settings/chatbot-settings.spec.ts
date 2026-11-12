@@ -196,9 +196,10 @@ test.describe('SLA Tab', () => {
 
   test('should show SLA fields when enabled', async ({ page }) => {
     await page.getByRole('switch').first().check()
-    // Target labels specifically to avoid matching description text
-    await expect(page.locator('label').filter({ hasText: /Response Time/i })).toBeVisible()
-    await expect(page.locator('label').filter({ hasText: /Escalation Time/i })).toBeVisible()
+    // Target the number inputs by name: the SLA switch's hint ("Track response times…")
+    // also matches /Response Time/ as label text.
+    await expect(page.getByRole('spinbutton', { name: /^Response Time/i })).toBeVisible()
+    await expect(page.getByRole('spinbutton', { name: /^Escalation Time/i })).toBeVisible()
   })
 
   test('should have client inactivity reminders toggle', async ({ page }) => {

@@ -139,13 +139,22 @@ test.describe('WhatsApp Accounts - Detail Page CRUD', () => {
     }
   })
 
-  test('should show activity log', async ({ page }) => {
-    await page.goto('/settings/accounts')
+  test('should show activity log', async ({ page, request }) => {
+    // Seed our own account (see "should show setup guide"): the first list row
+    // can be deleted by a parallel worker before the detail page loads.
+    const api = new ApiHelper(request)
+    await api.login(SUPER_ADMIN.email, SUPER_ADMIN.password)
+    const acc = await api.createWhatsAppAccount({
+      name: scope.name('activity-log').toLowerCase().replace(/\s/g, '-'),
+      phone_id: `phone-activity-${Date.now()}`,
+      business_id: `biz-activity-${Date.now()}`,
+      access_token: 'test-token-e2e',
+    })
+
+    await page.goto(`/settings/accounts/${acc.id}`)
     await page.waitForLoadState('networkidle')
 
-    if (await navigateToFirstItem(page)) {
-      await expectActivityLogVisible(page)
-    }
+    await expectActivityLogVisible(page)
   })
 
   test('should show setup guide', async ({ page, request }) => {

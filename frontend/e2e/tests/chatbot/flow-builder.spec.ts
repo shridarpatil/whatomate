@@ -145,19 +145,21 @@ test.describe('Chatbot Flow Builder - Other node types', () => {
     await builder.gotoNew()
   })
 
+  // These labels are static text in the template ("\n  Method\n  <select>"), which Vue condenses
+  // to a leading space, so getByLabel(/^Method/) never matches. Match the control's accessible name.
   test('API node exposes method + URL fields', async () => {
     await builder.addNode('API')
-    await expect(builder.page.getByLabel(/^Method/)).toBeVisible()
-    await expect(builder.page.getByLabel(/^URL/)).toBeVisible()
+    await expect(builder.page.getByRole('combobox', { name: 'Method', exact: true })).toBeVisible()
+    await expect(builder.page.getByRole('textbox', { name: 'URL', exact: true })).toBeVisible()
   })
 
   test('Transfer node exposes a team selector', async () => {
     await builder.addNode('Transfer')
-    await expect(builder.page.getByLabel(/^Team/)).toBeVisible()
+    await expect(builder.page.getByRole('combobox', { name: 'Team', exact: true })).toBeVisible()
   })
 
   test('Condition node exposes the expression textarea', async () => {
     await builder.addNode('Condition')
-    await expect(builder.page.getByLabel(/^Expression/)).toBeVisible()
+    await expect(builder.page.getByRole('textbox', { name: /^Expression/ })).toBeVisible()
   })
 })

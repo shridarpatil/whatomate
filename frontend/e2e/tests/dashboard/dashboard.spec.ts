@@ -9,8 +9,9 @@ test.describe('Dashboard', () => {
   })
 
   test('should display dashboard page', async ({ page }) => {
+    // PageHeader no longer renders the subtitle; the heading identifies the page.
     await expect(page.locator('h1')).toContainText('Dashboard')
-    await expect(page.getByText('Customizable analytics overview')).toBeVisible()
+    await expect(page.locator('h1')).toBeVisible()
   })
 
   test('should display stat cards', async ({ page }) => {

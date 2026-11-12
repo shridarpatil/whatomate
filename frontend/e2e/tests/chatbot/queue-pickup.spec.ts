@@ -418,13 +418,13 @@ test.describe('Queue pickup gated by allow_agent_queue_pickup', () => {
     await expect(pickBtn).toBeVisible({ timeout: 10_000 })
     await expect(pickBtn).toBeDisabled()
 
-    // Tooltip explains why it's disabled. We hover the wrapping span (the
-    // tooltip trigger) — disabled buttons don't receive pointer events, and
-    // the trigger wraps the button precisely for this reason.
-    await pickBtn.locator('xpath=ancestor::span[1]').hover()
-    await expect(
-      page.getByText(/Queue pickup is disabled by your administrator/i),
-    ).toBeVisible({ timeout: 5_000 })
+    // Tooltip explains why it's disabled. It is a native `title` on the span
+    // wrapping the button (disabled buttons don't receive pointer events), so
+    // assert the attribute rather than a rendered tooltip popup.
+    await expect(pickBtn.locator('xpath=ancestor::span[1]')).toHaveAttribute(
+      'title',
+      /Queue pickup is disabled by your administrator/i,
+    )
   })
 
   test('Pick Next is enabled again when the toggle is flipped back on', async ({ page }) => {

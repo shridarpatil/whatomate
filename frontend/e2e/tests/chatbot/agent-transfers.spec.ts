@@ -88,7 +88,8 @@ test.describe('Queue Tab', () => {
   })
 
   test('should show team queue counts', async ({ page }) => {
-    await expect(page.getByText(/General/i)).toBeVisible()
+    // The count badge reads "General: N"; the team filter <select> also has a "General Queue" option.
+    await expect(page.locator('main .badge').filter({ hasText: /General:\s*\d+/i })).toBeVisible()
   })
 })
 
