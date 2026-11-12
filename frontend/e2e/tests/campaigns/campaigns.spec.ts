@@ -68,25 +68,28 @@ test.describe('Campaign Edit Dialog', () => {
     await campaignsPage.goto()
   })
 
-  test('should open edit dialog when clicking edit button on draft campaign', async () => {
+  test('should open the campaign detail page when clicking edit', async ({ page }) => {
     if (await campaignsPage.clickEditButton()) {
-      await campaignsPage.expectDialogVisible()
-      await campaignsPage.expectDialogTitle(/Edit Campaign/i)
+      await expect(page.locator('main input#name')).toBeVisible()
     }
   })
 
-  test('should pre-fill form fields when editing campaign', async () => {
+  test('should pre-fill form fields when editing campaign', async ({ page }) => {
     if (await campaignsPage.clickEditButton()) {
-      const nameInput = campaignsPage.createDialog.locator('input#name')
+      const nameInput = page.locator('main input#name')
       await expect(nameInput).toBeVisible()
-      const nameValue = await nameInput.inputValue()
-      expect(nameValue.length).toBeGreaterThan(0)
+      expect((await nameInput.inputValue()).length).toBeGreaterThan(0)
     }
   })
 
-  test('should have Save Changes button in edit mode', async () => {
+  test('should show a Save button after editing a draft campaign', async ({ page }) => {
     if (await campaignsPage.clickEditButton()) {
-      await expect(campaignsPage.createDialog.getByRole('button', { name: /Save Changes/i })).toBeVisible()
+      const nameInput = page.locator('main input#name')
+      // Only draft campaigns are editable; Save appears once something changed.
+      if (await nameInput.isEnabled()) {
+        await nameInput.fill(`${await nameInput.inputValue()} edited`)
+        await expect(page.locator('main').getByRole('button', { name: /^(Save|Saving)/ })).toBeVisible()
+      }
     }
   })
 })

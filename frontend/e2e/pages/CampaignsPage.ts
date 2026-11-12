@@ -82,11 +82,12 @@ export class CampaignsPage extends BasePage {
   }
 
   // Dialog interactions
+  /** Edit opens the campaign's detail page (a router link), not a dialog. */
   async clickEditButton() {
     const btn = this.getEditButton()
     if (await btn.isVisible()) {
       await btn.click()
-      await this.createDialog.waitFor({ state: 'visible' })
+      await this.page.waitForURL(/\/campaigns\/[0-9a-f-]{36}$/)
       return true
     }
     return false
