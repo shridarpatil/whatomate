@@ -3,16 +3,11 @@ import { ref, computed, watch, onMounted, nextTick } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useNotesStore } from '@/stores/notes'
 import { useAuthStore } from '@/stores/auth'
-import { Button } from '@/components/ui/button'
-import { Badge } from '@/components/ui/badge'
-import { Avatar, AvatarFallback } from '@/components/ui/avatar'
-import { ScrollArea } from '@/components/ui/scroll-area'
-import { Textarea } from '@/components/ui/textarea'
 import { toast } from '@/lib/toast'
 import { useInfiniteScroll } from '@/composables/useInfiniteScroll'
 import { getInitials } from '@/lib/utils'
 import {
-  StickyNote, Pencil, Trash2, X, Check, Loader2, Send
+  StickyNote, Pencil, Trash2, X, Check, Send
 } from '@/lib/icons'
 
 const props = defineProps<{
@@ -64,7 +59,7 @@ onMounted(async () => {
       await notesStore.fetchNotes(props.contactId)
     }
     await nextTick()
-    // Delay setup like messages do to ensure ScrollArea is fully rendered
+    // Delay setup like messages do to ensure the list is fully rendered
     setTimeout(() => {
       scrollToBottom(true)
       notesScroll.setup()
@@ -160,150 +155,139 @@ function formatNoteTime(dateStr: string) {
 </script>
 
 <template>
-  <div id="notes-panel" class="w-80 border-l border-white/[0.08] light:border-gray-200 bg-[#111113] light:bg-white flex flex-col">
+  <article id="notes-panel" class="card p-4 flex flex-col min-h-0 h-full gap-4 chat-col">
     <!-- Header -->
-    <div class="px-4 py-3 border-b border-white/[0.08] light:border-gray-200 flex items-center justify-between">
-      <div class="flex items-center gap-2">
-        <div class="h-7 w-7 rounded-lg bg-amber-500/15 flex items-center justify-center">
-          <StickyNote class="h-4 w-4 text-amber-400 light:text-amber-600" />
-        </div>
-        <span class="text-sm font-semibold text-white light:text-gray-900">{{ t('chat.internalNotes') }}</span>
-        <Badge v-if="notesStore.notes.length > 0" class="bg-amber-500/20 text-amber-400 light:bg-amber-100 light:text-amber-700 border-0 text-[10px] px-1.5 py-0">
-          {{ notesStore.notes.length }}
-        </Badge>
+    <header class="hstack justify-between shrink-0">
+      <div class="hstack gap-2">
+        <StickyNote class="text-light" />
+        <h4>{{ t('chat.internalNotes') }}</h4>
+        <span v-if="notesStore.notes.length > 0" class="badge" data-variant="warning">{{ notesStore.notes.length }}</span>
       </div>
-      <Button
-        variant="ghost"
-        size="icon"
-        class="h-7 w-7 text-white/40 hover:text-white hover:bg-white/[0.08] light:text-gray-500 light:hover:text-gray-900 light:hover:bg-gray-100"
-        @click="emit('close')"
-      >
-        <X class="h-4 w-4" />
-      </Button>
-    </div>
+      <button type="button" class="ghost small icon" :title="t('common.close')" :aria-label="t('common.close')" @click="emit('close')">
+        <X />
+      </button>
+    </header>
 
     <!-- Notes list -->
-    <ScrollArea :ref="(el: any) => notesScroll.scrollAreaRef.value = el" class="flex-1 p-3">
-      <div class="space-y-3">
-        <!-- Loading older notes -->
-        <div v-if="notesStore.isLoadingOlder" class="flex justify-center py-2">
-          <Loader2 class="h-4 w-4 animate-spin text-white/30 light:text-gray-400" />
-        </div>
+    <div :ref="(el: any) => notesScroll.scrollAreaRef.value = el" class="flex-1 scroll-y vstack gap-2">
+      <!-- Loading older notes -->
+      <div v-if="notesStore.isLoadingOlder" class="flex justify-center">
+        <span role="status" aria-busy="true" data-spinner="small" :aria-label="t('common.loading')" />
+      </div>
 
-        <!-- Initial loading state -->
-        <div v-if="notesStore.isLoading" class="flex justify-center py-8">
-          <Loader2 class="h-5 w-5 animate-spin text-white/30 light:text-gray-400" />
-        </div>
+      <!-- Initial loading state -->
+      <div v-if="notesStore.isLoading" class="flex justify-center p-4">
+        <span role="status" aria-busy="true" :aria-label="t('common.loading')" />
+      </div>
 
-        <!-- Notes (chronological: oldest first, latest last) -->
-        <template v-else-if="notesStore.notes.length > 0">
-          <div
-            v-for="note in notesStore.notes"
-            :key="note.id"
-            class="group relative rounded-xl p-3 backdrop-blur-sm border border-white/[0.06] light:border-gray-200 bg-gradient-to-br from-white/[0.04] to-white/[0.02] light:from-gray-50 light:to-white hover:from-white/[0.06] hover:to-white/[0.03] light:hover:from-gray-100 light:hover:to-gray-50 transition-all duration-200"
-          >
-            <!-- Gradient accent line -->
-            <div class="absolute top-0 left-3 right-3 h-[2px] rounded-full bg-gradient-to-r from-amber-500/60 via-orange-500/40 to-transparent" />
+      <!-- Notes (chronological: oldest first, latest last) -->
+      <template v-else-if="notesStore.notes.length > 0">
+        <article
+          v-for="note in notesStore.notes"
+          :key="note.id"
+          data-note
+          data-hover-group
+          class="card p-4 shrink-0"
+        >
+          <!-- Editing mode -->
+          <div v-if="editingNoteId === note.id" class="vstack gap-2">
+            <textarea
+              v-model="editingContent"
+              :aria-label="t('common.edit')"
+              rows="2"
+              @keydown.meta.enter.prevent="saveEdit(note.id)"
+              @keydown.ctrl.enter.prevent="saveEdit(note.id)"
+            />
+            <div class="hstack gap-2 justify-end">
+              <button type="button" class="ghost small" @click="cancelEditing">{{ t('common.cancel') }}</button>
+              <button
+                type="button"
+                class="small"
+                :disabled="!editingContent.trim() || isSaving"
+                :aria-busy="isSaving ? 'true' : undefined"
+                data-spinner="small"
+                @click="saveEdit(note.id)"
+              >
+                <Check v-if="!isSaving" />
+                {{ t('common.save') }}
+              </button>
+            </div>
+          </div>
 
-            <!-- Editing mode -->
-            <template v-if="editingNoteId === note.id">
-              <Textarea
-                v-model="editingContent"
-                class="min-h-[60px] max-h-[100px] resize-none text-sm bg-white/[0.04] light:bg-gray-50 border-amber-500/20 light:border-amber-200 mt-1"
-                :rows="2"
-                @keydown.meta.enter.prevent="saveEdit(note.id)"
-                @keydown.ctrl.enter.prevent="saveEdit(note.id)"
-              />
-              <div class="flex justify-end gap-1.5 mt-2">
-                <Button variant="ghost" size="sm" class="h-7 text-xs" @click="cancelEditing">
-                  {{ t('common.cancel') }}
-                </Button>
-                <Button
-                  size="sm"
-                  class="h-7 text-xs bg-amber-600 hover:bg-amber-500 text-white"
-                  :disabled="!editingContent.trim() || isSaving"
-                  @click="saveEdit(note.id)"
-                >
-                  <Loader2 v-if="isSaving" class="h-3 w-3 mr-1 animate-spin" />
-                  <Check v-else class="h-3 w-3 mr-1" />
-                  {{ t('common.save') }}
-                </Button>
-              </div>
-            </template>
-
-            <!-- Display mode -->
-            <template v-else>
-              <div class="flex items-start gap-2.5 mt-1">
-                <Avatar class="h-6 w-6 shrink-0 ring-1 ring-white/[0.08] light:ring-gray-200">
-                  <AvatarFallback class="text-[10px]">
-                    {{ getInitials(note.created_by_name) }}
-                  </AvatarFallback>
-                </Avatar>
-                <div class="flex-1 min-w-0">
-                  <div class="flex items-center justify-between mb-1">
-                    <span class="text-xs font-medium text-white/70 light:text-gray-700">{{ note.created_by_name }}</span>
-                    <div class="flex items-center gap-1">
-                      <!-- Hover actions (own notes only) -->
-                      <div
-                        v-if="note.created_by_id === authStore.user?.id"
-                        class="opacity-0 group-hover:opacity-100 transition-opacity flex gap-0.5"
-                      >
-                        <button
-                          class="h-5 w-5 rounded-md flex items-center justify-center hover:bg-white/[0.08] light:hover:bg-gray-200 text-white/30 hover:text-white/60 light:text-gray-400 light:hover:text-gray-600 transition-colors"
-                          @click="startEditing(note.id, note.content)"
-                        >
-                          <Pencil class="h-3 w-3" />
-                        </button>
-                        <button
-                          class="h-5 w-5 rounded-md flex items-center justify-center hover:bg-red-500/10 text-white/30 hover:text-red-400 light:text-gray-400 light:hover:text-red-500 transition-colors"
-                          @click="deleteNote(note.id)"
-                        >
-                          <Trash2 class="h-3 w-3" />
-                        </button>
-                      </div>
-                      <span class="text-[10px] text-white/30 light:text-gray-400">{{ formatNoteTime(note.created_at) }}</span>
-                    </div>
-                  </div>
-                  <p class="text-[13px] text-white/60 light:text-gray-600 leading-relaxed whitespace-pre-wrap break-words">{{ note.content }}</p>
+          <!-- Display mode -->
+          <div v-else class="flex gap-2">
+            <figure data-variant="avatar" class="small shrink-0">
+              <abbr>{{ getInitials(note.created_by_name) }}</abbr>
+            </figure>
+            <div class="flex-1 min-w-0">
+              <div class="flex items-center justify-between gap-2">
+                <small class="truncate"><strong>{{ note.created_by_name }}</strong></small>
+                <div class="hstack gap-1 shrink-0">
+                  <!-- Hover actions (own notes only) -->
+                  <template v-if="note.created_by_id === authStore.user?.id">
+                    <button
+                      type="button"
+                      class="ghost small icon"
+                      data-hover-reveal
+                      :title="t('common.edit')"
+                      :aria-label="t('common.edit')"
+                      @click="startEditing(note.id, note.content)"
+                    >
+                      <Pencil :size="12" />
+                    </button>
+                    <button
+                      type="button"
+                      class="ghost small icon"
+                      data-hover-reveal
+                      :title="t('common.delete')"
+                      :aria-label="t('common.delete')"
+                      @click="deleteNote(note.id)"
+                    >
+                      <Trash2 :size="12" />
+                    </button>
+                  </template>
+                  <small class="text-lighter">{{ formatNoteTime(note.created_at) }}</small>
                 </div>
               </div>
-            </template>
+              <p class="pre-wrap text-light">{{ note.content }}</p>
+            </div>
           </div>
-        </template>
+        </article>
+      </template>
 
-        <!-- Empty state -->
-        <div v-else class="flex flex-col items-center justify-center py-12 text-center">
-          <div class="h-12 w-12 rounded-xl bg-amber-500/10 light:bg-amber-50 flex items-center justify-center mb-3">
-            <StickyNote class="h-6 w-6 text-amber-400/50 light:text-amber-400" />
-          </div>
-          <p class="text-sm font-medium text-white/40 light:text-gray-500 mb-1">{{ t('chat.noNotes') }}</p>
-          <p class="text-xs text-white/25 light:text-gray-400">{{ t('chat.writeNote') }}</p>
-        </div>
-
-        <!-- Scroll anchor -->
-        <div ref="notesEndRef" />
+      <!-- Empty state -->
+      <div v-else class="vstack gap-1 items-center align-center text-light p-4">
+        <StickyNote :size="24" />
+        <strong>{{ t('chat.noNotes') }}</strong>
+        <small>{{ t('chat.writeNote') }}</small>
       </div>
-    </ScrollArea>
+
+      <!-- Scroll anchor -->
+      <div ref="notesEndRef" />
+    </div>
 
     <!-- Add note input -->
-    <div class="p-4 border-t border-white/[0.08] light:border-gray-200">
-      <div class="flex items-center gap-2 p-2 rounded-xl bg-white/[0.06] light:bg-gray-100 border border-white/[0.08] light:border-gray-200">
-        <textarea
-          v-model="newNoteContent"
-          :placeholder="t('chat.writeNote') + '...'"
-          class="flex-1 bg-transparent text-[14px] text-white light:text-gray-900 placeholder:text-white/30 light:placeholder:text-gray-400 focus:outline-none resize-none min-h-[36px] max-h-[120px] py-2 overflow-y-auto"
-          rows="1"
-          @keydown.enter.exact.prevent="addNote"
-        />
-        <button
-          class="w-9 h-9 rounded-lg bg-amber-600 hover:bg-amber-500 light:bg-amber-500 light:hover:bg-amber-600 flex items-center justify-center transition-colors disabled:opacity-50"
-          :disabled="!newNoteContent.trim() || isSaving"
-          @click="addNote"
-        >
-          <Loader2 v-if="isSaving" class="h-4 w-4 animate-spin text-white" />
-          <Send v-else class="h-4 w-4 text-white" />
-        </button>
-      </div>
+    <div class="flex items-center gap-2 shrink-0">
+      <textarea
+        v-model="newNoteContent"
+        class="min-h-0"
+        :placeholder="t('chat.writeNote') + '...'"
+        :aria-label="t('chat.writeNote')"
+        rows="1"
+        @keydown.enter.exact.prevent="addNote"
+      />
+      <button
+        type="button"
+        class="icon shrink-0"
+        :disabled="!newNoteContent.trim() || isSaving"
+        :aria-busy="isSaving ? 'true' : undefined"
+        data-spinner="small"
+        :title="t('chat.addNote')"
+        :aria-label="t('chat.addNote')"
+        @click="addNote"
+      >
+        <Send v-if="!isSaving" />
+      </button>
     </div>
-  </div>
+  </article>
 </template>

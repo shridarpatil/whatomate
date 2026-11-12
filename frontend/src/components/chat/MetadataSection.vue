@@ -1,20 +1,10 @@
 <script setup lang="ts">
-import { ref } from 'vue'
-import { Badge } from '@/components/ui/badge'
-import {
-  Collapsible,
-  CollapsibleContent,
-  CollapsibleTrigger,
-} from '@/components/ui/collapsible'
-import { ChevronDown } from '@/lib/icons'
 import { formatLabel } from '@/lib/utils'
 
-const props = defineProps<{
+defineProps<{
   label: string
   data: any
 }>()
-
-const isOpen = ref(true)
 
 function isObject(val: any): val is Record<string, any> {
   return val !== null && typeof val === 'object' && !Array.isArray(val)
@@ -46,96 +36,53 @@ function getTableColumns(arr: Record<string, any>[]): string[] {
 </script>
 
 <template>
-  <Collapsible v-model:open="isOpen" class="border-t pt-3">
-    <CollapsibleTrigger class="flex items-center justify-between w-full py-1 text-sm font-medium hover:text-primary transition-colors">
+  <details open>
+    <summary>
       <span>
         {{ label }}
-        <span v-if="isArrayOfObjects(data)" class="text-muted-foreground font-normal">({{ data.length }})</span>
+        <span v-if="isArrayOfObjects(data)" class="text-light">({{ data.length }})</span>
       </span>
-      <ChevronDown
-        :class="[
-          'h-4 w-4 text-muted-foreground transition-transform',
-          isOpen ? '' : '-rotate-90'
-        ]"
-      />
-    </CollapsibleTrigger>
-    <CollapsibleContent>
-      <!-- Object: key-value rows -->
-      <div v-if="isObject(data)" class="mt-2 rounded-md border">
-        <div
-          v-for="(val, key) in data"
-          :key="key"
-          class="flex justify-between items-start px-3 py-1.5 border-b border-muted/50 last:border-0"
-        >
-          <span class="text-xs text-muted-foreground shrink-0">{{ formatLabel(String(key)) }}</span>
-          <Badge
-            v-if="typeof val === 'boolean'"
-            :variant="val ? 'default' : 'secondary'"
-            class="text-[10px] ml-2"
-          >
-            {{ val ? 'Yes' : 'No' }}
-          </Badge>
-          <span v-else class="text-xs font-medium text-right max-w-[60%] break-words ml-2">
-            {{ formatValue(val) }}
-          </span>
-        </div>
-      </div>
+    </summary>
 
-      <!-- Array of objects: table -->
-      <div v-else-if="isArrayOfObjects(data)" class="mt-2 rounded-md border overflow-x-auto">
-        <table class="w-full text-xs">
-          <thead>
-            <tr class="border-b bg-muted/50">
-              <th
-                v-for="col in getTableColumns(data)"
-                :key="col"
-                class="px-3 py-1.5 text-left font-medium text-muted-foreground"
-              >
-                {{ formatLabel(col) }}
-              </th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr
-              v-for="(row, idx) in data"
-              :key="idx"
-              class="border-b last:border-0"
-            >
-              <td
-                v-for="col in getTableColumns(data)"
-                :key="col"
-                class="px-3 py-1.5"
-              >
-                {{ formatValue(row[col]) }}
-              </td>
-            </tr>
-          </tbody>
-        </table>
+    <!-- Object: key-value rows -->
+    <div v-if="isObject(data)" class="vstack gap-1">
+      <div v-for="(val, key) in data" :key="key" class="flex justify-between gap-2">
+        <small class="text-light shrink-0">{{ formatLabel(String(key)) }}</small>
+        <span v-if="typeof val === 'boolean'" class="badge" :data-variant="val ? undefined : 'secondary'">
+          {{ val ? $t('common.yes') : $t('common.no') }}
+        </span>
+        <p v-else class="min-w-0 align-right"><small>{{ formatValue(val) }}</small></p>
       </div>
+    </div>
 
-      <!-- Array of primitives: inline badges -->
-      <div v-else-if="isArrayOfPrimitives(data)" class="mt-2 flex flex-wrap gap-1.5">
-        <Badge v-for="(item, idx) in data" :key="idx" variant="secondary" class="text-xs">
-          {{ String(item) }}
-        </Badge>
-      </div>
+    <!-- Array of objects: table -->
+    <div v-else-if="isArrayOfObjects(data)" class="table">
+      <table>
+        <thead>
+          <tr>
+            <th v-for="col in getTableColumns(data)" :key="col">{{ formatLabel(col) }}</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr v-for="(row, idx) in data" :key="idx">
+            <td v-for="col in getTableColumns(data)" :key="col">{{ formatValue(row[col]) }}</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
 
-      <!-- Single primitive (fallback) -->
-      <div v-else class="mt-2 rounded-md border">
-        <div class="flex justify-between items-start px-3 py-1.5">
-          <span class="text-xs text-muted-foreground">{{ label }}</span>
-          <Badge
-            v-if="typeof data === 'boolean'"
-            :variant="data ? 'default' : 'secondary'"
-            class="text-[10px] ml-2"
-          >
-            {{ data ? 'Yes' : 'No' }}
-          </Badge>
-          <span v-else class="text-xs font-medium text-right max-w-[60%] break-words ml-2">
-            {{ formatValue(data) }}
-          </span>
-        </div>
-      </div>
-    </CollapsibleContent>
-  </Collapsible>
+    <!-- Array of primitives: inline badges -->
+    <div v-else-if="isArrayOfPrimitives(data)" class="hstack gap-1">
+      <span v-for="(item, idx) in data" :key="idx" class="badge" data-variant="secondary">{{ String(item) }}</span>
+    </div>
+
+    <!-- Single primitive (fallback) -->
+    <div v-else class="flex justify-between gap-2">
+      <small class="text-light">{{ label }}</small>
+      <span v-if="typeof data === 'boolean'" class="badge" :data-variant="data ? undefined : 'secondary'">
+        {{ data ? $t('common.yes') : $t('common.no') }}
+      </span>
+      <p v-else class="min-w-0 align-right"><small>{{ formatValue(data) }}</small></p>
+    </div>
+  </details>
 </template>

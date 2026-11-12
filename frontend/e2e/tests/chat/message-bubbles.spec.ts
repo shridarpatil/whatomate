@@ -102,34 +102,34 @@ test.describe('Chat message bubbles', () => {
     const chatPage = new ChatPage(page)
     await chatPage.goto(contactId)
 
-    const bubble = page.locator(`#message-${outgoingTextId} .chat-bubble`)
+    const bubble = page.locator(`#message-${outgoingTextId} [data-bubble]`)
     await expect(bubble).toBeVisible({ timeout: 10_000 })
-    await expect(bubble).toHaveClass(/chat-bubble-outgoing/)
+    await expect(bubble).toHaveAttribute('data-bubble', 'outgoing')
     await expect(bubble).toContainText('Hello from the agent')
 
     // Outgoing bubbles include a timestamp + status icon.
-    await expect(bubble.locator('.chat-bubble-time')).toBeVisible()
-    await expect(bubble.locator('.status-icon')).toBeVisible()
+    await expect(bubble.locator('[data-bubble-time]')).toBeVisible()
+    await expect(bubble.locator('[data-status-icon]')).toBeVisible()
   })
 
   test('incoming text bubble renders without status icon', async ({ page }) => {
     const chatPage = new ChatPage(page)
     await chatPage.goto(contactId)
 
-    const bubble = page.locator(`#message-${incomingTextId} .chat-bubble`)
+    const bubble = page.locator(`#message-${incomingTextId} [data-bubble]`)
     await expect(bubble).toBeVisible({ timeout: 10_000 })
-    await expect(bubble).toHaveClass(/chat-bubble-incoming/)
+    await expect(bubble).toHaveAttribute('data-bubble', 'incoming')
     await expect(bubble).toContainText('Hi from the customer')
 
     // Status icon only renders for outgoing direction.
-    await expect(bubble.locator('.status-icon')).toHaveCount(0)
+    await expect(bubble.locator('[data-status-icon]')).toHaveCount(0)
   })
 
   test('failed outgoing bubble shows the error message', async ({ page }) => {
     const chatPage = new ChatPage(page)
     await chatPage.goto(contactId)
 
-    const bubble = page.locator(`#message-${failedOutgoingId} .chat-bubble`)
+    const bubble = page.locator(`#message-${failedOutgoingId} [data-bubble]`)
     await expect(bubble).toBeVisible({ timeout: 10_000 })
     await expect(bubble).toContainText('This one failed')
 
@@ -143,11 +143,11 @@ test.describe('Chat message bubbles', () => {
     const chatPage = new ChatPage(page)
     await chatPage.goto(contactId)
 
-    const bubble = page.locator(`#message-${replyTextId} .chat-bubble`)
+    const bubble = page.locator(`#message-${replyTextId} [data-bubble]`)
     await expect(bubble).toBeVisible({ timeout: 10_000 })
 
     // Reply preview block sits inside the bubble and shows the original text.
-    const preview = bubble.locator('.reply-preview')
+    const preview = bubble.locator('[data-reply-preview]')
     await expect(preview).toBeVisible()
     await expect(preview).toContainText('Hi from the customer')
   })
@@ -156,13 +156,13 @@ test.describe('Chat message bubbles', () => {
     const chatPage = new ChatPage(page)
     await chatPage.goto(contactId)
 
-    const replyBubble = page.locator(`#message-${replyTextId} .chat-bubble`)
+    const replyBubble = page.locator(`#message-${replyTextId} [data-bubble]`)
     await expect(replyBubble).toBeVisible({ timeout: 10_000 })
 
-    await replyBubble.locator('.reply-preview').click()
+    await replyBubble.locator('[data-reply-preview]').click()
 
     // The original incoming bubble should be scrolled into view.
-    await expect(page.locator(`#message-${incomingTextId} .chat-bubble`)).toBeInViewport()
+    await expect(page.locator(`#message-${incomingTextId} [data-bubble]`)).toBeInViewport()
   })
 
   test('all seeded bubbles render in chronological order', async ({ page }) => {
@@ -244,12 +244,12 @@ test.describe('Chat template bubble', () => {
     const chatPage = new ChatPage(page)
     await chatPage.goto(contactId)
 
-    const bubble = page.locator(`#message-${tplMessageId} .chat-bubble`)
+    const bubble = page.locator(`#message-${tplMessageId} [data-bubble]`)
     await expect(bubble).toBeVisible({ timeout: 10_000 })
-    await expect(bubble).toHaveClass(/chat-bubble-outgoing/)
+    await expect(bubble).toHaveAttribute('data-bubble', 'outgoing')
     await expect(bubble).toContainText('Welcome Alice')
     await expect(bubble).toContainText('ORD-1')
-    await expect(bubble.locator('.status-icon')).toBeVisible()
+    await expect(bubble.locator('[data-status-icon]')).toBeVisible()
   })
 })
 
@@ -317,10 +317,10 @@ test.describe('Sending a text message via the UI', () => {
     // appear with our typed text and the outgoing class. Status (read /
     // delivered / failed) depends on whether the test WhatsApp account
     // accepts the send; we only assert the bubble renders.
-    const bubble = page.locator('.chat-bubble-outgoing').filter({ hasText: messageText }).last()
+    const bubble = page.locator('[data-bubble="outgoing"]').filter({ hasText: messageText }).last()
     await expect(bubble).toBeVisible({ timeout: 10_000 })
     await expect(bubble).toContainText(messageText)
-    await expect(bubble.locator('.chat-bubble-time')).toBeVisible()
+    await expect(bubble.locator('[data-bubble-time]')).toBeVisible()
 
     // The composer should be cleared after a successful send.
     await expect(composer).toHaveValue('')

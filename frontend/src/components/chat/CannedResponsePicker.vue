@@ -1,15 +1,8 @@
 <script setup lang="ts">
-import { ref, computed, watch } from 'vue'
-import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
-import { ScrollArea } from '@/components/ui/scroll-area'
-import {
-  Popover,
-  PopoverContent,
-  PopoverTrigger,
-} from '@/components/ui/popover'
+import { ref, computed, watch, nextTick, useId } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { cannedResponsesService, type CannedResponse } from '@/services/api'
-import { MessageSquareText, Search, Loader2 } from '@/lib/icons'
+import { MessageSquareText } from '@/lib/icons'
 
 const props = defineProps<{
   externalOpen?: boolean
@@ -21,19 +14,28 @@ const emit = defineEmits<{
   (e: 'close'): void
 }>()
 
-const internalOpen = ref(false)
+const { t } = useI18n()
+
+const popoverId = `${useId()}-canned`
+const popover = ref<HTMLElement | null>(null)
+const search = ref<HTMLInputElement | null>(null)
 const isLoading = ref(false)
 const searchQuery = ref('')
 const responses = ref<CannedResponse[]>([])
+// Opened by the composer's "/" command: keep focus in the composer.
+let openedExternally = false
 
-// Sync external open state - use external if true, otherwise use internal
-const isOpen = computed({
-  get: () => props.externalOpen || internalOpen.value,
-  set: (val) => {
-    internalOpen.value = val
-    if (!val) {
-      emit('close')
-    }
+function isShown() {
+  return !!popover.value?.matches(':popover-open')
+}
+
+// The composer opens/closes the picker while the agent types "/…".
+watch(() => props.externalOpen, (open) => {
+  if (open && !isShown()) {
+    openedExternally = true
+    popover.value?.showPopover()
+  } else if (!open && isShown()) {
+    popover.value?.hidePopover()
   }
 })
 
@@ -44,12 +46,15 @@ watch(() => props.externalSearch, (val) => {
   }
 })
 
-// Fetch responses when popover opens
-watch(isOpen, async (open) => {
-  if (open && responses.value.length === 0) {
-    await fetchResponses()
+async function onToggle(e: Event) {
+  if ((e as ToggleEvent).newState === 'open') {
+    if (!openedExternally) nextTick(() => search.value?.focus())
+    openedExternally = false
+    if (responses.value.length === 0) await fetchResponses()
+  } else {
+    emit('close')
   }
-})
+}
 
 async function fetchResponses() {
   isLoading.value = true
@@ -104,64 +109,65 @@ function getCategoryLabel(category: string): string {
 
 function selectResponse(response: CannedResponse) {
   emit('select', response)
-  isOpen.value = false
+  popover.value?.hidePopover()
   searchQuery.value = ''
 }
 </script>
 
 <template>
-  <Popover v-model:open="isOpen">
-    <PopoverTrigger as-child>
-      <Button id="canned-response-picker-button" type="button" variant="ghost" size="icon">
-        <MessageSquareText class="h-5 w-5" />
-      </Button>
-    </PopoverTrigger>
-    <PopoverContent side="top" align="start" class="w-80 p-0">
-      <div class="p-3 border-b">
-        <div class="relative">
-          <Search class="absolute left-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-          <Input
-            v-model="searchQuery"
-            placeholder="Search responses..."
-            class="pl-8 h-9"
-            @keydown.stop
-          />
-        </div>
-      </div>
+  <ot-dropdown>
+    <button
+      id="canned-response-picker-button"
+      type="button"
+      class="ghost icon"
+      :popovertarget="popoverId"
+      :title="t('chat.cannedResponses')"
+      :aria-label="t('chat.cannedResponses')"
+    >
+      <MessageSquareText :size="20" />
+    </button>
+    <div :id="popoverId" ref="popover" popover class="picker" data-picker="canned-responses" @toggle="onToggle">
+      <div class="vstack gap-2 p-4">
+        <input
+          ref="search"
+          v-model="searchQuery"
+          type="search"
+          :placeholder="t('cannedResponses.searchResponses') + '...'"
+          :aria-label="t('cannedResponses.searchResponses')"
+        />
 
-      <ScrollArea class="h-[300px]">
-        <div v-if="isLoading" class="flex items-center justify-center py-8">
-          <Loader2 class="h-6 w-6 animate-spin text-muted-foreground" />
-        </div>
+        <div class="scroll-y picker-list vstack gap-1">
+          <div v-if="isLoading" class="flex justify-center p-4">
+            <span role="status" aria-busy="true" :aria-label="t('common.loading')" />
+          </div>
 
-        <div v-else-if="filteredResponses.length === 0" class="py-8 text-center text-muted-foreground text-sm">
-          No canned responses found
-        </div>
+          <p v-else-if="filteredResponses.length === 0" class="align-center text-light p-4">
+            <small>{{ t('cannedResponses.noResponsesFound') }}</small>
+          </p>
 
-        <div v-else class="p-2">
-          <template v-for="(items, category) in groupedResponses" :key="category">
-            <div class="px-2 py-1.5 text-xs font-medium text-muted-foreground uppercase tracking-wider">
-              {{ getCategoryLabel(category) }}
-            </div>
-            <button
-              v-for="response in items"
-              :key="response.id"
-              @click="selectResponse(response)"
-              class="w-full text-left px-3 py-2 rounded-md hover:bg-accent transition-colors"
-            >
-              <div class="flex items-center justify-between">
-                <span class="font-medium text-sm">{{ response.name }}</span>
-                <span v-if="response.shortcut" class="text-xs font-mono text-muted-foreground">
-                  /{{ response.shortcut }}
+          <template v-else>
+            <template v-for="(items, category) in groupedResponses" :key="category">
+              <small class="text-light">{{ getCategoryLabel(category) }}</small>
+              <button
+                v-for="response in items"
+                :key="response.id"
+                type="button"
+                class="ghost w-100 shrink-0"
+                data-picker-item
+                @click="selectResponse(response)"
+              >
+                <span class="vstack gap-1 w-100 min-w-0 align-left">
+                  <span class="flex justify-between gap-2">
+                    <strong class="truncate">{{ response.name }}</strong>
+                    <small v-if="response.shortcut" class="text-light"><code>/{{ response.shortcut }}</code></small>
+                  </span>
+                  <small class="text-light truncate">{{ response.content }}</small>
                 </span>
-              </div>
-              <p class="text-xs text-muted-foreground mt-0.5 line-clamp-2">
-                {{ response.content }}
-              </p>
-            </button>
+              </button>
+            </template>
           </template>
         </div>
-      </ScrollArea>
-    </PopoverContent>
-  </Popover>
+      </div>
+    </div>
+  </ot-dropdown>
 </template>

@@ -458,7 +458,11 @@
     "urlButtonParamPlaceholder": "Enter dynamic URL value",
     "preview": "Preview",
     "serviceWindowExpired": "The 24-hour messaging window has expired. Only template messages can be sent until the customer replies.",
-    "sendTemplateAction": "Send Template"
+    "sendTemplateAction": "Send Template",
+    "noTags": "No tags",
+    "general": "General",
+    "noPanelData": "No data configured",
+    "noPanelDataHint": "Configure panel display in the chatbot flow settings."
   },
   "contacts": {
     "title": "Contacts",

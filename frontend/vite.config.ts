@@ -34,8 +34,6 @@ export default defineConfig({
           'vue-vendor': ['vue', 'vue-router', 'pinia'],
           // UI primitives
           'reka-ui': ['reka-ui'],
-          // Emoji picker (heavy)
-          'emoji-picker': ['vue3-emoji-picker'],
           // Form validation
           'validation': ['vee-validate'],
           // Utilities

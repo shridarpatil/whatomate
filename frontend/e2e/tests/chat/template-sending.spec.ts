@@ -141,7 +141,7 @@ test.describe('Template Sending', () => {
     await chatPage.waitForTemplatesLoaded()
 
     // At least our seeded templates should appear
-    const templateItems = chatPage.templatePopover.locator('button.w-full.text-left')
+    const templateItems = chatPage.templatePopover.locator('[data-picker-item]')
     const count = await templateItems.count()
     expect(count).toBeGreaterThan(0)
   })
@@ -207,8 +207,8 @@ test.describe('Template Sending', () => {
     await expect(chatPage.templateDialog.getByRole('heading', { name: 'Fill Parameters' })).toBeVisible()
 
     // Should have input fields for name and order_id
-    const nameInput = chatPage.templateDialog.locator('.space-y-1').filter({ hasText: 'name' }).locator('input')
-    const orderInput = chatPage.templateDialog.locator('.space-y-1').filter({ hasText: 'order_id' }).locator('input')
+    const nameInput = chatPage.templateDialog.locator('[data-param="name"] input')
+    const orderInput = chatPage.templateDialog.locator('[data-param="order_id"] input')
     await expect(nameInput).toBeVisible()
     await expect(orderInput).toBeVisible()
 

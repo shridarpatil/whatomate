@@ -183,7 +183,7 @@ test.describe('Multi-Account Tabs', () => {
     await chatPage.goto(CONTACT_ID)
     await page.waitForTimeout(500)
 
-    // One tab should have the active (emerald) styling
+    // Exactly one tab should be selected
     const activeTab = chatPage.activeAccountTab
     await expect(activeTab).toHaveCount(1)
 
@@ -202,9 +202,7 @@ test.describe('Multi-Account Tabs', () => {
     // Inactive tab should be visible (not transparent/invisible)
     const inactiveTab = inactiveTabs.first()
     await expect(inactiveTab).toBeVisible()
-    // Check it has a background class for visibility
-    const classes = await inactiveTab.getAttribute('class') || ''
-    expect(classes).toContain('bg-white')
+    await expect(inactiveTab).toHaveAttribute('aria-selected', 'false')
   })
 
   test('should switch account when clicking inactive tab', async ({ page }) => {
@@ -251,7 +249,7 @@ test.describe('Multi-Account Tabs', () => {
     await page.waitForTimeout(500)
 
     // Get the chat header and account tabs bounding boxes
-    const header = page.locator('.h-14.flex-shrink-0').first()
+    const header = page.locator('[data-chat-header]')
     const tabsContainer = chatPage.getAccountTab('account-1').locator('..')
 
     const headerBox = await header.boundingBox()

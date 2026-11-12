@@ -28,7 +28,7 @@ test.describe('Chat Page', () => {
   })
 
   test('should have search input', async ({ page }) => {
-    const searchInput = page.locator('input[placeholder*="Search"]')
+    const searchInput = page.locator('main').getByRole('searchbox', { name: 'Search contacts' })
     if (await searchInput.isVisible()) {
       await expect(searchInput).toBeVisible()
     }
@@ -45,7 +45,7 @@ test.describe('Contact List', () => {
   })
 
   test('should search contacts', async ({ page }) => {
-    const searchInput = page.locator('input[placeholder*="Search"]')
+    const searchInput = page.locator('main').getByRole('searchbox', { name: 'Search contacts' })
     if (await searchInput.isVisible()) {
       await searchInput.fill('test')
       await page.waitForTimeout(500)
@@ -54,7 +54,7 @@ test.describe('Contact List', () => {
   })
 
   test('should clear search', async ({ page }) => {
-    const searchInput = page.locator('input[placeholder*="Search"]')
+    const searchInput = page.locator('main').getByRole('searchbox', { name: 'Search contacts' })
     if (await searchInput.isVisible()) {
       await searchInput.fill('test')
       await searchInput.fill('')
@@ -64,7 +64,7 @@ test.describe('Contact List', () => {
 
   test('should show contact items', async ({ page }) => {
     // Contact list may or may not have items
-    const contacts = page.locator('.contact-item, [data-testid="contact"], .cursor-pointer')
+    const contacts = page.locator('[data-testid="contact"]')
     const count = await contacts.count()
     // Just verify the page loads without error
     expect(count).toBeGreaterThanOrEqual(0)
@@ -82,7 +82,7 @@ test.describe('Message Area', () => {
 
   test('should show message area when contact selected', async ({ page }) => {
     // Try to click first contact if available
-    const contacts = page.locator('.cursor-pointer').filter({ has: page.locator('text=/[+0-9]|contact/i') })
+    const contacts = page.locator('[data-testid="contact"]').filter({ has: page.locator('text=/[+0-9]|contact/i') })
     const count = await contacts.count()
     if (count > 0) {
       await contacts.first().click()
@@ -96,7 +96,7 @@ test.describe('Message Area', () => {
   })
 
   test('should have message input field', async ({ page }) => {
-    const contacts = page.locator('.cursor-pointer').filter({ has: page.locator('text=/[+0-9]/') })
+    const contacts = page.locator('[data-testid="contact"]').filter({ has: page.locator('text=/[+0-9]/') })
     const count = await contacts.count()
     if (count > 0) {
       await contacts.first().click()
@@ -109,12 +109,12 @@ test.describe('Message Area', () => {
   })
 
   test('should have send button', async ({ page }) => {
-    const contacts = page.locator('.cursor-pointer').filter({ has: page.locator('text=/[+0-9]/') })
+    const contacts = page.locator('[data-testid="contact"]').filter({ has: page.locator('text=/[+0-9]/') })
     const count = await contacts.count()
     if (count > 0) {
       await contacts.first().click()
       await page.waitForLoadState('networkidle')
-      const sendBtn = page.locator('button').filter({ has: page.locator('[data-icon="send"]') })
+      const sendBtn = page.locator('form button[type="submit"]')
       if (await sendBtn.isVisible()) {
         await expect(sendBtn).toBeVisible()
       }
@@ -132,7 +132,7 @@ test.describe('Chat Actions', () => {
   })
 
   test('should have attachment button', async ({ page }) => {
-    const contacts = page.locator('.cursor-pointer').filter({ has: page.locator('text=/[+0-9]/') })
+    const contacts = page.locator('[data-testid="contact"]').filter({ has: page.locator('text=/[+0-9]/') })
     const count = await contacts.count()
     if (count > 0) {
       await contacts.first().click()
@@ -145,7 +145,7 @@ test.describe('Chat Actions', () => {
   })
 
   test('should have emoji button', async ({ page }) => {
-    const contacts = page.locator('.cursor-pointer').filter({ has: page.locator('text=/[+0-9]/') })
+    const contacts = page.locator('[data-testid="contact"]').filter({ has: page.locator('text=/[+0-9]/') })
     const count = await contacts.count()
     if (count > 0) {
       await contacts.first().click()
@@ -168,7 +168,7 @@ test.describe('Chat Message Input', () => {
   })
 
   test('should type in message input', async ({ page }) => {
-    const contacts = page.locator('.cursor-pointer').filter({ has: page.locator('text=/[+0-9]/') })
+    const contacts = page.locator('[data-testid="contact"]').filter({ has: page.locator('text=/[+0-9]/') })
     const count = await contacts.count()
     if (count > 0) {
       await contacts.first().click()
@@ -182,7 +182,7 @@ test.describe('Chat Message Input', () => {
   })
 
   test('should clear input after typing', async ({ page }) => {
-    const contacts = page.locator('.cursor-pointer').filter({ has: page.locator('text=/[+0-9]/') })
+    const contacts = page.locator('[data-testid="contact"]').filter({ has: page.locator('text=/[+0-9]/') })
     const count = await contacts.count()
     if (count > 0) {
       await contacts.first().click()
@@ -207,7 +207,7 @@ test.describe('Contact Info Panel', () => {
   })
 
   test('should have contact info button', async ({ page }) => {
-    const contacts = page.locator('.cursor-pointer').filter({ has: page.locator('text=/[+0-9]/') })
+    const contacts = page.locator('[data-testid="contact"]').filter({ has: page.locator('text=/[+0-9]/') })
     const count = await contacts.count()
     if (count > 0) {
       await contacts.first().click()
@@ -230,7 +230,7 @@ test.describe('Chat Transfer Actions', () => {
   })
 
   test('should have transfer button if available', async ({ page }) => {
-    const contacts = page.locator('.cursor-pointer').filter({ has: page.locator('text=/[+0-9]/') })
+    const contacts = page.locator('[data-testid="contact"]').filter({ has: page.locator('text=/[+0-9]/') })
     const count = await contacts.count()
     if (count > 0) {
       await contacts.first().click()
@@ -243,7 +243,7 @@ test.describe('Chat Transfer Actions', () => {
   })
 
   test('should have resume button if available', async ({ page }) => {
-    const contacts = page.locator('.cursor-pointer').filter({ has: page.locator('text=/[+0-9]/') })
+    const contacts = page.locator('[data-testid="contact"]').filter({ has: page.locator('text=/[+0-9]/') })
     const count = await contacts.count()
     if (count > 0) {
       await contacts.first().click()
@@ -266,7 +266,7 @@ test.describe('Chat Messages Display', () => {
   })
 
   test('should display messages area', async ({ page }) => {
-    const contacts = page.locator('.cursor-pointer').filter({ has: page.locator('text=/[+0-9]/') })
+    const contacts = page.locator('[data-testid="contact"]').filter({ has: page.locator('text=/[+0-9]/') })
     const count = await contacts.count()
     if (count > 0) {
       await contacts.first().click()
@@ -280,7 +280,7 @@ test.describe('Chat Messages Display', () => {
   })
 
   test('should show message bubbles if messages exist', async ({ page }) => {
-    const contacts = page.locator('.cursor-pointer').filter({ has: page.locator('text=/[+0-9]/') })
+    const contacts = page.locator('[data-testid="contact"]').filter({ has: page.locator('text=/[+0-9]/') })
     const count = await contacts.count()
     if (count > 0) {
       await contacts.first().click()
@@ -304,7 +304,7 @@ test.describe('Canned Responses', () => {
   })
 
   test('should have canned responses button', async ({ page }) => {
-    const contacts = page.locator('.cursor-pointer').filter({ has: page.locator('text=/[+0-9]/') })
+    const contacts = page.locator('[data-testid="contact"]').filter({ has: page.locator('text=/[+0-9]/') })
     const count = await contacts.count()
     if (count > 0) {
       await contacts.first().click()
@@ -327,7 +327,7 @@ test.describe('Custom Actions', () => {
   })
 
   test('should have custom actions button', async ({ page }) => {
-    const contacts = page.locator('.cursor-pointer').filter({ has: page.locator('text=/[+0-9]/') })
+    const contacts = page.locator('[data-testid="contact"]').filter({ has: page.locator('text=/[+0-9]/') })
     const count = await contacts.count()
     if (count > 0) {
       await contacts.first().click()

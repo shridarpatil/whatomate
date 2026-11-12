@@ -134,7 +134,7 @@ test.describe('Contact Metadata Panel', () => {
     await openInfoPanel(page)
 
     // Click "Address" section header to collapse it
-    const addressTrigger = page.locator('button').filter({ hasText: 'Address' })
+    const addressTrigger = page.locator('summary').filter({ hasText: 'Address' })
     await addressTrigger.click()
 
     // Values should be hidden after collapse

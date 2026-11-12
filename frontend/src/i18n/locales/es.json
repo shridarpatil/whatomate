@@ -424,7 +424,11 @@
     "urlButtonParamPlaceholder": "Ingrese el valor dinámico de la URL",
     "preview": "Vista previa",
     "serviceWindowExpired": "La ventana de mensajería de 24 horas ha expirado. Solo se pueden enviar mensajes de plantilla hasta que el cliente responda.",
-    "sendTemplateAction": "Enviar plantilla"
+    "sendTemplateAction": "Enviar plantilla",
+    "noTags": "No tags",
+    "general": "General",
+    "noPanelData": "No data configured",
+    "noPanelDataHint": "Configure panel display in the chatbot flow settings."
   },
   "contacts": {
     "title": "Contactos",

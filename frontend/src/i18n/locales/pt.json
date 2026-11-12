@@ -458,7 +458,11 @@
     "urlButtonParamPlaceholder": "Insira o valor da URL dinâmica",
     "preview": "Prévia",
     "serviceWindowExpired": "A janela de mensagens de 24 horas expirou. Apenas os modelos de mensagens podem ser enviados até o cliente responder.",
-    "sendTemplateAction": "Enviar modelo"
+    "sendTemplateAction": "Enviar modelo",
+    "noTags": "No tags",
+    "general": "General",
+    "noPanelData": "No data configured",
+    "noPanelDataHint": "Configure panel display in the chatbot flow settings."
   },
   "contacts": {
     "title": "Contatos",

@@ -1,35 +1,13 @@
 <script setup lang="ts">
 import { ref, watch, computed, onMounted } from 'vue'
-import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
-import { Badge } from '@/components/ui/badge'
-import { Button } from '@/components/ui/button'
-import { ScrollArea } from '@/components/ui/scroll-area'
-import {
-  Collapsible,
-  CollapsibleContent,
-  CollapsibleTrigger,
-} from '@/components/ui/collapsible'
-import {
-  Popover,
-  PopoverContent,
-  PopoverTrigger
-} from '@/components/ui/popover'
-import {
-  Command,
-  CommandEmpty,
-  CommandGroup,
-  CommandInput,
-  CommandItem,
-  CommandList
-} from '@/components/ui/command'
-import { X, ChevronDown, Phone, User, Plus, Check, Tags, Loader2 } from '@/lib/icons'
-import { TagBadge } from '@/components/ui/tag-badge'
+import { useI18n } from 'vue-i18n'
+import { X, Phone, User, Tags } from '@/lib/icons'
+import Combobox from '@/components/oat/Combobox.vue'
 import MetadataSection from '@/components/chat/MetadataSection.vue'
 import { getInitials, formatLabel } from '@/lib/utils'
-import { getTagColorClass } from '@/lib/constants'
 import { useTagsStore } from '@/stores/tags'
 import { useAuthStore } from '@/stores/auth'
-import { contactsService, type Tag } from '@/services/api'
+import { contactsService } from '@/services/api'
 import { toast } from '@/lib/toast'
 import type { Contact } from '@/stores/contacts'
 
@@ -73,17 +51,16 @@ const emit = defineEmits<{
   tagsUpdated: [tags: string[]]
 }>()
 
+const { t } = useI18n()
 const tagsStore = useTagsStore()
 const authStore = useAuthStore()
 const collapsedSections = ref<Record<string, boolean>>({})
-const tagSelectorOpen = ref(false)
 const isUpdatingTags = ref(false)
 
 // Resizable panel state
 const MIN_WIDTH = 280
 const MAX_WIDTH = 480
 const panelWidth = ref(MAX_WIDTH) // Default to max width
-const isResizing = ref(false)
 
 // Check if user can edit tags
 const canEditTags = computed(() => authStore.hasPermission('contacts', 'write'))
@@ -96,7 +73,6 @@ onMounted(async () => {
 })
 
 function startResize(e: MouseEvent) {
-  isResizing.value = true
   const startX = e.clientX
   const startWidth = panelWidth.value
 
@@ -108,7 +84,6 @@ function startResize(e: MouseEvent) {
   }
 
   function onMouseUp() {
-    isResizing.value = false
     document.removeEventListener('mousemove', onMouseMove)
     document.removeEventListener('mouseup', onMouseUp)
   }
@@ -128,8 +103,8 @@ watch(() => props.sessionData, (newData) => {
   }
 }, { immediate: true })
 
-function toggleSection(sectionId: string) {
-  collapsedSections.value[sectionId] = !collapsedSections.value[sectionId]
+function onSectionToggle(sectionId: string, e: Event) {
+  collapsedSections.value[sectionId] = !(e.target as HTMLDetailsElement).open
 }
 
 function isSectionCollapsed(sectionId: string): boolean {
@@ -143,19 +118,23 @@ function getFieldValue(key: string): string {
   return String(value)
 }
 
-function getColorClass(color?: string): string {
+// Panel field colours map onto Oat badge variants ('info' keeps the primary badge).
+function getBadgeVariant(color?: string): string | undefined {
   switch (color) {
     case 'success':
-      return 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400'
     case 'warning':
-      return 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-400'
+      return color
     case 'error':
-      return 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400'
+      return 'danger'
     case 'info':
-      return 'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-400'
+      return undefined
     default:
-      return 'bg-muted text-muted-foreground'
+      return 'secondary'
   }
+}
+
+function sortedFields(section: PanelSection): PanelFieldConfig[] {
+  return [...section.fields].sort((a, b) => a.order - b.order)
 }
 
 // Sort sections by order
@@ -190,15 +169,12 @@ const metadataSections = computed(() => {
   )
 })
 
-// Get tag details for display
-function getTagDetails(tagName: string): Tag | undefined {
-  return tagsStore.getTagByName(tagName)
-}
-
-// Check if a tag is selected
-function isTagSelected(tagName: string): boolean {
-  return contactTags.value.includes(tagName)
-}
+// Tags not yet on the contact; chosen ones are removed via their badge.
+const tagOptions = computed(() =>
+  tagsStore.tags
+    .filter(tag => !contactTags.value.includes(tag.name))
+    .map(tag => ({ value: tag.name, label: tag.name })),
+)
 
 // Toggle tag on contact
 async function toggleTag(tagName: string) {
@@ -237,121 +213,80 @@ async function updateContactTags(tags: string[]) {
     isUpdatingTags.value = false
   }
 }
-
 </script>
 
 <template>
-  <div
-    class="flex flex-col bg-card h-full relative"
-    :style="{ width: `${panelWidth}px` }"
-  >
-    <!-- Resize Handle -->
-    <div
-      class="absolute left-0 top-0 bottom-0 w-1 cursor-col-resize hover:bg-primary/20 active:bg-primary/30 z-10 border-l"
-      :class="{ 'bg-primary/30': isResizing }"
-      @mousedown="startResize"
-    />
+  <div class="flex h-full min-h-0 chat-col" :style="{ width: `${panelWidth}px` }">
+    <!-- Resize handle: drag left to widen -->
+    <div class="resize-handle" role="separator" aria-orientation="vertical" @mousedown="startResize" />
 
-    <!-- Header -->
-    <div class="h-12 px-3 border-b flex items-center justify-between">
-      <h3 class="font-medium text-sm">Contact Info</h3>
-      <Button variant="ghost" size="icon" class="h-8 w-8" @click="emit('close')">
-        <X class="h-4 w-4" />
-      </Button>
-    </div>
+    <article data-testid="contact-info" class="card p-4 flex-1 min-w-0 flex flex-col min-h-0 gap-4">
+      <header class="hstack justify-between shrink-0">
+        <h4>{{ t('chat.contactInfo') }}</h4>
+        <button type="button" class="ghost small icon" :title="t('common.close')" :aria-label="t('common.close')" @click="emit('close')">
+          <X />
+        </button>
+      </header>
 
-    <ScrollArea class="flex-1">
-      <div class="p-4 space-y-4">
+      <div class="flex-1 scroll-y vstack gap-4">
         <!-- Contact Header -->
-        <div class="flex flex-col items-center text-center pb-4 border-b">
-          <Avatar class="h-16 w-16 mb-3">
-            <AvatarImage :src="contact.avatar_url" />
-            <AvatarFallback class="text-lg">
-              {{ getInitials(contact.name || contact.phone_number) }}
-            </AvatarFallback>
-          </Avatar>
-          <h4 class="font-medium">
-            {{ contact.name || contact.phone_number }}
-          </h4>
-          <div class="flex items-center gap-1 text-sm text-muted-foreground mt-1">
-            <Phone class="h-3 w-3" />
+        <div class="vstack gap-1 items-center align-center">
+          <figure data-variant="avatar" class="large">
+            <img v-if="contact.avatar_url" :src="contact.avatar_url" alt="" />
+            <abbr v-else>{{ getInitials(contact.name || contact.phone_number) }}</abbr>
+          </figure>
+          <strong>{{ contact.name || contact.phone_number }}</strong>
+          <small class="hstack gap-1 text-light">
+            <Phone :size="12" />
             <span>{{ contact.phone_number }}</span>
-          </div>
+          </small>
         </div>
 
+        <hr />
+
         <!-- Tags Section (always shown) -->
-        <div class="pb-4">
-          <div class="flex items-center justify-between py-2">
-            <h5 class="text-sm font-medium flex items-center gap-2">
-              <Tags class="h-4 w-4 text-muted-foreground" />
-              Tags
-            </h5>
-            <Popover v-if="canEditTags" v-model:open="tagSelectorOpen">
-              <PopoverTrigger as-child>
-                <Button variant="ghost" size="sm" class="h-7 px-2">
-                  <Plus class="h-3.5 w-3.5" />
-                </Button>
-              </PopoverTrigger>
-              <PopoverContent class="w-[200px] p-0" align="end">
-                <Command>
-                  <CommandInput placeholder="Search tags..." />
-                  <CommandList>
-                    <CommandEmpty>
-                      <div class="py-4 text-center text-sm text-muted-foreground">
-                        No tags found
-                      </div>
-                    </CommandEmpty>
-                    <CommandGroup>
-                      <CommandItem
-                        v-for="tag in tagsStore.tags"
-                        :key="tag.name"
-                        :value="tag.name"
-                        class="flex items-center gap-2"
-                        @select="toggleTag(tag.name)"
-                      >
-                        <div class="flex items-center gap-2 flex-1">
-                          <span :class="['w-2 h-2 rounded-full', getTagColorClass(tag.color).split(' ')[0]]"></span>
-                          <span>{{ tag.name }}</span>
-                        </div>
-                        <Check v-if="isTagSelected(tag.name)" class="h-4 w-4 text-primary" />
-                      </CommandItem>
-                    </CommandGroup>
-                  </CommandList>
-                </Command>
-              </PopoverContent>
-            </Popover>
+        <section class="vstack gap-2">
+          <div class="hstack justify-between">
+            <strong class="hstack gap-2"><Tags class="text-light" />{{ t('contacts.tags') }}</strong>
+            <Combobox
+              v-if="canEditTags"
+              class="small"
+              :model-value="null"
+              :options="tagOptions"
+              :placeholder="t('contacts.addTag')"
+              :search-placeholder="t('contacts.searchTags')"
+              :empty-text="t('contacts.noTagsFound')"
+              :disabled="isUpdatingTags"
+              @update:model-value="toggleTag"
+            />
           </div>
 
-          <div class="flex flex-wrap gap-2 mt-2">
+          <div class="hstack gap-2">
             <template v-if="contactTags.length > 0">
-              <TagBadge
-                v-for="tagName in contactTags"
-                :key="tagName"
-                :color="getTagDetails(tagName)?.color"
-              >
+              <span v-for="tagName in contactTags" :key="tagName" class="badge" data-variant="secondary">
                 {{ tagName }}
                 <button
                   v-if="canEditTags"
                   type="button"
-                  class="ml-1 rounded-full hover:bg-black/10 dark:hover:bg-white/10 p-0.5 transition-colors"
                   :disabled="isUpdatingTags"
+                  :aria-label="`${t('contacts.removeTag')}: ${tagName}`"
                   @click.stop="removeTag(tagName)"
                 >
-                  <X class="h-3 w-3" />
+                  <X :size="12" />
                 </button>
-              </TagBadge>
+              </span>
             </template>
-            <span v-else class="text-sm text-muted-foreground">No tags</span>
-            <Loader2 v-if="isUpdatingTags" class="h-4 w-4 animate-spin text-muted-foreground" />
+            <small v-else class="text-light">{{ t('chat.noTags') }}</small>
+            <span v-if="isUpdatingTags" role="status" aria-busy="true" data-spinner="small" />
           </div>
-        </div>
+        </section>
 
         <!-- Contact Metadata -->
-        <div v-if="hasMetadata" class="space-y-3">
+        <div v-if="hasMetadata">
           <!-- General section: top-level primitives -->
           <MetadataSection
             v-if="metadataPrimitives.length > 0"
-            label="General"
+            :label="t('chat.general')"
             :data="Object.fromEntries(metadataPrimitives)"
           />
           <!-- Object / array sections -->
@@ -364,108 +299,54 @@ async function updateContactTags(tags: string[]) {
         </div>
 
         <!-- No Session Data or no panel config -->
-        <div v-if="!props.sessionData || sortedSections.length === 0" class="text-center py-6 text-muted-foreground border-t">
-          <User class="h-8 w-8 mx-auto mb-2 opacity-50" />
-          <p class="text-sm">No data configured</p>
-          <p class="text-xs mt-1">Configure panel display in the chatbot flow settings.</p>
+        <div v-if="!props.sessionData || sortedSections.length === 0" class="vstack gap-1 items-center align-center text-light p-4">
+          <User :size="32" />
+          <small>{{ t('chat.noPanelData') }}</small>
+          <small>{{ t('chat.noPanelDataHint') }}</small>
         </div>
 
         <!-- Session Data with panel config -->
         <template v-else>
           <!-- Flow Name Badge -->
-          <div v-if="props.sessionData?.flow_name" class="flex items-center gap-2">
-            <Badge variant="outline" class="text-xs">
-              {{ props.sessionData?.flow_name }}
-            </Badge>
+          <div v-if="props.sessionData?.flow_name">
+            <span class="badge outline">{{ props.sessionData?.flow_name }}</span>
           </div>
 
           <!-- Dynamic Sections -->
-          <div v-for="section in sortedSections" :key="section.id" class="space-y-2 border-t pt-4">
-            <Collapsible
+          <template v-for="section in sortedSections" :key="section.id">
+            <details
               v-if="section.collapsible"
               :open="!isSectionCollapsed(section.id)"
-              @update:open="toggleSection(section.id)"
+              @toggle="onSectionToggle(section.id, $event)"
             >
-              <CollapsibleTrigger class="flex items-center justify-between w-full py-2 text-sm font-medium hover:text-primary transition-colors">
-                <span>{{ section.label }}</span>
-                <ChevronDown
-                  :class="[
-                    'h-4 w-4 transition-transform',
-                    isSectionCollapsed(section.id) ? '-rotate-90' : ''
-                  ]"
-                />
-              </CollapsibleTrigger>
-              <CollapsibleContent>
-                <div
-                  :class="[
-                    'grid gap-2 pt-2',
-                    section.columns === 2 ? 'grid-cols-2' : 'grid-cols-1'
-                  ]"
-                >
-                  <div
-                    v-for="field in section.fields.sort((a, b) => a.order - b.order)"
-                    :key="field.key"
-                    class="bg-muted/50 rounded-md px-3 py-2"
-                  >
-                    <p class="text-[10px] uppercase tracking-wide text-muted-foreground font-medium">{{ field.label }}</p>
-                    <!-- Badge display -->
-                    <span
-                      v-if="field.display_type === 'badge'"
-                      :class="['inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-semibold mt-1', getColorClass(field.color)]"
-                    >
-                      {{ getFieldValue(field.key) }}
-                    </span>
-                    <!-- Tag display -->
-                    <span
-                      v-else-if="field.display_type === 'tag'"
-                      :class="['inline-flex items-center rounded-md px-2 py-1 text-xs font-medium mt-1', getColorClass(field.color)]"
-                    >
-                      {{ getFieldValue(field.key) }}
-                    </span>
-                    <!-- Default text display -->
-                    <p v-else class="text-sm font-semibold break-words mt-0.5">{{ getFieldValue(field.key) }}</p>
+              <summary>{{ section.label }}</summary>
+              <div class="row gap-2">
+                <div v-for="field in sortedFields(section)" :key="field.key" :class="section.columns === 2 ? 'col-6' : 'col-12'">
+                  <small class="text-light">{{ field.label }}</small>
+                  <div v-if="field.display_type === 'badge' || field.display_type === 'tag'">
+                    <span class="badge" :data-variant="getBadgeVariant(field.color)">{{ getFieldValue(field.key) }}</span>
                   </div>
-                </div>
-              </CollapsibleContent>
-            </Collapsible>
-
-            <!-- Non-collapsible section -->
-            <div v-else>
-              <h5 class="py-2 text-sm font-medium">{{ section.label }}</h5>
-              <div
-                :class="[
-                  'grid gap-2',
-                  section.columns === 2 ? 'grid-cols-2' : 'grid-cols-1'
-                ]"
-              >
-                <div
-                  v-for="field in section.fields.sort((a, b) => a.order - b.order)"
-                  :key="field.key"
-                  class="bg-muted/50 rounded-md px-3 py-2"
-                >
-                  <p class="text-[10px] uppercase tracking-wide text-muted-foreground font-medium">{{ field.label }}</p>
-                  <!-- Badge display -->
-                  <span
-                    v-if="field.display_type === 'badge'"
-                    :class="['inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-semibold mt-1', getColorClass(field.color)]"
-                  >
-                    {{ getFieldValue(field.key) }}
-                  </span>
-                  <!-- Tag display -->
-                  <span
-                    v-else-if="field.display_type === 'tag'"
-                    :class="['inline-flex items-center rounded-md px-2 py-1 text-xs font-medium mt-1', getColorClass(field.color)]"
-                  >
-                    {{ getFieldValue(field.key) }}
-                  </span>
-                  <!-- Default text display -->
-                  <p v-else class="text-sm font-semibold break-words mt-0.5">{{ getFieldValue(field.key) }}</p>
+                  <p v-else><strong>{{ getFieldValue(field.key) }}</strong></p>
                 </div>
               </div>
-            </div>
-          </div>
+            </details>
+
+            <!-- Non-collapsible section -->
+            <section v-else class="vstack gap-2">
+              <strong>{{ section.label }}</strong>
+              <div class="row gap-2">
+                <div v-for="field in sortedFields(section)" :key="field.key" :class="section.columns === 2 ? 'col-6' : 'col-12'">
+                  <small class="text-light">{{ field.label }}</small>
+                  <div v-if="field.display_type === 'badge' || field.display_type === 'tag'">
+                    <span class="badge" :data-variant="getBadgeVariant(field.color)">{{ getFieldValue(field.key) }}</span>
+                  </div>
+                  <p v-else><strong>{{ getFieldValue(field.key) }}</strong></p>
+                </div>
+              </div>
+            </section>
+          </template>
         </template>
       </div>
-    </ScrollArea>
+    </article>
   </div>
 </template>

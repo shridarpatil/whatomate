@@ -445,7 +445,11 @@
     "urlButtonParamPlaceholder": "أدخل قيمة الرابط المتغيرة",
     "preview": "معاينة",
     "serviceWindowExpired": "انتهت نافذة المراسلة لمدة 24 ساعة. لا يمكن إرسال سوى رسائل القوالب حتى يرد العميل.",
-    "sendTemplateAction": "إرسال قالب"
+    "sendTemplateAction": "إرسال قالب",
+    "noTags": "No tags",
+    "general": "General",
+    "noPanelData": "No data configured",
+    "noPanelDataHint": "Configure panel display in the chatbot flow settings."
   },
   "contacts": {
     "title": "جهات الاتصال",
