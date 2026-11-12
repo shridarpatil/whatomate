@@ -17,9 +17,10 @@ function clear() {
 </script>
 
 <template>
-  <div class="hstack gap-1">
+  <div class="hstack gap-1 items-center">
     <Search />
     <input
+      class="w-auto"
       v-model="model"
       type="text"
       role="searchbox"

@@ -229,7 +229,7 @@ function sanitizeScreensForMeta(screens: any[]): any[] {
           <div class="hstack items-center gap-2">
             <label class="hstack items-center gap-2">
               <small class="text-light">{{ $t('flows.account') }}:</small>
-              <select v-model="selectedAccount" @change="onAccountChange">
+              <select class="w-auto" v-model="selectedAccount" @change="onAccountChange">
                 <option value="all">{{ $t('flows.allAccounts') }}</option>
                 <option v-for="account in accounts" :key="account.id" :value="account.name">{{ account.name }}</option>
               </select>

@@ -262,19 +262,19 @@ watch(phoneSearch, () => {
       <article v-if="!error" class="card">
         <div class="hstack gap-4 flex-wrap items-center">
           <SearchInput v-model="phoneSearch" :placeholder="t('calling.searchByPhone')" />
-          <select v-model="statusFilter" :aria-label="t('calling.filterByStatus')">
+          <select class="w-auto" v-model="statusFilter" :aria-label="t('calling.filterByStatus')">
             <option v-for="opt in statusOptions" :key="opt.value" :value="opt.value">{{ opt.label }}</option>
           </select>
-          <select v-model="directionFilter" :aria-label="t('calling.filterByDirection')">
+          <select class="w-auto" v-model="directionFilter" :aria-label="t('calling.filterByDirection')">
             <option value="all">{{ t('calling.allDirections') }}</option>
             <option value="incoming">{{ t('calling.incoming') }}</option>
             <option value="outgoing">{{ t('calling.outgoing') }}</option>
           </select>
-          <select v-model="ivrFlowFilter" :aria-label="t('calling.filterByIVRFlow')">
+          <select class="w-auto" v-model="ivrFlowFilter" :aria-label="t('calling.filterByIVRFlow')">
             <option value="all">{{ t('calling.allIVRFlows') }}</option>
             <option v-for="flow in ivrFlows" :key="flow.id" :value="flow.id">{{ flow.name }}</option>
           </select>
-          <select v-model="accountFilter" :aria-label="t('calling.filterByAccount')">
+          <select class="w-auto" v-model="accountFilter" :aria-label="t('calling.filterByAccount')">
             <option value="all">{{ t('calling.allAccounts') }}</option>
             <option v-for="acc in accounts" :key="acc.name" :value="acc.name">{{ acc.name }}</option>
           </select>

@@ -304,7 +304,7 @@ function getHeaderIcon(type: string) {
           <div class="hstack items-center gap-4 flex-wrap">
             <label class="hstack items-center gap-2">
               <small class="text-light">{{ $t('templates.account') }}:</small>
-              <select v-model="selectedAccount" @change="onAccountChange">
+              <select class="w-auto" v-model="selectedAccount" @change="onAccountChange">
                 <option value="all">{{ $t('templates.allAccounts') }}</option>
                 <option v-for="account in accounts" :key="account.id" :value="account.name">{{ account.name }}</option>
               </select>

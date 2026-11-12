@@ -114,7 +114,7 @@ function getCategoryLabel(category: string): string { return getLabelFromValue(C
         <header class="hstack justify-between flex-wrap gap-4">
           <h3>{{ $t('cannedResponses.yourResponses') }}</h3>
           <div class="hstack gap-2">
-            <select v-model="selectedCategory" :aria-label="$t('cannedResponses.category')">
+            <select class="w-auto" v-model="selectedCategory" :aria-label="$t('cannedResponses.category')">
               <option value="all">{{ $t('cannedResponses.allCategories') }}</option>
               <option v-for="cat in CANNED_RESPONSE_CATEGORIES" :key="cat.value" :value="cat.value">{{ cat.label }}</option>
             </select>

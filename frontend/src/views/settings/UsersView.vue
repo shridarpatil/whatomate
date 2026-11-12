@@ -217,7 +217,7 @@ async function copyInviteLink() {
             <p><RouterLink to="/settings/roles">{{ $t('users.manageRoles') }}</RouterLink></p>
           </div>
           <div class="hstack gap-2 flex-wrap">
-            <select v-model="roleFilter" :aria-label="$t('users.allRoles', 'All roles')">
+            <select class="w-auto" v-model="roleFilter" :aria-label="$t('users.allRoles', 'All roles')">
               <option value="">{{ $t('users.allRoles', 'All roles') }}</option>
               <option v-for="role in rolesStore.roles" :key="role.id" :value="role.id">{{ role.name }}</option>
             </select>

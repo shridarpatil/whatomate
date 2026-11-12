@@ -250,7 +250,7 @@ function getProgressPercentage(campaign: Campaign): number {
         <header class="hstack justify-between items-center flex-wrap gap-4">
           <h3>{{ $t('campaigns.yourCampaigns') }}</h3>
           <div class="hstack items-center gap-2 flex-wrap">
-            <select v-model="filterStatus" :aria-label="$t('campaigns.status')">
+            <select class="w-auto" v-model="filterStatus" :aria-label="$t('campaigns.status')">
               <option v-for="opt in statusOptions" :key="opt.value" :value="opt.value">{{ opt.label }}</option>
             </select>
             <DateRangePicker
