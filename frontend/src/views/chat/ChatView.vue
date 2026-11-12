@@ -2589,21 +2589,53 @@ async function sendMediaMessage() {
           {{ $t('chat.unassignContact') }}
         </button>
         <hr />
-        <div class="scroll-y picker-list vstack gap-1">
-          <button
-            v-for="user in filteredAssignableUsers"
-            :key="user.id"
-            type="button"
-            class="w-100 shrink-0"
-            :class="contactsStore.currentContact?.assigned_user_id === user.id ? undefined : 'ghost'"
-            :data-variant="contactsStore.currentContact?.assigned_user_id === user.id ? 'secondary' : undefined"
-            @click="assignContactToUser(user.id); isAssignDialogOpen = false"
-          >
-            <User />
-            <span class="flex-1 truncate align-left">{{ user.full_name }}</span>
-            <Check v-if="contactsStore.currentContact?.assigned_user_id === user.id" />
-            <span v-else class="badge outline">{{ user.role?.name }}</span>
-          </button>
+        <div class="scroll-y picker-list">
+          <div class="table">
+            <table>
+              <thead>
+                <tr>
+                  <th>{{ $t('teams.agent') }}</th>
+                  <th>{{ $t('users.role') }}</th>
+                  <th :aria-label="$t('common.actions')"></th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr v-for="user in filteredAssignableUsers" :key="user.id">
+                  <td>
+                    <div class="hstack gap-2 items-center min-w-0">
+                      <figure data-variant="avatar" class="small" :aria-label="user.full_name">
+                        <abbr :title="user.full_name">{{ getInitials(user.full_name) }}</abbr>
+                      </figure>
+                      <div class="flex flex-col min-w-0">
+                        <strong class="truncate">{{ user.full_name }}</strong>
+                        <small class="text-light truncate">{{ user.email }}</small>
+                      </div>
+                    </div>
+                  </td>
+                  <td><span class="badge outline">{{ user.role?.name }}</span></td>
+                  <td class="align-right">
+                    <span
+                      v-if="contactsStore.currentContact?.assigned_user_id === user.id"
+                      class="badge"
+                      data-variant="success"
+                    >
+                      <Check :size="12" />
+                      {{ $t('chat.assigned') }}
+                    </span>
+                    <button
+                      v-else
+                      type="button"
+                      class="small"
+                      :aria-label="`${$t('chat.assign')} ${user.full_name}`"
+                      @click="assignContactToUser(user.id); isAssignDialogOpen = false"
+                    >
+                      {{ $t('chat.assign') }}
+                    </button>
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
           <p v-if="filteredAssignableUsers.length === 0" class="align-center text-light p-4">
             <small>{{ $t('chat.noUsersFound') }}</small>
           </p>
