@@ -66,7 +66,7 @@ import {
   Shield,
   LineChart,
   Tags
-} from 'lucide-vue-next'
+} from '@/lib/icons'
 // Centralized Chart.js setup (registered once)
 import { Line, Bar, Pie } from '@/lib/charts'
 import { DateRangePicker } from '@/components/shared'

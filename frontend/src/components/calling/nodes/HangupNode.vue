@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { PhoneOff } from 'lucide-vue-next'
+import { PhoneOff } from '@/lib/icons'
 import BaseNode from './BaseNode.vue'
 
 defineOptions({ inheritAttrs: false })

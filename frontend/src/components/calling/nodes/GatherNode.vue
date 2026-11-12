@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed } from 'vue'
-import { Hash } from 'lucide-vue-next'
+import { Hash } from '@/lib/icons'
 import BaseNode from './BaseNode.vue'
 
 defineOptions({ inheritAttrs: false })

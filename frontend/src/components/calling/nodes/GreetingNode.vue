@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed } from 'vue'
-import { Volume2 } from 'lucide-vue-next'
+import { Volume2 } from '@/lib/icons'
 import BaseNode from './BaseNode.vue'
 
 defineOptions({ inheritAttrs: false })

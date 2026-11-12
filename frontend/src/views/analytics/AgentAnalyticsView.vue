@@ -27,7 +27,7 @@ import {
   ChevronsUpDown,
   Check,
   Coffee
-} from 'lucide-vue-next'
+} from '@/lib/icons'
 // Centralized Chart.js setup (registered once)
 import { Line, Bar, Doughnut } from '@/lib/charts'
 import { useDateRange } from '@/composables/useDateRange'

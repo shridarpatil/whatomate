@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed } from 'vue'
-import { Phone, ArrowRight } from 'lucide-vue-next'
+import { Phone, ArrowRight } from '@/lib/icons'
 
 interface Step {
   node?: string

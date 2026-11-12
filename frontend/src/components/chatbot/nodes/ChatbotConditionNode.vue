@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed } from 'vue'
-import { GitBranch } from 'lucide-vue-next'
+import { GitBranch } from '@/lib/icons'
 import BaseNode from '@/components/calling/nodes/BaseNode.vue'
 
 defineOptions({ inheritAttrs: false })

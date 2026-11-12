@@ -12,7 +12,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { PageHeader, AuditLogPanel } from '@/components/shared'
 import LanguageSwitcher from '@/components/LanguageSwitcher.vue'
 import { toast } from '@/lib/toast'
-import { Settings, Bell, Loader2, Globe, Phone, Upload, Play, Pause, Music } from 'lucide-vue-next'
+import { Settings, Bell, Loader2, Globe, Phone, Upload, Play, Pause, Music } from '@/lib/icons'
 import { usersService, organizationService } from '@/services/api'
 import { useAuthStore, type CallRingtone } from '@/stores/auth'
 import { previewRingtone } from '@/lib/ringtone'

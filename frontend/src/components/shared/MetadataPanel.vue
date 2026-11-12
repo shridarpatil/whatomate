@@ -2,7 +2,7 @@
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Separator } from '@/components/ui/separator'
 import { formatDateTime } from '@/lib/utils'
-import { Clock, UserCircle } from 'lucide-vue-next'
+import { Clock, UserCircle } from '@/lib/icons'
 
 defineProps<{
   createdAt?: string

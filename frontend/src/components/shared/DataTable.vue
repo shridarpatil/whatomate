@@ -8,7 +8,7 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table'
-import { ArrowUpDown, ArrowUp, ArrowDown } from 'lucide-vue-next'
+import { ArrowUpDown, ArrowUp, ArrowDown } from '@/lib/icons'
 import { Skeleton } from '@/components/ui/skeleton'
 import PaginationControls from './PaginationControls.vue'
 import type { Component } from 'vue'

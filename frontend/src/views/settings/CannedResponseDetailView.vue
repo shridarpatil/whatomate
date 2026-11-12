@@ -39,7 +39,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog'
-import { MessageSquareText, Trash2, Save } from 'lucide-vue-next'
+import { MessageSquareText, Trash2, Save } from '@/lib/icons'
 import { CANNED_RESPONSE_CATEGORIES } from '@/lib/constants'
 
 const route = useRoute()

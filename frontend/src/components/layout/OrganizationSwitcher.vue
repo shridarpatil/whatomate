@@ -15,7 +15,7 @@ import { Input } from '@/components/ui/input'
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { organizationsService } from '@/services/api'
 import { toast } from '@/lib/toast'
-import { Building2, Plus, Loader2 } from 'lucide-vue-next'
+import { Building2, Plus, Loader2 } from '@/lib/icons'
 
 const props = defineProps<{
   collapsed?: boolean

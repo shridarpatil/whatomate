@@ -45,7 +45,7 @@ import {
   TestTube2,
   Check,
   X,
-} from 'lucide-vue-next'
+} from '@/lib/icons'
 
 interface WhatsAppAccount {
   id: string

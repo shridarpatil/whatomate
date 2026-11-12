@@ -19,7 +19,7 @@ import { useUsersStore } from '@/stores/users'
 import { useTeamsStore } from '@/stores/teams'
 import { toast } from '@/lib/toast'
 import { useRouter } from 'vue-router'
-import { UserX, Play, MessageSquare, User, Clock, Loader2, Users, UserPlus, AlertTriangle, CheckCircle2, XCircle } from 'lucide-vue-next'
+import { UserX, Play, MessageSquare, User, Clock, Loader2, Users, UserPlus, AlertTriangle, CheckCircle2, XCircle } from '@/lib/icons'
 import { getErrorMessage } from '@/lib/api-utils'
 
 const { t } = useI18n()

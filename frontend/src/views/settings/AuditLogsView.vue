@@ -15,7 +15,7 @@ import { PageHeader, DataTable, DateRangePicker, type Column } from '@/component
 import { auditLogsService, type AuditLogEntry } from '@/services/api'
 import { useUsersStore } from '@/stores/users'
 import { useDateRange } from '@/composables/useDateRange'
-import { ScrollText } from 'lucide-vue-next'
+import { ScrollText } from '@/lib/icons'
 import { formatDate, formatLabel } from '@/lib/utils'
 
 const { t } = useI18n()

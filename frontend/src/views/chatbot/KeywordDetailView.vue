@@ -40,7 +40,7 @@ import {
   Trash2,
   Save,
   Plus,
-} from 'lucide-vue-next'
+} from '@/lib/icons'
 import { getErrorMessage } from '@/lib/api-utils'
 
 const route = useRoute()

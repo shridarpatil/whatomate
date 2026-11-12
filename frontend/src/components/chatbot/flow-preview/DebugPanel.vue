@@ -20,7 +20,7 @@ import {
   Braces,
   ListTree,
   CircleDot
-} from 'lucide-vue-next'
+} from '@/lib/icons'
 import { ref } from 'vue'
 
 const props = defineProps<{

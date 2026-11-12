@@ -23,7 +23,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle
 } from '@/components/ui/alert-dialog'
-import { LogOut, User } from 'lucide-vue-next'
+import { LogOut, User } from '@/lib/icons'
 import { toast } from '@/lib/toast'
 import { getInitials } from '@/lib/utils'
 import ThemeSwitcher from './ThemeSwitcher.vue'

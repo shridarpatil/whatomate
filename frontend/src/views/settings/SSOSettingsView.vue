@@ -13,7 +13,7 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { PageHeader, ConfirmDialog, ErrorState } from '@/components/shared'
 import { toast } from '@/lib/toast'
-import { ShieldCheck, Settings2, ExternalLink, Info, Copy, Check, Loader2 } from 'lucide-vue-next'
+import { ShieldCheck, Settings2, ExternalLink, Info, Copy, Check, Loader2 } from '@/lib/icons'
 import { getErrorMessage } from '@/lib/api-utils'
 
 const { t } = useI18n()

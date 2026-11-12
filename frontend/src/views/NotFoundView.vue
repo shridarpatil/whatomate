@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { Button } from '@/components/ui/button'
-import { Home, ArrowLeft } from 'lucide-vue-next'
+import { Home, ArrowLeft } from '@/lib/icons'
 </script>
 
 <template>

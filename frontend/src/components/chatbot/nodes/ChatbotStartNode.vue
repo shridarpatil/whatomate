@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { Play } from 'lucide-vue-next'
+import { Play } from '@/lib/icons'
 import BaseNode from '@/components/calling/nodes/BaseNode.vue'
 
 defineOptions({ inheritAttrs: false })

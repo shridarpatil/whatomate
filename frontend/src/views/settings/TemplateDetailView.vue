@@ -46,7 +46,7 @@ import {
   X,
   ChevronDown,
   Info,
-} from 'lucide-vue-next'
+} from '@/lib/icons'
 import { getErrorMessage } from '@/lib/api-utils'
 import { getQualityBadgeClass, getQualityRatingLabel } from '@/lib/utils'
 

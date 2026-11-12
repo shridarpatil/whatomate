@@ -90,7 +90,7 @@ import {
   RotateCw,
   Filter,
   StickyNote
-} from 'lucide-vue-next'
+} from '@/lib/icons'
 import { getInitials, getAvatarGradient } from '@/lib/utils'
 import { useColorMode } from '@/composables/useColorMode'
 import { useInfiniteScroll } from '@/composables/useInfiniteScroll'
@@ -105,7 +105,7 @@ import { useNotesStore } from '@/stores/notes'
 import { useHeaderMedia } from '@/composables/useHeaderMedia'
 import { CreateContactDialog } from '@/components/shared'
 import HeaderMediaUpload from '@/components/shared/HeaderMediaUpload.vue'
-import { Info } from 'lucide-vue-next'
+import { Info } from '@/lib/icons'
 
 const { t } = useI18n()
 const route = useRoute()

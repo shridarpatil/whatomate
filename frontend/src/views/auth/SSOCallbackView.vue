@@ -5,7 +5,7 @@ import { useI18n } from 'vue-i18n'
 import { useAuthStore } from '@/stores/auth'
 import { api } from '@/services/api'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
-import { Loader2, AlertCircle, CheckCircle } from 'lucide-vue-next'
+import { Loader2, AlertCircle, CheckCircle } from '@/lib/icons'
 import { toast } from '@/lib/toast'
 
 const { t } = useI18n()

@@ -56,7 +56,7 @@ import {
   Eye,
   MousePointerClick,
   Search
-} from 'lucide-vue-next'
+} from '@/lib/icons'
 import { Line, Bar } from '@/lib/charts'
 import { toast } from '@/lib/toast'
 import { useDateRange } from '@/composables/useDateRange'

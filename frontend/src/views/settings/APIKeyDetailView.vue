@@ -21,7 +21,7 @@ import {
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
 } from '@/components/ui/alert-dialog'
 import { Switch } from '@/components/ui/switch'
-import { Key, Trash2, Save, Copy, AlertTriangle } from 'lucide-vue-next'
+import { Key, Trash2, Save, Copy, AlertTriangle } from '@/lib/icons'
 import { IconButton } from '@/components/shared'
 
 interface APIKey {

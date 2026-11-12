@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import type { ButtonConfig } from '@/types/flow-preview'
-import { ExternalLink, Phone, PhoneCall } from 'lucide-vue-next'
+import { ExternalLink, Phone, PhoneCall } from '@/lib/icons'
 
 defineProps<{
   buttons: ButtonConfig[]

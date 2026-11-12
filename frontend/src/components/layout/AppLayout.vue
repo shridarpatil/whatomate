@@ -11,7 +11,7 @@ import {
   ChevronRight,
   Menu,
   X
-} from 'lucide-vue-next'
+} from '@/lib/icons'
 import { wsService } from '@/services/websocket'
 import { authService } from '@/services/api'
 import OrganizationSwitcher from './OrganizationSwitcher.vue'

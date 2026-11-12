@@ -8,7 +8,7 @@ import {
   BreadcrumbPage,
   BreadcrumbSeparator,
 } from '@/components/ui/breadcrumb'
-import { ArrowLeft } from 'lucide-vue-next'
+import { ArrowLeft } from '@/lib/icons'
 import type { Component } from 'vue'
 
 defineProps<{

@@ -10,7 +10,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
-import { CalendarIcon } from 'lucide-vue-next'
+import { CalendarIcon } from '@/lib/icons'
 import { today, getLocalTimeZone } from '@internationalized/date'
 import type { TimeRangePreset } from '@/composables/useDateRange'
 

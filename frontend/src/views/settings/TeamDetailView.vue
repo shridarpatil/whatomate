@@ -46,7 +46,7 @@ import {
   UserPlus,
   UserMinus,
   Shield,
-} from 'lucide-vue-next'
+} from '@/lib/icons'
 
 const route = useRoute()
 const router = useRouter()

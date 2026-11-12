@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import type { HTMLAttributes } from 'vue'
-import { AlertCircle } from 'lucide-vue-next'
+import { AlertCircle } from '@/lib/icons'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
 

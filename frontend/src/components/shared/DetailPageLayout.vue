@@ -2,7 +2,7 @@
 import { ScrollArea } from '@/components/ui/scroll-area'
 import PageHeader from './PageHeader.vue'
 import ErrorState from './ErrorState.vue'
-import { Loader2 } from 'lucide-vue-next'
+import { Loader2 } from '@/lib/icons'
 import type { Component } from 'vue'
 
 defineProps<{

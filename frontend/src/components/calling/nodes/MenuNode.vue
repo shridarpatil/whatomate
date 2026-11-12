@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed } from 'vue'
-import { Grid3X3 } from 'lucide-vue-next'
+import { Grid3X3 } from '@/lib/icons'
 import BaseNode from './BaseNode.vue'
 
 defineOptions({ inheritAttrs: false })

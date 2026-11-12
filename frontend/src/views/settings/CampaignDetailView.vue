@@ -75,7 +75,7 @@ import {
   FileSpreadsheet,
   ChevronDown,
   Download,
-} from 'lucide-vue-next'
+} from '@/lib/icons'
 
 interface Campaign {
   id: string

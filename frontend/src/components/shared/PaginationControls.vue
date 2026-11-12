@@ -6,7 +6,7 @@ import {
   ChevronRight,
   ChevronsLeft,
   ChevronsRight,
-} from 'lucide-vue-next'
+} from '@/lib/icons'
 import { getPageNumbers } from '@/composables/usePagination'
 
 const props = defineProps<{

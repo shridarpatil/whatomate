@@ -24,7 +24,7 @@ import {
   Facebook,
   Smartphone,
   Network
-} from 'lucide-vue-next'
+} from '@/lib/icons'
 
 declare global {
   interface Window {

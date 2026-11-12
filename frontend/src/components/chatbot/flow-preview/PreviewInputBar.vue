@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { ref, computed } from 'vue'
-import { Send, Mic } from 'lucide-vue-next'
+import { Send, Mic } from '@/lib/icons'
 
 const props = defineProps<{
   inputType: string | null

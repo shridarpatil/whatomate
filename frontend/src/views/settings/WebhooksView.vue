@@ -11,7 +11,7 @@ import { ScrollArea } from '@/components/ui/scroll-area'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { PageHeader, DataTable, SearchInput, DeleteConfirmDialog, ConfirmDialog, IconButton, ErrorState, type Column } from '@/components/shared'
 import { toast } from '@/lib/toast'
-import { Plus, Trash2, Pencil, Webhook as WebhookIcon, Play } from 'lucide-vue-next'
+import { Plus, Trash2, Pencil, Webhook as WebhookIcon, Play } from '@/lib/icons'
 import { getErrorMessage } from '@/lib/api-utils'
 import { debounce, formatDate } from '@/lib/utils'
 

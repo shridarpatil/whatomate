@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed } from 'vue'
-import { Globe } from 'lucide-vue-next'
+import { Globe } from '@/lib/icons'
 import BaseNode from './BaseNode.vue'
 
 defineOptions({ inheritAttrs: false })

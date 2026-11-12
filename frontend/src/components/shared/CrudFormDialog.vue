@@ -8,7 +8,7 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
-import { Loader2 } from 'lucide-vue-next'
+import { Loader2 } from '@/lib/icons'
 
 const open = defineModel<boolean>('open', { default: false })
 

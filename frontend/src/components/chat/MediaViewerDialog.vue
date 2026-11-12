@@ -23,7 +23,7 @@ import {
   ChevronRight,
   FileText,
   Loader2,
-} from 'lucide-vue-next'
+} from '@/lib/icons'
 import type { Message } from '@/stores/contacts'
 
 const props = defineProps<{ items: Message[] }>()

@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed } from 'vue'
-import { StopCircle } from 'lucide-vue-next'
+import { StopCircle } from '@/lib/icons'
 import BaseNode from '@/components/calling/nodes/BaseNode.vue'
 
 defineOptions({ inheritAttrs: false })

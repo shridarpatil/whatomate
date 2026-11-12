@@ -13,7 +13,7 @@ import { useInfiniteScroll } from '@/composables/useInfiniteScroll'
 import { getInitials, getAvatarGradient } from '@/lib/utils'
 import {
   StickyNote, Pencil, Trash2, X, Check, Loader2, Send
-} from 'lucide-vue-next'
+} from '@/lib/icons'
 
 const props = defineProps<{
   contactId: string

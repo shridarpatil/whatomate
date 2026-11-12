@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { Input } from '@/components/ui/input'
-import { Search, X } from 'lucide-vue-next'
+import { Search, X } from '@/lib/icons'
 
 const model = defineModel<string>({ default: '' })
 

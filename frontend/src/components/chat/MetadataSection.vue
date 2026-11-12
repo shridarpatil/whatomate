@@ -6,7 +6,7 @@ import {
   CollapsibleContent,
   CollapsibleTrigger,
 } from '@/components/ui/collapsible'
-import { ChevronDown } from 'lucide-vue-next'
+import { ChevronDown } from '@/lib/icons'
 import { formatLabel } from '@/lib/utils'
 
 const props = defineProps<{

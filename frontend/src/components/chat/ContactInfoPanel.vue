@@ -22,7 +22,7 @@ import {
   CommandItem,
   CommandList
 } from '@/components/ui/command'
-import { X, ChevronDown, Phone, User, Plus, Check, Tags, Loader2 } from 'lucide-vue-next'
+import { X, ChevronDown, Phone, User, Plus, Check, Tags, Loader2 } from '@/lib/icons'
 import { TagBadge } from '@/components/ui/tag-badge'
 import MetadataSection from '@/components/chat/MetadataSection.vue'
 import { getInitials, getAvatarGradient, formatLabel } from '@/lib/utils'

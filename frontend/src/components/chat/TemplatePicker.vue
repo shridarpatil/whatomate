@@ -10,7 +10,7 @@ import {
   PopoverTrigger,
 } from '@/components/ui/popover'
 import { templatesService } from '@/services/api'
-import { LayoutTemplate, Search, Loader2 } from 'lucide-vue-next'
+import { LayoutTemplate, Search, Loader2 } from '@/lib/icons'
 
 const props = defineProps<{
   selectedAccount?: string | null

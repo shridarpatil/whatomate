@@ -11,7 +11,7 @@ import { Switch } from '@/components/ui/switch'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Textarea } from '@/components/ui/textarea'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
-import { Trash2, Plus, Upload, Play, Pause, X, Loader2, Type } from 'lucide-vue-next'
+import { Trash2, Plus, Upload, Play, Pause, X, Loader2, Type } from '@/lib/icons'
 import { toast } from '@/lib/toast'
 
 const props = defineProps<{

@@ -23,7 +23,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
-import { Sparkles, Save } from 'lucide-vue-next'
+import { Sparkles, Save } from '@/lib/icons'
 
 const route = useRoute()
 const router = useRouter()

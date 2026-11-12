@@ -5,7 +5,7 @@ import { formatDateTime, formatLabel } from '@/lib/utils'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
-import { History, Plus, Pencil, Trash2, Loader2, ChevronDown } from 'lucide-vue-next'
+import { History, Plus, Pencil, Trash2, Loader2, ChevronDown } from '@/lib/icons'
 
 const props = defineProps<{
   resourceType: string

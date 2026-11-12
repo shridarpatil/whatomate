@@ -20,7 +20,7 @@ import {
   Users,
   MessageSquare,
   Clock
-} from 'lucide-vue-next'
+} from '@/lib/icons'
 
 const { t } = useI18n()
 

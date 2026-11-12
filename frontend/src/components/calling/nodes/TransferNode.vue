@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed } from 'vue'
-import { Users } from 'lucide-vue-next'
+import { Users } from '@/lib/icons'
 import BaseNode from './BaseNode.vue'
 import { useTeamsStore } from '@/stores/teams'
 

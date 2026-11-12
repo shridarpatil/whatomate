@@ -13,7 +13,7 @@ import { PageHeader, DeleteConfirmDialog, ConfirmDialog, DataTable, SearchInput,
 import FlowBuilder from '@/components/flow-builder/FlowBuilder.vue'
 import { flowsService, accountsService } from '@/services/api'
 import { toast } from '@/lib/toast'
-import { Plus, Pencil, Trash2, Workflow, Play, ExternalLink, Loader2, Archive, RefreshCw, Upload, Copy } from 'lucide-vue-next'
+import { Plus, Pencil, Trash2, Workflow, Play, ExternalLink, Loader2, Archive, RefreshCw, Upload, Copy } from '@/lib/icons'
 import { getErrorMessage } from '@/lib/api-utils'
 import { formatDate } from '@/lib/utils'
 import { useSearchPagination } from '@/composables/useSearchPagination'

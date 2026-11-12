@@ -10,7 +10,7 @@ import PreviewListPicker from './PreviewListPicker.vue'
 import PreviewInputBar from './PreviewInputBar.vue'
 import DebugPanel from './DebugPanel.vue'
 import ApiMockDialog from './ApiMockDialog.vue'
-import { MessageSquare } from 'lucide-vue-next'
+import { MessageSquare } from '@/lib/icons'
 
 const props = defineProps<{
   graph: ChatFlowGraph | null

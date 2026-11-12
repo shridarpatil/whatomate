@@ -8,7 +8,7 @@ import { Button } from '@/components/ui/button'
 import DetailPageLayout from '@/components/shared/DetailPageLayout.vue'
 import { auditLogsService, type AuditLogEntry } from '@/services/api'
 import { formatDateTime, formatLabel } from '@/lib/utils'
-import { ScrollText, Info, ExternalLink, ArrowRight } from 'lucide-vue-next'
+import { ScrollText, Info, ExternalLink, ArrowRight } from '@/lib/icons'
 
 const route = useRoute()
 const { t } = useI18n()

@@ -29,7 +29,7 @@ import {
   CheckCircle,
   Clock,
   AlertCircle,
-} from 'lucide-vue-next'
+} from '@/lib/icons'
 import { formatDate } from '@/lib/utils'
 import { useSearchPagination } from '@/composables/useSearchPagination'
 import { useDateRange } from '@/composables/useDateRange'

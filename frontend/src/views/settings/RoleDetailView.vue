@@ -30,7 +30,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog'
-import { Shield, Lock, Star, Save, Trash2, Loader2 } from 'lucide-vue-next'
+import { Shield, Lock, Star, Save, Trash2, Loader2 } from '@/lib/icons'
 
 const route = useRoute()
 const router = useRouter()

@@ -9,7 +9,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Separator } from '@/components/ui/separator'
 import { toast } from '@/lib/toast'
-import { MessageSquare, Loader2 } from 'lucide-vue-next'
+import { MessageSquare, Loader2 } from '@/lib/icons'
 
 const { t } = useI18n()
 

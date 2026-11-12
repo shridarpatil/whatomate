@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { Button } from '@/components/ui/button'
-import { Upload, FileText, X } from 'lucide-vue-next'
+import { Upload, FileText, X } from '@/lib/icons'
 
 defineProps<{
   file: File | null

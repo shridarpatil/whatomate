@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { ref, onMounted, onUnmounted } from 'vue'
-import { ArrowUp } from 'lucide-vue-next'
+import { ArrowUp } from '@/lib/icons'
 import { Button } from '@/components/ui/button'
 
 const props = withDefaults(defineProps<{

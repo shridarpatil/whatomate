@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { ref } from 'vue'
 import type { ButtonConfig } from '@/types/flow-preview'
-import { ExternalLink, X, List } from 'lucide-vue-next'
+import { ExternalLink, X, List } from '@/lib/icons'
 
 defineProps<{
   buttons: ButtonConfig[]

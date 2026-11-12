@@ -10,7 +10,7 @@ import { chatbotService } from '@/services/api'
 import { toast } from '@/lib/toast'
 import { PageHeader, DataTable, DeleteConfirmDialog, SearchInput, IconButton, ErrorState, type Column } from '@/components/shared'
 import { getErrorMessage } from '@/lib/api-utils'
-import { Plus, Pencil, Trash2, Sparkles } from 'lucide-vue-next'
+import { Plus, Pencil, Trash2, Sparkles } from '@/lib/icons'
 import { debounce } from '@/lib/utils'
 
 const { t } = useI18n()

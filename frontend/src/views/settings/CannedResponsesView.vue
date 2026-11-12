@@ -11,7 +11,7 @@ import { PageHeader, SearchInput, DeleteConfirmDialog, DataTable, IconButton, Er
 import { cannedResponsesService, type CannedResponse } from '@/services/api'
 import { useCrudState } from '@/composables/useCrudState'
 import { toast } from '@/lib/toast'
-import { Plus, MessageSquareText, Pencil, Trash2, Copy } from 'lucide-vue-next'
+import { Plus, MessageSquareText, Pencil, Trash2, Copy } from '@/lib/icons'
 import { getErrorMessage } from '@/lib/api-utils'
 import { CANNED_RESPONSE_CATEGORIES, getLabelFromValue } from '@/lib/constants'
 import { useSearchPagination } from '@/composables/useSearchPagination'

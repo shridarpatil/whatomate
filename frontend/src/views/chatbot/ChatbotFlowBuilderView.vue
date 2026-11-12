@@ -36,7 +36,7 @@ import {
   Plus,
   Trash2,
   Play,
-} from 'lucide-vue-next'
+} from '@/lib/icons'
 
 import AuditLogPanel from '@/components/shared/AuditLogPanel.vue'
 import MetadataPanel from '@/components/shared/MetadataPanel.vue'

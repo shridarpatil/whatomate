@@ -12,7 +12,7 @@ import { PageHeader, SearchInput, DataTable, IconButton, DeleteConfirmDialog, Er
 import { api, templatesService } from '@/services/api'
 import { useOrganizationsStore } from '@/stores/organizations'
 import { toast } from '@/lib/toast'
-import { Plus, RefreshCw, FileText, Pencil, Trash2, Loader2, MessageSquare, Image, FileIcon, Video } from 'lucide-vue-next'
+import { Plus, RefreshCw, FileText, Pencil, Trash2, Loader2, MessageSquare, Image, FileIcon, Video } from '@/lib/icons'
 import { getErrorMessage } from '@/lib/api-utils'
 import { useSearchPagination } from '@/composables/useSearchPagination'
 import { getQualityBadgeClass, getQualityRatingLabel } from '@/lib/utils'

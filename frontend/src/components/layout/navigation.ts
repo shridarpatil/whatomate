@@ -22,7 +22,7 @@ import {
   PhoneCall,
   PhoneForwarded,
   ScrollText
-} from 'lucide-vue-next'
+} from '@/lib/icons'
 import type { Component } from 'vue'
 
 export interface NavItem {

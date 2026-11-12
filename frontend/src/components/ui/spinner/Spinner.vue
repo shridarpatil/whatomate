@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import type { HTMLAttributes } from "vue"
 import { computed } from "vue"
-import { Loader2 } from "lucide-vue-next"
+import { Loader2 } from "@/lib/icons"
 import { cn } from "@/lib/utils"
 
 interface SpinnerProps {

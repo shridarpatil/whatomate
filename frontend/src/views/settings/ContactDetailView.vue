@@ -61,7 +61,7 @@ import {
   Check,
   ChevronsUpDown,
   X,
-} from 'lucide-vue-next'
+} from '@/lib/icons'
 
 const route = useRoute()
 const router = useRouter()

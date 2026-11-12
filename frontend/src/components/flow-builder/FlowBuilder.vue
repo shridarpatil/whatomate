@@ -29,7 +29,7 @@ import {
   ArrowRight,
   Settings2,
   Layers
-} from 'lucide-vue-next'
+} from '@/lib/icons'
 
 // Component types available in WhatsApp Flows
 const componentTypes = [

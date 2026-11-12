@@ -9,7 +9,7 @@ import {
   PopoverTrigger,
 } from '@/components/ui/popover'
 import { cannedResponsesService, type CannedResponse } from '@/services/api'
-import { MessageSquareText, Search, Loader2 } from 'lucide-vue-next'
+import { MessageSquareText, Search, Loader2 } from '@/lib/icons'
 
 const props = defineProps<{
   externalOpen?: boolean

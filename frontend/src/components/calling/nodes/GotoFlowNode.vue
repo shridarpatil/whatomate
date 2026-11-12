@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed } from 'vue'
-import { ExternalLink } from 'lucide-vue-next'
+import { ExternalLink } from '@/lib/icons'
 import BaseNode from './BaseNode.vue'
 import { useCallingStore } from '@/stores/calling'
 

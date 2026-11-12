@@ -12,7 +12,7 @@ import {
   XCircle,
   Flag,
   AlertCircle
-} from 'lucide-vue-next'
+} from '@/lib/icons'
 
 const props = defineProps<{
   entries: ExecutionLogEntry[]

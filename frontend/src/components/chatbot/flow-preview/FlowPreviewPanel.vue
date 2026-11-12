@@ -16,7 +16,7 @@ import {
   Clock,
   StopCircle,
   Variable,
-} from 'lucide-vue-next'
+} from '@/lib/icons'
 
 const props = defineProps<{
   steps: FlowStep[]
