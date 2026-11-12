@@ -31,7 +31,10 @@ function onToggle(e: Event) {
 
 // Lets the parent open the picker (e.g. from the service-window banner).
 function open() {
-  trigger.value?.click()
+  // Open directly (not via a simulated trigger click, which toggles and can
+  // immediately close the menu again).
+  const el = popover.value
+  if (el && !el.matches(':popover-open')) el.showPopover()
 }
 defineExpose({ open })
 

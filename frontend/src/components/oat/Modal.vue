@@ -27,7 +27,8 @@ function sync() {
 }
 
 onMounted(sync)
-watch(() => props.open, sync)
+// 'post' so the gated content is rendered before showModal() picks initial focus.
+watch(() => props.open, sync, { flush: 'post' })
 
 // Native close/cancel (Escape) fire outside Vue's state; mirror them back to the parent.
 function onNativeClose() {
