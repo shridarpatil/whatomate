@@ -118,10 +118,7 @@ onMounted(() => fetchItems())
       />
       <article v-else class="card">
         <header class="hstack justify-between flex-wrap gap-4">
-          <div>
-            <h3>{{ $t('apiKeys.yourApiKeys') }}</h3>
-            <p class="text-light">{{ $t('apiKeys.yourApiKeysDesc') }}</p>
-          </div>
+          <h3>{{ $t('apiKeys.yourApiKeys') }}</h3>
           <SearchInput v-model="searchQuery" :placeholder="$t('apiKeys.searchApiKeys') + '...'" />
         </header>
         <DataTable :items="apiKeys" :columns="columns" :is-loading="isLoading" :empty-icon="Key" :empty-title="searchQuery ? $t('apiKeys.noMatchingApiKeys') : $t('apiKeys.noApiKeysYet')" :empty-description="searchQuery ? $t('apiKeys.noMatchingApiKeysDesc') : $t('apiKeys.noApiKeysYetDesc')" v-model:sort-key="sortKey" v-model:sort-direction="sortDirection" server-pagination :current-page="currentPage" :total-items="totalItems" :page-size="pageSize" item-name="API keys" @page-change="handlePageChange">

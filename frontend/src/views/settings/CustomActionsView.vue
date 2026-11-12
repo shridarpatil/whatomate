@@ -196,10 +196,7 @@ onMounted(() => fetchActions())
     <div v-else class="flex-1 scroll-y p-4">
       <article class="card">
         <header class="hstack justify-between flex-wrap gap-4">
-          <div>
-            <h3>{{ $t('customActions.yourActions') }}</h3>
-            <p class="text-light">{{ $t('customActions.yourActionsDesc') }}</p>
-          </div>
+          <h3>{{ $t('customActions.yourActions') }}</h3>
           <SearchInput v-model="searchQuery" :placeholder="$t('customActions.searchActions') + '...'" />
         </header>
         <DataTable :items="actions" :columns="columns" :is-loading="isLoading" :empty-icon="Zap" :empty-title="searchQuery ? $t('customActions.noMatchingActions') : $t('customActions.noActionsYet')" :empty-description="searchQuery ? $t('customActions.noMatchingActionsDesc') : $t('customActions.noActionsYetDesc')" v-model:sort-key="sortKey" v-model:sort-direction="sortDirection" server-pagination :current-page="currentPage" :total-items="totalItems" :page-size="pageSize" item-name="actions" @page-change="handlePageChange">

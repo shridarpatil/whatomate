@@ -266,7 +266,6 @@ function togglePlayAudio(type: 'hold_music' | 'ringback') {
             <article class="card">
               <header>
                 <h3>{{ $t('settings.generalSettings') }}</h3>
-                <p class="text-light">{{ $t('settings.generalSettingsDesc') }}</p>
               </header>
               <label data-field>
                 {{ $t('settings.organizationName') }}
@@ -320,7 +319,6 @@ function togglePlayAudio(type: 'hold_music' | 'ringback') {
             <article v-if="canWriteAccounts" class="card mt-6">
               <header>
                 <h3>{{ $t('settings.metaAppCredentials') }}</h3>
-                <p class="text-light">{{ $t('settings.metaAppCredentialsDesc') }}</p>
               </header>
               <div class="row">
                 <div class="col-6">
@@ -361,7 +359,6 @@ function togglePlayAudio(type: 'hold_music' | 'ringback') {
             <article class="card">
               <header>
                 <h3>{{ $t('settings.notifications') }}</h3>
-                <p class="text-light">{{ $t('settings.notificationsDesc') }}</p>
               </header>
             <label data-field>
               <span class="hstack justify-between">
@@ -423,7 +420,6 @@ function togglePlayAudio(type: 'hold_music' | 'ringback') {
             <article class="card">
               <header>
                 <h3>{{ $t('settings.callingSettings') }}</h3>
-                <p class="text-light">{{ $t('settings.callingSettingsDesc') }}</p>
               </header>
             <label data-field>
               <span class="hstack justify-between">

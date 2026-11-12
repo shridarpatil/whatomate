@@ -146,10 +146,7 @@ async function confirmDeleteFlow() {
     <div class="flex-1 scroll-y p-4">
       <article class="card">
         <header class="hstack justify-between flex-wrap gap-4">
-          <div>
-            <h3>{{ $t('chatbotFlows.yourFlows') }}</h3>
-            <p class="text-light">{{ $t('chatbotFlows.yourFlowsDesc') }}</p>
-          </div>
+          <h3>{{ $t('chatbotFlows.yourFlows') }}</h3>
           <SearchInput v-model="searchQuery" :placeholder="$t('chatbotFlows.searchFlows') + '...'" />
         </header>
         <ErrorState

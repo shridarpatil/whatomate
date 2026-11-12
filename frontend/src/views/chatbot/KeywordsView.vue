@@ -134,10 +134,7 @@ const emptyDescription = computed(() => {
     <div class="flex-1 scroll-y p-4">
       <article class="card">
         <header class="hstack justify-between flex-wrap gap-4">
-          <div>
-            <h3>{{ $t('keywords.yourRules') }}</h3>
-            <p class="text-light">{{ $t('keywords.yourRulesDesc') }}</p>
-          </div>
+          <h3>{{ $t('keywords.yourRules') }}</h3>
           <SearchInput v-model="searchQuery" :placeholder="$t('keywords.searchKeywords') + '...'" />
         </header>
         <ErrorState

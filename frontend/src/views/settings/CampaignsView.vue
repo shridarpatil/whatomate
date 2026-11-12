@@ -248,10 +248,7 @@ function getProgressPercentage(campaign: Campaign): number {
     <div class="flex-1 scroll-y p-4">
       <article class="card">
         <header class="hstack justify-between items-center flex-wrap gap-4">
-          <div>
-            <h3>{{ $t('campaigns.yourCampaigns') }}</h3>
-            <p class="text-light">{{ $t('campaigns.yourCampaignsDesc') }}</p>
-          </div>
+          <h3>{{ $t('campaigns.yourCampaigns') }}</h3>
           <div class="hstack items-center gap-2 flex-wrap">
             <select v-model="filterStatus" :aria-label="$t('campaigns.status')">
               <option v-for="opt in statusOptions" :key="opt.value" :value="opt.value">{{ opt.label }}</option>

@@ -203,7 +203,6 @@ onMounted(async () => {
             {{ form.permissions.length }} {{ $t('common.selected') || 'selected' }}
           </small>
         </header>
-        <p class="text-light mb-4">{{ $t('roles.selectPermissions') }}</p>
         <div v-if="rolesStore.permissions.length === 0" class="vstack items-center gap-2 p-4" role="status" aria-busy="true" data-spinner="large">
           <p class="text-light">{{ $t('roles.loadingPermissions') }}...</p>
         </div>

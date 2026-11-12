@@ -117,10 +117,7 @@ function editTooltip(role: Role): string {
     <div v-else class="flex-1 scroll-y p-4">
       <article class="card">
         <header class="hstack justify-between flex-wrap gap-4">
-          <div>
-            <h3>{{ $t('roles.yourRoles') }}</h3>
-            <p class="text-light">{{ $t('roles.yourRolesDesc') }}</p>
-          </div>
+          <h3>{{ $t('roles.yourRoles') }}</h3>
           <SearchInput v-model="searchQuery" :placeholder="$t('roles.searchRoles') + '...'" />
         </header>
         <DataTable :items="roles" :columns="columns" :is-loading="isLoading" :empty-icon="Shield" :empty-title="searchQuery ? $t('roles.noMatchingRoles') : $t('roles.noRolesYet')" :empty-description="searchQuery ? $t('roles.noMatchingRolesDesc') : $t('roles.noRolesYetDesc')" v-model:sort-key="sortKey" v-model:sort-direction="sortDirection" server-pagination :current-page="currentPage" :total-items="totalItems" :page-size="pageSize" item-name="roles" @page-change="handlePageChange">

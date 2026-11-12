@@ -74,7 +74,6 @@ async function changePassword() {
         <article class="card">
           <header>
             <h3>{{ $t('profile.accountInfo') }}</h3>
-            <p class="text-light">{{ $t('profile.accountInfoDesc') }}</p>
           </header>
           <div class="row">
           <div class="col-4">
@@ -96,7 +95,6 @@ async function changePassword() {
         <article class="card">
           <header>
             <h3>{{ $t('profile.changePassword') }}</h3>
-            <p class="text-light">{{ $t('profile.changePasswordDesc') }}</p>
           </header>
         <div data-field>
           <label for="current_password">{{ $t('profile.currentPassword') }}</label>

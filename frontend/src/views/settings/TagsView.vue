@@ -137,10 +137,7 @@ function getColorLabel(color: string): string {
     <div v-else class="flex-1 scroll-y p-4">
       <article class="card">
         <header class="hstack justify-between flex-wrap gap-4">
-          <div>
-            <h3>{{ $t('tags.organizationTags') }}</h3>
-            <p class="text-light">{{ $t('tags.organizationTagsDesc') }}</p>
-          </div>
+          <h3>{{ $t('tags.organizationTags') }}</h3>
           <SearchInput v-model="searchQuery" :placeholder="$t('tags.searchTags') + '...'" />
         </header>
         <DataTable

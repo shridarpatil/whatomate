@@ -225,10 +225,7 @@ function sanitizeScreensForMeta(screens: any[]): any[] {
     <div v-else class="flex-1 scroll-y p-4">
       <article class="card">
         <header class="hstack justify-between items-center flex-wrap gap-4">
-          <div>
-            <h3>{{ $t('flows.yourFlows') }}</h3>
-            <p class="text-light">{{ $t('flows.yourFlowsDesc') }}</p>
-          </div>
+          <h3>{{ $t('flows.yourFlows') }}</h3>
           <div class="hstack items-center gap-2">
             <label class="hstack items-center gap-2">
               <small class="text-light">{{ $t('flows.account') }}:</small>

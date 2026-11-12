@@ -153,10 +153,7 @@ async function toggleContext(context: AIContext, event?: Event) {
     <div class="flex-1 scroll-y p-4">
       <article class="card">
         <header class="hstack justify-between flex-wrap gap-4">
-          <div>
-            <h3>{{ $t('aiContexts.yourContexts') }}</h3>
-            <p class="text-light">{{ $t('aiContexts.yourContextsDesc') }}</p>
-          </div>
+          <h3>{{ $t('aiContexts.yourContexts') }}</h3>
           <SearchInput v-model="searchQuery" :placeholder="$t('aiContexts.searchContexts') + '...'" />
         </header>
         <ErrorState

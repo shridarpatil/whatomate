@@ -387,7 +387,6 @@ function formatTimeRemaining(deadline: string | undefined): string {
         <article v-else-if="!isAdminOrManager" class="card">
           <header>
             <h3>{{ $t('agentTransfers.myTransfers') }}</h3>
-            <p class="text-light">{{ $t('agentTransfers.contactsTransferred') }}</p>
           </header>
           <div v-if="myTransfers.length === 0" class="align-center vstack gap-2 items-center">
             <UserX :size="32" />
@@ -451,7 +450,6 @@ function formatTimeRemaining(deadline: string | undefined): string {
             <article v-if="activeTab === 'my-transfers'" class="card">
               <header>
                 <h3>{{ $t('agentTransfers.myTransfers') }}</h3>
-                <p class="text-light">{{ $t('agentTransfers.transfersAssignedToYou') }}</p>
               </header>
               <div v-if="myTransfers.length === 0" class="align-center vstack gap-2 items-center">
                 <UserX :size="32" />
@@ -502,10 +500,7 @@ function formatTimeRemaining(deadline: string | undefined): string {
             <!-- Queue Tab -->
             <article v-else-if="activeTab === 'queue'" class="card">
               <header class="hstack justify-between flex-wrap gap-4">
-                <div>
-                  <h3>{{ $t('agentTransfers.transferQueue') }}</h3>
-                  <p class="text-light">{{ $t('agentTransfers.unassignedTransfers') }}</p>
-                </div>
+                <h3>{{ $t('agentTransfers.transferQueue') }}</h3>
                 <div class="hstack gap-4 flex-wrap">
                   <div class="hstack gap-2 flex-wrap">
                     <span class="badge outline">{{ $t('agentTransfers.general') }}: {{ teamQueueCounts.general || 0 }}</span>
@@ -587,7 +582,6 @@ function formatTimeRemaining(deadline: string | undefined): string {
             <article v-else-if="activeTab === 'all'" class="card">
               <header>
                 <h3>{{ $t('agentTransfers.allActiveTransfers') }}</h3>
-                <p class="text-light">{{ $t('agentTransfers.allCurrentlyActive') }}</p>
               </header>
               <div v-if="allActiveTransfers.length === 0" class="align-center vstack gap-2 items-center">
                 <UserX :size="32" />
@@ -659,7 +653,6 @@ function formatTimeRemaining(deadline: string | undefined): string {
                     {{ historyTransfers.length }} of {{ historyTotalCount }}
                   </small>
                 </div>
-                <p class="text-light">{{ $t('agentTransfers.resumedTransfers') }}</p>
               </header>
               <!-- Loading state -->
               <div v-if="isLoadingHistory && historyTransfers.length === 0" class="align-center" role="status" aria-busy="true" data-spinner="large">

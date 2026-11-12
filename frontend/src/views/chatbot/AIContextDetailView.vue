@@ -250,7 +250,6 @@ onMounted(async () => {
         <h3>{{ $t('aiContexts.apiConfiguration', 'API Configuration') }}</h3>
       </header>
       <div class="vstack gap-4">
-        <p class="text-light">{{ $t('aiContexts.apiConfigHint', 'Configure the external API to fetch dynamic context.') }}</p>
 
         <div class="row">
           <label data-field class="col-3">

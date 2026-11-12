@@ -214,7 +214,7 @@ async function copyInviteLink() {
               <h3>{{ $t('users.yourUsers') }}</h3>
               <span class="badge" data-variant="success">{{ onlineCount }} {{ $t('users.online', 'online') }}</span>
             </div>
-            <p class="text-light">{{ $t('users.subtitle') }}. <RouterLink to="/settings/roles">{{ $t('users.manageRoles') }}</RouterLink></p>
+            <p><RouterLink to="/settings/roles">{{ $t('users.manageRoles') }}</RouterLink></p>
           </div>
           <div class="hstack gap-2 flex-wrap">
             <select v-model="roleFilter" :aria-label="$t('users.allRoles', 'All roles')">

@@ -736,7 +736,6 @@ function callTiles(group: { currency: string; agg: ReturnType<typeof aggregateCa
 
                 <article class="card">
                   <h4>{{ $t('metaInsights.messageDeliveryOverTime') }}</h4>
-                  <p class="text-light">{{ $t('metaInsights.sentVsDelivered') }}</p>
                   <LineChart
                     v-if="messagingChart.labels.length > 0"
                     :labels="messagingChart.labels"
@@ -776,7 +775,6 @@ function callTiles(group: { currency: string; agg: ReturnType<typeof aggregateCa
 
                   <article class="card">
                     <h4>{{ $t('metaInsights.messagesCostByCategory') }}</h4>
-                    <p class="text-light">{{ $t('metaInsights.breakdownByCategory') }}</p>
                     <BarChart
                       v-if="Object.keys(group.agg.byCategory).length > 0"
                       :labels="pricingChartFor(group.agg).labels"
@@ -792,7 +790,6 @@ function callTiles(group: { currency: string; agg: ReturnType<typeof aggregateCa
                     <div class="col-6">
                       <article class="card">
                         <h4>{{ $t('metaInsights.freeMessages') }}</h4>
-                        <p class="text-light">{{ $t('metaInsights.freeTierBreakdown') }}</p>
                         <div class="vstack gap-2">
                           <div class="hstack justify-between items-center gap-2">
                             <span class="text-light">{{ $t('metaInsights.freeCustomerService') }}</span>
@@ -814,7 +811,6 @@ function callTiles(group: { currency: string; agg: ReturnType<typeof aggregateCa
                     <div class="col-6">
                       <article class="card">
                         <h4>{{ $t('metaInsights.paidMessages') }}</h4>
-                        <p class="text-light">{{ $t('metaInsights.paidBreakdown') }}</p>
                         <div class="vstack gap-2">
                           <div v-for="(count, category) in group.agg.paidMessages.byCategory" :key="category" class="hstack justify-between items-center gap-2">
                             <span class="text-light">{{ formatCategory(category as string) }}</span>
@@ -837,7 +833,6 @@ function callTiles(group: { currency: string; agg: ReturnType<typeof aggregateCa
                     <div class="col-6">
                       <article class="card">
                         <h4>{{ $t('metaInsights.costByCategory') }}</h4>
-                        <p class="text-light">{{ $t('metaInsights.approximateCharges') }}</p>
                         <div class="vstack gap-2">
                           <div v-for="(cost, category) in group.agg.costByCategory" :key="category" class="hstack justify-between items-center gap-2">
                             <span class="text-light">{{ formatCategory(category as string) }}</span>
@@ -855,7 +850,6 @@ function callTiles(group: { currency: string; agg: ReturnType<typeof aggregateCa
                     <div class="col-6">
                       <article class="card">
                         <h4>{{ $t('metaInsights.byCountry') }}</h4>
-                        <p class="text-light">{{ $t('metaInsights.messagesCostByCountry') }}</p>
                         <div class="vstack gap-2">
                           <div v-for="(data, country) in group.agg.byCountry" :key="country" class="hstack justify-between items-center gap-2">
                             <span class="text-light">{{ country }}</span>
@@ -907,10 +901,7 @@ function callTiles(group: { currency: string; agg: ReturnType<typeof aggregateCa
                   <!-- Template Performance Table -->
                   <article class="card">
                     <header class="hstack justify-between items-center flex-wrap gap-4">
-                      <div>
-                        <h4>{{ $t('metaInsights.templatePerformance') }}</h4>
-                        <p class="text-light">{{ $t('metaInsights.performanceByTemplate') }}</p>
-                      </div>
+                      <h4>{{ $t('metaInsights.templatePerformance') }}</h4>
                       <input
                         v-model="templateSearchQuery"
                         type="search"

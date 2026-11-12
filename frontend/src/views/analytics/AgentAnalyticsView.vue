@@ -317,7 +317,6 @@ void _displayStats.value // Suppress unused warning
           <div class="col-6">
             <article class="card">
               <h4>{{ $t('agentAnalytics.transferTrends') }}</h4>
-              <p class="text-light">{{ $t('agentAnalytics.transfersOverTime') }}</p>
               <div v-if="isLoading" role="status" class="skeleton box" aria-busy="true"></div>
               <LineChart
                 v-else-if="trendLabels.length > 0"
@@ -332,7 +331,6 @@ void _displayStats.value // Suppress unused warning
           <div class="col-6">
             <article class="card">
               <h4>{{ $t('agentAnalytics.conversationSources') }}</h4>
-              <p class="text-light">{{ $t('agentAnalytics.howConversationsInitiated') }}</p>
               <div v-if="isLoading" role="status" class="skeleton box" aria-busy="true"></div>
               <PieChart
                 v-else-if="sourceLabels.length > 0"
@@ -349,7 +347,6 @@ void _displayStats.value // Suppress unused warning
         <!-- Agent Comparison (Admin/Manager only, when viewing all agents) -->
         <article v-if="!error && isAllAgents" class="card">
           <h4>{{ $t('agentAnalytics.agentComparison') }}</h4>
-          <p class="text-light">{{ $t('agentAnalytics.performanceComparison') }}</p>
           <div v-if="isLoading" role="status" class="skeleton box" aria-busy="true"></div>
           <BarChart
             v-else-if="comparisonLabels.length > 0"

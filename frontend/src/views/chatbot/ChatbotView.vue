@@ -204,7 +204,6 @@ const statCards = computed(() => [
                     <small class="text-light">{{ $t('chatbot.rulesConfigured', { count: stats.keywords_count }) }}</small>
                   </div>
                 </header>
-                <p class="text-light">{{ $t('chatbot.keywordRulesDesc') }}</p>
               </article>
             </RouterLink>
           </div>
@@ -219,7 +218,6 @@ const statCards = computed(() => [
                     <small class="text-light">{{ $t('chatbot.flowsCreated', { count: stats.flows_count }) }}</small>
                   </div>
                 </header>
-                <p class="text-light">{{ $t('chatbot.flowsDesc') }}</p>
               </article>
             </RouterLink>
           </div>
@@ -234,7 +232,6 @@ const statCards = computed(() => [
                     <small class="text-light">{{ $t('chatbot.contextsActive', { count: stats.ai_contexts_count }) }}</small>
                   </div>
                 </header>
-                <p class="text-light">{{ $t('chatbot.aiContextsDesc') }}</p>
               </article>
             </RouterLink>
           </div>
@@ -243,10 +240,7 @@ const statCards = computed(() => [
         <!-- Current Settings -->
         <article class="card">
           <header class="hstack justify-between flex-wrap gap-2">
-            <div>
-              <h3>{{ $t('chatbot.currentConfiguration') }}</h3>
-              <p class="text-light">{{ $t('chatbot.configOverview') }}</p>
-            </div>
+            <h3>{{ $t('chatbot.currentConfiguration') }}</h3>
             <RouterLink to="/settings/chatbot" class="button outline small">
               <Settings :size="16" />
               {{ $t('chatbot.editSettings') }}

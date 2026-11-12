@@ -129,10 +129,7 @@ async function confirmDelete() {
     <div v-else class="flex-1 scroll-y p-4">
       <article class="card">
         <header class="hstack justify-between flex-wrap gap-4">
-          <div>
-            <h3>{{ $t('teams.yourTeams') }}</h3>
-            <p class="text-light">{{ $t('teams.yourTeamsDesc') }}</p>
-          </div>
+          <h3>{{ $t('teams.yourTeams') }}</h3>
           <SearchInput v-model="searchQuery" :placeholder="$t('teams.searchTeams') + '...'" />
         </header>
         <DataTable :items="teams" :columns="columns" :is-loading="isLoading" :empty-icon="Users" :empty-title="searchQuery ? $t('teams.noMatchingTeams') : $t('teams.noTeamsYet')" :empty-description="searchQuery ? $t('teams.noMatchingTeamsDesc') : $t('teams.noTeamsYetDesc')" v-model:sort-key="sortKey" v-model:sort-direction="sortDirection" server-pagination :current-page="currentPage" :total-items="totalItems" :page-size="pageSize" item-name="teams" @page-change="handlePageChange">

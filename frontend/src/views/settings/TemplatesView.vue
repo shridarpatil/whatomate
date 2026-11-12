@@ -300,10 +300,7 @@ function getHeaderIcon(type: string) {
       />
       <article v-else class="card">
         <header class="hstack justify-between items-center flex-wrap gap-4">
-          <div>
-            <h3>{{ $t('templates.yourTemplates') }}</h3>
-            <p class="text-light">{{ $t('templates.yourTemplatesDesc') }}</p>
-          </div>
+          <h3>{{ $t('templates.yourTemplates') }}</h3>
           <div class="hstack items-center gap-4 flex-wrap">
             <label class="hstack items-center gap-2">
               <small class="text-light">{{ $t('templates.account') }}:</small>

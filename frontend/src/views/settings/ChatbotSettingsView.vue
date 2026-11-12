@@ -397,7 +397,6 @@ function removeEscalationUser(userId: string) {
             <article class="card">
               <header>
                 <h3>{{ $t('chatbotSettings.messagesTitle') }}</h3>
-                <p class="text-light">{{ $t('chatbotSettings.messagesDesc') }}</p>
               </header>
               <div data-field>
                 <label for="greeting">{{ $t('chatbotSettings.greetingMessage') }}</label>
@@ -450,7 +449,6 @@ function removeEscalationUser(userId: string) {
             <article class="card">
               <header>
                 <h3>{{ $t('chatbotSettings.agentSettings') }}</h3>
-                <p class="text-light">{{ $t('chatbotSettings.agentSettingsDesc') }}</p>
               </header>
               <label data-field>
                 <span class="hstack justify-between">
@@ -491,7 +489,6 @@ function removeEscalationUser(userId: string) {
             <article class="card">
               <header>
                 <h3>{{ $t('chatbotSettings.businessHours') }}</h3>
-                <p class="text-light">{{ $t('chatbotSettings.businessHoursDesc') }}</p>
               </header>
               <label data-field>
                 <span class="hstack justify-between">
@@ -542,7 +539,6 @@ function removeEscalationUser(userId: string) {
             <article class="card">
               <header>
                 <h3>{{ $t('chatbotSettings.slaSettings') }}</h3>
-                <p class="text-light">{{ $t('chatbotSettings.slaSettingsDesc') }}</p>
               </header>
               <label data-field>
                 <span class="hstack justify-between">
@@ -678,7 +674,6 @@ function removeEscalationUser(userId: string) {
             <article class="card">
               <header>
                 <h3>{{ $t('chatbotSettings.aiSettings') }}</h3>
-                <p class="text-light">{{ $t('chatbotSettings.aiSettingsDesc') }}</p>
               </header>
               <label data-field>
                 <span class="hstack justify-between">

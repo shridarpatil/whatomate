@@ -121,19 +121,19 @@ export class AgentTransfersPage extends BasePage {
   }
 
   async expectMyTransfersTabVisible() {
-    await expect(this.page.getByText('Contacts transferred to you')).toBeVisible()
+    await expect(this.page.getByRole('heading', { name: 'My Transfers' })).toBeVisible()
   }
 
   async expectQueueTabVisible() {
-    await expect(this.page.getByText('Unassigned transfers waiting')).toBeVisible()
+    await expect(this.page.getByRole('heading', { name: 'Transfer Queue' })).toBeVisible()
   }
 
   async expectAllActiveTabVisible() {
-    await expect(this.page.getByText('All currently active')).toBeVisible()
+    await expect(this.page.getByRole('heading', { name: 'All Active Transfers' })).toBeVisible()
   }
 
   async expectHistoryTabVisible() {
-    await expect(this.page.getByText('Resumed transfers')).toBeVisible()
+    await expect(this.page.getByRole('heading', { name: 'Transfer History' })).toBeVisible()
   }
 
   async expectEmptyMyTransfers() {

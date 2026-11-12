@@ -145,10 +145,7 @@ onMounted(() => fetchWebhooks())
     <div v-else class="flex-1 scroll-y p-4">
       <article class="card">
         <header class="hstack justify-between flex-wrap gap-4">
-          <div>
-            <h3>{{ $t('webhooks.yourWebhooks') }}</h3>
-            <p class="text-light">{{ $t('webhooks.yourWebhooksDesc') }}</p>
-          </div>
+          <h3>{{ $t('webhooks.yourWebhooks') }}</h3>
           <SearchInput v-model="searchQuery" :placeholder="$t('webhooks.searchWebhooks') + '...'" />
         </header>
         <DataTable :items="webhooks" :columns="columns" :is-loading="isLoading" :empty-icon="WebhookIcon" :empty-title="searchQuery ? $t('webhooks.noMatchingWebhooks') : $t('webhooks.noWebhooksYet')" :empty-description="searchQuery ? $t('webhooks.noMatchingWebhooksDesc') : $t('webhooks.noWebhooksYetDesc')" v-model:sort-key="sortKey" v-model:sort-direction="sortDirection" server-pagination :current-page="currentPage" :total-items="totalItems" :page-size="pageSize" item-name="webhooks" @page-change="handlePageChange">

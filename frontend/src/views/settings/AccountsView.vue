@@ -287,7 +287,6 @@ async function confirmDelete() {
       <article class="card">
         <header>
           <h3>{{ $t('accounts.yourAccounts') }}</h3>
-          <p class="text-light">{{ $t('accounts.yourAccountsDesc') }}</p>
         </header>
         <DataTable
           :items="accounts"
