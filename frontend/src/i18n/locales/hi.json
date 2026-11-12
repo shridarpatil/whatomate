@@ -996,6 +996,7 @@
     "nameRequired": "नाम अनिवार्य है"
   },
   "webhooks": {
+    "removeHeader": "Remove header",
     "title": "वेबहुक",
     "subtitle": "बाहरी सिस्टम के लिए वेबहुक",
     "addWebhook": "वेबहुक जोड़ें",

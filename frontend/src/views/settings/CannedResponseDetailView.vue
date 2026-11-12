@@ -267,9 +267,9 @@ onMounted(() => { loadResponse() })
             <hr>
             <small class="text-light">{{ $t('common.preview', 'Preview') }}</small>
             <div class="card vstack gap-2">
-              <template v-if="form.content">
-                <p v-for="(line, idx) in form.content.split('\n')" :key="idx">{{ line }}</p>
-              </template>
+              <p v-if="form.content">
+                <template v-for="(line, idx) in form.content.split('\n')" :key="idx"><br v-if="idx > 0">{{ line }}</template>
+              </p>
               <PreviewButtonGroup :buttons="form.buttons" disabled />
             </div>
           </template>

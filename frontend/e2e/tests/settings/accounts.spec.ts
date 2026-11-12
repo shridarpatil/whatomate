@@ -23,7 +23,7 @@ test.describe('WhatsApp Accounts - List View', () => {
     await page.goto('/settings/accounts/new')
     await page.waitForLoadState('networkidle')
     expect(page.url()).toContain('/settings/accounts/new')
-    await expect(page.locator('input').first()).toBeVisible()
+    await expect(page.locator('main').locator('input').first()).toBeVisible()
   })
 
   test('should show delete confirmation from list', async ({ page }) => {
@@ -61,8 +61,8 @@ test.describe('WhatsApp Accounts - Detail Page CRUD', () => {
     await page.goto('/settings/accounts/new')
     await page.waitForLoadState('networkidle')
 
-    await expect(page.locator('input').first()).toBeVisible()
-    await expect(page.locator('input[type="password"]').first()).toBeVisible()
+    await expect(page.locator('main').locator('input').first()).toBeVisible()
+    await expect(page.locator('main').locator('input[type="password"]').first()).toBeVisible()
   })
 
   test('should show validation error for empty required fields', async ({ page }) => {
@@ -70,7 +70,7 @@ test.describe('WhatsApp Accounts - Detail Page CRUD', () => {
     await page.waitForLoadState('networkidle')
 
     // Fill something to trigger hasChanges
-    const input = page.locator('input').first()
+    const input = page.locator('main').locator('input').first()
     if (await input.isDisabled()) { test.skip(true, 'No write permission'); return }
 
     await input.fill('test')

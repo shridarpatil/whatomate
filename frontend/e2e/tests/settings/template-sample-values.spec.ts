@@ -7,7 +7,7 @@ const scope = createTestScope('tpl-sample-values')
 async function gotoNewTemplate(page: Page) {
   await page.goto('/templates/new')
   // Wait for the Vue app to mount — the body textarea is inside the Content card
-  const bodyTextarea = page.locator('textarea').first()
+  const bodyTextarea = page.locator('main').locator('textarea').first()
   await bodyTextarea.waitFor({ state: 'visible', timeout: 15000 })
   // Ensure textarea is enabled/editable
   await expect(bodyTextarea).toBeEnabled({ timeout: 5000 })
@@ -98,7 +98,7 @@ test.describe('Template Sample Values', () => {
     await headerContentInput.waitFor({ state: 'visible', timeout: 5000 })
     await headerContentInput.fill('Welcome {{1}}!')
 
-    const bodyTextarea = page.locator('textarea').first()
+    const bodyTextarea = page.locator('main').locator('textarea').first()
     await bodyTextarea.fill('Hello {{1}}, check your order {{2}}.')
 
     await expect(page.getByText('Sample Values for Variables')).toBeVisible()

@@ -46,7 +46,7 @@ test.describe('API Keys Management', () => {
     await saveButton(page).click()
 
     // Should show the key display dialog with the full key
-    const keyDialog = page.locator('[role="dialog"]')
+    const keyDialog = page.locator('dialog[open], [role="dialog"]')
     await expect(keyDialog).toBeVisible({ timeout: 10000 })
     await expect(keyDialog.locator('text=whm_')).toBeVisible()
 
@@ -70,7 +70,7 @@ test.describe('API Keys Management', () => {
     await page.locator('input[type="datetime-local"]').fill(dateStr)
     await saveButton(page).click()
 
-    const keyDialog = page.locator('[role="dialog"]')
+    const keyDialog = page.locator('dialog[open], [role="dialog"]')
     await expect(keyDialog).toBeVisible({ timeout: 10000 })
     await page.getByRole('button', { name: 'Done' }).click()
     await page.waitForURL(/\/settings\/api-keys\/[a-f0-9-]+$/)
@@ -84,7 +84,7 @@ test.describe('API Keys Management', () => {
     await gotoCreateApiKey(page)
     await nameInput(page).fill(keyName)
     await saveButton(page).click()
-    const keyDialog = page.locator('[role="dialog"]')
+    const keyDialog = page.locator('dialog[open], [role="dialog"]')
     await expect(keyDialog).toBeVisible({ timeout: 10000 })
     await page.getByRole('button', { name: 'Done' }).click()
 
@@ -107,7 +107,7 @@ test.describe('API Keys Management', () => {
     await gotoCreateApiKey(page)
     await nameInput(page).fill(keyName)
     await saveButton(page).click()
-    const keyDialog = page.locator('[role="dialog"]')
+    const keyDialog = page.locator('dialog[open], [role="dialog"]')
     await expect(keyDialog).toBeVisible({ timeout: 10000 })
     await page.getByRole('button', { name: 'Done' }).click()
 

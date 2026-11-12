@@ -45,7 +45,7 @@ test.describe('Keyword Rules - List View', () => {
     await page.goto('/chatbot/keywords/new')
     await page.waitForLoadState('networkidle')
     expect(page.url()).toContain('/chatbot/keywords/new')
-    await expect(page.locator('input').first()).toBeVisible()
+    await expect(page.locator('main').locator('input').first()).toBeVisible()
   })
 
   test('should load detail page from list', async ({ page, request }) => {
@@ -92,10 +92,10 @@ test.describe('Keyword Rules - Detail Page CRUD', () => {
     await page.goto('/chatbot/keywords/new')
     await page.waitForLoadState('networkidle')
 
-    await expect(page.locator('input').first()).toBeVisible()
+    await expect(page.locator('main').locator('input').first()).toBeVisible()
     const selects = page.locator('button[role="combobox"]')
     expect(await selects.count()).toBeGreaterThanOrEqual(2)
-    await expect(page.locator('textarea').first()).toBeVisible()
+    await expect(page.locator('main').locator('textarea').first()).toBeVisible()
     await expect(page.locator('button[role="switch"]').first()).toBeVisible()
   })
 
@@ -113,7 +113,7 @@ test.describe('Keyword Rules - Detail Page CRUD', () => {
     await page.goto(`/chatbot/keywords/${id}`)
     await page.waitForLoadState('networkidle')
 
-    const input = page.locator('input').first()
+    const input = page.locator('main').locator('input').first()
     expect(await input.isDisabled()).toBe(false)
 
     const original = await input.inputValue()

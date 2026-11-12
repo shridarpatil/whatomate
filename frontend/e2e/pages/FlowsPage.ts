@@ -17,8 +17,8 @@ export class FlowsPage extends BasePage {
     this.syncButton = page.getByRole('button', { name: /Sync from Meta/i }).first()
     this.accountFilter = page.locator('button[role="combobox"]').first()
     // Distinguish dialogs by their title content
-    this.createDialog = page.locator('[role="dialog"][data-state="open"]').filter({ hasText: 'Create WhatsApp Flow' })
-    this.editDialog = page.locator('[role="dialog"][data-state="open"]').filter({ hasText: 'Edit WhatsApp Flow' })
+    this.createDialog = page.locator('dialog[open], [role="dialog"][data-state="open"]').filter({ hasText: 'Create WhatsApp Flow' })
+    this.editDialog = page.locator('dialog[open], [role="dialog"][data-state="open"]').filter({ hasText: 'Edit WhatsApp Flow' })
     this.alertDialog = page.locator('[role="alertdialog"]')
   }
 

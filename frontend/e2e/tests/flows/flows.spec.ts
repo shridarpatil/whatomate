@@ -196,7 +196,7 @@ test.describe('Chatbot Flows Management', () => {
   test('should display flow builder on create page', async () => {
     await chatbotFlowsPage.gotoNewFlow()
     await chatbotFlowsPage.expectFlowBuilderVisible()
-    await expect(chatbotFlowsPage.page.locator('input').first()).toBeVisible()
+    await expect(chatbotFlowsPage.page.locator('main').locator('input').first()).toBeVisible()
   })
 
   test('should show validation when saving empty flow', async ({ page }) => {

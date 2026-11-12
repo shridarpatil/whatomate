@@ -28,8 +28,8 @@ export class ChatPage extends BasePage {
     this.cannedResponsesButton = page.locator('#canned-response-picker-button')
     this.contactInfoPanel = page.locator('.contact-info, [data-testid="contact-info"]')
     this.messageList = page.locator('.messages-container, [data-testid="messages"]')
-    this.assignDialog = page.locator('[role="dialog"][data-state="open"]')
-    this.mediaDialog = page.locator('[role="dialog"][data-state="open"]').filter({ hasText: /Send|Upload|Media/i })
+    this.assignDialog = page.locator('dialog[open], [role="dialog"][data-state="open"]')
+    this.mediaDialog = page.locator('dialog[open], [role="dialog"][data-state="open"]').filter({ hasText: /Send|Upload|Media/i })
   }
 
   async goto(contactId?: string) {
@@ -328,7 +328,7 @@ export class ChatPage extends BasePage {
   }
 
   get templateDialog(): Locator {
-    return this.page.locator('[role="dialog"][data-state="open"]').filter({ hasText: /Preview|Fill Parameters/i })
+    return this.page.locator('dialog[open], [role="dialog"][data-state="open"]').filter({ hasText: /Preview|Fill Parameters/i })
   }
 
   get templateDialogSendButton(): Locator {

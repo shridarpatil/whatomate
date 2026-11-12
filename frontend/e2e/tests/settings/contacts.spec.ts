@@ -299,7 +299,7 @@ test.describe('Contacts in Chat View', () => {
     await page.waitForLoadState('networkidle')
 
     await page.getByRole('button', { name: /add contact/i }).first().click()
-    const dialog = page.locator('[role="dialog"][data-state="open"]')
+    const dialog = page.locator('dialog[open], [role="dialog"][data-state="open"]')
     await expect(dialog).toBeVisible({ timeout: 5000 })
     await expect(dialog).toContainText(/Create Contact/i)
   })
@@ -313,7 +313,7 @@ test.describe('Contacts in Chat View', () => {
     const contactName = scope.name('chat-create')
 
     await page.getByRole('button', { name: /add contact/i }).first().click()
-    const dialog = page.locator('[role="dialog"][data-state="open"]')
+    const dialog = page.locator('dialog[open], [role="dialog"][data-state="open"]')
     await expect(dialog).toBeVisible({ timeout: 5000 })
 
     await dialog.locator('input').first().fill(phoneNumber)

@@ -104,7 +104,7 @@ test.describe('Campaign recipients — TEXT header parameter', () => {
     await page.waitForLoadState('networkidle')
 
     await page.getByRole('button', { name: /Add Recipients/i }).first().click()
-    const dialog = page.locator('[role="dialog"]')
+    const dialog = page.locator('dialog[open], [role="dialog"]')
     await expect(dialog).toBeVisible()
 
     // Format hint shows the header column explicitly so users don't conflate
@@ -165,7 +165,7 @@ test.describe('Campaign recipients — TEXT header parameter', () => {
     await page.waitForLoadState('networkidle')
 
     await page.getByRole('button', { name: /Add Recipients/i }).first().click()
-    const dialog = page.locator('[role="dialog"]')
+    const dialog = page.locator('dialog[open], [role="dialog"]')
     await expect(dialog).toBeVisible()
 
     // Missing the header column — only phone, name, and two body values.
@@ -200,7 +200,7 @@ test.describe('Campaign recipients — TEXT header parameter', () => {
     await page.waitForLoadState('networkidle')
 
     await page.getByRole('button', { name: /Add Recipients/i }).first().click()
-    const dialog = page.locator('[role="dialog"]')
+    const dialog = page.locator('dialog[open], [role="dialog"]')
     await expect(dialog).toBeVisible()
 
     await dialog.getByRole('tab', { name: /CSV/i }).click()

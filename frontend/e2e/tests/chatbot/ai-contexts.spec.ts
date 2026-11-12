@@ -88,9 +88,9 @@ test.describe('AI Contexts - Detail Page CRUD', () => {
     await page.goto('/chatbot/ai/new')
     await page.waitForLoadState('networkidle')
 
-    await expect(page.locator('input').first()).toBeVisible()
+    await expect(page.locator('main').locator('input').first()).toBeVisible()
     await expect(page.locator('button[role="combobox"]').first()).toBeVisible()
-    await expect(page.locator('textarea').first()).toBeVisible()
+    await expect(page.locator('main').locator('textarea').first()).toBeVisible()
     await expect(page.locator('button[role="switch"]').first()).toBeVisible()
   })
 
@@ -132,7 +132,7 @@ test.describe('AI Contexts - Detail Page CRUD', () => {
       expect(href, 'detail link must be present after API seed').toBeTruthy()
     }
 
-    const nameInput = page.locator('input').first()
+    const nameInput = page.locator('main').locator('input').first()
     expect(await nameInput.isDisabled(), 'admin should have write permission').toBe(false)
 
     const original = await nameInput.inputValue()

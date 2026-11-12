@@ -17,11 +17,11 @@ test.describe('Team Assignment Strategy for Calls', () => {
     await page.waitForLoadState('networkidle')
 
     // Fill name
-    await page.locator('input').first().fill(teamName)
+    await page.locator('main').locator('input').first().fill(teamName)
     await page.waitForTimeout(200)
 
     // Select round_robin strategy (default, but click to verify it works)
-    await page.locator('select').first().selectOption('round_robin')
+    await page.locator('main').locator('select').first().selectOption('round_robin')
 
     // Create
     const createBtn = page.getByRole('button', { name: /Create/i })
@@ -46,10 +46,10 @@ test.describe('Team Assignment Strategy for Calls', () => {
     await page.goto('/settings/teams/new')
     await page.waitForLoadState('networkidle')
 
-    await page.locator('input').first().fill(teamName)
+    await page.locator('main').locator('input').first().fill(teamName)
     await page.waitForTimeout(200)
 
-    await page.locator('select').first().selectOption('load_balanced')
+    await page.locator('main').locator('select').first().selectOption('load_balanced')
 
     const createBtn = page.getByRole('button', { name: /Create/i })
     await expect(createBtn).toBeVisible({ timeout: 5000 })
@@ -69,10 +69,10 @@ test.describe('Team Assignment Strategy for Calls', () => {
     await page.goto('/settings/teams/new')
     await page.waitForLoadState('networkidle')
 
-    await page.locator('input').first().fill(teamName)
+    await page.locator('main').locator('input').first().fill(teamName)
     await page.waitForTimeout(200)
 
-    await page.locator('select').first().selectOption('manual')
+    await page.locator('main').locator('select').first().selectOption('manual')
 
     const createBtn = page.getByRole('button', { name: /Create/i })
     await expect(createBtn).toBeVisible({ timeout: 5000 })
@@ -97,10 +97,10 @@ test.describe('Team per_agent_timeout_secs persists round-trip', () => {
     await page.goto('/settings/teams/new')
     await page.waitForLoadState('networkidle')
 
-    await page.locator('input').first().fill(teamName)
+    await page.locator('main').locator('input').first().fill(teamName)
 
     // The numeric per_agent_timeout_secs input — type="number".
-    const timeoutInput = page.locator('input[type="number"]').first()
+    const timeoutInput = page.locator('main').locator('input[type="number"]').first()
     await timeoutInput.fill('30')
     await page.waitForTimeout(200)
 
@@ -113,7 +113,7 @@ test.describe('Team per_agent_timeout_secs persists round-trip', () => {
     // Reload to confirm the value round-tripped from the server.
     await page.reload()
     await page.waitForLoadState('networkidle')
-    await expect(page.locator('input[type="number"]').first()).toHaveValue('30')
+    await expect(page.locator('main').locator('input[type="number"]').first()).toHaveValue('30')
   })
 })
 

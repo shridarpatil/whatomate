@@ -1009,6 +1009,7 @@
     "nameRequired": "El nombre es obligatorio"
   },
   "webhooks": {
+    "removeHeader": "Remove header",
     "title": "Webhooks",
     "subtitle": "Configurar webhooks para enviar eventos a sistemas externos",
     "addWebhook": "Agregar webhook",

@@ -33,7 +33,7 @@ test.describe('Teams - List View', () => {
     await page.goto('/settings/teams/new')
     await page.waitForLoadState('networkidle')
     expect(page.url()).toContain('/settings/teams/new')
-    await expect(page.locator('input').first()).toBeVisible()
+    await expect(page.locator('main').locator('input').first()).toBeVisible()
   })
 
   test('should load detail page from list', async ({ page }) => {
@@ -66,9 +66,9 @@ test.describe('Teams - Detail Page CRUD', () => {
     await page.goto('/settings/teams/new')
     await page.waitForLoadState('networkidle')
 
-    await expect(page.locator('input').first()).toBeVisible()
-    await expect(page.locator('textarea').first()).toBeVisible()
-    await expect(page.locator('select').first()).toBeVisible()
+    await expect(page.locator('main').locator('input').first()).toBeVisible()
+    await expect(page.locator('main').locator('textarea').first()).toBeVisible()
+    await expect(page.locator('main').locator('select').first()).toBeVisible()
     await expect(page.getByRole('switch').first()).toBeVisible()
   })
 
@@ -78,11 +78,11 @@ test.describe('Teams - Detail Page CRUD', () => {
     await page.goto('/settings/teams/new')
     await page.waitForLoadState('networkidle')
 
-    const input = page.locator('input').first()
+    const input = page.locator('main').locator('input').first()
     if (await input.isDisabled()) { test.skip(true, 'No write permission'); return }
 
     await input.fill(newTeam.name)
-    await page.locator('textarea').first().fill(newTeam.description)
+    await page.locator('main').locator('textarea').first().fill(newTeam.description)
     await page.waitForTimeout(300)
 
     const createBtn = page.getByRole('button', { name: /Create/i })
@@ -107,7 +107,7 @@ test.describe('Teams - Detail Page CRUD', () => {
     const href = await navigateToFirstItem(page)
     if (!href) { test.skip(true, 'No teams exist'); return }
 
-    const input = page.locator('input').first()
+    const input = page.locator('main').locator('input').first()
     if (await input.isDisabled()) { test.skip(true, 'No write permission'); return }
 
     const original = await input.inputValue()

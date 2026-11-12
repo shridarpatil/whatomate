@@ -124,7 +124,7 @@ export class ChatbotSettingsPage extends BasePage {
   }
 
   async fillOutOfHoursMessage(message: string) {
-    await this.page.locator('textarea').filter({ hasText: '' }).last().fill(message)
+    await this.page.locator('main').locator('textarea').filter({ hasText: '' }).last().fill(message)
   }
 
   async toggleAllowAutomatedOutsideHours() {
@@ -137,23 +137,23 @@ export class ChatbotSettingsPage extends BasePage {
   }
 
   async setSLAResponseMinutes(minutes: number) {
-    await this.page.locator('input[type="number"]').first().fill(String(minutes))
+    await this.page.locator('main').locator('input[type="number"]').first().fill(String(minutes))
   }
 
   async setSLAEscalationMinutes(minutes: number) {
-    await this.page.locator('input[type="number"]').nth(1).fill(String(minutes))
+    await this.page.locator('main').locator('input[type="number"]').nth(1).fill(String(minutes))
   }
 
   async setSLAResolutionMinutes(minutes: number) {
-    await this.page.locator('input[type="number"]').nth(2).fill(String(minutes))
+    await this.page.locator('main').locator('input[type="number"]').nth(2).fill(String(minutes))
   }
 
   async setSLAAutoCloseHours(hours: number) {
-    await this.page.locator('input[type="number"]').nth(3).fill(String(hours))
+    await this.page.locator('main').locator('input[type="number"]').nth(3).fill(String(hours))
   }
 
   async fillAutoCloseMessage(message: string) {
-    await this.page.locator('textarea').first().fill(message)
+    await this.page.locator('main').locator('textarea').first().fill(message)
   }
 
   async toggleClientReminder() {
@@ -176,15 +176,15 @@ export class ChatbotSettingsPage extends BasePage {
   }
 
   async fillAPIKey(key: string) {
-    await this.page.locator('input[type="password"]').fill(key)
+    await this.page.locator('main').locator('input[type="password"]').fill(key)
   }
 
   async setMaxTokens(tokens: number) {
-    await this.page.locator('input[type="number"]').first().fill(String(tokens))
+    await this.page.locator('main').locator('input[type="number"]').first().fill(String(tokens))
   }
 
   async fillSystemPrompt(prompt: string) {
-    await this.page.locator('textarea').fill(prompt)
+    await this.page.locator('main').locator('textarea').fill(prompt)
   }
 
   async saveSettings() {

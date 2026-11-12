@@ -1108,6 +1108,7 @@
     "errorLoadingApiKeys": "Falha ao carregar as chaves de API. Tente novamente."
   },
   "webhooks": {
+    "removeHeader": "Remove header",
     "title": "Webhooks",
     "subtitle": "Configure webhooks para enviar eventos para sistemas externos",
     "addWebhook": "Adicionar Webhook",

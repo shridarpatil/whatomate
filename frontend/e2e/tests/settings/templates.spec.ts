@@ -32,7 +32,7 @@ test.describe('Message Templates - List View', () => {
     await page.goto('/templates/new')
     await page.waitForLoadState('networkidle')
     expect(page.url()).toContain('/templates/new')
-    await expect(page.locator('input').first()).toBeVisible()
+    await expect(page.locator('main').locator('input').first()).toBeVisible()
   })
 
   test('should navigate to detail page when clicking template name', async ({ page }) => {
@@ -99,9 +99,9 @@ test.describe('Message Templates - Detail Page', () => {
     await page.waitForLoadState('networkidle')
 
     // Name input should be visible
-    await expect(page.locator('input').first()).toBeVisible()
+    await expect(page.locator('main').locator('input').first()).toBeVisible()
     // Body textarea should be visible
-    await expect(page.locator('textarea').first()).toBeVisible()
+    await expect(page.locator('main').locator('textarea').first()).toBeVisible()
     // Account select should be visible
     await expect(page.locator('button[role="combobox"]').first()).toBeVisible()
   })
@@ -189,7 +189,7 @@ test.describe('Message Templates - Detail Page', () => {
     await page.waitForTimeout(500)
 
     // Wait for the input to be visible after expanding
-    const input = page.locator('input:visible').first()
+    const input = page.locator('main').locator('input:visible').first()
     await input.waitFor({ state: 'visible', timeout: 5000 })
     if (await input.isDisabled()) { test.skip(true, 'No write permission'); return }
 
@@ -207,7 +207,7 @@ test.describe('Message Templates - Detail Page', () => {
       await page.waitForTimeout(500)
 
       // Revert
-      const inputAfterSave = page.locator('input:visible').first()
+      const inputAfterSave = page.locator('main').locator('input:visible').first()
       await inputAfterSave.waitFor({ state: 'visible', timeout: 5000 })
       await inputAfterSave.fill(original)
       await page.waitForTimeout(300)
@@ -287,7 +287,7 @@ test.describe('Message Templates - Detail Page Form', () => {
     await page.goto('/templates/new')
     await page.waitForLoadState('networkidle')
 
-    await expect(page.locator('textarea').first()).toBeVisible()
+    await expect(page.locator('main').locator('textarea').first()).toBeVisible()
   })
 
   test('should have add button option on create page', async ({ page }) => {
@@ -302,7 +302,7 @@ test.describe('Message Templates - Detail Page Form', () => {
     await page.waitForLoadState('networkidle')
 
     // Footer textarea is the second textarea
-    const textareas = page.locator('textarea')
+    const textareas = page.locator('main').locator('textarea')
     expect(await textareas.count()).toBeGreaterThanOrEqual(2)
   })
 })

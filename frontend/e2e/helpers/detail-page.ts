@@ -13,7 +13,7 @@ export async function expectActivityLogVisible(page: Page) {
 }
 
 export async function expectSaveButtonOnChange(page: Page) {
-  const input = page.locator('input').first()
+  const input = page.locator('main').locator('input').first()
   const original = await input.inputValue()
   await input.fill(original + '-test')
   await page.waitForTimeout(300)

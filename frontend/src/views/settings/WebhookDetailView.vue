@@ -271,7 +271,7 @@ onMounted(async () => {
             <div v-for="(value, key) in form.headers" :key="key" class="hstack gap-2">
               <span class="badge" data-variant="secondary">{{ key }}</span>
               <span class="truncate flex-1">{{ value }}</span>
-              <IconButton v-if="canWrite" :icon="Trash2" :label="$t('common.delete')" size="icon" @click="removeHeader(key as string)" />
+              <IconButton v-if="canWrite" :icon="Trash2" :label="$t('webhooks.removeHeader')" size="icon" @click="removeHeader(key as string)" />
             </div>
             <div v-if="canWrite" class="hstack gap-2">
               <input v-model="newHeaderKey" class="flex-1" :placeholder="$t('webhooks.headerName')" :aria-label="$t('webhooks.headerName')" />

@@ -24,7 +24,7 @@ export class AgentTransfersPage extends BasePage {
     this.allActiveTab = page.getByRole('tab', { name: /All Active/i })
     this.historyTab = page.getByRole('tab', { name: /History/i })
     this.teamFilterSelect = page.locator('button[role="combobox"]')
-    this.assignDialog = page.locator('[role="dialog"][data-state="open"]')
+    this.assignDialog = page.locator('dialog[open], [role="dialog"][data-state="open"]')
     this.loadMoreButton = page.getByRole('button', { name: /Load More/i })
   }
 

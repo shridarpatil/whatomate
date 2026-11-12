@@ -260,7 +260,7 @@ export class CannedResponsesPage extends TableSettingsPage {
   constructor(page: Page) {
     super(page, { headingText: 'Canned Responses', addButtonText: 'Add Response' })
     // Category filter is the first native select in the card header (search is an input)
-    this.categoryFilter = page.locator('select').first()
+    this.categoryFilter = page.locator('main').locator('select').first()
   }
 
   async goto() {
@@ -469,7 +469,7 @@ export class ContactsPage extends TableSettingsPage {
   constructor(page: Page) {
     super(page, { headingText: 'Contacts', addButtonText: 'Add Contact' })
     this.importExportButton = page.getByRole('button', { name: /Import.*Export/i })
-    this.importExportDialog = page.locator('[role="dialog"][data-state="open"]')
+    this.importExportDialog = page.locator('dialog[open], [role="dialog"][data-state="open"]')
   }
 
   async goto() {

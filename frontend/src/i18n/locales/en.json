@@ -1108,6 +1108,7 @@
     "errorLoadingApiKeys": "Failed to load API keys. Please try again."
   },
   "webhooks": {
+    "removeHeader": "Remove header",
     "title": "Webhooks",
     "subtitle": "Configure webhooks to send events to external systems",
     "addWebhook": "Add Webhook",

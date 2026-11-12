@@ -880,6 +880,7 @@
     "errorLoadingApiKeys": "فشل تحميل مفاتيح API. يرجى المحاولة مرة أخرى."
   },
   "webhooks": {
+    "removeHeader": "Remove header",
     "title": "ويب هوك (Webhooks)",
     "subtitle": "تكوين الويب هوك لإرسال الأحداث إلى الأنظمة الخارجية",
     "addWebhook": "إضافة ويب هوك",

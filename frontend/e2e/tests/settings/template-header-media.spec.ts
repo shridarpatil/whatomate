@@ -67,7 +67,7 @@ test.describe('Template media header — issue #355', () => {
       await displayInput.fill(`Edited ${Date.now()}`)
     } else {
       // Fallback: edit the first writable input to dirty the form.
-      const firstInput = page.locator('input:visible').first()
+      const firstInput = page.locator('main').locator('input:visible').first()
       const original = await firstInput.inputValue()
       await firstInput.fill(`${original}_e`)
     }
@@ -96,7 +96,7 @@ test.describe('Template media header — issue #355', () => {
     // Fill the minimum required fields: name, account, body. Leave the IMAGE
     // header sample unset to trigger the new save guard.
     const name = `tpl_no_media_${Date.now()}`
-    const nameInput = page.locator('input').first()
+    const nameInput = page.locator('main').locator('input').first()
     await nameInput.fill(name)
 
     // Select the WhatsApp account combobox (first combobox on the page).
@@ -105,7 +105,7 @@ test.describe('Template media header — issue #355', () => {
     await page.getByRole('option', { name: accountName }).first().click()
 
     // Body content.
-    await page.locator('textarea').first().fill('Hello no-media')
+    await page.locator('main').locator('textarea').first().fill('Hello no-media')
 
     // Switch header type to IMAGE.
     const headerCombo = page.locator('button[role="combobox"]').filter({ hasText: /Header|TEXT|None|Type/i }).first()

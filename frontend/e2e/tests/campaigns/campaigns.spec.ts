@@ -30,13 +30,13 @@ test.describe('Campaigns Management', () => {
     await page.goto('/campaigns/new')
     await page.waitForLoadState('networkidle')
     expect(page.url()).toContain('/campaigns/new')
-    await expect(page.locator('input').first()).toBeVisible()
+    await expect(page.locator('main').locator('input').first()).toBeVisible()
   })
 
   test('should show required fields on create page', async ({ page }) => {
     await page.goto('/campaigns/new')
     await page.waitForLoadState('networkidle')
-    await expect(page.locator('input').first()).toBeVisible()
+    await expect(page.locator('main').locator('input').first()).toBeVisible()
     // Account and Template selects
     const selects = page.locator('button[role="combobox"]')
     expect(await selects.count()).toBeGreaterThanOrEqual(1)
@@ -160,7 +160,7 @@ test.describe('Campaign Detail Page CRUD', () => {
     await page.waitForLoadState('networkidle')
 
     // Name input
-    await expect(page.locator('input').first()).toBeVisible()
+    await expect(page.locator('main').locator('input').first()).toBeVisible()
     // Account and Template selects
     const selects = page.locator('button[role="combobox"]')
     expect(await selects.count()).toBeGreaterThanOrEqual(1)
@@ -256,7 +256,7 @@ test.describe('Campaign Detail Page CRUD', () => {
     await page.goto(href)
     await page.waitForLoadState('networkidle')
 
-    const nameInput = page.locator('input').first()
+    const nameInput = page.locator('main').locator('input').first()
     if (await nameInput.isDisabled()) return
 
     const original = await nameInput.inputValue()
@@ -323,7 +323,7 @@ test.describe('Campaign Detail Page CRUD', () => {
     const addBtn = page.getByRole('button', { name: /Add/i }).first()
     if (await addBtn.isVisible({ timeout: 3000 }).catch(() => false)) {
       await addBtn.click()
-      const dialog = page.locator('[role="dialog"]')
+      const dialog = page.locator('dialog[open], [role="dialog"]')
       await expect(dialog).toBeVisible({ timeout: 5000 })
       // Should have Manual Entry and CSV tabs
       await expect(dialog.getByText('Manual Entry')).toBeVisible()
