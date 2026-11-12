@@ -89,26 +89,16 @@
     color: var(--muted-foreground);
     font-weight: var(--font-normal);
   }
-  /* In-bubble buttons / list options / CTA & call pills: solid card pills so
-     they read as tappable options on any bubble (text keeps its normal style). */
-  .card[data-bubble] :is([data-interactive-buttons] > :is(.badge, .button), a.button.outline, .badge.outline) {
-    display: flex;
-    justify-content: center;
-    padding: var(--space-2) var(--space-3);
+  /* In-bubble buttons / list options and reply quotes use Oat's own markup
+     (secondary badges/buttons, <blockquote>); only Oat's grey is swapped for
+     the bubble-friendly card fill and the brand quote bar. */
+  .card[data-bubble] :is(.badge, .button)[data-variant="secondary"] {
     background-color: var(--card);
     border: 1px solid var(--border);
-    border-radius: var(--radius-medium);
-    color: var(--foreground);
-    white-space: normal;
   }
-  /* Quoted message inside a reply: tinted block with a brand bar, not a box. */
-  .card[data-bubble] [data-reply-preview] {
-    justify-content: flex-start;
-    background-color: color-mix(in oklab, var(--foreground) 6%, transparent);
-    border: 0;
-    border-inline-start: 3px solid var(--primary);
-    border-radius: var(--radius-small);
-    color: var(--foreground);
+  .card[data-bubble] [data-reply-preview] blockquote {
+    margin: 0;
+    border-inline-start-color: var(--primary);
   }
 
   /* Flow node colours (approved exception, flow editors only): one accent per
