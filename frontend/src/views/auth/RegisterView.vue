@@ -64,7 +64,7 @@ const handleRegister = async () => {
   <main class="flex items-center justify-center h-screen scroll-y p-4">
     <div class="auth-panel">
         <article class="card">
-          <header class="vstack items-center align-center">
+          <header class="vstack gap-2 items-center align-center mb-6">
             <MessageSquare :size="32" />
             <h2>{{ $t('auth.createAccount') }}</h2>
             <p class="text-light">{{ $t('auth.createAccountDesc') }}</p>

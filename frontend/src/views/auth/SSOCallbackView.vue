@@ -45,7 +45,7 @@ onMounted(async () => {
   <main class="flex items-center justify-center h-screen scroll-y p-4">
     <div class="auth-panel">
         <article class="card">
-          <header class="vstack items-center align-center">
+          <header class="vstack gap-2 items-center align-center mb-6">
             <div v-if="status === 'loading'" role="status" aria-busy="true" data-spinner="large" :aria-label="$t('auth.ssoLoading')"></div>
             <CheckCircle v-else-if="status === 'success'" :size="32" />
             <AlertCircle v-else :size="32" />
@@ -60,7 +60,7 @@ onMounted(async () => {
               <template v-else>{{ errorMessage }}</template>
             </p>
           </header>
-          <footer v-if="status === 'error'" class="align-center">
+          <footer v-if="status === 'error'" class="align-center mt-6">
             <RouterLink to="/login">{{ $t('auth.returnToLogin') }}</RouterLink>
           </footer>
         </article>

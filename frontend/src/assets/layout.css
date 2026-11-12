@@ -24,6 +24,8 @@
   [data-sidebar-layout] > main { padding-block-start: 0; }
   /* Sign-in / register / SSO card: a narrow centred panel. */
   .auth-panel { width: min(100%, 24rem); }
+  /* Drop Oat's article-style heading/paragraph margins; spacing comes from gaps. */
+  .auth-panel :is(h1, h2, h3, p) { margin: 0; }
   /* Oat makes form controls full width; opt out for inline toolbar controls. */
   .w-auto { width: auto; }
   .truncate { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }

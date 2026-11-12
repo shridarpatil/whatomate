@@ -82,7 +82,7 @@ const initiateSSO = (provider: string) => {
   <main class="flex items-center justify-center h-screen scroll-y p-4">
     <div class="auth-panel">
         <article class="card">
-          <header class="vstack items-center align-center">
+          <header class="vstack gap-2 items-center align-center mb-6">
             <MessageSquare :size="32" />
             <h2>{{ $t('auth.welcomeTitle') }}</h2>
             <p class="text-light">{{ $t('auth.welcomeSubtitle') }}</p>
@@ -134,7 +134,7 @@ const initiateSSO = (provider: string) => {
             </button>
           </div>
 
-          <footer class="align-center">
+          <footer class="align-center mt-6">
             <p class="text-light">
               {{ $t('auth.noAccount') }}
               <RouterLink to="/register">{{ $t('auth.signUp') }}</RouterLink>
