@@ -13,4 +13,7 @@
   .relative { position: relative; }
   .absolute-fill { position: absolute; inset: 0; }
   .truncate { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+  /* Keep top-placed toasts clear of the app header (Oat's default is --space-4). */
+  .toast-container[data-placement^="top"] { top: var(--space-18); }
 }
