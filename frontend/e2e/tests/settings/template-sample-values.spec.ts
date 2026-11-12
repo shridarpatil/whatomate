@@ -88,11 +88,9 @@ test.describe('Template Sample Values', () => {
   test('should show header variables when header type is TEXT', async ({ page }) => {
     await gotoNewTemplate(page)
 
-    // Select TEXT header type — find the select within the Header Type field
-    const headerTypeField = page.locator('div.space-y-1\\.5').filter({ hasText: 'Header Type' })
-    const headerTypeSelect = headerTypeField.locator('button[role="combobox"]')
-    await headerTypeSelect.click()
-    await page.locator('[role="option"]').filter({ hasText: 'Text' }).click()
+    // Select TEXT header type — find the native select within the Header Type field
+    const headerTypeSelect = page.locator('main label').filter({ hasText: 'Header Type' }).locator('select')
+    await headerTypeSelect.selectOption({ label: 'Text' })
 
     const headerContentInput = page.locator('#header-content')
     await headerContentInput.waitFor({ state: 'visible', timeout: 5000 })

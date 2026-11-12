@@ -61,7 +61,7 @@ test.describe('Message Templates - List View', () => {
       test.skip(true, 'No templates in list')
       return
     }
-    const deleteBtn = firstRow.locator('button.text-destructive, button:has(svg.text-destructive)').first()
+    const deleteBtn = firstRow.getByRole('button', { name: /delete/i }).first()
     if (!(await deleteBtn.isVisible({ timeout: 3000 }).catch(() => false))) {
       test.skip(true, 'No delete button found')
       return
@@ -82,8 +82,8 @@ test.describe('Message Templates - Sync', () => {
   })
 
   test('should have sync button disabled when no account selected', async () => {
-    const allAccountsSelected = await templatesPage.accountSelect.textContent()
-    if (allAccountsSelected?.includes('All')) {
+    const selectedAccount = await templatesPage.accountSelect.inputValue()
+    if (selectedAccount === 'all') {
       await expect(templatesPage.syncButton).toBeDisabled()
     }
   })
@@ -103,7 +103,7 @@ test.describe('Message Templates - Detail Page', () => {
     // Body textarea should be visible
     await expect(page.locator('main').locator('textarea').first()).toBeVisible()
     // Account select should be visible
-    await expect(page.locator('button[role="combobox"]').first()).toBeVisible()
+    await expect(page.locator('main select').first()).toBeVisible()
   })
 
   test('should show metadata on existing template', async ({ page }) => {
@@ -261,7 +261,7 @@ test.describe('Message Templates - Detail Page Form', () => {
     await page.waitForLoadState('networkidle')
 
     // Language select should be present
-    const selects = page.locator('button[role="combobox"]')
+    const selects = page.locator('main select')
     expect(await selects.count()).toBeGreaterThanOrEqual(1)
   })
 
@@ -269,8 +269,8 @@ test.describe('Message Templates - Detail Page Form', () => {
     await page.goto('/templates/new')
     await page.waitForLoadState('networkidle')
 
-    // Category select (multiple comboboxes on the page)
-    const selects = page.locator('button[role="combobox"]')
+    // Category select (multiple selects on the page)
+    const selects = page.locator('main select')
     expect(await selects.count()).toBeGreaterThanOrEqual(1)
   })
 
@@ -278,8 +278,8 @@ test.describe('Message Templates - Detail Page Form', () => {
     await page.goto('/templates/new')
     await page.waitForLoadState('networkidle')
 
-    // Header type select is one of the comboboxes
-    const selects = page.locator('button[role="combobox"]')
+    // Header type select is one of the selects
+    const selects = page.locator('main select')
     expect(await selects.count()).toBeGreaterThanOrEqual(1)
   })
 

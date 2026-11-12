@@ -16,10 +16,9 @@ test.describe('Campaigns Management', () => {
     await expect(campaignsPage.createButton).toBeVisible()
   })
 
-  test('should display status filter', async ({ page }) => {
+  test('should display status filter', async () => {
     await expect(campaignsPage.statusFilter).toBeVisible()
-    await campaignsPage.statusFilter.click()
-    await expect(page.locator('[role="option"]').first()).toBeVisible()
+    await expect(campaignsPage.statusFilter.locator('option').first()).toBeAttached()
   })
 
   test('should display time range filter', async () => {
@@ -38,7 +37,7 @@ test.describe('Campaigns Management', () => {
     await page.waitForLoadState('networkidle')
     await expect(page.locator('main').locator('input').first()).toBeVisible()
     // Account and Template selects
-    const selects = page.locator('button[role="combobox"]')
+    const selects = page.locator('main select')
     expect(await selects.count()).toBeGreaterThanOrEqual(1)
   })
 
@@ -55,12 +54,8 @@ test.describe('Campaigns Management', () => {
   })
 
   test('should filter campaigns by status', async ({ page }) => {
-    await campaignsPage.statusFilter.click()
-    const completedOption = page.locator('[role="option"]').filter({ hasText: /Completed/i })
-    if (await completedOption.isVisible()) {
-      await completedOption.click()
-      await page.waitForLoadState('networkidle')
-    }
+    await campaignsPage.statusFilter.selectOption('completed')
+    await page.waitForLoadState('networkidle')
   })
 })
 
@@ -162,7 +157,7 @@ test.describe('Campaign Detail Page CRUD', () => {
     // Name input
     await expect(page.locator('main').locator('input').first()).toBeVisible()
     // Account and Template selects
-    const selects = page.locator('button[role="combobox"]')
+    const selects = page.locator('main select')
     expect(await selects.count()).toBeGreaterThanOrEqual(1)
   })
 
@@ -326,8 +321,8 @@ test.describe('Campaign Detail Page CRUD', () => {
       const dialog = page.locator('dialog[open], [role="dialog"]')
       await expect(dialog).toBeVisible({ timeout: 5000 })
       // Should have Manual Entry and CSV tabs
-      await expect(dialog.getByText('Manual Entry')).toBeVisible()
-      await expect(dialog.getByText('CSV')).toBeVisible()
+      await expect(dialog.getByRole('tab', { name: /Manual Entry/i })).toBeVisible()
+      await expect(dialog.getByRole('tab', { name: /CSV/i })).toBeVisible()
       // Close
       await page.keyboard.press('Escape')
     }

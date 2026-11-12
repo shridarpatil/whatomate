@@ -12,7 +12,11 @@
   .sticky-top { position: sticky; top: 0; z-index: 1; }
   .relative { position: relative; }
   .fixed-bottom-end { position: fixed; inset-block-end: var(--space-6); inset-inline-end: var(--space-6); z-index: 40; }
+  .media-preview { display: block; max-width: 100%; max-height: 12rem; object-fit: contain; }
+  .modal-wide { width: min(100% - 2rem, 80rem); }
+  .h-builder { height: 60dvh; }
   .absolute-fill { position: absolute; inset: 0; }
+  .pre-wrap { white-space: pre-wrap; }
   .truncate { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
   /* Visually hidden until focused. */

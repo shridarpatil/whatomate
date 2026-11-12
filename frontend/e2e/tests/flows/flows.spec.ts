@@ -36,7 +36,7 @@ test.describe('WhatsApp Flows Management', () => {
     await flowsPage.openCreateDialog()
     const dialog = flowsPage.createDialog
     await expect(dialog.locator('label').filter({ hasText: /Account/i }).first()).toBeVisible()
-    await expect(dialog.locator('button[role="combobox"]').first()).toBeVisible()
+    await expect(dialog.locator('select').first()).toBeVisible()
   })
 
   test('should have category selector in create dialog', async () => {
@@ -51,10 +51,9 @@ test.describe('WhatsApp Flows Management', () => {
     await flowsPage.expectDialogHidden()
   })
 
-  test('should filter flows by account', async ({ page }) => {
+  test('should filter flows by account', async () => {
     await expect(flowsPage.accountFilter).toBeVisible()
-    await flowsPage.accountFilter.click()
-    await expect(page.locator('[role="option"]').filter({ hasText: /All Accounts/i })).toBeVisible()
+    await expect(flowsPage.accountFilter.locator('option').filter({ hasText: /All Accounts/i })).toHaveCount(1)
   })
 })
 

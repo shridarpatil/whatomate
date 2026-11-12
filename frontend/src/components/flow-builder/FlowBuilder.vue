@@ -1,20 +1,6 @@
 <script setup lang="ts">
 import { ref, computed, watch } from 'vue'
-import { Card, CardHeader, CardTitle } from '@/components/ui/card'
-import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
-import { Label } from '@/components/ui/label'
-import { Badge } from '@/components/ui/badge'
-import { ScrollArea } from '@/components/ui/scroll-area'
-import { Separator } from '@/components/ui/separator'
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select'
-import { Switch } from '@/components/ui/switch'
+import { useI18n } from 'vue-i18n'
 import {
   Plus,
   Trash2,
@@ -27,23 +13,27 @@ import {
   ChevronDown,
   Image,
   ArrowRight,
+  ArrowUp,
+  ArrowDown,
   Settings2,
   Layers
 } from '@/lib/icons'
 
+const { t } = useI18n()
+
 // Component types available in WhatsApp Flows
 const componentTypes = [
-  { type: 'TextHeading', label: 'Heading', icon: Type },
-  { type: 'TextSubheading', label: 'Subheading', icon: Type },
-  { type: 'TextBody', label: 'Text', icon: Type },
-  { type: 'TextInput', label: 'Text Input', icon: TextCursorInput },
-  { type: 'TextArea', label: 'Text Area', icon: TextCursorInput },
-  { type: 'Dropdown', label: 'Dropdown', icon: ChevronDown },
-  { type: 'RadioButtonsGroup', label: 'Radio Buttons', icon: CircleDot },
-  { type: 'CheckboxGroup', label: 'Checkboxes', icon: CheckSquare },
-  { type: 'DatePicker', label: 'Date Picker', icon: Calendar },
-  { type: 'Image', label: 'Image', icon: Image },
-  { type: 'Footer', label: 'Footer Button', icon: ArrowRight },
+  { type: 'TextHeading', labelKey: 'waFlowBuilder.types.heading', icon: Type },
+  { type: 'TextSubheading', labelKey: 'waFlowBuilder.types.subheading', icon: Type },
+  { type: 'TextBody', labelKey: 'waFlowBuilder.types.text', icon: Type },
+  { type: 'TextInput', labelKey: 'waFlowBuilder.types.textInput', icon: TextCursorInput },
+  { type: 'TextArea', labelKey: 'waFlowBuilder.types.textArea', icon: TextCursorInput },
+  { type: 'Dropdown', labelKey: 'waFlowBuilder.types.dropdown', icon: ChevronDown },
+  { type: 'RadioButtonsGroup', labelKey: 'waFlowBuilder.types.radioButtons', icon: CircleDot },
+  { type: 'CheckboxGroup', labelKey: 'waFlowBuilder.types.checkboxes', icon: CheckSquare },
+  { type: 'DatePicker', labelKey: 'waFlowBuilder.types.datePicker', icon: Calendar },
+  { type: 'Image', labelKey: 'waFlowBuilder.types.image', icon: Image },
+  { type: 'Footer', labelKey: 'waFlowBuilder.types.footerButton', icon: ArrowRight },
 ]
 
 interface FlowComponent {
@@ -297,7 +287,7 @@ function updateOption(index: number, key: string, value: string) {
 
 function getComponentLabel(comp: FlowComponent): string {
   const typeInfo = componentTypes.find(t => t.type === comp.type)
-  return typeInfo?.label || comp.type
+  return typeInfo ? t(typeInfo.labelKey) : comp.type
 }
 
 function getComponentIcon(type: string) {
@@ -348,419 +338,351 @@ defineExpose({
 </script>
 
 <template>
-  <div class="flex h-full gap-4">
+  <div class="row h-full">
     <!-- Screens Panel -->
-    <Card class="w-64 flex-shrink-0 flex flex-col overflow-hidden">
-      <CardHeader class="py-3 px-4">
-        <div class="flex items-center justify-between">
-          <CardTitle class="text-sm font-medium flex items-center gap-2">
-            <Layers class="h-4 w-4" />
-            Screens
-          </CardTitle>
-          <Button variant="ghost" size="icon" class="h-7 w-7" @click="addScreen">
-            <Plus class="h-4 w-4" />
-          </Button>
-        </div>
-      </CardHeader>
-      <Separator />
-      <ScrollArea class="flex-1">
-        <div class="p-2 space-y-1">
-          <div
-            v-for="(screen, index) in screens"
-            :key="screen.id"
-            :class="[
-              'flex items-center gap-2 p-2 rounded-md cursor-pointer text-sm',
-              selectedScreenIndex === index ? 'bg-primary text-primary-foreground light:bg-primary light:text-primary-foreground' : 'hover:bg-muted'
-            ]"
+    <article class="card col-3 flex flex-col overflow-hidden min-h-0">
+      <header class="hstack justify-between">
+        <h3 class="hstack gap-2">
+          <Layers :size="16" />
+          {{ t('waFlowBuilder.screens') }}
+        </h3>
+        <button type="button" class="ghost small icon" :title="t('waFlowBuilder.addScreen')" :aria-label="t('waFlowBuilder.addScreen')" @click="addScreen">
+          <Plus :size="16" />
+        </button>
+      </header>
+      <div class="scroll-y flex-1 vstack gap-1">
+        <div v-for="(screen, index) in screens" :key="screen.id" class="hstack gap-1">
+          <button
+            type="button"
+            class="flex-1 truncate"
+            :class="{ ghost: selectedScreenIndex !== index }"
+            :aria-current="selectedScreenIndex === index ? 'true' : undefined"
             @click="selectScreen(index)"
           >
-            <GripVertical class="h-4 w-4 opacity-50" />
-            <span class="flex-1 truncate">{{ screen.title }}</span>
-            <Button
-              v-if="screens.length > 1"
-              variant="ghost"
-              size="icon"
-              class="h-6 w-6 opacity-50 hover:opacity-100"
-              @click.stop="removeScreen(index)"
-            >
-              <Trash2 class="h-3 w-3" />
-            </Button>
-          </div>
-          <div
-            v-if="screens.length === 0"
-            class="p-4 text-center text-sm text-muted-foreground"
+            <GripVertical :size="16" />
+            {{ screen.title }}
+          </button>
+          <button
+            v-if="screens.length > 1"
+            type="button"
+            class="ghost small icon"
+            :title="t('waFlowBuilder.removeScreen')"
+            :aria-label="t('waFlowBuilder.removeScreen')"
+            @click="removeScreen(index)"
           >
-            No screens yet
-          </div>
+            <Trash2 :size="14" />
+          </button>
         </div>
-      </ScrollArea>
-    </Card>
+        <p v-if="screens.length === 0" class="align-center text-light">
+          {{ t('waFlowBuilder.noScreens') }}
+        </p>
+      </div>
+    </article>
 
     <!-- Screen Editor -->
-    <Card class="flex-1 flex flex-col overflow-hidden">
-      <CardHeader class="py-3 px-4 flex-shrink-0">
-        <div class="flex items-center justify-between">
-          <div v-if="selectedScreen" class="flex items-center gap-2">
-            <Input
-              v-model="selectedScreen.title"
-              class="h-8 w-48 text-sm font-medium"
-              placeholder="Screen Title"
-            />
-            <Badge variant="outline">{{ selectedScreen.id }}</Badge>
-          </div>
-          <CardTitle v-else class="text-sm font-medium">Select a screen</CardTitle>
+    <article class="card col-6 flex flex-col overflow-hidden min-h-0">
+      <header>
+        <div v-if="selectedScreen" class="hstack gap-2">
+          <input
+            v-model="selectedScreen.title"
+            :aria-label="t('waFlowBuilder.screenTitle')"
+            :placeholder="t('waFlowBuilder.screenTitle')"
+          />
+          <span class="badge outline">{{ selectedScreen.id }}</span>
         </div>
-      </CardHeader>
-      <Separator />
+        <h3 v-else>{{ t('waFlowBuilder.selectScreen') }}</h3>
+      </header>
 
-      <div v-if="selectedScreen" class="flex-1 flex overflow-hidden">
+      <div v-if="selectedScreen" class="row flex-1 min-h-0">
         <!-- Component Palette -->
-        <ScrollArea class="w-48 border-r flex-shrink-0">
-          <div class="p-3">
-            <p class="text-xs font-medium text-muted-foreground mb-2">Add Components</p>
-            <div class="grid grid-cols-2 gap-1">
-              <Button
-                v-for="comp in componentTypes"
-                :key="comp.type"
-                variant="outline"
-                size="sm"
-                class="h-auto py-2 flex-col gap-1 text-xs"
-                @click="addComponent(comp.type)"
-              >
-                <component :is="comp.icon" class="h-4 w-4" />
-                <span class="text-[10px]">{{ comp.label }}</span>
-              </Button>
-            </div>
+        <div class="col-4 scroll-y">
+          <p class="text-light mb-2"><small>{{ t('waFlowBuilder.addComponents') }}</small></p>
+          <div class="row">
+            <button
+              v-for="comp in componentTypes"
+              :key="comp.type"
+              type="button"
+              class="outline small col-6 vstack"
+              @click="addComponent(comp.type)"
+            >
+              <component :is="comp.icon" :size="16" />
+              <small>{{ t(comp.labelKey) }}</small>
+            </button>
           </div>
-        </ScrollArea>
+        </div>
 
         <!-- Screen Preview -->
-        <ScrollArea class="flex-1">
-          <div class="p-4">
-            <div class="max-w-sm mx-auto bg-muted/30 rounded-lg p-4">
-            <h3 class="text-lg font-semibold mb-4">{{ selectedScreen.title }}</h3>
-            <div class="space-y-3">
-              <div
-                v-for="(comp, index) in selectedScreen.layout.children"
-                :key="comp.id"
-                :class="[
-                  'p-3 rounded-md border-2 cursor-pointer transition-colors',
-                  selectedComponentIndex === index
-                    ? 'border-primary bg-primary/5'
-                    : 'border-transparent hover:border-muted-foreground/20'
-                ]"
-                @click="selectComponent(index)"
-              >
-                <!-- Text Components -->
-                <template v-if="comp.type === 'TextHeading'">
-                  <h2 class="text-xl font-bold">{{ comp.text }}</h2>
-                </template>
-                <template v-else-if="comp.type === 'TextSubheading'">
-                  <h3 class="text-lg font-semibold">{{ comp.text }}</h3>
-                </template>
-                <template v-else-if="comp.type === 'TextBody'">
-                  <p class="text-sm">{{ comp.text }}</p>
-                </template>
+        <div class="col-8 scroll-y">
+          <h3 class="mb-4">{{ selectedScreen.title }}</h3>
+          <div class="vstack gap-2">
+            <div
+              v-for="(comp, index) in selectedScreen.layout.children"
+              :key="comp.id"
+              tabindex="0"
+              :class="selectedComponentIndex === index ? 'card' : 'p-4'"
+              :aria-current="selectedComponentIndex === index ? 'true' : undefined"
+              @click="selectComponent(index)"
+              @keydown.enter.self="selectComponent(index)"
+            >
+              <!-- Text Components -->
+              <template v-if="comp.type === 'TextHeading'">
+                <h2>{{ comp.text }}</h2>
+              </template>
+              <template v-else-if="comp.type === 'TextSubheading'">
+                <h3>{{ comp.text }}</h3>
+              </template>
+              <template v-else-if="comp.type === 'TextBody'">
+                <p>{{ comp.text }}</p>
+              </template>
 
-                <!-- Input Components -->
-                <template v-else-if="comp.type === 'TextInput' || comp.type === 'TextArea'">
-                  <Label class="text-sm">
-                    {{ comp.label }}
-                    <span v-if="comp.required" class="text-destructive">*</span>
-                  </Label>
-                  <Input
-                    v-if="comp.type === 'TextInput'"
-                    disabled
-                    :placeholder="comp.label"
-                    class="mt-1"
-                  />
-                  <textarea
-                    v-else
-                    disabled
-                    :placeholder="comp.label"
-                    class="mt-1 w-full p-2 rounded-md border bg-background text-sm"
-                    rows="3"
-                  />
-                </template>
+              <!-- Input Components -->
+              <template v-else-if="comp.type === 'TextInput' || comp.type === 'TextArea'">
+                <label data-field>
+                  <span>{{ comp.label }}<span v-if="comp.required"> *</span></span>
+                  <input v-if="comp.type === 'TextInput'" disabled :placeholder="comp.label" />
+                  <textarea v-else disabled :placeholder="comp.label" rows="3" />
+                </label>
+              </template>
 
-                <!-- Dropdown -->
-                <template v-else-if="comp.type === 'Dropdown'">
-                  <Label class="text-sm">
-                    {{ comp.label }}
-                    <span v-if="comp.required" class="text-destructive">*</span>
-                  </Label>
-                  <div class="mt-1 p-2 rounded-md border bg-background text-sm flex items-center justify-between">
-                    <span class="text-muted-foreground">Select...</span>
-                    <ChevronDown class="h-4 w-4" />
-                  </div>
-                </template>
+              <!-- Dropdown -->
+              <template v-else-if="comp.type === 'Dropdown'">
+                <label data-field>
+                  <span>{{ comp.label }}<span v-if="comp.required"> *</span></span>
+                  <select disabled>
+                    <option>{{ t('waFlowBuilder.selectPlaceholder') }}</option>
+                  </select>
+                </label>
+              </template>
 
-                <!-- Radio Buttons -->
-                <template v-else-if="comp.type === 'RadioButtonsGroup'">
-                  <Label class="text-sm mb-2 block">
-                    {{ comp.label }}
-                    <span v-if="comp.required" class="text-destructive">*</span>
-                  </Label>
-                  <div class="space-y-2">
-                    <div
-                      v-for="opt in comp['data-source']"
-                      :key="opt.id"
-                      class="flex items-center gap-2"
-                    >
-                      <div class="h-4 w-4 rounded-full border-2" />
-                      <span class="text-sm">{{ opt.title }}</span>
-                    </div>
-                  </div>
-                </template>
+              <!-- Radio Buttons -->
+              <template v-else-if="comp.type === 'RadioButtonsGroup'">
+                <fieldset>
+                  <legend>{{ comp.label }}<span v-if="comp.required"> *</span></legend>
+                  <label v-for="opt in comp['data-source']" :key="opt.id">
+                    <input type="radio" disabled />
+                    {{ opt.title }}
+                  </label>
+                </fieldset>
+              </template>
 
-                <!-- Checkboxes -->
-                <template v-else-if="comp.type === 'CheckboxGroup'">
-                  <Label class="text-sm mb-2 block">
-                    {{ comp.label }}
-                    <span v-if="comp.required" class="text-destructive">*</span>
-                  </Label>
-                  <div class="space-y-2">
-                    <div
-                      v-for="opt in comp['data-source']"
-                      :key="opt.id"
-                      class="flex items-center gap-2"
-                    >
-                      <div class="h-4 w-4 rounded border" />
-                      <span class="text-sm">{{ opt.title }}</span>
-                    </div>
-                  </div>
-                </template>
+              <!-- Checkboxes -->
+              <template v-else-if="comp.type === 'CheckboxGroup'">
+                <fieldset>
+                  <legend>{{ comp.label }}<span v-if="comp.required"> *</span></legend>
+                  <label v-for="opt in comp['data-source']" :key="opt.id">
+                    <input type="checkbox" disabled />
+                    {{ opt.title }}
+                  </label>
+                </fieldset>
+              </template>
 
-                <!-- Date Picker -->
-                <template v-else-if="comp.type === 'DatePicker'">
-                  <Label class="text-sm">
-                    {{ comp.label }}
-                    <span v-if="comp.required" class="text-destructive">*</span>
-                  </Label>
-                  <div class="mt-1 p-2 rounded-md border bg-background text-sm flex items-center justify-between">
-                    <span class="text-muted-foreground">Select date...</span>
-                    <Calendar class="h-4 w-4" />
-                  </div>
-                </template>
+              <!-- Date Picker -->
+              <template v-else-if="comp.type === 'DatePicker'">
+                <label data-field>
+                  <span>{{ comp.label }}<span v-if="comp.required"> *</span></span>
+                  <input type="date" disabled />
+                </label>
+              </template>
 
-                <!-- Image -->
-                <template v-else-if="comp.type === 'Image'">
-                  <div class="bg-muted rounded-md p-8 flex items-center justify-center">
-                    <Image class="h-8 w-8 text-muted-foreground" />
-                  </div>
-                </template>
+              <!-- Image -->
+              <template v-else-if="comp.type === 'Image'">
+                <div class="vstack items-center p-4">
+                  <Image :size="32" />
+                </div>
+              </template>
 
-                <!-- Footer -->
-                <template v-else-if="comp.type === 'Footer'">
-                  <Button class="w-full">{{ comp.label }}</Button>
-                </template>
+              <!-- Footer -->
+              <template v-else-if="comp.type === 'Footer'">
+                <button type="button" class="w-100">{{ comp.label }}</button>
+              </template>
 
-                <!-- Generic fallback -->
-                <template v-else>
-                  <div class="flex items-center gap-2 text-sm text-muted-foreground">
-                    <component :is="getComponentIcon(comp.type)" class="h-4 w-4" />
-                    {{ getComponentLabel(comp) }}
-                  </div>
-                </template>
-              </div>
-
-              <div
-                v-if="selectedScreen.layout.children.length === 0"
-                class="p-8 text-center text-sm text-muted-foreground border-2 border-dashed rounded-lg"
-              >
-                Add components from the palette
-              </div>
+              <!-- Generic fallback -->
+              <template v-else>
+                <div class="hstack gap-2 text-light">
+                  <component :is="getComponentIcon(comp.type)" :size="16" />
+                  {{ getComponentLabel(comp) }}
+                </div>
+              </template>
             </div>
-            </div>
+
+            <p v-if="selectedScreen.layout.children.length === 0" class="align-center text-light p-4">
+              {{ t('waFlowBuilder.addComponentsHint') }}
+            </p>
           </div>
-        </ScrollArea>
-      </div>
-
-      <div v-else class="flex-1 flex items-center justify-center text-muted-foreground">
-        <div class="text-center">
-          <Layers class="h-12 w-12 mx-auto mb-4 opacity-50" />
-          <p>Add a screen to get started</p>
-          <Button class="mt-4" @click="addScreen">
-            <Plus class="h-4 w-4 mr-2" />
-            Add Screen
-          </Button>
         </div>
       </div>
-    </Card>
+
+      <div v-else class="flex-1 flex items-center justify-center">
+        <div class="vstack items-center">
+          <Layers :size="48" />
+          <p class="text-light">{{ t('waFlowBuilder.addScreenToStart') }}</p>
+          <button type="button" @click="addScreen">
+            <Plus :size="16" />
+            {{ t('waFlowBuilder.addScreen') }}
+          </button>
+        </div>
+      </div>
+    </article>
 
     <!-- Properties Panel -->
-    <Card class="w-72 flex-shrink-0 flex flex-col overflow-hidden">
-      <CardHeader class="py-3 px-4 flex-shrink-0">
-        <CardTitle class="text-sm font-medium flex items-center gap-2">
-          <Settings2 class="h-4 w-4" />
-          Properties
-        </CardTitle>
-      </CardHeader>
-      <Separator />
-      <ScrollArea class="flex-1">
-        <div v-if="selectedComponent" class="p-4 space-y-4">
-          <div class="flex items-center justify-between">
-            <Badge>{{ getComponentLabel(selectedComponent) }}</Badge>
-            <div class="flex gap-1">
-              <Button
-                variant="ghost"
-                size="icon"
-                class="h-7 w-7"
+    <article class="card col-3 flex flex-col overflow-hidden min-h-0">
+      <header>
+        <h3 class="hstack gap-2">
+          <Settings2 :size="16" />
+          {{ t('waFlowBuilder.properties') }}
+        </h3>
+      </header>
+      <div class="scroll-y flex-1">
+        <div v-if="selectedComponent" class="vstack gap-4">
+          <div class="hstack justify-between">
+            <span class="badge">{{ getComponentLabel(selectedComponent) }}</span>
+            <div class="hstack gap-1">
+              <button
+                type="button"
+                class="ghost small icon"
+                :title="t('waFlowBuilder.moveUp')"
+                :aria-label="t('waFlowBuilder.moveUp')"
                 :disabled="selectedComponentIndex === 0"
                 @click="moveComponent(selectedComponentIndex!, 'up')"
               >
-                <span class="rotate-180">▼</span>
-              </Button>
-              <Button
-                variant="ghost"
-                size="icon"
-                class="h-7 w-7"
+                <ArrowUp :size="14" />
+              </button>
+              <button
+                type="button"
+                class="ghost small icon"
+                :title="t('waFlowBuilder.moveDown')"
+                :aria-label="t('waFlowBuilder.moveDown')"
                 :disabled="selectedComponentIndex === selectedScreen!.layout.children.length - 1"
                 @click="moveComponent(selectedComponentIndex!, 'down')"
               >
-                ▼
-              </Button>
-              <Button
-                variant="ghost"
-                size="icon"
-                class="h-7 w-7 text-destructive"
+                <ArrowDown :size="14" />
+              </button>
+              <button
+                type="button"
+                class="ghost small icon"
+                data-variant="danger"
+                :title="t('waFlowBuilder.removeComponent')"
+                :aria-label="t('waFlowBuilder.removeComponent')"
                 @click="removeComponent(selectedComponentIndex!)"
               >
-                <Trash2 class="h-4 w-4" />
-              </Button>
+                <Trash2 :size="14" />
+              </button>
             </div>
           </div>
 
           <!-- Text property -->
-          <div v-if="'text' in selectedComponent" class="space-y-2">
-            <Label class="text-xs">Text</Label>
-            <Input
-              :model-value="selectedComponent.text"
-              @update:model-value="updateComponentProperty('text', $event)"
+          <label v-if="'text' in selectedComponent" data-field>
+            {{ t('waFlowBuilder.text') }}
+            <input
+              :value="selectedComponent.text"
+              @input="updateComponentProperty('text', ($event.target as HTMLInputElement).value)"
             />
-          </div>
+          </label>
 
           <!-- Label property -->
-          <div v-if="'label' in selectedComponent && selectedComponent.type !== 'Footer'" class="space-y-2">
-            <Label class="text-xs">Label</Label>
-            <Input
-              :model-value="selectedComponent.label"
-              @update:model-value="updateComponentProperty('label', $event)"
+          <label v-if="'label' in selectedComponent && selectedComponent.type !== 'Footer'" data-field>
+            {{ t('waFlowBuilder.label') }}
+            <input
+              :value="selectedComponent.label"
+              @input="updateComponentProperty('label', ($event.target as HTMLInputElement).value)"
             />
-          </div>
+          </label>
 
           <!-- Name property -->
-          <div v-if="'name' in selectedComponent" class="space-y-2">
-            <Label class="text-xs">Field Name (Key)</Label>
-            <Input
-              :model-value="selectedComponent.name"
-              @update:model-value="updateComponentProperty('name', $event)"
-              class="font-mono text-sm"
-              placeholder="e.g. email, phone, message"
+          <label v-if="'name' in selectedComponent" data-field>
+            {{ t('waFlowBuilder.fieldName') }}
+            <input
+              :value="selectedComponent.name"
+              :placeholder="t('waFlowBuilder.fieldNamePlaceholder')"
+              @input="updateComponentProperty('name', ($event.target as HTMLInputElement).value)"
             />
-            <p class="text-xs text-muted-foreground">
-              This key is used in the response data. Use lowercase with underscores (e.g. customer_name).
-            </p>
-          </div>
+            <small data-hint>{{ t('waFlowBuilder.fieldNameHint') }}</small>
+          </label>
 
           <!-- Required property -->
-          <div v-if="'required' in selectedComponent" class="flex items-center justify-between">
-            <Label class="text-xs">Required</Label>
-            <Switch
+          <label v-if="'required' in selectedComponent" class="hstack justify-between">
+            {{ t('waFlowBuilder.required') }}
+            <input
+              type="checkbox"
+              role="switch"
               :checked="selectedComponent.required"
-              @update:checked="updateComponentProperty('required', $event)"
+              @change="updateComponentProperty('required', ($event.target as HTMLInputElement).checked)"
             />
-          </div>
+          </label>
 
           <!-- Options for Dropdown, Radio, Checkbox -->
-          <div v-if="selectedComponent['data-source']" class="space-y-2">
-            <div class="flex items-center justify-between">
-              <Label class="text-xs">Options</Label>
-              <Button variant="ghost" size="sm" class="h-6 text-xs" @click="addOption">
-                <Plus class="h-3 w-3 mr-1" />
-                Add
-              </Button>
+          <div v-if="selectedComponent['data-source']" class="vstack gap-2">
+            <div class="hstack justify-between">
+              <strong>{{ t('waFlowBuilder.options') }}</strong>
+              <button type="button" class="ghost small" @click="addOption">
+                <Plus :size="14" />
+                {{ t('waFlowBuilder.add') }}
+              </button>
             </div>
-            <div class="space-y-2">
-              <div
-                v-for="(opt, index) in selectedComponent['data-source']"
-                :key="opt.id"
-                class="flex gap-2"
+            <div v-for="(opt, index) in selectedComponent['data-source']" :key="opt.id" class="hstack gap-2">
+              <input
+                class="flex-1"
+                :value="opt.title"
+                :placeholder="t('waFlowBuilder.optionPlaceholder')"
+                :aria-label="t('waFlowBuilder.optionPlaceholder')"
+                @input="updateOption(index, 'title', ($event.target as HTMLInputElement).value)"
+              />
+              <button
+                type="button"
+                class="ghost small icon"
+                :title="t('waFlowBuilder.removeOption')"
+                :aria-label="t('waFlowBuilder.removeOption')"
+                @click="removeOption(index)"
               >
-                <Input
-                  :model-value="opt.title"
-                  @update:model-value="updateOption(index, 'title', $event)"
-                  class="text-sm"
-                  placeholder="Option text"
-                />
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  class="h-9 w-9 flex-shrink-0"
-                  @click="removeOption(index)"
-                >
-                  <Trash2 class="h-3 w-3" />
-                </Button>
-              </div>
+                <Trash2 :size="14" />
+              </button>
             </div>
           </div>
 
           <!-- Footer specific -->
-          <div v-if="selectedComponent.type === 'Footer'" class="space-y-4">
-            <div class="space-y-2">
-              <Label class="text-xs">Button Text</Label>
-              <Input
-                :model-value="selectedComponent.label"
-                @update:model-value="updateComponentProperty('label', $event)"
+          <div v-if="selectedComponent.type === 'Footer'" class="vstack gap-4">
+            <label data-field>
+              {{ t('waFlowBuilder.buttonText') }}
+              <input
+                :value="selectedComponent.label"
+                @input="updateComponentProperty('label', ($event.target as HTMLInputElement).value)"
               />
-            </div>
-            <div class="space-y-2">
-              <Label class="text-xs">Action</Label>
-              <Select
-                :model-value="selectedComponent['on-click-action']?.name || 'complete'"
-                @update:model-value="updateComponentProperty('on-click-action', { name: $event, payload: {} })"
+            </label>
+            <label data-field>
+              {{ t('waFlowBuilder.action') }}
+              <select
+                :value="selectedComponent['on-click-action']?.name || 'complete'"
+                @change="updateComponentProperty('on-click-action', { name: ($event.target as HTMLSelectElement).value, payload: {} })"
               >
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="complete">Complete Flow</SelectItem>
-                  <SelectItem value="navigate">Navigate to Screen</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-            <div
-              v-if="selectedComponent['on-click-action']?.name === 'navigate'"
-              class="space-y-2"
-            >
-              <Label class="text-xs">Target Screen</Label>
-              <Select
-                :model-value="selectedComponent['on-click-action']?.next?.name || ''"
-                @update:model-value="updateComponentProperty('on-click-action', {
+                <option value="complete">{{ t('waFlowBuilder.completeFlow') }}</option>
+                <option value="navigate">{{ t('waFlowBuilder.navigateToScreen') }}</option>
+              </select>
+            </label>
+            <label v-if="selectedComponent['on-click-action']?.name === 'navigate'" data-field>
+              {{ t('waFlowBuilder.targetScreen') }}
+              <select
+                :value="selectedComponent['on-click-action']?.next?.name || ''"
+                @change="updateComponentProperty('on-click-action', {
                   name: 'navigate',
-                  next: { type: 'screen', name: $event }
+                  next: { type: 'screen', name: ($event.target as HTMLSelectElement).value }
                 })"
               >
-                <SelectTrigger>
-                  <SelectValue placeholder="Select screen" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem
-                    v-for="screen in screens.filter(s => s.id !== selectedScreen?.id)"
-                    :key="screen.id"
-                    :value="screen.id"
-                  >
-                    {{ screen.title }}
-                  </SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
+                <option value="" disabled>{{ t('waFlowBuilder.selectTargetScreen') }}</option>
+                <option
+                  v-for="screen in screens.filter(s => s.id !== selectedScreen?.id)"
+                  :key="screen.id"
+                  :value="screen.id"
+                >
+                  {{ screen.title }}
+                </option>
+              </select>
+            </label>
           </div>
         </div>
-        <div v-else class="p-4 text-center text-sm text-muted-foreground">
-          Select a component to edit its properties
-        </div>
-      </ScrollArea>
-    </Card>
+        <p v-else class="align-center text-light">
+          {{ t('waFlowBuilder.selectComponentHint') }}
+        </p>
+      </div>
+    </article>
   </div>
 </template>

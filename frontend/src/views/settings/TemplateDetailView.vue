@@ -10,41 +10,18 @@ import DetailPageLayout from '@/components/shared/DetailPageLayout.vue'
 import MetadataPanel from '@/components/shared/MetadataPanel.vue'
 import AuditLogPanel from '@/components/shared/AuditLogPanel.vue'
 import UnsavedChangesDialog from '@/components/shared/UnsavedChangesDialog.vue'
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { Badge } from '@/components/ui/badge'
-import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
-import { Label } from '@/components/ui/label'
-import { Textarea } from '@/components/ui/textarea'
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select'
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from '@/components/ui/alert-dialog'
+import Modal from '@/components/oat/Modal.vue'
+import { ConfirmDialog } from '@/components/shared'
 import {
   FileText,
   Trash2,
   Save,
   Upload,
-  Loader2,
   Check,
   Eye,
   Send,
   Plus,
   X,
-  ChevronDown,
   Info,
 } from '@/lib/icons'
 import { getErrorMessage } from '@/lib/api-utils'
@@ -104,8 +81,8 @@ const authOtpType = computed(() => {
 
 const zeroTapAccepted = ref(false)
 
-function setAuthOtpType(type: string | number | bigint | Record<string, any> | null) {
-  if (!type || typeof type !== 'string') return
+function setAuthOtpType(type: string) {
+  if (!type) return
   zeroTapAccepted.value = false
   const existing = form.value.buttons.find((b: any) => b.type === 'OTP')
   if (existing) {
@@ -361,9 +338,9 @@ const headerTypes = [
 const statusVariant = computed(() => {
   if (!template.value) return 'secondary' as const
   switch (template.value.status?.toUpperCase()) {
-    case 'APPROVED': return 'default' as const
-    case 'REJECTED': return 'destructive' as const
-    case 'PENDING': return 'outline' as const
+    case 'APPROVED': return 'success' as const
+    case 'REJECTED': return 'danger' as const
+    case 'PENDING': return 'warning' as const
     default: return 'secondary' as const
   }
 })
@@ -658,16 +635,6 @@ onMounted(async () => {
     await loadTemplate()
   }
 })
-
-const legacyQualityBadges: Record<string, string> = {
-  success: 'bg-green-950 text-green-400 border border-green-800/40 light:bg-green-100 light:text-green-800',
-  warning: 'bg-yellow-950 text-yellow-400 border border-yellow-800/40 light:bg-yellow-100 light:text-yellow-800',
-  danger: 'bg-red-950 text-red-400 border border-red-800/40 light:bg-red-100 light:text-red-800',
-  secondary: 'bg-gray-800 text-gray-400 light:bg-gray-100 light:text-gray-600',
-}
-function legacyQualityBadge(rating: string): string {
-  return legacyQualityBadges[getQualityBadgeVariant(rating)]
-}
 </script>
 
 <template>
@@ -675,7 +642,6 @@ function legacyQualityBadge(rating: string): string {
   <DetailPageLayout
     :title="isNew ? $t('templates.newTemplate', 'New Template') : (template?.display_name || template?.name || '')"
     :icon="FileText"
-    icon-gradient="bg-gradient-to-br from-blue-500 to-indigo-600 shadow-blue-500/20"
     back-link="/templates"
     :breadcrumbs="breadcrumbs"
     :is-loading="isLoading"
@@ -683,484 +649,423 @@ function legacyQualityBadge(rating: string): string {
     :not-found-title="$t('templates.notFound', 'Template not found')"
   >
     <template #actions>
-      <div class="flex items-center gap-2">
-        <Button v-if="!isNew" variant="outline" size="sm" @click="isPreviewOpen = true">
-          <Eye class="h-4 w-4 mr-1" /> {{ $t('templates.preview', 'Preview') }}
-        </Button>
-        <Button v-if="canPublish" variant="outline" size="sm" @click="publishDialogOpen = true" :disabled="isPublishing">
-          <Loader2 v-if="isPublishing" class="h-4 w-4 mr-1 animate-spin" />
-          <Send v-else class="h-4 w-4 mr-1" />
+      <div class="hstack gap-2">
+        <button v-if="!isNew" type="button" class="outline small" @click="isPreviewOpen = true">
+          <Eye :size="16" /> {{ $t('templates.preview', 'Preview') }}
+        </button>
+        <button
+          v-if="canPublish"
+          type="button"
+          class="outline small"
+          :disabled="isPublishing"
+          :aria-busy="isPublishing ? 'true' : undefined"
+          @click="publishDialogOpen = true"
+        >
+          <Send v-if="!isPublishing" :size="16" />
           {{ template?.meta_template_id ? $t('templates.republish', 'Republish') : $t('templates.publish', 'Publish') }}
-        </Button>
-        <Button v-if="canWrite && (hasChanges || isNew)" size="sm" @click="save" :disabled="isSaving">
-          <Save class="h-4 w-4 mr-1" /> {{ isSaving ? $t('common.saving', 'Saving...') : isNew ? $t('common.create') : $t('common.save') }}
-        </Button>
-        <Button v-if="canDelete && !isNew" variant="destructive" size="sm" @click="deleteDialogOpen = true">
-          <Trash2 class="h-4 w-4 mr-1" /> {{ $t('common.delete') }}
-        </Button>
+        </button>
+        <button
+          v-if="canWrite && (hasChanges || isNew)"
+          type="button"
+          class="small"
+          :disabled="isSaving"
+          :aria-busy="isSaving ? 'true' : undefined"
+          @click="save"
+        >
+          <Save v-if="!isSaving" :size="16" /> {{ isSaving ? $t('common.saving', 'Saving...') : isNew ? $t('common.create') : $t('common.save') }}
+        </button>
+        <button v-if="canDelete && !isNew" type="button" class="small" data-variant="danger" @click="deleteDialogOpen = true">
+          <Trash2 :size="16" /> {{ $t('common.delete') }}
+        </button>
       </div>
     </template>
 
     <!-- Details Card -->
-    <Card>
-      <CardHeader class="pb-3 cursor-pointer" @click="isDetailsOpen = !isDetailsOpen">
-        <div class="flex items-center justify-between">
-          <div class="flex items-center gap-2">
-            <CardTitle class="text-sm font-medium">{{ $t('templates.details', 'Details') }}</CardTitle>
-            <Badge v-if="!isNew && template?.status" :variant="statusVariant">
-              {{ template.status }}
-            </Badge>
-            <Badge v-if="!isNew && template?.quality_rating" :class="legacyQualityBadge(template.quality_rating)">
+    <article class="card">
+      <details :open="isDetailsOpen" @toggle="isDetailsOpen = ($event.target as HTMLDetailsElement).open">
+        <summary>
+          <span class="hstack gap-2">
+            {{ $t('templates.details', 'Details') }}
+            <span v-if="!isNew && template?.status" class="badge" :data-variant="statusVariant">{{ template.status }}</span>
+            <span v-if="!isNew && template?.quality_rating" class="badge" :data-variant="getQualityBadgeVariant(template.quality_rating)">
               {{ getQualityRatingLabel(template.quality_rating, t) }}
-            </Badge>
+            </span>
+          </span>
+        </summary>
+        <div class="vstack gap-4 mt-4">
+          <!-- Edit limits info for approved templates -->
+          <div v-if="template?.status?.toUpperCase() === 'APPROVED'" role="alert" class="hstack gap-2">
+            <Info :size="14" />
+            <span>{{ $t('templates.editLimitsInfo', 'Approved templates can be edited up to 10 times in 30 days (1 edit per 24 hours). Editing triggers a new review which may take up to 24 hours. Name, language, and category cannot be changed.') }}</span>
           </div>
-          <ChevronDown class="h-4 w-4 text-muted-foreground transition-transform" :class="isDetailsOpen && 'rotate-180'" />
+          <label data-field>
+            {{ $t('templates.whatsappAccount', 'WhatsApp Account') }}
+            <select v-model="form.whatsapp_account" :disabled="!canWrite || !!template?.meta_template_id">
+              <option value="" disabled>{{ $t('templates.selectAccount', 'Select account') }}</option>
+              <option v-for="account in accounts" :key="account.id" :value="account.name">{{ account.name }}</option>
+            </select>
+          </label>
+          <label data-field>
+            {{ $t('templates.name', 'Name') }} *
+            <input v-model="form.name" :disabled="!canWrite || !!template?.meta_template_id" />
+          </label>
+          <label data-field>
+            {{ $t('templates.displayName', 'Display Name') }}
+            <input v-model="form.display_name" :disabled="!canWrite || !isEditable" />
+          </label>
+          <label data-field>
+            {{ $t('templates.language', 'Language') }}
+            <select v-model="form.language" :disabled="!canWrite || !!template?.meta_template_id">
+              <option v-for="lang in languages" :key="lang.code" :value="lang.code">{{ lang.name }}</option>
+            </select>
+          </label>
+          <label data-field>
+            {{ $t('templates.category', 'Category') }}
+            <select v-model="form.category" :disabled="!canWrite || !isEditable || (!!template?.meta_template_id && template?.status?.toUpperCase() === 'APPROVED')">
+              <option v-for="cat in categories" :key="cat.value" :value="cat.value">{{ cat.label }}</option>
+            </select>
+          </label>
         </div>
-      </CardHeader>
-      <CardContent v-show="isDetailsOpen" class="space-y-4">
-        <!-- Edit limits info for approved templates -->
-        <div v-if="template?.status?.toUpperCase() === 'APPROVED'" class="flex items-start gap-2 rounded-md bg-blue-500/10 border border-blue-500/20 px-3 py-2 text-xs text-blue-400 light:text-blue-600">
-          <Info class="h-3.5 w-3.5 shrink-0 mt-0.5" />
-          <span>{{ $t('templates.editLimitsInfo', 'Approved templates can be edited up to 10 times in 30 days (1 edit per 24 hours). Editing triggers a new review which may take up to 24 hours. Name, language, and category cannot be changed.') }}</span>
-        </div>
-        <div class="space-y-1.5">
-          <Label class="text-xs">{{ $t('templates.whatsappAccount', 'WhatsApp Account') }}</Label>
-          <Select v-model="form.whatsapp_account" :disabled="!canWrite || !!template?.meta_template_id">
-            <SelectTrigger><SelectValue :placeholder="$t('templates.selectAccount', 'Select account')" /></SelectTrigger>
-            <SelectContent>
-              <SelectItem v-for="account in accounts" :key="account.id" :value="account.name">
-                {{ account.name }}
-              </SelectItem>
-            </SelectContent>
-          </Select>
-        </div>
-        <div class="space-y-1.5">
-          <Label class="text-xs">{{ $t('templates.name', 'Name') }} *</Label>
-          <Input v-model="form.name" :disabled="!canWrite || !!template?.meta_template_id" />
-        </div>
-        <div class="space-y-1.5">
-          <Label class="text-xs">{{ $t('templates.displayName', 'Display Name') }}</Label>
-          <Input v-model="form.display_name" :disabled="!canWrite || !isEditable" />
-        </div>
-        <div class="space-y-1.5">
-          <Label class="text-xs">{{ $t('templates.language', 'Language') }}</Label>
-          <Select v-model="form.language" :disabled="!canWrite || !!template?.meta_template_id">
-            <SelectTrigger><SelectValue /></SelectTrigger>
-            <SelectContent>
-              <SelectItem v-for="lang in languages" :key="lang.code" :value="lang.code">
-                {{ lang.name }}
-              </SelectItem>
-            </SelectContent>
-          </Select>
-        </div>
-        <div class="space-y-1.5">
-          <Label class="text-xs">{{ $t('templates.category', 'Category') }}</Label>
-          <Select v-model="form.category" :disabled="!canWrite || !isEditable || (!!template?.meta_template_id && template?.status?.toUpperCase() === 'APPROVED')">
-            <SelectTrigger><SelectValue /></SelectTrigger>
-            <SelectContent>
-              <SelectItem v-for="cat in categories" :key="cat.value" :value="cat.value">
-                {{ cat.label }}
-              </SelectItem>
-            </SelectContent>
-          </Select>
-        </div>
-      </CardContent>
-    </Card>
+      </details>
+    </article>
 
     <!-- Content Card -->
-    <Card>
-      <CardHeader class="pb-3">
-        <CardTitle class="text-sm font-medium">{{ $t('templates.content', 'Content') }}</CardTitle>
-      </CardHeader>
-      <CardContent class="space-y-4">
-        <div v-if="!isAuthentication" class="space-y-1.5">
-          <Label class="text-xs">{{ $t('templates.headerType', 'Header Type') }}</Label>
-          <Select v-model="form.header_type" :disabled="!canWrite || !isEditable">
-            <SelectTrigger><SelectValue /></SelectTrigger>
-            <SelectContent>
-              <SelectItem v-for="ht in headerTypes" :key="ht.value" :value="ht.value">
-                {{ ht.label }}
-              </SelectItem>
-            </SelectContent>
-          </Select>
-        </div>
-        <div v-if="form.header_type === 'TEXT'" class="space-y-1.5">
-          <Label class="text-xs" for="header-content">{{ $t('templates.headerContent', 'Header Content') }}</Label>
-          <Input id="header-content" v-model="form.header_content" :disabled="!canWrite || !isEditable" />
-          <p v-if="hasTooManyHeaderVariables" class="text-xs text-destructive" v-text="headerTooManyVariablesHint" />
-        </div>
+    <article class="card">
+      <header>
+        <h3>{{ $t('templates.content', 'Content') }}</h3>
+      </header>
+      <div class="vstack gap-4">
+        <label v-if="!isAuthentication" data-field>
+          {{ $t('templates.headerType', 'Header Type') }}
+          <select v-model="form.header_type" :disabled="!canWrite || !isEditable">
+            <option v-for="ht in headerTypes" :key="ht.value" :value="ht.value">{{ ht.label }}</option>
+          </select>
+        </label>
+        <label v-if="form.header_type === 'TEXT'" data-field>
+          {{ $t('templates.headerContent', 'Header Content') }}
+          <input id="header-content" v-model="form.header_content" :disabled="!canWrite || !isEditable" :aria-invalid="hasTooManyHeaderVariables ? 'true' : undefined" />
+          <div v-if="hasTooManyHeaderVariables" class="error" role="status" v-text="headerTooManyVariablesHint" />
+        </label>
 
         <!-- Header Media Upload for IMAGE/VIDEO/DOCUMENT -->
-        <div v-else-if="['IMAGE', 'VIDEO', 'DOCUMENT'].includes(form.header_type)" class="space-y-3">
-          <Label class="text-xs">{{ $t('templates.headerSample', 'Header') }} {{ form.header_type.toLowerCase() }}</Label>
-          <div class="flex items-center gap-2">
-            <div class="flex-1">
-              <input
-                type="file"
-                :accept="getAcceptedFileTypes()"
-                :disabled="!canWrite || !isEditable"
-                @change="onHeaderMediaFileChange"
-                class="w-full text-sm file:mr-4 file:py-1.5 file:px-3 file:rounded-md file:border-0 file:text-xs file:font-medium file:bg-primary file:text-primary-foreground hover:file:bg-primary/90 cursor-pointer"
-              />
-            </div>
-            <Button
+        <div v-else-if="['IMAGE', 'VIDEO', 'DOCUMENT'].includes(form.header_type)" class="vstack gap-2">
+          <strong>{{ $t('templates.headerSample', 'Header') }} {{ form.header_type.toLowerCase() }}</strong>
+          <div class="hstack gap-2">
+            <input
+              type="file"
+              class="flex-1"
+              :accept="getAcceptedFileTypes()"
+              :disabled="!canWrite || !isEditable"
+              :aria-label="$t('templates.headerSample', 'Header') + ' ' + form.header_type.toLowerCase()"
+              @change="onHeaderMediaFileChange"
+            />
+            <button
               type="button"
-              size="sm"
-              @click="uploadHeaderMedia"
+              class="small"
               :disabled="!headerMediaFile || headerMediaUploading"
+              :aria-busy="headerMediaUploading ? 'true' : undefined"
+              @click="uploadHeaderMedia"
             >
-              <Loader2 v-if="headerMediaUploading" class="h-3.5 w-3.5 mr-1 animate-spin" />
-              <Upload v-else class="h-3.5 w-3.5 mr-1" />
+              <Upload v-if="!headerMediaUploading" :size="14" />
               {{ $t('templates.uploadMedia', 'Upload') }}
-            </Button>
+            </button>
           </div>
-          <div v-if="headerMediaFilename && !headerMediaHandle" class="text-xs text-muted-foreground">
+          <small v-if="headerMediaFilename && !headerMediaHandle" class="text-light">
             {{ headerMediaFilename }}
-          </div>
-          <div v-if="headerMediaHandle" class="bg-green-950 light:bg-green-50 border border-green-800 light:border-green-200 rounded-lg p-2.5">
-            <div class="flex items-center gap-2">
-              <Check class="h-3.5 w-3.5 text-green-600" />
-              <span class="text-xs text-green-200 light:text-green-800">{{ $t('templates.mediaUploadedSuccess', 'Media uploaded') }}</span>
+          </small>
+          <div v-if="headerMediaHandle" role="alert" data-variant="success" class="vstack gap-1">
+            <div class="hstack gap-2">
+              <Check :size="14" />
+              <span>{{ $t('templates.mediaUploadedSuccess', 'Media uploaded') }}</span>
             </div>
-            <p class="text-xs text-muted-foreground mt-1 font-mono truncate">
-              Handle: {{ headerMediaHandle.substring(0, 40) }}...
-            </p>
+            <small class="truncate"><code>Handle: {{ headerMediaHandle.substring(0, 40) }}...</code></small>
           </div>
-          <p class="text-xs text-muted-foreground">
+          <small class="text-light">
             <span v-if="form.header_type === 'IMAGE'">JPEG or PNG, max 5MB</span>
             <span v-else-if="form.header_type === 'VIDEO'">MP4, max 16MB</span>
             <span v-else-if="form.header_type === 'DOCUMENT'">PDF, max 100MB</span>
-          </p>
+          </small>
         </div>
 
         <!-- Authentication template: fixed body & options -->
-        <div v-if="isAuthentication" class="space-y-4">
+        <div v-if="isAuthentication" class="vstack gap-4">
           <!-- OTP Code Delivery Method -->
-          <div class="space-y-2">
-            <Label class="text-xs">{{ $t('templates.codeDelivery', 'Code Delivery Method') }}</Label>
-            <Select :model-value="authOtpType" @update:model-value="setAuthOtpType" :disabled="!canWrite || !isEditable">
-              <SelectTrigger class="h-8 text-xs">
-                <SelectValue placeholder="Select delivery method" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="COPY_CODE">Copy Code</SelectItem>
-                <SelectItem value="ONE_TAP">One-Tap Autofill (Android only)</SelectItem>
-                <SelectItem value="ZERO_TAP">Zero-Tap (Android only)</SelectItem>
-              </SelectContent>
-            </Select>
-            <p class="text-xs text-muted-foreground">
+          <label data-field>
+            {{ $t('templates.codeDelivery', 'Code Delivery Method') }}
+            <select :value="authOtpType" :disabled="!canWrite || !isEditable" @change="setAuthOtpType(($event.target as HTMLSelectElement).value)">
+              <option value="COPY_CODE">Copy Code</option>
+              <option value="ONE_TAP">One-Tap Autofill (Android only)</option>
+              <option value="ZERO_TAP">Zero-Tap (Android only)</option>
+            </select>
+            <small data-hint>
               <span v-if="authOtpType === 'COPY_CODE'">User taps a button to copy the code to clipboard.</span>
               <span v-else-if="authOtpType === 'ONE_TAP'">User taps a button to autofill the code in your app. Requires app configuration.</span>
               <span v-else-if="authOtpType === 'ZERO_TAP'">Code is delivered to your app automatically. Requires app configuration.</span>
-            </p>
-          </div>
+            </small>
+          </label>
 
-          <div class="space-y-1.5">
-            <Label class="text-xs">{{ $t('templates.bodyContent', 'Body Content') }}</Label>
-            <div class="rounded-md border bg-muted/50 p-3 text-sm text-muted-foreground">
-              <span class="font-mono">{'{{1}}'}</span> is your verification code.
-              <span v-if="form.add_security_recommendation" class="block mt-1">For your security, do not share this code.</span>
+          <div class="vstack gap-1">
+            <strong>{{ $t('templates.bodyContent', 'Body Content') }}</strong>
+            <div class="card">
+              <code>{'{{1}}'}</code> is your verification code.
+              <div v-if="form.add_security_recommendation">For your security, do not share this code.</div>
             </div>
-            <p class="text-xs text-muted-foreground">Authentication templates use fixed preset text defined by Meta.</p>
+            <small class="text-light">Authentication templates use fixed preset text defined by Meta.</small>
           </div>
-          <div class="flex items-center gap-2">
+          <label>
             <input
               id="security-rec"
               type="checkbox"
               v-model="form.add_security_recommendation"
               :disabled="!canWrite || !isEditable"
-              class="h-4 w-4 rounded border-gray-300"
             />
-            <Label for="security-rec" class="text-xs cursor-pointer">{{ $t('templates.addSecurityRecommendation', 'Add security recommendation') }}</Label>
-          </div>
-          <div class="space-y-2">
-            <div class="flex items-center gap-2">
+            {{ $t('templates.addSecurityRecommendation', 'Add security recommendation') }}
+          </label>
+          <div class="vstack gap-2">
+            <label>
               <input
                 id="code-expiration"
                 type="checkbox"
                 :checked="form.code_expiration_minutes > 0"
-                @change="form.code_expiration_minutes = ($event.target as HTMLInputElement).checked ? 10 : 0"
                 :disabled="!canWrite || !isEditable"
-                class="h-4 w-4 rounded border-gray-300"
+                @change="form.code_expiration_minutes = ($event.target as HTMLInputElement).checked ? 10 : 0"
               />
-              <Label for="code-expiration" class="text-xs cursor-pointer">{{ $t('templates.addCodeExpiration', 'Add expiration time for the code') }}</Label>
-            </div>
-            <div v-if="form.code_expiration_minutes > 0" class="flex items-center gap-2 ml-6">
-              <Input
+              {{ $t('templates.addCodeExpiration', 'Add expiration time for the code') }}
+            </label>
+            <div v-if="form.code_expiration_minutes > 0" class="hstack gap-2">
+              <input
                 type="number"
-                :model-value="form.code_expiration_minutes"
-                @update:model-value="(val: string) => form.code_expiration_minutes = val ? parseInt(val) : 0"
+                :value="form.code_expiration_minutes"
                 min="1"
                 max="90"
-                class="h-8 text-xs w-24"
+                :aria-label="$t('templates.addCodeExpiration', 'Add expiration time for the code')"
                 :disabled="!canWrite || !isEditable"
+                @input="form.code_expiration_minutes = ($event.target as HTMLInputElement).value ? parseInt(($event.target as HTMLInputElement).value) : 0"
               />
-              <span class="text-xs text-muted-foreground">minutes (1-90)</span>
+              <small class="text-light">minutes (1-90)</small>
             </div>
-            <p v-if="form.code_expiration_minutes > 0" class="text-xs text-muted-foreground ml-6">
+            <small v-if="form.code_expiration_minutes > 0" class="text-light">
               Footer: "This code expires in {{ form.code_expiration_minutes }} minutes."
-            </p>
+            </small>
           </div>
           <!-- Zero-Tap Terms of Service -->
-          <div v-if="authOtpType === 'ZERO_TAP'" class="border border-amber-500/30 bg-amber-500/5 rounded-lg p-3">
-            <div class="flex items-start gap-2">
+          <div v-if="authOtpType === 'ZERO_TAP'" role="alert" data-variant="warning">
+            <label>
               <input
                 id="zero-tap-tos"
                 type="checkbox"
                 v-model="zeroTapAccepted"
                 :disabled="!canWrite || !isEditable"
-                class="h-4 w-4 mt-0.5 rounded border-gray-300"
               />
-              <Label for="zero-tap-tos" class="text-xs cursor-pointer leading-relaxed">
+              <span>
                 By selecting zero-tap, I understand that my business's use of zero-tap authentication is subject to the
-                <a href="https://www.whatsapp.com/legal/business-terms/" target="_blank" class="underline text-primary">WhatsApp Business Terms of Service</a>.
+                <a href="https://www.whatsapp.com/legal/business-terms/" target="_blank" rel="noopener noreferrer">WhatsApp Business Terms of Service</a>.
                 It is my business's responsibility to ensure its customers expect that the code will be automatically filled in on their behalf when they choose to receive the zero-tap code through WhatsApp.
-              </Label>
-            </div>
+              </span>
+            </label>
           </div>
 
-          <!-- ONE_TAP: autofill text + supported apps -->
-          <div v-if="authOtpType === 'ONE_TAP'" class="space-y-3 border rounded-lg p-3">
-            <div class="space-y-1">
-              <Label class="text-xs">{{ $t('templates.autofillText', 'Autofill Text') }}</Label>
-              <Input v-model="form.buttons[0].autofill_text" placeholder="Autofill" class="h-8 text-xs" :disabled="!canWrite || !isEditable" />
-            </div>
-            <div class="space-y-2">
-              <div class="flex items-center justify-between">
-                <Label class="text-xs">{{ $t('templates.supportedApps', 'Supported Apps') }} *</Label>
-                <Button
+          <!-- ONE_TAP / ZERO_TAP: autofill text + supported apps -->
+          <fieldset v-if="authOtpType === 'ONE_TAP' || authOtpType === 'ZERO_TAP'" class="vstack gap-4">
+            <label v-if="authOtpType === 'ONE_TAP'" data-field>
+              {{ $t('templates.autofillText', 'Autofill Text') }}
+              <input v-model="form.buttons[0].autofill_text" placeholder="Autofill" :disabled="!canWrite || !isEditable" />
+            </label>
+            <div class="vstack gap-2">
+              <div class="hstack justify-between">
+                <strong>{{ $t('templates.supportedApps', 'Supported Apps') }} *</strong>
+                <button
                   v-if="canWrite && isEditable && (form.buttons[0]?.supported_apps?.length || 0) < 5"
-                  type="button" variant="outline" size="xs" class="h-6 text-xs"
+                  type="button"
+                  class="outline small"
                   @click="addSupportedApp"
                 >
-                  <Plus class="h-3 w-3 mr-1" /> Add App
-                </Button>
+                  <Plus :size="14" /> Add App
+                </button>
               </div>
-              <div v-for="(app, i) in form.buttons[0]?.supported_apps || []" :key="i" class="flex items-end gap-2">
-                <div class="flex-1 space-y-1">
-                  <Label class="text-xs">Package Name *</Label>
-                  <Input v-model="app.package_name" placeholder="com.example.app" class="h-8 text-xs" :disabled="!canWrite || !isEditable" />
-                </div>
-                <div class="flex-1 space-y-1">
-                  <Label class="text-xs">Signature Hash *</Label>
-                  <Input v-model="app.signature_hash" placeholder="K8a/AINcGX7" class="h-8 text-xs" :disabled="!canWrite || !isEditable" />
-                </div>
-                <Button
+              <div v-for="(app, i) in form.buttons[0]?.supported_apps || []" :key="i" class="hstack gap-2">
+                <label data-field class="flex-1">
+                  Package Name *
+                  <input v-model="app.package_name" placeholder="com.example.app" :disabled="!canWrite || !isEditable" />
+                </label>
+                <label data-field class="flex-1">
+                  Signature Hash *
+                  <input v-model="app.signature_hash" placeholder="K8a/AINcGX7" :disabled="!canWrite || !isEditable" />
+                </label>
+                <button
                   v-if="canWrite && isEditable && (form.buttons[0]?.supported_apps?.length || 0) > 1"
-                  type="button" variant="ghost" size="sm" class="h-8 w-8 p-0 shrink-0"
+                  type="button"
+                  class="ghost small icon"
+                  :title="$t('common.remove')"
+                  :aria-label="$t('common.remove')"
                   @click="removeSupportedApp(Number(i))"
                 >
-                  <X class="h-3.5 w-3.5 text-destructive" />
-                </Button>
+                  <X :size="14" />
+                </button>
               </div>
             </div>
-          </div>
-
-          <!-- ZERO_TAP: supported apps -->
-          <div v-if="authOtpType === 'ZERO_TAP'" class="space-y-3 border rounded-lg p-3">
-            <div class="space-y-2">
-              <div class="flex items-center justify-between">
-                <Label class="text-xs">{{ $t('templates.supportedApps', 'Supported Apps') }} *</Label>
-                <Button
-                  v-if="canWrite && isEditable && (form.buttons[0]?.supported_apps?.length || 0) < 5"
-                  type="button" variant="outline" size="xs" class="h-6 text-xs"
-                  @click="addSupportedApp"
-                >
-                  <Plus class="h-3 w-3 mr-1" /> Add App
-                </Button>
-              </div>
-              <div v-for="(app, i) in form.buttons[0]?.supported_apps || []" :key="i" class="flex items-end gap-2">
-                <div class="flex-1 space-y-1">
-                  <Label class="text-xs">Package Name *</Label>
-                  <Input v-model="app.package_name" placeholder="com.example.app" class="h-8 text-xs" :disabled="!canWrite || !isEditable" />
-                </div>
-                <div class="flex-1 space-y-1">
-                  <Label class="text-xs">Signature Hash *</Label>
-                  <Input v-model="app.signature_hash" placeholder="K8a/AINcGX7" class="h-8 text-xs" :disabled="!canWrite || !isEditable" />
-                </div>
-                <Button
-                  v-if="canWrite && isEditable && (form.buttons[0]?.supported_apps?.length || 0) > 1"
-                  type="button" variant="ghost" size="sm" class="h-8 w-8 p-0 shrink-0"
-                  @click="removeSupportedApp(Number(i))"
-                >
-                  <X class="h-3.5 w-3.5 text-destructive" />
-                </Button>
-              </div>
-            </div>
-          </div>
+          </fieldset>
         </div>
 
         <!-- Standard template: editable body -->
-        <div v-else class="space-y-1.5">
-          <Label class="text-xs">{{ $t('templates.bodyContent', 'Body Content') }} *</Label>
-          <Textarea
+        <label v-else data-field>
+          {{ $t('templates.bodyContent', 'Body Content') }} *
+          <textarea
             v-model="form.body_content"
-            :rows="6"
+            rows="6"
             :disabled="!canWrite || !isEditable"
+            :aria-invalid="hasMixedVariables || hasDuplicateVariables || hasVariableAtEdge ? 'true' : undefined"
           />
-          <p v-if="hasMixedVariables" class="text-xs text-destructive" v-text="mixedVariablesHint" />
-          <p v-else-if="hasDuplicateVariables" class="text-xs text-destructive" v-text="duplicateVariablesHint" />
-          <p v-else-if="hasVariableAtEdge" class="text-xs text-destructive" v-text="variablePositionHint" />
-          <p v-else class="text-xs text-muted-foreground" v-text="bodyHint" />
-        </div>
+          <div v-if="hasMixedVariables" class="error" role="status" v-text="mixedVariablesHint" />
+          <div v-else-if="hasDuplicateVariables" class="error" role="status" v-text="duplicateVariablesHint" />
+          <div v-else-if="hasVariableAtEdge" class="error" role="status" v-text="variablePositionHint" />
+          <small v-else data-hint v-text="bodyHint" />
+        </label>
 
         <!-- Sample Values for Variables -->
-        <div v-if="!isAuthentication && allVariables.length > 0" class="space-y-3">
+        <div v-if="!isAuthentication && allVariables.length > 0" class="vstack gap-2">
           <div>
-            <Label class="text-xs">{{ $t('templates.sampleValues', 'Sample Values for Variables') }}</Label>
-            <p class="text-xs text-muted-foreground mt-0.5">{{ $t('templates.sampleValuesHint', 'Provide example values for your variables. This helps Meta review and approve your template faster.') }}</p>
+            <strong>{{ $t('templates.sampleValues', 'Sample Values for Variables') }}</strong>
+            <p class="text-light">{{ $t('templates.sampleValuesHint', 'Provide example values for your variables. This helps Meta review and approve your template faster.') }}</p>
           </div>
-          <div v-for="v in allVariables" :key="`${v.component}-${v.index}`" class="flex items-center gap-3">
-            <span class="text-xs text-muted-foreground w-28 shrink-0 font-mono">{{ v.component }}:{{ v.label }}</span>
-            <Input
-              :model-value="getSampleValueForVar(v.component, v.index)"
-              @update:model-value="(val: string) => setSampleValueForVar(v.component, v.index, val)"
+          <div v-for="v in allVariables" :key="`${v.component}-${v.index}`" class="hstack gap-2">
+            <code>{{ v.component }}:{{ v.label }}</code>
+            <input
+              class="flex-1"
+              :value="getSampleValueForVar(v.component, v.index)"
               :placeholder="$t('templates.sampleValuePlaceholder', 'e.g. John Doe')"
-              class="h-8 text-xs"
+              :aria-label="`${v.component}:${v.label}`"
               :disabled="!canWrite || !isEditable"
+              @input="setSampleValueForVar(v.component, v.index, ($event.target as HTMLInputElement).value)"
             />
           </div>
         </div>
 
         <!-- Buttons (hidden for auth templates — OTP managed via selector above) -->
-        <div v-if="!isAuthentication" class="space-y-3">
-          <div class="flex items-center justify-between">
-            <Label class="text-xs">{{ $t('templates.buttons', 'Buttons') }} <span class="text-muted-foreground font-normal">({{ $t('templates.maxButtonsHint', 'up to 3, optional') }})</span></Label>
-            <Button
+        <div v-if="!isAuthentication" class="vstack gap-2">
+          <div class="hstack justify-between">
+            <strong>{{ $t('templates.buttons', 'Buttons') }} <small class="text-light">({{ $t('templates.maxButtonsHint', 'up to 3, optional') }})</small></strong>
+            <button
               v-if="canWrite && isEditable"
               type="button"
-              variant="outline"
-              size="xs"
-              class="h-7 text-xs"
-              @click="addButton"
+              class="outline small"
               :disabled="form.buttons.length >= 3"
+              @click="addButton"
             >
-              <Plus class="h-3 w-3 mr-1" />
+              <Plus :size="14" />
               {{ $t('templates.addButton', 'Add') }}
-            </Button>
+            </button>
           </div>
-          <div v-for="(button, index) in form.buttons" :key="index" class="border rounded-lg p-3 space-y-3">
-            <div class="flex items-center justify-between">
-              <span class="text-xs font-medium">{{ $t('templates.button', 'Button') }} {{ index + 1 }}</span>
-              <Button v-if="canWrite && isEditable" type="button" variant="ghost" size="sm" class="h-7 w-7 p-0" @click="removeButton(index)">
-                <X class="h-3.5 w-3.5 text-destructive" />
-              </Button>
+          <fieldset v-for="(button, index) in form.buttons" :key="index" class="vstack gap-2">
+            <div class="hstack justify-between">
+              <strong>{{ $t('templates.button', 'Button') }} {{ index + 1 }}</strong>
+              <button
+                v-if="canWrite && isEditable"
+                type="button"
+                class="ghost small icon"
+                :title="$t('common.remove')"
+                :aria-label="$t('common.remove')"
+                @click="removeButton(index)"
+              >
+                <X :size="14" />
+              </button>
             </div>
-            <div class="grid grid-cols-2 gap-3">
-              <div class="space-y-1">
-                <Label class="text-xs">{{ $t('templates.buttonType', 'Type') }}</Label>
-                <Select v-model="button.type" :disabled="!canWrite || !isEditable">
-                  <SelectTrigger class="h-8 text-xs"><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem v-for="bt in buttonTypes" :key="bt.value" :value="bt.value">
-                      {{ bt.label }}
-                    </SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-              <div class="space-y-1">
-                <Label class="text-xs">{{ $t('templates.buttonText', 'Text') }}</Label>
-                <Input v-model="button.text" class="h-8 text-xs" :disabled="!canWrite || !isEditable" />
-              </div>
+            <div class="row">
+              <label data-field class="col-6">
+                {{ $t('templates.buttonType', 'Type') }}
+                <select v-model="button.type" :disabled="!canWrite || !isEditable">
+                  <option v-for="bt in buttonTypes" :key="bt.value" :value="bt.value">{{ bt.label }}</option>
+                </select>
+              </label>
+              <label data-field class="col-6">
+                {{ $t('templates.buttonText', 'Text') }}
+                <input v-model="button.text" :disabled="!canWrite || !isEditable" />
+              </label>
             </div>
-            <div v-if="button.type === 'URL'" class="space-y-1">
-              <Label class="text-xs">{{ $t('templates.buttonUrl', 'URL') }}</Label>
-              <Input v-model="button.url" placeholder="https://example.com" class="h-8 text-xs" :disabled="!canWrite || !isEditable" />
-              <div v-if="button.url && button.url.includes('{')" class="space-y-1 mt-1">
-                <Label class="text-xs">{{ $t('templates.buttonUrlExample', 'URL Example') }}</Label>
-                <Input v-model="button.example" placeholder="https://example.com/order/123" class="h-8 text-xs" :disabled="!canWrite || !isEditable" />
-              </div>
+            <div v-if="button.type === 'URL'" class="vstack gap-2">
+              <label data-field>
+                {{ $t('templates.buttonUrl', 'URL') }}
+                <input v-model="button.url" placeholder="https://example.com" :disabled="!canWrite || !isEditable" />
+              </label>
+              <label v-if="button.url && button.url.includes('{')" data-field>
+                {{ $t('templates.buttonUrlExample', 'URL Example') }}
+                <input v-model="button.example" placeholder="https://example.com/order/123" :disabled="!canWrite || !isEditable" />
+              </label>
             </div>
-            <div v-if="button.type === 'PHONE_NUMBER'" class="space-y-1">
-              <Label class="text-xs">{{ $t('templates.buttonPhoneNumber', 'Phone Number') }}</Label>
-              <Input v-model="button.phone_number" placeholder="+1234567890" class="h-8 text-xs" :disabled="!canWrite || !isEditable" />
+            <label v-if="button.type === 'PHONE_NUMBER'" data-field>
+              {{ $t('templates.buttonPhoneNumber', 'Phone Number') }}
+              <input v-model="button.phone_number" placeholder="+1234567890" :disabled="!canWrite || !isEditable" />
+            </label>
+            <label v-if="button.type === 'COPY_CODE'" data-field>
+              {{ $t('templates.copyCodeExample', 'Example Code') }}
+              <input v-model="button.example" placeholder="SAVE20" :disabled="!canWrite || !isEditable" />
+            </label>
+            <div v-if="button.type === 'FLOW'" class="vstack gap-2">
+              <label data-field>
+                {{ $t('templates.flow', 'Flow') }}
+                <select v-model="button.flow_id" :disabled="!canWrite || !isEditable">
+                  <option value="" disabled>{{ $t('templates.selectFlow', 'Select a Flow') }}</option>
+                  <option v-for="flow in whatsappFlows" :key="flow.id" :value="flow.meta_flow_id || flow.id">{{ flow.name }}</option>
+                </select>
+              </label>
+              <label data-field>
+                {{ $t('templates.flowAction', 'Flow Action') }}
+                <select v-model="button.flow_action" :disabled="!canWrite || !isEditable">
+                  <option value="" disabled>navigate</option>
+                  <option value="navigate">Navigate</option>
+                  <option value="data_exchange">Data Exchange</option>
+                </select>
+              </label>
+              <label v-if="button.flow_action === 'navigate' && button.flow_id && getFlowScreens(button.flow_id).length > 0" data-field>
+                {{ $t('templates.navigateScreen', 'Screen') }}
+                <select v-model="button.navigate_screen" :disabled="!canWrite || !isEditable">
+                  <option value="" disabled>{{ $t('templates.selectScreen', 'Select Screen') }}</option>
+                  <option v-for="screen in getFlowScreens(button.flow_id)" :key="screen" :value="screen">{{ screen }}</option>
+                </select>
+              </label>
+              <label v-else-if="button.flow_action === 'navigate'" data-field>
+                {{ $t('templates.navigateScreen', 'Screen') }}
+                <input v-model="button.navigate_screen" placeholder="SCREEN_ID" :disabled="!canWrite || !isEditable" />
+              </label>
             </div>
-            <div v-if="button.type === 'COPY_CODE'" class="space-y-1">
-              <Label class="text-xs">{{ $t('templates.copyCodeExample', 'Example Code') }}</Label>
-              <Input v-model="button.example" placeholder="SAVE20" class="h-8 text-xs" :disabled="!canWrite || !isEditable" />
-            </div>
-            <div v-if="button.type === 'FLOW'" class="space-y-2">
-              <div class="space-y-1">
-                <Label class="text-xs">{{ $t('templates.flow', 'Flow') }}</Label>
-                <Select v-model="button.flow_id" :disabled="!canWrite || !isEditable">
-                  <SelectTrigger class="h-8 text-xs">
-                    <SelectValue :placeholder="$t('templates.selectFlow', 'Select a Flow')" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem v-for="flow in whatsappFlows" :key="flow.id" :value="flow.meta_flow_id || flow.id">
-                      {{ flow.name }}
-                    </SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-              <div class="space-y-1">
-                <Label class="text-xs">{{ $t('templates.flowAction', 'Flow Action') }}</Label>
-                <Select v-model="button.flow_action" :disabled="!canWrite || !isEditable">
-                  <SelectTrigger class="h-8 text-xs">
-                    <SelectValue placeholder="navigate" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="navigate">Navigate</SelectItem>
-                    <SelectItem value="data_exchange">Data Exchange</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-              <div v-if="button.flow_action === 'navigate' && button.flow_id && getFlowScreens(button.flow_id).length > 0" class="space-y-1">
-                <Label class="text-xs">{{ $t('templates.navigateScreen', 'Screen') }}</Label>
-                <Select v-model="button.navigate_screen" :disabled="!canWrite || !isEditable">
-                  <SelectTrigger class="h-8 text-xs">
-                    <SelectValue :placeholder="$t('templates.selectScreen', 'Select Screen')" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem v-for="screen in getFlowScreens(button.flow_id)" :key="screen" :value="screen">
-                      {{ screen }}
-                    </SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-              <div v-else-if="button.flow_action === 'navigate'" class="space-y-1">
-                <Label class="text-xs">{{ $t('templates.navigateScreen', 'Screen') }}</Label>
-                <Input v-model="button.navigate_screen" placeholder="SCREEN_ID" class="h-8 text-xs" :disabled="!canWrite || !isEditable" />
-              </div>
-            </div>
-            <div v-if="button.type === 'OTP'" class="space-y-2">
-              <div class="space-y-1">
-                <Label class="text-xs">{{ $t('templates.otpType', 'OTP Type') }}</Label>
-                <Select v-model="button.otp_type" :disabled="!canWrite || !isEditable">
-                  <SelectTrigger class="h-8 text-xs">
-                    <SelectValue placeholder="Copy Code" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="COPY_CODE">Copy Code</SelectItem>
-                    <SelectItem value="ONE_TAP">One Tap</SelectItem>
-                    <SelectItem value="ZERO_TAP">Zero Tap</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-              <div v-if="button.otp_type === 'ONE_TAP'" class="space-y-1">
-                <Label class="text-xs">{{ $t('templates.autofillText', 'Autofill Text') }}</Label>
-                <Input v-model="button.autofill_text" placeholder="Autofill" class="h-8 text-xs" :disabled="!canWrite || !isEditable" />
-              </div>
-              <div v-if="button.otp_type === 'ONE_TAP' || button.otp_type === 'ZERO_TAP'" class="space-y-1">
-                <Label class="text-xs">{{ $t('templates.packageName', 'Package Name') }}</Label>
-                <Input v-model="button.package_name" placeholder="com.example.app" class="h-8 text-xs" :disabled="!canWrite || !isEditable" />
-                <Label class="text-xs">{{ $t('templates.signatureHash', 'Signature Hash') }}</Label>
-                <Input v-model="button.signature_hash" placeholder="App signature hash" class="h-8 text-xs" :disabled="!canWrite || !isEditable" />
+            <div v-if="button.type === 'OTP'" class="vstack gap-2">
+              <label data-field>
+                {{ $t('templates.otpType', 'OTP Type') }}
+                <select v-model="button.otp_type" :disabled="!canWrite || !isEditable">
+                  <option value="" disabled>Copy Code</option>
+                  <option value="COPY_CODE">Copy Code</option>
+                  <option value="ONE_TAP">One Tap</option>
+                  <option value="ZERO_TAP">Zero Tap</option>
+                </select>
+              </label>
+              <label v-if="button.otp_type === 'ONE_TAP'" data-field>
+                {{ $t('templates.autofillText', 'Autofill Text') }}
+                <input v-model="button.autofill_text" placeholder="Autofill" :disabled="!canWrite || !isEditable" />
+              </label>
+              <div v-if="button.otp_type === 'ONE_TAP' || button.otp_type === 'ZERO_TAP'" class="vstack gap-2">
+                <label data-field>
+                  {{ $t('templates.packageName', 'Package Name') }}
+                  <input v-model="button.package_name" placeholder="com.example.app" :disabled="!canWrite || !isEditable" />
+                </label>
+                <label data-field>
+                  {{ $t('templates.signatureHash', 'Signature Hash') }}
+                  <input v-model="button.signature_hash" placeholder="App signature hash" :disabled="!canWrite || !isEditable" />
+                </label>
               </div>
             </div>
-          </div>
+          </fieldset>
         </div>
 
-        <div v-if="!isAuthentication" class="space-y-1.5">
-          <Label class="text-xs">{{ $t('templates.footerContent', 'Footer Content') }}</Label>
-          <Textarea
+        <label v-if="!isAuthentication" data-field>
+          {{ $t('templates.footerContent', 'Footer Content') }}
+          <textarea
             v-model="form.footer_content"
-            :rows="2"
+            rows="2"
             :disabled="!canWrite || !isEditable"
           />
-        </div>
-        </CardContent>
-    </Card>
+        </label>
+      </div>
+    </article>
 
     <!-- Activity Log -->
     <AuditLogPanel
@@ -1180,125 +1085,95 @@ function legacyQualityBadge(rating: string): string {
       />
 
       <!-- Editing Guidelines -->
-      <Card v-if="template?.meta_template_id">
-        <CardHeader class="pb-3">
-          <CardTitle class="text-sm font-medium">{{ $t('templates.editingGuidelines', 'Editing Guidelines') }}</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <ul class="list-disc list-inside space-y-2 text-sm text-muted-foreground">
-            <li>{{ $t('templates.guideEditLimit', 'Approved templates can be edited up to 10 times in a 30-day window') }}</li>
-            <li>{{ $t('templates.guideDailyLimit', 'Within a 24-hour period, you are limited to 1 edit') }}</li>
-            <li>{{ $t('templates.guideReview', 'Editing triggers a new review process, which can take up to 24 hours') }}</li>
-            <li>{{ $t('templates.guideEditable', 'You can edit: body, header, footer, and buttons') }}</li>
-            <li>{{ $t('templates.guideNotEditable', 'You cannot change: name, language, or category of approved templates') }}</li>
-            <li>{{ $t('templates.guidePending', 'While under review, the template cannot be used to send messages') }}</li>
-            <li>{{ $t('templates.guideRejected', 'Rejected or paused templates have no edit limits') }}</li>
-          </ul>
-        </CardContent>
-      </Card>
+      <article v-if="template?.meta_template_id" class="card">
+        <header>
+          <h3>{{ $t('templates.editingGuidelines', 'Editing Guidelines') }}</h3>
+        </header>
+        <ul class="text-light">
+          <li>{{ $t('templates.guideEditLimit', 'Approved templates can be edited up to 10 times in a 30-day window') }}</li>
+          <li>{{ $t('templates.guideDailyLimit', 'Within a 24-hour period, you are limited to 1 edit') }}</li>
+          <li>{{ $t('templates.guideReview', 'Editing triggers a new review process, which can take up to 24 hours') }}</li>
+          <li>{{ $t('templates.guideEditable', 'You can edit: body, header, footer, and buttons') }}</li>
+          <li>{{ $t('templates.guideNotEditable', 'You cannot change: name, language, or category of approved templates') }}</li>
+          <li>{{ $t('templates.guidePending', 'While under review, the template cannot be used to send messages') }}</li>
+          <li>{{ $t('templates.guideRejected', 'Rejected or paused templates have no edit limits') }}</li>
+        </ul>
+      </article>
     </template>
   </DetailPageLayout>
 
   <!-- Delete Confirmation -->
-  <AlertDialog v-model:open="deleteDialogOpen">
-    <AlertDialogContent>
-      <AlertDialogHeader>
-        <AlertDialogTitle>{{ $t('templates.deleteTemplate', 'Delete Template') }}</AlertDialogTitle>
-        <AlertDialogDescription>
-          {{ $t('templates.deleteConfirm', 'Are you sure? This action cannot be undone.') }}
-        </AlertDialogDescription>
-      </AlertDialogHeader>
-      <AlertDialogFooter>
-        <AlertDialogCancel>{{ $t('common.cancel') }}</AlertDialogCancel>
-        <AlertDialogAction @click="deleteTemplate">{{ $t('common.delete') }}</AlertDialogAction>
-      </AlertDialogFooter>
-    </AlertDialogContent>
-  </AlertDialog>
+  <ConfirmDialog
+    v-model:open="deleteDialogOpen"
+    :title="$t('templates.deleteTemplate', 'Delete Template')"
+    :description="$t('templates.deleteConfirm', 'Are you sure? This action cannot be undone.')"
+    :confirm-label="$t('common.delete')"
+    @confirm="deleteTemplate"
+  />
 
   <!-- Preview Dialog -->
-  <AlertDialog v-model:open="isPreviewOpen">
-    <AlertDialogContent class="max-w-md">
-      <AlertDialogHeader>
-        <AlertDialogTitle>{{ $t('templates.templatePreview', 'Template Preview') }}</AlertDialogTitle>
-        <AlertDialogDescription>{{ template?.display_name || template?.name }}</AlertDialogDescription>
-      </AlertDialogHeader>
-      <div v-if="template" class="py-2">
-        <div class="bg-gray-800 light:bg-[#e5ddd5] rounded-lg p-4">
-          <div class="bg-gray-700 light:bg-white rounded-lg shadow max-w-[280px] overflow-hidden">
-            <div v-if="template.header_type && template.header_type !== 'NONE'" class="p-3 border-b">
-              <div v-if="template.header_type === 'TEXT'" class="font-semibold">{{ previewHeader }}</div>
-              <div v-else class="h-32 bg-gray-600 light:bg-gray-200 rounded flex items-center justify-center">
-                <span class="text-sm text-gray-400">{{ template.header_type }}</span>
-              </div>
-            </div>
-            <div class="p-3">
-              <p class="text-sm whitespace-pre-wrap">{{ previewBody }}</p>
-            </div>
-            <div v-if="template.footer_content" class="px-3 pb-3">
-              <p class="text-xs text-gray-500">{{ template.footer_content }}</p>
-            </div>
-            <div v-if="template.buttons && template.buttons.length > 0" class="border-t">
-              <div v-for="(btn, idx) in template.buttons" :key="idx" class="border-b last:border-b-0">
-                <button class="w-full py-2 text-sm text-blue-500 hover:bg-gray-600 light:hover:bg-gray-50">
-                  {{ btn.text || btn.title || 'Button' }}
-                </button>
-              </div>
-            </div>
+  <Modal
+    v-model:open="isPreviewOpen"
+    :title="$t('templates.templatePreview', 'Template Preview')"
+    :description="template?.display_name || template?.name"
+  >
+    <div v-if="template" class="vstack gap-4">
+      <div class="card vstack gap-2">
+        <div v-if="template.header_type && template.header_type !== 'NONE'">
+          <strong v-if="template.header_type === 'TEXT'">{{ previewHeader }}</strong>
+          <div v-else class="card align-center">
+            <small class="text-light">{{ template.header_type }}</small>
           </div>
         </div>
-        <div class="mt-4 space-y-2 text-sm">
-          <div class="flex justify-between">
-            <span class="text-muted-foreground">{{ $t('templates.status', 'Status') }}:</span>
-            <Badge :variant="statusVariant">{{ template.status }}</Badge>
-          </div>
-          <div v-if="template.quality_rating" class="flex justify-between">
-            <span class="text-muted-foreground">{{ $t('templates.qualityRating', 'Quality Rating') }}:</span>
-            <Badge :class="legacyQualityBadge(template.quality_rating)">
-              {{ getQualityRatingLabel(template.quality_rating, t) }}
-            </Badge>
-          </div>
-          <div class="flex justify-between">
-            <span class="text-muted-foreground">{{ $t('templates.category', 'Category') }}:</span>
-            <span>{{ template.category }}</span>
-          </div>
-          <div class="flex justify-between">
-            <span class="text-muted-foreground">{{ $t('templates.language', 'Language') }}:</span>
-            <span>{{ languages.find(l => l.code === template!.language)?.name || template.language }}</span>
-          </div>
-          <div v-if="template.meta_template_id" class="flex justify-between">
-            <span class="text-muted-foreground">Meta ID:</span>
-            <span class="font-mono text-xs">{{ template.meta_template_id }}</span>
-          </div>
+        <p class="pre-wrap">{{ previewBody }}</p>
+        <small v-if="template.footer_content" class="text-light">{{ template.footer_content }}</small>
+        <div v-if="template.buttons && template.buttons.length > 0" class="vstack gap-1">
+          <button v-for="(btn, idx) in template.buttons" :key="idx" type="button" class="outline small">
+            {{ btn.text || btn.title || 'Button' }}
+          </button>
         </div>
       </div>
-      <AlertDialogFooter>
-        <AlertDialogCancel>{{ $t('common.close', 'Close') }}</AlertDialogCancel>
-      </AlertDialogFooter>
-    </AlertDialogContent>
-  </AlertDialog>
+      <div class="vstack gap-2">
+        <div class="hstack justify-between">
+          <span class="text-light">{{ $t('templates.status', 'Status') }}:</span>
+          <span class="badge" :data-variant="statusVariant">{{ template.status }}</span>
+        </div>
+        <div v-if="template.quality_rating" class="hstack justify-between">
+          <span class="text-light">{{ $t('templates.qualityRating', 'Quality Rating') }}:</span>
+          <span class="badge" :data-variant="getQualityBadgeVariant(template.quality_rating)">
+            {{ getQualityRatingLabel(template.quality_rating, t) }}
+          </span>
+        </div>
+        <div class="hstack justify-between">
+          <span class="text-light">{{ $t('templates.category', 'Category') }}:</span>
+          <span>{{ template.category }}</span>
+        </div>
+        <div class="hstack justify-between">
+          <span class="text-light">{{ $t('templates.language', 'Language') }}:</span>
+          <span>{{ languages.find(l => l.code === template!.language)?.name || template.language }}</span>
+        </div>
+        <div v-if="template.meta_template_id" class="hstack justify-between">
+          <span class="text-light">Meta ID:</span>
+          <code>{{ template.meta_template_id }}</code>
+        </div>
+      </div>
+    </div>
+    <template #footer>
+      <button type="button" class="outline" @click="isPreviewOpen = false">{{ $t('common.close', 'Close') }}</button>
+    </template>
+  </Modal>
 
   <!-- Publish Confirmation -->
-  <AlertDialog v-model:open="publishDialogOpen">
-    <AlertDialogContent>
-      <AlertDialogHeader>
-        <AlertDialogTitle>
-          {{ template?.meta_template_id ? $t('templates.republishTemplate', 'Republish Template') : $t('templates.publishTemplate', 'Publish Template') }}
-        </AlertDialogTitle>
-        <AlertDialogDescription>
-          {{ template?.meta_template_id
-            ? $t('templates.republishConfirm', 'This will resubmit the template to Meta for approval.')
-            : $t('templates.publishConfirm', 'This will submit the template to Meta for approval.')
-          }}
-        </AlertDialogDescription>
-      </AlertDialogHeader>
-      <AlertDialogFooter>
-        <AlertDialogCancel>{{ $t('common.cancel') }}</AlertDialogCancel>
-        <AlertDialogAction @click="confirmPublish" :disabled="isPublishing">
-          {{ template?.meta_template_id ? $t('templates.republish', 'Republish') : $t('templates.publish', 'Publish') }}
-        </AlertDialogAction>
-      </AlertDialogFooter>
-    </AlertDialogContent>
-  </AlertDialog>
+  <ConfirmDialog
+    v-model:open="publishDialogOpen"
+    :title="template?.meta_template_id ? $t('templates.republishTemplate', 'Republish Template') : $t('templates.publishTemplate', 'Publish Template')"
+    :description="template?.meta_template_id
+      ? $t('templates.republishConfirm', 'This will resubmit the template to Meta for approval.')
+      : $t('templates.publishConfirm', 'This will submit the template to Meta for approval.')"
+    :confirm-label="template?.meta_template_id ? $t('templates.republish', 'Republish') : $t('templates.publish', 'Publish')"
+    :is-submitting="isPublishing"
+    @confirm="confirmPublish"
+  />
 
   <UnsavedChangesDialog :open="showLeaveDialog" @stay="cancelLeave" @leave="confirmLeave" />
   </div>

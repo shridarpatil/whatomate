@@ -16,10 +16,11 @@ export class TemplatesPage extends BasePage {
   constructor(page: Page) {
     super(page)
     this.heading = page.locator('h1').filter({ hasText: 'Message Templates' })
-    this.createButton = page.locator('a[href="/templates/new"] button').first()
+    this.createButton = page.locator('a[href="/templates/new"]').first()
     this.syncButton = page.locator('header').getByRole('button', { name: /Sync from Meta/i })
     this.searchInput = page.locator('input[placeholder*="Search templates"], input[placeholder*="search templates"]')
-    this.accountSelect = page.locator('button[role="combobox"]').first()
+    // Native select inside <main> (the app shell aside has its own selects)
+    this.accountSelect = page.locator('main select').first()
     this.alertDialog = page.locator('[role="alertdialog"]')
     this.tableBody = page.locator('tbody')
   }
@@ -30,8 +31,7 @@ export class TemplatesPage extends BasePage {
   }
 
   async selectAccount(accountName: string) {
-    await this.accountSelect.click()
-    await this.page.locator('[role="option"]').filter({ hasText: accountName }).click()
+    await this.accountSelect.selectOption({ label: accountName })
   }
 
   async search(term: string) {
@@ -41,7 +41,7 @@ export class TemplatesPage extends BasePage {
 
   async deleteTemplateFromList(rowIndex = 0) {
     const row = this.page.locator('tbody tr').nth(rowIndex)
-    await row.locator('button').filter({ has: this.page.locator('svg.text-destructive') }).click()
+    await row.getByRole('button', { name: /delete/i }).click()
     await this.alertDialog.waitFor({ state: 'visible' })
   }
 

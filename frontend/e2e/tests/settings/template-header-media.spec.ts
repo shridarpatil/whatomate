@@ -99,18 +99,14 @@ test.describe('Template media header — issue #355', () => {
     const nameInput = page.locator('main').locator('input').first()
     await nameInput.fill(name)
 
-    // Select the WhatsApp account combobox (first combobox on the page).
-    const accountCombo = page.locator('button[role="combobox"]').first()
-    await accountCombo.click()
-    await page.getByRole('option', { name: accountName }).first().click()
+    // Select the WhatsApp account (first select inside <main>).
+    await page.locator('main select').first().selectOption({ label: accountName })
 
     // Body content.
     await page.locator('main').locator('textarea').first().fill('Hello no-media')
 
     // Switch header type to IMAGE.
-    const headerCombo = page.locator('button[role="combobox"]').filter({ hasText: /Header|TEXT|None|Type/i }).first()
-    await headerCombo.click()
-    await page.getByRole('option', { name: /^Image$/i }).first().click()
+    await page.locator('main label').filter({ hasText: 'Header Type' }).locator('select').selectOption({ label: 'Image' })
     await page.waitForTimeout(200)
 
     // Click Save — expect the new guard toast and no navigation away from /new.

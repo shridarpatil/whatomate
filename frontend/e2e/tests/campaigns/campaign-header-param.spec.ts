@@ -112,8 +112,7 @@ test.describe('Campaign recipients — TEXT header parameter', () => {
     await expect(dialog.locator('code')).toContainText('header')
 
     // Manual entry: phone, name, header, body_1, body_2 — header is the
-    // third column. The Textarea component doesn't forward an id; the
-    // dialog only has one textarea when the Manual tab is active.
+    // third column. The dialog only renders one textarea (the active tab panel).
     const textarea = dialog.locator('textarea')
     await textarea.fill('+15551230001, Alice, HEADER-VAL, BODY-1, BODY-2')
 

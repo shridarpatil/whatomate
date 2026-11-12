@@ -2,17 +2,11 @@
 import { ref, onMounted, watch, computed } from 'vue'
 import { RouterLink } from 'vue-router'
 import { useI18n } from 'vue-i18n'
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
-import { Button } from '@/components/ui/button'
-import { Label } from '@/components/ui/label'
-import { Badge } from '@/components/ui/badge'
-import { ScrollArea } from '@/components/ui/scroll-area'
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { PageHeader, SearchInput, DataTable, IconButton, DeleteConfirmDialog, ErrorState, type Column } from '@/components/shared'
 import { api, templatesService } from '@/services/api'
 import { useOrganizationsStore } from '@/stores/organizations'
 import { toast } from '@/lib/toast'
-import { Plus, RefreshCw, FileText, Pencil, Trash2, Loader2, MessageSquare, Image, FileIcon, Video } from '@/lib/icons'
+import { Plus, RefreshCw, FileText, Pencil, Trash2, MessageSquare, Image, FileIcon, Video } from '@/lib/icons'
 import { getErrorMessage } from '@/lib/api-utils'
 import { useSearchPagination } from '@/composables/useSearchPagination'
 import { getQualityBadgeVariant, getQualityRatingLabel } from '@/lib/utils'
@@ -179,9 +173,8 @@ async function fetchAccounts() {
   }
 }
 
-function onAccountChange(value: string | number | bigint | Record<string, any> | null) {
-  if (typeof value !== 'string') return
-  localStorage.setItem('templates_selected_account', value)
+function onAccountChange() {
+  localStorage.setItem('templates_selected_account', selectedAccount.value)
   currentPage.value = 1
   fetchTemplates()
 }
@@ -251,43 +244,21 @@ async function confirmDeleteTemplate() {
   }
 }
 
-const legacyQualityBadges: Record<string, string> = {
-  success: 'bg-green-950 text-green-400 border border-green-800/40 light:bg-green-100 light:text-green-800',
-  warning: 'bg-yellow-950 text-yellow-400 border border-yellow-800/40 light:bg-yellow-100 light:text-yellow-800',
-  danger: 'bg-red-950 text-red-400 border border-red-800/40 light:bg-red-100 light:text-red-800',
-  secondary: 'bg-gray-800 text-gray-400 light:bg-gray-100 light:text-gray-600',
-}
-function legacyQualityBadge(rating: string): string {
-  return legacyQualityBadges[getQualityBadgeVariant(rating)]
-}
-
-// Dark-first: default is dark mode, light: prefix for light mode
-function getStatusBadgeClass(status: string) {
+function getStatusBadgeVariant(status: string): string | undefined {
   switch (status) {
     case 'APPROVED':
-      return 'bg-green-900 text-green-300 light:bg-green-100 light:text-green-800'
+      return 'success'
     case 'PENDING':
-      return 'bg-yellow-900 text-yellow-300 light:bg-yellow-100 light:text-yellow-800'
+      return 'warning'
     case 'REJECTED':
-      return 'bg-red-900 text-red-300 light:bg-red-100 light:text-red-800'
-    case 'DRAFT':
-      return 'bg-gray-800 text-gray-300 light:bg-gray-100 light:text-gray-800'
+      return 'danger'
     default:
-      return 'bg-gray-800 text-gray-300 light:bg-gray-100 light:text-gray-800'
+      return 'secondary'
   }
 }
 
-function getCategoryBadgeClass(category: string) {
-  switch (category) {
-    case 'UTILITY':
-      return 'bg-blue-900 text-blue-300 light:bg-blue-100 light:text-blue-800'
-    case 'MARKETING':
-      return 'bg-purple-900 text-purple-300 light:bg-purple-100 light:text-purple-800'
-    case 'AUTHENTICATION':
-      return 'bg-orange-900 text-orange-300 light:bg-orange-100 light:text-orange-800'
-    default:
-      return 'bg-gray-800 text-gray-300 light:bg-gray-100 light:text-gray-800'
-  }
+function getCategoryBadgeVariant(category: string): string | undefined {
+  return category === 'UTILITY' ? 'secondary' : undefined
 }
 
 function getHeaderIcon(type: string) {
@@ -305,144 +276,114 @@ function getHeaderIcon(type: string) {
 </script>
 
 <template>
-  <div class="flex flex-col h-full bg-[#0a0a0b] light:bg-gray-50">
-    <PageHeader :title="$t('templates.title')" :subtitle="$t('templates.subtitle')" :icon="FileText" icon-gradient="bg-gradient-to-br from-blue-500 to-cyan-600 shadow-blue-500/20">
+  <div class="flex flex-col h-full">
+    <PageHeader :title="$t('templates.title')" :description="$t('templates.subtitle')" :icon="FileText">
       <template #actions>
-        <Button variant="outline" size="sm" @click="syncTemplates" :disabled="isSyncing || !selectedAccount || selectedAccount === 'all'">
-          <Loader2 v-if="isSyncing" class="h-4 w-4 mr-2 animate-spin" />
-          <RefreshCw v-else class="h-4 w-4 mr-2" />
+        <button type="button" class="outline small" :aria-busy="isSyncing ? 'true' : undefined" :disabled="isSyncing || !selectedAccount || selectedAccount === 'all'" @click="syncTemplates">
+          <RefreshCw v-if="!isSyncing" :size="16" />
           {{ $t('templates.syncFromMeta') }}
-        </Button>
-        <RouterLink to="/templates/new">
-          <Button variant="outline" size="sm">
-            <Plus class="h-4 w-4 mr-2" />
-            {{ $t('templates.createTemplate') }}
-          </Button>
+        </button>
+        <RouterLink to="/templates/new" class="button outline small">
+          <Plus :size="16" />
+          {{ $t('templates.createTemplate') }}
         </RouterLink>
       </template>
     </PageHeader>
 
-    <ScrollArea class="flex-1">
-      <div class="p-6">
-        <div>
-          <ErrorState
-            v-if="error && !isLoading"
-            :title="$t('common.loadErrorTitle')"
-            :description="error"
-            :retry-label="$t('common.retry')"
-            @retry="fetchTemplates"
-          />
-          <Card v-else>
-            <CardHeader>
-              <div class="flex items-center justify-between flex-wrap gap-4">
-                <div>
-                  <CardTitle>{{ $t('templates.yourTemplates') }}</CardTitle>
-                  <CardDescription>{{ $t('templates.yourTemplatesDesc') }}</CardDescription>
-                </div>
-                <div class="flex items-center gap-4 flex-wrap">
-                  <div class="flex items-center gap-2">
-                    <Label class="text-sm text-muted-foreground">{{ $t('templates.account') }}:</Label>
-                    <Select v-model="selectedAccount" @update:model-value="onAccountChange">
-                      <SelectTrigger class="w-[180px]">
-                        <SelectValue :placeholder="$t('templates.allAccounts')" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="all">{{ $t('templates.allAccounts') }}</SelectItem>
-                        <SelectItem v-for="account in accounts" :key="account.id" :value="account.name">
-                          {{ account.name }}
-                        </SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  <SearchInput v-model="searchQuery" :placeholder="$t('templates.searchTemplates') + '...'" class="w-64" />
-                </div>
-              </div>
-            </CardHeader>
-            <CardContent>
-              <DataTable
-                :items="templates"
-                :columns="columns"
-                :is-loading="isLoading"
-                :empty-icon="FileText"
-                :empty-title="$t('templates.noTemplatesFound')"
-                :empty-description="$t('templates.noTemplatesFoundDesc')"
-                server-pagination
-                :current-page="currentPage"
-                :total-items="totalItems"
-                :page-size="pageSize"
-                item-name="templates"
-                @page-change="handlePageChange"
-                v-model:sort-key="sortKey"
-                v-model:sort-direction="sortDirection"
-              >
-                <template #cell-name="{ item: template }">
-                  <RouterLink :to="`/templates/${template.id}`" class="text-inherit no-underline hover:opacity-80">
-                    <span class="font-medium">{{ template.display_name || template.name }}</span>
-                    <p class="text-xs font-mono text-muted-foreground">{{ template.name }}</p>
-                  </RouterLink>
-                </template>
-                <template #cell-category="{ item: template }">
-                  <Badge :class="getCategoryBadgeClass(template.category)" class="text-xs">
-                    {{ template.category }}
-                  </Badge>
-                </template>
-                <template #cell-status="{ item: template }">
-                  <Badge :class="getStatusBadgeClass(template.status)" class="text-xs">
-                    {{ template.status }}
-                  </Badge>
-                </template>
-                <template #cell-quality_rating="{ item: template }">
-                  <Badge v-if="template.quality_rating" :class="legacyQualityBadge(template.quality_rating)" class="text-xs">
-                    {{ getQualityRatingLabel(template.quality_rating, t) }}
-                  </Badge>
-                  <span v-else class="text-muted-foreground text-xs">—</span>
-                </template>
-                <template #cell-language="{ item: template }">
-                  <span class="text-muted-foreground">{{ getLanguageName(template.language) }}</span>
-                </template>
-                <template #cell-header_type="{ item: template }">
-                  <div class="flex items-center gap-1">
-                    <component :is="getHeaderIcon(template.header_type)" class="h-4 w-4 text-muted-foreground" />
-                    <span class="text-muted-foreground text-sm">{{ template.header_type || 'NONE' }}</span>
-                  </div>
-                </template>
-                <template #cell-actions="{ item: template }">
-                  <div class="flex items-center justify-end gap-1">
-                    <RouterLink :to="`/templates/${template.id}`">
-                      <IconButton
-                        :icon="Pencil"
-                        :label="$t('common.edit')"
-                        class="h-8 w-8"
-                      />
-                    </RouterLink>
-                    <IconButton
-                      :icon="Trash2"
-                      :label="$t('common.delete')"
-                      class="h-8 w-8 text-destructive"
-                      @click="openDeleteDialog(template)"
-                    />
-                  </div>
-                </template>
-                <template #empty-action>
-                  <div class="flex items-center justify-center gap-2">
-                    <Button variant="outline" size="sm" @click="syncTemplates" :disabled="!selectedAccount || selectedAccount === 'all'">
-                      <RefreshCw class="h-4 w-4 mr-2" />
-                      {{ $t('templates.syncFromMeta') }}
-                    </Button>
-                    <RouterLink to="/templates/new">
-                      <Button variant="outline" size="sm">
-                        <Plus class="h-4 w-4 mr-2" />
-                        {{ $t('templates.createTemplate') }}
-                      </Button>
-                    </RouterLink>
-                  </div>
-                </template>
-              </DataTable>
-            </CardContent>
-          </Card>
-        </div>
-      </div>
-    </ScrollArea>
+    <div class="flex-1 scroll-y p-4">
+      <ErrorState
+        v-if="error && !isLoading"
+        :title="$t('common.loadErrorTitle')"
+        :description="error"
+        :retry-label="$t('common.retry')"
+        @retry="fetchTemplates"
+      />
+      <article v-else class="card">
+        <header class="hstack justify-between items-center flex-wrap gap-4">
+          <div>
+            <h3>{{ $t('templates.yourTemplates') }}</h3>
+            <p class="text-light">{{ $t('templates.yourTemplatesDesc') }}</p>
+          </div>
+          <div class="hstack items-center gap-4 flex-wrap">
+            <label class="hstack items-center gap-2">
+              <small class="text-light">{{ $t('templates.account') }}:</small>
+              <select v-model="selectedAccount" @change="onAccountChange">
+                <option value="all">{{ $t('templates.allAccounts') }}</option>
+                <option v-for="account in accounts" :key="account.id" :value="account.name">{{ account.name }}</option>
+              </select>
+            </label>
+            <SearchInput v-model="searchQuery" :placeholder="$t('templates.searchTemplates') + '...'" />
+          </div>
+        </header>
+        <DataTable
+          :items="templates"
+          :columns="columns"
+          :is-loading="isLoading"
+          :empty-icon="FileText"
+          :empty-title="$t('templates.noTemplatesFound')"
+          :empty-description="$t('templates.noTemplatesFoundDesc')"
+          server-pagination
+          :current-page="currentPage"
+          :total-items="totalItems"
+          :page-size="pageSize"
+          item-name="templates"
+          @page-change="handlePageChange"
+          v-model:sort-key="sortKey"
+          v-model:sort-direction="sortDirection"
+        >
+          <template #cell-name="{ item: template }">
+            <RouterLink :to="`/templates/${template.id}`">
+              <strong>{{ template.display_name || template.name }}</strong>
+              <br />
+              <small class="text-light"><code>{{ template.name }}</code></small>
+            </RouterLink>
+          </template>
+          <template #cell-category="{ item: template }">
+            <span class="badge" :data-variant="getCategoryBadgeVariant(template.category)">{{ template.category }}</span>
+          </template>
+          <template #cell-status="{ item: template }">
+            <span class="badge" :data-variant="getStatusBadgeVariant(template.status)">{{ template.status }}</span>
+          </template>
+          <template #cell-quality_rating="{ item: template }">
+            <span v-if="template.quality_rating" class="badge" :data-variant="getQualityBadgeVariant(template.quality_rating)">
+              {{ getQualityRatingLabel(template.quality_rating, t) }}
+            </span>
+            <small v-else class="text-light">—</small>
+          </template>
+          <template #cell-language="{ item: template }">
+            <span class="text-light">{{ getLanguageName(template.language) }}</span>
+          </template>
+          <template #cell-header_type="{ item: template }">
+            <div class="hstack items-center gap-1">
+              <component :is="getHeaderIcon(template.header_type)" :size="16" />
+              <small class="text-light">{{ template.header_type || 'NONE' }}</small>
+            </div>
+          </template>
+          <template #cell-actions="{ item: template }">
+            <div class="hstack items-center justify-end gap-1">
+              <RouterLink :to="`/templates/${template.id}`" class="button ghost icon" :title="$t('common.edit')" :aria-label="$t('common.edit')"><Pencil :size="16" /></RouterLink>
+              <IconButton
+                :icon="Trash2"
+                :label="$t('common.delete')"
+                @click="openDeleteDialog(template)"
+              />
+            </div>
+          </template>
+          <template #empty-action>
+            <div class="hstack items-center justify-center gap-2">
+              <button type="button" class="outline small" :disabled="!selectedAccount || selectedAccount === 'all'" @click="syncTemplates">
+                <RefreshCw :size="16" />
+                {{ $t('templates.syncFromMeta') }}
+              </button>
+              <RouterLink to="/templates/new" class="button outline small">
+                <Plus :size="16" />
+                {{ $t('templates.createTemplate') }}
+              </RouterLink>
+            </div>
+          </template>
+        </DataTable>
+      </article>
+    </div>
 
     <!-- Delete Confirmation Dialog -->
     <DeleteConfirmDialog
