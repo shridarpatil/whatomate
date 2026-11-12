@@ -80,13 +80,10 @@ test.describe('Queue Tab', () => {
   })
 
   test('should filter by team', async ({ page }) => {
-    await transfersPage.teamFilterSelect.click()
-    const options = page.locator('[role="option"]')
+    const options = transfersPage.teamFilterSelect.locator('option')
     const optionCount = await options.count()
     if (optionCount > 1) {
-      await options.nth(1).click()
-    } else {
-      await page.keyboard.press('Escape')
+      await transfersPage.teamFilterSelect.selectOption({ index: 1 })
     }
   })
 
@@ -267,7 +264,7 @@ test.describe('Tab Navigation', () => {
     await transfersPage.switchToQueue()
     await transfersPage.switchToMyTransfers()
     // Should be back on my transfers
-    await expect(transfersPage.myTransfersTab).toHaveAttribute('data-state', 'active')
+    await expect(transfersPage.myTransfersTab).toHaveAttribute('aria-selected', 'true')
   })
 })
 

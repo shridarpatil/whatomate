@@ -9,20 +9,6 @@ import DetailPageLayout from '@/components/shared/DetailPageLayout.vue'
 import MetadataPanel from '@/components/shared/MetadataPanel.vue'
 import AuditLogPanel from '@/components/shared/AuditLogPanel.vue'
 import UnsavedChangesDialog from '@/components/shared/UnsavedChangesDialog.vue'
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { Badge } from '@/components/ui/badge'
-import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
-import { Label } from '@/components/ui/label'
-import { Textarea } from '@/components/ui/textarea'
-import { Switch } from '@/components/ui/switch'
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select'
 import { Sparkles, Save } from '@/lib/icons'
 
 const route = useRoute()
@@ -186,7 +172,6 @@ onMounted(async () => {
   <DetailPageLayout
     :title="isNew ? $t('aiContexts.newContext', 'New AI Context') : (contextData?.name || '')"
     :icon="Sparkles"
-    icon-gradient="bg-gradient-to-br from-violet-500 to-purple-600 shadow-violet-500/20"
     back-link="/chatbot/ai"
     :breadcrumbs="breadcrumbs"
     :is-loading="isLoading"
@@ -194,129 +179,119 @@ onMounted(async () => {
     :not-found-title="$t('aiContexts.notFound', 'AI Context not found')"
   >
     <template #actions>
-      <div class="flex items-center gap-2">
-        <Button v-if="hasChanges || isNew" size="sm" @click="save" :disabled="isSaving">
-          <Save class="h-4 w-4 mr-1" /> {{ isSaving ? $t('common.saving', 'Saving...') : isNew ? $t('common.create') : $t('common.save') }}
-        </Button>
+      <div class="hstack gap-2">
+        <button v-if="hasChanges || isNew" type="button" class="small" :disabled="isSaving" :aria-busy="isSaving ? 'true' : undefined" data-spinner="small" @click="save">
+          <Save v-if="!isSaving" :size="16" /> {{ isSaving ? $t('common.saving', 'Saving...') : isNew ? $t('common.create') : $t('common.save') }}
+        </button>
       </div>
     </template>
 
     <!-- Details Card -->
-    <Card>
-      <CardHeader class="pb-3">
-        <div class="flex items-center justify-between">
-          <CardTitle class="text-sm font-medium">{{ $t('aiContexts.details', 'Details') }}</CardTitle>
-          <Badge :variant="form.enabled ? 'default' : 'secondary'">
-            {{ form.enabled ? $t('aiContexts.active', 'Active') : $t('aiContexts.inactive', 'Inactive') }}
-          </Badge>
-        </div>
-      </CardHeader>
-      <CardContent class="space-y-4">
-        <div class="space-y-1.5">
-          <Label class="text-xs">{{ $t('aiContexts.name', 'Name') }} *</Label>
-          <Input v-model="form.name" :placeholder="$t('aiContexts.namePlaceholder', 'e.g. Product Knowledge Base')" />
-        </div>
+    <article class="card">
+      <header class="hstack justify-between">
+        <h3>{{ $t('aiContexts.details', 'Details') }}</h3>
+        <span class="badge" :data-variant="form.enabled ? 'success' : 'secondary'">
+          {{ form.enabled ? $t('aiContexts.active', 'Active') : $t('aiContexts.inactive', 'Inactive') }}
+        </span>
+      </header>
+      <div class="vstack gap-4">
+        <label data-field>
+          {{ $t('aiContexts.name', 'Name') }} *
+          <input v-model="form.name" :placeholder="$t('aiContexts.namePlaceholder', 'e.g. Product Knowledge Base')">
+        </label>
 
-        <div class="space-y-1.5">
-          <Label class="text-xs">{{ $t('aiContexts.contextType', 'Context Type') }}</Label>
-          <Select v-model="form.context_type">
-            <SelectTrigger><SelectValue :placeholder="$t('aiContexts.selectType', 'Select type')" /></SelectTrigger>
-            <SelectContent>
-              <SelectItem value="static">{{ $t('aiContexts.staticContent', 'Static Content') }}</SelectItem>
-              <SelectItem value="api">{{ $t('aiContexts.apiFetch', 'API Fetch') }}</SelectItem>
-            </SelectContent>
-          </Select>
-        </div>
+        <label data-field>
+          {{ $t('aiContexts.contextType', 'Context Type') }}
+          <select v-model="form.context_type">
+            <option value="static">{{ $t('aiContexts.staticContent', 'Static Content') }}</option>
+            <option value="api">{{ $t('aiContexts.apiFetch', 'API Fetch') }}</option>
+          </select>
+        </label>
 
-        <div class="space-y-1.5">
-          <Label class="text-xs">{{ $t('aiContexts.triggerKeywords', 'Trigger Keywords') }}</Label>
-          <Input
+        <label data-field>
+          {{ $t('aiContexts.triggerKeywords', 'Trigger Keywords') }}
+          <input
             v-model="form.trigger_keywords"
             :placeholder="$t('aiContexts.triggerKeywordsPlaceholder', 'pricing, plans, cost')"
-          />
-          <p class="text-xs text-muted-foreground">
-            {{ $t('aiContexts.triggerKeywordsHint', 'Comma-separated. Leave empty to always trigger.') }}
-          </p>
-        </div>
+          >
+          <small data-hint>{{ $t('aiContexts.triggerKeywordsHint', 'Comma-separated. Leave empty to always trigger.') }}</small>
+        </label>
 
-        <div class="space-y-1.5">
-          <Label class="text-xs">{{ $t('aiContexts.contentPrompt', 'Static Content') }}</Label>
-          <Textarea
+        <label data-field>
+          {{ $t('aiContexts.contentPrompt', 'Static Content') }}
+          <textarea
             v-model="form.static_content"
             :placeholder="$t('aiContexts.contentPlaceholder', 'Enter prompt text') + '...'"
-            :rows="6"
+            rows="6"
           />
-          <p class="text-xs text-muted-foreground">
+          <small data-hint>
             {{ $t('aiContexts.contentHint', 'Supports variable placeholders') }}:
-            <code class="bg-muted px-1 rounded">{{ variableExample('variable') }}</code>
-          </p>
-        </div>
+            <code>{{ variableExample('variable') }}</code>
+          </small>
+        </label>
 
-        <div class="grid grid-cols-2 gap-4">
-          <div class="space-y-1.5">
-            <Label class="text-xs">{{ $t('aiContexts.priorityLabel', 'Priority') }}</Label>
-            <Input v-model.number="form.priority" type="number" min="1" max="100" />
-            <p class="text-xs text-muted-foreground">{{ $t('aiContexts.priorityHint', 'Higher priority contexts are used first (1-100)') }}</p>
-          </div>
-          <div class="flex items-center gap-2 pt-6">
-            <Switch :checked="form.enabled" @update:checked="form.enabled = $event" />
-            <Label class="text-xs">{{ $t('aiContexts.enabled', 'Enabled') }}</Label>
-          </div>
+        <div class="row">
+          <label data-field class="col-6">
+            {{ $t('aiContexts.priorityLabel', 'Priority') }}
+            <input v-model.number="form.priority" type="number" min="1" max="100">
+            <small data-hint>{{ $t('aiContexts.priorityHint', 'Higher priority contexts are used first (1-100)') }}</small>
+          </label>
+          <label class="hstack gap-2 col-6">
+            <input v-model="form.enabled" type="checkbox" role="switch">
+            {{ $t('aiContexts.enabled', 'Enabled') }}
+          </label>
         </div>
-      </CardContent>
-    </Card>
+      </div>
+    </article>
 
     <!-- API Configuration Card (only for api type) -->
-    <Card v-if="form.context_type === 'api'">
-      <CardHeader class="pb-3">
-        <CardTitle class="text-sm font-medium">{{ $t('aiContexts.apiConfiguration', 'API Configuration') }}</CardTitle>
-      </CardHeader>
-      <CardContent class="space-y-4">
-        <p class="text-xs text-muted-foreground">{{ $t('aiContexts.apiConfigHint', 'Configure the external API to fetch dynamic context.') }}</p>
+    <article v-if="form.context_type === 'api'" class="card">
+      <header>
+        <h3>{{ $t('aiContexts.apiConfiguration', 'API Configuration') }}</h3>
+      </header>
+      <div class="vstack gap-4">
+        <p class="text-light">{{ $t('aiContexts.apiConfigHint', 'Configure the external API to fetch dynamic context.') }}</p>
 
-        <div class="grid grid-cols-4 gap-4">
-          <div class="col-span-1 space-y-1.5">
-            <Label class="text-xs">{{ $t('aiContexts.method', 'Method') }}</Label>
-            <Select v-model="form.api_method">
-              <SelectTrigger><SelectValue :placeholder="$t('aiContexts.method', 'Method')" /></SelectTrigger>
-              <SelectContent>
-                <SelectItem value="GET">GET</SelectItem>
-                <SelectItem value="POST">POST</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-          <div class="col-span-3 space-y-1.5">
-            <Label class="text-xs">{{ $t('aiContexts.apiUrl', 'API URL') }}</Label>
-            <Input
+        <div class="row">
+          <label data-field class="col-3">
+            {{ $t('aiContexts.method', 'Method') }}
+            <select v-model="form.api_method">
+              <option value="GET">GET</option>
+              <option value="POST">POST</option>
+            </select>
+          </label>
+          <label data-field class="col-9">
+            {{ $t('aiContexts.apiUrl', 'API URL') }}
+            <input
               v-model="form.api_url"
               :placeholder="$t('aiContexts.apiUrlPlaceholder', 'https://api.example.com/data')"
-            />
-          </div>
+            >
+          </label>
         </div>
-        <p class="text-xs text-muted-foreground">
-          {{ $t('aiContexts.variables', 'Variables') }}: <code class="bg-muted px-1 rounded">{{ variableExample('phone_number') }}</code>, <code class="bg-muted px-1 rounded">{{ variableExample('user_message') }}</code>
-        </p>
+        <small class="text-light">
+          {{ $t('aiContexts.variables', 'Variables') }}: <code>{{ variableExample('phone_number') }}</code>, <code>{{ variableExample('user_message') }}</code>
+        </small>
 
-        <div class="space-y-1.5">
-          <Label class="text-xs">{{ $t('aiContexts.headersOptional', 'Headers (optional)') }}</Label>
-          <Textarea
+        <label data-field>
+          {{ $t('aiContexts.headersOptional', 'Headers (optional)') }}
+          <textarea
             v-model="form.api_headers"
             placeholder='{"Authorization": "Bearer ..."}'
-            :rows="3"
+            rows="3"
           />
-          <p class="text-xs text-muted-foreground">{{ $t('aiContexts.headersHint', 'JSON format') }}</p>
-        </div>
+          <small data-hint>{{ $t('aiContexts.headersHint', 'JSON format') }}</small>
+        </label>
 
-        <div class="space-y-1.5">
-          <Label class="text-xs">{{ $t('aiContexts.responsePath', 'Response Path') }}</Label>
-          <Input
+        <label data-field>
+          {{ $t('aiContexts.responsePath', 'Response Path') }}
+          <input
             v-model="form.api_response_path"
             :placeholder="$t('aiContexts.responsePathPlaceholder', '$.data.result')"
-          />
-          <p class="text-xs text-muted-foreground">{{ $t('aiContexts.responsePathHint', 'JSONPath to extract from the API response') }}</p>
-        </div>
-      </CardContent>
-    </Card>
+          >
+          <small data-hint>{{ $t('aiContexts.responsePathHint', 'JSONPath to extract from the API response') }}</small>
+        </label>
+      </div>
+    </article>
 
     <!-- Activity Log -->
     <AuditLogPanel

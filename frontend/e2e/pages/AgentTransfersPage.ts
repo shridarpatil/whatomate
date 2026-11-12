@@ -1,5 +1,6 @@
 import { Page, Locator, expect } from '@playwright/test'
 import { BasePage } from './BasePage'
+import { selectOptionMatching } from '../helpers/select'
 
 /**
  * Agent Transfers Page - Transfer queue management
@@ -23,8 +24,8 @@ export class AgentTransfersPage extends BasePage {
     this.queueTab = page.getByRole('tab', { name: /Queue/i })
     this.allActiveTab = page.getByRole('tab', { name: /All Active/i })
     this.historyTab = page.getByRole('tab', { name: /History/i })
-    this.teamFilterSelect = page.locator('button[role="combobox"]')
-    this.assignDialog = page.locator('dialog[open], [role="dialog"][data-state="open"]')
+    this.teamFilterSelect = page.locator('main').getByRole('combobox', { name: /Filter by team/i })
+    this.assignDialog = page.locator('dialog[open]')
     this.loadMoreButton = page.getByRole('button', { name: /Load More/i })
   }
 
@@ -56,8 +57,7 @@ export class AgentTransfersPage extends BasePage {
   }
 
   async filterByTeam(teamName: string) {
-    await this.teamFilterSelect.click()
-    await this.page.locator('[role="option"]').filter({ hasText: teamName }).click()
+    await selectOptionMatching(this.teamFilterSelect, new RegExp(teamName))
   }
 
   // Table helpers
@@ -88,13 +88,11 @@ export class AgentTransfersPage extends BasePage {
 
   // Assign dialog helpers
   async selectTeamInDialog(teamName: string) {
-    await this.assignDialog.locator('button[role="combobox"]').first().click()
-    await this.page.locator('[role="option"]').filter({ hasText: teamName }).click()
+    await selectOptionMatching(this.assignDialog.getByRole('combobox').first(), new RegExp(teamName))
   }
 
   async selectAgentInDialog(agentName: string) {
-    await this.assignDialog.locator('button[role="combobox"]').last().click()
-    await this.page.locator('[role="option"]').filter({ hasText: agentName }).click()
+    await selectOptionMatching(this.assignDialog.getByRole('combobox').last(), new RegExp(agentName))
   }
 
   async saveAssignment() {

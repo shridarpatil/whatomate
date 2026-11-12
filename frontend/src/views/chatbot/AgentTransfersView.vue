@@ -1,16 +1,7 @@
 <script setup lang="ts">
 import { ref, computed, onMounted, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
-import { Button } from '@/components/ui/button'
-import { Badge } from '@/components/ui/badge'
-import { ScrollArea } from '@/components/ui/scroll-area'
-import { Skeleton } from '@/components/ui/skeleton'
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
-import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
+import Modal from '@/components/oat/Modal.vue'
 import { PageHeader, IconButton, ErrorState, ConfirmDialog } from '@/components/shared'
 import { chatbotService, type Team } from '@/services/api'
 import { useTransfersStore, type AgentTransfer, getSLAStatus } from '@/stores/transfers'
@@ -19,7 +10,7 @@ import { useUsersStore } from '@/stores/users'
 import { useTeamsStore } from '@/stores/teams'
 import { toast } from '@/lib/toast'
 import { useRouter } from 'vue-router'
-import { UserX, Play, MessageSquare, User, Clock, Loader2, Users, UserPlus, AlertTriangle, CheckCircle2, XCircle } from '@/lib/icons'
+import { UserX, Play, MessageSquare, User, Clock, Users, UserPlus, AlertTriangle, CheckCircle2, XCircle } from '@/lib/icons'
 import { getErrorMessage } from '@/lib/api-utils'
 
 const { t } = useI18n()
@@ -283,6 +274,39 @@ function getSourceBadge(source: string) {
   }
 }
 
+// Map the old shadcn badge variants onto Oat's data-variant / outline class.
+function badgeVariant(variant: string): string | undefined {
+  switch (variant) {
+    case 'destructive': return 'danger'
+    case 'warning': return 'warning'
+    case 'secondary': return 'secondary'
+    default: return undefined
+  }
+}
+
+function slaTitle(transfer: AgentTransfer, showPickedUp = false): string {
+  const lines: string[] = []
+  if (showPickedUp && transfer.picked_up_at) {
+    lines.push(`${t('agentTransfers.pickedUpAt')}: ${formatDate(transfer.picked_up_at)}`)
+  } else if (transfer.sla_response_deadline) {
+    lines.push(`${t('agentTransfers.responseDeadline')}: ${formatDate(transfer.sla_response_deadline)}`)
+  }
+  if (transfer.escalation_level > 0) {
+    lines.push(`${t('agentTransfers.escalationLevel')}: ${transfer.escalation_level}`)
+  }
+  if (transfer.sla_breached && transfer.sla_breached_at) {
+    lines.push(`${t('agentTransfers.breachedAt')}: ${formatDate(transfer.sla_breached_at)}`)
+  }
+  return lines.join('\n')
+}
+
+const tabs = computed(() => [
+  { value: 'my-transfers', label: t('agentTransfers.myTransfers'), count: myTransfers.value.length, variant: 'secondary' },
+  { value: 'queue', label: t('agentTransfers.queue'), count: queueTransfers.value.length, variant: 'danger' },
+  { value: 'all', label: t('agentTransfers.allActive') },
+  { value: 'history', label: t('agentTransfers.history') },
+] as { value: string; label: string; count?: number; variant?: string }[])
+
 function getSLABadge(transfer: AgentTransfer) {
   const status = getSLAStatus(transfer)
   switch (status) {
@@ -316,42 +340,38 @@ function formatTimeRemaining(deadline: string | undefined): string {
 </script>
 
 <template>
-  <div class="flex flex-col h-full bg-[#0a0a0b] light:bg-gray-50">
-    <PageHeader :title="$t('agentTransfers.title')" :subtitle="$t('agentTransfers.subtitle')" :icon="UserX" icon-gradient="bg-gradient-to-br from-red-500 to-orange-600 shadow-red-500/20">
+  <div class="flex flex-col h-full">
+    <PageHeader :title="$t('agentTransfers.title')" :description="$t('agentTransfers.subtitle')" :icon="UserX">
       <template v-if="!isAdminOrManager" #actions>
-        <div class="flex items-center gap-4">
-          <div class="text-sm text-white/50 light:text-gray-500">
-            <Users class="h-4 w-4 inline mr-1" />
+        <div class="hstack gap-4">
+          <small class="text-light hstack gap-1">
+            <Users :size="16" />
             {{ $t('agentTransfers.waitingInQueue', { count: transfersStore.queueCount }) }}
-          </div>
-          <Tooltip :disabled="allowQueuePickup">
-            <TooltipTrigger as-child>
-              <span>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  @click="pickNextTransfer"
-                  :disabled="!allowQueuePickup || isPicking || transfersStore.queueCount === 0"
-                >
-                  <Loader2 v-if="isPicking" class="mr-2 h-4 w-4 animate-spin" />
-                  <Play v-else class="mr-2 h-4 w-4" />
-                  {{ $t('agentTransfers.pickNext') }}
-                </Button>
-              </span>
-            </TooltipTrigger>
-            <TooltipContent>{{ $t('agentTransfers.queuePickupDisabled') }}</TooltipContent>
-          </Tooltip>
+          </small>
+          <span :title="!allowQueuePickup ? $t('agentTransfers.queuePickupDisabled') : undefined">
+            <button
+              type="button"
+              class="outline small"
+              :disabled="!allowQueuePickup || isPicking || transfersStore.queueCount === 0"
+              :aria-busy="isPicking ? 'true' : undefined"
+              data-spinner="small"
+              @click="pickNextTransfer"
+            >
+              <Play v-if="!isPicking" :size="16" />
+              {{ $t('agentTransfers.pickNext') }}
+            </button>
+          </span>
         </div>
       </template>
     </PageHeader>
 
     <!-- Content -->
-    <ScrollArea class="flex-1">
-      <div class="p-6 space-y-6">
+    <div class="flex-1 scroll-y p-4">
+      <div class="vstack gap-6">
         <!-- Loading skeleton -->
-        <div v-if="isLoading" class="space-y-4">
-          <Skeleton class="h-12 w-full bg-white/[0.08] light:bg-gray-200 rounded-xl" />
-          <Skeleton class="h-64 w-full bg-white/[0.08] light:bg-gray-200 rounded-xl" />
+        <div v-if="isLoading" class="vstack gap-4" role="status" aria-busy="true">
+          <div class="skeleton line"></div>
+          <div class="skeleton box"></div>
         </div>
 
         <!-- Error state -->
@@ -364,437 +384,374 @@ function formatTimeRemaining(deadline: string | undefined): string {
         />
 
         <!-- Agent View (no tabs, just their transfers) -->
-        <div v-else-if="!isAdminOrManager">
-          <div class="rounded-xl border border-white/[0.08] bg-white/[0.02] light:bg-white light:border-gray-200">
-            <div class="p-6">
-              <h3 class="text-lg font-semibold text-white light:text-gray-900">{{ $t('agentTransfers.myTransfers') }}</h3>
-              <p class="text-sm text-white/50 light:text-gray-500">{{ $t('agentTransfers.contactsTransferred') }}</p>
-            </div>
-            <div class="px-6 pb-6">
-              <div v-if="myTransfers.length === 0" class="text-center py-8 text-white/50 light:text-gray-500">
-                <div class="h-16 w-16 rounded-xl bg-red-500/20 flex items-center justify-center mx-auto mb-4">
-                  <UserX class="h-8 w-8 text-red-400" />
-                </div>
-                <p>{{ $t('agentTransfers.noActiveTransfers') }}</p>
-                <p class="text-sm mt-2">{{ $t('agentTransfers.clickPickNext') }}</p>
-              </div>
+        <article v-else-if="!isAdminOrManager" class="card">
+          <header>
+            <h3>{{ $t('agentTransfers.myTransfers') }}</h3>
+            <p class="text-light">{{ $t('agentTransfers.contactsTransferred') }}</p>
+          </header>
+          <div v-if="myTransfers.length === 0" class="align-center vstack gap-2 items-center">
+            <UserX :size="32" />
+            <p>{{ $t('agentTransfers.noActiveTransfers') }}</p>
+            <small class="text-light">{{ $t('agentTransfers.clickPickNext') }}</small>
+          </div>
 
-              <Table v-else>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>{{ $t('agentTransfers.contact') }}</TableHead>
-                    <TableHead>{{ $t('agentTransfers.phone') }}</TableHead>
-                    <TableHead>{{ $t('agentTransfers.transferredAt') }}</TableHead>
-                    <TableHead>{{ $t('agentTransfers.source') }}</TableHead>
-                    <TableHead class="text-right">{{ $t('agentTransfers.actions') }}</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  <TableRow v-for="transfer in myTransfers" :key="transfer.id">
-                    <TableCell class="font-medium">{{ transfer.contact_name }}</TableCell>
-                    <TableCell>{{ transfer.phone_number }}</TableCell>
-                    <TableCell>{{ formatDate(transfer.transferred_at) }}</TableCell>
-                    <TableCell>
-                      <Badge :variant="getSourceBadge(transfer.source).variant">
-                        {{ getSourceBadge(transfer.source).label }}
-                      </Badge>
-                    </TableCell>
-                    <TableCell class="text-right space-x-2">
+          <div v-else class="table">
+            <table>
+              <thead>
+                <tr>
+                  <th>{{ $t('agentTransfers.contact') }}</th>
+                  <th>{{ $t('agentTransfers.phone') }}</th>
+                  <th>{{ $t('agentTransfers.transferredAt') }}</th>
+                  <th>{{ $t('agentTransfers.source') }}</th>
+                  <th class="align-right">{{ $t('agentTransfers.actions') }}</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr v-for="transfer in myTransfers" :key="transfer.id">
+                  <td><strong>{{ transfer.contact_name }}</strong></td>
+                  <td>{{ transfer.phone_number }}</td>
+                  <td>{{ formatDate(transfer.transferred_at) }}</td>
+                  <td>
+                    <span class="badge" :class="{ outline: getSourceBadge(transfer.source).variant === 'outline' }" :data-variant="badgeVariant(getSourceBadge(transfer.source).variant)">
+                      {{ getSourceBadge(transfer.source).label }}
+                    </span>
+                  </td>
+                  <td class="align-right">
+                    <div class="hstack gap-1 justify-end">
                       <IconButton :icon="MessageSquare" :label="$t('agentTransfers.viewChat')" variant="outline" size="sm" @click="viewChat(transfer)" />
                       <IconButton :icon="Play" :label="$t('agentTransfers.resumeChatbot')" variant="outline" size="sm" :disabled="isResuming" @click="openResumeDialog(transfer)" />
-                    </TableCell>
-                  </TableRow>
-                </TableBody>
-              </Table>
-            </div>
+                    </div>
+                  </td>
+                </tr>
+              </tbody>
+            </table>
           </div>
-        </div>
+        </article>
 
         <!-- Admin/Manager View (with tabs) -->
-        <div v-else>
-          <Tabs v-model="activeTab" class="w-full">
-            <TabsList class="mb-6">
-              <TabsTrigger value="my-transfers">
-                {{ $t('agentTransfers.myTransfers') }}
-                <Badge v-if="myTransfers.length > 0" class="ml-2" variant="secondary">
-                  {{ myTransfers.length }}
-                </Badge>
-              </TabsTrigger>
-              <TabsTrigger value="queue">
-                {{ $t('agentTransfers.queue') }}
-                <Badge v-if="queueTransfers.length > 0" class="ml-2" variant="destructive">
-                  {{ queueTransfers.length }}
-                </Badge>
-              </TabsTrigger>
-              <TabsTrigger value="all">{{ $t('agentTransfers.allActive') }}</TabsTrigger>
-              <TabsTrigger value="history">{{ $t('agentTransfers.history') }}</TabsTrigger>
-            </TabsList>
+        <div v-else class="vstack gap-4">
+          <div role="tablist">
+            <button
+              v-for="tab in tabs"
+              :id="`transfers-tab-${tab.value}`"
+              :key="tab.value"
+              type="button"
+              role="tab"
+              aria-controls="transfers-tabpanel"
+              :aria-selected="activeTab === tab.value"
+              @click="activeTab = tab.value"
+            >
+              {{ tab.label }}
+              <span v-if="tab.count" class="badge" :data-variant="tab.variant">{{ tab.count }}</span>
+            </button>
+          </div>
 
+          <div id="transfers-tabpanel" role="tabpanel" :aria-labelledby="`transfers-tab-${activeTab}`">
             <!-- My Transfers Tab -->
-            <TabsContent value="my-transfers">
-              <Card>
-                <CardHeader>
-                  <CardTitle>{{ $t('agentTransfers.myTransfers') }}</CardTitle>
-                  <CardDescription>{{ $t('agentTransfers.transfersAssignedToYou') }}</CardDescription>
-                </CardHeader>
-                <CardContent>
-                  <div v-if="myTransfers.length === 0" class="text-center py-8 text-muted-foreground">
-                    <UserX class="h-12 w-12 mx-auto mb-4 opacity-50" />
-                    <p>{{ $t('agentTransfers.noActiveTransfers') }}</p>
-                  </div>
+            <article v-if="activeTab === 'my-transfers'" class="card">
+              <header>
+                <h3>{{ $t('agentTransfers.myTransfers') }}</h3>
+                <p class="text-light">{{ $t('agentTransfers.transfersAssignedToYou') }}</p>
+              </header>
+              <div v-if="myTransfers.length === 0" class="align-center vstack gap-2 items-center">
+                <UserX :size="32" />
+                <p>{{ $t('agentTransfers.noActiveTransfers') }}</p>
+              </div>
 
-                  <Table v-else>
-                    <TableHeader>
-                      <TableRow>
-                        <TableHead>{{ $t('agentTransfers.contact') }}</TableHead>
-                        <TableHead>{{ $t('agentTransfers.phone') }}</TableHead>
-                        <TableHead>{{ $t('agentTransfers.transferredAt') }}</TableHead>
-                        <TableHead>{{ $t('agentTransfers.source') }}</TableHead>
-                        <TableHead>{{ $t('agentTransfers.notes') }}</TableHead>
-                        <TableHead class="text-right">{{ $t('agentTransfers.actions') }}</TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      <TableRow v-for="transfer in myTransfers" :key="transfer.id">
-                        <TableCell class="font-medium">{{ transfer.contact_name }}</TableCell>
-                        <TableCell>{{ transfer.phone_number }}</TableCell>
-                        <TableCell>{{ formatDate(transfer.transferred_at) }}</TableCell>
-                        <TableCell>
-                          <Badge :variant="getSourceBadge(transfer.source).variant">
-                            {{ getSourceBadge(transfer.source).label }}
-                          </Badge>
-                        </TableCell>
-                        <TableCell class="max-w-[200px] truncate">{{ transfer.notes || '-' }}</TableCell>
-                        <TableCell class="text-right space-x-2">
-                          <Button size="sm" variant="outline" @click="viewChat(transfer)">
-                            <MessageSquare class="h-4 w-4 mr-1" />
+              <div v-else class="table">
+                <table>
+                  <thead>
+                    <tr>
+                      <th>{{ $t('agentTransfers.contact') }}</th>
+                      <th>{{ $t('agentTransfers.phone') }}</th>
+                      <th>{{ $t('agentTransfers.transferredAt') }}</th>
+                      <th>{{ $t('agentTransfers.source') }}</th>
+                      <th>{{ $t('agentTransfers.notes') }}</th>
+                      <th class="align-right">{{ $t('agentTransfers.actions') }}</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <tr v-for="transfer in myTransfers" :key="transfer.id">
+                      <td><strong>{{ transfer.contact_name }}</strong></td>
+                      <td>{{ transfer.phone_number }}</td>
+                      <td>{{ formatDate(transfer.transferred_at) }}</td>
+                      <td>
+                        <span class="badge" :class="{ outline: getSourceBadge(transfer.source).variant === 'outline' }" :data-variant="badgeVariant(getSourceBadge(transfer.source).variant)">
+                          {{ getSourceBadge(transfer.source).label }}
+                        </span>
+                      </td>
+                      <td><span class="truncate">{{ transfer.notes || '-' }}</span></td>
+                      <td class="align-right">
+                        <div class="hstack gap-1 justify-end">
+                          <button type="button" class="outline small" @click="viewChat(transfer)">
+                            <MessageSquare :size="16" />
                             {{ $t('agentTransfers.chat') }}
-                          </Button>
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            @click="openResumeDialog(transfer)"
-                            :disabled="isResuming"
-                          >
-                            <Play class="h-4 w-4 mr-1" />
+                          </button>
+                          <button type="button" class="outline small" :disabled="isResuming" @click="openResumeDialog(transfer)">
+                            <Play :size="16" />
                             {{ $t('agentTransfers.resume') }}
-                          </Button>
-                        </TableCell>
-                      </TableRow>
-                    </TableBody>
-                  </Table>
-                </CardContent>
-              </Card>
-            </TabsContent>
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+            </article>
 
             <!-- Queue Tab -->
-            <TabsContent value="queue">
-              <Card>
-                <CardHeader>
-                  <div class="flex items-center justify-between">
-                    <div>
-                      <CardTitle>{{ $t('agentTransfers.transferQueue') }}</CardTitle>
-                      <CardDescription>{{ $t('agentTransfers.unassignedTransfers') }}</CardDescription>
-                    </div>
-                    <div class="flex items-center gap-3">
-                      <div class="flex items-center gap-2 text-sm text-muted-foreground">
-                        <Badge variant="outline">{{ $t('agentTransfers.general') }}: {{ teamQueueCounts.general || 0 }}</Badge>
-                        <Badge v-for="team in teams" :key="team.id" variant="outline">
-                          {{ team.name }}: {{ teamQueueCounts[team.id] || 0 }}
-                        </Badge>
-                      </div>
-                      <Select v-model="selectedTeamFilter">
-                        <SelectTrigger class="w-[180px]">
-                          <SelectValue :placeholder="$t('agentTransfers.filterByTeam')" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="all">{{ $t('agentTransfers.allQueues') }}</SelectItem>
-                          <SelectItem value="general">{{ $t('agentTransfers.generalQueue') }}</SelectItem>
-                          <SelectItem v-for="team in teams" :key="team.id" :value="team.id">
-                            {{ team.name }}
-                          </SelectItem>
-                        </SelectContent>
-                      </Select>
-                    </div>
+            <article v-else-if="activeTab === 'queue'" class="card">
+              <header class="hstack justify-between flex-wrap gap-4">
+                <div>
+                  <h3>{{ $t('agentTransfers.transferQueue') }}</h3>
+                  <p class="text-light">{{ $t('agentTransfers.unassignedTransfers') }}</p>
+                </div>
+                <div class="hstack gap-4 flex-wrap">
+                  <div class="hstack gap-2 flex-wrap">
+                    <span class="badge outline">{{ $t('agentTransfers.general') }}: {{ teamQueueCounts.general || 0 }}</span>
+                    <span v-for="team in teams" :key="team.id" class="badge outline">
+                      {{ team.name }}: {{ teamQueueCounts[team.id] || 0 }}
+                    </span>
                   </div>
-                </CardHeader>
-                <CardContent>
-                  <div v-if="queueTransfers.length === 0" class="text-center py-8 text-muted-foreground">
-                    <Clock class="h-12 w-12 mx-auto mb-4 opacity-50" />
-                    <p>{{ $t('agentTransfers.noTransfersInQueue') }}</p>
-                  </div>
+                  <select v-model="selectedTeamFilter" :aria-label="$t('agentTransfers.filterByTeam')">
+                    <option value="all">{{ $t('agentTransfers.allQueues') }}</option>
+                    <option value="general">{{ $t('agentTransfers.generalQueue') }}</option>
+                    <option v-for="team in teams" :key="team.id" :value="team.id">{{ team.name }}</option>
+                  </select>
+                </div>
+              </header>
+              <div v-if="queueTransfers.length === 0" class="align-center vstack gap-2 items-center">
+                <Clock :size="32" />
+                <p>{{ $t('agentTransfers.noTransfersInQueue') }}</p>
+              </div>
 
-                  <Table v-else>
-                    <TableHeader>
-                      <TableRow>
-                        <TableHead>{{ $t('agentTransfers.contact') }}</TableHead>
-                        <TableHead>{{ $t('agentTransfers.phone') }}</TableHead>
-                        <TableHead>{{ $t('agentTransfers.team') }}</TableHead>
-                        <TableHead>{{ $t('agentTransfers.sla') }}</TableHead>
-                        <TableHead>{{ $t('agentTransfers.waiting') }}</TableHead>
-                        <TableHead>{{ $t('agentTransfers.source') }}</TableHead>
-                        <TableHead class="text-right">{{ $t('agentTransfers.actions') }}</TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      <TableRow v-for="transfer in queueTransfers" :key="transfer.id">
-                        <TableCell class="font-medium">{{ transfer.contact_name }}</TableCell>
-                        <TableCell>{{ transfer.phone_number }}</TableCell>
-                        <TableCell>
-                          <Badge variant="outline">
-                            <Users class="h-3 w-3 mr-1" />
-                            {{ getTeamName(transfer.team_id) }}
-                          </Badge>
-                        </TableCell>
-                        <TableCell>
-                          <Tooltip>
-                            <TooltipTrigger asChild>
-                              <Badge :variant="getSLABadge(transfer).variant" class="cursor-help">
-                                <XCircle v-if="getSLABadge(transfer).icon === 'xcircle'" class="h-3 w-3 mr-1" />
-                                <AlertTriangle v-else-if="getSLABadge(transfer).icon === 'alert'" class="h-3 w-3 mr-1" />
-                                <CheckCircle2 v-else class="h-3 w-3 mr-1" />
-                                {{ getSLABadge(transfer).label }}
-                              </Badge>
-                            </TooltipTrigger>
-                            <TooltipContent>
-                              <div class="text-xs space-y-1">
-                                <p v-if="transfer.sla_response_deadline">{{ $t('agentTransfers.responseDeadline') }}: {{ formatDate(transfer.sla_response_deadline) }}</p>
-                                <p v-if="transfer.escalation_level > 0">{{ $t('agentTransfers.escalationLevel') }}: {{ transfer.escalation_level }}</p>
-                                <p v-if="transfer.sla_breached">{{ $t('agentTransfers.breachedAt') }}: {{ formatDate(transfer.sla_breached_at!) }}</p>
-                              </div>
-                            </TooltipContent>
-                          </Tooltip>
-                        </TableCell>
-                        <TableCell>
-                          <span :class="{ 'text-destructive font-medium': getSLAStatus(transfer) === 'breached' }">
-                            {{ formatTimeRemaining(transfer.sla_response_deadline) }}
-                          </span>
-                        </TableCell>
-                        <TableCell>
-                          <Badge :variant="getSourceBadge(transfer.source).variant">
-                            {{ getSourceBadge(transfer.source).label }}
-                          </Badge>
-                        </TableCell>
-                        <TableCell class="text-right space-x-2">
-                          <Button size="sm" variant="outline" @click="openAssignDialog(transfer)">
-                            <UserPlus class="h-4 w-4 mr-1" />
+              <div v-else class="table">
+                <table>
+                  <thead>
+                    <tr>
+                      <th>{{ $t('agentTransfers.contact') }}</th>
+                      <th>{{ $t('agentTransfers.phone') }}</th>
+                      <th>{{ $t('agentTransfers.team') }}</th>
+                      <th>{{ $t('agentTransfers.sla') }}</th>
+                      <th>{{ $t('agentTransfers.waiting') }}</th>
+                      <th>{{ $t('agentTransfers.source') }}</th>
+                      <th class="align-right">{{ $t('agentTransfers.actions') }}</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <tr v-for="transfer in queueTransfers" :key="transfer.id">
+                      <td><strong>{{ transfer.contact_name }}</strong></td>
+                      <td>{{ transfer.phone_number }}</td>
+                      <td>
+                        <span class="badge outline">
+                          <Users :size="12" />
+                          {{ getTeamName(transfer.team_id) }}
+                        </span>
+                      </td>
+                      <td>
+                        <span class="badge" :class="{ outline: getSLABadge(transfer).variant === 'outline' }" :data-variant="badgeVariant(getSLABadge(transfer).variant)" :title="slaTitle(transfer)">
+                          <XCircle v-if="getSLABadge(transfer).icon === 'xcircle'" :size="12" />
+                          <AlertTriangle v-else-if="getSLABadge(transfer).icon === 'alert'" :size="12" />
+                          <CheckCircle2 v-else :size="12" />
+                          {{ getSLABadge(transfer).label }}
+                        </span>
+                      </td>
+                      <td>
+                        <strong v-if="getSLAStatus(transfer) === 'breached'">{{ formatTimeRemaining(transfer.sla_response_deadline) }}</strong>
+                        <span v-else>{{ formatTimeRemaining(transfer.sla_response_deadline) }}</span>
+                      </td>
+                      <td>
+                        <span class="badge" :class="{ outline: getSourceBadge(transfer.source).variant === 'outline' }" :data-variant="badgeVariant(getSourceBadge(transfer.source).variant)">
+                          {{ getSourceBadge(transfer.source).label }}
+                        </span>
+                      </td>
+                      <td class="align-right">
+                        <div class="hstack gap-1 justify-end">
+                          <button type="button" class="outline small" @click="openAssignDialog(transfer)">
+                            <UserPlus :size="16" />
                             {{ $t('agentTransfers.assign') }}
-                          </Button>
-                          <Button size="sm" variant="outline" @click="viewChat(transfer)">
-                            <MessageSquare class="h-4 w-4 mr-1" />
+                          </button>
+                          <button type="button" class="outline small" @click="viewChat(transfer)">
+                            <MessageSquare :size="16" />
                             {{ $t('agentTransfers.chat') }}
-                          </Button>
-                        </TableCell>
-                      </TableRow>
-                    </TableBody>
-                  </Table>
-                </CardContent>
-              </Card>
-            </TabsContent>
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+            </article>
 
             <!-- All Active Tab -->
-            <TabsContent value="all">
-              <Card>
-                <CardHeader>
-                  <CardTitle>{{ $t('agentTransfers.allActiveTransfers') }}</CardTitle>
-                  <CardDescription>{{ $t('agentTransfers.allCurrentlyActive') }}</CardDescription>
-                </CardHeader>
-                <CardContent>
-                  <div v-if="allActiveTransfers.length === 0" class="text-center py-8 text-muted-foreground">
-                    <UserX class="h-12 w-12 mx-auto mb-4 opacity-50" />
-                    <p>{{ $t('agentTransfers.noActiveTransfersGlobal') }}</p>
-                  </div>
+            <article v-else-if="activeTab === 'all'" class="card">
+              <header>
+                <h3>{{ $t('agentTransfers.allActiveTransfers') }}</h3>
+                <p class="text-light">{{ $t('agentTransfers.allCurrentlyActive') }}</p>
+              </header>
+              <div v-if="allActiveTransfers.length === 0" class="align-center vstack gap-2 items-center">
+                <UserX :size="32" />
+                <p>{{ $t('agentTransfers.noActiveTransfersGlobal') }}</p>
+              </div>
 
-                  <Table v-else>
-                    <TableHeader>
-                      <TableRow>
-                        <TableHead>{{ $t('agentTransfers.contact') }}</TableHead>
-                        <TableHead>{{ $t('agentTransfers.phone') }}</TableHead>
-                        <TableHead>{{ $t('agentTransfers.assignedTo') }}</TableHead>
-                        <TableHead>{{ $t('agentTransfers.team') }}</TableHead>
-                        <TableHead>{{ $t('agentTransfers.sla') }}</TableHead>
-                        <TableHead>{{ $t('agentTransfers.source') }}</TableHead>
-                        <TableHead class="text-right">{{ $t('agentTransfers.actions') }}</TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      <TableRow v-for="transfer in allActiveTransfers" :key="transfer.id">
-                        <TableCell class="font-medium">{{ transfer.contact_name }}</TableCell>
-                        <TableCell>{{ transfer.phone_number }}</TableCell>
-                        <TableCell>
-                          <Badge v-if="transfer.agent_name" variant="outline">
-                            <User class="h-3 w-3 mr-1" />
-                            {{ transfer.agent_name }}
-                          </Badge>
-                          <Badge v-else variant="destructive">{{ $t('agentTransfers.unassigned') }}</Badge>
-                        </TableCell>
-                        <TableCell>
-                          <Badge variant="outline">
-                            <Users class="h-3 w-3 mr-1" />
-                            {{ getTeamName(transfer.team_id) }}
-                          </Badge>
-                        </TableCell>
-                        <TableCell>
-                          <Tooltip>
-                            <TooltipTrigger asChild>
-                              <Badge :variant="getSLABadge(transfer).variant" class="cursor-help">
-                                <XCircle v-if="getSLABadge(transfer).icon === 'xcircle'" class="h-3 w-3 mr-1" />
-                                <AlertTriangle v-else-if="getSLABadge(transfer).icon === 'alert'" class="h-3 w-3 mr-1" />
-                                <CheckCircle2 v-else class="h-3 w-3 mr-1" />
-                                {{ getSLABadge(transfer).label }}
-                              </Badge>
-                            </TooltipTrigger>
-                            <TooltipContent>
-                              <div class="text-xs space-y-1">
-                                <p v-if="transfer.picked_up_at">{{ $t('agentTransfers.pickedUpAt') }}: {{ formatDate(transfer.picked_up_at) }}</p>
-                                <p v-else-if="transfer.sla_response_deadline">{{ $t('agentTransfers.responseDeadline') }}: {{ formatDate(transfer.sla_response_deadline) }}</p>
-                                <p v-if="transfer.escalation_level > 0">{{ $t('agentTransfers.escalationLevel') }}: {{ transfer.escalation_level }}</p>
-                                <p v-if="transfer.sla_breached">{{ $t('agentTransfers.breachedAt') }}: {{ formatDate(transfer.sla_breached_at!) }}</p>
-                              </div>
-                            </TooltipContent>
-                          </Tooltip>
-                        </TableCell>
-                        <TableCell>
-                          <Badge :variant="getSourceBadge(transfer.source).variant">
-                            {{ getSourceBadge(transfer.source).label }}
-                          </Badge>
-                        </TableCell>
-                        <TableCell class="text-right space-x-2">
+              <div v-else class="table">
+                <table>
+                  <thead>
+                    <tr>
+                      <th>{{ $t('agentTransfers.contact') }}</th>
+                      <th>{{ $t('agentTransfers.phone') }}</th>
+                      <th>{{ $t('agentTransfers.assignedTo') }}</th>
+                      <th>{{ $t('agentTransfers.team') }}</th>
+                      <th>{{ $t('agentTransfers.sla') }}</th>
+                      <th>{{ $t('agentTransfers.source') }}</th>
+                      <th class="align-right">{{ $t('agentTransfers.actions') }}</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <tr v-for="transfer in allActiveTransfers" :key="transfer.id">
+                      <td><strong>{{ transfer.contact_name }}</strong></td>
+                      <td>{{ transfer.phone_number }}</td>
+                      <td>
+                        <span v-if="transfer.agent_name" class="badge outline">
+                          <User :size="12" />
+                          {{ transfer.agent_name }}
+                        </span>
+                        <span v-else class="badge" data-variant="danger">{{ $t('agentTransfers.unassigned') }}</span>
+                      </td>
+                      <td>
+                        <span class="badge outline">
+                          <Users :size="12" />
+                          {{ getTeamName(transfer.team_id) }}
+                        </span>
+                      </td>
+                      <td>
+                        <span class="badge" :class="{ outline: getSLABadge(transfer).variant === 'outline' }" :data-variant="badgeVariant(getSLABadge(transfer).variant)" :title="slaTitle(transfer, true)">
+                          <XCircle v-if="getSLABadge(transfer).icon === 'xcircle'" :size="12" />
+                          <AlertTriangle v-else-if="getSLABadge(transfer).icon === 'alert'" :size="12" />
+                          <CheckCircle2 v-else :size="12" />
+                          {{ getSLABadge(transfer).label }}
+                        </span>
+                      </td>
+                      <td>
+                        <span class="badge" :class="{ outline: getSourceBadge(transfer.source).variant === 'outline' }" :data-variant="badgeVariant(getSourceBadge(transfer.source).variant)">
+                          {{ getSourceBadge(transfer.source).label }}
+                        </span>
+                      </td>
+                      <td class="align-right">
+                        <div class="hstack gap-1 justify-end">
                           <IconButton :icon="UserPlus" :label="$t('agentTransfers.assign')" variant="outline" size="sm" @click="openAssignDialog(transfer)" />
                           <IconButton :icon="MessageSquare" :label="$t('agentTransfers.chat')" variant="outline" size="sm" @click="viewChat(transfer)" />
                           <IconButton :icon="Play" :label="$t('agentTransfers.resumeChatbot')" variant="outline" size="sm" :disabled="isResuming" @click="openResumeDialog(transfer)" />
-                        </TableCell>
-                      </TableRow>
-                    </TableBody>
-                  </Table>
-                </CardContent>
-              </Card>
-            </TabsContent>
+                        </div>
+                      </td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+            </article>
 
             <!-- History Tab -->
-            <TabsContent value="history">
-              <Card>
-                <CardHeader>
-                  <CardTitle class="flex items-center justify-between">
-                    <span>{{ $t('agentTransfers.transferHistory') }}</span>
-                    <span v-if="historyTotalCount > 0" class="text-sm font-normal text-muted-foreground">
-                      {{ historyTransfers.length }} of {{ historyTotalCount }}
-                    </span>
-                  </CardTitle>
-                  <CardDescription>{{ $t('agentTransfers.resumedTransfers') }}</CardDescription>
-                </CardHeader>
-                <CardContent>
-                  <!-- Loading state -->
-                  <div v-if="isLoadingHistory && historyTransfers.length === 0" class="text-center py-8">
-                    <Loader2 class="h-8 w-8 mx-auto mb-4 animate-spin text-muted-foreground" />
-                    <p class="text-muted-foreground">{{ $t('agentTransfers.loadingHistory') }}...</p>
-                  </div>
+            <article v-else-if="activeTab === 'history'" class="card">
+              <header>
+                <div class="hstack justify-between">
+                  <h3>{{ $t('agentTransfers.transferHistory') }}</h3>
+                  <small v-if="historyTotalCount > 0" class="text-light">
+                    {{ historyTransfers.length }} of {{ historyTotalCount }}
+                  </small>
+                </div>
+                <p class="text-light">{{ $t('agentTransfers.resumedTransfers') }}</p>
+              </header>
+              <!-- Loading state -->
+              <div v-if="isLoadingHistory && historyTransfers.length === 0" class="align-center" role="status" aria-busy="true" data-spinner="large">
+                <p class="text-light">{{ $t('agentTransfers.loadingHistory') }}...</p>
+              </div>
 
-                  <div v-else-if="historyTransfers.length === 0" class="text-center py-8 text-muted-foreground">
-                    <Clock class="h-12 w-12 mx-auto mb-4 opacity-50" />
-                    <p>{{ $t('agentTransfers.noTransferHistory') }}</p>
-                  </div>
+              <div v-else-if="historyTransfers.length === 0" class="align-center vstack gap-2 items-center">
+                <Clock :size="32" />
+                <p>{{ $t('agentTransfers.noTransferHistory') }}</p>
+              </div>
 
-                  <template v-else>
-                    <Table>
-                      <TableHeader>
-                        <TableRow>
-                          <TableHead>{{ $t('agentTransfers.contact') }}</TableHead>
-                          <TableHead>{{ $t('agentTransfers.phone') }}</TableHead>
-                          <TableHead>{{ $t('agentTransfers.handledBy') }}</TableHead>
-                          <TableHead>{{ $t('agentTransfers.transferredAt') }}</TableHead>
-                          <TableHead>{{ $t('agentTransfers.resumedAt') }}</TableHead>
-                        </TableRow>
-                      </TableHeader>
-                      <TableBody>
-                        <TableRow v-for="transfer in historyTransfers" :key="transfer.id">
-                          <TableCell class="font-medium">{{ transfer.contact_name }}</TableCell>
-                          <TableCell>{{ transfer.phone_number }}</TableCell>
-                          <TableCell>{{ transfer.agent_name || '-' }}</TableCell>
-                          <TableCell>{{ formatDate(transfer.transferred_at) }}</TableCell>
-                          <TableCell>{{ transfer.resumed_at ? formatDate(transfer.resumed_at) : '-' }}</TableCell>
-                        </TableRow>
-                      </TableBody>
-                    </Table>
+              <template v-else>
+                <div class="table">
+                  <table>
+                    <thead>
+                      <tr>
+                        <th>{{ $t('agentTransfers.contact') }}</th>
+                        <th>{{ $t('agentTransfers.phone') }}</th>
+                        <th>{{ $t('agentTransfers.handledBy') }}</th>
+                        <th>{{ $t('agentTransfers.transferredAt') }}</th>
+                        <th>{{ $t('agentTransfers.resumedAt') }}</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      <tr v-for="transfer in historyTransfers" :key="transfer.id">
+                        <td><strong>{{ transfer.contact_name }}</strong></td>
+                        <td>{{ transfer.phone_number }}</td>
+                        <td>{{ transfer.agent_name || '-' }}</td>
+                        <td>{{ formatDate(transfer.transferred_at) }}</td>
+                        <td>{{ transfer.resumed_at ? formatDate(transfer.resumed_at) : '-' }}</td>
+                      </tr>
+                    </tbody>
+                  </table>
+                </div>
 
-                    <!-- Load More button -->
-                    <div v-if="hasMoreHistory" class="flex justify-center mt-4">
-                      <Button
-                        variant="outline"
-                        @click="transfersStore.loadMoreHistory()"
-                        :disabled="isLoadingHistory"
-                      >
-                        <Loader2 v-if="isLoadingHistory" class="h-4 w-4 mr-2 animate-spin" />
-                        {{ $t('agentTransfers.loadMore') }}
-                      </Button>
-                    </div>
-                  </template>
-                </CardContent>
-              </Card>
-            </TabsContent>
-          </Tabs>
+                <!-- Load More button -->
+                <div v-if="hasMoreHistory" class="hstack justify-center">
+                  <button
+                    type="button"
+                    class="outline"
+                    :disabled="isLoadingHistory"
+                    :aria-busy="isLoadingHistory ? 'true' : undefined"
+                    data-spinner="small"
+                    @click="transfersStore.loadMoreHistory()"
+                  >
+                    {{ $t('agentTransfers.loadMore') }}
+                  </button>
+                </div>
+              </template>
+            </article>
+          </div>
         </div>
       </div>
-    </ScrollArea>
+    </div>
 
     <!-- Assign Dialog -->
-    <Dialog v-model:open="assignDialogOpen">
-      <DialogContent>
-        <DialogHeader>
-          <DialogTitle>{{ $t('agentTransfers.reassignTransfer') }}</DialogTitle>
-          <DialogDescription>
-            {{ $t('agentTransfers.changeAssignment') }}
-          </DialogDescription>
-        </DialogHeader>
-
-        <div class="space-y-4 py-4">
-          <div v-if="transferToAssign" class="text-sm border rounded-lg p-3 bg-muted/50">
-            <p><strong>{{ $t('agentTransfers.contact') }}:</strong> {{ transferToAssign.contact_name }}</p>
-            <p><strong>{{ $t('agentTransfers.phone') }}:</strong> {{ transferToAssign.phone_number }}</p>
-          </div>
-
-          <div class="space-y-2">
-            <label class="text-sm font-medium">{{ $t('agentTransfers.teamQueue') }}</label>
-            <Select v-model="selectedTeamId">
-              <SelectTrigger>
-                <SelectValue :placeholder="$t('agentTransfers.selectTeam')" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="general">{{ $t('agentTransfers.generalQueue') }}</SelectItem>
-                <SelectItem v-for="team in teams" :key="team.id" :value="team.id">
-                  {{ team.name }}
-                </SelectItem>
-              </SelectContent>
-            </Select>
-            <p class="text-xs text-muted-foreground">{{ $t('agentTransfers.moveToTeamQueue') }}</p>
-          </div>
-
-          <div class="space-y-2">
-            <label class="text-sm font-medium">{{ $t('agentTransfers.assignToAgent') }}</label>
-            <Select v-model="selectedAgentId">
-              <SelectTrigger>
-                <SelectValue :placeholder="$t('agentTransfers.selectAgent')" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="unassigned">{{ $t('agentTransfers.unassignedInQueue') }}</SelectItem>
-                <SelectItem v-for="agent in agents" :key="agent.id" :value="agent.id">
-                  {{ agent.full_name }}
-                </SelectItem>
-              </SelectContent>
-            </Select>
-            <p class="text-xs text-muted-foreground">{{ $t('agentTransfers.directlyAssign') }}</p>
-          </div>
+    <Modal
+      v-model:open="assignDialogOpen"
+      :title="$t('agentTransfers.reassignTransfer')"
+      :description="$t('agentTransfers.changeAssignment')"
+    >
+      <div class="vstack gap-4">
+        <div v-if="transferToAssign" class="vstack gap-1">
+          <p><strong>{{ $t('agentTransfers.contact') }}:</strong> {{ transferToAssign.contact_name }}</p>
+          <p><strong>{{ $t('agentTransfers.phone') }}:</strong> {{ transferToAssign.phone_number }}</p>
         </div>
 
-        <DialogFooter>
-          <Button variant="outline" size="sm" @click="assignDialogOpen = false">{{ $t('common.cancel') }}</Button>
-          <Button size="sm" @click="assignTransfer" :disabled="isAssigning">
-            <Loader2 v-if="isAssigning" class="mr-2 h-4 w-4 animate-spin" />
-            {{ $t('agentTransfers.save') }}
-          </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
+        <label data-field>
+          {{ $t('agentTransfers.teamQueue') }}
+          <select v-model="selectedTeamId">
+            <option value="general">{{ $t('agentTransfers.generalQueue') }}</option>
+            <option v-for="team in teams" :key="team.id" :value="team.id">{{ team.name }}</option>
+          </select>
+          <small data-hint>{{ $t('agentTransfers.moveToTeamQueue') }}</small>
+        </label>
+
+        <label data-field>
+          {{ $t('agentTransfers.assignToAgent') }}
+          <select v-model="selectedAgentId">
+            <option value="unassigned">{{ $t('agentTransfers.unassignedInQueue') }}</option>
+            <option v-for="agent in agents" :key="agent.id" :value="agent.id">{{ agent.full_name }}</option>
+          </select>
+          <small data-hint>{{ $t('agentTransfers.directlyAssign') }}</small>
+        </label>
+      </div>
+      <template #footer>
+        <button type="button" class="outline" @click="assignDialogOpen = false">{{ $t('common.cancel') }}</button>
+        <button type="button" :disabled="isAssigning" :aria-busy="isAssigning ? 'true' : undefined" data-spinner="small" @click="assignTransfer">
+          {{ $t('agentTransfers.save') }}
+        </button>
+      </template>
+    </Modal>
 
     <!-- Resume Confirmation Dialog -->
     <ConfirmDialog

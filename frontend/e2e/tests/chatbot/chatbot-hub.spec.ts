@@ -94,7 +94,7 @@ test.describe('Stats Cards', () => {
 
   test('should display stats cards', async ({ page }) => {
     // Stats cards should be visible
-    const cards = page.locator('.rounded-lg.border')
+    const cards = page.locator('main article.card')
     await expect(cards.first()).toBeVisible()
   })
 

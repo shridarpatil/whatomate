@@ -89,9 +89,9 @@ test.describe('AI Contexts - Detail Page CRUD', () => {
     await page.waitForLoadState('networkidle')
 
     await expect(page.locator('main').locator('input').first()).toBeVisible()
-    await expect(page.locator('button[role="combobox"]').first()).toBeVisible()
+    await expect(page.locator('main').getByRole('combobox').first()).toBeVisible()
     await expect(page.locator('main').locator('textarea').first()).toBeVisible()
-    await expect(page.locator('button[role="switch"]').first()).toBeVisible()
+    await expect(page.locator('main').getByRole('switch').first()).toBeVisible()
   })
 
   test('should create static AI context', async ({ page, request }) => {
@@ -108,14 +108,8 @@ test.describe('AI Contexts - Detail Page CRUD', () => {
     await page.goto('/chatbot/ai/new')
     await page.waitForLoadState('networkidle')
 
-    const typeSelect = page.locator('button[role="combobox"]').first()
-    await typeSelect.click()
-    const apiOption = page.getByRole('option', { name: /api/i })
-    if (await apiOption.isVisible()) {
-      await apiOption.click()
-      await page.waitForTimeout(500)
-      await expect(page.getByText('API URL')).toBeVisible({ timeout: 3000 })
-    }
+    await page.locator('main').getByLabel('Context Type').selectOption('api')
+    await expect(page.getByText('API URL')).toBeVisible({ timeout: 3000 })
   })
 
   test('should edit existing context', async ({ page, request }) => {

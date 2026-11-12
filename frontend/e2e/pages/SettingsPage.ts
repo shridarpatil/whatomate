@@ -1,5 +1,6 @@
 import { Page, Locator, expect } from '@playwright/test'
 import { BasePage } from './BasePage'
+import { selectOptionMatching } from '../helpers/select'
 
 /**
  * Base class for settings pages that use cards/grid layout
@@ -484,8 +485,7 @@ export class ContactsPage extends TableSettingsPage {
       await this.dialog.locator('input').nth(1).fill(name)
     }
     if (account) {
-      await this.dialog.locator('button[role="combobox"]').first().click()
-      await this.page.locator('[role="option"]').filter({ hasText: account }).click()
+      await selectOptionMatching(this.dialog.getByLabel('WhatsApp Account'), new RegExp(account))
     }
   }
 
@@ -498,16 +498,11 @@ export class ContactsPage extends TableSettingsPage {
 
   // Tag selection in form
   async selectTags(tags: string[]) {
-    // Open tag selector popover
-    const tagButton = this.dialog.locator('button[role="combobox"]').last()
-    await tagButton.click()
-
+    // The tag Combobox adds a tag per selection and closes itself.
     for (const tag of tags) {
-      await this.page.locator('[role="option"]').filter({ hasText: tag }).click()
+      await this.dialog.getByLabel('Tags').click()
+      await this.page.getByRole('option', { name: tag }).first().click()
     }
-
-    // Close by clicking outside
-    await this.dialog.locator('h2').click()
   }
 
   // Table helpers - buttons in order: chat, edit, delete

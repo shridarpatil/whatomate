@@ -93,10 +93,10 @@ test.describe('Keyword Rules - Detail Page CRUD', () => {
     await page.waitForLoadState('networkidle')
 
     await expect(page.locator('main').locator('input').first()).toBeVisible()
-    const selects = page.locator('button[role="combobox"]')
+    const selects = page.locator('main').getByRole('combobox')
     expect(await selects.count()).toBeGreaterThanOrEqual(2)
     await expect(page.locator('main').locator('textarea').first()).toBeVisible()
-    await expect(page.locator('button[role="switch"]').first()).toBeVisible()
+    await expect(page.locator('main').getByRole('switch').first()).toBeVisible()
   })
 
   test('should create keyword rule', async ({ page, request }) => {

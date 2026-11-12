@@ -77,7 +77,7 @@ test.describe('Contacts Management', () => {
     await contactsPage.editContact(phoneNumber)
 
     // Update profile name on the detail page
-    const nameInput = page.locator('div.space-y-1\\.5:has(> label:has-text("Profile Name")) input').first()
+    const nameInput = page.locator('main').getByLabel('Profile Name')
     await nameInput.fill(newName)
     await page.waitForTimeout(300)
 
