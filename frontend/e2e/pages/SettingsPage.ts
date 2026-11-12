@@ -19,9 +19,8 @@ export class CardGridPage extends BasePage {
     this.heading = page.locator('h1').filter({ hasText: options.headingText }).first()
     this.addButton = page.getByRole('button', { name: new RegExp(options.addButtonText, 'i') }).first()
     this.searchInput = page.locator('input[placeholder*="Search"]')
-    this.categoryFilter = page.locator('button[role="combobox"]').first()
-    // Native <dialog> (Modal) or legacy reka dialog
-    this.dialog = page.locator('dialog[open], [role="dialog"][data-state="open"]')
+    this.categoryFilter = page.locator('main').locator('select').first()
+    this.dialog = page.locator('dialog[open]')
     this.alertDialog = page.locator('[role="alertdialog"]')
   }
 
@@ -36,8 +35,7 @@ export class CardGridPage extends BasePage {
   }
 
   async filterByCategory(category: string) {
-    await this.categoryFilter.click()
-    await this.page.locator('[role="option"]').filter({ hasText: category }).click()
+    await this.categoryFilter.selectOption({ label: category })
     await this.page.waitForLoadState('networkidle')
   }
 
@@ -51,7 +49,7 @@ export class CardGridPage extends BasePage {
   }
 
   getDialogCombobox(): Locator {
-    return this.dialog.locator('button[role="combobox"]')
+    return this.dialog.locator('button[aria-haspopup="listbox"]')
   }
 
   async submitDialog(buttonText = 'Create') {
@@ -124,8 +122,7 @@ export class TableSettingsPage extends BasePage {
     this.addButton = page.getByRole('button', { name: new RegExp(options.addButtonText, 'i') }).first()
     this.searchInput = page.locator('input[placeholder*="Search"]')
     this.table = page.locator('table')
-    // Native <dialog> (Modal) or legacy reka dialog
-    this.dialog = page.locator('dialog[open], [role="dialog"][data-state="open"]')
+    this.dialog = page.locator('dialog[open]')
     this.alertDialog = page.locator('[role="alertdialog"]')
   }
 
@@ -470,7 +467,7 @@ export class ContactsPage extends TableSettingsPage {
   constructor(page: Page) {
     super(page, { headingText: 'Contacts', addButtonText: 'Add Contact' })
     this.importExportButton = page.getByRole('button', { name: /Import.*Export/i })
-    this.importExportDialog = page.locator('dialog[open], [role="dialog"][data-state="open"]')
+    this.importExportDialog = page.locator('dialog[open]')
   }
 
   async goto() {

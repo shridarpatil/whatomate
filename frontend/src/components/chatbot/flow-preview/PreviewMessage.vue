@@ -25,7 +25,7 @@ const isDebug = computed(() => props.message.type === 'debug')
   <!-- Bot Message -->
   <div v-if="isBot" class="vstack gap-1">
     <div class="flex">
-      <div v-if="message.isValidationError" role="alert" data-variant="danger" data-bubble="incoming" class="flex-col gap-1">
+      <div v-if="message.isValidationError" role="status" data-variant="danger" data-bubble="incoming" class="flex-col gap-1">
         <div class="pre-wrap">{{ message.content }}</div>
         <small class="align-right">{{ formattedTime }}</small>
       </div>
@@ -51,7 +51,7 @@ const isDebug = computed(() => props.message.type === 'debug')
   </div>
 
   <!-- System Message -->
-  <div v-else-if="isSystem" role="alert" data-variant="warning" class="items-center">
+  <div v-else-if="isSystem" role="status" data-variant="warning" class="items-center">
     <Info :size="12" />
     <small>{{ message.content }}</small>
   </div>

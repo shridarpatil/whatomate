@@ -125,6 +125,7 @@ function addNodeFromPalette(type: IVRNodeType) {
     hangup: { audio_file: '' },
   }
 
+  nodes.value.forEach(n => (n.selected = false))
   addNodes([{
     id,
     type,
@@ -136,6 +137,9 @@ function addNodeFromPalette(type: IVRNodeType) {
     },
   }])
 
+  const created = nodes.value.find((n) => n.id === id)
+  if (created) created.selected = true
+  selectedNodeId.value = id
   if (isFirst) entryNodeId.value = id
 }
 

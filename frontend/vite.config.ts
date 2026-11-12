@@ -31,13 +31,7 @@ export default defineConfig({
       output: {
         manualChunks: {
           // Core Vue ecosystem
-          'vue-vendor': ['vue', 'vue-router', 'pinia'],
-          // UI primitives
-          'reka-ui': ['reka-ui'],
-          // Form validation
-          'validation': ['vee-validate'],
-          // Utilities
-          'utils': ['@vueuse/core', 'clsx', 'tailwind-merge', 'class-variance-authority']
+          'vue-vendor': ['vue', 'vue-router', 'pinia']
         }
       }
     },

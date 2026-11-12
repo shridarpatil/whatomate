@@ -1,16 +1,6 @@
 import { Page, Locator, expect } from '@playwright/test'
 import { BasePage } from './BasePage'
 
-// Escape special characters in CSS selectors (backslashes must be escaped first)
-function escapeCssSelector(id: string): string {
-  return id.replace(/\\/g, '\\\\').replace(/\./g, '\\.')
-}
-
-// Escape a string for safe use inside a RegExp.
-function escapeRegex(s: string): string {
-  return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
-}
-
 export class DialogPage extends BasePage {
   readonly dialog: Locator
   readonly cancelButton: Locator
@@ -99,8 +89,7 @@ export class DialogPage extends BasePage {
 
   /**
    * Fill a select by its label: native <select> (selectOption) or Combobox
-   * (click the trigger, click the option). Falls back to the legacy
-   * button[role="combobox"] path for screens not yet migrated.
+   * (click the trigger, click the option).
    */
   async fillSelect(label: string, option: string) {
     const native = this.dialog.getByLabel(label, { exact: false }).and(this.page.locator('select'))
@@ -116,47 +105,16 @@ export class DialogPage extends BasePage {
       return
     }
 
-    await this.selectOption(label, option)
+    throw new Error(`No select or combobox labelled "${label}" in dialog`)
   }
 
   async selectOption(label: string, value: string) {
-    // Find the select trigger near the label
-    const labelLocator = this.dialog.locator(`label`).filter({ hasText: label })
-    const selectTrigger = labelLocator.locator('..').locator('button[role="combobox"]')
-
-    if (await selectTrigger.count() > 0) {
-      await selectTrigger.click()
-    } else {
-      // Try finding by data-testid or other selectors
-      const container = labelLocator.locator('..')
-      await container.locator('button').first().click()
-    }
-
-    // Anchor on the option's accessible name, not on a substring match — a
-    // hasText filter would also match custom roles whose names embed the
-    // value (e.g. selecting 'Agent' matched any role with 'agent' in its
-    // name when leftover test roles were present).
-    const opts = this.page.getByRole('option', { name: new RegExp(`^\\s*${escapeRegex(value)}\\b`, 'i') })
-    await opts.first().click()
+    await this.fillSelect(label, value)
   }
 
-  /** Native <input type="checkbox"> (Oat) is checked by label; legacy button[role="checkbox"] by data-state. */
+  /** Native <input type="checkbox"> (Oat), located by label. */
   private async setChecked(label: string, checked: boolean) {
-    const native = this.dialog.getByLabel(label).and(this.page.locator('input[type="checkbox"]'))
-    if (await native.count() > 0) {
-      await native.first().setChecked(checked)
-      return
-    }
-
-    const labelLocator = this.dialog.locator('label').filter({ hasText: label })
-    const labelFor = await labelLocator.getAttribute('for')
-    const checkbox = labelFor
-      ? this.dialog.locator(`#${escapeCssSelector(labelFor)}`)
-      : labelLocator.locator('..').locator('button[role="checkbox"]')
-    const isChecked = (await checkbox.getAttribute('data-state')) === 'checked'
-    if (isChecked !== checked) {
-      await checkbox.click()
-    }
+    await this.dialog.getByLabel(label).and(this.page.locator('input[type="checkbox"]')).first().setChecked(checked)
   }
 
   async checkCheckbox(label: string) {

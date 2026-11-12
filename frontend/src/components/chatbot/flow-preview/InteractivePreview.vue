@@ -130,7 +130,7 @@ function handleGoToStep(stepName: string) {
 </script>
 
 <template>
-  <div class="flex flex-1 gap-4 h-full min-h-0 min-w-0">
+  <div class="flex flex-wrap flex-1 gap-4 h-full min-h-0 min-w-0">
     <!-- Chat Area -->
     <div class="flex flex-1 justify-center min-w-0 min-h-0">
       <article class="card p-4 side-panel flex flex-col gap-4 min-h-0">

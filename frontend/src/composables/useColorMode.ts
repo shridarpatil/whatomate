@@ -18,15 +18,6 @@ function updateTheme() {
   const scheme = resolveScheme(colorMode.value, getSystemTheme())
   isDark.value = scheme === 'dark'
   document.documentElement.style.colorScheme = scheme
-
-  // Dark-first: we use .light class for light mode, .dark class for dark mode
-  if (isDark.value) {
-    document.documentElement.classList.remove('light')
-    document.documentElement.classList.add('dark')
-  } else {
-    document.documentElement.classList.remove('dark')
-    document.documentElement.classList.add('light')
-  }
 }
 
 export function useColorMode() {

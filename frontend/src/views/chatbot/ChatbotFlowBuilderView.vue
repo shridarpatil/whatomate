@@ -228,6 +228,7 @@ const paletteLabels: Record<string, string> = {
 function addNodeFromPalette(type: ChatNodeType) {
   const pos = project({ x: window.innerWidth / 2 - 200, y: window.innerHeight / 2 - 200 })
   const id = `node_${Date.now()}_${nodeCounter++}`
+  nodes.value.forEach((n) => (n.selected = false))
   addNodes([
     {
       id,
@@ -240,6 +241,8 @@ function addNodeFromPalette(type: ChatNodeType) {
       },
     },
   ])
+  const created = nodes.value.find((n) => n.id === id)
+  if (created) created.selected = true
   // First action node added → wire start → it so the flow has an entry
   // path. Subsequent nodes are wired manually.
   const startHasOutgoing = edges.value.some((e) => e.source === START_NODE_ID)

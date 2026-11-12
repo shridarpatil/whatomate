@@ -1,5 +1,4 @@
 import { ref, computed, watch } from 'vue'
-import { CalendarDate } from '@internationalized/date'
 
 export type TimeRangePreset = 'today' | '7days' | '30days' | 'this_month' | 'custom'
 
@@ -35,12 +34,9 @@ export function useDateRange(options: UseDateRangeOptions = {}) {
     if (savedCustom) {
       try {
         const parsed = JSON.parse(savedCustom)
-        // RangeCalendar requires CalendarDate instances; the JSON-restored
-        // POJOs would render an empty calendar (issue: Apply button shown
-        // but no grid on second open).
         customRange = {
-          start: parsed.start ? new CalendarDate(parsed.start.year, parsed.start.month, parsed.start.day) : undefined,
-          end: parsed.end ? new CalendarDate(parsed.end.year, parsed.end.month, parsed.end.day) : undefined,
+          start: parsed.start ? { year: parsed.start.year, month: parsed.start.month, day: parsed.start.day } : undefined,
+          end: parsed.end ? { year: parsed.end.year, month: parsed.end.month, day: parsed.end.day } : undefined,
         }
       } catch {
         // ignore
