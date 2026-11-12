@@ -2,8 +2,8 @@ import { ref, watch, onMounted } from 'vue'
 
 export type ColorMode = 'light' | 'dark' | 'system'
 
-const colorMode = ref<ColorMode>('dark')
-const isDark = ref(true)
+const colorMode = ref<ColorMode>('system')
+const isDark = ref(false)
 
 export function resolveScheme(mode: ColorMode, systemDark: boolean): 'light' | 'dark' {
   if (mode === 'system') return systemDark ? 'dark' : 'light'
