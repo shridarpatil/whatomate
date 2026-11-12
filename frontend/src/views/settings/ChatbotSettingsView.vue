@@ -1,24 +1,13 @@
 <script setup lang="ts">
 import { ref, onMounted, computed, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
-import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
-import { Label } from '@/components/ui/label'
-import { Textarea } from '@/components/ui/textarea'
-import { ScrollArea } from '@/components/ui/scroll-area'
-import { Separator } from '@/components/ui/separator'
-import { Switch } from '@/components/ui/switch'
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
-import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
-import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '@/components/ui/command'
 import { PageHeader, AuditLogPanel } from '@/components/shared'
+import Combobox from '@/components/oat/Combobox.vue'
 import MessageButtonsEditor from '@/components/shared/MessageButtonsEditor.vue'
 import type { ButtonConfig } from '@/types/flow-preview'
 import { validateWhatsAppButtons } from '@/lib/whatsappButtons'
-import { toast } from 'vue-sonner'
-import { Bot, Loader2, Brain, X, Clock, AlertTriangle, UserPlus, MessageSquare, Users } from 'lucide-vue-next'
+import { toast } from '@/lib/toast'
+import { Bot, Brain, X, Clock, AlertTriangle, MessageSquare, Users } from '@/lib/icons'
 import { chatbotService } from '@/services/api'
 import { useUsersStore } from '@/stores/users'
 import { useAuthStore } from '@/stores/auth'
@@ -147,7 +136,6 @@ watch(isClientReminderEnabled, (newValue) => {
 
 const isSLAEnabled = ref(false)
 const availableUsers = ref<{ id: string; full_name: string }[]>([])
-const escalationComboboxOpen = ref(false)
 
 const selectedEscalationUsers = computed(() => {
   return availableUsers.value.filter(u =>
@@ -160,6 +148,10 @@ const unselectedUsers = computed(() => {
     !slaSettings.value.sla_escalation_notify_ids.includes(u.id)
   )
 })
+
+const unselectedUserOptions = computed(() =>
+  unselectedUsers.value.map(u => ({ value: u.id, label: u.full_name }))
+)
 
 watch(isSLAEnabled, (newValue) => {
   slaSettings.value.sla_enabled = newValue
@@ -356,11 +348,11 @@ async function saveSLASettings() {
   }
 }
 
-function addEscalationUser(userId: string) {
+function addEscalationUser(userId: string | null) {
+  if (!userId) return
   if (!slaSettings.value.sla_escalation_notify_ids.includes(userId)) {
     slaSettings.value.sla_escalation_notify_ids.push(userId)
   }
-  escalationComboboxOpen.value = false
 }
 
 function removeEscalationUser(userId: string) {
@@ -372,526 +364,372 @@ function removeEscalationUser(userId: string) {
 </script>
 
 <template>
-  <div class="flex flex-col h-full bg-[#0a0a0b] light:bg-gray-50">
-    <PageHeader :title="$t('chatbotSettings.title')" :subtitle="$t('chatbotSettings.subtitle')" :icon="Bot" icon-gradient="bg-gradient-to-br from-purple-500 to-pink-600 shadow-purple-500/20" />
-    <ScrollArea class="flex-1">
-      <div class="p-6 space-y-4 max-w-4xl mx-auto">
-        <Tabs default-value="messages" class="w-full">
-          <TabsList class="grid w-full grid-cols-5 mb-6">
-            <TabsTrigger value="messages">
-              <MessageSquare class="h-4 w-4 mr-2" />
+  <div class="flex flex-col h-full">
+    <PageHeader :title="$t('chatbotSettings.title')" :description="$t('chatbotSettings.subtitle')" :icon="Bot" />
+    <div class="flex-1 scroll-y p-4">
+      <div class="container">
+        <ot-tabs>
+          <div role="tablist">
+            <button type="button" role="tab">
+              <MessageSquare :size="16" />
               {{ $t('chatbotSettings.messages') }}
-            </TabsTrigger>
-            <TabsTrigger value="agents">
-              <Users class="h-4 w-4 mr-2" />
+            </button>
+            <button type="button" role="tab">
+              <Users :size="16" />
               {{ $t('chatbotSettings.agents') }}
-            </TabsTrigger>
-            <TabsTrigger value="hours">
-              <Clock class="h-4 w-4 mr-2" />
+            </button>
+            <button type="button" role="tab">
+              <Clock :size="16" />
               {{ $t('chatbotSettings.hours') }}
-            </TabsTrigger>
-            <TabsTrigger value="sla">
-              <AlertTriangle class="h-4 w-4 mr-2" />
+            </button>
+            <button type="button" role="tab">
+              <AlertTriangle :size="16" />
               {{ $t('chatbotSettings.sla') }}
-            </TabsTrigger>
-            <TabsTrigger value="ai">
-              <Brain class="h-4 w-4 mr-2" />
+            </button>
+            <button type="button" role="tab">
+              <Brain :size="16" />
               {{ $t('chatbotSettings.ai') }}
-            </TabsTrigger>
-          </TabsList>
+            </button>
+          </div>
 
           <!-- Messages Tab -->
-          <TabsContent value="messages">
-            <Card>
-              <CardHeader>
-                <CardTitle>{{ $t('chatbotSettings.messagesTitle') }}</CardTitle>
-                <CardDescription>{{ $t('chatbotSettings.messagesDesc') }}</CardDescription>
-              </CardHeader>
-              <CardContent class="space-y-4">
-                <div class="space-y-2">
-                  <Label for="greeting">{{ $t('chatbotSettings.greetingMessage') }}</Label>
-                  <Textarea
-                    id="greeting"
-                    v-model="chatbotSettings.greeting_message"
-                    :placeholder="$t('chatbotSettings.greetingPlaceholder') + '...'"
-                    :rows="2"
-                  />
-                  <div class="mt-2">
-                    <MessageButtonsEditor
-                      :buttons="chatbotSettings.greeting_buttons"
-                      :allowed-types="['reply', 'url']"
-                      @update:buttons="chatbotSettings.greeting_buttons = $event"
-                    />
-                  </div>
-                </div>
-
-                <Separator />
-
-                <div class="space-y-2">
-                  <Label for="fallback">{{ $t('chatbotSettings.fallbackMessage') }}</Label>
-                  <Textarea
-                    id="fallback"
-                    v-model="chatbotSettings.fallback_message"
-                    :placeholder="$t('chatbotSettings.fallbackPlaceholder') + '...'"
-                    :rows="2"
-                  />
-                  <div class="mt-2">
-                    <MessageButtonsEditor
-                      :buttons="chatbotSettings.fallback_buttons"
-                      :allowed-types="['reply', 'url']"
-                      @update:buttons="chatbotSettings.fallback_buttons = $event"
-                    />
-                  </div>
-                </div>
-
-                <Separator />
-
-                <div class="space-y-2">
-                  <Label for="timeout">{{ $t('chatbotSettings.sessionTimeout') }}</Label>
-                  <Input
-                    id="timeout"
-                    v-model.number="chatbotSettings.session_timeout_minutes"
-                    type="number"
-                    min="5"
-                    max="120"
-                    class="w-32"
-                  />
-                  <p class="text-xs text-muted-foreground">{{ $t('chatbotSettings.sessionTimeoutHint') }}</p>
-                </div>
-
-                <div class="flex justify-end pt-2">
-                  <Button @click="saveMessagesSettings" :disabled="isSubmitting">
-                    <Loader2 v-if="isSubmitting" class="mr-2 h-4 w-4 animate-spin" />
-                    {{ $t('chatbotSettings.saveChanges') }}
-                  </Button>
-                </div>
-              </CardContent>
-            </Card>
+          <div role="tabpanel">
+            <article class="card">
+              <header>
+                <h3>{{ $t('chatbotSettings.messagesTitle') }}</h3>
+              </header>
+              <div data-field>
+                <label for="greeting">{{ $t('chatbotSettings.greetingMessage') }}</label>
+                <textarea
+                  id="greeting"
+                  v-model="chatbotSettings.greeting_message"
+                  :placeholder="$t('chatbotSettings.greetingPlaceholder') + '...'"
+                  rows="2"
+                />
+                <MessageButtonsEditor
+                  :buttons="chatbotSettings.greeting_buttons"
+                  :allowed-types="['reply', 'url']"
+                  @update:buttons="chatbotSettings.greeting_buttons = $event"
+                />
+              </div>
+              <hr>
+              <div data-field>
+                <label for="fallback">{{ $t('chatbotSettings.fallbackMessage') }}</label>
+                <textarea
+                  id="fallback"
+                  v-model="chatbotSettings.fallback_message"
+                  :placeholder="$t('chatbotSettings.fallbackPlaceholder') + '...'"
+                  rows="2"
+                />
+                <MessageButtonsEditor
+                  :buttons="chatbotSettings.fallback_buttons"
+                  :allowed-types="['reply', 'url']"
+                  @update:buttons="chatbotSettings.fallback_buttons = $event"
+                />
+              </div>
+              <hr>
+              <label data-field>
+                {{ $t('chatbotSettings.sessionTimeout') }}
+                <input id="timeout" v-model.number="chatbotSettings.session_timeout_minutes" type="number" min="5" max="120" />
+                <small data-hint>{{ $t('chatbotSettings.sessionTimeoutHint') }}</small>
+              </label>
+              <div class="hstack justify-end">
+                <button type="button" :aria-busy="isSubmitting" :disabled="isSubmitting" @click="saveMessagesSettings">
+                  {{ $t('chatbotSettings.saveChanges') }}
+                </button>
+              </div>
+            </article>
             <div v-if="orgID" class="mt-4">
               <AuditLogPanel :key="messagesLogKey" resource-type="settings.chatbot.messages" :resource-id="orgID" />
             </div>
-          </TabsContent>
+          </div>
 
           <!-- Agents Tab -->
-          <TabsContent value="agents">
-            <Card>
-              <CardHeader>
-                <CardTitle>{{ $t('chatbotSettings.agentSettings') }}</CardTitle>
-                <CardDescription>{{ $t('chatbotSettings.agentSettingsDesc') }}</CardDescription>
-              </CardHeader>
-              <CardContent class="space-y-4">
-                <div class="flex items-center justify-between py-2">
-                  <div>
-                    <p class="font-medium">{{ $t('chatbotSettings.allowQueuePickup') }}</p>
-                    <p class="text-sm text-muted-foreground">{{ $t('chatbotSettings.allowQueuePickupDesc') }}</p>
-                  </div>
-                  <Switch
-                    :checked="chatbotSettings.allow_agent_queue_pickup"
-                    @update:checked="chatbotSettings.allow_agent_queue_pickup = $event"
-                  />
-                </div>
-
-                <Separator />
-
-                <div class="flex items-center justify-between py-2">
-                  <div>
-                    <p class="font-medium">{{ $t('chatbotSettings.assignSameAgent') }}</p>
-                    <p class="text-sm text-muted-foreground">{{ $t('chatbotSettings.assignSameAgentDesc') }}</p>
-                  </div>
-                  <Switch
-                    :checked="chatbotSettings.assign_to_same_agent"
-                    @update:checked="chatbotSettings.assign_to_same_agent = $event"
-                  />
-                </div>
-
-                <Separator />
-
-                <div class="flex items-center justify-between py-2">
-                  <div>
-                    <p class="font-medium">{{ $t('chatbotSettings.currentConversationOnly') }}</p>
-                    <p class="text-sm text-muted-foreground">{{ $t('chatbotSettings.currentConversationOnlyDesc') }}</p>
-                  </div>
-                  <Switch
-                    :checked="chatbotSettings.agent_current_conversation_only"
-                    @update:checked="chatbotSettings.agent_current_conversation_only = $event"
-                  />
-                </div>
-
-                <div class="flex justify-end pt-4">
-                  <Button @click="saveAgentSettings" :disabled="isSubmitting">
-                    <Loader2 v-if="isSubmitting" class="mr-2 h-4 w-4 animate-spin" />
-                    {{ $t('chatbotSettings.saveChanges') }}
-                  </Button>
-                </div>
-              </CardContent>
-            </Card>
+          <div role="tabpanel">
+            <article class="card">
+              <header>
+                <h3>{{ $t('chatbotSettings.agentSettings') }}</h3>
+              </header>
+              <label data-field>
+                <span class="hstack justify-between">
+                  <span>{{ $t('chatbotSettings.allowQueuePickup') }}</span>
+                  <input type="checkbox" role="switch" v-model="chatbotSettings.allow_agent_queue_pickup" />
+                </span>
+                <small data-hint>{{ $t('chatbotSettings.allowQueuePickupDesc') }}</small>
+              </label>
+              <hr>
+              <label data-field>
+                <span class="hstack justify-between">
+                  <span>{{ $t('chatbotSettings.assignSameAgent') }}</span>
+                  <input type="checkbox" role="switch" v-model="chatbotSettings.assign_to_same_agent" />
+                </span>
+                <small data-hint>{{ $t('chatbotSettings.assignSameAgentDesc') }}</small>
+              </label>
+              <hr>
+              <label data-field>
+                <span class="hstack justify-between">
+                  <span>{{ $t('chatbotSettings.currentConversationOnly') }}</span>
+                  <input type="checkbox" role="switch" v-model="chatbotSettings.agent_current_conversation_only" />
+                </span>
+                <small data-hint>{{ $t('chatbotSettings.currentConversationOnlyDesc') }}</small>
+              </label>
+              <div class="hstack justify-end">
+                <button type="button" :aria-busy="isSubmitting" :disabled="isSubmitting" @click="saveAgentSettings">
+                  {{ $t('chatbotSettings.saveChanges') }}
+                </button>
+              </div>
+            </article>
             <div v-if="orgID" class="mt-4">
               <AuditLogPanel :key="agentsLogKey" resource-type="settings.chatbot.agents" :resource-id="orgID" />
             </div>
-          </TabsContent>
+          </div>
 
           <!-- Business Hours Tab -->
-          <TabsContent value="hours">
-            <Card>
-              <CardHeader>
-                <CardTitle>{{ $t('chatbotSettings.businessHours') }}</CardTitle>
-                <CardDescription>{{ $t('chatbotSettings.businessHoursDesc') }}</CardDescription>
-              </CardHeader>
-              <CardContent class="space-y-4">
-                <div class="flex items-center justify-between">
-                  <div>
-                    <p class="font-medium">{{ $t('chatbotSettings.enableBusinessHours') }}</p>
-                    <p class="text-sm text-muted-foreground">{{ $t('chatbotSettings.enableBusinessHoursDesc') }}</p>
-                  </div>
-                  <Switch
-                    :checked="chatbotSettings.business_hours_enabled"
-                    @update:checked="chatbotSettings.business_hours_enabled = $event"
-                  />
-                </div>
-
-                <div v-if="chatbotSettings.business_hours_enabled" class="space-y-4 pt-2">
-                  <Separator />
-
-                  <div class="border rounded-lg p-4 space-y-3">
-                    <div
-                      v-for="hour in chatbotSettings.business_hours"
-                      :key="hour.day"
-                      class="flex items-center gap-4"
-                    >
-                      <div class="w-20">
-                        <Switch
-                          :checked="hour.enabled"
-                          @update:checked="hour.enabled = $event"
-                        />
-                      </div>
-                      <span class="w-24 font-medium" :class="{ 'text-muted-foreground': !hour.enabled }">
-                        {{ daysOfWeek[hour.day] }}
-                      </span>
-                      <div class="flex items-center gap-2" :class="{ 'opacity-50': !hour.enabled }">
-                        <Input
-                          v-model="hour.start_time"
-                          type="time"
-                          class="w-28"
-                          :disabled="!hour.enabled"
-                        />
-                        <span class="text-muted-foreground">{{ $t('chatbotSettings.to') }}</span>
-                        <Input
-                          v-model="hour.end_time"
-                          type="time"
-                          class="w-28"
-                          :disabled="!hour.enabled"
-                        />
-                      </div>
+          <div role="tabpanel">
+            <article class="card">
+              <header>
+                <h3>{{ $t('chatbotSettings.businessHours') }}</h3>
+              </header>
+              <label data-field>
+                <span class="hstack justify-between">
+                  <span>{{ $t('chatbotSettings.enableBusinessHours') }}</span>
+                  <input type="checkbox" role="switch" v-model="chatbotSettings.business_hours_enabled" />
+                </span>
+                <small data-hint>{{ $t('chatbotSettings.enableBusinessHoursDesc') }}</small>
+              </label>
+              <div v-if="chatbotSettings.business_hours_enabled" class="vstack gap-2">
+                <hr>
+                <div class="vstack gap-2">
+                  <div v-for="hour in chatbotSettings.business_hours" :key="hour.day" class="hstack gap-4">
+                    <input type="checkbox" role="switch" v-model="hour.enabled" :aria-label="daysOfWeek[hour.day]" />
+                    <strong class="flex-1" :class="{ 'text-light': !hour.enabled }">{{ daysOfWeek[hour.day] }}</strong>
+                    <div class="hstack gap-2">
+                      <input v-model="hour.start_time" type="time" :aria-label="$t('chatbotSettings.startTime', { day: daysOfWeek[hour.day] })" :disabled="!hour.enabled" />
+                      <span class="text-light">{{ $t('chatbotSettings.to') }}</span>
+                      <input v-model="hour.end_time" type="time" :aria-label="$t('chatbotSettings.endTime', { day: daysOfWeek[hour.day] })" :disabled="!hour.enabled" />
                     </div>
                   </div>
-
-                  <Separator />
-
-                  <div class="space-y-2">
-                    <Label>{{ $t('chatbotSettings.outOfHoursMessage') }}</Label>
-                    <Textarea
-                      v-model="chatbotSettings.out_of_hours_message"
-                      :placeholder="$t('chatbotSettings.outOfHoursPlaceholder') + '...'"
-                      :rows="2"
-                    />
-                  </div>
-
-                  <div class="flex items-center justify-between py-2">
-                    <div>
-                      <p class="font-medium">{{ $t('chatbotSettings.allowAutomatedOutsideHours') }}</p>
-                      <p class="text-sm text-muted-foreground">{{ $t('chatbotSettings.allowAutomatedOutsideHoursDesc') }}</p>
-                    </div>
-                    <Switch
-                      :checked="chatbotSettings.allow_automated_outside_hours"
-                      @update:checked="chatbotSettings.allow_automated_outside_hours = $event"
-                    />
-                  </div>
                 </div>
-
-                <div class="flex justify-end pt-2">
-                  <Button @click="saveBusinessHoursSettings" :disabled="isSubmitting">
-                    <Loader2 v-if="isSubmitting" class="mr-2 h-4 w-4 animate-spin" />
-                    {{ $t('chatbotSettings.saveChanges') }}
-                  </Button>
-                </div>
-              </CardContent>
-            </Card>
+                <hr>
+                <label data-field>
+                  {{ $t('chatbotSettings.outOfHoursMessage') }}
+                  <textarea v-model="chatbotSettings.out_of_hours_message" :placeholder="$t('chatbotSettings.outOfHoursPlaceholder') + '...'" rows="2" />
+                </label>
+                <label data-field>
+                  <span class="hstack justify-between">
+                    <span>{{ $t('chatbotSettings.allowAutomatedOutsideHours') }}</span>
+                    <input type="checkbox" role="switch" v-model="chatbotSettings.allow_automated_outside_hours" />
+                  </span>
+                  <small data-hint>{{ $t('chatbotSettings.allowAutomatedOutsideHoursDesc') }}</small>
+                </label>
+              </div>
+              <div class="hstack justify-end">
+                <button type="button" :aria-busy="isSubmitting" :disabled="isSubmitting" @click="saveBusinessHoursSettings">
+                  {{ $t('chatbotSettings.saveChanges') }}
+                </button>
+              </div>
+            </article>
             <div v-if="orgID" class="mt-4">
               <AuditLogPanel :key="hoursLogKey" resource-type="settings.chatbot.hours" :resource-id="orgID" />
             </div>
-          </TabsContent>
+          </div>
 
           <!-- SLA Tab -->
-          <TabsContent value="sla">
-            <Card>
-              <CardHeader>
-                <CardTitle>{{ $t('chatbotSettings.slaSettings') }}</CardTitle>
-                <CardDescription>{{ $t('chatbotSettings.slaSettingsDesc') }}</CardDescription>
-              </CardHeader>
-              <CardContent class="space-y-4">
-                <div class="flex items-center justify-between">
-                  <div>
-                    <p class="font-medium">{{ $t('chatbotSettings.enableSlaTracking') }}</p>
-                    <p class="text-sm text-muted-foreground">{{ $t('chatbotSettings.enableSlaTrackingDesc') }}</p>
+          <div role="tabpanel">
+            <article class="card">
+              <header>
+                <h3>{{ $t('chatbotSettings.slaSettings') }}</h3>
+              </header>
+              <label data-field>
+                <span class="hstack justify-between">
+                  <span>{{ $t('chatbotSettings.enableSlaTracking') }}</span>
+                  <input type="checkbox" role="switch" v-model="isSLAEnabled" />
+                </span>
+                <small data-hint>{{ $t('chatbotSettings.enableSlaTrackingDesc') }}</small>
+              </label>
+              <div v-if="isSLAEnabled" class="vstack gap-2">
+                <hr>
+                <div class="row">
+                  <div class="col-6">
+                    <label data-field>
+                      {{ $t('chatbotSettings.responseTime') }}
+                      <input v-model.number="slaSettings.sla_response_minutes" type="number" min="1" max="1440" />
+                      <small data-hint>{{ $t('chatbotSettings.responseTimeHint') }}</small>
+                    </label>
                   </div>
-                  <Switch
-                    :checked="isSLAEnabled"
-                    @update:checked="(val: boolean) => isSLAEnabled = val"
-                  />
-                </div>
-
-                <div v-if="isSLAEnabled" class="space-y-4 pt-2">
-                  <Separator />
-
-                  <div class="grid grid-cols-2 gap-4">
-                    <div class="space-y-2">
-                      <Label>{{ $t('chatbotSettings.responseTime') }}</Label>
-                      <Input v-model.number="slaSettings.sla_response_minutes" type="number" min="1" max="1440" />
-                      <p class="text-xs text-muted-foreground">{{ $t('chatbotSettings.responseTimeHint') }}</p>
-                    </div>
-                    <div class="space-y-2">
-                      <Label>{{ $t('chatbotSettings.escalationTime') }}</Label>
-                      <Input v-model.number="slaSettings.sla_escalation_minutes" type="number" min="1" max="1440" />
-                      <p class="text-xs text-muted-foreground">{{ $t('chatbotSettings.escalationTimeHint') }}</p>
-                    </div>
-                  </div>
-
-                  <div class="grid grid-cols-2 gap-4">
-                    <div class="space-y-2">
-                      <Label>{{ $t('chatbotSettings.resolutionTime') }}</Label>
-                      <Input v-model.number="slaSettings.sla_resolution_minutes" type="number" min="1" max="10080" />
-                      <p class="text-xs text-muted-foreground">{{ $t('chatbotSettings.resolutionTimeHint') }}</p>
-                    </div>
-                    <div class="space-y-2">
-                      <Label>{{ $t('chatbotSettings.autoCloseHours') }}</Label>
-                      <Input v-model.number="slaSettings.sla_auto_close_hours" type="number" min="1" max="168" />
-                      <p class="text-xs text-muted-foreground">{{ $t('chatbotSettings.autoCloseHoursHint') }}</p>
-                    </div>
-                  </div>
-
-                  <div class="space-y-2">
-                    <Label>{{ $t('chatbotSettings.autoCloseMessage') }}</Label>
-                    <Textarea
-                      v-model="slaSettings.sla_auto_close_message"
-                      :placeholder="$t('chatbotSettings.autoClosePlaceholder') + '...'"
-                      :rows="2"
-                    />
-                  </div>
-
-                  <div class="space-y-2">
-                    <Label>{{ $t('chatbotSettings.customerWarningMessage') }}</Label>
-                    <Textarea
-                      v-model="slaSettings.sla_warning_message"
-                      :placeholder="$t('chatbotSettings.customerWarningPlaceholder') + '...'"
-                      :rows="2"
-                    />
-                  </div>
-
-                  <Separator />
-
-                  <div class="space-y-3">
-                    <div class="flex items-center justify-between">
-                      <div>
-                        <Label>{{ $t('chatbotSettings.escalationNotifyContacts') }}</Label>
-                        <p class="text-xs text-muted-foreground">{{ $t('chatbotSettings.escalationNotifyHint') }}</p>
-                      </div>
-                      <Popover v-model:open="escalationComboboxOpen">
-                        <PopoverTrigger as-child>
-                          <Button variant="outline" size="sm" class="gap-2" :disabled="unselectedUsers.length === 0">
-                            <UserPlus class="h-4 w-4" />
-                            {{ $t('chatbotSettings.addUser') }}
-                          </Button>
-                        </PopoverTrigger>
-                        <PopoverContent class="w-[250px] p-0" align="end">
-                          <Command>
-                            <CommandInput :placeholder="$t('chatbotSettings.searchUsers') + '...'" />
-                            <CommandList>
-                              <CommandEmpty>{{ $t('chatbotSettings.noUsersFound') }}</CommandEmpty>
-                              <CommandGroup>
-                                <CommandItem
-                                  v-for="user in unselectedUsers"
-                                  :key="user.id"
-                                  :value="user.full_name"
-                                  @select="addEscalationUser(user.id)"
-                                  class="cursor-pointer"
-                                >
-                                  {{ user.full_name }}
-                                </CommandItem>
-                              </CommandGroup>
-                            </CommandList>
-                          </Command>
-                        </PopoverContent>
-                      </Popover>
-                    </div>
-
-                    <div v-if="selectedEscalationUsers.length > 0" class="flex flex-wrap gap-2">
-                      <div
-                        v-for="user in selectedEscalationUsers"
-                        :key="user.id"
-                        class="flex items-center gap-2 px-3 py-1.5 bg-muted rounded-full text-sm"
-                      >
-                        <span>{{ user.full_name }}</span>
-                        <button type="button" @click="removeEscalationUser(user.id)" class="text-muted-foreground hover:text-foreground">
-                          <X class="h-3.5 w-3.5" />
-                        </button>
-                      </div>
-                    </div>
-                    <p v-else class="text-sm text-muted-foreground italic">{{ $t('chatbotSettings.noUsersSelected') }}</p>
+                  <div class="col-6">
+                    <label data-field>
+                      {{ $t('chatbotSettings.escalationTime') }}
+                      <input v-model.number="slaSettings.sla_escalation_minutes" type="number" min="1" max="1440" />
+                      <small data-hint>{{ $t('chatbotSettings.escalationTimeHint') }}</small>
+                    </label>
                   </div>
                 </div>
-
-                <Separator class="my-6" />
-
-                <!-- Client Inactivity Settings (Chatbot Only) -->
-                <div class="space-y-4">
-                  <div class="flex items-center justify-between">
+                <div class="row">
+                  <div class="col-6">
+                    <label data-field>
+                      {{ $t('chatbotSettings.resolutionTime') }}
+                      <input v-model.number="slaSettings.sla_resolution_minutes" type="number" min="1" max="10080" />
+                      <small data-hint>{{ $t('chatbotSettings.resolutionTimeHint') }}</small>
+                    </label>
+                  </div>
+                  <div class="col-6">
+                    <label data-field>
+                      {{ $t('chatbotSettings.autoCloseHours') }}
+                      <input v-model.number="slaSettings.sla_auto_close_hours" type="number" min="1" max="168" />
+                      <small data-hint>{{ $t('chatbotSettings.autoCloseHoursHint') }}</small>
+                    </label>
+                  </div>
+                </div>
+                <label data-field>
+                  {{ $t('chatbotSettings.autoCloseMessage') }}
+                  <textarea v-model="slaSettings.sla_auto_close_message" :placeholder="$t('chatbotSettings.autoClosePlaceholder') + '...'" rows="2" />
+                </label>
+                <label data-field>
+                  {{ $t('chatbotSettings.customerWarningMessage') }}
+                  <textarea v-model="slaSettings.sla_warning_message" :placeholder="$t('chatbotSettings.customerWarningPlaceholder') + '...'" rows="2" />
+                </label>
+                <hr>
+                <div class="vstack gap-2">
+                  <div class="hstack justify-between">
                     <div>
-                      <p class="font-medium">{{ $t('chatbotSettings.clientInactivityReminders') }}</p>
-                      <p class="text-sm text-muted-foreground">{{ $t('chatbotSettings.clientInactivityRemindersDesc') }}</p>
+                      <strong>{{ $t('chatbotSettings.escalationNotifyContacts') }}</strong>
+                      <p><small class="text-light">{{ $t('chatbotSettings.escalationNotifyHint') }}</small></p>
                     </div>
-                    <Switch
-                      :checked="isClientReminderEnabled"
-                      @update:checked="(val: boolean) => isClientReminderEnabled = val"
+                    <Combobox
+                      :model-value="null"
+                      :options="unselectedUserOptions"
+                      :placeholder="$t('chatbotSettings.addUser')"
+                      :search-placeholder="$t('chatbotSettings.searchUsers') + '...'"
+                      :empty-text="$t('chatbotSettings.noUsersFound')"
+                      :disabled="unselectedUsers.length === 0"
+                      @update:model-value="addEscalationUser"
                     />
                   </div>
-
-                  <div v-if="isClientReminderEnabled" class="space-y-4 pt-2">
-                    <div class="grid grid-cols-2 gap-4">
-                      <div class="space-y-2">
-                        <Label>{{ $t('chatbotSettings.reminderAfter') }}</Label>
-                        <Input v-model.number="slaSettings.client_reminder_minutes" type="number" min="1" max="1440" />
-                        <p class="text-xs text-muted-foreground">{{ $t('chatbotSettings.reminderAfterHint') }}</p>
-                      </div>
-                      <div class="space-y-2">
-                        <Label>{{ $t('chatbotSettings.autoCloseAfter') }}</Label>
-                        <Input v-model.number="slaSettings.client_auto_close_minutes" type="number" min="1" max="1440" />
-                        <p class="text-xs text-muted-foreground">{{ $t('chatbotSettings.autoCloseAfterHint') }}</p>
-                      </div>
-                    </div>
-
-                    <div class="space-y-2">
-                      <Label>{{ $t('chatbotSettings.reminderMessage') }}</Label>
-                      <Textarea
-                        v-model="slaSettings.client_reminder_message"
-                        :placeholder="$t('chatbotSettings.reminderPlaceholder') + '...'"
-                        :rows="2"
-                      />
-                    </div>
-
-                    <div class="space-y-2">
-                      <Label>{{ $t('chatbotSettings.clientAutoCloseMessage') }}</Label>
-                      <Textarea
-                        v-model="slaSettings.client_auto_close_message"
-                        :placeholder="$t('chatbotSettings.clientAutoClosePlaceholder') + '...'"
-                        :rows="2"
-                      />
-                    </div>
+                  <div v-if="selectedEscalationUsers.length > 0" class="hstack gap-2 flex-wrap">
+                    <span v-for="user in selectedEscalationUsers" :key="user.id" class="badge outline">
+                      {{ user.full_name }}
+                      <button
+                        type="button"
+                        class="ghost icon small"
+                        :title="$t('common.remove')"
+                        :aria-label="`${$t('common.remove')} ${user.full_name}`"
+                        @click="removeEscalationUser(user.id)"
+                      >
+                        <X :size="12" />
+                      </button>
+                    </span>
+                  </div>
+                  <p v-else class="text-light">{{ $t('chatbotSettings.noUsersSelected') }}</p>
+                </div>
+              </div>
+              <hr>
+              <!-- Client Inactivity Settings (Chatbot Only) -->
+              <label data-field>
+                <span class="hstack justify-between">
+                  <span>{{ $t('chatbotSettings.clientInactivityReminders') }}</span>
+                  <input type="checkbox" role="switch" v-model="isClientReminderEnabled" />
+                </span>
+                <small data-hint>{{ $t('chatbotSettings.clientInactivityRemindersDesc') }}</small>
+              </label>
+              <div v-if="isClientReminderEnabled" class="vstack gap-2">
+                <div class="row">
+                  <div class="col-6">
+                    <label data-field>
+                      {{ $t('chatbotSettings.reminderAfter') }}
+                      <input v-model.number="slaSettings.client_reminder_minutes" type="number" min="1" max="1440" />
+                      <small data-hint>{{ $t('chatbotSettings.reminderAfterHint') }}</small>
+                    </label>
+                  </div>
+                  <div class="col-6">
+                    <label data-field>
+                      {{ $t('chatbotSettings.autoCloseAfter') }}
+                      <input v-model.number="slaSettings.client_auto_close_minutes" type="number" min="1" max="1440" />
+                      <small data-hint>{{ $t('chatbotSettings.autoCloseAfterHint') }}</small>
+                    </label>
                   </div>
                 </div>
-
-                <div class="flex justify-end pt-2">
-                  <Button @click="saveSLASettings" :disabled="isSubmitting">
-                    <Loader2 v-if="isSubmitting" class="mr-2 h-4 w-4 animate-spin" />
-                    {{ $t('chatbotSettings.saveChanges') }}
-                  </Button>
-                </div>
-              </CardContent>
-            </Card>
+                <label data-field>
+                  {{ $t('chatbotSettings.reminderMessage') }}
+                  <textarea v-model="slaSettings.client_reminder_message" :placeholder="$t('chatbotSettings.reminderPlaceholder') + '...'" rows="2" />
+                </label>
+                <label data-field>
+                  {{ $t('chatbotSettings.clientAutoCloseMessage') }}
+                  <textarea v-model="slaSettings.client_auto_close_message" :placeholder="$t('chatbotSettings.clientAutoClosePlaceholder') + '...'" rows="2" />
+                </label>
+              </div>
+              <div class="hstack justify-end">
+                <button type="button" :aria-busy="isSubmitting" :disabled="isSubmitting" @click="saveSLASettings">
+                  {{ $t('chatbotSettings.saveChanges') }}
+                </button>
+              </div>
+            </article>
             <div v-if="orgID" class="mt-4">
               <AuditLogPanel :key="slaLogKey" resource-type="settings.chatbot.sla" :resource-id="orgID" />
             </div>
-          </TabsContent>
+          </div>
 
           <!-- AI Tab -->
-          <TabsContent value="ai">
-            <Card>
-              <CardHeader>
-                <CardTitle>{{ $t('chatbotSettings.aiSettings') }}</CardTitle>
-                <CardDescription>{{ $t('chatbotSettings.aiSettingsDesc') }}</CardDescription>
-              </CardHeader>
-              <CardContent class="space-y-4">
-                <div class="flex items-center justify-between">
-                  <div>
-                    <p class="font-medium">{{ $t('chatbotSettings.enableAiResponses') }}</p>
-                    <p class="text-sm text-muted-foreground">{{ $t('chatbotSettings.enableAiResponsesDesc') }}</p>
+          <div role="tabpanel">
+            <article class="card">
+              <header>
+                <h3>{{ $t('chatbotSettings.aiSettings') }}</h3>
+              </header>
+              <label data-field>
+                <span class="hstack justify-between">
+                  <span>{{ $t('chatbotSettings.enableAiResponses') }}</span>
+                  <input type="checkbox" role="switch" v-model="isAIEnabled" />
+                </span>
+                <small data-hint>{{ $t('chatbotSettings.enableAiResponsesDesc') }}</small>
+              </label>
+              <div v-if="isAIEnabled" class="vstack gap-2">
+                <hr>
+                <div class="row">
+                  <div class="col-6">
+                    <label data-field>
+                      {{ $t('chatbotSettings.aiProvider') }}
+                      <select v-model="aiSettings.ai_provider">
+                        <option value="">{{ $t('chatbotSettings.selectProvider') }}...</option>
+                        <option v-for="provider in aiProviders" :key="provider.value" :value="provider.value">{{ provider.label }}</option>
+                      </select>
+                    </label>
                   </div>
-                  <Switch
-                    :checked="isAIEnabled"
-                    @update:checked="(val: boolean) => isAIEnabled = val"
-                  />
-                </div>
-
-                <div v-if="isAIEnabled" class="space-y-4 pt-2">
-                  <Separator />
-
-                  <div class="grid grid-cols-2 gap-4">
-                    <div class="space-y-2">
-                      <Label>{{ $t('chatbotSettings.aiProvider') }}</Label>
-                      <Select v-model="aiSettings.ai_provider">
-                        <SelectTrigger>
-                          <SelectValue :placeholder="$t('chatbotSettings.selectProvider') + '...'" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem v-for="provider in aiProviders" :key="provider.value" :value="provider.value">
-                            {{ provider.label }}
-                          </SelectItem>
-                        </SelectContent>
-                      </Select>
-                    </div>
-                    <div class="space-y-2">
-                      <Label>{{ $t('chatbotSettings.model') }}</Label>
-                      <Select v-model="aiSettings.ai_model" :disabled="!aiSettings.ai_provider">
-                        <SelectTrigger>
-                          <SelectValue :placeholder="$t('chatbotSettings.selectModel') + '...'" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem v-for="model in availableModels" :key="model" :value="model">
-                            {{ model }}
-                          </SelectItem>
-                        </SelectContent>
-                      </Select>
-                    </div>
-                  </div>
-
-                  <div class="space-y-2">
-                    <Label>{{ $t('chatbotSettings.apiKey') }}</Label>
-                    <Input
-                      v-model="aiSettings.ai_api_key"
-                      type="password"
-                      :placeholder="$t('chatbotSettings.apiKeyPlaceholder') + '...'"
-                    />
-                    <p class="text-xs text-muted-foreground">{{ $t('chatbotSettings.apiKeyHint') }}</p>
-                  </div>
-
-                  <div class="space-y-2">
-                    <Label>{{ $t('chatbotSettings.maxTokens') }}</Label>
-                    <Input v-model.number="aiSettings.ai_max_tokens" type="number" min="100" max="4000" class="w-32" />
-                  </div>
-
-                  <div class="space-y-2">
-                    <Label>{{ $t('chatbotSettings.systemPrompt') }}</Label>
-                    <Textarea
-                      v-model="aiSettings.ai_system_prompt"
-                      :placeholder="$t('chatbotSettings.systemPromptPlaceholder') + '...'"
-                      :rows="3"
-                    />
+                  <div class="col-6">
+                    <label data-field>
+                      {{ $t('chatbotSettings.model') }}
+                      <select v-model="aiSettings.ai_model" :disabled="!aiSettings.ai_provider">
+                        <option value="">{{ $t('chatbotSettings.selectModel') }}...</option>
+                        <option v-for="model in availableModels" :key="model" :value="model">{{ model }}</option>
+                      </select>
+                    </label>
                   </div>
                 </div>
-
-                <div class="flex justify-end pt-2">
-                  <Button @click="saveAISettings" :disabled="isSubmitting">
-                    <Loader2 v-if="isSubmitting" class="mr-2 h-4 w-4 animate-spin" />
-                    {{ $t('chatbotSettings.saveChanges') }}
-                  </Button>
-                </div>
-              </CardContent>
-            </Card>
+                <label data-field>
+                  {{ $t('chatbotSettings.apiKey') }}
+                  <input v-model="aiSettings.ai_api_key" type="password" :placeholder="$t('chatbotSettings.apiKeyPlaceholder') + '...'" />
+                  <small data-hint>{{ $t('chatbotSettings.apiKeyHint') }}</small>
+                </label>
+                <label data-field>
+                  {{ $t('chatbotSettings.maxTokens') }}
+                  <input v-model.number="aiSettings.ai_max_tokens" type="number" min="100" max="4000" />
+                </label>
+                <label data-field>
+                  {{ $t('chatbotSettings.systemPrompt') }}
+                  <textarea v-model="aiSettings.ai_system_prompt" :placeholder="$t('chatbotSettings.systemPromptPlaceholder') + '...'" rows="3" />
+                </label>
+              </div>
+              <div class="hstack justify-end">
+                <button type="button" :aria-busy="isSubmitting" :disabled="isSubmitting" @click="saveAISettings">
+                  {{ $t('chatbotSettings.saveChanges') }}
+                </button>
+              </div>
+            </article>
             <div v-if="orgID" class="mt-4">
               <AuditLogPanel :key="aiLogKey" resource-type="settings.chatbot.ai" :resource-id="orgID" />
             </div>
-          </TabsContent>
-        </Tabs>
+          </div>
+        </ot-tabs>
       </div>
-    </ScrollArea>
+    </div>
   </div>
 </template>

@@ -6,8 +6,6 @@ declare module '*.vue' {
   export default component
 }
 
-declare module 'vue3-emoji-picker/css'
-
 interface ImportMetaEnv {
   readonly VITE_API_URL: string
   readonly VITE_WS_URL: string
@@ -15,4 +13,14 @@ interface ImportMetaEnv {
 
 interface ImportMeta {
   readonly env: ImportMetaEnv
+}
+
+interface Window {
+  ot: {
+    toast(
+      message: string,
+      title?: string,
+      options?: { variant?: string; placement?: string; duration?: number },
+    ): HTMLElement | undefined
+  }
 }

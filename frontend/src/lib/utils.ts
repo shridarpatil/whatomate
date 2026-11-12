@@ -1,10 +1,3 @@
-import { type ClassValue, clsx } from 'clsx'
-import { twMerge } from 'tailwind-merge'
-
-export function cn(...inputs: ClassValue[]) {
-  return twMerge(clsx(inputs))
-}
-
 export function formatDate(date: string | Date, options?: Intl.DateTimeFormatOptions): string {
   const d = typeof date === 'string' ? new Date(date) : date
   return d.toLocaleDateString('en-US', {
@@ -56,28 +49,6 @@ export function getInitials(name: string): string {
     .slice(0, 2)
 }
 
-const avatarGradients = [
-  'from-violet-500 to-purple-600',
-  'from-blue-500 to-cyan-600',
-  'from-rose-500 to-pink-600',
-  'from-amber-500 to-orange-600',
-  'from-emerald-500 to-teal-600',
-  'from-indigo-500 to-blue-600',
-  'from-fuchsia-500 to-purple-600',
-  'from-cyan-500 to-blue-600',
-  'from-orange-500 to-red-600',
-  'from-teal-500 to-emerald-600',
-]
-
-export function getAvatarGradient(name: string): string {
-  if (!name) return avatarGradients[0]
-  let hash = 0
-  for (let i = 0; i < name.length; i++) {
-    hash = name.charCodeAt(i) + ((hash << 5) - hash)
-  }
-  return avatarGradients[Math.abs(hash) % avatarGradients.length]
-}
-
 export function formatLabel(key: string): string {
   return key
     .replace(/_/g, ' ')
@@ -85,20 +56,21 @@ export function formatLabel(key: string): string {
     .replace(/\b\w/g, c => c.toUpperCase())
 }
 
-export function getQualityBadgeClass(rating: string): string {
-  if (!rating) return 'bg-gray-800 text-gray-400 light:bg-gray-100 light:text-gray-600'
-  switch (rating.toUpperCase()) {
+export type BadgeVariant = 'success' | 'warning' | 'danger' | 'secondary'
+
+export function getQualityBadgeVariant(rating: string): BadgeVariant {
+  switch ((rating || '').toUpperCase()) {
     case 'GREEN':
     case 'HIGH':
-      return 'bg-green-950 text-green-400 border border-green-800/40 light:bg-green-100 light:text-green-800'
+      return 'success'
     case 'YELLOW':
     case 'MEDIUM':
-      return 'bg-yellow-950 text-yellow-400 border border-yellow-800/40 light:bg-yellow-100 light:text-yellow-800'
+      return 'warning'
     case 'RED':
     case 'LOW':
-      return 'bg-red-950 text-red-400 border border-red-800/40 light:bg-red-100 light:text-red-800'
+      return 'danger'
     default:
-      return 'bg-gray-800 text-gray-400 light:bg-gray-100 light:text-gray-600'
+      return 'secondary'
   }
 }
 
@@ -121,18 +93,17 @@ export function getQualityRatingLabel(rating: string | undefined, t: (key: strin
   }
 }
 
-export function getVerificationBadgeClass(status: string): string {
-  if (!status) return 'bg-gray-800 text-gray-400 light:bg-gray-100 light:text-gray-600'
-  switch (status.toUpperCase()) {
+export function getVerificationBadgeVariant(status: string): BadgeVariant {
+  switch ((status || '').toUpperCase()) {
     case 'VERIFIED':
     case 'VERIFIED_CODE':
-      return 'bg-green-950 text-green-400 border border-green-800/40 light:bg-green-100 light:text-green-800'
+      return 'success'
     case 'NOT_VERIFIED':
-      return 'bg-red-950 text-red-400 border border-red-800/40 light:bg-red-100 light:text-red-800'
+      return 'danger'
     case 'EXPIRED':
-      return 'bg-amber-950 text-amber-400 border border-amber-800/40 light:bg-amber-100 light:text-amber-800'
+      return 'warning'
     default:
-      return 'bg-gray-800 text-gray-400 light:bg-gray-100 light:text-gray-600'
+      return 'secondary'
   }
 }
 

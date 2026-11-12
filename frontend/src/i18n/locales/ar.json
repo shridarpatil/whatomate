@@ -1,5 +1,7 @@
 {
   "dateRange": {
+    "from": "From",
+    "to": "To",
     "selectRange": "نطاق التاريخ",
     "today": "اليوم",
     "last7Days": "آخر 7 أيام",
@@ -47,6 +49,8 @@
     "deselectAll": "إلغاء تحديد الكل",
     "noResults": "لم يتم العثور على نتائج",
     "noData": "لا توجد بيانات متاحة",
+    "showData": "Show data",
+    "value": "Value",
     "error": "خطأ",
     "success": "نجاح",
     "warning": "تحذير",
@@ -116,7 +120,12 @@
     "loadMore": "تحميل المزيد",
     "stay": "البقاء",
     "unsavedChangesDesc": "لديك تغييرات غير محفوظة. هل أنت متأكد أنك تريد المغادرة؟",
-    "unsavedChangesTitle": "تغييرات غير محفوظة"
+    "unsavedChangesTitle": "تغييرات غير محفوظة",
+    "firstPage": "First page",
+    "lastPage": "Last page",
+    "pagination": "Pagination",
+    "scrollToTop": "Scroll to top",
+    "clickToUpload": "Click to upload file"
   },
   "auth": {
     "login": "تسجيل الدخول",
@@ -238,6 +247,9 @@
     "Widget": "ويدجت"
   },
   "nav": {
+    "sidebar": "Sidebar",
+    "mainNavigation": "Main navigation",
+    "secondaryNavigation": "Secondary navigation",
     "dashboard": "لوحة القيادة",
     "chat": "الدردشة",
     "contacts": "جهات الاتصال",
@@ -281,6 +293,10 @@
     "toggleMenu": "تبديل القائمة"
   },
   "userMenu": {
+    "colorTheme": "Color theme",
+    "themeLight": "Light theme",
+    "themeDark": "Dark theme",
+    "themeSystem": "System theme",
     "myAccount": "حسابي",
     "status": "الحالة",
     "available": "متاح",
@@ -295,9 +311,12 @@
     "failedUpdateAvailability": "فشل تحديث الحالة",
     "awayWarningTitle": "ستتم إعادة التحويلات النشطة إلى قائمة الانتظار",
     "awayWarningDesc": "لديك {count} تحويل(ات) نشطة معينة لك. سيؤدي تعيين حالتك إلى \"بعيد\" إلى إعادتها إلى قائمة الانتظار ليقوم وكلاء آخرون باستلامها.",
-    "goAway": "تغيير الحالة لبعيد"
+    "goAway": "تغيير الحالة لبعيد",
+    "userMenu": "قائمة المستخدم",
+    "toggleAvailability": "تبديل حالة التوفر"
   },
   "chat": {
+    "lastActive": "Last active {time}",
     "marketingOptOut": "إلغاء الاشتراك في التسويق",
     "conversations": "المحادثات",
     "messages": "الرسائل",
@@ -342,6 +361,7 @@
     "noTagsAvailable": "لا توجد أوسمة متاحة",
     "paused": "متوقف مؤقتاً",
     "assignedTo": "مسند إلى",
+    "assigned": "Assigned",
     "unassigned": "غير مسند",
     "assign": "إسناد",
     "transfer": "تحويل",
@@ -429,7 +449,11 @@
     "urlButtonParamPlaceholder": "أدخل قيمة الرابط المتغيرة",
     "preview": "معاينة",
     "serviceWindowExpired": "انتهت نافذة المراسلة لمدة 24 ساعة. لا يمكن إرسال سوى رسائل القوالب حتى يرد العميل.",
-    "sendTemplateAction": "إرسال قالب"
+    "sendTemplateAction": "إرسال قالب",
+    "noTags": "No tags",
+    "general": "General",
+    "noPanelData": "No data configured",
+    "noPanelDataHint": "Configure panel display in the chatbot flow settings."
   },
   "contacts": {
     "title": "جهات الاتصال",
@@ -594,7 +618,10 @@
     "metaAppCredentialsDesc": "قم بتعيين إعدادات تطبيق Meta الخاصة بكل مؤسسة للاشتراك المدمج في واتساب. اترك السر فارغًا للاحتفاظ بالسر الحالي.",
     "metaAppId": "معرف تطبيق Meta",
     "metaConfigId": "معرف تكوين Meta",
-    "metaAppSecret": "سر تطبيق Meta"
+    "metaAppSecret": "سر تطبيق Meta",
+    "previewRingtone": "Preview ringtone",
+    "playAudio": "Play",
+    "pauseAudio": "Pause"
   },
   "analytics": {
     "title": "التحليلات",
@@ -863,6 +890,7 @@
     "errorLoadingApiKeys": "فشل تحميل مفاتيح API. يرجى المحاولة مرة أخرى."
   },
   "webhooks": {
+    "removeHeader": "Remove header",
     "title": "ويب هوك (Webhooks)",
     "subtitle": "تكوين الويب هوك لإرسال الأحداث إلى الأنظمة الخارجية",
     "addWebhook": "إضافة ويب هوك",
@@ -1040,6 +1068,7 @@
     "goHome": "الرئيسية"
   },
   "profile": {
+    "togglePasswordVisibility": "Toggle password visibility",
     "title": "الملف الشخصي",
     "description": "إدارة إعدادات حسابك",
     "accountInfo": "معلومات الحساب",
@@ -1282,6 +1311,8 @@
     "loadWidgetsFailed": "فشل تحميل الأدوات",
     "loadWidgetDataFailed": "فشل تحميل بيانات الأداة",
     "editLayout": "تعديل التنسيق",
+    "moveEarlier": "Move earlier",
+    "moveLater": "Move later",
     "layoutSaved": "تم حفظ التنسيق",
     "saveLayoutFailed": "فشل حفظ التنسيق",
     "editWidgetTooltip": "تعديل الأداة",
@@ -1574,7 +1605,9 @@
     "aiSettingsSaved": "تم حفظ إعدادات الذكاء الاصطناعي",
     "slaSettingsSaved": "تم حفظ إعدادات SLA",
     "aiSaveFailed": "فشل حفظ إعدادات الذكاء الاصطناعي",
-    "slaSaveFailed": "فشل حفظ إعدادات SLA"
+    "slaSaveFailed": "فشل حفظ إعدادات SLA",
+    "startTime": "{day} start time",
+    "endTime": "{day} end time"
   },
   "agentTransfers": {
     "title": "التحويلات",
@@ -2113,7 +2146,16 @@
     "sectionLabelPlaceholder": "تسمية القسم",
     "addFieldPlaceholder": "+ إضافة",
     "exampleUrlPlaceholder": "https://example.com",
-    "dataPathPlaceholder": "data.path"
+    "dataPathPlaceholder": "data.path",
+    "previewTitle": "Flow preview",
+    "previewStart": "Start",
+    "previewPause": "Pause",
+    "previewRestart": "Restart",
+    "previewStepForward": "Step forward",
+    "previewStepBack": "Step back",
+    "dataPath": "مسار البيانات",
+    "configureApiMock": "إعداد محاكاة واجهة API",
+    "selectOption": "اختر خيارًا"
   },
   "calling": {
     "callLogs": "سجلات المكالمات",
@@ -2239,7 +2281,8 @@
     "deleteNodeConfirmTitle": "حذف العقدة",
     "deleteNodeConfirmDesc": "هل أنت متأكد أنك تريد حذف هذه العقدة؟ سيتم أيضاً إزالة جميع الروابط المتصلة بها.",
     "flowSaving": "جاري الحفظ...",
-    "flowSave": "حفظ"
+    "flowSave": "حفظ",
+    "ttsText": "النص المراد نطقه"
   },
   "callTransfers": {
     "title": "تحويلات المكالمات",
@@ -2551,6 +2594,10 @@
     "publishFailed": "فشل نشر التدفق"
   },
   "organizations": {
+    "label": "Organization",
+    "selectPlaceholder": "Select organization",
+    "loading": "Loading...",
+    "none": "No organizations found",
     "title": "المؤسسات",
     "createNew": "إنشاء مؤسسة جديدة",
     "createTitle": "إنشاء مؤسسة",
@@ -2561,5 +2608,51 @@
     "selectOrg": "اختر المؤسسة",
     "noMatchingOrgs": "لم يتم العثور على مؤسسات",
     "allOrgs": "جميع المؤسسات"
+  },
+  "waFlowBuilder": {
+    "screens": "Screens",
+    "addScreen": "Add Screen",
+    "removeScreen": "Remove screen",
+    "noScreens": "No screens yet",
+    "selectScreen": "Select a screen",
+    "screenTitle": "Screen Title",
+    "addComponents": "Add Components",
+    "addComponentsHint": "Add components from the palette",
+    "addScreenToStart": "Add a screen to get started",
+    "properties": "Properties",
+    "selectComponentHint": "Select a component to edit its properties",
+    "moveUp": "Move up",
+    "moveDown": "Move down",
+    "removeComponent": "Remove component",
+    "text": "Text",
+    "label": "Label",
+    "fieldName": "Field Name (Key)",
+    "fieldNamePlaceholder": "e.g. email, phone, message",
+    "fieldNameHint": "This key is used in the response data. Use lowercase with underscores (e.g. customer_name).",
+    "required": "Required",
+    "options": "Options",
+    "add": "Add",
+    "optionPlaceholder": "Option text",
+    "removeOption": "Remove option",
+    "buttonText": "Button Text",
+    "action": "Action",
+    "completeFlow": "Complete Flow",
+    "navigateToScreen": "Navigate to Screen",
+    "targetScreen": "Target Screen",
+    "selectTargetScreen": "Select screen",
+    "selectPlaceholder": "Select...",
+    "types": {
+      "heading": "Heading",
+      "subheading": "Subheading",
+      "text": "Text",
+      "textInput": "Text Input",
+      "textArea": "Text Area",
+      "dropdown": "Dropdown",
+      "radioButtons": "Radio Buttons",
+      "checkboxes": "Checkboxes",
+      "datePicker": "Date Picker",
+      "image": "Image",
+      "footerButton": "Footer Button"
+    }
   }
 }

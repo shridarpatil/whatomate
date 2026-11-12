@@ -1,16 +1,6 @@
 import { Page, Locator, expect } from '@playwright/test'
 import { BasePage } from './BasePage'
 
-// Escape special characters in CSS selectors (backslashes must be escaped first)
-function escapeCssSelector(id: string): string {
-  return id.replace(/\\/g, '\\\\').replace(/\./g, '\\.')
-}
-
-// Escape a string for safe use inside a RegExp.
-function escapeRegex(s: string): string {
-  return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
-}
-
 export class DialogPage extends BasePage {
   readonly dialog: Locator
   readonly cancelButton: Locator
@@ -18,10 +8,11 @@ export class DialogPage extends BasePage {
 
   constructor(page: Page) {
     super(page)
-    this.dialog = page.locator('[role="dialog"]')
+    // Native <dialog> (Modal) has the implicit dialog role; legacy markup uses role="dialog" explicitly.
+    this.dialog = page.locator('dialog[open], [role="dialog"]').first()
     // Be specific - Cancel button (not the X close button)
     this.cancelButton = this.dialog.getByRole('button', { name: 'Cancel', exact: true })
-    this.closeButton = this.dialog.locator('button[class*="absolute"]')
+    this.closeButton = this.dialog.getByRole('button', { name: 'Close', exact: true })
   }
 
   get submitButton(): Locator {
@@ -45,6 +36,13 @@ export class DialogPage extends BasePage {
   async fillField(label: string, value: string) {
     // Try multiple strategies to find the input
     const labelLocator = this.dialog.locator(`label`).filter({ hasText: label })
+
+    // Strategy 0: Oat markup - the input is nested in <label data-field>
+    const nestedInput = labelLocator.locator('input:not([type="checkbox"]):not([type="radio"]), textarea')
+    if (await nestedInput.count() > 0) {
+      await nestedInput.first().fill(value)
+      return
+    }
 
     // Strategy 1: Input is sibling of label
     const siblingInput = labelLocator.locator('~ input, ~ textarea')
@@ -84,66 +82,55 @@ export class DialogPage extends BasePage {
     throw new Error(`Could not find input for label: ${label}`)
   }
 
-  async selectOption(label: string, value: string) {
-    // Find the select trigger near the label
-    const labelLocator = this.dialog.locator(`label`).filter({ hasText: label })
-    const selectTrigger = labelLocator.locator('..').locator('button[role="combobox"]')
+  /** Alert dialog (Modal with `alert`). */
+  get alertDialog(): Locator {
+    return this.page.getByRole('alertdialog')
+  }
 
-    if (await selectTrigger.count() > 0) {
-      await selectTrigger.click()
-    } else {
-      // Try finding by data-testid or other selectors
-      const container = labelLocator.locator('..')
-      await container.locator('button').first().click()
+  /**
+   * Fill a select by its label: native <select> (selectOption) or Combobox
+   * (click the trigger, click the option).
+   */
+  async fillSelect(label: string, option: string) {
+    const native = this.dialog.getByLabel(label, { exact: false }).and(this.page.locator('select'))
+    if (await native.count() > 0) {
+      const select = native.first()
+      // Native options show raw text (e.g. role "agent (System)"), so fall back to a
+      // case-insensitive match ignoring a trailing "(…)" suffix when there is no exact label.
+      const labels = (await select.locator('option').allTextContents()).map(l => l.trim())
+      const base = (l: string) => l.replace(/\s*\([^)]*\)\s*$/, '').toLowerCase()
+      const label = labels.find(l => l === option)
+        ?? labels.find(l => base(l) === option.toLowerCase())
+        ?? option
+      await select.selectOption({ label })
+      return
     }
 
-    // Anchor on the option's accessible name, not on a substring match — a
-    // hasText filter would also match custom roles whose names embed the
-    // value (e.g. selecting 'Agent' matched any role with 'agent' in its
-    // name when leftover test roles were present).
-    const opts = this.page.getByRole('option', { name: new RegExp(`^\\s*${escapeRegex(value)}\\b`, 'i') })
-    await opts.first().click()
+    const combo = this.dialog.locator('button[aria-haspopup="listbox"]').and(this.dialog.getByLabel(label))
+    if (await combo.count() > 0) {
+      await combo.first().click()
+      await this.page.getByRole('option', { name: option, exact: true }).first().click()
+      return
+    }
+
+    throw new Error(`No select or combobox labelled "${label}" in dialog`)
+  }
+
+  async selectOption(label: string, value: string) {
+    await this.fillSelect(label, value)
+  }
+
+  /** Native <input type="checkbox"> (Oat), located by label. */
+  private async setChecked(label: string, checked: boolean) {
+    await this.dialog.getByLabel(label).and(this.page.locator('input[type="checkbox"]')).first().setChecked(checked)
   }
 
   async checkCheckbox(label: string) {
-    // Find label, get its 'for' attribute, then find checkbox by id
-    const labelLocator = this.dialog.locator('label').filter({ hasText: label })
-    const labelFor = await labelLocator.getAttribute('for')
-
-    let checkbox: Locator
-    if (labelFor) {
-      // Checkbox has id matching label's for attribute
-      // Need to escape dots in ID for CSS selector
-      const escapedId = escapeCssSelector(labelFor)
-      checkbox = this.dialog.locator(`#${escapedId}`)
-    } else {
-      // Checkbox is sibling of label in same container
-      checkbox = labelLocator.locator('..').locator('button[role="checkbox"], input[type="checkbox"]')
-    }
-
-    // Check if already checked
-    const dataState = await checkbox.getAttribute('data-state')
-    if (dataState !== 'checked') {
-      await checkbox.click()
-    }
+    await this.setChecked(label, true)
   }
 
   async uncheckCheckbox(label: string) {
-    const labelLocator = this.dialog.locator('label').filter({ hasText: label })
-    const labelFor = await labelLocator.getAttribute('for')
-
-    let checkbox: Locator
-    if (labelFor) {
-      const escapedId = escapeCssSelector(labelFor)
-      checkbox = this.dialog.locator(`#${escapedId}`)
-    } else {
-      checkbox = labelLocator.locator('..').locator('button[role="checkbox"], input[type="checkbox"]')
-    }
-
-    const dataState = await checkbox.getAttribute('data-state')
-    if (dataState === 'checked') {
-      await checkbox.click()
-    }
+    await this.setChecked(label, false)
   }
 
   async submit() {
@@ -160,7 +147,7 @@ export class DialogPage extends BasePage {
 
   async expectFieldError(label: string, message: string) {
     const labelLocator = this.dialog.locator(`label`).filter({ hasText: label })
-    const errorMessage = labelLocator.locator('..').locator('p, span').filter({ hasText: message })
+    const errorMessage = labelLocator.locator('..').locator('p, span, .error').filter({ hasText: message })
     await expect(errorMessage).toBeVisible()
   }
 }

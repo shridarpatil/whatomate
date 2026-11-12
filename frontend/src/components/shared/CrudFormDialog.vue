@@ -1,14 +1,6 @@
 <script setup lang="ts">
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from '@/components/ui/dialog'
-import { Button } from '@/components/ui/button'
-import { Loader2 } from 'lucide-vue-next'
+import { computed } from 'vue'
+import Modal from '@/components/oat/Modal.vue'
 
 const open = defineModel<boolean>('open', { default: false })
 
@@ -70,33 +62,25 @@ const computedSubmitLabel = computed(() => {
   if (props.submitLabel) return props.submitLabel
   return props.isEditing ? props.editSubmitLabel : props.createSubmitLabel
 })
-</script>
 
-<script lang="ts">
-import { computed } from 'vue'
+// Tailwind width tokens from call sites map onto the two Modal sizes.
+const size = computed(() => (/max-w-(lg|xl|[2-7]xl)/.test(props.maxWidth) ? 'large' : undefined))
 </script>
 
 <template>
-  <Dialog v-model:open="open">
-    <DialogContent :class="[maxWidth, 'max-h-[90vh] overflow-y-auto']">
-      <DialogHeader>
-        <DialogTitle>{{ computedTitle }}</DialogTitle>
-        <DialogDescription>{{ computedDescription }}</DialogDescription>
-      </DialogHeader>
-
-      <div class="py-4">
-        <slot />
-      </div>
-
-      <DialogFooter>
-        <Button variant="outline" size="sm" @click="handleCancel">
-          {{ cancelLabel }}
-        </Button>
-        <Button size="sm" @click="handleSubmit" :disabled="isSubmitting">
-          <Loader2 v-if="isSubmitting" class="h-4 w-4 mr-2 animate-spin" />
-          {{ computedSubmitLabel }}
-        </Button>
-      </DialogFooter>
-    </DialogContent>
-  </Dialog>
+  <Modal v-model:open="open" :title="computedTitle" :description="computedDescription" :size="size">
+    <slot />
+    <template #footer>
+      <button type="button" class="outline" @click="handleCancel">{{ cancelLabel }}</button>
+      <button
+        type="button"
+        :disabled="isSubmitting"
+        :aria-busy="isSubmitting ? 'true' : undefined"
+        data-spinner="small"
+        @click="handleSubmit"
+      >
+        {{ computedSubmitLabel }}
+      </button>
+    </template>
+  </Modal>
 </template>

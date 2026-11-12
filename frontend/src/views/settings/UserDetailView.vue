@@ -5,36 +5,14 @@ import { useI18n } from 'vue-i18n'
 import { useUsersStore, type User } from '@/stores/users'
 import { useAuthStore } from '@/stores/auth'
 import { useRolesStore } from '@/stores/roles'
-import { toast } from 'vue-sonner'
+import { toast } from '@/lib/toast'
 import { getErrorMessage } from '@/lib/api-utils'
 import { useUnsavedChangesGuard } from '@/composables/useUnsavedChangesGuard'
 import DetailPageLayout from '@/components/shared/DetailPageLayout.vue'
 import MetadataPanel from '@/components/shared/MetadataPanel.vue'
 import AuditLogPanel from '@/components/shared/AuditLogPanel.vue'
 import UnsavedChangesDialog from '@/components/shared/UnsavedChangesDialog.vue'
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { Badge } from '@/components/ui/badge'
-import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
-import { Label } from '@/components/ui/label'
-import { Switch } from '@/components/ui/switch'
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select'
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from '@/components/ui/alert-dialog'
+import Modal from '@/components/oat/Modal.vue'
 import {
   User as UserIcon,
   Shield,
@@ -42,7 +20,7 @@ import {
   UserCog,
   Trash2,
   Save,
-} from 'lucide-vue-next'
+} from '@/lib/icons'
 
 const route = useRoute()
 const router = useRouter()
@@ -179,7 +157,6 @@ onMounted(async () => {
     <DetailPageLayout
       :title="user?.full_name || ''"
       :icon="UserIcon"
-      icon-gradient="bg-gradient-to-br from-blue-500 to-indigo-600 shadow-blue-500/20"
       back-link="/settings/users"
       :breadcrumbs="breadcrumbs"
       :is-loading="isLoading"
@@ -187,104 +164,76 @@ onMounted(async () => {
       :not-found-title="$t('users.notFound', 'User not found')"
     >
       <template #actions>
-        <div class="flex items-center gap-2">
-          <Button v-if="canWrite && hasChanges" size="sm" @click="save" :disabled="isSaving">
-            <Save class="h-4 w-4 mr-1" /> {{ isSaving ? $t('common.saving', 'Saving...') : $t('common.save') }}
-          </Button>
-          <Button
-            v-if="canDelete && !isSelf"
-            variant="destructive"
-            size="sm"
-            @click="deleteDialogOpen = true"
-          >
-            <Trash2 class="h-4 w-4 mr-1" />
+        <div class="hstack gap-2">
+          <button v-if="canWrite && hasChanges" type="button" class="small" :disabled="isSaving" :aria-busy="isSaving ? 'true' : undefined" data-spinner="small" @click="save">
+            <Save v-if="!isSaving" :size="16" /> {{ isSaving ? $t('common.saving', 'Saving...') : $t('common.save') }}
+          </button>
+          <button v-if="canDelete && !isSelf" type="button" class="small" data-variant="danger" @click="deleteDialogOpen = true">
+            <Trash2 :size="16" />
             {{ isMember ? $t('users.removeMember') : $t('common.delete') }}
-          </Button>
+          </button>
         </div>
       </template>
 
       <!-- User Details Card -->
-      <Card>
-        <CardHeader class="pb-3">
-          <div class="flex items-center justify-between">
-            <CardTitle class="text-sm font-medium">{{ $t('teams.details', 'Details') }}</CardTitle>
-            <div class="flex items-center gap-2">
-              <Badge v-if="isSelf" variant="outline">{{ $t('users.you') }}</Badge>
-              <Badge v-if="user?.is_super_admin" variant="default">{{ $t('users.superAdmin') }}</Badge>
-              <Badge v-if="isMember" variant="secondary">{{ $t('users.member') }}</Badge>
-              <Badge :variant="(user?.is_active ?? true) ? 'default' : 'secondary'">
-                {{ (user?.is_active ?? true) ? $t('common.active') : $t('common.inactive') }}
-              </Badge>
-            </div>
+      <article class="card">
+        <header class="hstack justify-between">
+          <h3>{{ $t('teams.details', 'Details') }}</h3>
+          <div class="hstack gap-2">
+            <span v-if="isSelf" class="badge outline">{{ $t('users.you') }}</span>
+            <span v-if="user?.is_super_admin" class="badge">{{ $t('users.superAdmin') }}</span>
+            <span v-if="isMember" class="badge" data-variant="secondary">{{ $t('users.member') }}</span>
+            <span class="badge" :data-variant="(user?.is_active ?? true) ? 'success' : 'secondary'">
+              {{ (user?.is_active ?? true) ? $t('common.active') : $t('common.inactive') }}
+            </span>
           </div>
-        </CardHeader>
-        <CardContent class="space-y-4">
-          <div class="flex items-center gap-3 p-3 rounded-lg bg-muted/50">
-            <div class="h-10 w-10 rounded-full bg-primary/10 flex items-center justify-center shrink-0">
-              <component :is="getRoleIcon(user?.role?.name || '')" class="h-5 w-5 text-primary" />
-            </div>
+        </header>
+        <div class="vstack gap-4">
+          <div class="hstack gap-2">
+            <component :is="getRoleIcon(user?.role?.name || '')" :size="24" />
             <div class="min-w-0">
-              <p class="font-medium truncate">{{ user?.full_name }}</p>
-              <p class="text-sm text-muted-foreground truncate">{{ user?.email }}</p>
+              <p class="truncate"><strong>{{ user?.full_name }}</strong></p>
+              <p class="truncate text-light">{{ user?.email }}</p>
             </div>
           </div>
 
-          <div class="space-y-1.5">
-            <Label class="text-xs">{{ $t('users.fullName') }} <span class="text-destructive">*</span></Label>
-            <Input v-model="form.full_name" :disabled="!canWrite || isMember" />
-          </div>
-          <div class="space-y-1.5">
-            <Label class="text-xs">{{ $t('common.email') }} <span class="text-destructive">*</span></Label>
-            <Input v-model="form.email" type="email" :disabled="!canWrite || isMember" />
-          </div>
-          <div v-if="!isMember" class="space-y-1.5">
-            <Label class="text-xs">
+          <label data-field>
+            {{ $t('users.fullName') }} *
+            <input v-model="form.full_name" :disabled="!canWrite || isMember" />
+          </label>
+          <label data-field>
+            {{ $t('common.email') }} *
+            <input v-model="form.email" type="email" :disabled="!canWrite || isMember" />
+          </label>
+          <label v-if="!isMember" data-field>
+            <span>
               {{ $t('users.password') }}
-              <span class="text-muted-foreground">{{ $t('users.keepExisting') }}</span>
-            </Label>
-            <Input v-model="form.password" type="password" :placeholder="$t('users.passwordPlaceholder')" :disabled="!canWrite" />
-          </div>
-          <div class="space-y-1.5">
-            <Label class="text-xs">{{ $t('users.role') }} <span class="text-destructive">*</span></Label>
-            <Select v-model="form.role_id" :disabled="!canWrite">
-              <SelectTrigger>
-                <SelectValue :placeholder="$t('users.selectRole')">
-                  <template v-if="form.role_id">
-                    <span class="capitalize">{{ rolesStore.roles.find(r => r.id === form.role_id)?.name }}</span>
-                  </template>
-                </SelectValue>
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem v-for="role in rolesStore.roles" :key="role.id" :value="role.id">
-                  <div class="flex items-center gap-2">
-                    <span class="capitalize">{{ role.name }}</span>
-                    <Badge v-if="role.is_system" variant="secondary" class="text-xs">{{ $t('users.system') }}</Badge>
-                  </div>
-                </SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-          <div class="flex items-center justify-between">
-            <Label class="text-xs font-normal cursor-pointer">{{ $t('users.accountActive') }}</Label>
-            <Switch
-              :checked="form.is_active"
-              @update:checked="form.is_active = $event"
-              :disabled="!canWrite || isSelf"
-            />
-          </div>
-          <div v-if="isSuperAdmin" class="flex items-center justify-between border-t pt-4">
-            <div>
-              <Label class="text-xs font-normal cursor-pointer">{{ $t('users.superAdminLabel') }}</Label>
-              <p class="text-[11px] text-muted-foreground">{{ $t('users.superAdminDesc') }}</p>
-            </div>
-            <Switch
-              :checked="form.is_super_admin"
-              @update:checked="form.is_super_admin = $event"
-              :disabled="!canWrite || (isSelf && user?.is_super_admin)"
-            />
-          </div>
-        </CardContent>
-      </Card>
+              <small class="text-light">{{ $t('users.keepExisting') }}</small>
+            </span>
+            <input v-model="form.password" type="password" :placeholder="$t('users.passwordPlaceholder')" :disabled="!canWrite" />
+          </label>
+          <label data-field>
+            {{ $t('users.role') }} *
+            <select v-model="form.role_id" :disabled="!canWrite">
+              <option value="" disabled>{{ $t('users.selectRole') }}</option>
+              <option v-for="role in rolesStore.roles" :key="role.id" :value="role.id">{{ role.name }}{{ role.is_system ? ` (${$t('users.system')})` : '' }}</option>
+            </select>
+          </label>
+          <label data-field>
+            <span class="hstack justify-between">
+              <span>{{ $t('users.accountActive') }}</span>
+              <input v-model="form.is_active" type="checkbox" role="switch" :disabled="!canWrite || isSelf" />
+            </span>
+          </label>
+          <label v-if="isSuperAdmin" data-field>
+            <span class="hstack justify-between">
+              <span>{{ $t('users.superAdminLabel') }}</span>
+              <input v-model="form.is_super_admin" type="checkbox" role="switch" :disabled="!canWrite || (isSelf && user?.is_super_admin)" />
+            </span>
+            <small data-hint>{{ $t('users.superAdminDesc') }}</small>
+          </label>
+        </div>
+      </article>
 
       <!-- Activity Log -->
       <AuditLogPanel
@@ -303,24 +252,15 @@ onMounted(async () => {
     </DetailPageLayout>
 
     <!-- Delete Confirmation -->
-    <AlertDialog v-model:open="deleteDialogOpen">
-      <AlertDialogContent>
-        <AlertDialogHeader>
-          <AlertDialogTitle>
-            {{ isMember ? $t('users.removeMember') : $t('users.deleteUser') }}
-          </AlertDialogTitle>
-          <AlertDialogDescription>
-            {{ isMember ? $t('users.removeMemberWarning') : $t('teams.deleteConfirm', 'Are you sure? This action cannot be undone.') }}
-          </AlertDialogDescription>
-        </AlertDialogHeader>
-        <AlertDialogFooter>
-          <AlertDialogCancel>{{ $t('common.cancel') }}</AlertDialogCancel>
-          <AlertDialogAction @click="deleteUser">
-            {{ isMember ? $t('common.remove', 'Remove') : $t('common.delete') }}
-          </AlertDialogAction>
-        </AlertDialogFooter>
-      </AlertDialogContent>
-    </AlertDialog>
+    <Modal v-model:open="deleteDialogOpen" alert :title="isMember ? $t('users.removeMember') : $t('users.deleteUser')">
+      <p>{{ isMember ? $t('users.removeMemberWarning') : $t('teams.deleteConfirm', 'Are you sure? This action cannot be undone.') }}</p>
+      <template #footer>
+        <button type="button" class="outline" @click="deleteDialogOpen = false">{{ $t('common.cancel') }}</button>
+        <button type="button" data-variant="danger" @click="deleteUser">
+          {{ isMember ? $t('common.remove', 'Remove') : $t('common.delete') }}
+        </button>
+      </template>
+    </Modal>
 
     <UnsavedChangesDialog :open="showLeaveDialog" @stay="cancelLeave" @leave="confirmLeave" />
   </div>

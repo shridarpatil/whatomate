@@ -1,21 +1,9 @@
 <script setup lang="ts">
 import { ref, onMounted, onUnmounted, computed, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
-import { Button } from '@/components/ui/button'
-import { Badge } from '@/components/ui/badge'
-import { ScrollArea } from '@/components/ui/scroll-area'
-import { Progress } from '@/components/ui/progress'
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select'
 import { campaignsService } from '@/services/api'
 import { wsService } from '@/services/websocket'
-import { toast } from 'vue-sonner'
+import { toast } from '@/lib/toast'
 import { PageHeader, DataTable, DeleteConfirmDialog, SearchInput, IconButton, ErrorState, DateRangePicker, type Column } from '@/components/shared'
 import { getErrorMessage } from '@/lib/api-utils'
 import {
@@ -29,7 +17,7 @@ import {
   CheckCircle,
   Clock,
   AlertCircle,
-} from 'lucide-vue-next'
+} from '@/lib/icons'
 import { formatDate } from '@/lib/utils'
 import { useSearchPagination } from '@/composables/useSearchPagination'
 import { useDateRange } from '@/composables/useDateRange'
@@ -218,19 +206,19 @@ function getStatusIcon(status: string) {
   }
 }
 
-function getStatusClass(status: string): string {
+function getStatusVariant(status: string): string | undefined {
   switch (status) {
     case 'completed':
-      return 'border-green-600 text-green-600'
+      return 'success'
     case 'running':
     case 'processing':
     case 'queued':
-      return 'border-blue-600 text-blue-600'
+      return 'secondary'
     case 'failed':
     case 'cancelled':
-      return 'border-destructive text-destructive'
+      return 'danger'
     default:
-      return ''
+      return undefined
   }
 }
 
@@ -242,136 +230,112 @@ function getProgressPercentage(campaign: Campaign): number {
 </script>
 
 <template>
-  <div class="flex flex-col h-full bg-[#0a0a0b] light:bg-gray-50">
+  <div class="flex flex-col h-full">
     <PageHeader
       :title="$t('campaigns.title')"
-      :subtitle="$t('campaigns.subtitle')"
+      :description="$t('campaigns.subtitle')"
       :icon="Megaphone"
-      icon-gradient="bg-gradient-to-br from-rose-500 to-pink-600 shadow-rose-500/20"
     >
       <template #actions>
-        <RouterLink to="/campaigns/new">
-          <Button variant="outline" size="sm">
-            <Plus class="h-4 w-4 mr-2" />
-            {{ $t('campaigns.createCampaign') }}
-          </Button>
+        <RouterLink to="/campaigns/new" class="button outline small">
+          <Plus :size="16" />
+          {{ $t('campaigns.createCampaign') }}
         </RouterLink>
       </template>
     </PageHeader>
 
     <!-- Campaigns List -->
-    <ScrollArea class="flex-1">
-      <div class="p-6">
-        <div>
-          <Card>
-            <CardHeader>
-              <div class="flex items-center justify-between flex-wrap gap-4">
-                <div>
-                  <CardTitle>{{ $t('campaigns.yourCampaigns') }}</CardTitle>
-                  <CardDescription>{{ $t('campaigns.yourCampaignsDesc') }}</CardDescription>
-                </div>
-                <div class="flex items-center gap-2 flex-wrap">
-                  <Select v-model="filterStatus">
-                    <SelectTrigger class="w-[140px]">
-                      <SelectValue :placeholder="$t('campaigns.allStatuses')" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem v-for="opt in statusOptions" :key="opt.value" :value="opt.value">
-                        {{ opt.label }}
-                      </SelectItem>
-                    </SelectContent>
-                  </Select>
-                  <DateRangePicker
-                    v-model:selected-range="selectedRange"
-                    v-model:custom-date-range="customDateRange"
-                    v-model:is-date-picker-open="isDatePickerOpen"
-                    :format-date-range-display="formatDateRangeDisplay"
-                    @apply-custom="applyCustomRange"
-                  />
-                  <SearchInput v-model="searchQuery" :placeholder="$t('campaigns.searchCampaigns') + '...'" class="w-48" />
-                </div>
+    <div class="flex-1 scroll-y p-4">
+      <article class="card">
+        <header class="hstack justify-between items-center flex-wrap gap-4">
+          <h3>{{ $t('campaigns.yourCampaigns') }}</h3>
+          <div class="hstack items-center gap-2 flex-wrap">
+            <select class="w-auto" v-model="filterStatus" :aria-label="$t('campaigns.status')">
+              <option v-for="opt in statusOptions" :key="opt.value" :value="opt.value">{{ opt.label }}</option>
+            </select>
+            <DateRangePicker
+              v-model:selected-range="selectedRange"
+              v-model:custom-date-range="customDateRange"
+              v-model:is-date-picker-open="isDatePickerOpen"
+              :format-date-range-display="formatDateRangeDisplay"
+              @apply-custom="applyCustomRange"
+            />
+            <SearchInput v-model="searchQuery" :placeholder="$t('campaigns.searchCampaigns') + '...'" />
+          </div>
+        </header>
+        <ErrorState
+          v-if="error && !isLoading"
+          :title="$t('campaigns.fetchFailedTitle')"
+          :description="error"
+          :retry-label="$t('common.retry')"
+          @retry="fetchCampaigns"
+        />
+        <DataTable
+          v-else
+          :items="campaigns"
+          :columns="columns"
+          :is-loading="isLoading"
+          :empty-icon="Megaphone"
+          :empty-title="searchQuery ? $t('campaigns.noMatchingCampaigns') : $t('campaigns.noCampaignsYet')"
+          :empty-description="searchQuery ? $t('campaigns.noMatchingCampaignsDesc') : $t('campaigns.noCampaignsYetDesc')"
+          v-model:sort-key="sortKey"
+          v-model:sort-direction="sortDirection"
+          server-pagination
+          :current-page="currentPage"
+          :total-items="totalItems"
+          :page-size="pageSize"
+          item-name="campaigns"
+          @page-change="handlePageChange"
+        >
+          <template #cell-name="{ item: campaign }">
+            <RouterLink :to="`/campaigns/${campaign.id}`"><strong>{{ campaign.name }}</strong></RouterLink>
+          </template>
+          <template #cell-template="{ item: campaign }">
+            <span class="text-light">{{ campaign.template_name || '—' }}</span>
+          </template>
+          <template #cell-status="{ item: campaign }">
+            <span class="badge" :data-variant="getStatusVariant(campaign.status)">
+              <component :is="getStatusIcon(campaign.status)" :size="12" />
+              {{ campaign.status }}
+            </span>
+          </template>
+          <template #cell-stats="{ item: campaign }">
+            <div class="vstack gap-1">
+              <div v-if="campaign.status === 'running' || campaign.status === 'processing'" class="vstack">
+                <progress :value="getProgressPercentage(campaign)" max="100" :aria-label="$t('campaigns.progress')"></progress>
+                <small class="text-light">{{ getProgressPercentage(campaign) }}%</small>
               </div>
-            </CardHeader>
-            <CardContent>
-              <ErrorState
-                v-if="error && !isLoading"
-                :title="$t('campaigns.fetchFailedTitle')"
-                :description="error"
-                :retry-label="$t('common.retry')"
-                @retry="fetchCampaigns"
+              <div class="hstack items-center gap-2">
+                <small :title="$t('campaigns.recipients')"><Users :size="12" /> {{ campaign.total_recipients }}</small>
+                <small :title="$t('campaigns.delivered')">{{ campaign.delivered_count }}</small>
+                <small :title="$t('campaigns.read')">{{ campaign.read_count }}</small>
+                <small v-if="campaign.failed_count > 0" :title="$t('campaigns.failed')">{{ campaign.failed_count }}</small>
+              </div>
+            </div>
+          </template>
+          <template #cell-created_at="{ item: campaign }">
+            <span class="text-light">{{ formatDate(campaign.created_at) }}</span>
+          </template>
+          <template #cell-actions="{ item: campaign }">
+            <div class="hstack items-center justify-end gap-1">
+              <RouterLink :to="`/campaigns/${campaign.id}`" class="button ghost icon" :title="$t('campaigns.editCampaign')" :aria-label="$t('campaigns.editCampaign')"><Pencil :size="16" /></RouterLink>
+              <IconButton
+                :icon="Trash2"
+                :label="$t('campaigns.deleteCampaign')"
+                :disabled="campaign.status === 'running' || campaign.status === 'processing'"
+                @click="openDeleteDialog(campaign)"
               />
-              <DataTable
-                v-else
-                :items="campaigns"
-                :columns="columns"
-                :is-loading="isLoading"
-                :empty-icon="Megaphone"
-                :empty-title="searchQuery ? $t('campaigns.noMatchingCampaigns') : $t('campaigns.noCampaignsYet')"
-                :empty-description="searchQuery ? $t('campaigns.noMatchingCampaignsDesc') : $t('campaigns.noCampaignsYetDesc')"
-                v-model:sort-key="sortKey"
-                v-model:sort-direction="sortDirection"
-                server-pagination
-                :current-page="currentPage"
-                :total-items="totalItems"
-                :page-size="pageSize"
-                item-name="campaigns"
-                @page-change="handlePageChange"
-              >
-                <template #cell-name="{ item: campaign }">
-                  <RouterLink :to="`/campaigns/${campaign.id}`" class="font-medium text-inherit no-underline hover:opacity-80">{{ campaign.name }}</RouterLink>
-                </template>
-                <template #cell-template="{ item: campaign }">
-                  <span class="text-sm text-muted-foreground">{{ campaign.template_name || '—' }}</span>
-                </template>
-                <template #cell-status="{ item: campaign }">
-                  <Badge variant="outline" :class="[getStatusClass(campaign.status), 'text-xs']">
-                    <component :is="getStatusIcon(campaign.status)" class="h-3 w-3 mr-1" />
-                    {{ campaign.status }}
-                  </Badge>
-                </template>
-                <template #cell-stats="{ item: campaign }">
-                  <div class="space-y-1">
-                    <div v-if="campaign.status === 'running' || campaign.status === 'processing'" class="w-32">
-                      <Progress :model-value="getProgressPercentage(campaign)" class="h-1.5" />
-                      <span class="text-xs text-muted-foreground">{{ getProgressPercentage(campaign) }}%</span>
-                    </div>
-                    <div class="flex items-center gap-3 text-xs">
-                      <span title="Recipients"><Users class="h-3 w-3 inline mr-0.5" />{{ campaign.total_recipients }}</span>
-                      <span class="text-green-600" title="Delivered">{{ campaign.delivered_count }}</span>
-                      <span class="text-blue-600" title="Read">{{ campaign.read_count }}</span>
-                      <span v-if="campaign.failed_count > 0" class="text-destructive" title="Failed">{{ campaign.failed_count }}</span>
-                    </div>
-                  </div>
-                </template>
-                <template #cell-created_at="{ item: campaign }">
-                  <span class="text-muted-foreground text-sm">{{ formatDate(campaign.created_at) }}</span>
-                </template>
-                <template #cell-actions="{ item: campaign }">
-                  <div class="flex items-center justify-end gap-1">
-                    <RouterLink :to="`/campaigns/${campaign.id}`"><IconButton :icon="Pencil" :label="$t('campaigns.editCampaign')" class="h-8 w-8" /></RouterLink>
-                    <IconButton
-                      :icon="Trash2"
-                      :label="$t('campaigns.deleteCampaign')"
-                      class="h-8 w-8 text-destructive"
-                      :disabled="campaign.status === 'running' || campaign.status === 'processing'"
-                      @click="openDeleteDialog(campaign)"
-                    />
-                  </div>
-                </template>
-                <template #empty-action>
-                  <RouterLink v-if="!searchQuery" to="/campaigns/new">
-                    <Button variant="outline" size="sm">
-                      <Plus class="h-4 w-4 mr-2" />
-                      {{ $t('campaigns.createCampaign') }}
-                    </Button>
-                  </RouterLink>
-                </template>
-              </DataTable>
-            </CardContent>
-          </Card>
-        </div>
-      </div>
-    </ScrollArea>
+            </div>
+          </template>
+          <template #empty-action>
+            <RouterLink v-if="!searchQuery" to="/campaigns/new" class="button outline small">
+              <Plus :size="16" />
+              {{ $t('campaigns.createCampaign') }}
+            </RouterLink>
+          </template>
+        </DataTable>
+      </article>
+    </div>
 
     <DeleteConfirmDialog
       v-model:open="deleteDialogOpen"
@@ -380,7 +344,5 @@ function getProgressPercentage(campaign: Campaign): number {
       :is-submitting="isDeletingCampaign"
       @confirm="confirmDeleteCampaign"
     />
-
-    <!-- Media Preview Dialog -->
   </div>
 </template>

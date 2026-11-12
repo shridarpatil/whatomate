@@ -124,21 +124,18 @@ test.describe('Chat composer interactions', () => {
     // press here exercises that path (vs. clicking the submit button).
     await composer.press('Enter')
 
-    const bubble = page.locator('.chat-bubble-outgoing').filter({ hasText: messageText }).last()
+    const bubble = page.locator('[data-bubble="outgoing"]').filter({ hasText: messageText }).last()
     await expect(bubble).toBeVisible({ timeout: 10_000 })
     await expect(composer).toHaveValue('')
   })
 
   test('clicking Reply on a bubble shows the reply indicator', async ({ page }) => {
-    // Hover the message group container so the reply button (visible only
-    // on hover via opacity-0 group-hover:opacity-100) becomes interactive.
+    // Hover the message row so its actions (revealed on hover) become visible.
     const wrap = page.locator(`#message-${incomingMessageId}`)
     await wrap.hover()
 
     // Click the Reply icon button next to the bubble.
-    const replyBtn = wrap.locator('xpath=..').locator('button').filter({
-      has: page.locator('[class*="lucide-reply"]'),
-    }).first()
+    const replyBtn = wrap.getByRole('button', { name: 'Reply', exact: true })
     await expect(replyBtn).toBeVisible({ timeout: 5_000 })
     await replyBtn.click()
 
@@ -151,21 +148,13 @@ test.describe('Chat composer interactions', () => {
   test('cancelling a reply (X) hides the reply indicator', async ({ page }) => {
     const wrap = page.locator(`#message-${incomingMessageId}`)
     await wrap.hover()
-    await wrap.locator('xpath=..').locator('button').filter({
-      has: page.locator('[class*="lucide-reply"]'),
-    }).first().click()
+    await wrap.getByRole('button', { name: 'Reply', exact: true }).click()
 
     const indicator = page.getByText(/Replying to /i)
     await expect(indicator).toBeVisible({ timeout: 5_000 })
 
     // Cancel — the X button to the right of the indicator.
-    await page.locator('button').filter({
-      has: page.locator('[class*="lucide-x"]'),
-    }).filter({ hasNot: page.locator('main *') }).first().click().catch(async () => {
-      // Fallback: scope to the sibling within the indicator container.
-      await indicator.locator('xpath=ancestor::div[contains(@class, "border-t")][1]')
-        .locator('button').click()
-    })
+    await page.locator('[data-reply-indicator]').getByRole('button', { name: 'Cancel reply' }).click()
 
     await expect(indicator).toHaveCount(0)
   })
@@ -173,9 +162,7 @@ test.describe('Chat composer interactions', () => {
   test('sending a reply produces a bubble with the reply preview', async ({ page }) => {
     const wrap = page.locator(`#message-${incomingMessageId}`)
     await wrap.hover()
-    await wrap.locator('xpath=..').locator('button').filter({
-      has: page.locator('[class*="lucide-reply"]'),
-    }).first().click()
+    await wrap.getByRole('button', { name: 'Reply', exact: true }).click()
 
     await expect(page.getByText(/Replying to /i)).toBeVisible({ timeout: 5_000 })
 
@@ -185,11 +172,11 @@ test.describe('Chat composer interactions', () => {
     await page.locator('form button[type="submit"]').last().click()
 
     // The new outgoing bubble must contain the reply text AND a
-    // .reply-preview block referencing the original incoming message.
-    const newBubble = page.locator('.chat-bubble-outgoing').filter({ hasText: replyText }).last()
+    // reply preview block referencing the original incoming message.
+    const newBubble = page.locator('[data-bubble="outgoing"]').filter({ hasText: replyText }).last()
     await expect(newBubble).toBeVisible({ timeout: 10_000 })
-    await expect(newBubble.locator('.reply-preview')).toBeVisible()
-    await expect(newBubble.locator('.reply-preview')).toContainText('Original from customer')
+    await expect(newBubble.locator('[data-reply-preview]')).toBeVisible()
+    await expect(newBubble.locator('[data-reply-preview]')).toContainText('Original from customer')
 
     // Reply indicator goes away on successful send.
     await expect(page.getByText(/Replying to /i)).toHaveCount(0)

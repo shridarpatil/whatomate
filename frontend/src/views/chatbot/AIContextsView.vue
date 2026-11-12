@@ -1,17 +1,12 @@
 <script setup lang="ts">
 import { ref, onMounted, watch, computed } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { Button } from '@/components/ui/button'
-import { Badge } from '@/components/ui/badge'
-import { ScrollArea } from '@/components/ui/scroll-area'
-import { Switch } from '@/components/ui/switch'
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { chatbotService } from '@/services/api'
-import { toast } from 'vue-sonner'
+import { toast } from '@/lib/toast'
 import { PageHeader, DataTable, DeleteConfirmDialog, SearchInput, IconButton, ErrorState, type Column } from '@/components/shared'
 import { getErrorMessage } from '@/lib/api-utils'
-import { Plus, Pencil, Trash2, Sparkles } from 'lucide-vue-next'
-import { useDebounceFn } from '@vueuse/core'
+import { Plus, Pencil, Trash2, Sparkles } from '@/lib/icons'
+import { debounce } from '@/lib/utils'
 
 const { t } = useI18n()
 
@@ -95,7 +90,7 @@ async function fetchContexts() {
 }
 
 // Debounced search to avoid too many API calls
-const debouncedSearch = useDebounceFn(() => {
+const debouncedSearch = debounce(() => {
   currentPage.value = 1
   fetchContexts()
 }, 300)
@@ -127,127 +122,103 @@ async function confirmDeleteContext() {
   }
 }
 
-async function toggleContext(context: AIContext) {
+async function toggleContext(context: AIContext, event?: Event) {
   try {
     await chatbotService.updateAIContext(context.id, { enabled: !context.enabled })
     context.enabled = !context.enabled
     toast.success(context.enabled ? t('common.enabledSuccess', { resource: t('resources.AIContext') }) : t('common.disabledSuccess', { resource: t('resources.AIContext') }))
   } catch (error: any) {
+    if (event?.target instanceof HTMLInputElement) event.target.checked = context.enabled
     toast.error(getErrorMessage(error, t('common.failedToggle', { resource: t('resources.AIContext') })))
   }
 }
 </script>
 
 <template>
-  <div class="flex flex-col h-full bg-[#0a0a0b] light:bg-gray-50">
+  <div class="flex flex-col h-full">
     <PageHeader
       :title="$t('aiContexts.title')"
       :icon="Sparkles"
-      icon-gradient="bg-gradient-to-br from-orange-500 to-amber-600 shadow-orange-500/20"
       back-link="/chatbot"
       :breadcrumbs="[{ label: $t('aiContexts.backToChatbot'), href: '/chatbot' }, { label: $t('nav.aiContexts') }]"
     >
       <template #actions>
-        <RouterLink to="/chatbot/ai/new">
-          <Button variant="outline" size="sm">
-            <Plus class="h-4 w-4 mr-2" />
-            {{ $t('aiContexts.addContext') }}
-          </Button>
+        <RouterLink to="/chatbot/ai/new" class="button outline small">
+          <Plus :size="16" />
+          {{ $t('aiContexts.addContext') }}
         </RouterLink>
       </template>
     </PageHeader>
 
-    <ScrollArea class="flex-1">
-      <div class="p-6">
-        <div>
-          <Card>
-            <CardHeader>
-              <div class="flex items-center justify-between flex-wrap gap-4">
-                <div>
-                  <CardTitle>{{ $t('aiContexts.yourContexts') }}</CardTitle>
-                  <CardDescription>{{ $t('aiContexts.yourContextsDesc') }}</CardDescription>
-                </div>
-                <SearchInput v-model="searchQuery" :placeholder="$t('aiContexts.searchContexts') + '...'" class="w-64" />
-              </div>
-            </CardHeader>
-            <CardContent>
-              <ErrorState
-                v-if="error"
-                :title="$t('common.loadErrorTitle')"
-                :description="error"
-                :retry-label="$t('common.retry')"
-                @retry="fetchContexts"
-              />
-              <DataTable
-                v-else
-                :items="contexts"
-                :columns="columns"
-                :is-loading="isLoading"
-                :empty-icon="Sparkles"
-                :empty-title="searchQuery ? $t('aiContexts.noMatchingContexts') : $t('aiContexts.noContextsYet')"
-                :empty-description="searchQuery ? $t('aiContexts.noMatchingContextsDesc') : $t('aiContexts.noContextsYetDesc')"
-                v-model:sort-key="sortKey"
-                v-model:sort-direction="sortDirection"
-                server-pagination
-                :current-page="currentPage"
-                :total-items="totalItems"
-                :page-size="pageSize"
-                item-name="contexts"
-                @page-change="handlePageChange"
-              >
-                <template #cell-name="{ item: context }">
-                  <RouterLink :to="`/chatbot/ai/${context.id}`" class="font-medium text-inherit no-underline hover:opacity-80">{{ context.name }}</RouterLink>
-                </template>
-                <template #cell-context_type="{ item: context }">
-                  <Badge
-                    :class="context.context_type === 'api'
-                      ? 'bg-blue-500/20 text-blue-400 border-transparent'
-                      : 'bg-orange-500/20 text-orange-400 border-transparent'"
-                    class="text-xs"
-                  >
-                    {{ context.context_type === 'api' ? $t('aiContexts.apiFetch') : $t('aiContexts.static') }}
-                  </Badge>
-                </template>
-                <template #cell-trigger_keywords="{ item: context }">
-                  <div class="flex flex-wrap gap-1">
-                    <Badge v-for="kw in context.trigger_keywords?.slice(0, 2)" :key="kw" variant="secondary" class="text-xs">
-                      {{ kw }}
-                    </Badge>
-                    <Badge v-if="context.trigger_keywords?.length > 2" variant="outline" class="text-xs">
-                      +{{ context.trigger_keywords.length - 2 }}
-                    </Badge>
-                    <span v-if="!context.trigger_keywords?.length" class="text-muted-foreground text-sm">{{ $t('aiContexts.always') }}</span>
-                  </div>
-                </template>
-                <template #cell-priority="{ item: context }">
-                  <span class="text-muted-foreground">{{ context.priority }}</span>
-                </template>
-                <template #cell-status="{ item: context }">
-                  <div class="flex items-center gap-2">
-                    <Switch :checked="context.enabled" @update:checked="toggleContext(context)" />
-                    <span class="text-sm text-muted-foreground">{{ context.enabled ? $t('aiContexts.active') : $t('aiContexts.inactive') }}</span>
-                  </div>
-                </template>
-                <template #cell-actions="{ item: context }">
-                  <div class="flex items-center justify-end gap-1">
-                    <RouterLink :to="`/chatbot/ai/${context.id}`"><IconButton :icon="Pencil" :label="$t('aiContexts.editContextLabel')" class="h-8 w-8" /></RouterLink>
-                    <IconButton :icon="Trash2" :label="$t('aiContexts.deleteContextLabel')" class="h-8 w-8 text-destructive" @click="openDeleteDialog(context)" />
-                  </div>
-                </template>
-                <template #empty-action>
-                  <RouterLink v-if="!searchQuery" to="/chatbot/ai/new">
-                    <Button variant="outline" size="sm">
-                      <Plus class="h-4 w-4 mr-2" />
-                      {{ $t('aiContexts.addContext') }}
-                    </Button>
-                  </RouterLink>
-                </template>
-              </DataTable>
-            </CardContent>
-          </Card>
-        </div>
-      </div>
-    </ScrollArea>
+    <div class="flex-1 scroll-y p-4">
+      <article class="card">
+        <header class="hstack justify-between flex-wrap gap-4">
+          <h3>{{ $t('aiContexts.yourContexts') }}</h3>
+          <SearchInput v-model="searchQuery" :placeholder="$t('aiContexts.searchContexts') + '...'" />
+        </header>
+        <ErrorState
+          v-if="error"
+          :title="$t('common.loadErrorTitle')"
+          :description="error"
+          :retry-label="$t('common.retry')"
+          @retry="fetchContexts"
+        />
+        <DataTable
+          v-else
+          :items="contexts"
+          :columns="columns"
+          :is-loading="isLoading"
+          :empty-icon="Sparkles"
+          :empty-title="searchQuery ? $t('aiContexts.noMatchingContexts') : $t('aiContexts.noContextsYet')"
+          :empty-description="searchQuery ? $t('aiContexts.noMatchingContextsDesc') : $t('aiContexts.noContextsYetDesc')"
+          v-model:sort-key="sortKey"
+          v-model:sort-direction="sortDirection"
+          server-pagination
+          :current-page="currentPage"
+          :total-items="totalItems"
+          :page-size="pageSize"
+          item-name="contexts"
+          @page-change="handlePageChange"
+        >
+          <template #cell-name="{ item: context }">
+            <RouterLink :to="`/chatbot/ai/${context.id}`"><strong>{{ context.name }}</strong></RouterLink>
+          </template>
+          <template #cell-context_type="{ item: context }">
+            <span class="badge" data-variant="secondary">
+              {{ context.context_type === 'api' ? $t('aiContexts.apiFetch') : $t('aiContexts.static') }}
+            </span>
+          </template>
+          <template #cell-trigger_keywords="{ item: context }">
+            <div class="hstack gap-1 flex-wrap">
+              <span v-for="kw in context.trigger_keywords?.slice(0, 2)" :key="kw" class="badge" data-variant="secondary">{{ kw }}</span>
+              <span v-if="context.trigger_keywords?.length > 2" class="badge outline">+{{ context.trigger_keywords.length - 2 }}</span>
+              <small v-if="!context.trigger_keywords?.length" class="text-light">{{ $t('aiContexts.always') }}</small>
+            </div>
+          </template>
+          <template #cell-priority="{ item: context }">
+            <span class="text-light">{{ context.priority }}</span>
+          </template>
+          <template #cell-status="{ item: context }">
+            <label class="hstack gap-2">
+              <input type="checkbox" role="switch" :checked="context.enabled" :aria-label="$t('aiContexts.status')" @change="toggleContext(context, $event)">
+              <small class="text-light">{{ context.enabled ? $t('aiContexts.active') : $t('aiContexts.inactive') }}</small>
+            </label>
+          </template>
+          <template #cell-actions="{ item: context }">
+            <div class="hstack gap-1 justify-end">
+              <RouterLink :to="`/chatbot/ai/${context.id}`" class="button ghost icon" :title="$t('aiContexts.editContextLabel')" :aria-label="$t('aiContexts.editContextLabel')"><Pencil :size="16" /></RouterLink>
+              <IconButton :icon="Trash2" :label="$t('aiContexts.deleteContextLabel')" @click="openDeleteDialog(context)" />
+            </div>
+          </template>
+          <template #empty-action>
+            <RouterLink v-if="!searchQuery" to="/chatbot/ai/new" class="button outline small">
+              <Plus :size="16" />
+              {{ $t('aiContexts.addContext') }}
+            </RouterLink>
+          </template>
+        </DataTable>
+      </article>
+    </div>
 
     <DeleteConfirmDialog
       v-model:open="deleteDialogOpen"

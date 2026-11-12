@@ -1,12 +1,6 @@
 <script setup lang="ts">
 import { computed } from 'vue'
-import { Plus, Trash2 } from 'lucide-vue-next'
-import { Input } from '@/components/ui/input'
-import { Label } from '@/components/ui/label'
-import { Button } from '@/components/ui/button'
-import { Switch } from '@/components/ui/switch'
-import { Badge } from '@/components/ui/badge'
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { Plus, Trash2 } from '@/lib/icons'
 
 export interface PanelField {
   key: string
@@ -106,6 +100,21 @@ function addField(sectionIndex: number, variableKey: string | number | bigint | 
   update({ sections })
 }
 
+// The "Add field…" select is an action, not a value: add, then reset it.
+function onAddFieldChange(sectionIndex: number, e: Event) {
+  const select = e.target as HTMLSelectElement
+  addField(sectionIndex, select.value)
+  select.value = ''
+}
+
+function val(e: Event): string {
+  return (e.target as HTMLInputElement).value
+}
+
+function checked(e: Event): boolean {
+  return (e.target as HTMLInputElement).checked
+}
+
 function removeField(sectionIndex: number, fieldIndex: number) {
   const sections = props.panelConfig.sections.map((s, i) => {
     if (i !== sectionIndex) return s
@@ -130,164 +139,155 @@ function setField(sectionIndex: number, fieldIndex: number, patch: Partial<Panel
 </script>
 
 <template>
-  <div class="space-y-3 min-w-0 overflow-hidden">
-    <div v-if="availableVariables.length > 0" class="text-[10px] text-muted-foreground space-y-1">
-      <div class="font-medium">Available variables</div>
-      <div class="flex flex-wrap gap-1">
-        <code
-          v-for="(v, i) in availableVariables"
-          :key="v.key + i"
-          class="bg-muted px-1.5 py-0.5 rounded"
-        >{{ v.key }}</code>
+  <div class="vstack gap-4 min-w-0">
+    <div v-if="availableVariables.length > 0" class="vstack gap-1">
+      <small><strong>Available variables</strong></small>
+      <div class="hstack gap-1 flex-wrap">
+        <code v-for="(v, i) in availableVariables" :key="v.key + i">{{ v.key }}</code>
       </div>
     </div>
-    <div v-else class="text-[10px] text-muted-foreground p-2 border rounded bg-muted/30">
-      No variables captured yet. Add a Prompt node with a "Store response as" value, or an API node with response mapping.
-    </div>
+    <p v-else class="text-light">
+      <small>No variables captured yet. Add a Prompt node with a "Store response as" value, or an API node with response mapping.</small>
+    </p>
 
-    <div class="space-y-2">
-      <div class="flex items-center justify-between">
-        <Label class="text-xs">Sections</Label>
-        <Button variant="outline" size="sm" class="h-7 px-2 text-xs gap-1" @click="addSection">
-          <Plus class="h-3.5 w-3.5" /> Add Section
-        </Button>
+    <div class="vstack gap-2">
+      <div class="hstack justify-between">
+        <span>Sections</span>
+        <button type="button" class="outline small" @click="addSection">
+          <Plus /> Add Section
+        </button>
       </div>
 
-      <div
-        v-if="panelConfig.sections.length === 0"
-        class="text-[10px] text-muted-foreground p-2 border rounded bg-muted/30 text-center"
-      >
-        No sections configured.
-      </div>
+      <p v-if="panelConfig.sections.length === 0" class="text-light align-center">
+        <small>No sections configured.</small>
+      </p>
 
-      <div
+      <article
         v-for="(section, sectionIdx) in panelConfig.sections"
         :key="section.id"
-        class="border rounded-md p-2 space-y-2 bg-muted/20 min-w-0"
+        class="card p-4 vstack gap-2 min-w-0"
       >
-        <div class="flex items-center gap-2">
-          <Input
-            :model-value="section.label"
-            @update:model-value="(v) => setSection(sectionIdx, { label: String(v ?? '') })"
+        <div class="hstack gap-2">
+          <input
+            class="flex-1 min-w-0"
+            :value="section.label"
             placeholder="Section label"
-            class="h-7 text-xs flex-1"
-          />
-          <Button variant="ghost" size="icon" class="h-7 w-7" @click="removeSection(sectionIdx)">
-            <Trash2 class="h-3 w-3 text-destructive" />
-          </Button>
-        </div>
-
-        <div class="flex items-center gap-3 text-[10px]">
-          <div class="flex items-center gap-1">
-            <span class="text-muted-foreground">Columns:</span>
-            <Select
-              :model-value="String(section.columns)"
-              @update:model-value="(v) => setSection(sectionIdx, { columns: (Number(v) === 2 ? 2 : 1) })"
-            >
-              <SelectTrigger class="h-6 w-14 text-[10px]"><SelectValue /></SelectTrigger>
-              <SelectContent>
-                <SelectItem value="1">1</SelectItem>
-                <SelectItem value="2">2</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-          <div class="flex items-center gap-1">
-            <Switch
-              :checked="section.collapsible"
-              @update:checked="(v) => setSection(sectionIdx, { collapsible: v })"
-              class="scale-75"
-            />
-            <span class="text-muted-foreground">Collapsible</span>
-          </div>
-          <div v-if="section.collapsible" class="flex items-center gap-1">
-            <Switch
-              :checked="section.default_collapsed"
-              @update:checked="(v) => setSection(sectionIdx, { default_collapsed: v })"
-              class="scale-75"
-            />
-            <span class="text-muted-foreground">Collapsed by default</span>
-          </div>
-        </div>
-
-        <div class="space-y-1">
-          <div class="flex items-center justify-between">
-            <span class="text-[10px] text-muted-foreground">Fields:</span>
-            <Select @update:model-value="(v: any) => addField(sectionIdx, v)">
-              <SelectTrigger class="h-6 w-32 text-[10px]">
-                <SelectValue placeholder="Add field…" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem
-                  v-for="v in unassignedVariables"
-                  :key="v.key"
-                  :value="v.key"
-                >
-                  {{ v.key }}
-                </SelectItem>
-                <div
-                  v-if="unassignedVariables.length === 0"
-                  class="p-2 text-[10px] text-muted-foreground"
-                >
-                  No unused variables left.
-                </div>
-              </SelectContent>
-            </Select>
-          </div>
-
-          <div
-            v-if="section.fields.length === 0"
-            class="text-[10px] text-muted-foreground text-center py-1"
+            :aria-label="$t('flowBuilder.sectionLabelPlaceholder')"
+            @input="setSection(sectionIdx, { label: val($event) })"
           >
-            No fields added.
+          <button
+            type="button"
+            class="ghost small icon"
+            data-variant="danger"
+            :aria-label="$t('common.delete')"
+            :title="$t('common.delete')"
+            @click="removeSection(sectionIdx)"
+          >
+            <Trash2 />
+          </button>
+        </div>
+
+        <div class="hstack gap-4 flex-wrap">
+          <label class="hstack gap-2">
+            <small>Columns:</small>
+            <select
+              :value="String(section.columns)"
+              @change="setSection(sectionIdx, { columns: (Number(val($event)) === 2 ? 2 : 1) })"
+            >
+              <option value="1">1</option>
+              <option value="2">2</option>
+            </select>
+          </label>
+          <label class="hstack gap-2">
+            <input
+              type="checkbox"
+              role="switch"
+              :checked="section.collapsible"
+              @change="setSection(sectionIdx, { collapsible: checked($event) })"
+            >
+            <small>Collapsible</small>
+          </label>
+          <label v-if="section.collapsible" class="hstack gap-2">
+            <input
+              type="checkbox"
+              role="switch"
+              :checked="section.default_collapsed"
+              @change="setSection(sectionIdx, { default_collapsed: checked($event) })"
+            >
+            <small>Collapsed by default</small>
+          </label>
+        </div>
+
+        <div class="vstack gap-2">
+          <div class="hstack justify-between gap-2">
+            <small class="text-light">Fields:</small>
+            <select value="" :aria-label="$t('flowBuilder.addFieldPlaceholder')" @change="onAddFieldChange(sectionIdx, $event)">
+              <option value="" disabled>Add field…</option>
+              <option v-for="v in unassignedVariables" :key="v.key" :value="v.key">
+                {{ v.key }}
+              </option>
+              <option v-if="unassignedVariables.length === 0" value="" disabled>No unused variables left.</option>
+            </select>
           </div>
+
+          <p v-if="section.fields.length === 0" class="text-light align-center">
+            <small>No fields added.</small>
+          </p>
 
           <div
             v-for="(field, fieldIdx) in section.fields"
             :key="field.key"
-            class="bg-background rounded p-2 space-y-2"
+            class="vstack gap-2"
           >
-            <div class="flex items-center gap-1">
-              <Badge variant="secondary" class="text-[10px] font-mono">{{ field.key }}</Badge>
-              <Input
-                :model-value="field.label"
-                @update:model-value="(v) => setField(sectionIdx, fieldIdx, { label: String(v ?? '') })"
+            <hr>
+            <div class="hstack gap-1">
+              <span class="badge" data-variant="secondary">{{ field.key }}</span>
+              <input
+                class="flex-1 min-w-0"
+                :value="field.label"
                 placeholder="Display label"
-                class="h-6 text-[10px] flex-1"
-              />
-              <Button variant="ghost" size="icon" class="h-6 w-6" @click="removeField(sectionIdx, fieldIdx)">
-                <Trash2 class="h-3 w-3 text-destructive" />
-              </Button>
+                :aria-label="$t('flowBuilder.displayLabel')"
+                @input="setField(sectionIdx, fieldIdx, { label: val($event) })"
+              >
+              <button
+                type="button"
+                class="ghost small icon"
+                data-variant="danger"
+                :aria-label="$t('common.delete')"
+                :title="$t('common.delete')"
+                @click="removeField(sectionIdx, fieldIdx)"
+              >
+                <Trash2 />
+              </button>
             </div>
-            <div class="flex items-center gap-2">
-              <Select
-                :model-value="field.display_type || 'text'"
-                @update:model-value="(v: any) => setField(sectionIdx, fieldIdx, { display_type: v })"
+            <div class="hstack gap-2">
+              <select
+                class="flex-1 min-w-0"
+                :value="field.display_type || 'text'"
+                :aria-label="$t('flowBuilder.displayType')"
+                @change="setField(sectionIdx, fieldIdx, { display_type: val($event) as PanelField['display_type'] })"
               >
-                <SelectTrigger class="h-6 text-[10px] w-20"><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="text">Text</SelectItem>
-                  <SelectItem value="badge">Badge</SelectItem>
-                  <SelectItem value="tag">Tag</SelectItem>
-                </SelectContent>
-              </Select>
-              <Select
-                :model-value="field.color || 'default'"
+                <option value="text">Text</option>
+                <option value="badge">Badge</option>
+                <option value="tag">Tag</option>
+              </select>
+              <select
+                class="flex-1 min-w-0"
+                :value="field.color || 'default'"
                 :disabled="(field.display_type || 'text') === 'text'"
-                @update:model-value="(v: any) => setField(sectionIdx, fieldIdx, { color: v })"
+                :aria-label="$t('flowBuilder.colorLabel')"
+                @change="setField(sectionIdx, fieldIdx, { color: val($event) as PanelField['color'] })"
               >
-                <SelectTrigger class="h-6 text-[10px] flex-1"><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="default">Default</SelectItem>
-                  <SelectItem value="success">Success</SelectItem>
-                  <SelectItem value="warning">Warning</SelectItem>
-                  <SelectItem value="error">Error</SelectItem>
-                  <SelectItem value="info">Info</SelectItem>
-                </SelectContent>
-              </Select>
+                <option value="default">Default</option>
+                <option value="success">Success</option>
+                <option value="warning">Warning</option>
+                <option value="error">Error</option>
+                <option value="info">Info</option>
+              </select>
             </div>
           </div>
         </div>
-      </div>
+      </article>
     </div>
   </div>
 </template>

@@ -5,7 +5,7 @@ import { useI18n } from 'vue-i18n'
 import { useRolesStore } from '@/stores/roles'
 import { useAuthStore } from '@/stores/auth'
 import type { Role } from '@/services/api'
-import { toast } from 'vue-sonner'
+import { toast } from '@/lib/toast'
 import { getErrorMessage } from '@/lib/api-utils'
 import { useUnsavedChangesGuard } from '@/composables/useUnsavedChangesGuard'
 import DetailPageLayout from '@/components/shared/DetailPageLayout.vue'
@@ -13,24 +13,8 @@ import MetadataPanel from '@/components/shared/MetadataPanel.vue'
 import AuditLogPanel from '@/components/shared/AuditLogPanel.vue'
 import UnsavedChangesDialog from '@/components/shared/UnsavedChangesDialog.vue'
 import PermissionMatrix from '@/components/roles/PermissionMatrix.vue'
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { Badge } from '@/components/ui/badge'
-import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
-import { Label } from '@/components/ui/label'
-import { Textarea } from '@/components/ui/textarea'
-import { Switch } from '@/components/ui/switch'
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from '@/components/ui/alert-dialog'
-import { Shield, Lock, Star, Save, Trash2, Loader2 } from 'lucide-vue-next'
+import Modal from '@/components/oat/Modal.vue'
+import { Shield, Lock, Star, Save, Trash2 } from '@/lib/icons'
 
 const route = useRoute()
 const router = useRouter()
@@ -162,7 +146,6 @@ onMounted(async () => {
     <DetailPageLayout
       :title="isNew ? t('roles.createRole') : (role?.name || '')"
       :icon="Shield"
-      icon-gradient="bg-gradient-to-br from-purple-500 to-indigo-600 shadow-purple-500/20"
       back-link="/settings/roles"
       :breadcrumbs="breadcrumbs"
       :is-loading="isLoading"
@@ -170,84 +153,67 @@ onMounted(async () => {
       :not-found-title="$t('roles.notFound', 'Role not found')"
     >
       <template #actions>
-        <div class="flex items-center gap-2">
-          <Button v-if="canEditForm && (hasChanges || isNew)" size="sm" @click="save" :disabled="isSaving">
-            <Save class="h-4 w-4 mr-1" />
+        <div class="hstack gap-2">
+          <button v-if="canEditForm && (hasChanges || isNew)" type="button" class="small" :disabled="isSaving" :aria-busy="isSaving ? 'true' : undefined" data-spinner="small" @click="save">
+            <Save v-if="!isSaving" :size="16" />
             {{ isSaving ? $t('common.saving', 'Saving...') : isNew ? $t('common.create') : $t('common.save') }}
-          </Button>
-          <Button
-            v-if="canDelete && !isNew && !isSystem"
-            variant="destructive"
-            size="sm"
-            @click="deleteDialogOpen = true"
-          >
-            <Trash2 class="h-4 w-4 mr-1" /> {{ $t('common.delete') }}
-          </Button>
+          </button>
+          <button v-if="canDelete && !isNew && !isSystem" type="button" class="small" data-variant="danger" @click="deleteDialogOpen = true">
+            <Trash2 :size="16" /> {{ $t('common.delete') }}
+          </button>
         </div>
       </template>
 
       <!-- Role Details Card -->
-      <Card>
-        <CardHeader class="pb-3">
-          <div class="flex items-center justify-between">
-            <CardTitle class="text-sm font-medium">{{ $t('teams.details', 'Details') }}</CardTitle>
-            <div class="flex items-center gap-2">
-              <Badge v-if="isSystem" variant="secondary">
-                <Lock class="h-3 w-3 mr-1" />{{ $t('roles.system') }}
-              </Badge>
-              <Badge v-if="role?.is_default" variant="outline">
-                <Star class="h-3 w-3 mr-1" />{{ $t('roles.default') }}
-              </Badge>
-            </div>
+      <article class="card">
+        <header class="hstack justify-between">
+          <h3>{{ $t('teams.details', 'Details') }}</h3>
+          <div class="hstack gap-2">
+            <span v-if="isSystem" class="badge" data-variant="secondary"><Lock :size="12" />{{ $t('roles.system') }}</span>
+            <span v-if="role?.is_default" class="badge outline"><Star :size="12" />{{ $t('roles.default') }}</span>
           </div>
-        </CardHeader>
-        <CardContent class="space-y-4">
-          <p v-if="isSystem" class="text-xs text-muted-foreground">
+        </header>
+        <div class="vstack gap-4">
+          <p v-if="isSystem" class="text-light">
             {{ isSuperAdmin ? $t('roles.superAdminCanEdit') : $t('roles.systemRoleViewOnly') }}
           </p>
-          <div class="space-y-1.5">
-            <Label class="text-xs">{{ $t('roles.name') }} <span class="text-destructive">*</span></Label>
-            <Input v-model="form.name" :placeholder="$t('roles.namePlaceholder')" :disabled="!canEditForm || isSystem" />
-          </div>
-          <div class="space-y-1.5">
-            <Label class="text-xs">{{ $t('roles.description') }}</Label>
-            <Textarea v-model="form.description" :placeholder="$t('roles.descriptionPlaceholder')" :rows="2" :disabled="!canEditForm" />
-          </div>
-          <div v-if="!isSystem" class="flex items-center justify-between">
-            <div class="space-y-0.5">
-              <Label class="text-xs font-normal cursor-pointer">{{ $t('roles.defaultRole') }}</Label>
-              <p class="text-[11px] text-muted-foreground">{{ $t('roles.defaultRoleDesc') }}</p>
-            </div>
-            <Switch :checked="form.is_default" @update:checked="form.is_default = $event" :disabled="!canEditForm" />
-          </div>
-        </CardContent>
-      </Card>
+          <label data-field>
+            {{ $t('roles.name') }} *
+            <input v-model="form.name" :placeholder="$t('roles.namePlaceholder')" :disabled="!canEditForm || isSystem" />
+          </label>
+          <label data-field>
+            {{ $t('roles.description') }}
+            <textarea v-model="form.description" :placeholder="$t('roles.descriptionPlaceholder')" rows="2" :disabled="!canEditForm" />
+          </label>
+          <label v-if="!isSystem" data-field>
+            <span class="hstack justify-between">
+              <span>{{ $t('roles.defaultRole') }}</span>
+              <input v-model="form.is_default" type="checkbox" role="switch" :disabled="!canEditForm" />
+            </span>
+            <small data-hint>{{ $t('roles.defaultRoleDesc') }}</small>
+          </label>
+        </div>
+      </article>
 
       <!-- Permissions Card -->
-      <Card>
-        <CardHeader class="pb-3">
-          <div class="flex items-center justify-between">
-            <CardTitle class="text-sm font-medium">{{ $t('roles.permissions') }}</CardTitle>
-            <span class="text-xs text-muted-foreground">
-              {{ form.permissions.length }} {{ $t('common.selected') || 'selected' }}
-            </span>
-          </div>
-        </CardHeader>
-        <CardContent>
-          <p class="text-sm text-muted-foreground mb-3">{{ $t('roles.selectPermissions') }}</p>
-          <div v-if="rolesStore.permissions.length === 0" class="text-center py-8 text-muted-foreground border rounded-lg">
-            <Loader2 class="h-6 w-6 animate-spin mx-auto mb-2" />
-            <p>{{ $t('roles.loadingPermissions') }}...</p>
-          </div>
-          <PermissionMatrix
-            v-else
-            :key="role?.id || 'new'"
-            :permission-groups="rolesStore.permissionGroups"
-            v-model:selected-permissions="form.permissions"
-            :disabled="!canEditPermissions"
-          />
-        </CardContent>
-      </Card>
+      <article class="card">
+        <header class="hstack justify-between">
+          <h3>{{ $t('roles.permissions') }}</h3>
+          <small class="text-light">
+            {{ form.permissions.length }} {{ $t('common.selected') || 'selected' }}
+          </small>
+        </header>
+        <div v-if="rolesStore.permissions.length === 0" class="vstack items-center gap-2 p-4" role="status" aria-busy="true" data-spinner="large">
+          <p class="text-light">{{ $t('roles.loadingPermissions') }}...</p>
+        </div>
+        <PermissionMatrix
+          v-else
+          :key="role?.id || 'new'"
+          :permission-groups="rolesStore.permissionGroups"
+          v-model:selected-permissions="form.permissions"
+          :disabled="!canEditPermissions"
+        />
+      </article>
 
       <!-- Activity Log -->
       <AuditLogPanel
@@ -266,20 +232,13 @@ onMounted(async () => {
     </DetailPageLayout>
 
     <!-- Delete Confirmation -->
-    <AlertDialog v-model:open="deleteDialogOpen">
-      <AlertDialogContent>
-        <AlertDialogHeader>
-          <AlertDialogTitle>{{ $t('roles.deleteRole') }}</AlertDialogTitle>
-          <AlertDialogDescription>
-            {{ $t('teams.deleteConfirm', 'Are you sure? This action cannot be undone.') }}
-          </AlertDialogDescription>
-        </AlertDialogHeader>
-        <AlertDialogFooter>
-          <AlertDialogCancel>{{ $t('common.cancel') }}</AlertDialogCancel>
-          <AlertDialogAction @click="deleteRole">{{ $t('common.delete') }}</AlertDialogAction>
-        </AlertDialogFooter>
-      </AlertDialogContent>
-    </AlertDialog>
+    <Modal v-model:open="deleteDialogOpen" alert :title="$t('roles.deleteRole')">
+      <p>{{ $t('teams.deleteConfirm', 'Are you sure? This action cannot be undone.') }}</p>
+      <template #footer>
+        <button type="button" class="outline" @click="deleteDialogOpen = false">{{ $t('common.cancel') }}</button>
+        <button type="button" data-variant="danger" @click="deleteRole">{{ $t('common.delete') }}</button>
+      </template>
+    </Modal>
 
     <UnsavedChangesDialog :open="showLeaveDialog" @stay="cancelLeave" @leave="confirmLeave" />
   </div>

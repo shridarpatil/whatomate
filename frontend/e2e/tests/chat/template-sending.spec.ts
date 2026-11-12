@@ -84,7 +84,9 @@ test.describe('Template Sending', () => {
     const orgId = await execSQL(`SELECT organization_id FROM users WHERE email = 'admin@test.com' LIMIT 1`)
 
     // Clean up leftover e2e templates from previous runs
-    await execSQL(`DELETE FROM templates WHERE name LIKE 'e2e_%' AND organization_id = '${orgId}'`)
+    // Only this spec's prefixes: a blanket 'e2e_%' also deletes templates that
+    // parallel specs (e.g. template-header-param's e2e_hdr_*) just seeded.
+    await execSQL(`DELETE FROM templates WHERE (name LIKE 'e2e_simple_%' OR name LIKE 'e2e_params_%' OR name LIKE 'e2e_buttons_%') AND organization_id = '${orgId}'`)
 
     // Seed APPROVED templates directly via SQL (API only creates DRAFT)
     const uid = Date.now().toString().slice(-6)
@@ -141,7 +143,7 @@ test.describe('Template Sending', () => {
     await chatPage.waitForTemplatesLoaded()
 
     // At least our seeded templates should appear
-    const templateItems = chatPage.templatePopover.locator('button.w-full.text-left')
+    const templateItems = chatPage.templatePopover.locator('[data-picker-item]')
     const count = await templateItems.count()
     expect(count).toBeGreaterThan(0)
   })
@@ -207,8 +209,8 @@ test.describe('Template Sending', () => {
     await expect(chatPage.templateDialog.getByRole('heading', { name: 'Fill Parameters' })).toBeVisible()
 
     // Should have input fields for name and order_id
-    const nameInput = chatPage.templateDialog.locator('.space-y-1').filter({ hasText: 'name' }).locator('input')
-    const orderInput = chatPage.templateDialog.locator('.space-y-1').filter({ hasText: 'order_id' }).locator('input')
+    const nameInput = chatPage.templateDialog.locator('[data-param="name"] input')
+    const orderInput = chatPage.templateDialog.locator('[data-param="order_id"] input')
     await expect(nameInput).toBeVisible()
     await expect(orderInput).toBeVisible()
 
@@ -279,8 +281,8 @@ test.describe('Template Sending', () => {
 
     // Should show success toast or the dialog should close
     // The API may fail if no WhatsApp account is configured, so we check both outcomes
-    const toastSuccess = page.locator('[data-sonner-toast]').filter({ hasText: /Template sent/i })
-    const toastError = page.locator('[data-sonner-toast]').filter({ hasText: /Failed/i })
+    const toastSuccess = page.locator('.toast-container output').filter({ hasText: /Template sent/i })
+    const toastError = page.locator('.toast-container output').filter({ hasText: /Failed/i })
     const dialogClosed = chatPage.templateDialog
 
     // Wait for either toast to appear
@@ -311,7 +313,7 @@ test.describe('Template Sending', () => {
     await chatPage.sendTemplate()
 
     // Should show validation error toast
-    const toast = page.locator('[data-sonner-toast]').filter({ hasText: /required/i })
+    const toast = page.locator('.toast-container output').filter({ hasText: /required/i })
     await expect(toast).toBeVisible({ timeout: 5000 })
 
     // Dialog should remain open
@@ -339,8 +341,8 @@ test.describe('Template Sending', () => {
     await chatPage.sendTemplate()
 
     // Check for success or failure toast
-    const toastSuccess = page.locator('[data-sonner-toast]').filter({ hasText: /Template sent/i })
-    const toastError = page.locator('[data-sonner-toast]').filter({ hasText: /Failed/i })
+    const toastSuccess = page.locator('.toast-container output').filter({ hasText: /Template sent/i })
+    const toastError = page.locator('.toast-container output').filter({ hasText: /Failed/i })
     await expect(toastSuccess.or(toastError)).toBeVisible({ timeout: 10000 })
   })
 

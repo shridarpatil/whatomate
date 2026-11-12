@@ -36,7 +36,7 @@ export class LoginPage extends BasePage {
 
   async expectLoginError(message?: string) {
     // Errors are shown as toast notifications
-    const toastLocator = this.page.locator('[data-sonner-toast]')
+    const toastLocator = this.page.locator('.toast-container output')
     await expect(toastLocator).toBeVisible({ timeout: 10000 })
     if (message) {
       await expect(toastLocator.filter({ hasText: message })).toBeVisible()

@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed } from 'vue'
-import { Hash } from 'lucide-vue-next'
+import { Hash } from '@/lib/icons'
 import BaseNode from './BaseNode.vue'
 
 defineOptions({ inheritAttrs: false })
@@ -23,8 +23,8 @@ const outputHandles = [
 </script>
 
 <template>
-  <BaseNode :label="data?.label || 'Gather'" header-class="bg-blue-600" :output-handles="outputHandles" :has-input="!data?.isEntryNode">
-    <template #icon><Hash class="w-4 h-4" /></template>
-    <p class="truncate">{{ summary }}</p>
+  <BaseNode :label="data?.label || 'Gather'" :output-handles="outputHandles" :has-input="!data?.isEntryNode">
+    <template #icon><Hash /></template>
+    <small class="truncate">{{ summary }}</small>
   </BaseNode>
 </template>

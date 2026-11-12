@@ -2,13 +2,10 @@
 import { ref, computed, onMounted } from 'vue'
 import { useRoute } from 'vue-router'
 import { useI18n } from 'vue-i18n'
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { Badge } from '@/components/ui/badge'
-import { Button } from '@/components/ui/button'
 import DetailPageLayout from '@/components/shared/DetailPageLayout.vue'
 import { auditLogsService, type AuditLogEntry } from '@/services/api'
 import { formatDateTime, formatLabel } from '@/lib/utils'
-import { ScrollText, Info, ExternalLink, ArrowRight } from 'lucide-vue-next'
+import { ScrollText, Info, ExternalLink, ArrowRight } from '@/lib/icons'
 
 const route = useRoute()
 const { t } = useI18n()
@@ -74,10 +71,9 @@ function formatValue(val: any): string {
 
 function actionVariant(action: string): string {
   switch (action) {
-    case 'created': return 'bg-green-500/10 text-green-500 border-green-500/20'
-    case 'updated': return 'bg-blue-500/10 text-blue-500 border-blue-500/20'
-    case 'deleted': return 'bg-red-500/10 text-red-500 border-red-500/20'
-    default: return ''
+    case 'created': return 'success'
+    case 'deleted': return 'danger'
+    default: return 'secondary'
   }
 }
 
@@ -103,76 +99,63 @@ onMounted(async () => {
     :is-not-found="!isLoading && !log"
     :not-found-title="t('auditLogs.noLogs')"
   >
-    <Card v-if="log">
-      <CardHeader class="pb-3">
-        <CardTitle class="text-sm font-medium">{{ t('auditLogs.changes') }}</CardTitle>
-      </CardHeader>
-      <CardContent>
-        <div v-if="log.changes && log.changes.length > 0" class="space-y-3">
-          <div
-            v-for="(change, idx) in log.changes"
-            :key="idx"
-            class="rounded-md bg-muted/50 px-3 py-2.5"
-          >
-            <span class="text-sm font-medium">{{ formatLabel(change.field) }}</span>
-            <div class="mt-1 text-sm">
-              <template v-if="log.action === 'updated'">
-                <div class="flex items-start gap-2 text-muted-foreground">
-                  <span class="text-red-400 line-through break-words">{{ formatValue(change.old_value) }}</span>
-                  <ArrowRight class="h-4 w-4 shrink-0 mt-0.5" />
-                  <span class="text-green-400 break-words">{{ formatValue(change.new_value) }}</span>
-                </div>
-              </template>
-              <template v-else-if="log.action === 'created'">
-                <span class="text-muted-foreground break-words">{{ formatValue(change.new_value) }}</span>
-              </template>
-              <template v-else>
-                <span class="text-red-400 break-words">{{ formatValue(change.old_value) }}</span>
-              </template>
-            </div>
+    <article v-if="log" class="card">
+      <header>
+        <h3>{{ t('auditLogs.changes') }}</h3>
+      </header>
+      <div v-if="log.changes && log.changes.length > 0" class="vstack gap-4">
+        <div
+          v-for="(change, idx) in log.changes"
+          :key="idx"
+          class="vstack gap-2"
+        >
+          <strong>{{ formatLabel(change.field) }}</strong>
+          <div v-if="log.action === 'updated'" class="hstack gap-2">
+            <del>{{ formatValue(change.old_value) }}</del>
+            <ArrowRight :size="16" />
+            <ins>{{ formatValue(change.new_value) }}</ins>
           </div>
+          <span v-else-if="log.action === 'created'">{{ formatValue(change.new_value) }}</span>
+          <del v-else>{{ formatValue(change.old_value) }}</del>
+          <hr v-if="idx < log.changes.length - 1">
         </div>
-        <p v-else class="text-sm text-muted-foreground">{{ t('auditLogs.noChanges') }}</p>
-      </CardContent>
-    </Card>
+      </div>
+      <p v-else class="text-light">{{ t('auditLogs.noChanges') }}</p>
+    </article>
 
     <template #sidebar>
-      <Card v-if="log" class="overflow-hidden">
-        <CardHeader class="pb-3">
-          <div class="flex items-center gap-2">
-            <Info class="h-4 w-4 text-muted-foreground" />
-            <CardTitle class="text-sm font-medium">{{ t('common.details', 'Details') }}</CardTitle>
-          </div>
-        </CardHeader>
-        <CardContent class="space-y-3 text-sm">
+      <article v-if="log" class="card">
+        <header class="hstack gap-2">
+          <Info :size="16" />
+          <h3>{{ t('common.details', 'Details') }}</h3>
+        </header>
+        <div class="vstack gap-4">
           <div>
-            <span class="text-muted-foreground text-xs">{{ t('auditLogs.user') }}</span>
-            <p class="font-medium">{{ log.user_name }}</p>
+            <small class="text-light">{{ t('auditLogs.user') }}</small>
+            <p><strong>{{ log.user_name }}</strong></p>
           </div>
           <div>
-            <span class="text-muted-foreground text-xs">{{ t('auditLogs.action') }}</span>
-            <div class="mt-0.5">
-              <Badge variant="outline" :class="[actionVariant(log.action), 'text-xs']">
+            <small class="text-light">{{ t('auditLogs.action') }}</small>
+            <p>
+              <span class="badge" :data-variant="actionVariant(log.action)">
                 {{ t(`auditLogs.${log.action}`) }}
-              </Badge>
-            </div>
+              </span>
+            </p>
           </div>
           <div>
-            <span class="text-muted-foreground text-xs">{{ t('auditLogs.resource') }}</span>
-            <p class="font-medium">{{ formatLabel(log.resource_type) }}</p>
+            <small class="text-light">{{ t('auditLogs.resource') }}</small>
+            <p><strong>{{ formatLabel(log.resource_type) }}</strong></p>
           </div>
           <div>
-            <span class="text-muted-foreground text-xs">{{ t('auditLogs.date') }}</span>
+            <small class="text-light">{{ t('auditLogs.date') }}</small>
             <p>{{ formatDateTime(log.created_at) }}</p>
           </div>
-          <RouterLink v-if="resourceLink" :to="resourceLink">
-            <Button variant="outline" size="sm" class="w-full mt-2">
-              <ExternalLink class="h-3.5 w-3.5 mr-1.5" />
-              {{ t('auditLogs.viewResource') }}
-            </Button>
+          <RouterLink v-if="resourceLink" :to="resourceLink" class="button outline small w-100">
+            <ExternalLink :size="14" />
+            {{ t('auditLogs.viewResource') }}
           </RouterLink>
-        </CardContent>
-      </Card>
+        </div>
+      </article>
     </template>
   </DetailPageLayout>
 </template>

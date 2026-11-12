@@ -42,7 +42,7 @@ export function listLoadsBody(opts: BaseOpts & {
     if (opts.addButton) {
       // .first() — pages sometimes render the button twice (header + empty-state).
       await expect(
-        page.getByRole('button', { name: opts.addButton }).first(),
+        page.getByRole('button', { name: opts.addButton }).or(page.getByRole('link', { name: opts.addButton })).first(),
       ).toBeVisible({ timeout: 5000 })
     }
     for (const pattern of opts.expectVisible ?? []) {
@@ -61,7 +61,7 @@ export function expectAddButtonHidden(opts: BaseOpts & {
     await page.waitForLoadState('networkidle')
 
     await expect(
-      page.getByRole('button', { name: opts.addButton }),
+      page.getByRole('button', { name: opts.addButton }).or(page.getByRole('link', { name: opts.addButton })),
     ).toHaveCount(0, { timeout: 5000 })
   }
 }
@@ -122,7 +122,7 @@ export function createFlowBody(opts: BaseOpts & {
 
     const toast = opts.successToast ?? /created|added/i
     await expect(
-      page.locator('[data-sonner-toast], [role="status"], [role="alert"]')
+      page.locator('.toast-container output, [role="status"], [role="alert"]')
         .filter({ hasText: toast }),
     ).toBeVisible({ timeout: 5000 })
 
@@ -185,7 +185,7 @@ export function editFlowBody(opts: BaseOpts & {
     await expect(row).toBeVisible({ timeout: 5000 })
 
     const editButton = opts.rowEditButton ?? /edit/i
-    await row.getByRole('button', { name: editButton }).click()
+    await row.getByRole('button', { name: editButton }).or(row.getByRole('link', { name: editButton })).click()
 
     for (const field of opts.fields) {
       const input = resolveFieldLocator(page, field)
@@ -198,7 +198,7 @@ export function editFlowBody(opts: BaseOpts & {
 
     const toast = opts.successToast ?? /updated|saved/i
     await expect(
-      page.locator('[data-sonner-toast], [role="status"], [role="alert"]')
+      page.locator('.toast-container output, [role="status"], [role="alert"]')
         .filter({ hasText: toast }),
     ).toBeVisible({ timeout: 5000 })
   }

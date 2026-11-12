@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed } from 'vue'
-import { StopCircle } from 'lucide-vue-next'
+import { StopCircle } from '@/lib/icons'
 import BaseNode from '@/components/calling/nodes/BaseNode.vue'
 
 defineOptions({ inheritAttrs: false })
@@ -16,12 +16,11 @@ const completionMessage = computed(() => {
 <template>
   <BaseNode
     :label="data?.label || 'End'"
-    header-class="bg-slate-600"
     :output-handles="[]"
     :has-input="!data?.isEntryNode"
   >
-    <template #icon><StopCircle class="w-4 h-4" /></template>
-    <p v-if="completionMessage" class="truncate" :title="data?.config?.message || ''">{{ completionMessage }}</p>
-    <p v-else>End of flow</p>
+    <template #icon><StopCircle /></template>
+    <small v-if="completionMessage" class="truncate" :title="data?.config?.message || ''">{{ completionMessage }}</small>
+    <small v-else>End of flow</small>
   </BaseNode>
 </template>

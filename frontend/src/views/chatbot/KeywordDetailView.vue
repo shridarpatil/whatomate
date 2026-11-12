@@ -4,43 +4,19 @@ import { useRoute, useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { useAuthStore } from '@/stores/auth'
 import { chatbotService } from '@/services/api'
-import { toast } from 'vue-sonner'
+import { toast } from '@/lib/toast'
 import { useUnsavedChangesGuard } from '@/composables/useUnsavedChangesGuard'
 import DetailPageLayout from '@/components/shared/DetailPageLayout.vue'
 import MetadataPanel from '@/components/shared/MetadataPanel.vue'
 import AuditLogPanel from '@/components/shared/AuditLogPanel.vue'
 import UnsavedChangesDialog from '@/components/shared/UnsavedChangesDialog.vue'
-import { IconButton } from '@/components/shared'
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { Badge } from '@/components/ui/badge'
-import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
-import { Label } from '@/components/ui/label'
-import { Textarea } from '@/components/ui/textarea'
-import { Switch } from '@/components/ui/switch'
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select'
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from '@/components/ui/alert-dialog'
+import { IconButton, DeleteConfirmDialog } from '@/components/shared'
 import {
   Key,
   Trash2,
   Save,
   Plus,
-} from 'lucide-vue-next'
+} from '@/lib/icons'
 import { getErrorMessage } from '@/lib/api-utils'
 
 const route = useRoute()
@@ -208,7 +184,6 @@ onMounted(async () => {
   <DetailPageLayout
     :title="isNew ? $t('keywords.newKeyword', 'New Keyword Rule') : (keyword?.name || form.keywords.split(',')[0]?.trim() || '')"
     :icon="Key"
-    icon-gradient="bg-gradient-to-br from-yellow-500 to-orange-600 shadow-yellow-500/20"
     back-link="/chatbot/keywords"
     :breadcrumbs="breadcrumbs"
     :is-loading="isLoading"
@@ -216,138 +191,127 @@ onMounted(async () => {
     :not-found-title="$t('keywords.notFound', 'Keyword rule not found')"
   >
     <template #actions>
-      <div class="flex items-center gap-2">
-        <Button v-if="canWrite && (hasChanges || isNew)" size="sm" @click="save" :disabled="isSaving">
-          <Save class="h-4 w-4 mr-1" /> {{ isSaving ? $t('common.saving', 'Saving...') : isNew ? $t('common.create') : $t('common.save') }}
-        </Button>
-        <Button v-if="canDelete && !isNew" variant="destructive" size="sm" @click="deleteDialogOpen = true">
-          <Trash2 class="h-4 w-4 mr-1" /> {{ $t('common.delete') }}
-        </Button>
+      <div class="hstack gap-2">
+        <button v-if="canWrite && (hasChanges || isNew)" type="button" class="small" :disabled="isSaving" :aria-busy="isSaving ? 'true' : undefined" data-spinner="small" @click="save">
+          <Save v-if="!isSaving" :size="16" /> {{ isSaving ? $t('common.saving', 'Saving...') : isNew ? $t('common.create') : $t('common.save') }}
+        </button>
+        <button v-if="canDelete && !isNew" type="button" class="small" data-variant="danger" @click="deleteDialogOpen = true">
+          <Trash2 :size="16" /> {{ $t('common.delete') }}
+        </button>
       </div>
     </template>
 
     <!-- Keyword Details Card -->
-    <Card>
-      <CardHeader class="pb-3">
-        <div class="flex items-center justify-between">
-          <CardTitle class="text-sm font-medium">{{ $t('keywords.details', 'Details') }}</CardTitle>
-          <Badge :variant="(keyword?.enabled ?? form.enabled) ? 'default' : 'secondary'">
-            {{ (keyword?.enabled ?? form.enabled) ? $t('keywords.active', 'Active') : $t('keywords.inactive', 'Inactive') }}
-          </Badge>
-        </div>
-      </CardHeader>
-      <CardContent class="space-y-4">
-        <div class="space-y-1.5">
-          <Label class="text-xs">{{ $t('keywords.keywordsLabel', 'Keywords') }} *</Label>
-          <Input
+    <article class="card">
+      <header class="hstack justify-between">
+        <h3>{{ $t('keywords.details', 'Details') }}</h3>
+        <span class="badge" :data-variant="(keyword?.enabled ?? form.enabled) ? 'success' : 'secondary'">
+          {{ (keyword?.enabled ?? form.enabled) ? $t('keywords.active', 'Active') : $t('keywords.inactive', 'Inactive') }}
+        </span>
+      </header>
+      <div class="vstack gap-4">
+        <label data-field>
+          {{ $t('keywords.keywordsLabel', 'Keywords') }} *
+          <input
             v-model="form.keywords"
             :placeholder="$t('keywords.keywordsPlaceholder', 'hello, hi, hey')"
             :disabled="!canWrite"
-          />
-          <p class="text-xs text-muted-foreground">{{ $t('keywords.keywordsHint', 'Comma-separated list of keywords') }}</p>
-        </div>
-        <div class="space-y-1.5">
-          <Label class="text-xs">{{ $t('keywords.matchTypeLabel', 'Match Type') }}</Label>
-          <Select v-model="form.match_type" :disabled="!canWrite">
-            <SelectTrigger><SelectValue /></SelectTrigger>
-            <SelectContent>
-              <SelectItem value="contains">{{ $t('keywords.contains', 'Contains') }}</SelectItem>
-              <SelectItem value="exact">{{ $t('keywords.exact', 'Exact') }}</SelectItem>
-              <SelectItem value="regex">{{ $t('keywords.regex', 'Regex') }}</SelectItem>
-            </SelectContent>
-          </Select>
-        </div>
-        <div class="space-y-1.5">
-          <Label class="text-xs">{{ $t('keywords.responseType', 'Response Type') }}</Label>
-          <Select v-model="form.response_type" :disabled="!canWrite">
-            <SelectTrigger><SelectValue /></SelectTrigger>
-            <SelectContent>
-              <SelectItem value="text">{{ $t('keywords.textResponse', 'Text Response') }}</SelectItem>
-              <SelectItem value="transfer">{{ $t('keywords.transferToAgent', 'Transfer to Agent') }}</SelectItem>
-            </SelectContent>
-          </Select>
-        </div>
-        <div class="space-y-1.5">
-          <Label class="text-xs">
-            {{ form.response_type === 'transfer' ? $t('keywords.transferMessage', 'Transfer Message') : $t('keywords.responseMessage', 'Response Message') }}
-            <span v-if="form.response_type !== 'transfer'">*</span>
-          </Label>
-          <Textarea
+          >
+          <small data-hint>{{ $t('keywords.keywordsHint', 'Comma-separated list of keywords') }}</small>
+        </label>
+        <label data-field>
+          {{ $t('keywords.matchTypeLabel', 'Match Type') }}
+          <select v-model="form.match_type" :disabled="!canWrite">
+            <option value="contains">{{ $t('keywords.contains', 'Contains') }}</option>
+            <option value="exact">{{ $t('keywords.exact', 'Exact') }}</option>
+            <option value="regex">{{ $t('keywords.regex', 'Regex') }}</option>
+          </select>
+        </label>
+        <label data-field>
+          {{ $t('keywords.responseType', 'Response Type') }}
+          <select v-model="form.response_type" :disabled="!canWrite">
+            <option value="text">{{ $t('keywords.textResponse', 'Text Response') }}</option>
+            <option value="transfer">{{ $t('keywords.transferToAgent', 'Transfer to Agent') }}</option>
+          </select>
+        </label>
+        <label data-field>
+          {{ form.response_type === 'transfer' ? $t('keywords.transferMessage', 'Transfer Message') : $t('keywords.responseMessage', 'Response Message') }}
+          <template v-if="form.response_type !== 'transfer'"> *</template>
+          <textarea
             v-model="form.response_content"
             :placeholder="form.response_type === 'transfer' ? $t('keywords.transferPlaceholder', 'Optional message before transfer') + '...' : $t('keywords.responsePlaceholder', 'Enter the response message') + '...'"
-            :rows="3"
+            rows="3"
             :disabled="!canWrite"
           />
-          <p v-if="form.response_type === 'transfer'" class="text-xs text-muted-foreground">
+          <small v-if="form.response_type === 'transfer'" data-hint>
             {{ $t('keywords.transferHint', 'Optional message sent before transferring to a human agent') }}
-          </p>
-        </div>
+          </small>
+        </label>
 
         <!-- Buttons Section (only for text responses) -->
-        <div v-if="form.response_type === 'text'" class="space-y-1.5">
-          <div class="flex items-center justify-between">
-            <Label class="text-xs">{{ $t('keywords.buttonsOptional', 'Buttons (optional)') }}</Label>
-            <Button
+        <div v-if="form.response_type === 'text'" class="vstack gap-2">
+          <div class="hstack justify-between">
+            <strong>{{ $t('keywords.buttonsOptional', 'Buttons (optional)') }}</strong>
+            <button
               v-if="canWrite"
               type="button"
-              variant="outline"
-              size="sm"
-              class="h-7 text-xs"
-              @click="addButton"
+              class="outline small"
               :disabled="form.buttons.length >= 10"
+              @click="addButton"
             >
-              <Plus class="h-3 w-3 mr-1" />
+              <Plus :size="14" />
               {{ $t('keywords.addButton', 'Add Button') }}
-            </Button>
+            </button>
           </div>
-          <p class="text-xs text-muted-foreground">
+          <small class="text-light">
             {{ $t('keywords.buttonsHint', 'Add quick-reply buttons to the response message') }}
-          </p>
-          <div v-if="form.buttons.length > 0" class="space-y-2 mt-2">
+          </small>
+          <div v-if="form.buttons.length > 0" class="vstack gap-2">
             <div
               v-for="(button, index) in form.buttons"
               :key="index"
-              class="flex items-center gap-2"
+              class="hstack gap-2"
             >
-              <Input
+              <input
                 v-model="button.id"
+                class="flex-1"
                 :placeholder="$t('keywords.buttonId', 'Button ID')"
-                class="flex-1"
+                :aria-label="$t('keywords.buttonId', 'Button ID')"
                 :disabled="!canWrite"
-              />
-              <Input
+              >
+              <input
                 v-model="button.title"
-                :placeholder="$t('keywords.buttonTitle', 'Button Title')"
                 class="flex-1"
+                :placeholder="$t('keywords.buttonTitle', 'Button Title')"
+                :aria-label="$t('keywords.buttonTitle', 'Button Title')"
                 :disabled="!canWrite"
-              />
+              >
               <IconButton
                 v-if="canWrite"
                 :icon="Trash2"
                 :label="$t('keywords.removeButtonLabel', 'Remove button')"
-                class="text-destructive"
                 @click="removeButton(index)"
               />
             </div>
           </div>
         </div>
 
-        <div class="space-y-1.5">
-          <Label class="text-xs">{{ $t('keywords.priorityLabel', 'Priority') }}</Label>
-          <Input
+        <label data-field>
+          {{ $t('keywords.priorityLabel', 'Priority') }}
+          <input
             v-model.number="form.priority"
             type="number"
             min="1"
             max="100"
             :disabled="!canWrite"
-          />
-        </div>
-        <div class="flex items-center gap-2">
-          <Switch :checked="form.enabled" @update:checked="form.enabled = $event" :disabled="!canWrite" />
-          <Label class="text-xs">{{ $t('keywords.enabled', 'Enabled') }}</Label>
-        </div>
-      </CardContent>
-    </Card>
+          >
+        </label>
+        <label class="hstack gap-2">
+          <input v-model="form.enabled" type="checkbox" role="switch" :disabled="!canWrite">
+          {{ $t('keywords.enabled', 'Enabled') }}
+        </label>
+      </div>
+    </article>
 
     <!-- Activity Log -->
     <AuditLogPanel
@@ -368,20 +332,12 @@ onMounted(async () => {
   </DetailPageLayout>
 
   <!-- Delete Confirmation -->
-  <AlertDialog v-model:open="deleteDialogOpen">
-    <AlertDialogContent>
-      <AlertDialogHeader>
-        <AlertDialogTitle>{{ $t('keywords.deleteRule', 'Delete Keyword Rule') }}</AlertDialogTitle>
-        <AlertDialogDescription>
-          {{ $t('keywords.deleteRuleDesc', 'Are you sure? This action cannot be undone.') }}
-        </AlertDialogDescription>
-      </AlertDialogHeader>
-      <AlertDialogFooter>
-        <AlertDialogCancel>{{ $t('common.cancel') }}</AlertDialogCancel>
-        <AlertDialogAction @click="deleteKeyword">{{ $t('common.delete') }}</AlertDialogAction>
-      </AlertDialogFooter>
-    </AlertDialogContent>
-  </AlertDialog>
+  <DeleteConfirmDialog
+    v-model:open="deleteDialogOpen"
+    :title="$t('keywords.deleteRule', 'Delete Keyword Rule')"
+    :description="$t('keywords.deleteRuleDesc', 'Are you sure? This action cannot be undone.')"
+    @confirm="deleteKeyword"
+  />
 
   <UnsavedChangesDialog :open="showLeaveDialog" @stay="cancelLeave" @leave="confirmLeave" />
   </div>

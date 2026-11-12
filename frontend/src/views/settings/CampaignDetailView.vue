@@ -4,7 +4,7 @@ import { useRoute, useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { campaignsService, templatesService, api } from '@/services/api'
 import { wsService } from '@/services/websocket'
-import { toast } from 'vue-sonner'
+import { toast } from '@/lib/toast'
 import { useUnsavedChangesGuard } from '@/composables/useUnsavedChangesGuard'
 import { useHeaderMedia } from '@/composables/useHeaderMedia'
 import { getErrorMessage } from '@/lib/api-utils'
@@ -15,47 +15,7 @@ import AuditLogPanel from '@/components/shared/AuditLogPanel.vue'
 import UnsavedChangesDialog from '@/components/shared/UnsavedChangesDialog.vue'
 import { ConfirmDialog } from '@/components/shared'
 import HeaderMediaUpload from '@/components/shared/HeaderMediaUpload.vue'
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible'
-import { Badge } from '@/components/ui/badge'
-import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
-import { Label } from '@/components/ui/label'
-import { Textarea } from '@/components/ui/textarea'
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select'
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from '@/components/ui/dialog'
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from '@/components/ui/alert-dialog'
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from '@/components/ui/table'
+import Modal from '@/components/oat/Modal.vue'
 import {
   Megaphone,
   Trash2,
@@ -73,9 +33,8 @@ import {
   UserPlus,
   Upload,
   FileSpreadsheet,
-  ChevronDown,
   Download,
-} from 'lucide-vue-next'
+} from '@/lib/icons'
 
 interface Campaign {
   id: string
@@ -195,6 +154,7 @@ const showMediaUpload = ref(false)
 const recipientsInput = ref('')
 const addRecipientsTab = ref('manual')
 const csvFile = ref<File | null>(null)
+const csvInput = ref<HTMLInputElement | null>(null)
 
 // --- Selected template for param extraction ---
 const selectedTemplate = ref<Template | null>(null)
@@ -304,33 +264,42 @@ function getStatusIcon(status: string) {
   }
 }
 
-function getStatusClass(status: string): string {
+function getStatusVariant(status: string): string | undefined {
   switch (status) {
     case 'completed':
-      return 'border-green-600 text-green-600'
+      return 'success'
     case 'running':
     case 'processing':
     case 'queued':
-      return 'border-blue-600 text-blue-600'
+      return 'secondary'
     case 'failed':
     case 'cancelled':
-      return 'border-destructive text-destructive'
+      return 'danger'
     default:
-      return ''
+      return undefined
   }
 }
 
-function getRecipientStatusClass(status: string): string {
+function getRecipientStatusVariant(status: string): string | undefined {
   switch (status) {
     case 'sent':
     case 'delivered':
-      return 'border-green-600 text-green-600'
+      return 'success'
     case 'failed':
-      return 'border-destructive text-destructive'
+      return 'danger'
     default:
-      return ''
+      return undefined
   }
 }
+
+const progressPercent = computed(() => {
+  const c = campaign.value
+  if (!c || c.total_recipients <= 0) return 0
+  return Math.round(((c.sent_count + c.failed_count) / c.total_recipients) * 100)
+})
+
+// Recipients section is open on first load when the list is short.
+const recipientsOpen = ref(false)
 
 async function loadAccounts() {
   try {
@@ -542,12 +511,14 @@ async function loadExistingMedia() {
   if (!campaign.value?.id) return
   try {
     const response = await campaignsService.getMedia(campaign.value.id)
-    const blob = new Blob([response.data], { type: (response.headers as any)['content-type'] })
+    const blob = new Blob([response.data], { type: response.headers.get('content-type') ?? undefined })
     existingMediaUrl.value = URL.createObjectURL(blob)
   } catch {
     existingMediaUrl.value = null
   }
 }
+
+let recipientsLoadedOnce = false
 
 async function loadRecipients() {
   if (isNew.value || !campaign.value) return
@@ -555,9 +526,13 @@ async function loadRecipients() {
   try {
     const response = await campaignsService.getRecipients(campaign.value.id)
     recipients.value = (response.data as any).data?.recipients || []
+    if (!recipientsLoadedOnce) {
+      recipientsOpen.value = recipients.value.length > 0 && recipients.value.length <= 20
+    }
   } catch {
     recipients.value = []
   } finally {
+    recipientsLoadedOnce = true
     isLoadingRecipients.value = false
   }
 }
@@ -950,7 +925,6 @@ onUnmounted(() => {
   <DetailPageLayout
     :title="isNew ? $t('campaigns.newCampaign', 'New Campaign') : (campaign?.name || '')"
     :icon="Megaphone"
-    icon-gradient="bg-gradient-to-br from-pink-500 to-rose-600 shadow-pink-500/20"
     back-link="/campaigns"
     :breadcrumbs="breadcrumbs"
     :is-loading="isLoading"
@@ -958,144 +932,105 @@ onUnmounted(() => {
     :not-found-title="$t('campaigns.notFound', 'Campaign not found')"
   >
     <template #actions>
-      <div class="flex items-center gap-2">
+      <div class="hstack gap-2">
         <!-- Status badge for existing campaigns -->
-        <Badge
-          v-if="!isNew && campaign"
-          variant="outline"
-          :class="[getStatusClass(campaign.status), 'text-xs']"
-        >
-          <component :is="getStatusIcon(campaign.status)" class="h-3 w-3 mr-1" />
+        <span v-if="!isNew && campaign" class="badge" :data-variant="getStatusVariant(campaign.status)">
+          <component :is="getStatusIcon(campaign.status)" :size="12" />
           {{ campaign.status }}
-        </Badge>
+        </span>
 
         <!-- Start/Resume -->
-        <Button
-          v-if="!isNew && campaign && canStart"
-          variant="outline"
-          size="sm"
-          @click="startDialogOpen = true"
-        >
-          <Play class="h-4 w-4 mr-1" />
+        <button v-if="!isNew && campaign && canStart" type="button" class="outline small" @click="startDialogOpen = true">
+          <Play :size="16" />
           {{ campaign.status === 'paused' ? $t('campaigns.resume', 'Resume') : $t('campaigns.start', 'Start') }}
-        </Button>
+        </button>
 
         <!-- Pause -->
-        <Button
-          v-if="!isNew && campaign && canPause"
-          variant="outline"
-          size="sm"
-          @click="pauseDialogOpen = true"
-        >
-          <Pause class="h-4 w-4 mr-1" />
+        <button v-if="!isNew && campaign && canPause" type="button" class="outline small" @click="pauseDialogOpen = true">
+          <Pause :size="16" />
           {{ $t('campaigns.pause', 'Pause') }}
-        </Button>
+        </button>
 
         <!-- Cancel -->
-        <Button
-          v-if="!isNew && campaign && canCancel"
-          variant="outline"
-          size="sm"
-          @click="cancelDialogOpen = true"
-        >
-          <XCircle class="h-4 w-4 mr-1" />
+        <button v-if="!isNew && campaign && canCancel" type="button" class="outline small" @click="cancelDialogOpen = true">
+          <XCircle :size="16" />
           {{ $t('campaigns.cancel', 'Cancel') }}
-        </Button>
+        </button>
 
         <!-- Retry Failed -->
-        <Button
-          v-if="!isNew && campaign && canRetryFailed"
-          variant="outline"
-          size="sm"
-          @click="retryFailed"
-        >
-          <RefreshCw class="h-4 w-4 mr-1" />
+        <button v-if="!isNew && campaign && canRetryFailed" type="button" class="outline small" @click="retryFailed">
+          <RefreshCw :size="16" />
           {{ $t('campaigns.retryFailed', 'Retry Failed') }}
-        </Button>
+        </button>
 
-        <Button
+        <button
           v-if="isDraft && (hasChanges || isNew)"
-          size="sm"
-          @click="save"
+          type="button"
+          class="small"
           :disabled="isSaving"
+          :aria-busy="isSaving ? 'true' : undefined"
+          @click="save"
         >
-          <Save class="h-4 w-4 mr-1" />
+          <Save v-if="!isSaving" :size="16" />
           {{ isSaving ? $t('common.saving', 'Saving...') : isNew ? $t('common.create') : $t('common.save') }}
-        </Button>
-        <Button
-          v-if="isDraft && !isNew"
-          variant="destructive"
-          size="sm"
-          @click="deleteDialogOpen = true"
-        >
-          <Trash2 class="h-4 w-4 mr-1" /> {{ $t('common.delete') }}
-        </Button>
+        </button>
+        <button v-if="isDraft && !isNew" type="button" class="small" data-variant="danger" @click="deleteDialogOpen = true">
+          <Trash2 :size="16" /> {{ $t('common.delete') }}
+        </button>
       </div>
     </template>
 
     <!-- Details Card -->
-    <Card>
-      <CardHeader class="pb-3">
-        <CardTitle class="text-sm font-medium">{{ $t('campaigns.details', 'Details') }}</CardTitle>
-      </CardHeader>
-      <CardContent class="space-y-4">
-        <div class="space-y-1.5">
-          <Label class="text-xs">{{ $t('campaigns.name', 'Name') }} *</Label>
-          <Input v-model="form.name" :disabled="!isDraft" :placeholder="$t('campaigns.namePlaceholder', 'Enter campaign name')" />
-        </div>
-        <div class="space-y-1.5">
-          <Label class="text-xs">{{ $t('campaigns.whatsappAccount', 'WhatsApp Account') }}</Label>
-          <Select v-model="form.whatsapp_account" :disabled="!isDraft">
-            <SelectTrigger>
-              <SelectValue :placeholder="$t('campaigns.selectAccount', 'Select account')" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem v-for="account in accounts" :key="account.name" :value="account.name">
-                {{ account.name }}
-              </SelectItem>
-            </SelectContent>
-          </Select>
-        </div>
-        <div class="space-y-1.5">
-          <Label class="text-xs">{{ $t('campaigns.template', 'Template') }}</Label>
-          <Select v-model="form.template_id" :disabled="!isDraft || !form.whatsapp_account">
-            <SelectTrigger>
-              <SelectValue :placeholder="form.whatsapp_account ? $t('campaigns.selectTemplate', 'Select template') : $t('campaigns.selectAccountFirst', 'Select an account first')" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem v-for="tmpl in templates.filter(t => t.id)" :key="tmpl.id" :value="tmpl.id">
-                {{ tmpl.display_name || tmpl.name }}
-              </SelectItem>
-            </SelectContent>
-          </Select>
-        </div>
+    <article class="card">
+      <header>
+        <h3>{{ $t('campaigns.details', 'Details') }}</h3>
+      </header>
+      <div class="vstack gap-4">
+        <label data-field>
+          {{ $t('campaigns.name', 'Name') }} *
+          <input id="name" v-model="form.name" :disabled="!isDraft" :placeholder="$t('campaigns.namePlaceholder', 'Enter campaign name')" />
+        </label>
+        <label data-field>
+          {{ $t('campaigns.whatsappAccount', 'WhatsApp Account') }}
+          <select v-model="form.whatsapp_account" :disabled="!isDraft">
+            <option value="" disabled>{{ $t('campaigns.selectAccount', 'Select account') }}</option>
+            <option v-for="account in accounts" :key="account.name" :value="account.name">{{ account.name }}</option>
+          </select>
+        </label>
+        <label data-field>
+          {{ $t('campaigns.template', 'Template') }}
+          <select v-model="form.template_id" :disabled="!isDraft || !form.whatsapp_account">
+            <option value="" disabled>{{ form.whatsapp_account ? $t('campaigns.selectTemplate', 'Select template') : $t('campaigns.selectAccountFirst', 'Select an account first') }}</option>
+            <option v-for="tmpl in templates.filter(t => t.id)" :key="tmpl.id" :value="tmpl.id">{{ tmpl.display_name || tmpl.name }}</option>
+          </select>
+        </label>
 
         <!-- Media Upload Section -->
-        <div v-if="templateNeedsMedia" class="space-y-1.5">
-          <Label class="text-xs">{{ $t('campaigns.headerMedia', 'Header Media') }}</Label>
+        <div v-if="templateNeedsMedia" class="vstack gap-2">
+          <strong>{{ $t('campaigns.headerMedia', 'Header Media') }}</strong>
           <!-- Show existing media with preview -->
-          <div v-if="campaign?.header_media_filename && !mediaFile" class="rounded-lg border overflow-hidden">
+          <div v-if="campaign?.header_media_filename && !mediaFile" class="vstack gap-2">
             <!-- Image preview -->
             <img
               v-if="campaign.header_media_mime_type?.startsWith('image/') && existingMediaUrl"
               :src="existingMediaUrl"
               :alt="campaign.header_media_filename"
-              class="w-full max-h-48 object-contain bg-muted"
+              class="media-preview"
             />
             <!-- Video preview -->
             <video
               v-else-if="campaign.header_media_mime_type?.startsWith('video/') && existingMediaUrl"
               :src="existingMediaUrl"
               controls
-              class="w-full max-h-48"
+              class="media-preview"
             />
             <!-- File info bar -->
-            <div class="flex items-center gap-2 px-3 py-2 bg-muted/50 text-sm">
-              <Upload class="h-4 w-4 text-muted-foreground shrink-0" />
+            <div class="hstack gap-2">
+              <Upload :size="16" />
               <span class="truncate flex-1">{{ campaign.header_media_filename }}</span>
-              <Button v-if="isDraft" variant="ghost" size="sm" class="h-6 text-xs" @click="showMediaUpload = true">
+              <button v-if="isDraft" type="button" class="ghost small" @click="showMediaUpload = true">
                 {{ $t('campaigns.replace', 'Replace') }}
-              </Button>
+              </button>
             </div>
           </div>
           <!-- Upload component for drafts without existing media or when replacing -->
@@ -1110,165 +1045,130 @@ onUnmounted(() => {
           />
         </div>
 
-        <!-- Schedule field hidden until scheduling functionality is implemented -->
-        <!-- <div class="space-y-1.5">
-          <Label class="text-xs">{{ $t('campaigns.scheduledAt', 'Schedule') }}</Label>
-          <Input v-model="form.scheduled_at" type="datetime-local" :disabled="!isDraft" />
-        </div> -->
-        <div v-if="!isNew && campaign" class="space-y-1.5">
-          <Label class="text-xs">{{ $t('campaigns.status', 'Status') }}</Label>
+        <div v-if="!isNew && campaign" class="vstack gap-1">
+          <small class="text-light">{{ $t('campaigns.status', 'Status') }}</small>
           <div>
-            <Badge variant="outline" :class="[getStatusClass(campaign.status), 'text-xs']">
-              <component :is="getStatusIcon(campaign.status)" class="h-3 w-3 mr-1" />
+            <span class="badge" :data-variant="getStatusVariant(campaign.status)">
+              <component :is="getStatusIcon(campaign.status)" :size="12" />
               {{ campaign.status }}
-            </Badge>
+            </span>
           </div>
         </div>
-      </CardContent>
-    </Card>
+      </div>
+    </article>
 
     <!-- Stats Card (existing campaigns only) -->
-    <Card v-if="!isNew && campaign">
-      <CardHeader class="pb-3">
-        <CardTitle class="text-sm font-medium">{{ $t('campaigns.statistics', 'Statistics') }}</CardTitle>
-      </CardHeader>
-      <CardContent>
-        <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
-          <div class="flex flex-col items-center gap-1 rounded-lg border p-3">
-            <Users class="h-4 w-4 text-muted-foreground" />
-            <span class="text-lg font-semibold">{{ campaign.total_recipients }}</span>
-            <span class="text-[10px] text-muted-foreground uppercase tracking-wide">{{ $t('campaigns.totalRecipients', 'Recipients') }}</span>
-          </div>
-          <div class="flex flex-col items-center gap-1 rounded-lg border p-3">
-            <Send class="h-4 w-4 text-blue-500" />
-            <span class="text-lg font-semibold">{{ campaign.sent_count }}</span>
-            <span class="text-[10px] text-muted-foreground uppercase tracking-wide">{{ $t('campaigns.sent', 'Sent') }}</span>
-          </div>
-          <div class="flex flex-col items-center gap-1 rounded-lg border p-3">
-            <CheckCircle class="h-4 w-4 text-green-500" />
-            <span class="text-lg font-semibold">{{ campaign.delivered_count }}</span>
-            <span class="text-[10px] text-muted-foreground uppercase tracking-wide">{{ $t('campaigns.delivered', 'Delivered') }}</span>
-          </div>
-          <div class="flex flex-col items-center gap-1 rounded-lg border p-3">
-            <Eye class="h-4 w-4 text-purple-500" />
-            <span class="text-lg font-semibold">{{ campaign.read_count }}</span>
-            <span class="text-[10px] text-muted-foreground uppercase tracking-wide">{{ $t('campaigns.read', 'Read') }}</span>
-          </div>
-          <div class="flex flex-col items-center gap-1 rounded-lg border p-3">
-            <XCircle class="h-4 w-4 text-destructive" />
-            <span class="text-lg font-semibold">{{ campaign.failed_count }}</span>
-            <span class="text-[10px] text-muted-foreground uppercase tracking-wide">{{ $t('campaigns.failed', 'Failed') }}</span>
-          </div>
+    <article v-if="!isNew && campaign" class="card">
+      <header>
+        <h3>{{ $t('campaigns.statistics', 'Statistics') }}</h3>
+      </header>
+      <div class="hstack gap-4 flex-wrap">
+        <div class="vstack items-center gap-1 flex-1">
+          <Users :size="16" />
+          <strong>{{ campaign.total_recipients }}</strong>
+          <small class="text-light">{{ $t('campaigns.totalRecipients', 'Recipients') }}</small>
         </div>
+        <div class="vstack items-center gap-1 flex-1">
+          <Send :size="16" />
+          <strong>{{ campaign.sent_count }}</strong>
+          <small class="text-light">{{ $t('campaigns.sent', 'Sent') }}</small>
+        </div>
+        <div class="vstack items-center gap-1 flex-1">
+          <CheckCircle :size="16" />
+          <strong>{{ campaign.delivered_count }}</strong>
+          <small class="text-light">{{ $t('campaigns.delivered', 'Delivered') }}</small>
+        </div>
+        <div class="vstack items-center gap-1 flex-1">
+          <Eye :size="16" />
+          <strong>{{ campaign.read_count }}</strong>
+          <small class="text-light">{{ $t('campaigns.read', 'Read') }}</small>
+        </div>
+        <div class="vstack items-center gap-1 flex-1">
+          <XCircle :size="16" />
+          <strong>{{ campaign.failed_count }}</strong>
+          <small class="text-light">{{ $t('campaigns.failed', 'Failed') }}</small>
+        </div>
+      </div>
 
-        <!-- Progress Bar -->
-        <div v-if="campaign.total_recipients > 0" class="mt-4 space-y-2">
-          <div class="flex items-center justify-between text-xs text-muted-foreground">
-            <span>{{ $t('campaigns.progress', 'Progress') }}</span>
-            <span>{{ Math.round(((campaign.sent_count + campaign.failed_count) / campaign.total_recipients) * 100) }}%</span>
-          </div>
-          <div class="h-2.5 w-full bg-muted rounded-full overflow-hidden flex">
-            <div
-              class="bg-green-500 h-full transition-all duration-500"
-              :style="{ width: `${(campaign.delivered_count / campaign.total_recipients) * 100}%` }"
-            />
-            <div
-              class="bg-blue-500 h-full transition-all duration-500"
-              :style="{ width: `${((campaign.sent_count - campaign.delivered_count) / campaign.total_recipients) * 100}%` }"
-            />
-            <div
-              class="bg-destructive h-full transition-all duration-500"
-              :style="{ width: `${(campaign.failed_count / campaign.total_recipients) * 100}%` }"
-            />
-          </div>
-          <div class="flex items-center gap-4 text-[10px] text-muted-foreground">
-            <span class="flex items-center gap-1"><span class="w-2 h-2 rounded-full bg-green-500" /> {{ $t('campaigns.delivered', 'Delivered') }}</span>
-            <span class="flex items-center gap-1"><span class="w-2 h-2 rounded-full bg-blue-500" /> {{ $t('campaigns.sent', 'Sent') }}</span>
-            <span class="flex items-center gap-1"><span class="w-2 h-2 rounded-full bg-destructive" /> {{ $t('campaigns.failed', 'Failed') }}</span>
-          </div>
+      <!-- Progress Bar -->
+      <div v-if="campaign.total_recipients > 0" class="vstack gap-1 mt-4">
+        <div class="hstack justify-between">
+          <small class="text-light">{{ $t('campaigns.progress', 'Progress') }}</small>
+          <small class="text-light">{{ progressPercent }}%</small>
         </div>
-      </CardContent>
-    </Card>
+        <progress :value="progressPercent" max="100" :aria-label="$t('campaigns.progress', 'Progress')"></progress>
+      </div>
+    </article>
 
     <!-- Recipients Card (collapsible) -->
-    <Card v-if="!isNew && campaign">
-      <Collapsible :default-open="recipients.length > 0 && recipients.length <= 20">
-        <CardHeader class="pb-3 flex flex-row items-center justify-between">
-          <CollapsibleTrigger class="flex items-center gap-2 cursor-pointer hover:opacity-80">
-            <ChevronDown class="h-4 w-4 text-muted-foreground transition-transform [[data-state=closed]_&]:rotate-[-90deg]" />
-            <CardTitle class="text-sm font-medium">
-              {{ $t('campaigns.recipients', 'Recipients') }} ({{ recipients.length }})
-            </CardTitle>
-          </CollapsibleTrigger>
-          <Button v-if="isDraft" variant="outline" size="sm" @click="openAddRecipientsDialog">
-            <UserPlus class="h-4 w-4 mr-1" />
-            {{ $t('campaigns.addRecipients', 'Add') }}
-          </Button>
-        </CardHeader>
-        <CollapsibleContent>
-        <CardContent>
-        <div v-if="isLoadingRecipients" class="text-center py-8 text-sm text-muted-foreground">
-          {{ $t('common.loading', 'Loading...') }}
-        </div>
-        <div v-else-if="recipients.length === 0" class="text-center py-8">
-          <Users class="h-8 w-8 mx-auto text-muted-foreground mb-2" />
-          <p class="text-sm text-muted-foreground">{{ $t('campaigns.noRecipients', 'No recipients yet') }}</p>
-          <Button v-if="isDraft" variant="outline" size="sm" class="mt-3" @click="openAddRecipientsDialog">
-            <UserPlus class="h-4 w-4 mr-1" />
-            {{ $t('campaigns.addRecipients', 'Add Recipients') }}
-          </Button>
-        </div>
-        <div v-else class="overflow-auto max-h-96">
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>{{ $t('campaigns.phoneNumber', 'Phone Number') }}</TableHead>
-                <TableHead>{{ $t('campaigns.recipientName', 'Name') }}</TableHead>
-                <TableHead>{{ $t('campaigns.status', 'Status') }}</TableHead>
-                <TableHead>{{ $t('campaigns.sentAt', 'Sent At') }}</TableHead>
-                <TableHead v-if="isDraft" class="w-10" />
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              <TableRow v-for="recipient in recipients" :key="recipient.id">
-                <TableCell class="font-mono text-xs">{{ recipient.phone_number }}</TableCell>
-                <TableCell class="text-sm">{{ recipient.recipient_name || '-' }}</TableCell>
-                <TableCell>
-                  <div class="flex flex-col gap-0.5">
-                    <Badge variant="outline" :class="[getRecipientStatusClass(recipient.status), 'text-xs w-fit']">
-                      {{ recipient.status }}
-                    </Badge>
-                    <span
-                      v-if="recipient.status === 'failed' && recipient.error_message"
-                      class="text-[10px] text-destructive max-w-[180px] truncate block"
-                      :title="recipient.error_message"
+    <article v-if="!isNew && campaign" class="card">
+      <div v-if="isDraft" class="hstack justify-end mb-2">
+        <button type="button" class="outline small" @click="openAddRecipientsDialog">
+          <UserPlus :size="16" />
+          {{ $t('campaigns.addRecipients', 'Add') }}
+        </button>
+      </div>
+      <details :open="recipientsOpen" @toggle="recipientsOpen = ($event.target as HTMLDetailsElement).open">
+        <summary>
+          {{ $t('campaigns.recipients', 'Recipients') }} ({{ recipients.length }})
+        </summary>
+        <div class="vstack gap-4 mt-4">
+          <div v-if="isLoadingRecipients" class="align-center p-4" role="status" aria-busy="true" data-spinner="large" :aria-label="$t('common.loading', 'Loading...')" />
+          <div v-else-if="recipients.length === 0" class="vstack items-center gap-2 p-4">
+            <Users :size="32" />
+            <p class="text-light">{{ $t('campaigns.noRecipients', 'No recipients yet') }}</p>
+            <button v-if="isDraft" type="button" class="outline small" @click="openAddRecipientsDialog">
+              <UserPlus :size="16" />
+              {{ $t('campaigns.addRecipients', 'Add Recipients') }}
+            </button>
+          </div>
+          <div v-else class="table scroll-y">
+            <table>
+              <thead>
+                <tr>
+                  <th>{{ $t('campaigns.phoneNumber', 'Phone Number') }}</th>
+                  <th>{{ $t('campaigns.recipientName', 'Name') }}</th>
+                  <th>{{ $t('campaigns.status', 'Status') }}</th>
+                  <th>{{ $t('campaigns.sentAt', 'Sent At') }}</th>
+                  <th v-if="isDraft" :aria-label="$t('common.actions')"></th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr v-for="recipient in recipients" :key="recipient.id">
+                  <td><code>{{ recipient.phone_number }}</code></td>
+                  <td>{{ recipient.recipient_name || '-' }}</td>
+                  <td>
+                    <div class="vstack gap-1">
+                      <span class="badge" :data-variant="getRecipientStatusVariant(recipient.status)">{{ recipient.status }}</span>
+                      <small
+                        v-if="recipient.status === 'failed' && recipient.error_message"
+                        class="truncate"
+                        :title="recipient.error_message"
+                      >
+                        {{ recipient.error_message }}
+                      </small>
+                    </div>
+                  </td>
+                  <td class="text-light">{{ recipient.sent_at ? formatDateTime(recipient.sent_at) : '-' }}</td>
+                  <td v-if="isDraft">
+                    <button
+                      type="button"
+                      class="ghost small icon"
+                      :title="$t('common.delete')"
+                      :aria-label="$t('common.delete')"
+                      :disabled="deletingRecipientId === recipient.id"
+                      @click="deleteRecipient(recipient.id)"
                     >
-                      {{ recipient.error_message }}
-                    </span>
-                  </div>
-                </TableCell>
-                <TableCell class="text-xs text-muted-foreground">
-                  {{ recipient.sent_at ? formatDateTime(recipient.sent_at) : '-' }}
-                </TableCell>
-                <TableCell v-if="isDraft">
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    class="h-7 w-7"
-                    :disabled="deletingRecipientId === recipient.id"
-                    @click="deleteRecipient(recipient.id)"
-                  >
-                    <Trash2 class="h-3.5 w-3.5 text-destructive" />
-                  </Button>
-                </TableCell>
-              </TableRow>
-            </TableBody>
-          </Table>
+                      <Trash2 :size="14" />
+                    </button>
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
         </div>
-      </CardContent>
-        </CollapsibleContent>
-      </Collapsible>
-    </Card>
+      </details>
+    </article>
 
     <!-- Audit Log -->
     <AuditLogPanel
@@ -1290,20 +1190,13 @@ onUnmounted(() => {
   </DetailPageLayout>
 
   <!-- Delete Confirmation -->
-  <AlertDialog v-model:open="deleteDialogOpen">
-    <AlertDialogContent>
-      <AlertDialogHeader>
-        <AlertDialogTitle>{{ $t('campaigns.deleteCampaign', 'Delete Campaign') }}</AlertDialogTitle>
-        <AlertDialogDescription>
-          {{ $t('campaigns.deleteConfirm', 'Are you sure? This action cannot be undone.') }}
-        </AlertDialogDescription>
-      </AlertDialogHeader>
-      <AlertDialogFooter>
-        <AlertDialogCancel>{{ $t('common.cancel') }}</AlertDialogCancel>
-        <AlertDialogAction @click="deleteCampaign">{{ $t('common.delete') }}</AlertDialogAction>
-      </AlertDialogFooter>
-    </AlertDialogContent>
-  </AlertDialog>
+  <ConfirmDialog
+    v-model:open="deleteDialogOpen"
+    :title="$t('campaigns.deleteCampaign', 'Delete Campaign')"
+    :description="$t('campaigns.deleteConfirm', 'Are you sure? This action cannot be undone.')"
+    :confirm-label="$t('common.delete')"
+    @confirm="deleteCampaign"
+  />
 
   <!-- Start/Resume Confirmation -->
   <ConfirmDialog
@@ -1336,114 +1229,113 @@ onUnmounted(() => {
   />
 
   <!-- Add Recipients Dialog -->
-  <Dialog v-model:open="showAddRecipientsDialog">
-    <DialogContent class="sm:max-w-[550px]">
-      <DialogHeader>
-        <DialogTitle>{{ $t('campaigns.addRecipients', 'Add Recipients') }}</DialogTitle>
-        <DialogDescription>
-          {{ $t('campaigns.addRecipientsDescription', 'Add phone numbers manually or upload a CSV file.') }}
-        </DialogDescription>
-      </DialogHeader>
+  <Modal
+    v-model:open="showAddRecipientsDialog"
+    size="large"
+    :title="$t('campaigns.addRecipients', 'Add Recipients')"
+    :description="$t('campaigns.addRecipientsDescription', 'Add phone numbers manually or upload a CSV file.')"
+  >
+    <div role="tablist" class="w-100">
+      <button
+        type="button"
+        role="tab"
+        class="flex-1"
+        :aria-selected="addRecipientsTab === 'manual'"
+        @click="addRecipientsTab = 'manual'"
+      >
+        <UserPlus :size="16" />
+        {{ $t('campaigns.manualEntry', 'Manual Entry') }}
+      </button>
+      <button
+        type="button"
+        role="tab"
+        class="flex-1"
+        :aria-selected="addRecipientsTab === 'csv'"
+        @click="addRecipientsTab = 'csv'"
+      >
+        <FileSpreadsheet :size="16" />
+        {{ $t('campaigns.csvUpload', 'CSV Upload') }}
+      </button>
+    </div>
 
-      <Tabs v-model="addRecipientsTab">
-        <TabsList class="w-full">
-          <TabsTrigger value="manual" class="flex-1">
-            <UserPlus class="h-4 w-4 mr-1" />
-            {{ $t('campaigns.manualEntry', 'Manual Entry') }}
-          </TabsTrigger>
-          <TabsTrigger value="csv" class="flex-1">
-            <FileSpreadsheet class="h-4 w-4 mr-1" />
-            {{ $t('campaigns.csvUpload', 'CSV Upload') }}
-          </TabsTrigger>
-        </TabsList>
-
-        <!-- Manual Entry Tab -->
-        <TabsContent value="manual" class="space-y-3 mt-3">
-          <div class="space-y-1.5">
-            <Label class="text-xs text-muted-foreground">
-              {{ $t('campaigns.formatHint', 'Format') }}: <code class="text-[10px] bg-muted px-1 rounded">{{ manualEntryFormat }}</code>
-            </Label>
-            <p class="text-[10px] text-muted-foreground mb-1">
-              {{ $t('campaigns.recipientFormatNote', 'One recipient per line. Name is optional. Template parameters must match the selected template.') }}
+    <!-- Manual Entry Tab -->
+    <div v-if="addRecipientsTab === 'manual'" role="tabpanel">
+      <div class="vstack gap-2">
+        <label data-field>
+          <span>{{ $t('campaigns.formatHint', 'Format') }}: <code>{{ manualEntryFormat }}</code></span>
+          <small data-hint>{{ $t('campaigns.recipientFormatNote', 'One recipient per line. Name is optional. Template parameters must match the selected template.') }}</small>
+          <textarea
+            id="recipients"
+            v-model="recipientsInput"
+            :placeholder="recipientPlaceholder"
+            rows="8"
+          />
+        </label>
+        <!-- Validation Feedback -->
+        <div v-if="recipientsInput.trim()">
+          <small v-if="manualInputValidation.isValid" class="text-light">
+            {{ manualInputValidation.validLines }} valid recipient{{ manualInputValidation.validLines !== 1 ? 's' : '' }}
+          </small>
+          <div v-else-if="manualInputValidation.invalidLines.length > 0" class="error" role="status">
+            <p>
+              {{ manualInputValidation.invalidLines.length }} of {{ manualInputValidation.totalLines }} lines have errors:
             </p>
-            <Textarea
-              v-model="recipientsInput"
-              :placeholder="recipientPlaceholder"
-              :rows="8"
-              class="font-mono text-sm"
-            />
+            <ul>
+              <li v-for="err in manualInputValidation.invalidLines.slice(0, 5)" :key="err.lineNumber">
+                Line {{ err.lineNumber }}: {{ err.reason }}
+              </li>
+              <li v-if="manualInputValidation.invalidLines.length > 5">
+                ...and {{ manualInputValidation.invalidLines.length - 5 }} more
+              </li>
+            </ul>
           </div>
-          <!-- Validation Feedback -->
-          <div v-if="recipientsInput.trim()">
-            <p v-if="manualInputValidation.isValid" class="text-xs text-green-600">
-              {{ manualInputValidation.validLines }} valid recipient{{ manualInputValidation.validLines !== 1 ? 's' : '' }}
-            </p>
-            <div v-else-if="manualInputValidation.invalidLines.length > 0" class="text-xs space-y-1">
-              <p class="text-destructive font-medium">
-                {{ manualInputValidation.invalidLines.length }} of {{ manualInputValidation.totalLines }} lines have errors:
-              </p>
-              <ul class="list-disc list-inside text-destructive space-y-0.5">
-                <li v-for="err in manualInputValidation.invalidLines.slice(0, 5)" :key="err.lineNumber">
-                  Line {{ err.lineNumber }}: {{ err.reason }}
-                </li>
-                <li v-if="manualInputValidation.invalidLines.length > 5" class="text-muted-foreground">
-                  ...and {{ manualInputValidation.invalidLines.length - 5 }} more
-                </li>
-              </ul>
-            </div>
-          </div>
-          <DialogFooter>
-            <Button
-              @click="addRecipients"
-              :disabled="isAddingRecipients || !manualInputValidation.isValid"
-            >
-              <UserPlus class="h-4 w-4 mr-1" />
-              {{ isAddingRecipients ? $t('common.adding', 'Adding...') : $t('campaigns.addRecipients', 'Add Recipients') }}
-            </Button>
-          </DialogFooter>
-        </TabsContent>
+        </div>
+        <div class="hstack justify-end">
+          <button
+            type="button"
+            :disabled="isAddingRecipients || !manualInputValidation.isValid"
+            :aria-busy="isAddingRecipients ? 'true' : undefined"
+            @click="addRecipients"
+          >
+            <UserPlus v-if="!isAddingRecipients" :size="16" />
+            {{ isAddingRecipients ? $t('common.adding', 'Adding...') : $t('campaigns.addRecipients', 'Add Recipients') }}
+          </button>
+        </div>
+      </div>
+    </div>
 
-        <!-- CSV Upload Tab -->
-        <TabsContent value="csv" class="space-y-3 mt-3">
-          <div class="space-y-1.5">
-            <Label class="text-xs text-muted-foreground">
-              {{ $t('campaigns.csvFormatHint', 'CSV must include a phone_number (or phone, mobile, number) column. Optionally include a name column. For templates with a TEXT header variable, add a "header" column. Then one column per body parameter.') }}
-            </Label>
-            <div class="flex items-center justify-between text-xs">
-              <code class="bg-muted px-1.5 py-0.5 rounded">{{ csvHeaderRow }}</code>
-              <button
-                type="button"
-                class="text-primary hover:underline inline-flex items-center gap-1"
-                @click="downloadSampleCSV"
-              >
-                <Download class="h-3.5 w-3.5" />
-                {{ $t('campaigns.downloadSampleCsv', 'Download sample CSV') }}
-              </button>
-            </div>
-            <div
-              class="border-2 border-dashed rounded-lg p-6 text-center cursor-pointer hover:border-primary/50 transition-colors"
-              @click="($refs.csvInput as HTMLInputElement)?.click()"
-            >
-              <Upload class="h-6 w-6 mx-auto text-muted-foreground mb-1" />
-              <p class="text-sm text-muted-foreground">
-                {{ csvFile ? csvFile.name : $t('campaigns.clickToUploadCSV', 'Click to select CSV file') }}
-              </p>
-            </div>
-            <input ref="csvInput" type="file" accept=".csv" class="hidden" @change="handleCSVFileSelect" />
-          </div>
-          <DialogFooter>
-            <Button
-              @click="addRecipientsFromCSV"
-              :disabled="isAddingRecipients || !csvFile"
-            >
-              <FileSpreadsheet class="h-4 w-4 mr-1" />
-              {{ isAddingRecipients ? $t('common.importing', 'Importing...') : $t('campaigns.importCSV', 'Import CSV') }}
-            </Button>
-          </DialogFooter>
-        </TabsContent>
-      </Tabs>
-    </DialogContent>
-  </Dialog>
+    <!-- CSV Upload Tab -->
+    <div v-if="addRecipientsTab === 'csv'" role="tabpanel">
+      <div class="vstack gap-2">
+        <small class="text-light">
+          {{ $t('campaigns.csvFormatHint', 'CSV must include a phone_number (or phone, mobile, number) column. Optionally include a name column. For templates with a TEXT header variable, add a "header" column. Then one column per body parameter.') }}
+        </small>
+        <div class="hstack justify-between">
+          <code>{{ csvHeaderRow }}</code>
+          <button type="button" class="ghost small" @click="downloadSampleCSV">
+            <Download :size="14" />
+            {{ $t('campaigns.downloadSampleCsv', 'Download sample CSV') }}
+          </button>
+        </div>
+        <button type="button" class="outline" @click="csvInput?.click()">
+          <Upload :size="16" />
+          {{ csvFile ? csvFile.name : $t('campaigns.clickToUploadCSV', 'Click to select CSV file') }}
+        </button>
+        <input ref="csvInput" type="file" accept=".csv" hidden @change="handleCSVFileSelect" />
+        <div class="hstack justify-end">
+          <button
+            type="button"
+            :disabled="isAddingRecipients || !csvFile"
+            :aria-busy="isAddingRecipients ? 'true' : undefined"
+            @click="addRecipientsFromCSV"
+          >
+            <FileSpreadsheet v-if="!isAddingRecipients" :size="16" />
+            {{ isAddingRecipients ? $t('common.importing', 'Importing...') : $t('campaigns.importCSV', 'Import CSV') }}
+          </button>
+        </div>
+      </div>
+    </div>
+  </Modal>
 
   <UnsavedChangesDialog :open="showLeaveDialog" @stay="cancelLeave" @leave="confirmLeave" />
   </div>

@@ -15,11 +15,12 @@ export class FlowsPage extends BasePage {
     this.heading = page.getByRole('heading', { name: /WhatsApp Flows/i })
     this.createButton = page.getByRole('button', { name: /Create Flow/i }).first()
     this.syncButton = page.getByRole('button', { name: /Sync from Meta/i }).first()
-    this.accountFilter = page.locator('button[role="combobox"]').first()
+    // Native select inside <main> (the app shell aside has its own selects)
+    this.accountFilter = page.locator('main select').first()
     // Distinguish dialogs by their title content
-    this.createDialog = page.locator('[role="dialog"][data-state="open"]').filter({ hasText: 'Create WhatsApp Flow' })
-    this.editDialog = page.locator('[role="dialog"][data-state="open"]').filter({ hasText: 'Edit WhatsApp Flow' })
-    this.alertDialog = page.locator('[role="alertdialog"]')
+    this.createDialog = page.locator('dialog[open]').filter({ hasText: 'Create WhatsApp Flow' })
+    this.editDialog = page.locator('dialog[open]').filter({ hasText: 'Edit WhatsApp Flow' })
+    this.alertDialog = page.getByRole('alertdialog')
   }
 
   async goto() {
@@ -34,23 +35,23 @@ export class FlowsPage extends BasePage {
 
   // Flow card actions
   getFlowCard(index = 0): Locator {
-    return this.page.locator('.rounded-lg.border').nth(index)
+    return this.page.locator('main article.card').nth(index)
   }
 
   getEditButton(card?: Locator): Locator {
     const container = card || this.page
-    // Use lucide class without svg prefix for broader compatibility
-    return container.locator('button').filter({ has: this.page.locator('.lucide-pencil') }).first()
+    // Icons carry a data-icon attribute (see src/lib/icons.ts)
+    return container.locator('button').filter({ has: this.page.locator('[data-icon="pencil"]') }).first()
   }
 
   getDeleteButton(card?: Locator): Locator {
     const container = card || this.page
-    return container.locator('button').filter({ has: this.page.locator('.lucide-trash-2') }).first()
+    return container.locator('button').filter({ has: this.page.locator('[data-icon="trash-2"]') }).first()
   }
 
   getDuplicateButton(card?: Locator): Locator {
     const container = card || this.page
-    return container.locator('button').filter({ has: this.page.locator('.lucide-copy') }).first()
+    return container.locator('button').filter({ has: this.page.locator('[data-icon="copy"]') }).first()
   }
 
   getPreviewButton(card?: Locator): Locator {
@@ -111,25 +112,21 @@ export class FlowsPage extends BasePage {
 
   // Form helpers
   async fillFlowName(name: string) {
-    await this.createDialog.locator('input').filter({ hasText: '' }).first().fill(name)
+    await this.createDialog.getByPlaceholder(/Flow name/i).fill(name)
   }
 
+  // Account and category are native selects (account first, then category)
   async selectAccount(accountName: string) {
-    const accountTrigger = this.createDialog.locator('button[role="combobox"]').first()
-    await accountTrigger.click()
-    await this.page.locator('[role="option"]').filter({ hasText: accountName }).click()
+    await this.createDialog.locator('select').first().selectOption({ label: accountName })
   }
 
   async selectCategory(category: string) {
-    const categoryTriggers = this.createDialog.locator('button[role="combobox"]')
-    await categoryTriggers.nth(1).click()
-    await this.page.locator('[role="option"]').filter({ hasText: category }).click()
+    await this.createDialog.locator('select').nth(1).selectOption({ label: category })
   }
 
   // Filter by account
   async filterByAccount(accountName: string) {
-    await this.accountFilter.click()
-    await this.page.locator('[role="option"]').filter({ hasText: accountName }).click()
+    await this.accountFilter.selectOption({ label: accountName })
   }
 
   // Sync flows
@@ -198,8 +195,8 @@ export class ChatbotFlowsPage extends BasePage {
     super(page)
     this.heading = page.getByRole('heading', { name: /Conversation Flows/i }).first()
     this.createButton = page.getByRole('button', { name: /Create Flow/i }).first()
-    this.backButton = page.locator('button').filter({ has: page.locator('.lucide-arrow-left') }).first()
-    this.alertDialog = page.locator('[role="alertdialog"]')
+    this.backButton = page.locator('button').filter({ has: page.locator('[data-icon="arrow-left"]') }).first()
+    this.alertDialog = page.getByRole('alertdialog')
   }
 
   async goto() {
@@ -224,12 +221,12 @@ export class ChatbotFlowsPage extends BasePage {
 
   getEditButton(card?: Locator): Locator {
     const container = card || this.page
-    return container.locator('button').filter({ has: this.page.locator('.lucide-pencil') }).first()
+    return container.locator('button').filter({ has: this.page.locator('[data-icon="pencil"]') }).first()
   }
 
   getDeleteButton(card?: Locator): Locator {
     const container = card || this.page
-    return container.locator('button').filter({ has: this.page.locator('.lucide-trash-2') }).first()
+    return container.locator('button').filter({ has: this.page.locator('[data-icon="trash-2"]') }).first()
   }
 
   getToggleButton(card?: Locator): Locator {
@@ -328,8 +325,8 @@ export class ChatbotFlowBuilderPage extends BasePage {
 
   constructor(page: Page) {
     super(page)
-    // The "Add node:" label uniquely identifies the palette row.
-    this.paletteToolbar = page.locator('div', { hasText: /^Add node:/ }).first()
+    // The palette row is a toolbar labelled by its "Add node:" caption.
+    this.paletteToolbar = page.getByRole('toolbar', { name: /Add node/ })
   }
 
   async gotoNew() {
@@ -379,11 +376,11 @@ export class ChatbotFlowBuilderPage extends BasePage {
 
   /** All per-button config cards inside the right panel. */
   get buttonCards() {
-    return this.page.locator('.p-2.border.rounded-md.space-y-2')
+    return this.page.locator('main [data-button-config]')
   }
 
   /** Delete button on a per-button card. */
   getButtonDeleteButton(index: number) {
-    return this.buttonCards.nth(index).locator('button').filter({ has: this.page.locator('.text-destructive') })
+    return this.buttonCards.nth(index).getByRole('button', { name: 'Delete' })
   }
 }

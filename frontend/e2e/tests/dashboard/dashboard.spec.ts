@@ -9,8 +9,9 @@ test.describe('Dashboard', () => {
   })
 
   test('should display dashboard page', async ({ page }) => {
+    // PageHeader no longer renders the subtitle; the heading identifies the page.
     await expect(page.locator('h1')).toContainText('Dashboard')
-    await expect(page.getByText('Customizable analytics overview')).toBeVisible()
+    await expect(page.locator('h1')).toBeVisible()
   })
 
   test('should display stat cards', async ({ page }) => {
@@ -22,28 +23,21 @@ test.describe('Dashboard', () => {
   })
 
   test('should display time range filter', async ({ page }) => {
-    // Check for time range selector
-    const timeRangeSelect = page.locator('button[role="combobox"]').first()
-    await expect(timeRangeSelect).toBeVisible()
+    await expect(page.locator('main').getByLabel('Date Range')).toBeVisible()
   })
 
   test('should change time range', async ({ page }) => {
-    // Open time range dropdown
-    await page.locator('button[role="combobox"]').first().click()
-
-    // Select "Last 7 Days"
-    await page.locator('[role="option"]').filter({ hasText: 'Last 7 Days' }).click()
+    const range = page.locator('main').getByLabel('Date Range')
+    await range.selectOption({ label: 'Last 7 Days' })
 
     // Should reload data
     await page.waitForLoadState('networkidle')
 
-    // Check that the selection is updated
-    await expect(page.locator('button[role="combobox"]').first()).toContainText('Last 7 Days')
+    await expect(range).toHaveValue('7days')
   })
 
   test('should display recent messages widget', async ({ page }) => {
-    // Widget names are displayed in spans, not headings
-    await expect(page.getByText('Recent Messages', { exact: true })).toBeVisible({ timeout: 15000 })
+        await expect(page.getByText('Recent Messages', { exact: true })).toBeVisible({ timeout: 15000 })
     await expect(page.getByText('Latest conversations from your contacts')).toBeVisible()
   })
 
@@ -81,14 +75,12 @@ test.describe('Dashboard', () => {
   })
 
   test('should show custom date range picker', async ({ page }) => {
-    // Open time range dropdown
-    await page.locator('button[role="combobox"]').first().click()
+    const main = page.locator('main')
+    await main.getByLabel('Date Range').selectOption({ label: 'Custom Range' })
 
-    // Select "Custom Range"
-    await page.locator('[role="option"]').filter({ hasText: 'Custom Range' }).click()
-
-    // Should show date picker button
-    await expect(page.getByRole('button', { name: /Select|Calendar/i })).toBeVisible()
+    await expect(main.getByLabel('From', { exact: true })).toBeVisible()
+    await expect(main.getByLabel('To', { exact: true })).toBeVisible()
+    await expect(main.getByRole('button', { name: 'Apply' })).toBeVisible()
   })
 
   test('should display percentage change indicators', async ({ page }) => {

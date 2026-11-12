@@ -4,37 +4,22 @@ import { useRoute, useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { useAuthStore } from '@/stores/auth'
 import { webhooksService, type Webhook, type WebhookEvent } from '@/services/api'
-import { toast } from 'vue-sonner'
+import { toast } from '@/lib/toast'
 import { getErrorMessage } from '@/lib/api-utils'
 import { useUnsavedChangesGuard } from '@/composables/useUnsavedChangesGuard'
 import DetailPageLayout from '@/components/shared/DetailPageLayout.vue'
 import MetadataPanel from '@/components/shared/MetadataPanel.vue'
 import AuditLogPanel from '@/components/shared/AuditLogPanel.vue'
 import UnsavedChangesDialog from '@/components/shared/UnsavedChangesDialog.vue'
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { Badge } from '@/components/ui/badge'
-import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
-import { Label } from '@/components/ui/label'
-import { Switch } from '@/components/ui/switch'
-import { Checkbox } from '@/components/ui/checkbox'
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from '@/components/ui/alert-dialog'
+import Modal from '@/components/oat/Modal.vue'
+import { IconButton } from '@/components/shared'
 import {
   Webhook as WebhookIcon,
   Trash2,
   Save,
   Play,
   Plus,
-} from 'lucide-vue-next'
+} from '@/lib/icons'
 
 const route = useRoute()
 const router = useRouter()
@@ -117,8 +102,8 @@ watch(form, () => {
   hasChanges.value = true
 }, { deep: true })
 
-function toggleEvent(eventValue: string, checked: boolean | 'indeterminate') {
-  if (checked === true) {
+function toggleEvent(eventValue: string, checked: boolean) {
+  if (checked) {
     if (!form.value.events.includes(eventValue)) form.value.events.push(eventValue)
   } else {
     const index = form.value.events.indexOf(eventValue)
@@ -224,7 +209,6 @@ onMounted(async () => {
     <DetailPageLayout
       :title="isNew ? $t('webhooks.newWebhook', 'New Webhook') : (webhook?.name || '')"
       :icon="WebhookIcon"
-      icon-gradient="bg-gradient-to-br from-indigo-500 to-purple-600 shadow-indigo-500/20"
       back-link="/settings/webhooks"
       :breadcrumbs="breadcrumbs"
       :is-loading="isLoading"
@@ -232,88 +216,79 @@ onMounted(async () => {
       :not-found-title="$t('webhooks.notFound', 'Webhook not found')"
     >
       <template #actions>
-        <div class="flex items-center gap-2">
-          <Button v-if="canWrite && (hasChanges || isNew)" size="sm" @click="save" :disabled="isSaving">
-            <Save class="h-4 w-4 mr-1" /> {{ isSaving ? $t('common.saving', 'Saving...') : isNew ? $t('common.create') : $t('common.save') }}
-          </Button>
-          <Button v-if="!isNew" variant="outline" size="sm" @click="testWebhook" :disabled="isTesting">
-            <Play class="h-4 w-4 mr-1" /> {{ isTesting ? $t('webhooks.testing', 'Testing...') : $t('webhooks.testWebhook') }}
-          </Button>
-          <Button v-if="canDelete && !isNew" variant="destructive" size="sm" @click="deleteDialogOpen = true">
-            <Trash2 class="h-4 w-4 mr-1" /> {{ $t('common.delete') }}
-          </Button>
+        <div class="hstack gap-2">
+          <button v-if="canWrite && (hasChanges || isNew)" type="button" class="small" :disabled="isSaving" :aria-busy="isSaving ? 'true' : undefined" data-spinner="small" @click="save">
+            <Save v-if="!isSaving" :size="16" /> {{ isSaving ? $t('common.saving', 'Saving...') : isNew ? $t('common.create') : $t('common.save') }}
+          </button>
+          <button v-if="!isNew" type="button" class="outline small" :disabled="isTesting" :aria-busy="isTesting ? 'true' : undefined" data-spinner="small" @click="testWebhook">
+            <Play v-if="!isTesting" :size="16" /> {{ isTesting ? $t('webhooks.testing', 'Testing...') : $t('webhooks.testWebhook') }}
+          </button>
+          <button v-if="canDelete && !isNew" type="button" class="small" data-variant="danger" @click="deleteDialogOpen = true">
+            <Trash2 :size="16" /> {{ $t('common.delete') }}
+          </button>
         </div>
       </template>
 
-      <Card>
-        <CardHeader class="pb-3">
-          <div class="flex items-center justify-between">
-            <CardTitle class="text-sm font-medium">{{ $t('teams.details', 'Details') }}</CardTitle>
-            <Badge v-if="!isNew" :variant="(webhook?.is_active ?? true) ? 'default' : 'secondary'">
-              {{ (webhook?.is_active ?? true) ? $t('common.active') : $t('common.inactive') }}
-            </Badge>
-          </div>
-        </CardHeader>
-        <CardContent class="space-y-4">
-          <div class="space-y-1.5">
-            <Label class="text-xs">{{ $t('webhooks.name') }} <span class="text-destructive">*</span></Label>
-            <Input v-model="form.name" :placeholder="$t('webhooks.namePlaceholder')" :disabled="!canWrite" />
-          </div>
-          <div class="space-y-1.5">
-            <Label class="text-xs">{{ $t('webhooks.webhookUrl', 'URL') }} <span class="text-destructive">*</span></Label>
-            <Input v-model="form.url" type="url" :placeholder="$t('webhooks.webhookUrlPlaceholder')" :disabled="!canWrite" />
-          </div>
-          <div class="space-y-1.5">
-            <Label class="text-xs">{{ $t('webhooks.events') }} <span class="text-destructive">*</span></Label>
-            <div class="grid grid-cols-1 gap-2 border rounded-lg p-3">
-              <div v-for="event in availableEvents" :key="event.value" class="flex items-start gap-2">
-                <Checkbox
-                  :id="event.value"
+      <article class="card">
+        <header class="hstack justify-between">
+          <h3>{{ $t('teams.details', 'Details') }}</h3>
+          <span v-if="!isNew" class="badge" :data-variant="(webhook?.is_active ?? true) ? 'success' : 'secondary'">
+            {{ (webhook?.is_active ?? true) ? $t('common.active') : $t('common.inactive') }}
+          </span>
+        </header>
+        <div class="vstack gap-4">
+          <label data-field>
+            {{ $t('webhooks.name') }} *
+            <input v-model="form.name" :placeholder="$t('webhooks.namePlaceholder')" :disabled="!canWrite" />
+          </label>
+          <label data-field>
+            {{ $t('webhooks.webhookUrl', 'URL') }} *
+            <input v-model="form.url" type="url" :placeholder="$t('webhooks.webhookUrlPlaceholder')" :disabled="!canWrite" />
+          </label>
+          <fieldset class="vstack gap-2">
+            <legend>{{ $t('webhooks.events') }} *</legend>
+            <label v-for="event in availableEvents" :key="event.value" data-field>
+              <span class="hstack gap-2">
+                <input
+                  type="checkbox"
+                  :value="event.value"
                   :checked="form.events.includes(event.value)"
-                  @update:checked="(checked) => toggleEvent(event.value, checked)"
                   :disabled="!canWrite"
+                  @change="toggleEvent(event.value, ($event.target as HTMLInputElement).checked)"
                 />
-                <div class="grid gap-0.5">
-                  <Label :for="event.value" class="cursor-pointer">{{ event.label }}</Label>
-                  <p class="text-xs text-muted-foreground">{{ event.description }}</p>
-                </div>
-              </div>
+                {{ event.label }}
+              </span>
+              <small data-hint>{{ event.description }}</small>
+            </label>
+          </fieldset>
+          <label data-field>
+            {{ $t('webhooks.secret') }}
+            <input v-model="form.secret" type="password" :placeholder="$t('webhooks.secretPlaceholder')" :disabled="!canWrite" />
+            <small data-hint>{{ $t('webhooks.secretHint') }}</small>
+          </label>
+          <div class="vstack gap-2">
+            <strong>{{ $t('webhooks.customHeaders') }}</strong>
+            <div v-for="(value, key) in form.headers" :key="key" class="hstack gap-2">
+              <span class="badge" data-variant="secondary">{{ key }}</span>
+              <span class="truncate flex-1">{{ value }}</span>
+              <IconButton v-if="canWrite" :icon="Trash2" :label="$t('webhooks.removeHeader')" size="icon" @click="removeHeader(key as string)" />
+            </div>
+            <div v-if="canWrite" class="hstack gap-2">
+              <input v-model="newHeaderKey" class="flex-1" :placeholder="$t('webhooks.headerName')" :aria-label="$t('webhooks.headerName')" />
+              <input v-model="newHeaderValue" class="flex-1" :placeholder="$t('webhooks.headerValue')" :aria-label="$t('webhooks.headerValue')" />
+              <button type="button" class="outline small" @click="addHeader">
+                <Plus :size="12" /> {{ $t('common.add') }}
+              </button>
             </div>
           </div>
-          <div class="space-y-1.5">
-            <Label class="text-xs">{{ $t('webhooks.secret') }}</Label>
-            <Input v-model="form.secret" type="password" :placeholder="$t('webhooks.secretPlaceholder')" :disabled="!canWrite" />
-            <p class="text-xs text-muted-foreground">{{ $t('webhooks.secretHint') }}</p>
-          </div>
-          <div class="space-y-1.5">
-            <Label class="text-xs">{{ $t('webhooks.customHeaders') }}</Label>
-            <div class="space-y-2">
-              <div v-for="(value, key) in form.headers" :key="key" class="flex items-center gap-2">
-                <Badge variant="secondary" class="flex-shrink-0">{{ key }}</Badge>
-                <span class="text-sm truncate flex-1">{{ value }}</span>
-                <Button v-if="canWrite" variant="ghost" size="icon" class="h-6 w-6 flex-shrink-0" @click="removeHeader(key as string)">
-                  <Trash2 class="h-3 w-3" />
-                </Button>
-              </div>
-              <div v-if="canWrite" class="flex gap-2">
-                <Input v-model="newHeaderKey" :placeholder="$t('webhooks.headerName')" class="flex-1" />
-                <Input v-model="newHeaderValue" :placeholder="$t('webhooks.headerValue')" class="flex-1" />
-                <Button variant="outline" size="sm" @click="addHeader">
-                  <Plus class="h-3 w-3 mr-1" /> {{ $t('common.add') }}
-                </Button>
-              </div>
-            </div>
-          </div>
-          <div v-if="!isNew" class="flex items-center justify-between">
-            <Label class="text-xs font-normal cursor-pointer">{{ $t('common.active') }}</Label>
-            <Switch
-              :checked="form.is_active"
-              @update:checked="form.is_active = $event"
-              :disabled="!canWrite"
-            />
-          </div>
-        </CardContent>
-      </Card>
+          <label v-if="!isNew" data-field>
+            <span class="hstack justify-between">
+              <span>{{ $t('common.active') }}</span>
+              <input v-model="form.is_active" type="checkbox" role="switch" :disabled="!canWrite" />
+            </span>
+          </label>
+        </div>
+      </article>
 
       <AuditLogPanel
         v-if="webhook && !isNew"
@@ -329,20 +304,13 @@ onMounted(async () => {
       </template>
     </DetailPageLayout>
 
-    <AlertDialog v-model:open="deleteDialogOpen">
-      <AlertDialogContent>
-        <AlertDialogHeader>
-          <AlertDialogTitle>{{ $t('webhooks.deleteWebhook') }}</AlertDialogTitle>
-          <AlertDialogDescription>
-            {{ $t('teams.deleteConfirm', 'Are you sure? This action cannot be undone.') }}
-          </AlertDialogDescription>
-        </AlertDialogHeader>
-        <AlertDialogFooter>
-          <AlertDialogCancel>{{ $t('common.cancel') }}</AlertDialogCancel>
-          <AlertDialogAction @click="deleteWebhook">{{ $t('common.delete') }}</AlertDialogAction>
-        </AlertDialogFooter>
-      </AlertDialogContent>
-    </AlertDialog>
+    <Modal v-model:open="deleteDialogOpen" alert :title="$t('webhooks.deleteWebhook')">
+      <p>{{ $t('teams.deleteConfirm', 'Are you sure? This action cannot be undone.') }}</p>
+      <template #footer>
+        <button type="button" class="outline" @click="deleteDialogOpen = false">{{ $t('common.cancel') }}</button>
+        <button type="button" data-variant="danger" @click="deleteWebhook">{{ $t('common.delete') }}</button>
+      </template>
+    </Modal>
 
     <UnsavedChangesDialog :open="showLeaveDialog" @stay="cancelLeave" @leave="confirmLeave" />
   </div>

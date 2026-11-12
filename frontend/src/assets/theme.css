@@ -1,0 +1,128 @@
+/*
+ * App theme: compact density + brand primary on top of vendored Oat.
+ * Oat's defaults suit content sites (16px text, fluid headings, roomy spacing);
+ * this is an all-day admin app, so only size tokens are tightened. The one
+ * colour change is the brand primary (emerald). Nothing else (borders, radii,
+ * shadows, fonts, other colours) is overridden, except the approved chat
+ * skin at the end of this layer.
+ *
+ * This layer is declared after Oat's layers (theme, base, components,
+ * animations, utilities), so it wins over Oat's token definitions without
+ * !important. It is loaded before layout.css, so `layout` stays last.
+ */
+@layer theme-overrides {
+  :root {
+    /* Brand colour (contrast vs foreground: 5.48:1 light, 5.97:1 dark). */
+    --primary: light-dark(#047857, #10b981);
+    --primary-foreground: light-dark(#ffffff, #022c22);
+    --ring: light-dark(#047857, #10b981);
+
+    /* Spacing: same steps, tighter values (4, 6, 8, 12, 14, 16, 24, 32 ...px). */
+    --space-2: 0.375rem;
+    --space-3: 0.5rem;
+    --space-4: 0.75rem;
+    --space-5: 0.875rem;
+    --space-6: 1rem;
+    --space-8: 1.5rem;
+    --space-10: 2rem;
+    --space-12: 2.5rem;
+    --space-14: 2.75rem;
+    --space-16: 3rem;
+    --space-18: 3.5rem;
+
+    /* Type: 14px body, 13px controls/tables, fixed (non-fluid) app heading scale. */
+    --text-1: 1.5rem;
+    --text-2: 1.25rem;
+    --text-3: 1.125rem;
+    --text-4: 1rem;
+    --text-5: 0.875rem;
+    --text-6: 0.875rem;
+    --text-7: 0.8125rem;
+    --text-8: 0.75rem;
+
+    /* Layout tokens (defined by Oat in @layer components). */
+    --sidebar-width: 14rem;
+    --grid-gap: 1rem;
+  }
+
+  /* Oat hardcodes button sizes in rem. Regular buttons are now ~2.1rem tall
+     (6px + 19.5px line + 6px + border), so match icon buttons to that and keep
+     them square: >=32px hit target, no wide-and-flat icon buttons. */
+  :is(button, [type=submit], [type=reset], [type=button], a.button) {
+    &.icon {
+      width: 2.125rem;
+      height: 2.125rem;
+
+      &.small {
+        width: 1.75rem;
+        height: 1.75rem;
+      }
+    }
+  }
+
+  /* Chat skin (approved exception to "no custom colours", chat screen only).
+     Uses only Oat colour tokens and color-mix() of them, so light and dark
+     mode follow Oat's light-dark() values. Keyed on data attributes. */
+  /* Sticky header cells must hide rows scrolling beneath them. */
+  th.sticky-top { background-color: var(--card); }
+
+  [data-chat-header] {
+    background-color: var(--faint);
+    border-block-end: 1px solid var(--border);
+  }
+  [data-chat-canvas] { background-color: var(--faint); }
+  .card[data-bubble] {
+    border-radius: var(--radius-large);
+  }
+  .card[data-bubble="outgoing"] {
+    background-color: color-mix(in oklab, var(--primary) 15%, var(--card));
+    border-color: transparent;
+    border-start-end-radius: var(--radius-small);
+  }
+  .card[data-bubble="incoming"] {
+    background-color: var(--card);
+    border-color: var(--border);
+    border-start-start-radius: var(--radius-small);
+  }
+  .badge[data-date-pill] {
+    background-color: var(--muted);
+    color: var(--muted-foreground);
+    font-weight: var(--font-normal);
+  }
+
+  /* Flow node colours (approved exception, flow editors only): one accent per
+     node type, shown as a coloured inline-start edge + tinted icon chip.
+     Darker shade for light mode, lighter for dark mode. IVR + chatbot share
+     BaseNode, which sets data-node-type. */
+  [data-node-type] { --node-accent: var(--muted-foreground); border-inline-start: 4px solid var(--node-accent); }
+  :is([data-node-type="greeting"], [data-node-type="start"]) { --node-accent: light-dark(#059669, #34d399); }
+  [data-node-type="message"] { --node-accent: light-dark(#0d9488, #2dd4bf); }
+  :is([data-node-type="gather"], [data-node-type="prompt"]) { --node-accent: light-dark(#ea580c, #fb923c); }
+  :is([data-node-type="menu"], [data-node-type="buttons"]) { --node-accent: light-dark(#d97706, #fbbf24); }
+  :is([data-node-type="http_callback"], [data-node-type="api_call"]) { --node-accent: light-dark(#2563eb, #60a5fa); }
+  [data-node-type="webhook"] { --node-accent: light-dark(#0284c7, #38bdf8); }
+  [data-node-type="whatsapp_flow"] { --node-accent: light-dark(#65a30d, #a3e635); }
+  [data-node-type="transfer"] { --node-accent: light-dark(#7c3aed, #a78bfa); }
+  [data-node-type="condition"] { --node-accent: light-dark(#db2777, #f472b6); }
+  [data-node-type="goto_flow"] { --node-accent: light-dark(#4f46e5, #818cf8); }
+  [data-node-type="timing"] { --node-accent: light-dark(#0891b2, #22d3ee); }
+  :is([data-node-type="hangup"], [data-node-type="end"]) { --node-accent: light-dark(#dc2626, #f87171); }
+  [data-node-icon] {
+    display: inline-flex;
+    padding: var(--space-1);
+    border-radius: var(--radius-medium);
+    color: var(--node-accent);
+    background-color: color-mix(in oklab, var(--node-accent) 15%, transparent);
+  }
+
+  /* Auth pages (login / register / SSO): restore Oat's default, roomier
+     spacing inside the auth card only; the rest of the app stays compact. */
+  .auth-panel {
+    --space-2: 0.5rem;
+    --space-3: 0.75rem;
+    --space-4: 1rem;
+    --space-5: 1.25rem;
+    --space-6: 1.5rem;
+    --space-8: 2rem;
+  }
+}

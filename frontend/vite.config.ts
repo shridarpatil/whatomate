@@ -6,7 +6,7 @@ import compression from 'vite-plugin-compression'
 export default defineConfig({
   base: './',
   plugins: [
-    vue(),
+    vue({ template: { compilerOptions: { isCustomElement: tag => tag.startsWith('ot-') } } }),
     // Gzip compression
     compression({
       algorithm: 'gzip',
@@ -26,23 +26,12 @@ export default defineConfig({
     }
   },
   build: {
+    target: ['chrome123', 'edge123', 'firefox120', 'safari17.5'],
     rollupOptions: {
       output: {
         manualChunks: {
           // Core Vue ecosystem
-          'vue-vendor': ['vue', 'vue-router', 'pinia'],
-          // UI primitives
-          'reka-ui': ['reka-ui'],
-          // Charts (heavy)
-          'charts': ['chart.js', 'vue-chartjs'],
-          // Grid layout (heavy)
-          'grid-layout': ['grid-layout-plus'],
-          // Emoji picker (heavy)
-          'emoji-picker': ['vue3-emoji-picker'],
-          // Form validation
-          'validation': ['vee-validate'],
-          // Utilities
-          'utils': ['@vueuse/core', 'axios', 'clsx', 'tailwind-merge', 'class-variance-authority']
+          'vue-vendor': ['vue', 'vue-router', 'pinia']
         }
       }
     },

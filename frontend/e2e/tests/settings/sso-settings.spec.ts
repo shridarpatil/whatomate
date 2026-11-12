@@ -64,7 +64,7 @@ test.describe('SSO Settings', () => {
     // when the provider is unconfigured, "Configure" once it has a row.
     const ghCard = page
       .getByRole('heading', { name: 'GitHub', exact: true })
-      .locator('xpath=ancestor::*[contains(@class, "rounded-xl")][1]')
+      .locator('xpath=ancestor::article[1]')
     await ghCard.getByRole('button', { name: /Set Up|Configure/i }).click()
 
     // Edit dialog opens.
@@ -78,9 +78,7 @@ test.describe('SSO Settings', () => {
 
     // The Enable switch lives in a row labeled by sso.enableProvider.
     const enableSwitch = dialog.getByRole('switch').first()
-    if ((await enableSwitch.getAttribute('data-state')) !== 'checked') {
-      await enableSwitch.click()
-    }
+    await enableSwitch.check()
 
     // Save — the dialog closes once the PUT settles.
     await dialog.getByRole('button', { name: /^Save$/i }).click()
@@ -103,16 +101,14 @@ test.describe('SSO Settings', () => {
 
     const card = page
       .getByRole('heading', { name: 'Microsoft', exact: true })
-      .locator('xpath=ancestor::*[contains(@class, "rounded-xl")][1]')
+      .locator('xpath=ancestor::article[1]')
     await card.getByRole('button', { name: /Set Up|Configure/i }).click()
 
     const dialog = page.getByRole('dialog')
     await dialog.locator('#client_id').fill('ms-id')
     await dialog.locator('#client_secret').fill('ms-secret')
     const enableSwitch = dialog.getByRole('switch').first()
-    if ((await enableSwitch.getAttribute('data-state')) !== 'checked') {
-      await enableSwitch.click()
-    }
+    await enableSwitch.check()
     await dialog.getByRole('button', { name: /^Save$/i }).click()
     await expect(dialog).not.toBeVisible({ timeout: 10000 })
     await expect(card.getByText('Enabled', { exact: true })).toBeVisible({ timeout: 10000 })
@@ -121,7 +117,7 @@ test.describe('SSO Settings', () => {
     await card.getByRole('button', { name: /Configure/i }).click()
     await expect(dialog).toBeVisible()
     await dialog.getByRole('button', { name: /Remove/i }).click()
-    const confirm = page.locator('[role="alertdialog"]')
+    const confirm = page.getByRole('alertdialog')
     await expect(confirm).toBeVisible({ timeout: 5000 })
     await confirm.getByRole('button', { name: /Remove|Delete|Confirm/i }).click()
 
@@ -141,7 +137,7 @@ test.describe('SSO Settings', () => {
 
     const customCard = page
       .getByRole('heading', { name: /Custom OIDC/i })
-      .locator('xpath=ancestor::*[contains(@class, "rounded-xl")][1]')
+      .locator('xpath=ancestor::article[1]')
     await customCard.getByRole('button', { name: /Set Up|Configure/i }).click()
 
     const dialog = page.getByRole('dialog')

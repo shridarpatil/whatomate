@@ -1,4 +1,15 @@
 {
+  "dateRange": {
+    "from": "From",
+    "to": "To",
+    "selectRange": "Date Range",
+    "today": "Today",
+    "last7Days": "Last 7 Days",
+    "last30Days": "Last 30 Days",
+    "thisMonth": "This Month",
+    "customRange": "Custom Range",
+    "apply": "Apply"
+  },
   "common": {
     "save": "सहेजें",
     "cancel": "रद्द करें",
@@ -35,6 +46,8 @@
     "deselectAll": "सभी अचयनित करें",
     "noResults": "कोई परिणाम नहीं मिला",
     "noData": "कोई डेटा उपलब्ध नहीं",
+    "showData": "Show data",
+    "value": "Value",
     "error": "त्रुटि",
     "success": "सफलता",
     "warning": "चेतावनी",
@@ -85,7 +98,12 @@
     "deleteConfirmMessage": "क्या आप वाकई इस {resource} को हटाना चाहते हैं? यह कार्रवाई वापस नहीं ली जा सकती।",
     "searchPlaceholder": "{resource} खोजें",
     "selectPlaceholder": "{resource} चुनें",
-    "copiedToClipboard": "क्लिपबोर्ड पर कॉपी किया गया"
+    "copiedToClipboard": "क्लिपबोर्ड पर कॉपी किया गया",
+    "firstPage": "First page",
+    "lastPage": "Last page",
+    "pagination": "Pagination",
+    "scrollToTop": "Scroll to top",
+    "clickToUpload": "Click to upload file"
   },
   "auth": {
     "login": "लॉगिन",
@@ -207,6 +225,9 @@
     "Widget": "विजेट"
   },
   "nav": {
+    "sidebar": "Sidebar",
+    "mainNavigation": "Main navigation",
+    "secondaryNavigation": "Secondary navigation",
     "dashboard": "डैशबोर्ड",
     "chat": "चैट",
     "contacts": "संपर्क",
@@ -245,6 +266,10 @@
     "toggleMenu": "मेन्यू टॉगल करें"
   },
   "userMenu": {
+    "colorTheme": "Color theme",
+    "themeLight": "Light theme",
+    "themeDark": "Dark theme",
+    "themeSystem": "System theme",
     "myAccount": "मेरा खाता",
     "status": "स्थिति",
     "available": "उपलब्ध",
@@ -259,9 +284,12 @@
     "failedUpdateAvailability": "उपलब्धता अपडेट करने में विफल",
     "awayWarningTitle": "सक्रिय ट्रांसफर कतार में वापस आ जाएंगे",
     "awayWarningDesc": "आपके पास {count} सक्रिय ट्रांसफर हैं। अपनी स्थिति 'Away' सेट करने से वे कतार में वापस आ जाएंगे।",
-    "goAway": "Away सेट करें"
+    "goAway": "Away सेट करें",
+    "userMenu": "उपयोगकर्ता मेनू",
+    "toggleAvailability": "उपलब्धता स्थिति बदलें"
   },
   "chat": {
+    "lastActive": "Last active {time}",
     "conversations": "बातचीत",
     "messages": "संदेश",
     "noContacts": "कोई संपर्क नहीं मिला",
@@ -304,6 +332,7 @@
     "noTagsAvailable": "कोई टैग उपलब्ध नहीं",
     "paused": "रुका हुआ",
     "assignedTo": "को सौंपा गया",
+    "assigned": "Assigned",
     "unassigned": "अनअसाइन किया गया",
     "assign": "असाइन करें",
     "transfer": "ट्रांसफर",
@@ -386,7 +415,11 @@
     "urlButtonParamPlaceholder": "गतिशील URL मान दर्ज करें",
     "preview": "पूर्वावलोकन",
     "serviceWindowExpired": "24-घंटे की संदेश सेवा विंडो समाप्त हो गई है। ग्राहक के जवाब देने तक केवल टेम्पलेट संदेश भेजे जा सकते हैं।",
-    "sendTemplateAction": "टेम्पलेट भेजें"
+    "sendTemplateAction": "टेम्पलेट भेजें",
+    "noTags": "No tags",
+    "general": "General",
+    "noPanelData": "No data configured",
+    "noPanelDataHint": "Configure panel display in the chatbot flow settings."
   },
   "contacts": {
     "title": "संपर्क",
@@ -546,7 +579,10 @@
     "currentFile": "वर्तमान फ़ाइल",
     "noFileUploaded": "डिफ़ॉल्ट का उपयोग कर रहे हैं",
     "audioUploaded": "ऑडियो फ़ाइल सफलतापूर्वक अपलोड की गई",
-    "audioUploadFailed": "ऑडियो फ़ाइल अपलोड करने में विफल"
+    "audioUploadFailed": "ऑडियो फ़ाइल अपलोड करने में विफल",
+    "previewRingtone": "Preview ringtone",
+    "playAudio": "Play",
+    "pauseAudio": "Pause"
   },
   "users": {
     "title": "उपयोगकर्ता प्रबंधन",
@@ -701,6 +737,10 @@
     "memberRemoved": "सदस्य को टीम से हटा दिया गया"
   },
   "organizations": {
+    "label": "Organization",
+    "selectPlaceholder": "Select organization",
+    "loading": "Loading...",
+    "none": "No organizations found",
     "createNew": "संगठन बनाएं",
     "createTitle": "संगठन बनाएं",
     "createDesc": "एक नया वर्कस्पेस प्रबंधित करने के लिए संगठन बनाएं।",
@@ -966,6 +1006,7 @@
     "nameRequired": "नाम अनिवार्य है"
   },
   "webhooks": {
+    "removeHeader": "Remove header",
     "title": "वेबहुक",
     "subtitle": "बाहरी सिस्टम के लिए वेबहुक",
     "addWebhook": "वेबहुक जोड़ें",
@@ -1104,6 +1145,7 @@
     "goHome": "होम"
   },
   "profile": {
+    "togglePasswordVisibility": "Toggle password visibility",
     "title": "प्रोफ़ाइल",
     "description": "सेटिंग्स प्रबंधित करें",
     "accountInfo": "खाता जानकारी",
@@ -1258,6 +1300,8 @@
     "layoutSaved": "सहेजा गया",
     "saveLayoutFailed": "विफल",
     "editLayout": "एडिट लेआउट",
+    "moveEarlier": "Move earlier",
+    "moveLater": "Move later",
     "editWidgetTooltip": "एडिट",
     "deleteWidgetTooltip": "हटाएं",
     "noChange": "कोई नहीं",
@@ -1594,7 +1638,9 @@
     "aiSettingsSaved": "सहेजे गए",
     "slaSettingsSaved": "सहेजे गए",
     "aiSaveFailed": "विफल",
-    "slaSaveFailed": "विफल"
+    "slaSaveFailed": "विफल",
+    "startTime": "{day} start time",
+    "endTime": "{day} end time"
   },
   "agentTransfers": {
     "title": "स्थानांतरण",
@@ -2102,7 +2148,16 @@
     "sectionLabelPlaceholder": "लेबल",
     "addFieldPlaceholder": "+ जोड़ें",
     "exampleUrlPlaceholder": "https://...",
-    "dataPathPlaceholder": "path"
+    "dataPathPlaceholder": "path",
+    "previewTitle": "Flow preview",
+    "previewStart": "Start",
+    "previewPause": "Pause",
+    "previewRestart": "Restart",
+    "previewStepForward": "Step forward",
+    "previewStepBack": "Step back",
+    "dataPath": "डेटा पथ",
+    "configureApiMock": "API मॉक कॉन्फ़िगर करें",
+    "selectOption": "एक विकल्प चुनें"
   },
   "calling": {
     "callLogs": "कॉल लॉग्स",
@@ -2204,7 +2259,8 @@
     "selectTargetFlow": "फ्लो",
     "uploadAudioTab": "अपलोड",
     "textToSpeechTab": "TTS",
-    "greetingTextPlaceholder": "संदेश"
+    "greetingTextPlaceholder": "संदेश",
+    "ttsText": "बोलने के लिए पाठ"
   },
   "callTransfers": {
     "title": "कॉल ट्रांसफर",
@@ -2254,5 +2310,51 @@
     "callFailed": "विफल",
     "permissionSent": "अनुरोध भेजा",
     "permissionSentDesc": "WhatsApp पर स्वीकार करना होगा।"
+  },
+  "waFlowBuilder": {
+    "screens": "Screens",
+    "addScreen": "Add Screen",
+    "removeScreen": "Remove screen",
+    "noScreens": "No screens yet",
+    "selectScreen": "Select a screen",
+    "screenTitle": "Screen Title",
+    "addComponents": "Add Components",
+    "addComponentsHint": "Add components from the palette",
+    "addScreenToStart": "Add a screen to get started",
+    "properties": "Properties",
+    "selectComponentHint": "Select a component to edit its properties",
+    "moveUp": "Move up",
+    "moveDown": "Move down",
+    "removeComponent": "Remove component",
+    "text": "Text",
+    "label": "Label",
+    "fieldName": "Field Name (Key)",
+    "fieldNamePlaceholder": "e.g. email, phone, message",
+    "fieldNameHint": "This key is used in the response data. Use lowercase with underscores (e.g. customer_name).",
+    "required": "Required",
+    "options": "Options",
+    "add": "Add",
+    "optionPlaceholder": "Option text",
+    "removeOption": "Remove option",
+    "buttonText": "Button Text",
+    "action": "Action",
+    "completeFlow": "Complete Flow",
+    "navigateToScreen": "Navigate to Screen",
+    "targetScreen": "Target Screen",
+    "selectTargetScreen": "Select screen",
+    "selectPlaceholder": "Select...",
+    "types": {
+      "heading": "Heading",
+      "subheading": "Subheading",
+      "text": "Text",
+      "textInput": "Text Input",
+      "textArea": "Text Area",
+      "dropdown": "Dropdown",
+      "radioButtons": "Radio Buttons",
+      "checkboxes": "Checkboxes",
+      "datePicker": "Date Picker",
+      "image": "Image",
+      "footerButton": "Footer Button"
+    }
   }
 }

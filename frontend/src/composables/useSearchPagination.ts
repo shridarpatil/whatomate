@@ -1,5 +1,5 @@
 import { ref, watch } from 'vue'
-import { useDebounceFn } from '@vueuse/core'
+import { debounce } from '@/lib/utils'
 
 interface UseSearchPaginationOptions {
   /** Items per page (default: 20) */
@@ -17,7 +17,7 @@ export function useSearchPagination(options: UseSearchPaginationOptions) {
   const currentPage = ref(1)
   const totalItems = ref(0)
 
-  const debouncedSearch = useDebounceFn(() => {
+  const debouncedSearch = debounce(() => {
     currentPage.value = 1
     fetchFn()
   }, debounceMs)

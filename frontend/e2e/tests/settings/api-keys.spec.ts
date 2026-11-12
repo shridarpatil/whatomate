@@ -14,7 +14,7 @@ function saveButton(page: Page): Locator {
 }
 
 async function gotoCreateApiKey(page: Page) {
-  await page.getByRole('button', { name: /Create API Key/i }).first().click()
+  await page.getByRole('link', { name: /Create API Key/i }).first().click()
   await page.waitForURL(/\/settings\/api-keys\/new$/)
   await page.waitForLoadState('networkidle')
 }
@@ -46,7 +46,7 @@ test.describe('API Keys Management', () => {
     await saveButton(page).click()
 
     // Should show the key display dialog with the full key
-    const keyDialog = page.locator('[role="dialog"]')
+    const keyDialog = page.locator('dialog[open], [role="dialog"]')
     await expect(keyDialog).toBeVisible({ timeout: 10000 })
     await expect(keyDialog.locator('text=whm_')).toBeVisible()
 
@@ -70,7 +70,7 @@ test.describe('API Keys Management', () => {
     await page.locator('input[type="datetime-local"]').fill(dateStr)
     await saveButton(page).click()
 
-    const keyDialog = page.locator('[role="dialog"]')
+    const keyDialog = page.locator('dialog[open], [role="dialog"]')
     await expect(keyDialog).toBeVisible({ timeout: 10000 })
     await page.getByRole('button', { name: 'Done' }).click()
     await page.waitForURL(/\/settings\/api-keys\/[a-f0-9-]+$/)
@@ -84,7 +84,7 @@ test.describe('API Keys Management', () => {
     await gotoCreateApiKey(page)
     await nameInput(page).fill(keyName)
     await saveButton(page).click()
-    const keyDialog = page.locator('[role="dialog"]')
+    const keyDialog = page.locator('dialog[open], [role="dialog"]')
     await expect(keyDialog).toBeVisible({ timeout: 10000 })
     await page.getByRole('button', { name: 'Done' }).click()
 
@@ -93,7 +93,7 @@ test.describe('API Keys Management', () => {
     await page.waitForLoadState('networkidle')
 
     // Click the name to go to detail
-    await page.locator('tbody tr .font-medium').getByText(keyName, { exact: true }).first().click()
+    await page.locator('tbody tr strong').getByText(keyName, { exact: true }).first().click()
     await page.waitForURL(/\/settings\/api-keys\/[a-f0-9-]+$/)
     await page.waitForLoadState('networkidle')
 
@@ -107,7 +107,7 @@ test.describe('API Keys Management', () => {
     await gotoCreateApiKey(page)
     await nameInput(page).fill(keyName)
     await saveButton(page).click()
-    const keyDialog = page.locator('[role="dialog"]')
+    const keyDialog = page.locator('dialog[open], [role="dialog"]')
     await expect(keyDialog).toBeVisible({ timeout: 10000 })
     await page.getByRole('button', { name: 'Done' }).click()
 
@@ -120,8 +120,8 @@ test.describe('API Keys Management', () => {
     // Click the delete (last) button on the row
     const row = await tablePage.getRow(keyName)
     await row.locator('td:last-child button').last().click()
-    await expect(page.locator('[role="alertdialog"]')).toBeVisible()
-    await page.locator('[role="alertdialog"]').getByRole('button', { name: /delete|confirm/i }).click()
+    await expect(page.getByRole('alertdialog')).toBeVisible()
+    await page.getByRole('alertdialog').getByRole('button', { name: /delete|confirm/i }).click()
 
     await page.waitForTimeout(1000)
   })

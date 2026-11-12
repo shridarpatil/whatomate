@@ -1,4 +1,15 @@
 {
+  "dateRange": {
+    "from": "From",
+    "to": "To",
+    "selectRange": "Date Range",
+    "today": "Today",
+    "last7Days": "Last 7 Days",
+    "last30Days": "Last 30 Days",
+    "thisMonth": "This Month",
+    "customRange": "Custom Range",
+    "apply": "Apply"
+  },
   "common": {
     "save": "Guardar",
     "cancel": "Cancelar",
@@ -35,6 +46,8 @@
     "deselectAll": "Deseleccionar todo",
     "noResults": "No se encontraron resultados",
     "noData": "No hay datos disponibles",
+    "showData": "Show data",
+    "value": "Value",
     "error": "Error",
     "success": "Éxito",
     "warning": "Advertencia",
@@ -85,7 +98,12 @@
     "deleteConfirmMessage": "¿Está seguro de que desea eliminar este {resource}? Esta acción no se puede deshacer.",
     "searchPlaceholder": "Buscar {resource}",
     "selectPlaceholder": "Seleccionar {resource}",
-    "copiedToClipboard": "Copiado al portapapeles"
+    "copiedToClipboard": "Copiado al portapapeles",
+    "firstPage": "First page",
+    "lastPage": "Last page",
+    "pagination": "Pagination",
+    "scrollToTop": "Scroll to top",
+    "clickToUpload": "Click to upload file"
   },
   "auth": {
     "login": "Iniciar sesión",
@@ -207,6 +225,9 @@
     "Widget": "Widget"
   },
   "nav": {
+    "sidebar": "Sidebar",
+    "mainNavigation": "Main navigation",
+    "secondaryNavigation": "Secondary navigation",
     "dashboard": "Panel",
     "chat": "Chat",
     "contacts": "Contactos",
@@ -245,6 +266,10 @@
     "toggleMenu": "Alternar menú"
   },
   "userMenu": {
+    "colorTheme": "Color theme",
+    "themeLight": "Light theme",
+    "themeDark": "Dark theme",
+    "themeSystem": "System theme",
     "myAccount": "Mi cuenta",
     "status": "Estado",
     "available": "Disponible",
@@ -259,9 +284,12 @@
     "failedUpdateAvailability": "Error al actualizar disponibilidad",
     "awayWarningTitle": "Las transferencias activas serán devueltas a la cola",
     "awayWarningDesc": "Tiene {count} transferencia(s) activa(s) asignada(s). Cambiar su estado a \"Ausente\" las devolverá a la cola para que otros agentes las atiendan.",
-    "goAway": "Ausentarse"
+    "goAway": "Ausentarse",
+    "userMenu": "Menú de usuario",
+    "toggleAvailability": "Cambiar estado de disponibilidad"
   },
   "chat": {
+    "lastActive": "Last active {time}",
     "conversations": "Conversaciones",
     "messages": "Mensajes",
     "noContacts": "No se encontraron contactos",
@@ -304,6 +332,7 @@
     "noTagsAvailable": "No hay etiquetas disponibles",
     "paused": "Pausado",
     "assignedTo": "Asignado a",
+    "assigned": "Assigned",
     "unassigned": "Sin asignar",
     "assign": "Asignar",
     "transfer": "Transferir",
@@ -399,7 +428,11 @@
     "urlButtonParamPlaceholder": "Ingrese el valor dinámico de la URL",
     "preview": "Vista previa",
     "serviceWindowExpired": "La ventana de mensajería de 24 horas ha expirado. Solo se pueden enviar mensajes de plantilla hasta que el cliente responda.",
-    "sendTemplateAction": "Enviar plantilla"
+    "sendTemplateAction": "Enviar plantilla",
+    "noTags": "No tags",
+    "general": "General",
+    "noPanelData": "No data configured",
+    "noPanelDataHint": "Configure panel display in the chatbot flow settings."
   },
   "contacts": {
     "title": "Contactos",
@@ -559,7 +592,10 @@
     "currentFile": "Archivo actual",
     "noFileUploaded": "Usando predeterminado",
     "audioUploaded": "Archivo de audio subido exitosamente",
-    "audioUploadFailed": "Error al subir el archivo de audio"
+    "audioUploadFailed": "Error al subir el archivo de audio",
+    "previewRingtone": "Preview ringtone",
+    "playAudio": "Play",
+    "pauseAudio": "Pause"
   },
   "users": {
     "title": "Gestión de usuarios",
@@ -714,6 +750,10 @@
     "memberRemoved": "Miembro eliminado del equipo"
   },
   "organizations": {
+    "label": "Organization",
+    "selectPlaceholder": "Select organization",
+    "loading": "Loading...",
+    "none": "No organizations found",
     "createNew": "Crear organización",
     "createTitle": "Crear organización",
     "createDesc": "Crear una nueva organización para gestionar un espacio de trabajo separado.",
@@ -979,6 +1019,7 @@
     "nameRequired": "El nombre es obligatorio"
   },
   "webhooks": {
+    "removeHeader": "Remove header",
     "title": "Webhooks",
     "subtitle": "Configurar webhooks para enviar eventos a sistemas externos",
     "addWebhook": "Agregar webhook",
@@ -1117,6 +1158,7 @@
     "goHome": "Ir al inicio"
   },
   "profile": {
+    "togglePasswordVisibility": "Toggle password visibility",
     "title": "Profile",
     "description": "Gestionar la configuración de su cuenta",
     "accountInfo": "Información de la cuenta",
@@ -1271,6 +1313,8 @@
     "layoutSaved": "Diseño guardado",
     "saveLayoutFailed": "Error al guardar el diseño",
     "editLayout": "Editar diseño",
+    "moveEarlier": "Move earlier",
+    "moveLater": "Move later",
     "editWidgetTooltip": "Editar widget",
     "deleteWidgetTooltip": "Eliminar widget",
     "noChange": "Sin cambios",
@@ -1607,7 +1651,9 @@
     "aiSettingsSaved": "Configuración de IA guardada",
     "slaSettingsSaved": "Configuración de SLA guardada",
     "aiSaveFailed": "Error al guardar la configuración de IA",
-    "slaSaveFailed": "Error al guardar la configuración de SLA"
+    "slaSaveFailed": "Error al guardar la configuración de SLA",
+    "startTime": "{day} start time",
+    "endTime": "{day} end time"
   },
   "agentTransfers": {
     "title": "Transferencias",
@@ -2115,7 +2161,16 @@
     "sectionLabelPlaceholder": "Etiqueta de sección",
     "addFieldPlaceholder": "+ Agregar",
     "exampleUrlPlaceholder": "https://ejemplo.com",
-    "dataPathPlaceholder": "data.ruta"
+    "dataPathPlaceholder": "data.ruta",
+    "previewTitle": "Flow preview",
+    "previewStart": "Start",
+    "previewPause": "Pause",
+    "previewRestart": "Restart",
+    "previewStepForward": "Step forward",
+    "previewStepBack": "Step back",
+    "dataPath": "Ruta de datos",
+    "configureApiMock": "Configurar simulación de API",
+    "selectOption": "Selecciona una opción"
   },
   "calling": {
     "callLogs": "Registro de llamadas",
@@ -2208,7 +2263,8 @@
     "selectTargetFlow": "Seleccionar flujo IVR",
     "uploadAudioTab": "Subir audio",
     "textToSpeechTab": "Texto a voz",
-    "greetingTextPlaceholder": "Escriba su mensaje de saludo IVR..."
+    "greetingTextPlaceholder": "Escriba su mensaje de saludo IVR...",
+    "ttsText": "Texto a leer"
   },
   "callTransfers": {
     "title": "Transferencias de llamadas",
@@ -2248,5 +2304,51 @@
     "callFailed": "Error al iniciar la llamada",
     "permissionSent": "Solicitud de permiso de llamada enviada",
     "permissionSentDesc": "El contacto necesita aceptar el permiso de llamada en WhatsApp antes de que pueda llamarlo. Intente de nuevo después de que acepte."
+  },
+  "waFlowBuilder": {
+    "screens": "Screens",
+    "addScreen": "Add Screen",
+    "removeScreen": "Remove screen",
+    "noScreens": "No screens yet",
+    "selectScreen": "Select a screen",
+    "screenTitle": "Screen Title",
+    "addComponents": "Add Components",
+    "addComponentsHint": "Add components from the palette",
+    "addScreenToStart": "Add a screen to get started",
+    "properties": "Properties",
+    "selectComponentHint": "Select a component to edit its properties",
+    "moveUp": "Move up",
+    "moveDown": "Move down",
+    "removeComponent": "Remove component",
+    "text": "Text",
+    "label": "Label",
+    "fieldName": "Field Name (Key)",
+    "fieldNamePlaceholder": "e.g. email, phone, message",
+    "fieldNameHint": "This key is used in the response data. Use lowercase with underscores (e.g. customer_name).",
+    "required": "Required",
+    "options": "Options",
+    "add": "Add",
+    "optionPlaceholder": "Option text",
+    "removeOption": "Remove option",
+    "buttonText": "Button Text",
+    "action": "Action",
+    "completeFlow": "Complete Flow",
+    "navigateToScreen": "Navigate to Screen",
+    "targetScreen": "Target Screen",
+    "selectTargetScreen": "Select screen",
+    "selectPlaceholder": "Select...",
+    "types": {
+      "heading": "Heading",
+      "subheading": "Subheading",
+      "text": "Text",
+      "textInput": "Text Input",
+      "textArea": "Text Area",
+      "dropdown": "Dropdown",
+      "radioButtons": "Radio Buttons",
+      "checkboxes": "Checkboxes",
+      "datePicker": "Date Picker",
+      "image": "Image",
+      "footerButton": "Footer Button"
+    }
   }
 }

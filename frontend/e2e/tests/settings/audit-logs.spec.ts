@@ -18,7 +18,7 @@ async function createWebhookViaUI(page: Page, name: string): Promise<string> {
   await page.getByPlaceholder('My Helpdesk Integration').fill(name)
   await page.getByPlaceholder('https://example.com/webhook').fill('https://webhook.site/e2e-audit')
   // Tick at least one event checkbox; first one is fine.
-  await page.locator('button[role="checkbox"]').first().click()
+  await page.getByRole('checkbox').first().check()
   await page.getByRole('button', { name: /^(Create|Save)$/i }).first().click()
   await page.waitForURL(/\/settings\/webhooks\/[a-f0-9-]+$/, { timeout: 10000 })
   await page.waitForLoadState('networkidle')
@@ -32,7 +32,7 @@ async function updateWebhookViaUI(page: Page, name: string, newUrl: string): Pro
   await page.waitForLoadState('networkidle')
   await page.getByPlaceholder(/Search/i).first().fill(name)
   await page.waitForTimeout(400)
-  await page.locator('tbody tr .font-medium').getByText(name, { exact: true }).first().click()
+  await page.locator('tbody tr strong').getByText(name, { exact: true }).first().click()
   await page.waitForURL(/\/settings\/webhooks\/[a-f0-9-]+$/)
   await page.waitForLoadState('networkidle')
 
@@ -72,11 +72,7 @@ test.describe('Audit Logs', () => {
     await expect(page.locator('tbody')).toBeVisible()
 
     // Open the action select and pick "Updated".
-    const actionTrigger = page.locator('button[role="combobox"]')
-      .filter({ hasText: /All Actions|Updated|Created|Deleted/i })
-      .first()
-    await actionTrigger.click()
-    await page.getByRole('option', { name: /^Updated$/ }).click()
+    await page.getByRole('combobox', { name: /All Actions/i }).selectOption({ label: 'Updated' })
     await page.waitForLoadState('networkidle')
 
     await expect.poll(async () => page.locator('tbody tr').count()).toBeGreaterThan(0)

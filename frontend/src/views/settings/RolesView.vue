@@ -1,17 +1,13 @@
 <script setup lang="ts">
 import { ref, onMounted, computed, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
-import { ScrollArea } from '@/components/ui/scroll-area'
-import { Button } from '@/components/ui/button'
-import { Badge } from '@/components/ui/badge'
 import { PageHeader, SearchInput, DataTable, DeleteConfirmDialog, IconButton, ErrorState, type Column } from '@/components/shared'
 import { useRolesStore } from '@/stores/roles'
 import { useOrganizationsStore } from '@/stores/organizations'
 import { useAuthStore } from '@/stores/auth'
 import type { Role } from '@/services/api'
-import { toast } from 'vue-sonner'
-import { Plus, Pencil, Trash2, Shield, Users, Lock, Star } from 'lucide-vue-next'
+import { toast } from '@/lib/toast'
+import { Plus, Pencil, Trash2, Shield, Users, Lock, Star } from '@/lib/icons'
 import { getErrorMessage } from '@/lib/api-utils'
 import { formatDate } from '@/lib/utils'
 import { useSearchPagination } from '@/composables/useSearchPagination'
@@ -102,12 +98,10 @@ function editTooltip(role: Role): string {
 </script>
 
 <template>
-  <div class="flex flex-col h-full bg-[#0a0a0b] light:bg-gray-50">
-    <PageHeader :title="$t('roles.title')" :subtitle="$t('roles.subtitle')" :icon="Shield" icon-gradient="bg-gradient-to-br from-purple-500 to-indigo-600 shadow-purple-500/20" back-link="/settings">
+  <div class="flex flex-col h-full">
+    <PageHeader :title="$t('roles.title')" :description="$t('roles.subtitle')" :icon="Shield" back-link="/settings">
       <template #actions>
-        <RouterLink v-if="canWrite" to="/settings/roles/new">
-          <Button variant="outline" size="sm"><Plus class="h-4 w-4 mr-2" />{{ $t('roles.addRole') }}</Button>
-        </RouterLink>
+        <RouterLink v-if="canWrite" to="/settings/roles/new" class="button outline small"><Plus :size="16" />{{ $t('roles.addRole') }}</RouterLink>
       </template>
     </PageHeader>
 
@@ -120,67 +114,52 @@ function editTooltip(role: Role): string {
       @retry="fetchRoles"
     />
 
-    <ScrollArea v-else class="flex-1">
-      <div class="p-6">
-        <div>
-          <Card>
-            <CardHeader>
-              <div class="flex items-center justify-between flex-wrap gap-4">
-                <div>
-                  <CardTitle>{{ $t('roles.yourRoles') }}</CardTitle>
-                  <CardDescription>{{ $t('roles.yourRolesDesc') }}</CardDescription>
-                </div>
-                <SearchInput v-model="searchQuery" :placeholder="$t('roles.searchRoles') + '...'" class="w-64" />
-              </div>
-            </CardHeader>
-            <CardContent>
-              <DataTable :items="roles" :columns="columns" :is-loading="isLoading" :empty-icon="Shield" :empty-title="searchQuery ? $t('roles.noMatchingRoles') : $t('roles.noRolesYet')" :empty-description="searchQuery ? $t('roles.noMatchingRolesDesc') : $t('roles.noRolesYetDesc')" v-model:sort-key="sortKey" v-model:sort-direction="sortDirection" server-pagination :current-page="currentPage" :total-items="totalItems" :page-size="pageSize" item-name="roles" @page-change="handlePageChange">
-                <template #cell-role="{ item: role }">
-                  <RouterLink :to="`/settings/roles/${role.id}`" class="flex items-center gap-2 text-inherit no-underline hover:opacity-80">
-                    <span class="font-medium">{{ role.name }}</span>
-                    <Badge v-if="role.is_system" variant="secondary"><Lock class="h-3 w-3 mr-1" />{{ $t('roles.system') }}</Badge>
-                    <Badge v-if="role.is_default" variant="outline"><Star class="h-3 w-3 mr-1" />{{ $t('roles.default') }}</Badge>
-                  </RouterLink>
-                </template>
-                <template #cell-description="{ item: role }">
-                  <span class="text-muted-foreground max-w-xs truncate block">{{ role.description || '-' }}</span>
-                </template>
-                <template #cell-permissions="{ item: role }">
-                  <Badge variant="outline">{{ role.permissions.length }}</Badge>
-                </template>
-                <template #cell-users="{ item: role }">
-                  <div class="flex items-center justify-center gap-1"><Users class="h-4 w-4 text-muted-foreground" /><span>{{ role.user_count }}</span></div>
-                </template>
-                <template #cell-created="{ item: role }">
-                  <span class="text-muted-foreground">{{ formatDate(role.created_at) }}</span>
-                </template>
-                <template #cell-actions="{ item: role }">
-                  <div class="flex items-center justify-end gap-1">
-                    <RouterLink :to="`/settings/roles/${role.id}`">
-                      <IconButton :icon="Pencil" :label="editTooltip(role)" class="h-8 w-8" />
-                    </RouterLink>
-                    <IconButton
-                      v-if="canDelete && !role.is_system"
-                      :label="role.user_count > 0 ? $t('roles.cannotDeleteUsers') : $t('roles.deleteRole')"
-                      class="h-8 w-8"
-                      :disabled="role.user_count > 0"
-                      @click="openDeleteDialog(role)"
-                    >
-                      <Trash2 class="h-4 w-4 text-destructive" />
-                    </IconButton>
-                  </div>
-                </template>
-                <template #empty-action>
-                  <RouterLink v-if="canWrite" to="/settings/roles/new">
-                    <Button variant="outline" size="sm"><Plus class="h-4 w-4 mr-2" />{{ $t('roles.addRole') }}</Button>
-                  </RouterLink>
-                </template>
-              </DataTable>
-            </CardContent>
-          </Card>
-        </div>
-      </div>
-    </ScrollArea>
+    <div v-else class="flex-1 scroll-y p-4">
+      <article class="card">
+        <header class="hstack justify-between flex-wrap gap-4">
+          <h3>{{ $t('roles.yourRoles') }}</h3>
+          <SearchInput v-model="searchQuery" :placeholder="$t('roles.searchRoles') + '...'" />
+        </header>
+        <DataTable :items="roles" :columns="columns" :is-loading="isLoading" :empty-icon="Shield" :empty-title="searchQuery ? $t('roles.noMatchingRoles') : $t('roles.noRolesYet')" :empty-description="searchQuery ? $t('roles.noMatchingRolesDesc') : $t('roles.noRolesYetDesc')" v-model:sort-key="sortKey" v-model:sort-direction="sortDirection" server-pagination :current-page="currentPage" :total-items="totalItems" :page-size="pageSize" item-name="roles" @page-change="handlePageChange">
+          <template #cell-role="{ item: role }">
+            <RouterLink :to="`/settings/roles/${role.id}`" class="hstack gap-2">
+              <strong>{{ role.name }}</strong>
+              <span v-if="role.is_system" class="badge" data-variant="secondary"><Lock :size="12" />{{ $t('roles.system') }}</span>
+              <span v-if="role.is_default" class="badge outline"><Star :size="12" />{{ $t('roles.default') }}</span>
+            </RouterLink>
+          </template>
+          <template #cell-description="{ item: role }">
+            <span class="text-light truncate">{{ role.description || '-' }}</span>
+          </template>
+          <template #cell-permissions="{ item: role }">
+            <span class="badge outline">{{ role.permissions.length }}</span>
+          </template>
+          <template #cell-users="{ item: role }">
+            <div class="hstack gap-1 justify-center"><Users :size="16" /><span>{{ role.user_count }}</span></div>
+          </template>
+          <template #cell-created="{ item: role }">
+            <span class="text-light">{{ formatDate(role.created_at) }}</span>
+          </template>
+          <template #cell-actions="{ item: role }">
+            <div class="hstack gap-1 justify-end">
+              <RouterLink :to="`/settings/roles/${role.id}`" class="button ghost icon" :title="editTooltip(role)" :aria-label="editTooltip(role)">
+                <Pencil :size="16" />
+              </RouterLink>
+              <IconButton
+                v-if="canDelete && !role.is_system"
+                :icon="Trash2"
+                :label="role.user_count > 0 ? $t('roles.cannotDeleteUsers') : $t('roles.deleteRole')"
+                :disabled="role.user_count > 0"
+                @click="openDeleteDialog(role)"
+              />
+            </div>
+          </template>
+          <template #empty-action>
+            <RouterLink v-if="canWrite" to="/settings/roles/new" class="button outline small"><Plus :size="16" />{{ $t('roles.addRole') }}</RouterLink>
+          </template>
+        </DataTable>
+      </article>
+    </div>
 
     <DeleteConfirmDialog v-model:open="deleteDialogOpen" :title="$t('roles.deleteRole')" :item-name="roleToDelete?.name" :is-submitting="isDeleting" @confirm="confirmDelete" />
   </div>

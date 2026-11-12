@@ -1,8 +1,6 @@
 <script setup lang="ts">
 import type { HTMLAttributes } from 'vue'
-import { AlertCircle } from 'lucide-vue-next'
-import { Button } from '@/components/ui/button'
-import { cn } from '@/lib/utils'
+import { AlertCircle } from '@/lib/icons'
 
 withDefaults(defineProps<{
   title?: string
@@ -22,23 +20,22 @@ defineEmits<{
 
 <template>
   <div
-    :class="cn('flex flex-col items-center justify-center py-12 px-4 text-center', $props.class)"
+    class="vstack items-center justify-center p-4 align-center"
+    :class="$props.class"
     role="alert"
   >
-    <div class="mb-4 flex h-14 w-14 items-center justify-center rounded-full bg-gradient-to-br from-destructive/15 to-destructive/5 ring-1 ring-destructive/10">
-      <AlertCircle class="h-7 w-7 text-destructive" />
-    </div>
-    <h3 class="text-lg font-semibold text-foreground">
+    <AlertCircle :size="32" />
+    <h3>
       <slot name="title">{{ title }}</slot>
     </h3>
-    <p class="mt-1 max-w-sm text-sm text-muted-foreground">
+    <p class="text-light">
       <slot name="description">{{ description }}</slot>
     </p>
-    <div class="mt-4">
+    <div>
       <slot name="action">
-        <Button variant="outline" size="sm" @click="$emit('retry')">
+        <button type="button" class="outline small" @click="$emit('retry')">
           {{ retryLabel }}
-        </Button>
+        </button>
       </slot>
     </div>
   </div>

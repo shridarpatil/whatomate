@@ -17,13 +17,13 @@ export class ChatbotHubPage extends BasePage {
     super(page)
     this.heading = page.locator('h1').filter({ hasText: 'Chatbot' })
     // The toggle is a Button with Enable/Disable text, not a switch
-    this.toggleButton = page.getByRole('button', { name: /Enable|Disable/i })
-    this.statusBadge = page.locator('.border').filter({ hasText: /Active|Inactive/ }).first()
+    this.toggleButton = page.locator('main').getByRole('button', { name: /Enable|Disable/i })
+    this.statusBadge = page.locator('main header .badge').filter({ hasText: /^\s*(Active|Inactive)\s*$/ }).first()
     // Target cards specifically by their full card title (not sidebar links)
     this.keywordsCard = page.getByRole('link', { name: /Keyword Rules.*rules/i })
     this.flowsCard = page.getByRole('link', { name: /Conversation Flows.*flows/i })
     this.aiContextsCard = page.getByRole('link', { name: /AI Contexts.*contexts/i })
-    this.statsCards = page.locator('.grid .rounded-lg.border')
+    this.statsCards = page.locator('main article.card')
   }
 
   async goto() {
@@ -59,7 +59,7 @@ export class ChatbotHubPage extends BasePage {
 
   // Toast helpers
   async expectToast(text: string | RegExp) {
-    const toast = this.page.locator('[data-sonner-toast]').filter({ hasText: text })
+    const toast = this.page.locator('.toast-container output').filter({ hasText: text })
     await expect(toast).toBeVisible({ timeout: 5000 })
     return toast
   }

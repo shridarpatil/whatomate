@@ -1,0 +1,80 @@
+@layer layout {
+  .scroll-y { overflow-y: auto; min-height: 0; }
+  .scroll-x { overflow-x: auto; }
+  .overflow-hidden { overflow: hidden; }
+  .h-full { height: 100%; }
+  .h-screen { height: 100dvh; }
+  .min-h-0 { min-height: 0; }
+  .min-w-0 { min-width: 0; }
+  .flex-1 { flex: 1 1 0%; }
+  .shrink-0 { flex-shrink: 0; }
+  .flex-wrap { flex-wrap: wrap; }
+  .sticky-top { position: sticky; top: 0; z-index: 1; }
+  .relative { position: relative; }
+  .fixed-bottom-end { position: fixed; inset-block-end: var(--space-6); inset-inline-end: var(--space-6); z-index: 40; }
+  .media-preview { display: block; max-width: 100%; max-height: 12rem; object-fit: contain; }
+  .modal-wide { width: min(100% - 2rem, 80rem); }
+  .h-builder { height: 60dvh; }
+  .absolute-fill { position: absolute; inset: 0; }
+  .pre-wrap { white-space: pre-wrap; }
+  .chart-tooltip { position: absolute; pointer-events: none; white-space: nowrap; z-index: 1; }
+  .chart-pie { max-width: 15rem; }
+  .meter-row { display: grid; grid-template-columns: 7rem 1fr 3rem; align-items: center; gap: var(--space-2); }
+  /* Oat pads every <main> for document pages; app pages set their own spacing. */
+  [data-sidebar-layout] > main { padding-block-start: 0; }
+  /* Sign-in / register / SSO card: a narrow centred panel. */
+  .auth-panel { width: min(100%, 24rem); }
+  /* Drop Oat's article-style heading/paragraph margins; spacing comes from gaps. */
+  .auth-panel :is(h1, h2, h3, p) { margin: 0; }
+  /* Oat makes form controls full width; opt out for inline toolbar controls. */
+  .w-auto { width: auto; }
+  .truncate { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+  /* Chat: side columns are 18rem; on phones the one visible column fills the screen. */
+  .chat-col { width: 18rem; max-width: 100%; }
+  @media (max-width: 47.99rem) { .chat-col { width: 100%; } }
+  [data-chat-header] { padding: var(--space-2) var(--space-3); }
+  [data-chat-canvas] { padding: var(--space-3); }
+  [data-bubble] { max-width: min(75%, 40rem); padding: var(--space-2) var(--space-3); }
+  /* Chat bubbles are compact: no paragraph gap, small gap before the time row. */
+  [data-bubble] p { margin-block-end: 0; }
+  [data-bubble-time] { margin-block-start: var(--space-1); }
+  .resize-handle { width: var(--space-1); flex-shrink: 0; cursor: col-resize; }
+  /* Popover pickers (emoji, templates, canned responses): fixed width, bounded list. */
+  .picker { width: min(20rem, 100vw - 2rem); }
+  .picker-list { max-height: 18rem; }
+  .media-fit { max-width: 100%; max-height: 100%; object-fit: contain; }
+  /* A floating pill centred over the top edge of a positioned area. */
+  .overlay-top { position: absolute; inset-inline: 0; top: var(--space-2); z-index: 1; display: flex; justify-content: center; pointer-events: none; }
+  /* Row actions appear on hover/focus where hovering exists; always shown on touch. */
+  @media (hover: hover) {
+    [data-hover-group]:not(:hover, :focus-within) [data-hover-reveal] { opacity: 0; }
+  }
+
+  /* Visually hidden until focused. */
+  .skip-link { position: absolute; inset-block-start: var(--space-2); inset-inline-start: var(--space-2); z-index: 10; }
+  .skip-link:not(:focus) { width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+
+  /* Nested sidebar nav items sit indented under their parent. */
+  [data-sidebar] nav li > ul { margin-inline-start: var(--space-4); }
+
+  /* The pinned secondary nav sizes to its content instead of sharing space with the main nav. */
+  [data-sidebar] > nav[data-pinned] { flex: none; }
+
+  /* Flow editors (vue-flow canvas). Node cards size to their content within bounds;
+     the properties side panel and the preview phone have a fixed width. */
+  .flow-node { min-width: 12rem; max-width: 24rem; }
+  .side-panel { width: 22rem; max-width: 100%; }
+  .h-preview { height: 70dvh; }
+  /* vue-flow's own (unlayered) CSS makes handles 6px; give them a usable hit target. */
+  .vue-flow__handle { width: var(--space-3) !important; height: var(--space-3) !important; }
+  /* Numbered caption under a node's output handle; `left` is set per handle at runtime. */
+  .handle-label { position: absolute; bottom: calc(-1 * var(--space-5)); translate: -50% 0; pointer-events: none; }
+
+  /* Top-placed toasts sit below the page header row so they never cover its
+     action buttons (Oat's default is --space-4); phones also clear the mobile bar. */
+  .toast-container[data-placement^="top"] { top: 4.5rem; }
+  @media (max-width: 48rem) {
+    .toast-container[data-placement^="top"] { top: 7.5rem; }
+  }
+}

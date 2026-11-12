@@ -1,62 +1,20 @@
 <script setup lang="ts">
-import { ref, watch, onMounted, onUnmounted, nextTick, computed, defineAsyncComponent } from 'vue'
+import { ref, reactive, watch, onMounted, onUnmounted, nextTick, computed, useId } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
-import { useContactsStore, type Contact, type Message } from '@/stores/contacts'
+import { useContactsStore, type Message } from '@/stores/contacts'
 import { useAuthStore } from '@/stores/auth'
 import { useUsersStore } from '@/stores/users'
 import { useTransfersStore } from '@/stores/transfers'
 import { wsService } from '@/services/websocket'
 import { contactsService, chatbotService, messagesService, customActionsService, accountsService, cannedResponsesService, getRequestHeaders, type CustomAction, type ActionResult, type CannedResponse } from '@/services/api'
 import { useTagsStore } from '@/stores/tags'
-import { TagBadge } from '@/components/ui/tag-badge'
-import { getTagColorClass } from '@/lib/constants'
 import { getErrorMessage } from '@/lib/api-utils'
 import { compressImage } from '@/lib/imageCompression'
-import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
-import { Textarea } from '@/components/ui/textarea'
-import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
-import { Badge } from '@/components/ui/badge'
-import { ScrollArea } from '@/components/ui/scroll-area'
-import { Spinner } from '@/components/ui/spinner'
-import { Separator } from '@/components/ui/separator'
+import Modal from '@/components/oat/Modal.vue'
+import { COMMON_EMOJIS } from '@/lib/emojis'
+import { toast } from '@/lib/toast'
 import {
-  Tooltip,
-  TooltipContent,
-  TooltipTrigger,
-} from '@/components/ui/tooltip'
-import {
-  Popover,
-  PopoverContent,
-  PopoverTrigger,
-} from '@/components/ui/popover'
-// Lazy-load emoji picker to reduce initial bundle size
-const EmojiPicker = defineAsyncComponent(() => {
-  return import('vue3-emoji-picker').then(module => {
-    // Import CSS when component loads
-    import('vue3-emoji-picker/css')
-    return module.default
-  })
-})
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuLabel,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from '@/components/ui/dropdown-menu'
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle,
-} from '@/components/ui/dialog'
-import { toast } from 'vue-sonner'
-import {
-  Search,
   Send,
   Paperclip,
   FileText,
@@ -71,7 +29,6 @@ import {
   AlertCircle,
   User,
   UserPlus,
-  UserMinus,
   UserX,
   Play,
   Reply,
@@ -79,7 +36,6 @@ import {
   SmilePlus,
   MapPin,
   ExternalLink,
-  Loader2,
   Zap,
   Ticket,
   BarChart,
@@ -89,10 +45,11 @@ import {
   Code,
   RotateCw,
   Filter,
-  StickyNote
-} from 'lucide-vue-next'
-import { getInitials, getAvatarGradient } from '@/lib/utils'
-import { useColorMode } from '@/composables/useColorMode'
+  StickyNote,
+  ArrowLeft,
+  Info
+} from '@/lib/icons'
+import { getInitials } from '@/lib/utils'
 import { useInfiniteScroll } from '@/composables/useInfiniteScroll'
 import CannedResponsePicker from '@/components/chat/CannedResponsePicker.vue'
 import PreviewButtonGroup from '@/components/chatbot/flow-preview/PreviewButtonGroup.vue'
@@ -105,7 +62,6 @@ import { useNotesStore } from '@/stores/notes'
 import { useHeaderMedia } from '@/composables/useHeaderMedia'
 import { CreateContactDialog } from '@/components/shared'
 import HeaderMediaUpload from '@/components/shared/HeaderMediaUpload.vue'
-import { Info } from 'lucide-vue-next'
 
 const { t } = useI18n()
 const route = useRoute()
@@ -116,7 +72,21 @@ const usersStore = useUsersStore()
 const transfersStore = useTransfersStore()
 const tagsStore = useTagsStore()
 const notesStore = useNotesStore()
-const { isDark } = useColorMode()
+const uid = useId()
+const emojiMenuId = `${uid}-emoji`
+const moreMenuId = `${uid}-more`
+const tagFilterId = `${uid}-tags`
+const emojiMenu = ref<HTMLElement | null>(null)
+
+// Phones show one column at a time: the conversation list, the thread or a side panel.
+const narrowQuery = window.matchMedia('(max-width: 47.99rem)')
+const isNarrow = ref(narrowQuery.matches)
+// Avatar URLs that failed to load; those contacts show initials instead.
+const failedAvatars = reactive(new Set<string>())
+
+function onNarrowChange(e: MediaQueryListEvent) {
+  isNarrow.value = e.matches
+}
 
 const canWriteContacts = authStore.hasPermission('contacts', 'write')
 
@@ -183,11 +153,8 @@ const stickyDate = ref('')
 const showStickyDate = ref(false)
 let stickyDateTimeout: ReturnType<typeof setTimeout> | null = null
 
-// Emoji picker state
-const emojiPickerOpen = ref(false)
-
 // Template picker state
-const templatePickerRef = ref<HTMLElement | null>(null)
+const templatePickerRef = ref<InstanceType<typeof TemplatePicker> | null>(null)
 const templateDialogOpen = ref(false)
 const selectedTemplate = ref<any>(null)
 const templateParamNames = ref<string[]>([])
@@ -213,9 +180,6 @@ const {
 const customActions = ref<CustomAction[]>([])
 const executingActionId = ref<string | null>(null)
 
-// Tags filter state
-const isTagFilterOpen = ref(false)
-
 // Service window state
 const isServiceWindowExpired = computed(() => {
   const contact = contactsStore.currentContact
@@ -224,8 +188,7 @@ const isServiceWindowExpired = computed(() => {
 })
 
 function openTemplatePicker() {
-  const btn = templatePickerRef.value?.querySelector('button')
-  btn?.click()
+  templatePickerRef.value?.open()
 }
 
 // Add contact dialog state
@@ -259,11 +222,6 @@ const messagesScroll = useInfiniteScroll({
     await messagesScroll.preserveScrollPosition(async () => {
       await contactsStore.fetchOlderMessages(contactsStore.currentContact!.id, selectedAccount.value || undefined)
       await nextTick()
-      // Load media for any new messages
-      try {
-      } catch (e) {
-        console.error('Error loading media:', e)
-      }
     })
   },
   hasMore: computed(() => contactsStore.hasMoreMessages),
@@ -419,6 +377,9 @@ async function executeCustomAction(action: CustomAction) {
 
 // Search state for assignment dialog
 const assignSearchQuery = ref('')
+watch(isAssignDialogOpen, (open) => {
+  if (!open) assignSearchQuery.value = ''
+})
 
 // Filtered users for assignment dialog
 const filteredAssignableUsers = computed(() => {
@@ -482,6 +443,7 @@ onMounted(async () => {
   // See issue #280.
   document.addEventListener('visibilitychange', onUserActive)
   window.addEventListener('focus', onUserActive)
+  narrowQuery.addEventListener('change', onNarrowChange)
 })
 
 function onUserActive() {
@@ -510,6 +472,7 @@ onUnmounted(() => {
   if (stickyDateTimeout) clearTimeout(stickyDateTimeout)
   document.removeEventListener('visibilitychange', onUserActive)
   window.removeEventListener('focus', onUserActive)
+  narrowQuery.removeEventListener('change', onNarrowChange)
 })
 
 function updateStickyDate(scrollContainer: HTMLElement) {
@@ -548,6 +511,11 @@ function updateStickyDate(scrollContainer: HTMLElement) {
 
 // Watch for route changes
 watch(contactId, async (newId) => {
+  // On phones a side panel replaces the thread; start the next contact on the thread.
+  if (isNarrow.value) {
+    isInfoPanelOpen.value = false
+    isNotesPanelOpen.value = false
+  }
   if (newId) {
     notesStore.notes = []
     notesStore.hasMore = false
@@ -622,11 +590,6 @@ async function selectContact(id: string) {
     wsService.setCurrentContact(id)
     // Wait for DOM to render messages before scrolling
     await nextTick()
-    // Load media for messages after messages are fetched
-    try {
-    } catch (e) {
-      console.error('Error loading media:', e)
-    }
     // Scroll after a brief delay to ensure content is rendered (instant on initial load)
     setTimeout(() => {
       scrollToBottom(true)
@@ -641,7 +604,8 @@ async function selectContact(id: string) {
     ])
     if (sessionResult) {
       contactSessionData.value = sessionResult.data.data || sessionResult.data
-      if (contactSessionData.value?.panel_config?.sections?.length > 0) {
+      // On phones the panel would cover the thread, so it stays closed there.
+      if (contactSessionData.value?.panel_config?.sections?.length > 0 && !isNarrow.value) {
         isInfoPanelOpen.value = true
       }
     } else {
@@ -681,29 +645,13 @@ watch(() => contactsStore.messages.length, (newLen, oldLen) => {
   }
 })
 
-// Watch for messages changes to load media
-watch(() => contactsStore.messages, () => {
-  try {
-  } catch (e) {
-    console.error('Error loading media:', e)
-  }
-}, { deep: true })
-
 async function switchAccount(accountName: string) {
   if (!contactsStore.currentContact || accountName === selectedAccount.value) return
   selectedAccount.value = accountName
   contactsStore.setAccountFilter(accountName)
   await contactsStore.fetchMessages(contactsStore.currentContact.id, { account: accountName })
   await nextTick()
-  try {
-  } catch (e) {
-    console.error('Error loading media:', e)
-  }
   scrollToBottom(true)
-}
-
-function handleContactClick(contact: Contact) {
-  router.push(`/chat/${contact.id}`)
 }
 
 async function sendMessage() {
@@ -813,8 +761,11 @@ function scrollToMessage(messageId: string | undefined) {
   const messageEl = document.getElementById(`message-${messageId}`)
   if (messageEl) {
     messageEl.scrollIntoView({ behavior: 'smooth', block: 'center' })
-    messageEl.classList.add('highlight-message')
-    setTimeout(() => messageEl.classList.remove('highlight-message'), 2000)
+    // Briefly ring the bubble so the agent can spot it.
+    messageEl.querySelector('[data-bubble]')?.animate(
+      [{ outline: '2px solid var(--ring)' }, { outline: '2px solid transparent' }],
+      { duration: 2000, easing: 'ease-out' },
+    )
   }
 }
 
@@ -1007,7 +958,8 @@ function closeCannedPicker() {
 
 function insertEmoji(emoji: string) {
   messageInput.value += emoji
-  emojiPickerOpen.value = false
+  emojiMenu.value?.hidePopover()
+  messageInputRef.value?.focus()
 }
 
 // Template message handling
@@ -1157,7 +1109,6 @@ async function sendTemplateMessage() {
 }
 
 // Reaction handling
-const reactionPickerMessageId = ref<string | null>(null)
 const quickReactionEmojis = ['👍', '❤️', '😂', '😮', '😢', '🙏']
 
 async function sendReaction(messageId: string, emoji: string) {
@@ -1175,17 +1126,8 @@ async function sendReaction(messageId: string, emoji: string) {
   } catch (error) {
     toast.error(t('chat.reactionFailed'))
   }
-  reactionPickerMessageId.value = null
+  document.getElementById(`react-${messageId}`)?.hidePopover()
 }
-
-function _toggleReactionPicker(messageId: string) {
-  if (reactionPickerMessageId.value === messageId) {
-    reactionPickerMessageId.value = null
-  } else {
-    reactionPickerMessageId.value = messageId
-  }
-}
-void _toggleReactionPicker // Suppress unused warning
 
 function replyToMessage(message: Message) {
   contactsStore.setReplyingTo(message)
@@ -1309,15 +1251,11 @@ function getMessageStatusIcon(status: string) {
   }
 }
 
-function getMessageStatusClass(status: string) {
-  switch (status) {
-    case 'read':
-      return 'text-blue-400' // Bright blue for read
-    case 'failed':
-      return 'text-destructive'
-    default:
-      return 'text-muted-foreground' // Gray for sent/delivered
-  }
+// Read ticks use the primary colour, failures the danger colour; sent/delivered stay muted.
+function getMessageStatusStroke(status: string): string {
+  if (status === 'read') return 'var(--primary)'
+  if (status === 'failed') return 'var(--danger)'
+  return 'currentColor'
 }
 
 function formatMessageTime(dateStr: string) {
@@ -1334,7 +1272,7 @@ function formatContactTime(dateStr?: string) {
   if (diffDays === 0) {
     return date.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })
   } else if (diffDays === 1) {
-    return 'Yesterday'
+    return t('chat.yesterday')
   } else if (diffDays < 7) {
     return date.toLocaleDateString('en-US', { weekday: 'short' })
   }
@@ -1349,9 +1287,9 @@ function getDateLabel(dateStr: string): string {
   const diffDays = Math.floor((today.getTime() - messageDate.getTime()) / 86400000)
 
   if (diffDays === 0) {
-    return 'Today'
+    return t('chat.today')
   } else if (diffDays === 1) {
-    return 'Yesterday'
+    return t('chat.yesterday')
   }
   return date.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' })
 }
@@ -1531,6 +1469,10 @@ function getFlowButtonText(message: Message): string | null {
   return (message.interactive_data as any).button_text || 'Open'
 }
 
+function isOutgoing(message: Message): boolean {
+  return message.direction === 'outgoing'
+}
+
 function isMediaMessage(message: Message): boolean {
   return ['image', 'video', 'audio', 'document'].includes(message.message_type)
 }
@@ -1703,202 +1645,185 @@ async function sendMediaMessage() {
 </script>
 
 <template>
-  <div class="flex h-full bg-[#0a0a0b] light:bg-gray-50">
+  <div class="flex h-full min-h-0 gap-4 p-4">
     <!-- Contacts List -->
-    <div class="w-80 border-r border-white/[0.08] light:border-gray-200 flex flex-col bg-[#0a0a0b] light:bg-white">
+    <article v-show="!isNarrow || !contactsStore.currentContact" data-testid="contacts" class="card p-4 flex flex-col min-h-0 gap-2 chat-col">
       <!-- Search Header -->
-      <div class="p-2 border-b border-white/[0.08] light:border-gray-200">
-        <div class="flex items-center gap-2">
-          <div class="relative flex-1">
-            <Search class="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-white/40 light:text-gray-400" />
-            <Input
-              v-model="contactsStore.searchQuery"
-              :placeholder="$t('chat.searchContacts') + '...'"
-              class="pl-8 h-8 text-sm bg-white/[0.04] border-white/[0.1] text-white placeholder:text-white/40 light:bg-gray-50 light:border-gray-200 light:text-gray-900 light:placeholder:text-gray-400"
-            />
-          </div>
+      <div class="vstack gap-2 shrink-0">
+        <div class="flex items-center gap-1">
+          <input
+            v-model="contactsStore.searchQuery"
+            type="search"
+            class="flex-1 min-w-0"
+            :placeholder="$t('chat.searchContacts') + '...'"
+            :aria-label="$t('chat.searchContacts')"
+          />
           <!-- Add Contact -->
-          <Tooltip v-if="canWriteContacts">
-            <TooltipTrigger as-child>
-              <Button
-                variant="ghost"
-                size="icon"
-                :aria-label="$t('chat.addContact')"
-                class="h-8 w-8 shrink-0 text-white/40 hover:text-white hover:bg-white/[0.08] light:text-gray-500 light:hover:text-gray-900 light:hover:bg-gray-100"
-                @click="openAddContactDialog"
-              >
-                <UserPlus class="h-4 w-4" />
-              </Button>
-            </TooltipTrigger>
-            <TooltipContent>{{ $t('chat.addContact') }}</TooltipContent>
-          </Tooltip>
+          <button
+            v-if="canWriteContacts"
+            type="button"
+            class="ghost small icon shrink-0"
+            :title="$t('chat.addContact')"
+            :aria-label="$t('chat.addContact')"
+            @click="openAddContactDialog"
+          >
+            <UserPlus />
+          </button>
           <!-- Tag Filter -->
-          <Popover v-model:open="isTagFilterOpen">
-            <PopoverTrigger as-child>
-              <Button
-                variant="ghost"
-                size="icon"
-                class="h-8 w-8 shrink-0 relative"
-                :class="contactsStore.selectedTags.length > 0 ? 'text-emerald-400 bg-emerald-500/10' : 'text-white/40 hover:text-white hover:bg-white/[0.08] light:text-gray-500 light:hover:text-gray-900 light:hover:bg-gray-100'"
-              >
-                <Filter class="h-4 w-4" />
-                <span v-if="contactsStore.selectedTags.length > 0" class="absolute -top-1 -right-1 h-4 w-4 rounded-full bg-emerald-500 text-[10px] text-white flex items-center justify-center">
-                  {{ contactsStore.selectedTags.length }}
-                </span>
-              </Button>
-            </PopoverTrigger>
-            <PopoverContent align="end" class="w-56 p-2">
-              <div class="space-y-2">
-                <div class="flex items-center justify-between px-1">
-                  <span class="text-sm font-medium">{{ $t('chat.filterByTags') }}</span>
-                  <Button
+          <ot-dropdown>
+            <button
+              type="button"
+              class="shrink-0 small"
+              :class="contactsStore.selectedTags.length > 0 ? 'outline' : 'ghost'"
+              :popovertarget="tagFilterId"
+              :title="$t('chat.filterByTags')"
+              :aria-label="$t('chat.filterByTags')"
+            >
+              <Filter />
+              <span v-if="contactsStore.selectedTags.length > 0" class="badge">{{ contactsStore.selectedTags.length }}</span>
+            </button>
+            <div :id="tagFilterId" popover class="picker">
+              <div class="vstack gap-2 p-4">
+                <div class="hstack justify-between">
+                  <strong>{{ $t('chat.filterByTags') }}</strong>
+                  <button
                     v-if="contactsStore.selectedTags.length > 0"
-                    variant="ghost"
-                    size="sm"
-                    class="h-6 px-2 text-xs"
+                    type="button"
+                    class="ghost small"
                     @click="clearTagFilter"
                   >
-                    Clear
-                  </Button>
-                </div>
-                <Separator />
-                <div v-if="tagsStore.tags.length === 0" class="py-2 text-center text-sm text-muted-foreground">
-                  {{ $t('chat.noTagsAvailable') }}
-                </div>
-                <div v-else class="space-y-1 max-h-48 overflow-y-auto">
-                  <button
-                    v-for="tag in tagsStore.tags"
-                    :key="tag.name"
-                    class="w-full flex items-center gap-2 px-2 py-1.5 rounded-md text-sm hover:bg-white/[0.08] light:hover:bg-gray-100 transition-colors"
-                    :class="contactsStore.selectedTags.includes(tag.name) && 'bg-white/[0.08] light:bg-gray-100'"
-                    @click="toggleTagFilter(tag.name)"
-                  >
-                    <span :class="['w-2 h-2 rounded-full shrink-0', getTagColorClass(tag.color).split(' ')[0]]" />
-                    <span class="flex-1 text-left truncate">{{ tag.name }}</span>
-                    <Check
-                      v-if="contactsStore.selectedTags.includes(tag.name)"
-                      class="h-4 w-4 text-emerald-400 shrink-0"
-                    />
+                    {{ $t('common.clear') }}
                   </button>
                 </div>
+                <hr />
+                <p v-if="tagsStore.tags.length === 0" class="align-center text-light">
+                  <small>{{ $t('chat.noTagsAvailable') }}</small>
+                </p>
+                <div v-else class="scroll-y picker-list vstack gap-2">
+                  <label v-for="tag in tagsStore.tags" :key="tag.name">
+                    <input
+                      type="checkbox"
+                      :checked="contactsStore.selectedTags.includes(tag.name)"
+                      @change="toggleTagFilter(tag.name)"
+                    />
+                    <span class="truncate">{{ tag.name }}</span>
+                  </label>
+                </div>
               </div>
-            </PopoverContent>
-          </Popover>
+            </div>
+          </ot-dropdown>
         </div>
         <!-- Active tag filters -->
-        <div v-if="contactsStore.selectedTags.length > 0" class="flex flex-wrap gap-1 mt-2">
-          <TagBadge
-            v-for="tagName in contactsStore.selectedTags"
-            :key="tagName"
-            :color="tagsStore.getTagByName(tagName)?.color"
-            class="cursor-pointer hover:opacity-80"
-            @click="toggleTagFilter(tagName)"
-          >
+        <div v-if="contactsStore.selectedTags.length > 0" class="hstack gap-1">
+          <span v-for="tagName in contactsStore.selectedTags" :key="tagName" class="badge" data-variant="secondary">
             {{ tagName }}
-            <X class="h-3 w-3 ml-1" />
-          </TagBadge>
+            <button type="button" :aria-label="`${$t('contacts.removeTag')}: ${tagName}`" @click="toggleTagFilter(tagName)">
+              <X :size="12" />
+            </button>
+          </span>
         </div>
       </div>
 
       <!-- Contacts -->
-      <ScrollArea :ref="(el: any) => contactsScroll.scrollAreaRef.value = el" orientation="vertical" class="flex-1">
-        <div class="py-1 w-full">
-          <div
-            v-for="contact in contactsStore.sortedContacts"
-            :key="contact.id"
-            :class="[
-              'flex items-center gap-2 px-3 py-2 cursor-pointer hover:bg-white/[0.04] light:hover:bg-gray-50 transition-colors',
-              contactsStore.currentContact?.id === contact.id && 'bg-white/[0.08] light:bg-gray-100'
-            ]"
-            @click="handleContactClick(contact)"
-          >
-            <Avatar class="h-9 w-9 ring-2 ring-white/[0.1] light:ring-gray-200">
-              <AvatarImage :src="contact.avatar_url" />
-              <AvatarFallback :class="'text-xs bg-gradient-to-br text-white ' + getAvatarGradient(contact.name || contact.phone_number)">
-                {{ getInitials(contact.name || contact.phone_number) }}
-              </AvatarFallback>
-            </Avatar>
-            <div class="flex-1 min-w-0">
-              <div class="flex items-center justify-between gap-2">
-                <p
-                  class="flex-1 min-w-0 text-sm font-medium truncate text-white light:text-gray-900"
-                  :title="contact.name || contact.phone_number"
-                >
-                  {{ contact.name || contact.phone_number }}
-                </p>
-                <span class="flex-shrink-0 text-[11px] text-white/40 light:text-gray-500">
-                  {{ formatContactTime(contact.last_message_at) }}
+      <nav
+        :ref="(el: any) => contactsScroll.scrollAreaRef.value = el"
+        class="flex-1 scroll-y"
+        :aria-label="$t('chat.conversations')"
+      >
+        <ul class="unstyled vstack gap-1">
+          <li v-for="contact in contactsStore.sortedContacts" :key="contact.id">
+            <RouterLink
+              :to="`/chat/${contact.id}`"
+              data-testid="contact"
+              class="button w-100"
+              :class="contactsStore.currentContact?.id === contact.id ? undefined : 'ghost'"
+              :data-variant="contactsStore.currentContact?.id === contact.id ? 'secondary' : undefined"
+              :aria-current="contactsStore.currentContact?.id === contact.id ? 'true' : undefined"
+            >
+              <figure data-variant="avatar" class="small shrink-0">
+                <img v-if="contact.avatar_url && !failedAvatars.has(contact.avatar_url)" :src="contact.avatar_url" alt="" @error="failedAvatars.add(contact.avatar_url)" />
+                <abbr v-else>{{ getInitials(contact.name || contact.phone_number) }}</abbr>
+              </figure>
+              <span class="flex flex-col flex-1 min-w-0 align-left">
+                <span class="flex items-center justify-between gap-2">
+                  <strong class="truncate" :title="contact.name || contact.phone_number">
+                    {{ contact.name || contact.phone_number }}
+                  </strong>
+                  <small class="text-light shrink-0">{{ formatContactTime(contact.last_message_at) }}</small>
                 </span>
-              </div>
-              <div class="flex items-center justify-between gap-2">
-                <p class="flex-1 min-w-0 text-xs text-white/50 light:text-gray-500 truncate">
-                  {{ contact.phone_number }}
-                </p>
-                <Badge v-if="contact.unread_count > 0" class="flex-shrink-0 h-5 text-[10px] bg-emerald-500/20 text-emerald-400 light:bg-emerald-100 light:text-emerald-700">
-                  {{ contact.unread_count }}
-                </Badge>
-              </div>
-            </div>
-          </div>
+                <span class="flex items-center justify-between gap-2">
+                  <small class="text-light truncate">{{ contact.phone_number }}</small>
+                  <span v-if="contact.unread_count > 0" class="badge" data-variant="success">{{ contact.unread_count }}</span>
+                </span>
+              </span>
+            </RouterLink>
+          </li>
+        </ul>
 
-          <!-- Loading indicator for infinite scroll -->
-          <div v-if="contactsStore.isLoadingMoreContacts" class="p-3 text-center">
-            <Loader2 class="h-5 w-5 mx-auto animate-spin text-white/40 light:text-gray-400" />
-          </div>
-
-          <div v-if="contactsStore.sortedContacts.length === 0" class="p-3 text-center text-white/40 light:text-gray-500">
-            <User class="h-6 w-6 mx-auto mb-1.5 opacity-50" />
-            <p class="text-sm">{{ $t('chat.noContacts') }}</p>
-          </div>
+        <!-- Loading indicator for infinite scroll -->
+        <div v-if="contactsStore.isLoadingMoreContacts" class="flex justify-center p-4">
+          <span role="status" aria-busy="true" :aria-label="$t('common.loading')" />
         </div>
-      </ScrollArea>
-    </div>
+
+        <div v-if="contactsStore.sortedContacts.length === 0" class="vstack gap-1 items-center align-center text-light p-4">
+          <User :size="24" />
+          <small>{{ $t('chat.noContacts') }}</small>
+        </div>
+      </nav>
+    </article>
 
     <!-- Chat Area -->
-    <div class="flex-1 flex flex-col bg-[#0f0f10] light:bg-gray-50">
+    <section
+      v-show="!isNarrow || (contactsStore.currentContact && !isNotesPanelOpen && !isInfoPanelOpen)"
+      class="flex-1 min-w-0 flex flex-col min-h-0 gap-2"
+    >
       <!-- No Contact Selected -->
-      <div
-        v-if="!contactsStore.currentContact"
-        class="flex-1 flex items-center justify-center text-white/40 light:text-gray-500"
-      >
-        <div class="text-center">
-          <div class="h-16 w-16 rounded-2xl bg-gradient-to-br from-emerald-500 to-green-600 flex items-center justify-center mx-auto mb-4 shadow-lg shadow-emerald-500/20">
-            <Send class="h-8 w-8 text-white" />
-          </div>
-          <h3 class="font-medium text-lg mb-1 text-white light:text-gray-900">{{ $t('chat.selectConversation') }}</h3>
-          <p class="text-sm text-white/50 light:text-gray-500">{{ $t('chat.chooseContact') }}</p>
+      <div v-if="!contactsStore.currentContact" class="flex-1 flex items-center justify-center">
+        <div class="vstack items-center align-center text-light">
+          <Send :size="32" />
+          <h3>{{ $t('chat.selectConversation') }}</h3>
+          <p>{{ $t('chat.chooseContact') }}</p>
         </div>
       </div>
 
       <!-- Chat Interface -->
       <template v-else>
         <!-- Chat Header -->
-        <div class="h-14 flex-shrink-0 px-4 border-b border-white/[0.08] light:border-gray-200 flex items-center justify-between bg-[#0f0f10] light:bg-white">
-          <div class="flex items-center gap-2">
-            <Avatar class="h-8 w-8 ring-2 ring-white/[0.1] light:ring-gray-200">
-              <AvatarImage :src="contactsStore.currentContact.avatar_url" />
-              <AvatarFallback :class="'text-xs bg-gradient-to-br text-white ' + getAvatarGradient(contactsStore.currentContact.name || contactsStore.currentContact.phone_number)">
-                {{ getInitials(contactsStore.currentContact.name || contactsStore.currentContact.phone_number) }}
-              </AvatarFallback>
-            </Avatar>
-            <div>
-              <div class="flex items-center gap-1.5">
-                <p class="text-sm font-medium text-white light:text-gray-900">
-                  {{ contactsStore.currentContact.name || contactsStore.currentContact.phone_number }}
-                </p>
-                <Badge v-if="activeTransferId" class="text-[10px] h-5 bg-orange-500/20 text-orange-400 light:bg-orange-100 light:text-orange-700">
-                  Paused
-                </Badge>
-                <Badge v-if="contactsStore.currentContact?.marketing_opt_out" class="text-[10px] h-5 bg-red-500/20 text-red-400 light:bg-red-100 light:text-red-700" :title="$t('chat.marketingOptOut')">
+        <header data-chat-header class="flex flex-wrap items-center justify-between gap-2 shrink-0">
+          <div class="flex items-center gap-2 min-w-0">
+            <RouterLink
+              v-if="isNarrow"
+              to="/chat"
+              class="button ghost small icon shrink-0"
+              :title="$t('common.back')"
+              :aria-label="$t('common.back')"
+            >
+              <ArrowLeft />
+            </RouterLink>
+            <figure data-variant="avatar" class="small shrink-0">
+              <img
+                v-if="contactsStore.currentContact.avatar_url && !failedAvatars.has(contactsStore.currentContact.avatar_url)"
+                :src="contactsStore.currentContact.avatar_url"
+                alt=""
+                @error="failedAvatars.add(contactsStore.currentContact.avatar_url)"
+              />
+              <abbr v-else>{{ getInitials(contactsStore.currentContact.name || contactsStore.currentContact.phone_number) }}</abbr>
+            </figure>
+            <div class="min-w-0 flex flex-col">
+              <div class="hstack gap-2">
+                <strong class="truncate">{{ contactsStore.currentContact.name || contactsStore.currentContact.phone_number }}</strong>
+                <span v-if="activeTransferId" class="badge" data-variant="warning">{{ $t('chat.paused') }}</span>
+                <span v-if="contactsStore.currentContact?.marketing_opt_out" class="badge" data-variant="danger" :title="$t('chat.marketingOptOut')">
                   {{ $t('chat.marketingOptOut', 'Marketing Opt-out') }}
-                </Badge>
+                </span>
               </div>
-              <p class="text-[11px] text-white/50 light:text-gray-500">
-                {{ contactsStore.currentContact.phone_number }}
-              </p>
+              <small class="text-light truncate">
+                {{ contactsStore.currentContact.phone_number }}<template v-if="contactsStore.currentContact.last_inbound_at">
+                  · {{ $t('chat.lastActive', { time: formatContactTime(contactsStore.currentContact.last_inbound_at) }) }}</template>
+              </small>
             </div>
           </div>
-          <div class="flex items-center gap-1">
+          <div class="hstack gap-1 justify-end">
             <CallButton
               v-if="contactsStore.currentContact?.phone_number && selectedAccount && isBusinessCallingEnabled"
               :contact-id="contactsStore.currentContact.id"
@@ -1906,120 +1831,147 @@ async function sendMediaMessage() {
               :contact-name="contactsStore.currentContact.name || contactsStore.currentContact.phone_number"
               :whatsapp-account="selectedAccount"
             />
-            <Tooltip v-if="canAssignContacts">
-              <TooltipTrigger as-child>
-                <Button variant="ghost" size="icon" class="h-8 w-8 text-white/50 hover:text-white hover:bg-white/[0.08] light:text-gray-500 light:hover:text-gray-900 light:hover:bg-gray-100" @click="isAssignDialogOpen = true">
-                  <UserPlus class="h-4 w-4" />
-                </Button>
-              </TooltipTrigger>
-              <TooltipContent>{{ $t('chat.assignToAgent') }}</TooltipContent>
-            </Tooltip>
-            <Tooltip v-if="activeTransferId">
-              <TooltipTrigger as-child>
-                <Button variant="ghost" size="icon" class="h-8 w-8 text-white/50 hover:text-white hover:bg-white/[0.08] light:text-gray-500 light:hover:text-gray-900 light:hover:bg-gray-100" :disabled="isResuming" @click="resumeChatbot">
-                  <Play class="h-4 w-4" />
-                </Button>
-              </TooltipTrigger>
-              <TooltipContent>{{ $t('chat.resumeChatbot') }}</TooltipContent>
-            </Tooltip>
+            <button
+              v-if="canAssignContacts"
+              type="button"
+              class="ghost small icon"
+              :title="$t('chat.assignToAgent')"
+              :aria-label="$t('chat.assignToAgent')"
+              @click="isAssignDialogOpen = true"
+            >
+              <UserPlus />
+            </button>
+            <button
+              v-if="activeTransferId"
+              type="button"
+              class="ghost small icon"
+              :title="$t('chat.resumeChatbot')"
+              :aria-label="$t('chat.resumeChatbot')"
+              :disabled="isResuming"
+              @click="resumeChatbot"
+            >
+              <Play />
+            </button>
             <!-- Custom Action Buttons -->
-            <Tooltip v-for="action in customActions" :key="action.id">
-              <TooltipTrigger as-child>
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  class="h-8 w-8 text-white/50 hover:text-white hover:bg-white/[0.08] light:text-gray-500 light:hover:text-gray-900 light:hover:bg-gray-100"
-                  :disabled="executingActionId === action.id"
-                  @click="executeCustomAction(action)"
+            <button
+              v-for="action in customActions"
+              :key="action.id"
+              type="button"
+              class="ghost small icon"
+              :title="action.name"
+              :aria-label="action.name"
+              :disabled="executingActionId === action.id"
+              :aria-busy="executingActionId === action.id ? 'true' : undefined"
+              data-spinner="small"
+              @click="executeCustomAction(action)"
+            >
+              <component :is="getActionIcon(action.icon)" v-if="executingActionId !== action.id" />
+            </button>
+            <button
+              id="notes-button"
+              type="button"
+              class="small"
+              :class="isNotesPanelOpen ? 'outline' : 'ghost'"
+              :aria-pressed="isNotesPanelOpen"
+              :title="$t('chat.internalNotes')"
+              :aria-label="$t('chat.internalNotes')"
+              @click="isNotesPanelOpen = !isNotesPanelOpen"
+            >
+              <StickyNote />
+              <span
+                v-if="notesStore.notes.length > 0 && !isNotesPanelOpen"
+                id="notes-badge"
+                class="badge"
+                data-variant="warning"
+              >
+                {{ notesStore.notes.length }}
+              </span>
+            </button>
+            <button
+              id="info-button"
+              type="button"
+              class="small icon"
+              :class="isInfoPanelOpen ? 'outline' : 'ghost'"
+              :aria-pressed="isInfoPanelOpen"
+              :title="$t('chat.contactInfo')"
+              :aria-label="$t('chat.contactInfo')"
+              @click="isInfoPanelOpen = !isInfoPanelOpen"
+            >
+              <Info />
+            </button>
+            <ot-dropdown>
+              <button
+                type="button"
+                class="ghost small icon"
+                :popovertarget="moreMenuId"
+                :title="$t('chat.contactOptions')"
+                :aria-label="$t('chat.contactOptions')"
+              >
+                <MoreVertical />
+              </button>
+              <div :id="moreMenuId" popover role="menu" :aria-label="$t('chat.contactOptions')">
+                <div role="presentation" class="p-4"><small class="text-light">{{ $t('chat.contactOptions') }}</small></div>
+                <hr />
+                <button
+                  v-if="canAssignContacts"
+                  type="button"
+                  role="menuitem"
+                  class="ghost"
+                  :popovertarget="moreMenuId"
+                  popovertargetaction="hide"
+                  @click="isAssignDialogOpen = true"
                 >
-                  <Loader2 v-if="executingActionId === action.id" class="h-4 w-4 animate-spin" />
-                  <component v-else :is="getActionIcon(action.icon)" class="h-4 w-4" />
-                </Button>
-              </TooltipTrigger>
-              <TooltipContent>{{ action.name }}</TooltipContent>
-            </Tooltip>
-            <Tooltip>
-              <TooltipTrigger as-child>
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  id="notes-button"
-                  class="h-8 w-8 relative text-white/50 hover:text-white hover:bg-white/[0.08] light:text-gray-500 light:hover:text-gray-900 light:hover:bg-gray-100"
-                  :class="isNotesPanelOpen && 'bg-amber-500/10 text-amber-400 light:bg-amber-50 light:text-amber-600'"
-                  @click="isNotesPanelOpen = !isNotesPanelOpen"
+                  <UserPlus />{{ $t('chat.assignToAgent') }}
+                </button>
+                <button
+                  v-if="!activeTransferId"
+                  type="button"
+                  role="menuitem"
+                  class="ghost"
+                  :disabled="isTransferring"
+                  :popovertarget="moreMenuId"
+                  popovertargetaction="hide"
+                  @click="transferToAgent"
                 >
-                  <StickyNote class="h-4 w-4" />
-                  <span
-                    v-if="notesStore.notes.length > 0 && !isNotesPanelOpen"
-                    id="notes-badge"
-                    class="absolute -top-0.5 -right-0.5 h-4 min-w-[16px] rounded-full bg-amber-500 text-[10px] text-white flex items-center justify-center px-1"
-                  >
-                    {{ notesStore.notes.length }}
-                  </span>
-                </Button>
-              </TooltipTrigger>
-              <TooltipContent>{{ $t('chat.internalNotes') }}</TooltipContent>
-            </Tooltip>
-            <Tooltip>
-              <TooltipTrigger as-child>
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  id="info-button"
-                  class="h-8 w-8 text-white/50 hover:text-white hover:bg-white/[0.08] light:text-gray-500 light:hover:text-gray-900 light:hover:bg-gray-100"
-                  :class="isInfoPanelOpen && 'bg-white/[0.08] text-white light:bg-gray-100 light:text-gray-900'"
+                  <UserX />{{ $t('chat.transferToAgent') }}
+                </button>
+                <button
+                  v-if="activeTransferId"
+                  type="button"
+                  role="menuitem"
+                  class="ghost"
+                  :disabled="isResuming"
+                  :popovertarget="moreMenuId"
+                  popovertargetaction="hide"
+                  @click="resumeChatbot"
+                >
+                  <Play />{{ $t('chat.resumeChatbot') }}
+                </button>
+                <button
+                  type="button"
+                  role="menuitem"
+                  class="ghost"
+                  :popovertarget="moreMenuId"
+                  popovertargetaction="hide"
                   @click="isInfoPanelOpen = !isInfoPanelOpen"
                 >
-                  <Info class="h-4 w-4" />
-                </Button>
-              </TooltipTrigger>
-              <TooltipContent>{{ $t('chat.contactInfo') }}</TooltipContent>
-            </Tooltip>
-            <DropdownMenu>
-              <DropdownMenuTrigger as-child>
-                <Button variant="ghost" size="icon" class="h-8 w-8 text-white/50 hover:text-white hover:bg-white/[0.08] light:text-gray-500 light:hover:text-gray-900 light:hover:bg-gray-100">
-                  <MoreVertical class="h-4 w-4" />
-                </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end">
-                <DropdownMenuLabel>{{ $t('chat.contactOptions') }}</DropdownMenuLabel>
-                <DropdownMenuSeparator />
-                <DropdownMenuItem v-if="canAssignContacts" @click="isAssignDialogOpen = true">
-                  <UserPlus class="mr-2 h-4 w-4" />
-                  <span>{{ $t('chat.assignToAgent') }}</span>
-                </DropdownMenuItem>
-                <DropdownMenuItem v-if="!activeTransferId" @click="transferToAgent" :disabled="isTransferring">
-                  <UserX class="mr-2 h-4 w-4" />
-                  <span>{{ $t('chat.transferToAgent') }}</span>
-                </DropdownMenuItem>
-                <DropdownMenuItem v-if="activeTransferId" @click="resumeChatbot" :disabled="isResuming">
-                  <Play class="mr-2 h-4 w-4" />
-                  <span>{{ $t('chat.resumeChatbot') }}</span>
-                </DropdownMenuItem>
-                <DropdownMenuItem @click="isInfoPanelOpen = !isInfoPanelOpen">
-                  <Info class="mr-2 h-4 w-4" />
-                  <span>{{ isInfoPanelOpen ? $t('chat.hideContactDetails') : $t('chat.viewContactDetails') }}</span>
-                </DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
+                  <Info />{{ isInfoPanelOpen ? $t('chat.hideContactDetails') : $t('chat.viewContactDetails') }}
+                </button>
+              </div>
+            </ot-dropdown>
           </div>
-        </div>
+        </header>
 
-        <!-- Account Tabs (shown when contact has messages from multiple WhatsApp accounts) -->
-        <div
-          v-if="orgAccounts.length > 1 && selectedAccount"
-          class="flex-shrink-0 px-4 py-2 border-b border-white/[0.08] light:border-gray-200 bg-[#0a0a0b] light:bg-gray-50"
-        >
-          <div class="inline-flex items-center gap-1 rounded-lg bg-white/[0.06] light:bg-gray-100 p-1">
+        <!-- Account Tabs (shown when the org has several WhatsApp accounts) -->
+        <div v-if="orgAccounts.length > 1 && selectedAccount" class="shrink-0 scroll-x">
+          <div role="tablist" :aria-label="$t('accounts.title')">
             <button
               v-for="acct in orgAccounts"
               :key="acct.name"
-              :class="[
-                'rounded-md px-3 py-1 text-xs font-medium whitespace-nowrap transition-all',
-                acct.name === selectedAccount
-                  ? 'bg-emerald-600 text-white shadow-sm'
-                  : 'bg-white/[0.08] text-white/70 hover:text-white/90 hover:bg-white/[0.12] light:bg-gray-200 light:text-gray-600 light:hover:text-gray-800 light:hover:bg-gray-300'
-              ]"
+              type="button"
+              role="tab"
+              aria-controls="chat-messages"
+              :aria-selected="acct.name === selectedAccount"
               @click="switchAccount(acct.name)"
             >
               {{ acct.name }}
@@ -2028,28 +1980,30 @@ async function sendMediaMessage() {
         </div>
 
         <!-- Messages -->
-        <div class="relative flex-1 min-h-0 overflow-hidden">
-          <!-- Loading overlay while switching contacts / loading the first page -->
-          <Spinner v-if="contactsStore.isLoadingMessages" overlay />
-
+        <div
+          class="relative flex-1 min-h-0 flex flex-col"
+          :aria-busy="contactsStore.isLoadingMessages ? 'true' : undefined"
+          data-spinner="large overlay"
+        >
           <!-- Sticky date header -->
-          <Transition name="sticky-date">
-            <div
-              v-if="showStickyDate"
-              class="absolute top-2 left-1/2 -translate-x-1/2 z-10 px-3 py-1 bg-white/[0.08] light:bg-gray-200 backdrop-blur-sm rounded-full text-[11px] text-white/50 light:text-gray-600 font-medium shadow-sm"
-            >
-              {{ stickyDate }}
-            </div>
-          </Transition>
+          <div v-if="showStickyDate" class="overlay-top">
+            <span class="badge" data-variant="secondary" data-date-pill>{{ stickyDate }}</span>
+          </div>
 
-          <ScrollArea :ref="(el: any) => messagesScroll.scrollAreaRef.value = el" class="h-full p-3 chat-background">
-            <div class="space-y-2">
+          <div
+            id="chat-messages"
+            :ref="(el: any) => messagesScroll.scrollAreaRef.value = el"
+            data-testid="messages"
+            data-chat-canvas
+            class="flex-1 scroll-y"
+          >
+            <div class="vstack gap-2">
               <!-- Loading indicator for older messages -->
-              <div v-if="contactsStore.isLoadingOlderMessages" class="flex justify-center py-2">
-                <div class="flex items-center gap-2 text-white/40 light:text-gray-500 text-sm">
-                  <div class="h-4 w-4 animate-spin rounded-full border-2 border-current border-t-transparent" />
-                  <span>{{ $t('chat.loadingOlderMessages') }}...</span>
-                </div>
+              <div v-if="contactsStore.isLoadingOlderMessages" class="flex justify-center">
+                <small class="hstack gap-2 text-light">
+                  <span aria-busy="true" data-spinner="small" />
+                  {{ $t('chat.loadingOlderMessages') }}...
+                </small>
               </div>
               <template
                 v-for="(message, index) in contactsStore.messages"
@@ -2058,503 +2012,431 @@ async function sendMediaMessage() {
                 <!-- Date separator -->
                 <div
                   v-if="shouldShowDateSeparator(index)"
-                  class="flex items-center justify-center my-4"
+                  class="flex justify-center"
                   :data-date-separator="getDateLabel(message.created_at)"
                 >
-                  <div class="px-3 py-1 bg-white/[0.06] light:bg-gray-200 rounded-full text-[11px] text-white/40 light:text-gray-600 font-medium">
-                    {{ getDateLabel(message.created_at) }}
-                  </div>
+                  <span class="badge" data-variant="secondary" data-date-pill>{{ getDateLabel(message.created_at) }}</span>
                 </div>
 
                 <!-- Unread divider (WhatsApp-style; appears above the first
                      message that arrived while the tab was hidden) -->
-                <div
-                  v-if="newMessagesCount > 0 && message.id === firstUnreadId"
-                  class="flex items-center justify-center my-4"
-                >
-                  <div class="px-3 py-1 bg-white/[0.06] light:bg-gray-200 rounded-full text-[11px] text-white/40 light:text-gray-600 font-medium">
+                <div v-if="newMessagesCount > 0 && message.id === firstUnreadId" class="flex justify-center">
+                  <span class="badge">
                     {{ newMessagesCount }} {{ newMessagesCount === 1 ? $t('chat.unreadMessage', 'unread message') : $t('chat.unreadMessages', 'unread messages') }}
-                  </div>
-                </div>
-
-              <!-- Message bubble -->
-              <div
-                :id="`message-${message.id}`"
-                :class="[
-                  'flex group',
-                  message.direction === 'outgoing' ? 'justify-end' : 'justify-start'
-                ]"
-              >
-              <div
-                :class="[
-                  'chat-bubble',
-                  message.direction === 'outgoing' ? 'chat-bubble-outgoing' : 'chat-bubble-incoming'
-                ]"
-              >
-                <!-- Reply preview (if this message is replying to another) -->
-                <div
-                  v-if="message.is_reply && message.reply_to_message"
-                  class="reply-preview cursor-pointer text-xs"
-                  @click="scrollToMessage(message.reply_to_message_id)"
-                >
-                  <p class="font-medium">
-                    {{ message.reply_to_message.direction === 'incoming' ? (contactsStore.currentContact?.profile_name || contactsStore.currentContact?.name || 'Customer') : 'You' }}
-                  </p>
-                  <p class="truncate">
-                    {{ getReplyPreviewContent(message) }}
-                  </p>
-                </div>
-                <!-- Template header media (image/video/document shown above template text) -->
-                <div v-if="message.message_type === 'template' && message.media_url" class="mb-2">
-                  <img
-                    v-if="message.media_mime_type?.startsWith('image/')"
-                    :src="getMediaUrl(message)"
-                    alt="Template header"
-                    class="max-w-[280px] max-h-[300px] rounded-lg cursor-pointer object-cover"
-                    @click="openMediaPreview(message)"
-                    @error="handleImageError($event)"
-                  />
-                  <video
-                    v-else-if="message.media_mime_type?.startsWith('video/')"
-                    :src="getMediaUrl(message)"
-                    controls
-                    class="max-w-[280px] max-h-[300px] rounded-lg"
-                  />
-                  <button
-                    v-else-if="isPreviewableDocument(message)"
-                    type="button"
-                    class="flex items-center gap-2 px-3 py-2 bg-background/50 rounded-lg hover:bg-background/80 transition-colors cursor-pointer text-left w-full"
-                    @click="openMediaPreview(message)"
-                  >
-                    <FileText class="h-5 w-5 text-muted-foreground" />
-                    <span class="text-sm truncate max-w-[200px]">{{ message.media_filename || 'Document' }}</span>
-                  </button>
-                  <a
-                    v-else
-                    :href="getMediaUrl(message)"
-                    :download="message.media_filename || 'document'"
-                    class="flex items-center gap-2 px-3 py-2 bg-background/50 rounded-lg hover:bg-background/80 transition-colors"
-                  >
-                    <FileText class="h-5 w-5 text-muted-foreground" />
-                    <span class="text-sm truncate max-w-[200px]">{{ message.media_filename || 'Document' }}</span>
-                  </a>
-                </div>
-                <!-- Image message -->
-                <div v-else-if="message.message_type === 'image' && message.media_url" class="mb-2">
-                  <img
-                    :src="getMediaUrl(message)"
-                    :alt="message.content?.body || 'Image'"
-                    class="max-w-[280px] max-h-[300px] rounded-lg cursor-pointer object-cover"
-                    @click="openMediaPreview(message)"
-                    @error="handleImageError($event)"
-                  />
-                </div>
-                <!-- Sticker message -->
-                <div v-else-if="message.message_type === 'sticker' && message.media_url" class="mb-2">
-                  <img
-                    :src="getMediaUrl(message)"
-                    alt="Sticker"
-                    class="max-w-[128px] max-h-[128px] cursor-pointer"
-                    @click="openMediaPreview(message)"
-                    @error="handleImageError($event)"
-                  />
-                </div>
-                <!-- Video message -->
-                <div v-else-if="message.message_type === 'video' && message.media_url" class="mb-2">
-                  <video
-                    :src="getMediaUrl(message)"
-                    controls
-                    class="max-w-[280px] max-h-[300px] rounded-lg"
-                    @error="handleMediaError($event, 'video')"
-                  />
-                </div>
-                <!-- Audio message -->
-                <div v-else-if="message.message_type === 'audio' && message.media_url" class="mb-2">
-                  <audio
-                    :src="getMediaUrl(message)"
-                    controls
-                    class="max-w-[280px]"
-                    @error="handleMediaError($event, 'audio')"
-                  />
-                </div>
-                <!-- Document message -->
-                <div v-else-if="message.message_type === 'document' && message.media_url" class="mb-2">
-                  <button
-                    v-if="isPreviewableDocument(message)"
-                    type="button"
-                    class="flex items-center gap-2 px-3 py-2 bg-background/50 rounded-lg hover:bg-background/80 transition-colors cursor-pointer text-left w-full"
-                    @click="openMediaPreview(message)"
-                  >
-                    <FileText class="h-5 w-5 text-muted-foreground" />
-                    <span class="text-sm truncate max-w-[200px]">
-                      {{ message.media_filename || 'Document' }}
-                    </span>
-                  </button>
-                  <a
-                    v-else
-                    :href="getMediaUrl(message)"
-                    :download="message.media_filename || 'document'"
-                    class="flex items-center gap-2 px-3 py-2 bg-background/50 rounded-lg hover:bg-background/80 transition-colors"
-                  >
-                    <FileText class="h-5 w-5 text-muted-foreground" />
-                    <span class="text-sm truncate max-w-[200px]">
-                      {{ message.media_filename || 'Document' }}
-                    </span>
-                  </a>
-                </div>
-                <!-- Location message -->
-                <div v-else-if="message.message_type === 'location' && getLocationData(message)" class="mb-2">
-                  <a
-                    :href="getGoogleMapsUrl(getLocationData(message)!)"
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    class="flex items-center gap-3 px-3 py-3 bg-background/50 rounded-lg hover:bg-background/80 transition-colors"
-                  >
-                    <div class="h-10 w-10 rounded-full bg-red-900/30 light:bg-red-100 flex items-center justify-center shrink-0">
-                      <MapPin class="h-5 w-5 text-red-500" />
-                    </div>
-                    <div class="flex-1 min-w-0">
-                      <p v-if="getLocationData(message)?.name" class="text-sm font-medium truncate">
-                        {{ getLocationData(message)?.name }}
-                      </p>
-                      <p v-else class="text-sm font-medium">Location</p>
-                      <p v-if="getLocationData(message)?.address" class="text-xs text-muted-foreground truncate">
-                        {{ getLocationData(message)?.address }}
-                      </p>
-                      <p class="text-xs text-muted-foreground">
-                        {{ getLocationData(message)?.latitude.toFixed(6) }}, {{ getLocationData(message)?.longitude.toFixed(6) }}
-                      </p>
-                    </div>
-                    <ExternalLink class="h-4 w-4 text-muted-foreground shrink-0" />
-                  </a>
-                </div>
-                <!-- Contacts message -->
-                <div v-else-if="message.message_type === 'contacts' && getContactsData(message).length > 0" class="mb-2 space-y-2">
-                  <div
-                    v-for="(contact, idx) in getContactsData(message)"
-                    :key="idx"
-                    class="flex items-center gap-3 px-3 py-2 bg-background/50 rounded-lg"
-                  >
-                    <div class="h-10 w-10 rounded-full bg-primary/10 flex items-center justify-center shrink-0">
-                      <User class="h-5 w-5 text-primary" />
-                    </div>
-                    <div class="flex-1 min-w-0">
-                      <p class="text-sm font-medium truncate">{{ contact.name }}</p>
-                      <div v-if="contact.phones?.length" class="flex items-center gap-1 text-xs text-muted-foreground">
-                        <Phone class="h-3 w-3" />
-                        <span class="truncate">{{ contact.phones.join(', ') }}</span>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-                <!-- Missed call (click-to-call the originating agent never picked up) -->
-                <div v-else-if="message.message_type === 'call'" class="mb-2">
-                  <div class="flex items-center gap-2 px-3 py-2 bg-background/50 rounded-lg">
-                    <PhoneMissed class="h-4 w-4 text-red-500 shrink-0" />
-                    <span class="text-sm">{{ $t('chat.missedCall', 'Missed call') }}</span>
-                  </div>
-                </div>
-                <!-- Unsupported message -->
-                <div v-else-if="message.message_type === 'unsupported'" class="mb-2">
-                  <div class="flex items-center gap-2 px-3 py-2 bg-muted/50 rounded-lg text-muted-foreground">
-                    <AlertCircle class="h-4 w-4 shrink-0" />
-                    <span class="text-sm italic">{{ $t('chat.unsupportedMessage') }}</span>
-                  </div>
-                </div>
-                <!-- Button reply - WhatsApp style -->
-                <div v-if="message.message_type === 'button_reply'" class="button-reply-bubble">
-                  <span class="whitespace-pre-wrap break-words">{{ getMessageContent(message) }}</span>
-                  <span class="chat-bubble-time"><span>{{ formatMessageTime(message.created_at) }}</span></span>
-                </div>
-                <!-- Text content (for text messages or captions) -->
-                <span v-else-if="getMessageContent(message)" class="whitespace-pre-wrap break-words">{{ getMessageContent(message) }}<span class="chat-bubble-time"><span>{{ formatMessageTime(message.created_at) }}</span><component v-if="message.direction === 'outgoing'" :is="getMessageStatusIcon(message.status)" :class="['h-4 w-4 status-icon', getMessageStatusClass(message.status)]" /></span></span>
-                <!-- Fallback for media without URL -->
-                <span v-else-if="isMediaMessage(message) && !message.media_url" class="text-muted-foreground italic">[{{ message.message_type.charAt(0).toUpperCase() + message.message_type.slice(1) }}]<span class="chat-bubble-time"><span>{{ formatMessageTime(message.created_at) }}</span><component v-if="message.direction === 'outgoing'" :is="getMessageStatusIcon(message.status)" :class="['h-4 w-4 status-icon', getMessageStatusClass(message.status)]" /></span></span>
-                <!-- Interactive buttons - WhatsApp style -->
-                <div
-                  v-if="getInteractiveButtons(message).length > 0"
-                  class="interactive-buttons mt-2 -mx-2 -mb-1.5 border-t"
-                >
-                  <template v-for="(btn, index) in getInteractiveButtons(message)" :key="btn.id">
-                    <a
-                      v-if="btn.type === 'URL' && btn.url"
-                      :href="btn.url"
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      :class="['py-2 text-sm text-center font-medium cursor-pointer flex items-center justify-center gap-1.5', index > 0 && 'border-t']"
-                    >
-                      <ExternalLink class="h-3.5 w-3.5" />
-                      {{ btn.title }}
-                    </a>
-                    <div
-                      v-else
-                      :class="['py-2 text-sm text-center font-medium cursor-pointer', index > 0 && 'border-t']"
-                    >
-                      {{ btn.title }}
-                    </div>
-                  </template>
-                </div>
-                <!-- CTA URL button - WhatsApp style -->
-                <a
-                  v-if="getCTAUrlData(message)"
-                  :href="getCTAUrlData(message)?.url"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  class="interactive-buttons mt-2 -mx-2 -mb-1.5 border-t block"
-                >
-                  <div class="py-2 text-sm text-center font-medium cursor-pointer flex items-center justify-center gap-1.5">
-                    <ExternalLink class="h-3.5 w-3.5" />
-                    {{ getCTAUrlData(message)?.button_text }}
-                  </div>
-                </a>
-                <!-- Voice call button - WhatsApp style, non-clickable in our chat -->
-                <div
-                  v-if="getVoiceCallData(message)"
-                  class="interactive-buttons mt-2 -mx-2 -mb-1.5 border-t"
-                >
-                  <div class="py-2 text-sm text-center font-medium flex items-center justify-center gap-1.5">
-                    <PhoneCall class="h-3.5 w-3.5" />
-                    {{ getVoiceCallData(message)?.display_text }}
-                  </div>
-                </div>
-                <!-- Flow button - WhatsApp style -->
-                <div
-                  v-if="getFlowButtonText(message)"
-                  class="interactive-buttons mt-2 -mx-2 -mb-1.5 border-t"
-                >
-                  <div class="py-2 text-sm text-center font-medium">
-                    {{ getFlowButtonText(message) }}
-                  </div>
-                </div>
-                <!-- Time for messages without text content -->
-                <span v-if="!getMessageContent(message) && !(isMediaMessage(message) && !message.media_url)" class="chat-bubble-time block clear-both">
-                  <span>{{ formatMessageTime(message.created_at) }}</span>
-                  <component
-                    v-if="message.direction === 'outgoing'"
-                    :is="getMessageStatusIcon(message.status)"
-                    :class="['h-4 w-4 status-icon', getMessageStatusClass(message.status)]"
-                  />
-                </span>
-                <!-- Reactions display -->
-                <div
-                  v-if="message.reactions && message.reactions.length > 0"
-                  class="reactions-display flex flex-wrap gap-1 mt-1"
-                >
-                  <span
-                    v-for="(reaction, idx) in message.reactions"
-                    :key="idx"
-                    class="reaction-badge"
-                    :title="reaction.from_phone || reaction.from_user || ''"
-                  >
-                    {{ reaction.emoji }}
                   </span>
                 </div>
-                <!-- Failed message error (not for template messages) -->
-                <span
-                  v-if="message.status === 'failed' && message.direction === 'outgoing' && message.message_type !== 'template'"
-                  class="flex items-center gap-1 mt-1 text-xs text-destructive"
-                >
-                  <AlertCircle class="h-3 w-3" />
-                  <span>{{ message.error_message || 'Failed to send' }}</span>
-                </span>
-                <!-- Failed template message indicator (no retry) -->
-                <span
-                  v-if="message.status === 'failed' && message.direction === 'outgoing' && message.message_type === 'template'"
-                  class="flex items-center gap-1 mt-1 text-xs text-destructive"
-                >
-                  <AlertCircle class="h-3 w-3" />
-                  <span>{{ message.error_message || 'Failed to send' }}</span>
-                </span>
-              </div>
-              <!-- Action buttons for incoming messages -->
-              <div v-if="message.direction === 'incoming'" class="flex flex-col gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity self-center ml-1">
-                <Popover :open="reactionPickerMessageId === message.id" @update:open="(open: boolean) => reactionPickerMessageId = open ? message.id : null">
-                  <PopoverTrigger as-child>
-                    <Button variant="ghost" size="icon" class="h-6 w-6">
-                      <SmilePlus class="h-3 w-3" />
-                    </Button>
-                  </PopoverTrigger>
-                  <PopoverContent side="top" class="w-auto p-2">
-                    <div class="flex gap-1">
-                      <button
-                        v-for="emoji in quickReactionEmojis"
-                        :key="emoji"
-                        class="text-lg hover:bg-muted p-1 rounded cursor-pointer"
-                        @click="sendReaction(message.id, emoji)"
-                      >
-                        {{ emoji }}
-                      </button>
-                    </div>
-                  </PopoverContent>
-                </Popover>
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  class="h-6 w-6"
-                  @click="replyToMessage(message)"
-                >
-                  <Reply class="h-3 w-3" />
-                </Button>
-              </div>
-              <!-- Reply button for outgoing messages (shown on hover) -->
-              <div v-if="message.direction === 'outgoing'" class="flex flex-col gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity self-center ml-1">
-                <Popover :open="reactionPickerMessageId === message.id" @update:open="(open: boolean) => reactionPickerMessageId = open ? message.id : null">
-                  <PopoverTrigger as-child>
-                    <Button variant="ghost" size="icon" class="h-6 w-6">
-                      <SmilePlus class="h-3 w-3" />
-                    </Button>
-                  </PopoverTrigger>
-                  <PopoverContent side="top" class="w-auto p-2">
-                    <div class="flex gap-1">
-                      <button
-                        v-for="emoji in quickReactionEmojis"
-                        :key="emoji"
-                        class="text-lg hover:bg-muted p-1 rounded cursor-pointer"
-                        @click="sendReaction(message.id, emoji)"
-                      >
-                        {{ emoji }}
-                      </button>
-                    </div>
-                  </PopoverContent>
-                </Popover>
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  class="h-6 w-6"
-                  @click="replyToMessage(message)"
-                >
-                  <Reply class="h-3 w-3" />
-                </Button>
-                <Button
-                  v-if="message.status === 'failed' && message.message_type !== 'template'"
-                  variant="ghost"
-                  size="icon"
-                  class="h-6 w-6 text-destructive hover:text-destructive"
-                  :disabled="retryingMessageId === message.id"
-                  @click="retryMessage(message)"
-                  title="Retry sending"
-                >
-                  <Loader2 v-if="retryingMessageId === message.id" class="h-3 w-3 animate-spin" />
-                  <RotateCw v-else class="h-3 w-3" />
-                </Button>
-              </div>
-            </div>
-            </template>
-            <div ref="messagesEndRef" />
-          </div>
-        </ScrollArea>
-        </div>
 
-        <!-- Service window expired banner -->
-        <div
-          v-if="isServiceWindowExpired"
-          class="px-4 py-2.5 border-t border-red-500/20 bg-red-500/10 flex items-center gap-2"
-        >
-          <Clock class="h-4 w-4 text-red-500 shrink-0" />
-          <span class="text-sm text-red-500 flex-1">{{ $t('chat.serviceWindowExpired') }}</span>
-          <Button variant="outline" size="sm" class="border-red-500/30 text-red-500 hover:bg-red-500/10 shrink-0" @click="openTemplatePicker">
-            {{ $t('chat.sendTemplateAction') }}
-          </Button>
-        </div>
+                <!-- Message row: bubble + hover actions -->
+                <div
+                  :id="`message-${message.id}`"
+                  data-testid="message"
+                  data-hover-group
+                  class="flex items-center gap-1"
+                  :class="{ 'justify-end': isOutgoing(message) }"
+                >
+                  <article class="card min-w-0" :data-bubble="message.direction">
+                    <!-- Reply preview (if this message is replying to another) -->
+                    <button
+                      v-if="message.is_reply && message.reply_to_message"
+                      type="button"
+                      class="outline small w-100 mb-2"
+                      data-reply-preview
+                      @click="scrollToMessage(message.reply_to_message_id)"
+                    >
+                      <span class="flex flex-col w-100 min-w-0 align-left">
+                        <strong>
+                          {{ message.reply_to_message.direction === 'incoming' ? (contactsStore.currentContact?.profile_name || contactsStore.currentContact?.name || $t('chat.customer')) : $t('chat.you') }}
+                        </strong>
+                        <span class="truncate">{{ getReplyPreviewContent(message) }}</span>
+                      </span>
+                    </button>
 
-        <!-- Reply indicator -->
-        <div
-          v-if="contactsStore.replyingTo"
-          class="px-4 py-2 border-t border-white/[0.08] light:border-gray-200 bg-white/[0.04] light:bg-gray-50 flex items-center justify-between"
-        >
-          <div class="flex-1 min-w-0">
-            <p class="text-xs font-medium text-white/50 light:text-gray-500">
-              Replying to {{ contactsStore.replyingTo.direction === 'incoming' ? (contactsStore.currentContact?.profile_name || contactsStore.currentContact?.name || 'Customer') : 'Yourself' }}
-            </p>
-            <p class="text-sm truncate text-white/70 light:text-gray-700">
-              {{ getMessageContent(contactsStore.replyingTo) || '[Media]' }}
-            </p>
-          </div>
-          <button class="w-6 h-6 rounded hover:bg-white/[0.08] light:hover:bg-gray-200 flex items-center justify-center shrink-0 transition-colors" @click="contactsStore.clearReplyingTo">
-            <X class="h-4 w-4 text-white/50 light:text-gray-500" />
-          </button>
-        </div>
-
-        <!-- Message Input -->
-        <div class="p-4 border-t border-white/[0.08] light:border-gray-200 bg-[#0f0f10] light:bg-white">
-          <form @submit.prevent="sendMessage" class="flex items-center gap-2 p-2 rounded-xl bg-white/[0.06] light:bg-gray-100 border border-white/[0.08] light:border-gray-200">
-            <Tooltip>
-              <TooltipTrigger as-child>
-                <span>
-                  <Popover v-model:open="emojiPickerOpen">
-                    <PopoverTrigger as-child>
-                      <button type="button" class="w-9 h-9 rounded-lg hover:bg-white/[0.08] light:hover:bg-gray-200 flex items-center justify-center transition-colors">
-                        <Smile class="w-[18px] h-[18px] text-white/40 light:text-gray-500" />
-                      </button>
-                    </PopoverTrigger>
-                    <PopoverContent side="top" align="start" class="w-auto p-0">
-                      <EmojiPicker
-                        :native="true"
-                        :disable-skin-tones="true"
-                        :theme="isDark ? 'dark' : 'light'"
-                        @select="insertEmoji($event.i)"
+                    <!-- Template header media (image/video/document shown above template text) -->
+                    <div v-if="message.message_type === 'template' && message.media_url" class="mb-2">
+                      <img
+                        v-if="message.media_mime_type?.startsWith('image/')"
+                        :src="getMediaUrl(message)"
+                        :alt="$t('chat.image')"
+                        class="media-preview"
+                        @click="openMediaPreview(message)"
+                        @error="handleImageError($event)"
                       />
-                    </PopoverContent>
-                  </Popover>
-                </span>
-              </TooltipTrigger>
-              <TooltipContent>{{ $t('chat.emoji') }}</TooltipContent>
-            </Tooltip>
-            <Tooltip>
-              <TooltipTrigger as-child>
-                <span>
-                  <CannedResponsePicker
-                    :external-open="cannedPickerOpen"
-                    :external-search="cannedSearchQuery"
-                    @select="handleCannedSelect"
-                    @close="closeCannedPicker"
-                  />
-                </span>
-              </TooltipTrigger>
-              <TooltipContent>{{ $t('chat.cannedResponses') }}</TooltipContent>
-            </Tooltip>
-            <Tooltip>
-              <TooltipTrigger as-child>
-                <span ref="templatePickerRef">
-                  <TemplatePicker
-                    :selected-account="selectedAccount"
-                    @select-with-params="handleTemplateWithParams"
-                  />
-                </span>
-              </TooltipTrigger>
-              <TooltipContent>{{ $t('chat.sendTemplate') }}</TooltipContent>
-            </Tooltip>
-            <Tooltip>
-              <TooltipTrigger as-child>
-                <button type="button" class="w-9 h-9 rounded-lg hover:bg-white/[0.08] light:hover:bg-gray-200 flex items-center justify-center transition-colors" @click="openFilePicker">
-                  <Paperclip class="w-[18px] h-[18px] text-white/40 light:text-gray-500" />
-                </button>
-              </TooltipTrigger>
-              <TooltipContent>{{ $t('chat.attachFile') }}</TooltipContent>
-            </Tooltip>
+                      <video
+                        v-else-if="message.media_mime_type?.startsWith('video/')"
+                        :src="getMediaUrl(message)"
+                        controls
+                        class="media-preview"
+                      />
+                      <button
+                        v-else-if="isPreviewableDocument(message)"
+                        type="button"
+                        class="outline w-100"
+                        @click="openMediaPreview(message)"
+                      >
+                        <FileText /><span class="truncate">{{ message.media_filename || $t('chat.document') }}</span>
+                      </button>
+                      <a
+                        v-else
+                        :href="getMediaUrl(message)"
+                        :download="message.media_filename || 'document'"
+                        class="button outline w-100"
+                      >
+                        <FileText /><span class="truncate">{{ message.media_filename || $t('chat.document') }}</span>
+                      </a>
+                    </div>
+                    <!-- Image message -->
+                    <div v-else-if="message.message_type === 'image' && message.media_url" class="mb-2">
+                      <img
+                        :src="getMediaUrl(message)"
+                        :alt="message.content?.body || $t('chat.image')"
+                        class="media-preview"
+                        @click="openMediaPreview(message)"
+                        @error="handleImageError($event)"
+                      />
+                    </div>
+                    <!-- Sticker message -->
+                    <div v-else-if="message.message_type === 'sticker' && message.media_url" class="mb-2">
+                      <img
+                        :src="getMediaUrl(message)"
+                        :alt="$t('chat.sticker')"
+                        class="media-preview"
+                        @click="openMediaPreview(message)"
+                        @error="handleImageError($event)"
+                      />
+                    </div>
+                    <!-- Video message -->
+                    <div v-else-if="message.message_type === 'video' && message.media_url" class="mb-2">
+                      <video
+                        :src="getMediaUrl(message)"
+                        controls
+                        class="media-preview"
+                        @error="handleMediaError($event, 'video')"
+                      />
+                    </div>
+                    <!-- Audio message -->
+                    <div v-else-if="message.message_type === 'audio' && message.media_url" class="mb-2">
+                      <audio
+                        :src="getMediaUrl(message)"
+                        controls
+                        class="w-100"
+                        @error="handleMediaError($event, 'audio')"
+                      />
+                    </div>
+                    <!-- Document message -->
+                    <div v-else-if="message.message_type === 'document' && message.media_url" class="mb-2">
+                      <button
+                        v-if="isPreviewableDocument(message)"
+                        type="button"
+                        class="outline w-100"
+                        @click="openMediaPreview(message)"
+                      >
+                        <FileText /><span class="truncate">{{ message.media_filename || $t('chat.document') }}</span>
+                      </button>
+                      <a
+                        v-else
+                        :href="getMediaUrl(message)"
+                        :download="message.media_filename || 'document'"
+                        class="button outline w-100"
+                      >
+                        <FileText /><span class="truncate">{{ message.media_filename || $t('chat.document') }}</span>
+                      </a>
+                    </div>
+                    <!-- Location message -->
+                    <div v-else-if="message.message_type === 'location' && getLocationData(message)" class="mb-2">
+                      <a
+                        :href="getGoogleMapsUrl(getLocationData(message)!)"
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        class="button outline w-100"
+                      >
+                        <MapPin :size="20" stroke="var(--danger)" />
+                        <span class="flex flex-col flex-1 min-w-0 align-left">
+                          <strong class="truncate">{{ getLocationData(message)?.name || $t('chat.location') }}</strong>
+                          <small v-if="getLocationData(message)?.address" class="text-light truncate">
+                            {{ getLocationData(message)?.address }}
+                          </small>
+                          <small class="text-light">
+                            {{ getLocationData(message)?.latitude.toFixed(6) }}, {{ getLocationData(message)?.longitude.toFixed(6) }}
+                          </small>
+                        </span>
+                        <ExternalLink />
+                      </a>
+                    </div>
+                    <!-- Contacts message -->
+                    <div v-else-if="message.message_type === 'contacts' && getContactsData(message).length > 0" class="vstack gap-2 mb-2">
+                      <div
+                        v-for="(contact, idx) in getContactsData(message)"
+                        :key="idx"
+                        class="flex items-center gap-2"
+                      >
+                        <figure data-variant="avatar" class="small shrink-0"><User /></figure>
+                        <div class="min-w-0">
+                          <strong class="truncate">{{ contact.name }}</strong>
+                          <small v-if="contact.phones?.length" class="flex items-center gap-1 text-light">
+                            <Phone :size="12" />
+                            <span class="truncate">{{ contact.phones.join(', ') }}</span>
+                          </small>
+                        </div>
+                      </div>
+                    </div>
+                    <!-- Missed call (click-to-call the originating agent never picked up) -->
+                    <p v-else-if="message.message_type === 'call'" class="flex items-center gap-2 mb-2">
+                      <PhoneMissed stroke="var(--danger)" />
+                      <span>{{ $t('chat.missedCall', 'Missed call') }}</span>
+                    </p>
+                    <!-- Unsupported message -->
+                    <p v-else-if="message.message_type === 'unsupported'" class="flex items-center gap-2 text-light mb-2">
+                      <AlertCircle />
+                      <em>{{ $t('chat.unsupportedMessage') }}</em>
+                    </p>
+
+                    <!-- Text content (text, button replies and captions) -->
+                    <p v-if="getMessageContent(message)" class="pre-wrap">{{ getMessageContent(message) }}</p>
+                    <!-- Fallback for media without URL -->
+                    <p v-else-if="isMediaMessage(message) && !message.media_url" class="text-light">
+                      <em>[{{ message.message_type.charAt(0).toUpperCase() + message.message_type.slice(1) }}]</em>
+                    </p>
+
+                    <!-- Interactive buttons - WhatsApp style -->
+                    <div v-if="getInteractiveButtons(message).length > 0" class="vstack gap-1 mt-2" data-interactive-buttons>
+                      <template v-for="btn in getInteractiveButtons(message)" :key="btn.id">
+                        <a
+                          v-if="btn.type === 'URL' && btn.url"
+                          :href="btn.url"
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          class="button outline small w-100"
+                        >
+                          <ExternalLink :size="14" />
+                          {{ btn.title }}
+                        </a>
+                        <span v-else class="badge outline w-100">{{ btn.title }}</span>
+                      </template>
+                    </div>
+                    <!-- CTA URL button - WhatsApp style -->
+                    <a
+                      v-if="getCTAUrlData(message)"
+                      :href="getCTAUrlData(message)?.url"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      class="button outline small w-100 mt-2"
+                    >
+                      <ExternalLink :size="14" />
+                      {{ getCTAUrlData(message)?.button_text }}
+                    </a>
+                    <!-- Voice call button - WhatsApp style, non-clickable in our chat -->
+                    <div v-if="getVoiceCallData(message)" class="mt-2">
+                      <span class="badge outline w-100">
+                        <PhoneCall :size="14" />
+                        {{ getVoiceCallData(message)?.display_text }}
+                      </span>
+                    </div>
+                    <!-- Flow button - WhatsApp style -->
+                    <div v-if="getFlowButtonText(message)" class="mt-2">
+                      <span class="badge outline w-100">{{ getFlowButtonText(message) }}</span>
+                    </div>
+
+                    <!-- Time and delivery status -->
+                    <div class="flex items-center justify-end gap-1" data-bubble-time>
+                      <small class="text-light">{{ formatMessageTime(message.created_at) }}</small>
+                      <component
+                        :is="getMessageStatusIcon(message.status)"
+                        v-if="message.direction === 'outgoing'"
+                        data-status-icon
+                        class="text-light"
+                        :stroke="getMessageStatusStroke(message.status)"
+                      />
+                    </div>
+
+                    <!-- Reactions display -->
+                    <div v-if="message.reactions && message.reactions.length > 0" class="hstack gap-1 mt-2">
+                      <span
+                        v-for="(reaction, idx) in message.reactions"
+                        :key="idx"
+                        class="badge outline"
+                        :title="reaction.from_phone || reaction.from_user || ''"
+                      >
+                        {{ reaction.emoji }}
+                      </span>
+                    </div>
+
+                    <!-- Failed message error -->
+                    <small
+                      v-if="message.status === 'failed' && message.direction === 'outgoing'"
+                      class="flex items-center gap-1 mt-2"
+                    >
+                      <AlertCircle :size="12" stroke="var(--danger)" class="shrink-0" />
+                      <span>{{ message.error_message || $t('chat.failedToSend') }}</span>
+                    </small>
+                  </article>
+
+                  <!-- Message actions (revealed on hover / focus) -->
+                  <div class="vstack gap-1 shrink-0" data-hover-reveal>
+                    <ot-dropdown>
+                      <button
+                        type="button"
+                        class="ghost small icon"
+                        :popovertarget="`react-${message.id}`"
+                        :title="$t('chat.addReaction')"
+                        :aria-label="$t('chat.addReaction')"
+                      >
+                        <SmilePlus :size="14" />
+                      </button>
+                      <div :id="`react-${message.id}`" popover>
+                        <div class="hstack gap-1 p-4">
+                          <button
+                            v-for="emoji in quickReactionEmojis"
+                            :key="emoji"
+                            type="button"
+                            class="ghost small"
+                            @click="sendReaction(message.id, emoji)"
+                          >
+                            {{ emoji }}
+                          </button>
+                        </div>
+                      </div>
+                    </ot-dropdown>
+                    <button
+                      type="button"
+                      class="ghost small icon"
+                      :title="$t('chat.reply')"
+                      :aria-label="$t('chat.reply')"
+                      @click="replyToMessage(message)"
+                    >
+                      <Reply :size="14" />
+                    </button>
+                    <button
+                      v-if="message.direction === 'outgoing' && message.status === 'failed' && message.message_type !== 'template'"
+                      type="button"
+                      class="ghost small icon"
+                      data-variant="danger"
+                      :title="$t('chat.retry')"
+                      :aria-label="$t('chat.retry')"
+                      :disabled="retryingMessageId === message.id"
+                      :aria-busy="retryingMessageId === message.id ? 'true' : undefined"
+                      data-spinner="small"
+                      @click="retryMessage(message)"
+                    >
+                      <RotateCw v-if="retryingMessageId !== message.id" :size="14" />
+                    </button>
+                  </div>
+                </div>
+              </template>
+              <div ref="messagesEndRef" />
+            </div>
+          </div>
+        </div>
+
+        <!-- Composer -->
+        <footer class="vstack gap-2 shrink-0">
+          <!-- Service window expired banner -->
+          <div v-if="isServiceWindowExpired" role="alert" data-variant="danger" class="items-center">
+            <Clock class="shrink-0" />
+            <span class="flex-1">{{ $t('chat.serviceWindowExpired') }}</span>
+            <button type="button" class="small shrink-0" @click="openTemplatePicker">
+              {{ $t('chat.sendTemplateAction') }}
+            </button>
+          </div>
+
+          <!-- Reply indicator -->
+          <div v-if="contactsStore.replyingTo" class="flex items-center gap-2" data-reply-indicator>
+            <div class="flex-1 min-w-0">
+              <small class="text-light">
+                {{ $t('chat.replyingTo') }} {{ contactsStore.replyingTo.direction === 'incoming' ? (contactsStore.currentContact?.profile_name || contactsStore.currentContact?.name || $t('chat.customer')) : $t('chat.yourself') }}
+              </small>
+              <p class="truncate">{{ getMessageContent(contactsStore.replyingTo) || `[${$t('chat.media')}]` }}</p>
+            </div>
+            <button
+              type="button"
+              class="ghost small icon shrink-0"
+              :title="$t('chat.cancelReply')"
+              :aria-label="$t('chat.cancelReply')"
+              @click="contactsStore.clearReplyingTo"
+            >
+              <X />
+            </button>
+          </div>
+
+          <!-- Message Input -->
+          <!-- Only the textarea and Send live in the <form>: picker search boxes
+               must not trigger implicit submission (Enter would send the draft). -->
+          <div class="flex items-center gap-1">
+            <ot-dropdown>
+              <button
+                type="button"
+                class="ghost icon"
+                :popovertarget="emojiMenuId"
+                :title="$t('chat.emoji')"
+                :aria-label="$t('chat.emoji')"
+              >
+                <Smile :size="20" />
+              </button>
+              <div :id="emojiMenuId" ref="emojiMenu" popover class="picker">
+                <div class="hstack gap-1 p-4">
+                  <button
+                    v-for="emoji in COMMON_EMOJIS"
+                    :key="emoji"
+                    type="button"
+                    class="ghost small"
+                    @click="insertEmoji(emoji)"
+                  >
+                    {{ emoji }}
+                  </button>
+                </div>
+              </div>
+            </ot-dropdown>
+            <CannedResponsePicker
+              :external-open="cannedPickerOpen"
+              :external-search="cannedSearchQuery"
+              @select="handleCannedSelect"
+              @close="closeCannedPicker"
+            />
+            <TemplatePicker
+              ref="templatePickerRef"
+              :selected-account="selectedAccount"
+              @select-with-params="handleTemplateWithParams"
+            />
+            <button
+              type="button"
+              class="ghost icon"
+              :title="$t('chat.attachFile')"
+              :aria-label="$t('chat.attachFile')"
+              @click="openFilePicker"
+            >
+              <Paperclip :size="20" />
+            </button>
             <input
               ref="fileInputRef"
               type="file"
               accept="image/*,video/*,audio/*,.pdf,.doc,.docx"
-              class="hidden"
+              hidden
               @change="handleFileSelect"
             />
-            <textarea
-              ref="messageInputRef"
-              v-model="messageInput"
-              :placeholder="$t('chat.typeMessage') + '...'"
-              rows="1"
-              class="flex-1 bg-transparent text-[14px] text-white light:text-gray-900 placeholder:text-white/30 light:placeholder:text-gray-400 focus:outline-none resize-none min-h-[36px] max-h-[120px] py-2 overflow-y-auto"
-              @keydown.enter.exact.prevent="sendMessage"
-              @input="autoResizeTextarea"
-            />
-            <button type="submit" class="w-9 h-9 rounded-lg bg-emerald-600 hover:bg-emerald-500 light:bg-emerald-500 light:hover:bg-emerald-600 flex items-center justify-center transition-colors disabled:opacity-50" :disabled="!messageInput.trim() || isSending">
-              <Send class="w-4 h-4 text-white" />
-            </button>
-          </form>
-        </div>
+            <form class="flex-1 min-w-0 flex items-center gap-1" @submit.prevent="sendMessage">
+              <textarea
+                ref="messageInputRef"
+                v-model="messageInput"
+                class="flex-1 min-w-0 min-h-0"
+                :placeholder="$t('chat.typeMessage') + '...'"
+                :aria-label="$t('chat.typeMessage')"
+                rows="1"
+                @keydown.enter.exact.prevent="sendMessage"
+                @input="autoResizeTextarea"
+              />
+              <button
+                type="submit"
+                class="icon shrink-0"
+                :title="$t('chat.send')"
+                :aria-label="$t('chat.send')"
+                :disabled="!messageInput.trim() || isSending"
+              >
+                <Send />
+              </button>
+            </form>
+          </div>
+        </footer>
       </template>
-    </div>
+    </section>
 
     <!-- Notes Side Panel -->
     <ConversationNotes
@@ -2568,271 +2450,231 @@ async function sendMediaMessage() {
       v-if="contactsStore.currentContact && isInfoPanelOpen"
       :contact="contactsStore.currentContact"
       :session-data="contactSessionData"
+      :narrow="isNarrow"
       @close="isInfoPanelOpen = false"
       @tags-updated="(tags) => contactsStore.updateContactTags(contactsStore.currentContact!.id, tags)"
     />
 
     <!-- Template Params Dialog -->
-    <Dialog v-model:open="templateDialogOpen">
-      <DialogContent class="max-w-sm">
-        <DialogHeader>
-          <DialogTitle>{{ templateParamNames.length > 0 ? $t('chat.fillParameters') : $t('chat.preview') }}</DialogTitle>
-          <DialogDescription>
-            {{ selectedTemplate?.display_name || selectedTemplate?.name }}
-          </DialogDescription>
-        </DialogHeader>
-        <div class="py-4 space-y-3">
-          <!-- Header media upload -->
-          <HeaderMediaUpload
-            v-if="templateNeedsHeaderMedia"
-            :file="templateHeaderFile"
-            :preview-url="templateHeaderPreview"
-            :accept-types="templateHeaderAccept"
-            :label="selectedTemplate?.header_type === 'IMAGE' ? $t('chat.headerImage') : selectedTemplate?.header_type === 'VIDEO' ? $t('chat.headerVideo') : $t('chat.headerDocument')"
-            @change="handleTemplateHeaderFile"
-            @clear="clearTemplateHeaderMedia"
-          />
+    <Modal
+      v-model:open="templateDialogOpen"
+      size="small"
+      :title="templateParamNames.length > 0 ? $t('chat.fillParameters') : $t('chat.preview')"
+      :description="selectedTemplate?.display_name || selectedTemplate?.name"
+    >
+      <div class="vstack gap-4">
+        <!-- Header media upload -->
+        <HeaderMediaUpload
+          v-if="templateNeedsHeaderMedia"
+          :file="templateHeaderFile"
+          :preview-url="templateHeaderPreview"
+          :accept-types="templateHeaderAccept"
+          :label="selectedTemplate?.header_type === 'IMAGE' ? $t('chat.headerImage') : selectedTemplate?.header_type === 'VIDEO' ? $t('chat.headerVideo') : $t('chat.headerDocument')"
+          @change="handleTemplateHeaderFile"
+          @clear="clearTemplateHeaderMedia"
+        />
 
-          <div v-if="showHeaderParamInput" class="space-y-1">
-            <label class="text-sm font-medium flex items-center gap-1.5">
-              <span>{{ templateHeaderParamName }}</span>
-              <span class="text-[10px] uppercase tracking-wider text-muted-foreground bg-muted px-1.5 py-0.5 rounded">
-                {{ $t('chat.headerParamBadge', 'Header') }}
+        <label v-if="showHeaderParamInput" data-field data-param-header>
+          <span class="hstack gap-2">
+            {{ templateHeaderParamName }}
+            <span class="badge" data-variant="secondary">{{ $t('chat.headerParamBadge', 'Header') }}</span>
+          </span>
+          <input v-model="templateHeaderParamValue" :placeholder="templateHeaderParamName ?? ''" />
+        </label>
+        <label v-for="param in templateParamNames" :key="param" data-field :data-param="param">
+          {{ param }}
+          <input v-model="templateParamValues[param]" :placeholder="param" />
+        </label>
+        <label v-for="(btnParam, idx) in templateButtonUrlParams" :key="`btn-${btnParam.index}`" data-field>
+          {{ btnParam.type === 'COPY_CODE' ? `Coupon Code (${btnParam.text})` : $t('chat.urlButtonParam', { button: btnParam.text }) }}
+          <input
+            v-model="templateButtonUrlParams[idx].value"
+            :placeholder="btnParam.type === 'COPY_CODE' ? 'WELCOME10' : $t('chat.urlButtonParamPlaceholder')"
+          />
+        </label>
+        <div v-if="templatePreview" class="vstack gap-1">
+          <small class="text-light">{{ $t('chat.preview') }}</small>
+          <article class="card" data-bubble="outgoing">
+            <img v-if="templateHeaderPreview" :src="templateHeaderPreview" alt="" class="media-preview mb-2" />
+            <p class="pre-wrap">{{ templatePreview }}</p>
+            <div v-if="selectedTemplate?.buttons?.length" class="vstack gap-1 mt-2" data-interactive-buttons>
+              <span v-for="(btn, index) in selectedTemplate.buttons" :key="index" class="badge outline w-100">
+                {{ btn.text }}
               </span>
-            </label>
-            <Input
-              v-model="templateHeaderParamValue"
-              :placeholder="templateHeaderParamName ?? ''"
-              class="h-9"
-            />
-          </div>
-          <div v-for="param in templateParamNames" :key="param" class="space-y-1">
-            <label class="text-sm font-medium">{{ param }}</label>
-            <Input
-              v-model="templateParamValues[param]"
-              :placeholder="param"
-              class="h-9"
-            />
-          </div>
-          <div v-for="(btnParam, idx) in templateButtonUrlParams" :key="`btn-${btnParam.index}`" class="space-y-1">
-            <label class="text-sm font-medium">
-              {{ btnParam.type === 'COPY_CODE' ? `Coupon Code (${btnParam.text})` : $t('chat.urlButtonParam', { button: btnParam.text }) }}
-            </label>
-            <Input
-              v-model="templateButtonUrlParams[idx].value"
-              :placeholder="btnParam.type === 'COPY_CODE' ? 'WELCOME10' : $t('chat.urlButtonParamPlaceholder')"
-              class="h-9"
-            />
-          </div>
-          <div v-if="templatePreview" class="space-y-1">
-            <label class="text-xs font-medium text-muted-foreground">{{ $t('chat.preview') }}</label>
-            <div class="chat-bubble chat-bubble-outgoing ml-auto" style="max-width: 100%;">
-              <img v-if="templateHeaderPreview" :src="templateHeaderPreview" class="rounded-lg mb-2 max-h-40 w-full object-cover" />
-              <span class="whitespace-pre-wrap break-words text-sm">{{ templatePreview }}</span>
-              <div
-                v-if="selectedTemplate?.buttons?.length"
-                class="interactive-buttons mt-2 -mx-2 -mb-1.5 border-t"
-              >
-                <div
-                  v-for="(btn, index) in selectedTemplate.buttons"
-                  :key="index"
-                  :class="['py-2 text-sm text-center font-medium', Number(index) > 0 && 'border-t']"
-                >
-                  {{ btn.text }}
-                </div>
-              </div>
             </div>
-          </div>
+          </article>
         </div>
-        <div class="flex justify-end gap-2">
-          <Button variant="outline" @click="templateDialogOpen = false">{{ $t('common.cancel') }}</Button>
-          <Button @click="sendTemplateMessage" :disabled="isSendingTemplate">
-            <Loader2 v-if="isSendingTemplate" class="h-4 w-4 mr-2 animate-spin" />
-            {{ $t('chat.send') }}
-          </Button>
-        </div>
-      </DialogContent>
-    </Dialog>
+      </div>
+      <template #footer>
+        <button type="button" class="outline" @click="templateDialogOpen = false">{{ $t('common.cancel') }}</button>
+        <button
+          type="button"
+          :disabled="isSendingTemplate"
+          :aria-busy="isSendingTemplate ? 'true' : undefined"
+          data-spinner="small"
+          @click="sendTemplateMessage"
+        >
+          {{ $t('chat.send') }}
+        </button>
+      </template>
+    </Modal>
 
     <!-- Canned Response Preview Dialog -->
-    <Dialog v-model:open="cannedDialogOpen">
-      <DialogContent class="max-w-sm">
-        <!-- DialogContent doesn't forward $attrs (multi-root via DialogPortal),
-             so wrap the body in a div carrying the stable id used by e2e. -->
-        <div id="canned-response-dialog">
-        <DialogHeader>
-          <DialogTitle>{{ cannedParamNames.length > 0 ? $t('chat.fillParameters') : $t('chat.preview') }}</DialogTitle>
-          <DialogDescription>
-            {{ selectedCannedResponse?.name }}
-          </DialogDescription>
-        </DialogHeader>
-        <div class="py-4 space-y-3">
-          <div v-for="param in cannedParamNames" :key="param" class="space-y-1">
-            <label class="text-sm font-medium" :for="`canned-response-param-${param}`">{{ param }}</label>
-            <Input
-              :id="`canned-response-param-${param}`"
-              v-model="cannedParamValues[param]"
-              :placeholder="param"
-              class="h-9 canned-response-param"
+    <Modal
+      id="canned-response-dialog"
+      v-model:open="cannedDialogOpen"
+      size="small"
+      :title="cannedParamNames.length > 0 ? $t('chat.fillParameters') : $t('chat.preview')"
+      :description="selectedCannedResponse?.name"
+    >
+      <div class="vstack gap-4">
+        <label v-for="param in cannedParamNames" :key="param" data-field>
+          {{ param }}
+          <input
+            :id="`canned-response-param-${param}`"
+            v-model="cannedParamValues[param]"
+            data-canned-param
+            :placeholder="param"
+          />
+        </label>
+        <div v-if="cannedPreview || cannedPreviewButtons.length" class="vstack gap-1">
+          <small class="text-light">{{ $t('chat.preview') }}</small>
+          <article id="canned-response-preview" class="card" data-bubble="outgoing">
+            <p v-if="cannedPreview" class="pre-wrap">{{ cannedPreview }}</p>
+            <PreviewButtonGroup
+              v-if="cannedPreviewButtons.length"
+              :buttons="cannedPreviewButtons"
+              disabled
             />
-          </div>
-          <div v-if="cannedPreview || cannedPreviewButtons.length" class="space-y-1">
-            <label class="text-xs font-medium text-muted-foreground">{{ $t('chat.preview') }}</label>
-            <div id="canned-response-preview" class="chat-bubble chat-bubble-outgoing ml-auto" style="max-width: 100%;">
-              <span v-if="cannedPreview" class="whitespace-pre-wrap break-words text-sm">{{ cannedPreview }}</span>
-              <PreviewButtonGroup
-                v-if="cannedPreviewButtons.length"
-                :buttons="cannedPreviewButtons"
-                disabled
-              />
-            </div>
-          </div>
+          </article>
         </div>
-        <div class="flex justify-end gap-2">
-          <Button id="canned-response-cancel" variant="outline" @click="cannedDialogOpen = false">{{ $t('common.cancel') }}</Button>
-          <Button id="canned-response-send" :disabled="isSendingCanned" @click="sendCannedResponse">
-            <Loader2 v-if="isSendingCanned" class="h-4 w-4 mr-2 animate-spin" />
-            {{ $t('chat.send') }}
-          </Button>
-        </div>
-        </div>
-      </DialogContent>
-    </Dialog>
+      </div>
+      <template #footer>
+        <button id="canned-response-cancel" type="button" class="outline" @click="cannedDialogOpen = false">{{ $t('common.cancel') }}</button>
+        <button
+          id="canned-response-send"
+          type="button"
+          :disabled="isSendingCanned"
+          :aria-busy="isSendingCanned ? 'true' : undefined"
+          data-spinner="small"
+          @click="sendCannedResponse"
+        >
+          {{ $t('chat.send') }}
+        </button>
+      </template>
+    </Modal>
 
     <!-- Assign Contact Dialog -->
-    <Dialog v-model:open="isAssignDialogOpen" @update:open="(open) => !open && (assignSearchQuery = '')">
-      <DialogContent class="max-w-sm">
-        <DialogHeader>
-          <DialogTitle>{{ $t('chat.assignContact') }}</DialogTitle>
-          <DialogDescription>
-            {{ $t('chat.assignContactDesc') }}
-          </DialogDescription>
-        </DialogHeader>
-        <div class="py-4 space-y-3">
-          <!-- Search input -->
-          <div class="relative">
-            <Search class="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
-            <Input
-              v-model="assignSearchQuery"
-              :placeholder="$t('chat.searchUsers') + '...'"
-              class="pl-9 h-9"
-            />
+    <Modal
+      v-model:open="isAssignDialogOpen"
+      size="small"
+      :title="$t('chat.assignContact')"
+      :description="$t('chat.assignContactDesc')"
+    >
+      <div class="vstack gap-2">
+        <input
+          v-model="assignSearchQuery"
+          type="search"
+          :placeholder="$t('chat.searchUsers') + '...'"
+          :aria-label="$t('chat.searchUsers')"
+        />
+        <div class="scroll-y picker-list">
+          <div class="table">
+            <table>
+              <thead>
+                <tr>
+                  <th>{{ $t('teams.agent') }}</th>
+                  <th>{{ $t('users.role') }}</th>
+                  <th :aria-label="$t('common.actions')"></th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr v-for="user in filteredAssignableUsers" :key="user.id">
+                  <td>
+                    <div class="hstack gap-2 items-center min-w-0">
+                      <figure data-variant="avatar" class="small" :aria-label="user.full_name">
+                        <abbr :title="user.full_name">{{ getInitials(user.full_name) }}</abbr>
+                      </figure>
+                      <div class="flex flex-col min-w-0">
+                        <strong class="truncate">{{ user.full_name }}</strong>
+                        <small class="text-light truncate">{{ user.email }}</small>
+                      </div>
+                    </div>
+                  </td>
+                  <td><span class="badge outline">{{ user.role?.name }}</span></td>
+                  <td class="align-right">
+                    <input
+                      type="checkbox"
+                      role="switch"
+                      :checked="contactsStore.currentContact?.assigned_user_id === user.id"
+                      :aria-label="user.full_name"
+                      @change="assignContactToUser(($event.target as HTMLInputElement).checked ? user.id : null); isAssignDialogOpen = false"
+                    />
+                  </td>
+                </tr>
+              </tbody>
+            </table>
           </div>
-          <Button
-            v-if="contactsStore.currentContact?.assigned_user_id"
-            variant="outline"
-            class="w-full justify-start"
-            @click="assignContactToUser(null); isAssignDialogOpen = false"
-          >
-            <UserMinus class="mr-2 h-4 w-4" />
-            {{ $t('chat.unassignContact') }}
-          </Button>
-          <Separator />
-          <ScrollArea class="max-h-[280px]">
-            <div class="space-y-1">
-              <Button
-                v-for="user in filteredAssignableUsers"
-                :key="user.id"
-                :variant="contactsStore.currentContact?.assigned_user_id === user.id ? 'secondary' : 'ghost'"
-                class="w-full justify-start"
-                @click="assignContactToUser(user.id); isAssignDialogOpen = false"
-              >
-                <User class="mr-2 h-4 w-4" />
-                <span>{{ user.full_name }}</span>
-                <Check
-                  v-if="contactsStore.currentContact?.assigned_user_id === user.id"
-                  class="ml-auto h-4 w-4 text-primary"
-                />
-                <Badge v-else variant="outline" class="ml-auto text-xs">
-                  {{ user.role?.name }}
-                </Badge>
-              </Button>
-              <p v-if="filteredAssignableUsers.length === 0" class="text-sm text-muted-foreground text-center py-4">
-                {{ $t('chat.noUsersFound') }}
-              </p>
-            </div>
-          </ScrollArea>
+          <p v-if="filteredAssignableUsers.length === 0" class="align-center text-light p-4">
+            <small>{{ $t('chat.noUsersFound') }}</small>
+          </p>
         </div>
-      </DialogContent>
-    </Dialog>
+      </div>
+    </Modal>
 
     <!-- Media Preview Dialog -->
-    <Dialog v-model:open="isMediaDialogOpen">
-      <DialogContent class="max-w-md">
-        <DialogHeader>
-          <DialogTitle>{{ $t('chat.sendMedia') }}</DialogTitle>
-          <DialogDescription>
-            {{ selectedFile?.name }}
-          </DialogDescription>
-        </DialogHeader>
-        <div class="py-4 space-y-4">
-          <!-- Image preview -->
-          <div v-if="selectedFile?.type.startsWith('image/') && filePreviewUrl" class="flex justify-center">
-            <img
-              :src="filePreviewUrl"
-              :alt="selectedFile.name"
-              class="max-w-full max-h-[300px] rounded-lg object-contain"
-            />
-          </div>
-          <!-- Video preview -->
-          <div v-else-if="selectedFile?.type.startsWith('video/') && filePreviewUrl" class="flex justify-center">
-            <video
-              :src="filePreviewUrl"
-              controls
-              class="max-w-full max-h-[300px] rounded-lg"
-            />
-          </div>
-          <!-- Audio preview -->
-          <div v-else-if="selectedFile?.type.startsWith('audio/')" class="flex justify-center">
-            <div class="flex items-center gap-3 px-4 py-3 bg-muted rounded-lg">
-              <div class="h-10 w-10 rounded-full bg-primary/10 flex items-center justify-center">
-                <Paperclip class="h-5 w-5 text-primary" />
-              </div>
-              <div>
-                <p class="font-medium text-sm">{{ selectedFile.name }}</p>
-                <p class="text-xs text-muted-foreground">{{ $t('chat.audioFile') }}</p>
-              </div>
-            </div>
-          </div>
-          <!-- Document preview -->
-          <div v-else-if="selectedFile" class="flex justify-center">
-            <div class="flex items-center gap-3 px-4 py-3 bg-muted rounded-lg">
-              <div class="h-10 w-10 rounded-full bg-primary/10 flex items-center justify-center">
-                <FileText class="h-5 w-5 text-primary" />
-              </div>
-              <div>
-                <p class="font-medium text-sm truncate max-w-[200px]">{{ selectedFile.name }}</p>
-                <p class="text-xs text-muted-foreground">
-                  {{ (selectedFile.size / 1024).toFixed(1) }} KB
-                </p>
-              </div>
-            </div>
-          </div>
-
-          <!-- Caption input (not for audio) -->
-          <div v-if="selectedFile && !selectedFile.type.startsWith('audio/')">
-            <Textarea
-              v-model="mediaCaption"
-              :placeholder="$t('chat.mediaCaption') + '...'"
-              class="min-h-[60px] max-h-[100px] resize-none"
-              :rows="2"
-            />
-          </div>
-
-          <!-- Actions -->
-          <div class="flex justify-end gap-2">
-            <Button variant="outline" @click="closeMediaDialog" :disabled="isUploadingMedia">
-              {{ $t('common.cancel') }}
-            </Button>
-            <Button @click="sendMediaMessage" :disabled="isUploadingMedia">
-              <Send v-if="!isUploadingMedia" class="mr-2 h-4 w-4" />
-              <span v-if="isUploadingMedia">{{ $t('chat.sending') }}...</span>
-              <span v-else>{{ $t('chat.send') }}</span>
-            </Button>
+    <Modal v-model:open="isMediaDialogOpen" :title="$t('chat.sendMedia')" :description="selectedFile?.name">
+      <div class="vstack gap-4">
+        <!-- Image preview -->
+        <div v-if="selectedFile?.type.startsWith('image/') && filePreviewUrl" class="flex justify-center">
+          <img :src="filePreviewUrl" :alt="selectedFile.name" class="media-preview" />
+        </div>
+        <!-- Video preview -->
+        <div v-else-if="selectedFile?.type.startsWith('video/') && filePreviewUrl" class="flex justify-center">
+          <video :src="filePreviewUrl" controls class="media-preview" />
+        </div>
+        <!-- Audio preview -->
+        <div v-else-if="selectedFile?.type.startsWith('audio/')" class="flex items-center gap-2">
+          <figure data-variant="avatar" class="shrink-0"><Paperclip :size="20" /></figure>
+          <div class="min-w-0">
+            <strong class="truncate">{{ selectedFile.name }}</strong>
+            <small class="text-light">{{ $t('chat.audioFile') }}</small>
           </div>
         </div>
-      </DialogContent>
-    </Dialog>
+        <!-- Document preview -->
+        <div v-else-if="selectedFile" class="flex items-center gap-2">
+          <figure data-variant="avatar" class="shrink-0"><FileText :size="20" /></figure>
+          <div class="flex flex-col min-w-0">
+            <strong class="truncate">{{ selectedFile.name }}</strong>
+            <small class="text-light">{{ (selectedFile.size / 1024).toFixed(1) }} KB</small>
+          </div>
+        </div>
+
+        <!-- Caption input (not for audio) -->
+        <textarea
+          v-if="selectedFile && !selectedFile.type.startsWith('audio/')"
+          v-model="mediaCaption"
+          :placeholder="$t('chat.mediaCaption') + '...'"
+          :aria-label="$t('chat.mediaCaption')"
+          rows="2"
+        />
+      </div>
+      <template #footer>
+        <button type="button" class="outline" :disabled="isUploadingMedia" @click="closeMediaDialog">
+          {{ $t('common.cancel') }}
+        </button>
+        <button
+          type="button"
+          :disabled="isUploadingMedia"
+          :aria-busy="isUploadingMedia ? 'true' : undefined"
+          data-spinner="small"
+          @click="sendMediaMessage"
+        >
+          <Send v-if="!isUploadingMedia" />
+          {{ isUploadingMedia ? `${$t('chat.sending')}...` : $t('chat.send') }}
+        </button>
+      </template>
+    </Modal>
 
     <!-- Add Contact Dialog -->
     <CreateContactDialog v-model:open="isAddContactOpen" @created="onContactCreated" />
@@ -2845,15 +2687,3 @@ async function sendMediaMessage() {
     />
   </div>
 </template>
-
-<style scoped>
-.sticky-date-enter-active,
-.sticky-date-leave-active {
-  transition: opacity 0.3s ease;
-}
-
-.sticky-date-enter-from,
-.sticky-date-leave-to {
-  opacity: 0;
-}
-</style>

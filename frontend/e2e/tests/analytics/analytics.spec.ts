@@ -14,29 +14,25 @@ test.describe('Agent Analytics', () => {
   })
 
   test('should display time range filter', async ({ page }) => {
-    // Check for time range selector
-    const timeRangeSelect = page.locator('button[role="combobox"]').first()
+    // Time range is a native select in the page header
+    const timeRangeSelect = page.locator('main').getByLabel('Date Range')
     await expect(timeRangeSelect).toBeVisible()
   })
 
   test('should change time range filter', async ({ page }) => {
-    // Open time range dropdown
-    await page.locator('button[role="combobox"]').first().click()
-
-    // Select different option
-    const options = page.locator('[role="option"]')
-    if (await options.count() > 1) {
-      await options.nth(1).click()
-      await page.waitForLoadState('networkidle')
-    }
+    const timeRangeSelect = page.locator('main').getByLabel('Date Range')
+    const options = timeRangeSelect.locator('option')
+    expect(await options.count()).toBeGreaterThan(1)
+    await timeRangeSelect.selectOption({ index: 1 })
+    await page.waitForLoadState('networkidle')
   })
 
   test('should display agent performance metrics', async ({ page }) => {
-    // Wait for loading to complete (skeleton should disappear)
-    await page.waitForSelector('.card-depth', { timeout: 15000 })
+    // Wait for the stat tiles to finish loading (skeletons disappear)
+    await page.locator('[data-testid="agent-stats"] h3').first().waitFor({ timeout: 15000 })
 
-    // Check stat card labels are visible (use exact match to avoid matching chart descriptions)
-    await expect(page.getByText('Transfers Handled', { exact: true })).toBeVisible()
+    // Stat card labels (exact match to avoid matching chart descriptions)
+    await expect(page.getByText('Transfers Handled', { exact: true }).first()).toBeVisible()
     await expect(page.getByText('Active Conversations', { exact: true })).toBeVisible()
   })
 })

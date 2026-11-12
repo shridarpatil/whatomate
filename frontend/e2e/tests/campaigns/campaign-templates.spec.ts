@@ -74,7 +74,7 @@ test.describe('Campaign Create - Template Loading', () => {
     await page.waitForLoadState('networkidle')
 
     // Template select should be disabled when no account selected
-    const templateSelect = page.locator('button[role="combobox"]').nth(1)
+    const templateSelect = page.locator('main select').nth(1)
     await expect(templateSelect).toBeDisabled()
   })
 
@@ -84,16 +84,14 @@ test.describe('Campaign Create - Template Loading', () => {
     await page.waitForLoadState('networkidle')
 
     // Select account
-    const accountSelect = page.locator('button[role="combobox"]').first()
-    await accountSelect.click()
-    await page.getByRole('option', { name: 'Account Alpha' }).click()
+    const accountSelect = page.locator('main select').first()
+    await accountSelect.selectOption({ label: 'Account Alpha' })
     await page.waitForTimeout(500)
 
-    // Open template dropdown
-    const templateSelect = page.locator('button[role="combobox"]').nth(1)
-    await templateSelect.click()
+    // Template options (native select; the placeholder option is disabled)
+    const templateSelect = page.locator('main select').nth(1)
 
-    const options = page.locator('[role="option"]')
+    const options = templateSelect.locator('option:not([disabled])')
     await expect(options).toHaveCount(2)
     await expect(options.nth(0)).toContainText('Order Confirmation')
     await expect(options.nth(1)).toContainText('Shipping Update')
@@ -105,25 +103,20 @@ test.describe('Campaign Create - Template Loading', () => {
     await page.waitForLoadState('networkidle')
 
     // Select first account
-    const accountSelect = page.locator('button[role="combobox"]').first()
-    await accountSelect.click()
-    await page.getByRole('option', { name: 'Account Alpha' }).click()
+    const accountSelect = page.locator('main select').first()
+    await accountSelect.selectOption({ label: 'Account Alpha' })
     await page.waitForTimeout(500)
 
-    // Open template dropdown and verify 2 templates
-    const templateSelect = page.locator('button[role="combobox"]').nth(1)
-    await templateSelect.click()
-    await expect(page.locator('[role="option"]')).toHaveCount(2)
-    await page.keyboard.press('Escape')
+    // Verify 2 templates
+    const templateSelect = page.locator('main select').nth(1)
+    await expect(templateSelect.locator('option:not([disabled])')).toHaveCount(2)
 
     // Switch to second account
-    await accountSelect.click()
-    await page.getByRole('option', { name: 'Account Beta' }).click()
+    await accountSelect.selectOption({ label: 'Account Beta' })
     await page.waitForTimeout(500)
 
     // Verify 1 template
-    await templateSelect.click()
-    await expect(page.locator('[role="option"]')).toHaveCount(1)
+    await expect(templateSelect.locator('option:not([disabled])')).toHaveCount(1)
   })
 
   test('should fall back to template name when display_name is empty', async ({ page }) => {
@@ -132,16 +125,12 @@ test.describe('Campaign Create - Template Loading', () => {
     await page.waitForLoadState('networkidle')
 
     // Select Account Beta (has template with empty display_name)
-    const accountSelect = page.locator('button[role="combobox"]').first()
-    await accountSelect.click()
-    await page.getByRole('option', { name: 'Account Beta' }).click()
+    const accountSelect = page.locator('main select').first()
+    await accountSelect.selectOption({ label: 'Account Beta' })
     await page.waitForTimeout(500)
 
-    // Open template dropdown
-    const templateSelect = page.locator('button[role="combobox"]').nth(1)
-    await templateSelect.click()
-
     // Should show template name as fallback
-    await expect(page.locator('[role="option"]').first()).toContainText('welcome_message')
+    const templateSelect = page.locator('main select').nth(1)
+    await expect(templateSelect.locator('option:not([disabled])').first()).toContainText('welcome_message')
   })
 })

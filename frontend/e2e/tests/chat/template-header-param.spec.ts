@@ -106,7 +106,7 @@ test.describe('Chat composer — TEXT header parameter', () => {
     await expect(chatPage.templateDialog).toBeVisible()
 
     // Header slot is labeled with a "Header" badge — the dedicated input lives
-    // in its own .space-y-1 block.
+    // in its own [data-param-header] field.
     const headerBadge = chatPage.templateDialog.getByText('Header', { exact: true })
     await expect(headerBadge).toBeVisible()
 
@@ -130,17 +130,12 @@ test.describe('Chat composer — TEXT header parameter', () => {
 
     await expect(chatPage.templateDialog).toBeVisible()
 
-    // The header slot is the .space-y-1 block containing the "Header" badge.
-    const headerSlot = chatPage.templateDialog
-      .locator('.space-y-1')
-      .filter({ has: page.getByText('Header', { exact: true }) })
+    // The header slot is the field carrying the "Header" badge.
+    const headerSlot = chatPage.templateDialog.locator('[data-param-header]')
     await headerSlot.locator('input').fill('HEADER-VAL')
 
     // Body inputs follow templateParamNames order — "1" then "2".
-    const bodyInputs = chatPage.templateDialog
-      .locator('.space-y-1')
-      .filter({ hasNotText: 'Header' })
-      .locator('input')
+    const bodyInputs = chatPage.templateDialog.locator('[data-param] input')
     await bodyInputs.nth(0).fill('BODY-VAL-1')
     await bodyInputs.nth(1).fill('BODY-VAL-2')
 
@@ -173,16 +168,10 @@ test.describe('Chat composer — TEXT header parameter', () => {
 
     await expect(chatPage.templateDialog).toBeVisible()
 
-    const headerSlot = chatPage.templateDialog
-      .locator('.space-y-1')
-      .filter({ has: page.getByText('Header', { exact: true }) })
+    const headerSlot = chatPage.templateDialog.locator('[data-param-header]')
     await headerSlot.locator('input').fill('Summer')
 
-    const nameInput = chatPage.templateDialog
-      .locator('.space-y-1')
-      .filter({ hasText: 'name' })
-      .filter({ hasNotText: 'Header' })
-      .locator('input')
+    const nameInput = chatPage.templateDialog.locator('[data-param="name"] input')
     await nameInput.fill('Alice')
 
     const sendRequest = page.waitForRequest((r) =>

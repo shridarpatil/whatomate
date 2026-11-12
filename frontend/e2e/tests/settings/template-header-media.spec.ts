@@ -67,7 +67,7 @@ test.describe('Template media header — issue #355', () => {
       await displayInput.fill(`Edited ${Date.now()}`)
     } else {
       // Fallback: edit the first writable input to dirty the form.
-      const firstInput = page.locator('input:visible').first()
+      const firstInput = page.locator('main').locator('input:visible').first()
       const original = await firstInput.inputValue()
       await firstInput.fill(`${original}_e`)
     }
@@ -96,28 +96,24 @@ test.describe('Template media header — issue #355', () => {
     // Fill the minimum required fields: name, account, body. Leave the IMAGE
     // header sample unset to trigger the new save guard.
     const name = `tpl_no_media_${Date.now()}`
-    const nameInput = page.locator('input').first()
+    const nameInput = page.locator('main').locator('input').first()
     await nameInput.fill(name)
 
-    // Select the WhatsApp account combobox (first combobox on the page).
-    const accountCombo = page.locator('button[role="combobox"]').first()
-    await accountCombo.click()
-    await page.getByRole('option', { name: accountName }).first().click()
+    // Select the WhatsApp account (first select inside <main>).
+    await page.locator('main select').first().selectOption({ label: accountName })
 
     // Body content.
-    await page.locator('textarea').first().fill('Hello no-media')
+    await page.locator('main').locator('textarea').first().fill('Hello no-media')
 
     // Switch header type to IMAGE.
-    const headerCombo = page.locator('button[role="combobox"]').filter({ hasText: /Header|TEXT|None|Type/i }).first()
-    await headerCombo.click()
-    await page.getByRole('option', { name: /^Image$/i }).first().click()
+    await page.locator('main label').filter({ hasText: 'Header Type' }).locator('select').selectOption({ label: 'Image' })
     await page.waitForTimeout(200)
 
     // Click Save — expect the new guard toast and no navigation away from /new.
     await page.getByRole('button', { name: /Create|Save/i }).first().click({ force: true })
 
     await expect(
-      page.locator('[data-sonner-toast], [role="status"], [role="alert"]')
+      page.locator('.toast-container output, [role="status"], [role="alert"]')
         .filter({ hasText: /Upload a sample/i })
     ).toBeVisible({ timeout: 5000 })
 

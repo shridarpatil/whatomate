@@ -75,8 +75,7 @@ export class ChatbotSettingsPage extends BasePage {
     const control = this.page.getByRole('button', { name: type === 'url' ? /^URL$/ : /^Reply$/ })
     await (editor === 'first' ? control.first() : control.last()).click()
 
-    const rows = this.page.locator('.flex.items-center.gap-2:has(input)')
-    await rows.last().locator('input').fill(title)
+    await this.page.getByPlaceholder('Button title').last().fill(title)
 
     if (type === 'url') {
       await this.page.getByPlaceholder('https://example.com').last().fill(url ?? '')
@@ -93,30 +92,28 @@ export class ChatbotSettingsPage extends BasePage {
 
   // Agents tab helpers
   async toggleAgentQueuePickup() {
-    await this.page.locator('button[role="switch"]').first().click()
+    await this.page.getByRole('switch').first().click()
   }
 
   async toggleAssignToSameAgent() {
-    await this.page.locator('button[role="switch"]').nth(1).click()
+    await this.page.getByRole('switch').nth(1).click()
   }
 
   async toggleAgentCurrentConversationOnly() {
-    await this.page.locator('button[role="switch"]').nth(2).click()
+    await this.page.getByRole('switch').nth(2).click()
   }
 
   // Hours tab helpers
   async toggleBusinessHours() {
-    await this.page.locator('button[role="switch"]').first().click()
+    await this.page.getByRole('switch').first().click()
   }
 
   async setDayHours(dayIndex: number, enabled: boolean, startTime?: string, endTime?: string) {
-    const dayRow = this.page.locator('.flex.items-center.gap-4').nth(dayIndex)
-    const switchEl = dayRow.locator('button[role="switch"]')
-    const currentState = await switchEl.getAttribute('data-state')
+    const days = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday']
+    const switchEl = this.page.getByRole('switch', { name: days[dayIndex], exact: true })
+    const dayRow = switchEl.locator('..')
 
-    if ((enabled && currentState === 'unchecked') || (!enabled && currentState === 'checked')) {
-      await switchEl.click()
-    }
+    await switchEl.setChecked(enabled)
 
     if (enabled && startTime) {
       await dayRow.locator('input[type="time"]').first().fill(startTime)
@@ -127,69 +124,67 @@ export class ChatbotSettingsPage extends BasePage {
   }
 
   async fillOutOfHoursMessage(message: string) {
-    await this.page.locator('textarea').filter({ hasText: '' }).last().fill(message)
+    await this.page.locator('main').locator('textarea').filter({ hasText: '' }).last().fill(message)
   }
 
   async toggleAllowAutomatedOutsideHours() {
-    await this.page.locator('button[role="switch"]').last().click()
+    await this.page.getByRole('switch').last().click()
   }
 
   // SLA tab helpers
   async toggleSLAEnabled() {
-    await this.page.locator('button[role="switch"]').first().click()
+    await this.page.getByRole('switch').first().click()
   }
 
   async setSLAResponseMinutes(minutes: number) {
-    await this.page.locator('input[type="number"]').first().fill(String(minutes))
+    await this.page.locator('main').locator('input[type="number"]').first().fill(String(minutes))
   }
 
   async setSLAEscalationMinutes(minutes: number) {
-    await this.page.locator('input[type="number"]').nth(1).fill(String(minutes))
+    await this.page.locator('main').locator('input[type="number"]').nth(1).fill(String(minutes))
   }
 
   async setSLAResolutionMinutes(minutes: number) {
-    await this.page.locator('input[type="number"]').nth(2).fill(String(minutes))
+    await this.page.locator('main').locator('input[type="number"]').nth(2).fill(String(minutes))
   }
 
   async setSLAAutoCloseHours(hours: number) {
-    await this.page.locator('input[type="number"]').nth(3).fill(String(hours))
+    await this.page.locator('main').locator('input[type="number"]').nth(3).fill(String(hours))
   }
 
   async fillAutoCloseMessage(message: string) {
-    await this.page.locator('textarea').first().fill(message)
+    await this.page.locator('main').locator('textarea').first().fill(message)
   }
 
   async toggleClientReminder() {
     // Find the Client Inactivity Reminders switch
-    const switches = this.page.locator('button[role="switch"]')
+    const switches = this.page.getByRole('switch')
     await switches.nth(1).click() // Second switch in SLA tab
   }
 
   // AI tab helpers
   async toggleAIEnabled() {
-    await this.page.locator('button[role="switch"]').first().click()
+    await this.page.getByRole('switch').first().click()
   }
 
   async selectAIProvider(provider: string) {
-    await this.page.locator('button[role="combobox"]').first().click()
-    await this.page.locator('[role="option"]').filter({ hasText: provider }).click()
+    await this.page.getByLabel('AI Provider').selectOption({ label: provider })
   }
 
   async selectAIModel(model: string) {
-    await this.page.locator('button[role="combobox"]').nth(1).click()
-    await this.page.locator('[role="option"]').filter({ hasText: model }).click()
+    await this.page.getByLabel(/^Model/).selectOption({ label: model })
   }
 
   async fillAPIKey(key: string) {
-    await this.page.locator('input[type="password"]').fill(key)
+    await this.page.locator('main').locator('input[type="password"]').fill(key)
   }
 
   async setMaxTokens(tokens: number) {
-    await this.page.locator('input[type="number"]').first().fill(String(tokens))
+    await this.page.locator('main').locator('input[type="number"]').first().fill(String(tokens))
   }
 
   async fillSystemPrompt(prompt: string) {
-    await this.page.locator('textarea').fill(prompt)
+    await this.page.locator('main').locator('textarea').fill(prompt)
   }
 
   async saveSettings() {
@@ -198,18 +193,9 @@ export class ChatbotSettingsPage extends BasePage {
 
   // Toast helpers
   async expectToast(text: string | RegExp) {
-    const toast = this.page.locator('[data-sonner-toast]').filter({ hasText: text })
+    const toast = this.page.locator('.toast-container output').filter({ hasText: text })
     await expect(toast).toBeVisible({ timeout: 5000 })
     return toast
-  }
-
-  async dismissToast(text?: string | RegExp) {
-    const toast = text
-      ? this.page.locator('[data-sonner-toast]').filter({ hasText: text })
-      : this.page.locator('[data-sonner-toast]').first()
-    if (await toast.isVisible()) {
-      await toast.click()
-    }
   }
 
   // Assertions

@@ -1,28 +1,21 @@
 <script setup lang="ts">
-import { Button } from '@/components/ui/button'
-import { Home, ArrowLeft } from 'lucide-vue-next'
+import { Home, ArrowLeft } from '@/lib/icons'
 </script>
 
 <template>
-  <div class="min-h-screen flex items-center justify-center bg-background p-4">
-    <div class="text-center">
-      <h1 class="text-9xl font-bold text-muted-foreground/20">404</h1>
-      <h2 class="text-2xl font-semibold mt-4">{{ $t('notFound.title') }}</h2>
-      <p class="text-muted-foreground mt-2 max-w-md">
-        {{ $t('notFound.description') }}
-      </p>
-      <div class="flex items-center justify-center gap-4 mt-8">
-        <Button variant="outline" @click="$router.back()">
-          <ArrowLeft class="h-4 w-4 mr-2" />
-          {{ $t('notFound.goBack') }}
-        </Button>
-        <RouterLink to="/">
-          <Button>
-            <Home class="h-4 w-4 mr-2" />
-            {{ $t('notFound.goHome') }}
-          </Button>
-        </RouterLink>
-      </div>
+  <div class="flex flex-col items-center justify-center h-screen p-4 align-center">
+    <h1>404</h1>
+    <h2>{{ $t('notFound.title') }}</h2>
+    <p class="text-light">{{ $t('notFound.description') }}</p>
+    <div class="hstack gap-4 mt-8">
+      <button type="button" class="outline" @click="$router.back()">
+        <ArrowLeft :size="16" />
+        {{ $t('notFound.goBack') }}
+      </button>
+      <RouterLink to="/" class="button">
+        <Home :size="16" />
+        {{ $t('notFound.goHome') }}
+      </RouterLink>
     </div>
   </div>
 </template>

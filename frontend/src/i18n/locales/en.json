@@ -1,5 +1,7 @@
 {
   "dateRange": {
+    "from": "From",
+    "to": "To",
     "selectRange": "Date Range",
     "today": "Today",
     "last7Days": "Last 7 Days",
@@ -47,6 +49,8 @@
     "deselectAll": "Deselect All",
     "noResults": "No results found",
     "noData": "No data available",
+    "showData": "Show data",
+    "value": "Value",
     "error": "Error",
     "success": "Success",
     "warning": "Warning",
@@ -116,7 +120,12 @@
     "loadMore": "Load more",
     "stay": "Stay",
     "unsavedChangesDesc": "You have unsaved changes. Are you sure you want to leave?",
-    "unsavedChangesTitle": "Unsaved Changes"
+    "unsavedChangesTitle": "Unsaved Changes",
+    "firstPage": "First page",
+    "lastPage": "Last page",
+    "pagination": "Pagination",
+    "scrollToTop": "Scroll to top",
+    "clickToUpload": "Click to upload file"
   },
   "auth": {
     "login": "Login",
@@ -238,6 +247,9 @@
     "Widget": "Widget"
   },
   "nav": {
+    "sidebar": "Sidebar",
+    "mainNavigation": "Main navigation",
+    "secondaryNavigation": "Secondary navigation",
     "dashboard": "Dashboard",
     "chat": "Chat",
     "contacts": "Contacts",
@@ -281,6 +293,10 @@
     "toggleMenu": "Toggle menu"
   },
   "userMenu": {
+    "colorTheme": "Color theme",
+    "themeLight": "Light theme",
+    "themeDark": "Dark theme",
+    "themeSystem": "System theme",
     "myAccount": "My Account",
     "status": "Status",
     "available": "Available",
@@ -295,9 +311,12 @@
     "failedUpdateAvailability": "Failed to update availability",
     "awayWarningTitle": "Active Transfers Will Be Returned to Queue",
     "awayWarningDesc": "You have {count} active transfer(s) assigned to you. Setting your status to \"Away\" will return them to the queue for other agents to pick up.",
-    "goAway": "Go Away"
+    "goAway": "Go Away",
+    "userMenu": "User menu",
+    "toggleAvailability": "Toggle availability status"
   },
   "chat": {
+    "lastActive": "Last active {time}",
     "marketingOptOut": "Marketing Opt-out",
     "conversations": "Conversations",
     "messages": "Messages",
@@ -342,6 +361,7 @@
     "noTagsAvailable": "No tags available",
     "paused": "Paused",
     "assignedTo": "Assigned to",
+    "assigned": "Assigned",
     "unassigned": "Unassigned",
     "assign": "Assign",
     "transfer": "Transfer",
@@ -442,7 +462,11 @@
     "urlButtonParamPlaceholder": "Enter dynamic URL value",
     "preview": "Preview",
     "serviceWindowExpired": "The 24-hour messaging window has expired. Only template messages can be sent until the customer replies.",
-    "sendTemplateAction": "Send Template"
+    "sendTemplateAction": "Send Template",
+    "noTags": "No tags",
+    "general": "General",
+    "noPanelData": "No data configured",
+    "noPanelDataHint": "Configure panel display in the chatbot flow settings."
   },
   "contacts": {
     "title": "Contacts",
@@ -607,7 +631,10 @@
     "metaAppCredentialsDesc": "Set tenant-specific Meta App configurations for WhatsApp Embedded Signup. Leave secret blank to keep existing.",
     "metaAppId": "Meta App ID",
     "metaConfigId": "Meta Config ID",
-    "metaAppSecret": "Meta App Secret"
+    "metaAppSecret": "Meta App Secret",
+    "previewRingtone": "Preview ringtone",
+    "playAudio": "Play",
+    "pauseAudio": "Pause"
   },
   "users": {
     "title": "User Management",
@@ -782,6 +809,10 @@
     "searchUsers": "Search users"
   },
   "organizations": {
+    "label": "Organization",
+    "selectPlaceholder": "Select organization",
+    "loading": "Loading...",
+    "none": "No organizations found",
     "createNew": "Create Organization",
     "createTitle": "Create Organization",
     "createDesc": "Create a new organization to manage a separate workspace.",
@@ -1087,6 +1118,7 @@
     "errorLoadingApiKeys": "Failed to load API keys. Please try again."
   },
   "webhooks": {
+    "removeHeader": "Remove header",
     "title": "Webhooks",
     "subtitle": "Configure webhooks to send events to external systems",
     "addWebhook": "Add Webhook",
@@ -1264,6 +1296,7 @@
     "goHome": "Go Home"
   },
   "profile": {
+    "togglePasswordVisibility": "Toggle password visibility",
     "title": "Profile",
     "description": "Manage your account settings",
     "accountInfo": "Account Information",
@@ -1470,6 +1503,8 @@
     "layoutSaved": "Layout saved",
     "saveLayoutFailed": "Failed to save layout",
     "editLayout": "Edit Layout",
+    "moveEarlier": "Move earlier",
+    "moveLater": "Move later",
     "editWidgetTooltip": "Edit widget",
     "deleteWidgetTooltip": "Delete widget",
     "noChange": "No change",
@@ -1844,7 +1879,9 @@
     "aiSettingsSaved": "AI settings saved",
     "slaSettingsSaved": "SLA settings saved",
     "aiSaveFailed": "Failed to save AI settings",
-    "slaSaveFailed": "Failed to save SLA settings"
+    "slaSaveFailed": "Failed to save SLA settings",
+    "startTime": "{day} start time",
+    "endTime": "{day} end time"
   },
   "agentTransfers": {
     "title": "Transfers",
@@ -2384,7 +2421,16 @@
     "sectionLabelPlaceholder": "Section Label",
     "addFieldPlaceholder": "+ Add",
     "exampleUrlPlaceholder": "https://example.com",
-    "dataPathPlaceholder": "data.path"
+    "dataPathPlaceholder": "data.path",
+    "previewTitle": "Flow preview",
+    "previewStart": "Start",
+    "previewPause": "Pause",
+    "previewRestart": "Restart",
+    "previewStepForward": "Step forward",
+    "previewStepBack": "Step back",
+    "dataPath": "Data path",
+    "configureApiMock": "Configure API Mock",
+    "selectOption": "Select an option"
   },
   "calling": {
     "callLogs": "Call Logs",
@@ -2512,7 +2558,8 @@
     "deleteNodeConfirmTitle": "Delete Node",
     "deleteNodeConfirmDesc": "Are you sure you want to delete this node? All connected edges will also be removed.",
     "flowSaving": "Saving...",
-    "flowSave": "Save"
+    "flowSave": "Save",
+    "ttsText": "Text to speak"
   },
   "callTransfers": {
     "title": "Call Transfers",
@@ -2563,5 +2610,51 @@
     "callFailed": "Failed to initiate call",
     "permissionSent": "Call permission request sent",
     "permissionSentDesc": "The contact needs to accept the call permission on WhatsApp before you can call them. Try again after they accept."
+  },
+  "waFlowBuilder": {
+    "screens": "Screens",
+    "addScreen": "Add Screen",
+    "removeScreen": "Remove screen",
+    "noScreens": "No screens yet",
+    "selectScreen": "Select a screen",
+    "screenTitle": "Screen Title",
+    "addComponents": "Add Components",
+    "addComponentsHint": "Add components from the palette",
+    "addScreenToStart": "Add a screen to get started",
+    "properties": "Properties",
+    "selectComponentHint": "Select a component to edit its properties",
+    "moveUp": "Move up",
+    "moveDown": "Move down",
+    "removeComponent": "Remove component",
+    "text": "Text",
+    "label": "Label",
+    "fieldName": "Field Name (Key)",
+    "fieldNamePlaceholder": "e.g. email, phone, message",
+    "fieldNameHint": "This key is used in the response data. Use lowercase with underscores (e.g. customer_name).",
+    "required": "Required",
+    "options": "Options",
+    "add": "Add",
+    "optionPlaceholder": "Option text",
+    "removeOption": "Remove option",
+    "buttonText": "Button Text",
+    "action": "Action",
+    "completeFlow": "Complete Flow",
+    "navigateToScreen": "Navigate to Screen",
+    "targetScreen": "Target Screen",
+    "selectTargetScreen": "Select screen",
+    "selectPlaceholder": "Select...",
+    "types": {
+      "heading": "Heading",
+      "subheading": "Subheading",
+      "text": "Text",
+      "textInput": "Text Input",
+      "textArea": "Text Area",
+      "dropdown": "Dropdown",
+      "radioButtons": "Radio Buttons",
+      "checkboxes": "Checkboxes",
+      "datePicker": "Date Picker",
+      "image": "Image",
+      "footerButton": "Footer Button"
+    }
   }
 }

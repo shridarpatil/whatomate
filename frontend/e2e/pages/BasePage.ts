@@ -1,4 +1,4 @@
-import { Page, Locator } from '@playwright/test'
+import { Page, Locator, expect } from '@playwright/test'
 
 export class BasePage {
   constructor(protected page: Page) {}
@@ -20,7 +20,7 @@ export class BasePage {
   }
 
   async getToastMessage(): Promise<string | null> {
-    const toast = this.page.locator('[data-sonner-toast]').first()
+    const toast = this.page.locator('.toast-container output').first()
     if (await toast.isVisible()) {
       return toast.textContent()
     }
@@ -28,13 +28,14 @@ export class BasePage {
   }
 
   async waitForToast(text: string) {
-    await this.page.locator('[data-sonner-toast]').filter({ hasText: text }).waitFor()
+    await this.page.locator('.toast-container output').filter({ hasText: text }).waitFor()
   }
 
-  async dismissToast() {
-    const toast = this.page.locator('[data-sonner-toast]').first()
-    if (await toast.isVisible()) {
-      await toast.locator('button').click()
-    }
+  // Oat toasts have no close button or click-to-dismiss, so remove them from the DOM.
+  async dismissToast(text?: string | RegExp) {
+    const toasts = this.page.locator('.toast-container output')
+    const target = text ? toasts.filter({ hasText: text }) : toasts
+    await target.evaluateAll(els => els.forEach(el => el.remove()))
+    await expect(target).toHaveCount(0)
   }
 }

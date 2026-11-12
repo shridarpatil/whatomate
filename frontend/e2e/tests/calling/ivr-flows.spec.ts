@@ -50,11 +50,11 @@ test.describe('IVR Flow Toggle Status', () => {
 
   test('should show confirmation when toggling flow status', async ({ page }) => {
     // Find an active/disabled status badge that acts as a toggle button
-    const statusBadge = page.locator('[role="button"]').filter({ hasText: /active|disabled/i }).first()
+    const statusBadge = page.locator('main tbody button.badge').filter({ hasText: /enabled|disabled/i }).first()
     if (await statusBadge.isVisible({ timeout: 3000 }).catch(() => false)) {
       await statusBadge.click()
       // Verify the confirmation alert dialog appears
-      const alertDialog = page.locator('[role="alertdialog"]')
+      const alertDialog = page.getByRole('alertdialog')
       const dialogVisible = await alertDialog.isVisible({ timeout: 3000 }).catch(() => false)
       if (dialogVisible) {
         // Click cancel to dismiss without changing state

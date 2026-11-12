@@ -7,7 +7,7 @@ const scope = createTestScope('tpl-sample-values')
 async function gotoNewTemplate(page: Page) {
   await page.goto('/templates/new')
   // Wait for the Vue app to mount — the body textarea is inside the Content card
-  const bodyTextarea = page.locator('textarea').first()
+  const bodyTextarea = page.locator('main').locator('textarea').first()
   await bodyTextarea.waitFor({ state: 'visible', timeout: 15000 })
   // Ensure textarea is enabled/editable
   await expect(bodyTextarea).toBeEnabled({ timeout: 5000 })
@@ -88,17 +88,15 @@ test.describe('Template Sample Values', () => {
   test('should show header variables when header type is TEXT', async ({ page }) => {
     await gotoNewTemplate(page)
 
-    // Select TEXT header type — find the select within the Header Type field
-    const headerTypeField = page.locator('div.space-y-1\\.5').filter({ hasText: 'Header Type' })
-    const headerTypeSelect = headerTypeField.locator('button[role="combobox"]')
-    await headerTypeSelect.click()
-    await page.locator('[role="option"]').filter({ hasText: 'Text' }).click()
+    // Select TEXT header type — find the native select within the Header Type field
+    const headerTypeSelect = page.locator('main label').filter({ hasText: 'Header Type' }).locator('select')
+    await headerTypeSelect.selectOption({ label: 'Text' })
 
     const headerContentInput = page.locator('#header-content')
     await headerContentInput.waitFor({ state: 'visible', timeout: 5000 })
     await headerContentInput.fill('Welcome {{1}}!')
 
-    const bodyTextarea = page.locator('textarea').first()
+    const bodyTextarea = page.locator('main').locator('textarea').first()
     await bodyTextarea.fill('Hello {{1}}, check your order {{2}}.')
 
     await expect(page.getByText('Sample Values for Variables')).toBeVisible()
@@ -140,10 +138,15 @@ test.describe('Template Preview with Sample Values', () => {
     await expect(previewBtn).toBeVisible({ timeout: 10000 })
     await previewBtn.click()
 
-    const dialog = page.locator('[role="alertdialog"]')
+    // The preview is a regular (non-alert) Modal dialog labelled by its title.
+    const dialog = page.getByRole('dialog', { name: 'Template Preview' })
     await expect(dialog).toBeVisible({ timeout: 5000 })
-    await expect(dialog.getByText('Template Preview')).toBeVisible()
+    await expect(dialog.getByRole('heading', { name: 'Template Preview' })).toBeVisible()
+    // {{1}} is replaced by its sample value (or a "[1]" placeholder), never shown raw
+    await expect(dialog.getByText(/^Hello (?!\{\{).+, welcome$/)).toBeVisible()
 
-    await dialog.getByRole('button', { name: /Close/i }).click()
+    // Footer "Close" (the header X shares the same accessible name)
+    await dialog.locator('footer').getByRole('button', { name: /Close/i }).click()
+    await expect(dialog).toBeHidden()
   })
 })

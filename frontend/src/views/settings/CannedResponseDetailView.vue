@@ -4,7 +4,7 @@ import { useRoute, useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { useAuthStore } from '@/stores/auth'
 import { cannedResponsesService, type CannedResponse } from '@/services/api'
-import { toast } from 'vue-sonner'
+import { toast } from '@/lib/toast'
 import { getErrorMessage } from '@/lib/api-utils'
 import { validateWhatsAppButtons } from '@/lib/whatsappButtons'
 import { useUnsavedChangesGuard } from '@/composables/useUnsavedChangesGuard'
@@ -15,31 +15,8 @@ import UnsavedChangesDialog from '@/components/shared/UnsavedChangesDialog.vue'
 import MessageButtonsEditor from '@/components/shared/MessageButtonsEditor.vue'
 import PreviewButtonGroup from '@/components/chatbot/flow-preview/PreviewButtonGroup.vue'
 import type { ButtonConfig } from '@/types/flow-preview'
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { Badge } from '@/components/ui/badge'
-import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
-import { Label } from '@/components/ui/label'
-import { Switch } from '@/components/ui/switch'
-import { Textarea } from '@/components/ui/textarea'
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select'
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from '@/components/ui/alert-dialog'
-import { MessageSquareText, Trash2, Save } from 'lucide-vue-next'
+import Modal from '@/components/oat/Modal.vue'
+import { MessageSquareText, Trash2, Save } from '@/lib/icons'
 import { CANNED_RESPONSE_CATEGORIES } from '@/lib/constants'
 
 const route = useRoute()
@@ -201,7 +178,6 @@ onMounted(() => { loadResponse() })
     <DetailPageLayout
       :title="pageTitle"
       :icon="MessageSquareText"
-      icon-gradient="bg-gradient-to-br from-teal-500 to-emerald-600 shadow-teal-500/20"
       back-link="/settings/canned-responses"
       :breadcrumbs="breadcrumbs"
       :is-loading="isLoading"
@@ -209,83 +185,72 @@ onMounted(() => { loadResponse() })
       :not-found-title="$t('cannedResponses.noResponsesFound')"
     >
       <template #actions>
-        <div class="flex items-center gap-2">
-          <Button v-if="canWrite && (hasChanges || isNew)" size="sm" @click="save" :disabled="isSaving || !canSave">
-            <Save class="h-4 w-4 mr-1" />
+        <div class="hstack gap-2">
+          <button v-if="canWrite && (hasChanges || isNew)" type="button" class="small" :disabled="isSaving || !canSave" :aria-busy="isSaving ? 'true' : undefined" data-spinner="small" @click="save">
+            <Save v-if="!isSaving" :size="16" />
             {{ isSaving ? $t('common.saving', 'Saving...') : $t('common.save') }}
-          </Button>
-          <Button
-            v-if="!isNew && canDelete"
-            variant="destructive"
-            size="sm"
-            @click="deleteDialogOpen = true"
-          >
-            <Trash2 class="h-4 w-4 mr-1" />
+          </button>
+          <button v-if="!isNew && canDelete" type="button" class="small" data-variant="danger" @click="deleteDialogOpen = true">
+            <Trash2 :size="16" />
             {{ $t('common.delete') }}
-          </Button>
+          </button>
         </div>
       </template>
 
       <!-- Details Card -->
-      <Card>
-        <CardHeader class="pb-3">
-          <div class="flex items-center justify-between">
-            <CardTitle class="text-sm font-medium">{{ $t('teams.details', 'Details') }}</CardTitle>
-            <Badge v-if="!isNew" :variant="form.is_active ? 'default' : 'secondary'">
-              {{ form.is_active ? $t('common.active') : $t('common.inactive') }}
-            </Badge>
-          </div>
-        </CardHeader>
-        <CardContent class="space-y-4">
-          <div class="space-y-1.5">
-            <Label class="text-xs">{{ $t('cannedResponses.name') }} <span class="text-destructive">*</span></Label>
-            <Input v-model="form.name" placeholder="Welcome Message" :disabled="!canWrite" />
-          </div>
-          <div class="grid grid-cols-2 gap-4">
-            <div class="space-y-1.5">
-              <Label class="text-xs">{{ $t('cannedResponses.shortcut') }}</Label>
-              <div class="relative">
-                <span class="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground">/</span>
-                <Input v-model="form.shortcut" placeholder="welcome" class="pl-7" :disabled="!canWrite" />
-              </div>
-              <p class="text-[11px] text-muted-foreground">{{ $t('cannedResponses.shortcutHint') }}</p>
+      <article class="card">
+        <header class="hstack justify-between">
+          <h3>{{ $t('teams.details', 'Details') }}</h3>
+          <span v-if="!isNew" class="badge" :data-variant="form.is_active ? 'success' : 'secondary'">
+            {{ form.is_active ? $t('common.active') : $t('common.inactive') }}
+          </span>
+        </header>
+        <div class="vstack gap-4">
+          <label data-field>
+            {{ $t('cannedResponses.name') }} *
+            <input v-model="form.name" placeholder="Welcome Message" :disabled="!canWrite" />
+          </label>
+          <div class="row">
+            <div class="col-6">
+              <label data-field>
+                {{ $t('cannedResponses.shortcut') }}
+                <input v-model="form.shortcut" placeholder="welcome" :disabled="!canWrite" />
+                <small data-hint>{{ $t('cannedResponses.shortcutHint') }}</small>
+              </label>
             </div>
-            <div class="space-y-1.5">
-              <Label class="text-xs">{{ $t('cannedResponses.category') }}</Label>
-              <Select v-model="form.category" :disabled="!canWrite">
-                <SelectTrigger>
-                  <SelectValue :placeholder="$t('cannedResponses.category')" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem v-for="cat in CANNED_RESPONSE_CATEGORIES" :key="cat.value" :value="cat.value">
-                    {{ cat.label }}
-                  </SelectItem>
-                </SelectContent>
-              </Select>
+            <div class="col-6">
+              <label data-field>
+                {{ $t('cannedResponses.category') }}
+                <select v-model="form.category" :disabled="!canWrite">
+                  <option value="">{{ $t('cannedResponses.category') }}</option>
+                  <option v-for="cat in CANNED_RESPONSE_CATEGORIES" :key="cat.value" :value="cat.value">{{ cat.label }}</option>
+                </select>
+              </label>
             </div>
           </div>
-          <div class="space-y-1.5">
-            <Label class="text-xs">{{ $t('cannedResponses.content') }} <span class="text-destructive">*</span></Label>
-            <Textarea v-model="form.content" :placeholder="$t('cannedResponses.contentPlaceholder')" :rows="6" :disabled="!canWrite" />
-            <p class="text-[11px] text-muted-foreground">{{ $t('cannedResponses.placeholderHint') }}</p>
-          </div>
-          <div v-if="!isNew" class="flex items-center justify-between border-t pt-4">
-            <Label class="text-xs font-normal cursor-pointer">{{ $t('common.active') }}</Label>
-            <Switch
-              :checked="form.is_active"
-              @update:checked="form.is_active = $event"
-              :disabled="!canWrite"
-            />
-          </div>
-        </CardContent>
-      </Card>
+          <label data-field>
+            {{ $t('cannedResponses.content') }} *
+            <textarea v-model="form.content" :placeholder="$t('cannedResponses.contentPlaceholder')" rows="6" :disabled="!canWrite" />
+            <small data-hint>{{ $t('cannedResponses.placeholderHint') }}</small>
+          </label>
+          <template v-if="!isNew">
+            <hr>
+            <label data-field>
+              <span class="hstack justify-between">
+                <span>{{ $t('common.active') }}</span>
+                <input v-model="form.is_active" type="checkbox" role="switch" :disabled="!canWrite" />
+              </span>
+            </label>
+          </template>
+        </div>
+      </article>
 
       <!-- Buttons -->
-      <Card>
-        <CardHeader class="pb-3">
-          <CardTitle class="text-sm font-medium">{{ $t('cannedResponses.buttons', 'Buttons') }}</CardTitle>
-        </CardHeader>
-        <CardContent class="space-y-4">
+      <article class="card">
+        <header>
+          <h3>{{ $t('cannedResponses.buttons', 'Buttons') }}</h3>
+        </header>
+        <div class="vstack gap-4">
           <MessageButtonsEditor
             :buttons="form.buttons"
             :allowed-types="['reply', 'url', 'voice_call', 'flow']"
@@ -293,23 +258,23 @@ onMounted(() => { loadResponse() })
             @update:buttons="form.buttons = $event"
           />
 
-          <p
-            v-if="buttonsValidationError"
-            class="text-xs text-destructive rounded-md border border-destructive/30 bg-destructive/10 px-3 py-2"
-          >
+          <div v-if="buttonsValidationError" role="alert" data-variant="danger">
             {{ buttonsValidationError }}
-          </p>
+          </div>
 
           <!-- WhatsApp-style preview -->
-          <div v-if="form.buttons.length > 0" class="border-t pt-3">
-            <p class="text-[11px] text-muted-foreground mb-2">{{ $t('common.preview', 'Preview') }}</p>
-            <div class="max-w-sm bg-[#0a141a] dark:bg-[#0a141a] rounded-lg p-3 space-y-1">
-              <p v-if="form.content" class="text-sm text-white whitespace-pre-wrap">{{ form.content }}</p>
+          <template v-if="form.buttons.length > 0">
+            <hr>
+            <small class="text-light">{{ $t('common.preview', 'Preview') }}</small>
+            <div class="card vstack gap-2">
+              <p v-if="form.content">
+                <template v-for="(line, idx) in form.content.split('\n')" :key="idx"><br v-if="idx > 0">{{ line }}</template>
+              </p>
               <PreviewButtonGroup :buttons="form.buttons" disabled />
             </div>
-          </div>
-        </CardContent>
-      </Card>
+          </template>
+        </div>
+      </article>
 
       <!-- Activity Log -->
       <AuditLogPanel
@@ -328,20 +293,13 @@ onMounted(() => { loadResponse() })
     </DetailPageLayout>
 
     <!-- Delete Confirmation -->
-    <AlertDialog v-model:open="deleteDialogOpen">
-      <AlertDialogContent>
-        <AlertDialogHeader>
-          <AlertDialogTitle>{{ $t('cannedResponses.deleteTitle') }}</AlertDialogTitle>
-          <AlertDialogDescription>
-            {{ $t('teams.deleteConfirm', 'Are you sure? This action cannot be undone.') }}
-          </AlertDialogDescription>
-        </AlertDialogHeader>
-        <AlertDialogFooter>
-          <AlertDialogCancel>{{ $t('common.cancel') }}</AlertDialogCancel>
-          <AlertDialogAction @click="deleteResponse">{{ $t('common.delete') }}</AlertDialogAction>
-        </AlertDialogFooter>
-      </AlertDialogContent>
-    </AlertDialog>
+    <Modal v-model:open="deleteDialogOpen" alert :title="$t('cannedResponses.deleteTitle')">
+      <p>{{ $t('teams.deleteConfirm', 'Are you sure? This action cannot be undone.') }}</p>
+      <template #footer>
+        <button type="button" class="outline" @click="deleteDialogOpen = false">{{ $t('common.cancel') }}</button>
+        <button type="button" data-variant="danger" @click="deleteResponse">{{ $t('common.delete') }}</button>
+      </template>
+    </Modal>
 
     <UnsavedChangesDialog :open="showLeaveDialog" @stay="cancelLeave" @leave="confirmLeave" />
   </div>

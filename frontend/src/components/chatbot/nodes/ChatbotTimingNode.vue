@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed } from 'vue'
-import { Clock } from 'lucide-vue-next'
+import { Clock } from '@/lib/icons'
 import BaseNode from '@/components/calling/nodes/BaseNode.vue'
 
 defineOptions({ inheritAttrs: false })
@@ -23,11 +23,10 @@ const outputHandles = [
 <template>
   <BaseNode
     :label="data?.label || 'Timing'"
-    header-class="bg-cyan-600"
     :output-handles="outputHandles"
     :has-input="!data?.isEntryNode"
   >
-    <template #icon><Clock class="w-4 h-4" /></template>
-    <p class="truncate">{{ summary }}</p>
+    <template #icon><Clock /></template>
+    <small class="truncate">{{ summary }}</small>
   </BaseNode>
 </template>

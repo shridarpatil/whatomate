@@ -1,39 +1,13 @@
 <script setup lang="ts">
-import { ref, onMounted, computed, watch } from 'vue'
+import { ref, onMounted, onBeforeUnmount, computed, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { GridLayout, GridItem } from 'grid-layout-plus'
-import { ScrollArea } from '@/components/ui/scroll-area'
-import { Skeleton } from '@/components/ui/skeleton'
-import { Button } from '@/components/ui/button'
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue
-} from '@/components/ui/select'
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle
-} from '@/components/ui/dialog'
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle
-} from '@/components/ui/alert-dialog'
-import { Input } from '@/components/ui/input'
-import { Label } from '@/components/ui/label'
-import { Textarea } from '@/components/ui/textarea'
-import { Switch } from '@/components/ui/switch'
+import Modal from '@/components/oat/Modal.vue'
+import PageHeader from '@/components/shared/PageHeader.vue'
+import LineChart from '@/components/charts/LineChart.vue'
+import BarChart from '@/components/charts/BarChart.vue'
+import PieChart from '@/components/charts/PieChart.vue'
+import type { ChartSeries } from '@/components/charts/chart-utils'
+import { orderWidgets, reorder, type Placed } from '@/lib/dashboard-layout'
 import { widgetsService, type DashboardWidget, type WidgetData, type LayoutItem } from '@/services/api'
 import { useAuthStore } from '@/stores/auth'
 import {
@@ -52,6 +26,8 @@ import {
   BarChart3,
   FileText,
   X,
+  ChevronLeft,
+  ChevronRight,
   GripVertical,
   Megaphone,
   Settings,
@@ -64,11 +40,9 @@ import {
   ShieldCheck,
   Zap,
   Shield,
-  LineChart,
+  LineChart as LineChartIcon,
   Tags
-} from 'lucide-vue-next'
-// Centralized Chart.js setup (registered once)
-import { Line, Bar, Pie } from '@/lib/charts'
+} from '@/lib/icons'
 import { DateRangePicker } from '@/components/shared'
 import { useDateRange } from '@/composables/useDateRange'
 import { useAppToast } from '@/composables/useAppToast'
@@ -126,37 +100,47 @@ const selectedShortcuts = ref<string[]>([])
 
 // Shortcut registry
 const SHORTCUT_REGISTRY = computed(() => ({
-  chat: { label: t('dashboard.startChat'), to: '/chat', icon: MessageSquare, gradient: 'from-emerald-500 to-green-600' },
-  campaigns: { label: t('nav.campaigns'), to: '/campaigns', icon: Megaphone, gradient: 'from-orange-500 to-amber-600' },
-  templates: { label: t('nav.templates'), to: '/templates', icon: FileText, gradient: 'from-blue-500 to-cyan-600' },
-  chatbot: { label: t('nav.chatbot'), to: '/chatbot', icon: Bot, gradient: 'from-purple-500 to-pink-600' },
-  contacts: { label: t('nav.contacts'), to: '/settings/contacts', icon: Contact, gradient: 'from-cyan-500 to-blue-600' },
-  flows: { label: t('nav.flows'), to: '/flows', icon: Workflow, gradient: 'from-indigo-500 to-violet-600' },
-  transfers: { label: t('nav.transfers'), to: '/chatbot/transfers', icon: UserX, gradient: 'from-rose-500 to-red-600' },
-  agentAnalytics: { label: t('nav.agentAnalytics'), to: '/analytics/agents', icon: BarChart3, gradient: 'from-teal-500 to-cyan-600' },
-  metaInsights: { label: t('nav.metaInsights'), to: '/analytics/meta-insights', icon: LineChart, gradient: 'from-sky-500 to-blue-600' },
-  settings: { label: t('nav.settings'), to: '/settings', icon: Settings, gradient: 'from-gray-500 to-zinc-600' },
-  accounts: { label: t('nav.accounts'), to: '/settings/accounts', icon: Users, gradient: 'from-violet-500 to-purple-600' },
-  cannedResponses: { label: t('nav.cannedResponses'), to: '/settings/canned-responses', icon: MessageSquareText, gradient: 'from-amber-500 to-yellow-600' },
-  tags: { label: t('nav.tags'), to: '/settings/tags', icon: Tags, gradient: 'from-pink-500 to-rose-600' },
-  teams: { label: t('nav.teams'), to: '/settings/teams', icon: Users, gradient: 'from-lime-500 to-green-600' },
-  users: { label: t('nav.users'), to: '/settings/users', icon: Users, gradient: 'from-fuchsia-500 to-pink-600' },
-  roles: { label: t('nav.roles'), to: '/settings/roles', icon: Shield, gradient: 'from-slate-500 to-gray-600' },
-  apiKeys: { label: t('nav.apiKeys'), to: '/settings/api-keys', icon: Key, gradient: 'from-yellow-500 to-orange-600' },
-  webhooks: { label: t('nav.webhooks'), to: '/settings/webhooks', icon: Webhook, gradient: 'from-red-500 to-rose-600' },
-  customActions: { label: t('nav.customActions'), to: '/settings/custom-actions', icon: Zap, gradient: 'from-amber-500 to-orange-600' },
-  sso: { label: t('nav.sso'), to: '/settings/sso', icon: ShieldCheck, gradient: 'from-emerald-500 to-teal-600' },
+  chat: { label: t('dashboard.startChat'), to: '/chat', icon: MessageSquare },
+  campaigns: { label: t('nav.campaigns'), to: '/campaigns', icon: Megaphone },
+  templates: { label: t('nav.templates'), to: '/templates', icon: FileText },
+  chatbot: { label: t('nav.chatbot'), to: '/chatbot', icon: Bot },
+  contacts: { label: t('nav.contacts'), to: '/settings/contacts', icon: Contact },
+  flows: { label: t('nav.flows'), to: '/flows', icon: Workflow },
+  transfers: { label: t('nav.transfers'), to: '/chatbot/transfers', icon: UserX },
+  agentAnalytics: { label: t('nav.agentAnalytics'), to: '/analytics/agents', icon: BarChart3 },
+  metaInsights: { label: t('nav.metaInsights'), to: '/analytics/meta-insights', icon: LineChartIcon },
+  settings: { label: t('nav.settings'), to: '/settings', icon: Settings },
+  accounts: { label: t('nav.accounts'), to: '/settings/accounts', icon: Users },
+  cannedResponses: { label: t('nav.cannedResponses'), to: '/settings/canned-responses', icon: MessageSquareText },
+  tags: { label: t('nav.tags'), to: '/settings/tags', icon: Tags },
+  teams: { label: t('nav.teams'), to: '/settings/teams', icon: Users },
+  users: { label: t('nav.users'), to: '/settings/users', icon: Users },
+  roles: { label: t('nav.roles'), to: '/settings/roles', icon: Shield },
+  apiKeys: { label: t('nav.apiKeys'), to: '/settings/api-keys', icon: Key },
+  webhooks: { label: t('nav.webhooks'), to: '/settings/webhooks', icon: Webhook },
+  customActions: { label: t('nav.customActions'), to: '/settings/custom-actions', icon: Zap },
+  sso: { label: t('nav.sso'), to: '/settings/sso', icon: ShieldCheck },
 }))
 
-// Color options
+// Color options (stored values; mapped onto Oat's theme colours)
 const colorOptions = computed(() => [
-  { value: 'blue', label: t('dashboard.colorBlue'), bg: 'bg-blue-500/20', text: 'text-blue-400' },
-  { value: 'green', label: t('dashboard.colorGreen'), bg: 'bg-emerald-500/20', text: 'text-emerald-400' },
-  { value: 'purple', label: t('dashboard.colorPurple'), bg: 'bg-purple-500/20', text: 'text-purple-400' },
-  { value: 'orange', label: t('dashboard.colorOrange'), bg: 'bg-orange-500/20', text: 'text-orange-400' },
-  { value: 'red', label: t('dashboard.colorRed'), bg: 'bg-red-500/20', text: 'text-red-400' },
-  { value: 'cyan', label: t('dashboard.colorCyan'), bg: 'bg-cyan-500/20', text: 'text-cyan-400' }
+  { value: 'blue', label: t('dashboard.colorBlue') },
+  { value: 'green', label: t('dashboard.colorGreen') },
+  { value: 'purple', label: t('dashboard.colorPurple') },
+  { value: 'orange', label: t('dashboard.colorOrange') },
+  { value: 'red', label: t('dashboard.colorRed') },
+  { value: 'cyan', label: t('dashboard.colorCyan') }
 ])
+
+const WIDGET_COLORS: Record<string, string> = {
+  blue: 'var(--primary)',
+  cyan: 'var(--primary)',
+  green: 'var(--success)',
+  orange: 'var(--warning)',
+  red: 'var(--danger)',
+  purple: 'var(--muted-foreground)'
+}
+const widgetColor = (color: string) => WIDGET_COLORS[color] || WIDGET_COLORS.blue
 
 // Chart type options
 const chartTypeOptions = computed(() => [
@@ -165,110 +149,49 @@ const chartTypeOptions = computed(() => [
   { value: 'pie', label: t('dashboard.chartPie') }
 ])
 
-// Chart color palette for pie charts
-const chartColors = [
-  'rgba(59, 130, 246, 0.8)',
-  'rgba(16, 185, 129, 0.8)',
-  'rgba(245, 158, 11, 0.8)',
-  'rgba(139, 92, 246, 0.8)',
-  'rgba(239, 68, 68, 0.8)',
-  'rgba(6, 182, 212, 0.8)',
-  'rgba(236, 72, 153, 0.8)',
-  'rgba(234, 179, 8, 0.8)'
-]
+interface WidgetChart {
+  kind: 'line' | 'bar' | 'pie'
+  labels: string[]
+  series: ChartSeries[]
+  values: number[]
+}
 
-const getChartComponentData = (widget: DashboardWidget) => {
+const getChart = (widget: DashboardWidget): WidgetChart => {
   const data = widgetData.value[widget.id]
-  if (!data) return { labels: [], datasets: [] }
+  const chartData = data?.chart_data || []
+  const dataPoints = data?.data_points || []
+  const groupedSeries = data?.grouped_series
+  const kind: WidgetChart['kind'] = widget.chart_type === 'bar' || widget.chart_type === 'pie' ? widget.chart_type : 'line'
+  const empty = { kind, labels: [] as string[], series: [] as ChartSeries[], values: [] as number[] }
+  if (!data) return empty
 
-  const chartData = data.chart_data || []
-  const dataPoints = data.data_points || []
-  const groupedSeries = data.grouped_series
-
-  // Grouped line chart: multiple datasets from grouped_series
-  if (widget.chart_type === 'line' && groupedSeries && groupedSeries.datasets.length > 0) {
+  // Grouped line chart: one series per group
+  if (kind === 'line' && groupedSeries && groupedSeries.datasets.length > 0) {
     return {
+      ...empty,
       labels: groupedSeries.labels,
-      datasets: groupedSeries.datasets.map((ds, i) => ({
-        label: ds.label,
-        data: ds.data,
-        borderColor: chartColors[i % chartColors.length],
-        backgroundColor: chartColors[i % chartColors.length].replace('0.8)', '0.1)'),
-        fill: false,
-        tension: 0.3
-      }))
+      series: groupedSeries.datasets.map(ds => ({ label: ds.label, data: ds.data }))
     }
   }
 
-  // Bar/Pie with group_by uses data_points (group → count)
-  if (widget.chart_type === 'pie') {
+  // Pie/bar with group_by use data_points (group -> count)
+  if (kind === 'pie') {
     const source = dataPoints.length > 0 ? dataPoints : chartData
-    return {
-      labels: source.map((d: { label: string }) => d.label),
-      datasets: [{
-        data: source.map((d: { value: number }) => d.value),
-        backgroundColor: chartColors.slice(0, source.length),
-        borderWidth: 0
-      }]
-    }
+    return { ...empty, labels: source.map(d => d.label), values: source.map(d => d.value) }
   }
 
-  if (widget.chart_type === 'bar' && dataPoints.length > 0) {
-    return {
-      labels: dataPoints.map((d: { label: string }) => d.label),
-      datasets: [{
-        label: widget.name,
-        data: dataPoints.map((d: { value: number }) => d.value),
-        backgroundColor: dataPoints.map((_: any, i: number) => chartColors[i % chartColors.length]),
-        borderWidth: 0
-      }]
-    }
-  }
-
-  // Default: line and bar charts use time-series chart_data
-  const colorMap: Record<string, string> = {
-    blue: 'rgb(59, 130, 246)',
-    green: 'rgb(16, 185, 129)',
-    purple: 'rgb(139, 92, 246)',
-    orange: 'rgb(245, 158, 11)',
-    red: 'rgb(239, 68, 68)',
-    cyan: 'rgb(6, 182, 212)'
-  }
-  const borderColor = colorMap[widget.color] || colorMap.blue
-
+  const source = kind === 'bar' && dataPoints.length > 0 ? dataPoints : chartData
   return {
-    labels: chartData.map((d: { label: string }) => d.label),
-    datasets: [{
-      label: widget.name,
-      data: chartData.map((d: { value: number }) => d.value),
-      borderColor,
-      backgroundColor: widget.chart_type === 'bar'
-        ? borderColor.replace('rgb', 'rgba').replace(')', ', 0.8)')
-        : borderColor.replace('rgb', 'rgba').replace(')', ', 0.1)'),
-      fill: widget.chart_type === 'line',
-      tension: 0.3
-    }]
+    ...empty,
+    labels: source.map(d => d.label),
+    series: [{ label: widget.name, data: source.map(d => d.value), color: widgetColor(widget.color) }]
   }
 }
 
-const lineBarChartOptions = {
-  responsive: true,
-  maintainAspectRatio: false,
-  plugins: {
-    legend: { display: true, position: 'top' as const }
-  },
-  scales: {
-    y: { beginAtZero: true }
-  }
-}
-
-const pieChartOptions = {
-  responsive: true,
-  maintainAspectRatio: false,
-  plugins: {
-    legend: { position: 'bottom' as const }
-  }
-}
+const hasChartData = (id: string) =>
+  (widgetData.value[id]?.chart_data?.length || 0) > 0 ||
+  (widgetData.value[id]?.data_points?.length || 0) > 0 ||
+  (widgetData.value[id]?.grouped_series?.datasets?.length || 0) > 0
 
 // Time range filter
 const {
@@ -318,19 +241,6 @@ const formatTime = (dateStr: string): string => {
   return t('dashboard.daysAgo', { count: diffDays })
 }
 
-const getWidgetColor = (color: string) => {
-  const gradientMap: Record<string, string> = {
-    blue: 'bg-gradient-to-r from-blue-500/60 to-blue-500/0',
-    green: 'bg-gradient-to-r from-emerald-500/60 to-emerald-500/0',
-    purple: 'bg-gradient-to-r from-violet-500/60 to-violet-500/0',
-    orange: 'bg-gradient-to-r from-amber-500/60 to-amber-500/0',
-    red: 'bg-gradient-to-r from-rose-500/60 to-rose-500/0',
-    cyan: 'bg-gradient-to-r from-cyan-500/60 to-cyan-500/0'
-  }
-  const colorConfig = colorOptions.value.find(c => c.value === color) || colorOptions.value[0]
-  return { ...colorConfig, gradient: gradientMap[colorConfig.value] || gradientMap.blue }
-}
-
 const getWidgetIcon = (dataSource: string) => {
   switch (dataSource) {
     case 'messages':
@@ -348,97 +258,43 @@ const getWidgetIcon = (dataSource: string) => {
   }
 }
 
-// Grid layout state
-const GRID_COLS = 12
+// Grid layout state: widgets render in a fixed 12-column grid; edit mode reorders them.
+// Saved grid_w / grid_h are never changed here, only the flowed x / y.
 const GRID_ROW_HEIGHT = 40
-const GRID_MARGIN: [number, number] = [16, 16]
 
-const isDragMode = ref(false)
-const gridLayout = ref<Array<{ i: string; x: number; y: number; w: number; h: number }>>([])
+const isReorderMode = ref(false)
+const order = ref<Placed[]>([])
+let layoutDirty = false
 
 const isChartWidget = (widget: DashboardWidget) => widget.display_type === 'chart'
 const isTableWidget = (widget: DashboardWidget) => widget.display_type === 'table'
 const isShortcutsWidget = (widget: DashboardWidget) => widget.display_type === 'shortcuts'
 const isNumberWidget = (widget: DashboardWidget) => !isChartWidget(widget) && !isTableWidget(widget) && !isShortcutsWidget(widget)
 
-const getWidgetById = (id: string): DashboardWidget | undefined => {
-  return widgets.value.find(w => w.id === id)
-}
+const widgetsById = computed(() => new Map(widgets.value.map(w => [w.id, w])))
 
-const computeGridLayout = (widgetList: DashboardWidget[]) => {
-  const layout: Array<{ i: string; x: number; y: number; w: number; h: number }> = []
+const items = computed(() => order.value.flatMap((p, index) => {
+  const widget = widgetsById.value.get(p.id)
+  return widget ? [{ p, widget, index }] : []
+}))
 
-  // Separate positioned (grid_w > 0) from legacy (grid_w === 0) widgets
-  const positioned = widgetList.filter(w => w.grid_w > 0)
-  const legacy = widgetList.filter(w => w.grid_w === 0)
+const colSpan = (w: number) => Math.min(12, Math.max(1, Math.round(w)))
+const minHeight = (h: number) => `${h * GRID_ROW_HEIGHT}px`
+const chartHeight = (h: number) => Math.max(160, h * GRID_ROW_HEIGHT - 90)
+const bodyMaxHeight = (h: number) => `${Math.max(120, h * GRID_ROW_HEIGHT - 80)}px`
 
-  // Add positioned widgets as-is
-  for (const w of positioned) {
-    layout.push({ i: w.id, x: w.grid_x, y: w.grid_y, w: w.grid_w, h: w.grid_h })
-  }
-
-  // Auto-position legacy widgets
-  if (legacy.length > 0) {
-    // Find the max y used by positioned widgets to place legacy below
-    let nextY = 0
-    if (positioned.length > 0) {
-      nextY = Math.max(...positioned.map(w => w.grid_y + w.grid_h))
-    }
-
-    let curX = 0
-    let curY = nextY
-
-    // Number widgets first, then chart/table/shortcuts widgets
-    const legacyNumber = legacy.filter(w => !['chart', 'table', 'shortcuts'].includes(w.display_type))
-    const legacyLarge = legacy.filter(w => ['chart', 'table', 'shortcuts'].includes(w.display_type))
-
-    for (const w of legacyNumber) {
-      const itemW = 3
-      const itemH = 3
-      if (curX + itemW > GRID_COLS) {
-        curX = 0
-        curY += itemH
-      }
-      layout.push({ i: w.id, x: curX, y: curY, w: itemW, h: itemH })
-      curX += itemW
-    }
-
-    // Move to next row for large widgets
-    if (legacyNumber.length > 0 && legacyLarge.length > 0) {
-      curX = 0
-      curY += 3
-    }
-
-    for (const w of legacyLarge) {
-      let itemW = 6
-      let itemH = 5
-      if (w.display_type === 'table' || w.display_type === 'shortcuts') {
-        itemW = 6
-        itemH = 8
-      }
-      if (curX + itemW > GRID_COLS) {
-        curX = 0
-        curY += itemH
-      }
-      layout.push({ i: w.id, x: curX, y: curY, w: itemW, h: itemH })
-      curX += itemW
-    }
-  }
-
-  return layout
-}
-
-// Rebuild grid layout when widgets change
+// Rebuild order when widgets change
 watch(widgets, (val) => {
-  gridLayout.value = computeGridLayout(val)
+  order.value = orderWidgets(val)
 }, { immediate: true })
 
 // Debounced layout save
 let layoutSaveTimer: ReturnType<typeof setTimeout> | null = null
 
 const persistLayout = async () => {
-  const layoutItems: LayoutItem[] = gridLayout.value.map(item => ({
-    id: item.i,
+  layoutDirty = false
+  const layoutItems: LayoutItem[] = order.value.map(item => ({
+    id: item.id,
     grid_x: item.x,
     grid_y: item.y,
     grid_w: item.w,
@@ -451,23 +307,30 @@ const persistLayout = async () => {
   }
 }
 
-const onLayoutUpdate = (newLayout: Array<{ i: string; x: number; y: number; w: number; h: number }>) => {
-  gridLayout.value = newLayout
-  if (!isDragMode.value) return
+const moveWidget = (from: number, to: number) => {
+  if (to < 0 || to >= order.value.length) return
+  order.value = reorder(order.value, from, to)
+  layoutDirty = true
   if (layoutSaveTimer) clearTimeout(layoutSaveTimer)
   layoutSaveTimer = setTimeout(persistLayout, 500)
 }
 
-// Save immediately when exiting drag mode
-watch(isDragMode, (newVal, oldVal) => {
-  if (oldVal && !newVal) {
-    // Toggled off — save now
-    if (layoutSaveTimer) {
-      clearTimeout(layoutSaveTimer)
-      layoutSaveTimer = null
-    }
-    persistLayout()
+// Save immediately when leaving edit mode
+watch(isReorderMode, (on) => {
+  if (on) return
+  if (layoutSaveTimer) {
+    clearTimeout(layoutSaveTimer)
+    layoutSaveTimer = null
   }
+  if (layoutDirty) persistLayout()
+})
+
+onBeforeUnmount(() => {
+  if (layoutSaveTimer) {
+    clearTimeout(layoutSaveTimer)
+    layoutSaveTimer = null
+  }
+  if (layoutDirty) persistLayout()
 })
 
 const availableFields = computed(() => {
@@ -701,721 +564,401 @@ onMounted(() => {
 })
 </script>
 
+
 <template>
-  <div class="flex flex-col h-full bg-[#0a0a0b] light:bg-gray-50">
-    <!-- Header -->
-    <header class="border-b border-white/[0.08] light:border-gray-200 bg-[#0a0a0b]/95 light:bg-white/95 backdrop-blur">
-      <div class="flex h-16 items-center px-6">
-        <div class="h-8 w-8 rounded-lg bg-gradient-to-br from-emerald-500 to-green-600 flex items-center justify-center mr-3 shadow-lg shadow-emerald-500/20">
-          <LayoutDashboard class="h-4 w-4 text-white" />
-        </div>
-        <div class="flex-1">
-          <h1 class="text-xl font-semibold text-white light:text-gray-900">{{ $t('dashboard.title') }}</h1>
-          <p class="text-sm text-white/50 light:text-gray-500">{{ $t('dashboard.subtitle') }}</p>
-        </div>
+  <div class="flex flex-col h-full">
+    <PageHeader :title="$t('dashboard.title')" :description="$t('dashboard.subtitle')" :icon="LayoutDashboard">
+      <template #actions>
+        <button v-if="canCreateWidget" type="button" class="outline small" @click="openAddWidgetDialog">
+          <Plus :size="16" />
+          {{ $t('dashboard.addWidget') }}
+        </button>
 
-        <!-- Time Range Filter -->
-        <div class="flex items-center gap-2">
-          <Button v-if="canCreateWidget" variant="outline" size="sm" @click="openAddWidgetDialog" class="bg-white/[0.04] border-white/[0.1] text-white/70 hover:bg-white/[0.08] hover:text-white light:bg-white light:border-gray-200 light:text-gray-700">
-            <Plus class="h-4 w-4 mr-2" />
-            {{ $t('dashboard.addWidget') }}
-          </Button>
+        <button
+          v-if="canEditWidget && widgets.length > 1"
+          type="button"
+          class="small"
+          :class="{ outline: !isReorderMode }"
+          :aria-pressed="isReorderMode"
+          @click="isReorderMode = !isReorderMode"
+        >
+          <GripVertical :size="16" />
+          {{ isReorderMode ? $t('common.done') : $t('dashboard.editLayout') }}
+        </button>
 
-          <Button
-            v-if="canEditWidget && widgets.length > 1"
-            variant="outline"
-            size="sm"
-            @click="isDragMode = !isDragMode"
-            :class="[
-              isDragMode
-                ? 'bg-emerald-500/20 border-emerald-500/40 text-emerald-400 hover:bg-emerald-500/30 hover:text-emerald-300'
-                : 'bg-white/[0.04] border-white/[0.1] text-white/70 hover:bg-white/[0.08] hover:text-white light:bg-white light:border-gray-200 light:text-gray-700'
-            ]"
-          >
-            <GripVertical class="h-4 w-4 mr-2" />
-            {{ isDragMode ? $t('common.done') : $t('dashboard.editLayout') }}
-          </Button>
-
-          <DateRangePicker
-            v-model:selected-range="selectedRange"
-            v-model:custom-date-range="customDateRange"
-            v-model:is-date-picker-open="isDatePickerOpen"
-            :format-date-range-display="formatDateRangeDisplay"
-            @apply-custom="applyCustomRange"
-          />
-        </div>
-      </div>
-    </header>
+        <DateRangePicker
+          v-model:selected-range="selectedRange"
+          v-model:custom-date-range="customDateRange"
+          v-model:is-date-picker-open="isDatePickerOpen"
+          :format-date-range-display="formatDateRangeDisplay"
+          @apply-custom="applyCustomRange"
+        />
+      </template>
+    </PageHeader>
 
     <!-- Content -->
-    <ScrollArea class="flex-1">
-      <div class="p-6 space-y-6">
-        <!-- Loading Skeleton -->
-        <div v-if="isLoading" class="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-          <div v-for="i in 4" :key="i" class="rounded-xl border border-white/[0.08] bg-white/[0.02] p-6 light:bg-white light:border-gray-200">
-            <div class="flex flex-row items-center justify-between space-y-0 pb-2">
-              <Skeleton class="h-4 w-24 bg-white/[0.08] light:bg-gray-200" />
-              <Skeleton class="h-10 w-10 rounded-lg bg-white/[0.08] light:bg-gray-200" />
-            </div>
-            <div class="pt-2">
-              <Skeleton class="h-8 w-20 mb-2 bg-white/[0.08] light:bg-gray-200" />
-              <Skeleton class="h-3 w-32 bg-white/[0.08] light:bg-gray-200" />
-            </div>
-          </div>
+    <div class="flex-1 scroll-y p-4">
+      <!-- Loading Skeleton -->
+      <div v-if="isLoading" class="row">
+        <div v-for="i in 4" :key="i" class="col-3">
+          <article class="card" aria-busy="true">
+            <div role="status" class="skeleton line"></div>
+            <div role="status" class="skeleton box"></div>
+          </article>
         </div>
+      </div>
 
-        <!-- Widget Grid Layout -->
-        <GridLayout
-          v-if="!isLoading && gridLayout.length > 0"
-          :layout="gridLayout"
-          :col-num="GRID_COLS"
-          :row-height="GRID_ROW_HEIGHT"
-          :margin="GRID_MARGIN"
-          :is-draggable="isDragMode"
-          :is-resizable="isDragMode"
-          :vertical-compact="true"
-          :use-css-transforms="true"
-          @layout-updated="onLayoutUpdate"
+      <!-- Widget grid -->
+      <div v-else-if="items.length > 0" class="row">
+        <div
+          v-for="{ p, widget, index } in items"
+          :key="widget.id"
+          :class="`col-${colSpan(p.w)}`"
+          :style="{ minHeight: minHeight(p.h) }"
+          data-testid="dashboard-widget"
         >
-          <GridItem
-            v-for="item in gridLayout"
-            :key="item.i"
-            :i="item.i"
-            :x="item.x"
-            :y="item.y"
-            :w="item.w"
-            :h="item.h"
-            :min-w="2"
-            :min-h="2"
-            drag-allow-from=".widget-drag-handle"
-          >
-            <!-- Number widget card -->
-            <div
-              v-if="getWidgetById(item.i) && isNumberWidget(getWidgetById(item.i)!)"
-              class="group relative h-full card-depth rounded-xl border border-white/[0.08] bg-white/[0.04] p-6 light:bg-white light:border-gray-200 hover:bg-white/[0.06] light:hover:bg-gray-50 transition-colors overflow-hidden"
-            >
-              <!-- Gradient accent bar -->
-              <div :class="['absolute top-0 inset-x-0 h-0.5', getWidgetColor(getWidgetById(item.i)!.color).gradient]" />
-
-              <!-- Drag handle indicator -->
-              <div v-if="isDragMode" class="widget-drag-handle absolute top-2 left-2 text-white/20 light:text-gray-300 cursor-grab active:cursor-grabbing z-10">
-                <GripVertical class="h-4 w-4" />
+          <article class="card h-full vstack gap-2">
+            <header class="hstack items-center gap-2">
+              <div class="flex-1 min-w-0">
+                <h4 class="truncate">{{ widget.name }}</h4>
+                <small v-if="widget.description" class="text-light">{{ widget.description }}</small>
               </div>
 
-              <div class="flex flex-row items-start justify-between space-y-0 pb-2">
-                <div class="flex-1">
-                  <span class="text-sm font-medium text-white/50 light:text-gray-500">
-                    {{ getWidgetById(item.i)!.name }}
-                  </span>
-                </div>
-                <div class="flex items-center gap-2">
-                  <!-- Actions - hidden in drag mode -->
-                  <div v-if="!isDragMode && (canEditWidget || canDeleteWidget)" class="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                    <Button
-                      v-if="canEditWidget"
-                      variant="ghost"
-                      size="icon"
-                      class="h-6 w-6 text-white/20 hover:text-white hover:bg-white/[0.1] light:text-gray-300 light:hover:text-gray-700 light:hover:bg-gray-100"
-                      @click.stop="openEditWidgetDialog(getWidgetById(item.i)!)"
-                      :title="$t('dashboard.editWidgetTooltip')"
-                    >
-                      <Pencil class="h-3 w-3" />
-                    </Button>
-                    <Button
-                      v-if="canDeleteWidget"
-                      variant="ghost"
-                      size="icon"
-                      class="h-6 w-6 text-white/20 hover:text-red-400 hover:bg-red-500/10 light:text-gray-300 light:hover:text-red-600 light:hover:bg-red-50"
-                      @click.stop="openDeleteDialog(getWidgetById(item.i)!)"
-                      :title="$t('dashboard.deleteWidgetTooltip')"
-                    >
-                      <Trash2 class="h-3 w-3" />
-                    </Button>
-                  </div>
-                  <!-- Icon -->
-                  <div :class="['h-10 w-10 rounded-lg flex items-center justify-center', getWidgetColor(getWidgetById(item.i)!.color).bg]">
-                    <component :is="getWidgetIcon(getWidgetById(item.i)!.data_source)" :class="['h-5 w-5', getWidgetColor(getWidgetById(item.i)!.color).text]" />
-                  </div>
-                </div>
+              <div v-if="isReorderMode" class="hstack gap-1">
+                <button
+                  type="button"
+                  class="ghost icon small"
+                  :disabled="index === 0"
+                  :aria-label="$t('dashboard.moveEarlier')"
+                  :title="$t('dashboard.moveEarlier')"
+                  @click="moveWidget(index, index - 1)"
+                >
+                  <ChevronLeft :size="16" />
+                </button>
+                <button
+                  type="button"
+                  class="ghost icon small"
+                  :disabled="index === order.length - 1"
+                  :aria-label="$t('dashboard.moveLater')"
+                  :title="$t('dashboard.moveLater')"
+                  @click="moveWidget(index, index + 1)"
+                >
+                  <ChevronRight :size="16" />
+                </button>
+              </div>
+              <div v-else-if="canEditWidget || canDeleteWidget" class="hstack gap-1">
+                <button
+                  v-if="canEditWidget"
+                  type="button"
+                  class="ghost icon small"
+                  :aria-label="$t('dashboard.editWidgetTooltip')"
+                  :title="$t('dashboard.editWidgetTooltip')"
+                  @click="openEditWidgetDialog(widget)"
+                >
+                  <Pencil :size="14" />
+                </button>
+                <button
+                  v-if="canDeleteWidget"
+                  type="button"
+                  class="ghost icon small"
+                  :aria-label="$t('dashboard.deleteWidgetTooltip')"
+                  :title="$t('dashboard.deleteWidgetTooltip')"
+                  @click="openDeleteDialog(widget)"
+                >
+                  <Trash2 :size="14" />
+                </button>
               </div>
 
-              <div class="pt-2">
-                <div class="text-3xl font-bold text-white light:text-gray-900">
-                  <template v-if="isWidgetDataLoading">
-                    <Skeleton class="h-8 w-20 bg-white/[0.08] light:bg-gray-200" />
-                  </template>
-                  <template v-else>
-                    <Transition name="counter-fade" mode="out-in">
-                      <span :key="widgetData[item.i]?.value">{{ formatNumber(widgetData[item.i]?.value || 0) }}</span>
-                    </Transition>
-                  </template>
-                </div>
-                <div v-if="getWidgetById(item.i)!.show_change && widgetData[item.i]" class="flex items-center text-xs text-white/40 light:text-gray-500 mt-1">
+              <component
+                :is="getWidgetIcon(widget.data_source)"
+                v-if="isNumberWidget(widget) || isChartWidget(widget)"
+                :size="20"
+                :color="widgetColor(widget.color)"
+                aria-hidden="true"
+              />
+            </header>
+
+            <!-- Number -->
+            <template v-if="isNumberWidget(widget)">
+              <div v-if="isWidgetDataLoading" role="status" class="skeleton line" aria-busy="true"></div>
+              <h2 v-else>{{ formatNumber(widgetData[widget.id]?.value || 0) }}</h2>
+              <div v-if="widget.show_change && widgetData[widget.id]" class="hstack items-center gap-2">
+                <span
+                  class="badge"
+                  :data-variant="widgetData[widget.id].change > 0 ? 'success' : widgetData[widget.id].change < 0 ? 'danger' : 'secondary'"
+                >
                   <component
-                    :is="widgetData[item.i]?.change > 0 ? TrendingUp : widgetData[item.i]?.change < 0 ? TrendingDown : Minus"
-                    :class="[
-                      'h-3 w-3 mr-1',
-                      widgetData[item.i]?.change > 0 ? 'text-emerald-400' : widgetData[item.i]?.change < 0 ? 'text-red-400' : 'text-white/30'
-                    ]"
+                    :is="widgetData[widget.id].change > 0 ? TrendingUp : widgetData[widget.id].change < 0 ? TrendingDown : Minus"
+                    :size="12"
                   />
-                  <span :class="widgetData[item.i]?.change > 0 ? 'text-emerald-400' : widgetData[item.i]?.change < 0 ? 'text-red-400' : 'text-white/30 light:text-gray-400'">
-                    {{ Math.abs(widgetData[item.i]?.change || 0).toFixed(1) }}%
-                  </span>
-                  <span class="ml-1">{{ comparisonPeriodLabel }}</span>
-                </div>
+                  {{ Math.abs(widgetData[widget.id].change || 0).toFixed(1) }}%
+                </span>
+                <small class="text-light">{{ comparisonPeriodLabel }}</small>
               </div>
-            </div>
+            </template>
 
-            <!-- Chart widget card -->
-            <div
-              v-else-if="getWidgetById(item.i) && isChartWidget(getWidgetById(item.i)!)"
-              class="group relative h-full flex flex-col card-depth rounded-xl border border-white/[0.08] bg-white/[0.04] p-6 light:bg-white light:border-gray-200 hover:bg-white/[0.06] light:hover:bg-gray-50 transition-colors overflow-hidden"
-            >
-              <!-- Drag handle indicator -->
-              <div v-if="isDragMode" class="widget-drag-handle absolute top-2 left-2 text-white/20 light:text-gray-300 cursor-grab active:cursor-grabbing z-10">
-                <GripVertical class="h-4 w-4" />
-              </div>
+            <!-- Chart -->
+            <template v-else-if="isChartWidget(widget)">
+              <div v-if="isWidgetDataLoading" role="status" class="skeleton box" aria-busy="true"></div>
+              <template v-else-if="hasChartData(widget.id)">
+                <template v-for="chart in [getChart(widget)]" :key="chart.kind">
+                  <LineChart
+                    v-if="chart.kind === 'line'"
+                    :labels="chart.labels"
+                    :series="chart.series"
+                    :height="chartHeight(p.h)"
+                    :caption="widget.name"
+                  />
+                  <BarChart
+                    v-else-if="chart.kind === 'bar'"
+                    :labels="chart.labels"
+                    :series="chart.series"
+                    :height="chartHeight(p.h)"
+                    :caption="widget.name"
+                  />
+                  <PieChart
+                    v-else
+                    :labels="chart.labels"
+                    :values="chart.values"
+                    :caption="widget.name"
+                  />
+                </template>
+              </template>
+              <p v-else class="text-light">{{ $t('common.noData') }}</p>
+            </template>
 
-              <div class="flex flex-row items-center justify-between pb-2">
-                <div>
-                  <span class="text-sm font-medium text-white/50 light:text-gray-500">{{ getWidgetById(item.i)!.name }}</span>
-                  <p v-if="getWidgetById(item.i)!.description" class="text-xs text-white/30 light:text-gray-400 mt-0.5">{{ getWidgetById(item.i)!.description }}</p>
-                </div>
-                <div class="flex items-center gap-2">
-                  <div v-if="!isDragMode && (canEditWidget || canDeleteWidget)" class="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                    <Button
-                      v-if="canEditWidget"
-                      variant="ghost"
-                      size="icon"
-                      class="h-6 w-6 text-white/20 hover:text-white hover:bg-white/[0.1] light:text-gray-300 light:hover:text-gray-700 light:hover:bg-gray-100"
-                      @click.stop="openEditWidgetDialog(getWidgetById(item.i)!)"
-                      :title="$t('dashboard.editWidgetTooltip')"
-                    >
-                      <Pencil class="h-3 w-3" />
-                    </Button>
-                    <Button
-                      v-if="canDeleteWidget"
-                      variant="ghost"
-                      size="icon"
-                      class="h-6 w-6 text-white/20 hover:text-red-400 hover:bg-red-500/10 light:text-gray-300 light:hover:text-red-600 light:hover:bg-red-50"
-                      @click.stop="openDeleteDialog(getWidgetById(item.i)!)"
-                      :title="$t('dashboard.deleteWidgetTooltip')"
-                    >
-                      <Trash2 class="h-3 w-3" />
-                    </Button>
-                  </div>
-                  <div :class="['h-10 w-10 rounded-lg flex items-center justify-center', getWidgetColor(getWidgetById(item.i)!.color).bg]">
-                    <component :is="getWidgetIcon(getWidgetById(item.i)!.data_source)" :class="['h-5 w-5', getWidgetColor(getWidgetById(item.i)!.color).text]" />
-                  </div>
-                </div>
+            <!-- Table -->
+            <template v-else-if="isTableWidget(widget)">
+              <div v-if="isWidgetDataLoading" role="status" class="skeleton box" aria-busy="true"></div>
+              <!-- Grouped table (group_by set) -->
+              <div
+                v-else-if="widget.group_by_field && widgetData[widget.id]?.data_points?.length"
+                class="table scroll-y"
+                :style="{ maxHeight: bodyMaxHeight(p.h) }"
+              >
+                <table>
+                  <thead>
+                    <tr>
+                      <th>{{ widget.group_by_field }}</th>
+                      <th>{{ $t('dashboard.count') }}</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <tr v-for="dp in widgetData[widget.id]?.data_points" :key="dp.label">
+                      <td>{{ dp.label }}</td>
+                      <td>{{ dp.value }}</td>
+                    </tr>
+                  </tbody>
+                </table>
               </div>
-              <div class="flex-1 min-h-0 pt-2">
-                <template v-if="isWidgetDataLoading">
-                  <Skeleton class="h-full w-full bg-white/[0.08] light:bg-gray-200" />
-                </template>
-                <template v-else-if="(widgetData[item.i]?.chart_data?.length || 0) > 0 || (widgetData[item.i]?.data_points?.length || 0) > 0 || (widgetData[item.i]?.grouped_series?.datasets?.length || 0) > 0">
-                  <Line v-if="getWidgetById(item.i)!.chart_type === 'line'" :data="getChartComponentData(getWidgetById(item.i)!)" :options="lineBarChartOptions" />
-                  <Bar v-else-if="getWidgetById(item.i)!.chart_type === 'bar'" :data="getChartComponentData(getWidgetById(item.i)!)" :options="lineBarChartOptions" />
-                  <Pie v-else-if="getWidgetById(item.i)!.chart_type === 'pie'" :data="getChartComponentData(getWidgetById(item.i)!)" :options="pieChartOptions" />
-                </template>
-                <template v-else>
-                  <div class="h-full flex items-center justify-center text-white/40 light:text-gray-400">
-                    {{ $t('common.noData') }}
-                  </div>
-                </template>
-              </div>
-            </div>
-
-            <!-- Table widget card -->
-            <div
-              v-else-if="getWidgetById(item.i) && isTableWidget(getWidgetById(item.i)!)"
-              class="group relative h-full flex flex-col card-depth rounded-xl border border-white/[0.08] bg-white/[0.04] light:bg-white light:border-gray-200 hover:bg-white/[0.06] light:hover:bg-gray-50 transition-colors overflow-hidden"
-            >
-              <!-- Drag handle -->
-              <div v-if="isDragMode" class="widget-drag-handle absolute top-2 left-2 text-white/20 light:text-gray-300 cursor-grab active:cursor-grabbing z-10">
-                <GripVertical class="h-4 w-4" />
-              </div>
-
-              <div class="p-6 pb-3 flex flex-row items-center justify-between">
-                <div>
-                  <span class="text-sm font-medium text-white/50 light:text-gray-500">{{ getWidgetById(item.i)!.name }}</span>
-                  <p v-if="getWidgetById(item.i)!.description" class="text-xs text-white/30 light:text-gray-400 mt-0.5">{{ getWidgetById(item.i)!.description }}</p>
-                </div>
-                <div class="flex items-center gap-2">
-                  <div v-if="!isDragMode && (canEditWidget || canDeleteWidget)" class="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                    <Button v-if="canEditWidget" variant="ghost" size="icon" class="h-6 w-6 text-white/20 hover:text-white hover:bg-white/[0.1] light:text-gray-300 light:hover:text-gray-700 light:hover:bg-gray-100" @click.stop="openEditWidgetDialog(getWidgetById(item.i)!)" :title="$t('dashboard.editWidgetTooltip')">
-                      <Pencil class="h-3 w-3" />
-                    </Button>
-                    <Button v-if="canDeleteWidget" variant="ghost" size="icon" class="h-6 w-6 text-white/20 hover:text-red-400 hover:bg-red-500/10 light:text-gray-300 light:hover:text-red-600 light:hover:bg-red-50" @click.stop="openDeleteDialog(getWidgetById(item.i)!)" :title="$t('dashboard.deleteWidgetTooltip')">
-                      <Trash2 class="h-3 w-3" />
-                    </Button>
-                  </div>
-                </div>
-              </div>
-
-              <div class="flex-1 min-h-0 overflow-auto px-6 pb-6">
-                <template v-if="isWidgetDataLoading">
-                  <Skeleton class="h-full w-full bg-white/[0.08] light:bg-gray-200" />
-                </template>
-                <!-- Grouped table (group_by set) -->
-                <template v-else-if="getWidgetById(item.i)!.group_by_field && widgetData[item.i]?.data_points?.length">
-                  <table class="w-full">
-                    <thead>
-                      <tr class="border-b border-white/[0.08] light:border-gray-200">
-                        <th class="text-left py-2 text-xs font-medium text-white/40 light:text-gray-500 uppercase">{{ getWidgetById(item.i)!.group_by_field }}</th>
-                        <th class="text-right py-2 text-xs font-medium text-white/40 light:text-gray-500 uppercase">{{ $t('dashboard.count') }}</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      <tr v-for="dp in widgetData[item.i]?.data_points" :key="dp.label" class="border-b border-white/[0.04] light:border-gray-100">
-                        <td class="py-2 text-sm text-white/70 light:text-gray-700">{{ dp.label }}</td>
-                        <td class="py-2 text-sm text-right text-white light:text-gray-900 font-medium">{{ dp.value }}</td>
-                      </tr>
-                    </tbody>
-                  </table>
-                </template>
-                <!-- Row list (no group_by) -->
-                <template v-else-if="widgetData[item.i]?.table_rows?.length">
-                  <div class="space-y-3">
-                    <div
-                      v-for="row in widgetData[item.i]?.table_rows"
-                      :key="row.id"
-                      class="flex items-start gap-3 p-3 rounded-lg hover:bg-white/[0.04] light:hover:bg-gray-50 transition-colors"
-                    >
-                      <div
-                        :class="[
-                          'h-10 w-10 rounded-lg flex items-center justify-center text-sm font-medium shrink-0',
-                          row.direction === 'incoming' ? 'bg-gradient-to-br from-emerald-500 to-green-600 text-white' : 'bg-gradient-to-br from-blue-500 to-cyan-600 text-white'
-                        ]"
-                      >
-                        {{ row.label.split(' ').map((n: string) => n[0]).join('').slice(0, 2).toUpperCase() }}
-                      </div>
-                      <div class="flex-1 min-w-0">
-                        <div class="flex items-center justify-between">
-                          <p class="text-sm font-medium truncate text-white light:text-gray-900">{{ row.label }}</p>
-                          <span class="text-xs text-white/40 light:text-gray-500 flex items-center gap-1 shrink-0">
-                            <Clock class="h-3 w-3" />
-                            {{ formatTime(row.created_at) }}
-                          </span>
-                        </div>
-                        <p class="text-sm text-white/50 light:text-gray-600 truncate">{{ row.sub_label }}</p>
-                        <div class="flex items-center gap-2 mt-1">
-                          <span
-                            v-if="row.direction"
-                            :class="[
-                              'text-[10px] px-1.5 py-0.5 rounded-full font-medium',
-                              row.direction === 'incoming' ? 'bg-emerald-500/20 text-emerald-400 light:bg-emerald-100 light:text-emerald-700' : 'bg-blue-500/20 text-blue-400 light:bg-blue-100 light:text-blue-700'
-                            ]"
-                          >
-                            {{ row.direction }}
-                          </span>
-                          <span
-                            v-if="row.status"
-                            :class="[
-                              'text-[10px] px-1.5 py-0.5 rounded-full font-medium',
-                              row.status === 'delivered' ? 'bg-blue-500/20 text-blue-400 light:bg-blue-100 light:text-blue-700' :
-                              row.status === 'read' ? 'bg-emerald-500/20 text-emerald-400 light:bg-emerald-100 light:text-emerald-700' :
-                              row.status === 'failed' ? 'bg-red-500/20 text-red-400 light:bg-red-100 light:text-red-700' :
-                              'bg-white/10 text-white/50 light:bg-gray-100 light:text-gray-600'
-                            ]"
-                          >
-                            {{ row.status }}
-                          </span>
-                        </div>
-                      </div>
+              <!-- Row list (no group_by) -->
+              <ul
+                v-else-if="widgetData[widget.id]?.table_rows?.length"
+                class="unstyled vstack gap-2 scroll-y"
+                :style="{ maxHeight: bodyMaxHeight(p.h) }"
+              >
+                <li v-for="row in widgetData[widget.id]?.table_rows" :key="row.id" class="hstack gap-2">
+                  <figure data-variant="avatar" :aria-label="row.label">
+                    <abbr :title="row.label">{{ row.label.split(' ').map((n: string) => n[0]).join('').slice(0, 2).toUpperCase() }}</abbr>
+                  </figure>
+                  <div class="flex-1 min-w-0">
+                    <div class="hstack items-center justify-between gap-2">
+                      <strong class="truncate">{{ row.label }}</strong>
+                      <small class="text-light hstack items-center gap-1 shrink-0">
+                        <Clock :size="12" />
+                        {{ formatTime(row.created_at) }}
+                      </small>
+                    </div>
+                    <p class="text-light truncate">{{ row.sub_label }}</p>
+                    <div class="hstack gap-2">
+                      <span v-if="row.direction" class="badge" :data-variant="row.direction === 'incoming' ? 'success' : 'secondary'">{{ row.direction }}</span>
+                      <span
+                        v-if="row.status"
+                        class="badge"
+                        :data-variant="row.status === 'read' ? 'success' : row.status === 'failed' ? 'danger' : 'secondary'"
+                      >{{ row.status }}</span>
                     </div>
                   </div>
-                </template>
-                <template v-else>
-                  <div class="h-full flex items-center justify-center text-white/40 light:text-gray-400">
-                    {{ $t('common.noData') }}
-                  </div>
-                </template>
-              </div>
-            </div>
+                </li>
+              </ul>
+              <p v-else class="text-light">{{ $t('common.noData') }}</p>
+            </template>
 
-            <!-- Shortcuts widget card -->
+            <!-- Shortcuts -->
             <div
-              v-else-if="getWidgetById(item.i) && isShortcutsWidget(getWidgetById(item.i)!)"
-              class="group relative h-full flex flex-col card-depth rounded-xl border border-white/[0.08] bg-white/[0.04] light:bg-white light:border-gray-200 hover:bg-white/[0.06] light:hover:bg-gray-50 transition-colors overflow-hidden"
+              v-else
+              class="row scroll-y"
+              :style="{ maxHeight: bodyMaxHeight(p.h) }"
             >
-              <!-- Drag handle -->
-              <div v-if="isDragMode" class="widget-drag-handle absolute top-2 left-2 text-white/20 light:text-gray-300 cursor-grab active:cursor-grabbing z-10">
-                <GripVertical class="h-4 w-4" />
-              </div>
-
-              <div class="p-6 pb-3 flex flex-row items-center justify-between">
-                <div>
-                  <span class="text-sm font-medium text-white/50 light:text-gray-500">{{ getWidgetById(item.i)!.name }}</span>
-                  <p v-if="getWidgetById(item.i)!.description" class="text-xs text-white/30 light:text-gray-400 mt-0.5">{{ getWidgetById(item.i)!.description }}</p>
+              <template v-for="key in (widget.config?.shortcuts || [])" :key="key">
+                <div
+                  v-if="SHORTCUT_REGISTRY[key as keyof typeof SHORTCUT_REGISTRY]"
+                  :class="p.w >= 8 ? 'col-4' : 'col-6'"
+                >
+                  <RouterLink
+                    :to="SHORTCUT_REGISTRY[key as keyof typeof SHORTCUT_REGISTRY].to"
+                    class="button outline w-100"
+                  >
+                    <component :is="SHORTCUT_REGISTRY[key as keyof typeof SHORTCUT_REGISTRY].icon" :size="16" />
+                    {{ SHORTCUT_REGISTRY[key as keyof typeof SHORTCUT_REGISTRY].label }}
+                  </RouterLink>
                 </div>
-                <div class="flex items-center gap-2">
-                  <div v-if="!isDragMode && (canEditWidget || canDeleteWidget)" class="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                    <Button v-if="canEditWidget" variant="ghost" size="icon" class="h-6 w-6 text-white/20 hover:text-white hover:bg-white/[0.1] light:text-gray-300 light:hover:text-gray-700 light:hover:bg-gray-100" @click.stop="openEditWidgetDialog(getWidgetById(item.i)!)" :title="$t('dashboard.editWidgetTooltip')">
-                      <Pencil class="h-3 w-3" />
-                    </Button>
-                    <Button v-if="canDeleteWidget" variant="ghost" size="icon" class="h-6 w-6 text-white/20 hover:text-red-400 hover:bg-red-500/10 light:text-gray-300 light:hover:text-red-600 light:hover:bg-red-50" @click.stop="openDeleteDialog(getWidgetById(item.i)!)" :title="$t('dashboard.deleteWidgetTooltip')">
-                      <Trash2 class="h-3 w-3" />
-                    </Button>
-                  </div>
-                </div>
-              </div>
-
-              <div class="flex-1 min-h-0 overflow-y-auto px-6 pb-6">
-                <div :class="['grid gap-3 pt-1', item.w >= 8 ? 'grid-cols-3' : 'grid-cols-2']">
-                  <template v-for="key in (getWidgetById(item.i)!.config?.shortcuts || [])" :key="key">
-                    <RouterLink
-                      v-if="SHORTCUT_REGISTRY[key as keyof typeof SHORTCUT_REGISTRY]"
-                      :to="SHORTCUT_REGISTRY[key as keyof typeof SHORTCUT_REGISTRY].to"
-                      class="card-interactive flex flex-col items-center justify-center p-4 rounded-xl border border-white/[0.08] bg-white/[0.02] light:bg-gray-50 light:border-gray-200"
-                    >
-                      <div :class="['h-12 w-12 rounded-lg bg-gradient-to-br flex items-center justify-center mb-2 shadow-lg', SHORTCUT_REGISTRY[key as keyof typeof SHORTCUT_REGISTRY].gradient, 'shadow-' + (key as string) + '-500/20']">
-                        <component :is="SHORTCUT_REGISTRY[key as keyof typeof SHORTCUT_REGISTRY].icon" class="h-6 w-6 text-white" />
-                      </div>
-                      <span class="text-sm font-medium text-white light:text-gray-900">{{ SHORTCUT_REGISTRY[key as keyof typeof SHORTCUT_REGISTRY].label }}</span>
-                    </RouterLink>
-                  </template>
-                </div>
-              </div>
+              </template>
             </div>
-          </GridItem>
-        </GridLayout>
-
+          </article>
+        </div>
       </div>
-    </ScrollArea>
+    </div>
 
     <!-- Widget Dialog -->
-    <Dialog v-model:open="isWidgetDialogOpen">
-      <DialogContent class="sm:max-w-[500px] bg-[#141414] border-white/[0.08] text-white light:bg-white light:border-gray-200 light:text-gray-900">
-        <DialogHeader>
-          <DialogTitle>{{ isEditMode ? $t('dashboard.editWidget') : $t('dashboard.createWidget') }}</DialogTitle>
-          <DialogDescription class="text-white/50 light:text-gray-500">
-            {{ $t('dashboard.widgetDialogDesc') }}
-          </DialogDescription>
-        </DialogHeader>
+    <Modal
+      v-model:open="isWidgetDialogOpen"
+      :title="isEditMode ? $t('dashboard.editWidget') : $t('dashboard.createWidget')"
+      :description="$t('dashboard.widgetDialogDesc')"
+    >
+      <div class="vstack gap-4">
+        <label data-field>
+          {{ $t('dashboard.widgetName') }} *
+          <input v-model="widgetForm.name" :placeholder="$t('dashboard.widgetNamePlaceholder')" />
+        </label>
 
-        <div class="space-y-4 py-4">
-          <!-- Name -->
-          <div class="space-y-2">
-            <Label class="text-white/70 light:text-gray-700">{{ $t('dashboard.widgetName') }} *</Label>
-            <Input
-              v-model="widgetForm.name"
-              :placeholder="$t('dashboard.widgetNamePlaceholder')"
-              class="bg-white/[0.04] border-white/[0.1] text-white placeholder:text-white/30 light:bg-white light:border-gray-300 light:text-gray-900"
-            />
+        <label data-field>
+          {{ $t('dashboard.widgetDescription') }}
+          <textarea v-model="widgetForm.description" :placeholder="$t('dashboard.widgetDescriptionPlaceholder')" rows="2"></textarea>
+        </label>
+
+        <!-- Data Source (hidden for shortcuts) -->
+        <label v-if="widgetForm.display_type !== 'shortcuts'" data-field>
+          {{ $t('dashboard.dataSource') }} *
+          <select v-model="widgetForm.data_source">
+            <option value="" disabled>{{ $t('dashboard.selectDataSource') }}</option>
+            <option v-for="source in dataSources" :key="source.name" :value="source.name">{{ source.label }}</option>
+          </select>
+        </label>
+
+        <!-- Metric (hidden for shortcuts and table) -->
+        <label v-if="widgetForm.display_type !== 'shortcuts' && widgetForm.display_type !== 'table'" data-field>
+          {{ $t('dashboard.metric') }}
+          <select v-model="widgetForm.metric">
+            <option value="count">{{ $t('dashboard.metricCount') }}</option>
+            <option value="sum">{{ $t('dashboard.metricSum') }}</option>
+            <option value="avg">{{ $t('dashboard.metricAverage') }}</option>
+          </select>
+        </label>
+
+        <!-- Display Type -->
+        <label data-field>
+          {{ $t('dashboard.displayType') }}
+          <select v-model="widgetForm.display_type">
+            <option value="number">{{ $t('dashboard.displayNumber') }}</option>
+            <option value="chart">{{ $t('dashboard.displayChart') }}</option>
+            <option value="table">{{ $t('dashboard.displayTable') }}</option>
+            <option value="shortcuts">{{ $t('dashboard.displayShortcuts') }}</option>
+          </select>
+        </label>
+
+        <!-- Chart Type -->
+        <label v-if="widgetForm.display_type === 'chart'" data-field>
+          {{ $t('dashboard.chartType') }}
+          <select v-model="widgetForm.chart_type">
+            <option v-for="ct in chartTypeOptions" :key="ct.value" :value="ct.value">{{ ct.label }}</option>
+          </select>
+        </label>
+
+        <!-- Group By -->
+        <label
+          v-if="(widgetForm.display_type === 'chart' || widgetForm.display_type === 'table') && widgetForm.data_source"
+          data-field
+        >
+          {{ $t('dashboard.groupBy') }}
+          <select v-model="widgetForm.group_by_field">
+            <option value="">{{ $t('dashboard.noneTimeSeries') }}</option>
+            <option v-for="field in availableFields" :key="field" :value="field">{{ field }}</option>
+          </select>
+        </label>
+
+        <!-- Shortcuts selector -->
+        <fieldset v-if="widgetForm.display_type === 'shortcuts'" class="vstack gap-2">
+          <legend>{{ $t('dashboard.selectShortcuts') }}</legend>
+          <label v-for="(shortcut, key) in SHORTCUT_REGISTRY" :key="key" class="hstack items-center gap-2">
+            <input v-model="selectedShortcuts" type="checkbox" :value="key" />
+            <component :is="shortcut.icon" :size="16" />
+            {{ shortcut.label }}
+          </label>
+        </fieldset>
+
+        <!-- Filters (hidden for shortcuts) -->
+        <div v-if="widgetForm.display_type !== 'shortcuts'" class="vstack gap-2">
+          <div class="hstack items-center justify-between">
+            <strong>{{ $t('dashboard.filters') }} ({{ widgetForm.filters.length }})</strong>
+            <button type="button" class="outline small" @click.stop.prevent="addFilter">
+              <Plus :size="16" />
+              {{ $t('dashboard.addFilter') }}
+            </button>
           </div>
-
-          <!-- Description -->
-          <div class="space-y-2">
-            <Label class="text-white/70 light:text-gray-700">{{ $t('dashboard.widgetDescription') }}</Label>
-            <Textarea
-              v-model="widgetForm.description"
-              :placeholder="$t('dashboard.widgetDescriptionPlaceholder')"
-              class="bg-white/[0.04] border-white/[0.1] text-white placeholder:text-white/30 light:bg-white light:border-gray-300 light:text-gray-900"
-              :rows="2"
-            />
-          </div>
-
-          <!-- Data Source (hidden for shortcuts) -->
-          <div v-if="widgetForm.display_type !== 'shortcuts'" class="space-y-2">
-            <Label class="text-white/70 light:text-gray-700">{{ $t('dashboard.dataSource') }} *</Label>
-            <Select :model-value="widgetForm.data_source" @update:model-value="(val) => widgetForm.data_source = String(val)">
-              <SelectTrigger class="bg-white/[0.04] border-white/[0.1] text-white light:bg-white light:border-gray-300 light:text-gray-900">
-                <SelectValue :placeholder="$t('dashboard.selectDataSource')" />
-              </SelectTrigger>
-              <SelectContent class="bg-[#1a1a1a] border-white/[0.08] light:bg-white light:border-gray-200">
-                <SelectItem
-                  v-for="source in dataSources"
-                  :key="source.name"
-                  :value="source.name"
-                  class="text-white/70 focus:bg-white/[0.08] focus:text-white light:text-gray-700 light:focus:bg-gray-100"
-                >
-                  {{ source.label }}
-                </SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-
-          <!-- Metric (hidden for shortcuts and table) -->
-          <div v-if="widgetForm.display_type !== 'shortcuts' && widgetForm.display_type !== 'table'" class="space-y-2">
-            <Label class="text-white/70 light:text-gray-700">{{ $t('dashboard.metric') }}</Label>
-            <Select :model-value="widgetForm.metric" @update:model-value="(val) => widgetForm.metric = String(val)">
-              <SelectTrigger class="bg-white/[0.04] border-white/[0.1] text-white light:bg-white light:border-gray-300 light:text-gray-900">
-                <SelectValue :placeholder="$t('dashboard.selectMetric')" />
-              </SelectTrigger>
-              <SelectContent class="bg-[#1a1a1a] border-white/[0.08] light:bg-white light:border-gray-200">
-                <SelectItem value="count" class="text-white/70 focus:bg-white/[0.08] focus:text-white light:text-gray-700 light:focus:bg-gray-100">{{ $t('dashboard.metricCount') }}</SelectItem>
-                <SelectItem value="sum" class="text-white/70 focus:bg-white/[0.08] focus:text-white light:text-gray-700 light:focus:bg-gray-100">{{ $t('dashboard.metricSum') }}</SelectItem>
-                <SelectItem value="avg" class="text-white/70 focus:bg-white/[0.08] focus:text-white light:text-gray-700 light:focus:bg-gray-100">{{ $t('dashboard.metricAverage') }}</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-
-          <!-- Display Type -->
-          <div class="space-y-2">
-            <Label class="text-white/70 light:text-gray-700">{{ $t('dashboard.displayType') }}</Label>
-            <Select :model-value="widgetForm.display_type" @update:model-value="(val) => widgetForm.display_type = String(val)">
-              <SelectTrigger class="bg-white/[0.04] border-white/[0.1] text-white light:bg-white light:border-gray-300 light:text-gray-900">
-                <SelectValue :placeholder="$t('dashboard.selectDisplayType')" />
-              </SelectTrigger>
-              <SelectContent class="bg-[#1a1a1a] border-white/[0.08] light:bg-white light:border-gray-200">
-                <SelectItem value="number" class="text-white/70 focus:bg-white/[0.08] focus:text-white light:text-gray-700 light:focus:bg-gray-100">{{ $t('dashboard.displayNumber') }}</SelectItem>
-                <SelectItem value="chart" class="text-white/70 focus:bg-white/[0.08] focus:text-white light:text-gray-700 light:focus:bg-gray-100">{{ $t('dashboard.displayChart') }}</SelectItem>
-                <SelectItem value="table" class="text-white/70 focus:bg-white/[0.08] focus:text-white light:text-gray-700 light:focus:bg-gray-100">{{ $t('dashboard.displayTable') }}</SelectItem>
-                <SelectItem value="shortcuts" class="text-white/70 focus:bg-white/[0.08] focus:text-white light:text-gray-700 light:focus:bg-gray-100">{{ $t('dashboard.displayShortcuts') }}</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-
-          <!-- Chart Type (visible when display type is chart) -->
-          <div v-if="widgetForm.display_type === 'chart'" class="space-y-2">
-            <Label class="text-white/70 light:text-gray-700">{{ $t('dashboard.chartType') }}</Label>
-            <Select :model-value="widgetForm.chart_type" @update:model-value="(val) => widgetForm.chart_type = String(val)">
-              <SelectTrigger class="bg-white/[0.04] border-white/[0.1] text-white light:bg-white light:border-gray-300 light:text-gray-900">
-                <SelectValue :placeholder="$t('dashboard.selectChartType')" />
-              </SelectTrigger>
-              <SelectContent class="bg-[#1a1a1a] border-white/[0.08] light:bg-white light:border-gray-200">
-                <SelectItem
-                  v-for="ct in chartTypeOptions"
-                  :key="ct.value"
-                  :value="ct.value"
-                  class="text-white/70 focus:bg-white/[0.08] focus:text-white light:text-gray-700 light:focus:bg-gray-100"
-                >
-                  {{ ct.label }}
-                </SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-
-          <!-- Group By (visible when display type is chart or table, and data source is selected) -->
-          <div v-if="(widgetForm.display_type === 'chart' || widgetForm.display_type === 'table') && widgetForm.data_source" class="space-y-2">
-            <Label class="text-white/70 light:text-gray-700">{{ $t('dashboard.groupBy') }}</Label>
-            <Select :model-value="widgetForm.group_by_field || 'none'" @update:model-value="(val) => widgetForm.group_by_field = val === 'none' ? '' : String(val)">
-              <SelectTrigger class="bg-white/[0.04] border-white/[0.1] text-white light:bg-white light:border-gray-300 light:text-gray-900">
-                <SelectValue :placeholder="$t('dashboard.noneTimeSeries')" />
-              </SelectTrigger>
-              <SelectContent class="bg-[#1a1a1a] border-white/[0.08] light:bg-white light:border-gray-200">
-                <SelectItem
-                  value="none"
-                  class="text-white/70 focus:bg-white/[0.08] focus:text-white light:text-gray-700 light:focus:bg-gray-100"
-                >
-                  {{ $t('dashboard.noneTimeSeries') }}
-                </SelectItem>
-                <SelectItem
-                  v-for="field in availableFields"
-                  :key="field"
-                  :value="field"
-                  class="text-white/70 focus:bg-white/[0.08] focus:text-white light:text-gray-700 light:focus:bg-gray-100"
-                >
-                  {{ field }}
-                </SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-
-          <!-- Shortcuts selector (only for shortcuts display type) -->
-          <div v-if="widgetForm.display_type === 'shortcuts'" class="space-y-2">
-            <Label class="text-white/70 light:text-gray-700">{{ $t('dashboard.selectShortcuts') }}</Label>
-            <div class="space-y-2 max-h-64 overflow-y-auto pr-1">
-              <label
-                v-for="(shortcut, key) in SHORTCUT_REGISTRY"
-                :key="key"
-                class="flex items-center gap-3 p-2 rounded-lg hover:bg-white/[0.04] light:hover:bg-gray-50 cursor-pointer"
-              >
-                <input
-                  type="checkbox"
-                  :value="key"
-                  v-model="selectedShortcuts"
-                  class="rounded border-white/20 bg-white/[0.04] text-emerald-500 focus:ring-emerald-500 light:border-gray-300 light:bg-white"
-                />
-                <div class="flex items-center gap-2">
-                  <div :class="['h-8 w-8 rounded-lg bg-gradient-to-br flex items-center justify-center', shortcut.gradient]">
-                    <component :is="shortcut.icon" class="h-4 w-4 text-white" />
-                  </div>
-                  <span class="text-sm text-white/70 light:text-gray-700">{{ shortcut.label }}</span>
-                </div>
-              </label>
-            </div>
-          </div>
-
-          <!-- Filters (hidden for shortcuts) -->
-          <div v-if="widgetForm.display_type !== 'shortcuts'" class="space-y-2">
-            <div class="flex items-center justify-between">
-              <Label class="text-white/70 light:text-gray-700">{{ $t('dashboard.filters') }} ({{ widgetForm.filters.length }})</Label>
-              <Button type="button" variant="outline" size="sm" @click.stop.prevent="addFilter" class="border-white/20 text-white hover:bg-white/10 light:border-gray-300 light:text-gray-700">
-                <Plus class="h-4 w-4 mr-1" />
-                {{ $t('dashboard.addFilter') }}
-              </Button>
-            </div>
-            <p v-if="!widgetForm.data_source && widgetForm.filters.length === 0" class="text-xs text-white/40 light:text-gray-500">
-              {{ $t('dashboard.selectDataSourceFirst') }}
-            </p>
-            <div v-for="(filter, index) in widgetForm.filters" :key="index" class="flex items-center gap-2">
-              <div class="flex-1">
-                <Select :model-value="filter.field" @update:model-value="(val) => filter.field = String(val)">
-                  <SelectTrigger class="w-full bg-white/[0.04] border-white/[0.1] text-white text-sm light:bg-white light:border-gray-300 light:text-gray-900">
-                    <SelectValue :placeholder="$t('dashboard.field')" />
-                  </SelectTrigger>
-                  <SelectContent class="bg-[#1a1a1a] border-white/[0.08] light:bg-white light:border-gray-200">
-                    <SelectItem
-                      v-for="field in availableFields"
-                      :key="field"
-                      :value="field"
-                      class="text-white/70 focus:bg-white/[0.08] focus:text-white light:text-gray-700 light:focus:bg-gray-100"
-                    >
-                      {{ field }}
-                    </SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-              <div class="w-36">
-                <Select :model-value="filter.operator" @update:model-value="(val) => filter.operator = String(val)">
-                  <SelectTrigger class="w-full bg-white/[0.04] border-white/[0.1] text-white text-sm light:bg-white light:border-gray-300 light:text-gray-900">
-                    <SelectValue :placeholder="$t('dashboard.operator')" />
-                  </SelectTrigger>
-                  <SelectContent class="bg-[#1a1a1a] border-white/[0.08] light:bg-white light:border-gray-200">
-                    <SelectItem
-                      v-for="op in operators"
-                      :key="op.value"
-                      :value="op.value"
-                      class="text-white/70 focus:bg-white/[0.08] focus:text-white light:text-gray-700 light:focus:bg-gray-100"
-                    >
-                      {{ op.label }}
-                    </SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-              <Input
-                v-model="filter.value"
-                :placeholder="$t('dashboard.value')"
-                class="flex-1 bg-white/[0.04] border-white/[0.1] text-white text-sm placeholder:text-white/30 light:bg-white light:border-gray-300 light:text-gray-900"
-              />
-              <Button variant="ghost" size="icon" @click="removeFilter(index)" class="text-white/50 hover:text-red-400 shrink-0">
-                <X class="h-4 w-4" />
-              </Button>
-            </div>
-          </div>
-
-          <!-- Color (hidden for shortcuts and table) -->
-          <div v-if="widgetForm.display_type !== 'shortcuts' && widgetForm.display_type !== 'table'" class="space-y-2">
-            <Label class="text-white/70 light:text-gray-700">{{ $t('dashboard.color') }}</Label>
-            <Select :model-value="widgetForm.color" @update:model-value="(val) => widgetForm.color = String(val)">
-              <SelectTrigger class="bg-white/[0.04] border-white/[0.1] text-white light:bg-white light:border-gray-300 light:text-gray-900">
-                <SelectValue :placeholder="$t('dashboard.selectColor')" />
-              </SelectTrigger>
-              <SelectContent class="bg-[#1a1a1a] border-white/[0.08] light:bg-white light:border-gray-200">
-                <SelectItem
-                  v-for="color in colorOptions"
-                  :key="color.value"
-                  :value="color.value"
-                  class="text-white/70 focus:bg-white/[0.08] focus:text-white light:text-gray-700 light:focus:bg-gray-100"
-                >
-                  <span class="flex items-center gap-2">
-                    <span :class="['inline-block w-3 h-3 rounded-full', color.bg]"></span>
-                    {{ color.label }}
-                  </span>
-                </SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-
-          <!-- Options -->
-          <div class="flex items-center justify-between">
-            <div v-if="widgetForm.display_type === 'number' || widgetForm.display_type === 'percentage'" class="flex items-center gap-2">
-              <Switch v-model:checked="widgetForm.show_change" />
-              <Label class="text-white/70 light:text-gray-700">{{ $t('dashboard.showPercentChange') }}</Label>
-            </div>
-            <div class="flex items-center gap-2">
-              <Switch v-model:checked="widgetForm.is_shared" />
-              <Label class="text-white/70 light:text-gray-700">{{ $t('dashboard.shareWithTeam') }}</Label>
-            </div>
+          <small v-if="!widgetForm.data_source && widgetForm.filters.length === 0" class="text-light">
+            {{ $t('dashboard.selectDataSourceFirst') }}
+          </small>
+          <div v-for="(filter, index) in widgetForm.filters" :key="index" class="hstack items-center gap-2">
+            <select v-model="filter.field" class="flex-1" :aria-label="$t('dashboard.field')">
+              <option value="" disabled>{{ $t('dashboard.field') }}</option>
+              <option v-for="field in availableFields" :key="field" :value="field">{{ field }}</option>
+            </select>
+            <select v-model="filter.operator" class="flex-1" :aria-label="$t('dashboard.operator')">
+              <option value="" disabled>{{ $t('dashboard.operator') }}</option>
+              <option v-for="op in operators" :key="op.value" :value="op.value">{{ op.label }}</option>
+            </select>
+            <input v-model="filter.value" class="flex-1" :placeholder="$t('dashboard.value')" :aria-label="$t('dashboard.value')" />
+            <button
+              type="button"
+              class="ghost icon shrink-0"
+              :aria-label="$t('common.remove', 'Remove')"
+              :title="$t('common.remove', 'Remove')"
+              @click="removeFilter(index)"
+            >
+              <X :size="16" />
+            </button>
           </div>
         </div>
 
-        <DialogFooter>
-          <Button variant="outline" @click="isWidgetDialogOpen = false" class="border-white/[0.1] text-white/70 hover:bg-white/[0.08] light:border-gray-300 light:text-gray-700">
-            {{ $t('common.cancel') }}
-          </Button>
-          <Button @click="saveWidget" :disabled="isSavingWidget">
-            {{ isSavingWidget ? $t('common.saving') + '...' : (isEditMode ? $t('common.update') : $t('common.create')) }}
-          </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
+        <!-- Color (hidden for shortcuts and table) -->
+        <label v-if="widgetForm.display_type !== 'shortcuts' && widgetForm.display_type !== 'table'" data-field>
+          {{ $t('dashboard.color') }}
+          <select v-model="widgetForm.color">
+            <option v-for="color in colorOptions" :key="color.value" :value="color.value">{{ color.label }}</option>
+          </select>
+        </label>
+
+        <!-- Options -->
+        <label v-if="widgetForm.display_type === 'number' || widgetForm.display_type === 'percentage'" class="hstack items-center gap-2">
+          <input v-model="widgetForm.show_change" type="checkbox" role="switch" />
+          {{ $t('dashboard.showPercentChange') }}
+        </label>
+        <label class="hstack items-center gap-2">
+          <input v-model="widgetForm.is_shared" type="checkbox" role="switch" />
+          {{ $t('dashboard.shareWithTeam') }}
+        </label>
+      </div>
+
+      <template #footer>
+        <button type="button" class="outline" @click="isWidgetDialogOpen = false">{{ $t('common.cancel') }}</button>
+        <button type="button" :disabled="isSavingWidget" @click="saveWidget">
+          {{ isSavingWidget ? $t('common.saving') + '...' : (isEditMode ? $t('common.update') : $t('common.create')) }}
+        </button>
+      </template>
+    </Modal>
 
     <!-- Delete Confirmation Dialog -->
-    <AlertDialog v-model:open="deleteDialogOpen">
-      <AlertDialogContent class="bg-[#141414] border-white/[0.08] light:bg-white light:border-gray-200">
-        <AlertDialogHeader>
-          <AlertDialogTitle class="text-white light:text-gray-900">{{ $t('dashboard.deleteWidgetTitle') }}</AlertDialogTitle>
-          <AlertDialogDescription class="text-white/60 light:text-gray-500">
-            {{ $t('dashboard.deleteWidgetConfirm', { name: widgetToDelete?.name }) }}
-          </AlertDialogDescription>
-        </AlertDialogHeader>
-        <AlertDialogFooter>
-          <AlertDialogCancel class="bg-transparent border-white/[0.1] text-white/70 hover:bg-white/[0.08] light:border-gray-300 light:text-gray-700 light:hover:bg-gray-100">
-            {{ $t('common.cancel') }}
-          </AlertDialogCancel>
-          <AlertDialogAction @click="confirmDeleteWidget" class="bg-red-600 text-white hover:bg-red-700">
-            {{ $t('common.delete') }}
-          </AlertDialogAction>
-        </AlertDialogFooter>
-      </AlertDialogContent>
-    </AlertDialog>
+    <Modal
+      v-model:open="deleteDialogOpen"
+      alert
+      :title="$t('dashboard.deleteWidgetTitle')"
+      :description="$t('dashboard.deleteWidgetConfirm', { name: widgetToDelete?.name })"
+    >
+      <template #footer>
+        <button type="button" class="outline" @click="deleteDialogOpen = false">{{ $t('common.cancel') }}</button>
+        <button type="button" data-variant="danger" @click="confirmDeleteWidget">{{ $t('common.delete') }}</button>
+      </template>
+    </Modal>
   </div>
 </template>
-
-<style>
-/* Grid layout placeholder styling */
-.vue-grid-item.vue-grid-placeholder {
-  background: transparent !important;
-  border: 2px dashed rgba(16, 185, 129, 0.4) !important;
-  border-radius: 0.75rem;
-}
-
-/* Grid resize handle styling */
-.vue-grid-item > .vue-resizable-handle {
-  width: 20px;
-  height: 20px;
-  bottom: 4px;
-  right: 4px;
-  background: none;
-  cursor: se-resize;
-}
-
-.vue-grid-item > .vue-resizable-handle::after {
-  content: '';
-  position: absolute;
-  right: 4px;
-  bottom: 4px;
-  width: 8px;
-  height: 8px;
-  border-right: 2px solid rgba(255, 255, 255, 0.2);
-  border-bottom: 2px solid rgba(255, 255, 255, 0.2);
-  border-radius: 0 0 2px 0;
-}
-
-.light .vue-grid-item > .vue-resizable-handle::after {
-  border-right-color: rgba(0, 0, 0, 0.2);
-  border-bottom-color: rgba(0, 0, 0, 0.2);
-}
-
-/* Ensure grid items don't overflow */
-.vue-grid-item {
-  transition: all 200ms ease;
-}
-
-/* Animated counter transition */
-.counter-fade-enter-active,
-.counter-fade-leave-active {
-  transition: opacity 0.25s ease, transform 0.25s ease;
-}
-.counter-fade-enter-from {
-  opacity: 0;
-  transform: translateY(4px);
-}
-.counter-fade-leave-to {
-  opacity: 0;
-  transform: translateY(-4px);
-}
-</style>
