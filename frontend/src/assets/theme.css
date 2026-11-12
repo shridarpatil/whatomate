@@ -89,6 +89,17 @@
     color: var(--muted-foreground);
     font-weight: var(--font-normal);
   }
+  /* In-bubble buttons / list options and reply quotes use Oat's own markup
+     (secondary badges/buttons, <blockquote>); only Oat's grey is swapped for
+     the bubble-friendly card fill and the brand quote bar. */
+  .card[data-bubble] :is(.badge, .button)[data-variant="secondary"] {
+    background-color: var(--card);
+    border: 1px solid var(--border);
+  }
+  .card[data-bubble] [data-reply-preview] blockquote {
+    margin: 0;
+    border-inline-start-color: var(--primary);
+  }
 
   /* Flow node colours (approved exception, flow editors only): one accent per
      node type, shown as a coloured inline-start edge + tinted icon chip.

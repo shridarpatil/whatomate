@@ -2039,16 +2039,16 @@ async function sendMediaMessage() {
                     <button
                       v-if="message.is_reply && message.reply_to_message"
                       type="button"
-                      class="outline small w-100 mb-2"
+                      class="ghost small w-100 mb-2 hstack"
                       data-reply-preview
                       @click="scrollToMessage(message.reply_to_message_id)"
                     >
-                      <span class="flex flex-col w-100 min-w-0 align-left">
+                      <blockquote class="flex flex-col w-100 min-w-0 align-left">
                         <strong>
                           {{ message.reply_to_message.direction === 'incoming' ? (contactsStore.currentContact?.profile_name || contactsStore.currentContact?.name || $t('chat.customer')) : $t('chat.you') }}
                         </strong>
                         <span class="truncate">{{ getReplyPreviewContent(message) }}</span>
-                      </span>
+                      </blockquote>
                     </button>
 
                     <!-- Template header media (image/video/document shown above template text) -->
@@ -2198,19 +2198,20 @@ async function sendMediaMessage() {
                     </p>
 
                     <!-- Interactive buttons - WhatsApp style -->
-                    <div v-if="getInteractiveButtons(message).length > 0" class="vstack gap-1 mt-2" data-interactive-buttons>
+                    <div v-if="getInteractiveButtons(message).length > 0" class="vstack gap-1 mt-4" data-interactive-buttons>
                       <template v-for="btn in getInteractiveButtons(message)" :key="btn.id">
                         <a
                           v-if="btn.type === 'URL' && btn.url"
                           :href="btn.url"
                           target="_blank"
                           rel="noopener noreferrer"
-                          class="button outline small w-100"
+                          class="button small w-100"
+                          data-variant="secondary"
                         >
                           <ExternalLink :size="14" />
                           {{ btn.title }}
                         </a>
-                        <span v-else class="badge outline w-100">{{ btn.title }}</span>
+                        <span v-else class="badge w-100" data-variant="secondary">{{ btn.title }}</span>
                       </template>
                     </div>
                     <!-- CTA URL button - WhatsApp style -->
@@ -2219,14 +2220,15 @@ async function sendMediaMessage() {
                       :href="getCTAUrlData(message)?.url"
                       target="_blank"
                       rel="noopener noreferrer"
-                      class="button outline small w-100 mt-2"
+                      class="button small w-100 mt-4"
+                      data-variant="secondary"
                     >
                       <ExternalLink :size="14" />
                       {{ getCTAUrlData(message)?.button_text }}
                     </a>
                     <!-- Voice call button - WhatsApp style, non-clickable in our chat -->
-                    <div v-if="getVoiceCallData(message)" class="mt-2">
-                      <span class="badge outline w-100">
+                    <div v-if="getVoiceCallData(message)" class="mt-4">
+                      <span class="badge w-100" data-variant="secondary">
                         <PhoneCall :size="14" />
                         {{ getVoiceCallData(message)?.display_text }}
                       </span>
@@ -2497,7 +2499,7 @@ async function sendMediaMessage() {
           <article class="card" data-bubble="outgoing">
             <img v-if="templateHeaderPreview" :src="templateHeaderPreview" alt="" class="media-preview mb-2" />
             <p class="pre-wrap">{{ templatePreview }}</p>
-            <div v-if="selectedTemplate?.buttons?.length" class="vstack gap-1 mt-2" data-interactive-buttons>
+            <div v-if="selectedTemplate?.buttons?.length" class="vstack gap-1 mt-4" data-interactive-buttons>
               <span v-for="(btn, index) in selectedTemplate.buttons" :key="index" class="badge outline w-100">
                 {{ btn.text }}
               </span>
