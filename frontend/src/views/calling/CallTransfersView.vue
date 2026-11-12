@@ -3,10 +3,7 @@ import { ref, computed, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useCallingStore } from '@/stores/calling'
 import { callTransfersService, type CallTransfer } from '@/services/api'
-import { Card, CardContent } from '@/components/ui/card'
-import { Button } from '@/components/ui/button'
-import { Badge } from '@/components/ui/badge'
-import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs'
+import PageHeader from '@/components/shared/PageHeader.vue'
 import { Phone, PhoneOff, PhoneForwarded, RefreshCw, Clock } from '@/lib/icons'
 import { toast } from '@/lib/toast'
 import DataTable from '@/components/shared/DataTable.vue'
@@ -83,13 +80,11 @@ function formatDate(dateStr?: string): string {
   return new Date(dateStr).toLocaleString()
 }
 
-function statusVariant(status: string): 'default' | 'secondary' | 'destructive' | 'outline' {
+function statusVariant(status: string): 'success' | 'warning' | 'danger' | 'secondary' {
   switch (status) {
-    case 'waiting': return 'default'
-    case 'connected': return 'default'
-    case 'completed': return 'secondary'
-    case 'abandoned': return 'destructive'
-    case 'no_answer': return 'outline'
+    case 'waiting': return 'warning'
+    case 'connected': return 'success'
+    case 'abandoned': return 'danger'
     default: return 'secondary'
   }
 }
@@ -101,77 +96,82 @@ onMounted(() => {
 </script>
 
 <template>
-  <div class="p-6 space-y-6">
-    <div class="flex items-center justify-between">
-      <div>
-        <h1 class="text-2xl font-bold">{{ t('callTransfers.title') }}</h1>
-      </div>
-      <Button variant="outline" size="sm" @click="store.fetchWaitingTransfers(); fetchHistory()">
-        <RefreshCw class="h-4 w-4 mr-2" />
-        {{ t('common.refresh') }}
-      </Button>
-    </div>
+  <div class="flex flex-col h-full">
+    <PageHeader :title="t('callTransfers.title')">
+      <template #actions>
+        <button type="button" class="outline small" @click="store.fetchWaitingTransfers(); fetchHistory()">
+          <RefreshCw :size="16" />
+          {{ t('common.refresh') }}
+        </button>
+      </template>
+    </PageHeader>
 
-    <Tabs v-model="activeTab">
-      <TabsList>
-        <TabsTrigger value="waiting">
+    <div class="flex-1 scroll-y p-4 vstack gap-4">
+      <div role="tablist">
+        <button
+          id="transfers-tab-waiting"
+          type="button"
+          role="tab"
+          aria-controls="transfers-tabpanel"
+          :aria-selected="activeTab === 'waiting'"
+          @click="activeTab = 'waiting'"
+        >
           {{ t('callTransfers.waiting') }}
-          <Badge v-if="store.waitingTransfers.length > 0" variant="destructive" class="ml-2 h-5 min-w-[20px]">
+          <span v-if="store.waitingTransfers.length > 0" class="badge" data-variant="danger">
             {{ store.waitingTransfers.length }}
-          </Badge>
-        </TabsTrigger>
-        <TabsTrigger value="history">{{ t('callTransfers.history') }}</TabsTrigger>
-      </TabsList>
+          </span>
+        </button>
+        <button
+          id="transfers-tab-history"
+          type="button"
+          role="tab"
+          aria-controls="transfers-tabpanel"
+          :aria-selected="activeTab === 'history'"
+          @click="activeTab = 'history'"
+        >
+          {{ t('callTransfers.history') }}
+        </button>
+      </div>
 
-      <TabsContent value="waiting" class="mt-4">
-        <Card>
-          <CardContent class="pt-6">
-            <DataTable
-              :items="store.waitingTransfers"
-              :columns="waitingColumns"
-              :is-loading="false"
-              :empty-icon="PhoneForwarded"
-              :empty-title="t('callTransfers.noWaiting')"
-            >
-              <template #cell-caller_phone="{ item: transfer }">
-                <div class="flex items-center gap-2">
-                  <Phone class="h-4 w-4 text-green-400" />
-                  <span>{{ transfer.contact?.profile_name || transfer.caller_phone }}</span>
-                </div>
-              </template>
-              <template #cell-status>
-                <Badge variant="default" class="bg-yellow-600/20 text-yellow-400 border-yellow-600/30">
-                  {{ t('callTransfers.waiting') }}
-                </Badge>
-              </template>
-              <template #cell-transferred_at="{ item: transfer }">
-                {{ formatDate(transfer.transferred_at) }}
-              </template>
-              <template #cell-actions="{ item: transfer }">
-                <Button
-                  size="sm"
-                  class="bg-green-600 hover:bg-green-500 text-white"
-                  @click="handleAccept(transfer.id)"
-                >
-                  <Phone class="h-3.5 w-3.5 mr-1" />
-                  {{ t('callTransfers.accept') }}
-                </Button>
-              </template>
-            </DataTable>
-          </CardContent>
-        </Card>
-      </TabsContent>
+      <div id="transfers-tabpanel" role="tabpanel" :aria-labelledby="`transfers-tab-${activeTab}`">
+        <article v-if="activeTab === 'waiting'" class="card">
+          <DataTable
+            :items="store.waitingTransfers"
+            :columns="waitingColumns"
+            :is-loading="false"
+            :empty-icon="PhoneForwarded"
+            :empty-title="t('callTransfers.noWaiting')"
+          >
+            <template #cell-caller_phone="{ item: transfer }">
+              <div class="hstack gap-2">
+                <Phone :size="16" />
+                <span>{{ transfer.contact?.profile_name || transfer.caller_phone }}</span>
+              </div>
+            </template>
+            <template #cell-status>
+              <span class="badge" data-variant="warning">{{ t('callTransfers.waiting') }}</span>
+            </template>
+            <template #cell-transferred_at="{ item: transfer }">
+              {{ formatDate(transfer.transferred_at) }}
+            </template>
+            <template #cell-actions="{ item: transfer }">
+              <button type="button" class="small" @click="handleAccept(transfer.id)">
+                <Phone :size="14" />
+                {{ t('callTransfers.accept') }}
+              </button>
+            </template>
+          </DataTable>
+        </article>
 
-      <TabsContent value="history" class="mt-4">
-        <ErrorState
-          v-if="historyError && !historyLoading"
-          :title="$t('common.loadErrorTitle')"
-          :description="historyError"
-          :retry-label="$t('common.retry')"
-          @retry="fetchHistory"
-        />
-        <Card v-else>
-          <CardContent class="pt-6">
+        <template v-else>
+          <ErrorState
+            v-if="historyError && !historyLoading"
+            :title="$t('common.loadErrorTitle')"
+            :description="historyError"
+            :retry-label="$t('common.retry')"
+            @retry="fetchHistory"
+          />
+          <article v-else class="card">
             <DataTable
               :items="historyTransfers"
               :columns="historyColumns"
@@ -187,18 +187,15 @@ onMounted(() => {
               @page-change="handleHistoryPageChange"
             >
               <template #cell-caller_phone="{ item: transfer }">
-                <div class="flex items-center gap-2">
-                  <component :is="transfer.status === 'completed' ? Phone : PhoneOff"
-                    class="h-4 w-4"
-                    :class="transfer.status === 'completed' ? 'text-green-400' : 'text-red-400'"
-                  />
+                <div class="hstack gap-2">
+                  <component :is="transfer.status === 'completed' ? Phone : PhoneOff" :size="16" />
                   <span>{{ transfer.contact?.profile_name || transfer.caller_phone }}</span>
                 </div>
               </template>
               <template #cell-status="{ item: transfer }">
-                <Badge :variant="statusVariant(transfer.status)">
+                <span class="badge" :data-variant="statusVariant(transfer.status)">
                   {{ transfer.status }}
-                </Badge>
+                </span>
               </template>
               <template #cell-hold_duration="{ item: transfer }">
                 {{ formatDuration(transfer.hold_duration) }}
@@ -210,9 +207,9 @@ onMounted(() => {
                 {{ formatDate(transfer.transferred_at) }}
               </template>
             </DataTable>
-          </CardContent>
-        </Card>
-      </TabsContent>
-    </Tabs>
+          </article>
+        </template>
+      </div>
+    </div>
   </div>
 </template>

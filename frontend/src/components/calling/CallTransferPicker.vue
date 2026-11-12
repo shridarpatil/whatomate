@@ -3,9 +3,8 @@ import { ref, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useCallingStore } from '@/stores/calling'
 import { teamsService, type Team, type TeamMember } from '@/services/api'
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
-import { Button } from '@/components/ui/button'
-import { ArrowLeft, Users, Loader2 } from '@/lib/icons'
+import Modal from '@/components/oat/Modal.vue'
+import { ArrowLeft, Users } from '@/lib/icons'
 import { toast } from '@/lib/toast'
 
 const emit = defineEmits<{ close: [] }>()
@@ -68,82 +67,72 @@ async function doTransfer(agentId?: string) {
 </script>
 
 <template>
-  <Dialog :open="true" @update:open="emit('close')">
-    <DialogContent class="sm:max-w-md">
-      <DialogHeader>
-        <DialogTitle>{{ t('callTransfers.transferCall') }}</DialogTitle>
-      </DialogHeader>
-
-      <!-- Step 1: Team list -->
-      <div v-if="step === 'teams'">
-        <p class="text-sm text-muted-foreground mb-3">{{ t('callTransfers.selectTeam') }}</p>
-        <div v-if="loading" class="flex justify-center py-8">
-          <Loader2 class="h-5 w-5 animate-spin text-muted-foreground" />
-        </div>
-        <div v-else-if="teams.length === 0" class="text-center py-8 text-sm text-muted-foreground">
-          {{ t('callTransfers.noTeams') }}
-        </div>
-        <div v-else class="space-y-1 max-h-64 overflow-y-auto">
-          <button
-            v-for="team in teams"
-            :key="team.id"
-            class="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg hover:bg-accent text-left transition-colors"
-            @click="selectTeam(team)"
-          >
-            <div class="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center shrink-0">
-              <Users class="h-4 w-4 text-primary" />
-            </div>
-            <div class="min-w-0">
-              <p class="text-sm font-medium truncate">{{ team.name }}</p>
-              <p class="text-xs text-muted-foreground">{{ team.member_count }} members</p>
-            </div>
-          </button>
-        </div>
-      </div>
-
-      <!-- Step 2: Team members -->
-      <div v-else>
-        <div class="flex items-center gap-2 mb-3">
-          <Button variant="ghost" size="sm" class="h-7 w-7 p-0" @click="goBack">
-            <ArrowLeft class="h-4 w-4" />
-          </Button>
-          <p class="text-sm text-muted-foreground">{{ selectedTeam?.name }}</p>
-        </div>
-
-        <Button
-          variant="outline"
-          class="w-full mb-2"
-          :disabled="store.isTransferring"
-          @click="doTransfer()"
+  <Modal :open="true" :title="t('callTransfers.transferCall')" @update:open="emit('close')">
+    <!-- Step 1: Team list -->
+    <div v-if="step === 'teams'">
+      <p class="text-light mb-4">{{ t('callTransfers.selectTeam') }}</p>
+      <div v-if="loading" class="align-center p-4" role="status" aria-busy="true" data-spinner="large" />
+      <p v-else-if="teams.length === 0" class="align-center text-light p-4">
+        {{ t('callTransfers.noTeams') }}
+      </p>
+      <div v-else class="vstack gap-1 scroll-y picker-list">
+        <button
+          v-for="team in teams"
+          :key="team.id"
+          type="button"
+          class="ghost hstack gap-2"
+          @click="selectTeam(team)"
         >
-          <Loader2 v-if="store.isTransferring" class="h-4 w-4 animate-spin mr-2" />
-          {{ t('callTransfers.transferToTeam') }}
-        </Button>
-
-        <p class="text-xs text-muted-foreground mb-2">{{ t('callTransfers.selectAgent') }}</p>
-
-        <div v-if="membersLoading" class="flex justify-center py-6">
-          <Loader2 class="h-5 w-5 animate-spin text-muted-foreground" />
-        </div>
-        <div v-else class="space-y-1 max-h-48 overflow-y-auto">
-          <button
-            v-for="member in members"
-            :key="member.user_id"
-            class="w-full flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-accent text-left transition-colors"
-            :disabled="store.isTransferring"
-            @click="doTransfer(member.user_id)"
-          >
-            <span
-              class="w-2 h-2 rounded-full shrink-0"
-              :class="member.is_available ? 'bg-green-500' : 'bg-zinc-400'"
-            />
-            <div class="min-w-0">
-              <p class="text-sm font-medium truncate">{{ member.full_name }}</p>
-              <p class="text-xs text-muted-foreground truncate">{{ member.email }}</p>
-            </div>
-          </button>
-        </div>
+          <Users :size="20" />
+          <span class="min-w-0">
+            <strong class="truncate">{{ team.name }}</strong>
+            <small class="text-light">{{ team.member_count }} members</small>
+          </span>
+        </button>
       </div>
-    </DialogContent>
-  </Dialog>
+    </div>
+
+    <!-- Step 2: Team members -->
+    <div v-else>
+      <div class="hstack items-center gap-2 mb-4">
+        <button type="button" class="ghost icon small" :title="t('callTransfers.back')" :aria-label="t('callTransfers.back')" @click="goBack">
+          <ArrowLeft />
+        </button>
+        <span class="text-light">{{ selectedTeam?.name }}</span>
+      </div>
+
+      <button
+        type="button"
+        class="outline w-100 mb-2"
+        :disabled="store.isTransferring"
+        :aria-busy="store.isTransferring ? 'true' : undefined"
+        data-spinner="small"
+        @click="doTransfer()"
+      >
+        {{ t('callTransfers.transferToTeam') }}
+      </button>
+
+      <p class="text-light mb-2"><small>{{ t('callTransfers.selectAgent') }}</small></p>
+
+      <div v-if="membersLoading" class="align-center p-4" role="status" aria-busy="true" data-spinner="large" />
+      <div v-else class="vstack gap-1 scroll-y picker-list">
+        <button
+          v-for="member in members"
+          :key="member.user_id"
+          type="button"
+          class="ghost hstack gap-2"
+          :disabled="store.isTransferring"
+          @click="doTransfer(member.user_id)"
+        >
+          <span class="badge" :data-variant="member.is_available ? 'success' : 'secondary'">
+            {{ member.is_available ? t('common.active') : t('common.inactive') }}
+          </span>
+          <span class="min-w-0">
+            <strong class="truncate">{{ member.full_name }}</strong>
+            <small class="text-light truncate">{{ member.email }}</small>
+          </span>
+        </button>
+      </div>
+    </div>
+  </Modal>
 </template>

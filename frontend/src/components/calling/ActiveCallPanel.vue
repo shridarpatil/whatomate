@@ -2,7 +2,6 @@
 import { computed, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useCallingStore } from '@/stores/calling'
-import { Button } from '@/components/ui/button'
 import { Phone, PhoneOff, PhoneIncoming, Mic, MicOff, ArrowRightLeft, Pause, Play } from '@/lib/icons'
 import CallTransferPicker from '@/components/calling/CallTransferPicker.vue'
 import { toast } from '@/lib/toast'
@@ -80,96 +79,94 @@ async function handleAccept(id: string) {
 
 <template>
   <Teleport to="body">
-    <div
-      v-if="showPanel"
-      class="fixed bottom-6 right-6 z-50 bg-zinc-900 border border-zinc-700 rounded-xl shadow-2xl p-4 min-w-[260px]"
-    >
+    <article v-if="showPanel" class="card fixed-bottom-end">
       <!-- Caller info -->
-      <div class="flex items-center gap-3 mb-3">
-        <div class="w-8 h-8 rounded-full flex items-center justify-center"
-          :class="store.isOnCall ? 'bg-green-600/20' : 'bg-green-600/20'"
-        >
-          <PhoneIncoming v-if="!store.isOnCall && firstWaiting" class="h-4 w-4 text-green-400 animate-pulse" />
-          <Phone v-else class="h-4 w-4 text-green-400" :class="{ 'animate-pulse': store.isConnecting }" />
-        </div>
-        <div>
-          <p class="text-sm font-medium text-zinc-100">
-            {{ displayName }}
-          </p>
-          <p class="text-xs text-zinc-400">{{ statusText }}</p>
+      <div class="hstack items-center gap-2 mb-2">
+        <PhoneIncoming v-if="!store.isOnCall && firstWaiting" :size="20" />
+        <Phone v-else :size="20" :aria-busy="store.isConnecting ? 'true' : undefined" />
+        <div role="status">
+          <strong>{{ displayName }}</strong>
+          <p class="text-light"><small>{{ statusText }}</small></p>
         </div>
       </div>
 
       <!-- Timer (only when on active call) -->
-      <div v-if="store.isOnCall" class="text-center mb-3">
-        <span class="text-2xl font-mono text-zinc-200">{{ formattedDuration }}</span>
+      <div v-if="store.isOnCall" class="align-center mb-2">
+        <strong>{{ formattedDuration }}</strong>
       </div>
 
       <!-- Call controls -->
-      <div class="flex items-center justify-center gap-3">
+      <div class="hstack items-center justify-center gap-2">
         <!-- Mute (only when on call) -->
-        <Button
+        <button
           v-if="store.isOnCall"
-          size="sm"
-          variant="ghost"
-          class="h-10 w-10 rounded-full p-0 border !text-zinc-300"
-          :class="store.isMuted ? '!bg-red-900/30 !border-red-700 hover:!bg-red-900/50' : '!bg-zinc-800 !border-zinc-600 hover:!bg-zinc-700'"
+          type="button"
+          class="icon"
+          :data-variant="store.isMuted ? 'danger' : 'secondary'"
+          :title="store.isMuted ? t('callTransfers.unmute') : t('callTransfers.mute')"
+          :aria-label="store.isMuted ? t('callTransfers.unmute') : t('callTransfers.mute')"
+          :aria-pressed="store.isMuted"
           @click="store.toggleMute()"
         >
-          <MicOff v-if="store.isMuted" class="h-4 w-4 !text-red-400" />
-          <Mic v-else class="h-4 w-4" />
-        </Button>
+          <MicOff v-if="store.isMuted" />
+          <Mic v-else />
+        </button>
 
         <!-- Hold/Resume (only when on active call) -->
-        <Button
+        <button
           v-if="store.isOnCall"
-          size="sm"
-          variant="ghost"
-          class="h-10 w-10 rounded-full p-0 border !text-zinc-300"
-          :class="store.isOnHold ? '!bg-amber-900/30 !border-amber-700 hover:!bg-amber-900/50' : '!bg-zinc-800 !border-zinc-600 hover:!bg-zinc-700'"
+          type="button"
+          class="icon"
+          :data-variant="store.isOnHold ? undefined : 'secondary'"
           :title="store.isOnHold ? t('calling.resume') : t('calling.hold')"
+          :aria-label="store.isOnHold ? t('calling.resume') : t('calling.hold')"
+          :aria-pressed="store.isOnHold"
           @click="store.isOnHold ? store.resumeCall() : store.holdCall()"
         >
-          <Play v-if="store.isOnHold" class="h-4 w-4 !text-amber-400" />
-          <Pause v-else class="h-4 w-4" />
-        </Button>
+          <Play v-if="store.isOnHold" />
+          <Pause v-else />
+        </button>
 
         <!-- Transfer (only when on active call) -->
-        <Button
+        <button
           v-if="store.isOnCall"
-          size="sm"
-          variant="ghost"
-          class="h-10 w-10 rounded-full p-0 border !bg-zinc-800 !border-zinc-600 !text-zinc-300 hover:!bg-zinc-700"
+          type="button"
+          class="icon"
+          data-variant="secondary"
           :title="t('callTransfers.transfer')"
+          :aria-label="t('callTransfers.transfer')"
           @click="showTransferPicker = true"
         >
-          <ArrowRightLeft class="h-4 w-4" />
-        </Button>
+          <ArrowRightLeft />
+        </button>
 
-        <!-- Accept incoming transfer (green) -->
-        <Button
+        <!-- Accept incoming transfer -->
+        <button
           v-if="firstWaiting"
-          variant="ghost"
-          size="sm"
-          class="h-10 w-10 rounded-full p-0 !bg-green-600 !text-white hover:!bg-green-500"
+          type="button"
+          class="icon"
+          :title="t('callTransfers.accept')"
+          :aria-label="t('callTransfers.accept')"
           :disabled="acceptingId === firstWaiting.id"
           @click="handleAccept(firstWaiting.id)"
         >
-          <Phone class="h-4 w-4" />
-        </Button>
+          <Phone />
+        </button>
 
-        <!-- Hangup / Decline (red) -->
-        <Button
+        <!-- Hangup / Decline -->
+        <button
           v-if="store.isOnCall || store.isConnecting"
-          variant="ghost"
-          size="sm"
-          class="h-10 w-10 rounded-full p-0 !bg-red-600 !text-white hover:!bg-red-500"
+          type="button"
+          class="icon"
+          data-variant="danger"
+          :title="t('callTransfers.hangup')"
+          :aria-label="t('callTransfers.hangup')"
           @click="store.endCall()"
         >
-          <PhoneOff class="h-4 w-4" />
-        </Button>
+          <PhoneOff />
+        </button>
       </div>
-    </div>
+    </article>
 
     <CallTransferPicker v-if="showTransferPicker" @close="showTransferPicker = false" />
   </Teleport>

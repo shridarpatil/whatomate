@@ -16,9 +16,9 @@ export class CallLogsPage {
     this.heading = page.getByRole('heading', { name: /Call Logs/i })
     this.table = page.locator('table')
     this.searchInput = page.getByPlaceholder(/search/i)
-    this.statusFilter = page.locator('[data-testid="status-filter"]').or(page.getByRole('combobox').first())
-    this.accountFilter = page.locator('[data-testid="account-filter"]')
-    this.directionFilter = page.locator('[data-testid="direction-filter"]')
+    this.statusFilter = page.getByLabel('Filter by status')
+    this.accountFilter = page.getByLabel('Filter by account')
+    this.directionFilter = page.getByLabel('Filter by direction')
     this.refreshButton = page.getByRole('button').filter({ has: page.locator('svg') }).filter({ hasText: /refresh/i }).or(
       page.getByRole('button', { name: /refresh/i })
     )
@@ -40,7 +40,7 @@ export class CallLogsPage {
   }
 
   async clickRow(index: number) {
-    await this.page.locator('tbody tr').nth(index).click()
+    await this.page.locator('tbody tr').nth(index).getByRole('link').first().click()
   }
 
   async search(query: string) {

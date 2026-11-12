@@ -16,7 +16,7 @@ import AuditLogPanel from '@/components/shared/AuditLogPanel.vue'
 import UnsavedChangesDialog from '@/components/shared/UnsavedChangesDialog.vue'
 import DeleteConfirmDialog from '@/components/shared/DeleteConfirmDialog.vue'
 import Combobox from '@/components/oat/Combobox.vue'
-import type { ComboOption } from '@/components/oat/combobox'
+import { filterOptions, type ComboOption } from '@/components/oat/combobox'
 import {
   Users,
   Phone,
@@ -144,6 +144,11 @@ function openChat() {
   router.push({ name: 'chat-conversation', params: { contactId: contact.value.id } })
 }
 
+const tagSearch = ref('')
+const filteredTags = computed(() =>
+  filterOptions(tagsStore.tags.map(tag => ({ value: tag.name, label: tag.name })), tagSearch.value),
+)
+
 function toggleTag(tagName: string) {
   const index = form.value.tags.indexOf(tagName)
   if (index === -1) {
@@ -234,6 +239,9 @@ onMounted(async () => {
             {{ $t('contacts.whatsappAccount', 'WhatsApp Account') }}
             <select v-model="form.whatsapp_account" :disabled="!canWrite">
               <option value="" disabled>{{ $t('contacts.selectAccount', 'Select account') }}</option>
+              <option v-if="form.whatsapp_account && !accounts.some(a => a.name === form.whatsapp_account)" :value="form.whatsapp_account">
+                {{ form.whatsapp_account }}
+              </option>
               <option v-for="account in accounts" :key="account.id" :value="account.name">
                 {{ account.name }} ({{ account.phone_number }})
               </option>
@@ -247,12 +255,20 @@ onMounted(async () => {
                 <span v-if="form.tags.length === 0" class="text-light">{{ $t('contacts.selectTags') }}</span>
                 <span v-else>{{ form.tags.length }} {{ $t('contacts.tagsSelected') }}</span>
               </summary>
-              <div class="vstack gap-2 scroll-y">
-                <p v-if="tagsStore.tags.length === 0" class="text-light">{{ $t('contacts.noTagsFound') }}</p>
-                <label v-for="tag in tagsStore.tags" :key="tag.name" class="hstack gap-2">
-                  <input type="checkbox" :checked="isTagSelected(tag.name)" @change="toggleTag(tag.name)">
-                  {{ tag.name }}
-                </label>
+              <div class="vstack gap-2">
+                <input
+                  v-model="tagSearch"
+                  type="search"
+                  :placeholder="$t('contacts.searchTags')"
+                  :aria-label="$t('contacts.searchTags')"
+                >
+                <div class="vstack gap-2 scroll-y picker-list">
+                  <p v-if="filteredTags.length === 0" class="text-light">{{ $t('contacts.noTagsFound') }}</p>
+                  <label v-for="tag in filteredTags" :key="tag.value" class="hstack gap-2">
+                    <input type="checkbox" :checked="isTagSelected(tag.value)" @change="toggleTag(tag.value)">
+                    {{ tag.label }}
+                  </label>
+                </div>
               </div>
             </details>
             <div v-if="form.tags.length > 0" class="hstack gap-1 flex-wrap">

@@ -500,7 +500,7 @@ export class ContactsPage extends TableSettingsPage {
   async selectTags(tags: string[]) {
     // The tag Combobox adds a tag per selection and closes itself.
     for (const tag of tags) {
-      await this.dialog.getByLabel('Tags').click()
+      await this.dialog.getByLabel('Tags', { exact: true }).click()
       await this.page.getByRole('option', { name: tag }).first().click()
     }
   }

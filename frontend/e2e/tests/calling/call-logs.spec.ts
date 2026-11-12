@@ -23,7 +23,7 @@ test.describe('Call Logs Page', () => {
 
   test('should have status filter', async ({ page }) => {
     // Look for a select/dropdown that filters by status
-    const filterTrigger = page.locator('button[role="combobox"], select').first()
+    const filterTrigger = page.locator('main select').first()
     await expect(filterTrigger).toBeVisible()
   })
 
@@ -50,12 +50,10 @@ test.describe('Call Logs Page', () => {
   })
 
   test('should filter by status', async ({ page }) => {
-    const statusTrigger = page.locator('button[role="combobox"]').first()
-    if (await statusTrigger.isVisible()) {
-      await statusTrigger.click()
-      // Should show status options
-      const options = page.getByRole('option')
-      const optionCount = await options.count()
+    const statusSelect = callLogsPage.statusFilter
+    if (await statusSelect.isVisible()) {
+      // Should list status options
+      const optionCount = await statusSelect.getByRole('option').count()
       expect(optionCount).toBeGreaterThan(0)
     }
   })
