@@ -88,7 +88,11 @@ export class CampaignsPage extends BasePage {
     if (await btn.isVisible()) {
       await btn.click()
       await this.page.waitForURL(/\/campaigns\/[0-9a-f-]{36}$/)
-      return true
+      // Another parallel test may delete the campaign between list render and click.
+      const notFound = this.page.locator('main').getByRole('heading', { name: /not found/i })
+      const form = this.page.locator('main input#name')
+      await expect(form.or(notFound)).toBeVisible()
+      return !(await notFound.isVisible())
     }
     return false
   }
