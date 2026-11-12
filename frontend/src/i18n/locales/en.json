@@ -621,7 +621,10 @@
     "metaAppCredentialsDesc": "Set tenant-specific Meta App configurations for WhatsApp Embedded Signup. Leave secret blank to keep existing.",
     "metaAppId": "Meta App ID",
     "metaConfigId": "Meta Config ID",
-    "metaAppSecret": "Meta App Secret"
+    "metaAppSecret": "Meta App Secret",
+    "previewRingtone": "Preview ringtone",
+    "playAudio": "Play",
+    "pauseAudio": "Pause"
   },
   "users": {
     "title": "User Management",

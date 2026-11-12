@@ -14,13 +14,13 @@ export class AccountsPage extends BasePage {
     super(page)
     this.heading = page.locator('h1').filter({ hasText: 'WhatsApp Accounts' })
     this.addButton = page.getByRole('button', { name: /Add Account/i }).first()
-    this.dialog = page.locator('[role="dialog"][data-state="open"]')
+    this.dialog = page.locator('dialog[open]')
     this.alertDialog = page.locator('[role="alertdialog"]')
     this.tableBody = page.locator('tbody')
   }
 
   get profileDialog() {
-    return this.page.locator('[role="dialog"][data-state="open"]').filter({ hasText: 'Business Profile' })
+    return this.page.locator('dialog[open]').filter({ hasText: 'Business Profile' })
   }
 
   async goto() {
@@ -46,21 +46,11 @@ export class AccountsPage extends BasePage {
     businessId: string
     accessToken: string
   }) {
-    // On detail page, fields are inside Card components
-    const inputs = this.page.locator('input')
-    // Name is the first input
-    await inputs.first().fill(options.name)
-
-    // Find by label
-    const phoneInput = this.page.locator('input').nth(2) // After name and app_id
-    await phoneInput.fill(options.phoneId)
-
-    const businessInput = this.page.locator('input').nth(3)
-    await businessInput.fill(options.businessId)
-
-    // Access token is a password field
-    const tokenInput = this.page.locator('input[type="password"]').first()
-    await tokenInput.fill(options.accessToken)
+    // Fields are inputs nested in <label data-field>, so they resolve by label
+    await this.page.getByLabel(/Account Name/).fill(options.name)
+    await this.page.getByLabel(/Phone Number ID/).fill(options.phoneId)
+    await this.page.getByLabel(/Business Account ID/).fill(options.businessId)
+    await this.page.getByLabel(/Access Token/).fill(options.accessToken)
   }
 
   async saveAccount() {
@@ -70,7 +60,7 @@ export class AccountsPage extends BasePage {
 
   async deleteAccount(name: string) {
     const row = this.page.locator('tr').filter({ hasText: name })
-    await row.locator('button').filter({ has: this.page.locator('svg.text-destructive') }).click()
+    await row.getByRole('button', { name: 'Delete' }).click()
     await this.alertDialog.waitFor({ state: 'visible' })
   }
 

@@ -19,17 +19,15 @@ export class GeneralSettingsPage extends BasePage {
     this.generalTab = page.getByRole('tab', { name: /General/i })
     this.notificationsTab = page.getByRole('tab', { name: /Notifications/i })
     this.orgNameInput = page.locator('input#org_name')
-    // Use label-based selectors for comboboxes
-    this.timezoneSelect = page.locator('label').filter({ hasText: 'Default Timezone' }).locator('..').locator('button[role="combobox"]')
-    this.dateFormatSelect = page.locator('label').filter({ hasText: 'Date Format' }).locator('..').locator('button[role="combobox"]')
+    // Native selects labelled by their wrapping <label data-field>
+    this.timezoneSelect = page.getByLabel('Default Timezone')
+    this.dateFormatSelect = page.getByLabel('Date Format')
     this.saveButton = page.getByRole('button', { name: /Save Changes/i })
   }
 
   // Helper to get switch by its label text
   private getSwitchByLabel(labelText: string): Locator {
-    return this.page.locator('.flex.items-center.justify-between')
-      .filter({ hasText: labelText })
-      .locator('button[role="switch"]')
+    return this.page.getByRole('switch', { name: new RegExp(labelText) })
   }
 
   // Switch locators using label-based approach
@@ -68,13 +66,11 @@ export class GeneralSettingsPage extends BasePage {
   }
 
   async selectTimezone(value: string) {
-    await this.timezoneSelect.click()
-    await this.page.locator('[role="option"]').filter({ hasText: value }).click()
+    await this.timezoneSelect.selectOption({ label: value })
   }
 
   async selectDateFormat(value: string) {
-    await this.dateFormatSelect.click()
-    await this.page.locator('[role="option"]').filter({ hasText: value }).click()
+    await this.dateFormatSelect.selectOption({ label: value })
   }
 
   async toggleMaskPhone() {

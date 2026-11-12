@@ -582,7 +582,10 @@
     "currentFile": "Archivo actual",
     "noFileUploaded": "Usando predeterminado",
     "audioUploaded": "Archivo de audio subido exitosamente",
-    "audioUploadFailed": "Error al subir el archivo de audio"
+    "audioUploadFailed": "Error al subir el archivo de audio",
+    "previewRingtone": "Preview ringtone",
+    "playAudio": "Play",
+    "pauseAudio": "Pause"
   },
   "users": {
     "title": "Gestión de usuarios",

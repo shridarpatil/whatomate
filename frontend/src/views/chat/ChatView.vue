@@ -91,7 +91,7 @@ import {
   Filter,
   StickyNote
 } from '@/lib/icons'
-import { getInitials, getAvatarGradient } from '@/lib/utils'
+import { getInitials } from '@/lib/utils'
 import { useColorMode } from '@/composables/useColorMode'
 import { useInfiniteScroll } from '@/composables/useInfiniteScroll'
 import CannedResponsePicker from '@/components/chat/CannedResponsePicker.vue'
@@ -1814,7 +1814,7 @@ async function sendMediaMessage() {
           >
             <Avatar class="h-9 w-9 ring-2 ring-white/[0.1] light:ring-gray-200">
               <AvatarImage :src="contact.avatar_url" />
-              <AvatarFallback :class="'text-xs bg-gradient-to-br text-white ' + getAvatarGradient(contact.name || contact.phone_number)">
+              <AvatarFallback class="text-xs">
                 {{ getInitials(contact.name || contact.phone_number) }}
               </AvatarFallback>
             </Avatar>
@@ -1877,7 +1877,7 @@ async function sendMediaMessage() {
           <div class="flex items-center gap-2">
             <Avatar class="h-8 w-8 ring-2 ring-white/[0.1] light:ring-gray-200">
               <AvatarImage :src="contactsStore.currentContact.avatar_url" />
-              <AvatarFallback :class="'text-xs bg-gradient-to-br text-white ' + getAvatarGradient(contactsStore.currentContact.name || contactsStore.currentContact.phone_number)">
+              <AvatarFallback class="text-xs">
                 {{ getInitials(contactsStore.currentContact.name || contactsStore.currentContact.phone_number) }}
               </AvatarFallback>
             </Avatar>

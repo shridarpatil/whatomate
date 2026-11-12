@@ -569,7 +569,10 @@
     "currentFile": "தற்போதைய கோப்பு",
     "noFileUploaded": "இயல்புநிலை பயன்படுத்தப்படுகிறது",
     "audioUploaded": "ஆடியோ கோப்பு வெற்றிகரமாக பதிவேற்றப்பட்டது",
-    "audioUploadFailed": "ஆடியோ கோப்பை பதிவேற்ற முடியவில்லை"
+    "audioUploadFailed": "ஆடியோ கோப்பை பதிவேற்ற முடியவில்லை",
+    "previewRingtone": "Preview ringtone",
+    "playAudio": "Play",
+    "pauseAudio": "Pause"
   },
   "users": {
     "title": "பயனர் மேலாண்மை",

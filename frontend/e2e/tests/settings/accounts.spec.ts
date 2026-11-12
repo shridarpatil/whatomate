@@ -33,7 +33,7 @@ test.describe('WhatsApp Accounts - List View', () => {
       test.skip(true, 'No accounts in list')
       return
     }
-    const deleteBtn = firstRow.locator('button.text-destructive, button:has(svg.text-destructive)').first()
+    const deleteBtn = firstRow.getByRole('button', { name: 'Delete' })
     if (!(await deleteBtn.isVisible({ timeout: 3000 }).catch(() => false))) {
       test.skip(true, 'No delete button found')
       return

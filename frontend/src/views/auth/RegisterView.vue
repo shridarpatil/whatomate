@@ -63,7 +63,7 @@ const handleRegister = async () => {
 <template>
   <main class="flex items-center justify-center h-screen scroll-y p-4">
     <div class="row">
-      <div class="col-4 offset-4">
+      <div class="col-6 offset-3">
         <article class="card">
           <header class="vstack items-center align-center">
             <MessageSquare :size="32" />

@@ -75,8 +75,7 @@ export class ChatbotSettingsPage extends BasePage {
     const control = this.page.getByRole('button', { name: type === 'url' ? /^URL$/ : /^Reply$/ })
     await (editor === 'first' ? control.first() : control.last()).click()
 
-    const rows = this.page.locator('.flex.items-center.gap-2:has(input)')
-    await rows.last().locator('input').fill(title)
+    await this.page.getByPlaceholder('Button title').last().fill(title)
 
     if (type === 'url') {
       await this.page.getByPlaceholder('https://example.com').last().fill(url ?? '')
@@ -93,30 +92,28 @@ export class ChatbotSettingsPage extends BasePage {
 
   // Agents tab helpers
   async toggleAgentQueuePickup() {
-    await this.page.locator('button[role="switch"]').first().click()
+    await this.page.getByRole('switch').first().click()
   }
 
   async toggleAssignToSameAgent() {
-    await this.page.locator('button[role="switch"]').nth(1).click()
+    await this.page.getByRole('switch').nth(1).click()
   }
 
   async toggleAgentCurrentConversationOnly() {
-    await this.page.locator('button[role="switch"]').nth(2).click()
+    await this.page.getByRole('switch').nth(2).click()
   }
 
   // Hours tab helpers
   async toggleBusinessHours() {
-    await this.page.locator('button[role="switch"]').first().click()
+    await this.page.getByRole('switch').first().click()
   }
 
   async setDayHours(dayIndex: number, enabled: boolean, startTime?: string, endTime?: string) {
-    const dayRow = this.page.locator('.flex.items-center.gap-4').nth(dayIndex)
-    const switchEl = dayRow.locator('button[role="switch"]')
-    const currentState = await switchEl.getAttribute('data-state')
+    const days = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday']
+    const switchEl = this.page.getByRole('switch', { name: days[dayIndex], exact: true })
+    const dayRow = switchEl.locator('..')
 
-    if ((enabled && currentState === 'unchecked') || (!enabled && currentState === 'checked')) {
-      await switchEl.click()
-    }
+    await switchEl.setChecked(enabled)
 
     if (enabled && startTime) {
       await dayRow.locator('input[type="time"]').first().fill(startTime)
@@ -131,12 +128,12 @@ export class ChatbotSettingsPage extends BasePage {
   }
 
   async toggleAllowAutomatedOutsideHours() {
-    await this.page.locator('button[role="switch"]').last().click()
+    await this.page.getByRole('switch').last().click()
   }
 
   // SLA tab helpers
   async toggleSLAEnabled() {
-    await this.page.locator('button[role="switch"]').first().click()
+    await this.page.getByRole('switch').first().click()
   }
 
   async setSLAResponseMinutes(minutes: number) {
@@ -161,23 +158,21 @@ export class ChatbotSettingsPage extends BasePage {
 
   async toggleClientReminder() {
     // Find the Client Inactivity Reminders switch
-    const switches = this.page.locator('button[role="switch"]')
+    const switches = this.page.getByRole('switch')
     await switches.nth(1).click() // Second switch in SLA tab
   }
 
   // AI tab helpers
   async toggleAIEnabled() {
-    await this.page.locator('button[role="switch"]').first().click()
+    await this.page.getByRole('switch').first().click()
   }
 
   async selectAIProvider(provider: string) {
-    await this.page.locator('button[role="combobox"]').first().click()
-    await this.page.locator('[role="option"]').filter({ hasText: provider }).click()
+    await this.page.getByLabel('AI Provider').selectOption({ label: provider })
   }
 
   async selectAIModel(model: string) {
-    await this.page.locator('button[role="combobox"]').nth(1).click()
-    await this.page.locator('[role="option"]').filter({ hasText: model }).click()
+    await this.page.getByLabel(/^Model/).selectOption({ label: model })
   }
 
   async fillAPIKey(key: string) {

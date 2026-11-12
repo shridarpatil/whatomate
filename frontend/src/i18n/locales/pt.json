@@ -621,7 +621,10 @@
     "metaAppCredentialsDesc": "Defina configurações específicas do App Meta para inscrição incorporada do WhatsApp. Deixe o Secret em branco para manter o existente.",
     "metaAppId": "Meta App ID",
     "metaConfigId": "Meta Config ID",
-    "metaAppSecret": "Meta App Secret"
+    "metaAppSecret": "Meta App Secret",
+    "previewRingtone": "Preview ringtone",
+    "playAudio": "Play",
+    "pauseAudio": "Pause"
   },
   "users": {
     "title": "Gerenciamento de usuários",

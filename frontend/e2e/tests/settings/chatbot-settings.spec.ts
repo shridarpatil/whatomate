@@ -115,11 +115,10 @@ test.describe('Agents Tab', () => {
   })
 
   test('should toggle agent queue pickup', async ({ page }) => {
-    const toggle = page.locator('button[role="switch"]').first()
-    const initialState = await toggle.getAttribute('data-state')
+    const toggle = page.getByRole('switch').first()
+    const initialState = await toggle.isChecked()
     await toggle.click()
-    const newState = await toggle.getAttribute('data-state')
-    expect(newState).not.toBe(initialState)
+    expect(await toggle.isChecked()).toBe(!initialState)
   })
 
   test('should save agent settings', async () => {
@@ -147,29 +146,20 @@ test.describe('Business Hours Tab', () => {
   })
 
   test('should toggle business hours enabled', async ({ page }) => {
-    const toggle = page.locator('button[role="switch"]').first()
-    const initialState = await toggle.getAttribute('data-state')
+    const toggle = page.getByRole('switch').first()
+    const initialState = await toggle.isChecked()
     await toggle.click()
-    const newState = await toggle.getAttribute('data-state')
-    expect(newState).not.toBe(initialState)
+    expect(await toggle.isChecked()).toBe(!initialState)
   })
 
   test('should show day schedule when enabled', async ({ page }) => {
-    const toggle = page.locator('button[role="switch"]').first()
-    const state = await toggle.getAttribute('data-state')
-    if (state === 'unchecked') {
-      await toggle.click()
-    }
+    await page.getByRole('switch').first().check()
     await expect(page.getByText('Monday')).toBeVisible()
     await expect(page.getByText('Tuesday')).toBeVisible()
   })
 
   test('should have out of hours message field', async ({ page }) => {
-    const toggle = page.locator('button[role="switch"]').first()
-    const state = await toggle.getAttribute('data-state')
-    if (state === 'unchecked') {
-      await toggle.click()
-    }
+    await page.getByRole('switch').first().check()
     await expect(page.getByText('Out of Hours Message')).toBeVisible()
   })
 
@@ -198,19 +188,14 @@ test.describe('SLA Tab', () => {
   })
 
   test('should toggle SLA enabled', async ({ page }) => {
-    const toggle = page.locator('button[role="switch"]').first()
-    const initialState = await toggle.getAttribute('data-state')
+    const toggle = page.getByRole('switch').first()
+    const initialState = await toggle.isChecked()
     await toggle.click()
-    const newState = await toggle.getAttribute('data-state')
-    expect(newState).not.toBe(initialState)
+    expect(await toggle.isChecked()).toBe(!initialState)
   })
 
   test('should show SLA fields when enabled', async ({ page }) => {
-    const toggle = page.locator('button[role="switch"]').first()
-    const state = await toggle.getAttribute('data-state')
-    if (state === 'unchecked') {
-      await toggle.click()
-    }
+    await page.getByRole('switch').first().check()
     // Target labels specifically to avoid matching description text
     await expect(page.locator('label').filter({ hasText: /Response Time/i })).toBeVisible()
     await expect(page.locator('label').filter({ hasText: /Escalation Time/i })).toBeVisible()
@@ -245,51 +230,33 @@ test.describe('AI Tab', () => {
   })
 
   test('should toggle AI enabled', async ({ page }) => {
-    const toggle = page.locator('button[role="switch"]').first()
-    const initialState = await toggle.getAttribute('data-state')
+    const toggle = page.getByRole('switch').first()
+    const initialState = await toggle.isChecked()
     await toggle.click()
-    const newState = await toggle.getAttribute('data-state')
-    expect(newState).not.toBe(initialState)
+    expect(await toggle.isChecked()).toBe(!initialState)
   })
 
   test('should show AI configuration when enabled', async ({ page }) => {
-    const toggle = page.locator('button[role="switch"]').first()
-    const state = await toggle.getAttribute('data-state')
-    if (state === 'unchecked') {
-      await toggle.click()
-    }
-    await expect(page.locator('label').filter({ hasText: /^AI Provider$/ })).toBeVisible()
-    await expect(page.locator('label').filter({ hasText: /^Model$/ })).toBeVisible()
+    await page.getByRole('switch').first().check()
+    await expect(page.getByLabel('AI Provider')).toBeVisible()
+    await expect(page.getByLabel(/^Model/)).toBeVisible()
   })
 
   test('should have API key field', async ({ page }) => {
-    const toggle = page.locator('button[role="switch"]').first()
-    const state = await toggle.getAttribute('data-state')
-    if (state === 'unchecked') {
-      await toggle.click()
-    }
-    await expect(page.locator('label').filter({ hasText: /^API Key$/ })).toBeVisible()
+    await page.getByRole('switch').first().check()
+    await expect(page.getByLabel('API Key')).toBeVisible()
   })
 
   test('should have system prompt field', async ({ page }) => {
-    const toggle = page.locator('button[role="switch"]').first()
-    const state = await toggle.getAttribute('data-state')
-    if (state === 'unchecked') {
-      await toggle.click()
-    }
+    await page.getByRole('switch').first().check()
     await expect(page.getByText('System Prompt')).toBeVisible()
   })
 
   test('should show AI providers', async ({ page }) => {
-    const toggle = page.locator('button[role="switch"]').first()
-    const state = await toggle.getAttribute('data-state')
-    if (state === 'unchecked') {
-      await toggle.click()
-    }
-    await page.locator('button[role="combobox"]').first().click()
-    await expect(page.locator('[role="option"]').filter({ hasText: 'OpenAI' })).toBeVisible()
-    await expect(page.locator('[role="option"]').filter({ hasText: 'Anthropic' })).toBeVisible()
-    await page.keyboard.press('Escape')
+    await page.getByRole('switch').first().check()
+    const provider = page.getByLabel('AI Provider')
+    await expect(provider.locator('option', { hasText: 'OpenAI' })).toHaveCount(1)
+    await expect(provider.locator('option', { hasText: 'Anthropic' })).toHaveCount(1)
   })
 
   test('should save AI settings', async () => {

@@ -4,20 +4,7 @@ import { useI18n } from 'vue-i18n'
 import { api } from '@/services/api'
 import { toast } from '@/lib/toast'
 import { CrudFormDialog } from '@/components/shared'
-import { Input } from '@/components/ui/input'
-import { Label } from '@/components/ui/label'
-import { Textarea } from '@/components/ui/textarea'
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
-import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
-import {
-  Loader2,
-  Globe,
-  Mail,
-  MapPin,
-  Image as ImageIcon,
-  AlertTriangle,
-  Pencil
-} from '@/lib/icons'
+import { Image as ImageIcon, AlertTriangle, Pencil } from '@/lib/icons'
 
 interface Props {
   open: boolean
@@ -82,11 +69,6 @@ const verticals = [
   { value: 'RETAIL', label: 'Retail' },
   { value: 'TRAVEL', label: 'Travel & Transportation' }
 ]
-
-const selectedVerticalLabel = computed(() => {
-  const found = verticals.find(v => v.value === profile.value.vertical)
-  return found?.label || ''
-})
 
 watch(() => props.open, async (isOpen) => {
   if (isOpen && props.accountId) {
@@ -218,113 +200,97 @@ async function handleFileChange(event: Event) {
     max-width="max-w-2xl"
     @submit="saveProfile"
   >
-    <div v-if="isLoading" class="py-12 flex justify-center">
-      <Loader2 class="h-8 w-8 animate-spin text-muted-foreground" />
-    </div>
+    <div v-if="isLoading" class="hstack justify-center p-4" role="status" aria-busy="true" data-spinner="large" />
 
-    <div v-else class="space-y-6">
-      <Alert variant="warning">
-        <AlertTriangle class="h-4 w-4" />
-        <AlertTitle>{{ $t('businessProfile.profileUpdates') }}</AlertTitle>
-        <AlertDescription>
-          {{ $t('businessProfile.profileUpdatesDesc') }}
-        </AlertDescription>
-      </Alert>
+    <div v-else class="vstack gap-4">
+      <div role="alert" data-variant="warning">
+        <strong class="hstack gap-2"><AlertTriangle :size="16" /> {{ $t('businessProfile.profileUpdates') }}</strong>
+        {{ $t('businessProfile.profileUpdatesDesc') }}
+      </div>
 
-      <div class="grid gap-6 md:grid-cols-2">
-        <!-- Profile Picture Preview -->
-        <div class="md:col-span-2 flex items-center gap-4">
-          <div
-            class="group relative h-24 w-24 rounded-full bg-secondary flex items-center justify-center overflow-hidden border border-border cursor-pointer transition-all hover:ring-2 hover:ring-emerald-500 hover:ring-offset-2 hover:ring-offset-background"
-            @click="triggerFileInput"
-          >
-            <!-- Loading Overlay -->
-            <div v-if="isUploading" class="absolute inset-0 bg-black/50 flex items-center justify-center z-10">
-              <Loader2 class="h-6 w-6 text-white animate-spin" />
-            </div>
-
-            <!-- Hover Overlay -->
-            <div v-if="!isUploading" class="absolute inset-0 bg-black/40 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity z-10">
-              <Pencil class="h-6 w-6 text-white" />
-            </div>
-
-            <img v-if="profile.profile_picture_url" :src="profile.profile_picture_url" alt="Profile" class="h-full w-full object-cover" />
-            <ImageIcon v-else class="h-10 w-10 text-muted-foreground" />
-
-            <input
-              ref="fileInput"
-              type="file"
-              accept="image/png, image/jpeg"
-              class="hidden"
-              @change="handleFileChange"
-            />
-          </div>
-          <div class="flex-1">
-            <Label>{{ $t('businessProfile.profilePicture') }}</Label>
-            <p class="text-xs text-muted-foreground mt-1">
-              {{ $t('businessProfile.profilePictureHint') }}
-            </p>
-          </div>
+      <!-- Profile Picture Preview -->
+      <div class="hstack gap-4">
+        <figure data-variant="avatar" class="large">
+          <img v-if="profile.profile_picture_url" :src="profile.profile_picture_url" alt="Profile" />
+          <ImageIcon v-else :size="24" />
+        </figure>
+        <div class="flex-1">
+          <strong>{{ $t('businessProfile.profilePicture') }}</strong>
+          <p><small class="text-light">{{ $t('businessProfile.profilePictureHint') }}</small></p>
         </div>
+        <input
+          ref="fileInput"
+          type="file"
+          accept="image/png, image/jpeg"
+          hidden
+          @change="handleFileChange"
+        />
+        <button
+          type="button"
+          class="outline icon"
+          :aria-busy="isUploading"
+          :disabled="isUploading"
+          :title="$t('businessProfile.profilePicture')"
+          :aria-label="$t('businessProfile.profilePicture')"
+          @click="triggerFileInput"
+        >
+          <Pencil v-if="!isUploading" :size="16" />
+        </button>
+      </div>
 
-        <!-- About -->
-        <div class="md:col-span-2 space-y-2">
-          <Label for="about">{{ $t('businessProfile.about') }}</Label>
-          <Input id="about" v-model="profile.about" :placeholder="$t('businessProfile.aboutPlaceholder')" maxlength="139" />
-          <p class="text-xs text-muted-foreground text-right">{{ profile.about.length }}/139</p>
-        </div>
+      <!-- About -->
+      <label data-field>
+        {{ $t('businessProfile.about') }}
+        <input id="about" v-model="profile.about" :placeholder="$t('businessProfile.aboutPlaceholder')" maxlength="139" />
+        <small data-hint>{{ profile.about.length }}/139</small>
+      </label>
 
-        <!-- Description -->
-        <div class="md:col-span-2 space-y-2">
-          <Label for="description">{{ $t('businessProfile.businessDescription') }}</Label>
-          <Textarea id="description" v-model="profile.description" :placeholder="$t('businessProfile.descriptionPlaceholder')" :rows="3" maxlength="512" />
-          <p class="text-xs text-muted-foreground text-right">{{ profile.description.length }}/512</p>
-        </div>
+      <!-- Description -->
+      <label data-field>
+        {{ $t('businessProfile.businessDescription') }}
+        <textarea id="description" v-model="profile.description" :placeholder="$t('businessProfile.descriptionPlaceholder')" rows="3" maxlength="512" />
+        <small data-hint>{{ profile.description.length }}/512</small>
+      </label>
 
+      <div class="row">
         <!-- Vertical (Category) -->
-        <div class="space-y-2">
-          <Label for="vertical">{{ $t('businessProfile.industry') }}</Label>
-          <Select v-model="profile.vertical">
-            <SelectTrigger>
-              <SelectValue :placeholder="$t('businessProfile.selectCategory')">
-                <template v-if="profile.vertical">{{ selectedVerticalLabel }}</template>
-              </SelectValue>
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem v-for="v in verticals" :key="v.value" :value="v.value">
-                {{ v.label }}
-              </SelectItem>
-            </SelectContent>
-          </Select>
+        <div class="col-6">
+          <label data-field>
+            {{ $t('businessProfile.industry') }}
+            <select id="vertical" v-model="profile.vertical">
+              <option value="">{{ $t('businessProfile.selectCategory') }}</option>
+              <option v-for="v in verticals" :key="v.value" :value="v.value">{{ v.label }}</option>
+            </select>
+          </label>
         </div>
 
         <!-- Email -->
-        <div class="space-y-2">
-          <Label for="email">{{ $t('businessProfile.contactEmail') }}</Label>
-          <div class="relative">
-            <Mail class="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
-            <Input id="email" v-model="profile.email" type="email" class="pl-9" :placeholder="$t('businessProfile.emailPlaceholder')" maxlength="128" />
-          </div>
-        </div>
-
-        <!-- Address -->
-        <div class="md:col-span-2 space-y-2">
-          <Label for="address">{{ $t('businessProfile.businessAddress') }}</Label>
-          <div class="relative">
-            <MapPin class="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
-            <Input id="address" v-model="profile.address" class="pl-9" :placeholder="$t('businessProfile.addressPlaceholder')" maxlength="256" />
-          </div>
-        </div>
-
-        <!-- Websites -->
-        <div class="md:col-span-2 space-y-3">
-          <Label>{{ $t('businessProfile.websites') }}</Label>
-          <div v-for="(_, index) in profile.websites" :key="index" class="relative">
-            <Globe class="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
-            <Input v-model="profile.websites[index]" class="pl-9" :placeholder="$t('businessProfile.websitePlaceholder')" maxlength="256" />
-          </div>
+        <div class="col-6">
+          <label data-field>
+            {{ $t('businessProfile.contactEmail') }}
+            <input id="email" v-model="profile.email" type="email" :placeholder="$t('businessProfile.emailPlaceholder')" maxlength="128" />
+          </label>
         </div>
       </div>
+
+      <!-- Address -->
+      <label data-field>
+        {{ $t('businessProfile.businessAddress') }}
+        <input id="address" v-model="profile.address" :placeholder="$t('businessProfile.addressPlaceholder')" maxlength="256" />
+      </label>
+
+      <!-- Websites -->
+      <fieldset class="vstack gap-2">
+        <legend>{{ $t('businessProfile.websites') }}</legend>
+        <input
+          v-for="(_, index) in profile.websites"
+          :key="index"
+          v-model="profile.websites[index]"
+          :aria-label="`${$t('businessProfile.websites')} ${index + 1}`"
+          :placeholder="$t('businessProfile.websitePlaceholder')"
+          maxlength="256"
+        />
+      </fieldset>
     </div>
   </CrudFormDialog>
 </template>

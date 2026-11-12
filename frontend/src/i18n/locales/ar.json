@@ -608,7 +608,10 @@
     "metaAppCredentialsDesc": "قم بتعيين إعدادات تطبيق Meta الخاصة بكل مؤسسة للاشتراك المدمج في واتساب. اترك السر فارغًا للاحتفاظ بالسر الحالي.",
     "metaAppId": "معرف تطبيق Meta",
     "metaConfigId": "معرف تكوين Meta",
-    "metaAppSecret": "سر تطبيق Meta"
+    "metaAppSecret": "سر تطبيق Meta",
+    "previewRingtone": "Preview ringtone",
+    "playAudio": "Play",
+    "pauseAudio": "Pause"
   },
   "analytics": {
     "title": "التحليلات",

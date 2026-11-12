@@ -6,38 +6,21 @@ import { useAuthStore } from '@/stores/auth'
 import { api } from '@/services/api'
 import { toast } from '@/lib/toast'
 import { getErrorMessage } from '@/lib/api-utils'
-import { getQualityBadgeClass, getQualityRatingLabel, getVerificationBadgeClass, getVerificationStatusLabel, formatLimitTier } from '@/lib/utils'
+import { getQualityBadgeVariant, getQualityRatingLabel, getVerificationBadgeVariant, getVerificationStatusLabel, formatLimitTier } from '@/lib/utils'
 import { useUnsavedChangesGuard } from '@/composables/useUnsavedChangesGuard'
 import DetailPageLayout from '@/components/shared/DetailPageLayout.vue'
 import MetadataPanel from '@/components/shared/MetadataPanel.vue'
 import AuditLogPanel from '@/components/shared/AuditLogPanel.vue'
 import UnsavedChangesDialog from '@/components/shared/UnsavedChangesDialog.vue'
 import BusinessProfileDialog from './BusinessProfileDialog.vue'
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { Badge } from '@/components/ui/badge'
-import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
-import { Label } from '@/components/ui/label'
-import { Switch } from '@/components/ui/switch'
-import { Separator } from '@/components/ui/separator'
 import { IconButton } from '@/components/shared'
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from '@/components/ui/alert-dialog'
+import Modal from '@/components/oat/Modal.vue'
 import {
   Phone,
   Save,
   Trash2,
   Copy,
   RefreshCw,
-  Loader2,
   AlertCircle,
   CheckCircle2,
   Bell,
@@ -276,208 +259,217 @@ onMounted(async () => {
   <DetailPageLayout
     :title="isNew ? $t('accounts.newAccount', 'New Account') : (account?.name || '')"
     :icon="Phone"
-    icon-gradient="bg-gradient-to-br from-emerald-500 to-green-600 shadow-emerald-500/20"
     back-link="/settings/accounts"
     :breadcrumbs="breadcrumbs"
     :is-loading="isLoading"
     :is-not-found="isNotFound"
   >
     <template #actions>
-      <div class="flex items-center gap-2">
-        <Button v-if="!isNew && account" variant="outline" size="sm" :disabled="testingConnection" @click="testConnection">
-          <Loader2 v-if="testingConnection" class="h-4 w-4 animate-spin mr-1" />
-          <RefreshCw v-else class="h-4 w-4 mr-1" />
+      <div class="hstack gap-2">
+        <button v-if="!isNew && account" type="button" class="outline small" :aria-busy="testingConnection" :disabled="testingConnection" @click="testConnection">
+          <RefreshCw v-if="!testingConnection" :size="16" />
           {{ $t('accounts.test', 'Test') }}
-        </Button>
-        <Button v-if="!isNew && account" variant="outline" size="sm" :disabled="subscribing" @click="subscribeApp">
-          <Loader2 v-if="subscribing" class="h-4 w-4 animate-spin mr-1" />
-          <Bell v-else class="h-4 w-4 mr-1" />
+        </button>
+        <button v-if="!isNew && account" type="button" class="outline small" :aria-busy="subscribing" :disabled="subscribing" @click="subscribeApp">
+          <Bell v-if="!subscribing" :size="16" />
           {{ $t('accounts.subscribe', 'Subscribe') }}
-        </Button>
-        <Button v-if="!isNew && account" variant="outline" size="sm" @click="isProfileDialogOpen = true">
-          <Store class="h-4 w-4 mr-1" />
+        </button>
+        <button v-if="!isNew && account" type="button" class="outline small" @click="isProfileDialogOpen = true">
+          <Store :size="16" />
           {{ $t('accounts.businessProfile', 'Profile') }}
-        </Button>
-        <Button v-if="canWrite && (hasChanges || isNew)" size="sm" @click="save" :disabled="isSaving">
-          <Save class="h-4 w-4 mr-1" /> {{ isSaving ? $t('common.saving', 'Saving...') : isNew ? $t('common.create') : $t('common.save') }}
-        </Button>
-        <Button v-if="canDelete && !isNew" variant="destructive" size="sm" @click="deleteDialogOpen = true">
-          <Trash2 class="h-4 w-4 mr-1" /> {{ $t('common.delete') }}
-        </Button>
+        </button>
+        <button v-if="canWrite && (hasChanges || isNew)" type="button" class="small" :aria-busy="isSaving" :disabled="isSaving" @click="save">
+          <Save v-if="!isSaving" :size="16" /> {{ isSaving ? $t('common.saving', 'Saving...') : isNew ? $t('common.create') : $t('common.save') }}
+        </button>
+        <button v-if="canDelete && !isNew" type="button" class="small" data-variant="danger" @click="deleteDialogOpen = true">
+          <Trash2 :size="16" /> {{ $t('common.delete') }}
+        </button>
       </div>
     </template>
 
     <!-- Test Result -->
-    <Card v-if="testResult">
-      <CardContent class="p-4">
-        <div v-if="testResult.success" class="space-y-2">
-          <div class="flex items-center gap-2 text-green-400 light:text-green-600">
-            <CheckCircle2 class="h-4 w-4" />
-            <span class="text-sm font-medium">{{ $t('accounts.connected', 'Connected') }}</span>
-            <span v-if="testResult.display_phone_number" class="text-sm text-muted-foreground">— {{ testResult.display_phone_number }}</span>
-            <Badge v-if="testResult.is_test_number" variant="outline" class="border-amber-600 text-amber-600">
-              <TestTube2 class="h-3 w-3 mr-1" /> {{ $t('accounts.testNumber', 'Test Number') }}
-            </Badge>
+    <article v-if="testResult" class="card">
+      <div v-if="testResult.success" class="vstack gap-2">
+        <div class="hstack gap-2 flex-wrap">
+          <CheckCircle2 :size="16" />
+          <strong>{{ $t('accounts.connected', 'Connected') }}</strong>
+          <span v-if="testResult.display_phone_number" class="text-light">— {{ testResult.display_phone_number }}</span>
+          <span v-if="testResult.is_test_number" class="badge" data-variant="warning">
+            <TestTube2 :size="12" /> {{ $t('accounts.testNumber', 'Test Number') }}
+          </span>
+        </div>
+        <div v-if="testResult.warning" role="alert" data-variant="warning">
+          <AlertCircle :size="16" />
+          {{ testResult.warning }}
+        </div>
+        <!-- Meta Connection Details -->
+        <hr>
+        <h4>{{ $t('accounts.metaConnectionDetails', 'Details') }}</h4>
+        <div class="row">
+          <!-- Verified Name -->
+          <div v-if="testResult.verified_name" class="col-3">
+            <small class="text-light">{{ $t('accounts.verifiedName', 'Verified Name') }}</small>
+            <p class="truncate" :title="testResult.verified_name"><strong>{{ testResult.verified_name }}</strong></p>
           </div>
-          <div v-if="testResult.warning" class="flex items-start gap-2 p-2 rounded-lg bg-amber-950/50 light:bg-amber-50 border border-amber-800 light:border-amber-200">
-            <AlertCircle class="h-4 w-4 text-amber-400 light:text-amber-600 mt-0.5 shrink-0" />
-            <span class="text-sm text-amber-300 light:text-amber-700">{{ testResult.warning }}</span>
+          <!-- Quality Rating -->
+          <div class="col-3">
+            <small class="text-light">{{ $t('accounts.qualityRating', 'Quality Rating') }}</small>
+            <p>
+              <span class="badge" :data-variant="getQualityBadgeVariant(testResult.quality_rating || '')">
+                {{ getQualityRatingLabel(testResult.quality_rating || '', t) }}
+              </span>
+            </p>
           </div>
-          <!-- Meta Connection Details -->
-          <div class="mt-4 border-t pt-4 border-border/40">
-            <h4 class="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-3">
-              {{ $t('accounts.metaConnectionDetails', 'Details') }}
-            </h4>
-            <div class="grid grid-cols-2 md:grid-cols-4 gap-4 bg-muted/20 p-3 rounded-lg border border-border/30">
-              <!-- Verified Name -->
-              <div v-if="testResult.verified_name" class="space-y-1">
-                <span class="text-[10px] text-muted-foreground block font-medium">{{ $t('accounts.verifiedName', 'Verified Name') }}</span>
-                <span class="text-sm font-semibold block text-foreground truncate" :title="testResult.verified_name">{{ testResult.verified_name }}</span>
-              </div>
-               <!-- Quality Rating -->
-              <div class="space-y-1">
-                <span class="text-[10px] text-muted-foreground block font-medium">{{ $t('accounts.qualityRating', 'Quality Rating') }}</span>
-                <Badge :class="getQualityBadgeClass(testResult.quality_rating || '')">
-                  {{ getQualityRatingLabel(testResult.quality_rating || '', t) }}
-                </Badge>
-              </div>
-              <!-- Messaging Limit Tier -->
-              <div class="space-y-1">
-                <span class="text-[10px] text-muted-foreground block font-medium">{{ $t('accounts.messagingLimitTier', 'Messaging Limit') }}</span>
-                <span class="text-sm font-semibold block text-foreground">
-                  {{ formatLimitTier(testResult.messaging_limit_tier, testResult.is_test_number || testResult.account_mode === 'SANDBOX', t) }}
-                </span>
-              </div>
-              <!-- Verification Status -->
-              <div v-if="testResult.code_verification_status" class="space-y-1">
-                <span class="text-[10px] text-muted-foreground block font-medium">{{ $t('accounts.codeVerificationStatus', 'Verification Status') }}</span>
-                <Badge :class="getVerificationBadgeClass(testResult.code_verification_status)">
-                  {{ getVerificationStatusLabel(testResult.code_verification_status, t) }}
-                </Badge>
-              </div>
-            </div>
+          <!-- Messaging Limit Tier -->
+          <div class="col-3">
+            <small class="text-light">{{ $t('accounts.messagingLimitTier', 'Messaging Limit') }}</small>
+            <p>
+              <strong>{{ formatLimitTier(testResult.messaging_limit_tier, testResult.is_test_number || testResult.account_mode === 'SANDBOX', t) }}</strong>
+            </p>
+          </div>
+          <!-- Verification Status -->
+          <div v-if="testResult.code_verification_status" class="col-3">
+            <small class="text-light">{{ $t('accounts.codeVerificationStatus', 'Verification Status') }}</small>
+            <p>
+              <span class="badge" :data-variant="getVerificationBadgeVariant(testResult.code_verification_status)">
+                {{ getVerificationStatusLabel(testResult.code_verification_status, t) }}
+              </span>
+            </p>
           </div>
         </div>
-        <div v-else class="flex items-center gap-2 text-red-400 light:text-red-600">
-          <X class="h-4 w-4" />
-          <span class="text-sm">{{ testResult.error }}</span>
-        </div>
-      </CardContent>
-    </Card>
+      </div>
+      <div v-else class="hstack gap-2">
+        <X :size="16" />
+        <span>{{ testResult.error }}</span>
+      </div>
+    </article>
 
     <!-- Account Details Card -->
-    <Card>
-      <CardHeader class="pb-3">
-        <div class="flex items-center justify-between">
-          <CardTitle class="text-sm font-medium">{{ $t('accounts.accountDetails', 'Account Details') }}</CardTitle>
-          <Badge v-if="account" :variant="account.status === 'active' ? 'default' : 'secondary'">
-            {{ account.status }}
-          </Badge>
+    <article class="card">
+      <header class="hstack justify-between">
+        <h3>{{ $t('accounts.accountDetails', 'Account Details') }}</h3>
+        <span v-if="account" class="badge" :data-variant="account.status === 'active' ? 'success' : 'secondary'">
+          {{ account.status }}
+        </span>
+      </header>
+
+      <label data-field>
+        {{ $t('accounts.accountName', 'Account Name') }} *
+        <input v-model="form.name" :disabled="!canWrite" />
+      </label>
+
+      <hr>
+
+      <div class="row">
+        <div class="col-6">
+          <label data-field>
+            {{ $t('accounts.metaAppId', 'Meta App ID') }}
+            <input v-model="form.app_id" :disabled="!canWrite" />
+          </label>
         </div>
-      </CardHeader>
-      <CardContent class="space-y-4">
-        <div class="space-y-1.5">
-          <Label class="text-xs">{{ $t('accounts.accountName', 'Account Name') }} *</Label>
-          <Input v-model="form.name" :disabled="!canWrite" />
+        <div class="col-6">
+          <label data-field>
+            {{ $t('accounts.phoneNumberId', 'Phone Number ID') }} *
+            <input v-model="form.phone_id" :disabled="!canWrite" />
+          </label>
         </div>
-
-        <Separator />
-
-        <div class="grid grid-cols-2 gap-4">
-          <div class="space-y-1.5">
-            <Label class="text-xs">{{ $t('accounts.metaAppId', 'Meta App ID') }}</Label>
-            <Input v-model="form.app_id" :disabled="!canWrite" />
-          </div>
-          <div class="space-y-1.5">
-            <Label class="text-xs">{{ $t('accounts.phoneNumberId', 'Phone Number ID') }} *</Label>
-            <Input v-model="form.phone_id" :disabled="!canWrite" />
-          </div>
-          <div class="space-y-1.5">
-            <Label class="text-xs">{{ $t('accounts.businessAccountId', 'Business Account ID') }} *</Label>
-            <Input v-model="form.business_id" :disabled="!canWrite" />
-          </div>
-          <div class="space-y-1.5">
-            <Label class="text-xs">{{ $t('accounts.apiVersion', 'API Version') }}</Label>
-            <Input v-model="form.api_version" :disabled="!canWrite" />
-          </div>
+        <div class="col-6">
+          <label data-field>
+            {{ $t('accounts.businessAccountId', 'Business Account ID') }} *
+            <input v-model="form.business_id" :disabled="!canWrite" />
+          </label>
         </div>
+        <div class="col-6">
+          <label data-field>
+            {{ $t('accounts.apiVersion', 'API Version') }}
+            <input v-model="form.api_version" :disabled="!canWrite" />
+          </label>
+        </div>
+      </div>
 
-        <Separator />
+      <hr>
 
-        <div class="grid grid-cols-2 gap-4">
-          <div class="space-y-1.5">
-            <Label class="text-xs">
+      <div class="row">
+        <div class="col-6">
+          <label data-field>
+            <span>
               {{ $t('accounts.accessToken', 'Access Token') }}
-              <span v-if="isNew" class="text-destructive">*</span>
-              <span v-else class="text-muted-foreground text-[10px]">{{ $t('accounts.accessTokenKeepExisting', '(leave empty to keep existing)') }}</span>
-            </Label>
-            <Input v-model="form.access_token" type="password" :disabled="!canWrite" />
-            <Badge v-if="account?.has_access_token" variant="outline" class="border-green-600 text-green-600">
-              <Check class="h-3 w-3 mr-1" /> {{ $t('accounts.configured', 'Configured') }}
-            </Badge>
-          </div>
-          <div class="space-y-1.5">
-            <Label class="text-xs">
+              <span v-if="isNew">*</span>
+              <small v-else class="text-light">{{ $t('accounts.accessTokenKeepExisting', '(leave empty to keep existing)') }}</small>
+            </span>
+            <input v-model="form.access_token" type="password" :disabled="!canWrite" />
+            <span v-if="account?.has_access_token" class="badge" data-variant="success">
+              <Check :size="12" /> {{ $t('accounts.configured', 'Configured') }}
+            </span>
+          </label>
+        </div>
+        <div class="col-6">
+          <label data-field>
+            <span>
               {{ $t('accounts.appSecret', 'App Secret') }}
-              <span v-if="!isNew" class="text-muted-foreground text-[10px]">{{ $t('accounts.accessTokenKeepExisting', '(leave empty to keep existing)') }}</span>
-            </Label>
-            <Input v-model="form.app_secret" type="password" :disabled="!canWrite" />
-            <Badge v-if="account?.has_app_secret" variant="outline" class="border-green-600 text-green-600">
-              <Check class="h-3 w-3 mr-1" /> {{ $t('accounts.configured', 'Configured') }}
-            </Badge>
-          </div>
+              <small v-if="!isNew" class="text-light">{{ $t('accounts.accessTokenKeepExisting', '(leave empty to keep existing)') }}</small>
+            </span>
+            <input v-model="form.app_secret" type="password" :disabled="!canWrite" />
+            <span v-if="account?.has_app_secret" class="badge" data-variant="success">
+              <Check :size="12" /> {{ $t('accounts.configured', 'Configured') }}
+            </span>
+          </label>
         </div>
+      </div>
 
-        <Separator />
+      <hr>
 
-        <div class="space-y-3">
-          <div class="flex items-center justify-between">
-            <Label class="text-xs">{{ $t('accounts.defaultIncoming', 'Default for Incoming') }}</Label>
-            <Switch :checked="form.is_default_incoming" @update:checked="form.is_default_incoming = $event" :disabled="!canWrite" />
-          </div>
-          <div class="flex items-center justify-between">
-            <Label class="text-xs">{{ $t('accounts.defaultOutgoing', 'Default for Outgoing') }}</Label>
-            <Switch :checked="form.is_default_outgoing" @update:checked="form.is_default_outgoing = $event" :disabled="!canWrite" />
-          </div>
-          <div class="flex items-center justify-between">
-            <Label class="text-xs">{{ $t('accounts.autoReadReceipt', 'Auto Read Receipt') }}</Label>
-            <Switch :checked="form.auto_read_receipt" @update:checked="form.auto_read_receipt = $event" :disabled="!canWrite" />
-          </div>
-          <div class="flex items-start justify-between gap-3">
-            <div class="space-y-0.5">
-              <Label class="text-xs">{{ $t('accounts.businessCallingEnabled', 'Business Calling enabled') }}</Label>
-              <p class="text-[11px] text-muted-foreground">
-                {{ $t('accounts.businessCallingEnabledDesc', 'Enable only after Meta enrolls this number in the WhatsApp Business Calling API. Required for click-to-call buttons in canned responses.') }}
-              </p>
-            </div>
-            <Switch :checked="form.business_calling_enabled" @update:checked="form.business_calling_enabled = $event" :disabled="!canWrite" />
-          </div>
-        </div>
-      </CardContent>
-    </Card>
+          <label data-field>
+            <span class="hstack justify-between">
+              <span>{{ $t('accounts.defaultIncoming', 'Default for Incoming') }}</span>
+              <input type="checkbox" role="switch" v-model="form.is_default_incoming" :disabled="!canWrite" />
+            </span>
+          </label>
+          <label data-field>
+            <span class="hstack justify-between">
+              <span>{{ $t('accounts.defaultOutgoing', 'Default for Outgoing') }}</span>
+              <input type="checkbox" role="switch" v-model="form.is_default_outgoing" :disabled="!canWrite" />
+            </span>
+          </label>
+          <label data-field>
+            <span class="hstack justify-between">
+              <span>{{ $t('accounts.autoReadReceipt', 'Auto Read Receipt') }}</span>
+              <input type="checkbox" role="switch" v-model="form.auto_read_receipt" :disabled="!canWrite" />
+            </span>
+          </label>
+          <label data-field>
+            <span class="hstack justify-between">
+              <span>{{ $t('accounts.businessCallingEnabled', 'Business Calling enabled') }}</span>
+              <input type="checkbox" role="switch" v-model="form.business_calling_enabled" :disabled="!canWrite" />
+            </span>
+            <small data-hint>
+              {{ $t('accounts.businessCallingEnabledDesc', 'Enable only after Meta enrolls this number in the WhatsApp Business Calling API. Required for click-to-call buttons in canned responses.') }}
+            </small>
+          </label>
+    </article>
 
     <!-- Webhook Config Card -->
-    <Card v-if="!isNew">
-      <CardHeader class="pb-3">
-        <CardTitle class="text-sm font-medium">{{ $t('accounts.webhookConfig', 'Webhook Configuration') }}</CardTitle>
-      </CardHeader>
-      <CardContent class="space-y-3">
+    <article v-if="!isNew" class="card">
+      <header>
+        <h3>{{ $t('accounts.webhookConfig', 'Webhook Configuration') }}</h3>
+      </header>
+      <div class="vstack gap-4">
         <div>
-          <Label class="text-xs text-muted-foreground">{{ $t('accounts.webhookUrl', 'Webhook URL') }}</Label>
-          <div class="flex items-center gap-2 mt-1">
-            <code class="px-2 py-1 bg-muted rounded text-xs font-mono flex-1 truncate">{{ webhookUrl }}</code>
+          <small class="text-light">{{ $t('accounts.webhookUrl', 'Webhook URL') }}</small>
+          <div class="hstack gap-2">
+            <code class="flex-1 truncate">{{ webhookUrl }}</code>
             <IconButton :icon="Copy" label="Copy" @click="copyToClipboard(webhookUrl)" />
           </div>
         </div>
         <div>
-          <Label class="text-xs text-muted-foreground">{{ $t('accounts.verifyToken', 'Verify Token') }}</Label>
-          <div class="flex items-center gap-2 mt-1">
-            <code class="px-2 py-1 bg-muted rounded text-xs font-mono flex-1 truncate">{{ account?.webhook_verify_token }}</code>
+          <small class="text-light">{{ $t('accounts.verifyToken', 'Verify Token') }}</small>
+          <div class="hstack gap-2">
+            <code class="flex-1 truncate">{{ account?.webhook_verify_token }}</code>
             <IconButton :icon="Copy" label="Copy" @click="copyToClipboard(account?.webhook_verify_token || '')" />
           </div>
         </div>
-      </CardContent>
-    </Card>
+      </div>
+    </article>
 
     <!-- Activity Log -->
     <AuditLogPanel
@@ -497,39 +489,30 @@ onMounted(async () => {
       />
 
       <!-- Setup Guide -->
-      <Card>
-        <CardHeader class="pb-3">
-          <CardTitle class="text-sm font-medium">{{ $t('accounts.setupGuide', 'Setup Guide') }}</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <ol class="list-decimal list-inside space-y-2.5 text-sm text-muted-foreground">
-            <li>{{ $t('accounts.setupStep1', 'Go to') }} <a href="https://developers.facebook.com" target="_blank" class="text-primary hover:underline">Meta Developer Console</a> {{ $t('accounts.setupStep1End', 'and create an app') }}</li>
-            <li>{{ $t('accounts.setupStep2', 'Add WhatsApp product to your app') }}</li>
-            <li>{{ $t('accounts.setupStep3', 'Copy') }} <strong>{{ $t('accounts.setupStep3Bold1', 'Phone Number ID') }}</strong> {{ $t('accounts.setupStep3And', 'and') }} <strong>{{ $t('accounts.setupStep3Bold2', 'Business Account ID') }}</strong></li>
-            <li>{{ $t('accounts.setupStep4', 'Generate a permanent token from') }} <a href="https://business.facebook.com/settings/system-users" target="_blank" class="text-primary hover:underline">Business Settings</a></li>
-            <li>{{ $t('accounts.setupStep5', 'Configure the webhook URL and verify token in Meta dashboard') }}</li>
-            <li>{{ $t('accounts.setupStep6', 'Click Test Connection to verify') }}</li>
-          </ol>
-        </CardContent>
-      </Card>
+      <article class="card">
+        <header>
+          <h3>{{ $t('accounts.setupGuide', 'Setup Guide') }}</h3>
+        </header>
+        <ol class="text-light">
+          <li>{{ $t('accounts.setupStep1', 'Go to') }} <a href="https://developers.facebook.com" target="_blank" rel="noopener noreferrer">Meta Developer Console</a> {{ $t('accounts.setupStep1End', 'and create an app') }}</li>
+          <li>{{ $t('accounts.setupStep2', 'Add WhatsApp product to your app') }}</li>
+          <li>{{ $t('accounts.setupStep3', 'Copy') }} <strong>{{ $t('accounts.setupStep3Bold1', 'Phone Number ID') }}</strong> {{ $t('accounts.setupStep3And', 'and') }} <strong>{{ $t('accounts.setupStep3Bold2', 'Business Account ID') }}</strong></li>
+          <li>{{ $t('accounts.setupStep4', 'Generate a permanent token from') }} <a href="https://business.facebook.com/settings/system-users" target="_blank" rel="noopener noreferrer">Business Settings</a></li>
+          <li>{{ $t('accounts.setupStep5', 'Configure the webhook URL and verify token in Meta dashboard') }}</li>
+          <li>{{ $t('accounts.setupStep6', 'Click Test Connection to verify') }}</li>
+        </ol>
+      </article>
     </template>
   </DetailPageLayout>
 
   <!-- Delete Confirmation -->
-  <AlertDialog v-model:open="deleteDialogOpen">
-    <AlertDialogContent>
-      <AlertDialogHeader>
-        <AlertDialogTitle>{{ $t('accounts.deleteAccount', 'Delete Account') }}</AlertDialogTitle>
-        <AlertDialogDescription>
-          {{ $t('accounts.deleteAccountConfirm', 'Are you sure? This cannot be undone.') }}
-        </AlertDialogDescription>
-      </AlertDialogHeader>
-      <AlertDialogFooter>
-        <AlertDialogCancel>{{ $t('common.cancel') }}</AlertDialogCancel>
-        <AlertDialogAction @click="deleteAccount">{{ $t('common.delete') }}</AlertDialogAction>
-      </AlertDialogFooter>
-    </AlertDialogContent>
-  </AlertDialog>
+  <Modal v-model:open="deleteDialogOpen" alert :title="$t('accounts.deleteAccount', 'Delete Account')">
+    <p>{{ $t('accounts.deleteAccountConfirm', 'Are you sure? This cannot be undone.') }}</p>
+    <template #footer>
+      <button type="button" class="outline" @click="deleteDialogOpen = false">{{ $t('common.cancel') }}</button>
+      <button type="button" data-variant="danger" @click="deleteAccount">{{ $t('common.delete') }}</button>
+    </template>
+  </Modal>
 
   <!-- Business Profile -->
   <BusinessProfileDialog

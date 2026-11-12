@@ -15,7 +15,7 @@ import { toast } from '@/lib/toast'
 import { Plus, RefreshCw, FileText, Pencil, Trash2, Loader2, MessageSquare, Image, FileIcon, Video } from '@/lib/icons'
 import { getErrorMessage } from '@/lib/api-utils'
 import { useSearchPagination } from '@/composables/useSearchPagination'
-import { getQualityBadgeClass, getQualityRatingLabel } from '@/lib/utils'
+import { getQualityBadgeVariant, getQualityRatingLabel } from '@/lib/utils'
 
 const { t } = useI18n()
 
@@ -251,6 +251,16 @@ async function confirmDeleteTemplate() {
   }
 }
 
+const legacyQualityBadges: Record<string, string> = {
+  success: 'bg-green-950 text-green-400 border border-green-800/40 light:bg-green-100 light:text-green-800',
+  warning: 'bg-yellow-950 text-yellow-400 border border-yellow-800/40 light:bg-yellow-100 light:text-yellow-800',
+  danger: 'bg-red-950 text-red-400 border border-red-800/40 light:bg-red-100 light:text-red-800',
+  secondary: 'bg-gray-800 text-gray-400 light:bg-gray-100 light:text-gray-600',
+}
+function legacyQualityBadge(rating: string): string {
+  return legacyQualityBadges[getQualityBadgeVariant(rating)]
+}
+
 // Dark-first: default is dark mode, light: prefix for light mode
 function getStatusBadgeClass(status: string) {
   switch (status) {
@@ -382,7 +392,7 @@ function getHeaderIcon(type: string) {
                   </Badge>
                 </template>
                 <template #cell-quality_rating="{ item: template }">
-                  <Badge v-if="template.quality_rating" :class="getQualityBadgeClass(template.quality_rating)" class="text-xs">
+                  <Badge v-if="template.quality_rating" :class="legacyQualityBadge(template.quality_rating)" class="text-xs">
                     {{ getQualityRatingLabel(template.quality_rating, t) }}
                   </Badge>
                   <span v-else class="text-muted-foreground text-xs">—</span>

@@ -46,7 +46,7 @@ test.describe('General Tab', () => {
   })
 
   test('should have date format selector', async ({ page }) => {
-    await expect(page.getByText('Date Format', { exact: true })).toBeVisible()
+    await expect(settingsPage.dateFormatSelect).toBeVisible()
   })
 
   test('should have mask phone numbers toggle', async ({ page }) => {
@@ -57,28 +57,21 @@ test.describe('General Tab', () => {
     await expect(settingsPage.saveButton.first()).toBeVisible()
   })
 
-  test('should show available timezones', async ({ page }) => {
-    await settingsPage.timezoneSelect.click()
-    await expect(page.locator('[role="option"]').filter({ hasText: 'UTC' })).toBeVisible()
-    await expect(page.locator('[role="option"]').filter({ hasText: 'Eastern' })).toBeVisible()
-    // Close dropdown
-    await page.keyboard.press('Escape')
+  test('should show available timezones', async () => {
+    await expect(settingsPage.timezoneSelect.locator('option', { hasText: 'UTC' })).toHaveCount(1)
+    await expect(settingsPage.timezoneSelect.locator('option', { hasText: 'Eastern' })).toHaveCount(1)
   })
 
-  test('should show available date formats', async ({ page }) => {
-    const dateFormatSelect = page.locator('button[role="combobox"]').nth(1)
-    await dateFormatSelect.click()
-    await expect(page.locator('[role="option"]').filter({ hasText: 'YYYY-MM-DD' })).toBeVisible()
-    await expect(page.locator('[role="option"]').filter({ hasText: 'DD/MM/YYYY' })).toBeVisible()
-    await page.keyboard.press('Escape')
+  test('should show available date formats', async () => {
+    await expect(settingsPage.dateFormatSelect.locator('option', { hasText: 'YYYY-MM-DD' })).toHaveCount(1)
+    await expect(settingsPage.dateFormatSelect.locator('option', { hasText: 'DD/MM/YYYY' })).toHaveCount(1)
   })
 
   test('should toggle mask phone numbers', async ({ page }) => {
-    const toggle = page.locator('button[role="switch"]').first()
-    const initialState = await toggle.getAttribute('data-state')
+    const toggle = page.getByRole('switch').first()
+    const initialState = await toggle.isChecked()
     await toggle.click()
-    const newState = await toggle.getAttribute('data-state')
-    expect(newState).not.toBe(initialState)
+    expect(await toggle.isChecked()).toBe(!initialState)
   })
 
   test('should save general settings', async () => {
@@ -104,7 +97,7 @@ test.describe('Notifications Tab', () => {
 
   test('should have email notifications toggle', async ({ page }) => {
     await expect(page.getByText('Email Notifications', { exact: true })).toBeVisible()
-    const toggle = page.locator('button[role="switch"]').first()
+    const toggle = page.getByRole('switch').first()
     await expect(toggle).toBeVisible()
   })
 
@@ -117,27 +110,24 @@ test.describe('Notifications Tab', () => {
   })
 
   test('should toggle email notifications', async ({ page }) => {
-    const toggle = page.locator('button[role="switch"]').first()
-    const initialState = await toggle.getAttribute('data-state')
+    const toggle = page.getByRole('switch').first()
+    const initialState = await toggle.isChecked()
     await toggle.click()
-    const newState = await toggle.getAttribute('data-state')
-    expect(newState).not.toBe(initialState)
+    expect(await toggle.isChecked()).toBe(!initialState)
   })
 
   test('should toggle new message alerts', async ({ page }) => {
-    const toggle = page.locator('button[role="switch"]').nth(1)
-    const initialState = await toggle.getAttribute('data-state')
+    const toggle = page.getByRole('switch').nth(1)
+    const initialState = await toggle.isChecked()
     await toggle.click()
-    const newState = await toggle.getAttribute('data-state')
-    expect(newState).not.toBe(initialState)
+    expect(await toggle.isChecked()).toBe(!initialState)
   })
 
   test('should toggle campaign updates', async ({ page }) => {
-    const toggle = page.locator('button[role="switch"]').nth(2)
-    const initialState = await toggle.getAttribute('data-state')
+    const toggle = page.getByRole('switch').nth(2)
+    const initialState = await toggle.isChecked()
     await toggle.click()
-    const newState = await toggle.getAttribute('data-state')
-    expect(newState).not.toBe(initialState)
+    expect(await toggle.isChecked()).toBe(!initialState)
   })
 
   test('should have save button', async () => {

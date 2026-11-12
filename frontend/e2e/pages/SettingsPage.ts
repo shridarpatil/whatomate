@@ -19,7 +19,8 @@ export class CardGridPage extends BasePage {
     this.addButton = page.getByRole('button', { name: new RegExp(options.addButtonText, 'i') }).first()
     this.searchInput = page.locator('input[placeholder*="Search"]')
     this.categoryFilter = page.locator('button[role="combobox"]').first()
-    this.dialog = page.locator('[role="dialog"][data-state="open"]')
+    // Native <dialog> (Modal) or legacy reka dialog
+    this.dialog = page.locator('dialog[open], [role="dialog"][data-state="open"]')
     this.alertDialog = page.locator('[role="alertdialog"]')
   }
 
@@ -122,7 +123,8 @@ export class TableSettingsPage extends BasePage {
     this.addButton = page.getByRole('button', { name: new RegExp(options.addButtonText, 'i') }).first()
     this.searchInput = page.locator('input[placeholder*="Search"]')
     this.table = page.locator('table')
-    this.dialog = page.locator('[role="dialog"][data-state="open"]')
+    // Native <dialog> (Modal) or legacy reka dialog
+    this.dialog = page.locator('dialog[open], [role="dialog"][data-state="open"]')
     this.alertDialog = page.locator('[role="alertdialog"]')
   }
 
@@ -158,7 +160,7 @@ export class TableSettingsPage extends BasePage {
 
   async toggleRowSwitch(rowText: string) {
     const row = this.getRow(rowText)
-    await row.locator('button[role="switch"]').click()
+    await row.locator('[role="switch"]').click()
   }
 
   // Dialog helpers

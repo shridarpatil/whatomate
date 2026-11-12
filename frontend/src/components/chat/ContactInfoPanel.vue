@@ -25,7 +25,7 @@ import {
 import { X, ChevronDown, Phone, User, Plus, Check, Tags, Loader2 } from '@/lib/icons'
 import { TagBadge } from '@/components/ui/tag-badge'
 import MetadataSection from '@/components/chat/MetadataSection.vue'
-import { getInitials, getAvatarGradient, formatLabel } from '@/lib/utils'
+import { getInitials, formatLabel } from '@/lib/utils'
 import { getTagColorClass } from '@/lib/constants'
 import { useTagsStore } from '@/stores/tags'
 import { useAuthStore } from '@/stores/auth'
@@ -266,7 +266,7 @@ async function updateContactTags(tags: string[]) {
         <div class="flex flex-col items-center text-center pb-4 border-b">
           <Avatar class="h-16 w-16 mb-3">
             <AvatarImage :src="contact.avatar_url" />
-            <AvatarFallback :class="'text-lg bg-gradient-to-br text-white ' + getAvatarGradient(contact.name || contact.phone_number)">
+            <AvatarFallback class="text-lg">
               {{ getInitials(contact.name || contact.phone_number) }}
             </AvatarFallback>
           </Avatar>

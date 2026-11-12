@@ -569,7 +569,10 @@
     "currentFile": "वर्तमान फ़ाइल",
     "noFileUploaded": "डिफ़ॉल्ट का उपयोग कर रहे हैं",
     "audioUploaded": "ऑडियो फ़ाइल सफलतापूर्वक अपलोड की गई",
-    "audioUploadFailed": "ऑडियो फ़ाइल अपलोड करने में विफल"
+    "audioUploadFailed": "ऑडियो फ़ाइल अपलोड करने में विफल",
+    "previewRingtone": "Preview ringtone",
+    "playAudio": "Play",
+    "pauseAudio": "Pause"
   },
   "users": {
     "title": "उपयोगकर्ता प्रबंधन",

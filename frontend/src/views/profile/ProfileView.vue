@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref } from 'vue'
+import { ref, computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { toast } from '@/lib/toast'
 import { User, Eye, EyeOff } from '@/lib/icons'
@@ -9,6 +9,11 @@ import { PageHeader } from '@/components/shared'
 import { getErrorMessage } from '@/lib/api-utils'
 
 const { t } = useI18n()
+
+const roleName = computed(() => {
+  const name = authStore.user?.role?.name || ''
+  return name.charAt(0).toUpperCase() + name.slice(1)
+})
 const authStore = useAuthStore()
 const isChangingPassword = ref(false)
 const showCurrentPassword = ref(false)
@@ -82,7 +87,7 @@ async function changePassword() {
           </div>
           <div class="col-4">
             <small class="text-light">{{ $t('users.role') }}</small>
-            <p>{{ authStore.user?.role?.name }}</p>
+            <p>{{ roleName }}</p>
           </div>
           </div>
         </article>

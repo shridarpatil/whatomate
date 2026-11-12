@@ -48,7 +48,7 @@ import {
   Info,
 } from '@/lib/icons'
 import { getErrorMessage } from '@/lib/api-utils'
-import { getQualityBadgeClass, getQualityRatingLabel } from '@/lib/utils'
+import { getQualityBadgeVariant, getQualityRatingLabel } from '@/lib/utils'
 
 interface WhatsAppAccount {
   id: string
@@ -658,6 +658,16 @@ onMounted(async () => {
     await loadTemplate()
   }
 })
+
+const legacyQualityBadges: Record<string, string> = {
+  success: 'bg-green-950 text-green-400 border border-green-800/40 light:bg-green-100 light:text-green-800',
+  warning: 'bg-yellow-950 text-yellow-400 border border-yellow-800/40 light:bg-yellow-100 light:text-yellow-800',
+  danger: 'bg-red-950 text-red-400 border border-red-800/40 light:bg-red-100 light:text-red-800',
+  secondary: 'bg-gray-800 text-gray-400 light:bg-gray-100 light:text-gray-600',
+}
+function legacyQualityBadge(rating: string): string {
+  return legacyQualityBadges[getQualityBadgeVariant(rating)]
+}
 </script>
 
 <template>
@@ -700,7 +710,7 @@ onMounted(async () => {
             <Badge v-if="!isNew && template?.status" :variant="statusVariant">
               {{ template.status }}
             </Badge>
-            <Badge v-if="!isNew && template?.quality_rating" :class="getQualityBadgeClass(template.quality_rating)">
+            <Badge v-if="!isNew && template?.quality_rating" :class="legacyQualityBadge(template.quality_rating)">
               {{ getQualityRatingLabel(template.quality_rating, t) }}
             </Badge>
           </div>
@@ -1243,7 +1253,7 @@ onMounted(async () => {
           </div>
           <div v-if="template.quality_rating" class="flex justify-between">
             <span class="text-muted-foreground">{{ $t('templates.qualityRating', 'Quality Rating') }}:</span>
-            <Badge :class="getQualityBadgeClass(template.quality_rating)">
+            <Badge :class="legacyQualityBadge(template.quality_rating)">
               {{ getQualityRatingLabel(template.quality_rating, t) }}
             </Badge>
           </div>
