@@ -2603,32 +2603,13 @@ async function sendMediaMessage() {
                   </td>
                   <td><span class="badge outline">{{ user.role?.name }}</span></td>
                   <td class="align-right">
-                    <div
-                      v-if="contactsStore.currentContact?.assigned_user_id === user.id"
-                      class="hstack gap-2 items-center justify-end"
-                    >
-                      <span class="badge" data-variant="success">
-                        <Check :size="12" />
-                        {{ $t('chat.assigned') }}
-                      </span>
-                      <button
-                        type="button"
-                        class="outline small"
-                        data-variant="danger"
-                        @click="assignContactToUser(null); isAssignDialogOpen = false"
-                      >
-                        {{ $t('chat.unassignContact') }}
-                      </button>
-                    </div>
-                    <button
-                      v-else
-                      type="button"
-                      class="small"
+                    <input
+                      type="checkbox"
+                      role="switch"
+                      :checked="contactsStore.currentContact?.assigned_user_id === user.id"
                       :aria-label="`${$t('chat.assign')} ${user.full_name}`"
-                      @click="assignContactToUser(user.id); isAssignDialogOpen = false"
-                    >
-                      {{ $t('chat.assign') }}
-                    </button>
+                      @change="assignContactToUser(($event.target as HTMLInputElement).checked ? user.id : null); isAssignDialogOpen = false"
+                    />
                   </td>
                 </tr>
               </tbody>
