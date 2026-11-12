@@ -10,6 +10,7 @@ defineProps<{
   // Kept for call-site compatibility; Oat's default look has no per-page gradient.
   iconGradient?: string
   backLink?: string
+  // Kept for call-site compatibility; breadcrumbs are intentionally not shown (the sidebar shows location).
   breadcrumbs?: Array<{ label: string; href?: string }>
 }>()
 </script>
@@ -22,17 +23,6 @@ defineProps<{
     <component :is="icon" v-if="icon" :size="20" />
     <div class="hstack gap-1 flex-1">
       <h1 class="w-100">{{ title }}</h1>
-      <nav v-if="breadcrumbs?.length" aria-label="Breadcrumb">
-        <ol class="unstyled hstack">
-          <template v-for="(crumb, index) in breadcrumbs" :key="index">
-            <li>
-              <RouterLink v-if="crumb.href" :to="crumb.href" class="unstyled">{{ crumb.label }}</RouterLink>
-              <span v-else aria-current="page">{{ crumb.label }}</span>
-            </li>
-            <li v-if="index < breadcrumbs.length - 1" aria-hidden="true">/</li>
-          </template>
-        </ol>
-      </nav>
     </div>
     <slot name="actions" />
   </header>
