@@ -253,23 +253,25 @@ const statCards = computed(() => [
             </RouterLink>
           </header>
           <div class="row">
-            <div class="col-6 vstack gap-1">
-              <h4>{{ $t('chatbot.greetingMessage') }}</h4>
-              <p class="text-light">{{ settings.greeting_message || $t('chatbot.notConfigured') }}</p>
+            <div class="col-6 card p-4 vstack gap-1">
+              <small class="text-light">{{ $t('chatbot.greetingMessage') }}</small>
+              <p v-if="settings.greeting_message" class="pre-wrap">{{ settings.greeting_message }}</p>
+              <em v-else class="text-lighter">{{ $t('chatbot.notConfigured') }}</em>
             </div>
-            <div class="col-6 vstack gap-1">
-              <h4>{{ $t('chatbot.fallbackMessage') }}</h4>
-              <p class="text-light">{{ settings.fallback_message || $t('chatbot.notConfigured') }}</p>
+            <div class="col-6 card p-4 vstack gap-1">
+              <small class="text-light">{{ $t('chatbot.fallbackMessage') }}</small>
+              <p v-if="settings.fallback_message" class="pre-wrap">{{ settings.fallback_message }}</p>
+              <em v-else class="text-lighter">{{ $t('chatbot.notConfigured') }}</em>
             </div>
-            <div class="col-6 vstack gap-1">
-              <h4>{{ $t('chatbot.sessionTimeout') }}</h4>
-              <div class="hstack gap-2 text-light">
+            <div class="col-6 card p-4 vstack gap-1">
+              <small class="text-light">{{ $t('chatbot.sessionTimeout') }}</small>
+              <strong class="hstack gap-2">
                 <Clock :size="16" />
                 {{ $t('chatbot.minutes', { count: settings.session_timeout_minutes }) }}
-              </div>
+              </strong>
             </div>
-            <div class="col-6 vstack gap-1">
-              <h4>{{ $t('chatbot.aiProvider') }}</h4>
+            <div class="col-6 card p-4 vstack gap-1">
+              <small class="text-light">{{ $t('chatbot.aiProvider') }}</small>
               <div class="hstack gap-2">
                 <span v-if="settings.ai_enabled" class="badge" data-variant="success">
                   {{ settings.ai_provider || $t('chatbot.notConfigured') }}
