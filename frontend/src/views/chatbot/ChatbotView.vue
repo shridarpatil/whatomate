@@ -6,7 +6,7 @@ import { Badge } from '@/components/ui/badge'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { Skeleton } from '@/components/ui/skeleton'
 import { chatbotService } from '@/services/api'
-import { toast } from 'vue-sonner'
+import { toast } from '@/lib/toast'
 import { PageHeader, ConfirmDialog, ErrorState } from '@/components/shared'
 import { getErrorMessage } from '@/lib/api-utils'
 import {

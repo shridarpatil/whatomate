@@ -54,7 +54,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog'
-import { toast } from 'vue-sonner'
+import { toast } from '@/lib/toast'
 import {
   Search,
   Send,

@@ -58,7 +58,7 @@ import {
   Search
 } from 'lucide-vue-next'
 import { Line, Bar } from '@/lib/charts'
-import { toast } from 'vue-sonner'
+import { toast } from '@/lib/toast'
 import { useDateRange } from '@/composables/useDateRange'
 
 

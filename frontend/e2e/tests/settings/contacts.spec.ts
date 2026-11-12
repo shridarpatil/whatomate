@@ -146,7 +146,7 @@ test.describe('Contacts Management', () => {
     await contactsPage.expectToast(/created/i)
 
     // Wait for toast to disappear
-    await page.locator('[data-sonner-toast]').waitFor({ state: 'hidden', timeout: 10000 })
+    await page.locator('.toast-container output').waitFor({ state: 'hidden', timeout: 10000 })
 
     // Try to create duplicate
     await contactsPage.openCreateDialog()
@@ -253,7 +253,7 @@ test.describe('Contacts Import/Export', () => {
     await contactsPage.expectToast(/created/i)
 
     // Wait for toast to disappear completely before continuing
-    await page.locator('[data-sonner-toast]').waitFor({ state: 'hidden', timeout: 10000 })
+    await page.locator('.toast-container output').waitFor({ state: 'hidden', timeout: 10000 })
 
     // Create CSV with same phone number but different name
     const newName = scope.name('updated-via-import')
@@ -320,7 +320,7 @@ test.describe('Contacts in Chat View', () => {
     await dialog.locator('input').nth(1).fill(contactName)
     await dialog.getByRole('button', { name: /Create/i }).click()
 
-    await expect(page.locator('[data-sonner-toast]').filter({ hasText: /created/i })).toBeVisible({ timeout: 10000 })
+    await expect(page.locator('.toast-container output').filter({ hasText: /created/i })).toBeVisible({ timeout: 10000 })
     await page.waitForURL(/\/chat\/.*/, { timeout: 10000 })
   })
 })

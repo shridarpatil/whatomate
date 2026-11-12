@@ -10,7 +10,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { PageHeader, SearchInput, DeleteConfirmDialog, DataTable, IconButton, ErrorState, type Column } from '@/components/shared'
 import { cannedResponsesService, type CannedResponse } from '@/services/api'
 import { useCrudState } from '@/composables/useCrudState'
-import { toast } from 'vue-sonner'
+import { toast } from '@/lib/toast'
 import { Plus, MessageSquareText, Pencil, Trash2, Copy } from 'lucide-vue-next'
 import { getErrorMessage } from '@/lib/api-utils'
 import { CANNED_RESPONSE_CATEGORIES, getLabelFromValue } from '@/lib/constants'

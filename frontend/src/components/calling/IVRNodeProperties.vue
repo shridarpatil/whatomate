@@ -12,7 +12,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Textarea } from '@/components/ui/textarea'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Trash2, Plus, Upload, Play, Pause, X, Loader2, Type } from 'lucide-vue-next'
-import { toast } from 'vue-sonner'
+import { toast } from '@/lib/toast'
 
 const props = defineProps<{
   node: IVRNode

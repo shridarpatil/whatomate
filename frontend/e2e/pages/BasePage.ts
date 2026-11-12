@@ -20,7 +20,7 @@ export class BasePage {
   }
 
   async getToastMessage(): Promise<string | null> {
-    const toast = this.page.locator('[data-sonner-toast]').first()
+    const toast = this.page.locator('.toast-container output').first()
     if (await toast.isVisible()) {
       return toast.textContent()
     }
@@ -28,11 +28,11 @@ export class BasePage {
   }
 
   async waitForToast(text: string) {
-    await this.page.locator('[data-sonner-toast]').filter({ hasText: text }).waitFor()
+    await this.page.locator('.toast-container output').filter({ hasText: text }).waitFor()
   }
 
   async dismissToast() {
-    const toast = this.page.locator('[data-sonner-toast]').first()
+    const toast = this.page.locator('.toast-container output').first()
     if (await toast.isVisible()) {
       await toast.locator('button').click()
     }

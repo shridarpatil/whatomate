@@ -198,15 +198,15 @@ export class ChatbotSettingsPage extends BasePage {
 
   // Toast helpers
   async expectToast(text: string | RegExp) {
-    const toast = this.page.locator('[data-sonner-toast]').filter({ hasText: text })
+    const toast = this.page.locator('.toast-container output').filter({ hasText: text })
     await expect(toast).toBeVisible({ timeout: 5000 })
     return toast
   }
 
   async dismissToast(text?: string | RegExp) {
     const toast = text
-      ? this.page.locator('[data-sonner-toast]').filter({ hasText: text })
-      : this.page.locator('[data-sonner-toast]').first()
+      ? this.page.locator('.toast-container output').filter({ hasText: text })
+      : this.page.locator('.toast-container output').first()
     if (await toast.isVisible()) {
       await toast.click()
     }

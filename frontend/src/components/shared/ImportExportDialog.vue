@@ -9,7 +9,7 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } f
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { dataService, type ExportColumn, type ImportResult } from '@/services/api'
-import { toast } from 'vue-sonner'
+import { toast } from '@/lib/toast'
 import { Loader2, Upload, Download, FileSpreadsheet, Check, AlertCircle } from 'lucide-vue-next'
 import { getErrorMessage } from '@/lib/api-utils'
 

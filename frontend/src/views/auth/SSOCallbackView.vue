@@ -6,7 +6,7 @@ import { useAuthStore } from '@/stores/auth'
 import { api } from '@/services/api'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Loader2, AlertCircle, CheckCircle } from 'lucide-vue-next'
-import { toast } from 'vue-sonner'
+import { toast } from '@/lib/toast'
 
 const { t } = useI18n()
 const router = useRouter()

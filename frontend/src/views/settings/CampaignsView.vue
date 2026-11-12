@@ -15,7 +15,7 @@ import {
 } from '@/components/ui/select'
 import { campaignsService } from '@/services/api'
 import { wsService } from '@/services/websocket'
-import { toast } from 'vue-sonner'
+import { toast } from '@/lib/toast'
 import { PageHeader, DataTable, DeleteConfirmDialog, SearchInput, IconButton, ErrorState, DateRangePicker, type Column } from '@/components/shared'
 import { getErrorMessage } from '@/lib/api-utils'
 import {

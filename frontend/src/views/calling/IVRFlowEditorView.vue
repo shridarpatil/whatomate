@@ -15,7 +15,7 @@ import { ArrowLeft, Save, Volume2, Grid3X3, Hash, Globe, Users, ExternalLink, Cl
 import AuditLogPanel from '@/components/shared/AuditLogPanel.vue'
 import MetadataPanel from '@/components/shared/MetadataPanel.vue'
 import { ScrollArea } from '@/components/ui/scroll-area'
-import { toast } from 'vue-sonner'
+import { toast } from '@/lib/toast'
 import ConfirmDialog from '@/components/shared/ConfirmDialog.vue'
 import ErrorState from '@/components/shared/ErrorState.vue'
 import IVRNodeProperties from '@/components/calling/IVRNodeProperties.vue'

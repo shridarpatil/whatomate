@@ -14,7 +14,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog'
 import { Plus, Pencil, Trash2, Phone, RefreshCw } from 'lucide-vue-next'
-import { toast } from 'vue-sonner'
+import { toast } from '@/lib/toast'
 import ConfirmDialog from '@/components/shared/ConfirmDialog.vue'
 import DeleteConfirmDialog from '@/components/shared/DeleteConfirmDialog.vue'
 import IconButton from '@/components/shared/IconButton.vue'

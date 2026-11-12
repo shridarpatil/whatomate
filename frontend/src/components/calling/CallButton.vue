@@ -6,7 +6,7 @@ import { outgoingCallsService } from '@/services/api'
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { Phone, Loader2, Clock, X } from 'lucide-vue-next'
-import { toast } from 'vue-sonner'
+import { toast } from '@/lib/toast'
 
 const props = defineProps<{
   contactId: string

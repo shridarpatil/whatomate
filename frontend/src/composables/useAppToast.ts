@@ -1,8 +1,8 @@
-import { toast } from 'vue-sonner'
+import { toast } from '@/lib/toast'
 
 /**
- * Shared toast utility wrapping vue-sonner.
- * Use this instead of importing `toast` from 'vue-sonner' directly
+ * Shared toast utility wrapping @/lib/toast.
+ * Use this instead of importing `toast` from '@/lib/toast' directly
  * or `useToast` from the shadcn toast component.
  *
  * Usage:

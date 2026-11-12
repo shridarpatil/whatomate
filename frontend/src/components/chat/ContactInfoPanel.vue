@@ -30,7 +30,7 @@ import { getTagColorClass } from '@/lib/constants'
 import { useTagsStore } from '@/stores/tags'
 import { useAuthStore } from '@/stores/auth'
 import { contactsService, type Tag } from '@/services/api'
-import { toast } from 'vue-sonner'
+import { toast } from '@/lib/toast'
 import type { Contact } from '@/stores/contacts'
 
 interface PanelFieldConfig {

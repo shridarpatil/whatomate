@@ -189,7 +189,7 @@ test.describe('Users - Copy Invite Link', () => {
     await copyButton.click()
 
     // Should show success toast
-    const toast = page.locator('[data-sonner-toast]')
+    const toast = page.locator('.toast-container output')
     await expect(toast).toBeVisible({ timeout: 5000 })
 
     // Verify clipboard contains a registration URL with org param

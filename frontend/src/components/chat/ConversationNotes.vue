@@ -8,7 +8,7 @@ import { Badge } from '@/components/ui/badge'
 import { Avatar, AvatarFallback } from '@/components/ui/avatar'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { Textarea } from '@/components/ui/textarea'
-import { toast } from 'vue-sonner'
+import { toast } from '@/lib/toast'
 import { useInfiniteScroll } from '@/composables/useInfiniteScroll'
 import { getInitials, getAvatarGradient } from '@/lib/utils'
 import {

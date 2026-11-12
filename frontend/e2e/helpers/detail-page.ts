@@ -27,7 +27,7 @@ export async function expectSaveButtonOnChange(page: Page) {
 export async function expectDeleteFromForm(page: Page, listUrl: string) {
   // Remove toasts from DOM so they don't block clicks
   await page.evaluate(() => {
-    document.querySelectorAll('[data-sonner-toast]').forEach(el => el.remove())
+    document.querySelectorAll('.toast-container output').forEach(el => el.remove())
   })
   await page.waitForTimeout(300)
 

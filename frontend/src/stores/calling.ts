@@ -2,7 +2,7 @@ import { defineStore } from 'pinia'
 import { ref, reactive, computed, watch } from 'vue'
 import { startRinging, stopRinging } from '@/lib/ringtone'
 import { callLogsService, ivrFlowsService, callTransfersService, outgoingCallsService, type CallLog, type IVRFlow, type CallTransfer } from '@/services/api'
-import { toast } from 'vue-sonner'
+import { toast } from '@/lib/toast'
 import { i18n } from '@/i18n'
 
 export const useCallingStore = defineStore('calling', () => {

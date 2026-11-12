@@ -106,7 +106,7 @@ test.describe('Roles Management', () => {
     await saveButton(page).click()
 
     // Error toast should appear (we stay on /new)
-    const toast = page.locator('[data-sonner-toast]')
+    const toast = page.locator('.toast-container output')
     await expect(toast).toBeVisible({ timeout: 5000 })
     expect(page.url()).toContain('/settings/roles/new')
   })

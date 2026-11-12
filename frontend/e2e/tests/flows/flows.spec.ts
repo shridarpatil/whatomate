@@ -29,7 +29,7 @@ test.describe('WhatsApp Flows Management', () => {
   test('should show validation error for empty flow name', async ({ page }) => {
     await flowsPage.openCreateDialog()
     await flowsPage.createDialog.getByRole('button', { name: /Create Flow/i }).click()
-    await expect(page.locator('[data-sonner-toast]')).toBeVisible({ timeout: 5000 })
+    await expect(page.locator('.toast-container output')).toBeVisible({ timeout: 5000 })
   })
 
   test('should have account selector in create dialog', async () => {
@@ -202,7 +202,7 @@ test.describe('Chatbot Flows Management', () => {
   test('should show validation when saving empty flow', async ({ page }) => {
     await chatbotFlowsPage.gotoNewFlow()
     await page.getByRole('button', { name: /Save/i }).click()
-    await expect(page.locator('[data-sonner-toast]')).toBeVisible({ timeout: 5000 })
+    await expect(page.locator('.toast-container output')).toBeVisible({ timeout: 5000 })
   })
 
   test('should have step type options', async ({ page }) => {

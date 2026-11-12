@@ -16,3 +16,13 @@ interface ImportMetaEnv {
 interface ImportMeta {
   readonly env: ImportMetaEnv
 }
+
+interface Window {
+  ot: {
+    toast(
+      message: string,
+      title?: string,
+      options?: { variant?: string; placement?: string; duration?: number },
+    ): HTMLElement | undefined
+  }
+}

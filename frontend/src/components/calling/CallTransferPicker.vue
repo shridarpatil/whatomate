@@ -6,7 +6,7 @@ import { teamsService, type Team, type TeamMember } from '@/services/api'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
 import { ArrowLeft, Users, Loader2 } from 'lucide-vue-next'
-import { toast } from 'vue-sonner'
+import { toast } from '@/lib/toast'
 
 const emit = defineEmits<{ close: [] }>()
 

@@ -12,7 +12,7 @@ import { PageHeader, SearchInput, DataTable, CrudFormDialog, DeleteConfirmDialog
 import type { Tag } from '@/services/api'
 import { useTagsStore } from '@/stores/tags'
 import { useCrudState } from '@/composables/useCrudState'
-import { toast } from 'vue-sonner'
+import { toast } from '@/lib/toast'
 import { Plus, Tags, Pencil, Trash2 } from 'lucide-vue-next'
 import { getErrorMessage } from '@/lib/api-utils'
 import { TAG_COLORS } from '@/lib/constants'

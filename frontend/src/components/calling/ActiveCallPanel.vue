@@ -5,7 +5,7 @@ import { useCallingStore } from '@/stores/calling'
 import { Button } from '@/components/ui/button'
 import { Phone, PhoneOff, PhoneIncoming, Mic, MicOff, ArrowRightLeft, Pause, Play } from 'lucide-vue-next'
 import CallTransferPicker from '@/components/calling/CallTransferPicker.vue'
-import { toast } from 'vue-sonner'
+import { toast } from '@/lib/toast'
 
 const { t } = useI18n()
 const store = useCallingStore()

@@ -117,7 +117,7 @@ test.describe('Template media header — issue #355', () => {
     await page.getByRole('button', { name: /Create|Save/i }).first().click({ force: true })
 
     await expect(
-      page.locator('[data-sonner-toast], [role="status"], [role="alert"]')
+      page.locator('.toast-container output, [role="status"], [role="alert"]')
         .filter({ hasText: /Upload a sample/i })
     ).toBeVisible({ timeout: 5000 })
 

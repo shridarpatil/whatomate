@@ -2,7 +2,7 @@
 import { ref, computed, onMounted, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRoute, useRouter } from 'vue-router'
-import { toast } from 'vue-sonner'
+import { toast } from '@/lib/toast'
 import { useCallingStore } from '@/stores/calling'
 import { accountsService, callLogsService, ivrFlowsService, type CallLog, type CallTransfer, type IVRFlow } from '@/services/api'
 import { Card, CardContent } from '@/components/ui/card'

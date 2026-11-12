@@ -11,7 +11,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { contactsService, accountsService, type Tag } from '@/services/api'
 import { useTagsStore } from '@/stores/tags'
-import { toast } from 'vue-sonner'
+import { toast } from '@/lib/toast'
 import { Loader2, Check, ChevronsUpDown, X } from 'lucide-vue-next'
 import { getErrorMessage } from '@/lib/api-utils'
 import { getTagColorClass } from '@/lib/constants'

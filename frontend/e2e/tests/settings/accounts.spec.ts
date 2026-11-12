@@ -80,7 +80,7 @@ test.describe('WhatsApp Accounts - Detail Page CRUD', () => {
     const createBtn = page.getByRole('button', { name: /Create/i })
     if (await createBtn.isVisible({ timeout: 3000 }).catch(() => false)) {
       await createBtn.click({ force: true })
-      const toast = page.locator('[data-sonner-toast]').first()
+      const toast = page.locator('.toast-container output').first()
       await expect(toast).toBeVisible({ timeout: 5000 })
     }
   })

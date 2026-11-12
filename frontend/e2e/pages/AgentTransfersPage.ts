@@ -112,7 +112,7 @@ export class AgentTransfersPage extends BasePage {
 
   // Toast helpers
   async expectToast(text: string | RegExp) {
-    const toast = this.page.locator('[data-sonner-toast]').filter({ hasText: text })
+    const toast = this.page.locator('.toast-container output').filter({ hasText: text })
     await expect(toast).toBeVisible({ timeout: 5000 })
     return toast
   }

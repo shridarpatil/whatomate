@@ -122,7 +122,7 @@ export function createFlowBody(opts: BaseOpts & {
 
     const toast = opts.successToast ?? /created|added/i
     await expect(
-      page.locator('[data-sonner-toast], [role="status"], [role="alert"]')
+      page.locator('.toast-container output, [role="status"], [role="alert"]')
         .filter({ hasText: toast }),
     ).toBeVisible({ timeout: 5000 })
 
@@ -198,7 +198,7 @@ export function editFlowBody(opts: BaseOpts & {
 
     const toast = opts.successToast ?? /updated|saved/i
     await expect(
-      page.locator('[data-sonner-toast], [role="status"], [role="alert"]')
+      page.locator('.toast-container output, [role="status"], [role="alert"]')
         .filter({ hasText: toast }),
     ).toBeVisible({ timeout: 5000 })
   }

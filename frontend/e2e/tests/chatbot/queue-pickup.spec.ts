@@ -196,7 +196,7 @@ test.describe('Pick from queue — agent flow', () => {
     // Success toast confirms the pick. Use a partial match because the toast
     // body includes the contact name interpolated via i18n.
     await expect(
-      page.locator('[data-sonner-toast]').filter({ hasText: /Transfer picked/i }),
+      page.locator('.toast-container output').filter({ hasText: /Transfer picked/i }),
     ).toBeVisible({ timeout: 10_000 })
 
     // After picking the page navigates to the contact's chat.
@@ -340,7 +340,7 @@ test.describe('Pick from queue — admin assign flow', () => {
 
     // Toast on success.
     await expect(
-      page.locator('[data-sonner-toast]').filter({ hasText: /updated|assigned/i }),
+      page.locator('.toast-container output').filter({ hasText: /updated|assigned/i }),
     ).toBeVisible({ timeout: 10_000 })
 
     // Transfer now has the agent assigned in the DB.
@@ -566,7 +566,7 @@ test.describe('Pickup respects assign_to_same_agent', () => {
     await resumeBtn.click()
 
     await expect(
-      page.locator('[data-sonner-toast]').filter({ hasText: /resumed/i }),
+      page.locator('.toast-container output').filter({ hasText: /resumed/i }),
     ).toBeVisible({ timeout: 10_000 })
 
     // Re-read: assigned_user_id remains nil, transfer is resumed.
@@ -691,7 +691,7 @@ test.describe('Admin reassign and unassign flows', () => {
     await dialog.getByRole('button', { name: /^Save$/i }).click()
 
     await expect(
-      page.locator('[data-sonner-toast]').filter({ hasText: /updated|assigned/i }),
+      page.locator('.toast-container output').filter({ hasText: /updated|assigned/i }),
     ).toBeVisible({ timeout: 10_000 })
 
     const rows = await execSQL(
@@ -719,7 +719,7 @@ test.describe('Admin reassign and unassign flows', () => {
     await dialog.getByRole('button', { name: /^Save$/i }).click()
 
     await expect(
-      page.locator('[data-sonner-toast]').filter({ hasText: /updated|assigned/i }),
+      page.locator('.toast-container output').filter({ hasText: /updated|assigned/i }),
     ).toBeVisible({ timeout: 10_000 })
 
     const rows = await execSQL(

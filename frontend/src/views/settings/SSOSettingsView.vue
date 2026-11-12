@@ -12,7 +12,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { PageHeader, ConfirmDialog, ErrorState } from '@/components/shared'
-import { toast } from 'vue-sonner'
+import { toast } from '@/lib/toast'
 import { ShieldCheck, Settings2, ExternalLink, Info, Copy, Check, Loader2 } from 'lucide-vue-next'
 import { getErrorMessage } from '@/lib/api-utils'
 

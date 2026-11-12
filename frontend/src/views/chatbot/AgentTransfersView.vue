@@ -17,7 +17,7 @@ import { useTransfersStore, type AgentTransfer, getSLAStatus } from '@/stores/tr
 import { useAuthStore } from '@/stores/auth'
 import { useUsersStore } from '@/stores/users'
 import { useTeamsStore } from '@/stores/teams'
-import { toast } from 'vue-sonner'
+import { toast } from '@/lib/toast'
 import { useRouter } from 'vue-router'
 import { UserX, Play, MessageSquare, User, Clock, Loader2, Users, UserPlus, AlertTriangle, CheckCircle2, XCircle } from 'lucide-vue-next'
 import { getErrorMessage } from '@/lib/api-utils'

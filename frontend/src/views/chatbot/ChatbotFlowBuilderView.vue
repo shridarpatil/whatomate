@@ -3,7 +3,7 @@ import { ref, computed, onMounted, markRaw, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRoute, useRouter } from 'vue-router'
 import { useVueFlow, MarkerType, type NodeMouseEvent, type Edge, type EdgeMouseEvent, type Connection } from '@vue-flow/core'
-import { toast } from 'vue-sonner'
+import { toast } from '@/lib/toast'
 
 import FlowCanvas from '@/components/shared/FlowCanvas.vue'
 import { chatbotService } from '@/services/api'
