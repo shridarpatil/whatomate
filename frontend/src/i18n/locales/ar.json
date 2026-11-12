@@ -49,6 +49,8 @@
     "deselectAll": "إلغاء تحديد الكل",
     "noResults": "لم يتم العثور على نتائج",
     "noData": "لا توجد بيانات متاحة",
+    "showData": "Show data",
+    "value": "Value",
     "error": "خطأ",
     "success": "نجاح",
     "warning": "تحذير",

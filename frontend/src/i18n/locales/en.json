@@ -49,6 +49,8 @@
     "deselectAll": "Deselect All",
     "noResults": "No results found",
     "noData": "No data available",
+    "showData": "Show data",
+    "value": "Value",
     "error": "Error",
     "success": "Success",
     "warning": "Warning",

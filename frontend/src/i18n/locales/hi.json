@@ -46,6 +46,8 @@
     "deselectAll": "सभी अचयनित करें",
     "noResults": "कोई परिणाम नहीं मिला",
     "noData": "कोई डेटा उपलब्ध नहीं",
+    "showData": "Show data",
+    "value": "Value",
     "error": "त्रुटि",
     "success": "सफलता",
     "warning": "चेतावनी",

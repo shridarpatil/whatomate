@@ -46,6 +46,8 @@
     "deselectAll": "அனைத்தையும் தேர்வுநீக்கு",
     "noResults": "முடிவுகள் எதுவும் இல்லை",
     "noData": "தரவு எதுவும் இல்லை",
+    "showData": "Show data",
+    "value": "Value",
     "error": "பிழை",
     "success": "வெற்றி",
     "warning": "எச்சரிக்கை",
