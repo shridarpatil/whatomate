@@ -192,47 +192,47 @@ const statCards = computed(() => [
           </template>
         </div>
 
-        <!-- Quick Actions -->
+        <!-- Quick Actions: plain divs, not article/header, so the link gets its accessible name from the card text -->
         <div class="row">
           <div class="col-4">
             <RouterLink to="/chatbot/keywords" class="unstyled">
-              <article class="card">
-                <header class="hstack gap-2">
+              <div class="card">
+                <div class="hstack gap-2">
                   <Key :size="20" />
                   <div>
                     <h3>{{ $t('chatbot.keywordRules') }}</h3>
                     <small class="text-light">{{ $t('chatbot.rulesConfigured', { count: stats.keywords_count }) }}</small>
                   </div>
-                </header>
-              </article>
+                </div>
+              </div>
             </RouterLink>
           </div>
 
           <div class="col-4">
             <RouterLink to="/chatbot/flows" class="unstyled">
-              <article class="card">
-                <header class="hstack gap-2">
+              <div class="card">
+                <div class="hstack gap-2">
                   <Workflow :size="20" />
                   <div>
                     <h3>{{ $t('chatbot.conversationFlows') }}</h3>
                     <small class="text-light">{{ $t('chatbot.flowsCreated', { count: stats.flows_count }) }}</small>
                   </div>
-                </header>
-              </article>
+                </div>
+              </div>
             </RouterLink>
           </div>
 
           <div class="col-4">
             <RouterLink to="/chatbot/ai" class="unstyled">
-              <article class="card">
-                <header class="hstack gap-2">
+              <div class="card">
+                <div class="hstack gap-2">
                   <Sparkles :size="20" />
                   <div>
                     <h3>{{ $t('chatbot.aiContexts') }}</h3>
                     <small class="text-light">{{ $t('chatbot.contextsActive', { count: stats.ai_contexts_count }) }}</small>
                   </div>
-                </header>
-              </article>
+                </div>
+              </div>
             </RouterLink>
           </div>
         </div>
