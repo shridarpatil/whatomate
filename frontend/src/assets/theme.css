@@ -111,4 +111,15 @@
     color: var(--node-accent);
     background-color: color-mix(in oklab, var(--node-accent) 15%, transparent);
   }
+
+  /* Auth pages (login / register / SSO): restore Oat's default, roomier
+     spacing inside the auth card only; the rest of the app stays compact. */
+  .auth-panel {
+    --space-2: 0.5rem;
+    --space-3: 0.75rem;
+    --space-4: 1rem;
+    --space-5: 1.25rem;
+    --space-6: 1.5rem;
+    --space-8: 2rem;
+  }
 }
