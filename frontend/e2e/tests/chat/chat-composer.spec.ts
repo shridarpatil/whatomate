@@ -137,7 +137,7 @@ test.describe('Chat composer interactions', () => {
 
     // Click the Reply icon button next to the bubble.
     const replyBtn = wrap.locator('xpath=..').locator('button').filter({
-      has: page.locator('[class*="lucide-reply"]'),
+      has: page.locator('[data-icon="reply"]'),
     }).first()
     await expect(replyBtn).toBeVisible({ timeout: 5_000 })
     await replyBtn.click()
@@ -152,7 +152,7 @@ test.describe('Chat composer interactions', () => {
     const wrap = page.locator(`#message-${incomingMessageId}`)
     await wrap.hover()
     await wrap.locator('xpath=..').locator('button').filter({
-      has: page.locator('[class*="lucide-reply"]'),
+      has: page.locator('[data-icon="reply"]'),
     }).first().click()
 
     const indicator = page.getByText(/Replying to /i)
@@ -160,7 +160,7 @@ test.describe('Chat composer interactions', () => {
 
     // Cancel — the X button to the right of the indicator.
     await page.locator('button').filter({
-      has: page.locator('[class*="lucide-x"]'),
+      has: page.locator('[data-icon="x"]'),
     }).filter({ hasNot: page.locator('main *') }).first().click().catch(async () => {
       // Fallback: scope to the sibling within the indicator container.
       await indicator.locator('xpath=ancestor::div[contains(@class, "border-t")][1]')
@@ -174,7 +174,7 @@ test.describe('Chat composer interactions', () => {
     const wrap = page.locator(`#message-${incomingMessageId}`)
     await wrap.hover()
     await wrap.locator('xpath=..').locator('button').filter({
-      has: page.locator('[class*="lucide-reply"]'),
+      has: page.locator('[data-icon="reply"]'),
     }).first().click()
 
     await expect(page.getByText(/Replying to /i)).toBeVisible({ timeout: 5_000 })

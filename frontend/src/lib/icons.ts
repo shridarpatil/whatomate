@@ -11,6 +11,10 @@ interface IconProps {
   strokeWidth?: number | string
 }
 
+// 'Trash2' -> 'trash-2', 'UserPlus' -> 'user-plus' (lucide file naming); used as a stable test hook.
+const toKebab = (name: string) =>
+  name.replace(/([a-z])([A-Z])/g, '$1-$2').replace(/(?<!\d)([A-Za-z])(\d)/g, '$1-$2').toLowerCase()
+
 function defineIcon(name: string): Component {
   const Icon: FunctionalComponent<IconProps> = (props, { attrs }) =>
     h(
@@ -26,6 +30,7 @@ function defineIcon(name: string): Component {
         width: props.size ?? 16,
         height: props.size ?? 16,
         'aria-hidden': 'true',
+        'data-icon': toKebab(name),
         ...attrs,
       },
       iconData[name].map(([tag, shape]) => h(tag, shape)),

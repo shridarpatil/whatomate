@@ -555,12 +555,9 @@ test.describe('Pickup respects assign_to_same_agent', () => {
     await expect(page.getByText('Paused').first()).toBeVisible({ timeout: 10_000 })
 
     // Click the standalone Resume button in the chat header. The button is
-    // icon-only (Play icon, no aria-label). Lucide-vue-next renders icons
-    // with a class attribute like "lucide lucide-play" on the SVG, but
-    // Playwright's :has(svg.X) selector struggles with SVG namespacing —
-    // use attribute matching instead.
+    // icon-only (Play icon, no aria-label); match it via its data-icon attribute.
     const resumeBtn = page.locator('main button').filter({
-      has: page.locator('[class*="lucide-play"]'),
+      has: page.locator('[data-icon="play"]'),
     }).first()
     await expect(resumeBtn).toBeVisible({ timeout: 10_000 })
     await resumeBtn.click()

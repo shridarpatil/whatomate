@@ -67,12 +67,12 @@ export class AgentTransfersPage extends BasePage {
 
   async viewChat(contactName: string) {
     const row = this.getTransferRow(contactName)
-    await row.locator('button').filter({ has: this.page.locator('.lucide-message-square') }).click()
+    await row.locator('button').filter({ has: this.page.locator('[data-icon="message-square"]') }).click()
   }
 
   async resumeTransfer(contactName: string) {
     const row = this.getTransferRow(contactName)
-    await row.locator('button').filter({ has: this.page.locator('.lucide-play') }).click()
+    await row.locator('button').filter({ has: this.page.locator('[data-icon="play"]') }).click()
     // Handle the ConfirmDialog that appears after clicking resume
     const alertDialog = this.page.locator('[role="alertdialog"]')
     await alertDialog.waitFor({ state: 'visible' })
@@ -82,7 +82,7 @@ export class AgentTransfersPage extends BasePage {
 
   async openAssignDialog(contactName: string) {
     const row = this.getTransferRow(contactName)
-    await row.locator('button').filter({ has: this.page.locator('.lucide-user-plus') }).click()
+    await row.locator('button').filter({ has: this.page.locator('[data-icon="user-plus"]') }).click()
     await this.assignDialog.waitFor({ state: 'visible' })
   }
 

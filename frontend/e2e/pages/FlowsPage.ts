@@ -39,18 +39,18 @@ export class FlowsPage extends BasePage {
 
   getEditButton(card?: Locator): Locator {
     const container = card || this.page
-    // Use lucide class without svg prefix for broader compatibility
-    return container.locator('button').filter({ has: this.page.locator('.lucide-pencil') }).first()
+    // Icons carry a data-icon attribute (see src/lib/icons.ts)
+    return container.locator('button').filter({ has: this.page.locator('[data-icon="pencil"]') }).first()
   }
 
   getDeleteButton(card?: Locator): Locator {
     const container = card || this.page
-    return container.locator('button').filter({ has: this.page.locator('.lucide-trash-2') }).first()
+    return container.locator('button').filter({ has: this.page.locator('[data-icon="trash-2"]') }).first()
   }
 
   getDuplicateButton(card?: Locator): Locator {
     const container = card || this.page
-    return container.locator('button').filter({ has: this.page.locator('.lucide-copy') }).first()
+    return container.locator('button').filter({ has: this.page.locator('[data-icon="copy"]') }).first()
   }
 
   getPreviewButton(card?: Locator): Locator {
@@ -198,7 +198,7 @@ export class ChatbotFlowsPage extends BasePage {
     super(page)
     this.heading = page.getByRole('heading', { name: /Conversation Flows/i }).first()
     this.createButton = page.getByRole('button', { name: /Create Flow/i }).first()
-    this.backButton = page.locator('button').filter({ has: page.locator('.lucide-arrow-left') }).first()
+    this.backButton = page.locator('button').filter({ has: page.locator('[data-icon="arrow-left"]') }).first()
     this.alertDialog = page.locator('[role="alertdialog"]')
   }
 
@@ -224,12 +224,12 @@ export class ChatbotFlowsPage extends BasePage {
 
   getEditButton(card?: Locator): Locator {
     const container = card || this.page
-    return container.locator('button').filter({ has: this.page.locator('.lucide-pencil') }).first()
+    return container.locator('button').filter({ has: this.page.locator('[data-icon="pencil"]') }).first()
   }
 
   getDeleteButton(card?: Locator): Locator {
     const container = card || this.page
-    return container.locator('button').filter({ has: this.page.locator('.lucide-trash-2') }).first()
+    return container.locator('button').filter({ has: this.page.locator('[data-icon="trash-2"]') }).first()
   }
 
   getToggleButton(card?: Locator): Locator {

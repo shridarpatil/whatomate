@@ -24,6 +24,14 @@ describe('icons', () => {
     expect(svg.getAttribute('height')).toBe('24')
   })
 
+  it('data-icon is the canonical kebab name', () => {
+    expect(render(icons.Trash2).getAttribute('data-icon')).toBe('trash-2')
+    expect(render(icons.UserPlus).getAttribute('data-icon')).toBe('user-plus')
+    expect(render(icons.Edit3).getAttribute('data-icon')).toBe('pen-line')
+    expect(render(icons.CalendarIcon).getAttribute('data-icon')).toBe('calendar')
+    expect(render(icons.Grid3X3).getAttribute('data-icon')).toBe('grid-3x3')
+  })
+
   it('every icon has data', () => {
     const entries = Object.entries(icons)
     expect(entries.length).toBeGreaterThan(0)

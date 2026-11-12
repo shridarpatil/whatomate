@@ -132,7 +132,7 @@ test.describe('Create Organization via Sidebar', () => {
     // Use exact match for the "Organization" label to avoid matching "No organizations found"
     const orgLabel = sidebar.getByText('Organization', { exact: true })
     await expect(orgLabel).toBeVisible({ timeout: 10000 })
-    return orgLabel.locator('..').locator('button').filter({ has: page.locator('.lucide-plus-icon') })
+    return orgLabel.locator('..').locator('button').filter({ has: page.locator('[data-icon="plus"]') })
   }
 
   test('should show plus button in org switcher for super admin', async ({ page }) => {

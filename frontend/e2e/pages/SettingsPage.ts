@@ -234,9 +234,9 @@ export class TableSettingsPage extends BasePage {
 
   async getSortDirection(columnName: string): Promise<'asc' | 'desc' | null> {
     const header = this.getColumnHeader(columnName)
-    // Lucide icons render with class like 'lucide-arrow-up-icon'
-    const arrowUp = header.locator('.lucide-arrow-up-icon')
-    const arrowDown = header.locator('.lucide-arrow-down-icon')
+    // Icons carry a data-icon attribute (see src/lib/icons.ts)
+    const arrowUp = header.locator('[data-icon="arrow-up"]')
+    const arrowDown = header.locator('[data-icon="arrow-down"]')
 
     if (await arrowUp.count() > 0) return 'asc'
     if (await arrowDown.count() > 0) return 'desc'
