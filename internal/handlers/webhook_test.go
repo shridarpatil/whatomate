@@ -705,3 +705,74 @@ func TestWebhookHandler_smb_app_state_sync(t *testing.T) {
 	assert.Error(t, err, "contact should have been soft-deleted and not found by standard query")
 	assert.True(t, checkUnscoped.DeletedAt.Valid, "DeletedAt should be populated")
 }
+
+func TestWebhookHandler_smb_app_state_sync_StateSyncArray(t *testing.T) {
+	app := webhookTestApp(t)
+
+	uid := uuid.New().String()[:8]
+	org := models.Organization{
+		BaseModel: models.BaseModel{ID: uuid.New()},
+		Name:      "sync-arr-org-" + uid,
+		Slug:      "sync-arr-org-" + uid,
+	}
+	require.NoError(t, app.DB.Create(&org).Error)
+
+	waAccount := models.WhatsAppAccount{
+		BaseModel:      models.BaseModel{ID: uuid.New()},
+		OrganizationID: org.ID,
+		Name:           "sync-arr-acct-" + uid,
+		PhoneID:        "phone-sync-arr-" + uid,
+		BusinessID:     "biz-sync-arr-" + uid,
+		AccessToken:    "token",
+	}
+	require.NoError(t, app.DB.Create(&waAccount).Error)
+
+	send := func(action, phone, fullName string) {
+		body := []byte(`{
+			"object": "whatsapp_business_account",
+			"entry": [{
+				"id": "` + waAccount.BusinessID + `",
+				"changes": [{
+					"field": "smb_app_state_sync",
+					"value": {
+						"messaging_product": "whatsapp",
+						"metadata": {
+							"display_phone_number": "15550783881",
+							"phone_number_id": "` + waAccount.PhoneID + `"
+						},
+						"state_sync": [{
+							"type": "contact",
+							"contact": {
+								"full_name": "` + fullName + `",
+								"first_name": "Pablo",
+								"phone_number": "` + phone + `"
+							},
+							"action": "` + action + `",
+							"metadata": {"timestamp": "1739321024"}
+						}]
+					}
+				}]
+			}]
+		}`)
+		req := testutil.NewRequest(t)
+		req.RequestCtx.Request.Header.SetMethod("POST")
+		req.RequestCtx.Request.Header.SetContentType("application/json")
+		req.RequestCtx.Request.SetBody(body)
+		require.NoError(t, app.WebhookHandler(req))
+	}
+
+	send("add", "16505551234", "Pablo Morales")
+
+	var contact models.Contact
+	assert.Eventually(t, func() bool {
+		return app.DB.Where("organization_id = ? AND phone_number = ?", org.ID, "16505551234").First(&contact).Error == nil
+	}, 2*time.Second, 10*time.Millisecond)
+	assert.Equal(t, "Pablo Morales", contact.ProfileName)
+
+	send("remove", "16505551234", "")
+
+	assert.Eventually(t, func() bool {
+		var c models.Contact
+		return app.DB.Where("organization_id = ? AND phone_number = ?", org.ID, "16505551234").First(&c).Error != nil
+	}, 2*time.Second, 10*time.Millisecond)
+}
