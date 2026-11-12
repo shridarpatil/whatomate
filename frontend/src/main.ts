@@ -5,6 +5,7 @@ import App from './App.vue'
 import router from './router'
 import { i18n, initLocale } from './i18n'
 
+import './assets/fonts.css'
 import './vendor/oat/oat.css'
 import './vendor/oat/js/index.js'
 import './assets/theme.css'
