@@ -74,7 +74,7 @@ const handleOrgChange = async (value: string | number | bigint | Record<string, 
   if (!value || typeof value !== 'string') return
 
   // Everyone goes through switch-org, super admins included: the X-Organization-ID
-  // header alone only scopes axios calls. The WebSocket token, <img src> media and
+  // header alone only scopes API client calls. The WebSocket token, <img src> media and
   // window.open previews carry no headers, so the JWT itself has to name the target
   // org or those keep talking to the previous one.
   try {

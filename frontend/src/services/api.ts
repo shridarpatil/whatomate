@@ -1,17 +1,8 @@
-import axios, { type AxiosInstance, type AxiosError, type InternalAxiosRequestConfig } from 'axios'
+import { createHttpClient, type HttpClient, type HttpError, type RequestConfig } from '@/lib/http'
 
 // Get base path from server-injected config or fallback
 const basePath = ((window as any).__BASE_PATH__ ?? '').replace(/\/$/, '')
 const API_BASE_URL = import.meta.env.VITE_API_URL || `${basePath}/api`
-
-export const api: AxiosInstance = axios.create({
-  baseURL: API_BASE_URL,
-  timeout: 30000,
-  withCredentials: true,
-  headers: {
-    'Content-Type': 'application/json'
-  }
-})
 
 // Helper to read a cookie by name
 function getCookie(name: string): string | null {
@@ -38,29 +29,6 @@ export function getRequestHeaders(opts?: { csrf?: boolean }): Record<string, str
   return headers
 }
 
-// Request interceptor to add CSRF token and organization header
-api.interceptors.request.use(
-  (config: InternalAxiosRequestConfig) => {
-    // Add CSRF token on mutating requests (cookie-based auth sends cookies automatically)
-    const method = (config.method || '').toUpperCase()
-    if (method === 'POST' || method === 'PUT' || method === 'DELETE' || method === 'PATCH') {
-      const csrfToken = getCookie('whm_csrf')
-      if (csrfToken) {
-        config.headers['X-CSRF-Token'] = csrfToken
-      }
-    }
-    // Add organization override header for org switching
-    const selectedOrgId = localStorage.getItem('selected_organization_id')
-    if (selectedOrgId) {
-      config.headers['X-Organization-ID'] = selectedOrgId
-    }
-    return config
-  },
-  (error: AxiosError) => {
-    return Promise.reject(error)
-  }
-)
-
 // Token refresh mutex — ensures only one refresh runs at a time.
 // Without this, multiple concurrent 401s each trigger a refresh, but the
 // single-use refresh token (JTI deleted from Redis) causes all but the first
@@ -82,8 +50,15 @@ function onRefreshComplete(success: boolean) {
 // a single tab. Falls back to a plain request where Web Locks is unavailable
 // (older browsers / insecure contexts).
 async function refreshAccessToken(): Promise<void> {
-  const doRefresh = () =>
-    axios.post(`${API_BASE_URL}/auth/refresh`, {}, { withCredentials: true })
+  const doRefresh = async () => {
+    const res = await fetch(`${API_BASE_URL}/auth/refresh`, {
+      method: 'POST',
+      credentials: 'include',
+      headers: { 'Content-Type': 'application/json' },
+      body: '{}',
+    })
+    if (!res.ok) throw new Error(`refresh failed: ${res.status}`)
+  }
 
   if (navigator.locks?.request) {
     await navigator.locks.request('whm-token-refresh', async () => {
@@ -94,11 +69,27 @@ async function refreshAccessToken(): Promise<void> {
   }
 }
 
-// Response interceptor for error handling
-api.interceptors.response.use(
-  (response) => response,
-  async (error: AxiosError) => {
-    const originalRequest = error.config as InternalAxiosRequestConfig & { _retry?: boolean }
+export const api: HttpClient = createHttpClient({
+  baseURL: API_BASE_URL,
+  timeout: 30000,
+  // Add CSRF token on mutating requests and organization header for org switching
+  onRequest: (config: RequestConfig) => {
+    const headers: Record<string, string> = { ...(config.headers || {}) }
+    const method = (config.method || '').toUpperCase()
+    if (method === 'POST' || method === 'PUT' || method === 'DELETE' || method === 'PATCH') {
+      const csrfToken = getCookie('whm_csrf')
+      if (csrfToken) {
+        headers['X-CSRF-Token'] = csrfToken
+      }
+    }
+    const selectedOrgId = localStorage.getItem('selected_organization_id')
+    if (selectedOrgId) {
+      headers['X-Organization-ID'] = selectedOrgId
+    }
+    config.headers = headers
+  },
+  onError: async (error: HttpError, retry) => {
+    const originalRequest = error.config
 
     // Skip token refresh logic for auth endpoints
     const isAuthEndpoint = originalRequest?.url?.startsWith('/auth/')
@@ -112,7 +103,7 @@ api.interceptors.response.use(
         return new Promise((resolve, reject) => {
           refreshSubscribers.push((success: boolean) => {
             if (success) {
-              resolve(api(originalRequest))
+              resolve(retry(originalRequest))
             } else {
               reject(error)
             }
@@ -123,16 +114,9 @@ api.interceptors.response.use(
       isRefreshing = true
 
       try {
-        // Browser sends whm_refresh cookie automatically via withCredentials.
+        // Browser sends whm_refresh cookie automatically (credentials: include).
         // Serialized across tabs via Web Locks to avoid single-use-token races.
         await refreshAccessToken()
-
-        // Cookies are updated by the server response — notify waiting requests
-        onRefreshComplete(true)
-        isRefreshing = false
-
-        // Retry the original request
-        return api(originalRequest)
       } catch {
         // Refresh failed — notify waiting requests and redirect to login
         onRefreshComplete(false)
@@ -142,12 +126,20 @@ api.interceptors.response.use(
         localStorage.removeItem('auth_token')
         localStorage.removeItem('refresh_token')
         window.location.href = basePath + '/login'
+        throw error
       }
+
+      // Cookies are updated by the server response — notify waiting requests
+      onRefreshComplete(true)
+      isRefreshing = false
+
+      // Retry the original request
+      return retry(originalRequest)
     }
 
-    return Promise.reject(error)
-  }
-)
+    throw error
+  },
+})
 
 // API service methods
 export const authService = {
@@ -1244,7 +1236,7 @@ export const ivrFlowsService = {
       headers: { 'Content-Type': 'multipart/form-data' }
     })
   },
-  getAudioUrl: (filename: string) => `${api.defaults.baseURL}/ivr-flows/audio/${encodeURIComponent(filename)}`
+  getAudioUrl: (filename: string) => `${api.baseURL}/ivr-flows/audio/${encodeURIComponent(filename)}`
 }
 
 export default api

@@ -2,13 +2,13 @@
  * API utility functions for handling responses and errors consistently
  */
 
-import type { AxiosResponse, AxiosError } from 'axios'
+import { isHttpError, type HttpResponse } from './http'
 
 /**
  * Unwraps API response data, handling both nested and flat response structures.
  * API responses may come as { data: { data: T } } or { data: T }
  */
-export function unwrapResponse<T>(response: AxiosResponse): T {
+export function unwrapResponse<T>(response: HttpResponse): T {
   const data = response.data
   // Handle nested data structure: { data: { data: T } }
   if (data && typeof data === 'object' && 'data' in data) {
@@ -23,7 +23,7 @@ export function unwrapResponse<T>(response: AxiosResponse): T {
  * Supports: { data: { data: { items: T[] } } }, { data: { items: T[] } }, { data: T[] }
  */
 export function unwrapListResponse<T>(
-  response: AxiosResponse,
+  response: HttpResponse,
   key: string
 ): T[] {
   const data = response.data
@@ -54,7 +54,7 @@ export function unwrapListResponse<T>(
  * Unwraps a single item response, handling various API response formats.
  */
 export function unwrapItemResponse<T>(
-  response: AxiosResponse,
+  response: HttpResponse,
   key?: string
 ): T {
   const data = response.data
@@ -82,15 +82,15 @@ export function unwrapItemResponse<T>(
 
 /**
  * Extracts error message from various error formats.
- * Handles Axios errors, standard errors, and string errors.
+ * Handles HTTP client errors, standard errors, and string errors.
  */
 export function getErrorMessage(error: unknown, defaultMessage = 'An error occurred'): string {
   if (!error) {
     return defaultMessage
   }
 
-  // Handle Axios error with response
-  if (isAxiosError(error)) {
+  // Handle HTTP error with response
+  if (isHttpError(error)) {
     const responseMessage = error.response?.data?.message
     if (responseMessage && typeof responseMessage === 'string') {
       return responseMessage
@@ -114,16 +114,4 @@ export function getErrorMessage(error: unknown, defaultMessage = 'An error occur
   }
 
   return defaultMessage
-}
-
-/**
- * Type guard for Axios errors
- */
-function isAxiosError(error: unknown): error is AxiosError<{ message?: string; errors?: any[] }> {
-  return (
-    typeof error === 'object' &&
-    error !== null &&
-    'isAxiosError' in error &&
-    (error as any).isAxiosError === true
-  )
 }

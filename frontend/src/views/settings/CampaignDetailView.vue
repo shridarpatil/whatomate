@@ -542,7 +542,7 @@ async function loadExistingMedia() {
   if (!campaign.value?.id) return
   try {
     const response = await campaignsService.getMedia(campaign.value.id)
-    const blob = new Blob([response.data], { type: (response.headers as any)['content-type'] })
+    const blob = new Blob([response.data], { type: response.headers.get('content-type') ?? undefined })
     existingMediaUrl.value = URL.createObjectURL(blob)
   } catch {
     existingMediaUrl.value = null

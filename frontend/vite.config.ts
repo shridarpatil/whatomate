@@ -43,7 +43,7 @@ export default defineConfig({
           // Form validation
           'validation': ['vee-validate'],
           // Utilities
-          'utils': ['@vueuse/core', 'axios', 'clsx', 'tailwind-merge', 'class-variance-authority']
+          'utils': ['@vueuse/core', 'clsx', 'tailwind-merge', 'class-variance-authority']
         }
       }
     },
