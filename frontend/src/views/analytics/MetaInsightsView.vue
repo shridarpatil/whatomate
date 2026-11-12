@@ -1,23 +1,13 @@
 <script setup lang="ts">
 import { ref, onMounted, computed, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
-import { Input } from '@/components/ui/input'
+import type { Component } from 'vue'
 import DataTable from '@/components/shared/DataTable.vue'
 import type { Column } from '@/components/shared/types'
-import { ScrollArea } from '@/components/ui/scroll-area'
-import { Skeleton } from '@/components/ui/skeleton'
-import { Button } from '@/components/ui/button'
-import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
-import { Badge } from '@/components/ui/badge'
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue
-} from '@/components/ui/select'
+import Combobox from '@/components/oat/Combobox.vue'
+import type { ComboOption } from '@/components/oat/combobox'
+import LineChart from '@/components/charts/LineChart.vue'
+import BarChart from '@/components/charts/BarChart.vue'
 import {
   metaAnalyticsService,
   type MetaAnalyticsType,
@@ -31,17 +21,7 @@ import {
 } from '@/services/api'
 import { PageHeader, ErrorState, DateRangePicker } from '@/components/shared'
 import {
-  Command,
-  CommandEmpty,
-  CommandGroup,
-  CommandInput,
-  CommandItem,
-  CommandList
-} from '@/components/ui/command'
-import {
   BarChart3,
-  ChevronsUpDown,
-  Check,
   MessageSquare,
   MessagesSquare,
   Wallet,
@@ -54,10 +34,8 @@ import {
   Send,
   CheckCircle,
   Eye,
-  MousePointerClick,
-  Search
+  MousePointerClick
 } from '@/lib/icons'
-import { Line, Bar } from '@/lib/charts'
 import { toast } from '@/lib/toast'
 import { useDateRange } from '@/composables/useDateRange'
 
@@ -70,7 +48,6 @@ const isRefreshing = ref(false)
 const error = ref<string | null>(null)
 const accounts = ref<MetaAnalyticsAccount[]>([])
 const selectedAccountId = ref<string>('all')
-const accountComboboxOpen = ref(false)
 const activeTab = ref<MetaAnalyticsType>('analytics')
 const analyticsData = ref<MetaAnalyticsResponse[]>([])
 
@@ -112,12 +89,23 @@ const saveOtherPreferences = () => {
   localStorage.setItem('meta_insights_active_tab', activeTab.value)
 }
 
-const selectedAccountName = computed(() => {
-  if (selectedAccountId.value === 'all') return t('metaInsights.allAccounts')
-  const account = accounts.value.find(a => a.id === selectedAccountId.value)
-  return account?.name || t('metaInsights.selectAccount')
-})
+const accountOptions = computed<ComboOption[]>(() => [
+  { value: 'all', label: t('metaInsights.allAccounts') },
+  ...accounts.value.map(a => ({ value: a.id, label: a.name }))
+])
 
+const granularityOptions = computed(() => [
+  { value: 'HALF_HOUR', label: t('metaInsights.halfHour') },
+  { value: 'DAY', label: t('metaInsights.daily') },
+  { value: 'MONTH', label: t('metaInsights.monthly') }
+])
+
+const tabs = computed(() => [
+  { value: 'analytics' as MetaAnalyticsType, icon: MessageSquare, label: t('metaInsights.messaging') },
+  { value: 'pricing_analytics' as MetaAnalyticsType, icon: Wallet, label: t('metaInsights.pricing') },
+  { value: 'template_analytics' as MetaAnalyticsType, icon: FileText, label: t('metaInsights.templates') },
+  { value: 'call_analytics' as MetaAnalyticsType, icon: Phone, label: t('metaInsights.calls') }
+])
 
 const fetchAccounts = async () => {
   try {
@@ -514,76 +502,37 @@ function aggregateCallData(points: MetaCallDataPoint[]) {
 }
 
 // Chart data
-const messagingChartData = computed(() => {
+const messagingChart = computed(() => {
   if (!aggregatedData.value || activeTab.value !== 'analytics') {
-    return { labels: [], datasets: [] }
+    return { labels: [] as string[], series: [] }
   }
-
   const data = aggregatedData.value as ReturnType<typeof aggregateMessagingData>
-
   return {
-    labels: data.timeSeries.map(t => formatTimestamp(t.time)),
-    datasets: [
-      {
-        label: t('metaInsights.sent'),
-        data: data.timeSeries.map(d => d.sent),
-        borderColor: 'rgb(59, 130, 246)',
-        backgroundColor: 'rgba(59, 130, 246, 0.1)',
-        fill: true,
-        tension: 0.3
-      },
-      {
-        label: t('metaInsights.delivered'),
-        data: data.timeSeries.map(d => d.delivered),
-        borderColor: 'rgb(16, 185, 129)',
-        backgroundColor: 'rgba(16, 185, 129, 0.1)',
-        fill: true,
-        tension: 0.3
-      }
+    labels: data.timeSeries.map(ts => formatTimestamp(ts.time)),
+    series: [
+      { label: t('metaInsights.sent'), data: data.timeSeries.map(d => d.sent) },
+      { label: t('metaInsights.delivered'), data: data.timeSeries.map(d => d.delivered) }
     ]
   }
 })
 
-function pricingChartDataFor(data: ReturnType<typeof aggregatePricingData>) {
+function pricingChartFor(data: ReturnType<typeof aggregatePricingData>) {
   const categories = Object.entries(data.byCategory)
-
   return {
     labels: categories.map(([cat]) => formatCategory(cat)),
-    datasets: [
-      {
-        label: t('metaInsights.messaging'),
-        data: categories.map(([, val]) => val.volume),
-        backgroundColor: 'rgba(59, 130, 246, 0.8)'
-      },
-      {
-        label: t('metaInsights.cost'),
-        data: categories.map(([, val]) => val.cost),
-        backgroundColor: 'rgba(16, 185, 129, 0.8)'
-      }
+    series: [
+      { label: t('metaInsights.messaging'), data: categories.map(([, val]) => val.volume) },
+      { label: t('metaInsights.cost'), data: categories.map(([, val]) => val.cost) }
     ]
   }
 }
 
-function callChartDataFor(data: ReturnType<typeof aggregateCallData>) {
+function callChartFor(data: ReturnType<typeof aggregateCallData>) {
   return {
     labels: data.timeSeries.map(ts => formatTimestamp(ts.time)),
-    datasets: [
-      {
-        label: t('metaInsights.incoming'),
-        data: data.timeSeries.map(d => d.incoming),
-        borderColor: 'rgb(59, 130, 246)',
-        backgroundColor: 'rgba(59, 130, 246, 0.1)',
-        fill: true,
-        tension: 0.3
-      },
-      {
-        label: t('metaInsights.outgoing'),
-        data: data.timeSeries.map(d => d.outgoing),
-        borderColor: 'rgb(168, 85, 247)',
-        backgroundColor: 'rgba(168, 85, 247, 0.1)',
-        fill: true,
-        tension: 0.3
-      }
+    series: [
+      { label: t('metaInsights.incoming'), data: data.timeSeries.map(d => d.incoming) },
+      { label: t('metaInsights.outgoing'), data: data.timeSeries.map(d => d.outgoing) }
     ]
   }
 }
@@ -623,21 +572,57 @@ function formatDuration(seconds: number): string {
   return remainingMins > 0 ? `${hours}h ${remainingMins}m` : `${hours}h`
 }
 
-const chartOptions = {
-  responsive: true,
-  maintainAspectRatio: false,
-  plugins: {
-    legend: {
-      position: 'bottom' as const
+type StatTile = { key: string; label: string; value: string; icon?: Component; badge?: string }
+
+const messagingTiles = computed<StatTile[]>(() => {
+  const totals = (aggregatedData.value as ReturnType<typeof aggregateMessagingData> | null)?.totals
+  if (!totals) return []
+  return [
+    { key: 'sent', icon: Send, label: t('metaInsights.messagesSent'), value: totals.sent.toLocaleString() },
+    { key: 'delivered', icon: CheckCircle, label: t('metaInsights.messagesDelivered'), value: totals.delivered.toLocaleString() },
+    {
+      key: 'rate',
+      icon: TrendingUp,
+      label: t('metaInsights.deliveryRate'),
+      value: `${totals.sent > 0 ? (totals.delivered / totals.sent * 100).toFixed(1) : 0}%`
     }
-  },
-  scales: {
-    y: {
-      beginAtZero: true
-    }
-  }
+  ]
+})
+
+function pricingTiles(group: { currency: string; agg: ReturnType<typeof aggregatePricingData> }): StatTile[] {
+  return [
+    { key: 'messages', icon: MessagesSquare, label: t('metaInsights.totalMessages'), value: group.agg.totals.volume.toLocaleString() },
+    { key: 'cost', label: t('metaInsights.totalCost'), badge: group.currency, value: formatCurrency(group.agg.totals.cost, group.currency) }
+  ]
 }
 
+function templateTiles(group: { currency: string; agg: ReturnType<typeof aggregateTemplateData> }): StatTile[] {
+  const totals = group.agg.totals
+  return [
+    { key: 'sent', icon: Send, label: t('metaInsights.sent'), value: totals.sent.toLocaleString() },
+    { key: 'delivered', icon: CheckCircle, label: t('metaInsights.delivered'), value: totals.delivered.toLocaleString() },
+    { key: 'read', icon: Eye, label: t('metaInsights.read'), value: totals.read.toLocaleString() },
+    { key: 'replied', icon: MessagesSquare, label: t('metaInsights.replied'), value: totals.replied.toLocaleString() },
+    { key: 'clicked', icon: MousePointerClick, label: t('metaInsights.clicked'), value: totals.clicked.toLocaleString() },
+    {
+      key: 'cost',
+      label: t('metaInsights.totalCost'),
+      badge: group.currency,
+      value: totals.cost > 0 ? formatCurrency(totals.cost, group.currency) : '-'
+    }
+  ]
+}
+
+function callTiles(group: { currency: string; agg: ReturnType<typeof aggregateCallData> }): StatTile[] {
+  const totals = group.agg.totals
+  return [
+    { key: 'calls', icon: Phone, label: t('metaInsights.totalCalls'), value: totals.calls.toLocaleString() },
+    { key: 'incoming', icon: PhoneIncoming, label: t('metaInsights.incoming'), value: totals.incoming.toLocaleString() },
+    { key: 'outgoing', icon: PhoneOutgoing, label: t('metaInsights.outgoing'), value: totals.outgoing.toLocaleString() },
+    { key: 'duration', icon: TrendingUp, label: t('metaInsights.avgDuration'), value: formatDuration(totals.avgDuration) },
+    { key: 'cost', label: t('metaInsights.totalCost'), badge: group.currency, value: formatCurrency(totals.cost, group.currency) }
+  ]
+}
 
 </script>
 
@@ -647,58 +632,22 @@ const chartOptions = {
       :title="$t('metaInsights.title')"
       :description="$t('metaInsights.subtitle')"
       :icon="BarChart3"
-      icon-gradient="bg-gradient-to-br from-green-500 to-emerald-600 shadow-green-500/20"
     >
       <template #actions>
         <!-- Account Filter -->
-        <div class="flex items-center gap-2">
-          <Popover v-model:open="accountComboboxOpen">
-            <PopoverTrigger as-child>
-              <Button variant="outline" role="combobox" :aria-expanded="accountComboboxOpen" class="w-[180px] justify-between">
-                <span class="truncate">{{ selectedAccountName }}</span>
-                <ChevronsUpDown class="ml-2 h-4 w-4 shrink-0 opacity-50" />
-              </Button>
-            </PopoverTrigger>
-            <PopoverContent class="w-[180px] p-0">
-              <Command>
-                <CommandInput :placeholder="$t('metaInsights.searchAccount')" />
-                <CommandList>
-                  <CommandEmpty>{{ $t('metaInsights.noAccountFound') }}</CommandEmpty>
-                  <CommandGroup>
-                    <CommandItem
-                      value="all"
-                      @select="() => { selectedAccountId = 'all'; accountComboboxOpen = false }"
-                    >
-                      <Check :class="['mr-2 h-4 w-4', selectedAccountId === 'all' ? 'opacity-100' : 'opacity-0']" />
-                      {{ $t('metaInsights.allAccounts') }}
-                    </CommandItem>
-                    <CommandItem
-                      v-for="account in accounts"
-                      :key="account.id"
-                      :value="account.name"
-                      @select="() => { selectedAccountId = account.id; accountComboboxOpen = false }"
-                    >
-                      <Check :class="['mr-2 h-4 w-4', selectedAccountId === account.id ? 'opacity-100' : 'opacity-0']" />
-                      {{ account.name }}
-                    </CommandItem>
-                  </CommandGroup>
-                </CommandList>
-              </Command>
-            </PopoverContent>
-          </Popover>
-        </div>
+        <Combobox
+          v-model="selectedAccountId"
+          :options="accountOptions"
+          :placeholder="$t('metaInsights.selectAccount')"
+          :search-placeholder="$t('metaInsights.searchAccount')"
+          :empty-text="$t('metaInsights.noAccountFound')"
+          :aria-label="$t('metaInsights.selectAccount')"
+        />
 
         <!-- Granularity Filter -->
-        <Select v-model="selectedGranularity">
-          <SelectTrigger class="w-[130px]">
-            <SelectValue :placeholder="$t('metaInsights.granularity')" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="HALF_HOUR">{{ $t('metaInsights.halfHour') }}</SelectItem>
-            <SelectItem value="DAY">{{ $t('metaInsights.daily') }}</SelectItem>
-            <SelectItem value="MONTH">{{ $t('metaInsights.monthly') }}</SelectItem>
-          </SelectContent>
-        </Select>
+        <select v-model="selectedGranularity" :aria-label="$t('metaInsights.granularity')">
+          <option v-for="opt in granularityOptions" :key="opt.value" :value="opt.value">{{ opt.label }}</option>
+        </select>
 
         <!-- Time Range Filter -->
         <DateRangePicker
@@ -710,20 +659,26 @@ const chartOptions = {
         />
 
         <!-- Refresh Button -->
-        <Button variant="outline" size="icon" :aria-label="$t('metaInsights.refreshCache')" @click="refreshCache" :disabled="isRefreshing">
-          <RefreshCw :class="['h-4 w-4', isRefreshing && 'animate-spin']" />
-        </Button>
+        <button
+          type="button"
+          class="outline icon"
+          :aria-label="$t('metaInsights.refreshCache')"
+          :title="$t('metaInsights.refreshCache')"
+          :disabled="isRefreshing"
+          :aria-busy="isRefreshing"
+          @click="refreshCache"
+        >
+          <RefreshCw :size="16" />
+        </button>
 
         <!-- Cache indicator -->
-        <Badge v-if="isCached" variant="secondary" class="ml-2">
-          {{ $t('metaInsights.cached') }}
-        </Badge>
+        <span v-if="isCached" class="badge" data-variant="secondary">{{ $t('metaInsights.cached') }}</span>
       </template>
     </PageHeader>
 
     <!-- Content -->
-    <ScrollArea class="flex-1">
-      <div class="p-6 space-y-6">
+    <div class="flex-1 scroll-y p-4">
+      <div class="vstack gap-4">
         <!-- Error State -->
         <ErrorState
           v-if="error && !isLoading"
@@ -734,385 +689,233 @@ const chartOptions = {
         />
 
         <!-- Analytics Type Tabs -->
-        <Tabs v-if="!error" v-model="activeTab" class="w-full">
-          <TabsList class="grid w-full grid-cols-4 lg:w-auto lg:inline-flex">
-            <TabsTrigger value="analytics">
-              <MessageSquare class="h-4 w-4 lg:mr-2" />
-              <span class="hidden lg:inline">{{ $t('metaInsights.messaging') }}</span>
-            </TabsTrigger>
-            <TabsTrigger value="pricing_analytics">
-              <Wallet class="h-4 w-4 lg:mr-2" />
-              <span class="hidden lg:inline">{{ $t('metaInsights.pricing') }}</span>
-            </TabsTrigger>
-            <TabsTrigger value="template_analytics">
-              <FileText class="h-4 w-4 lg:mr-2" />
-              <span class="hidden lg:inline">{{ $t('metaInsights.templates') }}</span>
-            </TabsTrigger>
-            <TabsTrigger value="call_analytics">
-              <Phone class="h-4 w-4 lg:mr-2" />
-              <span class="hidden lg:inline">{{ $t('metaInsights.calls') }}</span>
-            </TabsTrigger>
-          </TabsList>
+        <div v-if="!error">
+          <div role="tablist">
+            <button
+              v-for="tab in tabs"
+              :key="tab.value"
+              type="button"
+              role="tab"
+              :aria-selected="activeTab === tab.value"
+              :title="tab.label"
+              @click="activeTab = tab.value"
+            >
+              <component :is="tab.icon" :size="16" />
+              {{ tab.label }}
+            </button>
+          </div>
 
-          <!-- Messaging Analytics -->
-          <TabsContent value="analytics" class="space-y-6">
-            <template v-if="isLoading">
-              <div class="grid gap-4 md:grid-cols-3">
-                <div v-for="i in 3" :key="i" class="rounded-xl border border-white/[0.08] bg-white/[0.02] p-6 light:bg-white light:border-gray-200">
-                  <Skeleton class="h-4 w-24 mb-2 bg-white/[0.08] light:bg-gray-200" />
-                  <Skeleton class="h-8 w-16 bg-white/[0.08] light:bg-gray-200" />
-                </div>
+          <div role="tabpanel" class="vstack gap-4">
+            <!-- Messaging Analytics -->
+            <template v-if="activeTab === 'analytics'">
+              <template v-if="isLoading">
+                <div class="row">
+              <div v-for="i in 3" :key="i" class="col-4">
+                <article class="card" aria-busy="true">
+                  <div role="status" class="skeleton line"></div>
+                  <div role="status" class="skeleton box"></div>
+                </article>
               </div>
-            </template>
-            <template v-else-if="aggregatedData && activeTab === 'analytics'">
-              <!-- Stats Cards -->
-              <div class="grid gap-4 md:grid-cols-3">
-                <div class="card-depth rounded-xl border border-white/[0.08] bg-white/[0.04] p-6 light:bg-white light:border-gray-200">
-                  <div class="flex flex-row items-center justify-between space-y-0 pb-2">
-                    <span class="text-sm font-medium text-white/50 light:text-gray-500">{{ $t('metaInsights.messagesSent') }}</span>
-                    <div class="h-10 w-10 rounded-lg bg-blue-500/20 flex items-center justify-center">
-                      <Send class="h-5 w-5 text-blue-400" />
+            </div>
+              </template>
+              <template v-else-if="aggregatedData">
+                <div class="row">
+                <div v-for="tile in messagingTiles" :key="tile.key" class="col-4">
+                  <article class="card">
+                    <div class="hstack items-center gap-2 text-light">
+                      <component :is="tile.icon" v-if="tile.icon" :size="16" />
+                      <span v-else class="badge" data-variant="secondary">{{ tile.badge }}</span>
+                      <small>{{ tile.label }}</small>
                     </div>
-                  </div>
-                  <div class="pt-2">
-                    <div class="text-3xl font-bold text-white light:text-gray-900">
-                      {{ (aggregatedData as ReturnType<typeof aggregateMessagingData>).totals.sent.toLocaleString() }}
-                    </div>
-                  </div>
-                </div>
-
-                <div class="card-depth rounded-xl border border-white/[0.08] bg-white/[0.04] p-6 light:bg-white light:border-gray-200">
-                  <div class="flex flex-row items-center justify-between space-y-0 pb-2">
-                    <span class="text-sm font-medium text-white/50 light:text-gray-500">{{ $t('metaInsights.messagesDelivered') }}</span>
-                    <div class="h-10 w-10 rounded-lg bg-emerald-500/20 flex items-center justify-center">
-                      <CheckCircle class="h-5 w-5 text-emerald-400" />
-                    </div>
-                  </div>
-                  <div class="pt-2">
-                    <div class="text-3xl font-bold text-white light:text-gray-900">
-                      {{ (aggregatedData as ReturnType<typeof aggregateMessagingData>).totals.delivered.toLocaleString() }}
-                    </div>
-                  </div>
-                </div>
-
-                <div class="card-depth rounded-xl border border-white/[0.08] bg-white/[0.04] p-6 light:bg-white light:border-gray-200">
-                  <div class="flex flex-row items-center justify-between space-y-0 pb-2">
-                    <span class="text-sm font-medium text-white/50 light:text-gray-500">{{ $t('metaInsights.deliveryRate') }}</span>
-                    <div class="h-10 w-10 rounded-lg bg-purple-500/20 flex items-center justify-center">
-                      <TrendingUp class="h-5 w-5 text-purple-400" />
-                    </div>
-                  </div>
-                  <div class="pt-2">
-                    <div class="text-3xl font-bold text-white light:text-gray-900">
-                      {{ ((aggregatedData as ReturnType<typeof aggregateMessagingData>).totals.sent > 0
-                        ? ((aggregatedData as ReturnType<typeof aggregateMessagingData>).totals.delivered / (aggregatedData as ReturnType<typeof aggregateMessagingData>).totals.sent * 100).toFixed(1)
-                        : 0) }}%
-                    </div>
-                  </div>
+                    <h3>{{ tile.value }}</h3>
+                  </article>
                 </div>
               </div>
 
-              <!-- Chart -->
-              <Card>
-                <CardHeader>
-                  <CardTitle>{{ $t('metaInsights.messageDeliveryOverTime') }}</CardTitle>
-                  <CardDescription>{{ $t('metaInsights.sentVsDelivered') }}</CardDescription>
-                </CardHeader>
-                <CardContent>
-                  <div class="h-80">
-                    <Line v-if="messagingChartData.labels.length > 0" :data="messagingChartData" :options="chartOptions" />
-                    <div v-else class="h-full flex items-center justify-center text-muted-foreground">
-                      {{ $t('metaInsights.noDataForPeriod') }}
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
+                <article class="card">
+                  <h4>{{ $t('metaInsights.messageDeliveryOverTime') }}</h4>
+                  <p class="text-light">{{ $t('metaInsights.sentVsDelivered') }}</p>
+                  <LineChart
+                    v-if="messagingChart.labels.length > 0"
+                    :labels="messagingChart.labels"
+                    :series="messagingChart.series"
+                    :height="320"
+                    :caption="$t('metaInsights.messageDeliveryOverTime')"
+                  />
+                  <p v-else class="text-light">{{ $t('metaInsights.noDataForPeriod') }}</p>
+                </article>
+              </template>
+              <p v-else class="text-light align-center p-4">{{ $t('metaInsights.noMessagingData') }}</p>
             </template>
-            <template v-else>
-              <div class="text-center py-12 text-muted-foreground">
-                {{ $t('metaInsights.noMessagingData') }}
+
+            <!-- Pricing Analytics -->
+            <template v-else-if="activeTab === 'pricing_analytics'">
+              <article v-if="isLoading" class="card" aria-busy="true">
+                <div role="status" class="skeleton box"></div>
+              </article>
+              <template v-else-if="pricingGroups.length">
+                <div v-for="group in pricingGroups" :key="group.currency" class="vstack gap-4">
+                  <div v-if="pricingGroups.length > 1" class="hstack items-center gap-2">
+                <span class="badge outline">{{ group.currency }}</span>
+                <small class="text-light">{{ $t('metaInsights.billedIn') }}</small>
               </div>
-            </template>
-          </TabsContent>
-          <!-- Pricing Analytics -->
-          <TabsContent value="pricing_analytics" class="space-y-6">
-            <template v-if="isLoading">
-              <Skeleton class="h-64 bg-white/[0.08] light:bg-gray-200" />
-            </template>
-            <template v-else-if="pricingGroups.length">
-              <div v-for="group in pricingGroups" :key="group.currency" class="space-y-6">
-                <div v-if="pricingGroups.length > 1" class="flex items-center gap-2">
-                  <Badge variant="outline">{{ group.currency }}</Badge>
-                  <span class="text-sm text-white/50 light:text-gray-500">{{ $t('metaInsights.billedIn') }}</span>
+                  <div class="row">
+                <div v-for="tile in pricingTiles(group)" :key="tile.key" class="col-6">
+                  <article class="card">
+                    <div class="hstack items-center gap-2 text-light">
+                      <component :is="tile.icon" v-if="tile.icon" :size="16" />
+                      <span v-else class="badge" data-variant="secondary">{{ tile.badge }}</span>
+                      <small>{{ tile.label }}</small>
+                    </div>
+                    <h3>{{ tile.value }}</h3>
+                  </article>
                 </div>
-                <!-- Stats Cards -->
-                <div class="grid gap-4 md:grid-cols-2">
-                  <div class="card-depth rounded-xl border border-white/[0.08] bg-white/[0.04] p-6 light:bg-white light:border-gray-200">
-                    <div class="flex flex-row items-center justify-between space-y-0 pb-2">
-                      <span class="text-sm font-medium text-white/50 light:text-gray-500">{{ $t('metaInsights.totalMessages') }}</span>
-                      <div class="h-10 w-10 rounded-lg bg-blue-500/20 flex items-center justify-center">
-                        <MessagesSquare class="h-5 w-5 text-blue-400" />
-                      </div>
-                    </div>
-                    <div class="pt-2">
-                      <div class="text-3xl font-bold text-white light:text-gray-900">
-                        {{ group.agg.totals.volume.toLocaleString() }}
-                      </div>
-                    </div>
-                  </div>
+              </div>
 
-                  <div class="card-depth rounded-xl border border-white/[0.08] bg-white/[0.04] p-6 light:bg-white light:border-gray-200">
-                    <div class="flex flex-row items-center justify-between space-y-0 pb-2">
-                      <span class="text-sm font-medium text-white/50 light:text-gray-500">{{ $t('metaInsights.totalCost') }}</span>
-                      <div class="h-10 w-10 rounded-lg bg-emerald-500/20 flex items-center justify-center">
-                        <span class="text-xs font-semibold text-emerald-400">{{ group.currency }}</span>
-                      </div>
-                    </div>
-                    <div class="pt-2">
-                      <div class="text-3xl font-bold text-white light:text-gray-900">
-                        {{ formatCurrency(group.agg.totals.cost, group.currency) }}
-                      </div>
-                    </div>
-                  </div>
-                </div>
+                  <article class="card">
+                    <h4>{{ $t('metaInsights.messagesCostByCategory') }}</h4>
+                    <p class="text-light">{{ $t('metaInsights.breakdownByCategory') }}</p>
+                    <BarChart
+                      v-if="Object.keys(group.agg.byCategory).length > 0"
+                      :labels="pricingChartFor(group.agg).labels"
+                      :series="pricingChartFor(group.agg).series"
+                      :height="320"
+                      :caption="$t('metaInsights.messagesCostByCategory')"
+                    />
+                    <p v-else class="text-light">{{ $t('metaInsights.noDataForPeriod') }}</p>
+                  </article>
 
-                <!-- Chart -->
-                <Card>
-                  <CardHeader>
-                    <CardTitle>{{ $t('metaInsights.messagesCostByCategory') }}</CardTitle>
-                    <CardDescription>{{ $t('metaInsights.breakdownByCategory') }}</CardDescription>
-                  </CardHeader>
-                  <CardContent>
-                    <div class="h-80">
-                      <Bar v-if="Object.keys(group.agg.byCategory).length > 0" :data="pricingChartDataFor(group.agg)" :options="chartOptions" />
-                      <div v-else class="h-full flex items-center justify-center text-muted-foreground">
-                        {{ $t('metaInsights.noDataForPeriod') }}
-                      </div>
-                    </div>
-                  </CardContent>
-                </Card>
-
-                <!-- Detailed Breakdown -->
-                <div class="grid gap-6 lg:grid-cols-2">
-                  <!-- Free Messages Breakdown -->
-                  <Card>
-                    <CardHeader>
-                      <CardTitle>{{ $t('metaInsights.freeMessages') }}</CardTitle>
-                      <CardDescription>{{ $t('metaInsights.freeTierBreakdown') }}</CardDescription>
-                    </CardHeader>
-                    <CardContent>
-                      <div class="space-y-3">
-                        <div class="flex items-center justify-between py-2 border-b border-white/[0.08] light:border-gray-100">
-                          <span class="text-sm text-white/70 light:text-gray-600">{{ $t('metaInsights.freeCustomerService') }}</span>
-                          <span class="font-semibold text-white light:text-gray-900">{{ group.agg.freeMessages.customerService.toLocaleString() }}</span>
-                        </div>
-                        <div class="flex items-center justify-between py-2 border-b border-white/[0.08] light:border-gray-100">
-                          <span class="text-sm text-white/70 light:text-gray-600">{{ $t('metaInsights.freeEntryPoint') }}</span>
-                          <span class="font-semibold text-white light:text-gray-900">{{ group.agg.freeMessages.entryPoint.toLocaleString() }}</span>
-                        </div>
-                        <div class="flex items-center justify-between py-2 bg-green-500/10 rounded px-2 -mx-2">
-                          <span class="text-sm font-medium text-green-400 light:text-green-600">{{ $t('metaInsights.totalFree') }}</span>
-                          <span class="font-bold text-green-400 light:text-green-600">{{ group.agg.freeMessages.total.toLocaleString() }}</span>
-                        </div>
-                      </div>
-                    </CardContent>
-                  </Card>
-
-                  <!-- Paid Messages by Category -->
-                  <Card>
-                    <CardHeader>
-                      <CardTitle>{{ $t('metaInsights.paidMessages') }}</CardTitle>
-                      <CardDescription>{{ $t('metaInsights.paidBreakdown') }}</CardDescription>
-                    </CardHeader>
-                    <CardContent>
-                      <div class="space-y-3">
-                        <div v-for="(count, category) in group.agg.paidMessages.byCategory" :key="category" class="flex items-center justify-between py-2 border-b border-white/[0.08] light:border-gray-100 last:border-0">
-                          <span class="text-sm text-white/70 light:text-gray-600">{{ formatCategory(category as string) }}</span>
-                          <span class="font-semibold text-white light:text-gray-900">{{ (count as number).toLocaleString() }}</span>
-                        </div>
-                        <div v-if="Object.keys(group.agg.paidMessages.byCategory).length === 0" class="text-center text-white/40 light:text-gray-400 py-4">
-                          {{ $t('metaInsights.noPaidMessages') }}
-                        </div>
-                        <div v-else class="flex items-center justify-between py-2 bg-amber-500/10 rounded px-2 -mx-2">
-                          <span class="text-sm font-medium text-amber-400 light:text-amber-600">{{ $t('metaInsights.totalPaid') }}</span>
-                          <span class="font-bold text-amber-400 light:text-amber-600">{{ group.agg.paidMessages.total.toLocaleString() }}</span>
-                        </div>
-                      </div>
-                    </CardContent>
-                  </Card>
-
-                  <!-- Cost by Category -->
-                  <Card>
-                    <CardHeader>
-                      <CardTitle>{{ $t('metaInsights.costByCategory') }}</CardTitle>
-                      <CardDescription>{{ $t('metaInsights.approximateCharges') }}</CardDescription>
-                    </CardHeader>
-                    <CardContent>
-                      <div class="space-y-3">
-                        <div v-for="(cost, category) in group.agg.costByCategory" :key="category" class="flex items-center justify-between py-2 border-b border-white/[0.08] light:border-gray-100 last:border-0">
-                          <span class="text-sm text-white/70 light:text-gray-600">{{ formatCategory(category as string) }}</span>
-                          <span class="font-semibold text-white light:text-gray-900">{{ formatCurrency(cost as number, group.currency) }}</span>
-                        </div>
-                        <div class="flex items-center justify-between py-2 bg-emerald-500/10 rounded px-2 -mx-2">
-                          <span class="text-sm font-medium text-emerald-400 light:text-emerald-600">{{ $t('metaInsights.totalCost') }}</span>
-                          <span class="font-bold text-emerald-400 light:text-emerald-600">{{ formatCurrency(group.agg.totals.cost, group.currency) }}</span>
-                        </div>
-                      </div>
-                    </CardContent>
-                  </Card>
-
-                  <!-- By Country -->
-                  <Card>
-                    <CardHeader>
-                      <CardTitle>{{ $t('metaInsights.byCountry') }}</CardTitle>
-                      <CardDescription>{{ $t('metaInsights.messagesCostByCountry') }}</CardDescription>
-                    </CardHeader>
-                    <CardContent>
-                      <div class="space-y-3">
-                        <div v-for="(data, country) in group.agg.byCountry" :key="country" class="flex items-center justify-between py-2 border-b border-white/[0.08] light:border-gray-100 last:border-0">
-                          <span class="text-sm text-white/70 light:text-gray-600">{{ country }}</span>
-                          <div class="text-right">
-                            <span class="font-semibold text-white light:text-gray-900">{{ (data as {volume: number, cost: number}).volume.toLocaleString() }} {{ $t('metaInsights.msgs') }}</span>
-                            <span class="text-white/50 light:text-gray-500 ml-2">{{ formatCurrency((data as {volume: number, cost: number}).cost, group.currency) }}</span>
+                  <!-- Detailed Breakdown -->
+                  <div class="row">
+                    <div class="col-6">
+                      <article class="card">
+                        <h4>{{ $t('metaInsights.freeMessages') }}</h4>
+                        <p class="text-light">{{ $t('metaInsights.freeTierBreakdown') }}</p>
+                        <div class="vstack gap-2">
+                          <div class="hstack justify-between items-center gap-2">
+                            <span class="text-light">{{ $t('metaInsights.freeCustomerService') }}</span>
+                            <strong>{{ group.agg.freeMessages.customerService.toLocaleString() }}</strong>
+                          </div>
+                          <div class="hstack justify-between items-center gap-2">
+                            <span class="text-light">{{ $t('metaInsights.freeEntryPoint') }}</span>
+                            <strong>{{ group.agg.freeMessages.entryPoint.toLocaleString() }}</strong>
+                          </div>
+                          <hr />
+                          <div class="hstack justify-between items-center gap-2">
+                            <strong>{{ $t('metaInsights.totalFree') }}</strong>
+                            <span class="badge" data-variant="success">{{ group.agg.freeMessages.total.toLocaleString() }}</span>
                           </div>
                         </div>
-                      </div>
-                    </CardContent>
-                  </Card>
+                      </article>
+                    </div>
+
+                    <div class="col-6">
+                      <article class="card">
+                        <h4>{{ $t('metaInsights.paidMessages') }}</h4>
+                        <p class="text-light">{{ $t('metaInsights.paidBreakdown') }}</p>
+                        <div class="vstack gap-2">
+                          <div v-for="(count, category) in group.agg.paidMessages.byCategory" :key="category" class="hstack justify-between items-center gap-2">
+                            <span class="text-light">{{ formatCategory(category as string) }}</span>
+                            <strong>{{ (count as number).toLocaleString() }}</strong>
+                          </div>
+                          <p v-if="Object.keys(group.agg.paidMessages.byCategory).length === 0" class="text-light">
+                            {{ $t('metaInsights.noPaidMessages') }}
+                          </p>
+                          <template v-else>
+                            <hr />
+                            <div class="hstack justify-between items-center gap-2">
+                              <strong>{{ $t('metaInsights.totalPaid') }}</strong>
+                              <span class="badge" data-variant="warning">{{ group.agg.paidMessages.total.toLocaleString() }}</span>
+                            </div>
+                          </template>
+                        </div>
+                      </article>
+                    </div>
+
+                    <div class="col-6">
+                      <article class="card">
+                        <h4>{{ $t('metaInsights.costByCategory') }}</h4>
+                        <p class="text-light">{{ $t('metaInsights.approximateCharges') }}</p>
+                        <div class="vstack gap-2">
+                          <div v-for="(cost, category) in group.agg.costByCategory" :key="category" class="hstack justify-between items-center gap-2">
+                            <span class="text-light">{{ formatCategory(category as string) }}</span>
+                            <strong>{{ formatCurrency(cost as number, group.currency) }}</strong>
+                          </div>
+                          <hr />
+                          <div class="hstack justify-between items-center gap-2">
+                            <strong>{{ $t('metaInsights.totalCost') }}</strong>
+                            <span class="badge" data-variant="success">{{ formatCurrency(group.agg.totals.cost, group.currency) }}</span>
+                          </div>
+                        </div>
+                      </article>
+                    </div>
+
+                    <div class="col-6">
+                      <article class="card">
+                        <h4>{{ $t('metaInsights.byCountry') }}</h4>
+                        <p class="text-light">{{ $t('metaInsights.messagesCostByCountry') }}</p>
+                        <div class="vstack gap-2">
+                          <div v-for="(data, country) in group.agg.byCountry" :key="country" class="hstack justify-between items-center gap-2">
+                            <span class="text-light">{{ country }}</span>
+                            <span>
+                              <strong>{{ (data as {volume: number, cost: number}).volume.toLocaleString() }} {{ $t('metaInsights.msgs') }}</strong>
+                              <span class="text-light">{{ formatCurrency((data as {volume: number, cost: number}).cost, group.currency) }}</span>
+                            </span>
+                          </div>
+                        </div>
+                      </article>
+                    </div>
+                  </div>
+                </div>
+              </template>
+              <p v-else class="text-light align-center p-4">{{ $t('metaInsights.noPricingData') }}</p>
+            </template>
+
+            <!-- Template Analytics -->
+            <template v-else-if="activeTab === 'template_analytics'">
+              <template v-if="isLoading">
+                <div class="row">
+              <div v-for="i in 3" :key="i" class="col-4">
+                <article class="card" aria-busy="true">
+                  <div role="status" class="skeleton line"></div>
+                  <div role="status" class="skeleton box"></div>
+                </article>
+              </div>
+            </div>
+              </template>
+              <template v-else-if="templateGroups.length">
+                <div v-for="group in templateGroups" :key="group.currency" class="vstack gap-4">
+                  <div v-if="templateGroups.length > 1" class="hstack items-center gap-2">
+                <span class="badge outline">{{ group.currency }}</span>
+                <small class="text-light">{{ $t('metaInsights.billedIn') }}</small>
+              </div>
+                  <div class="row">
+                <div v-for="tile in templateTiles(group)" :key="tile.key" class="col-4">
+                  <article class="card">
+                    <div class="hstack items-center gap-2 text-light">
+                      <component :is="tile.icon" v-if="tile.icon" :size="16" />
+                      <span v-else class="badge" data-variant="secondary">{{ tile.badge }}</span>
+                      <small>{{ tile.label }}</small>
+                    </div>
+                    <h3>{{ tile.value }}</h3>
+                  </article>
                 </div>
               </div>
-            </template>
-            <template v-else>
-              <div class="text-center py-12 text-muted-foreground">
-                {{ $t('metaInsights.noPricingData') }}
-              </div>
-            </template>
-          </TabsContent>
 
-          <!-- Template Analytics -->
-          <TabsContent value="template_analytics" class="space-y-6">
-            <template v-if="isLoading">
-              <div class="grid gap-4 md:grid-cols-3">
-                <div v-for="i in 3" :key="i" class="rounded-xl border border-white/[0.08] bg-white/[0.02] p-6 light:bg-white light:border-gray-200">
-                  <Skeleton class="h-4 w-24 mb-2 bg-white/[0.08] light:bg-gray-200" />
-                  <Skeleton class="h-8 w-16 bg-white/[0.08] light:bg-gray-200" />
-                </div>
-              </div>
-            </template>
-            <template v-else-if="templateGroups.length">
-              <div v-for="group in templateGroups" :key="group.currency" class="space-y-6">
-                <div v-if="templateGroups.length > 1" class="flex items-center gap-2">
-                  <Badge variant="outline">{{ group.currency }}</Badge>
-                  <span class="text-sm text-white/50 light:text-gray-500">{{ $t('metaInsights.billedIn') }}</span>
-                </div>
-                <!-- Stats Cards -->
-                <div class="grid gap-4 md:grid-cols-6">
-                  <div class="card-depth rounded-xl border border-white/[0.08] bg-white/[0.04] p-6 light:bg-white light:border-gray-200">
-                    <div class="flex flex-row items-center justify-between space-y-0 pb-2">
-                      <span class="text-sm font-medium text-white/50 light:text-gray-500">{{ $t('metaInsights.sent') }}</span>
-                      <div class="h-10 w-10 rounded-lg bg-blue-500/20 flex items-center justify-center">
-                        <Send class="h-5 w-5 text-blue-400" />
-                      </div>
-                    </div>
-                    <div class="pt-2">
-                      <div class="text-3xl font-bold text-white light:text-gray-900">
-                        {{ group.agg.totals.sent.toLocaleString() }}
-                      </div>
-                    </div>
-                  </div>
-
-                  <div class="card-depth rounded-xl border border-white/[0.08] bg-white/[0.04] p-6 light:bg-white light:border-gray-200">
-                    <div class="flex flex-row items-center justify-between space-y-0 pb-2">
-                      <span class="text-sm font-medium text-white/50 light:text-gray-500">{{ $t('metaInsights.delivered') }}</span>
-                      <div class="h-10 w-10 rounded-lg bg-emerald-500/20 flex items-center justify-center">
-                        <CheckCircle class="h-5 w-5 text-emerald-400" />
-                      </div>
-                    </div>
-                    <div class="pt-2">
-                      <div class="text-3xl font-bold text-white light:text-gray-900">
-                        {{ group.agg.totals.delivered.toLocaleString() }}
-                      </div>
-                    </div>
-                  </div>
-
-                  <div class="card-depth rounded-xl border border-white/[0.08] bg-white/[0.04] p-6 light:bg-white light:border-gray-200">
-                    <div class="flex flex-row items-center justify-between space-y-0 pb-2">
-                      <span class="text-sm font-medium text-white/50 light:text-gray-500">{{ $t('metaInsights.read') }}</span>
-                      <div class="h-10 w-10 rounded-lg bg-purple-500/20 flex items-center justify-center">
-                        <Eye class="h-5 w-5 text-purple-400" />
-                      </div>
-                    </div>
-                    <div class="pt-2">
-                      <div class="text-3xl font-bold text-white light:text-gray-900">
-                        {{ group.agg.totals.read.toLocaleString() }}
-                      </div>
-                    </div>
-                  </div>
-
-                  <div class="card-depth rounded-xl border border-white/[0.08] bg-white/[0.04] p-6 light:bg-white light:border-gray-200">
-                    <div class="flex flex-row items-center justify-between space-y-0 pb-2">
-                      <span class="text-sm font-medium text-white/50 light:text-gray-500">{{ $t('metaInsights.replied') }}</span>
-                      <div class="h-10 w-10 rounded-lg bg-amber-500/20 flex items-center justify-center">
-                        <MessagesSquare class="h-5 w-5 text-amber-400" />
-                      </div>
-                    </div>
-                    <div class="pt-2">
-                      <div class="text-3xl font-bold text-white light:text-gray-900">
-                        {{ group.agg.totals.replied.toLocaleString() }}
-                      </div>
-                    </div>
-                  </div>
-
-                  <div class="card-depth rounded-xl border border-white/[0.08] bg-white/[0.04] p-6 light:bg-white light:border-gray-200">
-                    <div class="flex flex-row items-center justify-between space-y-0 pb-2">
-                      <span class="text-sm font-medium text-white/50 light:text-gray-500">{{ $t('metaInsights.clicked') }}</span>
-                      <div class="h-10 w-10 rounded-lg bg-cyan-500/20 flex items-center justify-center">
-                        <MousePointerClick class="h-5 w-5 text-cyan-400" />
-                      </div>
-                    </div>
-                    <div class="pt-2">
-                      <div class="text-3xl font-bold text-white light:text-gray-900">
-                        {{ group.agg.totals.clicked.toLocaleString() }}
-                      </div>
-                    </div>
-                  </div>
-
-                  <div class="card-depth rounded-xl border border-white/[0.08] bg-white/[0.04] p-6 light:bg-white light:border-gray-200">
-                    <div class="flex flex-row items-center justify-between space-y-0 pb-2">
-                      <span class="text-sm font-medium text-white/50 light:text-gray-500">{{ $t('metaInsights.totalCost') }}</span>
-                      <div class="h-10 w-10 rounded-lg bg-rose-500/20 flex items-center justify-center">
-                        <span class="text-xs font-semibold text-rose-400">{{ group.currency }}</span>
-                      </div>
-                    </div>
-                    <div class="pt-2">
-                      <div class="text-3xl font-bold text-white light:text-gray-900">
-                        {{ group.agg.totals.cost > 0
-                          ? formatCurrency(group.agg.totals.cost, group.currency)
-                          : '-' }}
-                      </div>
-                    </div>
-                  </div>
-                </div>
-
-                <!-- Template Performance Table -->
-                <Card>
-                  <CardHeader>
-                    <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+                  <!-- Template Performance Table -->
+                  <article class="card">
+                    <header class="hstack justify-between items-center flex-wrap gap-4">
                       <div>
-                        <CardTitle>{{ $t('metaInsights.templatePerformance') }}</CardTitle>
-                        <CardDescription>{{ $t('metaInsights.performanceByTemplate') }}</CardDescription>
+                        <h4>{{ $t('metaInsights.templatePerformance') }}</h4>
+                        <p class="text-light">{{ $t('metaInsights.performanceByTemplate') }}</p>
                       </div>
-                      <div class="relative w-full sm:w-64">
-                        <Search class="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-white/40 light:text-gray-400" />
-                        <Input
-                          v-model="templateSearchQuery"
-                          :placeholder="$t('metaInsights.searchTemplates')"
-                          class="pl-9"
-                        />
-                      </div>
-                    </div>
-                  </CardHeader>
-                  <CardContent>
+                      <input
+                        v-model="templateSearchQuery"
+                        type="search"
+                        :placeholder="$t('metaInsights.searchTemplates')"
+                        :aria-label="$t('metaInsights.searchTemplates')"
+                      />
+                    </header>
                     <DataTable
                       :items="filteredTemplateRows(group.agg)"
                       :columns="templateColumns"
@@ -1122,8 +925,8 @@ const chartOptions = {
                       :empty-description="templateSearchQuery ? '' : $t('metaInsights.noDataForSelectedPeriod')"
                     >
                       <template #cell-name="{ item }">
-                        <div class="font-medium">{{ item.name }}</div>
-                        <div v-if="item.name !== item.templateId" class="text-xs text-muted-foreground font-mono">{{ item.templateId }}</div>
+                        <strong>{{ item.name }}</strong>
+                        <div v-if="item.name !== item.templateId"><small class="text-light"><code>{{ item.templateId }}</code></small></div>
                       </template>
                       <template #cell-sent="{ item }">
                         {{ item.sent.toLocaleString() }}
@@ -1150,130 +953,61 @@ const chartOptions = {
                         {{ item.cost > 0 ? formatCurrency(item.cost, group.currency) : '-' }}
                       </template>
                     </DataTable>
-                  </CardContent>
-                </Card>
-              </div>
+                  </article>
+                </div>
+              </template>
+              <p v-else class="text-light align-center p-4">{{ $t('metaInsights.noTemplateAnalytics') }}</p>
             </template>
-            <template v-else>
-              <div class="text-center py-12 text-muted-foreground">
-                {{ $t('metaInsights.noTemplateAnalytics') }}
-              </div>
-            </template>
-          </TabsContent>
 
-          <!-- Call Analytics -->
-          <TabsContent value="call_analytics" class="space-y-6">
-            <template v-if="isLoading">
-              <div class="grid gap-4 md:grid-cols-2">
-                <div v-for="i in 2" :key="i" class="rounded-xl border border-white/[0.08] bg-white/[0.02] p-6 light:bg-white light:border-gray-200">
-                  <Skeleton class="h-4 w-24 mb-2 bg-white/[0.08] light:bg-gray-200" />
-                  <Skeleton class="h-8 w-16 bg-white/[0.08] light:bg-gray-200" />
+            <!-- Call Analytics -->
+            <template v-else-if="activeTab === 'call_analytics'">
+              <template v-if="isLoading">
+                <div class="row">
+              <div v-for="i in 2" :key="i" class="col-6">
+                <article class="card" aria-busy="true">
+                  <div role="status" class="skeleton line"></div>
+                  <div role="status" class="skeleton box"></div>
+                </article>
+              </div>
+            </div>
+              </template>
+              <template v-else-if="callGroups.length">
+                <div v-for="group in callGroups" :key="group.currency" class="vstack gap-4">
+                  <div v-if="callGroups.length > 1" class="hstack items-center gap-2">
+                <span class="badge outline">{{ group.currency }}</span>
+                <small class="text-light">{{ $t('metaInsights.billedIn') }}</small>
+              </div>
+                  <div class="row">
+                <div v-for="tile in callTiles(group)" :key="tile.key" class="col-4">
+                  <article class="card">
+                    <div class="hstack items-center gap-2 text-light">
+                      <component :is="tile.icon" v-if="tile.icon" :size="16" />
+                      <span v-else class="badge" data-variant="secondary">{{ tile.badge }}</span>
+                      <small>{{ tile.label }}</small>
+                    </div>
+                    <h3>{{ tile.value }}</h3>
+                  </article>
                 </div>
               </div>
-            </template>
-            <template v-else-if="callGroups.length">
-              <div v-for="group in callGroups" :key="group.currency" class="space-y-6">
-                <div v-if="callGroups.length > 1" class="flex items-center gap-2">
-                  <Badge variant="outline">{{ group.currency }}</Badge>
-                  <span class="text-sm text-white/50 light:text-gray-500">{{ $t('metaInsights.billedIn') }}</span>
+
+                  <article class="card">
+                    <h4>{{ $t('metaInsights.callsOverTime') }}</h4>
+                    <LineChart
+                      v-if="group.agg.timeSeries.length > 0"
+                      :labels="callChartFor(group.agg).labels"
+                      :series="callChartFor(group.agg).series"
+                      :height="320"
+                      :caption="$t('metaInsights.callsOverTime')"
+                    />
+                    <p v-else class="text-light">{{ $t('metaInsights.noDataForPeriod') }}</p>
+                  </article>
                 </div>
-                <!-- Stats Cards -->
-                <div class="grid gap-4 md:grid-cols-5">
-                  <div class="card-depth rounded-xl border border-white/[0.08] bg-white/[0.04] p-6 light:bg-white light:border-gray-200">
-                    <div class="flex flex-row items-center justify-between space-y-0 pb-2">
-                      <span class="text-sm font-medium text-white/50 light:text-gray-500">{{ $t('metaInsights.totalCalls') }}</span>
-                      <div class="h-10 w-10 rounded-lg bg-blue-500/20 flex items-center justify-center">
-                        <Phone class="h-5 w-5 text-blue-400" />
-                      </div>
-                    </div>
-                    <div class="pt-2">
-                      <div class="text-3xl font-bold text-white light:text-gray-900">
-                        {{ group.agg.totals.calls.toLocaleString() }}
-                      </div>
-                    </div>
-                  </div>
-
-                  <div class="card-depth rounded-xl border border-white/[0.08] bg-white/[0.04] p-6 light:bg-white light:border-gray-200">
-                    <div class="flex flex-row items-center justify-between space-y-0 pb-2">
-                      <span class="text-sm font-medium text-white/50 light:text-gray-500">{{ $t('metaInsights.incoming') }}</span>
-                      <div class="h-10 w-10 rounded-lg bg-blue-500/20 flex items-center justify-center">
-                        <PhoneIncoming class="h-5 w-5 text-blue-400" />
-                      </div>
-                    </div>
-                    <div class="pt-2">
-                      <div class="text-3xl font-bold text-white light:text-gray-900">
-                        {{ group.agg.totals.incoming.toLocaleString() }}
-                      </div>
-                    </div>
-                  </div>
-
-                  <div class="card-depth rounded-xl border border-white/[0.08] bg-white/[0.04] p-6 light:bg-white light:border-gray-200">
-                    <div class="flex flex-row items-center justify-between space-y-0 pb-2">
-                      <span class="text-sm font-medium text-white/50 light:text-gray-500">{{ $t('metaInsights.outgoing') }}</span>
-                      <div class="h-10 w-10 rounded-lg bg-purple-500/20 flex items-center justify-center">
-                        <PhoneOutgoing class="h-5 w-5 text-purple-400" />
-                      </div>
-                    </div>
-                    <div class="pt-2">
-                      <div class="text-3xl font-bold text-white light:text-gray-900">
-                        {{ group.agg.totals.outgoing.toLocaleString() }}
-                      </div>
-                    </div>
-                  </div>
-
-                  <div class="card-depth rounded-xl border border-white/[0.08] bg-white/[0.04] p-6 light:bg-white light:border-gray-200">
-                    <div class="flex flex-row items-center justify-between space-y-0 pb-2">
-                      <span class="text-sm font-medium text-white/50 light:text-gray-500">{{ $t('metaInsights.avgDuration') }}</span>
-                      <div class="h-10 w-10 rounded-lg bg-emerald-500/20 flex items-center justify-center">
-                        <TrendingUp class="h-5 w-5 text-emerald-400" />
-                      </div>
-                    </div>
-                    <div class="pt-2">
-                      <div class="text-3xl font-bold text-white light:text-gray-900">
-                        {{ formatDuration(group.agg.totals.avgDuration) }}
-                      </div>
-                    </div>
-                  </div>
-
-                  <div class="card-depth rounded-xl border border-white/[0.08] bg-white/[0.04] p-6 light:bg-white light:border-gray-200">
-                    <div class="flex flex-row items-center justify-between space-y-0 pb-2">
-                      <span class="text-sm font-medium text-white/50 light:text-gray-500">{{ $t('metaInsights.totalCost') }}</span>
-                      <div class="h-10 w-10 rounded-lg bg-amber-500/20 flex items-center justify-center">
-                        <span class="text-xs font-semibold text-amber-400">{{ group.currency }}</span>
-                      </div>
-                    </div>
-                    <div class="pt-2">
-                      <div class="text-3xl font-bold text-white light:text-gray-900">
-                        {{ formatCurrency(group.agg.totals.cost, group.currency) }}
-                      </div>
-                    </div>
-                  </div>
-                </div>
-
-                <!-- Chart -->
-                <Card>
-                  <CardHeader>
-                    <CardTitle>{{ $t('metaInsights.callsOverTime') }}</CardTitle>
-                  </CardHeader>
-                  <CardContent>
-                    <div class="h-80">
-                      <Line v-if="group.agg.timeSeries.length > 0" :data="callChartDataFor(group.agg)" :options="chartOptions" />
-                      <div v-else class="h-full flex items-center justify-center text-muted-foreground">
-                        {{ $t('metaInsights.noDataForPeriod') }}
-                      </div>
-                    </div>
-                  </CardContent>
-                </Card>
-              </div>
+              </template>
+              <p v-else class="text-light align-center p-4">{{ $t('metaInsights.noCallAnalytics') }}</p>
             </template>
-            <template v-else>
-              <div class="text-center py-12 text-muted-foreground">
-                {{ $t('metaInsights.noCallAnalytics') }}
-              </div>
-            </template>
-          </TabsContent>
-        </Tabs>
+          </div>
+        </div>
       </div>
-    </ScrollArea>
+    </div>
   </div>
 </template>

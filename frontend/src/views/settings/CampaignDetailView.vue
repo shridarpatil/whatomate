@@ -1062,7 +1062,7 @@ onUnmounted(() => {
       <header>
         <h3>{{ $t('campaigns.statistics', 'Statistics') }}</h3>
       </header>
-      <div class="hstack gap-4">
+      <div class="hstack gap-4 flex-wrap">
         <div class="vstack items-center gap-1 flex-1">
           <Users :size="16" />
           <strong>{{ campaign.total_recipients }}</strong>

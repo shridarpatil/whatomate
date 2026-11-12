@@ -253,7 +253,7 @@ function getProgressPercentage(campaign: Campaign): number {
             <p class="text-light">{{ $t('campaigns.yourCampaignsDesc') }}</p>
           </div>
           <div class="hstack items-center gap-2 flex-wrap">
-            <select v-model="filterStatus" :aria-label="$t('campaigns.allStatuses')">
+            <select v-model="filterStatus" :aria-label="$t('campaigns.status')">
               <option v-for="opt in statusOptions" :key="opt.value" :value="opt.value">{{ opt.label }}</option>
             </select>
             <DateRangePicker
