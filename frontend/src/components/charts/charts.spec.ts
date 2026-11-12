@@ -44,13 +44,13 @@ describe('LineChart', () => {
     expect(root.querySelector('ul')).toBeNull()
     // minimal single-series look: no markers, soft area fill, no y tick labels
     expect(root.querySelectorAll('path[stroke="var(--background)"]').length).toBe(0)
-    expect(root.querySelector('path[fill-opacity="0.12"]')).toBeTruthy()
+    expect(root.querySelector('path[fill-opacity="0.1"]')).toBeTruthy()
     expect(root.querySelectorAll('text[text-anchor="end"]').length).toBe(0)
   })
   it('draws markers, no area and y tick labels for multiple series', () => {
     const root = mount(LineChart, { labels, series: two })
     expect(root.querySelectorAll('path[stroke="var(--background)"]').length).toBeGreaterThanOrEqual(6)
-    expect(root.querySelector('path[fill-opacity="0.12"]')).toBeNull()
+    expect(root.querySelector('path[fill-opacity="0.1"]')).toBeNull()
     expect(root.querySelectorAll('text[text-anchor="end"]').length).toBeGreaterThan(0)
   })
   it('shows a tooltip on focus', async () => {
@@ -72,6 +72,10 @@ describe('LineChart', () => {
 })
 
 describe('BarChart', () => {
+  it('colours single-series bars per point when pointColors is given', () => {
+    const root = mount(BarChart, { labels, series: [two[0]], pointColors: ['red', 'green', 'blue'] })
+    expect([...root.querySelectorAll('path[data-bar]')].map(p => p.getAttribute('fill'))).toEqual(['red', 'green', 'blue'])
+  })
   it('draws series x labels bars grouped and one per series stacked', () => {
     expect(mount(BarChart, { labels, series: two }).querySelectorAll('path[data-bar]').length).toBe(6)
     el!.remove()
@@ -93,6 +97,10 @@ describe('BarChart', () => {
 })
 
 describe('PieChart', () => {
+  it('uses explicit slice colours when given', () => {
+    const root = mount(PieChart, { labels: ['x', 'y'], values: [1, 2], colors: ['red', 'blue'] })
+    expect([...root.querySelectorAll('svg path')].map(p => p.getAttribute('fill'))).toEqual(['red', 'blue'])
+  })
   it('draws a slice per non-zero value with a legend', () => {
     const root = mount(PieChart, { labels: ['x', 'y', 'z'], values: [1, 2, 0] })
     expect(root.querySelectorAll('svg path').length).toBe(2)

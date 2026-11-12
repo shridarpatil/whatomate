@@ -15,6 +15,7 @@ const props = withDefaults(defineProps<{
   series: ChartSeries[]
   height?: number
   stacked?: boolean
+  pointColors?: string[] // single series only: one colour per bar
   formatValue?: (v: number) => string
   caption?: string
 }>(), { height: 240 })
@@ -116,7 +117,7 @@ const groups = computed(() => props.labels.map((_, i) => {
         y: Math.min(yv, baseline.value),
         width: bw,
         height: Math.abs(baseline.value - yv),
-        color: items.value[si].color,
+        color: (k === 1 && props.pointColors?.[i]) || items.value[si].color,
         round: v < 0 ? 'bottom' : 'top',
       })
     })

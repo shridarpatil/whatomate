@@ -123,7 +123,7 @@ const tableCells = computed(() => props.labels.map((_, i) => folded.value.map(s 
           </g>
           <line v-if="active !== null" :x1="xs[active]" :x2="xs[active]" :y1="plot.y0" :y2="plot.y1" stroke="var(--muted-foreground)" stroke-width="1" />
           <g v-for="(l, si) in lines" :key="si">
-            <path v-if="(fill || single) && l.area" :d="l.area" :fill="l.color" fill-opacity="0.12" stroke="none" />
+            <path v-if="(fill || single) && l.area" :d="l.area" :fill="l.color" fill-opacity="0.1" stroke="none" />
             <path :d="l.d" fill="none" :stroke="l.color" stroke-width="2" stroke-linejoin="round" stroke-linecap="round" :stroke-dasharray="l.dash || undefined" />
             <template v-for="(p, i) in l.pts" :key="i">
               <ChartMarker v-if="!single && (i % markerStep === 0 || i === active)" :shape="l.marker" :x="p[0]" :y="p[1]" :size="MARKER_SIZE" :color="l.color" />

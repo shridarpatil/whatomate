@@ -132,15 +132,12 @@ const colorOptions = computed(() => [
   { value: 'cyan', label: t('dashboard.colorCyan') }
 ])
 
-const WIDGET_COLORS: Record<string, string> = {
-  blue: 'var(--primary)',
-  cyan: 'var(--primary)',
-  green: 'var(--success)',
-  orange: 'var(--warning)',
-  red: 'var(--danger)',
-  purple: 'var(--muted-foreground)'
-}
-const widgetColor = (color: string) => WIDGET_COLORS[color] || WIDGET_COLORS.blue
+// Chart colours are CSS variables (theme.css): --widget-chart follows the card's
+// data-widget-color; --chart-1..8 is the classic categorical palette.
+const WIDGET_LINE = 'var(--widget-chart)'
+const WIDGET_BAR = 'color-mix(in srgb, var(--widget-chart) 80%, transparent)'
+const CHART_PALETTE = Array.from({ length: 8 }, (_, i) => `var(--chart-${i + 1})`)
+const paletteColor = (i: number) => CHART_PALETTE[i % CHART_PALETTE.length]
 
 // Chart type options
 const chartTypeOptions = computed(() => [
@@ -170,7 +167,7 @@ const getChart = (widget: DashboardWidget): WidgetChart => {
     return {
       ...empty,
       labels: groupedSeries.labels,
-      series: groupedSeries.datasets.map(ds => ({ label: ds.label, data: ds.data }))
+      series: groupedSeries.datasets.map((ds, i) => ({ label: ds.label, data: ds.data, color: paletteColor(i) }))
     }
   }
 
@@ -180,11 +177,14 @@ const getChart = (widget: DashboardWidget): WidgetChart => {
     return { ...empty, labels: source.map(d => d.label), values: source.map(d => d.value) }
   }
 
-  const source = kind === 'bar' && dataPoints.length > 0 ? dataPoints : chartData
+  const grouped = kind === 'bar' && dataPoints.length > 0
+  const source = grouped ? dataPoints : chartData
   return {
     ...empty,
     labels: source.map(d => d.label),
-    series: [{ label: widget.name, data: source.map(d => d.value), color: widgetColor(widget.color) }]
+    series: [{ label: widget.name, data: source.map(d => d.value), color: kind === 'bar' ? WIDGET_BAR : WIDGET_LINE }],
+    // Grouped bars get one palette colour per category (old Chart.js look).
+    values: grouped ? source.map(d => d.value) : []
   }
 }
 
@@ -279,9 +279,16 @@ const items = computed(() => order.value.flatMap((p, index) => {
 }))
 
 const colSpan = (w: number) => Math.min(12, Math.max(1, Math.round(w)))
-const minHeight = (h: number) => `${h * GRID_ROW_HEIGHT}px`
-const chartHeight = (h: number) => Math.max(160, h * GRID_ROW_HEIGHT - 90)
-const bodyMaxHeight = (h: number) => `${Math.max(120, h * GRID_ROW_HEIGHT - 80)}px`
+// Same pixel height as the old grid-layout-plus item: h rows of 40px plus 16px margins between them.
+const GRID_MARGIN = 16
+const widgetHeight = (h: number) => h * GRID_ROW_HEIGHT + (h - 1) * GRID_MARGIN
+// Chart area = card minus padding (2 x 24), header tile (40) and gap (16); the
+// "show data" toggle (18) sits below it.
+const chartArea = (h: number) => Math.max(100, widgetHeight(h) - 104 - 18)
+// Line/bar: SVG height (multi-series lines also show a ~24px legend on top).
+const chartHeight = (h: number, multi = false) => chartArea(h) - (multi ? 24 : 0)
+// Pie: diameter leaves room for the legend row below it.
+const pieSize = (h: number) => `${Math.max(80, chartArea(h) - 28)}px`
 
 // Rebuild order when widgets change
 watch(widgets, (val) => {
@@ -618,7 +625,7 @@ onMounted(() => {
           v-for="{ p, widget, index } in items"
           :key="widget.id"
           :class="`col-${colSpan(p.w)}`"
-          :style="{ minHeight: minHeight(p.h) }"
+          :style="{ height: `${widgetHeight(p.h)}px` }"
           data-testid="dashboard-widget"
         >
           <article
@@ -630,7 +637,7 @@ onMounted(() => {
             <header class="hstack items-center gap-2">
               <div class="flex-1 min-w-0">
                 <h4 class="truncate">{{ widget.name }}</h4>
-                <small v-if="widget.description" class="text-light">{{ widget.description }}</small>
+                <small v-if="widget.description && !isNumberWidget(widget)" class="text-light">{{ widget.description }}</small>
               </div>
 
               <div v-if="isReorderMode" class="hstack gap-1">
@@ -707,30 +714,34 @@ onMounted(() => {
             <!-- Chart -->
             <template v-else-if="isChartWidget(widget)">
               <div v-if="isWidgetDataLoading" role="status" class="skeleton box" aria-busy="true"></div>
-              <template v-else-if="hasChartData(widget.id)">
+              <div
+                v-else-if="hasChartData(widget.id)"
+                class="flex-1 min-h-0 scroll-y"
+                data-widget-chart
+                :style="{ '--pie-size': pieSize(p.h) }"
+              >
                 <template v-for="chart in [getChart(widget)]" :key="chart.kind">
                   <LineChart
                     v-if="chart.kind === 'line'"
                     :labels="chart.labels"
                     :series="chart.series"
-                    :height="chartHeight(p.h)"
-                    :caption="widget.name"
+                    :height="chartHeight(p.h, chart.series.length > 1)"
                   />
                   <BarChart
                     v-else-if="chart.kind === 'bar'"
                     :labels="chart.labels"
                     :series="chart.series"
+                    :point-colors="chart.values.length ? chart.values.map((_, i) => paletteColor(i)) : undefined"
                     :height="chartHeight(p.h)"
-                    :caption="widget.name"
                   />
                   <PieChart
                     v-else
                     :labels="chart.labels"
                     :values="chart.values"
-                    :caption="widget.name"
+                    :colors="CHART_PALETTE"
                   />
                 </template>
-              </template>
+              </div>
               <p v-else class="text-light">{{ $t('common.noData') }}</p>
             </template>
 
@@ -740,8 +751,7 @@ onMounted(() => {
               <!-- Grouped table (group_by set) -->
               <div
                 v-else-if="widget.group_by_field && widgetData[widget.id]?.data_points?.length"
-                class="table scroll-y"
-                :style="{ maxHeight: bodyMaxHeight(p.h) }"
+                class="table scroll-y flex-1 min-h-0"
               >
                 <table>
                   <thead>
@@ -761,8 +771,8 @@ onMounted(() => {
               <!-- Row list (no group_by) -->
               <ul
                 v-else-if="widgetData[widget.id]?.table_rows?.length"
-                class="unstyled vstack gap-2 scroll-y"
-                :style="{ maxHeight: bodyMaxHeight(p.h) }"
+                class="unstyled vstack gap-2 scroll-y flex-1 min-h-0"
+                data-widget-rows
               >
                 <li v-for="row in widgetData[widget.id]?.table_rows" :key="row.id" class="hstack gap-2" data-widget-row>
                   <figure data-variant="avatar" :data-direction="row.direction" :aria-label="row.label">
@@ -778,11 +788,12 @@ onMounted(() => {
                     </div>
                     <p class="text-light truncate">{{ row.sub_label }}</p>
                     <div class="hstack gap-2">
-                      <span v-if="row.direction" class="badge" :data-variant="row.direction === 'incoming' ? 'success' : 'secondary'">{{ row.direction }}</span>
+                      <span v-if="row.direction" class="badge" :data-variant="row.direction === 'incoming' ? 'success' : 'secondary'" :data-pill="row.direction === 'incoming' ? 'green' : 'blue'">{{ row.direction }}</span>
                       <span
                         v-if="row.status"
                         class="badge"
                         :data-variant="row.status === 'read' ? 'success' : row.status === 'failed' ? 'danger' : 'secondary'"
+                        :data-pill="row.status === 'delivered' ? 'blue' : row.status === 'read' ? 'green' : row.status === 'failed' ? 'red' : 'grey'"
                       >{{ row.status }}</span>
                     </div>
                   </div>
@@ -794,8 +805,8 @@ onMounted(() => {
             <!-- Shortcuts -->
             <div
               v-else
-              class="row scroll-y"
-              :style="{ maxHeight: bodyMaxHeight(p.h) }"
+              class="row scroll-y flex-1 min-h-0"
+              data-shortcut-grid
             >
               <template v-for="key in (widget.config?.shortcuts || [])" :key="key">
                 <div
