@@ -2144,7 +2144,13 @@
     "sectionLabelPlaceholder": "लेबल",
     "addFieldPlaceholder": "+ जोड़ें",
     "exampleUrlPlaceholder": "https://...",
-    "dataPathPlaceholder": "path"
+    "dataPathPlaceholder": "path",
+    "previewTitle": "Flow preview",
+    "previewStart": "Start",
+    "previewPause": "Pause",
+    "previewRestart": "Restart",
+    "previewStepForward": "Step forward",
+    "previewStepBack": "Step back"
   },
   "calling": {
     "callLogs": "कॉल लॉग्स",

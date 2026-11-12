@@ -2157,7 +2157,13 @@
     "sectionLabelPlaceholder": "Etiqueta de sección",
     "addFieldPlaceholder": "+ Agregar",
     "exampleUrlPlaceholder": "https://ejemplo.com",
-    "dataPathPlaceholder": "data.ruta"
+    "dataPathPlaceholder": "data.ruta",
+    "previewTitle": "Flow preview",
+    "previewStart": "Start",
+    "previewPause": "Pause",
+    "previewRestart": "Restart",
+    "previewStepForward": "Step forward",
+    "previewStepBack": "Step back"
   },
   "calling": {
     "callLogs": "Registro de llamadas",

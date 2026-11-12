@@ -71,32 +71,33 @@ function handleKeydown(event: KeyboardEvent) {
 </script>
 
 <template>
-  <div class="bg-[#f0f2f5] dark:bg-[#202c33] px-3 py-2 flex items-center gap-2">
-    <div class="flex-1 bg-white dark:bg-[#2a3942] rounded-full px-4 py-2">
-      <input
-        v-if="isEnabled"
-        v-model="inputValue"
-        :type="inputTypeAttr"
-        :placeholder="inputPlaceholder"
-        class="w-full text-sm bg-transparent border-none outline-none text-gray-800 dark:text-gray-200 placeholder:text-gray-400"
-        @keydown="handleKeydown"
-      />
-      <p v-else class="text-sm text-gray-400">
-        {{ disabled ? 'Waiting...' : 'Type a message' }}
-      </p>
-    </div>
+  <form class="hstack gap-2" @submit.prevent="handleSubmit">
+    <input
+      v-if="isEnabled"
+      v-model="inputValue"
+      class="flex-1 min-w-0"
+      :type="inputTypeAttr"
+      :placeholder="inputPlaceholder"
+      :aria-label="inputPlaceholder"
+      @keydown="handleKeydown"
+    >
+    <input
+      v-else
+      class="flex-1 min-w-0"
+      disabled
+      :placeholder="disabled ? 'Waiting...' : 'Type a message'"
+      :aria-label="disabled ? 'Waiting...' : 'Type a message'"
+    >
 
     <button
-      class="w-10 h-10 rounded-full flex items-center justify-center transition-colors"
-      :class="{
-        'bg-[#00a884] hover:bg-[#008f6d] cursor-pointer': isEnabled && inputString,
-        'bg-gray-300 dark:bg-gray-600 cursor-not-allowed': !isEnabled || !inputString
-      }"
+      type="submit"
+      class="icon"
       :disabled="!isEnabled || !inputString"
-      @click="handleSubmit"
+      :aria-label="$t('chat.send')"
+      :title="$t('chat.send')"
     >
-      <Send v-if="inputString" class="h-5 w-5 text-white" />
-      <Mic v-else class="h-5 w-5 text-white" />
+      <Send v-if="inputString" />
+      <Mic v-else />
     </button>
-  </div>
+  </form>
 </template>

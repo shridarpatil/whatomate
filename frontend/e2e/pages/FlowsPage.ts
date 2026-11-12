@@ -325,8 +325,8 @@ export class ChatbotFlowBuilderPage extends BasePage {
 
   constructor(page: Page) {
     super(page)
-    // The "Add node:" label uniquely identifies the palette row.
-    this.paletteToolbar = page.locator('div', { hasText: /^Add node:/ }).first()
+    // The palette row is a toolbar labelled by its "Add node:" caption.
+    this.paletteToolbar = page.getByRole('toolbar', { name: /Add node/ })
   }
 
   async gotoNew() {
@@ -376,11 +376,11 @@ export class ChatbotFlowBuilderPage extends BasePage {
 
   /** All per-button config cards inside the right panel. */
   get buttonCards() {
-    return this.page.locator('.p-2.border.rounded-md.space-y-2')
+    return this.page.locator('main [data-button-config]')
   }
 
   /** Delete button on a per-button card. */
   getButtonDeleteButton(index: number) {
-    return this.buttonCards.nth(index).locator('button').filter({ has: this.page.locator('.text-destructive') })
+    return this.buttonCards.nth(index).getByRole('button', { name: 'Delete' })
   }
 }

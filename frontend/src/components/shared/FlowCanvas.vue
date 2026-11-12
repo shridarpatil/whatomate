@@ -39,7 +39,7 @@ defineEmits<{
 </script>
 
 <template>
-  <div class="flow-canvas h-full relative">
+  <div class="h-full relative">
     <VueFlow
       :nodes="nodes"
       :edges="edges"
@@ -70,7 +70,7 @@ defineEmits<{
       @edges-change="$emit('edges-change', $event)"
     >
       <Background
-        pattern-color="hsl(var(--sh-muted-foreground) / 0.15)"
+        pattern-color="var(--border)"
         :gap="20"
         :size="1"
         variant="dots"

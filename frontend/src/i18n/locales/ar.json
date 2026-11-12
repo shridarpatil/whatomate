@@ -2142,7 +2142,13 @@
     "sectionLabelPlaceholder": "تسمية القسم",
     "addFieldPlaceholder": "+ إضافة",
     "exampleUrlPlaceholder": "https://example.com",
-    "dataPathPlaceholder": "data.path"
+    "dataPathPlaceholder": "data.path",
+    "previewTitle": "Flow preview",
+    "previewStart": "Start",
+    "previewPause": "Pause",
+    "previewRestart": "Restart",
+    "previewStepForward": "Step forward",
+    "previewStepBack": "Step back"
   },
   "calling": {
     "callLogs": "سجلات المكالمات",

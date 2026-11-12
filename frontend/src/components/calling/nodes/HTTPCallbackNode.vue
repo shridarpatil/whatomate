@@ -21,8 +21,8 @@ const outputHandles = [
 </script>
 
 <template>
-  <BaseNode :label="data?.label || 'HTTP Callback'" header-class="bg-orange-600" :output-handles="outputHandles" :has-input="!data?.isEntryNode">
-    <template #icon><Globe class="w-4 h-4" /></template>
-    <p class="truncate font-mono text-[10px]">{{ summary }}</p>
+  <BaseNode :label="data?.label || 'HTTP Callback'" :output-handles="outputHandles" :has-input="!data?.isEntryNode">
+    <template #icon><Globe /></template>
+    <small class="truncate"><code>{{ summary }}</code></small>
   </BaseNode>
 </template>

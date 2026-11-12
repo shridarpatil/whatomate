@@ -2416,7 +2416,13 @@
     "sectionLabelPlaceholder": "Rótulo de Seção",
     "addFieldPlaceholder": "+ Adicionar",
     "exampleUrlPlaceholder": "https://exemplo.com",
-    "dataPathPlaceholder": "data.path"
+    "dataPathPlaceholder": "data.path",
+    "previewTitle": "Flow preview",
+    "previewStart": "Start",
+    "previewPause": "Pause",
+    "previewRestart": "Restart",
+    "previewStepForward": "Step forward",
+    "previewStepBack": "Step back"
   },
   "calling": {
     "callLogs": "Registros de chamadas",

@@ -2,8 +2,7 @@
 import { ref, computed, watch } from 'vue'
 import type { FlowStep, FlowData } from '@/types/flow-preview'
 import type { ChatFlowGraph } from '@/services/api'
-import { Button } from '@/components/ui/button'
-import { ScrollArea } from '@/components/ui/scroll-area'
+import Modal from '@/components/oat/Modal.vue'
 import InteractivePreview from './InteractivePreview.vue'
 import {
   MessageSquare,
@@ -16,6 +15,8 @@ import {
   Clock,
   StopCircle,
   Variable,
+  List,
+  CheckCheck,
 } from '@/lib/icons'
 
 const props = defineProps<{
@@ -42,6 +43,12 @@ watch(() => props.initialMode, (newMode) => {
     mode.value = newMode
   }
 })
+
+// The active mode tab is outlined, the other is ghost.
+const tabClass = computed(() => ({
+  edit: mode.value === 'edit' ? 'outline' : 'ghost',
+  preview: mode.value === 'preview' ? 'outline' : 'ghost',
+}))
 
 // Step types that don't render as a WhatsApp message bubble — control-
 // flow nodes that operate on session state without sending anything.
@@ -86,276 +93,165 @@ const localListPickerOpen = computed({
 </script>
 
 <template>
-  <div class="flex-1 flex flex-col h-full overflow-hidden">
+  <div class="flex flex-col flex-1 h-full min-h-0 gap-4">
     <!-- Mode Toggle Header -->
-    <div class="px-4 py-2 border-b bg-white dark:bg-[#111b21] flex items-center justify-between">
-      <div class="flex items-center gap-1 p-0.5 bg-gray-100 dark:bg-gray-800 rounded-lg">
-        <Button
-          variant="ghost"
-          size="sm"
-          class="h-7 px-3 rounded-md transition-all"
-          :class="{
-            'bg-white dark:bg-gray-700 shadow-sm': mode === 'edit',
-            'hover:bg-gray-50 dark:hover:bg-gray-700': mode !== 'edit'
-          }"
+    <div class="hstack justify-between gap-2 shrink-0">
+      <div role="tablist" class="hstack gap-1">
+        <button
+          type="button"
+          role="tab"
+          class="small"
+          :class="tabClass.edit"
+          :aria-selected="mode === 'edit' ? 'true' : 'false'"
           @click="mode = 'edit'"
         >
-          <Edit3 class="h-3.5 w-3.5 mr-1.5" />
+          <Edit3 :size="14" />
           Edit
-        </Button>
-        <Button
-          variant="ghost"
-          size="sm"
-          class="h-7 px-3 rounded-md transition-all"
-          :class="{
-            'bg-white dark:bg-gray-700 shadow-sm': mode === 'preview',
-            'hover:bg-gray-50 dark:hover:bg-gray-700': mode !== 'preview'
-          }"
+        </button>
+        <button
+          type="button"
+          role="tab"
+          class="small"
+          :class="tabClass.preview"
+          :aria-selected="mode === 'preview' ? 'true' : 'false'"
           @click="mode = 'preview'"
         >
-          <Play class="h-3.5 w-3.5 mr-1.5" />
+          <Play :size="14" />
           Preview
-        </Button>
+        </button>
       </div>
 
-      <div class="text-xs text-gray-500 dark:text-gray-400">
+      <small class="text-light">
         {{ mode === 'edit' ? 'Read-only preview of selected step' : 'Interactive flow simulation' }}
-      </div>
+      </small>
     </div>
 
     <!-- Content Area -->
-    <div class="flex-1 overflow-hidden">
+    <div role="tabpanel" class="flex flex-1 min-h-0">
       <!-- Edit Mode: Read-only Static Preview -->
-      <template v-if="mode === 'edit'">
-        <div class="h-full flex flex-col">
-          <!-- Control-flow nodes don't render as WhatsApp bubbles — show
-               a typed placeholder card instead so authors aren't confused. -->
-          <div
-            v-if="selectedStep && controlNodeInfo"
-            class="flex-1 flex items-center justify-center p-6 bg-[#efeae2] dark:bg-[#0b141a]"
-          >
-            <div class="max-w-sm w-full bg-white dark:bg-[#202c33] rounded-xl shadow-md p-6 text-center">
-              <div class="inline-flex items-center justify-center w-12 h-12 rounded-full bg-gray-100 dark:bg-gray-800 mb-3">
-                <component :is="controlNodeInfo.icon" class="h-6 w-6 text-gray-600 dark:text-gray-300" />
+      <div v-if="mode === 'edit'" class="flex flex-1 justify-center items-center min-h-0">
+        <!-- Control-flow nodes don't render as WhatsApp bubbles — show
+             a typed placeholder card instead so authors aren't confused. -->
+        <article v-if="selectedStep && controlNodeInfo" class="card side-panel vstack items-center gap-2 align-center">
+          <component :is="controlNodeInfo.icon" :size="24" />
+          <strong>{{ controlNodeInfo.label }}</strong>
+          <small class="text-light">{{ controlNodeInfo.description }}</small>
+          <p v-if="selectedStep.message" class="align-left"><small>{{ selectedStep.message }}</small></p>
+          <small v-else class="text-lighter"><em>Use the right panel to configure this step.</em></small>
+        </article>
+
+        <!-- WhatsApp Static Preview (for message / buttons / api_fetch / whatsapp_flow / transfer) -->
+        <article v-else class="card p-4 side-panel h-full flex flex-col gap-4 min-h-0">
+          <!-- Chat Header -->
+          <header class="hstack gap-2 shrink-0 min-w-0">
+            <MessageSquare :size="20" class="shrink-0" />
+            <div class="vstack min-w-0">
+              <strong class="truncate">{{ flowData.name || 'WhatsApp Preview' }}</strong>
+              <small v-if="selectedStep" class="truncate text-light">Step {{ (selectedStepIndex ?? 0) + 1 }}: {{ selectedStep.step_name }}</small>
+              <small v-else class="text-light">Select a step</small>
+            </div>
+          </header>
+
+          <!-- Chat Messages -->
+          <div v-if="selectedStep" class="flex-1 scroll-y vstack gap-4">
+            <!-- Bot Message Bubble -->
+            <div class="vstack gap-1" data-bubble="incoming">
+              <article class="card p-4 vstack gap-1">
+                <div v-if="selectedStep.message" class="pre-wrap">{{ selectedStep.message }}</div>
+                <small v-else class="text-lighter"><em>No message configured</em></small>
+                <small class="text-lighter align-right">12:00 PM</small>
+              </article>
+
+              <!-- Interactive Buttons (up to 3) -->
+              <div v-if="selectedStep.message_type === 'buttons' && selectedStep.buttons.length > 0 && selectedStep.buttons.length <= 3" class="vstack gap-1">
+                <button v-for="(btn, idx) in selectedStep.buttons" :key="idx" type="button" class="outline w-100">
+                  <ExternalLink v-if="btn.type === 'url'" />
+                  {{ btn.title || `Option ${idx + 1}` }}
+                </button>
               </div>
-              <p class="text-sm font-medium text-gray-900 dark:text-gray-100 mb-1">
-                {{ controlNodeInfo.label }}
-              </p>
-              <p class="text-xs text-gray-500 dark:text-gray-400 mb-4">
-                {{ controlNodeInfo.description }}
-              </p>
-              <p v-if="selectedStep.message" class="text-xs text-gray-600 dark:text-gray-300 bg-gray-50 dark:bg-gray-900/30 rounded px-3 py-2 text-left">
-                {{ selectedStep.message }}
-              </p>
-              <p v-else class="text-xs text-gray-400 italic">
-                Use the right panel to configure this step.
-              </p>
+
+              <!-- List Button (more than 3 options) -->
+              <button
+                v-if="selectedStep.message_type === 'buttons' && selectedStep.buttons.length > 3"
+                type="button"
+                class="outline w-100"
+                @click="localListPickerOpen = !localListPickerOpen"
+              >
+                <List />
+                Select an option
+              </button>
+
+              <!-- WhatsApp Flow Button -->
+              <button v-if="selectedStep.message_type === 'whatsapp_flow'" type="button" class="outline w-100">
+                {{ selectedStep.input_config?.flow_cta || 'Open Form' }}
+              </button>
+            </div>
+
+            <!-- User Response Placeholder -->
+            <div v-if="selectedStep.message_type !== 'transfer'" class="flex justify-end">
+              <article class="card p-4 vstack gap-1" data-bubble="outgoing">
+                <small><em>
+                  <template v-if="selectedStep.input_type === 'none'">(No response needed)</template>
+                  <template v-else-if="selectedStep.message_type === 'buttons'">User taps a button...</template>
+                  <template v-else-if="selectedStep.message_type === 'whatsapp_flow'">User completes form...</template>
+                  <template v-else>User types {{ selectedStep.input_type }}...</template>
+                </em></small>
+                <small class="hstack gap-1 justify-end text-lighter">12:01 PM <CheckCheck :size="14" /></small>
+              </article>
+            </div>
+
+            <!-- Store As Info -->
+            <p v-if="selectedStep.store_as" class="align-center text-light">
+              <small>Response saved as <code>{{ selectedStep.store_as }}</code></small>
+            </p>
+
+            <!-- Transfer System Message -->
+            <div v-if="selectedStep.message_type === 'transfer'" role="alert" data-variant="warning" class="items-center">
+              <Users :size="12" />
+              <small>Conversation transferred to {{ selectedStep?.transfer_config?.team_id === '_general' ? 'General Queue' : teams.find(t => t.id === selectedStep?.transfer_config?.team_id)?.name || 'Team' }}</small>
+            </div>
+
+            <!-- API Info -->
+            <div v-if="selectedStep.message_type === 'api_fetch'" role="alert" class="items-center">
+              <Globe :size="12" />
+              <small>Message populated from API</small>
             </div>
           </div>
-
-          <!-- WhatsApp Static Preview (for message / buttons / api_fetch / whatsapp_flow / transfer) -->
-          <div v-else class="flex-1 flex items-center justify-center p-4 bg-[#efeae2] dark:bg-[#0b141a] overflow-auto">
-            <div v-if="selectedStep" class="w-full max-w-sm">
-              <!-- Phone Frame -->
-              <div class="bg-[#efeae2] dark:bg-[#0b141a] rounded-2xl overflow-hidden shadow-xl flex flex-col h-[600px] relative">
-                <!-- Chat Header -->
-                <div class="bg-[#075e54] dark:bg-[#202c33] text-white px-4 py-3 flex items-center gap-3 flex-shrink-0">
-                  <div class="w-10 h-10 rounded-full bg-white/20 flex items-center justify-center">
-                    <MessageSquare class="h-5 w-5" />
-                  </div>
-                  <div>
-                    <p class="font-medium text-sm">{{ flowData.name || 'WhatsApp Preview' }}</p>
-                    <p class="text-xs text-white/70">Step {{ (selectedStepIndex ?? 0) + 1 }}: {{ selectedStep.step_name }}</p>
-                  </div>
-                </div>
-
-                <!-- Chat Messages -->
-                <ScrollArea class="flex-1 p-4">
-                  <div class="space-y-3">
-                  <!-- Bot Message Bubble -->
-                  <div class="flex justify-start">
-                    <div class="max-w-[85%]">
-                      <div class="bg-white dark:bg-[#202c33] rounded-lg rounded-tl-none shadow-sm p-3">
-                        <p v-if="selectedStep.message" class="text-sm text-gray-800 dark:text-gray-200 whitespace-pre-wrap">{{ selectedStep.message }}</p>
-                        <p v-else class="text-sm text-gray-400 italic">No message configured</p>
-                        <p class="text-[10px] text-gray-400 text-right mt-1">12:00 PM</p>
-                      </div>
-
-                      <!-- Interactive Buttons (up to 3) -->
-                      <div v-if="selectedStep.message_type === 'buttons' && selectedStep.buttons.length > 0 && selectedStep.buttons.length <= 3" class="mt-1 space-y-1">
-                        <button
-                          v-for="(btn, idx) in selectedStep.buttons"
-                          :key="idx"
-                          class="w-full bg-white dark:bg-[#202c33] text-[#00a884] text-sm font-medium py-2.5 rounded-lg shadow-sm border-0 flex items-center justify-center gap-1.5"
-                        >
-                          <ExternalLink v-if="btn.type === 'url'" class="h-4 w-4" />
-                          {{ btn.title || `Option ${idx + 1}` }}
-                        </button>
-                      </div>
-
-                      <!-- List Button (more than 3 options) -->
-                      <div v-if="selectedStep.message_type === 'buttons' && selectedStep.buttons.length > 3" class="mt-1">
-                        <button
-                          class="w-full bg-white dark:bg-[#202c33] text-[#00a884] text-sm font-medium py-2.5 rounded-lg shadow-sm border-0 flex items-center justify-center gap-2"
-                          @click="localListPickerOpen = !localListPickerOpen"
-                        >
-                          <svg class="h-4 w-4" viewBox="0 0 24 24" fill="currentColor">
-                            <path d="M3 4h18v2H3V4zm0 7h18v2H3v-2zm0 7h18v2H3v-2z"/>
-                          </svg>
-                          Select an option
-                        </button>
-                      </div>
-
-                      <!-- WhatsApp Flow Button -->
-                      <div v-if="selectedStep.message_type === 'whatsapp_flow'" class="mt-1">
-                        <button class="w-full bg-white dark:bg-[#202c33] text-[#00a884] text-sm font-medium py-2.5 rounded-lg shadow-sm border-0">
-                          {{ selectedStep.input_config?.flow_cta || 'Open Form' }}
-                        </button>
-                      </div>
-                    </div>
-                  </div>
-
-                  <!-- User Response Placeholder -->
-                  <div v-if="selectedStep.message_type !== 'transfer'" class="flex justify-end">
-                    <div class="max-w-[85%]">
-                      <div class="bg-[#005c4b] light:bg-[#d9fdd3] rounded-lg rounded-tr-none shadow-sm p-3">
-                        <p class="text-sm text-gray-200 light:text-gray-800 italic">
-                          <template v-if="selectedStep.input_type === 'none'">
-                            (No response needed)
-                          </template>
-                          <template v-else-if="selectedStep.message_type === 'buttons'">
-                            User taps a button...
-                          </template>
-                          <template v-else-if="selectedStep.message_type === 'whatsapp_flow'">
-                            User completes form...
-                          </template>
-                          <template v-else>
-                            User types {{ selectedStep.input_type }}...
-                          </template>
-                        </p>
-                        <p class="text-[10px] text-gray-500 dark:text-gray-400 text-right mt-1 flex items-center justify-end gap-1">
-                          12:01 PM
-                          <svg class="h-4 w-4 text-[#53bdeb]" viewBox="0 0 24 24" fill="currentColor">
-                            <path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41L9 16.17z"/>
-                          </svg>
-                        </p>
-                      </div>
-                    </div>
-                  </div>
-
-                  <!-- Store As Info -->
-                  <div v-if="selectedStep.store_as" class="flex justify-center">
-                    <div class="bg-white/80 dark:bg-[#202c33]/80 text-xs text-gray-500 dark:text-gray-400 px-3 py-1 rounded-full">
-                      Response saved as <code class="font-mono text-[#00a884]">{{ selectedStep.store_as }}</code>
-                    </div>
-                  </div>
-
-                  <!-- Transfer System Message -->
-                  <div v-if="selectedStep.message_type === 'transfer'" class="flex justify-center">
-                    <div class="bg-amber-100 dark:bg-amber-900/30 text-xs text-amber-700 dark:text-amber-400 px-3 py-1.5 rounded-lg flex items-center gap-1.5">
-                      <Users class="h-3 w-3" />
-                      <span>Conversation transferred to {{ selectedStep?.transfer_config?.team_id === '_general' ? 'General Queue' : teams.find(t => t.id === selectedStep?.transfer_config?.team_id)?.name || 'Team' }}</span>
-                    </div>
-                  </div>
-
-                  <!-- API Info -->
-                  <div v-if="selectedStep.message_type === 'api_fetch'" class="flex justify-center">
-                    <div class="bg-blue-100 dark:bg-blue-900/30 text-xs text-blue-700 dark:text-blue-400 px-3 py-1.5 rounded-lg flex items-center gap-1.5">
-                      <Globe class="h-3 w-3" />
-                      <span>Message populated from API</span>
-                    </div>
-                  </div>
-                  </div>
-                </ScrollArea>
-
-                <!-- Input Bar -->
-                <div class="bg-[#f0f2f5] dark:bg-[#202c33] px-3 py-2 flex items-center gap-2 flex-shrink-0">
-                  <div class="flex-1 bg-white dark:bg-[#2a3942] rounded-full px-4 py-2">
-                    <p class="text-sm text-gray-400">Type a message</p>
-                  </div>
-                  <div class="w-10 h-10 rounded-full bg-gray-300 dark:bg-gray-600 flex items-center justify-center">
-                    <svg class="h-5 w-5 text-white" viewBox="0 0 24 24" fill="currentColor">
-                      <path d="M12 14.5L7 10l1.4-1.4 3.6 3.6 3.6-3.6L17 10l-5 4.5z"/>
-                    </svg>
-                  </div>
-                </div>
-
-                <!-- List Picker Overlay -->
-                <div
-                  v-if="localListPickerOpen && selectedStep.message_type === 'buttons' && selectedStep.buttons.length > 3"
-                  class="absolute inset-0 z-10 flex flex-col"
-                >
-                  <div class="flex-1 bg-black/50" @click="localListPickerOpen = false"></div>
-                  <div class="bg-white dark:bg-[#1f2c34] rounded-t-2xl overflow-hidden">
-                    <div class="bg-[#075e54] dark:bg-[#00a884] text-white px-4 py-3 flex items-center justify-between">
-                      <button class="p-1 hover:bg-white/10 rounded" @click="localListPickerOpen = false">
-                        <svg class="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                          <path d="M6 18L18 6M6 6l12 12"/>
-                        </svg>
-                      </button>
-                      <span class="font-medium text-sm">Select an option</span>
-                      <div class="w-5"></div>
-                    </div>
-                    <div class="max-h-[250px] overflow-y-auto">
-                      <div
-                        v-for="(btn, idx) in selectedStep.buttons"
-                        :key="idx"
-                        class="px-4 py-3 border-b border-gray-100 dark:border-gray-700 last:border-0 hover:bg-gray-50 dark:hover:bg-[#2a3942] cursor-pointer flex items-center gap-3"
-                        @click="localListPickerOpen = false"
-                      >
-                        <div v-if="btn.type === 'url'" class="w-5 h-5 flex items-center justify-center flex-shrink-0 text-[#00a884]">
-                          <ExternalLink class="h-4 w-4" />
-                        </div>
-                        <div v-else class="w-5 h-5 rounded-full border-2 border-[#00a884] flex items-center justify-center flex-shrink-0">
-                          <span class="text-[10px] text-[#00a884] font-medium">{{ idx + 1 }}</span>
-                        </div>
-                        <span class="text-sm text-gray-800 dark:text-gray-200 flex-1">{{ btn.title || `Option ${idx + 1}` }}</span>
-                        <ExternalLink v-if="btn.type === 'url'" class="h-3 w-3 text-gray-400" />
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            <div v-else class="w-full max-w-sm flex flex-col items-center justify-center">
-              <!-- Empty State Phone Frame -->
-              <div class="bg-[#efeae2] dark:bg-[#0b141a] rounded-2xl overflow-hidden shadow-xl flex flex-col h-[600px] w-full">
-                <div class="bg-[#075e54] dark:bg-[#202c33] text-white px-4 py-3 flex items-center gap-3 flex-shrink-0">
-                  <div class="w-10 h-10 rounded-full bg-white/20 flex items-center justify-center">
-                    <MessageSquare class="h-5 w-5" />
-                  </div>
-                  <div>
-                    <p class="font-medium text-sm">{{ flowData.name || 'WhatsApp Preview' }}</p>
-                    <p class="text-xs text-white/70">Select a step</p>
-                  </div>
-                </div>
-                <div class="flex-1 flex items-center justify-center">
-                  <p class="text-sm text-gray-500 dark:text-gray-400">Select a step to view preview</p>
-                </div>
-                <div class="bg-[#f0f2f5] dark:bg-[#202c33] px-3 py-2 flex items-center gap-2 flex-shrink-0">
-                  <div class="flex-1 bg-white dark:bg-[#2a3942] rounded-full px-4 py-2">
-                    <p class="text-sm text-gray-400">Type a message</p>
-                  </div>
-                  <div class="w-10 h-10 rounded-full bg-gray-300 dark:bg-gray-600 flex items-center justify-center">
-                    <svg class="h-5 w-5 text-white" viewBox="0 0 24 24" fill="currentColor">
-                      <path d="M12 14.5L7 10l1.4-1.4 3.6 3.6 3.6-3.6L17 10l-5 4.5z"/>
-                    </svg>
-                  </div>
-                </div>
-              </div>
-            </div>
+          <div v-else class="flex flex-1 items-center justify-center text-light">
+            <small>Select a step to view preview</small>
           </div>
-        </div>
-      </template>
+
+          <!-- Input Bar -->
+          <input class="shrink-0" disabled placeholder="Type a message" aria-label="Type a message">
+        </article>
+
+        <!-- List Picker -->
+        <Modal
+          v-if="selectedStep && selectedStep.message_type === 'buttons' && selectedStep.buttons.length > 3"
+          v-model:open="localListPickerOpen"
+          size="small"
+          title="Select an option"
+        >
+          <ul class="unstyled vstack gap-2">
+            <li v-for="(btn, idx) in selectedStep.buttons" :key="idx">
+              <button type="button" class="outline w-100 justify-between" @click="localListPickerOpen = false">
+                <span class="hstack gap-2 min-w-0">
+                  <ExternalLink v-if="btn.type === 'url'" />
+                  <span v-else class="badge outline">{{ idx + 1 }}</span>
+                  <span class="truncate">{{ btn.title || `Option ${idx + 1}` }}</span>
+                </span>
+              </button>
+            </li>
+          </ul>
+        </Modal>
+      </div>
 
       <!-- Preview Mode: Interactive Simulation (graph-based) -->
-      <template v-else>
-        <InteractivePreview
-          :graph="graph || null"
-          :flow-data="flowData"
-        />
-      </template>
+      <InteractivePreview
+        v-else
+        :graph="graph || null"
+        :flow-data="flowData"
+      />
     </div>
   </div>
 </template>

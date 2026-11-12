@@ -9,16 +9,6 @@ import FlowCanvas from '@/components/shared/FlowCanvas.vue'
 import { chatbotService } from '@/services/api'
 import type { ChatFlowGraph, ChatNode, ChatEdge, ChatNodeType } from '@/services/api'
 
-import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
-import { Label } from '@/components/ui/label'
-import { Switch } from '@/components/ui/switch'
-import { Textarea } from '@/components/ui/textarea'
-import { ScrollArea } from '@/components/ui/scroll-area'
-import { Card, CardHeader, CardTitle } from '@/components/ui/card'
-import { Separator } from '@/components/ui/separator'
-import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible'
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import {
   ArrowLeft,
   Save,
@@ -31,8 +21,6 @@ import {
   Clock,
   ExternalLink,
   StopCircle,
-  ChevronDown,
-  ChevronRight,
   Plus,
   Trash2,
   Play,
@@ -59,7 +47,7 @@ import ChatbotEndNode from '@/components/chatbot/nodes/ChatbotEndNode.vue'
 import ChatbotStartNode from '@/components/chatbot/nodes/ChatbotStartNode.vue'
 
 import InteractivePreview from '@/components/chatbot/flow-preview/InteractivePreview.vue'
-import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog'
+import Modal from '@/components/oat/Modal.vue'
 
 const { t } = useI18n()
 const route = useRoute()
@@ -92,8 +80,7 @@ const showDeleteNodeConfirm = ref(false)
 const cancelDialogOpen = ref(false)
 const showPreview = ref(false)
 const auditRefreshKey = ref(0)
-const completionConfigOpen = ref(false)
-const panelConfigOpen = ref(false)
+// The activity log loads only once its section is expanded.
 const activityOpen = ref(false)
 
 const createdAt = ref('')
@@ -124,16 +111,16 @@ const nodeTypes: any = {
 
 // Palette: 'prompt' and 'webhook' are internal-only — a Text node
 // becomes a prompt when the author sets an expected response.
-const palette: { type: ChatNodeType; label: string; icon: any; color: string }[] = [
-  { type: 'message', label: 'Text', icon: MessageSquare, color: 'bg-blue-600' },
-  { type: 'buttons', label: 'Buttons', icon: MousePointerClick, color: 'bg-purple-600' },
-  { type: 'api_call', label: 'API', icon: Globe, color: 'bg-orange-600' },
-  { type: 'whatsapp_flow', label: 'WA Flow', icon: MessageCircle, color: 'bg-green-600' },
-  { type: 'transfer', label: 'Transfer', icon: Users, color: 'bg-amber-600' },
-  { type: 'condition', label: 'Condition', icon: GitBranch, color: 'bg-indigo-600' },
-  { type: 'timing', label: 'Timing', icon: Clock, color: 'bg-cyan-600' },
-  { type: 'goto_flow', label: 'Go to Flow', icon: ExternalLink, color: 'bg-teal-600' },
-  { type: 'end', label: 'End', icon: StopCircle, color: 'bg-slate-600' },
+const palette: { type: ChatNodeType; label: string; icon: any }[] = [
+  { type: 'message', label: 'Text', icon: MessageSquare },
+  { type: 'buttons', label: 'Buttons', icon: MousePointerClick },
+  { type: 'api_call', label: 'API', icon: Globe },
+  { type: 'whatsapp_flow', label: 'WA Flow', icon: MessageCircle },
+  { type: 'transfer', label: 'Transfer', icon: Users },
+  { type: 'condition', label: 'Condition', icon: GitBranch },
+  { type: 'timing', label: 'Timing', icon: Clock },
+  { type: 'goto_flow', label: 'Go to Flow', icon: ExternalLink },
+  { type: 'end', label: 'End', icon: StopCircle },
 ]
 
 const {
@@ -316,7 +303,7 @@ function spreadParallelLabels() {
   for (const group of groups.values()) {
     for (let i = 0; i < group.length; i++) {
       const yOffset = group.length > 1 ? (i - (group.length - 1) / 2) * 22 : 0
-      group[i].labelStyle = { transform: `translateY(${yOffset}px)` }
+      group[i].labelStyle = { transform: `translateY(${yOffset}px)`, fill: 'var(--foreground)' }
       group[i].labelBgStyle = { fill: 'none', fillOpacity: 0 }
       group[i].labelBgPadding = [0, 0] as [number, number]
     }
@@ -679,6 +666,10 @@ function removeCompletionHeader(key: string) {
   hasUnsavedChanges.value = true
 }
 
+function val(e: Event): string {
+  return (e.target as HTMLInputElement).value
+}
+
 // Mark changes from text inputs.
 watch([name, description, enabled, triggerKeywords, initialMessage, completionMessage, onCompleteAction, panelConfig], () => {
   if (!isLoading.value) hasUnsavedChanges.value = true
@@ -691,85 +682,61 @@ onMounted(async () => {
 </script>
 
 <template>
-  <div class="flex flex-col h-screen bg-muted/30">
+  <div class="flex flex-col h-full min-h-0">
+    <div class="vstack gap-4 p-4 shrink-0">
     <!-- Header -->
-    <header class="border-b bg-background px-4 py-3 flex-shrink-0">
-      <div class="flex items-center gap-4">
-        <Button variant="ghost" size="icon" @click="handleCancel">
-          <ArrowLeft class="h-5 w-5" />
-        </Button>
+    <header class="hstack gap-4 flex-wrap">
+      <button type="button" class="ghost icon" :aria-label="$t('common.back')" :title="$t('common.back')" @click="handleCancel">
+        <ArrowLeft :size="20" />
+      </button>
 
-        <div class="flex-1 flex items-center gap-6">
-          <div class="flex items-center gap-2">
-            <Label class="text-sm text-muted-foreground whitespace-nowrap">{{ $t('flowBuilder.name') }}</Label>
-            <Input v-model="name" :placeholder="$t('flowBuilder.namePlaceholder')" class="w-48 font-medium" />
-          </div>
-          <div class="flex items-center gap-2">
-            <Label class="text-sm text-muted-foreground whitespace-nowrap">{{ $t('flowBuilder.description') }}</Label>
-            <Input v-model="description" :placeholder="$t('flowBuilder.optional')" class="w-64" />
-          </div>
-        </div>
+      <label class="hstack gap-2 flex-1 min-w-0">
+        <small class="text-light">{{ $t('flowBuilder.name') }}</small>
+        <input v-model="name" :placeholder="$t('flowBuilder.namePlaceholder')">
+      </label>
+      <label class="hstack gap-2 flex-1 min-w-0">
+        <small class="text-light">{{ $t('flowBuilder.description') }}</small>
+        <input v-model="description" :placeholder="$t('flowBuilder.optional')">
+      </label>
 
-        <div class="flex items-center gap-3">
-          <div class="flex items-center gap-2">
-            <Switch :checked="enabled" @update:checked="enabled = $event" />
-            <span class="text-sm">{{ enabled ? $t('flowBuilder.enabled') : $t('flowBuilder.disabled') }}</span>
-          </div>
+      <div class="hstack gap-2 flex-wrap">
+        <label class="hstack gap-2">
+          <input v-model="enabled" type="checkbox" role="switch">
+          <small>{{ enabled ? $t('flowBuilder.enabled') : $t('flowBuilder.disabled') }}</small>
+        </label>
 
-          <Button variant="outline" size="sm" @click="showPreview = true" :disabled="nodes.length === 0">
-            <Play class="h-4 w-4 mr-1" />
-            {{ $t('flowBuilder.preview', 'Preview') }}
-          </Button>
-          <Button variant="outline" @click="handleCancel">{{ $t('flowBuilder.cancel') }}</Button>
-          <Button @click="saveFlow" :disabled="isSaving">
-            <Save class="h-4 w-4 mr-2" />
-            {{ isSaving ? $t('flowBuilder.saving') + '...' : $t('flowBuilder.saveFlow') }}
-          </Button>
-        </div>
+        <button type="button" class="outline small" :disabled="nodes.length === 0" @click="showPreview = true">
+          <Play />
+          {{ $t('flowBuilder.preview', 'Preview') }}
+        </button>
+        <button type="button" class="outline small" @click="handleCancel">{{ $t('flowBuilder.cancel') }}</button>
+        <button type="button" class="small" :disabled="isSaving" :aria-busy="isSaving ? 'true' : undefined" data-spinner="small" @click="saveFlow">
+          <Save />
+          {{ isSaving ? $t('flowBuilder.saving') + '...' : $t('flowBuilder.saveFlow') }}
+        </button>
       </div>
     </header>
 
     <!-- Node palette -->
-    <div class="flex items-center gap-2 px-4 py-2 border-b bg-muted/30 overflow-x-auto shrink-0">
-      <span class="text-xs text-muted-foreground shrink-0">Add node:</span>
-      <Button
+    <div class="hstack gap-2 scroll-x" role="toolbar" aria-labelledby="chat-flow-palette-label">
+      <small id="chat-flow-palette-label" class="text-light shrink-0">Add node:</small>
+      <button
         v-for="p in palette"
         :key="p.type"
-        variant="outline"
-        size="sm"
-        class="h-7 text-xs gap-1.5 shrink-0"
+        type="button"
+        class="outline small shrink-0"
         @click="addNodeFromPalette(p.type)"
       >
-        <div :class="['w-2 h-2 rounded-full', p.color]" />
-        <component :is="p.icon" class="w-3 h-3" />
+        <component :is="p.icon" />
         {{ p.label }}
-      </Button>
+      </button>
+    </div>
     </div>
 
     <!-- Main: canvas + right panel -->
-    <div class="flex-1 flex overflow-hidden">
+    <div class="flex flex-1 min-h-0">
       <!-- Canvas -->
-      <div class="flex-1 relative">
-        <div v-if="isLoading" class="absolute inset-0 flex items-center justify-center bg-background/80 z-10">
-          <div class="animate-spin rounded-full h-8 w-8 border-b-2 border-primary" />
-        </div>
-        <ErrorState
-          v-else-if="loadError"
-          :title="$t('flowBuilder.loadFailed', 'Failed to load flow')"
-          :description="$t('flowBuilder.loadFailedDesc', 'Try reloading or go back to the flow list.')"
-          class="absolute inset-0 z-10 bg-background"
-        >
-          <template #action>
-            <div class="flex gap-2">
-              <Button variant="outline" size="sm" @click="router.push('/chatbot/flows')">
-                {{ $t('common.goBack', 'Go back') }}
-              </Button>
-              <Button size="sm" @click="loadFlow">
-                {{ $t('common.retry') }}
-              </Button>
-            </div>
-          </template>
-        </ErrorState>
+      <div class="flex-1 relative min-w-0">
         <FlowCanvas
           :node-types="nodeTypes"
           edge-type="default"
@@ -779,173 +746,178 @@ onMounted(async () => {
           @edge-update="onEdgeUpdate"
           @node-drag-stop="onNodeDragStop"
         />
+        <div v-if="isLoading" class="absolute-fill card flex items-center justify-center">
+          <div role="status" aria-busy="true" data-spinner="large" :aria-label="$t('flowBuilder.loading')" />
+        </div>
+        <div v-else-if="loadError" class="absolute-fill card flex items-center justify-center">
+          <ErrorState
+            :title="$t('flowBuilder.loadFailed', 'Failed to load flow')"
+            :description="$t('flowBuilder.loadFailedDesc', 'Try reloading or go back to the flow list.')"
+          >
+            <template #action>
+              <div class="hstack gap-2 justify-center">
+                <button type="button" class="outline small" @click="router.push('/chatbot/flows')">
+                  {{ $t('common.goBack', 'Go back') }}
+                </button>
+                <button type="button" class="small" @click="loadFlow">
+                  {{ $t('common.retry') }}
+                </button>
+              </div>
+            </template>
+          </ErrorState>
+        </div>
       </div>
 
       <!-- Right panel -->
-      <Card class="w-[420px] min-w-0 border-y-0 border-r-0 rounded-none shrink-0 flex flex-col">
+      <aside class="side-panel shrink-0 scroll-y card p-4 min-w-0">
         <!-- Node properties when a node is selected -->
-        <div v-if="selectedChatNode && selectedChatNode.type !== 'start'" class="flex-1 overflow-y-auto">
-          <ChatNodeProperties
-            :node="selectedChatNode"
-            :current-flow-id="flowId"
-            :available-flows="availableFlows"
-            @update:node="onUpdateNode"
-            @delete="requestDeleteSelectedNode"
-          />
-        </div>
+        <ChatNodeProperties
+          v-if="selectedChatNode && selectedChatNode.type !== 'start'"
+          :node="selectedChatNode"
+          :current-flow-id="flowId"
+          :available-flows="availableFlows"
+          @update:node="onUpdateNode"
+          @delete="requestDeleteSelectedNode"
+        />
 
         <!-- Flow settings when nothing is selected -->
-        <ScrollArea v-else orientation="vertical" class="flex-1">
-          <div class="p-4 space-y-4 min-w-0">
-            <CardHeader class="p-0 pb-2">
-              <CardTitle class="text-sm font-medium">{{ $t('flowBuilder.flowSettings') }}</CardTitle>
-            </CardHeader>
+        <div v-else class="min-w-0">
+          <h4 class="mb-4">{{ $t('flowBuilder.flowSettings') }}</h4>
 
-            <!-- Trigger keywords -->
-            <div class="space-y-1.5">
-              <Label class="text-xs">{{ $t('flowBuilder.triggerKeywords') }}</Label>
-              <Input v-model="triggerKeywords" :placeholder="$t('flowBuilder.triggerKeywordsPlaceholder')" class="h-8 text-xs" />
-              <p class="text-[10px] text-muted-foreground">{{ $t('flowBuilder.triggerKeywordsHint') }}</p>
-            </div>
+          <!-- Trigger keywords -->
+          <label data-field>
+            {{ $t('flowBuilder.triggerKeywords') }}
+            <input v-model="triggerKeywords" :placeholder="$t('flowBuilder.triggerKeywordsPlaceholder')">
+            <small data-hint>{{ $t('flowBuilder.triggerKeywordsHint') }}</small>
+          </label>
 
-            <Separator />
+          <hr>
 
-            <!-- Initial message -->
-            <div class="space-y-1.5">
-              <Label class="text-xs">{{ $t('flowBuilder.initialMessage') }}</Label>
-              <Textarea v-model="initialMessage" :placeholder="$t('flowBuilder.initialMessagePlaceholder')" :rows="2" class="text-xs" />
-            </div>
+          <!-- Initial message -->
+          <label data-field>
+            {{ $t('flowBuilder.initialMessage') }}
+            <textarea v-model="initialMessage" :placeholder="$t('flowBuilder.initialMessagePlaceholder')" rows="2" />
+          </label>
 
-            <!-- Completion message -->
-            <div class="space-y-1.5">
-              <Label class="text-xs">{{ $t('flowBuilder.completionMessage') }}</Label>
-              <Textarea v-model="completionMessage" :placeholder="$t('flowBuilder.completionMessagePlaceholder')" :rows="2" class="text-xs" />
-            </div>
+          <!-- Completion message -->
+          <label data-field>
+            {{ $t('flowBuilder.completionMessage') }}
+            <textarea v-model="completionMessage" :placeholder="$t('flowBuilder.completionMessagePlaceholder')" rows="2" />
+          </label>
 
-            <Separator />
+          <!-- On complete action -->
+          <details>
+            <summary>{{ $t('flowBuilder.onCompletion') }}</summary>
+            <div>
+              <label data-field>
+                {{ $t('flowBuilder.action') }}
+                <select v-model="onCompleteAction">
+                  <option value="none">{{ $t('flowBuilder.noAction') }}</option>
+                  <option value="webhook">{{ $t('flowBuilder.sendToWebhook') }}</option>
+                </select>
+              </label>
 
-            <!-- On complete action -->
-            <Collapsible v-model:open="completionConfigOpen">
-              <CollapsibleTrigger class="flex items-center justify-between w-full py-1 text-sm font-medium">
-                {{ $t('flowBuilder.onCompletion') }}
-                <component :is="completionConfigOpen ? ChevronDown : ChevronRight" class="h-4 w-4" />
-              </CollapsibleTrigger>
-              <CollapsibleContent class="pt-3 space-y-3">
-                <div class="space-y-1.5">
-                  <Label class="text-xs">{{ $t('flowBuilder.action') }}</Label>
-                  <Select v-model="onCompleteAction">
-                    <SelectTrigger class="h-8 text-xs"><SelectValue /></SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="none">{{ $t('flowBuilder.noAction') }}</SelectItem>
-                      <SelectItem value="webhook">{{ $t('flowBuilder.sendToWebhook') }}</SelectItem>
-                    </SelectContent>
-                  </Select>
+              <template v-if="onCompleteAction === 'webhook'">
+                <div class="hstack gap-2">
+                  <label data-field>
+                    {{ $t('flowBuilder.method') }}
+                    <select v-model="completionConfig.method">
+                      <option value="GET">GET</option>
+                      <option value="POST">POST</option>
+                      <option value="PUT">PUT</option>
+                      <option value="PATCH">PATCH</option>
+                    </select>
+                  </label>
+                  <label data-field class="flex-1 min-w-0">
+                    URL
+                    <input v-model="completionConfig.url" type="url" placeholder="https://example.com/hook">
+                  </label>
                 </div>
-
-                <template v-if="onCompleteAction === 'webhook'">
-                  <div class="space-y-3 p-3 border rounded-lg bg-muted/30">
-                    <div class="flex gap-2">
-                      <div class="w-20">
-                        <Label class="text-[10px]">{{ $t('flowBuilder.method') }}</Label>
-                        <Select v-model="completionConfig.method">
-                          <SelectTrigger class="h-7 text-xs"><SelectValue /></SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="GET">GET</SelectItem>
-                            <SelectItem value="POST">POST</SelectItem>
-                            <SelectItem value="PUT">PUT</SelectItem>
-                            <SelectItem value="PATCH">PATCH</SelectItem>
-                          </SelectContent>
-                        </Select>
-                      </div>
-                      <div class="flex-1">
-                        <Label class="text-[10px]">URL</Label>
-                        <Input v-model="completionConfig.url" placeholder="https://example.com/hook" class="h-7 text-xs font-mono" />
-                      </div>
-                    </div>
-                    <div class="space-y-2">
-                      <div class="flex items-center justify-between">
-                        <Label class="text-[10px]">{{ $t('flowBuilder.headers') }}</Label>
-                        <Button variant="ghost" size="sm" class="h-5 text-[10px] px-1" @click="addCompletionHeader">
-                          <Plus class="h-3 w-3" />
-                        </Button>
-                      </div>
-                      <div v-for="(val, key) in completionConfig.headers" :key="key" class="flex gap-1">
-                        <Input
-                          :model-value="String(key)"
-                          @update:model-value="(v: string) => updateCompletionHeaderKey(String(key), v)"
-                          placeholder="Key"
-                          class="h-6 text-[10px] flex-1"
-                        />
-                        <Input
-                          :model-value="String(val)"
-                          @update:model-value="(v: string) => updateCompletionHeaderValue(String(key), v)"
-                          placeholder="Value"
-                          class="h-6 text-[10px] flex-1"
-                        />
-                        <Button variant="ghost" size="icon" class="h-5 w-5" @click="removeCompletionHeader(String(key))">
-                          <Trash2 class="h-3 w-3 text-destructive" />
-                        </Button>
-                      </div>
-                    </div>
-                    <div class="space-y-1">
-                      <Label class="text-[10px]">Body</Label>
-                      <Textarea v-model="completionConfig.body" :rows="2" class="text-[10px] font-mono" />
-                    </div>
+                <div class="vstack gap-2 mb-4">
+                  <div class="hstack justify-between">
+                    <span>{{ $t('flowBuilder.headers') }}</span>
+                    <button
+                      type="button"
+                      class="ghost small icon"
+                      :aria-label="$t('common.add')"
+                      :title="$t('common.add')"
+                      @click="addCompletionHeader"
+                    >
+                      <Plus />
+                    </button>
                   </div>
-                </template>
-              </CollapsibleContent>
-            </Collapsible>
+                  <div v-for="(v, key) in completionConfig.headers" :key="key" class="hstack gap-1">
+                    <input
+                      class="flex-1 min-w-0"
+                      :value="String(key)"
+                      placeholder="Key"
+                      aria-label="Key"
+                      @input="updateCompletionHeaderKey(String(key), val($event))"
+                    >
+                    <input
+                      class="flex-1 min-w-0"
+                      :value="String(v)"
+                      placeholder="Value"
+                      aria-label="Value"
+                      @input="updateCompletionHeaderValue(String(key), val($event))"
+                    >
+                    <button
+                      type="button"
+                      class="ghost small icon"
+                      data-variant="danger"
+                      :aria-label="$t('common.delete')"
+                      :title="$t('common.delete')"
+                      @click="removeCompletionHeader(String(key))"
+                    >
+                      <Trash2 />
+                    </button>
+                  </div>
+                </div>
+                <label data-field>
+                  Body
+                  <textarea v-model="completionConfig.body" rows="2" />
+                </label>
+              </template>
+            </div>
+          </details>
 
-            <Separator />
+          <!-- Contact panel display config -->
+          <details>
+            <summary>Contact panel display</summary>
+            <div>
+              <PanelConfigEditor
+                :panel-config="panelConfig"
+                :available-variables="availableVariables"
+                @update:panel-config="panelConfig = $event"
+              />
+            </div>
+          </details>
 
-            <!-- Contact panel display config -->
-            <Collapsible v-model:open="panelConfigOpen">
-              <CollapsibleTrigger class="flex items-center justify-between w-full py-1 text-sm font-medium">
-                Contact panel display
-                <component :is="panelConfigOpen ? ChevronDown : ChevronRight" class="h-4 w-4" />
-              </CollapsibleTrigger>
-              <CollapsibleContent class="pt-3">
-                <PanelConfigEditor
-                  :panel-config="panelConfig"
-                  :available-variables="availableVariables"
-                  @update:panel-config="panelConfig = $event"
-                />
-              </CollapsibleContent>
-            </Collapsible>
-
-            <template v-if="!isNewFlow">
-              <Separator />
-              <Collapsible v-model:open="activityOpen">
-                <CollapsibleTrigger class="flex items-center justify-between w-full py-1 text-sm font-medium">
-                  Activity
-                  <component :is="activityOpen ? ChevronDown : ChevronRight" class="h-4 w-4" />
-                </CollapsibleTrigger>
-                <CollapsibleContent class="pt-3 space-y-3">
-                  <MetadataPanel
-                    :created-at="createdAt"
-                    :updated-at="updatedAt"
-                    :created-by-name="createdByName"
-                    :updated-by-name="updatedByName"
-                  />
-                  <AuditLogPanel :key="auditRefreshKey" resource-type="chatbot_flow" :resource-id="flowId" />
-                </CollapsibleContent>
-              </Collapsible>
-            </template>
-          </div>
-        </ScrollArea>
-      </Card>
+          <details v-if="!isNewFlow" @toggle="activityOpen = ($event.target as HTMLDetailsElement).open">
+            <summary>Activity</summary>
+            <div v-if="activityOpen" class="vstack gap-4">
+              <MetadataPanel
+                :created-at="createdAt"
+                :updated-at="updatedAt"
+                :created-by-name="createdByName"
+                :updated-by-name="updatedByName"
+              />
+              <AuditLogPanel :key="auditRefreshKey" resource-type="chatbot_flow" :resource-id="flowId" />
+            </div>
+          </details>
+        </div>
+      </aside>
     </div>
 
     <!-- Preview overlay -->
-    <Dialog v-model:open="showPreview">
-      <DialogContent class="max-w-[1100px] w-[95vw] h-[92vh] p-0 flex flex-col">
-        <DialogTitle class="sr-only">Flow preview</DialogTitle>
+    <Modal v-model:open="showPreview" class="modal-wide" :title="$t('flowBuilder.previewTitle')">
+      <div v-if="showPreview" class="h-preview flex">
         <InteractivePreview
           :graph="previewGraph"
           :flow-data="{ name, description, trigger_keywords: triggerKeywords, initial_message: initialMessage, completion_message: completionMessage, enabled, steps: [] } as any"
         />
-      </DialogContent>
-    </Dialog>
+      </div>
+    </Modal>
 
     <!-- Dialogs -->
     <ConfirmDialog

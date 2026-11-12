@@ -23,11 +23,9 @@ const notes = computed(() => {
 </script>
 
 <template>
-  <BaseNode :label="data?.label || 'Transfer'" header-class="bg-amber-600" :output-handles="[]" :has-input="!data?.isEntryNode">
-    <template #icon><UserPlus class="w-4 h-4" /></template>
-    <div>
-      <p class="font-medium truncate" :title="teamLabel">→ {{ teamLabel }}</p>
-      <p v-if="notes" class="truncate text-muted-foreground/70 mt-0.5" :title="notes">{{ notes }}</p>
-    </div>
+  <BaseNode :label="data?.label || 'Transfer'" :output-handles="[]" :has-input="!data?.isEntryNode">
+    <template #icon><UserPlus /></template>
+    <small class="truncate" :title="teamLabel"><strong>→ {{ teamLabel }}</strong></small>
+    <small v-if="notes" class="truncate text-lighter" :title="notes">{{ notes }}</small>
   </BaseNode>
 </template>

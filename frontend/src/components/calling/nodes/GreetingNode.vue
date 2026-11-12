@@ -18,9 +18,9 @@ const outputHandles = [{ id: 'default', label: 'next' }]
 </script>
 
 <template>
-  <BaseNode :label="data?.label || 'Greeting'" header-class="bg-green-600" :output-handles="outputHandles" :has-input="!data?.isEntryNode">
-    <template #icon><Volume2 class="w-4 h-4" /></template>
-    <p class="truncate">{{ summary }}</p>
-    <p v-if="data?.config?.interruptible" class="text-[10px] text-green-600 mt-0.5">Interruptible</p>
+  <BaseNode :label="data?.label || 'Greeting'" :output-handles="outputHandles" :has-input="!data?.isEntryNode">
+    <template #icon><Volume2 /></template>
+    <small class="truncate">{{ summary }}</small>
+    <span v-if="data?.config?.interruptible"><span class="badge" data-variant="success">Interruptible</span></span>
   </BaseNode>
 </template>

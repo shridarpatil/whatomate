@@ -147,17 +147,17 @@ test.describe('Chatbot Flow Builder - Other node types', () => {
 
   test('API node exposes method + URL fields', async () => {
     await builder.addNode('API')
-    await expect(builder.page.getByText(/^Method$/i).first()).toBeVisible()
-    await expect(builder.page.getByText(/^URL$/i).first()).toBeVisible()
+    await expect(builder.page.getByLabel(/^Method/)).toBeVisible()
+    await expect(builder.page.getByLabel(/^URL/)).toBeVisible()
   })
 
   test('Transfer node exposes a team selector', async () => {
     await builder.addNode('Transfer')
-    await expect(builder.page.getByText(/^Team$/i).first()).toBeVisible()
+    await expect(builder.page.getByLabel(/^Team/)).toBeVisible()
   })
 
   test('Condition node exposes the expression textarea', async () => {
     await builder.addNode('Condition')
-    await expect(builder.page.getByText(/^Expression$/i).first()).toBeVisible()
+    await expect(builder.page.getByLabel(/^Expression/)).toBeVisible()
   })
 })

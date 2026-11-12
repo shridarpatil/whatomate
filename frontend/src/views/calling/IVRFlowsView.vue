@@ -227,10 +227,10 @@ onMounted(async () => {
               <template v-else>
                 <tr v-for="flow in store.ivrFlows" :key="flow.id">
                   <td>
-                    <a href="#" class="unstyled" @click.prevent="openEdit(flow)">
+                    <RouterLink :to="{ name: 'ivr-flow-editor', params: { id: flow.id } }" class="unstyled">
                       <strong>{{ flow.name }}</strong>
                       <p v-if="flow.description" class="text-light"><small>{{ flow.description }}</small></p>
-                    </a>
+                    </RouterLink>
                   </td>
                   <td>{{ flow.whatsapp_account }}</td>
                   <td>

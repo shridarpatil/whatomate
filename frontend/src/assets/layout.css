@@ -47,6 +47,16 @@
   /* The pinned secondary nav sizes to its content instead of sharing space with the main nav. */
   [data-sidebar] > nav[data-pinned] { flex: none; }
 
+  /* Flow editors (vue-flow canvas). Node cards size to their content within bounds;
+     the properties side panel and the preview phone have a fixed width. */
+  .flow-node { min-width: 12rem; max-width: 24rem; }
+  .side-panel { width: 26rem; max-width: 100%; }
+  .h-preview { height: 70dvh; }
+  /* vue-flow's own (unlayered) CSS makes handles 6px; give them a usable hit target. */
+  .vue-flow__handle { width: var(--space-3) !important; height: var(--space-3) !important; }
+  /* Numbered caption under a node's output handle; `left` is set per handle at runtime. */
+  .handle-label { position: absolute; bottom: calc(-1 * var(--space-5)); translate: -50% 0; pointer-events: none; }
+
   /* Keep top-placed toasts clear of the app header (Oat's default is --space-4). */
   .toast-container[data-placement^="top"] { top: var(--space-18); }
 }

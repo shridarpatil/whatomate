@@ -14,8 +14,8 @@ const summary = computed(() => {
 </script>
 
 <template>
-  <BaseNode :label="data?.label || 'WhatsApp Flow'" header-class="bg-green-600" :has-input="!data?.isEntryNode">
-    <template #icon><MessageCircle class="w-4 h-4" /></template>
-    <p class="truncate" :title="summary">{{ summary }}</p>
+  <BaseNode :label="data?.label || 'WhatsApp Flow'" :has-input="!data?.isEntryNode">
+    <template #icon><MessageCircle /></template>
+    <small class="truncate" :title="summary">{{ summary }}</small>
   </BaseNode>
 </template>

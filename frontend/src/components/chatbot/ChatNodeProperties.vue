@@ -2,12 +2,6 @@
 import { computed } from 'vue'
 import type { ChatNode } from '@/services/api'
 import { useTeamsStore } from '@/stores/teams'
-import { Input } from '@/components/ui/input'
-import { Label } from '@/components/ui/label'
-import { Button } from '@/components/ui/button'
-import { Switch } from '@/components/ui/switch'
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
-import { Textarea } from '@/components/ui/textarea'
 import { Trash2, Plus } from '@/lib/icons'
 
 const props = defineProps<{
@@ -25,6 +19,11 @@ const teamsStore = useTeamsStore()
 if (teamsStore.teams.length === 0) teamsStore.fetchTeams()
 
 const config = computed(() => props.node.config || {})
+
+// Value of the input/select/textarea that fired an event.
+function val(e: Event): string {
+  return (e.target as HTMLInputElement).value
+}
 
 function updateConfig(key: string, value: any) {
   emit('update:node', {
@@ -229,447 +228,432 @@ const typeLabel: Record<string, string> = {
 </script>
 
 <template>
-  <div class="space-y-4 p-4">
-    <div class="flex items-center justify-between">
-      <h3 class="font-semibold text-sm">{{ typeLabel[node.type] || node.type }}</h3>
-      <Button v-if="node.type !== 'start'" variant="ghost" size="icon" class="h-7 w-7" @click="emit('delete')">
-        <Trash2 class="h-3.5 w-3.5 text-destructive" />
-      </Button>
+  <div>
+    <div class="hstack justify-between mb-4">
+      <h4>{{ typeLabel[node.type] || node.type }}</h4>
+      <button
+        v-if="node.type !== 'start'"
+        type="button"
+        class="ghost small icon"
+        data-variant="danger"
+        :aria-label="$t('common.delete')"
+        :title="$t('common.delete')"
+        @click="emit('delete')"
+      >
+        <Trash2 />
+      </button>
     </div>
 
     <!-- Start: nothing to configure beyond the label. -->
-    <p v-if="node.type === 'start'" class="text-xs text-muted-foreground">
-      Flow entry point. Wire its output to the first node that should run.
+    <p v-if="node.type === 'start'" class="text-light">
+      <small>Flow entry point. Wire its output to the first node that should run.</small>
     </p>
 
     <!-- Label -->
-    <div v-if="node.type !== 'start'" class="space-y-1.5">
-      <Label class="text-xs">Label</Label>
-      <Input :model-value="node.label" @update:model-value="(v) => updateLabel(String(v ?? ''))" class="h-8 text-sm" />
-    </div>
+    <label v-if="node.type !== 'start'" data-field>
+      Label
+      <input :value="node.label" @input="updateLabel(val($event))">
+    </label>
 
     <!-- text (message OR prompt) -->
     <template v-if="isTextNode">
-      <div class="space-y-1.5">
-        <Label class="text-xs">Message</Label>
-        <Textarea
-          :model-value="textBodyValue"
-          @update:model-value="(v: string) => updateTextBody(String(v ?? ''))"
+      <label data-field>
+        Message
+        <textarea
+          :value="textBodyValue"
           placeholder="Enter your message"
-          class="min-h-[80px] text-xs"
+          rows="3"
+          @input="updateTextBody(val($event))"
         />
-        <p class="text-[10px] text-muted-foreground">Use double-brace placeholders (e.g. <code>customer_name</code>) to interpolate session variables.</p>
-      </div>
-      <div class="space-y-1.5">
-        <Label class="text-xs">Expected response</Label>
-        <Select :model-value="expectedResponse" @update:model-value="(v: any) => setExpectedResponse(v)">
-          <SelectTrigger class="h-8 text-sm"><SelectValue /></SelectTrigger>
-          <SelectContent>
-            <SelectItem value="none">None (fire-and-forget)</SelectItem>
-            <SelectItem value="text">Text</SelectItem>
-            <SelectItem value="number">Number</SelectItem>
-            <SelectItem value="email">Email</SelectItem>
-            <SelectItem value="phone">Phone</SelectItem>
-            <SelectItem value="date">Date</SelectItem>
-            <SelectItem value="select">Selection</SelectItem>
-          </SelectContent>
-        </Select>
-        <p class="text-[10px] text-muted-foreground">When set, the flow waits for the user's reply before continuing.</p>
-      </div>
+        <small data-hint>Use double-brace placeholders (e.g. <code>customer_name</code>) to interpolate session variables.</small>
+      </label>
+      <label data-field>
+        Expected response
+        <select :value="expectedResponse" @change="setExpectedResponse(val($event))">
+          <option value="none">None (fire-and-forget)</option>
+          <option value="text">Text</option>
+          <option value="number">Number</option>
+          <option value="email">Email</option>
+          <option value="phone">Phone</option>
+          <option value="date">Date</option>
+          <option value="select">Selection</option>
+        </select>
+        <small data-hint>When set, the flow waits for the user's reply before continuing.</small>
+      </label>
       <template v-if="node.type === 'prompt'">
-        <div class="space-y-1.5">
-          <Label class="text-xs">Store response as</Label>
-          <Input
-            :model-value="config.store_as || ''"
-            @update:model-value="(v: string) => updateConfig('store_as', v)"
-            placeholder="variable_name"
-            class="h-8 text-sm font-mono"
-          />
-        </div>
-        <div class="space-y-1.5">
-          <Label class="text-xs">Validation regex (optional)</Label>
-          <Input
-            :model-value="config.validation_regex || ''"
-            @update:model-value="(v: string) => updateConfig('validation_regex', v)"
-            placeholder="^[0-9]+$"
-            class="h-8 text-xs font-mono"
-          />
-        </div>
-        <div class="space-y-1.5">
-          <Label class="text-xs">Validation error message</Label>
-          <Input
-            :model-value="config.validation_error || ''"
-            @update:model-value="(v: string) => updateConfig('validation_error', v)"
+        <label data-field>
+          Store response as
+          <input :value="config.store_as || ''" placeholder="variable_name" @input="updateConfig('store_as', val($event))">
+        </label>
+        <label data-field>
+          Validation regex (optional)
+          <input :value="config.validation_regex || ''" placeholder="^[0-9]+$" @input="updateConfig('validation_regex', val($event))">
+        </label>
+        <label data-field>
+          Validation error message
+          <input
+            :value="config.validation_error || ''"
             placeholder="Invalid input. Please try again."
-            class="h-8 text-xs"
-          />
-        </div>
-        <div class="space-y-1.5">
-          <Label class="text-xs">Max retries</Label>
-          <Input
+            @input="updateConfig('validation_error', val($event))"
+          >
+        </label>
+        <label data-field>
+          Max retries
+          <input
             type="number"
-            :model-value="String(config.max_retries ?? 3)"
-            @update:model-value="(v: string) => updateConfig('max_retries', parseInt(v) || 3)"
-            class="h-8 text-sm"
+            :value="String(config.max_retries ?? 3)"
             min="1"
             max="10"
-          />
-        </div>
+            @input="updateConfig('max_retries', parseInt(val($event)) || 3)"
+          >
+        </label>
       </template>
     </template>
 
     <!-- buttons -->
     <template v-if="node.type === 'buttons'">
-      <div class="space-y-1.5">
-        <Label class="text-xs">Body</Label>
-        <Textarea
-          :model-value="config.body || ''"
-          @update:model-value="(v: string) => updateConfig('body', v)"
+      <label data-field>
+        Body
+        <textarea
+          :value="config.body || ''"
           placeholder="Message shown above the buttons"
-          class="min-h-[60px] text-xs"
+          rows="2"
+          @input="updateConfig('body', val($event))"
         />
-      </div>
-      <div class="space-y-1.5">
-        <div class="flex items-center justify-between">
-          <Label class="text-xs">Button Options ({{ (config.buttons || []).length }}/{{ hasCtaButtons ? 2 : 10 }})</Label>
+      </label>
+      <div class="vstack gap-2 mb-4">
+        <span>Button Options ({{ (config.buttons || []).length }}/{{ hasCtaButtons ? 2 : 10 }})</span>
+        <div class="hstack gap-1">
+          <button type="button" class="outline small" :disabled="hasCtaButtons || replyCount >= 10" @click="addReplyButton">
+            <Plus /> Reply
+          </button>
+          <button type="button" class="outline small" :disabled="hasReplyButtons || ctaCount >= 2" @click="addUrlButton">
+            <Plus /> URL
+          </button>
+          <button type="button" class="outline small" :disabled="hasReplyButtons || ctaCount >= 2" @click="addPhoneButton">
+            <Plus /> Phone
+          </button>
         </div>
-        <div class="flex gap-1">
-          <Button variant="outline" size="sm" class="h-7 text-xs" :disabled="hasCtaButtons || replyCount >= 10" @click="addReplyButton">
-            <Plus class="h-3 w-3 mr-0.5" /> Reply
-          </Button>
-          <Button variant="outline" size="sm" class="h-7 text-xs" :disabled="hasReplyButtons || ctaCount >= 2" @click="addUrlButton">
-            <Plus class="h-3 w-3 mr-0.5" /> URL
-          </Button>
-          <Button variant="outline" size="sm" class="h-7 text-xs" :disabled="hasReplyButtons || ctaCount >= 2" @click="addPhoneButton">
-            <Plus class="h-3 w-3 mr-0.5" /> Phone
-          </Button>
-        </div>
-        <div v-for="(btn, idx) in (config.buttons || [])" :key="btn.id || idx" class="p-2 border rounded-md space-y-2 bg-muted/30">
-          <div class="flex items-center gap-1">
-            <span class="text-[10px] uppercase text-muted-foreground w-12">{{ btn.type || 'reply' }}</span>
-            <Input
-              :model-value="btn.title || ''"
-              @update:model-value="(v: string) => updateButton(Number(idx), 'title', v)"
+        <article
+          v-for="(btn, idx) in (config.buttons || [])"
+          :key="btn.id || idx"
+          class="card p-4 vstack gap-2"
+          data-button-config
+        >
+          <div class="hstack gap-1">
+            <span class="badge" data-variant="secondary">{{ btn.type || 'reply' }}</span>
+            <input
+              class="flex-1 min-w-0"
+              :value="btn.title || ''"
               placeholder="Button Title"
-              class="h-7 text-xs flex-1"
-            />
-            <Button variant="ghost" size="icon" class="h-6 w-6" @click="removeButton(Number(idx))">
-              <Trash2 class="h-3 w-3 text-destructive" />
-            </Button>
+              aria-label="Button Title"
+              @input="updateButton(Number(idx), 'title', val($event))"
+            >
+            <button
+              type="button"
+              class="ghost small icon"
+              data-variant="danger"
+              :aria-label="$t('common.delete')"
+              :title="$t('common.delete')"
+              @click="removeButton(Number(idx))"
+            >
+              <Trash2 />
+            </button>
           </div>
-          <Input
-            :model-value="btn.id || ''"
-            @update:model-value="(v: string) => updateButton(Number(idx), 'id', v)"
+          <input
+            :value="btn.id || ''"
             placeholder="button_id"
-            class="h-7 text-xs font-mono"
-          />
-          <Input
+            aria-label="button_id"
+            @input="updateButton(Number(idx), 'id', val($event))"
+          >
+          <input
             v-if="btn.type === 'url'"
-            :model-value="btn.url || ''"
-            @update:model-value="(v: string) => updateButton(Number(idx), 'url', v)"
+            type="url"
+            :value="btn.url || ''"
             placeholder="https://example.com"
-            class="h-7 text-xs font-mono"
-          />
-          <Input
+            aria-label="URL"
+            @input="updateButton(Number(idx), 'url', val($event))"
+          >
+          <input
             v-if="btn.type === 'phone'"
-            :model-value="btn.phone_number || ''"
-            @update:model-value="(v: string) => updateButton(Number(idx), 'phone_number', v)"
+            type="tel"
+            :value="btn.phone_number || ''"
             placeholder="+1234567890"
-            class="h-7 text-xs font-mono"
-          />
-        </div>
-        <p class="text-[10px] text-muted-foreground">Reply buttons (max 10) send the user's choice back. URL / Phone buttons (max 2 per node, mutually exclusive with Reply) open a link or call. Wire reply buttons to next nodes by dragging from the button handle on the canvas.</p>
+            aria-label="Phone"
+            @input="updateButton(Number(idx), 'phone_number', val($event))"
+          >
+        </article>
+        <small class="text-light">Reply buttons (max 10) send the user's choice back. URL / Phone buttons (max 2 per node, mutually exclusive with Reply) open a link or call. Wire reply buttons to next nodes by dragging from the button handle on the canvas.</small>
       </div>
+
+      <hr>
 
       <!-- Input — buttons always expect a button selection; surface this
            for visual consistency with text nodes. -->
-      <div class="pt-2 border-t space-y-1.5">
-        <Label class="text-xs">Expected response</Label>
-        <Select model-value="button" disabled>
-          <SelectTrigger class="h-8 text-sm"><SelectValue /></SelectTrigger>
-          <SelectContent>
-            <SelectItem value="button">Selection (buttons)</SelectItem>
-          </SelectContent>
-        </Select>
-      </div>
+      <label data-field>
+        Expected response
+        <select value="button" disabled>
+          <option value="button">Selection (buttons)</option>
+        </select>
+      </label>
 
-      <div class="space-y-1.5">
-        <Label class="text-xs">Store response as (optional)</Label>
-        <Input
-          :model-value="config.store_as || ''"
-          @update:model-value="(v: string) => updateConfig('store_as', v)"
-          placeholder="variable_name"
-          class="h-8 text-sm font-mono"
-        />
-        <p class="text-[10px] text-muted-foreground">Saves the tapped button's title into this variable so later nodes can reference it.</p>
-      </div>
-
+      <label data-field>
+        Store response as (optional)
+        <input :value="config.store_as || ''" placeholder="variable_name" @input="updateConfig('store_as', val($event))">
+        <small data-hint>Saves the tapped button's title into this variable so later nodes can reference it.</small>
+      </label>
     </template>
 
     <!-- api_call -->
     <template v-if="node.type === 'api_call'">
-      <div class="space-y-1.5">
-        <Label class="text-xs">URL</Label>
-        <Input
-          :model-value="config.url || ''"
-          @update:model-value="(v: string) => updateConfig('url', v)"
-          placeholder="https://api.example.com/endpoint"
-          class="h-8 text-xs font-mono"
-        />
-      </div>
-      <div class="space-y-1.5">
-        <Label class="text-xs">Method</Label>
-        <Select :model-value="config.method || 'GET'" @update:model-value="(v: any) => updateConfig('method', v)">
-          <SelectTrigger class="h-8 text-sm"><SelectValue /></SelectTrigger>
-          <SelectContent>
-            <SelectItem value="GET">GET</SelectItem>
-            <SelectItem value="POST">POST</SelectItem>
-            <SelectItem value="PUT">PUT</SelectItem>
-            <SelectItem value="PATCH">PATCH</SelectItem>
-          </SelectContent>
-        </Select>
-      </div>
-      <div class="space-y-1.5">
-        <div class="flex items-center justify-between">
-          <Label class="text-xs">Headers</Label>
-          <Button variant="outline" size="sm" class="h-6 text-xs" @click="addHeader">
-            <Plus class="h-3 w-3 mr-1" /> Add
-          </Button>
+      <label data-field>
+        URL
+        <input :value="config.url || ''" placeholder="https://api.example.com/endpoint" @input="updateConfig('url', val($event))">
+      </label>
+      <label data-field>
+        Method
+        <select :value="config.method || 'GET'" @change="updateConfig('method', val($event))">
+          <option value="GET">GET</option>
+          <option value="POST">POST</option>
+          <option value="PUT">PUT</option>
+          <option value="PATCH">PATCH</option>
+        </select>
+      </label>
+      <div class="vstack gap-2 mb-4">
+        <div class="hstack justify-between">
+          <span>Headers</span>
+          <button type="button" class="outline small" @click="addHeader">
+            <Plus /> Add
+          </button>
         </div>
-        <div v-for="(val, key) in (config.headers || {})" :key="String(key)" class="flex items-center gap-1">
-          <Input :model-value="String(key)" @update:model-value="(v: string) => updateHeaderKey(String(key), v)" placeholder="Key" class="h-7 text-xs flex-1" />
-          <Input :model-value="String(val)" @update:model-value="(v: string) => updateHeaderValue(String(key), v)" placeholder="Value" class="h-7 text-xs flex-1" />
-          <Button variant="ghost" size="icon" class="h-6 w-6" @click="removeHeader(String(key))">
-            <Trash2 class="h-3 w-3 text-destructive" />
-          </Button>
+        <div v-for="(v, key) in (config.headers || {})" :key="String(key)" class="hstack gap-1">
+          <input class="flex-1 min-w-0" :value="String(key)" placeholder="Key" aria-label="Key" @input="updateHeaderKey(String(key), val($event))">
+          <input class="flex-1 min-w-0" :value="String(v)" placeholder="Value" aria-label="Value" @input="updateHeaderValue(String(key), val($event))">
+          <button
+            type="button"
+            class="ghost small icon"
+            data-variant="danger"
+            :aria-label="$t('common.delete')"
+            :title="$t('common.delete')"
+            @click="removeHeader(String(key))"
+          >
+            <Trash2 />
+          </button>
         </div>
       </div>
-      <div class="space-y-1.5">
-        <Label class="text-xs">Body</Label>
-        <Textarea
-          :model-value="config.body || ''"
-          @update:model-value="(v: string) => updateConfig('body', v)"
+      <label data-field>
+        Body
+        <textarea
+          :value="config.body || ''"
           placeholder='{"phone": "{{phone_number}}"}'
-          class="min-h-[60px] text-xs font-mono"
+          rows="3"
+          @input="updateConfig('body', val($event))"
         />
-      </div>
-      <div class="space-y-1.5">
-        <div class="flex items-center justify-between">
-          <Label class="text-xs">Response mapping</Label>
-          <Button variant="outline" size="sm" class="h-6 text-xs" @click="addResponseMapping">
-            <Plus class="h-3 w-3 mr-1" /> Add
-          </Button>
+      </label>
+      <div class="vstack gap-2 mb-4">
+        <div class="hstack justify-between">
+          <span>Response mapping</span>
+          <button type="button" class="outline small" @click="addResponseMapping">
+            <Plus /> Add
+          </button>
         </div>
-        <p class="text-[10px] text-muted-foreground">Map JSON paths into session variables (e.g. <code>data.user.name</code>).</p>
-        <div v-for="(val, key) in (config.response_mapping || {})" :key="String(key)" class="flex items-center gap-1">
-          <Input :model-value="String(key)" @update:model-value="(v: string) => updateResponseMappingKey(String(key), v)" placeholder="var_name" class="h-7 text-xs flex-1 font-mono" />
-          <Input :model-value="String(val)" @update:model-value="(v: string) => updateResponseMappingValue(String(key), v)" placeholder="path.to.field" class="h-7 text-xs flex-1 font-mono" />
-          <Button variant="ghost" size="icon" class="h-6 w-6" @click="removeResponseMapping(String(key))">
-            <Trash2 class="h-3 w-3 text-destructive" />
-          </Button>
+        <small class="text-light">Map JSON paths into session variables (e.g. <code>data.user.name</code>).</small>
+        <div v-for="(v, key) in (config.response_mapping || {})" :key="String(key)" class="hstack gap-1">
+          <input class="flex-1 min-w-0" :value="String(key)" placeholder="var_name" aria-label="var_name" @input="updateResponseMappingKey(String(key), val($event))">
+          <input class="flex-1 min-w-0" :value="String(v)" placeholder="path.to.field" aria-label="path.to.field" @input="updateResponseMappingValue(String(key), val($event))">
+          <button
+            type="button"
+            class="ghost small icon"
+            data-variant="danger"
+            :aria-label="$t('common.delete')"
+            :title="$t('common.delete')"
+            @click="removeResponseMapping(String(key))"
+          >
+            <Trash2 />
+          </button>
         </div>
       </div>
-      <div class="space-y-1.5">
-        <Label class="text-xs">Message template (optional)</Label>
-        <Textarea
-          :model-value="config.message_template || ''"
-          @update:model-value="(v: string) => updateConfig('message_template', v)"
+      <label data-field>
+        Message template (optional)
+        <textarea
+          :value="config.message_template || ''"
           placeholder="Hello {{user_name}}!"
-          class="min-h-[50px] text-xs"
+          rows="2"
+          @input="updateConfig('message_template', val($event))"
         />
-        <p class="text-[10px] text-muted-foreground">Sent on 2xx response after mappings are applied.</p>
-      </div>
+        <small data-hint>Sent on 2xx response after mappings are applied.</small>
+      </label>
     </template>
 
     <!-- condition -->
     <template v-if="node.type === 'condition'">
-      <div class="space-y-1.5">
-        <Label class="text-xs">Expression</Label>
-        <Textarea
-          :model-value="config.expression || ''"
-          @update:model-value="(v: string) => updateConfig('expression', v)"
+      <label data-field>
+        Expression
+        <textarea
+          :value="config.expression || ''"
           placeholder='tier == "premium" and amount > 100'
-          class="min-h-[60px] text-xs font-mono"
+          rows="3"
+          @input="updateConfig('expression', val($event))"
         />
-        <p class="text-[10px] text-muted-foreground">Routes via the <code>true</code> / <code>false</code> handle. Uses expr-lang syntax.</p>
-      </div>
+        <small data-hint>Routes via the <code>true</code> / <code>false</code> handle. Uses expr-lang syntax.</small>
+      </label>
     </template>
 
     <!-- timing -->
     <template v-if="node.type === 'timing'">
-      <div class="space-y-1.5">
-        <Label class="text-xs">Schedule</Label>
-        <div v-for="(entry, idx) in schedule" :key="idx" class="flex items-center gap-1.5 text-xs">
-          <span class="w-12 capitalize">{{ entry.day.slice(0, 3) }}</span>
-          <Switch :checked="entry.enabled" @update:checked="(v: boolean) => updateScheduleEntry(Number(idx), 'enabled', v)" />
-          <Input
-            v-if="entry.enabled"
-            type="time"
-            :model-value="entry.start_time"
-            @update:model-value="(v: string) => updateScheduleEntry(Number(idx), 'start_time', v)"
-            class="h-8 text-xs w-28"
-          />
-          <span v-if="entry.enabled" class="text-muted-foreground">-</span>
-          <Input
-            v-if="entry.enabled"
-            type="time"
-            :model-value="entry.end_time"
-            @update:model-value="(v: string) => updateScheduleEntry(Number(idx), 'end_time', v)"
-            class="h-8 text-xs w-28"
-          />
+      <fieldset class="vstack gap-2 mb-4">
+        <legend>Schedule</legend>
+        <div v-for="(entry, idx) in schedule" :key="idx" class="hstack gap-2">
+          <label class="hstack gap-2 shrink-0">
+            <input
+              type="checkbox"
+              role="switch"
+              :checked="entry.enabled"
+              @change="updateScheduleEntry(Number(idx), 'enabled', ($event.target as HTMLInputElement).checked)"
+            >
+            <small>{{ entry.day.slice(0, 3) }}</small>
+          </label>
+          <template v-if="entry.enabled">
+            <input
+              type="time"
+              class="flex-1 min-w-0"
+              :value="entry.start_time"
+              :aria-label="`${entry.day} start`"
+              @input="updateScheduleEntry(Number(idx), 'start_time', val($event))"
+            >
+            <span class="text-light">-</span>
+            <input
+              type="time"
+              class="flex-1 min-w-0"
+              :value="entry.end_time"
+              :aria-label="`${entry.day} end`"
+              @input="updateScheduleEntry(Number(idx), 'end_time', val($event))"
+            >
+          </template>
         </div>
-        <p class="text-[10px] text-muted-foreground">Routes via <code>in_hours</code> / <code>out_of_hours</code>.</p>
-      </div>
+        <small class="text-light">Routes via <code>in_hours</code> / <code>out_of_hours</code>.</small>
+      </fieldset>
     </template>
 
     <!-- transfer -->
     <template v-if="node.type === 'transfer'">
-      <div class="space-y-1.5">
-        <Label class="text-xs">Body (sent before handoff)</Label>
-        <Textarea
-          :model-value="config.body || ''"
-          @update:model-value="(v: string) => updateConfig('body', v)"
+      <label data-field>
+        Body (sent before handoff)
+        <textarea
+          :value="config.body || ''"
           placeholder="Connecting you with a human..."
-          class="min-h-[50px] text-xs"
+          rows="2"
+          @input="updateConfig('body', val($event))"
         />
-      </div>
-      <div class="space-y-1.5">
-        <Label class="text-xs">Team</Label>
-        <Select :model-value="config.team_id || '_general'" @update:model-value="(v: any) => updateConfig('team_id', v)">
-          <SelectTrigger class="h-8 text-sm"><SelectValue placeholder="General queue" /></SelectTrigger>
-          <SelectContent>
-            <SelectItem value="_general">General queue</SelectItem>
-            <SelectItem v-for="team in teamsStore.teams" :key="team.id" :value="team.id">
-              {{ team.name }}
-            </SelectItem>
-          </SelectContent>
-        </Select>
-      </div>
-      <div class="space-y-1.5">
-        <Label class="text-xs">Notes (for agents)</Label>
-        <Textarea
-          :model-value="config.notes || ''"
-          @update:model-value="(v: string) => updateConfig('notes', v)"
+      </label>
+      <label data-field>
+        Team
+        <select :value="config.team_id || '_general'" @change="updateConfig('team_id', val($event))">
+          <option value="_general">General queue</option>
+          <option v-for="team in teamsStore.teams" :key="team.id" :value="team.id">
+            {{ team.name }}
+          </option>
+        </select>
+      </label>
+      <label data-field>
+        Notes (for agents)
+        <textarea
+          :value="config.notes || ''"
           placeholder="Customer asked about: {{topic}}"
-          class="min-h-[50px] text-xs"
+          rows="2"
+          @input="updateConfig('notes', val($event))"
         />
-      </div>
+      </label>
     </template>
 
     <!-- end -->
     <template v-if="node.type === 'end'">
-      <div class="space-y-1.5">
-        <Label class="text-xs">Final message (optional)</Label>
-        <Textarea
-          :model-value="config.message || ''"
-          @update:model-value="(v: string) => updateConfig('message', v)"
+      <label data-field>
+        Final message (optional)
+        <textarea
+          :value="config.message || ''"
           placeholder="Sent when the flow ends. Leave blank for silent terminal."
-          class="min-h-[60px] text-xs"
+          rows="3"
+          @input="updateConfig('message', val($event))"
         />
-      </div>
+      </label>
     </template>
 
     <!-- goto_flow -->
     <template v-if="node.type === 'goto_flow'">
-      <div class="space-y-1.5">
-        <Label class="text-xs">Target flow</Label>
-        <Select :model-value="config.flow_id || 'none'" @update:model-value="(v: any) => updateConfig('flow_id', v === 'none' ? '' : v)">
-          <SelectTrigger class="h-8 text-sm"><SelectValue placeholder="Select flow" /></SelectTrigger>
-          <SelectContent>
-            <SelectItem value="none">Select flow…</SelectItem>
-            <SelectItem v-for="flow in gotoFlowTargets" :key="flow.id" :value="flow.id">
-              {{ flow.name }}
-            </SelectItem>
-          </SelectContent>
-        </Select>
-        <p class="text-[10px] text-muted-foreground">Session variables carry forward into the target flow.</p>
-      </div>
+      <label data-field>
+        Target flow
+        <select :value="config.flow_id || 'none'" @change="updateConfig('flow_id', val($event) === 'none' ? '' : val($event))">
+          <option value="none">Select flow…</option>
+          <option v-for="flow in gotoFlowTargets" :key="flow.id" :value="flow.id">
+            {{ flow.name }}
+          </option>
+        </select>
+        <small data-hint>Session variables carry forward into the target flow.</small>
+      </label>
     </template>
 
     <!-- whatsapp_flow -->
     <template v-if="node.type === 'whatsapp_flow'">
-      <div class="space-y-1.5">
-        <Label class="text-xs">WhatsApp Flow ID</Label>
-        <Input
-          :model-value="config.flow_id || ''"
-          @update:model-value="(v: string) => updateConfig('flow_id', v)"
-          placeholder="Meta flow id"
-          class="h-8 text-xs font-mono"
-        />
-      </div>
-      <div class="space-y-1.5">
-        <Label class="text-xs">Header</Label>
-        <Input
-          :model-value="config.header || ''"
-          @update:model-value="(v: string) => updateConfig('header', v)"
-          class="h-8 text-xs"
-        />
-      </div>
-      <div class="space-y-1.5">
-        <Label class="text-xs">Body</Label>
-        <Textarea
-          :model-value="config.body || ''"
-          @update:model-value="(v: string) => updateConfig('body', v)"
-          class="min-h-[50px] text-xs"
-        />
-      </div>
-      <div class="space-y-1.5">
-        <Label class="text-xs">CTA label</Label>
-        <Input
-          :model-value="config.cta || ''"
-          @update:model-value="(v: string) => updateConfig('cta', v)"
-          placeholder="Open form"
-          class="h-8 text-xs"
-        />
-      </div>
+      <label data-field>
+        WhatsApp Flow ID
+        <input :value="config.flow_id || ''" placeholder="Meta flow id" @input="updateConfig('flow_id', val($event))">
+      </label>
+      <label data-field>
+        Header
+        <input :value="config.header || ''" @input="updateConfig('header', val($event))">
+      </label>
+      <label data-field>
+        Body
+        <textarea :value="config.body || ''" rows="2" @input="updateConfig('body', val($event))" />
+      </label>
+      <label data-field>
+        CTA label
+        <input :value="config.cta || ''" placeholder="Open form" @input="updateConfig('cta', val($event))">
+      </label>
     </template>
 
     <!-- webhook -->
     <template v-if="node.type === 'webhook'">
-      <div class="space-y-1.5">
-        <Label class="text-xs">URL</Label>
-        <Input
-          :model-value="config.url || ''"
-          @update:model-value="(v: string) => updateConfig('url', v)"
-          placeholder="https://example.com/hook"
-          class="h-8 text-xs font-mono"
-        />
-      </div>
-      <div class="space-y-1.5">
-        <Label class="text-xs">Method</Label>
-        <Select :model-value="config.method || 'POST'" @update:model-value="(v: any) => updateConfig('method', v)">
-          <SelectTrigger class="h-8 text-sm"><SelectValue /></SelectTrigger>
-          <SelectContent>
-            <SelectItem value="GET">GET</SelectItem>
-            <SelectItem value="POST">POST</SelectItem>
-            <SelectItem value="PUT">PUT</SelectItem>
-            <SelectItem value="PATCH">PATCH</SelectItem>
-          </SelectContent>
-        </Select>
-      </div>
-      <div class="space-y-1.5">
-        <div class="flex items-center justify-between">
-          <Label class="text-xs">Headers</Label>
-          <Button variant="outline" size="sm" class="h-6 text-xs" @click="addHeader">
-            <Plus class="h-3 w-3 mr-1" /> Add
-          </Button>
+      <label data-field>
+        URL
+        <input :value="config.url || ''" placeholder="https://example.com/hook" @input="updateConfig('url', val($event))">
+      </label>
+      <label data-field>
+        Method
+        <select :value="config.method || 'POST'" @change="updateConfig('method', val($event))">
+          <option value="GET">GET</option>
+          <option value="POST">POST</option>
+          <option value="PUT">PUT</option>
+          <option value="PATCH">PATCH</option>
+        </select>
+      </label>
+      <div class="vstack gap-2 mb-4">
+        <div class="hstack justify-between">
+          <span>Headers</span>
+          <button type="button" class="outline small" @click="addHeader">
+            <Plus /> Add
+          </button>
         </div>
-        <div v-for="(val, key) in (config.headers || {})" :key="String(key)" class="flex items-center gap-1">
-          <Input :model-value="String(key)" @update:model-value="(v: string) => updateHeaderKey(String(key), v)" placeholder="Key" class="h-7 text-xs flex-1" />
-          <Input :model-value="String(val)" @update:model-value="(v: string) => updateHeaderValue(String(key), v)" placeholder="Value" class="h-7 text-xs flex-1" />
-          <Button variant="ghost" size="icon" class="h-6 w-6" @click="removeHeader(String(key))">
-            <Trash2 class="h-3 w-3 text-destructive" />
-          </Button>
+        <div v-for="(v, key) in (config.headers || {})" :key="String(key)" class="hstack gap-1">
+          <input class="flex-1 min-w-0" :value="String(key)" placeholder="Key" aria-label="Key" @input="updateHeaderKey(String(key), val($event))">
+          <input class="flex-1 min-w-0" :value="String(v)" placeholder="Value" aria-label="Value" @input="updateHeaderValue(String(key), val($event))">
+          <button
+            type="button"
+            class="ghost small icon"
+            data-variant="danger"
+            :aria-label="$t('common.delete')"
+            :title="$t('common.delete')"
+            @click="removeHeader(String(key))"
+          >
+            <Trash2 />
+          </button>
         </div>
       </div>
-      <div class="space-y-1.5">
-        <Label class="text-xs">Body</Label>
-        <Textarea
-          :model-value="config.body || ''"
-          @update:model-value="(v: string) => updateConfig('body', v)"
-          class="min-h-[50px] text-xs font-mono"
-        />
-      </div>
+      <label data-field>
+        Body
+        <textarea :value="config.body || ''" rows="2" @input="updateConfig('body', val($event))" />
+      </label>
     </template>
 
     <!-- Skip condition. Evaluated by the runner before executing the
@@ -680,18 +664,13 @@ const typeLabel: Record<string, string> = {
          buttons / timing — they have no default edge) and terminal
          nodes (end / transfer / goto_flow) where there's nothing to
          skip past. -->
-    <div
-      v-if="!['start', 'end', 'transfer', 'goto_flow', 'condition', 'buttons', 'timing'].includes(node.type)"
-      class="pt-2 border-t space-y-1.5"
-    >
-      <Label class="text-xs">Skip condition (optional)</Label>
-      <Input
-        :model-value="config.skip_condition || ''"
-        @update:model-value="(v: string) => updateConfig('skip_condition', v)"
-        placeholder='tier == "premium"'
-        class="h-8 text-xs font-mono"
-      />
-      <p class="text-[10px] text-muted-foreground">Skip this node when the expression evaluates truthy — execution continues via the default edge.</p>
-    </div>
+    <template v-if="!['start', 'end', 'transfer', 'goto_flow', 'condition', 'buttons', 'timing'].includes(node.type)">
+      <hr>
+      <label data-field>
+        Skip condition (optional)
+        <input :value="config.skip_condition || ''" placeholder='tier == "premium"' @input="updateConfig('skip_condition', val($event))">
+        <small data-hint>Skip this node when the expression evaluates truthy — execution continues via the default edge.</small>
+      </label>
+    </template>
   </div>
 </template>
