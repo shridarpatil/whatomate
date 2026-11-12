@@ -71,8 +71,10 @@
   /* Numbered caption under a node's output handle; `left` is set per handle at runtime. */
   .handle-label { position: absolute; bottom: calc(-1 * var(--space-5)); translate: -50% 0; pointer-events: none; }
 
-  /* Keep top-placed toasts clear of the mobile header bar (Oat's default is --space-4). */
+  /* Top-placed toasts sit below the page header row so they never cover its
+     action buttons (Oat's default is --space-4); phones also clear the mobile bar. */
+  .toast-container[data-placement^="top"] { top: 4.5rem; }
   @media (max-width: 48rem) {
-    .toast-container[data-placement^="top"] { top: var(--space-16); }
+    .toast-container[data-placement^="top"] { top: 7.5rem; }
   }
 }

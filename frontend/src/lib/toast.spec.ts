@@ -24,7 +24,7 @@ describe('toast', () => {
 
   it('error maps to danger', () => {
     toast.error('Failed')
-    expect(otToast).toHaveBeenCalledWith('Failed', undefined, { variant: 'danger', placement: 'bottom-right' })
+    expect(otToast).toHaveBeenCalledWith('Failed', undefined, { variant: 'danger', placement: 'top-right' })
   })
 
   it('description becomes body', () => {
@@ -32,13 +32,13 @@ describe('toast', () => {
     expect(otToast).toHaveBeenCalledWith('All good', 'Saved', {
       variant: 'success',
       duration: 2000,
-      placement: 'bottom-right',
+      placement: 'top-right',
     })
   })
 
   it('plain toast is info', () => {
     toast('Hello')
-    expect(otToast).toHaveBeenCalledWith('Hello', undefined, { variant: 'info', placement: 'bottom-right' })
+    expect(otToast).toHaveBeenCalledWith('Hello', undefined, { variant: 'info', placement: 'top-right' })
   })
 
   it('warning and info map to their variants', () => {

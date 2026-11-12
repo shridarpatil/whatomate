@@ -12,7 +12,7 @@ export interface ToastOptions {
 type Variant = 'success' | 'danger' | 'warning' | 'info'
 
 function show(variant: Variant, message: string, opts?: ToastOptions) {
-  const options: { variant: Variant; duration?: number; placement: string } = { variant, placement: 'bottom-right' }
+  const options: { variant: Variant; duration?: number; placement: string } = { variant, placement: 'top-right' }
   if (opts?.duration !== undefined) options.duration = opts.duration
   const el = opts?.description
     ? window.ot.toast(opts.description, message, options)
