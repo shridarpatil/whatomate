@@ -2,11 +2,8 @@ import { test, expect } from '@playwright/test'
 import { loginAsSuperAdmin } from '../../framework'
 
 /**
- * Regression: a custom date range saved to localStorage was being restored
- * as plain {year, month, day} objects, which RangeCalendar (reka-ui) can't
- * render. Result: re-opening the date picker after a previous Apply showed
- * only the Apply button — no calendar grid. Now restored as CalendarDate
- * instances.
+ * Regression: a custom date range saved to localStorage must be restored
+ * (as CalendarDate instances) and shown in the From/To date inputs.
  */
 
 test.describe('DateRangePicker — re-open after Apply', () => {
@@ -34,7 +31,7 @@ test.describe('DateRangePicker — re-open after Apply', () => {
     })
   })
 
-  test('calendar grid renders on second open with previously applied range', async ({ page }) => {
+  test('date inputs show the previously applied range', async ({ page }) => {
     await page.goto('/')
     await page.waitForLoadState('networkidle')
 
@@ -47,18 +44,8 @@ test.describe('DateRangePicker — re-open after Apply', () => {
     expect(storageState.range).toBe('custom')
     expect(storageState.custom).toBeTruthy()
 
-    // The date button is rendered by formatDateRangeDisplay; with the
-    // seeded range it shows month/day/year separated by " - ". Match a
-    // small portion to stay robust against locale formatting differences.
-    const dateButton = page.getByRole('button').filter({ hasText: '/2026' })
-    await expect(dateButton).toBeVisible({ timeout: 10000 })
-    await dateButton.click()
-
-    // The grid is what was missing before the fix.
-    const grid = page.locator('[role="grid"]').first()
-    await expect(grid).toBeVisible({ timeout: 5000 })
-
-    // Sanity: at least one date cell is present.
-    await expect(page.locator('[role="gridcell"]').first()).toBeVisible()
+    // A custom range renders native From/To date inputs seeded from storage.
+    await expect(page.getByLabel('From')).toHaveValue('2026-04-01', { timeout: 10000 })
+    await expect(page.getByLabel('To')).toHaveValue('2026-04-30')
   })
 })

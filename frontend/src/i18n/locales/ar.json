@@ -1,5 +1,7 @@
 {
   "dateRange": {
+    "from": "From",
+    "to": "To",
     "selectRange": "نطاق التاريخ",
     "today": "اليوم",
     "last7Days": "آخر 7 أيام",

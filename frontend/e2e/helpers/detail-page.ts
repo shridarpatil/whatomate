@@ -34,7 +34,7 @@ export async function expectDeleteFromForm(page: Page, listUrl: string) {
   const deleteBtn = page.getByRole('button', { name: /Delete/i }).first()
   if (await deleteBtn.isVisible()) {
     await deleteBtn.click()
-    const dialog = page.locator('[role="alertdialog"]')
+    const dialog = page.getByRole('alertdialog')
     await expect(dialog).toBeVisible({ timeout: 5000 })
     await dialog.getByRole('button', { name: /Delete/i }).click()
     await page.waitForTimeout(2000)

@@ -1,5 +1,7 @@
 {
   "dateRange": {
+    "from": "From",
+    "to": "To",
     "selectRange": "Date Range",
     "today": "Today",
     "last7Days": "Last 7 Days",

@@ -18,10 +18,11 @@ export class DialogPage extends BasePage {
 
   constructor(page: Page) {
     super(page)
-    this.dialog = page.locator('[role="dialog"]')
+    // Native <dialog> (Modal) has the implicit dialog role; legacy markup uses role="dialog" explicitly.
+    this.dialog = page.locator('dialog[open], [role="dialog"]').first()
     // Be specific - Cancel button (not the X close button)
     this.cancelButton = this.dialog.getByRole('button', { name: 'Cancel', exact: true })
-    this.closeButton = this.dialog.locator('button[class*="absolute"]')
+    this.closeButton = this.dialog.getByRole('button', { name: 'Close', exact: true })
   }
 
   get submitButton(): Locator {
@@ -82,6 +83,33 @@ export class DialogPage extends BasePage {
     }
 
     throw new Error(`Could not find input for label: ${label}`)
+  }
+
+  /** Alert dialog (Modal with `alert`). */
+  get alertDialog(): Locator {
+    return this.page.getByRole('alertdialog')
+  }
+
+  /**
+   * Fill a select by its label: native <select> (selectOption) or Combobox
+   * (click the trigger, click the option). Falls back to the legacy
+   * button[role="combobox"] path for screens not yet migrated.
+   */
+  async fillSelect(label: string, option: string) {
+    const native = this.dialog.getByLabel(label, { exact: false }).and(this.page.locator('select'))
+    if (await native.count() > 0) {
+      await native.first().selectOption({ label: option })
+      return
+    }
+
+    const combo = this.dialog.locator('button[aria-haspopup="listbox"]').and(this.dialog.getByLabel(label))
+    if (await combo.count() > 0) {
+      await combo.first().click()
+      await this.page.getByRole('option', { name: option, exact: true }).first().click()
+      return
+    }
+
+    await this.selectOption(label, option)
   }
 
   async selectOption(label: string, value: string) {
