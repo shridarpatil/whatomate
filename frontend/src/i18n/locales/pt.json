@@ -1866,7 +1866,9 @@
     "aiSettingsSaved": "Configurações de IA salvas",
     "slaSettingsSaved": "Configurações SLA salvas",
     "aiSaveFailed": "Falha ao salvar as configurações de IA",
-    "slaSaveFailed": "Falha ao salvar as configurações de SLA"
+    "slaSaveFailed": "Falha ao salvar as configurações de SLA",
+    "startTime": "{day} start time",
+    "endTime": "{day} end time"
   },
   "agentTransfers": {
     "title": "Transferências",

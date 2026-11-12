@@ -169,7 +169,7 @@ async function deleteAction() {
 
 function addHeader() { if (newHeaderKey.value.trim() && newHeaderValue.value.trim()) { formData.value.config.headers[newHeaderKey.value.trim()] = newHeaderValue.value.trim(); newHeaderKey.value = ''; newHeaderValue.value = '' } }
 function removeHeader(key: string) { delete formData.value.config.headers[key] }
-function getActionTypeBadge(type: string) { return { webhook: { label: 'Webhook', variant: undefined }, url: { label: 'URL', variant: 'secondary' }, javascript: { label: 'JavaScript', variant: undefined } }[type] || { label: type, variant: undefined } }
+function getActionTypeBadge(type: string) { return { webhook: { label: 'Webhook', variant: undefined, outline: false }, url: { label: 'URL', variant: 'secondary', outline: false }, javascript: { label: 'JavaScript', variant: 'secondary', outline: true } }[type] || { label: type, variant: undefined, outline: true } }
 
 const defaultBodyTemplate = `{\n  "subject": "WhatsApp: {{contact.name}}",\n  "phone": "{{contact.phone_number}}",\n  "description": "Contact from WhatsApp",\n  "user": "{{user.name}}"\n}`
 
@@ -205,7 +205,7 @@ onMounted(() => fetchActions())
         <DataTable :items="actions" :columns="columns" :is-loading="isLoading" :empty-icon="Zap" :empty-title="searchQuery ? $t('customActions.noMatchingActions') : $t('customActions.noActionsYet')" :empty-description="searchQuery ? $t('customActions.noMatchingActionsDesc') : $t('customActions.noActionsYetDesc')" v-model:sort-key="sortKey" v-model:sort-direction="sortDirection" server-pagination :current-page="currentPage" :total-items="totalItems" :page-size="pageSize" item-name="actions" @page-change="handlePageChange">
           <template #cell-icon="{ item: action }"><component :is="getIconComponent(action.icon)" :size="20" /></template>
           <template #cell-name="{ item: action }"><strong>{{ action.name }}</strong></template>
-          <template #cell-type="{ item: action }"><span class="badge" :data-variant="getActionTypeBadge(action.action_type).variant">{{ getActionTypeBadge(action.action_type).label }}</span></template>
+          <template #cell-type="{ item: action }"><span class="badge" :class="{ outline: getActionTypeBadge(action.action_type).outline }" :data-variant="getActionTypeBadge(action.action_type).variant">{{ getActionTypeBadge(action.action_type).label }}</span></template>
           <template #cell-target="{ item: action }"><span class="truncate text-light">{{ action.action_type === 'javascript' ? $t('customActions.customScript') : action.config.url }}</span></template>
           <template #cell-status="{ item: action }">
             <label class="hstack gap-2">

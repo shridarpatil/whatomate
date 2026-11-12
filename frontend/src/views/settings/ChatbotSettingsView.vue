@@ -507,9 +507,9 @@ function removeEscalationUser(userId: string) {
                     <input type="checkbox" role="switch" v-model="hour.enabled" :aria-label="daysOfWeek[hour.day]" />
                     <strong class="flex-1" :class="{ 'text-light': !hour.enabled }">{{ daysOfWeek[hour.day] }}</strong>
                     <div class="hstack gap-2">
-                      <input v-model="hour.start_time" type="time" :aria-label="`${daysOfWeek[hour.day]} start`" :disabled="!hour.enabled" />
+                      <input v-model="hour.start_time" type="time" :aria-label="$t('chatbotSettings.startTime', { day: daysOfWeek[hour.day] })" :disabled="!hour.enabled" />
                       <span class="text-light">{{ $t('chatbotSettings.to') }}</span>
-                      <input v-model="hour.end_time" type="time" :aria-label="`${daysOfWeek[hour.day]} end`" :disabled="!hour.enabled" />
+                      <input v-model="hour.end_time" type="time" :aria-label="$t('chatbotSettings.endTime', { day: daysOfWeek[hour.day] })" :disabled="!hour.enabled" />
                     </div>
                   </div>
                 </div>

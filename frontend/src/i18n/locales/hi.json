@@ -1625,7 +1625,9 @@
     "aiSettingsSaved": "सहेजे गए",
     "slaSettingsSaved": "सहेजे गए",
     "aiSaveFailed": "विफल",
-    "slaSaveFailed": "विफल"
+    "slaSaveFailed": "विफल",
+    "startTime": "{day} start time",
+    "endTime": "{day} end time"
   },
   "agentTransfers": {
     "title": "स्थानांतरण",

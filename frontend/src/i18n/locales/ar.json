@@ -1592,7 +1592,9 @@
     "aiSettingsSaved": "تم حفظ إعدادات الذكاء الاصطناعي",
     "slaSettingsSaved": "تم حفظ إعدادات SLA",
     "aiSaveFailed": "فشل حفظ إعدادات الذكاء الاصطناعي",
-    "slaSaveFailed": "فشل حفظ إعدادات SLA"
+    "slaSaveFailed": "فشل حفظ إعدادات SLA",
+    "startTime": "{day} start time",
+    "endTime": "{day} end time"
   },
   "agentTransfers": {
     "title": "التحويلات",

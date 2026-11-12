@@ -1866,7 +1866,9 @@
     "aiSettingsSaved": "AI settings saved",
     "slaSettingsSaved": "SLA settings saved",
     "aiSaveFailed": "Failed to save AI settings",
-    "slaSaveFailed": "Failed to save SLA settings"
+    "slaSaveFailed": "Failed to save SLA settings",
+    "startTime": "{day} start time",
+    "endTime": "{day} end time"
   },
   "agentTransfers": {
     "title": "Transfers",

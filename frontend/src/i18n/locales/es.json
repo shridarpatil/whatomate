@@ -1638,7 +1638,9 @@
     "aiSettingsSaved": "Configuración de IA guardada",
     "slaSettingsSaved": "Configuración de SLA guardada",
     "aiSaveFailed": "Error al guardar la configuración de IA",
-    "slaSaveFailed": "Error al guardar la configuración de SLA"
+    "slaSaveFailed": "Error al guardar la configuración de SLA",
+    "startTime": "{day} start time",
+    "endTime": "{day} end time"
   },
   "agentTransfers": {
     "title": "Transferencias",
