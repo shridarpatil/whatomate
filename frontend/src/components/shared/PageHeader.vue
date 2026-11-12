@@ -18,9 +18,9 @@ defineProps<{
     <RouterLink v-if="backLink" :to="backLink" class="button ghost icon" :title="$t('common.back', 'Back')" :aria-label="$t('common.back', 'Back')">
       <ArrowLeft />
     </RouterLink>
-    <component :is="icon" v-if="icon" :size="24" />
-    <div class="flex-1">
-      <h1>{{ title }}</h1>
+    <component :is="icon" v-if="icon" :size="20" />
+    <div class="hstack gap-1 flex-1">
+      <h1 class="w-100">{{ title }}</h1>
       <nav v-if="breadcrumbs?.length" aria-label="Breadcrumb">
         <ol class="unstyled hstack">
           <template v-for="(crumb, index) in breadcrumbs" :key="index">

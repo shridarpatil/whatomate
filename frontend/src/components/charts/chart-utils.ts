@@ -9,14 +9,13 @@ export interface ChartSeries {
 /** Fixed slot order; a series keeps the slot of its index. */
 export const SERIES_COLORS = [
   'var(--primary)',
-  'var(--success)',
-  'var(--danger)',
   'var(--warning)',
+  'var(--danger)',
   'var(--muted-foreground)',
 ]
 /** Secondary encodings so identity never relies on colour alone (slot 0 is solid). */
-export const SERIES_DASHES = ['', '8 4', '2 3', '10 3 2 3', '4 2 1 2']
-export const SERIES_MARKERS: MarkerShape[] = ['circle', 'square', 'triangle', 'diamond', 'cross']
+export const SERIES_DASHES = ['', '8 4', '2 3', '10 3 2 3']
+export const SERIES_MARKERS: MarkerShape[] = ['circle', 'square', 'triangle', 'diamond']
 
 /** Fallback chart width (px) before the wrapper is measured. */
 export const VIEW_WIDTH = 600
@@ -29,7 +28,7 @@ export function seriesColor(index: number, explicit?: string): string {
 
 const finite = (v: unknown) => (typeof v === 'number' && Number.isFinite(v) ? v : 0)
 
-/** Keep the first 4 series and fold the rest into one "Other" series in the last slot. */
+/** Keep the first 3 series and fold the rest into one "Other" series in the last slot. */
 export function foldSeries(series: ChartSeries[], otherLabel: string): ChartSeries[] {
   if (series.length <= SERIES_COLORS.length) return series
   const keep = series.slice(0, SERIES_COLORS.length - 1)

@@ -22,8 +22,8 @@
   .meter-row { display: grid; grid-template-columns: 7rem 1fr 3rem; align-items: center; gap: var(--space-2); }
   .truncate { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
-  /* Chat: side columns are 20rem; on phones the one visible column fills the screen. */
-  .chat-col { width: 20rem; max-width: 100%; }
+  /* Chat: side columns are 18rem; on phones the one visible column fills the screen. */
+  .chat-col { width: 18rem; max-width: 100%; }
   @media (max-width: 47.99rem) { .chat-col { width: 100%; } }
   [data-bubble] { max-width: min(75%, 40rem); }
   .resize-handle { width: var(--space-1); flex-shrink: 0; cursor: col-resize; }
@@ -50,7 +50,7 @@
   /* Flow editors (vue-flow canvas). Node cards size to their content within bounds;
      the properties side panel and the preview phone have a fixed width. */
   .flow-node { min-width: 12rem; max-width: 24rem; }
-  .side-panel { width: 26rem; max-width: 100%; }
+  .side-panel { width: 22rem; max-width: 100%; }
   .h-preview { height: 70dvh; }
   /* vue-flow's own (unlayered) CSS makes handles 6px; give them a usable hit target. */
   .vue-flow__handle { width: var(--space-3) !important; height: var(--space-3) !important; }

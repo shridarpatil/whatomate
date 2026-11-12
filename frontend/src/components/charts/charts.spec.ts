@@ -115,11 +115,11 @@ describe('PieChart', () => {
 })
 
 describe('foldSeries', () => {
-  it('folds series beyond five into Other in the last slot', () => {
+  it('folds series beyond four into Other in the last slot', () => {
     const many = Array.from({ length: 7 }, (_, i) => ({ label: `s${i}`, data: [1, 1] }))
     const out = foldSeries(many, 'Other')
-    expect(out).toHaveLength(5)
-    expect(out[4]).toEqual({ label: 'Other', data: [3, 3] })
+    expect(out).toHaveLength(4)
+    expect(out[3]).toEqual({ label: 'Other', data: [4, 4] })
     expect(out[0].label).toBe('s0')
   })
 })

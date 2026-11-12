@@ -8,7 +8,7 @@ import ChartTooltip from './ChartTooltip.vue'
 import ChartDataTable from './ChartDataTable.vue'
 import { useChartWidth } from './useChartWidth'
 import {
-  type ChartSeries, MARKER_SIZE, SERIES_DASHES, SERIES_MARKERS,
+  type ChartSeries, MARKER_SIZE, SERIES_COLORS, SERIES_DASHES, SERIES_MARKERS,
   foldSeries, seriesColor, textWidth, value,
 } from './chart-utils'
 
@@ -36,9 +36,9 @@ const single = computed(() => folded.value.length === 1)
 
 const items = computed(() => folded.value.map((s, i) => ({
   label: s.label,
-  color: seriesColor(i, i === 4 && props.series.length > 5 ? undefined : s.color),
-  dash: SERIES_DASHES[Math.min(i, 4)],
-  marker: SERIES_MARKERS[Math.min(i, 4)],
+  color: seriesColor(i, i === SERIES_COLORS.length - 1 && props.series.length > SERIES_COLORS.length ? undefined : s.color),
+  dash: SERIES_DASHES[i],
+  marker: SERIES_MARKERS[i],
   kind: 'line' as const,
 })))
 

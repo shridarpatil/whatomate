@@ -1,0 +1,61 @@
+/*
+ * App theme: compact density + brand primary on top of vendored Oat.
+ * Oat's defaults suit content sites (16px text, fluid headings, roomy spacing);
+ * this is an all-day admin app, so only size tokens are tightened. The one
+ * colour change is the brand primary (emerald). Nothing else (borders, radii,
+ * shadows, fonts, other colours) is overridden.
+ *
+ * This layer is declared after Oat's layers (theme, base, components,
+ * animations, utilities), so it wins over Oat's token definitions without
+ * !important. It is loaded before layout.css, so `layout` stays last.
+ */
+@layer theme-overrides {
+  :root {
+    /* Brand colour (contrast vs foreground: 5.48:1 light, 5.97:1 dark). */
+    --primary: light-dark(#047857, #10b981);
+    --primary-foreground: light-dark(#ffffff, #022c22);
+    --ring: light-dark(#047857, #10b981);
+
+    /* Spacing: same steps, tighter values (4, 6, 8, 12, 14, 16, 24, 32 ...px). */
+    --space-2: 0.375rem;
+    --space-3: 0.5rem;
+    --space-4: 0.75rem;
+    --space-5: 0.875rem;
+    --space-6: 1rem;
+    --space-8: 1.5rem;
+    --space-10: 2rem;
+    --space-12: 2.5rem;
+    --space-14: 2.75rem;
+    --space-16: 3rem;
+    --space-18: 3.5rem;
+
+    /* Type: 14px body, 13px controls/tables, fixed (non-fluid) app heading scale. */
+    --text-1: 1.5rem;
+    --text-2: 1.25rem;
+    --text-3: 1.125rem;
+    --text-4: 1rem;
+    --text-5: 0.875rem;
+    --text-6: 0.875rem;
+    --text-7: 0.8125rem;
+    --text-8: 0.75rem;
+
+    /* Layout tokens (defined by Oat in @layer components). */
+    --sidebar-width: 14rem;
+    --grid-gap: 1rem;
+  }
+
+  /* Oat hardcodes button sizes in rem. Regular buttons are now ~2.1rem tall
+     (6px + 19.5px line + 6px + border), so match icon buttons to that and keep
+     them square: >=32px hit target, no wide-and-flat icon buttons. */
+  :is(button, [type=submit], [type=reset], [type=button], a.button) {
+    &.icon {
+      width: 2.125rem;
+      height: 2.125rem;
+
+      &.small {
+        width: 1.75rem;
+        height: 1.75rem;
+      }
+    }
+  }
+}

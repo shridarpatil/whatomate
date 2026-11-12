@@ -7,6 +7,7 @@ import { i18n } from './i18n'
 
 import './vendor/oat/oat.css'
 import './vendor/oat/js/index.js'
+import './assets/theme.css'
 import './assets/layout.css'
 
 const app = createApp(App)
