@@ -29,6 +29,8 @@
   /* Chat: side columns are 18rem; on phones the one visible column fills the screen. */
   .chat-col { width: 18rem; max-width: 100%; }
   @media (max-width: 47.99rem) { .chat-col { width: 100%; } }
+  [data-chat-header] { padding: var(--space-2) var(--space-3); }
+  [data-chat-canvas] { padding: var(--space-3); }
   [data-bubble] { max-width: min(75%, 40rem); padding: var(--space-2) var(--space-3); }
   /* Chat bubbles are compact: no paragraph gap, small gap before the time row. */
   [data-bubble] p { margin-block-end: 0; }

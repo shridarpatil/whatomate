@@ -314,6 +314,7 @@
     "goAway": "Sair"
   },
   "chat": {
+    "lastActive": "Last active {time}",
     "marketingOptOut": "Opt-out de marketing",
     "conversations": "Conversas",
     "messages": "Mensagens",

@@ -3,7 +3,8 @@
  * Oat's defaults suit content sites (16px text, fluid headings, roomy spacing);
  * this is an all-day admin app, so only size tokens are tightened. The one
  * colour change is the brand primary (emerald). Nothing else (borders, radii,
- * shadows, fonts, other colours) is overridden.
+ * shadows, fonts, other colours) is overridden, except the approved chat
+ * skin at the end of this layer.
  *
  * This layer is declared after Oat's layers (theme, base, components,
  * animations, utilities), so it wins over Oat's token definitions without
@@ -57,5 +58,32 @@
         height: 1.75rem;
       }
     }
+  }
+
+  /* Chat skin (approved exception to "no custom colours", chat screen only).
+     Uses only Oat colour tokens and color-mix() of them, so light and dark
+     mode follow Oat's light-dark() values. Keyed on data attributes. */
+  [data-chat-header] {
+    background-color: var(--faint);
+    border-block-end: 1px solid var(--border);
+  }
+  [data-chat-canvas] { background-color: var(--faint); }
+  .card[data-bubble] {
+    border-radius: var(--radius-large);
+  }
+  .card[data-bubble="outgoing"] {
+    background-color: color-mix(in oklab, var(--primary) 15%, var(--card));
+    border-color: transparent;
+    border-start-end-radius: var(--radius-small);
+  }
+  .card[data-bubble="incoming"] {
+    background-color: var(--card);
+    border-color: var(--border);
+    border-start-start-radius: var(--radius-small);
+  }
+  .badge[data-date-pill] {
+    background-color: var(--muted);
+    color: var(--muted-foreground);
+    font-weight: var(--font-normal);
   }
 }

@@ -1810,7 +1810,7 @@ async function sendMediaMessage() {
               />
               <abbr v-else>{{ getInitials(contactsStore.currentContact.name || contactsStore.currentContact.phone_number) }}</abbr>
             </figure>
-            <div class="min-w-0">
+            <div class="min-w-0 flex flex-col">
               <div class="hstack gap-2">
                 <strong class="truncate">{{ contactsStore.currentContact.name || contactsStore.currentContact.phone_number }}</strong>
                 <span v-if="activeTransferId" class="badge" data-variant="warning">{{ $t('chat.paused') }}</span>
@@ -1818,7 +1818,10 @@ async function sendMediaMessage() {
                   {{ $t('chat.marketingOptOut', 'Marketing Opt-out') }}
                 </span>
               </div>
-              <small class="text-light">{{ contactsStore.currentContact.phone_number }}</small>
+              <small class="text-light truncate">
+                {{ contactsStore.currentContact.phone_number }}<template v-if="contactsStore.currentContact.last_inbound_at">
+                  · {{ $t('chat.lastActive', { time: formatContactTime(contactsStore.currentContact.last_inbound_at) }) }}</template>
+              </small>
             </div>
           </div>
           <div class="hstack gap-1 justify-end">
@@ -1985,13 +1988,14 @@ async function sendMediaMessage() {
         >
           <!-- Sticky date header -->
           <div v-if="showStickyDate" class="overlay-top">
-            <span class="badge" data-variant="secondary">{{ stickyDate }}</span>
+            <span class="badge" data-variant="secondary" data-date-pill>{{ stickyDate }}</span>
           </div>
 
           <div
             id="chat-messages"
             :ref="(el: any) => messagesScroll.scrollAreaRef.value = el"
             data-testid="messages"
+            data-chat-canvas
             class="flex-1 scroll-y"
           >
             <div class="vstack gap-2">
@@ -2012,7 +2016,7 @@ async function sendMediaMessage() {
                   class="flex justify-center"
                   :data-date-separator="getDateLabel(message.created_at)"
                 >
-                  <span class="badge" data-variant="secondary">{{ getDateLabel(message.created_at) }}</span>
+                  <span class="badge" data-variant="secondary" data-date-pill>{{ getDateLabel(message.created_at) }}</span>
                 </div>
 
                 <!-- Unread divider (WhatsApp-style; appears above the first

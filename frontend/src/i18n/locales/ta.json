@@ -287,6 +287,7 @@
     "goAway": "விலகிச் செல்"
   },
   "chat": {
+    "lastActive": "Last active {time}",
     "conversations": "உரையாடல்கள்",
     "messages": "செய்திகள்",
     "noContacts": "தொடர்புகள் எதுவும் இல்லை",

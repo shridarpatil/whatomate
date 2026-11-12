@@ -314,6 +314,7 @@
     "goAway": "تغيير الحالة لبعيد"
   },
   "chat": {
+    "lastActive": "Last active {time}",
     "marketingOptOut": "إلغاء الاشتراك في التسويق",
     "conversations": "المحادثات",
     "messages": "الرسائل",
