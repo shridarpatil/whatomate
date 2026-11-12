@@ -86,4 +86,23 @@
     color: var(--muted-foreground);
     font-weight: var(--font-normal);
   }
+
+  /* Flow node categories (approved exception, flow editors only). Oat colour
+     tokens only: a coloured inline-start edge + tinted icon chip per category.
+     Category → types (IVR + chatbot share BaseNode, which sets data-node-type). */
+  [data-node-type] { --node-accent: var(--muted-foreground); border-inline-start: 4px solid var(--node-accent); }
+  /* Start / speak */
+  :is([data-node-type="greeting"], [data-node-type="start"], [data-node-type="message"]) { --node-accent: var(--primary); }
+  /* Asks for input */
+  :is([data-node-type="menu"], [data-node-type="gather"], [data-node-type="prompt"], [data-node-type="buttons"], [data-node-type="whatsapp_flow"]) { --node-accent: var(--warning); }
+  /* Logic / integration (default grey): condition, timing, goto_flow, http_callback, api_call, webhook */
+  /* Handoff / end */
+  :is([data-node-type="transfer"], [data-node-type="hangup"], [data-node-type="end"]) { --node-accent: var(--danger); }
+  [data-node-icon] {
+    display: inline-flex;
+    padding: var(--space-1);
+    border-radius: var(--radius-medium);
+    color: var(--node-accent);
+    background-color: color-mix(in oklab, var(--node-accent) 15%, transparent);
+  }
 }

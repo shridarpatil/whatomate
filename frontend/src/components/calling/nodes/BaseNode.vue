@@ -25,12 +25,12 @@ function handleLeft(idx: number, count: number) {
 </script>
 
 <template>
-  <article class="card p-4 relative flow-node" :style="selectedStyle">
+  <article class="card p-4 relative flow-node" :data-node-type="node.type" :style="selectedStyle">
     <!-- Input handle (top) -->
     <Handle v-if="hasInput !== false" id="input" type="target" :position="Position.Top" />
 
     <header class="hstack gap-2 mb-2 min-w-0">
-      <slot name="icon" />
+      <span data-node-icon><slot name="icon" /></span>
       <strong class="truncate">{{ label }}</strong>
     </header>
 
