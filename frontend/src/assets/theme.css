@@ -263,6 +263,7 @@
      subtitle; actions gap-2 with h-8 (sm) buttons and an h-9 select. */
   [data-page-header] {
     height: 4rem;
+    flex-shrink: 0;
     padding: 0 1.5rem;
     background-color: light-dark(rgb(255 255 255 / 0.95), rgb(10 10 11 / 0.95));
     border-block-end: 1px solid light-dark(#e5e7eb, rgb(255 255 255 / 0.08));
