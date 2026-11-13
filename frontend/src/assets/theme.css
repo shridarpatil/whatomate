@@ -14,8 +14,12 @@
 @layer theme-overrides {
   html {
     font-size: 14px;
+    -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
   }
+
+  /* Old base: headings are medium weight; Oat uses semibold. */
+  :is(h1, h2, h3, h4, h5, h6) { font-weight: 500; }
 
   :root {
     /* Brand colour (contrast vs foreground: 5.48:1 light, 5.97:1 dark). */
@@ -264,6 +268,7 @@
   [data-page-header] {
     height: 4rem;
     flex-shrink: 0;
+    align-content: center; /* Oat's hstack wraps with align-content: flex-start */
     padding: 0 1.5rem;
     background-color: light-dark(rgb(255 255 255 / 0.95), rgb(10 10 11 / 0.95));
     border-block-end: 1px solid light-dark(#e5e7eb, rgb(255 255 255 / 0.08));
@@ -491,5 +496,24 @@
   dialog[data-classic-dialog] {
     background-color: light-dark(#fff, #141414);
     border-color: light-dark(#e5e7eb, rgb(255 255 255 / 0.08));
+  }
+
+  /* Sidebar (old): links at 50% white, sub-links 40%, section labels 30%;
+     only the current page is full white on a faint fill. */
+  [data-sidebar] nav {
+    a {
+      color: light-dark(#6b7280, rgb(255 255 255 / 0.5));
+      &:hover { color: light-dark(#111827, #fff); background-color: light-dark(#f9fafb, rgb(255 255 255 / 0.06)); }
+      &[aria-current] { color: light-dark(#111827, #fff); background-color: light-dark(#f3f4f6, rgb(255 255 255 / 0.08)); }
+    }
+    ul ul a {
+      color: light-dark(#9ca3af, rgb(255 255 255 / 0.4));
+      &:hover { color: light-dark(#374151, rgb(255 255 255 / 0.7)); background-color: light-dark(#f9fafb, rgb(255 255 255 / 0.04)); }
+      &[aria-current] { color: light-dark(#111827, #fff); background-color: light-dark(#f3f4f6, rgb(255 255 255 / 0.06)); }
+    }
+    small {
+      font-size: 10px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em;
+      color: light-dark(#9ca3af, rgb(255 255 255 / 0.3));
+    }
   }
 }
