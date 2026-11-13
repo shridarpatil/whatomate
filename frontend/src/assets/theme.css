@@ -516,4 +516,7 @@
       color: light-dark(#9ca3af, rgb(255 255 255 / 0.3));
     }
   }
+
+  /* Dashboard edit layout: the widget being dragged over shows a brand outline. */
+  [data-layout-editing] > [data-drag-over] > [data-widget] { outline: 2px dashed var(--primary); outline-offset: 2px; }
 }

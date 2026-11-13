@@ -7,7 +7,7 @@ import LineChart from '@/components/charts/LineChart.vue'
 import BarChart from '@/components/charts/BarChart.vue'
 import PieChart from '@/components/charts/PieChart.vue'
 import type { ChartSeries } from '@/components/charts/chart-utils'
-import { orderWidgets, reorder, type Placed } from '@/lib/dashboard-layout'
+import { orderWidgets, reorder, resize, GRID_COLS, type Placed } from '@/lib/dashboard-layout'
 import { widgetsService, type DashboardWidget, type WidgetData, type LayoutItem } from '@/services/api'
 import { useAuthStore } from '@/stores/auth'
 import {
@@ -26,9 +26,8 @@ import {
   BarChart3,
   FileText,
   X,
-  ChevronLeft,
-  ChevronRight,
   GripVertical,
+  MoveDiagonal2,
   Megaphone,
   Settings,
   Contact,
@@ -261,6 +260,8 @@ const getWidgetIcon = (dataSource: string) => {
 // Grid layout state: widgets render in a fixed 12-column grid; edit mode reorders them.
 // Saved grid_w / grid_h are never changed here, only the flowed x / y.
 const GRID_ROW_HEIGHT = 40
+// Same pixel height as the old grid-layout-plus item: h rows of 40px plus 16px margins between them.
+const GRID_MARGIN = 16
 
 const isReorderMode = ref(false)
 const order = ref<Placed[]>([])
@@ -279,8 +280,6 @@ const items = computed(() => order.value.flatMap((p, index) => {
 }))
 
 const colSpan = (w: number) => Math.min(12, Math.max(1, Math.round(w)))
-// Same pixel height as the old grid-layout-plus item: h rows of 40px plus 16px margins between them.
-const GRID_MARGIN = 16
 const widgetHeight = (h: number) => h * GRID_ROW_HEIGHT + (h - 1) * GRID_MARGIN
 // Chart area = card minus padding (2 x 24), header tile (40) and gap (16); the
 // "show data" toggle (18) sits below it.
@@ -314,12 +313,93 @@ const persistLayout = async () => {
   }
 }
 
-const moveWidget = (from: number, to: number) => {
-  if (to < 0 || to >= order.value.length) return
-  order.value = reorder(order.value, from, to)
+const scheduleLayoutSave = () => {
   layoutDirty = true
   if (layoutSaveTimer) clearTimeout(layoutSaveTimer)
   layoutSaveTimer = setTimeout(persistLayout, 500)
+}
+
+const moveWidget = (from: number, to: number) => {
+  if (to < 0 || to >= order.value.length) return
+  order.value = reorder(order.value, from, to)
+  scheduleLayoutSave()
+}
+
+const resizeWidget = (index: number, w: number, h: number) => {
+  const p = order.value[index]
+  if (!p) return
+  const next = resize(order.value, index, w, h)
+  if (next[index].w === p.w && next[index].h === p.h) return
+  order.value = next
+  scheduleLayoutSave()
+}
+
+// Edit layout: drag a widget onto another to move it there.
+const gridEl = ref<HTMLElement | null>(null)
+const dragFrom = ref<number | null>(null)
+const dragOver = ref<number | null>(null)
+let resizing = false
+
+const onDragStart = (index: number, e: DragEvent) => {
+  if (resizing) { e.preventDefault(); return }
+  dragFrom.value = index
+  if (e.dataTransfer) {
+    e.dataTransfer.effectAllowed = 'move'
+    e.dataTransfer.setData('text/plain', String(index))
+  }
+}
+const onDragOver = (index: number, e: DragEvent) => {
+  if (dragFrom.value === null) return
+  e.preventDefault()
+  dragOver.value = index
+}
+const onDrop = (index: number) => {
+  if (dragFrom.value !== null) moveWidget(dragFrom.value, index)
+  onDragEnd()
+}
+const onDragEnd = () => {
+  dragFrom.value = null
+  dragOver.value = null
+}
+
+// Edit layout: drag the corner handle to resize, snapping to grid columns and rows.
+const startResize = (index: number, e: PointerEvent) => {
+  const start = order.value[index]
+  const grid = gridEl.value
+  if (!start || !grid) return
+  e.preventDefault()
+  const handle = e.currentTarget as HTMLElement
+  handle.setPointerCapture(e.pointerId)
+  resizing = true
+  const gap = parseFloat(getComputedStyle(grid).columnGap) || 0
+  const colStep = (grid.clientWidth + gap) / GRID_COLS
+  const rowStep = GRID_ROW_HEIGHT + GRID_MARGIN
+  const { clientX: x0, clientY: y0 } = e
+  const { w: w0, h: h0 } = start
+  const move = (ev: PointerEvent) => {
+    resizeWidget(index, w0 + (ev.clientX - x0) / colStep, h0 + (ev.clientY - y0) / rowStep)
+  }
+  const stop = () => {
+    resizing = false
+    handle.removeEventListener('pointermove', move)
+    handle.removeEventListener('pointerup', stop)
+    handle.removeEventListener('pointercancel', stop)
+  }
+  handle.addEventListener('pointermove', move)
+  handle.addEventListener('pointerup', stop)
+  handle.addEventListener('pointercancel', stop)
+}
+
+const resizeByKey = (index: number, e: KeyboardEvent) => {
+  const p = order.value[index]
+  if (!p) return
+  const delta: Record<string, [number, number]> = {
+    ArrowLeft: [-1, 0], ArrowRight: [1, 0], ArrowUp: [0, -1], ArrowDown: [0, 1],
+  }
+  const d = delta[e.key]
+  if (!d) return
+  e.preventDefault()
+  resizeWidget(index, p.w + d[0], p.h + d[1])
 }
 
 // Save immediately when leaving edit mode
@@ -620,13 +700,20 @@ onMounted(() => {
       </div>
 
       <!-- Widget grid -->
-      <div v-else-if="items.length > 0" class="row">
+      <div v-else-if="items.length > 0" ref="gridEl" class="row" :data-layout-editing="isReorderMode || undefined">
         <div
           v-for="{ p, widget, index } in items"
           :key="widget.id"
           :class="`col-${colSpan(p.w)}`"
           :style="{ height: `${widgetHeight(p.h)}px` }"
+          :draggable="isReorderMode ? 'true' : undefined"
+          :data-dragging="dragFrom === index || undefined"
+          :data-drag-over="(dragOver === index && dragFrom !== index) || undefined"
           data-testid="dashboard-widget"
+          @dragstart="onDragStart(index, $event)"
+          @dragover="onDragOver(index, $event)"
+          @drop.prevent="onDrop(index)"
+          @dragend="onDragEnd"
         >
           <article
             class="card h-full vstack gap-2"
@@ -634,35 +721,25 @@ onMounted(() => {
             :data-widget-color="widget.color"
             data-hover-group
           >
+            <button
+              v-if="isReorderMode"
+              type="button"
+              class="ghost icon small"
+              data-resize-handle
+              :aria-label="$t('dashboard.resizeWidget')"
+              :title="$t('dashboard.resizeWidget')"
+              @pointerdown="startResize(index, $event)"
+              @keydown="resizeByKey(index, $event)"
+            >
+              <MoveDiagonal2 :size="14" />
+            </button>
             <header class="hstack items-center gap-2">
               <div class="flex-1 min-w-0">
                 <h4 class="truncate">{{ widget.name }}</h4>
                 <small v-if="widget.description && !isNumberWidget(widget)" class="text-light">{{ widget.description }}</small>
               </div>
 
-              <div v-if="isReorderMode" class="hstack gap-1">
-                <button
-                  type="button"
-                  class="ghost icon small"
-                  :disabled="index === 0"
-                  :aria-label="$t('dashboard.moveEarlier')"
-                  :title="$t('dashboard.moveEarlier')"
-                  @click="moveWidget(index, index - 1)"
-                >
-                  <ChevronLeft :size="16" />
-                </button>
-                <button
-                  type="button"
-                  class="ghost icon small"
-                  :disabled="index === order.length - 1"
-                  :aria-label="$t('dashboard.moveLater')"
-                  :title="$t('dashboard.moveLater')"
-                  @click="moveWidget(index, index + 1)"
-                >
-                  <ChevronRight :size="16" />
-                </button>
-              </div>
-              <div v-else-if="canEditWidget || canDeleteWidget" class="hstack gap-1" data-hover-reveal>
+              <div v-if="!isReorderMode && (canEditWidget || canDeleteWidget)" class="hstack gap-1" data-hover-reveal>
                 <button
                   v-if="canEditWidget"
                   type="button"

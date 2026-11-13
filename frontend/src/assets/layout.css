@@ -52,6 +52,12 @@
     [data-hover-group]:not(:hover, :focus-within) [data-hover-reveal] { opacity: 0; }
   }
 
+  /* Dashboard edit layout: drag widgets to move, corner handle to resize. */
+  [data-layout-editing] > [draggable] { cursor: grab; }
+  [data-layout-editing] > [data-dragging] { opacity: 0.5; }
+  [data-layout-editing] [data-widget] { position: relative; }
+  [data-resize-handle] { position: absolute; inset-inline-end: var(--space-1); inset-block-end: var(--space-1); cursor: nwse-resize; touch-action: none; }
+
   /* Visually hidden until focused. */
   .skip-link { position: absolute; inset-block-start: var(--space-2); inset-inline-start: var(--space-2); z-index: 10; }
   .skip-link:not(:focus) { width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
