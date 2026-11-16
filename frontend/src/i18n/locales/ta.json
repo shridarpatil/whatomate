@@ -1,5 +1,7 @@
 {
   "dateRange": {
+    "from": "From",
+    "to": "To",
     "selectRange": "Date Range",
     "today": "Today",
     "last7Days": "Last 7 Days",
@@ -47,6 +49,8 @@
     "deselectAll": "அனைத்தையும் தேர்வுநீக்கு",
     "noResults": "முடிவுகள் எதுவும் இல்லை",
     "noData": "தரவு எதுவும் இல்லை",
+    "showData": "Show data",
+    "value": "Value",
     "error": "பிழை",
     "success": "வெற்றி",
     "warning": "எச்சரிக்கை",
@@ -116,7 +120,12 @@
     "loadMore": "Load more",
     "stay": "Stay",
     "unsavedChangesDesc": "You have unsaved changes. Are you sure you want to leave?",
-    "unsavedChangesTitle": "Unsaved Changes"
+    "unsavedChangesTitle": "Unsaved Changes",
+    "firstPage": "First page",
+    "lastPage": "Last page",
+    "pagination": "Pagination",
+    "scrollToTop": "Scroll to top",
+    "clickToUpload": "Click to upload file"
   },
   "auth": {
     "login": "உள்நுழைய",
@@ -238,6 +247,9 @@
     "Widget": "விட்ஜெட்"
   },
   "nav": {
+    "sidebar": "Sidebar",
+    "mainNavigation": "Main navigation",
+    "secondaryNavigation": "Secondary navigation",
     "dashboard": "டாஷ்போர்டு",
     "chat": "அரட்டை",
     "contacts": "தொடர்புகள்",
@@ -281,6 +293,10 @@
     "toggleMenu": "மெனுவை மாற்று"
   },
   "userMenu": {
+    "colorTheme": "Color theme",
+    "themeLight": "Light theme",
+    "themeDark": "Dark theme",
+    "themeSystem": "System theme",
     "myAccount": "எனது கணக்கு",
     "status": "நிலை",
     "available": "கிடைக்கும்",
@@ -295,9 +311,12 @@
     "failedUpdateAvailability": "கிடைக்கும் நிலையைப் புதுப்பிக்க முடியவில்லை",
     "awayWarningTitle": "செயலில் உள்ள மாற்றுகைகள் வரிசைக்குத் திருப்பியனுப்பப்படும்",
     "awayWarningDesc": "உங்களிடம் {count} செயலில் உள்ள மாற்றுகை(கள்) உள்ளன. உங்கள் நிலையை \"விலகி\" ஆக மாற்றினால், அவை மற்ற முகவர்களுக்காக வரிசைக்குத் திருப்பியனுப்பப்படும்.",
-    "goAway": "விலகிச் செல்"
+    "goAway": "விலகிச் செல்",
+    "userMenu": "User menu",
+    "toggleAvailability": "Toggle availability status"
   },
   "chat": {
+    "lastActive": "Last active {time}",
     "marketingOptOut": "Marketing Opt-out",
     "conversations": "உரையாடல்கள்",
     "messages": "செய்திகள்",
@@ -342,6 +361,7 @@
     "noTagsAvailable": "குறிச்சொற்கள் எதுவும் இல்லை",
     "paused": "இடைநிறுத்தப்பட்டது",
     "assignedTo": "இவருக்கு ஒதுக்கப்பட்டது",
+    "assigned": "Assigned",
     "unassigned": "ஒதுக்கப்படாதது",
     "assign": "ஒதுக்கு",
     "transfer": "மாற்று",
@@ -442,7 +462,11 @@
     "urlButtonParamPlaceholder": "Enter dynamic URL value",
     "preview": "முன்னோட்டம்",
     "serviceWindowExpired": "24 மணிநேர செய்தியிடல் சாளரம் காலாவதியானது. வாடிக்கையாளர் பதிலளிக்கும் வரை வார்ப்புரு செய்திகளை மட்டுமே அனுப்ப முடியும்.",
-    "sendTemplateAction": "வார்ப்புருவை அனுப்பு"
+    "sendTemplateAction": "வார்ப்புருவை அனுப்பு",
+    "noTags": "No tags",
+    "general": "General",
+    "noPanelData": "No data configured",
+    "noPanelDataHint": "Configure panel display in the chatbot flow settings."
   },
   "contacts": {
     "title": "தொடர்புகள்",
@@ -563,6 +587,11 @@
     "selectFormat": "வடிவத்தைத் தேர்வுசெய்க",
     "organizationName": "நிறுவனப் பெயர்",
     "organizationPlaceholder": "உங்கள் நிறுவனம்",
+    "organizationLogo": "Organization logo",
+    "organizationLogoHint": "PNG, JPEG or WebP. Shown in the sidebar; resized to 128px.",
+    "logoSaved": "Logo updated",
+    "logoRemoved": "Logo removed",
+    "logoInvalid": "Use a PNG, JPEG or WebP image",
     "maskPhoneNumbers": "தொலைபேசி எண்களை மறை",
     "maskPhoneNumbersDesc": "கடைசி 4 இலக்கங்களை மட்டும் காண்பிக்கும்",
     "notifications": "அறிவிப்புகள்",
@@ -607,7 +636,10 @@
     "metaAppCredentialsDesc": "Set tenant-specific Meta App configurations for WhatsApp Embedded Signup. Leave secret blank to keep existing.",
     "metaAppId": "Meta App ID",
     "metaConfigId": "Meta Config ID",
-    "metaAppSecret": "Meta App Secret"
+    "metaAppSecret": "Meta App Secret",
+    "previewRingtone": "Preview ringtone",
+    "playAudio": "Play",
+    "pauseAudio": "Pause"
   },
   "users": {
     "title": "பயனர் மேலாண்மை",
@@ -782,6 +814,10 @@
     "searchUsers": "Search users"
   },
   "organizations": {
+    "label": "Organization",
+    "selectPlaceholder": "Select organization",
+    "loading": "Loading...",
+    "none": "No organizations found",
     "createNew": "நிறுவனத்தை உருவாக்கு",
     "createTitle": "நிறுவனத்தை உருவாக்கு",
     "createDesc": "தனி பணியிடத்தை நிர்வகிக்க புதிய நிறுவனத்தை உருவாக்கவும்.",
@@ -1087,6 +1123,7 @@
     "errorLoadingApiKeys": "Failed to load API keys. Please try again."
   },
   "webhooks": {
+    "removeHeader": "Remove header",
     "title": "வெப்ஹூக்குகள்",
     "subtitle": "வெளிப்புற அமைப்புகளுக்கு நிகழ்வுகளை அனுப்ப வெப்ஹூக்குகளை உள்ளமைக்கவும்",
     "addWebhook": "வெப்ஹூக்கைச் சேர்",
@@ -1264,6 +1301,7 @@
     "goHome": "முகப்புக்குச் செல்க"
   },
   "profile": {
+    "togglePasswordVisibility": "Toggle password visibility",
     "title": "சுயவிவரம்",
     "description": "உங்கள் கணக்கு அமைப்புகளை நிர்வகிக்கவும்",
     "accountInfo": "கணக்குத் தகவல்",
@@ -1470,6 +1508,7 @@
     "layoutSaved": "அமைப்பு சேமிக்கப்பட்டது",
     "saveLayoutFailed": "அமைப்பைச் சேமிக்க முடியவில்லை",
     "editLayout": "அமைப்பைத் திருத்து",
+    "resizeWidget": "Resize widget (arrow keys)",
     "editWidgetTooltip": "விட்ஜெட்டைத் திருத்து",
     "deleteWidgetTooltip": "விட்ஜெட்டை நீக்கு",
     "noChange": "மாற்றம் இல்லை",
@@ -1844,7 +1883,9 @@
     "aiSettingsSaved": "AI அமைப்புகள் சேமிக்கப்பட்டன",
     "slaSettingsSaved": "SLA அமைப்புகள் சேமிக்கப்பட்டன",
     "aiSaveFailed": "AI அமைப்புகளைச் சேமிக்க முடியவில்லை",
-    "slaSaveFailed": "SLA அமைப்புகளைச் சேமிக்க முடியவில்லை"
+    "slaSaveFailed": "SLA அமைப்புகளைச் சேமிக்க முடியவில்லை",
+    "startTime": "{day} start time",
+    "endTime": "{day} end time"
   },
   "agentTransfers": {
     "title": "மாற்றுகைகள்",
@@ -2384,7 +2425,16 @@
     "sectionLabelPlaceholder": "பிரிவு லேபிள்",
     "addFieldPlaceholder": "+ சேர்",
     "exampleUrlPlaceholder": "https://example.com",
-    "dataPathPlaceholder": "data.path"
+    "dataPathPlaceholder": "data.path",
+    "previewTitle": "Flow preview",
+    "previewStart": "Start",
+    "previewPause": "Pause",
+    "previewRestart": "Restart",
+    "previewStepForward": "Step forward",
+    "previewStepBack": "Step back",
+    "dataPath": "Data path",
+    "configureApiMock": "Configure API Mock",
+    "selectOption": "Select an option"
   },
   "calling": {
     "callLogs": "அழைப்புப் பதிவுகள்",
@@ -2512,7 +2562,8 @@
     "deleteNodeConfirmTitle": "Delete Node",
     "deleteNodeConfirmDesc": "Are you sure you want to delete this node? All connected edges will also be removed.",
     "flowSaving": "Saving...",
-    "flowSave": "Save"
+    "flowSave": "Save",
+    "ttsText": "Text to speak"
   },
   "callTransfers": {
     "title": "அழைப்பு மாற்றுகைகள்",
@@ -2563,5 +2614,51 @@
     "callFailed": "அழைப்பைத் தொடங்க முடியவில்லை",
     "permissionSent": "அழைப்பு அனுமதி கோரிக்கை அனுப்பப்பட்டது",
     "permissionSentDesc": "நீங்கள் அழைக்கும் முன், தொடர்பு WhatsApp -இல் அழைப்பு அனுமதியை ஏற்க வேண்டும். அவர்கள் ஏற்ற பிறகு மீண்டும் முயல்க."
+  },
+  "waFlowBuilder": {
+    "screens": "Screens",
+    "addScreen": "Add Screen",
+    "removeScreen": "Remove screen",
+    "noScreens": "No screens yet",
+    "selectScreen": "Select a screen",
+    "screenTitle": "Screen Title",
+    "addComponents": "Add Components",
+    "addComponentsHint": "Add components from the palette",
+    "addScreenToStart": "Add a screen to get started",
+    "properties": "Properties",
+    "selectComponentHint": "Select a component to edit its properties",
+    "moveUp": "Move up",
+    "moveDown": "Move down",
+    "removeComponent": "Remove component",
+    "text": "Text",
+    "label": "Label",
+    "fieldName": "Field Name (Key)",
+    "fieldNamePlaceholder": "e.g. email, phone, message",
+    "fieldNameHint": "This key is used in the response data. Use lowercase with underscores (e.g. customer_name).",
+    "required": "Required",
+    "options": "Options",
+    "add": "Add",
+    "optionPlaceholder": "Option text",
+    "removeOption": "Remove option",
+    "buttonText": "Button Text",
+    "action": "Action",
+    "completeFlow": "Complete Flow",
+    "navigateToScreen": "Navigate to Screen",
+    "targetScreen": "Target Screen",
+    "selectTargetScreen": "Select screen",
+    "selectPlaceholder": "Select...",
+    "types": {
+      "heading": "Heading",
+      "subheading": "Subheading",
+      "text": "Text",
+      "textInput": "Text Input",
+      "textArea": "Text Area",
+      "dropdown": "Dropdown",
+      "radioButtons": "Radio Buttons",
+      "checkboxes": "Checkboxes",
+      "datePicker": "Date Picker",
+      "image": "Image",
+      "footerButton": "Footer Button"
+    }
   }
 }
