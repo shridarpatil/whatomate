@@ -739,6 +739,7 @@ onMounted(() => {
                 <small v-if="widget.description && !isNumberWidget(widget)" class="text-light">{{ widget.description }}</small>
               </div>
 
+              <!-- Edit/delete appear on card hover or keyboard focus (always shown on touch screens). -->
               <div v-if="!isReorderMode && (canEditWidget || canDeleteWidget)" class="hstack gap-1" data-hover-reveal>
                 <button
                   v-if="canEditWidget"
