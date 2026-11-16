@@ -164,12 +164,14 @@ onMounted(async () => {
 async function saveGeneralSettings() {
   isSubmitting.value = true
   try {
-    const payload: any = {
-      name: generalSettings.value.organization_name,
-      timezone: generalSettings.value.default_timezone,
-      date_format: generalSettings.value.date_format,
-      mask_phone_numbers: generalSettings.value.mask_phone_numbers
-    }
+    const payload: any = canWriteGeneral.value
+      ? {
+          name: generalSettings.value.organization_name,
+          timezone: generalSettings.value.default_timezone,
+          date_format: generalSettings.value.date_format,
+          mask_phone_numbers: generalSettings.value.mask_phone_numbers
+        }
+      : {}
     if (canWriteAccounts.value) {
       payload.meta_app_id = generalSettings.value.meta_app_id
       payload.meta_config_id = generalSettings.value.meta_config_id
@@ -371,7 +373,7 @@ function togglePlayAudio(type: 'hold_music' | 'ringback') {
               </span>
               <small data-hint>{{ $t('settings.maskPhoneNumbersDesc') }}</small>
             </label>
-            <div class="hstack justify-end">
+            <div v-if="canWriteGeneral" class="hstack justify-end">
               <button type="button" class="outline small" :aria-busy="isSubmitting" :disabled="isSubmitting" @click="saveGeneralSettings">
                 {{ $t('settings.save') }}
               </button>
@@ -565,7 +567,7 @@ function togglePlayAudio(type: 'hold_music' | 'ringback') {
               </div>
             </div>
               </fieldset>
-            <div class="hstack justify-end">
+            <div v-if="canWriteGeneral" class="hstack justify-end">
               <button type="button" class="outline small" :aria-busy="isSubmitting" :disabled="isSubmitting" @click="saveCallingSettings">
                 {{ $t('settings.save') }}
               </button>

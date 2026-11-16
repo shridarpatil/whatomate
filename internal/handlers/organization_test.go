@@ -102,7 +102,7 @@ func TestApp_UpdateOrganizationSettings_Success(t *testing.T) {
 
 	app := newTestApp(t)
 	org := testutil.CreateTestOrganization(t, app.DB)
-	user := testutil.CreateTestUser(t, app.DB, org.ID, testutil.WithEmail(testutil.UniqueEmail("update-settings")))
+	user := settingsWriter(t, app, org.ID, "update-settings")
 
 	maskEnabled := true
 	timezone := "America/New_York"
@@ -145,7 +145,7 @@ func TestApp_UpdateOrganizationSettings_PartialUpdate(t *testing.T) {
 
 	app := newTestApp(t)
 	org := testutil.CreateTestOrganization(t, app.DB)
-	user := testutil.CreateTestUser(t, app.DB, org.ID, testutil.WithEmail(testutil.UniqueEmail("partial-update")))
+	user := settingsWriter(t, app, org.ID, "partial-update")
 
 	// Set initial settings
 	org.Settings = models.JSONB{
@@ -196,7 +196,7 @@ func TestApp_UpdateOrganizationSettings_EmptyNameIgnored(t *testing.T) {
 
 	app := newTestApp(t)
 	org := testutil.CreateTestOrganization(t, app.DB)
-	user := testutil.CreateTestUser(t, app.DB, org.ID, testutil.WithEmail(testutil.UniqueEmail("empty-name")))
+	user := settingsWriter(t, app, org.ID, "empty-name")
 	originalName := org.Name
 
 	// Send an empty name -- should be ignored
@@ -368,7 +368,7 @@ func TestApp_UpdateOrganizationSettings_CallingFields(t *testing.T) {
 
 	app := newTestApp(t)
 	org := testutil.CreateTestOrganization(t, app.DB)
-	user := testutil.CreateTestUser(t, app.DB, org.ID, testutil.WithEmail(testutil.UniqueEmail("update-calling")))
+	user := settingsWriter(t, app, org.ID, "update-calling")
 
 	// Enable calling with custom values
 	req := testutil.NewJSONRequest(t, map[string]any{
@@ -397,7 +397,7 @@ func TestApp_UpdateOrganizationSettings_CallingPartialUpdate(t *testing.T) {
 
 	app := newTestApp(t)
 	org := testutil.CreateTestOrganization(t, app.DB)
-	user := testutil.CreateTestUser(t, app.DB, org.ID, testutil.WithEmail(testutil.UniqueEmail("calling-partial")))
+	user := settingsWriter(t, app, org.ID, "calling-partial")
 
 	// Set initial calling settings
 	org.Settings = models.JSONB{
@@ -431,7 +431,7 @@ func TestApp_UpdateOrganizationSettings_CallingDisable(t *testing.T) {
 
 	app := newTestApp(t)
 	org := testutil.CreateTestOrganization(t, app.DB)
-	user := testutil.CreateTestUser(t, app.DB, org.ID, testutil.WithEmail(testutil.UniqueEmail("calling-disable")))
+	user := settingsWriter(t, app, org.ID, "calling-disable")
 
 	// Start with calling enabled
 	org.Settings = models.JSONB{
@@ -459,7 +459,7 @@ func TestApp_UpdateOrganizationSettings_CallingZeroDurationIgnored(t *testing.T)
 
 	app := newTestApp(t)
 	org := testutil.CreateTestOrganization(t, app.DB)
-	user := testutil.CreateTestUser(t, app.DB, org.ID, testutil.WithEmail(testutil.UniqueEmail("calling-zero")))
+	user := settingsWriter(t, app, org.ID, "calling-zero")
 
 	// Set initial calling settings
 	org.Settings = models.JSONB{
@@ -719,4 +719,57 @@ func TestApp_UpdateOrganizationSettings_LogoNeedsPermission(t *testing.T) {
 	var unchanged models.Organization
 	require.NoError(t, app.DB.Where("id = ?", org.ID).First(&unchanged).Error)
 	assert.Empty(t, unchanged.Settings["logo"])
+}
+
+// settingsWriter creates a user whose role has settings.general:write.
+func settingsWriter(t *testing.T, app *handlers.App, orgID uuid.UUID, key string) *models.User {
+	t.Helper()
+	role := testutil.CreateTestRoleWithKeys(t, app.DB, orgID, "settings-writer-"+key, []string{"settings.general:read", "settings.general:write"})
+	return testutil.CreateTestUser(t, app.DB, orgID, testutil.WithEmail(testutil.UniqueEmail(key)), testutil.WithRoleID(&role.ID))
+}
+
+func TestApp_UpdateOrganizationSettings_RequiresWritePermission(t *testing.T) {
+	t.Parallel()
+
+	bodies := map[string]map[string]any{
+		"name":          {"name": "Hijacked"},
+		"timezone":      {"timezone": "Asia/Tokyo"},
+		"mask_phone":    {"mask_phone_numbers": false},
+		"calling":       {"calling_enabled": true},
+		"call_duration": {"max_call_duration": 10},
+	}
+	for name, body := range bodies {
+		t.Run(name, func(t *testing.T) {
+			t.Parallel()
+			app := newTestApp(t)
+			org := testutil.CreateTestOrganization(t, app.DB)
+			role := testutil.CreateTestRoleWithKeys(t, app.DB, org.ID, "settings-reader", []string{"settings.general:read"})
+			user := testutil.CreateTestUser(t, app.DB, org.ID, testutil.WithRoleID(&role.ID))
+
+			req := testutil.NewJSONRequest(t, body)
+			testutil.SetAuthContext(req, org.ID, user.ID)
+			require.NoError(t, app.UpdateOrganizationSettings(req))
+			assert.Equal(t, fasthttp.StatusForbidden, testutil.GetResponseStatusCode(req))
+
+			var unchanged models.Organization
+			require.NoError(t, app.DB.Where("id = ?", org.ID).First(&unchanged).Error)
+			assert.Equal(t, org.Name, unchanged.Name)
+			assert.Nil(t, unchanged.Settings["timezone"])
+			assert.Nil(t, unchanged.Settings["calling_enabled"])
+		})
+	}
+}
+
+func TestApp_UpdateOrganizationSettings_MetaCredsOnlyNeedAccountsWrite(t *testing.T) {
+	t.Parallel()
+
+	app := newTestApp(t)
+	org := testutil.CreateTestOrganization(t, app.DB)
+	role := testutil.CreateTestRoleWithKeys(t, app.DB, org.ID, "accounts-writer", []string{"accounts:read", "accounts:write"})
+	user := testutil.CreateTestUser(t, app.DB, org.ID, testutil.WithRoleID(&role.ID))
+
+	req := testutil.NewJSONRequest(t, map[string]any{"meta_app_id": "123"})
+	testutil.SetAuthContext(req, org.ID, user.ID)
+	require.NoError(t, app.UpdateOrganizationSettings(req))
+	assert.Equal(t, fasthttp.StatusOK, testutil.GetResponseStatusCode(req))
 }

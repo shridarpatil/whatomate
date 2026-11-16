@@ -209,6 +209,18 @@ func (a *App) UpdateOrganizationSettings(r *fastglue.Request) error {
 		return r.SendErrorEnvelope(fasthttp.StatusNotFound, "Organization not found", nil, "")
 	}
 
+	// Every settings field needs settings.general:write (the whole settings
+	// page, including the Calling tab, is gated on settings.general). Meta App
+	// credentials are gated separately on accounts:write below.
+	settingsTouched := req.MaskPhoneNumbers != nil || req.Timezone != nil || req.DateFormat != nil || req.Name != nil ||
+		req.CallingEnabled != nil || req.MaxCallDuration != nil || req.TransferTimeoutSecs != nil ||
+		req.HoldMusicFile != nil || req.RingbackFile != nil || req.Logo != nil
+	if settingsTouched {
+		if err := a.requirePermission(r, userID, models.ResourceSettingsGeneral, models.ActionWrite); err != nil {
+			return nil
+		}
+	}
+
 	// Gating Meta App credentials update on accounts:write permission
 	metaAppCredsTouched := req.MetaAppID != nil || req.MetaConfigID != nil || req.MetaAppSecret != nil
 	if metaAppCredsTouched {
@@ -217,11 +229,7 @@ func (a *App) UpdateOrganizationSettings(r *fastglue.Request) error {
 		}
 	}
 
-	// Logo changes need settings.general:write.
 	if req.Logo != nil {
-		if err := a.requirePermission(r, userID, models.ResourceSettingsGeneral, models.ActionWrite); err != nil {
-			return nil
-		}
 		if *req.Logo != "" && !validateOrgLogo(*req.Logo) {
 			return r.SendErrorEnvelope(fasthttp.StatusBadRequest, "Logo must be a PNG, JPEG or WebP image up to 64 KB", nil, "")
 		}
